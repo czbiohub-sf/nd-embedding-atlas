@@ -1,0 +1,24 @@
+import { DockviewShell } from "../components/layout/DockviewShell";
+import { FilterInfo } from "../components/toolbar/FilterInfo";
+import { TimeSlider } from "../components/toolbar/TimeSlider";
+import { Toolbar } from "../components/toolbar/Toolbar";
+import { useDashboard } from "../hooks/useDashboard";
+
+export function DashboardShell() {
+    const { state } = useDashboard();
+    const { metadata } = state;
+
+    return (
+        <div className="flex h-full flex-col bg-base">
+            <Toolbar>
+                <TimeSlider />
+                <FilterInfo />
+                <span className="ml-auto text-text-muted">v{metadata.version}</span>
+            </Toolbar>
+
+            <div className="min-h-0 flex-1">
+                <DockviewShell hasPlate={!!metadata.plate} />
+            </div>
+        </div>
+    );
+}

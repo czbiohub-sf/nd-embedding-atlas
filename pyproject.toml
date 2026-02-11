@@ -1,61 +1,68 @@
 [build-system]
 build-backend = "hatchling.build"
-requires = [ "hatchling" ]
+requires = [ "hatchling", "uv-dynamic-versioning" ]
 
 [project]
 name = "ome-atlas"
-version = "0.0.1"
-description = "A very interesting piece of code"
+description = "An interactive browser-based dashboard that bridges the gap between abstract AI embeddings and biological ground truth by linking high-dimensional feature points directly to their source 5D image data for rapid exploration and annotation."
 readme = "README.md"
 license = { file = "LICENSE" }
 maintainers = [
   { name = "Sricharan Reddy Varra", email = "sricharan.varra@biohub.org" },
 ]
-authors = [
-  { name = "Sricharan Reddy Varra" },
-]
-requires-python = ">=3.11"
+authors = [ { name = "Sricharan Reddy Varra" } ]
+requires-python = ">=3.12,<3.14"
 classifiers = [
   "Programming Language :: Python :: 3 :: Only",
-  "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
-  "Programming Language :: Python :: 3.14",
 ]
+dynamic = [ "version" ]
 dependencies = [
-  "anndata",
-  # for debug logging (referenced from the issue template)
+  "anndata>=0.12.9",
+  "dask[dataframe,distributed]>=2025.9.2",
+  "duckdb>=1.4.4",
+  "fastapi>=0.128",
+  "iohub==0.3.0a5",
+  "obstore>=0.8.2",
+  "pyarrow>=18",
+  "rich>=14.3.1",
+  "scanpy>=1.11.5",
   "session-info2",
+  "structlog>=25.5",
+  "typer>=0.21.1",
+  "zarr>=3.1.5",
+  "zarrs>=0.2.1",
 ]
 # https://docs.pypi.org/project_metadata/#project-urls
-urls.Documentation = "https://ome-atlas.readthedocs.io/"
-urls.Homepage = "https://github.com/srivarra/ome-atlas"
-urls.Source = "https://github.com/srivarra/ome-atlas"
+urls.Documentation = "https://pages.github.com/czbiohub-sf/image-embedding-atlas"
+urls.Homepage = "https://github.com/czbiohub-sf/image-embedding-atlas"
+urls.Source = "https://github.com/czbiohub-sf/image-embedding-atlas"
+scripts.ome-atlas = "ome_atlas.cli._app:app"
 
 [dependency-groups]
-dev = [
-  "pre-commit",
-  "twine>=4.0.2",
-]
+dev = [ { include-group = "doc" }, { include-group = "test" } ]
 test = [
-  "coverage>=7.10",
-  "pytest",
-  "pytest-cov",     # For VS Code’s coverage functionality
+  "coverage>=7.13.2",
+  "pytest>=9.0.2",
+  "pytest-cov>=7",
 ]
 doc = [
   "ipykernel",
-  "ipython",
-  "myst-nb>=1.1",
-  "pandas",
-  "sphinx>=8.1",
-  "sphinx-autodoc-typehints",
-  "sphinx-book-theme>=1",
-  "sphinx-copybutton",
-  "sphinx-design",
-  "sphinxcontrib-bibtex>=1",
-  "sphinxcontrib-katex",
-  "sphinxext-opengraph",
+  "zensical>=0.0.21",
 ]
+
+[tool.hatch.build.hooks.custom]
+# Uses hatch_build.py at project root
+
+[tool.hatch.build]
+artifacts = [ "src/ome_atlas/_frontend" ]
+
+[tool.hatch.build.targets.wheel.force-include]
+"frontend/dist" = "ome_atlas/_frontend"
+
+[tool.hatch.version]
+source = "uv-dynamic-versioning"
 
 [tool.hatch.envs.default]
 installer = "uv"
@@ -70,21 +77,23 @@ scripts.clean = "git clean -fdX -- {args:docs}"
 # Test the lowest and highest supported Python versions with normal deps
 [[tool.hatch.envs.hatch-test.matrix]]
 deps = [ "stable" ]
-python = [ "3.11", "3.14" ]
+python = [ "3.12", "3.13" ]
 
 # Test the newest supported Python version also with pre-release deps
 [[tool.hatch.envs.hatch-test.matrix]]
 deps = [ "pre" ]
-python = [ "3.14" ]
+python = [ "3.13" ]
 
 [tool.hatch.envs.hatch-test]
-dependency-groups = [ "dev", "test" ]
+dependency-groups = [ "test" ]
 
 [tool.hatch.envs.hatch-test.overrides]
 # If the matrix variable `deps` is set to "pre",
 # set the environment variable `UV_PRERELEASE` to "allow".
 matrix.deps.env-vars = [
-  { key = "UV_PRERELEASE", value = "allow", if = [ "pre" ] },
+  { key = "UV_PRERELEASE", value = "allow", if = [
+    "pre",
+  ] },
 ]
 
 [tool.ruff]
@@ -95,18 +104,25 @@ extend-include = [ "*.ipynb" ]
 format.docstring-code-format = true
 
 lint.select = [
-  "B",      # flake8-bugbear
-  "BLE",    # flake8-blind-except
-  "C4",     # flake8-comprehensions
-  "D",      # pydocstyle
-  "E",      # Error detected by Pycodestyle
-  "F",      # Errors detected by Pyflakes
-  "I",      # isort
-  "RUF100", # Report unused noqa directives
-  "TID",    # flake8-tidy-imports
-  "UP",     # pyupgrade
-  "W",      # Warning detected by Pycodestyle
+  "B",    # flake8-bugbear
+  "BLE",  # flake8-blind-except
+  "C4",   # flake8-comprehensions
+  "D",    # pydocstyle
+  "E",    # Error detected by Pycodestyle
+  "F",    # Errors detected by Pyflakes
+  "I",    # isort
+  "NPY",  # NumPy-specific rules
+  "PD",   # Pandas code
+  "PERF", # Perflint
+  "PT",   # Pytest
+  "PTH",  # pathlib
+  "RUF",  # Ruff-specific rules
+  "TID",  # flake8-tidy-imports
+  "TRY",  # Tryceratops
+  "UP",   # pyupgrade
+  "W",    # Warning detected by Pycodestyle
 ]
+
 lint.ignore = [
   "B008", # Errors from function calls in argument defaults. These are fine when the result is immutable.
   "D100", # Missing docstring in public module
@@ -137,9 +153,7 @@ addopts = [
 [tool.coverage.run]
 source = [ "ome_atlas" ]
 patch = [ "subprocess" ]
-omit = [
-  "**/test_*.py",
-]
+omit = [ "**/test_*.py" ]
 
 [tool.cruft]
 skip = [

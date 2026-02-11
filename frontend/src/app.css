@@ -1,0 +1,238 @@
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&family=JetBrains+Mono:wght@400;500;600&display=swap");
+@import "tailwindcss";
+
+/*
+ * ome-atlas dashboard theme
+ *
+ * Design direction: Scientific instrument panel — precise, data-dense, dark.
+ * Typography: JetBrains Mono (data/code), DM Sans (UI labels/headings).
+ */
+
+@theme {
+    --font-sans: "DM Sans", system-ui, -apple-system, sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Code", monospace;
+
+    /* Backgrounds */
+    --color-base: #0c1021;
+    --color-surface: #141829;
+    --color-elevated: #1a1f36;
+
+    /* Borders */
+    --color-border-subtle: #242a45;
+    --color-border-active: #3b4578;
+
+    /* Text */
+    --color-text-primary: #e2e8f0;
+    --color-text-secondary: #8892b0;
+    --color-text-muted: #4a5278;
+
+    /* Accent */
+    --color-accent-cyan: #22d3ee;
+    --color-accent-amber: #f59e0b;
+    --color-accent-rose: #f43f5e;
+
+    /* Charts */
+    --color-chart-mark: #6366f1;
+    --color-chart-mark-fade: oklch(0.585 0.233 277.117 / 0.125);
+}
+
+/* Base styles */
+html,
+body,
+#root {
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    background-color: var(--color-base);
+    color: var(--color-text-primary);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    line-height: 1.4;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--color-border-subtle);
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--color-border-active);
+}
+
+/* Select/dropdown styling for dark theme */
+select {
+    appearance: none;
+    background-color: var(--color-surface);
+    color: var(--color-text-primary);
+    border: 1px solid var(--color-border-subtle);
+    border-radius: 4px;
+    padding: 2px 20px 2px 6px;
+    font-size: 12px;
+    font-family: var(--font-sans);
+    cursor: pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238892b0' d='M3 5l3 3 3-3'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 4px center;
+}
+
+select:hover {
+    border-color: var(--color-border-active);
+}
+
+select:focus {
+    outline: 1px solid var(--color-accent-cyan);
+    outline-offset: -1px;
+}
+
+select:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* Mosaic slider input — dark theme overrides */
+.time-slider .input {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-family: var(--font-mono);
+    color: var(--color-text-secondary);
+}
+
+.time-slider .input label {
+    white-space: nowrap;
+}
+
+.time-slider .input label.value {
+    min-width: 2ch;
+    text-align: right;
+    color: var(--color-text-primary);
+    font-variant-numeric: tabular-nums;
+}
+
+.time-slider .input input[type="range"] {
+    width: 120px;
+    height: 4px;
+    accent-color: var(--color-accent-cyan);
+    cursor: pointer;
+}
+
+/* Trajectory — dim point cloud when a trajectory is active */
+.trajectory-active canvas {
+    opacity: 0.2;
+    transition: opacity 0.2s ease;
+}
+
+/* Trajectory tooltip */
+.trajectory-tooltip {
+    padding: 8px;
+    border: 1px solid var(--color-border-subtle);
+    border-radius: 6px;
+    background: oklch(0.12 0.02 260 / 0.85);
+    backdrop-filter: blur(8px);
+    color: var(--color-text-primary);
+    font-family: var(--font-sans);
+    font-size: 12px;
+    max-width: 340px;
+    max-height: 260px;
+    overflow-y: auto;
+}
+
+.trajectory-tooltip__pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 6px;
+}
+
+.trajectory-tooltip__pill {
+    display: inline-flex;
+    gap: 4px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: var(--color-surface);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--color-text-primary);
+    white-space: nowrap;
+}
+
+.trajectory-tooltip__pill-key {
+    color: var(--color-text-muted);
+    font-weight: 500;
+}
+
+.trajectory-tooltip__btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--color-text-secondary);
+    font-family: var(--font-sans);
+    font-size: 11px;
+    cursor: pointer;
+    transition:
+        color 0.15s,
+        background 0.15s;
+}
+
+.trajectory-tooltip__btn:hover {
+    color: var(--color-accent-cyan);
+    background: var(--color-surface);
+}
+
+/* Dockview header action buttons */
+.dv-header-action {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: none;
+    background: transparent;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    border-radius: 4px;
+}
+
+.dv-header-action:hover {
+    color: var(--color-text-primary);
+    background: var(--color-elevated);
+}
+
+/* Dockview dark theme overrides — map to ome-atlas tokens */
+.dockview-theme-dark {
+    --dv-background-color: var(--color-base);
+    --dv-paneview-header-border-color: var(--color-border-subtle);
+    --dv-tabs-container-background-color: var(--color-surface);
+    --dv-activegroup-visiblepanel-tab-background-color: var(--color-elevated);
+    --dv-activegroup-hiddenpanel-tab-background-color: var(--color-surface);
+    --dv-inactivegroup-visiblepanel-tab-background-color: var(--color-surface);
+    --dv-inactivegroup-hiddenpanel-tab-background-color: var(--color-base);
+    --dv-separator-border: var(--color-border-subtle);
+    --dv-tab-font-size: 12px;
+    --dv-font-family: var(--font-sans);
+    --dv-activegroup-visiblepanel-tab-color: var(--color-text-primary);
+    --dv-activegroup-hiddenpanel-tab-color: var(--color-text-muted);
+    --dv-inactivegroup-visiblepanel-tab-color: var(--color-text-secondary);
+    --dv-inactivegroup-hiddenpanel-tab-color: var(--color-text-muted);
+}

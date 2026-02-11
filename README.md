@@ -1,10 +1,4 @@
-# ome-atlas
-
-[![Tests][badge-tests]][tests]
-[![Documentation][badge-docs]][documentation]
-
-[badge-tests]: https://img.shields.io/github/actions/workflow/status/srivarra/ome-atlas/test.yaml?branch=main
-[badge-docs]: https://img.shields.io/readthedocs/ome-atlas
+# image-embedding-atlas [name tbd]
 
 A very interesting piece of code
 

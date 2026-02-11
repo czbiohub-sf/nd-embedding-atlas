@@ -1,7 +1,12 @@
 from importlib.metadata import version
 
-from . import pl, pp, tl
+import zarr
+import zarrs
 
-__all__ = ["pl", "pp", "tl"]
+from . import cli, io, vz
+
+__all__ = ["cli", "io", "vz"]
 
 __version__ = version("ome-atlas")
+
+zarr.config.set({"codec_pipeline.path": "zarrs.ZarrsCodecPipeline"})

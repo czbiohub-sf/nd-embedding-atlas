@@ -19,3 +19,11 @@ __pycache__/
 # docs
 /docs/generated/
 /docs/_build/
+
+# Bundled frontend (built by hatch hook)
+src/ome_atlas/_frontend/
+
+# misc
+.claude/
+notes/
+.playwright-cli/
