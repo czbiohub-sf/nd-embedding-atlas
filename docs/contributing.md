@@ -9,7 +9,7 @@ icon: lucide/git-pull-request
 ### Prerequisites
 
 - **Python 3.12--3.13** (managed with [uv](https://docs.astral.sh/uv/))
-- **[pnpm](https://pnpm.io/)** for frontend builds
+- **[pnpm](https://pnpm.io/)** for frontend builds -- install with `npm install -g pnpm`
 - **[prek](https://github.com/j178/prek)** for Git hooks (`uvx prek`)
 
 ### Clone and install

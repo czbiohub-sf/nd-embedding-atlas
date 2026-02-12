@@ -14,6 +14,7 @@ Please refer to the [documentation][docs-link].
 
 You need to have Python 3.12 or newer installed on your system.
 If you don't have Python installed, we recommend installing [uv][uv-link].
+Building from source also requires [pnpm][pnpm-link] for the frontend (`npm install -g pnpm`).
 
 1. Install the latest development version:
 
@@ -49,6 +50,7 @@ If you found a bug or want a new feature, please use the [issue tracker][issue-t
 
 <!-- links -->
 [uv-link]: https://github.com/astral-sh/uv
+[pnpm-link]: https://pnpm.io/
 [issue-tracker]: https://github.com/czbiohub-sf/nd-embedding-atlas/issues
 [discussions-link]: https://github.com/czbiohub-sf/nd-embedding-atlas/discussions
 [docs-link]: https://super-adventure-yv3eleq.pages.github.io/
