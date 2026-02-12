@@ -1,4 +1,4 @@
-# ome-atlas
+# nd-embedding-atlas
 
 Interactive browser-based dashboard linking AI embeddings to source 5D (TCZYX) image data.
 Early-stage -- APIs are in flux.
@@ -11,17 +11,17 @@ Early-stage -- APIs are in flux.
 - **duckdb** + **pyarrow** for analytical queries and Arrow IPC serialization
 - **React** + **Vite** + **Mosaic** custom frontend (`frontend/`)
 - **FastAPI** + **uvicorn** for serving
-- **iohub** for OME-Zarr 5D image access
+- **iohub** for OME-Zarr 5D image access (not used)
 - **typer** for CLI, **rich** for terminal output
 
 ## Project layout
 
 ```text
-src/ome_atlas/
+src/nd_embedding_atlas/
   __init__.py         # Re-exports: cli, io, vz; sets zarrs codec
   _frontend/          # Bundled frontend (auto-built by hatch hook, gitignored)
   cli/
-    _app.py           # Typer CLI — `ome-atlas view` command
+    _app.py           # Typer CLI — `nd-embedding-atlas view` command
   io/
     collection.py     # AnnDataCollection — core data abstraction
   vz/
@@ -47,7 +47,7 @@ vz._prepare    ──→  io.collection (AnnDataCollection)
 vz._duckdb     ──→  duckdb, pyarrow (Arrow IPC + Mosaic query protocol)
 vz._serve      ──→  vz._duckdb, vz._prepare, fastapi, uvicorn
 io.collection  ──→  anndata, zarr, zarrs, dask
-scripts/*      ──→  ome_atlas.io, ome_atlas.vz, typer
+scripts/*      ──→  nd_embedding_atlas.io, nd_embedding_atlas.vz, typer
 ```
 
 ## Key abstractions
@@ -77,18 +77,21 @@ Dict-like container mapping string keys to zarr stores. Internally calls
 ### Frontend (`frontend/`)
 
 - Custom React + Vite dashboard, built with `cd frontend && pnpm build`
-- `frontend/dist/` is bundled into the wheel at `ome_atlas/_frontend/` via hatch build hook
-- Runtime resolution order: `frontend/dist/` (dev) → `ome_atlas/_frontend/` (wheel) → error
+- `frontend/dist/` is bundled into the wheel at `nd_embedding_atlas/_frontend/` via hatch build hook
+- Runtime resolution order: `frontend/dist/` (dev) → `nd_embedding_atlas/_frontend/` (wheel) → error
 - Uses Mosaic for cross-filtered scatter + table + charts via DuckDB queries
 - Dockview for panel layout; custom viewer components for OME-Zarr image crops
 
 ## Commands
 
 ```zsh
-# Launch viewer on AnnData zarr(s)
-uv run ome-atlas view /path/to/data.zarr --plate /path/to/plate.zarr
+# Install all dependency groups
+uv sync --all-groups
 
-# Build custom frontend (required before serving)
+# Launch viewer (ndea is a short alias for nd-embedding-atlas)
+uv run ndea view /path/to/data.zarr --plate /path/to/plate.zarr
+
+# Build frontend (required before serving)
 cd frontend && pnpm install && pnpm build
 
 # Build wheel (auto-builds frontend via hatch hook if dist/ missing)
@@ -97,7 +100,7 @@ uv build
 # Run python scripts/code
 uv run python script.py
 
-# Lint + format (pre-commit hooks)
+# Lint + format
 uvx prek
 
 # Run tests
@@ -105,11 +108,15 @@ uv run pytest
 
 # Sync lockfile after changing pyproject.toml
 uv lock
+
+# Docs
+uv run zensical serve   # live preview
+uv run zensical build   # static site
 ```
 
 ## Code style
 
-Enforced by ruff (config in `pyproject.toml`) and pre-commit hooks.
+Enforced by ruff (config in `pyproject.toml`) and prek hooks (`uvx prek`).
 
 - **Line length**: 120
 - **Docstrings**: numpy convention (`Parameters`, `Returns`, etc.)
@@ -125,7 +132,7 @@ Enforced by ruff (config in `pyproject.toml`) and pre-commit hooks.
 - **pathlib.Path** over os.path (PTH rules enabled)
 - **Indentation**: 4 spaces (Python), 2 spaces (YAML/TOML/TSX)
 
-### Pre-commit hooks (run via `uvx prek`)
+### Prek hooks (run via `uvx prek`)
 
 1. biome-check (TS/TSX/CSS/JSON — lint + format, config in `biome.jsonc`)
 2. pyproject-fmt
@@ -140,7 +147,7 @@ B, BLE, C4, D, E, F, I, NPY, PD, PERF, PT, PTH, RUF, TID, TRY, UP, W
 
 - **pytest** with `--import-mode=importlib`
 - Fixtures in `tests/conftest.py`
-- Test data lives in `../ome-atlas-test-data/` (external, not in repo)
+- Test data: run `uv run scripts/download_dynaclr_datasets.py` to download to `data/`
 - CI runs via hatch test matrix: Python 3.12 + 3.13 stable, 3.13 pre-release
 - Coverage reported to Codecov
 
@@ -197,9 +204,9 @@ else:
 
 ### Versioning
 
-Single source of truth: git tags → `uv-dynamic-versioning` → `importlib.metadata.version("ome-atlas")`.
+Single source of truth: git tags → `uv-dynamic-versioning` → `importlib.metadata.version("nd-embedding-atlas")`.
 
-- Python: `importlib.metadata.version("ome-atlas")`
+- Python: `importlib.metadata.version("nd-embedding-atlas")`
 - Frontend: fetched at runtime via `/data/metadata.json` `version` field
 - `package.json` version is a placeholder — frontend is never published to npm
 
@@ -211,26 +218,21 @@ Single source of truth: git tags → `uv-dynamic-versioning` → `importlib.meta
 
 ## Gotchas
 
-- **Frontend resolution**: Dev uses `frontend/dist/`; wheel uses bundled `ome_atlas/_frontend/`. If neither exists, `_resolve_frontend()` raises with instructions.
+- **Frontend resolution**: Dev uses `frontend/dist/`; wheel uses bundled `nd_embedding_atlas/_frontend/`. If neither exists, `_resolve_frontend()` raises with instructions.
 - **Hatch build hook**: `hatch_build.py` runs `pnpm build` during `uv build` if `frontend/dist/` is missing. Requires `pnpm` on PATH.
 - **DuckDB RecordBatchReader**: `result.arrow()` returns `RecordBatchReader` not `Table` in duckdb >= 1.4
 - **Mosaic preagg tables**: Frontend creates `CREATE TABLE mosaic.preagg_*` -- SQL filter must allow these
 - **VIEW schema caching**: DuckDB VIEWs cache column types; `ALTER TABLE` on underlying table invalidates cached schema
 - **Ruff S608**: SQL injection rule is NOT in the enabled ruleset -- don't add `# noqa: S608`
 
-## Decision log
+## Key decisions
 
-| Decision | Chosen | Rationale |
-|----------|--------|-----------|
-| Frontend | Custom React + Vite + Mosaic | Full control over linked scatter/table/charts; Dockview panels |
-| Data access | `anndata.experimental.read_lazy` + `ad.concat` | Keeps everything lazy until materialization. Dask-backed X/obsm |
-| Zarr codec | zarrs (Rust) via `ZarrsCodecPipeline` | Faster read/write than default Python codecs |
-| Zarr format | v3 with sharding (via annbatch) | Better cloud access patterns, consolidated metadata |
-| Python tooling | uv + ruff + hatch | Modern, fast. uv for deps, ruff for lint/format, hatch for test matrix |
-| DuckDB mode | Server-side (not WASM) | More reliable for large datasets, avoids browser memory limits |
-| Arrow serialization | Inline pyarrow IPC (no embedding-atlas) | Removed heavy transitive deps (torch, sentence-transformers, etc.) |
-| Frontend bundling | Hatch build hook + `force-include` | Auto-builds frontend during `uv build`; bundles into wheel at `ome_atlas/_frontend/` |
-| Versioning | `uv-dynamic-versioning` + runtime `importlib.metadata` | Single source of truth from git tags; frontend reads version from API, no build-time sync needed |
+- **Custom React + Vite + Mosaic frontend** -- full control over linked scatter/table/charts; Dockview panels
+- **Hatch build hook + `force-include`** -- auto-builds frontend during `uv build`; bundles into wheel at `nd_embedding_atlas/_frontend/`
+- **Server-side DuckDB** (not WASM) -- more reliable for large datasets, avoids browser memory limits
+- **Inline pyarrow IPC** (no embedding-atlas Python dep) -- removed heavy transitive deps (torch, sentence-transformers)
+- **zarrs Rust codec** -- faster read/write than default Python codecs
+- **Zarr v3 with sharding** (via annbatch) -- better cloud access patterns
 
 ## Resources
 
@@ -241,6 +243,8 @@ Single source of truth: git tags → `uv-dynamic-versioning` → `importlib.meta
 - [web-design-guidelines](https://skills.sh/anthropics/skills/web-design-guidelines)
 - [frontend-design](https://skills.sh/anthropics/claude-plugins-official/frontend-design)
 - [claude-md-improver](https://skills.sh/anthropics/claude-plugins-official/claude-md-improver)
+
+### Relevant Packages
 
 - [embedding-atlas](https://github.com/apple/embedding-atlas) -- Apple's WebGL scatter/table viewer (original inspiration, no longer a Python dependency)
 - [idetik](https://github.com/chanzuckerberg/idetik) -- Idetik

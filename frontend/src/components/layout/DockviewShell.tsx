@@ -66,7 +66,7 @@ const COMPONENTS = {
     charts: ChartGroupPanel,
 } as const;
 
-const STORAGE_KEY = "ome_atlas_layout";
+const STORAGE_KEY = "ndea_layout";
 
 // ── Default layout ───────────────────────────────────────────────────────
 

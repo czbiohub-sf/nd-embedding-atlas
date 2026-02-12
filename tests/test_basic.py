@@ -1,5 +1,5 @@
-import ome_atlas
+import nd_embedding_atlas
 
 
 def test_package_has_version():
-    assert ome_atlas.__version__ is not None
+    assert nd_embedding_atlas.__version__ is not None

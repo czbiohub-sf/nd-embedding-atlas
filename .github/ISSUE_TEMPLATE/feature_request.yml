@@ -1,5 +1,5 @@
 name: Feature request
-description: Propose a new feature for ome-atlas
+description: Propose a new feature for nd-embedding-atlas
 type: Enhancement
 body:
   - type: textarea

@@ -3,8 +3,8 @@ build-backend = "hatchling.build"
 requires = [ "hatchling", "uv-dynamic-versioning" ]
 
 [project]
-name = "ome-atlas"
-description = "An interactive browser-based dashboard that bridges the gap between abstract AI embeddings and biological ground truth by linking high-dimensional feature points directly to their source 5D image data for rapid exploration and annotation."
+name = "nd-embedding-atlas"
+description = "An interactive browser-based dashboard linking AI embeddings to source nD image data for rapid exploration and annotation."
 readme = "README.md"
 license = { file = "LICENSE" }
 maintainers = [
@@ -19,6 +19,7 @@ classifiers = [
 ]
 dynamic = [ "version" ]
 dependencies = [
+  "annbatch>=0.0.7",
   "anndata>=0.12.9",
   "dask[dataframe,distributed]>=2025.9.2",
   "duckdb>=1.4.4",
@@ -31,14 +32,16 @@ dependencies = [
   "session-info2",
   "structlog>=25.5",
   "typer>=0.21.1",
+  "uvicorn>=0.34",
   "zarr>=3.1.5",
   "zarrs>=0.2.1",
 ]
 # https://docs.pypi.org/project_metadata/#project-urls
-urls.Documentation = "https://pages.github.com/czbiohub-sf/image-embedding-atlas"
-urls.Homepage = "https://github.com/czbiohub-sf/image-embedding-atlas"
-urls.Source = "https://github.com/czbiohub-sf/image-embedding-atlas"
-scripts.ome-atlas = "ome_atlas.cli._app:app"
+urls.Documentation = "https://pages.github.com/czbiohub-sf/nd-embedding-atlas"
+urls.Homepage = "https://github.com/czbiohub-sf/nd-embedding-atlas"
+urls.Source = "https://github.com/czbiohub-sf/nd-embedding-atlas"
+scripts.nd-embedding-atlas = "nd_embedding_atlas.cli._app:app"
+scripts.ndea = "nd_embedding_atlas.cli._app:app"
 
 [dependency-groups]
 dev = [ { include-group = "doc" }, { include-group = "test" } ]
@@ -52,57 +55,39 @@ doc = [
   "zensical>=0.0.21",
 ]
 
-[tool.hatch.build.hooks.custom]
+[tool.hatch]
 # Uses hatch_build.py at project root
 
-[tool.hatch.build]
-artifacts = [ "src/ome_atlas/_frontend" ]
-
-[tool.hatch.build.targets.wheel.force-include]
-"frontend/dist" = "ome_atlas/_frontend"
-
-[tool.hatch.version]
-source = "uv-dynamic-versioning"
-
-[tool.hatch.envs.default]
-installer = "uv"
-dependency-groups = [ "dev" ]
-
-[tool.hatch.envs.docs]
-dependency-groups = [ "doc" ]
-scripts.build = "sphinx-build -M html docs docs/_build -W {args}"
-scripts.open = "python -m webbrowser -t docs/_build/html/index.html"
-scripts.clean = "git clean -fdX -- {args:docs}"
-
-# Test the lowest and highest supported Python versions with normal deps
-[[tool.hatch.envs.hatch-test.matrix]]
-deps = [ "stable" ]
-python = [ "3.12", "3.13" ]
-
-# Test the newest supported Python version also with pre-release deps
-[[tool.hatch.envs.hatch-test.matrix]]
-deps = [ "pre" ]
-python = [ "3.13" ]
-
-[tool.hatch.envs.hatch-test]
-dependency-groups = [ "test" ]
-
-[tool.hatch.envs.hatch-test.overrides]
+build.artifacts = [ "src/nd_embedding_atlas/_frontend" ]
+build.hooks.custom = {}
+build.targets.wheel.force-include."frontend/dist" = "nd_embedding_atlas/_frontend"
+envs.default.installer = "uv"
+envs.default.dependency-groups = [ "dev" ]
+envs.docs.dependency-groups = [ "doc" ]
+envs.docs.scripts.build = "sphinx-build -M html docs docs/_build -W {args}"
+envs.docs.scripts.open = "python -m webbrowser -t docs/_build/html/index.html"
+envs.docs.scripts.clean = "git clean -fdX -- {args:docs}"
+envs.hatch-test.dependency-groups = [ "test" ]
+envs.hatch-test.matrix = [
+  # Test the lowest and highest supported Python versions with normal deps
+  { deps = [ "stable" ], python = [ "3.12", "3.13" ] },
+  # Test the newest supported Python version also with pre-release deps
+  { deps = [ "pre" ], python = [ "3.13" ] },
+]
 # If the matrix variable `deps` is set to "pre",
 # set the environment variable `UV_PRERELEASE` to "allow".
-matrix.deps.env-vars = [
+envs.hatch-test.overrides.matrix.deps.env-vars = [
   { key = "UV_PRERELEASE", value = "allow", if = [
     "pre",
   ] },
 ]
+version.source = "uv-dynamic-versioning"
 
 [tool.ruff]
 line-length = 120
 src = [ "src" ]
 extend-include = [ "*.ipynb" ]
-
 format.docstring-code-format = true
-
 lint.select = [
   "B",    # flake8-bugbear
   "BLE",  # flake8-blind-except
@@ -122,7 +107,6 @@ lint.select = [
   "UP",   # pyupgrade
   "W",    # Warning detected by Pycodestyle
 ]
-
 lint.ignore = [
   "B008", # Errors from function calls in argument defaults. These are fine when the result is immutable.
   "D100", # Missing docstring in public module
@@ -150,10 +134,10 @@ addopts = [
   "--import-mode=importlib", # allow using test files with same name
 ]
 
-[tool.coverage.run]
-source = [ "ome_atlas" ]
-patch = [ "subprocess" ]
-omit = [ "**/test_*.py" ]
+[tool.coverage]
+run.omit = [ "**/test_*.py" ]
+run.patch = [ "subprocess" ]
+run.source = [ "nd_embedding_atlas" ]
 
 [tool.cruft]
 skip = [

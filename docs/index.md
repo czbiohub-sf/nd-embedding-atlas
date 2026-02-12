@@ -2,165 +2,125 @@
 icon: lucide/rocket
 ---
 
-# Get started
+# Getting started
 
-For full documentation visit [zensical.org](https://zensical.org/docs/).
+nd-embedding-atlas is an interactive dashboard that links high-dimensional AI embeddings
+to their source 5D (TCZYX) image data for rapid exploration and annotation.
 
-## Commands
+## Prerequisites
 
-* [`zensical new`][new] - Create a new project
-* [`zensical serve`][serve] - Start local web server
-* [`zensical build`][build] - Build your site
+Before you begin, make sure you have the following installed:
 
-  [new]: https://zensical.org/docs/usage/new/
-  [serve]: https://zensical.org/docs/usage/preview/
-  [build]: https://zensical.org/docs/usage/build/
+- [x] **Python 3.12+**
+- [x] **[uv](https://docs.astral.sh/uv/)** -- fast Python package manager
+- [x] **[pnpm](https://pnpm.io/)** -- for building the frontend
+- [x] **wget** -- for downloading test datasets (`brew install wget` on macOS)
 
-## Examples
+## Installation
 
-### Admonitions
+### Clone and install
 
-> Go to [documentation](https://zensical.org/docs/authoring/admonitions/)
-
-!!! note
-
-    This is a **note** admonition. Use it to provide helpful information.
-
-!!! warning
-
-    This is a **warning** admonition. Be careful!
-
-### Details
-
-> Go to [documentation](https://zensical.org/docs/authoring/admonitions/#collapsible-blocks)
-
-??? info "Click to expand for more info"
-
-    This content is hidden until you click to expand it.
-    Great for FAQs or long explanations.
-
-## Code Blocks
-
-> Go to [documentation](https://zensical.org/docs/authoring/code-blocks/)
-
-``` python hl_lines="2" title="Code blocks"
-def greet(name):
-    print(f"Hello, {name}!") # (1)!
-
-greet("Python")
+``` bash
+git clone https://github.com/czbiohub-sf/nd-embedding-atlas.git
+cd nd-embedding-atlas
+uv sync # (1)!
 ```
 
-1.  > Go to [documentation](https://zensical.org/docs/authoring/code-blocks/#code-annotations)
+1. This creates a virtual environment and installs all dependencies from the lockfile.
 
-    Code annotations allow to attach notes to lines of code.
+### Build the frontend
 
-Code can also be highlighted inline: `#!python print("Hello, Python!")`.
-
-## Content tabs
-
-> Go to [documentation](https://zensical.org/docs/authoring/content-tabs/)
-
-=== "Python"
-
-    ``` python
-    print("Hello from Python!")
-    ```
-
-=== "Rust"
-
-    ``` rs
-    println!("Hello from Rust!");
-    ```
-
-## Diagrams
-
-> Go to [documentation](https://zensical.org/docs/authoring/diagrams/)
-
-``` mermaid
-graph LR
-  A[Start] --> B{Error?};
-  B -->|Yes| C[Hmm...];
-  C --> D[Debug];
-  D --> B;
-  B ---->|No| E[Yay!];
+``` bash
+cd frontend && pnpm install && pnpm build # (1)!
+cd ..
 ```
 
-## Footnotes
+1. Compiles the React + Vite dashboard into `frontend/dist/`, which the Python server
+   serves as static files.
 
-> Go to [documentation](https://zensical.org/docs/authoring/footnotes/)
+## Download test data
 
-Here's a sentence with a footnote.[^1]
+The project includes scripts to download example datasets. Pick the one that fits your use case:
 
-Hover it, to see a tooltip.
+=== "DynaCLR (cell tracking)"
 
-[^1]: This is the footnote.
+    Small zarr v3 stores with cell tracking annotations and PCA + PHATE embeddings. Good for quick testing.
 
+    ``` bash
+    uv run scripts/download_dynaclr_datasets.py [OUTPUT] # (1)!
+    ```
 
-## Formatting
+    1. `OUTPUT` -- directory for `.zarr` stores (default: `data/`). Existing stores are skipped.
+       Requires `wget` on PATH.
 
-> Go to [documentation](https://zensical.org/docs/authoring/formatting/)
+    This downloads two stores into the output directory:
 
-- ==This was marked (highlight)==
-- ^^This was inserted (underline)^^
-- ~~This was deleted (strikethrough)~~
-- H~2~O
-- A^T^A
-- ++ctrl+alt+del++
+    | Store | Description |
+    |-------|-------------|
+    | `dataset.zarr` | OME-Zarr v0.5 plate with 5D image data |
+    | `annotations_zv3.zarr` | AnnData with tracking annotations and embeddings |
 
-## Icons, Emojis
+    !!! tip "On the Bruno HPC"
 
-> Go to [documentation](https://zensical.org/docs/authoring/icons-emojis/)
+        The DynaCLR datasets are already available at:
 
-* :sparkles: `:sparkles:`
-* :rocket: `:rocket:`
-* :tada: `:tada:`
-* :memo: `:memo:`
-* :eyes: `:eyes:`
+        ```
+        /hpc/websites/public.czbiohub.org/comp.micro/nd-embedding-atlas-test-data
+        ```
 
-## Maths
+        You can symlink or point the viewer directly at these paths instead of downloading.
 
-> Go to [documentation](https://zensical.org/docs/authoring/math/)
+=== "CellxGene (transcriptomics)"
 
-$$
-\cos x=\sum_{k=0}^{\infty}\frac{(-1)^k}{(2k)!}x^{2k}
-$$
+    Larger scRNA-seq datasets from [CellxGene](https://cellxgene.cziscience.com/).
+    Downloads `.h5ad` files and converts them to zarr v3 with sharding. The purpose is to inspect
+    the perfomance of the embedding atlas.
 
-!!! warning "Needs configuration"
-    Note that MathJax is included via a `script` tag on this page and is not
-    configured in the generated default configuration to avoid including it
-    in a pages that do not need it. See the documentation for details on how
-    to configure it on all your pages if they are more Maths-heavy than these
-    simple starter pages.
+    ``` bash
+    uv run scripts/download_cxg_datasets.py [OUTPUT] # (1)!
+    ```
 
-<script id="MathJax-script" async src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
-<script>
-  window.MathJax = {
-    tex: {
-      inlineMath: [["\\(", "\\)"]],
-      displayMath: [["\\[", "\\]"]],
-      processEscapes: true,
-      processEnvironments: true
-    },
-    options: {
-      ignoreHtmlClass: ".*|",
-      processHtmlClass: "arithmatex"
-    }
-  };
-</script>
+    1. `OUTPUT` -- directory for `.zarr` stores (default: `data/`). Existing stores are skipped.
+       Downloads to a temp directory first, converts to zarr v3, then cleans up the `.h5ad` files.
 
-## Task Lists
+    !!! info "This may take a while"
 
-> Go to [documentation](https://zensical.org/docs/authoring/lists/#using-task-lists)
+        CellxGene datasets are several GB each. The script downloads to a temp
+        directory, converts to zarr v3, then cleans up the intermediate `.h5ad` files.
 
-* [x] Install Zensical
-* [x] Configure `zensical.toml`
-* [x] Write amazing documentation
-* [ ] Deploy anywhere
+## Launch the viewer
 
-## Tooltips
+After downloading, launch the viewer on the datasets:
 
-> Go to [documentation](https://zensical.org/docs/authoring/tooltips/)
+=== "DynaCLR (cell tracking)"
 
-[Hover me][example]
+    ``` bash
+    uv run ndea view data/annotations_zv3.zarr --plate data/dataset.zarr
+    ```
 
-  [example]: https://example.com "I'm a tooltip!"
+    This loads the tracking annotations with embeddings and connects the
+    OME-Zarr plate for cell crop viewing.
+
+=== "CellxGene (transcriptomics)"
+
+    ``` bash
+    uv run ndea view cxg-data/*.zarr  # (1)!
+    ```
+
+    1. You can use glob patterns to select the AnnData `.zarr` files with lazy concatenation.
+
+The viewer starts a local server at `http://localhost:5055` with:
+
+- **Embedding plot** -- interactive WebGL scatter of the embedding space
+- **Data table** -- sortable, filterable metadata table
+- **Charts** -- cross-filtered distributions of obs columns
+- **OME-Zarr Movie viewer** -- OME-Zarr image crops (when `--plate` is provided)
+
+!!! tip "Short alias"
+
+    `ndea` is an alias for `nd-embedding-atlas`. Both work interchangeably.
+
+## What's next?
+
+- Browse the [API documentation](api.md) for programmatic usage
+- Read the [contributing documentation](contributing.md) for architecture details and contribution patterns

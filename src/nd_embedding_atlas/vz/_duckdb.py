@@ -14,7 +14,7 @@ import pyarrow as pa
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 
-from ome_atlas.vz._prepare import _obsm_column_prefix
+from nd_embedding_atlas.vz._prepare import _obsm_column_prefix
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # EmbeddingStore — lazy embedding management via VIEWs

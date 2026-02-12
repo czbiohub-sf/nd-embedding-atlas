@@ -2,7 +2,7 @@
 @import "tailwindcss";
 
 /*
- * ome-atlas dashboard theme
+ * nd-embedding-atlas dashboard theme
  *
  * Design direction: Scientific instrument panel — precise, data-dense, dark.
  * Typography: JetBrains Mono (data/code), DM Sans (UI labels/headings).
@@ -219,7 +219,7 @@ select:disabled {
     background: var(--color-elevated);
 }
 
-/* Dockview dark theme overrides — map to ome-atlas tokens */
+/* Dockview dark theme overrides — map to nd-embedding-atlas tokens */
 .dockview-theme-dark {
     --dv-background-color: var(--color-base);
     --dv-paneview-header-border-color: var(--color-border-subtle);

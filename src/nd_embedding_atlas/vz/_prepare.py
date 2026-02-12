@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 import pandas as pd
 
 if TYPE_CHECKING:
-    from ome_atlas.io import AnnDataCollection
+    from nd_embedding_atlas.io import AnnDataCollection
 
 
 def prepare_obs(

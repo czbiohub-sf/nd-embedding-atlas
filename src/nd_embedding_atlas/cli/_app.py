@@ -1,4 +1,4 @@
-"""ome-atlas CLI."""
+"""nd-embedding-atlas CLI."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from typing import Annotated
 import typer
 
 app = typer.Typer(
-    name="ome-atlas",
+    name="nd-embedding-atlas",
     add_completion=False,
     no_args_is_help=True,
 )
@@ -36,8 +36,8 @@ def view(
     """Launch the interactive embedding viewer for one or more AnnData datasets."""
     from rich.console import Console
 
-    from ome_atlas import vz
-    from ome_atlas.io import AnnDataCollection
+    from nd_embedding_atlas import vz
+    from nd_embedding_atlas.io import AnnDataCollection
 
     console = Console()
 

@@ -11,13 +11,13 @@
 # The site_name is shown in the page header and the browser window title
 #
 # Read more: https://zensical.org/docs/setup/basics/#site_name
-site_name = "Documentation"
+site_name = "nd-embedding-atlas"
 
 # The site_description is included in the HTML head and should contain a
 # meaningful description of the site content for use by search engines.
 #
 # Read more: https://zensical.org/docs/setup/basics/#site_description
-site_description = "A new project generated from the default template project."
+site_description = "An interactive browser-based dashboard linking AI embeddings to source 5D image data."
 
 # The site_author attribute. This is used in the HTML head element.
 #
@@ -293,8 +293,8 @@ toggle.name = "Switch to light mode"
 # - https://zensical.org/docs/setup/logo-and-icons
 # - https://zensical.org/docs/authoring/icons-emojis/#search
 # ----------------------------------------------------------------------------
-#[project.theme.icon]
-#logo = "lucide/smile"
+[project.theme.icon]
+logo = "lucide/brackets"
 #repo = "lucide/smile"
 
 # ----------------------------------------------------------------------------
@@ -302,4 +302,4 @@ toggle.name = "Switch to light mode"
 # ----------------------------------------------------------------------------
 #[[project.extra.social]]
 icon = "fontawesome/brands/github"
-link = "https://github.com/czbiohub-sf/image-embedding-atlas"
+link = "https://github.com/czbiohub-sf/nd-embedding-atlas"
