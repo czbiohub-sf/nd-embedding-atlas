@@ -37,7 +37,7 @@ dependencies = [
   "zarrs>=0.2.1",
 ]
 # https://docs.pypi.org/project_metadata/#project-urls
-urls.Documentation = "https://pages.github.com/czbiohub-sf/nd-embedding-atlas"
+urls.Documentation = "https://super-adventure-yv3eleq.pages.github.io/"
 urls.Homepage = "https://github.com/czbiohub-sf/nd-embedding-atlas"
 urls.Source = "https://github.com/czbiohub-sf/nd-embedding-atlas"
 scripts.nd-embedding-atlas = "nd_embedding_atlas.cli._app:app"

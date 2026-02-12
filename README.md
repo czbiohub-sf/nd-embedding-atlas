@@ -8,8 +8,7 @@ An interactive browser-based dashboard that bridges the gap between abstract AI 
 
 ## Getting started
 
-Please refer to the [documentation][docs-link],
-in particular, the [API documentation][api-docs-link].
+Please refer to the [documentation][docs-link].
 
 ## Installation
 
@@ -52,6 +51,5 @@ If you found a bug or want a new feature, please use the [issue tracker][issue-t
 [uv-link]: https://github.com/astral-sh/uv
 [issue-tracker]: https://github.com/czbiohub-sf/nd-embedding-atlas/issues
 [discussions-link]: https://github.com/czbiohub-sf/nd-embedding-atlas/discussions
-[docs-link]: https://nd-embedding-atlas.readthedocs.io
-[changelog]: https://nd-embedding-atlas.readthedocs.io/en/latest/changelog.html
-[api-docs-link]: https://nd-embedding-atlas.readthedocs.io/en/latest/api.html
+[docs-link]: https://super-adventure-yv3eleq.pages.github.io/
+[changelog]: CHANGELOG.md
