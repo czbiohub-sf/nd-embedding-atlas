@@ -95,6 +95,7 @@ export function ScatterPanel(_props: IDockviewPanelProps) {
     // Clear trajectory when embedding axes change
     useEffect(() => {
         if (trajectory) actions.setTrajectory(null);
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- only clear when axes change, not when trajectory itself changes
     }, [actions.setTrajectory, trajectory]);
 
     const showTrajectory = useCallback(

@@ -1,3 +1,4 @@
+import { useCallback, useMemo } from "react";
 import { useDashboard } from "../../hooks/useDashboard";
 import { useViewer } from "../../hooks/useViewer";
 
@@ -12,22 +13,33 @@ export function ViewerControls({ cropSize, setCropSize }: Props) {
     const { bounds, zIndex, tIndex } = state;
     const { trajectory } = dashState;
 
-    // When trajectory is active, override T slider range to track's time span
+    // When trajectory is active, override T slider to only the timepoints in the track
     const traj = trajectory?.points;
-    const trajMin = traj ? traj[0].t : null;
-    const trajMax = traj ? traj[traj.length - 1].t : null;
-    const isTrajectoryMode = trajMin != null && trajMax != null;
+    const trajTimepoints = useMemo(() => (traj ? traj.map((p) => p.t) : null), [traj]);
+    const isTrajectoryMode = trajTimepoints != null && trajTimepoints.length > 0;
 
-    const effectiveTMin = isTrajectoryMode ? trajMin : 0;
-    const effectiveTMax = isTrajectoryMode ? trajMax : (bounds.tMax ?? 0);
-    const effectiveTValue = isTrajectoryMode ? (trajectory?.tIndex ?? trajMin) : tIndex;
+    const effectiveTMin = isTrajectoryMode ? 0 : 0;
+    const effectiveTMax = isTrajectoryMode ? trajTimepoints.length - 1 : (bounds.tMax ?? 0);
 
-    const handleTChange = (t: number) => {
-        actions.setTIndex(t);
-        if (isTrajectoryMode) {
-            dashActions.setTrajectoryTIndex(t);
-        }
-    };
+    // In trajectory mode, slider position is the index into trajTimepoints; display the actual T value
+    const trajCurrentIdx = isTrajectoryMode
+        ? Math.max(0, trajTimepoints.indexOf(trajectory?.tIndex ?? trajTimepoints[0]))
+        : 0;
+    const effectiveTValue = isTrajectoryMode ? trajCurrentIdx : tIndex;
+    const displayTValue = isTrajectoryMode ? trajTimepoints[trajCurrentIdx] : tIndex;
+
+    const handleTChange = useCallback(
+        (sliderVal: number) => {
+            if (isTrajectoryMode && trajTimepoints) {
+                const t = trajTimepoints[sliderVal];
+                actions.setTIndex(t);
+                dashActions.setTrajectoryTIndex(t);
+            } else {
+                actions.setTIndex(sliderVal);
+            }
+        },
+        [isTrajectoryMode, trajTimepoints, actions, dashActions],
+    );
 
     return (
         <div className="absolute right-0 bottom-0 left-0 z-10 flex flex-col gap-0.5 bg-surface/80 px-2 py-1 backdrop-blur-sm">
@@ -43,7 +55,7 @@ export function ViewerControls({ cropSize, setCropSize }: Props) {
                         className="h-1 flex-1 accent-accent-cyan"
                         aria-label="Timepoint"
                     />
-                    <span className="w-8 font-mono text-[10px] text-text-muted tabular-nums">{effectiveTValue}</span>
+                    <span className="w-8 font-mono text-[10px] text-text-muted tabular-nums">{displayTValue}</span>
                 </div>
             ) : null}
             {bounds.zMax !== null && bounds.zMax > 0 && (
