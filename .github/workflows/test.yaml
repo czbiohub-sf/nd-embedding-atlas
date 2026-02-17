@@ -47,7 +47,8 @@ jobs:
   test:
     needs: get-environments
     permissions:
-       id-token: write  # for codecov OIDC
+      contents: read    # checkout private repo
+      id-token: write   # for codecov OIDC
 
     strategy:
       fail-fast: false
