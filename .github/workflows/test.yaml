@@ -69,6 +69,14 @@ jobs:
         uses: astral-sh/setup-uv@v7
         with:
           python-version: ${{ matrix.env.python }}
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
       - name: create hatch environment
         run: uvx hatch env create ${{ matrix.env.name }}
       - name: list all all installed package versions
