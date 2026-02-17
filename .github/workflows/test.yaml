@@ -48,7 +48,7 @@ jobs:
     needs: get-environments
     permissions:
       contents: read    # checkout private repo
-      id-token: write   # for codecov OIDC
+      # id-token: write   # for codecov OIDC (requires public repo or paid plan)
 
     strategy:
       fail-fast: false
@@ -93,11 +93,11 @@ jobs:
           test -f .coverage || uvx hatch run ${{ matrix.env.name }}:cov-combine
           uvx hatch run ${{ matrix.env.name }}:cov-report   # report visibly
           uvx hatch run ${{ matrix.env.name }}:coverage xml # create report for upload
-      - name: Upload coverage
-        uses: codecov/codecov-action@v5
-        with:
-          fail_ci_if_error: true
-          use_oidc: true
+      # - name: Upload coverage
+      #   uses: codecov/codecov-action@v5
+      #   with:
+      #     fail_ci_if_error: true
+      #     use_oidc: true
 
   # Check that all tests defined above pass. This makes it easy to set a single "required" test in branch
   # protection instead of having to update it frequently. See https://github.com/re-actors/alls-green#why.
