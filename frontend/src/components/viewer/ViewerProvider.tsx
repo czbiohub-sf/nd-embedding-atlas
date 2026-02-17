@@ -129,7 +129,7 @@ export function ViewerProvider({ children }: Props) {
         [setLayers, clearLayers, setFrame],
     );
 
-    // Meta uses refs — only changes when initialized state changes
+    // Meta uses refs — recompute when initialized flips so consumers see the real viewport
     const meta = useMemo(() => ({ runtime: runtimeRef.current, viewport: viewportRef.current }), []);
 
     const value = useMemo<ViewerInternalContext>(

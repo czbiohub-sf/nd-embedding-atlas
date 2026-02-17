@@ -47,6 +47,10 @@ export function SingleCropViewer({ cropSize }: Props) {
     // ── Bbox layer ref — managed directly via layerManager ────────────
     const bboxRef = useRef<Layer | null>(null);
 
+    // Refs for values used inside layer-creation effect to avoid unnecessary re-runs
+    const cropSizeRef = useRef(cropSize);
+    cropSizeRef.current = cropSize;
+
     // ── Fetch cell info ───────────────────────────────────────────────
     const { data: cellInfo } = useSWR<CellInfo>(highlightId ? `/api/cell/${highlightId}` : null, fetcher, {
         keepPreviousData: true,
@@ -99,6 +103,11 @@ export function SingleCropViewer({ cropSize }: Props) {
         },
         [meta.viewport, scale.x, scale.y],
     );
+
+    const updateBboxRef = useRef(updateBbox);
+    updateBboxRef.current = updateBbox;
+    const frameAroundRef = useRef(frameAround);
+    frameAroundRef.current = frameAround;
 
     // ── Layer creation effect (image channels only) ───────────────────
     useEffect(() => {
@@ -180,10 +189,10 @@ export function SingleCropViewer({ cropSize }: Props) {
             actions.setLayers(layers);
 
             // Add bbox directly to viewport (not through setLayers)
-            updateBbox(cellInfo.x, cellInfo.y, cropSize / 2);
+            updateBboxRef.current(cellInfo.x, cellInfo.y, cropSizeRef.current / 2);
 
             // Frame camera around cell
-            frameAround(cellInfo.x, cellInfo.y);
+            frameAroundRef.current(cellInfo.x, cellInfo.y);
         };
 
         loadLayers();
@@ -191,6 +200,8 @@ export function SingleCropViewer({ cropSize }: Props) {
         return () => {
             cancelled = true;
         };
+        // Only re-run when the cell or source actually changes, not on crop/bbox/frame changes
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [
         sourceUrl,
         cellInfo?.fov_name,
@@ -199,9 +210,6 @@ export function SingleCropViewer({ cropSize }: Props) {
         cellInfo?.t,
         viewerState.initialized,
         actions,
-        frameAround,
-        updateBbox,
-        cropSize,
         metadata.plate_channels,
         cellInfo,
     ]);
@@ -227,7 +235,8 @@ export function SingleCropViewer({ cropSize }: Props) {
         const frame = trajectory.points.find((p) => p.t === trajectory.tIndex);
         if (!frame) return;
         updateBbox(frame.spatial_x, frame.spatial_y, cropSize / 2);
-    }, [trajectory?.tIndex, trajectory?.points, cropSize, cellInfo, trajectory, updateBbox]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- trajectory?.tIndex and trajectory?.points cover all reads
+    }, [trajectory?.tIndex, trajectory?.points, cropSize, cellInfo, updateBbox, trajectory]);
 
     if (!highlightId || !cellInfo) return null;
     return null;
