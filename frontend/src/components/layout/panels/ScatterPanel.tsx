@@ -92,10 +92,14 @@ export function ScatterPanel(_props: IDockviewPanelProps) {
 
     // ── Trajectory ────────────────────────────────────────────────────────
 
-    // Clear trajectory when embedding axes change
+    // Clear trajectory when embedding axes change (not when trajectory itself changes)
+    const axesKeyRef = useRef<string | null>(null);
     useEffect(() => {
-        if (trajectory) actions.setTrajectory(null);
-    }, [actions.setTrajectory, trajectory]);
+        const key = axes ? `${axes.obsmKey}:${axes.xDim}:${axes.yDim}` : null;
+        const changed = axesKeyRef.current !== null && key !== axesKeyRef.current;
+        axesKeyRef.current = key;
+        if (changed) actions.setTrajectory(null);
+    }, [axes, actions]);
 
     const showTrajectory = useCallback(
         async (trackId: number, fovName: string, clickedT?: number) => {
@@ -146,14 +150,18 @@ export function ScatterPanel(_props: IDockviewPanelProps) {
         [trajectory, categoryColors, activeIndex],
     );
 
+    // Ref keeps handleSelection stable so EmbeddingViewMosaic doesn't re-fire onSelection on prop change
+    const trajectoryRef = useRef(trajectory);
+    trajectoryRef.current = trajectory;
+
     const handleSelection = useCallback(
         (pts: unknown) => {
             const arr = pts as { identifier?: string | number | bigint }[] | null;
             const id = arr?.[0]?.identifier ?? null;
             actions.setHighlight(id != null ? String(id) : null);
-            if (trajectory) actions.setTrajectory(null);
+            if (trajectoryRef.current) actions.setTrajectory(null);
         },
-        [actions, trajectory],
+        [actions],
     );
 
     // ── Scatter content ──────────────────────────────────────────────────

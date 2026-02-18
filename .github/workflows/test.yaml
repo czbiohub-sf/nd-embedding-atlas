@@ -47,7 +47,8 @@ jobs:
   test:
     needs: get-environments
     permissions:
-       id-token: write  # for codecov OIDC
+      contents: read    # checkout private repo
+      # id-token: write   # for codecov OIDC (requires public repo or paid plan)
 
     strategy:
       fail-fast: false
@@ -68,6 +69,14 @@ jobs:
         uses: astral-sh/setup-uv@v7
         with:
           python-version: ${{ matrix.env.python }}
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
       - name: create hatch environment
         run: uvx hatch env create ${{ matrix.env.name }}
       - name: list all all installed package versions
@@ -84,11 +93,11 @@ jobs:
           test -f .coverage || uvx hatch run ${{ matrix.env.name }}:cov-combine
           uvx hatch run ${{ matrix.env.name }}:cov-report   # report visibly
           uvx hatch run ${{ matrix.env.name }}:coverage xml # create report for upload
-      - name: Upload coverage
-        uses: codecov/codecov-action@v5
-        with:
-          fail_ci_if_error: true
-          use_oidc: true
+      # - name: Upload coverage
+      #   uses: codecov/codecov-action@v5
+      #   with:
+      #     fail_ci_if_error: true
+      #     use_oidc: true
 
   # Check that all tests defined above pass. This makes it easy to set a single "required" test in branch
   # protection instead of having to update it frequently. See https://github.com/re-actors/alls-green#why.
