@@ -21,12 +21,16 @@ class CustomBuildHook(BuildHookInterface):
             self.app.display_info("Frontend dist/ exists, skipping build")
             return
 
-        if not shutil.which("pnpm"):
-            msg = "pnpm is required to build the frontend. Install: npm i -g pnpm"
+        if shutil.which("pnpm"):
+            pnpm_cmd = ["pnpm"]
+        elif shutil.which("npx"):
+            pnpm_cmd = ["npx", "pnpm"]
+        else:
+            msg = "pnpm (or npx) is required to build the frontend. Install: npm i -g pnpm"
             raise RuntimeError(msg)
 
         self.app.display_info("Installing frontend dependencies...")
-        subprocess.run(["pnpm", "install", "--frozen-lockfile"], cwd=str(frontend_dir), check=True)
+        subprocess.run([*pnpm_cmd, "install", "--frozen-lockfile"], cwd=str(frontend_dir), check=True)
 
         self.app.display_info("Building frontend...")
-        subprocess.run(["pnpm", "build"], cwd=str(frontend_dir), check=True)
+        subprocess.run([*pnpm_cmd, "build"], cwd=str(frontend_dir), check=True)

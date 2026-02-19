@@ -1,8 +1,11 @@
-"""AnnDataCollection — AnnData-like interface over multiple zarr-backed datasets.
+"""AnnDataCollection — AnnData-like interface over multiple lazy-backed datasets.
 
 Internally uses ``ad.concat`` on lazy AnnData objects (from ``read_lazy``) to
 present a single concatenated view.  All properties (``.X``, ``.obs``,
 ``.obsm``, ``.layers``) delegate to this cached concat result and remain lazy.
+
+Supports both zarr stores and ``.h5ad`` (HDF5) files as inputs — ``read_lazy``
+handles both backends natively.
 
 Mostly follows spatialdata's ``Elements`` pattern (``UserDict``-based container
 with coercion on assignment).
@@ -36,7 +39,6 @@ from rich.tree import Tree
 
 # PEP 695 type aliases
 type StoreLike = zarr.storage.StoreLike | zarr.Group
-type Shape = tuple[int, int]
 
 
 @dataclass(slots=True, frozen=True)
@@ -60,7 +62,7 @@ class DatasetEntry:
         return self.adata.n_vars
 
     @property
-    def shape(self) -> Shape:
+    def shape(self) -> tuple[int, int]:
         """Shape of X matrix."""
         return self.adata.shape
 
@@ -144,7 +146,8 @@ class Datasets[V: DatasetEntry](UserDict[str, V]):
 
         Accepts anything zarr.open_group accepts (str, Path, Store,
         StorePath, ObjectStore, MemoryStore, etc.) plus an already-opened
-        zarr.Group.  Loads lazily via ``ad.experimental.read_lazy()``.
+        zarr.Group or a path to an ``.h5ad`` file.  Loads lazily via
+        ``ad.experimental.read_lazy()``.
 
         Override in subclasses to produce custom entry types.
         """
@@ -153,6 +156,10 @@ class Datasets[V: DatasetEntry](UserDict[str, V]):
         match value:
             case zarr.Group():
                 store = value
+            case str() | Path() if Path(value).suffix == ".h5ad":
+                path = Path(value)
+                adata = ad.experimental.read_lazy(path, load_annotation_index=True)
+                return self._check_var_names(key, adata, path)
             case str() | Path():
                 path = Path(value)
                 store = _open_zarr_group(value)
@@ -160,8 +167,10 @@ class Datasets[V: DatasetEntry](UserDict[str, V]):
                 store = _open_zarr_group(value)
 
         adata = ad.experimental.read_lazy(store, load_annotation_index=True)
+        return self._check_var_names(key, adata, path)
 
-        # Warn on var_names mismatch against first dataset
+    def _check_var_names(self, key: str, adata: ad.AnnData, path: Path | None) -> DatasetEntry:
+        """Warn on var_names mismatch and return a ``DatasetEntry``."""
         if self.data:
             first_entry = next(iter(self.data.values()))
             if not first_entry.var_names.equals(adata.var_names):
@@ -289,10 +298,8 @@ class AnnDataCollection:
             msg = "Collection is empty"
             raise ValueError(msg)
 
-        adatas = {key: entry.adata for key, entry in self._datasets.items()}
+        adatas = {key: entry.adata for key, entry in self.datasets.items()}
 
-        # Always use ad.concat, even for single datasets, to avoid
-        # returning a mutable reference to the entry's adata.
         return ad.concat(
             adatas,
             join="outer",
@@ -355,7 +362,7 @@ class AnnDataCollection:
         return self._concat.n_vars
 
     @property
-    def shape(self) -> Shape:
+    def shape(self) -> tuple[int, int]:
         """Shape of concatenated data matrix."""
         return (self.n_obs, self.n_vars)
 

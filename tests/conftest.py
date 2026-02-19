@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import anndata as ad
 import numpy as np
 import pytest
@@ -9,3 +11,17 @@ def adata():
     adata.layers["scaled"] = np.array([[0.1, 0.2], [0.3, 0.4], [0.5, 0.6]]).astype(np.float32)
 
     return adata
+
+
+@pytest.fixture
+def rng() -> np.random.Generator:
+    """Return a default RNG for random number generation."""
+    return np.random.default_rng(42)
+
+
+@pytest.fixture
+def h5ad_path(adata, tmp_path) -> Path:
+    """Write a small AnnData to an h5ad file and return the path."""
+    p = tmp_path / "test.h5ad"
+    adata.write_h5ad(p)
+    return p
