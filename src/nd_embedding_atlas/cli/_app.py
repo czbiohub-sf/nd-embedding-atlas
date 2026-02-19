@@ -15,20 +15,27 @@ app = typer.Typer(
 
 
 def _resolve_inputs(paths: list[Path]) -> list[Path]:
-    """Expand directories to *.zarr children and filter to AnnData zarrs."""
+    """Expand directories to AnnData stores and filter to valid inputs.
+
+    Accepts ``.h5ad`` files, ``.zarr`` directories (with ``obs/`` subdir),
+    and plain directories (scanned for ``*.zarr`` children and ``*.h5ad`` files).
+    """
     result: list[Path] = []
     for p in paths:
         p = p.resolve()
-        if p.is_dir() and p.suffix == ".zarr" and (p / "obs").is_dir():
+        if p.is_file() and p.suffix == ".h5ad":
+            result.append(p)
+        elif p.is_dir() and p.suffix == ".zarr" and (p / "obs").is_dir():
             result.append(p)
         elif p.is_dir():
             result.extend(child for child in sorted(p.glob("*.zarr")) if (child / "obs").is_dir())
+            result.extend(sorted(p.glob("*.h5ad")))
     return result
 
 
 @app.command()
 def view(
-    paths: Annotated[list[Path], typer.Argument(help="AnnData .zarr paths or directories containing them.")],
+    paths: Annotated[list[Path], typer.Argument(help="AnnData .zarr/.h5ad paths or directories containing them.")],
     plate: Annotated[Path | None, typer.Option("--plate", "-p", help="OME-Zarr plate for cell crop viewer.")] = None,
     host: Annotated[str, typer.Option(help="Server host.")] = "localhost",
     port: Annotated[int, typer.Option(help="Server port.")] = 5055,
@@ -41,14 +48,14 @@ def view(
 
     console = Console()
 
-    zarr_paths = _resolve_inputs(paths)
-    if not zarr_paths:
-        console.print("[red]No AnnData .zarr stores found in the given paths.[/red]")
+    data_paths = _resolve_inputs(paths)
+    if not data_paths:
+        console.print("[red]No AnnData stores (.zarr or .h5ad) found in the given paths.[/red]")
         raise typer.Exit(1)
 
-    console.print(f"Found [cyan]{len(zarr_paths)}[/cyan] dataset(s):")
+    console.print(f"Found [cyan]{len(data_paths)}[/cyan] dataset(s):")
     collection = AnnDataCollection()
-    for p in zarr_paths:
+    for p in data_paths:
         key = p.stem
         console.print(f"  {key} → {p}")
         collection[key] = p
