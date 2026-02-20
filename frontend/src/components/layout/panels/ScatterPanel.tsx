@@ -40,7 +40,12 @@ export function ScatterPanel(_props: IDockviewPanelProps) {
 
     // ── Per-panel color-by state ─────────────────────────────────────────
     const [colorByColumn, setColorByColumn] = useState<string | null>(null);
-    const obsColumns = metadata.obs_columns ?? [];
+    const obsColumns = useMemo(() => metadata.obs_columns ?? [], [metadata.obs_columns]);
+    const additionalFields = useMemo(
+        () =>
+            Object.fromEntries(["track_id", "fov_name", "t"].filter((f) => obsColumns.includes(f)).map((f) => [f, f])),
+        [obsColumns],
+    );
 
     // ── Category column mapping ──────────────────────────────────────────
     const [categoryMapping, setCategoryMapping] = useState<CategoryMapping | null>(null);
@@ -188,7 +193,7 @@ export function ScatterPanel(_props: IDockviewPanelProps) {
                 category={categoryCol}
                 categoryColors={categoryColors}
                 identifier="__row_index__"
-                additionalFields={{ track_id: "track_id", fov_name: "fov_name", t: "t" }}
+                additionalFields={additionalFields}
                 width={size.width}
                 height={size.height}
                 filter={brushSelection}

@@ -1251,12 +1251,14 @@ dependencies = [
 dev = [
     { name = "coverage" },
     { name = "ipykernel" },
+    { name = "pymdown-extensions" },
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "zensical" },
 ]
 doc = [
     { name = "ipykernel" },
+    { name = "pymdown-extensions" },
     { name = "zensical" },
 ]
 test = [
@@ -1289,12 +1291,14 @@ requires-dist = [
 dev = [
     { name = "coverage", specifier = ">=7.13.2" },
     { name = "ipykernel" },
+    { name = "pymdown-extensions", specifier = ">=10.20.1" },
     { name = "pytest", specifier = ">=9.0.2" },
     { name = "pytest-cov", specifier = ">=7" },
     { name = "zensical", specifier = ">=0.0.21" },
 ]
 doc = [
     { name = "ipykernel" },
+    { name = "pymdown-extensions", specifier = ">=10.20.1" },
     { name = "zensical", specifier = ">=0.0.21" },
 ]
 test = [

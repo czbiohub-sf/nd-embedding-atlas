@@ -295,11 +295,21 @@ toggle.name = "Switch to light mode"
 # ----------------------------------------------------------------------------
 [project.theme.icon]
 logo = "lucide/brackets"
-#repo = "lucide/smile"
+# repo = "lucide/github"
 
 # ----------------------------------------------------------------------------
 # The "extra" section contains miscellaneous settings.
 # ----------------------------------------------------------------------------
-#[[project.extra.social]]
-icon = "fontawesome/brands/github"
-link = "https://github.com/czbiohub-sf/nd-embedding-atlas"
+# [[project.extra.social]]
+# icon = "fontawesome/brands/github"
+# link = "https://github.com/czbiohub-sf/nd-embedding-atlas"
+
+# ----------------------------------------------------------------------------
+# Markdown extensions
+# ----------------------------------------------------------------------------
+[project.markdown_extensions.admonition]
+[project.markdown_extensions.pymdownx.details]
+[project.markdown_extensions.pymdownx.superfences]
+
+[project.markdown_extensions.pymdownx.tabbed]
+alternate_style = true

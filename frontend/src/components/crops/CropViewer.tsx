@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { useDashboard } from "../../hooks/useDashboard";
 import { Viewer, ViewerControls, ViewerErrorBoundary, ViewerLoadingOverlay } from "../viewer";
 import { SingleCropViewer } from "./SingleCropViewer";
+import { ViewerPauseGate } from "./ViewerPauseGate";
 
 export function CropViewer() {
     const { state } = useDashboard();
@@ -25,6 +26,7 @@ export function CropViewer() {
     return (
         <ViewerErrorBoundary>
             <Viewer.Provider>
+                <ViewerPauseGate active={!!state.highlightId} />
                 <div className="relative h-full bg-base">
                     <Viewer.Canvas className="absolute inset-0 h-full w-full" />
                     <SingleCropViewer cropSize={cropSize} />

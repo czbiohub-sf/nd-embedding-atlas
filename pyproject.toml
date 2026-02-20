@@ -52,6 +52,7 @@ test = [
 ]
 doc = [
   "ipykernel",
+  "pymdown-extensions>=10.20.1",
   "zensical>=0.0.21",
 ]
 
