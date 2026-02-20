@@ -151,7 +151,12 @@ export function DockviewShell({ hasPlate }: Props) {
                     for (const id of expectedPanels) {
                         if (!event.api.getPanel(id)) {
                             const component = id as keyof typeof COMPONENTS;
-                            const title = { scatter: "Embedding", table: "Data Table", "image-viewer": "Image Viewer", charts: "Charts" }[id];
+                            const title = {
+                                scatter: "Embedding",
+                                table: "Data Table",
+                                "image-viewer": "Image Viewer",
+                                charts: "Charts",
+                            }[id];
                             event.api.addPanel({ id, component, title });
                         }
                     }

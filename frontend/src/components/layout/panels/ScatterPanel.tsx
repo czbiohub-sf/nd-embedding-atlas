@@ -42,7 +42,8 @@ export function ScatterPanel(_props: IDockviewPanelProps) {
     const [colorByColumn, setColorByColumn] = useState<string | null>(null);
     const obsColumns = useMemo(() => metadata.obs_columns ?? [], [metadata.obs_columns]);
     const additionalFields = useMemo(
-        () => Object.fromEntries(["track_id", "fov_name", "t"].filter((f) => obsColumns.includes(f)).map((f) => [f, f])),
+        () =>
+            Object.fromEntries(["track_id", "fov_name", "t"].filter((f) => obsColumns.includes(f)).map((f) => [f, f])),
         [obsColumns],
     );
 

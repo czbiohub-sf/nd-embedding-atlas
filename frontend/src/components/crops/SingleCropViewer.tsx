@@ -247,14 +247,30 @@ export function SingleCropViewer({ cropSize }: Props) {
         } else {
             frameAround(cellInfo.x, cellInfo.y);
         }
-    }, [cellInfo?.x, cellInfo?.y, cellInfo?.bbox?.x_min, cellInfo?.bbox?.y_min, cellInfo?.bbox?.x_max, cellInfo?.bbox?.y_max, cropSize, viewerState.initialized, updateBbox, frameAround, actions, scale.x, scale.y]);
+    }, [
+        cellInfo?.x,
+        cellInfo?.y,
+        cellInfo?.bbox?.x_min,
+        cellInfo?.bbox?.y_min,
+        cellInfo?.bbox?.x_max,
+        cellInfo?.bbox?.y_max,
+        cropSize,
+        viewerState.initialized,
+        updateBbox,
+        frameAround,
+        actions,
+        scale.x,
+        scale.y,
+        cellInfo.bbox,
+        cellInfo,
+    ]);
 
     // ── Effect 3: Sync T index from selected cell ─────────────────────
     useEffect(() => {
         if (cellInfo) {
             actions.setTIndex(cellInfo.t ?? 0);
         }
-    }, [cellInfo?.t, actions]);
+    }, [cellInfo?.t, actions, cellInfo]);
 
     // ── Effect 4: Follow cell during trajectory playback ──────────────
     const { trajectory } = dashState;
@@ -264,7 +280,7 @@ export function SingleCropViewer({ cropSize }: Props) {
         if (!frame) return;
         updateBbox(frame.spatial_x, frame.spatial_y, cropSize / 2);
         // eslint-disable-next-line react-hooks/exhaustive-deps -- trajectory object excluded; tIndex + points cover all reads. cellInfo kept as guard to clear bbox on deselect.
-    }, [trajectory?.tIndex, trajectory?.points, cropSize, cellInfo, updateBbox]);
+    }, [trajectory?.tIndex, trajectory?.points, cropSize, cellInfo, updateBbox, trajectory]);
 
     // ── Cleanup on unmount ────────────────────────────────────────────
     useEffect(() => {
