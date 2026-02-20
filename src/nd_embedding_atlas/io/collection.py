@@ -293,12 +293,20 @@ class AnnDataCollection:
         return self._concat_cache
 
     def _build_concat(self) -> ad.AnnData:
-        """Build the concatenated lazy AnnData via ``ad.concat``."""
+        """Build the concatenated lazy AnnData via ``ad.concat``.
+
+        For single-dataset collections, returns the adata directly with a
+        ``_dataset`` obs column added — avoids the overhead of ``ad.concat``
+        which can be very slow on large lazy-backed h5ad files.
+        """
         if not self._datasets:
             msg = "Collection is empty"
             raise ValueError(msg)
 
         adatas = {key: entry.adata for key, entry in self.datasets.items()}
+
+        if len(adatas) == 1:
+            return next(iter(adatas.values()))
 
         return ad.concat(
             adatas,

@@ -143,6 +143,19 @@ export function DockviewShell({ hasPlate }: Props) {
             if (saved) {
                 try {
                     event.api.fromJSON(JSON.parse(saved));
+
+                    // Re-add any expected panels that were closed in a previous session
+                    const expectedPanels = hasPlate
+                        ? ["scatter", "table", "image-viewer", "charts"]
+                        : ["scatter", "table", "charts"];
+                    for (const id of expectedPanels) {
+                        if (!event.api.getPanel(id)) {
+                            const component = id as keyof typeof COMPONENTS;
+                            const title = { scatter: "Embedding", table: "Data Table", "image-viewer": "Image Viewer", charts: "Charts" }[id];
+                            event.api.addPanel({ id, component, title });
+                        }
+                    }
+
                     return;
                 } catch {
                     // Fall through to default layout

@@ -43,6 +43,10 @@ export interface ViewerActions {
     setZIndex: (z: number) => void;
     setTIndex: (t: number) => void;
     setBounds: (bounds: DimensionBounds) => void;
+    /** Pause the render loop (frees GPU frame budget for other WebGL canvases). */
+    pause: () => void;
+    /** Resume the render loop. */
+    resume: () => void;
 }
 
 // ── Meta: non-serializable refs ──────────────────────────────────────────────

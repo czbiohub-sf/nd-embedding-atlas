@@ -35,15 +35,16 @@ class EmbeddingStore:
 
     DEFAULT_OBSM_PRIORITY: ClassVar[list[str]] = ["X_umap", "X_tsne", "X_phate", "X_pca"]
 
-    def __init__(self, obs_df: pd.DataFrame) -> None:
+    def __init__(self, obs_df: pd.DataFrame, *, hidden_columns: set[str] | None = None) -> None:
         self.con = duckdb.connect(":memory:")
         self._loaded: dict[str, dict[str, Any]] = {}
+        self._hidden: set[str] = hidden_columns or set()
 
         obs_df = obs_df.copy()
         obs_df["__row_index__"] = range(len(obs_df))
         _ = obs_df  # prevent GC — DuckDB scans local Python objects by name
         self.con.sql("CREATE TABLE obs_base AS (SELECT * FROM obs_df)")
-        self.con.sql("CREATE VIEW dataset AS SELECT * FROM obs_base")
+        self._rebuild_view()
         self.n_obs = len(obs_df)
 
     def register_embedding(self, obsm_key: str, coords: np.ndarray) -> None:
@@ -70,9 +71,32 @@ class EmbeddingStore:
         self._rebuild_view()
 
     def _rebuild_view(self) -> None:
-        """Recreate the ``dataset`` VIEW to include all registered embeddings."""
+        """Recreate the ``dataset`` VIEW to include all registered embeddings.
+
+        Hidden columns are excluded from the VIEW but remain in ``obs_base``
+        for direct queries (e.g. ``/api/cell``).
+        """
+        if self._hidden:
+            # Discover obs_base columns and exclude hidden ones
+            cols = [
+                row[0]
+                for row in self.con.execute("SELECT column_name FROM (DESCRIBE obs_base)").fetchall()
+                if row[0] not in self._hidden
+            ]
+            select = ", ".join(f'obs_base."{c}"' for c in cols)
+        else:
+            select = "obs_base.*"
         joins = " ".join(f"LEFT JOIN {meta['table']} USING (__row_index__)" for meta in self._loaded.values())
-        self.con.sql(f"CREATE OR REPLACE VIEW dataset AS SELECT * FROM obs_base {joins}")
+        # Embedding columns (exclude __row_index__ to avoid duplication with obs_base)
+        emb_cols: list[str] = []
+        for meta in self._loaded.values():
+            prefix = meta["prefix"]
+            emb_cols.extend(f'{meta["table"]}."{prefix}_{i}"' for i in range(meta["n_dims"]))
+        emb_select = ", ".join(emb_cols)
+        if emb_select:
+            self.con.sql(f"CREATE OR REPLACE VIEW dataset AS SELECT {select}, {emb_select} FROM obs_base {joins}")
+        else:
+            self.con.sql(f"CREATE OR REPLACE VIEW dataset AS SELECT {select} FROM obs_base")
 
     @property
     def loaded_embeddings(self) -> dict[str, dict[str, Any]]:
@@ -130,6 +154,11 @@ def mount_duckdb_endpoints(app: FastAPI, con: duckdb.DuckDBPyConnection) -> None
             return JSONResponse({"error": "Missing 'sql' or 'type' in query payload"}, status_code=400)
         sql = query["sql"]
         command = query["type"]
+        import logging
+        import time
+
+        _t0 = time.perf_counter()
+        logging.getLogger("ndea.query").debug("SQL [%s]: %s", command, sql[:200])
         # Block destructive statements (allow specific safe mutations)
         stripped = sql.strip().upper()
         if any(stripped.startswith(p) for p in _blocked_prefixes) and not any(
@@ -160,6 +189,10 @@ def mount_duckdb_endpoints(app: FastAPI, con: duckdb.DuckDBPyConnection) -> None
                 raise ValueError(msg)  # noqa: TRY301
         except Exception as e:  # noqa: BLE001
             return JSONResponse({"error": str(e)}, status_code=500)
+        finally:
+            _elapsed = (time.perf_counter() - _t0) * 1000
+            if _elapsed > 100:
+                logging.getLogger("ndea.query").warning("SLOW [%s] %.0fms: %s", command, _elapsed, sql[:300])
 
     @app.get("/data/query")
     async def get_query(req: Request) -> Response:

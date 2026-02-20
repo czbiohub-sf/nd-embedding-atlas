@@ -7,6 +7,12 @@ icon: lucide/rocket
 nd-embedding-atlas is an interactive dashboard that links high-dimensional AI embeddings
 to their source 5D (TCZYX) image data for rapid exploration and annotation.
 
+!!! warning "AnnData schema expectations are in flux"
+
+    The column names, layout of `obs`/`obsm`/`layers`, and general AnnData
+    structure that the viewer recognizes are not yet standardized and will
+    change. You may need to adjust your AnnData as we formalize the structure.
+
 ## Prerequisites
 
 Before you begin, make sure you have the following installed:
@@ -57,7 +63,7 @@ The project includes scripts to download example datasets. Pick the one that fit
 
     | Store | Description |
     |-------|-------------|
-    | `dataset.zarr` | OME-Zarr v0.5 plate with 5D image data |
+    | `dataset.zarr` | OME-Zarr v0.5 HCS plate with 5D image data |
     | `annotations_zv3.zarr` | AnnData with tracking annotations and embeddings |
 
     !!! tip "On the Bruno HPC"
@@ -99,7 +105,7 @@ After downloading, launch the viewer on the datasets:
     ```
 
     This loads the tracking annotations with embeddings and connects the
-    OME-Zarr plate for cell crop viewing.
+    OME-Zarr HCS plate for cell crop viewing.
 
 === "CellxGene (transcriptomics)"
 

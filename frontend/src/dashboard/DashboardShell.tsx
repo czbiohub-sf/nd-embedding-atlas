@@ -7,11 +7,12 @@ import { useDashboard } from "../hooks/useDashboard";
 export function DashboardShell() {
     const { state } = useDashboard();
     const { metadata } = state;
+    const hasTime = metadata.obs_columns?.includes("t") ?? false;
 
     return (
         <div className="flex h-full flex-col bg-base">
             <Toolbar>
-                <TimeSlider />
+                {hasTime && <TimeSlider />}
                 <FilterInfo />
                 <span className="ml-auto text-text-muted">v{metadata.version}</span>
             </Toolbar>

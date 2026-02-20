@@ -163,9 +163,38 @@ def create_app(
         expose_headers=["*"],
     )
 
+    # ── Auto-detect spatial columns (from full obs, before filtering) ─
+    _all_obs_cols = set(collection.obs.keys())
+
+    # FOV column: fov_name > well
+    _fov_col = "fov_name" if "fov_name" in _all_obs_cols else ("well" if "well" in _all_obs_cols else None)
+
+    # Time column: t (if absent, default 0 at query time)
+    _t_col = "t" if "t" in _all_obs_cols else None
+
+    # Bbox column: bbox > cp_bbox (bbox = phenotyping segmentation, cp_bbox = CellProfiler)
+    _bbox_col = "bbox" if "bbox" in _all_obs_cols else ("cp_bbox" if "cp_bbox" in _all_obs_cols else None)
+
+    # Centroid columns: x/y > x_cp1/y_cp1 > x_global_pheno/y_global_pheno
+    _x_col = _y_col = None
+    for _xc, _yc in [("x", "y"), ("x_cp1", "y_cp1"), ("x_global_pheno", "y_global_pheno")]:
+        if _xc in _all_obs_cols and _yc in _all_obs_cols:
+            _x_col, _y_col = _xc, _yc
+            break
+
+    # Ensure spatial columns are always loaded (needed by /api/cell)
+    if obs_columns is not None and plate_path is not None:
+        spatial = {c for c in [_fov_col, _t_col, _bbox_col, _x_col, _y_col] if c is not None}
+        obs_columns = list(dict.fromkeys([*obs_columns, *sorted(spatial)]))
+
+    # Determine which spatial columns should be hidden from Mosaic
+    _hidden_cols: set[str] = set()
+    if plate_path is not None:
+        _hidden_cols = {c for c in [_fov_col, _t_col, _bbox_col, _x_col, _y_col] if c is not None}
+
     # Materialize obs only
     obs_df = prepare_obs(collection, obs_columns=obs_columns)
-    store = EmbeddingStore(obs_df)
+    store = EmbeddingStore(obs_df, hidden_columns=_hidden_cols)
 
     # Mount Mosaic query endpoints on the store's connection
     mount_duckdb_endpoints(app, store.con)
@@ -240,7 +269,7 @@ def create_app(
         default_y = "y"
 
     id_column = "__row_index__"
-    obs_column_names = [c for c in obs_df.columns if c != "__row_index__"]
+    obs_column_names = [c for c in obs_df.columns if c != "__row_index__" and c not in _hidden_cols]
     embedding_props = {
         "data": {
             "id": id_column,
@@ -266,6 +295,13 @@ def create_app(
                 result["plate_pixel_scale"] = plate_meta["pixel_scale"]
             if "channels" in plate_meta:
                 result["plate_channels"] = plate_meta["channels"]
+        result["spatial"] = {
+            "fov_col": _fov_col,
+            "t_col": _t_col,
+            "bbox_col": _bbox_col,
+            "x_col": _x_col,
+            "y_col": _y_col,
+        }
         return result
 
     @app.get("/data/dataset.parquet")
@@ -323,18 +359,52 @@ def create_app(
         @app.get("/api/cell/{row_index}", response_model=None)
         async def get_cell(row_index: int) -> dict | JSONResponse:
             """Look up spatial coordinates for a cell by row index."""
+            select_cols = []
+            if _fov_col:
+                select_cols.append(_fov_col)
+            if _t_col:
+                select_cols.append(_t_col)
+            if _bbox_col:
+                select_cols.append(_bbox_col)
+            if _x_col:
+                select_cols.extend([_x_col, _y_col])
+
+            if not select_cols:
+                return JSONResponse({"error": "No spatial columns found"}, status_code=500)
+
             row = store.con.execute(
-                "SELECT fov_name, t, x, y FROM obs_base WHERE __row_index__ = ?",
+                f"SELECT {', '.join(select_cols)} FROM obs_base WHERE __row_index__ = ?",
                 [row_index],
             ).fetchone()
             if row is None:
                 return JSONResponse({"error": "Cell not found"}, status_code=404)
-            return {
-                "fov_name": row[0],
-                "t": int(row[1]),
-                "x": float(row[2]),
-                "y": float(row[3]),
-            }
+
+            result_map = dict(zip(select_cols, row, strict=True))
+            response: dict = {}
+
+            # fov_name (normalize from whatever source column)
+            if _fov_col:
+                response["fov_name"] = str(result_map[_fov_col])
+
+            # t (default 0 when column is absent)
+            response["t"] = int(result_map[_t_col]) if _t_col else 0
+
+            # bbox parsing: "[44055 98779 44238 98919]" → {y_min, x_min, y_max, x_max}
+            if _bbox_col and result_map.get(_bbox_col):
+                parts = str(result_map[_bbox_col]).strip("[]").split()
+                if len(parts) == 4:
+                    y_min, x_min, y_max, x_max = (float(v) for v in parts)
+                    response["bbox"] = {"y_min": y_min, "x_min": x_min, "y_max": y_max, "x_max": x_max}
+                    # Provide centroid from bbox center as fallback x/y
+                    response["x"] = (x_min + x_max) / 2
+                    response["y"] = (y_min + y_max) / 2
+
+            # Explicit x/y centroids (override bbox center if available)
+            if _x_col and result_map.get(_x_col) is not None:
+                response["x"] = float(result_map[_x_col])
+                response["y"] = float(result_map[_y_col])
+
+            return response
 
     # Resolve which frontend to serve
     if static_dir is not None:

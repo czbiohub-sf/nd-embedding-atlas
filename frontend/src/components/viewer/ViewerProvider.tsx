@@ -50,7 +50,8 @@ export function ViewerProvider({ children }: Props) {
                 canvas,
                 viewports: [{ camera, layers: [], cameraControls: controls }],
             });
-            runtime.start();
+            // Don't auto-start the render loop — CropViewer calls resume()
+            // when a cell is selected, avoiding GPU contention with the scatter.
             runtimeRef.current = runtime;
             viewportRef.current = runtime.viewports[0] ?? null;
             setInitialized(true);
@@ -117,6 +118,14 @@ export function ViewerProvider({ children }: Props) {
         }
     }, []);
 
+    const pause = useCallback(() => {
+        runtimeRef.current?.stop();
+    }, []);
+
+    const resume = useCallback(() => {
+        runtimeRef.current?.start();
+    }, []);
+
     // ── Context value ─────────────────────────────────────────────────────
 
     const state = useMemo<ViewerState>(
@@ -125,8 +134,8 @@ export function ViewerProvider({ children }: Props) {
     );
 
     const actions = useMemo(
-        () => ({ setLayers, clearLayers, setFrame, setZIndex, setTIndex, setBounds }),
-        [setLayers, clearLayers, setFrame],
+        () => ({ setLayers, clearLayers, setFrame, setZIndex, setTIndex, setBounds, pause, resume }),
+        [setLayers, clearLayers, setFrame, pause, resume],
     );
 
     // Meta uses refs — recompute when initialized flips so consumers see the real viewport

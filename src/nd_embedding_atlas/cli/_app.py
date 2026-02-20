@@ -37,6 +37,10 @@ def _resolve_inputs(paths: list[Path]) -> list[Path]:
 def view(
     paths: Annotated[list[Path], typer.Argument(help="AnnData .zarr/.h5ad paths or directories containing them.")],
     plate: Annotated[Path | None, typer.Option("--plate", "-p", help="OME-Zarr plate for cell crop viewer.")] = None,
+    obs_columns: Annotated[
+        list[str] | None,
+        typer.Option("--obs-columns", "-c", help="Subset of obs columns to load (comma-sep or repeated)."),
+    ] = None,
     host: Annotated[str, typer.Option(help="Server host.")] = "localhost",
     port: Annotated[int, typer.Option(help="Server port.")] = 5055,
 ) -> None:
@@ -61,7 +65,13 @@ def view(
         collection[key] = p
 
     console.print(f"\n[bold]{collection.n_obs:,}[/bold] obs x [bold]{collection.n_vars:,}[/bold] vars")
+    if obs_columns:
+        console.print(f"  obs columns: {', '.join(obs_columns)}")
+
+    # Expand comma-separated values: -c "a,b,c" → ["a", "b", "c"]
+    if obs_columns:
+        obs_columns = [col.strip() for raw in obs_columns for col in raw.split(",") if col.strip()]
 
     resolved_plate = str(plate.resolve()) if plate is not None else None
     console.print(f"\nServing at [link=http://{host}:{port}]http://{host}:{port}[/link]")
-    vz.serve(collection, plate_path=resolved_plate, host=host, port=port)
+    vz.serve(collection, obs_columns=obs_columns or None, plate_path=resolved_plate, host=host, port=port)

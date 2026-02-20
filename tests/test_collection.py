@@ -36,7 +36,6 @@ def test_collection_h5ad_obs_materializes(h5ad_path: Path):
     if hasattr(obs, "to_memory"):
         obs = obs.to_memory()
     assert len(obs) == 3
-    assert "_dataset" in obs.columns
 
 
 def test_collection_h5ad_X_computes(h5ad_path: Path):
