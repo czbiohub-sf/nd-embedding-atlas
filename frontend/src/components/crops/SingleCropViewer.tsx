@@ -261,7 +261,7 @@ export function SingleCropViewer({ cropSize }: Props) {
         actions,
         scale.x,
         scale.y,
-        cellInfo.bbox,
+        cellInfo?.bbox,
         cellInfo,
     ]);
 
