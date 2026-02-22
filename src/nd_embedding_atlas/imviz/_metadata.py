@@ -6,6 +6,7 @@ import json
 import pathlib
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 
@@ -63,7 +64,92 @@ def get_plate_metadata(plate_path: str | pathlib.Path) -> dict[str, Any]:
     # Channel metadata from OME/OMERO (colors, windows)
     result["channels"] = _read_omero_channels(plate_path, first_pos)
 
+    # Auto-contrast: sample first position to compute intensity percentiles
+    _apply_auto_contrast(first_pos, result["channels"])
+
     return result
+
+
+def _sample_contrast_range(
+    data: Any,
+    channel_idx: int,
+    *,
+    time_point: int = 0,
+    low_pct: float = 1.0,
+    high_pct: float = 99.0,
+    sample_fraction: float = 0.1,
+) -> tuple[float, float]:
+    """Calculate contrast range by sampling a fraction of voxels.
+
+    Uses strided indexing to efficiently downsample the volume.
+
+    Parameters
+    ----------
+    data
+        Array-like with shape ``(T, C, Z, Y, X)`` or ``(C, Z, Y, X)``.
+    channel_idx
+        Channel index to sample.
+    time_point
+        Timepoint to sample (for 5D data).
+    low_pct, high_pct
+        Percentiles for contrast range.
+    sample_fraction
+        Fraction of voxels to sample (0.1 = 10%).
+
+    Returns
+    -------
+    ``(min, max)`` intensity values at the given percentiles.
+    """
+    shape = data.shape
+
+    if len(shape) == 5:  # TCZYX
+        z_size, y_size, x_size = shape[2], shape[3], shape[4]
+    elif len(shape) == 4:  # CZYX
+        z_size, y_size, x_size = shape[1], shape[2], shape[3]
+    else:
+        return 0.0, 65535.0
+
+    total_pixels = z_size * y_size * x_size
+    target_pixels = int(total_pixels * sample_fraction)
+    stride = max(1, int(np.cbrt(total_pixels / target_pixels)))
+
+    if len(shape) == 5:
+        t = min(time_point, shape[0] - 1)
+        sample = np.array(data[t, channel_idx, ::stride, ::stride, ::stride])
+    else:
+        sample = np.array(data[channel_idx, ::stride, ::stride, ::stride])
+
+    return float(np.percentile(sample, low_pct)), float(np.percentile(sample, high_pct))
+
+
+def _apply_auto_contrast(position: Any, channels: list[dict[str, Any]]) -> None:
+    """Update channel windows with auto-contrast from sampled data.
+
+    Modifies *channels* in place.  Skips channels that already have
+    meaningful contrast windows (start != 0 or end != 65535).
+    """
+    data = position.data
+    n_channels = len(channels)
+
+    for i in range(n_channels):
+        window = channels[i].get("window", {})
+        start = window.get("start", 0)
+        end = window.get("end", 65535)
+
+        # Skip if window already looks reasonable (not full 16-bit range)
+        if start != 0 or end != 65535:
+            continue
+
+        try:
+            lo, hi = _sample_contrast_range(data, i)
+            channels[i]["window"] = {
+                "start": round(lo, 1),
+                "end": round(hi, 1),
+                "min": round(lo, 1),
+                "max": round(hi, 1),
+            }
+        except Exception:  # noqa: BLE001
+            pass  # Keep default window on error
 
 
 def _read_omero_channels(

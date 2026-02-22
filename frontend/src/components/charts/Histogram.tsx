@@ -69,7 +69,9 @@ export function Histogram({ field, bins: binCount = 20 }: Props) {
 
     // Step 2: compute bin parameters
     const binParams = useMemo(() => {
-        if (!stats || stats.count === 0 || stats.min === stats.max) return null;
+        if (!stats || stats.count === 0) return null;
+        // Constant-value column: min === max, no meaningful histogram
+        if (stats.min === stats.max) return null;
         const range = stats.max - stats.min;
         const binSize = range / binCount;
         return { binStart: stats.min, binSize };
@@ -116,6 +118,15 @@ export function Histogram({ field, bins: binCount = 20 }: Props) {
     const [brushRange, setBrushRange] = useState<[number, number] | null>(null);
     const brushing = useRef(false);
     const sourceRef = useRef({ reset: () => setBrushRange(null) });
+
+    // Constant-value column: show the value with count instead of empty histogram
+    if (stats && stats.count > 0 && stats.min === stats.max) {
+        return (
+            <div ref={containerRef} className="py-2 text-[11px] text-text-muted">
+                {formatTick(stats.min)} ({stats.count.toLocaleString()} rows)
+            </div>
+        );
+    }
 
     if (!binParams || !data || data.length === 0) {
         return (

@@ -81,6 +81,18 @@ class TestGetPlateMetadata:
         assert "x" in meta["pixel_scale"]
         assert "y" in meta["pixel_scale"]
 
+    def test_auto_contrast_windows(self):
+        """Channel windows should have data-driven contrast, not [0, 65535]."""
+        from nd_embedding_atlas.imviz import get_plate_metadata
+
+        meta = get_plate_metadata(ZARR_V2)
+        for ch in meta["channels"]:
+            window = ch["window"]
+            # Auto-contrast should narrow the range from the full 16-bit default
+            assert window["end"] < 65535 or window["start"] > 0, (
+                f"Channel {ch['label']} still has default [0, 65535] window"
+            )
+
     def test_v3_matches_v2_positions(self):
         from nd_embedding_atlas.imviz import get_plate_metadata
 
@@ -212,6 +224,13 @@ class TestCreateApp:
         assert len(data["plate_stores"]) == 2
         assert data["plate_stores"][0]["ome_version"] == "0.4"
         assert data["plate_stores"][1]["ome_version"] == "0.5"
+
+    def test_metadata_auto_contrast(self, client):
+        resp = client.get("/data/metadata.json")
+        data = resp.json()
+        for ch in data["plate_channels"]:
+            w = ch["window"]
+            assert w["end"] < 65535 or w["start"] > 0, f"Channel {ch['label']} has default contrast"
 
     def test_metadata_obs_columns(self, client):
         resp = client.get("/data/metadata.json")

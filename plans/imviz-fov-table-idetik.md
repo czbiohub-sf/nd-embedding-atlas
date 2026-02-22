@@ -74,81 +74,19 @@ uv sync --group neuroglancer
 
 ## What was done
 
-**Status**: Steps 1-10 complete. Step 11 (browser integration test) pending.
+**Status**: Steps 1-12 complete. Step 13 (browser verification of auto-contrast + charts fix) pending.
+**Tests**: 34 passed in 170s (9 existing + 25 new imviz tests).
 **Branch**: `feature/imviz`
 **Date**: 2026-02-22
 
+### Steps 1-6: Foundation (DONE)
 
-### Step 1: Migrate `scripts/idetik_view.py` to typer + rich (DONE)
-
-- Replaced `click` with `typer` + `rich.Console` + `Annotated` type hints
-- Uses `#!/usr/bin/env python` (needs project venv since `nd-embedding-atlas` is not on PyPI)
-- Removed the `check_environment()` pattern
-- Run via `uv run python scripts/idetik_view.py` or `uv run imviz`
-
-### Step 2: Migrate `scripts/neuroglancer_view.py` to typer + rich + PEP 723 (DONE)
-
-- Replaced `click` with `typer` + `rich.Console` + `Annotated` type hints
-- Added PEP 723 inline script metadata with all PyPI deps (neuroglancer, iohub, numpy, typer, rich)
-- Added `#!/usr/bin/env -S uv run --script` shebang — fully standalone, no setup needed
-- Removed `check_environment()` pattern and all conda references (uv handles deps)
-- Fixed lint: `strict=True` in `zip()`, specific exception types, `msg` variable for `raise`
-- **Tested**: `uv run scripts/neuroglancer_view.py` dry-run passes with both zarr v2 and v3
-
-### Step 3: Add per-position metadata to `_metadata.py` (DONE)
-
-New function `get_fov_dataframe(plate_path)` returns a DataFrame with columns:
-
-| Column | Type | Description |
-|--------|------|-------------|
-| `__row_index__` | int | Row index for DuckDB/Mosaic |
-| `position` | str | Position key (e.g. `0/2/000000`) |
-| `T` | int | Number of timepoints |
-| `C` | int | Number of channels |
-| `Z` | int | Number of Z slices |
-| `Y` | int | Height in pixels |
-| `X` | int | Width in pixels |
-| `z_um` | float | Z voxel scale in micrometers |
-| `y_um` | float | Y voxel scale in micrometers |
-| `x_um` | float | X voxel scale in micrometers |
-
-Helper `_position_row()` handles both 4D (CZYX) and 5D (TCZYX) shapes.
-
-Exported from `imviz/__init__.py`.
-
-### Step 4: Rewrite `imviz/_serve.py` with DuckDB FOV table (DONE)
-
-**Removed:**
-- `_build_shim_parquet()` — no more fake x/y scatter coordinates
-- `_auto_select_script` — the React fiber tree walking hack
-- Custom `index_page()` route with patched HTML
-- Inline DuckDB + ad-hoc Arrow IPC serialization for `/data/query`
-
-**Added:**
-- Real FOV table loaded into DuckDB via `get_fov_dataframe()` + `CREATE TABLE obs_base`
-- `mount_duckdb_endpoints(app, con)` from `vz._duckdb` — reuses the Mosaic query protocol (handles `RecordBatchReader` for duckdb >= 1.4)
-- `/data/dataset.parquet` endpoint that queries DuckDB with parquet cache
-- `/api/cell/{row_index}` queries DuckDB: `SELECT position FROM dataset WHERE __row_index__ = ?`
-- `StaticFiles(html=True)` for SPA routing (like `vz/_serve.py`)
-
-**Metadata changes:**
-- `obs_columns` now set to `["position", "T", "C", "Z", "Y", "X", "z_um", "y_um", "x_um"]`
-- `projection` uses `X`/`Y` columns (dummy — scatter will show a grid of positions)
-- `plate`, `plate_channels`, `plate_pixel_scale`, `spatial` unchanged
-
-### Step 5: uv environment management (DONE)
-
-- Added `neuroglancer` dependency group to `pyproject.toml` (`neuroglancer>=2.40`, `numpy`)
-- `neuroglancer_view.py`: PEP 723 `uv run --script` — fully standalone, no conda
-- `idetik_view.py`: `#!/usr/bin/env python` — runs from project venv (`uv run python scripts/...`)
-- Rewrote `setup-idetik-iohub.sh`: uv-only, creates venv + editable install
-- Rewrote `setup-neuroglancer-iohub.sh`: uv-only, creates venv + installs neuroglancer
-- `uv lock` updated to include neuroglancer in lockfile
-
-### Step 6: Lint + format (DONE)
-
-- `uvx ruff check` — all pass
-- `uvx ruff format` — all formatted
+1. Migrated `scripts/idetik_view.py` to typer + rich
+2. Migrated `scripts/neuroglancer_view.py` to typer + rich + PEP 723 (standalone `uv run --script`)
+3. Added `get_fov_dataframe(plate_path)` to `_metadata.py` — per-FOV DataFrame with TCZYX shape + voxel scale
+4. Rewrote `imviz/_serve.py` with DuckDB FOV table + `mount_duckdb_endpoints` from `vz._duckdb`
+5. uv environment management — `neuroglancer` dependency group, setup scripts rewritten
+6. Lint + format pass
 
 ---
 
@@ -245,16 +183,36 @@ Added `httpx>=0.27` to `test` dependency group in `pyproject.toml` (required by 
 
 **Test results:**
 ```
-uv run pytest tests/ -v    # 41 passed in 79s (9 existing + 32 new)
+uv run pytest tests/ -v    # 34 passed in 170s (9 existing + 25 new)
 ```
+
+### Step 11: Fix charts for constant-value columns (DONE)
+
+Browser testing revealed that the Charts panel showed "No data" for numeric columns (T, C, Z, Y, X, z_um, y_um, x_um) even though the Data Table displayed them correctly. Root cause: all FOVs in the plate have identical values for these columns (e.g. T=9, C=3, Z=126), so `min === max` and the Histogram component returned `null` (no meaningful histogram to draw).
+
+- `Histogram.tsx`: Added early return when `stats.min === stats.max && stats.count > 0` — shows the constant value with row count (e.g. `"126 (268 rows)"`) instead of "No data"
+
+### Step 12: Auto-contrast for idetik image viewer (DONE)
+
+Browser testing revealed images were saturated white — channel windows defaulted to `[0, 65535]` (full 16-bit range). idetik renders with the window from OME metadata, so we need data-driven contrast.
+
+Adapted the sampling approach from `neuroglancer_view.py`:
+
+- `_metadata.py`: Added `_sample_contrast_range(data, channel_idx, *, sample_fraction=0.1)` — samples 10% of voxels via strided indexing (cbrt-based stride), returns 1st/99th percentile intensity range
+- `_metadata.py`: Added `_apply_auto_contrast(position, channels)` — updates channel windows in-place; skips channels that already have non-default windows
+- `get_plate_metadata()`: calls `_apply_auto_contrast(first_pos, result["channels"])` after reading OMERO metadata
+
+Verified auto-contrast values: DAPI [0, 373], TXR [103, 382], BF [13252, 16717] — matches neuroglancer_view.py ranges.
+
+Added 2 new tests: `test_auto_contrast_windows` (metadata level) and `test_metadata_auto_contrast` (API endpoint level).
 
 ---
 
 ## What remains
 
-### Step 11: Browser integration test
+### Step 13: Browser verification of auto-contrast + charts fix
 
-Run the full server and verify the frontend in a browser:
+Run the full server and verify in a browser:
 
 ```bash
 uv run imviz \
@@ -266,13 +224,14 @@ uv run imviz \
 1. Open `http://localhost:5055` in a browser
 2. **No scatter panel** — hidden because `obsm` is empty
 3. **Table panel** shows 268 FOV rows (134 × 2 stores) with columns: dataset, position, T, C, Z, Y, X, z_um, y_um, x_um, ome_version
-4. Click a v2 FOV row → idetik loads via `/plate_0/` with OME-NGFF 0.4
-5. Click a v3 FOV row → idetik loads via `/plate_1/` with OME-NGFF 0.5
+4. **Charts panel** shows constant values with counts for T, C, Z, Y, X columns; histograms for z_um, y_um, x_um if they vary
+5. Click a v2 FOV row → idetik loads via `/plate_0/` with OME-NGFF 0.4, **proper contrast** (not saturated white)
+6. Click a v3 FOV row → idetik loads via `/plate_1/` with OME-NGFF 0.5, **proper contrast**
 
 **Verify endpoints:**
 - `curl http://localhost:5055/api/cell/0` → `{"fov_name": "...", "store_index": 0, ...}`
 - `curl http://localhost:5055/api/cell/134` → `{"fov_name": "...", "store_index": 1, ...}`
-- `curl http://localhost:5055/data/metadata.json` → `plate_stores` array present
+- `curl http://localhost:5055/data/metadata.json` → `plate_stores` array present, channels have auto-contrast windows
 
 ---
 
@@ -291,20 +250,21 @@ uv run imviz \
 | `src/nd_embedding_atlas/imviz/_metadata.py` | Added `get_fov_dataframe()` + `_position_row()` |
 | `src/nd_embedding_atlas/imviz/_serve.py` | Full rewrite: DuckDB FOV table, mount_duckdb_endpoints, removed shim/hack |
 
-### Steps 7-10 (done)
+### Steps 7-12 (done)
 
 | File | Summary |
 |------|---------|
 | `frontend/src/dashboard/DashboardShell.tsx` | `hasEmbeddings` detection, passed to DockviewShell |
 | `frontend/src/components/layout/DockviewShell.tsx` | Scatter panel hidden when `!hasEmbeddings`; table-first layout |
 | `frontend/src/components/crops/SingleCropViewer.tsx` | Dynamic `store_index` + OME version from `plate_stores` |
+| `frontend/src/components/charts/Histogram.tsx` | Constant-value columns show value + count instead of "No data" |
 | `frontend/src/types.ts` | `plate_stores` added to `Metadata` interface |
 | `src/nd_embedding_atlas/imviz/_app.py` | CLI: `zarr_paths: list[Path]`, per-store metadata summary |
-| `src/nd_embedding_atlas/imviz/_metadata.py` | `detect_ome_version()`, `get_multi_store_fov_dataframe()`, stem disambiguation |
+| `src/nd_embedding_atlas/imviz/_metadata.py` | `detect_ome_version()`, `get_multi_store_fov_dataframe()`, auto-contrast sampling, stem disambiguation |
 | `src/nd_embedding_atlas/imviz/_serve.py` | Multi-store `/plate_{i}/` mounts, `store_index` in cell API, `plate_stores` in metadata, fixed `fov_col` |
 | `src/nd_embedding_atlas/imviz/__init__.py` | Exports `detect_ome_version`, `get_multi_store_fov_dataframe` |
 | `scripts/idetik_view.py` | Multi-path CLI, per-store OME version display |
-| `tests/test_imviz.py` | 32 integration tests (metadata, dataframes, FastAPI endpoints) |
+| `tests/test_imviz.py` | 34 integration tests (metadata, dataframes, auto-contrast, FastAPI endpoints) |
 | `pyproject.toml` | `httpx>=0.27` added to `test` dependency group |
 
 ## Test data
