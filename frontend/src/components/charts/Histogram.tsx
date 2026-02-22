@@ -122,8 +122,13 @@ export function Histogram({ field, bins: binCount = 20 }: Props) {
     // Constant-value column: show the value with count instead of empty histogram
     if (stats && stats.count > 0 && stats.min === stats.max) {
         return (
-            <div ref={containerRef} className="py-2 text-[11px] text-text-muted">
-                {formatTick(stats.min)} ({stats.count.toLocaleString()} rows)
+            <div ref={containerRef} className="py-2">
+                <span className="inline-block rounded bg-blue-900 px-1.5 py-0.5 text-[11px] font-medium text-white">
+                    {formatTick(stats.min)}
+                </span>
+                <span className="ml-1 text-[10px] text-text-muted">
+                    ({stats.count.toLocaleString()} rows)
+                </span>
             </div>
         );
     }
