@@ -125,6 +125,63 @@ def get_fov_dataframe(plate_path: str | pathlib.Path) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def detect_ome_version(plate_path: str | pathlib.Path) -> str:
+    """Detect OME-NGFF version from a zarr store.
+
+    Parameters
+    ----------
+    plate_path
+        Path to an OME-Zarr store.
+
+    Returns
+    -------
+    ``"0.5"`` for Zarr v3 stores (``zarr.json`` present),
+    ``"0.4"`` for Zarr v2 stores.
+    """
+    p = pathlib.Path(plate_path)
+    if (p / "zarr.json").exists():
+        return "0.5"
+    return "0.4"
+
+
+def get_multi_store_fov_dataframe(plate_paths: list[str | pathlib.Path]) -> pd.DataFrame:
+    """Build a combined DataFrame from multiple OME-Zarr stores.
+
+    Each store gets a ``dataset`` column (path stem) and ``store_index`` column.
+    Row indices are globally unique across stores.
+
+    Parameters
+    ----------
+    plate_paths
+        List of paths to OME-Zarr stores.
+
+    Returns
+    -------
+    Combined DataFrame suitable for loading into DuckDB.
+    """
+    frames: list[pd.DataFrame] = []
+    offset = 0
+
+    # Build unique dataset names — use parent dir when stems collide
+    paths = [pathlib.Path(p) for p in plate_paths]
+    stems = [p.stem for p in paths]
+    if len(set(stems)) < len(stems):
+        names = [f"{p.parent.name}/{p.stem}" for p in paths]
+    else:
+        names = stems
+
+    for i, plate_path in enumerate(paths):
+        df = get_fov_dataframe(plate_path)
+        df["dataset"] = names[i]
+        df["store_index"] = i
+        df["ome_version"] = detect_ome_version(plate_path)
+        df["__row_index__"] = range(offset, offset + len(df))
+        offset += len(df)
+        frames.append(df)
+
+    return pd.concat(frames, ignore_index=True)
+
+
 def _position_row(idx: int, key: str, pos: Any) -> dict[str, Any]:
     """Extract a single row of FOV metadata from an iohub Position."""
     shape = list(pos.data.shape)

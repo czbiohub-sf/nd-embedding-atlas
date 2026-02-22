@@ -22,6 +22,11 @@ export interface Metadata {
         color: string;
         window: { start: number; end: number; min: number; max: number };
     }>;
+    plate_stores?: Array<{
+        mount: string;
+        name: string;
+        ome_version: "0.4" | "0.5";
+    }>;
 }
 
 export interface AxisState {

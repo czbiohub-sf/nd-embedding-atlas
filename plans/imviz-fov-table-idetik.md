@@ -8,7 +8,7 @@ Examples of concrete use cases are:
 2. Visualize intermediate results of image processing pipeline implemented with biahub that may contain both zarr v2 and zarr v3 stores.
 3. Quickly review plate-level images after converting raw data into zarr v2 or zarr v3 stores to decide how the experiment worked.
 
-We use neuroglancer as a baseline implementation and are developing imviz built on top of nd-embedding-atlas and idetik. neuroglancer can read both zarr v2 and zarr v3 stores, and iohub can parse corresponding ome-ngff 0.4 and ome-ngff 0.5 metadata.
+We use neuroglancer as a baseline implementation and are developing imviz to replace it. imviz will build on top of nd-embedding-atlas and idetik. neuroglancer can read both zarr v2 and zarr v3 stores, and iohub can parse corresponding ome-ngff 0.4 and ome-ngff 0.5 metadata.
 
 nd-embedding-atlas, idetik, and iohub need to be installed from corresponding repositories main branches to develop this feature.
 
@@ -45,18 +45,20 @@ python scripts/neuroglancer_view.py /path/to/data.zarr
 ### idetik_view.py — requires project venv
 
 Depends on `nd-embedding-atlas` which is not on PyPI, so it cannot use PEP 723
-standalone mode. Run from the project venv:
+standalone mode. Accepts one or more zarr store paths. Run from the project venv:
 
 ```bash
-uv sync                                                 # install project
-uv run imviz /path/to/data.zarr                          # CLI entry point
-uv run python scripts/idetik_view.py /path/to/data.zarr  # script
+uv sync                                                            # install project
+uv run imviz /path/to/v2.zarr /path/to/v3.zarr                     # multi-store
+uv run imviz /path/to/data.zarr                                     # single store
+uv run imviz /path/to/data.zarr --dry-run                           # metadata only
+uv run python scripts/idetik_view.py /path/to/v2.zarr /path/to/v3.zarr  # script
 ```
 
 Or create a separate venv:
 ```bash
 source scripts/setup-idetik-iohub.sh   # creates uv venv + editable install
-imviz /path/to/data.zarr
+imviz /path/to/v2.zarr /path/to/v3.zarr
 ```
 
 ### pyproject.toml dependency group
@@ -72,7 +74,7 @@ uv sync --group neuroglancer
 
 ## What was done
 
-**Status**: Steps 1-5 complete. Steps 6-7 need frontend/integration testing.
+**Status**: Steps 1-10 complete. Step 11 (browser integration test) pending.
 **Branch**: `feature/imviz`
 **Date**: 2026-02-22
 
@@ -179,37 +181,104 @@ Total positions: 134
 
 ---
 
-## What remains (for your colleague)
+### Step 7: Hide scatter panel when no embeddings exist (DONE)
 
-### Step 7: Full serve test — FOV table + idetik viewer
+Scatter is meaningless for pure FOV browsing (`obsm: {}`). Hidden entirely using
+the existing `hasPlate` conditional pattern in `DockviewShell.tsx`.
 
-Run the full server (not dry-run) and verify the frontend:
+- `DashboardShell.tsx`: added `hasEmbeddings = Object.keys(metadata.obsm ?? {}).length > 0`, passed to `DockviewShell`
+- `DockviewShell.tsx`: added `hasEmbeddings` prop; `loadDefaultLayout()` skips scatter when `!hasEmbeddings`; table becomes first panel; sidebar references table instead of scatter; `expectedPanels` excludes scatter; callback deps updated
+
+Layout when `hasEmbeddings=false, hasPlate=true`:
+```
+┌──────────────┬──────────────┐
+│  Data Table   │ Image Viewer │
+│               ├──────────────┤
+│               │    Charts    │
+└──────────────┴──────────────┘
+```
+
+### Step 8: Accept multiple zarr store paths in CLI and server (DONE)
+
+Both zarr v2 and v3 stores shown in a single FOV table with `dataset`, `store_index`, and `ome_version` columns.
+
+**CLI (`_app.py` + `scripts/idetik_view.py`):**
+- `zarr_paths: list[Path]` positional argument (1+); validates all paths; prints per-store metadata with detected OME-NGFF version
+
+**Metadata (`_metadata.py`):**
+- `detect_ome_version(plate_path)` → `"0.4"` (v2) or `"0.5"` (v3) via `zarr.json` presence check
+- `get_multi_store_fov_dataframe(plate_paths)` → concatenated DataFrame with `dataset` (path stem, parent-disambiguated when stems collide), `store_index`, `ome_version` columns; globally unique `__row_index__`
+- Both exported from `imviz/__init__.py`
+
+**Server (`_serve.py`):**
+- `create_app()` / `serve()` accept `plate_paths: str | Path | list[str | Path]` (backward-compatible)
+- Each store mounted at `/plate_{i}/` (e.g. `/plate_0/`, `/plate_1/`)
+- First store's metadata used for channels/scale
+- `obs_column_names` includes `dataset`, `ome_version`
+- `/api/cell/{row_index}` returns `store_index` in response
+- `/data/metadata.json` includes `plate_stores: [{mount, name, ome_version}, ...]`
+- Fixed `spatial.fov_col` from `"fov_name"` (wrong) to `"position"` (actual column name)
+
+### Step 9: Fix idetik zarr v2/v3 version detection in frontend (DONE)
+
+Previously hardcoded to `version: "0.5"`. idetik supports both `"0.4"` and `"0.5"`.
+
+- `frontend/src/types.ts`: added `plate_stores` to `Metadata` interface
+- `SingleCropViewer.tsx`: source URL uses `store_index` (`` /plate_${storeIndex}/${fov_name} ``); OME version looked up from `metadata.plate_stores[storeIndex].ome_version`; falls back to `"/plate"` mount + `"0.5"` when `plate_stores` absent (backward-compatible with main ndea viewer)
+
+### Step 10: Integration tests (DONE)
+
+Added `tests/test_imviz.py` — 32 pytest tests covering the full imviz stack:
+
+| Test class | # | Coverage |
+|---|---|---|
+| `test_detect_ome_version_*` | 2 | v2 → `"0.4"`, v3 → `"0.5"` |
+| `TestGetPlateMetadata` | 7 | plate type, positions (134), channels, 5D shape, pixel scale, v2/v3 parity |
+| `TestGetFovDataframe` | 4 | row count, required columns, sequential index, v2/v3 parity |
+| `TestGetMultiStoreFovDataframe` | 7 | combined count (268), extra columns, store_index, ome_version, global row index, stem disambiguation, single-store fallback |
+| `TestCreateApp` | 9 | metadata endpoint (obsm empty, plate_stores), parquet, cell endpoint (store 0/1/404), health, embedding stubs, Mosaic SQL query (count=268) |
+| `TestCreateAppSingleStore` | 3 | backward-compat: single-path metadata, cell endpoint, Mosaic count (134) |
+
+Tests use `@requires_data` skip marker — auto-skipped in CI when HPC data mount is absent.
+
+Added `httpx>=0.27` to `test` dependency group in `pyproject.toml` (required by Starlette TestClient).
+
+**Test results:**
+```
+uv run pytest tests/ -v    # 41 passed in 79s (9 existing + 32 new)
+```
+
+---
+
+## What remains
+
+### Step 11: Browser integration test
+
+Run the full server and verify the frontend in a browser:
 
 ```bash
-uv run imviz /hpc/projects/intracellular_dashboard/virtual_stain_ft_infected/2026_01_29_A549_H2B_CAAX_DAPI_DENV_ZIKV/0-convert_zarrv3/convert.zarr
+uv run imviz \
+  /hpc/projects/intracellular_dashboard/virtual_stain_ft_infected/2026_01_29_A549_H2B_CAAX_DAPI_DENV_ZIKV/0-convert/convert.zarr \
+  /hpc/projects/intracellular_dashboard/virtual_stain_ft_infected/2026_01_29_A549_H2B_CAAX_DAPI_DENV_ZIKV/0-convert_zarrv3/convert.zarr
 ```
 
 **Expected behavior:**
 1. Open `http://localhost:5055` in a browser
-2. The **table panel** should show all 134 FOV rows with columns: position, T, C, Z, Y, X, z_um, y_um, x_um
-3. The **scatter panel** will show a grid of points (X vs Y — all positions have the same pixel dimensions, so they'll overlap). This is expected and not useful in this mode.
-4. Click a row in the table -> the **image viewer panel** should load that FOV via idetik
+2. **No scatter panel** — hidden because `obsm` is empty
+3. **Table panel** shows 268 FOV rows (134 × 2 stores) with columns: dataset, position, T, C, Z, Y, X, z_um, y_um, x_um, ome_version
+4. Click a v2 FOV row → idetik loads via `/plate_0/` with OME-NGFF 0.4
+5. Click a v3 FOV row → idetik loads via `/plate_1/` with OME-NGFF 0.5
 
-**Possible issues to watch for:**
-- The scatter panel showing "No data" or crashing — the projection columns `X`/`Y` are integers (pixel dimensions), not spatial coordinates. If the frontend requires float columns for scatter, may need to cast them or add dummy float columns.
-- The image viewer not loading — verify the `/api/cell/{row_index}` endpoint returns correct `fov_name` by hitting it directly: `curl http://localhost:5055/api/cell/0`
-- Mosaic not booting — check browser console for errors from `/data/query`. The DuckDB `dataset` VIEW now has real columns; Mosaic may issue queries that reference old column names.
-
-### Step 8: Consider hiding the scatter panel
-
-Since the scatter is meaningless for pure FOV browsing (no embeddings), consider either:
-- **Option A**: Frontend change to hide scatter when `obsm` is empty (check `metadata.obsm === {}`)
-- **Option B**: Set `projection` to `null` in metadata and handle gracefully
-- **Option C**: Leave as-is — the table is the primary interface
+**Verify endpoints:**
+- `curl http://localhost:5055/api/cell/0` → `{"fov_name": "...", "store_index": 0, ...}`
+- `curl http://localhost:5055/api/cell/134` → `{"fov_name": "...", "store_index": 1, ...}`
+- `curl http://localhost:5055/data/metadata.json` → `plate_stores` array present
 
 ---
 
 ## Files modified
+
+### Steps 1-6 (done)
 
 | File | Summary |
 |------|---------|
@@ -222,7 +291,26 @@ Since the scatter is meaningless for pure FOV browsing (no embeddings), consider
 | `src/nd_embedding_atlas/imviz/_metadata.py` | Added `get_fov_dataframe()` + `_position_row()` |
 | `src/nd_embedding_atlas/imviz/_serve.py` | Full rewrite: DuckDB FOV table, mount_duckdb_endpoints, removed shim/hack |
 
+### Steps 7-10 (done)
+
+| File | Summary |
+|------|---------|
+| `frontend/src/dashboard/DashboardShell.tsx` | `hasEmbeddings` detection, passed to DockviewShell |
+| `frontend/src/components/layout/DockviewShell.tsx` | Scatter panel hidden when `!hasEmbeddings`; table-first layout |
+| `frontend/src/components/crops/SingleCropViewer.tsx` | Dynamic `store_index` + OME version from `plate_stores` |
+| `frontend/src/types.ts` | `plate_stores` added to `Metadata` interface |
+| `src/nd_embedding_atlas/imviz/_app.py` | CLI: `zarr_paths: list[Path]`, per-store metadata summary |
+| `src/nd_embedding_atlas/imviz/_metadata.py` | `detect_ome_version()`, `get_multi_store_fov_dataframe()`, stem disambiguation |
+| `src/nd_embedding_atlas/imviz/_serve.py` | Multi-store `/plate_{i}/` mounts, `store_index` in cell API, `plate_stores` in metadata, fixed `fov_col` |
+| `src/nd_embedding_atlas/imviz/__init__.py` | Exports `detect_ome_version`, `get_multi_store_fov_dataframe` |
+| `scripts/idetik_view.py` | Multi-path CLI, per-store OME version display |
+| `tests/test_imviz.py` | 32 integration tests (metadata, dataframes, FastAPI endpoints) |
+| `pyproject.toml` | `httpx>=0.27` added to `test` dependency group |
+
 ## Test data
 
 - **Zarr v2**: `/hpc/projects/intracellular_dashboard/virtual_stain_ft_infected/2026_01_29_A549_H2B_CAAX_DAPI_DENV_ZIKV/0-convert/convert.zarr`
 - **Zarr v3**: `/hpc/projects/intracellular_dashboard/virtual_stain_ft_infected/2026_01_29_A549_H2B_CAAX_DAPI_DENV_ZIKV/0-convert_zarrv3/convert.zarr`
+
+## Test against neuroglancer if needed
+Use neuroglancer_view script with above data if you need to check metadata or intensity ranges in the data.

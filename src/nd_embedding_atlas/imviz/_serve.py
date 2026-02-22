@@ -19,7 +19,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from nd_embedding_atlas.imviz._metadata import get_fov_dataframe, get_plate_metadata
+from nd_embedding_atlas.imviz._metadata import (
+    detect_ome_version,
+    get_multi_store_fov_dataframe,
+    get_plate_metadata,
+)
 from nd_embedding_atlas.vz._duckdb import mount_duckdb_endpoints
 
 
@@ -50,7 +54,7 @@ def _resolve_frontend() -> str:
 
 
 def create_app(
-    plate_path: str | pathlib.Path,
+    plate_paths: str | pathlib.Path | list[str | pathlib.Path],
     *,
     position: str | None = None,
     channels: list[str] | None = None,
@@ -63,8 +67,9 @@ def create_app(
 
     Parameters
     ----------
-    plate_path
-        Path to an OME-Zarr plate or position directory.
+    plate_paths
+        Path(s) to OME-Zarr plate or position directories.  Accepts a single
+        path or a list for multi-store browsing.
     position
         Initial position key to display.  ``None`` uses the first position.
     channels
@@ -76,7 +81,11 @@ def create_app(
     -------
     FastAPI app ready for ``uvicorn.run()``.
     """
-    plate_path = pathlib.Path(plate_path).resolve()
+    # Normalize to list of resolved Paths
+    if isinstance(plate_paths, (str, pathlib.Path)):
+        plate_paths = [plate_paths]
+    resolved_paths = [pathlib.Path(p).resolve() for p in plate_paths]
+
     app = FastAPI(title="imviz")
     app.add_middleware(
         CORSMiddleware,
@@ -86,8 +95,8 @@ def create_app(
         expose_headers=["*"],
     )
 
-    # ── Pre-compute metadata ─────────────────────────────────────────
-    meta = get_plate_metadata(plate_path)
+    # ── Pre-compute metadata from first store ────────────────────────
+    meta = get_plate_metadata(resolved_paths[0])
 
     # Apply channel filter
     if channels:
@@ -120,8 +129,18 @@ def create_app(
 
     pixel_scale = meta.get("pixel_scale", {"x": 1, "y": 1})
 
+    # ── Build per-store info ─────────────────────────────────────────
+    plate_stores = [
+        {
+            "mount": f"/plate_{i}",
+            "name": p.stem,
+            "ome_version": detect_ome_version(p),
+        }
+        for i, p in enumerate(resolved_paths)
+    ]
+
     # ── Build FOV table in DuckDB ────────────────────────────────────
-    fov_df = get_fov_dataframe(plate_path)  # noqa: F841 — DuckDB scans local Python variables by name
+    fov_df = get_multi_store_fov_dataframe(resolved_paths)  # noqa: F841 — DuckDB scans local Python variables by name
     con = duckdb.connect(":memory:")
     con.sql("CREATE TABLE obs_base AS (SELECT * FROM fov_df)")
     con.sql("CREATE OR REPLACE VIEW dataset AS SELECT * FROM obs_base")
@@ -138,7 +157,7 @@ def create_app(
     except importlib.metadata.PackageNotFoundError:
         version = "0.0.0-dev"
 
-    obs_column_names = ["position", "T", "C", "Z", "Y", "X", "z_um", "y_um", "x_um"]
+    obs_column_names = ["dataset", "position", "T", "C", "Z", "Y", "X", "z_um", "y_um", "x_um", "ome_version"]
 
     @app.get("/data/metadata.json")
     async def get_metadata() -> dict:
@@ -156,8 +175,9 @@ def create_app(
             "plate": True,
             "plate_pixel_scale": pixel_scale,
             "plate_channels": plate_channels,
+            "plate_stores": plate_stores,
             "spatial": {
-                "fov_col": "fov_name",
+                "fov_col": "position",
                 "t_col": None,
                 "bbox_col": None,
                 "x_col": None,
@@ -189,17 +209,22 @@ def create_app(
 
     @app.get("/api/cell/{row_index}", response_model=None)
     async def get_cell(row_index: int) -> dict | JSONResponse:
-        row = con.execute("SELECT position FROM dataset WHERE __row_index__ = ?", [row_index]).fetchone()
+        row = con.execute(
+            "SELECT position, store_index FROM dataset WHERE __row_index__ = ?",
+            [row_index],
+        ).fetchone()
         if row is None:
             return JSONResponse({"error": "Position not found"}, status_code=404)
 
         fov_name = row[0]
+        store_index = row[1]
         # For a single position, fov_name is "/" — serve from plate root
         if fov_name == "/":
             fov_name = ""
 
         return {
             "fov_name": fov_name,
+            "store_index": store_index,
             "t": 0,
             "x": shape_x / 2,
             "y": shape_y / 2,
@@ -216,11 +241,16 @@ def create_app(
 
     @app.get("/api/health")
     async def health() -> dict:
-        return {"status": "ok", "plate": str(plate_path), "type": meta["type"]}
+        return {
+            "status": "ok",
+            "stores": [str(p) for p in resolved_paths],
+            "type": meta["type"],
+        }
 
     # ── Static file mounts (order matters — most specific first) ──────
-    # Serve OME-Zarr data
-    app.mount("/plate", StaticFiles(directory=str(plate_path)), name="plate")
+    # Serve OME-Zarr data — one mount per store
+    for i, p in enumerate(resolved_paths):
+        app.mount(f"/plate_{i}", StaticFiles(directory=str(p)), name=f"plate_{i}")
 
     # Serve frontend with html=True for SPA routing
     if static_dir is not None:
@@ -234,7 +264,7 @@ def create_app(
 
 
 def serve(
-    plate_path: str | pathlib.Path,
+    plate_paths: str | pathlib.Path | list[str | pathlib.Path],
     *,
     position: str | None = None,
     channels: list[str] | None = None,
@@ -246,8 +276,8 @@ def serve(
 
     Parameters
     ----------
-    plate_path
-        Path to an OME-Zarr plate or position.
+    plate_paths
+        Path(s) to OME-Zarr plate(s) or position(s).
     position
         Initial position to display.
     channels
@@ -258,11 +288,14 @@ def serve(
         Server bind address.
     """
     app = create_app(
-        plate_path,
+        plate_paths,
         position=position,
         channels=channels,
         static_dir=static_dir,
     )
     print(f"imviz viewer: http://{host}:{port}")
-    print(f"  plate: {plate_path}")
+    if isinstance(plate_paths, (str, pathlib.Path)):
+        plate_paths = [plate_paths]
+    for p in plate_paths:
+        print(f"  store: {p}")
     uvicorn.run(app, host=host, port=port, access_log=False)

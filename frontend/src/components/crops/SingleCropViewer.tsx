@@ -20,6 +20,7 @@ const CAMERA_VIEW_HALF = 150;
 
 interface CellInfo {
     fov_name: string;
+    store_index?: number;
     t: number;
     x: number;
     y: number;
@@ -59,9 +60,13 @@ export function SingleCropViewer({ cropSize }: Props) {
         keepPreviousData: true,
     });
 
-    // ── Derive source URL ─────────────────────────────────────────────
+    // ── Derive source URL and OME version ──────────────────────────────
     const scale = metadata.plate_pixel_scale ?? { x: 1, y: 1 };
-    const sourceUrl = cellInfo ? `${window.location.origin}/plate/${cellInfo.fov_name}` : null;
+    const storeIndex = cellInfo?.store_index ?? 0;
+    const plateMount = metadata.plate_stores ? `/plate_${storeIndex}` : "/plate";
+    const sourceUrl = cellInfo ? `${window.location.origin}${plateMount}/${cellInfo.fov_name}` : null;
+    const omeVersion: "0.4" | "0.5" =
+        metadata.plate_stores?.[storeIndex]?.ome_version === "0.4" ? "0.4" : "0.5";
 
     // ── Helper: frame camera around a point ───────────────────────────
     const frameAround = useCallback(
@@ -145,7 +150,7 @@ export function SingleCropViewer({ cropSize }: Props) {
 
             const source = OmeZarrImageSource.fromHttp({
                 url: sourceUrl,
-                version: "0.5",
+                version: omeVersion,
             });
 
             // Load source dimensions and channel info in parallel
@@ -227,7 +232,7 @@ export function SingleCropViewer({ cropSize }: Props) {
         return () => {
             cancelled = true;
         };
-    }, [sourceUrl, viewerState.initialized, actions, metadata.plate_channels]);
+    }, [sourceUrl, omeVersion, viewerState.initialized, actions, metadata.plate_channels]);
 
     // ── Effect 2: Cell framing (bbox + camera on every cell change) ───
     useEffect(() => {
