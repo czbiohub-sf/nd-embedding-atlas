@@ -232,6 +232,11 @@ void main() {{
             except (ValueError, TypeError, RuntimeError) as e:
                 console.print(f"  [red]x Error adding layer {name}: {e}[/red]")
 
+        # 30-degree tilt from top-down XY view in the 3D perspective panel.
+        # Quaternion for 30° rotation around X axis: [sin(15°), 0, 0, cos(15°)]
+        tilt_rad = np.radians(15)
+        s.projection_orientation = [np.sin(tilt_rad), 0, 0, np.cos(tilt_rad)]
+
     console.print("\n[bold green]Neuroglancer viewer is ready![/bold green]")
     console.print(f"\n  URL: {viewer}")
     console.print("\nPress Ctrl+C to exit...")
