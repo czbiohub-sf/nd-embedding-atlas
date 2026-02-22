@@ -172,21 +172,23 @@ export function SingleCropViewer({ cropSize }: Props) {
             }
 
             // Resolve channel definitions
+            // Prefer server-computed plate_channels (has auto-contrast) over
+            // raw omeroChannels from the zarr store (may have default [0, 65535]).
             let channelDefs: Array<{ color: Color; contrastLimits: [number, number] }>;
-            if (omeroChannels) {
-                channelDefs = omeroChannels.map((ch) => ({
-                    color: ch.color ? Color.fromRgbHex(`#${ch.color}`) : Color.WHITE,
-                    contrastLimits: ch.window
-                        ? ([ch.window.start, ch.window.end] as [number, number])
-                        : ([0, 65535] as [number, number]),
-                }));
-            } else if (metadata.plate_channels) {
+            if (metadata.plate_channels) {
                 channelDefs = metadata.plate_channels.map(
                     (ch: { color: string; window: { start: number; end: number } }) => ({
                         color: Color.fromRgbHex(`#${ch.color}`),
                         contrastLimits: [ch.window.start, ch.window.end] as [number, number],
                     }),
                 );
+            } else if (omeroChannels) {
+                channelDefs = omeroChannels.map((ch) => ({
+                    color: ch.color ? Color.fromRgbHex(`#${ch.color}`) : Color.WHITE,
+                    contrastLimits: ch.window
+                        ? ([ch.window.start, ch.window.end] as [number, number])
+                        : ([0, 65535] as [number, number]),
+                }));
             } else {
                 channelDefs = [{ color: Color.WHITE, contrastLimits: [0, 65535] }];
             }
