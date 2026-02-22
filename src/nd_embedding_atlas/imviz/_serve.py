@@ -1,25 +1,26 @@
 """FastAPI app for serving OME-Zarr images with idetik frontend.
 
-Serves the nd-embedding-atlas frontend with shim endpoints so that
-the dashboard boots, shows the image-viewer panel, and auto-loads the
-first FOV.  Embedding scatter / DuckDB / Mosaic are replaced by minimal
-stubs that return enough data for the frontend to render.
+Serves the nd-embedding-atlas frontend with a FOV table backed by DuckDB.
+The dashboard shows a table of positions; clicking a row loads the
+corresponding FOV via idetik.  Mosaic query endpoints are provided by
+``vz._duckdb.mount_duckdb_endpoints``.
 """
 
 from __future__ import annotations
 
 import importlib.metadata
 import importlib.resources
-import io
 import pathlib
 
+import duckdb
 import uvicorn
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from nd_embedding_atlas.imviz._metadata import get_plate_metadata
+from nd_embedding_atlas.imviz._metadata import get_fov_dataframe, get_plate_metadata
+from nd_embedding_atlas.vz._duckdb import mount_duckdb_endpoints
 
 
 def _resolve_frontend() -> str:
@@ -48,29 +49,6 @@ def _resolve_frontend() -> str:
     raise FileNotFoundError(msg)
 
 
-def _build_shim_parquet(n_positions: int) -> bytes:
-    """Build a minimal Parquet file with one row per position.
-
-    The frontend (Mosaic + embedding-atlas scatter) expects a dataset.parquet
-    with at least an ``__row_index__`` column and x/y projection columns.
-    We create one row per position so that each can be "selected" via the
-    ``/api/cell/{row_index}`` endpoint.
-    """
-    import pyarrow as pa
-    import pyarrow.parquet as pq
-
-    table = pa.table(
-        {
-            "__row_index__": pa.array(list(range(n_positions)), type=pa.int64()),
-            "x": pa.array([float(i) for i in range(n_positions)], type=pa.float32()),
-            "y": pa.array([0.0] * n_positions, type=pa.float32()),
-        }
-    )
-    buf = pa.BufferOutputStream()
-    pq.write_table(table, buf)
-    return buf.getvalue().to_pybytes()
-
-
 def create_app(
     plate_path: str | pathlib.Path,
     *,
@@ -80,8 +58,8 @@ def create_app(
 ) -> FastAPI:
     """Create a FastAPI app for viewing OME-Zarr images.
 
-    Serves the nd-embedding-atlas frontend with all required endpoints
-    shimmed so the image viewer panel works out of the box.
+    Serves the nd-embedding-atlas frontend with a DuckDB-backed FOV table
+    and idetik image viewer.
 
     Parameters
     ----------
@@ -123,8 +101,6 @@ def create_app(
     if position is None and positions_list:
         position = positions_list[0]
 
-    n_positions = len(positions_list)
-
     # Build plate_channels in the format the frontend expects
     plate_channels = []
     for ch in meta["channels"]:
@@ -144,14 +120,25 @@ def create_app(
 
     pixel_scale = meta.get("pixel_scale", {"x": 1, "y": 1})
 
-    # Pre-build parquet bytes (small — one row per position)
-    parquet_bytes = _build_shim_parquet(n_positions)
+    # ── Build FOV table in DuckDB ────────────────────────────────────
+    fov_df = get_fov_dataframe(plate_path)  # noqa: F841 — DuckDB scans local Python variables by name
+    con = duckdb.connect(":memory:")
+    con.sql("CREATE TABLE obs_base AS (SELECT * FROM fov_df)")
+    con.sql("CREATE OR REPLACE VIEW dataset AS SELECT * FROM obs_base")
+
+    # Mount Mosaic query endpoints (reuse vz infrastructure)
+    mount_duckdb_endpoints(app, con)
+
+    # ── Parquet cache ────────────────────────────────────────────────
+    parquet_cache: dict[str, bytes | None] = {"data": None}
 
     # ── /data/metadata.json — the frontend's primary config endpoint ──
     try:
         version = importlib.metadata.version("nd-embedding-atlas")
     except importlib.metadata.PackageNotFoundError:
         version = "0.0.0-dev"
+
+    obs_column_names = ["position", "T", "C", "Z", "Y", "X", "z_um", "y_um", "x_um"]
 
     @app.get("/data/metadata.json")
     async def get_metadata() -> dict:
@@ -160,12 +147,12 @@ def create_app(
             "props": {
                 "data": {
                     "id": "__row_index__",
-                    "projection": {"x": "x", "y": "y"},
+                    "projection": {"x": "X", "y": "Y"},
                 },
             },
             "database": {"type": "rest"},
             "obsm": {},
-            "obs_columns": [],
+            "obs_columns": obs_column_names,
             "plate": True,
             "plate_pixel_scale": pixel_scale,
             "plate_channels": plate_channels,
@@ -181,48 +168,32 @@ def create_app(
     # ── /data/dataset.parquet — Mosaic needs this to boot ─────────────
     @app.get("/data/dataset.parquet")
     async def get_parquet() -> Response:
-        return Response(parquet_bytes, media_type="application/octet-stream")
-
-    # ── /data/query — Mosaic REST connector stub ──────────────────────
-    # The Mosaic coordinator sends SQL queries here.  We use an in-memory
-    # DuckDB to answer them from the shim parquet.
-    import duckdb
-    import pyarrow.parquet as pq
-
-    _con = duckdb.connect()
-    _shim_table = pq.read_table(io.BytesIO(parquet_bytes))
-    _con.execute("CREATE TABLE dataset AS SELECT * FROM _shim_table")
-
-    @app.post("/data/query")
-    async def mosaic_query(request: Request) -> Response:
-        body = await request.json()
-        sql = body.get("sql", "")
-        if not sql:
-            return JSONResponse({"error": "no sql"}, status_code=400)
-        try:
-            result = _con.execute(sql)
-            # Return Apache Arrow IPC format (what mosaic-rest expects)
+        if parquet_cache["data"] is None:
             import pyarrow as pa
+            import pyarrow.parquet as pq
 
-            table = result.arrow()
+            arrow = con.sql("SELECT * FROM dataset").arrow()
             sink = pa.BufferOutputStream()
-            writer = pa.ipc.new_stream(sink, table.schema)
-            writer.write_table(table)
-            writer.close()
-            return Response(
-                sink.getvalue().to_pybytes(),
-                media_type="application/vnd.apache.arrow.stream",
-            )
-        except Exception as e:
-            return JSONResponse({"error": str(e)}, status_code=400)
+            if isinstance(arrow, pa.Table):
+                pq.write_table(arrow, sink)
+            else:
+                # DuckDB >= 1.4 returns RecordBatchReader
+                table = pa.Table.from_batches(list(arrow), schema=arrow.schema)
+                pq.write_table(table, sink)
+            parquet_cache["data"] = sink.getvalue().to_pybytes()
+        return Response(parquet_cache["data"], media_type="application/octet-stream")
 
     # ── /api/cell/{row_index} — map row index to FOV info ─────────────
+    shape_y = meta["shape"][-2]
+    shape_x = meta["shape"][-1]
+
     @app.get("/api/cell/{row_index}", response_model=None)
     async def get_cell(row_index: int) -> dict | JSONResponse:
-        if row_index < 0 or row_index >= n_positions:
+        row = con.execute("SELECT position FROM dataset WHERE __row_index__ = ?", [row_index]).fetchone()
+        if row is None:
             return JSONResponse({"error": "Position not found"}, status_code=404)
 
-        fov_name = positions_list[row_index]
+        fov_name = row[0]
         # For a single position, fov_name is "/" — serve from plate root
         if fov_name == "/":
             fov_name = ""
@@ -230,8 +201,8 @@ def create_app(
         return {
             "fov_name": fov_name,
             "t": 0,
-            "x": meta["shape"][-1] / 2,  # Center X
-            "y": meta["shape"][-2] / 2,  # Center Y
+            "x": shape_x / 2,
+            "y": shape_y / 2,
         }
 
     # ── Embedding stubs (frontend polls these) ────────────────────────
@@ -251,84 +222,13 @@ def create_app(
     # Serve OME-Zarr data
     app.mount("/plate", StaticFiles(directory=str(plate_path)), name="plate")
 
-    # Serve frontend with auto-select injection
+    # Serve frontend with html=True for SPA routing
     if static_dir is not None:
         resolved_static = str(static_dir)
     else:
         resolved_static = _resolve_frontend()
 
-    _frontend_dir = pathlib.Path(resolved_static)
-    _index_html = (_frontend_dir / "index.html").read_text()
-
-    # Inject a script that auto-clicks cell 0 after the React app mounts.
-    # The DashboardProvider stores its actions on window.__NDEA_ACTIONS__
-    # which doesn't exist, so instead we poll for a clickable scatter point
-    # and simulate a click, OR we directly poke React's internal state via
-    # a MutationObserver that waits for the scatter canvas and dispatches
-    # a synthetic selection.
-    #
-    # Simplest robust approach: poll for the "Click a cell" text in the
-    # image viewer panel and programmatically trigger highlight via the
-    # embedding-atlas scatter's built-in tooltip/selection API.
-    #
-    # Even simpler: just inject the highlightId into the DashboardProvider's
-    # initial state by intercepting the metadata response.  But that's not
-    # how React works externally.
-    #
-    # Most reliable: inject a tiny inline script that, after the app boots,
-    # finds React's fiber tree and calls setHighlight("0").
-    _auto_select_script = """
-<script>
-// imviz: auto-select cell 0 so the image viewer loads immediately.
-// We poll for the React root's __reactFiber and walk to DashboardContext
-// to call setHighlight("0").
-(function() {
-  var attempts = 0;
-  var timer = setInterval(function() {
-    attempts++;
-    if (attempts > 100) { clearInterval(timer); return; }
-    // Look for the "Click a cell to view" text — if present, the app
-    // has mounted but no cell is selected yet.
-    var el = document.querySelector('[class*="text-text-muted"]');
-    if (!el) return;
-    // Find the React internal instance on the root element
-    var root = document.getElementById('root');
-    if (!root) return;
-    var key = Object.keys(root).find(function(k) {
-      return k.startsWith('__reactFiber$') || k.startsWith('__reactInternalInstance$');
-    });
-    if (!key) return;
-    // Walk the fiber tree to find DashboardContext consumer
-    function findContext(fiber, depth) {
-      if (!fiber || depth > 50) return null;
-      // Check memoizedState for the dashboard actions
-      if (fiber.memoizedProps && fiber.memoizedProps.value &&
-          fiber.memoizedProps.value.actions &&
-          fiber.memoizedProps.value.actions.setHighlight) {
-        return fiber.memoizedProps.value.actions;
-      }
-      var result = findContext(fiber.child, depth + 1);
-      if (result) return result;
-      return findContext(fiber.sibling, depth + 1);
-    }
-    var actions = findContext(root[key], 0);
-    if (actions) {
-      actions.setHighlight("0");
-      clearInterval(timer);
-    }
-  }, 200);
-})();
-</script>
-"""
-    _patched_index = _index_html.replace("</body>", _auto_select_script + "</body>")
-
-    from starlette.responses import HTMLResponse
-
-    @app.get("/", response_class=HTMLResponse)
-    async def index_page() -> str:
-        return _patched_index
-
-    app.mount("/", StaticFiles(directory=resolved_static, html=False))
+    app.mount("/", StaticFiles(directory=resolved_static, html=True))
 
     return app
 

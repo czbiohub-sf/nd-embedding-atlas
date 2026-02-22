@@ -56,6 +56,10 @@ doc = [
   "pymdown-extensions>=10.20.1",
   "zensical>=0.0.21",
 ]
+neuroglancer = [
+  "neuroglancer>=2.40",
+  "numpy",
+]
 
 [tool.hatch]
 # Uses hatch_build.py at project root

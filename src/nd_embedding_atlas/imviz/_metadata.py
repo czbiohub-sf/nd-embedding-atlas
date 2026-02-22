@@ -6,6 +6,8 @@ import json
 import pathlib
 from typing import Any
 
+import pandas as pd
+
 
 def get_plate_metadata(plate_path: str | pathlib.Path) -> dict[str, Any]:
     """Extract positions, channels, and scales from an OME-Zarr plate or position.
@@ -91,6 +93,67 @@ def _read_omero_channels(
 
     # Fallback: just channel names
     return [{"label": name, "color": "FFFFFF", "window": {}} for name in channel_names]
+
+
+def get_fov_dataframe(plate_path: str | pathlib.Path) -> pd.DataFrame:
+    """Build a DataFrame with one row per FOV position.
+
+    Columns: ``__row_index__``, ``position``, ``T``, ``C``, ``Z``, ``Y``, ``X``,
+    ``z_um``, ``y_um``, ``x_um``.
+
+    Parameters
+    ----------
+    plate_path
+        Path to an OME-Zarr store (plate or single position).
+
+    Returns
+    -------
+    DataFrame suitable for loading into DuckDB as the obs table.
+    """
+    from iohub.ngff import open_ome_zarr
+
+    dataset = open_ome_zarr(str(plate_path), mode="r")
+
+    rows: list[dict[str, Any]] = []
+
+    if hasattr(dataset, "positions"):
+        for idx, (key, pos) in enumerate(dataset.positions()):
+            rows.append(_position_row(idx, key, pos))
+    else:
+        rows.append(_position_row(0, "/", dataset))
+
+    return pd.DataFrame(rows)
+
+
+def _position_row(idx: int, key: str, pos: Any) -> dict[str, Any]:
+    """Extract a single row of FOV metadata from an iohub Position."""
+    shape = list(pos.data.shape)
+    scale = list(pos.scale)
+
+    # Shape: always TCZYX (5D)
+    t = shape[0] if len(shape) >= 5 else 1
+    c = shape[1] if len(shape) >= 5 else (shape[0] if len(shape) == 4 else 1)
+    z = shape[-3] if len(shape) >= 3 else 1
+    y = shape[-2] if len(shape) >= 2 else shape[-1]
+    x = shape[-1]
+
+    # Scale: last 3 are Z, Y, X in micrometers
+    z_um = scale[-3] if len(scale) >= 3 else 1.0
+    y_um = scale[-2] if len(scale) >= 2 else 1.0
+    x_um = scale[-1] if len(scale) >= 1 else 1.0
+
+    return {
+        "__row_index__": idx,
+        "position": key,
+        "T": t,
+        "C": c,
+        "Z": z,
+        "Y": y,
+        "X": x,
+        "z_um": round(z_um, 4),
+        "y_um": round(y_um, 4),
+        "x_um": round(x_um, 4),
+    }
 
 
 def _try_read_omero(pos_path: pathlib.Path) -> list[dict] | None:

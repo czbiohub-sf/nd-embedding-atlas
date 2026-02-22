@@ -1,45 +1,50 @@
 #!/bin/bash
-# Setup script for idetik_iohub environment.
-# This environment provides the idetik WebGL viewer for OME-Zarr data
-# via nd-embedding-atlas.
+# Setup for the idetik (imviz) OME-Zarr viewer.
 #
-# Usage:
-#   source scripts/setup-idetik-iohub.sh
+# The idetik viewer requires nd-embedding-atlas installed (not on PyPI),
+# so it runs from the project venv — not as a standalone uv script.
 #
-# The environment is installed under /hpc/mydata/$USER/envs/idetik_iohub.
-# To create it for the first time, run:
+# ──────────────────────────────────────────────────────────────────────
+# Option A — project venv (recommended for development):
 #
-#   uv venv /hpc/mydata/$USER/envs/idetik_iohub --python 3.12
-#   uv pip install --python /hpc/mydata/$USER/envs/idetik_iohub/bin/python \
-#       -e /hpc/mydata/$USER/code/nd-embedding-atlas
+#   cd /path/to/nd-embedding-atlas
+#   uv sync
+#   uv run imviz /path/to/data.zarr                   # CLI entry point
+#   uv run python scripts/idetik_view.py /path/to/data.zarr  # script
+#
+# Option B — separate venv (for users who don't develop nd-embedding-atlas):
+#
+#   source scripts/setup-idetik-iohub.sh   # creates & activates venv
+#   imviz /path/to/data.zarr
+#
+# ──────────────────────────────────────────────────────────────────────
 
+set -euo pipefail
+
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_DIR="/hpc/mydata/${USER}/envs/idetik_iohub"
 
 if [ ! -d "$ENV_DIR" ]; then
-    echo "ERROR: Environment not found at $ENV_DIR" >&2
-    echo "" >&2
-    echo "Create it with:" >&2
-    echo "  uv venv $ENV_DIR --python 3.12" >&2
-    echo "  uv pip install --python $ENV_DIR/bin/python \\" >&2
-    echo "      -e /hpc/mydata/$USER/code/nd-embedding-atlas" >&2
-    return 1 2>/dev/null || exit 1
+    echo "Creating idetik_iohub environment at $ENV_DIR ..."
+    uv venv "$ENV_DIR" --python 3.12
+    uv pip install --python "$ENV_DIR/bin/python" -e "$REPO_DIR"
+    echo "  Environment created and nd-embedding-atlas installed."
+else
+    echo "  Environment already exists at $ENV_DIR"
 fi
 
-echo "Setting up idetik_iohub environment..."
-
-# Activate uv-managed environment
+# Activate
+# shellcheck disable=SC1091
 source "$ENV_DIR/bin/activate"
 
-# Resolve the scripts directory relative to this setup script
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-echo "  idetik_iohub environment activated"
 echo ""
-echo "Available tools:"
-echo "  - $SCRIPT_DIR/idetik_view.py  - idetik OME-Zarr viewer CLI"
-echo "  - imviz                        - Typer CLI entry point"
+echo "idetik_iohub environment activated."
 echo ""
 echo "Usage:"
-echo "  $SCRIPT_DIR/idetik_view.py /path/to/data.zarr"
-echo "  $SCRIPT_DIR/idetik_view.py /path/to/data.zarr --dry-run"
-echo "  $SCRIPT_DIR/idetik_view.py --help"
+echo "  imviz /path/to/data.zarr                   # launch viewer"
+echo "  imviz /path/to/data.zarr --dry-run          # inspect metadata"
+echo "  imviz --help                                 # show options"
+echo ""
+echo "Or from the project venv (without this script):"
+echo "  uv run imviz /path/to/data.zarr"
+echo "  uv run python scripts/idetik_view.py /path/to/data.zarr"

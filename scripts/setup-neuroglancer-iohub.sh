@@ -1,40 +1,50 @@
 #!/bin/bash
-# Setup script for neuroglancer_iohub environment.
-# This environment supports Zarr v2/v3 with iohub, neuroglancer, and zarr-python.
+# Setup for the neuroglancer OME-Zarr viewer.
 #
-# Usage:
-#   source scripts/setup-neuroglancer-iohub.sh
+# The neuroglancer viewer is fully standalone — all deps are on PyPI.
+# uv resolves them automatically via PEP 723 inline script metadata.
 #
-# The environment is a conda env under /hpc/mydata/$USER/envs/neuroglancer_iohub.
+# ──────────────────────────────────────────────────────────────────────
+# Option A — standalone script (no install needed, uv resolves deps):
+#
+#   uv run scripts/neuroglancer_view.py /path/to/data.zarr
+#   uv run scripts/neuroglancer_view.py /path/to/data.zarr --dry-run
+#
+# Option B — project venv with neuroglancer group:
+#
+#   source scripts/setup-neuroglancer-iohub.sh   # creates & activates venv
+#   python scripts/neuroglancer_view.py /path/to/data.zarr
+#
+# ──────────────────────────────────────────────────────────────────────
 
+set -euo pipefail
+
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_DIR="/hpc/mydata/${USER}/envs/neuroglancer_iohub"
 
 if [ ! -d "$ENV_DIR" ]; then
-    echo "ERROR: Environment not found at $ENV_DIR" >&2
-    echo "" >&2
-    echo "Create it with:" >&2
-    echo "  module load anaconda && module load comp_micro" >&2
-    echo "  conda create -p $ENV_DIR python=3.12 neuroglancer iohub numpy click" >&2
-    return 1 2>/dev/null || exit 1
+    echo "Creating neuroglancer_iohub environment at $ENV_DIR ..."
+    uv venv "$ENV_DIR" --python 3.12
+    uv pip install --python "$ENV_DIR/bin/python" \
+        -e "$REPO_DIR" \
+        "neuroglancer>=2.40" \
+        numpy
+    echo "  Environment created with nd-embedding-atlas + neuroglancer."
+else
+    echo "  Environment already exists at $ENV_DIR"
 fi
 
-echo "Setting up neuroglancer_iohub environment..."
+# Activate
+# shellcheck disable=SC1091
+source "$ENV_DIR/bin/activate"
 
-# Load required modules
-module load anaconda
-module load comp_micro
-
-# Activate environment
-conda activate "$ENV_DIR"
-
-# Resolve the scripts directory relative to this setup script
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-echo "  neuroglancer_iohub environment activated"
 echo ""
-echo "Available tools:"
-echo "  - $SCRIPT_DIR/neuroglancer_view.py - Neuroglancer viewer CLI"
+echo "neuroglancer_iohub environment activated."
 echo ""
 echo "Usage:"
-echo "  $SCRIPT_DIR/neuroglancer_view.py /path/to/data.zarr"
-echo "  $SCRIPT_DIR/neuroglancer_view.py --help"
+echo "  python scripts/neuroglancer_view.py /path/to/data.zarr            # launch viewer"
+echo "  python scripts/neuroglancer_view.py /path/to/data.zarr --dry-run  # inspect metadata"
+echo "  python scripts/neuroglancer_view.py --help                         # show options"
+echo ""
+echo "Or standalone (no setup script needed):"
+echo "  uv run scripts/neuroglancer_view.py /path/to/data.zarr"

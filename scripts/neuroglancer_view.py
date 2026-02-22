@@ -1,81 +1,37 @@
-#!/usr/bin/env python
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.12"
+# dependencies = [
+#     "iohub==0.3.0a5",
+#     "neuroglancer>=2.40",
+#     "numpy",
+#     "rich>=14",
+#     "typer>=0.21.1",
+# ]
+# ///
 """Neuroglancer viewer CLI for OME-Zarr datasets with iohub metadata parsing.
 
-This version uses iohub for robust OME-NGFF metadata handling and neuroglancer
+Uses iohub for robust OME-NGFF metadata handling and neuroglancer
 for visualization with adjustable contrast controls.
 
-Environment Setup:
-    source <repo>/scripts/setup-neuroglancer-iohub.sh
+Usage::
 
-    This activates /hpc/mydata/$USER/envs/neuroglancer_iohub.
-
-Dependencies (provided by the environment):
-    - click
-    - neuroglancer
-    - iohub (with zarr v2/v3 support)
-    - numpy
+    uv run scripts/neuroglancer_view.py /path/to/data.zarr
+    uv run scripts/neuroglancer_view.py /path/to/data.zarr --position A/1/0
+    uv run scripts/neuroglancer_view.py /path/to/data.zarr --channels "Phase3D,GFP"
+    uv run scripts/neuroglancer_view.py /path/to/data.zarr --dry-run
 """
 
-import os
-import sys
+from __future__ import annotations
+
 from pathlib import Path
+from typing import Annotated
 
-SCRIPT_DIR = Path(__file__).resolve().parent
-ENV_NAME = "neuroglancer_iohub"
-
-
-def check_environment():
-    """Check if required packages are available and provide setup instructions."""
-    missing_packages = []
-
-    try:
-        import click  # noqa: F401
-    except ImportError:
-        missing_packages.append("click")
-
-    try:
-        import neuroglancer  # noqa: F401
-    except ImportError:
-        missing_packages.append("neuroglancer")
-
-    try:
-        import iohub  # noqa: F401
-    except ImportError:
-        missing_packages.append("iohub")
-
-    try:
-        import numpy  # noqa: F401
-    except ImportError:
-        missing_packages.append("numpy")
-
-    if missing_packages:
-        user = os.environ.get("USER", "YOUR_USERNAME")
-        setup_script = SCRIPT_DIR / f"setup-{ENV_NAME}.sh"
-        env_dir = f"/hpc/mydata/{user}/envs/{ENV_NAME}"
-
-        print("=" * 70, file=sys.stderr)
-        print("ERROR: Required packages not found", file=sys.stderr)
-        print("=" * 70, file=sys.stderr)
-        print(f"\nMissing packages: {', '.join(missing_packages)}", file=sys.stderr)
-        print(f"\nThis script requires the {ENV_NAME} conda environment.", file=sys.stderr)
-        print("\nPlease run:\n", file=sys.stderr)
-        print(f"    source {setup_script}", file=sys.stderr)
-        print("\nOr manually activate:", file=sys.stderr)
-        print("    module load anaconda", file=sys.stderr)
-        print("    module load comp_micro", file=sys.stderr)
-        print(f"    conda activate {env_dir}", file=sys.stderr)
-        print("\n" + "=" * 70, file=sys.stderr)
-        sys.exit(1)
-
-
-# Check environment before importing heavy dependencies
-check_environment()
-
-import click
 import neuroglancer
 import numpy as np
+import typer
 from iohub.ngff import open_ome_zarr
-
+from rich.console import Console
 
 # Fluorescence microscopy channel color conventions
 # Colors are in RGB format [R, G, B] with values 0-1
@@ -120,117 +76,54 @@ CHANNEL_COLORS = {
     "default": [1.0, 1.0, 1.0],
 }
 
+app = typer.Typer(add_completion=False)
+console = Console()
 
-@click.command()
-@click.argument("zarr_path", type=click.Path(exists=True, path_type=Path))
-@click.option(
-    "--position",
-    "-p",
-    default=None,
-    help='Position key (e.g., "A/1/0" or "0/0/0"). If not specified, uses first position.',
-)
-@click.option(
-    "--channels",
-    "-c",
-    default=None,
-    help="Comma-separated channel names to display (default: all channels)",
-)
-@click.option(
-    "--bind-address",
-    default="0.0.0.0",
-    help="Server bind address for neuroglancer (default: 0.0.0.0)",
-)
-@click.option(
-    "--contrast-percentile-low",
-    default=1.0,
-    type=float,
-    help="Lower percentile for auto-contrast (default: 1.0)",
-)
-@click.option(
-    "--contrast-percentile-high",
-    default=99.0,
-    type=float,
-    help="Upper percentile for auto-contrast (default: 99.0)",
-)
-@click.option(
-    "--voxel-size",
-    default=None,
-    help='Override voxel size as "z,y,x" in microns (e.g., "0.2,0.103,0.103")',
-)
-@click.option(
-    "--time-point",
-    "-t",
-    default=0,
-    type=int,
-    help="Time point to display for time-series data (default: 0)",
-)
-@click.option(
-    "--dry-run",
-    is_flag=True,
-    help="Test loading and setup without launching viewer",
-)
+
+@app.command()
 def main(
-    zarr_path,
-    position,
-    channels,
-    bind_address,
-    contrast_percentile_low,
-    contrast_percentile_high,
-    voxel_size,
-    time_point,
-    dry_run,
-):
-    """Launch neuroglancer viewer for OME-Zarr datasets using iohub metadata.
-
-    ZARR_PATH: Path to the OME-Zarr store to visualize.
-
-    \b
-    Examples:
-        # View first position with all channels
-        neuroglancer_view.py /path/to/data.zarr
-
-        # View specific position
-        neuroglancer_view.py /path/to/data.zarr --position A/1/0
-
-        # View specific channels only
-        neuroglancer_view.py /path/to/data.zarr --channels "Phase3D,GFP"
-
-        # Override voxel size
-        neuroglancer_view.py /path/to/data.zarr --voxel-size "0.2,0.103,0.103"
-
-        # View time-series data at specific time point
-        neuroglancer_view.py /path/to/data.zarr --time-point 5
-
-        # Dry run to test without launching viewer
-        neuroglancer_view.py /path/to/data.zarr --dry-run
-    """
-    click.echo(f"Starting neuroglancer viewer for: {zarr_path}")
+    zarr_path: Annotated[Path, typer.Argument(help="Path to the OME-Zarr store to visualize.")],
+    position: Annotated[str | None, typer.Option("--position", "-p", help="Position key (e.g. A/1/0).")] = None,
+    channels: Annotated[str | None, typer.Option("--channels", "-c", help="Comma-separated channel names.")] = None,
+    bind_address: Annotated[str, typer.Option(help="Server bind address for neuroglancer.")] = "0.0.0.0",
+    contrast_percentile_low: Annotated[float, typer.Option(help="Lower percentile for auto-contrast.")] = 1.0,
+    contrast_percentile_high: Annotated[float, typer.Option(help="Upper percentile for auto-contrast.")] = 99.0,
+    voxel_size: Annotated[
+        str | None, typer.Option(help='Override voxel size as "z,y,x" in microns (e.g. "0.2,0.103,0.103").')
+    ] = None,
+    time_point: Annotated[int, typer.Option("--time-point", "-t", help="Time point to display.")] = 0,
+    dry_run: Annotated[
+        bool, typer.Option("--dry-run", help="Test loading and setup without launching viewer.")
+    ] = False,
+) -> None:
+    """Launch neuroglancer viewer for OME-Zarr datasets using iohub metadata."""
+    console.print(f"Starting neuroglancer viewer for [cyan]{zarr_path}[/cyan]")
 
     # Open zarr store with iohub
     try:
-        dataset = open_ome_zarr(zarr_path, mode="r")
-        click.echo(f"Dataset type: {type(dataset).__name__}")
-        click.echo("Opened with iohub (supports Zarr v2/v3 and OME-NGFF 0.4/0.5)")
+        dataset = open_ome_zarr(str(zarr_path), mode="r")
+        console.print(f"  Dataset type: [bold]{type(dataset).__name__}[/bold]")
+        console.print("  Opened with iohub (supports Zarr v2/v3 and OME-NGFF 0.4/0.5)")
     except Exception as e:
-        click.echo(f"Error opening zarr store: {e}", err=True)
-        sys.exit(1)
+        console.print(f"[red]Error opening zarr store: {e}[/red]")
+        raise typer.Exit(1) from e
 
     # Get position
     try:
         pos_obj = _get_position(dataset, position)
     except Exception as e:
-        click.echo(f"Error getting position: {e}", err=True)
-        sys.exit(1)
+        console.print(f"[red]Error getting position: {e}[/red]")
+        raise typer.Exit(1) from e
 
     # Get metadata using iohub's API
     data_shape = pos_obj.data.shape
     channel_names = list(pos_obj.channel_names)
     scale = pos_obj.scale
 
-    click.echo("\nPosition metadata:")
-    click.echo(f"  Shape: {data_shape}")
-    click.echo(f"  Channels: {channel_names}")
-    click.echo(f"  Scale (um): {scale}")
+    console.print("\nPosition metadata:")
+    console.print(f"  Shape: {data_shape}")
+    console.print(f"  Channels: {channel_names}")
+    console.print(f"  Scale (um): {scale}")
 
     # Filter channels if specified
     if channels:
@@ -243,23 +136,23 @@ def main(
                 channel_indices.append(channel_names.index(ch_name))
                 filtered_channel_names.append(ch_name)
             else:
-                click.echo(f"Warning: Channel '{ch_name}' not found, skipping", err=True)
+                console.print(f"[yellow]Warning: Channel '{ch_name}' not found, skipping[/yellow]")
 
         if not channel_indices:
-            click.echo("Error: No valid channels specified", err=True)
-            sys.exit(1)
+            console.print("[red]Error: No valid channels specified[/red]")
+            raise typer.Exit(1)
     else:
         channel_indices = list(range(len(channel_names)))
         filtered_channel_names = channel_names
 
-    click.echo(f"\nDisplaying channels: {filtered_channel_names}")
+    console.print(f"\nDisplaying channels: {filtered_channel_names}")
 
     # Calculate auto-contrast by sampling (lazy loading)
-    click.echo("\nCalculating auto-contrast (sampling 10% of pixels)...")
+    console.print("\nCalculating auto-contrast (sampling 10% of pixels)...")
     contrast_ranges = []
     channel_colors = []
 
-    for idx, name in zip(channel_indices, filtered_channel_names):
+    for idx, name in zip(channel_indices, filtered_channel_names, strict=True):
         try:
             data_min, data_max = _sample_contrast_range(
                 pos_obj.data,
@@ -275,38 +168,38 @@ def main(
             channel_colors.append(color)
             color_name = f"RGB({color[0]:.1f}, {color[1]:.1f}, {color[2]:.1f})"
 
-            click.echo(f"  + {name}: contrast=[{data_min:.1f}, {data_max:.1f}], color={color_name}")
+            console.print(f"  + {name}: contrast=[{data_min:.1f}, {data_max:.1f}], color={color_name}")
         except Exception as e:
-            click.echo(f"  x Error processing {name}: {e}", err=True)
-            sys.exit(1)
+            console.print(f"  [red]x Error processing {name}: {e}[/red]")
+            raise typer.Exit(1) from e
 
     # Determine voxel size
     if voxel_size:
+        parts = voxel_size.split(",")
+        if len(parts) != 3:
+            console.print("[red]Error: voxel size must have 3 values (z,y,x)[/red]")
+            raise typer.Exit(1)
         try:
-            voxel_size_um = [float(v) for v in voxel_size.split(",")]
-            if len(voxel_size_um) != 3:
-                raise ValueError("Must specify 3 values (z,y,x)")
-        except Exception as e:
-            click.echo(f"Error parsing voxel size: {e}", err=True)
-            sys.exit(1)
+            voxel_size_um = [float(v) for v in parts]
+        except ValueError as e:
+            console.print(f"[red]Error parsing voxel size: {e}[/red]")
+            raise typer.Exit(1) from e
     else:
         voxel_size_um = scale[-3:] if len(scale) >= 3 else [1.0, 1.0, 1.0]
 
     voxel_size_nm = [v * 1000 for v in voxel_size_um]
-    click.echo(f"\nVoxel size: {voxel_size_um} um = {voxel_size_nm} nm")
+    console.print(f"\nVoxel size: {voxel_size_um} um = {voxel_size_nm} nm")
 
     if dry_run:
-        click.echo("\n" + "=" * 70)
-        click.echo("DRY RUN: Setup completed successfully!")
-        click.echo("=" * 70)
+        console.print("\n[green]Dry run: setup completed successfully![/green]")
         return
 
     # Start neuroglancer
-    click.echo(f"\nStarting neuroglancer server (binding to {bind_address})...")
+    console.print(f"\nStarting neuroglancer server (binding to {bind_address})...")
     neuroglancer.set_server_bind_address(bind_address)
     viewer = neuroglancer.Viewer()
 
-    click.echo("\nLoading channels into neuroglancer...")
+    console.print("\nLoading channels into neuroglancer...")
 
     with viewer.txn() as s:
         dimensions = neuroglancer.CoordinateSpace(
@@ -316,7 +209,7 @@ def main(
         )
 
         for idx, name, (data_min, data_max), color in zip(
-            channel_indices, filtered_channel_names, contrast_ranges, channel_colors
+            channel_indices, filtered_channel_names, contrast_ranges, channel_colors, strict=True
         ):
             try:
                 channel_data = _extract_channel_data(pos_obj.data, idx, time_point)
@@ -335,15 +228,13 @@ void main() {{
 }}
 """,
                 )
-                click.echo(f"  + Added layer: {name}")
-            except Exception as e:
-                click.echo(f"  x Error adding layer {name}: {e}", err=True)
+                console.print(f"  + Added layer: {name}")
+            except (ValueError, TypeError, RuntimeError) as e:
+                console.print(f"  [red]x Error adding layer {name}: {e}[/red]")
 
-    click.echo(f"\n{'=' * 70}")
-    click.echo("Neuroglancer viewer is ready!")
-    click.echo(f"\nURL: {viewer}")
-    click.echo(f"{'=' * 70}\n")
-    click.echo("Press Ctrl+C to exit...")
+    console.print("\n[bold green]Neuroglancer viewer is ready![/bold green]")
+    console.print(f"\n  URL: {viewer}")
+    console.print("\nPress Ctrl+C to exit...")
 
     try:
         import time
@@ -351,7 +242,7 @@ void main() {{
         while True:
             time.sleep(1)
     except KeyboardInterrupt:
-        click.echo("\n\nShutting down viewer...")
+        console.print("\n\nShutting down viewer...")
 
 
 def _get_position(dataset, position_key):
@@ -362,21 +253,20 @@ def _get_position(dataset, position_key):
 
         if position_key is None:
             pos_key, _ = positions_list[0]
-            click.echo(f"Using first position: {pos_key}")
-            click.echo(f"  (Available positions: {available_keys})")
+            console.print(f"Using first position: {pos_key}")
+            console.print(f"  (Available positions: {available_keys})")
         else:
             if position_key not in available_keys:
-                raise ValueError(
-                    f"Position '{position_key}' not found. Available: {available_keys}"
-                )
+                msg = f"Position '{position_key}' not found. Available: {available_keys}"
+                raise ValueError(msg)
             pos_key = position_key
-            click.echo(f"Using position: {pos_key}")
+            console.print(f"Using position: {pos_key}")
 
         return dataset[pos_key]
     else:
         if position_key is not None:
-            click.echo("Warning: Position key ignored (dataset is not a Plate)", err=True)
-        click.echo("Dataset is a single Position")
+            console.print("[yellow]Warning: Position key ignored (dataset is not a Plate)[/yellow]")
+        console.print("Dataset is a single Position")
         return dataset
 
 
@@ -386,17 +276,16 @@ def _extract_channel_data(data, channel_idx, time_point):
 
     if len(shape) == 5:  # TCZYX
         if time_point >= shape[0]:
-            raise ValueError(f"Time point {time_point} out of range (max: {shape[0] - 1})")
+            msg = f"Time point {time_point} out of range (max: {shape[0] - 1})"
+            raise ValueError(msg)
         return np.array(data[time_point, channel_idx, :, :, :])
     elif len(shape) == 4:  # CZYX
         if time_point != 0:
-            click.echo(
-                f"Warning: Time point {time_point} requested but data has no time dimension",
-                err=True,
-            )
+            console.print(f"[yellow]Warning: Time point {time_point} requested but data has no time dimension[/yellow]")
         return np.array(data[channel_idx, :, :, :])
     else:
-        raise ValueError(f"Unexpected data shape: {shape} (expected CZYX or TCZYX)")
+        msg = f"Unexpected data shape: {shape} (expected CZYX or TCZYX)"
+        raise ValueError(msg)
 
 
 def _sample_contrast_range(data, channel_idx, time_point, low_pct, high_pct, sample_fraction=0.1):
@@ -405,12 +294,14 @@ def _sample_contrast_range(data, channel_idx, time_point, low_pct, high_pct, sam
 
     if len(shape) == 5:  # TCZYX
         if time_point >= shape[0]:
-            raise ValueError(f"Time point {time_point} out of range (max: {shape[0] - 1})")
+            msg = f"Time point {time_point} out of range (max: {shape[0] - 1})"
+            raise ValueError(msg)
         z_size, y_size, x_size = shape[2], shape[3], shape[4]
     elif len(shape) == 4:  # CZYX
         z_size, y_size, x_size = shape[1], shape[2], shape[3]
     else:
-        raise ValueError(f"Unexpected data shape: {shape}")
+        msg = f"Unexpected data shape: {shape}"
+        raise ValueError(msg)
 
     total_pixels = z_size * y_size * x_size
     target_pixels = int(total_pixels * sample_fraction)
@@ -442,4 +333,4 @@ def _get_channel_color(channel_name):
 
 
 if __name__ == "__main__":
-    main()
+    app()

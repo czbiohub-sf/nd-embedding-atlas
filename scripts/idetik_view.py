@@ -4,138 +4,59 @@
 Uses the idetik WebGL frontend (via nd-embedding-atlas) for visualization
 of OME-Zarr plates and positions.
 
-Environment Setup:
-    source <repo>/scripts/setup-idetik-iohub.sh
+Requires nd-embedding-atlas installed in the environment (not on PyPI).
+Use the project venv or the imviz CLI entry point::
 
-    This activates /hpc/mydata/$USER/envs/idetik_iohub.
-
-Dependencies (provided by the environment):
-    - nd-embedding-atlas (includes idetik frontend, FastAPI, iohub)
-    - click
+    uv run python scripts/idetik_view.py /path/to/data.zarr
+    uv run imviz /path/to/data.zarr
 """
 
-import os
-import sys
+from __future__ import annotations
+
 from pathlib import Path
+from typing import Annotated
 
-SCRIPT_DIR = Path(__file__).resolve().parent
-ENV_NAME = "idetik_iohub"
+import typer
+from rich.console import Console
 
-
-def check_environment():
-    """Check if required packages are available and provide setup instructions."""
-    missing_packages = []
-
-    try:
-        import click  # noqa: F401
-    except ImportError:
-        missing_packages.append("click")
-
-    try:
-        import nd_embedding_atlas  # noqa: F401
-    except ImportError:
-        missing_packages.append("nd-embedding-atlas")
-
-    try:
-        import iohub  # noqa: F401
-    except ImportError:
-        missing_packages.append("iohub")
-
-    if missing_packages:
-        user = os.environ.get("USER", "YOUR_USERNAME")
-        setup_script = SCRIPT_DIR / f"setup-{ENV_NAME}.sh"
-        env_dir = f"/hpc/mydata/{user}/envs/{ENV_NAME}"
-
-        print("=" * 70, file=sys.stderr)
-        print("ERROR: Required packages not found", file=sys.stderr)
-        print("=" * 70, file=sys.stderr)
-        print(f"\nMissing packages: {', '.join(missing_packages)}", file=sys.stderr)
-        print(f"\nThis script requires the {ENV_NAME} environment.", file=sys.stderr)
-        print("\nPlease run:\n", file=sys.stderr)
-        print(f"    source {setup_script}", file=sys.stderr)
-        print("\nOr manually activate:", file=sys.stderr)
-        print(f"    source {env_dir}/bin/activate", file=sys.stderr)
-        print("\n" + "=" * 70, file=sys.stderr)
-        sys.exit(1)
+app = typer.Typer(add_completion=False)
+console = Console()
 
 
-# Check environment before importing heavy dependencies
-check_environment()
+@app.command()
+def main(
+    zarr_path: Annotated[Path, typer.Argument(help="Path to the OME-Zarr store to visualize.")],
+    position: Annotated[str | None, typer.Option("--position", "-p", help="Position key (e.g. A/1/0).")] = None,
+    channels: Annotated[str | None, typer.Option("--channels", "-c", help="Comma-separated channel names.")] = None,
+    bind_address: Annotated[str, typer.Option(help="Server bind address.")] = "0.0.0.0",
+    port: Annotated[int, typer.Option(help="Server port.")] = 5055,
+    dry_run: Annotated[bool, typer.Option("--dry-run", help="Print metadata and exit.")] = False,
+) -> None:
+    """Launch idetik viewer for OME-Zarr datasets."""
+    from nd_embedding_atlas.imviz import get_plate_metadata, serve
 
-import click
-from nd_embedding_atlas.imviz import get_plate_metadata, serve
+    if not zarr_path.exists():
+        console.print(f"[red]Path does not exist: {zarr_path}[/red]")
+        raise typer.Exit(1)
 
-
-@click.command()
-@click.argument("zarr_path", type=click.Path(exists=True, path_type=Path))
-@click.option(
-    "--position",
-    "-p",
-    default=None,
-    help='Position key (e.g., "A/1/0" or "0/0/0"). If not specified, uses first position.',
-)
-@click.option(
-    "--channels",
-    "-c",
-    default=None,
-    help="Comma-separated channel names to display (default: all channels)",
-)
-@click.option(
-    "--bind-address",
-    default="0.0.0.0",
-    help="Server bind address (default: 0.0.0.0)",
-)
-@click.option(
-    "--port",
-    default=5055,
-    type=int,
-    help="Server port (default: 5055)",
-)
-@click.option(
-    "--dry-run",
-    is_flag=True,
-    help="Print metadata and exit without launching viewer",
-)
-def main(zarr_path, position, channels, bind_address, port, dry_run):
-    """Launch idetik viewer for OME-Zarr datasets.
-
-    ZARR_PATH: Path to the OME-Zarr store to visualize.
-
-    \b
-    Examples:
-        # View first position with all channels
-        idetik_view.py /path/to/data.zarr
-
-        # View specific position
-        idetik_view.py /path/to/data.zarr --position A/1/0
-
-        # View specific channels only
-        idetik_view.py /path/to/data.zarr --channels "Phase3D,GFP"
-
-        # Dry run to inspect metadata
-        idetik_view.py /path/to/data.zarr --dry-run
-    """
-    click.echo(f"Reading metadata from: {zarr_path}")
-
+    console.print(f"Reading metadata from [cyan]{zarr_path}[/cyan]...")
     meta = get_plate_metadata(zarr_path)
 
-    click.echo(f"\nDataset type: {meta['type']}")
-    click.echo(f"  Positions: {len(meta['positions'])}")
-    click.echo(f"  Channels: {meta['channel_names']}")
-    click.echo(f"  Shape: {meta['shape']}")
-    click.echo(f"  Scale: {meta['scale']}")
+    console.print(f"  Type: [bold]{meta['type']}[/bold]")
+    console.print(f"  Positions: {len(meta['positions'])}")
+    console.print(f"  Channels: {meta['channel_names']}")
+    console.print(f"  Shape: {meta['shape']}")
+    console.print(f"  Scale: {meta['scale']}")
 
     if dry_run:
-        click.echo(f"\n{'=' * 70}")
-        click.echo("DRY RUN: Metadata read successfully!")
-        click.echo(f"{'=' * 70}")
+        console.print("\n[green]Dry run complete.[/green]")
         if len(meta["positions"]) <= 20:
             for pos in meta["positions"]:
-                click.echo(f"    {pos}")
+                console.print(f"    {pos}")
         else:
             for pos in meta["positions"][:10]:
-                click.echo(f"    {pos}")
-            click.echo(f"    ... ({len(meta['positions']) - 10} more)")
+                console.print(f"    {pos}")
+            console.print(f"    ... ({len(meta['positions']) - 10} more)")
         return
 
     channel_list = [c.strip() for c in channels.split(",")] if channels else None
@@ -150,4 +71,4 @@ def main(zarr_path, position, channels, bind_address, port, dry_run):
 
 
 if __name__ == "__main__":
-    main()
+    app()
