@@ -74,7 +74,7 @@ uv sync --group neuroglancer
 
 ## What was done
 
-**Status**: Steps 1-12 complete. Step 13 (browser verification of auto-contrast + charts fix) pending.
+**Status**: Steps 1-13 complete. Step 14 (channel controls UI) next.
 **Tests**: 34 passed in 170s (9 existing + 25 new imviz tests).
 **Branch**: `feature/imviz`
 **Date**: 2026-02-22
@@ -190,7 +190,7 @@ uv run pytest tests/ -v    # 34 passed in 170s (9 existing + 25 new)
 
 Browser testing revealed that the Charts panel showed "No data" for numeric columns (T, C, Z, Y, X, z_um, y_um, x_um) even though the Data Table displayed them correctly. Root cause: all FOVs in the plate have identical values for these columns (e.g. T=9, C=3, Z=126), so `min === max` and the Histogram component returned `null` (no meaningful histogram to draw).
 
-- `Histogram.tsx`: Added early return when `stats.min === stats.max && stats.count > 0` — shows the constant value with row count (e.g. `"126 (268 rows)"`) instead of "No data"
+- `Histogram.tsx`: Added early return when `stats.min === stats.max && stats.count > 0` — shows the constant value with row count (e.g. `"126 (268 rows)"`) instead of "No data". Styled as white text on dark blue badge for readability.
 
 ### Step 12: Auto-contrast for idetik image viewer (DONE)
 
@@ -206,32 +206,42 @@ Verified auto-contrast values: DAPI [0, 373], TXR [103, 382], BF [13252, 16717] 
 
 Added 2 new tests: `test_auto_contrast_windows` (metadata level) and `test_metadata_auto_contrast` (API endpoint level).
 
+### Step 13: Browser verification (DONE — partial)
+
+- Auto-contrast fix confirmed: swapped priority so `plate_channels` (server-computed) is used before `omeroChannels` (raw zarr store defaults)
+- Charts constant-value badges now visible (white on dark blue)
+- Images display with proper contrast (not saturated white)
+- Channel controls (visibility toggles, contrast sliders) are **missing** — next step
+
 ---
 
 ## What remains
 
-### Step 13: Browser verification of auto-contrast + charts fix
+### Step 14: Channel controls UI
 
-Run the full server and verify in a browser:
+Add per-channel visibility toggles, contrast sliders, and color indicators to the image viewer panel.
 
-```bash
-uv run imviz \
-  /hpc/projects/intracellular_dashboard/virtual_stain_ft_infected/2026_01_29_A549_H2B_CAAX_DAPI_DENV_ZIKV/0-convert/convert.zarr \
-  /hpc/projects/intracellular_dashboard/virtual_stain_ft_infected/2026_01_29_A549_H2B_CAAX_DAPI_DENV_ZIKV/0-convert_zarrv3/convert.zarr
-```
+**Existing infrastructure** (already in place):
 
-**Expected behavior:**
-1. Open `http://localhost:5055` in a browser
-2. **No scatter panel** — hidden because `obsm` is empty
-3. **Table panel** shows 268 FOV rows (134 × 2 stores) with columns: dataset, position, T, C, Z, Y, X, z_um, y_um, x_um, ome_version
-4. **Charts panel** shows constant values with counts for T, C, Z, Y, X columns; histograms for z_um, y_um, x_um if they vary
-5. Click a v2 FOV row → idetik loads via `/plate_0/` with OME-NGFF 0.4, **proper contrast** (not saturated white)
-6. Click a v3 FOV row → idetik loads via `/plate_1/` with OME-NGFF 0.5, **proper contrast**
+| Component | File | What it provides |
+|---|---|---|
+| `MultiChannelLayers` | `frontend/src/lib/MultiChannelLayers.ts` | `setChannelProps()`, `channelProps` getter, change callbacks |
+| `ChunkedImageLayer` | `@idetik/core` | Per-layer `setChannelProps([props])` for runtime contrast/color updates |
+| `ViewerContext` | `frontend/src/components/viewer/ViewerContext.tsx` | State + actions for layers, Z/T sliders |
+| `ViewerControls` | `frontend/src/components/viewer/ViewerControls.tsx` | T/Z/crop sliders (model for channel sliders) |
+| `metadata.plate_channels` | Server `/data/metadata.json` | `label`, `color`, `window.{start, end, min, max}` per channel |
 
-**Verify endpoints:**
-- `curl http://localhost:5055/api/cell/0` → `{"fov_name": "...", "store_index": 0, ...}`
-- `curl http://localhost:5055/api/cell/134` → `{"fov_name": "...", "store_index": 1, ...}`
-- `curl http://localhost:5055/data/metadata.json` → `plate_stores` array present, channels have auto-contrast windows
+**What needs to be added:**
+
+1. **Channel state** in `ViewerState` — array of `{ visible: boolean, color: string, contrastLimits: [number, number] }` per channel
+2. **`ChannelControls` component** — for each channel:
+   - Color swatch (from `plate_channels[i].color`)
+   - Channel label (e.g. "DAPI", "TXR", "BF")
+   - Visibility toggle (eye icon)
+   - Contrast range slider (dual-thumb, range = `[window.min, window.max]`)
+3. **ViewerActions** — `setChannelVisibility(index, visible)`, `setChannelContrast(index, [lo, hi])`
+4. **Wire to idetik** — on state change, call `multiChannelRef.current.setChannelProps(newProps)` to update layers at runtime; toggle visibility by setting layer opacity or removing/re-adding layer
+5. **Placement** — below the existing T/Z/crop sliders in `ViewerControls`, or as a collapsible section
 
 ---
 
@@ -256,8 +266,8 @@ uv run imviz \
 |------|---------|
 | `frontend/src/dashboard/DashboardShell.tsx` | `hasEmbeddings` detection, passed to DockviewShell |
 | `frontend/src/components/layout/DockviewShell.tsx` | Scatter panel hidden when `!hasEmbeddings`; table-first layout |
-| `frontend/src/components/crops/SingleCropViewer.tsx` | Dynamic `store_index` + OME version from `plate_stores` |
-| `frontend/src/components/charts/Histogram.tsx` | Constant-value columns show value + count instead of "No data" |
+| `frontend/src/components/crops/SingleCropViewer.tsx` | Dynamic `store_index` + OME version; prefer server auto-contrast over raw zarr windows |
+| `frontend/src/components/charts/Histogram.tsx` | Constant-value columns: white-on-blue badge + muted row count |
 | `frontend/src/types.ts` | `plate_stores` added to `Metadata` interface |
 | `src/nd_embedding_atlas/imviz/_app.py` | CLI: `zarr_paths: list[Path]`, per-store metadata summary |
 | `src/nd_embedding_atlas/imviz/_metadata.py` | `detect_ome_version()`, `get_multi_store_fov_dataframe()`, auto-contrast sampling, stem disambiguation |
