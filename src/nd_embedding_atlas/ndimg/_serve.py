@@ -1,8 +1,8 @@
-"""FastAPI app for serving OME-Zarr images with idetik frontend.
+"""FastAPI app for serving OME-Zarr images with ndimg frontend.
 
 Serves the nd-embedding-atlas frontend with a FOV table backed by DuckDB.
 The dashboard shows a table of positions; clicking a row loads the
-corresponding FOV via idetik.  Mosaic query endpoints are provided by
+corresponding FOV.  Mosaic query endpoints are provided by
 ``vz._duckdb.mount_duckdb_endpoints``.
 """
 
@@ -63,7 +63,7 @@ def create_app(
     """Create a FastAPI app for viewing OME-Zarr images.
 
     Serves the nd-embedding-atlas frontend with a DuckDB-backed FOV table
-    and idetik image viewer.
+    and image viewer.
 
     Parameters
     ----------
@@ -272,7 +272,7 @@ def serve(
     host: str = "0.0.0.0",
     port: int = 5055,
 ) -> None:
-    """Launch the idetik OME-Zarr viewer.
+    """Launch the ndimg OME-Zarr viewer.
 
     Parameters
     ----------

@@ -42,7 +42,7 @@ source scripts/setup-neuroglancer-iohub.sh   # creates uv venv + installs deps
 python scripts/neuroglancer_view.py /path/to/data.zarr
 ```
 
-### idetik_view.py — requires project venv
+### ndimg_view.py — requires project venv
 
 Depends on `nd-embedding-atlas` which is not on PyPI, so it cannot use PEP 723
 standalone mode. Accepts one or more zarr store paths. Run from the project venv:
@@ -52,12 +52,12 @@ uv sync                                                            # install pro
 uv run ndimg /path/to/v2.zarr /path/to/v3.zarr                     # multi-store
 uv run ndimg /path/to/data.zarr                                     # single store
 uv run ndimg /path/to/data.zarr --dry-run                           # metadata only
-uv run python scripts/idetik_view.py /path/to/v2.zarr /path/to/v3.zarr  # script
+uv run python scripts/ndimg_view.py /path/to/v2.zarr /path/to/v3.zarr  # script
 ```
 
 Or create a separate venv:
 ```bash
-source scripts/setup-idetik-iohub.sh   # creates uv venv + editable install
+source scripts/setup-ndimg-iohub.sh   # creates uv venv + editable install
 ndimg /path/to/v2.zarr /path/to/v3.zarr
 ```
 
@@ -85,7 +85,7 @@ uv sync --group neuroglancer
 
 ### Steps 1-6: Foundation (DONE)
 
-1. Migrated `scripts/idetik_view.py` to typer + rich
+1. Migrated `scripts/ndimg_view.py` to typer + rich
 2. Migrated `scripts/neuroglancer_view.py` to typer + rich + PEP 723 (standalone `uv run --script`)
 3. Added `get_fov_dataframe(plate_path)` to `_metadata.py` — per-FOV DataFrame with TCZYX shape + voxel scale
 4. Rewrote `ndimg/_serve.py` with DuckDB FOV table + `mount_duckdb_endpoints` from `vz._duckdb`
@@ -104,7 +104,7 @@ uv sync --group neuroglancer
 | `0-convert_zarrv3/convert.zarr` | v3 | PASS — identical metadata, identical contrast ranges |
 | v3 + `--position 0/3/000000 --channels "DAPI,BF"` | v3 | PASS — position/channel filters work |
 
-### idetik_view.py (via `uv run python scripts/idetik_view.py`)
+### ndimg_view.py (via `uv run python scripts/ndimg_view.py`)
 
 | Dataset | Zarr version | Result |
 |---------|-------------|--------|
@@ -144,7 +144,7 @@ Layout when `hasEmbeddings=false, hasPlate=true`:
 
 Both zarr v2 and v3 stores shown in a single FOV table with `dataset`, `store_index`, and `ome_version` columns.
 
-**CLI (`_app.py` + `scripts/idetik_view.py`):**
+**CLI (`_app.py` + `scripts/ndimg_view.py`):**
 - `zarr_paths: list[Path]` positional argument (1+); validates all paths; prints per-store metadata with detected OME-NGFF version
 
 **Metadata (`_metadata.py`):**
@@ -256,9 +256,9 @@ Add per-channel visibility toggles, contrast sliders, and color indicators to th
 | File | Summary |
 |------|---------|
 | `pyproject.toml` | Added `neuroglancer` dependency group |
-| `scripts/idetik_view.py` | click -> typer + rich, runs from project venv |
+| `scripts/ndimg_view.py` | click -> typer + rich, runs from project venv |
 | `scripts/neuroglancer_view.py` | click -> typer + rich + PEP 723, standalone `uv run --script` |
-| `scripts/setup-idetik-iohub.sh` | Rewritten: uv-only, no conda |
+| `scripts/setup-ndimg-iohub.sh` | Rewritten: uv-only, no conda |
 | `scripts/setup-neuroglancer-iohub.sh` | Rewritten: uv-only, no conda |
 | `src/nd_embedding_atlas/ndimg/__init__.py` | Added `get_fov_dataframe` export |
 | `src/nd_embedding_atlas/ndimg/_metadata.py` | Added `get_fov_dataframe()` + `_position_row()` |
@@ -277,7 +277,7 @@ Add per-channel visibility toggles, contrast sliders, and color indicators to th
 | `src/nd_embedding_atlas/ndimg/_metadata.py` | `detect_ome_version()`, `get_multi_store_fov_dataframe()`, auto-contrast sampling, stem disambiguation |
 | `src/nd_embedding_atlas/ndimg/_serve.py` | Multi-store `/plate_{i}/` mounts, `store_index` in cell API, `plate_stores` in metadata, fixed `fov_col` |
 | `src/nd_embedding_atlas/ndimg/__init__.py` | Exports `detect_ome_version`, `get_multi_store_fov_dataframe` |
-| `scripts/idetik_view.py` | Multi-path CLI, per-store OME version display |
+| `scripts/ndimg_view.py` | Multi-path CLI, per-store OME version display |
 | `tests/test_ndimg.py` | 34 integration tests (metadata, dataframes, auto-contrast, FastAPI endpoints) |
 | `pyproject.toml` | `httpx>=0.27` added to `test` dependency group |
 

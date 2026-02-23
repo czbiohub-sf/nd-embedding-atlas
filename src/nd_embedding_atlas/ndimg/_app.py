@@ -23,7 +23,7 @@ def view(
     port: Annotated[int, typer.Option(help="Server port.")] = 5055,
     dry_run: Annotated[bool, typer.Option("--dry-run", help="Print metadata and exit.")] = False,
 ) -> None:
-    """Launch the idetik OME-Zarr image viewer."""
+    """Launch the ndimg OME-Zarr image viewer."""
     from rich.console import Console
 
     from nd_embedding_atlas.ndimg._metadata import detect_ome_version, get_plate_metadata

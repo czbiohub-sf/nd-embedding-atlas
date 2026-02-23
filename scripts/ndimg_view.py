@@ -1,14 +1,14 @@
 #!/usr/bin/env python
-"""idetik viewer CLI for OME-Zarr datasets.
+"""ndimg viewer CLI for OME-Zarr datasets.
 
-Uses the idetik WebGL frontend (via nd-embedding-atlas) for visualization
+Uses the ndimg WebGL frontend (via nd-embedding-atlas) for visualization
 of OME-Zarr plates and positions.  Accepts multiple zarr stores for
 side-by-side v2/v3 comparison.
 
 Requires nd-embedding-atlas installed in the environment (not on PyPI).
 Use the project venv or the ndimg CLI entry point::
 
-    uv run python scripts/idetik_view.py /path/to/v2.zarr /path/to/v3.zarr
+    uv run python scripts/ndimg_view.py /path/to/v2.zarr /path/to/v3.zarr
     uv run ndimg /path/to/data.zarr
 """
 
@@ -33,7 +33,7 @@ def main(
     port: Annotated[int, typer.Option(help="Server port.")] = 5055,
     dry_run: Annotated[bool, typer.Option("--dry-run", help="Print metadata and exit.")] = False,
 ) -> None:
-    """Launch idetik viewer for OME-Zarr datasets."""
+    """Launch ndimg viewer for OME-Zarr datasets."""
     from nd_embedding_atlas.ndimg import detect_ome_version, get_plate_metadata, serve
 
     for zarr_path in zarr_paths:

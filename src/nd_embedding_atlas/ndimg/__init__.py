@@ -1,4 +1,4 @@
-"""Standalone OME-Zarr image viewer using idetik frontend."""
+"""Standalone OME-Zarr image viewer (ndimg)."""
 
 from nd_embedding_atlas.ndimg._metadata import (
     detect_ome_version,
