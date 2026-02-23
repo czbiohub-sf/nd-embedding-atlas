@@ -43,7 +43,7 @@ urls.Homepage = "https://github.com/czbiohub-sf/nd-embedding-atlas"
 urls.Source = "https://github.com/czbiohub-sf/nd-embedding-atlas"
 scripts.nd-embedding-atlas = "nd_embedding_atlas.cli._app:app"
 scripts.ndea = "nd_embedding_atlas.cli._app:app"
-scripts.imviz = "nd_embedding_atlas.imviz._app:app"
+scripts.ndimg = "nd_embedding_atlas.ndimg._app:app"
 
 [dependency-groups]
 dev = [ { include-group = "doc" }, { include-group = "test" } ]

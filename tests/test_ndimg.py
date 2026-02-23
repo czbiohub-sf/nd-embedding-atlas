@@ -1,4 +1,4 @@
-"""Tests for the imviz OME-Zarr viewer module.
+"""Tests for the ndimg OME-Zarr viewer module.
 
 These tests cover metadata extraction, FOV table construction, multi-store
 support, OME version detection, and the FastAPI server endpoints.
@@ -33,14 +33,14 @@ requires_data = pytest.mark.skipif(
 
 @requires_data
 def test_detect_ome_version_v2():
-    from nd_embedding_atlas.imviz import detect_ome_version
+    from nd_embedding_atlas.ndimg import detect_ome_version
 
     assert detect_ome_version(ZARR_V2) == "0.4"
 
 
 @requires_data
 def test_detect_ome_version_v3():
-    from nd_embedding_atlas.imviz import detect_ome_version
+    from nd_embedding_atlas.ndimg import detect_ome_version
 
     assert detect_ome_version(ZARR_V3) == "0.5"
 
@@ -51,31 +51,31 @@ def test_detect_ome_version_v3():
 @requires_data
 class TestGetPlateMetadata:
     def test_returns_plate_type(self):
-        from nd_embedding_atlas.imviz import get_plate_metadata
+        from nd_embedding_atlas.ndimg import get_plate_metadata
 
         meta = get_plate_metadata(ZARR_V2)
         assert meta["type"] == "plate"
 
     def test_positions_count(self):
-        from nd_embedding_atlas.imviz import get_plate_metadata
+        from nd_embedding_atlas.ndimg import get_plate_metadata
 
         meta = get_plate_metadata(ZARR_V2)
         assert len(meta["positions"]) == 134
 
     def test_channel_names(self):
-        from nd_embedding_atlas.imviz import get_plate_metadata
+        from nd_embedding_atlas.ndimg import get_plate_metadata
 
         meta = get_plate_metadata(ZARR_V2)
         assert meta["channel_names"] == ["DAPI", "TXR", "BF"]
 
     def test_shape_is_5d(self):
-        from nd_embedding_atlas.imviz import get_plate_metadata
+        from nd_embedding_atlas.ndimg import get_plate_metadata
 
         meta = get_plate_metadata(ZARR_V2)
         assert len(meta["shape"]) == 5  # TCZYX
 
     def test_pixel_scale_present(self):
-        from nd_embedding_atlas.imviz import get_plate_metadata
+        from nd_embedding_atlas.ndimg import get_plate_metadata
 
         meta = get_plate_metadata(ZARR_V2)
         assert "x" in meta["pixel_scale"]
@@ -83,7 +83,7 @@ class TestGetPlateMetadata:
 
     def test_auto_contrast_windows(self):
         """Channel windows should have data-driven contrast, not [0, 65535]."""
-        from nd_embedding_atlas.imviz import get_plate_metadata
+        from nd_embedding_atlas.ndimg import get_plate_metadata
 
         meta = get_plate_metadata(ZARR_V2)
         for ch in meta["channels"]:
@@ -94,14 +94,14 @@ class TestGetPlateMetadata:
             )
 
     def test_v3_matches_v2_positions(self):
-        from nd_embedding_atlas.imviz import get_plate_metadata
+        from nd_embedding_atlas.ndimg import get_plate_metadata
 
         meta_v2 = get_plate_metadata(ZARR_V2)
         meta_v3 = get_plate_metadata(ZARR_V3)
         assert meta_v2["positions"] == meta_v3["positions"]
 
     def test_v3_matches_v2_channels(self):
-        from nd_embedding_atlas.imviz import get_plate_metadata
+        from nd_embedding_atlas.ndimg import get_plate_metadata
 
         meta_v2 = get_plate_metadata(ZARR_V2)
         meta_v3 = get_plate_metadata(ZARR_V3)
@@ -114,26 +114,26 @@ class TestGetPlateMetadata:
 @requires_data
 class TestGetFovDataframe:
     def test_row_count(self):
-        from nd_embedding_atlas.imviz import get_fov_dataframe
+        from nd_embedding_atlas.ndimg import get_fov_dataframe
 
         df = get_fov_dataframe(ZARR_V2)
         assert len(df) == 134
 
     def test_required_columns(self):
-        from nd_embedding_atlas.imviz import get_fov_dataframe
+        from nd_embedding_atlas.ndimg import get_fov_dataframe
 
         df = get_fov_dataframe(ZARR_V2)
         expected = {"__row_index__", "position", "T", "C", "Z", "Y", "X", "z_um", "y_um", "x_um"}
         assert expected.issubset(set(df.columns))
 
     def test_row_index_is_sequential(self):
-        from nd_embedding_atlas.imviz import get_fov_dataframe
+        from nd_embedding_atlas.ndimg import get_fov_dataframe
 
         df = get_fov_dataframe(ZARR_V2)
         assert list(df["__row_index__"]) == list(range(len(df)))
 
     def test_v3_matches_v2_shape(self):
-        from nd_embedding_atlas.imviz import get_fov_dataframe
+        from nd_embedding_atlas.ndimg import get_fov_dataframe
 
         df_v2 = get_fov_dataframe(ZARR_V2)
         df_v3 = get_fov_dataframe(ZARR_V3)
@@ -147,13 +147,13 @@ class TestGetFovDataframe:
 @requires_data
 class TestGetMultiStoreFovDataframe:
     def test_combined_row_count(self):
-        from nd_embedding_atlas.imviz import get_multi_store_fov_dataframe
+        from nd_embedding_atlas.ndimg import get_multi_store_fov_dataframe
 
         df = get_multi_store_fov_dataframe([ZARR_V2, ZARR_V3])
         assert len(df) == 268  # 134 * 2
 
     def test_extra_columns_present(self):
-        from nd_embedding_atlas.imviz import get_multi_store_fov_dataframe
+        from nd_embedding_atlas.ndimg import get_multi_store_fov_dataframe
 
         df = get_multi_store_fov_dataframe([ZARR_V2, ZARR_V3])
         assert "dataset" in df.columns
@@ -161,13 +161,13 @@ class TestGetMultiStoreFovDataframe:
         assert "ome_version" in df.columns
 
     def test_store_index_values(self):
-        from nd_embedding_atlas.imviz import get_multi_store_fov_dataframe
+        from nd_embedding_atlas.ndimg import get_multi_store_fov_dataframe
 
         df = get_multi_store_fov_dataframe([ZARR_V2, ZARR_V3])
         assert set(df["store_index"].unique()) == {0, 1}
 
     def test_ome_version_values(self):
-        from nd_embedding_atlas.imviz import get_multi_store_fov_dataframe
+        from nd_embedding_atlas.ndimg import get_multi_store_fov_dataframe
 
         df = get_multi_store_fov_dataframe([ZARR_V2, ZARR_V3])
         versions = df.groupby("store_index")["ome_version"].first().to_dict()
@@ -175,14 +175,14 @@ class TestGetMultiStoreFovDataframe:
         assert versions[1] == "0.5"
 
     def test_row_index_globally_unique(self):
-        from nd_embedding_atlas.imviz import get_multi_store_fov_dataframe
+        from nd_embedding_atlas.ndimg import get_multi_store_fov_dataframe
 
         df = get_multi_store_fov_dataframe([ZARR_V2, ZARR_V3])
         assert list(df["__row_index__"]) == list(range(268))
 
     def test_dataset_names_disambiguated(self):
         """When stems collide, parent dir is prepended."""
-        from nd_embedding_atlas.imviz import get_multi_store_fov_dataframe
+        from nd_embedding_atlas.ndimg import get_multi_store_fov_dataframe
 
         df = get_multi_store_fov_dataframe([ZARR_V2, ZARR_V3])
         names = df["dataset"].unique().tolist()
@@ -191,7 +191,7 @@ class TestGetMultiStoreFovDataframe:
         assert names[0] != names[1]
 
     def test_single_store_fallback(self):
-        from nd_embedding_atlas.imviz import get_multi_store_fov_dataframe
+        from nd_embedding_atlas.ndimg import get_multi_store_fov_dataframe
 
         df = get_multi_store_fov_dataframe([ZARR_V3])
         assert len(df) == 134
@@ -206,10 +206,10 @@ class TestGetMultiStoreFovDataframe:
 class TestCreateApp:
     @pytest.fixture
     def client(self):
-        """Create a TestClient for the imviz app with both stores."""
+        """Create a TestClient for the ndimg app with both stores."""
         from starlette.testclient import TestClient
 
-        from nd_embedding_atlas.imviz import create_app
+        from nd_embedding_atlas.ndimg import create_app
 
         app = create_app([ZARR_V2, ZARR_V3])
         return TestClient(app)
@@ -295,7 +295,7 @@ class TestCreateAppSingleStore:
     def client(self):
         from starlette.testclient import TestClient
 
-        from nd_embedding_atlas.imviz import create_app
+        from nd_embedding_atlas.ndimg import create_app
 
         app = create_app(ZARR_V3)
         return TestClient(app)

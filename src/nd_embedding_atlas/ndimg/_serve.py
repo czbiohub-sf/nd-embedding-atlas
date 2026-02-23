@@ -19,7 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from nd_embedding_atlas.imviz._metadata import (
+from nd_embedding_atlas.ndimg._metadata import (
     detect_ome_version,
     get_multi_store_fov_dataframe,
     get_plate_metadata,
@@ -86,7 +86,7 @@ def create_app(
         plate_paths = [plate_paths]
     resolved_paths = [pathlib.Path(p).resolve() for p in plate_paths]
 
-    app = FastAPI(title="imviz")
+    app = FastAPI(title="ndimg")
     app.add_middleware(
         CORSMiddleware,
         allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
@@ -293,7 +293,7 @@ def serve(
         channels=channels,
         static_dir=static_dir,
     )
-    print(f"imviz viewer: http://{host}:{port}")
+    print(f"ndimg viewer: http://{host}:{port}")
     if isinstance(plate_paths, (str, pathlib.Path)):
         plate_paths = [plate_paths]
     for p in plate_paths:

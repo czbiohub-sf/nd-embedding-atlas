@@ -1,5 +1,5 @@
 #!/bin/bash
-# Setup for the idetik (imviz) OME-Zarr viewer.
+# Setup for the idetik (ndimg) OME-Zarr viewer.
 #
 # The idetik viewer requires nd-embedding-atlas installed (not on PyPI),
 # so it runs from the project venv — not as a standalone uv script.
@@ -9,13 +9,13 @@
 #
 #   cd /path/to/nd-embedding-atlas
 #   uv sync
-#   uv run imviz /path/to/data.zarr                   # CLI entry point
+#   uv run ndimg /path/to/data.zarr                   # CLI entry point
 #   uv run python scripts/idetik_view.py /path/to/data.zarr  # script
 #
 # Option B — separate venv (for users who don't develop nd-embedding-atlas):
 #
 #   source scripts/setup-idetik-iohub.sh   # creates & activates venv
-#   imviz /path/to/data.zarr
+#   ndimg /path/to/data.zarr
 #
 # ──────────────────────────────────────────────────────────────────────
 
@@ -41,10 +41,10 @@ echo ""
 echo "idetik_iohub environment activated."
 echo ""
 echo "Usage:"
-echo "  imviz /path/to/data.zarr                   # launch viewer"
-echo "  imviz /path/to/data.zarr --dry-run          # inspect metadata"
-echo "  imviz --help                                 # show options"
+echo "  ndimg /path/to/data.zarr                   # launch viewer"
+echo "  ndimg /path/to/data.zarr --dry-run          # inspect metadata"
+echo "  ndimg --help                                 # show options"
 echo ""
 echo "Or from the project venv (without this script):"
-echo "  uv run imviz /path/to/data.zarr"
+echo "  uv run ndimg /path/to/data.zarr"
 echo "  uv run python scripts/idetik_view.py /path/to/data.zarr"

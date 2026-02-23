@@ -6,10 +6,10 @@ of OME-Zarr plates and positions.  Accepts multiple zarr stores for
 side-by-side v2/v3 comparison.
 
 Requires nd-embedding-atlas installed in the environment (not on PyPI).
-Use the project venv or the imviz CLI entry point::
+Use the project venv or the ndimg CLI entry point::
 
     uv run python scripts/idetik_view.py /path/to/v2.zarr /path/to/v3.zarr
-    uv run imviz /path/to/data.zarr
+    uv run ndimg /path/to/data.zarr
 """
 
 from __future__ import annotations
@@ -34,7 +34,7 @@ def main(
     dry_run: Annotated[bool, typer.Option("--dry-run", help="Print metadata and exit.")] = False,
 ) -> None:
     """Launch idetik viewer for OME-Zarr datasets."""
-    from nd_embedding_atlas.imviz import detect_ome_version, get_plate_metadata, serve
+    from nd_embedding_atlas.ndimg import detect_ome_version, get_plate_metadata, serve
 
     for zarr_path in zarr_paths:
         if not zarr_path.exists():

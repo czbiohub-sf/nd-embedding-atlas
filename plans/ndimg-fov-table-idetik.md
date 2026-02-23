@@ -1,4 +1,4 @@
-# Plan: imviz FOV table + idetik integration
+# Plan: ndimg FOV table + idetik integration
 
 # Goal:
 Browse 5D image FOVs via local or a remote web server. This is a stripped down version of nd-embedding-viewer that does not have the embedding point cloud, but includes an FOV table with key metadata and integrated idetik viewer for performant exploration of 5D FOVs compliant with OME-ngff 0.4 and OME-ngff 0.5 metadata.
@@ -8,7 +8,7 @@ Examples of concrete use cases are:
 2. Visualize intermediate results of image processing pipeline implemented with biahub that may contain both zarr v2 and zarr v3 stores.
 3. Quickly review plate-level images after converting raw data into zarr v2 or zarr v3 stores to decide how the experiment worked.
 
-We use neuroglancer as a baseline implementation and are developing imviz to replace it. imviz will build on top of nd-embedding-atlas and idetik. neuroglancer can read both zarr v2 and zarr v3 stores, and iohub can parse corresponding ome-ngff 0.4 and ome-ngff 0.5 metadata.
+We use neuroglancer as a baseline implementation and are developing ndimg to replace it. ndimg will build on top of nd-embedding-atlas and idetik. neuroglancer can read both zarr v2 and zarr v3 stores, and iohub can parse corresponding ome-ngff 0.4 and ome-ngff 0.5 metadata.
 
 nd-embedding-atlas, idetik, and iohub need to be installed from corresponding repositories main branches to develop this feature.
 
@@ -49,16 +49,16 @@ standalone mode. Accepts one or more zarr store paths. Run from the project venv
 
 ```bash
 uv sync                                                            # install project
-uv run imviz /path/to/v2.zarr /path/to/v3.zarr                     # multi-store
-uv run imviz /path/to/data.zarr                                     # single store
-uv run imviz /path/to/data.zarr --dry-run                           # metadata only
+uv run ndimg /path/to/v2.zarr /path/to/v3.zarr                     # multi-store
+uv run ndimg /path/to/data.zarr                                     # single store
+uv run ndimg /path/to/data.zarr --dry-run                           # metadata only
 uv run python scripts/idetik_view.py /path/to/v2.zarr /path/to/v3.zarr  # script
 ```
 
 Or create a separate venv:
 ```bash
 source scripts/setup-idetik-iohub.sh   # creates uv venv + editable install
-imviz /path/to/v2.zarr /path/to/v3.zarr
+ndimg /path/to/v2.zarr /path/to/v3.zarr
 ```
 
 ### pyproject.toml dependency group
@@ -75,8 +75,8 @@ uv sync --group neuroglancer
 ## What was done
 
 **Status**: Steps 1-14 complete. Channel controls UI done. Full-FOV camera on launch.
-**Tests**: 34 passed in 170s (9 existing + 25 new imviz tests).
-**Branch**: `feature/imviz`
+**Tests**: 34 passed in 170s (9 existing + 25 new ndimg tests).
+**Branch**: `feature/ndimg`
 **Date**: 2026-02-22
 
 ### Known issues
@@ -88,7 +88,7 @@ uv sync --group neuroglancer
 1. Migrated `scripts/idetik_view.py` to typer + rich
 2. Migrated `scripts/neuroglancer_view.py` to typer + rich + PEP 723 (standalone `uv run --script`)
 3. Added `get_fov_dataframe(plate_path)` to `_metadata.py` — per-FOV DataFrame with TCZYX shape + voxel scale
-4. Rewrote `imviz/_serve.py` with DuckDB FOV table + `mount_duckdb_endpoints` from `vz._duckdb`
+4. Rewrote `ndimg/_serve.py` with DuckDB FOV table + `mount_duckdb_endpoints` from `vz._duckdb`
 5. uv environment management — `neuroglancer` dependency group, setup scripts rewritten
 6. Lint + format pass
 
@@ -150,7 +150,7 @@ Both zarr v2 and v3 stores shown in a single FOV table with `dataset`, `store_in
 **Metadata (`_metadata.py`):**
 - `detect_ome_version(plate_path)` → `"0.4"` (v2) or `"0.5"` (v3) via `zarr.json` presence check
 - `get_multi_store_fov_dataframe(plate_paths)` → concatenated DataFrame with `dataset` (path stem, parent-disambiguated when stems collide), `store_index`, `ome_version` columns; globally unique `__row_index__`
-- Both exported from `imviz/__init__.py`
+- Both exported from `ndimg/__init__.py`
 
 **Server (`_serve.py`):**
 - `create_app()` / `serve()` accept `plate_paths: str | Path | list[str | Path]` (backward-compatible)
@@ -170,7 +170,7 @@ Previously hardcoded to `version: "0.5"`. idetik supports both `"0.4"` and `"0.5
 
 ### Step 10: Integration tests (DONE)
 
-Added `tests/test_imviz.py` — 32 pytest tests covering the full imviz stack:
+Added `tests/test_ndimg.py` — 32 pytest tests covering the full ndimg stack:
 
 | Test class | # | Coverage |
 |---|---|---|
@@ -260,9 +260,9 @@ Add per-channel visibility toggles, contrast sliders, and color indicators to th
 | `scripts/neuroglancer_view.py` | click -> typer + rich + PEP 723, standalone `uv run --script` |
 | `scripts/setup-idetik-iohub.sh` | Rewritten: uv-only, no conda |
 | `scripts/setup-neuroglancer-iohub.sh` | Rewritten: uv-only, no conda |
-| `src/nd_embedding_atlas/imviz/__init__.py` | Added `get_fov_dataframe` export |
-| `src/nd_embedding_atlas/imviz/_metadata.py` | Added `get_fov_dataframe()` + `_position_row()` |
-| `src/nd_embedding_atlas/imviz/_serve.py` | Full rewrite: DuckDB FOV table, mount_duckdb_endpoints, removed shim/hack |
+| `src/nd_embedding_atlas/ndimg/__init__.py` | Added `get_fov_dataframe` export |
+| `src/nd_embedding_atlas/ndimg/_metadata.py` | Added `get_fov_dataframe()` + `_position_row()` |
+| `src/nd_embedding_atlas/ndimg/_serve.py` | Full rewrite: DuckDB FOV table, mount_duckdb_endpoints, removed shim/hack |
 
 ### Steps 7-12 (done)
 
@@ -273,12 +273,12 @@ Add per-channel visibility toggles, contrast sliders, and color indicators to th
 | `frontend/src/components/crops/SingleCropViewer.tsx` | Dynamic `store_index` + OME version; prefer server auto-contrast over raw zarr windows |
 | `frontend/src/components/charts/Histogram.tsx` | Constant-value columns: white-on-blue badge + muted row count |
 | `frontend/src/types.ts` | `plate_stores` added to `Metadata` interface |
-| `src/nd_embedding_atlas/imviz/_app.py` | CLI: `zarr_paths: list[Path]`, per-store metadata summary |
-| `src/nd_embedding_atlas/imviz/_metadata.py` | `detect_ome_version()`, `get_multi_store_fov_dataframe()`, auto-contrast sampling, stem disambiguation |
-| `src/nd_embedding_atlas/imviz/_serve.py` | Multi-store `/plate_{i}/` mounts, `store_index` in cell API, `plate_stores` in metadata, fixed `fov_col` |
-| `src/nd_embedding_atlas/imviz/__init__.py` | Exports `detect_ome_version`, `get_multi_store_fov_dataframe` |
+| `src/nd_embedding_atlas/ndimg/_app.py` | CLI: `zarr_paths: list[Path]`, per-store metadata summary |
+| `src/nd_embedding_atlas/ndimg/_metadata.py` | `detect_ome_version()`, `get_multi_store_fov_dataframe()`, auto-contrast sampling, stem disambiguation |
+| `src/nd_embedding_atlas/ndimg/_serve.py` | Multi-store `/plate_{i}/` mounts, `store_index` in cell API, `plate_stores` in metadata, fixed `fov_col` |
+| `src/nd_embedding_atlas/ndimg/__init__.py` | Exports `detect_ome_version`, `get_multi_store_fov_dataframe` |
 | `scripts/idetik_view.py` | Multi-path CLI, per-store OME version display |
-| `tests/test_imviz.py` | 34 integration tests (metadata, dataframes, auto-contrast, FastAPI endpoints) |
+| `tests/test_ndimg.py` | 34 integration tests (metadata, dataframes, auto-contrast, FastAPI endpoints) |
 | `pyproject.toml` | `httpx>=0.27` added to `test` dependency group |
 
 ## Test data

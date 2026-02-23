@@ -1,4 +1,4 @@
-"""CLI command for launching the imviz viewer."""
+"""CLI command for launching the ndimg viewer."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from typing import Annotated
 import typer
 
 app = typer.Typer(
-    name="imviz",
+    name="ndimg",
     add_completion=False,
     no_args_is_help=True,
 )
@@ -26,7 +26,7 @@ def view(
     """Launch the idetik OME-Zarr image viewer."""
     from rich.console import Console
 
-    from nd_embedding_atlas.imviz._metadata import detect_ome_version, get_plate_metadata
+    from nd_embedding_atlas.ndimg._metadata import detect_ome_version, get_plate_metadata
 
     console = Console()
 
@@ -62,7 +62,7 @@ def view(
 
     channel_list = [c.strip() for c in channels.split(",")] if channels else None
 
-    from nd_embedding_atlas.imviz._serve import serve
+    from nd_embedding_atlas.ndimg._serve import serve
 
     console.print(f"\nServing at [link=http://{host}:{port}]http://{host}:{port}[/link]")
     serve(
