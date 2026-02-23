@@ -27,6 +27,13 @@ export interface Metadata {
         name: string;
         ome_version: "0.4" | "0.5";
     }>;
+    spatial?: {
+        fov_col: string | null;
+        t_col: string | null;
+        bbox_col: string | null;
+        x_col: string | null;
+        y_col: string | null;
+    };
 }
 
 export interface AxisState {

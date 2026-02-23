@@ -289,6 +289,10 @@ export function SingleCropViewer({ cropSize }: Props) {
     useEffect(() => {
         if (!viewerState.initialized) return;
 
+        // Skip bbox when there are no per-cell spatial columns (e.g. ndimg FOV-level view)
+        const hasCellCoords = !!metadata.spatial?.x_col;
+        if (!hasCellCoords) return;
+
         let cx: number | undefined;
         let cy: number | undefined;
         let bbox: CellInfo["bbox"] | undefined;

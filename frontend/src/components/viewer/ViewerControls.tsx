@@ -11,7 +11,8 @@ export function ViewerControls({ cropSize, setCropSize }: Props) {
     const { state: dashState, actions: dashActions } = useDashboard();
     const { state, actions } = useViewer();
     const { bounds, zIndex, tIndex } = state;
-    const { trajectory } = dashState;
+    const { trajectory, metadata } = dashState;
+    const hasCellCoords = !!metadata.spatial?.x_col;
 
     // When trajectory is active, override T slider to only the timepoints in the track
     const traj = trajectory?.points;
@@ -73,19 +74,21 @@ export function ViewerControls({ cropSize, setCropSize }: Props) {
                     <span className="w-8 font-mono text-[10px] text-text tabular-nums">{zIndex}</span>
                 </div>
             )}
-            <div className="flex items-center gap-2">
-                <span className="w-6 font-mono text-[10px] text-text">bbox</span>
-                <input
-                    type="range"
-                    min={50}
-                    max={500}
-                    value={cropSize}
-                    onChange={(e) => setCropSize(Number(e.target.value))}
-                    className="h-1 flex-1 accent-accent-cyan"
-                    aria-label="Bounding box size"
-                />
-                <span className="w-8 font-mono text-[10px] text-text tabular-nums">{cropSize}</span>
-            </div>
+            {hasCellCoords && (
+                <div className="flex items-center gap-2">
+                    <span className="w-6 font-mono text-[10px] text-text">bbox</span>
+                    <input
+                        type="range"
+                        min={50}
+                        max={500}
+                        value={cropSize}
+                        onChange={(e) => setCropSize(Number(e.target.value))}
+                        className="h-1 flex-1 accent-accent-cyan"
+                        aria-label="Bounding box size"
+                    />
+                    <span className="w-8 font-mono text-[10px] text-text tabular-nums">{cropSize}</span>
+                </div>
+            )}
         </div>
     );
 }

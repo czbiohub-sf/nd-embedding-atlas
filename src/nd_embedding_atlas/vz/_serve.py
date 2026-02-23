@@ -58,65 +58,19 @@ def _resolve_frontend() -> str:
 
 
 def _read_plate_metadata(plate_path: str | pathlib.Path | None) -> dict | None:
-    """Read pixel scale and channel info from the first FOV in an OME-Zarr plate."""
+    """Read pixel scale and channel info from an OME-Zarr plate.
+
+    Delegates to ``ndimg.get_plate_metadata`` which uses iohub for robust
+    OME-NGFF v0.4/v0.5 parsing and applies percentile-based auto-contrast.
+    """
     if plate_path is None:
         return None
-    import json
+    try:
+        from nd_embedding_atlas.ndimg._metadata import get_plate_metadata
 
-    plate_root = pathlib.Path(plate_path)
-    zarr_json = plate_root / "zarr.json"
-    if not zarr_json.exists():
+        return get_plate_metadata(plate_path)
+    except Exception:  # noqa: BLE001
         return None
-    attrs = json.loads(zarr_json.read_text()).get("attributes", {})
-    wells = attrs.get("ome", {}).get("plate", {}).get("wells", [])
-    if not wells:
-        return None
-    well_path = plate_root / wells[0]["path"]
-    well_zarr = well_path / "zarr.json"
-    if not well_zarr.exists():
-        return None
-    well_attrs = json.loads(well_zarr.read_text()).get("attributes", {})
-    images = well_attrs.get("ome", {}).get("well", {}).get("images", [])
-    if not images:
-        return None
-    fov_path = well_path / images[0]["path"]
-    fov_zarr = fov_path / "zarr.json"
-    if not fov_zarr.exists():
-        return None
-    fov_attrs = json.loads(fov_zarr.read_text()).get("attributes", {})
-
-    result: dict = {}
-
-    # Pixel scale
-    multiscales = fov_attrs.get("ome", {}).get("multiscales", [])
-    if multiscales:
-        axes = multiscales[0].get("axes", [])
-        datasets = multiscales[0].get("datasets", [])
-        if datasets:
-            scale = datasets[0].get("coordinateTransformations", [{}])[0].get("scale", [])
-            if len(scale) == len(axes):
-                axis_names = [a["name"].upper() for a in axes]
-                pixel_scale = {}
-                for name, s in zip(axis_names, scale, strict=True):
-                    if name in ("Y", "X"):
-                        pixel_scale[name.lower()] = s
-                if pixel_scale:
-                    result["pixel_scale"] = pixel_scale
-
-    # Channel info from omero metadata
-    omero = fov_attrs.get("ome", {}).get("omero", {})
-    channels = omero.get("channels", [])
-    if channels:
-        result["channels"] = [
-            {
-                "label": ch.get("label", f"Channel {i}"),
-                "color": ch.get("color", "FFFFFF"),
-                "window": ch.get("window", {}),
-            }
-            for i, ch in enumerate(channels)
-        ]
-
-    return result or None
 
 
 def create_app(
