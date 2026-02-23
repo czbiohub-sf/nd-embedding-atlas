@@ -15,9 +15,6 @@ import { MultiChannelLayers } from "../../lib/MultiChannelLayers";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
-/** Fixed camera view radius in pixels (independent of crop slider). */
-const CAMERA_VIEW_HALF = 150;
-
 interface CellInfo {
     fov_name: string;
     store_index?: number;
@@ -67,15 +64,6 @@ export function SingleCropViewer({ cropSize }: Props) {
     const sourceUrl = cellInfo ? `${window.location.origin}${plateMount}/${cellInfo.fov_name}` : null;
     const omeVersion: "0.4" | "0.5" =
         metadata.plate_stores?.[storeIndex]?.ome_version === "0.4" ? "0.4" : "0.5";
-
-    // ── Helper: frame camera around a point ───────────────────────────
-    const frameAround = useCallback(
-        (cx: number, cy: number) => {
-            const h = CAMERA_VIEW_HALF;
-            actions.setFrame((cx - h) * scale.x, (cx + h) * scale.x, (cy + h) * scale.y, (cy - h) * scale.y);
-        },
-        [actions, scale.x, scale.y],
-    );
 
     // ── Helper: swap bbox layer without touching image layers ─────────
     const updateBbox = useCallback(
@@ -161,12 +149,16 @@ export function SingleCropViewer({ cropSize }: Props) {
 
             if (cancelled) return;
 
-            // Set Z/T bounds from source dimensions
+            // Set Z/T bounds and FOV extent from source dimensions
+            let fovY = 2048;
+            let fovX = 2048;
             try {
                 const dims = loader.getSourceDimensionMap();
                 const zMax = dims.z ? dims.z.lods[0].size - 1 : null;
                 const tMax = dims.t ? dims.t.lods[0].size - 1 : null;
                 actions.setBounds({ zMax, tMax });
+                if (dims.y) fovY = dims.y.lods[0].size;
+                if (dims.x) fovX = dims.x.lods[0].size;
             } catch {
                 // Source doesn't support dimension probing
             }
@@ -228,6 +220,9 @@ export function SingleCropViewer({ cropSize }: Props) {
 
             actions.setLayers(layers);
 
+            // Frame camera to show the full FOV
+            actions.setFrame(0, fovX * scale.x, fovY * scale.y, 0);
+
             // Push channel definitions to ViewerProvider for ChannelControls
             const channelDefsForContext = channelDefs.map((ch, i) => {
                 const plateCh = metadata.plate_channels?.[i];
@@ -250,26 +245,13 @@ export function SingleCropViewer({ cropSize }: Props) {
         return () => {
             cancelled = true;
         };
-    }, [sourceUrl, omeVersion, viewerState.initialized, actions, metadata.plate_channels]);
+    }, [sourceUrl, omeVersion, viewerState.initialized, actions, metadata.plate_channels, scale.x, scale.y]);
 
-    // ── Effect 2: Cell framing (bbox + camera on every cell change) ───
+    // ── Effect 2: Cell bbox overlay (no camera change) ────────────────
     useEffect(() => {
         if (!cellInfo || !viewerState.initialized) return;
 
         updateBbox(cellInfo.x, cellInfo.y, cropSize / 2, cellInfo.bbox);
-
-        if (cellInfo.bbox) {
-            const { y_min, x_min, y_max, x_max } = cellInfo.bbox;
-            const pad = 50;
-            actions.setFrame(
-                (x_min - pad) * scale.x,
-                (x_max + pad) * scale.x,
-                (y_max + pad) * scale.y,
-                (y_min - pad) * scale.y,
-            );
-        } else {
-            frameAround(cellInfo.x, cellInfo.y);
-        }
     }, [
         cellInfo?.x,
         cellInfo?.y,
@@ -280,10 +262,6 @@ export function SingleCropViewer({ cropSize }: Props) {
         cropSize,
         viewerState.initialized,
         updateBbox,
-        frameAround,
-        actions,
-        scale.x,
-        scale.y,
         cellInfo?.bbox,
         cellInfo,
     ]);

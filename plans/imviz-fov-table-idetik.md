@@ -74,10 +74,14 @@ uv sync --group neuroglancer
 
 ## What was done
 
-**Status**: Steps 1-13 complete. Step 14 (channel controls UI) next.
+**Status**: Steps 1-14 complete. Channel controls UI done. Full-FOV camera on launch.
 **Tests**: 34 passed in 170s (9 existing + 25 new imviz tests).
 **Branch**: `feature/imviz`
 **Date**: 2026-02-22
+
+### Known issues
+
+- **Crop slider bbox not visible**: The crop slider adjusts the bbox overlay size but the bounding box rectangle is not rendering visibly on the full-FOV view. The crop slider currently has no visual effect — needs investigation.
 
 ### Steps 1-6: Foundation (DONE)
 
