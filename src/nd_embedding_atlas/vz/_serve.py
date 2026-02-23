@@ -355,8 +355,39 @@ def create_app(
             "available_embeddings": available_obsm_keys,
         }
 
-    # ── Cell crop viewer endpoint ─────────────────────────────────────
+    # ── Cell crop viewer endpoints ────────────────────────────────────
     if has_plate:
+
+        @app.get("/api/cell/lookup", response_model=None)
+        async def lookup_cell(fov_name: str, track_id: int, t: int) -> dict | JSONResponse:
+            """Look up spatial coordinates for a specific (fov_name, track_id, t) triple."""
+            if not (_fov_col and _x_col and _y_col):
+                return JSONResponse({"error": "Spatial columns not configured"}, status_code=500)
+
+            select_cols = [_x_col, _y_col]
+            if _bbox_col:
+                select_cols.append(_bbox_col)
+
+            where = f"{_fov_col} = ? AND track_id = ? AND {_t_col} = ?" if _t_col else f"{_fov_col} = ? AND track_id = ?"
+            params: list = [fov_name, track_id, t] if _t_col else [fov_name, track_id]
+
+            row = store.con.execute(
+                f"SELECT {', '.join(select_cols)} FROM obs_base WHERE {where} LIMIT 1",
+                params,
+            ).fetchone()
+            if row is None:
+                return JSONResponse({"error": "Cell not found"}, status_code=404)
+
+            result_map = dict(zip(select_cols, row, strict=True))
+            response: dict = {"x": float(result_map[_x_col]), "y": float(result_map[_y_col])}
+
+            if _bbox_col and result_map.get(_bbox_col):
+                parts = str(result_map[_bbox_col]).strip("[]").split()
+                if len(parts) == 4:
+                    y_min, x_min, y_max, x_max = (float(v) for v in parts)
+                    response["bbox"] = {"y_min": y_min, "x_min": x_min, "y_max": y_max, "x_max": x_max}
+
+            return response
 
         @app.get("/api/cell/{row_index}", response_model=None)
         async def get_cell(row_index: int) -> dict | JSONResponse:

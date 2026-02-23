@@ -24,6 +24,16 @@ interface CellInfo {
     bbox?: { y_min: number; x_min: number; y_max: number; x_max: number };
 }
 
+/** Coordinates returned by /api/cell/lookup for a specific (fov_name, track_id, t). */
+interface CellCoords {
+    x: number;
+    y: number;
+    bbox?: { y_min: number; x_min: number; y_max: number; x_max: number };
+}
+
+/** Default bbox half-size in pixels when no bbox metadata is available. */
+const DEFAULT_BBOX_HALF_PX = 64; // 128 / 2
+
 interface Props {
     cropSize: number;
 }
@@ -52,8 +62,24 @@ export function SingleCropViewer({ cropSize }: Props) {
     // ── Bbox layer ref — managed directly via layerManager ────────────
     const bboxRef = useRef<Layer | null>(null);
 
-    // ── Fetch cell info ───────────────────────────────────────────────
+    // ── Fetch cell info (initial selection) ─────────────────────────────
     const { data: cellInfo } = useSWR<CellInfo>(highlightId ? `/api/cell/${highlightId}` : null, fetcher, {
+        keepPreviousData: true,
+    });
+
+    // ── Fetch updated coordinates as T changes ──────────────────────────
+    // When a trajectory is active, use trajectory coords directly. Otherwise
+    // look up the cell's position at the current tIndex via the lookup endpoint.
+    const { trajectory } = dashState;
+    const trackId = trajectory?.trackId;
+    const fovName = cellInfo?.fov_name;
+    const currentT = viewerState.tIndex;
+
+    // Build lookup key: only fetch when we have the identifying info and T differs from initial
+    const lookupKey =
+        fovName && trackId != null ? `/api/cell/lookup?fov_name=${encodeURIComponent(fovName)}&track_id=${trackId}&t=${currentT}` : null;
+
+    const { data: lookupCoords } = useSWR<CellCoords>(lookupKey, fetcher, {
         keepPreviousData: true,
     });
 
@@ -83,13 +109,20 @@ export function SingleCropViewer({ cropSize }: Props) {
 
             let path: [number, number, number][];
             if (explicitBbox) {
-                const { y_min, x_min, y_max, x_max } = explicitBbox;
+                // Scale the explicit bbox around its center by the crop slider value
+                const bboxCx = (explicitBbox.x_min + explicitBbox.x_max) / 2;
+                const bboxCy = (explicitBbox.y_min + explicitBbox.y_max) / 2;
+                const bboxHalfW = (explicitBbox.x_max - explicitBbox.x_min) / 2;
+                const bboxHalfH = (explicitBbox.y_max - explicitBbox.y_min) / 2;
+                const scaleFactor = half / Math.max(bboxHalfW, bboxHalfH, 1);
+                const hw = bboxHalfW * scaleFactor;
+                const hh = bboxHalfH * scaleFactor;
                 path = [
-                    [x_min * scale.x, y_min * scale.y, 0],
-                    [x_max * scale.x, y_min * scale.y, 0],
-                    [x_max * scale.x, y_max * scale.y, 0],
-                    [x_min * scale.x, y_max * scale.y, 0],
-                    [x_min * scale.x, y_min * scale.y, 0],
+                    [(bboxCx - hw) * scale.x, (bboxCy - hh) * scale.y, 0],
+                    [(bboxCx + hw) * scale.x, (bboxCy - hh) * scale.y, 0],
+                    [(bboxCx + hw) * scale.x, (bboxCy + hh) * scale.y, 0],
+                    [(bboxCx - hw) * scale.x, (bboxCy + hh) * scale.y, 0],
+                    [(bboxCx - hw) * scale.x, (bboxCy - hh) * scale.y, 0],
                 ];
             } else {
                 const sx = cx * scale.x;
@@ -108,8 +141,8 @@ export function SingleCropViewer({ cropSize }: Props) {
             const bbox = new ProjectedLineLayer([
                 {
                     path,
-                    color: [0.13, 0.83, 0.93],
-                    width: 0.005,
+                    color: [1, 1, 1],
+                    width: 0.015,
                 },
             ]);
 
@@ -247,23 +280,49 @@ export function SingleCropViewer({ cropSize }: Props) {
         };
     }, [sourceUrl, omeVersion, viewerState.initialized, actions, metadata.plate_channels, scale.x, scale.y]);
 
-    // ── Effect 2: Cell bbox overlay (no camera change) ────────────────
+    // ── Effect 2: Cell bbox overlay ─────────────────────────────────────
+    // Resolves the best (x, y) for the current view state:
+    //   - trajectory active → use trajectory frame coords
+    //   - lookup endpoint returned coords for current T → use those
+    //   - fallback → use initial cellInfo coords
+    // Depends on aggregateState to re-add on top after image layers load.
     useEffect(() => {
-        if (!cellInfo || !viewerState.initialized) return;
+        if (!viewerState.initialized) return;
 
-        updateBbox(cellInfo.x, cellInfo.y, cropSize / 2, cellInfo.bbox);
+        let cx: number | undefined;
+        let cy: number | undefined;
+        let bbox: CellInfo["bbox"] | undefined;
+
+        if (trajectory) {
+            // During trajectory playback, use the frame matching current T
+            const frame = trajectory.points.find((p) => p.t === trajectory.tIndex);
+            if (frame) {
+                cx = frame.spatial_x;
+                cy = frame.spatial_y;
+            }
+        } else if (lookupCoords) {
+            // Lookup returned coordinates for the current (fov_name, track_id, t)
+            cx = lookupCoords.x;
+            cy = lookupCoords.y;
+            bbox = lookupCoords.bbox;
+        } else if (cellInfo) {
+            // Fallback to initial cell selection
+            cx = cellInfo.x;
+            cy = cellInfo.y;
+            bbox = cellInfo.bbox;
+        }
+
+        if (cx == null || cy == null) return;
+
+        updateBbox(cx, cy, cropSize > 0 ? cropSize / 2 : DEFAULT_BBOX_HALF_PX, bbox);
     }, [
-        cellInfo?.x,
-        cellInfo?.y,
-        cellInfo?.bbox?.x_min,
-        cellInfo?.bbox?.y_min,
-        cellInfo?.bbox?.x_max,
-        cellInfo?.bbox?.y_max,
+        cellInfo,
+        lookupCoords,
+        trajectory,
         cropSize,
         viewerState.initialized,
+        viewerState.aggregateState,
         updateBbox,
-        cellInfo?.bbox,
-        cellInfo,
     ]);
 
     // ── Effect 3: Sync T index from selected cell ─────────────────────
@@ -273,15 +332,14 @@ export function SingleCropViewer({ cropSize }: Props) {
         }
     }, [cellInfo?.t, actions, cellInfo]);
 
-    // ── Effect 4: Follow cell during trajectory playback ──────────────
-    const { trajectory } = dashState;
+    // ── Effect 4: Follow trajectory T changes ───────────────────────────
     useEffect(() => {
-        if (!trajectory || !cellInfo) return;
+        if (!trajectory) return;
         const frame = trajectory.points.find((p) => p.t === trajectory.tIndex);
-        if (!frame) return;
-        updateBbox(frame.spatial_x, frame.spatial_y, cropSize / 2);
-        // eslint-disable-next-line react-hooks/exhaustive-deps -- trajectory object excluded; tIndex + points cover all reads. cellInfo kept as guard to clear bbox on deselect.
-    }, [trajectory?.tIndex, trajectory?.points, cropSize, cellInfo, updateBbox, trajectory]);
+        if (frame) {
+            actions.setTIndex(trajectory.tIndex);
+        }
+    }, [trajectory?.tIndex, trajectory?.points, actions, trajectory]);
 
     // ── Cleanup on unmount ────────────────────────────────────────────
     useEffect(() => {

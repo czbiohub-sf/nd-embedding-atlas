@@ -181,7 +181,8 @@ export function ViewerProvider({ children }: Props) {
     );
 
     // Meta uses refs — recompute when initialized flips so consumers see the real viewport
-    const meta = useMemo(() => ({ runtime: runtimeRef.current, viewport: viewportRef.current }), []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- initialized triggers re-read of refs
+    const meta = useMemo(() => ({ runtime: runtimeRef.current, viewport: viewportRef.current }), [initialized]);
 
     const value = useMemo<ViewerInternalContext>(
         () => ({ state, actions, meta, _canvasRef: canvasRef }),

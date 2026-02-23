@@ -74,7 +74,7 @@ export function ViewerControls({ cropSize, setCropSize }: Props) {
                 </div>
             )}
             <div className="flex items-center gap-2">
-                <span className="w-6 font-mono text-[10px] text-text">crop</span>
+                <span className="w-6 font-mono text-[10px] text-text">bbox</span>
                 <input
                     type="range"
                     min={50}
@@ -82,7 +82,7 @@ export function ViewerControls({ cropSize, setCropSize }: Props) {
                     value={cropSize}
                     onChange={(e) => setCropSize(Number(e.target.value))}
                     className="h-1 flex-1 accent-accent-cyan"
-                    aria-label="Crop size"
+                    aria-label="Bounding box size"
                 />
                 <span className="w-8 font-mono text-[10px] text-text tabular-nums">{cropSize}</span>
             </div>
