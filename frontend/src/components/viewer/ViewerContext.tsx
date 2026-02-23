@@ -1,5 +1,6 @@
 import type { Idetik, Layer, LayerState, Viewport } from "@idetik/core";
 import { createContext } from "react";
+import type { MultiChannelLayers } from "../../lib/MultiChannelLayers";
 
 // ── Tracked layer ────────────────────────────────────────────────────────────
 
@@ -7,6 +8,16 @@ export interface TrackedLayer {
     id: string;
     layer: Layer;
     state: LayerState;
+}
+
+// ── Channel definition ───────────────────────────────────────────────────────
+
+export interface ChannelDef {
+    label: string;
+    color: string; // hex like "FF0000"
+    visible: boolean;
+    contrastLimits: [number, number];
+    contrastRange: [number, number]; // full range for slider min/max
 }
 
 // ── Dimension bounds ─────────────────────────────────────────────────────────
@@ -29,6 +40,7 @@ export interface ViewerState {
     tIndex: number;
     bounds: DimensionBounds;
     error: string | null;
+    channels: ChannelDef[];
 }
 
 // ── Actions ──────────────────────────────────────────────────────────────────
@@ -43,6 +55,10 @@ export interface ViewerActions {
     setZIndex: (z: number) => void;
     setTIndex: (t: number) => void;
     setBounds: (bounds: DimensionBounds) => void;
+    /** Replace channel definitions and store the MultiChannelLayers ref. */
+    setChannels: (channels: ChannelDef[], multiChannel: MultiChannelLayers) => void;
+    /** Update a single channel property (visible, contrastLimits). */
+    setChannelProp: (index: number, update: Partial<Pick<ChannelDef, "visible" | "contrastLimits">>) => void;
     /** Pause the render loop (frees GPU frame budget for other WebGL canvases). */
     pause: () => void;
     /** Resume the render loop. */

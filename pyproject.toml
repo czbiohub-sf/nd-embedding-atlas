@@ -27,6 +27,7 @@ dependencies = [
   "iohub==0.3.0a5",
   "obstore>=0.8.2",
   "pyarrow>=18",
+  "pyyaml>=6",
   "rich>=14.3.1",
   "scanpy>=1.11.5",
   "session-info2",

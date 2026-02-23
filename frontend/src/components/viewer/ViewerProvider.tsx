@@ -1,6 +1,8 @@
-import { Idetik, type Layer, type LayerState, OrthographicCamera, PanZoomControls, type Viewport } from "@idetik/core";
+import { Color, Idetik, type Layer, type LayerState, OrthographicCamera, PanZoomControls, type Viewport } from "@idetik/core";
 import { type ReactNode, useCallback, useMemo, useRef, useState } from "react";
+import type { MultiChannelLayers } from "../../lib/MultiChannelLayers";
 import {
+    type ChannelDef,
     type DimensionBounds,
     type TrackedLayer,
     ViewerContext,
@@ -31,6 +33,9 @@ export function ViewerProvider({ children }: Props) {
     const viewportRef = useRef<Viewport | null>(null);
     const layerMapRef = useRef<Map<string, LayerEntry>>(new Map());
 
+    // ── Channel refs ─────────────────────────────────────────────────────
+    const multiChannelRef = useRef<MultiChannelLayers | null>(null);
+
     // ── Reactive state ────────────────────────────────────────────────────
     const [trackedLayers, setTrackedLayers] = useState<TrackedLayer[]>([]);
     const [initialized, setInitialized] = useState(false);
@@ -38,6 +43,7 @@ export function ViewerProvider({ children }: Props) {
     const [tIndex, setTIndex] = useState(0);
     const [bounds, setBounds] = useState<DimensionBounds>({ zMax: null, tMax: null });
     const [error, setError] = useState<string | null>(null);
+    const [channels, setChannelsState] = useState<ChannelDef[]>([]);
 
     const aggregateState = useMemo(() => computeAggregate(trackedLayers), [trackedLayers]);
 
@@ -118,6 +124,31 @@ export function ViewerProvider({ children }: Props) {
         }
     }, []);
 
+    const setChannels = useCallback((defs: ChannelDef[], multiChannel: MultiChannelLayers) => {
+        multiChannelRef.current = multiChannel;
+        setChannelsState(defs);
+    }, []);
+
+    const setChannelProp = useCallback(
+        (index: number, update: Partial<Pick<ChannelDef, "visible" | "contrastLimits">>) => {
+            setChannelsState((prev) => {
+                const next = prev.map((ch, i) => (i === index ? { ...ch, ...update } : ch));
+                // Sync to idetik
+                const mc = multiChannelRef.current;
+                if (mc) {
+                    const props = next.map((ch) => ({
+                        color: Color.fromRgbHex(`#${ch.color}`),
+                        contrastLimits: ch.contrastLimits as [number, number],
+                        visible: ch.visible,
+                    }));
+                    mc.setChannelProps(props);
+                }
+                return next;
+            });
+        },
+        [],
+    );
+
     const pause = useCallback(() => {
         runtimeRef.current?.stop();
     }, []);
@@ -129,13 +160,24 @@ export function ViewerProvider({ children }: Props) {
     // ── Context value ─────────────────────────────────────────────────────
 
     const state = useMemo<ViewerState>(
-        () => ({ initialized, layers: trackedLayers, aggregateState, zIndex, tIndex, bounds, error }),
-        [initialized, trackedLayers, aggregateState, zIndex, tIndex, bounds, error],
+        () => ({ initialized, layers: trackedLayers, aggregateState, zIndex, tIndex, bounds, error, channels }),
+        [initialized, trackedLayers, aggregateState, zIndex, tIndex, bounds, error, channels],
     );
 
     const actions = useMemo(
-        () => ({ setLayers, clearLayers, setFrame, setZIndex, setTIndex, setBounds, pause, resume }),
-        [setLayers, clearLayers, setFrame, pause, resume],
+        () => ({
+            setLayers,
+            clearLayers,
+            setFrame,
+            setZIndex,
+            setTIndex,
+            setBounds,
+            setChannels,
+            setChannelProp,
+            pause,
+            resume,
+        }),
+        [setLayers, clearLayers, setFrame, setChannels, setChannelProp, pause, resume],
     );
 
     // Meta uses refs — recompute when initialized flips so consumers see the real viewport

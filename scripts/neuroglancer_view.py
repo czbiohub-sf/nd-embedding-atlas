@@ -5,6 +5,7 @@
 #     "iohub==0.3.0a5",
 #     "neuroglancer>=2.40",
 #     "numpy",
+#     "pyyaml",
 #     "rich>=14",
 #     "typer>=0.21.1",
 # ]
@@ -33,48 +34,24 @@ import typer
 from iohub.ngff import open_ome_zarr
 from rich.console import Console
 
-# Fluorescence microscopy channel color conventions
-# Colors are in RGB format [R, G, B] with values 0-1
-CHANNEL_COLORS = {
-    # DNA stains
-    "DAPI": [0.0, 0.5, 1.0],
-    "Hoechst": [0.0, 0.5, 1.0],
-    "H2B": [0.0, 0.5, 1.0],
-    # Green fluorophores
-    "GFP": [0.0, 1.0, 0.0],
-    "FITC": [0.0, 1.0, 0.0],
-    "Alexa488": [0.0, 1.0, 0.0],
-    "EGFP": [0.0, 1.0, 0.0],
-    # Red fluorophores
-    "RFP": [1.0, 0.0, 0.0],
-    "mCherry": [1.0, 0.0, 0.0],
-    "TXR": [1.0, 0.0, 0.0],
-    "Texas Red": [1.0, 0.0, 0.0],
-    "TRITC": [1.0, 0.3, 0.0],
-    "Alexa594": [1.0, 0.0, 0.0],
-    "Alexa568": [1.0, 0.3, 0.0],
-    "tdTomato": [1.0, 0.0, 0.0],
-    "mScarlet": [1.0, 0.0, 0.0],
-    "CAAX": [1.0, 0.0, 0.0],
-    # Far-red/Magenta fluorophores
-    "Cy5": [1.0, 0.0, 1.0],
-    "Alexa647": [1.0, 0.0, 1.0],
-    "Cy7": [1.0, 0.0, 0.5],
-    # Cyan fluorophores
-    "CFP": [0.0, 1.0, 1.0],
-    "mTurquoise": [0.0, 1.0, 1.0],
-    # Yellow fluorophores
-    "YFP": [1.0, 1.0, 0.0],
-    "Venus": [1.0, 1.0, 0.0],
-    # Brightfield/Phase
-    "BF": [1.0, 1.0, 1.0],
-    "Phase": [1.0, 1.0, 1.0],
-    "Phase3D": [1.0, 1.0, 1.0],
-    "Brightfield": [1.0, 1.0, 1.0],
-    "DIC": [1.0, 1.0, 1.0],
-    # Default for unknown channels
-    "default": [1.0, 1.0, 1.0],
-}
+def _load_channel_colors() -> dict[str, list[float]]:
+    """Load channel colors from scripts/channel_colors.yaml and convert hex to RGB [0-1]."""
+    import yaml
+
+    yaml_path = Path(__file__).parent / "channel_colors.yaml"
+    with yaml_path.open() as f:
+        hex_map: dict[str, str] = yaml.safe_load(f)
+
+    colors: dict[str, list[float]] = {}
+    for name, hex_str in hex_map.items():
+        r = int(hex_str[0:2], 16) / 255
+        g = int(hex_str[2:4], 16) / 255
+        b = int(hex_str[4:6], 16) / 255
+        colors[name] = [r, g, b]
+    return colors
+
+
+CHANNEL_COLORS = _load_channel_colors()
 
 app = typer.Typer(add_completion=False)
 console = Console()

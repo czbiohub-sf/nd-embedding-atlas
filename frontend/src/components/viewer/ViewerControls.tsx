@@ -42,10 +42,10 @@ export function ViewerControls({ cropSize, setCropSize }: Props) {
     );
 
     return (
-        <div className="absolute right-0 bottom-0 left-0 z-10 flex flex-col gap-0.5 bg-surface/80 px-2 py-1 backdrop-blur-sm">
+        <div className="flex flex-col gap-0.5">
             {(bounds.tMax !== null && bounds.tMax > 0) || isTrajectoryMode ? (
                 <div className="flex items-center gap-2">
-                    <span className="w-6 font-mono text-[10px] text-text-muted">T{isTrajectoryMode ? "*" : ""}</span>
+                    <span className="w-6 font-mono text-[10px] text-text">T{isTrajectoryMode ? "*" : ""}</span>
                     <input
                         type="range"
                         min={effectiveTMin}
@@ -55,12 +55,12 @@ export function ViewerControls({ cropSize, setCropSize }: Props) {
                         className="h-1 flex-1 accent-accent-cyan"
                         aria-label="Timepoint"
                     />
-                    <span className="w-8 font-mono text-[10px] text-text-muted tabular-nums">{displayTValue}</span>
+                    <span className="w-8 font-mono text-[10px] text-text tabular-nums">{displayTValue}</span>
                 </div>
             ) : null}
             {bounds.zMax !== null && bounds.zMax > 0 && (
                 <div className="flex items-center gap-2">
-                    <span className="w-6 font-mono text-[10px] text-text-muted">Z</span>
+                    <span className="w-6 font-mono text-[10px] text-text">Z</span>
                     <input
                         type="range"
                         min={0}
@@ -70,11 +70,11 @@ export function ViewerControls({ cropSize, setCropSize }: Props) {
                         className="h-1 flex-1 accent-accent-cyan"
                         aria-label="Z slice"
                     />
-                    <span className="w-8 font-mono text-[10px] text-text-muted tabular-nums">{zIndex}</span>
+                    <span className="w-8 font-mono text-[10px] text-text tabular-nums">{zIndex}</span>
                 </div>
             )}
             <div className="flex items-center gap-2">
-                <span className="w-6 font-mono text-[10px] text-text-muted">crop</span>
+                <span className="w-6 font-mono text-[10px] text-text">crop</span>
                 <input
                     type="range"
                     min={50}
@@ -84,7 +84,7 @@ export function ViewerControls({ cropSize, setCropSize }: Props) {
                     className="h-1 flex-1 accent-accent-cyan"
                     aria-label="Crop size"
                 />
-                <span className="w-8 font-mono text-[10px] text-text-muted tabular-nums">{cropSize}</span>
+                <span className="w-8 font-mono text-[10px] text-text tabular-nums">{cropSize}</span>
             </div>
         </div>
     );

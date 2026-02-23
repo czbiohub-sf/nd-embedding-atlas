@@ -227,6 +227,22 @@ export function SingleCropViewer({ cropSize }: Props) {
             multiChannelRef.current = multiChannel;
 
             actions.setLayers(layers);
+
+            // Push channel definitions to ViewerProvider for ChannelControls
+            const channelDefsForContext = channelDefs.map((ch, i) => {
+                const plateCh = metadata.plate_channels?.[i];
+                return {
+                    label: plateCh?.label ?? `Ch ${i}`,
+                    color: plateCh?.color ?? "FFFFFF",
+                    visible: true,
+                    contrastLimits: ch.contrastLimits as [number, number],
+                    contrastRange: [
+                        plateCh?.window?.min ?? 0,
+                        plateCh?.window?.max ?? 65535,
+                    ] as [number, number],
+                };
+            });
+            actions.setChannels(channelDefsForContext, multiChannel);
         };
 
         loadLayers();
