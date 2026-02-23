@@ -187,10 +187,12 @@ def create_app(
         spatial = {c for c in [_fov_col, _t_col, _bbox_col, _x_col, _y_col] if c is not None}
         obs_columns = list(dict.fromkeys([*obs_columns, *sorted(spatial)]))
 
-    # Determine which spatial columns should be hidden from Mosaic
+    # Determine which spatial columns should be hidden from Mosaic.
+    # Keep fov_col, t_col, x_col, y_col visible — they're needed for trajectory queries
+    # and tooltips. Only hide bbox (serialized bounding box string, not useful for queries).
     _hidden_cols: set[str] = set()
     if plate_path is not None:
-        _hidden_cols = {c for c in [_fov_col, _t_col, _bbox_col, _x_col, _y_col] if c is not None}
+        _hidden_cols = {c for c in [_bbox_col] if c is not None}
 
     # Materialize obs only
     obs_df = prepare_obs(collection, obs_columns=obs_columns)
