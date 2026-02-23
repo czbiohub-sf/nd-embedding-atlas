@@ -35,6 +35,11 @@ If you found a bug or want a new feature, please use the [issue tracker][issue-t
 
 > t.b.a
 
+
+## What does the UI look like?
+<img width="1466" height="1083" alt="image" src="https://github.com/user-attachments/assets/9f70cbee-1853-445e-bb86-c9e5fdd143c1" />
+
+
 <!-- badges -->
 [badge-hatch]: https://img.shields.io/badge/%F0%9F%A5%9A-Hatch-4051b5.svg
 [badge-uv]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json
