@@ -29,6 +29,7 @@ export function ViewerProvider({ children }: Props) {
     // ── Mutable refs ──────────────────────────────────────────────────────
     const runtimeRef = useRef<Idetik | null>(null);
     const viewportRef = useRef<Viewport | null>(null);
+    const cameraRef = useRef<OrthographicCamera | null>(null);
     const layerMapRef = useRef<Map<string, LayerEntry>>(new Map());
 
     // ── Reactive state ────────────────────────────────────────────────────
@@ -54,11 +55,13 @@ export function ViewerProvider({ children }: Props) {
             // when a cell is selected, avoiding GPU contention with the scatter.
             runtimeRef.current = runtime;
             viewportRef.current = runtime.viewports[0] ?? null;
+            cameraRef.current = camera;
             setInitialized(true);
         } else if (!canvas && runtimeRef.current) {
             runtimeRef.current.stop();
             runtimeRef.current = null;
             viewportRef.current = null;
+            cameraRef.current = null;
             layerMapRef.current.clear();
             setTrackedLayers([]);
             setInitialized(false);
@@ -112,10 +115,7 @@ export function ViewerProvider({ children }: Props) {
     }, [removeAllLayers]);
 
     const setFrame = useCallback((left: number, right: number, bottom: number, top: number) => {
-        const camera = viewportRef.current?.camera;
-        if (camera && "setFrame" in camera) {
-            (camera as OrthographicCamera).setFrame(left, right, bottom, top);
-        }
+        cameraRef.current?.setFrame(left, right, bottom, top);
     }, []);
 
     const pause = useCallback(() => {
@@ -139,7 +139,11 @@ export function ViewerProvider({ children }: Props) {
     );
 
     // Meta uses refs — recompute when initialized flips so consumers see the real viewport
-    const meta = useMemo(() => ({ runtime: runtimeRef.current, viewport: viewportRef.current }), []);
+    // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally re-read refs when initialized changes
+    const meta = useMemo(
+        () => ({ runtime: runtimeRef.current, viewport: viewportRef.current, orthoCamera: cameraRef.current }),
+        [initialized],
+    );
 
     const value = useMemo<ViewerInternalContext>(
         () => ({ state, actions, meta, _canvasRef: canvasRef }),

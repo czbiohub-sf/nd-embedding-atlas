@@ -1,4 +1,5 @@
 import { DockviewShell } from "../components/layout/DockviewShell";
+import { ExportButton } from "../components/toolbar/ExportButton";
 import { FilterInfo } from "../components/toolbar/FilterInfo";
 import { TimeSlider } from "../components/toolbar/TimeSlider";
 import { Toolbar } from "../components/toolbar/Toolbar";
@@ -14,6 +15,7 @@ export function DashboardShell() {
             <Toolbar>
                 {hasTime && <TimeSlider />}
                 <FilterInfo />
+                <ExportButton />
                 <span className="ml-auto text-text-muted">v{metadata.version}</span>
             </Toolbar>
 

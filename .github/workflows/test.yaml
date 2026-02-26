@@ -12,6 +12,10 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# TODO: remove once hatch is compatible with virtualenv 21+ (pypa/hatch#2193)
+env:
+  UV_CONSTRAINT: ${{ github.workspace }}/.github/uv-constraints.txt
+
 jobs:
   # Get the test environment from hatch as defined in pyproject.toml.
   # This ensures that the pyproject.toml is the single point of truth for test definitions and the same tests are

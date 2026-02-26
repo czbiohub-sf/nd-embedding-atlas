@@ -103,6 +103,15 @@ class EmbeddingStore:
         """Mapping of loaded obsm keys to their metadata."""
         return dict(self._loaded)
 
+    def cursor(self) -> duckdb.DuckDBPyConnection:
+        """Return a new cursor for thread-safe query execution.
+
+        Use as a context manager: ``with store.cursor() as cur: cur.execute(...)``.
+        The Mosaic query endpoints already use this pattern; all other callers
+        should use this method instead of accessing ``store.con`` directly.
+        """
+        return self.con.cursor()
+
     def close(self) -> None:
         """Close the DuckDB connection."""
         self.con.close()
