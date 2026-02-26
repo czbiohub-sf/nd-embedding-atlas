@@ -15,6 +15,14 @@ export interface Metadata {
     database: { type: string; uri?: string };
     obsm: Record<string, ObsmEntry>;
     obs_columns?: string[];
+    export_dir?: string;
+    spatial?: {
+        fov_col: string | null;
+        t_col: string | null;
+        bbox_col: string | null;
+        x_col: string | null;
+        y_col: string | null;
+    };
     plate?: boolean;
     plate_pixel_scale?: { x: number; y: number };
     plate_channels?: Array<{
@@ -94,4 +102,21 @@ export interface ChartPanelEntry {
     id: string;
     spec: ChartSpec;
     collapsed?: boolean;
+}
+
+// ── Cell info (from /api/cell/:id) ───────────────────────────────────────────
+
+export interface CellBbox {
+    y_min: number;
+    x_min: number;
+    y_max: number;
+    x_max: number;
+}
+
+export interface CellInfo {
+    fov_name: string;
+    t: number;
+    x: number;
+    y: number;
+    bbox?: CellBbox;
 }

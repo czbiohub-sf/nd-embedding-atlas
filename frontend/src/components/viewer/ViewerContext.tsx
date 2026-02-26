@@ -1,4 +1,4 @@
-import type { Idetik, Layer, LayerState, Viewport } from "@idetik/core";
+import type { Idetik, Layer, LayerState, OrthographicCamera, Viewport } from "@idetik/core";
 import { createContext } from "react";
 import type { MultiChannelLayers } from "../../lib/MultiChannelLayers";
 
@@ -70,6 +70,7 @@ export interface ViewerActions {
 export interface ViewerMeta {
     runtime: Idetik | null;
     viewport: Viewport | null;
+    orthoCamera: OrthographicCamera | null;
 }
 
 // ── Context value ────────────────────────────────────────────────────────────

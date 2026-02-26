@@ -108,10 +108,12 @@ export function ScatterPanel(_props: IDockviewPanelProps) {
 
     const showTrajectory = useCallback(
         async (trackId: number, fovName: string, clickedT?: number) => {
+            const spatialX = metadata.spatial?.x_col ?? "x";
+            const spatialY = metadata.spatial?.y_col ?? "y";
             const catSelect = categoryCol ? `, ${categoryCol} AS category` : "";
             const safeFovName = String(fovName).replace(/'/g, "''");
             const safeTrackId = Number.isFinite(trackId) ? trackId : 0;
-            const sql = `SELECT ${xCol} AS emb_x, ${yCol} AS emb_y, x AS spatial_x, y AS spatial_y, t${catSelect} FROM ${table} WHERE track_id = ${safeTrackId} AND fov_name = '${safeFovName}' ORDER BY t ASC`;
+            const sql = `SELECT ${xCol} AS emb_x, ${yCol} AS emb_y, ${spatialX} AS spatial_x, ${spatialY} AS spatial_y, t${catSelect} FROM ${table} WHERE track_id = ${safeTrackId} AND fov_name = '${safeFovName}' ORDER BY t ASC`;
             const result = await coordinator.query(sql, { type: "json" });
             const rows = toRows<TrajectoryFrame>(result);
             if (rows.length > 0) {
@@ -124,7 +126,7 @@ export function ScatterPanel(_props: IDockviewPanelProps) {
                 });
             }
         },
-        [coordinator, table, xCol, yCol, categoryCol, actions],
+        [coordinator, table, xCol, yCol, categoryCol, actions, metadata.spatial],
     );
 
     // Compute activeIndex from trajectory.tIndex

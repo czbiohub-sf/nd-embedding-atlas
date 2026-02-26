@@ -41,6 +41,12 @@ def view(
         list[str] | None,
         typer.Option("--obs-columns", "-c", help="Subset of obs columns to load (comma-sep or repeated)."),
     ] = None,
+    export_dir: Annotated[
+        Path | None, typer.Option("--export-dir", "-e", help="Directory for exported zarr stores (default: ./exports).")
+    ] = None,
+    columns_config: Annotated[
+        Path | None, typer.Option("--columns-config", "-C", help="YAML file mapping spatial column names.")
+    ] = None,
     host: Annotated[str, typer.Option(help="Server host.")] = "localhost",
     port: Annotated[int, typer.Option(help="Server port.")] = 5055,
 ) -> None:
@@ -48,7 +54,7 @@ def view(
     from rich.console import Console
 
     from nd_embedding_atlas import vz
-    from nd_embedding_atlas.io import AnnDataCollection
+    from nd_embedding_atlas.io import AnnDataCollection, load_config
 
     console = Console()
 
@@ -73,5 +79,25 @@ def view(
         obs_columns = [col.strip() for raw in obs_columns for col in raw.split(",") if col.strip()]
 
     resolved_plate = str(plate.resolve()) if plate is not None else None
+    resolved_export = str(export_dir.resolve()) if export_dir is not None else None
+    if resolved_export:
+        console.print(f"  export dir: {resolved_export}")
+
+    # Load and validate column mapping config
+    config = None
+    if columns_config:
+        config = load_config(columns_config)
+        obs_cols = set(collection.obs.keys())
+        config.validate_against_obs(obs_cols)
+        console.print(f"  columns config: {columns_config}")
+
     console.print(f"\nServing at [link=http://{host}:{port}]http://{host}:{port}[/link]")
-    vz.serve(collection, obs_columns=obs_columns or None, plate_path=resolved_plate, host=host, port=port)
+    vz.serve(
+        collection,
+        obs_columns=obs_columns or None,
+        plate_path=resolved_plate,
+        export_dir=resolved_export,
+        columns_config=config,
+        host=host,
+        port=port,
+    )
