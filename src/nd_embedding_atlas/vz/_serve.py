@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures
+import dataclasses
 import importlib.metadata
 import importlib.resources
 import pathlib
+import re
+import uuid
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -14,12 +17,36 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
+from pydantic import BaseModel
 
 from nd_embedding_atlas.vz._duckdb import EmbeddingStore, mount_duckdb_endpoints
+from nd_embedding_atlas.vz._export import export_subset
 from nd_embedding_atlas.vz._prepare import _obsm_column_prefix, prepare_obs
 
 if TYPE_CHECKING:
     from nd_embedding_atlas.io import AnnDataCollection
+    from nd_embedding_atlas.io._config import NdeaConfig
+
+
+class ExportRequest(BaseModel):
+    """Request body for the export endpoint."""
+
+    predicate: str
+    filename: str = "export"
+    selection_type: str = "unknown"
+    embedding_key: str | None = None
+
+
+@dataclasses.dataclass
+class ExportTaskState:
+    """Typed state for the single-slot background export task."""
+
+    task_id: str
+    task: asyncio.Task[None]
+    status: str = "running"  # "running" | "done" | "error"
+    output_path: str | None = None
+    n_obs: int | None = None
+    error: str | None = None
 
 
 def _resolve_frontend() -> str:
@@ -125,6 +152,8 @@ def create_app(
     obs_columns: list[str] | None = None,
     plate_path: str | pathlib.Path | None = None,
     static_dir: str | pathlib.Path | None = None,
+    export_dir: str | pathlib.Path | None = None,
+    columns_config: NdeaConfig | None = None,
 ) -> FastAPI:
     """Create a FastAPI app that loads embeddings on demand.
 
@@ -149,11 +178,19 @@ def create_app(
         Directory to serve as the frontend. ``None`` uses the custom React
         frontend at ``frontend/dist/`` if available, else embedding-atlas's
         bundled frontend.
+    export_dir
+        Directory for exported zarr stores. Defaults to ``exports/`` in the
+        current working directory.
+    columns_config
+        Parsed YAML column mapping. If provided, spatial column names are
+        taken from the config instead of auto-detected.
 
     Returns
     -------
     FastAPI app ready for ``uvicorn.run()``.
     """
+    resolved_export_dir = pathlib.Path(export_dir).resolve() if export_dir else pathlib.Path.cwd() / "exports"
+
     app = FastAPI()
     app.add_middleware(
         CORSMiddleware,
@@ -163,34 +200,37 @@ def create_app(
         expose_headers=["*"],
     )
 
-    # ── Auto-detect spatial columns (from full obs, before filtering) ─
+    # ── Resolve spatial columns (config > auto-detect) ─────────────────
     _all_obs_cols = set(collection.obs.keys())
 
-    # FOV column: fov_name > well
-    _fov_col = "fov_name" if "fov_name" in _all_obs_cols else ("well" if "well" in _all_obs_cols else None)
-
-    # Time column: t (if absent, default 0 at query time)
-    _t_col = "t" if "t" in _all_obs_cols else None
-
-    # Bbox column: bbox > cp_bbox (bbox = phenotyping segmentation, cp_bbox = CellProfiler)
-    _bbox_col = "bbox" if "bbox" in _all_obs_cols else ("cp_bbox" if "cp_bbox" in _all_obs_cols else None)
-
-    # Centroid columns: x/y > x_cp1/y_cp1 > x_global_pheno/y_global_pheno
-    _x_col = _y_col = None
-    for _xc, _yc in [("x", "y"), ("x_cp1", "y_cp1"), ("x_global_pheno", "y_global_pheno")]:
-        if _xc in _all_obs_cols and _yc in _all_obs_cols:
-            _x_col, _y_col = _xc, _yc
-            break
+    if columns_config and columns_config.columns:
+        cm = columns_config.columns
+        _fov_col = cm.fov
+        _t_col = cm.t
+        _bbox_col = cm.bbox
+        _x_col = cm.x
+        _y_col = cm.y
+    else:
+        # Fallback: auto-detect from obs column names
+        _fov_col = "fov_name" if "fov_name" in _all_obs_cols else ("well" if "well" in _all_obs_cols else None)
+        _t_col = "t" if "t" in _all_obs_cols else None
+        _bbox_col = "bbox" if "bbox" in _all_obs_cols else ("cp_bbox" if "cp_bbox" in _all_obs_cols else None)
+        _x_col = _y_col = None
+        for _xc, _yc in [("x", "y"), ("x_cp1", "y_cp1"), ("x_global_pheno", "y_global_pheno")]:
+            if _xc in _all_obs_cols and _yc in _all_obs_cols:
+                _x_col, _y_col = _xc, _yc
+                break
 
     # Ensure spatial columns are always loaded (needed by /api/cell)
     if obs_columns is not None and plate_path is not None:
         spatial = {c for c in [_fov_col, _t_col, _bbox_col, _x_col, _y_col] if c is not None}
         obs_columns = list(dict.fromkeys([*obs_columns, *sorted(spatial)]))
 
-    # Determine which spatial columns should be hidden from Mosaic
+    # Only hide bbox strings from the Mosaic dataset VIEW — keep fov, t, x, y
+    # visible so the frontend trajectory query can access them.
     _hidden_cols: set[str] = set()
     if plate_path is not None:
-        _hidden_cols = {c for c in [_fov_col, _t_col, _bbox_col, _x_col, _y_col] if c is not None}
+        _hidden_cols = {c for c in [_bbox_col] if c is not None}
 
     # Materialize obs only
     obs_df = prepare_obs(collection, obs_columns=obs_columns)
@@ -289,6 +329,7 @@ def create_app(
             "obsm": _build_obsm_metadata(),
             "obs_columns": obs_column_names,
             "plate": has_plate,
+            "export_dir": str(resolved_export_dir),
         }
         if plate_meta:
             if "pixel_scale" in plate_meta:
@@ -309,7 +350,8 @@ def create_app(
         if parquet_cache["data"] is None:
             import pyarrow.parquet as pq
 
-            table = store.con.sql("SELECT * FROM dataset").arrow()
+            with store.cursor() as cur:
+                table = cur.sql("SELECT * FROM dataset").arrow()
             import pyarrow as pa
 
             sink = pa.BufferOutputStream()
@@ -353,6 +395,107 @@ def create_app(
             "available_embeddings": available_obsm_keys,
         }
 
+    # ── Export endpoints ────────────────────────────────────────────────
+    # Single-slot: only one export at a time.
+    export_task: ExportTaskState | None = None
+
+    def _sanitize_filename(name: str) -> str:
+        """Strip path separators and replace non-alphanumeric chars (except _ - .)."""
+        name = name.replace("/", "").replace("\\", "").replace("\x00", "")
+        name = re.sub(r"[^\w\-.]", "_", name)
+        return name or "export"
+
+    def _run_export(indices: np.ndarray, request: ExportRequest) -> dict[str, Any]:
+        """Run export in thread pool. Returns result dict."""
+        filename = _sanitize_filename(request.filename)
+        resolved_export_dir.mkdir(parents=True, exist_ok=True)
+        output_path = resolved_export_dir / f"{filename}.zarr"
+
+        export_subset(
+            collection,
+            indices,
+            output_path,
+            selection_type=request.selection_type,
+            embedding_key=request.embedding_key,
+        )
+        return {"output_path": str(output_path), "n_obs": len(indices)}
+
+    async def _export_bg(indices: np.ndarray, request: ExportRequest) -> None:
+        """Background coroutine for export."""
+        try:
+            loop = asyncio.get_running_loop()
+            result = await loop.run_in_executor(executor, _run_export, indices, request)
+            export_task.status = "done"
+            export_task.output_path = result["output_path"]
+            export_task.n_obs = result["n_obs"]
+        except Exception as e:  # noqa: BLE001
+            export_task.status = "error"
+            export_task.error = str(e)
+
+    def _query_indices(predicate: str) -> np.ndarray:
+        """Query DuckDB for row indices matching predicate (runs in thread pool).
+
+        Note: this executes user-provided SQL, consistent with the existing
+        ``/data/query`` endpoint which already executes arbitrary Mosaic SQL.
+        """
+        with store.cursor() as cur:
+            result = cur.execute(f"SELECT __row_index__ FROM dataset WHERE {predicate}")
+            rows = result.fetchall()
+        return np.array([r[0] for r in rows], dtype=np.int64)
+
+    @app.post("/api/export")
+    async def start_export(request: ExportRequest) -> JSONResponse:
+        nonlocal export_task
+
+        # Check for concurrent export
+        if export_task is not None and not export_task.task.done():
+            return JSONResponse(
+                {"error": "An export is already in progress"},
+                status_code=409,
+            )
+
+        # Validate predicate by querying for indices
+        loop = asyncio.get_running_loop()
+        try:
+            indices = await loop.run_in_executor(executor, _query_indices, request.predicate)
+        except Exception as e:  # noqa: BLE001
+            return JSONResponse({"error": f"Invalid predicate: {e}"}, status_code=400)
+
+        if len(indices) == 0:
+            return JSONResponse({"error": "No observations match the predicate"}, status_code=400)
+
+        if int(np.max(indices)) >= store.n_obs:
+            return JSONResponse(
+                {"error": f"Row index out of bounds: max={int(np.max(indices))}, n_obs={store.n_obs}"},
+                status_code=400,
+            )
+
+        # Start background export (atomic assignment replaces prior state)
+        task_id = uuid.uuid4().hex[:12]
+        bg = asyncio.create_task(_export_bg(indices, request))
+        export_task = ExportTaskState(task_id=task_id, task=bg)
+
+        return JSONResponse({"task_id": task_id, "status": "running"}, status_code=202)
+
+    @app.get("/api/export/{task_id}/status")
+    async def export_status(task_id: str) -> JSONResponse:
+        if export_task is None or export_task.task_id != task_id:
+            return JSONResponse({"error": "Export task not found"}, status_code=404)
+
+        if export_task.status == "running":
+            return JSONResponse({"status": "running"})
+        if export_task.status == "error":
+            return JSONResponse({"status": "error", "error": export_task.error or "Unknown error"})
+        if export_task.status == "done":
+            return JSONResponse(
+                {
+                    "status": "done",
+                    "output_path": export_task.output_path,
+                    "n_obs": export_task.n_obs,
+                }
+            )
+        return JSONResponse({"status": export_task.status})
+
     # ── Cell crop viewer endpoint ─────────────────────────────────────
     if has_plate:
 
@@ -372,10 +515,11 @@ def create_app(
             if not select_cols:
                 return JSONResponse({"error": "No spatial columns found"}, status_code=500)
 
-            row = store.con.execute(
-                f"SELECT {', '.join(select_cols)} FROM obs_base WHERE __row_index__ = ?",
-                [row_index],
-            ).fetchone()
+            with store.cursor() as cur:
+                row = cur.execute(
+                    f"SELECT {', '.join(select_cols)} FROM obs_base WHERE __row_index__ = ?",
+                    [row_index],
+                ).fetchone()
             if row is None:
                 return JSONResponse({"error": "Cell not found"}, status_code=404)
 
@@ -429,6 +573,8 @@ def serve(
     obs_columns: list[str] | None = None,
     plate_path: str | pathlib.Path | None = None,
     static_dir: str | pathlib.Path | None = None,
+    export_dir: str | pathlib.Path | None = None,
+    columns_config: NdeaConfig | None = None,
     host: str = "localhost",
     port: int = 5055,
 ) -> None:
@@ -444,9 +590,20 @@ def serve(
         Path to an OME-Zarr plate for the cell crop viewer.
     static_dir
         Frontend directory to serve. See :func:`create_app` for resolution logic.
+    export_dir
+        Directory for exported zarr stores. Defaults to ``exports/`` in CWD.
+    columns_config
+        Parsed YAML column mapping. See :func:`create_app`.
     host, port
         Server bind address.
     """
-    app = create_app(collection, obs_columns=obs_columns, plate_path=plate_path, static_dir=static_dir)
+    app = create_app(
+        collection,
+        obs_columns=obs_columns,
+        plate_path=plate_path,
+        static_dir=static_dir,
+        export_dir=export_dir,
+        columns_config=columns_config,
+    )
     print(f"nd-embedding-atlas viewer: http://{host}:{port}")
     uvicorn.run(app, host=host, port=port, access_log=False)
