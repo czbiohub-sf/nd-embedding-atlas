@@ -15,39 +15,15 @@ export default defineConfig({
         outDir: "dist",
         rollupOptions: {
             output: {
-                advancedChunks: {
-                    groups: [
-                        {
-                            name: "vendor-react",
-                            test: /node_modules[\\/]+(react|react-dom|scheduler)/,
-                            priority: 20,
-                        },
-                        {
-                            name: "vendor-idetik",
-                            test: /node_modules[\\/]+@idetik/,
-                            priority: 15,
-                        },
-                        {
-                            name: "vendor-mosaic",
-                            test: /node_modules[\\/]+(@uwdata|mosaic)/,
-                            priority: 15,
-                        },
-                        {
-                            name: "vendor-dockview",
-                            test: /node_modules[\\/]+dockview/,
-                            priority: 15,
-                        },
-                        {
-                            name: "vendor-embedding-atlas",
-                            test: /node_modules[\\/]+embedding-atlas/,
-                            priority: 15,
-                        },
-                        {
-                            name: "vendor-arrow",
-                            test: /node_modules[\\/]+apache-arrow/,
-                            priority: 10,
-                        },
-                    ],
+                manualChunks(id) {
+                    if (id.includes("node_modules")) {
+                        if (/[\\/](react|react-dom|scheduler)[\\/]/.test(id)) return "vendor-react";
+                        if (/[\\/]@idetik[\\/]/.test(id)) return "vendor-idetik";
+                        if (/[\\/](@uwdata|mosaic)[\\/]/.test(id)) return "vendor-mosaic";
+                        if (/[\\/]dockview[\\/]/.test(id)) return "vendor-dockview";
+                        if (/[\\/]embedding-atlas[\\/]/.test(id)) return "vendor-embedding-atlas";
+                        if (/[\\/]apache-arrow[\\/]/.test(id)) return "vendor-arrow";
+                    }
                 },
             },
         },
