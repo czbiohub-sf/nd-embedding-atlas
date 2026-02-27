@@ -14,10 +14,6 @@ class CustomBuildHook(BuildHookInterface):
 
     def initialize(self, version, build_data):
         """Run ``pnpm build`` in ``frontend/`` if ``dist/`` is missing."""
-        if version == "editable":
-            self.app.display_info("Editable install — skipping frontend build")
-            return
-
         frontend_dir = Path(self.root) / "frontend"
         dist_dir = frontend_dir / "dist"
 
