@@ -1,3 +1,4 @@
+import { vec3 } from "gl-matrix";
 import { useCallback, useEffect } from "react";
 import useSWR from "swr";
 import { useBboxLayer } from "../../hooks/useBboxLayer";
@@ -5,6 +6,7 @@ import { useDashboard } from "../../hooks/useDashboard";
 import { useFovLoader } from "../../hooks/useFovLoader";
 import { useViewer } from "../../hooks/useViewer";
 import { jsonFetcher } from "../../lib/fetcher";
+import type { OrbitControls } from "../../lib/OrbitControls";
 import type { CellInfo } from "../../types";
 
 /** Fixed camera view radius in pixels (independent of crop slider). */
@@ -31,20 +33,15 @@ export function SingleCropViewer({ cropSize }: Props) {
     // ── Hooks for imperative plumbing ─────────────────────────────────
     useFovLoader({
         sourceUrl,
-        viewerState,
-        actions,
         plateChannels: metadata.plate_channels,
     });
 
     const { updateBbox } = useBboxLayer({
         viewport: meta.viewport,
-        orthoCamera: meta.orthoCamera,
         scale,
     });
 
-    // ── Helper: camera framing ────────────────────────────────────────
-    // Sets the camera frame directly — Idetik's internal setAspectRatio
-    // (called automatically on resize) handles aspect correction.
+    // ── Helper: 2D camera framing ───────────────────────────────────
     const frameRegion = useCallback(
         (cx: number, cy: number, hx: number, hy: number) => {
             actions.setFrame((cx - hx) * scale.x, (cx + hx) * scale.x, (cy + hy) * scale.y, (cy - hy) * scale.y);
@@ -52,32 +49,45 @@ export function SingleCropViewer({ cropSize }: Props) {
         [actions, scale.x, scale.y],
     );
 
-    // ── Effect: Cell framing (bbox + camera on every cell change) ─────
+    // ── Effect: Cell framing (mode-aware) ────────────────────────────
     useEffect(() => {
         if (!cellInfo || !viewerState.initialized) return;
 
-        updateBbox(cellInfo.x, cellInfo.y, cropSize / 2, cellInfo.bbox);
+        if (viewerState.viewMode === "2d") {
+            updateBbox(cellInfo.x, cellInfo.y, cropSize / 2, cellInfo.bbox);
 
-        if (cellInfo.bbox) {
-            const { y_min, x_min, y_max, x_max } = cellInfo.bbox;
-            const pad = 50;
-            frameRegion((x_min + x_max) / 2, (y_min + y_max) / 2, (x_max - x_min) / 2 + pad, (y_max - y_min) / 2 + pad);
+            if (cellInfo.bbox) {
+                const { y_min, x_min, y_max, x_max } = cellInfo.bbox;
+                const pad = 50;
+                frameRegion(
+                    (x_min + x_max) / 2,
+                    (y_min + y_max) / 2,
+                    (x_max - x_min) / 2 + pad,
+                    (y_max - y_min) / 2 + pad,
+                );
+            } else {
+                frameRegion(cellInfo.x, cellInfo.y, CAMERA_VIEW_HALF, CAMERA_VIEW_HALF);
+            }
         } else {
-            frameRegion(cellInfo.x, cellInfo.y, CAMERA_VIEW_HALF, CAMERA_VIEW_HALF);
+            // 3D: position orbit camera to look at cell center
+            const cx = cellInfo.x * scale.x;
+            const cy = cellInfo.y * scale.y;
+            const controls = meta.viewport?.cameraControls;
+            if (controls && "lookAt" in controls) {
+                const radius = cropSize * Math.max(scale.x, scale.y) * 1.5;
+                (controls as OrbitControls).lookAt(vec3.fromValues(cx, cy, 0), radius);
+            }
         }
     }, [
-        cellInfo?.x,
-        cellInfo?.y,
-        cellInfo?.bbox?.x_min,
-        cellInfo?.bbox?.y_min,
-        cellInfo?.bbox?.x_max,
-        cellInfo?.bbox?.y_max,
+        cellInfo,
         cropSize,
         viewerState.initialized,
+        viewerState.viewMode,
         updateBbox,
         frameRegion,
-        cellInfo?.bbox,
-        cellInfo,
+        scale.x,
+        scale.y,
+        meta.viewport,
     ]);
 
     // ── Effect: Sync T index from selected cell ───────────────────────
@@ -85,7 +95,7 @@ export function SingleCropViewer({ cropSize }: Props) {
         if (cellInfo) {
             actions.setTIndex(cellInfo.t ?? 0);
         }
-    }, [cellInfo?.t, actions, cellInfo]);
+    }, [cellInfo, actions]);
 
     // ── Effect: Follow cell during trajectory playback ────────────────
     const { trajectory } = dashState;
@@ -93,8 +103,11 @@ export function SingleCropViewer({ cropSize }: Props) {
         if (!trajectory || !cellInfo) return;
         const frame = trajectory.points.find((p) => p.t === trajectory.tIndex);
         if (!frame) return;
-        updateBbox(frame.spatial_x, frame.spatial_y, cropSize / 2);
-    }, [trajectory?.tIndex, trajectory?.points, cropSize, cellInfo, updateBbox, trajectory]);
+        // Only update bbox in 2D mode
+        if (viewerState.viewMode === "2d") {
+            updateBbox(frame.spatial_x, frame.spatial_y, cropSize / 2);
+        }
+    }, [trajectory?.tIndex, trajectory?.points, cropSize, cellInfo, updateBbox, viewerState.viewMode, trajectory]);
 
     if (!highlightId || !cellInfo) return null;
     return null;

@@ -1,5 +1,7 @@
 """Standalone OME-Zarr image viewer (ndimg)."""
 
+from __future__ import annotations
+
 from nd_embedding_atlas.ndimg._metadata import (
     detect_ome_version,
     get_fov_dataframe,

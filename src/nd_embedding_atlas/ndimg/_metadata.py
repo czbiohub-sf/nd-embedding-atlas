@@ -4,51 +4,12 @@ from __future__ import annotations
 
 import json
 import pathlib
-from functools import lru_cache
 from typing import Any
 
 import numpy as np
 import pandas as pd
-import yaml
 
-
-@lru_cache(maxsize=1)
-def _load_channel_color_map() -> dict[str, str]:
-    """Load channel color hex map from scripts/channel_colors.yaml."""
-    yaml_path = pathlib.Path(__file__).resolve().parents[3] / "scripts" / "channel_colors.yaml"
-    if not yaml_path.exists():
-        return {"default": "FFFFFF"}
-    with yaml_path.open() as f:
-        return yaml.safe_load(f)
-
-
-def get_default_channel_color(channel_name: str) -> str:
-    """Return hex color for a channel name, using scripts/channel_colors.yaml defaults.
-
-    Parameters
-    ----------
-    channel_name
-        Channel label (e.g. ``"DAPI"``, ``"GFP"``).
-
-    Returns
-    -------
-    str
-        6-character hex color string (e.g. ``"0080FF"``).
-    """
-    color_map = _load_channel_color_map()
-    name_lower = channel_name.lower()
-
-    # Exact match (case-insensitive)
-    for key, color in color_map.items():
-        if key.lower() == name_lower:
-            return color
-
-    # Substring match
-    for key, color in color_map.items():
-        if key != "default" and key.lower() in name_lower:
-            return color
-
-    return color_map.get("default", "FFFFFF")
+from nd_embedding_atlas.io import ChannelColors
 
 
 def get_plate_metadata(plate_path: str | pathlib.Path) -> dict[str, Any]:
@@ -212,14 +173,14 @@ def _read_omero_channels(
         return [
             {
                 "label": ch.get("label", channel_names[i]),
-                "color": ch.get("color") or get_default_channel_color(ch.get("label", channel_names[i])),
+                "color": ch.get("color") or ChannelColors.hex(ch.get("label", channel_names[i])),
                 "window": ch.get("window", {}),
             }
             for i, ch in enumerate(omero_channels)
         ]
 
     # Fallback: channel names with default colors from channel_colors.yaml
-    return [{"label": name, "color": get_default_channel_color(name), "window": {}} for name in channel_names]
+    return [{"label": name, "color": ChannelColors.hex(name), "window": {}} for name in channel_names]
 
 
 def get_fov_dataframe(plate_path: str | pathlib.Path) -> pd.DataFrame:

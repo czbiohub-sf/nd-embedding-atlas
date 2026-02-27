@@ -35,13 +35,10 @@ export interface Metadata {
         name: string;
         ome_version: "0.4" | "0.5";
     }>;
-    spatial?: {
-        fov_col: string | null;
-        t_col: string | null;
-        bbox_col: string | null;
-        x_col: string | null;
-        y_col: string | null;
-    };
+    /** Data shape [T, C, Z, Y, X] of the first FOV. */
+    plate_shape?: number[];
+    /** Voxel scale per axis (e.g. { z: 1.0, y: 0.1494, x: 0.1494 }). */
+    plate_scale?: Record<string, number>;
 }
 
 export interface AxisState {
@@ -117,6 +114,8 @@ export interface CellInfo {
     fov_name: string;
     t: number;
     x: number;
+    /** Index into plate_stores array (ndimg multi-store mode). */
+    store_index?: number;
     y: number;
     bbox?: CellBbox;
 }

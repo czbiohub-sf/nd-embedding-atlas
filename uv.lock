@@ -334,6 +334,18 @@ wheels = [
 ]
 
 [[package]]
+name = "cmap"
+version = "0.7.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/37/85/5c31c565c68807e525cb268d783e62b1f4a46b97d301d991f6b4ffbd52d6/cmap-0.7.2.tar.gz", hash = "sha256:9501cec4d5c2b7a821479aec3282b3d8b42fda983bad055e0f9dbc19cf7bc5b1", size = 949039, upload-time = "2026-02-24T13:18:33.729Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/28/b6/0f760b625233ae39ed7df1069e11edd8c2f8807acac75e40f6228507238c/cmap-0.7.2-py3-none-any.whl", hash = "sha256:ad85bcc2327351bb72ff41516d4116d74b0af89258b35a323fcccb655a64f1f2", size = 995915, upload-time = "2026-02-24T13:18:31.346Z" },
+]
+
+[[package]]
 name = "colorama"
 version = "0.4.6"
 source = { registry = "https://pypi.org/simple" }
@@ -1354,6 +1366,7 @@ source = { editable = "." }
 dependencies = [
     { name = "annbatch" },
     { name = "anndata" },
+    { name = "cmap" },
     { name = "dask", extra = ["dataframe", "distributed"] },
     { name = "duckdb" },
     { name = "fastapi" },
@@ -1401,6 +1414,7 @@ test = [
 requires-dist = [
     { name = "annbatch", specifier = ">=0.0.7" },
     { name = "anndata", specifier = ">=0.12.9" },
+    { name = "cmap", specifier = ">=0.5" },
     { name = "dask", extras = ["dataframe", "distributed"], specifier = ">=2025.9.2" },
     { name = "duckdb", specifier = ">=1.4.4" },
     { name = "fastapi", specifier = ">=0.128" },

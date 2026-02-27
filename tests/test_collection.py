@@ -6,7 +6,7 @@ from pathlib import Path
 
 import numpy as np
 
-from nd_embedding_atlas.cli._app import _resolve_inputs
+from nd_embedding_atlas.cli._app import _resolve_anndata
 from nd_embedding_atlas.io import AnnDataCollection
 
 
@@ -58,22 +58,22 @@ def test_collection_h5ad_entry_has_path(h5ad_path: Path):
     assert collection.datasets["test"].path == h5ad_path
 
 
-# -- CLI _resolve_inputs --
+# -- CLI _resolve_anndata --
 
 
 def test_resolve_h5ad_file(h5ad_path: Path):
     """Direct h5ad file path is accepted."""
-    result = _resolve_inputs([h5ad_path])
+    result = _resolve_anndata([h5ad_path])
     assert result == [h5ad_path]
 
 
 def test_resolve_directory_finds_h5ad(h5ad_path: Path):
     """Scanning a directory discovers h5ad files."""
-    result = _resolve_inputs([h5ad_path.parent])
+    result = _resolve_anndata([h5ad_path.parent])
     assert h5ad_path in result
 
 
 def test_resolve_ignores_nonexistent(tmp_path: Path):
     """Non-existent h5ad path is ignored."""
-    result = _resolve_inputs([tmp_path / "missing.h5ad"])
+    result = _resolve_anndata([tmp_path / "missing.h5ad"])
     assert result == []

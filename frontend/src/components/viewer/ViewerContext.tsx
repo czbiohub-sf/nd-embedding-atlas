@@ -1,4 +1,4 @@
-import type { Idetik, Layer, LayerState, OrthographicCamera, Viewport } from "@idetik/core";
+import type { Idetik, Layer, LayerState, OrthographicCamera, PerspectiveCamera, Viewport } from "@idetik/core";
 import { createContext } from "react";
 import type { MultiChannelLayers } from "../../lib/MultiChannelLayers";
 
@@ -12,13 +12,20 @@ export interface TrackedLayer {
 
 // ── Channel definition ───────────────────────────────────────────────────────
 
+export type BlendMode = "normal" | "additive" | "multiply" | "subtractive";
+
 export interface ChannelDef {
     label: string;
     color: string; // hex like "FF0000"
     visible: boolean;
     contrastLimits: [number, number];
     contrastRange: [number, number]; // full range for slider min/max
+    blendMode: BlendMode;
 }
+
+// ── View mode ────────────────────────────────────────────────────────────────
+
+export type ViewMode = "2d" | "3d";
 
 // ── Dimension bounds ─────────────────────────────────────────────────────────
 
@@ -34,13 +41,18 @@ export interface DimensionBounds {
 export interface ViewerState {
     initialized: boolean;
     layers: TrackedLayer[];
-    /** Aggregate: error > loading > ready > null. */
+    /** Aggregate: loading > ready > null. Errors are tracked separately via ``error``. */
     aggregateState: LayerState | null;
     zIndex: number;
     tIndex: number;
     bounds: DimensionBounds;
     error: string | null;
     channels: ChannelDef[];
+    viewMode: ViewMode;
+    /** Z range for 3D volume rendering [zMin, zMax]. Null in 2D mode. */
+    zRange: [number, number] | null;
+    /** Increments on runtime recreation (mode switch). Used by hooks to detect layer invalidation. */
+    generation: number;
 }
 
 // ── Actions ──────────────────────────────────────────────────────────────────
@@ -57,8 +69,14 @@ export interface ViewerActions {
     setBounds: (bounds: DimensionBounds) => void;
     /** Replace channel definitions and store the MultiChannelLayers ref. */
     setChannels: (channels: ChannelDef[], multiChannel: MultiChannelLayers) => void;
-    /** Update a single channel property (visible, contrastLimits). */
-    setChannelProp: (index: number, update: Partial<Pick<ChannelDef, "visible" | "contrastLimits">>) => void;
+    /** Update a single channel property (visible, contrastLimits, blendMode). */
+    setChannelProp: (
+        index: number,
+        update: Partial<Pick<ChannelDef, "visible" | "contrastLimits" | "blendMode">>,
+    ) => void;
+    setViewMode: (mode: ViewMode) => void;
+    setZRange: (range: [number, number]) => void;
+    setError: (error: string | null) => void;
     /** Pause the render loop (frees GPU frame budget for other WebGL canvases). */
     pause: () => void;
     /** Resume the render loop. */
@@ -71,6 +89,7 @@ export interface ViewerMeta {
     runtime: Idetik | null;
     viewport: Viewport | null;
     orthoCamera: OrthographicCamera | null;
+    perspectiveCamera: PerspectiveCamera | null;
 }
 
 // ── Context value ────────────────────────────────────────────────────────────

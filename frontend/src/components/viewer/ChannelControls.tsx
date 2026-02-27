@@ -1,20 +1,28 @@
 import { useViewer } from "../../hooks/useViewer";
+import type { BlendMode } from "./ViewerContext";
+
+const BLEND_OPTIONS: { value: BlendMode; label: string }[] = [
+    { value: "additive", label: "Add" },
+    { value: "normal", label: "Norm" },
+    { value: "multiply", label: "Mul" },
+    { value: "subtractive", label: "Sub" },
+];
 
 export function ChannelControls() {
     const { state, actions } = useViewer();
-    const { channels } = state;
+    const { channels, viewMode } = state;
 
     if (channels.length === 0) return null;
 
     return (
         <div className="flex flex-col gap-0.5">
             {channels.map((ch, i) => (
-                <div key={i} className="flex items-center gap-1.5">
+                <div key={ch.label} className="flex items-center gap-1.5">
                     {/* Visibility toggle */}
                     <button
                         type="button"
                         onClick={() => actions.setChannelProp(i, { visible: !ch.visible })}
-                        className="flex w-4 shrink-0 items-center justify-center text-[10px] leading-none text-text hover:text-accent-cyan"
+                        className="flex w-4 shrink-0 items-center justify-center text-[10px] text-text leading-none hover:text-accent-cyan"
                         aria-label={`Toggle ${ch.label}`}
                         title={ch.visible ? "Hide channel" : "Show channel"}
                     >
@@ -33,6 +41,21 @@ export function ChannelControls() {
                     >
                         {ch.label}
                     </span>
+                    {/* Blend mode — only in 2D (3D ray marcher handles blending) */}
+                    {viewMode === "2d" && (
+                        <select
+                            value={ch.blendMode}
+                            onChange={(e) => actions.setChannelProp(i, { blendMode: e.target.value as BlendMode })}
+                            className="h-4 w-11 shrink-0 py-0 pr-3 text-[9px]"
+                            aria-label={`${ch.label} blend mode`}
+                        >
+                            {BLEND_OPTIONS.map((opt) => (
+                                <option key={opt.value} value={opt.value}>
+                                    {opt.label}
+                                </option>
+                            ))}
+                        </select>
+                    )}
                     {/* Contrast min slider */}
                     <input
                         type="range"

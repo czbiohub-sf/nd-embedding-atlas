@@ -1,4 +1,4 @@
-"""nd-embedding-atlas CLI."""
+"""nd-embedding-atlas CLI — unified entrypoint with auto-detection."""
 
 from __future__ import annotations
 
@@ -14,90 +14,93 @@ app = typer.Typer(
 )
 
 
-def _resolve_inputs(paths: list[Path]) -> list[Path]:
-    """Expand directories to AnnData stores and filter to valid inputs.
+def _is_anndata(p: Path) -> bool:
+    """Check if a path is an AnnData store (.h5ad file or .zarr with obs/)."""
+    if p.is_file() and p.suffix == ".h5ad":
+        return True
+    return p.is_dir() and p.suffix == ".zarr" and (p / "obs").is_dir()
 
-    Accepts ``.h5ad`` files, ``.zarr`` directories (with ``obs/`` subdir),
-    and plain directories (scanned for ``*.zarr`` children and ``*.h5ad`` files).
-    """
+
+def _is_ome_zarr(p: Path) -> bool:
+    """Check if a path is an OME-Zarr store (.zarr without obs/)."""
+    return p.is_dir() and p.suffix == ".zarr" and not (p / "obs").is_dir()
+
+
+def _resolve_anndata(paths: list[Path]) -> list[Path]:
+    """Expand directories to AnnData stores and filter to valid inputs."""
     result: list[Path] = []
     for p in paths:
         p = p.resolve()
-        if p.is_file() and p.suffix == ".h5ad":
-            result.append(p)
-        elif p.is_dir() and p.suffix == ".zarr" and (p / "obs").is_dir():
+        if _is_anndata(p):
             result.append(p)
         elif p.is_dir():
-            result.extend(child for child in sorted(p.glob("*.zarr")) if (child / "obs").is_dir())
+            result.extend(child for child in sorted(p.glob("*.zarr")) if _is_anndata(child))
             result.extend(sorted(p.glob("*.h5ad")))
     return result
 
 
+def _classify_paths(paths: list[Path]) -> tuple[str, list[Path]]:
+    """Classify input paths as AnnData or OME-Zarr.
+
+    Returns
+    -------
+    tuple[str, list[Path]]
+        ("anndata", resolved_paths) or ("ome-zarr", resolved_paths).
+    """
+    anndata_paths = _resolve_anndata(paths)
+    ome_paths = [p.resolve() for p in paths if _is_ome_zarr(p.resolve())]
+
+    if anndata_paths and not ome_paths:
+        return "anndata", anndata_paths
+    if ome_paths and not anndata_paths:
+        return "ome-zarr", ome_paths
+
+    if anndata_paths and ome_paths:
+        msg = "Cannot mix AnnData and OME-Zarr paths. Use --plate to attach an OME-Zarr to an AnnData viewer."
+        raise typer.BadParameter(msg)
+
+    msg = "No AnnData (.zarr with obs/, .h5ad) or OME-Zarr stores found."
+    raise typer.BadParameter(msg)
+
+
 @app.command()
 def view(
-    paths: Annotated[list[Path], typer.Argument(help="AnnData .zarr/.h5ad paths or directories containing them.")],
+    paths: Annotated[list[Path], typer.Argument(help="AnnData or OME-Zarr paths.")],
+    # ── AnnData-specific ──
     plate: Annotated[Path | None, typer.Option("--plate", "-p", help="OME-Zarr plate for cell crop viewer.")] = None,
     obs_columns: Annotated[
         list[str] | None,
-        typer.Option("--obs-columns", "-c", help="Subset of obs columns to load (comma-sep or repeated)."),
+        typer.Option("--obs-columns", help="Subset of obs columns to load (comma-sep or repeated)."),
     ] = None,
     export_dir: Annotated[
-        Path | None, typer.Option("--export-dir", "-e", help="Directory for exported zarr stores (default: ./exports).")
+        Path | None, typer.Option("--export-dir", "-e", help="Directory for exported zarr stores.")
     ] = None,
     columns_config: Annotated[
         Path | None, typer.Option("--columns-config", "-C", help="YAML file mapping spatial column names.")
     ] = None,
+    # ── OME-Zarr-specific ──
+    channels: Annotated[str | None, typer.Option("--channels", "-c", help="Comma-separated channel names.")] = None,
+    # ── Shared ──
     host: Annotated[str, typer.Option(help="Server host.")] = "localhost",
     port: Annotated[int, typer.Option(help="Server port.")] = 5055,
+    dry_run: Annotated[bool, typer.Option("--dry-run", help="Print metadata and exit.")] = False,
 ) -> None:
-    """Launch the interactive embedding viewer for one or more AnnData datasets."""
-    from rich.console import Console
+    """Launch the viewer. Auto-detects AnnData vs OME-Zarr inputs."""
+    kind, resolved = _classify_paths(paths)
 
-    from nd_embedding_atlas import vz
-    from nd_embedding_atlas.io import AnnDataCollection, load_config
+    if kind == "ome-zarr":
+        from nd_embedding_atlas.cli._ndimg import view_ome_zarr
 
-    console = Console()
+        view_ome_zarr(resolved, channels=channels, host=host, port=port, dry_run=dry_run)
+    else:
+        from nd_embedding_atlas.cli._ndea import view_anndata
 
-    data_paths = _resolve_inputs(paths)
-    if not data_paths:
-        console.print("[red]No AnnData stores (.zarr or .h5ad) found in the given paths.[/red]")
-        raise typer.Exit(1)
-
-    console.print(f"Found [cyan]{len(data_paths)}[/cyan] dataset(s):")
-    collection = AnnDataCollection()
-    for p in data_paths:
-        key = p.stem
-        console.print(f"  {key} → {p}")
-        collection[key] = p
-
-    console.print(f"\n[bold]{collection.n_obs:,}[/bold] obs x [bold]{collection.n_vars:,}[/bold] vars")
-    if obs_columns:
-        console.print(f"  obs columns: {', '.join(obs_columns)}")
-
-    # Expand comma-separated values: -c "a,b,c" → ["a", "b", "c"]
-    if obs_columns:
-        obs_columns = [col.strip() for raw in obs_columns for col in raw.split(",") if col.strip()]
-
-    resolved_plate = str(plate.resolve()) if plate is not None else None
-    resolved_export = str(export_dir.resolve()) if export_dir is not None else None
-    if resolved_export:
-        console.print(f"  export dir: {resolved_export}")
-
-    # Load and validate column mapping config
-    config = None
-    if columns_config:
-        config = load_config(columns_config)
-        obs_cols = set(collection.obs.keys())
-        config.validate_against_obs(obs_cols)
-        console.print(f"  columns config: {columns_config}")
-
-    console.print(f"\nServing at [link=http://{host}:{port}]http://{host}:{port}[/link]")
-    vz.serve(
-        collection,
-        obs_columns=obs_columns or None,
-        plate_path=resolved_plate,
-        export_dir=resolved_export,
-        columns_config=config,
-        host=host,
-        port=port,
-    )
+        view_anndata(
+            resolved,
+            plate=plate,
+            obs_columns=obs_columns,
+            export_dir=export_dir,
+            columns_config=columns_config,
+            host=host,
+            port=port,
+        )

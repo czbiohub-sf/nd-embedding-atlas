@@ -5,8 +5,6 @@ from __future__ import annotations
 import asyncio
 import concurrent.futures
 import dataclasses
-import importlib.metadata
-import importlib.resources
 import pathlib
 import re
 import uuid
@@ -15,10 +13,10 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import uvicorn
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 
+from nd_embedding_atlas._server import build_parquet_bytes, create_cors_app, get_package_version, mount_frontend
 from nd_embedding_atlas.vz._duckdb import EmbeddingStore, mount_duckdb_endpoints
 from nd_embedding_atlas.vz._export import export_subset
 from nd_embedding_atlas.vz._prepare import _obsm_column_prefix, prepare_obs
@@ -49,100 +47,36 @@ class ExportTaskState:
     error: str | None = None
 
 
-def _resolve_frontend() -> str:
-    """Resolve frontend static directory (dev or bundled).
-
-    Resolution order:
-
-    1. **Dev** -- walk up from this file to find ``frontend/dist/``
-       (works with editable installs).
-    2. **Bundled** -- ``importlib.resources`` looks for ``nd_embedding_atlas/_frontend/``
-       inside the installed wheel.
-
-    Raises
-    ------
-    FileNotFoundError
-        If neither location contains a built frontend.
-    """
-    # 1. Dev: walk up to find frontend/dist/ (editable install)
-    p = pathlib.Path(__file__).resolve()
-    for parent in p.parents:
-        dist = parent / "frontend" / "dist"
-        if dist.is_dir():
-            return str(dist)
-
-    # 2. Bundled: importlib.resources (wheel install)
-    ref = importlib.resources.files("nd_embedding_atlas") / "_frontend"
-    if ref.is_dir():
-        return str(ref)
-
-    msg = (
-        "No frontend found. Either:\n"
-        "  - Run `cd frontend && pnpm install && pnpm build` (development)\n"
-        "  - Install from wheel: `uv pip install nd-embedding-atlas`"
-    )
-    raise FileNotFoundError(msg)
-
-
 def _read_plate_metadata(plate_path: str | pathlib.Path | None) -> dict | None:
-    """Read pixel scale and channel info from the first FOV in an OME-Zarr plate."""
+    """Read pixel scale, shape, and channel info from an OME-Zarr plate.
+
+    Delegates to ``ndimg.get_plate_metadata`` for robust v0.4/v0.5 handling.
+    """
     if plate_path is None:
         return None
-    import json
+    try:
+        from nd_embedding_atlas.ndimg._metadata import get_plate_metadata
 
-    plate_root = pathlib.Path(plate_path)
-    zarr_json = plate_root / "zarr.json"
-    if not zarr_json.exists():
+        meta = get_plate_metadata(plate_path)
+    except Exception:  # noqa: BLE001
         return None
-    attrs = json.loads(zarr_json.read_text()).get("attributes", {})
-    wells = attrs.get("ome", {}).get("plate", {}).get("wells", [])
-    if not wells:
-        return None
-    well_path = plate_root / wells[0]["path"]
-    well_zarr = well_path / "zarr.json"
-    if not well_zarr.exists():
-        return None
-    well_attrs = json.loads(well_zarr.read_text()).get("attributes", {})
-    images = well_attrs.get("ome", {}).get("well", {}).get("images", [])
-    if not images:
-        return None
-    fov_path = well_path / images[0]["path"]
-    fov_zarr = fov_path / "zarr.json"
-    if not fov_zarr.exists():
-        return None
-    fov_attrs = json.loads(fov_zarr.read_text()).get("attributes", {})
 
     result: dict = {}
-
-    # Pixel scale
-    multiscales = fov_attrs.get("ome", {}).get("multiscales", [])
-    if multiscales:
-        axes = multiscales[0].get("axes", [])
-        datasets = multiscales[0].get("datasets", [])
-        if datasets:
-            scale = datasets[0].get("coordinateTransformations", [{}])[0].get("scale", [])
-            if len(scale) == len(axes):
-                axis_names = [a["name"].upper() for a in axes]
-                pixel_scale = {}
-                for name, s in zip(axis_names, scale, strict=True):
-                    if name in ("Y", "X"):
-                        pixel_scale[name.lower()] = s
-                if pixel_scale:
-                    result["pixel_scale"] = pixel_scale
-
-    # Channel info from omero metadata
-    omero = fov_attrs.get("ome", {}).get("omero", {})
-    channels = omero.get("channels", [])
-    if channels:
+    if "pixel_scale" in meta:
+        result["pixel_scale"] = meta["pixel_scale"]
+    if "scale" in meta:
+        result["scale"] = meta["scale"]
+    if "shape" in meta:
+        result["shape"] = meta["shape"]
+    if meta.get("channels"):
         result["channels"] = [
             {
                 "label": ch.get("label", f"Channel {i}"),
                 "color": ch.get("color", "FFFFFF"),
                 "window": ch.get("window", {}),
             }
-            for i, ch in enumerate(channels)
+            for i, ch in enumerate(meta["channels"])
         ]
-
     return result or None
 
 
@@ -191,14 +125,7 @@ def create_app(
     """
     resolved_export_dir = pathlib.Path(export_dir).resolve() if export_dir else pathlib.Path.cwd() / "exports"
 
-    app = FastAPI()
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
-        allow_methods=["*"],
-        allow_headers=["*"],
-        expose_headers=["*"],
-    )
+    app = create_cors_app()
 
     # ── Resolve spatial columns (config > auto-detect) ─────────────────
     _all_obs_cols = set(collection.obs.keys())
@@ -323,7 +250,7 @@ def create_app(
     @app.get("/data/metadata.json")
     async def get_metadata() -> dict:
         result: dict = {
-            "version": importlib.metadata.version("nd-embedding-atlas"),
+            "version": get_package_version(),
             "props": embedding_props,
             "database": {"type": "rest"},
             "obsm": _build_obsm_metadata(),
@@ -336,6 +263,10 @@ def create_app(
                 result["plate_pixel_scale"] = plate_meta["pixel_scale"]
             if "channels" in plate_meta:
                 result["plate_channels"] = plate_meta["channels"]
+            if "shape" in plate_meta:
+                result["plate_shape"] = plate_meta["shape"]
+            if "scale" in plate_meta:
+                result["plate_scale"] = plate_meta["scale"]
         result["spatial"] = {
             "fov_col": _fov_col,
             "t_col": _t_col,
@@ -348,15 +279,8 @@ def create_app(
     @app.get("/data/dataset.parquet")
     async def get_parquet() -> Response:
         if parquet_cache["data"] is None:
-            import pyarrow.parquet as pq
-
             with store.cursor() as cur:
-                table = cur.sql("SELECT * FROM dataset").arrow()
-            import pyarrow as pa
-
-            sink = pa.BufferOutputStream()
-            pq.write_table(table, sink)
-            parquet_cache["data"] = sink.getvalue().to_pybytes()
+                parquet_cache["data"] = build_parquet_bytes(cur)
         return Response(parquet_cache["data"], media_type="application/octet-stream")
 
     @app.post("/api/embeddings/{key}")
@@ -550,19 +474,13 @@ def create_app(
 
             return response
 
-    # Resolve which frontend to serve
-    if static_dir is not None:
-        resolved_static = str(static_dir)
-    else:
-        resolved_static = _resolve_frontend()
-
     from fastapi.staticfiles import StaticFiles
 
     # Serve OME-Zarr plate as static files (must be before the catch-all "/" mount)
     if plate_path is not None:
         app.mount("/plate", StaticFiles(directory=str(plate_path)), name="plate")
 
-    app.mount("/", StaticFiles(directory=resolved_static, html=True))
+    mount_frontend(app, static_dir=static_dir)
 
     return app
 

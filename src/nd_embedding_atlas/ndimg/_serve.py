@@ -8,17 +8,16 @@ corresponding FOV.  Mosaic query endpoints are provided by
 
 from __future__ import annotations
 
-import importlib.metadata
-import importlib.resources
 import pathlib
+from collections.abc import Sequence
 
 import duckdb
 import uvicorn
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
+from nd_embedding_atlas._server import build_parquet_bytes, create_cors_app, get_package_version, mount_frontend
 from nd_embedding_atlas.ndimg._metadata import (
     detect_ome_version,
     get_multi_store_fov_dataframe,
@@ -27,37 +26,11 @@ from nd_embedding_atlas.ndimg._metadata import (
 from nd_embedding_atlas.vz._duckdb import mount_duckdb_endpoints
 
 
-def _resolve_frontend() -> str:
-    """Resolve the nd-embedding-atlas frontend directory.
-
-    Resolution order:
-
-    1. **Dev** -- walk up from this file to find ``frontend/dist/``
-    2. **Bundled** -- ``importlib.resources`` for ``nd_embedding_atlas/_frontend/``
-    """
-    p = pathlib.Path(__file__).resolve()
-    for parent in p.parents:
-        dist = parent / "frontend" / "dist"
-        if dist.is_dir():
-            return str(dist)
-
-    ref = importlib.resources.files("nd_embedding_atlas") / "_frontend"
-    if ref.is_dir():
-        return str(ref)
-
-    msg = (
-        "No frontend found. Either:\n"
-        "  - Run `cd frontend && pnpm install && pnpm build` (development)\n"
-        "  - Install from wheel: `uv pip install nd-embedding-atlas`"
-    )
-    raise FileNotFoundError(msg)
-
-
 def create_app(
-    plate_paths: str | pathlib.Path | list[str | pathlib.Path],
+    plate_paths: str | pathlib.Path | Sequence[str | pathlib.Path],
     *,
     position: str | None = None,
-    channels: list[str] | None = None,
+    channels: Sequence[str] | None = None,
     static_dir: str | pathlib.Path | None = None,
 ) -> FastAPI:
     """Create a FastAPI app for viewing OME-Zarr images.
@@ -86,14 +59,7 @@ def create_app(
         plate_paths = [plate_paths]
     resolved_paths = [pathlib.Path(p).resolve() for p in plate_paths]
 
-    app = FastAPI(title="ndimg")
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
-        allow_methods=["*"],
-        allow_headers=["*"],
-        expose_headers=["*"],
-    )
+    app = create_cors_app(title="ndimg")
 
     # ── Pre-compute metadata from first store ────────────────────────
     meta = get_plate_metadata(resolved_paths[0])
@@ -105,10 +71,6 @@ def create_app(
         meta["channel_names"] = [available[i] for i in filtered_indices]
         if meta["channels"]:
             meta["channels"] = [meta["channels"][i] for i in filtered_indices]
-
-    positions_list: list[str] = meta["positions"]
-    if position is None and positions_list:
-        position = positions_list[0]
 
     # Build plate_channels in the format the frontend expects
     plate_channels = []
@@ -152,10 +114,7 @@ def create_app(
     parquet_cache: dict[str, bytes | None] = {"data": None}
 
     # ── /data/metadata.json — the frontend's primary config endpoint ──
-    try:
-        version = importlib.metadata.version("nd-embedding-atlas")
-    except importlib.metadata.PackageNotFoundError:
-        version = "0.0.0-dev"
+    version = get_package_version()
 
     obs_column_names = ["dataset", "position", "T", "C", "Z", "Y", "X", "z_um", "y_um", "x_um", "ome_version"]
 
@@ -176,6 +135,8 @@ def create_app(
             "plate_pixel_scale": pixel_scale,
             "plate_channels": plate_channels,
             "plate_stores": plate_stores,
+            "plate_shape": meta["shape"],
+            "plate_scale": meta["scale"],
             "spatial": {
                 "fov_col": "position",
                 "t_col": None,
@@ -189,18 +150,7 @@ def create_app(
     @app.get("/data/dataset.parquet")
     async def get_parquet() -> Response:
         if parquet_cache["data"] is None:
-            import pyarrow as pa
-            import pyarrow.parquet as pq
-
-            arrow = con.sql("SELECT * FROM dataset").arrow()
-            sink = pa.BufferOutputStream()
-            if isinstance(arrow, pa.Table):
-                pq.write_table(arrow, sink)
-            else:
-                # DuckDB >= 1.4 returns RecordBatchReader
-                table = pa.Table.from_batches(list(arrow), schema=arrow.schema)
-                pq.write_table(table, sink)
-            parquet_cache["data"] = sink.getvalue().to_pybytes()
+            parquet_cache["data"] = build_parquet_bytes(con)
         return Response(parquet_cache["data"], media_type="application/octet-stream")
 
     # ── /api/cell/{row_index} — map row index to FOV info ─────────────
@@ -253,21 +203,16 @@ def create_app(
         app.mount(f"/plate_{i}", StaticFiles(directory=str(p)), name=f"plate_{i}")
 
     # Serve frontend with html=True for SPA routing
-    if static_dir is not None:
-        resolved_static = str(static_dir)
-    else:
-        resolved_static = _resolve_frontend()
-
-    app.mount("/", StaticFiles(directory=resolved_static, html=True))
+    mount_frontend(app, static_dir=static_dir)
 
     return app
 
 
 def serve(
-    plate_paths: str | pathlib.Path | list[str | pathlib.Path],
+    plate_paths: str | pathlib.Path | Sequence[str | pathlib.Path],
     *,
     position: str | None = None,
-    channels: list[str] | None = None,
+    channels: Sequence[str] | None = None,
     static_dir: str | pathlib.Path | None = None,
     host: str = "0.0.0.0",
     port: int = 5055,

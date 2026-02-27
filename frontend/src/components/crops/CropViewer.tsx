@@ -1,6 +1,13 @@
 import { useRef, useState } from "react";
 import { useDashboard } from "../../hooks/useDashboard";
-import { ChannelControls, Viewer, ViewerControls, ViewerErrorBoundary, ViewerLoadingOverlay } from "../viewer";
+import {
+    ChannelControls,
+    Viewer,
+    ViewerControls,
+    ViewerErrorBoundary,
+    ViewerLoadingOverlay,
+    VolumeControls,
+} from "../viewer";
 import { SingleCropViewer } from "./SingleCropViewer";
 import { ViewerPauseGate } from "./ViewerPauseGate";
 
@@ -33,6 +40,7 @@ export function CropViewer() {
                     <ViewerLoadingOverlay />
                     <div className="absolute right-0 bottom-0 left-0 z-10 flex flex-col gap-1 bg-surface/90 px-2 py-1.5 backdrop-blur-sm">
                         <ChannelControls />
+                        <VolumeControls />
                         <ViewerControls cropSize={cropSize} setCropSize={setCropSize} />
                     </div>
                     {!state.highlightId && (
