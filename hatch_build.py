@@ -14,6 +14,10 @@ class CustomBuildHook(BuildHookInterface):
 
     def initialize(self, version, build_data):
         """Run ``pnpm build`` in ``frontend/`` if ``dist/`` is missing."""
+        if version == "editable":
+            self.app.display_info("Editable install — skipping frontend build")
+            return
+
         frontend_dir = Path(self.root) / "frontend"
         dist_dir = frontend_dir / "dist"
 
@@ -30,7 +34,7 @@ class CustomBuildHook(BuildHookInterface):
             raise RuntimeError(msg)
 
         self.app.display_info("Installing frontend dependencies...")
-        subprocess.run([*pnpm_cmd, "install", "--frozen-lockfile"], cwd=str(frontend_dir), check=True)
+        subprocess.run([*pnpm_cmd, "install", "--frozen-lockfile", "--force"], cwd=str(frontend_dir), check=True)
 
         self.app.display_info("Building frontend...")
         subprocess.run([*pnpm_cmd, "build"], cwd=str(frontend_dir), check=True)

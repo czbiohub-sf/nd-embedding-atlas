@@ -185,7 +185,7 @@ def create_app(
         store.register_embedding(default_key, np.asarray(coords, dtype=np.float32))
 
     # Background task management
-    executor = concurrent.futures.ThreadPoolExecutor(max_workers=2)
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=8)
     loading_tasks: dict[str, asyncio.Task[None]] = {}
     load_errors: dict[str, str] = {}
 
