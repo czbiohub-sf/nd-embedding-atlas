@@ -113,6 +113,7 @@ export function ViewerProvider({ children }: Props) {
         if (runtimeRef.current) {
             runtimeRef.current.stop();
             runtimeRef.current = null;
+            runningRef.current = false;
         }
         viewportRef.current = null;
         cameraRef.current = null;
@@ -215,12 +216,20 @@ export function ViewerProvider({ children }: Props) {
         cameraRef.current?.setFrame(left, right, bottom, top);
     }, []);
 
+    const runningRef = useRef(false);
+
     const pause = useCallback(() => {
-        runtimeRef.current?.stop();
+        if (runtimeRef.current && runningRef.current) {
+            runtimeRef.current.stop();
+            runningRef.current = false;
+        }
     }, []);
 
     const resume = useCallback(() => {
-        runtimeRef.current?.start();
+        if (runtimeRef.current && !runningRef.current) {
+            runtimeRef.current.start();
+            runningRef.current = true;
+        }
     }, []);
 
     const setChannels = useCallback((defs: ChannelDef[], multiChannel: MultiChannelLayers) => {
