@@ -1,6 +1,6 @@
 import { type Layer, ProjectedLineLayer, type Viewport } from "@idetik/core";
 import { useCallback, useEffect, useRef } from "react";
-import type { CellBbox } from "../types";
+import type { ObsBbox } from "../types";
 
 type BboxPath = [number, number, number][];
 
@@ -10,7 +10,7 @@ interface UseBboxLayerOptions {
 }
 
 interface UseBboxLayerReturn {
-    updateBbox: (cx: number, cy: number, half: number, explicitBbox?: CellBbox) => void;
+    updateBbox: (cx: number, cy: number, half: number, explicitBbox?: ObsBbox) => void;
 }
 
 /**
@@ -24,7 +24,7 @@ export function useBboxLayer({ viewport, scale }: UseBboxLayerOptions): UseBboxL
     const bboxRef = useRef<Layer | null>(null);
 
     const updateBbox = useCallback(
-        (cx: number, cy: number, half: number, explicitBbox?: CellBbox) => {
+        (cx: number, cy: number, half: number, explicitBbox?: ObsBbox) => {
             if (!viewport) return;
 
             if (bboxRef.current) {

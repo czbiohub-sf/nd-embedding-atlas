@@ -34,6 +34,7 @@ import typer
 from iohub.ngff import open_ome_zarr
 from rich.console import Console
 
+
 def _load_channel_colors() -> dict[str, list[float]]:
     """Load channel colors from scripts/channel_colors.yaml and convert hex to RGB [0-1]."""
     import yaml

@@ -1,8 +1,6 @@
-from nd_embedding_atlas.vz._prepare import prepare_obs
-from nd_embedding_atlas.vz._serve import create_app, serve
+from nd_embedding_atlas.vz._prepare import detect_spatial_columns, prepare_obs
 
 __all__ = [
-    "create_app",
+    "detect_spatial_columns",
     "prepare_obs",
-    "serve",
 ]

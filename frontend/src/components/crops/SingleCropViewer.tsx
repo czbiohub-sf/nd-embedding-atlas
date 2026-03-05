@@ -7,7 +7,7 @@ import { useFovLoader } from "../../hooks/useFovLoader";
 import { useViewer } from "../../hooks/useViewer";
 import { jsonFetcher } from "../../lib/fetcher";
 import type { OrbitControls } from "../../lib/OrbitControls";
-import type { CellInfo } from "../../types";
+import type { ObsInfo } from "../../types";
 
 /** Fixed camera view radius in pixels (independent of crop slider). */
 const CAMERA_VIEW_HALF = 150;
@@ -21,14 +21,14 @@ export function SingleCropViewer({ cropSize }: Props) {
     const { state: viewerState, actions, meta } = useViewer();
     const { highlightId, metadata } = dashState;
 
-    // ── Fetch cell info ───────────────────────────────────────────────
-    const { data: cellInfo } = useSWR<CellInfo>(highlightId ? `/api/cell/${highlightId}` : null, jsonFetcher, {
+    // ── Fetch obs info ────────────────────────────────────────────────
+    const { data: obsInfo } = useSWR<ObsInfo>(highlightId ? `/api/obs/${highlightId}` : null, jsonFetcher, {
         keepPreviousData: true,
     });
 
     // ── Derive source URL ─────────────────────────────────────────────
     const scale = metadata.plate_pixel_scale ?? { x: 1, y: 1 };
-    const sourceUrl = cellInfo ? `${window.location.origin}/plate/${cellInfo.fov_name}` : null;
+    const sourceUrl = obsInfo ? `${window.location.origin}/plate/${obsInfo.fov_name}` : null;
 
     // ── Hooks for imperative plumbing ─────────────────────────────────
     useFovLoader({
@@ -49,15 +49,15 @@ export function SingleCropViewer({ cropSize }: Props) {
         [actions, scale.x, scale.y],
     );
 
-    // ── Effect: Cell framing (mode-aware) ────────────────────────────
+    // ── Effect: Observation framing (mode-aware) ──────────────────────
     useEffect(() => {
-        if (!cellInfo || !viewerState.initialized) return;
+        if (!obsInfo || !viewerState.initialized) return;
 
         if (viewerState.viewMode === "2d") {
-            updateBbox(cellInfo.x, cellInfo.y, cropSize / 2, cellInfo.bbox);
+            updateBbox(obsInfo.x, obsInfo.y, cropSize / 2, obsInfo.bbox);
 
-            if (cellInfo.bbox) {
-                const { y_min, x_min, y_max, x_max } = cellInfo.bbox;
+            if (obsInfo.bbox) {
+                const { y_min, x_min, y_max, x_max } = obsInfo.bbox;
                 const pad = 50;
                 frameRegion(
                     (x_min + x_max) / 2,
@@ -66,12 +66,12 @@ export function SingleCropViewer({ cropSize }: Props) {
                     (y_max - y_min) / 2 + pad,
                 );
             } else {
-                frameRegion(cellInfo.x, cellInfo.y, CAMERA_VIEW_HALF, CAMERA_VIEW_HALF);
+                frameRegion(obsInfo.x, obsInfo.y, CAMERA_VIEW_HALF, CAMERA_VIEW_HALF);
             }
         } else {
-            // 3D: position orbit camera to look at cell center
-            const cx = cellInfo.x * scale.x;
-            const cy = cellInfo.y * scale.y;
+            // 3D: position orbit camera to look at observation center
+            const cx = obsInfo.x * scale.x;
+            const cy = obsInfo.y * scale.y;
             const controls = meta.viewport?.cameraControls;
             if (controls && "lookAt" in controls) {
                 const radius = cropSize * Math.max(scale.x, scale.y) * 1.5;
@@ -79,7 +79,7 @@ export function SingleCropViewer({ cropSize }: Props) {
             }
         }
     }, [
-        cellInfo,
+        obsInfo,
         cropSize,
         viewerState.initialized,
         viewerState.viewMode,
@@ -90,25 +90,25 @@ export function SingleCropViewer({ cropSize }: Props) {
         meta.viewport,
     ]);
 
-    // ── Effect: Sync T index from selected cell ───────────────────────
+    // ── Effect: Sync T index from selected observation ──────────────
     useEffect(() => {
-        if (cellInfo) {
-            actions.setTIndex(cellInfo.t ?? 0);
+        if (obsInfo) {
+            actions.setTIndex(obsInfo.t ?? 0);
         }
-    }, [cellInfo, actions]);
+    }, [obsInfo, actions]);
 
-    // ── Effect: Follow cell during trajectory playback ────────────────
+    // ── Effect: Follow observation during trajectory playback ────────
     const { trajectory } = dashState;
     useEffect(() => {
-        if (!trajectory || !cellInfo) return;
+        if (!trajectory || !obsInfo) return;
         const frame = trajectory.points.find((p) => p.t === trajectory.tIndex);
         if (!frame) return;
         // Only update bbox in 2D mode
         if (viewerState.viewMode === "2d") {
             updateBbox(frame.spatial_x, frame.spatial_y, cropSize / 2);
         }
-    }, [trajectory?.tIndex, trajectory?.points, cropSize, cellInfo, updateBbox, viewerState.viewMode, trajectory]);
+    }, [trajectory?.tIndex, trajectory?.points, cropSize, obsInfo, updateBbox, viewerState.viewMode, trajectory]);
 
-    if (!highlightId || !cellInfo) return null;
+    if (!highlightId || !obsInfo) return null;
     return null;
 }

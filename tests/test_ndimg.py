@@ -16,8 +16,7 @@ import pytest
 # ── Test data paths ──────────────────────────────────────────────────────────
 
 _DATA_ROOT = Path(
-    "/hpc/projects/intracellular_dashboard/virtual_stain_ft_infected"
-    "/2026_01_29_A549_H2B_CAAX_DAPI_DENV_ZIKV"
+    "/hpc/projects/intracellular_dashboard/virtual_stain_ft_infected/2026_01_29_A549_H2B_CAAX_DAPI_DENV_ZIKV"
 )
 ZARR_V2 = _DATA_ROOT / "0-convert" / "convert.zarr"
 ZARR_V3 = _DATA_ROOT / "0-convert_zarrv3" / "convert.zarr"

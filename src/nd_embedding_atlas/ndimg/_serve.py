@@ -3,7 +3,7 @@
 Serves the nd-embedding-atlas frontend with a FOV table backed by DuckDB.
 The dashboard shows a table of positions; clicking a row loads the
 corresponding FOV.  Mosaic query endpoints are provided by
-``vz._duckdb.mount_duckdb_endpoints``.
+``server.routes._mosaic.mount_duckdb_endpoints``.
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ from nd_embedding_atlas.ndimg._metadata import (
     get_multi_store_fov_dataframe,
     get_plate_metadata,
 )
-from nd_embedding_atlas.vz._duckdb import mount_duckdb_endpoints
+from nd_embedding_atlas.server.routes._mosaic import mount_duckdb_endpoints
 
 
 def create_app(
@@ -153,18 +153,18 @@ def create_app(
             parquet_cache["data"] = build_parquet_bytes(con)
         return Response(parquet_cache["data"], media_type="application/octet-stream")
 
-    # ── /api/cell/{row_index} — map row index to FOV info ─────────────
+    # ── /api/obs/{row_index} — map row index to FOV info ────────────
     shape_y = meta["shape"][-2]
     shape_x = meta["shape"][-1]
 
-    @app.get("/api/cell/{row_index}", response_model=None)
-    async def get_cell(row_index: int) -> dict | JSONResponse:
+    @app.get("/api/obs/{row_index}", response_model=None)
+    async def get_obs(row_index: int) -> dict | JSONResponse:
         row = con.execute(
             "SELECT position, store_index FROM dataset WHERE __row_index__ = ?",
             [row_index],
         ).fetchone()
         if row is None:
-            return JSONResponse({"error": "Position not found"}, status_code=404)
+            return JSONResponse({"error": "Observation not found"}, status_code=404)
 
         fov_name = row[0]
         store_index = row[1]

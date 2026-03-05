@@ -232,7 +232,7 @@ export function ScatterPanel(_props: IDockviewPanelProps) {
                             {obsmKeys.map((k) => {
                                 const entry = metadata.obsm[k];
                                 const label = k.replace(/^X_/, "");
-                                const suffix = entry?.loaded ? "" : " (pending)";
+                                const suffix = entry?.loaded;
                                 return (
                                     <option key={k} value={k}>
                                         {label}

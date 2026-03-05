@@ -67,7 +67,7 @@ def _classify_paths(paths: list[Path]) -> tuple[str, list[Path]]:
 def view(
     paths: Annotated[list[Path], typer.Argument(help="AnnData or OME-Zarr paths.")],
     # ── AnnData-specific ──
-    plate: Annotated[Path | None, typer.Option("--plate", "-p", help="OME-Zarr plate for cell crop viewer.")] = None,
+    plate: Annotated[Path | None, typer.Option("--plate", "-p", help="OME-Zarr plate for observation viewer.")] = None,
     obs_columns: Annotated[
         list[str] | None,
         typer.Option("--obs-columns", help="Subset of obs columns to load (comma-sep or repeated)."),
@@ -83,6 +83,12 @@ def view(
     # ── Shared ──
     host: Annotated[str, typer.Option(help="Server host.")] = "localhost",
     port: Annotated[int, typer.Option(help="Server port.")] = 5055,
+    duckdb_threads: Annotated[
+        int | None, typer.Option("--duckdb-threads", help="DuckDB internal thread count.")
+    ] = None,
+    pool_workers: Annotated[
+        int | None, typer.Option("--pool-workers", help="Request handler thread pool size.")
+    ] = None,
     dry_run: Annotated[bool, typer.Option("--dry-run", help="Print metadata and exit.")] = False,
 ) -> None:
     """Launch the viewer. Auto-detects AnnData vs OME-Zarr inputs."""
@@ -101,6 +107,8 @@ def view(
             obs_columns=obs_columns,
             export_dir=export_dir,
             columns_config=columns_config,
+            duckdb_threads=duckdb_threads,
+            pool_workers=pool_workers,
             host=host,
             port=port,
         )

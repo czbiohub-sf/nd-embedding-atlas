@@ -190,7 +190,7 @@ export function useFovLoader({ sourceUrl, plateChannels }: UseFovLoaderOptions):
 
             // Preserve user's channel settings (visibility, contrast, blend) if the
             // channel lineup hasn't changed (same count + labels). This keeps
-            // user adjustments stable when clicking between cells in the same plate.
+            // user adjustments stable when clicking between observations in the same plate.
             const existing = viewerState.channels;
             const canReuse =
                 existing.length === defaultChannelState.length &&

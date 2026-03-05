@@ -12,6 +12,8 @@ def view_anndata(
     obs_columns: list[str] | None,
     export_dir: Path | None,
     columns_config: Path | None,
+    duckdb_threads: int | None = None,
+    pool_workers: int | None = None,
     host: str,
     port: int,
 ) -> None:
@@ -22,13 +24,17 @@ def view_anndata(
     data_paths
         Resolved AnnData store paths.
     plate
-        Optional OME-Zarr plate for the cell crop viewer.
+        Optional OME-Zarr plate for the observation viewer.
     obs_columns
         Subset of obs columns to load.
     export_dir
         Directory for exported zarr stores.
     columns_config
         Path to YAML column mapping file.
+    duckdb_threads
+        DuckDB internal thread count.
+    pool_workers
+        Request handler thread pool size.
     host
         Server bind address.
     port
@@ -36,8 +42,8 @@ def view_anndata(
     """
     from rich.console import Console
 
-    from nd_embedding_atlas import vz
     from nd_embedding_atlas.io import AnnDataCollection, load_config
+    from nd_embedding_atlas.server import serve
 
     console = Console()
 
@@ -68,12 +74,14 @@ def view_anndata(
         console.print(f"  columns config: {columns_config}")
 
     console.print(f"\nServing at [link=http://{host}:{port}]http://{host}:{port}[/link]")
-    vz.serve(
+    serve(
         collection,
         obs_columns=obs_columns or None,
         plate_path=resolved_plate,
         export_dir=resolved_export,
         columns_config=config,
+        duckdb_threads=duckdb_threads,
+        pool_workers=pool_workers,
         host=host,
         port=port,
     )

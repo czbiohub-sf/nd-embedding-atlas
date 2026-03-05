@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { useViewer } from "../../hooks/useViewer";
 
 /**
- * Pauses/resumes the idetik render loop based on whether a cell is selected.
+ * Pauses/resumes the idetik render loop based on whether an observation is selected.
  *
  * When paused, the WebGL canvas stops its requestAnimationFrame loop,
  * freeing GPU frame budget for the scatter plot's own WebGL canvas.

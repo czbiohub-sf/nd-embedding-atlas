@@ -3,9 +3,9 @@ from importlib.metadata import version
 import zarr
 import zarrs
 
-from . import cli, io, ndimg, vz
+from . import cli, io, ndimg, server, vz
 
-__all__ = ["cli", "io", "ndimg", "vz"]
+__all__ = ["cli", "io", "ndimg", "server", "vz"]
 
 __version__ = version("nd-embedding-atlas")
 

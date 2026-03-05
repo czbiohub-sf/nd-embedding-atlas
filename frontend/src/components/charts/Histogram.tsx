@@ -123,12 +123,10 @@ export function Histogram({ field, bins: binCount = 20 }: Props) {
     if (stats && stats.count > 0 && stats.min === stats.max) {
         return (
             <div ref={containerRef} className="py-2">
-                <span className="inline-block rounded bg-blue-900 px-1.5 py-0.5 text-[11px] font-medium text-white">
+                <span className="inline-block rounded bg-blue-900 px-1.5 py-0.5 font-medium text-[11px] text-white">
                     {formatTick(stats.min)}
                 </span>
-                <span className="ml-1 text-[10px] text-text-muted">
-                    ({stats.count.toLocaleString()} rows)
-                </span>
+                <span className="ml-1 text-[10px] text-text-muted">({stats.count.toLocaleString()} rows)</span>
             </div>
         );
     }

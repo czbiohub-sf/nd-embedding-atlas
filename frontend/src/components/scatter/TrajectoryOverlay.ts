@@ -15,7 +15,7 @@ const DEFAULT_ACTIVE_COLOR = "#ffffff";
 
 /**
  * Plain JS class implementing embedding-atlas CustomComponent interface.
- * Renders an SVG polyline for a cell's trajectory across time frames.
+ * Renders an SVG polyline for an observation's trajectory across time frames.
  */
 export class TrajectoryOverlay {
     private svg: SVGSVGElement;

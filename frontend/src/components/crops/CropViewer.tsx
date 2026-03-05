@@ -20,12 +20,12 @@ export function CropViewer() {
         hasEverSelected.current = true;
     }
 
-    // Don't mount the viewer until the user first clicks a cell.
+    // Don't mount the viewer until the user first clicks an observation.
     // Once mounted, keep it alive to avoid WebGL teardown/recreation.
     if (!hasEverSelected.current) {
         return (
             <div className="flex h-full w-full items-center justify-center bg-surface text-text-muted text-xs">
-                Click a cell to view
+                Click an observation to view
             </div>
         );
     }
@@ -45,7 +45,7 @@ export function CropViewer() {
                     </div>
                     {!state.highlightId && (
                         <div className="absolute inset-0 flex items-center justify-center bg-surface text-text-muted text-xs">
-                            Click a cell to view
+                            Click an observation to view
                         </div>
                     )}
                 </div>

@@ -76,6 +76,23 @@ def get_package_version() -> str:
         return "0.0.0-dev"
 
 
+def arrow_to_ipc_bytes(arrow: pa.Table | pa.RecordBatchReader) -> bytes:
+    """Serialize an Arrow Table or RecordBatchReader to IPC stream bytes.
+
+    Handles both ``pa.Table`` (DuckDB < 1.4) and ``pa.RecordBatchReader``
+    (DuckDB >= 1.4) transparently.
+    """
+    sink = pa.BufferOutputStream()
+    if isinstance(arrow, pa.Table):
+        with pa.ipc.new_stream(sink, arrow.schema) as writer:
+            writer.write(arrow)
+    else:
+        with pa.ipc.new_stream(sink, arrow.schema) as writer:
+            for batch in arrow:
+                writer.write_batch(batch)
+    return sink.getvalue().to_pybytes()
+
+
 def build_parquet_bytes(con: object) -> bytes:
     """Build Parquet bytes from the ``dataset`` VIEW. Handles DuckDB >= 1.4 RecordBatchReader.
 
