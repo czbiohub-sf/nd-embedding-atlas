@@ -70,29 +70,33 @@ const STORAGE_KEY = "ndea_layout";
 
 // ── Default layout ───────────────────────────────────────────────────────
 
-function loadDefaultLayout(api: DockviewApi, hasPlate: boolean) {
-    // Main scatter panel
-    api.addPanel({
-        id: "scatter",
-        component: "scatter",
-        title: "Embedding",
-    });
+function loadDefaultLayout(api: DockviewApi, hasPlate: boolean, hasEmbeddings: boolean) {
+    // Scatter panel — only when embeddings exist
+    if (hasEmbeddings) {
+        api.addPanel({
+            id: "scatter",
+            component: "scatter",
+            title: "Embedding",
+        });
+    }
 
-    // Table below scatter
+    // Table — first panel when no scatter
     api.addPanel({
         id: "table",
         component: "table",
         title: "Data Table",
-        position: { referencePanel: "scatter", direction: "below" },
+        position: hasEmbeddings ? { referencePanel: "scatter", direction: "below" } : undefined,
     });
 
-    // Sidebar: image viewer + charts (right of scatter)
+    // Reference panel for the right sidebar
+    const sidebarRef = hasEmbeddings ? "scatter" : "table";
+
     if (hasPlate) {
         api.addPanel({
             id: "image-viewer",
             component: "image-viewer",
             title: "Image Viewer",
-            position: { referencePanel: "scatter", direction: "right" },
+            position: { referencePanel: sidebarRef, direction: "right" },
         });
 
         api.addPanel({
@@ -106,7 +110,7 @@ function loadDefaultLayout(api: DockviewApi, hasPlate: boolean) {
             id: "charts",
             component: "charts",
             title: "Charts",
-            position: { referencePanel: "scatter", direction: "right" },
+            position: { referencePanel: sidebarRef, direction: "right" },
         });
     }
 }
@@ -115,9 +119,10 @@ function loadDefaultLayout(api: DockviewApi, hasPlate: boolean) {
 
 interface Props {
     hasPlate: boolean;
+    hasEmbeddings: boolean;
 }
 
-export function DockviewShell({ hasPlate }: Props) {
+export function DockviewShell({ hasPlate, hasEmbeddings }: Props) {
     const apiRef = useRef<DockviewApi | null>(null);
 
     // Persist layout changes to localStorage
@@ -145,9 +150,10 @@ export function DockviewShell({ hasPlate }: Props) {
                     event.api.fromJSON(JSON.parse(saved));
 
                     // Re-add any expected panels that were closed in a previous session
+                    const basePanels = hasEmbeddings ? ["scatter", "table"] : ["table"];
                     const expectedPanels = hasPlate
-                        ? ["scatter", "table", "image-viewer", "charts"]
-                        : ["scatter", "table", "charts"];
+                        ? [...basePanels, "image-viewer", "charts"]
+                        : [...basePanels, "charts"];
                     for (const id of expectedPanels) {
                         if (!event.api.getPanel(id)) {
                             const component = id as keyof typeof COMPONENTS;
@@ -167,9 +173,9 @@ export function DockviewShell({ hasPlate }: Props) {
                 }
             }
 
-            loadDefaultLayout(event.api, hasPlate);
+            loadDefaultLayout(event.api, hasPlate, hasEmbeddings);
         },
-        [hasPlate],
+        [hasPlate, hasEmbeddings],
     );
 
     return (

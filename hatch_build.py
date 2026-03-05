@@ -30,7 +30,7 @@ class CustomBuildHook(BuildHookInterface):
             raise RuntimeError(msg)
 
         self.app.display_info("Installing frontend dependencies...")
-        subprocess.run([*pnpm_cmd, "install", "--frozen-lockfile"], cwd=str(frontend_dir), check=True)
+        subprocess.run([*pnpm_cmd, "install", "--frozen-lockfile", "--force"], cwd=str(frontend_dir), check=True)
 
         self.app.display_info("Building frontend...")
         subprocess.run([*pnpm_cmd, "build"], cwd=str(frontend_dir), check=True)

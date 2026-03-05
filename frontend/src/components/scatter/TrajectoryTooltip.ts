@@ -7,7 +7,7 @@ export interface TrajectoryTooltipProps {
 
 /**
  * Plain JS class implementing embedding-atlas CustomComponent interface.
- * Renders a tooltip card with cell fields and a "Show Trajectory" button.
+ * Renders a tooltip card with observation fields and a "Show Trajectory" button.
  *
  * Follows the same pattern as embedding-atlas's Tooltip.svelte + Nearest Neighbors button.
  */

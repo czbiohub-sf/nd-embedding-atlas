@@ -1,0 +1,49 @@
+# Default fluorescence microscopy channel colors.
+# Keys are matched case-insensitively against channel names.
+# Colors are RGB hex (without leading #).
+
+# DNA stains
+DAPI: "0080FF"
+Hoechst: "0080FF"
+H2B: "0080FF"
+
+# Green fluorophores
+GFP: "00FF00"
+FITC: "00FF00"
+Alexa488: "00FF00"
+EGFP: "00FF00"
+
+# Red fluorophores
+RFP: "FF0000"
+mCherry: "FF0000"
+TXR: "FF0000"
+Texas Red: "FF0000"
+TRITC: "FF4D00"
+Alexa594: "FF0000"
+Alexa568: "FF4D00"
+tdTomato: "FF0000"
+mScarlet: "FF0000"
+CAAX: "FF0000"
+
+# Far-red / Magenta fluorophores
+Cy5: "FF00FF"
+Alexa647: "FF00FF"
+Cy7: "FF0080"
+
+# Cyan fluorophores
+CFP: "00FFFF"
+mTurquoise: "00FFFF"
+
+# Yellow fluorophores
+YFP: "FFFF00"
+Venus: "FFFF00"
+
+# Brightfield / Phase
+BF: "FFFFFF"
+Phase: "FFFFFF"
+Phase3D: "FFFFFF"
+Brightfield: "FFFFFF"
+DIC: "FFFFFF"
+
+# Fallback for unknown channels
+default: "FFFFFF"

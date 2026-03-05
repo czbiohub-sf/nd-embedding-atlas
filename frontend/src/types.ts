@@ -30,6 +30,15 @@ export interface Metadata {
         color: string;
         window: { start: number; end: number; min: number; max: number };
     }>;
+    plate_stores?: Array<{
+        mount: string;
+        name: string;
+        ome_version: "0.4" | "0.5";
+    }>;
+    /** Data shape [T, C, Z, Y, X] of the first FOV. */
+    plate_shape?: number[];
+    /** Voxel scale per axis (e.g. { z: 1.0, y: 0.1494, x: 0.1494 }). */
+    plate_scale?: Record<string, number>;
 }
 
 export interface AxisState {
@@ -92,19 +101,21 @@ export interface ChartPanelEntry {
     collapsed?: boolean;
 }
 
-// ── Cell info (from /api/cell/:id) ───────────────────────────────────────────
+// ── Observation info (from /api/obs/:id) ─────────────────────────────────────
 
-export interface CellBbox {
+export interface ObsBbox {
     y_min: number;
     x_min: number;
     y_max: number;
     x_max: number;
 }
 
-export interface CellInfo {
+export interface ObsInfo {
     fov_name: string;
     t: number;
     x: number;
+    /** Index into plate_stores array (ndimg multi-store mode). */
+    store_index?: number;
     y: number;
-    bbox?: CellBbox;
+    bbox?: ObsBbox;
 }

@@ -9,6 +9,7 @@ export function DashboardShell() {
     const { state } = useDashboard();
     const { metadata } = state;
     const hasTime = metadata.obs_columns?.includes("t") ?? false;
+    const hasEmbeddings = Object.keys(metadata.obsm ?? {}).length > 0;
 
     return (
         <div className="flex h-full flex-col bg-base">
@@ -20,7 +21,7 @@ export function DashboardShell() {
             </Toolbar>
 
             <div className="min-h-0 flex-1">
-                <DockviewShell hasPlate={!!metadata.plate} />
+                <DockviewShell hasPlate={!!metadata.plate} hasEmbeddings={hasEmbeddings} />
             </div>
         </div>
     );

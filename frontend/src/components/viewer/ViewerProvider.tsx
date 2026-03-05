@@ -1,11 +1,24 @@
-import { Idetik, type Layer, type LayerState, OrthographicCamera, PanZoomControls, type Viewport } from "@idetik/core";
-import { type ReactNode, useCallback, useMemo, useRef, useState } from "react";
 import {
+    Color,
+    Idetik,
+    type Layer,
+    type LayerState,
+    OrthographicCamera,
+    PanZoomControls,
+    PerspectiveCamera,
+    type Viewport,
+} from "@idetik/core";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { MultiChannelLayers } from "../../lib/MultiChannelLayers";
+import { OrbitControls } from "../../lib/OrbitControls";
+import {
+    type ChannelDef,
     type DimensionBounds,
     type TrackedLayer,
     ViewerContext,
     type ViewerInternalContext,
     type ViewerState,
+    type ViewMode,
 } from "./ViewerContext";
 
 interface Props {
@@ -19,17 +32,59 @@ interface LayerEntry {
 
 function computeAggregate(layers: TrackedLayer[]): LayerState | null {
     if (layers.length === 0) return null;
-    // LayerState is "initialized" | "loading" | "ready" — no "error" in idetik
     if (layers.some((l) => l.state === "loading")) return "loading";
     if (layers.every((l) => l.state === "ready")) return "ready";
-    return "loading";
+    return "loading"; // includes "initialized" state (not yet loading)
 }
+
+// ── Runtime factory ─────────────────────────────────────────────────────────
+
+interface RuntimeResult {
+    runtime: Idetik;
+    viewport: Viewport;
+    orthoCamera: OrthographicCamera | null;
+    perspectiveCamera: PerspectiveCamera | null;
+}
+
+function createRuntime(canvas: HTMLCanvasElement, mode: ViewMode): RuntimeResult {
+    if (mode === "3d") {
+        const camera = new PerspectiveCamera({ fov: 45 });
+        const controls = new OrbitControls(camera, { radius: 500 });
+        const runtime = new Idetik({
+            canvas,
+            viewports: [{ camera, layers: [], cameraControls: controls }],
+        });
+        return {
+            runtime,
+            viewport: runtime.viewports[0],
+            orthoCamera: null,
+            perspectiveCamera: camera,
+        };
+    }
+
+    const camera = new OrthographicCamera(0, 1, 0, 1);
+    const controls = new PanZoomControls(camera);
+    const runtime = new Idetik({
+        canvas,
+        viewports: [{ camera, layers: [], cameraControls: controls }],
+    });
+    return {
+        runtime,
+        viewport: runtime.viewports[0],
+        orthoCamera: camera,
+        perspectiveCamera: null,
+    };
+}
+
+// ── Provider ────────────────────────────────────────────────────────────────
 
 export function ViewerProvider({ children }: Props) {
     // ── Mutable refs ──────────────────────────────────────────────────────
     const runtimeRef = useRef<Idetik | null>(null);
     const viewportRef = useRef<Viewport | null>(null);
     const cameraRef = useRef<OrthographicCamera | null>(null);
+    const perspCameraRef = useRef<PerspectiveCamera | null>(null);
+    const canvasElRef = useRef<HTMLCanvasElement | null>(null);
     const layerMapRef = useRef<Map<string, LayerEntry>>(new Map());
 
     // ── Reactive state ────────────────────────────────────────────────────
@@ -39,35 +94,78 @@ export function ViewerProvider({ children }: Props) {
     const [tIndex, setTIndex] = useState(0);
     const [bounds, setBounds] = useState<DimensionBounds>({ zMax: null, tMax: null });
     const [error, setError] = useState<string | null>(null);
+    const [channels, setChannelsState] = useState<ChannelDef[]>([]);
+    const [viewMode, setViewMode] = useState<ViewMode>("2d");
+    const [zRange, setZRange] = useState<[number, number] | null>(null);
+    const [generation, setGeneration] = useState(0);
+    const multiChannelRef = useRef<MultiChannelLayers | null>(null);
 
     const aggregateState = useMemo(() => computeAggregate(trackedLayers), [trackedLayers]);
 
-    // ── Canvas ref callback ───────────────────────────────────────────────
-    const canvasRef = useCallback((canvas: HTMLCanvasElement | null) => {
-        if (canvas && !runtimeRef.current) {
-            const camera = new OrthographicCamera(0, 1, 0, 1);
-            const controls = new PanZoomControls(camera);
-            const runtime = new Idetik({
-                canvas,
-                viewports: [{ camera, layers: [], cameraControls: controls }],
-            });
-            // Don't auto-start the render loop — CropViewer calls resume()
-            // when a cell is selected, avoiding GPU contention with the scatter.
-            runtimeRef.current = runtime;
-            viewportRef.current = runtime.viewports[0] ?? null;
-            cameraRef.current = camera;
-            setInitialized(true);
-        } else if (!canvas && runtimeRef.current) {
+    // ── Shared teardown helper ────────────────────────────────────────────
+    const teardownRuntime = useCallback(() => {
+        // Remove layer callbacks
+        for (const [, entry] of layerMapRef.current) {
+            entry.layer.removeStateChangeCallback(entry.callback);
+        }
+        layerMapRef.current.clear();
+
+        if (runtimeRef.current) {
             runtimeRef.current.stop();
             runtimeRef.current = null;
-            viewportRef.current = null;
-            cameraRef.current = null;
-            layerMapRef.current.clear();
-            setTrackedLayers([]);
-            setInitialized(false);
-            setError(null);
+            runningRef.current = false;
         }
+        viewportRef.current = null;
+        cameraRef.current = null;
+        perspCameraRef.current = null;
     }, []);
+
+    const applyRuntime = useCallback((result: RuntimeResult) => {
+        runtimeRef.current = result.runtime;
+        viewportRef.current = result.viewport;
+        cameraRef.current = result.orthoCamera;
+        perspCameraRef.current = result.perspectiveCamera;
+    }, []);
+
+    // ── Canvas ref callback ───────────────────────────────────────────────
+    // Only handles mount/unmount. Mode changes are handled by the effect below.
+    const canvasRef = useCallback(
+        (canvas: HTMLCanvasElement | null) => {
+            canvasElRef.current = canvas;
+            if (canvas && !runtimeRef.current) {
+                applyRuntime(createRuntime(canvas, viewMode));
+                setInitialized(true);
+            } else if (!canvas) {
+                teardownRuntime();
+                setTrackedLayers([]);
+                setInitialized(false);
+                setError(null);
+            }
+        },
+        // viewMode intentionally excluded — the effect handles mode switches
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [applyRuntime, teardownRuntime, viewMode],
+    );
+
+    // ── Effect: recreate runtime when viewMode changes ────────────────────
+    // Viewport.camera is readonly, so switching 2D↔3D requires a new Idetik instance.
+    const prevModeRef = useRef(viewMode);
+    useEffect(() => {
+        if (prevModeRef.current === viewMode) return;
+        prevModeRef.current = viewMode;
+
+        const canvas = canvasElRef.current;
+        if (!canvas) return;
+
+        teardownRuntime();
+        setTrackedLayers([]);
+        setChannelsState([]);
+
+        applyRuntime(createRuntime(canvas, viewMode));
+        setInitialized(true);
+        // Bump generation so hooks (useFovLoader) detect the runtime swap and reload layers
+        setGeneration((g) => g + 1);
+    }, [viewMode, teardownRuntime, applyRuntime]);
 
     // ── Helpers ───────────────────────────────────────────────────────────
 
@@ -118,31 +216,116 @@ export function ViewerProvider({ children }: Props) {
         cameraRef.current?.setFrame(left, right, bottom, top);
     }, []);
 
+    const runningRef = useRef(false);
+
     const pause = useCallback(() => {
-        runtimeRef.current?.stop();
+        if (runtimeRef.current && runningRef.current) {
+            runtimeRef.current.stop();
+            runningRef.current = false;
+        }
     }, []);
 
     const resume = useCallback(() => {
-        runtimeRef.current?.start();
+        if (runtimeRef.current && !runningRef.current) {
+            runtimeRef.current.start();
+            runningRef.current = true;
+        }
     }, []);
+
+    const setChannels = useCallback((defs: ChannelDef[], multiChannel: MultiChannelLayers) => {
+        multiChannelRef.current = multiChannel;
+        setChannelsState(defs);
+    }, []);
+
+    const setChannelProp = useCallback(
+        (index: number, update: Partial<Pick<ChannelDef, "visible" | "contrastLimits" | "blendMode">>) => {
+            setChannelsState((prev) => {
+                const next = prev.map((ch, i) => (i === index ? { ...ch, ...update } : ch));
+                const mc = multiChannelRef.current;
+                if (mc) {
+                    // Sync visibility + contrast to idetik channel props
+                    mc.setChannelProps(
+                        next.map((ch) => ({
+                            visible: ch.visible,
+                            color: Color.fromRgbHex(`#${ch.color}`),
+                            contrastLimits: ch.contrastLimits,
+                        })),
+                    );
+                    // Blend mode only applies to 2D layers (individual ChunkedImageLayers)
+                    if (update.blendMode && mc.layers.length > 1) {
+                        const layer = mc.layers[index];
+                        if (layer) {
+                            layer.blendMode = update.blendMode;
+                            layer.transparent = update.blendMode !== "normal";
+                        }
+                    }
+                }
+                return next;
+            });
+        },
+        [],
+    );
 
     // ── Context value ─────────────────────────────────────────────────────
 
     const state = useMemo<ViewerState>(
-        () => ({ initialized, layers: trackedLayers, aggregateState, zIndex, tIndex, bounds, error }),
-        [initialized, trackedLayers, aggregateState, zIndex, tIndex, bounds, error],
+        () => ({
+            initialized,
+            layers: trackedLayers,
+            aggregateState,
+            zIndex,
+            tIndex,
+            bounds,
+            error,
+            channels,
+            viewMode,
+            zRange,
+            generation,
+        }),
+        [
+            initialized,
+            trackedLayers,
+            aggregateState,
+            zIndex,
+            tIndex,
+            bounds,
+            error,
+            channels,
+            viewMode,
+            zRange,
+            generation,
+        ],
     );
 
     const actions = useMemo(
-        () => ({ setLayers, clearLayers, setFrame, setZIndex, setTIndex, setBounds, pause, resume }),
-        [setLayers, clearLayers, setFrame, pause, resume],
+        () => ({
+            setLayers,
+            clearLayers,
+            setFrame,
+            setZIndex,
+            setTIndex,
+            setBounds,
+            setChannels,
+            setChannelProp,
+            setViewMode,
+            setZRange,
+            setError,
+            pause,
+            resume,
+        }),
+        [setLayers, clearLayers, setFrame, setChannels, setChannelProp, pause, resume],
     );
 
     // Meta uses refs — recompute when initialized flips so consumers see the real viewport
-    // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally re-read refs when initialized changes
+    // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally re-read refs when initialized/viewMode changes
     const meta = useMemo(
-        () => ({ runtime: runtimeRef.current, viewport: viewportRef.current, orthoCamera: cameraRef.current }),
-        [initialized],
+        () => ({
+            runtime: runtimeRef.current,
+            viewport: viewportRef.current,
+            orthoCamera: cameraRef.current,
+            perspectiveCamera: perspCameraRef.current,
+        }),
+        [initialized, viewMode],
     );
 
     const value = useMemo<ViewerInternalContext>(
