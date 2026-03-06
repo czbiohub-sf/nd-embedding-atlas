@@ -25,15 +25,16 @@
     "dependencies": {
         "@idetik/core": "^0.12.0",
         "@tanstack/react-table": "^8.21.3",
-        "@tanstack/react-virtual": "^3.13.19",
+        "@tanstack/react-virtual": "^3.13.20",
         "@uwdata/mosaic-core": "^0.21.1",
         "@uwdata/mosaic-inputs": "^0.21.1",
         "@uwdata/mosaic-sql": "^0.21.1",
         "dockview-react": "^5.1.0",
-        "embedding-atlas": "0.17.0",
+        "embedding-atlas": "0.18.0",
         "gl-matrix": "^3.4.4",
         "react": "^19.2.4",
         "react-dom": "^19.2.4",
-        "swr": "^2.4.1"
+        "swr": "^2.4.1",
+        "tweakpane": "^4.0.5"
     }
 }
