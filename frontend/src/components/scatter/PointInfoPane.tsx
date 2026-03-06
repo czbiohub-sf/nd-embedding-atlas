@@ -25,7 +25,6 @@ export function PointInfoPane({
     const paramsRef = useRef<Record<string, string>>({});
     const onShowTrajectoryRef = useRef(onShowTrajectory);
     onShowTrajectoryRef.current = onShowTrajectory;
-    const _fieldsKey = additionalFields.join(",");
 
     // Create the pane once, with stable structure
     useEffect(() => {

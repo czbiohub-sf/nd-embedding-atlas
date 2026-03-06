@@ -97,8 +97,7 @@ export function ChannelControls() {
             paneRef.current?.dispose();
             paneRef.current = null;
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps -- rebuild when channel list or view mode changes
-    }, [channels.length, viewMode, channels[i]]);
+    }, [channels, viewMode]);
 
     if (channels.length === 0) return null;
 
