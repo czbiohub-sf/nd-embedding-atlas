@@ -50,9 +50,6 @@ export function ViewerControls({ cropSize, setCropSize }: Props) {
         }
     }, []);
 
-    // Dep key to rebuild pane when structure changes
-    const _structureKey = `${hasT}:${hasZ}:${hasCellCoords}:${viewMode}:${effectiveTMax}:${bounds.zMax}:${isTrajectoryMode}`;
-
     useEffect(() => {
         const el = containerRef.current;
         if (!el) return;
