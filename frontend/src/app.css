@@ -139,65 +139,209 @@ select:disabled {
     transition: opacity 0.2s ease;
 }
 
-/* Trajectory tooltip */
-.trajectory-tooltip {
-    padding: 8px;
-    border: 1px solid var(--color-border-subtle);
-    border-radius: 6px;
-    background: oklch(0.12 0.02 260 / 0.85);
-    backdrop-filter: blur(8px);
-    color: var(--color-text-primary);
-    font-family: var(--font-sans);
-    font-size: 12px;
-    max-width: 340px;
-    max-height: 260px;
+/* Point info pane (Tweakpane overlay on scatter) */
+.tp-point-info .tp-dfwv {
+    min-width: 180px;
+}
+
+/* ── Tweakpane overlay positioning ───────────────────────────────── */
+.tp-overlay {
+    position: absolute;
+    z-index: 10;
+    max-height: 50vh;
     overflow-y: auto;
 }
 
-.trajectory-tooltip__pills {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-    margin-bottom: 6px;
+.tp-overlay--top-left {
+    top: 8px;
+    left: 8px;
+}
+.tp-overlay--bottom-left {
+    bottom: 8px;
+    left: 8px;
+}
+.tp-overlay--top-right {
+    top: 8px;
+    right: 8px;
+}
+.tp-overlay--bottom-right {
+    bottom: 8px;
+    right: 8px;
 }
 
-.trajectory-tooltip__pill {
-    display: inline-flex;
-    gap: 4px;
-    padding: 2px 6px;
-    border-radius: 4px;
-    background: var(--color-surface);
+/* Tweakpane dark theme — applied to panes inside overlays */
+.tp-overlay .tp-dfwv {
+    --tp-base-background-color: hsla(230, 30%, 8%, 0.85);
+    --tp-base-shadow-color: transparent;
+    --tp-container-background-color: hsla(230, 30%, 12%, 0.5);
+    --tp-container-background-color-hover: hsla(230, 30%, 18%, 0.6);
+    --tp-groove-foreground-color: var(--color-accent-cyan);
+    --tp-input-background-color: var(--color-surface);
+    --tp-input-foreground-color: var(--color-text-primary);
+    --tp-label-foreground-color: var(--color-text-secondary);
+    --tp-monitor-background-color: var(--color-surface);
+    --tp-monitor-foreground-color: var(--color-text-primary);
+    --tp-button-background-color: var(--color-surface);
+    --tp-button-background-color-hover: var(--color-elevated);
+    --tp-button-foreground-color: var(--color-text-primary);
+    backdrop-filter: blur(8px);
+    border-radius: 6px;
     font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--color-text-primary);
-    white-space: nowrap;
+    font-size: 10px;
 }
 
-.trajectory-tooltip__pill-key {
-    color: var(--color-text-muted);
-    font-weight: 500;
-}
-
-.trajectory-tooltip__btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 3px 8px;
-    border: none;
-    border-radius: 4px;
-    background: transparent;
-    color: var(--color-text-secondary);
+/* ── Categorical legend ──────────────────────────────────────────── */
+.legend-categorical {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 10;
+    max-height: 40%;
+    overflow-y: auto;
+    background: hsla(230, 30%, 8%, 0.85);
+    backdrop-filter: blur(8px);
+    border-radius: 6px;
+    padding: 6px 8px;
     font-family: var(--font-sans);
     font-size: 11px;
+    color: var(--color-text-primary);
+    min-width: 140px;
+}
+
+.legend-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 0;
+    border-radius: 3px;
+    position: relative;
+    transition: opacity 0.15s;
+}
+
+.legend-row:hover {
+    background: hsla(230, 30%, 15%, 0.5);
+}
+
+.legend-row--dimmed {
+    opacity: 0.35;
+}
+
+.legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 1.5px solid transparent;
+    padding: 0;
     cursor: pointer;
+    flex-shrink: 0;
+    transition:
+        border-color 0.15s,
+        box-shadow 0.15s;
+}
+
+.legend-dot:hover {
+    border-color: var(--color-text-secondary);
+}
+
+.legend-dot--isolated {
+    border-color: var(--color-text-primary);
+    box-shadow: 0 0 0 2px hsla(0, 0%, 100%, 0.25);
+}
+
+.legend-label {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--color-text-secondary);
+}
+
+.legend-row--dimmed .legend-label {
+    color: var(--color-text-muted);
+}
+
+.legend-count {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--color-text-muted);
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+}
+
+.legend-picker-btn {
+    width: 18px;
+    height: 18px;
+    border: none;
+    background: transparent;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    border-radius: 3px;
+    font-size: 11px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
     transition:
         color 0.15s,
         background 0.15s;
 }
 
-.trajectory-tooltip__btn:hover {
+.legend-picker-btn:hover {
+    color: var(--color-text-primary);
+    background: var(--color-elevated);
+}
+
+.legend-picker-popout {
+    position: absolute;
+    right: 100%;
+    top: 50%;
+    transform: translateY(-50%);
+    margin-right: 6px;
+    background: var(--color-elevated);
+    border: 1px solid var(--color-border-subtle);
+    border-radius: 6px;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    z-index: 20;
+    box-shadow: 0 4px 16px hsla(0, 0%, 0%, 0.4);
+}
+
+.legend-picker-popout input[type="color"] {
+    width: 120px;
+    height: 80px;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    border-radius: 4px;
+    background: transparent;
+}
+
+.legend-picker-popout input[type="color"]::-webkit-color-swatch-wrapper {
+    padding: 0;
+}
+
+.legend-picker-popout input[type="color"]::-webkit-color-swatch {
+    border: none;
+    border-radius: 4px;
+}
+
+.legend-picker-popout input[type="color"]::-moz-color-swatch {
+    border: none;
+    border-radius: 4px;
+}
+
+.legend-picker-hex {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--color-text-secondary);
+}
+
+.legend-count-filtered {
     color: var(--color-accent-cyan);
-    background: var(--color-surface);
 }
 
 /* Dockview header action buttons */

@@ -69,10 +69,10 @@ export interface ViewerActions {
     setBounds: (bounds: DimensionBounds) => void;
     /** Replace channel definitions and store the MultiChannelLayers ref. */
     setChannels: (channels: ChannelDef[], multiChannel: MultiChannelLayers) => void;
-    /** Update a single channel property (visible, contrastLimits, blendMode). */
+    /** Update a single channel property (visible, color, contrastLimits, blendMode). */
     setChannelProp: (
         index: number,
-        update: Partial<Pick<ChannelDef, "visible" | "contrastLimits" | "blendMode">>,
+        update: Partial<Pick<ChannelDef, "visible" | "color" | "contrastLimits" | "blendMode">>,
     ) => void;
     setViewMode: (mode: ViewMode) => void;
     setZRange: (range: [number, number]) => void;

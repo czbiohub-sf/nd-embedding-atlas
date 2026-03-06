@@ -238,7 +238,7 @@ export function ViewerProvider({ children }: Props) {
     }, []);
 
     const setChannelProp = useCallback(
-        (index: number, update: Partial<Pick<ChannelDef, "visible" | "contrastLimits" | "blendMode">>) => {
+        (index: number, update: Partial<Pick<ChannelDef, "visible" | "color" | "contrastLimits" | "blendMode">>) => {
             setChannelsState((prev) => {
                 const next = prev.map((ch, i) => (i === index ? { ...ch, ...update } : ch));
                 const mc = multiChannelRef.current;
