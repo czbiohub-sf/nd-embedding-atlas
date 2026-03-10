@@ -25,6 +25,7 @@ dependencies = [
   "dask[dataframe,distributed]>=2025.9.2",
   "duckdb>=1.4.4",
   "fastapi>=0.128",
+  "gunicorn[h2]>=25",
   "iohub==0.3.0a5",
   "obstore>=0.8.2",
   "pyarrow>=18",
@@ -47,7 +48,11 @@ scripts.ndea = "nd_embedding_atlas.cli._app:app"
 scripts.ndimg = "nd_embedding_atlas.cli._ndimg:app"
 
 [dependency-groups]
-dev = [ { include-group = "doc" }, { include-group = "test" } ]
+dev = [
+  "pyinstrument>=5.1.2",
+  { include-group = "doc" },
+  { include-group = "test" },
+]
 test = [
   "coverage>=7.13.2",
   "httpx>=0.27",
@@ -91,6 +96,9 @@ envs.hatch-test.overrides.matrix.deps.env-vars = [
   ] },
 ]
 version.source = "uv-dynamic-versioning"
+
+[tool.uv.sources]
+iohub = { git = "https://github.com/czbiohub-sf/iohub", branch = "main" }
 
 [tool.ruff]
 line-length = 120

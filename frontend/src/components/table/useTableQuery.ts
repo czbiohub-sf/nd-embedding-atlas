@@ -113,7 +113,7 @@ export function useTableQuery(opts: UseTableQueryOptions): UseTableQueryResult {
                 const whereClause = filterExpr ? `WHERE ${filterExprToExpr(filterExpr as FilterExpr)}` : "";
                 const sql = `SELECT "__row_index__", ${colList} FROM ${table} ${whereClause} ORDER BY ${buildOrderBy()} LIMIT ${PAGE_SIZE} OFFSET ${offset}`;
 
-                const result = await coordinator.query(sql, { type: "json" });
+                const result = await coordinator.query(sql, { type: "arrow" });
                 const rows = toRows<Row>(result);
 
                 // LRU eviction
@@ -176,7 +176,7 @@ export function useTableQuery(opts: UseTableQueryOptions): UseTableQueryResult {
                     WHERE ${filterExpr ? filterExprToExpr(filterExpr as FilterExpr) : "TRUE"}
                     AND (${sort ? `("${sort.column}" < (SELECT "${sort.column}" FROM target) OR ("${sort.column}" = (SELECT "${sort.column}" FROM target) AND __row_index__ <= ${Number(rowIndex)}))` : `__row_index__ <= ${Number(rowIndex)}`})
                 `;
-                const result = await coordinator.query(countSql, { type: "json" });
+                const result = await coordinator.query(countSql, { type: "arrow" });
                 const rows = toRows<{ pos: number }>(result);
                 const pos = rows[0]?.pos;
                 return pos != null ? pos - 1 : null; // -1 because we count rows <= target

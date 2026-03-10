@@ -27,6 +27,10 @@ export function ViewerControls({ cropSize, setCropSize }: Props) {
 
     const containerRef = useRef<HTMLDivElement>(null);
     const paneRef = useRef<TweakPane>(null);
+    // Stable param objects mutated in place for pane.refresh()
+    const tParamsRef = useRef({ T: tIndex });
+    const zParamsRef = useRef({ Z: zIndex });
+    const bboxParamsRef = useRef({ bbox: cropSize });
 
     // Stable refs for handlers
     const actionsRef = useRef(actions);
@@ -50,6 +54,20 @@ export function ViewerControls({ cropSize, setCropSize }: Props) {
         }
     }, []);
 
+    // ── Sync transient slider positions without rebuilding the pane ───
+    // In trajectory mode the slider represents an index (0…N-1), not the raw T value.
+    useEffect(() => {
+        if (isTrajectoryMode && trajTimepoints) {
+            const idx = trajTimepoints.indexOf(tIndex);
+            tParamsRef.current.T = idx >= 0 ? idx : 0;
+        } else {
+            tParamsRef.current.T = tIndex;
+        }
+        zParamsRef.current.Z = zIndex;
+        bboxParamsRef.current.bbox = cropSize;
+        paneRef.current?.refresh();
+    }, [tIndex, zIndex, cropSize, isTrajectoryMode, trajTimepoints]);
+
     useEffect(() => {
         const el = containerRef.current;
         if (!el) return;
@@ -64,9 +82,14 @@ export function ViewerControls({ cropSize, setCropSize }: Props) {
 
             // T slider — label changes to "T*" in trajectory mode
             if (hasT) {
-                const tLabel = isTrajectoryMode ? "T*" : "T";
-                const tParams = { [tLabel]: tIndex };
-                pane.addBinding(tParams, tLabel, { min: 0, max: effectiveTMax, step: 1 }).on(
+                // Guard: Tweakpane throws if the initial value is not a number
+                if (typeof tParamsRef.current.T !== "number") tParamsRef.current.T = 0;
+                pane.addBinding(tParamsRef.current, "T", {
+                    label: isTrajectoryMode ? "T*" : "T",
+                    min: 0,
+                    max: effectiveTMax,
+                    step: 1,
+                }).on(
                     "change",
                     (ev: { value: number }) => handleTChange(Math.round(ev.value)),
                 );
@@ -74,8 +97,7 @@ export function ViewerControls({ cropSize, setCropSize }: Props) {
 
             // Z slider (2D only — 3D uses range which is harder in Tweakpane, keep native for now)
             if (hasZ && viewMode === "2d") {
-                const zParams = { Z: zIndex };
-                pane.addBinding(zParams, "Z", { min: 0, max: bounds.zMax ?? 0, step: 1 }).on(
+                pane.addBinding(zParamsRef.current, "Z", { min: 0, max: bounds.zMax ?? 0, step: 1 }).on(
                     "change",
                     (ev: { value: number }) => actionsRef.current.setZIndex(Math.round(ev.value)),
                 );
@@ -83,15 +105,14 @@ export function ViewerControls({ cropSize, setCropSize }: Props) {
 
             // Crop size
             if (hasCellCoords) {
-                const cropParams = { bbox: cropSize };
-                pane.addBinding(cropParams, "bbox", { min: 50, max: 500, step: 10 }).on(
+                pane.addBinding(bboxParamsRef.current, "bbox", { min: 50, max: 500, step: 10 }).on(
                     "change",
                     (ev: { value: number }) => setCropSizeRef.current(Math.round(ev.value)),
                 );
             }
 
-            // View mode button (2D/3D)
-            if (hasZ) {
+            // View mode button (2D/3D) — always show in 3D so user can switch back
+            if (hasZ || viewMode === "3d") {
                 const modeParams = { "3D": viewMode === "3d" };
                 pane.addBinding(modeParams, "3D").on("change", (ev: { value: boolean }) => {
                     actionsRef.current.setViewMode(ev.value ? "3d" : "2d");
@@ -106,16 +127,13 @@ export function ViewerControls({ cropSize, setCropSize }: Props) {
         };
     }, [
         bounds.zMax,
-        cropSize,
         effectiveTMax,
         handleTChange,
         hasCellCoords,
         hasT,
         hasZ,
         isTrajectoryMode,
-        tIndex,
         viewMode,
-        zIndex,
     ]);
 
     return <div ref={containerRef} className="tp-viewer-controls" />;

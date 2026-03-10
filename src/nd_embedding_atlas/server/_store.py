@@ -51,12 +51,13 @@ class EmbeddingStore:
     ) -> None:
         n_cores = os.cpu_count() or 8
         _duckdb_threads = duckdb_threads or max(n_cores // 2, 4)
-        _pool_workers = pool_workers or max(n_cores // 2, 4)
+        # One worker serialises DuckDB queries; DuckDB parallelises internally via duckdb_threads.
+        _pool_workers = pool_workers or 1
 
         self.con = duckdb.connect(":memory:", config={"threads": _duckdb_threads})
         self._executor = concurrent.futures.ThreadPoolExecutor(
             max_workers=_pool_workers,
-            thread_name_prefix="ndea-worker",
+            thread_name_prefix="ndea-duckdb",
         )
         self._schema_lock = threading.Lock()
         self._loaded: dict[str, dict[str, Any]] = {}
@@ -66,6 +67,7 @@ class EmbeddingStore:
         obs_df["__row_index__"] = range(len(obs_df))
         _ = obs_df  # prevent GC — DuckDB scans local Python objects by name
         self.con.sql("CREATE TABLE obs_base AS (SELECT * FROM obs_df)")
+        self.con.sql("CREATE INDEX obs_base_row_index ON obs_base(__row_index__)")
         self._rebuild_view()
         self.n_obs = len(obs_df)
 
