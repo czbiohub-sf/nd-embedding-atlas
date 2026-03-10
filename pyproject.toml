@@ -26,7 +26,7 @@ dependencies = [
   "duckdb>=1.4.4",
   "fastapi>=0.128",
   "gunicorn[h2]>=25",
-  "iohub==0.3.0a5",
+  "iohub",
   "obstore>=0.8.2",
   "pyarrow>=18",
   "pyyaml>=6",
