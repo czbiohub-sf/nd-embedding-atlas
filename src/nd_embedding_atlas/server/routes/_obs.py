@@ -65,6 +65,32 @@ def make_obs_router(get_state: Callable[[], ViewerState]) -> APIRouter:
 
         return response
 
+    @router.get("/api/obs/{row_index}/detail", response_model=None)
+    async def get_obs_detail(row_index: int, state: State) -> dict | JSONResponse:
+        """Return all visible obs columns for a single observation (bypasses Mosaic)."""
+
+        def _fetch(row_index: int, state: ViewerState) -> tuple[list[str], tuple] | None:
+            with state.store.cursor() as cur:
+                cols = [
+                    d[0]
+                    for d in cur.execute("SELECT * FROM obs_base LIMIT 0").description
+                    if d[0] not in state.store._hidden
+                ]
+                row = cur.execute(
+                    f"SELECT {', '.join(cols)} FROM obs_base WHERE __row_index__ = ?",
+                    [row_index],
+                ).fetchone()
+                return (cols, row) if row is not None else None
+
+        loop = asyncio.get_running_loop()
+        result = await loop.run_in_executor(state.executor, _fetch, row_index, state)
+
+        if result is None:
+            return JSONResponse({"error": "Observation not found"}, status_code=404)
+
+        cols, row = result
+        return dict(zip(cols, (str(v) if v is not None else None for v in row), strict=True))
+
     @router.get("/api/health")
     async def health(state: State) -> dict:
         return {

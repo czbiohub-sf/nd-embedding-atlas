@@ -26,14 +26,18 @@ export function SingleCropViewer({ cropSize }: Props) {
         keepPreviousData: true,
     });
 
-    // ── Derive source URL ─────────────────────────────────────────────
+    // ── Derive source URL and OME version ────────────────────────────
     const scale = metadata.plate_pixel_scale ?? { x: 1, y: 1 };
-    const sourceUrl = obsInfo ? `${window.location.origin}/plate/${obsInfo.fov_name}` : null;
+    const activeStore = metadata.plate_stores?.[obsInfo?.store_index ?? 0];
+    const mountPrefix = activeStore ? activeStore.mount : "/plate";
+    const omeVersion = activeStore?.ome_version ?? metadata.plate_ome_version;
+    const sourceUrl = obsInfo ? `${window.location.origin}${mountPrefix}/${obsInfo.fov_name}` : null;
 
     // ── Hooks for imperative plumbing ─────────────────────────────────
     useFovLoader({
         sourceUrl,
         plateChannels: metadata.plate_channels,
+        omeVersion,
     });
 
     const { updateBbox } = useBboxLayer({
@@ -52,6 +56,8 @@ export function SingleCropViewer({ cropSize }: Props) {
     // ── Effect: Observation framing (mode-aware) ──────────────────────
     useEffect(() => {
         if (!obsInfo || !viewerState.initialized) return;
+
+        console.log("[frame] setFrame called", { x: obsInfo.x, y: obsInfo.y, t: performance.now().toFixed(1) });
 
         if (viewerState.viewMode === "2d") {
             updateBbox(obsInfo.x, obsInfo.y, cropSize / 2, obsInfo.bbox);
@@ -73,7 +79,9 @@ export function SingleCropViewer({ cropSize }: Props) {
             const cx = obsInfo.x * scale.x;
             const cy = obsInfo.y * scale.y;
             const controls = meta.viewport?.cameraControls;
-            if (controls && "lookAt" in controls) {
+            const hasLookAt = controls && "lookAt" in controls;
+            console.log("[3d] lookAt", { cx, cy, hasLookAt, controls: !!controls });
+            if (hasLookAt) {
                 const radius = cropSize * Math.max(scale.x, scale.y) * 1.5;
                 (controls as OrbitControls).lookAt(vec3.fromValues(cx, cy, 0), radius);
             }

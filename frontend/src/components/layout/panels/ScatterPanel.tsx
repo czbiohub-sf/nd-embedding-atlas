@@ -385,8 +385,6 @@ function ScatterView({
             >
                 <PointInfoPane
                     highlightId={highlightId}
-                    coordinator={coordinator}
-                    table={table}
                     additionalFields={Object.keys(additionalFields)}
                     onShowTrajectory={showTrajectory}
                 />

@@ -1,9 +1,17 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useViewer } from "../../hooks/useViewer";
 import type { BlendMode } from "./ViewerContext";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Tweakpane types incomplete without @tweakpane/core
 type TweakPane = any;
+
+interface ChannelParams {
+    visible: boolean;
+    color: string;
+    blend: string;
+    min: number;
+    max: number;
+}
 
 const BLEND_OPTIONS: { text: string; value: string }[] = [
     { text: "Add", value: "additive" },
@@ -22,10 +30,45 @@ export function ChannelControls() {
     actionsRef.current = actions;
     const channelsRef = useRef(channels);
     channelsRef.current = channels;
+    // Stable per-channel param objects mutated in place for pane.refresh()
+    const channelParamsRef = useRef<ChannelParams[]>([]);
 
+    // Structural signature — pane is rebuilt only when channel count, labels, or
+    // contrast ranges change (not on every contrastLimits slider move).
+    const channelSignature = useMemo(
+        () => channels.map((ch) => `${ch.label}|${ch.contrastRange[0]}-${ch.contrastRange[1]}`).join(","),
+        [channels],
+    );
+
+    // ── Sync value changes without rebuilding the pane ────────────────
+    // Keep params in sync with React state so future rebuilds use the latest values.
+    // No pane.refresh() — all changes originate from Tweakpane handlers (which already
+    // write back to params via writePrimitive), so refreshing would fight the drag state.
+    useEffect(() => {
+        const params = channelParamsRef.current;
+        if (params.length !== channels.length) return;
+        channels.forEach((ch, i) => {
+            params[i].visible = ch.visible;
+            params[i].color = `#${ch.color}`;
+            params[i].blend = ch.blendMode;
+            params[i].min = ch.contrastLimits[0];
+            params[i].max = ch.contrastLimits[1];
+        });
+    }, [channels]);
+
+    // ── Rebuild pane on structural changes only ───────────────────────
     useEffect(() => {
         const el = containerRef.current;
         if (!el || channels.length === 0) return;
+
+        // Initialise stable param objects from current channel state
+        channelParamsRef.current = channels.map((ch) => ({
+            visible: ch.visible,
+            color: `#${ch.color}`,
+            blend: ch.blendMode,
+            min: ch.contrastLimits[0],
+            max: ch.contrastLimits[1],
+        }));
 
         let disposed = false;
 
@@ -37,25 +80,20 @@ export function ChannelControls() {
 
             for (let i = 0; i < channels.length; i++) {
                 const ch = channels[i];
+                const p = channelParamsRef.current[i];
                 const folder = pane.addFolder({ title: ch.label, expanded: ch.visible });
 
-                // Visibility binding
-                const visParams = { visible: ch.visible };
-                folder.addBinding(visParams, "visible").on("change", (ev: { value: boolean }) => {
+                folder.addBinding(p, "visible").on("change", (ev: { value: boolean }) => {
                     actionsRef.current.setChannelProp(i, { visible: ev.value });
                 });
 
-                // Color binding (channel stores "FF0000", Tweakpane uses "#ff0000")
-                const colorParams = { color: `#${ch.color}` };
-                folder.addBinding(colorParams, "color").on("change", (ev: { value: string }) => {
+                folder.addBinding(p, "color").on("change", (ev: { value: string }) => {
                     actionsRef.current.setChannelProp(i, { color: ev.value.replace("#", "").toUpperCase() });
                 });
 
-                // Blend mode (2D only)
                 if (viewMode === "2d") {
-                    const blendParams = { blend: ch.blendMode };
                     folder
-                        .addBinding(blendParams, "blend", {
+                        .addBinding(p, "blend", {
                             options: Object.fromEntries(BLEND_OPTIONS.map((o) => [o.text, o.value])),
                         })
                         .on("change", (ev: { value: string }) => {
@@ -63,30 +101,37 @@ export function ChannelControls() {
                         });
                 }
 
-                // Contrast min slider
-                const contrastParams = { min: ch.contrastLimits[0], max: ch.contrastLimits[1] };
+                // Step derived from range so fractional ranges (e.g. [-0.3, 0.3]) still work.
+                const contrastStep =
+                    (ch.contrastRange[1] - ch.contrastRange[0]) / 200 || 1;
 
                 folder
-                    .addBinding(contrastParams, "min", {
+                    .addBinding(p, "min", {
                         min: ch.contrastRange[0],
                         max: ch.contrastRange[1],
-                        step: 1,
+                        step: contrastStep,
                     })
                     .on("change", (ev: { value: number }) => {
                         const current = channelsRef.current[i];
-                        const hi = Math.max(ev.value + 1, current.contrastLimits[1]);
+                        const hi = Math.min(
+                            Math.max(ev.value, current.contrastLimits[1]),
+                            current.contrastRange[1],
+                        );
                         actionsRef.current.setChannelProp(i, { contrastLimits: [ev.value, hi] });
                     });
 
                 folder
-                    .addBinding(contrastParams, "max", {
+                    .addBinding(p, "max", {
                         min: ch.contrastRange[0],
                         max: ch.contrastRange[1],
-                        step: 1,
+                        step: contrastStep,
                     })
                     .on("change", (ev: { value: number }) => {
                         const current = channelsRef.current[i];
-                        const lo = Math.min(current.contrastLimits[0], ev.value - 1);
+                        const lo = Math.max(
+                            Math.min(current.contrastLimits[0], ev.value),
+                            current.contrastRange[0],
+                        );
                         actionsRef.current.setChannelProp(i, { contrastLimits: [lo, ev.value] });
                     });
             }
@@ -97,7 +142,8 @@ export function ChannelControls() {
             paneRef.current?.dispose();
             paneRef.current = null;
         };
-    }, [channels, viewMode]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [channelSignature, viewMode]);
 
     if (channels.length === 0) return null;
 

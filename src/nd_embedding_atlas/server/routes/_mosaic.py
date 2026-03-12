@@ -74,7 +74,12 @@ def _handle_query(query: dict, state: ViewerState) -> Response:
                     headers={"Content-Type": "application/octet-stream"},
                 )
             if command == "json":
-                data = result.df().to_json(orient="records")
+                cols = [d[0] for d in result.description]
+                rows = result.fetchall()
+                data = json.dumps(
+                    [dict(zip(cols, row, strict=False)) for row in rows],
+                    default=str,
+                )
                 return Response(data, headers={"Content-Type": "application/json"})
             msg = f"Unknown command {command}"
             raise ValueError(msg)  # noqa: TRY301
@@ -117,7 +122,12 @@ def mount_duckdb_endpoints(app: FastAPI, con: "duckdb.DuckDBPyConnection") -> No
                         headers={"Content-Type": "application/octet-stream"},
                     )
                 if command == "json":
-                    data = result.df().to_json(orient="records")
+                    cols = [d[0] for d in result.description]
+                    rows = result.fetchall()
+                    data = json.dumps(
+                        [dict(zip(cols, row, strict=False)) for row in rows],
+                        default=str,
+                    )
                     return Response(data, headers={"Content-Type": "application/json"})
                 msg = f"Unknown command {command}"
                 raise ValueError(msg)  # noqa: TRY301

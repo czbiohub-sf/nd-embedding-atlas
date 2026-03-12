@@ -1,22 +1,17 @@
-import type { Coordinator } from "@uwdata/mosaic-core";
 import { useEffect, useRef } from "react";
-import { toRows } from "../../lib/mosaic-helpers";
+import { jsonFetcher } from "../../lib/fetcher";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type TweakPane = any;
 
 interface PointInfoPaneProps {
     highlightId: string | null;
-    coordinator: Coordinator;
-    table: string;
     additionalFields: string[];
     onShowTrajectory: (trackId: number, fovName: string, clickedT?: number) => void;
 }
 
 export function PointInfoPane({
     highlightId,
-    coordinator,
-    table,
     additionalFields,
     onShowTrajectory,
 }: PointInfoPaneProps) {
@@ -73,39 +68,31 @@ export function PointInfoPane({
         };
     }, [additionalFields]);
 
-    // Update values when highlightId changes — no pane rebuild
+    // Update values when highlightId changes — fetch directly from server, bypassing Mosaic
     useEffect(() => {
         if (!highlightId) return;
 
         let cancelled = false;
         const fields = ["__row_index__", ...additionalFields];
-        const fieldList = fields.map((f) => `"${f}"`).join(", ");
-        const sql = `SELECT ${fieldList} FROM ${table} WHERE "__row_index__" = ${Number(highlightId)} LIMIT 1`;
 
-        coordinator.query(sql, { type: "json" }).then(
-            (result) => {
+        jsonFetcher(`/api/obs/${highlightId}/detail`).then(
+            (row: Record<string, string | null>) => {
                 if (cancelled) return;
-                const rows = toRows<Record<string, unknown>>(result);
-                if (rows.length === 0) return;
-                const row = rows[0];
-
                 const params = paramsRef.current;
                 for (const key of fields) {
                     params[key] = row[key] != null ? String(row[key]) : "—";
                 }
-
-                // Refresh all bindings to pick up the new values
                 paneRef.current?.refresh();
             },
             (err) => {
-                console.error("PointInfoPane query failed:", err);
+                console.error("PointInfoPane fetch failed:", err);
             },
         );
 
         return () => {
             cancelled = true;
         };
-    }, [highlightId, coordinator, table, additionalFields]);
+    }, [highlightId, additionalFields]);
 
     return <div ref={containerRef} className="tp-point-info" />;
 }

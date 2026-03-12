@@ -134,6 +134,7 @@ export function ViewerProvider({ children }: Props) {
             canvasElRef.current = canvas;
             if (canvas && !runtimeRef.current) {
                 applyRuntime(createRuntime(canvas, viewMode));
+                console.log("[viewer] initialized=true (canvas mounted)", performance.now().toFixed(1));
                 setInitialized(true);
             } else if (!canvas) {
                 teardownRuntime();
@@ -157,11 +158,18 @@ export function ViewerProvider({ children }: Props) {
         const canvas = canvasElRef.current;
         if (!canvas) return;
 
+        const wasRunning = runningRef.current;
         teardownRuntime();
         setTrackedLayers([]);
         setChannelsState([]);
 
-        applyRuntime(createRuntime(canvas, viewMode));
+        const result = createRuntime(canvas, viewMode);
+        applyRuntime(result);
+        if (wasRunning) {
+            result.runtime.start();
+            runningRef.current = true;
+        }
+        console.log("[viewer] initialized=true (mode switch)", performance.now().toFixed(1));
         setInitialized(true);
         // Bump generation so hooks (useFovLoader) detect the runtime swap and reload layers
         setGeneration((g) => g + 1);
@@ -248,7 +256,10 @@ export function ViewerProvider({ children }: Props) {
                         next.map((ch) => ({
                             visible: ch.visible,
                             color: Color.fromRgbHex(`#${ch.color}`),
-                            contrastLimits: ch.contrastLimits,
+                            contrastLimits:
+                                ch.contrastLimits[0] < ch.contrastLimits[1]
+                                    ? ch.contrastLimits
+                                    : [ch.contrastLimits[0], ch.contrastLimits[0] + 1],
                         })),
                     );
                     // Blend mode only applies to 2D layers (individual ChunkedImageLayers)

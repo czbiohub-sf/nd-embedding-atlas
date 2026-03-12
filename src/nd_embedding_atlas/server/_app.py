@@ -34,7 +34,7 @@ def _read_plate_metadata(plate_path: str | pathlib.Path | None) -> dict[str, Any
     if plate_path is None:
         return None
     try:
-        from nd_embedding_atlas.ndimg._metadata import get_plate_metadata
+        from nd_embedding_atlas.ndimg._metadata import detect_ome_version, get_plate_metadata
 
         meta = get_plate_metadata(plate_path)
     except Exception:  # noqa: BLE001
@@ -56,7 +56,8 @@ def _read_plate_metadata(plate_path: str | pathlib.Path | None) -> dict[str, Any
             }
             for i, ch in enumerate(meta["channels"])
         ]
-    return result or None
+    result["plate_ome_version"] = detect_ome_version(plate_path)
+    return result
 
 
 def create_app(
@@ -101,6 +102,17 @@ def create_app(
         obs_columns = list(dict.fromkeys([*obs_columns, *sorted(spatial.all_columns)]))
 
     # ── Build store ───────────────────────────────────────────────────
+    try:
+        from pyinstrument import Profiler as _Profiler
+
+        _profiler = _Profiler(interval=0.001)
+        _profiler.start()
+    except ImportError:
+        _profiler = None
+
+    has_plate = plate_path is not None
+    plate_meta = _read_plate_metadata(plate_path) if has_plate else None
+
     obs_df = prepare_obs(collection, obs_columns=obs_columns)
     hidden_cols = spatial.hidden if plate_path else set()
     store = EmbeddingStore(
@@ -128,6 +140,10 @@ def create_app(
             coords = coords.compute()
         store.register_embedding(default_key, np.asarray(coords, dtype=np.float32))
 
+    if _profiler is not None:
+        _profiler.stop()
+        _profiler.print()
+
     # ── Build state ───────────────────────────────────────────────────
     state = ViewerState(
         collection,
@@ -147,8 +163,6 @@ def create_app(
         default_y = "y"
 
     obs_column_names = [c for c in obs_df.columns if c != "__row_index__" and c not in hidden_cols]
-    has_plate = plate_path is not None
-    plate_meta = _read_plate_metadata(plate_path) if has_plate else None
 
     config = DatasetConfig(
         obs_column_names=obs_column_names,
@@ -167,6 +181,11 @@ def create_app(
     # ── Assemble app ──────────────────────────────────────────────────
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        # Dedicate more threads to file I/O (zarr chunk serving via StaticFiles).
+        # StaticFiles uses anyio's default thread pool; DuckDB queries use state.executor separately.
+        import anyio
+
+        anyio.to_thread.current_default_thread_limiter().total_tokens = 32
         yield
         state.shutdown()
 
@@ -186,6 +205,15 @@ def create_app(
         app.mount("/plate", StaticFiles(directory=str(plate_path)), name="plate")
 
     mount_frontend(app, static_dir=static_dir)
+
+    # ── Optional profiling ────────────────────────────────────────────
+    try:
+        from pyinstrument.middleware import ProfilerMiddleware
+
+        app.add_middleware(ProfilerMiddleware, html=True, open_in_browser=False, interval=0.001)
+    except ImportError:
+        pass
+
     return app
 
 
@@ -238,4 +266,5 @@ def serve(
         pool_workers=pool_workers,
     )
     print(f"nd-embedding-atlas viewer: http://{host}:{port}")
+
     uvicorn.run(app, host=host, port=port, access_log=False)

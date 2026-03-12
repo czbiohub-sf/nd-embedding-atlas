@@ -24,6 +24,7 @@ export interface Metadata {
         y_col: string | null;
     };
     plate?: boolean;
+    plate_ome_version?: "0.4" | "0.5";
     plate_pixel_scale?: { x: number; y: number };
     plate_channels?: Array<{
         label: string;
