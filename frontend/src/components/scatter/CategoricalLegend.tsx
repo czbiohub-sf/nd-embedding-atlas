@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLegendCounts } from "../../hooks/useLegendCounts";
 import { useLegend } from "./LegendContext";
 
@@ -48,27 +48,6 @@ export function CategoricalLegend() {
         return () => document.removeEventListener("mousedown", handler);
     }, [pickerIndex]);
 
-    const handleDotClick = useCallback(
-        (index: number, e: React.MouseEvent) => {
-            actions.toggleIsolation(index, e.shiftKey);
-        },
-        [actions],
-    );
-
-    const handleDotKeyDown = useCallback(
-        (index: number, e: React.KeyboardEvent) => {
-            if (e.key === " " || e.key === "Enter") {
-                e.preventDefault();
-                actions.toggleIsolation(index, e.shiftKey);
-            }
-        },
-        [actions],
-    );
-
-    const handlePickerToggle = useCallback((index: number) => {
-        setPickerIndex((prev) => (prev === index ? null : index));
-    }, []);
-
     if (legend.length === 0) return null;
 
     const hasIsolation = isolatedIndices.size > 0;
@@ -91,8 +70,13 @@ export function CategoricalLegend() {
                             type="button"
                             className={`legend-dot${isIsolated ? "legend-dot--isolated" : ""}`}
                             style={{ backgroundColor: currentColor }}
-                            onClick={(e) => handleDotClick(item.index, e)}
-                            onKeyDown={(e) => handleDotKeyDown(item.index, e)}
+                            onClick={(e) => actions.toggleIsolation(item.index, e.shiftKey)}
+                            onKeyDown={(e) => {
+                                if (e.key === " " || e.key === "Enter") {
+                                    e.preventDefault();
+                                    actions.toggleIsolation(item.index, e.shiftKey);
+                                }
+                            }}
                             aria-pressed={isIsolated}
                             aria-label={`Isolate ${item.label}`}
                             title={`Click to isolate, Shift+Click to add`}
@@ -117,7 +101,7 @@ export function CategoricalLegend() {
                         <button
                             type="button"
                             className="legend-picker-btn"
-                            onClick={() => handlePickerToggle(item.index)}
+                            onClick={() => setPickerIndex((prev) => (prev === item.index ? null : item.index))}
                             aria-label={`Change color for ${item.label}`}
                             aria-haspopup="dialog"
                             title="Change color"
