@@ -6,15 +6,44 @@
  * efficiently (only ~500 in memory at a time via page cache).
  */
 
-import { type ColumnDef, flexRender, getCoreRowModel, type SortingState, useReactTable } from "@tanstack/react-table";
+import {
+    type ColumnDef,
+    type ColumnSizingState,
+    flexRender,
+    getCoreRowModel,
+    type SortingState,
+    useReactTable,
+} from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { Coordinator, Selection } from "@uwdata/mosaic-core";
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type Row, type SortState, useTableQuery } from "./useTableQuery";
 
 const ROW_HEIGHT = 32;
 const HEADER_HEIGHT = 30;
 const OVERSCAN = 15;
+
+/** Estimate column width in px by sampling row content lengths. */
+function estimateColumnWidth(name: string, rows: Row[]): number {
+    const CHAR_WIDTH = 7.2;
+    const PADDING = 20;
+    const MIN = 60;
+    const MAX = 360;
+
+    let maxLen = name.length + 2;
+    for (const row of rows) {
+        const val = row[name];
+        if (val == null) continue;
+        const str =
+            typeof val === "number"
+                ? Number.isInteger(val)
+                    ? val.toLocaleString()
+                    : val.toFixed(3)
+                : String(val);
+        maxLen = Math.max(maxLen, str.length);
+    }
+    return Math.min(MAX, Math.max(MIN, Math.ceil(maxLen * CHAR_WIDTH + PADDING)));
+}
 
 export interface DataTableProps {
     coordinator: Coordinator;
@@ -38,6 +67,8 @@ export function DataTable({
     // ── Server-side sort state (lifted into TanStack Table) ─────────
     // We store sorting in TanStack Table's state but execute it server-side.
     const sortingRef = useRef<SortingState>([]);
+    const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({});
+    const autoSizedRef = useRef(false);
 
     const sort: SortState | null = useMemo(() => {
         const s = sortingRef.current;
@@ -62,6 +93,8 @@ export function DataTable({
                 accessorFn: (row: Row) => row[name],
                 header: name,
                 size: name.length < 6 ? 80 : name.length < 12 ? 120 : 160,
+                minSize: 50,
+                maxSize: 600,
                 cell: (info) => {
                     const val = info.getValue();
                     if (val == null) return <span className="text-[#4a5278]">—</span>;
@@ -94,17 +127,36 @@ export function DataTable({
         return rows;
     }, [totalCount, getRow]);
 
+    // ── Auto-size columns from first loaded data ─────────────────
+    useEffect(() => {
+        if (autoSizedRef.current || visibleData.length === 0) return;
+        autoSizedRef.current = true;
+        const sizing: ColumnSizingState = {};
+        for (const name of columnNames) {
+            sizing[name] = estimateColumnWidth(name, visibleData.slice(0, 100));
+        }
+        setColumnSizing(sizing);
+    }, [visibleData, columnNames]);
+
+    // Reset auto-sizing when columns change
+    useEffect(() => {
+        autoSizedRef.current = false;
+    }, [columnNames]);
+
     // ── TanStack Table instance ─────────────────────────────────────
     const tableInstance = useReactTable({
         data: visibleData,
         columns: tableColumns,
-        state: { sorting: sortingRef.current },
+        state: { sorting: sortingRef.current, columnSizing },
         onSortingChange: (updater) => {
             const next = typeof updater === "function" ? updater(sortingRef.current) : updater;
             sortingRef.current = next;
             // Force re-render to propagate sort change to useTableQuery
             containerRef.current?.dispatchEvent(new Event("sort-change"));
         },
+        onColumnSizingChange: setColumnSizing,
+        columnResizeMode: "onChange",
+        enableColumnResizing: true,
         getCoreRowModel: getCoreRowModel(),
         manualSorting: true,
         manualFiltering: true,
@@ -115,6 +167,15 @@ export function DataTable({
 
     // ── Memoized getItemKey ─────────────────────────────────────────
     const getItemKey = useCallback((index: number) => index, []);
+
+    // ── Double-click resize handle → auto-fit column ─────────────
+    const handleAutoSizeColumn = useCallback(
+        (columnId: string) => {
+            const width = estimateColumnWidth(columnId, visibleData.slice(0, 100));
+            setColumnSizing((prev) => ({ ...prev, [columnId]: width }));
+        },
+        [visibleData],
+    );
 
     // ── Virtual scrolling ───────────────────────────────────────────
     const rowVirtualizer = useVirtualizer({
@@ -159,6 +220,7 @@ export function DataTable({
 
     // ── Render ──────────────────────────────────────────────────────
     const headerGroups = tableInstance.getHeaderGroups();
+    const totalWidth = tableInstance.getTotalSize();
 
     return (
         <div className="flex h-full w-full flex-col overflow-hidden bg-[#141829] font-mono text-[#e2e8f0] text-xs">
@@ -172,23 +234,42 @@ export function DataTable({
                 {/* Sticky header via TanStack Table header groups */}
                 <div
                     className="sticky top-0 z-10 border-[#242a45] border-b bg-[#0c1021]"
-                    style={{ height: HEADER_HEIGHT }}
+                    style={{ height: HEADER_HEIGHT, minWidth: totalWidth }}
                 >
                     {headerGroups.map((headerGroup) => (
-                        <div key={headerGroup.id} className="flex">
+                        <div key={headerGroup.id} className="flex" style={{ minWidth: totalWidth }}>
                             {headerGroup.headers.map((header) => (
-                                <button
-                                    type="button"
+                                <div
                                     key={header.id}
-                                    className="flex shrink-0 cursor-pointer select-none items-center px-2 font-medium font-sans text-[#8892b0] text-[11px] hover:text-[#e2e8f0]"
+                                    className="group relative flex shrink-0 items-center"
                                     style={{ width: header.getSize(), height: HEADER_HEIGHT }}
-                                    onClick={header.column.getToggleSortingHandler()}
                                 >
-                                    {header.isPlaceholder
-                                        ? null
-                                        : flexRender(header.column.columnDef.header, header.getContext())}
-                                    {{ asc: " ↑", desc: " ↓" }[header.column.getIsSorted() as string] ?? null}
-                                </button>
+                                    <button
+                                        type="button"
+                                        className="flex h-full w-full cursor-pointer select-none items-center px-2 font-medium font-sans text-[#8892b0] text-[11px] hover:text-[#e2e8f0]"
+                                        onClick={header.column.getToggleSortingHandler()}
+                                    >
+                                        {header.isPlaceholder
+                                            ? null
+                                            : flexRender(
+                                                  header.column.columnDef.header,
+                                                  header.getContext(),
+                                              )}
+                                        {{ asc: " ↑", desc: " ↓" }[
+                                            header.column.getIsSorted() as string
+                                        ] ?? null}
+                                    </button>
+                                    <div
+                                        onMouseDown={header.getResizeHandler()}
+                                        onTouchStart={header.getResizeHandler()}
+                                        onDoubleClick={() => handleAutoSizeColumn(header.column.id)}
+                                        className={`absolute top-0 right-0 h-full w-[3px] cursor-col-resize select-none touch-none ${
+                                            header.column.getIsResizing()
+                                                ? "bg-[#5b8def]"
+                                                : "bg-transparent group-hover:bg-[#4a5278]"
+                                        }`}
+                                    />
+                                </div>
                             ))}
                         </div>
                     ))}
@@ -198,7 +279,7 @@ export function DataTable({
                 <div
                     style={{
                         height: `${rowVirtualizer.getTotalSize()}px`,
-                        width: "100%",
+                        minWidth: totalWidth,
                         position: "relative",
                     }}
                 >
@@ -214,11 +295,12 @@ export function DataTable({
                                 type="button"
                                 key={virtualRow.key}
                                 data-index={virtualRow.index}
-                                className={`absolute flex w-full cursor-pointer border-[#242a45]/50 border-b text-left ${
+                                className={`absolute flex cursor-pointer border-[#242a45]/50 border-b text-left ${
                                     isHighlighted ? "bg-[#242a45]" : "hover:bg-[#1a1f36]"
                                 }`}
                                 style={{
                                     height: `${ROW_HEIGHT}px`,
+                                    minWidth: totalWidth,
                                     transform: `translateY(${virtualRow.start - rowVirtualizer.options.scrollMargin}px)`,
                                 }}
                                 onClick={() => handleRowClick(virtualRow.index)}
