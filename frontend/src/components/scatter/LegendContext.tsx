@@ -1,11 +1,10 @@
 import type { Coordinator, Selection } from "@uwdata/mosaic-core";
-import { createContext, use, useCallback, useEffect, useMemo, useState } from "react";
+import { createContext, use, useCallback, useMemo, useState } from "react";
 import type { CategoryLegendItem, CategoryMapping } from "../../lib/category-column";
 
 // ── State ───────────────────────────────────────────────────────────────────
 
 export interface LegendState {
-    column: string | null;
     mode: "categorical" | "continuous";
     // Categorical
     isolatedIndices: Set<number>;
@@ -20,7 +19,6 @@ export interface LegendState {
 // ── Actions ─────────────────────────────────────────────────────────────────
 
 export interface LegendActions {
-    setColumn: (col: string | null) => void;
     setMode: (mode: "categorical" | "continuous") => void;
     toggleIsolation: (index: number, additive: boolean) => void;
     clearIsolation: () => void;
@@ -66,6 +64,7 @@ export function useLegend(): LegendContextValue {
 // ── Provider ────────────────────────────────────────────────────────────────
 
 const DIM_COLOR = "#4b556330";
+const EMPTY_LEGEND: CategoryLegendItem[] = [];
 
 interface LegendProviderProps {
     categoryMapping: CategoryMapping | null;
@@ -84,7 +83,6 @@ export function LegendProvider({
     categoryCol,
     children,
 }: LegendProviderProps) {
-    const [column, setColumn] = useState<string | null>(null);
     const [mode, setMode] = useState<"categorical" | "continuous">("categorical");
     const [isolatedIndices, setIsolatedIndices] = useState<Set<number>>(new Set());
     const [colorOverrides, setColorOverrides] = useState<Map<number, string>>(new Map());
@@ -93,22 +91,22 @@ export function LegendProvider({
     const [range, setRange] = useState<[number, number]>([0, 1]);
     const [scale, setScale] = useState<"linear" | "log">("linear");
 
-    // Reset overrides + isolation when column changes
-    useEffect(() => {
-        setColorOverrides(new Map());
-        setIsolatedIndices(new Set());
-    }, []);
-
     const toggleIsolation = useCallback((index: number, additive: boolean) => {
         setIsolatedIndices((prev) => {
-            const next = new Set(additive ? prev : []);
-            if (prev.has(index) && additive) {
-                next.delete(index);
-            } else {
-                next.add(index);
+            if (additive) {
+                const next = new Set(prev);
+                if (prev.has(index)) {
+                    next.delete(index);
+                } else {
+                    next.add(index);
+                }
+                return next.size > 0 ? next : new Set();
             }
-            // If nothing left, clear isolation
-            return next.size > 0 ? next : new Set();
+            // Non-additive: if already the sole selection, deselect; otherwise isolate just this
+            if (prev.size === 1 && prev.has(index)) {
+                return new Set();
+            }
+            return new Set([index]);
         });
     }, []);
 
@@ -126,7 +124,6 @@ export function LegendProvider({
 
     const state: LegendState = useMemo(
         () => ({
-            column,
             mode,
             isolatedIndices,
             colorOverrides,
@@ -135,12 +132,11 @@ export function LegendProvider({
             range,
             scale,
         }),
-        [column, mode, isolatedIndices, colorOverrides, colormapName, colormapReversed, range, scale],
+        [mode, isolatedIndices, colorOverrides, colormapName, colormapReversed, range, scale],
     );
 
     const actions: LegendActions = useMemo(
         () => ({
-            setColumn,
             setMode,
             toggleIsolation,
             clearIsolation,
@@ -153,7 +149,7 @@ export function LegendProvider({
         [toggleIsolation, clearIsolation, setColorOverride],
     );
 
-    const legend = categoryMapping?.legend ?? [];
+    const legend = categoryMapping?.legend ?? EMPTY_LEGEND;
 
     const meta: LegendMeta = useMemo(
         () => ({
