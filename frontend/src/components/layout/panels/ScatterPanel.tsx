@@ -53,6 +53,26 @@ export function ScatterPanel(_props: IDockviewPanelProps) {
     // ── Per-panel color-by state ─────────────────────────────────────────
     const [colorByColumn, setColorByColumn] = useState<string | null>(null);
     const obsColumns = useMemo(() => metadata.obs_columns ?? [], [metadata.obs_columns]);
+
+    // ── Categorical palette state ────────────────────────────────────────
+    const [categoricalColormap, setCategoricalColormap] = useState("glasbey");
+    const [maxCategories, setMaxCategories] = useState(64);
+    const [palette, setPalette] = useState<string[]>([]);
+    const [availableColormaps, setAvailableColormaps] = useState<string[]>([]);
+
+    useEffect(() => {
+        fetch("/data/colormaps")
+            .then((r) => r.json())
+            .then((data: { colormaps: string[] }) => setAvailableColormaps(data.colormaps))
+            .catch(console.error);
+    }, []);
+
+    useEffect(() => {
+        fetch(`/data/categorical-palette?colormap=${encodeURIComponent(categoricalColormap)}&n=${maxCategories}`)
+            .then((r) => r.json())
+            .then((data: { colors: string[] }) => setPalette(data.colors))
+            .catch(console.error);
+    }, [categoricalColormap, maxCategories]);
     const additionalFields = useMemo(
         () =>
             Object.fromEntries(["track_id", "fov_name", "t"].filter((f) => obsColumns.includes(f)).map((f) => [f, f])),
@@ -70,27 +90,50 @@ export function ScatterPanel(_props: IDockviewPanelProps) {
         }
         let cancelled = false;
         setCategoryLoading(true);
-        makeCategoryColumn(coordinator, colorByColumn).then(
-            (mapping) => {
-                if (!cancelled) {
-                    setCategoryMapping(mapping);
-                    setCategoryLoading(false);
-                }
-            },
-            (err) => {
-                console.error("Failed to create category column:", err);
-                if (!cancelled) {
-                    setCategoryMapping(null);
-                    setCategoryLoading(false);
-                }
-            },
-        );
+
+        const run = async () => {
+            // Auto-detect the number of distinct values for this column.
+            const countResult = await coordinator.query(
+                `SELECT COUNT(DISTINCT CAST("${colorByColumn}" AS TEXT))::INT AS n FROM obs_base`,
+                { type: "json" },
+            );
+            if (cancelled) return;
+            const n = Math.min(toRows<{ n: number }>(countResult)[0]?.n ?? 64, 256);
+            setMaxCategories(n);
+
+            const mapping = await makeCategoryColumn(coordinator, colorByColumn, n);
+            if (!cancelled) {
+                setCategoryMapping(mapping);
+                setCategoryLoading(false);
+            }
+        };
+
+        run().catch((err) => {
+            console.error("Failed to create category column:", err);
+            if (!cancelled) {
+                setCategoryMapping(null);
+                setCategoryLoading(false);
+            }
+        });
+
         return () => {
             cancelled = true;
         };
     }, [coordinator, colorByColumn]);
 
-    const categoryCol = categoryMapping?.indexColumn ?? null;
+    // Re-apply palette to existing mapping without touching DuckDB.
+    const coloredCategoryMapping = useMemo(() => {
+        if (!categoryMapping || palette.length === 0) return categoryMapping;
+        return {
+            ...categoryMapping,
+            legend: categoryMapping.legend.map((item) => ({
+                ...item,
+                color: palette[item.index % palette.length],
+            })),
+        };
+    }, [categoryMapping, palette]);
+
+    const categoryCol = coloredCategoryMapping?.indexColumn ?? null;
 
     // ── Derive rendering state ───────────────────────────────────────────
     const obsmKeys = axes ? Object.keys(metadata.obsm) : [];
@@ -190,6 +233,40 @@ export function ScatterPanel(_props: IDockviewPanelProps) {
                         </select>
                     </label>
 
+                    {colorByColumn ? (
+                        <>
+                            <div className="h-4 w-px bg-border-subtle" />
+                            <label className="flex items-center gap-1.5">
+                                <span className="font-medium text-[10px] text-text-muted uppercase tracking-wider">
+                                    Palette
+                                </span>
+                                <select
+                                    value={categoricalColormap}
+                                    onChange={(e) => setCategoricalColormap(e.target.value)}
+                                >
+                                    {availableColormaps.map((c) => (
+                                        <option key={c} value={c}>
+                                            {c}
+                                        </option>
+                                    ))}
+                                </select>
+                            </label>
+                            <label className="flex items-center gap-1">
+                                <span className="text-[10px] text-text-muted">Max</span>
+                                <input
+                                    type="number"
+                                    min={2}
+                                    max={256}
+                                    value={maxCategories}
+                                    onChange={(e) =>
+                                        setMaxCategories(Math.max(2, Math.min(256, Number(e.target.value))))
+                                    }
+                                    className="w-14"
+                                />
+                            </label>
+                        </>
+                    ) : null}
+
                     {loadingKey ? (
                         <span className="animate-pulse text-[11px] text-accent-amber italic">
                             loading {loadingKey.replace(/^X_/, "")}...
@@ -200,7 +277,7 @@ export function ScatterPanel(_props: IDockviewPanelProps) {
 
             {/* ── Scatter view (wrapped in LegendProvider) ────────────── */}
             <LegendProvider
-                categoryMapping={categoryMapping}
+                categoryMapping={coloredCategoryMapping}
                 coordinator={coordinator}
                 selection={brushSelection}
                 table={table}

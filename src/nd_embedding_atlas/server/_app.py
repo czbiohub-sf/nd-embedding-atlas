@@ -13,7 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from nd_embedding_atlas._server import create_cors_app, mount_frontend
 from nd_embedding_atlas.server._state import DatasetConfig, ViewerState
 from nd_embedding_atlas.server._store import EmbeddingStore
-from nd_embedding_atlas.server.routes._data import make_data_router
+from nd_embedding_atlas.server.routes._data import make_colormaps_router, make_data_router
 from nd_embedding_atlas.server.routes._embeddings import make_embeddings_router
 from nd_embedding_atlas.server.routes._export import make_export_router
 from nd_embedding_atlas.server.routes._mosaic import make_mosaic_router
@@ -197,6 +197,7 @@ def create_app(
 
     app.include_router(make_mosaic_router(get_state))
     app.include_router(make_data_router(get_state, config))
+    app.include_router(make_colormaps_router())
     app.include_router(make_embeddings_router(get_state))
     app.include_router(make_export_router(get_state))
     app.include_router(make_obs_router(get_state))

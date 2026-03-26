@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { useLegendCounts } from "../../hooks/useLegendCounts";
 import { useLegend } from "./LegendContext";
 
@@ -13,40 +13,23 @@ import { useLegend } from "./LegendContext";
  */
 export function CategoricalLegend() {
     const { state, actions, meta } = useLegend();
-    const { isolatedIndices, colorOverrides } = state;
+    const { isolatedIndices } = state;
     const { legend, coordinator, selection, table, categoryCol } = meta;
-    const [pickerIndex, setPickerIndex] = useState<number | null>(null);
     const containerRef = useRef<HTMLDivElement>(null);
 
     // Reactive filtered counts — updates when cross-filter changes
     const counts = useLegendCounts({ coordinator, selection, table, categoryCol });
 
-    // ESC handler: close picker first, then clear isolation
+    // ESC handler: clear isolation
     useEffect(() => {
         const handler = (e: KeyboardEvent) => {
-            if (e.key === "Escape") {
-                if (pickerIndex !== null) {
-                    setPickerIndex(null);
-                } else if (isolatedIndices.size > 0) {
-                    actions.clearIsolation();
-                }
+            if (e.key === "Escape" && isolatedIndices.size > 0) {
+                actions.clearIsolation();
             }
         };
         document.addEventListener("keydown", handler);
         return () => document.removeEventListener("keydown", handler);
-    }, [pickerIndex, isolatedIndices.size, actions]);
-
-    // Click outside to close picker
-    useEffect(() => {
-        if (pickerIndex === null) return;
-        const handler = (e: MouseEvent) => {
-            if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-                setPickerIndex(null);
-            }
-        };
-        document.addEventListener("mousedown", handler);
-        return () => document.removeEventListener("mousedown", handler);
-    }, [pickerIndex]);
+    }, [isolatedIndices.size, actions]);
 
     if (legend.length === 0) return null;
 
@@ -57,7 +40,6 @@ export function CategoricalLegend() {
             {legend.map((item) => {
                 const isIsolated = isolatedIndices.has(item.index);
                 const isDimmed = hasIsolation && !isIsolated;
-                const currentColor = colorOverrides.get(item.index) ?? item.color;
                 const c = counts?.get(item.index);
                 const total = c?.total ?? item.count;
                 const filtered = c?.filtered ?? total;
@@ -69,7 +51,7 @@ export function CategoricalLegend() {
                         <button
                             type="button"
                             className={`legend-dot${isIsolated ? "legend-dot--isolated" : ""}`}
-                            style={{ backgroundColor: currentColor }}
+                            style={{ backgroundColor: item.color }}
                             onClick={(e) => actions.toggleIsolation(item.index, e.shiftKey)}
                             onKeyDown={(e) => {
                                 if (e.key === " " || e.key === "Enter") {
@@ -96,30 +78,6 @@ export function CategoricalLegend() {
                                 total.toLocaleString()
                             )}
                         </span>
-
-                        {/* Color picker button */}
-                        <button
-                            type="button"
-                            className="legend-picker-btn"
-                            onClick={() => setPickerIndex((prev) => (prev === item.index ? null : item.index))}
-                            aria-label={`Change color for ${item.label}`}
-                            aria-haspopup="dialog"
-                            title="Change color"
-                        >
-                            ⬡
-                        </button>
-
-                        {/* Color picker popout */}
-                        {pickerIndex === item.index ? (
-                            <div className="legend-picker-popout">
-                                <input
-                                    type="color"
-                                    value={currentColor}
-                                    onChange={(e) => actions.setColorOverride(item.index, e.target.value)}
-                                />
-                                <span className="legend-picker-hex">{currentColor}</span>
-                            </div>
-                        ) : null}
                     </div>
                 );
             })}

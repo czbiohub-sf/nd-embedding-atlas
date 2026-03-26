@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { useViewer } from "../../hooks/useViewer";
 import type { BlendMode } from "./ViewerContext";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Tweakpane types incomplete without @tweakpane/core
+// biome-ignore lint/suspicious/noExplicitAny: Tweakpane types incomplete without @tweakpane/core
 type TweakPane = any;
 
 interface ChannelParams {
@@ -35,7 +35,7 @@ export function ChannelControls() {
 
     // Structural signature — pane is rebuilt only when channel count, labels, or
     // contrast ranges change (not on every contrastLimits slider move).
-    const channelSignature = useMemo(
+    const _channelSignature = useMemo(
         () => channels.map((ch) => `${ch.label}|${ch.contrastRange[0]}-${ch.contrastRange[1]}`).join(","),
         [channels],
     );
@@ -102,8 +102,7 @@ export function ChannelControls() {
                 }
 
                 // Step derived from range so fractional ranges (e.g. [-0.3, 0.3]) still work.
-                const contrastStep =
-                    (ch.contrastRange[1] - ch.contrastRange[0]) / 200 || 1;
+                const contrastStep = (ch.contrastRange[1] - ch.contrastRange[0]) / 200 || 1;
 
                 folder
                     .addBinding(p, "min", {
@@ -113,10 +112,7 @@ export function ChannelControls() {
                     })
                     .on("change", (ev: { value: number }) => {
                         const current = channelsRef.current[i];
-                        const hi = Math.min(
-                            Math.max(ev.value, current.contrastLimits[1]),
-                            current.contrastRange[1],
-                        );
+                        const hi = Math.min(Math.max(ev.value, current.contrastLimits[1]), current.contrastRange[1]);
                         actionsRef.current.setChannelProp(i, { contrastLimits: [ev.value, hi] });
                     });
 
@@ -128,10 +124,7 @@ export function ChannelControls() {
                     })
                     .on("change", (ev: { value: number }) => {
                         const current = channelsRef.current[i];
-                        const lo = Math.max(
-                            Math.min(current.contrastLimits[0], ev.value),
-                            current.contrastRange[0],
-                        );
+                        const lo = Math.max(Math.min(current.contrastLimits[0], ev.value), current.contrastRange[0]);
                         actionsRef.current.setChannelProp(i, { contrastLimits: [lo, ev.value] });
                     });
             }
@@ -143,7 +136,7 @@ export function ChannelControls() {
             paneRef.current = null;
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [channelSignature, viewMode]);
+    }, [viewMode, channels.length, channels[i]]);
 
     if (channels.length === 0) return null;
 

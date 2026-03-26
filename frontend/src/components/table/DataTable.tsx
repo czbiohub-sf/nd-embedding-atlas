@@ -35,11 +35,7 @@ function estimateColumnWidth(name: string, rows: Row[]): number {
         const val = row[name];
         if (val == null) continue;
         const str =
-            typeof val === "number"
-                ? Number.isInteger(val)
-                    ? val.toLocaleString()
-                    : val.toFixed(3)
-                : String(val);
+            typeof val === "number" ? (Number.isInteger(val) ? val.toLocaleString() : val.toFixed(3)) : String(val);
         maxLen = Math.max(maxLen, str.length);
     }
     return Math.min(MAX, Math.max(MIN, Math.ceil(maxLen * CHAR_WIDTH + PADDING)));
@@ -141,7 +137,7 @@ export function DataTable({
     // Reset auto-sizing when columns change
     useEffect(() => {
         autoSizedRef.current = false;
-    }, [columnNames]);
+    }, []);
 
     // ── TanStack Table instance ─────────────────────────────────────
     const tableInstance = useReactTable({
@@ -251,19 +247,15 @@ export function DataTable({
                                     >
                                         {header.isPlaceholder
                                             ? null
-                                            : flexRender(
-                                                  header.column.columnDef.header,
-                                                  header.getContext(),
-                                              )}
-                                        {{ asc: " ↑", desc: " ↓" }[
-                                            header.column.getIsSorted() as string
-                                        ] ?? null}
+                                            : flexRender(header.column.columnDef.header, header.getContext())}
+                                        {{ asc: " ↑", desc: " ↓" }[header.column.getIsSorted() as string] ?? null}
                                     </button>
+                                    {/* biome-ignore lint/a11y/noStaticElementInteractions: column resize handle is drag-only */}
                                     <div
                                         onMouseDown={header.getResizeHandler()}
                                         onTouchStart={header.getResizeHandler()}
                                         onDoubleClick={() => handleAutoSizeColumn(header.column.id)}
-                                        className={`absolute top-0 right-0 h-full w-[3px] cursor-col-resize select-none touch-none ${
+                                        className={`absolute top-0 right-0 h-full w-[3px] cursor-col-resize touch-none select-none ${
                                             header.column.getIsResizing()
                                                 ? "bg-[#5b8def]"
                                                 : "bg-transparent group-hover:bg-[#4a5278]"

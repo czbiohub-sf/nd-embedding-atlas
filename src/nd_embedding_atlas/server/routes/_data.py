@@ -4,7 +4,7 @@ import asyncio
 from collections.abc import Callable
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 
 from nd_embedding_atlas._server import build_parquet_bytes, get_package_version
@@ -23,6 +23,32 @@ def _build_obsm_metadata(state: ViewerState) -> dict[str, Any]:
         else:
             meta[key] = {"prefix": prefix, "n_dims": None, "loaded": False}
     return meta
+
+
+def make_colormaps_router() -> APIRouter:
+    """Return an APIRouter for colormap utility endpoints (stateless)."""
+    router = APIRouter()
+
+    @router.get("/data/colormaps")
+    async def get_colormaps() -> dict:
+        from nd_embedding_atlas.io._colors import list_qualitative_colormaps
+
+        return {"colormaps": list_qualitative_colormaps()}
+
+    @router.get("/data/categorical-palette")
+    async def get_categorical_palette(colormap: str = "tab20", n: int = 64) -> dict:
+        from nd_embedding_atlas.io._colors import make_categorical_palette
+
+        if n < 1 or n > 256:
+            msg = "n must be between 1 and 256"
+            raise HTTPException(status_code=400, detail=msg)
+        try:
+            colors = make_categorical_palette(colormap, n)
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return {"colors": colors}
+
+    return router
 
 
 def make_data_router(get_state: Callable[[], ViewerState], config: DatasetConfig) -> APIRouter:

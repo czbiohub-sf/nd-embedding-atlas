@@ -1,12 +1,12 @@
 import { useEffect, useRef } from "react";
 import { useViewer } from "../../hooks/useViewer";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Tweakpane types incomplete without @tweakpane/core
+// biome-ignore lint/suspicious/noExplicitAny: Tweakpane types incomplete without @tweakpane/core
 type TweakPane = any;
 
 // Opacity is stored as a [0,1] log-scale slider value; actual opacityMultiplier = 10^(v*4-3)
 // This maps: 0 → 0.001, 0.5 → ~0.1, 0.75 → 1.0, 1.0 → 10.0
-const opacityToMultiplier = (v: number) => Math.pow(10, v * 4 - 3);
+const opacityToMultiplier = (v: number) => 10 ** (v * 4 - 3);
 const multiplierToOpacity = (m: number) => (Math.log10(m) + 3) / 4;
 
 const DEFAULTS = { opacity: multiplierToOpacity(1.0), step: 1.0, earlyStop: 0.99 };
@@ -57,16 +57,18 @@ export function VolumeControls() {
             );
 
             // Early termination — higher = more accurate, lower = faster
-            pane.addBinding(paramsRef.current, "earlyStop", { label: "early stop α", min: 0.8, max: 1.0, step: 0.01 }).on(
-                "change",
-                (ev: { value: number }) => {
-                    for (const { layer } of layersRef.current) {
-                        if ("earlyTerminationAlpha" in layer) {
-                            (layer as unknown as Record<string, unknown>).earlyTerminationAlpha = ev.value;
-                        }
+            pane.addBinding(paramsRef.current, "earlyStop", {
+                label: "early stop α",
+                min: 0.8,
+                max: 1.0,
+                step: 0.01,
+            }).on("change", (ev: { value: number }) => {
+                for (const { layer } of layersRef.current) {
+                    if ("earlyTerminationAlpha" in layer) {
+                        (layer as unknown as Record<string, unknown>).earlyTerminationAlpha = ev.value;
                     }
-                },
-            );
+                }
+            });
         });
 
         return () => {

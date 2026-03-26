@@ -3,11 +3,11 @@ import {
     Color,
     createPlaybackPolicy,
     loadOmeroChannels,
-    OmeZarrImageSource,
     type OmeroChannel,
+    OmeZarrImageSource,
     VolumeLayer,
 } from "@idetik/core";
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import type { ChannelDef, ViewMode } from "../components/viewer/ViewerContext";
 import { MultiChannelLayers } from "../lib/MultiChannelLayers";
 import type { Metadata } from "../types";
@@ -17,7 +17,7 @@ import { useViewer } from "./useViewer";
 // Keyed by sourceUrl; avoids re-fetching zarr metadata for recently-visited FOVs.
 interface CachedSource {
     source: OmeZarrImageSource;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // biome-ignore lint/suspicious/noExplicitAny: idetik loader type not exported
     loader: any;
     omeroChannels: OmeroChannel[] | null;
 }
@@ -67,8 +67,10 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion }: UseFovLoa
     const sourceRef = useRef<OmeZarrImageSource | null>(null);
 
     /** Ensure contrast limits are strictly increasing — idetik throws if lo >= hi. */
-    const safeContrastLimits = (limits: [number, number]): [number, number] =>
-        limits[0] < limits[1] ? limits : [limits[0], limits[0] + 1];
+    const safeContrastLimits = useCallback(
+        (limits: [number, number]): [number, number] => (limits[0] < limits[1] ? limits : [limits[0], limits[0] + 1]),
+        [],
+    );
 
     // ── Main FOV load effect ──────────────────────────────────────────
     useEffect(() => {
@@ -119,7 +121,8 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion }: UseFovLoa
                     loadOmeroChannels(source).catch(() => null),
                 ]);
                 if (SOURCE_CACHE.size >= SOURCE_CACHE_MAX) {
-                    SOURCE_CACHE.delete(SOURCE_CACHE.keys().next().value!);
+                    const oldest = SOURCE_CACHE.keys().next().value;
+                    if (oldest !== undefined) SOURCE_CACHE.delete(oldest);
                 }
                 cached = { source, loader, omeroChannels };
                 SOURCE_CACHE.set(sourceUrl, cached);
@@ -147,9 +150,7 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion }: UseFovLoa
             if (omeroChannels) {
                 channelDefs = omeroChannels.map((ch) => ({
                     color: ch.color ? Color.fromRgbHex(`#${ch.color}`) : Color.WHITE,
-                    contrastLimits: safeContrastLimits(
-                        ch.window ? [ch.window.start, ch.window.end] : [0, 65535],
-                    ),
+                    contrastLimits: safeContrastLimits(ch.window ? [ch.window.start, ch.window.end] : [0, 65535]),
                 }));
             } else if (plateChsRef.current) {
                 channelDefs = plateChsRef.current.map((ch) => ({
@@ -173,7 +174,17 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion }: UseFovLoa
 
             if (viewMode === "3d") {
                 // 3D: single VolumeLayer with all channels
-                const policy = createPlaybackPolicy({ lod: { min: 0, bias: 0.5 }, prefetch: { x: 0, y: 0, z: 0, t: 0 }, priorityOrder: ["visibleCurrent", "fallbackVisible", "prefetchTime", "prefetchSpace", "fallbackBackground"] });
+                const policy = createPlaybackPolicy({
+                    lod: { min: 0, bias: 0.5 },
+                    prefetch: { x: 0, y: 0, z: 0, t: 0 },
+                    priorityOrder: [
+                        "visibleCurrent",
+                        "fallbackVisible",
+                        "prefetchTime",
+                        "prefetchSpace",
+                        "fallbackBackground",
+                    ],
+                });
                 const sliceCoords = {
                     get t() {
                         return tRef.current;
@@ -196,7 +207,17 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion }: UseFovLoa
                 // 2D: one ChunkedImageLayer per channel.
                 // priorityOrder omits fallbackBackground/prefetchSpace to prevent idetik from
                 // loading the entire image as a background task (very expensive with single-LOD data).
-                const policy = createPlaybackPolicy({ prefetch: { x: 0, y: 0, z: 0, t: 0 }, lod: { min: 0, bias: 0.5 }, priorityOrder: ["visibleCurrent", "fallbackVisible", "prefetchTime", "prefetchSpace", "fallbackBackground"] });
+                const policy = createPlaybackPolicy({
+                    prefetch: { x: 0, y: 0, z: 0, t: 0 },
+                    lod: { min: 0, bias: 0.5 },
+                    priorityOrder: [
+                        "visibleCurrent",
+                        "fallbackVisible",
+                        "prefetchTime",
+                        "prefetchSpace",
+                        "fallbackBackground",
+                    ],
+                });
                 const imageLayers = channelDefs.map((ch, i) => {
                     const sliceCoords = {
                         get t() {
@@ -242,7 +263,10 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion }: UseFovLoa
                     color: hex,
                     visible: true,
                     contrastLimits: ch.contrastLimits,
-                    contrastRange: [plateChsRef.current?.[i]?.window?.min ?? 0, plateChsRef.current?.[i]?.window?.max ?? 65535],
+                    contrastRange: [
+                        plateChsRef.current?.[i]?.window?.min ?? 0,
+                        plateChsRef.current?.[i]?.window?.max ?? 65535,
+                    ],
                     blendMode: viewMode === "3d" ? "additive" : i > 0 ? "additive" : "normal",
                 };
             });
@@ -288,6 +312,8 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion }: UseFovLoa
         viewerState.initialized,
         viewMode,
         viewerState.generation,
+        safeContrastLimits,
+        viewerState.channels,
     ]);
 
     // ── Cleanup on unmount ─────────────────────────────────────────────

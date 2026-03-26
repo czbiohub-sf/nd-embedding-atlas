@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { jsonFetcher } from "../../lib/fetcher";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// biome-ignore lint/suspicious/noExplicitAny: Tweakpane types incomplete without @tweakpane/core
 type TweakPane = any;
 
 interface PointInfoPaneProps {
@@ -10,11 +10,7 @@ interface PointInfoPaneProps {
     onShowTrajectory: (trackId: number, fovName: string, clickedT?: number) => void;
 }
 
-export function PointInfoPane({
-    highlightId,
-    additionalFields,
-    onShowTrajectory,
-}: PointInfoPaneProps) {
+export function PointInfoPane({ highlightId, additionalFields, onShowTrajectory }: PointInfoPaneProps) {
     const containerRef = useRef<HTMLDivElement>(null);
     const paneRef = useRef<TweakPane>(null);
     const paramsRef = useRef<Record<string, string>>({});
