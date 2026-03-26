@@ -25,7 +25,7 @@ export function ChannelControls() {
     const { channels, viewMode } = state;
     const containerRef = useRef<HTMLDivElement>(null);
     const paneRef = useRef<TweakPane>(null);
-    // Stable refs so Tweakpane handlers always see latest
+    // Stable refs so Tweakpane handlers always see latest values
     const actionsRef = useRef(actions);
     actionsRef.current = actions;
     const channelsRef = useRef(channels);
@@ -33,9 +33,10 @@ export function ChannelControls() {
     // Stable per-channel param objects mutated in place for pane.refresh()
     const channelParamsRef = useRef<ChannelParams[]>([]);
 
-    // Structural signature — pane is rebuilt only when channel count, labels, or
-    // contrast ranges change (not on every contrastLimits slider move).
-    const _channelSignature = useMemo(
+    // Structural key — changes only when channel count, labels, or contrast ranges
+    // change, not on every contrastLimits slider move. Used as a dep below to avoid
+    // rebuilding the entire Tweakpane pane on every render.
+    const channelStructureKey = useMemo(
         () => channels.map((ch) => `${ch.label}|${ch.contrastRange[0]}-${ch.contrastRange[1]}`).join(","),
         [channels],
     );
@@ -57,8 +58,12 @@ export function ChannelControls() {
     }, [channels]);
 
     // ── Rebuild pane on structural changes only ───────────────────────
+    // Reads channelStructureKey to register it as a dep (rebuild trigger), then reads
+    // all channel data via channelsRef so the closure never captures stale values.
     useEffect(() => {
+        void channelStructureKey;
         const el = containerRef.current;
+        const channels = channelsRef.current;
         if (!el || channels.length === 0) return;
 
         // Initialise stable param objects from current channel state
@@ -135,8 +140,7 @@ export function ChannelControls() {
             paneRef.current?.dispose();
             paneRef.current = null;
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [viewMode, channels.length, channels[i]]);
+    }, [viewMode, channelStructureKey]);
 
     if (channels.length === 0) return null;
 
