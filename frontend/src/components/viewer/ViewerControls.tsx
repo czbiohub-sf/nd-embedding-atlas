@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useDashboard } from "../../hooks/useDashboard";
 import { useViewer } from "../../hooks/useViewer";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Tweakpane types incomplete without @tweakpane/core
+// biome-ignore lint/suspicious/noExplicitAny: Tweakpane types incomplete without @tweakpane/core
 type TweakPane = any;
 
 interface Props {
@@ -89,10 +89,7 @@ export function ViewerControls({ cropSize, setCropSize }: Props) {
                     min: 0,
                     max: effectiveTMax,
                     step: 1,
-                }).on(
-                    "change",
-                    (ev: { value: number }) => handleTChange(Math.round(ev.value)),
-                );
+                }).on("change", (ev: { value: number }) => handleTChange(Math.round(ev.value)));
             }
 
             // Z slider (2D only — 3D uses range which is harder in Tweakpane, keep native for now)
@@ -125,16 +122,7 @@ export function ViewerControls({ cropSize, setCropSize }: Props) {
             paneRef.current?.dispose();
             paneRef.current = null;
         };
-    }, [
-        bounds.zMax,
-        effectiveTMax,
-        handleTChange,
-        hasCellCoords,
-        hasT,
-        hasZ,
-        isTrajectoryMode,
-        viewMode,
-    ]);
+    }, [bounds.zMax, effectiveTMax, handleTChange, hasCellCoords, hasT, hasZ, isTrajectoryMode, viewMode]);
 
     return <div ref={containerRef} className="tp-viewer-controls" />;
 }

@@ -23,23 +23,10 @@ export interface CategoryMapping {
     legend: CategoryLegendItem[];
 }
 
-const CATEGORY_COLORS = [
-    "#f97316",
-    "#22c55e",
-    "#3b82f6",
-    "#eab308",
-    "#a855f7",
-    "#06b6d4",
-    "#ef4444",
-    "#84cc16",
-    "#ec4899",
-    "#14b8a6",
-];
+export const OTHER_COLOR = "#6b7280";
+export const NULL_COLOR = "#4b5563";
 
-const OTHER_COLOR = "#6b7280";
-const NULL_COLOR = "#4b5563";
-
-const MAX_CATEGORIES = 10;
+const DEFAULT_MAX_CATEGORIES = 64;
 
 /**
  * Cache of already-created columns so we don't re-run ALTER TABLE.
@@ -57,7 +44,11 @@ function getCreatedColumns(coordinator: Coordinator): Set<string> {
     return set;
 }
 
-export async function makeCategoryColumn(coordinator: Coordinator, column: string): Promise<CategoryMapping> {
+export async function makeCategoryColumn(
+    coordinator: Coordinator,
+    column: string,
+    maxCategories: number = DEFAULT_MAX_CATEGORIES,
+): Promise<CategoryMapping> {
     const indexCol = `__ev_${column}_id`;
     const createdColumns = getCreatedColumns(coordinator);
 
@@ -68,7 +59,7 @@ export async function makeCategoryColumn(coordinator: Coordinator, column: strin
          WHERE CAST("${column}" AS TEXT) IS NOT NULL
          GROUP BY CAST("${column}" AS TEXT)
          ORDER BY count DESC
-         LIMIT ${MAX_CATEGORIES}`,
+         LIMIT ${maxCategories}`,
         { type: "json" },
     );
     const values = toRows<{ value: string; count: number }>(result);
@@ -95,10 +86,11 @@ export async function makeCategoryColumn(coordinator: Coordinator, column: strin
 
     await rebuildDatasetView(coordinator);
 
-    // Build legend
+    // Build legend — colors are intentionally empty here; the component applies
+    // the palette via a useMemo so that re-coloring never re-runs this DB work.
     const legend: CategoryLegendItem[] = values.map(({ value, count }, i) => ({
         label: value,
-        color: CATEGORY_COLORS[i % CATEGORY_COLORS.length],
+        color: "",
         index: i,
         count,
     }));

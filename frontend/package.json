@@ -19,18 +19,18 @@
         "@vitejs/plugin-react": "^6.0.1",
         "playwright": "^1.58.2",
         "tailwindcss": "^4.2.2",
-        "typescript": "~5.9.3",
-        "vite": "^8.0.0"
+        "typescript": "~6.0.2",
+        "vite": "^8.0.2"
     },
     "dependencies": {
-        "@idetik/core": "^0.13.3",
+        "@idetik/core": "^0.15.2",
         "@tanstack/react-table": "^8.21.3",
         "@tanstack/react-virtual": "^3.13.23",
         "@uwdata/mosaic-core": "^0.21.1",
         "@uwdata/mosaic-inputs": "^0.21.1",
         "@uwdata/mosaic-sql": "^0.21.1",
         "dockview-react": "^5.1.0",
-        "embedding-atlas": "0.18.1",
+        "embedding-atlas": "0.19.1",
         "gl-matrix": "^3.4.4",
         "react": "^19.2.4",
         "react-dom": "^19.2.4",
