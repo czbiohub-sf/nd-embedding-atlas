@@ -84,12 +84,17 @@ export function ScatterPanel(_props: IDockviewPanelProps) {
   const [continuousColormap, setContinuousColormap] = useState("viridis");
   const [maxCategories, setMaxCategories] = useState(64);
   const [palette, setPalette] = useState<string[]>([]);
-  const [availableColormaps, setAvailableColormaps] = useState<string[]>([]);
+  const [categoricalColormaps, setCategoricalColormaps] = useState<string[]>([]);
+  const [continuousColormaps, setContinuousColormaps] = useState<string[]>([]);
 
   useEffect(() => {
     fetch("/data/colormaps")
       .then((r) => r.json())
-      .then((data: { colormaps: string[] }) => setAvailableColormaps(data.colormaps))
+      .then((data: { categorical?: string[]; continuous?: string[]; colormaps?: string[] }) => {
+        // Support both old { colormaps } and new { categorical, continuous } formats
+        setCategoricalColormaps(data.categorical ?? data.colormaps ?? []);
+        setContinuousColormaps(data.continuous ?? []);
+      })
       .catch(console.error);
   }, []);
 
@@ -250,7 +255,7 @@ export function ScatterPanel(_props: IDockviewPanelProps) {
                 </span>
                 <CompactSelect
                   value={categoricalColormap}
-                  options={availableColormaps.map((c) => ({ value: c, label: c }))}
+                  options={categoricalColormaps.map((c) => ({ value: c, label: c }))}
                   onChange={setCategoricalColormap}
                 />
               </label>
@@ -279,7 +284,7 @@ export function ScatterPanel(_props: IDockviewPanelProps) {
                 </span>
                 <CompactSelect
                   value={continuousColormap}
-                  options={availableColormaps.map((c) => ({ value: c, label: c }))}
+                  options={continuousColormaps.map((c) => ({ value: c, label: c }))}
                   onChange={setContinuousColormap}
                 />
               </label>
@@ -437,7 +442,11 @@ function ScatterView({
     },
   });
 
-  // ── GPU init (only when data changes) ─────────────────────────────────────
+  // ── GPU init — only when POSITIONS change, not when colors change ──────────
+  // data.positions is a stable Float32Array ref that only changes when the
+  // positions endpoint is re-fetched (axes/embedding switch).
+  // colorValues changes (colormap switch) are handled separately below.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     const canvas = canvasRef.current;
     const overlay = overlayRef.current;
@@ -490,7 +499,8 @@ function ScatterView({
       gpuRef.current?.destroy();
       gpuRef.current = null;
     };
-  }, [data]);
+  // Use positions Float32Array reference as dep — stable across color changes
+  }, [data?.positions]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Color updates without GPU re-init ─────────────────────────────────────
   const paletteRef = useRef<readonly (readonly [number, number, number])[]>([]);
