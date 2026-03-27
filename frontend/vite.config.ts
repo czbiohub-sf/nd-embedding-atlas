@@ -1,9 +1,14 @@
+import path from "path";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
+import typegpu from "unplugin-typegpu/vite";
 import { defineConfig } from "vite";
 
 export default defineConfig({
-    plugins: [react(), tailwindcss()],
+    plugins: [react(), tailwindcss(), typegpu()],
+    resolve: {
+        alias: { "@": path.resolve(__dirname, "./src") },
+    },
     server: {
         proxy: {
             "/data": "http://localhost:5055",
@@ -23,8 +28,8 @@ export default defineConfig({
                             priority: 20,
                         },
                         {
-                            name: "vendor-idetik",
-                            test: /node_modules[\\/]+@idetik/,
+                            name: "vendor-typegpu",
+                            test: /node_modules[\\/]+typegpu/,
                             priority: 15,
                         },
                         {
@@ -35,11 +40,6 @@ export default defineConfig({
                         {
                             name: "vendor-dockview",
                             test: /node_modules[\\/]+dockview/,
-                            priority: 15,
-                        },
-                        {
-                            name: "vendor-embedding-atlas",
-                            test: /node_modules[\\/]+embedding-atlas/,
                             priority: 15,
                         },
                         {

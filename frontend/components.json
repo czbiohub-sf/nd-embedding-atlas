@@ -1,0 +1,8 @@
+{
+  "style": "base-lyra",
+  "rsc": false,
+  "tsx": true,
+  "tailwind": { "css": "src/app.css", "baseColor": "neutral", "cssVariables": true },
+  "aliases": { "components": "@/components", "utils": "@/lib/utils" },
+  "iconLibrary": "lucide"
+}
