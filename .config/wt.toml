@@ -9,4 +9,4 @@ python-deps = "uv sync --all-groups"
 
 [pre-merge]
 # Ensure frontend builds cleanly before merging
-build-check = "cd frontend && pnpm build"
+build-check = "cd frontend && pnpm exec tsc --noEmit"

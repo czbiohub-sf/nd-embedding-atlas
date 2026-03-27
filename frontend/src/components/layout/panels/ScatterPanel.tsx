@@ -382,8 +382,8 @@ function ScatterView({
   // ── State refs (no re-render on change) ───────────────────────────────────
   const viewStateRef = useRef({ panX: 0, panY: 0, zoom: 1 });
   const rowIndicesRef = useRef<number[]>([]);
+  const scatterSourceRef = useRef<object>({});
   const [gpuError, setGpuError] = useState<string | null>(null);
-  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
 
   // ── Data from Mosaic binary endpoints ─────────────────────────────────────
   const { data, colorRange, loading: dataLoading } = useMosaicScatterData({
@@ -405,10 +405,10 @@ function ScatterView({
   });
 
   // Update callbacks each render without recreating config
-  callbacksRef.current.onSelectionChange = (count, indices) => {
+  callbacksRef.current.onSelectionChange = (_count, indices) => {
     const rowIds = (indices ?? []).map((i) => rowIndicesRef.current[i] ?? i);
     brushSelection.update({
-      source: "scatter",
+      source: scatterSourceRef.current,
       clients: new Set(),
       value: rowIds,
       predicate:
@@ -481,7 +481,6 @@ function ScatterView({
         ctx2.scale(dpr2, dpr2);
       }
       gpuRef.current?.resize(Math.floor(r.width), Math.floor(r.height));
-      setContainerSize({ width: r.width, height: r.height });
     });
     obs.observe(canvas);
 
