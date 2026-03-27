@@ -24,6 +24,7 @@ export interface SortState {
 interface PageEntry {
     rows: Row[];
     lastAccessed: number;
+    cacheKey: string;
 }
 
 export interface UseTableQueryOptions {
@@ -53,7 +54,9 @@ export function useTableQuery(opts: UseTableQueryOptions): UseTableQueryResult {
     // ── Page cache ──────────────────────────────────────────────────
     const pagesRef = useRef<Map<number, PageEntry>>(new Map());
     const pendingRef = useRef<Set<number>>(new Set());
+    const activeCacheKeyRef = useRef("");
     const [, forceUpdate] = useState(0);
+    const [_filterVersion, setFilterVersion] = useState(0);
 
     // ── Count query via Mosaic client (reactive to selection) ────────
     const countQuery = useCallback(
@@ -83,14 +86,31 @@ export function useTableQuery(opts: UseTableQueryOptions): UseTableQueryResult {
     const sortKey = sort ? `${sort.column}:${sort.direction}` : "none";
     const cacheKey = `${filterKey}|${sortKey}`;
     const prevCacheKey = useRef(cacheKey);
+    const refetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    // Keep activeCacheKeyRef in sync on first render and when cacheKey changes.
+    activeCacheKeyRef.current = cacheKey;
 
     useEffect(() => {
         if (prevCacheKey.current !== cacheKey) {
-            pagesRef.current.clear();
+            // activeCacheKeyRef is already updated inline above.
+            // Cancel in-flight fetches for the old key so they don't overwrite
+            // fresh data when they land (fetchPage checks the key on completion).
             pendingRef.current.clear();
             prevCacheKey.current = cacheKey;
-            forceUpdate((n) => n + 1);
+            // Debounce the re-fetch trigger so rapid lasso adjustments don't
+            // cause a fetch on every intermediate update.
+            if (refetchTimerRef.current != null) clearTimeout(refetchTimerRef.current);
+            refetchTimerRef.current = setTimeout(() => {
+                refetchTimerRef.current = null;
+                setFilterVersion((n) => n + 1);
+            }, 150);
         }
+        return () => {
+            if (refetchTimerRef.current != null) {
+                clearTimeout(refetchTimerRef.current);
+                refetchTimerRef.current = null;
+            }
+        };
     }, [cacheKey]);
 
     // ── Build ORDER BY clause ───────────────────────────────────────
@@ -106,6 +126,9 @@ export function useTableQuery(opts: UseTableQueryOptions): UseTableQueryResult {
             if (pendingRef.current.has(pageIndex)) return;
             pendingRef.current.add(pageIndex);
 
+            // Snapshot the key at fetch time — discard result if it changes.
+            const fetchedFor = activeCacheKeyRef.current;
+
             try {
                 const offset = pageIndex * PAGE_SIZE;
                 const colList = columns.map((c) => `"${c}"`).join(", ");
@@ -114,23 +137,29 @@ export function useTableQuery(opts: UseTableQueryOptions): UseTableQueryResult {
                 const sql = `SELECT "__row_index__", ${colList} FROM ${table} ${whereClause} ORDER BY ${buildOrderBy()} LIMIT ${PAGE_SIZE} OFFSET ${offset}`;
 
                 const result = await coordinator.query(sql, { type: "arrow" });
+
+                // Discard if the filter changed while we were waiting.
+                if (fetchedFor !== activeCacheKeyRef.current) return;
+
                 const rows = toRows<Row>(result);
 
-                // LRU eviction
+                // LRU eviction — prefer evicting stale pages first.
                 const pages = pagesRef.current;
                 if (pages.size >= MAX_CACHED_PAGES) {
-                    let oldestKey = -1;
-                    let oldestTime = Infinity;
+                    let evictKey = -1;
+                    let evictTime = Infinity;
                     for (const [key, entry] of pages) {
-                        if (entry.lastAccessed < oldestTime) {
-                            oldestTime = entry.lastAccessed;
-                            oldestKey = key;
+                        const isStale = entry.cacheKey !== fetchedFor;
+                        const t = isStale ? -Infinity : entry.lastAccessed;
+                        if (t < evictTime) {
+                            evictTime = t;
+                            evictKey = key;
                         }
                     }
-                    if (oldestKey >= 0) pages.delete(oldestKey);
+                    if (evictKey >= 0) pages.delete(evictKey);
                 }
 
-                pages.set(pageIndex, { rows, lastAccessed: Date.now() });
+                pages.set(pageIndex, { rows, lastAccessed: Date.now(), cacheKey: fetchedFor });
                 forceUpdate((n) => n + 1);
             } finally {
                 pendingRef.current.delete(pageIndex);
@@ -149,17 +178,25 @@ export function useTableQuery(opts: UseTableQueryOptions): UseTableQueryResult {
     }, []);
 
     // ── Public: ensure a range is loaded (call from scroll handler) ─
+    // filterVersion is included so ensureRange gets a new reference whenever
+    // the filter/sort settles — this causes the scroll useEffect in DataTable
+    // to re-run and re-fetch the visible range without any extra dep wiring.
     const ensureRange = useCallback(
         (startIndex: number, endIndex: number) => {
             const startPage = Math.floor(startIndex / PAGE_SIZE);
             const endPage = Math.floor(endIndex / PAGE_SIZE);
-            // Fetch visible pages + one page ahead/behind
+            const activeKey = activeCacheKeyRef.current;
+            // Fetch visible pages + one page ahead/behind.
+            // Treat stale pages (wrong cacheKey) as missing so they get refreshed.
             for (let p = Math.max(0, startPage - 1); p <= endPage + 1; p++) {
-                if (!pagesRef.current.has(p) && !pendingRef.current.has(p)) {
+                const entry = pagesRef.current.get(p);
+                const needsFetch = !entry || entry.cacheKey !== activeKey;
+                if (needsFetch && !pendingRef.current.has(p)) {
                     fetchPage(p);
                 }
             }
         },
+        // eslint-disable-next-line react-hooks/exhaustive-deps
         [fetchPage],
     );
 

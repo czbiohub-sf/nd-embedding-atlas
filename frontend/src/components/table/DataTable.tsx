@@ -73,7 +73,7 @@ export function DataTable({
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     // ── Server-side data ────────────────────────────────────────────
-    const { totalCount, getRow, ensureRange, loading, findRowPosition } = useTableQuery({
+    const { totalCount, getRow, ensureRange, findRowPosition } = useTableQuery({
         coordinator,
         table,
         columns: columnNames,
@@ -222,7 +222,7 @@ export function DataTable({
         <div className="flex h-full w-full flex-col overflow-hidden bg-[#141829] font-mono text-[#e2e8f0] text-xs">
             {/* Status bar */}
             <div className="flex shrink-0 items-center justify-between border-[#242a45] border-b px-3 py-1.5 font-sans text-[#8892b0] text-[11px]">
-                <span>{loading ? "Loading…" : `${totalCount.toLocaleString()} observations`}</span>
+                <span>{totalCount.toLocaleString()} observations</span>
             </div>
 
             {/* Scrollable container */}
