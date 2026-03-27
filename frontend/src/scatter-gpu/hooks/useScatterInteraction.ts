@@ -27,6 +27,10 @@ export function createInteractionController(
   const enableZoom = interactionConfig?.zoom ?? true;
   const enableLasso = interactionConfig?.lasso ?? true;
   const enableMarquee = interactionConfig?.marquee ?? true;
+  // NOTE: The overlay canvas must be DPR-scaled before passing to this controller.
+  // Apply: overlay.width = Math.floor(cssW * dpr); overlay.height = Math.floor(cssH * dpr);
+  // Then: const ctx = overlay.getContext("2d"); ctx.scale(dpr, dpr);
+  // This ensures lasso/marquee drawing is crisp on retina displays.
   const overlayCtx = overlay.getContext("2d")!;
 
   // Current (rendered) values — what the GPU sees
@@ -350,6 +354,9 @@ export function createInteractionController(
     requestRender() {
       needsRender = true;
       scheduleLoop();
+    },
+    getViewState(): { panX: number; panY: number; zoom: number } {
+      return { panX, panY, zoom };
     },
     resize() {
       updateView();

@@ -151,6 +151,40 @@ export async function createScatterplot(
       );
       interaction.resize();
     },
+    updateColors(palette: readonly (readonly [number, number, number])[]) {
+      const colorData = new Float32Array(data.numCells * 4);
+      for (let i = 0; i < data.numCells; i++) {
+        const cat = data.categoryIndices[i]! % Math.max(1, palette.length);
+        const entry = palette[cat];
+        if (entry) {
+          colorData[i * 4] = entry[0];
+          colorData[i * 4 + 1] = entry[1];
+          colorData[i * 4 + 2] = entry[2];
+          colorData[i * 4 + 3] = 1.0;
+        } else {
+          colorData[i * 4 + 3] = 1.0;
+        }
+      }
+      device.queue.writeBuffer(root.unwrap(buffers.colorBuffer), 0, colorData);
+      interaction.requestRender();
+    },
+    updateColorsDirect(rgba: Float32Array) {
+      device.queue.writeBuffer(root.unwrap(buffers.colorBuffer), 0, rgba);
+      interaction.requestRender();
+    },
+    getViewState() {
+      return interaction.getViewState();
+    },
+    worldToScreen(wx: number, wy: number, w: number, h: number) {
+      const { panX, panY, zoom } = interaction.getViewState();
+      const aspect = w / h;
+      const clipX = (wx + panX) * zoom / aspect;
+      const clipY = (wy + panY) * zoom;
+      return {
+        x: (clipX + 1) / 2 * w,
+        y: (1 - (clipY + 1) / 2) * h,
+      };
+    },
     destroy() {
       interaction.destroy();
       selection.destroy();

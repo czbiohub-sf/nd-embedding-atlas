@@ -68,6 +68,14 @@ export interface InteractionConfig {
 export interface ScatterplotHandle {
   resize(width: number, height: number): void;
   destroy(): void;
+  /** Update color buffer from palette without GPU re-initialization (categorical coloring). */
+  updateColors(palette: readonly (readonly [number, number, number])[]): void;
+  /** Write pre-computed RGBA float32 array directly to colorBuffer (continuous coloring). */
+  updateColorsDirect(rgba: Float32Array): void;
+  /** Current pan/zoom state of the viewport. */
+  getViewState(): { panX: number; panY: number; zoom: number };
+  /** Convert world coordinates to screen pixel coordinates using the current view transform. */
+  worldToScreen(worldX: number, worldY: number, canvasWidth: number, canvasHeight: number): { x: number; y: number };
 }
 
 export interface RenderConfig {
