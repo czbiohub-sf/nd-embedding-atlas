@@ -1,7 +1,5 @@
 """Binary scatter data endpoints for the WebGPU scatter renderer."""
 
-from __future__ import annotations
-
 import asyncio
 import json
 import struct

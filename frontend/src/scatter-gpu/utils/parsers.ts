@@ -16,11 +16,10 @@
 /** Parsed result from /api/scatter-positions */
 export interface PositionBlob {
   header: {
-    num_points: number;
-    embedding_key: string;
-    x_col: string;
-    y_col: string;
-    row_indices: number[];
+    numCells: number;
+    embeddingKey: string;
+    ndim: number;
+    rowIndices: number[];
   };
   positions: Float32Array;
 }
@@ -28,9 +27,7 @@ export interface PositionBlob {
 /** Parsed result from /api/scatter-categories */
 export interface CategoryBlob {
   header: {
-    num_points: number;
-    cat_col: string;
-    category_names: string[];
+    categoryNames: string[];
   };
   categoryIndices: Uint8Array;
 }

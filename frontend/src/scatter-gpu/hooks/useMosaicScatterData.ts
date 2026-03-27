@@ -99,9 +99,9 @@ export function useMosaicScatterData({
         const { header, positions: floats } = parsePositionBlob(buf);
         setPositions({
           floats,
-          rowIndices: header.row_indices,
-          numCells: header.num_points,
-          embeddingKey: header.embedding_key,
+          rowIndices: header.rowIndices,
+          numCells: header.numCells,
+          embeddingKey: header.embeddingKey,
         });
         // Reset color state whenever positions change
         setCategoryIndices(null);
@@ -142,7 +142,7 @@ export function useMosaicScatterData({
         .then((buf) => {
           const { header, categoryIndices: indices } = parseCategoryBlob(buf);
           setCategoryIndices(indices);
-          setCategoryNames(header.category_names);
+          setCategoryNames(header.categoryNames);
           setColorValues(null);
           setColorRange(null);
         })
