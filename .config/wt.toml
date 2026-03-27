@@ -1,0 +1,12 @@
+# nd-embedding-atlas worktree project config
+# Runs for all team members when they create/merge worktrees
+
+[post-create]
+# Install frontend dependencies in every new worktree
+frontend-deps = "cd frontend && pnpm install --frozen-lockfile"
+# Sync Python dependencies
+python-deps = "uv sync --all-groups"
+
+[pre-merge]
+# Ensure frontend builds cleanly before merging
+build-check = "cd frontend && pnpm build"
