@@ -31,9 +31,12 @@ def make_colormaps_router() -> APIRouter:
 
     @router.get("/data/colormaps")
     async def get_colormaps() -> dict:
-        from nd_embedding_atlas.io._colors import list_qualitative_colormaps
+        from nd_embedding_atlas.io._colors import list_continuous_colormaps, list_qualitative_colormaps
 
-        return {"colormaps": list_qualitative_colormaps()}
+        return {
+            "categorical": list_qualitative_colormaps(),
+            "continuous": list_continuous_colormaps(),
+        }
 
     @router.get("/data/categorical-palette")
     async def get_categorical_palette(colormap: str = "tab20", n: int = 64) -> dict:

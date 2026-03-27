@@ -18,6 +18,7 @@ from nd_embedding_atlas.server.routes._embeddings import make_embeddings_router
 from nd_embedding_atlas.server.routes._export import make_export_router
 from nd_embedding_atlas.server.routes._mosaic import make_mosaic_router
 from nd_embedding_atlas.server.routes._obs import make_obs_router
+from nd_embedding_atlas.server.routes._scatter import make_scatter_router
 from nd_embedding_atlas.vz._prepare import detect_spatial_columns, prepare_obs
 
 if TYPE_CHECKING:
@@ -201,6 +202,7 @@ def create_app(
     app.include_router(make_embeddings_router(get_state))
     app.include_router(make_export_router(get_state))
     app.include_router(make_obs_router(get_state))
+    app.include_router(make_scatter_router(get_state))
 
     if plate_path is not None:
         app.mount("/plate", StaticFiles(directory=str(plate_path)), name="plate")
