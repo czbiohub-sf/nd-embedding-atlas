@@ -362,6 +362,49 @@ select:disabled {
     color: var(--color-accent-cyan);
 }
 
+/* ── Continuous (gradient) legend ────────────────────────────────── */
+.legend-continuous {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 10;
+    background: hsla(230, 30%, 8%, 0.85);
+    backdrop-filter: blur(8px);
+    border-radius: 6px;
+    padding: 6px 8px;
+    font-family: var(--font-sans);
+    font-size: 11px;
+    color: var(--color-text-primary);
+    width: 144px;
+}
+
+.legend-continuous-title {
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 4px;
+}
+
+.legend-continuous-bar {
+    height: 12px;
+    width: 100%;
+    border-radius: 3px;
+    border: 1px solid var(--color-border-subtle);
+    background: var(--color-surface);
+}
+
+.legend-continuous-ticks {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 3px;
+    font-size: 9px;
+    color: var(--color-text-muted);
+    font-family: var(--font-mono);
+}
+
 /* Dockview header action buttons */
 .dv-header-action {
     display: flex;
