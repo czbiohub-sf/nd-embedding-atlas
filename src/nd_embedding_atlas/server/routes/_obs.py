@@ -83,13 +83,20 @@ def make_obs_router(get_state: Callable[[], ViewerState]) -> APIRouter:
                 return (cols, row) if row is not None else None
 
         loop = asyncio.get_running_loop()
-        result = await loop.run_in_executor(state.executor, _fetch, row_index, state)
+        try:
+            result = await loop.run_in_executor(state.executor, _fetch, row_index, state)
+        except Exception as exc:
+            import traceback
+            return JSONResponse({"error": str(exc), "traceback": traceback.format_exc()}, status_code=500)
 
         if result is None:
             return JSONResponse({"error": "Observation not found"}, status_code=404)
 
         cols, row = result
-        return dict(zip(cols, (str(v) if v is not None else None for v in row), strict=True))
+        try:
+            return dict(zip(cols, (str(v) if v is not None else None for v in row), strict=True))
+        except Exception as exc:
+            return JSONResponse({"error": f"Serialization failed: {exc}", "cols": cols, "row_len": len(row)}, status_code=500)
 
     @router.get("/api/health")
     async def health(state: State) -> dict:

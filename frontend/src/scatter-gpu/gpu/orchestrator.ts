@@ -61,6 +61,8 @@ export async function createScatterplot(
         uniforms,
         selection,
         () => {
+            // Guard against 0-size canvas (hidden/collapsed Dockview panel)
+            if (canvas.width === 0 || canvas.height === 0) return;
             culling.dispatchCulling(viewVersion);
             render(context, data.numCells, "clear");
         },
