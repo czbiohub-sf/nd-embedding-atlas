@@ -1,471 +1,635 @@
 import type { IDockviewPanelProps } from "dockview-react";
-import { EmbeddingViewMosaic } from "embedding-atlas/react";
-import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useContainerSize } from "../../../hooks/useContainerSize";
-import { useDashboard } from "../../../hooks/useDashboard";
-import { useEmbeddingLoader } from "../../../hooks/useEmbeddingLoader";
-import { type CategoryMapping, makeCategoryColumn } from "../../../lib/category-column";
-import { toRows } from "../../../lib/mosaic-helpers";
-import type { AxisState, TrajectoryFrame } from "../../../types";
+import { column, eq, literal, or } from "@uwdata/mosaic-sql";
+import { createScatterplot } from "../../../scatter-gpu/gpu/orchestrator";
+import type { ScatterplotConfig, ScatterplotHandle } from "../../../scatter-gpu/types";
+import { useMosaicScatterData } from "../../../scatter-gpu/hooks/useMosaicScatterData";
+import type { ColorMode } from "../../../scatter-gpu/hooks/useMosaicScatterData";
+import type { TrajectoryOverlaySvgHandle } from "../../scatter/TrajectoryOverlaySvg";
+import { TrajectoryOverlaySvg } from "../../scatter/TrajectoryOverlaySvg";
+import { ContinuousLegend } from "../../scatter/ContinuousLegend";
 import { CategoricalLegend } from "../../scatter/CategoricalLegend";
 import { LegendProvider, useEffectiveCategoryColors } from "../../scatter/LegendContext";
 import { PointInfoPane } from "../../scatter/PointInfoPane";
-import { TrajectoryOverlay } from "../../scatter/TrajectoryOverlay";
+import { CompactSelect } from "../../ui/select";
+import { Button } from "../../ui/button";
+import { useDashboard } from "../../../hooks/useDashboard";
+import { useEmbeddingLoader } from "../../../hooks/useEmbeddingLoader";
+import { useColumnTypes } from "../../../hooks/useColumnTypes";
+import { makeCategoryColumn, type CategoryMapping } from "../../../lib/category-column";
+import { resolveColorMode } from "../../../hooks/useColorMode";
+import { toRows } from "../../../lib/mosaic-helpers";
+import type { AxisState, TrajectoryFrame } from "../../../types";
 
-const SCATTER_CONFIG = { colorScheme: "dark" } as const;
+// ── Helper ────────────────────────────────────────────────────────────────────
 
-/** No-op tooltip class — renders nothing, suppresses embedding-atlas default tooltip. */
-class NoopTooltip {
-    constructor(node: HTMLDivElement) {
-        node.style.display = "none";
-    }
-    update() {}
-    destroy() {}
+function hexToRgbPalette(hexColors: string[]): readonly (readonly [number, number, number])[] {
+  return hexColors.map((hex) => {
+    const h = hex.replace("#", "");
+    return [
+      parseInt(h.slice(0, 2), 16) / 255,
+      parseInt(h.slice(2, 4), 16) / 255,
+      parseInt(h.slice(4, 6), 16) / 255,
+    ] as const;
+  });
 }
-const NOOP_TOOLTIP = { class: NoopTooltip };
+
+// ── Outer panel ───────────────────────────────────────────────────────────────
 
 export function ScatterPanel(_props: IDockviewPanelProps) {
-    const { state, actions, meta } = useDashboard();
-    const { metadata, highlightId, trajectory } = state;
-    const { coordinator, brushSelection, table } = meta;
+  const { state, actions, meta } = useDashboard();
+  const { metadata, trajectory } = state;
+  const { coordinator, brushSelection, table } = meta;
 
-    // ── Per-panel embedding state ─────────────────────────────────────────
-    const [axes, setAxes] = useState<AxisState | null>(null);
-    const { loadEmbedding, loadingKey } = useEmbeddingLoader(metadata, actions.refreshMetadata);
+  // ── Per-panel embedding state ──────────────────────────────────────────────
+  const [axes, setAxes] = useState<AxisState | null>(null);
+  const { loadEmbedding, loadingKey } = useEmbeddingLoader(metadata, actions.refreshMetadata);
 
-    // Initialize from first loaded embedding
-    useEffect(() => {
-        if (axes || !metadata) return;
-        const first = Object.entries(metadata.obsm).find(([, v]) => v.loaded);
-        if (first) setAxes({ obsmKey: first[0], xDim: 0, yDim: 1 });
-    }, [metadata, axes]);
+  // Initialize from first loaded embedding
+  useEffect(() => {
+    if (axes || !metadata) return;
+    const first = Object.entries(metadata.obsm).find(([, v]) => v.loaded);
+    if (first) setAxes({ obsmKey: first[0], xDim: 0, yDim: 1 });
+  }, [metadata, axes]);
 
-    // Handle embedding change — load if needed, then update axes
-    const handleSetAxes = async (newAxes: AxisState) => {
-        const entry = metadata.obsm[newAxes.obsmKey];
-        if (entry && !entry.loaded) {
-            await loadEmbedding(newAxes.obsmKey);
-        }
-        setAxes(newAxes);
+  const handleSetAxes = async (newAxes: AxisState) => {
+    const entry = metadata.obsm[newAxes.obsmKey];
+    if (entry && !entry.loaded) {
+      await loadEmbedding(newAxes.obsmKey);
+    }
+    setAxes(newAxes);
+  };
+
+  // ── Color-by state ─────────────────────────────────────────────────────────
+  const [colorByColumn, setColorByColumn] = useState<string | null>(null);
+  const obsColumns = useMemo(() => metadata.obs_columns ?? [], [metadata.obs_columns]);
+
+  // ── Color mode (categorical vs continuous) ─────────────────────────────────
+  const columnTypes = useColumnTypes(coordinator);
+  const [colorModeOverride, setColorModeOverride] = useState<ColorMode | undefined>(undefined);
+
+  // Reset override when color column changes
+  useEffect(() => {
+    setColorModeOverride(undefined);
+  }, [colorByColumn]);
+
+  const colorModeInfo = useMemo(
+    () => resolveColorMode(colorByColumn, columnTypes, colorModeOverride),
+    [colorByColumn, columnTypes, colorModeOverride],
+  );
+  const colorMode: ColorMode = colorModeInfo.mode;
+
+  // ── Categorical palette state ──────────────────────────────────────────────
+  const [categoricalColormap, setCategoricalColormap] = useState("glasbey");
+  const [continuousColormap, setContinuousColormap] = useState("viridis");
+  const [maxCategories, setMaxCategories] = useState(64);
+  const [palette, setPalette] = useState<string[]>([]);
+  const [availableColormaps, setAvailableColormaps] = useState<string[]>([]);
+
+  useEffect(() => {
+    fetch("/data/colormaps")
+      .then((r) => r.json())
+      .then((data: { colormaps: string[] }) => setAvailableColormaps(data.colormaps))
+      .catch(console.error);
+  }, []);
+
+  useEffect(() => {
+    fetch(
+      `/data/categorical-palette?colormap=${encodeURIComponent(categoricalColormap)}&n=${maxCategories}`,
+    )
+      .then((r) => r.json())
+      .then((data: { colors: string[] }) => setPalette(data.colors))
+      .catch(console.error);
+  }, [categoricalColormap, maxCategories]);
+
+  const additionalFields = useMemo(
+    () =>
+      Object.fromEntries(
+        ["track_id", "fov_name", "t"]
+          .filter((f) => obsColumns.includes(f))
+          .map((f) => [f, f]),
+      ),
+    [obsColumns],
+  );
+
+  // ── Category column mapping ────────────────────────────────────────────────
+  const [categoryMapping, setCategoryMapping] = useState<CategoryMapping | null>(null);
+  const [categoryLoading, setCategoryLoading] = useState(false);
+
+  useEffect(() => {
+    if (!colorByColumn || colorMode !== "categorical") {
+      setCategoryMapping(null);
+      return;
+    }
+    let cancelled = false;
+    setCategoryLoading(true);
+
+    const run = async () => {
+      const countResult = await coordinator.query(
+        `SELECT COUNT(DISTINCT CAST("${colorByColumn}" AS TEXT))::INT AS n FROM obs_base`,
+        { type: "json" },
+      );
+      if (cancelled) return;
+      const n = Math.min(toRows<{ n: number }>(countResult)[0]?.n ?? 64, 256);
+      setMaxCategories(n);
+
+      const mapping = await makeCategoryColumn(coordinator, colorByColumn, n);
+      if (!cancelled) {
+        setCategoryMapping(mapping);
+        setCategoryLoading(false);
+      }
     };
 
-    // ── Per-panel color-by state ─────────────────────────────────────────
-    const [colorByColumn, setColorByColumn] = useState<string | null>(null);
-    const obsColumns = useMemo(() => metadata.obs_columns ?? [], [metadata.obs_columns]);
+    run().catch((err) => {
+      console.error("Failed to create category column:", err);
+      if (!cancelled) {
+        setCategoryMapping(null);
+        setCategoryLoading(false);
+      }
+    });
 
-    // ── Categorical palette state ────────────────────────────────────────
-    const [categoricalColormap, setCategoricalColormap] = useState("glasbey");
-    const [maxCategories, setMaxCategories] = useState(64);
-    const [palette, setPalette] = useState<string[]>([]);
-    const [availableColormaps, setAvailableColormaps] = useState<string[]>([]);
+    return () => {
+      cancelled = true;
+    };
+  }, [coordinator, colorByColumn, colorMode]);
 
-    useEffect(() => {
-        fetch("/data/colormaps")
-            .then((r) => r.json())
-            .then((data: { colormaps: string[] }) => setAvailableColormaps(data.colormaps))
-            .catch(console.error);
-    }, []);
+  // Re-apply palette to existing mapping without touching DuckDB
+  const coloredCategoryMapping = useMemo(() => {
+    if (!categoryMapping || palette.length === 0) return categoryMapping;
+    return {
+      ...categoryMapping,
+      legend: categoryMapping.legend.map((item) => ({
+        ...item,
+        color: palette[item.index % palette.length],
+      })),
+    };
+  }, [categoryMapping, palette]);
 
-    useEffect(() => {
-        fetch(`/data/categorical-palette?colormap=${encodeURIComponent(categoricalColormap)}&n=${maxCategories}`)
-            .then((r) => r.json())
-            .then((data: { colors: string[] }) => setPalette(data.colors))
-            .catch(console.error);
-    }, [categoricalColormap, maxCategories]);
-    const additionalFields = useMemo(
-        () =>
-            Object.fromEntries(["track_id", "fov_name", "t"].filter((f) => obsColumns.includes(f)).map((f) => [f, f])),
-        [obsColumns],
-    );
+  const categoryCol = coloredCategoryMapping?.indexColumn ?? null;
 
-    // ── Category column mapping ──────────────────────────────────────────
-    const [categoryMapping, setCategoryMapping] = useState<CategoryMapping | null>(null);
-    const [categoryLoading, setCategoryLoading] = useState(false);
+  // ── Derive rendering state ─────────────────────────────────────────────────
+  const obsmKeys = axes ? Object.keys(metadata.obsm) : [];
+  const currentEntry = axes ? metadata.obsm[axes.obsmKey] : null;
+  const dims = Array.from({ length: currentEntry?.n_dims ?? 0 }, (_, i) => i);
+  const prefix = currentEntry?.prefix ?? "x";
+  const xCol = axes ? `${prefix}_${axes.xDim}` : "";
+  const yCol = axes ? `${prefix}_${axes.yDim}` : "";
 
-    useEffect(() => {
-        if (!colorByColumn) {
-            setCategoryMapping(null);
-            return;
-        }
-        let cancelled = false;
-        setCategoryLoading(true);
+  const isLoading = !!loadingKey || categoryLoading;
 
-        const run = async () => {
-            // Auto-detect the number of distinct values for this column.
-            const countResult = await coordinator.query(
-                `SELECT COUNT(DISTINCT CAST("${colorByColumn}" AS TEXT))::INT AS n FROM obs_base`,
-                { type: "json" },
-            );
-            if (cancelled) return;
-            const n = Math.min(toRows<{ n: number }>(countResult)[0]?.n ?? 64, 256);
-            setMaxCategories(n);
+  return (
+    <div className="flex h-full w-full flex-col overflow-hidden bg-base">
+      {/* ── Toolbar ─────────────────────────────────────────────────────── */}
+      {axes ? (
+        <div className="flex shrink-0 items-center gap-2 border-b border-border-subtle px-2 py-1 text-text-secondary">
+          <label className="flex items-center gap-1.5">
+            <span className="font-medium text-[10px] text-text-muted uppercase tracking-wider">
+              Embedding
+            </span>
+            <CompactSelect
+              value={axes.obsmKey}
+              disabled={loadingKey !== null}
+              options={obsmKeys.map((k) => ({ value: k, label: k.replace(/^X_/, "") }))}
+              onChange={(v) => handleSetAxes({ obsmKey: v, xDim: 0, yDim: 1 })}
+            />
+          </label>
 
-            const mapping = await makeCategoryColumn(coordinator, colorByColumn, n);
-            if (!cancelled) {
-                setCategoryMapping(mapping);
-                setCategoryLoading(false);
-            }
-        };
+          <label className="flex items-center gap-1">
+            <span className="text-[10px] text-text-muted">X</span>
+            <CompactSelect
+              value={String(axes.xDim)}
+              disabled={loadingKey !== null || !currentEntry?.loaded}
+              options={dims.map((d) => ({ value: String(d), label: String(d) }))}
+              onChange={(v) => handleSetAxes({ ...axes, xDim: Number(v) })}
+            />
+          </label>
 
-        run().catch((err) => {
-            console.error("Failed to create category column:", err);
-            if (!cancelled) {
-                setCategoryMapping(null);
-                setCategoryLoading(false);
-            }
-        });
+          <label className="flex items-center gap-1">
+            <span className="text-[10px] text-text-muted">Y</span>
+            <CompactSelect
+              value={String(axes.yDim)}
+              disabled={loadingKey !== null || !currentEntry?.loaded}
+              options={dims.map((d) => ({ value: String(d), label: String(d) }))}
+              onChange={(v) => handleSetAxes({ ...axes, yDim: Number(v) })}
+            />
+          </label>
 
-        return () => {
-            cancelled = true;
-        };
-    }, [coordinator, colorByColumn]);
+          <div className="h-4 w-px bg-border-subtle" />
 
-    // Re-apply palette to existing mapping without touching DuckDB.
-    const coloredCategoryMapping = useMemo(() => {
-        if (!categoryMapping || palette.length === 0) return categoryMapping;
-        return {
-            ...categoryMapping,
-            legend: categoryMapping.legend.map((item) => ({
-                ...item,
-                color: palette[item.index % palette.length],
-            })),
-        };
-    }, [categoryMapping, palette]);
+          <label className="flex items-center gap-1.5">
+            <span className="font-medium text-[10px] text-text-muted uppercase tracking-wider">
+              Color
+            </span>
+            <CompactSelect
+              value={colorByColumn ?? ""}
+              placeholder="none"
+              options={obsColumns.map((col) => ({ value: col, label: col }))}
+              onChange={(v) => setColorByColumn(v || null)}
+            />
+          </label>
 
-    const categoryCol = coloredCategoryMapping?.indexColumn ?? null;
-
-    // ── Derive rendering state ───────────────────────────────────────────
-    const obsmKeys = axes ? Object.keys(metadata.obsm) : [];
-    const currentEntry = axes ? metadata.obsm[axes.obsmKey] : null;
-    const dims = Array.from({ length: currentEntry?.n_dims ?? 0 }, (_, i) => i);
-    const prefix = currentEntry?.prefix ?? "x";
-    const xCol = axes ? `${prefix}_${axes.xDim}` : "";
-    const yCol = axes ? `${prefix}_${axes.yDim}` : "";
-
-    const isLoading = !!loadingKey || categoryLoading;
-
-    return (
-        <div className="flex h-full w-full flex-col overflow-hidden bg-base">
-            {/* ── Embedding selector ─────────────────────────────────── */}
-            {axes ? (
-                <div className="flex shrink-0 items-center gap-2 border-border-subtle border-b px-2 py-1 text-text-secondary">
-                    <label className="flex items-center gap-1.5">
-                        <span className="font-medium text-[10px] text-text-muted uppercase tracking-wider">
-                            Embedding
-                        </span>
-                        <select
-                            value={axes.obsmKey}
-                            disabled={loadingKey !== null}
-                            onChange={(e) =>
-                                handleSetAxes({
-                                    obsmKey: e.target.value,
-                                    xDim: 0,
-                                    yDim: 1,
-                                })
-                            }
-                        >
-                            {obsmKeys.map((k) => {
-                                const entry = metadata.obsm[k];
-                                const label = k.replace(/^X_/, "");
-                                const suffix = entry?.loaded;
-                                return (
-                                    <option key={k} value={k}>
-                                        {label}
-                                        {suffix}
-                                    </option>
-                                );
-                            })}
-                        </select>
-                    </label>
-
-                    <label className="flex items-center gap-1">
-                        <span className="text-[10px] text-text-muted">X</span>
-                        <select
-                            value={axes.xDim}
-                            disabled={loadingKey !== null || !currentEntry?.loaded}
-                            onChange={(e) =>
-                                handleSetAxes({
-                                    ...axes,
-                                    xDim: Number(e.target.value),
-                                })
-                            }
-                        >
-                            {dims.map((d) => (
-                                <option key={d} value={d}>
-                                    {d}
-                                </option>
-                            ))}
-                        </select>
-                    </label>
-
-                    <label className="flex items-center gap-1">
-                        <span className="text-[10px] text-text-muted">Y</span>
-                        <select
-                            value={axes.yDim}
-                            disabled={loadingKey !== null || !currentEntry?.loaded}
-                            onChange={(e) =>
-                                handleSetAxes({
-                                    ...axes,
-                                    yDim: Number(e.target.value),
-                                })
-                            }
-                        >
-                            {dims.map((d) => (
-                                <option key={d} value={d}>
-                                    {d}
-                                </option>
-                            ))}
-                        </select>
-                    </label>
-
-                    <div className="h-4 w-px bg-border-subtle" />
-
-                    <label className="flex items-center gap-1.5">
-                        <span className="font-medium text-[10px] text-text-muted uppercase tracking-wider">Color</span>
-                        <select value={colorByColumn ?? ""} onChange={(e) => setColorByColumn(e.target.value || null)}>
-                            <option value="">none</option>
-                            {obsColumns.map((col) => (
-                                <option key={col} value={col}>
-                                    {col}
-                                </option>
-                            ))}
-                        </select>
-                    </label>
-
-                    {colorByColumn ? (
-                        <>
-                            <div className="h-4 w-px bg-border-subtle" />
-                            <label className="flex items-center gap-1.5">
-                                <span className="font-medium text-[10px] text-text-muted uppercase tracking-wider">
-                                    Palette
-                                </span>
-                                <select
-                                    value={categoricalColormap}
-                                    onChange={(e) => setCategoricalColormap(e.target.value)}
-                                >
-                                    {availableColormaps.map((c) => (
-                                        <option key={c} value={c}>
-                                            {c}
-                                        </option>
-                                    ))}
-                                </select>
-                            </label>
-                            <label className="flex items-center gap-1">
-                                <span className="text-[10px] text-text-muted">Max</span>
-                                <input
-                                    type="number"
-                                    min={2}
-                                    max={256}
-                                    value={maxCategories}
-                                    onChange={(e) =>
-                                        setMaxCategories(Math.max(2, Math.min(256, Number(e.target.value))))
-                                    }
-                                    className="w-14"
-                                />
-                            </label>
-                        </>
-                    ) : null}
-
-                    {loadingKey ? (
-                        <span className="animate-pulse text-[11px] text-accent-amber italic">
-                            loading {loadingKey.replace(/^X_/, "")}...
-                        </span>
-                    ) : null}
-                </div>
-            ) : null}
-
-            {/* ── Scatter view (wrapped in LegendProvider) ────────────── */}
-            <LegendProvider
-                categoryMapping={coloredCategoryMapping}
-                coordinator={coordinator}
-                selection={brushSelection}
-                table={table}
-                categoryCol={categoryCol}
+          {colorModeInfo.canToggle && (
+            <Button
+              variant="ghost"
+              size="xs"
+              className="h-6 px-2 text-xs"
+              onClick={() =>
+                setColorModeOverride(colorMode === "continuous" ? "categorical" : "continuous")
+              }
             >
-                <ScatterView
-                    axes={axes}
-                    isLoading={isLoading}
-                    loadingKey={loadingKey}
-                    coordinator={coordinator}
-                    table={table}
-                    xCol={xCol}
-                    yCol={yCol}
-                    categoryCol={categoryCol}
-                    categoryMapping={categoryMapping}
-                    additionalFields={additionalFields}
-                    brushSelection={brushSelection}
-                    highlightId={highlightId}
-                    trajectory={trajectory}
-                    metadata={metadata}
-                    actions={actions}
+              {colorMode === "continuous" ? "scale" : "palette"}
+            </Button>
+          )}
+
+          {colorByColumn && colorMode === "categorical" ? (
+            <>
+              <div className="h-4 w-px bg-border-subtle" />
+              <label className="flex items-center gap-1.5">
+                <span className="font-medium text-[10px] text-text-muted uppercase tracking-wider">
+                  Palette
+                </span>
+                <CompactSelect
+                  value={categoricalColormap}
+                  options={availableColormaps.map((c) => ({ value: c, label: c }))}
+                  onChange={setCategoricalColormap}
                 />
-            </LegendProvider>
+              </label>
+              <label className="flex items-center gap-1">
+                <span className="text-[10px] text-text-muted">Max</span>
+                <input
+                  type="number"
+                  min={2}
+                  max={256}
+                  value={maxCategories}
+                  onChange={(e) =>
+                    setMaxCategories(Math.max(2, Math.min(256, Number(e.target.value))))
+                  }
+                  className="w-14 h-6 rounded border border-border bg-input px-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                />
+              </label>
+            </>
+          ) : null}
+
+          {colorByColumn && colorMode === "continuous" ? (
+            <>
+              <div className="h-4 w-px bg-border-subtle" />
+              <label className="flex items-center gap-1.5">
+                <span className="font-medium text-[10px] text-text-muted uppercase tracking-wider">
+                  Colormap
+                </span>
+                <CompactSelect
+                  value={continuousColormap}
+                  options={availableColormaps.map((c) => ({ value: c, label: c }))}
+                  onChange={setContinuousColormap}
+                />
+              </label>
+            </>
+          ) : null}
+
+          {loadingKey ? (
+            <span className="animate-pulse text-[11px] text-accent-amber italic">
+              loading {loadingKey.replace(/^X_/, "")}...
+            </span>
+          ) : null}
         </div>
-    );
+      ) : null}
+
+      {/* ── Scatter view (wrapped in LegendProvider) ─────────────────────── */}
+      <LegendProvider
+        categoryMapping={coloredCategoryMapping}
+        coordinator={coordinator}
+        selection={brushSelection}
+        table={table}
+        categoryCol={categoryCol}
+      >
+        <ScatterView
+          axes={axes}
+          isLoading={isLoading}
+          loadingKey={loadingKey}
+          coordinator={coordinator}
+          table={table}
+          xCol={xCol}
+          yCol={yCol}
+          colorMode={colorMode}
+          categoryCol={categoryCol}
+          categoryMapping={coloredCategoryMapping}
+          colorByColumn={colorByColumn}
+          continuousColormap={continuousColormap}
+          additionalFields={additionalFields}
+          brushSelection={brushSelection}
+          highlightId={state.highlightId}
+          trajectory={trajectory}
+          metadata={metadata}
+          actions={actions}
+        />
+      </LegendProvider>
+    </div>
+  );
 }
 
-// ── Inner component: consumes LegendContext for effective colors ──────────
+// ── Inner component ───────────────────────────────────────────────────────────
 
 interface ScatterViewProps {
-    axes: AxisState | null;
-    isLoading: boolean;
-    loadingKey: string | null;
-    coordinator: import("@uwdata/mosaic-core").Coordinator;
-    table: string;
-    xCol: string;
-    yCol: string;
-    categoryCol: string | null;
-    categoryMapping: CategoryMapping | null;
-    additionalFields: Record<string, string>;
-    brushSelection: import("@uwdata/mosaic-core").Selection;
-    highlightId: string | null;
-    trajectory: import("../../../types").TrajectoryData | null;
-    metadata: import("../../../types").Metadata;
-    actions: import("../../../dashboard/DashboardContext").DashboardActions;
+  axes: AxisState | null;
+  isLoading: boolean;
+  loadingKey: string | null;
+  coordinator: import("@uwdata/mosaic-core").Coordinator;
+  table: string;
+  xCol: string;
+  yCol: string;
+  colorMode: ColorMode;
+  categoryCol: string | null;
+  categoryMapping: CategoryMapping | null;
+  colorByColumn: string | null;
+  continuousColormap: string;
+  additionalFields: Record<string, string>;
+  brushSelection: import("@uwdata/mosaic-core").Selection;
+  highlightId: string | null;
+  trajectory: import("../../../types").TrajectoryData | null;
+  metadata: import("../../../types").Metadata;
+  actions: import("../../../dashboard/DashboardContext").DashboardActions;
 }
 
 function ScatterView({
+  axes,
+  isLoading,
+  loadingKey,
+  coordinator,
+  table,
+  xCol,
+  yCol,
+  colorMode,
+  categoryCol,
+  categoryMapping,
+  colorByColumn,
+  continuousColormap,
+  additionalFields,
+  brushSelection,
+  highlightId,
+  trajectory,
+  metadata,
+  actions,
+}: ScatterViewProps) {
+  const categoryColors = useEffectiveCategoryColors();
+
+  // ── Canvas refs ────────────────────────────────────────────────────────────
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const overlayRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const gpuRef = useRef<ScatterplotHandle | null>(null);
+  const trajectoryOverlayRef = useRef<TrajectoryOverlaySvgHandle | null>(null);
+
+  // ── State refs (no re-render on change) ───────────────────────────────────
+  const viewStateRef = useRef({ panX: 0, panY: 0, zoom: 1 });
+  const rowIndicesRef = useRef<number[]>([]);
+  const [gpuError, setGpuError] = useState<string | null>(null);
+  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
+
+  // ── Data from Mosaic binary endpoints ─────────────────────────────────────
+  const { data, colorRange, loading: dataLoading } = useMosaicScatterData({
     axes,
-    isLoading,
-    loadingKey,
-    coordinator,
-    table,
     xCol,
     yCol,
+    colorMode,
     categoryCol,
-    categoryMapping,
-    additionalFields,
-    brushSelection,
-    highlightId,
-    trajectory,
-    metadata,
-    actions,
-}: ScatterViewProps) {
-    const categoryColors = useEffectiveCategoryColors();
+    originalCol: colorByColumn,
+    continuousColCol: colorMode === "continuous" ? colorByColumn : null,
+    continuousColormap,
+  });
 
-    const scatterRef = useRef<HTMLDivElement>(null);
-    const size = useContainerSize(scatterRef);
+  // ── Stable callbacks ref — GPU config never changes identity ──────────────
+  const callbacksRef = useRef({
+    onSelectionChange: (_count: number | null, _indices?: number[]) => {},
+    onPointClick: (_index: number, _pos: [number, number], _catIdx: number, _catName: string) => {},
+    onViewChange: (_zoom: number) => {},
+  });
 
-    // ── Trajectory ────────────────────────────────────────────────────────
+  // Update callbacks each render without recreating config
+  callbacksRef.current.onSelectionChange = (count, indices) => {
+    const rowIds = (indices ?? []).map((i) => rowIndicesRef.current[i] ?? i);
+    brushSelection.update({
+      source: "scatter",
+      clients: new Set(),
+      value: rowIds,
+      predicate:
+        rowIds.length > 0
+          ? or(...rowIds.map((id) => eq(column("__row_index__"), literal(id))))
+          : null,
+    });
+  };
 
-    const axesKeyRef = useRef<string | null>(null);
-    useEffect(() => {
-        const key = axes ? `${axes.obsmKey}:${axes.xDim}:${axes.yDim}` : null;
-        const changed = axesKeyRef.current !== null && key !== axesKeyRef.current;
-        axesKeyRef.current = key;
-        if (changed) actions.setTrajectory(null);
-    }, [axes, actions]);
+  callbacksRef.current.onPointClick = (index) => {
+    const rowIdx = rowIndicesRef.current[index] ?? index;
+    actions.setHighlight(String(rowIdx));
+  };
 
-    const showTrajectory = useCallback(
-        async (trackId: number, fovName: string, clickedT?: number) => {
-            const spatialX = metadata.spatial?.x_col ?? "x";
-            const spatialY = metadata.spatial?.y_col ?? "y";
-            const catSelect = categoryCol ? `, ${categoryCol} AS category` : "";
-            const safeFovName = String(fovName).replace(/'/g, "''");
-            const safeTrackId = Number.isFinite(trackId) ? trackId : 0;
-            const sql = `SELECT ${xCol} AS emb_x, ${yCol} AS emb_y, ${spatialX} AS spatial_x, ${spatialY} AS spatial_y, t${catSelect} FROM ${table} WHERE track_id = ${safeTrackId} AND fov_name = '${safeFovName}' ORDER BY t ASC`;
-            const result = await coordinator.query(sql, { type: "json" });
-            const rows = toRows<TrajectoryFrame>(result);
-            if (rows.length > 0) {
-                const initialT = clickedT != null && rows.some((r) => r.t === clickedT) ? clickedT : rows[0].t;
-                actions.setTrajectory({
-                    trackId,
-                    fovName,
-                    tIndex: initialT,
-                    points: rows,
-                });
-            }
-        },
-        [coordinator, table, xCol, yCol, categoryCol, actions, metadata.spatial],
-    );
+  callbacksRef.current.onViewChange = () => {
+    if (gpuRef.current) viewStateRef.current = gpuRef.current.getViewState();
+    trajectoryOverlayRef.current?.update();
+  };
 
-    const activeIndex = useMemo(() => {
-        if (!trajectory) return null;
-        const idx = trajectory.points.findIndex((p) => p.t === trajectory.tIndex);
-        return idx >= 0 ? idx : null;
-    }, [trajectory]);
+  // Config created once — never changes identity (stable for GPU)
+  const configRef = useRef<ScatterplotConfig>({
+    callbacks: {
+      onSelectionChange: (...args) => callbacksRef.current.onSelectionChange(...args),
+      onPointClick: (...args) => callbacksRef.current.onPointClick(...args),
+      onViewChange: (...args) => callbacksRef.current.onViewChange(...args),
+    },
+  });
 
-    const overlayComponent = useMemo(
-        () =>
-            trajectory
-                ? {
-                      class: TrajectoryOverlay,
-                      props: { points: trajectory.points, categoryColors, activeIndex },
-                  }
-                : null,
-        [trajectory, categoryColors, activeIndex],
-    );
-
-    const trajectoryRef = useRef(trajectory);
-    trajectoryRef.current = trajectory;
-
-    const handleSelection = useCallback(
-        (pts: unknown) => {
-            const arr = pts as { identifier?: string | number | bigint }[] | null;
-            const id = arr?.[0]?.identifier ?? null;
-            actions.setHighlight(id != null ? String(id) : null);
-            if (trajectoryRef.current) actions.setTrajectory(null);
-        },
-        [actions],
-    );
-
-    // ── Scatter content ──────────────────────────────────────────────────
-    let scatterContent: React.ReactNode = null;
-    if (!axes) {
-        scatterContent = (
-            <div className="flex h-full items-center justify-center text-sm text-text-muted">No embedding loaded</div>
-        );
-    } else if (isLoading) {
-        scatterContent = (
-            <div className="flex h-full items-center justify-center text-sm text-text-muted">
-                Loading
-                {loadingKey ? ` ${loadingKey.replace(/^X_/, "")}...` : " colors..."}
-            </div>
-        );
-    } else if (size.width > 0 && size.height > 0) {
-        scatterContent = (
-            <EmbeddingViewMosaic
-                key={`${xCol}:${yCol}:${categoryCol ?? "none"}`}
-                coordinator={coordinator}
-                table={table}
-                x={xCol}
-                y={yCol}
-                category={categoryCol}
-                categoryColors={categoryColors}
-                identifier="__row_index__"
-                additionalFields={additionalFields}
-                width={size.width}
-                height={size.height}
-                filter={brushSelection}
-                rangeSelection={brushSelection}
-                tooltip={null}
-                text={null}
-                config={SCATTER_CONFIG}
-                onSelection={handleSelection}
-                customTooltip={NOOP_TOOLTIP}
-                customOverlay={overlayComponent}
-            />
-        );
+  // ── GPU init (only when data changes) ─────────────────────────────────────
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const overlay = overlayRef.current;
+    if (!data || !canvas || !overlay) return;
+    if (!navigator.gpu) {
+      setGpuError("WebGPU not supported. Use Chrome, Edge, or Safari 18+.");
+      return;
     }
 
+    let destroyed = false;
+    rowIndicesRef.current = data.rowIndices ?? [];
+
+    // Apply DPR scaling
+    const dpr = window.devicePixelRatio || 1;
+    const w = canvas.clientWidth;
+    const h = canvas.clientHeight;
+    canvas.width = Math.floor(w * dpr);
+    canvas.height = Math.floor(h * dpr);
+    overlay.width = Math.floor(w * dpr);
+    overlay.height = Math.floor(h * dpr);
+    const ctx = overlay.getContext("2d");
+    if (ctx) ctx.scale(dpr, dpr);
+
+    createScatterplot(canvas, overlay, data, configRef.current)
+      .then((gpu) => {
+        if (!destroyed) gpuRef.current = gpu;
+      })
+      .catch((err: Error) => setGpuError(err.message));
+
+    const obs = new ResizeObserver((entries) => {
+      const r = entries[0]?.contentRect;
+      if (!r) return;
+      const dpr2 = window.devicePixelRatio || 1;
+      canvas.width = Math.floor(r.width * dpr2);
+      canvas.height = Math.floor(r.height * dpr2);
+      overlay.width = Math.floor(r.width * dpr2);
+      overlay.height = Math.floor(r.height * dpr2);
+      const ctx2 = overlay.getContext("2d");
+      if (ctx2) {
+        ctx2.setTransform(1, 0, 0, 1, 0, 0);
+        ctx2.scale(dpr2, dpr2);
+      }
+      gpuRef.current?.resize(Math.floor(r.width), Math.floor(r.height));
+      setContainerSize({ width: r.width, height: r.height });
+    });
+    obs.observe(canvas);
+
+    return () => {
+      destroyed = true;
+      obs.disconnect();
+      gpuRef.current?.destroy();
+      gpuRef.current = null;
+    };
+  }, [data]);
+
+  // ── Color updates without GPU re-init ─────────────────────────────────────
+  const paletteRef = useRef<readonly (readonly [number, number, number])[]>([]);
+
+  useEffect(() => {
+    if (colorMode !== "categorical") return;
+    const colors = categoryColors ?? [];
+    if (colors.length === 0) return;
+    const palette = hexToRgbPalette(colors);
+    paletteRef.current = palette;
+    gpuRef.current?.updateColors(palette);
+  }, [categoryColors, colorMode]);
+
+  useEffect(() => {
+    if (colorMode !== "continuous" || !data?.colorValues) return;
+    gpuRef.current?.updateColorsDirect(data.colorValues);
+  }, [data?.colorValues, colorMode]);
+
+  // ── Trajectory ────────────────────────────────────────────────────────────
+  const axesKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    const key = axes ? `${axes.obsmKey}:${axes.xDim}:${axes.yDim}` : null;
+    const changed = axesKeyRef.current !== null && key !== axesKeyRef.current;
+    axesKeyRef.current = key;
+    if (changed) actions.setTrajectory(null);
+  }, [axes, actions]);
+
+  const showTrajectory = useCallback(
+    async (trackId: number, fovName: string, clickedT?: number) => {
+      const spatialX = metadata.spatial?.x_col ?? "x";
+      const spatialY = metadata.spatial?.y_col ?? "y";
+      const catSelect = categoryCol ? `, ${categoryCol} AS category` : "";
+      const safeFovName = String(fovName).replace(/'/g, "''");
+      const safeTrackId = Number.isFinite(trackId) ? trackId : 0;
+      const sql = `SELECT ${xCol} AS emb_x, ${yCol} AS emb_y, ${spatialX} AS spatial_x, ${spatialY} AS spatial_y, t${catSelect} FROM ${table} WHERE track_id = ${safeTrackId} AND fov_name = '${safeFovName}' ORDER BY t ASC`;
+      const result = await coordinator.query(sql, { type: "json" });
+      const rows = toRows<TrajectoryFrame>(result);
+      if (rows.length > 0) {
+        const initialT =
+          clickedT != null && rows.some((r) => r.t === clickedT) ? clickedT : rows[0].t;
+        actions.setTrajectory({
+          trackId,
+          fovName,
+          tIndex: initialT,
+          points: rows,
+        });
+      }
+    },
+    [coordinator, table, xCol, yCol, categoryCol, actions, metadata.spatial],
+  );
+
+  const activeIndex = useMemo(() => {
+    if (!trajectory) return null;
+    const idx = trajectory.points.findIndex((p) => p.t === trajectory.tIndex);
+    return idx >= 0 ? idx : null;
+  }, [trajectory]);
+
+  // ── Render ────────────────────────────────────────────────────────────────
+  const showLoading = isLoading || dataLoading;
+
+  if (!axes) {
     return (
-        <div
-            ref={scatterRef}
-            className={`relative min-h-0 flex-1 overflow-hidden${trajectory ? "trajectory-active" : ""}`}
-        >
-            {scatterContent}
-            {categoryMapping && !isLoading ? <CategoricalLegend /> : null}
-            <div
-                className="tp-overlay tp-overlay--bottom-left"
-                style={highlightId ? undefined : { visibility: "hidden", pointerEvents: "none" }}
-            >
-                <PointInfoPane
-                    highlightId={highlightId}
-                    additionalFields={Object.keys(additionalFields)}
-                    onShowTrajectory={showTrajectory}
-                />
-            </div>
-        </div>
+      <div className="relative min-h-0 flex-1 overflow-hidden flex items-center justify-center text-sm text-text-muted">
+        No embedding loaded
+      </div>
     );
+  }
+
+  if (showLoading) {
+    return (
+      <div className="relative min-h-0 flex-1 overflow-hidden flex items-center justify-center text-sm text-text-muted">
+        Loading{loadingKey ? ` ${loadingKey.replace(/^X_/, "")}...` : "..."}
+      </div>
+    );
+  }
+
+  if (gpuError) {
+    return (
+      <div className="relative min-h-0 flex-1 overflow-hidden flex items-center justify-center text-sm text-red-400 p-4 text-center">
+        {gpuError}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      ref={containerRef}
+      className={`relative min-h-0 flex-1 overflow-hidden${trajectory ? " trajectory-active" : ""}`}
+    >
+      {/* WebGPU render canvas */}
+      <canvas
+        ref={canvasRef}
+        className="absolute inset-0 w-full h-full"
+        style={{ display: "block" }}
+      />
+      {/* 2D overlay canvas (lasso, marquee, interaction feedback) */}
+      <canvas
+        ref={overlayRef}
+        className="absolute inset-0 w-full h-full"
+        style={{ display: "block" }}
+      />
+
+      {/* Trajectory SVG overlay */}
+      {trajectory ? (
+        <TrajectoryOverlaySvg
+          ref={trajectoryOverlayRef}
+          points={trajectory.points}
+          activeIndex={activeIndex}
+          categoryColors={categoryColors ?? []}
+          containerRef={containerRef}
+          gpuRef={gpuRef}
+        />
+      ) : null}
+
+      {/* Legend */}
+      {colorMode === "categorical" && categoryMapping && !showLoading ? (
+        <CategoricalLegend />
+      ) : null}
+      {colorMode === "continuous" && colorByColumn && colorRange ? (
+        <ContinuousLegend
+          columnName={colorByColumn}
+          colormap={continuousColormap}
+          vmin={colorRange[0]}
+          vmax={colorRange[1]}
+        />
+      ) : null}
+
+      {/* Point info pane */}
+      <div
+        className="tp-overlay tp-overlay--bottom-left"
+        style={highlightId ? undefined : { visibility: "hidden", pointerEvents: "none" }}
+      >
+        <PointInfoPane
+          highlightId={highlightId}
+          additionalFields={Object.keys(additionalFields)}
+          onShowTrajectory={showTrajectory}
+        />
+      </div>
+    </div>
+  );
 }
