@@ -76,15 +76,25 @@ export function createVertexShader(uniforms: ScatterUniforms) {
   }).$uses({ unpackColor });
 }
 
-export function createFragmentShader() {
+export function createFragmentShader(uniforms: import("./buffers").ScatterUniforms) {
+  const { pointShapeUniform } = uniforms;
   return fragmentFn({
     in: { color: d.vec4f, uv: d.vec2f },
     out: d.vec4f,
   })((input) => {
     "use gpu";
-    const dist = sdDisk(input.uv, 1.0);
-    const fw = std.max(std.fwidth(dist), 0.01);
-    const alpha = 1 - std.smoothstep(-fw, fw, dist);
+    let alpha = 0.0;
+    if (pointShapeUniform.value === 0) {
+      // Disk: hard-edged circle with analytic anti-aliasing via smoothstep
+      const dist = sdDisk(input.uv, 1.0);
+      const fw = std.max(std.fwidth(dist), 0.01);
+      alpha = 1 - std.smoothstep(-fw, fw, dist);
+    } else {
+      // Gaussian: soft exp(-r²) falloff — overlapping points add density naturally,
+      // anti-aliases at any zoom level without needing MSAA.
+      const r2 = input.uv.x * input.uv.x + input.uv.y * input.uv.y;
+      alpha = std.exp(-r2 * 3.0); // sigma ≈ 0.58 within the unit quad
+    }
     if (alpha < 0.004) {
       std.discard();
     }
@@ -94,5 +104,5 @@ export function createFragmentShader() {
       input.color.z * alpha,
       alpha,
     );
-  });
+  }).$uses({ pointShapeUniform });
 }

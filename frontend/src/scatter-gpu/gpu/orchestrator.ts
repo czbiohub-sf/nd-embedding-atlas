@@ -18,7 +18,7 @@ export async function createScatterplot(
     const t0 = performance.now();
 
     const gpu = await initGPU(canvas);
-    const { root, device, context, format } = gpu;
+    const { root, device, context, format, preferredWorkgroupSize } = gpu;
     const tGpu = performance.now();
     console.log(`GPU init: ${(tGpu - t0).toFixed(1)}ms`);
 
@@ -37,7 +37,7 @@ export async function createScatterplot(
     const tUpload = performance.now();
     console.log(`Buffer upload: ${(tUpload - tGpu).toFixed(1)}ms`);
 
-    const culling = createCullingEngine(root, device, buffers, uniforms, data.numCells);
+    const culling = createCullingEngine(root, device, buffers, uniforms, data.numCells, preferredWorkgroupSize);
 
     // Default to transparent — let the CSS background-color of the container
     // show through. This makes the scatter canvas respond to dark/light theme
@@ -46,17 +46,35 @@ export async function createScatterplot(
         config?.render?.backgroundColor ?? ([0, 0, 0, 0] as [number, number, number, number]);
 
     const mainVertex = createVertexShader(uniforms);
-    const mainFragment = createFragmentShader();
+    const mainFragment = createFragmentShader(uniforms);
     const { render } = createRenderPipeline(root, mainVertex, mainFragment, buffers, culling, format, backgroundColor, data.numCells);
 
-    const selection = createSelectionEngine(root, device, buffers, uniforms, data.numCells, (count, indices) =>
-        config?.callbacks?.onSelectionChange?.(count, indices),
-    );
+    const selection = createSelectionEngine(root, device, buffers, uniforms, data.numCells, (count, indices) => {
+        selectionActive = count !== null;
+        // When selection is cleared, restore LOD stride for current zoom
+        if (!selectionActive) {
+            uniforms.lodStrideUniform.write(zoomToLodStride(currentZoom));
+        } else {
+            uniforms.lodStrideUniform.write(1); // disable LOD while selection is active
+        }
+        config?.callbacks?.onSelectionChange?.(count, indices);
+    }, preferredWorkgroupSize);
     const tPipelines = performance.now();
     console.log(`Pipeline setup: ${(tPipelines - tUpload).toFixed(1)}ms`);
 
+    // Phase 4 LOD: map zoom level → stride (how many points to skip).
+    // At low zoom many points overlap, so we drop every N-th to reduce GPU load.
+    // Thresholds: zoom < 0.05 → 8×, < 0.15 → 4×, < 0.4 → 2×, else → 1 (all).
+    function zoomToLodStride(zoom: number): number {
+        if (zoom < 0.05) return 8;
+        if (zoom < 0.15) return 4;
+        if (zoom < 0.4)  return 2;
+        return 1;
+    }
+
     let currentZoom = 1;
     let viewVersion = 0;
+    let selectionActive = false; // tracked locally so LOD can disable itself during selection
 
     const interaction = createInteractionController(
         canvas,
@@ -73,6 +91,11 @@ export async function createScatterplot(
             onViewChange: (zoom: number) => {
                 currentZoom = zoom;
                 viewVersion++;
+                // Phase 4 LOD: update stride based on zoom; skip if selection is active
+                // so selected points are never inadvertently hidden by stride filtering.
+                if (!selectionActive) {
+                    uniforms.lodStrideUniform.write(zoomToLodStride(zoom));
+                }
                 config?.callbacks?.onViewChange?.(zoom);
             },
             onFps: (fps: number) => {
@@ -110,6 +133,9 @@ export async function createScatterplot(
         },
         config?.interaction,
     );
+
+    // Initialise point shape from config (default: disk)
+    uniforms.pointShapeUniform.write(config?.render?.pointShape === "gaussian" ? 1 : 0);
 
     // ── Grid spatial index for O(1) hit testing ───────────────────────────
     // World space is [-1,1]×[-1,1]. Divide into GRID×GRID cells; each cell
@@ -177,6 +203,10 @@ export async function createScatterplot(
         },
         getViewState() {
             return interaction.getViewState();
+        },
+        setPointShape(shape: "disk" | "gaussian") {
+            uniforms.pointShapeUniform.write(shape === "gaussian" ? 1 : 0);
+            interaction.requestRender();
         },
         worldToScreen(wx: number, wy: number, w: number, h: number) {
             const { panX, panY, zoom } = interaction.getViewState();

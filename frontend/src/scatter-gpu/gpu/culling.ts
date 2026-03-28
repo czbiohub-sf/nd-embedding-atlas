@@ -20,6 +20,7 @@ export function createCullingEngine(
   buffers: ScatterBuffers,
   uniforms: ScatterUniforms,
   numPoints: number,
+  wgSize: 64 | 256 = 64,
 ) {
   // Visibility buffer: 1 = visible, 0 = culled
   const visibilityBuffer = root
@@ -33,42 +34,48 @@ export function createCullingEngine(
 
   const posReadonly = buffers.posBuffer.as("readonly");
   const visMutable  = visibilityBuffer.as("mutable");
-  const { viewUniform } = uniforms;
+  const { viewUniform, lodStrideUniform } = uniforms;
 
   // Compile-time constant — tgpu.unroll expands this to 4 explicit blocks
   const BATCH = [0, 1, 2, 3] as const;
 
-  // 64-thread workgroups: optimal for Apple Silicon (M-series warp size),
-  // safe on NVIDIA/AMD (just slightly more workgroups dispatched vs 256).
   const cullComputeFn = tgpu["~unstable"].computeFn({
-    workgroupSize: [64],
+    workgroupSize: [wgSize],
     in: { gid: d.builtin.globalInvocationId },
   })((input) => {
     "use gpu";
-    const base = input.gid.x * BATCH.length;
-    const view = viewUniform.value;
-    const m = 0.05;
+    const base   = input.gid.x * BATCH.length;
+    const view   = viewUniform.value;
+    const stride = lodStrideUniform.value;
+    const m  = 0.05;
     const xb = (1.0 + m) * view.w;
     for (const k of tgpu.unroll(BATCH)) {
       const idx = base + k;
       if (idx < numPoints) {
-        const pos = posReadonly.value[idx];
-        const sx = (pos.x + view.x) * view.z;
-        const sy = (pos.y + view.y) * view.z;
-        if (sx >= -xb && sx <= xb && sy >= -(1.0 + m) && sy <= 1.0 + m) {
-          visMutable.value[idx] = 1;
-        } else {
+        // Phase 4 LOD: skip points that don't survive the stride filter.
+        // stride=1 → all points, stride=4 → every 4th. Fast path avoids
+        // the more expensive viewport projection for culled points.
+        if (idx % stride !== 0) {
           visMutable.value[idx] = 0;
+        } else {
+          const pos = posReadonly.value[idx];
+          const sx = (pos.x + view.x) * view.z;
+          const sy = (pos.y + view.y) * view.z;
+          if (sx >= -xb && sx <= xb && sy >= -(1.0 + m) && sy <= 1.0 + m) {
+            visMutable.value[idx] = 1;
+          } else {
+            visMutable.value[idx] = 0;
+          }
         }
       }
     }
-  }).$uses({ posReadonly, visMutable, viewUniform });
+  }).$uses({ posReadonly, visMutable, viewUniform, lodStrideUniform });
 
   const cullPipeline = root["~unstable"]
     .withCompute(cullComputeFn)
     .createPipeline();
 
-  const workgroups = Math.ceil(numPoints / (64 * BATCH.length));
+  const workgroups = Math.ceil(numPoints / (wgSize * BATCH.length));
   let lastViewVersion = -1;
 
   function dispatchCulling(viewVersion = 0) {
