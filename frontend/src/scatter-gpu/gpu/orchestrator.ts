@@ -50,31 +50,13 @@ export async function createScatterplot(
     const { render } = createRenderPipeline(root, mainVertex, mainFragment, buffers, culling, format, backgroundColor, data.numCells);
 
     const selection = createSelectionEngine(root, device, buffers, uniforms, data.numCells, (count, indices) => {
-        selectionActive = count !== null;
-        // When selection is cleared, restore LOD stride for current zoom
-        if (!selectionActive) {
-            uniforms.lodStrideUniform.write(zoomToLodStride(currentZoom));
-        } else {
-            uniforms.lodStrideUniform.write(1); // disable LOD while selection is active
-        }
         config?.callbacks?.onSelectionChange?.(count, indices);
     }, preferredWorkgroupSize);
     const tPipelines = performance.now();
     console.log(`Pipeline setup: ${(tPipelines - tUpload).toFixed(1)}ms`);
 
-    // Phase 4 LOD: map zoom level → stride (how many points to skip).
-    // At low zoom many points overlap, so we drop every N-th to reduce GPU load.
-    // Thresholds: zoom < 0.05 → 8×, < 0.15 → 4×, < 0.4 → 2×, else → 1 (all).
-    function zoomToLodStride(zoom: number): number {
-        if (zoom < 0.05) return 8;
-        if (zoom < 0.15) return 4;
-        if (zoom < 0.4)  return 2;
-        return 1;
-    }
-
     let currentZoom = 1;
     let viewVersion = 0;
-    let selectionActive = false; // tracked locally so LOD can disable itself during selection
 
     const interaction = createInteractionController(
         canvas,
@@ -91,11 +73,6 @@ export async function createScatterplot(
             onViewChange: (zoom: number) => {
                 currentZoom = zoom;
                 viewVersion++;
-                // Phase 4 LOD: update stride based on zoom; skip if selection is active
-                // so selected points are never inadvertently hidden by stride filtering.
-                if (!selectionActive) {
-                    uniforms.lodStrideUniform.write(zoomToLodStride(zoom));
-                }
                 config?.callbacks?.onViewChange?.(zoom);
             },
             onFps: (fps: number) => {

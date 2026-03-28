@@ -20,12 +20,9 @@ export function createUniforms(
   );
   const viewUniform = root.createUniform(d.vec4f, d.vec4f(0, 0, 1, aspectRatio));
   const selectionModeUniform = root.createUniform(d.f32, 0);
-  // LOD stride: 1 = all points, 2 = every other, 4 = every 4th, etc.
-  // Updated by onViewChange based on zoom level (see orchestrator.ts).
-  const lodStrideUniform = root.createUniform(d.u32, 1);
   // Point shape: 0 = disk (hard edge + smoothstep), 1 = gaussian (exp(-r²) falloff).
   const pointShapeUniform = root.createUniform(d.u32, 0);
-  return { paramsUniform, viewUniform, selectionModeUniform, lodStrideUniform, pointShapeUniform };
+  return { paramsUniform, viewUniform, selectionModeUniform, pointShapeUniform };
 }
 
 export type ScatterUniforms = ReturnType<typeof createUniforms>;

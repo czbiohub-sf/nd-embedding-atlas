@@ -34,7 +34,7 @@ export function createCullingEngine(
 
   const posReadonly = buffers.posBuffer.as("readonly");
   const visMutable  = visibilityBuffer.as("mutable");
-  const { viewUniform, lodStrideUniform } = uniforms;
+  const { viewUniform } = uniforms;
 
   // Compile-time constant — tgpu.unroll expands this to 4 explicit blocks
   const BATCH = [0, 1, 2, 3] as const;
@@ -44,32 +44,24 @@ export function createCullingEngine(
     in: { gid: d.builtin.globalInvocationId },
   })((input) => {
     "use gpu";
-    const base   = input.gid.x * BATCH.length;
-    const view   = viewUniform.value;
-    const stride = lodStrideUniform.value;
+    const base = input.gid.x * BATCH.length;
+    const view = viewUniform.value;
     const m  = 0.05;
     const xb = (1.0 + m) * view.w;
     for (const k of tgpu.unroll(BATCH)) {
       const idx = base + k;
       if (idx < numPoints) {
-        // Phase 4 LOD: skip points that don't survive the stride filter.
-        // stride=1 → all points, stride=4 → every 4th. Fast path avoids
-        // the more expensive viewport projection for culled points.
-        if (idx % stride !== 0) {
-          visMutable.value[idx] = 0;
+        const pos = posReadonly.value[idx];
+        const sx = (pos.x + view.x) * view.z;
+        const sy = (pos.y + view.y) * view.z;
+        if (sx >= -xb && sx <= xb && sy >= -(1.0 + m) && sy <= 1.0 + m) {
+          visMutable.value[idx] = 1;
         } else {
-          const pos = posReadonly.value[idx];
-          const sx = (pos.x + view.x) * view.z;
-          const sy = (pos.y + view.y) * view.z;
-          if (sx >= -xb && sx <= xb && sy >= -(1.0 + m) && sy <= 1.0 + m) {
-            visMutable.value[idx] = 1;
-          } else {
-            visMutable.value[idx] = 0;
-          }
+          visMutable.value[idx] = 0;
         }
       }
     }
-  }).$uses({ posReadonly, visMutable, viewUniform, lodStrideUniform });
+  }).$uses({ posReadonly, visMutable, viewUniform });
 
   const cullPipeline = root["~unstable"]
     .withCompute(cullComputeFn)
