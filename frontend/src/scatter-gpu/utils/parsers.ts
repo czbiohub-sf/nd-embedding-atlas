@@ -8,130 +8,78 @@
  *   Bytes 5–(5+header_len-1): JSON header (UTF-8)
  *   Padding:       align to 4 bytes from byte 0
  *   Data:          Float32Array (positions/rgba) or Uint8Array (categories)
- *
- * The version byte is prepended by the Python endpoint (Wave 1B).
- * Client parsers read byte 0 as version, assert === 1, then parse from offset 1.
  */
+import {
+    CategoryHeaderSchema,
+    ContinuousColorsHeaderSchema,
+    PositionHeaderSchema,
+    type CategoryHeader,
+    type ContinuousColorsHeader,
+    type PositionHeader,
+} from "./schemas";
 
 /** Parsed result from /api/scatter-positions */
 export interface PositionBlob {
-  header: {
-    numCells: number;
-    embeddingKey: string;
-    ndim: number;
-    rowIndices: number[];
-  };
-  positions: Float32Array;
+    header: PositionHeader;
+    positions: Float32Array;
 }
 
 /** Parsed result from /api/scatter-categories */
 export interface CategoryBlob {
-  header: {
-    categoryNames: string[];
-  };
-  categoryIndices: Uint8Array;
-}
-
-/**
- * Parse the binary position blob returned by /api/scatter-positions.
- *
- * Protocol version 1:
- *   [version: u8][header_len: u32le][header: utf8][padding to 4B][float32[] positions]
- */
-export function parsePositionBlob(buf: ArrayBuffer): PositionBlob {
-  const view = new DataView(buf);
-
-  // Read and validate version byte
-  const version = view.getUint8(0);
-  if (version !== 1) {
-    throw new Error(`Unsupported scatter-positions format v${version} (expected 1)`);
-  }
-
-  // Header length is at offset 1 (4 bytes, little-endian)
-  const headerLen = view.getUint32(1, true);
-
-  // JSON header at offset 5
-  const headerBytes = new Uint8Array(buf, 5, headerLen);
-  const header = JSON.parse(new TextDecoder().decode(headerBytes)) as PositionBlob["header"];
-
-  // Positions start after padding to next 4-byte boundary from start of buffer
-  const rawDataOffset = 5 + headerLen;
-  const alignedOffset = Math.ceil(rawDataOffset / 4) * 4;
-  const positions = new Float32Array(buf, alignedOffset);
-
-  return { header, positions };
-}
-
-/**
- * Parse the binary category blob returned by /api/scatter-categories.
- *
- * Protocol version 1:
- *   [version: u8][header_len: u32le][header: utf8][padding to 4B][uint8[] category_indices]
- */
-export function parseCategoryBlob(buf: ArrayBuffer): CategoryBlob {
-  const view = new DataView(buf);
-
-  // Read and validate version byte
-  const version = view.getUint8(0);
-  if (version !== 1) {
-    throw new Error(`Unsupported scatter-categories format v${version} (expected 1)`);
-  }
-
-  // Header length is at offset 1 (4 bytes, little-endian)
-  const headerLen = view.getUint32(1, true);
-
-  // JSON header at offset 5
-  const headerBytes = new Uint8Array(buf, 5, headerLen);
-  const header = JSON.parse(new TextDecoder().decode(headerBytes)) as CategoryBlob["header"];
-
-  // Category indices start after padding to next 4-byte boundary from start of buffer
-  const rawDataOffset = 5 + headerLen;
-  const alignedOffset = Math.ceil(rawDataOffset / 4) * 4;
-  const categoryIndices = new Uint8Array(buf, alignedOffset);
-
-  return { header, categoryIndices };
+    header: CategoryHeader;
+    categoryIndices: Uint8Array;
 }
 
 /** Parsed result from /api/scatter-continuous-colors */
 export interface ContinuousColorsBlob {
-  header: {
-    numPoints: number;
-    vmin: number;
-    vmax: number;
-    colormap: string;
-  };
-  /** RGBA float32 values, length = numPoints * 4, each channel in [0, 1] */
-  rgba: Float32Array;
+    header: ContinuousColorsHeader;
+    /** RGBA float32 values, length = numPoints * 4, each channel in [0, 1] */
+    rgba: Float32Array;
+}
+
+/** Shared binary framing logic: reads version byte, returns aligned data offset. */
+function parseFrame(buf: ArrayBuffer, label: string): { header: unknown; dataOffset: number } {
+    const view = new DataView(buf);
+    const version = view.getUint8(0);
+    if (version !== 1) {
+        throw new Error(`Unsupported ${label} format v${version} (expected 1)`);
+    }
+    const headerLen = view.getUint32(1, true);
+    const headerBytes = new Uint8Array(buf, 5, headerLen);
+    const header: unknown = JSON.parse(new TextDecoder().decode(headerBytes));
+    const rawDataOffset = 5 + headerLen;
+    const dataOffset = Math.ceil(rawDataOffset / 4) * 4;
+    return { header, dataOffset };
+}
+
+/**
+ * Parse the binary position blob returned by /api/scatter-positions.
+ * Validates the JSON header with Zod — throws a descriptive ZodError if
+ * the Python endpoint changes field names or types.
+ */
+export function parsePositionBlob(buf: ArrayBuffer): PositionBlob {
+    const { header: rawHeader, dataOffset } = parseFrame(buf, "scatter-positions");
+    const header = PositionHeaderSchema.parse(rawHeader);
+    const positions = new Float32Array(buf, dataOffset);
+    return { header, positions };
+}
+
+/**
+ * Parse the binary category blob returned by /api/scatter-categories.
+ */
+export function parseCategoryBlob(buf: ArrayBuffer): CategoryBlob {
+    const { header: rawHeader, dataOffset } = parseFrame(buf, "scatter-categories");
+    const header = CategoryHeaderSchema.parse(rawHeader);
+    const categoryIndices = new Uint8Array(buf, dataOffset);
+    return { header, categoryIndices };
 }
 
 /**
  * Parse the binary continuous-colors blob returned by /api/scatter-continuous-colors.
- *
- * Protocol version 1:
- *   [version: u8][header_len: u32le][header: utf8][padding to 4B][float32[] rgba]
- *
- * The JSON header contains: { numPoints, vmin, vmax, colormap }
  */
 export function parseContinuousColorsBlob(buf: ArrayBuffer): ContinuousColorsBlob {
-  const view = new DataView(buf);
-
-  // Read and validate version byte
-  const version = view.getUint8(0);
-  if (version !== 1) {
-    throw new Error(`Unsupported scatter-continuous-colors format v${version} (expected 1)`);
-  }
-
-  // Header length is at offset 1 (4 bytes, little-endian)
-  const headerLen = view.getUint32(1, true);
-
-  // JSON header at offset 5
-  const headerBytes = new Uint8Array(buf, 5, headerLen);
-  const header = JSON.parse(new TextDecoder().decode(headerBytes)) as ContinuousColorsBlob["header"];
-
-  // RGBA data starts after padding to next 4-byte boundary from start of buffer
-  const rawDataOffset = 5 + headerLen;
-  const alignedOffset = Math.ceil(rawDataOffset / 4) * 4;
-  const rgba = new Float32Array(buf, alignedOffset, header.numPoints * 4);
-
-  return { header, rgba };
+    const { header: rawHeader, dataOffset } = parseFrame(buf, "scatter-continuous-colors");
+    const header = ContinuousColorsHeaderSchema.parse(rawHeader);
+    const rgba = new Float32Array(buf, dataOffset, header.numPoints * 4);
+    return { header, rgba };
 }

@@ -1,8 +1,8 @@
 import type { IDockviewPanelProps } from "dockview-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { column, eq, literal, or } from "@uwdata/mosaic-sql";
-import { createScatterplot } from "../../../scatter-gpu/gpu/orchestrator";
-import type { ScatterplotConfig, ScatterplotHandle } from "../../../scatter-gpu/types";
+import { ScatterGPUHost, type ScatterGPUHostHandle } from "../../../scatter-gpu/components/ScatterGPUHost";
+import type { ScatterplotConfig } from "../../../scatter-gpu/types";
 import { useMosaicScatterData } from "../../../scatter-gpu/hooks/useMosaicScatterData";
 import type { ColorMode } from "../../../scatter-gpu/hooks/useMosaicScatterData";
 import type { TrajectoryOverlaySvgHandle } from "../../scatter/TrajectoryOverlaySvg";
@@ -379,12 +379,15 @@ function ScatterView({
 }: ScatterViewProps) {
   const categoryColors = useEffectiveCategoryColors();
 
-  // ── Canvas refs ────────────────────────────────────────────────────────────
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const overlayRef = useRef<HTMLCanvasElement>(null);
+  // ── Refs ──────────────────────────────────────────────────────────────────
+  const hostRef = useRef<ScatterGPUHostHandle | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const gpuRef = useRef<ScatterplotHandle | null>(null);
   const trajectoryOverlayRef = useRef<TrajectoryOverlaySvgHandle | null>(null);
+  // Adapter so TrajectoryOverlaySvg can call worldToScreen via hostRef
+  const gpuAdapter = useRef({
+    worldToScreen: (wx: number, wy: number, w: number, h: number) =>
+      hostRef.current?.worldToScreen(wx, wy, w, h) ?? { x: 0, y: 0 },
+  });
 
   // ── State refs (no re-render on change) ───────────────────────────────────
   const viewStateRef = useRef({ panX: 0, panY: 0, zoom: 1 });
@@ -393,7 +396,7 @@ function ScatterView({
   const [gpuError, setGpuError] = useState<string | null>(null);
 
   // ── Data from Mosaic binary endpoints ─────────────────────────────────────
-  const { data, colorRange, loading: dataLoading } = useMosaicScatterData({
+  const { data, positionKey, colorRange, loading: dataLoading } = useMosaicScatterData({
     axes,
     xCol,
     yCol,
@@ -431,7 +434,7 @@ function ScatterView({
   };
 
   callbacksRef.current.onViewChange = () => {
-    if (gpuRef.current) viewStateRef.current = gpuRef.current.getViewState();
+    if (hostRef.current) viewStateRef.current = hostRef.current.getViewState();
     trajectoryOverlayRef.current?.update();
   };
 
@@ -444,65 +447,8 @@ function ScatterView({
     },
   });
 
-  // ── GPU init — only when POSITIONS change, not when colors change ──────────
-  // data.positions is a stable Float32Array ref that only changes when the
-  // positions endpoint is re-fetched (axes/embedding switch).
-  // colorValues changes (colormap switch) are handled separately below.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    const overlay = overlayRef.current;
-    if (!data || !canvas || !overlay) return;
-    if (!navigator.gpu) {
-      setGpuError("WebGPU not supported. Use Chrome, Edge, or Safari 18+.");
-      return;
-    }
-
-    let destroyed = false;
-    rowIndicesRef.current = data.rowIndices ?? [];
-
-    // Apply DPR scaling
-    const dpr = window.devicePixelRatio || 1;
-    const w = canvas.clientWidth;
-    const h = canvas.clientHeight;
-    canvas.width = Math.floor(w * dpr);
-    canvas.height = Math.floor(h * dpr);
-    overlay.width = Math.floor(w * dpr);
-    overlay.height = Math.floor(h * dpr);
-    const ctx = overlay.getContext("2d");
-    if (ctx) ctx.scale(dpr, dpr);
-
-    createScatterplot(canvas, overlay, data, configRef.current)
-      .then((gpu) => {
-        if (!destroyed) gpuRef.current = gpu;
-      })
-      .catch((err: Error) => setGpuError(err.message));
-
-    const obs = new ResizeObserver((entries) => {
-      const r = entries[0]?.contentRect;
-      if (!r) return;
-      const dpr2 = window.devicePixelRatio || 1;
-      canvas.width = Math.floor(r.width * dpr2);
-      canvas.height = Math.floor(r.height * dpr2);
-      overlay.width = Math.floor(r.width * dpr2);
-      overlay.height = Math.floor(r.height * dpr2);
-      const ctx2 = overlay.getContext("2d");
-      if (ctx2) {
-        ctx2.setTransform(1, 0, 0, 1, 0, 0);
-        ctx2.scale(dpr2, dpr2);
-      }
-      gpuRef.current?.resize(Math.floor(r.width), Math.floor(r.height));
-    });
-    obs.observe(canvas);
-
-    return () => {
-      destroyed = true;
-      obs.disconnect();
-      gpuRef.current?.destroy();
-      gpuRef.current = null;
-    };
-  // Use positions Float32Array reference as dep — stable across color changes
-  }, [data?.positions]); // eslint-disable-line react-hooks/exhaustive-deps
+  // GPU lifecycle is now owned by ScatterGPUHost (see render return).
+  // positionKey is a stable string dep passed to ScatterGPUHost.
 
   // ── Color updates without GPU re-init ─────────────────────────────────────
   const paletteRef = useRef<readonly (readonly [number, number, number])[]>([]);
@@ -514,13 +460,12 @@ function ScatterView({
     if (colors.length === 0 || colors.some((c) => !c)) return;
     const palette = hexToRgbPalette(colors);
     paletteRef.current = palette;
-    // Pass current category indices — GPU closure has the original (empty) indices
-    gpuRef.current?.updateColors(palette, data?.categoryIndices);
+    hostRef.current?.setColors(palette, data?.categoryIndices);
   }, [categoryColors, colorMode, data?.categoryIndices]);
 
   useEffect(() => {
     if (colorMode !== "continuous" || !data?.colorValues) return;
-    gpuRef.current?.updateColorsDirect(data.colorValues);
+    hostRef.current?.setColorsDirect(data.colorValues);
   }, [data?.colorValues, colorMode]);
 
   // ── Trajectory ────────────────────────────────────────────────────────────
@@ -573,15 +518,23 @@ function ScatterView({
     );
   }
 
-  // NOTE: do NOT early-return for loading — canvas must stay mounted so the GPU
-  // init effect can run when data.positions arrives. Show overlays instead.
-
   return (
     <div
       ref={containerRef}
       className={`relative min-h-0 flex-1 overflow-hidden${trajectory ? " trajectory-active" : ""}`}
     >
-      {/* Loading / error overlays — rendered ON TOP of canvas, not instead of it */}
+      {/* GPU host — always mounted; never unmounted for loading/error states.
+          Canvas lifecycle is decoupled from React render tree. */}
+      <ScatterGPUHost
+        ref={hostRef}
+        data={data}
+        positionKey={positionKey}
+        config={configRef.current}
+        onGpuError={setGpuError}
+        onRowIndicesChange={(indices) => { rowIndicesRef.current = indices; }}
+      />
+
+      {/* Loading overlay — on top of canvas, not instead of it */}
       {showLoading && (
         <div className="absolute inset-0 z-10 flex items-center justify-center text-sm text-text-muted bg-base/50 pointer-events-none">
           Loading{loadingKey ? ` ${loadingKey.replace(/^X_/, "")}...` : "..."}
@@ -592,18 +545,6 @@ function ScatterView({
           {gpuError}
         </div>
       )}
-      {/* WebGPU render canvas */}
-      <canvas
-        ref={canvasRef}
-        className="absolute inset-0 w-full h-full"
-        style={{ display: "block" }}
-      />
-      {/* 2D overlay canvas (lasso, marquee, interaction feedback) */}
-      <canvas
-        ref={overlayRef}
-        className="absolute inset-0 w-full h-full"
-        style={{ display: "block" }}
-      />
 
       {/* Trajectory SVG overlay */}
       {trajectory ? (
@@ -613,7 +554,7 @@ function ScatterView({
           activeIndex={activeIndex}
           categoryColors={categoryColors ?? []}
           containerRef={containerRef}
-          gpuRef={gpuRef}
+          gpuRef={gpuAdapter}
         />
       ) : null}
 

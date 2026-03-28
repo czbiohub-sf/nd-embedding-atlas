@@ -26,6 +26,10 @@ interface UseMosaicScatterDataOptions {
 
 interface UseMosaicScatterDataResult {
   data: ScatterData | null;
+  /** Stable string key: `${embeddingKey}:${numCells}`. Changes only when
+   *  positions are re-fetched (embedding/axes switch). Use as a GPU re-init
+   *  dep instead of a Float32Array reference. */
+  positionKey: string | null;
   categoryNames: string[];
   colorRange: [number, number] | null;
   loading: boolean;
@@ -219,8 +223,13 @@ export function useMosaicScatterData({
     }
   }, [positions, colorMode, categoryIndices, categoryNames, colorValues]);
 
+  const positionKey = positions
+    ? `${positions.embeddingKey}:${positions.numCells}`
+    : null;
+
   return {
     data,
+    positionKey,
     categoryNames,
     colorRange,
     loading: posLoading || colorLoading,

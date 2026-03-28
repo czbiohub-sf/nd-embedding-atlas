@@ -1,7 +1,6 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import type { RefObject } from "react";
 import type { TrajectoryFrame } from "../../types";
-import type { ScatterplotHandle } from "../../scatter-gpu/types";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const DEFAULT_COLOR = "#22d3ee";
@@ -12,12 +11,17 @@ export interface TrajectoryOverlaySvgHandle {
   update(): void;
 }
 
+/** Minimal GPU interface needed by the trajectory overlay. */
+interface WorldToScreenProvider {
+  worldToScreen(wx: number, wy: number, w: number, h: number): { x: number; y: number };
+}
+
 interface Props {
   points: TrajectoryFrame[];
   activeIndex: number | null;
   categoryColors: string[];
   containerRef: RefObject<HTMLDivElement | null>;
-  gpuRef: RefObject<ScatterplotHandle | null>;
+  gpuRef: RefObject<WorldToScreenProvider | null>;
 }
 
 export const TrajectoryOverlaySvg = forwardRef<TrajectoryOverlaySvgHandle, Props>(
