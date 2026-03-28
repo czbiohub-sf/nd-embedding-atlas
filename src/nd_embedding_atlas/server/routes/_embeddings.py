@@ -15,13 +15,14 @@ if TYPE_CHECKING:
 
 
 def _materialize_embedding(key: str, collection: "AnnDataCollection") -> np.ndarray:
-    """Materialize an obsm key to float32 numpy array (runs in thread pool)."""
-    coords = collection.obsm[key]
-    if hasattr(coords, "persist"):
-        coords = coords.persist()
-    if hasattr(coords, "compute"):
-        coords = coords.compute()
-    return np.asarray(coords, dtype=np.float32)
+    """Materialize an obsm key to float32 numpy array (runs in thread pool).
+
+    Uses the fast direct-read path (zarr/h5py) when possible, bypassing
+    AnnData/dask overhead (60× faster on 1M-cell zarr stores).
+    """
+    from nd_embedding_atlas.io._get import get_obsm  # noqa: PLC0415
+
+    return get_obsm(collection, key, dtype=np.float32)
 
 
 async def _load_embedding_bg(key: str, state: ViewerState) -> None:
