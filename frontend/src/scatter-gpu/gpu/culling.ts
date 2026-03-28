@@ -1,6 +1,5 @@
 import tgpu from "typegpu";
 import * as d from "typegpu/data";
-import { computeFn } from "./tgpu-compat";
 import type { TgpuRoot } from "../types";
 import type { ScatterBuffers, ScatterUniforms } from "./buffers";
 
@@ -11,8 +10,9 @@ import type { ScatterBuffers, ScatterUniforms } from "./buffers";
  * (plus a small margin for point quads). Writes a visibility flag (0 or 1)
  * to a buffer that the vertex shader uses to collapse invisible points.
  *
- * This avoids buffer reordering — the vertex shader simply scales
- * invisible point quads to zero area.
+ * Batch size 4: each thread tests 4 consecutive points, reducing dispatch
+ * overhead. Uses tgpu.unroll for compile-time loop unrolling instead of
+ * manual WGSL string template building.
  */
 export function createCullingEngine(
   root: TgpuRoot,
@@ -31,44 +31,41 @@ export function createCullingEngine(
     "instance",
   );
 
-  // Compute shader reads positions + view uniform, writes visibility
   const posReadonly = buffers.posBuffer.as("readonly");
-  const visMutable = visibilityBuffer.as("mutable");
+  const visMutable  = visibilityBuffer.as("mutable");
+  const { viewUniform } = uniforms;
 
-  const batchSize = 4;
-  let batchBody = "";
-  for (let k = 0; k < batchSize; k++) {
-    batchBody += `
-    {
-      let idx = base + ${k}u;
-      if (idx < ${numPoints}u) {
-        let pos = positions[idx];
-        let sx = (pos.x + view.x) * view.z;
-        let sy = (pos.y + view.y) * view.z;
-        let m = 0.05;
-        let xBound = (1.0 + m) * view.w;
-        visibility[idx] = select(0u, 1u, sx >= -xBound && sx <= xBound && sy >= -(1.0 + m) && sy <= (1.0 + m));
-      }
-    }`;
-  }
+  // Compile-time constant — tgpu.unroll expands this to 4 explicit blocks
+  const BATCH = [0, 1, 2, 3] as const;
 
-  const cullComputeFn = computeFn({
+  const cullComputeFn = tgpu["~unstable"].computeFn({
     workgroupSize: [256],
     in: { gid: d.builtin.globalInvocationId },
-  })`{
-    let base = in.gid.x * ${batchSize}u;
-    ${batchBody}
-  }`.$uses({
-    positions: posReadonly,
-    visibility: visMutable,
-    view: uniforms.viewUniform,
-  });
+  })((input) => {
+    "use gpu";
+    const base = input.gid.x * BATCH.length;
+    const view = viewUniform.value;
+    const m = 0.05;
+    const xb = (1.0 + m) * view.w;
+    for (const k of tgpu.unroll(BATCH)) {
+      const idx = base + k;
+      if (idx < numPoints) {
+        const pos = posReadonly.value[idx];
+        const sx = (pos.x + view.x) * view.z;
+        const sy = (pos.y + view.y) * view.z;
+        visMutable.value[idx] = (
+          sx >= -xb && sx <= xb &&
+          sy >= -(1.0 + m) && sy <= 1.0 + m
+        ) ? 1 : 0;
+      }
+    }
+  }).$uses({ posReadonly, visMutable, viewUniform });
 
   const cullPipeline = root["~unstable"]
     .withCompute(cullComputeFn)
     .createPipeline();
 
-  const workgroups = Math.ceil(numPoints / (256 * batchSize));
+  const workgroups = Math.ceil(numPoints / (256 * BATCH.length));
   let lastViewVersion = -1;
 
   function dispatchCulling(viewVersion = 0) {

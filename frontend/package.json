@@ -30,7 +30,7 @@
         "@idetik/core": "^0.15.3",
         "@tanstack/react-table": "^8.21.3",
         "@tanstack/react-virtual": "^3.13.23",
-        "@typegpu/sdf": "0.9.0",
+        "@typegpu/sdf": "^0.10.0",
         "@uwdata/mosaic-core": "^0.22.0",
         "@uwdata/mosaic-inputs": "^0.22.0",
         "@uwdata/mosaic-sql": "^0.22.0",
@@ -39,13 +39,13 @@
         "cmdk": "^1.1.1",
         "dockview-react": "^5.2.0",
         "gl-matrix": "^3.4.4",
-        "lucide-react": "^0.577.0",
+        "lucide-react": "^1.7.0",
         "react": "^19.2.4",
         "react-dom": "^19.2.4",
         "swr": "^2.4.1",
         "tailwind-merge": "^3.5.0",
-        "typegpu": "0.9.0",
-        "zod": "^3.24.0",
-        "tweakpane": "^4.0.5"
+        "tweakpane": "^4.0.5",
+        "typegpu": "^0.10.2",
+        "zod": "^4.3.6"
     }
 }

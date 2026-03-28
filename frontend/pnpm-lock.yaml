@@ -21,8 +21,8 @@ importers:
         specifier: ^3.13.23
         version: 3.13.23(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       '@typegpu/sdf':
-        specifier: 0.9.0
-        version: 0.9.0(typegpu@0.9.0)
+        specifier: ^0.10.0
+        version: 0.10.0(typegpu@0.10.2)
       '@uwdata/mosaic-core':
         specifier: ^0.22.0
         version: 0.22.0
@@ -48,8 +48,8 @@ importers:
         specifier: ^3.4.4
         version: 3.4.4
       lucide-react:
-        specifier: ^0.577.0
-        version: 0.577.0(react@19.2.4)
+        specifier: ^1.7.0
+        version: 1.7.0(react@19.2.4)
       react:
         specifier: ^19.2.4
         version: 19.2.4
@@ -66,11 +66,11 @@ importers:
         specifier: ^4.0.5
         version: 4.0.5
       typegpu:
-        specifier: 0.9.0
-        version: 0.9.0
+        specifier: ^0.10.2
+        version: 0.10.2
       zod:
-        specifier: ^3.24.0
-        version: 3.25.76
+        specifier: ^4.3.6
+        version: 4.3.6
     devDependencies:
       '@playwright/test':
         specifier: ^1.58.2
@@ -104,7 +104,7 @@ importers:
         version: 6.0.2
       unplugin-typegpu:
         specifier: ^0.10.2
-        version: 0.10.2(typegpu@0.9.0)
+        version: 0.10.2(typegpu@0.10.2)
       vite:
         specifier: ^8.0.3
         version: 8.0.3(@types/node@20.19.37)(esbuild@0.27.3)(jiti@2.6.1)
@@ -767,10 +767,10 @@ packages:
   '@tybys/wasm-util@0.10.1':
     resolution: {integrity: sha512-9tTaPJLSiejZKx+Bmog4uSubteqTvFrVrURwkmHixBo0G4seD0zUxp98E1DzUBJxLQ3NPwXrGKDiVjwx/DpPsg==}
 
-  '@typegpu/sdf@0.9.0':
-    resolution: {integrity: sha512-gCJY7Bbu194GG0BNFfNYemmBVGUg/nQ2LilqJyJ682gUPEsAFUYhURsPKuqi5R++8yd4Bkd753r/t3w5bxG/bQ==}
+  '@typegpu/sdf@0.10.0':
+    resolution: {integrity: sha512-q2P7xkpt/7IeyhrJ7Cd+3LgofCDNS/IFh9ZFCepyTIWBZLwhEjgAqOBl8Cbil8+SWkrKkIO6aJPWlhs+refDjg==}
     peerDependencies:
-      typegpu: ^0.9.0
+      typegpu: ^0.10.0
 
   '@types/command-line-args@5.2.3':
     resolution: {integrity: sha512-uv0aG6R0Y8WHZLTamZwtfsDLVRnOa+n+n5rEvFWL5Na5gZ8V2Teab/duDPFzIIIhs9qizDpcavCusCLJZu62Kw==}
@@ -851,6 +851,12 @@ packages:
   array-back@6.2.3:
     resolution: {integrity: sha512-SGDvmg6QTYiTxCBkYVmThcoa67uLl35pyzRHdpCGBOcqFy6BtwnphoFPk7LhJshD+Yk1Kt35WGWeZPTgwR4Fhw==}
     engines: {node: '>=12.17'}
+
+  balanced-match@1.0.2:
+    resolution: {integrity: sha512-3oSeUO0TMV67hN1AmbXsK4yaqU7tjiHlbxRDZOpH0KW9+CeX4bRAaX0Anxt0tx2MrpRpWwQaPwIlISEJhYU5Pw==}
+
+  brace-expansion@2.0.3:
+    resolution: {integrity: sha512-MCV/fYJEbqx68aE58kv2cA/kiky1G8vux3OR6/jbS+jIMe/6fJWa0DTzJU7dqijOWYwHi1t29FlfYI9uytqlpA==}
 
   chalk-template@0.4.0:
     resolution: {integrity: sha512-/ghrgmhfY8RaSdeo43hNXxpoHAtxdbskUHjPpfqUWGttFgycUhYPGx3YZBCnUCvOa7Doivn1IZec3DEGFoMgLg==}
@@ -1056,8 +1062,8 @@ packages:
   lodash.camelcase@4.3.0:
     resolution: {integrity: sha512-TwuEnCnxbc3rAvhf/LbG7tJUDzhqXyFnv3dtzLOPgCG/hODL7WFnsbwktkD7yUV0RrreP/l1PALq/YSg6VvjlA==}
 
-  lucide-react@0.577.0:
-    resolution: {integrity: sha512-4LjoFv2eEPwYDPg/CUdBJQSDfPyzXCRrVW1X7jrx/trgxnxkHFjnVZINbzvzxjN70dxychOfg+FTYwBiS3pQ5A==}
+  lucide-react@1.7.0:
+    resolution: {integrity: sha512-yI7BeItCLZJTXikmK4KNUGCKoGzSvbKlfCvw44bU4fXAL6v3gYS4uHD1jzsLkfwODYwI6Drw5Tu9Z5ulDe0TSg==}
     peerDependencies:
       react: ^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0
 
@@ -1067,6 +1073,10 @@ packages:
 
   magic-string@0.30.21:
     resolution: {integrity: sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ==}
+
+  minimatch@9.0.9:
+    resolution: {integrity: sha512-OBwBN9AL4dqmETlpS2zasx+vTeWclWzkblfZk7KTA5j3jeOONz/tRCnZomUyvNg83wL5Zv9Ss6HMJXAgL8R2Yg==}
+    engines: {node: '>=16 || 14 >=14.17'}
 
   nanoid@3.3.11:
     resolution: {integrity: sha512-N8SpfPUnUp1bK+PMYW8qSWdl9U+wwNWI4QKxOYDy9JAro3WMX7p2OeVRF9v+347pnakNevPmiHhNmZ2HbFA76w==}
@@ -1187,10 +1197,6 @@ packages:
     resolution: {integrity: sha512-Y5IBd0In6btjdJ3Tv0PTWeDajDc9Phwd8G/3gW3p3hbbr02JTkwqjvN9JeJsvuFmnmAStU+t05Zu/8Fl5oIOvw==}
     engines: {node: '>=12.20.0'}
 
-  tinyest@0.2.0:
-    resolution: {integrity: sha512-k8XL8FipMVboHtNwAJ6PgGVkWk+9hWEROGoxEXJKmO9ZOXehlBgdGY5uCkGRgT60TYJhtfOelvC/ikMpKYAmHA==}
-    engines: {node: '>=12.20.0'}
-
   tinyest@0.3.1:
     resolution: {integrity: sha512-SJNnjbvTEo5VmIjsMYpUFL34b9RyaI382r1v7gyVXZpd4VnjIZKMrGk1mphXM4zkhrs3hZfO1Xwv63DoZX50yw==}
     engines: {node: '>=12.20.0'}
@@ -1202,14 +1208,17 @@ packages:
   tslib@2.8.1:
     resolution: {integrity: sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w==}
 
+  tsover-runtime@0.0.5:
+    resolution: {integrity: sha512-OwpUKI97GvNRVukCE4jtCzUwQvnn6Wyu4a3LikaNF1GXosopXW4J928/EdBsKBxLKv/NP7RjuwhGFkkR1UCdjA==}
+
   tweakpane@4.0.5:
     resolution: {integrity: sha512-rxEXdSI+ArlG1RyO6FghC4ZUX8JkEfz8F3v1JuteXSV0pEtHJzyo07fcDG+NsJfN5L39kSbCYbB9cBGHyuI/tQ==}
 
   typed-binary@4.3.3:
     resolution: {integrity: sha512-W2hLsSzt3k/tg38gDE4Fn/QiwcoqGuUHBc2cb3mXuH7KcYxe/GM57vzW14s2/bawB4R5knGgGq8Xb57vsaJ4Sg==}
 
-  typegpu@0.9.0:
-    resolution: {integrity: sha512-1mIUiElaxmwy4RMGvFrifHYmLnXLQjB30eKanAWj1ab3qhJvDq0bUfi9j0JP3jaQPXsGgFcNvLGJvCfvi55Ajg==}
+  typegpu@0.10.2:
+    resolution: {integrity: sha512-5DZRvNtsbvRM++MONmwxfX0+vYAZgPKnGNCB8nnr3jwXo/gaOJ51WcgKRU8cHvK0RvMikCCVdolwBeEC0B9m7A==}
     engines: {node: '>=12.20.0'}
 
   typescript@6.0.2:
@@ -1324,6 +1333,9 @@ packages:
 
   zod@3.25.76:
     resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
+
+  zod@4.3.6:
+    resolution: {integrity: sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg==}
 
 snapshots:
 
@@ -1811,9 +1823,9 @@ snapshots:
       tslib: 2.8.1
     optional: true
 
-  '@typegpu/sdf@0.9.0(typegpu@0.9.0)':
+  '@typegpu/sdf@0.10.0(typegpu@0.10.2)':
     dependencies:
-      typegpu: 0.9.0
+      typegpu: 0.10.2
 
   '@types/command-line-args@5.2.3': {}
 
@@ -1887,6 +1899,12 @@ snapshots:
   array-back@3.1.0: {}
 
   array-back@6.2.3: {}
+
+  balanced-match@1.0.2: {}
+
+  brace-expansion@2.0.3:
+    dependencies:
+      balanced-match: 1.0.2
 
   chalk-template@0.4.0:
     dependencies:
@@ -2078,7 +2096,7 @@ snapshots:
 
   lodash.camelcase@4.3.0: {}
 
-  lucide-react@0.577.0(react@19.2.4):
+  lucide-react@1.7.0(react@19.2.4):
     dependencies:
       react: 19.2.4
 
@@ -2089,6 +2107,10 @@ snapshots:
   magic-string@0.30.21:
     dependencies:
       '@jridgewell/sourcemap-codec': 1.5.5
+
+  minimatch@9.0.9:
+    dependencies:
+      brace-expansion: 2.0.3
 
   nanoid@3.3.11: {}
 
@@ -2206,8 +2228,6 @@ snapshots:
     dependencies:
       tinyest: 0.3.1
 
-  tinyest@0.2.0: {}
-
   tinyest@0.3.1: {}
 
   tinyglobby@0.2.15:
@@ -2217,13 +2237,19 @@ snapshots:
 
   tslib@2.8.1: {}
 
+  tsover-runtime@0.0.5:
+    dependencies:
+      minimatch: 9.0.9
+      unplugin: 2.3.11
+
   tweakpane@4.0.5: {}
 
   typed-binary@4.3.3: {}
 
-  typegpu@0.9.0:
+  typegpu@0.10.2:
     dependencies:
-      tinyest: 0.2.0
+      tinyest: 0.3.1
+      tsover-runtime: 0.0.5
       typed-binary: 4.3.3
 
   typescript@6.0.2: {}
@@ -2234,7 +2260,7 @@ snapshots:
 
   undici-types@6.21.0: {}
 
-  unplugin-typegpu@0.10.2(typegpu@0.9.0):
+  unplugin-typegpu@0.10.2(typegpu@0.10.2):
     dependencies:
       '@babel/standalone': 7.29.2
       defu: 6.1.4
@@ -2244,7 +2270,7 @@ snapshots:
       picomatch: 4.0.4
       tinyest: 0.3.1
       tinyest-for-wgsl: 0.3.2
-      typegpu: 0.9.0
+      typegpu: 0.10.2
       unplugin: 2.3.11
 
   unplugin@2.3.11:
@@ -2302,3 +2328,5 @@ snapshots:
       numcodecs: 0.3.2
 
   zod@3.25.76: {}
+
+  zod@4.3.6: {}

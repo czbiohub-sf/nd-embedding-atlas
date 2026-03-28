@@ -47,7 +47,7 @@ export async function createScatterplot(
 
     const mainVertex = createVertexShader(uniforms);
     const mainFragment = createFragmentShader();
-    const { render } = createRenderPipeline(root, mainVertex, mainFragment, buffers, culling, format, backgroundColor);
+    const { render } = createRenderPipeline(root, mainVertex, mainFragment, buffers, culling, format, backgroundColor, data.numCells);
 
     const selection = createSelectionEngine(root, device, buffers, uniforms, data.numCells, (count, indices) =>
         config?.callbacks?.onSelectionChange?.(count, indices),
