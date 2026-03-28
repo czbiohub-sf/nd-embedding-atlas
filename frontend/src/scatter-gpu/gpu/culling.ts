@@ -53,10 +53,11 @@ export function createCullingEngine(
         const pos = posReadonly.value[idx];
         const sx = (pos.x + view.x) * view.z;
         const sy = (pos.y + view.y) * view.z;
-        visMutable.value[idx] = (
-          sx >= -xb && sx <= xb &&
-          sy >= -(1.0 + m) && sy <= 1.0 + m
-        ) ? 1 : 0;
+        if (sx >= -xb && sx <= xb && sy >= -(1.0 + m) && sy <= 1.0 + m) {
+          visMutable.value[idx] = 1;
+        } else {
+          visMutable.value[idx] = 0;
+        }
       }
     }
   }).$uses({ posReadonly, visMutable, viewUniform });

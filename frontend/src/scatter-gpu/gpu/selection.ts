@@ -22,34 +22,25 @@ export function createSelectionEngine(
   const { selectionModeUniform } = uniforms;
   const { posBuffer, selectedBuffer } = buffers;
 
-  // Staging buffer for async readback (MAP_READ + COPY_DST)
   const stagingBuffer = device.createBuffer({
     size: numPoints * 4,
     usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
   });
   let isReadingBack = false;
 
-  // Lasso polygon buffer + vertex count
   const polygonBuffer = root
     .createBuffer(d.arrayOf(d.vec2f, MAX_POLYGON_VERTS))
     .$usage("storage");
   const polygonCountUniform = root.createUniform(d.u32, 0);
 
-  // Buffer accessors for compute shaders
   const pointsReadonly  = posBuffer.as("readonly");
   const selectedMutable = selectedBuffer.as("mutable");
   const polygonReadonly = polygonBuffer.as("readonly");
 
-  // ── PIP (point-in-polygon) kernel ────────────────────────────────────────
-  //
-  // Inner polygon test stays as raw WGSL — numVerts is dynamic (lasso length),
-  // so it cannot be unrolled at compile time.
-  // Outer batch loop uses tgpu.unroll for compile-time unrolling (batch = 2).
-
+  // ── PIP kernel ─────────────────────────────────────────────────────────
   const PIP_BATCH = [0, 1] as const;
 
-  // Raw WGSL helper for the inner dynamic loop over polygon vertices.
-  // Called from the 'use gpu' outer compute function.
+  // Raw WGSL for the inner dynamic loop (numVerts is runtime, cannot unroll)
   const pipTest = tgpu.fn([d.vec2f, d.u32], d.bool)`
     (pt: vec2f, numVerts: u32) -> bool {
       var c = false;
@@ -79,25 +70,21 @@ export function createSelectionEngine(
       const idx = base + k;
       if (idx < numPoints) {
         const pt = pointsReadonly.value[idx];
-        selectedMutable.value[idx] = pipTest(pt, numVerts) ? 1 : 0;
+        if (pipTest(pt, numVerts)) {
+          selectedMutable.value[idx] = 1;
+        } else {
+          selectedMutable.value[idx] = 0;
+        }
       }
     }
-  }).$uses({
-    pointsReadonly,
-    selectedMutable,
-    polygonCountUniform,
-    pipTest,
-  });
+  }).$uses({ pointsReadonly, selectedMutable, polygonCountUniform, pipTest });
 
   const pipPipeline = root["~unstable"]
     .withCompute(pipComputeFn)
     .createPipeline();
   const workgroups = Math.ceil(numPoints / (256 * PIP_BATCH.length));
 
-  // ── AABB (marquee) selection kernel ──────────────────────────────────────
-  //
-  // No inner loop — fully expressible in 'use gpu' with tgpu.unroll.
-
+  // ── AABB kernel ────────────────────────────────────────────────────────
   const AABB_BATCH = [0, 1] as const;
   const marqueeUniform = root.createUniform(d.vec4f, d.vec4f(0, 0, 0, 0));
 
@@ -107,15 +94,16 @@ export function createSelectionEngine(
   })((input) => {
     "use gpu";
     const base = input.gid.x * AABB_BATCH.length;
-    const r    = marqueeUniform.value; // (xMin, yMin, xMax, yMax)
+    const r    = marqueeUniform.value;
     for (const k of tgpu.unroll(AABB_BATCH)) {
       const idx = base + k;
       if (idx < numPoints) {
         const pt = pointsReadonly.value[idx];
-        selectedMutable.value[idx] = (
-          pt.x >= r.x && pt.x <= r.z &&
-          pt.y >= r.y && pt.y <= r.w
-        ) ? 1 : 0;
+        if (pt.x >= r.x && pt.x <= r.z && pt.y >= r.y && pt.y <= r.w) {
+          selectedMutable.value[idx] = 1;
+        } else {
+          selectedMutable.value[idx] = 0;
+        }
       }
     }
   }).$uses({ pointsReadonly, selectedMutable, marqueeUniform });
@@ -124,7 +112,7 @@ export function createSelectionEngine(
     .withCompute(aabbComputeFn)
     .createPipeline();
 
-  // ── Shared readback logic ─────────────────────────────────────────────────
+  // ── Readback ───────────────────────────────────────────────────────────
   let readbackFrame = 0;
   function readbackSelectionCount() {
     if (isReadingBack) return;
@@ -145,15 +133,11 @@ export function createSelectionEngine(
         let count = 0;
         const indices: number[] = [];
         for (let i = 0; i < data.length; i++) {
-          if (data[i]) {
-            count++;
-            indices.push(i);
-          }
+          if (data[i]) { count++; indices.push(i); }
         }
         stagingBuffer.unmap();
         isReadingBack = false;
-        const dt = performance.now() - t0;
-        console.log(`[${frame}] ${count.toLocaleString()} selected (${dt.toFixed(1)}ms)`);
+        console.log(`[${frame}] ${count.toLocaleString()} selected (${(performance.now()-t0).toFixed(1)}ms)`);
         onSelectionChange(count, indices);
       })
       .catch(() => { isReadingBack = false; });
@@ -161,19 +145,12 @@ export function createSelectionEngine(
 
   function runLassoSelection(polygon: [number, number][], readback = true) {
     if (polygon.length < 3) return;
-
     const simplified = simplifyPath(polygon, 0.001);
     const vertCount  = Math.min(simplified.length, MAX_POLYGON_VERTS);
-
-    const polyData = simplified
-      .slice(0, vertCount)
-      .map(([x, y]) => d.vec2f(x, y));
-    while (polyData.length < MAX_POLYGON_VERTS) {
-      polyData.push(d.vec2f(0, 0));
-    }
+    const polyData   = simplified.slice(0, vertCount).map(([x, y]) => d.vec2f(x, y));
+    while (polyData.length < MAX_POLYGON_VERTS) polyData.push(d.vec2f(0, 0));
     polygonBuffer.write(polyData);
     polygonCountUniform.write(vertCount);
-
     pipPipeline.dispatchWorkgroups(workgroups);
     selectionModeUniform.write(1);
     debugLogSelection();
@@ -191,7 +168,7 @@ export function createSelectionEngine(
     if (readback) readbackSelectionCount();
   }
 
-  // ── Debug ─────────────────────────────────────────────────────────────────
+  // ── Debug ──────────────────────────────────────────────────────────────
   let debugPipeline: ReturnType<
     ReturnType<TgpuRoot["~unstable"]["withCompute"]>["createPipeline"]
   > | null = null;
@@ -208,7 +185,6 @@ export function createSelectionEngine(
       const r   = marqueeUniform.value;
       console.log("pt", idx, "pos", pt, "sel", sel, "rect", r);
     });
-
     debugPipeline = root["~unstable"].withCompute(debugFn).createPipeline();
   }
 
@@ -233,16 +209,9 @@ export function createSelectionEngine(
   }
 
   return {
-    runLassoSelection,
-    runMarqueeSelection,
-    selectPoint,
-    clearSelection,
-    debugLogSelection,
-    pipComputeFn,
-    aabbComputeFn,
-    destroy() {
-      stagingBuffer.destroy();
-    },
+    runLassoSelection, runMarqueeSelection, selectPoint, clearSelection,
+    debugLogSelection, pipComputeFn, aabbComputeFn,
+    destroy() { stagingBuffer.destroy(); },
   };
 }
 
