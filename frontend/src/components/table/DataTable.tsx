@@ -93,7 +93,7 @@ export function DataTable({
                 maxSize: 600,
                 cell: (info) => {
                     const val = info.getValue();
-                    if (val == null) return <span className="text-[#4a5278]">—</span>;
+                    if (val == null) return <span className="text-text-muted">—</span>;
                     if (typeof val === "number") {
                         return (
                             <span className="tabular-nums">
@@ -219,9 +219,9 @@ export function DataTable({
     const totalWidth = tableInstance.getTotalSize();
 
     return (
-        <div className="flex h-full w-full flex-col overflow-hidden bg-[#141829] font-mono text-[#e2e8f0] text-xs">
+        <div className="flex h-full w-full flex-col overflow-hidden bg-surface font-mono text-text-primary text-xs">
             {/* Status bar */}
-            <div className="flex shrink-0 items-center justify-between border-[#242a45] border-b px-3 py-1.5 font-sans text-[#8892b0] text-[11px]">
+            <div className="flex shrink-0 items-center justify-between border-border-subtle border-b px-3 py-1.5 font-sans text-text-secondary text-[11px]">
                 <span>{totalCount.toLocaleString()} observations</span>
             </div>
 
@@ -229,7 +229,7 @@ export function DataTable({
             <div ref={containerRef} className="flex-1 overflow-auto">
                 {/* Sticky header via TanStack Table header groups */}
                 <div
-                    className="sticky top-0 z-10 border-[#242a45] border-b bg-[#0c1021]"
+                    className="sticky top-0 z-10 border-border-subtle border-b bg-base"
                     style={{ height: HEADER_HEIGHT, minWidth: totalWidth }}
                 >
                     {headerGroups.map((headerGroup) => (
@@ -242,7 +242,7 @@ export function DataTable({
                                 >
                                     <button
                                         type="button"
-                                        className="flex h-full w-full cursor-pointer select-none items-center px-2 font-medium font-sans text-[#8892b0] text-[11px] hover:text-[#e2e8f0]"
+                                        className="flex h-full w-full cursor-pointer select-none items-center px-2 font-medium font-sans text-text-secondary text-[11px] hover:text-text-primary"
                                         onClick={header.column.getToggleSortingHandler()}
                                     >
                                         {header.isPlaceholder
@@ -257,8 +257,8 @@ export function DataTable({
                                         onDoubleClick={() => handleAutoSizeColumn(header.column.id)}
                                         className={`absolute top-0 right-0 h-full w-[3px] cursor-col-resize touch-none select-none ${
                                             header.column.getIsResizing()
-                                                ? "bg-[#5b8def]"
-                                                : "bg-transparent group-hover:bg-[#4a5278]"
+                                                ? "bg-primary"
+                                                : "bg-transparent group-hover:bg-elevated"
                                         }`}
                                     />
                                 </div>
@@ -287,8 +287,8 @@ export function DataTable({
                                 type="button"
                                 key={virtualRow.key}
                                 data-index={virtualRow.index}
-                                className={`absolute flex cursor-pointer border-[#242a45]/50 border-b text-left ${
-                                    isHighlighted ? "bg-[#242a45]" : "hover:bg-[#1a1f36]"
+                                className={`absolute flex cursor-pointer border-border-subtle/50 border-b text-left ${
+                                    isHighlighted ? "bg-elevated" : "hover:bg-elevated"
                                 }`}
                                 style={{
                                     height: `${ROW_HEIGHT}px`,
@@ -307,7 +307,7 @@ export function DataTable({
                                                   style={{ width: col.getSize(), height: ROW_HEIGHT }}
                                               >
                                                   {val == null ? (
-                                                      <span className="text-[#4a5278]">—</span>
+                                                      <span className="text-text-muted">—</span>
                                                   ) : typeof val === "number" ? (
                                                       <span className="tabular-nums">
                                                           {Number.isInteger(val)
@@ -331,7 +331,7 @@ export function DataTable({
                                                   className="flex shrink-0 items-center px-2"
                                                   style={{ width: col.getSize(), height: ROW_HEIGHT }}
                                               >
-                                                  <div className="h-3 w-2/3 animate-pulse rounded bg-[#242a45]" />
+                                                  <div className="h-3 w-2/3 animate-pulse rounded bg-elevated" />
                                               </div>
                                           ))}
                             </button>
