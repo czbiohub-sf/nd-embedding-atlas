@@ -6,6 +6,7 @@ import {
 } from "dockview-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import "dockview-react/dist/styles/dockview.css";
+import { useTheme } from "../../providers/ThemeProvider";
 
 import { ChartGroupPanel } from "./panels/ChartGroupPanel";
 import { ImageViewerPanel } from "./panels/ImageViewerPanel";
@@ -123,6 +124,7 @@ interface Props {
 }
 
 export function DockviewShell({ hasPlate, hasEmbeddings }: Props) {
+    const { theme } = useTheme();
     const apiRef = useRef<DockviewApi | null>(null);
 
     // Persist layout changes to localStorage
@@ -180,7 +182,7 @@ export function DockviewShell({ hasPlate, hasEmbeddings }: Props) {
 
     return (
         <DockviewReact
-            className="dockview-theme-dark"
+            className={theme === "dark" ? "dockview-theme-dark" : "dockview-theme-light"}
             components={COMPONENTS}
             onReady={onReady}
             rightHeaderActionsComponent={RightHeaderActions}

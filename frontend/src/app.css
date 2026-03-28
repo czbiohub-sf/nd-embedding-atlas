@@ -225,6 +225,48 @@ select:disabled { opacity: 0.4; cursor: not-allowed; }
     --dv-inactivegroup-hiddenpanel-tab-color: var(--color-text-muted);
 }
 
+/* Dockview light theme — also override the built-in abyss theme in light mode */
+:root:not(.dark) .dockview-theme-abyss,
+.dockview-theme-light {
+    --dv-background-color: var(--color-base);
+    --dv-paneview-header-border-color: var(--color-border-subtle);
+    --dv-tabs-container-background-color: var(--color-surface);
+    --dv-activegroup-visiblepanel-tab-background-color: var(--color-elevated);
+    --dv-activegroup-hiddenpanel-tab-background-color: var(--color-surface);
+    --dv-inactivegroup-visiblepanel-tab-background-color: var(--color-surface);
+    --dv-inactivegroup-hiddenpanel-tab-background-color: var(--color-base);
+    --dv-separator-border: var(--color-border-subtle);
+    --dv-tab-font-size: 12px;
+    --dv-font-family: var(--font-sans);
+    --dv-activegroup-visiblepanel-tab-color: var(--color-text-primary);
+    --dv-activegroup-hiddenpanel-tab-color: var(--color-text-muted);
+    --dv-inactivegroup-visiblepanel-tab-color: var(--color-text-secondary);
+    --dv-inactivegroup-hiddenpanel-tab-color: var(--color-text-muted);
+}
+
+/* Light mode — override Dockview abyss hardcoded dark colors */
+:root:not(.dark) .dv-grid-view.dv-dockview,
+:root:not(.dark) .dv-groupview {
+    background-color: var(--color-base) !important;
+}
+:root:not(.dark) .dv-tabs-and-actions-container {
+    background-color: var(--color-surface) !important;
+}
+:root:not(.dark) .dv-tab {
+    color: var(--color-text-primary) !important;
+}
+:root:not(.dark) .dv-tab.dv-active-tab {
+    background-color: var(--color-elevated) !important;
+}
+:root:not(.dark) .dv-tab:not(.dv-active-tab) {
+    background-color: var(--color-surface) !important;
+    color: var(--color-text-secondary) !important;
+}
+:root:not(.dark) .dv-pane-header {
+    background-color: var(--color-surface) !important;
+    color: var(--color-text-secondary) !important;
+}
+
 /* Dockview header action buttons */
 .dv-header-action {
     display: flex; align-items: center; justify-content: center;

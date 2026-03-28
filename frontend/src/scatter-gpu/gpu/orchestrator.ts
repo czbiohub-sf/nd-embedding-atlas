@@ -39,8 +39,11 @@ export async function createScatterplot(
 
     const culling = createCullingEngine(root, device, buffers, uniforms, data.numCells);
 
+    // Default to transparent — let the CSS background-color of the container
+    // show through. This makes the scatter canvas respond to dark/light theme
+    // without requiring GPU re-initialization.
     const backgroundColor =
-        config?.render?.backgroundColor ?? ([0.06, 0.06, 0.1, 1] as [number, number, number, number]);
+        config?.render?.backgroundColor ?? ([0, 0, 0, 0] as [number, number, number, number]);
 
     const mainVertex = createVertexShader(uniforms);
     const mainFragment = createFragmentShader();

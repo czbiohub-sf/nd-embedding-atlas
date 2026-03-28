@@ -197,7 +197,7 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
         );
 
         return (
-            <div className="absolute inset-0">
+            <div className="absolute inset-0" style={{ backgroundColor: "var(--color-base)" }}>
                 <canvas
                     ref={canvasCallbackRef}
                     className="absolute inset-0 w-full h-full"
