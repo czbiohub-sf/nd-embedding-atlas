@@ -573,27 +573,25 @@ function ScatterView({
     );
   }
 
-  if (showLoading) {
-    return (
-      <div className="relative min-h-0 flex-1 overflow-hidden flex items-center justify-center text-sm text-text-muted">
-        Loading{loadingKey ? ` ${loadingKey.replace(/^X_/, "")}...` : "..."}
-      </div>
-    );
-  }
-
-  if (gpuError) {
-    return (
-      <div className="relative min-h-0 flex-1 overflow-hidden flex items-center justify-center text-sm text-red-400 p-4 text-center">
-        {gpuError}
-      </div>
-    );
-  }
+  // NOTE: do NOT early-return for loading — canvas must stay mounted so the GPU
+  // init effect can run when data.positions arrives. Show overlays instead.
 
   return (
     <div
       ref={containerRef}
       className={`relative min-h-0 flex-1 overflow-hidden${trajectory ? " trajectory-active" : ""}`}
     >
+      {/* Loading / error overlays — rendered ON TOP of canvas, not instead of it */}
+      {showLoading && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center text-sm text-text-muted bg-base/50 pointer-events-none">
+          Loading{loadingKey ? ` ${loadingKey.replace(/^X_/, "")}...` : "..."}
+        </div>
+      )}
+      {gpuError && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center text-sm text-red-400 p-4 text-center bg-base/80">
+          {gpuError}
+        </div>
+      )}
       {/* WebGPU render canvas */}
       <canvas
         ref={canvasRef}
