@@ -33,8 +33,9 @@ export interface CategoryBlob {
 /** Parsed result from /api/scatter-continuous-colors */
 export interface ContinuousColorsBlob {
     header: ContinuousColorsHeader;
-    /** RGBA float32 values, length = numPoints * 4, each channel in [0, 1] */
-    rgba: Float32Array;
+    /** RGBA uint8 values, length = numPoints * 4, each channel in [0, 255].
+     *  4× smaller than float32 RGBA — backend applies colormap, we just upload. */
+    rgba: Uint8Array;
 }
 
 /** Shared binary framing logic: reads version byte, returns aligned data offset. */
@@ -80,6 +81,6 @@ export function parseCategoryBlob(buf: ArrayBuffer): CategoryBlob {
 export function parseContinuousColorsBlob(buf: ArrayBuffer): ContinuousColorsBlob {
     const { header: rawHeader, dataOffset } = parseFrame(buf, "scatter-continuous-colors");
     const header = ContinuousColorsHeaderSchema.parse(rawHeader);
-    const rgba = new Float32Array(buf, dataOffset, header.numPoints * 4);
+    const rgba = new Uint8Array(buf, dataOffset, header.numPoints * 4);
     return { header, rgba };
 }

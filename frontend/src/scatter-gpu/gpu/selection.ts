@@ -59,8 +59,9 @@ export function createSelectionEngine(
     }
   `.$uses({ polygon: polygonReadonly });
 
+  // 64-thread workgroups: optimal on Apple Silicon, safe everywhere.
   const pipComputeFn = computeFn({
-    workgroupSize: [256],
+    workgroupSize: [64],
     in: { gid: d.builtin.globalInvocationId },
   })((input) => {
     "use gpu";
@@ -82,14 +83,14 @@ export function createSelectionEngine(
   const pipPipeline = root["~unstable"]
     .withCompute(pipComputeFn)
     .createPipeline();
-  const workgroups = Math.ceil(numPoints / (256 * PIP_BATCH.length));
+  const workgroups = Math.ceil(numPoints / (64 * PIP_BATCH.length));
 
   // ── AABB kernel ────────────────────────────────────────────────────────
   const AABB_BATCH = [0, 1] as const;
   const marqueeUniform = root.createUniform(d.vec4f, d.vec4f(0, 0, 0, 0));
 
   const aabbComputeFn = computeFn({
-    workgroupSize: [256],
+    workgroupSize: [64],
     in: { gid: d.builtin.globalInvocationId },
   })((input) => {
     "use gpu";

@@ -37,8 +37,11 @@ export function createBuffers(root: TgpuRoot, numPoints: number, _numCategories:
     .createBuffer(d.arrayOf(d.vec2f, numPoints))
     .$usage("vertex", "storage");
 
+  // Packed RGBA as u32 (4 bytes/point vs 16 bytes for vec4f) — 4× bandwidth reduction.
+  // Byte layout (little-endian): [R, G, B, A] packed as R | (G<<8) | (B<<16) | (A<<24).
+  // The vertex shader unpacks via the unpackColor WGSL fn in shaders.ts.
   const colorBuffer = root
-    .createBuffer(d.arrayOf(d.vec4f, numPoints))
+    .createBuffer(d.arrayOf(d.u32, numPoints))
     .$usage("vertex");
 
   const selectedBuffer = root
@@ -51,7 +54,7 @@ export function createBuffers(root: TgpuRoot, numPoints: number, _numCategories:
     .$usage("storage");
 
   const colorLayout = tgpu.vertexLayout(
-    (n: number) => d.arrayOf(d.vec4f, n),
+    (n: number) => d.arrayOf(d.u32, n),
     "instance",
   );
 
@@ -118,11 +121,12 @@ export function uploadData(
   const rawCatBuffer = root.unwrap(buffers.categoryBuffer);
   device.queue.writeBuffer(rawCatBuffer, 0, catStaging);
 
-  // 3. Pack colors on CPU: category index → palette → vec4f (RGBA 0–1)
+  // 3. Pack colors on CPU: category index → palette → u32 packed RGBA (4 bytes/point).
+  // Palette values are 0–255; pack as R|(G<<8)|(B<<16)|(255<<24) for little-endian unorm8x4.
   const colors = palette ?? PALETTE;
   const numCats = colors.length;
   const totalCats = data.categoryNames.length;
-  const colorData = new Float32Array(numPoints * 4);
+  const colorData = new Uint32Array(numPoints);
   for (let i = 0; i < numPoints; i++) {
     const cat = data.categoryIndices[i]! % numCats;
     let r: number, g: number, b: number;
@@ -132,11 +136,7 @@ export function uploadData(
       const c = colors[cat]!;
       r = c[0]; g = c[1]; b = c[2];
     }
-    const off = i * 4;
-    colorData[off] = r / 255;
-    colorData[off + 1] = g / 255;
-    colorData[off + 2] = b / 255;
-    colorData[off + 3] = 1.0;
+    colorData[i] = (r | (g << 8) | (b << 16) | (255 << 24)) >>> 0;
   }
   const rawColorBuffer = root.unwrap(buffers.colorBuffer);
   device.queue.writeBuffer(rawColorBuffer, 0, colorData);

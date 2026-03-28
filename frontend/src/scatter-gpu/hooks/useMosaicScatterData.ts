@@ -72,7 +72,7 @@ export function useMosaicScatterData({
   // --- Color state (lightweight, changes on colorBy change) ---
   const [categoryIndices, setCategoryIndices] = useState<Uint8Array | null>(null);
   const [categoryNames, setCategoryNames] = useState<string[]>([]);
-  const [colorValues, setColorValues] = useState<Float32Array | null>(null);
+  const [colorValues, setColorValues] = useState<Uint8Array | null>(null);
   const [colorRange, setColorRange] = useState<[number, number] | null>(null);
   const [colorLoading, setColorLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -181,7 +181,7 @@ export function useMosaicScatterData({
         })
         .then((buf) => {
           const { header, rgba } = parseContinuousColorsBlob(buf);
-          setColorValues(rgba);
+          setColorValues(rgba);  // Uint8Array RGBA
           setColorRange([header.vmin, header.vmax]);
           setCategoryIndices(null);
           setCategoryNames([]);

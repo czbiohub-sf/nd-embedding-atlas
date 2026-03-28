@@ -38,8 +38,10 @@ export function createCullingEngine(
   // Compile-time constant — tgpu.unroll expands this to 4 explicit blocks
   const BATCH = [0, 1, 2, 3] as const;
 
+  // 64-thread workgroups: optimal for Apple Silicon (M-series warp size),
+  // safe on NVIDIA/AMD (just slightly more workgroups dispatched vs 256).
   const cullComputeFn = tgpu["~unstable"].computeFn({
-    workgroupSize: [256],
+    workgroupSize: [64],
     in: { gid: d.builtin.globalInvocationId },
   })((input) => {
     "use gpu";
@@ -66,7 +68,7 @@ export function createCullingEngine(
     .withCompute(cullComputeFn)
     .createPipeline();
 
-  const workgroups = Math.ceil(numPoints / (256 * BATCH.length));
+  const workgroups = Math.ceil(numPoints / (64 * BATCH.length));
   let lastViewVersion = -1;
 
   function dispatchCulling(viewVersion = 0) {

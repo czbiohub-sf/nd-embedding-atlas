@@ -248,10 +248,12 @@ def make_scatter_router(get_state: Callable[[], ViewerState]) -> APIRouter:
             # Map through colormap → uint8 RGB (N, 3)
             rgb = sample_continuous_colormap(colormap, normalised)
 
-            # Build float32 RGBA (N, 4) with alpha = 1.0
+            # Build uint8 RGBA (N, 4) with alpha = 255.
+            # 4× smaller than float32 RGBA — frontend does zero-copy Uint32Array reinterpret.
             n = len(values)
-            rgba_f32 = np.ones((n, 4), dtype=np.float32)
-            rgba_f32[:, :3] = rgb.astype(np.float32) / 255.0
+            rgba_u8 = np.empty((n, 4), dtype=np.uint8)
+            rgba_u8[:, :3] = rgb
+            rgba_u8[:, 3] = 255
 
             header = {
                 "numPoints": n,
@@ -259,7 +261,7 @@ def make_scatter_router(get_state: Callable[[], ViewerState]) -> APIRouter:
                 "vmax": actual_vmax,
                 "colormap": colormap,
             }
-            return _pack_binary(header, rgba_f32)
+            return _pack_binary(header, rgba_u8)
 
         try:
             payload = await asyncio.get_running_loop().run_in_executor(state.executor, _build)

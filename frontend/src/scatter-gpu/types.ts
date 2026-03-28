@@ -21,8 +21,8 @@ export interface ScatterData {
     ndim: 2 | 3;
 
     // v2 extension slots (currently unused; keep fields for protocol stability)
-    /** continuous [0,1] per point — enables gradient coloring */
-    colorValues?: Float32Array;
+    /** RGBA uint8 per point — enables gradient coloring (4 bytes/pt, backend-mapped) */
+    colorValues?: Uint8Array;
     /** relative size per point — enables encoding by expression */
     sizeValues?: Float32Array;
     /** LOD tile viewport */
@@ -70,8 +70,8 @@ export interface ScatterplotHandle {
     destroy(): void;
     /** Update color buffer from palette without GPU re-initialization (categorical coloring). */
     updateColors(palette: readonly (readonly [number, number, number])[], categoryIndices?: Uint8Array): void;
-    /** Write pre-computed RGBA float32 array directly to colorBuffer (continuous coloring). */
-    updateColorsDirect(rgba: Float32Array): void;
+    /** Write pre-computed RGBA uint8 array directly to colorBuffer (continuous coloring). */
+    updateColorsDirect(rgba: Uint8Array): void;
     /** Current pan/zoom state of the viewport. */
     getViewState(): { panX: number; panY: number; zoom: number };
     /** Convert world coordinates to screen pixel coordinates using the current view transform. */

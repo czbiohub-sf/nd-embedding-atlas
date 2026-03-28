@@ -17,7 +17,7 @@ import type { ScatterData, ScatterplotConfig, ScatterplotHandle } from "../types
 
 export interface ScatterGPUHostHandle {
     setColors(palette: readonly (readonly [number, number, number])[], indices?: Uint8Array): void;
-    setColorsDirect(rgba: Float32Array): void;
+    setColorsDirect(rgba: Uint8Array): void;
     getViewState(): { panX: number; panY: number; zoom: number };
     worldToScreen(wx: number, wy: number, w: number, h: number): { x: number; y: number };
 }

@@ -83,15 +83,20 @@ export async function createScatterplot(
                 const maxDist2 = hitRadiusWorld * hitRadiusWorld;
                 let bestIdx = -1;
                 let bestDist2 = maxDist2;
-                for (let i = 0; i < data.numCells; i++) {
-                    const px = data.positions[i * 2]!;
-                    const py = data.positions[i * 2 + 1]!;
-                    const dx = px - worldX;
-                    const dy = py - worldY;
-                    const d2 = dx * dx + dy * dy;
-                    if (d2 < bestDist2) {
-                        bestDist2 = d2;
-                        bestIdx = i;
+                // Grid spatial index: query only cells that overlap the hit radius
+                const r = Math.ceil((hitRadiusWorld / 2) * GRID) + 1;
+                const cx = Math.floor(((worldX + 1) / 2) * GRID);
+                const cy = Math.floor(((worldY + 1) / 2) * GRID);
+                for (let gx = Math.max(0, cx - r); gx <= Math.min(GRID - 1, cx + r); gx++) {
+                    for (let gy = Math.max(0, cy - r); gy <= Math.min(GRID - 1, cy + r); gy++) {
+                        for (const i of gridCells[gx * GRID + gy]!) {
+                            const px = data.positions[i * 2]!;
+                            const py = data.positions[i * 2 + 1]!;
+                            const dx = px - worldX;
+                            const dy = py - worldY;
+                            const d2 = dx * dx + dy * dy;
+                            if (d2 < bestDist2) { bestDist2 = d2; bestIdx = i; }
+                        }
                     }
                 }
                 if (bestIdx >= 0) {
@@ -105,6 +110,18 @@ export async function createScatterplot(
         },
         config?.interaction,
     );
+
+    // ── Grid spatial index for O(1) hit testing ───────────────────────────
+    // World space is [-1,1]×[-1,1]. Divide into GRID×GRID cells; each cell
+    // stores the indices of points that fall within it. onPointClick queries
+    // only the 1–4 cells that overlap the hit radius instead of scanning all points.
+    const GRID = 128;
+    const gridCells: number[][] = Array.from({ length: GRID * GRID }, () => []);
+    for (let i = 0; i < data.numCells; i++) {
+      const gx = Math.min(GRID - 1, Math.max(0, Math.floor(((data.positions[i * 2]! + 1) / 2) * GRID)));
+      const gy = Math.min(GRID - 1, Math.max(0, Math.floor(((data.positions[i * 2 + 1]! + 1) / 2) * GRID)));
+      gridCells[gx * GRID + gy]!.push(i);
+    }
 
     console.log(
         `Scatterplot ready: ${data.numCells.toLocaleString()} points in ${(performance.now() - t0).toFixed(1)}ms`,
@@ -130,26 +147,32 @@ export async function createScatterplot(
             interaction.resize();
         },
         updateColors(palette: readonly (readonly [number, number, number])[], categoryIndices?: Uint8Array) {
-            // Use passed indices (fresh from latest data) or fall back to original closure data
+            // Use passed indices (fresh from latest data) or fall back to original closure data.
+            // palette entries are [0,1] normalized RGB; pack to u32 RGBA for the color buffer.
             const indices = categoryIndices ?? data.categoryIndices;
-            const colorData = new Float32Array(data.numCells * 4);
+            const colorData = new Uint32Array(data.numCells);
             for (let i = 0; i < data.numCells; i++) {
                 const cat = (indices[i] ?? 0) % Math.max(1, palette.length);
                 const entry = palette[cat];
                 if (entry) {
-                    colorData[i * 4] = entry[0];
-                    colorData[i * 4 + 1] = entry[1];
-                    colorData[i * 4 + 2] = entry[2];
-                    colorData[i * 4 + 3] = 1.0;
+                    const r = Math.round(entry[0] * 255);
+                    const g = Math.round(entry[1] * 255);
+                    const b = Math.round(entry[2] * 255);
+                    colorData[i] = (r | (g << 8) | (b << 16) | (255 << 24)) >>> 0;
                 } else {
-                    colorData[i * 4 + 3] = 1.0;
+                    colorData[i] = (255 << 24) >>> 0; // opaque black fallback
                 }
             }
             device.queue.writeBuffer(root.unwrap(buffers.colorBuffer), 0, colorData);
             interaction.requestRender();
         },
-        updateColorsDirect(rgba: Float32Array) {
-            device.queue.writeBuffer(root.unwrap(buffers.colorBuffer), 0, rgba);
+        updateColorsDirect(rgba: Uint8Array) {
+            // rgba is Uint8Array [R,G,B,A, R,G,B,A, ...] in [0,255].
+            // On little-endian hardware a Uint32Array view of this memory gives
+            // R|(G<<8)|(B<<16)|(A<<24) per element — exactly our packed color format.
+            // This is a zero-copy reinterpretation; no per-pixel loop needed.
+            const colorData = new Uint32Array(rgba.buffer, rgba.byteOffset, data.numCells);
+            device.queue.writeBuffer(root.unwrap(buffers.colorBuffer), 0, colorData);
             interaction.requestRender();
         },
         getViewState() {
