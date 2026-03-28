@@ -14,6 +14,7 @@ import { PointInfoPane } from "../../scatter/PointInfoPane";
 import { CompactSelect } from "../../ui/select";
 import { Button } from "../../ui/button";
 import { useDashboard } from "../../../hooks/useDashboard";
+import { useScatterUIDispatch } from "../../../providers/ScatterUIStateProvider";
 import { useEmbeddingLoader } from "../../../hooks/useEmbeddingLoader";
 import { useColumnTypes } from "../../../hooks/useColumnTypes";
 import { makeCategoryColumn, type CategoryMapping } from "../../../lib/category-column";
@@ -378,6 +379,7 @@ function ScatterView({
   actions,
 }: ScatterViewProps) {
   const categoryColors = useEffectiveCategoryColors();
+  const { setFps, setZoom, setSelection, setEmbedding, setNumPoints } = useScatterUIDispatch();
 
   // ── Refs ──────────────────────────────────────────────────────────────────
   const hostRef = useRef<ScatterGPUHostHandle | null>(null);
@@ -412,11 +414,13 @@ function ScatterView({
     onSelectionChange: (_count: number | null, _indices?: number[]) => {},
     onPointClick: (_index: number, _pos: [number, number], _catIdx: number, _catName: string) => {},
     onViewChange: (_zoom: number) => {},
+    onFps: (_fps: number) => {},
   });
 
   // Update callbacks each render without recreating config
   callbacksRef.current.onSelectionChange = (_count, indices) => {
     const rowIds = (indices ?? []).map((i) => rowIndicesRef.current[i] ?? i);
+    setSelection(rowIds.length > 0 ? rowIds.length : null);
     brushSelection.update({
       source: scatterSourceRef.current,
       clients: new Set(),
@@ -433,17 +437,21 @@ function ScatterView({
     actions.setHighlight(String(rowIdx));
   };
 
-  callbacksRef.current.onViewChange = () => {
+  callbacksRef.current.onViewChange = (zoom: number) => {
     if (hostRef.current) viewStateRef.current = hostRef.current.getViewState();
+    setZoom(zoom);
     trajectoryOverlayRef.current?.update();
   };
+
+  callbacksRef.current.onFps = (fps: number) => setFps(fps);
 
   // Config created once — never changes identity (stable for GPU)
   const configRef = useRef<ScatterplotConfig>({
     callbacks: {
       onSelectionChange: (...args) => callbacksRef.current.onSelectionChange(...args),
-      onPointClick: (...args) => callbacksRef.current.onPointClick(...args),
-      onViewChange: (...args) => callbacksRef.current.onViewChange(...args),
+      onPointClick:      (...args) => callbacksRef.current.onPointClick(...args),
+      onViewChange:      (...args) => callbacksRef.current.onViewChange(...args),
+      onFps:             (...args) => callbacksRef.current.onFps(...args),
     },
   });
 
@@ -475,7 +483,8 @@ function ScatterView({
     const changed = axesKeyRef.current !== null && key !== axesKeyRef.current;
     axesKeyRef.current = key;
     if (changed) actions.setTrajectory(null);
-  }, [axes, actions]);
+    setEmbedding(axes?.obsmKey ?? null);
+  }, [axes, actions, setEmbedding]);
 
   const showTrajectory = useCallback(
     async (trackId: number, fovName: string, clickedT?: number) => {
@@ -531,7 +540,7 @@ function ScatterView({
         positionKey={positionKey}
         config={configRef.current}
         onGpuError={setGpuError}
-        onRowIndicesChange={(indices) => { rowIndicesRef.current = indices; }}
+        onRowIndicesChange={(indices) => { rowIndicesRef.current = indices; setNumPoints(indices.length); }}
       />
 
       {/* Loading overlay — on top of canvas, not instead of it */}

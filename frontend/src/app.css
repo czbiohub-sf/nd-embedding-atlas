@@ -4,57 +4,104 @@
 /*
  * nd-embedding-atlas dashboard theme
  *
- * Design direction: Scientific instrument panel — precise, data-dense, dark.
+ * Design direction: Scientific instrument panel — precise, data-dense.
  * Typography: JetBrains Mono (data/code), DM Sans (UI labels/headings).
+ * Two modes: dark (default) and light — toggled via .dark class on <html>.
  */
 
+/* ── Dark mode variant ────────────────────────────────────────────── */
+@custom-variant dark (&:is(.dark *));
+
+/* ── Base font/layout tokens (mode-independent) ──────────────────── */
 @theme {
     --font-sans: "DM Sans", system-ui, -apple-system, sans-serif;
     --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Code", monospace;
 
-    /* Backgrounds */
-    --color-base: #0c1021;
-    --color-surface: #141829;
-    --color-elevated: #1a1f36;
-
-    /* Borders */
-    --color-border-subtle: #242a45;
-    --color-border-active: #3b4578;
-
-    /* Text */
-    --color-text-primary: #e2e8f0;
-    --color-text-secondary: #8892b0;
-    --color-text-muted: #4a5278;
-
-    /* Accent */
-    --color-accent-cyan: #22d3ee;
+    /* Accent colors — same in both modes */
+    --color-accent-cyan:  #06b6d4;
     --color-accent-amber: #f59e0b;
-    --color-accent-rose: #f43f5e;
+    --color-accent-rose:  #f43f5e;
 
     /* Charts */
-    --color-chart-mark: #6366f1;
+    --color-chart-mark:      #6366f1;
     --color-chart-mark-fade: oklch(0.585 0.233 277.117 / 0.125);
-
-    /* shadcn/ui CSS variable bridge — mapped to nd-embedding-atlas dark palette */
-    --color-background: #0c1021;
-    --color-foreground: #e2e8f0;
-    --color-card: #141829;
-    --color-card-foreground: #e2e8f0;
-    --color-primary: #22d3ee;
-    --color-primary-foreground: #0c1021;
-    --color-secondary: #1a1f36;
-    --color-secondary-foreground: #e2e8f0;
-    --color-muted: #242a45;
-    --color-muted-foreground: #8892b0;
-    --color-accent: #f59e0b;
-    --color-accent-foreground: #0c1021;
-    --color-destructive: #f43f5e;
-    --color-border: #242a45;
-    --color-input: #141829;
-    --color-ring: #22d3ee;
 }
 
-/* Base styles */
+/* ── Light mode (default / :root) ────────────────────────────────── */
+:root {
+    /* Backgrounds */
+    --color-base:           #f8fafc;
+    --color-surface:        #f1f5f9;
+    --color-elevated:       #e2e8f0;
+
+    /* Borders */
+    --color-border-subtle:  #cbd5e1;
+    --color-border-active:  #94a3b8;
+
+    /* Text */
+    --color-text-primary:   #0f172a;
+    --color-text-secondary: #475569;
+    --color-text-muted:     #94a3b8;
+
+    /* shadcn bridge */
+    --color-background:        #f8fafc;
+    --color-foreground:        #0f172a;
+    --color-card:              #ffffff;
+    --color-card-foreground:   #0f172a;
+    --color-primary:           #06b6d4;
+    --color-primary-foreground: #f8fafc;
+    --color-secondary:         #f1f5f9;
+    --color-secondary-foreground: #0f172a;
+    --color-muted:             #f1f5f9;
+    --color-muted-foreground:  #64748b;
+    --color-accent:            #f59e0b;
+    --color-accent-foreground: #0f172a;
+    --color-destructive:       #f43f5e;
+    --color-border:            #e2e8f0;
+    --color-input:             #f1f5f9;
+    --color-ring:              #06b6d4;
+    --color-status-bar:        #f1f5f9;
+    --color-status-bar-border: #e2e8f0;
+}
+
+/* ── Dark mode (.dark on <html>) ─────────────────────────────────── */
+.dark {
+    /* Backgrounds — deep navy, scientific instrument */
+    --color-base:           #0c1021;
+    --color-surface:        #141829;
+    --color-elevated:       #1a1f36;
+
+    /* Borders */
+    --color-border-subtle:  #242a45;
+    --color-border-active:  #3b4578;
+
+    /* Text */
+    --color-text-primary:   #e2e8f0;
+    --color-text-secondary: #8892b0;
+    --color-text-muted:     #4a5278;
+
+    /* shadcn bridge */
+    --color-background:        #0c1021;
+    --color-foreground:        #e2e8f0;
+    --color-card:              #141829;
+    --color-card-foreground:   #e2e8f0;
+    --color-primary:           #22d3ee;
+    --color-primary-foreground: #0c1021;
+    --color-secondary:         #1a1f36;
+    --color-secondary-foreground: #e2e8f0;
+    --color-muted:             #242a45;
+    --color-muted-foreground:  #8892b0;
+    --color-accent:            #f59e0b;
+    --color-accent-foreground: #0c1021;
+    --color-destructive:       #f43f5e;
+    --color-border:            #242a45;
+    --color-input:             #141829;
+    --color-ring:              #22d3ee;
+    --color-status-bar:        #0a0d1a;
+    --color-status-bar-border: #1a1f36;
+}
+
+/* ── Base styles ─────────────────────────────────────────────────── */
 html,
 body,
 #root {
@@ -74,26 +121,13 @@ body {
     -moz-osx-font-smoothing: grayscale;
 }
 
-/* Scrollbar styling */
-::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-}
+/* ── Scrollbar ───────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--color-border-subtle); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-border-active); }
 
-::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-    background: var(--color-border-subtle);
-    border-radius: 3px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-    background: var(--color-border-active);
-}
-
-/* Select/dropdown styling for dark theme */
+/* ── Native select — themed ──────────────────────────────────────── */
 select {
     appearance: none;
     background-color: var(--color-surface);
@@ -108,323 +142,72 @@ select {
     background-repeat: no-repeat;
     background-position: right 4px center;
 }
+select:hover { border-color: var(--color-border-active); }
+select:focus { outline: 1px solid var(--color-ring); outline-offset: -1px; }
+select:disabled { opacity: 0.4; cursor: not-allowed; }
 
-select:hover {
-    border-color: var(--color-border-active);
-}
-
-select:focus {
-    outline: 1px solid var(--color-accent-cyan);
-    outline-offset: -1px;
-}
-
-select:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-}
-
-/* Mosaic slider input — dark theme overrides */
+/* ── Mosaic slider ───────────────────────────────────────────────── */
 .time-slider .input {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 11px;
-    font-family: var(--font-mono);
+    display: flex; align-items: center; gap: 6px;
+    font-size: 11px; font-family: var(--font-mono);
     color: var(--color-text-secondary);
 }
-
-.time-slider .input label {
-    white-space: nowrap;
-}
-
+.time-slider .input label { white-space: nowrap; }
 .time-slider .input label.value {
-    min-width: 2ch;
-    text-align: right;
-    color: var(--color-text-primary);
-    font-variant-numeric: tabular-nums;
+    min-width: 2ch; text-align: right;
+    color: var(--color-text-primary); font-variant-numeric: tabular-nums;
 }
-
 .time-slider .input input[type="range"] {
-    width: 120px;
-    height: 4px;
-    accent-color: var(--color-accent-cyan);
-    cursor: pointer;
+    width: 120px; height: 4px;
+    accent-color: var(--color-accent-cyan); cursor: pointer;
 }
 
-/* Trajectory — dim point cloud when a trajectory is active */
-.trajectory-active canvas {
-    opacity: 0.2;
-    transition: opacity 0.2s ease;
-}
-
-/* Point info pane (Tweakpane overlay on scatter) */
-.tp-point-info .tp-dfwv {
-    min-width: 180px;
-}
-
-/* ── Tweakpane overlay positioning ───────────────────────────────── */
-.tp-overlay {
-    position: absolute;
-    z-index: 10;
-    max-height: 50vh;
-    overflow-y: auto;
-}
-
-.tp-overlay--top-left {
-    top: 8px;
-    left: 8px;
-}
-.tp-overlay--bottom-left {
-    bottom: 8px;
-    left: 8px;
-}
-.tp-overlay--top-right {
-    top: 8px;
-    right: 8px;
-}
-.tp-overlay--bottom-right {
-    bottom: 8px;
-    right: 8px;
-}
-
-/* Tweakpane dark theme — applied to panes inside overlays */
-.tp-overlay .tp-dfwv {
-    --tp-base-background-color: hsla(230, 30%, 8%, 0.85);
-    --tp-base-shadow-color: transparent;
-    --tp-container-background-color: hsla(230, 30%, 12%, 0.5);
-    --tp-container-background-color-hover: hsla(230, 30%, 18%, 0.6);
-    --tp-groove-foreground-color: var(--color-accent-cyan);
-    --tp-input-background-color: var(--color-surface);
-    --tp-input-foreground-color: var(--color-text-primary);
-    --tp-label-foreground-color: var(--color-text-secondary);
-    --tp-monitor-background-color: var(--color-surface);
-    --tp-monitor-foreground-color: var(--color-text-primary);
-    --tp-button-background-color: var(--color-surface);
-    --tp-button-background-color-hover: var(--color-elevated);
-    --tp-button-foreground-color: var(--color-text-primary);
-    backdrop-filter: blur(8px);
-    border-radius: 6px;
-    font-family: var(--font-mono);
-    font-size: 10px;
-}
+/* ── Trajectory — dim scatter when active ────────────────────────── */
+.trajectory-active canvas { opacity: 0.2; transition: opacity 0.2s ease; }
 
 /* ── Categorical legend ──────────────────────────────────────────── */
 .legend-categorical {
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    z-index: 10;
-    max-height: 40%;
-    overflow-y: auto;
-    background: hsla(230, 30%, 8%, 0.85);
+    position: absolute; top: 8px; right: 8px; z-index: 10;
+    max-height: 40%; overflow-y: auto;
+    background: color-mix(in srgb, var(--color-base) 85%, transparent);
     backdrop-filter: blur(8px);
-    border-radius: 6px;
-    padding: 6px 8px;
-    font-family: var(--font-sans);
-    font-size: 11px;
-    color: var(--color-text-primary);
-    min-width: 140px;
+    border-radius: 6px; padding: 6px 8px;
+    border: 1px solid var(--color-border-subtle);
+    font-family: var(--font-sans); font-size: 11px;
+    color: var(--color-text-primary); min-width: 140px;
 }
-
 .legend-row {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 2px 0;
-    border-radius: 3px;
-    position: relative;
-    transition: opacity 0.15s;
+    display: flex; align-items: center; gap: 6px; padding: 2px 0;
+    border-radius: 3px; position: relative; transition: opacity 0.15s;
 }
-
-.legend-row:hover {
-    background: hsla(230, 30%, 15%, 0.5);
-}
-
-.legend-row--dimmed {
-    opacity: 0.35;
-}
-
+.legend-row:hover { background: color-mix(in srgb, var(--color-elevated) 50%, transparent); }
+.legend-row--dimmed { opacity: 0.35; }
 .legend-dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    border: 1.5px solid transparent;
-    padding: 0;
-    cursor: pointer;
-    flex-shrink: 0;
-    transition:
-        border-color 0.15s,
-        box-shadow 0.15s;
+    width: 10px; height: 10px; border-radius: 50%;
+    border: 1.5px solid transparent; padding: 0; cursor: pointer; flex-shrink: 0;
+    transition: border-color 0.15s, box-shadow 0.15s;
 }
+.legend-dot:hover { border-color: var(--color-text-secondary); }
+.legend-dot--isolated { border-color: var(--color-text-primary); box-shadow: 0 0 0 2px oklch(from var(--color-text-primary) l c h / 0.25); }
+.legend-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-text-secondary); }
+.legend-row--dimmed .legend-label { color: var(--color-text-muted); }
+.legend-count { font-family: var(--font-mono); font-size: 10px; color: var(--color-text-muted); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.legend-count-filtered { color: var(--color-accent-cyan); }
 
-.legend-dot:hover {
-    border-color: var(--color-text-secondary);
-}
-
-.legend-dot--isolated {
-    border-color: var(--color-text-primary);
-    box-shadow: 0 0 0 2px hsla(0, 0%, 100%, 0.25);
-}
-
-.legend-label {
-    flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    color: var(--color-text-secondary);
-}
-
-.legend-row--dimmed .legend-label {
-    color: var(--color-text-muted);
-}
-
-.legend-count {
-    font-family: var(--font-mono);
-    font-size: 10px;
-    color: var(--color-text-muted);
-    font-variant-numeric: tabular-nums;
-    flex-shrink: 0;
-}
-
-.legend-picker-btn {
-    width: 18px;
-    height: 18px;
-    border: none;
-    background: transparent;
-    color: var(--color-text-muted);
-    cursor: pointer;
-    border-radius: 3px;
-    font-size: 11px;
-    padding: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    transition:
-        color 0.15s,
-        background 0.15s;
-}
-
-.legend-picker-btn:hover {
-    color: var(--color-text-primary);
-    background: var(--color-elevated);
-}
-
-.legend-picker-popout {
-    position: absolute;
-    right: 100%;
-    top: 50%;
-    transform: translateY(-50%);
-    margin-right: 6px;
-    background: var(--color-elevated);
-    border: 1px solid var(--color-border-subtle);
-    border-radius: 6px;
-    padding: 8px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 6px;
-    z-index: 20;
-    box-shadow: 0 4px 16px hsla(0, 0%, 0%, 0.4);
-}
-
-.legend-picker-popout input[type="color"] {
-    width: 120px;
-    height: 80px;
-    border: none;
-    padding: 0;
-    cursor: pointer;
-    border-radius: 4px;
-    background: transparent;
-}
-
-.legend-picker-popout input[type="color"]::-webkit-color-swatch-wrapper {
-    padding: 0;
-}
-
-.legend-picker-popout input[type="color"]::-webkit-color-swatch {
-    border: none;
-    border-radius: 4px;
-}
-
-.legend-picker-popout input[type="color"]::-moz-color-swatch {
-    border: none;
-    border-radius: 4px;
-}
-
-.legend-picker-hex {
-    font-family: var(--font-mono);
-    font-size: 10px;
-    color: var(--color-text-secondary);
-}
-
-.legend-count-filtered {
-    color: var(--color-accent-cyan);
-}
-
-/* ── Continuous (gradient) legend ────────────────────────────────── */
+/* ── Continuous legend ───────────────────────────────────────────── */
 .legend-continuous {
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    z-index: 10;
-    background: hsla(230, 30%, 8%, 0.85);
-    backdrop-filter: blur(8px);
-    border-radius: 6px;
-    padding: 6px 8px;
-    font-family: var(--font-sans);
-    font-size: 11px;
-    color: var(--color-text-primary);
-    width: 144px;
-}
-
-.legend-continuous-title {
-    font-size: 10px;
-    font-weight: 500;
-    color: var(--color-text-secondary);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    margin-bottom: 4px;
-}
-
-.legend-continuous-bar {
-    height: 12px;
-    width: 100%;
-    border-radius: 3px;
+    position: absolute; top: 8px; right: 8px; z-index: 10;
+    background: color-mix(in srgb, var(--color-base) 85%, transparent);
+    backdrop-filter: blur(8px); border-radius: 6px; padding: 6px 8px;
     border: 1px solid var(--color-border-subtle);
-    background: var(--color-surface);
+    font-family: var(--font-sans); font-size: 11px;
+    color: var(--color-text-primary); width: 144px;
 }
+.legend-continuous-title { font-size: 10px; font-weight: 500; color: var(--color-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px; }
+.legend-continuous-bar { height: 12px; width: 100%; border-radius: 3px; border: 1px solid var(--color-border-subtle); }
+.legend-continuous-ticks { display: flex; justify-content: space-between; margin-top: 3px; font-size: 9px; color: var(--color-text-muted); font-family: var(--font-mono); }
 
-.legend-continuous-ticks {
-    display: flex;
-    justify-content: space-between;
-    margin-top: 3px;
-    font-size: 9px;
-    color: var(--color-text-muted);
-    font-family: var(--font-mono);
-}
-
-/* Dockview header action buttons */
-.dv-header-action {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-    border: none;
-    background: transparent;
-    color: var(--color-text-muted);
-    cursor: pointer;
-    border-radius: 4px;
-}
-
-.dv-header-action:hover {
-    color: var(--color-text-primary);
-    background: var(--color-elevated);
-}
-
-/* Dockview dark theme overrides — map to nd-embedding-atlas tokens */
+/* ── Dockview theme overrides ────────────────────────────────────── */
 .dockview-theme-dark {
     --dv-background-color: var(--color-base);
     --dv-paneview-header-border-color: var(--color-border-subtle);
@@ -440,4 +223,28 @@ select:disabled {
     --dv-activegroup-hiddenpanel-tab-color: var(--color-text-muted);
     --dv-inactivegroup-visiblepanel-tab-color: var(--color-text-secondary);
     --dv-inactivegroup-hiddenpanel-tab-color: var(--color-text-muted);
+}
+
+/* Dockview header action buttons */
+.dv-header-action {
+    display: flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px; border: none; background: transparent;
+    color: var(--color-text-muted); cursor: pointer; border-radius: 4px;
+}
+.dv-header-action:hover { color: var(--color-text-primary); background: var(--color-elevated); }
+
+/* ── Status bar ──────────────────────────────────────────────────── */
+.status-bar {
+    height: 24px;
+    background: var(--color-status-bar);
+    border-top: 1px solid var(--color-status-bar-border);
+    display: flex;
+    align-items: center;
+    padding: 0 10px;
+    gap: 0;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--color-text-muted);
+    flex-shrink: 0;
+    user-select: none;
 }

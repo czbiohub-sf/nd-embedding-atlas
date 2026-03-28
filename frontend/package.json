@@ -13,24 +13,24 @@
     },
     "devDependencies": {
         "@playwright/test": "^1.58.2",
+        "@tailwindcss/vite": "^4.2.2",
         "@types/react": "^19.2.14",
         "@types/react-dom": "^19.2.3",
         "@vitejs/plugin-react": "^6.0.1",
         "@webgpu/types": "^0.1.69",
-        "@tailwindcss/vite": "^4.2.2",
         "agent-browser": "^0.23.0",
         "playwright": "^1.58.2",
         "tailwindcss": "^4.2.2",
         "typescript": "~6.0.2",
-        "unplugin-typegpu": "^0.9.0",
+        "unplugin-typegpu": "^0.10.2",
         "vite": "^8.0.3"
     },
     "dependencies": {
-        "@base-ui/react": "^1.2.0",
+        "@base-ui/react": "^1.3.0",
         "@idetik/core": "^0.15.3",
         "@tanstack/react-table": "^8.21.3",
         "@tanstack/react-virtual": "^3.13.23",
-        "@typegpu/sdf": "^0.9.0",
+        "@typegpu/sdf": "0.9.0",
         "@uwdata/mosaic-core": "^0.22.0",
         "@uwdata/mosaic-inputs": "^0.22.0",
         "@uwdata/mosaic-sql": "^0.22.0",
@@ -44,8 +44,8 @@
         "react-dom": "^19.2.4",
         "swr": "^2.4.1",
         "tailwind-merge": "^3.5.0",
-        "tweakpane": "^4.0.5",
         "typegpu": "0.9.0",
-        "zod": "^3.24.0"
+        "zod": "^3.24.0",
+        "tweakpane": "^4.0.5"
     }
 }

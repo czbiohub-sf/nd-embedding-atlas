@@ -1,11 +1,11 @@
 import path from "path";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
-import typegpu from "unplugin-typegpu/vite";
+import typegpuPlugin from 'unplugin-typegpu/vite';
 import { defineConfig } from "vite";
 
 export default defineConfig({
-    plugins: [react(), tailwindcss(), typegpu()],
+    plugins: [react(), tailwindcss(), typegpuPlugin({})],
     resolve: {
         alias: { "@": path.resolve(__dirname, "./src") },
     },
