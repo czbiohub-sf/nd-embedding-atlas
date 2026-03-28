@@ -179,6 +179,12 @@ select:disabled { opacity: 0.4; cursor: not-allowed; }
 }
 
 /* ── Dockview — dark theme ────────────────────────────────────────── */
+/* Override Dockview's hardcoded abyss-light blue tint */
+.dockview-theme-abyss,
+.dockview-theme-dark {
+    --dv-color-abyss-light: var(--color-elevated);
+}
+
 .dockview-theme-dark {
     --dv-background-color: var(--color-base);
     --dv-paneview-header-border-color: var(--color-border-subtle);
