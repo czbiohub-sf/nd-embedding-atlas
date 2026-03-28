@@ -13,9 +13,11 @@ from nd_embedding_atlas.vz._prepare import parse_bbox
 
 def _lookup_obs(row_index: int, select_cols: list[str], state: ViewerState) -> tuple | None:
     """Query DuckDB for a single observation by row index (runs in thread pool)."""
+    # Quote column names to handle special chars (e.g. leiden_0.5 contains a dot)
+    quoted = ", ".join(f'"{c}"' for c in select_cols)
     with state.store.cursor() as cur:
         return cur.execute(
-            f"SELECT {', '.join(select_cols)} FROM obs_base WHERE __row_index__ = ?",
+            f"SELECT {quoted} FROM obs_base WHERE __row_index__ = ?",
             [row_index],
         ).fetchone()
 
@@ -76,27 +78,22 @@ def make_obs_router(get_state: Callable[[], ViewerState]) -> APIRouter:
                     for d in cur.execute("SELECT * FROM obs_base LIMIT 0").description
                     if d[0] not in state.store._hidden
                 ]
+                # Quote column names to handle dots/special chars (e.g. leiden_0.5)
+                quoted = ", ".join(f'"{c}"' for c in cols)
                 row = cur.execute(
-                    f"SELECT {', '.join(cols)} FROM obs_base WHERE __row_index__ = ?",
+                    f"SELECT {quoted} FROM obs_base WHERE __row_index__ = ?",
                     [row_index],
                 ).fetchone()
                 return (cols, row) if row is not None else None
 
         loop = asyncio.get_running_loop()
-        try:
-            result = await loop.run_in_executor(state.executor, _fetch, row_index, state)
-        except Exception as exc:
-            import traceback
-            return JSONResponse({"error": str(exc), "traceback": traceback.format_exc()}, status_code=500)
+        result = await loop.run_in_executor(state.executor, _fetch, row_index, state)
 
         if result is None:
             return JSONResponse({"error": "Observation not found"}, status_code=404)
 
         cols, row = result
-        try:
-            return dict(zip(cols, (str(v) if v is not None else None for v in row), strict=True))
-        except Exception as exc:
-            return JSONResponse({"error": f"Serialization failed: {exc}", "cols": cols, "row_len": len(row)}, status_code=500)
+        return dict(zip(cols, (str(v) if v is not None else None for v in row), strict=True))
 
     @router.get("/api/health")
     async def health(state: State) -> dict:
