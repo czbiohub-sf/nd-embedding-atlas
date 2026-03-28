@@ -508,7 +508,8 @@ function ScatterView({
   useEffect(() => {
     if (colorMode !== "categorical") return;
     const colors = categoryColors ?? [];
-    if (colors.length === 0) return;
+    // Wait until palette has been applied (empty strings = palette not yet loaded)
+    if (colors.length === 0 || colors.some((c) => !c)) return;
     const palette = hexToRgbPalette(colors);
     paletteRef.current = palette;
     // Pass current category indices — GPU closure has the original (empty) indices
