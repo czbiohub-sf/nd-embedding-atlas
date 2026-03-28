@@ -158,9 +158,11 @@ export function ScatterPanel(_props: IDockviewPanelProps) {
     };
   }, [coordinator, colorByColumn, colorMode]);
 
-  // Re-apply palette to existing mapping without touching DuckDB
+  // Re-apply palette to existing mapping without touching DuckDB.
+  // Return null (not categoryMapping) when palette isn't loaded yet — empty
+  // color strings would propagate to the GPU and never trigger a re-color.
   const coloredCategoryMapping = useMemo(() => {
-    if (!categoryMapping || palette.length === 0) return categoryMapping;
+    if (!categoryMapping || palette.length === 0) return null;
     return {
       ...categoryMapping,
       legend: categoryMapping.legend.map((item) => ({
