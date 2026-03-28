@@ -126,10 +126,12 @@ export async function createScatterplot(
             uniforms.paramsUniform.write(d.vec4f(pointRadius, gpuW / gpuH, selectionDimFactor, adaptiveScale));
             interaction.resize();
         },
-        updateColors(palette: readonly (readonly [number, number, number])[]) {
+        updateColors(palette: readonly (readonly [number, number, number])[], categoryIndices?: Uint8Array) {
+            // Use passed indices (fresh from latest data) or fall back to original closure data
+            const indices = categoryIndices ?? data.categoryIndices;
             const colorData = new Float32Array(data.numCells * 4);
             for (let i = 0; i < data.numCells; i++) {
-                const cat = data.categoryIndices[i]! % Math.max(1, palette.length);
+                const cat = (indices[i] ?? 0) % Math.max(1, palette.length);
                 const entry = palette[cat];
                 if (entry) {
                     colorData[i * 4] = entry[0];

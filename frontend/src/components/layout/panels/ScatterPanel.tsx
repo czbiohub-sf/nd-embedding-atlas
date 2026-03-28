@@ -511,8 +511,9 @@ function ScatterView({
     if (colors.length === 0) return;
     const palette = hexToRgbPalette(colors);
     paletteRef.current = palette;
-    gpuRef.current?.updateColors(palette);
-  }, [categoryColors, colorMode]);
+    // Pass current category indices — GPU closure has the original (empty) indices
+    gpuRef.current?.updateColors(palette, data?.categoryIndices);
+  }, [categoryColors, colorMode, data?.categoryIndices]);
 
   useEffect(() => {
     if (colorMode !== "continuous" || !data?.colorValues) return;

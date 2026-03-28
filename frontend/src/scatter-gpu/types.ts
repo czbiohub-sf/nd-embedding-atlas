@@ -69,7 +69,7 @@ export interface ScatterplotHandle {
     resize(width: number, height: number): void;
     destroy(): void;
     /** Update color buffer from palette without GPU re-initialization (categorical coloring). */
-    updateColors(palette: readonly (readonly [number, number, number])[]): void;
+    updateColors(palette: readonly (readonly [number, number, number])[], categoryIndices?: Uint8Array): void;
     /** Write pre-computed RGBA float32 array directly to colorBuffer (continuous coloring). */
     updateColorsDirect(rgba: Float32Array): void;
     /** Current pan/zoom state of the viewport. */
