@@ -188,9 +188,10 @@ def get_obs(
     from nd_embedding_atlas.io import AnnDataCollection  # noqa: PLC0415
 
     if isinstance(source, AnnDataCollection):
-        # If single dataset with a known path, use the fast path
-        if len(source) == 1:
-            entry = next(iter(source.values()))
+        # datasets is the underlying Datasets mapping (UserDict)
+        datasets = source.datasets
+        if len(datasets) == 1:
+            entry = next(iter(datasets.data.values()))
             if entry.path is not None:
                 return get_obs(entry.path, columns=columns)
         # Multi-dataset or pathless → fall back to Dataset2D.to_memory()
@@ -262,7 +263,7 @@ def get_obsm(
 
     if isinstance(source, AnnDataCollection):
         if len(source) == 1:
-            entry = next(iter(source.values()))
+            entry = next(iter(source.datasets.data.values()))
             if entry.path is not None:
                 return get_obsm(entry.path, key, dtype=dtype, columns=columns)
         # Fall back to dask.compute()
@@ -316,7 +317,7 @@ def get_var(
 
     if isinstance(source, AnnDataCollection):
         if len(source) == 1:
-            entry = next(iter(source.values()))
+            entry = next(iter(source.datasets.data.values()))
             if entry.path is not None:
                 return get_var(entry.path, columns=columns)
 
