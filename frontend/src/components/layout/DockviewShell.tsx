@@ -3,7 +3,9 @@ import {
     DockviewReact,
     type DockviewReadyEvent,
     type IDockviewHeaderActionsProps,
+    type IDockviewPanelHeaderProps,
 } from "dockview-react";
+import { XIcon } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import "dockview-react/dist/styles/dockview.css";
 import { useTheme } from "../../providers/ThemeProvider";
@@ -12,6 +14,38 @@ import { ChartGroupPanel } from "./panels/ChartGroupPanel";
 import { ImageViewerPanel } from "./panels/ImageViewerPanel";
 import { ScatterPanel } from "./panels/ScatterPanel";
 import { TablePanel } from "./panels/TablePanel";
+
+// ── Custom tab ───────────────────────────────────────────────────────────
+
+function CustomTab({ api }: IDockviewPanelHeaderProps) {
+    const [isActive, setIsActive] = useState(api.isActive);
+
+    useEffect(() => {
+        const d = api.onDidActiveChange((e) => setIsActive(e.isActive));
+        return () => d.dispose();
+    }, [api]);
+
+    return (
+        <div
+            className={[
+                "group flex h-full items-center gap-2 px-3 text-[11px] font-medium select-none border-r border-border-subtle transition-colors",
+                isActive
+                    ? "bg-elevated text-text-primary"
+                    : "bg-surface text-text-muted hover:text-text-secondary",
+            ].join(" ")}
+        >
+            <span>{api.title}</span>
+            <button
+                type="button"
+                className="flex items-center justify-center w-3.5 h-3.5 rounded opacity-0 group-hover:opacity-60 hover:!opacity-100 hover:text-text-primary transition-opacity"
+                onClick={(e) => { e.stopPropagation(); api.close(); }}
+                aria-label="Close panel"
+            >
+                <XIcon size={10} strokeWidth={2} />
+            </button>
+        </div>
+    );
+}
 
 // ── Header actions (maximize toggle) ────────────────────────────────────
 
@@ -185,6 +219,7 @@ export function DockviewShell({ hasPlate, hasEmbeddings }: Props) {
             className={theme === "dark" ? "dockview-theme-dark" : "dockview-theme-light"}
             components={COMPONENTS}
             onReady={onReady}
+            defaultTabComponent={CustomTab}
             rightHeaderActionsComponent={RightHeaderActions}
         />
     );
