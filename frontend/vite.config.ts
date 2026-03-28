@@ -18,34 +18,54 @@ export default defineConfig({
     },
     build: {
         outDir: "dist",
-        rollupOptions: {
+        rolldownOptions: {
             output: {
-                advancedChunks: {
+                codeSplitting: {
                     groups: [
                         {
                             name: "vendor-react",
                             test: /node_modules[\\/]+(react|react-dom|scheduler)/,
-                            priority: 20,
+                            priority: 30,
                         },
                         {
                             name: "vendor-typegpu",
-                            test: /node_modules[\\/]+typegpu/,
-                            priority: 15,
+                            test: /node_modules[\\/]+(typegpu|@typegpu)/,
+                            priority: 25,
                         },
                         {
                             name: "vendor-mosaic",
                             test: /node_modules[\\/]+(@uwdata|mosaic)/,
-                            priority: 15,
+                            priority: 25,
                         },
                         {
                             name: "vendor-dockview",
                             test: /node_modules[\\/]+dockview/,
-                            priority: 15,
+                            priority: 25,
+                        },
+                        {
+                            name: "vendor-idetik",
+                            test: /node_modules[\\/]+@idetik/,
+                            priority: 20,
+                        },
+                        {
+                            name: "vendor-tanstack",
+                            test: /node_modules[\\/]+@tanstack/,
+                            priority: 20,
                         },
                         {
                             name: "vendor-arrow",
-                            test: /node_modules[\\/]+apache-arrow/,
+                            test: /node_modules[\\/]+(apache-arrow)/,
+                            priority: 15,
+                        },
+                        {
+                            name: "vendor-ui",
+                            test: /node_modules[\\/]+(lucide-react|@base-ui|class-variance-authority|clsx|tailwind-merge|cmdk|@radix-ui)/,
                             priority: 10,
+                        },
+                        {
+                            name: "vendor-misc",
+                            test: /node_modules[\\/]+(gl-matrix|zod|swr|@zarr|zarr)/,
+                            priority: 5,
                         },
                     ],
                 },
