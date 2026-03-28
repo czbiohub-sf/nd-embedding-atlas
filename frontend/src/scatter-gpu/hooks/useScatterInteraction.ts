@@ -53,7 +53,8 @@ export function createInteractionController(
     let lassoPath: [number, number][] = [];
     let marqueeStart: [number, number] = [0, 0];
     let marqueeEnd: [number, number] = [0, 0];
-    let lastSelectionDispatch = 0;
+    let lastSelectionDispatch = 0;  // governs readback  (~50 ms / 20 fps)
+  let lastSelectionCompute  = 0;  // governs compute dispatch (~8 ms / 120 fps)
 
     function updateView() {
         const aspect = overlay.clientWidth / overlay.clientHeight || 1;
@@ -165,14 +166,16 @@ export function createInteractionController(
             lassoPath.push(pixelToWorld(e.offsetX, e.offsetY));
             drawLasso();
             if (lassoPath.length >= 3) {
-                // Dispatch compute every move (visual dimming stays live)
-                // but only readback count every ~50ms
                 const now = performance.now();
-                const doReadback = now - lastSelectionDispatch > 50;
-                if (doReadback) lastSelectionDispatch = now;
-                selection.runLassoSelection(lassoPath, doReadback);
-                needsRender = true;
-                scheduleLoop();
+                const doCompute  = now - lastSelectionCompute  > 8;   // ~120 fps cap
+                const doReadback = now - lastSelectionDispatch > 50;  // ~20 fps readback
+                if (doCompute) {
+                    lastSelectionCompute = now;
+                    if (doReadback) lastSelectionDispatch = now;
+                    selection.runLassoSelection(lassoPath, doReadback);
+                    needsRender = true;
+                    scheduleLoop();
+                }
             }
         } else if (isMarquee) {
             marqueeEnd = pixelToWorld(e.offsetX, e.offsetY);
@@ -183,11 +186,15 @@ export function createInteractionController(
             const yMax = Math.max(marqueeStart[1], marqueeEnd[1]);
             if (xMax - xMin > 0.001 || yMax - yMin > 0.001) {
                 const now = performance.now();
+                const doCompute  = now - lastSelectionCompute  > 8;
                 const doReadback = now - lastSelectionDispatch > 50;
-                if (doReadback) lastSelectionDispatch = now;
-                selection.runMarqueeSelection({ xMin, yMin, xMax, yMax }, doReadback);
-                needsRender = true;
-                scheduleLoop();
+                if (doCompute) {
+                    lastSelectionCompute = now;
+                    if (doReadback) lastSelectionDispatch = now;
+                    selection.runMarqueeSelection({ xMin, yMin, xMax, yMax }, doReadback);
+                    needsRender = true;
+                    scheduleLoop();
+                }
             }
         } else if (isPanning) {
             const aspect = overlay.clientWidth / overlay.clientHeight || 1;
@@ -242,6 +249,8 @@ export function createInteractionController(
 
     function onDblClick() {
         const t0 = performance.now();
+        lastSelectionDispatch = 0;
+        lastSelectionCompute  = 0;
         selection.clearSelection();
         needsRender = true;
         scheduleLoop();
