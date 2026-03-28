@@ -9,8 +9,13 @@ from typing import TYPE_CHECKING, Annotated
 import numpy as np
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
+from pydantic import BaseModel
 
 from nd_embedding_atlas.server._state import ViewerState
+
+
+class _SelectionBody(BaseModel):
+    row_indices: list[int]
 
 if TYPE_CHECKING:
     pass
@@ -261,5 +266,40 @@ def make_scatter_router(get_state: Callable[[], ViewerState]) -> APIRouter:
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         return Response(payload, media_type="application/octet-stream")
+
+    # ── Selection temp table ────────────────────────────────────────────────────
+    # For large lasso selections (≥ 5000 pts) the frontend posts selected row
+    # indices here.  We write them into a DuckDB temp table so the Mosaic
+    # table-panel query can use a subquery predicate instead of a massive OR chain:
+    #   WHERE __row_index__ IN (SELECT row_index FROM __scatter_selection)
+    # DuckDB evaluates this as a hash join — O(1) vs O(n) OR clauses.
+
+    @router.post("/api/scatter-selection")
+    async def update_scatter_selection(body: _SelectionBody, state: State) -> dict:
+        """Write selected row indices into the __scatter_selection temp table."""
+        import pyarrow as pa
+
+        def _write(row_indices: list[int]) -> None:
+            arr = pa.array(row_indices, type=pa.uint32())
+            tbl = pa.table({"row_index": arr})  # noqa: F841 — DuckDB reads local PyArrow vars
+            state.store.con.execute("DROP TABLE IF EXISTS __scatter_selection")
+            state.store.con.execute(
+                "CREATE TEMP TABLE __scatter_selection AS SELECT * FROM tbl"
+            )
+
+        await asyncio.get_running_loop().run_in_executor(
+            state.executor, _write, body.row_indices
+        )
+        return {"ok": True, "count": len(body.row_indices)}
+
+    @router.delete("/api/scatter-selection")
+    async def clear_scatter_selection(state: State) -> dict:
+        """Remove the __scatter_selection temp table (clears the table filter)."""
+
+        def _clear() -> None:
+            state.store.con.execute("DROP TABLE IF EXISTS __scatter_selection")
+
+        await asyncio.get_running_loop().run_in_executor(state.executor, _clear)
+        return {"ok": True}
 
     return router

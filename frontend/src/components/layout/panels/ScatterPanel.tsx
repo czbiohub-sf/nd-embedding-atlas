@@ -1,6 +1,7 @@
 import type { IDockviewPanelProps } from "dockview-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { column, eq, literal, or } from "@uwdata/mosaic-sql";
+import { useDebouncer } from "@tanstack/react-pacer";
+import { verbatim } from "@uwdata/mosaic-sql";
 import { ScatterGPUHost, type ScatterGPUHostHandle } from "../../../scatter-gpu/components/ScatterGPUHost";
 import type { ScatterplotConfig } from "../../../scatter-gpu/types";
 import { useMosaicScatterData } from "../../../scatter-gpu/hooks/useMosaicScatterData";
@@ -22,7 +23,25 @@ import { resolveColorMode } from "../../../hooks/useColorMode";
 import { toRows } from "../../../lib/mosaic-helpers";
 import type { AxisState, TrajectoryFrame } from "../../../types";
 
-// ── Helper ────────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/**
+ * Build a Mosaic WHERE predicate for the given row IDs.
+ *
+ * Small selections (< 5000): `__row_index__ IN (1,2,3,...)`
+ * DuckDB converts IN lists to hash sets — much faster than 100K OR clauses.
+ *
+ * Large selections (≥ 5000): subquery against the __scatter_selection temp
+ * table that is populated via POST /api/scatter-selection before this
+ * predicate is applied. See ScatterView.syncLargeSelection().
+ */
+function buildSelectionPredicate(rowIds: number[]): string | null {
+  if (rowIds.length === 0) return null;
+  if (rowIds.length < 5000) {
+    return `__row_index__ IN (${rowIds.join(",")})`;
+  }
+  return `__row_index__ IN (SELECT row_index FROM __scatter_selection)`;
+}
 
 function hexToRgbPalette(hexColors: string[]): readonly (readonly [number, number, number])[] {
   return hexColors.map((hex) => {
@@ -409,6 +428,49 @@ function ScatterView({
     continuousColormap,
   });
 
+  // ── Large-selection temp table sync ──────────────────────────────────────
+  // For selections ≥ 5000 rows, populate a DuckDB temp table before updating
+  // the Mosaic predicate. The table query then uses a subquery instead of a
+  // massive IN list. Smaller selections use IN (ids) directly — no server call.
+  const syncLargeSelection = useCallback(async (rowIds: number[]) => {
+    if (rowIds.length === 0) {
+      await fetch("/api/scatter-selection", { method: "DELETE" }).catch(() => {});
+      return null;
+    }
+    await fetch("/api/scatter-selection", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ row_indices: rowIds }),
+    }).catch(() => {});
+    return `__row_index__ IN (SELECT row_index FROM __scatter_selection)`;
+  }, []);
+
+  // ── Debounced brushSelection update ──────────────────────────────────────
+  // Visual feedback (point dimming, status bar count) stays immediate.
+  // The expensive Mosaic SQL query is debounced: fires 200ms after drawing stops.
+  const brushDebouncer = useDebouncer(
+    async (rowIds: number[]) => {
+      const predicate =
+        rowIds.length >= 5000
+          ? await syncLargeSelection(rowIds)
+          : buildSelectionPredicate(rowIds);
+
+      brushSelection.update({
+        source: scatterSourceRef.current,
+        clients: new Set(),
+        value: rowIds,
+        predicate: predicate ? verbatim(predicate) : null,
+      });
+    },
+    {
+      wait: 200,
+      leading: false,
+      trailing: true,
+      // Guarantee the table syncs if the component unmounts mid-lasso
+      onUnmount: (d) => d.flush(),
+    },
+  );
+
   // ── Stable callbacks ref — GPU config never changes identity ──────────────
   const callbacksRef = useRef({
     onSelectionChange: (_count: number | null, _indices?: number[]) => {},
@@ -420,16 +482,20 @@ function ScatterView({
   // Update callbacks each render without recreating config
   callbacksRef.current.onSelectionChange = (_count, indices) => {
     const rowIds = (indices ?? []).map((i) => rowIndicesRef.current[i] ?? i);
-    setSelection(rowIds.length > 0 ? rowIds.length : null);
-    brushSelection.update({
-      source: scatterSourceRef.current,
-      clients: new Set(),
-      value: rowIds,
-      predicate:
-        rowIds.length > 0
-          ? or(...rowIds.map((id) => eq(column("__row_index__"), literal(id))))
-          : null,
-    });
+    setSelection(rowIds.length > 0 ? rowIds.length : null);  // status bar — immediate
+
+    if (rowIds.length === 0) {
+      // Clear is time-sensitive — cancel debounce and update right away
+      brushDebouncer.cancel();
+      brushSelection.update({
+        source: scatterSourceRef.current,
+        clients: new Set(),
+        value: [],
+        predicate: null,
+      });
+    } else {
+      brushDebouncer.maybeExecute(rowIds);  // table update — debounced 200ms
+    }
   };
 
   callbacksRef.current.onPointClick = (index) => {
