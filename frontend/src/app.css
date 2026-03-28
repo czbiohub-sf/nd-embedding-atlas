@@ -77,37 +77,38 @@
  *  new values automatically — no dark: prefix needed in components.
  * ──────────────────────────────────────────────────────────────────── */
 .dark {
-    --color-base:     #0c1021;
-    --color-surface:  #141829;
-    --color-elevated: #1a1f36;
+    /* Near-black neutrals — no blue tint */
+    --color-base:     #08090a;
+    --color-surface:  #111113;
+    --color-elevated: #1c1c1f;
 
-    --color-border-subtle: #242a45;
-    --color-border-active: #3b4578;
+    --color-border-subtle: #27272a;
+    --color-border-active: #3f3f46;
 
-    --color-text-primary:   #e2e8f0;
-    --color-text-secondary: #8892b0;
-    --color-text-muted:     #4a5278;
+    --color-text-primary:   #f4f4f5;
+    --color-text-secondary: #a1a1aa;
+    --color-text-muted:     #52525b;
 
     /* shadcn bridge */
-    --color-background:           #0c1021;
-    --color-foreground:           #e2e8f0;
-    --color-card:                 #141829;
-    --color-card-foreground:      #e2e8f0;
+    --color-background:           #08090a;
+    --color-foreground:           #f4f4f5;
+    --color-card:                 #111113;
+    --color-card-foreground:      #f4f4f5;
     --color-primary:              #22d3ee;
-    --color-primary-foreground:   #0c1021;
-    --color-secondary:            #1a1f36;
-    --color-secondary-foreground: #e2e8f0;
-    --color-muted:                #242a45;
-    --color-muted-foreground:     #8892b0;
+    --color-primary-foreground:   #08090a;
+    --color-secondary:            #1c1c1f;
+    --color-secondary-foreground: #f4f4f5;
+    --color-muted:                #27272a;
+    --color-muted-foreground:     #a1a1aa;
     --color-accent:               #f59e0b;
-    --color-accent-foreground:    #0c1021;
+    --color-accent-foreground:    #08090a;
     --color-destructive:          #f43f5e;
-    --color-border:               #242a45;
-    --color-input:                #141829;
+    --color-border:               #27272a;
+    --color-input:                #111113;
     --color-ring:                 #22d3ee;
 
-    --color-status-bar:        #0a0d1a;
-    --color-status-bar-border: #1a1f36;
+    --color-status-bar:        #050506;
+    --color-status-bar-border: #1c1c1f;
 }
 
 /* ── Base layout ──────────────────────────────────────────────────── */
