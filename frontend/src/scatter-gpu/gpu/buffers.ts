@@ -20,9 +20,7 @@ export function createUniforms(
   );
   const viewUniform = root.createUniform(d.vec4f, d.vec4f(0, 0, 1, aspectRatio));
   const selectionModeUniform = root.createUniform(d.f32, 0);
-  // Point shape: 0 = disk (hard edge + smoothstep), 1 = gaussian (exp(-r²) falloff).
-  const pointShapeUniform = root.createUniform(d.u32, 0);
-  return { paramsUniform, viewUniform, selectionModeUniform, pointShapeUniform };
+  return { paramsUniform, viewUniform, selectionModeUniform };
 }
 
 export type ScatterUniforms = ReturnType<typeof createUniforms>;

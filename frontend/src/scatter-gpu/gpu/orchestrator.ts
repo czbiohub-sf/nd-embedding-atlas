@@ -46,7 +46,7 @@ export async function createScatterplot(
         config?.render?.backgroundColor ?? ([0, 0, 0, 0] as [number, number, number, number]);
 
     const mainVertex = createVertexShader(uniforms);
-    const mainFragment = createFragmentShader(uniforms);
+    const mainFragment = createFragmentShader();
     const { render } = createRenderPipeline(root, mainVertex, mainFragment, buffers, culling, format, backgroundColor, data.numCells);
 
     const selection = createSelectionEngine(root, device, buffers, uniforms, data.numCells, (count, indices) => {
@@ -110,9 +110,6 @@ export async function createScatterplot(
         },
         config?.interaction,
     );
-
-    // Initialise point shape from config (default: disk)
-    uniforms.pointShapeUniform.write(config?.render?.pointShape === "gaussian" ? 1 : 0);
 
     // ── Grid spatial index for O(1) hit testing ───────────────────────────
     // World space is [-1,1]×[-1,1]. Divide into GRID×GRID cells; each cell
@@ -180,10 +177,6 @@ export async function createScatterplot(
         },
         getViewState() {
             return interaction.getViewState();
-        },
-        setPointShape(shape: "disk" | "gaussian") {
-            uniforms.pointShapeUniform.write(shape === "gaussian" ? 1 : 0);
-            interaction.requestRender();
         },
         worldToScreen(wx: number, wy: number, w: number, h: number) {
             const { panX, panY, zoom } = interaction.getViewState();

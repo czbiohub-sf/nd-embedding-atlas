@@ -72,8 +72,6 @@ export interface ScatterplotHandle {
     updateColors(palette: readonly (readonly [number, number, number])[], categoryIndices?: Uint8Array): void;
     /** Write pre-computed RGBA uint8 array directly to colorBuffer (continuous coloring). */
     updateColorsDirect(rgba: Uint8Array): void;
-    /** Switch point rendering shape at runtime. */
-    setPointShape(shape: "disk" | "gaussian"): void;
     /** Current pan/zoom state of the viewport. */
     getViewState(): { panX: number; panY: number; zoom: number };
     /** Convert world coordinates to screen pixel coordinates using the current view transform. */
@@ -94,11 +92,6 @@ export interface RenderConfig {
      * v2: "continuous" uses colorValues Float32Array for gradient coloring.
      */
     colorMode?: "categorical" | "continuous";
-    /**
-     * Point shape. Default: "disk" (hard edge + AA).
-     * "gaussian": soft exp(-r²) falloff — density blends naturally at overlaps.
-     */
-    pointShape?: "disk" | "gaussian";
 }
 
 export interface ScatterplotConfig {
