@@ -210,6 +210,37 @@ export function ScatterPanel(props: IDockviewPanelProps) {
 
   const categoryCol = coloredCategoryMapping?.indexColumn ?? null;
 
+  // ── Isolation → Mosaic cross-filter ───────────────────────────────────────
+  // Deferred via requestAnimationFrame so it fires outside any active
+  // Mosaic AsyncDispatch cycle (direct calls from React effects get cancelled).
+  const isolationSourceRef = useRef<object>({});
+  const handleIsolationChange = useCallback((isolatedIndices: Set<number>) => {
+    const source = isolationSourceRef.current;
+    const catMap = coloredCategoryMapping;
+    const col = colorByColumn;
+    requestAnimationFrame(() => {
+      if (isolatedIndices.size === 0 || !catMap || !col) {
+        brushSelection.update({ source, clients: new Set(), value: [], predicate: null });
+        return;
+      }
+      const labels = catMap.legend
+        .filter((item) => isolatedIndices.has(item.index))
+        .map((item) => `'${item.label.replace(/'/g, "''")}'`);
+      if (labels.length === 0) {
+        brushSelection.update({ source, clients: new Set(), value: [], predicate: null });
+        return;
+      }
+      const sql = `${col} IN (${labels.join(", ")})`;
+      brushSelection.update({
+        source,
+        clients: new Set(),
+        value: [],
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        predicate: verbatim(sql) as any,
+      });
+    });
+  }, [brushSelection, coloredCategoryMapping, colorByColumn]);
+
   // ── Derive rendering state ─────────────────────────────────────────────────
   const obsmKeys = axes ? Object.keys(metadata.obsm) : [];
   const currentEntry = axes ? metadata.obsm[axes.obsmKey] : null;
@@ -259,6 +290,7 @@ export function ScatterPanel(props: IDockviewPanelProps) {
         selection={brushSelection}
         table={table}
         categoryCol={categoryCol}
+        onIsolationChange={handleIsolationChange}
       >
         <ScatterView
           myPanelId={myPanelId}

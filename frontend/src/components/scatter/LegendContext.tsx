@@ -1,5 +1,5 @@
 import type { Coordinator, Selection } from "@uwdata/mosaic-core";
-import { createContext, use, useCallback, useMemo, useState } from "react";
+import { createContext, use, useCallback, useEffect, useMemo, useState } from "react";
 import type { CategoryLegendItem, CategoryMapping } from "../../lib/category-column";
 
 // ── State ───────────────────────────────────────────────────────────────────
@@ -72,6 +72,8 @@ interface LegendProviderProps {
     selection: Selection;
     table: string;
     categoryCol: string | null;
+    /** Called whenever the set of isolated category indices changes. */
+    onIsolationChange?: (isolatedIndices: Set<number>) => void;
     children: React.ReactNode;
 }
 
@@ -81,11 +83,19 @@ export function LegendProvider({
     selection,
     table,
     categoryCol,
+    onIsolationChange,
     children,
 }: LegendProviderProps) {
     const [mode, setMode] = useState<"categorical" | "continuous">("categorical");
     const [isolatedIndices, setIsolatedIndices] = useState<Set<number>>(new Set());
     const [colorOverrides, setColorOverrides] = useState<Map<number, string>>(new Map());
+
+    // ── Notify parent of isolation changes so it can update Mosaic ────────────
+    // Mosaic's brushSelection.update() must be called from ScatterPanel where
+    // it correctly integrates with the coordinator's event dispatch cycle.
+    useEffect(() => {
+        onIsolationChange?.(isolatedIndices);
+    }, [isolatedIndices, onIsolationChange]);
     const [colormapName, setColormapName] = useState("viridis");
     const [colormapReversed, setColormapReversed] = useState(false);
     const [range, setRange] = useState<[number, number]>([0, 1]);
