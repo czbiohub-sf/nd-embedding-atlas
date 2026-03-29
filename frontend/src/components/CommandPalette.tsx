@@ -60,9 +60,6 @@ export function CommandPalette({ onAddScatter }: CommandPaletteProps) {
                                 >
                                     <LayoutGrid className="mr-2 h-4 w-4" />
                                     <span>New Scatter — {label}</span>
-                                    {!entry.loaded && (
-                                        <CommandShortcut>load</CommandShortcut>
-                                    )}
                                 </CommandItem>
                             );
                         })}
