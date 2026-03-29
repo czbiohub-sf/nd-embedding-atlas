@@ -1,11 +1,8 @@
 import type { TgpuRoot } from "typegpu";
+import type { ViewState } from "../types";
 
-// ---------------------------------------------------------------------------
-// PanelId branded type
-// ---------------------------------------------------------------------------
-
-export type PanelId = string & { readonly __brand: "PanelId" };
-export const panelId = (id: string): PanelId => id as PanelId;
+export type { PanelId } from "../lib/branded-types";
+export { panelId } from "../lib/branded-types";
 
 // ---------------------------------------------------------------------------
 // Data
@@ -80,7 +77,7 @@ export interface ScatterplotHandle {
     /** Write pre-computed RGBA uint8 array directly to colorBuffer (continuous coloring). */
     updateColorsDirect(rgba: Uint8Array): void;
     /** Current pan/zoom state of the viewport. */
-    getViewState(): { panX: number; panY: number; zoom: number };
+    getViewState(): ViewState;
     /** Convert world coordinates to screen pixel coordinates using the current view transform. */
     worldToScreen(worldX: number, worldY: number, canvasWidth: number, canvasHeight: number): { x: number; y: number };
     /** Apply an externally-driven selection (from another panel). rowIndices = app-level row IDs; panelRowIndices = this panel's rowIndicesRef. */
@@ -90,7 +87,7 @@ export interface ScatterplotHandle {
     /** Clear an externally-driven selection. */
     clearExternalSelection(): void;
     /** Programmatically set the view state (for view lock sync). Suppresses the onViewChange broadcast for this write. */
-    setViewState(state: { panX: number; panY: number; zoom: number }): void;
+    setViewState(state: ViewState): void;
 }
 
 export interface RenderConfig {
@@ -118,7 +115,7 @@ export interface ScatterplotConfig {
     palette?: readonly (readonly [number, number, number])[];
     callbacks?: {
         onSelectionChange?: (count: number | null, indices?: number[]) => void;
-        onViewChange?: (state: { panX: number; panY: number; zoom: number }) => void;
+        onViewChange?: (state: ViewState) => void;
         onPointClick?: (index: number, position: [number, number], categoryIndex: number, categoryName: string) => void;
         onFps?: (fps: number) => void;
     };

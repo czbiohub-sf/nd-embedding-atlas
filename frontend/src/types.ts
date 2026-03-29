@@ -1,3 +1,10 @@
+/** Pan/zoom state for a scatter view. */
+export interface ViewState {
+  panX: number;
+  panY: number;
+  zoom: number;
+}
+
 export interface ObsmEntry {
     prefix: string;
     n_dims: number | null;

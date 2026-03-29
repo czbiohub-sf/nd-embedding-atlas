@@ -1,5 +1,6 @@
 import { Store } from "@tanstack/store";
-import type { PanelId } from "../scatter-gpu/types";
+import type { PanelId } from "../lib/branded-types";
+import type { ViewState } from "../types";
 
 export type ViewLockMode = "linked" | "independent";
 
@@ -21,7 +22,7 @@ export const viewSyncStore = new Store<ViewSyncState>({
 
 export function broadcastViewState(
   id: PanelId,
-  state: { panX: number; panY: number; zoom: number },
+  state: ViewState,
 ) {
   viewSyncStore.setState((s) => ({ ...s, ...state, sourcePanelId: id }));
 }

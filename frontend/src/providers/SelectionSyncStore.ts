@@ -1,5 +1,5 @@
 import { Store } from "@tanstack/store";
-import type { PanelId } from "../scatter-gpu/types";
+import type { PanelId } from "../lib/branded-types";
 
 // Discriminated union: invalid states are unrepresentable.
 // "empty" guarantees no row indices exist; "active" guarantees both are set.

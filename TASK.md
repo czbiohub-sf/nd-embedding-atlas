@@ -1,59 +1,65 @@
-# Phase 3: DataTable — Fix Broken Sorting + O(n) visibleData
+# Phase 5: Shared Types — PanelId Relocation + ViewState + RowIndex
 
-Fix two bugs in the table component. Read each file before editing.
+Fix module coupling: `providers/` layer imports `PanelId` from `scatter-gpu/types.ts`
+(upward dependency — lower-level layer depending on a feature module). Also add missing
+shared types used in many places.
 
-## BUG 1: Sorting is silently broken
+Read each file before editing.
 
-Read `frontend/src/components/table/DataTable.tsx` fully.
-
-The sorting state uses a ref (`sortingRef`) and a custom DOM event dispatch instead of
-React state. The `sort` useMemo has empty deps `[]` so it NEVER recomputes after mount.
-Clicking column headers dispatches a DOM event but nothing re-renders the table correctly.
-
-### Fix:
-
-Replace `sortingRef` + DOM event pattern with proper React state:
-
-```tsx
-// Replace:
-const sortingRef = useRef<SortingState>([]);
-// ... onSortingChange: (updater) => { sortingRef.current = ...; dispatchEvent(...) }
-// ... const sort = useMemo(() => { ...uses sortingRef.current... }, [])  // NEVER updates
-
-// With:
-const [sorting, setSorting] = useState<SortingState>([]);
-// ... onSortingChange: setSorting
-// ... const sort = useMemo(() => { ...derive sort from sorting... }, [sorting])
-```
-
-Make sure `sort` is derived from the `sorting` state and passed to `useTableQuery` so
-the query re-runs when sort changes.
-
-## BUG 2: `visibleData` iterates ALL `totalCount` rows — O(n) for 400k+ datasets
-
-Read `frontend/src/components/table/useTableQuery.ts` fully.
-
-The `visibleData` useMemo in DataTable loops `for (let i = 0; i < totalCount; i++) getRow(i)`.
-For 455k rows, this checks every index to find ~500 cached rows → causes multi-second freezes.
-
-### Fix:
-
-In `useTableQuery.ts`, add a `getCachedRows()` function to the hook return value:
+## TASK 1: Create `frontend/src/lib/branded-types.ts`
 
 ```ts
-getCachedRows: (): Row[] => {
-  const rows: Row[] = [];
-  for (const entry of pagesRef.current.values()) {
-    for (const row of entry.rows) rows.push(row);
-  }
-  return rows;
+/**
+ * Branded nominal types for cross-cutting identifiers.
+ * Shared by providers/, scatter-gpu/, and components/.
+ */
+
+/** Stable panel identifier — branded string to prevent accidental mixing. */
+export type PanelId = string & { readonly __brand: "PanelId" };
+export const panelId = (id: string): PanelId => id as PanelId;
+
+/** DuckDB __row_index__ value — distinct from GPU buffer point indices. */
+export type RowIndex = number & { readonly __brand: "RowIndex" };
+export const rowIndex = (n: number): RowIndex => n as RowIndex;
+```
+
+## TASK 2: Update `frontend/src/scatter-gpu/types.ts`
+
+Find the `PanelId` type definition and `panelId` function. Replace them with re-exports:
+
+```ts
+export type { PanelId } from "../lib/branded-types";
+export { panelId } from "../lib/branded-types";
+```
+
+Keep ALL other types in the file unchanged.
+
+## TASK 3: Update `frontend/src/providers/SelectionSyncStore.ts`
+
+Find the import of `PanelId` from `../scatter-gpu/types`.
+Change it to import from `../lib/branded-types` instead.
+
+## TASK 4: Update `frontend/src/providers/ViewSyncStore.ts`
+
+Same as Task 3 — find the PanelId import and update to `../lib/branded-types`.
+
+## TASK 5: Add `ViewState` to `frontend/src/types.ts`
+
+The `{ panX: number; panY: number; zoom: number }` shape is repeated 6+ times across
+scatter-gpu/types.ts, useScatterInteraction.ts, ViewSyncStore.ts, etc.
+
+Add to `types.ts`:
+```ts
+/** Pan/zoom state for a scatter view. */
+export interface ViewState {
+  panX: number;
+  panY: number;
+  zoom: number;
 }
 ```
 
-In `DataTable.tsx`, replace the `visibleData` useMemo loop with:
-```tsx
-const visibleData = useMemo(() => getCachedRows(), [totalCount, getCachedRows]);
-```
+Then find the inline occurrences of this shape in scatter-gpu files and replace with
+the imported `ViewState` type. Update imports as needed.
 
 ---
 
@@ -63,4 +69,5 @@ const visibleData = useMemo(() => getCachedRows(), [totalCount, getCachedRows]);
 cd frontend && pnpm exec tsc --noEmit
 ```
 
-Fix ALL TypeScript errors. Verify sorting state is properly reactive.
+Should produce ZERO errors — all changes are re-exports and type aliases.
+No runtime behavior changes at all.

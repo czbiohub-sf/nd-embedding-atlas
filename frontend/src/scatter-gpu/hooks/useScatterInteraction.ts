@@ -2,9 +2,10 @@ import * as d from "typegpu/data";
 import type { ScatterUniforms } from "../gpu/buffers";
 import type { SelectionEngine } from "../gpu/selection";
 import type { InteractionConfig } from "../types";
+import type { ViewState } from "../../types";
 
 interface InteractionCallbacks {
-    onViewChange?: (state: { panX: number; panY: number; zoom: number }) => void;
+    onViewChange?: (state: ViewState) => void;
     onPointClick?: (worldX: number, worldY: number) => void;
     onFps?: (fps: number) => void;
 }
@@ -376,10 +377,10 @@ export function createInteractionController(
             needsRender = true;
             scheduleLoop();
         },
-        getViewState(): { panX: number; panY: number; zoom: number } {
+        getViewState(): ViewState {
             return { panX, panY, zoom };
         },
-        setViewState(state: { panX: number; panY: number; zoom: number }) {
+        setViewState(state: ViewState) {
             panX = targetPanX = state.panX;
             panY = targetPanY = state.panY;
             zoom = targetZoom = state.zoom;

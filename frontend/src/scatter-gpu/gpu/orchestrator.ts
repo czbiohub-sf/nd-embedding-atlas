@@ -2,6 +2,7 @@ import tgpu from "typegpu";
 import * as d from "typegpu/data";
 import { createInteractionController } from "../hooks/useScatterInteraction";
 import type { ScatterData, ScatterplotConfig, ScatterplotHandle } from "../types";
+import type { ViewState } from "../../types";
 import { createBuffers, createUniforms, uploadData } from "./buffers";
 import { createCullingEngine } from "./culling";
 import { acquireDevice, releaseDevice } from "./device-manager";
@@ -72,7 +73,7 @@ export async function createScatterplot(
             render(context, data.numCells, "clear");
         },
         {
-            onViewChange: (state: { panX: number; panY: number; zoom: number }) => {
+            onViewChange: (state: ViewState) => {
                 currentZoom = state.zoom;
                 viewVersion++;
                 config?.callbacks?.onViewChange?.(state);
@@ -212,7 +213,7 @@ export async function createScatterplot(
         setForcedSelectionMode(mode: 'pan' | 'marquee' | 'lasso') {
             interaction.setForcedSelectionMode(mode);
         },
-        setViewState(state: { panX: number; panY: number; zoom: number }) {
+        setViewState(state: ViewState) {
             interaction.setViewState(state);
         },
         destroy() {

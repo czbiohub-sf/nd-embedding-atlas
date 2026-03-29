@@ -14,15 +14,16 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from "react";
 import { createScatterplot } from "../gpu/orchestrator";
 import type { ScatterData, ScatterplotConfig, ScatterplotHandle } from "../types";
+import type { ViewState } from "../../types";
 
 export interface ScatterGPUHostHandle {
     setColors(palette: readonly (readonly [number, number, number])[], indices?: Uint8Array): void;
     setColorsDirect(rgba: Uint8Array): void;
-    getViewState(): { panX: number; panY: number; zoom: number };
+    getViewState(): ViewState;
     worldToScreen(wx: number, wy: number, w: number, h: number): { x: number; y: number };
     setExternalSelection(rowIndices: number[]): void;
     clearExternalSelection(): void;
-    setViewState(state: { panX: number; panY: number; zoom: number }): void;
+    setViewState(state: ViewState): void;
     setForcedSelectionMode(mode: 'pan' | 'marquee' | 'lasso'): void;
 }
 
