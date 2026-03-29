@@ -51,7 +51,7 @@ export function CommandPalette({ onAddScatter }: CommandPaletteProps) {
 
                 {obsmEntries.length > 0 && (
                     <CommandGroup heading="Scatter">
-                        {obsmEntries.map(([key, entry]) => {
+                        {obsmEntries.map(([key]) => {
                             const label = key.replace(/^X_/, "");
                             return (
                                 <CommandItem
