@@ -115,18 +115,12 @@ function loadDefaultLayout(api: DockviewApi, hasPlate: boolean, hasEmbeddings: b
         });
     }
 
-    // Table — first panel when no scatter
-    api.addPanel({
-        id: "table",
-        component: "table",
-        title: "Data Table",
-        position: hasEmbeddings ? { referencePanel: "scatter", direction: "below" } : undefined,
-    });
+    // Table lives in TerminalTable (fixed ⌘J panel), not in Dockview
 
     // Reference panel for the right sidebar
-    const sidebarRef = hasEmbeddings ? "scatter" : "table";
+    const sidebarRef = hasEmbeddings ? "scatter" : undefined;
 
-    if (hasPlate) {
+    if (hasPlate && sidebarRef) {
         api.addPanel({
             id: "image-viewer",
             component: "image-viewer",
@@ -173,7 +167,7 @@ export function DockviewShell({ hasPlate, hasEmbeddings }: Props) {
                     event.api.fromJSON(JSON.parse(saved));
 
                     // Re-add any expected panels that were closed in a previous session
-                    const basePanels = hasEmbeddings ? ["scatter", "table"] : ["table"];
+                    const basePanels = hasEmbeddings ? ["scatter"] : [];
                     const expectedPanels = hasPlate
                         ? [...basePanels, "image-viewer"]
                         : [...basePanels];
