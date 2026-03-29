@@ -3,13 +3,12 @@ import { useLegendCounts } from "../../hooks/useLegendCounts";
 import { useLegend } from "./LegendContext";
 
 /**
- * Categorical color legend with interactive dot isolation and color picker popout.
+ * Categorical color legend with interactive dot isolation.
  *
- * Each row: ● label ··· count [⬡]
+ * Each row: ● label ··· count
  * - Click ● → isolate (dim others to 30%)
  * - Shift+Click ● → additive toggle
- * - Click [⬡] → popout color picker
- * - ESC → clear isolation or close picker
+ * - ESC → clear isolation
  */
 export function CategoricalLegend() {
     const { state, actions, meta } = useLegend();
@@ -36,51 +35,68 @@ export function CategoricalLegend() {
     const hasIsolation = isolatedIndices.size > 0;
 
     return (
-        <div ref={containerRef} className="legend-categorical">
-            {legend.map((item) => {
-                const isIsolated = isolatedIndices.has(item.index);
-                const isDimmed = hasIsolation && !isIsolated;
-                const c = counts?.get(item.index);
-                const total = c?.total ?? item.count;
-                const filtered = c?.filtered ?? total;
-                const isFiltered = filtered !== total;
+        <div
+            ref={containerRef}
+            className="absolute bottom-3 left-3 z-10 w-52 rounded-lg border border-border-subtle/20 text-[11px] font-mono"
+            style={{
+                background: "color-mix(in oklch, var(--color-base) 85%, transparent)",
+                backdropFilter: "blur(12px)",
+            }}
+        >
+            <div className="px-2.5 pt-2 pb-1 text-[10px] text-text-muted uppercase tracking-wider">
+                Categories · {legend.length}
+            </div>
+            <div className="overflow-y-auto max-h-[200px] px-2.5 pb-2">
+                <div className="flex flex-col gap-0.5">
+                    {legend.map((item) => {
+                        const isIsolated = isolatedIndices.has(item.index);
+                        const isDimmed = hasIsolation && !isIsolated;
+                        const c = counts?.get(item.index);
+                        const total = c?.total ?? item.count;
+                        const filtered = c?.filtered ?? total;
+                        const isFiltered = filtered !== total;
 
-                return (
-                    <div key={item.index} className={`legend-row${isDimmed ? "legend-row--dimmed" : ""}`}>
-                        {/* Isolation dot */}
-                        <button
-                            type="button"
-                            className={`legend-dot${isIsolated ? "legend-dot--isolated" : ""}`}
-                            style={{ backgroundColor: item.color }}
-                            onClick={(e) => actions.toggleIsolation(item.index, e.shiftKey)}
-                            onKeyDown={(e) => {
-                                if (e.key === " " || e.key === "Enter") {
-                                    e.preventDefault();
-                                    actions.toggleIsolation(item.index, e.shiftKey);
-                                }
-                            }}
-                            aria-pressed={isIsolated}
-                            aria-label={`Isolate ${item.label}`}
-                            title={`Click to isolate, Shift+Click to add`}
-                        />
+                        return (
+                            <div
+                                key={item.index}
+                                className={`flex items-center gap-2 py-0.5 rounded px-1 transition-opacity cursor-default${isDimmed ? " opacity-40" : " opacity-80 hover:opacity-100"}`}
+                            >
+                                {/* Isolation dot */}
+                                <button
+                                    type="button"
+                                    className={`inline-block h-2 w-2 shrink-0 rounded-full border-0 p-0 cursor-pointer transition-[box-shadow]${isIsolated ? " ring-1 ring-offset-1 ring-current" : ""}`}
+                                    style={{ backgroundColor: item.color }}
+                                    onClick={(e) => actions.toggleIsolation(item.index, e.shiftKey)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === " " || e.key === "Enter") {
+                                            e.preventDefault();
+                                            actions.toggleIsolation(item.index, e.shiftKey);
+                                        }
+                                    }}
+                                    aria-pressed={isIsolated}
+                                    aria-label={`Isolate ${item.label}`}
+                                    title="Click to isolate, Shift+Click to add"
+                                />
 
-                        {/* Label */}
-                        <span className="legend-label">{item.label}</span>
+                                {/* Label */}
+                                <span className="flex-1 truncate text-text-secondary">{item.label}</span>
 
-                        {/* Count — shows "filtered / total" when cross-filter is active */}
-                        <span className="legend-count">
-                            {isFiltered ? (
-                                <>
-                                    <span className="legend-count-filtered">{filtered.toLocaleString()}</span>
-                                    {` / ${total.toLocaleString()}`}
-                                </>
-                            ) : (
-                                total.toLocaleString()
-                            )}
-                        </span>
-                    </div>
-                );
-            })}
+                                {/* Count */}
+                                <span className="text-text-muted shrink-0">
+                                    {isFiltered ? (
+                                        <>
+                                            <span className="text-accent-cyan">{filtered.toLocaleString()}</span>
+                                            {`/${total.toLocaleString()}`}
+                                        </>
+                                    ) : (
+                                        total.toLocaleString()
+                                    )}
+                                </span>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
         </div>
     );
 }
