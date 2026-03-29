@@ -27,6 +27,10 @@ export function createInteractionController(
     const enableZoom = interactionConfig?.zoom ?? true;
     const enableLasso = interactionConfig?.lasso ?? true;
     const enableMarquee = interactionConfig?.marquee ?? true;
+
+    // Forced selection mode — set by toolbar buttons; bypasses keyboard modifiers.
+    // 'pan' = default drag-to-pan; 'marquee'/'lasso' = drag-to-select without Shift.
+    let forcedSelectionMode: 'pan' | 'marquee' | 'lasso' = 'pan';
     // NOTE: The overlay canvas must be DPR-scaled before passing to this controller.
     // Apply: overlay.width = Math.floor(cssW * dpr); overlay.height = Math.floor(cssH * dpr);
     // Then: const ctx = overlay.getContext("2d"); ctx.scale(dpr, dpr);
@@ -149,13 +153,16 @@ export function createInteractionController(
 
     // Named handlers for proper cleanup
     function onPointerDown(e: PointerEvent) {
-        if (e.shiftKey && (e.metaKey || e.ctrlKey) && enableLasso) {
-            // Shift + Cmd/Ctrl + drag → lasso selection
+        // Lasso: Shift+Alt+drag (keyboard) or forced lasso mode (button)
+        // Marquee: Shift+drag (keyboard) or forced marquee mode (button)
+        const wantsLasso = (e.shiftKey && e.altKey) || forcedSelectionMode === 'lasso';
+        const wantsMarquee = (e.shiftKey && !e.altKey) || forcedSelectionMode === 'marquee';
+
+        if (wantsLasso && enableLasso) {
             isLassoing = true;
             lassoPath = [pixelToWorld(e.offsetX, e.offsetY)];
             overlay.setPointerCapture(e.pointerId);
-        } else if (e.shiftKey && enableMarquee) {
-            // Shift + drag → marquee (rectangle) selection
+        } else if (wantsMarquee && enableMarquee) {
             isMarquee = true;
             marqueeStart = pixelToWorld(e.offsetX, e.offsetY);
             marqueeEnd = marqueeStart;
@@ -378,6 +385,9 @@ export function createInteractionController(
             zoom = targetZoom = state.zoom;
             skipNextViewChange = true;
             updateView();
+        },
+        setForcedSelectionMode(mode: 'pan' | 'marquee' | 'lasso') {
+            forcedSelectionMode = mode;
         },
         resize() {
             updateView();

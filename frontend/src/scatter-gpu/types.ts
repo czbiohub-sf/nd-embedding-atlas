@@ -85,6 +85,8 @@ export interface ScatterplotHandle {
     worldToScreen(worldX: number, worldY: number, canvasWidth: number, canvasHeight: number): { x: number; y: number };
     /** Apply an externally-driven selection (from another panel). rowIndices = app-level row IDs; panelRowIndices = this panel's rowIndicesRef. */
     setExternalSelection(rowIndices: number[]): void;
+    /** Switch the drag behaviour: 'pan' = default, 'marquee'/'lasso' = always-draw-selection. */
+    setForcedSelectionMode(mode: 'pan' | 'marquee' | 'lasso'): void;
     /** Clear an externally-driven selection. */
     clearExternalSelection(): void;
     /** Programmatically set the view state (for view lock sync). Suppresses the onViewChange broadcast for this write. */

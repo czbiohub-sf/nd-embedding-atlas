@@ -207,6 +207,9 @@ export async function createScatterplot(
             selection.clearSelectionExternal();
             interaction.requestRender();
         },
+        setForcedSelectionMode(mode: 'pan' | 'marquee' | 'lasso') {
+            interaction.setForcedSelectionMode(mode);
+        },
         setViewState(state: { panX: number; panY: number; zoom: number }) {
             interaction.setViewState(state);
         },

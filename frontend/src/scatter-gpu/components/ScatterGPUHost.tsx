@@ -23,6 +23,7 @@ export interface ScatterGPUHostHandle {
     setExternalSelection(rowIndices: number[]): void;
     clearExternalSelection(): void;
     setViewState(state: { panX: number; panY: number; zoom: number }): void;
+    setForcedSelectionMode(mode: 'pan' | 'marquee' | 'lasso'): void;
 }
 
 interface ScatterGPUHostProps {
@@ -203,6 +204,9 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
                 },
                 setViewState(state) {
                     gpuRef.current?.setViewState(state);
+                },
+                setForcedSelectionMode(mode) {
+                    gpuRef.current?.setForcedSelectionMode(mode);
                 },
             }),
             [],

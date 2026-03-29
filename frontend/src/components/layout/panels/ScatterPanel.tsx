@@ -93,6 +93,9 @@ export function ScatterPanel(props: IDockviewPanelProps) {
     setAxes(newAxes);
   };
 
+  // ── Selection tool state ───────────────────────────────────────────────────
+  const [selectionTool, setSelectionTool] = useState<'pan' | 'marquee' | 'lasso'>('pan');
+
   // ── Color-by state ─────────────────────────────────────────────────────────
   const [colorByColumn, setColorByColumn] = useState<string | null>(null);
   const obsColumns = useMemo(() => metadata.obs_columns ?? [], [metadata.obs_columns]);
@@ -244,6 +247,8 @@ export function ScatterPanel(props: IDockviewPanelProps) {
           onSetCategoricalColormap={setCategoricalColormap}
           onSetContinuousColormap={setContinuousColormap}
           onSetMaxCategories={setMaxCategories}
+          selectionTool={selectionTool}
+          onSetSelectionTool={setSelectionTool}
         />
       ) : null}
 
@@ -257,6 +262,7 @@ export function ScatterPanel(props: IDockviewPanelProps) {
       >
         <ScatterView
           myPanelId={myPanelId}
+          selectionTool={selectionTool}
           axes={axes}
           isLoading={isLoading}
           loadingKey={loadingKey}
@@ -285,6 +291,7 @@ export function ScatterPanel(props: IDockviewPanelProps) {
 
 interface ScatterViewProps {
   myPanelId: PanelId;
+  selectionTool: 'pan' | 'marquee' | 'lasso';
   axes: AxisState | null;
   isLoading: boolean;
   loadingKey: string | null;
@@ -307,6 +314,7 @@ interface ScatterViewProps {
 
 function ScatterView({
   myPanelId,
+  selectionTool,
   axes,
   isLoading,
   loadingKey,
@@ -331,6 +339,12 @@ function ScatterView({
 
   // ── Refs ──────────────────────────────────────────────────────────────────
   const hostRef = useRef<ScatterGPUHostHandle | null>(null);
+
+  // Sync toolbar selection tool to the GPU interaction controller
+  useEffect(() => {
+    hostRef.current?.setForcedSelectionMode(selectionTool);
+  }, [selectionTool]);
+
   const containerRef = useRef<HTMLDivElement>(null);
   const trajectoryOverlayRef = useRef<TrajectoryOverlaySvgHandle | null>(null);
   // Adapter so TrajectoryOverlaySvg can call worldToScreen via hostRef

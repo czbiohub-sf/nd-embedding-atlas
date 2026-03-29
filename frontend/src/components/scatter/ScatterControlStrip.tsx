@@ -9,7 +9,7 @@ import type { ColorMode } from "../../scatter-gpu/hooks/useMosaicScatterData";
 import type { AxisState } from "../../types";
 import { CompactSelect } from "../ui/select";
 import { Button } from "../ui/button";
-import { Lock, LockOpen } from "lucide-react";
+import { Lock, LockOpen, BoxSelect, LassoSelect } from "lucide-react";
 import { useStore } from "@tanstack/react-store";
 import { viewSyncStore, toggleViewLock } from "../../providers/ViewSyncStore";
 
@@ -37,6 +37,9 @@ export interface ScatterControlStripProps {
   onSetCategoricalColormap: (c: string) => void;
   onSetContinuousColormap: (c: string) => void;
   onSetMaxCategories: (n: number) => void;
+
+  selectionTool: 'pan' | 'marquee' | 'lasso';
+  onSetSelectionTool: (tool: 'pan' | 'marquee' | 'lasso') => void;
 }
 
 export function ScatterControlStrip({
@@ -60,6 +63,8 @@ export function ScatterControlStrip({
   onSetCategoricalColormap,
   onSetContinuousColormap,
   onSetMaxCategories,
+  selectionTool,
+  onSetSelectionTool,
 }: ScatterControlStripProps) {
   const lockMode = useStore(viewSyncStore, (s) => s.lockMode);
   const isLinked = lockMode === "linked";
@@ -174,7 +179,26 @@ export function ScatterControlStrip({
         </span>
       ) : null}
 
-      <div className="ml-auto">
+      <div className="ml-auto flex items-center gap-0.5">
+        <Button
+          variant="ghost"
+          size="xs"
+          className={`h-6 w-6 px-0 ${selectionTool === 'marquee' ? 'bg-accent text-accent-foreground' : ''}`}
+          onClick={() => onSetSelectionTool(selectionTool === 'marquee' ? 'pan' : 'marquee')}
+          title="Rectangle select (Shift+drag) — click to lock mode"
+        >
+          <BoxSelect className="h-3.5 w-3.5" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="xs"
+          className={`h-6 w-6 px-0 ${selectionTool === 'lasso' ? 'bg-accent text-accent-foreground' : ''}`}
+          onClick={() => onSetSelectionTool(selectionTool === 'lasso' ? 'pan' : 'lasso')}
+          title="Lasso select (Shift+Alt+drag) — click to lock mode"
+        >
+          <LassoSelect className="h-3.5 w-3.5" />
+        </Button>
+        <div className="h-4 w-px bg-border-subtle mx-0.5" />
         <Button
           variant="ghost"
           size="xs"
