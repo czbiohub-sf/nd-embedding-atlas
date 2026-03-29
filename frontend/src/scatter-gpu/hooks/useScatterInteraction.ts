@@ -104,11 +104,13 @@ export function createInteractionController(
         const aspect = overlay.clientWidth / overlay.clientHeight || 1;
         const ndcX = ((wx + panX) * zoom) / aspect;
         const ndcY = (wy + panY) * zoom;
-        return [((ndcX + 1) / 2) * overlay.width, ((-ndcY + 1) / 2) * overlay.height];
+        // Use clientWidth/clientHeight (CSS pixels) — the 2D context has ctx.scale(dpr,dpr)
+        // so drawing ops expect CSS-pixel coordinates, not device pixels.
+        return [((ndcX + 1) / 2) * overlay.clientWidth, ((-ndcY + 1) / 2) * overlay.clientHeight];
     }
 
     function drawLasso() {
-        overlayCtx.clearRect(0, 0, overlay.width, overlay.height);
+        overlayCtx.clearRect(0, 0, overlay.clientWidth, overlay.clientHeight);
         if (lassoPath.length < 2) return;
 
         overlayCtx.beginPath();
@@ -128,7 +130,7 @@ export function createInteractionController(
     }
 
     function drawMarquee() {
-        overlayCtx.clearRect(0, 0, overlay.width, overlay.height);
+        overlayCtx.clearRect(0, 0, overlay.clientWidth, overlay.clientHeight);
         const [x1, y1] = worldToPixel(marqueeStart[0], marqueeStart[1]);
         const [x2, y2] = worldToPixel(marqueeEnd[0], marqueeEnd[1]);
         const rx = Math.min(x1, x2);
@@ -218,7 +220,7 @@ export function createInteractionController(
     function onPointerUp(e: PointerEvent) {
         if (isLassoing) {
             isLassoing = false;
-            overlayCtx.clearRect(0, 0, overlay.width, overlay.height);
+            overlayCtx.clearRect(0, 0, overlay.clientWidth, overlay.clientHeight);
             if (lassoPath.length >= 3) {
                 selection.runLassoSelection(lassoPath);
                 needsRender = true;
@@ -228,7 +230,7 @@ export function createInteractionController(
             overlay.releasePointerCapture(e.pointerId);
         } else if (isMarquee) {
             isMarquee = false;
-            overlayCtx.clearRect(0, 0, overlay.width, overlay.height);
+            overlayCtx.clearRect(0, 0, overlay.clientWidth, overlay.clientHeight);
             const xMin = Math.min(marqueeStart[0], marqueeEnd[0]);
             const xMax = Math.max(marqueeStart[0], marqueeEnd[0]);
             const yMin = Math.min(marqueeStart[1], marqueeEnd[1]);
