@@ -209,18 +209,22 @@ export function createSelectionEngine(
     onSelectionChange(null);
   }
 
+  // Pre-allocated mask — reused on every external selection update to avoid
+  // O(n) heap allocation per sync event (critical for 455K+ point datasets).
+  const externalSelectionMask = new Uint32Array(numPoints);
+
   function setSelectedPoints(pointIndices: number[]) {
-    const mask = new Uint32Array(numPoints);
+    externalSelectionMask.fill(0);
     for (const idx of pointIndices) {
-      if (idx >= 0 && idx < numPoints) mask[idx] = 1;
+      if (idx >= 0 && idx < numPoints) externalSelectionMask[idx] = 1;
     }
-    device.queue.writeBuffer(root.unwrap(selectedBuffer), 0, mask);
+    device.queue.writeBuffer(root.unwrap(selectedBuffer), 0, externalSelectionMask);
     selectionModeUniform.write(pointIndices.length > 0 ? 1 : 0);
   }
 
   function clearSelectionExternal() {
-    const mask = new Uint32Array(numPoints);
-    device.queue.writeBuffer(root.unwrap(selectedBuffer), 0, mask);
+    externalSelectionMask.fill(0);
+    device.queue.writeBuffer(root.unwrap(selectedBuffer), 0, externalSelectionMask);
     selectionModeUniform.write(0);
   }
 

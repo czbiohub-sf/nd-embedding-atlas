@@ -111,6 +111,12 @@ export async function createScatterplot(
         config?.interaction,
     );
 
+    // ── Row index → point index lookup (built once, used by setExternalSelection) ──
+    // Pre-building this Map avoids O(n) reconstruction on every selection sync event.
+    const rowToPoint = new Map<number, number>(
+        data.rowIndices.map((r, i) => [r, i]),
+    );
+
     // ── Grid spatial index for O(1) hit testing ───────────────────────────
     // World space is [-1,1]×[-1,1]. Divide into GRID×GRID cells; each cell
     // stores the indices of points that fall within it. onPointClick queries
@@ -188,12 +194,12 @@ export async function createScatterplot(
                 y: (1 - (clipY + 1) / 2) * h,
             };
         },
-        setExternalSelection({ rowIndices, panelRowIndices }: { rowIndices: number[]; panelRowIndices: number[] }) {
-            const rowToPoint = new Map(panelRowIndices.map((r, i) => [r, i]));
-            const pointIndices = rowIndices.flatMap(r => {
+        setExternalSelection(rowIndices: number[]) {
+            const pointIndices: number[] = [];
+            for (const r of rowIndices) {
                 const i = rowToPoint.get(r);
-                return i !== undefined ? [i] : [];
-            });
+                if (i !== undefined) pointIndices.push(i);
+            }
             selection.setSelectedPoints(pointIndices);
             interaction.requestRender();
         },

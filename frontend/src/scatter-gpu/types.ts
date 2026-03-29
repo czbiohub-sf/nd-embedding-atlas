@@ -84,7 +84,7 @@ export interface ScatterplotHandle {
     /** Convert world coordinates to screen pixel coordinates using the current view transform. */
     worldToScreen(worldX: number, worldY: number, canvasWidth: number, canvasHeight: number): { x: number; y: number };
     /** Apply an externally-driven selection (from another panel). rowIndices = app-level row IDs; panelRowIndices = this panel's rowIndicesRef. */
-    setExternalSelection(params: { rowIndices: number[]; panelRowIndices: number[] }): void;
+    setExternalSelection(rowIndices: number[]): void;
     /** Clear an externally-driven selection. */
     clearExternalSelection(): void;
     /** Programmatically set the view state (for view lock sync). Suppresses the onViewChange broadcast for this write. */

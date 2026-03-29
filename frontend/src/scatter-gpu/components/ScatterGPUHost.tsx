@@ -20,7 +20,7 @@ export interface ScatterGPUHostHandle {
     setColorsDirect(rgba: Uint8Array): void;
     getViewState(): { panX: number; panY: number; zoom: number };
     worldToScreen(wx: number, wy: number, w: number, h: number): { x: number; y: number };
-    setExternalSelection(params: { rowIndices: number[]; panelRowIndices: number[] }): void;
+    setExternalSelection(rowIndices: number[]): void;
     clearExternalSelection(): void;
     setViewState(state: { panX: number; panY: number; zoom: number }): void;
 }

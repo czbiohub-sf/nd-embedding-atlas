@@ -490,10 +490,7 @@ function ScatterView({
         hostRef.current?.clearExternalSelection();
       } else {
         if (s.sourcePanelId === myPanelId) return; // skip own broadcasts
-        hostRef.current?.setExternalSelection({
-          rowIndices: s.selectedRowIndices,
-          panelRowIndices: rowIndicesRef.current,
-        });
+        hostRef.current?.setExternalSelection(s.selectedRowIndices);
       }
     });
     return () => sub.unsubscribe();
