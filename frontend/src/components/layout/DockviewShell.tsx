@@ -101,7 +101,7 @@ const COMPONENTS = {
     charts: ChartGroupPanel,
 } as const;
 
-const STORAGE_KEY = "ndea_layout";
+const STORAGE_KEY = "ndea_layout_v2"; // v2: table removed from Dockview (now TerminalTable ⌘J)
 
 // ── Default layout ───────────────────────────────────────────────────────
 
