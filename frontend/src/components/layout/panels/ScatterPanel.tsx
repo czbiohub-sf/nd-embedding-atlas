@@ -55,7 +55,8 @@ function hexToRgbPalette(hexColors: string[]): readonly (readonly [number, numbe
 
 // ── Outer panel ───────────────────────────────────────────────────────────────
 
-export function ScatterPanel(_props: IDockviewPanelProps) {
+export function ScatterPanel(props: IDockviewPanelProps) {
+  const initialObsmKey = (props.params as { initialObsmKey?: string } | undefined)?.initialObsmKey ?? null;
   const { state, actions, meta } = useDashboard();
   const { metadata, trajectory } = state;
   const { coordinator, brushSelection, table } = meta;
@@ -64,12 +65,12 @@ export function ScatterPanel(_props: IDockviewPanelProps) {
   const [axes, setAxes] = useState<AxisState | null>(null);
   const { loadEmbedding, loadingKey } = useEmbeddingLoader(metadata, actions.refreshMetadata);
 
-  // Initialize from first loaded embedding
+  // Initialize: prefer initialObsmKey from panel params, then first loaded embedding
   useEffect(() => {
     if (axes || !metadata) return;
-    const first = Object.entries(metadata.obsm).find(([, v]) => v.loaded);
-    if (first) setAxes({ obsmKey: first[0], xDim: 0, yDim: 1 });
-  }, [metadata, axes]);
+    const key = initialObsmKey ?? Object.entries(metadata.obsm).find(([, v]) => v.loaded)?.[0];
+    if (key) setAxes({ obsmKey: key, xDim: 0, yDim: 1 });
+  }, [metadata, axes, initialObsmKey]);
 
   const handleSetAxes = async (newAxes: AxisState) => {
     const entry = metadata.obsm[newAxes.obsmKey];

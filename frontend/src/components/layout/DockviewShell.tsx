@@ -136,9 +136,10 @@ function loadDefaultLayout(api: DockviewApi, hasPlate: boolean, hasEmbeddings: b
 interface Props {
     hasPlate: boolean;
     hasEmbeddings: boolean;
+    onApiReady?: (api: DockviewApi) => void;
 }
 
-export function DockviewShell({ hasPlate, hasEmbeddings }: Props) {
+export function DockviewShell({ hasPlate, hasEmbeddings, onApiReady }: Props) {
     const { theme } = useTheme();
     const apiRef = useRef<DockviewApi | null>(null);
 
@@ -159,6 +160,7 @@ export function DockviewShell({ hasPlate, hasEmbeddings }: Props) {
     const onReady = useCallback(
         (event: DockviewReadyEvent) => {
             apiRef.current = event.api;
+            onApiReady?.(event.api);
 
             // Try to restore saved layout
             const saved = localStorage.getItem(STORAGE_KEY);
