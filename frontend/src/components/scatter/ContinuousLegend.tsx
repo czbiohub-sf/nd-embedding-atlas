@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useColormapPalette } from "../../hooks/useColormaps";
 
 interface Props {
   columnName: string;
@@ -6,17 +6,6 @@ interface Props {
   vmin: number;
   vmax: number;
 }
-
-/**
- * Compact gradient legend for continuous (numeric) column coloring.
- * Positioned top-right like CategoricalLegend, shown in its place when
- * color mode is "continuous".
- *
- * Fetches colormap preview via /data/categorical-palette (which supports
- * any cmap-recognized colormap name, including viridis, plasma, etc.).
- * Falls back to hardcoded CSS gradient stops for known colormaps if the
- * fetch fails.
- */
 
 const COLORMAP_FALLBACKS: Record<string, string> = {
   viridis: "#440154, #414487, #2a788e, #22a884, #7ad151, #fde725",
@@ -27,19 +16,10 @@ const COLORMAP_FALLBACKS: Record<string, string> = {
 };
 
 export function ContinuousLegend({ columnName, colormap, vmin, vmax }: Props) {
-  const [gradientStops, setGradientStops] = useState<string>("");
-
-  useEffect(() => {
-    fetch(`/data/categorical-palette?colormap=${encodeURIComponent(colormap)}&n=16`)
-      .then((r) => r.json())
-      .then((data: { colors: string[] }) => {
-        setGradientStops(data.colors.join(", "));
-      })
-      .catch(() => {
-        const fallback = COLORMAP_FALLBACKS[colormap] ?? COLORMAP_FALLBACKS["viridis"];
-        setGradientStops(fallback);
-      });
-  }, [colormap]);
+  const paletteQuery = useColormapPalette(colormap, 16);
+  const gradientStops = paletteQuery.data
+    ? paletteQuery.data.join(", ")
+    : (COLORMAP_FALLBACKS[colormap] ?? COLORMAP_FALLBACKS["viridis"]);
 
   function formatValue(v: number): string {
     if (Math.abs(v) >= 10000 || (Math.abs(v) < 0.01 && v !== 0)) {

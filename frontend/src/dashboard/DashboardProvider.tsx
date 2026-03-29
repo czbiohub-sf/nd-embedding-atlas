@@ -1,4 +1,5 @@
 import { Coordinator, restConnector, Selection } from "@uwdata/mosaic-core";
+import { brushPredicateStore } from "../providers/BrushPredicateStore";
 import { type ReactNode, useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useColumnTypes } from "../hooks/useColumnTypes";
@@ -49,6 +50,28 @@ export function DashboardProvider({ children }: Props) {
     }, []);
 
     const brushSelection = useMemo(() => Selection.crossfilter(), []);
+
+    // ── BrushPredicateStore → brushSelection bridge ────────────────────────
+    // Subscribes to the Store and calls brushSelection.update() via
+    // requestAnimationFrame, outside React's render cycle and outside any
+    // active Mosaic AsyncDispatch cycle.  Components write to the Store
+    // (setBrushPredicate); this is the single place that actually updates Mosaic.
+    useEffect(() => {
+        const sub = brushPredicateStore.subscribe(() => {
+            const { source, predicate, version } = brushPredicateStore.state;
+            if (version === 0) return; // skip initial state
+            requestAnimationFrame(() => {
+                brushSelection.update({
+                    source,
+                    clients: new Set(),
+                    value: [],
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    predicate: predicate ? ({ toString: () => predicate } as any) : null,
+                });
+            });
+        });
+        return () => sub.unsubscribe();
+    }, [brushSelection]);
 
     // Metadata
     const queryClient = useQueryClient();

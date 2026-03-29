@@ -1,11 +1,13 @@
 import type { IDockviewPanelProps } from "dockview-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useColormapList, useColormapPalette } from "../../../hooks/useColormaps";
 import { useDebouncer, useThrottler } from "@tanstack/react-pacer";
 import { verbatim } from "@uwdata/mosaic-sql";
 import { ScatterGPUHost, type ScatterGPUHostHandle } from "../../../scatter-gpu/components/ScatterGPUHost";
 import type { ScatterplotConfig } from "../../../scatter-gpu/types";
 import { panelId } from "../../../scatter-gpu/types";
 import { selectionSyncStore, broadcastSelection, clearSelectionSync } from "../../../providers/SelectionSyncStore";
+import { setBrushPredicate } from "../../../providers/BrushPredicateStore";
 import { viewSyncStore, broadcastViewState } from "../../../providers/ViewSyncStore";
 import { useMosaicScatterData } from "../../../scatter-gpu/hooks/useMosaicScatterData";
 import type { ColorMode } from "../../../scatter-gpu/hooks/useMosaicScatterData";
@@ -119,29 +121,13 @@ export function ScatterPanel(props: IDockviewPanelProps) {
   const [categoricalColormap, setCategoricalColormap] = useState("glasbey");
   const [continuousColormap, setContinuousColormap] = useState("viridis");
   const [maxCategories, setMaxCategories] = useState(64);
-  const [palette, setPalette] = useState<string[]>([]);
-  const [categoricalColormaps, setCategoricalColormaps] = useState<string[]>([]);
-  const [continuousColormaps, setContinuousColormaps] = useState<string[]>([]);
+  // Colormap lists + palette — cached via TanStack Query (no repeated fetches)
+  const colormapListQuery = useColormapList();
+  const categoricalColormaps = colormapListQuery.data?.categorical ?? [];
+  const continuousColormaps = colormapListQuery.data?.continuous ?? [];
 
-  useEffect(() => {
-    fetch("/data/colormaps")
-      .then((r) => r.json())
-      .then((data: { categorical?: string[]; continuous?: string[]; colormaps?: string[] }) => {
-        // Support both old { colormaps } and new { categorical, continuous } formats
-        setCategoricalColormaps(data.categorical ?? data.colormaps ?? []);
-        setContinuousColormaps(data.continuous ?? []);
-      })
-      .catch(console.error);
-  }, []);
-
-  useEffect(() => {
-    fetch(
-      `/data/categorical-palette?colormap=${encodeURIComponent(categoricalColormap)}&n=${maxCategories}`,
-    )
-      .then((r) => r.json())
-      .then((data: { colors: string[] }) => setPalette(data.colors))
-      .catch(console.error);
-  }, [categoricalColormap, maxCategories]);
+  const paletteQuery = useColormapPalette(categoricalColormap, maxCategories);
+  const palette = paletteQuery.data ?? [];
 
   const additionalFields = useMemo(
     () =>
@@ -210,36 +196,26 @@ export function ScatterPanel(props: IDockviewPanelProps) {
 
   const categoryCol = coloredCategoryMapping?.indexColumn ?? null;
 
-  // ── Isolation → Mosaic cross-filter ───────────────────────────────────────
-  // Deferred via requestAnimationFrame so it fires outside any active
-  // Mosaic AsyncDispatch cycle (direct calls from React effects get cancelled).
+  // ── Isolation → Mosaic cross-filter (via BrushPredicateStore) ────────────
+  // Writes to BrushPredicateStore; DashboardProvider's stable subscription
+  // translates it to brushSelection.update() outside React's render cycle,
+  // eliminating the AsyncDispatch cancellation race condition.
   const isolationSourceRef = useRef<object>({});
   const handleIsolationChange = useCallback((isolatedIndices: Set<number>) => {
     const source = isolationSourceRef.current;
-    const catMap = coloredCategoryMapping;
-    const col = colorByColumn;
-    requestAnimationFrame(() => {
-      if (isolatedIndices.size === 0 || !catMap || !col) {
-        brushSelection.update({ source, clients: new Set(), value: [], predicate: null });
-        return;
-      }
-      const labels = catMap.legend
-        .filter((item) => isolatedIndices.has(item.index))
-        .map((item) => `'${item.label.replace(/'/g, "''")}'`);
-      if (labels.length === 0) {
-        brushSelection.update({ source, clients: new Set(), value: [], predicate: null });
-        return;
-      }
-      const sql = `${col} IN (${labels.join(", ")})`;
-      brushSelection.update({
-        source,
-        clients: new Set(),
-        value: [],
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        predicate: verbatim(sql) as any,
-      });
-    });
-  }, [brushSelection, coloredCategoryMapping, colorByColumn]);
+    if (isolatedIndices.size === 0 || !coloredCategoryMapping || !colorByColumn) {
+      setBrushPredicate(source, null);
+      return;
+    }
+    const labels = coloredCategoryMapping.legend
+      .filter((item) => isolatedIndices.has(item.index))
+      .map((item) => `'${item.label.replace(/'/g, "''")}'`);
+    if (labels.length === 0) {
+      setBrushPredicate(source, null);
+      return;
+    }
+    setBrushPredicate(source, `${colorByColumn} IN (${labels.join(", ")})`);
+  }, [coloredCategoryMapping, colorByColumn]);
 
   // ── Derive rendering state ─────────────────────────────────────────────────
   const obsmKeys = axes ? Object.keys(metadata.obsm) : [];

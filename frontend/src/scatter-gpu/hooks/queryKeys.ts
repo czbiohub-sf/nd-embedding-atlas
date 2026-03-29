@@ -1,3 +1,9 @@
+export const colormapKeys = {
+  list: () => ["colormaps", "list"] as const,
+  palette: (colormap: string, n: number) =>
+    ["colormaps", "palette", colormap, n] as const,
+} as const;
+
 export const scatterKeys = {
   positions: (obsmKey: string, xCol: string, yCol: string) =>
     ["scatter", "positions", obsmKey, xCol, yCol] as const,
