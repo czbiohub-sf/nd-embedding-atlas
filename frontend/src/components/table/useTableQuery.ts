@@ -40,6 +40,8 @@ export interface UseTableQueryResult {
     totalCount: number;
     /** Get a row by its virtual index. Returns undefined if not yet loaded. */
     getRow: (index: number) => Row | undefined;
+    /** Return all currently cached rows (O(cached) not O(totalCount)). */
+    getCachedRows: () => Row[];
     /** Request that a range of rows be loaded (call on scroll). */
     ensureRange: (startIndex: number, endIndex: number) => void;
     /** Whether the initial count query is loading. */
@@ -224,9 +226,18 @@ export function useTableQuery(opts: UseTableQueryOptions): UseTableQueryResult {
         [coordinator, table, selection, sort],
     );
 
+    const getCachedRows = useCallback((): Row[] => {
+        const rows: Row[] = [];
+        for (const entry of pagesRef.current.values()) {
+            for (const row of entry.rows) rows.push(row);
+        }
+        return rows;
+    }, []);
+
     return {
         totalCount: totalCount ?? 0,
         getRow,
+        getCachedRows,
         ensureRange,
         loading,
         findRowPosition,

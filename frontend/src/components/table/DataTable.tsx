@@ -61,19 +61,18 @@ export function DataTable({
     const containerRef = useRef<HTMLDivElement>(null);
 
     // ── Server-side sort state (lifted into TanStack Table) ─────────
-    // We store sorting in TanStack Table's state but execute it server-side.
-    const sortingRef = useRef<SortingState>([]);
+    // We store sorting in React state so changes re-render and re-query.
+    const [sorting, setSorting] = useState<SortingState>([]);
     const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({});
     const autoSizedRef = useRef(false);
 
     const sort: SortState | null = useMemo(() => {
-        const s = sortingRef.current;
-        if (s.length === 0) return null;
-        return { column: s[0].id, direction: s[0].desc ? "desc" : "asc" };
-    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+        if (sorting.length === 0) return null;
+        return { column: sorting[0].id, direction: sorting[0].desc ? "desc" : "asc" };
+    }, [sorting]);
 
     // ── Server-side data ────────────────────────────────────────────
-    const { totalCount, getRow, ensureRange, findRowPosition } = useTableQuery({
+    const { totalCount, getRow, getCachedRows, ensureRange, findRowPosition } = useTableQuery({
         coordinator,
         table,
         columns: columnNames,
@@ -114,14 +113,7 @@ export function DataTable({
     // ── Build visible data array from page cache ────────────────────
     // Only includes rows that are actually loaded — NOT the full dataset.
     // TanStack Table sees this small array; Virtual handles the full count.
-    const visibleData = useMemo(() => {
-        const rows: Row[] = [];
-        for (let i = 0; i < totalCount; i++) {
-            const row = getRow(i);
-            if (row) rows.push(row);
-        }
-        return rows;
-    }, [totalCount, getRow]);
+    const visibleData = useMemo(() => getCachedRows(), [totalCount, getCachedRows]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // ── Auto-size columns from first loaded data ─────────────────
     useEffect(() => {
@@ -143,13 +135,8 @@ export function DataTable({
     const tableInstance = useReactTable({
         data: visibleData,
         columns: tableColumns,
-        state: { sorting: sortingRef.current, columnSizing },
-        onSortingChange: (updater) => {
-            const next = typeof updater === "function" ? updater(sortingRef.current) : updater;
-            sortingRef.current = next;
-            // Force re-render to propagate sort change to useTableQuery
-            containerRef.current?.dispatchEvent(new Event("sort-change"));
-        },
+        state: { sorting, columnSizing },
+        onSortingChange: setSorting,
         onColumnSizingChange: setColumnSizing,
         columnResizeMode: "onChange",
         enableColumnResizing: true,
