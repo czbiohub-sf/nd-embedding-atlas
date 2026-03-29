@@ -1,9 +1,11 @@
 import { Coordinator, restConnector, Selection } from "@uwdata/mosaic-core";
 import { type ReactNode, useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useColumnTypes } from "../hooks/useColumnTypes";
 import { generateDefaultPanels } from "../lib/chart-spec";
 import type { ChartPanelEntry, ChartSpec, Metadata, TrajectoryData } from "../types";
 import { DashboardContext, type DashboardState } from "./DashboardContext";
+import { scatterKeys } from "../scatter-gpu/hooks/queryKeys";
 
 // ── Panel reducer ──────────────────────────────────────────────────────────
 
@@ -49,12 +51,14 @@ export function DashboardProvider({ children }: Props) {
     const brushSelection = useMemo(() => Selection.crossfilter(), []);
 
     // Metadata
-    const [metadata, setMetadata] = useState<Metadata | null>(null);
-    useEffect(() => {
-        fetch("/data/metadata.json")
-            .then((r) => r.json())
-            .then(setMetadata);
-    }, []);
+    const queryClient = useQueryClient();
+    const metadataQuery = useQuery<Metadata>({
+        queryKey: scatterKeys.metadata(),
+        queryFn: () => fetch("/data/metadata.json").then((r) => r.json()),
+        staleTime: Infinity,
+        gcTime: Infinity,
+    });
+    const metadata = metadataQuery.data ?? null;
 
     // UI state
     const [highlightId, setHighlightId] = useState<string | null>(null);
@@ -81,9 +85,8 @@ export function DashboardProvider({ children }: Props) {
 
     // Actions
     const refreshMetadata = useCallback(async () => {
-        const newMeta: Metadata = await fetch("/data/metadata.json").then((r) => r.json());
-        setMetadata(newMeta);
-    }, []);
+        await queryClient.invalidateQueries({ queryKey: scatterKeys.metadata() });
+    }, [queryClient]);
 
     const setTrajectory = useCallback((data: TrajectoryData | null) => setTrajectoryState(data), []);
     const setTrajectoryTIndex = useCallback(

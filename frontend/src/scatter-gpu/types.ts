@@ -1,6 +1,13 @@
 import type { TgpuRoot } from "typegpu";
 
 // ---------------------------------------------------------------------------
+// PanelId branded type
+// ---------------------------------------------------------------------------
+
+export type PanelId = string & { readonly __brand: "PanelId" };
+export const panelId = (id: string): PanelId => id as PanelId;
+
+// ---------------------------------------------------------------------------
 // Data
 // ---------------------------------------------------------------------------
 
@@ -76,6 +83,12 @@ export interface ScatterplotHandle {
     getViewState(): { panX: number; panY: number; zoom: number };
     /** Convert world coordinates to screen pixel coordinates using the current view transform. */
     worldToScreen(worldX: number, worldY: number, canvasWidth: number, canvasHeight: number): { x: number; y: number };
+    /** Apply an externally-driven selection (from another panel). rowIndices = app-level row IDs; panelRowIndices = this panel's rowIndicesRef. */
+    setExternalSelection(params: { rowIndices: number[]; panelRowIndices: number[] }): void;
+    /** Clear an externally-driven selection. */
+    clearExternalSelection(): void;
+    /** Programmatically set the view state (for view lock sync). Suppresses the onViewChange broadcast for this write. */
+    setViewState(state: { panX: number; panY: number; zoom: number }): void;
 }
 
 export interface RenderConfig {
@@ -103,7 +116,7 @@ export interface ScatterplotConfig {
     palette?: readonly (readonly [number, number, number])[];
     callbacks?: {
         onSelectionChange?: (count: number | null, indices?: number[]) => void;
-        onViewChange?: (zoom: number) => void;
+        onViewChange?: (state: { panX: number; panY: number; zoom: number }) => void;
         onPointClick?: (index: number, position: [number, number], categoryIndex: number, categoryName: string) => void;
         onFps?: (fps: number) => void;
     };

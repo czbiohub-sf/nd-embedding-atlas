@@ -70,10 +70,10 @@ export async function createScatterplot(
             render(context, data.numCells, "clear");
         },
         {
-            onViewChange: (zoom: number) => {
-                currentZoom = zoom;
+            onViewChange: (state: { panX: number; panY: number; zoom: number }) => {
+                currentZoom = state.zoom;
                 viewVersion++;
-                config?.callbacks?.onViewChange?.(zoom);
+                config?.callbacks?.onViewChange?.(state);
             },
             onFps: (fps: number) => {
                 config?.callbacks?.onFps?.(fps);
@@ -187,6 +187,22 @@ export async function createScatterplot(
                 x: ((clipX + 1) / 2) * w,
                 y: (1 - (clipY + 1) / 2) * h,
             };
+        },
+        setExternalSelection({ rowIndices, panelRowIndices }: { rowIndices: number[]; panelRowIndices: number[] }) {
+            const rowToPoint = new Map(panelRowIndices.map((r, i) => [r, i]));
+            const pointIndices = rowIndices.flatMap(r => {
+                const i = rowToPoint.get(r);
+                return i !== undefined ? [i] : [];
+            });
+            selection.setSelectedPoints(pointIndices);
+            interaction.requestRender();
+        },
+        clearExternalSelection() {
+            selection.clearSelectionExternal();
+            interaction.requestRender();
+        },
+        setViewState(state: { panX: number; panY: number; zoom: number }) {
+            interaction.setViewState(state);
         },
         destroy() {
             interaction.destroy();

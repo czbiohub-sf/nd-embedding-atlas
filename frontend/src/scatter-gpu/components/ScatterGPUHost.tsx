@@ -20,6 +20,9 @@ export interface ScatterGPUHostHandle {
     setColorsDirect(rgba: Uint8Array): void;
     getViewState(): { panX: number; panY: number; zoom: number };
     worldToScreen(wx: number, wy: number, w: number, h: number): { x: number; y: number };
+    setExternalSelection(params: { rowIndices: number[]; panelRowIndices: number[] }): void;
+    clearExternalSelection(): void;
+    setViewState(state: { panX: number; panY: number; zoom: number }): void;
 }
 
 interface ScatterGPUHostProps {
@@ -191,6 +194,15 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
                 },
                 worldToScreen(wx, wy, w, h) {
                     return gpuRef.current?.worldToScreen(wx, wy, w, h) ?? { x: 0, y: 0 };
+                },
+                setExternalSelection(params) {
+                    gpuRef.current?.setExternalSelection(params);
+                },
+                clearExternalSelection() {
+                    gpuRef.current?.clearExternalSelection();
+                },
+                setViewState(state) {
+                    gpuRef.current?.setViewState(state);
                 },
             }),
             [],

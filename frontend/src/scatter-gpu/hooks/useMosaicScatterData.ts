@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import type { ScatterData } from "../types";
 import type { AxisState } from "../../types";
 import { parsePositionBlob, parseCategoryBlob, parseContinuousColorsBlob } from "../utils/parsers";
+import { scatterKeys } from "./queryKeys";
 
 export type ColorMode = "categorical" | "continuous";
 
@@ -36,22 +38,20 @@ interface UseMosaicScatterDataResult {
   error: string | null;
 }
 
-/** Parsed positions held in state between color changes */
-interface PositionState {
-  floats: Float32Array;
-  rowIndices: number[];
-  numCells: number;
-  embeddingKey: string;
-}
-
 /**
  * Bridge hook that fetches position and color data from the binary scatter
  * endpoints and assembles a `ScatterData` object for the GPU scatter plot.
  *
- * Two independent fetch effects:
+ * Three parallel useQuery calls:
  *  1. Positions — fires when `axes`, `xCol`, or `yCol` changes. Heavy (~4 MB).
- *  2. Colors    — fires when `colorMode`, `categoryCol`, or `continuousColCol`
- *                 changes AND positions are loaded. Lightweight.
+ *  2. Categories — fires in parallel with positions when categoryCol is set.
+ *  3. Continuous colors — fires in parallel with positions when continuousColCol is set.
+ *
+ * CRITICAL: colors are NOT gated on positions — they run in parallel.
+ * Only the useMemo assembly blocks on positions.
+ *
+ * When multiple panels show the same embedding, TanStack Query deduplicates
+ * fetch requests via the query key cache.
  */
 export function useMosaicScatterData({
   axes,
@@ -65,174 +65,118 @@ export function useMosaicScatterData({
   vmin,
   vmax,
 }: UseMosaicScatterDataOptions): UseMosaicScatterDataResult {
-  // --- Position state (heavy, persists while axes stay the same) ---
-  const [positions, setPositions] = useState<PositionState | null>(null);
-  const [posLoading, setPosLoading] = useState(false);
-
-  // --- Color state (lightweight, changes on colorBy change) ---
-  const [categoryIndices, setCategoryIndices] = useState<Uint8Array | null>(null);
-  const [categoryNames, setCategoryNames] = useState<string[]>([]);
-  const [colorValues, setColorValues] = useState<Uint8Array | null>(null);
-  const [colorRange, setColorRange] = useState<[number, number] | null>(null);
-  const [colorLoading, setColorLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  // Effect 1: fetch positions when axes / column names change
-  useEffect(() => {
-    if (!axes) {
-      setPositions(null);
-      return;
-    }
-
-    const ac = new AbortController();
-    setPosLoading(true);
-    setError(null);
-
-    const params = new URLSearchParams({
-      embedding: axes.obsmKey,
-      x_col: xCol,
-      y_col: yCol,
-    });
-
-    fetch(`/api/scatter-positions?${params}`, { signal: ac.signal })
-      .then((r) => {
-        if (!r.ok) throw new Error(`scatter-positions failed: ${r.status}`);
-        return r.arrayBuffer();
-      })
-      .then((buf) => {
-        const { header, positions: floats } = parsePositionBlob(buf);
-        setPositions({
-          floats,
-          rowIndices: header.rowIndices,
-          numCells: header.numCells,
-          embeddingKey: header.embeddingKey,
-        });
-        // Reset color state whenever positions change
-        setCategoryIndices(null);
-        setCategoryNames([]);
-        setColorValues(null);
-        setColorRange(null);
-      })
-      .catch((e: Error) => {
-        if (e.name !== "AbortError") setError(e.message);
-      })
-      .finally(() => setPosLoading(false));
-
-    return () => ac.abort();
-  }, [axes, xCol, yCol]);
-
-  // Effect 2: fetch categories or continuous colors when color config changes
-  useEffect(() => {
-    if (!positions) return;
-
-    if (colorMode === "categorical") {
-      if (!categoryCol) {
-        setCategoryIndices(new Uint8Array(positions.numCells));
-        setCategoryNames([]);
-        return;
-      }
-
-      const ac = new AbortController();
-      setColorLoading(true);
-
-      const params = new URLSearchParams({ cat_col: categoryCol });
-      if (originalCol) params.set("original_col", originalCol);
-
-      fetch(`/api/scatter-categories?${params}`, { signal: ac.signal })
-        .then((r) => {
-          if (!r.ok) throw new Error(`scatter-categories failed: ${r.status}`);
-          return r.arrayBuffer();
-        })
-        .then((buf) => {
-          const { header, categoryIndices: indices } = parseCategoryBlob(buf);
-          setCategoryIndices(indices);
-          setCategoryNames(header.categoryNames);
-          setColorValues(null);
-          setColorRange(null);
-        })
-        .catch((e: Error) => {
-          if (e.name !== "AbortError") setError(e.message);
-        })
-        .finally(() => setColorLoading(false));
-
-      return () => ac.abort();
-    } else {
-      // continuous
-      if (!continuousColCol) {
-        setColorValues(null);
-        setColorRange(null);
-        return;
-      }
-
-      const ac = new AbortController();
-      setColorLoading(true);
-
+  // 1. Positions query
+  const positionQuery = useQuery({
+    queryKey: axes ? scatterKeys.positions(axes.obsmKey, xCol, yCol) : ["scatter", "positions", null],
+    queryFn: async ({ signal }) => {
       const params = new URLSearchParams({
-        color_col: continuousColCol,
+        embedding: axes!.obsmKey,
+        x_col: xCol,
+        y_col: yCol,
+      });
+      const r = await fetch(`/api/scatter-positions?${params}`, { signal });
+      if (!r.ok) throw new Error(`scatter-positions failed: ${r.status}`);
+      const buf = await r.arrayBuffer();
+      const { header, positions } = parsePositionBlob(buf);
+      // Copy to prevent stale ArrayBuffer reference across React Query cache evictions
+      return {
+        floats: new Float32Array(positions),
+        rowIndices: header.rowIndices,
+        numCells: header.numCells,
+        embeddingKey: header.embeddingKey,
+      };
+    },
+    enabled: !!axes,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // 2. Categories — NOT blocked by positions (parallel)
+  const categoryQuery = useQuery({
+    queryKey: scatterKeys.categories(categoryCol!, originalCol),
+    queryFn: async ({ signal }) => {
+      const params = new URLSearchParams({ cat_col: categoryCol! });
+      if (originalCol) params.set("original_col", originalCol);
+      const r = await fetch(`/api/scatter-categories?${params}`, { signal });
+      if (!r.ok) throw new Error(`scatter-categories failed: ${r.status}`);
+      const buf = await r.arrayBuffer();
+      const { header, categoryIndices } = parseCategoryBlob(buf);
+      return { categoryIndices, categoryNames: header.categoryNames };
+    },
+    enabled: colorMode === "categorical" && !!categoryCol, // no !!positionQuery.data — parallel
+    staleTime: 30_000,
+  });
+
+  // 3. Continuous colors — NOT blocked by positions (parallel)
+  const continuousQuery = useQuery({
+    queryKey: scatterKeys.continuousColors(continuousColCol!, continuousColormap, vmin, vmax),
+    queryFn: async ({ signal }) => {
+      const params = new URLSearchParams({
+        color_col: continuousColCol!,
         colormap: continuousColormap,
       });
       if (vmin != null) params.set("vmin", String(vmin));
       if (vmax != null) params.set("vmax", String(vmax));
+      const r = await fetch(`/api/scatter-continuous-colors?${params}`, { signal });
+      if (!r.ok) throw new Error(`scatter-continuous-colors failed: ${r.status}`);
+      const buf = await r.arrayBuffer();
+      const { header, rgba } = parseContinuousColorsBlob(buf);
+      return { rgba, vmin: header.vmin, vmax: header.vmax };
+    },
+    enabled: colorMode === "continuous" && !!continuousColCol, // no !!positionQuery.data — parallel
+    staleTime: 30_000,
+  });
 
-      fetch(`/api/scatter-continuous-colors?${params}`, { signal: ac.signal })
-        .then((r) => {
-          if (!r.ok) throw new Error(`scatter-continuous-colors failed: ${r.status}`);
-          return r.arrayBuffer();
-        })
-        .then((buf) => {
-          const { header, rgba } = parseContinuousColorsBlob(buf);
-          setColorValues(rgba);  // Uint8Array RGBA
-          setColorRange([header.vmin, header.vmax]);
-          setCategoryIndices(null);
-          setCategoryNames([]);
-        })
-        .catch((e: Error) => {
-          if (e.name !== "AbortError") setError(e.message);
-        })
-        .finally(() => setColorLoading(false));
-
-      return () => ac.abort();
-    }
-  }, [positions, colorMode, categoryCol, originalCol, continuousColCol, continuousColormap, vmin, vmax]);
-
-  // Merge positions + colors into ScatterData
+  // Assembly blocks on positions only — colors show when ready
   const data = useMemo((): ScatterData | null => {
-    if (!positions) return null;
+    if (!positionQuery.data) return null;
 
     const base = {
-      positions: positions.floats,
-      numCells: positions.numCells,
-      rowIndices: positions.rowIndices,
-      embeddingKey: positions.embeddingKey,
+      positions: positionQuery.data.floats,
+      numCells: positionQuery.data.numCells,
+      rowIndices: positionQuery.data.rowIndices,
+      embeddingKey: positionQuery.data.embeddingKey,
       ndim: 2 as const,
     };
 
     if (colorMode === "categorical") {
+      const catData = categoryQuery.data;
       return {
         ...base,
-        categoryIndices: categoryIndices ?? new Uint8Array(positions.numCells),
-        categoryNames,
+        categoryIndices: catData?.categoryIndices ?? new Uint8Array(positionQuery.data.numCells),
+        categoryNames: catData?.categoryNames ?? [],
       };
     } else {
+      const contData = continuousQuery.data;
       return {
         ...base,
-        categoryIndices: new Uint8Array(positions.numCells),
+        categoryIndices: new Uint8Array(positionQuery.data.numCells),
         categoryNames: [],
-        colorValues: colorValues ?? undefined,
+        colorValues: contData?.rgba ?? undefined,
       };
     }
-  }, [positions, colorMode, categoryIndices, categoryNames, colorValues]);
+  }, [positionQuery.data, colorMode, categoryQuery.data, continuousQuery.data]);
 
-  const positionKey = positions
-    ? `${positions.embeddingKey}:${positions.numCells}`
+  const positionKey = positionQuery.data
+    ? `${positionQuery.data.embeddingKey}:${positionQuery.data.numCells}`
     : null;
+
+  const categoryNames = categoryQuery.data?.categoryNames ?? [];
+  const colorRange: [number, number] | null =
+    continuousQuery.data ? [continuousQuery.data.vmin, continuousQuery.data.vmax] : null;
+
+  const loading = positionQuery.isFetching || categoryQuery.isFetching || continuousQuery.isFetching;
+  const error =
+    (positionQuery.error as Error | null)?.message ??
+    (categoryQuery.error as Error | null)?.message ??
+    (continuousQuery.error as Error | null)?.message ??
+    null;
 
   return {
     data,
     positionKey,
     categoryNames,
     colorRange,
-    loading: posLoading || colorLoading,
+    loading,
     error,
   };
 }

@@ -4,7 +4,7 @@ import type { SelectionEngine } from "../gpu/selection";
 import type { InteractionConfig } from "../types";
 
 interface InteractionCallbacks {
-    onViewChange?: (zoom: number) => void;
+    onViewChange?: (state: { panX: number; panY: number; zoom: number }) => void;
     onPointClick?: (worldX: number, worldY: number) => void;
     onFps?: (fps: number) => void;
 }
@@ -43,6 +43,9 @@ export function createInteractionController(
     let targetPanY = 0;
     let targetZoom = 1;
 
+    // Suppress the next onViewChange broadcast (used by setViewState to avoid feedback loops)
+    let skipNextViewChange = false;
+
     let isPanning = false;
     let isLassoing = false;
     let isMarquee = false;
@@ -61,7 +64,10 @@ export function createInteractionController(
         uniforms.viewUniform.write(d.vec4f(panX, panY, zoom, aspect));
         needsRender = true;
         scheduleLoop();
-        callbacks?.onViewChange?.(zoom);
+        if (!skipNextViewChange) {
+            callbacks?.onViewChange?.({ panX, panY, zoom });
+        }
+        skipNextViewChange = false;
     }
 
     function snapToTarget() {
@@ -363,6 +369,13 @@ export function createInteractionController(
         },
         getViewState(): { panX: number; panY: number; zoom: number } {
             return { panX, panY, zoom };
+        },
+        setViewState(state: { panX: number; panY: number; zoom: number }) {
+            panX = targetPanX = state.panX;
+            panY = targetPanY = state.panY;
+            zoom = targetZoom = state.zoom;
+            skipNextViewChange = true;
+            updateView();
         },
         resize() {
             updateView();

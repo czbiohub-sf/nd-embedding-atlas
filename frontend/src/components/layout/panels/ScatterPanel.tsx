@@ -1,9 +1,12 @@
 import type { IDockviewPanelProps } from "dockview-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useDebouncer } from "@tanstack/react-pacer";
+import { useDebouncer, useThrottler } from "@tanstack/react-pacer";
 import { verbatim } from "@uwdata/mosaic-sql";
 import { ScatterGPUHost, type ScatterGPUHostHandle } from "../../../scatter-gpu/components/ScatterGPUHost";
 import type { ScatterplotConfig } from "../../../scatter-gpu/types";
+import { panelId } from "../../../scatter-gpu/types";
+import { selectionSyncStore, broadcastSelection, clearSelectionSync } from "../../../providers/SelectionSyncStore";
+import { viewSyncStore, broadcastViewState } from "../../../providers/ViewSyncStore";
 import { useMosaicScatterData } from "../../../scatter-gpu/hooks/useMosaicScatterData";
 import type { ColorMode } from "../../../scatter-gpu/hooks/useMosaicScatterData";
 import type { TrajectoryOverlaySvgHandle } from "../../scatter/TrajectoryOverlaySvg";
@@ -21,6 +24,7 @@ import { makeCategoryColumn, type CategoryMapping } from "../../../lib/category-
 import { resolveColorMode } from "../../../hooks/useColorMode";
 import { toRows } from "../../../lib/mosaic-helpers";
 import type { AxisState, TrajectoryFrame } from "../../../types";
+import type { PanelId } from "../../../scatter-gpu/types";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -56,6 +60,7 @@ function hexToRgbPalette(hexColors: string[]): readonly (readonly [number, numbe
 // ── Outer panel ───────────────────────────────────────────────────────────────
 
 export function ScatterPanel(props: IDockviewPanelProps) {
+  const myPanelId = panelId(props.api.id);
   const initialObsmKey = (props.params as { initialObsmKey?: string } | undefined)?.initialObsmKey ?? null;
   const { state, actions, meta } = useDashboard();
   const { metadata, trajectory } = state;
@@ -243,6 +248,7 @@ export function ScatterPanel(props: IDockviewPanelProps) {
         categoryCol={categoryCol}
       >
         <ScatterView
+          myPanelId={myPanelId}
           axes={axes}
           isLoading={isLoading}
           loadingKey={loadingKey}
@@ -270,6 +276,7 @@ export function ScatterPanel(props: IDockviewPanelProps) {
 // ── Inner component ───────────────────────────────────────────────────────────
 
 interface ScatterViewProps {
+  myPanelId: PanelId;
   axes: AxisState | null;
   isLoading: boolean;
   loadingKey: string | null;
@@ -291,6 +298,7 @@ interface ScatterViewProps {
 }
 
 function ScatterView({
+  myPanelId,
   axes,
   isLoading,
   loadingKey,
@@ -358,6 +366,14 @@ function ScatterView({
     return `__row_index__ IN (SELECT row_index FROM __scatter_selection)`;
   }, []);
 
+  // ── Throttled view-state broadcast (~60fps) ───────────────────────────────
+  const viewBroadcaster = useThrottler(
+    (vs: { panX: number; panY: number; zoom: number }) => {
+      if (viewSyncStore.state.lockMode === "linked") broadcastViewState(myPanelId, vs);
+    },
+    { wait: 16 },
+  );
+
   // ── Debounced brushSelection update ──────────────────────────────────────
   // Visual feedback (point dimming, status bar count) stays immediate.
   // The expensive Mosaic SQL query is debounced: fires 200ms after drawing stops.
@@ -388,7 +404,7 @@ function ScatterView({
   const callbacksRef = useRef({
     onSelectionChange: (_count: number | null, _indices?: number[]) => {},
     onPointClick: (_index: number, _pos: [number, number], _catIdx: number, _catName: string) => {},
-    onViewChange: (_zoom: number) => {},
+    onViewChange: (_state: { panX: number; panY: number; zoom: number }) => {},
     onFps: (_fps: number) => {},
   });
 
@@ -406,8 +422,10 @@ function ScatterView({
         value: [],
         predicate: null,
       });
+      clearSelectionSync();
     } else {
       brushDebouncer.maybeExecute(rowIds);  // table update — debounced 200ms
+      broadcastSelection(myPanelId, rowIds);
     }
   };
 
@@ -416,10 +434,11 @@ function ScatterView({
     actions.setHighlight(String(rowIdx));
   };
 
-  callbacksRef.current.onViewChange = (zoom: number) => {
-    if (hostRef.current) viewStateRef.current = hostRef.current.getViewState();
-    setZoom(zoom);
+  callbacksRef.current.onViewChange = (state: { panX: number; panY: number; zoom: number }) => {
+    viewStateRef.current = state;
+    setZoom(state.zoom);
     trajectoryOverlayRef.current?.update();
+    viewBroadcaster.maybeExecute(state);
   };
 
   callbacksRef.current.onFps = (fps: number) => setFps(fps);
@@ -454,6 +473,33 @@ function ScatterView({
     if (colorMode !== "continuous" || !data?.colorValues) return;
     hostRef.current?.setColorsDirect(data.colorValues);
   }, [data?.colorValues, colorMode]);
+
+  // ── Cross-panel selection sync ────────────────────────────────────────────
+  useEffect(() => {
+    const sub = selectionSyncStore.subscribe(() => {
+      const s = selectionSyncStore.state;
+      if (s.type === "empty") {
+        hostRef.current?.clearExternalSelection();
+      } else {
+        if (s.sourcePanelId === myPanelId) return; // skip own broadcasts
+        hostRef.current?.setExternalSelection({
+          rowIndices: s.selectedRowIndices,
+          panelRowIndices: rowIndicesRef.current,
+        });
+      }
+    });
+    return () => sub.unsubscribe();
+  }, [myPanelId]);
+
+  // ── Cross-panel view sync ─────────────────────────────────────────────────
+  useEffect(() => {
+    const sub = viewSyncStore.subscribe(() => {
+      const s = viewSyncStore.state;
+      if (s.lockMode !== "linked" || s.sourcePanelId === myPanelId) return;
+      hostRef.current?.setViewState({ panX: s.panX, panY: s.panY, zoom: s.zoom });
+    });
+    return () => sub.unsubscribe();
+  }, [myPanelId]);
 
   // ── Trajectory ────────────────────────────────────────────────────────────
   const axesKeyRef = useRef<string | null>(null);

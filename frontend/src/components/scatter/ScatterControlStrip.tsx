@@ -9,6 +9,9 @@ import type { ColorMode } from "../../scatter-gpu/hooks/useMosaicScatterData";
 import type { AxisState } from "../../types";
 import { CompactSelect } from "../ui/select";
 import { Button } from "../ui/button";
+import { Lock, LockOpen } from "lucide-react";
+import { useStore } from "@tanstack/react-store";
+import { viewSyncStore, toggleViewLock } from "../../providers/ViewSyncStore";
 
 export interface ScatterControlStripProps {
   axes: AxisState;
@@ -58,6 +61,9 @@ export function ScatterControlStrip({
   onSetContinuousColormap,
   onSetMaxCategories,
 }: ScatterControlStripProps) {
+  const lockMode = useStore(viewSyncStore, (s) => s.lockMode);
+  const isLinked = lockMode === "linked";
+
   return (
     <div className="flex shrink-0 items-center gap-2 border-b border-border-subtle px-2 py-1 text-text-secondary">
       <label className="flex items-center gap-1.5">
@@ -167,6 +173,18 @@ export function ScatterControlStrip({
           loading {loadingKey.replace(/^X_/, "")}...
         </span>
       ) : null}
+
+      <div className="ml-auto">
+        <Button
+          variant="ghost"
+          size="xs"
+          className="h-6 w-6 px-0"
+          onClick={toggleViewLock}
+          title={isLinked ? "Unlink views" : "Link views"}
+        >
+          {isLinked ? <Lock className="h-3.5 w-3.5" /> : <LockOpen className="h-3.5 w-3.5" />}
+        </Button>
+      </div>
     </div>
   );
 }

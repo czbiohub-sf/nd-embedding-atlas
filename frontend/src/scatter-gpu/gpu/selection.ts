@@ -209,8 +209,24 @@ export function createSelectionEngine(
     onSelectionChange(null);
   }
 
+  function setSelectedPoints(pointIndices: number[]) {
+    const mask = new Uint32Array(numPoints);
+    for (const idx of pointIndices) {
+      if (idx >= 0 && idx < numPoints) mask[idx] = 1;
+    }
+    device.queue.writeBuffer(root.unwrap(selectedBuffer), 0, mask);
+    selectionModeUniform.write(pointIndices.length > 0 ? 1 : 0);
+  }
+
+  function clearSelectionExternal() {
+    const mask = new Uint32Array(numPoints);
+    device.queue.writeBuffer(root.unwrap(selectedBuffer), 0, mask);
+    selectionModeUniform.write(0);
+  }
+
   return {
     runLassoSelection, runMarqueeSelection, selectPoint, clearSelection,
+    setSelectedPoints, clearSelectionExternal,
     debugLogSelection, pipComputeFn, aabbComputeFn,
     destroy() { stagingBuffer.destroy(); },
   };
