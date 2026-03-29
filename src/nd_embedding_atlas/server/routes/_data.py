@@ -13,12 +13,7 @@ from nd_embedding_atlas.vz._prepare import _obsm_column_prefix
 
 
 def _build_obsm_metadata(state: ViewerState) -> dict[str, Any]:
-    """Build obsm metadata dict including loaded status and dimensionality.
-
-    For loaded embeddings, n_dims comes from the DuckDB registry.
-    For unloaded embeddings, n_dims is read directly from the zarr/h5ad
-    shape metadata — no data is loaded into memory.
-    """
+    """Build obsm metadata dict including loaded status."""
     meta: dict[str, Any] = {}
     for key in state.available_obsm_keys:
         prefix = _obsm_column_prefix(key)
@@ -26,14 +21,7 @@ def _build_obsm_metadata(state: ViewerState) -> dict[str, Any]:
             info = state.store.loaded_embeddings[key]
             meta[key] = {"prefix": prefix, "n_dims": info["n_dims"], "loaded": True}
         else:
-            n_dims: int | None = None
-            try:
-                arr = state.collection.obsm[key]
-                if arr is not None and len(arr.shape) >= 2:
-                    n_dims = int(arr.shape[1])
-            except Exception:  # noqa: BLE001
-                pass
-            meta[key] = {"prefix": prefix, "n_dims": n_dims, "loaded": False}
+            meta[key] = {"prefix": prefix, "n_dims": None, "loaded": False}
     return meta
 
 

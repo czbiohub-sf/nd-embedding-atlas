@@ -53,7 +53,6 @@ export function CommandPalette({ onAddScatter }: CommandPaletteProps) {
                     <CommandGroup heading="Scatter">
                         {obsmEntries.map(([key, entry]) => {
                             const label = key.replace(/^X_/, "");
-                            const dims = entry.n_dims ?? "?";
                             return (
                                 <CommandItem
                                     key={key}
@@ -61,9 +60,9 @@ export function CommandPalette({ onAddScatter }: CommandPaletteProps) {
                                 >
                                     <LayoutGrid className="mr-2 h-4 w-4" />
                                     <span>New Scatter — {label}</span>
-                                    <CommandShortcut>
-                                        {entry.loaded ? `${dims}D` : `${dims}D · load`}
-                                    </CommandShortcut>
+                                    {!entry.loaded && (
+                                        <CommandShortcut>load</CommandShortcut>
+                                    )}
                                 </CommandItem>
                             );
                         })}
