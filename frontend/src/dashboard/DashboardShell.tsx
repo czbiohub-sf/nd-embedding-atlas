@@ -1,5 +1,6 @@
 import { DockviewShell } from "../components/layout/DockviewShell";
-import { StatusBar } from "../components/StatusBar";
+import { StatusFooter } from "../components/StatusFooter";
+import { TerminalTable } from "../components/table/TerminalTable";
 import { ExportButton } from "../components/toolbar/ExportButton";
 import { FilterInfo } from "../components/toolbar/FilterInfo";
 import { TimeSlider } from "../components/toolbar/TimeSlider";
@@ -13,7 +14,10 @@ export function DashboardShell() {
     const hasEmbeddings = Object.keys(metadata.obsm ?? {}).length > 0;
 
     return (
-        <div className="flex h-full flex-col" style={{ background: "var(--color-base)" }}>
+        <div
+            className="flex h-full flex-col"
+            style={{ background: "var(--color-base)", paddingBottom: "var(--footer-height, 1.5rem)" }}
+        >
             <Toolbar>
                 {hasTime && <TimeSlider />}
                 <FilterInfo />
@@ -27,8 +31,11 @@ export function DashboardShell() {
                 <DockviewShell hasPlate={!!metadata.plate} hasEmbeddings={hasEmbeddings} />
             </div>
 
-            {/* Vim-style status bar — always visible, shows scatter metrics */}
-            <StatusBar />
+            {/* Terminal table drawer — slides up above the fixed footer */}
+            <TerminalTable />
+
+            {/* Fixed footer — always visible, shows scatter metrics + ⌘J toggle */}
+            <StatusFooter />
         </div>
     );
 }

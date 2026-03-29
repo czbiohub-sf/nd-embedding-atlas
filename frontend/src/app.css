@@ -66,9 +66,12 @@
     --color-input:                #f1f5f9;
     --color-ring:                 #06b6d4;
 
-    /* ── Status bar ── */
+    /* ── Status bar / footer ── */
     --color-status-bar:        #f1f5f9;
     --color-status-bar-border: #e2e8f0;
+
+    /* ── Layout ── */
+    --footer-height: 1.5rem;  /* 24px — height of fixed StatusFooter */
 }
 
 /* ── Dark mode overrides ──────────────────────────────────────────────
