@@ -45,7 +45,7 @@ export function CommandPalette({ onAddScatter }: CommandPaletteProps) {
 
     return (
         <CommandDialog open={open} onOpenChange={setOpen}>
-            <CommandInput placeholder="Search commands…" />
+            <CommandInput placeholder="Search commands…" autoFocus />
             <CommandList>
                 <CommandEmpty>No results found.</CommandEmpty>
 
