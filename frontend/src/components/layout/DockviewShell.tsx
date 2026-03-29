@@ -5,7 +5,7 @@ import {
     type IDockviewHeaderActionsProps,
     type IDockviewPanelHeaderProps,
 } from "dockview-react";
-import { XIcon } from "lucide-react";
+import { XIcon, Minimize2, Maximize2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import "dockview-react/dist/styles/dockview.css";
 import { useTheme } from "../../providers/ThemeProvider";
@@ -66,29 +66,10 @@ function RightHeaderActions({ api, containerApi }: IDockviewHeaderActionsProps) 
             title={maximized ? "Restore" : "Maximize"}
             onClick={() => (maximized ? api.exitMaximized() : api.maximize())}
         >
-            {maximized ? (
-                // Restore icon (collapse arrows)
-                <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden="true">
-                    <path
-                        d="M5.5 2v3.5H2M9.5 13v-3.5H13M5.5 5.5L1 1M9.5 9.5L14 14"
-                        stroke="currentColor"
-                        strokeWidth="1.2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                    />
-                </svg>
-            ) : (
-                // Maximize icon (expand arrows)
-                <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden="true">
-                    <path
-                        d="M2 5.5V2h3.5M13 9.5V13H9.5M5.5 5.5L1 1M9.5 9.5L14 14"
-                        stroke="currentColor"
-                        strokeWidth="1.2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                    />
-                </svg>
-            )}
+            {maximized
+                ? <Minimize2 className="size-3.5" />
+                : <Maximize2 className="size-3.5" />
+            }
         </button>
     );
 }
