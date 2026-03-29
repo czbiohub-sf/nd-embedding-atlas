@@ -226,6 +226,7 @@ export function createSelectionEngine(
     externalSelectionMask.fill(0);
     device.queue.writeBuffer(root.unwrap(selectedBuffer), 0, externalSelectionMask);
     selectionModeUniform.write(0);
+    onSelectionChange(null);
   }
 
   return {

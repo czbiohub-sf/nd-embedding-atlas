@@ -1,26 +1,16 @@
 import tgpu from "typegpu";
+import type { DeviceInfo } from "./device-manager";
 
-export async function initGPU(canvas: HTMLCanvasElement) {
-  // Detect GPU vendor before device creation so we can tune workgroup sizes.
-  // GPUAdapter.info is available in Chrome 121+ / Firefox 130+.
-  const adapter = await navigator.gpu.requestAdapter();
-  const vendor = ((adapter as { info?: { vendor?: string } } | null)?.info?.vendor ?? "").toLowerCase();
-  // Apple Silicon (M-series) GPUs have a warp/SIMD size of 32 threads per core,
-  // making 64-thread workgroups the optimal occupancy sweet spot.
-  // NVIDIA and AMD are better served by 256.
-  const preferredWorkgroupSize: 64 | 256 = vendor.includes("apple") ? 64 : 256;
+export async function initGPU(canvas: HTMLCanvasElement, deviceInfo: DeviceInfo) {
+  const { device, format, preferredWorkgroupSize } = deviceInfo;
 
-  const root = await tgpu.init({
-    device: { optionalFeatures: ["timestamp-query"] },
-  });
-  const device = root.device;
+  const root = tgpu.initFromDevice({ device });
   const context = canvas.getContext("webgpu")!;
-  const format = navigator.gpu.getPreferredCanvasFormat();
   context.configure({ device, format, alphaMode: "premultiplied" });
 
   const limits = device.limits;
   console.log(
-    `GPU vendor: "${vendor || "unknown"}", workgroupSize: ${preferredWorkgroupSize}. ` +
+    `GPU workgroupSize: ${preferredWorkgroupSize}. ` +
     `Limits: maxSizeX=${limits.maxComputeWorkgroupSizeX}, maxInvocations=${limits.maxComputeInvocationsPerWorkgroup}`,
   );
 

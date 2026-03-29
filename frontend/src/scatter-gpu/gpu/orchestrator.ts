@@ -4,6 +4,7 @@ import { createInteractionController } from "../hooks/useScatterInteraction";
 import type { ScatterData, ScatterplotConfig, ScatterplotHandle } from "../types";
 import { createBuffers, createUniforms, uploadData } from "./buffers";
 import { createCullingEngine } from "./culling";
+import { acquireDevice, releaseDevice } from "./device-manager";
 import { initGPU } from "./init";
 import { createRenderPipeline } from "./pipeline";
 import { createSelectionEngine } from "./selection";
@@ -17,7 +18,8 @@ export async function createScatterplot(
 ): Promise<ScatterplotHandle> {
     const t0 = performance.now();
 
-    const gpu = await initGPU(canvas);
+    const deviceInfo = await acquireDevice();
+    const gpu = await initGPU(canvas, deviceInfo);
     const { root, device, context, format, preferredWorkgroupSize } = gpu;
     const tGpu = performance.now();
     console.log(`GPU init: ${(tGpu - t0).toFixed(1)}ms`);
@@ -218,6 +220,7 @@ export async function createScatterplot(
             selection.destroy();
             culling.destroy();
             root.destroy();
+            releaseDevice();
         },
     };
 }
