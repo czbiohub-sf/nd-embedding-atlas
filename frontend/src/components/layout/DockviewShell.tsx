@@ -133,21 +133,8 @@ function loadDefaultLayout(api: DockviewApi, hasPlate: boolean, hasEmbeddings: b
             title: "Image Viewer",
             position: { referencePanel: sidebarRef, direction: "right" },
         });
-
-        api.addPanel({
-            id: "charts",
-            component: "charts",
-            title: "Charts",
-            position: { referencePanel: "image-viewer", direction: "below" },
-        });
-    } else {
-        api.addPanel({
-            id: "charts",
-            component: "charts",
-            title: "Charts",
-            position: { referencePanel: sidebarRef, direction: "right" },
-        });
     }
+    // Charts panel temporarily removed from default layout (⌘K will add them later)
 }
 
 // ── DockviewShell ────────────────────────────────────────────────────────
@@ -188,8 +175,8 @@ export function DockviewShell({ hasPlate, hasEmbeddings }: Props) {
                     // Re-add any expected panels that were closed in a previous session
                     const basePanels = hasEmbeddings ? ["scatter", "table"] : ["table"];
                     const expectedPanels = hasPlate
-                        ? [...basePanels, "image-viewer", "charts"]
-                        : [...basePanels, "charts"];
+                        ? [...basePanels, "image-viewer"]
+                        : [...basePanels];
                     for (const id of expectedPanels) {
                         if (!event.api.getPanel(id)) {
                             const component = id as keyof typeof COMPONENTS;
