@@ -35,8 +35,8 @@ export function CommandPalette({ onAddScatter }: CommandPaletteProps) {
         return () => document.removeEventListener("keydown", handler);
     }, []);
 
-    // Only show loaded embeddings — unloaded ones have no data to display yet
-    const obsmEntries = Object.entries(metadata.obsm ?? {}).filter(([, e]) => e.loaded);
+    // Show all embeddings — unloaded ones are fetched on demand when the panel opens
+    const obsmEntries = Object.entries(metadata.obsm ?? {});
 
     function dispatch(fn: () => void) {
         fn();
@@ -61,7 +61,9 @@ export function CommandPalette({ onAddScatter }: CommandPaletteProps) {
                                 >
                                     <LayoutGrid className="mr-2 h-4 w-4" />
                                     <span>New Scatter — {label}</span>
-                                    <CommandShortcut>{dims}D</CommandShortcut>
+                                    <CommandShortcut>
+                                        {entry.loaded ? `${dims}D` : `${dims}D · load`}
+                                    </CommandShortcut>
                                 </CommandItem>
                             );
                         })}

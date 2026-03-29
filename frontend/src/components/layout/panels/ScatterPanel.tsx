@@ -70,12 +70,20 @@ export function ScatterPanel(props: IDockviewPanelProps) {
   const [axes, setAxes] = useState<AxisState | null>(null);
   const { loadEmbedding, loadingKey } = useEmbeddingLoader(metadata, actions.refreshMetadata);
 
-  // Initialize: prefer initialObsmKey from panel params, then first loaded embedding
+  // Initialize: prefer initialObsmKey from panel params, then first loaded embedding.
+  // If the target embedding isn't loaded yet, trigger loadEmbedding first.
   useEffect(() => {
     if (axes || !metadata) return;
     const key = initialObsmKey ?? Object.entries(metadata.obsm).find(([, v]) => v.loaded)?.[0];
-    if (key) setAxes({ obsmKey: key, xDim: 0, yDim: 1 });
-  }, [metadata, axes, initialObsmKey]);
+    if (!key) return;
+    const entry = metadata.obsm[key];
+    if (entry && !entry.loaded) {
+      loadEmbedding(key).then(() => setAxes({ obsmKey: key, xDim: 0, yDim: 1 }));
+    } else {
+      setAxes({ obsmKey: key, xDim: 0, yDim: 1 });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [metadata, axes, initialObsmKey]); // loadEmbedding is stable (useCallback)
 
   const handleSetAxes = async (newAxes: AxisState) => {
     const entry = metadata.obsm[newAxes.obsmKey];
