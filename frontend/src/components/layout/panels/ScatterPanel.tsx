@@ -413,22 +413,56 @@ function ScatterView({
     { wait: 16 },
   );
 
-  // ── Debounced brushSelection update ──────────────────────────────────────
+  // ── Live + debounced brushSelection update ────────────────────────────────
   // Visual feedback (point dimming, status bar count) stays immediate.
-  // The expensive Mosaic SQL query is debounced: fires 200ms after drawing stops.
-  const brushDebouncer = useDebouncer(
-    async (rowIds: number[]) => {
-      const predicate =
-        rowIds.length >= 5000
-          ? await syncLargeSelection(rowIds)
-          : buildSelectionPredicate(rowIds);
-
+  //
+  // Two-tier strategy matched to selection size:
+  //  • Small (<5000 rows): throttle at ~50ms = same rate as GPU readback.
+  //    Table updates live while drawing. Uses fast IN-list predicate.
+  //  • Large (≥5000 rows): debounce 200ms. Creates a temp DuckDB table —
+  //    too expensive to fire every 50ms. Wait for the user to pause.
+  //
+  // The debouncer also fires a trailing accurate update for small selections
+  // (usually a no-op since the throttler already set the same predicate).
+  const brushThrottler = useThrottler(
+    (rowIds: number[]) => {
+      if (rowIds.length === 0 || rowIds.length >= 5000) return;
+      const predicate = buildSelectionPredicate(rowIds);
       brushSelection.update({
         source: scatterSourceRef.current,
         clients: new Set(),
         value: rowIds,
         predicate: predicate ? verbatim(predicate) : null,
       });
+    },
+    {
+      wait: 50,       // matches GPU readback gate (~20 fps)
+      leading: true,  // fire immediately on first readback
+      trailing: true, // one final update when drawing stops
+    },
+  );
+
+  const brushDebouncer = useDebouncer(
+    async (rowIds: number[]) => {
+      if (rowIds.length < 5000) {
+        // Small: throttler already updated live; ensure final predicate is accurate.
+        const predicate = buildSelectionPredicate(rowIds);
+        brushSelection.update({
+          source: scatterSourceRef.current,
+          clients: new Set(),
+          value: rowIds,
+          predicate: predicate ? verbatim(predicate) : null,
+        });
+      } else {
+        // Large: expensive temp-table sync — only run after drawing stops.
+        const predicate = await syncLargeSelection(rowIds);
+        brushSelection.update({
+          source: scatterSourceRef.current,
+          clients: new Set(),
+          value: rowIds,
+          predicate: predicate ? verbatim(predicate) : null,
+        });
+      }
     },
     {
       wait: 200,
@@ -453,7 +487,8 @@ function ScatterView({
     setSelection(rowIds.length > 0 ? rowIds.length : null);  // status bar — immediate
 
     if (rowIds.length === 0) {
-      // Clear is time-sensitive — cancel debounce and update right away
+      // Clear is time-sensitive — cancel both and update right away
+      brushThrottler.cancel();
       brushDebouncer.cancel();
       brushSelection.update({
         source: scatterSourceRef.current,
@@ -463,7 +498,8 @@ function ScatterView({
       });
       clearSelectionSync();
     } else {
-      brushDebouncer.maybeExecute(rowIds);  // table update — debounced 200ms
+      brushThrottler.maybeExecute(rowIds);  // live update for small selections (~50ms)
+      brushDebouncer.maybeExecute(rowIds);  // debounced final + large selections (200ms)
       broadcastSelection(myPanelId, rowIds);
     }
   };
