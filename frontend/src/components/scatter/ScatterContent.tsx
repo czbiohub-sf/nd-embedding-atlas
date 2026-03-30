@@ -17,6 +17,7 @@ import type { PanelId } from "../../scatter-gpu/types";
 import { selectionSyncStore } from "../../providers/SelectionSyncStore";
 import { useScatterBrushSync } from "../../scatter-gpu/hooks/useScatterBrushSync";
 import { useIsolationBridge } from "../../scatter-gpu/hooks/useIsolationBridge";
+import type { IsolationCapability } from "../../scatter-gpu/handle-capabilities";
 import { useTrajectoryLoader } from "../../scatter-gpu/hooks/useTrajectoryLoader";
 import { viewSyncStore, broadcastViewState } from "../../providers/ViewSyncStore";
 import { broadcastPanelState, clearPanelState } from "../../providers/PanelStateStore";
@@ -116,10 +117,7 @@ export function ScatterContent({
 
   // ── Isolation → Mosaic cross-filter + GPU alpha dimming ───────────────────
   // Both refs are synced by ScatterView after its GPU host and data are ready.
-  const isolationHandleRef = useRef<{
-    setCategoryIsolation(s: Set<number>, c: Uint8Array): void;
-    clearCategoryIsolation(): void;
-  } | null>(null);
+  const isolationHandleRef = useRef<IsolationCapability | null>(null);
   const categoryIndicesRef = useRef<Uint8Array | null>(null);
   const fitViewRef = useRef<(() => void) | null>(null);
   const { handleIsolationChange } = useIsolationBridge({

@@ -2,18 +2,13 @@ import { useCallback, useRef } from "react";
 import type { RefObject } from "react";
 import type { CategoryMapping } from "../../lib/category-column";
 import { setBrushPredicate } from "../../providers/BrushPredicateStore";
-
-/** Minimal GPU handle surface needed for category isolation dimming. */
-interface IsolationHandle {
-  setCategoryIsolation(isolatedSet: Set<number>, categoryIndices: Uint8Array): void;
-  clearCategoryIsolation(): void;
-}
+import type { IsolationCapability } from "../handle-capabilities";
 
 interface UseIsolationBridgeOptions {
   coloredCategoryMapping: CategoryMapping | null;
   colorByColumn: string | null;
   /** Ref to the GPU host — used to drive visual alpha-dimming on isolation. */
-  scatterRef: RefObject<IsolationHandle | null>;
+  scatterRef: { readonly current: IsolationCapability | null };
   /** Ref to per-point category palette indices — synced by ScatterView after data loads. */
   categoryIndicesRef: RefObject<Uint8Array | null>;
 }

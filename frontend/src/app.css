@@ -53,6 +53,15 @@
 
   /* ── Layout ── */
   --footer-height: 1.5rem;
+
+  /* ── Z-index layer system ── */
+  --z-canvas:  10;
+  --z-hud:     20;
+  --z-panel:   30;
+  --z-float:   100;
+  --z-popover: 200;
+  --z-modal:   300;
+  --z-toast:   400;
 }
 
 /* ── Dark mode overrides ──────────────────────────────────────────────
