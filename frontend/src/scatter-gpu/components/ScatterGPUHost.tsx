@@ -15,6 +15,8 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from 
 import { createScatterplot } from "../gpu/orchestrator";
 import type { ScatterData, ScatterplotConfig, ScatterplotHandle } from "../types";
 import type { ScatterGPUHostHandle } from "../handle-capabilities";
+import type { PanelId } from "../../lib/branded-types";
+import { selectionLayerStore, initPanelLayerState, clearPanelLayerState } from "../../providers/SelectionLayerStore";
 
 export type { ScatterGPUHostHandle } from "../handle-capabilities";
 
@@ -34,10 +36,12 @@ interface ScatterGPUHostProps {
   config: ScatterplotConfig;
   onGpuError(msg: string): void;
   onRowIndicesChange(indices: number[]): void;
+  /** Panel identity for SelectionLayerStore registration. Optional to avoid breaking call sites. */
+  myPanelId?: PanelId;
 }
 
 export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostProps>(function ScatterGPUHost(
-  { data, positionKey, config, onGpuError, onRowIndicesChange },
+  { data, positionKey, config, onGpuError, onRowIndicesChange, myPanelId },
   ref,
 ) {
   const canvasElRef = useRef<HTMLCanvasElement | null>(null);
@@ -173,6 +177,23 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
       gpuRef.current = null;
     };
   }, []);
+
+  // Subscribe to SelectionLayerStore for this panel's slot.
+  // Must be in useEffect so subscription lifecycle matches component lifetime.
+  useEffect(() => {
+    if (!myPanelId) return;
+    initPanelLayerState(myPanelId);
+    const sub = selectionLayerStore.subscribe(() => {
+      const panelState = selectionLayerStore.state.get(myPanelId);
+      if (!panelState || !gpuRef.current) return;
+      // Phase 4 will add actual layer upload logic here.
+      // For now, this subscription is a no-op placeholder.
+    });
+    return () => {
+      sub.unsubscribe();
+      clearPanelLayerState(myPanelId);
+    };
+  }, [myPanelId]);
 
   // Expose imperative handle to parent
   useImperativeHandle(
