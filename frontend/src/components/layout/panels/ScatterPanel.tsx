@@ -1,12 +1,13 @@
 import type { IDockviewPanelProps } from "dockview-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useThrottler } from "@tanstack/react-pacer";
 import { ScatterGPUHost, type ScatterGPUHostHandle } from "../../../scatter-gpu/components/ScatterGPUHost";
 import type { ScatterplotConfig } from "../../../scatter-gpu/types";
 import { panelId } from "../../../scatter-gpu/types";
 import { selectionSyncStore } from "../../../providers/SelectionSyncStore";
-import { setBrushPredicate } from "../../../providers/BrushPredicateStore";
 import { useScatterBrushSync } from "../../../scatter-gpu/hooks/useScatterBrushSync";
+import { useIsolationBridge } from "../../../scatter-gpu/hooks/useIsolationBridge";
+import { useTrajectoryLoader } from "../../../scatter-gpu/hooks/useTrajectoryLoader";
 import { viewSyncStore, broadcastViewState } from "../../../providers/ViewSyncStore";
 import { useMosaicScatterData } from "../../../scatter-gpu/hooks/useMosaicScatterData";
 import type { ColorMode } from "../../../scatter-gpu/hooks/useMosaicScatterData";
@@ -21,9 +22,8 @@ import { useDashboard } from "../../../hooks/useDashboard";
 import { useScatterUIDispatch } from "../../../providers/ScatterUIStateProvider";
 import { useEmbeddingLoader } from "../../../hooks/useEmbeddingLoader";
 import { type CategoryMapping } from "../../../lib/category-column";
-import { toRows } from "../../../lib/mosaic-helpers";
 import { useScatterColorState } from "../../../scatter-gpu/hooks/useScatterColorState";
-import type { AxisState, TrajectoryFrame } from "../../../types";
+import type { AxisState } from "../../../types";
 import type { PanelId } from "../../../scatter-gpu/types";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -100,34 +100,7 @@ export function ScatterPanel(props: IDockviewPanelProps) {
   );
 
   // ── Isolation → Mosaic cross-filter (via BrushPredicateStore) ────────────
-  // Reads coloredCategoryMapping and colorByColumn via refs so this callback
-  // is stable (never recreated). This prevents the LegendContext useEffect
-  // from re-firing when only the callback reference changes — which would
-  // call setBrushPredicate(null) and cancel any pending lasso Mosaic update.
-  const isolationSourceRef = useRef<object>({});
-  const catMapRef = useRef(coloredCategoryMapping);
-  catMapRef.current = coloredCategoryMapping;
-  const colByColRef = useRef(colorByColumn);
-  colByColRef.current = colorByColumn;
-
-  const handleIsolationChange = useCallback((isolatedIndices: Set<number>) => {
-    const source = isolationSourceRef.current;
-    const catMap = catMapRef.current;
-    const col = colByColRef.current;
-    if (isolatedIndices.size === 0 || !catMap || !col) {
-      setBrushPredicate(source, null);
-      return;
-    }
-    const labels = catMap.legend
-      .filter((item) => isolatedIndices.has(item.index))
-      .map((item) => `'${item.label.replace(/'/g, "''")}'`);
-    if (labels.length === 0) {
-      setBrushPredicate(source, null);
-      return;
-    }
-    setBrushPredicate(source, `${col} IN (${labels.join(", ")})`);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // stable — reads catMap/col via refs, never recreated
+  const { handleIsolationChange } = useIsolationBridge({ coloredCategoryMapping, colorByColumn });
 
   // ── Derive rendering state ─────────────────────────────────────────────────
   const obsmKeys = axes ? Object.keys(metadata.obsm) : [];
@@ -402,35 +375,14 @@ function ScatterView({
     setEmbedding(axes?.obsmKey ?? null);
   }, [axes, actions, setEmbedding]);
 
-  const showTrajectory = useCallback(
-    async (trackId: number, fovName: string, clickedT?: number) => {
-      const spatialX = metadata.spatial?.x_col ?? "x";
-      const spatialY = metadata.spatial?.y_col ?? "y";
-      const catSelect = categoryCol ? `, ${categoryCol} AS category` : "";
-      const safeFovName = String(fovName).replace(/'/g, "''");
-      const safeTrackId = Number.isFinite(trackId) ? trackId : 0;
-      const sql = `SELECT ${xCol} AS emb_x, ${yCol} AS emb_y, ${spatialX} AS spatial_x, ${spatialY} AS spatial_y, t${catSelect} FROM ${table} WHERE track_id = ${safeTrackId} AND fov_name = '${safeFovName}' ORDER BY t ASC`;
-      const result = await coordinator.query(sql, { type: "json" });
-      const rows = toRows<TrajectoryFrame>(result);
-      if (rows.length > 0) {
-        const initialT =
-          clickedT != null && rows.some((r) => r.t === clickedT) ? clickedT : rows[0].t;
-        actions.setTrajectory({
-          trackId,
-          fovName,
-          tIndex: initialT,
-          points: rows,
-        });
-      }
-    },
-    [coordinator, table, xCol, yCol, categoryCol, actions, metadata.spatial],
-  );
-
-  const activeIndex = useMemo(() => {
-    if (!trajectory) return null;
-    const idx = trajectory.points.findIndex((p) => p.t === trajectory.tIndex);
-    return idx >= 0 ? idx : null;
-  }, [trajectory]);
+  const { showTrajectory, activeIndex } = useTrajectoryLoader({
+    coordinator,
+    table,
+    xCol,
+    yCol,
+    categoryCol,
+    metadata,
+  });
 
   // ── Render ────────────────────────────────────────────────────────────────
   const showLoading = isLoading || dataLoading;
