@@ -31,7 +31,7 @@ export function FloatingWindow({ handle, title, children, className, extraTitleA
   return (
     <div
       className={cn(
-        "fixed z-[100] flex flex-col overflow-hidden",
+        "fixed z-float flex flex-col overflow-hidden",
         "rounded-xl border border-white/10 shadow-2xl shadow-black/60",
         "bg-card/90 backdrop-blur-xl",
         className,

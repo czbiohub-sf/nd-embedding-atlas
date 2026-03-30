@@ -69,6 +69,11 @@ export interface InteractionConfig {
   marquee?: boolean;
 }
 
+/**
+ * Low-level GPU scatterplot handle — returned by createScatterplot().
+ * For the React-layer imperative handle exposed via forwardRef, see:
+ * scatter-gpu/handle-capabilities.ts → ScatterGPUHostHandle
+ */
 export interface ScatterplotHandle {
   resize(width: number, height: number): void;
   destroy(): void;
