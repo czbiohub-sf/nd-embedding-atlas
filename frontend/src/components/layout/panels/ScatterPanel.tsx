@@ -1,6 +1,5 @@
 import type { IDockviewPanelProps } from "dockview-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useColormapList, useColormapPalette } from "../../../hooks/useColormaps";
 import { useDebouncer, useThrottler } from "@tanstack/react-pacer";
 import { verbatim } from "@uwdata/mosaic-sql";
 import { ScatterGPUHost, type ScatterGPUHostHandle } from "../../../scatter-gpu/components/ScatterGPUHost";
@@ -21,10 +20,9 @@ import { ScatterControlStrip } from "../../scatter/ScatterControlStrip";
 import { useDashboard } from "../../../hooks/useDashboard";
 import { useScatterUIDispatch } from "../../../providers/ScatterUIStateProvider";
 import { useEmbeddingLoader } from "../../../hooks/useEmbeddingLoader";
-import { useColumnTypes } from "../../../hooks/useColumnTypes";
-import { makeCategoryColumn, type CategoryMapping } from "../../../lib/category-column";
-import { resolveColorMode } from "../../../hooks/useColorMode";
+import { type CategoryMapping } from "../../../lib/category-column";
 import { toRows } from "../../../lib/mosaic-helpers";
+import { useScatterColorState } from "../../../scatter-gpu/hooks/useScatterColorState";
 import type { AxisState, TrajectoryFrame } from "../../../types";
 import type { PanelId } from "../../../scatter-gpu/types";
 
@@ -98,36 +96,16 @@ export function ScatterPanel(props: IDockviewPanelProps) {
   // ── Selection tool state ───────────────────────────────────────────────────
   const [selectionTool, setSelectionTool] = useState<'pan' | 'marquee' | 'lasso'>('pan');
 
-  // ── Color-by state ─────────────────────────────────────────────────────────
-  const [colorByColumn, setColorByColumn] = useState<string | null>(null);
-  const obsColumns = useMemo(() => metadata.obs_columns ?? [], [metadata.obs_columns]);
-
-  // ── Color mode (categorical vs continuous) ─────────────────────────────────
-  const columnTypes = useColumnTypes(coordinator);
-  const [colorModeOverride, setColorModeOverride] = useState<ColorMode | undefined>(undefined);
-
-  // Reset override when color column changes
-  useEffect(() => {
-    setColorModeOverride(undefined);
-  }, [colorByColumn]);
-
-  const colorModeInfo = useMemo(
-    () => resolveColorMode(colorByColumn, columnTypes, colorModeOverride),
-    [colorByColumn, columnTypes, colorModeOverride],
-  );
-  const colorMode: ColorMode = colorModeInfo.mode;
-
-  // ── Categorical palette state ──────────────────────────────────────────────
-  const [categoricalColormap, setCategoricalColormap] = useState("glasbey");
-  const [continuousColormap, setContinuousColormap] = useState("viridis");
-  const [maxCategories, setMaxCategories] = useState(64);
-  // Colormap lists + palette — cached via TanStack Query (no repeated fetches)
-  const colormapListQuery = useColormapList();
-  const categoricalColormaps = colormapListQuery.data?.categorical ?? [];
-  const continuousColormaps = colormapListQuery.data?.continuous ?? [];
-
-  const paletteQuery = useColormapPalette(categoricalColormap, maxCategories);
-  const palette = paletteQuery.data ?? [];
+  // ── Color state ────────────────────────────────────────────────────────────
+  const {
+    colorByColumn, setColorByColumn, obsColumns,
+    colorMode, setColorModeOverride, colorModeInfo,
+    categoricalColormap, setCategoricalColormap,
+    continuousColormap, setContinuousColormap,
+    maxCategories, setMaxCategories,
+    categoricalColormaps, continuousColormaps,
+    categoryLoading, coloredCategoryMapping, categoryCol,
+  } = useScatterColorState(coordinator, metadata);
 
   const additionalFields = useMemo(
     () =>
@@ -138,63 +116,6 @@ export function ScatterPanel(props: IDockviewPanelProps) {
       ),
     [obsColumns],
   );
-
-  // ── Category column mapping ────────────────────────────────────────────────
-  const [categoryMapping, setCategoryMapping] = useState<CategoryMapping | null>(null);
-  const [categoryLoading, setCategoryLoading] = useState(false);
-
-  useEffect(() => {
-    if (!colorByColumn || colorMode !== "categorical") {
-      setCategoryMapping(null);
-      return;
-    }
-    let cancelled = false;
-    setCategoryLoading(true);
-
-    const run = async () => {
-      const countResult = await coordinator.query(
-        `SELECT COUNT(DISTINCT CAST("${colorByColumn}" AS TEXT))::INT AS n FROM obs_base`,
-        { type: "json" },
-      );
-      if (cancelled) return;
-      const n = Math.min(toRows<{ n: number }>(countResult)[0]?.n ?? 64, 256);
-      setMaxCategories(n);
-
-      const mapping = await makeCategoryColumn(coordinator, colorByColumn, n);
-      if (!cancelled) {
-        setCategoryMapping(mapping);
-        setCategoryLoading(false);
-      }
-    };
-
-    run().catch((err) => {
-      console.error("Failed to create category column:", err);
-      if (!cancelled) {
-        setCategoryMapping(null);
-        setCategoryLoading(false);
-      }
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [coordinator, colorByColumn, colorMode]);
-
-  // Re-apply palette to existing mapping without touching DuckDB.
-  // Return null (not categoryMapping) when palette isn't loaded yet — empty
-  // color strings would propagate to the GPU and never trigger a re-color.
-  const coloredCategoryMapping = useMemo(() => {
-    if (!categoryMapping || palette.length === 0) return null;
-    return {
-      ...categoryMapping,
-      legend: categoryMapping.legend.map((item) => ({
-        ...item,
-        color: palette[item.index % palette.length],
-      })),
-    };
-  }, [categoryMapping, palette]);
-
-  const categoryCol = coloredCategoryMapping?.indexColumn ?? null;
 
   // ── Isolation → Mosaic cross-filter (via BrushPredicateStore) ────────────
   // Reads coloredCategoryMapping and colorByColumn via refs so this callback
