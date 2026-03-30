@@ -5,6 +5,7 @@ import { type ReactNode, useCallback, useEffect, useMemo, useReducer, useRef, us
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useColumnTypes } from "../hooks/useColumnTypes";
 import { generateDefaultPanels } from "../lib/chart-spec";
+import { MetadataSchema } from "../lib/schemas";
 import type { ChartPanelEntry, ChartSpec, Metadata, TrajectoryData } from "../types";
 import { DashboardContext, type DashboardState } from "./DashboardContext";
 import { scatterKeys } from "../scatter-gpu/hooks/queryKeys";
@@ -77,7 +78,7 @@ export function DashboardProvider({ children }: Props) {
     const queryClient = useQueryClient();
     const metadataQuery = useQuery<Metadata>({
         queryKey: scatterKeys.metadata(),
-        queryFn: () => fetch("/data/metadata.json").then((r) => r.json()),
+        queryFn: () => fetch("/data/metadata.json").then((r) => r.json()).then((d) => MetadataSchema.parse(d)),
         staleTime: Infinity,
         gcTime: Infinity,
     });
@@ -145,10 +146,28 @@ export function DashboardProvider({ children }: Props) {
 
     const contextValue = useMemo(() => (state ? { state, actions, meta } : null), [state, actions, meta]);
 
-    // Don't render until metadata is ready
-    if (!contextValue) {
+    if (metadataQuery.isError) {
+        return (
+            <div className="flex h-full flex-col items-center justify-center gap-3 bg-surface-primary text-sm text-text-secondary">
+                <p className="text-red-400">
+                    Failed to load metadata:{" "}
+                    {metadataQuery.error instanceof Error ? metadataQuery.error.message : String(metadataQuery.error)}
+                </p>
+                <button
+                    className="rounded bg-surface-secondary px-3 py-1.5 text-xs hover:bg-surface-tertiary"
+                    onClick={() => metadataQuery.refetch()}
+                >
+                    Retry
+                </button>
+            </div>
+        );
+    }
+
+    if (metadataQuery.isPending) {
         return <div className="flex h-full items-center justify-center text-sm text-text-secondary">Loading...</div>;
     }
+
+    if (!contextValue) return null;
 
     return <DashboardContext value={contextValue}>{children}</DashboardContext>;
 }

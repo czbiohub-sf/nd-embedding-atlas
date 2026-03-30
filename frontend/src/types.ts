@@ -1,3 +1,5 @@
+export type { Metadata, ObsInfo } from "./lib/schemas";
+
 /** Pan/zoom state for a scatter view. */
 export interface ViewState {
   panX: number;
@@ -9,44 +11,6 @@ export interface ObsmEntry {
     prefix: string;
     n_dims: number | null;
     loaded: boolean;
-}
-
-export interface Metadata {
-    version: string;
-    props: {
-        data: {
-            id: string;
-            projection: { x: string; y: string };
-        };
-    };
-    database: { type: string; uri?: string };
-    obsm: Record<string, ObsmEntry>;
-    obs_columns?: string[];
-    export_dir?: string;
-    spatial?: {
-        fov_col: string | null;
-        t_col: string | null;
-        bbox_col: string | null;
-        x_col: string | null;
-        y_col: string | null;
-    };
-    plate?: boolean;
-    plate_ome_version?: "0.4" | "0.5";
-    plate_pixel_scale?: { x: number; y: number };
-    plate_channels?: Array<{
-        label: string;
-        color: string;
-        window: { start: number; end: number; min: number; max: number };
-    }>;
-    plate_stores?: Array<{
-        mount: string;
-        name: string;
-        ome_version: "0.4" | "0.5";
-    }>;
-    /** Data shape [T, C, Z, Y, X] of the first FOV. */
-    plate_shape?: number[];
-    /** Voxel scale per axis (e.g. { z: 1.0, y: 0.1494, x: 0.1494 }). */
-    plate_scale?: Record<string, number>;
 }
 
 export interface AxisState {
@@ -116,14 +80,4 @@ export interface ObsBbox {
     x_min: number;
     y_max: number;
     x_max: number;
-}
-
-export interface ObsInfo {
-    fov_name: string;
-    t: number;
-    x: number;
-    /** Index into plate_stores array (ndimg multi-store mode). */
-    store_index?: number;
-    y: number;
-    bbox?: ObsBbox;
 }

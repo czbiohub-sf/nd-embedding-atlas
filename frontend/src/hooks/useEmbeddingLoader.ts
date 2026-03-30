@@ -1,12 +1,13 @@
 import { useCallback, useRef, useState } from "react";
+import { EmbeddingStatusSchema } from "../lib/schemas";
 import type { Metadata } from "../types";
 
 async function pollUntilReady(key: string, signal: AbortSignal): Promise<void> {
     for (;;) {
         const res = await fetch(`/api/embeddings/${key}/status`, { signal });
-        const { status } = await res.json();
-        if (status === "ready") return;
-        if (status === "error") {
+        const parsed = EmbeddingStatusSchema.parse(await res.json());
+        if (parsed.status === "ready") return;
+        if (parsed.status === "error") {
             const msg = `Failed to load embedding ${key}`;
             throw new Error(msg);
         }

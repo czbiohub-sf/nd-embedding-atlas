@@ -1,13 +1,12 @@
 import { vec3 } from "gl-matrix";
 import { useCallback, useEffect } from "react";
-import useSWR from "swr";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useBboxLayer } from "../../hooks/useBboxLayer";
 import { useDashboard } from "../../hooks/useDashboard";
 import { useFovLoader } from "../../hooks/useFovLoader";
 import { useViewer } from "../../hooks/useViewer";
-import { jsonFetcher } from "../../lib/fetcher";
+import { ObsInfoSchema } from "../../lib/schemas";
 import type { OrbitControls } from "../../lib/OrbitControls";
-import type { ObsInfo } from "../../types";
 
 /** Fixed camera view radius in pixels (independent of crop slider). */
 const CAMERA_VIEW_HALF = 150;
@@ -22,8 +21,15 @@ export function SingleCropViewer({ cropSize }: Props) {
     const { highlightId, metadata } = dashState;
 
     // ── Fetch obs info ────────────────────────────────────────────────
-    const { data: obsInfo } = useSWR<ObsInfo>(highlightId ? `/api/obs/${highlightId}` : null, jsonFetcher, {
-        keepPreviousData: true,
+    const { data: obsInfo } = useQuery({
+        queryKey: ["obs", highlightId],
+        queryFn: async () => {
+            const r = await fetch(`/api/obs/${highlightId}`);
+            return ObsInfoSchema.parse(await r.json());
+        },
+        enabled: !!highlightId,
+        placeholderData: keepPreviousData,
+        staleTime: 10_000,
     });
 
     // ── Derive source URL and OME version ────────────────────────────
