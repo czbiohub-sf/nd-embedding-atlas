@@ -5,6 +5,7 @@ import { MAX_POLYGON_VERTS } from "../constants";
 import { simplifyPath } from "../utils/geometry";
 import type { TgpuRoot } from "../types";
 import type { ScatterBuffers, ScatterUniforms } from "./buffers";
+import { type CompositorEngine, LAYER_LASSO, LAYER_ISOLATION } from "./compositor";
 
 const DEBUG_SELECTION = typeof location !== "undefined" && new URLSearchParams(location.search).has("debug-selection");
 
@@ -16,8 +17,8 @@ export function createSelectionEngine(
   numPoints: number,
   onSelectionChange: (count: number | null, indices?: number[]) => void,
   wgSize: 64 | 256 = 64,
+  compositor: CompositorEngine,
 ) {
-  const { selectionModeUniform } = uniforms;
   const { posBuffer, selectedBuffer } = buffers;
 
   const stagingBuffer = device.createBuffer({
@@ -29,9 +30,12 @@ export function createSelectionEngine(
   const polygonBuffer = root.createBuffer(d.arrayOf(d.vec2f, MAX_POLYGON_VERTS)).$usage("storage");
   const polygonCountUniform = root.createUniform(d.u32, 0);
 
-  const pointsReadonly = posBuffer.as("readonly");
+  const pointsReadonly  = posBuffer.as("readonly");
   const selectedMutable = selectedBuffer.as("mutable");
   const polygonReadonly = polygonBuffer.as("readonly");
+
+  // Buffer view into the compositor's lasso layer
+  const lassoMutable = compositor.lassoBuffer.as("mutable");
 
   // ── PIP kernel ─────────────────────────────────────────────────────────
   const PIP_BATCH = [0, 1] as const;
@@ -67,13 +71,13 @@ export function createSelectionEngine(
       if (idx < numPoints) {
         const pt = pointsReadonly.value[idx];
         if (pipTest(pt, numVerts)) {
-          selectedMutable.value[idx] = 1;
+          lassoMutable.value[idx] = 1;
         } else {
-          selectedMutable.value[idx] = 0;
+          lassoMutable.value[idx] = 0;
         }
       }
     }
-  }).$uses({ pointsReadonly, selectedMutable, polygonCountUniform, pipTest });
+  }).$uses({ pointsReadonly, lassoMutable, polygonCountUniform, pipTest });
 
   const pipPipeline = root["~unstable"].withCompute(pipComputeFn).createPipeline();
   const workgroups = Math.ceil(numPoints / (wgSize * PIP_BATCH.length));
@@ -94,13 +98,13 @@ export function createSelectionEngine(
       if (idx < numPoints) {
         const pt = pointsReadonly.value[idx];
         if (pt.x >= r.x && pt.x <= r.z && pt.y >= r.y && pt.y <= r.w) {
-          selectedMutable.value[idx] = 1;
+          lassoMutable.value[idx] = 1;
         } else {
-          selectedMutable.value[idx] = 0;
+          lassoMutable.value[idx] = 0;
         }
       }
     }
-  }).$uses({ pointsReadonly, selectedMutable, marqueeUniform });
+  }).$uses({ pointsReadonly, lassoMutable, marqueeUniform });
 
   const aabbPipeline = root["~unstable"].withCompute(aabbComputeFn).createPipeline();
 
@@ -149,7 +153,7 @@ export function createSelectionEngine(
     polygonBuffer.write(polyData);
     polygonCountUniform.write(vertCount);
     pipPipeline.dispatchWorkgroups(workgroups);
-    selectionModeUniform.write(1);
+    compositor.markDirty(LAYER_LASSO, true);
     debugLogSelection();
     if (readback) readbackSelectionCount();
   }
@@ -157,7 +161,7 @@ export function createSelectionEngine(
   function runMarqueeSelection(rect: { xMin: number; yMin: number; xMax: number; yMax: number }, readback = true) {
     marqueeUniform.write(d.vec4f(rect.xMin, rect.yMin, rect.xMax, rect.yMax));
     aabbPipeline.dispatchWorkgroups(workgroups);
-    selectionModeUniform.write(1);
+    compositor.markDirty(LAYER_LASSO, true);
     debugLogSelection();
     if (readback) readbackSelectionCount();
   }
@@ -191,7 +195,7 @@ export function createSelectionEngine(
     encoder.clearBuffer(rawBuf);
     device.queue.submit([encoder.finish()]);
     device.queue.writeBuffer(rawBuf, index * 4, new Uint32Array([1]));
-    selectionModeUniform.write(1);
+    uniforms.selectionModeUniform.write(1);
     onSelectionChange(1, [index]);
   }
 
@@ -205,13 +209,13 @@ export function createSelectionEngine(
       if (idx >= 0 && idx < numPoints) externalSelectionMask[idx] = 1;
     }
     device.queue.writeBuffer(root.unwrap(selectedBuffer), 0, externalSelectionMask);
-    selectionModeUniform.write(pointIndices.length > 0 ? 1 : 0);
+    uniforms.selectionModeUniform.write(pointIndices.length > 0 ? 1 : 0);
   }
 
   function clearSelectionExternal() {
     externalSelectionMask.fill(0);
     device.queue.writeBuffer(root.unwrap(selectedBuffer), 0, externalSelectionMask);
-    selectionModeUniform.write(0);
+    uniforms.selectionModeUniform.write(0);
     // Do NOT call onSelectionChange here — that path calls clearSelectionSync,
     // which notifies other panels, which call clearExternalSelection, which loops.
     // Status bar is updated via the separate onExternalClear callback in orchestrator.
@@ -250,10 +254,14 @@ export function createSelectionEngine(
   function setIsolationMask(mask: Uint32Array | null) {
     isolationMask = mask;
     if (mask) {
-      device.queue.writeBuffer(root.unwrap(selectedBuffer), 0, mask);
-      selectionModeUniform.write(1);
+      device.queue.writeBuffer(root.unwrap(compositor.isolationBuffer), 0, mask);
+      compositor.markDirty(LAYER_ISOLATION, true);
     } else {
-      selectionModeUniform.write(0);
+      // Clear the isolation buffer and mark the layer inactive
+      const encoder = device.createCommandEncoder();
+      encoder.clearBuffer(root.unwrap(compositor.isolationBuffer));
+      device.queue.submit([encoder.finish()]);
+      compositor.markDirty(LAYER_ISOLATION, false);
     }
   }
 
@@ -262,14 +270,12 @@ export function createSelectionEngine(
     runMarqueeSelection,
     selectPoint,
     clearSelection() {
-      // Restore category isolation mask if one is active so that a lasso
-      // double-click clear doesn't wipe the legend isolation state.
-      if (isolationMask) {
-        device.queue.writeBuffer(root.unwrap(selectedBuffer), 0, isolationMask);
-        selectionModeUniform.write(1);
-      } else {
-        selectionModeUniform.write(0);
-      }
+      // Zero the lasso layer and mark it inactive. If isolation is active,
+      // the compositor will keep it visible via the isolation tier.
+      const encoder = device.createCommandEncoder();
+      encoder.clearBuffer(root.unwrap(compositor.lassoBuffer));
+      device.queue.submit([encoder.finish()]);
+      compositor.markDirty(LAYER_LASSO, false);
       onSelectionChange(null);
     },
     setSelectedPoints,
@@ -280,6 +286,7 @@ export function createSelectionEngine(
     debugLogSelection,
     pipComputeFn,
     aabbComputeFn,
+    get isolationMask() { return isolationMask; },
     destroy() {
       stagingBuffer.destroy();
     },

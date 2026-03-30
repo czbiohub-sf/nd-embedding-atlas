@@ -4,6 +4,7 @@ import { createInteractionController } from "../hooks/useScatterInteraction";
 import type { ScatterData, ScatterplotConfig, ScatterplotHandle } from "../types";
 import type { ViewState } from "../../types";
 import { createBuffers, createUniforms, uploadData } from "./buffers";
+import { createCompositor } from "./compositor";
 import { createCullingEngine } from "./culling";
 import { acquireDevice, releaseDevice } from "./device-manager";
 import { initGPU } from "./init";
@@ -42,6 +43,8 @@ export async function createScatterplot(
 
   const culling = createCullingEngine(root, device, buffers, uniforms, data.numCells, preferredWorkgroupSize);
 
+  const compositor = createCompositor(root, device, buffers, uniforms, data.numCells, preferredWorkgroupSize);
+
   // Default to transparent — let the CSS background-color of the container
   // show through. This makes the scatter canvas respond to dark/light theme
   // without requiring GPU re-initialization.
@@ -70,6 +73,7 @@ export async function createScatterplot(
       config?.callbacks?.onSelectionChange?.(count, indices);
     },
     preferredWorkgroupSize,
+    compositor,
   );
   const tPipelines = performance.now();
   console.log(`Pipeline setup: ${(tPipelines - tUpload).toFixed(1)}ms`);
@@ -86,6 +90,7 @@ export async function createScatterplot(
       // Guard against 0-size canvas (hidden/collapsed Dockview panel)
       if (canvas.width === 0 || canvas.height === 0) return;
       culling.dispatchCulling(viewVersion);
+      compositor.dispatchIfDirty();
       render(context, data.numCells, "clear");
     },
     {
@@ -159,6 +164,8 @@ export async function createScatterplot(
     console.log(tgpu.resolve([mainVertex, mainFragment]));
     console.log("=== PIP Compute WGSL ===");
     console.log(tgpu.resolve([selection.pipComputeFn]));
+    console.log("=== Compositor Compute WGSL ===");
+    console.log(tgpu.resolve([compositor.compositorFn]));
     console.log("=== Culling Compute WGSL ===");
     console.log(tgpu.resolve([culling.cullComputeFn]));
   }
@@ -263,6 +270,7 @@ export async function createScatterplot(
     destroy() {
       interaction.destroy();
       selection.destroy();
+      compositor.destroy();
       culling.destroy();
       root.destroy();
       releaseDevice();
