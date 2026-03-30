@@ -12,6 +12,7 @@ import { useTheme } from "../../providers/ThemeProvider";
 
 import { ChartGroupPanel } from "./panels/ChartGroupPanel";
 import { ImageViewerPanel } from "./panels/ImageViewerPanel";
+import { PanelErrorBoundary } from "./PanelErrorBoundary";
 import { ScatterPanel } from "./panels/ScatterPanel";
 import { TablePanel } from "./panels/TablePanel";
 
@@ -76,11 +77,27 @@ function RightHeaderActions({ api, containerApi }: IDockviewHeaderActionsProps) 
 
 // ── Panel component registry ─────────────────────────────────────────────
 const COMPONENTS = {
-    scatter: ScatterPanel,
-    table: TablePanel,
-    "image-viewer": ImageViewerPanel,
-    charts: ChartGroupPanel,
-} as const;
+    scatter: (props: Parameters<typeof ScatterPanel>[0]) => (
+        <PanelErrorBoundary panelName="Scatter">
+            <ScatterPanel {...props} />
+        </PanelErrorBoundary>
+    ),
+    table: (props: Parameters<typeof TablePanel>[0]) => (
+        <PanelErrorBoundary panelName="Table">
+            <TablePanel {...props} />
+        </PanelErrorBoundary>
+    ),
+    "image-viewer": (props: Parameters<typeof ImageViewerPanel>[0]) => (
+        <PanelErrorBoundary panelName="Image Viewer">
+            <ImageViewerPanel {...props} />
+        </PanelErrorBoundary>
+    ),
+    charts: (props: Parameters<typeof ChartGroupPanel>[0]) => (
+        <PanelErrorBoundary panelName="Charts">
+            <ChartGroupPanel {...props} />
+        </PanelErrorBoundary>
+    ),
+};
 
 const STORAGE_KEY = "ndea_layout_v2"; // v2: table removed from Dockview (now TerminalTable ⌘J)
 
