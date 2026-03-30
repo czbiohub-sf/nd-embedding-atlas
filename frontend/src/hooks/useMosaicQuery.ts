@@ -13,7 +13,8 @@
  * the current brushPredicateStore.version as a cache-key dep so the query
  * automatically re-runs when the cross-filter predicate changes.
  */
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import type { UseQueryResult } from "@tanstack/react-query";
 import { useStore } from "@tanstack/react-store";
 import type { Coordinator } from "@uwdata/mosaic-core";
 import type { FilterExpr } from "@uwdata/mosaic-sql";
@@ -26,16 +27,25 @@ export function useMosaicQuery<T>(
   coordinator: Coordinator,
   sql: string | null,
   transform: (result: unknown) => T,
-  opts: { enabled?: boolean; staleTime?: number } = {},
-) {
+  opts?: {
+    enabled?: boolean;
+    staleTime?: number;
+    resultType?: "json" | "arrow";
+    queryKeyExtra?: readonly unknown[];
+  },
+): UseQueryResult<T> {
   return useQuery<T>({
-    queryKey: ["mosaic", sql],
+    queryKey: ["mosaic", coordinator, sql, ...(opts?.queryKeyExtra ?? [])],
     queryFn: async () => {
-      const result = await coordinator.query(sql!, { type: "json" });
+      const result =
+        opts?.resultType === "arrow"
+          ? await coordinator.query(sql!, { type: "arrow" })
+          : await coordinator.query(sql!, { type: "json" });
       return transform(result);
     },
-    enabled: !!sql && opts.enabled !== false,
-    staleTime: opts.staleTime ?? 30_000,
+    enabled: !!sql && opts?.enabled !== false,
+    staleTime: opts?.staleTime ?? 30_000,
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -58,12 +68,13 @@ export function useMosaicSelectionQuery<T>(
   const sql = buildSql(predicateStr != null ? stringPredicate(predicateStr) : null);
 
   return useQuery<T>({
-    queryKey: [cacheKeyPrefix, version, sql],
+    queryKey: [cacheKeyPrefix, coordinator, version, sql],
     queryFn: async () => {
       const result = await coordinator.query(sql!, { type: "json" });
       return transform(result);
     },
     enabled: !!sql && opts.enabled !== false,
     staleTime: opts.staleTime ?? 30_000,
+    placeholderData: keepPreviousData,
   });
 }
