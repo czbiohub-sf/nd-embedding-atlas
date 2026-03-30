@@ -67,7 +67,6 @@ export async function createScatterplot(
     root,
     device,
     buffers,
-    uniforms,
     data.numCells,
     (count, indices) => {
       config?.callbacks?.onSelectionChange?.(count, indices);

@@ -4,7 +4,7 @@ import { computeFn } from "./tgpu-compat";
 import { MAX_POLYGON_VERTS } from "../constants";
 import { simplifyPath } from "../utils/geometry";
 import type { TgpuRoot } from "../types";
-import type { ScatterBuffers, ScatterUniforms } from "./buffers";
+import type { ScatterBuffers } from "./buffers";
 import { type CompositorEngine, LAYER_LASSO, LAYER_ISOLATION } from "./compositor";
 
 const DEBUG_SELECTION = typeof location !== "undefined" && new URLSearchParams(location.search).has("debug-selection");
@@ -13,7 +13,6 @@ export function createSelectionEngine(
   root: TgpuRoot,
   device: GPUDevice,
   buffers: ScatterBuffers,
-  uniforms: ScatterUniforms,
   numPoints: number,
   onSelectionChange: (count: number | null, indices?: number[]) => void,
   wgSize: 64 | 256 = 64,
@@ -195,7 +194,6 @@ export function createSelectionEngine(
     encoder.clearBuffer(rawBuf);
     device.queue.submit([encoder.finish()]);
     device.queue.writeBuffer(rawBuf, index * 4, new Uint32Array([1]));
-    uniforms.selectionModeUniform.write(1);
     onSelectionChange(1, [index]);
   }
 
@@ -209,22 +207,17 @@ export function createSelectionEngine(
       if (idx >= 0 && idx < numPoints) externalSelectionMask[idx] = 1;
     }
     device.queue.writeBuffer(root.unwrap(selectedBuffer), 0, externalSelectionMask);
-    uniforms.selectionModeUniform.write(pointIndices.length > 0 ? 1 : 0);
   }
 
   function clearSelectionExternal() {
     externalSelectionMask.fill(0);
     device.queue.writeBuffer(root.unwrap(selectedBuffer), 0, externalSelectionMask);
-    uniforms.selectionModeUniform.write(0);
     // Do NOT call onSelectionChange here — that path calls clearSelectionSync,
     // which notifies other panels, which call clearExternalSelection, which loops.
     // Status bar is updated via the separate onExternalClear callback in orchestrator.
   }
 
   // ── Category isolation ─────────────────────────────────────────────────
-  // Stored as a pre-built Uint32Array so clearSelection can restore it after
-  // a lasso double-click without recomputing from category data.
-  let isolationMask: Uint32Array | null = null;
 
   /**
    * Dim all points whose category index is NOT in `isolatedSet`.
@@ -252,7 +245,6 @@ export function createSelectionEngine(
    * Pass null to clear. Mask persists through lasso/marquee clear.
    */
   function setIsolationMask(mask: Uint32Array | null) {
-    isolationMask = mask;
     if (mask) {
       device.queue.writeBuffer(root.unwrap(compositor.isolationBuffer), 0, mask);
       compositor.markDirty(LAYER_ISOLATION, true);
@@ -286,7 +278,6 @@ export function createSelectionEngine(
     debugLogSelection,
     pipComputeFn,
     aabbComputeFn,
-    get isolationMask() { return isolationMask; },
     destroy() {
       stagingBuffer.destroy();
     },
