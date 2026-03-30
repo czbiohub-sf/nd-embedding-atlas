@@ -1,10 +1,9 @@
 import { useRef } from "react";
 import type { RefObject } from "react";
 import { useThrottler, useDebouncer } from "@tanstack/react-pacer";
-import { verbatim } from "@uwdata/mosaic-sql";
-import type { Selection } from "@uwdata/mosaic-core";
 import type { PanelId } from "../types";
 import { broadcastSelection, clearSelectionSync } from "../../providers/SelectionSyncStore";
+import { setActiveFilter, clearActiveFilter } from "../../providers/ActiveFilterStore";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -29,7 +28,6 @@ export function buildSelectionPredicate(rowIds: number[]): string | null {
 // ── Hook ──────────────────────────────────────────────────────────────────────
 
 export interface UseScatterBrushSyncOptions {
-  brushSelection: Selection;
   myPanelId: PanelId;
   rowIndicesRef: RefObject<number[]>;
   setSelection: (n: number | null) => void;
@@ -41,13 +39,13 @@ export interface UseScatterBrushSyncResult {
 }
 
 export function useScatterBrushSync({
-  brushSelection,
   myPanelId,
   rowIndicesRef,
   setSelection,
 }: UseScatterBrushSyncOptions): UseScatterBrushSyncResult {
-  // Stable source object for Mosaic's cross-filter source tracking
-  const scatterSourceRef = useRef<object>({});
+  // Stable ref to capture myPanelId for use inside throttler/debouncer callbacks
+  const panelIdRef = useRef<PanelId>(myPanelId);
+  panelIdRef.current = myPanelId;
 
   // ── Large-selection temp table sync ──────────────────────────────────────
   // For selections ≥ 5000 rows, populate a DuckDB temp table before updating
@@ -66,7 +64,7 @@ export function useScatterBrushSync({
     return `__row_index__ IN (SELECT row_index FROM __scatter_selection)`;
   };
 
-  // ── Live + debounced brushSelection update ────────────────────────────────
+  // ── Live + debounced activeFilterStore update ─────────────────────────────
   // Visual feedback (point dimming, status bar count) stays immediate.
   //
   // Two-tier strategy matched to selection size:
@@ -77,16 +75,15 @@ export function useScatterBrushSync({
   //
   // The debouncer also fires a trailing accurate update for small selections
   // (usually a no-op since the throttler already set the same predicate).
+  //
+  // NOTE: setActiveFilter / clearActiveFilter write to ActiveFilterStore.
+  // DashboardProvider is the SOLE caller of brushSelection.update() — it
+  // subscribes to this store and dispatches via requestAnimationFrame.
   const brushThrottler = useThrottler(
     (rowIds: number[]) => {
       if (rowIds.length === 0 || rowIds.length >= 5000) return;
       const predicate = buildSelectionPredicate(rowIds);
-      brushSelection.update({
-        source: scatterSourceRef.current,
-        clients: new Set(),
-        value: rowIds,
-        predicate: predicate ? verbatim(predicate) : null,
-      });
+      setActiveFilter(panelIdRef.current, predicate);
     },
     {
       wait: 50, // matches GPU readback gate (~20 fps)
@@ -100,21 +97,11 @@ export function useScatterBrushSync({
       if (rowIds.length < 5000) {
         // Small: throttler already updated live; ensure final predicate is accurate.
         const predicate = buildSelectionPredicate(rowIds);
-        brushSelection.update({
-          source: scatterSourceRef.current,
-          clients: new Set(),
-          value: rowIds,
-          predicate: predicate ? verbatim(predicate) : null,
-        });
+        setActiveFilter(panelIdRef.current, predicate);
       } else {
         // Large: expensive temp-table sync — only run after drawing stops.
         const predicate = await syncLargeSelection(rowIds);
-        brushSelection.update({
-          source: scatterSourceRef.current,
-          clients: new Set(),
-          value: rowIds,
-          predicate: predicate ? verbatim(predicate) : null,
-        });
+        setActiveFilter(panelIdRef.current, predicate);
       }
     },
     {
@@ -134,12 +121,7 @@ export function useScatterBrushSync({
       // Clear is time-sensitive — cancel both and update right away
       brushThrottler.cancel();
       brushDebouncer.cancel();
-      brushSelection.update({
-        source: scatterSourceRef.current,
-        clients: new Set(),
-        value: [],
-        predicate: null,
-      });
+      clearActiveFilter(myPanelId);
       clearSelectionSync(myPanelId);
     } else {
       brushThrottler.maybeExecute(rowIds); // live update for small selections (~50ms)

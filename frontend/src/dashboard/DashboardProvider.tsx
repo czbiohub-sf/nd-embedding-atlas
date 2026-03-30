@@ -1,5 +1,5 @@
 import { Coordinator, restConnector, Selection } from "@uwdata/mosaic-core";
-import { brushPredicateStore } from "../providers/BrushPredicateStore";
+import { activeFilterStore } from "../providers/ActiveFilterStore";
 import { stringPredicate } from "../lib/mosaic-helpers";
 import { type ReactNode, useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -53,20 +53,21 @@ export function DashboardProvider({ children }: Props) {
 
   const brushSelection = useMemo(() => Selection.crossfilter(), []);
 
-  // ── BrushPredicateStore → brushSelection bridge ────────────────────────
+  // ── ActiveFilterStore → brushSelection bridge ─────────────────────────
   // Subscribes to the Store and calls brushSelection.update() via
   // requestAnimationFrame, outside React's render cycle and outside any
   // active Mosaic AsyncDispatch cycle.  Components write to the Store
-  // (setBrushPredicate); this is the single place that actually updates Mosaic.
+  // (setActiveFilter / clearActiveFilter); this is the single place that
+  // actually updates Mosaic's brushSelection.
   useEffect(() => {
-    const sub = brushPredicateStore.subscribe(() => {
-      const { source, predicate, version } = brushPredicateStore.state;
+    const sub = activeFilterStore.subscribe(() => {
+      const { source, predicate, version } = activeFilterStore.state;
       if (version === 0) return; // skip initial state
       requestAnimationFrame(() => {
         brushSelection.update({
           source,
           clients: new Set(),
-          value: [],
+          value: predicate ? [predicate] : [],
           predicate: predicate ? stringPredicate(predicate) : null,
         });
       });

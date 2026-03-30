@@ -40,7 +40,7 @@ import { hexToRgbPalette } from "../../scatter-gpu/utils/colors";
 import { colorSourceFromString, colorSourceLegendLabel, colorSourceToString } from "../../lib/color-source";
 import type { AxisState, TrajectoryData, Metadata } from "../../types";
 import type { DockviewPanelApi } from "dockview-react";
-import type { Coordinator, Selection } from "@uwdata/mosaic-core";
+import type { Coordinator } from "@uwdata/mosaic-core";
 import type { DashboardActions } from "../../dashboard/DashboardContext";
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -168,7 +168,6 @@ export function ScatterContent({
     categoryMapping: coloredCategoryMapping,
     colorByColumn,
     continuousColormap,
-    brushSelection,
     trajectory,
     metadata,
     actions,
@@ -261,7 +260,6 @@ interface ScatterViewProps {
   categoryMapping: CategoryMapping | null;
   colorByColumn: string | null;
   continuousColormap: string;
-  brushSelection: Selection;
   trajectory: TrajectoryData | null;
   metadata: Metadata;
   actions: DashboardActions;
@@ -282,7 +280,6 @@ function ScatterView({
   categoryMapping,
   colorByColumn,
   continuousColormap,
-  brushSelection,
   trajectory,
   metadata,
   actions,
@@ -421,7 +418,6 @@ function ScatterView({
   );
 
   const { onSelectionChange } = useScatterBrushSync({
-    brushSelection,
     myPanelId,
     rowIndicesRef,
     setSelection,
