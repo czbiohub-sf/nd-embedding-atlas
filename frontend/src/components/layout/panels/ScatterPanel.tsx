@@ -476,6 +476,7 @@ function ScatterView({
   // ── Stable callbacks ref — GPU config never changes identity ──────────────
   const callbacksRef = useRef({
     onSelectionChange: (_count: number | null, _indices?: number[]) => {},
+    onExternalClear: () => {},
     onPointClick: (_index: number, _pos: [number, number], _catIdx: number, _catName: string) => {},
     onViewChange: (_state: { panX: number; panY: number; zoom: number }) => {},
     onFps: (_fps: number) => {},
@@ -496,13 +497,17 @@ function ScatterView({
         value: [],
         predicate: null,
       });
-      clearSelectionSync();
+      clearSelectionSync(myPanelId);
     } else {
       brushThrottler.maybeExecute(rowIds);  // live update for small selections (~50ms)
       brushDebouncer.maybeExecute(rowIds);  // debounced final + large selections (200ms)
       broadcastSelection(myPanelId, rowIds);
     }
   };
+
+  // External clear: another panel cleared its selection. Only update the status bar —
+  // must NOT call clearSelectionSync here or a ping-pong cascade fires between panels.
+  callbacksRef.current.onExternalClear = () => setSelection(null);
 
   callbacksRef.current.onPointClick = (index) => {
     const rowIdx = rowIndicesRef.current[index] ?? index;
@@ -554,6 +559,7 @@ function ScatterView({
     const sub = selectionSyncStore.subscribe(() => {
       const s = selectionSyncStore.state;
       if (s.type === "empty") {
+        if (s.sourcePanelId === myPanelId) return; // skip own clear
         hostRef.current?.clearExternalSelection();
       } else {
         if (s.sourcePanelId === myPanelId) return; // skip own broadcasts

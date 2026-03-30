@@ -59,7 +59,7 @@
     --color-secondary-foreground: #0f172a;
     --color-muted:                #f1f5f9;
     --color-muted-foreground:     #64748b;
-    --color-accent:               #f59e0b;
+    --color-accent:               #e2e8f0;   /* UI hover/selected (command palette, menus) */
     --color-accent-foreground:    #0f172a;
     --color-destructive:          #f43f5e;
     --color-border:               #e2e8f0;
@@ -103,8 +103,8 @@
     --color-secondary-foreground: #f4f4f5;
     --color-muted:                #27272a;
     --color-muted-foreground:     #a1a1aa;
-    --color-accent:               #f59e0b;
-    --color-accent-foreground:    #08090a;
+    --color-accent:               #27272a;   /* UI hover/selected (command palette, menus) */
+    --color-accent-foreground:    #f4f4f5;
     --color-destructive:          #f43f5e;
     --color-border:               #27272a;
     --color-input:                #111113;

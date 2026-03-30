@@ -209,6 +209,7 @@ export async function createScatterplot(
         clearExternalSelection() {
             selection.clearSelectionExternal();
             interaction.requestRender();
+            config?.callbacks?.onExternalClear?.();
         },
         setForcedSelectionMode(mode: 'pan' | 'marquee' | 'lasso') {
             interaction.setForcedSelectionMode(mode);

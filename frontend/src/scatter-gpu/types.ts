@@ -115,6 +115,9 @@ export interface ScatterplotConfig {
     palette?: readonly (readonly [number, number, number])[];
     callbacks?: {
         onSelectionChange?: (count: number | null, indices?: number[]) => void;
+        /** Called when an external selection is cleared by another panel. Only updates
+         *  status bar — must NOT call clearSelectionSync to avoid cross-panel cascade. */
+        onExternalClear?: () => void;
         onViewChange?: (state: ViewState) => void;
         onPointClick?: (index: number, position: [number, number], categoryIndex: number, categoryName: string) => void;
         onFps?: (fps: number) => void;

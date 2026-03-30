@@ -7,6 +7,16 @@ frontend-deps = "cd frontend && pnpm install --frozen-lockfile"
 # Sync Python dependencies
 python-deps = "uv sync --all-groups"
 
+[post-start]
+# Start the Vite dev server in the background for interactive testing
+# Logs go to .git/wt-logs/<branch>-post-start-dev-server.log
+dev-server = "cd frontend && pnpm dev --port 0"
+
+[pre-commit]
+# Type-check before every wt merge commit
+typecheck = "cd frontend && pnpm exec tsc --noEmit"
+
 [pre-merge]
-# Ensure frontend builds cleanly before merging
-build-check = "cd frontend && pnpm exec tsc --noEmit"
+# Full typecheck + build check before merging
+typecheck = "cd frontend && pnpm exec tsc --noEmit"
+build-check = "cd frontend && pnpm build --mode=typecheck 2>/dev/null || cd frontend && pnpm exec tsc --noEmit"

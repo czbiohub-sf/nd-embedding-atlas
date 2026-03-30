@@ -4,7 +4,7 @@ import type { PanelId } from "../lib/branded-types";
 // Discriminated union: invalid states are unrepresentable.
 // "empty" guarantees no row indices exist; "active" guarantees both are set.
 export type SelectionSyncState =
-  | { type: "empty"; sourcePanelId: null }
+  | { type: "empty"; sourcePanelId: PanelId | null }
   | { type: "active"; selectedRowIndices: number[]; sourcePanelId: PanelId };
 
 // Module singleton (not React context) because:
@@ -23,6 +23,6 @@ export function broadcastSelection(id: PanelId, rowIndices: number[]) {
   }));
 }
 
-export function clearSelectionSync() {
-  selectionSyncStore.setState(() => ({ type: "empty", sourcePanelId: null }));
+export function clearSelectionSync(sourcePanelId: PanelId | null = null) {
+  selectionSyncStore.setState(() => ({ type: "empty", sourcePanelId }));
 }

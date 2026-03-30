@@ -226,7 +226,9 @@ export function createSelectionEngine(
     externalSelectionMask.fill(0);
     device.queue.writeBuffer(root.unwrap(selectedBuffer), 0, externalSelectionMask);
     selectionModeUniform.write(0);
-    onSelectionChange(null);
+    // Do NOT call onSelectionChange here — that path calls clearSelectionSync,
+    // which notifies other panels, which call clearExternalSelection, which loops.
+    // Status bar is updated via the separate onExternalClear callback in orchestrator.
   }
 
   return {
