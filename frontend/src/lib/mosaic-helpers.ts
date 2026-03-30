@@ -53,6 +53,22 @@ export function predicateToSql(selection: Selection): string | null {
 }
 
 /**
+ * Wraps a raw SQL string as a Mosaic-compatible ExprNode.
+ * Mosaic calls .toString() on predicates when building SQL — this satisfies
+ * that contract without requiring full AST construction.
+ *
+ * The cast is intentional: ExprNode is a nominal class, but Mosaic only needs
+ * the .toString() contract at runtime. This is the single escape hatch for
+ * string → ExprNode bridging; all call sites should use this helper instead of
+ * `as any` / `as unknown as`.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function stringPredicate(sql: string): ExprNode {
+    // biome-ignore lint/suspicious/noExplicitAny: intentional bridge — see JSDoc
+    return { toString: () => sql } as unknown as ExprNode;
+}
+
+/**
  * Rebuild the `dataset` VIEW after ALTER TABLE on obs_base.
  *
  * DuckDB VIEWs cache column types — adding a column to obs_base invalidates

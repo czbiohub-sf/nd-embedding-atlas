@@ -1,5 +1,6 @@
 import { Coordinator, restConnector, Selection } from "@uwdata/mosaic-core";
 import { brushPredicateStore } from "../providers/BrushPredicateStore";
+import { stringPredicate } from "../lib/mosaic-helpers";
 import { type ReactNode, useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useColumnTypes } from "../hooks/useColumnTypes";
@@ -65,8 +66,7 @@ export function DashboardProvider({ children }: Props) {
                     source,
                     clients: new Set(),
                     value: [],
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    predicate: predicate ? ({ toString: () => predicate } as any) : null,
+                    predicate: predicate ? stringPredicate(predicate) : null,
                 });
             });
         });

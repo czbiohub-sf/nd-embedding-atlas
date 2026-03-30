@@ -18,6 +18,7 @@ import { useStore } from "@tanstack/react-store";
 import type { Coordinator } from "@uwdata/mosaic-core";
 import type { FilterExpr } from "@uwdata/mosaic-sql";
 import { brushPredicateStore } from "../providers/BrushPredicateStore";
+import { stringPredicate } from "../lib/mosaic-helpers";
 
 // ── Static query (no Selection dependency) ──────────────────────────────────
 
@@ -52,9 +53,9 @@ export function useMosaicSelectionQuery<T>(
     const version = useStore(brushPredicateStore, (s) => s.version);
     const predicateStr = brushPredicateStore.state.predicate;
 
-    // Build SQL using current predicate string (parsed back to FilterExpr-like
-    // for compatibility; most buildSql functions accept string | null directly)
-    const sql = buildSql(predicateStr as unknown as FilterExpr | null);
+    // Build SQL using current predicate string wrapped as a FilterExpr-compatible
+    // object so callers can call .toString() on it when building WHERE clauses.
+    const sql = buildSql(predicateStr != null ? stringPredicate(predicateStr) : null);
 
     return useQuery<T>({
         queryKey: [cacheKeyPrefix, version, sql],

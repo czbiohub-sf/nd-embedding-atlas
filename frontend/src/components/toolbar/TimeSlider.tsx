@@ -12,7 +12,8 @@ export function TimeSlider() {
         const instance = new Slider({
             from: meta.table,
             column: "t",
-            // biome-ignore lint: Slider accepts Selection at runtime despite Param-only types
+            // biome-ignore lint/suspicious/noExplicitAny: Slider types declare Param for `as`, but Selection extends Param and works at runtime
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             as: meta.brushSelection as any,
             select: "interval",
             label: "T",

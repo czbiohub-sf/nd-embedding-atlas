@@ -62,9 +62,9 @@ export function useTableQuery(opts: UseTableQueryOptions): UseTableQueryResult {
 
     // ── Count query via Mosaic client (reactive to selection) ────────
     const countQuery = useCallback(
-        (predicate: unknown) => {
+        (predicate: FilterExpr) => {
             const q = Query.from(table).select({ count: count() });
-            const expr = filterExprToExpr(predicate as FilterExpr);
+            const expr = filterExprToExpr(predicate);
             if (expr) q.where(expr);
             return q;
         },
@@ -135,7 +135,7 @@ export function useTableQuery(opts: UseTableQueryOptions): UseTableQueryResult {
                 const offset = pageIndex * PAGE_SIZE;
                 const colList = columns.map((c) => `"${c}"`).join(", ");
                 const filterExpr = selection?.predicate(null);
-                const whereClause = filterExpr ? `WHERE ${filterExprToExpr(filterExpr as FilterExpr)}` : "";
+                const whereClause = filterExpr ? `WHERE ${filterExprToExpr(filterExpr)}` : "";
                 const sql = `SELECT "__row_index__", ${colList} FROM ${table} ${whereClause} ORDER BY ${buildOrderBy()} LIMIT ${PAGE_SIZE} OFFSET ${offset}`;
 
                 const result = await coordinator.query(sql, { type: "arrow" });
@@ -212,7 +212,7 @@ export function useTableQuery(opts: UseTableQueryOptions): UseTableQueryResult {
                 const countSql = `
                     WITH target AS (SELECT * FROM ${table} WHERE __row_index__ = ${Number(rowIndex)})
                     SELECT COUNT(*) AS pos FROM ${table}
-                    WHERE ${filterExpr ? filterExprToExpr(filterExpr as FilterExpr) : "TRUE"}
+                    WHERE ${filterExpr ? filterExprToExpr(filterExpr) : "TRUE"}
                     AND (${sort ? `("${sort.column}" < (SELECT "${sort.column}" FROM target) OR ("${sort.column}" = (SELECT "${sort.column}" FROM target) AND __row_index__ <= ${Number(rowIndex)}))` : `__row_index__ <= ${Number(rowIndex)}`})
                 `;
                 const result = await coordinator.query(countSql, { type: "arrow" });
