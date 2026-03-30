@@ -1,0 +1,842 @@
+<!doctype html>
+<!--
+  Option C — Smart Single Combobox with Sectioned Groups
+  ─────────────────────────────────────────────────────────────────────────────
+  Rationale: A single trigger keeps the pill identical to the existing combobox
+  (zero visual disruption). The open panel uses CommandGroups: [Obs metadata]
+  and [Gene expression], with a visible section header for each. Typing
+  searches both groups simultaneously — so users who don't know whether
+  "leiden" is a gene or an obs column don't need to choose a mode first.
+  When a gene is chosen a layer dropdown materialises as a contextual footer
+  row at the bottom of the popover. The source type is revealed via a small
+  badge suffix on the selected value in the trigger.
+  ─────────────────────────────────────────────────────────────────────────────
+-->
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Option C — Smart Single Combobox</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            fontFamily: { mono: ["JetBrains Mono", "Fira Code", "ui-monospace", "monospace"] },
+          },
+        },
+      };
+    </script>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        background: hsl(220 13% 7%);
+        font-family: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+        min-height: 100vh;
+        padding: 2rem;
+        gap: 3rem;
+        flex-wrap: wrap;
+      }
+
+      .glass-pill {
+        background: rgba(18, 20, 27, 0.75);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.07);
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px 8px;
+        font-size: 11px;
+        position: relative;
+      }
+      .glass-sep {
+        width: 1px;
+        height: 12px;
+        background: rgba(255, 255, 255, 0.1);
+      }
+      .glass-label {
+        font-size: 10px;
+        color: hsl(215 15% 38%);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      .combo-trigger {
+        height: 24px;
+        border: none;
+        background: transparent;
+        padding: 0 6px;
+        font-size: 11px;
+        color: hsl(210 20% 80%);
+        border-radius: 4px;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        transition: background 0.12s;
+        font-family: inherit;
+        white-space: nowrap;
+      }
+      .combo-trigger:hover {
+        background: rgba(255, 255, 255, 0.1);
+        color: hsl(210 20% 92%);
+      }
+
+      /* The color trigger — same sizing as existing but slightly wider for badge */
+      .color-trigger {
+        height: 24px;
+        max-width: 148px;
+        border: none;
+        background: transparent;
+        padding: 0 6px;
+        font-size: 11px;
+        color: hsl(210 20% 80%);
+        border-radius: 4px;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        transition: background 0.12s;
+        font-family: inherit;
+        white-space: nowrap;
+      }
+      .color-trigger:hover {
+        background: rgba(255, 255, 255, 0.1);
+        color: hsl(210 20% 92%);
+      }
+      .color-trigger .val-text {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        flex: 1;
+        min-width: 0;
+      }
+
+      /* Inline type badge suffix on trigger */
+      .type-suffix {
+        font-size: 9px;
+        padding: 1px 4px;
+        border-radius: 3px;
+        font-weight: 600;
+        letter-spacing: 0.03em;
+        flex-shrink: 0;
+      }
+      .type-suffix.obs {
+        background: rgba(99, 179, 237, 0.14);
+        color: hsl(205 80% 68%);
+      }
+      .type-suffix.gene {
+        background: rgba(154, 205, 120, 0.14);
+        color: hsl(115 45% 65%);
+      }
+
+      /* ── Popover ── */
+      .popover {
+        position: absolute;
+        top: 30px;
+        left: 0;
+        background: hsl(220 13% 10%);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        box-shadow:
+          0 8px 32px rgba(0, 0, 0, 0.65),
+          0 2px 8px rgba(0, 0, 0, 0.4);
+        width: 280px;
+        overflow: hidden;
+        animation: pop-in 0.12s ease-out;
+        z-index: 50;
+      }
+      @keyframes pop-in {
+        from {
+          opacity: 0;
+          transform: translateY(-4px) scale(0.98);
+        }
+        to {
+          opacity: 1;
+          transform: none;
+        }
+      }
+
+      /* Search bar */
+      .search-bar {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 8px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      }
+      .search-icon {
+        color: hsl(215 15% 40%);
+        flex-shrink: 0;
+      }
+      .search-input {
+        flex: 1;
+        background: transparent;
+        border: none;
+        padding: 2px 0;
+        font-size: 11px;
+        color: hsl(210 20% 88%);
+        font-family: inherit;
+        outline: none;
+      }
+      .search-input::placeholder {
+        color: hsl(215 15% 38%);
+      }
+
+      /* None item */
+      .none-item {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 10px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        font-size: 11px;
+        color: hsl(215 15% 45%);
+        cursor: pointer;
+        transition: background 0.08s;
+        font-style: italic;
+      }
+      .none-item:hover {
+        background: rgba(255, 255, 255, 0.06);
+        color: hsl(210 20% 75%);
+      }
+      .none-item.selected {
+        background: rgba(255, 255, 255, 0.06);
+        color: hsl(210 20% 80%);
+      }
+
+      /* Command list */
+      .cmd-list {
+        max-height: 240px;
+        overflow-y: auto;
+        padding: 4px 0;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+      }
+
+      /* Group header */
+      .group-header {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 10px 3px;
+        font-size: 9px;
+        color: hsl(215 15% 40%);
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        position: sticky;
+        top: 0;
+        background: hsl(220 13% 10%);
+        z-index: 1;
+      }
+      .group-header .g-badge {
+        font-size: 8px;
+        padding: 1px 4px;
+        border-radius: 2px;
+        font-weight: 700;
+      }
+      .group-header .g-badge.obs {
+        background: rgba(99, 179, 237, 0.15);
+        color: hsl(205 80% 68%);
+      }
+      .group-header .g-badge.gene {
+        background: rgba(154, 205, 120, 0.15);
+        color: hsl(115 45% 65%);
+      }
+      .group-header .g-count {
+        color: hsl(215 15% 33%);
+        font-size: 9px;
+        margin-left: auto;
+      }
+      .group-sep {
+        height: 1px;
+        background: rgba(255, 255, 255, 0.05);
+        margin: 4px 0;
+      }
+
+      /* Command items */
+      .cmd-item {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px;
+        font-size: 11px;
+        color: hsl(215 15% 60%);
+        cursor: pointer;
+        transition:
+          background 0.07s,
+          color 0.07s;
+      }
+      .cmd-item:hover {
+        background: rgba(255, 255, 255, 0.07);
+        color: hsl(210 20% 92%);
+      }
+      .cmd-item.selected {
+        background: rgba(99, 130, 255, 0.14);
+        color: hsl(220 80% 76%);
+      }
+      .cmd-item.selected.gene-item {
+        background: rgba(154, 205, 120, 0.13);
+        color: hsl(115 45% 70%);
+      }
+      .cmd-item .check {
+        width: 10px;
+        height: 10px;
+        flex-shrink: 0;
+      }
+      .cmd-item .check.hidden {
+        opacity: 0;
+      }
+      /* Gene items get a subtle left accent */
+      .cmd-item.gene-item {
+        border-left: 2px solid transparent;
+      }
+      .cmd-item.gene-item:hover {
+        border-left-color: rgba(154, 205, 120, 0.3);
+      }
+      .cmd-item.gene-item.selected {
+        border-left-color: hsl(115 45% 40%);
+      }
+
+      /* "More genes" hint */
+      .more-hint {
+        padding: 4px 10px 6px;
+        font-size: 9px;
+        color: hsl(215 15% 33%);
+        font-style: italic;
+      }
+
+      /* Empty state */
+      .empty {
+        padding: 16px;
+        text-align: center;
+        font-size: 11px;
+        color: hsl(215 15% 38%);
+      }
+
+      /* Layer footer — appears when gene selected */
+      .layer-footer {
+        border-top: 1px solid rgba(255, 255, 255, 0.07);
+        padding: 6px 10px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: rgba(154, 205, 120, 0.04);
+      }
+      .layer-label-txt {
+        font-size: 9px;
+        color: hsl(115 35% 50%);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        flex-shrink: 0;
+      }
+      .layer-chips {
+        display: flex;
+        gap: 4px;
+        flex-wrap: wrap;
+      }
+      .layer-chip {
+        font-size: 10px;
+        padding: 2px 7px;
+        border-radius: 3px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        background: transparent;
+        color: hsl(215 15% 50%);
+        cursor: pointer;
+        font-family: inherit;
+        transition:
+          background 0.1s,
+          color 0.1s,
+          border-color 0.1s;
+      }
+      .layer-chip:hover {
+        background: rgba(255, 255, 255, 0.08);
+        color: hsl(210 20% 85%);
+      }
+      .layer-chip.active {
+        background: rgba(154, 205, 120, 0.15);
+        border-color: rgba(154, 205, 120, 0.3);
+        color: hsl(115 45% 68%);
+      }
+
+      /* Annotations */
+      .annotation {
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.07);
+        border-radius: 6px;
+        padding: 12px 14px;
+        font-size: 11px;
+        color: hsl(215 15% 55%);
+        line-height: 1.6;
+        max-width: 310px;
+      }
+      .annotation strong {
+        color: hsl(210 20% 80%);
+      }
+      .demo-area {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        align-items: flex-start;
+      }
+      .section-title {
+        font-size: 10px;
+        color: hsl(215 15% 35%);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="demo-area">
+      <div class="section-title">Option C — Smart Single Combobox</div>
+
+      <!-- Trigger state snapshots -->
+      <div>
+        <div class="section-title" style="margin-bottom: 6px">State: none</div>
+        <div class="glass-pill">
+          <span class="glass-label">emb</span>
+          <button class="combo-trigger">
+            X_umap
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M7 9l5 5 5-5" />
+            </svg>
+          </button>
+          <div class="glass-sep"></div>
+          <span class="glass-label">x</span>
+          <button class="combo-trigger" style="max-width: 40px">0</button>
+          <span class="glass-label">y</span>
+          <button class="combo-trigger" style="max-width: 40px">1</button>
+          <div class="glass-sep"></div>
+          <span class="glass-label">col</span>
+          <button class="color-trigger" style="color: hsl(215 15% 40%)">
+            <span class="val-text">none</span>
+            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M7 9l5 5 5-5" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div>
+        <div class="section-title" style="margin-bottom: 6px">State: obs column selected</div>
+        <div class="glass-pill">
+          <span class="glass-label">emb</span>
+          <button class="combo-trigger">
+            X_umap
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M7 9l5 5 5-5" />
+            </svg>
+          </button>
+          <div class="glass-sep"></div>
+          <span class="glass-label">x</span>
+          <button class="combo-trigger" style="max-width: 40px">0</button>
+          <span class="glass-label">y</span>
+          <button class="combo-trigger" style="max-width: 40px">1</button>
+          <div class="glass-sep"></div>
+          <span class="glass-label">col</span>
+          <button class="color-trigger">
+            <span class="val-text">cell_type</span>
+            <span class="type-suffix obs">obs</span>
+            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M7 9l5 5 5-5" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div>
+        <div class="section-title" style="margin-bottom: 6px">State: gene expression selected</div>
+        <div class="glass-pill">
+          <span class="glass-label">emb</span>
+          <button class="combo-trigger">
+            X_umap
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M7 9l5 5 5-5" />
+            </svg>
+          </button>
+          <div class="glass-sep"></div>
+          <span class="glass-label">x</span>
+          <button class="combo-trigger" style="max-width: 40px">0</button>
+          <span class="glass-label">y</span>
+          <button class="combo-trigger" style="max-width: 40px">1</button>
+          <div class="glass-sep"></div>
+          <span class="glass-label">col</span>
+          <!-- Trigger shows gene name + layer inline -->
+          <button class="color-trigger" style="max-width: 168px">
+            <span class="val-text">ACTB · log1p</span>
+            <span class="type-suffix gene">X</span>
+            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M7 9l5 5 5-5" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Interactive demo -->
+      <div>
+        <div class="section-title" style="margin-bottom: 6px">Interactive — single combobox, type to search both</div>
+        <div class="glass-pill" style="position: relative">
+          <span class="glass-label">emb</span>
+          <button class="combo-trigger">
+            X_umap
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M7 9l5 5 5-5" />
+            </svg>
+          </button>
+          <div class="glass-sep"></div>
+          <span class="glass-label">x</span>
+          <button class="combo-trigger" style="max-width: 40px">0</button>
+          <span class="glass-label">y</span>
+          <button class="combo-trigger" style="max-width: 40px">1</button>
+          <div class="glass-sep"></div>
+          <span class="glass-label">col</span>
+
+          <!-- The single trigger -->
+          <button class="color-trigger" id="col-trigger" onclick="togglePop(event)" style="max-width: 168px">
+            <span class="val-text" id="trigger-val" style="color: hsl(215 15% 40%)">none</span>
+            <span class="type-suffix obs" id="trigger-badge" style="display: none"></span>
+            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M7 9l5 5 5-5" />
+            </svg>
+          </button>
+
+          <!-- The popover -->
+          <div class="popover" id="col-popover" style="display: none; left: -8px">
+            <!-- Search -->
+            <div class="search-bar">
+              <svg
+                class="search-icon"
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
+              >
+                <circle cx="11" cy="11" r="8" />
+                <path d="M21 21l-4.35-4.35" />
+              </svg>
+              <input
+                class="search-input"
+                id="pop-search"
+                placeholder="Search obs columns or genes…"
+                oninput="onSearch(this.value)"
+                autocomplete="off"
+              />
+              <button
+                onclick="clearSel()"
+                style="
+                  background: none;
+                  border: none;
+                  cursor: pointer;
+                  color: hsl(215 15% 40%);
+                  font-size: 10px;
+                  font-family: inherit;
+                  padding: 0;
+                "
+                id="clear-btn"
+              >
+                none
+              </button>
+            </div>
+
+            <!-- None row -->
+            <div class="none-item" id="none-item" onclick="selectNone()">
+              <svg
+                width="10"
+                height="10"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
+                id="none-check"
+              >
+                <path d="M20 6L9 17l-5-5" />
+              </svg>
+              no coloring
+            </div>
+
+            <!-- Main list -->
+            <div class="cmd-list" id="cmd-list"></div>
+
+            <!-- Layer footer (hidden until gene selected) -->
+            <div class="layer-footer" id="layer-footer" style="display: none">
+              <span class="layer-label-txt">layer</span>
+              <div class="layer-chips" id="layer-chips"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Rationale panel -->
+    <div class="demo-area" style="max-width: 310px; padding-top: 28px">
+      <div class="section-title">Design rationale</div>
+      <div class="annotation">
+        <strong>Trigger parity:</strong> visually identical to the existing Combobox trigger — drop-in replacement. The
+        source type is only revealed as a small badge suffix, not cluttering the trigger when not needed.<br /><br />
+        <strong>Unified search:</strong> typing simultaneously narrows both obs columns and gene groups. Users who know
+        a name but not its type don't need to pick a mode first — the result appears in the right group. This is the
+        least friction path for exploratory use.<br /><br />
+        <strong>Layer chips:</strong> materialise as an inline chip row at the popover footer only when a gene is
+        selected. Chips are always visible (not hidden in a dropdown), enabling single-click layer switching without any
+        secondary opening.
+      </div>
+      <div class="annotation" style="margin-top: 8px">
+        <strong>Best for:</strong> the most common case — a user who doesn't have a preformed "I want a gene" vs "I want
+        obs" mental model, just wants to type a name and pick it. The unified search surface scales cleanly to 33k genes
+        because only matches are shown.
+      </div>
+    </div>
+
+    <script>
+      const OBS = [
+        "cell_type",
+        "leiden",
+        "batch",
+        "n_counts",
+        "pct_mito",
+        "total_umis",
+        "doublet_score",
+        "phase",
+        "tissue",
+        "donor_id",
+        "velocity_confidence",
+        "S_score",
+        "G2M_score",
+      ];
+      const GENES = [
+        "ACTB",
+        "CD3E",
+        "TP53",
+        "GAPDH",
+        "EGFR",
+        "MKI67",
+        "CD19",
+        "CD8A",
+        "FOXP3",
+        "IL2",
+        "TNF",
+        "IFNG",
+        "CD4",
+        "CD14",
+        "PTPRC",
+        "SOX2",
+        "NANOG",
+        "OCT4",
+        "KRT18",
+        "VIM",
+        "ZEB1",
+        "TWIST1",
+        "CDH1",
+        "CDH2",
+        "EPCAM",
+        "PECAM1",
+        "COL1A1",
+        "ACTA2",
+        "PDGFRA",
+        "PDGFRB",
+        "CD68",
+        "CSF1R",
+        "CD163",
+        "ITGAM",
+        "HLA-A",
+        "HLA-B",
+        "B2M",
+        "CALR",
+        "CD47",
+        "CD44",
+        "CD274",
+        "PDCD1",
+        "HAVCR2",
+        "LAG3",
+        "TIGIT",
+        "CTLA4",
+        "CD80",
+        "CD86",
+        "IDO1",
+        "CXCL10",
+      ];
+      const LAYERS = ["X", "log1p", "normalized", "raw", "spliced", "unspliced"];
+
+      let sel = { type: null, value: null, layer: "X" };
+      let popOpen = false;
+
+      function togglePop(e) {
+        e.stopPropagation();
+        if (popOpen) {
+          closePop();
+          return;
+        }
+        document.getElementById("col-popover").style.display = "block";
+        popOpen = true;
+        const si = document.getElementById("pop-search");
+        si.value = "";
+        renderList("");
+        setTimeout(() => si.focus(), 60);
+      }
+      function closePop() {
+        document.getElementById("col-popover").style.display = "none";
+        popOpen = false;
+      }
+
+      let debT;
+      function onSearch(q) {
+        clearTimeout(debT);
+        debT = setTimeout(() => renderList(q), 160);
+      }
+
+      function renderList(q) {
+        const ql = q.toLowerCase();
+
+        // Filter obs
+        const obsFiltered = OBS.filter((x) => !ql || x.toLowerCase().includes(ql));
+        // Filter genes — for 33k this would be a server query; simulated here
+        const genesFiltered = GENES.filter((x) => !ql || x.toLowerCase().startsWith(ql));
+
+        const list = document.getElementById("cmd-list");
+        let html = "";
+
+        if (obsFiltered.length === 0 && genesFiltered.length === 0) {
+          html = '<div class="empty">No results for "' + q + '"</div>';
+          list.innerHTML = html;
+          updateLayerFooter();
+          return;
+        }
+
+        if (obsFiltered.length > 0) {
+          html += `<div class="group-header"><span class="g-badge obs">obs</span> Metadata <span class="g-count">${obsFiltered.length}</span></div>`;
+          html += obsFiltered
+            .map(
+              (c) => `
+        <div class="cmd-item ${sel.type === "obs" && sel.value === c ? "selected" : ""}" onclick="selectObs('${c}')">
+          <svg class="check ${sel.type === "obs" && sel.value === c ? "" : "hidden"}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6L9 17l-5-5"/></svg>
+          ${c}
+        </div>`,
+            )
+            .join("");
+        }
+
+        if (obsFiltered.length > 0 && genesFiltered.length > 0) {
+          html += '<div class="group-sep"></div>';
+        }
+
+        if (genesFiltered.length > 0) {
+          const shown = genesFiltered.slice(0, 40);
+          const total = 33694;
+          const matchCount = ql ? genesFiltered.length : total;
+          html += `<div class="group-header"><span class="g-badge gene">X</span> Gene expression <span class="g-count">${matchCount.toLocaleString()}</span></div>`;
+          html += shown
+            .map(
+              (g) => `
+        <div class="cmd-item gene-item ${sel.type === "gene" && sel.value === g ? "selected" : ""}" onclick="selectGene('${g}')">
+          <svg class="check ${sel.type === "gene" && sel.value === g ? "" : "hidden"}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6L9 17l-5-5"/></svg>
+          ${g}
+        </div>`,
+            )
+            .join("");
+          if (!ql && genesFiltered.length > 40) {
+            html += `<div class="more-hint">Type to search ${(total - 40).toLocaleString()} more genes…</div>`;
+          }
+        }
+
+        list.innerHTML = html;
+        updateLayerFooter();
+        // None-item check
+        document.getElementById("none-check").style.opacity = sel.type === null ? "1" : "0";
+        document.getElementById("none-item").classList.toggle("selected", sel.type === null);
+      }
+
+      function updateLayerFooter() {
+        const footer = document.getElementById("layer-footer");
+        if (sel.type !== "gene") {
+          footer.style.display = "none";
+          return;
+        }
+        footer.style.display = "flex";
+        const chips = document.getElementById("layer-chips");
+        chips.innerHTML = LAYERS.map(
+          (l) => `
+      <button class="layer-chip ${sel.layer === l ? "active" : ""}" onclick="selectLayer('${l}'); event.stopPropagation()">${l}</button>
+    `,
+        ).join("");
+      }
+
+      function selectObs(col) {
+        sel = { type: "obs", value: col, layer: "X" };
+        updateTrigger();
+        updateLayerFooter();
+        renderList(document.getElementById("pop-search").value);
+        closePop();
+      }
+
+      function selectGene(gene) {
+        sel = { ...sel, type: "gene", value: gene };
+        updateTrigger();
+        updateLayerFooter();
+        renderList(document.getElementById("pop-search").value);
+        // Don't close — let user pick layer first if desired
+      }
+
+      function selectLayer(l) {
+        sel.layer = l;
+        updateTrigger();
+        updateLayerFooter();
+        // Close after layer selection
+        closePop();
+      }
+
+      function selectNone() {
+        clearSel();
+      }
+      function clearSel() {
+        sel = { type: null, value: null, layer: "X" };
+        updateTrigger();
+        renderList(document.getElementById("pop-search").value);
+        closePop();
+      }
+
+      function updateTrigger() {
+        const valEl = document.getElementById("trigger-val");
+        const badge = document.getElementById("trigger-badge");
+
+        if (!sel.type) {
+          valEl.textContent = "none";
+          valEl.style.color = "hsl(215 15% 40%)";
+          badge.style.display = "none";
+        } else if (sel.type === "obs") {
+          valEl.textContent = sel.value;
+          valEl.style.color = "";
+          badge.textContent = "obs";
+          badge.className = "type-suffix obs";
+          badge.style.display = "";
+        } else {
+          const layStr = sel.layer === "X" ? "" : " · " + sel.layer;
+          valEl.textContent = sel.value + layStr;
+          valEl.style.color = "";
+          badge.textContent = "X";
+          badge.className = "type-suffix gene";
+          badge.style.display = "";
+        }
+      }
+
+      document.addEventListener("click", (e) => {
+        if (
+          !document.getElementById("col-trigger").contains(e.target) &&
+          !document.getElementById("col-popover").contains(e.target)
+        ) {
+          closePop();
+        }
+      });
+
+      renderList("");
+    </script>
+  </body>
+</html>
