@@ -39,7 +39,9 @@
     --color-text-secondary: #475569;  /* labels, captions     → text-text-secondary */
     --color-text-muted:     #94a3b8;  /* placeholders, hints  → text-text-muted     */
 
-    /* ── Accent (mode-independent) ── */
+    /* ── Data visualization accents (charts, scatter, categorical colors) ──
+     * Use: bg-accent-cyan, text-accent-amber, bg-accent-rose, etc.
+     * Do NOT use these for UI hover/selected/focus states.               */
     --color-accent-cyan:  #06b6d4;
     --color-accent-amber: #f59e0b;
     --color-accent-rose:  #f43f5e;
@@ -48,7 +50,12 @@
     --color-chart-mark:      #6366f1;
     --color-chart-mark-fade: oklch(0.585 0.233 277.117 / 0.125);
 
-    /* ── shadcn/ui bridge (used by ui/ components) ── */
+    /* ── shadcn/ui semantic bridge (UI interaction states) ─────────────────
+     * accent   = hover/selected bg in menus, command palette, dropdowns
+     * primary  = primary action buttons
+     * muted    = secondary surfaces, disabled states
+     * ring     = focus ring color
+     * These must be neutral surfaces — never data-vis colors.            */
     --color-background:           #f8fafc;
     --color-foreground:           #0f172a;
     --color-card:                 #ffffff;
@@ -59,7 +66,7 @@
     --color-secondary-foreground: #0f172a;
     --color-muted:                #f1f5f9;
     --color-muted-foreground:     #64748b;
-    --color-accent:               #e2e8f0;   /* UI hover/selected (command palette, menus) */
+    --color-accent:               #e2e8f0;  /* = --color-elevated (neutral hover bg) */
     --color-accent-foreground:    #0f172a;
     --color-destructive:          #f43f5e;
     --color-border:               #e2e8f0;
@@ -92,7 +99,7 @@
     --color-text-secondary: #a1a1aa;
     --color-text-muted:     #52525b;
 
-    /* shadcn bridge */
+    /* shadcn/ui semantic bridge — dark overrides (must stay neutral surfaces) */
     --color-background:           #08090a;
     --color-foreground:           #f4f4f5;
     --color-card:                 #111113;
@@ -103,7 +110,7 @@
     --color-secondary-foreground: #f4f4f5;
     --color-muted:                #27272a;
     --color-muted-foreground:     #a1a1aa;
-    --color-accent:               #27272a;   /* UI hover/selected (command palette, menus) */
+    --color-accent:               #27272a;  /* = --color-border-subtle (neutral hover bg) */
     --color-accent-foreground:    #f4f4f5;
     --color-destructive:          #f43f5e;
     --color-border:               #27272a;
