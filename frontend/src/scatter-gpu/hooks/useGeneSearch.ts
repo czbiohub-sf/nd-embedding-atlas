@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { varKeys } from "./queryKeys";
 
 interface VarNamesResponse {
   names: string[];
@@ -24,7 +25,7 @@ export function useGeneSearch(query: string): GeneSearchResult {
   }, [query]);
 
   const { data, isLoading } = useQuery<VarNamesResponse>({
-    queryKey: ["var", "names", debouncedQuery],
+    queryKey: varKeys.names(debouncedQuery),
     queryFn: async () => {
       const params = new URLSearchParams({ limit: "50" });
       if (debouncedQuery) params.set("q", debouncedQuery);
