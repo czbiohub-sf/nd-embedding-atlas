@@ -47,6 +47,8 @@ import { ColorSourcePicker } from "../scatter/ColorSourcePicker";
 import { cn } from "../../lib/utils";
 import type { AxisState } from "../../types";
 import type { ColorMode } from "../../scatter-gpu/hooks/useMosaicScatterData";
+import type { ColorSource } from "../../lib/color-source";
+import { colorSourceToString } from "../../lib/color-source";
 
 interface Props {
   // Axes
@@ -58,13 +60,13 @@ interface Props {
   onSetAxes: (axes: AxisState) => void;
 
   // Color
-  colorByColumn: string | null;
+  colorSource: ColorSource;
   obsColumns: string[];
   colorMode: ColorMode;
   colorModeCanToggle: boolean;
   /** Whether the dataset has a var/expression matrix — hides Var tab when false */
   hasVar: boolean;
-  onSetColorByColumn: (col: string | null) => void;
+  onSetColorSource: (src: ColorSource) => void;
   onToggleColorMode: () => void;
 
   // Selection tool
@@ -88,12 +90,12 @@ export function ScatterOverlayControls({
   loadingKey,
   currentEntryLoaded,
   onSetAxes,
-  colorByColumn,
+  colorSource,
   obsColumns,
   colorMode,
   colorModeCanToggle,
   hasVar,
-  onSetColorByColumn,
+  onSetColorSource,
   onToggleColorMode,
   selectionTool,
   onSetSelectionTool,
@@ -161,10 +163,10 @@ export function ScatterOverlayControls({
         {/* Color column */}
         <span className="text-[10px] text-muted-foreground/60 uppercase tracking-wide">col</span>
         <ColorSourcePicker
-          colorByColumn={colorByColumn}
+          colorSource={colorSource}
           obsColumns={obsColumns}
           hasVar={hasVar}
-          onSetColorByColumn={onSetColorByColumn}
+          onSetColorSource={onSetColorSource}
           triggerClassName={cn(glassTrigger, "max-w-36")}
           contentClassName="w-64"
         />
@@ -269,7 +271,11 @@ export function ScatterOverlayControls({
                       if (floatingWindow.state.open) {
                         floatingWindow.close();
                       } else {
-                        addFloatingScatter({ id: `float-${Date.now()}`, axes, colorByColumn });
+                        addFloatingScatter({
+                          id: `float-${Date.now()}`,
+                          axes,
+                          colorByColumn: colorSourceToString(colorSource),
+                        });
                         panelApi?.close();
                       }
                     }}

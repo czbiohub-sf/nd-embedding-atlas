@@ -7,25 +7,14 @@ import { cn } from "@/lib/utils";
 import { useGeneSearch } from "@/scatter-gpu/hooks/useGeneSearch";
 import { useLayerNames } from "@/scatter-gpu/hooks/useLayerNames";
 import { useGeneColumn } from "@/scatter-gpu/hooks/useGeneColumn";
-
-// ── Var column name encoding ──────────────────────────────────────────────────
-// Non-alphanumeric characters become underscores.
-// Format: __var_{var}_{layer}__
-
-interface ParsedVarColumn {
-  varName: string;
-  layer: string;
-}
-
-function parseVarColumn(col: string): ParsedVarColumn | null {
-  const match = col.match(/^__var_(.+)_([^_]+)__$/);
-  if (!match) return null;
-  return { varName: match[1], layer: match[2] };
-}
-
-function isVarColumn(col: string): boolean {
-  return col.startsWith("__var_") && col.endsWith("__");
-}
+import {
+  type ColorSource,
+  COLOR_NONE,
+  colorSourceObs,
+  colorSourceVar,
+  colorSourceFromString,
+  isVarSource,
+} from "@/lib/color-source";
 
 // ── Trigger label helpers ─────────────────────────────────────────────────────
 
@@ -65,11 +54,11 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
 // ── Props ─────────────────────────────────────────────────────────────────────
 
 export interface ColorSourcePickerProps {
-  colorByColumn: string | null;
+  colorSource: ColorSource;
   obsColumns: string[];
   /** Whether the dataset has a var/expression matrix. Hides the Var tab when false. */
   hasVar?: boolean;
-  onSetColorByColumn: (col: string | null) => void;
+  onSetColorSource: (src: ColorSource) => void;
   /** Glass-override for the trigger button className */
   triggerClassName?: string;
   contentClassName?: string;
@@ -78,10 +67,10 @@ export interface ColorSourcePickerProps {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function ColorSourcePicker({
-  colorByColumn,
+  colorSource,
   obsColumns,
   hasVar = false,
-  onSetColorByColumn,
+  onSetColorSource,
   triggerClassName,
   contentClassName,
 }: ColorSourcePickerProps) {
@@ -95,13 +84,13 @@ export function ColorSourcePicker({
   const { setStatus } = useScatterUIDispatch();
   const { materialize, status: varStatus, column: varColumn } = useGeneColumn({ onStatus: setStatus });
 
-  // When var materialization completes, propagate the column and close.
+  // When var materialization completes, propagate the ColorSource and close.
   useEffect(() => {
     if (varStatus === "ready" && varColumn) {
-      onSetColorByColumn(varColumn);
+      onSetColorSource(colorSourceFromString(varColumn));
       setOpen(false);
     }
-  }, [varStatus, varColumn, onSetColorByColumn]);
+  }, [varStatus, varColumn, onSetColorSource]);
 
   // Ensure selectedLayer stays valid when layers load.
   useEffect(() => {
@@ -112,23 +101,26 @@ export function ColorSourcePicker({
 
   // ── Trigger display ──────────────────────────────────────────────────────────
   let triggerContent: React.ReactNode;
-  if (!colorByColumn) {
-    triggerContent = <span className="flex-1 truncate text-left text-muted-foreground">— none</span>;
-  } else if (isVarColumn(colorByColumn)) {
-    const parsed = parseVarColumn(colorByColumn);
-    triggerContent = (
-      <>
-        <span className="flex-1 truncate text-left font-mono">{parsed?.varName ?? colorByColumn}</span>
-        {parsed && <VarBadge layer={parsed.layer} />}
-      </>
-    );
-  } else {
-    triggerContent = (
-      <>
-        <span className="flex-1 truncate text-left">{colorByColumn}</span>
-        <ObsBadge />
-      </>
-    );
+  switch (colorSource.kind) {
+    case "none":
+      triggerContent = <span className="flex-1 truncate text-left text-muted-foreground">— none</span>;
+      break;
+    case "obs":
+      triggerContent = (
+        <>
+          <span className="flex-1 truncate text-left">{colorSource.column}</span>
+          <ObsBadge />
+        </>
+      );
+      break;
+    case "var":
+      triggerContent = (
+        <>
+          <span className="flex-1 truncate text-left font-mono">{colorSource.varName}</span>
+          <VarBadge layer={colorSource.layer} />
+        </>
+      );
+      break;
   }
 
   // ── Var selection handler ────────────────────────────────────────────────────
@@ -177,7 +169,7 @@ export function ColorSourcePicker({
                 <CommandItem
                   value=""
                   onSelect={() => {
-                    onSetColorByColumn(null);
+                    onSetColorSource(COLOR_NONE);
                     setOpen(false);
                   }}
                 >
@@ -188,7 +180,7 @@ export function ColorSourcePicker({
                     key={col}
                     value={col}
                     onSelect={() => {
-                      onSetColorByColumn(col);
+                      onSetColorSource(colorSourceObs(col));
                       setOpen(false);
                     }}
                   >
@@ -234,9 +226,8 @@ export function ColorSourcePicker({
                   type="button"
                   onClick={() => {
                     setSelectedLayer(layer);
-                    const active = colorByColumn ? parseVarColumn(colorByColumn) : null;
-                    if (active && layer !== active.layer) {
-                      materialize(active.varName, layer);
+                    if (isVarSource(colorSource) && layer !== colorSource.layer) {
+                      materialize(colorSource.varName, layer);
                     }
                   }}
                   className={cn(
@@ -261,3 +252,7 @@ export function ColorSourcePicker({
     </Popover>
   );
 }
+
+// Re-export ColorSource so callers can import from this module if convenient
+export type { ColorSource };
+export { colorSourceVar };

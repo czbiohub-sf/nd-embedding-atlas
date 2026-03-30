@@ -7,11 +7,15 @@ import type { ColorMode } from "../../hooks/useColorMode";
 import { makeCategoryColumn, type CategoryMapping } from "../../lib/category-column";
 import { toRows } from "../../lib/mosaic-helpers";
 import type { Metadata } from "../../types";
+import { type ColorSource, colorSourceFromString, colorSourceToString } from "../../lib/color-source";
 
 export interface ScatterColorState {
   // Column selection
   colorByColumn: string | null;
   setColorByColumn: (col: string | null) => void;
+  // ColorSource API (new — preferred over raw string)
+  colorSource: ColorSource;
+  setColorSource: (src: ColorSource) => void;
   obsColumns: string[];
 
   // Color mode
@@ -128,9 +132,17 @@ export function useScatterColorState(coordinator: Coordinator, metadata: Metadat
 
   const categoryCol = coloredCategoryMapping?.indexColumn ?? null;
 
+  const colorSource = useMemo(() => colorSourceFromString(colorByColumn), [colorByColumn]);
+  const setColorSource = useMemo(
+    () => (src: ColorSource) => setColorByColumn(colorSourceToString(src)),
+    [setColorByColumn],
+  );
+
   return {
     colorByColumn,
     setColorByColumn,
+    colorSource,
+    setColorSource,
     obsColumns,
     colorMode,
     colorModeOverride,

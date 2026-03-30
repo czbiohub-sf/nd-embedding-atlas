@@ -37,6 +37,7 @@ import { toRows } from "../../lib/mosaic-helpers";
 import { setBrushPredicate } from "../../providers/BrushPredicateStore";
 import { useScatterColorState } from "../../scatter-gpu/hooks/useScatterColorState";
 import { hexToRgbPalette } from "../../scatter-gpu/utils/colors";
+import { colorSourceLegendLabel, colorSourceToString } from "../../lib/color-source";
 import type { AxisState, TrajectoryData, Metadata } from "../../types";
 import type { DockviewPanelApi } from "dockview-react";
 import type { Coordinator, Selection } from "@uwdata/mosaic-core";
@@ -99,7 +100,9 @@ export function ScatterContent({
   // ── Color state ────────────────────────────────────────────────────────────
   const {
     colorByColumn,
-    setColorByColumn,
+    setColorByColumn: _setColorByColumn,
+    colorSource,
+    setColorSource,
     obsColumns,
     colorMode,
     setColorModeOverride,
@@ -142,7 +145,7 @@ export function ScatterContent({
 
   // ── Broadcast panel state for cross-panel sync ─────────────────────────────
   useEffect(() => {
-    broadcastPanelState(String(myPanelId), { axes: effectiveAxes, colorByColumn });
+    broadcastPanelState(String(myPanelId), { axes: effectiveAxes, colorByColumn: colorSourceToString(colorSource) });
   }, [myPanelId, effectiveAxes, colorByColumn]);
 
   useEffect(() => {
@@ -181,13 +184,13 @@ export function ScatterContent({
       dims={dims}
       loadingKey={loadingKey}
       currentEntryLoaded={!!currentEntry?.loaded}
-      colorByColumn={colorByColumn}
+      colorSource={colorSource}
       obsColumns={obsColumns}
       colorMode={colorMode}
       colorModeCanToggle={colorModeInfo.canToggle}
       hasVar={(metadata.var_count ?? 0) > 0}
       onSetAxes={handleSetAxes}
-      onSetColorByColumn={setColorByColumn}
+      onSetColorSource={setColorSource}
       onToggleColorMode={() => setColorModeOverride(colorMode === "continuous" ? "categorical" : "continuous")}
       selectionTool={selectionTool}
       onSetSelectionTool={setSelectionTool}
@@ -562,10 +565,7 @@ function ScatterView({
       {colorMode === "categorical" && categoryMapping && !showLoading ? <CategoricalLegend /> : null}
       {colorMode === "continuous" && colorByColumn && colorRange ? (
         <ContinuousLegend
-          columnName={(() => {
-            const m = colorByColumn.match(/^__var_.+_([^_]+)__$/);
-            return m ? m[1] : colorByColumn;
-          })()}
+          columnName={colorSourceLegendLabel(colorSource)}
           colormap={continuousColormap}
           vmin={userVmin ?? colorRange[0]}
           vmax={userVmax ?? colorRange[1]}
