@@ -31,10 +31,7 @@ export const activeFilterStore = new Store<ActiveFilterState>({
   version: 0,
 });
 
-export function setActiveFilter(
-  panelId: PanelId,
-  predicate: string | null,
-): void {
+export function setActiveFilter(panelId: PanelId, predicate: string | null): void {
   activeFilterStore.setState((s) => ({
     ...s,
     predicate,

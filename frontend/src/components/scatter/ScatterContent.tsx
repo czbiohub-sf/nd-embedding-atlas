@@ -392,9 +392,13 @@ function ScatterView({
     const positions = data?.positions;
     const el = containerRef.current;
     if (!positions || positions.length < 2 || !el) return;
-    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    let minX = Infinity,
+      maxX = -Infinity,
+      minY = Infinity,
+      maxY = -Infinity;
     for (let i = 0; i < positions.length; i += 2) {
-      const x = positions[i], y = positions[i + 1];
+      const x = positions[i],
+        y = positions[i + 1];
       if (x < minX) minX = x;
       if (x > maxX) maxX = x;
       if (y < minY) minY = y;
@@ -403,10 +407,7 @@ function ScatterView({
     if (!isFinite(minX) || minX === maxX || minY === maxY) return;
     const aspect = el.clientWidth / el.clientHeight || 1;
     const padding = 0.88;
-    const zoom = Math.min(
-      (2 * padding) / (maxY - minY),
-      (2 * aspect * padding) / (maxX - minX),
-    );
+    const zoom = Math.min((2 * padding) / (maxY - minY), (2 * aspect * padding) / (maxX - minX));
     hostRef.current?.setViewState({
       panX: -(minX + maxX) / 2,
       panY: -(minY + maxY) / 2,

@@ -29,7 +29,7 @@ export function createSelectionEngine(
   const polygonBuffer = root.createBuffer(d.arrayOf(d.vec2f, MAX_POLYGON_VERTS)).$usage("storage");
   const polygonCountUniform = root.createUniform(d.u32, 0);
 
-  const pointsReadonly  = posBuffer.as("readonly");
+  const pointsReadonly = posBuffer.as("readonly");
   const selectedMutable = selectedBuffer.as("mutable");
   const polygonReadonly = polygonBuffer.as("readonly");
 

@@ -61,10 +61,7 @@ export function ScatterStatePlugin() {
                     label="bitmap.size"
                     value={<span className="text-purple-400">{ids.length.toLocaleString()}</span>}
                   />
-                  <Row
-                    label="bitmap[0..4]"
-                    value={`[${ids.slice(0, 5).join(", ")}${ids.length > 5 ? ", …" : ""}]`}
-                  />
+                  <Row label="bitmap[0..4]" value={`[${ids.slice(0, 5).join(", ")}${ids.length > 5 ? ", …" : ""}]`} />
                 </>
               );
             })()}

@@ -6,9 +6,9 @@ import type { TgpuRoot } from "../types";
 import type { ScatterBuffers, ScatterUniforms } from "./buffers";
 
 // Layer bit constants
-export const LAYER_LASSO      = 0b0001;
-export const LAYER_EXTERNAL   = 0b0010;
-export const LAYER_ISOLATION  = 0b0100;
+export const LAYER_LASSO = 0b0001;
+export const LAYER_EXTERNAL = 0b0010;
+export const LAYER_ISOLATION = 0b0100;
 export const LAYER_ANNOTATION = 0b1000;
 
 export function createCompositor(
@@ -22,21 +22,21 @@ export function createCompositor(
   void device; // kept for API symmetry / future use
 
   // 4 layer buffers — all u32[numPoints], storage usage
-  const lassoBuffer      = root.createBuffer(d.arrayOf(d.u32, numPoints)).$usage("storage");
-  const externalBuffer   = root.createBuffer(d.arrayOf(d.u32, numPoints)).$usage("storage");
-  const isolationBuffer  = root.createBuffer(d.arrayOf(d.u32, numPoints)).$usage("storage");
+  const lassoBuffer = root.createBuffer(d.arrayOf(d.u32, numPoints)).$usage("storage");
+  const externalBuffer = root.createBuffer(d.arrayOf(d.u32, numPoints)).$usage("storage");
+  const isolationBuffer = root.createBuffer(d.arrayOf(d.u32, numPoints)).$usage("storage");
   const annotationBuffer = root.createBuffer(d.arrayOf(d.u32, numPoints)).$usage("storage");
 
-  let isDirty       = false;
+  let isDirty = false;
   let layerActiveBits = 0;
 
   // Buffer views used by the compositor shader
-  const lassoReadonly      = lassoBuffer.as("readonly");
-  const externalReadonly   = externalBuffer.as("readonly");
-  const isolationReadonly  = isolationBuffer.as("readonly");
+  const lassoReadonly = lassoBuffer.as("readonly");
+  const externalReadonly = externalBuffer.as("readonly");
+  const isolationReadonly = isolationBuffer.as("readonly");
   const annotationReadonly = annotationBuffer.as("readonly");
-  const { selectedBuffer }  = buffers;
-  const selectedMutable    = selectedBuffer.as("mutable");
+  const { selectedBuffer } = buffers;
+  const selectedMutable = selectedBuffer.as("mutable");
   const { selectionModeUniform } = uniforms;
 
   // Uniform carrying the layer active bitmask into the GPU shader
@@ -59,17 +59,17 @@ export function createCompositor(
     in: { gid: d.builtin.globalInvocationId },
   })((input) => {
     "use gpu";
-    const base    = input.gid.x * COMP_BATCH.length;
+    const base = input.gid.x * COMP_BATCH.length;
     const layerBits = layerBitsUniform.value;
     for (const k of tgpu.unroll(COMP_BATCH)) {
       const idx = base + k;
       if (idx < numPoints) {
         const iso = isolationReadonly.value[idx];
         const lasso = lassoReadonly.value[idx];
-        const ext   = externalReadonly.value[idx];
+        const ext = externalReadonly.value[idx];
 
         // Tier flags derived from bitmask
-        const hasIso = (layerBits & 4) != 0;   // LAYER_ISOLATION
+        const hasIso = (layerBits & 4) != 0; // LAYER_ISOLATION
         const hasSel = ((layerBits & 1) | (layerBits & 2)) != 0; // lasso | external
 
         // isoPass: if isolation tier active, point must be in isolation mask
@@ -95,7 +95,7 @@ export function createCompositor(
   function markDirty(layerBit: number, isActive: boolean): void {
     isDirty = true;
     if (isActive) layerActiveBits |= layerBit;
-    else          layerActiveBits &= ~layerBit;
+    else layerActiveBits &= ~layerBit;
   }
 
   function dispatchIfDirty(): void {
@@ -113,7 +113,9 @@ export function createCompositor(
   return {
     markDirty,
     dispatchIfDirty,
-    get layerActiveBits() { return layerActiveBits; },
+    get layerActiveBits() {
+      return layerActiveBits;
+    },
     // Expose layer buffers so selection engine can write into them
     lassoBuffer,
     externalBuffer,

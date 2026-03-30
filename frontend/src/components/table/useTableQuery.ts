@@ -94,10 +94,12 @@ export function useTableQuery(opts: UseTableQueryOptions): UseTableQueryResult {
 
   // Debounce the re-fetch trigger so rapid lasso adjustments don't
   // cause a fetch on every intermediate update.
-  const filterVersionDebouncer = useDebouncer(
-    () => setFilterVersion((n) => n + 1),
-    { wait: 150, leading: false, trailing: true, onUnmount: (d) => d.flush() },
-  );
+  const filterVersionDebouncer = useDebouncer(() => setFilterVersion((n) => n + 1), {
+    wait: 150,
+    leading: false,
+    trailing: true,
+    onUnmount: (d) => d.flush(),
+  });
 
   useEffect(() => {
     if (prevCacheKey.current !== cacheKey) {

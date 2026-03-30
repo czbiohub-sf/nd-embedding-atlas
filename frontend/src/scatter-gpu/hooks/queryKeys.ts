@@ -12,20 +12,14 @@ export const scatterKeys = {
   continuousColors: (colorCol: string, colormap: string, vmin?: number, vmax?: number) =>
     ["scatter", "continuous-colors", colorCol, colormap, vmin ?? null, vmax ?? null] as const,
   metadata: () => ["metadata"] as const,
-  categoryCount: (coordinator: Coordinator, col: string) =>
-    ["scatter", "category-count", coordinator, col] as const,
+  categoryCount: (coordinator: Coordinator, col: string) => ["scatter", "category-count", coordinator, col] as const,
   rangeIsolation: (coordinator: Coordinator, col: string, vmin: number, vmax: number) =>
     ["scatter", "range-isolation", coordinator, col, vmin, vmax] as const,
 } as const;
 
 export const tableKeys = {
-  rowPosition: (
-    coordinator: Coordinator,
-    table: string,
-    rowIndex: number,
-    filterKey: string,
-    sortKey: string,
-  ) => ["table", "row-position", coordinator, table, rowIndex, filterKey, sortKey] as const,
+  rowPosition: (coordinator: Coordinator, table: string, rowIndex: number, filterKey: string, sortKey: string) =>
+    ["table", "row-position", coordinator, table, rowIndex, filterKey, sortKey] as const,
 } as const;
 
 export const trajectoryKeys = {

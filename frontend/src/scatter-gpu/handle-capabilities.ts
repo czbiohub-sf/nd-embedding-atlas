@@ -39,8 +39,4 @@ export interface ColorCapability {
  * Full React-layer scatter GPU handle, assembled from capabilities.
  * Replaces the hand-written interface in ScatterGPUHost.tsx.
  */
-export type ScatterGPUHostHandle =
-  & ColorCapability
-  & SelectionCapability
-  & IsolationCapability
-  & ViewCapability;
+export type ScatterGPUHostHandle = ColorCapability & SelectionCapability & IsolationCapability & ViewCapability;

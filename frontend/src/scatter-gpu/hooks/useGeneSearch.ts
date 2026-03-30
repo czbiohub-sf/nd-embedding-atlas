@@ -19,11 +19,14 @@ export interface GeneSearchResult {
  */
 export function useGeneSearch(query: string): GeneSearchResult {
   const [debouncedQuery, setDebouncedQuery] = useState(query);
-  const geneDebouncer = useDebouncer(
-    (q: string) => setDebouncedQuery(q),
-    { wait: 200, leading: false, trailing: true },
-  );
-  useEffect(() => { geneDebouncer.maybeExecute(query); }, [query]); // eslint-disable-line react-hooks/exhaustive-deps
+  const geneDebouncer = useDebouncer((q: string) => setDebouncedQuery(q), {
+    wait: 200,
+    leading: false,
+    trailing: true,
+  });
+  useEffect(() => {
+    geneDebouncer.maybeExecute(query);
+  }, [query]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const { data, isLoading } = useQuery<VarNamesResponse>({
     queryKey: varKeys.names(debouncedQuery),

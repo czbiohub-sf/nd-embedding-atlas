@@ -54,8 +54,7 @@ export function useFloatingWindow(opts: Options = {}): FloatingWindowHandle {
   });
 
   const drag = useDrag<{ originX: number; originY: number }>({
-    onMove: (dx, dy, origin) =>
-      setState((s) => ({ ...s, x: origin.originX + dx, y: origin.originY + dy })),
+    onMove: (dx, dy, origin) => setState((s) => ({ ...s, x: origin.originX + dx, y: origin.originY + dy })),
     skipInteractive: true,
   });
 

@@ -58,11 +58,7 @@ export function clearPanelLayerState(panelId: PanelId): void {
 
 export type LayerName = keyof PanelLayerState;
 
-export function setLayerActive(
-  panelId: PanelId,
-  layer: LayerName,
-  isActive: boolean,
-): void {
+export function setLayerActive(panelId: PanelId, layer: LayerName, isActive: boolean): void {
   selectionLayerStore.setState((m) => {
     const panelState = m.get(panelId) ?? emptyPanelState();
     const slot = panelState[layer];

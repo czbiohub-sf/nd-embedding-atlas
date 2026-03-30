@@ -16,11 +16,7 @@ export const DRAG_THRESHOLD_PX = 4;
 /** Tags that should never initiate a drag even without data-no-drag. */
 const INTERACTIVE_TAGS = new Set(["BUTTON", "A", "INPUT", "SELECT", "TEXTAREA"]);
 
-function shouldAbortDrag(
-  target: EventTarget | null,
-  boundary: Element,
-  skipInteractive: boolean,
-): boolean {
+function shouldAbortDrag(target: EventTarget | null, boundary: Element, skipInteractive: boolean): boolean {
   let node = target as Element | null;
   while (node && node !== boundary) {
     if (node.hasAttribute("data-no-drag")) return true;
@@ -55,9 +51,7 @@ interface DragSession<O extends Record<string, number>> {
   thresholdPassed: boolean;
 }
 
-export function useDrag<O extends Record<string, number>>(
-  options: UseDragOptions<O>,
-): UseDragHandle<O> {
+export function useDrag<O extends Record<string, number>>(options: UseDragOptions<O>): UseDragHandle<O> {
   const { threshold = 0, skipInteractive = false } = options;
 
   // Keep latest callbacks in refs so callers don't need useCallback
@@ -71,24 +65,29 @@ export function useDrag<O extends Record<string, number>>(
   const sessionRef = useRef<DragSession<O> | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
-  const onMove = useCallback((e: PointerEvent) => {
-    const session = sessionRef.current;
-    if (!session) return;
-    const dx = e.clientX - session.startX;
-    const dy = e.clientY - session.startY;
-    if (!session.thresholdPassed) {
-      if (Math.hypot(dx, dy) < threshold) return;
-      session.thresholdPassed = true;
-    }
-    onMoveRef.current(dx, dy, session.origin);
-  }, [threshold]); // eslint-disable-line react-hooks/exhaustive-deps
+  const onMove = useCallback(
+    (e: PointerEvent) => {
+      const session = sessionRef.current;
+      if (!session) return;
+      const dx = e.clientX - session.startX;
+      const dy = e.clientY - session.startY;
+      if (!session.thresholdPassed) {
+        if (Math.hypot(dx, dy) < threshold) return;
+        session.thresholdPassed = true;
+      }
+      onMoveRef.current(dx, dy, session.origin);
+    },
+    [threshold],
+  ); // eslint-disable-line react-hooks/exhaustive-deps
 
   const onUp = useCallback(() => {
     const session = sessionRef.current;
     if (!session) return;
     if (session.captureTarget?.isConnected) {
       try {
-        (session.captureTarget as Element & { releasePointerCapture?: (id: number) => void }).releasePointerCapture?.(0);
+        (session.captureTarget as Element & { releasePointerCapture?: (id: number) => void }).releasePointerCapture?.(
+          0,
+        );
       } catch {}
     }
     window.removeEventListener("pointermove", onMove);
@@ -115,9 +114,7 @@ export function useDrag<O extends Record<string, number>>(
       if (shouldAbortDrag(e.target, boundary, skipInteractive)) return;
 
       try {
-        (e.currentTarget as Element & { setPointerCapture: (id: number) => void }).setPointerCapture(
-          e.pointerId,
-        );
+        (e.currentTarget as Element & { setPointerCapture: (id: number) => void }).setPointerCapture(e.pointerId);
       } catch {}
 
       sessionRef.current = {

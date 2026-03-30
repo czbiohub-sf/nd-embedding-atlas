@@ -14,9 +14,7 @@ export class DensePointSet implements IPointSet {
   private readonly _numPoints: number;
 
   constructor(numPoints: number, selectedIndices?: number[]) {
-    this.bitset = selectedIndices
-      ? new TypedFastBitSet(selectedIndices)
-      : new TypedFastBitSet();
+    this.bitset = selectedIndices ? new TypedFastBitSet(selectedIndices) : new TypedFastBitSet();
     this._numPoints = numPoints;
   }
 
@@ -61,10 +59,7 @@ export class DensePointSet implements IPointSet {
    * Populate from category membership.
    * For each point i: if isolatedCategories.has(categoryIndices[i]), set bit i.
    */
-  setFromCategories(
-    isolatedCategories: Set<number>,
-    categoryIndices: Uint8Array,
-  ): void {
+  setFromCategories(isolatedCategories: Set<number>, categoryIndices: Uint8Array): void {
     this.bitset.clear();
     const n = Math.min(categoryIndices.length, this._numPoints);
     for (let i = 0; i < n; i++) {
