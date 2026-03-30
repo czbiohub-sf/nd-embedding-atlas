@@ -15,6 +15,7 @@ import { ScatterGPUHost, type ScatterGPUHostHandle } from "../../scatter-gpu/com
 import type { ScatterplotConfig } from "../../scatter-gpu/types";
 import type { PanelId } from "../../scatter-gpu/types";
 import { selectionSyncStore } from "../../providers/SelectionSyncStore";
+import { getBitmapRowIds, disposeBitmap } from "../../providers/RoaringBroadcastStore";
 import { useScatterBrushSync } from "../../scatter-gpu/hooks/useScatterBrushSync";
 import { useIsolationBridge } from "../../scatter-gpu/hooks/useIsolationBridge";
 import type { IsolationCapability } from "../../scatter-gpu/handle-capabilities";
@@ -149,7 +150,10 @@ export function ScatterContent({
   }, [myPanelId, effectiveAxes, colorByColumn]);
 
   useEffect(() => {
-    return () => clearPanelState(String(myPanelId));
+    return () => {
+      clearPanelState(String(myPanelId));
+      disposeBitmap(String(myPanelId) as PanelId);
+    };
   }, [myPanelId]);
 
   // Shared ScatterView props
@@ -478,7 +482,7 @@ function ScatterView({
         hostRef.current?.clearExternalSelection();
       } else {
         if (s.sourcePanelId === myPanelId) return;
-        hostRef.current?.setExternalSelection(s.selectedRowIndices);
+        hostRef.current?.setExternalSelection(getBitmapRowIds(s.sourcePanelId));
       }
     });
     return () => sub.unsubscribe();

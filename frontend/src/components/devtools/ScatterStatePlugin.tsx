@@ -6,6 +6,7 @@
 import { useStore } from "@tanstack/react-store";
 import { brushPredicateStore } from "../../providers/BrushPredicateStore";
 import { selectionSyncStore } from "../../providers/SelectionSyncStore";
+import { getBitmapRowIds } from "../../providers/RoaringBroadcastStore";
 import { viewSyncStore } from "../../providers/ViewSyncStore";
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
@@ -51,14 +52,22 @@ export function ScatterStatePlugin() {
         {selection.type === "active" && (
           <>
             <Row label="sourcePanelId" value={selection.sourcePanelId} />
-            <Row
-              label="selectedRowIndices.length"
-              value={<span className="text-purple-400">{selection.selectedRowIndices.length.toLocaleString()}</span>}
-            />
-            <Row
-              label="selectedRowIndices[0..4]"
-              value={`[${selection.selectedRowIndices.slice(0, 5).join(", ")}${selection.selectedRowIndices.length > 5 ? ", …" : ""}]`}
-            />
+            <Row label="version" value={<span className="text-purple-400">{selection.version}</span>} />
+            {(() => {
+              const ids = getBitmapRowIds(selection.sourcePanelId);
+              return (
+                <>
+                  <Row
+                    label="bitmap.size"
+                    value={<span className="text-purple-400">{ids.length.toLocaleString()}</span>}
+                  />
+                  <Row
+                    label="bitmap[0..4]"
+                    value={`[${ids.slice(0, 5).join(", ")}${ids.length > 5 ? ", …" : ""}]`}
+                  />
+                </>
+              );
+            })()}
           </>
         )}
       </Section>
