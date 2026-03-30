@@ -37,7 +37,7 @@ import { toRows } from "../../lib/mosaic-helpers";
 import { setBrushPredicate } from "../../providers/BrushPredicateStore";
 import { useScatterColorState } from "../../scatter-gpu/hooks/useScatterColorState";
 import { hexToRgbPalette } from "../../scatter-gpu/utils/colors";
-import { colorSourceLegendLabel, colorSourceToString } from "../../lib/color-source";
+import { colorSourceFromString, colorSourceLegendLabel, colorSourceToString } from "../../lib/color-source";
 import type { AxisState, TrajectoryData, Metadata } from "../../types";
 import type { DockviewPanelApi } from "dockview-react";
 import type { Coordinator, Selection } from "@uwdata/mosaic-core";
@@ -565,7 +565,7 @@ function ScatterView({
       {colorMode === "categorical" && categoryMapping && !showLoading ? <CategoricalLegend /> : null}
       {colorMode === "continuous" && colorByColumn && colorRange ? (
         <ContinuousLegend
-          columnName={colorSourceLegendLabel(colorSource)}
+          columnName={colorSourceLegendLabel(colorSourceFromString(colorByColumn))}
           colormap={continuousColormap}
           vmin={userVmin ?? colorRange[0]}
           vmax={userVmax ?? colorRange[1]}
