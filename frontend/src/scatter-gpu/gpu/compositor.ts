@@ -1,4 +1,6 @@
+import tgpu from "typegpu";
 import * as d from "typegpu/data";
+import * as std from "typegpu/std";
 import { computeFn } from "./tgpu-compat";
 import type { TgpuRoot } from "../types";
 import type { ScatterBuffers, ScatterUniforms } from "./buffers";
@@ -65,17 +67,15 @@ export function createCompositor(
         const iso = isolationReadonly.value[idx];
         const lasso = lassoReadonly.value[idx];
         const ext   = externalReadonly.value[idx];
-        // annotationBuffer reserved; read to keep binding alive
-        const _ann  = annotationReadonly.value[idx];
 
         // Tier flags derived from bitmask
-        const hasIso = (layerBits & 0x4u) != 0u;   // LAYER_ISOLATION
-        const hasSel = ((layerBits & 0x1u) | (layerBits & 0x2u)) != 0u; // lasso | external
+        const hasIso = (layerBits & 4) != 0;   // LAYER_ISOLATION
+        const hasSel = ((layerBits & 1) | (layerBits & 2)) != 0; // lasso | external
 
         // isoPass: if isolation tier active, point must be in isolation mask
-        const isoPass = select(1u, iso, hasIso);
+        const isoPass = std.select(1, iso, hasIso);
         // selPass: if selection tier active, point must be in lasso OR external
-        const selPass = select(1u, lasso | ext, hasSel);
+        const selPass = std.select(1, lasso | ext, hasSel);
 
         selectedMutable.value[idx] = isoPass & selPass;
       }
