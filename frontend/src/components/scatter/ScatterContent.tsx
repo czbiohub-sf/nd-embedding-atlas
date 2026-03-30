@@ -7,7 +7,7 @@
  *  - Any future container
  */
 
-import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { useFloatingWindow } from "../../hooks/useFloatingWindow";
 import { FloatingWindow } from "../FloatingWindow";
 import { useThrottler } from "@tanstack/react-pacer";
@@ -36,8 +36,10 @@ import { toRows } from "../../lib/mosaic-helpers";
 import { setBrushPredicate } from "../../providers/BrushPredicateStore";
 import { useScatterColorState } from "../../scatter-gpu/hooks/useScatterColorState";
 import { hexToRgbPalette } from "../../scatter-gpu/utils/colors";
-import type { AxisState } from "../../types";
+import type { AxisState, TrajectoryData, Metadata } from "../../types";
 import type { DockviewPanelApi } from "dockview-react";
+import type { Coordinator, Selection } from "@uwdata/mosaic-core";
+import type { DashboardActions } from "../../dashboard/DashboardContext";
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
@@ -249,7 +251,7 @@ interface ScatterViewProps {
   axes: AxisState | null;
   isLoading: boolean;
   loadingKey: string | null;
-  coordinator: import("@uwdata/mosaic-core").Coordinator;
+  coordinator: Coordinator;
   table: string;
   xCol: string;
   yCol: string;
@@ -258,10 +260,10 @@ interface ScatterViewProps {
   categoryMapping: CategoryMapping | null;
   colorByColumn: string | null;
   continuousColormap: string;
-  brushSelection: import("@uwdata/mosaic-core").Selection;
-  trajectory: import("../../types").TrajectoryData | null;
-  metadata: import("../../types").Metadata;
-  actions: import("../../dashboard/DashboardContext").DashboardActions;
+  brushSelection: Selection;
+  trajectory: TrajectoryData | null;
+  metadata: Metadata;
+  actions: DashboardActions;
 }
 
 function ScatterView({
@@ -378,21 +380,19 @@ function ScatterView({
       cancelled = true;
       clearTimeout(tid);
     };
+    // coordinator is a stable singleton per DashboardProvider session — safe to omit from deps.
+    // If it ever becomes unstable, replace with coordinatorRef.current.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [colorMode, colorByColumn, userVmin, userVmax]);
 
   // ── Fit-view: pan+zoom to show the full embedding bounding box ──────────────
-  function handleFitView() {
+  const handleFitView = useCallback(() => {
     const positions = data?.positions;
     const el = containerRef.current;
     if (!positions || positions.length < 2 || !el) return;
-    let minX = Infinity,
-      maxX = -Infinity,
-      minY = Infinity,
-      maxY = -Infinity;
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
     for (let i = 0; i < positions.length; i += 2) {
-      const x = positions[i],
-        y = positions[i + 1];
+      const x = positions[i], y = positions[i + 1];
       if (x < minX) minX = x;
       if (x > maxX) maxX = x;
       if (y < minY) minY = y;
@@ -400,14 +400,17 @@ function ScatterView({
     }
     if (!isFinite(minX) || minX === maxX || minY === maxY) return;
     const aspect = el.clientWidth / el.clientHeight || 1;
-    const padding = 0.88; // leave a small margin
-    const zoom = Math.min((2 * padding) / (maxY - minY), (2 * aspect * padding) / (maxX - minX));
+    const padding = 0.88;
+    const zoom = Math.min(
+      (2 * padding) / (maxY - minY),
+      (2 * aspect * padding) / (maxX - minX),
+    );
     hostRef.current?.setViewState({
       panX: -(minX + maxX) / 2,
       panY: -(minY + maxY) / 2,
       zoom,
     });
-  }
+  }, [data?.positions]);
 
   const viewBroadcaster = useThrottler(
     (vs: { panX: number; panY: number; zoom: number }) => {
