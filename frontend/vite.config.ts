@@ -53,7 +53,9 @@ export default defineConfig({
       "/plate": "http://localhost:5055",
     },
   },
+  optimizeDeps: { exclude: ["roaring-wasm"] },
   build: {
+    target: "esnext",
     outDir: "dist",
     rolldownOptions: {
       output: {
@@ -92,6 +94,11 @@ export default defineConfig({
             {
               name: "vendor-arrow",
               test: /node_modules[\\/]+(apache-arrow)/,
+              priority: 15,
+            },
+            {
+              name: "vendor-roaring",
+              test: /[\\/]node_modules[\\/]roaring-wasm[\\/]/,
               priority: 15,
             },
             {

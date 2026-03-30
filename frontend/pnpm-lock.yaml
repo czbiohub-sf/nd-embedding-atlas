@@ -90,6 +90,9 @@ importers:
       react-resizable-panels:
         specifier: ^4.8.0
         version: 4.8.0(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      roaring-wasm:
+        specifier: ^1.1.0
+        version: 1.1.0
       shadcn:
         specifier: ^4.1.1
         version: 4.1.1(@types/node@20.19.37)(typescript@6.0.2)
@@ -108,6 +111,9 @@ importers:
       tweakpane:
         specifier: ^4.0.5
         version: 4.0.5
+      typedfastbitset:
+        specifier: ^0.8.0
+        version: 0.8.0
       typegpu:
         specifier: ^0.10.2
         version: 0.10.2
@@ -149,7 +155,7 @@ importers:
         specifier: ^0.10.2
         version: 0.10.2(typegpu@0.10.2)
       vite:
-        specifier: npm:@voidzero-dev/vite-plus-core@^0.1.14
+        specifier: npm:@voidzero-dev/vite-plus-core@latest
         version: '@voidzero-dev/vite-plus-core@0.1.14(@types/node@20.19.37)(esbuild@0.27.3)(jiti@2.6.1)(typescript@6.0.2)'
       vite-plus:
         specifier: latest
@@ -1871,8 +1877,8 @@ packages:
   ee-first@1.1.1:
     resolution: {integrity: sha512-WMwm9LhRUo+WUaRN+vRuETqG89IgZphVSNkdFgeb6sS/E4OrDIN7t48CAewSHXc6C8lefD8KKfr5vY61brQlow==}
 
-  electron-to-chromium@1.5.328:
-    resolution: {integrity: sha512-QNQ5l45DzYytThO21403XN3FvK0hOkWDG8viNf6jqS42msJ8I4tGDSpBCgvDRRPnkffafiwAym2X2eHeGD2V0w==}
+  electron-to-chromium@1.5.329:
+    resolution: {integrity: sha512-/4t+AS1l4S3ZC0Ja7PHFIWeBIxGA3QGqV8/yKsP36v7NcyUCl+bIcmw6s5zVuMIECWwBrAK/6QLzTmbJChBboQ==}
 
   emoji-regex@10.6.0:
     resolution: {integrity: sha512-toUI84YS5YmxW219erniWD0CIVOo46xGKColeNQRgOzDorgBi1v4D71/OFzgD9GO2UGKIv1C3Sp8DAn0+j5w7A==}
@@ -2585,8 +2591,8 @@ packages:
   path-to-regexp@6.3.0:
     resolution: {integrity: sha512-Yhpw4T9C6hPpgPeA28us07OJeqZ5EzQTkbfwuhsUg0c237RomFoETJgmp2sa3F/41gfLE6G5cqcYwznmeEeOlQ==}
 
-  path-to-regexp@8.4.0:
-    resolution: {integrity: sha512-PuseHIvAnz3bjrM2rGJtSgo1zjgxapTLZ7x2pjhzWwlp4SJQgK3f3iZIQwkpEnBaKz6seKBADpM4B4ySkuYypg==}
+  path-to-regexp@8.4.1:
+    resolution: {integrity: sha512-fvU78fIjZ+SBM9YwCknCvKOUKkLVqtWDVctl0s7xIqfmfb38t2TT4ZU2gHm+Z8xGwgW+QWEU3oQSAzIbo89Ggw==}
 
   pathe@2.0.3:
     resolution: {integrity: sha512-WUjGcAqP1gQacoQe+OBJsFA7Ld4DyXuUIjZ5cc75cLHvJ7dtNsTugphxIADwspS+AraAUePCKrSVtPLFj/F88w==}
@@ -2740,6 +2746,10 @@ packages:
   reusify@1.1.0:
     resolution: {integrity: sha512-g6QUff04oZpHs0eG5p83rFLhHeV00ug/Yf9nZM6fLeUrPguBTkTQOdpAWWspMh55TZfVQDPaN3NQJfbVRAxdIw==}
     engines: {iojs: '>=1.0.0', node: '>=0.10.0'}
+
+  roaring-wasm@1.1.0:
+    resolution: {integrity: sha512-mhNqA0BOqIW7k4ZYSYe3kCyvn5T3VWT+2661G7fZH0C6XcVkGoTDLAqne7b47xCNQE6LhuYviMKBnzbOiBXkdw==}
+    engines: {node: '>=14'}
 
   router@2.2.0:
     resolution: {integrity: sha512-nLTrUKm2UyiL7rlhapu/Zl45FwNgkZGaCpZbIHajDYgwlJCOzLSk+cIPAnsEqV955GjILJnKbdQC1nVPz+gAYQ==}
@@ -2996,6 +3006,9 @@ packages:
 
   typed-binary@4.3.3:
     resolution: {integrity: sha512-W2hLsSzt3k/tg38gDE4Fn/QiwcoqGuUHBc2cb3mXuH7KcYxe/GM57vzW14s2/bawB4R5knGgGq8Xb57vsaJ4Sg==}
+
+  typedfastbitset@0.8.0:
+    resolution: {integrity: sha512-GLGi9mkz4iQEzfujD6qFeu2G5HlPyevAPQfyo48zGDsF7BATg9HEcXqIwZg/HbM7RTN/96SppVGk3DtSFumo4w==}
 
   typegpu@0.10.2:
     resolution: {integrity: sha512-5DZRvNtsbvRM++MONmwxfX0+vYAZgPKnGNCB8nnr3jwXo/gaOJ51WcgKRU8cHvK0RvMikCCVdolwBeEC0B9m7A==}
@@ -4395,7 +4408,7 @@ snapshots:
     dependencies:
       baseline-browser-mapping: 2.10.12
       caniuse-lite: 1.0.30001782
-      electron-to-chromium: 1.5.328
+      electron-to-chromium: 1.5.329
       node-releases: 2.0.36
       update-browserslist-db: 1.2.3(browserslist@4.28.1)
 
@@ -4589,7 +4602,7 @@ snapshots:
 
   ee-first@1.1.1: {}
 
-  electron-to-chromium@1.5.328: {}
+  electron-to-chromium@1.5.329: {}
 
   emoji-regex@10.6.0: {}
 
@@ -5284,7 +5297,7 @@ snapshots:
 
   path-to-regexp@6.3.0: {}
 
-  path-to-regexp@8.4.0: {}
+  path-to-regexp@8.4.1: {}
 
   pathe@2.0.3: {}
 
@@ -5418,13 +5431,15 @@ snapshots:
 
   reusify@1.1.0: {}
 
+  roaring-wasm@1.1.0: {}
+
   router@2.2.0:
     dependencies:
       debug: 4.4.3
       depd: 2.0.0
       is-promise: 4.0.0
       parseurl: 1.3.3
-      path-to-regexp: 8.4.0
+      path-to-regexp: 8.4.1
     transitivePeerDependencies:
       - supports-color
 
@@ -5712,6 +5727,8 @@ snapshots:
       mime-types: 3.0.2
 
   typed-binary@4.3.3: {}
+
+  typedfastbitset@0.8.0: {}
 
   typegpu@0.10.2:
     dependencies:
