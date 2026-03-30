@@ -7,6 +7,7 @@
 
 import type { Coordinator, Selection } from "@uwdata/mosaic-core";
 import { count, type FilterExpr, Query } from "@uwdata/mosaic-sql";
+import { useDebouncer } from "@tanstack/react-pacer";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useMosaicClient } from "../../hooks/useMosaicClient";
 import { filterExprToExpr, toRows } from "../../lib/mosaic-helpers";
@@ -88,9 +89,15 @@ export function useTableQuery(opts: UseTableQueryOptions): UseTableQueryResult {
   const sortKey = sort ? `${sort.column}:${sort.direction}` : "none";
   const cacheKey = `${filterKey}|${sortKey}`;
   const prevCacheKey = useRef(cacheKey);
-  const refetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Keep activeCacheKeyRef in sync on first render and when cacheKey changes.
   activeCacheKeyRef.current = cacheKey;
+
+  // Debounce the re-fetch trigger so rapid lasso adjustments don't
+  // cause a fetch on every intermediate update.
+  const filterVersionDebouncer = useDebouncer(
+    () => setFilterVersion((n) => n + 1),
+    { wait: 150, leading: false, trailing: true, onUnmount: (d) => d.flush() },
+  );
 
   useEffect(() => {
     if (prevCacheKey.current !== cacheKey) {
@@ -99,21 +106,9 @@ export function useTableQuery(opts: UseTableQueryOptions): UseTableQueryResult {
       // fresh data when they land (fetchPage checks the key on completion).
       pendingRef.current.clear();
       prevCacheKey.current = cacheKey;
-      // Debounce the re-fetch trigger so rapid lasso adjustments don't
-      // cause a fetch on every intermediate update.
-      if (refetchTimerRef.current != null) clearTimeout(refetchTimerRef.current);
-      refetchTimerRef.current = setTimeout(() => {
-        refetchTimerRef.current = null;
-        setFilterVersion((n) => n + 1);
-      }, 150);
+      filterVersionDebouncer.maybeExecute();
     }
-    return () => {
-      if (refetchTimerRef.current != null) {
-        clearTimeout(refetchTimerRef.current);
-        refetchTimerRef.current = null;
-      }
-    };
-  }, [cacheKey]);
+  }, [cacheKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Build ORDER BY clause ───────────────────────────────────────
   const buildOrderBy = useCallback(() => {

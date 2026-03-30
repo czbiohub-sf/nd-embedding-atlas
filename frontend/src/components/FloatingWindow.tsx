@@ -53,7 +53,6 @@ export function FloatingWindow({ handle, title, children, className, extraTitleA
         {extraTitleActions}
         <button
           type="button"
-          onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => {
             e.stopPropagation();
             close();
