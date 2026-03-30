@@ -37,11 +37,7 @@ export function CategoricalLegend() {
   return (
     <div
       ref={containerRef}
-      className="absolute bottom-3 left-3 z-10 w-52 rounded-lg border border-border-subtle/20 text-[11px] font-mono"
-      style={{
-        background: "color-mix(in oklch, var(--color-base) 85%, transparent)",
-        backdropFilter: "blur(12px)",
-      }}
+      className="absolute left-2 top-10 z-20 w-52 rounded-lg border border-border/30 bg-card/80 backdrop-blur-md text-[11px] font-mono"
     >
       <div className="px-2.5 pt-2 pb-1 text-[10px] text-text-muted uppercase tracking-wider">
         Categories · {legend.length}

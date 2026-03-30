@@ -40,6 +40,8 @@ export const MetadataSchema = z
     database: z.object({ type: z.string(), uri: z.string().optional() }),
     obsm: z.record(z.string(), ObsmEntrySchema),
     obs_columns: z.array(z.string()).optional(),
+    var_count: z.number().optional(),
+    layers: z.array(z.string()).optional(),
     export_dir: z.string().optional(),
     spatial: SpatialSchema,
     plate: z.boolean().optional(),

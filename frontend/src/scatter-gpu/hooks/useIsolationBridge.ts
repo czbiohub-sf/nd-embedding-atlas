@@ -1,10 +1,21 @@
 import { useCallback, useRef } from "react";
+import type { RefObject } from "react";
 import type { CategoryMapping } from "../../lib/category-column";
 import { setBrushPredicate } from "../../providers/BrushPredicateStore";
+
+/** Minimal GPU handle surface needed for category isolation dimming. */
+interface IsolationHandle {
+  setCategoryIsolation(isolatedSet: Set<number>, categoryIndices: Uint8Array): void;
+  clearCategoryIsolation(): void;
+}
 
 interface UseIsolationBridgeOptions {
   coloredCategoryMapping: CategoryMapping | null;
   colorByColumn: string | null;
+  /** Ref to the GPU host — used to drive visual alpha-dimming on isolation. */
+  scatterRef: RefObject<IsolationHandle | null>;
+  /** Ref to per-point category palette indices — synced by ScatterView after data loads. */
+  categoryIndicesRef: RefObject<Uint8Array | null>;
 }
 
 interface UseIsolationBridgeResult {
@@ -13,15 +24,15 @@ interface UseIsolationBridgeResult {
 }
 
 /**
- * Bridges legend isolation state to Mosaic's BrushPredicateStore.
+ * Bridges legend isolation state to:
+ *  1. Mosaic's BrushPredicateStore — drives cross-filter (table, charts).
+ *  2. ScatterGPUHost.setCategoryIsolation — drives alpha-only GPU dim effect.
  *
- * Reads coloredCategoryMapping and colorByColumn via refs so the returned
- * callback is stable (never recreated). This prevents the LegendContext
- * useEffect from re-firing when only the callback reference changes — which
- * would call setBrushPredicate(null) and cancel any pending lasso Mosaic update.
+ * All mutable values (catMap, col, scatterRef, categoryIndices) are read via
+ * refs so the returned callback is stable and never triggers re-renders.
  */
 export function useIsolationBridge(opts: UseIsolationBridgeOptions): UseIsolationBridgeResult {
-  const { coloredCategoryMapping, colorByColumn } = opts;
+  const { coloredCategoryMapping, colorByColumn, scatterRef, categoryIndicesRef } = opts;
 
   const isolationSourceRef = useRef<object>({});
   const catMapRef = useRef(coloredCategoryMapping);
@@ -34,19 +45,32 @@ export function useIsolationBridge(opts: UseIsolationBridgeOptions): UseIsolatio
     const source = isolationSourceRef.current;
     const catMap = catMapRef.current;
     const col = colByColRef.current;
+    const catIndices = categoryIndicesRef.current;
+    const scatter = scatterRef.current;
+
+    // ── Clear path ───────────────────────────────────────────────────────
     if (isolatedIndices.size === 0 || !catMap || !col) {
       setBrushPredicate(source, null);
+      scatter?.clearCategoryIsolation();
       return;
     }
+
+    // ── Mosaic cross-filter predicate ────────────────────────────────────
     const labels = catMap.legend
       .filter((item) => isolatedIndices.has(item.index))
       .map((item) => `'${item.label.replace(/'/g, "''")}'`);
     if (labels.length === 0) {
       setBrushPredicate(source, null);
+      scatter?.clearCategoryIsolation();
       return;
     }
     setBrushPredicate(source, `${col} IN (${labels.join(", ")})`);
-  }, []); // stable — reads catMap/col via refs, never recreated
+
+    // ── GPU alpha-dimming ────────────────────────────────────────────────
+    if (scatter && catIndices) {
+      scatter.setCategoryIsolation(isolatedIndices, catIndices);
+    }
+  }, []); // stable — reads all values via refs, never recreated
 
   return { handleIsolationChange };
 }

@@ -47,6 +47,7 @@ export interface DataTableProps {
   selection?: Selection;
   highlightId?: string | null;
   onRowClick?: (rowIndex: string | null) => void;
+  onTotalCountChange?: (n: number) => void;
 }
 
 export function DataTable({
@@ -56,6 +57,7 @@ export function DataTable({
   selection,
   highlightId,
   onRowClick,
+  onTotalCountChange,
 }: DataTableProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -111,6 +113,11 @@ export function DataTable({
   // Only includes rows that are actually loaded — NOT the full dataset.
   // TanStack Table sees this small array; Virtual handles the full count.
   const visibleData = useMemo(() => getCachedRows(), [totalCount, getCachedRows]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Notify parent when row count changes so TerminalTable header can show it
+  useEffect(() => {
+    onTotalCountChange?.(totalCount);
+  }, [totalCount, onTotalCountChange]);
 
   // ── Auto-size columns from first loaded data ─────────────────
   useEffect(() => {
@@ -204,11 +211,6 @@ export function DataTable({
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden bg-surface font-mono text-text-primary text-xs">
-      {/* Status bar */}
-      <div className="flex shrink-0 items-center justify-between border-border-subtle border-b px-3 py-1.5 font-sans text-text-secondary text-[11px]">
-        <span>{totalCount.toLocaleString()} observations</span>
-      </div>
-
       {/* Scrollable container */}
       <div ref={containerRef} className="flex-1 overflow-auto">
         {/* Sticky header via TanStack Table header groups */}

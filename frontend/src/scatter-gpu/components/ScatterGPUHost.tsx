@@ -23,6 +23,10 @@ export interface ScatterGPUHostHandle {
   worldToScreen(wx: number, wy: number, w: number, h: number): { x: number; y: number };
   setExternalSelection(rowIndices: number[]): void;
   clearExternalSelection(): void;
+  setCategoryIsolation(isolatedSet: Set<number>, categoryIndices: Uint8Array): void;
+  clearCategoryIsolation(): void;
+  setRowIsolation(rowIndices: number[]): void;
+  clearRowIsolation(): void;
   setViewState(state: ViewState): void;
   setForcedSelectionMode(mode: "pan" | "marquee" | "lasso"): void;
 }
@@ -204,6 +208,18 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
       },
       clearExternalSelection() {
         gpuRef.current?.clearExternalSelection();
+      },
+      setCategoryIsolation(isolatedSet: Set<number>, categoryIndices: Uint8Array) {
+        gpuRef.current?.setCategoryIsolation(isolatedSet, categoryIndices);
+      },
+      clearCategoryIsolation() {
+        gpuRef.current?.clearCategoryIsolation();
+      },
+      setRowIsolation(rowIndices: number[]) {
+        gpuRef.current?.setRowIsolation(rowIndices);
+      },
+      clearRowIsolation() {
+        gpuRef.current?.clearRowIsolation();
       },
       setViewState(state) {
         gpuRef.current?.setViewState(state);

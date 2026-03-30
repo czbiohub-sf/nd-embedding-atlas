@@ -38,11 +38,11 @@ export function CropViewer() {
           <Viewer.Canvas className="absolute inset-0 h-full w-full" />
           <SingleCropViewer cropSize={cropSize} />
           <ViewerLoadingOverlay />
-          <div className="tp-overlay tp-overlay--top-left">
+          <div className="absolute left-2 top-2 z-20 flex flex-col gap-1">
             <ChannelControls />
             <VolumeControls />
           </div>
-          <div className="tp-overlay tp-overlay--bottom-left">
+          <div className="absolute bottom-2 left-2 z-20">
             <ViewerControls cropSize={cropSize} setCropSize={setCropSize} />
           </div>
           {!state.highlightId && (

@@ -195,11 +195,6 @@ export function createSelectionEngine(
     onSelectionChange(1, [index]);
   }
 
-  function clearSelection() {
-    selectionModeUniform.write(0);
-    onSelectionChange(null);
-  }
-
   // Pre-allocated mask — reused on every external selection update to avoid
   // O(n) heap allocation per sync event (critical for 455K+ point datasets).
   const externalSelectionMask = new Uint32Array(numPoints);
@@ -222,13 +217,66 @@ export function createSelectionEngine(
     // Status bar is updated via the separate onExternalClear callback in orchestrator.
   }
 
+  // ── Category isolation ─────────────────────────────────────────────────
+  // Stored as a pre-built Uint32Array so clearSelection can restore it after
+  // a lasso double-click without recomputing from category data.
+  let isolationMask: Uint32Array | null = null;
+
+  /**
+   * Dim all points whose category index is NOT in `isolatedSet`.
+   * Pass an empty Set (or call clearCategoryIsolation) to remove isolation.
+   * Uses the same alpha-dimming path as lasso/marquee selection.
+   */
+  function setCategoryIsolation(isolatedSet: Set<number>, categoryIndices: Uint8Array) {
+    if (isolatedSet.size === 0) {
+      clearCategoryIsolation();
+      return;
+    }
+    const mask = new Uint32Array(numPoints);
+    for (let i = 0; i < numPoints; i++) {
+      if (isolatedSet.has(categoryIndices[i])) mask[i] = 1;
+    }
+    setIsolationMask(mask);
+  }
+
+  function clearCategoryIsolation() {
+    setIsolationMask(null);
+  }
+
+  /**
+   * Apply a pre-built isolation mask directly (e.g. from a continuous range filter).
+   * Pass null to clear. Mask persists through lasso/marquee clear.
+   */
+  function setIsolationMask(mask: Uint32Array | null) {
+    isolationMask = mask;
+    if (mask) {
+      device.queue.writeBuffer(root.unwrap(selectedBuffer), 0, mask);
+      selectionModeUniform.write(1);
+    } else {
+      selectionModeUniform.write(0);
+    }
+  }
+
   return {
     runLassoSelection,
     runMarqueeSelection,
     selectPoint,
-    clearSelection,
+    clearSelection() {
+      // Restore category isolation mask if one is active so that a lasso
+      // double-click clear doesn't wipe the legend isolation state.
+      if (isolationMask) {
+        device.queue.writeBuffer(root.unwrap(selectedBuffer), 0, isolationMask);
+        selectionModeUniform.write(1);
+      } else {
+        selectionModeUniform.write(0);
+      }
+      onSelectionChange(null);
+    },
     setSelectedPoints,
     clearSelectionExternal,
+    setCategoryIsolation,
+    clearCategoryIsolation,
+    setIsolationMask,
     debugLogSelection,
     pipComputeFn,
     aabbComputeFn,

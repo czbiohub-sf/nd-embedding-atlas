@@ -56,11 +56,9 @@ export function ExportButton() {
       >
         Export
       </button>
-      {open && (
-        <Suspense fallback={null}>
-          <ExportDialog filtered={data?.filtered ?? 0} onClose={() => setOpen(false)} />
-        </Suspense>
-      )}
+      <Suspense fallback={null}>
+        <ExportDialog open={open} onOpenChange={setOpen} filtered={data?.filtered ?? 0} />
+      </Suspense>
     </div>
   );
 }

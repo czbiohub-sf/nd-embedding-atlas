@@ -61,6 +61,11 @@ def make_data_router(get_state: Callable[[], ViewerState], config: DatasetConfig
 
     @router.get("/data/metadata.json")
     async def get_metadata(state: State) -> dict:
+        try:
+            layer_keys = list(state.collection._concat.layers.keys())
+        except Exception:  # noqa: BLE001
+            layer_keys = []
+
         result: dict = {
             "version": get_package_version(),
             "props": config.embedding_props,
@@ -69,6 +74,8 @@ def make_data_router(get_state: Callable[[], ViewerState], config: DatasetConfig
             "obs_columns": config.obs_column_names,
             "plate": config.has_plate,
             "export_dir": str(state.export_dir),
+            "var_count": len(state.collection.var_names),
+            "layers": ["X", *layer_keys],
         }
         if config.plate_meta:
             result.update(config.plate_meta)

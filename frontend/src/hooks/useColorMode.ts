@@ -11,6 +11,11 @@ export function resolveColorMode(
   userOverride?: ColorMode,
 ): { mode: ColorMode; canToggle: boolean } {
   if (!columnName || !columnTypes) return { mode: "categorical", canToggle: false };
+  // Materialized var/expression columns are always float — force continuous
+  // regardless of whether columnTypes has caught up yet.
+  if (columnName.startsWith("__var_") && columnName.endsWith("__")) {
+    return { mode: userOverride ?? "continuous", canToggle: false };
+  }
   const dtype = columnTypes.get(columnName);
   const defaultMode: ColorMode = dtype === "number" ? "continuous" : "categorical";
   return {

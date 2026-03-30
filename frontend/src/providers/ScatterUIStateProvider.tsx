@@ -13,6 +13,8 @@ interface ScatterUIState {
   selectedCount: number | null;
   embeddingKey: string | null;
   numPoints: number;
+  /** Transient status message shown in the bottom dock (e.g. "Materializing ACTB…"). Null = nothing. */
+  statusMsg: string | null;
 }
 
 type ScatterUIAction =
@@ -20,7 +22,8 @@ type ScatterUIAction =
   | { type: "SET_ZOOM"; zoom: number }
   | { type: "SET_SELECTION"; count: number | null }
   | { type: "SET_EMBEDDING"; key: string | null }
-  | { type: "SET_NUM_POINTS"; n: number };
+  | { type: "SET_NUM_POINTS"; n: number }
+  | { type: "SET_STATUS"; msg: string | null };
 
 const initial: ScatterUIState = {
   fps: null,
@@ -28,6 +31,7 @@ const initial: ScatterUIState = {
   selectedCount: null,
   embeddingKey: null,
   numPoints: 0,
+  statusMsg: null,
 };
 
 function reducer(state: ScatterUIState, action: ScatterUIAction): ScatterUIState {
@@ -42,6 +46,8 @@ function reducer(state: ScatterUIState, action: ScatterUIAction): ScatterUIState
       return { ...state, embeddingKey: action.key };
     case "SET_NUM_POINTS":
       return { ...state, numPoints: action.n };
+    case "SET_STATUS":
+      return { ...state, statusMsg: action.msg };
     default:
       return state;
   }
@@ -72,5 +78,6 @@ export function useScatterUIDispatch() {
     setSelection: useCallback((count: number | null) => dispatch({ type: "SET_SELECTION", count }), [dispatch]),
     setEmbedding: useCallback((key: string | null) => dispatch({ type: "SET_EMBEDDING", key }), [dispatch]),
     setNumPoints: useCallback((n: number) => dispatch({ type: "SET_NUM_POINTS", n }), [dispatch]),
+    setStatus: useCallback((msg: string | null) => dispatch({ type: "SET_STATUS", msg }), [dispatch]),
   };
 }

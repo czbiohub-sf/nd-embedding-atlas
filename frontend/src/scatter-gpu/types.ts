@@ -86,6 +86,14 @@ export interface ScatterplotHandle {
   setForcedSelectionMode(mode: "pan" | "marquee" | "lasso"): void;
   /** Clear an externally-driven selection. */
   clearExternalSelection(): void;
+  /** Dim points whose category index is not in isolatedSet (legend isolation). Pass empty Set to clear. */
+  setCategoryIsolation(isolatedSet: Set<number>, categoryIndices: Uint8Array): void;
+  /** Remove category isolation dimming. */
+  clearCategoryIsolation(): void;
+  /** Dim points whose row index is NOT in rowIndices (continuous range filter). */
+  setRowIsolation(rowIndices: number[]): void;
+  /** Remove continuous range isolation. */
+  clearRowIsolation(): void;
   /** Programmatically set the view state (for view lock sync). Suppresses the onViewChange broadcast for this write. */
   setViewState(state: ViewState): void;
 }

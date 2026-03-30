@@ -1,0 +1,326 @@
+/**
+ * ScatterOverlayControls — glassmorphic controls overlaid on the scatter canvas.
+ *
+ * Two zones, both absolute-positioned:
+ *  top-left  → embedding + x/y dim comboboxes + color column combobox
+ *  top-right → selection tool toggles + utility button group (lock, pip, fullscreen, close)
+ */
+
+import { useMemo } from "react";
+import { BoxSelect, LassoSelect, Lock, LockOpen, X, Maximize2, PictureInPicture2Icon } from "lucide-react";
+
+/** Scan + Dot combined — "fit embedding to view" */
+function ScanDotIcon({ size = 12 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {/* Scan — corner brackets */}
+      <path d="M3 7V5a2 2 0 0 1 2-2h2" />
+      <path d="M17 3h2a2 2 0 0 1 2 2v2" />
+      <path d="M21 17v2a2 2 0 0 1-2 2h-2" />
+      <path d="M7 21H5a2 2 0 0 1-2-2v-2" />
+      {/* Dot — center point */}
+      <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+import type { FloatingWindowHandle } from "../../hooks/useFloatingWindow";
+import type { DockviewPanelApi } from "dockview-react";
+import { addFloatingScatter } from "../../providers/FloatingScatterStore";
+import { useStore } from "@tanstack/react-store";
+import { viewSyncStore, toggleViewLock } from "../../providers/ViewSyncStore";
+import { ToggleGroup, ToggleGroupItem } from "../ui/toggle-group";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
+import { Separator } from "../ui/separator";
+import { ButtonGroup } from "../ui/button-group";
+import { Combobox, type ComboboxOption } from "../ui/combobox";
+import { ColorSourcePicker } from "../scatter/ColorSourcePicker";
+import { cn } from "../../lib/utils";
+import type { AxisState } from "../../types";
+import type { ColorMode } from "../../scatter-gpu/hooks/useMosaicScatterData";
+
+interface Props {
+  // Axes
+  axes: AxisState;
+  obsmKeys: string[];
+  dims: number[];
+  loadingKey: string | null;
+  currentEntryLoaded: boolean;
+  onSetAxes: (axes: AxisState) => void;
+
+  // Color
+  colorByColumn: string | null;
+  obsColumns: string[];
+  colorMode: ColorMode;
+  colorModeCanToggle: boolean;
+  /** Whether the dataset has a var/expression matrix — hides Var tab when false */
+  hasVar: boolean;
+  onSetColorByColumn: (col: string | null) => void;
+  onToggleColorMode: () => void;
+
+  // Selection tool
+  selectionTool: "pan" | "marquee" | "lasso";
+  onSetSelectionTool: (t: "pan" | "marquee" | "lasso") => void;
+  onFitView?: () => void;
+  floatingWindow?: FloatingWindowHandle;
+  panelApi?: DockviewPanelApi;
+}
+
+const glass = "bg-card/75 backdrop-blur-md border border-white/[0.07] rounded-lg shadow-sm";
+
+/** Glass-styled combobox trigger for use inside the overlay zones. */
+const glassTrigger =
+  "h-6 max-w-28 border-0 bg-transparent px-1.5 text-[11px] gap-1 text-foreground/80 hover:bg-white/10 hover:text-foreground focus-visible:ring-0 dark:bg-transparent dark:hover:bg-white/10";
+
+export function ScatterOverlayControls({
+  axes,
+  obsmKeys,
+  dims,
+  loadingKey,
+  currentEntryLoaded,
+  onSetAxes,
+  colorByColumn,
+  obsColumns,
+  colorMode,
+  colorModeCanToggle,
+  hasVar,
+  onSetColorByColumn,
+  onToggleColorMode,
+  selectionTool,
+  onSetSelectionTool,
+  onFitView,
+  floatingWindow,
+  panelApi,
+}: Props) {
+  const lockMode = useStore(viewSyncStore, (s) => s.lockMode);
+  const isLinked = lockMode === "linked";
+  const disabled = loadingKey !== null;
+
+  // Memoize option arrays to avoid churn on every render
+  const embeddingOptions = useMemo<ComboboxOption[]>(
+    () => obsmKeys.map((k) => ({ value: k, label: k.replace(/^X_/, "") })),
+    [obsmKeys],
+  );
+  const dimOptions = useMemo<ComboboxOption[]>(() => dims.map((d) => ({ value: String(d), label: String(d) })), [dims]);
+
+  return (
+    <>
+      {/* ── Top-left: embedding + dims + color ── */}
+      <div className={cn("absolute left-2 top-2 z-20 flex items-center gap-1 px-2 py-1", glass)}>
+        {/* Embedding */}
+        <Combobox
+          value={axes.obsmKey}
+          onValueChange={(v) => v && onSetAxes({ obsmKey: v, xDim: 0, yDim: 1 })}
+          options={embeddingOptions}
+          placeholder="embedding"
+          searchPlaceholder="Search embeddings…"
+          disabled={disabled}
+          triggerClassName={cn(glassTrigger, "max-w-32")}
+          contentClassName="w-48"
+        />
+
+        <Separator orientation="vertical" className="h-3 bg-white/10" />
+
+        {/* X dim */}
+        <span className="text-[10px] text-muted-foreground/60">x</span>
+        <Combobox
+          value={String(axes.xDim)}
+          onValueChange={(v) => v !== "" && onSetAxes({ ...axes, xDim: Number(v) })}
+          options={dimOptions}
+          placeholder="0"
+          searchPlaceholder="Search dims…"
+          disabled={disabled || !currentEntryLoaded}
+          triggerClassName={cn(glassTrigger, "max-w-[3rem]")}
+          contentClassName="w-32"
+        />
+
+        {/* Y dim */}
+        <span className="text-[10px] text-muted-foreground/60">y</span>
+        <Combobox
+          value={String(axes.yDim)}
+          onValueChange={(v) => v !== "" && onSetAxes({ ...axes, yDim: Number(v) })}
+          options={dimOptions}
+          placeholder="1"
+          searchPlaceholder="Search dims…"
+          disabled={disabled || !currentEntryLoaded}
+          triggerClassName={cn(glassTrigger, "max-w-[3rem]")}
+          contentClassName="w-32"
+        />
+
+        <Separator orientation="vertical" className="h-3 bg-white/10" />
+
+        {/* Color column */}
+        <span className="text-[10px] text-muted-foreground/60 uppercase tracking-wide">col</span>
+        <ColorSourcePicker
+          colorByColumn={colorByColumn}
+          obsColumns={obsColumns}
+          hasVar={hasVar}
+          onSetColorByColumn={onSetColorByColumn}
+          triggerClassName={cn(glassTrigger, "max-w-36")}
+          contentClassName="w-64"
+        />
+
+        {colorModeCanToggle && (
+          <>
+            <Separator orientation="vertical" className="h-3 bg-white/10" />
+            <button
+              type="button"
+              onClick={onToggleColorMode}
+              className="px-0.5 text-[10px] text-muted-foreground/60 transition-colors hover:text-foreground"
+            >
+              {colorMode === "continuous" ? "scale" : "palette"}
+            </button>
+          </>
+        )}
+      </div>
+
+      {/* ── Top-right: selection tools + utility actions ── */}
+      <div className={cn("absolute right-2 top-2 z-20 flex items-center gap-1.5 px-1.5 py-1", glass)}>
+        {/* Selection tool toggles */}
+        <ToggleGroup
+          value={selectionTool === "pan" ? [] : [selectionTool]}
+          onValueChange={(v: string[]) => onSetSelectionTool((v[v.length - 1] as "marquee" | "lasso") ?? "pan")}
+          className="gap-0"
+        >
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <ToggleGroupItem
+                  value="marquee"
+                  size="sm"
+                  className="size-[22px] bg-transparent border-0 data-[state=on]:bg-white/15 text-muted-foreground data-[state=on]:text-foreground"
+                />
+              }
+            >
+              <BoxSelect className="size-3.5" />
+            </TooltipTrigger>
+            <TooltipContent side="bottom">Rectangle select</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <ToggleGroupItem
+                  value="lasso"
+                  size="sm"
+                  className="size-[22px] bg-transparent border-0 data-[state=on]:bg-white/15 text-muted-foreground data-[state=on]:text-foreground"
+                />
+              }
+            >
+              <LassoSelect className="size-3.5" />
+            </TooltipTrigger>
+            <TooltipContent side="bottom">Lasso select</TooltipContent>
+          </Tooltip>
+        </ToggleGroup>
+
+        <Separator orientation="vertical" className="mx-0.5 h-3 bg-white/10" />
+
+        {/* Utility actions as a ButtonGroup */}
+        <ButtonGroup className="border-white/10 bg-transparent">
+          {onFitView && (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <button
+                    type="button"
+                    onClick={onFitView}
+                    className="flex size-[22px] items-center justify-center bg-transparent text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
+                  />
+                }
+              >
+                <ScanDotIcon size={12} />
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Fit to embedding</TooltipContent>
+            </Tooltip>
+          )}
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <button
+                  type="button"
+                  onClick={toggleViewLock}
+                  className={cn(
+                    "flex size-[22px] items-center justify-center bg-transparent text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground",
+                    isLinked && "text-primary",
+                  )}
+                />
+              }
+            >
+              {isLinked ? <Lock className="size-3" /> : <LockOpen className="size-3" />}
+            </TooltipTrigger>
+            <TooltipContent side="bottom">{isLinked ? "Unlink views" : "Link views"}</TooltipContent>
+          </Tooltip>
+
+          {floatingWindow && (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (floatingWindow.state.open) {
+                        floatingWindow.close();
+                      } else {
+                        addFloatingScatter({ id: `float-${Date.now()}`, axes, colorByColumn });
+                        panelApi?.close();
+                      }
+                    }}
+                    className={cn(
+                      "flex size-[22px] items-center justify-center bg-transparent text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground",
+                      floatingWindow.state.open && "text-primary",
+                    )}
+                  />
+                }
+              >
+                <PictureInPicture2Icon className="size-3" />
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Float — collapse to overlay</TooltipContent>
+            </Tooltip>
+          )}
+
+          {panelApi && (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <button
+                    type="button"
+                    onClick={() => (panelApi.isMaximized() ? panelApi.exitMaximized() : panelApi.maximize())}
+                    className="flex size-[22px] items-center justify-center bg-transparent text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
+                  />
+                }
+              >
+                <Maximize2 className="size-3" />
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Fullscreen</TooltipContent>
+            </Tooltip>
+          )}
+
+          {panelApi && (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <button
+                    type="button"
+                    onClick={() => panelApi.close()}
+                    className="flex size-[22px] items-center justify-center bg-transparent text-muted-foreground transition-colors hover:bg-white/10 hover:text-destructive"
+                  />
+                }
+              >
+                <X className="size-3" />
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Close</TooltipContent>
+            </Tooltip>
+          )}
+        </ButtonGroup>
+      </div>
+    </>
+  );
+}

@@ -228,6 +228,32 @@ export async function createScatterplot(
       interaction.requestRender();
       config?.callbacks?.onExternalClear?.();
     },
+    setCategoryIsolation(isolatedSet: Set<number>, categoryIndices: Uint8Array) {
+      selection.setCategoryIsolation(isolatedSet, categoryIndices);
+      interaction.requestRender();
+    },
+    clearCategoryIsolation() {
+      selection.clearCategoryIsolation();
+      interaction.requestRender();
+    },
+    /** Dim points whose row index is NOT in the provided set (continuous range filter). */
+    setRowIsolation(rowIndices: number[]) {
+      if (rowIndices.length === 0) {
+        selection.setIsolationMask(null);
+      } else {
+        const mask = new Uint32Array(data.numCells);
+        for (const r of rowIndices) {
+          const i = rowToPoint.get(r);
+          if (i !== undefined) mask[i] = 1;
+        }
+        selection.setIsolationMask(mask);
+      }
+      interaction.requestRender();
+    },
+    clearRowIsolation() {
+      selection.setIsolationMask(null);
+      interaction.requestRender();
+    },
     setForcedSelectionMode(mode: "pan" | "marquee" | "lasso") {
       interaction.setForcedSelectionMode(mode);
     },

@@ -1,100 +1,116 @@
 # nd-embedding-atlas frontend
 
-React + Vite + TypeGPU/WebGPU scatter plots + Mosaic DuckDB analytics.
+React 19 + Vite 8 + TypeGPU/WebGPU scatter + Mosaic DuckDB analytics.
 
 ## Environment detection
 
-The toolchain adapts based on what's available. Check before running commands:
-
 ```bash
-which vp      # Vite+ unified CLI (preferred when available)
-which pnpm    # direct pnpm (standard dev environment)
-npx pnpm ...  # HPC / restricted environments — no global pnpm install
+which vp      # Vite+ unified CLI (preferred)
+which pnpm    # standard dev environment
+npx pnpm ...  # HPC / no global installs
 ```
 
 ## Commands
 
 ### Preferred: Vite+ (`vp`)
 
-If `vp` is available, use it for everything — it wraps pnpm, Rolldown, Oxlint, Oxfmt, and TypeScript in one CLI:
-
 ```bash
-vp dev              # dev server (proxies /api, /data, /plate → localhost:5055)
+vp dev              # dev server (proxies /api /data /plate → localhost:5055)
 vp build            # production build via Rolldown
-vp check            # typecheck + lint (Oxlint) + format (Oxfmt) — one command
-vp check --fix      # auto-fix lint + format issues
-vp lint             # Oxlint only
-vp fmt              # Oxfmt only
-vp install          # install dependencies (wraps pnpm)
+vp check            # typecheck + Oxlint + Oxfmt in one pass
+vp check --fix      # auto-fix lint + format
+vp install          # install dependencies
 vp add <pkg>        # add a dependency
 ```
 
-### Fallback: pnpm directly
-
-When `vp` is not installed:
+### Fallback: pnpm
 
 ```bash
-pnpm install        # install dependencies
-pnpm dev            # dev server
-pnpm build          # production build (runs tsc + vp build, falls back to vite build)
-pnpm check          # vp check if available, else tsc --noEmit
-pnpm lint           # vp lint if available, else biome check
+pnpm install && pnpm dev    # install + start dev server
+pnpm build                  # production build
+pnpm exec tsc --noEmit      # typecheck only
 ```
 
 ### HPC / restricted: npx pnpm
 
-On HPC clusters or environments where global installs are not permitted:
-
 ```bash
-npx pnpm install    # install dependencies
-npx pnpm dev        # dev server
-npx pnpm build      # production build
-npx pnpm exec tsc --noEmit   # typecheck
+npx pnpm install
+npx pnpm dev
+npx pnpm exec tsc --noEmit
 ```
 
 ## Python backend
 
-The frontend proxies all API calls to a FastAPI/uvicorn backend on port 5055.
-Start the backend with `uv run ndea view <data.zarr>` from the repo root.
-
-Or use mise to start both together:
+The frontend proxies all `/api`, `/data`, and `/plate` requests to FastAPI on port 5055.
 
 ```bash
-mise run dev path/to/data.zarr   # backend + frontend concurrently
+uv run ndea view path/to/data.zarr   # start backend
+mise run dev path/to/data.zarr       # start both concurrently
 ```
 
 ## Stack
 
 - **Vite 8 + Rolldown** — bundler (via `vite-plus` package)
-- **React 19 + TypeScript 6** — UI
-- **TypeGPU v0.10** — type-safe WebGPU scatter rendering
-- **Mosaic** — cross-filter analytics via server-side DuckDB
-- **TanStack** — Query, Store, Pacer, Table, Virtual, Hotkeys
-- **Tailwind v4** — utility CSS with custom design tokens in `app.css`
+- **React 19 + TypeScript 6** — UI framework
+- **TypeGPU v0.10** — type-safe WebGPU scatter rendering (`scatter-gpu/`)
+- **Mosaic** — cross-filter analytics via server-side DuckDB queries
+- **TanStack** — Query (caching), Store (cross-component state), Pacer (throttle/debounce), Table + Virtual, Hotkeys
+- **Tailwind v4** — utility CSS; design tokens defined in `app.css`
 - **Dockview** — resizable panel layout
 
 ## Key files
 
 ```
 src/
-  app.css                          # design tokens (@theme) + dark mode overrides
-  scatter-gpu/                     # WebGPU scatter renderer
-    gpu/                           # pipelines, selection, culling, shaders
-    hooks/                         # useScatterColorState, useScatterBrushSync, etc.
-  components/layout/panels/        # ScatterPanel, TablePanel, ImageViewerPanel
-  providers/                       # BrushPredicateStore, SelectionSyncStore, ViewSyncStore
-  dashboard/                       # DashboardContext/Provider/Shell
+  app.css                              # design tokens (@theme) + .dark overrides
+  types.ts                             # shared types: Metadata, ObsInfo, ViewState
+  lib/
+    branded-types.ts                   # PanelId, RowIndex branded types
+    schemas.ts                         # Zod schemas for API responses
+    mosaic-helpers.ts                  # stringPredicate() + Mosaic SQL helpers
+  providers/
+    BrushPredicateStore.ts             # TanStack Store → Mosaic brushSelection bridge
+    SelectionSyncStore.ts              # cross-panel selection broadcast
+    ViewSyncStore.ts                   # cross-panel pan/zoom lock
+  scatter-gpu/
+    gpu/                               # TypeGPU pipelines, selection, culling, shaders
+    components/ScatterGPUHost.tsx      # React ↔ WebGPU boundary (imperative handle)
+    hooks/
+      useScatterColorState.ts          # color column, mode, palette, category mapping
+      useScatterBrushSync.ts           # throttler/debouncer, Mosaic sync, broadcast
+      useIsolationBridge.ts            # stable handleIsolationChange (3-ref pattern)
+      useTrajectoryLoader.ts           # trajectory DuckDB query + activeIndex
+      useMosaicScatterData.ts          # TanStack Query: positions + colors from backend
+  components/layout/panels/
+    ScatterPanel.tsx                   # scatter panel (composes the hooks above)
+    TablePanel.tsx                     # obs table panel
+  dashboard/
+    DashboardProvider.tsx              # app-level coordinator, metadata, Mosaic setup
 ```
 
 ## Code style
 
-- 2-space indent for TSX/CSS, 4-space for Python
-- Double quotes, trailing commas, semicolons (`fmt` block in vite.config.ts)
-- Tailwind utilities only — no inline `style={{}}` except for dynamic values
+- 2-space indent (TSX/CSS/JSON)
+- Double quotes, trailing commas, semicolons (Oxfmt config in `vite.config.ts`)
+- Tailwind utilities only — no raw `style={{}}` except for dynamic/computed values
 - `@/` path alias → `src/`
+- `import type` for type-only imports
+
+## Gotchas
+
+**Selection sync cascade (multi-panel):** `clearSelectionExternal()` must NOT call `onSelectionChange` — it uses a separate `onExternalClear` callback. If it called `onSelectionChange`, clearing selection in panel A notifies panel B, which re-broadcasts its own clear, which panel A reacts to, oscillating at the GPU readback rate (~20 fps). See `gpu/selection.ts` and `ScatterPanel.tsx`.
+
+**Mosaic AsyncDispatch cancellation:** `brushSelection.update()` called from React effects gets cancelled by Mosaic's `Param.cancel('value')` when consecutive updates resolve to the same predicate. The fix is `BrushPredicateStore` (TanStack Store) → `requestAnimationFrame` → `brushSelection.update()`. Never call `brushSelection.update()` directly from a `useEffect`.
+
+**Two-tier selection sync:** Lasso readback fires at ~20 fps. Small selections (<5000 rows) update the table via `useThrottler(50ms)`; large selections use `useDebouncer(200ms)` which also handles temp-table sync. Both run on every readback. See `useScatterBrushSync.ts`.
+
+**GPU device exhaustion:** Each scatter panel shares one `GPUDevice` via `gpu/device-manager.ts` (ref-counted singleton). Never call `tgpu.init()` per panel — use `tgpu.initFromDevice()`. Opening 4+ panels with separate devices will crash Chrome.
+
+**`positionKey` destroys GPU on undefined:** `ScatterGPUHost` destroys and recreates the GPU when `positionKey` changes to `undefined`. Avoid transient undefined states in the data pipeline.
 
 ## Validation checklist
 
-- [ ] `vp check` (or `pnpm exec tsc --noEmit`) passes with zero errors
+- [ ] `vp check` passes with zero errors
 - [ ] `vp dev` starts without console errors
-- [ ] No `as any` / `as unknown as` casts introduced without a comment explaining why
+- [ ] No `as any` / `as unknown as` without an explanatory comment
+- [ ] No new `style={{}}` where a Tailwind utility exists

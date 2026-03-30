@@ -20,7 +20,7 @@ def _materialize_embedding(key: str, collection: "AnnDataCollection") -> np.ndar
     Uses the fast direct-read path (zarr/h5py) when possible, bypassing
     AnnData/dask overhead (60× faster on 1M-cell zarr stores).
     """
-    from nd_embedding_atlas.io._get import get_obsm  # noqa: PLC0415
+    from nd_embedding_atlas.io._get import get_obsm
 
     return get_obsm(collection, key, dtype=np.float32)
 

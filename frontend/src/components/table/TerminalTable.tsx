@@ -5,7 +5,7 @@
  * Drag handle at the top allows resizing the panel height.
  */
 
-import { useCallback, useRef } from "react";
+import { useCallback, useRef, useState } from "react";
 import { XIcon } from "lucide-react";
 import { useTerminalTable } from "../../providers/TerminalTableProvider";
 import { useDashboard } from "../../hooks/useDashboard";
@@ -15,6 +15,7 @@ const FALLBACK_TABLE_COLUMNS = ["_dataset"];
 
 export function TerminalTable() {
   const { open, height, toggle, setHeight } = useTerminalTable();
+  const [totalCount, setTotalCount] = useState<number>(0);
   const { state, actions, meta } = useDashboard();
   const { metadata, highlightId } = state;
   const { coordinator, brushSelection, table } = meta;
@@ -70,9 +71,11 @@ export function TerminalTable() {
       {/* Header bar */}
       <div className="flex shrink-0 items-center gap-2 border-b border-border-subtle bg-elevated px-3 py-1">
         <span className="text-[11px] font-medium text-text-secondary select-none">▲ Table</span>
-        <span className="text-[10px] text-text-muted select-none" style={{ letterSpacing: "0.04em" }}>
-          ⌘J
-        </span>
+        {totalCount > 0 && (
+          <span className="text-[10px] text-text-muted tabular-nums select-none">
+            {totalCount.toLocaleString()} obs
+          </span>
+        )}
         <span className="flex-1" />
         <button
           type="button"
@@ -94,6 +97,7 @@ export function TerminalTable() {
             selection={brushSelection}
             highlightId={highlightId}
             onRowClick={(id) => actions.setHighlight(id)}
+            onTotalCountChange={setTotalCount}
           />
         </div>
       )}

@@ -62,7 +62,8 @@ export function createVertexShader(uniforms: ScatterUniforms) {
     const rgba = unpackColor(input.instanceColor);
     return {
       position: d.vec4f((worldX + scaledQuad.x) / aspect, worldY + scaledQuad.y, 0, 1),
-      color: d.vec4f(rgba.x * dimFactor, rgba.y * dimFactor, rgba.z * dimFactor, rgba.w),
+      // Dim unselected points via alpha only — preserves color in light mode.
+      color: d.vec4f(rgba.x, rgba.y, rgba.z, rgba.w * dimFactor),
       uv: input.quadPos,
     };
   }).$uses({ unpackColor });
@@ -77,9 +78,11 @@ export function createFragmentShader() {
     const dist = sdDisk(input.uv, 1.0);
     const fw = std.max(std.fwidth(dist), 0.01);
     const alpha = 1 - std.smoothstep(-fw, fw, dist);
-    if (alpha < 0.004) {
+    // input.color.w carries the selection dim factor (1.0 = selected, ~0.08 = unselected).
+    const finalAlpha = alpha * input.color.w;
+    if (finalAlpha < 0.004) {
       std.discard();
     }
-    return d.vec4f(input.color.x * alpha, input.color.y * alpha, input.color.z * alpha, alpha);
+    return d.vec4f(input.color.x * finalAlpha, input.color.y * finalAlpha, input.color.z * finalAlpha, finalAlpha);
   });
 }

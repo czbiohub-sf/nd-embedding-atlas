@@ -1,29 +1,28 @@
 import type { DockviewApi } from "dockview-react";
-import { useRef, useCallback } from "react";
+import { useRef, useCallback, useState } from "react";
+import { DevtoolsDrawer } from "../components/devtools/DevtoolsDrawer";
+import { FloatingScatterRoot } from "../components/layout/FloatingScatterWindow";
 import { CommandPalette } from "../components/CommandPalette";
 import { DockviewShell } from "../components/layout/DockviewShell";
-import { StatusFooter } from "../components/StatusFooter";
+import { BottomDock } from "../components/layout/BottomDock";
 import { TerminalTable } from "../components/table/TerminalTable";
-import { ExportButton } from "../components/toolbar/ExportButton";
-import { FilterInfo } from "../components/toolbar/FilterInfo";
-import { TimeSlider } from "../components/toolbar/TimeSlider";
-import { Toolbar } from "../components/toolbar/Toolbar";
 import { useDashboard } from "../hooks/useDashboard";
 
 export function DashboardShell() {
   const { state } = useDashboard();
   const { metadata } = state;
-  const hasTime = metadata.obs_columns?.includes("t") ?? false;
   const hasEmbeddings = Object.keys(metadata.obsm ?? {}).length > 0;
 
   const dockviewApiRef = useRef<DockviewApi | null>(null);
+  const [dockviewApi, setDockviewApi] = useState<DockviewApi | null>(null);
+  const cmdPaletteOpenRef = useRef<((page: "scatter") => void) | null>(null);
+  const [devtoolsOpen, setDevtoolsOpen] = useState(false);
 
   const addScatterPanel = useCallback((obsmKey: string) => {
     const api = dockviewApiRef.current;
     if (!api) return;
     const id = `scatter-${Math.random().toString(36).slice(2, 10)}`;
     const label = obsmKey.replace(/^X_/, "").toUpperCase();
-    // Place to the right of any existing scatter panel, otherwise free-floating
     const existingScatter = api.panels.find((p) => p.id === "scatter" || p.id.startsWith("scatter-"));
     api.addPanel({
       id,
@@ -34,38 +33,42 @@ export function DashboardShell() {
     });
   }, []);
 
-  return (
-    <div
-      className="flex h-full flex-col"
-      style={{ background: "var(--color-base)", paddingBottom: "var(--footer-height, 1.5rem)" }}
-    >
-      <Toolbar>
-        {hasTime && <TimeSlider />}
-        <FilterInfo />
-        <ExportButton />
-        <span className="ml-auto" style={{ color: "var(--color-text-muted)", fontSize: 11 }}>
-          v{metadata.version}
-        </span>
-      </Toolbar>
+  const openScatterPicker = useCallback(() => {
+    cmdPaletteOpenRef.current?.("scatter");
+  }, []);
 
+  return (
+    <div className="flex h-full flex-col overflow-hidden bg-background">
       <div className="min-h-0 flex-1">
         <DockviewShell
           hasPlate={!!metadata.plate}
           hasEmbeddings={hasEmbeddings}
           onApiReady={(api) => {
             dockviewApiRef.current = api;
+            setDockviewApi(api);
           }}
         />
       </div>
 
-      {/* Terminal table drawer — slides up above the fixed footer */}
+      {/* ⌘J terminal table — slides up above the dock */}
       <TerminalTable />
 
-      {/* Fixed footer — always visible */}
-      <StatusFooter />
+      {/* Devtools drawer — sits directly above the dock */}
+      <DevtoolsDrawer open={devtoolsOpen} onClose={() => setDevtoolsOpen(false)} />
 
-      {/* ⌘K command palette — portaled, always mounted */}
-      <CommandPalette onAddScatter={addScatterPanel} />
+      {/* Bottom dock — 20px navigation + metrics */}
+      <BottomDock
+        dockviewApi={dockviewApi}
+        onAddScatter={openScatterPicker}
+        devtoolsOpen={devtoolsOpen}
+        onToggleDevtools={() => setDevtoolsOpen((o) => !o)}
+      />
+
+      {/* Floating scatter windows — outside Dockview so they survive panel close */}
+      <FloatingScatterRoot />
+
+      {/* ⌘K command palette */}
+      <CommandPalette onAddScatter={addScatterPanel} openRef={cmdPaletteOpenRef} />
     </div>
   );
 }

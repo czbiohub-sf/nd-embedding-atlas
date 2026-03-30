@@ -9,6 +9,9 @@ import type { ColorMode } from "../../scatter-gpu/hooks/useMosaicScatterData";
 import type { AxisState } from "../../types";
 import { CompactSelect } from "../ui/select";
 import { Button } from "../ui/button";
+import { Separator } from "../ui/separator";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
+import { ToggleGroup, ToggleGroupItem } from "../ui/toggle-group";
 import { Lock, LockOpen, BoxSelect, LassoSelect } from "lucide-react";
 import { useStore } from "@tanstack/react-store";
 import { viewSyncStore, toggleViewLock } from "../../providers/ViewSyncStore";
@@ -77,7 +80,7 @@ export function ScatterControlStrip({
           value={axes.obsmKey}
           disabled={loadingKey !== null}
           options={obsmKeys.map((k) => ({ value: k, label: k.replace(/^X_/, "") }))}
-          onChange={(v) => onSetAxes({ obsmKey: v, xDim: 0, yDim: 1 })}
+          onChange={(v: string) => onSetAxes({ obsmKey: v, xDim: 0, yDim: 1 })}
         />
       </label>
 
@@ -87,7 +90,7 @@ export function ScatterControlStrip({
           value={String(axes.xDim)}
           disabled={loadingKey !== null || !currentEntryLoaded}
           options={dims.map((d) => ({ value: String(d), label: String(d) }))}
-          onChange={(v) => onSetAxes({ ...axes, xDim: Number(v) })}
+          onChange={(v: string) => onSetAxes({ ...axes, xDim: Number(v) })}
         />
       </label>
 
@@ -97,11 +100,11 @@ export function ScatterControlStrip({
           value={String(axes.yDim)}
           disabled={loadingKey !== null || !currentEntryLoaded}
           options={dims.map((d) => ({ value: String(d), label: String(d) }))}
-          onChange={(v) => onSetAxes({ ...axes, yDim: Number(v) })}
+          onChange={(v: string) => onSetAxes({ ...axes, yDim: Number(v) })}
         />
       </label>
 
-      <div className="h-4 w-px bg-border-subtle" />
+      <Separator orientation="vertical" className="h-4" />
 
       <label className="flex items-center gap-1.5">
         <span className="font-medium text-[10px] text-text-muted uppercase tracking-wider">Color</span>
@@ -109,7 +112,7 @@ export function ScatterControlStrip({
           value={colorByColumn ?? ""}
           placeholder="none"
           options={obsColumns.map((col) => ({ value: col, label: col }))}
-          onChange={(v) => onSetColorByColumn(v || null)}
+          onChange={(v: string) => onSetColorByColumn(v || null)}
         />
       </label>
 
@@ -164,35 +167,44 @@ export function ScatterControlStrip({
         </span>
       ) : null}
 
-      <div className="ml-auto flex items-center gap-0.5">
-        <Button
-          variant="ghost"
-          size="xs"
-          className={`h-6 w-6 px-0 ${selectionTool === "marquee" ? "bg-accent text-accent-foreground" : ""}`}
-          onClick={() => onSetSelectionTool(selectionTool === "marquee" ? "pan" : "marquee")}
-          title="Rectangle select (Shift+drag) — click to lock mode"
+      <div className="ml-auto flex items-center gap-1">
+        <ToggleGroup
+          value={selectionTool === "pan" ? [] : [selectionTool]}
+          onValueChange={(v: string[]) => onSetSelectionTool((v[v.length - 1] as "marquee" | "lasso") ?? "pan")}
+          className="gap-0"
         >
-          <BoxSelect className="h-3.5 w-3.5" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="xs"
-          className={`h-6 w-6 px-0 ${selectionTool === "lasso" ? "bg-accent text-accent-foreground" : ""}`}
-          onClick={() => onSetSelectionTool(selectionTool === "lasso" ? "pan" : "lasso")}
-          title="Lasso select (Shift+Alt+drag) — click to lock mode"
-        >
-          <LassoSelect className="h-3.5 w-3.5" />
-        </Button>
-        <div className="h-4 w-px bg-border-subtle mx-0.5" />
-        <Button
-          variant="ghost"
-          size="xs"
-          className="h-6 w-6 px-0"
-          onClick={toggleViewLock}
-          title={isLinked ? "Unlink views" : "Link views"}
-        >
-          {isLinked ? <Lock className="h-3.5 w-3.5" /> : <LockOpen className="h-3.5 w-3.5" />}
-        </Button>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <ToggleGroupItem value="marquee" size="sm" className="size-6">
+                  <BoxSelect data-icon />
+                </ToggleGroupItem>
+              }
+            />
+            <TooltipContent side="bottom">Rectangle select (Shift+drag)</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <ToggleGroupItem value="lasso" size="sm" className="size-6">
+                  <LassoSelect data-icon />
+                </ToggleGroupItem>
+              }
+            />
+            <TooltipContent side="bottom">Lasso select (Shift+Alt+drag)</TooltipContent>
+          </Tooltip>
+        </ToggleGroup>
+
+        <Separator orientation="vertical" className="h-4 mx-0.5" />
+
+        <Tooltip>
+          <TooltipTrigger>
+            <Button variant="ghost" size="xs" className="size-6 px-0" onClick={toggleViewLock}>
+              {isLinked ? <Lock data-icon /> : <LockOpen data-icon />}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">{isLinked ? "Unlink views" : "Link views"}</TooltipContent>
+        </Tooltip>
       </div>
     </div>
   );

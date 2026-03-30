@@ -3,6 +3,8 @@ import { DashboardProvider, DashboardShell } from "./dashboard";
 import { ThemeProvider } from "./providers/ThemeProvider";
 import { ScatterUIStateProvider } from "./providers/ScatterUIStateProvider";
 import { TerminalTableProvider } from "./providers/TerminalTableProvider";
+import { TooltipProvider } from "./components/ui/tooltip";
+import { Toaster } from "./components/ui/sonner";
 
 // Module scope — survives HMR
 const queryClient = new QueryClient({
@@ -13,13 +15,16 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
-        <ScatterUIStateProvider>
-          <DashboardProvider>
-            <TerminalTableProvider>
-              <DashboardShell />
-            </TerminalTableProvider>
-          </DashboardProvider>
-        </ScatterUIStateProvider>
+        <TooltipProvider delay={400}>
+          <ScatterUIStateProvider>
+            <DashboardProvider>
+              <TerminalTableProvider>
+                <DashboardShell />
+                <Toaster position="bottom-right" />
+              </TerminalTableProvider>
+            </DashboardProvider>
+          </ScatterUIStateProvider>
+        </TooltipProvider>
       </ThemeProvider>
     </QueryClientProvider>
   );

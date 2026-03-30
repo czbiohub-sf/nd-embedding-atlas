@@ -20,7 +20,7 @@ export function createCullingEngine(
   buffers: ScatterBuffers,
   uniforms: ScatterUniforms,
   numPoints: number,
-  wgSize: 64 | 256 = 64,
+  wgSize: 64 | 256 = 256,
 ) {
   // Visibility buffer: 1 = visible, 0 = culled
   const visibilityBuffer = root.createBuffer(d.arrayOf(d.u32, numPoints)).$usage("storage", "vertex");

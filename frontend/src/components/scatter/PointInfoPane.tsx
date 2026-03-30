@@ -1,10 +1,11 @@
 /**
- * PointInfoPane — frosted-glass floating card showing obs metadata.
- * Replaces the Tweakpane-based implementation with a plain React component.
- * Will be replaced by PointHovercard in the next UX iteration.
+ * PointInfoPane — selected point metadata card.
+ * Positioned as a canvas overlay; renders when a point is clicked.
  */
 import { useEffect, useState } from "react";
 import { jsonFetcher } from "../../lib/fetcher";
+import { cn } from "../../lib/utils";
+import { Separator } from "../ui/separator";
 
 interface PointInfoPaneProps {
   highlightId: string | null;
@@ -25,9 +26,7 @@ export function PointInfoPane({ highlightId, additionalFields, onShowTrajectory 
       (data: Record<string, string | null>) => {
         if (!cancelled) setRow(data);
       },
-      (err) => {
-        console.error("PointInfoPane fetch failed:", err);
-      },
+      (err) => console.error("PointInfoPane fetch failed:", err),
     );
     return () => {
       cancelled = true;
@@ -43,67 +42,38 @@ export function PointInfoPane({ highlightId, additionalFields, onShowTrajectory 
 
   return (
     <div
-      style={{
-        background: "color-mix(in srgb, var(--color-base) 85%, transparent)",
-        backdropFilter: "blur(8px)",
-        border: "1px solid var(--color-border-subtle)",
-        borderRadius: 6,
-        padding: "8px 10px",
-        fontFamily: "var(--font-mono)",
-        fontSize: 11,
-        color: "var(--color-text-primary)",
-        minWidth: 160,
-      }}
+      className={cn(
+        "rounded-lg border border-border/50 bg-card/80 backdrop-blur-md",
+        "p-2.5 shadow-md min-w-[160px] max-w-[220px]",
+        "font-mono text-[11px]",
+      )}
     >
-      <div
-        style={{
-          fontFamily: "var(--font-sans)",
-          fontSize: 10,
-          fontWeight: 600,
-          color: "var(--color-text-muted)",
-          marginBottom: 6,
-          textTransform: "uppercase",
-          letterSpacing: "0.08em",
-        }}
-      >
-        Point Info
+      {/* Header */}
+      <p className="mb-1.5 text-[9px] font-sans font-semibold uppercase tracking-widest text-muted-foreground">Point</p>
+      <Separator className="mb-1.5 opacity-40" />
+
+      {/* Key–value rows */}
+      <div className="flex flex-col gap-0.5">
+        {fields.map((key) => (
+          <div key={key} className="flex items-baseline justify-between gap-3">
+            <span className="max-w-[90px] truncate text-muted-foreground/70">{key}</span>
+            <span className="tabular-nums text-foreground/90">{row[key] ?? "—"}</span>
+          </div>
+        ))}
       </div>
-      {fields.map((key) => (
-        <div key={key} style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "1px 0" }}>
-          <span
-            style={{
-              color: "var(--color-text-muted)",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-              maxWidth: 90,
-            }}
-          >
-            {key}
-          </span>
-          <span style={{ color: "var(--color-text-primary)", fontVariantNumeric: "tabular-nums" }}>
-            {row[key] ?? "—"}
-          </span>
-        </div>
-      ))}
+
+      {/* Trajectory action */}
       {canShowTrajectory && (
-        <button
-          onClick={() => onShowTrajectory(Number(trackId), String(fovName), row.t ? Number(row.t) : undefined)}
-          style={{
-            marginTop: 8,
-            width: "100%",
-            padding: "3px 0",
-            background: "var(--color-elevated)",
-            border: "1px solid var(--color-border-subtle)",
-            borderRadius: 3,
-            color: "var(--color-text-secondary)",
-            fontSize: 10,
-            cursor: "pointer",
-            fontFamily: "var(--font-sans)",
-          }}
-        >
-          → Show Trajectory
-        </button>
+        <>
+          <Separator className="my-2 opacity-40" />
+          <button
+            type="button"
+            onClick={() => onShowTrajectory(Number(trackId), String(fovName), row.t ? Number(row.t) : undefined)}
+            className="w-full rounded-sm border border-border/40 bg-muted/30 px-2 py-1 text-[10px] text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+          >
+            → Show Trajectory
+          </button>
+        </>
       )}
     </div>
   );

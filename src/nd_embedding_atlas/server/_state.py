@@ -58,6 +58,17 @@ class ExportTaskState:
     error: str | None = None
 
 
+@dataclasses.dataclass
+class GeneTaskState:
+    """Typed state for a single gene-column materialization task."""
+
+    task_id: str
+    task: asyncio.Task[None]
+    status: str = "loading"  # "loading" | "ready" | "error"
+    column: str = ""
+    error: str | None = None
+
+
 class ViewerState:
     """All mutable server state for one viewer session.
 
@@ -94,6 +105,7 @@ class ViewerState:
         self.load_errors: dict[str, str] = {}
         self.parquet_cache: bytes | None = None
         self.export_task: ExportTaskState | None = None
+        self.gene_tasks: dict[str, GeneTaskState] = {}
 
     @property
     def executor(self):

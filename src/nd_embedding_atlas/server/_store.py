@@ -11,6 +11,7 @@ from typing import Any, ClassVar
 import duckdb
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 
 from nd_embedding_atlas.vz._prepare import _obsm_column_prefix
 
@@ -130,6 +131,34 @@ class EmbeddingStore:
     def loaded_embeddings(self) -> types.MappingProxyType[str, dict[str, Any]]:
         """Read-only view of loaded obsm keys and their metadata."""
         return types.MappingProxyType(self._loaded)
+
+    def add_obs_column(self, col_name: str, data: pa.Array) -> None:
+        """Add a new column to ``obs_base`` and rebuild the VIEW.
+
+        Parameters
+        ----------
+        col_name
+            Name for the new column (must not already exist).
+        data
+            PyArrow array with exactly ``n_obs`` elements, aligned by ``__row_index__``.
+        """
+        with self._schema_lock:
+            # Register as an Arrow table so DuckDB can join against it reliably
+            # (local-variable scans are fragile in executor threads).
+            tbl = pa.table({
+                "__row_index__": pa.array(np.arange(len(data), dtype=np.int64)),
+                col_name: data,
+            })
+            self.con.register("_var_col_tbl", tbl)
+            try:
+                self.con.execute(f'ALTER TABLE obs_base ADD COLUMN "{col_name}" FLOAT')
+                self.con.execute(
+                    f'UPDATE obs_base SET "{col_name}" = t."{col_name}" '
+                    f'FROM _var_col_tbl t WHERE obs_base.__row_index__ = t.__row_index__'
+                )
+            finally:
+                self.con.unregister("_var_col_tbl")
+            self._rebuild_view()
 
     def cursor(self) -> duckdb.DuckDBPyConnection:
         """Return a new cursor for thread-safe query execution.

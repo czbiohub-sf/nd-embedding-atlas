@@ -11,7 +11,7 @@ uv     = "latest"            # managed by mise — used as Python backend + proj
 python = "3.13"
 node   = "24"
 pnpm   = "10"
-vp     = "latest"            # vite-plus CLI — mise registry: npm:vite-plus
+# vp (vite-plus) is self-managed at ~/.vite-plus — update with: vp update
 
 [env]
 # Backend port — override with NDEA_PORT=XXXX mise run dev
@@ -21,11 +21,14 @@ NDEA_PORT          = "5055"
 
 [tasks.dev]
 description = "Start backend + frontend dev server concurrently"
-# mise runs list items concurrently by default
-run = [
-    "uv run ndea view {{arg(name='data', var=false)}} --port $NDEA_PORT",
-    "cd frontend && vp dev",
-]
+run = """
+#!/bin/bash
+set -e
+uv run ndea view {{arg(name='data', var=false)}} --port $NDEA_PORT &
+BACKEND=$!
+trap "kill $BACKEND 2>/dev/null; wait $BACKEND 2>/dev/null" EXIT INT TERM
+cd frontend && vp dev
+"""
 
 [tasks.dev-frontend]
 description = "Frontend dev server only (assumes backend already running)"

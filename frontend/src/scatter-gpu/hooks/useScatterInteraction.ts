@@ -114,10 +114,19 @@ export function createInteractionController(
     return [((ndcX + 1) / 2) * overlay.clientWidth, ((-ndcY + 1) / 2) * overlay.clientHeight];
   }
 
+  function getOverlayColors() {
+    const isDark = document.documentElement.classList.contains("dark");
+    return {
+      stroke: isDark ? "rgba(255, 255, 255, 0.8)" : "rgba(30, 30, 30, 0.75)",
+      fill: isDark ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.05)",
+    };
+  }
+
   function drawLasso() {
     overlayCtx.clearRect(0, 0, overlay.clientWidth, overlay.clientHeight);
     if (lassoPath.length < 2) return;
 
+    const { stroke, fill } = getOverlayColors();
     overlayCtx.beginPath();
     for (let i = 0; i < lassoPath.length; i++) {
       const [wx, wy] = lassoPath[i];
@@ -126,11 +135,11 @@ export function createInteractionController(
       else overlayCtx.lineTo(px, py);
     }
     overlayCtx.closePath();
-    overlayCtx.strokeStyle = "rgba(255, 255, 255, 0.8)";
+    overlayCtx.strokeStyle = stroke;
     overlayCtx.lineWidth = 2;
     overlayCtx.setLineDash([6, 4]);
     overlayCtx.stroke();
-    overlayCtx.fillStyle = "rgba(255, 255, 255, 0.05)";
+    overlayCtx.fillStyle = fill;
     overlayCtx.fill();
   }
 
@@ -144,11 +153,12 @@ export function createInteractionController(
     const rh = Math.abs(y2 - y1);
     if (rw < 2 && rh < 2) return;
 
-    overlayCtx.strokeStyle = "rgba(255, 255, 255, 0.8)";
+    const { stroke, fill } = getOverlayColors();
+    overlayCtx.strokeStyle = stroke;
     overlayCtx.lineWidth = 2;
     overlayCtx.setLineDash([6, 4]);
     overlayCtx.strokeRect(rx, ry, rw, rh);
-    overlayCtx.fillStyle = "rgba(255, 255, 255, 0.05)";
+    overlayCtx.fillStyle = fill;
     overlayCtx.fillRect(rx, ry, rw, rh);
   }
 
