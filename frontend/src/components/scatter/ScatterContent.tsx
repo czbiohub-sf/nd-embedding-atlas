@@ -33,6 +33,7 @@ import { useScatterUIDispatch } from "../../providers/ScatterUIStateProvider";
 import { useEmbeddingLoader } from "../../hooks/useEmbeddingLoader";
 import { type CategoryMapping } from "../../lib/category-column";
 import { toRows } from "../../lib/mosaic-helpers";
+import { setBrushPredicate } from "../../providers/BrushPredicateStore";
 import { useScatterColorState } from "../../scatter-gpu/hooks/useScatterColorState";
 import { hexToRgbPalette } from "../../scatter-gpu/utils/colors";
 import type { AxisState } from "../../types";
@@ -318,11 +319,14 @@ function ScatterView({
   // ── Continuous range filter handles (dim-only — colormap is NOT remapped) ──
   const [userVmin, setUserVmin] = useState<number | undefined>(undefined);
   const [userVmax, setUserVmax] = useState<number | undefined>(undefined);
+  // Stable source identity for setBrushPredicate — one per ScatterView instance
+  const rangeFilterSourceRef = useRef<object>({});
 
   // Reset filter when column changes
   useEffect(() => {
     setUserVmin(undefined);
     setUserVmax(undefined);
+    setBrushPredicate(rangeFilterSourceRef.current, null);
   }, [colorByColumn]);
 
   const {
@@ -343,16 +347,20 @@ function ScatterView({
     // the slider only controls which points are dimmed via GPU isolation mask.
   });
 
-  // Continuous range isolation — dim points outside the selected value range.
+  // Continuous range isolation — dim points + update Mosaic cross-filter.
   // Debounced 80ms so rapid slider moves don't hammer DuckDB.
   useEffect(() => {
+    const source = rangeFilterSourceRef.current;
     if (colorMode !== "continuous" || !colorByColumn || userVmin === undefined || userVmax === undefined) {
       hostRef.current?.clearRowIsolation();
+      setBrushPredicate(source, null);
       return;
     }
     const col = colorByColumn;
     const vmin = userVmin;
     const vmax = userVmax;
+    // Update Mosaic cross-filter so exports + table reflect the range
+    setBrushPredicate(source, `"${col}" >= ${vmin} AND "${col}" <= ${vmax}`);
     let cancelled = false;
     const tid = setTimeout(() => {
       coordinator
