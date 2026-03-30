@@ -8,10 +8,14 @@
     <script>
       (function () {
         var stored = localStorage.getItem("ndea-theme");
-        var theme = stored === "light" ? "light"
-          : stored === "dark" ? "dark"
-          : window.matchMedia("(prefers-color-scheme: light)").matches ? "light"
-          : "dark";
+        var theme =
+          stored === "light"
+            ? "light"
+            : stored === "dark"
+              ? "dark"
+              : window.matchMedia("(prefers-color-scheme: light)").matches
+                ? "light"
+                : "dark";
         if (theme === "dark") document.documentElement.classList.add("dark");
       })();
     </script>

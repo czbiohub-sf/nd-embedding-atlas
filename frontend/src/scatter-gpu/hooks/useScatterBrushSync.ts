@@ -89,8 +89,8 @@ export function useScatterBrushSync({
       });
     },
     {
-      wait: 50,       // matches GPU readback gate (~20 fps)
-      leading: true,  // fire immediately on first readback
+      wait: 50, // matches GPU readback gate (~20 fps)
+      leading: true, // fire immediately on first readback
       trailing: true, // one final update when drawing stops
     },
   );
@@ -142,8 +142,8 @@ export function useScatterBrushSync({
       });
       clearSelectionSync(myPanelId);
     } else {
-      brushThrottler.maybeExecute(rowIds);  // live update for small selections (~50ms)
-      brushDebouncer.maybeExecute(rowIds);  // debounced final + large selections (200ms)
+      brushThrottler.maybeExecute(rowIds); // live update for small selections (~50ms)
+      brushDebouncer.maybeExecute(rowIds); // debounced final + large selections (200ms)
       broadcastSelection(myPanelId, rowIds);
     }
   };

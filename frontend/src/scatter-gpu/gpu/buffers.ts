@@ -8,11 +8,7 @@ const DEFAULTS = {
   selectionDimFactor: 0.08,
 } as const;
 
-export function createUniforms(
-  root: TgpuRoot,
-  aspectRatio: number,
-  renderConfig?: RenderConfig,
-) {
+export function createUniforms(root: TgpuRoot, aspectRatio: number, renderConfig?: RenderConfig) {
   const pointRadius = renderConfig?.pointRadius ?? DEFAULTS.pointRadius;
   const paramsUniform = root.createUniform(
     d.vec4f,
@@ -33,45 +29,25 @@ export function createBuffers(root: TgpuRoot, numPoints: number, _numCategories:
     )
     .$usage("vertex");
 
-  const posBuffer = root
-    .createBuffer(d.arrayOf(d.vec2f, numPoints))
-    .$usage("vertex", "storage");
+  const posBuffer = root.createBuffer(d.arrayOf(d.vec2f, numPoints)).$usage("vertex", "storage");
 
   // Packed RGBA as u32 (4 bytes/point vs 16 bytes for vec4f) — 4× bandwidth reduction.
   // Byte layout (little-endian): [R, G, B, A] packed as R | (G<<8) | (B<<16) | (A<<24).
   // The vertex shader unpacks via the unpackColor WGSL fn in shaders.ts.
-  const colorBuffer = root
-    .createBuffer(d.arrayOf(d.u32, numPoints))
-    .$usage("vertex");
+  const colorBuffer = root.createBuffer(d.arrayOf(d.u32, numPoints)).$usage("vertex");
 
-  const selectedBuffer = root
-    .createBuffer(d.arrayOf(d.u32, numPoints))
-    .$usage("vertex", "storage");
+  const selectedBuffer = root.createBuffer(d.arrayOf(d.u32, numPoints)).$usage("vertex", "storage");
 
   // Category indices (u32 per point) — used by density engine
-  const categoryBuffer = root
-    .createBuffer(d.arrayOf(d.u32, numPoints))
-    .$usage("storage");
+  const categoryBuffer = root.createBuffer(d.arrayOf(d.u32, numPoints)).$usage("storage");
 
-  const colorLayout = tgpu.vertexLayout(
-    (n: number) => d.arrayOf(d.u32, n),
-    "instance",
-  );
+  const colorLayout = tgpu.vertexLayout((n: number) => d.arrayOf(d.u32, n), "instance");
 
-  const selectedLayout = tgpu.vertexLayout(
-    (n: number) => d.arrayOf(d.u32, n),
-    "instance",
-  );
+  const selectedLayout = tgpu.vertexLayout((n: number) => d.arrayOf(d.u32, n), "instance");
 
-  const quadLayout = tgpu.vertexLayout(
-    (n: number) => d.arrayOf(d.vec2f, n),
-    "vertex",
-  );
+  const quadLayout = tgpu.vertexLayout((n: number) => d.arrayOf(d.vec2f, n), "vertex");
 
-  const posLayout = tgpu.vertexLayout(
-    (n: number) => d.arrayOf(d.vec2f, n),
-    "instance",
-  );
+  const posLayout = tgpu.vertexLayout((n: number) => d.arrayOf(d.vec2f, n), "instance");
 
   return {
     quadBuffer,
@@ -134,7 +110,9 @@ export function uploadData(
       [r, g, b] = colorMapper(cat, i, totalCats);
     } else {
       const c = colors[cat]!;
-      r = c[0]; g = c[1]; b = c[2];
+      r = c[0];
+      g = c[1];
+      b = c[2];
     }
     colorData[i] = (r | (g << 8) | (b << 16) | (255 << 24)) >>> 0;
   }
@@ -150,7 +128,7 @@ export function uploadData(
 
   console.log(
     `Data upload: ${numPoints.toLocaleString()} points in ${(performance.now() - t0).toFixed(1)}ms` +
-    ` (pos: ${(tPos - t0).toFixed(1)}ms, color: ${(tColor - tPos).toFixed(1)}ms)`,
+      ` (pos: ${(tPos - t0).toFixed(1)}ms, color: ${(tColor - tPos).toFixed(1)}ms)`,
   );
 }
 
@@ -174,7 +152,9 @@ export function buildCategoryColors(
       [r, g, b] = colorMapper(i, 0, numCategories);
     } else {
       const c = colors[i % colors.length]!;
-      r = c[0]; g = c[1]; b = c[2];
+      r = c[0];
+      g = c[1];
+      b = c[2];
     }
     data[i * 4] = r / 255;
     data[i * 4 + 1] = g / 255;

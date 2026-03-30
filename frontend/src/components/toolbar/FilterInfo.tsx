@@ -6,52 +6,52 @@ import { useMosaicClient } from "../../hooks/useMosaicClient";
 import { filterExprToExpr, toRows } from "../../lib/mosaic-helpers";
 
 interface PointCounts {
-    total: number;
-    filtered: number;
+  total: number;
+  filtered: number;
 }
 
 export function FilterInfo() {
-    const { meta } = useDashboard();
-    const { coordinator, brushSelection, table } = meta;
+  const { meta } = useDashboard();
+  const { coordinator, brushSelection, table } = meta;
 
-    const query = useCallback(
-        (predicate: FilterExpr) => {
-            const pred = filterExprToExpr(predicate);
-            return Query.from(table).select({
-                total: count(),
-                filtered: sum(cast(pred, "INT")),
-            });
-        },
-        [table],
-    );
+  const query = useCallback(
+    (predicate: FilterExpr) => {
+      const pred = filterExprToExpr(predicate);
+      return Query.from(table).select({
+        total: count(),
+        filtered: sum(cast(pred, "INT")),
+      });
+    },
+    [table],
+  );
 
-    const transform = useCallback((result: unknown): PointCounts => {
-        const rows = toRows(result);
-        const r = rows[0];
-        return {
-            total: Number(r?.total ?? 0),
-            filtered: Number(r?.filtered ?? 0),
-        };
-    }, []);
+  const transform = useCallback((result: unknown): PointCounts => {
+    const rows = toRows(result);
+    const r = rows[0];
+    return {
+      total: Number(r?.total ?? 0),
+      filtered: Number(r?.filtered ?? 0),
+    };
+  }, []);
 
-    const { data } = useMosaicClient({
-        coordinator,
-        selection: brushSelection,
-        query,
-        transform,
-    });
+  const { data } = useMosaicClient({
+    coordinator,
+    selection: brushSelection,
+    query,
+    transform,
+  });
 
-    if (!data) {
-        return <div className="ml-auto font-mono text-[11px] text-text-muted tabular-nums" />;
-    }
+  if (!data) {
+    return <div className="ml-auto font-mono text-[11px] text-text-muted tabular-nums" />;
+  }
 
-    const isFiltered = data.filtered < data.total;
+  const isFiltered = data.filtered < data.total;
 
-    return (
-        <div className="ml-auto font-mono text-[11px] text-text-muted tabular-nums">
-            {isFiltered
-                ? `${data.filtered.toLocaleString()} / ${data.total.toLocaleString()} points`
-                : `${data.total.toLocaleString()} points`}
-        </div>
-    );
+  return (
+    <div className="ml-auto font-mono text-[11px] text-text-muted tabular-nums">
+      {isFiltered
+        ? `${data.filtered.toLocaleString()} / ${data.total.toLocaleString()} points`
+        : `${data.total.toLocaleString()} points`}
+    </div>
+  );
 }

@@ -17,11 +17,11 @@ export function createRenderPipeline(
 
   const pipeline = root["~unstable"]
     .withVertex(mainVertex, {
-      quadPos:          quadLayout.attrib,
-      instancePos:      posLayout.attrib,
-      instanceColor:    colorLayout.attrib,
+      quadPos: quadLayout.attrib,
+      instancePos: posLayout.attrib,
+      instanceColor: colorLayout.attrib,
       instanceSelected: selectedLayout.attrib,
-      instanceVisible:  visibilityLayout.attrib,
+      instanceVisible: visibilityLayout.attrib,
     })
     .withFragment(mainFragment, {
       format,
@@ -43,10 +43,10 @@ export function createRenderPipeline(
     colorFormats: [format],
   });
   pipeline
-    .with(quadLayout,       buffers.quadBuffer)
-    .with(posLayout,        buffers.posBuffer)
-    .with(colorLayout,      buffers.colorBuffer)
-    .with(selectedLayout,   buffers.selectedBuffer)
+    .with(quadLayout, buffers.quadBuffer)
+    .with(posLayout, buffers.posBuffer)
+    .with(colorLayout, buffers.colorBuffer)
+    .with(selectedLayout, buffers.selectedBuffer)
     .with(visibilityLayout, culling.visibilityBuffer)
     .with(bundleEncoder)
     .draw(6, numPoints);
@@ -58,7 +58,7 @@ export function createRenderPipeline(
         {
           colorAttachments: [
             {
-              view:    context.getCurrentTexture().createView(),
+              view: context.getCurrentTexture().createView(),
               loadOp,
               storeOp: "store",
               ...(loadOp === "clear" ? { clearValue: backgroundColor } : {}),

@@ -23,49 +23,44 @@ export function createCullingEngine(
   wgSize: 64 | 256 = 64,
 ) {
   // Visibility buffer: 1 = visible, 0 = culled
-  const visibilityBuffer = root
-    .createBuffer(d.arrayOf(d.u32, numPoints))
-    .$usage("storage", "vertex");
+  const visibilityBuffer = root.createBuffer(d.arrayOf(d.u32, numPoints)).$usage("storage", "vertex");
 
-  const visibilityLayout = tgpu.vertexLayout(
-    (n: number) => d.arrayOf(d.u32, n),
-    "instance",
-  );
+  const visibilityLayout = tgpu.vertexLayout((n: number) => d.arrayOf(d.u32, n), "instance");
 
   const posReadonly = buffers.posBuffer.as("readonly");
-  const visMutable  = visibilityBuffer.as("mutable");
+  const visMutable = visibilityBuffer.as("mutable");
   const { viewUniform } = uniforms;
 
   // Compile-time constant — tgpu.unroll expands this to 4 explicit blocks
   const BATCH = [0, 1, 2, 3] as const;
 
-  const cullComputeFn = tgpu["~unstable"].computeFn({
-    workgroupSize: [wgSize],
-    in: { gid: d.builtin.globalInvocationId },
-  })((input) => {
-    "use gpu";
-    const base = input.gid.x * BATCH.length;
-    const view = viewUniform.value;
-    const m  = 0.05;
-    const xb = (1.0 + m) * view.w;
-    for (const k of tgpu.unroll(BATCH)) {
-      const idx = base + k;
-      if (idx < numPoints) {
-        const pos = posReadonly.value[idx];
-        const sx = (pos.x + view.x) * view.z;
-        const sy = (pos.y + view.y) * view.z;
-        if (sx >= -xb && sx <= xb && sy >= -(1.0 + m) && sy <= 1.0 + m) {
-          visMutable.value[idx] = 1;
-        } else {
-          visMutable.value[idx] = 0;
+  const cullComputeFn = tgpu["~unstable"]
+    .computeFn({
+      workgroupSize: [wgSize],
+      in: { gid: d.builtin.globalInvocationId },
+    })((input) => {
+      "use gpu";
+      const base = input.gid.x * BATCH.length;
+      const view = viewUniform.value;
+      const m = 0.05;
+      const xb = (1.0 + m) * view.w;
+      for (const k of tgpu.unroll(BATCH)) {
+        const idx = base + k;
+        if (idx < numPoints) {
+          const pos = posReadonly.value[idx];
+          const sx = (pos.x + view.x) * view.z;
+          const sy = (pos.y + view.y) * view.z;
+          if (sx >= -xb && sx <= xb && sy >= -(1.0 + m) && sy <= 1.0 + m) {
+            visMutable.value[idx] = 1;
+          } else {
+            visMutable.value[idx] = 0;
+          }
         }
       }
-    }
-  }).$uses({ posReadonly, visMutable, viewUniform });
+    })
+    .$uses({ posReadonly, visMutable, viewUniform });
 
-  const cullPipeline = root["~unstable"]
-    .withCompute(cullComputeFn)
-    .createPipeline();
+  const cullPipeline = root["~unstable"].withCompute(cullComputeFn).createPipeline();
 
   const workgroups = Math.ceil(numPoints / (wgSize * BATCH.length));
   let lastViewVersion = -1;

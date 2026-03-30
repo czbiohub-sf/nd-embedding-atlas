@@ -21,64 +21,64 @@
  *  Light values are the defaults. .dark overrides them below.
  * ──────────────────────────────────────────────────────────────────── */
 @theme {
-    /* Fonts */
-    --font-sans: "DM Sans", system-ui, -apple-system, sans-serif;
-    --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Code", monospace;
+  /* Fonts */
+  --font-sans: "DM Sans", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Code", monospace;
 
-    /* ── Surface backgrounds ── */
-    --color-base:     #f8fafc;   /* page root bg          → bg-base     */
-    --color-surface:  #f1f5f9;   /* panel / card bg       → bg-surface  */
-    --color-elevated: #e2e8f0;   /* hover / raised elem   → bg-elevated */
+  /* ── Surface backgrounds ── */
+  --color-base: #f8fafc; /* page root bg          → bg-base     */
+  --color-surface: #f1f5f9; /* panel / card bg       → bg-surface  */
+  --color-elevated: #e2e8f0; /* hover / raised elem   → bg-elevated */
 
-    /* ── Borders ── */
-    --color-border-subtle: #cbd5e1;  /* dividers, outlines   → border-border-subtle */
-    --color-border-active: #94a3b8;  /* focused / active     → border-border-active */
+  /* ── Borders ── */
+  --color-border-subtle: #cbd5e1; /* dividers, outlines   → border-border-subtle */
+  --color-border-active: #94a3b8; /* focused / active     → border-border-active */
 
-    /* ── Text ── */
-    --color-text-primary:   #0f172a;  /* body text            → text-text-primary   */
-    --color-text-secondary: #475569;  /* labels, captions     → text-text-secondary */
-    --color-text-muted:     #94a3b8;  /* placeholders, hints  → text-text-muted     */
+  /* ── Text ── */
+  --color-text-primary: #0f172a; /* body text            → text-text-primary   */
+  --color-text-secondary: #475569; /* labels, captions     → text-text-secondary */
+  --color-text-muted: #94a3b8; /* placeholders, hints  → text-text-muted     */
 
-    /* ── Data visualization accents (charts, scatter, categorical colors) ──
+  /* ── Data visualization accents (charts, scatter, categorical colors) ──
      * Use: bg-accent-cyan, text-accent-amber, bg-accent-rose, etc.
      * Do NOT use these for UI hover/selected/focus states.               */
-    --color-accent-cyan:  #06b6d4;
-    --color-accent-amber: #f59e0b;
-    --color-accent-rose:  #f43f5e;
+  --color-accent-cyan: #06b6d4;
+  --color-accent-amber: #f59e0b;
+  --color-accent-rose: #f43f5e;
 
-    /* ── Charts ── */
-    --color-chart-mark:      #6366f1;
-    --color-chart-mark-fade: oklch(0.585 0.233 277.117 / 0.125);
+  /* ── Charts ── */
+  --color-chart-mark: #6366f1;
+  --color-chart-mark-fade: oklch(0.585 0.233 277.117 / 0.125);
 
-    /* ── shadcn/ui semantic bridge (UI interaction states) ─────────────────
+  /* ── shadcn/ui semantic bridge (UI interaction states) ─────────────────
      * accent   = hover/selected bg in menus, command palette, dropdowns
      * primary  = primary action buttons
      * muted    = secondary surfaces, disabled states
      * ring     = focus ring color
      * These must be neutral surfaces — never data-vis colors.            */
-    --color-background:           #f8fafc;
-    --color-foreground:           #0f172a;
-    --color-card:                 #ffffff;
-    --color-card-foreground:      #0f172a;
-    --color-primary:              #06b6d4;
-    --color-primary-foreground:   #f8fafc;
-    --color-secondary:            #f1f5f9;
-    --color-secondary-foreground: #0f172a;
-    --color-muted:                #f1f5f9;
-    --color-muted-foreground:     #64748b;
-    --color-accent:               #e2e8f0;  /* = --color-elevated (neutral hover bg) */
-    --color-accent-foreground:    #0f172a;
-    --color-destructive:          #f43f5e;
-    --color-border:               #e2e8f0;
-    --color-input:                #f1f5f9;
-    --color-ring:                 #06b6d4;
+  --color-background: #f8fafc;
+  --color-foreground: #0f172a;
+  --color-card: #ffffff;
+  --color-card-foreground: #0f172a;
+  --color-primary: #06b6d4;
+  --color-primary-foreground: #f8fafc;
+  --color-secondary: #f1f5f9;
+  --color-secondary-foreground: #0f172a;
+  --color-muted: #f1f5f9;
+  --color-muted-foreground: #64748b;
+  --color-accent: #e2e8f0; /* = --color-elevated (neutral hover bg) */
+  --color-accent-foreground: #0f172a;
+  --color-destructive: #f43f5e;
+  --color-border: #e2e8f0;
+  --color-input: #f1f5f9;
+  --color-ring: #06b6d4;
 
-    /* ── Status bar / footer ── */
-    --color-status-bar:        #f1f5f9;
-    --color-status-bar-border: #e2e8f0;
+  /* ── Status bar / footer ── */
+  --color-status-bar: #f1f5f9;
+  --color-status-bar-border: #e2e8f0;
 
-    /* ── Layout ── */
-    --footer-height: 1.5rem;  /* 24px — height of fixed StatusFooter */
+  /* ── Layout ── */
+  --footer-height: 1.5rem; /* 24px — height of fixed StatusFooter */
 }
 
 /* ── Dark mode overrides ──────────────────────────────────────────────
@@ -87,129 +87,171 @@
  *  new values automatically — no dark: prefix needed in components.
  * ──────────────────────────────────────────────────────────────────── */
 .dark {
-    /* Near-black neutrals — no blue tint */
-    --color-base:     #08090a;
-    --color-surface:  #111113;
-    --color-elevated: #1c1c1f;
+  /* Near-black neutrals — no blue tint */
+  --color-base: #08090a;
+  --color-surface: #111113;
+  --color-elevated: #1c1c1f;
 
-    --color-border-subtle: #27272a;
-    --color-border-active: #3f3f46;
+  --color-border-subtle: #27272a;
+  --color-border-active: #3f3f46;
 
-    --color-text-primary:   #f4f4f5;
-    --color-text-secondary: #a1a1aa;
-    --color-text-muted:     #52525b;
+  --color-text-primary: #f4f4f5;
+  --color-text-secondary: #a1a1aa;
+  --color-text-muted: #52525b;
 
-    /* shadcn/ui semantic bridge — dark overrides (must stay neutral surfaces) */
-    --color-background:           #08090a;
-    --color-foreground:           #f4f4f5;
-    --color-card:                 #111113;
-    --color-card-foreground:      #f4f4f5;
-    --color-primary:              #22d3ee;
-    --color-primary-foreground:   #08090a;
-    --color-secondary:            #1c1c1f;
-    --color-secondary-foreground: #f4f4f5;
-    --color-muted:                #27272a;
-    --color-muted-foreground:     #a1a1aa;
-    --color-accent:               #27272a;  /* = --color-border-subtle (neutral hover bg) */
-    --color-accent-foreground:    #f4f4f5;
-    --color-destructive:          #f43f5e;
-    --color-border:               #27272a;
-    --color-input:                #111113;
-    --color-ring:                 #22d3ee;
+  /* shadcn/ui semantic bridge — dark overrides (must stay neutral surfaces) */
+  --color-background: #08090a;
+  --color-foreground: #f4f4f5;
+  --color-card: #111113;
+  --color-card-foreground: #f4f4f5;
+  --color-primary: #22d3ee;
+  --color-primary-foreground: #08090a;
+  --color-secondary: #1c1c1f;
+  --color-secondary-foreground: #f4f4f5;
+  --color-muted: #27272a;
+  --color-muted-foreground: #a1a1aa;
+  --color-accent: #27272a; /* = --color-border-subtle (neutral hover bg) */
+  --color-accent-foreground: #f4f4f5;
+  --color-destructive: #f43f5e;
+  --color-border: #27272a;
+  --color-input: #111113;
+  --color-ring: #22d3ee;
 
-    --color-status-bar:        #050506;
-    --color-status-bar-border: #1c1c1f;
+  --color-status-bar: #050506;
+  --color-status-bar-border: #1c1c1f;
 }
 
 /* ── Base layout ──────────────────────────────────────────────────── */
-html, body, #root {
-    height: 100%;
-    width: 100%;
-    margin: 0;
-    padding: 0;
+html,
+body,
+#root {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
 }
 
 body {
-    background-color: var(--color-base);
-    color: var(--color-text-primary);
-    font-family: var(--font-sans);
-    font-size: 13px;
-    line-height: 1.4;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
+  background-color: var(--color-base);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 /* ── Scrollbar ────────────────────────────────────────────────────── */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--color-border-subtle); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--color-border-active); }
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border-subtle);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-border-active);
+}
 
 /* ── Native select ────────────────────────────────────────────────── */
 select {
-    appearance: none;
-    background-color: var(--color-surface);
-    color: var(--color-text-primary);
-    border: 1px solid var(--color-border-subtle);
-    border-radius: 4px;
-    padding: 2px 20px 2px 6px;
-    font-size: 12px;
-    font-family: var(--font-sans);
-    cursor: pointer;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238892b0' d='M3 5l3 3 3-3'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: right 4px center;
+  appearance: none;
+  background-color: var(--color-surface);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 4px;
+  padding: 2px 20px 2px 6px;
+  font-size: 12px;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238892b0' d='M3 5l3 3 3-3'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 4px center;
 }
-select:hover { border-color: var(--color-border-active); }
-select:focus { outline: 1px solid var(--color-ring); outline-offset: -1px; }
-select:disabled { opacity: 0.4; cursor: not-allowed; }
+select:hover {
+  border-color: var(--color-border-active);
+}
+select:focus {
+  outline: 1px solid var(--color-ring);
+  outline-offset: -1px;
+}
+select:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
 
 /* ── Mosaic time slider ───────────────────────────────────────────── */
-.time-slider .input { display: flex; align-items: center; gap: 6px; font-size: 11px; font-family: var(--font-mono); color: var(--color-text-secondary); }
-.time-slider .input label { white-space: nowrap; }
-.time-slider .input label.value { min-width: 2ch; text-align: right; color: var(--color-text-primary); font-variant-numeric: tabular-nums; }
-.time-slider .input input[type="range"] { width: 120px; height: 4px; accent-color: var(--color-accent-cyan); cursor: pointer; }
+.time-slider .input {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--color-text-secondary);
+}
+.time-slider .input label {
+  white-space: nowrap;
+}
+.time-slider .input label.value {
+  min-width: 2ch;
+  text-align: right;
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+.time-slider .input input[type="range"] {
+  width: 120px;
+  height: 4px;
+  accent-color: var(--color-accent-cyan);
+  cursor: pointer;
+}
 
 /* ── Trajectory active state ──────────────────────────────────────── */
-.trajectory-active canvas { opacity: 0.2; transition: opacity 0.2s ease; }
+.trajectory-active canvas {
+  opacity: 0.2;
+  transition: opacity 0.2s ease;
+}
 
 /* ── Status bar ───────────────────────────────────────────────────── */
 .status-bar {
-    height: 24px;
-    background: var(--color-status-bar);
-    border-top: 1px solid var(--color-status-bar-border);
-    display: flex;
-    align-items: center;
-    padding: 0 10px;
-    font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--color-text-muted);
-    flex-shrink: 0;
-    user-select: none;
+  height: 24px;
+  background: var(--color-status-bar);
+  border-top: 1px solid var(--color-status-bar-border);
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+  user-select: none;
 }
 
 /* ── Dockview — dark theme ────────────────────────────────────────── */
 /* Override Dockview's hardcoded abyss-light blue tint */
 .dockview-theme-abyss,
 .dockview-theme-dark {
-    --dv-color-abyss-light: var(--color-elevated);
+  --dv-color-abyss-light: var(--color-elevated);
 }
 
 .dockview-theme-dark {
-    --dv-background-color: var(--color-base);
-    --dv-paneview-header-border-color: var(--color-border-subtle);
-    --dv-tabs-container-background-color: var(--color-surface);
-    --dv-activegroup-visiblepanel-tab-background-color: var(--color-elevated);
-    --dv-activegroup-hiddenpanel-tab-background-color: var(--color-surface);
-    --dv-inactivegroup-visiblepanel-tab-background-color: var(--color-surface);
-    --dv-inactivegroup-hiddenpanel-tab-background-color: var(--color-base);
-    --dv-separator-border: var(--color-border-subtle);
-    --dv-tab-font-size: 12px;
-    --dv-font-family: var(--font-sans);
-    --dv-activegroup-visiblepanel-tab-color: var(--color-text-primary);
-    --dv-activegroup-hiddenpanel-tab-color: var(--color-text-muted);
-    --dv-inactivegroup-visiblepanel-tab-color: var(--color-text-secondary);
-    --dv-inactivegroup-hiddenpanel-tab-color: var(--color-text-muted);
+  --dv-background-color: var(--color-base);
+  --dv-paneview-header-border-color: var(--color-border-subtle);
+  --dv-tabs-container-background-color: var(--color-surface);
+  --dv-activegroup-visiblepanel-tab-background-color: var(--color-elevated);
+  --dv-activegroup-hiddenpanel-tab-background-color: var(--color-surface);
+  --dv-inactivegroup-visiblepanel-tab-background-color: var(--color-surface);
+  --dv-inactivegroup-hiddenpanel-tab-background-color: var(--color-base);
+  --dv-separator-border: var(--color-border-subtle);
+  --dv-tab-font-size: 12px;
+  --dv-font-family: var(--font-sans);
+  --dv-activegroup-visiblepanel-tab-color: var(--color-text-primary);
+  --dv-activegroup-hiddenpanel-tab-color: var(--color-text-muted);
+  --dv-inactivegroup-visiblepanel-tab-color: var(--color-text-secondary);
+  --dv-inactivegroup-hiddenpanel-tab-color: var(--color-text-muted);
 }
 
 /* ── Design system utilities ──────────────────────────────────────────
@@ -220,51 +262,85 @@ select:disabled { opacity: 0.4; cursor: not-allowed; }
 /* Normalize SVG children on interactive elements:
  * non-interactive, no flex-shrink, default 1rem if not explicitly sized. */
 @utility icon-slot {
-    & svg { pointer-events: none; flex-shrink: 0; }
-    & svg:not([class*="size-"]) { width: 1rem; height: 1rem; }
+  & svg {
+    pointer-events: none;
+    flex-shrink: 0;
+  }
+  & svg:not([class*="size-"]) {
+    width: 1rem;
+    height: 1rem;
+  }
 }
 
 /* Thin focus ring — buttons, inputs */
 @utility focus-ring {
-    @apply focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50;
+  @apply focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50;
 }
 
 /* Thick focus ring — badges, chips */
 @utility focus-ring-thick {
-    @apply focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50;
+  @apply focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50;
 }
 
 /* Validation error ring — destructive border + ring, dark-mode adjusted */
 @utility invalid-ring {
-    @apply aria-invalid:border-destructive aria-invalid:ring-1 aria-invalid:ring-destructive/20
+  @apply aria-invalid:border-destructive aria-invalid:ring-1 aria-invalid:ring-destructive/20
            dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40;
 }
 
 /* Dockview light + abyss override (abyss hardcodes dark colors) */
 :root:not(.dark) .dockview-theme-abyss,
 .dockview-theme-light {
-    --dv-background-color: var(--color-base);
-    --dv-paneview-header-border-color: var(--color-border-subtle);
-    --dv-tabs-container-background-color: var(--color-surface);
-    --dv-activegroup-visiblepanel-tab-background-color: var(--color-elevated);
-    --dv-activegroup-hiddenpanel-tab-background-color: var(--color-surface);
-    --dv-inactivegroup-visiblepanel-tab-background-color: var(--color-surface);
-    --dv-inactivegroup-hiddenpanel-tab-background-color: var(--color-base);
-    --dv-separator-border: var(--color-border-subtle);
-    --dv-tab-font-size: 12px;
-    --dv-font-family: var(--font-sans);
-    --dv-activegroup-visiblepanel-tab-color: var(--color-text-primary);
-    --dv-activegroup-hiddenpanel-tab-color: var(--color-text-muted);
-    --dv-inactivegroup-visiblepanel-tab-color: var(--color-text-secondary);
-    --dv-inactivegroup-hiddenpanel-tab-color: var(--color-text-muted);
+  --dv-background-color: var(--color-base);
+  --dv-paneview-header-border-color: var(--color-border-subtle);
+  --dv-tabs-container-background-color: var(--color-surface);
+  --dv-activegroup-visiblepanel-tab-background-color: var(--color-elevated);
+  --dv-activegroup-hiddenpanel-tab-background-color: var(--color-surface);
+  --dv-inactivegroup-visiblepanel-tab-background-color: var(--color-surface);
+  --dv-inactivegroup-hiddenpanel-tab-background-color: var(--color-base);
+  --dv-separator-border: var(--color-border-subtle);
+  --dv-tab-font-size: 12px;
+  --dv-font-family: var(--font-sans);
+  --dv-activegroup-visiblepanel-tab-color: var(--color-text-primary);
+  --dv-activegroup-hiddenpanel-tab-color: var(--color-text-muted);
+  --dv-inactivegroup-visiblepanel-tab-color: var(--color-text-secondary);
+  --dv-inactivegroup-hiddenpanel-tab-color: var(--color-text-muted);
 }
 :root:not(.dark) .dv-grid-view.dv-dockview,
-:root:not(.dark) .dv-groupview { background-color: var(--color-base) !important; }
-:root:not(.dark) .dv-tabs-and-actions-container { background-color: var(--color-surface) !important; }
-:root:not(.dark) .dv-tab { color: var(--color-text-primary) !important; }
-:root:not(.dark) .dv-tab.dv-active-tab { background-color: var(--color-elevated) !important; }
-:root:not(.dark) .dv-tab:not(.dv-active-tab) { background-color: var(--color-surface) !important; color: var(--color-text-secondary) !important; }
-:root:not(.dark) .dv-pane-header { background-color: var(--color-surface) !important; color: var(--color-text-secondary) !important; }
+:root:not(.dark) .dv-groupview {
+  background-color: var(--color-base) !important;
+}
+:root:not(.dark) .dv-tabs-and-actions-container {
+  background-color: var(--color-surface) !important;
+}
+:root:not(.dark) .dv-tab {
+  color: var(--color-text-primary) !important;
+}
+:root:not(.dark) .dv-tab.dv-active-tab {
+  background-color: var(--color-elevated) !important;
+}
+:root:not(.dark) .dv-tab:not(.dv-active-tab) {
+  background-color: var(--color-surface) !important;
+  color: var(--color-text-secondary) !important;
+}
+:root:not(.dark) .dv-pane-header {
+  background-color: var(--color-surface) !important;
+  color: var(--color-text-secondary) !important;
+}
 
-.dv-header-action { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border: none; background: transparent; color: var(--color-text-muted); cursor: pointer; border-radius: 4px; }
-.dv-header-action:hover { color: var(--color-text-primary); background: var(--color-elevated); }
+.dv-header-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  border-radius: 4px;
+}
+.dv-header-action:hover {
+  color: var(--color-text-primary);
+  background: var(--color-elevated);
+}

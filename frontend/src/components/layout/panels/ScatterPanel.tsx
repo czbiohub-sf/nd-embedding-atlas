@@ -64,7 +64,7 @@ export function ScatterPanel(props: IDockviewPanelProps) {
     } else {
       setAxes({ obsmKey: key, xDim: 0, yDim: 1 });
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [metadata, axes, initialObsmKey]); // loadEmbedding is stable (useCallback)
 
   const handleSetAxes = async (newAxes: AxisState) => {
@@ -76,26 +76,31 @@ export function ScatterPanel(props: IDockviewPanelProps) {
   };
 
   // ── Selection tool state ───────────────────────────────────────────────────
-  const [selectionTool, setSelectionTool] = useState<'pan' | 'marquee' | 'lasso'>('pan');
+  const [selectionTool, setSelectionTool] = useState<"pan" | "marquee" | "lasso">("pan");
 
   // ── Color state ────────────────────────────────────────────────────────────
   const {
-    colorByColumn, setColorByColumn, obsColumns,
-    colorMode, setColorModeOverride, colorModeInfo,
-    categoricalColormap, setCategoricalColormap,
-    continuousColormap, setContinuousColormap,
-    maxCategories, setMaxCategories,
-    categoricalColormaps, continuousColormaps,
-    categoryLoading, coloredCategoryMapping, categoryCol,
+    colorByColumn,
+    setColorByColumn,
+    obsColumns,
+    colorMode,
+    setColorModeOverride,
+    colorModeInfo,
+    categoricalColormap,
+    setCategoricalColormap,
+    continuousColormap,
+    setContinuousColormap,
+    maxCategories,
+    setMaxCategories,
+    categoricalColormaps,
+    continuousColormaps,
+    categoryLoading,
+    coloredCategoryMapping,
+    categoryCol,
   } = useScatterColorState(coordinator, metadata);
 
   const additionalFields = useMemo(
-    () =>
-      Object.fromEntries(
-        ["track_id", "fov_name", "t"]
-          .filter((f) => obsColumns.includes(f))
-          .map((f) => [f, f]),
-      ),
+    () => Object.fromEntries(["track_id", "fov_name", "t"].filter((f) => obsColumns.includes(f)).map((f) => [f, f])),
     [obsColumns],
   );
 
@@ -133,9 +138,7 @@ export function ScatterPanel(props: IDockviewPanelProps) {
           maxCategories={maxCategories}
           onSetAxes={handleSetAxes}
           onSetColorByColumn={setColorByColumn}
-          onToggleColorMode={() =>
-            setColorModeOverride(colorMode === "continuous" ? "categorical" : "continuous")
-          }
+          onToggleColorMode={() => setColorModeOverride(colorMode === "continuous" ? "categorical" : "continuous")}
           onSetCategoricalColormap={setCategoricalColormap}
           onSetContinuousColormap={setContinuousColormap}
           onSetMaxCategories={setMaxCategories}
@@ -184,7 +187,7 @@ export function ScatterPanel(props: IDockviewPanelProps) {
 
 interface ScatterViewProps {
   myPanelId: PanelId;
-  selectionTool: 'pan' | 'marquee' | 'lasso';
+  selectionTool: "pan" | "marquee" | "lasso";
   axes: AxisState | null;
   isLoading: boolean;
   loadingKey: string | null;
@@ -252,7 +255,12 @@ function ScatterView({
   const [gpuError, setGpuError] = useState<string | null>(null);
 
   // ── Data from Mosaic binary endpoints ─────────────────────────────────────
-  const { data, positionKey, colorRange, loading: dataLoading } = useMosaicScatterData({
+  const {
+    data,
+    positionKey,
+    colorRange,
+    loading: dataLoading,
+  } = useMosaicScatterData({
     axes,
     xCol,
     yCol,
@@ -313,9 +321,9 @@ function ScatterView({
   const configRef = useRef<ScatterplotConfig>({
     callbacks: {
       onSelectionChange: (...args) => callbacksRef.current.onSelectionChange(...args),
-      onPointClick:      (...args) => callbacksRef.current.onPointClick(...args),
-      onViewChange:      (...args) => callbacksRef.current.onViewChange(...args),
-      onFps:             (...args) => callbacksRef.current.onFps(...args),
+      onPointClick: (...args) => callbacksRef.current.onPointClick(...args),
+      onViewChange: (...args) => callbacksRef.current.onViewChange(...args),
+      onFps: (...args) => callbacksRef.current.onFps(...args),
     },
   });
 
@@ -408,7 +416,10 @@ function ScatterView({
         positionKey={positionKey}
         config={configRef.current}
         onGpuError={setGpuError}
-        onRowIndicesChange={(indices) => { rowIndicesRef.current = indices; setNumPoints(indices.length); }}
+        onRowIndicesChange={(indices) => {
+          rowIndicesRef.current = indices;
+          setNumPoints(indices.length);
+        }}
       />
 
       {/* Loading overlay — on top of canvas, not instead of it */}
@@ -436,9 +447,7 @@ function ScatterView({
       ) : null}
 
       {/* Legend */}
-      {colorMode === "categorical" && categoryMapping && !showLoading ? (
-        <CategoricalLegend />
-      ) : null}
+      {colorMode === "categorical" && categoryMapping && !showLoading ? <CategoricalLegend /> : null}
       {colorMode === "continuous" && colorByColumn && colorRange ? (
         <ContinuousLegend
           columnName={colorByColumn}

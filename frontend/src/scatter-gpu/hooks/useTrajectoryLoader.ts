@@ -41,8 +41,7 @@ export function useTrajectoryLoader(opts: UseTrajectoryLoaderOptions): UseTrajec
       const result = await coordinator.query(sql, { type: "json" });
       const rows = toRows<TrajectoryFrame>(result);
       if (rows.length > 0) {
-        const initialT =
-          clickedT != null && rows.some((r) => r.t === clickedT) ? clickedT : rows[0].t;
+        const initialT = clickedT != null && rows.some((r) => r.t === clickedT) ? clickedT : rows[0].t;
         actions.setTrajectory({
           trackId,
           fovName,

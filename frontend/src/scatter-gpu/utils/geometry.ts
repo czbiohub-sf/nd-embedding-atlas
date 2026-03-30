@@ -1,8 +1,5 @@
 /** Douglas-Peucker line simplification */
-export function simplifyPath(
-  points: [number, number][],
-  epsilon: number,
-): [number, number][] {
+export function simplifyPath(points: [number, number][], epsilon: number): [number, number][] {
   if (points.length <= 2) return points;
 
   let maxDist = 0;
@@ -19,10 +16,7 @@ export function simplifyPath(
     if (lenSq === 0) {
       dist = Math.hypot(px - sx, py - sy);
     } else {
-      const t = Math.max(
-        0,
-        Math.min(1, ((px - sx) * dx + (py - sy) * dy) / lenSq),
-      );
+      const t = Math.max(0, Math.min(1, ((px - sx) * dx + (py - sy) * dy) / lenSq));
       dist = Math.hypot(px - (sx + t * dx), py - (sy + t * dy));
     }
     if (dist > maxDist) {

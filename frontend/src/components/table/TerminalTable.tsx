@@ -69,13 +69,8 @@ export function TerminalTable() {
 
       {/* Header bar */}
       <div className="flex shrink-0 items-center gap-2 border-b border-border-subtle bg-elevated px-3 py-1">
-        <span className="text-[11px] font-medium text-text-secondary select-none">
-          ▲ Table
-        </span>
-        <span
-          className="text-[10px] text-text-muted select-none"
-          style={{ letterSpacing: "0.04em" }}
-        >
+        <span className="text-[11px] font-medium text-text-secondary select-none">▲ Table</span>
+        <span className="text-[10px] text-text-muted select-none" style={{ letterSpacing: "0.04em" }}>
           ⌘J
         </span>
         <span className="flex-1" />

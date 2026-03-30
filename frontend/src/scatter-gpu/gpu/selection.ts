@@ -6,10 +6,7 @@ import { simplifyPath } from "../utils/geometry";
 import type { TgpuRoot } from "../types";
 import type { ScatterBuffers, ScatterUniforms } from "./buffers";
 
-const DEBUG_SELECTION =
-  typeof location !== "undefined" &&
-  new URLSearchParams(location.search).has("debug-selection");
-
+const DEBUG_SELECTION = typeof location !== "undefined" && new URLSearchParams(location.search).has("debug-selection");
 
 export function createSelectionEngine(
   root: TgpuRoot,
@@ -29,12 +26,10 @@ export function createSelectionEngine(
   });
   let isReadingBack = false;
 
-  const polygonBuffer = root
-    .createBuffer(d.arrayOf(d.vec2f, MAX_POLYGON_VERTS))
-    .$usage("storage");
+  const polygonBuffer = root.createBuffer(d.arrayOf(d.vec2f, MAX_POLYGON_VERTS)).$usage("storage");
   const polygonCountUniform = root.createUniform(d.u32, 0);
 
-  const pointsReadonly  = posBuffer.as("readonly");
+  const pointsReadonly = posBuffer.as("readonly");
   const selectedMutable = selectedBuffer.as("mutable");
   const polygonReadonly = polygonBuffer.as("readonly");
 
@@ -65,7 +60,7 @@ export function createSelectionEngine(
     in: { gid: d.builtin.globalInvocationId },
   })((input) => {
     "use gpu";
-    const base     = input.gid.x * PIP_BATCH.length;
+    const base = input.gid.x * PIP_BATCH.length;
     const numVerts = polygonCountUniform.value;
     for (const k of tgpu.unroll(PIP_BATCH)) {
       const idx = base + k;
@@ -80,9 +75,7 @@ export function createSelectionEngine(
     }
   }).$uses({ pointsReadonly, selectedMutable, polygonCountUniform, pipTest });
 
-  const pipPipeline = root["~unstable"]
-    .withCompute(pipComputeFn)
-    .createPipeline();
+  const pipPipeline = root["~unstable"].withCompute(pipComputeFn).createPipeline();
   const workgroups = Math.ceil(numPoints / (wgSize * PIP_BATCH.length));
 
   // ── AABB kernel ────────────────────────────────────────────────────────
@@ -95,7 +88,7 @@ export function createSelectionEngine(
   })((input) => {
     "use gpu";
     const base = input.gid.x * AABB_BATCH.length;
-    const r    = marqueeUniform.value;
+    const r = marqueeUniform.value;
     for (const k of tgpu.unroll(AABB_BATCH)) {
       const idx = base + k;
       if (idx < numPoints) {
@@ -109,9 +102,7 @@ export function createSelectionEngine(
     }
   }).$uses({ pointsReadonly, selectedMutable, marqueeUniform });
 
-  const aabbPipeline = root["~unstable"]
-    .withCompute(aabbComputeFn)
-    .createPipeline();
+  const aabbPipeline = root["~unstable"].withCompute(aabbComputeFn).createPipeline();
 
   // ── Readback ───────────────────────────────────────────────────────────
   let readbackFrame = 0;
@@ -134,21 +125,26 @@ export function createSelectionEngine(
         let count = 0;
         const indices: number[] = [];
         for (let i = 0; i < data.length; i++) {
-          if (data[i]) { count++; indices.push(i); }
+          if (data[i]) {
+            count++;
+            indices.push(i);
+          }
         }
         stagingBuffer.unmap();
         isReadingBack = false;
-        console.log(`[${frame}] ${count.toLocaleString()} selected (${(performance.now()-t0).toFixed(1)}ms)`);
+        console.log(`[${frame}] ${count.toLocaleString()} selected (${(performance.now() - t0).toFixed(1)}ms)`);
         onSelectionChange(count, indices);
       })
-      .catch(() => { isReadingBack = false; });
+      .catch(() => {
+        isReadingBack = false;
+      });
   }
 
   function runLassoSelection(polygon: [number, number][], readback = true) {
     if (polygon.length < 3) return;
     const simplified = simplifyPath(polygon, 0.001);
-    const vertCount  = Math.min(simplified.length, MAX_POLYGON_VERTS);
-    const polyData   = simplified.slice(0, vertCount).map(([x, y]) => d.vec2f(x, y));
+    const vertCount = Math.min(simplified.length, MAX_POLYGON_VERTS);
+    const polyData = simplified.slice(0, vertCount).map(([x, y]) => d.vec2f(x, y));
     while (polyData.length < MAX_POLYGON_VERTS) polyData.push(d.vec2f(0, 0));
     polygonBuffer.write(polyData);
     polygonCountUniform.write(vertCount);
@@ -158,10 +154,7 @@ export function createSelectionEngine(
     if (readback) readbackSelectionCount();
   }
 
-  function runMarqueeSelection(
-    rect: { xMin: number; yMin: number; xMax: number; yMax: number },
-    readback = true,
-  ) {
+  function runMarqueeSelection(rect: { xMin: number; yMin: number; xMax: number; yMax: number }, readback = true) {
     marqueeUniform.write(d.vec4f(rect.xMin, rect.yMin, rect.xMax, rect.yMax));
     aabbPipeline.dispatchWorkgroups(workgroups);
     selectionModeUniform.write(1);
@@ -170,9 +163,7 @@ export function createSelectionEngine(
   }
 
   // ── Debug ──────────────────────────────────────────────────────────────
-  let debugPipeline: ReturnType<
-    ReturnType<TgpuRoot["~unstable"]["withCompute"]>["createPipeline"]
-  > | null = null;
+  let debugPipeline: ReturnType<ReturnType<TgpuRoot["~unstable"]["withCompute"]>["createPipeline"]> | null = null;
 
   if (DEBUG_SELECTION) {
     const debugFn = computeFn({
@@ -181,9 +172,9 @@ export function createSelectionEngine(
     })((input) => {
       "use gpu";
       const idx = input.gid.x;
-      const pt  = pointsReadonly.value[idx];
+      const pt = pointsReadonly.value[idx];
       const sel = selectedMutable.value[idx];
-      const r   = marqueeUniform.value;
+      const r = marqueeUniform.value;
       console.log("pt", idx, "pos", pt, "sel", sel, "rect", r);
     });
     debugPipeline = root["~unstable"].withCompute(debugFn).createPipeline();
@@ -232,10 +223,18 @@ export function createSelectionEngine(
   }
 
   return {
-    runLassoSelection, runMarqueeSelection, selectPoint, clearSelection,
-    setSelectedPoints, clearSelectionExternal,
-    debugLogSelection, pipComputeFn, aabbComputeFn,
-    destroy() { stagingBuffer.destroy(); },
+    runLassoSelection,
+    runMarqueeSelection,
+    selectPoint,
+    clearSelection,
+    setSelectedPoints,
+    clearSelectionExternal,
+    debugLogSelection,
+    pipComputeFn,
+    aabbComputeFn,
+    destroy() {
+      stagingBuffer.destroy();
+    },
   };
 }
 

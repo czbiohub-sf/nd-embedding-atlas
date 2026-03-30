@@ -8,21 +8,21 @@
 import { z } from "zod";
 
 export const PositionHeaderSchema = z.object({
-    numCells: z.number().int().positive(),
-    embeddingKey: z.string().min(1),
-    ndim: z.literal(2),
-    rowIndices: z.array(z.number().int().nonnegative()),
+  numCells: z.number().int().positive(),
+  embeddingKey: z.string().min(1),
+  ndim: z.literal(2),
+  rowIndices: z.array(z.number().int().nonnegative()),
 });
 
 export const CategoryHeaderSchema = z.object({
-    categoryNames: z.array(z.string()),
+  categoryNames: z.array(z.string()),
 });
 
 export const ContinuousColorsHeaderSchema = z.object({
-    numPoints: z.number().int().positive(),
-    vmin: z.number(),
-    vmax: z.number(),
-    colormap: z.string().min(1),
+  numPoints: z.number().int().positive(),
+  vmin: z.number(),
+  vmax: z.number(),
+  colormap: z.string().min(1),
 });
 
 export type PositionHeader = z.infer<typeof PositionHeaderSchema>;

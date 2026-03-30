@@ -156,13 +156,12 @@ export function useMosaicScatterData({
     }
   }, [positionQuery.data, colorMode, categoryQuery.data, continuousQuery.data]);
 
-  const positionKey = positionQuery.data
-    ? `${positionQuery.data.embeddingKey}:${positionQuery.data.numCells}`
-    : null;
+  const positionKey = positionQuery.data ? `${positionQuery.data.embeddingKey}:${positionQuery.data.numCells}` : null;
 
   const categoryNames = categoryQuery.data?.categoryNames ?? [];
-  const colorRange: [number, number] | null =
-    continuousQuery.data ? [continuousQuery.data.vmin, continuousQuery.data.vmax] : null;
+  const colorRange: [number, number] | null = continuousQuery.data
+    ? [continuousQuery.data.vmin, continuousQuery.data.vmax]
+    : null;
 
   const loading = positionQuery.isFetching || categoryQuery.isFetching || continuousQuery.isFetching;
   const error =

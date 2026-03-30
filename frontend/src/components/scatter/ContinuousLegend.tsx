@@ -36,9 +36,7 @@ export function ContinuousLegend({ columnName, colormap, vmin, vmax }: Props) {
       <div
         className="legend-continuous-bar"
         style={{
-          background: gradientStops
-            ? `linear-gradient(to right, ${gradientStops})`
-            : "var(--color-surface)",
+          background: gradientStops ? `linear-gradient(to right, ${gradientStops})` : "var(--color-surface)",
         }}
       />
       <div className="legend-continuous-ticks">

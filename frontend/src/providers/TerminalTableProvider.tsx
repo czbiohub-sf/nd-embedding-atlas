@@ -48,11 +48,7 @@ export function TerminalTableProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo(() => ({ open, height, toggle, setHeight }), [open, height, toggle, setHeight]);
 
-  return (
-    <TerminalTableContext.Provider value={value}>
-      {children}
-    </TerminalTableContext.Provider>
-  );
+  return <TerminalTableContext.Provider value={value}>{children}</TerminalTableContext.Provider>;
 }
 
 export function useTerminalTable(): TerminalTableState {

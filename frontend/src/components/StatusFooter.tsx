@@ -11,7 +11,11 @@ import { useScatterUIState } from "../providers/ScatterUIStateProvider";
 import { useTerminalTable } from "../providers/TerminalTableProvider";
 
 function Dot() {
-  return <span className="mx-1.5" style={{ color: "var(--color-border-active)" }}>·</span>;
+  return (
+    <span className="mx-1.5" style={{ color: "var(--color-border-active)" }}>
+      ·
+    </span>
+  );
 }
 
 export function StatusFooter() {
@@ -20,19 +24,14 @@ export function StatusFooter() {
   const { toggle: toggleTable, open: tableOpen } = useTerminalTable();
 
   return (
-    <div
-      className="status-bar fixed bottom-0 left-0 right-0 z-50"
-      style={{ height: "var(--footer-height, 1.5rem)" }}
-    >
+    <div className="status-bar fixed bottom-0 left-0 right-0 z-50" style={{ height: "var(--footer-height, 1.5rem)" }}>
       {/* ── Left: branding + context ── */}
       <span style={{ color: "var(--color-text-secondary)", fontWeight: 500 }}>ndea</span>
 
       {embeddingKey && (
         <>
           <Dot />
-          <span style={{ color: "var(--color-text-muted)" }}>
-            {embeddingKey.replace(/^X_/, "")}
-          </span>
+          <span style={{ color: "var(--color-text-muted)" }}>{embeddingKey.replace(/^X_/, "")}</span>
         </>
       )}
 
@@ -42,32 +41,24 @@ export function StatusFooter() {
       {/* ── Right: metrics ── */}
       {numPoints > 0 && (
         <>
-          <span style={{ color: "var(--color-text-secondary)" }}>
-            {numPoints.toLocaleString()} obs
-          </span>
+          <span style={{ color: "var(--color-text-secondary)" }}>{numPoints.toLocaleString()} obs</span>
           <Dot />
         </>
       )}
 
       {selectedCount !== null && selectedCount > 0 && (
         <>
-          <span style={{ color: "var(--color-accent-cyan)" }}>
-            {selectedCount.toLocaleString()} sel
-          </span>
+          <span style={{ color: "var(--color-accent-cyan)" }}>{selectedCount.toLocaleString()} sel</span>
           <Dot />
         </>
       )}
 
-      <span style={{ fontVariantNumeric: "tabular-nums" }}>
-        {zoom.toFixed(1)}×
-      </span>
+      <span style={{ fontVariantNumeric: "tabular-nums" }}>{zoom.toFixed(1)}×</span>
 
       {fps !== null && (
         <>
           <Dot />
-          <span style={{ color: "var(--color-text-muted)" }}>
-            {Math.round(fps)} fps
-          </span>
+          <span style={{ color: "var(--color-text-muted)" }}>{Math.round(fps)} fps</span>
         </>
       )}
 
@@ -98,7 +89,8 @@ export function StatusFooter() {
         onClick={toggleTheme}
         className="ml-1 flex items-center justify-center rounded"
         style={{
-          width: 18, height: 18,
+          width: 18,
+          height: 18,
           color: "var(--color-text-muted)",
           background: "transparent",
           border: "none",
@@ -108,10 +100,7 @@ export function StatusFooter() {
         }}
         aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
       >
-        {theme === "dark"
-          ? <SunIcon size={12} />
-          : <MoonIcon size={12} />
-        }
+        {theme === "dark" ? <SunIcon size={12} /> : <MoonIcon size={12} />}
       </button>
     </div>
   );

@@ -20,10 +20,7 @@ export const viewSyncStore = new Store<ViewSyncState>({
   lockMode: "independent",
 });
 
-export function broadcastViewState(
-  id: PanelId,
-  state: ViewState,
-) {
+export function broadcastViewState(id: PanelId, state: ViewState) {
   viewSyncStore.setState((s) => ({ ...s, ...state, sourcePanelId: id }));
 }
 

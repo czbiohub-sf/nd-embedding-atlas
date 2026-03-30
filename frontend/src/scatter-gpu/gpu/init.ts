@@ -11,7 +11,7 @@ export async function initGPU(canvas: HTMLCanvasElement, deviceInfo: DeviceInfo)
   const limits = device.limits;
   console.log(
     `GPU workgroupSize: ${preferredWorkgroupSize}. ` +
-    `Limits: maxSizeX=${limits.maxComputeWorkgroupSizeX}, maxInvocations=${limits.maxComputeInvocationsPerWorkgroup}`,
+      `Limits: maxSizeX=${limits.maxComputeWorkgroupSizeX}, maxInvocations=${limits.maxComputeInvocationsPerWorkgroup}`,
   );
 
   return { root, device, context, format, preferredWorkgroupSize };

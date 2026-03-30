@@ -6,21 +6,21 @@ import { TerminalTableProvider } from "./providers/TerminalTableProvider";
 
 // Module scope — survives HMR
 const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
+  defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
 });
 
 export default function App() {
-    return (
-        <QueryClientProvider client={queryClient}>
-            <ThemeProvider>
-                <ScatterUIStateProvider>
-                    <DashboardProvider>
-                        <TerminalTableProvider>
-                            <DashboardShell />
-                        </TerminalTableProvider>
-                    </DashboardProvider>
-                </ScatterUIStateProvider>
-            </ThemeProvider>
-        </QueryClientProvider>
-    );
+  return (
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider>
+        <ScatterUIStateProvider>
+          <DashboardProvider>
+            <TerminalTableProvider>
+              <DashboardShell />
+            </TerminalTableProvider>
+          </DashboardProvider>
+        </ScatterUIStateProvider>
+      </ThemeProvider>
+    </QueryClientProvider>
+  );
 }

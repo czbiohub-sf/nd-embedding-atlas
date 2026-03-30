@@ -2,8 +2,8 @@ import { ViewerCanvas } from "./ViewerCanvas";
 import { ViewerProvider } from "./ViewerProvider";
 
 export const Viewer = {
-    Provider: ViewerProvider,
-    Canvas: ViewerCanvas,
+  Provider: ViewerProvider,
+  Canvas: ViewerCanvas,
 } as const;
 
 export { ChannelControls } from "./ChannelControls";

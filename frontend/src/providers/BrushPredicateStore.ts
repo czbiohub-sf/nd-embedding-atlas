@@ -15,31 +15,31 @@
 import { Store } from "@tanstack/store";
 
 export interface BrushPredicateState {
-    /** Current SQL predicate string, or null for "no filter" */
-    predicate: string | null;
-    /** Stable source object for Mosaic's cross-filter source tracking */
-    source: object;
-    /** Monotonically increasing; use as TanStack Query cache key dep */
-    version: number;
+  /** Current SQL predicate string, or null for "no filter" */
+  predicate: string | null;
+  /** Stable source object for Mosaic's cross-filter source tracking */
+  source: object;
+  /** Monotonically increasing; use as TanStack Query cache key dep */
+  version: number;
 }
 
 // Module singleton — never changes reference, accessible everywhere
 export const brushPredicateStore = new Store<BrushPredicateState>({
-    predicate: null,
-    source: {},
-    version: 0,
+  predicate: null,
+  source: {},
+  version: 0,
 });
 
 /** Write a new selection predicate; increments version for cache invalidation. */
 export function setBrushPredicate(source: object, sql: string | null) {
-    brushPredicateStore.setState((s) => ({
-        source,
-        predicate: sql,
-        version: s.version + 1,
-    }));
+  brushPredicateStore.setState((s) => ({
+    source,
+    predicate: sql,
+    version: s.version + 1,
+  }));
 }
 
 /** Clear the brush selection (show all rows). */
 export function clearBrushPredicate(source: object) {
-    setBrushPredicate(source, null);
+  setBrushPredicate(source, null);
 }

@@ -38,10 +38,7 @@ export interface ScatterColorState {
   categoryCol: string | null;
 }
 
-export function useScatterColorState(
-  coordinator: Coordinator,
-  metadata: Metadata,
-): ScatterColorState {
+export function useScatterColorState(coordinator: Coordinator, metadata: Metadata): ScatterColorState {
   // ── Column selection ────────────────────────────────────────────────────────
   const [colorByColumn, setColorByColumn] = useState<string | null>(null);
   const obsColumns = useMemo(() => metadata.obs_columns ?? [], [metadata.obs_columns]);

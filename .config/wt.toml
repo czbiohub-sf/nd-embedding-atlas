@@ -10,13 +10,12 @@ python-deps = "uv sync --all-groups"
 [post-start]
 # Start the Vite dev server in the background for interactive testing
 # Logs go to .git/wt-logs/<branch>-post-start-dev-server.log
-dev-server = "cd frontend && pnpm dev --port 0"
+dev-server = "cd frontend && vp dev --port 0"
 
 [pre-commit]
-# Type-check before every wt merge commit
-typecheck = "cd frontend && pnpm exec tsc --noEmit"
+# Type-check + lint + fmt before every wt merge commit
+check = "cd frontend && vp check"
 
 [pre-merge]
-# Full typecheck + build check before merging
-typecheck = "cd frontend && pnpm exec tsc --noEmit"
-build-check = "cd frontend && pnpm build --mode=typecheck 2>/dev/null || cd frontend && pnpm exec tsc --noEmit"
+# Full quality gate before merging
+check = "cd frontend && vp check"

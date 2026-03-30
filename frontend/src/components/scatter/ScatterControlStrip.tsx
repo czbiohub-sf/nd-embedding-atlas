@@ -38,8 +38,8 @@ export interface ScatterControlStripProps {
   onSetContinuousColormap: (c: string) => void;
   onSetMaxCategories: (n: number) => void;
 
-  selectionTool: 'pan' | 'marquee' | 'lasso';
-  onSetSelectionTool: (tool: 'pan' | 'marquee' | 'lasso') => void;
+  selectionTool: "pan" | "marquee" | "lasso";
+  onSetSelectionTool: (tool: "pan" | "marquee" | "lasso") => void;
 }
 
 export function ScatterControlStrip({
@@ -72,9 +72,7 @@ export function ScatterControlStrip({
   return (
     <div className="flex shrink-0 items-center gap-2 border-b border-border-subtle px-2 py-1 text-text-secondary">
       <label className="flex items-center gap-1.5">
-        <span className="font-medium text-[10px] text-text-muted uppercase tracking-wider">
-          Embedding
-        </span>
+        <span className="font-medium text-[10px] text-text-muted uppercase tracking-wider">Embedding</span>
         <CompactSelect
           value={axes.obsmKey}
           disabled={loadingKey !== null}
@@ -106,9 +104,7 @@ export function ScatterControlStrip({
       <div className="h-4 w-px bg-border-subtle" />
 
       <label className="flex items-center gap-1.5">
-        <span className="font-medium text-[10px] text-text-muted uppercase tracking-wider">
-          Color
-        </span>
+        <span className="font-medium text-[10px] text-text-muted uppercase tracking-wider">Color</span>
         <CompactSelect
           value={colorByColumn ?? ""}
           placeholder="none"
@@ -118,12 +114,7 @@ export function ScatterControlStrip({
       </label>
 
       {colorModeCanToggle && (
-        <Button
-          variant="ghost"
-          size="xs"
-          className="h-6 px-2 text-xs"
-          onClick={onToggleColorMode}
-        >
+        <Button variant="ghost" size="xs" className="h-6 px-2 text-xs" onClick={onToggleColorMode}>
           {colorMode === "continuous" ? "scale" : "palette"}
         </Button>
       )}
@@ -132,9 +123,7 @@ export function ScatterControlStrip({
         <>
           <div className="h-4 w-px bg-border-subtle" />
           <label className="flex items-center gap-1.5">
-            <span className="font-medium text-[10px] text-text-muted uppercase tracking-wider">
-              Palette
-            </span>
+            <span className="font-medium text-[10px] text-text-muted uppercase tracking-wider">Palette</span>
             <CompactSelect
               value={categoricalColormap}
               options={categoricalColormaps.map((c) => ({ value: c, label: c }))}
@@ -148,9 +137,7 @@ export function ScatterControlStrip({
               min={2}
               max={256}
               value={maxCategories}
-              onChange={(e) =>
-                onSetMaxCategories(Math.max(2, Math.min(256, Number(e.target.value))))
-              }
+              onChange={(e) => onSetMaxCategories(Math.max(2, Math.min(256, Number(e.target.value))))}
               className="w-14 h-6 rounded border border-border bg-input px-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
             />
           </label>
@@ -161,9 +148,7 @@ export function ScatterControlStrip({
         <>
           <div className="h-4 w-px bg-border-subtle" />
           <label className="flex items-center gap-1.5">
-            <span className="font-medium text-[10px] text-text-muted uppercase tracking-wider">
-              Colormap
-            </span>
+            <span className="font-medium text-[10px] text-text-muted uppercase tracking-wider">Colormap</span>
             <CompactSelect
               value={continuousColormap}
               options={continuousColormaps.map((c) => ({ value: c, label: c }))}
@@ -183,8 +168,8 @@ export function ScatterControlStrip({
         <Button
           variant="ghost"
           size="xs"
-          className={`h-6 w-6 px-0 ${selectionTool === 'marquee' ? 'bg-accent text-accent-foreground' : ''}`}
-          onClick={() => onSetSelectionTool(selectionTool === 'marquee' ? 'pan' : 'marquee')}
+          className={`h-6 w-6 px-0 ${selectionTool === "marquee" ? "bg-accent text-accent-foreground" : ""}`}
+          onClick={() => onSetSelectionTool(selectionTool === "marquee" ? "pan" : "marquee")}
           title="Rectangle select (Shift+drag) — click to lock mode"
         >
           <BoxSelect className="h-3.5 w-3.5" />
@@ -192,8 +177,8 @@ export function ScatterControlStrip({
         <Button
           variant="ghost"
           size="xs"
-          className={`h-6 w-6 px-0 ${selectionTool === 'lasso' ? 'bg-accent text-accent-foreground' : ''}`}
-          onClick={() => onSetSelectionTool(selectionTool === 'lasso' ? 'pan' : 'lasso')}
+          className={`h-6 w-6 px-0 ${selectionTool === "lasso" ? "bg-accent text-accent-foreground" : ""}`}
+          onClick={() => onSetSelectionTool(selectionTool === "lasso" ? "pan" : "lasso")}
           title="Lasso select (Shift+Alt+drag) — click to lock mode"
         >
           <LassoSelect className="h-3.5 w-3.5" />

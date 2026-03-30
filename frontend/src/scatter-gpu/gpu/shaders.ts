@@ -25,7 +25,7 @@ export function createVertexShader(uniforms: ScatterUniforms) {
     in: {
       quadPos: d.vec2f,
       instancePos: d.vec2f,
-      instanceColor: d.u32,  // packed RGBA, unpacked via unpackColor
+      instanceColor: d.u32, // packed RGBA, unpacked via unpackColor
       instanceSelected: d.u32,
       instanceVisible: d.u32,
     },
@@ -53,10 +53,7 @@ export function createVertexShader(uniforms: ScatterUniforms) {
 
     const adaptiveScale = params.w;
     const zoomedRadius = radius * std.sqrt(zoom) * vis * adaptiveScale;
-    const scaledQuad = d.vec2f(
-      input.quadPos.x * zoomedRadius,
-      input.quadPos.y * zoomedRadius,
-    );
+    const scaledQuad = d.vec2f(input.quadPos.x * zoomedRadius, input.quadPos.y * zoomedRadius);
 
     const sel = d.f32(input.instanceSelected);
     const selDimFactor = params.z;
@@ -64,12 +61,7 @@ export function createVertexShader(uniforms: ScatterUniforms) {
 
     const rgba = unpackColor(input.instanceColor);
     return {
-      position: d.vec4f(
-        (worldX + scaledQuad.x) / aspect,
-        worldY + scaledQuad.y,
-        0,
-        1,
-      ),
+      position: d.vec4f((worldX + scaledQuad.x) / aspect, worldY + scaledQuad.y, 0, 1),
       color: d.vec4f(rgba.x * dimFactor, rgba.y * dimFactor, rgba.z * dimFactor, rgba.w),
       uv: input.quadPos,
     };
@@ -88,11 +80,6 @@ export function createFragmentShader() {
     if (alpha < 0.004) {
       std.discard();
     }
-    return d.vec4f(
-      input.color.x * alpha,
-      input.color.y * alpha,
-      input.color.z * alpha,
-      alpha,
-    );
+    return d.vec4f(input.color.x * alpha, input.color.y * alpha, input.color.z * alpha, alpha);
   });
 }
