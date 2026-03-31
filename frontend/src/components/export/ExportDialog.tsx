@@ -4,7 +4,7 @@ import { useDashboard } from "../../hooks/useDashboard";
 import { predicateToSql, toRows } from "../../lib/mosaic-helpers";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
-import { Input } from "../ui/input";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "../ui/input-group";
 
 interface DatasetBreakdown {
   _dataset: string;
@@ -99,7 +99,7 @@ export default function ExportDialog({ open, onOpenChange, filtered }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-sm">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Export Selection</DialogTitle>
           <p className="font-mono text-[11px] text-muted-foreground tabular-nums">
@@ -127,22 +127,22 @@ export default function ExportDialog({ open, onOpenChange, filtered }: Props) {
           <label htmlFor="export-filename" className="text-xs text-muted-foreground">
             Filename
           </label>
-          <div className="flex h-9 overflow-hidden rounded-md border border-input focus-within:ring-2 focus-within:ring-ring/30">
-            <Input
+          <InputGroup>
+            <InputGroupInput
               id="export-filename"
               value={filename}
               onChange={(e) => setFilename(e.target.value)}
-              className="h-full rounded-none border-0 font-mono shadow-none focus-visible:ring-0"
+              className="font-mono"
               onKeyDown={(e) => {
                 if (e.key === "Enter" && filename.trim()) handleExport();
               }}
               // biome-ignore lint/a11y/noAutofocus: intentional — first field in a modal
               autoFocus
             />
-            <span className="flex shrink-0 items-center border-l border-input bg-muted px-2.5 font-mono text-xs text-muted-foreground">
+            <InputGroupAddon align="inline-end" className="self-stretch py-0 border-l border-input bg-muted px-2.5">
               .zarr
-            </span>
-          </div>
+            </InputGroupAddon>
+          </InputGroup>
           {previewPath && (
             <p className="truncate font-mono text-[10px] text-muted-foreground" title={previewPath}>
               {previewPath}

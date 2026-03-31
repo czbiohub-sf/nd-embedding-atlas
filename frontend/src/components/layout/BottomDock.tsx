@@ -96,7 +96,7 @@ export function BottomDock({ dockviewApi, onAddScatter, devtoolsOpen, onToggleDe
   }
 
   return (
-    <div className="flex h-5 shrink-0 items-center gap-0 border-t border-border bg-background px-2 text-[10px] text-muted-foreground">
+    <div className="flex h-6 shrink-0 items-center gap-0 border-t border-border bg-background px-2 text-[11px] text-muted-foreground">
       {/* ── Scatter dots ── */}
       {scatterPanels.map((p) => (
         <Tooltip key={p.id}>
@@ -131,7 +131,7 @@ export function BottomDock({ dockviewApi, onAddScatter, devtoolsOpen, onToggleDe
             <button
               type="button"
               onClick={onAddScatter}
-              className="mx-0.5 flex size-4 items-center justify-center rounded-sm text-[9px] text-muted-foreground/50 transition-colors hover:text-muted-foreground"
+              className="mx-0.5 flex size-4 items-center justify-center rounded-sm text-[10px] text-muted-foreground/60 transition-colors hover:text-muted-foreground"
             />
           }
         >
@@ -154,12 +154,12 @@ export function BottomDock({ dockviewApi, onAddScatter, devtoolsOpen, onToggleDe
                   "mx-0.5 flex size-4 items-center justify-center rounded-sm transition-colors",
                   activePanelId === "table"
                     ? "text-foreground"
-                    : "text-muted-foreground/50 hover:text-muted-foreground",
+                    : "text-muted-foreground/60 hover:text-muted-foreground",
                 )}
               />
             }
           >
-            <TableIcon className="size-2.5" />
+            <TableIcon className="size-3" />
           </TooltipTrigger>
           <TooltipContent side="top">Table</TooltipContent>
         </Tooltip>
@@ -176,12 +176,12 @@ export function BottomDock({ dockviewApi, onAddScatter, devtoolsOpen, onToggleDe
                   "mx-0.5 flex size-4 items-center justify-center rounded-sm transition-colors",
                   activePanelId === "image-viewer"
                     ? "text-foreground"
-                    : "text-muted-foreground/50 hover:text-muted-foreground",
+                    : "text-muted-foreground/60 hover:text-muted-foreground",
                 )}
               />
             }
           >
-            <ScanIcon className="size-2.5" />
+            <ScanIcon className="size-3" />
           </TooltipTrigger>
           <TooltipContent side="top">Image Viewer</TooltipContent>
         </Tooltip>
@@ -195,15 +195,15 @@ export function BottomDock({ dockviewApi, onAddScatter, devtoolsOpen, onToggleDe
         <>
           <span className="inline-block size-1.5 animate-pulse rounded-full bg-primary" />
           <span className="text-muted-foreground/80">{statusMsg}</span>
-          <span className="mx-1 text-muted-foreground/30">·</span>
+          <span className="mx-1 text-muted-foreground/60">·</span>
         </>
       )}
 
       {/* ── Metrics ── */}
-      {numPoints > 0 && <span className="tabular-nums text-muted-foreground/70">{numPoints.toLocaleString()}</span>}
+      {numPoints > 0 && <span className="tabular-nums text-muted-foreground">{numPoints.toLocaleString()}</span>}
       {selectedCount !== null && selectedCount > 0 && (
         <>
-          <span className="mx-1 text-muted-foreground/30">·</span>
+          <span className="mx-1 text-muted-foreground/60">·</span>
           <span className="tabular-nums" style={{ color: "oklch(0.585 0.233 277.117 / 80%)" }}>
             {selectedCount.toLocaleString()} sel
           </span>
@@ -211,14 +211,14 @@ export function BottomDock({ dockviewApi, onAddScatter, devtoolsOpen, onToggleDe
       )}
       {zoom !== 1 && (
         <>
-          <span className="mx-1 text-muted-foreground/30">·</span>
-          <span className="tabular-nums text-muted-foreground/60">{zoom.toFixed(1)}×</span>
+          <span className="mx-1 text-muted-foreground/60">·</span>
+          <span className="tabular-nums text-muted-foreground">{zoom.toFixed(1)}×</span>
         </>
       )}
       {fps !== null && (
         <>
-          <span className="mx-1 text-muted-foreground/30">·</span>
-          <span className="tabular-nums text-muted-foreground/40">{Math.round(fps)}fps</span>
+          <span className="mx-1 text-muted-foreground/60">·</span>
+          <span className="tabular-nums text-muted-foreground/75">{Math.round(fps)}fps</span>
         </>
       )}
 
@@ -226,8 +226,8 @@ export function BottomDock({ dockviewApi, onAddScatter, devtoolsOpen, onToggleDe
 
       {/* ⌘K */}
       <Tooltip>
-        <TooltipTrigger render={<span className="cursor-default text-muted-foreground/40" />}>
-          <ChevronRightIcon className="size-2.5" />
+        <TooltipTrigger render={<span className="cursor-default text-muted-foreground/75" />}>
+          <ChevronRightIcon className="size-3" />
         </TooltipTrigger>
         <TooltipContent side="top">Commands ⌘K</TooltipContent>
       </Tooltip>
@@ -242,12 +242,12 @@ export function BottomDock({ dockviewApi, onAddScatter, devtoolsOpen, onToggleDe
               aria-label="Toggle table (⌘J)"
               className={cn(
                 "ml-2 flex items-center gap-1 transition-colors",
-                tableOpen ? "text-foreground" : "text-muted-foreground/40 hover:text-muted-foreground",
+                tableOpen ? "text-foreground" : "text-muted-foreground/75 hover:text-muted-foreground",
               )}
             />
           }
         >
-          <DatabaseIcon className="size-2.5" />
+          <DatabaseIcon className="size-3" />
         </TooltipTrigger>
         <TooltipContent side="top">Table ⌘J</TooltipContent>
       </Tooltip>
@@ -263,12 +263,12 @@ export function BottomDock({ dockviewApi, onAddScatter, devtoolsOpen, onToggleDe
                 aria-label="Toggle devtools"
                 className={cn(
                   "ml-1 flex size-4 items-center justify-center transition-colors",
-                  devtoolsOpen ? "text-primary" : "text-muted-foreground/40 hover:text-muted-foreground",
+                  devtoolsOpen ? "text-primary" : "text-muted-foreground/75 hover:text-muted-foreground",
                 )}
               />
             }
           >
-            <LogsIcon className="size-2.5" />
+            <LogsIcon className="size-3" />
           </TooltipTrigger>
           <TooltipContent side="top">Devtools</TooltipContent>
         </Tooltip>
