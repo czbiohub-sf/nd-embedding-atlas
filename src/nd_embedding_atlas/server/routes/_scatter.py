@@ -130,6 +130,7 @@ def make_scatter_router(get_state: Callable[[], ViewerState]) -> APIRouter:
                 "embeddingKey": embedding,
                 "ndim": 2,
                 "rowIndices": row_indices,
+                "positionScale": float(max_abs) if max_abs > 0 else 1.0,
             }
             return _pack_binary(header, interleaved)
 

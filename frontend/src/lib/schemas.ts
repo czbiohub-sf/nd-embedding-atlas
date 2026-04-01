@@ -80,6 +80,16 @@ export const EmbeddingStatusSchema = z.object({
   error: z.string().optional(),
 });
 
+export const ObsSetSchema = z.object({
+  obsset_id: z.string(),
+  name: z.string(),
+  color: z.string().nullable(),
+  created_count: z.number(),
+  current_count: z.number(),
+  created_at: z.string(),
+});
+
 export type Metadata = z.infer<typeof MetadataSchema>;
 export type ObsInfo = z.infer<typeof ObsInfoSchema>;
 export type EmbeddingStatus = z.infer<typeof EmbeddingStatusSchema>;
+export type ObsSet = z.infer<typeof ObsSetSchema>;

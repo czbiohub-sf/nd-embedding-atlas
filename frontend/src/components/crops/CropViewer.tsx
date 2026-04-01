@@ -11,7 +11,11 @@ import {
 import { SingleCropViewer } from "./SingleCropViewer";
 import { ViewerPauseGate } from "./ViewerPauseGate";
 
-export function CropViewer() {
+interface CropViewerProps {
+  channelInstance?: "docked" | "pip";
+}
+
+export function CropViewer({ channelInstance = "docked" }: CropViewerProps) {
   const { state } = useDashboard();
   const hasEverSelected = useRef(false);
   const [cropSize, setCropSize] = useState(100);
@@ -24,7 +28,7 @@ export function CropViewer() {
   // Once mounted, keep it alive to avoid WebGL teardown/recreation.
   if (!hasEverSelected.current) {
     return (
-      <div className="flex h-full w-full items-center justify-center bg-surface text-text-muted text-xs">
+      <div className="flex h-full w-full items-center justify-center text-text-muted text-xs">
         Click an observation to view
       </div>
     );
@@ -32,9 +36,9 @@ export function CropViewer() {
 
   return (
     <ViewerErrorBoundary>
-      <Viewer.Provider>
+      <Viewer.Provider channelInstance={channelInstance}>
         <ViewerPauseGate active={!!state.highlightId} />
-        <div className="relative h-full bg-base">
+        <div className="relative h-full">
           <Viewer.Canvas className="absolute inset-0 h-full w-full" />
           <SingleCropViewer cropSize={cropSize} />
           <ViewerLoadingOverlay />
@@ -46,7 +50,7 @@ export function CropViewer() {
             <ViewerControls cropSize={cropSize} setCropSize={setCropSize} />
           </div>
           {!state.highlightId && (
-            <div className="absolute inset-0 flex items-center justify-center bg-surface text-text-muted text-xs">
+            <div className="absolute inset-0 flex items-center justify-center text-text-muted text-xs">
               Click an observation to view
             </div>
           )}

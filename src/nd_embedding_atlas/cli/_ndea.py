@@ -16,6 +16,7 @@ def view_anndata(
     pool_workers: int | None = None,
     host: str,
     port: int,
+    no_static: bool = False,
 ) -> None:
     """Launch the embedding atlas viewer.
 
@@ -84,4 +85,5 @@ def view_anndata(
         pool_workers=pool_workers,
         host=host,
         port=port,
+        no_static=no_static,
     )

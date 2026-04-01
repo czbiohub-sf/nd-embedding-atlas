@@ -1,0 +1,1038 @@
+<!doctype html>
+<!--
+  Track Gallery Sketch
+  ──────────────────────────────────────────────────────────────────────────────
+  A scrollable gallery of image crops — one per tracked timepoint.
+  Lives in the ⌘J drawer as a third tab, or as the Track tab itself.
+
+  Each card shows:
+    • Simulated fluorescence crop (canvas, dark bg + colored blobs)
+    • Timepoint label (T=N)
+    • Active highlight + ring
+    • Click → sets active T, scrubber follows
+
+  Three layout variants:
+    A — Horizontal filmstrip (single row, scroll left-right) — compact
+    B — Vertical grid (2-col, scroll down) — more detail per crop
+    C — Full gallery tab (fills the drawer, larger crops, metadata below each)
+  ──────────────────────────────────────────────────────────────────────────────
+-->
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Track Gallery Sketch</title>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        background: hsl(222 16% 8%);
+        color: hsl(210 20% 88%);
+        font-family: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+
+      /* ── Scatter bg ── */
+      #scatter-bg {
+        flex: 1;
+        position: relative;
+        min-height: 0;
+      }
+      #scatter-canvas {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+      }
+
+      /* ── Bottom dock ── */
+      .dock {
+        height: 24px;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        gap: 0;
+        border-top: 1px solid hsl(222 14% 18% / 0.4);
+        background: hsl(222 14% 10% / 0.8);
+        backdrop-filter: blur(8px);
+        padding: 0 8px;
+        font-size: 11px;
+        color: hsl(215 14% 50%);
+        z-index: 10;
+      }
+      .dsep {
+        width: 1px;
+        height: 12px;
+        background: hsl(215 14% 28% / 0.5);
+        margin: 0 7px;
+      }
+
+      /* ── Drawer shell ── */
+      .drawer {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 24px;
+        background: hsl(222 14% 10%);
+        border-top: 1px solid hsl(222 14% 20%);
+        display: flex;
+        flex-direction: column;
+        z-index: 40;
+        transition: height 180ms ease;
+        overflow: hidden;
+      }
+      .drawer.closed {
+        height: 0 !important;
+        border-top: none;
+      }
+
+      .resize-handle {
+        height: 5px;
+        flex-shrink: 0;
+        cursor: ns-resize;
+        background: hsl(222 14% 18% / 0.4);
+        transition: background 0.15s;
+      }
+      .resize-handle:hover {
+        background: hsl(222 14% 30% / 0.6);
+      }
+
+      /* ── Tab bar ── */
+      .tab-bar {
+        display: flex;
+        align-items: center;
+        border-bottom: 1px solid hsl(222 14% 18%);
+        background: hsl(222 14% 12%);
+        flex-shrink: 0;
+        height: 30px;
+        padding: 0 4px;
+      }
+      .tab {
+        padding: 0 12px;
+        height: 100%;
+        font-size: 11px;
+        color: hsl(215 14% 45%);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        position: relative;
+        user-select: none;
+        transition: color 0.1s;
+        border: none;
+        background: none;
+        font-family: inherit;
+      }
+      .tab:hover {
+        color: hsl(210 20% 75%);
+      }
+      .tab.active {
+        color: hsl(210 20% 90%);
+      }
+      .tab.active::after {
+        content: "";
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 1.5px;
+        background: hsl(210 20% 80% / 0.6);
+      }
+      .tab .dot {
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        background: oklch(0.585 0.233 277.117 / 70%);
+      }
+      .tab-spacer {
+        flex: 1;
+      }
+      .close-btn {
+        width: 20px;
+        height: 20px;
+        margin-right: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 4px;
+        border: none;
+        background: none;
+        color: hsl(215 14% 40%);
+        cursor: pointer;
+        font-size: 12px;
+        transition:
+          color 0.1s,
+          background 0.1s;
+        font-family: inherit;
+      }
+      .close-btn:hover {
+        color: hsl(210 20% 80%);
+        background: hsl(222 14% 18%);
+      }
+
+      /* ── Tab content panels ── */
+      .tab-panel {
+        display: none;
+        flex: 1;
+        min-height: 0;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      .tab-panel.active {
+        display: flex;
+      }
+
+      /* ── Shared scrubber bar ── */
+      .scrubber-bar {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 12px;
+        flex-shrink: 0;
+        border-bottom: 1px solid hsl(222 14% 16%);
+        background: hsl(222 14% 11%);
+      }
+      .t-lbl {
+        font-size: 10px;
+        color: oklch(0.585 0.233 277.117 / 70%);
+      }
+      .t-slider {
+        flex: 1;
+        accent-color: oklch(0.585 0.233 277.117);
+        height: 3px;
+        cursor: pointer;
+      }
+      .t-val {
+        font-size: 10px;
+        min-width: 36px;
+        text-align: center;
+        color: oklch(0.585 0.233 277.117);
+        background: oklch(0.585 0.233 277.117 / 12%);
+        border: 1px solid oklch(0.585 0.233 277.117 / 30%);
+        border-radius: 3px;
+        padding: 0 5px;
+      }
+      .ctrl-btn {
+        width: 22px;
+        height: 22px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 4px;
+        border: none;
+        background: none;
+        color: hsl(215 14% 45%);
+        cursor: pointer;
+        font-size: 13px;
+        transition:
+          color 0.1s,
+          background 0.1s;
+        font-family: inherit;
+      }
+      .ctrl-btn:hover {
+        color: hsl(210 20% 85%);
+        background: hsl(222 14% 18%);
+      }
+      .ctrl-btn.playing {
+        color: oklch(0.585 0.233 277.117);
+      }
+
+      /* ────────────────────────────────────────────────────────────────────────
+         VARIANT A — Horizontal filmstrip
+      ──────────────────────────────────────────────────────────────────────── */
+      .filmstrip-scroll {
+        display: flex;
+        gap: 6px;
+        padding: 8px 12px;
+        overflow-x: auto;
+        flex: 1;
+        align-items: center;
+        scrollbar-width: thin;
+        scrollbar-color: hsl(222 14% 25%) transparent;
+      }
+      .strip-card {
+        flex-shrink: 0;
+        position: relative;
+        width: 72px;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        cursor: pointer;
+      }
+      .strip-canvas-wrap {
+        position: relative;
+        width: 72px;
+        height: 72px;
+        border-radius: 5px;
+        overflow: hidden;
+        border: 2px solid transparent;
+        transition:
+          border-color 0.12s,
+          box-shadow 0.12s;
+      }
+      .strip-card.active .strip-canvas-wrap {
+        border-color: oklch(0.585 0.233 277.117);
+        box-shadow: 0 0 0 2px oklch(0.585 0.233 277.117 / 25%);
+      }
+      .strip-card:not(.active):hover .strip-canvas-wrap {
+        border-color: hsl(222 14% 32%);
+      }
+      .strip-card canvas {
+        display: block;
+        width: 72px;
+        height: 72px;
+      }
+      .strip-t-lbl {
+        text-align: center;
+        font-size: 9px;
+        color: hsl(215 14% 45%);
+        padding-bottom: 1px;
+      }
+      .strip-card.active .strip-t-lbl {
+        color: oklch(0.585 0.233 277.117);
+        font-weight: 600;
+      }
+
+      /* Active frame indicator dot */
+      .strip-card.active::before {
+        content: "";
+        position: absolute;
+        top: -6px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 4px;
+        height: 4px;
+        border-radius: 50%;
+        background: oklch(0.585 0.233 277.117);
+      }
+
+      /* ────────────────────────────────────────────────────────────────────────
+         VARIANT B — 2-column vertical grid
+      ──────────────────────────────────────────────────────────────────────── */
+      .grid-scroll {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+        overflow-x: hidden;
+        padding: 8px 10px;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 6px;
+        align-content: start;
+        scrollbar-width: thin;
+        scrollbar-color: hsl(222 14% 25%) transparent;
+      }
+      .grid-card {
+        position: relative;
+        cursor: pointer;
+        border-radius: 6px;
+        overflow: hidden;
+        border: 2px solid hsl(222 14% 18%);
+        background: hsl(222 14% 13%);
+        transition:
+          border-color 0.12s,
+          box-shadow 0.12s;
+        display: flex;
+        flex-direction: column;
+      }
+      .grid-card.active {
+        border-color: oklch(0.585 0.233 277.117);
+        box-shadow: 0 0 0 2px oklch(0.585 0.233 277.117 / 20%);
+      }
+      .grid-card:not(.active):hover {
+        border-color: hsl(222 14% 30%);
+      }
+      .grid-card canvas {
+        display: block;
+        width: 100%;
+      }
+      .grid-card-meta {
+        padding: 4px 6px;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .grid-t {
+        font-size: 10px;
+        color: hsl(215 14% 55%);
+      }
+      .grid-card.active .grid-t {
+        color: oklch(0.585 0.233 277.117);
+        font-weight: 600;
+      }
+      .grid-cat {
+        font-size: 9px;
+        color: hsl(215 14% 40%);
+        margin-left: auto;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 70px;
+      }
+
+      /* ────────────────────────────────────────────────────────────────────────
+         VARIANT C — Full gallery (larger crops, fills drawer)
+      ──────────────────────────────────────────────────────────────────────── */
+      .gallery-scroll {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+        overflow-x: hidden;
+        padding: 10px 12px;
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+        gap: 8px;
+        align-content: start;
+        scrollbar-width: thin;
+        scrollbar-color: hsl(222 14% 25%) transparent;
+      }
+      .gallery-card {
+        position: relative;
+        cursor: pointer;
+        border-radius: 8px;
+        overflow: hidden;
+        border: 2px solid hsl(222 14% 18%);
+        background: hsl(222 14% 13%);
+        transition:
+          border-color 0.12s,
+          box-shadow 0.12s,
+          transform 0.1s;
+        display: flex;
+        flex-direction: column;
+      }
+      .gallery-card:hover {
+        transform: translateY(-1px);
+      }
+      .gallery-card.active {
+        border-color: oklch(0.585 0.233 277.117);
+        box-shadow:
+          0 0 0 3px oklch(0.585 0.233 277.117 / 20%),
+          0 4px 12px rgba(0, 0, 0, 0.4);
+      }
+      .gallery-card:not(.active):hover {
+        border-color: hsl(222 14% 34%);
+      }
+      .gallery-card canvas {
+        display: block;
+        width: 100%;
+        aspect-ratio: 1;
+      }
+      .gallery-card-meta {
+        padding: 5px 8px 6px;
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+        background: hsl(222 14% 12%);
+        border-top: 1px solid hsl(222 14% 16%);
+      }
+      .gc-t {
+        font-size: 11px;
+        color: hsl(215 14% 60%);
+      }
+      .gallery-card.active .gc-t {
+        color: oklch(0.585 0.233 277.117);
+        font-weight: 600;
+      }
+      .gc-cat {
+        font-size: 9px;
+        color: hsl(215 14% 38%);
+      }
+      .gc-pos {
+        font-size: 9px;
+        color: hsl(215 14% 32%);
+        margin-top: 1px;
+      }
+
+      /* Now-playing badge */
+      .now-badge {
+        position: absolute;
+        top: 6px;
+        right: 6px;
+        background: oklch(0.585 0.233 277.117);
+        color: white;
+        font-size: 8px;
+        padding: 1px 5px;
+        border-radius: 3px;
+        display: none;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+      }
+      .gallery-card.active .now-badge {
+        display: block;
+      }
+
+      /* ── Variant switcher ── */
+      .variant-bar {
+        position: fixed;
+        top: 12px;
+        right: 12px;
+        display: flex;
+        gap: 6px;
+        z-index: 100;
+      }
+      .vbtn {
+        padding: 4px 10px;
+        font-size: 10px;
+        border-radius: 5px;
+        border: 1px solid hsl(222 14% 25%);
+        background: hsl(222 14% 13%);
+        color: hsl(215 14% 55%);
+        cursor: pointer;
+        font-family: inherit;
+        transition: all 0.1s;
+      }
+      .vbtn:hover {
+        background: hsl(222 14% 18%);
+        color: hsl(210 20% 80%);
+      }
+      .vbtn.active {
+        background: oklch(0.585 0.233 277.117 / 15%);
+        color: oklch(0.585 0.233 277.117);
+        border-color: oklch(0.585 0.233 277.117 / 40%);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="variant-bar">
+      <button class="vbtn" onclick="setVariant('A')">A — Filmstrip</button>
+      <button class="vbtn" onclick="setVariant('B')">B — 2-col grid</button>
+      <button class="vbtn active" onclick="setVariant('C')">C — Gallery</button>
+    </div>
+
+    <!-- Scatter background -->
+    <div id="scatter-bg">
+      <canvas id="scatter-canvas"></canvas>
+    </div>
+
+    <!-- Bottom dock -->
+    <div class="dock">
+      <span style="color: oklch(0.585 0.233 277.117)">●</span>
+      <span style="color: oklch(0.65 0.18 140); opacity: 0.4; margin-left: 2px">●</span>
+      <div class="dsep"></div>
+      <span style="color: hsl(215 14% 60%)">12,402</span>
+      <div class="dsep"></div>
+      <span style="color: oklch(0.585 0.233 277.117 / 80%)">847 sel</span>
+      <div style="flex: 1"></div>
+      <span style="opacity: 0.5; cursor: pointer; font-size: 11px" onclick="toggleDrawer()">⊟</span>
+      <div class="dsep"></div>
+      <span style="opacity: 0.3; font-size: 10px">☀</span>
+    </div>
+
+    <!-- Drawer -->
+    <div class="drawer" id="drawer" style="height: 320px">
+      <div class="resize-handle" id="resize-handle"></div>
+
+      <!-- Tab bar -->
+      <div class="tab-bar">
+        <button class="tab" id="tab-table" onclick="switchTab('table')">
+          Table <span style="font-size: 9px; color: hsl(215 14% 38%)">12,402</span>
+        </button>
+        <button class="tab active" id="tab-track" onclick="switchTab('track')">Track <span class="dot"></span></button>
+        <div class="tab-spacer"></div>
+        <button class="close-btn" onclick="toggleDrawer()">✕</button>
+      </div>
+
+      <!-- Table panel (stub) -->
+      <div class="tab-panel" id="panel-table">
+        <div
+          style="
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            color: hsl(215 14% 35%);
+          "
+        >
+          DataTable — existing implementation
+        </div>
+      </div>
+
+      <!-- Track panel -->
+      <div class="tab-panel active" id="panel-track">
+        <!-- Track header -->
+        <div
+          style="
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 5px 12px;
+            border-bottom: 1px solid hsl(222 14% 17%);
+            background: hsl(222 14% 12%);
+            flex-shrink: 0;
+            font-size: 10px;
+          "
+        >
+          <span>track</span>
+          <span style="color: oklch(0.585 0.233 277.117 / 85%); font-weight: 600">42</span>
+          <span style="color: hsl(215 14% 30%)">·</span>
+          <span
+            style="
+              color: hsl(215 14% 50%);
+              max-width: 180px;
+              overflow: hidden;
+              text-overflow: ellipsis;
+              white-space: nowrap;
+            "
+            >A/1/000001</span
+          >
+          <span style="color: hsl(215 14% 30%)">·</span>
+          <span id="frame-count" style="color: hsl(215 14% 50%)">15 frames</span>
+          <div style="flex: 1"></div>
+          <button
+            onclick="clearTrack()"
+            style="
+              display: flex;
+              align-items: center;
+              gap: 3px;
+              font-size: 10px;
+              color: hsl(215 14% 38%);
+              background: none;
+              border: none;
+              cursor: pointer;
+              font-family: inherit;
+              padding: 2px 6px;
+              border-radius: 4px;
+              transition: all 0.1s;
+            "
+            onmouseover="this.style.background = 'hsl(222 14% 18%)'"
+            onmouseout="this.style.background = 'none'"
+          >
+            ✕ clear
+          </button>
+        </div>
+
+        <!-- Scrubber bar -->
+        <div class="scrubber-bar">
+          <span class="t-lbl">T*</span>
+          <input
+            type="range"
+            class="t-slider"
+            id="t-slider"
+            min="0"
+            max="14"
+            value="0"
+            step="1"
+            oninput="scrubTo(+this.value)"
+          />
+          <span class="t-val" id="t-val">T=4</span>
+          <button class="ctrl-btn" onclick="step(-1)">‹</button>
+          <button class="ctrl-btn" id="play-btn" onclick="togglePlay()">▶</button>
+          <button class="ctrl-btn" onclick="step(1)">›</button>
+        </div>
+
+        <!-- Gallery / filmstrip / grid — swapped by variant -->
+        <div id="gallery-a" class="filmstrip-scroll" style="display: none"></div>
+        <div id="gallery-b" class="grid-scroll" style="display: none"></div>
+        <div id="gallery-c" class="gallery-scroll" style="display: none"></div>
+      </div>
+    </div>
+
+    <script>
+      // ── Seeded RNG ────────────────────────────────────────────────────────────
+      let seed = 42;
+      const rng = () => {
+        seed = (seed * 16807) % 2147483647;
+        return (seed - 1) / 2147483646;
+      };
+
+      // ── Track data ────────────────────────────────────────────────────────────
+      const T_VALUES = [4, 7, 10, 14, 18, 22, 28, 34, 41, 50, 58, 65, 71, 78, 85];
+      const CATS = ["Mitotic", "G1/S", "S phase", "G2", "M phase"];
+      const track = T_VALUES.map((t, i) => {
+        seed = t * 31 + 7;
+        return {
+          t,
+          i,
+          x: (90 + Math.sin(i * 0.55) * 70 + rng() * 18).toFixed(1),
+          y: (70 + Math.cos(i * 0.42) * 45 + rng() * 14).toFixed(1),
+          cat: CATS[Math.floor(rng() * 5)],
+          // each frame has a slightly different "cell morphology" seed
+          imgSeed: t * 17 + 3,
+        };
+      });
+
+      // ── State ─────────────────────────────────────────────────────────────────
+      let activeFrame = 0;
+      let playing = false;
+      let playInterval = null;
+      let variant = "C";
+      let drawerOpen = true;
+      let drawerH = 320;
+
+      // ── Draw simulated fluorescence crop ──────────────────────────────────────
+      function drawCrop(canvas, pt, size) {
+        canvas.width = size * devicePixelRatio;
+        canvas.height = size * devicePixelRatio;
+        const ctx = canvas.getContext("2d");
+        ctx.scale(devicePixelRatio, devicePixelRatio);
+
+        // Dark background
+        ctx.fillStyle = `hsl(${220 + rng() * 8}, 18%, ${7 + rng() * 3}%)`;
+        ctx.fillRect(0, 0, size, size);
+
+        seed = pt.imgSeed;
+
+        // Background noise
+        for (let i = 0; i < 120; i++) {
+          const px = rng() * size,
+            py = rng() * size;
+          ctx.beginPath();
+          ctx.arc(px, py, rng() * 1.5, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(80,90,120,${0.03 + rng() * 0.06})`;
+          ctx.fill();
+        }
+
+        // Neighbouring cells (dimmer)
+        for (let n = 0; n < 3; n++) {
+          const cx = rng() * size,
+            cy = rng() * size;
+          const rx = 8 + rng() * 12,
+            ry = 6 + rng() * 10;
+          const angle = rng() * Math.PI;
+          const h = 160 + rng() * 60;
+          const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(rx, ry));
+          grad.addColorStop(0, `hsla(${h}, 55%, 35%, 0.35)`);
+          grad.addColorStop(1, `hsla(${h}, 55%, 35%, 0)`);
+          ctx.save();
+          ctx.translate(cx, cy);
+          ctx.rotate(angle);
+          ctx.scale(rx / ry, 1);
+          ctx.beginPath();
+          ctx.arc(0, 0, ry, 0, Math.PI * 2);
+          ctx.fillStyle = grad;
+          ctx.fill();
+          ctx.restore();
+        }
+
+        // Main tracked cell (bright, center-ish)
+        const cx = size * (0.4 + rng() * 0.2);
+        const cy = size * (0.4 + rng() * 0.2);
+        const rx = size * (0.12 + rng() * 0.08);
+        const ry = size * (0.1 + rng() * 0.07);
+        const angle = rng() * Math.PI;
+
+        // Cell body glow
+        const h1 = 190 + rng() * 40;
+        const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, rx * 2.5);
+        glow.addColorStop(0, `hsla(${h1}, 80%, 65%, 0.15)`);
+        glow.addColorStop(1, `hsla(${h1}, 80%, 65%, 0)`);
+        ctx.beginPath();
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(angle);
+        ctx.scale(((rx * 2.5) / ry) * 2.5, 1);
+        ctx.arc(0, 0, ry * 2.5, 0, Math.PI * 2);
+        ctx.fillStyle = glow;
+        ctx.fill();
+        ctx.restore();
+
+        // Cell membrane
+        const memGrad = ctx.createRadialGradient(cx, cy, rx * 0.4, cx, cy, rx);
+        memGrad.addColorStop(0, `hsla(${h1}, 70%, 70%, 0.6)`);
+        memGrad.addColorStop(0.7, `hsla(${h1}, 65%, 55%, 0.8)`);
+        memGrad.addColorStop(1, `hsla(${h1}, 60%, 45%, 0.3)`);
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(angle);
+        ctx.scale(rx / ry, 1);
+        ctx.beginPath();
+        ctx.arc(0, 0, ry, 0, Math.PI * 2);
+        ctx.fillStyle = memGrad;
+        ctx.fill();
+        ctx.restore();
+
+        // Nucleus (2nd channel — green/yellow)
+        const nx = cx + (rng() - 0.5) * rx * 0.4,
+          ny = cy + (rng() - 0.5) * ry * 0.4;
+        const nr = rx * (0.3 + rng() * 0.2);
+        const h2 = 100 + rng() * 50;
+        const nucGrad = ctx.createRadialGradient(nx, ny, 0, nx, ny, nr);
+        nucGrad.addColorStop(0, `hsla(${h2}, 80%, 75%, 0.95)`);
+        nucGrad.addColorStop(0.6, `hsla(${h2}, 70%, 55%, 0.7)`);
+        nucGrad.addColorStop(1, `hsla(${h2}, 60%, 40%, 0)`);
+        ctx.beginPath();
+        ctx.arc(nx, ny, nr, 0, Math.PI * 2);
+        ctx.fillStyle = nucGrad;
+        ctx.fill();
+
+        // Target reticle overlay
+        ctx.beginPath();
+        ctx.arc(cx, cy, rx * 1.2, 0, Math.PI * 2);
+        ctx.strokeStyle = "rgba(255,255,255,0.12)";
+        ctx.lineWidth = 0.8;
+        ctx.stroke();
+
+        // Cross-hair ticks
+        const tickLen = 4;
+        [
+          [-1, 0],
+          [1, 0],
+          [0, -1],
+          [0, 1],
+        ].forEach(([dx, dy]) => {
+          const tx = cx + dx * rx * 1.2,
+            ty = cy + dy * rx * 1.2;
+          ctx.beginPath();
+          ctx.moveTo(tx - dy * tickLen, ty - dx * tickLen);
+          ctx.lineTo(tx + dy * tickLen, ty + dx * tickLen);
+          ctx.strokeStyle = "rgba(255,255,255,0.35)";
+          ctx.lineWidth = 0.8;
+          ctx.stroke();
+        });
+      }
+
+      // ── Build variant A (filmstrip) ───────────────────────────────────────────
+      function buildA() {
+        const container = document.getElementById("gallery-a");
+        container.innerHTML = "";
+        track.forEach((pt, i) => {
+          const card = document.createElement("div");
+          card.className = "strip-card" + (i === activeFrame ? " active" : "");
+          card.id = `strip-${i}`;
+
+          const wrap = document.createElement("div");
+          wrap.className = "strip-canvas-wrap";
+          const c = document.createElement("canvas");
+          drawCrop(c, pt, 72);
+          wrap.appendChild(c);
+          card.appendChild(wrap);
+
+          const lbl = document.createElement("div");
+          lbl.className = "strip-t-lbl";
+          lbl.textContent = `T=${pt.t}`;
+          card.appendChild(lbl);
+
+          card.onclick = () => scrubTo(i);
+          container.appendChild(card);
+        });
+      }
+
+      // ── Build variant B (2-col grid) ──────────────────────────────────────────
+      function buildB() {
+        const container = document.getElementById("gallery-b");
+        container.innerHTML = "";
+        track.forEach((pt, i) => {
+          const card = document.createElement("div");
+          card.className = "grid-card" + (i === activeFrame ? " active" : "");
+          card.id = `grid-${i}`;
+
+          const c = document.createElement("canvas");
+          drawCrop(c, pt, 120);
+          card.appendChild(c);
+
+          const meta = document.createElement("div");
+          meta.className = "grid-card-meta";
+          meta.innerHTML = `<span class="grid-t">T=${pt.t}</span><span class="grid-cat">${pt.cat}</span>`;
+          card.appendChild(meta);
+
+          card.onclick = () => scrubTo(i);
+          container.appendChild(card);
+        });
+      }
+
+      // ── Build variant C (full gallery) ────────────────────────────────────────
+      function buildC() {
+        const container = document.getElementById("gallery-c");
+        container.innerHTML = "";
+        track.forEach((pt, i) => {
+          const card = document.createElement("div");
+          card.className = "gallery-card" + (i === activeFrame ? " active" : "");
+          card.id = `gcard-${i}`;
+
+          const badge = document.createElement("div");
+          badge.className = "now-badge";
+          badge.textContent = "NOW";
+          card.appendChild(badge);
+
+          const c = document.createElement("canvas");
+          // Size determined by CSS (auto-fill grid), draw at fixed resolution
+          drawCrop(c, pt, 160);
+          card.appendChild(c);
+
+          const meta = document.createElement("div");
+          meta.className = "gallery-card-meta";
+          meta.innerHTML = `
+            <span class="gc-t">T = ${pt.t}</span>
+            <span class="gc-cat">${pt.cat}</span>
+            <span class="gc-pos">${pt.x} · ${pt.y} µm</span>
+          `;
+          card.appendChild(meta);
+
+          card.onclick = () => scrubTo(i);
+          container.appendChild(card);
+        });
+      }
+
+      // ── Scrubbing ─────────────────────────────────────────────────────────────
+      function scrubTo(idx) {
+        const old = activeFrame;
+        activeFrame = Math.max(0, Math.min(track.length - 1, idx));
+        document.getElementById("t-slider").value = activeFrame;
+        document.getElementById("t-val").textContent = `T=${track[activeFrame].t}`;
+
+        // Update active state in current gallery
+        if (variant === "A") {
+          document.getElementById(`strip-${old}`)?.classList.remove("active");
+          const el = document.getElementById(`strip-${activeFrame}`);
+          el?.classList.add("active");
+          el?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+        } else if (variant === "B") {
+          document.getElementById(`grid-${old}`)?.classList.remove("active");
+          const el = document.getElementById(`grid-${activeFrame}`);
+          el?.classList.add("active");
+          el?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        } else {
+          document.getElementById(`gcard-${old}`)?.classList.remove("active");
+          const el = document.getElementById(`gcard-${activeFrame}`);
+          el?.classList.add("active");
+          el?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        }
+      }
+
+      function step(dir) {
+        scrubTo(activeFrame + dir);
+      }
+
+      function togglePlay() {
+        playing = !playing;
+        const btn = document.getElementById("play-btn");
+        btn.textContent = playing ? "⏸" : "▶";
+        btn.className = "ctrl-btn" + (playing ? " playing" : "");
+        if (playing) {
+          playInterval = setInterval(() => {
+            const next = (activeFrame + 1) % track.length;
+            scrubTo(next);
+          }, 260);
+        } else {
+          clearInterval(playInterval);
+        }
+      }
+
+      function clearTrack() {
+        playing = false;
+        clearInterval(playInterval);
+        document.getElementById("play-btn").textContent = "▶";
+        document.getElementById("play-btn").className = "ctrl-btn";
+        // would navigate back to empty state in real app
+      }
+
+      // ── Variant switching ─────────────────────────────────────────────────────
+      function setVariant(v) {
+        variant = v;
+        document.querySelectorAll(".vbtn").forEach((b, i) => {
+          b.className = "vbtn" + (["A", "B", "C"][i] === v ? " active" : "");
+        });
+        ["a", "b", "c"].forEach((x) => {
+          document.getElementById(`gallery-${x}`).style.display = "none";
+        });
+        document.getElementById(`gallery-${v.toLowerCase()}`).style.display = v === "A" ? "flex" : "grid";
+
+        if (v === "A" && !document.getElementById("strip-0")) buildA();
+        if (v === "B" && !document.getElementById("grid-0")) buildB();
+        if (v === "C" && !document.getElementById("gcard-0")) buildC();
+
+        // Scroll active into view after brief delay
+        setTimeout(() => scrubTo(activeFrame), 50);
+      }
+
+      // ── Tab switching ─────────────────────────────────────────────────────────
+      function switchTab(t) {
+        ["table", "track"].forEach((x) => {
+          document.getElementById(`tab-${x}`).className = "tab" + (x === t ? " active" : "");
+          document.getElementById(`panel-${x}`).className = "tab-panel" + (x === t ? " active" : "");
+        });
+      }
+
+      // ── Drawer resize ─────────────────────────────────────────────────────────
+      const handle = document.getElementById("resize-handle");
+      let resizing = false,
+        ry0 = 0,
+        rh0 = 0;
+      handle.addEventListener("pointerdown", (e) => {
+        resizing = true;
+        ry0 = e.clientY;
+        rh0 = drawerH;
+        handle.setPointerCapture(e.pointerId);
+      });
+      handle.addEventListener("pointermove", (e) => {
+        if (!resizing) return;
+        drawerH = Math.max(120, Math.min(window.innerHeight - 60, rh0 + (ry0 - e.clientY)));
+        document.getElementById("drawer").style.height = drawerH + "px";
+      });
+      handle.addEventListener("pointerup", () => {
+        resizing = false;
+      });
+
+      function toggleDrawer() {
+        drawerOpen = !drawerOpen;
+        const d = document.getElementById("drawer");
+        d.classList.toggle("closed", !drawerOpen);
+        if (drawerOpen) d.style.height = drawerH + "px";
+      }
+
+      document.addEventListener("keydown", (e) => {
+        if ((e.metaKey || e.ctrlKey) && e.key === "j") {
+          e.preventDefault();
+          toggleDrawer();
+        }
+        if (e.key === "ArrowLeft") step(-1);
+        if (e.key === "ArrowRight") step(1);
+        if (e.key === " ") {
+          e.preventDefault();
+          togglePlay();
+        }
+      });
+
+      // ── Scatter background ────────────────────────────────────────────────────
+      function drawScatter() {
+        const c = document.getElementById("scatter-canvas");
+        const W = c.clientWidth,
+          H = c.clientHeight;
+        c.width = W * devicePixelRatio;
+        c.height = H * devicePixelRatio;
+        const ctx = c.getContext("2d");
+        ctx.scale(devicePixelRatio, devicePixelRatio);
+        ctx.fillStyle = "hsl(222 16% 8%)";
+        ctx.fillRect(0, 0, W, H);
+        seed = 77;
+        const clusters = [
+          [0.35, 0.45],
+          [0.65, 0.38],
+          [0.5, 0.72],
+          [0.22, 0.62],
+          [0.78, 0.55],
+          [0.5, 0.28],
+        ];
+        for (let i = 0; i < 900; i++) {
+          const cl = clusters[Math.floor(rng() * clusters.length)];
+          const x = cl[0] + (rng() - 0.5) * 0.22,
+            y = cl[1] + (rng() - 0.5) * 0.18;
+          ctx.beginPath();
+          ctx.arc(x * W, y * H, 2, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(130,140,180,${0.07 + rng() * 0.1})`;
+          ctx.fill();
+        }
+        // hint text
+        ctx.fillStyle = "hsl(215 14% 28%)";
+        ctx.font = "10px monospace";
+        ctx.textAlign = "center";
+        ctx.fillText("← / → or spacebar   ·   drag top edge to resize   ·   ⌘J to toggle", W / 2, H - 14);
+      }
+
+      // ── Init ─────────────────────────────────────────────────────────────────
+      window.addEventListener("load", () => {
+        drawScatter();
+        setVariant("C"); // default
+      });
+      window.addEventListener("resize", () => {
+        drawScatter();
+      });
+    </script>
+  </body>
+</html>

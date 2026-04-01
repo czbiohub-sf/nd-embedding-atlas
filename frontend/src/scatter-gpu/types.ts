@@ -78,7 +78,7 @@ export interface ScatterplotHandle {
   resize(width: number, height: number): void;
   destroy(): void;
   /** Update color buffer from palette without GPU re-initialization (categorical coloring). */
-  updateColors(palette: readonly (readonly [number, number, number])[], categoryIndices?: Uint8Array): void;
+  updateColors(palette: readonly (readonly [number, number, number, number?])[], categoryIndices?: Uint8Array): void;
   /** Write pre-computed RGBA uint8 array directly to colorBuffer (continuous coloring). */
   updateColorsDirect(rgba: Uint8Array): void;
   /** Current pan/zoom state of the viewport. */
@@ -101,6 +101,10 @@ export interface ScatterplotHandle {
   clearRowIsolation(): void;
   /** Programmatically set the view state (for view lock sync). Suppresses the onViewChange broadcast for this write. */
   setViewState(state: ViewState): void;
+  /** Animate to a view state using easeInOutQuint over durationMs (default 600ms). */
+  animateToViewState(state: ViewState, durationMs?: number): void;
+  /** Update point size without GPU re-initialization. */
+  setPointRadius(radius: number): void;
 }
 
 export interface RenderConfig {
@@ -133,6 +137,8 @@ export interface ScatterplotConfig {
     onExternalClear?: () => void;
     onViewChange?: (state: ViewState) => void;
     onPointClick?: (index: number, position: [number, number], categoryIndex: number, categoryName: string) => void;
+    /** Called when the user clicks on empty space (no point hit). */
+    onBackgroundClick?: () => void;
     onFps?: (fps: number) => void;
   };
 }

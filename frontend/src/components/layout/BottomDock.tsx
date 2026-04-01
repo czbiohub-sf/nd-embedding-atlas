@@ -8,13 +8,41 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { DockviewApi } from "dockview-react";
-import { TableIcon, ScanIcon, MoonIcon, SunIcon, LogsIcon, DatabaseIcon, ChevronRightIcon } from "lucide-react";
+import { TableIcon, ScanIcon, MoonIcon, SunIcon, LogsIcon, DatabaseIcon, ChevronRightIcon, XIcon, BookmarkIcon } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import { Separator } from "../ui/separator";
 import { useScatterUIState } from "../../providers/ScatterUIStateProvider";
+import { useStore } from "@tanstack/react-store";
+import { pointRadiusStore, setPointRadius, POINT_RADIUS_MIN, POINT_RADIUS_MAX } from "../../providers/PointRadiusStore";
 import { useTerminalTable } from "../../providers/TerminalTableProvider";
 import { useTheme } from "../../providers/ThemeProvider";
 import { cn } from "../../lib/utils";
+
+// ── Point size slider ─────────────────────────────────────────────────────
+function PointSizeSlider() {
+  const radius = useStore(pointRadiusStore, (s) => s.radius);
+  const pct = (radius - POINT_RADIUS_MIN) / (POINT_RADIUS_MAX - POINT_RADIUS_MIN);
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className="text-[9px] text-muted-foreground/50 select-none">●</span>
+      <input
+        type="range"
+        min={POINT_RADIUS_MIN}
+        max={POINT_RADIUS_MAX}
+        step={0.0005}
+        value={radius}
+        onChange={(e) => setPointRadius(parseFloat(e.target.value))}
+        className="h-1 w-16 cursor-pointer appearance-none rounded-full bg-white/10 [&::-webkit-slider-thumb]:size-2 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-muted-foreground/60 [&::-webkit-slider-thumb]:transition-colors hover:[&::-webkit-slider-thumb]:bg-foreground"
+        style={{
+          background: `linear-gradient(to right, oklch(0.585 0.233 277.117 / 60%) ${pct * 100}%, oklch(1 0 0 / 10%) ${pct * 100}%)`,
+        }}
+        aria-label="Point size"
+        title="Point size"
+      />
+    </div>
+  );
+}
 
 // ── Panel color palette (scatter panels in order of creation) ────────────
 const SCATTER_COLORS = [
@@ -38,11 +66,22 @@ interface PanelEntry {
 interface Props {
   dockviewApi: DockviewApi | null;
   onAddScatter: () => void;
+  onCloseViewer?: () => void;
+  onFloatViewer?: () => void;
+  hasPlate?: boolean;
   devtoolsOpen?: boolean;
   onToggleDevtools?: () => void;
 }
 
-export function BottomDock({ dockviewApi, onAddScatter, devtoolsOpen, onToggleDevtools }: Props) {
+export function BottomDock({
+  dockviewApi,
+  onAddScatter,
+  onCloseViewer,
+  onFloatViewer,
+  hasPlate,
+  devtoolsOpen,
+  onToggleDevtools,
+}: Props) {
   const { fps, zoom, selectedCount, numPoints, statusMsg } = useScatterUIState();
   const { toggle: toggleTable, open: tableOpen } = useTerminalTable();
   const { theme, toggle: toggleTheme } = useTheme();
@@ -90,13 +129,22 @@ export function BottomDock({ dockviewApi, onAddScatter, devtoolsOpen, onToggleDe
   const scatterPanels = panels.filter((p) => p.colorIndex !== undefined);
   const hasTable = panels.some((p) => p.id === "table");
   const hasViewer = panels.some((p) => p.id === "image-viewer");
+  const hasObsSets = panels.some((p) => p.id === "obssets");
+
+  function openObsSets() {
+    if (hasObsSets) {
+      activate("obssets");
+    } else {
+      dockviewApi?.addPanel({ id: "obssets", component: "obssets", title: "Obs Sets" });
+    }
+  }
 
   function activate(id: string) {
     dockviewApi?.getPanel(id)?.focus();
   }
 
   return (
-    <div className="flex h-6 shrink-0 items-center gap-0 border-t border-border bg-background px-2 text-[11px] text-muted-foreground">
+    <div className="flex h-6 shrink-0 items-center gap-0 border-t border-white/[0.07] bg-card/80 px-2 text-[11px] text-muted-foreground backdrop-blur-md">
       {/* ── Scatter dots ── */}
       {scatterPanels.map((p) => (
         <Tooltip key={p.id}>
@@ -140,7 +188,28 @@ export function BottomDock({ dockviewApi, onAddScatter, devtoolsOpen, onToggleDe
         <TooltipContent side="top">New scatter (⌘K)</TooltipContent>
       </Tooltip>
 
-      {(hasTable || hasViewer) && <Separator orientation="vertical" className="mx-1.5 h-3" />}
+      {(hasTable || hasViewer || true) && <Separator orientation="vertical" className="mx-1.5 h-3" />}
+
+      {/* ObsSets panel toggle */}
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <button
+              type="button"
+              onClick={openObsSets}
+              className={cn(
+                "mx-0.5 flex size-4 items-center justify-center rounded-sm transition-colors",
+                hasObsSets && activePanelId === "obssets"
+                  ? "text-foreground"
+                  : "text-muted-foreground/60 hover:text-muted-foreground",
+              )}
+            />
+          }
+        >
+          <BookmarkIcon className="size-3" />
+        </TooltipTrigger>
+        <TooltipContent side="top">Obs Sets</TooltipContent>
+      </Tooltip>
 
       {/* Table icon */}
       {hasTable && (
@@ -166,27 +235,67 @@ export function BottomDock({ dockviewApi, onAddScatter, devtoolsOpen, onToggleDe
       )}
 
       {hasViewer && (
+        <div className="mx-0.5 flex items-center gap-px">
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <button
+                  type="button"
+                  onClick={() => activate("image-viewer")}
+                  className={cn(
+                    "flex size-4 items-center justify-center rounded-sm transition-colors",
+                    activePanelId === "image-viewer"
+                      ? "text-foreground"
+                      : "text-muted-foreground/60 hover:text-muted-foreground",
+                  )}
+                />
+              }
+            >
+              <ScanIcon className="size-3" />
+            </TooltipTrigger>
+            <TooltipContent side="top">Image Viewer</TooltipContent>
+          </Tooltip>
+          {onCloseViewer && (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <button
+                    type="button"
+                    onClick={onCloseViewer}
+                    className="flex size-3.5 items-center justify-center rounded-sm text-muted-foreground/40 transition-colors hover:text-muted-foreground"
+                  />
+                }
+              >
+                <XIcon className="size-2.5" />
+              </TooltipTrigger>
+              <TooltipContent side="top">Close viewer</TooltipContent>
+            </Tooltip>
+          )}
+        </div>
+      )}
+
+      {hasPlate && onFloatViewer && (
         <Tooltip>
           <TooltipTrigger
             render={
               <button
                 type="button"
-                onClick={() => activate("image-viewer")}
-                className={cn(
-                  "mx-0.5 flex size-4 items-center justify-center rounded-sm transition-colors",
-                  activePanelId === "image-viewer"
-                    ? "text-foreground"
-                    : "text-muted-foreground/60 hover:text-muted-foreground",
-                )}
+                onClick={onFloatViewer}
+                aria-label="Float Image Viewer"
+                className="relative mx-0.5 flex size-4 items-center justify-center rounded-sm text-muted-foreground/60 transition-colors hover:text-muted-foreground"
               />
             }
           >
             <ScanIcon className="size-3" />
+            <span aria-hidden="true" className="absolute -right-0.5 -top-0.5 size-1.5 rounded-full bg-primary/70" />
           </TooltipTrigger>
-          <TooltipContent side="top">Image Viewer</TooltipContent>
+          <TooltipContent side="top">Float Image Viewer</TooltipContent>
         </Tooltip>
       )}
 
+      {/* ── Point size slider ── */}
+      <Separator orientation="vertical" className="mx-1.5 h-3" />
+      <PointSizeSlider />
       {/* ── Spacer ── */}
       <span className="flex-1" />
 

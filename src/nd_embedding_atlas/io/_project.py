@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pydantic import BaseModel, FilePath, field_validator
+from pydantic import BaseModel, DirectoryPath, field_validator
 
 
 class DatasetSpec(BaseModel):
-    hcs_plate: FilePath | None = None  # FilePath validates existence at parse time
-    anndata: FilePath  # FilePath validates existence at parse time
+    hcs_plate: DirectoryPath | None = None  # zarr stores are directories
+    anndata: DirectoryPath  # zarr stores are directories
 
 
 class ProjectConfig(BaseModel):

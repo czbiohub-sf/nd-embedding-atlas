@@ -26,7 +26,7 @@ export async function createScatterplot(
   const tGpu = performance.now();
   console.log(`GPU init: ${(tGpu - t0).toFixed(1)}ms`);
 
-  const pointRadius = config?.render?.pointRadius ?? 0.003;
+  let pointRadius = config?.render?.pointRadius ?? 0.003;
   const selectionDimFactor = config?.render?.selectionDimFactor ?? 0.08;
 
   // Adaptive point sizing: computed once from point count (zoom-independent).
@@ -131,6 +131,8 @@ export async function createScatterplot(
           const py = data.positions[bestIdx * 2 + 1]!;
           const catIdx = data.categoryIndices[bestIdx]!;
           config?.callbacks?.onPointClick?.(bestIdx, [px, py], catIdx, data.categoryNames[catIdx]!);
+        } else {
+          config?.callbacks?.onBackgroundClick?.();
         }
       },
     },
@@ -178,9 +180,16 @@ export async function createScatterplot(
       uniforms.paramsUniform.write(d.vec4f(pointRadius, gpuW / gpuH, selectionDimFactor, adaptiveScale));
       interaction.resize();
     },
-    updateColors(palette: readonly (readonly [number, number, number])[], categoryIndices?: Uint8Array) {
+    setPointRadius(r: number) {
+      pointRadius = r;
+      const { width, height } = canvas;
+      const dpr = window.devicePixelRatio || 1;
+      uniforms.paramsUniform.write(d.vec4f(pointRadius, (width * dpr) / Math.max(1, height * dpr), selectionDimFactor, adaptiveScale));
+      interaction.requestRender();
+    },
+    updateColors(palette: readonly (readonly [number, number, number, number?])[], categoryIndices?: Uint8Array) {
       // Use passed indices (fresh from latest data) or fall back to original closure data.
-      // palette entries are [0,1] normalized RGB; pack to u32 RGBA for the color buffer.
+      // palette entries are [0,1] normalized RGBA; pack to u32 RGBA for the color buffer.
       const indices = categoryIndices ?? data.categoryIndices;
       const colorData = new Uint32Array(data.numCells);
       for (let i = 0; i < data.numCells; i++) {
@@ -190,7 +199,8 @@ export async function createScatterplot(
           const r = Math.round(entry[0] * 255);
           const g = Math.round(entry[1] * 255);
           const b = Math.round(entry[2] * 255);
-          colorData[i] = (r | (g << 8) | (b << 16) | (255 << 24)) >>> 0;
+          const alpha = entry[3] !== undefined ? Math.round(entry[3] * 255) : 255;
+          colorData[i] = (r | (g << 8) | (b << 16) | (alpha << 24)) >>> 0;
         } else {
           colorData[i] = (255 << 24) >>> 0; // opaque black fallback
         }
@@ -265,6 +275,9 @@ export async function createScatterplot(
     },
     setViewState(state: ViewState) {
       interaction.setViewState(state);
+    },
+    animateToViewState(state: ViewState, durationMs?: number) {
+      interaction.animateToViewState(state, durationMs);
     },
     destroy() {
       interaction.destroy();

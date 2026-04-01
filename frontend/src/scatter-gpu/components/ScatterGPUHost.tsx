@@ -202,6 +202,9 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
       setColors(palette, indices) {
         gpuRef.current?.updateColors(palette, indices);
       },
+      setPointRadius(radius) {
+        gpuRef.current?.setPointRadius(radius);
+      },
       setColorsDirect(rgba) {
         gpuRef.current?.updateColorsDirect(rgba);
       },
@@ -231,6 +234,9 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
       },
       setViewState(state) {
         gpuRef.current?.setViewState(state);
+      },
+      animateToViewState(state, durationMs) {
+        gpuRef.current?.animateToViewState(state, durationMs);
       },
       setForcedSelectionMode(mode) {
         gpuRef.current?.setForcedSelectionMode(mode);

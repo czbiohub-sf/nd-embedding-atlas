@@ -22,8 +22,13 @@ interface UseMosaicScatterDataOptions {
   continuousColCol: string | null;
   /** Colormap name for continuous coloring (default: "viridis") */
   continuousColormap?: string;
+  /** Whether to reverse the colormap. Included in query key for cache differentiation.
+   *  Server ignores unknown params — safe to wire before backend ships. */
+  continuousReversed?: boolean;
   vmin?: number;
   vmax?: number;
+  /** Whether the embedding is registered in DuckDB. Prevents premature positions fetch. */
+  embeddingLoaded?: boolean;
 }
 
 interface UseMosaicScatterDataResult {
@@ -32,6 +37,8 @@ interface UseMosaicScatterDataResult {
    *  positions are re-fetched (embedding/axes switch). Use as a GPU re-init
    *  dep instead of a Float32Array reference. */
   positionKey: string | null;
+  /** The max-abs divisor used to normalise positions to [-1, 1] on the server. */
+  positionScale: number;
   categoryNames: string[];
   colorRange: [number, number] | null;
   loading: boolean;
@@ -62,8 +69,10 @@ export function useMosaicScatterData({
   originalCol,
   continuousColCol,
   continuousColormap = "viridis",
+  continuousReversed = false,
   vmin,
   vmax,
+  embeddingLoaded = true,
 }: UseMosaicScatterDataOptions): UseMosaicScatterDataResult {
   // 1. Positions query
   const positionQuery = useQuery({
@@ -84,9 +93,10 @@ export function useMosaicScatterData({
         rowIndices: header.rowIndices,
         numCells: header.numCells,
         embeddingKey: header.embeddingKey,
+        positionScale: header.positionScale,
       };
     },
-    enabled: !!axes,
+    enabled: !!axes && embeddingLoaded,
     staleTime: 5 * 60 * 1000,
   });
 
@@ -107,8 +117,13 @@ export function useMosaicScatterData({
   });
 
   // 3. Continuous colors — NOT blocked by positions (parallel)
+  //    `continuousReversed` is in the query key for cache differentiation.
+  //    The server ignores unknown params — safe before backend ships reversed support.
   const continuousQuery = useQuery({
-    queryKey: scatterKeys.continuousColors(continuousColCol!, continuousColormap, vmin, vmax),
+    queryKey: [
+      ...scatterKeys.continuousColors(continuousColCol!, continuousColormap, vmin, vmax),
+      continuousReversed,
+    ],
     queryFn: async ({ signal }) => {
       const params = new URLSearchParams({
         color_col: continuousColCol!,
@@ -116,6 +131,8 @@ export function useMosaicScatterData({
       });
       if (vmin != null) params.set("vmin", String(vmin));
       if (vmax != null) params.set("vmax", String(vmax));
+      // TODO: add scale to query key when /api/scatter-continuous-colors supports ?scale=log
+      if (continuousReversed) params.set("reversed", "true");
       const r = await fetch(`/api/scatter-continuous-colors?${params}`, { signal });
       if (!r.ok) throw new Error(`scatter-continuous-colors failed: ${r.status}`);
       const buf = await r.arrayBuffer();
@@ -173,6 +190,7 @@ export function useMosaicScatterData({
   return {
     data,
     positionKey,
+    positionScale: positionQuery.data?.positionScale ?? 1,
     categoryNames,
     colorRange,
     loading,

@@ -63,25 +63,42 @@ def _open_raw(path: str | Path) -> "zarr.Group | h5py.File":
         return h5py.File(p, "r")
 
 
+def _read_nullable_string(item: "zarr.Array | zarr.Group") -> "np.ndarray":
+    """Read an AnnData nullable-string-array encoding into a str numpy array.
+
+    AnnData zarr v3 stores string columns as a group with:
+      - ``values``: StringDType array
+      - ``mask``:   bool array (True = masked/NA)
+
+    Falls back to direct array read for zarr v2 plain string arrays.
+    """
+    import numpy as np  # noqa: PLC0415
+
+    try:
+        attrs = dict(item.attrs) if hasattr(item, "attrs") else {}
+        if attrs.get("encoding-type") == "nullable-string-array" and hasattr(item, "keys"):
+            values = item["values"][:]
+            # StringDType (kind='T') cannot use .astype(str) — use object then str
+            return values.astype(object).astype(str)
+        # Plain array (zarr v2 or other)
+        arr = item[:]
+        if arr.dtype.kind in ("S", "U"):
+            return arr.astype(str)
+        if arr.dtype.kind == "T":  # NumPy 2.0 StringDType
+            return arr.astype(object).astype(str)
+        return arr.astype(str)
+    except Exception:
+        return np.array([], dtype=str)
+
+
 def _read_obs_index(group: "zarr.Group | h5py.File") -> list[str]:
     """Read the AnnData obs string index from ``obs/_index``.
 
-    Parameters
-    ----------
-    group
-        Open zarr.Group or h5py.File for the AnnData store.
-
-    Returns
-    -------
-    List of obs index strings (obs_names).
+    Handles both zarr v2 (plain array) and zarr v3 (nullable-string-array group).
     """
     try:
-        raw = group["obs"]["_index"][:]
-        if raw.dtype.kind in ("S",):
-            raw = raw.astype(str)
-        elif raw.dtype == object:
-            raw = raw.astype(str)
-        return list(raw)
+        item = group["obs"]["_index"]
+        return list(_read_nullable_string(item))
     except (KeyError, Exception):
         return []
 
@@ -124,19 +141,28 @@ def _group_to_df(group: "zarr.Group | h5py.File", group_key: str) -> pd.DataFram
             continue
         item = g[col_name]
 
-        # ── Categorical: {codes, categories} sub-group ─────────────────
+        # ── Group-based encodings (zarr v2 categorical, zarr v3 new types) ──
         is_group = isinstance(item, h5py.Group) or (
             hasattr(item, "keys") and not hasattr(item, "__array__")
         )
         if is_group:
             try:
-                raw_codes = item["codes"][:]
-                raw_cats = item["categories"][:]
-                if raw_cats.dtype.kind in ("O", "S", "U") or (
-                    hasattr(raw_cats, "dtype") and raw_cats.dtype.kind in ("O", "S", "U")
-                ):
-                    raw_cats = raw_cats.astype(str)
-                columns[col_name] = pd.Categorical.from_codes(raw_codes, categories=raw_cats)
+                enc = dict(item.attrs).get("encoding-type", "") if hasattr(item, "attrs") else ""
+                if enc == "nullable-string-array":
+                    # zarr v3 nullable string column
+                    columns[col_name] = _read_nullable_string(item)
+                elif enc == "categorical" or ("codes" in item and "categories" in item):
+                    # Categorical: codes array + categories (may itself be a nullable-string group)
+                    raw_codes = item["codes"][:]
+                    cats_item = item["categories"]
+                    if hasattr(cats_item, "keys"):
+                        raw_cats = _read_nullable_string(cats_item)
+                    else:
+                        raw_cats = cats_item[:]
+                        if raw_cats.dtype.kind in ("O", "S", "U", "T"):
+                            raw_cats = raw_cats.astype(str)
+                    columns[col_name] = pd.Categorical.from_codes(raw_codes, categories=raw_cats)
+                # else: unknown group encoding — skip silently
             except (KeyError, Exception):
                 pass  # skip unrecognised sub-groups
             continue
@@ -144,8 +170,9 @@ def _group_to_df(group: "zarr.Group | h5py.File", group_key: str) -> pd.DataFram
         # ── Dense array ────────────────────────────────────────────────
         try:
             arr = item[:]
-            # Decode bytes / object arrays to str
-            if arr.dtype.kind in ("S",):
+            # Decode string-like arrays to plain Python str
+            # kind 'S' = bytes, 'U' = unicode, 'T' = NumPy 2.0 StringDType
+            if arr.dtype.kind in ("S", "U", "T"):
                 arr = arr.astype(str)
             elif arr.dtype == object:
                 try:
@@ -226,33 +253,33 @@ def get_obs(
             entry = next(iter(datasets.data.values()))
             if entry.path is not None:
                 return get_obs(entry.path, columns=columns, include_index=include_index)
-        # Multi-dataset: iterate per-entry to get original obs names before concat mangling
-        if include_index:
-            per_dataset_indices: list[str] = []
-            for entry in datasets.data.values():
-                if entry.path is not None:
-                    store = _open_raw(entry.path)
-                    try:
-                        idx = _read_obs_index(store)
-                    finally:
-                        if hasattr(store, "close"):
-                            store.close()
-                    per_dataset_indices.extend(idx)
-                else:
-                    # Pathless in-memory entry — fall back to adata obs_names
-                    adata = entry.data if hasattr(entry, "data") else None
-                    if adata is not None and hasattr(adata, "obs_names"):
-                        per_dataset_indices.extend(list(adata.obs_names))
+        # Multi-dataset: read obs per-entry via zarr fast path, then pd.concat.
+        # Avoids source.obs → _build_concat → ad.concat(lazy_adatas) which hits
+        # an xarray StringDType promotion error when string categories differ.
+        frames: list[pd.DataFrame] = []
+        for key, entry in datasets.data.items():
+            if entry.path is not None:
+                df = get_obs(entry.path, columns=columns, include_index=include_index)
+            else:
+                adata = getattr(entry, "adata", None) or getattr(entry, "data", None)
+                obs = adata.obs if adata is not None else pd.DataFrame()
+                if hasattr(obs, "to_memory"):
+                    obs = obs.to_memory()
+                df = obs.copy()
+                if include_index and adata is not None:
+                    df["obs_name"] = list(adata.obs_names)
+                if columns is not None:
+                    df = df[[c for c in columns if c in df.columns]]
+            df = df.copy()
+            df["_dataset"] = key
+            frames.append(df)
 
-        obs = source.obs
-        if hasattr(obs, "to_memory"):
-            obs = obs.to_memory()
-        if include_index and per_dataset_indices:
-            obs = obs.copy()
-            obs["obs_name"] = per_dataset_indices
+        result = pd.concat(frames, ignore_index=True)
+        # Keep only requested columns; always preserve _dataset and obs_name
         if columns is not None:
-            obs = obs[[c for c in columns if c in obs.columns]]
-        return obs
+            keep_cols = [c for c in result.columns if c in columns or c in ("_dataset", "obs_name")]
+            result = result[keep_cols]
+        return result
 
     # ── AnnData ────────────────────────────────────────────────────────
     obs = source.obs
@@ -321,13 +348,23 @@ def get_obsm(
             entry = next(iter(source.datasets.data.values()))
             if entry.path is not None:
                 return get_obsm(entry.path, key, dtype=dtype, columns=columns)
-        # Fall back to dask.compute()
-        raw = source.obsm[key]
-        if columns is not None:
-            raw = raw[:, columns]
-        if hasattr(raw, "compute"):
-            raw = raw.compute()
-        return np.asarray(raw, dtype=dtype) if dtype is not None else np.asarray(raw)
+        # Multi-dataset: read per-entry and stack — avoids ad.concat on lazy adatas
+        arrays = []
+        for entry in source.datasets.data.values():
+            if entry.path is not None:
+                arrays.append(get_obsm(entry.path, key, dtype=dtype, columns=columns))
+            else:
+                adata = getattr(entry, "adata", None) or getattr(entry, "data", None)
+                if adata is not None:
+                    raw = adata.obsm[key]
+                    if columns is not None:
+                        raw = raw[:, columns]
+                    if hasattr(raw, "compute"):
+                        raw = raw.compute()
+                    arrays.append(np.asarray(raw, dtype=dtype) if dtype is not None else np.asarray(raw))
+        if arrays:
+            return np.concatenate(arrays, axis=0)
+        return np.empty((0, 0), dtype=dtype or np.float32)
 
     # ── AnnData ────────────────────────────────────────────────────────
     raw = source.obsm[key]

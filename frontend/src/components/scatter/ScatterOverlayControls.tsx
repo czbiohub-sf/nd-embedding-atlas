@@ -6,8 +6,9 @@
  *  top-right → selection tool toggles + utility button group (lock, pip, fullscreen, close)
  */
 
-import { useMemo } from "react";
-import { BoxSelect, LassoSelect, Lock, LockOpen, X, Maximize2, PictureInPicture2Icon } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Bookmark, BoxSelect, LassoSelect, Lock, LockOpen, X, Maximize2, PictureInPicture2Icon, Waypoints } from "lucide-react";
+import { SaveObsSetDialog } from "./SaveObsSetDialog";
 
 /** Scan + Dot combined — "fit embedding to view" */
 function ScanDotIcon({ size = 12 }: { size?: number }) {
@@ -39,7 +40,7 @@ import { addFloatingScatter } from "../../providers/FloatingScatterStore";
 import { useStore } from "@tanstack/react-store";
 import { viewSyncStore, toggleViewLock } from "../../providers/ViewSyncStore";
 import { ToggleGroup, ToggleGroupItem } from "../ui/toggle-group";
-import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
+import { HoverTip } from "../ui/hover-tip";
 import { Separator } from "../ui/separator";
 import { ButtonGroup } from "../ui/button-group";
 import { Combobox, type ComboboxOption } from "../ui/combobox";
@@ -75,13 +76,22 @@ interface Props {
   onFitView?: () => void;
   floatingWindow?: FloatingWindowHandle;
   panelApi?: DockviewPanelApi;
+  trajectoryActive?: boolean;
+  onToggleTrajectory?: () => void;
+
+  // ObsSet save
+  hasSelection: boolean;
+  selectionCount: number;
+  /** Reads rowIndicesRef.current at call time — never stale */
+  getRowIndices: () => readonly number[];
+  selectionPath: "inline" | "temp_table";
 }
 
 const glass = "bg-card/75 backdrop-blur-md border border-white/[0.07] rounded-lg shadow-sm";
 
 /** Glass-styled combobox trigger for use inside the overlay zones. */
 const glassTrigger =
-  "h-6 max-w-28 border-0 bg-transparent px-1.5 text-[11px] gap-1 text-foreground/80 hover:bg-white/10 hover:text-foreground focus-visible:ring-0 dark:bg-transparent dark:hover:bg-white/10";
+  "h-6 max-w-28 border-0 bg-transparent px-1.5 text-[11px] gap-1 text-foreground/80 hover:bg-white/10 hover:text-foreground focus-visible:ring-0";
 
 export function ScatterOverlayControls({
   axes,
@@ -102,7 +112,14 @@ export function ScatterOverlayControls({
   onFitView,
   floatingWindow,
   panelApi,
+  trajectoryActive,
+  onToggleTrajectory,
+  hasSelection,
+  selectionCount,
+  getRowIndices,
+  selectionPath,
 }: Props) {
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const lockMode = useStore(viewSyncStore, (s) => s.lockMode);
   const isLinked = lockMode === "linked";
   const disabled = loadingKey !== null;
@@ -130,7 +147,7 @@ export function ScatterOverlayControls({
           contentClassName="w-48"
         />
 
-        <Separator orientation="vertical" className="h-3 bg-white/10" />
+        <Separator orientation="vertical" className="h-3 bg-white/[0.07]" />
 
         {/* X dim */}
         <span className="text-[10px] text-muted-foreground/60">x</span>
@@ -158,7 +175,7 @@ export function ScatterOverlayControls({
           contentClassName="w-32"
         />
 
-        <Separator orientation="vertical" className="h-3 bg-white/10" />
+        <Separator orientation="vertical" className="h-3 bg-white/[0.07]" />
 
         {/* Color column */}
         <span className="text-[10px] text-muted-foreground/60 uppercase tracking-wide">col</span>
@@ -173,7 +190,7 @@ export function ScatterOverlayControls({
 
         {colorModeCanToggle && (
           <>
-            <Separator orientation="vertical" className="h-3 bg-white/10" />
+            <Separator orientation="vertical" className="h-3 bg-white/[0.07]" />
             <button
               type="button"
               onClick={onToggleColorMode}
@@ -193,140 +210,186 @@ export function ScatterOverlayControls({
           onValueChange={(v: string[]) => onSetSelectionTool((v[v.length - 1] as "marquee" | "lasso") ?? "pan")}
           className="gap-0"
         >
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <ToggleGroupItem
-                  value="marquee"
-                  size="sm"
-                  className="size-[22px] bg-transparent border-0 data-[state=on]:bg-white/15 text-muted-foreground data-[state=on]:text-foreground"
-                />
-              }
-            >
-              <BoxSelect className="size-3.5" />
-            </TooltipTrigger>
-            <TooltipContent side="bottom">Rectangle select</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <ToggleGroupItem
-                  value="lasso"
-                  size="sm"
-                  className="size-[22px] bg-transparent border-0 data-[state=on]:bg-white/15 text-muted-foreground data-[state=on]:text-foreground"
-                />
-              }
-            >
-              <LassoSelect className="size-3.5" />
-            </TooltipTrigger>
-            <TooltipContent side="bottom">Lasso select</TooltipContent>
-          </Tooltip>
+          <HoverTip
+            label="Rectangle"
+            description="Drag to select a region"
+            side="bottom"
+            render={
+              <ToggleGroupItem
+                value="marquee"
+                size="sm"
+                className="size-[22px] bg-transparent border-0 data-[state=on]:bg-white/15 text-muted-foreground data-[state=on]:text-foreground"
+              />
+            }
+          >
+            <BoxSelect className="size-3.5" />
+          </HoverTip>
+          <HoverTip
+            label="Lasso"
+            description="Trace a freehand region"
+            side="bottom"
+            render={
+              <ToggleGroupItem
+                value="lasso"
+                size="sm"
+                className="size-[22px] bg-transparent border-0 data-[state=on]:bg-white/15 text-muted-foreground data-[state=on]:text-foreground"
+              />
+            }
+          >
+            <LassoSelect className="size-3.5" />
+          </HoverTip>
         </ToggleGroup>
 
-        <Separator orientation="vertical" className="mx-0.5 h-3 bg-white/10" />
-
-        {/* Utility actions as a ButtonGroup */}
-        <ButtonGroup className="border-white/10 bg-transparent">
-          {onFitView && (
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <button
-                    type="button"
-                    onClick={onFitView}
-                    className="flex size-[22px] items-center justify-center bg-transparent text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
-                  />
-                }
-              >
-                <ScanDotIcon size={12} />
-              </TooltipTrigger>
-              <TooltipContent side="bottom">Fit to embedding</TooltipContent>
-            </Tooltip>
-          )}
-          <Tooltip>
-            <TooltipTrigger
+        {hasSelection && (
+          <>
+            <Separator orientation="vertical" className="mx-0.5 h-3 bg-white/[0.07]" />
+            <HoverTip
+              label="Save selection"
+              description={`Save ${selectionCount} obs as an ObsSet`}
+              side="bottom"
               render={
                 <button
                   type="button"
-                  onClick={toggleViewLock}
+                  onClick={() => setSaveDialogOpen(true)}
+                  className="flex size-[22px] items-center justify-center bg-transparent text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
+                />
+              }
+            >
+              <Bookmark className="size-3.5" />
+            </HoverTip>
+          </>
+        )}
+
+        <Separator orientation="vertical" className="mx-0.5 h-3 bg-white/[0.07]" />
+
+        {/* Utility actions as a ButtonGroup */}
+        <ButtonGroup className="border-white/[0.07] bg-transparent">
+          {onToggleTrajectory && (
+            <HoverTip
+              label="Track"
+              description={trajectoryActive ? "Hide the trajectory" : "Show the cell's trajectory"}
+              side="bottom"
+              render={
+                <button
+                  type="button"
+                  onClick={onToggleTrajectory}
                   className={cn(
-                    "flex size-[22px] items-center justify-center bg-transparent text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground",
-                    isLinked && "text-primary",
+                    "flex size-[22px] items-center justify-center bg-transparent transition-colors hover:bg-white/10",
+                    trajectoryActive ? "text-primary" : "text-muted-foreground hover:text-foreground",
                   )}
                 />
               }
             >
-              {isLinked ? <Lock className="size-3" /> : <LockOpen className="size-3" />}
-            </TooltipTrigger>
-            <TooltipContent side="bottom">{isLinked ? "Unlink views" : "Link views"}</TooltipContent>
-          </Tooltip>
+              <Waypoints className="size-3" />
+            </HoverTip>
+          )}
+          {onFitView && (
+            <HoverTip
+              label="Fit view"
+              description="Zoom out to show all points"
+              side="bottom"
+              render={
+                <button
+                  type="button"
+                  onClick={onFitView}
+                  className="flex size-[22px] items-center justify-center bg-transparent text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
+                />
+              }
+            >
+              <ScanDotIcon size={12} />
+            </HoverTip>
+          )}
+          <HoverTip
+            label={isLinked ? "Views linked" : "Link views"}
+            description={isLinked ? "Click to pan each panel freely" : "Sync pan and zoom across panels"}
+            side="bottom"
+            render={
+              <button
+                type="button"
+                onClick={toggleViewLock}
+                className={cn(
+                  "flex size-[22px] items-center justify-center bg-transparent text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground",
+                  isLinked && "text-primary",
+                )}
+              />
+            }
+          >
+            {isLinked ? <Lock className="size-3" /> : <LockOpen className="size-3" />}
+          </HoverTip>
 
           {floatingWindow && (
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (floatingWindow.state.open) {
-                        floatingWindow.close();
-                      } else {
-                        addFloatingScatter({
-                          id: `float-${Date.now()}`,
-                          axes,
-                          colorByColumn: colorSourceToString(colorSource),
-                        });
-                        panelApi?.close();
-                      }
-                    }}
-                    className={cn(
-                      "flex size-[22px] items-center justify-center bg-transparent text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground",
-                      floatingWindow.state.open && "text-primary",
-                    )}
-                  />
-                }
-              >
-                <PictureInPicture2Icon className="size-3" />
-              </TooltipTrigger>
-              <TooltipContent side="bottom">Float — collapse to overlay</TooltipContent>
-            </Tooltip>
+            <HoverTip
+              label={floatingWindow.state.open ? "Floating" : "Float"}
+              description={floatingWindow.state.open ? "Return to docked panel" : "Detach to a floating window"}
+              side="bottom"
+              render={
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (floatingWindow.state.open) {
+                      floatingWindow.close();
+                    } else {
+                      addFloatingScatter({
+                        id: `float-${Date.now()}`,
+                        axes,
+                        colorByColumn: colorSourceToString(colorSource),
+                      });
+                      panelApi?.close();
+                    }
+                  }}
+                  className={cn(
+                    "flex size-[22px] items-center justify-center bg-transparent text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground",
+                    floatingWindow.state.open && "text-primary",
+                  )}
+                />
+              }
+            >
+              <PictureInPicture2Icon className="size-3" />
+            </HoverTip>
           )}
 
           {panelApi && (
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <button
-                    type="button"
-                    onClick={() => (panelApi.isMaximized() ? panelApi.exitMaximized() : panelApi.maximize())}
-                    className="flex size-[22px] items-center justify-center bg-transparent text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
-                  />
-                }
-              >
-                <Maximize2 className="size-3" />
-              </TooltipTrigger>
-              <TooltipContent side="bottom">Fullscreen</TooltipContent>
-            </Tooltip>
+            <HoverTip
+              label="Fullscreen"
+              description="Fill the workspace"
+              side="bottom"
+              render={
+                <button
+                  type="button"
+                  onClick={() => (panelApi.isMaximized() ? panelApi.exitMaximized() : panelApi.maximize())}
+                  className="flex size-[22px] items-center justify-center bg-transparent text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
+                />
+              }
+            >
+              <Maximize2 className="size-3" />
+            </HoverTip>
           )}
 
           {panelApi && (
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <button
-                    type="button"
-                    onClick={() => panelApi.close()}
-                    className="flex size-[22px] items-center justify-center bg-transparent text-muted-foreground transition-colors hover:bg-white/10 hover:text-destructive"
-                  />
-                }
-              >
-                <X className="size-3" />
-              </TooltipTrigger>
-              <TooltipContent side="bottom">Close</TooltipContent>
-            </Tooltip>
+            <HoverTip
+              label="Close"
+              description="Remove this panel"
+              side="bottom"
+              render={
+                <button
+                  type="button"
+                  onClick={() => panelApi.close()}
+                  className="flex size-[22px] items-center justify-center bg-transparent text-muted-foreground transition-colors hover:bg-white/10 hover:text-destructive"
+                />
+              }
+            >
+              <X className="size-3" />
+            </HoverTip>
           )}
         </ButtonGroup>
       </div>
+
+      <SaveObsSetDialog
+        open={saveDialogOpen}
+        onClose={() => setSaveDialogOpen(false)}
+        selectionPath={selectionPath}
+        getRowIndices={getRowIndices}
+      />
     </>
   );
 }

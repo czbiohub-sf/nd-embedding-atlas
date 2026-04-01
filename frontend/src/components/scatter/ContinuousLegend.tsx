@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useColormapPalette } from "../../hooks/useColormaps";
+import { ColormapGrid } from "../legend/ColormapGrid";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
+import { cn } from "@/lib/utils";
 
 interface Props {
   columnName: string;
@@ -9,8 +17,20 @@ interface Props {
   /** Full data range — defines slider bounds. Defaults to [vmin, vmax] if not provided. */
   absoluteVmin?: number;
   absoluteVmax?: number;
+  /** Whether the colormap gradient is reversed (display-only until backend ships). */
+  reversed?: boolean;
+  /** Current scale mode — wired to UI but not in query key until backend ships. */
+  scale?: "linear" | "log" | "sqrt";
   /** Called on every move with the current range (real-time). */
   onRangeChange?: (vmin: number, vmax: number) => void;
+  /** Called when the user selects a new colormap from the grid. */
+  onColormapChange?: (name: string) => void;
+  /** Called when the user toggles the reversed flag. */
+  onReversedChange?: (reversed: boolean) => void;
+  /** Called when the user selects a scale mode. */
+  onScaleChange?: (scale: "linear" | "log" | "sqrt") => void;
+  /** Called when the user clicks "Reset range" — should restore absolute min/max. */
+  onResetRange?: () => void;
 }
 
 const COLORMAP_FALLBACKS: Record<string, string> = {
@@ -26,6 +46,32 @@ function formatValue(v: number): string {
   return v.toPrecision(3);
 }
 
+interface ActionButtonProps {
+  active?: boolean;
+  disabled?: boolean;
+  onClick?: () => void;
+  children: React.ReactNode;
+}
+
+function ActionButton({ active, disabled, onClick, children }: ActionButtonProps) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={cn(
+        "flex-1 rounded px-1.5 py-0.5 text-[9px] font-mono transition-colors border",
+        active
+          ? "bg-white/10 text-white border-white/20"
+          : "text-muted-foreground hover:text-white hover:bg-white/[0.06] border-transparent",
+        "disabled:pointer-events-none disabled:opacity-30",
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
 export function ContinuousLegend({
   columnName,
   colormap,
@@ -33,7 +79,13 @@ export function ContinuousLegend({
   vmax,
   absoluteVmin,
   absoluteVmax,
+  reversed = false,
+  scale,
   onRangeChange,
+  onColormapChange,
+  onReversedChange,
+  onScaleChange,
+  onResetRange,
 }: Props) {
   const paletteQuery = useColormapPalette(colormap, 16);
   const gradientStops = paletteQuery.data
@@ -44,13 +96,15 @@ export function ContinuousLegend({
   const absMax = absoluteVmax ?? vmax;
   const hasRange = absMax > absMin && onRangeChange != null;
 
-  const toFrac = useCallback((v: number) => (absMax > absMin ? (v - absMin) / (absMax - absMin) : 0), [absMin, absMax]);
+  const toFrac = useCallback(
+    (v: number) => (absMax > absMin ? (v - absMin) / (absMax - absMin) : 0),
+    [absMin, absMax],
+  );
   const toVal = useCallback((f: number) => absMin + f * (absMax - absMin), [absMin, absMax]);
 
   const [localMin, setLocalMin] = useState(() => toFrac(vmin));
   const [localMax, setLocalMax] = useState(() => toFrac(vmax));
 
-  // Refs kept in sync for use inside window-level event handlers (avoids stale closure)
   const localMinRef = useRef(localMin);
   const localMaxRef = useRef(localMax);
   const onRangeChangeRef = useRef(onRangeChange);
@@ -63,7 +117,6 @@ export function ContinuousLegend({
   const draggingRef = useRef<"min" | "max" | null>(null);
   const barRef = useRef<HTMLDivElement>(null);
 
-  // Sync from props when not dragging (e.g. column change)
   useEffect(() => {
     if (!draggingRef.current) {
       setLocalMin(toFrac(vmin));
@@ -79,8 +132,6 @@ export function ContinuousLegend({
     return Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
   }
 
-  // Use window-level listeners (same pattern as useScatterInteraction) so events
-  // fire reliably when the pointer moves outside the button element.
   const startDrag = useCallback((which: "min" | "max") => {
     draggingRef.current = which;
 
@@ -110,60 +161,94 @@ export function ContinuousLegend({
 
   const minPct = `${(localMin * 100).toFixed(1)}%`;
   const maxPct = `${(localMax * 100).toFixed(1)}%`;
+  const scaleBadge = scale && scale !== "linear" ? (scale === "sqrt" ? "√" : scale) : null;
 
   return (
-    <div className="absolute left-2 top-10 z-20 w-44 rounded-lg border border-border/30 bg-card/80 backdrop-blur-md p-2.5">
-      {/* Column name */}
-      <p className="mb-1.5 truncate text-[10px] font-mono text-muted-foreground" title={columnName}>
-        {columnName}
+    <div className="absolute left-2 top-10 z-20 w-44 rounded-lg border border-white/[0.07] bg-card/80 backdrop-blur-md p-2.5">
+      {/* Column name + optional scale badge */}
+      <p className="mb-1.5 flex items-center gap-1 text-[10px] font-mono text-muted-foreground">
+        <span className="flex-1 truncate" title={columnName}>
+          {columnName}
+        </span>
+        {scaleBadge && <span className="shrink-0 text-[9px] text-accent-cyan">{scaleBadge}</span>}
       </p>
 
-      {/* Gradient bar with inline drag handles */}
-      <div ref={barRef} className="relative h-3 w-full rounded-sm select-none">
-        {/* Full gradient underneath */}
-        <div
-          className="absolute inset-0 rounded-sm"
-          style={{ background: `linear-gradient(to right, ${gradientStops})` }}
-        />
-
-        {hasRange && (
-          <>
-            {/* Dimmed overlay — left of min handle */}
-            <div className="absolute inset-y-0 left-0 rounded-l-sm bg-black/50" style={{ width: minPct }} />
-            {/* Dimmed overlay — right of max handle */}
+      {/* Gradient bar — right-click opens colormap/scale context menu */}
+      <ContextMenu>
+        <ContextMenuTrigger>
+          <div ref={barRef} className="relative h-3 w-full rounded-sm select-none cursor-context-menu">
+            {/* Full gradient — scaleX(-1) for reversed display */}
             <div
-              className="absolute inset-y-0 right-0 rounded-r-sm bg-black/50"
-              style={{ width: `${((1 - localMax) * 100).toFixed(1)}%` }}
-            />
-
-            {/* Min handle */}
-            <button
-              type="button"
-              aria-label="Set minimum value"
-              className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 size-3 cursor-ew-resize rounded-sm border-2 border-white/90 bg-white/20 shadow hover:bg-white/40 focus-visible:outline-none"
-              style={{ left: minPct, touchAction: "none" }}
-              onPointerDown={(e) => {
-                e.stopPropagation();
-                e.preventDefault();
-                startDrag("min");
+              className="absolute inset-0 rounded-sm"
+              style={{
+                background: `linear-gradient(to right, ${gradientStops})`,
+                transform: reversed ? "scaleX(-1)" : undefined,
               }}
             />
 
-            {/* Max handle */}
-            <button
-              type="button"
-              aria-label="Set maximum value"
-              className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 size-3 cursor-ew-resize rounded-sm border-2 border-white/90 bg-white/20 shadow hover:bg-white/40 focus-visible:outline-none"
-              style={{ left: maxPct, touchAction: "none" }}
-              onPointerDown={(e) => {
-                e.stopPropagation();
-                e.preventDefault();
-                startDrag("max");
-              }}
-            />
-          </>
-        )}
-      </div>
+            {hasRange && (
+              <>
+                <div className="absolute inset-y-0 left-0 rounded-l-sm bg-black/50" style={{ width: minPct }} />
+                <div
+                  className="absolute inset-y-0 right-0 rounded-r-sm bg-black/50"
+                  style={{ width: `${((1 - localMax) * 100).toFixed(1)}%` }}
+                />
+
+                <button
+                  type="button"
+                  aria-label="Set minimum value"
+                  className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 size-3 cursor-ew-resize rounded-sm border-2 border-white/90 bg-white/20 shadow hover:bg-white/40 focus-visible:outline-none"
+                  style={{ left: minPct, touchAction: "none" }}
+                  onPointerDown={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    startDrag("min");
+                  }}
+                />
+
+                <button
+                  type="button"
+                  aria-label="Set maximum value"
+                  className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 size-3 cursor-ew-resize rounded-sm border-2 border-white/90 bg-white/20 shadow hover:bg-white/40 focus-visible:outline-none"
+                  style={{ left: maxPct, touchAction: "none" }}
+                  onPointerDown={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    startDrag("max");
+                  }}
+                />
+              </>
+            )}
+          </div>
+        </ContextMenuTrigger>
+
+        <ContextMenuContent className="w-60 p-2 font-mono rounded-lg border border-white/[0.07] bg-card/80 backdrop-blur-md shadow-lg shadow-black/20">
+          <ColormapGrid active={colormap} onSelect={onColormapChange ?? (() => {})} />
+
+          <ContextMenuSeparator />
+
+          {/* Reverse + Reset range */}
+          <div className="flex gap-1 px-1 py-0.5">
+            <ActionButton active={reversed} onClick={() => onReversedChange?.(!reversed)}>
+              ⇄ Reverse
+            </ActionButton>
+            <ActionButton disabled={onResetRange == null} onClick={onResetRange}>
+              ↺ Reset range
+            </ActionButton>
+          </div>
+
+          {/* Scale selector — wired but NOT in query key until backend ships */}
+          {onScaleChange && (
+            <div className="flex gap-1 px-1 py-0.5">
+              {(["linear", "log", "sqrt"] as const).map((s) => (
+                <ActionButton key={s} active={scale === s} onClick={() => onScaleChange(s)}>
+                  {s === "sqrt" ? "√" : s}
+                </ActionButton>
+              ))}
+            </div>
+          )}
+        </ContextMenuContent>
+      </ContextMenu>
 
       {/* Min / max labels */}
       <div className="mt-1 flex justify-between text-[9px] font-mono tabular-nums text-muted-foreground/70">

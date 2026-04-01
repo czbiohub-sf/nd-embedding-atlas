@@ -39,7 +39,7 @@ export function useTrajectoryLoader(opts: UseTrajectoryLoaderOptions): UseTrajec
   const mutation = useMutation({
     mutationFn: async (params: { trackId: number; fovName: string; clickedT?: number }) => {
       const { trackId, fovName } = params;
-      const key = trajectoryKeys.track(coordinator, table, trackId, fovName);
+      const key = trajectoryKeys.track(table, trackId, fovName);
 
       // Return cached rows if available
       const cached = queryClient.getQueryData<TrajectoryFrame[]>(key);
@@ -50,7 +50,7 @@ export function useTrajectoryLoader(opts: UseTrajectoryLoaderOptions): UseTrajec
       const catSelect = categoryCol ? `, ${categoryCol} AS category` : "";
       const safeFovName = String(fovName).replace(/'/g, "''");
       const safeTrackId = Number.isFinite(trackId) ? trackId : 0;
-      const sql = `SELECT ${xCol} AS emb_x, ${yCol} AS emb_y, ${spatialX} AS spatial_x, ${spatialY} AS spatial_y, t${catSelect} FROM ${table} WHERE track_id = ${safeTrackId} AND fov_name = '${safeFovName}' ORDER BY t ASC`;
+      const sql = `SELECT __row_index__ AS "rowIndex", ${xCol} AS emb_x, ${yCol} AS emb_y, ${spatialX} AS spatial_x, ${spatialY} AS spatial_y, t, _dataset AS datasetKey${catSelect} FROM ${table} WHERE track_id = ${safeTrackId} AND fov_name = '${safeFovName}' ORDER BY t ASC`;
 
       const result = await coordinator.query(sql, { type: "json" });
       const rows = toRows<TrajectoryFrame>(result);
@@ -65,6 +65,7 @@ export function useTrajectoryLoader(opts: UseTrajectoryLoaderOptions): UseTrajec
         actions.setTrajectory({
           trackId,
           fovName,
+          datasetKey: rows[0]?.datasetKey as string | undefined,
           tIndex: initialT,
           points: rows,
         });

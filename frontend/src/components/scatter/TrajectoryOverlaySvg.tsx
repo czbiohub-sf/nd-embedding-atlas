@@ -22,10 +22,12 @@ interface Props {
   categoryColors: string[];
   containerRef: RefObject<HTMLDivElement | null>;
   gpuRef: RefObject<WorldToScreenProvider | null>;
+  /** Raw → normalized coordinate divisor (from backend positionScale). Default 1. */
+  positionScale?: number;
 }
 
 export const TrajectoryOverlaySvg = forwardRef<TrajectoryOverlaySvgHandle, Props>(function TrajectoryOverlaySvg(
-  { points, activeIndex, categoryColors, containerRef, gpuRef },
+  { points, activeIndex, categoryColors, containerRef, gpuRef, positionScale = 1 },
   ref,
 ) {
   const svgRef = useRef<SVGSVGElement>(null);
@@ -64,37 +66,94 @@ export const TrajectoryOverlaySvg = forwardRef<TrajectoryOverlaySvgHandle, Props
       return;
     }
 
-    const screenPts = points.map((p) => gpu.worldToScreen(p.emb_x, p.emb_y, w, h));
+    const s = positionScale > 0 ? positionScale : 1;
+    const screenPts = points.map((p) => gpu.worldToScreen(p.emb_x / s, p.emb_y / s, w, h));
+
+    // Arrowhead marker — one per distinct color, keyed by color string
+    const defs = document.createElementNS(SVG_NS, "defs");
+    const markerColors = new Set(points.map((p) => pointColor(p)));
+    for (const color of markerColors) {
+      const markerId = `traj-arrow-${color.replace(/[^a-zA-Z0-9]/g, "")}`;
+      const marker = document.createElementNS(SVG_NS, "marker");
+      marker.setAttribute("id", markerId);
+      marker.setAttribute("markerWidth", "6");
+      marker.setAttribute("markerHeight", "6");
+      marker.setAttribute("refX", "5");
+      marker.setAttribute("refY", "3");
+      marker.setAttribute("orient", "auto");
+      const arrow = document.createElementNS(SVG_NS, "path");
+      arrow.setAttribute("d", "M0,0 L0,6 L6,3 z");
+      arrow.setAttribute("fill", color);
+      arrow.setAttribute("fill-opacity", "0.8");
+      marker.appendChild(arrow);
+      defs.appendChild(marker);
+    }
 
     const g = document.createElementNS(SVG_NS, "g");
+    g.appendChild(defs);
 
-    // Line segments between consecutive points
+    // Line segments with directional arrowheads
     for (let i = 1; i < points.length; i++) {
       const p1 = screenPts[i - 1]!;
       const p2 = screenPts[i]!;
+      const color = pointColor(points[i]!);
+      const markerId = `traj-arrow-${color.replace(/[^a-zA-Z0-9]/g, "")}`;
+      // Shorten line end slightly so arrowhead sits at the point
+      const dx = p2.x - p1.x,
+        dy = p2.y - p1.y;
+      const len = Math.sqrt(dx * dx + dy * dy);
+      const shorten = len > 0 ? 8 / len : 0;
       const line = document.createElementNS(SVG_NS, "line");
       line.setAttribute("x1", String(p1.x));
       line.setAttribute("y1", String(p1.y));
-      line.setAttribute("x2", String(p2.x));
-      line.setAttribute("y2", String(p2.y));
-      line.setAttribute("stroke", pointColor(points[i]!));
+      line.setAttribute("x2", String(p2.x - dx * shorten));
+      line.setAttribute("y2", String(p2.y - dy * shorten));
+      line.setAttribute("stroke", color);
       line.setAttribute("stroke-width", "2");
       line.setAttribute("stroke-opacity", "0.7");
+      line.setAttribute("marker-end", `url(#${markerId})`);
       g.appendChild(line);
     }
 
-    // Circles at each time point
+    // Circles at each time point — all fully opaque, active gets a pulse ring
     for (let i = 0; i < points.length; i++) {
       const pt = screenPts[i]!;
       const isActive = activeIndex != null && i === activeIndex;
       const color = pointColor(points[i]!);
+
+      if (isActive) {
+        // Pulsing outer ring via SVG animate
+        const ring = document.createElementNS(SVG_NS, "circle");
+        ring.setAttribute("cx", String(pt.x));
+        ring.setAttribute("cy", String(pt.y));
+        ring.setAttribute("r", "8");
+        ring.setAttribute("fill", "none");
+        ring.setAttribute("stroke", color);
+        ring.setAttribute("stroke-width", "1.5");
+        ring.setAttribute("stroke-opacity", "0.6");
+        const animR = document.createElementNS(SVG_NS, "animate");
+        animR.setAttribute("attributeName", "r");
+        animR.setAttribute("values", "7;13;7");
+        animR.setAttribute("dur", "1.6s");
+        animR.setAttribute("repeatCount", "indefinite");
+        const animO = document.createElementNS(SVG_NS, "animate");
+        animO.setAttribute("attributeName", "stroke-opacity");
+        animO.setAttribute("values", "0.6;0;0.6");
+        animO.setAttribute("dur", "1.6s");
+        animO.setAttribute("repeatCount", "indefinite");
+        ring.appendChild(animR);
+        ring.appendChild(animO);
+        g.appendChild(ring);
+      }
+
       const circle = document.createElementNS(SVG_NS, "circle");
       circle.setAttribute("cx", String(pt.x));
       circle.setAttribute("cy", String(pt.y));
-      circle.setAttribute("r", isActive ? "6" : "3");
+      circle.setAttribute("r", isActive ? "5.5" : "3.5");
       circle.setAttribute("fill", isActive ? DEFAULT_ACTIVE_COLOR : color);
-      circle.setAttribute("stroke", isActive ? color : "none");
-      circle.setAttribute("stroke-width", isActive ? "2" : "0");
+      circle.setAttribute("stroke", color);
+      circle.setAttribute("stroke-width", isActive ? "2" : "1");
+      circle.setAttribute("stroke-opacity", "0.9");
       g.appendChild(circle);
     }
 
@@ -131,7 +190,7 @@ export const TrajectoryOverlaySvg = forwardRef<TrajectoryOverlaySvgHandle, Props
   }
 
   // Expose update() for GPU onViewChange — closure captures latest props via draw()
-  useImperativeHandle(ref, () => ({ update: draw }), [points, activeIndex, categoryColors]);
+  useImperativeHandle(ref, () => ({ update: draw }), [points, activeIndex, categoryColors, positionScale]);
 
   // Redraw when props or measured size change
   useEffect(() => {

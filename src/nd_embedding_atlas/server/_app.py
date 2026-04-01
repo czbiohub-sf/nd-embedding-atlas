@@ -19,6 +19,7 @@ from nd_embedding_atlas.server.routes._embeddings import make_embeddings_router
 from nd_embedding_atlas.server.routes._export import make_export_router
 from nd_embedding_atlas.server.routes._mosaic import make_mosaic_router
 from nd_embedding_atlas.server.routes._obs import make_obs_router
+from nd_embedding_atlas.server.routes._obssets import make_obssets_router
 from nd_embedding_atlas.server.routes._scatter import make_scatter_router
 from nd_embedding_atlas.server.routes._var import make_var_router
 from nd_embedding_atlas.vz._prepare import detect_spatial_columns, prepare_obs
@@ -63,6 +64,46 @@ def _read_plate_metadata(plate_path: str | pathlib.Path | None) -> dict[str, Any
     return result
 
 
+def _populate_obsset_tables(store: EmbeddingStore, obssets: list[dict]) -> None:
+    """Bulk-insert persisted ObsSets and their members into DuckDB.
+
+    Logs a warning for any ObsSet whose member count has drifted from
+    the recorded created_count (obs deleted from the dataset since save).
+    """
+    import logging as _logging  # noqa: PLC0415
+
+    _log = _logging.getLogger("ndea.obssets")
+    con = store.con
+    for o in obssets:
+        oid = o["obsset_id"]
+        members: list[dict] = o.get("members", [])
+        created_count: int = o.get("created_count", len(members))
+
+        con.execute(
+            "INSERT OR IGNORE INTO obssets (obsset_id, name, color, created_at, created_count) VALUES (?, ?, ?, ?, ?)",
+            [oid, o.get("name", ""), o.get("color"), o.get("created_at"), created_count],
+        )
+        if members:
+            rows = [(oid, m["dataset_key"], m["obs_name"]) for m in members]
+            con.executemany(
+                "INSERT OR IGNORE INTO obsset_members (obsset_id, dataset_key, obs_name) VALUES (?, ?, ?)",
+                rows,
+            )
+
+        actual_count = con.execute(
+            "SELECT COUNT(*) FROM obsset_members WHERE obsset_id = ?", [oid]
+        ).fetchone()[0]
+        if actual_count != created_count:
+            _log.warning(
+                "ObsSet %r (%s): created_count=%d but current member count=%d — "
+                "obs identity has drifted since last save.",
+                oid,
+                o.get("name", ""),
+                created_count,
+                actual_count,
+            )
+
+
 def create_app(
     collection: AnnDataCollection,
     *,
@@ -105,7 +146,9 @@ def create_app(
     resolved_export_dir = pathlib.Path(export_dir).resolve() if export_dir else pathlib.Path.cwd() / "exports"
 
     # ── Resolve spatial columns ───────────────────────────────────────
-    spatial = detect_spatial_columns(set(collection.obs.keys()), columns_config=columns_config)
+    from nd_embedding_atlas.io._get import get_obs as _get_obs_cols  # noqa: PLC0415
+    _first_obs = _get_obs_cols(collection, include_index=False)
+    spatial = detect_spatial_columns(set(_first_obs.columns), columns_config=columns_config)
 
     # Ensure spatial columns are always loaded (needed by /api/obs)
     if obs_columns is not None and plate_path is not None:
@@ -163,7 +206,14 @@ def create_app(
     )
 
     # Discover available obsm keys
-    available_obsm_keys: list[str] = list(collection.obsm.keys())
+    from nd_embedding_atlas.io._get import get_obsm as _get_obsm, _open_raw as _open_raw_store  # noqa: PLC0415
+    _first_entry = next(iter(collection.datasets.data.values()))
+    if _first_entry.path is not None:
+        _tmp_store = _open_raw_store(_first_entry.path)
+        available_obsm_keys: list[str] = [k for k in (_tmp_store["obsm"].keys() if "obsm" in _tmp_store else [])]
+        if hasattr(_tmp_store, "close"): _tmp_store.close()
+    else:
+        available_obsm_keys = list(collection.obsm.keys())
 
     # Pick default embedding and load eagerly
     default_key: str | None = None
@@ -175,7 +225,7 @@ def create_app(
         default_key = available_obsm_keys[0]
 
     if default_key is not None:
-        coords = collection.obsm[default_key]
+        coords = _get_obsm(collection, default_key)
         if hasattr(coords, "compute"):
             coords = coords.compute()
         store.register_embedding(default_key, np.asarray(coords, dtype=np.float32))
@@ -194,6 +244,15 @@ def create_app(
         dataset_plates=dataset_plates,
         project_config_path=project_config_path,
     )
+
+    # ── Load persisted ObsSets from sidecar ──────────────────────────
+    if project_config_path:
+        from nd_embedding_atlas.server._obssets_io import load_obssets, sidecar_path  # noqa: PLC0415
+
+        _sidecar = sidecar_path(project_config_path)
+        _persisted = load_obssets(_sidecar)
+        if _persisted:
+            _populate_obsset_tables(state.store, _persisted)
 
     # ── Build dataset config ──────────────────────────────────────────
     if default_key is not None and default_key in store.loaded_embeddings:
@@ -252,6 +311,7 @@ def create_app(
     app.include_router(make_embeddings_router(get_state))
     app.include_router(make_export_router(get_state))
     app.include_router(make_obs_router(get_state))
+    app.include_router(make_obssets_router(get_state))
     app.include_router(make_scatter_router(get_state))
     app.include_router(make_var_router(get_state))
 

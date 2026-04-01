@@ -1,16 +1,19 @@
 /**
- * BrushPredicateStore — TanStack Store bridge between Mosaic brushSelection and React.
+ * @deprecated Use ActiveFilterStore instead.
+ *
+ * BrushPredicateStore is retained only because ScatterContent.tsx still calls
+ * setBrushPredicate for the continuous range filter (colormap range slider).
+ * It has no subscribers in DashboardProvider and does not drive brushSelection.
+ * Do not add new writers or subscribers here.
+ *
+ * ---
+ * Original purpose: TanStack Store bridge between Mosaic brushSelection and React.
  *
  * Problem: calling brushSelection.update() directly from React useEffect races with
  * Mosaic's AsyncDispatch event queue (Param.cancel('value') clears queued updates
  * when consecutive null-predicate calls hit distinct([], []) = false).
  *
- * Solution: components write selection intent to this Store. A stable subscription
- * (wired in DashboardProvider, outside React's render cycle) translates Store state
- * → brushSelection.update() via requestAnimationFrame, ensuring no dispatch conflicts.
- *
- * Any component can also READ the current brush predicate without needing Mosaic refs:
- *   const pred = useStore(brushPredicateStore, s => s.predicate);
+ * Solution replaced by ActiveFilterStore + DashboardProvider bridge.
  */
 import { Store } from "@tanstack/store";
 

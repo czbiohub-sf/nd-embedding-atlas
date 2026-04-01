@@ -1,22 +1,36 @@
 import type { DockviewApi } from "dockview-react";
-import { useRef, useCallback, useState } from "react";
+import { useRef, useCallback, useState, useEffect } from "react";
 import { DevtoolsDrawer } from "../components/devtools/DevtoolsDrawer";
 import { FloatingScatterRoot } from "../components/layout/FloatingScatterWindow";
+import { ViewerPiP } from "../components/layout/ViewerPiP";
 import { CommandPalette } from "../components/CommandPalette";
 import { DockviewShell } from "../components/layout/DockviewShell";
 import { BottomDock } from "../components/layout/BottomDock";
 import { TerminalTable } from "../components/table/TerminalTable";
 import { useDashboard } from "../hooks/useDashboard";
+import { openViewerPiP } from "../providers/ViewerPiPStore";
 
 export function DashboardShell() {
   const { state } = useDashboard();
   const { metadata } = state;
   const hasEmbeddings = Object.keys(metadata.obsm ?? {}).length > 0;
+  const hasPlate = !!metadata.plate;
 
   const dockviewApiRef = useRef<DockviewApi | null>(null);
   const [dockviewApi, setDockviewApi] = useState<DockviewApi | null>(null);
   const cmdPaletteOpenRef = useRef<((page: "scatter") => void) | null>(null);
   const [devtoolsOpen, setDevtoolsOpen] = useState(false);
+
+  const prevHighlightRef = useRef<string | null>(null);
+  useEffect(() => {
+    const wasNull = prevHighlightRef.current === null;
+    const isNowSet = state.highlightId !== null;
+    prevHighlightRef.current = state.highlightId;
+    if (!wasNull || !isNowSet) return;
+    if (!state.metadata.plate) return;
+    const dockedExists = dockviewApi?.getPanel("image-viewer") != null;
+    if (!dockedExists) openViewerPiP();
+  }, [state.highlightId, state.metadata.plate, dockviewApi]);
 
   const addScatterPanel = useCallback((obsmKey: string) => {
     const api = dockviewApiRef.current;
@@ -35,6 +49,31 @@ export function DashboardShell() {
 
   const openScatterPicker = useCallback(() => {
     cmdPaletteOpenRef.current?.("scatter");
+  }, []);
+
+  const openViewerPanel = useCallback(() => {
+    const api = dockviewApiRef.current;
+    if (!api) return;
+    const existing = api.panels.find((p) => p.id === "image-viewer");
+    if (existing) {
+      existing.focus();
+      return;
+    }
+    const scatter = api.panels.find((p) => p.id === "scatter" || p.id.startsWith("scatter-"));
+    api.addPanel({
+      id: "image-viewer",
+      component: "image-viewer",
+      title: "Image Viewer",
+      position: scatter ? { referencePanel: scatter.id, direction: "right" } : undefined,
+    });
+  }, []);
+
+  const closeViewerPanel = useCallback(() => {
+    dockviewApiRef.current?.getPanel("image-viewer")?.api.close();
+  }, []);
+
+  const openFloatViewer = useCallback(() => {
+    openViewerPiP();
   }, []);
 
   return (
@@ -60,6 +99,9 @@ export function DashboardShell() {
       <BottomDock
         dockviewApi={dockviewApi}
         onAddScatter={openScatterPicker}
+        onCloseViewer={closeViewerPanel}
+        onFloatViewer={hasPlate ? openFloatViewer : undefined}
+        hasPlate={hasPlate}
         devtoolsOpen={devtoolsOpen}
         onToggleDevtools={() => setDevtoolsOpen((o) => !o)}
       />
@@ -67,8 +109,16 @@ export function DashboardShell() {
       {/* Floating scatter windows — outside Dockview so they survive panel close */}
       <FloatingScatterRoot />
 
+      {/* Picture-in-picture viewer — floats outside Dockview */}
+      <ViewerPiP />
+
       {/* ⌘K command palette */}
-      <CommandPalette onAddScatter={addScatterPanel} openRef={cmdPaletteOpenRef} />
+      <CommandPalette
+        onAddScatter={addScatterPanel}
+        onOpenViewer={openViewerPanel}
+        onFloatViewer={openFloatViewer}
+        openRef={cmdPaletteOpenRef}
+      />
     </div>
   );
 }

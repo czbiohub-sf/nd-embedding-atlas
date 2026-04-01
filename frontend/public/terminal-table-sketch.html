@@ -1,0 +1,1025 @@
+<!doctype html>
+<!--
+  TerminalTable Drawer Sketch
+  ──────────────────────────────────────────────────────────────────────────────
+  Explores the tabbed ⌘J drawer with Table | Track | (future) tabs.
+
+  Sketch A — Table tab (default, existing DataTable style)
+  Sketch B — Track tab: trajectory scrubber + per-frame list
+  Sketch C — Track tab: with filmstrip thumbnails (richer variant)
+
+  Interactions:
+    • Click tabs to switch
+    • Drag the top edge to resize the drawer
+    • Track scrubber plays through frames
+    • Click any row in the frame list to jump to that T
+  ──────────────────────────────────────────────────────────────────────────────
+-->
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <title>TerminalTable Drawer Sketch</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        background: hsl(222 16% 8%);
+        color: hsl(210 20% 88%);
+        font-family: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+
+      /* ── Fake scatter canvas behind everything ── */
+      #scatter-bg {
+        flex: 1;
+        position: relative;
+        overflow: hidden;
+      }
+
+      /* ── Bottom dock (mimics real BottomDock) ── */
+      .bottom-dock {
+        height: 24px;
+        display: flex;
+        align-items: center;
+        gap: 0;
+        border-top: 1px solid hsl(222 14% 18% / 0.4);
+        background: hsl(222 14% 10% / 0.8);
+        backdrop-filter: blur(8px);
+        padding: 0 8px;
+        font-size: 11px;
+        color: hsl(215 14% 50%);
+        flex-shrink: 0;
+        z-index: 10;
+      }
+      .dock-sep {
+        width: 1px;
+        height: 12px;
+        background: hsl(215 14% 30% / 0.5);
+        margin: 0 7px;
+      }
+      .dock-spacer {
+        flex: 1;
+      }
+      .metric {
+        color: hsl(215 14% 65%);
+      }
+      .metric.sel {
+        color: oklch(0.585 0.233 277.117 / 80%);
+      }
+      .dock-btn {
+        cursor: pointer;
+        opacity: 0.6;
+      }
+      .dock-btn:hover {
+        opacity: 1;
+      }
+      kbd {
+        font-size: 9px;
+        padding: 0 3px;
+        border: 1px solid hsl(215 14% 30%);
+        border-radius: 3px;
+        color: hsl(215 14% 45%);
+      }
+
+      /* ── Drawer ── */
+      .drawer {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 24px; /* above dock */
+        background: hsl(222 14% 10%);
+        border-top: 1px solid hsl(222 14% 20%);
+        display: flex;
+        flex-direction: column;
+        z-index: 40;
+        transition: height 180ms ease;
+        overflow: hidden;
+      }
+      .drawer.closed {
+        height: 0 !important;
+        border-top: none;
+      }
+
+      /* ── Resize handle ── */
+      .resize-handle {
+        height: 5px;
+        flex-shrink: 0;
+        cursor: ns-resize;
+        background: hsl(222 14% 18% / 0.4);
+        transition: background 0.15s;
+      }
+      .resize-handle:hover {
+        background: hsl(222 14% 28% / 0.6);
+      }
+
+      /* ── Tab bar ── */
+      .tab-bar {
+        display: flex;
+        align-items: center;
+        border-bottom: 1px solid hsl(222 14% 18%);
+        background: hsl(222 14% 12%);
+        flex-shrink: 0;
+        padding: 0 4px;
+        height: 30px;
+      }
+      .tab {
+        padding: 0 12px;
+        height: 100%;
+        font-size: 11px;
+        color: hsl(215 14% 45%);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        position: relative;
+        user-select: none;
+        transition: color 0.1s;
+        border: none;
+        background: none;
+        font-family: inherit;
+      }
+      .tab:hover {
+        color: hsl(210 20% 75%);
+      }
+      .tab.active {
+        color: hsl(210 20% 90%);
+      }
+      .tab.active::after {
+        content: "";
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 1.5px;
+        background: hsl(210 20% 80% / 0.7);
+      }
+      .tab .dot {
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        background: oklch(0.585 0.233 277.117 / 70%);
+        display: inline-block;
+      }
+      .tab .count {
+        font-size: 9px;
+        color: hsl(215 14% 40%);
+      }
+      .tab-spacer {
+        flex: 1;
+      }
+      .close-btn {
+        margin-right: 4px;
+        width: 20px;
+        height: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 4px;
+        cursor: pointer;
+        color: hsl(215 14% 40%);
+        font-size: 12px;
+        transition:
+          color 0.1s,
+          background 0.1s;
+        border: none;
+        background: none;
+        font-family: inherit;
+      }
+      .close-btn:hover {
+        color: hsl(210 20% 80%);
+        background: hsl(222 14% 18%);
+      }
+
+      /* ── Tab content ── */
+      .tab-content {
+        display: none;
+        flex: 1;
+        min-height: 0;
+        overflow: hidden;
+        flex-direction: column;
+      }
+      .tab-content.active {
+        display: flex;
+      }
+
+      /* ── TABLE TAB ── */
+      .data-table-wrap {
+        flex: 1;
+        min-height: 0;
+        overflow: auto;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 11px;
+      }
+      thead tr {
+        background: hsl(222 14% 13%);
+        position: sticky;
+        top: 0;
+        z-index: 2;
+      }
+      th {
+        padding: 4px 10px;
+        text-align: left;
+        font-weight: 500;
+        color: hsl(215 14% 50%);
+        font-size: 10px;
+        border-bottom: 1px solid hsl(222 14% 20%);
+        white-space: nowrap;
+        cursor: pointer;
+        user-select: none;
+      }
+      th:hover {
+        color: hsl(210 20% 75%);
+      }
+      td {
+        padding: 3px 10px;
+        color: hsl(210 20% 78%);
+        border-bottom: 1px solid hsl(222 14% 15%);
+        white-space: nowrap;
+        font-size: 11px;
+      }
+      tr.highlighted td {
+        background: oklch(0.585 0.233 277.117 / 8%);
+        color: hsl(210 20% 92%);
+      }
+      tr:hover td {
+        background: hsl(222 14% 14%);
+      }
+      tr.highlighted:hover td {
+        background: oklch(0.585 0.233 277.117 / 12%);
+      }
+
+      /* ── TRACK TAB ── */
+      .track-empty {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        color: hsl(215 14% 35%);
+        gap: 0;
+        text-align: center;
+      }
+
+      .track-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 5px 12px;
+        border-bottom: 1px solid hsl(222 14% 18%);
+        font-size: 10px;
+        flex-shrink: 0;
+        background: hsl(222 14% 12%);
+      }
+      .track-id {
+        color: oklch(0.585 0.233 277.117 / 85%);
+        font-weight: 600;
+      }
+      .track-sep {
+        color: hsl(215 14% 30%);
+      }
+      .track-fov {
+        color: hsl(215 14% 50%);
+        max-width: 180px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .track-frames {
+        color: hsl(215 14% 50%);
+      }
+      .clear-btn {
+        margin-left: auto;
+        display: flex;
+        align-items: center;
+        gap: 3px;
+        font-size: 10px;
+        color: hsl(215 14% 40%);
+        background: none;
+        border: none;
+        cursor: pointer;
+        font-family: inherit;
+        padding: 2px 6px;
+        border-radius: 4px;
+        transition:
+          color 0.1s,
+          background 0.1s;
+      }
+      .clear-btn:hover {
+        color: hsl(210 20% 70%);
+        background: hsl(222 14% 18%);
+      }
+
+      .scrubber-bar {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        border-bottom: 1px solid hsl(222 14% 16%);
+        flex-shrink: 0;
+      }
+      .t-label {
+        font-size: 10px;
+        color: oklch(0.585 0.233 277.117 / 75%);
+        width: 16px;
+      }
+      .t-slider {
+        flex: 1;
+        accent-color: oklch(0.585 0.233 277.117);
+        height: 3px;
+        cursor: pointer;
+      }
+      .t-val {
+        font-size: 10px;
+        color: oklch(0.585 0.233 277.117);
+        background: oklch(0.585 0.233 277.117 / 12%);
+        border: 1px solid oklch(0.585 0.233 277.117 / 30%);
+        border-radius: 3px;
+        padding: 0 5px;
+        min-width: 30px;
+        text-align: center;
+        tabular-nums: true;
+      }
+      .ctrl-btn {
+        width: 22px;
+        height: 22px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 4px;
+        border: none;
+        background: none;
+        color: hsl(215 14% 45%);
+        cursor: pointer;
+        font-size: 12px;
+        transition:
+          color 0.1s,
+          background 0.1s;
+        font-family: inherit;
+      }
+      .ctrl-btn:hover {
+        color: hsl(210 20% 85%);
+        background: hsl(222 14% 18%);
+      }
+      .ctrl-btn.playing {
+        color: oklch(0.585 0.233 277.117);
+      }
+
+      /* Frame list */
+      .frame-list {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+      }
+      .frame-list-header {
+        display: flex;
+        align-items: center;
+        padding: 3px 12px;
+        font-size: 10px;
+        color: hsl(215 14% 38%);
+        background: hsl(222 14% 13%);
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        border-bottom: 1px solid hsl(222 14% 18%);
+      }
+      .frame-list-header span {
+        font-weight: 500;
+      }
+      .frame-row {
+        display: flex;
+        align-items: center;
+        padding: 3px 12px;
+        font-size: 11px;
+        color: hsl(215 14% 55%);
+        cursor: pointer;
+        transition:
+          background 0.08s,
+          color 0.08s;
+        border: none;
+        background: none;
+        width: 100%;
+        text-align: left;
+        font-family: inherit;
+      }
+      .frame-row:hover {
+        background: hsl(222 14% 14%);
+        color: hsl(210 20% 80%);
+      }
+      .frame-row.active {
+        background: oklch(0.585 0.233 277.117 / 10%);
+        color: hsl(210 20% 92%);
+      }
+      .frame-row .tc {
+        width: 36px;
+        flex-shrink: 0;
+        color: inherit;
+      }
+      .frame-row.active .tc {
+        color: oklch(0.585 0.233 277.117);
+        font-weight: 600;
+      }
+      .frame-row .xc,
+      .frame-row .yc {
+        width: 64px;
+        flex-shrink: 0;
+        tabular-nums: true;
+      }
+      .frame-row .catc {
+        width: 48px;
+        flex-shrink: 0;
+      }
+      .frame-now {
+        margin-left: auto;
+        font-size: 9px;
+        color: oklch(0.585 0.233 277.117 / 60%);
+      }
+
+      /* ── FILMSTRIP (Sketch C) ── */
+      .filmstrip-bar {
+        display: flex;
+        gap: 3px;
+        padding: 6px 12px;
+        overflow-x: auto;
+        border-bottom: 1px solid hsl(222 14% 16%);
+        flex-shrink: 0;
+        background: hsl(222 14% 11%);
+        scrollbar-width: thin;
+      }
+      .filmstrip-thumb {
+        flex-shrink: 0;
+        width: 44px;
+        height: 36px;
+        border-radius: 4px;
+        border: 1.5px solid hsl(222 14% 22%);
+        background: hsl(222 14% 16%);
+        cursor: pointer;
+        position: relative;
+        overflow: hidden;
+        transition: border-color 0.1s;
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+      }
+      .filmstrip-thumb:hover {
+        border-color: hsl(215 14% 35%);
+      }
+      .filmstrip-thumb.active {
+        border-color: oklch(0.585 0.233 277.117);
+      }
+      .filmstrip-thumb.active::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: oklch(0.585 0.233 277.117 / 12%);
+      }
+      .filmstrip-thumb canvas {
+        position: absolute;
+        inset: 0;
+      }
+      .filmstrip-thumb .ft-lbl {
+        position: relative;
+        z-index: 1;
+        font-size: 8px;
+        color: hsl(210 20% 80%);
+        padding: 2px 0;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+      }
+
+      /* Variant selector */
+      .variant-bar {
+        position: fixed;
+        top: 12px;
+        right: 12px;
+        display: flex;
+        gap: 6px;
+        z-index: 100;
+      }
+      .vbtn {
+        padding: 4px 10px;
+        font-size: 10px;
+        border-radius: 5px;
+        border: 1px solid hsl(222 14% 25%);
+        background: hsl(222 14% 13%);
+        color: hsl(215 14% 55%);
+        cursor: pointer;
+        font-family: inherit;
+        transition: all 0.1s;
+      }
+      .vbtn:hover {
+        background: hsl(222 14% 18%);
+        color: hsl(210 20% 80%);
+      }
+      .vbtn.active {
+        background: oklch(0.585 0.233 277.117 / 15%);
+        color: oklch(0.585 0.233 277.117);
+        border-color: oklch(0.585 0.233 277.117 / 40%);
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Variant selector -->
+    <div class="variant-bar">
+      <button class="vbtn active" onclick="setVariant('A')">A — Table</button>
+      <button class="vbtn" onclick="setVariant('B')">B — Track list</button>
+      <button class="vbtn" onclick="setVariant('C')">C — Track + filmstrip</button>
+    </div>
+
+    <!-- Fake scatter background -->
+    <div id="scatter-bg">
+      <canvas id="scatter-canvas" style="position: absolute; inset: 0; width: 100%; height: 100%"></canvas>
+      <div
+        style="
+          position: absolute;
+          bottom: 12px;
+          left: 50%;
+          transform: translateX(-50%);
+          font-size: 10px;
+          color: hsl(215 14% 30%);
+        "
+      >
+        press <kbd>⌘J</kbd> to toggle drawer
+      </div>
+    </div>
+
+    <!-- Bottom dock -->
+    <div class="bottom-dock">
+      <span style="color: oklch(0.585 0.233 277.117)">●</span>
+      <span style="color: oklch(0.65 0.18 140); opacity: 0.4; margin-left: 2px">●</span>
+      <div class="dock-sep"></div>
+      <span class="metric">12,402</span>
+      <div class="dock-sep"></div>
+      <span class="metric sel">847 sel</span>
+      <div class="dock-sep"></div>
+      <span class="metric">2.4×</span>
+      <div class="dock-sep"></div>
+      <span class="metric" style="opacity: 0.55">58fps</span>
+      <div class="dock-spacer"></div>
+      <span class="dock-btn" title="⌘K" style="font-size: 10px">›</span>
+      <div class="dock-sep"></div>
+      <span
+        class="dock-btn"
+        id="toggle-btn"
+        onclick="toggleDrawer()"
+        title="⌘J"
+        style="display: flex; align-items: center; gap: 4px"
+      >
+        <span style="font-size: 11px">⊟</span>
+      </span>
+      <div class="dock-sep"></div>
+      <span style="font-size: 10px; opacity: 0.35">☀</span>
+    </div>
+
+    <!-- Drawer -->
+    <div class="drawer" id="drawer" style="height: 280px">
+      <!-- Resize handle -->
+      <div class="resize-handle" id="resize-handle"></div>
+
+      <!-- Tab bar -->
+      <div class="tab-bar">
+        <button class="tab active" id="tab-table" onclick="switchTab('table')">
+          Table <span class="count">12,402</span>
+        </button>
+        <button class="tab" id="tab-track" onclick="switchTab('track')">
+          Track <span class="dot" id="track-dot" style="display: none"></span>
+        </button>
+        <div class="tab-spacer"></div>
+        <button class="close-btn" onclick="toggleDrawer()">✕</button>
+      </div>
+
+      <!-- TABLE content -->
+      <div class="tab-content active" id="content-table">
+        <div class="data-table-wrap" id="table-scroll">
+          <table id="data-table">
+            <thead>
+              <tr>
+                <th onclick="sortBy('row')">__row_index__ ↕</th>
+                <th onclick="sortBy('dataset')">_dataset ↕</th>
+                <th onclick="sortBy('cell_type')">cell_type ↕</th>
+                <th onclick="sortBy('track_id')">track_id ↕</th>
+                <th onclick="sortBy('fov')">fov_name ↕</th>
+                <th onclick="sortBy('t')">t ↕</th>
+                <th onclick="sortBy('x')">x ↕</th>
+                <th onclick="sortBy('y')">y ↕</th>
+              </tr>
+            </thead>
+            <tbody id="table-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- TRACK content (variants B and C share this) -->
+      <div class="tab-content" id="content-track">
+        <!-- Empty state (hidden when track active) -->
+        <div class="track-empty" id="track-empty">
+          Click a point, then&nbsp;<span style="color: hsl(215 14% 55%)">→ Show Trajectory</span>&nbsp;to start tracking
+          <br /><br />
+          <button
+            onclick="loadDemoTrack()"
+            style="
+              margin-top: 8px;
+              padding: 4px 12px;
+              font-size: 10px;
+              border-radius: 5px;
+              border: 1px solid hsl(222 14% 25%);
+              background: hsl(222 14% 15%);
+              color: hsl(215 14% 60%);
+              cursor: pointer;
+              font-family: inherit;
+            "
+          >
+            Load demo track
+          </button>
+        </div>
+
+        <!-- Track active (hidden by default) -->
+        <div id="track-active" style="display: none; flex-direction: column; flex: 1; min-height: 0; overflow: hidden">
+          <!-- Track header -->
+          <div class="track-header">
+            <span>track</span>
+            <span class="track-id">42</span>
+            <span class="track-sep">·</span>
+            <span class="track-fov">A/1/000001</span>
+            <span class="track-sep">·</span>
+            <span class="track-frames" id="frame-count">15 frames</span>
+            <button class="clear-btn" onclick="clearTrack()">✕ clear</button>
+          </div>
+
+          <!-- Filmstrip (variant C only) -->
+          <div class="filmstrip-bar" id="filmstrip-bar" style="display: none">
+            <!-- filled by JS -->
+          </div>
+
+          <!-- Scrubber -->
+          <div class="scrubber-bar">
+            <span class="t-label">T*</span>
+            <input
+              type="range"
+              class="t-slider"
+              id="t-slider"
+              min="0"
+              max="14"
+              value="0"
+              step="1"
+              oninput="scrubTo(+this.value)"
+            />
+            <span class="t-val" id="t-val">T=4</span>
+            <button class="ctrl-btn" onclick="stepTrack(-1)" title="prev">‹</button>
+            <button class="ctrl-btn" id="play-btn" onclick="togglePlay()" title="play">▶</button>
+            <button class="ctrl-btn" onclick="stepTrack(1)" title="next">›</button>
+          </div>
+
+          <!-- Frame list -->
+          <div class="frame-list" id="frame-list">
+            <div class="frame-list-header">
+              <span style="width: 36px">T</span>
+              <span style="width: 64px">X</span>
+              <span style="width: 64px">Y</span>
+              <span style="width: 48px">cat</span>
+            </div>
+            <!-- filled by JS -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // ── State ────────────────────────────────────────────────────────────────
+      let drawerOpen = true;
+      let drawerH = 280;
+      let activeTab = "table";
+      let activeVariant = "A";
+      let playing = false;
+      let playInterval = null;
+      let activeFrame = 0;
+      let trackLoaded = false;
+
+      // Seeded random
+      let seed = 37;
+      function rand() {
+        seed = (seed * 16807) % 2147483647;
+        return (seed - 1) / 2147483646;
+      }
+
+      // ── Generate fake trajectory ─────────────────────────────────────────────
+      const TRACK_T = [4, 7, 10, 14, 18, 22, 28, 34, 41, 50, 58, 65, 71, 78, 85];
+      const track = TRACK_T.map((t, i) => {
+        seed = t * 17 + 3;
+        return {
+          t,
+          x: 120 + Math.sin(i * 0.5) * 60 + rand() * 15,
+          y: 80 + Math.cos(i * 0.4) * 40 + rand() * 12,
+          cat: ["Mitotic", "G1/S", "S", "G2", "M"][Math.floor(rand() * 5)],
+        };
+      });
+
+      // ── Generate fake table rows ─────────────────────────────────────────────
+      const CELL_TYPES = ["Epithelial", "Stromal", "Immune", "Endothelial", "Fibroblast"];
+      const FOVS = ["A/1/000001", "A/1/000002", "A/2/000001", "B/1/000000"];
+      const DATASETS = ["ds_001", "ds_002"];
+      seed = 42;
+      const tableRows = Array.from({ length: 120 }, (_, i) => ({
+        row: i,
+        dataset: DATASETS[Math.floor(rand() * 2)],
+        cell_type: CELL_TYPES[Math.floor(rand() * 5)],
+        track_id: Math.floor(rand() * 200),
+        fov: FOVS[Math.floor(rand() * 4)],
+        t: Math.floor(rand() * 90),
+        x: (rand() * 200).toFixed(1),
+        y: (rand() * 150).toFixed(1),
+      }));
+
+      // ── Scatter background ───────────────────────────────────────────────────
+      function drawScatter() {
+        const c = document.getElementById("scatter-canvas");
+        const W = c.clientWidth,
+          H = c.clientHeight;
+        c.width = W * devicePixelRatio;
+        c.height = H * devicePixelRatio;
+        const ctx = c.getContext("2d");
+        ctx.scale(devicePixelRatio, devicePixelRatio);
+        ctx.fillStyle = "hsl(222 16% 8%)";
+        ctx.fillRect(0, 0, W, H);
+        seed = 99;
+        const clusters = [
+          [0.35, 0.45],
+          [0.65, 0.38],
+          [0.5, 0.72],
+          [0.22, 0.6],
+          [0.78, 0.58],
+          [0.5, 0.3],
+        ];
+        for (let i = 0; i < 800; i++) {
+          const cl = clusters[Math.floor(rand() * clusters.length)];
+          const x = cl[0] + (rand() - 0.5) * 0.22,
+            y = cl[1] + (rand() - 0.5) * 0.18;
+          ctx.beginPath();
+          ctx.arc(x * W, y * H, 2, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(130,140,175,${0.08 + rand() * 0.1})`;
+          ctx.fill();
+        }
+      }
+
+      // ── Table rendering ──────────────────────────────────────────────────────
+      function renderTable() {
+        const tbody = document.getElementById("table-body");
+        tbody.innerHTML = "";
+        tableRows.forEach((r, i) => {
+          const tr = document.createElement("tr");
+          if (i === 7) tr.className = "highlighted";
+          tr.innerHTML = `
+            <td>${r.row}</td>
+            <td>${r.dataset}</td>
+            <td>${r.cell_type}</td>
+            <td>${r.track_id}</td>
+            <td>${r.fov}</td>
+            <td class="tabular-nums">${r.t}</td>
+            <td class="tabular-nums">${r.x}</td>
+            <td class="tabular-nums">${r.y}</td>
+          `;
+          tbody.appendChild(tr);
+        });
+      }
+
+      // ── Filmstrip ────────────────────────────────────────────────────────────
+      function buildFilmstrip() {
+        const bar = document.getElementById("filmstrip-bar");
+        bar.innerHTML = "";
+        track.forEach((pt, i) => {
+          const thumb = document.createElement("div");
+          thumb.className = "filmstrip-thumb" + (i === activeFrame ? " active" : "");
+          thumb.id = `thumb-${i}`;
+          // Noise canvas
+          const nc = document.createElement("canvas");
+          nc.width = 44;
+          nc.height = 36;
+          const nctx = nc.getContext("2d");
+          seed = pt.t * 13 + 7;
+          nctx.fillStyle = `hsl(${210 + rand() * 15}, 12%, ${9 + rand() * 4}%)`;
+          nctx.fillRect(0, 0, 44, 36);
+          nctx.beginPath();
+          nctx.ellipse(
+            22 + (rand() - 0.5) * 6,
+            18 + (rand() - 0.5) * 4,
+            8 + rand() * 4,
+            6 + rand() * 3,
+            rand() * Math.PI,
+            0,
+            Math.PI * 2,
+          );
+          nctx.fillStyle = `hsla(${190 + rand() * 40}, 55%, 55%, 0.3)`;
+          nctx.fill();
+          thumb.appendChild(nc);
+          const lbl = document.createElement("span");
+          lbl.className = "ft-lbl";
+          lbl.textContent = `T${pt.t}`;
+          thumb.appendChild(lbl);
+          thumb.onclick = () => scrubTo(i);
+          bar.appendChild(thumb);
+        });
+      }
+
+      function updateFilmstrip() {
+        track.forEach((_, i) => {
+          const th = document.getElementById(`thumb-${i}`);
+          if (th) th.className = "filmstrip-thumb" + (i === activeFrame ? " active" : "");
+        });
+        // Scroll active into view
+        const active = document.getElementById(`thumb-${activeFrame}`);
+        active?.scrollIntoView({ block: "nearest", behavior: "smooth", inline: "nearest" });
+      }
+
+      // ── Frame list rendering ─────────────────────────────────────────────────
+      function renderFrameList() {
+        const list = document.getElementById("frame-list");
+        // keep header
+        const header = list.querySelector(".frame-list-header");
+        list.innerHTML = "";
+        if (header) list.appendChild(header);
+
+        track.forEach((pt, i) => {
+          const row = document.createElement("button");
+          row.className = "frame-row" + (i === activeFrame ? " active" : "");
+          row.id = `frow-${i}`;
+          row.innerHTML = `
+            <span class="tc">${pt.t}</span>
+            <span class="xc tabular-nums">${pt.x.toFixed(1)}</span>
+            <span class="yc tabular-nums">${pt.y.toFixed(1)}</span>
+            <span class="catc">${pt.cat}</span>
+            ${i === activeFrame ? '<span class="frame-now">◀ now</span>' : ""}
+          `;
+          row.onclick = () => scrubTo(i);
+          list.appendChild(row);
+        });
+      }
+
+      function updateFrameList() {
+        track.forEach((_, i) => {
+          const row = document.getElementById(`frow-${i}`);
+          if (!row) return;
+          row.className = "frame-row" + (i === activeFrame ? " active" : "");
+          const now = row.querySelector(".frame-now");
+          if (i === activeFrame && !now) {
+            const s = document.createElement("span");
+            s.className = "frame-now";
+            s.textContent = "◀ now";
+            row.appendChild(s);
+          } else if (i !== activeFrame && now) {
+            now.remove();
+          }
+        });
+        // Scroll active row into view
+        const active = document.getElementById(`frow-${activeFrame}`);
+        active?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      }
+
+      function updateTVal() {
+        document.getElementById("t-val").textContent = `T=${track[activeFrame].t}`;
+        document.getElementById("t-slider").value = activeFrame;
+      }
+
+      // ── Track controls ───────────────────────────────────────────────────────
+      function scrubTo(idx) {
+        activeFrame = Math.max(0, Math.min(track.length - 1, idx));
+        updateTVal();
+        updateFrameList();
+        if (activeVariant === "C") updateFilmstrip();
+      }
+
+      function stepTrack(dir) {
+        scrubTo(activeFrame + dir);
+      }
+
+      function togglePlay() {
+        playing = !playing;
+        const btn = document.getElementById("play-btn");
+        btn.textContent = playing ? "⏸" : "▶";
+        btn.className = "ctrl-btn" + (playing ? " playing" : "");
+        if (playing) {
+          playInterval = setInterval(
+            () =>
+              stepTrack(1) ||
+              (activeFrame === track.length - 1 &&
+                ((playing = false),
+                (btn.textContent = "▶"),
+                (btn.className = "ctrl-btn"),
+                clearInterval(playInterval))),
+            220,
+          );
+        } else {
+          clearInterval(playInterval);
+        }
+      }
+
+      function clearTrack() {
+        playing = false;
+        clearInterval(playInterval);
+        document.getElementById("play-btn").textContent = "▶";
+        document.getElementById("play-btn").className = "ctrl-btn";
+        trackLoaded = false;
+        document.getElementById("track-active").style.display = "none";
+        document.getElementById("track-empty").style.display = "flex";
+        document.getElementById("track-dot").style.display = "none";
+      }
+
+      function loadDemoTrack() {
+        trackLoaded = true;
+        activeFrame = 0;
+        document.getElementById("track-empty").style.display = "none";
+        const ta = document.getElementById("track-active");
+        ta.style.display = "flex";
+        document.getElementById("frame-count").textContent = `${track.length} frames`;
+        document.getElementById("t-slider").max = track.length - 1;
+        document.getElementById("track-dot").style.display = "inline-block";
+
+        if (activeVariant === "C") {
+          document.getElementById("filmstrip-bar").style.display = "flex";
+          buildFilmstrip();
+        } else {
+          document.getElementById("filmstrip-bar").style.display = "none";
+        }
+
+        renderFrameList();
+        updateTVal();
+      }
+
+      // ── Tab / variant switching ──────────────────────────────────────────────
+      function switchTab(tab) {
+        activeTab = tab;
+        ["table", "track"].forEach((t) => {
+          document.getElementById(`tab-${t}`).className = "tab" + (t === tab ? " active" : "");
+          document.getElementById(`content-${t}`).className = "tab-content" + (t === tab ? " active" : "");
+        });
+      }
+
+      function setVariant(v) {
+        activeVariant = v;
+        document.querySelectorAll(".vbtn").forEach((b) => b.classList.remove("active"));
+        event.target.classList.add("active");
+
+        if (v === "A") {
+          switchTab("table");
+        } else {
+          switchTab("track");
+          if (trackLoaded) {
+            document.getElementById("filmstrip-bar").style.display = v === "C" ? "flex" : "none";
+            if (v === "C") buildFilmstrip();
+          }
+        }
+      }
+
+      // ── Drawer resize ────────────────────────────────────────────────────────
+      const handle = document.getElementById("resize-handle");
+      let resizing = false,
+        resizeStartY = 0,
+        resizeStartH = 0;
+      handle.addEventListener("pointerdown", (e) => {
+        resizing = true;
+        resizeStartY = e.clientY;
+        resizeStartH = drawerH;
+        handle.setPointerCapture(e.pointerId);
+      });
+      handle.addEventListener("pointermove", (e) => {
+        if (!resizing) return;
+        const delta = resizeStartY - e.clientY;
+        drawerH = Math.max(80, Math.min(window.innerHeight - 80, resizeStartH + delta));
+        document.getElementById("drawer").style.height = drawerH + "px";
+      });
+      handle.addEventListener("pointerup", () => {
+        resizing = false;
+      });
+
+      function toggleDrawer() {
+        drawerOpen = !drawerOpen;
+        const d = document.getElementById("drawer");
+        d.classList.toggle("closed", !drawerOpen);
+        if (drawerOpen) d.style.height = drawerH + "px";
+      }
+
+      // Keyboard shortcut
+      document.addEventListener("keydown", (e) => {
+        if ((e.metaKey || e.ctrlKey) && e.key === "j") {
+          e.preventDefault();
+          toggleDrawer();
+        }
+      });
+
+      // ── Init ─────────────────────────────────────────────────────────────────
+      window.addEventListener("load", () => {
+        drawScatter();
+        renderTable();
+      });
+      window.addEventListener("resize", drawScatter);
+    </script>
+  </body>
+</html>

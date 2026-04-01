@@ -5,7 +5,7 @@ export function ViewerLoadingOverlay() {
 
   if (state.error) {
     return (
-      <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-surface/60 backdrop-blur-sm">
+      <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-surface/60 backdrop-blur-md">
         <span className="text-accent-rose text-xs">{state.error}</span>
       </div>
     );

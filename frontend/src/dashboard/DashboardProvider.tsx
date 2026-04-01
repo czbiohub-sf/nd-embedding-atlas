@@ -1,5 +1,6 @@
 import { Coordinator, restConnector, Selection } from "@uwdata/mosaic-core";
-import { activeFilterStore } from "../providers/ActiveFilterStore";
+import { activeFilterStore, clearObsSetFilter, setObsSetFilter } from "../providers/ActiveFilterStore";
+import { obsSetStore } from "../providers/ObsSetStore";
 import { stringPredicate } from "../lib/mosaic-helpers";
 import { type ReactNode, useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -74,6 +75,46 @@ export function DashboardProvider({ children }: Props) {
     });
     return () => sub.unsubscribe();
   }, [brushSelection]);
+
+  // ── obsSetStore → activeFilterStore bridge ────────────────────────────────
+  // Subscribes to obsSetStore; on activation fetches the SQL predicate from the
+  // backend and applies it via setObsSetFilter. Uses AbortController to cancel
+  // in-flight requests when the active obsset changes before the response arrives.
+  // TanStack Store subscribe() fires on setState only — no initial-mount guard needed.
+  useEffect(() => {
+    const abortRef = { current: new AbortController() };
+
+    const sub = obsSetStore.subscribe(() => {
+      abortRef.current.abort();
+      abortRef.current = new AbortController();
+
+      const { activeObsSetId } = obsSetStore.state;
+      if (!activeObsSetId) {
+        clearObsSetFilter();
+        return;
+      }
+
+      const idAtRequest = activeObsSetId;
+      fetch(`/api/obssets/${activeObsSetId}/activate`, {
+        method: "POST",
+        signal: abortRef.current.signal,
+      })
+        .then((r) => r.json())
+        .then(({ predicate }: { predicate: string }) => {
+          if (obsSetStore.state.activeObsSetId === idAtRequest) {
+            setObsSetFilter(idAtRequest, predicate);
+          }
+        })
+        .catch(() => {
+          // AbortError on unmount or rapid re-activation — ignore
+        });
+    });
+
+    return () => {
+      sub.unsubscribe();
+      abortRef.current.abort();
+    };
+  }, []);
 
   // Metadata
   const queryClient = useQueryClient();

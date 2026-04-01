@@ -3,6 +3,7 @@
  * Positioned as a canvas overlay; renders when a point is clicked.
  */
 import { useEffect, useState } from "react";
+import { Waypoints } from "lucide-react";
 import { jsonFetcher } from "../../lib/fetcher";
 import { cn } from "../../lib/utils";
 import { Separator } from "../ui/separator";
@@ -10,10 +11,18 @@ import { Separator } from "../ui/separator";
 interface PointInfoPaneProps {
   highlightId: string | null;
   additionalFields: string[];
-  onShowTrajectory: (trackId: number, fovName: string, clickedT?: number) => void;
+  trajectoryActive: boolean;
+  onShowTrajectory?: (trackId: number, fovName: string, clickedT?: number) => void;
+  onClearTrajectory: () => void;
 }
 
-export function PointInfoPane({ highlightId, additionalFields, onShowTrajectory }: PointInfoPaneProps) {
+export function PointInfoPane({
+  highlightId,
+  additionalFields,
+  trajectoryActive,
+  onShowTrajectory,
+  onClearTrajectory,
+}: PointInfoPaneProps) {
   const [row, setRow] = useState<Record<string, string | null> | null>(null);
 
   useEffect(() => {
@@ -35,7 +44,7 @@ export function PointInfoPane({ highlightId, additionalFields, onShowTrajectory 
 
   if (!highlightId || !row) return null;
 
-  const fields = ["__row_index__", ...additionalFields];
+  const fields = [...additionalFields];
   const trackId = row.track_id;
   const fovName = row.fov_name;
   const canShowTrajectory = trackId && trackId !== "—" && fovName && fovName !== "—";
@@ -43,7 +52,7 @@ export function PointInfoPane({ highlightId, additionalFields, onShowTrajectory 
   return (
     <div
       className={cn(
-        "rounded-lg border border-border/50 bg-card/80 backdrop-blur-md",
+        "rounded-lg border border-white/[0.07] bg-card/80 backdrop-blur-md",
         "p-2.5 shadow-md min-w-[160px] max-w-[220px]",
         "font-mono text-[11px]",
       )}
@@ -62,16 +71,26 @@ export function PointInfoPane({ highlightId, additionalFields, onShowTrajectory 
         ))}
       </div>
 
-      {/* Trajectory action */}
+      {/* Trajectory toggle */}
       {canShowTrajectory && (
         <>
           <Separator className="my-2 opacity-40" />
           <button
             type="button"
-            onClick={() => onShowTrajectory(Number(trackId), String(fovName), row.t ? Number(row.t) : undefined)}
-            className="w-full rounded-sm border border-border/40 bg-muted/30 px-2 py-1 text-[10px] text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+            onClick={() =>
+              trajectoryActive
+                ? onClearTrajectory()
+                : onShowTrajectory?.(Number(trackId), String(fovName), row.t ? Number(row.t) : undefined)
+            }
+            className={cn(
+              "flex w-full items-center justify-center gap-1.5 rounded-sm border px-2 py-1 text-[10px] transition-colors",
+              trajectoryActive
+                ? "border-primary/40 bg-primary/10 text-primary hover:bg-primary/20"
+                : "border-border/40 bg-muted/30 text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+            )}
           >
-            → Show Trajectory
+            <Waypoints className="size-3" />
+            {trajectoryActive ? "Tracking" : "Show Trajectory"}
           </button>
         </>
       )}

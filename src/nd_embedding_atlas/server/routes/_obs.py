@@ -1,8 +1,10 @@
 """Observation lookup and health endpoints."""
 
-import asyncio
 from collections.abc import Callable
+from functools import partial
 from typing import Annotated
+
+import anyio
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
@@ -36,8 +38,9 @@ def make_obs_router(get_state: Callable[[], ViewerState]) -> APIRouter:
         if not select_cols:
             return JSONResponse({"error": "No spatial columns configured"}, status_code=404)
 
-        loop = asyncio.get_running_loop()
-        row = await loop.run_in_executor(state.executor, _lookup_obs, row_index, select_cols, state)
+        row = await anyio.to_thread.run_sync(
+            partial(_lookup_obs, row_index, select_cols, state), cancellable=True
+        )
 
         if row is None:
             return JSONResponse({"error": "Observation not found"}, status_code=404)
@@ -67,6 +70,45 @@ def make_obs_router(get_state: Callable[[], ViewerState]) -> APIRouter:
 
         return response
 
+    @router.get("/api/obs/batch", response_model=None)
+    async def get_obs_batch(ids: str, state: State) -> JSONResponse:
+        """Return x/y centroids for multiple observations in one query.
+
+        Parameters
+        ----------
+        ids
+            Comma-separated row indices (e.g. ``?ids=1,2,3``).
+        """
+        sp = state.spatial
+        x_col = sp.x
+        y_col = sp.y
+
+        if not x_col or not y_col:
+            return JSONResponse({})
+
+        try:
+            row_indices = [int(i) for i in ids.split(",") if i.strip()]
+        except ValueError:
+            return JSONResponse({"error": "ids must be comma-separated integers"}, status_code=422)
+
+        if not row_indices:
+            return JSONResponse({})
+
+        def _batch_lookup(indices: list[int]) -> dict[str, dict]:
+            placeholders = ", ".join("?" * len(indices))
+            with state.store.cursor() as cur:
+                rows = cur.execute(
+                    f'SELECT __row_index__, "{x_col}", "{y_col}" '
+                    f"FROM obs_base WHERE __row_index__ IN ({placeholders})",
+                    indices,
+                ).fetchall()
+            return {str(r[0]): {"x": float(r[1]), "y": float(r[2])} for r in rows}
+
+        result = await anyio.to_thread.run_sync(
+            partial(_batch_lookup, row_indices), cancellable=True
+        )
+        return JSONResponse(result)
+
     @router.get("/api/obs/{row_index}/detail", response_model=None)
     async def get_obs_detail(row_index: int, state: State) -> dict | JSONResponse:
         """Return all visible obs columns for a single observation (bypasses Mosaic)."""
@@ -86,8 +128,9 @@ def make_obs_router(get_state: Callable[[], ViewerState]) -> APIRouter:
                 ).fetchone()
                 return (cols, row) if row is not None else None
 
-        loop = asyncio.get_running_loop()
-        result = await loop.run_in_executor(state.executor, _fetch, row_index, state)
+        result = await anyio.to_thread.run_sync(
+            partial(_fetch, row_index, state), cancellable=True
+        )
 
         if result is None:
             return JSONResponse({"error": "Observation not found"}, status_code=404)

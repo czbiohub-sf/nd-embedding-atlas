@@ -9,11 +9,12 @@ export interface LegendState {
   // Categorical
   isolatedIndices: Set<number>;
   colorOverrides: Map<number, string>;
+  disabledIndices: Set<number>;
   // Continuous (Phase 2)
   colormapName: string;
   colormapReversed: boolean;
   range: [number, number];
-  scale: "linear" | "log";
+  scale: "linear" | "log" | "sqrt";
 }
 
 // ── Actions ─────────────────────────────────────────────────────────────────
@@ -23,10 +24,13 @@ export interface LegendActions {
   toggleIsolation: (index: number, additive: boolean) => void;
   clearIsolation: () => void;
   setColorOverride: (index: number, color: string) => void;
+  clearColorOverride: (index: number) => void;
+  toggleDisabled: (index: number) => void;
+  clearDisabled: () => void;
   setColormap: (name: string) => void;
   setColormapReversed: (reversed: boolean) => void;
   setRange: (range: [number, number]) => void;
-  setScale: (scale: "linear" | "log") => void;
+  setScale: (scale: "linear" | "log" | "sqrt") => void;
 }
 
 // ── Meta ────────────────────────────────────────────────────────────────────
@@ -89,6 +93,7 @@ export function LegendProvider({
   const [mode, setMode] = useState<"categorical" | "continuous">("categorical");
   const [isolatedIndices, setIsolatedIndices] = useState<Set<number>>(new Set());
   const [colorOverrides, setColorOverrides] = useState<Map<number, string>>(new Map());
+  const [disabledIndices, setDisabledIndices] = useState<Set<number>>(new Set());
 
   // ── Notify parent of isolation changes so it can update Mosaic ────────────
   // Mosaic's brushSelection.update() must be called from ScatterPanel where
@@ -99,7 +104,7 @@ export function LegendProvider({
   const [colormapName, setColormapName] = useState("viridis");
   const [colormapReversed, setColormapReversed] = useState(false);
   const [range, setRange] = useState<[number, number]>([0, 1]);
-  const [scale, setScale] = useState<"linear" | "log">("linear");
+  const [scale, setScale] = useState<"linear" | "log" | "sqrt">("linear");
 
   const toggleIsolation = useCallback((index: number, additive: boolean) => {
     setIsolatedIndices((prev) => {
@@ -132,17 +137,40 @@ export function LegendProvider({
     });
   }, []);
 
+  const clearColorOverride = useCallback((index: number) => {
+    setColorOverrides((prev) => {
+      const next = new Map(prev);
+      next.delete(index);
+      return next;
+    });
+  }, []);
+
+  const toggleDisabled = useCallback((index: number) => {
+    setDisabledIndices((prev) => {
+      const next = new Set(prev);
+      if (next.has(index)) {
+        next.delete(index);
+      } else {
+        next.add(index);
+      }
+      return next;
+    });
+  }, []);
+
+  const clearDisabled = useCallback(() => setDisabledIndices(new Set()), []);
+
   const state: LegendState = useMemo(
     () => ({
       mode,
       isolatedIndices,
       colorOverrides,
+      disabledIndices,
       colormapName,
       colormapReversed,
       range,
       scale,
     }),
-    [mode, isolatedIndices, colorOverrides, colormapName, colormapReversed, range, scale],
+    [mode, isolatedIndices, colorOverrides, disabledIndices, colormapName, colormapReversed, range, scale],
   );
 
   const actions: LegendActions = useMemo(
@@ -151,12 +179,15 @@ export function LegendProvider({
       toggleIsolation,
       clearIsolation,
       setColorOverride,
+      clearColorOverride,
+      toggleDisabled,
+      clearDisabled,
       setColormap: setColormapName,
       setColormapReversed,
       setRange,
       setScale,
     }),
-    [toggleIsolation, clearIsolation, setColorOverride],
+    [toggleIsolation, clearIsolation, setColorOverride, clearColorOverride, toggleDisabled, clearDisabled],
   );
 
   const legend = categoryMapping?.legend ?? EMPTY_LEGEND;
@@ -184,7 +215,7 @@ export function LegendProvider({
 export function useEffectiveCategoryColors(): string[] | null {
   const { state, meta } = useLegend();
   const { legend } = meta;
-  const { colorOverrides, isolatedIndices } = state;
+  const { colorOverrides, isolatedIndices, disabledIndices } = state;
 
   return useMemo(() => {
     if (legend.length === 0) return null;
@@ -192,11 +223,13 @@ export function useEffectiveCategoryColors(): string[] | null {
     const hasIsolation = isolatedIndices.size > 0;
 
     return legend.map((item) => {
+      // Priority: disabled > isolation-dim > normal
+      if (disabledIndices.has(item.index)) return "#00000000"; // alpha=0
       const baseColor = colorOverrides.get(item.index) ?? item.color;
       if (hasIsolation && !isolatedIndices.has(item.index)) {
         return DIM_COLOR;
       }
       return baseColor;
     });
-  }, [legend, colorOverrides, isolatedIndices]);
+  }, [legend, colorOverrides, isolatedIndices, disabledIndices]);
 }

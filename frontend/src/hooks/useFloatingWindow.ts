@@ -1,5 +1,7 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useDrag } from "./useDrag";
+
+export type ResizeEdge = "n" | "ne" | "e" | "se" | "s" | "sw" | "w" | "nw";
 
 export interface FloatingWindowState {
   x: number;
@@ -20,7 +22,7 @@ export interface FloatingWindowHandle {
   dragHandleProps: {
     onPointerDown: (e: React.PointerEvent) => void;
   };
-  resizeHandleProps: {
+  getResizeProps: (edge: ResizeEdge) => {
     onPointerDown: (e: React.PointerEvent) => void;
   };
 }
@@ -33,6 +35,13 @@ interface Options {
   minWidth?: number;
   minHeight?: number;
 }
+
+type ResizeOrigin = Record<string, number> & {
+  originX: number;
+  originY: number;
+  originW: number;
+  originH: number;
+};
 
 export function useFloatingWindow(opts: Options = {}): FloatingWindowHandle {
   const {
@@ -53,18 +62,40 @@ export function useFloatingWindow(opts: Options = {}): FloatingWindowHandle {
     minimized: false,
   });
 
+  // Which edge is being dragged — set before useDrag fires onMove
+  const activeEdgeRef = useRef<ResizeEdge>("se");
+
   const drag = useDrag<{ originX: number; originY: number }>({
     onMove: (dx, dy, origin) => setState((s) => ({ ...s, x: origin.originX + dx, y: origin.originY + dy })),
     skipInteractive: true,
   });
 
-  const resize = useDrag<{ originW: number; originH: number }>({
-    onMove: (dx, dy, origin) =>
-      setState((s) => ({
-        ...s,
-        width: Math.max(minWidth, origin.originW + dx),
-        height: Math.max(minHeight, origin.originH + dy),
-      })),
+  const resize = useDrag<ResizeOrigin>({
+    onMove: (dx, dy, origin) => {
+      const edge = activeEdgeRef.current;
+      setState((s) => {
+        let { x, y, width, height } = s;
+
+        if (edge.includes("e")) {
+          width = Math.max(minWidth, origin.originW + dx);
+        }
+        if (edge.includes("w")) {
+          const w = Math.max(minWidth, origin.originW - dx);
+          x = origin.originX + origin.originW - w;
+          width = w;
+        }
+        if (edge.includes("s")) {
+          height = Math.max(minHeight, origin.originH + dy);
+        }
+        if (edge.includes("n")) {
+          const h = Math.max(minHeight, origin.originH - dy);
+          y = origin.originY + origin.originH - h;
+          height = h;
+        }
+
+        return { ...s, x, y, width, height };
+      });
+    },
   });
 
   return {
@@ -77,8 +108,16 @@ export function useFloatingWindow(opts: Options = {}): FloatingWindowHandle {
     dragHandleProps: {
       onPointerDown: (e) => drag.start(e, { originX: state.x, originY: state.y }),
     },
-    resizeHandleProps: {
-      onPointerDown: (e) => resize.start(e, { originW: state.width, originH: state.height }),
-    },
+    getResizeProps: (edge) => ({
+      onPointerDown: (e) => {
+        activeEdgeRef.current = edge;
+        resize.start(e, {
+          originX: state.x,
+          originY: state.y,
+          originW: state.width,
+          originH: state.height,
+        });
+      },
+    }),
   };
 }

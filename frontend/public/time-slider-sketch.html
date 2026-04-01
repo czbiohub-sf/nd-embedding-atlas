@@ -1,0 +1,456 @@
+<!doctype html>
+<!--
+  Global Time Slider Sketch
+  ──────────────────────────────────────────────────────────────────────────────
+  Explores placement + interaction patterns for a unified time control that
+  drives both the image viewer T index and the Mosaic scatter filter.
+
+  Panel A — Bottom Dock Integration
+    Thin T slider appended to the right of the existing metrics area.
+    Compact: 120px wide, 3px track, no label. Shows current T as a badge.
+    Plays well with the 24px dock height.
+
+  Panel B — Scatter Overlay (floating HUD pill)
+    Glass pill above the scatter canvas, top-center.
+    Full labeling: T= value, play/pause, step buttons.
+    Matches the ScatterOverlayControls style.
+
+  Panel C — Scatter Overlay + Track Filmstrip
+    When a trajectory is active, the slider shows tick marks at each tracked
+    timepoint. Scrubbing jumps only between tracked T values.
+    Below the slider: mini filmstrip thumbnails (placeholder crops).
+
+  Interaction model:
+    • Without trajectory: slider = global time filter (scatter/table show t=T)
+    • With trajectory:   slider = track scrubber (snaps to tracked timepoints)
+    • Both update viewer T and Mosaic t= predicate simultaneously
+  ──────────────────────────────────────────────────────────────────────────────
+-->
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Global Time Slider Sketch</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        background: hsl(222 16% 8%);
+        color: hsl(210 20% 92%);
+        font-family: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
+        min-height: 100vh;
+        padding: 2rem;
+        display: flex;
+        flex-direction: column;
+        gap: 2.5rem;
+      }
+      h1 { font-size: 12px; color: hsl(215 14% 48%); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 0.5rem; }
+      h2 { font-size: 11px; color: hsl(215 14% 55%); margin-bottom: 6px; }
+      .section { display: flex; flex-direction: column; gap: 10px; }
+      .label { font-size: 10px; color: hsl(215 14% 40%); }
+
+      /* ── Bottom Dock mock ── */
+      .dock {
+        display: flex;
+        align-items: center;
+        height: 24px;
+        background: hsl(222 14% 10% / 0.8);
+        border: 1px solid hsl(222 14% 20% / 0.4);
+        border-radius: 6px;
+        padding: 0 8px;
+        gap: 0;
+        font-size: 11px;
+        color: hsl(215 14% 50%);
+        backdrop-filter: blur(8px);
+        max-width: 820px;
+      }
+      .dock-sep { width: 1px; height: 12px; background: hsl(215 14% 30% / 0.6); margin: 0 8px; }
+      .dock-metric { color: hsl(215 14% 65%); font-size: 11px; tabular-nums; }
+      .dock-metric.sel { color: oklch(0.585 0.233 277.117 / 80%); }
+      .dock-spacer { flex: 1; }
+      .dock-icon { opacity: 0.5; font-size: 10px; cursor: pointer; }
+      .dock-icon:hover { opacity: 1; }
+
+      /* ── Compact dock slider ── */
+      .dock-t-slider {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+      }
+      .dock-t-slider span.lbl { font-size: 10px; color: hsl(215 14% 45%); }
+      .dock-t-slider input[type=range] {
+        width: 100px;
+        accent-color: oklch(0.585 0.233 277.117);
+        height: 3px;
+        cursor: pointer;
+      }
+      .t-val {
+        font-size: 10px;
+        color: oklch(0.585 0.233 277.117);
+        background: oklch(0.585 0.233 277.117 / 12%);
+        border: 1px solid oklch(0.585 0.233 277.117 / 30%);
+        border-radius: 3px;
+        padding: 0 4px;
+        min-width: 22px;
+        text-align: center;
+      }
+
+      /* ── Overlay pill ── */
+      .scatter-mock {
+        position: relative;
+        background: hsl(222 14% 9%);
+        border: 1px solid hsl(222 14% 18%);
+        border-radius: 10px;
+        height: 240px;
+        overflow: hidden;
+        max-width: 600px;
+      }
+      .scatter-dots {
+        position: absolute;
+        inset: 0;
+      }
+      .overlay-pill {
+        position: absolute;
+        top: 10px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: hsl(222 14% 11% / 0.85);
+        backdrop-filter: blur(12px);
+        border: 1px solid hsl(222 14% 22% / 0.6);
+        border-radius: 8px;
+        padding: 5px 10px;
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 11px;
+        color: hsl(215 14% 55%);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+      }
+      .overlay-pill input[type=range] {
+        width: 140px;
+        accent-color: oklch(0.585 0.233 277.117);
+        height: 3px;
+      }
+      .pill-btn {
+        background: none;
+        border: 1px solid hsl(222 14% 25%);
+        border-radius: 4px;
+        color: hsl(215 14% 55%);
+        font-size: 10px;
+        cursor: pointer;
+        padding: 1px 5px;
+        font-family: inherit;
+      }
+      .pill-btn:hover { background: hsl(222 14% 16%); color: hsl(210 20% 85%); }
+      .pill-btn.active { background: oklch(0.585 0.233 277.117 / 15%); color: oklch(0.585 0.233 277.117); border-color: oklch(0.585 0.233 277.117 / 40%); }
+
+      /* ── Track filmstrip ── */
+      .filmstrip-pill {
+        position: absolute;
+        top: 10px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: hsl(222 14% 11% / 0.88);
+        backdrop-filter: blur(12px);
+        border: 1px solid hsl(222 14% 22% / 0.6);
+        border-radius: 8px;
+        padding: 7px 10px 6px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        min-width: 360px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+      }
+      .filmstrip-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11px;
+        color: hsl(215 14% 50%);
+      }
+      .filmstrip-row input[type=range] {
+        flex: 1;
+        accent-color: oklch(0.585 0.233 277.117);
+        height: 3px;
+      }
+      .filmstrip-thumbs {
+        display: flex;
+        gap: 3px;
+        overflow-x: auto;
+        padding-bottom: 2px;
+      }
+      .filmstrip-thumb {
+        flex-shrink: 0;
+        width: 40px;
+        height: 32px;
+        border-radius: 4px;
+        border: 1.5px solid transparent;
+        background: hsl(222 14% 16%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 9px;
+        color: hsl(215 14% 40%);
+        cursor: pointer;
+        transition: border-color 0.1s;
+        position: relative;
+        overflow: hidden;
+      }
+      .filmstrip-thumb.active {
+        border-color: oklch(0.585 0.233 277.117);
+      }
+      .filmstrip-thumb.active::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: oklch(0.585 0.233 277.117 / 15%);
+      }
+      .filmstrip-thumb .t-lbl {
+        position: absolute;
+        bottom: 2px;
+        left: 0; right: 0;
+        text-align: center;
+        font-size: 8px;
+        color: hsl(215 14% 55%);
+      }
+      /* Simulated image noise */
+      .filmstrip-thumb canvas { position: absolute; inset: 0; opacity: 0.6; }
+
+      /* Layout */
+      .two-col { display: flex; gap: 2rem; flex-wrap: wrap; }
+      .col { flex: 1; min-width: 280px; display: flex; flex-direction: column; gap: 10px; }
+    </style>
+  </head>
+  <body>
+    <h1>Global Time Slider Sketch</h1>
+
+    <!-- A: Bottom Dock -->
+    <div class="section">
+      <h2>A — Bottom Dock Placement</h2>
+      <div class="label">
+        Appended after the metrics area. 100px slider, compact T badge. No labels — minimal footprint.
+      </div>
+      <div class="dock">
+        <!-- Left: scatter dots -->
+        <span style="margin-right: 4px; color: oklch(0.585 0.233 277.117)">●</span>
+        <span style="margin-right: 1px; color: oklch(0.65 0.18 140); opacity: 0.4">●</span>
+        <span style="margin: 0 1px; color: oklch(0.75 0.18 45); opacity: 0.4">●</span>
+        <span style="opacity: 0.5; font-size: 10px; margin: 0 3px">+</span>
+        <div class="dock-sep"></div>
+        <!-- Table / viewer icons -->
+        <span class="dock-icon" style="margin-right: 6px">⊞</span>
+        <span class="dock-icon" style="margin-right: 2px">⊡</span>
+        <div class="dock-spacer"></div>
+        <!-- Status -->
+        <span class="dock-metric">12,402</span>
+        <span class="dock-sep"></span>
+        <span class="dock-metric sel">847 sel</span>
+        <span class="dock-sep"></span>
+        <span class="dock-metric">2.4×</span>
+        <span class="dock-sep"></span>
+        <span class="dock-metric" style="opacity: 0.55">58fps</span>
+        <div class="dock-sep"></div>
+        <!-- T Slider -->
+        <div class="dock-t-slider">
+          <span class="lbl">T</span>
+          <input type="range" id="dockSlider" min="0" max="65" value="12" step="1" />
+          <span class="t-val" id="dockVal">12</span>
+        </div>
+        <div class="dock-sep"></div>
+        <span class="dock-icon">›</span>
+        <span class="dock-icon" style="margin-left: 6px">⊟</span>
+        <span class="dock-icon" style="margin-left: 4px">☀</span>
+      </div>
+      <div class="label">Current T propagates to: image viewer T index + Mosaic <code>t = {T}</code> filter</div>
+    </div>
+
+    <!-- B + C side by side -->
+    <div class="two-col">
+      <!-- B: Floating overlay pill -->
+      <div class="col">
+        <h2>B — Scatter Overlay Pill (floating HUD)</h2>
+        <div class="label">
+          Draggable glass pill, top-center of scatter. Play/pause + step. Same style as ScatterOverlayControls.
+        </div>
+        <div class="scatter-mock">
+          <canvas id="scatterDots" class="scatter-dots"></canvas>
+          <div class="overlay-pill">
+            <button class="pill-btn" id="stepBack" title="step back">‹</button>
+            <button class="pill-btn active" id="playBtn" title="play/pause">▶</button>
+            <button class="pill-btn" id="stepFwd" title="step forward">›</button>
+            <span style="color: hsl(215 14% 35%)">|</span>
+            <span style="font-size: 10px; color: hsl(215 14% 45%)">T</span>
+            <input type="range" id="overlaySlider" min="0" max="65" value="18" step="1" />
+            <span class="t-val" id="overlayVal">18</span>
+          </div>
+        </div>
+        <div class="label">When playing: 200ms per frame. Mosaic filter + viewer update each frame.</div>
+      </div>
+
+      <!-- C: Track scrubber + filmstrip -->
+      <div class="col">
+        <h2>C — Track Scrubber + Filmstrip</h2>
+        <div class="label">
+          When trajectory is active: slider snaps to tracked T values. Filmstrip shows crop at each T.
+        </div>
+        <div class="scatter-mock">
+          <canvas id="scatterDots2" class="scatter-dots"></canvas>
+          <div class="filmstrip-pill">
+            <div class="filmstrip-row">
+              <span style="font-size: 10px; color: oklch(0.585 0.233 277.117)">T*</span>
+              <input type="range" id="trackSlider" min="0" max="9" value="4" step="1" />
+              <span class="t-val" id="trackVal" style="color: oklch(0.585 0.233 277.117)">T=18</span>
+              <button class="pill-btn" id="clearTrack" style="font-size: 9px; padding: 1px 4px">✕ track</button>
+            </div>
+            <div class="filmstrip-thumbs" id="filmstrip"></div>
+          </div>
+        </div>
+        <div class="label">
+          Tracked timepoints: 4, 7, 10, 14, 18, 22, 28, 34, 41, 50. Clicking a thumb jumps to that T.
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // ── Seeded random ────────────────────────────────────────────────────────
+      let seed = 99;
+      function rand() {
+        seed = (seed * 16807) % 2147483647;
+        return (seed - 1) / 2147483646;
+      }
+
+      // ── Dock slider ──────────────────────────────────────────────────────────
+      document.getElementById("dockSlider").addEventListener("input", function () {
+        document.getElementById("dockVal").textContent = this.value;
+      });
+
+      // ── Scatter point cloud (shared mock) ───────────────────────────────────
+      function drawScatterMock(canvasId) {
+        const c = document.getElementById(canvasId);
+        if (!c) return;
+        const W = c.clientWidth,
+          H = c.clientHeight;
+        c.width = W * devicePixelRatio;
+        c.height = H * devicePixelRatio;
+        const ctx = c.getContext("2d");
+        ctx.scale(devicePixelRatio, devicePixelRatio);
+        ctx.fillStyle = "hsl(222 14% 9%)";
+        ctx.fillRect(0, 0, W, H);
+        seed = 42;
+        // Random point cloud — gaussian-ish clusters
+        const clusters = [
+          [0.35, 0.4],
+          [0.65, 0.35],
+          [0.5, 0.7],
+          [0.25, 0.65],
+          [0.75, 0.6],
+        ];
+        for (let i = 0; i < 600; i++) {
+          const cl = clusters[Math.floor(rand() * clusters.length)];
+          const x = cl[0] + (rand() - 0.5) * 0.25,
+            y = cl[1] + (rand() - 0.5) * 0.2;
+          const px = x * W,
+            py = y * H;
+          ctx.beginPath();
+          ctx.arc(px, py, 2, 0, Math.PI * 2);
+          ctx.fillStyle = "rgba(140,150,180,0.15)";
+          ctx.fill();
+        }
+      }
+
+      // ── Overlay slider ───────────────────────────────────────────────────────
+      let playing = false,
+        playInterval = null;
+      const overlaySlider = document.getElementById("overlaySlider");
+      const overlayVal = document.getElementById("overlayVal");
+      const playBtn = document.getElementById("playBtn");
+
+      overlaySlider.addEventListener("input", function () {
+        overlayVal.textContent = this.value;
+      });
+      document.getElementById("stepBack").addEventListener("click", () => {
+        overlaySlider.value = Math.max(0, +overlaySlider.value - 1);
+        overlayVal.textContent = overlaySlider.value;
+      });
+      document.getElementById("stepFwd").addEventListener("click", () => {
+        overlaySlider.value = Math.min(65, +overlaySlider.value + 1);
+        overlayVal.textContent = overlaySlider.value;
+      });
+      playBtn.addEventListener("click", () => {
+        playing = !playing;
+        playBtn.textContent = playing ? "⏸" : "▶";
+        if (playing) {
+          playInterval = setInterval(() => {
+            let v = +overlaySlider.value + 1;
+            if (v > 65) v = 0;
+            overlaySlider.value = v;
+            overlayVal.textContent = v;
+          }, 200);
+        } else {
+          clearInterval(playInterval);
+        }
+      });
+
+      // ── Track filmstrip ──────────────────────────────────────────────────────
+      const TRACKED_T = [4, 7, 10, 14, 18, 22, 28, 34, 41, 50];
+      const trackSlider = document.getElementById("trackSlider");
+      const trackVal = document.getElementById("trackVal");
+
+      function buildFilmstrip(activeIdx) {
+        const fs = document.getElementById("filmstrip");
+        fs.innerHTML = "";
+        TRACKED_T.forEach((t, i) => {
+          const thumb = document.createElement("div");
+          thumb.className = "filmstrip-thumb" + (i === activeIdx ? " active" : "");
+          // Simulated image — noise canvas
+          const nc = document.createElement("canvas");
+          nc.width = 40;
+          nc.height = 32;
+          const nctx = nc.getContext("2d");
+          seed = t * 13 + 7;
+          nctx.fillStyle = `hsl(${200 + rand() * 20}, 12%, ${10 + rand() * 5}%)`;
+          nctx.fillRect(0, 0, 40, 32);
+          // Faint cell shape
+          nctx.beginPath();
+          nctx.arc(20 + (rand() - 0.5) * 6, 16 + (rand() - 0.5) * 4, 8 + rand() * 3, 0, Math.PI * 2);
+          nctx.fillStyle = `hsla(${200 + rand() * 30}, 50%, 55%, 0.25)`;
+          nctx.fill();
+          thumb.appendChild(nc);
+
+          const lbl = document.createElement("span");
+          lbl.className = "t-lbl";
+          lbl.textContent = `T${t}`;
+          thumb.appendChild(lbl);
+
+          thumb.addEventListener("click", () => {
+            trackSlider.value = i;
+            trackVal.textContent = `T=${TRACKED_T[i]}`;
+            buildFilmstrip(i);
+          });
+          fs.appendChild(thumb);
+        });
+      }
+
+      trackSlider.addEventListener("input", function () {
+        const i = +this.value;
+        trackVal.textContent = `T=${TRACKED_T[i]}`;
+        buildFilmstrip(i);
+      });
+      document.getElementById("clearTrack").addEventListener("click", () => {
+        trackVal.textContent = "—";
+        document.getElementById("filmstrip").innerHTML = "";
+        trackSlider.value = 0;
+      });
+
+      // ── Init ─────────────────────────────────────────────────────────────────
+      window.addEventListener("load", () => {
+        drawScatterMock("scatterDots");
+        drawScatterMock("scatterDots2");
+        buildFilmstrip(4);
+      });
+      window.addEventListener("resize", () => {
+        drawScatterMock("scatterDots");
+        drawScatterMock("scatterDots2");
+      });
+    </script>
+  </body>
+</html>

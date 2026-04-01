@@ -12,6 +12,14 @@ from nd_embedding_atlas.server._state import DatasetConfig, ViewerState
 from nd_embedding_atlas.vz._prepare import _obsm_column_prefix
 
 
+def _safe_var_count(collection: "Any") -> int:  # type: ignore[type-arg]
+    """Return var count without triggering ad.concat on lazy multi-dataset collections."""
+    try:
+        return len(collection.var_names)
+    except Exception:  # noqa: BLE001
+        return 0
+
+
 def _build_obsm_metadata(state: ViewerState) -> dict[str, Any]:
     """Build obsm metadata dict including loaded status."""
     meta: dict[str, Any] = {}
@@ -74,7 +82,7 @@ def make_data_router(get_state: Callable[[], ViewerState], config: DatasetConfig
             "obs_columns": config.obs_column_names,
             "plate": config.has_plate,
             "export_dir": str(state.export_dir),
-            "var_count": len(state.collection.var_names),
+            "var_count": _safe_var_count(state.collection),
             "layers": ["X", *layer_keys],
         }
         if config.plate_meta:

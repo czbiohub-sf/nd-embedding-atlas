@@ -12,6 +12,7 @@ import { useTheme } from "../../providers/ThemeProvider";
 
 import { ChartGroupPanel } from "./panels/ChartGroupPanel";
 import { ImageViewerPanel } from "./panels/ImageViewerPanel";
+import { ObsSetPanel } from "./panels/ObsSetPanel";
 import { PanelErrorBoundary } from "./PanelErrorBoundary";
 import { ScatterPanel } from "./panels/ScatterPanel";
 import { TablePanel } from "./panels/TablePanel";
@@ -95,13 +96,18 @@ const COMPONENTS = {
       <ChartGroupPanel {...props} />
     </PanelErrorBoundary>
   ),
+  obssets: () => (
+    <PanelErrorBoundary panelName="ObsSets">
+      <ObsSetPanel />
+    </PanelErrorBoundary>
+  ),
 };
 
 const STORAGE_KEY = "ndea_layout_v2"; // v2: table removed from Dockview (now TerminalTable ⌘J)
 
 // ── Default layout ───────────────────────────────────────────────────────
 
-function loadDefaultLayout(api: DockviewApi, hasPlate: boolean, hasEmbeddings: boolean) {
+function loadDefaultLayout(api: DockviewApi, hasEmbeddings: boolean) {
   // Scatter panel — only when embeddings exist
   if (hasEmbeddings) {
     api.addPanel({
@@ -113,17 +119,7 @@ function loadDefaultLayout(api: DockviewApi, hasPlate: boolean, hasEmbeddings: b
 
   // Table lives in TerminalTable (fixed ⌘J panel), not in Dockview
 
-  // Reference panel for the right sidebar
-  const sidebarRef = hasEmbeddings ? "scatter" : undefined;
-
-  if (hasPlate && sidebarRef) {
-    api.addPanel({
-      id: "image-viewer",
-      component: "image-viewer",
-      title: "Image Viewer",
-      position: { referencePanel: sidebarRef, direction: "right" },
-    });
-  }
+  // Image viewer is NOT added by default — user opens it via ⌘K or BottomDock.
   // Charts panel temporarily removed from default layout (⌘K will add them later)
 }
 
@@ -165,8 +161,9 @@ export function DockviewShell({ hasPlate, hasEmbeddings, onApiReady }: Props) {
           event.api.fromJSON(JSON.parse(saved));
 
           // Re-add any expected panels that were closed in a previous session
+          // Note: image-viewer is intentionally excluded — user opens it on demand.
           const basePanels = hasEmbeddings ? ["scatter"] : [];
-          const expectedPanels = hasPlate ? [...basePanels, "image-viewer"] : [...basePanels];
+          const expectedPanels = [...basePanels];
           for (const id of expectedPanels) {
             if (!event.api.getPanel(id)) {
               const component = id as keyof typeof COMPONENTS;
@@ -186,7 +183,7 @@ export function DockviewShell({ hasPlate, hasEmbeddings, onApiReady }: Props) {
         }
       }
 
-      loadDefaultLayout(event.api, hasPlate, hasEmbeddings);
+      loadDefaultLayout(event.api, hasEmbeddings);
     },
     [hasPlate, hasEmbeddings],
   );

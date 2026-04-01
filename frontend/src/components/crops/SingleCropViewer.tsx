@@ -112,11 +112,13 @@ export function SingleCropViewer({ cropSize }: Props) {
     if (!trajectory || !obsInfo) return;
     const frame = trajectory.points.find((p) => p.t === trajectory.tIndex);
     if (!frame) return;
+    // Drive the viewer T index so the image updates alongside the bbox
+    actions.setTIndex(trajectory.tIndex);
     // Only update bbox in 2D mode
     if (viewerState.viewMode === "2d") {
       updateBbox(frame.spatial_x, frame.spatial_y, cropSize / 2);
     }
-  }, [trajectory?.tIndex, trajectory?.points, cropSize, obsInfo, updateBbox, viewerState.viewMode, trajectory]);
+  }, [trajectory?.tIndex, trajectory?.points, cropSize, obsInfo, updateBbox, viewerState.viewMode, trajectory, actions]);
 
   if (!highlightId || !obsInfo) return null;
   return null;

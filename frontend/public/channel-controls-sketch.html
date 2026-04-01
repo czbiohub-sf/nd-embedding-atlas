@@ -1,0 +1,1047 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Channel Controls — Sketch</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #080a10;
+    --surface: rgba(12, 14, 20, 0.85);
+    --border: rgba(255, 255, 255, 0.08);
+    --border-hover: rgba(255, 255, 255, 0.15);
+    --text-primary: rgba(255, 255, 255, 0.92);
+    --text-secondary: rgba(255, 255, 255, 0.45);
+    --text-muted: rgba(255, 255, 255, 0.28);
+    --accent-purple: #9b7fe8;
+    --accent-cyan: #4dd9d9;
+    --accent-purple-dim: rgba(155, 127, 232, 0.15);
+    --accent-cyan-dim: rgba(77, 217, 217, 0.12);
+    --font: 'JetBrains Mono', ui-monospace, 'Cascadia Code', monospace;
+  }
+
+  html, body {
+    background: var(--bg);
+    color: var(--text-primary);
+    font-family: var(--font);
+    font-size: 12px;
+    min-height: 100vh;
+    overflow-x: auto;
+  }
+
+  body {
+    padding: 32px 24px 48px;
+  }
+
+  /* ── Page header ─────────────────────────────────────── */
+  .page-header {
+    text-align: center;
+    margin-bottom: 40px;
+  }
+
+  .page-header h1 {
+    font-size: 15px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+  }
+
+  .page-header .subtitle {
+    font-size: 10px;
+    color: var(--text-secondary);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .variant-labels {
+    display: flex;
+    gap: 24px;
+    justify-content: center;
+    margin-bottom: 20px;
+  }
+
+  .variant-label {
+    font-size: 10px;
+    color: var(--text-secondary);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    width: 380px;
+    text-align: center;
+    padding-bottom: 6px;
+    border-bottom: 1px solid rgba(155, 127, 232, 0.3);
+  }
+
+  /* ── Layout ──────────────────────────────────────────── */
+  .panels-row {
+    display: flex;
+    gap: 24px;
+    justify-content: center;
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  /* ── Viewer panel ────────────────────────────────────── */
+  .viewer-panel {
+    width: 380px;
+    height: 500px;
+    border-radius: 12px;
+    border: 1px solid rgba(155, 127, 232, 0.2);
+    overflow: hidden;
+    position: relative;
+    background: #05070d;
+    flex-shrink: 0;
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.6), 0 8px 32px rgba(0,0,0,0.5), 0 0 60px rgba(77, 217, 217, 0.03);
+  }
+
+  canvas.microscopy-bg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  /* ── Glass panel (channel controls) ─────────────────── */
+  .channel-panel {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    width: 240px;
+    background: var(--surface);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    transition: all 200ms ease;
+    z-index: 10;
+  }
+
+  /* ── Panel header ────────────────────────────────────── */
+  .panel-header {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 9px 10px 8px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(155, 127, 232, 0.06);
+    user-select: none;
+  }
+
+  .panel-header .header-icon {
+    color: var(--accent-purple);
+    flex-shrink: 0;
+    opacity: 0.85;
+  }
+
+  .panel-header .header-title {
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    flex: 1;
+  }
+
+  .minimize-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-muted);
+    padding: 2px 5px;
+    border-radius: 4px;
+    font-family: var(--font);
+    font-size: 13px;
+    line-height: 1;
+    transition: color 120ms, background 120ms;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .minimize-btn:hover {
+    color: var(--text-primary);
+    background: rgba(255,255,255,0.07);
+  }
+
+  /* ── Channel list ────────────────────────────────────── */
+  /* ── shadcn ScrollArea (mirrors @base-ui/react/scroll-area) ── */
+  /* Root: position:relative so the scrollbar positions against it */
+  .scroll-area-root {
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* Viewport: hides native scrollbar, exposes overflow-y:scroll */
+  .channel-list {
+    max-height: 320px;
+    overflow-y: scroll;
+    padding: 4px 0;
+    scrollbar-width: none;           /* Firefox */
+    border-radius: inherit;
+    outline: none;
+  }
+  .channel-list::-webkit-scrollbar { display: none; } /* Chrome/Safari */
+
+  /* Scrollbar track — data-vertical: h-full w-2.5 border-l border-l-transparent */
+  .scroll-area-bar {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 10px;                     /* w-2.5 */
+    display: flex;
+    flex-direction: column;
+    padding: 1px;
+    border-left: 1px solid transparent; /* border-l border-l-transparent */
+    transition: background 150ms;
+    touch-action: none;
+    user-select: none;
+  }
+
+  /* Thumb — rounded-full bg-border */
+  .scroll-area-thumb {
+    position: relative;
+    flex: 1;
+    border-radius: 9999px;
+    background: rgba(255,255,255,0.15); /* bg-border in dark mode */
+    transition: background 150ms;
+    min-height: 20px;
+  }
+  .scroll-area-thumb:hover {
+    background: rgba(255,255,255,0.28);
+  }
+
+  .channel-row {
+    padding: 5px 10px 6px;
+    transition: background 100ms;
+  }
+
+  .channel-row:hover {
+    background: rgba(255,255,255,0.03);
+  }
+
+  .channel-row-top {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 5px;
+  }
+
+  /* Eye toggle */
+  .eye-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-muted);
+    padding: 1px;
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: color 120ms;
+  }
+
+  .eye-btn:hover { color: var(--text-primary); }
+  .eye-btn.active { color: var(--text-primary); }
+
+  /* Color swatch */
+  .color-swatch {
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+    flex-shrink: 0;
+    opacity: 0.9;
+  }
+
+  /* Channel name */
+  .channel-name {
+    font-size: 10px;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+    min-width: 0;
+    font-weight: 400;
+    letter-spacing: 0.01em;
+  }
+
+  /* Blend select */
+  .blend-select {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 4px;
+    color: var(--text-secondary);
+    font-family: var(--font);
+    font-size: 9px;
+    padding: 2px 4px;
+    width: 36px;
+    flex-shrink: 0;
+    cursor: pointer;
+    outline: none;
+    -webkit-appearance: none;
+    appearance: none;
+    text-align: center;
+  }
+
+  .blend-select:hover {
+    border-color: rgba(155,127,232,0.3);
+    color: var(--text-primary);
+  }
+
+  /* ── Contrast slider track ───────────────────────────── */
+  .contrast-track-wrap {
+    position: relative;
+    height: 12px;
+    display: flex;
+    align-items: center;
+    padding: 0 2px;
+  }
+
+  .contrast-track {
+    position: relative;
+    height: 5px;
+    border-radius: 3px;
+    flex: 1;
+    overflow: visible;
+  }
+
+  /* Gradient from black → channel color */
+  .contrast-track .track-bg {
+    position: absolute;
+    inset: 0;
+    border-radius: 3px;
+    opacity: 0.35;
+  }
+
+  /* Selected window range overlay */
+  .contrast-track .track-range {
+    position: absolute;
+    top: 0;
+    height: 100%;
+    border-radius: 3px;
+    opacity: 0.75;
+  }
+
+  /* Thumb handles */
+  .thumb {
+    position: absolute;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    border: 1.5px solid rgba(255,255,255,0.7);
+    background: rgba(255,255,255,0.9);
+    cursor: ew-resize;
+    z-index: 2;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.5);
+  }
+
+  .contrast-labels {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 2px;
+    padding: 0 2px;
+  }
+
+  .contrast-label {
+    font-size: 9px;
+    color: var(--text-muted);
+    letter-spacing: 0.01em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ── Separator between channels ──────────────────────── */
+  .channel-row + .channel-row {
+    border-top: 1px solid rgba(255,255,255,0.04);
+  }
+
+  /* ──────────────────────────────────────────────────────
+     VARIANT 1: Icon badge minimized state
+  ────────────────────────────────────────────────────── */
+  #v1 .channel-panel.minimized {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    overflow: hidden;
+    background: rgba(12, 14, 20, 0.9);
+    border-color: rgba(155,127,232,0.3);
+  }
+
+  #v1 .channel-panel.minimized .panel-header,
+  #v1 .channel-panel.minimized .channel-list {
+    display: none;
+  }
+
+  #v1 .badge-restore {
+    display: none;
+    position: absolute;
+    inset: 0;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--accent-purple);
+    transition: color 120ms;
+  }
+
+  #v1 .badge-restore:hover { color: #c4a9ff; }
+
+  #v1 .channel-panel.minimized .badge-restore {
+    display: flex;
+  }
+
+  /* ──────────────────────────────────────────────────────
+     VARIANT 2: Edge tab minimized state
+  ────────────────────────────────────────────────────── */
+  #v2 .channel-panel {
+    transition: transform 200ms ease, opacity 200ms ease;
+    transform: translateX(0);
+  }
+
+  #v2 .channel-panel.minimized {
+    transform: translateX(-240px);
+    opacity: 0.0;
+    pointer-events: none;
+  }
+
+  #v2 .edge-tab {
+    position: absolute;
+    top: 60px;
+    left: 0;
+    width: 24px;
+    height: 80px;
+    background: rgba(12, 14, 20, 0.88);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(155,127,232,0.25);
+    border-left: none;
+    border-radius: 0 8px 8px 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 20;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 200ms ease;
+    color: var(--accent-purple);
+  }
+
+  #v2 .edge-tab:hover {
+    background: rgba(155,127,232,0.12);
+    border-color: rgba(155,127,232,0.4);
+  }
+
+  #v2 .edge-tab .tab-icon-wrap {
+    transform: rotate(90deg);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-direction: column;
+  }
+
+  #v2 .channel-panel.minimized ~ .edge-tab {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  /* ──────────────────────────────────────────────────────
+     VARIANT 3: Color dot pill minimized state
+  ────────────────────────────────────────────────────── */
+  #v3 .channel-panel.minimized {
+    width: auto;
+    height: auto;
+    border-radius: 20px;
+    overflow: visible;
+    background: rgba(12, 14, 20, 0.88);
+  }
+
+  #v3 .channel-panel.minimized .panel-header,
+  #v3 .channel-panel.minimized .channel-list {
+    display: none;
+  }
+
+  #v3 .pill-restore {
+    display: none;
+    align-items: center;
+    gap: 7px;
+    padding: 6px 10px 6px 8px;
+    cursor: pointer;
+    white-space: nowrap;
+    position: relative;
+  }
+
+  #v3 .pill-restore:hover .pill-tooltip {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  #v3 .channel-panel.minimized .pill-restore {
+    display: flex;
+  }
+
+  #v3 .pill-dots {
+    display: flex;
+    gap: 3px;
+    align-items: center;
+  }
+
+  #v3 .pill-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    opacity: 0.9;
+  }
+
+  #v3 .pill-icon {
+    color: var(--text-muted);
+    margin-left: 2px;
+  }
+
+  #v3 .pill-tooltip {
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%) translateY(4px);
+    background: rgba(12,14,20,0.95);
+    border: 1px solid rgba(155,127,232,0.25);
+    border-radius: 5px;
+    padding: 3px 8px;
+    font-size: 9px;
+    color: var(--text-secondary);
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 150ms, transform 150ms;
+  }
+
+  /* ── Viewer info overlay ─────────────────────────────── */
+  .viewer-info {
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+    font-size: 9px;
+    color: var(--text-muted);
+    letter-spacing: 0.06em;
+    text-align: right;
+    pointer-events: none;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+  }
+
+  /* ── Pixel coordinates ───────────────────────────────── */
+  .viewer-coords {
+    position: absolute;
+    bottom: 10px;
+    left: 12px;
+    font-size: 9px;
+    color: rgba(77,217,217,0.4);
+    letter-spacing: 0.05em;
+    pointer-events: none;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ── Decorative scan line ────────────────────────────── */
+  .scan-line {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(77,217,217,0.08), transparent);
+    animation: scanline 8s linear infinite;
+    pointer-events: none;
+    z-index: 5;
+  }
+
+  @keyframes scanline {
+    0% { top: 0; opacity: 0; }
+    5% { opacity: 1; }
+    95% { opacity: 0.4; }
+    100% { top: 100%; opacity: 0; }
+  }
+
+  /* ── Page decorations ────────────────────────────────── */
+  .page-glow {
+    position: fixed;
+    top: -200px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 600px;
+    height: 400px;
+    background: radial-gradient(ellipse, rgba(155,127,232,0.04) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: -1;
+  }
+</style>
+</head>
+<body>
+
+<div class="page-glow"></div>
+
+<div class="page-header">
+  <h1>Channel Controls</h1>
+  <div class="subtitle">Minimized state variants — fluorescence viewer overlay</div>
+</div>
+
+<div class="variant-labels">
+  <div class="variant-label">Variant 1 · Icon Badge</div>
+  <div class="variant-label">Variant 2 · Edge Tab</div>
+  <div class="variant-label">Variant 3 · Color Dot Pill</div>
+</div>
+
+<div class="panels-row">
+
+  <!-- ════════════════════════════════════════════════════
+       VARIANT 1 — Icon Badge
+  ═════════════════════════════════════════════════════ -->
+  <div class="viewer-panel" id="v1">
+    <canvas class="microscopy-bg" id="canvas1"></canvas>
+    <div class="scan-line"></div>
+
+    <!-- Channel controls overlay -->
+    <div class="channel-panel" id="panel1">
+
+      <!-- Badge restore (shown when minimized) -->
+      <div class="badge-restore" id="badgeRestore1" onclick="restore('panel1','badgeRestore1')">
+        <!-- Layers icon -->
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="12 2 2 7 12 12 22 7 12 2"/>
+          <polyline points="2 17 12 22 22 17"/>
+          <polyline points="2 12 12 17 22 12"/>
+        </svg>
+      </div>
+
+      <div class="panel-header">
+        <span class="header-icon">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="12 2 2 7 12 12 22 7 12 2"/>
+            <polyline points="2 17 12 22 22 17"/>
+            <polyline points="2 12 12 17 22 12"/>
+          </svg>
+        </span>
+        <span class="header-title">Channels</span>
+        <button class="minimize-btn" onclick="minimize('panel1','badgeRestore1')" title="Minimize">—</button>
+      </div>
+
+      <div class="scroll-area-root"><div class="channel-list" id="list1"></div><div class="scroll-area-bar" id="bar1"><div class="scroll-area-thumb" id="thumb1"></div></div></div>
+    </div>
+
+    <div class="viewer-info">Z: 12 / T: 04<br>1024 × 1024 px</div>
+    <div class="viewer-coords">x: 412  y: 319</div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════
+       VARIANT 2 — Edge Tab
+  ═════════════════════════════════════════════════════ -->
+  <div class="viewer-panel" id="v2">
+    <canvas class="microscopy-bg" id="canvas2"></canvas>
+    <div class="scan-line" style="animation-delay:-3s;"></div>
+
+    <div class="channel-panel" id="panel2">
+      <div class="panel-header">
+        <span class="header-icon">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="12 2 2 7 12 12 22 7 12 2"/>
+            <polyline points="2 17 12 22 22 17"/>
+            <polyline points="2 12 12 17 22 12"/>
+          </svg>
+        </span>
+        <span class="header-title">Channels</span>
+        <button class="minimize-btn" onclick="minimizeV2()" title="Collapse">
+          <!-- Chevron left -->
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="15 18 9 12 15 6"/>
+          </svg>
+        </button>
+      </div>
+      <div class="scroll-area-root"><div class="channel-list" id="list2"></div><div class="scroll-area-bar" id="bar2"><div class="scroll-area-thumb" id="thumb2"></div></div></div>
+    </div>
+
+    <!-- Edge tab -->
+    <div class="edge-tab" id="edgeTab2" onclick="restoreV2()">
+      <div class="tab-icon-wrap">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="12 2 2 7 12 12 22 7 12 2"/>
+          <polyline points="2 17 12 22 22 17"/>
+          <polyline points="2 12 12 17 22 12"/>
+        </svg>
+      </div>
+    </div>
+
+    <div class="viewer-info">Z: 12 / T: 04<br>1024 × 1024 px</div>
+    <div class="viewer-coords">x: 412  y: 319</div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════
+       VARIANT 3 — Color Dot Pill
+  ═════════════════════════════════════════════════════ -->
+  <div class="viewer-panel" id="v3">
+    <canvas class="microscopy-bg" id="canvas3"></canvas>
+    <div class="scan-line" style="animation-delay:-6s;"></div>
+
+    <div class="channel-panel" id="panel3">
+
+      <!-- Pill restore (shown when minimized) -->
+      <div class="pill-restore" id="pillRestore3" onclick="restoreV3()">
+        <span class="pill-icon">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="12 2 2 7 12 12 22 7 12 2"/>
+            <polyline points="2 17 12 22 22 17"/>
+            <polyline points="2 12 12 17 22 12"/>
+          </svg>
+        </span>
+        <div class="pill-dots" id="pillDots3"></div>
+        <div class="pill-tooltip">6 channels</div>
+      </div>
+
+      <div class="panel-header">
+        <span class="header-icon">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="12 2 2 7 12 12 22 7 12 2"/>
+            <polyline points="2 17 12 22 22 17"/>
+            <polyline points="2 12 12 17 22 12"/>
+          </svg>
+        </span>
+        <span class="header-title">Channels</span>
+        <button class="minimize-btn" onclick="minimizeV3()" title="Collapse">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+      <div class="scroll-area-root"><div class="channel-list" id="list3"></div><div class="scroll-area-bar" id="bar3"><div class="scroll-area-thumb" id="thumb3"></div></div></div>
+    </div>
+
+    <div class="viewer-info">Z: 12 / T: 04<br>1024 × 1024 px</div>
+    <div class="viewer-coords">x: 412  y: 319</div>
+  </div>
+
+</div>
+
+<script>
+// ─────────────────────────────────────────────────────────
+// Channel definitions
+// ─────────────────────────────────────────────────────────
+const CHANNELS = [
+  { name: 'Phase3D',               color: '#FFFFFF', range: [-0.30, 0.30], window: [-0.20, 0.20], blend: 'Nrm', visible: true },
+  { name: 'raw GFP EX488 EM525',   color: '#00FF44', range: [0, 65535],    window: [108, 4200],   blend: 'Add', visible: true },
+  { name: 'raw mCherry EX561',     color: '#FF4466', range: [0, 65535],    window: [104, 3800],   blend: 'Add', visible: true },
+  { name: 'DAPI EX405 EM450',      color: '#4488FF', range: [0, 65535],    window: [200, 12000],  blend: 'Add', visible: true },
+  { name: 'Brightfield',           color: '#FFCC44', range: [0, 65535],    window: [500, 45000],  blend: 'Nrm', visible: false },
+  { name: 'AF647 EX640 EM680',     color: '#FF8844', range: [0, 65535],    window: [80, 2500],    blend: 'Add', visible: true },
+];
+
+// ─────────────────────────────────────────────────────────
+// Format numbers compactly
+// ─────────────────────────────────────────────────────────
+function fmt(v) {
+  if (Math.abs(v) >= 10000) return (v/1000).toFixed(0) + 'k';
+  if (Math.abs(v) >= 1000)  return (v/1000).toFixed(1) + 'k';
+  if (Number.isInteger(v))  return String(v);
+  return v.toFixed(2);
+}
+
+// ─────────────────────────────────────────────────────────
+// Eye SVG paths
+// ─────────────────────────────────────────────────────────
+const EYE_ON = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
+const EYE_OFF = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
+
+// ─────────────────────────────────────────────────────────
+// Build channel list HTML
+// ─────────────────────────────────────────────────────────
+function buildChannelList(containerId) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = '';
+
+  CHANNELS.forEach((ch, i) => {
+    const [rMin, rMax] = ch.range;
+    const [wMin, wMax] = ch.window;
+    const rangeSpan = rMax - rMin;
+    const winLeftPct  = ((wMin - rMin) / rangeSpan) * 100;
+    const winRightPct = ((wMax - rMin) / rangeSpan) * 100;
+    const winWidthPct = winRightPct - winLeftPct;
+
+    const row = document.createElement('div');
+    row.className = 'channel-row';
+
+    row.innerHTML = `
+      <div class="channel-row-top">
+        <button class="eye-btn ${ch.visible ? 'active' : ''}" title="${ch.visible ? 'Hide' : 'Show'} channel">
+          ${ch.visible ? EYE_ON : EYE_OFF}
+        </button>
+        <div class="color-swatch" style="background:${ch.color};"></div>
+        <span class="channel-name" title="${ch.name}">${ch.name}</span>
+        <select class="blend-select">
+          <option ${ch.blend === 'Nrm' ? 'selected' : ''}>Nrm</option>
+          <option ${ch.blend === 'Add' ? 'selected' : ''}>Add</option>
+        </select>
+      </div>
+      <div class="contrast-track-wrap">
+        <div class="contrast-track">
+          <div class="track-bg" style="background: linear-gradient(to right, #000000, ${ch.color});"></div>
+          <div class="track-range" style="left:${winLeftPct}%; width:${winWidthPct}%; background: ${ch.color};"></div>
+          <div class="thumb" style="left:${winLeftPct}%;"></div>
+          <div class="thumb" style="left:${winRightPct}%;"></div>
+        </div>
+      </div>
+      <div class="contrast-labels">
+        <span class="contrast-label">${fmt(wMin)}</span>
+        <span class="contrast-label">${fmt(wMax)}</span>
+      </div>
+    `;
+
+    // Eye toggle interaction
+    const eyeBtn = row.querySelector('.eye-btn');
+    eyeBtn.addEventListener('click', () => {
+      ch.visible = !ch.visible;
+      eyeBtn.innerHTML = ch.visible ? EYE_ON : EYE_OFF;
+      eyeBtn.title = ch.visible ? 'Hide channel' : 'Show channel';
+      eyeBtn.classList.toggle('active', ch.visible);
+    });
+
+    container.appendChild(row);
+  });
+}
+
+// ─────────────────────────────────────────────────────────
+// Variant 1 controls
+// ─────────────────────────────────────────────────────────
+function minimize(panelId, badgeId) {
+  document.getElementById(panelId).classList.add('minimized');
+}
+function restore(panelId, badgeId) {
+  document.getElementById(panelId).classList.remove('minimized');
+}
+
+// ─────────────────────────────────────────────────────────
+// Variant 2 controls
+// ─────────────────────────────────────────────────────────
+function minimizeV2() {
+  document.getElementById('panel2').classList.add('minimized');
+}
+function restoreV2() {
+  document.getElementById('panel2').classList.remove('minimized');
+}
+
+// ─────────────────────────────────────────────────────────
+// Variant 3 controls
+// ─────────────────────────────────────────────────────────
+function minimizeV3() {
+  document.getElementById('panel3').classList.add('minimized');
+}
+function restoreV3() {
+  document.getElementById('panel3').classList.remove('minimized');
+}
+
+// ─────────────────────────────────────────────────────────
+// Shadcn-style overlay scrollbar thumb sync
+// ─────────────────────────────────────────────────────────
+function initScrollArea(listId, barId, thumbId) {
+  const list  = document.getElementById(listId);
+  const thumb = document.getElementById(thumbId);
+  const bar   = document.getElementById(barId);
+  if (!list || !thumb || !bar) return;
+
+  function update() {
+    const ratio      = list.clientHeight / list.scrollHeight;
+    const thumbH     = Math.max(20, bar.clientHeight * ratio);
+    const maxScroll  = list.scrollHeight - list.clientHeight;
+    const scrollPct  = maxScroll > 0 ? list.scrollTop / maxScroll : 0;
+    const maxTop     = bar.clientHeight - thumbH;
+    thumb.style.height = thumbH + 'px';
+    thumb.style.top    = (scrollPct * maxTop) + 'px';
+    // hide bar entirely when content fits
+    bar.style.display = ratio >= 1 ? 'none' : 'block';
+  }
+
+  list.addEventListener('scroll', update);
+  new ResizeObserver(update).observe(list);
+  update();
+}
+
+// ─────────────────────────────────────────────────────────
+// Build pill dots for variant 3
+// ─────────────────────────────────────────────────────────
+function buildPillDots() {
+  const container = document.getElementById('pillDots3');
+  CHANNELS.forEach(ch => {
+    const dot = document.createElement('div');
+    dot.className = 'pill-dot';
+    dot.style.background = ch.color;
+    if (!ch.visible) dot.style.opacity = '0.3';
+    container.appendChild(dot);
+  });
+}
+
+// ─────────────────────────────────────────────────────────
+// Microscopy canvas background
+// ─────────────────────────────────────────────────────────
+function drawMicroscopy(canvasId, seed) {
+  const canvas = document.getElementById(canvasId);
+  const panel = canvas.parentElement;
+  const W = panel.offsetWidth;
+  const H = panel.offsetHeight;
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d');
+
+  // Dark base
+  ctx.fillStyle = '#04060c';
+  ctx.fillRect(0, 0, W, H);
+
+  // Subtle texture noise
+  const img = ctx.createImageData(W, H);
+  const data = img.data;
+  let r = seed * 9301 + 49297;
+  function rng() { r = (r * 9301 + 49297) % 233280; return r / 233280; }
+
+  for (let i = 0; i < data.length; i += 4) {
+    const n = rng() * 0.03;
+    data[i]   = n * 255 * 0.4;
+    data[i+1] = n * 255 * 0.3;
+    data[i+2] = n * 255 * 0.5;
+    data[i+3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+
+  // Cell-like blobs
+  const blobs = [
+    // {x, y, rx, ry, color, alpha, type: 'cell'|'nucleus'|'membrane'}
+    { x: 0.28, y: 0.35, rx: 0.09, ry: 0.07, color: [0, 255, 68],   a: 0.18 },
+    { x: 0.62, y: 0.28, rx: 0.10, ry: 0.08, color: [0, 255, 68],   a: 0.14 },
+    { x: 0.45, y: 0.60, rx: 0.08, ry: 0.09, color: [0, 255, 68],   a: 0.20 },
+    { x: 0.78, y: 0.52, rx: 0.07, ry: 0.06, color: [0, 255, 68],   a: 0.16 },
+    { x: 0.18, y: 0.68, rx: 0.06, ry: 0.07, color: [0, 255, 68],   a: 0.13 },
+
+    { x: 0.28, y: 0.35, rx: 0.04, ry: 0.03, color: [68, 136, 255], a: 0.65 },
+    { x: 0.62, y: 0.28, rx: 0.04, ry: 0.035,color: [68, 136, 255], a: 0.70 },
+    { x: 0.45, y: 0.60, rx: 0.035,ry: 0.04, color: [68, 136, 255], a: 0.60 },
+    { x: 0.78, y: 0.52, rx: 0.03, ry: 0.025,color: [68, 136, 255], a: 0.68 },
+    { x: 0.18, y: 0.68, rx: 0.03, ry: 0.035,color: [68, 136, 255], a: 0.55 },
+
+    { x: 0.30, y: 0.38, rx: 0.025,ry: 0.022,color: [255, 68, 102], a: 0.55 },
+    { x: 0.61, y: 0.31, rx: 0.020,ry: 0.018,color: [255, 68, 102], a: 0.48 },
+    { x: 0.46, y: 0.62, rx: 0.022,ry: 0.025,color: [255, 68, 102], a: 0.52 },
+    { x: 0.79, y: 0.50, rx: 0.018,ry: 0.016,color: [255, 68, 102], a: 0.50 },
+
+    { x: 0.50, y: 0.20, rx: 0.06, ry: 0.04, color: [255, 204, 68], a: 0.10 },
+    { x: 0.85, y: 0.75, rx: 0.07, ry: 0.05, color: [255, 204, 68], a: 0.08 },
+    { x: 0.10, y: 0.42, rx: 0.05, ry: 0.06, color: [255, 204, 68], a: 0.09 },
+  ];
+
+  blobs.forEach(b => {
+    const gx = b.x * W;
+    const gy = b.y * H;
+    const rx = b.rx * W;
+    const ry = b.ry * H;
+    const [cr, cg, cb] = b.color;
+
+    const grad = ctx.createRadialGradient(gx, gy, 0, gx, gy, Math.max(rx, ry));
+    grad.addColorStop(0,   `rgba(${cr},${cg},${cb},${b.a})`);
+    grad.addColorStop(0.5, `rgba(${cr},${cg},${cb},${b.a * 0.4})`);
+    grad.addColorStop(1,   `rgba(${cr},${cg},${cb},0)`);
+
+    ctx.save();
+    ctx.translate(gx, gy);
+    ctx.scale(rx / Math.max(rx, ry), ry / Math.max(rx, ry));
+    ctx.beginPath();
+    ctx.arc(0, 0, Math.max(rx, ry), 0, Math.PI * 2);
+    ctx.fillStyle = grad;
+    ctx.fill();
+    ctx.restore();
+  });
+
+  // Thin membrane outlines for cells
+  const cells = [
+    { x: 0.28, y: 0.35, rx: 0.09, ry: 0.07 },
+    { x: 0.62, y: 0.28, rx: 0.10, ry: 0.08 },
+    { x: 0.45, y: 0.60, rx: 0.08, ry: 0.09 },
+    { x: 0.78, y: 0.52, rx: 0.07, ry: 0.06 },
+    { x: 0.18, y: 0.68, rx: 0.06, ry: 0.07 },
+  ];
+
+  cells.forEach(c => {
+    ctx.save();
+    ctx.translate(c.x * W, c.y * H);
+    ctx.scale(c.rx * W, c.ry * H);
+    ctx.beginPath();
+    ctx.arc(0, 0, 1, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(0, 255, 68, 0.12)';
+    ctx.lineWidth = 1 / (c.rx * W);
+    ctx.stroke();
+    ctx.restore();
+  });
+
+  // Subtle grid overlay
+  ctx.strokeStyle = 'rgba(77, 217, 217, 0.03)';
+  ctx.lineWidth = 0.5;
+  const gridSize = 40;
+  for (let x = 0; x < W; x += gridSize) {
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+  }
+  for (let y = 0; y < H; y += gridSize) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+  }
+
+  // Crosshair
+  const cx = W * 0.62, cy = H * 0.28;
+  const cs = 10;
+  ctx.strokeStyle = 'rgba(77, 217, 217, 0.25)';
+  ctx.lineWidth = 0.75;
+  ctx.beginPath(); ctx.moveTo(cx - cs, cy); ctx.lineTo(cx + cs, cy); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx, cy - cs); ctx.lineTo(cx, cy + cs); ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(cx, cy, 5, 0, Math.PI * 2);
+  ctx.strokeStyle = 'rgba(77, 217, 217, 0.2)';
+  ctx.stroke();
+
+  // Scale bar
+  ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+  ctx.lineWidth = 1;
+  const sbX = W - 55, sbY = H - 26;
+  ctx.beginPath(); ctx.moveTo(sbX, sbY); ctx.lineTo(sbX + 40, sbY); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(sbX, sbY - 3); ctx.lineTo(sbX, sbY + 3); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(sbX + 40, sbY - 3); ctx.lineTo(sbX + 40, sbY + 3); ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,0.25)';
+  ctx.font = '8px ui-monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('10 µm', sbX + 20, sbY - 5);
+}
+
+// ─────────────────────────────────────────────────────────
+// Initialize
+// ─────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  buildChannelList('list1');
+  buildChannelList('list2');
+  buildChannelList('list3');
+  buildPillDots();
+  initScrollArea('list1', 'bar1', 'thumb1');
+  initScrollArea('list2', 'bar2', 'thumb2');
+  initScrollArea('list3', 'bar3', 'thumb3');
+
+  // Draw the same scene on all 3 canvases (same seed for consistency)
+  drawMicroscopy('canvas1', 42);
+  drawMicroscopy('canvas2', 42);
+  drawMicroscopy('canvas3', 42);
+});
+
+// Redraw canvases on resize
+window.addEventListener('resize', () => {
+  drawMicroscopy('canvas1', 42);
+  drawMicroscopy('canvas2', 42);
+  drawMicroscopy('canvas3', 42);
+});
+</script>
+</body>
+</html>

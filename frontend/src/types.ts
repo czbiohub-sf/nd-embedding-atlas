@@ -28,11 +28,14 @@ export interface TrajectoryFrame {
   spatial_x: number;
   spatial_y: number;
   category?: number;
+  rowIndex?: number;
+  datasetKey?: string;
 }
 
 export interface TrajectoryData {
   trackId: number;
   fovName: string;
+  datasetKey?: string;
   tIndex: number;
   points: TrajectoryFrame[];
 }
@@ -65,7 +68,11 @@ export interface BoxPlotSpec {
   groupField?: string;
 }
 
-export type ChartSpec = CountPlotSpec | HistogramSpec | ScatterChartSpec | BoxPlotSpec;
+export interface ObsSetsSpec {
+  type: "obssets";
+}
+
+export type ChartSpec = CountPlotSpec | HistogramSpec | ScatterChartSpec | BoxPlotSpec | ObsSetsSpec;
 
 export interface ChartPanelEntry {
   id: string;

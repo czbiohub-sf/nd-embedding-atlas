@@ -79,7 +79,7 @@ export function uploadData(
   buffers: ScatterBuffers,
   data: ScatterData,
   colorMapper?: ColorMapper,
-  palette?: readonly (readonly [number, number, number])[],
+  palette?: readonly (readonly [number, number, number, number?])[],
 ) {
   const t0 = performance.now();
   const numPoints = data.numCells;
@@ -105,16 +105,18 @@ export function uploadData(
   const colorData = new Uint32Array(numPoints);
   for (let i = 0; i < numPoints; i++) {
     const cat = data.categoryIndices[i]! % numCats;
-    let r: number, g: number, b: number;
+    let r: number, g: number, b: number, alpha: number;
     if (colorMapper) {
       [r, g, b] = colorMapper(cat, i, totalCats);
+      alpha = 255;
     } else {
       const c = colors[cat]!;
       r = c[0];
       g = c[1];
       b = c[2];
+      alpha = c[3] !== undefined ? Math.round(c[3] * 255) : 255;
     }
-    colorData[i] = (r | (g << 8) | (b << 16) | (255 << 24)) >>> 0;
+    colorData[i] = (r | (g << 8) | (b << 16) | (alpha << 24)) >>> 0;
   }
   const rawColorBuffer = root.unwrap(buffers.colorBuffer);
   device.queue.writeBuffer(rawColorBuffer, 0, colorData);
@@ -139,7 +141,7 @@ export function uploadData(
 export function buildCategoryColors(
   numCategories: number,
   colorMapper?: ColorMapper,
-  palette?: readonly (readonly [number, number, number])[],
+  palette?: readonly (readonly [number, number, number, number?])[],
 ): Float32Array {
   const maxCats = 32;
   const data = new Float32Array(maxCats * 4);
@@ -147,19 +149,21 @@ export function buildCategoryColors(
   const n = Math.min(numCategories, maxCats);
 
   for (let i = 0; i < n; i++) {
-    let r: number, g: number, b: number;
+    let r: number, g: number, b: number, a: number;
     if (colorMapper) {
       [r, g, b] = colorMapper(i, 0, numCategories);
+      a = 1.0;
     } else {
       const c = colors[i % colors.length]!;
       r = c[0];
       g = c[1];
       b = c[2];
+      a = c[3] ?? 1.0; // disabled categories pass alpha=0 → invisible in density layer
     }
     data[i * 4] = r / 255;
     data[i * 4 + 1] = g / 255;
     data[i * 4 + 2] = b / 255;
-    data[i * 4 + 3] = 1.0;
+    data[i * 4 + 3] = a;
   }
   return data;
 }

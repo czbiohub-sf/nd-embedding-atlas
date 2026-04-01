@@ -11,6 +11,7 @@ import {
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MultiChannelLayers } from "../../lib/MultiChannelLayers";
 import { OrbitControls } from "../../lib/OrbitControls";
+import { clearViewerChannels, publishViewerChannels } from "../../providers/ViewerChannelsStore";
 import {
   type ChannelDef,
   type DimensionBounds,
@@ -23,6 +24,7 @@ import {
 
 interface Props {
   children: ReactNode;
+  channelInstance?: "docked" | "pip";
 }
 
 interface LayerEntry {
@@ -78,7 +80,7 @@ function createRuntime(canvas: HTMLCanvasElement, mode: ViewMode): RuntimeResult
 
 // ── Provider ────────────────────────────────────────────────────────────────
 
-export function ViewerProvider({ children }: Props) {
+export function ViewerProvider({ children, channelInstance = "docked" as const }: Props) {
   // ── Mutable refs ──────────────────────────────────────────────────────
   const runtimeRef = useRef<Idetik | null>(null);
   const viewportRef = useRef<Viewport | null>(null);
@@ -326,6 +328,17 @@ export function ViewerProvider({ children }: Props) {
     }),
     [initialized, viewMode],
   );
+
+  // Publish channels to ViewerChannelsStore so TrackGallery can match the viewer.
+  // Uses useEffect (not setState updater) to avoid React concurrent-mode side-effect violations.
+  useEffect(() => {
+    if (channels.length > 0) {
+      publishViewerChannels(channelInstance, channels);
+    }
+    return () => {
+      clearViewerChannels();
+    };
+  }, [channels, channelInstance]);
 
   const value = useMemo<ViewerInternalContext>(
     () => ({ state, actions, meta, _canvasRef: canvasRef }),

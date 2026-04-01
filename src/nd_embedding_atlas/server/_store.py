@@ -82,6 +82,7 @@ class EmbeddingStore:
         self.con.sql("CREATE TABLE obs_base AS (SELECT * FROM obs_df)")
         self.con.sql("CREATE INDEX obs_base_row_index ON obs_base(__row_index__)")
         self.con.sql("CREATE INDEX obs_base_obs_name ON obs_base(obs_name)")
+        self._init_obsset_tables()
         self._rebuild_view()
         self.n_obs = len(obs_df)
 
@@ -113,6 +114,34 @@ class EmbeddingStore:
             self.con.sql(f"CREATE TABLE {table_name} AS (SELECT * FROM df)")
             self._loaded[obsm_key] = {"prefix": prefix, "n_dims": n_dims, "table": table_name}
             self._rebuild_view()
+
+    def _init_obsset_tables(self) -> None:
+        """Create obssets and obsset_members tables if they do not exist.
+
+        No FK constraints — DuckDB silently ignores cascade enforcement.
+        The composite PRIMARY KEY on obsset_members prevents duplicate members.
+        """
+        self.con.sql("""
+            CREATE TABLE IF NOT EXISTS obssets (
+                obsset_id     TEXT PRIMARY KEY,
+                name          TEXT NOT NULL,
+                color         TEXT,
+                created_at    TIMESTAMP,
+                created_count INTEGER
+            )
+        """)
+        self.con.sql("""
+            CREATE TABLE IF NOT EXISTS obsset_members (
+                obsset_id   TEXT NOT NULL,
+                dataset_key TEXT NOT NULL,
+                obs_name    TEXT NOT NULL,
+                PRIMARY KEY (obsset_id, dataset_key, obs_name)
+            )
+        """)
+        self.con.sql("""
+            CREATE INDEX IF NOT EXISTS idx_obsset_members_id
+                ON obsset_members(obsset_id)
+        """)
 
     def _rebuild_view(self) -> None:
         """Recreate the ``dataset`` VIEW to include all registered embeddings.

@@ -64,8 +64,10 @@ def get_plate_metadata(plate_path: str | pathlib.Path) -> dict[str, Any]:
         result["pixel_scale"] = {"y": scale[-2], "x": scale[-1]}
 
     # Channel metadata from OME/OMERO (colors, windows).
-    # Windows are taken as-is from stored metadata — no pixel sampling at startup.
-    result["channels"] = _read_omero_channels(plate_path, first_pos)
+    channels = _read_omero_channels(plate_path, first_pos)
+    # Fill missing windows via auto-contrast (1-percentile / 99-percentile sampling).
+    _apply_auto_contrast(first_pos, channels)
+    result["channels"] = channels
 
     return result
 

@@ -1,8 +1,6 @@
 /**
- * TerminalTable — ⌘J-toggled drawer that slides up from the status footer.
- *
- * Fixed position above the footer, slides in/out with CSS transition.
- * Drag handle at the top allows resizing the panel height.
+ * TerminalTable — ⌘J-toggled drawer above the status footer.
+ * Tabs: Table | Track
  */
 
 import { useCallback, useRef, useState } from "react";
@@ -10,6 +8,8 @@ import { XIcon } from "lucide-react";
 import { useTerminalTable } from "../../providers/TerminalTableProvider";
 import { useDashboard } from "../../hooks/useDashboard";
 import { DataTable } from "./DataTable";
+import { TrackPane } from "./TrackPane";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "../ui/tabs";
 
 const FALLBACK_TABLE_COLUMNS = ["_dataset"];
 
@@ -17,10 +17,10 @@ export function TerminalTable() {
   const { open, height, toggle, setHeight } = useTerminalTable();
   const [totalCount, setTotalCount] = useState<number>(0);
   const { state, actions, meta } = useDashboard();
-  const { metadata, highlightId } = state;
+  const { metadata, highlightId, trajectory } = state;
   const { coordinator, brushSelection, table } = meta;
 
-  // ── Drag-to-resize ──────────────────────────────────────────────────────
+  // ── Drag-to-resize ───────────────────────────────────────────────────────
   const dragStartY = useRef<number | null>(null);
   const dragStartH = useRef<number>(height);
 
@@ -36,8 +36,7 @@ export function TerminalTable() {
   const onDragMove = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       if (dragStartY.current === null) return;
-      const delta = dragStartY.current - e.clientY; // dragging up = bigger
-      setHeight(dragStartH.current + delta);
+      setHeight(dragStartH.current + (dragStartY.current - e.clientY));
     },
     [setHeight],
   );
@@ -60,7 +59,7 @@ export function TerminalTable() {
     >
       {/* Drag handle */}
       <div
-        className="shrink-0 h-1.5 w-full cursor-ns-resize select-none bg-border-subtle/30 hover:bg-border-subtle/60 transition-colors"
+        className="h-1.5 w-full shrink-0 cursor-ns-resize select-none bg-border-subtle/30 transition-colors hover:bg-border-subtle/60"
         onPointerDown={onDragStart}
         onPointerMove={onDragMove}
         onPointerUp={onDragEnd}
@@ -68,38 +67,51 @@ export function TerminalTable() {
         aria-label="Resize table panel"
       />
 
-      {/* Header bar */}
-      <div className="flex shrink-0 items-center gap-2 border-b border-border-subtle bg-elevated px-3 py-1">
-        <span className="text-[11px] font-medium text-text-secondary select-none">▲ Table</span>
-        {totalCount > 0 && (
-          <span className="text-[10px] text-text-muted tabular-nums select-none">
-            {totalCount.toLocaleString()} obs
-          </span>
-        )}
-        <span className="flex-1" />
-        <button
-          type="button"
-          onClick={toggle}
-          className="flex items-center justify-center rounded p-0.5 text-text-muted hover:text-text-primary transition-colors"
-          aria-label="Close table"
-        >
-          <XIcon size={12} strokeWidth={2} />
-        </button>
-      </div>
-
-      {/* DataTable — only render when open to avoid unnecessary queries */}
       {open && (
-        <div className="min-h-0 flex-1 overflow-hidden">
-          <DataTable
-            coordinator={coordinator}
-            table={table}
-            columns={metadata.obs_columns ?? FALLBACK_TABLE_COLUMNS}
-            selection={brushSelection}
-            highlightId={highlightId}
-            onRowClick={(id) => actions.setHighlight(id)}
-            onTotalCountChange={setTotalCount}
-          />
-        </div>
+        <Tabs defaultValue="table" className="flex min-h-0 flex-1 flex-col">
+          {/* Tab bar */}
+          <div className="flex shrink-0 items-center border-b border-border-subtle bg-elevated">
+            <TabsList className="border-b-0 px-1">
+              <TabsTrigger value="table">
+                Table
+                {totalCount > 0 && (
+                  <span className="ml-1.5 text-[9px] text-muted-foreground/50 tabular-nums">
+                    {totalCount.toLocaleString()}
+                  </span>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="track">
+                Track
+                {trajectory && <span className="ml-1.5 inline-block size-1.5 rounded-full bg-primary/70" />}
+              </TabsTrigger>
+            </TabsList>
+            <span className="flex-1" />
+            <button
+              type="button"
+              onClick={toggle}
+              className="mr-2 flex items-center justify-center rounded p-0.5 text-text-muted transition-colors hover:text-text-primary"
+              aria-label="Close table"
+            >
+              <XIcon size={12} strokeWidth={2} />
+            </button>
+          </div>
+
+          <TabsContent value="table" className="flex flex-col overflow-hidden">
+            <DataTable
+              coordinator={coordinator}
+              table={table}
+              columns={metadata.obs_columns ?? FALLBACK_TABLE_COLUMNS}
+              selection={brushSelection}
+              highlightId={highlightId}
+              onRowClick={(id) => actions.setHighlight(id)}
+              onTotalCountChange={setTotalCount}
+            />
+          </TabsContent>
+
+          <TabsContent value="track" className="flex flex-col overflow-hidden">
+            <TrackPane />
+          </TabsContent>
+        </Tabs>
       )}
     </div>
   );

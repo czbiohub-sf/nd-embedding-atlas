@@ -19,6 +19,10 @@ export function createInteractionController(
   callbacks?: InteractionCallbacks,
   interactionConfig?: InteractionConfig,
 ) {
+  function easeInOutQuint(t: number): number {
+    return t < 0.5 ? 16 * t * t * t * t * t : 1 - Math.pow(-2 * t + 2, 5) / 2;
+  }
+
   const LERP_SPEED = interactionConfig?.lerpSpeed ?? 0.06;
   const LERP_EPSILON = interactionConfig?.lerpEpsilon ?? 0.0001;
 
@@ -50,6 +54,17 @@ export function createInteractionController(
 
   // Suppress the next onViewChange broadcast (used by setViewState to avoid feedback loops)
   let skipNextViewChange = false;
+
+  // Timed animation state — used by animateToViewState (easeInOutQuint, fixed duration)
+  let isTimedAnimating = false;
+  let timedAnimStart = 0;
+  let timedAnimDuration = 0;
+  let timedAnimFromPanX = 0;
+  let timedAnimFromPanY = 0;
+  let timedAnimFromZoom = 1;
+  let timedAnimToPanX = 0;
+  let timedAnimToPanY = 0;
+  let timedAnimToZoom = 1;
 
   let isPanning = false;
   let isLassoing = false;
@@ -343,7 +358,22 @@ export function createInteractionController(
   function loop() {
     loopRunning = false;
 
-    if (isAnimating) {
+    if (isTimedAnimating) {
+      const elapsed = performance.now() - timedAnimStart;
+      const raw = Math.min(elapsed / timedAnimDuration, 1);
+      const t = easeInOutQuint(raw);
+      panX = timedAnimFromPanX + (timedAnimToPanX - timedAnimFromPanX) * t;
+      panY = timedAnimFromPanY + (timedAnimToPanY - timedAnimFromPanY) * t;
+      zoom = timedAnimFromZoom + (timedAnimToZoom - timedAnimFromZoom) * t;
+      if (raw >= 1) {
+        panX = targetPanX = timedAnimToPanX;
+        panY = targetPanY = timedAnimToPanY;
+        zoom = targetZoom = timedAnimToZoom;
+        isTimedAnimating = false;
+        isAnimating = false;
+      }
+      updateView();
+    } else if (isAnimating) {
       // Lerp toward target
       panX += (targetPanX - panX) * LERP_SPEED;
       panY += (targetPanY - panY) * LERP_SPEED;
@@ -374,8 +404,8 @@ export function createInteractionController(
         }
       }
     }
-    // Keep looping only if still animating
-    if (isAnimating) {
+    // Keep looping while any animation is running
+    if (isTimedAnimating || isAnimating) {
       scheduleLoop();
     }
   }
@@ -391,11 +421,25 @@ export function createInteractionController(
       return { panX, panY, zoom };
     },
     setViewState(state: ViewState) {
+      isTimedAnimating = false;
       panX = targetPanX = state.panX;
       panY = targetPanY = state.panY;
       zoom = targetZoom = state.zoom;
       skipNextViewChange = true;
       updateView();
+    },
+    animateToViewState(state: ViewState, durationMs = 600) {
+      timedAnimStart = performance.now();
+      timedAnimDuration = durationMs;
+      timedAnimFromPanX = panX;
+      timedAnimFromPanY = panY;
+      timedAnimFromZoom = zoom;
+      timedAnimToPanX = targetPanX = state.panX;
+      timedAnimToPanY = targetPanY = state.panY;
+      timedAnimToZoom = targetZoom = state.zoom;
+      isTimedAnimating = true;
+      isAnimating = false;
+      scheduleLoop();
     },
     setForcedSelectionMode(mode: "pan" | "marquee" | "lasso") {
       forcedSelectionMode = mode;

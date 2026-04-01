@@ -1,5 +1,5 @@
 import { useState, useEffect, lazy, Suspense, useCallback, type RefObject } from "react";
-import { LayoutGrid, Table2, RotateCcw, Sun, Moon, ChevronRight, Download } from "lucide-react";
+import { LayoutGrid, Table2, RotateCcw, Sun, Moon, ChevronRight, Download, ScanIcon } from "lucide-react";
 import { cast, count, Query, sum } from "@uwdata/mosaic-sql";
 import type { FilterExpr } from "@uwdata/mosaic-sql";
 import { useMosaicClient } from "../hooks/useMosaicClient";
@@ -22,10 +22,12 @@ const ExportDialog = lazy(() => import("./export/ExportDialog"));
 
 interface CommandPaletteProps {
   onAddScatter: (obsmKey: string) => void;
+  onOpenViewer?: () => void;
+  onFloatViewer?: () => void;
   openRef?: RefObject<((page: "scatter") => void) | null>;
 }
 
-export function CommandPalette({ onAddScatter, openRef }: CommandPaletteProps) {
+export function CommandPalette({ onAddScatter, onOpenViewer, onFloatViewer, openRef }: CommandPaletteProps) {
   const [open, setOpen] = useState(false);
   const [page, setPage] = useState<"root" | "scatter">("root");
   const [search, setSearch] = useState("");
@@ -147,6 +149,18 @@ export function CommandPalette({ onAddScatter, openRef }: CommandPaletteProps) {
                     <Kbd>J</Kbd>
                   </KbdGroup>
                 </CommandItem>
+                {metadata.plate && onOpenViewer && (
+                  <CommandItem onSelect={() => dispatch(onOpenViewer)}>
+                    <ScanIcon data-icon="inline-start" />
+                    Open Image Viewer
+                  </CommandItem>
+                )}
+                {metadata.plate && onFloatViewer && (
+                  <CommandItem onSelect={() => dispatch(onFloatViewer)}>
+                    <ScanIcon data-icon="inline-start" />
+                    Float Image Viewer
+                  </CommandItem>
+                )}
                 <CommandItem
                   onSelect={() =>
                     dispatch(() => {

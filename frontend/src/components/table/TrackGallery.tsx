@@ -1,0 +1,304 @@
+/**
+ * TrackGallery — scrollable grid of WebP image crops, one per trajectory frame.
+ *
+ * Crops are fetched via POST /api/crop/{fov_path} with live channel state from
+ * the idetik viewer, so thumbnails match what the user sees in the image viewer.
+ *
+ * Uses @tanstack/react-virtual lanes for multi-column grid virtualization.
+ * Blob URL lifecycle: gcTime=0 + cleanup revocation on gallery unmount.
+ */
+
+import { useEffect, useRef, useState } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import { useQueryClient } from "@tanstack/react-query";
+import { useDashboard } from "../../hooks/useDashboard";
+import { useGalleryChannels } from "../../hooks/useGalleryChannels";
+import { obsCoordKey } from "../../hooks/useGalleryCropQuery";
+import { useGalleryCropQuery } from "../../hooks/useGalleryCropQuery";
+import { cn } from "../../lib/utils";
+import type { TrajectoryFrame } from "../../types";
+import type { ChannelDef } from "../viewer/ViewerContext";
+import type { ChannelHash } from "../../lib/branded-types";
+
+const CARD_SIZE = 230; // px — image (200) + footer (~30)
+const CARD_GAP = 10;
+const MIN_COL_WIDTH = 180;
+
+// ── Card ──────────────────────────────────────────────────────────────────────
+
+interface CardProps {
+  frame: TrajectoryFrame;
+  fovName: string;
+  isActive: boolean;
+  onClick: () => void;
+  fetchEnabled: boolean;
+  settledChannels: readonly ChannelDef[];
+  settledHash: ChannelHash;
+  datasetKey?: string;
+}
+
+function TrackGalleryCard({
+  frame,
+  fovName,
+  isActive,
+  onClick,
+  fetchEnabled,
+  settledChannels,
+  settledHash,
+  datasetKey,
+}: CardProps) {
+  const { data: blobUrl, isLoading } = useGalleryCropQuery({
+    fovName,
+    frame,
+    channels: settledChannels,
+    hash: settledHash,
+    datasetKey,
+    enabled: fetchEnabled && settledChannels.length > 0,
+  });
+
+  return (
+    <div
+      onClick={onClick}
+      className={cn(
+        "group relative flex cursor-pointer flex-col overflow-hidden rounded-lg border-2 bg-background transition-all duration-150",
+        isActive
+          ? "border-primary shadow-[0_0_0_3px_oklch(0.585_0.233_277.117/0.2)]"
+          : "border-border/40 hover:border-border/70",
+      )}
+    >
+      <div className="relative aspect-square w-full overflow-hidden bg-black">
+        {(isLoading || !blobUrl) && <div className="absolute inset-0 animate-pulse bg-muted/20" />}
+        {blobUrl && <img src={blobUrl} alt={`T=${frame.t}`} className="absolute inset-0 h-full w-full object-cover" />}
+        {isActive && (
+          <div className="absolute right-1.5 top-1.5 rounded bg-primary px-1.5 py-0.5 text-[9px] font-semibold text-primary-foreground">
+            NOW
+          </div>
+        )}
+      </div>
+      <div
+        className={cn(
+          "flex flex-col gap-0.5 border-t px-2 py-1.5",
+          isActive ? "border-primary/30 bg-primary/5" : "border-border/30 bg-muted/10",
+        )}
+      >
+        <span className={cn("text-[11px] font-medium tabular-nums", isActive ? "text-primary" : "text-foreground/70")}>
+          T = {frame.t}
+        </span>
+        {frame.category != null && <span className="text-[9px] text-muted-foreground/60">{frame.category}</span>}
+        <span className="text-[9px] text-muted-foreground/40 tabular-nums">
+          {frame.spatial_x.toFixed(1)} · {frame.spatial_y.toFixed(1)} µm
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ── Gallery ───────────────────────────────────────────────────────────────────
+
+interface TrackGalleryProps {
+  activeFrame: number;
+  onFrameSelect: (index: number) => void;
+}
+
+export function TrackGallery({ activeFrame, onFrameSelect }: TrackGalleryProps) {
+  const { state } = useDashboard();
+  const { trajectory } = state;
+  const { channels: settledChannels, hash: settledHash, isPending } = useGalleryChannels(300);
+
+
+  const queryClient = useQueryClient();
+
+  // ── Blob URL revocation ─────────────────────────────────────────────────────
+  // gcTime=0 evicts queries immediately when no subscriber → "removed" event fires.
+  // Cleanup on gallery unmount handles any remaining unreleased URLs.
+  useEffect(() => {
+    const cache = queryClient.getQueryCache();
+    const unsub = cache.subscribe((event) => {
+      if (event.type === "removed" && Array.isArray(event.query.queryKey) && event.query.queryKey[0] === "crop") {
+        const url = event.query.state.data;
+        if (typeof url === "string" && url.startsWith("blob:")) {
+          URL.revokeObjectURL(url);
+        } else if (url !== undefined) {
+          console.error("[TrackGallery] crop query data is not a blob URL — possible leak", typeof url);
+        }
+      }
+    });
+
+    return () => {
+      unsub();
+      // Revoke all remaining crop blob URLs synchronously on unmount
+      for (const query of queryClient.getQueryCache().findAll({ queryKey: ["crop"] })) {
+        const url = query.state.data;
+        if (typeof url === "string" && url.startsWith("blob:")) {
+          URL.revokeObjectURL(url);
+        }
+      }
+    };
+  }, [queryClient]);
+
+  // ── Container size for column count ────────────────────────────────────────
+  const parentRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(0);
+
+  useEffect(() => {
+    const el = parentRef.current;
+    if (!el) return;
+    const obs = new ResizeObserver(([entry]) => {
+      if (entry) setContainerWidth(entry.contentRect.width);
+    });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
+
+  const colCount = Math.max(1, Math.floor((containerWidth + CARD_GAP) / (MIN_COL_WIDTH + CARD_GAP)));
+  const colWidth = containerWidth > 0 ? (containerWidth - CARD_GAP * (colCount - 1)) / colCount : MIN_COL_WIDTH;
+
+  const count = trajectory?.points.length ?? 0;
+
+  const virtualizer = useVirtualizer({
+    count,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => CARD_SIZE + CARD_GAP,
+    lanes: colCount,
+    overscan: colCount * 2,
+  });
+
+  // Scroll active item into view after virtualizer has settled measurements
+  useEffect(() => {
+    if (count === 0) return;
+    const id = setTimeout(() => {
+      virtualizer.scrollToIndex(activeFrame, { behavior: "smooth", align: "auto" });
+    }, 0);
+    return () => clearTimeout(id);
+  }, [activeFrame, virtualizer, count]);
+
+  // ── Batch obs coordinate prefetch ─────────────────────────────────────────
+  // When a trajectory loads, fetch all FOV-local x/y coords in one DuckDB query
+  // and populate the cache so individual crop queries skip their obs fetch.
+  useEffect(() => {
+    if (!trajectory) return;
+    const rowIndices = trajectory.points
+      .map((p) => p.rowIndex)
+      .filter((id): id is number => id != null);
+    if (rowIndices.length === 0) return;
+
+    // Skip if all are already cached
+    const missing = rowIndices.filter(
+      (id) => !queryClient.getQueryData(obsCoordKey(id)),
+    );
+    if (missing.length === 0) return;
+
+    void fetch(`/api/obs/batch?ids=${missing.join(",")}`)
+      .then((r) => r.json())
+      .then((data: Record<string, { x: number; y: number }>) => {
+        for (const [idStr, coords] of Object.entries(data)) {
+          queryClient.setQueryData(obsCoordKey(Number(idStr)), coords);
+        }
+      })
+      .catch(() => {/* silently ignore — crop queries fall back to individual fetches */});
+  }, [trajectory, queryClient]);
+
+  // ── Crop prefetch for items just outside the viewport ─────────────────────
+  // Prefetch crops for the next colCount*2 items beyond the visible range.
+  const items = trajectory ? virtualizer.getVirtualItems() : [];
+  useEffect(() => {
+    if (!trajectory || isPending || settledChannels.length === 0) return;
+    if (items.length === 0) return;
+
+    const maxVisible = Math.max(...items.map((v) => v.index));
+    const prefetchEnd = Math.min(maxVisible + colCount * 2, trajectory.points.length - 1);
+
+    for (let i = maxVisible + 1; i <= prefetchEnd; i++) {
+      const frame = trajectory.points[i];
+      if (!frame) continue;
+      const qKey = ["crop", trajectory.fovName, frame.t ?? null, settledHash];
+      if (queryClient.getQueryData(qKey)) continue; // already cached
+
+      const cachedObs = frame.rowIndex != null
+        ? queryClient.getQueryData<{ x: number; y: number }>(obsCoordKey(frame.rowIndex))
+        : null;
+      if (!cachedObs) continue; // wait for batch obs to populate first
+
+      void queryClient.prefetchQuery({
+        queryKey: qKey,
+        queryFn: async ({ signal }) => {
+          const body = {
+            t: frame.t,
+            z: 0,
+            x: Math.round(cachedObs.x),
+            y: Math.round(cachedObs.y),
+            half: 150,
+            size: 200,
+            fmt: "webp",
+            channels: settledChannels.map((ch) => ({
+              visible: ch.visible,
+              lo: ch.contrastLimits[0],
+              hi: ch.contrastLimits[1],
+              color: ch.color,
+              blend: ch.blendMode,
+            })),
+          };
+          const res = await fetch(`/api/crop/${trajectory.fovName}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+            signal,
+          });
+          if (!res.ok) throw new Error(`prefetch crop failed: ${res.status}`);
+          const blob = await res.blob();
+          if (signal.aborted) throw new DOMException("Aborted", "AbortError");
+          return URL.createObjectURL(blob);
+        },
+        staleTime: Infinity,
+        gcTime: 0,
+      });
+    }
+  }, [items, trajectory, settledChannels, settledHash, colCount, queryClient, isPending]);
+
+  if (!trajectory) return null;
+
+  // Show skeleton until container is measured (avoids zero-width card flash)
+  if (containerWidth === 0) {
+    return <div ref={parentRef} className="min-h-0 flex-1 overflow-y-auto p-3" />;
+  }
+
+  const totalSize = virtualizer.getTotalSize();
+
+  return (
+    <div ref={parentRef} className="min-h-0 flex-1 overflow-y-auto p-3">
+      <div style={{ height: totalSize, position: "relative" }}>
+        {items.map((vItem) => {
+          const frame = trajectory.points[vItem.index];
+          if (!frame) return null;
+          const left = vItem.lane * (colWidth + CARD_GAP);
+
+          return (
+            <div
+              key={vItem.key}
+              data-index={vItem.index}
+              ref={virtualizer.measureElement}
+              style={{
+                position: "absolute",
+                top: vItem.start,
+                left,
+                width: colWidth,
+                paddingBottom: CARD_GAP,
+              }}
+            >
+              <TrackGalleryCard
+                frame={frame}
+                fovName={trajectory.fovName}
+                isActive={vItem.index === activeFrame}
+                onClick={() => onFrameSelect(vItem.index)}
+                fetchEnabled={!isPending}
+                settledChannels={settledChannels}
+                settledHash={settledHash}
+                datasetKey={trajectory.datasetKey}
+              />
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}

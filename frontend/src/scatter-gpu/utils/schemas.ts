@@ -12,6 +12,7 @@ export const PositionHeaderSchema = z.object({
   embeddingKey: z.string().min(1),
   ndim: z.literal(2),
   rowIndices: z.array(z.number().int().nonnegative()),
+  positionScale: z.number().positive().default(1),
 });
 
 export const CategoryHeaderSchema = z.object({

@@ -1,4 +1,6 @@
-import type { Coordinator } from "@uwdata/mosaic-core";
+// Note: Coordinator is intentionally excluded from all query keys — it contains
+// circular references that break TanStack Query's JSON.stringify-based key hashing.
+// There is one coordinator per app session so keys are still unique without it.
 
 export const colormapKeys = {
   list: () => ["colormaps", "list"] as const,
@@ -12,19 +14,17 @@ export const scatterKeys = {
   continuousColors: (colorCol: string, colormap: string, vmin?: number, vmax?: number) =>
     ["scatter", "continuous-colors", colorCol, colormap, vmin ?? null, vmax ?? null] as const,
   metadata: () => ["metadata"] as const,
-  categoryCount: (coordinator: Coordinator, col: string) => ["scatter", "category-count", coordinator, col] as const,
-  rangeIsolation: (coordinator: Coordinator, col: string, vmin: number, vmax: number) =>
-    ["scatter", "range-isolation", coordinator, col, vmin, vmax] as const,
+  categoryCount: (col: string) => ["scatter", "category-count", col] as const,
+  rangeIsolation: (col: string, vmin: number, vmax: number) => ["scatter", "range-isolation", col, vmin, vmax] as const,
 } as const;
 
 export const tableKeys = {
-  rowPosition: (coordinator: Coordinator, table: string, rowIndex: number, filterKey: string, sortKey: string) =>
-    ["table", "row-position", coordinator, table, rowIndex, filterKey, sortKey] as const,
+  rowPosition: (table: string, rowIndex: number, filterKey: string, sortKey: string) =>
+    ["table", "row-position", table, rowIndex, filterKey, sortKey] as const,
 } as const;
 
 export const trajectoryKeys = {
-  track: (coordinator: Coordinator, table: string, trackId: number, fovName: string) =>
-    ["trajectory", coordinator, table, trackId, fovName] as const,
+  track: (table: string, trackId: number, fovName: string) => ["trajectory", table, trackId, fovName] as const,
 } as const;
 
 export const varKeys = {

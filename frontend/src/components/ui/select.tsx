@@ -175,7 +175,7 @@ function CompactSelect({
     <Select value={value} onValueChange={(v) => onChange(v ?? "")} disabled={disabled}>
       <SelectTrigger
         className={cn(
-          "h-6 min-w-0 max-w-32 gap-1 border-0 bg-transparent px-1.5 text-xs shadow-none ring-0 focus:ring-0 data-[placeholder]:text-muted-foreground",
+          "h-6 min-w-0 max-w-32 gap-1 border-0 bg-transparent px-1.5 text-xs shadow-none ring-0 focus:ring-0 data-placeholder:text-muted-foreground",
           className,
         )}
       >

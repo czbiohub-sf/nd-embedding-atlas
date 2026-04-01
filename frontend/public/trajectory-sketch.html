@@ -1,0 +1,588 @@
+<!doctype html>
+<!--
+  Trajectory Visualization Sketch
+  ──────────────────────────────────────────────────────────────────────────────
+  Explores three interaction patterns for cell tracking:
+
+  Panel A — Single Track with Direction Arrows
+    SVG arrowhead markers on each segment. Active timepoint highlighted.
+    Diamond = birth, double-circle = last observed.
+
+  Panel B — Multi-Track Overlay
+    Four simultaneous tracks, each with a distinct OKLCH color.
+    Shared active-T crosshair. Track labels at current position.
+
+  Panel C — Opacity Dimming (non-tracked points)
+    GPU-style point cloud: tracked points full opacity, non-tracked at 10%.
+    Same visual language as lasso selection dimming.
+  ──────────────────────────────────────────────────────────────────────────────
+-->
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Trajectory Visualization Sketch</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              background: "hsl(222 16% 8%)",
+              card: "hsl(222 14% 11%)",
+              border: "hsl(222 14% 18%)",
+              foreground: "hsl(210 20% 92%)",
+              muted: { DEFAULT: "hsl(222 14% 14%)", foreground: "hsl(215 14% 50%)" },
+              primary: { DEFAULT: "oklch(0.585 0.233 277.117)", foreground: "white" },
+            },
+          },
+        },
+      };
+    </script>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        background: hsl(222 16% 8%);
+        color: hsl(210 20% 92%);
+        font-family: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
+        min-height: 100vh;
+        padding: 2rem;
+        display: flex;
+        flex-direction: column;
+        gap: 2rem;
+      }
+      h1 {
+        font-size: 13px;
+        color: hsl(215 14% 50%);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+      .panel-row {
+        display: flex;
+        gap: 2rem;
+        flex-wrap: wrap;
+      }
+      .panel {
+        background: hsl(222 14% 11%);
+        border: 1px solid hsl(222 14% 18%);
+        border-radius: 10px;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+        min-width: 320px;
+      }
+      .panel-header {
+        padding: 10px 14px;
+        border-bottom: 1px solid hsl(222 14% 18%);
+        font-size: 11px;
+        color: hsl(215 14% 55%);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .panel-header strong {
+        color: hsl(210 20% 86%);
+        font-size: 12px;
+      }
+      canvas,
+      svg {
+        display: block;
+      }
+      .controls {
+        padding: 10px 14px;
+        border-top: 1px solid hsl(222 14% 18%);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 11px;
+        color: hsl(215 14% 50%);
+      }
+      input[type="range"] {
+        flex: 1;
+        accent-color: oklch(0.585 0.233 277.117);
+        height: 4px;
+      }
+      .t-badge {
+        background: oklch(0.585 0.233 277.117 / 20%);
+        color: oklch(0.585 0.233 277.117);
+        border: 1px solid oklch(0.585 0.233 277.117 / 40%);
+        border-radius: 4px;
+        padding: 1px 6px;
+        font-size: 10px;
+        min-width: 32px;
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Trajectory Visualization Sketch</h1>
+
+    <div class="panel-row">
+      <!-- Panel A: Single track with direction arrows -->
+      <div class="panel">
+        <div class="panel-header">
+          <strong>A — Single Track + Direction Arrows</strong>
+          <span>arrowhead markers, active highlight</span>
+        </div>
+        <svg id="svgA" width="100%" height="300"></svg>
+        <div class="controls">
+          <span>T*</span>
+          <input type="range" id="sliderA" min="0" max="14" value="7" step="1" />
+          <span class="t-badge" id="tBadgeA">7</span>
+        </div>
+      </div>
+
+      <!-- Panel B: Multi-track -->
+      <div class="panel">
+        <div class="panel-header">
+          <strong>B — Multi-Track Overlay</strong>
+          <span>4 simultaneous tracks, shared T</span>
+        </div>
+        <svg id="svgB" width="100%" height="300"></svg>
+        <div class="controls">
+          <span>T</span>
+          <input type="range" id="sliderB" min="0" max="14" value="7" step="1" />
+          <span class="t-badge" id="tBadgeB">7</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Panel C: Opacity dimming -->
+    <div class="panel" style="max-width: 680px">
+      <div class="panel-header">
+        <strong>C — Non-Tracked Point Dimming</strong>
+        <span>tracked points full opacity · non-tracked at 10% (same as lasso dim)</span>
+      </div>
+      <canvas id="canvasC" height="300" style="width: 100%"></canvas>
+      <div class="controls">
+        <span>Track visible</span>
+        <input type="range" id="sliderC" min="0" max="14" value="7" step="1" />
+        <span class="t-badge" id="tBadgeC">7</span>
+        <span style="margin-left: 8px; color: hsl(215 14% 35%)">drag slider to scrub T</span>
+      </div>
+    </div>
+
+    <script>
+      // ── Palette ──────────────────────────────────────────────────────────────
+      const COLORS = [
+        "oklch(0.585 0.233 277.117)", // purple
+        "oklch(0.65 0.18 140)", // green
+        "oklch(0.75 0.18 45)", // amber
+        "oklch(0.65 0.18 20)", // rose
+      ];
+      const BG = "hsl(222 14% 11%)";
+      const GRID = "hsl(222 14% 16%)";
+
+      // ── Generate track paths ─────────────────────────────────────────────────
+      function genTrack(seed, nPoints, xRange, yRange) {
+        const pts = [];
+        let x = xRange[0] + Math.random() * (xRange[1] - xRange[0]);
+        let y = yRange[0] + Math.random() * (yRange[1] - yRange[0]);
+        let vx = (Math.random() - 0.5) * 0.08;
+        let vy = (Math.random() - 0.5) * 0.06;
+        for (let i = 0; i < nPoints; i++) {
+          vx += (Math.random() - 0.5) * 0.03;
+          vy += (Math.random() - 0.5) * 0.025;
+          vx = Math.max(-0.15, Math.min(0.15, vx));
+          vy = Math.max(-0.1, Math.min(0.1, vy));
+          x = Math.max(xRange[0], Math.min(xRange[1], x + vx));
+          y = Math.max(yRange[0], Math.min(yRange[1], y + vy));
+          pts.push({ x, y, t: i });
+        }
+        return pts;
+      }
+
+      // Use seeded-ish tracks for reproducibility
+      Math.random = (function () {
+        let s = 42;
+        return function () {
+          s = (s * 16807 + 0) % 2147483647;
+          return (s - 1) / 2147483646;
+        };
+      })();
+
+      const N = 15;
+      const track1 = genTrack(1, N, [0.05, 0.95], [0.08, 0.92]);
+      const track2 = genTrack(2, N, [0.05, 0.95], [0.08, 0.92]);
+      const track3 = genTrack(3, N, [0.05, 0.95], [0.08, 0.92]);
+      const track4 = genTrack(4, N, [0.05, 0.95], [0.08, 0.92]);
+
+      // ── SVG helpers ──────────────────────────────────────────────────────────
+      const NS = "http://www.w3.org/2000/svg";
+      function el(tag, attrs) {
+        const e = document.createElementNS(NS, tag);
+        for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+        return e;
+      }
+
+      function toScreen(pt, W, H, pad = 28) {
+        return { sx: pad + pt.x * (W - 2 * pad), sy: pad + pt.y * (H - 2 * pad) };
+      }
+
+      // ── Panel A: Single track + direction arrows ──────────────────────────────
+      function drawA(activeT) {
+        const svg = document.getElementById("svgA");
+        const W = svg.clientWidth || 400,
+          H = svg.clientHeight || 300;
+        svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+        svg.innerHTML = "";
+
+        const color = COLORS[0];
+        const pts = track1;
+
+        // Defs: arrowhead marker
+        const defs = el("defs", {});
+        const marker = el("marker", {
+          id: "arrow-a",
+          markerWidth: "6",
+          markerHeight: "6",
+          refX: "5",
+          refY: "3",
+          orient: "auto",
+        });
+        const markerPath = el("path", {
+          d: "M0,0 L0,6 L6,3 z",
+          fill: color,
+          "fill-opacity": "0.85",
+        });
+        marker.appendChild(markerPath);
+        defs.appendChild(marker);
+        svg.appendChild(defs);
+
+        const g = el("g", {});
+
+        // Segments with arrows
+        for (let i = 1; i < pts.length; i++) {
+          const a = toScreen(pts[i - 1], W, H);
+          const b = toScreen(pts[i], W, H);
+          // Shorten end slightly so arrowhead sits at the endpoint
+          const dx = b.sx - a.sx,
+            dy = b.sy - a.sy;
+          const len = Math.sqrt(dx * dx + dy * dy);
+          const shorten = len > 0 ? 8 / len : 0;
+          const bx = b.sx - dx * shorten,
+            by = b.sy - dy * shorten;
+
+          const isActive = pts[i - 1].t <= activeT && pts[i].t > activeT;
+          const isPast = pts[i].t <= activeT;
+
+          const line = el("line", {
+            x1: a.sx,
+            y1: a.sy,
+            x2: bx,
+            y2: by,
+            stroke: color,
+            "stroke-width": isPast ? "2.5" : "1.5",
+            "stroke-opacity": isPast ? "0.85" : "0.3",
+            "marker-end": "url(#arrow-a)",
+          });
+          g.appendChild(line);
+        }
+
+        // Circles at each timepoint
+        for (let i = 0; i < pts.length; i++) {
+          const { sx, sy } = toScreen(pts[i], W, H);
+          const isActive = pts[i].t === activeT;
+          const isPast = pts[i].t < activeT;
+          const isFuture = pts[i].t > activeT;
+          const r = isActive ? 6.5 : isPast ? 3 : 2.5;
+          const fill = isActive ? "#fff" : isPast ? color : "transparent";
+          const stroke = isActive ? color : isFuture ? color : "none";
+
+          const c = el("circle", {
+            cx: sx,
+            cy: sy,
+            r,
+            fill,
+            stroke,
+            "stroke-width": isActive ? "2.5" : isFuture ? "1.5" : "0",
+            opacity: isFuture ? "0.3" : "1",
+          });
+          g.appendChild(c);
+        }
+
+        // Diamond at t=0
+        const s0 = toScreen(pts[0], W, H);
+        const d = el("path", {
+          d: `M${s0.sx},${s0.sy - 5} L${s0.sx + 5},${s0.sy} L${s0.sx},${s0.sy + 5} L${s0.sx - 5},${s0.sy} Z`,
+          fill: color,
+          stroke: "#fff",
+          "stroke-width": "1",
+        });
+        g.appendChild(d);
+
+        // Double-circle at end
+        const sEnd = toScreen(pts[pts.length - 1], W, H);
+        g.appendChild(
+          el("circle", { cx: sEnd.sx, cy: sEnd.sy, r: "7", fill: "none", stroke: color, "stroke-width": "2.5" }),
+        );
+        g.appendChild(el("circle", { cx: sEnd.sx, cy: sEnd.sy, r: "4", fill: color }));
+
+        // T label at active point
+        if (activeT < pts.length) {
+          const ap = toScreen(pts[activeT], W, H);
+          const lbl = el("text", {
+            x: ap.sx + 10,
+            y: ap.sy - 8,
+            fill: "#fff",
+            "font-size": "10",
+            "font-family": "monospace",
+            opacity: "0.9",
+          });
+          lbl.textContent = `T=${activeT}`;
+          g.appendChild(lbl);
+        }
+
+        svg.appendChild(g);
+      }
+
+      // ── Panel B: Multi-track ─────────────────────────────────────────────────
+      function drawB(activeT) {
+        const svg = document.getElementById("svgB");
+        const W = svg.clientWidth || 400,
+          H = svg.clientHeight || 300;
+        svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+        svg.innerHTML = "";
+
+        const defs = el("defs", {});
+        const tracks = [track1, track2, track3, track4];
+
+        // One marker per color
+        COLORS.forEach((color, ci) => {
+          const marker = el("marker", {
+            id: `arrow-b${ci}`,
+            markerWidth: "6",
+            markerHeight: "6",
+            refX: "5",
+            refY: "3",
+            orient: "auto",
+          });
+          const mp = el("path", { d: "M0,0 L0,6 L6,3 z", fill: color, "fill-opacity": "0.9" });
+          marker.appendChild(mp);
+          defs.appendChild(marker);
+        });
+        svg.appendChild(defs);
+
+        const g = el("g", {});
+
+        tracks.forEach((pts, ti) => {
+          const color = COLORS[ti];
+
+          for (let i = 1; i < pts.length; i++) {
+            const a = toScreen(pts[i - 1], W, H);
+            const b = toScreen(pts[i], W, H);
+            const dx = b.sx - a.sx,
+              dy = b.sy - a.sy;
+            const len = Math.sqrt(dx * dx + dy * dy);
+            const shorten = len > 0 ? 8 / len : 0;
+            const bx = b.sx - dx * shorten,
+              by = b.sy - dy * shorten;
+            const isPast = pts[i].t <= activeT;
+            const line = el("line", {
+              x1: a.sx,
+              y1: a.sy,
+              x2: bx,
+              y2: by,
+              stroke: color,
+              "stroke-width": isPast ? "2" : "1",
+              "stroke-opacity": isPast ? "0.75" : "0.2",
+              "marker-end": `url(#arrow-b${ti})`,
+            });
+            g.appendChild(line);
+          }
+
+          // Active point per track
+          if (activeT < pts.length) {
+            const { sx, sy } = toScreen(pts[activeT], W, H);
+            g.appendChild(el("circle", { cx: sx, cy: sy, r: "5", fill: "#fff", stroke: color, "stroke-width": "2" }));
+            // Track label
+            const lbl = el("text", {
+              x: sx + 8,
+              y: sy - 6,
+              fill: color,
+              "font-size": "9",
+              "font-family": "monospace",
+              opacity: "0.9",
+            });
+            lbl.textContent = `#${ti + 1}`;
+            g.appendChild(lbl);
+          }
+
+          // Birth diamond
+          const s0 = toScreen(pts[0], W, H);
+          g.appendChild(
+            el("path", {
+              d: `M${s0.sx},${s0.sy - 4} L${s0.sx + 4},${s0.sy} L${s0.sx},${s0.sy + 4} L${s0.sx - 4},${s0.sy} Z`,
+              fill: color,
+              stroke: "rgba(255,255,255,0.3)",
+              "stroke-width": "0.8",
+            }),
+          );
+        });
+
+        // Global T crosshair line
+        const yLine = 28 + (activeT / (N - 1)) * (H - 56);
+        const crosshair = el("line", {
+          x1: "0",
+          y1: yLine,
+          x2: W,
+          y2: yLine,
+          stroke: "rgba(255,255,255,0.06)",
+          "stroke-width": "1",
+          "stroke-dasharray": "3,4",
+        });
+        g.appendChild(crosshair);
+
+        svg.appendChild(g);
+      }
+
+      // ── Panel C: Point cloud opacity dimming ─────────────────────────────────
+      const cloudPoints = [];
+      const CLOUD_N = 800;
+      // Generate random background scatter
+      for (let i = 0; i < CLOUD_N; i++) {
+        cloudPoints.push({ x: Math.random(), y: Math.random(), onTrack: false, trackT: -1 });
+      }
+      // Mark track1 timepoints as "on track"
+      track1.forEach((p, i) => {
+        const idx = Math.floor(Math.random() * 20 + i * 3) % CLOUD_N;
+        cloudPoints[idx] = { x: p.x, y: p.y, onTrack: true, trackT: p.t };
+      });
+
+      function drawC(activeT) {
+        const canvas = document.getElementById("canvasC");
+        const W = canvas.clientWidth;
+        const H = canvas.height;
+        canvas.width = W * devicePixelRatio;
+        canvas.height = H * devicePixelRatio;
+        const ctx = canvas.getContext("2d");
+        ctx.scale(devicePixelRatio, devicePixelRatio);
+
+        ctx.fillStyle = BG;
+        ctx.fillRect(0, 0, W, H);
+
+        const pad = 28;
+        function sc(pt) {
+          return { sx: pad + pt.x * (W - 2 * pad), sy: pad + pt.y * (H - 2 * pad) };
+        }
+
+        // Background points — dimmed
+        cloudPoints.forEach((pt) => {
+          if (pt.onTrack) return;
+          const { sx, sy } = sc(pt);
+          ctx.beginPath();
+          ctx.arc(sx, sy, 2.5, 0, Math.PI * 2);
+          ctx.fillStyle = "rgba(120, 130, 160, 0.10)";
+          ctx.fill();
+        });
+
+        // Track path
+        const color = "oklch(0.585 0.233 277.117)";
+        const colorRgb = "99, 102, 241"; // approx for canvas
+
+        for (let i = 1; i < track1.length; i++) {
+          const a = sc(track1[i - 1]),
+            b = sc(track1[i]);
+          const isPast = track1[i].t <= activeT;
+          ctx.beginPath();
+          ctx.moveTo(a.sx, a.sy);
+          ctx.lineTo(b.sx, b.sy);
+          ctx.strokeStyle = isPast ? `rgba(${colorRgb}, 0.85)` : `rgba(${colorRgb}, 0.2)`;
+          ctx.lineWidth = isPast ? 2.5 : 1.5;
+          ctx.stroke();
+
+          // Arrowhead
+          if (isPast) {
+            const dx = b.sx - a.sx,
+              dy = b.sy - a.sy;
+            const len = Math.sqrt(dx * dx + dy * dy);
+            if (len > 12) {
+              const mx = (a.sx + b.sx) / 2,
+                my = (a.sy + b.sy) / 2;
+              const nx = dx / len,
+                ny = dy / len;
+              const size = 5;
+              ctx.beginPath();
+              ctx.moveTo(mx + nx * size, my + ny * size);
+              ctx.lineTo(mx - ny * size * 0.6 - nx * size * 0.6, my + nx * size * 0.6 - ny * size * 0.6);
+              ctx.lineTo(mx + ny * size * 0.6 - nx * size * 0.6, my - nx * size * 0.6 - ny * size * 0.6);
+              ctx.closePath();
+              ctx.fillStyle = `rgba(${colorRgb}, 0.75)`;
+              ctx.fill();
+            }
+          }
+        }
+
+        // Tracked points — full opacity
+        track1.forEach((pt, i) => {
+          const { sx, sy } = sc(pt);
+          const isActive = pt.t === activeT;
+          const isPast = pt.t < activeT;
+          const isFuture = pt.t > activeT;
+
+          ctx.beginPath();
+          ctx.arc(sx, sy, isActive ? 6.5 : isPast ? 3.5 : 2.5, 0, Math.PI * 2);
+          if (isActive) {
+            ctx.fillStyle = "#ffffff";
+            ctx.strokeStyle = `rgba(${colorRgb}, 1)`;
+            ctx.lineWidth = 2.5;
+            ctx.fill();
+            ctx.stroke();
+          } else if (isPast) {
+            ctx.fillStyle = `rgba(${colorRgb}, 0.9)`;
+            ctx.fill();
+          } else {
+            ctx.fillStyle = `rgba(${colorRgb}, 0.25)`;
+            ctx.fill();
+          }
+        });
+
+        // Legend
+        ctx.fillStyle = "rgba(120,130,160,0.5)";
+        ctx.font = "10px monospace";
+        ctx.fillText("● tracked  (full opacity)", 14, H - 28);
+        ctx.fillStyle = "rgba(120,130,160,0.2)";
+        ctx.fillText("● others   (10% opacity)", 14, H - 14);
+      }
+
+      // ── Slider wiring ────────────────────────────────────────────────────────
+      function init() {
+        const slA = document.getElementById("sliderA");
+        const slB = document.getElementById("sliderB");
+        const slC = document.getElementById("sliderC");
+
+        slA.addEventListener("input", () => {
+          document.getElementById("tBadgeA").textContent = slA.value;
+          drawA(+slA.value);
+        });
+        slB.addEventListener("input", () => {
+          document.getElementById("tBadgeB").textContent = slB.value;
+          drawB(+slB.value);
+        });
+        slC.addEventListener("input", () => {
+          document.getElementById("tBadgeC").textContent = slC.value;
+          drawC(+slC.value);
+        });
+
+        drawA(7);
+        drawB(7);
+        drawC(7);
+      }
+
+      window.addEventListener("load", init);
+      window.addEventListener("resize", () => {
+        const tA = +document.getElementById("sliderA").value;
+        const tB = +document.getElementById("sliderB").value;
+        const tC = +document.getElementById("sliderC").value;
+        drawA(tA);
+        drawB(tB);
+        drawC(tC);
+      });
+    </script>
+  </body>
+</html>
