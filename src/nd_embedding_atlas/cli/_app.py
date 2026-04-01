@@ -90,8 +90,26 @@ def view(
         int | None, typer.Option("--pool-workers", help="Request handler thread pool size.")
     ] = None,
     dry_run: Annotated[bool, typer.Option("--dry-run", help="Print metadata and exit.")] = False,
+    no_static: Annotated[bool, typer.Option("--no-static", help="Skip mounting the built frontend (use with vp dev).")] = False,
 ) -> None:
     """Launch the viewer. Auto-detects AnnData vs OME-Zarr inputs."""
+    # YAML project config detection — must resolve before suffix check to handle symlinks
+    resolved_first = paths[0].resolve() if len(paths) == 1 else None
+    if resolved_first and resolved_first.suffix in (".yaml", ".yml"):
+        from nd_embedding_atlas.cli._project import view_project  # noqa: PLC0415
+
+        view_project(
+            resolved_first,
+            export_dir=export_dir,
+            columns_config=columns_config,
+            duckdb_threads=duckdb_threads,
+            pool_workers=pool_workers,
+            host=host,
+            port=port,
+            no_static=no_static,
+        )
+        return
+
     kind, resolved = _classify_paths(paths)
 
     if kind == "ome-zarr":
@@ -111,4 +129,5 @@ def view(
             pool_workers=pool_workers,
             host=host,
             port=port,
+            no_static=no_static,
         )

@@ -1,0 +1,791 @@
+<!doctype html>
+<!--
+  Option A — Two-tab Popover
+  ─────────────────────────────────────────────────────────────────────────────
+  Rationale: A Popover with [Obs] / [Gene] tabs gives a clean mode separation
+  while keeping the trigger compact — a single pill token that shows both the
+  source type (badge) and selected value. The Gene tab has a virtualized-style
+  list for 33k genes with debounced search. The layer selector only appears once
+  a gene is chosen, appearing as a secondary row inside the tab — keeping the
+  popover footprint constant.
+  ─────────────────────────────────────────────────────────────────────────────
+-->
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Option A — Two-tab Popover</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              card: "hsl(220 13% 10%)",
+              border: "hsl(220 13% 18%)",
+              input: "hsl(220 13% 18%)",
+              ring: "hsl(220 70% 60%)",
+              foreground: "hsl(210 20% 92%)",
+              muted: { foreground: "hsl(215 15% 55%)" },
+              primary: { DEFAULT: "hsl(220 70% 62%)", foreground: "hsl(0 0% 100%)" },
+              accent: { DEFAULT: "hsl(220 13% 16%)", foreground: "hsl(210 20% 92%)" },
+            },
+            fontFamily: { mono: ["JetBrains Mono", "Fira Code", "ui-monospace", "monospace"] },
+          },
+        },
+      };
+    </script>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        background: hsl(220 13% 7%);
+        font-family: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+        min-height: 100vh;
+        padding: 2rem;
+        gap: 3rem;
+        flex-wrap: wrap;
+      }
+
+      /* ── Glass pill (matches the scatter overlay style) ── */
+      .glass-pill {
+        background: rgba(18, 20, 27, 0.75);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.07);
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px 8px;
+        font-size: 11px;
+      }
+
+      .glass-sep {
+        width: 1px;
+        height: 12px;
+        background: rgba(255, 255, 255, 0.1);
+      }
+
+      .glass-label {
+        font-size: 10px;
+        color: hsl(215 15% 40%);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+
+      /* ── Combobox trigger (existing style in codebase) ── */
+      .combo-trigger {
+        height: 24px;
+        max-width: 112px;
+        border: none;
+        background: transparent;
+        padding: 0 6px;
+        font-size: 11px;
+        gap: 4px;
+        color: hsl(210 20% 80%);
+        border-radius: 4px;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        transition: background 0.12s;
+        font-family: inherit;
+        white-space: nowrap;
+      }
+      .combo-trigger:hover {
+        background: rgba(255, 255, 255, 0.1);
+        color: hsl(210 20% 92%);
+      }
+      .combo-trigger:focus {
+        outline: none;
+      }
+
+      /* Source type badge on the trigger */
+      .src-badge {
+        font-size: 9px;
+        padding: 1px 5px;
+        border-radius: 3px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        line-height: 1.4;
+        flex-shrink: 0;
+      }
+      .src-badge.obs {
+        background: rgba(99, 179, 237, 0.18);
+        color: hsl(205 80% 72%);
+      }
+      .src-badge.gene {
+        background: rgba(154, 205, 120, 0.18);
+        color: hsl(115 45% 68%);
+      }
+      .src-badge.none {
+        background: rgba(255, 255, 255, 0.07);
+        color: hsl(215 15% 50%);
+      }
+
+      /* ── Popover ── */
+      .popover-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 40;
+        display: none;
+      }
+      .popover-overlay.open {
+        display: block;
+      }
+
+      .popover {
+        position: absolute;
+        background: hsl(220 13% 10%);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        box-shadow:
+          0 8px 32px rgba(0, 0, 0, 0.6),
+          0 2px 8px rgba(0, 0, 0, 0.4);
+        width: 260px;
+        overflow: hidden;
+        animation: pop-in 0.12s ease-out;
+        z-index: 50;
+      }
+      @keyframes pop-in {
+        from {
+          opacity: 0;
+          transform: translateY(-4px) scale(0.98);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0) scale(1);
+        }
+      }
+
+      /* Tabs */
+      .tab-bar {
+        display: flex;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+        padding: 4px 6px 0;
+        gap: 2px;
+      }
+      .tab-btn {
+        font-family: inherit;
+        font-size: 11px;
+        padding: 4px 10px 5px;
+        border: none;
+        background: transparent;
+        cursor: pointer;
+        color: hsl(215 15% 50%);
+        border-radius: 4px 4px 0 0;
+        border-bottom: 2px solid transparent;
+        transition:
+          color 0.1s,
+          border-color 0.1s;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+      }
+      .tab-btn.active {
+        color: hsl(210 20% 92%);
+        border-bottom-color: hsl(220 70% 62%);
+      }
+      .tab-btn:hover:not(.active) {
+        color: hsl(210 20% 75%);
+        background: rgba(255, 255, 255, 0.04);
+      }
+
+      /* Search input */
+      .search-wrap {
+        padding: 6px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      }
+      .search-input {
+        width: 100%;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 5px;
+        padding: 5px 8px;
+        font-size: 11px;
+        color: hsl(210 20% 88%);
+        font-family: inherit;
+        outline: none;
+        transition: border-color 0.15s;
+      }
+      .search-input::placeholder {
+        color: hsl(215 15% 40%);
+      }
+      .search-input:focus {
+        border-color: rgba(100, 150, 255, 0.4);
+      }
+
+      /* Item list */
+      .item-list {
+        max-height: 200px;
+        overflow-y: auto;
+        padding: 3px;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+      }
+      .list-item {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 11px;
+        color: hsl(215 15% 65%);
+        cursor: pointer;
+        transition:
+          background 0.08s,
+          color 0.08s;
+      }
+      .list-item:hover {
+        background: rgba(255, 255, 255, 0.07);
+        color: hsl(210 20% 92%);
+      }
+      .list-item.selected {
+        background: rgba(99, 130, 255, 0.15);
+        color: hsl(220 80% 75%);
+      }
+      .list-item .check {
+        width: 10px;
+        height: 10px;
+        color: hsl(220 70% 62%);
+        flex-shrink: 0;
+      }
+      .list-item .check.hidden {
+        opacity: 0;
+      }
+
+      /* Layer picker — shown only when gene is selected */
+      .layer-row {
+        border-top: 1px solid rgba(255, 255, 255, 0.06);
+        padding: 6px 8px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 10px;
+        color: hsl(215 15% 50%);
+      }
+      .layer-row label {
+        flex-shrink: 0;
+      }
+      .layer-select {
+        flex: 1;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 4px;
+        padding: 3px 6px;
+        font-size: 10px;
+        font-family: inherit;
+        color: hsl(210 20% 80%);
+        outline: none;
+        cursor: pointer;
+      }
+      .layer-select option {
+        background: hsl(220 13% 12%);
+      }
+
+      /* Empty state */
+      .empty {
+        padding: 16px;
+        text-align: center;
+        font-size: 11px;
+        color: hsl(215 15% 40%);
+      }
+
+      /* Gene count label */
+      .gene-count {
+        font-size: 9px;
+        color: hsl(215 15% 35%);
+        padding: 2px 9px;
+        background: rgba(255, 255, 255, 0.03);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      }
+
+      /* Annotation text block */
+      .annotation {
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.07);
+        border-radius: 6px;
+        padding: 12px 14px;
+        font-size: 11px;
+        color: hsl(215 15% 55%);
+        line-height: 1.6;
+        max-width: 320px;
+      }
+      .annotation strong {
+        color: hsl(210 20% 80%);
+      }
+
+      .demo-area {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        align-items: flex-start;
+      }
+      .section-title {
+        font-size: 10px;
+        color: hsl(215 15% 35%);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- ─────────────────────────────────────────────────
+  DEMO AREA: shows the glass pill in both states
+───────────────────────────────────────────────────── -->
+    <div class="demo-area">
+      <div class="section-title">Option A — Two-tab Popover</div>
+
+      <!-- State 1: no selection (none) -->
+      <div>
+        <div class="section-title" style="margin-bottom: 6px">State: none</div>
+        <div class="glass-pill" style="position: relative">
+          <span class="glass-label">emb</span>
+          <button class="combo-trigger">
+            X_umap
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M7 9l5 5 5-5" />
+            </svg>
+          </button>
+          <div class="glass-sep"></div>
+          <span class="glass-label">x</span>
+          <button class="combo-trigger" style="max-width: 40px">
+            0
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M7 9l5 5 5-5" />
+            </svg>
+          </button>
+          <span class="glass-label">y</span>
+          <button class="combo-trigger" style="max-width: 40px">
+            1
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M7 9l5 5 5-5" />
+            </svg>
+          </button>
+          <div class="glass-sep"></div>
+          <span class="glass-label">col</span>
+          <button class="combo-trigger" style="color: hsl(215 15% 40%)">
+            <span class="src-badge none">—</span>
+            <span>none</span>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M7 9l5 5 5-5" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- State 2: obs column selected -->
+      <div>
+        <div class="section-title" style="margin-bottom: 6px">State: obs column</div>
+        <div class="glass-pill">
+          <span class="glass-label">emb</span>
+          <button class="combo-trigger">
+            X_umap
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M7 9l5 5 5-5" />
+            </svg>
+          </button>
+          <div class="glass-sep"></div>
+          <span class="glass-label">x</span>
+          <button class="combo-trigger" style="max-width: 40px">
+            0
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M7 9l5 5 5-5" />
+            </svg>
+          </button>
+          <span class="glass-label">y</span>
+          <button class="combo-trigger" style="max-width: 40px">
+            1
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M7 9l5 5 5-5" />
+            </svg>
+          </button>
+          <div class="glass-sep"></div>
+          <span class="glass-label">col</span>
+          <button class="combo-trigger">
+            <span class="src-badge obs">obs</span>
+            <span>cell_type</span>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M7 9l5 5 5-5" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- State 3: gene expression selected -->
+      <div>
+        <div class="section-title" style="margin-bottom: 6px">State: gene expression</div>
+        <div class="glass-pill">
+          <span class="glass-label">emb</span>
+          <button class="combo-trigger">
+            X_umap
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M7 9l5 5 5-5" />
+            </svg>
+          </button>
+          <div class="glass-sep"></div>
+          <span class="glass-label">x</span>
+          <button class="combo-trigger" style="max-width: 40px">
+            0
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M7 9l5 5 5-5" />
+            </svg>
+          </button>
+          <span class="glass-label">y</span>
+          <button class="combo-trigger" style="max-width: 40px">
+            1
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M7 9l5 5 5-5" />
+            </svg>
+          </button>
+          <div class="glass-sep"></div>
+          <span class="glass-label">col</span>
+          <button class="combo-trigger" style="max-width: 160px">
+            <span class="src-badge gene">X</span>
+            <span>ACTB · log1p</span>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M7 9l5 5 5-5" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Interactive demo -->
+      <div>
+        <div class="section-title" style="margin-bottom: 6px">Interactive (click the col trigger)</div>
+        <div class="glass-pill" style="position: relative">
+          <span class="glass-label">emb</span>
+          <button class="combo-trigger">
+            X_umap
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M7 9l5 5 5-5" />
+            </svg>
+          </button>
+          <div class="glass-sep"></div>
+          <span class="glass-label">x</span>
+          <button class="combo-trigger" style="max-width: 40px">
+            0
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M7 9l5 5 5-5" />
+            </svg>
+          </button>
+          <span class="glass-label">y</span>
+          <button class="combo-trigger" style="max-width: 40px">
+            1
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M7 9l5 5 5-5" />
+            </svg>
+          </button>
+          <div class="glass-sep"></div>
+          <span class="glass-label">col</span>
+          <button class="combo-trigger" id="color-trigger" style="max-width: 160px" onclick="openPopover(event)">
+            <span class="src-badge none" id="badge-none">—</span>
+            <span class="src-badge obs" id="badge-obs" style="display: none">obs</span>
+            <span class="src-badge gene" id="badge-gene" style="display: none">X</span>
+            <span id="trigger-label" style="color: hsl(215 15% 40%)">none</span>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M7 9l5 5 5-5" />
+            </svg>
+          </button>
+
+          <!-- Popover (absolute, anchored to the pill) -->
+          <div class="popover" id="popover" style="display: none; top: 28px; left: 0; min-width: 260px">
+            <!-- Tab bar -->
+            <div class="tab-bar">
+              <button class="tab-btn active" id="tab-obs" onclick="switchTab('obs')">
+                <span class="src-badge obs">obs</span> Metadata
+              </button>
+              <button class="tab-btn" id="tab-gene" onclick="switchTab('gene')">
+                <span class="src-badge gene">X</span> Gene
+              </button>
+              <button
+                class="tab-btn"
+                style="margin-left: auto; font-size: 10px; color: hsl(215 15% 40%)"
+                onclick="clearSelection()"
+              >
+                none
+              </button>
+            </div>
+
+            <!-- Obs tab content -->
+            <div id="obs-panel">
+              <div class="search-wrap">
+                <input
+                  class="search-input"
+                  id="obs-search"
+                  placeholder="Search columns…"
+                  oninput="filterObs(this.value)"
+                />
+              </div>
+              <div class="item-list" id="obs-list"></div>
+            </div>
+
+            <!-- Gene tab content (hidden initially) -->
+            <div id="gene-panel" style="display: none">
+              <div class="gene-count" id="gene-count">33,694 genes · showing top 50</div>
+              <div class="search-wrap">
+                <input
+                  class="search-input"
+                  id="gene-search"
+                  placeholder="Search genes… (debounced)"
+                  oninput="filterGenes(this.value)"
+                />
+              </div>
+              <div class="item-list" id="gene-list"></div>
+              <!-- Layer selector — appears once gene is chosen -->
+              <div class="layer-row" id="layer-row" style="display: none">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                  <path d="M2 17l10 5 10-5" />
+                  <path d="M2 12l10 5 10-5" />
+                </svg>
+                <label>layer</label>
+                <select class="layer-select" id="layer-select" onchange="updateLayer(this.value)">
+                  <option value="X">X (default)</option>
+                  <option value="log1p">log1p</option>
+                  <option value="normalized">normalized</option>
+                  <option value="raw">raw</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Rationale panel -->
+    <div class="demo-area" style="max-width: 320px; padding-top: 28px">
+      <div class="section-title">Design rationale</div>
+      <div class="annotation">
+        <strong>Trigger:</strong> a single compact token — source badge + value label + chevron — fits naturally in the
+        existing glass pill row without expanding it. The badge color (blue for obs, green for gene) gives immediate
+        context at a glance.<br /><br />
+        <strong>Popover:</strong> two tabs cleanly separate the two mode domains. Obs uses a flat search list (~500
+        items). Gene tab uses debounced server search (not prefilled) with a "none / clear" shortcut. The layer picker
+        only materializes when a gene is selected — no wasted vertical space otherwise.<br /><br />
+        <strong>Gene list:</strong> rendered lazily — only top 50 shown by default; user types to search (debounced
+        200ms → <code>GET /api/var/names?q=…&limit=50</code>).
+      </div>
+
+      <div class="annotation" style="margin-top: 8px">
+        <strong>Best for:</strong> users who think in terms of distinct modes (obs vs gene). Clear switching prevents
+        accidental cross-type selections. The layer picker being contextual avoids showing irrelevant controls when not
+        needed.
+      </div>
+    </div>
+
+    <script>
+      const OBS_COLUMNS = [
+        "cell_type",
+        "leiden",
+        "batch",
+        "n_counts",
+        "pct_mito",
+        "total_umis",
+        "doublet_score",
+        "phase",
+        "tissue",
+        "donor_id",
+      ];
+      const GENE_NAMES = [
+        "ACTB",
+        "CD3E",
+        "TP53",
+        "GAPDH",
+        "EGFR",
+        "MKI67",
+        "CD19",
+        "CD8A",
+        "FOXP3",
+        "IL2",
+        "TNF",
+        "IFNG",
+        "CD4",
+        "CD14",
+        "PTPRC",
+        "SOX2",
+        "NANOG",
+        "OCT4",
+        "KRT18",
+        "VIM",
+        "ZEB1",
+        "TWIST1",
+        "CDH1",
+        "CDH2",
+        "EPCAM",
+        "PECAM1",
+        "COL1A1",
+        "ACTA2",
+        "PDGFRA",
+        "PDGFRB",
+        "CD68",
+        "CSF1R",
+        "CD163",
+        "ITGAM",
+        "HLA-A",
+        "HLA-B",
+        "B2M",
+        "CALR",
+        "CD47",
+        "CD44",
+        "CD274",
+        "PDCD1",
+        "HAVCR2",
+        "LAG3",
+        "TIGIT",
+        "CTLA4",
+        "CD80",
+        "CD86",
+        "IDO1",
+        "CXCL10",
+      ];
+
+      let state = { mode: null, value: null, gene: null, layer: "X" };
+      let popoverOpen = false;
+
+      function renderObsList(query = "") {
+        const list = document.getElementById("obs-list");
+        const filtered = OBS_COLUMNS.filter((c) => c.toLowerCase().includes(query.toLowerCase()));
+        list.innerHTML =
+          filtered.length === 0
+            ? '<div class="empty">No columns found</div>'
+            : filtered
+                .map(
+                  (c) => `
+          <div class="list-item ${state.mode === "obs" && state.value === c ? "selected" : ""}" onclick="selectObs('${c}')">
+            <svg class="check ${state.mode === "obs" && state.value === c ? "" : "hidden"}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6L9 17l-5-5"/></svg>
+            ${c}
+          </div>`,
+                )
+                .join("");
+      }
+
+      function renderGeneList(query = "") {
+        const list = document.getElementById("gene-list");
+        const q = query.toLowerCase();
+        const filtered = GENE_NAMES.filter((g) => !q || g.toLowerCase().startsWith(q)).slice(0, 50);
+        list.innerHTML =
+          filtered.length === 0
+            ? '<div class="empty">No genes found. Try a different search.</div>'
+            : filtered
+                .map(
+                  (g) => `
+          <div class="list-item ${state.mode === "gene" && state.gene === g ? "selected" : ""}" onclick="selectGene('${g}')">
+            <svg class="check ${state.mode === "gene" && state.gene === g ? "" : "hidden"}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6L9 17l-5-5"/></svg>
+            ${g}
+          </div>`,
+                )
+                .join("");
+      }
+
+      function filterObs(v) {
+        renderObsList(v);
+      }
+
+      let debounceTimer;
+      function filterGenes(v) {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => renderGeneList(v), 180);
+      }
+
+      function selectObs(col) {
+        state = { mode: "obs", value: col, gene: null, layer: "X" };
+        updateTrigger();
+        renderObsList(document.getElementById("obs-search").value);
+      }
+
+      function selectGene(gene) {
+        state = { ...state, mode: "gene", gene };
+        document.getElementById("layer-row").style.display = "flex";
+        updateTrigger();
+        renderGeneList(document.getElementById("gene-search").value);
+      }
+
+      function updateLayer(layer) {
+        state.layer = layer;
+        updateTrigger();
+      }
+
+      function clearSelection() {
+        state = { mode: null, value: null, gene: null, layer: "X" };
+        document.getElementById("layer-row").style.display = "none";
+        updateTrigger();
+        closePopover();
+      }
+
+      function updateTrigger() {
+        const label = document.getElementById("trigger-label");
+        const badgeNone = document.getElementById("badge-none");
+        const badgeObs = document.getElementById("badge-obs");
+        const badgeGene = document.getElementById("badge-gene");
+
+        if (!state.mode) {
+          label.textContent = "none";
+          label.style.color = "hsl(215 15% 40%)";
+          badgeNone.style.display = "";
+          badgeObs.style.display = "none";
+          badgeGene.style.display = "none";
+        } else if (state.mode === "obs") {
+          label.textContent = state.value;
+          label.style.color = "";
+          badgeNone.style.display = "none";
+          badgeObs.style.display = "";
+          badgeGene.style.display = "none";
+        } else {
+          const layerStr = state.layer === "X" ? "" : ` · ${state.layer}`;
+          label.textContent = state.gene + layerStr;
+          label.style.color = "";
+          badgeNone.style.display = "none";
+          badgeObs.style.display = "none";
+          badgeGene.style.display = "";
+        }
+      }
+
+      function openPopover(e) {
+        e.stopPropagation();
+        const pop = document.getElementById("popover");
+        if (popoverOpen) {
+          closePopover();
+          return;
+        }
+        pop.style.display = "block";
+        popoverOpen = true;
+        // Open to the correct tab for current state
+        if (state.mode === "gene") switchTab("gene");
+        else switchTab("obs");
+        renderObsList();
+        renderGeneList();
+        if (state.mode === "gene") document.getElementById("layer-row").style.display = "flex";
+      }
+
+      function closePopover() {
+        document.getElementById("popover").style.display = "none";
+        popoverOpen = false;
+      }
+
+      function switchTab(tab) {
+        document.getElementById("obs-panel").style.display = tab === "obs" ? "block" : "none";
+        document.getElementById("gene-panel").style.display = tab === "gene" ? "block" : "none";
+        document.getElementById("tab-obs").classList.toggle("active", tab === "obs");
+        document.getElementById("tab-gene").classList.toggle("active", tab === "gene");
+      }
+
+      document.addEventListener("click", (e) => {
+        if (
+          !document.getElementById("popover").contains(e.target) &&
+          e.target !== document.getElementById("color-trigger") &&
+          !document.getElementById("color-trigger").contains(e.target)
+        ) {
+          closePopover();
+        }
+      });
+
+      renderObsList();
+      renderGeneList();
+    </script>
+  </body>
+</html>

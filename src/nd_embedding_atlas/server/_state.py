@@ -44,6 +44,7 @@ class DatasetConfig:
     default_x: str
     default_y: str
     id_column: str = "__row_index__"
+    dataset_keys: list[str] | None = None
 
 
 @dataclasses.dataclass
@@ -94,12 +95,16 @@ class ViewerState:
         available_obsm_keys: list[str],
         spatial: SpatialColumns,
         export_dir: pathlib.Path,
+        dataset_plates: dict[str, pathlib.Path] | None = None,
+        project_config_path: pathlib.Path | None = None,
     ) -> None:
         self.collection = collection
         self.store = store
         self.available_obsm_keys = available_obsm_keys
         self.spatial = spatial
         self.export_dir = export_dir
+        self.dataset_plates: dict[str, pathlib.Path] = dataset_plates or {}
+        self.project_config_path: pathlib.Path | None = project_config_path
 
         self.loading_tasks: dict[str, asyncio.Task[None]] = {}
         self.load_errors: dict[str, str] = {}

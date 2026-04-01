@@ -1,0 +1,554 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Dual Scatter — A B C</title>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Geist+Mono:wght@300;400;500;600&display=swap");
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      :root {
+        --bg: oklch(0.145 0 0);
+        --srf: oklch(0.175 0 0);
+        --elv: oklch(0.22 0 0);
+        --bdr: oklch(1 0 0 / 8%);
+        --fg: oklch(0.985 0 0);
+        --muted: oklch(0.48 0 0);
+        --dim: oklch(0.3 0 0);
+        --pu: oklch(0.585 0.233 277.117);
+        --pu-bg: oklch(0.585 0.233 277.117 / 16%);
+        --gr: oklch(0.65 0.18 140);
+        --gr-bg: oklch(0.65 0.18 140 / 14%);
+        --glass: oklch(0.185 0 0 / 76%);
+        --glass-b: oklch(1 0 0 / 7%);
+        --r: 0.45rem;
+      }
+
+      body {
+        background: oklch(0.09 0 0);
+        color: var(--fg);
+        font-family: "Geist Mono", ui-monospace, monospace;
+        font-size: 12px;
+        padding: 2rem;
+        display: flex;
+        flex-direction: column;
+        gap: 2.5rem;
+      }
+
+      h2 {
+        font-size: 9px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin-bottom: 0.6rem;
+      }
+      .sub {
+        font-size: 9px;
+        color: var(--dim);
+        margin-top: 0.35rem;
+        letter-spacing: 0.03em;
+      }
+
+      /* ── Canvas ── */
+      .cv {
+        position: absolute;
+        inset: 0;
+        background:
+          radial-gradient(ellipse 58% 48% at 38% 57%, oklch(0.585 0.233 277.117 / 8%) 0%, transparent 65%), var(--bg);
+      }
+      .cv::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background-image:
+          radial-gradient(circle 1.5px at 35% 55%, oklch(0.585 0.233 277.117 / 55%) 100%, transparent),
+          radial-gradient(circle 1px at 38% 51%, oklch(0.585 0.233 277.117 / 35%) 100%, transparent),
+          radial-gradient(circle 1.5px at 42% 60%, oklch(0.585 0.233 277.117 / 48%) 100%, transparent),
+          radial-gradient(circle 1px at 46% 50%, oklch(0.585 0.233 277.117 / 65%) 100%, transparent),
+          radial-gradient(circle 1.5px at 50% 54%, oklch(0.65 0.18 140 / 48%) 100%, transparent),
+          radial-gradient(circle 1.5px at 55% 48%, oklch(0.65 0.18 140 / 58%) 100%, transparent),
+          radial-gradient(circle 1px at 59% 43%, oklch(0.65 0.18 140 / 38%) 100%, transparent),
+          radial-gradient(circle 1.5px at 40% 41%, oklch(0.75 0.18 45 / 52%) 100%, transparent),
+          radial-gradient(circle 1px at 44% 37%, oklch(0.75 0.18 45 / 38%) 100%, transparent),
+          radial-gradient(circle 1.5px at 49% 39%, oklch(0.75 0.18 45 / 55%) 100%, transparent);
+      }
+      .cv.pca {
+        background:
+          radial-gradient(ellipse 52% 43% at 54% 46%, oklch(0.65 0.18 140 / 8%) 0%, transparent 62%), oklch(0.13 0 0);
+      }
+
+      /* ── Glass ── */
+      .gl {
+        background: var(--glass);
+        border: 1px solid var(--glass-b);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+      }
+
+      /* ── Overlays ── */
+      .oi {
+        position: absolute;
+        top: 7px;
+        left: 7px;
+        z-index: 10;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+      }
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 3px 8px;
+        font-size: 10.5px;
+        font-weight: 500;
+        color: var(--fg);
+        border-radius: calc(var(--r) * 0.7);
+      }
+      .badge .d {
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        background: var(--pu);
+        flex-shrink: 0;
+      }
+      .badge .d.g {
+        background: var(--gr);
+      }
+      .dims {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        padding: 2px 6px;
+        font-size: 9px;
+        color: var(--muted);
+        border-radius: calc(var(--r) * 0.7);
+        width: fit-content;
+      }
+      .dims .v {
+        padding: 1px 3px;
+        background: var(--elv);
+        border-radius: 3px;
+        color: var(--fg);
+        font-size: 9px;
+        cursor: pointer;
+      }
+      .ot {
+        position: absolute;
+        top: 7px;
+        right: 7px;
+        z-index: 10;
+        display: flex;
+        gap: 1px;
+        padding: 2px;
+        border-radius: calc(var(--r) * 0.6);
+      }
+      .tb {
+        width: 22px;
+        height: 22px;
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+        color: var(--muted);
+        cursor: pointer;
+      }
+      .tb.on {
+        color: var(--pu);
+      }
+      .ct {
+        position: absolute;
+        bottom: 7px;
+        left: 7px;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        padding: 2px 7px;
+        font-size: 9.5px;
+        color: var(--muted);
+        border-radius: calc(var(--r) * 0.7);
+      }
+      .ct .cv2 {
+        color: var(--fg);
+      }
+      .ring::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        z-index: 4;
+        pointer-events: none;
+        box-shadow: inset 0 0 0 1.5px oklch(0.585 0.233 277.117 / 20%);
+      }
+      .ring.g::before {
+        box-shadow: inset 0 0 0 1.5px oklch(0.65 0.18 140 / 20%);
+      }
+
+      /* ── App shell ── */
+      .app {
+        width: 680px;
+        background: var(--bg);
+        border: 1px solid var(--bdr);
+        border-radius: var(--r);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      .halves {
+        height: 220px;
+        display: flex;
+        overflow: hidden;
+      }
+      .half {
+        flex: 1;
+        position: relative;
+        overflow: hidden;
+      }
+      .half:first-child::after {
+        content: "";
+        position: absolute;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        width: 1px;
+        background: oklch(1 0 0 / 10%);
+        z-index: 5;
+      }
+
+      /* ══════════════════════════
+     DOCK A — 24px pill strip
+  ════════════════════════════ */
+      .dock-a {
+        display: flex;
+        align-items: center;
+        gap: 1px;
+        padding: 0 6px;
+        height: 24px;
+        background: var(--srf);
+        border-top: 1px solid var(--bdr);
+        flex-shrink: 0;
+      }
+      .da {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        padding: 0 7px;
+        height: 18px;
+        border-radius: 99px;
+        font-size: 9.5px;
+        color: var(--muted);
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .da:hover {
+        background: var(--elv);
+        color: var(--fg);
+      }
+      .da.pu {
+        background: var(--pu-bg);
+        color: var(--pu);
+      }
+      .da.gr {
+        background: var(--gr-bg);
+        color: var(--gr);
+      }
+      .da .d {
+        width: 4px;
+        height: 4px;
+        border-radius: 50%;
+        background: currentColor;
+        flex-shrink: 0;
+      }
+      .sep {
+        width: 1px;
+        height: 12px;
+        background: var(--bdr);
+        margin: 0 2px;
+      }
+      .sp {
+        flex: 1;
+      }
+
+      /* ══════════════════════════
+     DOCK B — 28px icons only
+  ════════════════════════════ */
+      .dock-b {
+        display: flex;
+        align-items: center;
+        gap: 0;
+        padding: 0 6px;
+        height: 28px;
+        background: var(--srf);
+        border-top: 1px solid var(--bdr);
+        flex-shrink: 0;
+      }
+      .db {
+        width: 26px;
+        height: 22px;
+        border-radius: 5px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        color: var(--muted);
+        cursor: pointer;
+        position: relative;
+      }
+      .db:hover {
+        background: var(--elv);
+        color: var(--fg);
+      }
+      .db.pu {
+        color: var(--pu);
+      }
+      .db.gr {
+        color: var(--gr);
+      }
+      /* two dots side by side for dual-active scatter */
+      .db .dd {
+        position: absolute;
+        bottom: 2px;
+        display: flex;
+        gap: 2px;
+      }
+      .db .dd .d {
+        width: 3px;
+        height: 3px;
+        border-radius: 50%;
+      }
+      .db .dd .d.pu {
+        background: var(--pu);
+      }
+      .db .dd .d.gr {
+        background: var(--gr);
+      }
+      .db-sep {
+        width: 1px;
+        height: 12px;
+        background: var(--bdr);
+        margin: 0 3px;
+      }
+
+      /* ══════════════════════════
+     DOCK C — 22px status+nav
+  ════════════════════════════ */
+      .dock-c {
+        display: flex;
+        align-items: center;
+        padding: 0 8px;
+        height: 22px;
+        background: oklch(0.12 0 0);
+        border-top: 1px solid var(--bdr);
+        font-size: 9.5px;
+        color: var(--muted);
+        flex-shrink: 0;
+        gap: 0;
+      }
+      .dc {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        padding: 0 5px;
+        height: 16px;
+        border-radius: 3px;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .dc:hover {
+        background: var(--elv);
+        color: var(--fg);
+      }
+      .dc.pu {
+        color: var(--pu);
+      }
+      .dc.gr {
+        color: var(--gr);
+      }
+      .dc .d {
+        width: 4px;
+        height: 4px;
+        border-radius: 50%;
+        background: currentColor;
+        flex-shrink: 0;
+      }
+      .vsep {
+        width: 1px;
+        height: 10px;
+        background: var(--bdr);
+        margin: 0 5px;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- ══════════════════════════════════════
+     VARIANT A · 24px pill strip
+════════════════════════════════════════ -->
+    <div>
+      <h2>A — pill strip · 24px</h2>
+      <div class="app">
+        <div class="halves">
+          <div class="half ring">
+            <div class="cv"></div>
+            <div class="oi">
+              <div class="badge gl"><span class="d"></span>X_umap</div>
+              <div class="dims gl"><span>x</span><span class="v">0</span><span>y</span><span class="v">1</span></div>
+            </div>
+            <div class="ot gl">
+              <div class="tb on">⬡</div>
+              <div class="tb">⬟</div>
+            </div>
+            <div class="ct gl">
+              <span style="font-size: 9px; color: var(--dim)">color</span><span class="cv2">cell_type</span>
+            </div>
+          </div>
+          <div class="half ring g">
+            <div class="cv pca"></div>
+            <div class="oi">
+              <div class="badge gl" style="color: var(--gr)"><span class="d g"></span>X_pca</div>
+              <div class="dims gl"><span>x</span><span class="v">0</span><span>y</span><span class="v">1</span></div>
+            </div>
+            <div class="ot gl">
+              <div class="tb">⬡</div>
+              <div class="tb">⬟</div>
+            </div>
+            <div class="ct gl">
+              <span style="font-size: 9px; color: var(--dim)">color</span><span class="cv2">leiden</span>
+            </div>
+          </div>
+        </div>
+        <div class="dock-a">
+          <div class="da pu"><span class="d"></span>umap</div>
+          <div class="da gr"><span class="d"></span>pca</div>
+          <div class="da" style="color: var(--dim)">+</div>
+          <div class="sep"></div>
+          <div class="da">table</div>
+          <div class="da">viewer</div>
+          <div class="sp"></div>
+          <div class="da" style="font-size: 9px">⌘K</div>
+        </div>
+      </div>
+      <div class="sub">24px · pills show name · color-coded active state</div>
+    </div>
+
+    <!-- ══════════════════════════════════════
+     VARIANT B · 28px icons only
+════════════════════════════════════════ -->
+    <div>
+      <h2>B — icons only · 28px</h2>
+      <div class="app">
+        <div class="halves">
+          <div class="half ring">
+            <div class="cv"></div>
+            <div class="oi">
+              <div class="badge gl"><span class="d"></span>X_umap</div>
+              <div class="dims gl"><span>x</span><span class="v">0</span><span>y</span><span class="v">1</span></div>
+            </div>
+            <div class="ot gl">
+              <div class="tb on">⬡</div>
+              <div class="tb">⬟</div>
+            </div>
+            <div class="ct gl">
+              <span style="font-size: 9px; color: var(--dim)">color</span><span class="cv2">cell_type</span>
+            </div>
+          </div>
+          <div class="half ring g">
+            <div class="cv pca"></div>
+            <div class="oi">
+              <div class="badge gl" style="color: var(--gr)"><span class="d g"></span>X_pca</div>
+              <div class="dims gl"><span>x</span><span class="v">0</span><span>y</span><span class="v">1</span></div>
+            </div>
+            <div class="ot gl">
+              <div class="tb">⬡</div>
+              <div class="tb">⬟</div>
+            </div>
+            <div class="ct gl">
+              <span style="font-size: 9px; color: var(--dim)">color</span><span class="cv2">leiden</span>
+            </div>
+          </div>
+        </div>
+        <div class="dock-b">
+          <!-- Scatter icon with TWO dots (one per open panel) -->
+          <div class="db">
+            ⬡
+            <div class="dd">
+              <div class="d pu"></div>
+              <div class="d gr"></div>
+            </div>
+          </div>
+          <div class="db" style="color: var(--dim); font-size: 14px">+</div>
+          <div class="db-sep"></div>
+          <div class="db">≡</div>
+          <div class="db">⊞</div>
+          <div class="sp"></div>
+          <div class="db" style="font-size: 9px; width: auto; padding: 0 5px">⌘K</div>
+        </div>
+      </div>
+      <div class="sub">28px · single scatter icon · two dots = two open panels · labels only on hover tooltip</div>
+    </div>
+
+    <!-- ══════════════════════════════════════
+     VARIANT C · 22px status+nav merged
+════════════════════════════════════════ -->
+    <div>
+      <h2>C — merged status + nav · 22px</h2>
+      <div class="app">
+        <div class="halves">
+          <div class="half ring">
+            <div class="cv"></div>
+            <div class="oi">
+              <div class="badge gl"><span class="d"></span>X_umap</div>
+              <div class="dims gl"><span>x</span><span class="v">0</span><span>y</span><span class="v">1</span></div>
+            </div>
+            <div class="ot gl">
+              <div class="tb on">⬡</div>
+              <div class="tb">⬟</div>
+            </div>
+            <div class="ct gl">
+              <span style="font-size: 9px; color: var(--dim)">color</span><span class="cv2">cell_type</span>
+            </div>
+          </div>
+          <div class="half ring g">
+            <div class="cv pca"></div>
+            <div class="oi">
+              <div class="badge gl" style="color: var(--gr)"><span class="d g"></span>X_pca</div>
+              <div class="dims gl"><span>x</span><span class="v">0</span><span>y</span><span class="v">1</span></div>
+            </div>
+            <div class="ot gl">
+              <div class="tb">⬡</div>
+              <div class="tb">⬟</div>
+            </div>
+            <div class="ct gl">
+              <span style="font-size: 9px; color: var(--dim)">color</span><span class="cv2">leiden</span>
+            </div>
+          </div>
+        </div>
+        <div class="dock-c">
+          <div class="dc pu"><span class="d"></span>umap</div>
+          <div class="dc gr"><span class="d"></span>pca</div>
+          <div class="dc" style="color: var(--dim)">+</div>
+          <div class="vsep"></div>
+          <div class="dc">table</div>
+          <div class="dc">viewer</div>
+          <div class="vsep"></div>
+          <span style="color: var(--pu); opacity: 0.8">93,431</span>
+          <span style="padding: 0 4px; color: var(--dim)">·</span>
+          <span style="color: oklch(0.75 0.14 45 / 80%)">1,204 sel</span>
+          <span style="padding: 0 4px; color: var(--dim)">·</span>
+          <span>2.4×</span>
+          <div class="sp"></div>
+          <span>120fps</span>
+          <div class="vsep"></div>
+          <span style="letter-spacing: 0.04em">⌘K</span>
+        </div>
+      </div>
+      <div class="sub">22px · nav + metrics in one bar · absolute minimum chrome · most content visible</div>
+    </div>
+  </body>
+</html>

@@ -79,6 +79,8 @@ def make_data_router(get_state: Callable[[], ViewerState], config: DatasetConfig
         }
         if config.plate_meta:
             result.update(config.plate_meta)
+        if config.dataset_keys is not None:
+            result["dataset_keys"] = config.dataset_keys
         result["spatial"] = {
             "fov_col": state.spatial.fov,
             "t_col": state.spatial.t,

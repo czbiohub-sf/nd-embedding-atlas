@@ -1,0 +1,604 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Micro Dock — ndea</title>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Geist+Mono:wght@300;400;500;600&display=swap");
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      :root {
+        --bg: oklch(0.145 0 0);
+        --surface: oklch(0.175 0 0);
+        --elevated: oklch(0.22 0 0);
+        --border: oklch(1 0 0 / 8%);
+        --fg: oklch(0.985 0 0);
+        --muted: oklch(0.48 0 0);
+        --dim: oklch(0.3 0 0);
+        --primary: oklch(0.585 0.233 277.117);
+        --primary-bg: oklch(0.585 0.233 277.117 / 16%);
+        --green: oklch(0.65 0.18 140);
+        --green-bg: oklch(0.65 0.18 140 / 14%);
+        --glass: oklch(0.19 0 0 / 75%);
+        --glass-b: oklch(1 0 0 / 7%);
+        --r: 0.45rem;
+      }
+
+      body {
+        background: oklch(0.09 0 0);
+        color: var(--fg);
+        font-family: "Geist Mono", ui-monospace, monospace;
+        font-size: 12px;
+        padding: 2rem;
+        display: flex;
+        flex-direction: column;
+        gap: 3rem;
+      }
+
+      h2 {
+        font-size: 9px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin-bottom: 0.75rem;
+      }
+      .note {
+        font-size: 9px;
+        color: var(--muted);
+        margin-top: 0.4rem;
+        letter-spacing: 0.03em;
+      }
+
+      /* ── Canvas simulation ── */
+      .scatter-canvas {
+        position: absolute;
+        inset: 0;
+        background:
+          radial-gradient(ellipse 60% 50% at 40% 58%, oklch(0.585 0.233 277.117 / 9%) 0%, transparent 65%),
+          radial-gradient(ellipse 40% 30% at 65% 38%, oklch(0.65 0.18 140 / 7%) 0%, transparent 60%), var(--bg);
+      }
+      .scatter-canvas::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background-image:
+          radial-gradient(circle 1.5px at 35% 55%, oklch(0.585 0.233 277.117 / 55%) 100%, transparent),
+          radial-gradient(circle 1px at 38% 51%, oklch(0.585 0.233 277.117 / 35%) 100%, transparent),
+          radial-gradient(circle 1.5px at 42% 59%, oklch(0.585 0.233 277.117 / 45%) 100%, transparent),
+          radial-gradient(circle 1px at 33% 61%, oklch(0.585 0.233 277.117 / 28%) 100%, transparent),
+          radial-gradient(circle 1.5px at 46% 50%, oklch(0.585 0.233 277.117 / 65%) 100%, transparent),
+          radial-gradient(circle 1px at 50% 54%, oklch(0.65 0.18 140 / 45%) 100%, transparent),
+          radial-gradient(circle 1.5px at 55% 48%, oklch(0.65 0.18 140 / 55%) 100%, transparent),
+          radial-gradient(circle 1px at 59% 43%, oklch(0.65 0.18 140 / 38%) 100%, transparent),
+          radial-gradient(circle 1.5px at 62% 51%, oklch(0.65 0.18 140 / 50%) 100%, transparent),
+          radial-gradient(circle 1.5px at 40% 41%, oklch(0.75 0.18 45 / 50%) 100%, transparent),
+          radial-gradient(circle 1px at 44% 37%, oklch(0.75 0.18 45 / 38%) 100%, transparent),
+          radial-gradient(circle 1.5px at 49% 39%, oklch(0.75 0.18 45 / 55%) 100%, transparent);
+      }
+      .scatter-canvas.pca {
+        background:
+          radial-gradient(ellipse 55% 45% at 52% 48%, oklch(0.65 0.18 140 / 9%) 0%, transparent 65%), oklch(0.13 0 0);
+      }
+
+      /* ── Glass ── */
+      .glass {
+        background: var(--glass);
+        border: 1px solid var(--glass-b);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+      }
+
+      /* ── Overlay controls (shared) ── */
+      .embed-info {
+        position: absolute;
+        top: 8px;
+        left: 8px;
+        z-index: 10;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+      }
+      .embed-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 3px 8px;
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--fg);
+        border-radius: calc(var(--r) * 0.7);
+      }
+      .embed-badge .dot {
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        background: var(--primary);
+        flex-shrink: 0;
+      }
+      .embed-badge .dot.g {
+        background: var(--green);
+      }
+      .embed-dims {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        padding: 2px 7px;
+        font-size: 9.5px;
+        color: var(--muted);
+        border-radius: calc(var(--r) * 0.7);
+        width: fit-content;
+      }
+      .embed-dims .v {
+        padding: 1px 4px;
+        background: var(--elevated);
+        border-radius: 3px;
+        color: var(--fg);
+        font-size: 9px;
+        cursor: pointer;
+      }
+      .tools {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        z-index: 10;
+        display: flex;
+        gap: 1px;
+        padding: 2px;
+        border-radius: calc(var(--r) * 0.7);
+      }
+      .tb {
+        width: 24px;
+        height: 24px;
+        border-radius: calc(var(--r) * 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+        color: var(--muted);
+        cursor: pointer;
+      }
+      .tb:hover {
+        background: var(--elevated);
+        color: var(--fg);
+      }
+      .tb.on {
+        color: var(--primary);
+      }
+      .color-tag {
+        position: absolute;
+        bottom: 8px;
+        left: 8px;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        padding: 3px 8px;
+        font-size: 10px;
+        color: var(--muted);
+        border-radius: calc(var(--r) * 0.7);
+      }
+      .color-tag .cv {
+        color: var(--fg);
+        font-size: 10px;
+      }
+      .obs-tag {
+        position: absolute;
+        bottom: 8px;
+        right: 8px;
+        z-index: 10;
+        padding: 3px 7px;
+        font-size: 9.5px;
+        color: var(--muted);
+        border-radius: calc(var(--r) * 0.7);
+      }
+      .focused-ring::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        z-index: 4;
+        pointer-events: none;
+        box-shadow: inset 0 0 0 1.5px oklch(0.585 0.233 277.117 / 22%);
+      }
+      .focused-ring.g::before {
+        box-shadow: inset 0 0 0 1.5px oklch(0.65 0.18 140 / 22%);
+      }
+
+      /* ═══════════════════════════════════
+     MICRO DOCK — the main subject
+  ═══════════════════════════════════ */
+
+      /* Variant A: pill strip — 24px tall */
+      .dock-a {
+        display: flex;
+        align-items: center;
+        gap: 1px;
+        padding: 0 6px;
+        height: 24px;
+        background: var(--surface);
+        border-top: 1px solid var(--border);
+        flex-shrink: 0;
+      }
+      .da {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        padding: 0 7px;
+        height: 18px;
+        border-radius: 99px;
+        font-size: 9.5px;
+        color: var(--muted);
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .da:hover {
+        background: var(--elevated);
+        color: var(--fg);
+      }
+      .da.on {
+        background: var(--primary-bg);
+        color: var(--primary);
+      }
+      .da.on-g {
+        background: var(--green-bg);
+        color: var(--green);
+      }
+      .da .d {
+        width: 4px;
+        height: 4px;
+        border-radius: 50%;
+        background: var(--primary);
+        flex-shrink: 0;
+      }
+      .da .d.g {
+        background: var(--green);
+      }
+      .da-sep {
+        width: 1px;
+        height: 12px;
+        background: var(--border);
+        margin: 0 2px;
+      }
+      .da-sp {
+        flex: 1;
+      }
+
+      /* Variant B: icon-only, 28px — no labels at all */
+      .dock-b {
+        display: flex;
+        align-items: center;
+        gap: 0;
+        padding: 0 6px;
+        height: 28px;
+        background: var(--surface);
+        border-top: 1px solid var(--border);
+        flex-shrink: 0;
+      }
+      .db {
+        width: 26px;
+        height: 22px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 5px;
+        font-size: 12px;
+        color: var(--muted);
+        cursor: pointer;
+        position: relative;
+      }
+      .db:hover {
+        background: var(--elevated);
+        color: var(--fg);
+      }
+      .db.on {
+        color: var(--primary);
+      }
+      .db.on-g {
+        color: var(--green);
+      }
+      .db .d {
+        position: absolute;
+        bottom: 2px;
+        width: 3px;
+        height: 3px;
+        border-radius: 50%;
+        background: var(--primary);
+      }
+      .db .d.g {
+        background: var(--green);
+      }
+      .db-sep {
+        width: 1px;
+        height: 12px;
+        background: var(--border);
+        margin: 0 3px;
+      }
+      .db-sp {
+        flex: 1;
+      }
+
+      /* Variant C: merged into status bar — single 20px line */
+      .dock-c {
+        display: flex;
+        align-items: center;
+        gap: 0;
+        padding: 0 8px;
+        height: 22px;
+        background: oklch(0.125 0 0);
+        border-top: 1px solid var(--border);
+        font-size: 9.5px;
+        color: var(--muted);
+        flex-shrink: 0;
+      }
+      .dc {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        padding: 0 6px;
+        height: 16px;
+        border-radius: 3px;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .dc:hover {
+        background: var(--elevated);
+        color: var(--fg);
+      }
+      .dc.on {
+        color: var(--primary);
+      }
+      .dc.on-g {
+        color: var(--green);
+      }
+      .dc .d {
+        width: 4px;
+        height: 4px;
+        border-radius: 50%;
+        background: currentColor;
+        flex-shrink: 0;
+      }
+      .dc-sep {
+        width: 1px;
+        height: 10px;
+        background: var(--border);
+        margin: 0 4px;
+      }
+      .dc-vsep {
+        width: 1px;
+        height: 10px;
+        background: var(--border);
+        margin: 0 6px;
+      }
+      .dc-sp {
+        flex: 1;
+      }
+
+      /* ── App shell ── */
+      .app {
+        width: 560px;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: var(--r);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      .viewport {
+        height: 220px;
+        position: relative;
+        overflow: hidden;
+        flex-shrink: 0;
+      }
+      .dual {
+        display: flex;
+        flex: 1;
+      }
+      .half {
+        flex: 1;
+        position: relative;
+        overflow: hidden;
+      }
+      .half:first-child::after {
+        content: "";
+        position: absolute;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        width: 1px;
+        background: oklch(1 0 0 / 10%);
+        z-index: 5;
+      }
+      .app-dual {
+        width: 680px;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: var(--r);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      .dual-vp {
+        height: 230px;
+        display: flex;
+        overflow: hidden;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- ══════ Dock variant A: pill strip, 24px ══════ -->
+    <div>
+      <h2>A — pill strip · 24px</h2>
+      <div class="app">
+        <div class="viewport">
+          <div class="scatter-canvas"></div>
+          <div class="embed-info">
+            <div class="embed-badge glass"><span class="dot"></span>X_umap</div>
+            <div class="embed-dims glass">
+              <span style="font-size: 9px; color: var(--muted)">x</span><span class="v">0</span
+              ><span style="font-size: 9px; color: var(--muted)">y</span><span class="v">1</span>
+            </div>
+          </div>
+          <div class="tools glass">
+            <div class="tb on">⬡</div>
+            <div class="tb">⬟</div>
+            <div class="tb" style="border-left: 1px solid var(--glass-b); margin-left: 2px">🔗</div>
+          </div>
+          <div class="color-tag glass">
+            <span style="font-size: 9px; color: var(--dim)">color</span><span class="cv">cell_type</span>
+          </div>
+          <div class="obs-tag glass">93,431</div>
+        </div>
+        <div class="dock-a">
+          <div class="da on"><span class="d"></span>umap</div>
+          <div class="da">pca</div>
+          <div class="da" style="color: var(--dim)">+</div>
+          <div class="da-sep"></div>
+          <div class="da">table</div>
+          <div class="da">viewer</div>
+          <div class="da-sp"></div>
+          <div class="da" style="font-size: 9px">⌘K</div>
+        </div>
+      </div>
+      <div class="note">↑ 24px total · text labels · pill active state</div>
+    </div>
+
+    <!-- ══════ Dock variant B: icon only, 28px ══════ -->
+    <div>
+      <h2>B — icon only · 28px · tooltip on hover</h2>
+      <div class="app">
+        <div class="viewport">
+          <div class="scatter-canvas"></div>
+          <div class="embed-info">
+            <div class="embed-badge glass"><span class="dot"></span>X_umap</div>
+            <div class="embed-dims glass">
+              <span style="font-size: 9px; color: var(--muted)">x</span><span class="v">0</span
+              ><span style="font-size: 9px; color: var(--muted)">y</span><span class="v">1</span>
+            </div>
+          </div>
+          <div class="tools glass">
+            <div class="tb on">⬡</div>
+            <div class="tb">⬟</div>
+            <div class="tb" style="border-left: 1px solid var(--glass-b); margin-left: 2px">🔗</div>
+          </div>
+          <div class="color-tag glass">
+            <span style="font-size: 9px; color: var(--dim)">color</span><span class="cv">cell_type</span>
+          </div>
+          <div class="obs-tag glass">93,431</div>
+        </div>
+        <div class="dock-b">
+          <div class="db on">⬡<span class="d"></span></div>
+          <div class="db">⬡</div>
+          <div class="db" style="color: var(--dim); font-size: 14px">+</div>
+          <div class="db-sep"></div>
+          <div class="db">≡</div>
+          <div class="db">⊞</div>
+          <div class="db-sp"></div>
+          <div class="db" style="font-size: 9px; width: auto; padding: 0 5px">⌘K</div>
+        </div>
+      </div>
+      <div class="note">↑ 28px total · no labels · dot = open · tooltip shows name on hover</div>
+    </div>
+
+    <!-- ══════ Dock variant C: merged into status bar, 22px ══════ -->
+    <div>
+      <h2>C — merged into status bar · 22px · maximum density</h2>
+      <div class="app">
+        <div class="viewport">
+          <div class="scatter-canvas"></div>
+          <div class="embed-info">
+            <div class="embed-badge glass"><span class="dot"></span>X_umap</div>
+            <div class="embed-dims glass">
+              <span style="font-size: 9px; color: var(--muted)">x</span><span class="v">0</span
+              ><span style="font-size: 9px; color: var(--muted)">y</span><span class="v">1</span>
+            </div>
+          </div>
+          <div class="tools glass">
+            <div class="tb on">⬡</div>
+            <div class="tb">⬟</div>
+            <div class="tb" style="border-left: 1px solid var(--glass-b); margin-left: 2px">🔗</div>
+          </div>
+          <div class="color-tag glass">
+            <span style="font-size: 9px; color: var(--dim)">color</span><span class="cv">cell_type</span>
+          </div>
+          <div class="obs-tag glass">93,431</div>
+        </div>
+        <!-- Status + nav merged into one 22px bar -->
+        <div class="dock-c">
+          <div class="dc on"><span class="d"></span>umap</div>
+          <div class="dc">pca</div>
+          <div class="dc" style="color: var(--dim)">+</div>
+          <div class="dc-sep"></div>
+          <div class="dc">table</div>
+          <div class="dc">viewer</div>
+          <div class="dc-vsep"></div>
+          <span style="color: oklch(0.585 0.233 277.117/80%); padding: 0 2px">93,431</span>
+          <span style="padding: 0 3px">·</span>
+          <span>2.4×</span>
+          <div class="dc-sp"></div>
+          <span>120fps</span>
+          <div class="dc-sep"></div>
+          <span style="letter-spacing: 0.04em">⌘K</span>
+        </div>
+      </div>
+      <div class="note">↑ 22px total · nav + status in one line · most compact possible</div>
+    </div>
+
+    <!-- ══════ Two scatters, variant A dock ══════ -->
+    <div>
+      <h2>Two scatters — variant A dock, color-coded</h2>
+      <div class="app-dual">
+        <div class="dual-vp">
+          <div class="half focused-ring">
+            <div class="scatter-canvas"></div>
+            <div class="embed-info">
+              <div class="embed-badge glass"><span class="dot"></span>X_umap</div>
+              <div class="embed-dims glass">
+                <span style="font-size: 9px; color: var(--muted)">x</span><span class="v">0</span
+                ><span style="font-size: 9px; color: var(--muted)">y</span><span class="v">1</span>
+              </div>
+            </div>
+            <div class="tools glass">
+              <div class="tb on">⬡</div>
+              <div class="tb">⬟</div>
+            </div>
+            <div class="color-tag glass">
+              <span style="font-size: 9px; color: var(--dim)">color</span><span class="cv">cell_type</span>
+            </div>
+          </div>
+          <div class="half focused-ring g">
+            <div class="scatter-canvas pca"></div>
+            <div class="embed-info">
+              <div class="embed-badge glass" style="color: var(--green)"><span class="dot g"></span>X_pca</div>
+              <div class="embed-dims glass">
+                <span style="font-size: 9px; color: var(--muted)">x</span><span class="v">0</span
+                ><span style="font-size: 9px; color: var(--muted)">y</span><span class="v">1</span>
+              </div>
+            </div>
+            <div class="tools glass">
+              <div class="tb">⬡</div>
+              <div class="tb">⬟</div>
+            </div>
+            <div class="color-tag glass">
+              <span style="font-size: 9px; color: var(--dim)">color</span><span class="cv">leiden</span>
+            </div>
+          </div>
+        </div>
+        <div class="dock-a">
+          <div class="da on"><span class="d"></span>umap</div>
+          <div class="da on-g"><span class="d g"></span>pca</div>
+          <div class="da" style="color: var(--dim)">+</div>
+          <div class="da-sep"></div>
+          <div class="da">table</div>
+          <div class="da">viewer</div>
+          <div class="da-sp"></div>
+          <div class="da" style="font-size: 9px">⌘K</div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

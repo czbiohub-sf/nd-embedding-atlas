@@ -66,9 +66,22 @@ class EmbeddingStore:
 
         obs_df = obs_df.copy()
         obs_df["__row_index__"] = range(len(obs_df))
+
+        # obs_name is the AnnData string index — stable identity for ObsSets
+        if "obs_name" not in obs_df.columns:
+            import warnings  # noqa: PLC0415
+
+            warnings.warn(
+                "obs_name missing from obs_df; falling back to row index string. "
+                "ObsSet identity will be unstable.",
+                stacklevel=2,
+            )
+            obs_df["obs_name"] = obs_df["__row_index__"].astype(str)
+
         _ = obs_df  # prevent GC — DuckDB scans local Python objects by name
         self.con.sql("CREATE TABLE obs_base AS (SELECT * FROM obs_df)")
         self.con.sql("CREATE INDEX obs_base_row_index ON obs_base(__row_index__)")
+        self.con.sql("CREATE INDEX obs_base_obs_name ON obs_base(obs_name)")
         self._rebuild_view()
         self.n_obs = len(obs_df)
 

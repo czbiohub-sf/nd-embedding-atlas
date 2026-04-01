@@ -45,12 +45,13 @@ export const MetadataSchema = z
     export_dir: z.string().optional(),
     spatial: SpatialSchema,
     plate: z.boolean().optional(),
+    dataset_keys: z.array(z.string()).optional(),
     plate_ome_version: z.enum(["0.4", "0.5"]).optional(),
     plate_pixel_scale: z.object({ x: z.number(), y: z.number() }).optional(),
     plate_channels: z.array(PlateChannelSchema).optional(),
     plate_stores: z.array(PlateStoreSchema).optional(),
     plate_shape: z.array(z.number()).optional(),
-    plate_scale: z.record(z.string(), z.number()).optional(),
+    plate_scale: z.array(z.number()).optional(),
     time_points: z.array(z.number()).optional(),
   })
   .passthrough(); // forward-compatible

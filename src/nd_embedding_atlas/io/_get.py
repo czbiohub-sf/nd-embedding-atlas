@@ -63,6 +63,29 @@ def _open_raw(path: str | Path) -> "zarr.Group | h5py.File":
         return h5py.File(p, "r")
 
 
+def _read_obs_index(group: "zarr.Group | h5py.File") -> list[str]:
+    """Read the AnnData obs string index from ``obs/_index``.
+
+    Parameters
+    ----------
+    group
+        Open zarr.Group or h5py.File for the AnnData store.
+
+    Returns
+    -------
+    List of obs index strings (obs_names).
+    """
+    try:
+        raw = group["obs"]["_index"][:]
+        if raw.dtype.kind in ("S",):
+            raw = raw.astype(str)
+        elif raw.dtype == object:
+            raw = raw.astype(str)
+        return list(raw)
+    except (KeyError, Exception):
+        return []
+
+
 def _group_to_df(group: "zarr.Group | h5py.File", group_key: str) -> pd.DataFrame:
     """Read an AnnData obs/var zarr/h5py group directly into a DataFrame.
 
@@ -143,6 +166,7 @@ def get_obs(
     source: "PathOrAdata",
     *,
     columns: list[str] | None = None,
+    include_index: bool = False,
 ) -> pd.DataFrame:
     """Return a DataFrame of obs metadata, bypassing AnnData overhead.
 
@@ -159,6 +183,9 @@ def get_obs(
         or an ``AnnDataCollection``.
     columns
         Subset of columns to return.  ``None`` returns all columns.
+    include_index
+        When ``True``, inject the AnnData string obs index as ``obs_name``
+        column (positionally aligned with the DataFrame rows).
 
     Returns
     -------
@@ -169,6 +196,11 @@ def get_obs(
         store = _open_raw(source)
         try:
             df = _group_to_df(store, "obs")
+            if include_index:
+                idx = _read_obs_index(store)
+                if idx:
+                    df = df.copy()
+                    df["obs_name"] = idx
         finally:
             if hasattr(store, "close"):
                 store.close()
@@ -193,11 +225,31 @@ def get_obs(
         if len(datasets) == 1:
             entry = next(iter(datasets.data.values()))
             if entry.path is not None:
-                return get_obs(entry.path, columns=columns)
-        # Multi-dataset or pathless → fall back to Dataset2D.to_memory()
+                return get_obs(entry.path, columns=columns, include_index=include_index)
+        # Multi-dataset: iterate per-entry to get original obs names before concat mangling
+        if include_index:
+            per_dataset_indices: list[str] = []
+            for entry in datasets.data.values():
+                if entry.path is not None:
+                    store = _open_raw(entry.path)
+                    try:
+                        idx = _read_obs_index(store)
+                    finally:
+                        if hasattr(store, "close"):
+                            store.close()
+                    per_dataset_indices.extend(idx)
+                else:
+                    # Pathless in-memory entry — fall back to adata obs_names
+                    adata = entry.data if hasattr(entry, "data") else None
+                    if adata is not None and hasattr(adata, "obs_names"):
+                        per_dataset_indices.extend(list(adata.obs_names))
+
         obs = source.obs
         if hasattr(obs, "to_memory"):
             obs = obs.to_memory()
+        if include_index and per_dataset_indices:
+            obs = obs.copy()
+            obs["obs_name"] = per_dataset_indices
         if columns is not None:
             obs = obs[[c for c in columns if c in obs.columns]]
         return obs
@@ -206,6 +258,9 @@ def get_obs(
     obs = source.obs
     if hasattr(obs, "to_memory"):
         obs = obs.to_memory()
+    if include_index:
+        obs = obs.copy()
+        obs["obs_name"] = list(source.obs_names)
     if columns is not None:
         obs = obs[[c for c in columns if c in obs.columns]]
     return obs

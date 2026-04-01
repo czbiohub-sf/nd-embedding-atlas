@@ -1,0 +1,508 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Bottom Dock — ndea</title>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Geist+Mono:wght@300;400;500;600&display=swap");
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      :root {
+        --bg: oklch(0.145 0 0);
+        --surface: oklch(0.19 0 0);
+        --elevated: oklch(0.24 0 0);
+        --border: oklch(1 0 0 / 9%);
+        --fg: oklch(0.985 0 0);
+        --muted: oklch(0.5 0 0);
+        --dim: oklch(0.32 0 0);
+        --primary: oklch(0.585 0.233 277.117);
+        --primary-bg: oklch(0.585 0.233 277.117 / 15%);
+        --r: 0.45rem;
+      }
+
+      body {
+        background: oklch(0.11 0 0);
+        color: var(--fg);
+        font-family: "Geist Mono", ui-monospace, monospace;
+        font-size: 12px;
+        padding: 2rem;
+        display: flex;
+        flex-direction: column;
+        gap: 3rem;
+      }
+
+      h2 {
+        font-size: 10px;
+        letter-spacing: 0.15em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin-bottom: 1rem;
+      }
+
+      /* ══════════════════════════════════════════════
+     CONCEPT 1 — Single active panel + bottom dock
+  ══════════════════════════════════════════════ */
+      .app-1 {
+        width: 640px;
+        height: 420px;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: var(--r);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+
+      /* Toolbar strip */
+      .toolbar {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0 0.75rem;
+        height: 32px;
+        border-bottom: 1px solid var(--border);
+        background: var(--surface);
+        flex-shrink: 0;
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .toolbar .chip {
+        padding: 0.15rem 0.5rem;
+        background: var(--elevated);
+        border-radius: calc(var(--r) * 0.5);
+        color: var(--fg);
+        font-size: 10.5px;
+        cursor: pointer;
+      }
+      .toolbar .sep {
+        width: 1px;
+        height: 14px;
+        background: var(--border);
+      }
+      .toolbar .spacer {
+        flex: 1;
+      }
+
+      /* Content area */
+      .content-area {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--dim);
+        font-size: 11px;
+        position: relative;
+      }
+
+      /* ── Bottom dock ── */
+      .bottom-dock {
+        display: flex;
+        align-items: center;
+        gap: 1px;
+        padding: 0 0.5rem;
+        height: 44px;
+        background: var(--surface);
+        border-top: 1px solid var(--border);
+        flex-shrink: 0;
+      }
+      .dock-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 3px;
+        width: 48px;
+        height: 36px;
+        border-radius: calc(var(--r) * 0.7);
+        cursor: pointer;
+        color: var(--muted);
+        position: relative;
+      }
+      .dock-item:hover {
+        background: var(--elevated);
+      }
+      .dock-item.active {
+        background: var(--primary-bg);
+        color: var(--primary);
+      }
+      .dock-icon {
+        font-size: 14px;
+        line-height: 1;
+      }
+      .dock-label {
+        font-size: 8px;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+        white-space: nowrap;
+      }
+      .dock-dot {
+        position: absolute;
+        bottom: 4px;
+        width: 3px;
+        height: 3px;
+        border-radius: 50%;
+        background: var(--primary);
+      }
+      .dock-sep {
+        width: 1px;
+        height: 20px;
+        background: var(--border);
+        margin: 0 4px;
+      }
+      .dock-spacer {
+        flex: 1;
+      }
+      .dock-badge {
+        position: absolute;
+        top: 4px;
+        right: 4px;
+        width: 14px;
+        height: 14px;
+        background: var(--primary);
+        border-radius: 50%;
+        font-size: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: oklch(0.12 0 0);
+        font-weight: 600;
+      }
+
+      /* ══════════════════════════════════════════════
+     CONCEPT 2 — Two scatter panels side by side
+  ══════════════════════════════════════════════ */
+      .app-2 {
+        width: 700px;
+        height: 440px;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: var(--r);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      .dual-panels {
+        flex: 1;
+        display: flex;
+        gap: 1px;
+        background: var(--border); /* gap color */
+        overflow: hidden;
+      }
+      .scatter-panel {
+        flex: 1;
+        background: var(--bg);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      .scatter-panel .panel-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0 0.6rem;
+        height: 28px;
+        background: var(--surface);
+        border-bottom: 1px solid var(--border);
+        font-size: 10.5px;
+        color: var(--muted);
+        flex-shrink: 0;
+      }
+      .scatter-panel.focused .panel-toolbar {
+        border-bottom-color: var(--primary);
+      }
+      .scatter-panel .panel-toolbar .embed {
+        color: var(--fg);
+        font-weight: 500;
+        font-size: 10.5px;
+      }
+      .scatter-panel .panel-content {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--dim);
+        font-size: 10px;
+        position: relative;
+      }
+      .scatter-panel.focused .panel-content {
+        outline: 1.5px solid oklch(0.585 0.233 277.117 / 20%);
+        outline-offset: -1.5px;
+      }
+      /* faint scatter plot hint */
+      .scatter-dots {
+        position: absolute;
+        inset: 0;
+        opacity: 0.3;
+      }
+      .scatter-dots::before {
+        content: "· · · · · ·\A· · · · · ·\A· · · · · ·\A· · · · · ·\A· · · · · ·";
+        white-space: pre;
+        display: block;
+        text-align: center;
+        font-size: 18px;
+        line-height: 2.2;
+        color: var(--primary);
+        padding-top: 20%;
+        letter-spacing: 8px;
+      }
+
+      /* Bottom dock for 2-panel layout */
+      .bottom-dock-2 {
+        display: flex;
+        align-items: center;
+        gap: 1px;
+        padding: 0 0.5rem;
+        height: 48px;
+        background: var(--surface);
+        border-top: 1px solid var(--border);
+        flex-shrink: 0;
+      }
+      .dock2-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 3px;
+        width: 52px;
+        height: 38px;
+        border-radius: calc(var(--r) * 0.7);
+        cursor: pointer;
+        color: var(--muted);
+        position: relative;
+        padding: 0 4px;
+      }
+      .dock2-item:hover {
+        background: var(--elevated);
+      }
+      .dock2-item.active {
+        background: var(--primary-bg);
+        color: var(--primary);
+      }
+      .dock2-item.active-2 {
+        background: oklch(0.55 0.18 140 / 12%);
+        color: oklch(0.65 0.18 140);
+      }
+      .d2-icon {
+        font-size: 13px;
+        line-height: 1;
+      }
+      .d2-label {
+        font-size: 8px;
+        letter-spacing: 0.02em;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 44px;
+        text-align: center;
+      }
+      /* Two active dots = two active scatter panels */
+      .d2-dots {
+        display: flex;
+        gap: 3px;
+        position: absolute;
+        bottom: 3px;
+      }
+      .d2-dot {
+        width: 3px;
+        height: 3px;
+        border-radius: 50%;
+      }
+      .d2-dot.purple {
+        background: var(--primary);
+      }
+      .d2-dot.green {
+        background: oklch(0.65 0.18 140);
+      }
+
+      .dock2-sep {
+        width: 1px;
+        height: 22px;
+        background: var(--border);
+        margin: 0 3px;
+      }
+      .dock2-spacer {
+        flex: 1;
+      }
+
+      /* Status row */
+      .status-row {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0 0.75rem;
+        height: 22px;
+        background: oklch(0.125 0 0);
+        border-top: 1px solid var(--border);
+        font-size: 10px;
+        color: var(--muted);
+        flex-shrink: 0;
+      }
+      .status-row .spill {
+        padding: 0 0.35rem;
+        background: var(--primary-bg);
+        color: var(--primary);
+        border-radius: 3px;
+        font-size: 9.5px;
+      }
+      .status-row .spacer {
+        flex: 1;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- ═══ Concept 1: Single panel + bottom dock ═══ -->
+    <div>
+      <h2>Single panel — bottom dock navigation</h2>
+      <div class="app-1">
+        <!-- Toolbar -->
+        <div class="toolbar">
+          <span class="chip">X_umap</span>
+          <span class="sep"></span>
+          <span>x</span><span class="chip">0</span> <span>y</span><span class="chip">1</span>
+          <span class="sep"></span>
+          <span>color</span><span class="chip">cell_type</span>
+          <span class="spacer"></span>
+          <span style="font-size: 10px">⊞ ⊡ 🔗</span>
+        </div>
+
+        <!-- Scatter content -->
+        <div class="content-area">
+          <div style="color: var(--dim); font-size: 11px">scatter · X_umap</div>
+        </div>
+
+        <!-- Bottom dock -->
+        <div class="bottom-dock">
+          <!-- Two scatter panels active -->
+          <div class="dock-item active">
+            <span class="dock-icon">⬡</span>
+            <span class="dock-label">umap</span>
+            <span class="dock-dot"></span>
+          </div>
+          <div class="dock-item">
+            <span class="dock-icon">⬡</span>
+            <span class="dock-label">pca</span>
+          </div>
+
+          <div class="dock-sep"></div>
+
+          <div class="dock-item">
+            <span class="dock-icon">≡</span>
+            <span class="dock-label">table</span>
+          </div>
+          <div class="dock-item">
+            <span class="dock-icon">⊞</span>
+            <span class="dock-label">viewer</span>
+          </div>
+
+          <div class="dock-spacer"></div>
+
+          <div class="dock-item">
+            <span class="dock-icon">⌘</span>
+            <span class="dock-label">cmd</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ Concept 2: Two scatter panels + shared bottom dock ═══ -->
+    <div>
+      <h2>Two scatter panels — shared dock, color-coded active state</h2>
+      <div class="app-2">
+        <!-- Dual panels -->
+        <div class="dual-panels">
+          <!-- Panel 1 (focused) -->
+          <div class="scatter-panel focused">
+            <div class="panel-toolbar">
+              <span
+                style="width: 6px; height: 6px; border-radius: 50%; background: var(--primary); flex-shrink: 0"
+              ></span>
+              <span class="embed">X_umap</span>
+              <span>·</span>
+              <span>cell_type</span>
+            </div>
+            <div class="panel-content">
+              <div class="scatter-dots"></div>
+              <span style="position: relative; z-index: 1">umap scatter</span>
+            </div>
+          </div>
+
+          <!-- Panel 2 (unfocused) -->
+          <div class="scatter-panel">
+            <div class="panel-toolbar">
+              <span
+                style="width: 6px; height: 6px; border-radius: 50%; background: oklch(0.65 0.18 140); flex-shrink: 0"
+              ></span>
+              <span class="embed">X_pca</span>
+              <span>·</span>
+              <span>leiden</span>
+            </div>
+            <div class="panel-content">
+              <span>pca scatter</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Shared bottom dock -->
+        <div class="bottom-dock-2">
+          <!-- Scatter 1 — purple active -->
+          <div class="dock2-item active">
+            <span class="d2-icon">⬡</span>
+            <span class="d2-label">umap</span>
+            <div class="d2-dots"><div class="d2-dot purple"></div></div>
+          </div>
+
+          <!-- Scatter 2 — green active -->
+          <div class="dock2-item active-2">
+            <span class="d2-icon">⬡</span>
+            <span class="d2-label">pca</span>
+            <div class="d2-dots"><div class="d2-dot green"></div></div>
+          </div>
+
+          <!-- New scatter (+ button) -->
+          <div class="dock2-item" style="color: var(--dim)">
+            <span class="d2-icon">+</span>
+            <span class="d2-label">scatter</span>
+          </div>
+
+          <div class="dock2-sep"></div>
+
+          <!-- Table -->
+          <div class="dock2-item">
+            <span class="d2-icon">≡</span>
+            <span class="d2-label">table</span>
+          </div>
+
+          <!-- Viewer -->
+          <div class="dock2-item">
+            <span class="d2-icon">⊞</span>
+            <span class="d2-label">viewer</span>
+          </div>
+
+          <div class="dock2-spacer"></div>
+
+          <!-- Settings / cmd -->
+          <div class="dock2-item">
+            <span class="d2-icon" style="font-size: 11px">⌘K</span>
+          </div>
+        </div>
+
+        <!-- Status bar -->
+        <div class="status-row">
+          <span class="spill">93,431 obs</span>
+          <span>·</span>
+          <span>1,204 sel</span>
+          <span>·</span>
+          <span>2.4×</span>
+          <span class="spacer"></span>
+          <span>120 fps</span>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

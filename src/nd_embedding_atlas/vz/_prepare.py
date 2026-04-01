@@ -22,6 +22,9 @@ def prepare_obs(
     Uses the fast direct-read path (zarr/h5py) when possible, bypassing
     AnnData's Dataset2D→pandas overhead (7× faster on 1M-cell zarr stores).
 
+    Always injects ``obs_name`` (AnnData string index) and ``_dataset``
+    columns for stable identity and cross-dataset queries.
+
     Parameters
     ----------
     collection
@@ -31,11 +34,21 @@ def prepare_obs(
 
     Returns
     -------
-    pandas DataFrame with obs columns only.
+    pandas DataFrame with obs columns only, plus ``obs_name`` and
+    ``_dataset`` identity columns.
     """
     from nd_embedding_atlas.io._get import get_obs  # noqa: PLC0415
 
-    return get_obs(collection, columns=obs_columns)
+    df = get_obs(collection, columns=obs_columns, include_index=True)
+
+    # _dataset column: ad.concat adds it for multi-dataset. For single-dataset,
+    # _build_concat returns the raw AnnData without _dataset — inject it here.
+    if "_dataset" not in df.columns:
+        dataset_key = next(iter(collection.keys()))
+        df = df.copy()
+        df["_dataset"] = dataset_key
+
+    return df
 
 
 def _obsm_column_prefix(obsm_key: str) -> str:

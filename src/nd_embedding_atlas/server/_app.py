@@ -13,6 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from nd_embedding_atlas._server import create_cors_app, mount_frontend
 from nd_embedding_atlas.server._state import DatasetConfig, ViewerState
 from nd_embedding_atlas.server._store import EmbeddingStore
+from nd_embedding_atlas.server.routes._crops import make_crop_router
 from nd_embedding_atlas.server.routes._data import make_colormaps_router, make_data_router
 from nd_embedding_atlas.server.routes._embeddings import make_embeddings_router
 from nd_embedding_atlas.server.routes._export import make_export_router
@@ -72,6 +73,9 @@ def create_app(
     columns_config: NdeaConfig | None = None,
     duckdb_threads: int | None = None,
     pool_workers: int | None = None,
+    no_static: bool = False,
+    dataset_plates: dict[str, pathlib.Path] | None = None,
+    project_config_path: pathlib.Path | None = None,
 ) -> FastAPI:
     """Create a FastAPI app that loads embeddings on demand.
 
@@ -93,6 +97,10 @@ def create_app(
         DuckDB internal thread count (default: half of CPU cores).
     pool_workers
         Request handler thread pool size (default: half of CPU cores).
+    dataset_plates
+        Per-dataset plate paths for project mode (key → plate path).
+    project_config_path
+        Path to the project YAML config (used for sidecar persistence).
     """
     resolved_export_dir = pathlib.Path(export_dir).resolve() if export_dir else pathlib.Path.cwd() / "exports"
 
@@ -112,8 +120,38 @@ def create_app(
     except ImportError:
         _profiler = None
 
-    has_plate = plate_path is not None
-    plate_meta = _read_plate_metadata(plate_path) if has_plate else None
+    has_plate = plate_path is not None or bool(dataset_plates)
+
+    # Single-dataset plate metadata
+    plate_meta = _read_plate_metadata(plate_path) if plate_path is not None else None
+
+    # Project mode: read per-dataset plate metadata; use first plate as canonical frontend meta
+    dataset_channels: dict[str, list[Any]] = {}
+    if dataset_plates:
+        import warnings as _warnings  # noqa: PLC0415
+
+        first_plate_meta: dict[str, Any] | None = None
+        first_channels: list[Any] | None = None
+        for _ds_key, _ds_plate_path in dataset_plates.items():
+            _meta = _read_plate_metadata(_ds_plate_path)
+            dataset_channels[_ds_key] = _meta.get("plate_channels", []) if _meta else []
+            if first_plate_meta is None:
+                first_plate_meta = _meta
+                first_channels = dataset_channels[_ds_key]
+
+        # Warn if channel layouts differ across plates
+        if len(dataset_channels) > 1:
+            channel_counts = {k: len(v) for k, v in dataset_channels.items()}
+            if len(set(channel_counts.values())) > 1:
+                _warnings.warn(
+                    f"Plate channel counts differ across datasets: {channel_counts}. "
+                    "Using first plate's channel layout as the canonical frontend metadata.",
+                    stacklevel=2,
+                )
+
+        # Use first plate as canonical frontend metadata if no single plate_path given
+        if plate_meta is None and first_plate_meta is not None:
+            plate_meta = first_plate_meta
 
     obs_df = prepare_obs(collection, obs_columns=obs_columns)
     hidden_cols = spatial.hidden if plate_path else set()
@@ -153,6 +191,8 @@ def create_app(
         available_obsm_keys=available_obsm_keys,
         spatial=spatial,
         export_dir=resolved_export_dir,
+        dataset_plates=dataset_plates,
+        project_config_path=project_config_path,
     )
 
     # ── Build dataset config ──────────────────────────────────────────
@@ -166,6 +206,8 @@ def create_app(
 
     obs_column_names = [c for c in obs_df.columns if c != "__row_index__" and c not in hidden_cols]
 
+    _dataset_keys: list[str] | None = list(dataset_plates.keys()) if dataset_plates else None
+
     config = DatasetConfig(
         obs_column_names=obs_column_names,
         embedding_props={
@@ -178,6 +220,7 @@ def create_app(
         plate_meta=plate_meta,
         default_x=default_x,
         default_y=default_y,
+        dataset_keys=_dataset_keys,
     )
 
     # ── Assemble app ──────────────────────────────────────────────────
@@ -197,6 +240,12 @@ def create_app(
     def get_state() -> ViewerState:
         return state
 
+    app.include_router(make_crop_router(
+        plate_path,
+        plate_meta.get("plate_channels") if plate_meta else None,
+        dataset_plates=dataset_plates,
+        dataset_channels=dataset_channels if dataset_channels else None,
+    ))
     app.include_router(make_mosaic_router(get_state))
     app.include_router(make_data_router(get_state, config))
     app.include_router(make_colormaps_router())
@@ -206,10 +255,23 @@ def create_app(
     app.include_router(make_scatter_router(get_state))
     app.include_router(make_var_router(get_state))
 
+    # Single-dataset: mount at /plate (unchanged — preserves frontend tile URL compatibility)
     if plate_path is not None:
         app.mount("/plate", StaticFiles(directory=str(plate_path)), name="plate")
 
-    mount_frontend(app, static_dir=static_dir)
+    # Project mode: mount each dataset plate at /plates/{key}; also mount the first at /plate
+    # as fallback for any hardcoded frontend paths. Frontend multi-plate routing (per _dataset)
+    # is deferred to Phase 2.
+    if dataset_plates:
+        first_mounted = False
+        for _key, _ds_plate_path in dataset_plates.items():
+            app.mount(f"/plates/{_key}", StaticFiles(directory=str(_ds_plate_path)), name=f"plate_{_key}")
+            if not first_mounted and plate_path is None:
+                app.mount("/plate", StaticFiles(directory=str(_ds_plate_path)), name="plate")
+                first_mounted = True
+
+    if not no_static:
+        mount_frontend(app, static_dir=static_dir)
 
     # ── Optional profiling ────────────────────────────────────────────
     try:
@@ -234,6 +296,9 @@ def serve(
     pool_workers: int | None = None,
     host: str = "localhost",
     port: int = 5055,
+    no_static: bool = False,
+    dataset_plates: dict[str, pathlib.Path] | None = None,
+    project_config_path: pathlib.Path | None = None,
 ) -> None:
     """Launch the viewer — loads embeddings on demand.
 
@@ -257,6 +322,10 @@ def serve(
         Request handler thread pool size.
     host, port
         Server bind address.
+    dataset_plates
+        Per-dataset plate paths for project mode (key → plate path).
+    project_config_path
+        Path to the project YAML config (used for sidecar persistence).
     """
     import uvicorn
 
@@ -269,6 +338,9 @@ def serve(
         columns_config=columns_config,
         duckdb_threads=duckdb_threads,
         pool_workers=pool_workers,
+        no_static=no_static,
+        dataset_plates=dataset_plates,
+        project_config_path=project_config_path,
     )
     print(f"nd-embedding-atlas viewer: http://{host}:{port}")
 
