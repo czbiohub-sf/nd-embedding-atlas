@@ -22,22 +22,20 @@ interface ColormapSwatchProps {
 
 function ColormapSwatch({ name, active, onSelect }: ColormapSwatchProps) {
   const { data: stops } = useColormapPalette(name, 8);
-  const gradient = stops
-    ? `linear-gradient(to right, ${stops.join(",")})`
-    : "linear-gradient(to right, #888, #444)";
+  const gradient = stops ? `linear-gradient(to right, ${stops.join(",")})` : "linear-gradient(to right, #888, #444)";
 
   return (
     <button
       type="button"
       onClick={() => onSelect(name)}
       className={cn(
-        "flex flex-col gap-1 p-1 rounded-md border transition-colors",
+        "flex flex-col gap-1 rounded-md border p-1 transition-colors",
         active ? "border-white/30 bg-white/[0.06]" : "border-transparent hover:bg-white/[0.04]",
       )}
     >
       {/* gradient is computed — inline style is required */}
       <div className="h-2 rounded-sm" style={{ background: gradient }} />
-      <span className="text-[9px] text-center text-muted-foreground leading-none">{name}</span>
+      <span className="text-center text-[9px] text-muted-foreground leading-none">{name}</span>
     </button>
   );
 }

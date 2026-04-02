@@ -1,10 +1,10 @@
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import type { ObsSet } from "../lib/schemas";
-import { ObsSetSchema } from "../lib/schemas";
-import type { ObsSetId } from "../lib/branded-types";
-import { obsSetStore, setActiveObsSet, updateObsSets } from "../providers/ObsSetStore";
 import { z } from "zod";
+import type { ObsSetId } from "../../lib/branded-types";
+import type { ObsSet } from "../../lib/schemas";
+import { ObsSetSchema } from "../../lib/schemas";
+import { obsSetStore, setActiveObsSet, updateObsSets } from "../../stores/ObsSetStore";
 
 const ObsSetListSchema = z.array(ObsSetSchema);
 
@@ -55,7 +55,7 @@ export function useDeleteObsSet() {
       if (obsSetStore.state.activeObsSetId === deletedId) {
         setActiveObsSet(null);
       }
-      qc.invalidateQueries({ queryKey: ["obssets"] });
+      void qc.invalidateQueries({ queryKey: ["obssets"] });
     },
   });
 }

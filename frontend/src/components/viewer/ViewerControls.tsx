@@ -1,19 +1,22 @@
 import { useMemo } from "react";
+import { selectTrajectory } from "../../dashboard/DashboardContext";
 import { useDashboard } from "../../hooks/useDashboard";
-import { useViewer } from "../../hooks/useViewer";
 import { cn } from "../../lib/utils";
 import { Slider } from "../ui/slider";
+import { useViewer } from "./useViewer";
 
 interface Props {
   cropSize: number;
   setCropSize: (size: number) => void;
+  datasetKey?: string;
 }
 
-export function ViewerControls({ cropSize, setCropSize }: Props) {
+export function ViewerControls({ cropSize, setCropSize, datasetKey }: Props) {
   const { state: dashState, actions: dashActions } = useDashboard();
   const { state, actions } = useViewer();
   const { bounds, zIndex, tIndex, viewMode } = state;
-  const { trajectory, metadata } = dashState;
+  const { trajectories, metadata } = dashState;
+  const trajectory = selectTrajectory(trajectories, datasetKey);
   const hasCellCoords = !!metadata.spatial?.x_col;
 
   const traj = trajectory?.points;
@@ -34,7 +37,7 @@ export function ViewerControls({ cropSize, setCropSize }: Props) {
     if (isTrajectoryMode && trajTimepoints) {
       const t = trajTimepoints[val] ?? trajTimepoints[0];
       actions.setTIndex(t);
-      dashActions.setTrajectoryTIndex(t);
+      dashActions.setTrajectoryTIndex(datasetKey ?? "", t);
     } else {
       actions.setTIndex(val);
     }
@@ -122,7 +125,7 @@ function SliderRow({ label, value, min, max, step, onChange }: SliderRowProps) {
         step={step}
         onValueChange={(v) => onChange(Array.isArray(v) ? v[0] : v)}
       />
-      <span className="w-6 text-right text-[10px] tabular-nums text-muted-foreground">{value}</span>
+      <span className="w-6 text-right text-[10px] text-muted-foreground tabular-nums">{value}</span>
     </div>
   );
 }

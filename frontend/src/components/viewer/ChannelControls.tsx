@@ -1,10 +1,10 @@
-import { useState } from "react";
 import { EyeIcon, EyeOffIcon, Layers } from "lucide-react";
-import { useViewer } from "../../hooks/useViewer";
+import { useState } from "react";
+import { ScrollArea } from "../ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { Slider } from "../ui/slider";
 import { Toggle } from "../ui/toggle";
-import { ScrollArea } from "../ui/scroll-area";
+import { useViewer } from "./useViewer";
 import type { BlendMode } from "./ViewerContext";
 
 const BLEND_OPTIONS: { label: string; value: BlendMode }[] = [
@@ -21,7 +21,7 @@ function fmtContrast(v: number): string {
 export function ChannelControls() {
   const { state, actions } = useViewer();
   const { channels, viewMode } = state;
-  const [minimized, setMinimized] = useState(false);
+  const [minimized, setMinimized] = useState(true);
 
   if (channels.length === 0) return null;
 
@@ -45,7 +45,7 @@ export function ChannelControls() {
       {/* Header */}
       <div className="flex shrink-0 items-center gap-1.5 px-2 py-1.5">
         <Layers className="size-3 shrink-0 text-muted-foreground/60" />
-        <span className="flex-1 text-[10px] font-medium text-muted-foreground/70">Channels</span>
+        <span className="flex-1 font-medium text-[10px] text-muted-foreground/70">Channels</span>
         <button
           type="button"
           onClick={() => setMinimized(true)}
@@ -80,7 +80,9 @@ export function ChannelControls() {
                     type="color"
                     value={`#${ch.color}`}
                     onChange={(e) =>
-                      actions.setChannelProp(i, { color: e.target.value.replace("#", "").toUpperCase() })
+                      actions.setChannelProp(i, {
+                        color: e.target.value.replace("#", "").toUpperCase(),
+                      })
                     }
                     className="size-4 shrink-0 cursor-pointer rounded-sm border-0 bg-transparent p-0"
                     aria-label={`${ch.label} color`}
@@ -109,7 +111,7 @@ export function ChannelControls() {
 
                 {/* Contrast range (dual-thumb slider) */}
                 <div className="flex items-center gap-1.5 pl-7">
-                  <span className="w-8 text-right text-[10px] tabular-nums text-muted-foreground">
+                  <span className="w-8 text-right text-[10px] text-muted-foreground tabular-nums">
                     {fmtContrast(ch.contrastLimits[0])}
                   </span>
                   <Slider
@@ -123,7 +125,7 @@ export function ChannelControls() {
                       actions.setChannelProp(i, { contrastLimits: [vals[0], vals[1]] });
                     }}
                   />
-                  <span className="w-8 text-[10px] tabular-nums text-muted-foreground">
+                  <span className="w-8 text-[10px] text-muted-foreground tabular-nums">
                     {fmtContrast(ch.contrastLimits[1])}
                   </span>
                 </div>

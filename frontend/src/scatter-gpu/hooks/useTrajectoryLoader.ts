@@ -1,9 +1,10 @@
-import { useMemo } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { Coordinator } from "@uwdata/mosaic-core";
-import type { Metadata, TrajectoryFrame } from "../../types";
-import { toRows } from "../../lib/mosaic-helpers";
+import { useMemo } from "react";
+import { selectAnyTrajectory } from "../../dashboard/DashboardContext";
 import { useDashboard } from "../../hooks/useDashboard";
+import { toRows } from "../../lib/mosaic-helpers";
+import type { Metadata, TrajectoryFrame } from "../../types";
 import { trajectoryKeys } from "./queryKeys";
 
 interface UseTrajectoryLoaderOptions {
@@ -33,7 +34,6 @@ interface UseTrajectoryLoaderResult {
 export function useTrajectoryLoader(opts: UseTrajectoryLoaderOptions): UseTrajectoryLoaderResult {
   const { coordinator, table, xCol, yCol, categoryCol, metadata } = opts;
   const { state, actions } = useDashboard();
-  const { trajectory } = state;
   const queryClient = useQueryClient();
 
   const mutation = useMutation({
@@ -77,6 +77,7 @@ export function useTrajectoryLoader(opts: UseTrajectoryLoaderOptions): UseTrajec
     await mutation.mutateAsync({ trackId, fovName, clickedT });
   };
 
+  const trajectory = selectAnyTrajectory(state.trajectories);
   const activeIndex = useMemo(() => {
     if (!trajectory) return null;
     const idx = trajectory.points.findIndex((p) => p.t === trajectory.tIndex);

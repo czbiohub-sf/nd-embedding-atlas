@@ -1,6 +1,6 @@
 """Fast direct-read accessors for AnnData obs / obsm / var.
 
-Benchmarks on a 1M-cell zarr store show 7× speedup for obs and 60× for obsm
+Benchmarks on a 1M-cell zarr store show 7x speedup for obs and 60x for obsm
 versus the AnnData Dataset2D.to_memory() / dask.compute() pathway.  The gains
 come from eliminating dask task-graph overhead and Dataset2D→pandas conversion.
 
@@ -15,38 +15,35 @@ Usage
 
     from nd_embedding_atlas.io._get import get_obs, get_obsm, get_var
 
-    obs_df  = get_obs("path/to/data.zarr")
-    coords  = get_obsm("path/to/data.zarr", "X_umap")
-    var_df  = get_var("path/to/data.zarr")
+    obs_df = get_obs("path/to/data.zarr")
+    coords = get_obsm("path/to/data.zarr", "X_umap")
+    var_df = get_var("path/to/data.zarr")
 
     # Also accepts an open AnnData / AnnDataCollection:
-    obs_df  = get_obs(adata)
-    coords  = get_obsm(collection, "X_umap")
+    obs_df = get_obs(adata)
+    coords = get_obsm(collection, "X_umap")
 """
 
 from __future__ import annotations
 
 import warnings
 from pathlib import Path
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
 
 if TYPE_CHECKING:
-    import anndata as ad
     import h5py
     import zarr
 
-    from nd_embedding_atlas.io import AnnDataCollection
-
-    PathOrAdata = Union[str, Path, "ad.AnnData", "AnnDataCollection"]
+    PathOrAdata = str | Path | "ad.AnnData" | "AnnDataCollection"
 
 
 # ── Internal helpers ───────────────────────────────────────────────────────
 
 
-def _open_raw(path: str | Path) -> "zarr.Group | h5py.File":
+def _open_raw(path: str | Path) -> zarr.Group | h5py.File:
     """Open the underlying zarr.Group or h5py.File for *path*.
 
     The caller is responsible for closing the handle when done.
@@ -54,16 +51,16 @@ def _open_raw(path: str | Path) -> "zarr.Group | h5py.File":
     """
     p = str(path)
     if Path(p).is_dir() or p.endswith(".zarr"):
-        import zarr  # noqa: PLC0415
+        import zarr
 
         return zarr.open(p, mode="r")
     else:
-        import h5py  # noqa: PLC0415
+        import h5py
 
         return h5py.File(p, "r")
 
 
-def _read_nullable_string(item: "zarr.Array | zarr.Group") -> "np.ndarray":
+def _read_nullable_string(item: zarr.Array | zarr.Group) -> np.ndarray:
     """Read an AnnData nullable-string-array encoding into a str numpy array.
 
     AnnData zarr v3 stores string columns as a group with:
@@ -72,7 +69,7 @@ def _read_nullable_string(item: "zarr.Array | zarr.Group") -> "np.ndarray":
 
     Falls back to direct array read for zarr v2 plain string arrays.
     """
-    import numpy as np  # noqa: PLC0415
+    import numpy as np
 
     try:
         attrs = dict(item.attrs) if hasattr(item, "attrs") else {}
@@ -87,11 +84,11 @@ def _read_nullable_string(item: "zarr.Array | zarr.Group") -> "np.ndarray":
         if arr.dtype.kind == "T":  # NumPy 2.0 StringDType
             return arr.astype(object).astype(str)
         return arr.astype(str)
-    except Exception:
+    except Exception:  # noqa: BLE001 — zarr/h5py can raise anything
         return np.array([], dtype=str)
 
 
-def _read_obs_index(group: "zarr.Group | h5py.File") -> list[str]:
+def _read_obs_index(group: zarr.Group | h5py.File) -> list[str]:
     """Read the AnnData obs string index from ``obs/_index``.
 
     Handles both zarr v2 (plain array) and zarr v3 (nullable-string-array group).
@@ -99,11 +96,11 @@ def _read_obs_index(group: "zarr.Group | h5py.File") -> list[str]:
     try:
         item = group["obs"]["_index"]
         return list(_read_nullable_string(item))
-    except (KeyError, Exception):
+    except (KeyError, Exception):  # noqa: BLE001
         return []
 
 
-def _group_to_df(group: "zarr.Group | h5py.File", group_key: str) -> pd.DataFrame:
+def _group_to_df(group: zarr.Group | h5py.File, group_key: str) -> pd.DataFrame:
     """Read an AnnData obs/var zarr/h5py group directly into a DataFrame.
 
     Handles:
@@ -123,7 +120,7 @@ def _group_to_df(group: "zarr.Group | h5py.File", group_key: str) -> pd.DataFram
     -------
     pandas.DataFrame with the decoded columns.
     """
-    import h5py  # noqa: PLC0415
+    import h5py
 
     g = group[group_key]
     columns: dict[str, object] = {}
@@ -133,7 +130,7 @@ def _group_to_df(group: "zarr.Group | h5py.File", group_key: str) -> pd.DataFram
     try:
         attrs = dict(g.attrs)
         _index_name = attrs.get("_index") or attrs.get("index_names", [None])[0]
-    except Exception:
+    except Exception:  # noqa: BLE001
         pass
 
     for col_name in g:
@@ -142,9 +139,7 @@ def _group_to_df(group: "zarr.Group | h5py.File", group_key: str) -> pd.DataFram
         item = g[col_name]
 
         # ── Group-based encodings (zarr v2 categorical, zarr v3 new types) ──
-        is_group = isinstance(item, h5py.Group) or (
-            hasattr(item, "keys") and not hasattr(item, "__array__")
-        )
+        is_group = isinstance(item, h5py.Group) or (hasattr(item, "keys") and not hasattr(item, "__array__"))
         if is_group:
             try:
                 enc = dict(item.attrs).get("encoding-type", "") if hasattr(item, "attrs") else ""
@@ -163,7 +158,7 @@ def _group_to_df(group: "zarr.Group | h5py.File", group_key: str) -> pd.DataFram
                             raw_cats = raw_cats.astype(str)
                     columns[col_name] = pd.Categorical.from_codes(raw_codes, categories=raw_cats)
                 # else: unknown group encoding — skip silently
-            except (KeyError, Exception):
+            except (KeyError, Exception):  # noqa: BLE001
                 pass  # skip unrecognised sub-groups
             continue
 
@@ -177,10 +172,10 @@ def _group_to_df(group: "zarr.Group | h5py.File", group_key: str) -> pd.DataFram
             elif arr.dtype == object:
                 try:
                     arr = arr.astype(str)
-                except Exception:
+                except Exception:  # noqa: BLE001
                     pass
             columns[col_name] = arr
-        except Exception:
+        except Exception:  # noqa: BLE001
             pass  # skip unreadable items
 
     return pd.DataFrame(columns)
@@ -190,7 +185,7 @@ def _group_to_df(group: "zarr.Group | h5py.File", group_key: str) -> pd.DataFram
 
 
 def get_obs(
-    source: "PathOrAdata",
+    source: PathOrAdata,
     *,
     columns: list[str] | None = None,
     include_index: bool = False,
@@ -198,7 +193,7 @@ def get_obs(
     """Return a DataFrame of obs metadata, bypassing AnnData overhead.
 
     For zarr/h5ad paths this reads directly from the underlying store
-    (7× faster than ``collection.obs.to_memory()`` on 1M-cell datasets).
+    (7x faster than ``collection.obs.to_memory()`` on 1M-cell datasets).
 
     Falls back to AnnData's own accessor when *source* is an in-memory
     AnnData or an AnnDataCollection without a backing path.
@@ -244,7 +239,7 @@ def get_obs(
         return df
 
     # ── AnnDataCollection → try backing path, else fall back ───────────
-    from nd_embedding_atlas.io import AnnDataCollection  # noqa: PLC0415
+    from nd_embedding_atlas.io import AnnDataCollection
 
     if isinstance(source, AnnDataCollection):
         # datasets is the underlying Datasets mapping (UserDict)
@@ -294,7 +289,7 @@ def get_obs(
 
 
 def get_obsm(
-    source: "PathOrAdata",
+    source: PathOrAdata,
     key: str,
     *,
     dtype: np.dtype | None = np.float32,
@@ -303,7 +298,7 @@ def get_obsm(
     """Return an obsm embedding array, bypassing AnnData/dask overhead.
 
     For zarr/h5ad paths this reads directly from the underlying store
-    (60× faster than ``collection.obsm[key].compute()`` on 1M-cell datasets
+    (60x faster than ``collection.obsm[key].compute()`` on 1M-cell datasets
     because it avoids dask task-graph construction entirely).
 
     Parameters
@@ -341,7 +336,7 @@ def get_obsm(
         return np.asarray(arr, dtype=dtype) if dtype is not None else np.asarray(arr)
 
     # ── AnnDataCollection → try backing path, else fall back ───────────
-    from nd_embedding_atlas.io import AnnDataCollection  # noqa: PLC0415
+    from nd_embedding_atlas.io import AnnDataCollection
 
     if isinstance(source, AnnDataCollection):
         if len(source) == 1:
@@ -376,7 +371,7 @@ def get_obsm(
 
 
 def get_var(
-    source: "PathOrAdata",
+    source: PathOrAdata,
     *,
     columns: list[str] | None = None,
 ) -> pd.DataFrame:
@@ -405,7 +400,7 @@ def get_var(
             df = df[[c for c in columns if c in df.columns]]
         return df
 
-    from nd_embedding_atlas.io import AnnDataCollection  # noqa: PLC0415
+    from nd_embedding_atlas.io import AnnDataCollection
 
     if isinstance(source, AnnDataCollection):
         if len(source) == 1:

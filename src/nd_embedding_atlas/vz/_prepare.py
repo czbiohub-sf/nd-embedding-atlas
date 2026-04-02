@@ -20,7 +20,7 @@ def prepare_obs(
     """Materialize only obs metadata (no embeddings).
 
     Uses the fast direct-read path (zarr/h5py) when possible, bypassing
-    AnnData's Dataset2D→pandas overhead (7× faster on 1M-cell zarr stores).
+    AnnData's Dataset2D→pandas overhead (7x faster on 1M-cell zarr stores).
 
     Always injects ``obs_name`` (AnnData string index) and ``_dataset``
     columns for stable identity and cross-dataset queries.
@@ -37,7 +37,7 @@ def prepare_obs(
     pandas DataFrame with obs columns only, plus ``obs_name`` and
     ``_dataset`` identity columns.
     """
-    from nd_embedding_atlas.io._get import get_obs  # noqa: PLC0415
+    from nd_embedding_atlas.io._get import get_obs
 
     df = get_obs(collection, columns=obs_columns, include_index=True)
 

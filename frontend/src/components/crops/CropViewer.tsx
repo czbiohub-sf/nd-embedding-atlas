@@ -12,10 +12,11 @@ import { SingleCropViewer } from "./SingleCropViewer";
 import { ViewerPauseGate } from "./ViewerPauseGate";
 
 interface CropViewerProps {
-  channelInstance?: "docked" | "pip";
+  channelInstance?: string;
+  datasetKey?: string;
 }
 
-export function CropViewer({ channelInstance = "docked" }: CropViewerProps) {
+export function CropViewer({ channelInstance = "docked", datasetKey }: CropViewerProps) {
   const { state } = useDashboard();
   const hasEverSelected = useRef(false);
   const [cropSize, setCropSize] = useState(100);
@@ -40,14 +41,14 @@ export function CropViewer({ channelInstance = "docked" }: CropViewerProps) {
         <ViewerPauseGate active={!!state.highlightId} />
         <div className="relative h-full">
           <Viewer.Canvas className="absolute inset-0 h-full w-full" />
-          <SingleCropViewer cropSize={cropSize} />
+          <SingleCropViewer cropSize={cropSize} datasetKey={datasetKey} />
           <ViewerLoadingOverlay />
-          <div className="absolute left-2 top-2 z-20 flex flex-col gap-1">
+          <div className="absolute top-2 left-2 z-20 flex flex-col gap-1">
             <ChannelControls />
             <VolumeControls />
           </div>
           <div className="absolute bottom-2 left-2 z-20">
-            <ViewerControls cropSize={cropSize} setCropSize={setCropSize} />
+            <ViewerControls cropSize={cropSize} setCropSize={setCropSize} datasetKey={datasetKey} />
           </div>
           {!state.highlightId && (
             <div className="absolute inset-0 flex items-center justify-center text-text-muted text-xs">

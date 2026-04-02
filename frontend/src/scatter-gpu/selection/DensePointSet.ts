@@ -1,5 +1,5 @@
-import type { IPointSet } from "./IPointSet";
 import TypedFastBitSet from "typedfastbitset";
+import type { IPointSet } from "./IPointSet";
 
 /**
  * DensePointSet — bitset-backed set for isolation layers.

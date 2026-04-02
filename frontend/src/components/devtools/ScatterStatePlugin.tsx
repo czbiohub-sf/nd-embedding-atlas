@@ -4,14 +4,14 @@
  */
 
 import { useStore } from "@tanstack/react-store";
-import { brushPredicateStore } from "../../providers/BrushPredicateStore";
-import { selectionSyncStore } from "../../providers/SelectionSyncStore";
-import { getBitmapRowIds } from "../../providers/RoaringBroadcastStore";
-import { viewSyncStore } from "../../providers/ViewSyncStore";
+import { brushPredicateStore } from "../../stores/BrushPredicateStore";
+import { getBitmapRowIds } from "../../stores/RoaringBroadcastStore";
+import { selectionSyncStore } from "../../stores/SelectionSyncStore";
+import { viewSyncStore } from "../../stores/ViewSyncStore";
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="flex items-start gap-3 border-b border-white/5 px-4 py-2 text-xs">
+    <div className="flex items-start gap-3 border-white/5 border-b px-4 py-2 text-xs">
       <span className="w-40 shrink-0 font-mono text-white/40">{label}</span>
       <span className="min-w-0 break-all font-mono text-white/80">{value}</span>
     </div>
@@ -21,7 +21,7 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="mb-2">
-      <div className="sticky top-0 bg-[#0d0d14] px-4 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-white/30">
+      <div className="sticky top-0 bg-[#0d0d14] px-4 py-1.5 font-semibold text-[10px] text-white/30 uppercase tracking-widest">
         {title}
       </div>
       {children}

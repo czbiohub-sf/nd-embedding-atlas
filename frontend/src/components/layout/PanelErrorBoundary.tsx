@@ -1,4 +1,4 @@
-import { Component, type ReactNode, type ErrorInfo } from "react";
+import { Component, type ErrorInfo, type ReactNode } from "react";
 
 interface Props {
   panelName: string;
@@ -24,10 +24,10 @@ export class PanelErrorBoundary extends Component<Props, State> {
     if (this.state.error) {
       return (
         <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
-          <div className="text-sm font-medium text-text-primary">{this.props.panelName} crashed</div>
-          <div className="max-w-xs font-mono text-xs text-text-muted break-all">{this.state.error.message}</div>
+          <div className="font-medium text-sm text-text-primary">{this.props.panelName} crashed</div>
+          <div className="max-w-xs break-all font-mono text-text-muted text-xs">{this.state.error.message}</div>
           <button
-            className="rounded border border-border-subtle px-3 py-1 text-xs text-text-secondary hover:bg-elevated"
+            className="rounded border border-border-subtle px-3 py-1 text-text-secondary text-xs hover:bg-elevated"
             onClick={() => this.setState({ error: null })}
           >
             Retry

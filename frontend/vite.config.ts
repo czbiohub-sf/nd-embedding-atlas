@@ -6,39 +6,31 @@ import { defineConfig } from "vite-plus";
 export default defineConfig({
   // ── Oxlint ────────────────────────────────────────────────────────────────
   lint: {
-    ignorePatterns: ["dist/**", "node_modules/**", "src/components/ui/**"],
     options: {
       typeAware: true,
       typeCheck: true,
-    },
-    rules: {
-      // Correctness
-      "no-unused-vars": "warn",
-      "react-hooks/exhaustive-deps": "error",
-      // Type safety
-      "@typescript-eslint/no-explicit-any": "warn",
-      // TypeGPU uses inline import() type patterns — warn only, can't auto-fix
-      "@typescript-eslint/consistent-type-imports": "warn",
-      // Style
-      "prefer-const": "error",
-      "no-console": "off",
     },
   },
 
   // ── Oxfmt ──────────────────────────────────────────────────────────────────
   fmt: {
-    printWidth: 120,
-    singleQuote: false, // double quotes — matches previous biome config
-    trailingComma: "all",
-    semi: true,
-    arrowParens: "always",
-    tabWidth: 2,
+    printWidth: 120,        // matches Python ruff 120-char convention
+    tabWidth: 2,            // project standard (CLAUDE.md)
+    useTabs: false,
+    semi: true,             // always semicolons
+    singleQuote: false,     // double quotes everywhere
+    jsxSingleQuote: false,
+    trailingComma: "all",   // ES2017+ compatible
+    arrowParens: "always",  // required for TS type annotations on params
+    bracketSpacing: true,   // { x } not {x}
+    endOfLine: "lf",        // explicit — "auto" is not supported by oxfmt
+    sortPackageJson: false, // IMPORTANT: oxfmt sorts package.json by default — disable
   },
 
   // ── Pre-commit (staged files only) ────────────────────────────────────────
   staged: {
-    "*.{ts,tsx,js,jsx}": "vp check --fix",
-    "*.{json,css}": "vp fmt --fix",
+    "*.{ts,tsx,js,jsx}": "vp fmt --write",
+    "*.{json,css}": "vp fmt --write",
   },
 
   // ── Vite ──────────────────────────────────────────────────────────────────

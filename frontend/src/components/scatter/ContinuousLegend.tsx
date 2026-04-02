@@ -1,6 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useColormapPalette } from "../../hooks/useColormaps";
-import { ColormapGrid } from "../legend/ColormapGrid";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -8,6 +6,8 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { cn } from "@/lib/utils";
+import { useColormapPalette } from "../../hooks/useColormaps";
+import { ColormapGrid } from "./ColormapGrid";
 
 interface Props {
   columnName: string;
@@ -60,10 +60,10 @@ function ActionButton({ active, disabled, onClick, children }: ActionButtonProps
       disabled={disabled}
       onClick={onClick}
       className={cn(
-        "flex-1 rounded px-1.5 py-0.5 text-[9px] font-mono transition-colors border",
+        "flex-1 rounded border px-1.5 py-0.5 font-mono text-[9px] transition-colors",
         active
-          ? "bg-white/10 text-white border-white/20"
-          : "text-muted-foreground hover:text-white hover:bg-white/[0.06] border-transparent",
+          ? "border-white/20 bg-white/10 text-white"
+          : "border-transparent text-muted-foreground hover:bg-white/[0.06] hover:text-white",
         "disabled:pointer-events-none disabled:opacity-30",
       )}
     >
@@ -90,16 +90,13 @@ export function ContinuousLegend({
   const paletteQuery = useColormapPalette(colormap, 16);
   const gradientStops = paletteQuery.data
     ? paletteQuery.data.join(", ")
-    : (COLORMAP_FALLBACKS[colormap] ?? COLORMAP_FALLBACKS["viridis"]);
+    : (COLORMAP_FALLBACKS[colormap] ?? COLORMAP_FALLBACKS.viridis);
 
   const absMin = absoluteVmin ?? vmin;
   const absMax = absoluteVmax ?? vmax;
   const hasRange = absMax > absMin && onRangeChange != null;
 
-  const toFrac = useCallback(
-    (v: number) => (absMax > absMin ? (v - absMin) / (absMax - absMin) : 0),
-    [absMin, absMax],
-  );
+  const toFrac = useCallback((v: number) => (absMax > absMin ? (v - absMin) / (absMax - absMin) : 0), [absMin, absMax]);
   const toVal = useCallback((f: number) => absMin + f * (absMax - absMin), [absMin, absMax]);
 
   const [localMin, setLocalMin] = useState(() => toFrac(vmin));
@@ -123,7 +120,7 @@ export function ContinuousLegend({
       setLocalMax(toFrac(vmax));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vmin, vmax, absMin, absMax]);
+  }, [vmin, vmax, toFrac]);
 
   function fracFromClientX(clientX: number): number {
     const bar = barRef.current;
@@ -132,41 +129,44 @@ export function ContinuousLegend({
     return Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
   }
 
-  const startDrag = useCallback((which: "min" | "max") => {
-    draggingRef.current = which;
+  const startDrag = useCallback(
+    (which: "min" | "max") => {
+      draggingRef.current = which;
 
-    function onMove(e: PointerEvent) {
-      const f = fracFromClientX(e.clientX);
-      if (which === "min") {
-        const next = Math.min(f, localMaxRef.current - 0.01);
-        setLocalMin(next);
-        localMinRef.current = next;
-      } else {
-        const next = Math.max(f, localMinRef.current + 0.01);
-        setLocalMax(next);
-        localMaxRef.current = next;
+      function onMove(e: PointerEvent) {
+        const f = fracFromClientX(e.clientX);
+        if (which === "min") {
+          const next = Math.min(f, localMaxRef.current - 0.01);
+          setLocalMin(next);
+          localMinRef.current = next;
+        } else {
+          const next = Math.max(f, localMinRef.current + 0.01);
+          setLocalMax(next);
+          localMaxRef.current = next;
+        }
+        onRangeChangeRef.current?.(toValRef.current(localMinRef.current), toValRef.current(localMaxRef.current));
       }
-      onRangeChangeRef.current?.(toValRef.current(localMinRef.current), toValRef.current(localMaxRef.current));
-    }
 
-    function onUp() {
-      draggingRef.current = null;
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-    }
+      function onUp() {
+        draggingRef.current = null;
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+      }
 
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
-  }, []);
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
+    },
+    [fracFromClientX],
+  );
 
   const minPct = `${(localMin * 100).toFixed(1)}%`;
   const maxPct = `${(localMax * 100).toFixed(1)}%`;
   const scaleBadge = scale && scale !== "linear" ? (scale === "sqrt" ? "√" : scale) : null;
 
   return (
-    <div className="absolute left-2 top-10 z-20 w-44 rounded-lg border border-white/[0.07] bg-card/80 backdrop-blur-md p-2.5">
+    <div className="absolute top-10 left-2 z-20 w-44 rounded-lg border border-white/[0.07] bg-card/80 p-2.5 backdrop-blur-md">
       {/* Column name + optional scale badge */}
-      <p className="mb-1.5 flex items-center gap-1 text-[10px] font-mono text-muted-foreground">
+      <p className="mb-1.5 flex items-center gap-1 font-mono text-[10px] text-muted-foreground">
         <span className="flex-1 truncate" title={columnName}>
           {columnName}
         </span>
@@ -176,7 +176,7 @@ export function ContinuousLegend({
       {/* Gradient bar — right-click opens colormap/scale context menu */}
       <ContextMenu>
         <ContextMenuTrigger>
-          <div ref={barRef} className="relative h-3 w-full rounded-sm select-none cursor-context-menu">
+          <div ref={barRef} className="relative h-3 w-full cursor-context-menu select-none rounded-sm">
             {/* Full gradient — scaleX(-1) for reversed display */}
             <div
               className="absolute inset-0 rounded-sm"
@@ -197,7 +197,7 @@ export function ContinuousLegend({
                 <button
                   type="button"
                   aria-label="Set minimum value"
-                  className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 size-3 cursor-ew-resize rounded-sm border-2 border-white/90 bg-white/20 shadow hover:bg-white/40 focus-visible:outline-none"
+                  className="absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 cursor-ew-resize rounded-sm border-2 border-white/90 bg-white/20 shadow hover:bg-white/40 focus-visible:outline-none"
                   style={{ left: minPct, touchAction: "none" }}
                   onPointerDown={(e) => {
                     e.stopPropagation();
@@ -209,7 +209,7 @@ export function ContinuousLegend({
                 <button
                   type="button"
                   aria-label="Set maximum value"
-                  className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 size-3 cursor-ew-resize rounded-sm border-2 border-white/90 bg-white/20 shadow hover:bg-white/40 focus-visible:outline-none"
+                  className="absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 cursor-ew-resize rounded-sm border-2 border-white/90 bg-white/20 shadow hover:bg-white/40 focus-visible:outline-none"
                   style={{ left: maxPct, touchAction: "none" }}
                   onPointerDown={(e) => {
                     e.stopPropagation();
@@ -222,7 +222,7 @@ export function ContinuousLegend({
           </div>
         </ContextMenuTrigger>
 
-        <ContextMenuContent className="w-60 p-2 font-mono rounded-lg border border-white/[0.07] bg-card/80 backdrop-blur-md shadow-lg shadow-black/20">
+        <ContextMenuContent className="w-60 rounded-lg border border-white/[0.07] bg-card/80 p-2 font-mono shadow-black/20 shadow-lg backdrop-blur-md">
           <ColormapGrid active={colormap} onSelect={onColormapChange ?? (() => {})} />
 
           <ContextMenuSeparator />
@@ -251,7 +251,7 @@ export function ContinuousLegend({
       </ContextMenu>
 
       {/* Min / max labels */}
-      <div className="mt-1 flex justify-between text-[9px] font-mono tabular-nums text-muted-foreground/70">
+      <div className="mt-1 flex justify-between font-mono text-[9px] text-muted-foreground/70 tabular-nums">
         <span>{formatValue(toVal(localMin))}</span>
         <span>{formatValue(toVal(localMax))}</span>
       </div>

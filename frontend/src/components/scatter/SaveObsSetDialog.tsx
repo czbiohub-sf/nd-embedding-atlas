@@ -7,8 +7,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useDashboard } from "../../hooks/useDashboard";
-import { useCreateObsSet } from "../../hooks/useObsSets";
 import { toRows } from "../../lib/mosaic-helpers";
+import { useCreateObsSet } from "./useObsSets";
 
 interface SaveObsSetDialogProps {
   open: boolean;
@@ -53,14 +53,13 @@ export function SaveObsSetDialog({ open, onClose, getRowIndices }: SaveObsSetDia
 
     const indices = getRowIndices();
 
-    
-      if (indices.length === 0) {
-        setMembers([]);
-        setResolving(false);
-        return;
-      }
-      const inList = indices.join(", ");
-      const sql = `
+    if (indices.length === 0) {
+      setMembers([]);
+      setResolving(false);
+      return;
+    }
+    const inList = indices.join(", ");
+    const sql = `
         SELECT _dataset AS dataset_key, obs_name
         FROM obs_base
         WHERE __row_index__ IN (${inList})
@@ -81,7 +80,7 @@ export function SaveObsSetDialog({ open, onClose, getRowIndices }: SaveObsSetDia
       });
     // coordinator is a stable singleton — safe to omit from deps
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, coordinator, getRowIndices]);
 
   if (!open) return null;
 
@@ -90,10 +89,7 @@ export function SaveObsSetDialog({ open, onClose, getRowIndices }: SaveObsSetDia
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!canSubmit || !members) return;
-    createObsSet.mutate(
-      { name: name.trim(), color: color || null, members },
-      { onSuccess: () => onClose() },
-    );
+    createObsSet.mutate({ name: name.trim(), color: color || null, members }, { onSuccess: () => onClose() });
   }
 
   return (
@@ -103,22 +99,16 @@ export function SaveObsSetDialog({ open, onClose, getRowIndices }: SaveObsSetDia
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="w-80 rounded-xl bg-surface-primary border border-border-subtle shadow-xl p-5 flex flex-col gap-4">
-        <h2 className="text-sm font-semibold text-text-primary">Save selection as ObsSet</h2>
+      <div className="flex w-80 flex-col gap-4 rounded-xl border border-border-subtle bg-surface-primary p-5 shadow-xl">
+        <h2 className="font-semibold text-sm text-text-primary">Save selection as ObsSet</h2>
 
-        {resolving && (
-          <p className="text-xs text-text-secondary">Resolving members…</p>
-        )}
-        {resolveError && (
-          <p className="text-xs text-red-400">Error: {resolveError}</p>
-        )}
-        {members !== null && !resolving && (
-          <p className="text-xs text-text-secondary">{members.length} observations</p>
-        )}
+        {resolving && <p className="text-text-secondary text-xs">Resolving members…</p>}
+        {resolveError && <p className="text-red-400 text-xs">Error: {resolveError}</p>}
+        {members !== null && !resolving && <p className="text-text-secondary text-xs">{members.length} observations</p>}
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
           <div className="flex flex-col gap-1">
-            <label className="text-xs text-text-secondary" htmlFor="obsset-name">
+            <label className="text-text-secondary text-xs" htmlFor="obsset-name">
               Name
             </label>
             <input
@@ -128,13 +118,13 @@ export function SaveObsSetDialog({ open, onClose, getRowIndices }: SaveObsSetDia
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Cluster A"
-              className="rounded-md bg-surface-secondary border border-border-subtle px-2 py-1.5 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-primary"
+              className="rounded-md border border-border-subtle bg-surface-secondary px-2 py-1.5 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-primary"
               autoComplete="off"
             />
           </div>
 
           <div className="flex flex-col gap-1">
-            <label className="text-xs text-text-secondary" htmlFor="obsset-color">
+            <label className="text-text-secondary text-xs" htmlFor="obsset-color">
               Color
             </label>
             <input
@@ -150,14 +140,14 @@ export function SaveObsSetDialog({ open, onClose, getRowIndices }: SaveObsSetDia
             <button
               type="button"
               onClick={onClose}
-              className="rounded-md px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-secondary"
+              className="rounded-md px-3 py-1.5 text-text-secondary text-xs hover:bg-surface-secondary"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={!canSubmit}
-              className="rounded-md bg-primary px-3 py-1.5 text-xs text-white disabled:opacity-40"
+              className="rounded-md bg-primary px-3 py-1.5 text-white text-xs disabled:opacity-40"
             >
               {createObsSet.isPending ? "Saving…" : "Save"}
             </button>

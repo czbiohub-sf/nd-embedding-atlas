@@ -9,9 +9,9 @@ import {
   type Viewport,
 } from "@idetik/core";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { MultiChannelLayers } from "../../lib/MultiChannelLayers";
-import { OrbitControls } from "../../lib/OrbitControls";
-import { clearViewerChannels, publishViewerChannels } from "../../providers/ViewerChannelsStore";
+import { clearViewerChannels, publishViewerChannels } from "../../stores/ViewerChannelsStore";
+import type { MultiChannelLayers } from "./MultiChannelLayers";
+import { OrbitControls } from "./OrbitControls";
 import {
   type ChannelDef,
   type DimensionBounds,
@@ -24,7 +24,7 @@ import {
 
 interface Props {
   children: ReactNode;
-  channelInstance?: "docked" | "pip";
+  channelInstance?: string;
 }
 
 interface LayerEntry {
@@ -80,7 +80,7 @@ function createRuntime(canvas: HTMLCanvasElement, mode: ViewMode): RuntimeResult
 
 // ── Provider ────────────────────────────────────────────────────────────────
 
-export function ViewerProvider({ children, channelInstance = "docked" as const }: Props) {
+export function ViewerProvider({ children, channelInstance = "docked" }: Props) {
   // ── Mutable refs ──────────────────────────────────────────────────────
   const runtimeRef = useRef<Idetik | null>(null);
   const viewportRef = useRef<Viewport | null>(null);
@@ -336,7 +336,7 @@ export function ViewerProvider({ children, channelInstance = "docked" as const }
       publishViewerChannels(channelInstance, channels);
     }
     return () => {
-      clearViewerChannels();
+      clearViewerChannels(channelInstance);
     };
   }, [channels, channelInstance]);
 

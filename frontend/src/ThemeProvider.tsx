@@ -53,7 +53,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   // Apply on mount
   useEffect(() => {
     applyTheme(theme);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [applyTheme, theme]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggle = useCallback(() => {
     applyTheme(theme === "dark" ? "light" : "dark");

@@ -1,7 +1,7 @@
-import { useCallback, useRef } from "react";
 import type { RefObject } from "react";
+import { useCallback, useRef } from "react";
 import type { CategoryMapping } from "../../lib/category-column";
-import { setBrushPredicate } from "../../providers/BrushPredicateStore";
+import { setBrushPredicate } from "../../stores/BrushPredicateStore";
 import type { IsolationCapability } from "../handle-capabilities";
 
 interface UseIsolationBridgeOptions {
@@ -36,36 +36,39 @@ export function useIsolationBridge(opts: UseIsolationBridgeOptions): UseIsolatio
   colByColRef.current = colorByColumn;
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const handleIsolationChange = useCallback((isolatedIndices: Set<number>) => {
-    const source = isolationSourceRef.current;
-    const catMap = catMapRef.current;
-    const col = colByColRef.current;
-    const catIndices = categoryIndicesRef.current;
-    const scatter = scatterRef.current;
+  const handleIsolationChange = useCallback(
+    (isolatedIndices: Set<number>) => {
+      const source = isolationSourceRef.current;
+      const catMap = catMapRef.current;
+      const col = colByColRef.current;
+      const catIndices = categoryIndicesRef.current;
+      const scatter = scatterRef.current;
 
-    // ── Clear path ───────────────────────────────────────────────────────
-    if (isolatedIndices.size === 0 || !catMap || !col) {
-      setBrushPredicate(source, null);
-      scatter?.clearCategoryIsolation();
-      return;
-    }
+      // ── Clear path ───────────────────────────────────────────────────────
+      if (isolatedIndices.size === 0 || !catMap || !col) {
+        setBrushPredicate(source, null);
+        scatter?.clearCategoryIsolation();
+        return;
+      }
 
-    // ── Mosaic cross-filter predicate ────────────────────────────────────
-    const labels = catMap.legend
-      .filter((item) => isolatedIndices.has(item.index))
-      .map((item) => `'${item.label.replace(/'/g, "''")}'`);
-    if (labels.length === 0) {
-      setBrushPredicate(source, null);
-      scatter?.clearCategoryIsolation();
-      return;
-    }
-    setBrushPredicate(source, `${col} IN (${labels.join(", ")})`);
+      // ── Mosaic cross-filter predicate ────────────────────────────────────
+      const labels = catMap.legend
+        .filter((item) => isolatedIndices.has(item.index))
+        .map((item) => `'${item.label.replace(/'/g, "''")}'`);
+      if (labels.length === 0) {
+        setBrushPredicate(source, null);
+        scatter?.clearCategoryIsolation();
+        return;
+      }
+      setBrushPredicate(source, `${col} IN (${labels.join(", ")})`);
 
-    // ── GPU alpha-dimming ────────────────────────────────────────────────
-    if (scatter && catIndices) {
-      scatter.setCategoryIsolation(isolatedIndices, catIndices);
-    }
-  }, []); // stable — reads all values via refs, never recreated
+      // ── GPU alpha-dimming ────────────────────────────────────────────────
+      if (scatter && catIndices) {
+        scatter.setCategoryIsolation(isolatedIndices, catIndices);
+      }
+    },
+    [categoryIndicesRef.current, scatterRef.current],
+  ); // stable — reads all values via refs, never recreated
 
   return { handleIsolationChange };
 }

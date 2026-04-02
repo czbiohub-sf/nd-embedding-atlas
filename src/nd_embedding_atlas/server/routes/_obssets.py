@@ -1,11 +1,10 @@
 """ObsSet CRUD + activate endpoints."""
 
-
 import asyncio
 import logging
 import uuid
 from collections.abc import Callable
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -60,7 +59,14 @@ def make_obssets_router(get_state: Callable[[], ViewerState]) -> APIRouter:
                 ORDER BY o.created_at
             """).fetchall()
             cols = ["obsset_id", "name", "color", "created_at", "created_count", "current_count"]
-            return [dict(zip(cols, row, strict=False)) for row in rows]
+            rows_out = []
+            for row in rows:
+                d = dict(zip(cols, row, strict=False))
+                # created_at may be a datetime object — coerce to ISO string for JSON
+                if hasattr(d.get("created_at"), "isoformat"):
+                    d["created_at"] = d["created_at"].isoformat()
+                rows_out.append(d)
+            return rows_out
 
         result = await asyncio.get_running_loop().run_in_executor(state.executor, _query)
         return JSONResponse(result)
@@ -71,7 +77,7 @@ def make_obssets_router(get_state: Callable[[], ViewerState]) -> APIRouter:
     async def create_obsset(body: CreateObsSetBody, state: State) -> JSONResponse:
         """Create a new ObsSet; write sidecar if project_config_path is set."""
         obsset_id = str(uuid.uuid4())
-        created_at = datetime.now(tz=timezone.utc).isoformat()
+        created_at = datetime.now(tz=UTC).isoformat()
         created_count = len(body.members)
 
         def _insert() -> dict:
@@ -129,9 +135,7 @@ def make_obssets_router(get_state: Callable[[], ViewerState]) -> APIRouter:
         """
 
         def _check_exists() -> bool:
-            row = state.store.con.execute(
-                "SELECT 1 FROM obssets WHERE obsset_id = ?", [obsset_id]
-            ).fetchone()
+            row = state.store.con.execute("SELECT 1 FROM obssets WHERE obsset_id = ?", [obsset_id]).fetchone()
             return row is not None
 
         exists = await asyncio.get_running_loop().run_in_executor(state.executor, _check_exists)
@@ -141,9 +145,7 @@ def make_obssets_router(get_state: Callable[[], ViewerState]) -> APIRouter:
         # Sanitise the ID to prevent SQL injection (UUIDs are hex+dash only)
         safe_id = obsset_id.replace("'", "''")
         predicate = (
-            f"(_dataset, obs_name) IN ("
-            f"SELECT dataset_key, obs_name FROM obsset_members WHERE obsset_id = '{safe_id}'"
-            f")"
+            f"(_dataset, obs_name) IN (SELECT dataset_key, obs_name FROM obsset_members WHERE obsset_id = '{safe_id}')"
         )
         return JSONResponse({"predicate": predicate})
 
@@ -171,14 +173,16 @@ def _maybe_write_sidecar(state: ViewerState) -> None:
             members = con.execute(
                 "SELECT dataset_key, obs_name FROM obsset_members WHERE obsset_id = ?", [oid]
             ).fetchall()
-            result.append({
-                "obsset_id": oid,
-                "name": name,
-                "color": color,
-                "created_at": str(created_at) if created_at is not None else None,
-                "created_count": created_count,
-                "members": [{"dataset_key": dk, "obs_name": on} for dk, on in members],
-            })
+            result.append(
+                {
+                    "obsset_id": oid,
+                    "name": name,
+                    "color": color,
+                    "created_at": str(created_at) if created_at is not None else None,
+                    "created_count": created_count,
+                    "members": [{"dataset_key": dk, "obs_name": on} for dk, on in members],
+                }
+            )
 
         path = sidecar_path(state.project_config_path)
         save_obssets(path, result)

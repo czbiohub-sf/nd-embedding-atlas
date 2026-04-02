@@ -1,6 +1,6 @@
 import { useCallback, useRef } from "react";
-import { useViewer } from "../../hooks/useViewer";
 import { Slider } from "../ui/slider";
+import { useViewer } from "./useViewer";
 
 // Opacity stored as [0,1] log-scale; opacityMultiplier = 10^(v*4-3)
 // 0 → 0.001, 0.5 → ~0.1, 0.75 → 1.0, 1.0 → 10.0
@@ -119,7 +119,7 @@ function VolumeRow({ label, title, defaultValue, min, max, step, onValueChange }
         step={step}
         onValueChange={handleChange}
       />
-      <span ref={displayRef} className="w-8 text-right text-[10px] tabular-nums text-muted-foreground">
+      <span ref={displayRef} className="w-8 text-right text-[10px] text-muted-foreground tabular-nums">
         {defaultValue.toFixed(2)}
       </span>
     </div>

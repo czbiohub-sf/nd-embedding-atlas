@@ -1,26 +1,26 @@
-import { useEffect, useState } from "react";
-import { useScatterUIDispatch } from "@/providers/ScatterUIStateProvider";
 import { ChevronDownIcon } from "lucide-react";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useEffect, useState } from "react";
+import { useScatterUIDispatch } from "@/components/scatter/ScatterUIStateProvider";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { cn } from "@/lib/utils";
-import { useGeneSearch } from "@/scatter-gpu/hooks/useGeneSearch";
-import { useLayerNames } from "@/scatter-gpu/hooks/useLayerNames";
-import { useGeneColumn } from "@/scatter-gpu/hooks/useGeneColumn";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
-  type ColorSource,
   COLOR_NONE,
+  type ColorSource,
+  colorSourceFromString,
   colorSourceObs,
   colorSourceVar,
-  colorSourceFromString,
   isVarSource,
 } from "@/lib/color-source";
+import { cn } from "@/lib/utils";
+import { useVarColumn } from "@/scatter-gpu/hooks/useVarColumn";
+import { useGeneSearch } from "@/scatter-gpu/hooks/useGeneSearch";
+import { useLayerNames } from "@/scatter-gpu/hooks/useLayerNames";
 
 // ── Trigger label helpers ─────────────────────────────────────────────────────
 
 function ObsBadge() {
   return (
-    <span className="shrink-0 rounded-sm border border-blue-500/30 bg-blue-500/20 px-1 font-sans text-[9px] leading-none text-blue-400">
+    <span className="shrink-0 rounded-sm border border-blue-500/30 bg-blue-500/20 px-1 font-sans text-[9px] text-blue-400 leading-none">
       obs
     </span>
   );
@@ -28,7 +28,7 @@ function ObsBadge() {
 
 function VarBadge({ layer }: { layer: string }) {
   return (
-    <span className="shrink-0 rounded-sm border border-emerald-500/30 bg-emerald-500/20 px-1 font-sans text-[9px] leading-none text-emerald-400">
+    <span className="shrink-0 rounded-sm border border-emerald-500/30 bg-emerald-500/20 px-1 font-sans text-[9px] text-emerald-400 leading-none">
       {layer}
     </span>
   );
@@ -42,7 +42,7 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
       type="button"
       onClick={onClick}
       className={cn(
-        "flex-1 rounded-sm px-2 py-0.5 text-xs font-medium transition-colors",
+        "flex-1 rounded-sm px-2 py-0.5 font-medium text-xs transition-colors",
         active ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
       )}
     >
@@ -82,7 +82,7 @@ export function ColorSourcePicker({
   const { names, isLoading: varsLoading } = useGeneSearch(varQuery);
   const layers = useLayerNames();
   const { setStatus } = useScatterUIDispatch();
-  const { materialize, status: varStatus, column: varColumn } = useGeneColumn({ onStatus: setStatus });
+  const { materialize, status: varStatus, column: varColumn } = useVarColumn({ onStatus: setStatus });
 
   // When var materialization completes, propagate the ColorSource and close.
   useEffect(() => {
@@ -135,7 +135,7 @@ export function ColorSourcePicker({
       <PopoverTrigger
         aria-expanded={open}
         className={cn(
-          "flex h-7 min-w-0 items-center justify-between gap-1.5 rounded-md border border-input bg-input/20 px-2 text-xs/relaxed whitespace-nowrap outline-none transition-colors",
+          "flex h-7 min-w-0 items-center justify-between gap-1.5 whitespace-nowrap rounded-md border border-input bg-input/20 px-2 text-xs/relaxed outline-none transition-colors",
           "hover:bg-input/40 focus-visible:ring-2 focus-visible:ring-ring/30",
           "disabled:cursor-not-allowed disabled:opacity-50",
           "dark:bg-input/30",
@@ -148,7 +148,7 @@ export function ColorSourcePicker({
 
       <PopoverContent className={cn("w-64 gap-0 p-0", contentClassName)} side="bottom" align="start" sideOffset={4}>
         {/* Tab switcher — Var tab only shown when dataset has expression data */}
-        <div className="flex gap-1 border-b border-border p-1">
+        <div className="flex gap-1 border-border border-b p-1">
           <TabButton active={tab === "obs"} onClick={() => setTab("obs")}>
             Obs
           </TabButton>
@@ -199,7 +199,7 @@ export function ColorSourcePicker({
             <Command shouldFilter={false}>
               <CommandInput value={varQuery} onValueChange={setVarQuery} placeholder="Search var…" />
               <CommandList>
-                {varsLoading && <div className="py-4 text-center text-xs text-muted-foreground">Loading…</div>}
+                {varsLoading && <div className="py-4 text-center text-muted-foreground text-xs">Loading…</div>}
                 {!varsLoading && names.length === 0 && <CommandEmpty>No var found.</CommandEmpty>}
                 {!varsLoading && names.length > 0 && (
                   <CommandGroup>
@@ -219,7 +219,7 @@ export function ColorSourcePicker({
             </Command>
 
             {/* Layer chips — always shown; clicking re-materializes if a var is active */}
-            <div className="flex flex-wrap gap-1 border-t border-border p-2">
+            <div className="flex flex-wrap gap-1 border-border border-t p-2">
               {layers.map((layer) => (
                 <button
                   key={layer}
@@ -244,7 +244,7 @@ export function ColorSourcePicker({
 
             {/* Errors shown inline; loading state is in the bottom dock */}
             {varStatus === "error" && (
-              <div className="border-t border-border px-3 py-2 text-xs text-destructive">Failed to load var.</div>
+              <div className="border-border border-t px-3 py-2 text-destructive text-xs">Failed to load var.</div>
             )}
           </>
         )}

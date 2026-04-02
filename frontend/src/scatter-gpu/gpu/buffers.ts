@@ -1,10 +1,13 @@
 import tgpu from "typegpu";
 import * as d from "typegpu/data";
-import { QUAD_VERTS, PALETTE } from "../constants";
-import type { ScatterData, TgpuRoot, ColorMapper, RenderConfig } from "../types";
+import { PALETTE, QUAD_VERTS } from "../constants";
+import type { ColorMapper, RenderConfig, ScatterData, TgpuRoot } from "../types";
+
+// Maximum number of palette entries supported by the GPU color-pack shader.
+export const MAX_PALETTE_SIZE = 64;
 
 const DEFAULTS = {
-  pointRadius: 0.003,
+  pointRadius: 0.002,
   selectionDimFactor: 0.08,
 } as const;
 
@@ -34,12 +37,18 @@ export function createBuffers(root: TgpuRoot, numPoints: number, _numCategories:
   // Packed RGBA as u32 (4 bytes/point vs 16 bytes for vec4f) — 4× bandwidth reduction.
   // Byte layout (little-endian): [R, G, B, A] packed as R | (G<<8) | (B<<16) | (A<<24).
   // The vertex shader unpacks via the unpackColor WGSL fn in shaders.ts.
-  const colorBuffer = root.createBuffer(d.arrayOf(d.u32, numPoints)).$usage("vertex");
+  // "storage" allows the GPU color-pack compute shader to write packed RGBA directly
+  const colorBuffer = root.createBuffer(d.arrayOf(d.u32, numPoints)).$usage("vertex", "storage");
 
   const selectedBuffer = root.createBuffer(d.arrayOf(d.u32, numPoints)).$usage("vertex", "storage");
 
-  // Category indices (u32 per point) — used by density engine
+  // Category indices (u32 per point) — used by density engine and GPU color-pack shader
   const categoryBuffer = root.createBuffer(d.arrayOf(d.u32, numPoints)).$usage("storage");
+
+  // Palette buffer: MAX_PALETTE_SIZE packed u32 RGBA entries, written by updateColors.
+  // GPU color-pack shader reads this + categoryBuffer to write colorBuffer on GPU.
+  const paletteBuffer = root.createBuffer(d.arrayOf(d.u32, MAX_PALETTE_SIZE)).$usage("storage");
+  const paletteLenUniform = root.createUniform(d.u32, 0);
 
   const colorLayout = tgpu.vertexLayout((n: number) => d.arrayOf(d.u32, n), "instance");
 
@@ -55,6 +64,8 @@ export function createBuffers(root: TgpuRoot, numPoints: number, _numCategories:
     colorBuffer,
     selectedBuffer,
     categoryBuffer,
+    paletteBuffer,
+    paletteLenUniform,
     colorLayout,
     selectedLayout,
     quadLayout,

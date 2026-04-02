@@ -34,7 +34,12 @@ function estimateColumnWidth(name: string, rows: Row[]): number {
   for (const row of rows) {
     const val = row[name];
     if (val == null) continue;
-    const str = typeof val === "number" ? (Number.isInteger(val) ? val.toLocaleString() : val.toFixed(3)) : String(val);
+    const str =
+      typeof val === "number"
+        ? Number.isInteger(val)
+          ? val.toLocaleString()
+          : val.toFixed(3)
+        : String(val as string | number | boolean | null);
     maxLen = Math.max(maxLen, str.length);
   }
   return Math.min(MAX, Math.max(MIN, Math.ceil(maxLen * CHAR_WIDTH + PADDING)));
@@ -100,8 +105,8 @@ export function DataTable({
             );
           }
           return (
-            <span className="truncate" title={String(val)}>
-              {String(val)}
+            <span className="truncate" title={String(val as string | number | boolean | null)}>
+              {String(val as string | number | boolean | null)}
             </span>
           );
         },
@@ -112,7 +117,7 @@ export function DataTable({
   // ── Build visible data array from page cache ────────────────────
   // Only includes rows that are actually loaded — NOT the full dataset.
   // TanStack Table sees this small array; Virtual handles the full count.
-  const visibleData = useMemo(() => getCachedRows(), [totalCount, getCachedRows]); // eslint-disable-line react-hooks/exhaustive-deps
+  const visibleData = useMemo(() => getCachedRows(), [getCachedRows]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Notify parent when row count changes so TerminalTable header can show it
   useEffect(() => {
@@ -186,7 +191,7 @@ export function DataTable({
   // ── Scroll-to-highlight ─────────────────────────────────────────
   useEffect(() => {
     if (highlightId == null) return;
-    findRowPosition(highlightId).then((pos) => {
+    void findRowPosition(highlightId).then((pos) => {
       if (pos != null) {
         rowVirtualizer.scrollToIndex(pos, { align: "center" });
         ensureRange(Math.max(0, pos - 50), pos + 50);
@@ -200,7 +205,7 @@ export function DataTable({
       const row = getRow(virtualIndex);
       if (!row || !onRowClick) return;
       const rowIndex = row.__row_index__;
-      onRowClick(rowIndex != null ? String(rowIndex) : null);
+      onRowClick(rowIndex != null ? String(rowIndex as number) : null);
     },
     [getRow, onRowClick],
   );
@@ -228,7 +233,7 @@ export function DataTable({
                 >
                   <button
                     type="button"
-                    className="flex h-full w-full cursor-pointer select-none items-center px-2 font-medium font-sans text-text-secondary text-[11px] hover:text-text-primary"
+                    className="flex h-full w-full cursor-pointer select-none items-center px-2 font-medium font-sans text-[11px] text-text-secondary hover:text-text-primary"
                     onClick={header.column.getToggleSortingHandler()}
                   >
                     {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
@@ -260,7 +265,7 @@ export function DataTable({
           {virtualItems.map((virtualRow) => {
             const row = getRow(virtualRow.index);
             const isHighlighted =
-              highlightId != null && row?.__row_index__ != null && String(row.__row_index__) === highlightId;
+              highlightId != null && row?.__row_index__ != null && String(row.__row_index__ as number) === highlightId;
 
             return (
               <button
@@ -293,8 +298,8 @@ export function DataTable({
                               {Number.isInteger(val) ? val.toLocaleString() : val.toFixed(3)}
                             </span>
                           ) : (
-                            <span className="truncate" title={String(val)}>
-                              {String(val)}
+                            <span className="truncate" title={String(val as string | number | boolean | null)}>
+                              {String(val as string | number | boolean | null)}
                             </span>
                           )}
                         </div>

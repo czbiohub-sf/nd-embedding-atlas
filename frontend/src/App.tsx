@@ -1,10 +1,10 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { DashboardProvider, DashboardShell } from "./dashboard";
-import { ThemeProvider } from "./providers/ThemeProvider";
-import { ScatterUIStateProvider } from "./providers/ScatterUIStateProvider";
-import { TerminalTableProvider } from "./providers/TerminalTableProvider";
-import { TooltipProvider } from "./components/ui/tooltip";
+import { ScatterUIStateProvider } from "./components/scatter/ScatterUIStateProvider";
+import { TerminalTableProvider } from "./components/table/TerminalTableProvider";
 import { Toaster } from "./components/ui/sonner";
+import { TooltipProvider } from "./components/ui/tooltip";
+import { DashboardProvider, DashboardShell } from "./dashboard";
+import { ThemeProvider } from "./ThemeProvider";
 
 // Module scope — survives HMR
 const queryClient = new QueryClient({

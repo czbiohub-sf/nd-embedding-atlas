@@ -69,11 +69,10 @@ class EmbeddingStore:
 
         # obs_name is the AnnData string index — stable identity for ObsSets
         if "obs_name" not in obs_df.columns:
-            import warnings  # noqa: PLC0415
+            import warnings
 
             warnings.warn(
-                "obs_name missing from obs_df; falling back to row index string. "
-                "ObsSet identity will be unstable.",
+                "obs_name missing from obs_df; falling back to row index string. ObsSet identity will be unstable.",
                 stacklevel=2,
             )
             obs_df["obs_name"] = obs_df["__row_index__"].astype(str)
@@ -187,16 +186,18 @@ class EmbeddingStore:
         with self._schema_lock:
             # Register as an Arrow table so DuckDB can join against it reliably
             # (local-variable scans are fragile in executor threads).
-            tbl = pa.table({
-                "__row_index__": pa.array(np.arange(len(data), dtype=np.int64)),
-                col_name: data,
-            })
+            tbl = pa.table(
+                {
+                    "__row_index__": pa.array(np.arange(len(data), dtype=np.int64)),
+                    col_name: data,
+                }
+            )
             self.con.register("_var_col_tbl", tbl)
             try:
                 self.con.execute(f'ALTER TABLE obs_base ADD COLUMN "{col_name}" FLOAT')
                 self.con.execute(
                     f'UPDATE obs_base SET "{col_name}" = t."{col_name}" '
-                    f'FROM _var_col_tbl t WHERE obs_base.__row_index__ = t.__row_index__'
+                    f"FROM _var_col_tbl t WHERE obs_base.__row_index__ = t.__row_index__"
                 )
             finally:
                 self.con.unregister("_var_col_tbl")

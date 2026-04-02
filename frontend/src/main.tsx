@@ -1,5 +1,5 @@
-import { roaringLibraryInitialize } from "roaring-wasm";
 import { createRoot } from "react-dom/client";
+import { roaringLibraryInitialize } from "roaring-wasm";
 import App from "./App";
 import "./app.css";
 

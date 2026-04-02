@@ -3,13 +3,13 @@
  * Tabs: Table | Track
  */
 
-import { useCallback, useRef, useState } from "react";
 import { XIcon } from "lucide-react";
-import { useTerminalTable } from "../../providers/TerminalTableProvider";
+import { useCallback, useRef, useState } from "react";
 import { useDashboard } from "../../hooks/useDashboard";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 import { DataTable } from "./DataTable";
+import { useTerminalTable } from "./TerminalTableProvider";
 import { TrackPane } from "./TrackPane";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "../ui/tabs";
 
 const FALLBACK_TABLE_COLUMNS = ["_dataset"];
 
@@ -17,7 +17,8 @@ export function TerminalTable() {
   const { open, height, toggle, setHeight } = useTerminalTable();
   const [totalCount, setTotalCount] = useState<number>(0);
   const { state, actions, meta } = useDashboard();
-  const { metadata, highlightId, trajectory } = state;
+  const { metadata, highlightId, trajectories } = state;
+  const hasAnyTrajectory = Object.keys(trajectories).length > 0;
   const { coordinator, brushSelection, table } = meta;
 
   // ── Drag-to-resize ───────────────────────────────────────────────────────
@@ -47,7 +48,7 @@ export function TerminalTable() {
 
   return (
     <div
-      className="fixed left-0 right-0 z-40 flex flex-col"
+      className="fixed right-0 left-0 z-40 flex flex-col"
       style={{
         bottom: "var(--footer-height, 1.5rem)",
         height: open ? height : 0,
@@ -70,7 +71,7 @@ export function TerminalTable() {
       {open && (
         <Tabs defaultValue="table" className="flex min-h-0 flex-1 flex-col">
           {/* Tab bar */}
-          <div className="flex shrink-0 items-center border-b border-border-subtle bg-elevated">
+          <div className="flex shrink-0 items-center border-border-subtle border-b bg-elevated">
             <TabsList className="border-b-0 px-1">
               <TabsTrigger value="table">
                 Table
@@ -82,7 +83,7 @@ export function TerminalTable() {
               </TabsTrigger>
               <TabsTrigger value="track">
                 Track
-                {trajectory && <span className="ml-1.5 inline-block size-1.5 rounded-full bg-primary/70" />}
+                {hasAnyTrajectory && <span className="ml-1.5 inline-block size-1.5 rounded-full bg-primary/70" />}
               </TabsTrigger>
             </TabsList>
             <span className="flex-1" />

@@ -1,8 +1,4 @@
 import { useEffect, useRef } from "react";
-import { useLegendCounts } from "../../hooks/useLegendCounts";
-import { hexToOklch, oklchToHex } from "@/lib/color-conversions";
-import type { OklchColor } from "@/lib/color-conversions";
-import { OklchColorPicker } from "@/components/ui/oklch-color-picker";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -10,8 +6,12 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
+import { OklchColorPicker } from "@/components/ui/oklch-color-picker";
+import type { OklchColor } from "@/lib/color-conversions";
+import { hexToOklch, oklchToHex } from "@/lib/color-conversions";
 import { cn } from "@/lib/utils";
 import { useLegend } from "./LegendContext";
+import { useLegendCounts } from "./useLegendCounts";
 
 /**
  * Categorical color legend with interactive dot disable + isolation.
@@ -49,12 +49,12 @@ export function CategoricalLegend() {
   return (
     <div
       ref={containerRef}
-      className="absolute left-2 top-10 z-20 w-52 rounded-lg border border-white/[0.07] bg-card/80 backdrop-blur-md text-[11px] font-mono"
+      className="absolute top-10 left-2 z-20 w-52 rounded-lg border border-white/[0.07] bg-card/80 font-mono text-[11px] backdrop-blur-md"
     >
       <div className="px-2.5 pt-2 pb-1 text-[10px] text-text-muted uppercase tracking-wider">
         Categories · {legend.length}
       </div>
-      <div className="overflow-y-auto max-h-[200px] px-2.5 pb-2">
+      <div className="max-h-[200px] overflow-y-auto px-2.5 pb-2">
         <div className="flex flex-col gap-0.5">
           {legend.map((item) => {
             const isIsolated = isolatedIndices.has(item.index);
@@ -80,7 +80,7 @@ export function CategoricalLegend() {
               <div
                 key={item.index}
                 className={cn(
-                  "flex items-center gap-2 py-0.5 rounded px-1 transition-opacity cursor-default",
+                  "flex cursor-default items-center gap-2 rounded px-1 py-0.5 transition-opacity",
                   isDimmed && "opacity-40",
                   !isDimmed && !isDisabled && "opacity-80 hover:opacity-100",
                   isDisabled && "opacity-30",
@@ -96,8 +96,8 @@ export function CategoricalLegend() {
                     <button
                       type="button"
                       className={cn(
-                        "inline-block h-2.5 w-2.5 shrink-0 rounded-full border-0 p-0 cursor-pointer transition-[box-shadow]",
-                        isIsolated && !isDisabled && "ring-1 ring-offset-1 ring-current",
+                        "inline-block h-2.5 w-2.5 shrink-0 cursor-pointer rounded-full border-0 p-0 transition-[box-shadow]",
+                        isIsolated && !isDisabled && "ring-1 ring-current ring-offset-1",
                       )}
                       style={dotStyle}
                       onClick={(e) => {
@@ -117,7 +117,7 @@ export function CategoricalLegend() {
                       title="Click to toggle visibility · Shift+Click to isolate · Right-click for color"
                     />
                   </ContextMenuTrigger>
-                  <ContextMenuContent className="w-52 p-1 font-mono rounded-lg border border-white/[0.07] bg-card/80 backdrop-blur-md shadow-lg shadow-black/20">
+                  <ContextMenuContent className="w-52 rounded-lg border border-white/[0.07] bg-card/80 p-1 font-mono shadow-black/20 shadow-lg backdrop-blur-md">
                     <OklchColorPicker
                       label={item.label}
                       color={effectiveOklch}
@@ -133,17 +133,12 @@ export function CategoricalLegend() {
                 </ContextMenu>
 
                 {/* Label */}
-                <span
-                  className={cn(
-                    "flex-1 truncate text-text-secondary",
-                    isDisabled && "line-through opacity-60",
-                  )}
-                >
+                <span className={cn("flex-1 truncate text-text-secondary", isDisabled && "line-through opacity-60")}>
                   {item.label}
                 </span>
 
                 {/* Count */}
-                <span className={cn("text-text-muted shrink-0", isDisabled && "opacity-40")}>
+                <span className={cn("shrink-0 text-text-muted", isDisabled && "opacity-40")}>
                   {isFiltered ? (
                     <>
                       <span className="text-accent-cyan">{filtered.toLocaleString()}</span>

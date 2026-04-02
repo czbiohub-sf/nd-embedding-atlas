@@ -5,19 +5,15 @@
  * Supports optional axis sync from a linked docked panel via PanelStateStore.
  */
 
-import { useEffect } from "react";
 import { useStore } from "@tanstack/react-store";
-import { LinkIcon, Link2OffIcon } from "lucide-react";
-import {
-  floatingScatterStore,
-  removeFloatingScatter,
-  setFloatingScatterLink,
-} from "../../providers/FloatingScatterStore";
-import { panelStateStore } from "../../providers/PanelStateStore";
+import { Link2OffIcon, LinkIcon } from "lucide-react";
+import { useEffect } from "react";
 import { useFloatingWindow } from "../../hooks/useFloatingWindow";
+import { panelId } from "../../scatter-gpu/types";
+import { floatingScatterStore, removeFloatingScatter, setFloatingScatterLink } from "../../stores/FloatingScatterStore";
+import { panelStateStore } from "../../stores/PanelStateStore";
 import { FloatingWindow } from "../FloatingWindow";
 import { ScatterContent } from "../scatter/ScatterContent";
-import { panelId } from "../../scatter-gpu/types";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 
 // ── One floating window per store entry ──────────────────────────────────────
@@ -31,7 +27,7 @@ function FloatingScatterItem({ entryId }: { entryId: string }) {
 
   useEffect(() => {
     fw.open();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fw.open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!entry) return null;
 

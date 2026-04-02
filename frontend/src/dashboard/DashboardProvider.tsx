@@ -1,15 +1,15 @@
-import { Coordinator, restConnector, Selection } from "@uwdata/mosaic-core";
-import { activeFilterStore, clearObsSetFilter, setObsSetFilter } from "../providers/ActiveFilterStore";
-import { obsSetStore } from "../providers/ObsSetStore";
-import { stringPredicate } from "../lib/mosaic-helpers";
-import { type ReactNode, useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Coordinator, restConnector, Selection } from "@uwdata/mosaic-core";
+import { type ReactNode, useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { useColumnTypes } from "../hooks/useColumnTypes";
 import { generateDefaultPanels } from "../lib/chart-spec";
+import { stringPredicate } from "../lib/mosaic-helpers";
 import { MetadataSchema } from "../lib/schemas";
+import { scatterKeys } from "../scatter-gpu/hooks/queryKeys";
+import { activeFilterStore, clearObsSetFilter, setObsSetFilter } from "../stores/ActiveFilterStore";
+import { obsSetStore } from "../stores/ObsSetStore";
 import type { ChartPanelEntry, ChartSpec, Metadata, TrajectoryData } from "../types";
 import { DashboardContext, type DashboardState } from "./DashboardContext";
-import { scatterKeys } from "../scatter-gpu/hooks/queryKeys";
 
 // ── Panel reducer ──────────────────────────────────────────────────────────
 
@@ -132,8 +132,8 @@ export function DashboardProvider({ children }: Props) {
   // UI state
   const [highlightId, setHighlightId] = useState<string | null>(null);
 
-  // Trajectory state — shared between scatter and image viewer
-  const [trajectory, setTrajectoryState] = useState<TrajectoryData | null>(null);
+  // Trajectory state — per-dataset, keyed by datasetKey (empty string for single-dataset mode)
+  const [trajectories, setTrajectoriesState] = useState<Record<string, TrajectoryData | null>>({});
 
   // Panel state
   const [panels, dispatchPanels] = useReducer(panelReducer, []);
@@ -157,11 +157,27 @@ export function DashboardProvider({ children }: Props) {
     await queryClient.invalidateQueries({ queryKey: scatterKeys.metadata() });
   }, [queryClient]);
 
-  const setTrajectory = useCallback((data: TrajectoryData | null) => setTrajectoryState(data), []);
-  const setTrajectoryTIndex = useCallback(
-    (t: number) => setTrajectoryState((prev) => (prev ? { ...prev, tIndex: t } : null)),
-    [],
-  );
+  const setTrajectory = useCallback((data: TrajectoryData | null) => {
+    if (!data) return; // null → no-op; use clearTrajectory(key) instead
+    const key = data.datasetKey ?? "";
+    setTrajectoriesState((prev) => ({ ...prev, [key]: data }));
+  }, []);
+
+  const setTrajectoryTIndex = useCallback((key: string, t: number) => {
+    setTrajectoriesState((prev) => {
+      const entry = prev[key];
+      if (!entry) return prev;
+      return { ...prev, [key]: { ...entry, tIndex: t } };
+    });
+  }, []);
+
+  const clearTrajectory = useCallback((key: string) => {
+    setTrajectoriesState((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  }, []);
 
   const addPanel = useCallback((spec: ChartSpec) => dispatchPanels({ type: "ADD_PANEL", spec }), []);
   const removePanel = useCallback((id: string) => dispatchPanels({ type: "REMOVE_PANEL", id }), []);
@@ -177,16 +193,17 @@ export function DashboardProvider({ children }: Props) {
       refreshMetadata,
       setTrajectory,
       setTrajectoryTIndex,
+      clearTrajectory,
     }),
-    [addPanel, removePanel, reorderPanels, refreshMetadata, setTrajectory, setTrajectoryTIndex],
+    [addPanel, removePanel, reorderPanels, refreshMetadata, setTrajectory, setTrajectoryTIndex, clearTrajectory],
   );
 
   const meta = useMemo(() => ({ coordinator, brushSelection, table: TABLE }), [coordinator, brushSelection]);
 
   // Memoize state to prevent unnecessary consumer re-renders
   const state = useMemo<DashboardState | null>(
-    () => (metadata ? { metadata, highlightId, panels, trajectory } : null),
-    [metadata, highlightId, panels, trajectory],
+    () => (metadata ? { metadata, highlightId, panels, trajectories } : null),
+    [metadata, highlightId, panels, trajectories],
   );
 
   const contextValue = useMemo(() => (state ? { state, actions, meta } : null), [state, actions, meta]);

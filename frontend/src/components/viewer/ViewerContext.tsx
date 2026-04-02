@@ -1,6 +1,6 @@
 import type { Idetik, Layer, LayerState, OrthographicCamera, PerspectiveCamera, Viewport } from "@idetik/core";
 import { createContext } from "react";
-import type { MultiChannelLayers } from "../../lib/MultiChannelLayers";
+import type { MultiChannelLayers } from "./MultiChannelLayers";
 
 // ── Tracked layer ────────────────────────────────────────────────────────────
 

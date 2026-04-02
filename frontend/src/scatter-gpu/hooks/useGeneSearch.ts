@@ -1,6 +1,6 @@
 import { useDebouncer } from "@tanstack/react-pacer";
-import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import { varKeys } from "./queryKeys";
 
 interface VarNamesResponse {
@@ -26,7 +26,7 @@ export function useGeneSearch(query: string): GeneSearchResult {
   });
   useEffect(() => {
     geneDebouncer.maybeExecute(query);
-  }, [query]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [query, geneDebouncer.maybeExecute]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const { data, isLoading } = useQuery<VarNamesResponse>({
     queryKey: varKeys.names(debouncedQuery),

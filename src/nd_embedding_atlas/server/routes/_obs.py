@@ -5,7 +5,6 @@ from functools import partial
 from typing import Annotated
 
 import anyio
-
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 
@@ -35,12 +34,15 @@ def make_obs_router(get_state: Callable[[], ViewerState]) -> APIRouter:
         sp = state.spatial
         select_cols = [c for c in [sp.fov, sp.t, sp.bbox, sp.x, sp.y] if c is not None]
 
+        # In multi-dataset mode, prepend _dataset BEFORE the early-exit guard
+        # so it's always fetched when available.
+        if state.dataset_plates:
+            select_cols = ["_dataset", *select_cols]
+
         if not select_cols:
             return JSONResponse({"error": "No spatial columns configured"}, status_code=404)
 
-        row = await anyio.to_thread.run_sync(
-            partial(_lookup_obs, row_index, select_cols, state), cancellable=True
-        )
+        row = await anyio.to_thread.run_sync(partial(_lookup_obs, row_index, select_cols, state), cancellable=True)
 
         if row is None:
             return JSONResponse({"error": "Observation not found"}, status_code=404)
@@ -67,6 +69,13 @@ def make_obs_router(get_state: Callable[[], ViewerState]) -> APIRouter:
         if sp.x and result_map.get(sp.x) is not None:
             response["x"] = float(result_map[sp.x])
             response["y"] = float(result_map[sp.y])
+
+        # In multi-dataset mode, resolve store_index from _dataset value
+        if state.dataset_plates:
+            _dataset_val = result_map.get("_dataset")
+            dataset_keys = list(state.dataset_plates.keys())
+            if _dataset_val is not None and _dataset_val in dataset_keys:
+                response["store_index"] = dataset_keys.index(_dataset_val)
 
         return response
 
@@ -98,15 +107,12 @@ def make_obs_router(get_state: Callable[[], ViewerState]) -> APIRouter:
             placeholders = ", ".join("?" * len(indices))
             with state.store.cursor() as cur:
                 rows = cur.execute(
-                    f'SELECT __row_index__, "{x_col}", "{y_col}" '
-                    f"FROM obs_base WHERE __row_index__ IN ({placeholders})",
+                    f'SELECT __row_index__, "{x_col}", "{y_col}" FROM obs_base WHERE __row_index__ IN ({placeholders})',
                     indices,
                 ).fetchall()
             return {str(r[0]): {"x": float(r[1]), "y": float(r[2])} for r in rows}
 
-        result = await anyio.to_thread.run_sync(
-            partial(_batch_lookup, row_indices), cancellable=True
-        )
+        result = await anyio.to_thread.run_sync(partial(_batch_lookup, row_indices), cancellable=True)
         return JSONResponse(result)
 
     @router.get("/api/obs/{row_index}/detail", response_model=None)
@@ -128,9 +134,7 @@ def make_obs_router(get_state: Callable[[], ViewerState]) -> APIRouter:
                 ).fetchone()
                 return (cols, row) if row is not None else None
 
-        result = await anyio.to_thread.run_sync(
-            partial(_fetch, row_index, state), cancellable=True
-        )
+        result = await anyio.to_thread.run_sync(partial(_fetch, row_index, state), cancellable=True)
 
         if result is None:
             return JSONResponse({"error": "Observation not found"}, status_code=404)

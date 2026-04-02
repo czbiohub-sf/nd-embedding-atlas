@@ -1,11 +1,10 @@
 import tgpu from "typegpu";
 import * as d from "typegpu/data";
-import { computeFn } from "./tgpu-compat";
 import { MAX_POLYGON_VERTS } from "../constants";
-import { simplifyPath } from "../utils/geometry";
 import type { TgpuRoot } from "../types";
+import { simplifyPath } from "../utils/geometry";
 import type { ScatterBuffers } from "./buffers";
-import { type CompositorEngine, LAYER_LASSO, LAYER_ISOLATION } from "./compositor";
+import { type CompositorEngine, LAYER_ISOLATION, LAYER_LASSO } from "./compositor";
 
 const DEBUG_SELECTION = typeof location !== "undefined" && new URLSearchParams(location.search).has("debug-selection");
 
@@ -58,54 +57,59 @@ export function createSelectionEngine(
     }
   `.$uses({ polygon: polygonReadonly });
 
-  const pipComputeFn = computeFn({
-    workgroupSize: [wgSize],
-    in: { gid: d.builtin.globalInvocationId },
-  })((input) => {
-    "use gpu";
-    const base = input.gid.x * PIP_BATCH.length;
-    const numVerts = polygonCountUniform.value;
-    for (const k of tgpu.unroll(PIP_BATCH)) {
-      const idx = base + k;
-      if (idx < numPoints) {
-        const pt = pointsReadonly.value[idx];
-        if (pipTest(pt, numVerts)) {
-          lassoMutable.value[idx] = 1;
-        } else {
-          lassoMutable.value[idx] = 0;
+  const pipComputeFn = tgpu
+    .computeFn({
+      workgroupSize: [wgSize],
+      in: { gid: d.builtin.globalInvocationId },
+    })((input) => {
+      "use gpu";
+      const base = input.gid.x * PIP_BATCH.length;
+      const numVerts = polygonCountUniform.$;
+      for (const k of tgpu.unroll(PIP_BATCH)) {
+        const idx = base + k;
+        if (idx < numPoints) {
+          const pt = pointsReadonly.$[idx];
+          if (pipTest(pt, numVerts)) {
+            lassoMutable.$[idx] = 1;
+          } else {
+            lassoMutable.$[idx] = 0;
+          }
         }
       }
-    }
-  }).$uses({ pointsReadonly, lassoMutable, polygonCountUniform, pipTest });
+    })
+    .$uses({ pointsReadonly, lassoMutable, polygonCountUniform, pipTest });
 
-  const pipPipeline = root["~unstable"].withCompute(pipComputeFn).createPipeline();
+  const pipPipeline = root.createComputePipeline({ compute: pipComputeFn });
   const workgroups = Math.ceil(numPoints / (wgSize * PIP_BATCH.length));
 
   // ── AABB kernel ────────────────────────────────────────────────────────
-  const AABB_BATCH = [0, 1] as const;
+  const AABB_BATCH = [0, 1, 2, 3] as const;
   const marqueeUniform = root.createUniform(d.vec4f, d.vec4f(0, 0, 0, 0));
 
-  const aabbComputeFn = computeFn({
-    workgroupSize: [wgSize],
-    in: { gid: d.builtin.globalInvocationId },
-  })((input) => {
-    "use gpu";
-    const base = input.gid.x * AABB_BATCH.length;
-    const r = marqueeUniform.value;
-    for (const k of tgpu.unroll(AABB_BATCH)) {
-      const idx = base + k;
-      if (idx < numPoints) {
-        const pt = pointsReadonly.value[idx];
-        if (pt.x >= r.x && pt.x <= r.z && pt.y >= r.y && pt.y <= r.w) {
-          lassoMutable.value[idx] = 1;
-        } else {
-          lassoMutable.value[idx] = 0;
+  const aabbComputeFn = tgpu
+    .computeFn({
+      workgroupSize: [wgSize],
+      in: { gid: d.builtin.globalInvocationId },
+    })((input) => {
+      "use gpu";
+      const base = input.gid.x * AABB_BATCH.length;
+      const r = marqueeUniform.$;
+      for (const k of tgpu.unroll(AABB_BATCH)) {
+        const idx = base + k;
+        if (idx < numPoints) {
+          const pt = pointsReadonly.$[idx];
+          if (pt.x >= r.x && pt.x <= r.z && pt.y >= r.y && pt.y <= r.w) {
+            lassoMutable.$[idx] = 1;
+          } else {
+            lassoMutable.$[idx] = 0;
+          }
         }
       }
-    }
-  }).$uses({ pointsReadonly, lassoMutable, marqueeUniform });
+    })
+    .$uses({ pointsReadonly, lassoMutable, marqueeUniform });
 
-  const aabbPipeline = root["~unstable"].withCompute(aabbComputeFn).createPipeline();
+  const aabbPipeline = root.createComputePipeline({ compute: aabbComputeFn });
+  const aabbWorkgroups = Math.ceil(numPoints / (wgSize * AABB_BATCH.length));
 
   // ── Readback ───────────────────────────────────────────────────────────
   let readbackFrame = 0;
@@ -159,28 +163,28 @@ export function createSelectionEngine(
 
   function runMarqueeSelection(rect: { xMin: number; yMin: number; xMax: number; yMax: number }, readback = true) {
     marqueeUniform.write(d.vec4f(rect.xMin, rect.yMin, rect.xMax, rect.yMax));
-    aabbPipeline.dispatchWorkgroups(workgroups);
+    aabbPipeline.dispatchWorkgroups(aabbWorkgroups);
     compositor.markDirty(LAYER_LASSO, true);
     debugLogSelection();
     if (readback) readbackSelectionCount();
   }
 
   // ── Debug ──────────────────────────────────────────────────────────────
-  let debugPipeline: ReturnType<ReturnType<TgpuRoot["~unstable"]["withCompute"]>["createPipeline"]> | null = null;
+  let debugPipeline: ReturnType<TgpuRoot["createComputePipeline"]> | null = null;
 
   if (DEBUG_SELECTION) {
-    const debugFn = computeFn({
+    const debugFn = tgpu.computeFn({
       workgroupSize: [1],
       in: { gid: d.builtin.globalInvocationId },
     })((input) => {
       "use gpu";
       const idx = input.gid.x;
-      const pt = pointsReadonly.value[idx];
-      const sel = selectedMutable.value[idx];
-      const r = marqueeUniform.value;
+      const pt = pointsReadonly.$[idx];
+      const sel = selectedMutable.$[idx];
+      const r = marqueeUniform.$;
       console.log("pt", idx, "pos", pt, "sel", sel, "rect", r);
     });
-    debugPipeline = root["~unstable"].withCompute(debugFn).createPipeline();
+    debugPipeline = root.createComputePipeline({ compute: debugFn });
   }
 
   function debugLogSelection(sampleCount = 8) {

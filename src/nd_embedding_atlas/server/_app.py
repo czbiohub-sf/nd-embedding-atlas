@@ -70,7 +70,7 @@ def _populate_obsset_tables(store: EmbeddingStore, obssets: list[dict]) -> None:
     Logs a warning for any ObsSet whose member count has drifted from
     the recorded created_count (obs deleted from the dataset since save).
     """
-    import logging as _logging  # noqa: PLC0415
+    import logging as _logging
 
     _log = _logging.getLogger("ndea.obssets")
     con = store.con
@@ -90,9 +90,7 @@ def _populate_obsset_tables(store: EmbeddingStore, obssets: list[dict]) -> None:
                 rows,
             )
 
-        actual_count = con.execute(
-            "SELECT COUNT(*) FROM obsset_members WHERE obsset_id = ?", [oid]
-        ).fetchone()[0]
+        actual_count = con.execute("SELECT COUNT(*) FROM obsset_members WHERE obsset_id = ?", [oid]).fetchone()[0]
         if actual_count != created_count:
             _log.warning(
                 "ObsSet %r (%s): created_count=%d but current member count=%d — "
@@ -146,13 +144,19 @@ def create_app(
     resolved_export_dir = pathlib.Path(export_dir).resolve() if export_dir else pathlib.Path.cwd() / "exports"
 
     # ── Resolve spatial columns ───────────────────────────────────────
-    from nd_embedding_atlas.io._get import get_obs as _get_obs_cols  # noqa: PLC0415
+    from nd_embedding_atlas.io._get import get_obs as _get_obs_cols
+
     _first_obs = _get_obs_cols(collection, include_index=False)
     spatial = detect_spatial_columns(set(_first_obs.columns), columns_config=columns_config)
 
     # Ensure spatial columns are always loaded (needed by /api/obs)
     if obs_columns is not None and plate_path is not None:
         obs_columns = list(dict.fromkeys([*obs_columns, *sorted(spatial.all_columns)]))
+
+    # In multi-dataset (project) mode, ensure _dataset is always in obs_columns
+    # so it's never filtered out during prepare_obs and is available in obs_base.
+    if dataset_plates and obs_columns is not None and "_dataset" not in obs_columns:
+        obs_columns = ["_dataset", *obs_columns]
 
     # ── Build store ───────────────────────────────────────────────────
     try:
@@ -170,17 +174,18 @@ def create_app(
 
     # Project mode: read per-dataset plate metadata; use first plate as canonical frontend meta
     dataset_channels: dict[str, list[Any]] = {}
+    dataset_ome_versions: dict[str, str] = {}
     if dataset_plates:
-        import warnings as _warnings  # noqa: PLC0415
+        import warnings as _warnings
 
         first_plate_meta: dict[str, Any] | None = None
-        first_channels: list[Any] | None = None
         for _ds_key, _ds_plate_path in dataset_plates.items():
             _meta = _read_plate_metadata(_ds_plate_path)
             dataset_channels[_ds_key] = _meta.get("plate_channels", []) if _meta else []
+            dataset_ome_versions[_ds_key] = _meta.get("plate_ome_version", "0.4") if _meta else "0.4"
             if first_plate_meta is None:
                 first_plate_meta = _meta
-                first_channels = dataset_channels[_ds_key]
+                dataset_channels[_ds_key]
 
         # Warn if channel layouts differ across plates
         if len(dataset_channels) > 1:
@@ -206,12 +211,15 @@ def create_app(
     )
 
     # Discover available obsm keys
-    from nd_embedding_atlas.io._get import get_obsm as _get_obsm, _open_raw as _open_raw_store  # noqa: PLC0415
+    from nd_embedding_atlas.io._get import _open_raw as _open_raw_store
+    from nd_embedding_atlas.io._get import get_obsm as _get_obsm
+
     _first_entry = next(iter(collection.datasets.data.values()))
     if _first_entry.path is not None:
         _tmp_store = _open_raw_store(_first_entry.path)
-        available_obsm_keys: list[str] = [k for k in (_tmp_store["obsm"].keys() if "obsm" in _tmp_store else [])]
-        if hasattr(_tmp_store, "close"): _tmp_store.close()
+        available_obsm_keys: list[str] = list(_tmp_store["obsm"].keys() if "obsm" in _tmp_store else [])
+        if hasattr(_tmp_store, "close"):
+            _tmp_store.close()
     else:
         available_obsm_keys = list(collection.obsm.keys())
 
@@ -242,12 +250,13 @@ def create_app(
         spatial=spatial,
         export_dir=resolved_export_dir,
         dataset_plates=dataset_plates,
+        dataset_ome_versions=dataset_ome_versions if dataset_ome_versions else None,
         project_config_path=project_config_path,
     )
 
     # ── Load persisted ObsSets from sidecar ──────────────────────────
     if project_config_path:
-        from nd_embedding_atlas.server._obssets_io import load_obssets, sidecar_path  # noqa: PLC0415
+        from nd_embedding_atlas.server._obssets_io import load_obssets, sidecar_path
 
         _sidecar = sidecar_path(project_config_path)
         _persisted = load_obssets(_sidecar)
@@ -299,12 +308,14 @@ def create_app(
     def get_state() -> ViewerState:
         return state
 
-    app.include_router(make_crop_router(
-        plate_path,
-        plate_meta.get("plate_channels") if plate_meta else None,
-        dataset_plates=dataset_plates,
-        dataset_channels=dataset_channels if dataset_channels else None,
-    ))
+    app.include_router(
+        make_crop_router(
+            plate_path,
+            plate_meta.get("plate_channels") if plate_meta else None,
+            dataset_plates=dataset_plates,
+            dataset_channels=dataset_channels if dataset_channels else None,
+        )
+    )
     app.include_router(make_mosaic_router(get_state))
     app.include_router(make_data_router(get_state, config))
     app.include_router(make_colormaps_router())

@@ -1,24 +1,24 @@
-import { useState, useEffect, lazy, Suspense, useCallback, type RefObject } from "react";
-import { LayoutGrid, Table2, RotateCcw, Sun, Moon, ChevronRight, Download, ScanIcon } from "lucide-react";
-import { cast, count, Query, sum } from "@uwdata/mosaic-sql";
 import type { FilterExpr } from "@uwdata/mosaic-sql";
+import { cast, count, Query, sum } from "@uwdata/mosaic-sql";
+import { ChevronRight, Download, LayoutGrid, Moon, RotateCcw, ScanIcon, Sun, Table2 } from "lucide-react";
+import { lazy, type RefObject, Suspense, useCallback, useEffect, useState } from "react";
+import { useDashboard } from "../hooks/useDashboard";
 import { useMosaicClient } from "../hooks/useMosaicClient";
 import { filterExprToExpr } from "../lib/mosaic-helpers";
+import { useTheme } from "../ThemeProvider";
+import { useTerminalTable } from "./table/TerminalTableProvider";
 import {
   CommandDialog,
-  CommandInput,
-  CommandList,
   CommandEmpty,
   CommandGroup,
+  CommandInput,
   CommandItem,
+  CommandList,
   CommandSeparator,
 } from "./ui/command";
 import { Kbd, KbdGroup } from "./ui/kbd";
-import { useDashboard } from "../hooks/useDashboard";
-import { useTerminalTable } from "../providers/TerminalTableProvider";
-import { useTheme } from "../providers/ThemeProvider";
 
-const ExportDialog = lazy(() => import("./export/ExportDialog"));
+const ExportDialog = lazy(() => import("./toolbar/ExportDialog"));
 
 interface CommandPaletteProps {
   onAddScatter: (obsmKey: string) => void;
@@ -37,7 +37,9 @@ export function CommandPalette({ onAddScatter, onOpenViewer, onFloatViewer, open
     state: { metadata },
     meta: { coordinator, brushSelection, table },
   } = useDashboard();
+  // eslint-disable-next-line @typescript-eslint/unbound-method
   const { toggle: toggleTable } = useTerminalTable();
+  // eslint-disable-next-line @typescript-eslint/unbound-method
   const { theme, toggle: toggleTheme } = useTheme();
 
   // Track filtered obs count for Export (same query as ExportButton)
@@ -204,7 +206,7 @@ export function CommandPalette({ onAddScatter, onOpenViewer, onFloatViewer, open
 
               {/* Version footer */}
               {metadata.version && (
-                <div className="px-3 py-2 text-[10px] text-muted-foreground/40 select-none">
+                <div className="select-none px-3 py-2 text-[10px] text-muted-foreground/40">
                   ndea v{metadata.version}
                 </div>
               )}

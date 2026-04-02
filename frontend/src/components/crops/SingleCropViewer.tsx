@@ -1,21 +1,24 @@
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { vec3 } from "gl-matrix";
 import { useCallback, useEffect } from "react";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { useBboxLayer } from "../../hooks/useBboxLayer";
+import { selectTrajectory } from "../../dashboard/DashboardContext";
 import { useDashboard } from "../../hooks/useDashboard";
-import { useFovLoader } from "../../hooks/useFovLoader";
-import { useViewer } from "../../hooks/useViewer";
 import { ObsInfoSchema } from "../../lib/schemas";
-import type { OrbitControls } from "../../lib/OrbitControls";
+import type { OrbitControls } from "../viewer/OrbitControls";
+import { useBboxLayer } from "../viewer/useBboxLayer";
+import { useFovLoader } from "../viewer/useFovLoader";
+import { useViewer } from "../viewer/useViewer";
 
 /** Fixed camera view radius in pixels (independent of crop slider). */
 const CAMERA_VIEW_HALF = 150;
 
 interface Props {
   cropSize: number;
+  /** If set, this viewer only responds to cells from this dataset key. */
+  datasetKey?: string;
 }
 
-export function SingleCropViewer({ cropSize }: Props) {
+export function SingleCropViewer({ cropSize, datasetKey }: Props) {
   const { state: dashState } = useDashboard();
   const { state: viewerState, actions, meta } = useViewer();
   const { highlightId, metadata } = dashState;
@@ -32,12 +35,20 @@ export function SingleCropViewer({ cropSize }: Props) {
     staleTime: 10_000,
   });
 
+  // ── Dataset filtering ─────────────────────────────────────────────
+  // When datasetKey is set, this viewer only drives itself for cells
+  // from the matching dataset. Derive from store_index → plate_stores[].name.
+  const activeStoreName = metadata.plate_stores?.[obsInfo?.store_index ?? 0]?.name;
+  const isForThisDataset = !datasetKey || activeStoreName === datasetKey;
+
   // ── Derive source URL and OME version ────────────────────────────
   const scale = metadata.plate_pixel_scale ?? { x: 1, y: 1 };
   const activeStore = metadata.plate_stores?.[obsInfo?.store_index ?? 0];
   const mountPrefix = activeStore ? activeStore.mount : "/plate";
   const omeVersion = activeStore?.ome_version ?? metadata.plate_ome_version;
-  const sourceUrl = obsInfo ? `${window.location.origin}${mountPrefix}/${obsInfo.fov_name}` : null;
+
+  // Gate sourceUrl — null prevents useFovLoader from loading the wrong plate.
+  const sourceUrl = isForThisDataset && obsInfo ? `${window.location.origin}${mountPrefix}/${obsInfo.fov_name}` : null;
 
   // ── Hooks for imperative plumbing ─────────────────────────────────
   useFovLoader({
@@ -61,7 +72,7 @@ export function SingleCropViewer({ cropSize }: Props) {
 
   // ── Effect: Observation framing (mode-aware) ──────────────────────
   useEffect(() => {
-    if (!obsInfo || !viewerState.initialized) return;
+    if (!isForThisDataset || !obsInfo || !viewerState.initialized) return;
 
     console.log("[frame] setFrame called", { x: obsInfo.x, y: obsInfo.y, t: performance.now().toFixed(1) });
 
@@ -88,6 +99,7 @@ export function SingleCropViewer({ cropSize }: Props) {
       }
     }
   }, [
+    isForThisDataset,
     obsInfo,
     cropSize,
     viewerState.initialized,
@@ -101,15 +113,17 @@ export function SingleCropViewer({ cropSize }: Props) {
 
   // ── Effect: Sync T index from selected observation ──────────────
   useEffect(() => {
+    if (!isForThisDataset) return;
     if (obsInfo) {
       actions.setTIndex(obsInfo.t ?? 0);
     }
-  }, [obsInfo, actions]);
+  }, [isForThisDataset, obsInfo, actions]);
 
   // ── Effect: Follow observation during trajectory playback ────────
-  const { trajectory } = dashState;
+  const { trajectories } = dashState;
+  const trajectory = selectTrajectory(trajectories, datasetKey);
   useEffect(() => {
-    if (!trajectory || !obsInfo) return;
+    if (!isForThisDataset || !trajectory || !obsInfo) return;
     const frame = trajectory.points.find((p) => p.t === trajectory.tIndex);
     if (!frame) return;
     // Drive the viewer T index so the image updates alongside the bbox
@@ -118,7 +132,26 @@ export function SingleCropViewer({ cropSize }: Props) {
     if (viewerState.viewMode === "2d") {
       updateBbox(frame.spatial_x, frame.spatial_y, cropSize / 2);
     }
-  }, [trajectory?.tIndex, trajectory?.points, cropSize, obsInfo, updateBbox, viewerState.viewMode, trajectory, actions]);
+  }, [
+    isForThisDataset,
+    trajectory?.tIndex,
+    trajectory?.points,
+    cropSize,
+    obsInfo,
+    updateBbox,
+    viewerState.viewMode,
+    trajectory,
+    actions,
+  ]);
+
+  // ── Placeholder when this viewer is for a different dataset ──────
+  if (!isForThisDataset) {
+    return (
+      <div className="absolute inset-0 flex items-center justify-center text-text-muted text-xs">
+        <span>Select a cell from {datasetKey}</span>
+      </div>
+    );
+  }
 
   if (!highlightId || !obsInfo) return null;
   return null;

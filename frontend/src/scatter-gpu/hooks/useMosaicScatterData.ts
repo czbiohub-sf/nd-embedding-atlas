@@ -1,8 +1,8 @@
-import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import type { ScatterData } from "../types";
+import { useMemo } from "react";
 import type { AxisState } from "../../types";
-import { parsePositionBlob, parseCategoryBlob, parseContinuousColorsBlob } from "../utils/parsers";
+import type { ScatterData } from "../types";
+import { parseCategoryBlob, parseContinuousColorsBlob, parsePositionBlob } from "../utils/parsers";
 import { scatterKeys } from "./queryKeys";
 
 export type ColorMode = "categorical" | "continuous";
@@ -120,10 +120,7 @@ export function useMosaicScatterData({
   //    `continuousReversed` is in the query key for cache differentiation.
   //    The server ignores unknown params — safe before backend ships reversed support.
   const continuousQuery = useQuery({
-    queryKey: [
-      ...scatterKeys.continuousColors(continuousColCol!, continuousColormap, vmin, vmax),
-      continuousReversed,
-    ],
+    queryKey: [...scatterKeys.continuousColors(continuousColCol!, continuousColormap, vmin, vmax), continuousReversed],
     queryFn: async ({ signal }) => {
       const params = new URLSearchParams({
         color_col: continuousColCol!,

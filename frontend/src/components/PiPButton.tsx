@@ -4,8 +4,8 @@
  */
 
 import { PictureInPicture2Icon, PictureInPictureIcon } from "lucide-react";
-import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { cn } from "../lib/utils";
+import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 
 interface Props {
   isPiP: boolean;

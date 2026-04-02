@@ -2,8 +2,9 @@ import type { IDockviewPanelProps } from "dockview-react";
 import { useDashboard } from "../../../hooks/useDashboard";
 import { CropViewer } from "../../crops/CropViewer";
 
-export function ImageViewerPanel(_props: IDockviewPanelProps) {
+export function ImageViewerPanel(props: IDockviewPanelProps<{ datasetKey?: string }>) {
   const { state } = useDashboard();
+  const datasetKey = props.params?.datasetKey;
 
   if (!state.metadata.plate) {
     return (
@@ -15,7 +16,7 @@ export function ImageViewerPanel(_props: IDockviewPanelProps) {
 
   return (
     <div className="h-full w-full overflow-hidden">
-      <CropViewer />
+      <CropViewer datasetKey={datasetKey} />
     </div>
   );
 }

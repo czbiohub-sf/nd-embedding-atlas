@@ -2,8 +2,9 @@
  * PointInfoPane — selected point metadata card.
  * Positioned as a canvas overlay; renders when a point is clicked.
  */
-import { useEffect, useState } from "react";
+
 import { Waypoints } from "lucide-react";
+import { useEffect, useState } from "react";
 import { jsonFetcher } from "../../lib/fetcher";
 import { cn } from "../../lib/utils";
 import { Separator } from "../ui/separator";
@@ -53,12 +54,12 @@ export function PointInfoPane({
     <div
       className={cn(
         "rounded-lg border border-white/[0.07] bg-card/80 backdrop-blur-md",
-        "p-2.5 shadow-md min-w-[160px] max-w-[220px]",
+        "min-w-[160px] max-w-[220px] p-2.5 shadow-md",
         "font-mono text-[11px]",
       )}
     >
       {/* Header */}
-      <p className="mb-1.5 text-[9px] font-sans font-semibold uppercase tracking-widest text-muted-foreground">Point</p>
+      <p className="mb-1.5 font-sans font-semibold text-[9px] text-muted-foreground uppercase tracking-widest">Point</p>
       <Separator className="mb-1.5 opacity-40" />
 
       {/* Key–value rows */}
@@ -66,7 +67,7 @@ export function PointInfoPane({
         {fields.map((key) => (
           <div key={key} className="flex items-baseline justify-between gap-3">
             <span className="max-w-[90px] truncate text-muted-foreground/70">{key}</span>
-            <span className="tabular-nums text-foreground/90">{row[key] ?? "—"}</span>
+            <span className="text-foreground/90 tabular-nums">{row[key] ?? "—"}</span>
           </div>
         ))}
       </div>

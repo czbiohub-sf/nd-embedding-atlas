@@ -1,5 +1,5 @@
-import type { OklchColor } from "@/lib/color-conversions";
 import { Slider } from "@/components/ui/slider";
+import type { OklchColor } from "@/lib/color-conversions";
 import { cn } from "@/lib/utils";
 
 interface OklchColorPickerProps {
@@ -13,12 +13,7 @@ interface OklchColorPickerProps {
 /** Swatch showing the current color */
 function ColorSwatch({ color }: { color: OklchColor }) {
   const bg = `oklch(${color.l} ${color.c} ${color.h}deg)`;
-  return (
-    <div
-      className="h-5 w-full rounded-sm border border-white/10"
-      style={{ background: bg }}
-    />
-  );
+  return <div className="h-5 w-full rounded-sm border border-white/10" style={{ background: bg }} />;
 }
 
 interface SliderRowProps {
@@ -41,7 +36,7 @@ function SliderRow({ label, value, min, max, step, gradient, onChange }: SliderR
       <div className="relative">
         {/* Gradient track behind the transparent slider track */}
         <div
-          className="pointer-events-none absolute inset-y-[5px] inset-x-[6px] rounded-full"
+          className="pointer-events-none absolute inset-x-[6px] inset-y-[5px] rounded-full"
           style={{ background: gradient }}
         />
         <Slider
@@ -50,13 +45,10 @@ function SliderRow({ label, value, min, max, step, gradient, onChange }: SliderR
           max={max}
           step={step}
           onValueChange={(v) => {
-              const next = Array.isArray(v) ? (v[0] ?? value) : v;
-              onChange(next);
-            }}
-          className={cn(
-            "relative",
-            "[&_[data-slot=slider-track]]:bg-transparent",
-          )}
+            const next = Array.isArray(v) ? (v[0] ?? value) : v;
+            onChange(next);
+          }}
+          className={cn("relative", "[&_[data-slot=slider-track]]:bg-transparent")}
         />
       </div>
     </div>
@@ -70,15 +62,11 @@ export function OklchColorPicker({ label, color, defaultColor, onChange, onReset
   // since values are computed from L/C/H state and cannot be expressed as static Tailwind utilities.
   const lGrad = `linear-gradient(to right, oklch(0 ${c} ${h}deg), oklch(0.5 ${c} ${h}deg), oklch(1 ${c} ${h}deg))`;
   const cGrad = `linear-gradient(to right, oklch(${l} 0 ${h}deg), oklch(${l} 0.2 ${h}deg), oklch(${l} 0.35 ${h}deg))`;
-  const hGrad = [0, 60, 120, 180, 240, 300, 360]
-    .map((deg) => `oklch(${l} ${c} ${deg}deg)`)
-    .join(", ");
+  const hGrad = [0, 60, 120, 180, 240, 300, 360].map((deg) => `oklch(${l} ${c} ${deg}deg)`).join(", ");
   const hGradient = `linear-gradient(to right, ${hGrad})`;
 
   const isDefault =
-    Math.abs(l - defaultColor.l) < 0.005 &&
-    Math.abs(c - defaultColor.c) < 0.005 &&
-    Math.abs(h - defaultColor.h) < 1;
+    Math.abs(l - defaultColor.l) < 0.005 && Math.abs(c - defaultColor.c) < 0.005 && Math.abs(h - defaultColor.h) < 1;
 
   return (
     <div className="flex flex-col gap-2 p-1">
@@ -90,7 +78,7 @@ export function OklchColorPicker({ label, color, defaultColor, onChange, onReset
           type="button"
           onClick={onReset}
           disabled={isDefault}
-          className="shrink-0 rounded px-1 py-0.5 text-[9px] text-muted-foreground/70 hover:text-muted-foreground disabled:pointer-events-none disabled:opacity-30 transition-opacity"
+          className="shrink-0 rounded px-1 py-0.5 text-[9px] text-muted-foreground/70 transition-opacity hover:text-muted-foreground disabled:pointer-events-none disabled:opacity-30"
         >
           ↺ reset
         </button>

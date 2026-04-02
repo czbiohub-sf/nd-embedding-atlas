@@ -67,13 +67,15 @@ def _parse_channel_defs(plate_channels: list[dict[str, Any]] | None) -> list[dic
         g = int(color_hex[2:4], 16) / 255.0
         b = int(color_hex[4:6], 16) / 255.0
         window = ch.get("window", {})
-        defs.append({
-            "r": r,
-            "g": g,
-            "b": b,
-            "lo": float(window.get("start", 0)),
-            "hi": float(window.get("end", 65535)),
-        })
+        defs.append(
+            {
+                "r": r,
+                "g": g,
+                "b": b,
+                "lo": float(window.get("start", 0)),
+                "hi": float(window.get("end", 65535)),
+            }
+        )
     return defs
 
 
@@ -150,11 +152,12 @@ def make_crop_router(
             raise HTTPException(status_code=404, detail=f"FOV not found: {fov_path}")
         try:
             pos = open_ome_zarr(str(fov_dir), mode="r")
-            return pos.data  # TCZYX zarr array at highest resolution
         except HTTPException:
             raise
         except Exception as exc:
             raise HTTPException(status_code=500, detail=f"Failed to open FOV: {exc}") from exc
+        else:
+            return pos.data  # TCZYX zarr array at highest resolution
 
     def _composite(crop: np.ndarray, defs: list[dict[str, Any]]) -> np.ndarray:
         """Composite a [C, H, W] float32 crop into an [H, W, 3] uint8 RGB image."""
@@ -216,7 +219,7 @@ def make_crop_router(
         t_idx = min(t, n_t - 1)
         z_idx = min(z, n_z - 1)
 
-        cx, cy = int(round(x)), int(round(y))
+        cx, cy = round(x), round(y)
         x0, x1 = max(0, cx - half), min(n_x, cx + half)
         y0, y1 = max(0, cy - half), min(n_y, cy + half)
         if x1 <= x0 or y1 <= y0:
@@ -252,7 +255,7 @@ def make_crop_router(
         t_idx = min(body.t, n_t - 1)
         z_idx = min(body.z, n_z - 1)
 
-        cx, cy = int(round(body.x)), int(round(body.y))
+        cx, cy = round(body.x), round(body.y)
         x0, x1 = max(0, cx - body.half), min(n_x, cx + body.half)
         y0, y1 = max(0, cy - body.half), min(n_y, cy + body.half)
         if x1 <= x0 or y1 <= y0:
@@ -273,12 +276,15 @@ def make_crop_router(
                     render_defs.append({"skip": True})
                     continue
                 hex_col = ch.color.lstrip("#")
-                render_defs.append({
-                    "lo": ch.lo, "hi": ch.hi,
-                    "r": int(hex_col[0:2], 16) / 255.0,
-                    "g": int(hex_col[2:4], 16) / 255.0,
-                    "b": int(hex_col[4:6], 16) / 255.0,
-                })
+                render_defs.append(
+                    {
+                        "lo": ch.lo,
+                        "hi": ch.hi,
+                        "r": int(hex_col[0:2], 16) / 255.0,
+                        "g": int(hex_col[2:4], 16) / 255.0,
+                        "b": int(hex_col[4:6], 16) / 255.0,
+                    }
+                )
             elif ci < len(ch_defs):
                 render_defs.append(ch_defs[ci])
             else:

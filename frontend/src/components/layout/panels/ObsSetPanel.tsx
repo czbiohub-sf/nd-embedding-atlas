@@ -4,16 +4,16 @@
  * Uses TanStack Virtual for the list so large ObsSet collections render efficiently.
  */
 
-import { useRef } from "react";
-import { useVirtualizer } from "@tanstack/react-virtual";
 import { useStore } from "@tanstack/react-store";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { Trash2 } from "lucide-react";
-import { obsSetStore, setActiveObsSet } from "../../../providers/ObsSetStore";
-import { useObsSets, useDeleteObsSet } from "../../../hooks/useObsSets";
+import { useRef } from "react";
 import type { ObsSetId } from "../../../lib/branded-types";
 import { obsSetId } from "../../../lib/branded-types";
 import type { ObsSet } from "../../../lib/schemas";
 import { cn } from "../../../lib/utils";
+import { obsSetStore, setActiveObsSet } from "../../../stores/ObsSetStore";
+import { useDeleteObsSet, useObsSets } from "../../scatter/useObsSets";
 
 export function ObsSetPanel() {
   const { data: obssets = [], isLoading, isError } = useObsSets();
@@ -30,24 +30,16 @@ export function ObsSetPanel() {
   });
 
   if (isLoading) {
-    return (
-      <div className="flex h-full items-center justify-center text-xs text-text-secondary">
-        Loading ObsSets…
-      </div>
-    );
+    return <div className="flex h-full items-center justify-center text-text-secondary text-xs">Loading ObsSets…</div>;
   }
 
   if (isError) {
-    return (
-      <div className="flex h-full items-center justify-center text-xs text-red-400">
-        Failed to load ObsSets
-      </div>
-    );
+    return <div className="flex h-full items-center justify-center text-red-400 text-xs">Failed to load ObsSets</div>;
   }
 
   if (obssets.length === 0) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-1 text-xs text-text-secondary">
+      <div className="flex h-full flex-col items-center justify-center gap-1 text-text-secondary text-xs">
         <p>No ObsSets saved yet.</p>
         <p className="text-text-muted">Use the lasso tool to select observations, then click the bookmark icon.</p>
       </div>
@@ -56,10 +48,7 @@ export function ObsSetPanel() {
 
   return (
     <div ref={parentRef} className="h-full overflow-y-auto px-2 py-2">
-      <div
-        style={{ height: virtualizer.getTotalSize() }}
-        className="relative w-full"
-      >
+      <div style={{ height: virtualizer.getTotalSize() }} className="relative w-full">
         {virtualizer.getVirtualItems().map((vitem) => {
           const obsset: ObsSet = obssets[vitem.index];
           const id = obsSetId(obsset.obsset_id);
@@ -106,7 +95,7 @@ export function ObsSetPanel() {
               {/* Activate toggle */}
               <button
                 type="button"
-                onClick={() => setActiveObsSet(isActive ? null : id as ObsSetId)}
+                onClick={() => setActiveObsSet(isActive ? null : (id as ObsSetId))}
                 className={cn(
                   "shrink-0 rounded px-1.5 py-0.5 text-[10px] transition-colors",
                   isActive

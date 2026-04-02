@@ -1,9 +1,9 @@
-import { useRef } from "react";
+import { useDebouncer, useThrottler } from "@tanstack/react-pacer";
 import type { RefObject } from "react";
-import { useThrottler, useDebouncer } from "@tanstack/react-pacer";
+import { useRef } from "react";
+import { clearActiveFilter, setActiveFilter } from "../../stores/ActiveFilterStore";
+import { broadcastSelection, clearSelectionSync } from "../../stores/SelectionSyncStore";
 import type { PanelId } from "../types";
-import { broadcastSelection, clearSelectionSync } from "../../providers/SelectionSyncStore";
-import { setActiveFilter, clearActiveFilter } from "../../providers/ActiveFilterStore";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

@@ -24,7 +24,7 @@ description = "Start backend + frontend dev server concurrently"
 run = """
 #!/bin/bash
 set -e
-uv run ndea view "$@" --port $NDEA_PORT --no-static &
+uv run ndea "$@" --port $NDEA_PORT --no-static &
 BACKEND=$!
 trap "kill $BACKEND 2>/dev/null; wait $BACKEND 2>/dev/null" EXIT INT TERM
 # Wait for backend to accept connections before starting the dev server

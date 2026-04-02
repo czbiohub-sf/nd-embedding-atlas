@@ -1,5 +1,5 @@
 import type { ChannelDef } from "../components/viewer/ViewerContext";
-import { channelHash, type ChannelHash } from "./branded-types";
+import { type ChannelHash, channelHash } from "./branded-types";
 
 /**
  * Stable hash over the display-relevant subset of ChannelDef[].

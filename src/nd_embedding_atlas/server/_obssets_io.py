@@ -24,7 +24,7 @@ def load_obssets(path: Path) -> list[dict]:
     """
     if not path.exists():
         return []
-    with open(path) as f:
+    with path.open() as f:
         return json.load(f)
 
 

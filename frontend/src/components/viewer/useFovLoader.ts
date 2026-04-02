@@ -8,10 +8,10 @@ import {
   VolumeLayer,
 } from "@idetik/core";
 import { useCallback, useEffect, useRef } from "react";
-import type { ChannelDef, ViewMode } from "../components/viewer/ViewerContext";
-import { MultiChannelLayers } from "../lib/MultiChannelLayers";
-import type { Metadata } from "../types";
+import type { Metadata } from "../../types";
+import { MultiChannelLayers } from "./MultiChannelLayers";
 import { useViewer } from "./useViewer";
+import type { ChannelDef, ViewMode } from "./ViewerContext";
 
 // ── Module-level zarr source cache ────────────────────────────────────────────
 // Keyed by sourceUrl; avoids re-fetching zarr metadata for recently-visited FOVs.

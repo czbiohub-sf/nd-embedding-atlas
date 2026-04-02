@@ -6,8 +6,18 @@
  *  top-right → selection tool toggles + utility button group (lock, pip, fullscreen, close)
  */
 
+import {
+  Bookmark,
+  BoxSelect,
+  LassoSelect,
+  Lock,
+  LockOpen,
+  Maximize2,
+  PictureInPicture2Icon,
+  Waypoints,
+  X,
+} from "lucide-react";
 import { useMemo, useState } from "react";
-import { Bookmark, BoxSelect, LassoSelect, Lock, LockOpen, X, Maximize2, PictureInPicture2Icon, Waypoints } from "lucide-react";
 import { SaveObsSetDialog } from "./SaveObsSetDialog";
 
 /** Scan + Dot combined — "fit embedding to view" */
@@ -34,22 +44,23 @@ function ScanDotIcon({ size = 12 }: { size?: number }) {
     </svg>
   );
 }
-import type { FloatingWindowHandle } from "../../hooks/useFloatingWindow";
-import type { DockviewPanelApi } from "dockview-react";
-import { addFloatingScatter } from "../../providers/FloatingScatterStore";
+
 import { useStore } from "@tanstack/react-store";
-import { viewSyncStore, toggleViewLock } from "../../providers/ViewSyncStore";
-import { ToggleGroup, ToggleGroupItem } from "../ui/toggle-group";
-import { HoverTip } from "../ui/hover-tip";
-import { Separator } from "../ui/separator";
-import { ButtonGroup } from "../ui/button-group";
-import { Combobox, type ComboboxOption } from "../ui/combobox";
-import { ColorSourcePicker } from "../scatter/ColorSourcePicker";
-import { cn } from "../../lib/utils";
-import type { AxisState } from "../../types";
-import type { ColorMode } from "../../scatter-gpu/hooks/useMosaicScatterData";
+import type { DockviewPanelApi } from "dockview-react";
+import type { FloatingWindowHandle } from "../../hooks/useFloatingWindow";
 import type { ColorSource } from "../../lib/color-source";
 import { colorSourceToString } from "../../lib/color-source";
+import { cn } from "../../lib/utils";
+import type { ColorMode } from "../../scatter-gpu/hooks/useMosaicScatterData";
+import { addFloatingScatter } from "../../stores/FloatingScatterStore";
+import { toggleViewLock, viewSyncStore } from "../../stores/ViewSyncStore";
+import type { AxisState } from "../../types";
+import { ColorSourcePicker } from "../scatter/ColorSourcePicker";
+import { ButtonGroup } from "../ui/button-group";
+import { Combobox, type ComboboxOption } from "../ui/combobox";
+import { HoverTip } from "../ui/hover-tip";
+import { Separator } from "../ui/separator";
+import { ToggleGroup, ToggleGroupItem } from "../ui/toggle-group";
 
 interface Props {
   // Axes
@@ -134,7 +145,7 @@ export function ScatterOverlayControls({
   return (
     <>
       {/* ── Top-left: embedding + dims + color ── */}
-      <div className={cn("absolute left-2 top-2 z-20 flex items-center gap-1 px-2 py-1", glass)}>
+      <div className={cn("absolute top-2 left-2 z-20 flex items-center gap-1 px-2 py-1", glass)}>
         {/* Embedding */}
         <Combobox
           value={axes.obsmKey}
@@ -203,7 +214,7 @@ export function ScatterOverlayControls({
       </div>
 
       {/* ── Top-right: selection tools + utility actions ── */}
-      <div className={cn("absolute right-2 top-2 z-20 flex items-center gap-1.5 px-1.5 py-1", glass)}>
+      <div className={cn("absolute top-2 right-2 z-20 flex items-center gap-1.5 px-1.5 py-1", glass)}>
         {/* Selection tool toggles */}
         <ToggleGroup
           value={selectionTool === "pan" ? [] : [selectionTool]}
@@ -218,7 +229,7 @@ export function ScatterOverlayControls({
               <ToggleGroupItem
                 value="marquee"
                 size="sm"
-                className="size-[22px] bg-transparent border-0 data-[state=on]:bg-white/15 text-muted-foreground data-[state=on]:text-foreground"
+                className="size-[22px] border-0 bg-transparent text-muted-foreground data-[state=on]:bg-white/15 data-[state=on]:text-foreground"
               />
             }
           >
@@ -232,7 +243,7 @@ export function ScatterOverlayControls({
               <ToggleGroupItem
                 value="lasso"
                 size="sm"
-                className="size-[22px] bg-transparent border-0 data-[state=on]:bg-white/15 text-muted-foreground data-[state=on]:text-foreground"
+                className="size-[22px] border-0 bg-transparent text-muted-foreground data-[state=on]:bg-white/15 data-[state=on]:text-foreground"
               />
             }
           >

@@ -15,27 +15,27 @@ export function createRenderPipeline(
   const { quadLayout, posLayout, colorLayout, selectedLayout } = buffers;
   const { visibilityLayout } = culling;
 
-  const pipeline = root["~unstable"]
-    .withVertex(mainVertex, {
+  const pipeline = root.createRenderPipeline({
+    attribs: {
       quadPos: quadLayout.attrib,
       instancePos: posLayout.attrib,
       instanceColor: colorLayout.attrib,
       instanceSelected: selectedLayout.attrib,
       instanceVisible: visibilityLayout.attrib,
-    })
-    .withFragment(mainFragment, {
+    },
+    vertex: mainVertex,
+    fragment: mainFragment,
+    targets: {
       format,
       blend: {
         color: { srcFactor: "one", dstFactor: "one-minus-src-alpha" },
         alpha: { srcFactor: "one", dstFactor: "one-minus-src-alpha" },
       },
-    })
-    .withPrimitive({ topology: "triangle-list" })
-    .createPipeline();
+    },
+    primitive: { topology: "triangle-list" },
+  });
 
   // Record vertex-buffer bindings + draw once via a raw WebGPU bundle encoder.
-  // pipeline.with(GPURenderBundleEncoder) captures pipeline state, all vertex
-  // buffers, and the uniform bind groups into the bundle.
   // Uniform buffer CONTENTS can change (viewUniform writes) without invalidating
   // the bundle — only buffer OBJECTS need to stay stable, which they do for the
   // lifetime of a scatter instance.
@@ -54,21 +54,22 @@ export function createRenderPipeline(
 
   return {
     render(context: GPUCanvasContext, _numPoints: number, loadOp: "clear" | "load" = "clear") {
-      root["~unstable"].beginRenderPass(
-        {
-          colorAttachments: [
-            {
-              view: context.getCurrentTexture().createView(),
-              loadOp,
-              storeOp: "store",
-              ...(loadOp === "clear" ? { clearValue: backgroundColor } : {}),
-            },
-          ],
-        },
-        (pass) => {
-          pass.executeBundles([renderBundle]);
-        },
-      );
+      // Raw WebGPU render pass — avoids ~unstable beginRenderPass while still
+      // supporting render bundles (which have no stable TypeGPU equivalent yet).
+      const encoder = root.device.createCommandEncoder();
+      const pass = encoder.beginRenderPass({
+        colorAttachments: [
+          {
+            view: context.getCurrentTexture().createView(),
+            loadOp,
+            storeOp: "store",
+            ...(loadOp === "clear" ? { clearValue: backgroundColor } : {}),
+          },
+        ],
+      });
+      pass.executeBundles([renderBundle]);
+      pass.end();
+      root.device.queue.submit([encoder.finish()]);
     },
   };
 }

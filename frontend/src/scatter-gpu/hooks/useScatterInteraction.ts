@@ -1,8 +1,8 @@
 import * as d from "typegpu/data";
+import type { ViewState } from "../../types";
 import type { ScatterUniforms } from "../gpu/buffers";
 import type { SelectionEngine } from "../gpu/selection";
 import type { InteractionConfig } from "../types";
-import type { ViewState } from "../../types";
 
 interface InteractionCallbacks {
   onViewChange?: (state: ViewState) => void;
@@ -20,7 +20,7 @@ export function createInteractionController(
   interactionConfig?: InteractionConfig,
 ) {
   function easeInOutQuint(t: number): number {
-    return t < 0.5 ? 16 * t * t * t * t * t : 1 - Math.pow(-2 * t + 2, 5) / 2;
+    return t < 0.5 ? 16 * t * t * t * t * t : 1 - (-2 * t + 2) ** 5 / 2;
   }
 
   const LERP_SPEED = interactionConfig?.lerpSpeed ?? 0.06;

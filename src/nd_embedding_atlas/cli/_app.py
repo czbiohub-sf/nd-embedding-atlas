@@ -90,13 +90,15 @@ def view(
         int | None, typer.Option("--pool-workers", help="Request handler thread pool size.")
     ] = None,
     dry_run: Annotated[bool, typer.Option("--dry-run", help="Print metadata and exit.")] = False,
-    no_static: Annotated[bool, typer.Option("--no-static", help="Skip mounting the built frontend (use with vp dev).")] = False,
+    no_static: Annotated[
+        bool, typer.Option("--no-static", help="Skip mounting the built frontend (use with vp dev).")
+    ] = False,
 ) -> None:
     """Launch the viewer. Auto-detects AnnData vs OME-Zarr inputs."""
     # YAML project config detection — must resolve before suffix check to handle symlinks
-    resolved_first = paths[0].resolve() if len(paths) == 1 else None
+    resolved_first = paths[0].resolve()
     if resolved_first and resolved_first.suffix in (".yaml", ".yml"):
-        from nd_embedding_atlas.cli._project import view_project  # noqa: PLC0415
+        from nd_embedding_atlas.cli._project import view_project
 
         view_project(
             resolved_first,

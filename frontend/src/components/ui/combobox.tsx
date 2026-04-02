@@ -1,7 +1,7 @@
-import { useState } from "react";
 import { CheckIcon, ChevronDownIcon } from "lucide-react";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useState } from "react";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
 export interface ComboboxOption {
@@ -47,7 +47,7 @@ export function Combobox({
         disabled={disabled}
         aria-expanded={open}
         className={cn(
-          "flex h-7 min-w-0 items-center justify-between gap-1.5 rounded-md border border-input bg-input/20 px-2 text-xs/relaxed whitespace-nowrap outline-none transition-colors",
+          "flex h-7 min-w-0 items-center justify-between gap-1.5 whitespace-nowrap rounded-md border border-input bg-input/20 px-2 text-xs/relaxed outline-none transition-colors",
           "hover:bg-input/40 focus-visible:ring-2 focus-visible:ring-ring/30",
           "disabled:cursor-not-allowed disabled:opacity-50",
           "dark:bg-input/30",

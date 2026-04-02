@@ -1,4 +1,4 @@
-export const POINT_RADIUS = 0.003;
+export const POINT_RADIUS = 0.002;
 export const MAX_POLYGON_VERTS = 512;
 
 export const PALETTE = [

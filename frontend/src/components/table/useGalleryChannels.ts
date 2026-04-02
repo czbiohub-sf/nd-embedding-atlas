@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
-import { useStore } from "@tanstack/react-store";
 import { useDebouncer } from "@tanstack/react-pacer";
-import { viewerChannelsStore } from "../providers/ViewerChannelsStore";
-import { hashChannels, EMPTY_CHANNEL_HASH } from "../lib/channel-hash";
-import type { ChannelDef } from "../components/viewer/ViewerContext";
-import type { ChannelHash } from "../lib/branded-types";
+import { useStore } from "@tanstack/react-store";
+import { useEffect, useState } from "react";
+import type { ChannelHash } from "../../lib/branded-types";
+import { EMPTY_CHANNEL_HASH, hashChannels } from "../../lib/channel-hash";
+import { viewerChannelsStore } from "../../stores/ViewerChannelsStore";
+import type { ChannelDef } from "../viewer/ViewerContext";
 
 export interface GalleryChannels {
   channels: readonly ChannelDef[];
@@ -12,8 +12,8 @@ export interface GalleryChannels {
   isPending: boolean;
 }
 
-export function useGalleryChannels(wait = 300): GalleryChannels {
-  const liveChannels = useStore(viewerChannelsStore, (s) => s.channels);
+export function useGalleryChannels(instanceId: string, wait = 300): GalleryChannels {
+  const liveChannels = useStore(viewerChannelsStore, (s) => s.slots[instanceId] ?? ([] as ChannelDef[]));
 
   const [settled, setSettled] = useState<{ channels: readonly ChannelDef[]; hash: ChannelHash }>(() => ({
     channels: liveChannels,
@@ -34,7 +34,7 @@ export function useGalleryChannels(wait = 300): GalleryChannels {
     debouncer.maybeExecute(liveChannels);
     // debouncer is stable (callback uses stable setState setter)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [liveChannels]);
+  }, [liveChannels, debouncer.maybeExecute]);
 
   const liveHash = liveChannels.length > 0 ? hashChannels(liveChannels) : EMPTY_CHANNEL_HASH;
   const isPending = liveHash !== settled.hash;

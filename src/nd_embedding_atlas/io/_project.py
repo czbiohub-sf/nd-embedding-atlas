@@ -36,9 +36,9 @@ def load_project(path: Path) -> ProjectConfig:
     -------
     Validated ProjectConfig instance.
     """
-    import yaml  # noqa: PLC0415
+    import yaml
 
-    with open(path) as f:
+    with path.open() as f:
         raw = yaml.safe_load(f)
     return ProjectConfig.model_validate(raw)
 

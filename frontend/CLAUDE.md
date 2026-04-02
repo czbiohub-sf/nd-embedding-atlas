@@ -68,7 +68,7 @@ src/
     branded-types.ts                   # PanelId, RowIndex branded types
     schemas.ts                         # Zod schemas for API responses
     mosaic-helpers.ts                  # stringPredicate() + Mosaic SQL helpers
-  providers/
+  stores/
     BrushPredicateStore.ts             # TanStack Store → Mosaic brushSelection bridge
     SelectionSyncStore.ts              # cross-panel selection broadcast
     ViewSyncStore.ts                   # cross-panel pan/zoom lock

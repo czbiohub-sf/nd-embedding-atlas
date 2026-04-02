@@ -1,7 +1,6 @@
 import tgpu from "typegpu";
 import * as d from "typegpu/data";
 import * as std from "typegpu/std";
-import { computeFn } from "./tgpu-compat";
 import type { TgpuRoot } from "../types";
 import type { ScatterBuffers, ScatterUniforms } from "./buffers";
 
@@ -52,44 +51,46 @@ export function createCompositor(
   //     - if only isolation active → isoPass
   //     - if only selection active → selPass
   //     - if both active → isoPass & selPass
-  const COMP_BATCH = [0, 1] as const;
+  const COMP_BATCH = [0, 1, 2, 3] as const;
 
-  const compositorFn = computeFn({
-    workgroupSize: [wgSize],
-    in: { gid: d.builtin.globalInvocationId },
-  })((input) => {
-    "use gpu";
-    const base = input.gid.x * COMP_BATCH.length;
-    const layerBits = layerBitsUniform.value;
-    for (const k of tgpu.unroll(COMP_BATCH)) {
-      const idx = base + k;
-      if (idx < numPoints) {
-        const iso = isolationReadonly.value[idx];
-        const lasso = lassoReadonly.value[idx];
-        const ext = externalReadonly.value[idx];
+  const compositorFn = tgpu
+    .computeFn({
+      workgroupSize: [wgSize],
+      in: { gid: d.builtin.globalInvocationId },
+    })((input) => {
+      "use gpu";
+      const base = input.gid.x * COMP_BATCH.length;
+      const layerBits = layerBitsUniform.$;
+      for (const k of tgpu.unroll(COMP_BATCH)) {
+        const idx = base + k;
+        if (idx < numPoints) {
+          const iso = isolationReadonly.$[idx];
+          const lasso = lassoReadonly.$[idx];
+          const ext = externalReadonly.$[idx];
 
-        // Tier flags derived from bitmask
-        const hasIso = (layerBits & 4) != 0; // LAYER_ISOLATION
-        const hasSel = ((layerBits & 1) | (layerBits & 2)) != 0; // lasso | external
+          // Tier flags derived from bitmask
+          const hasIso = (layerBits & 4) !== 0; // LAYER_ISOLATION
+          const hasSel = ((layerBits & 1) | (layerBits & 2)) !== 0; // lasso | external
 
-        // isoPass: if isolation tier active, point must be in isolation mask
-        const isoPass = std.select(1, iso, hasIso);
-        // selPass: if selection tier active, point must be in lasso OR external
-        const selPass = std.select(1, lasso | ext, hasSel);
+          // isoPass: if isolation tier active, point must be in isolation mask
+          const isoPass = std.select(1, iso, hasIso);
+          // selPass: if selection tier active, point must be in lasso OR external
+          const selPass = std.select(1, lasso | ext, hasSel);
 
-        selectedMutable.value[idx] = isoPass & selPass;
+          selectedMutable.$[idx] = isoPass & selPass;
+        }
       }
-    }
-  }).$uses({
-    layerBitsUniform,
-    lassoReadonly,
-    externalReadonly,
-    isolationReadonly,
-    annotationReadonly,
-    selectedMutable,
-  });
+    })
+    .$uses({
+      layerBitsUniform,
+      lassoReadonly,
+      externalReadonly,
+      isolationReadonly,
+      annotationReadonly,
+      selectedMutable,
+    });
 
-  const compositorPipeline = root["~unstable"].withCompute(compositorFn).createPipeline();
+  const compositorPipeline = root.createComputePipeline({ compute: compositorFn });
   const workgroups = Math.ceil(numPoints / (wgSize * COMP_BATCH.length));
 
   function markDirty(layerBit: number, isActive: boolean): void {

@@ -12,11 +12,11 @@
  * caused the canvas to unmount exactly when positions arrived.
  */
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from "react";
-import { createScatterplot } from "../gpu/orchestrator";
-import type { ScatterData, ScatterplotConfig, ScatterplotHandle } from "../types";
-import type { ScatterGPUHostHandle } from "../handle-capabilities";
 import type { PanelId } from "../../lib/branded-types";
-import { selectionLayerStore, initPanelLayerState, clearPanelLayerState } from "../../providers/SelectionLayerStore";
+import { clearPanelLayerState, initPanelLayerState, selectionLayerStore } from "../../stores/SelectionLayerStore";
+import { createScatterplot } from "../gpu/orchestrator";
+import type { ScatterGPUHostHandle } from "../handle-capabilities";
+import type { ScatterData, ScatterplotConfig, ScatterplotHandle } from "../types";
 
 export type { ScatterGPUHostHandle } from "../handle-capabilities";
 
@@ -41,6 +41,7 @@ interface ScatterGPUHostProps {
 }
 
 export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostProps>(function ScatterGPUHost(
+  // eslint-disable-next-line @typescript-eslint/unbound-method
   { data, positionKey, config, onGpuError, onRowIndicesChange, myPanelId },
   ref,
 ) {
@@ -247,10 +248,10 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
 
   return (
     <div className="absolute inset-0" style={{ backgroundColor: "var(--color-base)" }}>
-      <canvas ref={canvasCallbackRef} className="absolute inset-0 w-full h-full" style={{ display: "block" }} />
+      <canvas ref={canvasCallbackRef} className="absolute inset-0 h-full w-full" style={{ display: "block" }} />
       <canvas
         ref={overlayCallbackRef}
-        className="absolute inset-0 w-full h-full cursor-grab active:cursor-grabbing"
+        className="absolute inset-0 h-full w-full cursor-grab active:cursor-grabbing"
         style={{ display: "block" }}
       />
     </div>

@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from "react";
-import { EmbeddingStatusSchema } from "../lib/schemas";
-import type { Metadata } from "../types";
+import { EmbeddingStatusSchema } from "../../lib/schemas";
+import type { Metadata } from "../../types";
 
 async function pollUntilReady(key: string, signal: AbortSignal): Promise<void> {
   for (;;) {

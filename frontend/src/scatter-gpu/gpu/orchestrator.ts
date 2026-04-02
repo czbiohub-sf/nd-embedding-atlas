@@ -1,9 +1,9 @@
 import tgpu from "typegpu";
 import * as d from "typegpu/data";
+import type { ViewState } from "../../types";
 import { createInteractionController } from "../hooks/useScatterInteraction";
 import type { ScatterData, ScatterplotConfig, ScatterplotHandle } from "../types";
-import type { ViewState } from "../../types";
-import { createBuffers, createUniforms, uploadData } from "./buffers";
+import { createBuffers, createUniforms, MAX_PALETTE_SIZE, uploadData } from "./buffers";
 import { createCompositor } from "./compositor";
 import { createCullingEngine } from "./culling";
 import { acquireDevice, releaseDevice } from "./device-manager";
@@ -26,7 +26,7 @@ export async function createScatterplot(
   const tGpu = performance.now();
   console.log(`GPU init: ${(tGpu - t0).toFixed(1)}ms`);
 
-  let pointRadius = config?.render?.pointRadius ?? 0.003;
+  let pointRadius = config?.render?.pointRadius ?? 0.002;
   const selectionDimFactor = config?.render?.selectionDimFactor ?? 0.08;
 
   // Adaptive point sizing: computed once from point count (zoom-independent).
@@ -52,6 +52,7 @@ export async function createScatterplot(
 
   const mainVertex = createVertexShader(uniforms);
   const mainFragment = createFragmentShader();
+  // eslint-disable-next-line @typescript-eslint/unbound-method
   const { render } = createRenderPipeline(
     root,
     mainVertex,
@@ -74,6 +75,68 @@ export async function createScatterplot(
     preferredWorkgroupSize,
     compositor,
   );
+
+  // ── GPU color-pack pipeline ────────────────────────────────────────────────
+  // Instead of a O(n) CPU loop per palette change, pack colors on GPU:
+  //   categoryBuffer[i] → paletteBuffer[cat] → colorBuffer[i]
+  // CPU work per updateColors: O(palette_size) ≤ 64 entries (constant).
+  const COLOR_PACK_BATCH = [0, 1, 2, 3] as const;
+  const categoryReadonly = buffers.categoryBuffer.as("readonly");
+  const colorMutable = buffers.colorBuffer.as("mutable");
+  const paletteReadonly = buffers.paletteBuffer.as("readonly");
+
+  const colorPackFn = tgpu
+    .computeFn({
+      workgroupSize: [preferredWorkgroupSize],
+      in: { gid: d.builtin.globalInvocationId },
+    })((input) => {
+      "use gpu";
+      const base = input.gid.x * COLOR_PACK_BATCH.length;
+      const numCats = buffers.paletteLenUniform.$;
+      for (const k of tgpu.unroll(COLOR_PACK_BATCH)) {
+        const idx = base + k;
+        if (idx < data.numCells) {
+          const cat = categoryReadonly.$[idx] % numCats;
+          colorMutable.$[idx] = paletteReadonly.$[cat];
+        }
+      }
+    })
+    .$uses({
+      categoryReadonly,
+      colorMutable,
+      paletteReadonly,
+      paletteLenUniform: buffers.paletteLenUniform,
+    });
+
+  const colorPackPipeline = root.createComputePipeline({ compute: colorPackFn });
+  const colorPackWorkgroups = Math.ceil(data.numCells / (preferredWorkgroupSize * COLOR_PACK_BATCH.length));
+
+  /** Pack a JS palette into the GPU palette buffer and dispatch the color-pack shader. */
+  function gpuUpdateColors(
+    palette: readonly (readonly [number, number, number, number?])[],
+    categoryIndices?: Uint8Array,
+  ) {
+    const len = Math.min(palette.length, MAX_PALETTE_SIZE);
+    const packed = new Uint32Array(MAX_PALETTE_SIZE);
+    for (let i = 0; i < len; i++) {
+      const c = palette[i]!;
+      const r = Math.round(c[0] * 255);
+      const g = Math.round(c[1] * 255);
+      const b = Math.round(c[2] * 255);
+      const a = c[3] !== undefined ? Math.round(c[3] * 255) : 255;
+      packed[i] = (r | (g << 8) | (b << 16) | (a << 24)) >>> 0;
+    }
+    device.queue.writeBuffer(root.unwrap(buffers.paletteBuffer), 0, packed);
+    buffers.paletteLenUniform.write(len);
+    // If custom categoryIndices supplied (e.g. fresh from React), re-upload them first
+    if (categoryIndices) {
+      const catStaging = new Uint32Array(data.numCells);
+      for (let i = 0; i < data.numCells; i++) catStaging[i] = categoryIndices[i]!;
+      device.queue.writeBuffer(root.unwrap(buffers.categoryBuffer), 0, catStaging);
+    }
+    colorPackPipeline.dispatchWorkgroups(colorPackWorkgroups);
+  }
+
   const tPipelines = performance.now();
   console.log(`Pipeline setup: ${(tPipelines - tUpload).toFixed(1)}ms`);
 
@@ -152,7 +215,7 @@ export async function createScatterplot(
   for (let i = 0; i < data.numCells; i++) {
     const gx = Math.min(GRID - 1, Math.max(0, Math.floor(((data.positions[i * 2]! + 1) / 2) * GRID)));
     const gy = Math.min(GRID - 1, Math.max(0, Math.floor(((data.positions[i * 2 + 1]! + 1) / 2) * GRID)));
-    gridCells[gx * GRID + gy]!.push(i);
+    gridCells[gx * GRID + gy]?.push(i);
   }
 
   console.log(
@@ -184,34 +247,21 @@ export async function createScatterplot(
       pointRadius = r;
       const { width, height } = canvas;
       const dpr = window.devicePixelRatio || 1;
-      uniforms.paramsUniform.write(d.vec4f(pointRadius, (width * dpr) / Math.max(1, height * dpr), selectionDimFactor, adaptiveScale));
+      uniforms.paramsUniform.write(
+        d.vec4f(pointRadius, (width * dpr) / Math.max(1, height * dpr), selectionDimFactor, adaptiveScale),
+      );
       interaction.requestRender();
     },
     updateColors(palette: readonly (readonly [number, number, number, number?])[], categoryIndices?: Uint8Array) {
-      // Use passed indices (fresh from latest data) or fall back to original closure data.
-      // palette entries are [0,1] normalized RGBA; pack to u32 RGBA for the color buffer.
-      const indices = categoryIndices ?? data.categoryIndices;
-      const colorData = new Uint32Array(data.numCells);
-      for (let i = 0; i < data.numCells; i++) {
-        const cat = (indices[i] ?? 0) % Math.max(1, palette.length);
-        const entry = palette[cat];
-        if (entry) {
-          const r = Math.round(entry[0] * 255);
-          const g = Math.round(entry[1] * 255);
-          const b = Math.round(entry[2] * 255);
-          const alpha = entry[3] !== undefined ? Math.round(entry[3] * 255) : 255;
-          colorData[i] = (r | (g << 8) | (b << 16) | (alpha << 24)) >>> 0;
-        } else {
-          colorData[i] = (255 << 24) >>> 0; // opaque black fallback
-        }
-      }
-      device.queue.writeBuffer(root.unwrap(buffers.colorBuffer), 0, colorData);
+      // GPU compute shader packs category indices → palette → colorBuffer.
+      // CPU work: O(palette_size) ≤ 64 entries (constant, not O(numPoints)).
+      gpuUpdateColors(palette, categoryIndices);
       interaction.requestRender();
     },
     updateColorsDirect(rgba: Uint8Array) {
       // rgba is Uint8Array [R,G,B,A, R,G,B,A, ...] in [0,255].
       // On little-endian hardware a Uint32Array view of this memory gives
-      // R|(G<<8)|(B<<16)|(A<<24) per element — exactly our packed color format.
+      // R|(G<<8)|(B<<16)|(A<<24) per element -> packed color format.
       // This is a zero-copy reinterpretation; no per-pixel loop needed.
       const colorData = new Uint32Array(rgba.buffer, rgba.byteOffset, data.numCells);
       device.queue.writeBuffer(root.unwrap(buffers.colorBuffer), 0, colorData);

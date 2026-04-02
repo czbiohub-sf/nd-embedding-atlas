@@ -89,6 +89,15 @@ def make_data_router(get_state: Callable[[], ViewerState], config: DatasetConfig
             result.update(config.plate_meta)
         if config.dataset_keys is not None:
             result["dataset_keys"] = config.dataset_keys
+        if state.dataset_plates:
+            result["plate_stores"] = [
+                {
+                    "mount": f"/plates/{key}",
+                    "name": key,
+                    "ome_version": state.dataset_ome_versions.get(key, "0.4"),
+                }
+                for key in state.dataset_plates  # insertion order stable (Python 3.7+)
+            ]
         result["spatial"] = {
             "fov_col": state.spatial.fov,
             "t_col": state.spatial.t,

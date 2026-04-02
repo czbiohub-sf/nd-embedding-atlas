@@ -285,8 +285,7 @@ select:disabled {
 
 /* Validation error ring — destructive border + ring, dark-mode adjusted */
 @utility invalid-ring {
-  @apply aria-invalid:border-destructive aria-invalid:ring-1 aria-invalid:ring-destructive/20
-           dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40;
+  @apply aria-invalid:border-destructive aria-invalid:ring-1 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40;
 }
 
 /* Dockview light + abyss override (abyss hardcodes dark colors) */
@@ -309,29 +308,29 @@ select:disabled {
 }
 :root:not(.dark) .dv-grid-view.dv-dockview,
 :root:not(.dark) .dv-groupview {
-  background-color: var(--color-base) !important;
+  background-color: var(--color-base);
 }
 :root:not(.dark) .dv-tabs-and-actions-container {
-  background-color: var(--color-surface) !important;
+  background-color: var(--color-surface);
 }
 :root:not(.dark) .dv-tab {
-  color: var(--color-text-primary) !important;
+  color: var(--color-text-primary);
 }
 :root:not(.dark) .dv-tab.dv-active-tab {
-  background-color: var(--color-elevated) !important;
+  background-color: var(--color-elevated);
 }
 :root:not(.dark) .dv-tab:not(.dv-active-tab) {
-  background-color: var(--color-surface) !important;
-  color: var(--color-text-secondary) !important;
+  background-color: var(--color-surface);
+  color: var(--color-text-secondary);
 }
 :root:not(.dark) .dv-pane-header {
-  background-color: var(--color-surface) !important;
-  color: var(--color-text-secondary) !important;
+  background-color: var(--color-surface);
+  color: var(--color-text-secondary);
 }
 
 /* ── Hide Dockview tab strip — navigation handled by BottomDock ── */
 .dv-tabs-and-actions-container {
-  display: none !important;
+  display: none;
 }
 
 .dv-header-action {

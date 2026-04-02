@@ -1,14 +1,14 @@
 import type { DockviewApi } from "dockview-react";
-import { useRef, useCallback, useState, useEffect } from "react";
-import { DevtoolsDrawer } from "../components/devtools/DevtoolsDrawer";
-import { FloatingScatterRoot } from "../components/layout/FloatingScatterWindow";
-import { ViewerPiP } from "../components/layout/ViewerPiP";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { CommandPalette } from "../components/CommandPalette";
-import { DockviewShell } from "../components/layout/DockviewShell";
+import { DevtoolsDrawer } from "../components/devtools/DevtoolsDrawer";
 import { BottomDock } from "../components/layout/BottomDock";
+import { DockviewShell } from "../components/layout/DockviewShell";
+import { FloatingScatterRoot } from "../components/layout/FloatingScatterWindow";
+import { DatasetViewerPiP, ViewerPiP } from "../components/layout/ViewerPiP";
 import { TerminalTable } from "../components/table/TerminalTable";
 import { useDashboard } from "../hooks/useDashboard";
-import { openViewerPiP } from "../providers/ViewerPiPStore";
+import { openViewerPiP } from "../stores/ViewerPiPStore";
 
 export function DashboardShell() {
   const { state } = useDashboard();
@@ -104,13 +104,19 @@ export function DashboardShell() {
         hasPlate={hasPlate}
         devtoolsOpen={devtoolsOpen}
         onToggleDevtools={() => setDevtoolsOpen((o) => !o)}
+        datasetKeys={metadata.dataset_keys ?? undefined}
       />
 
       {/* Floating scatter windows — outside Dockview so they survive panel close */}
       <FloatingScatterRoot />
 
-      {/* Picture-in-picture viewer — floats outside Dockview */}
-      <ViewerPiP />
+      {/* Picture-in-picture viewer — single-dataset only */}
+      {(!metadata.dataset_keys || metadata.dataset_keys.length <= 1) && <ViewerPiP />}
+
+      {/* Per-dataset floating viewers */}
+      {metadata.dataset_keys?.map((key) => (
+        <DatasetViewerPiP key={key} datasetKey={key} />
+      ))}
 
       {/* ⌘K command palette */}
       <CommandPalette

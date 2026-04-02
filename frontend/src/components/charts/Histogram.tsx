@@ -40,7 +40,7 @@ export function Histogram({ field, bins: binCount = 20 }: Props) {
 
   useEffect(() => {
     let cancelled = false;
-    coordinator
+    void coordinator
       .query(
         `SELECT MIN(CAST("${field}" AS DOUBLE)) AS min,
                         MAX(CAST("${field}" AS DOUBLE)) AS max,
@@ -84,12 +84,12 @@ export function Histogram({ field, bins: binCount = 20 }: Props) {
       const { binStart, binSize } = binParams;
       const fieldExpr = cast(column(field), "DOUBLE");
       const pred = filterExprToExpr(predicate);
-      const binExpr = `FLOOR((${fieldExpr} - ${binStart}) / ${binSize})`;
+      const binExpr = `FLOOR((${String(fieldExpr)} - ${String(binStart)}) / ${String(binSize)})`;
       return `SELECT ${binExpr} AS bin,
                            COUNT(*) AS "countTotal",
-                           SUM(CAST((${pred}) AS INT)) AS "countFiltered"
+                           SUM(CAST((${String(pred)}) AS INT)) AS "countFiltered"
                     FROM dataset
-                    WHERE ${fieldExpr} IS NOT NULL AND isfinite(${fieldExpr})
+                    WHERE ${String(fieldExpr)} IS NOT NULL AND isfinite(${String(fieldExpr)})
                     GROUP BY bin
                     ORDER BY bin`;
     },

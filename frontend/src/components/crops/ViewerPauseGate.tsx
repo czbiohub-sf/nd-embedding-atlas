@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useViewer } from "../../hooks/useViewer";
+import { useViewer } from "../viewer/useViewer";
 
 /**
  * Pauses/resumes the idetik render loop based on whether an observation is selected.

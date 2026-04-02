@@ -37,9 +37,9 @@ def view_project(
     no_static
         Skip mounting the built frontend.
     """
-    from nd_embedding_atlas.io import AnnDataCollection  # noqa: PLC0415
-    from nd_embedding_atlas.io._project import load_project  # noqa: PLC0415
-    from nd_embedding_atlas.server._app import serve  # noqa: PLC0415
+    from nd_embedding_atlas.io import AnnDataCollection
+    from nd_embedding_atlas.io._project import load_project
+    from nd_embedding_atlas.server._app import serve
 
     project = load_project(config_path)
     collection = AnnDataCollection()
@@ -53,7 +53,7 @@ def view_project(
     # Load columns_config if provided
     columns_cfg = None
     if columns_config is not None:
-        from nd_embedding_atlas.io._config import load_config  # noqa: PLC0415
+        from nd_embedding_atlas.io._config import load_config
 
         columns_cfg = load_config(columns_config)
 

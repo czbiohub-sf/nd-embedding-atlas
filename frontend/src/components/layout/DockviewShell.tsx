@@ -5,15 +5,14 @@ import {
   type IDockviewHeaderActionsProps,
   type IDockviewPanelHeaderProps,
 } from "dockview-react";
-import { XIcon, Minimize2, Maximize2 } from "lucide-react";
+import { Maximize2, Minimize2, XIcon } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import "dockview-react/dist/styles/dockview.css";
-import { useTheme } from "../../providers/ThemeProvider";
-
+import { useTheme } from "../../ThemeProvider";
+import { PanelErrorBoundary } from "./PanelErrorBoundary";
 import { ChartGroupPanel } from "./panels/ChartGroupPanel";
 import { ImageViewerPanel } from "./panels/ImageViewerPanel";
 import { ObsSetPanel } from "./panels/ObsSetPanel";
-import { PanelErrorBoundary } from "./PanelErrorBoundary";
 import { ScatterPanel } from "./panels/ScatterPanel";
 import { TablePanel } from "./panels/TablePanel";
 
@@ -30,14 +29,14 @@ function CustomTab({ api }: IDockviewPanelHeaderProps) {
   return (
     <div
       className={[
-        "group flex h-full items-center gap-2 px-3 text-[11px] font-medium select-none border-r border-border-subtle transition-colors",
+        "group flex h-full select-none items-center gap-2 border-border-subtle border-r px-3 font-medium text-[11px] transition-colors",
         isActive ? "bg-elevated text-text-primary" : "bg-surface text-text-muted hover:text-text-secondary",
       ].join(" ")}
     >
       <span>{api.title}</span>
       <button
         type="button"
-        className="flex items-center justify-center w-3.5 h-3.5 rounded opacity-0 group-hover:opacity-60 hover:!opacity-100 hover:text-text-primary transition-opacity"
+        className="hover:!opacity-100 flex h-3.5 w-3.5 items-center justify-center rounded opacity-0 transition-opacity hover:text-text-primary group-hover:opacity-60"
         onClick={(e) => {
           e.stopPropagation();
           api.close();
@@ -131,7 +130,7 @@ interface Props {
   onApiReady?: (api: DockviewApi) => void;
 }
 
-export function DockviewShell({ hasPlate, hasEmbeddings, onApiReady }: Props) {
+export function DockviewShell({ hasPlate: _hasPlate, hasEmbeddings, onApiReady }: Props) {
   const { theme } = useTheme();
   const apiRef = useRef<DockviewApi | null>(null);
 
@@ -185,7 +184,7 @@ export function DockviewShell({ hasPlate, hasEmbeddings, onApiReady }: Props) {
 
       loadDefaultLayout(event.api, hasEmbeddings);
     },
-    [hasPlate, hasEmbeddings],
+    [hasEmbeddings, onApiReady],
   );
 
   return (

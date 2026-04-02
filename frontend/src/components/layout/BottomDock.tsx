@@ -6,17 +6,28 @@
  * Table/viewer as minimal icons.
  */
 
-import { useEffect, useRef, useState } from "react";
-import type { DockviewApi } from "dockview-react";
-import { TableIcon, ScanIcon, MoonIcon, SunIcon, LogsIcon, DatabaseIcon, ChevronRightIcon, XIcon, BookmarkIcon } from "lucide-react";
-import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
-import { Separator } from "../ui/separator";
-import { useScatterUIState } from "../../providers/ScatterUIStateProvider";
 import { useStore } from "@tanstack/react-store";
-import { pointRadiusStore, setPointRadius, POINT_RADIUS_MIN, POINT_RADIUS_MAX } from "../../providers/PointRadiusStore";
-import { useTerminalTable } from "../../providers/TerminalTableProvider";
-import { useTheme } from "../../providers/ThemeProvider";
+import type { DockviewApi } from "dockview-react";
+import {
+  BookmarkIcon,
+  ChevronRightIcon,
+  DatabaseIcon,
+  LogsIcon,
+  MoonIcon,
+  ScanIcon,
+  SunIcon,
+  TableIcon,
+  XIcon,
+} from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { cn } from "../../lib/utils";
+import { POINT_RADIUS_MAX, POINT_RADIUS_MIN, pointRadiusStore, setPointRadius } from "../../stores/PointRadiusStore";
+import { openDatasetViewerPiP } from "../../stores/ViewerPiPStore";
+import { useTheme } from "../../ThemeProvider";
+import { useScatterUIState } from "../scatter/ScatterUIStateProvider";
+import { useTerminalTable } from "../table/TerminalTableProvider";
+import { Separator } from "../ui/separator";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 
 // ── Point size slider ─────────────────────────────────────────────────────
 function PointSizeSlider() {
@@ -25,12 +36,12 @@ function PointSizeSlider() {
 
   return (
     <div className="flex items-center gap-1.5">
-      <span className="text-[9px] text-muted-foreground/50 select-none">●</span>
+      <span className="select-none text-[9px] text-muted-foreground/50">●</span>
       <input
         type="range"
         min={POINT_RADIUS_MIN}
         max={POINT_RADIUS_MAX}
-        step={0.0005}
+        step={0.0001}
         value={radius}
         onChange={(e) => setPointRadius(parseFloat(e.target.value))}
         className="h-1 w-16 cursor-pointer appearance-none rounded-full bg-white/10 [&::-webkit-slider-thumb]:size-2 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-muted-foreground/60 [&::-webkit-slider-thumb]:transition-colors hover:[&::-webkit-slider-thumb]:bg-foreground"
@@ -71,6 +82,8 @@ interface Props {
   hasPlate?: boolean;
   devtoolsOpen?: boolean;
   onToggleDevtools?: () => void;
+  /** Dataset keys for multi-dataset mode — renders per-dataset viewer buttons. */
+  datasetKeys?: string[];
 }
 
 export function BottomDock({
@@ -81,9 +94,12 @@ export function BottomDock({
   hasPlate,
   devtoolsOpen,
   onToggleDevtools,
+  datasetKeys,
 }: Props) {
   const { fps, zoom, selectedCount, numPoints, statusMsg } = useScatterUIState();
+  // eslint-disable-next-line @typescript-eslint/unbound-method
   const { toggle: toggleTable, open: tableOpen } = useTerminalTable();
+  // eslint-disable-next-line @typescript-eslint/unbound-method
   const { theme, toggle: toggleTheme } = useTheme();
 
   const [panels, setPanels] = useState<PanelEntry[]>([]);
@@ -144,7 +160,7 @@ export function BottomDock({
   }
 
   return (
-    <div className="flex h-6 shrink-0 items-center gap-0 border-t border-white/[0.07] bg-card/80 px-2 text-[11px] text-muted-foreground backdrop-blur-md">
+    <div className="flex h-6 shrink-0 items-center gap-0 border-white/[0.07] border-t bg-card/80 px-2 text-[11px] text-muted-foreground backdrop-blur-md">
       {/* ── Scatter dots ── */}
       {scatterPanels.map((p) => (
         <Tooltip key={p.id}>
@@ -188,7 +204,7 @@ export function BottomDock({
         <TooltipContent side="top">New scatter (⌘K)</TooltipContent>
       </Tooltip>
 
-      {(hasTable || hasViewer || true) && <Separator orientation="vertical" className="mx-1.5 h-3" />}
+      {<Separator orientation="vertical" className="mx-1.5 h-3" />}
 
       {/* ObsSets panel toggle */}
       <Tooltip>
@@ -234,7 +250,8 @@ export function BottomDock({
         </Tooltip>
       )}
 
-      {hasViewer && (
+      {/* Single-dataset viewer button (unchanged exact-match guard) */}
+      {!datasetKeys?.length && hasViewer && (
         <div className="mx-0.5 flex items-center gap-px">
           <Tooltip>
             <TooltipTrigger
@@ -274,6 +291,28 @@ export function BottomDock({
         </div>
       )}
 
+      {/* Multi-dataset viewer buttons — one per dataset key */}
+      {datasetKeys &&
+        datasetKeys.length > 1 &&
+        datasetKeys.map((key) => {
+          return (
+            <Tooltip key={key}>
+              <TooltipTrigger
+                render={
+                  <button
+                    type="button"
+                    onClick={() => openDatasetViewerPiP(key)}
+                    className="mx-0.5 flex size-4 items-center justify-center rounded-sm text-muted-foreground/60 transition-colors hover:text-muted-foreground"
+                  />
+                }
+              >
+                <ScanIcon className="size-3" />
+              </TooltipTrigger>
+              <TooltipContent side="top">{key}</TooltipContent>
+            </Tooltip>
+          );
+        })}
+
       {hasPlate && onFloatViewer && (
         <Tooltip>
           <TooltipTrigger
@@ -287,7 +326,7 @@ export function BottomDock({
             }
           >
             <ScanIcon className="size-3" />
-            <span aria-hidden="true" className="absolute -right-0.5 -top-0.5 size-1.5 rounded-full bg-primary/70" />
+            <span aria-hidden="true" className="absolute -top-0.5 -right-0.5 size-1.5 rounded-full bg-primary/70" />
           </TooltipTrigger>
           <TooltipContent side="top">Float Image Viewer</TooltipContent>
         </Tooltip>
@@ -309,7 +348,7 @@ export function BottomDock({
       )}
 
       {/* ── Metrics ── */}
-      {numPoints > 0 && <span className="tabular-nums text-muted-foreground">{numPoints.toLocaleString()}</span>}
+      {numPoints > 0 && <span className="text-muted-foreground tabular-nums">{numPoints.toLocaleString()}</span>}
       {selectedCount !== null && selectedCount > 0 && (
         <>
           <span className="mx-1 text-muted-foreground/60">·</span>
@@ -321,13 +360,13 @@ export function BottomDock({
       {zoom !== 1 && (
         <>
           <span className="mx-1 text-muted-foreground/60">·</span>
-          <span className="tabular-nums text-muted-foreground">{zoom.toFixed(1)}×</span>
+          <span className="text-muted-foreground tabular-nums">{zoom.toFixed(1)}×</span>
         </>
       )}
       {fps !== null && (
         <>
           <span className="mx-1 text-muted-foreground/60">·</span>
-          <span className="tabular-nums text-muted-foreground/75">{Math.round(fps)}fps</span>
+          <span className="text-muted-foreground/75 tabular-nums">{Math.round(fps)}fps</span>
         </>
       )}
 

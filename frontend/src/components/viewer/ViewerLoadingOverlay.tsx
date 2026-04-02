@@ -1,4 +1,4 @@
-import { useViewer } from "../../hooks/useViewer";
+import { useViewer } from "./useViewer";
 
 export function ViewerLoadingOverlay() {
   const { state } = useViewer();

@@ -59,7 +59,7 @@ export function CountPlot({ field, limit = 11 }: Props) {
   const transform = useCallback((result: unknown): CountPlotRow[] => {
     const rows = toRows(result);
     return rows.map((r) => ({
-      value: r.value != null ? String(r.value) : null,
+      value: r.value != null ? String(r.value as string | number | boolean) : null,
       count: Number(r.count),
       countSelected: Number(r.countSelected),
     }));

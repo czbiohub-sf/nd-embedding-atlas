@@ -19,21 +19,14 @@ interface HoverTipProps {
   delay?: number;
 }
 
-export function HoverTip({
-  label,
-  description,
-  render,
-  children,
-  side = "bottom",
-  delay = 700,
-}: HoverTipProps) {
+export function HoverTip({ label, description, render, children, side = "bottom", delay = 700 }: HoverTipProps) {
   return (
     <TooltipProvider delay={delay}>
       <Tooltip>
         <TooltipTrigger render={render}>{children}</TooltipTrigger>
         <TooltipContent side={side} sideOffset={6} variant="glass">
-          <span className="font-semibold text-xs leading-none text-foreground">{label}</span>
-          <span className="mt-1 text-[10px] leading-snug text-muted-foreground">{description}</span>
+          <span className="font-semibold text-foreground text-xs leading-none">{label}</span>
+          <span className="mt-1 text-[10px] text-muted-foreground leading-snug">{description}</span>
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>

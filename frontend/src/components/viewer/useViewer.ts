@@ -1,5 +1,5 @@
 import { use } from "react";
-import { ViewerContext, type ViewerContextValue } from "../components/viewer/ViewerContext";
+import { ViewerContext, type ViewerContextValue } from "./ViewerContext";
 
 export function useViewer(): ViewerContextValue {
   const ctx = use(ViewerContext);

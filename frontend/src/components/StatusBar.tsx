@@ -4,8 +4,8 @@
  * Layout: [app name · embedding · mode] ── spacer ── [obs · sel · zoom · fps · ⌘K]
  */
 import { MoonIcon, SunIcon } from "lucide-react";
-import { useTheme } from "../providers/ThemeProvider";
-import { useScatterUIState } from "../providers/ScatterUIStateProvider";
+import { useTheme } from "../ThemeProvider";
+import { useScatterUIState } from "./scatter/ScatterUIStateProvider";
 
 function Dot() {
   return (
@@ -16,6 +16,7 @@ function Dot() {
 }
 
 export function StatusBar() {
+  // eslint-disable-next-line @typescript-eslint/unbound-method
   const { theme, toggle } = useTheme();
   const { fps, zoom, selectedCount, embeddingKey, numPoints } = useScatterUIState();
 

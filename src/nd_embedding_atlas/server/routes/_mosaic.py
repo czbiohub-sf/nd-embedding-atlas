@@ -68,6 +68,10 @@ def _handle_query(query: dict, state: ViewerState) -> Response:
         # __scatter_selection persist across the CREATE TABLE → SELECT query sequence.
         # DuckDB serializes concurrent access on the same connection internally.
         result = state.store.con.execute(sql)
+        # After ALTER TABLE obs_base ADD COLUMN, the cached dataset VIEW schema
+        # is stale — rebuild it so the new column (__ev_*_id) is visible.
+        if stripped.startswith("ALTER TABLE OBS_BASE ADD COLUMN"):
+            state.store._rebuild_view()
         if command == "exec":
             return JSONResponse({})
         if command == "arrow":

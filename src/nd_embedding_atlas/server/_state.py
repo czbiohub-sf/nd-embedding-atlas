@@ -85,6 +85,8 @@ class ViewerState:
         Resolved spatial column names.
     export_dir
         Resolved export directory path.
+    dataset_ome_versions
+        OME-Zarr version string per dataset key (e.g. ``"0.4"`` or ``"0.5"``).
     """
 
     def __init__(
@@ -96,6 +98,7 @@ class ViewerState:
         spatial: SpatialColumns,
         export_dir: pathlib.Path,
         dataset_plates: dict[str, pathlib.Path] | None = None,
+        dataset_ome_versions: dict[str, str] | None = None,
         project_config_path: pathlib.Path | None = None,
     ) -> None:
         self.collection = collection
@@ -104,6 +107,7 @@ class ViewerState:
         self.spatial = spatial
         self.export_dir = export_dir
         self.dataset_plates: dict[str, pathlib.Path] = dataset_plates or {}
+        self.dataset_ome_versions: dict[str, str] = dataset_ome_versions or {}
         self.project_config_path: pathlib.Path | None = project_config_path
 
         self.loading_tasks: dict[str, asyncio.Task[None]] = {}

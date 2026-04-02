@@ -10,12 +10,12 @@
  *   Data:          Float32Array (positions/rgba) or Uint8Array (categories)
  */
 import {
-  CategoryHeaderSchema,
-  ContinuousColorsHeaderSchema,
-  PositionHeaderSchema,
   type CategoryHeader,
+  CategoryHeaderSchema,
   type ContinuousColorsHeader,
+  ContinuousColorsHeaderSchema,
   type PositionHeader,
+  PositionHeaderSchema,
 } from "./schemas";
 
 /** Parsed result from /api/scatter-positions */

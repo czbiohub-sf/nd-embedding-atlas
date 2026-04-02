@@ -1,5 +1,5 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import type { RefObject } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import type { TrajectoryFrame } from "../../types";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -190,17 +190,17 @@ export const TrajectoryOverlaySvg = forwardRef<TrajectoryOverlaySvgHandle, Props
   }
 
   // Expose update() for GPU onViewChange — closure captures latest props via draw()
-  useImperativeHandle(ref, () => ({ update: draw }), [points, activeIndex, categoryColors, positionScale]);
+  useImperativeHandle(ref, () => ({ update: draw }), [draw]);
 
   // Redraw when props or measured size change
   useEffect(() => {
     draw();
-  }, [points, activeIndex, categoryColors, size]);
+  }, [draw]);
 
   return (
     <svg
       ref={svgRef}
-      className="absolute inset-0 pointer-events-none"
+      className="pointer-events-none absolute inset-0"
       width={size.w}
       height={size.h}
       style={{ overflow: "visible" }}

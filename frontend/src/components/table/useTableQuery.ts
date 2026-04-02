@@ -5,9 +5,9 @@
  * the frontend only holds ~500 rows in memory at any time.
  */
 
+import { useDebouncer } from "@tanstack/react-pacer";
 import type { Coordinator, Selection } from "@uwdata/mosaic-core";
 import { count, type FilterExpr, Query } from "@uwdata/mosaic-sql";
-import { useDebouncer } from "@tanstack/react-pacer";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useMosaicClient } from "../../hooks/useMosaicClient";
 import { filterExprToExpr, toRows } from "../../lib/mosaic-helpers";
@@ -110,7 +110,7 @@ export function useTableQuery(opts: UseTableQueryOptions): UseTableQueryResult {
       prevCacheKey.current = cacheKey;
       filterVersionDebouncer.maybeExecute();
     }
-  }, [cacheKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [cacheKey, filterVersionDebouncer.maybeExecute]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Build ORDER BY clause ───────────────────────────────────────
   const buildOrderBy = useCallback(() => {
@@ -132,7 +132,7 @@ export function useTableQuery(opts: UseTableQueryOptions): UseTableQueryResult {
         const offset = pageIndex * PAGE_SIZE;
         const colList = columns.map((c) => `"${c}"`).join(", ");
         const filterExpr = selection?.predicate(null);
-        const whereClause = filterExpr ? `WHERE ${filterExprToExpr(filterExpr)}` : "";
+        const whereClause = filterExpr ? `WHERE ${String(filterExprToExpr(filterExpr))}` : "";
         const sql = `SELECT "__row_index__", ${colList} FROM ${table} ${whereClause} ORDER BY ${buildOrderBy()} LIMIT ${PAGE_SIZE} OFFSET ${offset}`;
 
         const result = await coordinator.query(sql, { type: "arrow" });
@@ -191,7 +191,7 @@ export function useTableQuery(opts: UseTableQueryOptions): UseTableQueryResult {
         const entry = pagesRef.current.get(p);
         const needsFetch = !entry || entry.cacheKey !== activeKey;
         if (needsFetch && !pendingRef.current.has(p)) {
-          fetchPage(p);
+          void fetchPage(p);
         }
       }
     },
@@ -209,7 +209,7 @@ export function useTableQuery(opts: UseTableQueryOptions): UseTableQueryResult {
         const countSql = `
                     WITH target AS (SELECT * FROM ${table} WHERE __row_index__ = ${Number(rowIndex)})
                     SELECT COUNT(*) AS pos FROM ${table}
-                    WHERE ${filterExpr ? filterExprToExpr(filterExpr) : "TRUE"}
+                    WHERE ${filterExpr ? String(filterExprToExpr(filterExpr)) : "TRUE"}
                     AND (${sort ? `("${sort.column}" < (SELECT "${sort.column}" FROM target) OR ("${sort.column}" = (SELECT "${sort.column}" FROM target) AND __row_index__ <= ${Number(rowIndex)}))` : `__row_index__ <= ${Number(rowIndex)}`})
                 `;
         const result = await coordinator.query(countSql, { type: "arrow" });

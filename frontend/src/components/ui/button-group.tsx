@@ -22,8 +22,8 @@ export function ButtonGroup({ children, className, orientation = "horizontal" }:
         orientation === "vertical" && "flex-col",
         "[&>*]:rounded-none [&>*]:border-0 [&>*]:shadow-none",
         orientation === "horizontal"
-          ? "[&>*+*]:border-l [&>*+*]:border-input"
-          : "[&>*+*]:border-t [&>*+*]:border-input",
+          ? "[&>*+*]:border-input [&>*+*]:border-l"
+          : "[&>*+*]:border-input [&>*+*]:border-t",
         className,
       )}
     >

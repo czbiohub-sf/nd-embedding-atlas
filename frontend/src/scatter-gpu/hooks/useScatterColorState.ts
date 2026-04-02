@@ -1,13 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
 import type { Coordinator } from "@uwdata/mosaic-core";
+import { useEffect, useMemo, useState } from "react";
+import type { ColorMode } from "../../hooks/useColorMode";
+import { resolveColorMode } from "../../hooks/useColorMode";
 import { useColormapList, useColormapPalette } from "../../hooks/useColormaps";
 import { useColumnTypes } from "../../hooks/useColumnTypes";
-import { resolveColorMode } from "../../hooks/useColorMode";
-import type { ColorMode } from "../../hooks/useColorMode";
-import { makeCategoryColumn, type CategoryMapping } from "../../lib/category-column";
+import { type CategoryMapping, makeCategoryColumn } from "../../lib/category-column";
+import { type ColorSource, colorSourceFromString, colorSourceToString } from "../../lib/color-source";
 import { toRows } from "../../lib/mosaic-helpers";
 import type { Metadata } from "../../types";
-import { type ColorSource, colorSourceFromString, colorSourceToString } from "../../lib/color-source";
 
 export interface ScatterColorState {
   // Column selection
@@ -54,7 +54,7 @@ export function useScatterColorState(coordinator: Coordinator, metadata: Metadat
   // Reset override when color column changes
   useEffect(() => {
     setColorModeOverride(undefined);
-  }, [colorByColumn]);
+  }, []);
 
   const colorModeInfo = useMemo(
     () => resolveColorMode(colorByColumn, columnTypes, colorModeOverride),
@@ -133,10 +133,7 @@ export function useScatterColorState(coordinator: Coordinator, metadata: Metadat
   const categoryCol = coloredCategoryMapping?.indexColumn ?? null;
 
   const colorSource = useMemo(() => colorSourceFromString(colorByColumn), [colorByColumn]);
-  const setColorSource = useMemo(
-    () => (src: ColorSource) => setColorByColumn(colorSourceToString(src)),
-    [setColorByColumn],
-  );
+  const setColorSource = useMemo(() => (src: ColorSource) => setColorByColumn(colorSourceToString(src)), []);
 
   return {
     colorByColumn,

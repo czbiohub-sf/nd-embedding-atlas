@@ -1,0 +1,236 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+
+  // ── Plugins ────────────────────────────────────────────────────────────────
+  // Explicitly list ALL plugins. Setting "plugins" OVERWRITES the default set
+  // (eslint, typescript, unicorn, oxc). Must re-list defaults + add react, etc.
+  "plugins": [
+    "eslint",
+    "typescript",
+    "unicorn",
+    "oxc",
+    "react",
+    "react-perf",
+    "import"
+  ],
+
+  // ── Environment globals ────────────────────────────────────────────────────
+  "env": {
+    "browser": true,
+    "es2022": true
+  },
+
+  // ── Plugin-wide settings ───────────────────────────────────────────────────
+  "settings": {
+    "react": {
+      "version": "19.0.0"
+    }
+  },
+
+  // ── Ignore patterns ────────────────────────────────────────────────────────
+  "ignorePatterns": [
+    "dist/**",
+    "node_modules/**",
+    "src/components/ui/**"
+  ],
+
+  // ── Category defaults ──────────────────────────────────────────────────────
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn"
+  },
+
+  // ── Per-rule overrides (organized by ruff category equivalent) ─────────────
+  "rules": {
+
+    // ════════════════════════════════════════════════════════════════════════
+    // CORRECTNESS
+    // ════════════════════════════════════════════════════════════════════════
+
+    // Defer to typescript/no_unused_vars which handles TS symbols correctly
+    "no-unused-vars": "off",
+    "typescript/no_unused_vars": ["warn", {
+      "argsIgnorePattern": "^_",
+      "varsIgnorePattern": "^_",
+      "ignoreRestSiblings": true
+    }],
+
+    // ════════════════════════════════════════════════════════════════════════
+    // REACT HOOKS — ruff B equivalent for React
+    // ════════════════════════════════════════════════════════════════════════
+
+    // FIXED: was "react-hooks/exhaustive-deps" (wrong plugin prefix — was silently doing nothing)
+    "react/rules_of_hooks": "error",
+    // warn not error: auto-fixer rewrites intentional dep arrays
+    "react/exhaustive_deps": "warn",
+    "react/only_export_components": ["warn", { "allowConstantExport": true }],
+
+    // ════════════════════════════════════════════════════════════════════════
+    // TYPE SAFETY — ruff B (bugbear) + TRY (tryceratops)
+    // ════════════════════════════════════════════════════════════════════════
+
+    // warn not error — TypeGPU uses complex inference patterns; see scatter-gpu/ override
+    "@typescript-eslint/no-explicit-any": "warn",
+
+    // TypeGPU uses inline import() type patterns — warn only
+    "typescript/consistent_type_imports": ["warn", {
+      "prefer": "type-imports",
+      "fixStyle": "separate-type-imports"
+    }],
+
+    // Unhandled promise rejections — maps to ruff B (async bugbear rules)
+    "typescript/no_floating_promises": "error",
+
+    // Passing async where sync expected — catches useEffect(async () => {})
+    "typescript/no_misused_promises": "error",
+
+    // return await in try/catch — maps to ruff TRY300
+    "typescript/return_await": "error",
+
+    // Only throw Error objects — maps to ruff TRY002
+    "typescript/only_throw_error": "error",
+
+    // ════════════════════════════════════════════════════════════════════════
+    // TYPESCRIPT MODERNIZATION — ruff UP (pyupgrade)
+    // ════════════════════════════════════════════════════════════════════════
+
+    // Prefer ?? over || — UP007 equivalent
+    "typescript/prefer_nullish_coalescing": "warn",
+
+    // Prefer a?.b over a && a.b — warn not error; auto-fix can change semantics
+    // if the chain intentionally short-circuits on falsy values (0, "")
+    "typescript/prefer_optional_chain": "warn",
+
+    // Ban String, Number, Boolean wrapper object types — UP018 equivalent
+    "typescript/no_wrapper_object_types": "error",
+
+    // Ban {} as a type
+    "typescript/no_empty_object_type": "warn",
+
+    // Ban @ts-ignore; prefer @ts-expect-error with description
+    "typescript/ban_ts_comment": ["warn", {
+      "ts-ignore": "allow-with-description",
+      "ts-expect-error": "allow-with-description",
+      "minimumDescriptionLength": 10
+    }],
+
+    // Prefer as const over literal type assertions
+    "typescript/prefer_as_const": "warn",
+
+    // Remove type assertions that don't change the type
+    "typescript/no_unnecessary_type_assertion": "warn",
+
+    // ════════════════════════════════════════════════════════════════════════
+    // STYLE — ruff E, W
+    // ════════════════════════════════════════════════════════════════════════
+
+    "prefer-const": "error",
+    "no-console": "off",
+    "eqeqeq": ["error", "always"],
+    "no-var": "error",
+    "object-shorthand": ["warn", "always"],
+    "no-eval": "error",
+    // ruff B012
+    "no-unsafe-finally": "error",
+    // ruff B023
+    "no-loop-func": "error",
+    // ruff TRY200/TRY201
+    "no-useless-catch": "error",
+    // ruff B025
+    "no-duplicate-case": "error",
+
+    // ════════════════════════════════════════════════════════════════════════
+    // UNICORN MODERNIZATION — ruff C4 + UP + PERF
+    // ════════════════════════════════════════════════════════════════════════
+
+    "unicorn/prefer_includes": "warn",
+    "unicorn/prefer_string_starts_ends_with": "warn",
+    "unicorn/prefer_array_flat_map": "warn",
+    "unicorn/prefer_negative_index": "warn",
+    "unicorn/prefer_array_find": "warn",
+    // ruff TRY004
+    "unicorn/prefer_type_error": "warn",
+    "unicorn/no_useless_undefined": "warn",
+    // OFF: codebase uses null extensively for React refs and DuckDB nullable columns
+    "unicorn/no_null": "off",
+    // OFF: .forEach() is idiomatic in TanStack callbacks
+    "unicorn/no_array_for_each": "off",
+
+    // ════════════════════════════════════════════════════════════════════════
+    // REACT PERFORMANCE — ruff PERF equivalent for React
+    // ════════════════════════════════════════════════════════════════════════
+
+    "react-perf/jsx_no_new_array_as_prop": "warn",
+    "react-perf/jsx_no_new_object_as_prop": "warn",
+    "react-perf/jsx_no_new_function_as_prop": "warn",
+    "react-perf/jsx_no_jsx_as_prop": "warn",
+
+    // ════════════════════════════════════════════════════════════════════════
+    // OXC-SPECIFIC — ruff B (bugbear) + PERF
+    // ════════════════════════════════════════════════════════════════════════
+
+    // O(n²) spread in reduce — critical for Mosaic/DuckDB obs array pipelines
+    // ruff PERF101 equivalent
+    "oxc/no_accumulating_spread": "error",
+    // x < y < z comparison chains — always true/false, logic bug
+    "oxc/bad_comparison_sequence": "error",
+    // Code that looks like it should throw but doesn't
+    "oxc/missing_throw": "error",
+
+    // ════════════════════════════════════════════════════════════════════════
+    // IMPORT HYGIENE — ruff I (isort) + TID (tidy-imports)
+    // ════════════════════════════════════════════════════════════════════════
+
+    "import/no_duplicates": "error",
+    "import/no_self_import": "error",
+    // warn only — can be slow on large codebases
+    "import/no_cycle": "warn",
+
+    // ════════════════════════════════════════════════════════════════════════
+    // REACT JSX STYLE
+    // ════════════════════════════════════════════════════════════════════════
+
+    "react/self_closing_comp": ["warn", { "html": false }],
+    "react/jsx_fragments": ["warn", "syntax"],
+    "react/jsx_boolean_value": ["warn", "never"],
+    "react/no_unknown_property": "error",
+    "react/no_danger": "warn",
+    "react/jsx_no_target_blank": "error",
+    "react/jsx_key": ["error", { "checkFragmentShorthand": true }],
+
+    // OFF: false positives on destructured React/TanStack hook methods
+    // (no 'this' binding issue when methods are pure functions)
+    "typescript/unbound-method": "off"
+  },
+
+  // ── File-scoped overrides ──────────────────────────────────────────────────
+  "overrides": [
+    {
+      // scatter-gpu/ uses non-null assertions for GPU device handles (GPUDevice,
+      // GPUBuffer, etc.) and any types for TypeGPU opaque APIs — relax both
+      "files": [
+        "src/scatter-gpu/**/*.ts",
+        "src/scatter-gpu/**/*.tsx"
+      ],
+      "rules": {
+        "typescript/no_non_null_assertion": "off",
+        "@typescript-eslint/no-explicit-any": "off",
+        // GPU pipelines use bare Promise chains without await
+        "typescript/no_floating_promises": "warn"
+      }
+    },
+    {
+      "files": [
+        "**/*.test.ts",
+        "**/*.test.tsx",
+        "**/*.spec.ts",
+        "**/*.spec.tsx"
+      ],
+      "rules": {
+        "@typescript-eslint/no-explicit-any": "off",
+        "typescript/no_non_null_assertion": "off",
+        "typescript/no_floating_promises": "off"
+      }
+    }
+  ]
+}

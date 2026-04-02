@@ -26,8 +26,7 @@ def _column_exists(state: ViewerState, col_name: str) -> bool:
     """Return True if col_name is already a column in obs_base."""
     with state.store.cursor() as cur:
         rows = cur.execute(
-            "SELECT column_name FROM information_schema.columns "
-            "WHERE table_name = 'obs_base' AND column_name = ?",
+            "SELECT column_name FROM information_schema.columns WHERE table_name = 'obs_base' AND column_name = ?",
             [col_name],
         ).fetchall()
     return len(rows) > 0

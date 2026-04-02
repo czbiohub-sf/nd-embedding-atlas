@@ -1,6 +1,6 @@
 import { type Layer, ProjectedLineLayer, type Viewport } from "@idetik/core";
 import { useCallback, useEffect, useRef } from "react";
-import type { ObsBbox } from "../types";
+import type { ObsBbox } from "../../types";
 
 type BboxPath = [number, number, number][];
 

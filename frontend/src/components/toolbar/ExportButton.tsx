@@ -5,7 +5,7 @@ import { useDashboard } from "../../hooks/useDashboard";
 import { useMosaicClient } from "../../hooks/useMosaicClient";
 import { filterExprToExpr } from "../../lib/mosaic-helpers";
 
-const ExportDialog = lazy(() => import("../export/ExportDialog"));
+const ExportDialog = lazy(() => import("./ExportDialog"));
 
 interface PointCounts {
   total: number;

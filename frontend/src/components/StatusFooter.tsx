@@ -4,23 +4,24 @@
  */
 
 import { MoonIcon, SunIcon } from "lucide-react";
-import { useTheme } from "../providers/ThemeProvider";
-import { useScatterUIState } from "../providers/ScatterUIStateProvider";
-import { useTerminalTable } from "../providers/TerminalTableProvider";
-import { Kbd, KbdGroup } from "./ui/kbd";
 import { cn } from "../lib/utils";
+import { useTheme } from "../ThemeProvider";
+import { useScatterUIState } from "./scatter/ScatterUIStateProvider";
+import { useTerminalTable } from "./table/TerminalTableProvider";
+import { Kbd, KbdGroup } from "./ui/kbd";
 
 function Dot() {
   return <span className="mx-1.5 text-border-active">·</span>;
 }
 
 export function StatusFooter() {
+  // eslint-disable-next-line @typescript-eslint/unbound-method
   const { theme, toggle: toggleTheme } = useTheme();
   const { fps, zoom, selectedCount, embeddingKey, numPoints } = useScatterUIState();
   const { toggle: toggleTable, open: tableOpen } = useTerminalTable();
 
   return (
-    <div className="status-bar fixed bottom-0 left-0 right-0 z-50 h-[var(--footer-height,1.5rem)]">
+    <div className="status-bar fixed right-0 bottom-0 left-0 z-50 h-[var(--footer-height,1.5rem)]">
       {/* ── Left: branding + context ── */}
       <span className="font-medium text-text-secondary">ndea</span>
 

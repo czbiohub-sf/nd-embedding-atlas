@@ -2,8 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useDashboard } from "../../hooks/useDashboard";
 import { predicateToSql, toRows } from "../../lib/mosaic-helpers";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "../ui/dialog";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "../ui/input-group";
 
 interface DatasetBreakdown {
@@ -38,7 +38,7 @@ export default function ExportDialog({ open, onOpenChange, filtered }: Props) {
     const hasDatasetCol = state.metadata.obs_columns?.includes("_dataset");
     if (predicate && hasDatasetCol) {
       const sql = `SELECT _dataset, COUNT(*) as n FROM ${meta.table} WHERE ${predicate} GROUP BY _dataset ORDER BY n DESC`;
-      meta.coordinator.query(sql, { type: "json" }).then((result: unknown) => {
+      void meta.coordinator.query(sql, { type: "json" }).then((result: unknown) => {
         setBreakdown(toRows<DatasetBreakdown>(result));
       });
     }
@@ -124,7 +124,7 @@ export default function ExportDialog({ open, onOpenChange, filtered }: Props) {
 
         {/* Filename input */}
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="export-filename" className="text-xs text-muted-foreground">
+          <label htmlFor="export-filename" className="text-muted-foreground text-xs">
             Filename
           </label>
           <InputGroup>
@@ -134,12 +134,12 @@ export default function ExportDialog({ open, onOpenChange, filtered }: Props) {
               onChange={(e) => setFilename(e.target.value)}
               className="font-mono"
               onKeyDown={(e) => {
-                if (e.key === "Enter" && filename.trim()) handleExport();
+                if (e.key === "Enter" && filename.trim()) void handleExport();
               }}
               // biome-ignore lint/a11y/noAutofocus: intentional — first field in a modal
               autoFocus
             />
-            <InputGroupAddon align="inline-end" className="self-stretch py-0 border-l border-input bg-muted px-2.5">
+            <InputGroupAddon align="inline-end" className="self-stretch border-input border-l bg-muted px-2.5 py-0">
               .zarr
             </InputGroupAddon>
           </InputGroup>

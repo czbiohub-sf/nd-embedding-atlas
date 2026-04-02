@@ -8,7 +8,7 @@ export interface DashboardState {
   metadata: Metadata;
   highlightId: string | null;
   panels: ChartPanelEntry[];
-  trajectory: TrajectoryData | null;
+  trajectories: Record<string, TrajectoryData | null>;
 }
 
 // ── Actions: what the dashboard can do ─────────────────────────────────────
@@ -20,7 +20,8 @@ export interface DashboardActions {
   reorderPanels: (ids: string[]) => void;
   refreshMetadata: () => Promise<void>;
   setTrajectory: (data: TrajectoryData | null) => void;
-  setTrajectoryTIndex: (t: number) => void;
+  setTrajectoryTIndex: (key: string, t: number) => void;
+  clearTrajectory: (key: string) => void;
 }
 
 // ── Meta: shared refs and infrastructure (not serializable) ────────────────
@@ -40,3 +41,21 @@ export interface DashboardContextValue {
 }
 
 export const DashboardContext = createContext<DashboardContextValue | null>(null);
+
+// ── Trajectory selectors ───────────────────────────────────────────────────
+
+/** Dataset-scoped lookup — use only in components tied to a specific dataset. */
+export function selectTrajectory(
+  trajectories: Record<string, TrajectoryData | null>,
+  datasetKey: string | undefined,
+): TrajectoryData | null {
+  return trajectories[datasetKey ?? ""] ?? null;
+}
+
+/** Returns the first non-null trajectory — use in cross-dataset components. */
+export function selectAnyTrajectory(trajectories: Record<string, TrajectoryData | null>): TrajectoryData | null {
+  for (const v of Object.values(trajectories)) {
+    if (v != null) return v;
+  }
+  return null;
+}

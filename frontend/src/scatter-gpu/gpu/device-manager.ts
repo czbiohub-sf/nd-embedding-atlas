@@ -13,8 +13,19 @@ export async function acquireDevice(): Promise<DeviceInfo> {
   if (_shared) return _shared;
   if (_initPromise) return _initPromise;
   _initPromise = (async () => {
-    const adapter = await navigator.gpu?.requestAdapter();
-    if (!adapter) throw new Error("WebGPU adapter not available");
+    if (!navigator.gpu) {
+      throw new Error(
+        "WebGPU is not supported in this browser. " +
+          "If you are on HPC, enable Vulkan flags in chrome://flags — see docs/webgpu-hpc-setup.md for details.",
+      );
+    }
+    const adapter = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
+    if (!adapter) {
+      throw new Error(
+        "No WebGPU adapter found. " +
+          "If you are on HPC, enable #enable-vulkan, #default-angle-vulkan, #vulkan-from-angle, and #enable-unsafe-webgpu in chrome://flags, then relaunch Chrome.",
+      );
+    }
     const vendor = ((adapter as any).info?.vendor ?? "").toLowerCase();
     const preferredWorkgroupSize: 64 | 256 = vendor.includes("apple") ? 64 : 256;
     const device = await adapter.requestDevice({

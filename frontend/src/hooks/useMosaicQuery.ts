@@ -13,13 +13,14 @@
  * the current brushPredicateStore.version as a cache-key dep so the query
  * automatically re-runs when the cross-filter predicate changes.
  */
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+
 import type { UseQueryResult } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useStore } from "@tanstack/react-store";
 import type { Coordinator } from "@uwdata/mosaic-core";
 import type { FilterExpr } from "@uwdata/mosaic-sql";
-import { brushPredicateStore } from "../providers/BrushPredicateStore";
 import { stringPredicate } from "../lib/mosaic-helpers";
+import { brushPredicateStore } from "../stores/BrushPredicateStore";
 
 // ── Static query (no Selection dependency) ──────────────────────────────────
 

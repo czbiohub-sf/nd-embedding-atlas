@@ -5,16 +5,16 @@
  * All state and callbacks live in ScatterPanel; this component is pure UI.
  */
 
-import type { ColorMode } from "../../scatter-gpu/hooks/useMosaicScatterData";
-import type { AxisState } from "../../types";
-import { CompactSelect } from "../ui/select";
-import { Button } from "../ui/button";
-import { Separator } from "../ui/separator";
-import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
-import { ToggleGroup, ToggleGroupItem } from "../ui/toggle-group";
-import { Lock, LockOpen, BoxSelect, LassoSelect } from "lucide-react";
 import { useStore } from "@tanstack/react-store";
-import { viewSyncStore, toggleViewLock } from "../../providers/ViewSyncStore";
+import { BoxSelect, LassoSelect, Lock, LockOpen } from "lucide-react";
+import type { ColorMode } from "../../scatter-gpu/hooks/useMosaicScatterData";
+import { toggleViewLock, viewSyncStore } from "../../stores/ViewSyncStore";
+import type { AxisState } from "../../types";
+import { Button } from "../ui/button";
+import { CompactSelect } from "../ui/select";
+import { Separator } from "../ui/separator";
+import { ToggleGroup, ToggleGroupItem } from "../ui/toggle-group";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 
 export interface ScatterControlStripProps {
   axes: AxisState;
@@ -73,7 +73,7 @@ export function ScatterControlStrip({
   const isLinked = lockMode === "linked";
 
   return (
-    <div className="flex shrink-0 items-center gap-2 border-b border-border-subtle px-2 py-1 text-text-secondary">
+    <div className="flex shrink-0 items-center gap-2 border-border-subtle border-b px-2 py-1 text-text-secondary">
       <label className="flex items-center gap-1.5">
         <span className="font-medium text-[10px] text-text-muted uppercase tracking-wider">Embedding</span>
         <CompactSelect
@@ -141,7 +141,7 @@ export function ScatterControlStrip({
               max={256}
               value={maxCategories}
               onChange={(e) => onSetMaxCategories(Math.max(2, Math.min(256, Number(e.target.value))))}
-              className="w-14 h-6 rounded border border-border bg-input px-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+              className="h-6 w-14 rounded border border-border bg-input px-1.5 text-foreground text-xs focus:outline-none focus:ring-1 focus:ring-ring"
             />
           </label>
         </>
@@ -195,7 +195,7 @@ export function ScatterControlStrip({
           </Tooltip>
         </ToggleGroup>
 
-        <Separator orientation="vertical" className="h-4 mx-0.5" />
+        <Separator orientation="vertical" className="mx-0.5 h-4" />
 
         <Tooltip>
           <TooltipTrigger>

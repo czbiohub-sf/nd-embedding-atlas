@@ -18,7 +18,7 @@ def _materialize_embedding(key: str, collection: "AnnDataCollection") -> np.ndar
     """Materialize an obsm key to float32 numpy array (runs in thread pool).
 
     Uses the fast direct-read path (zarr/h5py) when possible, bypassing
-    AnnData/dask overhead (60× faster on 1M-cell zarr stores).
+    AnnData/dask overhead (60x faster on 1M-cell zarr stores).
     """
     from nd_embedding_atlas.io._get import get_obsm
 

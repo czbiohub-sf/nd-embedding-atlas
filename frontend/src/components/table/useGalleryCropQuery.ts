@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { TrajectoryFrame } from "../types";
-import type { ChannelHash } from "../lib/branded-types";
-import type { ChannelDef } from "../components/viewer/ViewerContext";
+import type { ChannelHash } from "../../lib/branded-types";
+import type { TrajectoryFrame } from "../../types";
+import type { ChannelDef } from "../viewer/ViewerContext";
 
 /** Stable query key for a single obs coordinate lookup. */
 export const obsCoordKey = (rowIndex: number) => ["obs-coord", rowIndex] as const;
@@ -21,14 +21,7 @@ interface GalleryCropQueryParams {
  * Coordinates are converted from µm to pixels using plate_pixel_scale.
  * Blob URL lifecycle is managed at the gallery level (gcTime: 0 + cleanup revocation).
  */
-export function useGalleryCropQuery({
-  fovName,
-  datasetKey,
-  frame,
-  channels,
-  hash,
-  enabled,
-}: GalleryCropQueryParams) {
+export function useGalleryCropQuery({ fovName, datasetKey, frame, channels, hash, enabled }: GalleryCropQueryParams) {
   const queryClient = useQueryClient();
 
   return useQuery<string>({
@@ -40,9 +33,7 @@ export function useGalleryCropQuery({
       let xPx = 0;
       let yPx = 0;
       if (frame.rowIndex != null) {
-        const cached = queryClient.getQueryData<{ x: number; y: number }>(
-          obsCoordKey(frame.rowIndex),
-        );
+        const cached = queryClient.getQueryData<{ x: number; y: number }>(obsCoordKey(frame.rowIndex));
         if (cached) {
           xPx = Math.round(cached.x);
           yPx = Math.round(cached.y);

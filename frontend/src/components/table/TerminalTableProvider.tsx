@@ -6,8 +6,8 @@
  * Registers ⌘J hotkey to toggle open/closed.
  */
 
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 import { useHotkey } from "@tanstack/react-hotkeys";
+import { createContext, type ReactNode, useCallback, useContext, useMemo, useState } from "react";
 
 const HEIGHT_KEY = "ndea_table_height";
 const DEFAULT_HEIGHT = 300;

@@ -17,6 +17,7 @@ from nd_embedding_atlas.server._state import ViewerState
 class _SelectionBody(BaseModel):
     row_indices: list[int]
 
+
 if TYPE_CHECKING:
     pass
 
@@ -250,7 +251,7 @@ def make_scatter_router(get_state: Callable[[], ViewerState]) -> APIRouter:
             rgb = sample_continuous_colormap(colormap, normalised)
 
             # Build uint8 RGBA (N, 4) with alpha = 255.
-            # 4× smaller than float32 RGBA — frontend does zero-copy Uint32Array reinterpret.
+            # 4x smaller than float32 RGBA — frontend does zero-copy Uint32Array reinterpret.
             n = len(values)
             rgba_u8 = np.empty((n, 4), dtype=np.uint8)
             rgba_u8[:, :3] = rgb
@@ -286,13 +287,9 @@ def make_scatter_router(get_state: Callable[[], ViewerState]) -> APIRouter:
             arr = pa.array(row_indices, type=pa.uint32())
             tbl = pa.table({"row_index": arr})  # noqa: F841 — DuckDB reads local PyArrow vars
             state.store.con.execute("DROP TABLE IF EXISTS __scatter_selection")
-            state.store.con.execute(
-                "CREATE TEMP TABLE __scatter_selection AS SELECT * FROM tbl"
-            )
+            state.store.con.execute("CREATE TEMP TABLE __scatter_selection AS SELECT * FROM tbl")
 
-        await asyncio.get_running_loop().run_in_executor(
-            state.executor, _write, body.row_indices
-        )
+        await asyncio.get_running_loop().run_in_executor(state.executor, _write, body.row_indices)
         return {"ok": True, "count": len(body.row_indices)}
 
     @router.delete("/api/scatter-selection")

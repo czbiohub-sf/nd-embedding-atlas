@@ -8,103 +8,34 @@
  * Blob URL lifecycle: gcTime=0 + cleanup revocation on gallery unmount.
  */
 
-import { useEffect, useRef, useState } from "react";
-import { useVirtualizer } from "@tanstack/react-virtual";
 import { useQueryClient } from "@tanstack/react-query";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import { useEffect, useRef, useState } from "react";
+import { selectAnyTrajectory } from "../../dashboard/DashboardContext";
 import { useDashboard } from "../../hooks/useDashboard";
-import { useGalleryChannels } from "../../hooks/useGalleryChannels";
-import { obsCoordKey } from "../../hooks/useGalleryCropQuery";
-import { useGalleryCropQuery } from "../../hooks/useGalleryCropQuery";
-import { cn } from "../../lib/utils";
-import type { TrajectoryFrame } from "../../types";
-import type { ChannelDef } from "../viewer/ViewerContext";
-import type { ChannelHash } from "../../lib/branded-types";
+import { TrackGalleryCard } from "./TrackGalleryCard";
+import { useGalleryChannels } from "./useGalleryChannels";
+import { obsCoordKey } from "./useGalleryCropQuery";
 
 const CARD_SIZE = 230; // px — image (200) + footer (~30)
 const CARD_GAP = 10;
 const MIN_COL_WIDTH = 180;
 
-// ── Card ──────────────────────────────────────────────────────────────────────
-
-interface CardProps {
-  frame: TrajectoryFrame;
-  fovName: string;
-  isActive: boolean;
-  onClick: () => void;
-  fetchEnabled: boolean;
-  settledChannels: readonly ChannelDef[];
-  settledHash: ChannelHash;
-  datasetKey?: string;
-}
-
-function TrackGalleryCard({
-  frame,
-  fovName,
-  isActive,
-  onClick,
-  fetchEnabled,
-  settledChannels,
-  settledHash,
-  datasetKey,
-}: CardProps) {
-  const { data: blobUrl, isLoading } = useGalleryCropQuery({
-    fovName,
-    frame,
-    channels: settledChannels,
-    hash: settledHash,
-    datasetKey,
-    enabled: fetchEnabled && settledChannels.length > 0,
-  });
-
-  return (
-    <div
-      onClick={onClick}
-      className={cn(
-        "group relative flex cursor-pointer flex-col overflow-hidden rounded-lg border-2 bg-background transition-all duration-150",
-        isActive
-          ? "border-primary shadow-[0_0_0_3px_oklch(0.585_0.233_277.117/0.2)]"
-          : "border-border/40 hover:border-border/70",
-      )}
-    >
-      <div className="relative aspect-square w-full overflow-hidden bg-black">
-        {(isLoading || !blobUrl) && <div className="absolute inset-0 animate-pulse bg-muted/20" />}
-        {blobUrl && <img src={blobUrl} alt={`T=${frame.t}`} className="absolute inset-0 h-full w-full object-cover" />}
-        {isActive && (
-          <div className="absolute right-1.5 top-1.5 rounded bg-primary px-1.5 py-0.5 text-[9px] font-semibold text-primary-foreground">
-            NOW
-          </div>
-        )}
-      </div>
-      <div
-        className={cn(
-          "flex flex-col gap-0.5 border-t px-2 py-1.5",
-          isActive ? "border-primary/30 bg-primary/5" : "border-border/30 bg-muted/10",
-        )}
-      >
-        <span className={cn("text-[11px] font-medium tabular-nums", isActive ? "text-primary" : "text-foreground/70")}>
-          T = {frame.t}
-        </span>
-        {frame.category != null && <span className="text-[9px] text-muted-foreground/60">{frame.category}</span>}
-        <span className="text-[9px] text-muted-foreground/40 tabular-nums">
-          {frame.spatial_x.toFixed(1)} · {frame.spatial_y.toFixed(1)} µm
-        </span>
-      </div>
-    </div>
-  );
-}
-
-// ── Gallery ───────────────────────────────────────────────────────────────────
-
 interface TrackGalleryProps {
   activeFrame: number;
   onFrameSelect: (index: number) => void;
+  datasetKey?: string;
 }
 
-export function TrackGallery({ activeFrame, onFrameSelect }: TrackGalleryProps) {
+export function TrackGallery({ activeFrame, onFrameSelect, datasetKey }: TrackGalleryProps) {
   const { state } = useDashboard();
-  const { trajectory } = state;
-  const { channels: settledChannels, hash: settledHash, isPending } = useGalleryChannels(300);
-
+  const trajectory = selectAnyTrajectory(state.trajectories);
+  // Use || not ?? so empty string "" (single-dataset mode) falls through to "docked"
+  const {
+    channels: settledChannels,
+    hash: settledHash,
+    isPending,
+  } = useGalleryChannels(trajectory?.datasetKey || datasetKey || "docked", 300);
 
   const queryClient = useQueryClient();
 
@@ -177,15 +108,11 @@ export function TrackGallery({ activeFrame, onFrameSelect }: TrackGalleryProps) 
   // and populate the cache so individual crop queries skip their obs fetch.
   useEffect(() => {
     if (!trajectory) return;
-    const rowIndices = trajectory.points
-      .map((p) => p.rowIndex)
-      .filter((id): id is number => id != null);
+    const rowIndices = trajectory.points.map((p) => p.rowIndex).filter((id): id is number => id != null);
     if (rowIndices.length === 0) return;
 
     // Skip if all are already cached
-    const missing = rowIndices.filter(
-      (id) => !queryClient.getQueryData(obsCoordKey(id)),
-    );
+    const missing = rowIndices.filter((id) => !queryClient.getQueryData(obsCoordKey(id)));
     if (missing.length === 0) return;
 
     void fetch(`/api/obs/batch?ids=${missing.join(",")}`)
@@ -195,7 +122,9 @@ export function TrackGallery({ activeFrame, onFrameSelect }: TrackGalleryProps) 
           queryClient.setQueryData(obsCoordKey(Number(idStr)), coords);
         }
       })
-      .catch(() => {/* silently ignore — crop queries fall back to individual fetches */});
+      .catch(() => {
+        /* silently ignore — crop queries fall back to individual fetches */
+      });
   }, [trajectory, queryClient]);
 
   // ── Crop prefetch for items just outside the viewport ─────────────────────
@@ -214,9 +143,8 @@ export function TrackGallery({ activeFrame, onFrameSelect }: TrackGalleryProps) 
       const qKey = ["crop", trajectory.fovName, frame.t ?? null, settledHash];
       if (queryClient.getQueryData(qKey)) continue; // already cached
 
-      const cachedObs = frame.rowIndex != null
-        ? queryClient.getQueryData<{ x: number; y: number }>(obsCoordKey(frame.rowIndex))
-        : null;
+      const cachedObs =
+        frame.rowIndex != null ? queryClient.getQueryData<{ x: number; y: number }>(obsCoordKey(frame.rowIndex)) : null;
       if (!cachedObs) continue; // wait for batch obs to populate first
 
       void queryClient.prefetchQuery({
