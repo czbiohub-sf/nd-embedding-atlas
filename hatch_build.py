@@ -13,7 +13,7 @@ class CustomBuildHook(BuildHookInterface):
     """Build the React frontend if ``frontend/dist/`` does not already exist."""
 
     def initialize(self, version, build_data):
-        """Run ``pnpm build`` in ``frontend/`` if ``dist/`` is missing."""
+        """Build the frontend using vp (vite-plus), with graceful fallbacks for HPC environments."""
         frontend_dir = Path(self.root) / "frontend"
         dist_dir = frontend_dir / "dist"
 
@@ -21,16 +21,30 @@ class CustomBuildHook(BuildHookInterface):
             self.app.display_info("Frontend dist/ exists, skipping build")
             return
 
+        # ── Resolve pnpm ──────────────────────────────────────────────────────
+        # HPC environments typically have Node.js as a module but not pnpm globally.
+        # npx can download and run pnpm on demand.
         if shutil.which("pnpm"):
             pnpm_cmd = ["pnpm"]
         elif shutil.which("npx"):
             pnpm_cmd = ["npx", "pnpm"]
         else:
-            msg = "pnpm (or npx) is required to build the frontend. Install: npm i -g pnpm"
+            msg = "Node.js (with npx) is required to build the frontend. Load it with: module load nodejs"
             raise RuntimeError(msg)
 
         self.app.display_info("Installing frontend dependencies...")
-        subprocess.run([*pnpm_cmd, "install", "--frozen-lockfile", "--force"], cwd=str(frontend_dir), check=True)
+        subprocess.run([*pnpm_cmd, "install", "--frozen-lockfile"], cwd=str(frontend_dir), check=True)
 
-        self.app.display_info("Building frontend...")
-        subprocess.run([*pnpm_cmd, "build"], cwd=str(frontend_dir), check=True)
+        # ── Resolve vp (vite-plus) ────────────────────────────────────────────
+        # Prefer a globally installed vp; fall back to npx which downloads
+        # vite-plus on demand (works on HPC with Node.js but no global vp).
+        if shutil.which("vp"):
+            vp_cmd = ["vp"]
+        elif shutil.which("npx"):
+            vp_cmd = ["npx", "vite-plus"]
+        else:
+            msg = "npx not found. Ensure Node.js is loaded: module load nodejs"
+            raise RuntimeError(msg)
+
+        self.app.display_info(f"Building frontend with: {' '.join(vp_cmd)}")
+        subprocess.run([*vp_cmd, "build"], cwd=str(frontend_dir), check=True)

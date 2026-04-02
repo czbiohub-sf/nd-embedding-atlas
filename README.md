@@ -4,41 +4,64 @@
 | :---------: | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
 |  **Meta**   | [![Hatch][badge-hatch]][link-hatch] [![uv][badge-uv]][link-uv] [![Ruff][badge-ruff]][link-ruff] [![prek][badge-prek]][link-prek] [![License][badge-license]][link-license] |
 
-An interactive browser-based dashboard that bridges the gap between abstract AI embeddings and biological ground truth by linking high-dimensional feature points directly to their source nD image data for rapid exploration and annotation.
+An interactive browser-based dashboard that links high-dimensional AI embeddings to source 5D (TCZYX) image data for rapid exploration and annotation.
 
-## Getting started
+## Quick start
 
-Please refer to the [documentation][docs-link].
+**1. Install [uv](https://docs.astral.sh/uv/) if you don't have it:**
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
 
-## Installation
+**2. Install nd-embedding-atlas:**
+```bash
+uv tool install "git+ssh://git@github.com/czbiohub-sf/nd-embedding-atlas.git@main"
+```
 
-You need to have Python 3.12 or newer installed on your system.
-If you don't have Python installed, we recommend installing [uv][uv-link].
-Building from source also requires [pnpm][pnpm-link] for the frontend (`npm install -g pnpm`).
+**3. Launch the viewer:**
+```bash
+ndea path/to/data.zarr
+ndea path/to/data.zarr path/to/plate.zarr   # with OME-Zarr image viewer
+ndea path/to/config.yaml                     # multi-dataset config
+```
 
-1. Install the latest development version:
+Then open **Chrome or Edge** at `http://localhost:5055`.
+
+> **WebGPU required** — Chrome or Edge on a machine with a GPU. Firefox is not supported.
+> On HPC systems, see the [WebGPU setup guide][webgpu-hpc].
+
+## Upgrade
 
 ```bash
-pip install git+https://github.com/czbiohub-sf/nd-embedding-atlas.git@main
+uv tool upgrade nd-embedding-atlas
 ```
+
+## Documentation
+
+Full documentation at [czbiohub-sf.github.io/nd-embedding-atlas][docs-link]:
+
+- [Getting started][docs-index] — installation and first run
+- [Preparing your data][docs-data] — OME-Zarr layout, sharding, pyramids
+- [OPS datasets][docs-ops] — optical pooled screening workflow
+- [WebGPU on HPC][webgpu-hpc] — Chrome flags for HPC systems
+- [Contributing][docs-contrib] — dev setup and contribution guide
+
+## What does the UI look like?
+
+<img width="1466" height="1083" alt="image" src="https://github.com/user-attachments/assets/9f70cbee-1853-445e-bb86-c9e5fdd143c1" />
+
+## Contact
+
+For questions and help requests, reach out in the [discussions][discussions-link].
+For bugs or feature requests, use the [issue tracker][issue-tracker].
+
+## Citation
+
+> t.b.a.
 
 ## Release notes
 
 See the [changelog][].
-
-## Contact
-
-For questions and help requests, you can reach out in the [discussions][discussions-link].
-If you found a bug or want a new feature, please use the [issue tracker][issue-tracker].
-
-## Citation
-
-> t.b.a
-
-
-## What does the UI look like?
-<img width="1466" height="1083" alt="image" src="https://github.com/user-attachments/assets/9f70cbee-1853-445e-bb86-c9e5fdd143c1" />
-
 
 <!-- badges -->
 [badge-hatch]: https://img.shields.io/badge/%F0%9F%A5%9A-Hatch-4051b5.svg
@@ -54,9 +77,12 @@ If you found a bug or want a new feature, please use the [issue tracker][issue-t
 [link-license]: https://opensource.org/licenses/BSD-3-Clause
 
 <!-- links -->
-[uv-link]: https://github.com/astral-sh/uv
-[pnpm-link]: https://pnpm.io/
 [issue-tracker]: https://github.com/czbiohub-sf/nd-embedding-atlas/issues
 [discussions-link]: https://github.com/czbiohub-sf/nd-embedding-atlas/discussions
 [docs-link]: https://super-adventure-yv3eleq.pages.github.io/
+[docs-index]: https://super-adventure-yv3eleq.pages.github.io/
+[docs-data]: https://super-adventure-yv3eleq.pages.github.io/preparing-your-data/
+[docs-ops]: https://super-adventure-yv3eleq.pages.github.io/ops-datasets/
+[webgpu-hpc]: https://super-adventure-yv3eleq.pages.github.io/webgpu-hpc-setup/
+[docs-contrib]: https://super-adventure-yv3eleq.pages.github.io/contributing/
 [changelog]: CHANGELOG.md

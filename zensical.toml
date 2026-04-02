@@ -49,6 +49,13 @@ Copyright &copy; 2026 The authors
 #   { "Markdown in 5min" = "markdown.md" },
 # ]
 
+nav = [
+    { "Getting Started" = "index.md"},
+    { "Preparing your Imaging Data" =  "preparing-your-data.md"},
+    { "WebGPU Setup on HPC (Chrome)" = "webgpu-hpc-setup.md"},
+    { "Contributing" = "contributing.md"}
+]
+
 # With the "extra_css" option you can add your own CSS styling to customize
 # your Zensical project according to your needs. You can add any number of
 # CSS files.
