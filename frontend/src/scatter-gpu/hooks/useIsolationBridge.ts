@@ -67,7 +67,7 @@ export function useIsolationBridge(opts: UseIsolationBridgeOptions): UseIsolatio
         scatter.setCategoryIsolation(isolatedIndices, catIndices);
       }
     },
-    [categoryIndicesRef.current, scatterRef.current],
+    [categoryIndicesRef, scatterRef],
   ); // stable — reads all values via refs, never recreated
 
   return { handleIsolationChange };

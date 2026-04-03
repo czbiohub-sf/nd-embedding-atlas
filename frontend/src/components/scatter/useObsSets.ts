@@ -11,7 +11,7 @@ const ObsSetListSchema = z.array(ObsSetSchema);
 export interface CreateObsSetBody {
   name: string;
   color?: string | null;
-  members: Array<{ dataset_key: string; obs_name: string }>;
+  members: { dataset_key: string; obs_name: string }[];
 }
 
 export function useObsSets() {
@@ -48,8 +48,7 @@ export function useCreateObsSet() {
 export function useDeleteObsSet() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: ObsSetId): Promise<void> =>
-      fetch(`/api/obssets/${id}`, { method: "DELETE" }).then(() => undefined),
+    mutationFn: (id: ObsSetId): Promise<void> => fetch(`/api/obssets/${id}`, { method: "DELETE" }).then(() => {}),
     onSuccess: (_data, deletedId) => {
       // Clear active obsset if it was the deleted one
       if (obsSetStore.state.activeObsSetId === deletedId) {

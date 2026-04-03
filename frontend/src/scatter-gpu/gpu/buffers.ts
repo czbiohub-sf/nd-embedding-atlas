@@ -1,4 +1,4 @@
-import tgpu from "typegpu";
+import { tgpu } from "typegpu";
 import * as d from "typegpu/data";
 import { PALETTE, QUAD_VERTS } from "../constants";
 import type { ColorMapper, RenderConfig, ScatterData, TgpuRoot } from "../types";
@@ -115,13 +115,13 @@ export function uploadData(
   const totalCats = data.categoryNames.length;
   const colorData = new Uint32Array(numPoints);
   for (let i = 0; i < numPoints; i++) {
-    const cat = data.categoryIndices[i]! % numCats;
+    const cat = data.categoryIndices[i] % numCats;
     let r: number, g: number, b: number, alpha: number;
     if (colorMapper) {
       [r, g, b] = colorMapper(cat, i, totalCats);
       alpha = 255;
     } else {
-      const c = colors[cat]!;
+      const c = colors[cat];
       r = c[0];
       g = c[1];
       b = c[2];
@@ -165,7 +165,7 @@ export function buildCategoryColors(
       [r, g, b] = colorMapper(i, 0, numCategories);
       a = 1.0;
     } else {
-      const c = colors[i % colors.length]!;
+      const c = colors[i % colors.length];
       r = c[0];
       g = c[1];
       b = c[2];

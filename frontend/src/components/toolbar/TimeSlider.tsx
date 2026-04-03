@@ -20,12 +20,13 @@ export function TimeSlider() {
       step: 1,
     });
 
+    const container = containerRef.current;
     meta.coordinator.connect(instance);
-    containerRef.current?.replaceChildren(instance.element);
+    container?.replaceChildren(instance.element);
 
     return () => {
       meta.coordinator.disconnect(instance);
-      containerRef.current?.replaceChildren();
+      container?.replaceChildren();
     };
   }, [meta.coordinator, meta.brushSelection, meta.table]);
 

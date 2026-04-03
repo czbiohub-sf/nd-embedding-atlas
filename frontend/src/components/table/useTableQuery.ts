@@ -140,7 +140,7 @@ export function useTableQuery(opts: UseTableQueryOptions): UseTableQueryResult {
         // Discard if the filter changed while we were waiting.
         if (fetchedFor !== activeCacheKeyRef.current) return;
 
-        const rows = toRows<Row>(result);
+        const rows = toRows(result);
 
         // LRU eviction — prefer evicting stale pages first.
         const pages = pagesRef.current;

@@ -8,7 +8,6 @@ import { useStore } from "@tanstack/react-store";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Trash2 } from "lucide-react";
 import { useRef } from "react";
-import type { ObsSetId } from "../../../lib/branded-types";
 import { obsSetId } from "../../../lib/branded-types";
 import type { ObsSet } from "../../../lib/schemas";
 import { cn } from "../../../lib/utils";
@@ -95,7 +94,7 @@ export function ObsSetPanel() {
               {/* Activate toggle */}
               <button
                 type="button"
-                onClick={() => setActiveObsSet(isActive ? null : (id as ObsSetId))}
+                onClick={() => setActiveObsSet(isActive ? null : id)}
                 className={cn(
                   "shrink-0 rounded px-1.5 py-0.5 text-[10px] transition-colors",
                   isActive
@@ -110,7 +109,7 @@ export function ObsSetPanel() {
               {/* Delete */}
               <button
                 type="button"
-                onClick={() => deleteObsSet.mutate(id as ObsSetId)}
+                onClick={() => deleteObsSet.mutate(id)}
                 disabled={deleteObsSet.isPending}
                 className="shrink-0 rounded p-1 text-text-muted transition-colors hover:bg-surface-secondary hover:text-red-400 disabled:opacity-40"
                 title="Delete ObsSet"

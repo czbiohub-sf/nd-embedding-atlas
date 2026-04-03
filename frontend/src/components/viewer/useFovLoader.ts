@@ -15,10 +15,18 @@ import type { ChannelDef, ViewMode } from "./ViewerContext";
 
 // ── Module-level zarr source cache ────────────────────────────────────────────
 // Keyed by sourceUrl; avoids re-fetching zarr metadata for recently-visited FOVs.
+
+/** Minimal interface for the idetik loader returned by OmeZarrImageSource.open(). */
+interface IdetikLoader {
+  getSourceDimensionMap(): {
+    z?: { lods: { size: number }[] };
+    t?: { lods: { size: number }[] };
+  };
+}
+
 interface CachedSource {
   source: OmeZarrImageSource;
-  // biome-ignore lint/suspicious/noExplicitAny: idetik loader type not exported
-  loader: any;
+  loader: IdetikLoader;
   omeroChannels: OmeroChannel[] | null;
 }
 const SOURCE_CACHE = new Map<string, CachedSource>();
@@ -143,7 +151,7 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion }: UseFovLoa
       }
 
       // Resolve channel definitions
-      let channelDefs: Array<{ color: Color; contrastLimits: [number, number] }>;
+      let channelDefs: { color: Color; contrastLimits: [number, number] }[];
       if (omeroChannels) {
         channelDefs = omeroChannels.map((ch) => ({
           color: ch.color ? Color.fromRgbHex(`#${ch.color}`) : Color.WHITE,
@@ -167,7 +175,7 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion }: UseFovLoa
 
       // ── Create layers based on view mode ─────────────────────────
       let multiChannel: MultiChannelLayers;
-      let layerEntries: Array<{ id: string; layer: ChunkedImageLayer | VolumeLayer }>;
+      let layerEntries: { id: string; layer: ChunkedImageLayer | VolumeLayer }[];
 
       if (viewMode === "3d") {
         // 3D: single VolumeLayer with all channels

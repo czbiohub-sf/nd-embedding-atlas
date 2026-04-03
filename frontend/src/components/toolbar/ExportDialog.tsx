@@ -72,6 +72,7 @@ export default function ExportDialog({ open, onOpenChange, filtered }: Props) {
         return;
       }
 
+      // eslint-disable-next-line no-misused-promises
       const pollId = setInterval(async () => {
         try {
           const statusRes = await fetch(`/api/export/${data.task_id}/status`);
@@ -154,7 +155,13 @@ export default function ExportDialog({ open, onOpenChange, filtered }: Props) {
           <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button size="sm" disabled={!filename.trim()} onClick={handleExport}>
+          <Button
+            size="sm"
+            disabled={!filename.trim()}
+            onClick={() => {
+              void handleExport();
+            }}
+          >
             Export
           </Button>
         </DialogFooter>

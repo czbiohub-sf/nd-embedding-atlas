@@ -217,7 +217,9 @@ export function DashboardProvider({ children }: Props) {
         </p>
         <button
           className="rounded bg-surface-secondary px-3 py-1.5 text-xs hover:bg-surface-tertiary"
-          onClick={() => metadataQuery.refetch()}
+          onClick={() => {
+            void metadataQuery.refetch();
+          }}
         >
           Retry
         </button>

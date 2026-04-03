@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
 
 class DatasetSpec(BaseModel):
@@ -14,7 +14,12 @@ class DatasetSpec(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     anndata: Path
-    ome_zarr: Path | None = Field(None, alias="ome-zarr")
+    # "ome-zarr" is the canonical key; "hcs_plate" is accepted for backward compatibility
+    ome_zarr: Path | None = Field(
+        None,
+        alias="ome-zarr",
+        validation_alias=AliasChoices("ome-zarr", "hcs_plate"),
+    )
 
     @field_validator("anndata", "ome_zarr", mode="before")
     @classmethod
@@ -63,9 +68,10 @@ def load_project(path: Path) -> ProjectConfig:
     with path.open() as f:
         raw = yaml.safe_load(f)
 
-    # Resolve relative paths relative to the YAML file's parent directory
+    # Resolve relative paths relative to the YAML file's parent directory.
+    # Accept both "ome-zarr" (canonical) and "hcs_plate" (legacy).
     for ds in raw.get("datasets", {}).values():
-        for key in ("anndata", "ome-zarr"):
+        for key in ("anndata", "ome-zarr", "hcs_plate"):
             if ds.get(key):
                 p = Path(ds[key])
                 if not p.is_absolute():

@@ -65,11 +65,13 @@ export function ScatterUIStateProvider({ children }: { children: React.ReactNode
   );
 }
 
+// eslint-disable-next-line react/only-export-components
 export function useScatterUIState(): ScatterUIState {
   return use(StateContext);
 }
 
 /** Returns stable dispatch callbacks for the scatter panel to call. */
+// eslint-disable-next-line react/only-export-components
 export function useScatterUIDispatch() {
   const dispatch = use(DispatchContext);
   return {

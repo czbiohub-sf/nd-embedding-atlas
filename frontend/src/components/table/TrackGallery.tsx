@@ -35,7 +35,7 @@ export function TrackGallery({ activeFrame, onFrameSelect, datasetKey }: TrackGa
     channels: settledChannels,
     hash: settledHash,
     isPending,
-  } = useGalleryChannels(trajectory?.datasetKey || datasetKey || "docked", 300);
+  } = useGalleryChannels(trajectory?.datasetKey ?? datasetKey ?? "docked", 300);
 
   const queryClient = useQueryClient();
 
@@ -181,6 +181,7 @@ export function TrackGallery({ activeFrame, onFrameSelect, datasetKey }: TrackGa
         gcTime: 0,
       });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, trajectory, settledChannels, settledHash, colCount, queryClient, isPending]);
 
   if (!trajectory) return null;

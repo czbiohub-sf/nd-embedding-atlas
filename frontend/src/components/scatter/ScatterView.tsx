@@ -133,8 +133,8 @@ export function ScatterView({
   const [gpuError, setGpuError] = useState<string | null>(null);
 
   // ── Continuous range filter handles (dim-only — colormap is NOT remapped) ──
-  const [userVmin, setUserVmin] = useState<number | undefined>(undefined);
-  const [userVmax, setUserVmax] = useState<number | undefined>(undefined);
+  const [userVmin, setUserVmin] = useState<number | undefined>();
+  const [userVmax, setUserVmax] = useState<number | undefined>();
   const rangeFilterSourceRef = useRef<object>({});
 
   // Reset filter when column changes
@@ -378,7 +378,7 @@ export function ScatterView({
   const axesKeyRef = useRef<string | null>(null);
   useEffect(() => {
     const key = axes ? `${axes.obsmKey}:${axes.xDim}:${axes.yDim}` : null;
-    const changed = axesKeyRef.current !== null && key !== axesKeyRef.current;
+    const changed = axesKeyRef.current != null && key !== axesKeyRef.current;
     axesKeyRef.current = key;
     if (changed) actions.clearTrajectory(trajectory?.datasetKey ?? "");
     setEmbedding(axes?.obsmKey ?? null);
@@ -482,7 +482,13 @@ export function ScatterView({
           highlightId={highlightId}
           additionalFields={["t", "fov_name", "track_id"].filter((f) => metadata.obs_columns?.includes(f))}
           trajectoryActive={!!trajectory}
-          onShowTrajectory={isLoading ? undefined : showTrajectory}
+          onShowTrajectory={
+            isLoading
+              ? undefined
+              : (...args: Parameters<typeof showTrajectory>) => {
+                  void showTrajectory(...args);
+                }
+          }
           onClearTrajectory={() => actions.clearTrajectory(trajectory?.datasetKey ?? "")}
         />
       </div>

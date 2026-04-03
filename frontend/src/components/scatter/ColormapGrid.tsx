@@ -1,6 +1,7 @@
 import { cn } from "@/lib/utils";
 import { useColormapPalette } from "../../hooks/useColormaps";
 
+// eslint-disable-next-line react/only-export-components
 export const CONTINUOUS_COLORMAPS = [
   "viridis",
   "plasma",

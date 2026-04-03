@@ -1,8 +1,11 @@
-import tgpu from "typegpu";
+import { tgpu } from "typegpu";
 import * as d from "typegpu/data";
 import * as std from "typegpu/std";
 import type { TgpuRoot } from "../types";
 import type { ScatterBuffers, ScatterUniforms } from "./buffers";
+
+// TypeGPU manages buffer cleanup via root.destroy()
+function destroy(): void {}
 
 // Layer bit constants
 export const LAYER_LASSO = 0b0001;
@@ -105,10 +108,6 @@ export function createCompositor(
     layerBitsUniform.write(layerActiveBits);
     compositorPipeline.dispatchWorkgroups(workgroups);
     selectionModeUniform.write(layerActiveBits !== 0 ? 1 : 0);
-  }
-
-  function destroy(): void {
-    // TypeGPU manages buffer cleanup via root.destroy()
   }
 
   return {

@@ -51,6 +51,7 @@ export function TerminalTableProvider({ children }: { children: ReactNode }) {
   return <TerminalTableContext.Provider value={value}>{children}</TerminalTableContext.Provider>;
 }
 
+// eslint-disable-next-line react/only-export-components
 export function useTerminalTable(): TerminalTableState {
   const ctx = useContext(TerminalTableContext);
   if (!ctx) throw new Error("useTerminalTable must be used inside TerminalTableProvider");

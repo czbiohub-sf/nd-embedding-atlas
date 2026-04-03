@@ -194,7 +194,9 @@ export function ScatterContent({
       colorMode={colorMode}
       colorModeCanToggle={colorModeInfo.canToggle}
       hasVar={(metadata.var_count ?? 0) > 0}
-      onSetAxes={handleSetAxes}
+      onSetAxes={(newAxes) => {
+        void handleSetAxes(newAxes);
+      }}
       onSetColorSource={setColorSource}
       onToggleColorMode={() => setColorModeOverride(colorMode === "continuous" ? "categorical" : "continuous")}
       selectionTool={selectionTool}

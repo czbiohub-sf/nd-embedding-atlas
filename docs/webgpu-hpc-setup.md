@@ -37,4 +37,3 @@ You should see something like: `WebGPU ready: NVIDIA A40`
 - **"requestAdapter returned null"** — Make sure all 4 flags are enabled and you relaunched Chrome.
 - **Check `chrome://gpu`** — Scroll to "Dawn Info". Look for `Vulkan backend - NVIDIA A40` with `[WebGPU Status] Available`.
 - **Only "OpenGLES backend (Compatibility Mode)" appears** — The Vulkan flags didn't take effect. Double-check `chrome://flags`.
-

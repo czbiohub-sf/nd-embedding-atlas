@@ -192,7 +192,7 @@ export function ViewerProvider({ children, channelInstance = "docked" }: Props) 
   // ── Actions ───────────────────────────────────────────────────────────
 
   const setLayers = useCallback(
-    (entries: Array<{ id: string; layer: Layer }>) => {
+    (entries: { id: string; layer: Layer }[]) => {
       const viewport = viewportRef.current;
       if (!viewport) return;
 
@@ -326,6 +326,7 @@ export function ViewerProvider({ children, channelInstance = "docked" }: Props) 
       orthoCamera: cameraRef.current,
       perspectiveCamera: perspCameraRef.current,
     }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [initialized, viewMode],
   );
 

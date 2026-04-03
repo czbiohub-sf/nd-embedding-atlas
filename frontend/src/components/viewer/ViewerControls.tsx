@@ -25,7 +25,7 @@ export function ViewerControls({ cropSize, setCropSize, datasetKey }: Props) {
 
   const effectiveTMax = isTrajectoryMode ? trajTimepoints.length - 1 : (bounds.tMax ?? 0);
   const hasT = effectiveTMax > 0 || isTrajectoryMode;
-  const hasZ = bounds.zMax !== null && bounds.zMax > 0;
+  const hasZ = bounds.zMax != null && bounds.zMax > 0;
   const showModeToggle = hasZ || viewMode === "3d";
   const hasControls = hasT || hasZ || hasCellCoords || showModeToggle;
 

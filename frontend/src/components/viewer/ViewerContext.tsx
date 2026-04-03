@@ -59,7 +59,7 @@ export interface ViewerState {
 
 export interface ViewerActions {
   /** Atomically replace all layers. */
-  setLayers: (layers: Array<{ id: string; layer: Layer }>) => void;
+  setLayers: (layers: { id: string; layer: Layer }[]) => void;
   /** Remove all layers. */
   clearLayers: () => void;
   /** Set the camera frame (left, right, bottom, top). */

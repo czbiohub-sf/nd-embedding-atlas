@@ -61,7 +61,7 @@ uv tool upgrade nd-embedding-atlas
     pnpm install
     ```
 
-    or 
+    or
 
     ```bash
     vp install

@@ -1,7 +1,7 @@
-import tgpu from "typegpu";
+import { tgpu } from "typegpu";
 import type { DeviceInfo } from "./device-manager";
 
-export async function initGPU(canvas: HTMLCanvasElement, deviceInfo: DeviceInfo) {
+export function initGPU(canvas: HTMLCanvasElement, deviceInfo: DeviceInfo) {
   const { device, format, preferredWorkgroupSize } = deviceInfo;
 
   const root = tgpu.initFromDevice({ device });

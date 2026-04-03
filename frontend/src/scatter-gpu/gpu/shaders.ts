@@ -1,5 +1,5 @@
 import { sdDisk } from "@typegpu/sdf";
-import tgpu from "typegpu";
+import { tgpu } from "typegpu";
 import * as d from "typegpu/data";
 import * as std from "typegpu/std";
 import type { ScatterUniforms } from "./buffers";

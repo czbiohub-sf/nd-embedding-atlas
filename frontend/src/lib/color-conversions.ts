@@ -1,8 +1,8 @@
-import { converter, formatHex, modeOklch, modeRgb, parse, useMode } from "culori/fn";
+import { converter, formatHex, modeOklch, modeRgb, parse, useMode as registerMode } from "culori/fn";
 
 // Register oklch and rgb modes so formatHex can convert oklch → sRGB → hex
-useMode(modeOklch);
-useMode(modeRgb);
+registerMode(modeOklch);
+registerMode(modeRgb);
 
 const toOklch = converter("oklch");
 

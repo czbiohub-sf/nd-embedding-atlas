@@ -13,8 +13,10 @@ interface ThemeContextValue {
   setTheme(t: Theme): void;
 }
 
+// eslint-disable-next-line react/only-export-components
 export const ThemeContext = createContext<ThemeContextValue | null>(null);
 
+// eslint-disable-next-line react/only-export-components
 export function useTheme(): ThemeContextValue {
   const ctx = use(ThemeContext);
   if (!ctx) throw new Error("useTheme must be used within ThemeProvider");

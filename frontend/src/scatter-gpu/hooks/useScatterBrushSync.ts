@@ -7,6 +7,19 @@ import type { PanelId } from "../types";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+async function syncLargeSelection(rowIds: number[]): Promise<string | null> {
+  if (rowIds.length === 0) {
+    await fetch("/api/scatter-selection", { method: "DELETE" }).catch(() => {});
+    return null;
+  }
+  await fetch("/api/scatter-selection", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ row_indices: rowIds }),
+  }).catch(() => {});
+  return `__row_index__ IN (SELECT row_index FROM __scatter_selection)`;
+}
+
 /**
  * Build a Mosaic WHERE predicate for the given row IDs.
  *
@@ -46,23 +59,6 @@ export function useScatterBrushSync({
   // Stable ref to capture myPanelId for use inside throttler/debouncer callbacks
   const panelIdRef = useRef<PanelId>(myPanelId);
   panelIdRef.current = myPanelId;
-
-  // ── Large-selection temp table sync ──────────────────────────────────────
-  // For selections ≥ 5000 rows, populate a DuckDB temp table before updating
-  // the Mosaic predicate. The table query then uses a subquery instead of a
-  // massive IN list. Smaller selections use IN (ids) directly — no server call.
-  const syncLargeSelection = async (rowIds: number[]) => {
-    if (rowIds.length === 0) {
-      await fetch("/api/scatter-selection", { method: "DELETE" }).catch(() => {});
-      return null;
-    }
-    await fetch("/api/scatter-selection", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ row_indices: rowIds }),
-    }).catch(() => {});
-    return `__row_index__ IN (SELECT row_index FROM __scatter_selection)`;
-  };
 
   // ── Live + debounced activeFilterStore update ─────────────────────────────
   // Visual feedback (point dimming, status bar count) stays immediate.

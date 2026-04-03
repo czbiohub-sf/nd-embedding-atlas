@@ -122,12 +122,12 @@ export function ContinuousLegend({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vmin, vmax, toFrac]);
 
-  function fracFromClientX(clientX: number): number {
+  const fracFromClientX = useCallback((clientX: number): number => {
     const bar = barRef.current;
     if (!bar) return 0;
     const rect = bar.getBoundingClientRect();
     return Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-  }
+  }, []);
 
   const startDrag = useCallback(
     (which: "min" | "max") => {

@@ -84,7 +84,7 @@ export function SaveObsSetDialog({ open, onClose, getRowIndices }: SaveObsSetDia
 
   if (!open) return null;
 
-  const canSubmit = name.trim().length > 0 && members !== null && !resolving && !createObsSet.isPending;
+  const canSubmit = name.trim().length > 0 && members != null && !resolving && !createObsSet.isPending;
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -104,7 +104,7 @@ export function SaveObsSetDialog({ open, onClose, getRowIndices }: SaveObsSetDia
 
         {resolving && <p className="text-text-secondary text-xs">Resolving members…</p>}
         {resolveError && <p className="text-red-400 text-xs">Error: {resolveError}</p>}
-        {members !== null && !resolving && <p className="text-text-secondary text-xs">{members.length} observations</p>}
+        {members != null && !resolving && <p className="text-text-secondary text-xs">{members.length} observations</p>}
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
           <div className="flex flex-col gap-1">

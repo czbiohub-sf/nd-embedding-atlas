@@ -10,6 +10,18 @@ interface InteractionCallbacks {
   onFps?: (fps: number) => void;
 }
 
+function easeInOutQuint(t: number): number {
+  return t < 0.5 ? 16 * t * t * t * t * t : 1 - (-2 * t + 2) ** 5 / 2;
+}
+
+function getOverlayColors() {
+  const isDark = document.documentElement.classList.contains("dark");
+  return {
+    stroke: isDark ? "rgba(255, 255, 255, 0.8)" : "rgba(30, 30, 30, 0.75)",
+    fill: isDark ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.05)",
+  };
+}
+
 export function createInteractionController(
   _canvas: HTMLCanvasElement,
   overlay: HTMLCanvasElement,
@@ -19,10 +31,6 @@ export function createInteractionController(
   callbacks?: InteractionCallbacks,
   interactionConfig?: InteractionConfig,
 ) {
-  function easeInOutQuint(t: number): number {
-    return t < 0.5 ? 16 * t * t * t * t * t : 1 - (-2 * t + 2) ** 5 / 2;
-  }
-
   const LERP_SPEED = interactionConfig?.lerpSpeed ?? 0.06;
   const LERP_EPSILON = interactionConfig?.lerpEpsilon ?? 0.0001;
 
@@ -127,14 +135,6 @@ export function createInteractionController(
     // Use clientWidth/clientHeight (CSS pixels) — the 2D context has ctx.scale(dpr,dpr)
     // so drawing ops expect CSS-pixel coordinates, not device pixels.
     return [((ndcX + 1) / 2) * overlay.clientWidth, ((-ndcY + 1) / 2) * overlay.clientHeight];
-  }
-
-  function getOverlayColors() {
-    const isDark = document.documentElement.classList.contains("dark");
-    return {
-      stroke: isDark ? "rgba(255, 255, 255, 0.8)" : "rgba(30, 30, 30, 0.75)",
-      fill: isDark ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.05)",
-    };
   }
 
   function drawLasso() {
@@ -398,7 +398,7 @@ export function createInteractionController(
         lastFpsReport = now;
         const n = Math.min(frameIdx, 120);
         if (n > 1) {
-          const oldest = frameTimes[(frameIdx - n) % 120]!;
+          const oldest = frameTimes[(frameIdx - n) % 120];
           const fps = (n - 1) / ((now - oldest) / 1000);
           callbacks?.onFps?.(fps);
         }

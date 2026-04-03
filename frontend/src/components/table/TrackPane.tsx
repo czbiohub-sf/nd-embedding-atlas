@@ -39,6 +39,7 @@ export function TrackPane() {
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playing, trajectory, safeFrame, pts, actions]);
 
   useEffect(() => {
@@ -51,6 +52,7 @@ export function TrackPane() {
       const next = Math.max(0, Math.min(pts.length - 1, safeFrame + dir));
       actions.setTrajectoryTIndex(trajectory.datasetKey ?? "", pts[next]?.t);
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [trajectory, pts, safeFrame, actions],
   );
 
@@ -60,6 +62,7 @@ export function TrackPane() {
       const pt = pts[idx];
       if (pt) actions.setTrajectoryTIndex(trajectory.datasetKey ?? "", pt.t);
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [trajectory, pts, actions],
   );
 

@@ -1,11 +1,12 @@
 import type { TgpuRoot } from "../types";
 import type { ScatterBuffers } from "./buffers";
 import type { CullingEngine } from "./culling";
+import type { createFragmentShader, createVertexShader } from "./shaders";
 
 export function createRenderPipeline(
   root: TgpuRoot,
-  mainVertex: ReturnType<typeof import("./shaders").createVertexShader>,
-  mainFragment: ReturnType<typeof import("./shaders").createFragmentShader>,
+  mainVertex: ReturnType<typeof createVertexShader>,
+  mainFragment: ReturnType<typeof createFragmentShader>,
   buffers: ScatterBuffers,
   culling: CullingEngine,
   format: GPUTextureFormat,

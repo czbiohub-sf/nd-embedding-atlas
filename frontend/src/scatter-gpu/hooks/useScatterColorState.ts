@@ -49,7 +49,7 @@ export function useScatterColorState(coordinator: Coordinator, metadata: Metadat
 
   // ── Color mode (categorical vs continuous) ──────────────────────────────────
   const columnTypes = useColumnTypes(coordinator);
-  const [colorModeOverride, setColorModeOverride] = useState<ColorMode | undefined>(undefined);
+  const [colorModeOverride, setColorModeOverride] = useState<ColorMode | undefined>();
 
   // Reset override when color column changes
   useEffect(() => {
@@ -73,7 +73,7 @@ export function useScatterColorState(coordinator: Coordinator, metadata: Metadat
   const continuousColormaps = colormapListQuery.data?.continuous ?? [];
 
   const paletteQuery = useColormapPalette(categoricalColormap, maxCategories);
-  const palette = paletteQuery.data ?? [];
+  const palette = useMemo(() => paletteQuery.data ?? [], [paletteQuery.data]);
 
   // ── Category column mapping ─────────────────────────────────────────────────
   const [categoryMapping, setCategoryMapping] = useState<CategoryMapping | null>(null);

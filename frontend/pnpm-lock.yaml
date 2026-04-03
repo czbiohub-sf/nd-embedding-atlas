@@ -155,7 +155,7 @@ importers:
         specifier: ^0.10.2
         version: 0.10.2(typegpu@0.10.2)
       vite:
-        specifier: npm:@voidzero-dev/vite-plus-core@^0.1.15
+        specifier: npm:@voidzero-dev/vite-plus-core@latest
         version: '@voidzero-dev/vite-plus-core@0.1.15(@types/node@20.19.37)(esbuild@0.27.3)(jiti@2.6.1)(typescript@6.0.2)'
       vite-plus:
         specifier: latest

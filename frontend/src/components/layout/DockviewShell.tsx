@@ -7,6 +7,7 @@ import {
 } from "dockview-react";
 import { Maximize2, Minimize2, XIcon } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+// eslint-disable-next-line import/no-unassigned-import
 import "dockview-react/dist/styles/dockview.css";
 import { useTheme } from "../../ThemeProvider";
 import { PanelErrorBoundary } from "./PanelErrorBoundary";

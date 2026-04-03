@@ -178,11 +178,7 @@ export function useMosaicScatterData({
     : null;
 
   const loading = positionQuery.isFetching || categoryQuery.isFetching || continuousQuery.isFetching;
-  const error =
-    (positionQuery.error as Error | null)?.message ??
-    (categoryQuery.error as Error | null)?.message ??
-    (continuousQuery.error as Error | null)?.message ??
-    null;
+  const error = positionQuery.error?.message ?? categoryQuery.error?.message ?? continuousQuery.error?.message ?? null;
 
   return {
     data,

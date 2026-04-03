@@ -1,4 +1,4 @@
-import tgpu from "typegpu";
+import { tgpu } from "typegpu";
 import * as d from "typegpu/data";
 import { MAX_POLYGON_VERTS } from "../constants";
 import type { TgpuRoot } from "../types";

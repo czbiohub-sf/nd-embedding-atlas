@@ -1,4 +1,4 @@
-import tgpu from "typegpu";
+import { tgpu } from "typegpu";
 import * as d from "typegpu/data";
 import type { ViewState } from "../../types";
 import { createInteractionController } from "../hooks/useScatterInteraction";
@@ -21,7 +21,7 @@ export async function createScatterplot(
   const t0 = performance.now();
 
   const deviceInfo = await acquireDevice();
-  const gpu = await initGPU(canvas, deviceInfo);
+  const gpu = initGPU(canvas, deviceInfo);
   const { root, device, context, format, preferredWorkgroupSize } = gpu;
   const tGpu = performance.now();
   console.log(`GPU init: ${(tGpu - t0).toFixed(1)}ms`);
@@ -119,7 +119,7 @@ export async function createScatterplot(
     const len = Math.min(palette.length, MAX_PALETTE_SIZE);
     const packed = new Uint32Array(MAX_PALETTE_SIZE);
     for (let i = 0; i < len; i++) {
-      const c = palette[i]!;
+      const c = palette[i];
       const r = Math.round(c[0] * 255);
       const g = Math.round(c[1] * 255);
       const b = Math.round(c[2] * 255);
@@ -175,9 +175,9 @@ export async function createScatterplot(
         const cy = Math.floor(((worldY + 1) / 2) * GRID);
         for (let gx = Math.max(0, cx - r); gx <= Math.min(GRID - 1, cx + r); gx++) {
           for (let gy = Math.max(0, cy - r); gy <= Math.min(GRID - 1, cy + r); gy++) {
-            for (const i of gridCells[gx * GRID + gy]!) {
-              const px = data.positions[i * 2]!;
-              const py = data.positions[i * 2 + 1]!;
+            for (const i of gridCells[gx * GRID + gy]) {
+              const px = data.positions[i * 2];
+              const py = data.positions[i * 2 + 1];
               const dx = px - worldX;
               const dy = py - worldY;
               const d2 = dx * dx + dy * dy;
@@ -190,10 +190,10 @@ export async function createScatterplot(
         }
         if (bestIdx >= 0) {
           selection.selectPoint(bestIdx);
-          const px = data.positions[bestIdx * 2]!;
-          const py = data.positions[bestIdx * 2 + 1]!;
-          const catIdx = data.categoryIndices[bestIdx]!;
-          config?.callbacks?.onPointClick?.(bestIdx, [px, py], catIdx, data.categoryNames[catIdx]!);
+          const px = data.positions[bestIdx * 2];
+          const py = data.positions[bestIdx * 2 + 1];
+          const catIdx = data.categoryIndices[bestIdx];
+          config?.callbacks?.onPointClick?.(bestIdx, [px, py], catIdx, data.categoryNames[catIdx]);
         } else {
           config?.callbacks?.onBackgroundClick?.();
         }
@@ -213,8 +213,8 @@ export async function createScatterplot(
   const GRID = 128;
   const gridCells: number[][] = Array.from({ length: GRID * GRID }, () => []);
   for (let i = 0; i < data.numCells; i++) {
-    const gx = Math.min(GRID - 1, Math.max(0, Math.floor(((data.positions[i * 2]! + 1) / 2) * GRID)));
-    const gy = Math.min(GRID - 1, Math.max(0, Math.floor(((data.positions[i * 2 + 1]! + 1) / 2) * GRID)));
+    const gx = Math.min(GRID - 1, Math.max(0, Math.floor(((data.positions[i * 2] + 1) / 2) * GRID)));
+    const gy = Math.min(GRID - 1, Math.max(0, Math.floor(((data.positions[i * 2 + 1] + 1) / 2) * GRID)));
     gridCells[gx * GRID + gy]?.push(i);
   }
 

@@ -51,12 +51,12 @@ export function useVarColumn(options?: UseVarColumnOptions): VarColumnResult {
 
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const stopPolling = () => {
+  const stopPolling = useCallback(() => {
     if (pollIntervalRef.current !== null) {
       clearInterval(pollIntervalRef.current);
       pollIntervalRef.current = null;
     }
-  };
+  }, []);
 
   const materialize = useCallback(
     (gene: string, layer: string) => {
@@ -84,6 +84,7 @@ export function useVarColumn(options?: UseVarColumnOptions): VarColumnResult {
           return;
         }
 
+        // eslint-disable-next-line no-misused-promises
         pollIntervalRef.current = setInterval(async () => {
           try {
             const res = await fetch(`/api/gene-column/${taskId}/status`);

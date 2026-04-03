@@ -51,7 +51,7 @@ export const TrajectoryOverlaySvg = forwardRef<TrajectoryOverlaySvgHandle, Props
 
   function pointColor(point: TrajectoryFrame): string {
     if (categoryColors.length > 0 && point.category != null && point.category < categoryColors.length) {
-      return categoryColors[point.category]!;
+      return categoryColors[point.category];
     }
     return DEFAULT_COLOR;
   }
@@ -94,9 +94,9 @@ export const TrajectoryOverlaySvg = forwardRef<TrajectoryOverlaySvgHandle, Props
 
     // Line segments with directional arrowheads
     for (let i = 1; i < points.length; i++) {
-      const p1 = screenPts[i - 1]!;
-      const p2 = screenPts[i]!;
-      const color = pointColor(points[i]!);
+      const p1 = screenPts[i - 1];
+      const p2 = screenPts[i];
+      const color = pointColor(points[i]);
       const markerId = `traj-arrow-${color.replace(/[^a-zA-Z0-9]/g, "")}`;
       // Shorten line end slightly so arrowhead sits at the point
       const dx = p2.x - p1.x,
@@ -117,9 +117,9 @@ export const TrajectoryOverlaySvg = forwardRef<TrajectoryOverlaySvgHandle, Props
 
     // Circles at each time point — all fully opaque, active gets a pulse ring
     for (let i = 0; i < points.length; i++) {
-      const pt = screenPts[i]!;
+      const pt = screenPts[i];
       const isActive = activeIndex != null && i === activeIndex;
-      const color = pointColor(points[i]!);
+      const color = pointColor(points[i]);
 
       if (isActive) {
         // Pulsing outer ring via SVG animate
@@ -160,21 +160,21 @@ export const TrajectoryOverlaySvg = forwardRef<TrajectoryOverlaySvgHandle, Props
     // Start: diamond marker + End: double-circle (only when >= 2 points)
     if (points.length >= 2) {
       // Diamond at start
-      const start = screenPts[0]!;
+      const start = screenPts[0];
       const diamond = document.createElementNS(SVG_NS, "rect");
       diamond.setAttribute("x", String(start.x - 4));
       diamond.setAttribute("y", String(start.y - 4));
       diamond.setAttribute("width", "8");
       diamond.setAttribute("height", "8");
       diamond.setAttribute("transform", `rotate(45 ${start.x} ${start.y})`);
-      diamond.setAttribute("fill", pointColor(points[0]!));
+      diamond.setAttribute("fill", pointColor(points[0]));
       diamond.setAttribute("stroke", "#fff");
       diamond.setAttribute("stroke-width", "1");
       g.appendChild(diamond);
 
       // Double-circle at end
-      const end = screenPts[points.length - 1]!;
-      const endColor = pointColor(points[points.length - 1]!);
+      const end = screenPts[points.length - 1];
+      const endColor = pointColor(points[points.length - 1]);
       const outer = document.createElementNS(SVG_NS, "circle");
       outer.setAttribute("cx", String(end.x));
       outer.setAttribute("cy", String(end.y));
@@ -190,11 +190,13 @@ export const TrajectoryOverlaySvg = forwardRef<TrajectoryOverlaySvgHandle, Props
   }
 
   // Expose update() for GPU onViewChange — closure captures latest props via draw()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useImperativeHandle(ref, () => ({ update: draw }), [draw]);
 
   // Redraw when props or measured size change
   useEffect(() => {
     draw();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draw]);
 
   return (

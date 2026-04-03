@@ -21,30 +21,20 @@ class CustomBuildHook(BuildHookInterface):
             self.app.display_info("Frontend dist/ exists, skipping build")
             return
 
-        # ── Resolve pnpm ──────────────────────────────────────────────────────
-        # HPC environments typically have Node.js as a module but not pnpm globally.
-        # npx can download and run pnpm on demand.
-        if shutil.which("pnpm"):
-            pnpm_cmd = ["pnpm"]
-        elif shutil.which("npx"):
-            pnpm_cmd = ["npx", "pnpm"]
-        else:
-            msg = "Node.js (with npx) is required to build the frontend. Load it with: module load nodejs"
-            raise RuntimeError(msg)
-
-        self.app.display_info("Installing frontend dependencies...")
-        subprocess.run([*pnpm_cmd, "install", "--frozen-lockfile"], cwd=str(frontend_dir), check=True)
-
         # ── Resolve vp (vite-plus) ────────────────────────────────────────────
-        # Prefer a globally installed vp; fall back to npx which downloads
-        # vite-plus on demand (works on HPC with Node.js but no global vp).
+        # vp install + vp build are the canonical commands for this toolchain.
+        # Prefer a globally installed vp; fall back to npx vite-plus on HPC
+        # environments where Node.js is available but vp is not globally installed.
         if shutil.which("vp"):
             vp_cmd = ["vp"]
         elif shutil.which("npx"):
             vp_cmd = ["npx", "vite-plus"]
         else:
-            msg = "npx not found. Ensure Node.js is loaded: module load nodejs"
+            msg = "Node.js (with npx) is required to build the frontend. Load it with: module load nodejs"
             raise RuntimeError(msg)
 
-        self.app.display_info(f"Building frontend with: {' '.join(vp_cmd)}")
+        self.app.display_info("Installing frontend dependencies...")
+        subprocess.run([*vp_cmd, "install"], cwd=str(frontend_dir), check=True)
+
+        self.app.display_info("Building frontend...")
         subprocess.run([*vp_cmd, "build"], cwd=str(frontend_dir), check=True)

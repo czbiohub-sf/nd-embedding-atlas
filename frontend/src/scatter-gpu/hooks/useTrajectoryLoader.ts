@@ -65,7 +65,7 @@ export function useTrajectoryLoader(opts: UseTrajectoryLoaderOptions): UseTrajec
         actions.setTrajectory({
           trackId,
           fovName,
-          datasetKey: rows[0]?.datasetKey as string | undefined,
+          datasetKey: rows[0]?.datasetKey,
           tIndex: initialT,
           points: rows,
         });

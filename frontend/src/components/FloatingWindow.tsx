@@ -25,11 +25,11 @@ interface Props {
 
 // ── Resize handle descriptors ─────────────────────────────────────────────────
 
-const EDGE_HANDLES: Array<{
+const EDGE_HANDLES: {
   edge: ResizeEdge;
   className: string;
   cursor: string;
-}> = [
+}[] = [
   // Corners
   { edge: "nw", className: "top-0 left-0 size-3", cursor: "cursor-nw-resize" },
   { edge: "ne", className: "top-0 right-0 size-3", cursor: "cursor-ne-resize" },
@@ -92,10 +92,10 @@ export function FloatingWindow({ handle, title, children, className, extraTitleA
 
       {/* ── Resize handles — all 4 corners + 4 edges ── */}
       {!state.minimized &&
-        EDGE_HANDLES.map(({ edge, className, cursor }) => (
+        EDGE_HANDLES.map(({ edge, className: edgeClassName, cursor }) => (
           <div
             key={edge}
-            className={cn("absolute z-10", cursor, className)}
+            className={cn("absolute z-10", cursor, edgeClassName)}
             {...getResizeProps(edge)}
             style={{ touchAction: "none" }}
           />

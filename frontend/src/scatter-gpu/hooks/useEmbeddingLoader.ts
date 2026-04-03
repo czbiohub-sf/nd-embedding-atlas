@@ -11,7 +11,9 @@ async function pollUntilReady(key: string, signal: AbortSignal): Promise<void> {
       const msg = `Failed to load embedding ${key}`;
       throw new Error(msg);
     }
-    await new Promise((r) => setTimeout(r, 200));
+    await new Promise<void>((r) => {
+      setTimeout(r, 200);
+    });
   }
 }
 

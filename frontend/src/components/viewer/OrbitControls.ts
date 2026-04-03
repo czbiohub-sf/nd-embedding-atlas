@@ -8,8 +8,7 @@
  * - Wheel: zoom (dolly in/out)
  */
 
-import type { CameraControls, EventContext } from "@idetik/core";
-import { type PerspectiveCamera, Spherical } from "@idetik/core";
+import { type CameraControls, type EventContext, type PerspectiveCamera, Spherical } from "@idetik/core";
 import { vec3 } from "gl-matrix";
 
 const MOUSE_BUTTON_NONE = -1;

@@ -54,8 +54,10 @@ export interface LegendContextValue {
   meta: LegendMeta;
 }
 
+// eslint-disable-next-line react/only-export-components
 export const LegendContext = createContext<LegendContextValue | null>(null);
 
+// eslint-disable-next-line react/only-export-components
 export function useLegend(): LegendContextValue {
   const ctx = use(LegendContext);
   if (!ctx) {
@@ -212,6 +214,7 @@ export function LegendProvider({
 
 // ── Derived: effective colors (merges overrides + isolation) ────────────────
 
+// eslint-disable-next-line react/only-export-components
 export function useEffectiveCategoryColors(): string[] | null {
   const { state, meta } = useLegend();
   const { legend } = meta;

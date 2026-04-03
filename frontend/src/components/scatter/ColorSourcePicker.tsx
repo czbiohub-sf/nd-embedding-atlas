@@ -255,4 +255,5 @@ export function ColorSourcePicker({
 
 // Re-export ColorSource so callers can import from this module if convenient
 export type { ColorSource };
+// eslint-disable-next-line react/only-export-components
 export { colorSourceVar };
