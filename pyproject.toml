@@ -61,6 +61,7 @@ test = [
 ]
 doc = [
   "ipykernel",
+  "mike",
   "pymdown-extensions>=10.20.1",
   "zensical>=0.0.21",
 ]
@@ -99,6 +100,7 @@ version.source = "uv-dynamic-versioning"
 
 [tool.uv.sources]
 iohub = { git = "https://github.com/czbiohub-sf/iohub", branch = "main" }
+mike = { git = "https://github.com/squidfunk/mike.git" }
 
 [tool.ruff]
 line-length = 120
