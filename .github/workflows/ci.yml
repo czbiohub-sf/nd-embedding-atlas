@@ -1,0 +1,93 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  # ── Frontend ──────────────────────────────────────────────────────────────
+  frontend:
+    name: Frontend (lint + build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: voidzero-dev/setup-vp@v1
+
+      - name: Install dependencies
+        run: vp install
+
+      - name: Typecheck + lint
+        run: vp check
+
+      - name: Build
+        run: vp build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist/
+
+  # ── Python tests ──────────────────────────────────────────────────────────
+  test:
+    name: "Test (Python ${{ matrix.python }}, ${{ matrix.deps }})"
+    runs-on: ubuntu-latest
+    needs: frontend
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { python: "3.12", deps: stable }
+          - { python: "3.13", deps: stable }
+          - { python: "3.13", deps: pre }
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist/
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Sync dependencies
+        run: uv sync --group test
+        env:
+          UV_PRERELEASE: ${{ matrix.deps == 'pre' && 'allow' || 'if-necessary-or-explicit' }}
+
+      - name: Run tests
+        run: uv run pytest
+        env:
+          UV_PRERELEASE: ${{ matrix.deps == 'pre' && 'allow' || 'if-necessary-or-explicit' }}
+
+  # ── Build wheel ───────────────────────────────────────────────────────────
+  build:
+    name: Build wheel
+    runs-on: ubuntu-latest
+    needs: [frontend, test]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist/
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Build wheel + sdist
+        run: uv build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
