@@ -20,7 +20,7 @@ jobs:
     needs: frontend
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           filter: blob:none
           fetch-depth: 0  # uv-dynamic-versioning reads git tags
