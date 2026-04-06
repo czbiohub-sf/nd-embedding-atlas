@@ -7,9 +7,6 @@ jobs:
   test:
     name: "Python ${{ matrix.python }}"
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend  # setup-vp composite action inherits this
     strategy:
       fail-fast: false
       matrix:
@@ -21,17 +18,13 @@ jobs:
           filter: blob:none
           fetch-depth: 0
 
-      - uses: voidzero-dev/setup-vp@v1
-
       - uses: astral-sh/setup-uv@v7
         with:
           python-version: ${{ matrix.python }}
           enable-cache: true
 
       - name: Sync test dependencies
-        working-directory: ${{ github.workspace }}
         run: uv sync --locked --group test
 
       - name: Run tests
-        working-directory: ${{ github.workspace }}
         run: uv run pytest -v
