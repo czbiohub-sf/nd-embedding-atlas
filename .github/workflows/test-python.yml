@@ -30,10 +30,8 @@ jobs:
       - name: Sync test dependencies
         # stable: --locked enforces the committed lockfile
         # pre: no --locked so uv can resolve pre-release versions beyond the lockfile
-        # HATCH_BUILD_HOOKS_ENABLE=false: skip frontend build hook (tests don't need it)
         run: uv sync ${{ matrix.deps == 'pre' && '' || '--locked' }} --group test
         env:
-          HATCH_BUILD_HOOKS_ENABLE: "false"
           UV_PRERELEASE: ${{ matrix.deps == 'pre' && 'allow' || 'if-necessary-or-explicit' }}
 
       - name: Run tests
