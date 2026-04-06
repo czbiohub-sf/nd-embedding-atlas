@@ -62,6 +62,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # Copy wheel to stable name so users can always install from a fixed URL:
+          # https://github.com/czbiohub-sf/nd-embedding-atlas/releases/latest/download/ndea-latest.whl
+          cp dist/*.whl dist/ndea-latest.whl
           gh release create "${{ github.ref_name }}" dist/* \
             --repo "${{ github.repository }}" \
             --title "${{ github.ref_name }}" \

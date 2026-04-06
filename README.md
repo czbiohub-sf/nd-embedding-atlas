@@ -15,7 +15,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 **2. Install nd-embedding-atlas:**
 ```bash
-uv tool install "git+ssh://git@github.com/czbiohub-sf/nd-embedding-atlas.git@main"
+uv tool install "https://github.com/czbiohub-sf/nd-embedding-atlas/releases/latest/download/ndea-latest.whl"
 ```
 
 **3. Launch the viewer:**
@@ -33,7 +33,7 @@ Then open **Chrome or Edge** at `http://localhost:5055`.
 ## Upgrade
 
 ```bash
-uv tool upgrade nd-embedding-atlas
+uv tool install "https://github.com/czbiohub-sf/nd-embedding-atlas/releases/latest/download/ndea-latest.whl" --force
 ```
 
 ## Documentation

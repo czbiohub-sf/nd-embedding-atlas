@@ -23,20 +23,28 @@ to their source 5D (TCZYX) image data for rapid exploration and annotation.
 
 ### For users (recommended)
 
-Install once with [uv](https://docs.astral.sh/uv/), then run from anywhere:
+Requires [uv](https://docs.astral.sh/uv/) and Chrome or Edge. No Node.js needed — the frontend is bundled in the wheel.
 
 ``` bash
 # Install uv if you don't have it
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Install nd-embedding-atlas
-uv tool install "git+ssh://git@github.com/czbiohub-sf/nd-embedding-atlas.git@main"
+# Install nd-embedding-atlas (pre-built wheel from latest GitHub release)
+uv tool install "https://github.com/czbiohub-sf/nd-embedding-atlas/releases/latest/download/ndea-latest.whl"
 ```
 
-To upgrade later:
+To upgrade to the latest release:
 
 ``` bash
-uv tool upgrade nd-embedding-atlas
+uv tool install "https://github.com/czbiohub-sf/nd-embedding-atlas/releases/latest/download/ndea-latest.whl" --force
+```
+
+To install a specific version, find the release at
+[github.com/czbiohub-sf/nd-embedding-atlas/releases](https://github.com/czbiohub-sf/nd-embedding-atlas/releases)
+and use the versioned wheel URL:
+
+``` bash
+uv tool install "https://github.com/czbiohub-sf/nd-embedding-atlas/releases/download/v0.1.0/nd_embedding_atlas-0.1.0-py3-none-any.whl"
 ```
 
 ### For developers (clone and build)
@@ -48,23 +56,23 @@ uv tool upgrade nd-embedding-atlas
     cd nd-embedding-atlas
     ```
 
-2. Setup the Python backend
+2. Install all dependencies (Python + frontend)
+
+    ```bash
+    mise run sync
+    ```
+
+    Or separately:
 
     ```bash
     uv sync
+    cd frontend && vp install
     ```
 
-3. Setup the Frontend
+3. Start the dev stack
 
     ```bash
-    cd frontend
-    pnpm install
-    ```
-
-    or
-
-    ```bash
-    vp install
+    mise run dev path/to/data.zarr
     ```
 
 See the [contributing guide](contributing.md) for the full dev setup.

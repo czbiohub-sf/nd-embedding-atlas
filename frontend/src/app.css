@@ -330,7 +330,7 @@ select:disabled {
 
 /* ── Hide Dockview tab strip — navigation handled by BottomDock ── */
 .dv-tabs-and-actions-container {
-  display: none;
+  display: none !important;
 }
 
 .dv-header-action {
