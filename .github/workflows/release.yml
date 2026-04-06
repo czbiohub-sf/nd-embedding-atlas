@@ -1,21 +1,24 @@
 name: Release
 
 on:
-  push:
-    tags:
-      - "v*"
+  release:
+    types: [published]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
-  contents: write  # required to create GitHub Releases and upload assets
+  contents: write  # required to upload assets to the release
 
 jobs:
   # Build and validate the frontend, producing the frontend-dist artifact
   frontend:
     uses: ./.github/workflows/build-frontend.yml
 
-  # Build the wheel — hatch hook finds frontend/dist/ already present and skips rebuild
+  # Build the wheel
   build:
-    name: Build wheel + sdist
+    name: Build wheel
     runs-on: ubuntu-latest
     needs: frontend
 
@@ -48,9 +51,9 @@ jobs:
           path: dist/
           retention-days: 7
 
-  # Publish the wheel as a GitHub Release asset
+  # Upload wheel to the already-created GitHub Release
   publish:
-    name: Publish GitHub Release
+    name: Upload to GitHub Release
     runs-on: ubuntu-latest
     needs: build
 
@@ -60,17 +63,16 @@ jobs:
           name: dist
           path: dist/
 
-      - name: Create GitHub Release
+      - name: Upload wheel assets
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # Copy wheel to stable name so users can always install from a fixed URL:
+          # Copy wheel to stable name for fixed-URL installs:
           # https://github.com/czbiohub-sf/nd-embedding-atlas/releases/latest/download/ndea-latest.whl
           cp dist/*.whl dist/ndea-latest.whl
-          gh release create "${{ github.ref_name }}" dist/* \
+          gh release upload "${{ github.event.release.tag_name }}" dist/* \
             --repo "${{ github.repository }}" \
-            --title "${{ github.ref_name }}" \
-            --generate-notes
+            --clobber
 
   # Uncomment to publish to PyPI when ready (configure trusted publishing at
   # pypi.org/manage/project/nd-embedding-atlas/settings/publishing/ first)
