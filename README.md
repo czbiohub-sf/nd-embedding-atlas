@@ -8,14 +8,17 @@ An interactive browser-based dashboard that links high-dimensional AI embeddings
 
 ## Quick start
 
-**1. Install [uv](https://docs.astral.sh/uv/) if you don't have it:**
+**1. Install [uv](https://docs.astral.sh/uv/) and the [GitHub CLI](https://cli.github.com/) if you don't have them:**
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
+brew install gh && gh auth login   # macOS; see https://cli.github.com for other platforms
 ```
 
-**2. Install nd-embedding-atlas:**
+**2. Download and install nd-embedding-atlas:**
 ```bash
-uv tool install "https://github.com/czbiohub-sf/nd-embedding-atlas/releases/latest/download/ndea-latest.whl"
+gh release download --repo czbiohub-sf/nd-embedding-atlas \
+  -p "nd_embedding_atlas-*.whl" -D /tmp/ndea/
+uv tool install /tmp/ndea/nd_embedding_atlas-*.whl
 ```
 
 **3. Launch the viewer:**
@@ -33,7 +36,9 @@ Then open **Chrome or Edge** at `http://localhost:5055`.
 ## Upgrade
 
 ```bash
-uv tool install "https://github.com/czbiohub-sf/nd-embedding-atlas/releases/latest/download/ndea-latest.whl" --force
+gh release download --repo czbiohub-sf/nd-embedding-atlas \
+  -p "nd_embedding_atlas-*.whl" -D /tmp/ndea/
+uv tool install /tmp/ndea/nd_embedding_atlas-*.whl --force
 ```
 
 ## Documentation
