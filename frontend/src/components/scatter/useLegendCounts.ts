@@ -21,8 +21,10 @@ export function useLegendCounts(opts: {
   selection: Selection;
   table: string;
   categoryCol: string | null;
+  /** Called when the category column is missing from the VIEW (stale after backend restart). */
+  onStaleColumn?: () => void;
 }): Map<number, CategoryCounts> | null {
-  const { coordinator, selection, table, categoryCol } = opts;
+  const { coordinator, selection, table, categoryCol, onStaleColumn } = opts;
 
   const query = useCallback(
     (predicate: FilterExpr) => {
@@ -50,6 +52,9 @@ export function useLegendCounts(opts: {
     query,
     transform,
     enabled: categoryCol !== null,
+    onError: (err) => {
+      if (String(err).includes("not found in FROM clause")) onStaleColumn?.();
+    },
   });
 
   return data;

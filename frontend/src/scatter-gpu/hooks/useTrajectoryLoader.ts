@@ -50,9 +50,21 @@ export function useTrajectoryLoader(opts: UseTrajectoryLoaderOptions): UseTrajec
       const catSelect = categoryCol ? `, ${categoryCol} AS category` : "";
       const safeFovName = String(fovName).replace(/'/g, "''");
       const safeTrackId = Number.isFinite(trackId) ? trackId : 0;
-      const sql = `SELECT __row_index__ AS "rowIndex", ${xCol} AS emb_x, ${yCol} AS emb_y, ${spatialX} AS spatial_x, ${spatialY} AS spatial_y, t, _dataset AS datasetKey${catSelect} FROM ${table} WHERE track_id = ${safeTrackId} AND fov_name = '${safeFovName}' ORDER BY t ASC`;
+      const baseSql = `SELECT __row_index__ AS "rowIndex", ${xCol} AS emb_x, ${yCol} AS emb_y, ${spatialX} AS spatial_x, ${spatialY} AS spatial_y, t, _dataset AS datasetKey`;
+      const whereClause = `FROM ${table} WHERE track_id = ${safeTrackId} AND fov_name = '${safeFovName}' ORDER BY t ASC`;
+      const sql = `${baseSql}${catSelect} ${whereClause}`;
 
-      const result = await coordinator.query(sql, { type: "json" });
+      let result;
+      try {
+        result = await coordinator.query(sql, { type: "json" });
+      } catch (e) {
+        // __ev__* column missing from VIEW (stale after backend restart) — retry without it
+        if (catSelect && String(e).includes("not found in FROM clause")) {
+          result = await coordinator.query(`${baseSql} ${whereClause}`, { type: "json" });
+        } else {
+          throw e;
+        }
+      }
       const rows = toRows<TrajectoryFrame>(result);
 
       queryClient.setQueryData(key, rows);

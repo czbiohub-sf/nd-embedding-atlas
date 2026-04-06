@@ -103,6 +103,7 @@ export function ScatterContent({
     categoryLoading,
     coloredCategoryMapping,
     categoryCol,
+    clearCategoryMapping,
   } = useScatterColorState(coordinator, metadata);
 
   // ── Isolation → Mosaic cross-filter + GPU alpha dimming ───────────────────
@@ -222,6 +223,7 @@ export function ScatterContent({
         table={table}
         categoryCol={categoryCol}
         onIsolationChange={handleIsolationChange}
+        onStaleColumn={clearCategoryMapping}
       >
         <ScatterView {...scatterViewProps} overlayControls={overlayControls} />
       </LegendProvider>
@@ -242,6 +244,7 @@ export function ScatterContent({
           table={table}
           categoryCol={categoryCol}
           onIsolationChange={handleIsolationChange}
+          onStaleColumn={clearCategoryMapping}
         >
           <ScatterView {...scatterViewProps} overlayControls={overlayControls} />
         </LegendProvider>

@@ -44,6 +44,8 @@ export interface LegendMeta {
   selection: Selection;
   table: string;
   categoryCol: string | null;
+  /** Clears the category mapping when the __ev__* column is missing after backend restart. */
+  onStaleColumn?: () => void;
 }
 
 // ── Context ─────────────────────────────────────────────────────────────────
@@ -80,6 +82,8 @@ interface LegendProviderProps {
   categoryCol: string | null;
   /** Called whenever the set of isolated category indices changes. */
   onIsolationChange?: (isolatedIndices: Set<number>) => void;
+  /** Called when the __ev__* column is missing from the VIEW (stale after backend restart). */
+  onStaleColumn?: () => void;
   children: React.ReactNode;
 }
 
@@ -90,6 +94,7 @@ export function LegendProvider({
   table,
   categoryCol,
   onIsolationChange,
+  onStaleColumn,
   children,
 }: LegendProviderProps) {
   const [mode, setMode] = useState<"categorical" | "continuous">("categorical");
@@ -203,8 +208,9 @@ export function LegendProvider({
       selection,
       table,
       categoryCol,
+      onStaleColumn,
     }),
-    [legend, coordinator, selection, table, categoryCol],
+    [legend, coordinator, selection, table, categoryCol, onStaleColumn],
   );
 
   const value: LegendContextValue = useMemo(() => ({ state, actions, meta }), [state, actions, meta]);
