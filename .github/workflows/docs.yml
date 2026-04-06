@@ -22,6 +22,8 @@ jobs:
           python-version: "3.13"
           enable-cache: true
       - run: uv sync --locked --group doc
+        env:
+          HATCH_BUILD_HOOKS_ENABLE: "false"
       - run: uv run zensical build --clean
 
   # Deploy versioned docs via mike
@@ -39,6 +41,8 @@ jobs:
           enable-cache: true
 
       - run: uv sync --locked --group doc
+        env:
+          HATCH_BUILD_HOOKS_ENABLE: "false"
 
       - run: git config user.name "github-actions[bot]"
       - run: git config user.email "github-actions[bot]@users.noreply.github.com"
