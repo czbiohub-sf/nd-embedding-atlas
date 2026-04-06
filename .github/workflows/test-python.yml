@@ -5,16 +5,15 @@ on:
 
 jobs:
   test:
-    name: "Python ${{ matrix.python }} (${{ matrix.deps }})"
+    name: "Python ${{ matrix.python }}"
     runs-on: ubuntu-latest
-    continue-on-error: ${{ matrix.deps == 'pre' }}
+    defaults:
+      run:
+        working-directory: frontend  # setup-vp composite action inherits this
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - { python: "3.12", deps: stable }
-          - { python: "3.13", deps: stable }
-          - { python: "3.13", deps: pre }
+        python: ["3.12", "3.13"]
 
     steps:
       - uses: actions/checkout@v5
@@ -22,19 +21,17 @@ jobs:
           filter: blob:none
           fetch-depth: 0
 
+      - uses: voidzero-dev/setup-vp@v1
+
       - uses: astral-sh/setup-uv@v7
         with:
           python-version: ${{ matrix.python }}
           enable-cache: true
 
       - name: Sync test dependencies
-        # stable: --locked enforces the committed lockfile
-        # pre: no --locked so uv can resolve pre-release versions beyond the lockfile
-        run: uv sync ${{ matrix.deps == 'pre' && '' || '--locked' }} --group test
-        env:
-          UV_PRERELEASE: ${{ matrix.deps == 'pre' && 'allow' || 'if-necessary-or-explicit' }}
+        working-directory: ${{ github.workspace }}
+        run: uv sync --locked --group test
 
       - name: Run tests
+        working-directory: ${{ github.workspace }}
         run: uv run pytest -v
-        env:
-          UV_PRERELEASE: ${{ matrix.deps == 'pre' && 'allow' || 'if-necessary-or-explicit' }}

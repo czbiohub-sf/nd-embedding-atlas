@@ -74,7 +74,7 @@ neuroglancer = [
 # Uses hatch_build.py at project root
 
 build.artifacts = [ "src/nd_embedding_atlas/_frontend" ]
-build.hooks.custom = { "enable-by-default" = false }
+build.hooks.custom = {}
 build.targets.wheel.force-include."frontend/dist" = "nd_embedding_atlas/_frontend"
 envs.default.installer = "uv"
 envs.default.dependency-groups = [ "dev" ]
