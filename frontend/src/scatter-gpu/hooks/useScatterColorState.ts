@@ -40,6 +40,7 @@ export interface ScatterColorState {
   categoryLoading: boolean;
   coloredCategoryMapping: CategoryMapping | null;
   categoryCol: string | null;
+  clearCategoryMapping: () => void;
 }
 
 export function useScatterColorState(coordinator: Coordinator, metadata: Metadata): ScatterColorState {
@@ -78,6 +79,13 @@ export function useScatterColorState(coordinator: Coordinator, metadata: Metadat
   // ── Category column mapping ─────────────────────────────────────────────────
   const [categoryMapping, setCategoryMapping] = useState<CategoryMapping | null>(null);
   const [categoryLoading, setCategoryLoading] = useState(false);
+
+  // Clear stale category mapping when coordinator changes (e.g. backend restart).
+  // The __ev__* columns in obs_base are gone after restart — any cached mapping
+  // referencing them would cause trajectory queries to fail.
+  useEffect(() => {
+    setCategoryMapping(null);
+  }, [coordinator]);
 
   useEffect(() => {
     if (!colorByColumn || colorMode !== "categorical") {
@@ -158,5 +166,6 @@ export function useScatterColorState(coordinator: Coordinator, metadata: Metadat
     categoryLoading,
     coloredCategoryMapping,
     categoryCol,
+    clearCategoryMapping: () => setCategoryMapping(null),
   };
 }

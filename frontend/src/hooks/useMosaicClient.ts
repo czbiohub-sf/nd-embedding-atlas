@@ -11,6 +11,8 @@ export interface UseMosaicClientOptions<T> {
   transform: (result: unknown) => T;
   /** Set false to disable the client. Default true. */
   enabled?: boolean;
+  /** Called when the query errors. */
+  onError?: (err: Error) => void;
 }
 
 interface UseMosaicClientResult<T> {
@@ -20,7 +22,9 @@ interface UseMosaicClientResult<T> {
 }
 
 export function useMosaicClient<T>(opts: UseMosaicClientOptions<T>): UseMosaicClientResult<T> {
-  const { coordinator, selection, query, transform, enabled = true } = opts;
+  const { coordinator, selection, query, transform, enabled = true, onError } = opts;
+  const onErrorRef = useRef(onError);
+  onErrorRef.current = onError;
 
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
@@ -62,6 +66,7 @@ export function useMosaicClient<T>(opts: UseMosaicClientOptions<T>): UseMosaicCl
       queryError: (err: Error) => {
         setError(err);
         setLoading(false);
+        onErrorRef.current?.(err);
       },
     });
 

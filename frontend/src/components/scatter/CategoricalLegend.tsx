@@ -25,11 +25,11 @@ import { useLegendCounts } from "./useLegendCounts";
 export function CategoricalLegend() {
   const { state, actions, meta } = useLegend();
   const { isolatedIndices, disabledIndices, colorOverrides } = state;
-  const { legend, coordinator, selection, table, categoryCol } = meta;
+  const { legend, coordinator, selection, table, categoryCol, onStaleColumn } = meta;
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Reactive filtered counts — updates when cross-filter changes
-  const counts = useLegendCounts({ coordinator, selection, table, categoryCol });
+  const counts = useLegendCounts({ coordinator, selection, table, categoryCol, onStaleColumn });
 
   // ESC handler: clear isolation
   useEffect(() => {
