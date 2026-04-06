@@ -21,18 +21,23 @@ class CustomBuildHook(BuildHookInterface):
         # ── Build frontend if dist/ is missing ───────────────────────────────
         if not (dist_dir.is_dir() and any(dist_dir.iterdir())):
             if shutil.which("vp"):
-                vp_cmd = ["vp"]
+                install_cmd = ["vp", "install"]
+                build_cmd = ["vp", "build"]
+            elif shutil.which("pnpm"):
+                install_cmd = ["pnpm", "install", "--frozen-lockfile"]
+                build_cmd = ["pnpm", "build"]
             elif shutil.which("npx"):
-                vp_cmd = ["npx", "vite-plus"]
+                install_cmd = ["npx", "vite-plus", "install"]
+                build_cmd = ["npx", "vite-plus", "build"]
             else:
                 msg = "Node.js (with npx) is required to build the frontend. Load it with: module load nodejs"
                 raise RuntimeError(msg)
 
             self.app.display_info("Installing frontend dependencies...")
-            subprocess.run([*vp_cmd, "install"], cwd=str(frontend_dir), check=True)
+            subprocess.run(install_cmd, cwd=str(frontend_dir), check=True)
 
             self.app.display_info("Building frontend...")
-            subprocess.run([*vp_cmd, "build"], cwd=str(frontend_dir), check=True)
+            subprocess.run(build_cmd, cwd=str(frontend_dir), check=True)
         else:
             self.app.display_info("Frontend dist/ exists, skipping build")
 
