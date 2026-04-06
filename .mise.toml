@@ -61,7 +61,7 @@ run = ["uv run pytest -q", "uvx prek"]
 
 [tasks.build]
 description = "Production build — frontend then wheel"
-run = "cd frontend && vp build && cd .. && uv build"
+run = "cd frontend && vp build && cd .. && uv build --wheel"
 
 [tasks.clean]
 description = "Remove build artifacts"

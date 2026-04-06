@@ -34,8 +34,10 @@ jobs:
         with:
           enable-cache: true
 
-      - name: Build wheel + sdist
-        run: uv build
+      - name: Build wheel
+        run: uv build --wheel
+        env:
+          HATCH_BUILD_HOOKS_ENABLE: "true"
 
       - name: Check wheel metadata
         run: uvx twine check --strict dist/*.whl
