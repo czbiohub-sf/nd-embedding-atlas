@@ -44,6 +44,7 @@ class DatasetConfig:
     default_x: str
     default_y: str
     id_column: str = "__row_index__"
+    dataset_keys: list[str] | None = None
 
 
 @dataclasses.dataclass
@@ -55,6 +56,17 @@ class ExportTaskState:
     status: str = "running"  # "running" | "done" | "error"
     output_path: str | None = None
     n_obs: int | None = None
+    error: str | None = None
+
+
+@dataclasses.dataclass
+class GeneTaskState:
+    """Typed state for a single gene-column materialization task."""
+
+    task_id: str
+    task: asyncio.Task[None]
+    status: str = "loading"  # "loading" | "ready" | "error"
+    column: str = ""
     error: str | None = None
 
 
@@ -73,6 +85,8 @@ class ViewerState:
         Resolved spatial column names.
     export_dir
         Resolved export directory path.
+    dataset_ome_versions
+        OME-Zarr version string per dataset key (e.g. ``"0.4"`` or ``"0.5"``).
     """
 
     def __init__(
@@ -83,17 +97,24 @@ class ViewerState:
         available_obsm_keys: list[str],
         spatial: SpatialColumns,
         export_dir: pathlib.Path,
+        dataset_plates: dict[str, pathlib.Path] | None = None,
+        dataset_ome_versions: dict[str, str] | None = None,
+        project_config_path: pathlib.Path | None = None,
     ) -> None:
         self.collection = collection
         self.store = store
         self.available_obsm_keys = available_obsm_keys
         self.spatial = spatial
         self.export_dir = export_dir
+        self.dataset_plates: dict[str, pathlib.Path] = dataset_plates or {}
+        self.dataset_ome_versions: dict[str, str] = dataset_ome_versions or {}
+        self.project_config_path: pathlib.Path | None = project_config_path
 
         self.loading_tasks: dict[str, asyncio.Task[None]] = {}
         self.load_errors: dict[str, str] = {}
         self.parquet_cache: bytes | None = None
         self.export_task: ExportTaskState | None = None
+        self.gene_tasks: dict[str, GeneTaskState] = {}
 
     @property
     def executor(self):

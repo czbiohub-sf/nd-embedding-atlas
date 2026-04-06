@@ -1,382 +1,447 @@
 @import url("https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&family=JetBrains+Mono:wght@400;500;600&display=swap");
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/geist-mono";
 
 /*
- * nd-embedding-atlas dashboard theme
+ * nd-embedding-atlas — design token system
  *
- * Design direction: Scientific instrument panel — precise, data-dense, dark.
- * Typography: JetBrains Mono (data/code), DM Sans (UI labels/headings).
+ * Architecture (Tailwind v4):
+ *   @theme  → defines tokens WITH light values → generates Tailwind utilities
+ *             (bg-base, text-text-muted, border-border-subtle, etc.)
+ *   .dark   → overrides the same CSS variables → utilities switch automatically
+ *   Components → use only Tailwind utilities, no inline styles or pure CSS
+ *
+ * Design: Scientific instrument panel. DM Sans (UI) + JetBrains Mono (data).
  */
 
+/* ── Class-based dark mode variant ──────────────────────────────────── */
+@custom-variant dark (&:is(.dark *));
+
+/* ── Design tokens ────────────────────────────────────────────────────
+ *  @theme injects these into :root AND generates Tailwind utilities.
+ *  Light values are the defaults. .dark overrides them below.
+ * ──────────────────────────────────────────────────────────────────── */
 @theme {
-    --font-sans: "DM Sans", system-ui, -apple-system, sans-serif;
-    --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Code", monospace;
+  /* Fonts */
+  --font-sans: "DM Sans", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Code", monospace;
 
-    /* Backgrounds */
-    --color-base: #0c1021;
-    --color-surface: #141829;
-    --color-elevated: #1a1f36;
+  /* ── Surface backgrounds (light defaults — overridden in .dark via preset vars) ── */
+  --color-base: #ffffff; /* = oklch(1 0 0)     — page root bg    */
+  --color-surface: #f7f7f7; /* = oklch(0.97 0 0)  — panel bg        */
+  --color-elevated: #ebebeb; /* = oklch(0.93 0 0)  — hover / raised  */
 
-    /* Borders */
-    --color-border-subtle: #242a45;
-    --color-border-active: #3b4578;
+  /* ── Borders ── */
+  --color-border-subtle: #e8e8e8; /* = oklch(0.922 0 0) */
+  --color-border-active: #b8b8b8; /* = oklch(0.72 0 0)  */
 
-    /* Text */
-    --color-text-primary: #e2e8f0;
-    --color-text-secondary: #8892b0;
-    --color-text-muted: #4a5278;
+  /* ── Text ── */
+  --color-text-primary: #111111; /* = oklch(0.13 0 0)  */
+  --color-text-secondary: #444444; /* = oklch(0.36 0 0)  */
+  --color-text-muted: #6e6e6e; /* = oklch(0.50 0 0)  */
 
-    /* Accent */
-    --color-accent-cyan: #22d3ee;
-    --color-accent-amber: #f59e0b;
-    --color-accent-rose: #f43f5e;
+  /* ── Data visualization accents ── */
+  --color-accent-cyan: #06b6d4;
+  --color-accent-amber: #f59e0b;
+  --color-accent-rose: #f43f5e;
 
-    /* Charts */
-    --color-chart-mark: #6366f1;
-    --color-chart-mark-fade: oklch(0.585 0.233 277.117 / 0.125);
+  /* ── Charts ── */
+  --color-chart-mark: oklch(0.585 0.233 277.117);
+  --color-chart-mark-fade: oklch(0.585 0.233 277.117 / 0.125);
+
+  /* ── Layout ── */
+  --footer-height: 1.5rem;
+
+  /* ── Z-index layer system ── */
+  --z-canvas: 10;
+  --z-hud: 20;
+  --z-panel: 30;
+  --z-float: 100;
+  --z-popover: 200;
+  --z-modal: 300;
+  --z-toast: 400;
 }
 
-/* Base styles */
+/* ── Dark mode overrides ──────────────────────────────────────────────
+ *  Override the same CSS vars defined in @theme above.
+ *  Tailwind utilities (bg-base, text-text-muted, etc.) pick up the
+ *  new values automatically — no dark: prefix needed in components.
+ * ──────────────────────────────────────────────────────────────────── */
+/* html.dark has specificity (0,2,0) vs :root (0,1,0) — ensures dark vars win
+ * even when the preset's :root block appears later in the file.            */
+html.dark {
+  /* Bridge old --color-* tokens to the preset's OKLCH dark vars.
+   * Preset sets --background, --card, --muted, --foreground, --border
+   * in its own .dark block below — we reference them here so everything stays in sync. */
+  --color-base: var(--background); /* oklch(0.145 0 0) ≈ #1a1a1a */
+  --color-surface: var(--card); /* oklch(0.205 0 0) ≈ #282828 */
+  --color-elevated: var(--muted); /* oklch(0.269 0 0) ≈ #363636 */
+
+  --color-border-subtle: var(--border); /* oklch(1 0 0 / 10%)         */
+  --color-border-active: oklch(1 0 0 / 22%);
+
+  --color-text-primary: var(--foreground); /* oklch(0.985 0 0)   */
+  --color-text-secondary: var(--muted-foreground); /* oklch(0.708 0 0)   */
+  --color-text-muted: oklch(0.62 0 0);
+
+  /* Preset OKLCH dark values follow — they set --background, --card, --muted etc.
+   * which our bridge vars above reference via var(). */
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.398 0.195 277.366);
+  --primary-foreground: oklch(0.962 0.018 272.314);
+  --secondary: oklch(0.274 0.006 286.033);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.76 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 16%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.585 0.233 277.117);
+  --sidebar-primary-foreground: oklch(0.962 0.018 272.314);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+}
+
+/* ── Base layout ──────────────────────────────────────────────────── */
 html,
 body,
 #root {
-    height: 100%;
-    width: 100%;
-    margin: 0;
-    padding: 0;
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
 }
 
 body {
-    background-color: var(--color-base);
-    color: var(--color-text-primary);
-    font-family: var(--font-sans);
-    font-size: 13px;
-    line-height: 1.4;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
+  background-color: var(--color-base);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* Scrollbar styling */
+/* ── Scrollbar ────────────────────────────────────────────────────── */
 ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+  width: 6px;
+  height: 6px;
 }
-
 ::-webkit-scrollbar-track {
-    background: transparent;
+  background: transparent;
 }
-
 ::-webkit-scrollbar-thumb {
-    background: var(--color-border-subtle);
-    border-radius: 3px;
+  background: var(--color-border-subtle);
+  border-radius: 3px;
 }
-
 ::-webkit-scrollbar-thumb:hover {
-    background: var(--color-border-active);
+  background: var(--color-border-active);
 }
 
-/* Select/dropdown styling for dark theme */
+/* ── Native select ────────────────────────────────────────────────── */
 select {
-    appearance: none;
-    background-color: var(--color-surface);
-    color: var(--color-text-primary);
-    border: 1px solid var(--color-border-subtle);
-    border-radius: 4px;
-    padding: 2px 20px 2px 6px;
-    font-size: 12px;
-    font-family: var(--font-sans);
-    cursor: pointer;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238892b0' d='M3 5l3 3 3-3'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: right 4px center;
+  appearance: none;
+  background-color: var(--color-surface);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 4px;
+  padding: 2px 20px 2px 6px;
+  font-size: 12px;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238892b0' d='M3 5l3 3 3-3'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 4px center;
 }
-
 select:hover {
-    border-color: var(--color-border-active);
+  border-color: var(--color-border-active);
 }
-
 select:focus {
-    outline: 1px solid var(--color-accent-cyan);
-    outline-offset: -1px;
+  outline: 1px solid var(--color-ring);
+  outline-offset: -1px;
 }
-
 select:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
-/* Mosaic slider input — dark theme overrides */
+/* ── Mosaic time slider ───────────────────────────────────────────── */
 .time-slider .input {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 11px;
-    font-family: var(--font-mono);
-    color: var(--color-text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--color-text-secondary);
 }
-
 .time-slider .input label {
-    white-space: nowrap;
+  white-space: nowrap;
 }
-
 .time-slider .input label.value {
-    min-width: 2ch;
-    text-align: right;
-    color: var(--color-text-primary);
-    font-variant-numeric: tabular-nums;
+  min-width: 2ch;
+  text-align: right;
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
 }
-
 .time-slider .input input[type="range"] {
-    width: 120px;
-    height: 4px;
-    accent-color: var(--color-accent-cyan);
-    cursor: pointer;
+  width: 120px;
+  height: 4px;
+  accent-color: var(--color-accent-cyan);
+  cursor: pointer;
 }
 
-/* Trajectory — dim point cloud when a trajectory is active */
+/* ── Trajectory active state ──────────────────────────────────────── */
 .trajectory-active canvas {
-    opacity: 0.2;
-    transition: opacity 0.2s ease;
+  opacity: 0.2;
+  transition: opacity 0.2s ease;
 }
 
-/* Point info pane (Tweakpane overlay on scatter) */
-.tp-point-info .tp-dfwv {
-    min-width: 180px;
+/* ── Status bar ───────────────────────────────────────────────────── */
+.status-bar {
+  height: 24px;
+  background: var(--color-status-bar);
+  border-top: 1px solid var(--color-status-bar-border);
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+  user-select: none;
 }
 
-/* ── Tweakpane overlay positioning ───────────────────────────────── */
-.tp-overlay {
-    position: absolute;
-    z-index: 10;
-    max-height: 50vh;
-    overflow-y: auto;
-}
-
-.tp-overlay--top-left {
-    top: 8px;
-    left: 8px;
-}
-.tp-overlay--bottom-left {
-    bottom: 8px;
-    left: 8px;
-}
-.tp-overlay--top-right {
-    top: 8px;
-    right: 8px;
-}
-.tp-overlay--bottom-right {
-    bottom: 8px;
-    right: 8px;
-}
-
-/* Tweakpane dark theme — applied to panes inside overlays */
-.tp-overlay .tp-dfwv {
-    --tp-base-background-color: hsla(230, 30%, 8%, 0.85);
-    --tp-base-shadow-color: transparent;
-    --tp-container-background-color: hsla(230, 30%, 12%, 0.5);
-    --tp-container-background-color-hover: hsla(230, 30%, 18%, 0.6);
-    --tp-groove-foreground-color: var(--color-accent-cyan);
-    --tp-input-background-color: var(--color-surface);
-    --tp-input-foreground-color: var(--color-text-primary);
-    --tp-label-foreground-color: var(--color-text-secondary);
-    --tp-monitor-background-color: var(--color-surface);
-    --tp-monitor-foreground-color: var(--color-text-primary);
-    --tp-button-background-color: var(--color-surface);
-    --tp-button-background-color-hover: var(--color-elevated);
-    --tp-button-foreground-color: var(--color-text-primary);
-    backdrop-filter: blur(8px);
-    border-radius: 6px;
-    font-family: var(--font-mono);
-    font-size: 10px;
-}
-
-/* ── Categorical legend ──────────────────────────────────────────── */
-.legend-categorical {
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    z-index: 10;
-    max-height: 40%;
-    overflow-y: auto;
-    background: hsla(230, 30%, 8%, 0.85);
-    backdrop-filter: blur(8px);
-    border-radius: 6px;
-    padding: 6px 8px;
-    font-family: var(--font-sans);
-    font-size: 11px;
-    color: var(--color-text-primary);
-    min-width: 140px;
-}
-
-.legend-row {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 2px 0;
-    border-radius: 3px;
-    position: relative;
-    transition: opacity 0.15s;
-}
-
-.legend-row:hover {
-    background: hsla(230, 30%, 15%, 0.5);
-}
-
-.legend-row--dimmed {
-    opacity: 0.35;
-}
-
-.legend-dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    border: 1.5px solid transparent;
-    padding: 0;
-    cursor: pointer;
-    flex-shrink: 0;
-    transition:
-        border-color 0.15s,
-        box-shadow 0.15s;
-}
-
-.legend-dot:hover {
-    border-color: var(--color-text-secondary);
-}
-
-.legend-dot--isolated {
-    border-color: var(--color-text-primary);
-    box-shadow: 0 0 0 2px hsla(0, 0%, 100%, 0.25);
-}
-
-.legend-label {
-    flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    color: var(--color-text-secondary);
-}
-
-.legend-row--dimmed .legend-label {
-    color: var(--color-text-muted);
-}
-
-.legend-count {
-    font-family: var(--font-mono);
-    font-size: 10px;
-    color: var(--color-text-muted);
-    font-variant-numeric: tabular-nums;
-    flex-shrink: 0;
-}
-
-.legend-picker-btn {
-    width: 18px;
-    height: 18px;
-    border: none;
-    background: transparent;
-    color: var(--color-text-muted);
-    cursor: pointer;
-    border-radius: 3px;
-    font-size: 11px;
-    padding: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    transition:
-        color 0.15s,
-        background 0.15s;
-}
-
-.legend-picker-btn:hover {
-    color: var(--color-text-primary);
-    background: var(--color-elevated);
-}
-
-.legend-picker-popout {
-    position: absolute;
-    right: 100%;
-    top: 50%;
-    transform: translateY(-50%);
-    margin-right: 6px;
-    background: var(--color-elevated);
-    border: 1px solid var(--color-border-subtle);
-    border-radius: 6px;
-    padding: 8px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 6px;
-    z-index: 20;
-    box-shadow: 0 4px 16px hsla(0, 0%, 0%, 0.4);
-}
-
-.legend-picker-popout input[type="color"] {
-    width: 120px;
-    height: 80px;
-    border: none;
-    padding: 0;
-    cursor: pointer;
-    border-radius: 4px;
-    background: transparent;
-}
-
-.legend-picker-popout input[type="color"]::-webkit-color-swatch-wrapper {
-    padding: 0;
-}
-
-.legend-picker-popout input[type="color"]::-webkit-color-swatch {
-    border: none;
-    border-radius: 4px;
-}
-
-.legend-picker-popout input[type="color"]::-moz-color-swatch {
-    border: none;
-    border-radius: 4px;
-}
-
-.legend-picker-hex {
-    font-family: var(--font-mono);
-    font-size: 10px;
-    color: var(--color-text-secondary);
-}
-
-.legend-count-filtered {
-    color: var(--color-accent-cyan);
-}
-
-/* Dockview header action buttons */
-.dv-header-action {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-    border: none;
-    background: transparent;
-    color: var(--color-text-muted);
-    cursor: pointer;
-    border-radius: 4px;
-}
-
-.dv-header-action:hover {
-    color: var(--color-text-primary);
-    background: var(--color-elevated);
-}
-
-/* Dockview dark theme overrides — map to nd-embedding-atlas tokens */
+/* ── Dockview — dark theme ────────────────────────────────────────── */
+/* Override Dockview's hardcoded abyss-light blue tint */
+.dockview-theme-abyss,
 .dockview-theme-dark {
-    --dv-background-color: var(--color-base);
-    --dv-paneview-header-border-color: var(--color-border-subtle);
-    --dv-tabs-container-background-color: var(--color-surface);
-    --dv-activegroup-visiblepanel-tab-background-color: var(--color-elevated);
-    --dv-activegroup-hiddenpanel-tab-background-color: var(--color-surface);
-    --dv-inactivegroup-visiblepanel-tab-background-color: var(--color-surface);
-    --dv-inactivegroup-hiddenpanel-tab-background-color: var(--color-base);
-    --dv-separator-border: var(--color-border-subtle);
-    --dv-tab-font-size: 12px;
-    --dv-font-family: var(--font-sans);
-    --dv-activegroup-visiblepanel-tab-color: var(--color-text-primary);
-    --dv-activegroup-hiddenpanel-tab-color: var(--color-text-muted);
-    --dv-inactivegroup-visiblepanel-tab-color: var(--color-text-secondary);
-    --dv-inactivegroup-hiddenpanel-tab-color: var(--color-text-muted);
+  --dv-color-abyss-light: var(--color-elevated);
+}
+
+.dockview-theme-dark {
+  --dv-background-color: var(--color-base);
+  --dv-group-view-background-color: var(--color-base);
+  --dv-paneview-header-border-color: var(--color-border-subtle);
+  --dv-tabs-container-background-color: var(--color-surface);
+  --dv-activegroup-visiblepanel-tab-background-color: var(--color-elevated);
+  --dv-activegroup-hiddenpanel-tab-background-color: var(--color-surface);
+  --dv-inactivegroup-visiblepanel-tab-background-color: var(--color-surface);
+  --dv-inactivegroup-hiddenpanel-tab-background-color: var(--color-base);
+  --dv-separator-border: var(--color-border-subtle);
+  --dv-tab-font-size: 12px;
+  --dv-font-family: var(--font-sans);
+  --dv-activegroup-visiblepanel-tab-color: var(--color-text-primary);
+  --dv-activegroup-hiddenpanel-tab-color: var(--color-text-muted);
+  --dv-inactivegroup-visiblepanel-tab-color: var(--color-text-secondary);
+  --dv-inactivegroup-hiddenpanel-tab-color: var(--color-text-muted);
+}
+
+/* ── Design system utilities ──────────────────────────────────────────
+ *  Extracted behavioral invariants. @utility (not @layer components) so
+ *  variants (hover:, disabled:, etc.) keep working in Tailwind v4.
+ * ──────────────────────────────────────────────────────────────────── */
+
+/* Normalize SVG children on interactive elements:
+ * non-interactive, no flex-shrink, default 1rem if not explicitly sized. */
+@utility icon-slot {
+  & svg {
+    pointer-events: none;
+    flex-shrink: 0;
+  }
+  & svg:not([class*="size-"]) {
+    width: 1rem;
+    height: 1rem;
+  }
+}
+
+/* Thin focus ring — buttons, inputs */
+@utility focus-ring {
+  @apply focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50;
+}
+
+/* Thick focus ring — badges, chips */
+@utility focus-ring-thick {
+  @apply focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50;
+}
+
+/* Validation error ring — destructive border + ring, dark-mode adjusted */
+@utility invalid-ring {
+  @apply aria-invalid:border-destructive aria-invalid:ring-1 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40;
+}
+
+/* Dockview light + abyss override (abyss hardcodes dark colors) */
+:root:not(.dark) .dockview-theme-abyss,
+.dockview-theme-light {
+  --dv-background-color: var(--color-base);
+  --dv-paneview-header-border-color: var(--color-border-subtle);
+  --dv-tabs-container-background-color: var(--color-surface);
+  --dv-activegroup-visiblepanel-tab-background-color: var(--color-elevated);
+  --dv-activegroup-hiddenpanel-tab-background-color: var(--color-surface);
+  --dv-inactivegroup-visiblepanel-tab-background-color: var(--color-surface);
+  --dv-inactivegroup-hiddenpanel-tab-background-color: var(--color-base);
+  --dv-separator-border: var(--color-border-subtle);
+  --dv-tab-font-size: 12px;
+  --dv-font-family: var(--font-sans);
+  --dv-activegroup-visiblepanel-tab-color: var(--color-text-primary);
+  --dv-activegroup-hiddenpanel-tab-color: var(--color-text-muted);
+  --dv-inactivegroup-visiblepanel-tab-color: var(--color-text-secondary);
+  --dv-inactivegroup-hiddenpanel-tab-color: var(--color-text-muted);
+}
+:root:not(.dark) .dv-grid-view.dv-dockview,
+:root:not(.dark) .dv-groupview {
+  background-color: var(--color-base);
+}
+:root:not(.dark) .dv-tabs-and-actions-container {
+  background-color: var(--color-surface);
+}
+:root:not(.dark) .dv-tab {
+  color: var(--color-text-primary);
+}
+:root:not(.dark) .dv-tab.dv-active-tab {
+  background-color: var(--color-elevated);
+}
+:root:not(.dark) .dv-tab:not(.dv-active-tab) {
+  background-color: var(--color-surface);
+  color: var(--color-text-secondary);
+}
+:root:not(.dark) .dv-pane-header {
+  background-color: var(--color-surface);
+  color: var(--color-text-secondary);
+}
+
+/* ── Hide Dockview tab strip — navigation handled by BottomDock ── */
+.dv-tabs-and-actions-container {
+  display: none !important;
+}
+
+.dv-header-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  border-radius: 4px;
+}
+.dv-header-action:hover {
+  color: var(--color-text-primary);
+  background: var(--color-elevated);
+}
+/*
+ ---break---
+ */
+@theme inline {
+  --font-heading: var(--font-mono);
+  --font-mono: "Geist Mono Variable", monospace;
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+/*
+ ---break---
+ */
+:root {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.457 0.24 277.023);
+  --primary-foreground: oklch(0.962 0.018 272.314);
+  --secondary: oklch(0.967 0.001 286.375);
+  --secondary-foreground: oklch(0.21 0.006 285.885);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.46 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.87 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --radius: 0.45rem;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.511 0.262 276.966);
+  --sidebar-primary-foreground: oklch(0.962 0.018 272.314);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+}
+/*
+ ---break---
+ */
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-mono;
+  }
 }

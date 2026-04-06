@@ -310,7 +310,7 @@ class AnnDataCollection:
 
         return ad.concat(
             adatas,
-            join="outer",
+            join="inner",
             label="_dataset",
             index_unique="-",
         )

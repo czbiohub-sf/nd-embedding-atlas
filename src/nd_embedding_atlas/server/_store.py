@@ -11,6 +11,7 @@ from typing import Any, ClassVar
 import duckdb
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 
 from nd_embedding_atlas.vz._prepare import _obsm_column_prefix
 
@@ -65,9 +66,22 @@ class EmbeddingStore:
 
         obs_df = obs_df.copy()
         obs_df["__row_index__"] = range(len(obs_df))
+
+        # obs_name is the AnnData string index — stable identity for ObsSets
+        if "obs_name" not in obs_df.columns:
+            import warnings
+
+            warnings.warn(
+                "obs_name missing from obs_df; falling back to row index string. ObsSet identity will be unstable.",
+                stacklevel=2,
+            )
+            obs_df["obs_name"] = obs_df["__row_index__"].astype(str)
+
         _ = obs_df  # prevent GC — DuckDB scans local Python objects by name
         self.con.sql("CREATE TABLE obs_base AS (SELECT * FROM obs_df)")
         self.con.sql("CREATE INDEX obs_base_row_index ON obs_base(__row_index__)")
+        self.con.sql("CREATE INDEX obs_base_obs_name ON obs_base(obs_name)")
+        self._init_obsset_tables()
         self._rebuild_view()
         self.n_obs = len(obs_df)
 
@@ -100,6 +114,34 @@ class EmbeddingStore:
             self._loaded[obsm_key] = {"prefix": prefix, "n_dims": n_dims, "table": table_name}
             self._rebuild_view()
 
+    def _init_obsset_tables(self) -> None:
+        """Create obssets and obsset_members tables if they do not exist.
+
+        No FK constraints — DuckDB silently ignores cascade enforcement.
+        The composite PRIMARY KEY on obsset_members prevents duplicate members.
+        """
+        self.con.sql("""
+            CREATE TABLE IF NOT EXISTS obssets (
+                obsset_id     TEXT PRIMARY KEY,
+                name          TEXT NOT NULL,
+                color         TEXT,
+                created_at    TIMESTAMP,
+                created_count INTEGER
+            )
+        """)
+        self.con.sql("""
+            CREATE TABLE IF NOT EXISTS obsset_members (
+                obsset_id   TEXT NOT NULL,
+                dataset_key TEXT NOT NULL,
+                obs_name    TEXT NOT NULL,
+                PRIMARY KEY (obsset_id, dataset_key, obs_name)
+            )
+        """)
+        self.con.sql("""
+            CREATE INDEX IF NOT EXISTS idx_obsset_members_id
+                ON obsset_members(obsset_id)
+        """)
+
     def _rebuild_view(self) -> None:
         """Recreate the ``dataset`` VIEW to include all registered embeddings.
 
@@ -130,6 +172,36 @@ class EmbeddingStore:
     def loaded_embeddings(self) -> types.MappingProxyType[str, dict[str, Any]]:
         """Read-only view of loaded obsm keys and their metadata."""
         return types.MappingProxyType(self._loaded)
+
+    def add_obs_column(self, col_name: str, data: pa.Array) -> None:
+        """Add a new column to ``obs_base`` and rebuild the VIEW.
+
+        Parameters
+        ----------
+        col_name
+            Name for the new column (must not already exist).
+        data
+            PyArrow array with exactly ``n_obs`` elements, aligned by ``__row_index__``.
+        """
+        with self._schema_lock:
+            # Register as an Arrow table so DuckDB can join against it reliably
+            # (local-variable scans are fragile in executor threads).
+            tbl = pa.table(
+                {
+                    "__row_index__": pa.array(np.arange(len(data), dtype=np.int64)),
+                    col_name: data,
+                }
+            )
+            self.con.register("_var_col_tbl", tbl)
+            try:
+                self.con.execute(f'ALTER TABLE obs_base ADD COLUMN "{col_name}" FLOAT')
+                self.con.execute(
+                    f'UPDATE obs_base SET "{col_name}" = t."{col_name}" '
+                    f"FROM _var_col_tbl t WHERE obs_base.__row_index__ = t.__row_index__"
+                )
+            finally:
+                self.con.unregister("_var_col_tbl")
+            self._rebuild_view()
 
     def cursor(self) -> duckdb.DuckDBPyConnection:
         """Return a new cursor for thread-safe query execution.

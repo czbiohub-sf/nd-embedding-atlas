@@ -1,0 +1,40 @@
+name: Build Frontend
+
+on:
+  workflow_call:
+    outputs:
+      artifact-name:
+        description: Name of the uploaded frontend-dist artifact
+        value: frontend-dist
+
+jobs:
+  build:
+    name: Frontend (lint + build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: voidzero-dev/setup-vp@v1
+
+      - name: Install dependencies
+        run: vp install
+
+      - name: Typecheck + lint
+        run: vp check
+
+      - name: Build
+        run: vp build
+
+      # Uncomment when vitest is configured
+      # - name: Test
+      #   run: vp test
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist/
+          retention-days: 1

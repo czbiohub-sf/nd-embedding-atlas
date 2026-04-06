@@ -1,148 +1,139 @@
-import { useEffect, useMemo, useRef } from "react";
-import { useViewer } from "../../hooks/useViewer";
+import { EyeIcon, EyeOffIcon, Layers } from "lucide-react";
+import { useState } from "react";
+import { ScrollArea } from "../ui/scroll-area";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
+import { Slider } from "../ui/slider";
+import { Toggle } from "../ui/toggle";
+import { useViewer } from "./useViewer";
 import type { BlendMode } from "./ViewerContext";
 
-// biome-ignore lint/suspicious/noExplicitAny: Tweakpane types incomplete without @tweakpane/core
-type TweakPane = any;
-
-interface ChannelParams {
-    visible: boolean;
-    color: string;
-    blend: string;
-    min: number;
-    max: number;
-}
-
-const BLEND_OPTIONS: { text: string; value: string }[] = [
-    { text: "Add", value: "additive" },
-    { text: "Norm", value: "normal" },
-    { text: "Mul", value: "multiply" },
-    { text: "Sub", value: "subtractive" },
+const BLEND_OPTIONS: { label: string; value: BlendMode }[] = [
+  { label: "Add", value: "additive" },
+  { label: "Norm", value: "normal" },
+  { label: "Mul", value: "multiply" },
+  { label: "Sub", value: "subtractive" },
 ];
 
+function fmtContrast(v: number): string {
+  return Math.abs(v) < 10 ? v.toFixed(2) : Math.round(v).toString();
+}
+
 export function ChannelControls() {
-    const { state, actions } = useViewer();
-    const { channels, viewMode } = state;
-    const containerRef = useRef<HTMLDivElement>(null);
-    const paneRef = useRef<TweakPane>(null);
-    // Stable refs so Tweakpane handlers always see latest values
-    const actionsRef = useRef(actions);
-    actionsRef.current = actions;
-    const channelsRef = useRef(channels);
-    channelsRef.current = channels;
-    // Stable per-channel param objects mutated in place for pane.refresh()
-    const channelParamsRef = useRef<ChannelParams[]>([]);
+  const { state, actions } = useViewer();
+  const { channels, viewMode } = state;
+  const [minimized, setMinimized] = useState(true);
 
-    // Structural key — changes only when channel count, labels, or contrast ranges
-    // change, not on every contrastLimits slider move. Used as a dep below to avoid
-    // rebuilding the entire Tweakpane pane on every render.
-    const channelStructureKey = useMemo(
-        () => channels.map((ch) => `${ch.label}|${ch.contrastRange[0]}-${ch.contrastRange[1]}`).join(","),
-        [channels],
+  if (channels.length === 0) return null;
+
+  // ── Minimized: icon badge ──────────────────────────────────────────────────
+  if (minimized) {
+    return (
+      <button
+        type="button"
+        onClick={() => setMinimized(false)}
+        aria-label="Open channel controls"
+        className="flex size-7 items-center justify-center rounded-lg border border-white/[0.07] bg-card/80 text-muted-foreground backdrop-blur-md transition-colors hover:text-foreground"
+      >
+        <Layers className="size-3.5" />
+      </button>
     );
+  }
 
-    // ── Sync value changes without rebuilding the pane ────────────────
-    // Keep params in sync with React state so future rebuilds use the latest values.
-    // No pane.refresh() — all changes originate from Tweakpane handlers (which already
-    // write back to params via writePrimitive), so refreshing would fight the drag state.
-    useEffect(() => {
-        const params = channelParamsRef.current;
-        if (params.length !== channels.length) return;
-        channels.forEach((ch, i) => {
-            params[i].visible = ch.visible;
-            params[i].color = `#${ch.color}`;
-            params[i].blend = ch.blendMode;
-            params[i].min = ch.contrastLimits[0];
-            params[i].max = ch.contrastLimits[1];
-        });
-    }, [channels]);
+  // ── Expanded panel ─────────────────────────────────────────────────────────
+  return (
+    <div className="flex flex-col overflow-hidden rounded-lg border border-white/[0.07] bg-card/80 backdrop-blur-md">
+      {/* Header */}
+      <div className="flex shrink-0 items-center gap-1.5 px-2 py-1.5">
+        <Layers className="size-3 shrink-0 text-muted-foreground/60" />
+        <span className="flex-1 font-medium text-[10px] text-muted-foreground/70">Channels</span>
+        <button
+          type="button"
+          onClick={() => setMinimized(true)}
+          aria-label="Minimize channel controls"
+          className="flex size-4 items-center justify-center rounded text-muted-foreground/40 transition-colors hover:text-muted-foreground"
+        >
+          <span className="text-[11px] leading-none">—</span>
+        </button>
+      </div>
 
-    // ── Rebuild pane on structural changes only ───────────────────────
-    // Reads channelStructureKey to register it as a dep (rebuild trigger), then reads
-    // all channel data via channelsRef so the closure never captures stale values.
-    useEffect(() => {
-        void channelStructureKey;
-        const el = containerRef.current;
-        const channels = channelsRef.current;
-        if (!el || channels.length === 0) return;
+      {/* Scrollable channel list */}
+      <ScrollArea className="max-h-72">
+        <div className="flex flex-col gap-2 px-2 pb-2">
+          {channels.map((ch, i) => {
+            const step = (ch.contrastRange[1] - ch.contrastRange[0]) / 200 || 1;
 
-        // Initialise stable param objects from current channel state
-        channelParamsRef.current = channels.map((ch) => ({
-            visible: ch.visible,
-            color: `#${ch.color}`,
-            blend: ch.blendMode,
-            min: ch.contrastLimits[0],
-            max: ch.contrastLimits[1],
-        }));
+            return (
+              <div key={ch.label} className="flex flex-col gap-1">
+                {/* Row: visibility · color · label · blend */}
+                <div className="flex items-center gap-1.5">
+                  <Toggle
+                    size="sm"
+                    pressed={ch.visible}
+                    onPressedChange={(v) => actions.setChannelProp(i, { visible: v })}
+                    aria-label={`Toggle ${ch.label} visibility`}
+                    className="size-5 shrink-0 p-0"
+                  >
+                    {ch.visible ? <EyeIcon /> : <EyeOffIcon />}
+                  </Toggle>
 
-        let disposed = false;
+                  <input
+                    type="color"
+                    value={`#${ch.color}`}
+                    onChange={(e) =>
+                      actions.setChannelProp(i, {
+                        color: e.target.value.replace("#", "").toUpperCase(),
+                      })
+                    }
+                    className="size-4 shrink-0 cursor-pointer rounded-sm border-0 bg-transparent p-0"
+                    aria-label={`${ch.label} color`}
+                  />
 
-        import("tweakpane").then(({ Pane }) => {
-            if (disposed) return;
+                  <span className="flex-1 truncate text-[10px] text-foreground/80">{ch.label}</span>
 
-            const pane = new Pane({ container: el, title: "Channels" }) as TweakPane;
-            paneRef.current = pane;
+                  {viewMode === "2d" && (
+                    <Select
+                      value={ch.blendMode}
+                      onValueChange={(v) => actions.setChannelProp(i, { blendMode: v as BlendMode })}
+                    >
+                      <SelectTrigger className="h-5 w-16 rounded px-1.5 text-[10px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {BLEND_OPTIONS.map((o) => (
+                          <SelectItem key={o.value} value={o.value} className="text-[10px]">
+                            {o.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
 
-            for (let i = 0; i < channels.length; i++) {
-                const ch = channels[i];
-                const p = channelParamsRef.current[i];
-                const folder = pane.addFolder({ title: ch.label, expanded: ch.visible });
-
-                folder.addBinding(p, "visible").on("change", (ev: { value: boolean }) => {
-                    actionsRef.current.setChannelProp(i, { visible: ev.value });
-                });
-
-                folder.addBinding(p, "color").on("change", (ev: { value: string }) => {
-                    actionsRef.current.setChannelProp(i, { color: ev.value.replace("#", "").toUpperCase() });
-                });
-
-                if (viewMode === "2d") {
-                    folder
-                        .addBinding(p, "blend", {
-                            options: Object.fromEntries(BLEND_OPTIONS.map((o) => [o.text, o.value])),
-                        })
-                        .on("change", (ev: { value: string }) => {
-                            actionsRef.current.setChannelProp(i, { blendMode: ev.value as BlendMode });
-                        });
-                }
-
-                // Step derived from range so fractional ranges (e.g. [-0.3, 0.3]) still work.
-                const contrastStep = (ch.contrastRange[1] - ch.contrastRange[0]) / 200 || 1;
-
-                folder
-                    .addBinding(p, "min", {
-                        min: ch.contrastRange[0],
-                        max: ch.contrastRange[1],
-                        step: contrastStep,
-                    })
-                    .on("change", (ev: { value: number }) => {
-                        const current = channelsRef.current[i];
-                        const hi = Math.min(Math.max(ev.value, current.contrastLimits[1]), current.contrastRange[1]);
-                        actionsRef.current.setChannelProp(i, { contrastLimits: [ev.value, hi] });
-                    });
-
-                folder
-                    .addBinding(p, "max", {
-                        min: ch.contrastRange[0],
-                        max: ch.contrastRange[1],
-                        step: contrastStep,
-                    })
-                    .on("change", (ev: { value: number }) => {
-                        const current = channelsRef.current[i];
-                        const lo = Math.max(Math.min(current.contrastLimits[0], ev.value), current.contrastRange[0]);
-                        actionsRef.current.setChannelProp(i, { contrastLimits: [lo, ev.value] });
-                    });
-            }
-        });
-
-        return () => {
-            disposed = true;
-            paneRef.current?.dispose();
-            paneRef.current = null;
-        };
-    }, [viewMode, channelStructureKey]);
-
-    if (channels.length === 0) return null;
-
-    return <div ref={containerRef} className="tp-channels" />;
+                {/* Contrast range (dual-thumb slider) */}
+                <div className="flex items-center gap-1.5 pl-7">
+                  <span className="w-8 text-right text-[10px] text-muted-foreground tabular-nums">
+                    {fmtContrast(ch.contrastLimits[0])}
+                  </span>
+                  <Slider
+                    className="flex-1"
+                    value={[ch.contrastLimits[0], ch.contrastLimits[1]]}
+                    min={ch.contrastRange[0]}
+                    max={ch.contrastRange[1]}
+                    step={step}
+                    onValueChange={(v) => {
+                      const vals = Array.isArray(v) ? v : [v, v];
+                      actions.setChannelProp(i, { contrastLimits: [vals[0], vals[1]] });
+                    }}
+                  />
+                  <span className="w-8 text-[10px] text-muted-foreground tabular-nums">
+                    {fmtContrast(ch.contrastLimits[1])}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </ScrollArea>
+    </div>
+  );
 }

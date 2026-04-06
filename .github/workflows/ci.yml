@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "0 5 1,15 * *"  # 1st and 15th of every month
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    uses: ./.github/workflows/build-frontend.yml
+
+  python:
+    uses: ./.github/workflows/test-python.yml
+
+  # Single required status for branch protection — checks all jobs including
+  # the matrix inside test-python.yml. Pre-release failures are allowed via
+  # continue-on-error inside the reusable workflow.
+  check:
+    name: All checks pass
+    if: always()
+    needs: [frontend, python]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: re-actors/alls-green@release/v1
+        with:
+          jobs: ${{ toJSON(needs) }}

@@ -25,7 +25,7 @@ dependencies = [
   "dask[dataframe,distributed]>=2025.9.2",
   "duckdb>=1.4.4",
   "fastapi>=0.128",
-  "gunicorn[h2]>=25",
+  "gunicorn>=25",
   "iohub",
   "obstore>=0.8.2",
   "pyarrow>=18",
@@ -61,6 +61,7 @@ test = [
 ]
 doc = [
   "ipykernel",
+  "mike",
   "pymdown-extensions>=10.20.1",
   "zensical>=0.0.21",
 ]
@@ -73,8 +74,7 @@ neuroglancer = [
 # Uses hatch_build.py at project root
 
 build.artifacts = [ "src/nd_embedding_atlas/_frontend" ]
-build.hooks.custom = {}
-build.targets.wheel.force-include."frontend/dist" = "nd_embedding_atlas/_frontend"
+build.hooks.custom = { "enable-by-default" = false }
 envs.default.installer = "uv"
 envs.default.dependency-groups = [ "dev" ]
 envs.docs.dependency-groups = [ "doc" ]
@@ -99,6 +99,7 @@ version.source = "uv-dynamic-versioning"
 
 [tool.uv.sources]
 iohub = { git = "https://github.com/czbiohub-sf/iohub", branch = "main" }
+mike = { git = "https://github.com/squidfunk/mike.git" }
 
 [tool.ruff]
 line-length = 120

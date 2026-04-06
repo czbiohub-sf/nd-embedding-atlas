@@ -6,12 +6,26 @@ default_stages:
   - pre-push
 minimum_pre_commit_version: 2.16.0
 repos:
-  - repo: https://github.com/biomejs/pre-commit
-    rev: v2.3.10
+  - repo: local
     hooks:
-      - id: biome-check
-        args: [--unsafe]
-        exclude: ^\.cruft\.json$ # inconsistent indentation with cruft - file never to be modified manually.
+      - id: oxlint
+        name: oxlint
+        language: system
+        # No --fix: fail fast, let developer fix manually.
+        # --deny-warnings promotes warnings to errors so nothing slips through.
+        entry: bash -c 'cd frontend && vp lint --deny-warnings src'
+        pass_filenames: false
+        types_or: [ts, tsx]
+        files: ^frontend/src/
+        exclude: ^frontend/src/components/ui/
+      - id: oxfmt
+        name: oxfmt
+        language: system
+        # --check: verify without writing. Run 'vp fmt --write src' to fix.
+        entry: bash -c 'cd frontend && vp fmt --check src'
+        pass_filenames: false
+        types_or: [ts, tsx, json, css]
+        files: ^frontend/src/
   - repo: https://github.com/tox-dev/pyproject-fmt
     rev: v2.11.1
     hooks:

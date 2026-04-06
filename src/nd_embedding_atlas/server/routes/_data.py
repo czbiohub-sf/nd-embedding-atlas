@@ -12,6 +12,14 @@ from nd_embedding_atlas.server._state import DatasetConfig, ViewerState
 from nd_embedding_atlas.vz._prepare import _obsm_column_prefix
 
 
+def _safe_var_count(collection: "Any") -> int:  # type: ignore[type-arg]
+    """Return var count without triggering ad.concat on lazy multi-dataset collections."""
+    try:
+        return len(collection.var_names)
+    except Exception:  # noqa: BLE001
+        return 0
+
+
 def _build_obsm_metadata(state: ViewerState) -> dict[str, Any]:
     """Build obsm metadata dict including loaded status."""
     meta: dict[str, Any] = {}
@@ -31,9 +39,12 @@ def make_colormaps_router() -> APIRouter:
 
     @router.get("/data/colormaps")
     async def get_colormaps() -> dict:
-        from nd_embedding_atlas.io._colors import list_qualitative_colormaps
+        from nd_embedding_atlas.io._colors import list_continuous_colormaps, list_qualitative_colormaps
 
-        return {"colormaps": list_qualitative_colormaps()}
+        return {
+            "categorical": list_qualitative_colormaps(),
+            "continuous": list_continuous_colormaps(),
+        }
 
     @router.get("/data/categorical-palette")
     async def get_categorical_palette(colormap: str = "tab20", n: int = 64) -> dict:
@@ -58,6 +69,11 @@ def make_data_router(get_state: Callable[[], ViewerState], config: DatasetConfig
 
     @router.get("/data/metadata.json")
     async def get_metadata(state: State) -> dict:
+        try:
+            layer_keys = list(state.collection._concat.layers.keys())
+        except Exception:  # noqa: BLE001
+            layer_keys = []
+
         result: dict = {
             "version": get_package_version(),
             "props": config.embedding_props,
@@ -66,9 +82,22 @@ def make_data_router(get_state: Callable[[], ViewerState], config: DatasetConfig
             "obs_columns": config.obs_column_names,
             "plate": config.has_plate,
             "export_dir": str(state.export_dir),
+            "var_count": _safe_var_count(state.collection),
+            "layers": ["X", *layer_keys],
         }
         if config.plate_meta:
             result.update(config.plate_meta)
+        if config.dataset_keys is not None:
+            result["dataset_keys"] = config.dataset_keys
+        if state.dataset_plates:
+            result["plate_stores"] = [
+                {
+                    "mount": f"/plates/{key}",
+                    "name": key,
+                    "ome_version": state.dataset_ome_versions.get(key, "0.4"),
+                }
+                for key in state.dataset_plates  # insertion order stable (Python 3.7+)
+            ]
         result["spatial"] = {
             "fov_col": state.spatial.fov,
             "t_col": state.spatial.t,

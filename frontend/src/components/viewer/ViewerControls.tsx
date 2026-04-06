@@ -1,128 +1,131 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useMemo } from "react";
+import { selectTrajectory } from "../../dashboard/DashboardContext";
 import { useDashboard } from "../../hooks/useDashboard";
-import { useViewer } from "../../hooks/useViewer";
-
-// biome-ignore lint/suspicious/noExplicitAny: Tweakpane types incomplete without @tweakpane/core
-type TweakPane = any;
+import { cn } from "../../lib/utils";
+import { Slider } from "../ui/slider";
+import { useViewer } from "./useViewer";
 
 interface Props {
-    cropSize: number;
-    setCropSize: (size: number) => void;
+  cropSize: number;
+  setCropSize: (size: number) => void;
+  datasetKey?: string;
 }
 
-export function ViewerControls({ cropSize, setCropSize }: Props) {
-    const { state: dashState, actions: dashActions } = useDashboard();
-    const { state, actions } = useViewer();
-    const { bounds, zIndex, tIndex, viewMode } = state;
-    const { trajectory, metadata } = dashState;
-    const hasCellCoords = !!metadata.spatial?.x_col;
+export function ViewerControls({ cropSize, setCropSize, datasetKey }: Props) {
+  const { state: dashState, actions: dashActions } = useDashboard();
+  const { state, actions } = useViewer();
+  const { bounds, zIndex, tIndex, viewMode } = state;
+  const { trajectories, metadata } = dashState;
+  const trajectory = selectTrajectory(trajectories, datasetKey);
+  const hasCellCoords = !!metadata.spatial?.x_col;
 
-    const traj = trajectory?.points;
-    const trajTimepoints = useMemo(() => (traj ? traj.map((p) => p.t) : null), [traj]);
-    const isTrajectoryMode = trajTimepoints != null && trajTimepoints.length > 0;
+  const traj = trajectory?.points;
+  const trajTimepoints = useMemo(() => (traj ? traj.map((p) => p.t) : null), [traj]);
+  const isTrajectoryMode = trajTimepoints != null && trajTimepoints.length > 0;
 
-    const effectiveTMax = isTrajectoryMode ? trajTimepoints.length - 1 : (bounds.tMax ?? 0);
-    const hasT = effectiveTMax > 0 || isTrajectoryMode;
-    const hasZ = bounds.zMax !== null && bounds.zMax > 0;
+  const effectiveTMax = isTrajectoryMode ? trajTimepoints.length - 1 : (bounds.tMax ?? 0);
+  const hasT = effectiveTMax > 0 || isTrajectoryMode;
+  const hasZ = bounds.zMax != null && bounds.zMax > 0;
+  const showModeToggle = hasZ || viewMode === "3d";
+  const hasControls = hasT || hasZ || hasCellCoords || showModeToggle;
 
-    const containerRef = useRef<HTMLDivElement>(null);
-    const paneRef = useRef<TweakPane>(null);
-    // Stable param objects mutated in place for pane.refresh()
-    const tParamsRef = useRef({ T: tIndex });
-    const zParamsRef = useRef({ Z: zIndex });
-    const bboxParamsRef = useRef({ bbox: cropSize });
+  if (!hasControls) return null;
 
-    // Stable refs for handlers
-    const actionsRef = useRef(actions);
-    actionsRef.current = actions;
-    const dashActionsRef = useRef(dashActions);
-    dashActionsRef.current = dashActions;
-    const setCropSizeRef = useRef(setCropSize);
-    setCropSizeRef.current = setCropSize;
-    const trajTimepointsRef = useRef(trajTimepoints);
-    trajTimepointsRef.current = trajTimepoints;
-    const isTrajectoryModeRef = useRef(isTrajectoryMode);
-    isTrajectoryModeRef.current = isTrajectoryMode;
+  const tDisplayIndex = isTrajectoryMode ? Math.max(0, trajTimepoints?.indexOf(tIndex) ?? 0) : tIndex;
 
-    const handleTChange = useCallback((sliderVal: number) => {
-        if (isTrajectoryModeRef.current && trajTimepointsRef.current) {
-            const t = trajTimepointsRef.current[sliderVal];
-            actionsRef.current.setTIndex(t);
-            dashActionsRef.current.setTrajectoryTIndex(t);
-        } else {
-            actionsRef.current.setTIndex(sliderVal);
-        }
-    }, []);
+  function handleTChange(val: number) {
+    if (isTrajectoryMode && trajTimepoints) {
+      const t = trajTimepoints[val] ?? trajTimepoints[0];
+      actions.setTIndex(t);
+      dashActions.setTrajectoryTIndex(datasetKey ?? "", t);
+    } else {
+      actions.setTIndex(val);
+    }
+  }
 
-    // ── Sync transient slider positions without rebuilding the pane ───
-    // In trajectory mode the slider represents an index (0…N-1), not the raw T value.
-    useEffect(() => {
-        if (isTrajectoryMode && trajTimepoints) {
-            const idx = trajTimepoints.indexOf(tIndex);
-            tParamsRef.current.T = idx >= 0 ? idx : 0;
-        } else {
-            tParamsRef.current.T = tIndex;
-        }
-        zParamsRef.current.Z = zIndex;
-        bboxParamsRef.current.bbox = cropSize;
-        paneRef.current?.refresh();
-    }, [tIndex, zIndex, cropSize, isTrajectoryMode, trajTimepoints]);
+  return (
+    <div className="flex min-w-44 flex-col gap-1.5 rounded-lg border border-white/[0.07] bg-card/80 p-2 backdrop-blur-md">
+      {hasT && (
+        <SliderRow
+          label={isTrajectoryMode ? "T*" : "T"}
+          value={tDisplayIndex}
+          min={0}
+          max={effectiveTMax}
+          step={1}
+          onChange={(v) => handleTChange(Math.round(v))}
+        />
+      )}
 
-    useEffect(() => {
-        const el = containerRef.current;
-        if (!el) return;
+      {hasZ && viewMode === "2d" && (
+        <SliderRow
+          label="Z"
+          value={zIndex}
+          min={0}
+          max={bounds.zMax ?? 0}
+          step={1}
+          onChange={(v) => actions.setZIndex(Math.round(v))}
+        />
+      )}
 
-        let disposed = false;
+      {hasCellCoords && (
+        <SliderRow
+          label="px"
+          value={cropSize}
+          min={50}
+          max={500}
+          step={10}
+          onChange={(v) => setCropSize(Math.round(v))}
+        />
+      )}
 
-        import("tweakpane").then(({ Pane }) => {
-            if (disposed) return;
+      {showModeToggle && (
+        <div className="flex items-center gap-1.5">
+          <span className="w-5 shrink-0 text-[10px] text-muted-foreground" />
+          <div className="flex overflow-hidden rounded-md border border-border/60">
+            {(["2d", "3d"] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => actions.setViewMode(mode)}
+                className={cn(
+                  "px-2 py-0.5 text-[10px] transition-colors",
+                  viewMode === mode ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {mode.toUpperCase()}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
-            const pane = new Pane({ container: el, title: "Dimensions" }) as TweakPane;
-            paneRef.current = pane;
+// ── Shared slider row ────────────────────────────────────────────────────────
 
-            // T slider — label changes to "T*" in trajectory mode
-            if (hasT) {
-                // Guard: Tweakpane throws if the initial value is not a number
-                if (typeof tParamsRef.current.T !== "number") tParamsRef.current.T = 0;
-                pane.addBinding(tParamsRef.current, "T", {
-                    label: isTrajectoryMode ? "T*" : "T",
-                    min: 0,
-                    max: effectiveTMax,
-                    step: 1,
-                }).on("change", (ev: { value: number }) => handleTChange(Math.round(ev.value)));
-            }
+interface SliderRowProps {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  onChange: (v: number) => void;
+}
 
-            // Z slider (2D only — 3D uses range which is harder in Tweakpane, keep native for now)
-            if (hasZ && viewMode === "2d") {
-                pane.addBinding(zParamsRef.current, "Z", { min: 0, max: bounds.zMax ?? 0, step: 1 }).on(
-                    "change",
-                    (ev: { value: number }) => actionsRef.current.setZIndex(Math.round(ev.value)),
-                );
-            }
-
-            // Crop size
-            if (hasCellCoords) {
-                pane.addBinding(bboxParamsRef.current, "bbox", { min: 50, max: 500, step: 10 }).on(
-                    "change",
-                    (ev: { value: number }) => setCropSizeRef.current(Math.round(ev.value)),
-                );
-            }
-
-            // View mode button (2D/3D) — always show in 3D so user can switch back
-            if (hasZ || viewMode === "3d") {
-                const modeParams = { "3D": viewMode === "3d" };
-                pane.addBinding(modeParams, "3D").on("change", (ev: { value: boolean }) => {
-                    actionsRef.current.setViewMode(ev.value ? "3d" : "2d");
-                });
-            }
-        });
-
-        return () => {
-            disposed = true;
-            paneRef.current?.dispose();
-            paneRef.current = null;
-        };
-    }, [bounds.zMax, effectiveTMax, handleTChange, hasCellCoords, hasT, hasZ, isTrajectoryMode, viewMode]);
-
-    return <div ref={containerRef} className="tp-viewer-controls" />;
+function SliderRow({ label, value, min, max, step, onChange }: SliderRowProps) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className="w-5 shrink-0 text-[10px] text-muted-foreground">{label}</span>
+      <Slider
+        className="flex-1"
+        value={[value]}
+        min={min}
+        max={max}
+        step={step}
+        onValueChange={(v) => onChange(Array.isArray(v) ? v[0] : v)}
+      />
+      <span className="w-6 text-right text-[10px] text-muted-foreground tabular-nums">{value}</span>
+    </div>
+  );
 }

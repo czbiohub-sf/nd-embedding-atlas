@@ -1,34 +1,38 @@
-import { useState } from "react";
+import { ChevronDownIcon, ChevronRightIcon } from "lucide-react";
+import { type ReactNode, useState } from "react";
+import { cn } from "../../lib/utils";
 
-interface CollapsibleOverlayProps {
-    title: string;
-    position: "top-left" | "bottom-left" | "top-right" | "bottom-right";
-    defaultExpanded?: boolean;
-    children: React.ReactNode;
-}
+type Position = "top-left" | "bottom-left" | "top-right" | "bottom-right";
 
-const POSITION_CLASSES: Record<CollapsibleOverlayProps["position"], string> = {
-    "top-left": "top-2 left-2",
-    "bottom-left": "bottom-2 left-2",
-    "top-right": "top-2 right-2",
-    "bottom-right": "bottom-2 right-2",
+const POSITION_CLASSES: Record<Position, string> = {
+  "top-left": "top-2 left-2",
+  "bottom-left": "bottom-2 left-2",
+  "top-right": "top-2 right-2",
+  "bottom-right": "bottom-2 right-2",
 };
 
-export function CollapsibleOverlay({ title, position, defaultExpanded = true, children }: CollapsibleOverlayProps) {
-    const [expanded, setExpanded] = useState(defaultExpanded);
+interface Props {
+  title: string;
+  position: Position;
+  defaultExpanded?: boolean;
+  children: ReactNode;
+}
 
-    return (
-        <div className={`viewer-overlay ${POSITION_CLASSES[position]}`}>
-            <button
-                type="button"
-                className="viewer-overlay-header"
-                onClick={() => setExpanded((prev) => !prev)}
-                aria-expanded={expanded}
-            >
-                <span className="viewer-overlay-chevron">{expanded ? "\u25BE" : "\u25B8"}</span>
-                {title}
-            </button>
-            {expanded ? <div className="viewer-overlay-content">{children}</div> : null}
-        </div>
-    );
+export function CollapsibleOverlay({ title, position, defaultExpanded = true, children }: Props) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
+
+  return (
+    <div className={cn("absolute z-20 flex flex-col gap-1", POSITION_CLASSES[position])}>
+      <button
+        type="button"
+        onClick={() => setExpanded((prev) => !prev)}
+        aria-expanded={expanded}
+        className="flex items-center gap-1 self-start rounded-md border border-white/[0.07] bg-card/80 px-2 py-0.5 text-[10px] text-muted-foreground backdrop-blur-md transition-colors hover:text-foreground"
+      >
+        {expanded ? <ChevronDownIcon className="size-3" /> : <ChevronRightIcon className="size-3" />}
+        {title}
+      </button>
+      {expanded && children}
+    </div>
+  );
 }

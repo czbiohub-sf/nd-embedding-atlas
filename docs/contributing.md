@@ -9,7 +9,8 @@ icon: lucide/git-pull-request
 ### Prerequisites
 
 - **Python 3.12--3.13** (managed with [uv](https://docs.astral.sh/uv/))
-- **[pnpm](https://pnpm.io/)** for frontend builds -- install with `npm install -g pnpm`
+- **[pnpm](https://pnpm.io/)** -- fast Node.js package manager; requires Node.js (load with `module load nodejs` on HPC, or install via [nvm](https://github.com/nvm-sh/nvm))
+- **[vite-plus](https://viteplus.dev/guide/)** -- unified frontend toolchain providing the `vp` CLI; installed automatically by `pnpm install`
 - **[prek](https://github.com/j178/prek)** for Git hooks (`uvx prek`)
 
 ### Clone and install
@@ -25,7 +26,7 @@ uv sync --all-groups # (1)!
 ### Build the frontend
 
 ``` bash
-cd frontend && pnpm install && pnpm build
+cd frontend && pnpm install && vp build
 cd ..
 ```
 
@@ -55,7 +56,8 @@ raise ValueError(msg)
 
 ### Frontend
 
-Enforced by [Biome](https://biomejs.dev/) (config in `biome.jsonc`).
+Enforced by [Oxlint](https://oxc.rs/docs/guide/usage/linter.html) + [Oxfmt](https://oxc.rs/docs/guide/usage/formatter.html) via vite-plus.
+Config lives in `frontend/oxlint.json` and the `lint:` / `fmt:` sections of `frontend/vite.config.ts`.
 
 ## Linting and formatting
 
@@ -63,7 +65,7 @@ Enforced by [Biome](https://biomejs.dev/) (config in `biome.jsonc`).
 uvx prek # (1)!
 ```
 
-1. Runs all pre-commit hooks: Biome (TS/TSX/CSS/JSON), pyproject-fmt,
+1. Runs all pre-commit hooks: Oxlint + Oxfmt (TS/TSX), pyproject-fmt,
    Ruff check + format, private key detection, AST checks, whitespace fixes.
 
 Or run tools individually:
@@ -79,8 +81,8 @@ Or run tools individually:
 
     ``` bash
     cd frontend
-    pnpm lint:fix
-    pnpm format
+    vp lint --fix src
+    vp fmt --write src
     ```
 
 ## Testing
@@ -107,66 +109,41 @@ The CI runs via [Hatch](https://hatch.pypa.io/) across:
 
 ``` bash
 cd frontend
-pnpm dev   # (1)!
-pnpm build # (2)!
+vp dev   # (1)!
+vp build # (2)!
 ```
 
-1. Starts Vite dev server with hot reload. Useful for iterating on components
-   without restarting the Python backend.
-2. TypeScript check + Vite production build &rarr; `frontend/dist/`.
+1. Starts the dev server with hot reload. The Python backend must be running separately.
+2. Production build → `frontend/dist/`.
 
-After any frontend changes, rebuild before serving:
+Full dev stack (backend + frontend together):
 
 ``` bash
-pnpm build && cd .. && uv run ndea view data/annotations_zv3.zarr
+mise run dev data/annotations_zv3.zarr
 ```
 
 ## Project structure
 
 ``` text
 src/nd_embedding_atlas/
-  __init__.py         # Re-exports: cli, io, vz; sets zarrs codec
-  _frontend/          # Bundled frontend (auto-built, gitignored)
-  cli/_app.py         # Typer CLI entry point
-  io/collection.py    # AnnDataCollection core abstraction
-  vz/
-    _prepare.py       # Materialize obs metadata
-    _duckdb.py        # EmbeddingStore + Mosaic query endpoints
-    _serve.py         # FastAPI app factory + static file serving
-frontend/             # React + Vite + Mosaic dashboard
-scripts/              # Standalone CLI scripts (typer + rich)
-tests/                # pytest
+  cli/          # Typer CLI — auto-detects AnnData / OME-Zarr / YAML config
+  io/           # AnnDataCollection, fast zarr readers, ProjectConfig YAML model
+  ndimg/        # OME-Zarr standalone viewer (metadata + FastAPI app)
+  server/       # Main FastAPI app, EmbeddingStore (DuckDB), route modules
+  vz/           # obs materialisation, spatial column detection, zarr export
+
+frontend/src/
+  scatter-gpu/  # TypeGPU/WebGPU scatter renderer — pipelines, shaders, selection
+  components/   # React panels: scatter, viewer, table, charts, toolbar, layout
+  dashboard/    # App-level DashboardProvider + DashboardContext
+  stores/       # TanStack Store singletons (selection, view sync, brush predicate)
+  hooks/        # Generic hooks (useMosaicClient, useDashboard, etc.)
+  lib/          # Utilities (mosaic-helpers, color-source, schemas, etc.)
+
+scripts/        # Standalone data-prep scripts (typer + rich)
+tests/          # pytest
 ```
 
-### Module dependency graph
-
-``` mermaid
-graph LR
-  cli._app --> io.collection
-  cli._app --> vz._serve
-  vz._prepare --> io.collection
-  vz._duckdb --> vz._prepare
-  vz._serve --> vz._duckdb
-  vz._serve --> vz._prepare
-  io.collection --> anndata & zarr & dask
-```
-
-## Scripts
-
-Scripts in `scripts/` follow these conventions:
-
-- **typer** for CLI argument parsing
-- **Lazy imports** inside the command function (keeps `--help` fast)
-- **rich** for progress bars and styled output
-- Entry point: `if __name__ == "__main__": app()`
-
-Standalone scripts that touch zarr directly are recommended to use zarrs-python codec as it helps speed up I/O:
-
-``` python
-import zarr
-import zarrs  # noqa: F401
-zarr.config.set({"codec_pipeline.path": "zarrs.ZarrsCodecPipeline"})
-```
 
 ## Common commands
 
@@ -175,15 +152,14 @@ zarr.config.set({"codec_pipeline.path": "zarrs.ZarrsCodecPipeline"})
 | `uv sync` | Install dependencies |
 | `uv run pytest` | Run tests |
 | `uvx prek` | Lint + format (all pre-commit hooks) |
-| `uv run ndea view <paths>` | Launch the viewer |
+| `ndea <paths>` | Launch the viewer |
+| `mise run dev <path>` | Full dev stack (backend + frontend) |
 | `uv build` | Build wheel (auto-builds frontend) |
-| `cd frontend && pnpm build` | Rebuild frontend |
+| `cd frontend && vp build` | Rebuild frontend only |
 | `uv run zensical serve` | Preview docs locally (live reload) |
 | `uv run zensical build` | Build static docs site |
 
 ## Versioning
-
-Single source of truth: **git tags** &rarr; `uv-dynamic-versioning` &rarr; `importlib.metadata.version("nd-embedding-atlas")`.
 
 The frontend reads the version at runtime from `/data/metadata.json` -- no build-time sync needed.
 `package.json` version is a placeholder (not published to npm).

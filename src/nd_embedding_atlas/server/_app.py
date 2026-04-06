@@ -13,11 +13,15 @@ from fastapi.staticfiles import StaticFiles
 from nd_embedding_atlas._server import create_cors_app, mount_frontend
 from nd_embedding_atlas.server._state import DatasetConfig, ViewerState
 from nd_embedding_atlas.server._store import EmbeddingStore
+from nd_embedding_atlas.server.routes._crops import make_crop_router
 from nd_embedding_atlas.server.routes._data import make_colormaps_router, make_data_router
 from nd_embedding_atlas.server.routes._embeddings import make_embeddings_router
 from nd_embedding_atlas.server.routes._export import make_export_router
 from nd_embedding_atlas.server.routes._mosaic import make_mosaic_router
 from nd_embedding_atlas.server.routes._obs import make_obs_router
+from nd_embedding_atlas.server.routes._obssets import make_obssets_router
+from nd_embedding_atlas.server.routes._scatter import make_scatter_router
+from nd_embedding_atlas.server.routes._var import make_var_router
 from nd_embedding_atlas.vz._prepare import detect_spatial_columns, prepare_obs
 
 if TYPE_CHECKING:
@@ -60,6 +64,44 @@ def _read_plate_metadata(plate_path: str | pathlib.Path | None) -> dict[str, Any
     return result
 
 
+def _populate_obsset_tables(store: EmbeddingStore, obssets: list[dict]) -> None:
+    """Bulk-insert persisted ObsSets and their members into DuckDB.
+
+    Logs a warning for any ObsSet whose member count has drifted from
+    the recorded created_count (obs deleted from the dataset since save).
+    """
+    import logging as _logging
+
+    _log = _logging.getLogger("ndea.obssets")
+    con = store.con
+    for o in obssets:
+        oid = o["obsset_id"]
+        members: list[dict] = o.get("members", [])
+        created_count: int = o.get("created_count", len(members))
+
+        con.execute(
+            "INSERT OR IGNORE INTO obssets (obsset_id, name, color, created_at, created_count) VALUES (?, ?, ?, ?, ?)",
+            [oid, o.get("name", ""), o.get("color"), o.get("created_at"), created_count],
+        )
+        if members:
+            rows = [(oid, m["dataset_key"], m["obs_name"]) for m in members]
+            con.executemany(
+                "INSERT OR IGNORE INTO obsset_members (obsset_id, dataset_key, obs_name) VALUES (?, ?, ?)",
+                rows,
+            )
+
+        actual_count = con.execute("SELECT COUNT(*) FROM obsset_members WHERE obsset_id = ?", [oid]).fetchone()[0]
+        if actual_count != created_count:
+            _log.warning(
+                "ObsSet %r (%s): created_count=%d but current member count=%d — "
+                "obs identity has drifted since last save.",
+                oid,
+                o.get("name", ""),
+                created_count,
+                actual_count,
+            )
+
+
 def create_app(
     collection: AnnDataCollection,
     *,
@@ -70,6 +112,9 @@ def create_app(
     columns_config: NdeaConfig | None = None,
     duckdb_threads: int | None = None,
     pool_workers: int | None = None,
+    no_static: bool = False,
+    dataset_plates: dict[str, pathlib.Path] | None = None,
+    project_config_path: pathlib.Path | None = None,
 ) -> FastAPI:
     """Create a FastAPI app that loads embeddings on demand.
 
@@ -91,15 +136,27 @@ def create_app(
         DuckDB internal thread count (default: half of CPU cores).
     pool_workers
         Request handler thread pool size (default: half of CPU cores).
+    dataset_plates
+        Per-dataset plate paths for project mode (key → plate path).
+    project_config_path
+        Path to the project YAML config (used for sidecar persistence).
     """
     resolved_export_dir = pathlib.Path(export_dir).resolve() if export_dir else pathlib.Path.cwd() / "exports"
 
     # ── Resolve spatial columns ───────────────────────────────────────
-    spatial = detect_spatial_columns(set(collection.obs.keys()), columns_config=columns_config)
+    from nd_embedding_atlas.io._get import get_obs as _get_obs_cols
+
+    _first_obs = _get_obs_cols(collection, include_index=False)
+    spatial = detect_spatial_columns(set(_first_obs.columns), columns_config=columns_config)
 
     # Ensure spatial columns are always loaded (needed by /api/obs)
     if obs_columns is not None and plate_path is not None:
         obs_columns = list(dict.fromkeys([*obs_columns, *sorted(spatial.all_columns)]))
+
+    # In multi-dataset (project) mode, ensure _dataset is always in obs_columns
+    # so it's never filtered out during prepare_obs and is available in obs_base.
+    if dataset_plates and obs_columns is not None and "_dataset" not in obs_columns:
+        obs_columns = ["_dataset", *obs_columns]
 
     # ── Build store ───────────────────────────────────────────────────
     try:
@@ -110,8 +167,39 @@ def create_app(
     except ImportError:
         _profiler = None
 
-    has_plate = plate_path is not None
-    plate_meta = _read_plate_metadata(plate_path) if has_plate else None
+    has_plate = plate_path is not None or bool(dataset_plates)
+
+    # Single-dataset plate metadata
+    plate_meta = _read_plate_metadata(plate_path) if plate_path is not None else None
+
+    # Project mode: read per-dataset plate metadata; use first plate as canonical frontend meta
+    dataset_channels: dict[str, list[Any]] = {}
+    dataset_ome_versions: dict[str, str] = {}
+    if dataset_plates:
+        import warnings as _warnings
+
+        first_plate_meta: dict[str, Any] | None = None
+        for _ds_key, _ds_plate_path in dataset_plates.items():
+            _meta = _read_plate_metadata(_ds_plate_path)
+            dataset_channels[_ds_key] = _meta.get("plate_channels", []) if _meta else []
+            dataset_ome_versions[_ds_key] = _meta.get("plate_ome_version", "0.4") if _meta else "0.4"
+            if first_plate_meta is None:
+                first_plate_meta = _meta
+                dataset_channels[_ds_key]
+
+        # Warn if channel layouts differ across plates
+        if len(dataset_channels) > 1:
+            channel_counts = {k: len(v) for k, v in dataset_channels.items()}
+            if len(set(channel_counts.values())) > 1:
+                _warnings.warn(
+                    f"Plate channel counts differ across datasets: {channel_counts}. "
+                    "Using first plate's channel layout as the canonical frontend metadata.",
+                    stacklevel=2,
+                )
+
+        # Use first plate as canonical frontend metadata if no single plate_path given
+        if plate_meta is None and first_plate_meta is not None:
+            plate_meta = first_plate_meta
 
     obs_df = prepare_obs(collection, obs_columns=obs_columns)
     hidden_cols = spatial.hidden if plate_path else set()
@@ -123,7 +211,17 @@ def create_app(
     )
 
     # Discover available obsm keys
-    available_obsm_keys: list[str] = list(collection.obsm.keys())
+    from nd_embedding_atlas.io._get import _open_raw as _open_raw_store
+    from nd_embedding_atlas.io._get import get_obsm as _get_obsm
+
+    _first_entry = next(iter(collection.datasets.data.values()))
+    if _first_entry.path is not None:
+        _tmp_store = _open_raw_store(_first_entry.path)
+        available_obsm_keys: list[str] = list(_tmp_store["obsm"].keys() if "obsm" in _tmp_store else [])
+        if hasattr(_tmp_store, "close"):
+            _tmp_store.close()
+    else:
+        available_obsm_keys = list(collection.obsm.keys())
 
     # Pick default embedding and load eagerly
     default_key: str | None = None
@@ -135,7 +233,7 @@ def create_app(
         default_key = available_obsm_keys[0]
 
     if default_key is not None:
-        coords = collection.obsm[default_key]
+        coords = _get_obsm(collection, default_key)
         if hasattr(coords, "compute"):
             coords = coords.compute()
         store.register_embedding(default_key, np.asarray(coords, dtype=np.float32))
@@ -151,7 +249,19 @@ def create_app(
         available_obsm_keys=available_obsm_keys,
         spatial=spatial,
         export_dir=resolved_export_dir,
+        dataset_plates=dataset_plates,
+        dataset_ome_versions=dataset_ome_versions if dataset_ome_versions else None,
+        project_config_path=project_config_path,
     )
+
+    # ── Load persisted ObsSets from sidecar ──────────────────────────
+    if project_config_path:
+        from nd_embedding_atlas.server._obssets_io import load_obssets, sidecar_path
+
+        _sidecar = sidecar_path(project_config_path)
+        _persisted = load_obssets(_sidecar)
+        if _persisted:
+            _populate_obsset_tables(state.store, _persisted)
 
     # ── Build dataset config ──────────────────────────────────────────
     if default_key is not None and default_key in store.loaded_embeddings:
@@ -163,6 +273,8 @@ def create_app(
         default_y = "y"
 
     obs_column_names = [c for c in obs_df.columns if c != "__row_index__" and c not in hidden_cols]
+
+    _dataset_keys: list[str] | None = list(dataset_plates.keys()) if dataset_plates else None
 
     config = DatasetConfig(
         obs_column_names=obs_column_names,
@@ -176,6 +288,7 @@ def create_app(
         plate_meta=plate_meta,
         default_x=default_x,
         default_y=default_y,
+        dataset_keys=_dataset_keys,
     )
 
     # ── Assemble app ──────────────────────────────────────────────────
@@ -195,17 +308,41 @@ def create_app(
     def get_state() -> ViewerState:
         return state
 
+    app.include_router(
+        make_crop_router(
+            plate_path,
+            plate_meta.get("plate_channels") if plate_meta else None,
+            dataset_plates=dataset_plates,
+            dataset_channels=dataset_channels if dataset_channels else None,
+        )
+    )
     app.include_router(make_mosaic_router(get_state))
     app.include_router(make_data_router(get_state, config))
     app.include_router(make_colormaps_router())
     app.include_router(make_embeddings_router(get_state))
     app.include_router(make_export_router(get_state))
     app.include_router(make_obs_router(get_state))
+    app.include_router(make_obssets_router(get_state))
+    app.include_router(make_scatter_router(get_state))
+    app.include_router(make_var_router(get_state))
 
+    # Single-dataset: mount at /plate (unchanged — preserves frontend tile URL compatibility)
     if plate_path is not None:
         app.mount("/plate", StaticFiles(directory=str(plate_path)), name="plate")
 
-    mount_frontend(app, static_dir=static_dir)
+    # Project mode: mount each dataset plate at /plates/{key}; also mount the first at /plate
+    # as fallback for any hardcoded frontend paths. Frontend multi-plate routing (per _dataset)
+    # is deferred to Phase 2.
+    if dataset_plates:
+        first_mounted = False
+        for _key, _ds_plate_path in dataset_plates.items():
+            app.mount(f"/plates/{_key}", StaticFiles(directory=str(_ds_plate_path)), name=f"plate_{_key}")
+            if not first_mounted and plate_path is None:
+                app.mount("/plate", StaticFiles(directory=str(_ds_plate_path)), name="plate")
+                first_mounted = True
+
+    if not no_static:
+        mount_frontend(app, static_dir=static_dir)
 
     # ── Optional profiling ────────────────────────────────────────────
     try:
@@ -230,6 +367,9 @@ def serve(
     pool_workers: int | None = None,
     host: str = "localhost",
     port: int = 5055,
+    no_static: bool = False,
+    dataset_plates: dict[str, pathlib.Path] | None = None,
+    project_config_path: pathlib.Path | None = None,
 ) -> None:
     """Launch the viewer — loads embeddings on demand.
 
@@ -253,6 +393,10 @@ def serve(
         Request handler thread pool size.
     host, port
         Server bind address.
+    dataset_plates
+        Per-dataset plate paths for project mode (key → plate path).
+    project_config_path
+        Path to the project YAML config (used for sidecar persistence).
     """
     import uvicorn
 
@@ -265,6 +409,9 @@ def serve(
         columns_config=columns_config,
         duckdb_threads=duckdb_threads,
         pool_workers=pool_workers,
+        no_static=no_static,
+        dataset_plates=dataset_plates,
+        project_config_path=project_config_path,
     )
     print(f"nd-embedding-atlas viewer: http://{host}:{port}")
 

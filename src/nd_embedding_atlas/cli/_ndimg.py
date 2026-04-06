@@ -1,7 +1,4 @@
-"""OME-Zarr image viewer (ndimg) command implementation.
-
-Also serves as a standalone CLI entrypoint via ``scripts.ndimg`` in pyproject.toml.
-"""
+"""OME-Zarr image viewer (ndimg) command implementation."""
 
 from __future__ import annotations
 
@@ -10,7 +7,6 @@ from typing import Annotated
 
 import typer
 
-# Standalone Typer app — used by the ``ndimg`` entrypoint for backward compat.
 app = typer.Typer(
     name="ndimg",
     add_completion=False,
@@ -21,7 +17,6 @@ app = typer.Typer(
 def view_ome_zarr(
     zarr_paths: list[Path],
     *,
-    channels: str | None = None,
     host: str = "localhost",
     port: int = 5055,
     dry_run: bool = False,
@@ -32,8 +27,6 @@ def view_ome_zarr(
     ----------
     zarr_paths
         Resolved OME-Zarr store paths.
-    channels
-        Comma-separated channel names to filter.
     host
         Server bind address.
     port
@@ -77,14 +70,11 @@ def view_ome_zarr(
                 console.print(f"    ... ({len(positions) - 10} more)")
         return
 
-    channel_list = [c.strip() for c in channels.split(",")] if channels else None
-
     from nd_embedding_atlas.ndimg._serve import serve
 
     console.print(f"\nServing at [link=http://{host}:{port}]http://{host}:{port}[/link]")
     serve(
         plate_paths=zarr_paths,
-        channels=channel_list,
         host=host,
         port=port,
     )
@@ -93,10 +83,9 @@ def view_ome_zarr(
 @app.command()
 def view(
     zarr_paths: Annotated[list[Path], typer.Argument(help="Path(s) to OME-Zarr plate(s) or position(s).")],
-    channels: Annotated[str | None, typer.Option("--channels", "-c", help="Comma-separated channel names.")] = None,
-    host: Annotated[str, typer.Option(help="Server bind address.")] = "0.0.0.0",
     port: Annotated[int, typer.Option(help="Server port.")] = 5055,
     dry_run: Annotated[bool, typer.Option("--dry-run", help="Print metadata and exit.")] = False,
+    host: Annotated[str, typer.Option(help="Server bind address.", hidden=True)] = "0.0.0.0",
 ) -> None:
     """Launch the ndimg OME-Zarr image viewer."""
-    view_ome_zarr(zarr_paths, channels=channels, host=host, port=port, dry_run=dry_run)
+    view_ome_zarr(zarr_paths, host=host, port=port, dry_run=dry_run)

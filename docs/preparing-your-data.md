@@ -6,7 +6,7 @@ icon: lucide/layers
 
 The viewer streams image data directly from OME-Zarr over HTTP using tile-based
 fetching. How your data is stored has a large impact on loading speed, memory
-usage, and interactivity. This page explains what to do — and why.
+usage, and interactivity. This page explains what to do and why.
 
 ## At a glance
 
@@ -20,13 +20,15 @@ usage, and interactivity. This page explains what to do — and why.
 
 ## Why storage format matters
 
-The viewer uses idetik's tile-based renderer which fetches only the chunks
+The viewer uses [idetik's][idetik-gh] tile-based renderer which fetches only the chunks
 that intersect the current camera viewport (the crop region). Two things determine
 how much data is transferred on every obs click:
 
+[idetik-gh]: https://github.com/chanzuckerberg/idetik
+
 **1. Background thumbnail loading.**
 The renderer always pre-loads a low-resolution thumbnail of the full FOV in the
-background so that panning feels instant. With a proper pyramid the thumbnail is
+background so that panning feels smooth. With a proper pyramid the thumbnail is
 the coarsest LOD, a small amount of data. Without a pyramid the renderer falls
 back to the only LOD available (full resolution), downloading the entire image
 every time.
@@ -41,7 +43,7 @@ typically intersects ≤ 4 chunks per channel.
 
 ## Zarr v3 with sharding (recommended)
 
-OME-NGFF 0.5 stores data as zarr v3. Use the `sharding_indexed` codec to pack
+OME-NGFF 0.5 stores data as Zarr v3. Use the `sharding_indexed` codec to pack
 many small inner chunks into larger shard files on disk. This is ideal for HTTP
 access because:
 
@@ -53,11 +55,14 @@ access because:
 
 ### Recommended layout
 
-```
+
+```shell
 Shard shape  :  (T, C, Z, Y, X) - For now feel free to use any sharding configuration you prefer
 Chunk Shape  :  (1, 1, 1,  256,  265) - Chunks are the most important aspect as this is how the viewer fetches data
-Codec        :  sharding_indexed → [bytes(little-endian), blosc/zstd clevel=1]
+Codec        :  sharding_indexed → [bytes(little-endian), blosc/zstd clevel=1] # (1)!
 ```
+
+1. The codec used for compression is flexible, pick what suites you best.
 
 At LOD 0 for a 100 k × 100 k image this gives a 12 × 12 grid of shard files
 (≈ 144 shards). Each shard is ~3 GB on disk but the viewer only reads a few
@@ -115,17 +120,12 @@ with open_ome_zarr("plate.zarr", mode="r+") as plate:
 Zarr v2 (OME-NGFF 0.4) is supported but has limitations:
 
 - **No byte-range sharding.** Each chunk is stored as a separate file. Reading
-  a 512 × 512 px crop fetches one file per channel — acceptable if chunks are
-  small, but there is no way to share a shard index across channels.
+  a 512 × 512 px crop fetches one file per chunk. This might be fine if are
+  small.
 - **Chunk size still matters.** Make sure the XY chunk dimensions do **not**
   cover the full image plane. A chunk of `(1, 1, 1, 748, 1135)` forces the
-  client to download an entire 748 × 1 135 px plane to display a 10 × 10 px
+  client to download an entire 748 × 1135 px plane to display a 10 × 10 px
   region.
-
-```
-Recommended zarr v2 chunk: (1, 1, 1, 256, 256) or (1, 1, 1, 512, 512)
-Avoid:                      (1, 1, Z, Y, X)  where Y×X ≈ full plane
-```
 
 Multi-scale pyramids are equally important for zarr v2 as the viewer's
 background-loading behaviour is the same regardless of storage version.

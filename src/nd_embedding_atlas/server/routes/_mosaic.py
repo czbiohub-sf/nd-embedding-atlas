@@ -64,25 +64,31 @@ def _handle_query(query: dict, state: ViewerState) -> Response:
         return JSONResponse({"error": "Statement type not allowed"}, status_code=400)
 
     try:
-        with state.store.cursor() as cursor:
-            result = cursor.execute(sql)
-            if command == "exec":
-                return JSONResponse({})
-            if command == "arrow":
-                return Response(
-                    arrow_to_ipc_bytes(result.arrow()),
-                    headers={"Content-Type": "application/octet-stream"},
-                )
-            if command == "json":
-                cols = [d[0] for d in result.description]
-                rows = result.fetchall()
-                data = json.dumps(
-                    [dict(zip(cols, row, strict=False)) for row in rows],
-                    default=str,
-                )
-                return Response(data, headers={"Content-Type": "application/json"})
-            msg = f"Unknown command {command}"
-            raise ValueError(msg)  # noqa: TRY301
+        # Use the main connection (not cursor()) so that Mosaic temp tables such as
+        # __scatter_selection persist across the CREATE TABLE → SELECT query sequence.
+        # DuckDB serializes concurrent access on the same connection internally.
+        result = state.store.con.execute(sql)
+        # After ALTER TABLE obs_base ADD COLUMN, the cached dataset VIEW schema
+        # is stale — rebuild it so the new column (__ev_*_id) is visible.
+        if stripped.startswith("ALTER TABLE OBS_BASE ADD COLUMN"):
+            state.store._rebuild_view()
+        if command == "exec":
+            return JSONResponse({})
+        if command == "arrow":
+            return Response(
+                arrow_to_ipc_bytes(result.arrow()),
+                headers={"Content-Type": "application/octet-stream"},
+            )
+        if command == "json":
+            cols = [d[0] for d in result.description]
+            rows = result.fetchall()
+            data = json.dumps(
+                [dict(zip(cols, row, strict=False)) for row in rows],
+                default=str,
+            )
+            return Response(data, headers={"Content-Type": "application/json"})
+        msg = f"Unknown command {command}"
+        raise ValueError(msg)  # noqa: TRY301
     except Exception as e:  # noqa: BLE001
         return JSONResponse({"error": str(e)}, status_code=500)
     finally:
@@ -112,25 +118,25 @@ def mount_duckdb_endpoints(app: FastAPI, con: "duckdb.DuckDBPyConnection") -> No
         ):
             return JSONResponse({"error": "Statement type not allowed"}, status_code=400)
         try:
-            with con.cursor() as cursor:
-                result = cursor.execute(sql)
-                if command == "exec":
-                    return JSONResponse({})
-                if command == "arrow":
-                    return Response(
-                        arrow_to_ipc_bytes(result.arrow()),
-                        headers={"Content-Type": "application/octet-stream"},
-                    )
-                if command == "json":
-                    cols = [d[0] for d in result.description]
-                    rows = result.fetchall()
-                    data = json.dumps(
-                        [dict(zip(cols, row, strict=False)) for row in rows],
-                        default=str,
-                    )
-                    return Response(data, headers={"Content-Type": "application/json"})
-                msg = f"Unknown command {command}"
-                raise ValueError(msg)  # noqa: TRY301
+            # Use con directly (not cursor()) so temp tables persist across queries.
+            result = con.execute(sql)
+            if command == "exec":
+                return JSONResponse({})
+            if command == "arrow":
+                return Response(
+                    arrow_to_ipc_bytes(result.arrow()),
+                    headers={"Content-Type": "application/octet-stream"},
+                )
+            if command == "json":
+                cols = [d[0] for d in result.description]
+                rows = result.fetchall()
+                data = json.dumps(
+                    [dict(zip(cols, row, strict=False)) for row in rows],
+                    default=str,
+                )
+                return Response(data, headers={"Content-Type": "application/json"})
+            msg = f"Unknown command {command}"
+            raise ValueError(msg)  # noqa: TRY301
         except Exception as e:  # noqa: BLE001
             return JSONResponse({"error": str(e)}, status_code=500)
 

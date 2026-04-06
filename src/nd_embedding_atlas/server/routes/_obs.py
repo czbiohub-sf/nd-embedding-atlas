@@ -1,9 +1,10 @@
 """Observation lookup and health endpoints."""
 
-import asyncio
 from collections.abc import Callable
+from functools import partial
 from typing import Annotated
 
+import anyio
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 
@@ -13,9 +14,11 @@ from nd_embedding_atlas.vz._prepare import parse_bbox
 
 def _lookup_obs(row_index: int, select_cols: list[str], state: ViewerState) -> tuple | None:
     """Query DuckDB for a single observation by row index (runs in thread pool)."""
+    # Quote column names to handle special chars (e.g. leiden_0.5 contains a dot)
+    quoted = ", ".join(f'"{c}"' for c in select_cols)
     with state.store.cursor() as cur:
         return cur.execute(
-            f"SELECT {', '.join(select_cols)} FROM obs_base WHERE __row_index__ = ?",
+            f"SELECT {quoted} FROM obs_base WHERE __row_index__ = ?",
             [row_index],
         ).fetchone()
 
@@ -31,11 +34,15 @@ def make_obs_router(get_state: Callable[[], ViewerState]) -> APIRouter:
         sp = state.spatial
         select_cols = [c for c in [sp.fov, sp.t, sp.bbox, sp.x, sp.y] if c is not None]
 
+        # In multi-dataset mode, prepend _dataset BEFORE the early-exit guard
+        # so it's always fetched when available.
+        if state.dataset_plates:
+            select_cols = ["_dataset", *select_cols]
+
         if not select_cols:
             return JSONResponse({"error": "No spatial columns configured"}, status_code=404)
 
-        loop = asyncio.get_running_loop()
-        row = await loop.run_in_executor(state.executor, _lookup_obs, row_index, select_cols, state)
+        row = await anyio.to_thread.run_sync(partial(_lookup_obs, row_index, select_cols, state), cancellable=True)
 
         if row is None:
             return JSONResponse({"error": "Observation not found"}, status_code=404)
@@ -63,7 +70,50 @@ def make_obs_router(get_state: Callable[[], ViewerState]) -> APIRouter:
             response["x"] = float(result_map[sp.x])
             response["y"] = float(result_map[sp.y])
 
+        # In multi-dataset mode, resolve store_index from _dataset value
+        if state.dataset_plates:
+            _dataset_val = result_map.get("_dataset")
+            dataset_keys = list(state.dataset_plates.keys())
+            if _dataset_val is not None and _dataset_val in dataset_keys:
+                response["store_index"] = dataset_keys.index(_dataset_val)
+
         return response
+
+    @router.get("/api/obs/batch", response_model=None)
+    async def get_obs_batch(ids: str, state: State) -> JSONResponse:
+        """Return x/y centroids for multiple observations in one query.
+
+        Parameters
+        ----------
+        ids
+            Comma-separated row indices (e.g. ``?ids=1,2,3``).
+        """
+        sp = state.spatial
+        x_col = sp.x
+        y_col = sp.y
+
+        if not x_col or not y_col:
+            return JSONResponse({})
+
+        try:
+            row_indices = [int(i) for i in ids.split(",") if i.strip()]
+        except ValueError:
+            return JSONResponse({"error": "ids must be comma-separated integers"}, status_code=422)
+
+        if not row_indices:
+            return JSONResponse({})
+
+        def _batch_lookup(indices: list[int]) -> dict[str, dict]:
+            placeholders = ", ".join("?" * len(indices))
+            with state.store.cursor() as cur:
+                rows = cur.execute(
+                    f'SELECT __row_index__, "{x_col}", "{y_col}" FROM obs_base WHERE __row_index__ IN ({placeholders})',
+                    indices,
+                ).fetchall()
+            return {str(r[0]): {"x": float(r[1]), "y": float(r[2])} for r in rows}
+
+        result = await anyio.to_thread.run_sync(partial(_batch_lookup, row_indices), cancellable=True)
+        return JSONResponse(result)
 
     @router.get("/api/obs/{row_index}/detail", response_model=None)
     async def get_obs_detail(row_index: int, state: State) -> dict | JSONResponse:
@@ -76,14 +126,15 @@ def make_obs_router(get_state: Callable[[], ViewerState]) -> APIRouter:
                     for d in cur.execute("SELECT * FROM obs_base LIMIT 0").description
                     if d[0] not in state.store._hidden
                 ]
+                # Quote column names to handle dots/special chars (e.g. leiden_0.5)
+                quoted = ", ".join(f'"{c}"' for c in cols)
                 row = cur.execute(
-                    f"SELECT {', '.join(cols)} FROM obs_base WHERE __row_index__ = ?",
+                    f"SELECT {quoted} FROM obs_base WHERE __row_index__ = ?",
                     [row_index],
                 ).fetchone()
                 return (cols, row) if row is not None else None
 
-        loop = asyncio.get_running_loop()
-        result = await loop.run_in_executor(state.executor, _fetch, row_index, state)
+        result = await anyio.to_thread.run_sync(partial(_fetch, row_index, state), cancellable=True)
 
         if result is None:
             return JSONResponse({"error": "Observation not found"}, status_code=404)
