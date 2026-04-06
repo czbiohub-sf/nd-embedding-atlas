@@ -19,63 +19,22 @@ to their source 5D (TCZYX) image data for rapid exploration and annotation.
     does not support by default. On HPC systems, see the
     [WebGPU setup guide](webgpu-hpc-setup.md) to enable WebGPU in Chrome.
 
-## Installing
+## Installation
 
-### For users (recommended)
-
-Requires [uv](https://docs.astral.sh/uv/) and Chrome or Edge. No Node.js needed — the frontend is bundled in the wheel.
+Requires **[uv](https://docs.astral.sh/uv/)** and the **[GitHub CLI](https://cli.github.com/)** (`gh auth login` once to authenticate).
 
 ``` bash
-# Install uv if you don't have it
-curl -LsSf https://astral.sh/uv/install.sh | sh
+# Download the latest release wheel
+gh release download --repo czbiohub-sf/nd-embedding-atlas \
+  -p "nd_embedding_atlas-*.whl" -D /tmp/ndea/
 
-# Install nd-embedding-atlas (pre-built wheel from latest GitHub release)
-uv tool install "https://github.com/czbiohub-sf/nd-embedding-atlas/releases/latest/download/ndea-latest.whl"
+# Install (no Node.js required — frontend is bundled)
+uv tool install /tmp/ndea/nd_embedding_atlas-*.whl
 ```
 
-To upgrade to the latest release:
+To upgrade, re-run the above and add `--force` to the install command.
 
-``` bash
-uv tool install "https://github.com/czbiohub-sf/nd-embedding-atlas/releases/latest/download/ndea-latest.whl" --force
-```
-
-To install a specific version, find the release at
-[github.com/czbiohub-sf/nd-embedding-atlas/releases](https://github.com/czbiohub-sf/nd-embedding-atlas/releases)
-and use the versioned wheel URL:
-
-``` bash
-uv tool install "https://github.com/czbiohub-sf/nd-embedding-atlas/releases/download/v0.1.0/nd_embedding_atlas-0.1.0-py3-none-any.whl"
-```
-
-### For developers (clone and build)
-
-1. Clone
-
-    ``` bash
-    git clone https://github.com/czbiohub-sf/nd-embedding-atlas.git
-    cd nd-embedding-atlas
-    ```
-
-2. Install all dependencies (Python + frontend)
-
-    ```bash
-    mise run sync
-    ```
-
-    Or separately:
-
-    ```bash
-    uv sync
-    cd frontend && vp install
-    ```
-
-3. Start the dev stack
-
-    ```bash
-    mise run dev path/to/data.zarr
-    ```
-
-See the [contributing guide](contributing.md) for the full dev setup.
+For developer setup, see the [contributing guide](contributing.md).
 
 ## Download test data
 
@@ -107,12 +66,13 @@ The project includes scripts to download example datasets. Pick the one that fit
         /hpc/websites/public.czbiohub.org/comp.micro/nd-embedding-atlas-test-data
         ```
 
-        You can point the viewer directly at these paths instead of downloading.
+        You can symlink or point the viewer directly at these paths instead of downloading.
 
 === "CellxGene (transcriptomics)"
 
     Larger scRNA-seq datasets from [CellxGene](https://cellxgene.cziscience.com/).
-    Downloads `.h5ad` files and converts them to zarr v3 with sharding.
+    Downloads `.h5ad` files and converts them to zarr v3 with sharding. The purpose is to inspect
+    the perfomance of the embedding atlas.
 
     ``` bash
     uv run scripts/download_cxg_datasets.py [OUTPUT] # (1)!
@@ -123,75 +83,42 @@ The project includes scripts to download example datasets. Pick the one that fit
 
     !!! info "This may take a while"
 
-        CellxGene datasets are several GB each.
+        CellxGene datasets are several GB each. The script downloads to a temp
+        directory, converts to zarr v3, then cleans up the intermediate `.h5ad` files.
 
 ## Launch the viewer
 
-Pass your data paths directly — the CLI auto-detects AnnData vs OME-Zarr by structure:
+After downloading, launch the viewer on the datasets:
 
 === "DynaCLR (cell tracking)"
 
     ``` bash
-    ndea data/annotations_zv3.zarr data/dataset.zarr
+    uv run ndea view data/annotations_zv3.zarr --plate data/dataset.zarr
     ```
 
-    The AnnData (`.zarr` with `obs/`) loads the embeddings and metadata.
-    The OME-Zarr (`.zarr` without `obs/`) becomes the image viewer.
+    This loads the tracking annotations with embeddings and connects the
+    OME-Zarr HCS plate for cell crop viewing.
 
 === "CellxGene (transcriptomics)"
 
     ``` bash
-    ndea cxg-data/*.zarr # (1)!
+    uv run ndea view cxg-data/*.zarr  # (1)!
     ```
 
-    1. Glob patterns work — all matching AnnData stores are lazily concatenated.
+    1. You can use glob patterns to select the AnnData `.zarr` files with lazy concatenation.
 
+The viewer starts a local server at `http://localhost:5055` with:
 
+- **Embedding plot** -- interactive WebGL scatter of the embedding space
+- **Data table** -- sortable, filterable metadata table
+- **Charts** -- cross-filtered distributions of obs columns
+- **OME-Zarr Movie viewer** -- OME-Zarr image crops (when `--plate` is provided)
 
-The viewer starts at `http://localhost:5055` with:
+!!! tip "Short alias"
 
-- **Embedding scatter** -- interactive WebGPU scatterplot of the embedding space
-- **Data table** -- View [`AnnData.obs`][anndata-obs-docs]
-- **Image viewer** -- OME-Zarr image crops (when an OME-Zarr store is provided)
-
-
-[anndata-obs-docs]: https://anndata.readthedocs.io/en/stable/tutorials/notebooks/getting-started.html
-
-## Multi-dataset config
-
-To view multiple AnnData + OME-Zarr pairs together, create a YAML config file:
-
-``` yaml
-datasets:
-  "experiment-1":
-    anndata: path/to/exp1.zarr       # relative to this YAML file, or absolute
-    ome-zarr: path/to/plate1.zarr    # optional
-
-  "experiment-2":
-    anndata: path/to/exp2.h5ad       # .h5ad files also work
-    ome-zarr: path/to/plate2.zarr
-```
-
-Then launch:
-
-``` bash
-ndea config.yaml
-```
-
-## CLI reference
-
-``` bash
-ndea --help
-```
-
-| Option | Description |
-|--------|-------------|
-| `--export-dir` / `-e` | Directory for exported zarr stores |
-| `--port` | Server port (default: 5055) |
-| `--dry-run` | Validate inputs and exit without launching |
+    `ndea` is an alias for `nd-embedding-atlas`. Both work interchangeably.
 
 ## What's next?
 
-- Read [Preparing your data](preparing-your-data.md) for OME-Zarr layout guidance
-- See [OPS datasets](ops-datasets.md) for an optical pooled screening workflow example
-- Read the [contributing guide](contributing.md)
+- Browse the [API documentation](api.md) for programmatic usage
+- Read the [contributing documentation](contributing.md) for architecture details and contribution patterns
