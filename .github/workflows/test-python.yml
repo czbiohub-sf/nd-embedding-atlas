@@ -30,7 +30,9 @@ jobs:
           enable-cache: true
 
       - name: Sync test dependencies
-        run: uv sync --locked --group test
+        # stable: --locked enforces the committed lockfile
+        # pre: no --locked so uv can resolve pre-release versions beyond the lockfile
+        run: uv sync ${{ matrix.deps == 'pre' && '' || '--locked' }} --group test
         env:
           UV_PRERELEASE: ${{ matrix.deps == 'pre' && 'allow' || 'if-necessary-or-explicit' }}
 
