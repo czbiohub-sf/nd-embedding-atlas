@@ -14,14 +14,20 @@ import type { ViewState } from "../types";
 export interface SelectionCapability {
   setExternalSelection(rowIndices: number[]): void;
   clearExternalSelection(): void;
+  clearSelection(): void;
   setForcedSelectionMode(mode: "pan" | "marquee" | "lasso"): void;
 }
 
 export interface IsolationCapability {
   setCategoryIsolation(isolatedSet: Set<number>, categoryIndices: Uint8Array): void;
   clearCategoryIsolation(): void;
-  setRowIsolation(rowIndices: number[]): void;
-  clearRowIsolation(): void;
+  setTrajectoryIsolation(rowIndices: number[]): void;
+  clearTrajectoryIsolation(): void;
+  setContinuousIsolation(rowIndices: number[]): void;
+  clearContinuousIsolation(): void;
+  rehydrateIsolation(): void;
+  setHighlightPoints(rowIndices: number[]): void;
+  clearHighlight(): void;
 }
 
 export interface ViewCapability {

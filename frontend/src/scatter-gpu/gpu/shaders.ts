@@ -33,6 +33,8 @@ export function createVertexShader(uniforms: ScatterUniforms) {
         position: d.builtin.position,
         color: d.vec4f,
         uv: d.vec2f,
+        /** 1.0 when this point is the highlighted (clicked) point, 0.0 otherwise. */
+        highlight: d.f32,
       },
     })((input) => {
       "use gpu";
@@ -52,19 +54,25 @@ export function createVertexShader(uniforms: ScatterUniforms) {
       const worldY = (input.instancePos.y + offsetY) * zoom;
 
       const adaptiveScale = params.w;
-      const zoomedRadius = radius * std.sqrt(zoom) * vis * adaptiveScale;
+      // Four-tier dim: 0 = heavy, 1 = moderate, 2 = full bright, 3 = clicked (outline)
+      const sel = input.instanceSelected;
+      const isClicked = sel >= 3 && selMode >= 1;
+      // Clicked point gets a 1.6x size boost for the outline ring
+      const clickedScale = std.select(1.0, 1.6, isClicked);
+      const zoomedRadius = radius * std.sqrt(zoom) * vis * adaptiveScale * clickedScale;
       const scaledQuad = d.vec2f(input.quadPos.x * zoomedRadius, input.quadPos.y * zoomedRadius);
 
-      const sel = d.f32(input.instanceSelected);
-      const selDimFactor = params.z;
-      const dimFactor = std.mix(1.0, std.mix(selDimFactor, 1.0, sel), selMode);
+      const selDimFactor = params.z; // heavy dim (default 0.08)
+      const moderateDimFactor = std.clamp(selDimFactor * 4.0, 0.0, 0.6); // ~0.32
+      const tierAlpha = std.select(std.select(selDimFactor, moderateDimFactor, sel >= 1), 1.0, sel >= 2);
+      const dimFactor = std.mix(1.0, tierAlpha, selMode);
 
       const rgba = unpackColor(input.instanceColor);
       return {
         position: d.vec4f((worldX + scaledQuad.x) / aspect, worldY + scaledQuad.y, 0, 1),
-        // Dim unselected points via alpha only — preserves color in light mode.
         color: d.vec4f(rgba.x, rgba.y, rgba.z, rgba.w * dimFactor),
         uv: input.quadPos,
+        highlight: std.select(0.0, 1.0, isClicked),
       };
     })
     .$uses({ unpackColor });
@@ -72,14 +80,40 @@ export function createVertexShader(uniforms: ScatterUniforms) {
 
 export function createFragmentShader() {
   return tgpu.fragmentFn({
-    in: { color: d.vec4f, uv: d.vec2f },
+    in: { color: d.vec4f, uv: d.vec2f, highlight: d.f32 },
     out: d.vec4f,
   })((input) => {
     "use gpu";
     const dist = sdDisk(input.uv, 1.0);
     const fw = std.max(std.fwidth(dist), 0.01);
     const alpha = 1 - std.smoothstep(-fw, fw, dist);
-    // input.color.w carries the selection dim factor (1.0 = selected, ~0.08 = unselected).
+
+    if (input.highlight > 0.5) {
+      // Highlighted point: white outline ring + filled center
+      // The quad is 1.6x bigger, so the inner disk sits at r=0.625 (1/1.6)
+      const innerRadius = 0.625;
+      const innerDist = sdDisk(input.uv, innerRadius);
+      const innerAlpha = 1 - std.smoothstep(-fw, fw, innerDist);
+      // Ring = outer disk minus inner disk
+      const ringAlpha = alpha * (1 - innerAlpha);
+      // Composite: white ring + colored fill
+      const ringColor = d.vec4f(1.0, 1.0, 1.0, ringAlpha * 0.9);
+      const fillColor = d.vec4f(
+        input.color.x * innerAlpha,
+        input.color.y * innerAlpha,
+        input.color.z * innerAlpha,
+        innerAlpha * input.color.w,
+      );
+      const r = fillColor.x + ringColor.x * ringColor.w * (1 - fillColor.w);
+      const g = fillColor.y + ringColor.y * ringColor.w * (1 - fillColor.w);
+      const b = fillColor.z + ringColor.z * ringColor.w * (1 - fillColor.w);
+      const a = fillColor.w + ringColor.w * (1 - fillColor.w);
+      if (a < 0.004) {
+        std.discard();
+      }
+      return d.vec4f(r, g, b, a);
+    }
+
     const finalAlpha = alpha * input.color.w;
     if (finalAlpha < 0.004) {
       std.discard();

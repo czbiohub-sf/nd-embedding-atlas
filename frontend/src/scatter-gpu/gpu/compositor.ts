@@ -8,10 +8,11 @@ import type { ScatterBuffers, ScatterUniforms } from "./buffers";
 function destroy(): void {}
 
 // Layer bit constants
-export const LAYER_LASSO = 0b0001;
-export const LAYER_EXTERNAL = 0b0010;
-export const LAYER_ISOLATION = 0b0100;
-export const LAYER_ANNOTATION = 0b1000;
+export const LAYER_LASSO = 0b00001;
+export const LAYER_EXTERNAL = 0b00010;
+export const LAYER_ISOLATION = 0b00100;
+export const LAYER_ANNOTATION = 0b01000;
+export const LAYER_HIGHLIGHT = 0b10000;
 
 export function createCompositor(
   root: TgpuRoot,
@@ -23,11 +24,12 @@ export function createCompositor(
 ) {
   void device; // kept for API symmetry / future use
 
-  // 4 layer buffers — all u32[numPoints], storage usage
+  // 5 layer buffers — all u32[numPoints], storage usage
   const lassoBuffer = root.createBuffer(d.arrayOf(d.u32, numPoints)).$usage("storage");
   const externalBuffer = root.createBuffer(d.arrayOf(d.u32, numPoints)).$usage("storage");
   const isolationBuffer = root.createBuffer(d.arrayOf(d.u32, numPoints)).$usage("storage");
   const annotationBuffer = root.createBuffer(d.arrayOf(d.u32, numPoints)).$usage("storage");
+  const highlightBuffer = root.createBuffer(d.arrayOf(d.u32, numPoints)).$usage("storage");
 
   let isDirty = false;
   let layerActiveBits = 0;
@@ -37,6 +39,7 @@ export function createCompositor(
   const externalReadonly = externalBuffer.as("readonly");
   const isolationReadonly = isolationBuffer.as("readonly");
   const annotationReadonly = annotationBuffer.as("readonly");
+  const highlightReadonly = highlightBuffer.as("readonly");
   const { selectedBuffer } = buffers;
   const selectedMutable = selectedBuffer.as("mutable");
   const { selectionModeUniform } = uniforms;
@@ -45,15 +48,17 @@ export function createCompositor(
   const layerBitsUniform = root.createUniform(d.u32, 0);
 
   // ── Compositor compute kernel ──────────────────────────────────────────────
-  // Two-tier AND/OR semantics:
-  //   isolation tier : isolationBuffer (active only when LAYER_ISOLATION bit set)
-  //   selection tier : lasso | external (OR; active when either bit set)
-  //   annotation     : reserved for future use (ignored in current composite)
-  //   final          : intersection(isolation_tier, selection_tier) with identity fallback
-  //     - if neither tier active → pass-all (1)
-  //     - if only isolation active → isoPass
-  //     - if only selection active → selPass
-  //     - if both active → isoPass & selPass
+  // Three-tier composition (materialized view — selectedBuffer is never written directly):
+  //
+  //   highlight tier : highlightBuffer (point click — always wins)
+  //   isolation tier : isolationBuffer (category + trajectory + continuous masks)
+  //   selection tier : lasso | external (lasso/marquee OR cross-panel sync)
+  //
+  //   final = highlight | (isoPass & selPass)
+  //
+  //   - Highlighted points are always fully bright (never dimmed by filters)
+  //   - Isolation and selection tiers intersect normally
+  //   - If no tiers active → pass-all (1)
   const COMP_BATCH = [0, 1, 2, 3] as const;
 
   const compositorFn = tgpu
@@ -70,17 +75,31 @@ export function createCompositor(
           const iso = isolationReadonly.$[idx];
           const lasso = lassoReadonly.$[idx];
           const ext = externalReadonly.$[idx];
+          const hi = highlightReadonly.$[idx];
 
           // Tier flags derived from bitmask
+          const hasHi = (layerBits & 16) !== 0; // LAYER_HIGHLIGHT
           const hasIso = (layerBits & 4) !== 0; // LAYER_ISOLATION
           const hasSel = ((layerBits & 1) | (layerBits & 2)) !== 0; // lasso | external
 
-          // isoPass: if isolation tier active, point must be in isolation mask
+          // Each tier: if active, use buffer value; if inactive, identity
+          const hiVal = std.select(0, hi, hasHi); // 0=none, 1=trajectory, 2=clicked
           const isoPass = std.select(1, iso, hasIso);
-          // selPass: if selection tier active, point must be in lasso OR external
           const selPass = std.select(1, lasso | ext, hasSel);
 
-          selectedMutable.$[idx] = isoPass & selPass;
+          // Four-tier brightness:
+          //   3 = clicked point (outline ring + full bright)
+          //   2 = full bright (trajectory, or passes filters with no highlight)
+          //   1 = moderate dim (passes filters but not highlighted)
+          //   0 = heavy dim (filtered out)
+          const filterPass = isoPass & selPass;
+          const hasFilters = hasIso || hasSel;
+          const useModerate = hasHi && hasFilters;
+          // Without moderate: filterPass * 2 → 0 or 2
+          const binary = filterPass * 2;
+          // With moderate: clicked→3, trajectory→2, filterPass→1, else→0
+          const tiered = std.select(filterPass, hiVal + 1, hiVal !== 0);
+          selectedMutable.$[idx] = std.select(binary, tiered, useModerate);
         }
       }
     })
@@ -90,6 +109,7 @@ export function createCompositor(
       externalReadonly,
       isolationReadonly,
       annotationReadonly,
+      highlightReadonly,
       selectedMutable,
     });
 
@@ -121,6 +141,7 @@ export function createCompositor(
     externalBuffer,
     isolationBuffer,
     annotationBuffer,
+    highlightBuffer,
     // Expose compute fn for WGSL debug dumps
     compositorFn,
     destroy,
