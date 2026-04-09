@@ -89,6 +89,8 @@ def make_data_router(get_state: Callable[[], ViewerState], config: DatasetConfig
             result.update(config.plate_meta)
         if config.dataset_keys is not None:
             result["dataset_keys"] = config.dataset_keys
+        if config.dataset_channels:
+            result["dataset_channels"] = config.dataset_channels
         if state.dataset_plates:
             result["plate_stores"] = [
                 {

@@ -176,8 +176,6 @@ def create_app(
     dataset_channels: dict[str, list[Any]] = {}
     dataset_ome_versions: dict[str, str] = {}
     if dataset_plates:
-        import warnings as _warnings
-
         first_plate_meta: dict[str, Any] | None = None
         for _ds_key, _ds_plate_path in dataset_plates.items():
             _meta = _read_plate_metadata(_ds_plate_path)
@@ -187,14 +185,15 @@ def create_app(
                 first_plate_meta = _meta
                 dataset_channels[_ds_key]
 
-        # Warn if channel layouts differ across plates
+        # Log when channel layouts differ across plates (each dataset gets its own channels)
         if len(dataset_channels) > 1:
             channel_counts = {k: len(v) for k, v in dataset_channels.items()}
             if len(set(channel_counts.values())) > 1:
-                _warnings.warn(
-                    f"Plate channel counts differ across datasets: {channel_counts}. "
-                    "Using first plate's channel layout as the canonical frontend metadata.",
-                    stacklevel=2,
+                import logging as _logging
+
+                _logging.getLogger("ndea").info(
+                    "Plate channel counts differ across datasets: %s — per-dataset channels will be served.",
+                    channel_counts,
                 )
 
         # Use first plate as canonical frontend metadata if no single plate_path given
@@ -287,6 +286,7 @@ def create_app(
         default_x=default_x,
         default_y=default_y,
         dataset_keys=_dataset_keys,
+        dataset_channels=dataset_channels if dataset_channels else None,
     )
 
     # ── Assemble app ──────────────────────────────────────────────────

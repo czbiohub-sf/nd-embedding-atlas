@@ -31,11 +31,17 @@ export function TrackGallery({ activeFrame, onFrameSelect, datasetKey }: TrackGa
   const { state } = useDashboard();
   const trajectory = selectAnyTrajectory(state.trajectories);
   // Use || not ?? so empty string "" (single-dataset mode) falls through to "docked"
+  // Resolve per-dataset channels when available, falling back to global plate_channels
+  const resolvedDatasetKey = trajectory?.datasetKey ?? datasetKey;
+  const resolvedPlateChannels =
+    (resolvedDatasetKey ? state.metadata.dataset_channels?.[resolvedDatasetKey] : undefined) ??
+    state.metadata.plate_channels;
+
   const {
     channels: settledChannels,
     hash: settledHash,
     isPending,
-  } = useGalleryChannels(trajectory?.datasetKey ?? datasetKey ?? "docked", 300, state.metadata.plate_channels);
+  } = useGalleryChannels(resolvedDatasetKey ?? "docked", 300, resolvedPlateChannels);
 
   const queryClient = useQueryClient();
 
