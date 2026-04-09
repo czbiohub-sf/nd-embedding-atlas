@@ -49,6 +49,7 @@ export const MetadataSchema = z
     plate_ome_version: z.enum(["0.4", "0.5"]).optional(),
     plate_pixel_scale: z.object({ x: z.number(), y: z.number() }).optional(),
     plate_channels: z.array(PlateChannelSchema).optional(),
+    dataset_channels: z.record(z.string(), z.array(PlateChannelSchema)).optional(),
     plate_stores: z.array(PlateStoreSchema).optional(),
     plate_shape: z.array(z.number()).optional(),
     plate_scale: z.array(z.number()).optional(),

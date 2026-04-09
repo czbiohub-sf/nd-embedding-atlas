@@ -51,9 +51,13 @@ export function SingleCropViewer({ cropSize, datasetKey }: Props) {
   const sourceUrl = isForThisDataset && obsInfo ? `${window.location.origin}${mountPrefix}/${obsInfo.fov_name}` : null;
 
   // ── Hooks for imperative plumbing ─────────────────────────────────
+  // Resolve per-dataset channels when available, falling back to global plate_channels
+  const resolvedChannels =
+    (activeStoreName ? metadata.dataset_channels?.[activeStoreName] : undefined) ?? metadata.plate_channels;
+
   useFovLoader({
     sourceUrl,
-    plateChannels: metadata.plate_channels,
+    plateChannels: resolvedChannels,
     omeVersion,
   });
 

@@ -45,6 +45,7 @@ class DatasetConfig:
     default_y: str
     id_column: str = "__row_index__"
     dataset_keys: list[str] | None = None
+    dataset_channels: dict[str, list[dict[str, Any]]] | None = None
 
 
 @dataclasses.dataclass
