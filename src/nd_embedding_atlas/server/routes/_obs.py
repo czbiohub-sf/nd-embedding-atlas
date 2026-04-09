@@ -28,57 +28,8 @@ def make_obs_router(get_state: Callable[[], ViewerState]) -> APIRouter:
     router = APIRouter()
     State = Annotated[ViewerState, Depends(get_state)]
 
-    @router.get("/api/obs/{row_index}", response_model=None)
-    async def get_obs(row_index: int, state: State) -> dict | JSONResponse:
-        """Look up spatial coordinates for an observation by row index."""
-        sp = state.spatial
-        select_cols = [c for c in [sp.fov, sp.t, sp.bbox, sp.x, sp.y] if c is not None]
-
-        # In multi-dataset mode, prepend _dataset BEFORE the early-exit guard
-        # so it's always fetched when available.
-        if state.dataset_plates:
-            select_cols = ["_dataset", *select_cols]
-
-        if not select_cols:
-            return JSONResponse({"error": "No spatial columns configured"}, status_code=404)
-
-        row = await anyio.to_thread.run_sync(partial(_lookup_obs, row_index, select_cols, state), cancellable=True)
-
-        if row is None:
-            return JSONResponse({"error": "Observation not found"}, status_code=404)
-
-        result_map = dict(zip(select_cols, row, strict=True))
-        response: dict = {}
-
-        # fov_name (normalize from whatever source column)
-        if sp.fov:
-            response["fov_name"] = str(result_map[sp.fov])
-
-        # t (default 0 when column is absent)
-        response["t"] = int(result_map[sp.t]) if sp.t else 0
-
-        # bbox parsing
-        if sp.bbox and result_map.get(sp.bbox):
-            bbox = parse_bbox(str(result_map[sp.bbox]))
-            if bbox:
-                response["bbox"] = bbox
-                response["x"] = (bbox["x_min"] + bbox["x_max"]) / 2
-                response["y"] = (bbox["y_min"] + bbox["y_max"]) / 2
-
-        # Explicit x/y centroids (override bbox center if available)
-        if sp.x and result_map.get(sp.x) is not None:
-            response["x"] = float(result_map[sp.x])
-            response["y"] = float(result_map[sp.y])
-
-        # In multi-dataset mode, resolve store_index from _dataset value
-        if state.dataset_plates:
-            _dataset_val = result_map.get("_dataset")
-            dataset_keys = list(state.dataset_plates.keys())
-            if _dataset_val is not None and _dataset_val in dataset_keys:
-                response["store_index"] = dataset_keys.index(_dataset_val)
-
-        return response
-
+    # ── Batch must be registered BEFORE the parameterized {row_index} route
+    # so FastAPI doesn't capture "batch" as a row_index value.
     @router.get("/api/obs/batch", response_model=None)
     async def get_obs_batch(ids: str, state: State) -> JSONResponse:
         """Return x/y centroids for multiple observations in one query.
@@ -114,6 +65,50 @@ def make_obs_router(get_state: Callable[[], ViewerState]) -> APIRouter:
 
         result = await anyio.to_thread.run_sync(partial(_batch_lookup, row_indices), cancellable=True)
         return JSONResponse(result)
+
+    @router.get("/api/obs/{row_index}", response_model=None)
+    async def get_obs(row_index: int, state: State) -> dict | JSONResponse:
+        """Look up spatial coordinates for an observation by row index."""
+        sp = state.spatial
+        select_cols = [c for c in [sp.fov, sp.t, sp.bbox, sp.x, sp.y] if c is not None]
+
+        if state.dataset_plates:
+            select_cols = ["_dataset", *select_cols]
+
+        if not select_cols:
+            return JSONResponse({"error": "No spatial columns configured"}, status_code=404)
+
+        row = await anyio.to_thread.run_sync(partial(_lookup_obs, row_index, select_cols, state), cancellable=True)
+
+        if row is None:
+            return JSONResponse({"error": "Observation not found"}, status_code=404)
+
+        result_map = dict(zip(select_cols, row, strict=True))
+        response: dict = {}
+
+        if sp.fov:
+            response["fov_name"] = str(result_map[sp.fov])
+
+        response["t"] = int(result_map[sp.t]) if sp.t else 0
+
+        if sp.bbox and result_map.get(sp.bbox):
+            bbox = parse_bbox(str(result_map[sp.bbox]))
+            if bbox:
+                response["bbox"] = bbox
+                response["x"] = (bbox["x_min"] + bbox["x_max"]) / 2
+                response["y"] = (bbox["y_min"] + bbox["y_max"]) / 2
+
+        if sp.x and result_map.get(sp.x) is not None:
+            response["x"] = float(result_map[sp.x])
+            response["y"] = float(result_map[sp.y])
+
+        if state.dataset_plates:
+            _dataset_val = result_map.get("_dataset")
+            dataset_keys = list(state.dataset_plates.keys())
+            if _dataset_val is not None and _dataset_val in dataset_keys:
+                response["store_index"] = dataset_keys.index(_dataset_val)
+
+        return response
 
     @router.get("/api/obs/{row_index}/detail", response_model=None)
     async def get_obs_detail(row_index: int, state: State) -> dict | JSONResponse:

@@ -13,7 +13,7 @@ interface PointInfoPaneProps {
   highlightId: string | null;
   additionalFields: string[];
   trajectoryActive: boolean;
-  onShowTrajectory?: (trackId: number, fovName: string, clickedT?: number) => void;
+  onShowTrajectory?: (trackId: number, fovName: string, clickedT?: number, datasetKey?: string) => void;
   onClearTrajectory: () => void;
 }
 
@@ -81,7 +81,12 @@ export function PointInfoPane({
             onClick={() =>
               trajectoryActive
                 ? onClearTrajectory()
-                : onShowTrajectory?.(Number(trackId), String(fovName), row.t ? Number(row.t) : undefined)
+                : onShowTrajectory?.(
+                    Number(trackId),
+                    String(fovName),
+                    row.t ? Number(row.t) : undefined,
+                    row._dataset ? String(row._dataset) : undefined,
+                  )
             }
             className={cn(
               "flex w-full items-center justify-center gap-1.5 rounded-sm border px-2 py-1 text-[10px] transition-colors",

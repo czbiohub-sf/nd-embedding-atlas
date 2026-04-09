@@ -91,14 +91,26 @@ export interface ScatterplotHandle {
   setForcedSelectionMode(mode: "pan" | "marquee" | "lasso"): void;
   /** Clear an externally-driven selection. */
   clearExternalSelection(): void;
+  /** Clear lasso/marquee selection. */
+  clearSelection(): void;
   /** Dim points whose category index is not in isolatedSet (legend isolation). Pass empty Set to clear. */
   setCategoryIsolation(isolatedSet: Set<number>, categoryIndices: Uint8Array): void;
   /** Remove category isolation dimming. */
   clearCategoryIsolation(): void;
-  /** Dim points whose row index is NOT in rowIndices (continuous range filter). */
-  setRowIsolation(rowIndices: number[]): void;
+  /** Isolate trajectory points (always visible regardless of category filter). */
+  setTrajectoryIsolation(rowIndices: number[]): void;
+  /** Remove trajectory isolation. */
+  clearTrajectoryIsolation(): void;
+  /** Isolate continuous range filter points. */
+  setContinuousIsolation(rowIndices: number[]): void;
   /** Remove continuous range isolation. */
-  clearRowIsolation(): void;
+  clearContinuousIsolation(): void;
+  /** Re-upload all isolation masks after GPU reinit. */
+  rehydrateIsolation(): void;
+  /** Clear the single-point highlight. */
+  clearHighlight(): void;
+  /** Highlight multiple points (e.g. trajectory points — always full bright). */
+  setHighlightPoints(rowIndices: number[]): void;
   /** Programmatically set the view state (for view lock sync). Suppresses the onViewChange broadcast for this write. */
   setViewState(state: ViewState): void;
   /** Animate to a view state using easeInOutQuint over durationMs (default 600ms). */

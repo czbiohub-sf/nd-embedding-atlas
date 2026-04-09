@@ -4,7 +4,7 @@ import { MAX_POLYGON_VERTS } from "../constants";
 import type { TgpuRoot } from "../types";
 import { simplifyPath } from "../utils/geometry";
 import type { ScatterBuffers } from "./buffers";
-import { type CompositorEngine, LAYER_ISOLATION, LAYER_LASSO } from "./compositor";
+import { type CompositorEngine, LAYER_EXTERNAL, LAYER_HIGHLIGHT, LAYER_ISOLATION, LAYER_LASSO } from "./compositor";
 
 const DEBUG_SELECTION = typeof location !== "undefined" && new URLSearchParams(location.search).has("debug-selection");
 
@@ -192,13 +192,48 @@ export function createSelectionEngine(
     debugPipeline.dispatchWorkgroups(sampleCount);
   }
 
+  // ── Composable highlight ────────────────────────────────────────────────
+  // Two independent sources merged into highlightBuffer: clicked point + trajectory points.
+  // Same pattern as recomposeIsolation — each source owns its state, recomposeHighlight merges.
+  const highlightMask = new Uint32Array(numPoints); // pre-allocated scratch
+  let clickedPointIdx = -1;
+  let trajectoryHighlightIndices: number[] = [];
+
+  function recomposeHighlight() {
+    const hasClick = clickedPointIdx >= 0;
+    const hasTrajectory = trajectoryHighlightIndices.length > 0;
+    if (!hasClick && !hasTrajectory) {
+      const encoder = device.createCommandEncoder();
+      encoder.clearBuffer(root.unwrap(compositor.highlightBuffer));
+      device.queue.submit([encoder.finish()]);
+      compositor.markDirty(LAYER_HIGHLIGHT, false);
+      return;
+    }
+    highlightMask.fill(0);
+    // Trajectory points get 1 (full bright), clicked point gets 2 (outline ring)
+    for (const idx of trajectoryHighlightIndices) {
+      if (idx >= 0 && idx < numPoints) highlightMask[idx] = 1;
+    }
+    if (hasClick) highlightMask[clickedPointIdx] = 2;
+    device.queue.writeBuffer(root.unwrap(compositor.highlightBuffer), 0, highlightMask);
+    compositor.markDirty(LAYER_HIGHLIGHT, true);
+  }
+
   function selectPoint(index: number) {
-    const rawBuf = root.unwrap(selectedBuffer);
-    const encoder = device.createCommandEncoder();
-    encoder.clearBuffer(rawBuf);
-    device.queue.submit([encoder.finish()]);
-    device.queue.writeBuffer(rawBuf, index * 4, new Uint32Array([1]));
+    clickedPointIdx = index;
+    recomposeHighlight();
     onSelectionChange(1, [index]);
+  }
+
+  function setHighlightPoints(pointIndices: number[]) {
+    trajectoryHighlightIndices = pointIndices;
+    recomposeHighlight();
+  }
+
+  function clearHighlight() {
+    clickedPointIdx = -1;
+    trajectoryHighlightIndices = [];
+    recomposeHighlight();
   }
 
   // Pre-allocated mask — reused on every external selection update to avoid
@@ -210,55 +245,116 @@ export function createSelectionEngine(
     for (const idx of pointIndices) {
       if (idx >= 0 && idx < numPoints) externalSelectionMask[idx] = 1;
     }
-    device.queue.writeBuffer(root.unwrap(selectedBuffer), 0, externalSelectionMask);
+    device.queue.writeBuffer(root.unwrap(compositor.externalBuffer), 0, externalSelectionMask);
+    compositor.markDirty(LAYER_EXTERNAL, true);
   }
 
   function clearSelectionExternal() {
     externalSelectionMask.fill(0);
-    device.queue.writeBuffer(root.unwrap(selectedBuffer), 0, externalSelectionMask);
+    device.queue.writeBuffer(root.unwrap(compositor.externalBuffer), 0, externalSelectionMask);
+    compositor.markDirty(LAYER_EXTERNAL, false);
     // Do NOT call onSelectionChange here — that path calls clearSelectionSync,
     // which notifies other panels, which call clearExternalSelection, which loops.
     // Status bar is updated via the separate onExternalClear callback in orchestrator.
   }
 
-  // ── Category isolation ─────────────────────────────────────────────────
+  // ── Composable isolation masks ──────────────────────────────────────────
+  // Three features independently own their mask. recomposeIsolation() ANDs
+  // active masks (with trajectory OR'd so it's never hidden by category)
+  // and writes the result to the single GPU isolation buffer.
+
+  const categoryMask = new Uint32Array(numPoints);
+  const trajectoryMask = new Uint32Array(numPoints);
+  const continuousMask = new Uint32Array(numPoints);
+  let categoryActive = false;
+  let trajectoryActive = false;
+  let continuousActive = false;
+
+  // Scratch buffer for the composed result — avoids allocation per recompose.
+  const composedMask = new Uint32Array(numPoints);
 
   /**
-   * Dim all points whose category index is NOT in `isolatedSet`.
-   * Pass an empty Set (or call clearCategoryIsolation) to remove isolation.
-   * Uses the same alpha-dimming path as lasso/marquee selection.
+   * Compose all active masks → single GPU upload.
+   *
+   * Semantics: `(trajectory OR (category AND continuous))`
+   * - Trajectory points are always visible (never masked by category).
+   * - Category and continuous intersect normally.
+   * - If no masks are active, the isolation layer is deactivated.
    */
+  function recomposeIsolation() {
+    const anyActive = categoryActive || trajectoryActive || continuousActive;
+    if (!anyActive) {
+      const encoder = device.createCommandEncoder();
+      encoder.clearBuffer(root.unwrap(compositor.isolationBuffer));
+      device.queue.submit([encoder.finish()]);
+      compositor.markDirty(LAYER_ISOLATION, false);
+      return;
+    }
+
+    for (let i = 0; i < numPoints; i++) {
+      // Start with all-ones for inactive masks (identity for AND)
+      const cat = categoryActive ? categoryMask[i] : 1;
+      const cont = continuousActive ? continuousMask[i] : 1;
+      const traj = trajectoryActive ? trajectoryMask[i] : 0;
+      // trajectory OR (category AND continuous)
+      composedMask[i] = traj | (cat & cont);
+    }
+
+    device.queue.writeBuffer(root.unwrap(compositor.isolationBuffer), 0, composedMask);
+    compositor.markDirty(LAYER_ISOLATION, true);
+  }
+
   function setCategoryIsolation(isolatedSet: Set<number>, categoryIndices: Uint8Array) {
     if (isolatedSet.size === 0) {
       clearCategoryIsolation();
       return;
     }
-    const mask = new Uint32Array(numPoints);
     for (let i = 0; i < numPoints; i++) {
-      if (isolatedSet.has(categoryIndices[i])) mask[i] = 1;
+      categoryMask[i] = isolatedSet.has(categoryIndices[i]) ? 1 : 0;
     }
-    setIsolationMask(mask);
+    categoryActive = true;
+    recomposeIsolation();
   }
 
   function clearCategoryIsolation() {
-    setIsolationMask(null);
+    categoryMask.fill(0);
+    categoryActive = false;
+    recomposeIsolation();
   }
 
-  /**
-   * Apply a pre-built isolation mask directly (e.g. from a continuous range filter).
-   * Pass null to clear. Mask persists through lasso/marquee clear.
-   */
-  function setIsolationMask(mask: Uint32Array | null) {
-    if (mask) {
-      device.queue.writeBuffer(root.unwrap(compositor.isolationBuffer), 0, mask);
-      compositor.markDirty(LAYER_ISOLATION, true);
-    } else {
-      // Clear the isolation buffer and mark the layer inactive
-      const encoder = device.createCommandEncoder();
-      encoder.clearBuffer(root.unwrap(compositor.isolationBuffer));
-      device.queue.submit([encoder.finish()]);
-      compositor.markDirty(LAYER_ISOLATION, false);
-    }
+  function setTrajectoryIsolation(mask: Uint32Array) {
+    trajectoryMask.set(mask);
+    trajectoryActive = true;
+    recomposeIsolation();
+  }
+
+  function clearTrajectoryIsolation() {
+    trajectoryMask.fill(0);
+    trajectoryActive = false;
+    recomposeIsolation();
+  }
+
+  function setContinuousIsolation(mask: Uint32Array) {
+    continuousMask.set(mask);
+    continuousActive = true;
+    recomposeIsolation();
+  }
+
+  function clearContinuousIsolation() {
+    continuousMask.fill(0);
+    continuousActive = false;
+    recomposeIsolation();
+  }
+
+  /** Re-upload all CPU masks to GPU after GPU reinit (positionKey change). */
+  function rehydrateIsolation() {
+    recomposeIsolation();
+  }
+
+  /** Check if a point is visible under current isolation (for click filtering). */
+  function isPointVisible(pointIndex: number): boolean {
+    if (!categoryActive && !trajectoryActive && !continuousActive) return true;
+    return composedMask[pointIndex] === 1;
   }
 
   return {
@@ -266,19 +362,24 @@ export function createSelectionEngine(
     runMarqueeSelection,
     selectPoint,
     clearSelection() {
-      // Zero the lasso layer and mark it inactive. If isolation is active,
-      // the compositor will keep it visible via the isolation tier.
       const encoder = device.createCommandEncoder();
       encoder.clearBuffer(root.unwrap(compositor.lassoBuffer));
       device.queue.submit([encoder.finish()]);
       compositor.markDirty(LAYER_LASSO, false);
       onSelectionChange(null);
     },
+    clearHighlight,
+    setHighlightPoints,
+    isPointVisible,
     setSelectedPoints,
     clearSelectionExternal,
     setCategoryIsolation,
     clearCategoryIsolation,
-    setIsolationMask,
+    setTrajectoryIsolation,
+    clearTrajectoryIsolation,
+    setContinuousIsolation,
+    clearContinuousIsolation,
+    rehydrateIsolation,
     debugLogSelection,
     pipComputeFn,
     aabbComputeFn,

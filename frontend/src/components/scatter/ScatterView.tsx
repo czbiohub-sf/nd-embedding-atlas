@@ -142,7 +142,7 @@ export function ScatterView({
     setUserVmin(undefined);
     setUserVmax(undefined);
     setBrushPredicate(rangeFilterSourceRef.current, null);
-  }, []);
+  }, [colorByColumn]);
 
   const {
     data,
@@ -165,32 +165,34 @@ export function ScatterView({
     // the slider only controls which points are dimmed via GPU isolation mask.
   });
 
-  // Trajectory isolation — combine all active trajectories
+  // Trajectory isolation — each feature owns its own mask; no mutual exclusion needed.
+  // Also highlights trajectory points so they render at full brightness (tier 2).
   useEffect(() => {
     if (activeTrajectories.length === 0) {
-      hostRef.current?.clearRowIsolation();
+      hostRef.current?.clearTrajectoryIsolation();
       return;
     }
     const rowIndices = activeTrajectories.flatMap((t) =>
       t.points.map((p) => p.rowIndex).filter((id): id is number => id != null),
     );
     if (rowIndices.length > 0) {
-      hostRef.current?.setRowIsolation(rowIndices);
+      hostRef.current?.setTrajectoryIsolation(rowIndices);
+      hostRef.current?.setHighlightPoints(rowIndices);
     }
     return () => {
-      hostRef.current?.clearRowIsolation();
+      hostRef.current?.clearTrajectoryIsolation();
+      hostRef.current?.clearHighlight();
     };
   }, [activeTrajectories]);
 
-  // Continuous range isolation — dim points + update Mosaic cross-filter.
+  // Continuous range isolation — independent mask; no trajectory guards needed.
   useEffect(() => {
     const source = rangeFilterSourceRef.current;
     if (colorMode !== "continuous" || !colorByColumn || userVmin === undefined || userVmax === undefined) {
-      if (!trajectory) hostRef.current?.clearRowIsolation();
+      hostRef.current?.clearContinuousIsolation();
       setBrushPredicate(source, null);
       return;
     }
-    if (trajectory) return;
     const col = colorByColumn;
     const vmin = userVmin;
     const vmax = userVmax;
@@ -204,10 +206,10 @@ export function ScatterView({
         .then((result: unknown) => {
           if (cancelled) return;
           const indices = toRows<{ __row_index__: number }>(result).map((r) => r.__row_index__);
-          hostRef.current?.setRowIsolation(indices);
+          hostRef.current?.setContinuousIsolation(indices);
         })
         .catch(() => {
-          if (!cancelled) hostRef.current?.clearRowIsolation();
+          if (!cancelled) hostRef.current?.clearContinuousIsolation();
         });
     }, 80);
     return () => {
@@ -215,7 +217,7 @@ export function ScatterView({
       clearTimeout(tid);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [colorMode, colorByColumn, userVmin, userVmax, coordinator, trajectory]);
+  }, [colorMode, colorByColumn, userVmin, userVmax, coordinator]);
 
   // ── Fit-view ──────────────────────────────────────────────────────────────
   const handleFitView = useCallback(() => {
@@ -270,7 +272,11 @@ export function ScatterView({
     onFps: (_fps: number) => {},
   });
 
-  callbacksRef.current.onSelectionChange = onSelectionChange;
+  const hasLassoRef = useRef(false);
+  callbacksRef.current.onSelectionChange = (...args) => {
+    hasLassoRef.current = args[0] != null && args[0] > 0;
+    onSelectionChange(...args);
+  };
   callbacksRef.current.onExternalClear = () => setSelection(null);
   callbacksRef.current.onBackgroundClick = () => {
     actions.setHighlight(null);
@@ -320,13 +326,8 @@ export function ScatterView({
     hostRef.current?.setPointRadius(pointRadiusStore.state.radius);
     // Selection tool
     hostRef.current?.setForcedSelectionMode(selectionTool);
-    // Row isolation — combine all active trajectories
-    if (activeTrajectories.length > 0) {
-      const rowIndices = activeTrajectories.flatMap((t) =>
-        t.points.map((p) => p.rowIndex).filter((id): id is number => id != null),
-      );
-      if (rowIndices.length > 0) hostRef.current?.setRowIsolation(rowIndices);
-    }
+    // Re-upload all isolation masks from CPU state after GPU reinit
+    hostRef.current?.rehydrateIsolation();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [positionKey]); // intentionally only positionKey — this runs once per GPU init
 
@@ -374,6 +375,34 @@ export function ScatterView({
     });
     return () => sub.unsubscribe();
   }, []);
+
+  // Clear GPU highlight when highlightId becomes null (escape, background click, etc.)
+  useEffect(() => {
+    if (!highlightId) {
+      hostRef.current?.clearHighlight();
+    }
+  }, [highlightId]);
+
+  // Escape cascade: highlight → trajectory → lasso → (category handled by CategoricalLegend)
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (highlightId) {
+        actions.setHighlight(null);
+      } else if (trajectory) {
+        actions.clearTrajectory(trajectory.datasetKey ?? "");
+      } else if (hasLassoRef.current) {
+        hostRef.current?.clearSelection();
+        setSelection(null);
+        hasLassoRef.current = false;
+      } else {
+        return; // let event propagate to CategoricalLegend's Escape handler
+      }
+      e.stopPropagation();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [highlightId, trajectory, actions, setSelection]);
 
   const axesKeyRef = useRef<string | null>(null);
   useEffect(() => {

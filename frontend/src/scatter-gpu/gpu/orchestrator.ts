@@ -76,6 +76,10 @@ export async function createScatterplot(
     compositor,
   );
 
+  // Pre-allocated staging masks for row→point index conversion (avoids per-call allocation)
+  const trajectoryStagingMask = new Uint32Array(data.numCells);
+  const continuousStagingMask = new Uint32Array(data.numCells);
+
   // ── GPU color-pack pipeline ────────────────────────────────────────────────
   // Instead of a O(n) CPU loop per palette change, pack colors on GPU:
   //   categoryBuffer[i] → paletteBuffer[cat] → colorBuffer[i]
@@ -181,7 +185,7 @@ export async function createScatterplot(
               const dx = px - worldX;
               const dy = py - worldY;
               const d2 = dx * dx + dy * dy;
-              if (d2 < bestDist2) {
+              if (d2 < bestDist2 && selection.isPointVisible(i)) {
                 bestDist2 = d2;
                 bestIdx = i;
               }
@@ -195,6 +199,7 @@ export async function createScatterplot(
           const catIdx = data.categoryIndices[bestIdx];
           config?.callbacks?.onPointClick?.(bestIdx, [px, py], catIdx, data.categoryNames[catIdx]);
         } else {
+          selection.clearHighlight();
           config?.callbacks?.onBackgroundClick?.();
         }
       },
@@ -280,6 +285,10 @@ export async function createScatterplot(
         y: (1 - (clipY + 1) / 2) * h,
       };
     },
+    clearSelection() {
+      selection.clearSelection();
+      interaction.requestRender();
+    },
     setExternalSelection(rowIndices: number[]) {
       const pointIndices: number[] = [];
       for (const r of rowIndices) {
@@ -294,6 +303,19 @@ export async function createScatterplot(
       interaction.requestRender();
       config?.callbacks?.onExternalClear?.();
     },
+    clearHighlight() {
+      selection.clearHighlight();
+      interaction.requestRender();
+    },
+    setHighlightPoints(rowIndices: number[]) {
+      const pointIndices: number[] = [];
+      for (const r of rowIndices) {
+        const i = rowToPoint.get(r);
+        if (i !== undefined) pointIndices.push(i);
+      }
+      selection.setHighlightPoints(pointIndices);
+      interaction.requestRender();
+    },
     setCategoryIsolation(isolatedSet: Set<number>, categoryIndices: Uint8Array) {
       selection.setCategoryIsolation(isolatedSet, categoryIndices);
       interaction.requestRender();
@@ -302,22 +324,42 @@ export async function createScatterplot(
       selection.clearCategoryIsolation();
       interaction.requestRender();
     },
-    /** Dim points whose row index is NOT in the provided set (continuous range filter). */
-    setRowIsolation(rowIndices: number[]) {
+    setTrajectoryIsolation(rowIndices: number[]) {
       if (rowIndices.length === 0) {
-        selection.setIsolationMask(null);
+        selection.clearTrajectoryIsolation();
       } else {
-        const mask = new Uint32Array(data.numCells);
+        trajectoryStagingMask.fill(0);
         for (const r of rowIndices) {
           const i = rowToPoint.get(r);
-          if (i !== undefined) mask[i] = 1;
+          if (i !== undefined) trajectoryStagingMask[i] = 1;
         }
-        selection.setIsolationMask(mask);
+        selection.setTrajectoryIsolation(trajectoryStagingMask);
       }
       interaction.requestRender();
     },
-    clearRowIsolation() {
-      selection.setIsolationMask(null);
+    clearTrajectoryIsolation() {
+      selection.clearTrajectoryIsolation();
+      interaction.requestRender();
+    },
+    setContinuousIsolation(rowIndices: number[]) {
+      if (rowIndices.length === 0) {
+        selection.clearContinuousIsolation();
+      } else {
+        continuousStagingMask.fill(0);
+        for (const r of rowIndices) {
+          const i = rowToPoint.get(r);
+          if (i !== undefined) continuousStagingMask[i] = 1;
+        }
+        selection.setContinuousIsolation(continuousStagingMask);
+      }
+      interaction.requestRender();
+    },
+    clearContinuousIsolation() {
+      selection.clearContinuousIsolation();
+      interaction.requestRender();
+    },
+    rehydrateIsolation() {
+      selection.rehydrateIsolation();
       interaction.requestRender();
     },
     setForcedSelectionMode(mode: "pan" | "marquee" | "lasso") {

@@ -17,7 +17,7 @@ interface UseTrajectoryLoaderOptions {
 }
 
 interface UseTrajectoryLoaderResult {
-  showTrajectory: (trackId: number, fovName: string, clickedT?: number) => Promise<void>;
+  showTrajectory: (trackId: number, fovName: string, clickedT?: number, datasetKey?: string) => Promise<void>;
   activeIndex: number | null;
 }
 
@@ -37,8 +37,8 @@ export function useTrajectoryLoader(opts: UseTrajectoryLoaderOptions): UseTrajec
   const queryClient = useQueryClient();
 
   const mutation = useMutation({
-    mutationFn: async (params: { trackId: number; fovName: string; clickedT?: number }) => {
-      const { trackId, fovName } = params;
+    mutationFn: async (params: { trackId: number; fovName: string; clickedT?: number; datasetKey?: string }) => {
+      const { trackId, fovName, datasetKey } = params;
       const key = trajectoryKeys.track(table, trackId, fovName);
 
       // Return cached rows if available
@@ -50,8 +50,9 @@ export function useTrajectoryLoader(opts: UseTrajectoryLoaderOptions): UseTrajec
       const catSelect = categoryCol ? `, ${categoryCol} AS category` : "";
       const safeFovName = String(fovName).replace(/'/g, "''");
       const safeTrackId = Number.isFinite(trackId) ? trackId : 0;
+      const datasetFilter = datasetKey ? ` AND _dataset = '${String(datasetKey).replace(/'/g, "''")}'` : "";
       const baseSql = `SELECT __row_index__ AS "rowIndex", ${xCol} AS emb_x, ${yCol} AS emb_y, ${spatialX} AS spatial_x, ${spatialY} AS spatial_y, t, _dataset AS datasetKey`;
-      const whereClause = `FROM ${table} WHERE track_id = ${safeTrackId} AND fov_name = '${safeFovName}' ORDER BY t ASC`;
+      const whereClause = `FROM ${table} WHERE track_id = ${safeTrackId} AND fov_name = '${safeFovName}'${datasetFilter} ORDER BY t ASC`;
       const sql = `${baseSql}${catSelect} ${whereClause}`;
 
       let result;
@@ -85,8 +86,8 @@ export function useTrajectoryLoader(opts: UseTrajectoryLoaderOptions): UseTrajec
     },
   });
 
-  const showTrajectory = async (trackId: number, fovName: string, clickedT?: number) => {
-    await mutation.mutateAsync({ trackId, fovName, clickedT });
+  const showTrajectory = async (trackId: number, fovName: string, clickedT?: number, datasetKey?: string) => {
+    await mutation.mutateAsync({ trackId, fovName, clickedT, datasetKey });
   };
 
   const trajectory = selectAnyTrajectory(state.trajectories);

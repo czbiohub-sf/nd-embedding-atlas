@@ -7,24 +7,21 @@ import type { IsolationCapability } from "../handle-capabilities";
 interface UseIsolationBridgeOptions {
   coloredCategoryMapping: CategoryMapping | null;
   colorByColumn: string | null;
-  /** Ref to the GPU host — used to drive visual alpha-dimming on isolation. */
   scatterRef: { readonly current: IsolationCapability | null };
-  /** Ref to per-point category palette indices — synced by ScatterView after data loads. */
   categoryIndicesRef: RefObject<Uint8Array | null>;
 }
 
 interface UseIsolationBridgeResult {
-  /** Stable callback — safe to pass to LegendProvider onIsolationChange */
   handleIsolationChange: (isolatedIndices: Set<number>) => void;
 }
 
 /**
  * Bridges legend isolation state to:
  *  1. Mosaic's BrushPredicateStore — drives cross-filter (table, charts).
- *  2. ScatterGPUHost.setCategoryIsolation — drives alpha-only GPU dim effect.
+ *  2. ScatterGPUHost.setCategoryIsolation — drives GPU alpha-dimming.
  *
- * All mutable values (catMap, col, scatterRef, categoryIndices) are read via
- * refs so the returned callback is stable and never triggers re-renders.
+ * Each feature owns its own isolation mask in the GPU selection engine,
+ * so this hook writes unconditionally — no trajectory/continuous guards needed.
  */
 export function useIsolationBridge(opts: UseIsolationBridgeOptions): UseIsolationBridgeResult {
   const { coloredCategoryMapping, colorByColumn, scatterRef, categoryIndicesRef } = opts;
@@ -44,14 +41,12 @@ export function useIsolationBridge(opts: UseIsolationBridgeOptions): UseIsolatio
       const catIndices = categoryIndicesRef.current;
       const scatter = scatterRef.current;
 
-      // ── Clear path ───────────────────────────────────────────────────────
       if (isolatedIndices.size === 0 || !catMap || !col) {
         setBrushPredicate(source, null);
         scatter?.clearCategoryIsolation();
         return;
       }
 
-      // ── Mosaic cross-filter predicate ────────────────────────────────────
       const labels = catMap.legend
         .filter((item) => isolatedIndices.has(item.index))
         .map((item) => `'${item.label.replace(/'/g, "''")}'`);
@@ -62,13 +57,12 @@ export function useIsolationBridge(opts: UseIsolationBridgeOptions): UseIsolatio
       }
       setBrushPredicate(source, `${col} IN (${labels.join(", ")})`);
 
-      // ── GPU alpha-dimming ────────────────────────────────────────────────
       if (scatter && catIndices) {
         scatter.setCategoryIsolation(isolatedIndices, catIndices);
       }
     },
     [categoryIndicesRef, scatterRef],
-  ); // stable — reads all values via refs, never recreated
+  );
 
   return { handleIsolationChange };
 }

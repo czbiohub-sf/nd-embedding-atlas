@@ -35,7 +35,7 @@ export function TrackGallery({ activeFrame, onFrameSelect, datasetKey }: TrackGa
     channels: settledChannels,
     hash: settledHash,
     isPending,
-  } = useGalleryChannels(trajectory?.datasetKey ?? datasetKey ?? "docked", 300);
+  } = useGalleryChannels(trajectory?.datasetKey ?? datasetKey ?? "docked", 300, state.metadata.plate_channels);
 
   const queryClient = useQueryClient();
 
@@ -158,6 +158,7 @@ export function TrackGallery({ activeFrame, onFrameSelect, datasetKey }: TrackGa
             half: 150,
             size: 200,
             fmt: "webp",
+            ...(trajectory.datasetKey ? { dataset_key: trajectory.datasetKey } : {}),
             channels: settledChannels.map((ch) => ({
               visible: ch.visible,
               lo: ch.contrastLimits[0],

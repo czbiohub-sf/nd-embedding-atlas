@@ -221,17 +221,35 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
       clearExternalSelection() {
         gpuRef.current?.clearExternalSelection();
       },
+      clearSelection() {
+        gpuRef.current?.clearSelection();
+      },
       setCategoryIsolation(isolatedSet: Set<number>, categoryIndices: Uint8Array) {
         gpuRef.current?.setCategoryIsolation(isolatedSet, categoryIndices);
       },
       clearCategoryIsolation() {
         gpuRef.current?.clearCategoryIsolation();
       },
-      setRowIsolation(rowIndices: number[]) {
-        gpuRef.current?.setRowIsolation(rowIndices);
+      setTrajectoryIsolation(rowIndices: number[]) {
+        gpuRef.current?.setTrajectoryIsolation(rowIndices);
       },
-      clearRowIsolation() {
-        gpuRef.current?.clearRowIsolation();
+      clearTrajectoryIsolation() {
+        gpuRef.current?.clearTrajectoryIsolation();
+      },
+      setContinuousIsolation(rowIndices: number[]) {
+        gpuRef.current?.setContinuousIsolation(rowIndices);
+      },
+      clearContinuousIsolation() {
+        gpuRef.current?.clearContinuousIsolation();
+      },
+      rehydrateIsolation() {
+        gpuRef.current?.rehydrateIsolation();
+      },
+      setHighlightPoints(rowIndices: number[]) {
+        gpuRef.current?.setHighlightPoints(rowIndices);
+      },
+      clearHighlight() {
+        gpuRef.current?.clearHighlight();
       },
       setViewState(state) {
         gpuRef.current?.setViewState(state);
