@@ -502,6 +502,8 @@ export function ScatterView({
             containerRef={containerRef}
             gpuRef={gpuAdapter}
             positionScale={positionScale}
+            xCol={xCol}
+            yCol={yCol}
           />
         );
       })}

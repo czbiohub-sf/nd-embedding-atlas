@@ -42,8 +42,8 @@ export function SingleCropViewer({ cropSize, datasetKey }: Props) {
   const isForThisDataset = !datasetKey || activeStoreName === datasetKey;
 
   // ── Derive source URL and OME version ────────────────────────────
-  const scale = metadata.plate_pixel_scale ?? { x: 1, y: 1 };
   const activeStore = metadata.plate_stores?.[obsInfo?.store_index ?? 0];
+  const scale = activeStore?.pixel_scale ?? metadata.plate_pixel_scale ?? { x: 1, y: 1 };
   const mountPrefix = activeStore ? activeStore.mount : "/plate";
   const omeVersion = activeStore?.ome_version ?? metadata.plate_ome_version;
 

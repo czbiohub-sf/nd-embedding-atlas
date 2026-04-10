@@ -100,6 +100,7 @@ class ViewerState:
         export_dir: pathlib.Path,
         dataset_plates: dict[str, pathlib.Path] | None = None,
         dataset_ome_versions: dict[str, str] | None = None,
+        dataset_pixel_scales: dict[str, dict[str, float]] | None = None,
         project_config_path: pathlib.Path | None = None,
     ) -> None:
         self.collection = collection
@@ -109,6 +110,7 @@ class ViewerState:
         self.export_dir = export_dir
         self.dataset_plates: dict[str, pathlib.Path] = dataset_plates or {}
         self.dataset_ome_versions: dict[str, str] = dataset_ome_versions or {}
+        self.dataset_pixel_scales: dict[str, dict[str, float]] = dataset_pixel_scales or {}
         self.project_config_path: pathlib.Path | None = project_config_path
 
         self.loading_tasks: dict[str, asyncio.Task[None]] = {}

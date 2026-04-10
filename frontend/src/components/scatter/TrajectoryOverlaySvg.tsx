@@ -24,10 +24,14 @@ interface Props {
   gpuRef: RefObject<WorldToScreenProvider | null>;
   /** Raw → normalized coordinate divisor (from backend positionScale). Default 1. */
   positionScale?: number;
+  /** Embedding x column name to read from each point's coords record. */
+  xCol: string;
+  /** Embedding y column name to read from each point's coords record. */
+  yCol: string;
 }
 
 export const TrajectoryOverlaySvg = forwardRef<TrajectoryOverlaySvgHandle, Props>(function TrajectoryOverlaySvg(
-  { points, activeIndex, categoryColors, containerRef, gpuRef, positionScale = 1 },
+  { points, activeIndex, categoryColors, containerRef, gpuRef, positionScale = 1, xCol, yCol },
   ref,
 ) {
   const svgRef = useRef<SVGSVGElement>(null);
@@ -67,7 +71,11 @@ export const TrajectoryOverlaySvg = forwardRef<TrajectoryOverlaySvgHandle, Props
     }
 
     const s = positionScale > 0 ? positionScale : 1;
-    const screenPts = points.map((p) => gpu.worldToScreen(p.emb_x / s, p.emb_y / s, w, h));
+    const screenPts = points.map((p) => {
+      const ex = p.coords[xCol] ?? 0;
+      const ey = p.coords[yCol] ?? 0;
+      return gpu.worldToScreen(ex / s, ey / s, w, h);
+    });
 
     // Arrowhead marker — one per distinct color, keyed by color string
     const defs = document.createElementNS(SVG_NS, "defs");
