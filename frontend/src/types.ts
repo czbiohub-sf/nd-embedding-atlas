@@ -23,8 +23,8 @@ export interface AxisState {
 
 export interface TrajectoryFrame {
   t: number;
-  emb_x: number;
-  emb_y: number;
+  /** Per-embedding coordinates keyed by column name (e.g. "pca_0": 1.23). */
+  coords: Record<string, number>;
   spatial_x: number;
   spatial_y: number;
   category?: number;

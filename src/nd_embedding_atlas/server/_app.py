@@ -175,15 +175,17 @@ def create_app(
     # Project mode: read per-dataset plate metadata; use first plate as canonical frontend meta
     dataset_channels: dict[str, list[Any]] = {}
     dataset_ome_versions: dict[str, str] = {}
+    dataset_pixel_scales: dict[str, dict[str, float]] = {}
     if dataset_plates:
         first_plate_meta: dict[str, Any] | None = None
         for _ds_key, _ds_plate_path in dataset_plates.items():
             _meta = _read_plate_metadata(_ds_plate_path)
             dataset_channels[_ds_key] = _meta.get("plate_channels", []) if _meta else []
             dataset_ome_versions[_ds_key] = _meta.get("plate_ome_version", "0.4") if _meta else "0.4"
+            if _meta and "plate_pixel_scale" in _meta:
+                dataset_pixel_scales[_ds_key] = _meta["plate_pixel_scale"]
             if first_plate_meta is None:
                 first_plate_meta = _meta
-                dataset_channels[_ds_key]
 
         # Log when channel layouts differ across plates (each dataset gets its own channels)
         if len(dataset_channels) > 1:
@@ -248,6 +250,7 @@ def create_app(
         export_dir=resolved_export_dir,
         dataset_plates=dataset_plates,
         dataset_ome_versions=dataset_ome_versions if dataset_ome_versions else None,
+        dataset_pixel_scales=dataset_pixel_scales if dataset_pixel_scales else None,
         project_config_path=project_config_path,
     )
 

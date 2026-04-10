@@ -97,6 +97,7 @@ def make_data_router(get_state: Callable[[], ViewerState], config: DatasetConfig
                     "mount": f"/plates/{key}",
                     "name": key,
                     "ome_version": state.dataset_ome_versions.get(key, "0.4"),
+                    **({"pixel_scale": state.dataset_pixel_scales[key]} if key in state.dataset_pixel_scales else {}),
                 }
                 for key in state.dataset_plates  # insertion order stable (Python 3.7+)
             ]

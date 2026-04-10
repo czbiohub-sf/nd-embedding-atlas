@@ -26,6 +26,7 @@ const PlateStoreSchema = z.object({
   mount: z.string(),
   name: z.string(),
   ome_version: z.enum(["0.4", "0.5"]),
+  pixel_scale: z.object({ x: z.number(), y: z.number() }).optional(),
 });
 
 export const MetadataSchema = z
