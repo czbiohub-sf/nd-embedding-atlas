@@ -41,7 +41,7 @@ export function ChannelControls() {
 
   // ── Expanded panel ─────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col overflow-hidden rounded-lg border border-white/[0.07] bg-card/80 backdrop-blur-md">
+    <div className="flex max-h-[min(50vh,360px)] flex-col overflow-hidden rounded-lg border border-white/[0.07] bg-card/80 backdrop-blur-md">
       {/* Header */}
       <div className="flex shrink-0 items-center gap-1.5 px-2 py-1.5">
         <Layers className="size-3 shrink-0 text-muted-foreground/60" />
@@ -57,7 +57,7 @@ export function ChannelControls() {
       </div>
 
       {/* Scrollable channel list */}
-      <ScrollArea className="max-h-72">
+      <ScrollArea className="min-h-0 flex-1">
         <div className="flex flex-col gap-2 px-2 pb-2">
           {channels.map((ch, i) => {
             const step = (ch.contrastRange[1] - ch.contrastRange[0]) / 200 || 1;

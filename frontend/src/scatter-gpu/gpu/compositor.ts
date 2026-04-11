@@ -95,8 +95,8 @@ export function createCompositor(
           const filterPass = isoPass & selPass;
           const hasFilters = hasIso || hasSel;
           const useModerate = hasHi && hasFilters;
-          // Without moderate: filterPass * 2 → 0 or 2
-          const binary = filterPass * 2;
+          // Without moderate: filterPass * 2 → 0 or 2, but clicked point always gets 3
+          const binary = std.select(filterPass * 2, 3, hiVal >= 2);
           // With moderate: clicked→3, trajectory→2, filterPass→1, else→0
           const tiered = std.select(filterPass, hiVal + 1, hiVal !== 0);
           selectedMutable.$[idx] = std.select(binary, tiered, useModerate);
