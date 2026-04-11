@@ -51,6 +51,12 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion }: UseFovLoa
   // ── Refs for reactive sliceCoords getters ─────────────────────────
   const zRef = useRef(0);
   const tRef = useRef(0);
+  // idetik expects physical coordinates (µm/seconds), we store array indices.
+  // Scale/offset captured from dimension map when source is opened.
+  const zScaleRef = useRef(1);
+  const zOffsetRef = useRef(0);
+  const tScaleRef = useRef(1);
+  const tOffsetRef = useRef(0);
 
   useEffect(() => {
     zRef.current = viewerState.zIndex;
@@ -139,11 +145,25 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion }: UseFovLoa
 
       if (cancelled) return;
 
-      // Set Z/T bounds from source dimensions
+      // Set Z/T bounds from source dimensions and capture z scale for physical coord conversion
       try {
         const dims = loader.getSourceDimensionMap();
         const zMax = dims.z ? dims.z.lods[0].size - 1 : null;
         const tMax = dims.t ? dims.t.lods[0].size - 1 : null;
+        // Capture z scale/offset so sliceCoords getter can convert index → physical
+        // Capture scale/offset for index→physical conversion (idetik uses physical coords)
+        // idetik LOD types don't expose scale/translation but the runtime object has them
+        type LodWithPhysical = { size: number; scale?: number; translation?: number; offset?: number };
+        if (dims.z) {
+          const lod0 = dims.z.lods[0] as LodWithPhysical;
+          zScaleRef.current = lod0.scale ?? 1;
+          zOffsetRef.current = lod0.translation ?? lod0.offset ?? 0;
+        }
+        if (dims.t) {
+          const lod0 = dims.t.lods[0] as LodWithPhysical;
+          tScaleRef.current = lod0.scale ?? 1;
+          tOffsetRef.current = lod0.translation ?? lod0.offset ?? 0;
+        }
         console.log("[useFovLoader] setBounds", { zMax, tMax });
         actionsRef.current.setBounds({ zMax, tMax });
       } catch (e) {
@@ -186,7 +206,7 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion }: UseFovLoa
         });
         const sliceCoords = {
           get t() {
-            return tRef.current;
+            return tRef.current * tScaleRef.current + tOffsetRef.current;
           },
           z: undefined as number | undefined,
           c: undefined as number | undefined,
@@ -214,10 +234,10 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion }: UseFovLoa
         const imageLayers = channelDefs.map((ch, i) => {
           const sliceCoords = {
             get t() {
-              return tRef.current;
+              return tRef.current * tScaleRef.current + tOffsetRef.current;
             },
             get z() {
-              return zRef.current;
+              return zRef.current * zScaleRef.current + zOffsetRef.current;
             },
             c: i,
           };
