@@ -85,12 +85,13 @@ export function useTrajectoryLoader(opts: UseTrajectoryLoaderOptions): UseTrajec
       const sql = `${baseSql}${catSelect} ${whereClause}`;
 
       let result;
+      const fallbackSql = `SELECT __row_index__ AS "rowIndex", ${spatialX} AS spatial_x, ${spatialY} AS spatial_y, t, _dataset AS datasetKey ${whereClause}`;
       try {
         result = await coordinator.query(sql, { type: "json" });
       } catch (e) {
-        // __ev__* column missing from VIEW (stale after backend restart) — retry without it
-        if (catSelect && String(e).includes("not found in FROM clause")) {
-          result = await coordinator.query(`${baseSql} ${whereClause}`, { type: "json" });
+        // Column missing from VIEW (stale category col, unloaded embedding) — retry with minimal columns
+        if (String(e).includes("not found in FROM clause")) {
+          result = await coordinator.query(fallbackSql, { type: "json" });
         } else {
           throw e;
         }
