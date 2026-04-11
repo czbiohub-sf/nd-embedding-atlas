@@ -104,6 +104,7 @@ def make_data_router(get_state: Callable[[], ViewerState], config: DatasetConfig
         result["spatial"] = {
             "fov_col": state.spatial.fov,
             "t_col": state.spatial.t,
+            "z_col": state.spatial.z,
             "bbox_col": state.spatial.bbox,
             "x_col": state.spatial.x,
             "y_col": state.spatial.y,

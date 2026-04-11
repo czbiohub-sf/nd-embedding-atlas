@@ -10,6 +10,7 @@ export const SpatialSchema = z
   .object({
     fov_col: z.string().nullable().optional(),
     t_col: z.string().nullable().optional(),
+    z_col: z.string().nullable().optional(),
     bbox_col: z.string().nullable().optional(),
     x_col: z.string().nullable().optional(),
     y_col: z.string().nullable().optional(),
@@ -70,6 +71,7 @@ export const ObsInfoSchema = z
   .object({
     fov_name: z.string(),
     t: z.number(),
+    z: z.number(),
     x: z.number(),
     y: z.number(),
     bbox: ObsBboxSchema.optional(),

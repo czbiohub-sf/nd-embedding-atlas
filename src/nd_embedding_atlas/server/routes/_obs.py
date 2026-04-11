@@ -42,6 +42,7 @@ def make_obs_router(get_state: Callable[[], ViewerState]) -> APIRouter:
         sp = state.spatial
         x_col = sp.x
         y_col = sp.y
+        z_col = sp.z
 
         if not x_col or not y_col:
             return JSONResponse({})
@@ -56,12 +57,17 @@ def make_obs_router(get_state: Callable[[], ViewerState]) -> APIRouter:
 
         def _batch_lookup(indices: list[int]) -> dict[str, dict]:
             placeholders = ", ".join("?" * len(indices))
+            select_cols = f'__row_index__, "{x_col}", "{y_col}"'
+            if z_col:
+                select_cols += f', "{z_col}"'
             with state.store.cursor() as cur:
                 rows = cur.execute(
-                    f'SELECT __row_index__, "{x_col}", "{y_col}" FROM obs_base WHERE __row_index__ IN ({placeholders})',
+                    f"SELECT {select_cols} FROM obs_base WHERE __row_index__ IN ({placeholders})",
                     indices,
                 ).fetchall()
-            return {str(r[0]): {"x": float(r[1]), "y": float(r[2])} for r in rows}
+            if z_col:
+                return {str(r[0]): {"x": float(r[1]), "y": float(r[2]), "z": int(r[3])} for r in rows}
+            return {str(r[0]): {"x": float(r[1]), "y": float(r[2]), "z": 0} for r in rows}
 
         result = await anyio.to_thread.run_sync(partial(_batch_lookup, row_indices), cancellable=True)
         return JSONResponse(result)
@@ -70,7 +76,7 @@ def make_obs_router(get_state: Callable[[], ViewerState]) -> APIRouter:
     async def get_obs(row_index: int, state: State) -> dict | JSONResponse:
         """Look up spatial coordinates for an observation by row index."""
         sp = state.spatial
-        select_cols = [c for c in [sp.fov, sp.t, sp.bbox, sp.x, sp.y] if c is not None]
+        select_cols = [c for c in [sp.fov, sp.t, sp.z, sp.bbox, sp.x, sp.y] if c is not None]
 
         if state.dataset_plates:
             select_cols = ["_dataset", *select_cols]
@@ -90,6 +96,7 @@ def make_obs_router(get_state: Callable[[], ViewerState]) -> APIRouter:
             response["fov_name"] = str(result_map[sp.fov])
 
         response["t"] = int(result_map[sp.t]) if sp.t else 0
+        response["z"] = int(result_map[sp.z]) if sp.z and result_map.get(sp.z) is not None else 0
 
         if sp.bbox and result_map.get(sp.bbox):
             bbox = parse_bbox(str(result_map[sp.bbox]))

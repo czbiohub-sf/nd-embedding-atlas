@@ -18,6 +18,7 @@ class SpatialColumns:
 
     fov: str | None = None
     t: str | None = None
+    z: str | None = None
     bbox: str | None = None
     x: str | None = None
     y: str | None = None
@@ -30,7 +31,7 @@ class SpatialColumns:
     @property
     def all_columns(self) -> set[str]:
         """All non-None spatial column names."""
-        return {c for c in [self.fov, self.t, self.bbox, self.x, self.y] if c is not None}
+        return {c for c in [self.fov, self.t, self.z, self.bbox, self.x, self.y] if c is not None}
 
 
 @dataclasses.dataclass(frozen=True)
@@ -61,14 +62,16 @@ class ExportTaskState:
 
 
 @dataclasses.dataclass
-class GeneTaskState:
-    """Typed state for a single gene-column materialization task."""
+class VarTaskState:
+    """Typed state for a single var-column materialization task."""
 
     task_id: str
     task: asyncio.Task[None]
     status: str = "loading"  # "loading" | "ready" | "error"
     column: str = ""
     error: str | None = None
+    vmin: float | None = None
+    vmax: float | None = None
 
 
 class ViewerState:
@@ -117,7 +120,7 @@ class ViewerState:
         self.load_errors: dict[str, str] = {}
         self.parquet_cache: bytes | None = None
         self.export_task: ExportTaskState | None = None
-        self.gene_tasks: dict[str, GeneTaskState] = {}
+        self.var_tasks: dict[str, VarTaskState] = {}
 
     @property
     def executor(self):

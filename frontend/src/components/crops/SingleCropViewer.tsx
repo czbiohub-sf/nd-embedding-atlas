@@ -120,6 +120,7 @@ export function SingleCropViewer({ cropSize, datasetKey }: Props) {
     if (!isForThisDataset) return;
     if (obsInfo) {
       actions.setTIndex(obsInfo.t ?? 0);
+      actions.setZIndex(obsInfo.z ?? 0);
     }
   }, [isForThisDataset, obsInfo, actions]);
 

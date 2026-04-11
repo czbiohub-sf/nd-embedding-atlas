@@ -44,7 +44,7 @@ def prepare_obs(
     # _dataset column: ad.concat adds it for multi-dataset. For single-dataset,
     # _build_concat returns the raw AnnData without _dataset — inject it here.
     if "_dataset" not in df.columns:
-        dataset_key = next(iter(collection.keys()))
+        dataset_key = collection.keys[0]
         df = df.copy()
         df["_dataset"] = dataset_key
 
@@ -79,10 +79,11 @@ def detect_spatial_columns(
 
     if columns_config and columns_config.columns:
         cm = columns_config.columns
-        return SpatialColumns(fov=cm.fov, t=cm.t, bbox=cm.bbox, x=cm.x, y=cm.y)
+        return SpatialColumns(fov=cm.fov, t=cm.t, z=None, bbox=cm.bbox, x=cm.x, y=cm.y)
 
     fov = "fov_name" if "fov_name" in obs_columns else ("well" if "well" in obs_columns else None)
     t = "t" if "t" in obs_columns else None
+    z = "z" if "z" in obs_columns else None
     bbox = "bbox" if "bbox" in obs_columns else ("cp_bbox" if "cp_bbox" in obs_columns else None)
 
     x = y = None
@@ -91,7 +92,7 @@ def detect_spatial_columns(
             x, y = xc, yc
             break
 
-    return SpatialColumns(fov=fov, t=t, bbox=bbox, x=x, y=y)
+    return SpatialColumns(fov=fov, t=t, z=z, bbox=bbox, x=x, y=y)
 
 
 def parse_bbox(raw: str) -> dict[str, float] | None:

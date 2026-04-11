@@ -123,7 +123,7 @@ export function TrackGallery({ activeFrame, onFrameSelect, datasetKey }: TrackGa
 
     void fetch(`/api/obs/batch?ids=${missing.join(",")}`)
       .then((r) => r.json())
-      .then((data: Record<string, { x: number; y: number }>) => {
+      .then((data: Record<string, { x: number; y: number; z?: number }>) => {
         for (const [idStr, coords] of Object.entries(data)) {
           queryClient.setQueryData(obsCoordKey(Number(idStr)), coords);
         }
@@ -150,7 +150,9 @@ export function TrackGallery({ activeFrame, onFrameSelect, datasetKey }: TrackGa
       if (queryClient.getQueryData(qKey)) continue; // already cached
 
       const cachedObs =
-        frame.rowIndex != null ? queryClient.getQueryData<{ x: number; y: number }>(obsCoordKey(frame.rowIndex)) : null;
+        frame.rowIndex != null
+          ? queryClient.getQueryData<{ x: number; y: number; z?: number }>(obsCoordKey(frame.rowIndex))
+          : null;
       if (!cachedObs) continue; // wait for batch obs to populate first
 
       void queryClient.prefetchQuery({
@@ -158,7 +160,7 @@ export function TrackGallery({ activeFrame, onFrameSelect, datasetKey }: TrackGa
         queryFn: async ({ signal }) => {
           const body = {
             t: frame.t,
-            z: 0,
+            z: cachedObs.z ?? 0,
             x: Math.round(cachedObs.x),
             y: Math.round(cachedObs.y),
             half: 150,
