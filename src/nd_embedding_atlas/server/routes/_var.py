@@ -1,4 +1,4 @@
-"""Var (gene) name search, layer listing, and gene-expression column materialization endpoints."""
+"""Var name search, layer listing, and var-expression column materialization endpoints."""
 
 import asyncio
 import re
@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from nd_embedding_atlas.server._state import GeneTaskState, ViewerState
+from nd_embedding_atlas.server._state import VarTaskState, ViewerState
 
 
 def _sanitize_column_name(var_name: str, layer: str) -> str:
@@ -32,16 +32,17 @@ def _column_exists(state: ViewerState, col_name: str) -> bool:
     return len(rows) > 0
 
 
-def _materialize_gene_sync(state: ViewerState, gene: str, layer: str, col_name: str) -> None:
+def _materialize_var_sync(state: ViewerState, var_name: str, layer: str, col_name: str) -> dict:
+    """Materialize a var expression column into DuckDB. Returns ``{"vmin": ..., "vmax": ...}``."""
     import scipy.sparse as sp  # optional dep — only imported when needed
 
     adata = state.collection._concat
-    if gene not in adata.var_names:
-        msg = f"Var '{gene}' not found in var_names"
+    if var_name not in adata.var_names:
+        msg = f"Var '{var_name}' not found in var_names"
         raise ValueError(msg)
 
     # Slice a single var column — efficient for sparse matrices
-    expr = adata[:, gene].layers[layer] if layer != "X" else adata[:, gene].X
+    expr = adata[:, var_name].layers[layer] if layer != "X" else adata[:, var_name].X
 
     # Handle dask (lazy), sparse, or dense
     if hasattr(expr, "compute"):
@@ -50,37 +51,46 @@ def _materialize_gene_sync(state: ViewerState, gene: str, layer: str, col_name: 
         expr = expr.toarray()
     col_data = np.asarray(expr).ravel().astype(np.float32)
 
+    # Compute range for colormap clims
+    finite = col_data[np.isfinite(col_data)]
+    vmin = float(finite.min()) if len(finite) else 0.0
+    vmax = float(finite.max()) if len(finite) else 1.0
+
     arr = pa.array(col_data, type=pa.float32())
     state.store.add_obs_column(col_name, arr)
+    return {"vmin": vmin, "vmax": vmax}
 
 
-async def _materialize_gene_bg(
+async def _materialize_var_bg(
     state: ViewerState,
-    gene: str,
+    var_name: str,
     layer: str,
     col_name: str,
     task_id: str,
 ) -> None:
     loop = asyncio.get_running_loop()
     try:
-        await loop.run_in_executor(
+        result = await loop.run_in_executor(
             state.store.executor,
-            lambda: _materialize_gene_sync(state, gene, layer, col_name),
+            lambda: _materialize_var_sync(state, var_name, layer, col_name),
         )
-        state.gene_tasks[task_id].status = "ready"
+        task = state.var_tasks[task_id]
+        task.status = "ready"
+        task.vmin = result["vmin"]
+        task.vmax = result["vmax"]
     except Exception as exc:
-        state.gene_tasks[task_id].status = "error"
-        state.gene_tasks[task_id].error = str(exc)
+        state.var_tasks[task_id].status = "error"
+        state.var_tasks[task_id].error = str(exc)
         raise
 
 
-class _GeneColumnRequest(BaseModel):
-    gene: str
+class _VarColumnRequest(BaseModel):
+    gene: str  # var name — kept as "gene" for frontend JSON compat
     layer: str = "X"
 
 
 def make_var_router(get_state: Callable[[], ViewerState]) -> APIRouter:
-    """Return an APIRouter for var-name, layer, and gene-column endpoints."""
+    """Return an APIRouter for var-name, layer, and var-column endpoints."""
     router = APIRouter()
     State = Annotated[ViewerState, Depends(get_state)]
 
@@ -102,46 +112,54 @@ def make_var_router(get_state: Callable[[], ViewerState]) -> APIRouter:
             layer_keys = []
         return {"layers": ["X", *layer_keys]}
 
-    @router.post("/api/gene-column")
-    async def post_gene_column(body: _GeneColumnRequest, state: State) -> JSONResponse:
-        gene = body.gene
+    @router.post("/api/var-column")
+    async def post_var_column(body: _VarColumnRequest, state: State) -> JSONResponse:
+        var_name = body.gene
         layer = body.layer
-        col_name = _sanitize_column_name(gene, layer)
+        col_name = _sanitize_column_name(var_name, layer)
 
-        # Already materialized — return immediately
+        # Already materialized — query min/max from DuckDB and return
         if _column_exists(state, col_name):
-            return JSONResponse({"status": "ready", "column": col_name}, status_code=200)
+            with state.store.cursor() as cur:
+                row = cur.execute(f'SELECT MIN("{col_name}"), MAX("{col_name}") FROM obs_base').fetchone()
+            vmin = float(row[0]) if row and row[0] is not None else 0.0
+            vmax = float(row[1]) if row and row[1] is not None else 1.0
+            return JSONResponse({"status": "ready", "column": col_name, "vmin": vmin, "vmax": vmax}, status_code=200)
 
         # Check for an in-flight task for the same column
-        for existing in state.gene_tasks.values():
+        for existing in state.var_tasks.values():
             if existing.column == col_name and existing.status == "loading":
                 return JSONResponse(
-                    {"error": f"Gene column '{col_name}' is already being materialized"},
+                    {"error": f"Var column '{col_name}' is already being materialized"},
                     status_code=409,
                 )
 
         task_id = str(uuid.uuid4())
-        gene_task = GeneTaskState(task_id=task_id, task=None, status="loading", column=col_name)  # type: ignore[arg-type]
-        state.gene_tasks[task_id] = gene_task
+        var_task = VarTaskState(task_id=task_id, task=None, status="loading", column=col_name)  # type: ignore[arg-type]
+        state.var_tasks[task_id] = var_task
 
-        task = asyncio.create_task(_materialize_gene_bg(state, gene, layer, col_name, task_id))
-        state.gene_tasks[task_id].task = task
+        task = asyncio.create_task(_materialize_var_bg(state, var_name, layer, col_name, task_id))
+        state.var_tasks[task_id].task = task
 
         return JSONResponse({"task_id": task_id, "status": "loading", "column": col_name}, status_code=202)
 
-    @router.get("/api/gene-column/{task_id}/status")
-    async def get_gene_column_status(task_id: str, state: State) -> JSONResponse:
-        if task_id not in state.gene_tasks:
+    @router.get("/api/var-column/{task_id}/status")
+    async def get_var_column_status(task_id: str, state: State) -> JSONResponse:
+        if task_id not in state.var_tasks:
             return JSONResponse({"error": "Unknown task_id"}, status_code=404)
 
-        gene_task = state.gene_tasks[task_id]
-        if gene_task.status == "loading":
-            return JSONResponse({"status": "loading", "column": gene_task.column})
-        if gene_task.status == "ready":
-            return JSONResponse({"status": "ready", "column": gene_task.column})
+        var_task = state.var_tasks[task_id]
+        if var_task.status == "loading":
+            return JSONResponse({"status": "loading", "column": var_task.column})
+        if var_task.status == "ready":
+            resp: dict = {"status": "ready", "column": var_task.column}
+            if var_task.vmin is not None:
+                resp["vmin"] = var_task.vmin
+                resp["vmax"] = var_task.vmax
+            return JSONResponse(resp)
         # error
         return JSONResponse(
-            {"status": "error", "column": gene_task.column, "error": gene_task.error},
+            {"status": "error", "column": var_task.column, "error": var_task.error},
             status_code=500,
         )
 

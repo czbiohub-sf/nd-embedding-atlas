@@ -7,26 +7,26 @@ interface VarNamesResponse {
   names: string[];
 }
 
-export interface GeneSearchResult {
+export interface VarSearchResult {
   names: string[];
   isLoading: boolean;
 }
 
 /**
- * Debounced gene name search via TanStack Query.
+ * Debounced var name search via TanStack Query.
  * GET /api/var/names?q=<query>&limit=50
- * Empty query returns the first 50 gene names.
+ * Empty query returns the first 50 var names.
  */
-export function useGeneSearch(query: string): GeneSearchResult {
+export function useVarSearch(query: string): VarSearchResult {
   const [debouncedQuery, setDebouncedQuery] = useState(query);
-  const geneDebouncer = useDebouncer((q: string) => setDebouncedQuery(q), {
+  const varDebouncer = useDebouncer((q: string) => setDebouncedQuery(q), {
     wait: 200,
     leading: false,
     trailing: true,
   });
   useEffect(() => {
-    geneDebouncer.maybeExecute(query);
-  }, [query, geneDebouncer.maybeExecute]); // eslint-disable-line react-hooks/exhaustive-deps
+    varDebouncer.maybeExecute(query);
+  }, [query, varDebouncer.maybeExecute]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const { data, isLoading } = useQuery<VarNamesResponse>({
     queryKey: varKeys.names(debouncedQuery),
