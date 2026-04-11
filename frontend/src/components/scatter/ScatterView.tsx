@@ -428,9 +428,9 @@ export function ScatterView({
 
   const showLoading = isLoading || dataLoading;
 
-  // ── ContinuousLegendBound — defined here so colorRange is in scope ─────────
-  function ContinuousLegendBound() {
-    return colorMode === "continuous" && colorByColumn && colorRange ? (
+  // ── Continuous legend (inline JSX, not a nested component — avoids remount on state change) ──
+  const continuousLegendEl =
+    colorMode === "continuous" && colorByColumn && colorRange ? (
       <ContinuousLegend
         columnName={colorSourceLegendLabel(colorSourceFromString(colorByColumn))}
         colormap={legendState.colormapName}
@@ -453,7 +453,6 @@ export function ScatterView({
         }}
       />
     ) : null;
-  }
 
   if (!axes) {
     return (
@@ -524,7 +523,7 @@ export function ScatterView({
         />
       </div>
       {colorMode === "categorical" && categoryMapping && !showLoading ? <CategoricalLegend /> : null}
-      <ContinuousLegendBound />
+      {continuousLegendEl}
     </div>
   );
 }
