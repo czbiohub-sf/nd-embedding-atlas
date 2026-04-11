@@ -212,13 +212,12 @@ def create_app(
     )
 
     # Discover available obsm keys
-    from nd_embedding_atlas.io._get import _read_adata as _read_adata_store
     from nd_embedding_atlas.io._get import get_obsm as _get_obsm
+    from nd_embedding_atlas.io._get import list_obsm_keys
 
     _first_entry = next(iter(collection.datasets.data.values()))
     if _first_entry.path is not None:
-        _tmp_adata = _read_adata_store(_first_entry.path)
-        available_obsm_keys: list[str] = list(_tmp_adata.obsm.keys())
+        available_obsm_keys: list[str] = list_obsm_keys(_first_entry.path)
     else:
         available_obsm_keys = list(collection.obsm.keys())
 

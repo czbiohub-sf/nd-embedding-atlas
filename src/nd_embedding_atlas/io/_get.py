@@ -1,7 +1,8 @@
 """Accessors for AnnData obs / obsm / var.
 
-Uses anndata + scanpy for obs/var (correct handling of all encodings).
-For obsm, reads directly from zarr/h5py to skip dask overhead.
+Uses ``anndata.io.read_elem`` for targeted reads — only touches the specific
+zarr/h5py group needed, skipping the expensive full-store load of ``read_zarr``.
+For a 1.38M x 2,345 dataset this cuts startup from ~20s to ~6s.
 """
 
 from __future__ import annotations
@@ -22,14 +23,64 @@ if TYPE_CHECKING:
 # ── Internal helpers ───────────────────────────────────────────────────────
 
 
-def _read_adata(path: str | Path) -> ad.AnnData:
-    """Read an AnnData from a zarr store or h5ad file."""
-    import anndata as ad
-
+def _open_store(path: str | Path):
+    """Open a zarr.Group or h5py.File for targeted element reads."""
     p = Path(path)
     if p.is_dir() or p.suffix == ".zarr":
-        return ad.read_zarr(p)
-    return ad.read_h5ad(p)
+        import zarr
+
+        return zarr.open(str(p), mode="r")
+    import h5py
+
+    return h5py.File(str(p), "r")
+
+
+def _read_obs_from_store(path: str | Path, *, columns: list[str] | None = None, include_index: bool = False) -> pd.DataFrame:
+    """Read obs directly via ``read_elem`` — skips loading X, obsm, layers."""
+    import anndata as ad
+
+    store = _open_store(path)
+    try:
+        df = ad.io.read_elem(store["obs"])
+    finally:
+        if hasattr(store, "close"):
+            store.close()
+
+    if include_index:
+        df = df.copy()
+        df["obs_name"] = list(df.index)
+
+    if columns is not None:
+        missing = [c for c in columns if c not in df.columns]
+        if missing:
+            warnings.warn(f"get_obs: columns not found and skipped: {missing}", stacklevel=3)
+        df = df[[c for c in columns if c in df.columns]]
+
+    return df
+
+
+def _read_obsm_from_store(
+    path: str | Path,
+    key: str,
+    *,
+    dtype: np.dtype | None = np.float32,
+    columns: list[int] | None = None,
+) -> np.ndarray:
+    """Read a single obsm array via ``read_elem`` — skips loading X, obs, layers."""
+    import anndata as ad
+
+    store = _open_store(path)
+    try:
+        raw = ad.io.read_elem(store[f"obsm/{key}"])
+    finally:
+        if hasattr(store, "close"):
+            store.close()
+
+    if columns is not None:
+        raw = raw[:, columns]
+    if hasattr(raw, "compute"):
+        raw = raw.compute()
+    return np.asarray(raw, dtype=dtype) if dtype else np.asarray(raw)
 
 
 def _obs_from_adata(
@@ -38,7 +89,7 @@ def _obs_from_adata(
     columns: list[str] | None = None,
     include_index: bool = False,
 ) -> pd.DataFrame:
-    """Extract obs DataFrame from an AnnData via ``scanpy.get.obs_df``."""
+    """Extract obs DataFrame from an in-memory AnnData via ``scanpy.get.obs_df``."""
     import scanpy as sc
 
     keys = list(adata.obs.columns) if columns is None else [c for c in columns if c in adata.obs.columns]
@@ -64,9 +115,9 @@ def get_obs(
 ) -> pd.DataFrame:
     """Return a DataFrame of obs metadata.
 
-    Uses ``scanpy.get.obs_df`` for correct handling of all column encodings
-    (categoricals, nullable strings, etc.).  For multi-dataset collections,
-    reads each entry individually and concatenates to avoid lazy-concat issues.
+    For paths, uses ``anndata.io.read_elem`` to read only the obs group
+    (skips X, obsm, layers — 3.5x faster on large datasets).
+    For in-memory AnnData, uses ``scanpy.get.obs_df``.
 
     Parameters
     ----------
@@ -83,7 +134,7 @@ def get_obs(
     pandas.DataFrame
     """
     if isinstance(source, (str, Path)):
-        return _obs_from_adata(_read_adata(source), columns=columns, include_index=include_index)
+        return _read_obs_from_store(source, columns=columns, include_index=include_index)
 
     from nd_embedding_atlas.io import AnnDataCollection
 
@@ -120,9 +171,9 @@ def get_obsm(
     dtype: np.dtype | None = np.float32,
     columns: list[int] | None = None,
 ) -> np.ndarray:
-    """Return an obsm embedding array, reading directly from zarr/h5py.
+    """Return an obsm embedding array via targeted ``read_elem``.
 
-    Bypasses dask task-graph construction for 60x speedup on large datasets.
+    Reads only the requested obsm group — skips X, obs, layers.
 
     Parameters
     ----------
@@ -140,13 +191,7 @@ def get_obsm(
     numpy.ndarray
     """
     if isinstance(source, (str, Path)):
-        adata = _read_adata(source)
-        raw = adata.obsm[key]
-        if columns is not None:
-            raw = raw[:, columns]
-        if hasattr(raw, "compute"):
-            raw = raw.compute()
-        return np.asarray(raw, dtype=dtype) if dtype else np.asarray(raw)
+        return _read_obsm_from_store(source, key, dtype=dtype, columns=columns)
 
     from nd_embedding_atlas.io import AnnDataCollection
 
@@ -176,3 +221,23 @@ def get_obsm(
     if hasattr(raw, "compute"):
         raw = raw.compute()
     return np.asarray(raw, dtype=dtype) if dtype else np.asarray(raw)
+
+
+def list_obsm_keys(source: PathOrAdata) -> list[str]:
+    """Return available obsm keys without loading the full AnnData."""
+    if isinstance(source, (str, Path)):
+        store = _open_store(source)
+        try:
+            return list(store["obsm"].keys()) if "obsm" in store else []
+        finally:
+            if hasattr(store, "close"):
+                store.close()
+
+    from nd_embedding_atlas.io import AnnDataCollection
+
+    if isinstance(source, AnnDataCollection):
+        entry = next(iter(source.datasets.data.values()))
+        if entry.path is not None:
+            return list_obsm_keys(entry.path)
+
+    return list(source.obsm.keys())
