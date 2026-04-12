@@ -340,6 +340,8 @@ export function ScatterView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [positionKey]); // intentionally only positionKey — this runs once per GPU init
 
+  // Re-run color upload when data changes OR after GPU reinit (positionKey).
+  // Without positionKey, cached category data won't trigger a re-upload to the new GPU.
   useEffect(() => {
     if (colorMode !== "categorical") return;
     const colors = categoryColors ?? [];
@@ -347,12 +349,12 @@ export function ScatterView({
     const palette = hexToRgbPalette(colors);
     paletteRef.current = palette;
     hostRef.current?.setColors(palette, data?.categoryIndices);
-  }, [categoryColors, colorMode, data?.categoryIndices]);
+  }, [categoryColors, colorMode, data?.categoryIndices, positionKey]);
 
   useEffect(() => {
     if (colorMode !== "continuous" || !data?.colorValues) return;
     hostRef.current?.setColorsDirect(data.colorValues);
-  }, [data?.colorValues, colorMode]);
+  }, [data?.colorValues, colorMode, positionKey]);
 
   useEffect(() => {
     const sub = selectionSyncStore.subscribe(() => {
