@@ -4,6 +4,7 @@ export const ObsmEntrySchema = z.object({
   prefix: z.string(),
   n_dims: z.number().nullable().optional(),
   loaded: z.boolean(),
+  modality: z.string().optional(),
 });
 
 export const SpatialSchema = z
@@ -42,7 +43,9 @@ export const MetadataSchema = z
     database: z.object({ type: z.string(), uri: z.string().optional() }),
     obsm: z.record(z.string(), ObsmEntrySchema),
     obs_columns: z.array(z.string()).optional(),
-    var_count: z.number().optional(),
+    modalities: z.array(z.string()).optional(),
+    var_count: z.union([z.number(), z.record(z.string(), z.number())]).optional(),
+    modality_obs_columns: z.record(z.string(), z.array(z.string())).optional(),
     layers: z.array(z.string()).optional(),
     export_dir: z.string().optional(),
     spatial: SpatialSchema,

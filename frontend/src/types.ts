@@ -11,6 +11,7 @@ export interface ObsmEntry {
   prefix: string;
   n_dims: number | null;
   loaded: boolean;
+  modality?: string;
 }
 
 export interface AxisState {

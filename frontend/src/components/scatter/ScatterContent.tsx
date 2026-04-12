@@ -194,7 +194,11 @@ export function ScatterContent({
       obsColumns={obsColumns}
       colorMode={colorMode}
       colorModeCanToggle={colorModeInfo.canToggle}
-      hasVar={(metadata.var_count ?? 0) > 0}
+      hasVar={
+        typeof metadata.var_count === "number"
+          ? metadata.var_count > 0
+          : Object.values(metadata.var_count ?? {}).some((v) => v > 0)
+      }
       onSetAxes={(newAxes) => {
         void handleSetAxes(newAxes);
       }}
