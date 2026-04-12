@@ -219,6 +219,9 @@ export function ScatterView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [colorMode, colorByColumn, userVmin, userVmax, coordinator]);
 
+  // ── Auto-fit on first data load ────────────────────────────────────────────
+  const hasAutoFit = useRef(false);
+
   // ── Fit-view ──────────────────────────────────────────────────────────────
   const handleFitView = useCallback(() => {
     const positions = data?.positions;
@@ -249,6 +252,15 @@ export function ScatterView({
       600,
     );
   }, [data?.positions]);
+
+  // Auto-fit to data bounds on first render
+  useEffect(() => {
+    if (!hasAutoFit.current && data?.positions && data.positions.length >= 2 && hostRef.current) {
+      hasAutoFit.current = true;
+      // Small delay to let GPU init complete
+      requestAnimationFrame(() => handleFitView());
+    }
+  }, [data?.positions, handleFitView]);
 
   const viewBroadcaster = useThrottler(
     (vs: { panX: number; panY: number; zoom: number }) => {
