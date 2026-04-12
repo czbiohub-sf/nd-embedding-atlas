@@ -32,6 +32,109 @@ if TYPE_CHECKING:
 # ── Shared helpers ────────────────────────────────────────────────────────
 
 
+def _autocontrast_channels(plate_path: str | pathlib.Path, channels: list[dict]) -> list[dict]:
+    """Sample a FOV to compute p1/p99.9 contrast limits when OME defaults are bad."""
+    import logging
+
+    try:
+        import numpy as np
+        import zarr
+
+        store = zarr.open(str(plate_path), mode="r")
+
+        # Find first FOV by walking the plate structure
+        fov_path = None
+        for row_key in sorted(store.keys()):
+            if row_key in ("zarr.json", ".zattrs", ".zgroup"):
+                continue
+            row = store[row_key]
+            if not hasattr(row, "keys"):
+                continue
+            for col_key in sorted(row.keys()):
+                col = row[col_key]
+                if not hasattr(col, "keys"):
+                    continue
+                for field_key in sorted(col.keys()):
+                    field = col[field_key]
+                    if hasattr(field, "keys") and "0" in field:
+                        fov_path = f"{row_key}/{col_key}/{field_key}"
+                        break
+                if fov_path:
+                    break
+            if fov_path:
+                break
+
+        if not fov_path:
+            return channels
+
+        # Sample up to 3 FOVs and take max across them for robust contrast
+        sample_fovs = [fov_path]
+        # Try to find more FOVs for a better sample
+        all_fovs: list[str] = []
+        for row_key in sorted(store.keys()):
+            if row_key in ("zarr.json", ".zattrs", ".zgroup"):
+                continue
+            row = store[row_key]
+            if not hasattr(row, "keys"):
+                continue
+            for col_key in sorted(row.keys()):
+                col = row[col_key]
+                if not hasattr(col, "keys"):
+                    continue
+                for field_key in sorted(col.keys()):
+                    field = col[field_key]
+                    if hasattr(field, "keys") and "0" in field:
+                        all_fovs.append(f"{row_key}/{col_key}/{field_key}")
+                if len(all_fovs) > 100:
+                    break
+            if len(all_fovs) > 100:
+                break
+        if len(all_fovs) > 3:
+            # Pick evenly spaced FOVs for diversity
+            step = len(all_fovs) // 3
+            sample_fovs = [all_fovs[0], all_fovs[step], all_fovs[-1]]
+
+        # Read and accumulate stats across sampled FOVs
+        all_data = []
+        for fp in sample_fovs:
+            arr = store[f"{fp}/0"]
+            if arr.ndim == 5:
+                d = np.array(arr[0, :, 0])
+            elif arr.ndim == 4:
+                d = np.array(arr[:, 0])
+            else:
+                d = np.array(arr)
+            all_data.append(d)
+        data = np.concatenate(all_data, axis=-1)  # concat along X for wider sample
+
+        updated = []
+        for i, ch in enumerate(channels):
+            ch = dict(ch)
+            window = dict(ch.get("window", {}))
+            if i < data.shape[0] and window.get("end", 0) >= 65535:
+                ch_data = data[i]
+                p1 = float(np.percentile(ch_data, 1))
+                p999 = float(np.percentile(ch_data, 99.9))
+                data_min = float(ch_data.min())
+                data_max = float(ch_data.max())
+                window["start"] = p1
+                window["end"] = p999
+                window["min"] = data_min
+                window["max"] = data_max
+                ch["window"] = window
+            updated.append(ch)
+
+        logging.getLogger("ndea").info("Auto-contrast from FOV %s: %s", fov_path, [
+            f"ch{i}: [{c.get('window', {}).get('start', 0):.0f}, {c.get('window', {}).get('end', 0):.0f}]"
+            for i, c in enumerate(updated)
+        ])
+    except Exception:  # noqa: BLE001
+        logging.getLogger("ndea").warning("Auto-contrast sampling failed", exc_info=True)
+        return channels
+    else:
+        return updated
+
+
 def _read_plate_metadata(plate_path: str | pathlib.Path | None) -> dict[str, Any] | None:
     """Read pixel scale, shape, and channel info from an OME-Zarr plate."""
     if plate_path is None:
@@ -54,13 +157,22 @@ def _read_plate_metadata(plate_path: str | pathlib.Path | None) -> dict[str, Any
     if "shape" in meta:
         result["plate_shape"] = meta["shape"]
     if meta.get("channels"):
+        channels = meta["channels"]
+        # Auto-contrast: if all windows are 0-65535 (bad OME default), sample a FOV
+        needs_autocontrast = any(
+            ch.get("window", {}).get("start", 0) == 0 and ch.get("window", {}).get("end", 0) >= 65535
+            for ch in channels
+        )
+        if needs_autocontrast:
+            channels = _autocontrast_channels(plate_path, channels)
+
         result["plate_channels"] = [
             {
                 "label": ch.get("label", f"Channel {i}"),
                 "color": ch.get("color", "FFFFFF"),
                 "window": ch.get("window", {}),
             }
-            for i, ch in enumerate(meta["channels"])
+            for i, ch in enumerate(channels)
         ]
     result["plate_ome_version"] = detect_ome_version(plate_path)
     return result
@@ -350,18 +462,7 @@ def create_app(
 
 def serve_app(app: FastAPI, *, host: str = "localhost", port: int = 5055) -> None:
     """Run a pre-built FastAPI app with uvicorn."""
-    import socket
-
     import uvicorn
-
-    # Pre-check port availability so the error is obvious (not buried in uvicorn output)
-    for family in (socket.AF_INET6, socket.AF_INET):
-        try:
-            with socket.socket(family, socket.SOCK_STREAM) as s:
-                s.bind(("::1" if family == socket.AF_INET6 else "127.0.0.1", port))
-        except OSError:
-            msg = f"Port {port} already in use. Kill the existing process or use --port to pick another."
-            raise SystemExit(msg) from None
 
     print(f"nd-embedding-atlas viewer: http://{host}:{port}")
     uvicorn.run(app, host=host, port=port, access_log=True)
