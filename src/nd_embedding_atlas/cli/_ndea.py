@@ -39,13 +39,13 @@ def view_anndata(
     """
     from rich.console import Console
 
-    from nd_embedding_atlas.io import AnnDataCollection
+    from nd_embedding_atlas.io import DatasetCollection
     from nd_embedding_atlas.server import serve
 
     console = Console()
 
     console.print(f"Found [cyan]{len(data_paths)}[/cyan] dataset(s):")
-    collection = AnnDataCollection()
+    collection = DatasetCollection()
     for p in data_paths:
         key = p.stem
         console.print(f"  {key} → {p}")

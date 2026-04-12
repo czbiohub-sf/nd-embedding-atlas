@@ -1,4 +1,4 @@
-"""AnnDataCollection — AnnData-like interface over multiple lazy-backed datasets.
+"""DatasetCollection — AnnData-like interface over multiple lazy-backed datasets.
 
 Internally uses ``ad.concat`` on lazy AnnData objects (from ``read_lazy``) to
 present a single concatenated view.  All properties (``.X``, ``.obs``,
@@ -88,7 +88,7 @@ class Datasets[V: DatasetEntry](UserDict[str, V]):
     ----------
     on_change
         Optional callback invoked after any mutation (set/delete/clear).
-        For example, used by ``AnnDataCollection`` to invalidate its concat cache.
+        For example, used by ``DatasetCollection`` to invalidate its concat cache.
     """
 
     def __init__(self, on_change: Callable[[], None] | None = None) -> None:
@@ -220,7 +220,7 @@ def _open_zarr_group(store: zarr.storage.StoreLike) -> zarr.Group:
         return zarr.open_group(store, mode="r")
 
 
-class AnnDataCollection:
+class DatasetCollection:
     """AnnData-like interface over multiple zarr-backed datasets.
 
     Internally caches the result of ``ad.concat`` on lazy AnnData objects.
@@ -240,7 +240,7 @@ class AnnDataCollection:
 
     Examples
     --------
-    >>> collection = AnnDataCollection()
+    >>> collection = DatasetCollection()
     >>> collection["sample_a"] = "data/a.zarr"
     >>> collection["sample_b"] = "data/b.zarr"
     >>>
@@ -268,6 +268,35 @@ class AnnDataCollection:
     def keys(self) -> list[str]:
         """Dataset keys in insertion order."""
         return list(self._datasets.keys())
+
+    def get_obs(
+        self,
+        *,
+        columns: list[str] | None = None,
+        include_index: bool = False,
+    ) -> pd.DataFrame:
+        """Return obs metadata as a DataFrame."""
+        from nd_embedding_atlas.io._anndata import get_obs
+
+        return get_obs(self, columns=columns, include_index=include_index)
+
+    def get_obsm(
+        self,
+        key: str,
+        *,
+        dtype: np.dtype | None = np.float32,
+        columns: list[int] | None = None,
+    ) -> np.ndarray:
+        """Return an obsm embedding array."""
+        from nd_embedding_atlas.io._anndata import get_obsm
+
+        return get_obsm(self, key, dtype=dtype, columns=columns)
+
+    def obsm_keys(self) -> list[str]:
+        """Return available obsm keys."""
+        from nd_embedding_atlas.io._anndata import list_obsm_keys
+
+        return list_obsm_keys(self)
 
     def add(self, key: str, path: StoreLike) -> Self:
         """Add a dataset. Returns self for chaining."""
@@ -438,9 +467,9 @@ class AnnDataCollection:
 
     def __repr__(self) -> str:
         if not self._datasets:
-            return "AnnDataCollection(empty)"
+            return "DatasetCollection(empty)"
 
-        tree = Tree(f"AnnDataCollection with n_obs x n_vars = {self.n_obs:,} x {self.n_vars:,}")
+        tree = Tree(f"DatasetCollection with n_obs x n_vars = {self.n_obs:,} x {self.n_vars:,}")
 
         datasets_branch = tree.add(f"backed by {len(self._datasets)} dataset(s)")
         for key, entry in self._datasets.items():
@@ -464,3 +493,7 @@ class AnnDataCollection:
         with console.capture() as capture:
             console.print(tree)
         return capture.get()
+
+
+# Backward-compat alias — will be removed in a future version.
+AnnDataCollection = DatasetCollection

@@ -1,4 +1,4 @@
-"""Materialize obs metadata from an AnnDataCollection for the viewer."""
+"""Materialize obs metadata from a DataSource for the viewer."""
 
 from __future__ import annotations
 
@@ -7,44 +7,29 @@ from typing import TYPE_CHECKING
 import pandas as pd
 
 if TYPE_CHECKING:
-    from nd_embedding_atlas.io import AnnDataCollection
     from nd_embedding_atlas.io._config import NdeaConfig
+    from nd_embedding_atlas.io._protocol import DataSource
     from nd_embedding_atlas.server._state import SpatialColumns
 
 
 def prepare_obs(
-    collection: AnnDataCollection,
+    source: DataSource,
     *,
     obs_columns: list[str] | None = None,
 ) -> pd.DataFrame:
     """Materialize only obs metadata (no embeddings).
 
-    Uses the fast direct-read path (zarr/h5py) when possible, bypassing
-    AnnData's Dataset2D→pandas overhead (7x faster on 1M-cell zarr stores).
+    Delegates to the source's ``get_obs`` method, which dispatches to the
+    appropriate backend (AnnData direct read or MuData merged obs).
 
-    Always injects ``obs_name`` (AnnData string index) and ``_dataset``
-    columns for stable identity and cross-dataset queries.
-
-    Parameters
-    ----------
-    collection
-        The collection to extract obs from.
-    obs_columns
-        Subset of ``.obs`` columns to include. ``None`` includes all columns.
-
-    Returns
-    -------
-    pandas DataFrame with obs columns only, plus ``obs_name`` and
-    ``_dataset`` identity columns.
+    Always injects ``obs_name`` and ``_dataset`` columns for stable identity.
     """
-    from nd_embedding_atlas.io._get import get_obs
+    df = source.get_obs(columns=obs_columns, include_index=True)
 
-    df = get_obs(collection, columns=obs_columns, include_index=True)
-
-    # _dataset column: ad.concat adds it for multi-dataset. For single-dataset,
-    # _build_concat returns the raw AnnData without _dataset — inject it here.
+    # _dataset column: multi-dataset AnnData adds it via ad.concat.
+    # For single-dataset or MuData, inject a default.
     if "_dataset" not in df.columns:
-        dataset_key = collection.keys[0]
+        dataset_key = source.keys[0] if source.keys else "default"
         df = df.copy()
         df["_dataset"] = dataset_key
 
@@ -52,7 +37,14 @@ def prepare_obs(
 
 
 def _obsm_column_prefix(obsm_key: str) -> str:
-    """Derive column prefix from obsm key (strip leading ``X_``)."""
+    """Derive column prefix from obsm key.
+
+    For plain keys (``X_umap``), strips leading ``X_`` → ``umap``.
+    For modality-prefixed keys (``rna:X_umap``), produces ``rna_umap``.
+    """
+    if ":" in obsm_key:
+        mod, _, key = obsm_key.partition(":")
+        return f"{mod}_{key.removeprefix('X_')}"
     return obsm_key.removeprefix("X_")
 
 
