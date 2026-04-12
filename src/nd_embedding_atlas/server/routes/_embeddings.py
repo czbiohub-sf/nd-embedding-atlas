@@ -1,40 +1,38 @@
 """Embedding loading and status endpoints."""
 
 import asyncio
-from collections.abc import Callable
+import json
+from collections.abc import AsyncIterator, Callable
 from typing import TYPE_CHECKING, Annotated
 
 import numpy as np
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
+from sse_starlette.sse import EventSourceResponse, ServerSentEvent
 
 from nd_embedding_atlas.server._state import ViewerState
 
 if TYPE_CHECKING:
-    from nd_embedding_atlas.io import AnnDataCollection
+    from nd_embedding_atlas.io._protocol import DataSource
 
 
-def _materialize_embedding(key: str, collection: "AnnDataCollection") -> np.ndarray:
-    """Materialize an obsm key to float32 numpy array (runs in thread pool).
-
-    Uses the fast direct-read path (zarr/h5py) when possible, bypassing
-    AnnData/dask overhead (60x faster on 1M-cell zarr stores).
-    """
-    from nd_embedding_atlas.io._get import get_obsm
-
-    return get_obsm(collection, key, dtype=np.float32)
+def _materialize_embedding(key: str, source: "DataSource") -> np.ndarray:
+    """Materialize an obsm key to float32 numpy array (runs in thread pool)."""
+    result = source.get_obsm(key, dtype=np.float32)
+    if hasattr(result, "compute"):
+        result = result.compute()
+    return np.asarray(result, dtype=np.float32)
 
 
 async def _load_embedding_bg(key: str, state: ViewerState) -> None:
     """Background coroutine to materialize and register an embedding."""
     try:
         loop = asyncio.get_running_loop()
-        result = await loop.run_in_executor(state.executor, _materialize_embedding, key, state.collection)
+        result = await loop.run_in_executor(state.executor, _materialize_embedding, key, state.source)
         state.store.register_embedding(key, result)
         state.invalidate_parquet_cache()
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         state.load_errors[key] = str(e)
-        raise
 
 
 def make_embeddings_router(get_state: Callable[[], ViewerState]) -> APIRouter:
@@ -68,5 +66,43 @@ def make_embeddings_router(get_state: Callable[[], ViewerState]) -> APIRouter:
                 return JSONResponse({"status": "error", "error": error_msg}, status_code=500)
             return JSONResponse({"status": "ready"})
         return JSONResponse({"status": "not_started"})
+
+    @router.get("/api/embeddings/{key}/stream")
+    async def embedding_stream(key: str, state: State) -> EventSourceResponse:
+        """SSE stream that pushes embedding load status until a terminal state."""
+
+        async def _generate() -> AsyncIterator[ServerSentEvent]:
+            # Already loaded — emit ready and close
+            if key in state.store.loaded_embeddings:
+                yield ServerSentEvent(data=json.dumps({"status": "ready"}), event="status")
+                return
+
+            # Not even started
+            if key not in state.loading_tasks:
+                yield ServerSentEvent(
+                    data=json.dumps({"status": "error", "error": "Loading not started — POST first"}),
+                    event="status",
+                )
+                return
+
+            # Emit initial loading status
+            yield ServerSentEvent(data=json.dumps({"status": "loading"}), event="status")
+
+            # Poll until terminal state
+            task = state.loading_tasks[key]
+            while not task.done():
+                await asyncio.wait({task}, timeout=0.3)
+
+            # Terminal state
+            if key in state.store.loaded_embeddings:
+                yield ServerSentEvent(data=json.dumps({"status": "ready"}), event="status")
+            else:
+                error_msg = state.load_errors.get(key, "Unknown error")
+                yield ServerSentEvent(
+                    data=json.dumps({"status": "error", "error": error_msg}),
+                    event="status",
+                )
+
+        return EventSourceResponse(_generate())
 
     return router
