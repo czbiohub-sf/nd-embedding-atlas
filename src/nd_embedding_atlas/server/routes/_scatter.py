@@ -188,7 +188,9 @@ def make_scatter_router(get_state: Callable[[], ViewerState]) -> APIRouter:
                     except Exception:  # noqa: BLE001
                         category_names = []
 
-            indices = np.array([r[0] if r[0] is not None else 0 for r in idx_rows], dtype=np.uint8)
+            raw_indices = [r[0] if r[0] is not None else 0 for r in idx_rows]
+            max_idx = max(raw_indices) if raw_indices else 0
+            indices = np.array(raw_indices, dtype=np.uint16 if max_idx > 255 else np.uint8)
             header = {"categoryNames": category_names}
             return _pack_binary(header, indices)
 
