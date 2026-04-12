@@ -10,16 +10,20 @@
  */
 
 import { ChevronDownIcon } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { useScatterUIDispatch } from "@/components/scatter/ScatterUIStateProvider";
 import { Badge } from "@/components/ui/badge";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { COLOR_NONE, type ColorSource, colorSourceObs, isVarSource } from "@/lib/color-source";
+import { COLOR_NONE, type ColorSource, colorSourceFromString, colorSourceObs, isVarSource } from "@/lib/color-source";
 import { getModality } from "@/lib/modality";
 import { cn } from "@/lib/utils";
+import { useLayerNames } from "@/scatter-gpu/hooks/useLayerNames";
+import { useVarColumn } from "@/scatter-gpu/hooks/useVarColumn";
+import { useVarSearch } from "@/scatter-gpu/hooks/useVarSearch";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -41,20 +45,6 @@ export interface ModalityColorPickerProps {
 
   /** Active embedding key — used to show cross-modality indicator. */
   activeEmbeddingKey?: string;
-
-  /** Trigger to materialize a var column. */
-  onMaterializeVar?: (varName: string, layer: string, modality?: string) => void;
-
-  /** Var materialization status. */
-  varStatus?: "idle" | "loading" | "ready" | "error";
-
-  /** Search results from server. */
-  varNames?: string[];
-  varLoading?: boolean;
-  onVarQueryChange?: (query: string, modality?: string) => void;
-
-  /** Available layers. */
-  layers?: string[];
 
   triggerClassName?: string;
 }
@@ -101,12 +91,6 @@ export function ModalityColorPicker({
   modalities,
   varCount,
   activeEmbeddingKey,
-  onMaterializeVar,
-  varStatus,
-  varNames = [],
-  varLoading = false,
-  onVarQueryChange,
-  layers = ["X"],
   triggerClassName,
 }: ModalityColorPickerProps) {
   const [open, setOpen] = useState(false);
@@ -119,6 +103,34 @@ export function ModalityColorPicker({
   const isMuData = !!modalities && modalities.length > 0;
   const embeddingMod = activeEmbeddingKey ? getModality(activeEmbeddingKey) : undefined;
   const hasVar = typeof varCount === "number" ? varCount > 0 : !!varCount && Object.values(varCount).some((v) => v > 0);
+
+  // ── Internal var hooks ──────────────────────────────────────────────────────
+  const { names: varNames, isLoading: varLoading } = useVarSearch(varQuery, isMuData ? varModTab : undefined);
+  const layers = useLayerNames();
+  const { setStatus } = useScatterUIDispatch();
+  const { materialize, status: varStatus, column: varColumn } = useVarColumn({ onStatus: setStatus });
+
+  // When var materialization completes, propagate ColorSource and close
+  useEffect(() => {
+    if (varStatus === "ready" && varColumn) {
+      onSetColorSource(colorSourceFromString(varColumn));
+      setOpen(false);
+    }
+  }, [varStatus, varColumn, onSetColorSource]);
+
+  // Keep selectedLayer valid
+  useEffect(() => {
+    if (layers.length > 0 && !layers.includes(selectedLayer)) {
+      setSelectedLayer(layers[0]);
+    }
+  }, [layers, selectedLayer]);
+
+  const handleVarSelect = useCallback(
+    (varName: string) => {
+      materialize(varName, selectedLayer, isMuData ? varModTab : undefined);
+    },
+    [materialize, selectedLayer, isMuData, varModTab],
+  );
 
   // Derive which obs columns belong to which modality
   const obsGroups = useMemo(() => {
@@ -142,15 +154,10 @@ export function ModalityColorPicker({
     return (obsGroups as Record<string, string[]>)[obsModTab] ?? [];
   }, [obsModTab, obsGroups]);
 
-  // Propagate var search query to parent
-  useEffect(() => {
-    onVarQueryChange?.(varQuery, isMuData ? varModTab : undefined);
-  }, [varQuery, varModTab, isMuData, onVarQueryChange]);
-
   // Derive color modality for cross-mod indicator
   const colorMod = useMemo(() => {
     if (colorSource.kind === "var" && isMuData) {
-      return varModTab; // last searched modality
+      return varModTab;
     }
     if (colorSource.kind === "obs" && isMuData && modalityObsColumns) {
       for (const [mod, cols] of Object.entries(modalityObsColumns)) {
@@ -385,9 +392,7 @@ export function ModalityColorPicker({
                           key={name}
                           value={name}
                           disabled={varStatus === "loading"}
-                          onSelect={() => {
-                            onMaterializeVar?.(name, selectedLayer, isMuData ? varModTab : undefined);
-                          }}
+                          onSelect={() => handleVarSelect(name)}
                         >
                           <span className="font-mono text-xs">{name}</span>
                         </CommandItem>
@@ -408,7 +413,7 @@ export function ModalityColorPicker({
                   onClick={() => {
                     setSelectedLayer(layer);
                     if (isVarSource(colorSource) && layer !== colorSource.layer) {
-                      onMaterializeVar?.(colorSource.varName, layer, isMuData ? varModTab : undefined);
+                      materialize(colorSource.varName, layer, isMuData ? varModTab : undefined);
                     }
                   }}
                   className={cn(
