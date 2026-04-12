@@ -1,10 +1,11 @@
-import { useState } from "react";
-import { ChevronDownIcon, ChevronRightIcon, CircleCheckIcon, CircleDashedIcon } from "lucide-react";
+import { useMemo, useState } from "react";
+import { ChevronDownIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
+import { getModality, getBareObsmKey } from "@/lib/modality";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -19,135 +20,149 @@ export interface EmbeddingPickerProps {
   obsm: Record<string, ObsmEntry>;
   activeKey: string;
   onSelect: (key: string) => void;
+  triggerClassName?: string;
+}
+
+// ── Modality colors (shared with ModalityColorPicker) ────────────────────────
+
+export const MODALITY_COLORS: Record<string, string> = {
+  rna: "border-emerald-500/30 bg-emerald-500/15 text-emerald-400",
+  dinov2: "border-violet-500/30 bg-violet-500/15 text-violet-400",
+  protein: "border-amber-500/30 bg-amber-500/15 text-amber-400",
+  atac: "border-rose-500/30 bg-rose-500/15 text-rose-400",
+};
+
+function modColor(mod: string): string {
+  return MODALITY_COLORS[mod] ?? "border-muted-foreground/30 bg-muted/30 text-muted-foreground";
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-/** Strip "X_" prefix for display, e.g. "rna:X_umap" → "rna:umap" */
-function displayName(key: string): string {
-  return key.replace(/X_/g, "");
+/** "rna:X_umap" → "umap", "X_pca" → "pca" */
+function bareLabel(key: string): string {
+  return getBareObsmKey(key).replace(/^X_/, "");
 }
 
-/** Group obsm entries by modality. Entries without modality go into "default". */
+/** Group obsm keys by modality. */
 function groupByModality(obsm: Record<string, ObsmEntry>): Map<string, [string, ObsmEntry][]> {
   const groups = new Map<string, [string, ObsmEntry][]>();
   for (const [key, entry] of Object.entries(obsm)) {
-    const mod = entry.modality ?? "default";
+    const mod = entry.modality ?? getModality(key) ?? "default";
     if (!groups.has(mod)) groups.set(mod, []);
     groups.get(mod)!.push([key, entry]);
   }
   return groups;
 }
 
-// ── Modality colors ──────────────────────────────────────────────────────────
-
-const MODALITY_COLORS: Record<string, string> = {
-  rna: "border-emerald-500/30 bg-emerald-500/15 text-emerald-400",
-  dinov2: "border-violet-500/30 bg-violet-500/15 text-violet-400",
-  protein: "border-amber-500/30 bg-amber-500/15 text-amber-400",
-  atac: "border-rose-500/30 bg-rose-500/15 text-rose-400",
-  default: "border-border-subtle bg-elevated text-text-secondary",
-};
-
-function modalityColor(mod: string): string {
-  return MODALITY_COLORS[mod] ?? MODALITY_COLORS.default;
-}
-
 // ── Component ────────────────────────────────────────────────────────────────
 
-export function EmbeddingPicker({ obsm, activeKey, onSelect }: EmbeddingPickerProps) {
+export function EmbeddingPicker({ obsm, activeKey, onSelect, triggerClassName }: EmbeddingPickerProps) {
   const [open, setOpen] = useState(false);
-  const groups = groupByModality(obsm);
+  const [filter, setFilter] = useState<string | null>(null);
+  const groups = useMemo(() => groupByModality(obsm), [obsm]);
+  const modalities = useMemo(() => [...groups.keys()], [groups]);
+  const activeMod = getModality(activeKey);
+
+  // Filter entries by selected modality tab
+  const visibleGroups = filter ? new Map([[filter, groups.get(filter) ?? []]]) : groups;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
         className={cn(
-          "flex h-7 min-w-0 items-center justify-between gap-1.5 whitespace-nowrap rounded-md",
-          "border border-input bg-input/20 px-2 text-xs/relaxed outline-none transition-colors",
-          "hover:bg-input/40 focus-visible:ring-2 focus-visible:ring-ring/30",
-          "dark:bg-input/30",
+          "flex h-6 min-w-0 items-center gap-1.5 whitespace-nowrap rounded-md",
+          "border-0 bg-transparent px-1.5 text-[11px] outline-none transition-colors",
+          "text-foreground/80 hover:bg-white/10 hover:text-foreground focus-visible:ring-0",
+          triggerClassName,
         )}
       >
-        <span className="flex-1 truncate text-left font-mono">{displayName(activeKey)}</span>
-        <ChevronDownIcon className="size-3.5 shrink-0 text-muted-foreground" />
+        <span className="truncate font-mono">{bareLabel(activeKey)}</span>
+        {activeMod && (
+          <Badge variant="outline" className={cn("px-1 py-0 text-[9px]", modColor(activeMod))}>
+            {activeMod}
+          </Badge>
+        )}
+        <ChevronDownIcon className="size-3 shrink-0 text-muted-foreground" />
       </PopoverTrigger>
 
-      <PopoverContent className="w-72 gap-0 p-0" side="bottom" align="start" sideOffset={4}>
-        <ScrollArea className="max-h-80">
-          <div className="p-1.5">
-            {[...groups.entries()].map(([mod, entries]) => (
-              <ModalityGroup
+      <PopoverContent className="w-56 gap-0 p-0" side="bottom" align="start" sideOffset={4}>
+        {/* Modality filter tabs */}
+        {modalities.length > 1 && (
+          <div className="flex gap-1 border-border border-b px-2 py-1.5">
+            <button
+              type="button"
+              onClick={() => setFilter(null)}
+              className={cn(
+                "rounded-sm px-1.5 py-0.5 text-[10px] transition-colors",
+                !filter ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+              )}
+            >
+              all
+            </button>
+            {modalities.map((mod) => (
+              <button
                 key={mod}
-                modality={mod}
-                entries={entries}
-                activeKey={activeKey}
-                onSelect={(key) => {
-                  onSelect(key);
-                  setOpen(false);
-                }}
-              />
+                type="button"
+                onClick={() => setFilter(filter === mod ? null : mod)}
+                className={cn(
+                  "rounded-sm px-1.5 py-0.5 text-[10px] transition-colors",
+                  filter === mod
+                    ? "bg-muted text-foreground"
+                    : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+                )}
+              >
+                <Badge variant="outline" className={cn("px-1 py-0 text-[9px]", modColor(mod))}>
+                  {mod}
+                </Badge>
+              </button>
+            ))}
+          </div>
+        )}
+
+        <ScrollArea className="max-h-64">
+          <div className="p-1">
+            {[...visibleGroups.entries()].map(([mod, entries], gi) => (
+              <div key={mod}>
+                {gi > 0 && <Separator className="my-1" />}
+                {/* Section header (only when showing all) */}
+                {!filter && modalities.length > 1 && (
+                  <div className="flex items-center gap-1.5 px-2 py-1">
+                    <Badge variant="outline" className={cn("px-1 py-0 text-[9px]", modColor(mod))}>
+                      {mod}
+                    </Badge>
+                    <span className="text-[10px] text-muted-foreground">{entries.length}</span>
+                  </div>
+                )}
+                {/* Embedding items */}
+                {entries.map(([key, entry]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => {
+                      onSelect(key);
+                      setOpen(false);
+                    }}
+                    className={cn(
+                      "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors",
+                      key === activeKey
+                        ? "bg-primary/15 text-foreground"
+                        : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                    )}
+                  >
+                    <span className="flex-1 truncate font-mono">{bareLabel(key)}</span>
+                    {entry.n_dims != null && (
+                      <span className="shrink-0 text-[10px] text-muted-foreground">{entry.n_dims}d</span>
+                    )}
+                    {!entry.loaded && (
+                      <span className="shrink-0 text-[9px] text-muted-foreground/50">load</span>
+                    )}
+                  </button>
+                ))}
+              </div>
             ))}
           </div>
         </ScrollArea>
       </PopoverContent>
     </Popover>
-  );
-}
-
-// ── Modality group ───────────────────────────────────────────────────────────
-
-function ModalityGroup({
-  modality,
-  entries,
-  activeKey,
-  onSelect,
-}: {
-  modality: string;
-  entries: [string, ObsmEntry][];
-  activeKey: string;
-  onSelect: (key: string) => void;
-}) {
-  return (
-    <Collapsible defaultOpen>
-      <CollapsibleTrigger
-        className={cn(
-          "flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-xs",
-          "text-text-secondary hover:bg-elevated transition-colors",
-        )}
-      >
-        <ChevronRightIcon className="size-3 shrink-0 transition-transform [[data-open]>&]:rotate-90" />
-        <Badge variant="outline" className={cn("text-[9px]", modalityColor(modality))}>
-          {modality}
-        </Badge>
-        <span className="ml-auto text-text-muted text-[10px]">{entries.length}</span>
-      </CollapsibleTrigger>
-
-      <CollapsibleContent>
-        <div className="ml-3 border-border-subtle border-l pl-2">
-          {entries.map(([key, entry]) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => onSelect(key)}
-              className={cn(
-                "flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-xs transition-colors",
-                key === activeKey
-                  ? "bg-primary/10 text-primary-foreground"
-                  : "text-text-secondary hover:bg-elevated hover:text-text-primary",
-              )}
-            >
-              {entry.loaded ? (
-                <CircleCheckIcon className="size-3 shrink-0 text-emerald-400" />
-              ) : (
-                <CircleDashedIcon className="size-3 shrink-0 text-text-muted" />
-              )}
-              <span className="flex-1 truncate font-mono">{displayName(key)}</span>
-              {entry.n_dims != null && <span className="shrink-0 text-text-muted text-[10px]">{entry.n_dims}d</span>}
-            </button>
-          ))}
-        </div>
-      </CollapsibleContent>
-    </Collapsible>
   );
 }
