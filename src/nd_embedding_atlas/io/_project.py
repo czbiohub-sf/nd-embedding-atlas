@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class DatasetSpec(BaseModel):
@@ -13,7 +13,9 @@ class DatasetSpec(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    anndata: Path
+    anndata: Path | None = None
+    # MuData store (.h5mu or .zarr with mod/ group) — mutually exclusive with anndata
+    mudata: Path | None = None
     # "ome-zarr" is the canonical key; "hcs_plate" is accepted for backward compatibility
     ome_zarr: Path | None = Field(
         None,
@@ -21,7 +23,7 @@ class DatasetSpec(BaseModel):
         validation_alias=AliasChoices("ome-zarr", "hcs_plate"),
     )
 
-    @field_validator("anndata", "ome_zarr", mode="before")
+    @field_validator("anndata", "mudata", "ome_zarr", mode="before")
     @classmethod
     def path_must_exist(cls, v: Any) -> Any:
         """Validate that the path exists (file or directory)."""
@@ -32,6 +34,32 @@ class DatasetSpec(BaseModel):
             msg = f"Path does not exist: {p}"
             raise ValueError(msg)
         return p
+
+    @model_validator(mode="after")
+    def check_mutual_exclusivity(self):
+        """Validate that exactly one of anndata/mudata is specified."""
+        if self.anndata is not None and self.mudata is not None:
+            msg = "Cannot specify both 'anndata' and 'mudata' in a dataset entry"
+            raise ValueError(msg)
+        if self.anndata is None and self.mudata is None:
+            msg = "Must specify either 'anndata' or 'mudata' in a dataset entry"
+            raise ValueError(msg)
+        return self
+
+    @property
+    def data_path(self) -> Path:
+        """Return the primary data path (anndata or mudata)."""
+        if self.mudata is not None:
+            return self.mudata
+        if self.anndata is not None:
+            return self.anndata
+        msg = "DatasetSpec requires either 'anndata' or 'mudata'"
+        raise ValueError(msg)
+
+    @property
+    def is_mudata(self) -> bool:
+        """Return True if this dataset uses MuData format."""
+        return self.mudata is not None
 
 
 class ProjectConfig(BaseModel):
@@ -71,7 +99,7 @@ def load_project(path: Path) -> ProjectConfig:
     # Resolve relative paths relative to the YAML file's parent directory.
     # Accept both "ome-zarr" (canonical) and "hcs_plate" (legacy).
     for ds in raw.get("datasets", {}).values():
-        for key in ("anndata", "ome-zarr", "hcs_plate"):
+        for key in ("anndata", "mudata", "ome-zarr", "hcs_plate"):
             if ds.get(key):
                 p = Path(ds[key])
                 if not p.is_absolute():
