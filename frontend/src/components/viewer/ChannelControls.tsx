@@ -109,11 +109,19 @@ export function ChannelControls() {
                   )}
                 </div>
 
-                {/* Contrast range (dual-thumb slider) */}
+                {/* Contrast range (dual-thumb slider + editable inputs) */}
                 <div className="flex items-center gap-1.5 pl-7">
-                  <span className="w-8 text-right text-[10px] text-muted-foreground tabular-nums">
-                    {fmtContrast(ch.contrastLimits[0])}
-                  </span>
+                  <input
+                    type="number"
+                    value={Math.round(ch.contrastLimits[0])}
+                    onChange={(e) => {
+                      const v = Number(e.target.value);
+                      if (!Number.isNaN(v)) {
+                        actions.setChannelProp(i, { contrastLimits: [v, ch.contrastLimits[1]] });
+                      }
+                    }}
+                    className="w-10 rounded border border-border bg-transparent px-1 text-right text-[10px] text-muted-foreground tabular-nums outline-none focus:border-primary/50 focus:text-foreground"
+                  />
                   <Slider
                     className="flex-1"
                     value={[ch.contrastLimits[0], ch.contrastLimits[1]]}
@@ -125,9 +133,17 @@ export function ChannelControls() {
                       actions.setChannelProp(i, { contrastLimits: [vals[0], vals[1]] });
                     }}
                   />
-                  <span className="w-8 text-[10px] text-muted-foreground tabular-nums">
-                    {fmtContrast(ch.contrastLimits[1])}
-                  </span>
+                  <input
+                    type="number"
+                    value={Math.round(ch.contrastLimits[1])}
+                    onChange={(e) => {
+                      const v = Number(e.target.value);
+                      if (!Number.isNaN(v)) {
+                        actions.setChannelProp(i, { contrastLimits: [ch.contrastLimits[0], v] });
+                      }
+                    }}
+                    className="w-10 rounded border border-border bg-transparent px-1 text-[10px] text-muted-foreground tabular-nums outline-none focus:border-primary/50 focus:text-foreground"
+                  />
                 </div>
               </div>
             );
