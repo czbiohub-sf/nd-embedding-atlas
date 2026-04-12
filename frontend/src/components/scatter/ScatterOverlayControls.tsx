@@ -56,6 +56,7 @@ import { addFloatingScatter } from "../../stores/FloatingScatterStore";
 import { toggleViewLock, viewSyncStore } from "../../stores/ViewSyncStore";
 import type { AxisState } from "../../types";
 import { ColorSourcePicker } from "../scatter/ColorSourcePicker";
+import { ModalityColorPicker } from "../mudata/ModalityColorPicker";
 import { ButtonGroup } from "../ui/button-group";
 import { Combobox, type ComboboxOption } from "../ui/combobox";
 import { HoverTip } from "../ui/hover-tip";
@@ -80,6 +81,12 @@ interface Props {
   hasVar: boolean;
   onSetColorSource: (src: ColorSource) => void;
   onToggleColorMode: () => void;
+
+  // MuData modality support (all optional — absent for single AnnData)
+  modalities?: string[];
+  modalityObsColumns?: Record<string, string[]>;
+  varCount?: number | Record<string, number>;
+  activeEmbeddingKey?: string;
 
   // Selection tool
   selectionTool: "pan" | "marquee" | "lasso";
@@ -118,6 +125,10 @@ export function ScatterOverlayControls({
   hasVar,
   onSetColorSource,
   onToggleColorMode,
+  modalities,
+  modalityObsColumns,
+  varCount,
+  activeEmbeddingKey,
   selectionTool,
   onSetSelectionTool,
   onFitView,
@@ -190,14 +201,27 @@ export function ScatterOverlayControls({
 
         {/* Color column */}
         <span className="text-[10px] text-muted-foreground/60 uppercase tracking-wide">col</span>
-        <ColorSourcePicker
-          colorSource={colorSource}
-          obsColumns={obsColumns}
-          hasVar={hasVar}
-          onSetColorSource={onSetColorSource}
-          triggerClassName={cn(glassTrigger, "max-w-36")}
-          contentClassName="w-64"
-        />
+        {modalities && modalities.length > 0 ? (
+          <ModalityColorPicker
+            colorSource={colorSource}
+            onSetColorSource={onSetColorSource}
+            obsColumns={obsColumns}
+            modalityObsColumns={modalityObsColumns}
+            modalities={modalities}
+            varCount={varCount}
+            activeEmbeddingKey={activeEmbeddingKey}
+            triggerClassName={cn(glassTrigger, "max-w-36")}
+          />
+        ) : (
+          <ColorSourcePicker
+            colorSource={colorSource}
+            obsColumns={obsColumns}
+            hasVar={hasVar}
+            onSetColorSource={onSetColorSource}
+            triggerClassName={cn(glassTrigger, "max-w-36")}
+            contentClassName="w-64"
+          />
+        )}
 
         {colorModeCanToggle && (
           <>

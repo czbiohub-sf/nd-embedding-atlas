@@ -204,6 +204,10 @@ export function ScatterContent({
       }}
       onSetColorSource={setColorSource}
       onToggleColorMode={() => setColorModeOverride(colorMode === "continuous" ? "categorical" : "continuous")}
+      modalities={metadata.modalities}
+      modalityObsColumns={metadata.modality_obs_columns}
+      varCount={metadata.var_count}
+      activeEmbeddingKey={effectiveAxes.obsmKey}
       selectionTool={selectionTool}
       onSetSelectionTool={setSelectionTool}
       onFitView={() => fitViewRef.current?.()}
