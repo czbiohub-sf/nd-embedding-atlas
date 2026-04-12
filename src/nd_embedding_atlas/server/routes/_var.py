@@ -1,9 +1,10 @@
 """Var name search, layer listing, and var-expression column materialization endpoints."""
 
 import asyncio
+import json
 import re
 import uuid
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
 from typing import Annotated
 
 import numpy as np
@@ -11,6 +12,7 @@ import pyarrow as pa
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+from sse_starlette.sse import EventSourceResponse, ServerSentEvent
 
 from nd_embedding_atlas.server._state import VarTaskState, ViewerState
 
@@ -32,24 +34,54 @@ def _column_exists(state: ViewerState, col_name: str) -> bool:
     return len(rows) > 0
 
 
-def _materialize_var_sync(state: ViewerState, var_name: str, layer: str, col_name: str) -> dict:
+def _materialize_var_sync(
+    state: ViewerState, var_name: str, layer: str, col_name: str, modality: str | None = None
+) -> dict:
     """Materialize a var expression column into DuckDB. Returns ``{"vmin": ..., "vmax": ...}``."""
     import scipy.sparse as sp  # optional dep — only imported when needed
 
-    adata = state.collection._concat
-    if var_name not in adata.var_names:
-        msg = f"Var '{var_name}' not found in var_names"
-        raise ValueError(msg)
+    from nd_embedding_atlas.io._mudata import MuDataSource
 
-    # Slice a single var column — efficient for sparse matrices
-    expr = adata[:, var_name].layers[layer] if layer != "X" else adata[:, var_name].X
+    if isinstance(state.source, MuDataSource):
+        import anndata as ad
 
-    # Handle dask (lazy), sparse, or dense
-    if hasattr(expr, "compute"):
-        expr = expr.compute()
-    if sp.issparse(expr):
-        expr = expr.toarray()
-    col_data = np.asarray(expr).ravel().astype(np.float32)
+        from nd_embedding_atlas.io._store import store_ctx
+
+        mod = modality or state.source.modalities[0]
+        with store_ctx(state.source.path) as s:
+            x_data = ad.io.read_elem(s[f"mod/{mod}/X"])
+            var_df = ad.io.read_elem(s[f"mod/{mod}/var"])
+
+        if var_name not in var_df.index:
+            msg = f"Var '{var_name}' not found in modality '{mod}'"
+            raise ValueError(msg)
+
+        var_idx = list(var_df.index).index(var_name)
+        expr = x_data[:, var_idx]
+        if hasattr(expr, "compute"):
+            expr = expr.compute()
+        if sp.issparse(expr):
+            expr = expr.toarray()
+        col_data = np.asarray(expr).ravel().astype(np.float32)
+    else:
+        if state.collection is None:
+            msg = "No data source available for var column materialization"
+            raise NotImplementedError(msg)
+
+        adata = state.collection._concat
+        if var_name not in adata.var_names:
+            msg = f"Var '{var_name}' not found in var_names"
+            raise ValueError(msg)
+
+        # Slice a single var column — efficient for sparse matrices
+        expr = adata[:, var_name].layers[layer] if layer != "X" else adata[:, var_name].X
+
+        # Handle dask (lazy), sparse, or dense
+        if hasattr(expr, "compute"):
+            expr = expr.compute()
+        if sp.issparse(expr):
+            expr = expr.toarray()
+        col_data = np.asarray(expr).ravel().astype(np.float32)
 
     # Compute range for colormap clims
     finite = col_data[np.isfinite(col_data)]
@@ -67,26 +99,27 @@ async def _materialize_var_bg(
     layer: str,
     col_name: str,
     task_id: str,
+    modality: str | None = None,
 ) -> None:
     loop = asyncio.get_running_loop()
     try:
         result = await loop.run_in_executor(
             state.store.executor,
-            lambda: _materialize_var_sync(state, var_name, layer, col_name),
+            lambda: _materialize_var_sync(state, var_name, layer, col_name, modality=modality),
         )
         task = state.var_tasks[task_id]
         task.status = "ready"
         task.vmin = result["vmin"]
         task.vmax = result["vmax"]
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         state.var_tasks[task_id].status = "error"
         state.var_tasks[task_id].error = str(exc)
-        raise
 
 
 class _VarColumnRequest(BaseModel):
     gene: str  # var name — kept as "gene" for frontend JSON compat
     layer: str = "X"
+    modality: str | None = None
 
 
 def make_var_router(get_state: Callable[[], ViewerState]) -> APIRouter:
@@ -95,17 +128,29 @@ def make_var_router(get_state: Callable[[], ViewerState]) -> APIRouter:
     State = Annotated[ViewerState, Depends(get_state)]
 
     @router.get("/api/var/names")
-    async def get_var_names(state: State, q: str = "", limit: int = 50) -> dict:
-        all_names: list[str] = sorted(state.collection.var_names.tolist())
+    async def get_var_names(state: State, q: str = "", limit: int = 50, modality: str | None = None) -> dict:
+        from nd_embedding_atlas.io._mudata import MuDataSource, get_var_names_mudata
+
+        if isinstance(state.source, MuDataSource):
+            if modality is None:
+                modality = state.source.modalities[0]
+            all_names = get_var_names_mudata(state.source.path, modality)
+        elif state.collection is not None:
+            all_names = sorted(state.collection.var_names.tolist())
+        else:
+            return {"names": [], "modality": modality}
+
         if q:
             q_lower = q.lower()
             matches = [n for n in all_names if q_lower in n.lower()]
         else:
             matches = all_names
-        return {"names": matches[:limit]}
+        return {"names": matches[:limit], "modality": modality}
 
     @router.get("/api/var/layers")
     async def get_var_layers(state: State) -> dict:
+        if state.collection is None:
+            return {"layers": ["X"]}
         try:
             layer_keys = list(state.collection._concat.layers.keys())
         except Exception:  # noqa: BLE001
@@ -138,7 +183,7 @@ def make_var_router(get_state: Callable[[], ViewerState]) -> APIRouter:
         var_task = VarTaskState(task_id=task_id, task=None, status="loading", column=col_name)  # type: ignore[arg-type]
         state.var_tasks[task_id] = var_task
 
-        task = asyncio.create_task(_materialize_var_bg(state, var_name, layer, col_name, task_id))
+        task = asyncio.create_task(_materialize_var_bg(state, var_name, layer, col_name, task_id, modality=body.modality))
         state.var_tasks[task_id].task = task
 
         return JSONResponse({"task_id": task_id, "status": "loading", "column": col_name}, status_code=202)
@@ -162,5 +207,56 @@ def make_var_router(get_state: Callable[[], ViewerState]) -> APIRouter:
             {"status": "error", "column": var_task.column, "error": var_task.error},
             status_code=500,
         )
+
+    @router.get("/api/var-column/{task_id}/stream")
+    async def var_column_stream(task_id: str, state: State) -> EventSourceResponse:
+        """SSE stream that pushes var-column materialization status until terminal."""
+
+        async def _generate() -> AsyncIterator[ServerSentEvent]:
+            if task_id not in state.var_tasks:
+                yield ServerSentEvent(
+                    data=json.dumps({"status": "error", "error": "Unknown task_id"}),
+                    event="status",
+                )
+                return
+
+            var_task = state.var_tasks[task_id]
+
+            # Already terminal
+            if var_task.status == "ready":
+                resp: dict = {"status": "ready", "column": var_task.column}
+                if var_task.vmin is not None:
+                    resp["vmin"] = var_task.vmin
+                    resp["vmax"] = var_task.vmax
+                yield ServerSentEvent(data=json.dumps(resp), event="status")
+                return
+
+            if var_task.status == "error":
+                yield ServerSentEvent(
+                    data=json.dumps({"status": "error", "column": var_task.column, "error": var_task.error}),
+                    event="status",
+                )
+                return
+
+            # Loading — emit initial status and poll
+            yield ServerSentEvent(data=json.dumps({"status": "loading"}), event="status")
+
+            while not var_task.task.done():
+                await asyncio.wait({var_task.task}, timeout=0.3)
+
+            # Terminal
+            if var_task.status == "ready":
+                resp = {"status": "ready", "column": var_task.column}
+                if var_task.vmin is not None:
+                    resp["vmin"] = var_task.vmin
+                    resp["vmax"] = var_task.vmax
+                yield ServerSentEvent(data=json.dumps(resp), event="status")
+            else:
+                yield ServerSentEvent(
+                    data=json.dumps({"status": "error", "column": var_task.column, "error": var_task.error}),
+                    event="status",
+                )
+
+        return EventSourceResponse(_generate())
 
     return router
