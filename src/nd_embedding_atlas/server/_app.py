@@ -94,18 +94,26 @@ def _autocontrast_channels(plate_path: str | pathlib.Path, channels: list[dict])
             step = len(all_fovs) // 3
             sample_fovs = [all_fovs[0], all_fovs[step], all_fovs[-1]]
 
-        # Read and accumulate stats across sampled FOVs
+        # Read a small center crop from each sampled FOV (fast — one chunk per channel)
         all_data = []
         for fp in sample_fovs:
             arr = store[f"{fp}/0"]
-            if arr.ndim == 5:
-                d = np.array(arr[0, :, 0])
-            elif arr.ndim == 4:
-                d = np.array(arr[:, 0])
+            shape = arr.shape
+            # Read center 512x512 crop per channel (fits in one chunk typically)
+            if arr.ndim == 5:  # T, C, Z, Y, X
+                cy, cx = shape[3] // 2, shape[4] // 2
+                h = min(512, shape[3])
+                w = min(512, shape[4])
+                d = np.array(arr[0, :, 0, cy - h // 2 : cy + h // 2, cx - w // 2 : cx + w // 2])
+            elif arr.ndim == 4:  # C, Z, Y, X
+                cy, cx = shape[2] // 2, shape[3] // 2
+                h = min(512, shape[2])
+                w = min(512, shape[3])
+                d = np.array(arr[:, 0, cy - h // 2 : cy + h // 2, cx - w // 2 : cx + w // 2])
             else:
                 d = np.array(arr)
             all_data.append(d)
-        data = np.concatenate(all_data, axis=-1)  # concat along X for wider sample
+        data = np.concatenate(all_data, axis=-1)
 
         updated = []
         for i, ch in enumerate(channels):
