@@ -8,7 +8,8 @@ import pathlib
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from nd_embedding_atlas.io import AnnDataCollection
+    from nd_embedding_atlas.io import DatasetCollection
+    from nd_embedding_atlas.io._protocol import DataSource
     from nd_embedding_atlas.server._store import EmbeddingStore
 
 
@@ -80,7 +81,7 @@ class ViewerState:
     Parameters
     ----------
     collection
-        The AnnDataCollection being served.
+        The DatasetCollection being served.
     store
         Initialized EmbeddingStore (obs already loaded into DuckDB).
     available_obsm_keys
@@ -95,7 +96,7 @@ class ViewerState:
 
     def __init__(
         self,
-        collection: AnnDataCollection,
+        source: DataSource,
         store: EmbeddingStore,
         *,
         available_obsm_keys: list[str],
@@ -106,7 +107,7 @@ class ViewerState:
         dataset_pixel_scales: dict[str, dict[str, float]] | None = None,
         project_config_path: pathlib.Path | None = None,
     ) -> None:
-        self.collection = collection
+        self.source: DataSource = source
         self.store = store
         self.available_obsm_keys = available_obsm_keys
         self.spatial = spatial
@@ -121,6 +122,13 @@ class ViewerState:
         self.parquet_cache: bytes | None = None
         self.export_task: ExportTaskState | None = None
         self.var_tasks: dict[str, VarTaskState] = {}
+
+    @property
+    def collection(self) -> DatasetCollection | None:
+        """Return the DatasetCollection if source is one, else None."""
+        from nd_embedding_atlas.io import DatasetCollection
+
+        return self.source if isinstance(self.source, DatasetCollection) else None
 
     @property
     def executor(self):
