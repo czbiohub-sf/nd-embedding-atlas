@@ -207,6 +207,7 @@ export function ScatterContent({
       modalities={metadata.modalities}
       modalityObsColumns={metadata.modality_obs_columns}
       varCount={metadata.var_count}
+      obsm={metadata.modalities ? metadata.obsm : undefined}
       activeEmbeddingKey={effectiveAxes.obsmKey}
       selectionTool={selectionTool}
       onSetSelectionTool={setSelectionTool}

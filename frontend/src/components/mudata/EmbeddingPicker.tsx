@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 
 interface ObsmEntry {
   prefix: string;
-  n_dims: number | null;
+  n_dims?: number | null;
   loaded: boolean;
   modality?: string;
 }
