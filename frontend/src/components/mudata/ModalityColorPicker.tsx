@@ -255,34 +255,83 @@ export function ModalityColorPicker({
                     >
                       <span className="text-muted-foreground">— none</span>
                     </CommandItem>
-                    {visibleObsCols
-                      .filter((c) => c !== "_dataset" && c !== "obs_name")
-                      .map((col) => {
-                        // Find which modality owns this column
-                        let origin: string | undefined;
-                        if (isMuData && modalityObsColumns) {
-                          for (const [mod, cols] of Object.entries(modalityObsColumns)) {
-                            if (cols.includes(col)) {
-                              origin = mod;
-                              break;
+                  </CommandGroup>
+                  {/* When "all" + MuData: group by modality with headings */}
+                  {obsModTab === "all" && isMuData && modalityObsColumns ? (
+                    <>
+                      {/* Shared columns (not in any modality) */}
+                      {(() => {
+                        const modCols = new Set(Object.values(modalityObsColumns).flat());
+                        const shared = obsColumns.filter(
+                          (c) => !modCols.has(c) && c !== "_dataset" && c !== "obs_name",
+                        );
+                        return shared.length > 0 ? (
+                          <CommandGroup heading="shared">
+                            {shared.map((col) => (
+                              <CommandItem
+                                key={col}
+                                value={col}
+                                onSelect={() => {
+                                  onSetColorSource(colorSourceObs(col));
+                                  setOpen(false);
+                                }}
+                              >
+                                <span className="flex-1 truncate">{col}</span>
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        ) : null;
+                      })()}
+                      {/* Per-modality groups */}
+                      {Object.entries(modalityObsColumns).map(([mod, cols]) => (
+                        <CommandGroup key={mod} heading={mod}>
+                          {cols.map((col) => (
+                            <CommandItem
+                              key={`${mod}:${col}`}
+                              value={col}
+                              onSelect={() => {
+                                onSetColorSource(colorSourceObs(col));
+                                setOpen(false);
+                              }}
+                            >
+                              <span className="flex-1 truncate">{col}</span>
+                              <ModBadge mod={mod} />
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      ))}
+                    </>
+                  ) : (
+                    /* Filtered view or non-MuData: flat list */
+                    <CommandGroup>
+                      {visibleObsCols
+                        .filter((c) => c !== "_dataset" && c !== "obs_name")
+                        .map((col) => {
+                          let origin: string | undefined;
+                          if (isMuData && modalityObsColumns) {
+                            for (const [mod, cols] of Object.entries(modalityObsColumns)) {
+                              if (cols.includes(col)) {
+                                origin = mod;
+                                break;
+                              }
                             }
                           }
-                        }
-                        return (
-                          <CommandItem
-                            key={col}
-                            value={col}
-                            onSelect={() => {
-                              onSetColorSource(colorSourceObs(col));
-                              setOpen(false);
-                            }}
-                          >
-                            <span className="flex-1 truncate">{col}</span>
-                            {origin && <ModBadge mod={origin} />}
-                          </CommandItem>
-                        );
-                      })}
-                  </CommandGroup>
+                          return (
+                            <CommandItem
+                              key={col}
+                              value={col}
+                              onSelect={() => {
+                                onSetColorSource(colorSourceObs(col));
+                                setOpen(false);
+                              }}
+                            >
+                              <span className="flex-1 truncate">{col}</span>
+                              {origin && <ModBadge mod={origin} />}
+                            </CommandItem>
+                          );
+                        })}
+                    </CommandGroup>
+                  )}
                 </ScrollArea>
               </CommandList>
             </Command>

@@ -1,9 +1,9 @@
 import { useMemo, useState } from "react";
-import { ChevronDownIcon } from "lucide-react";
+import { ChevronDownIcon, ChevronRightIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { getModality, getBareObsmKey } from "@/lib/modality";
 
@@ -121,45 +121,56 @@ export function EmbeddingPicker({ obsm, activeKey, onSelect, triggerClassName }:
 
         <ScrollArea className="max-h-64">
           <div className="p-1">
-            {[...visibleGroups.entries()].map(([mod, entries], gi) => (
-              <div key={mod}>
-                {gi > 0 && <Separator className="my-1" />}
-                {/* Section header (only when showing all) */}
-                {!filter && modalities.length > 1 && (
-                  <div className="flex items-center gap-1.5 px-2 py-1">
+            {[...visibleGroups.entries()].map(([mod, entries]) => {
+              const items = entries.map(([key, entry]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => {
+                    onSelect(key);
+                    setOpen(false);
+                  }}
+                  className={cn(
+                    "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors",
+                    key === activeKey
+                      ? "bg-primary/15 text-foreground"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                  )}
+                >
+                  <span className="flex-1 truncate font-mono">{bareLabel(key)}</span>
+                  {entry.n_dims != null && (
+                    <span className="shrink-0 text-[10px] text-muted-foreground">{entry.n_dims}d</span>
+                  )}
+                  {!entry.loaded && (
+                    <span className="shrink-0 text-[9px] text-muted-foreground/50">load</span>
+                  )}
+                </button>
+              ));
+
+              // When filtered to one modality, show flat list
+              if (filter) return <div key={mod}>{items}</div>;
+
+              // When "all", wrap each modality in a collapsible
+              return (
+                <Collapsible key={mod} defaultOpen>
+                  <CollapsibleTrigger
+                    className={cn(
+                      "flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-xs",
+                      "text-muted-foreground hover:bg-muted transition-colors",
+                    )}
+                  >
+                    <ChevronRightIcon className="size-3 shrink-0 transition-transform [[data-open]>&]:rotate-90" />
                     <Badge variant="outline" className={cn("px-1 py-0 text-[9px]", modColor(mod))}>
                       {mod}
                     </Badge>
-                    <span className="text-[10px] text-muted-foreground">{entries.length}</span>
-                  </div>
-                )}
-                {/* Embedding items */}
-                {entries.map(([key, entry]) => (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => {
-                      onSelect(key);
-                      setOpen(false);
-                    }}
-                    className={cn(
-                      "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors",
-                      key === activeKey
-                        ? "bg-primary/15 text-foreground"
-                        : "text-muted-foreground hover:bg-muted hover:text-foreground",
-                    )}
-                  >
-                    <span className="flex-1 truncate font-mono">{bareLabel(key)}</span>
-                    {entry.n_dims != null && (
-                      <span className="shrink-0 text-[10px] text-muted-foreground">{entry.n_dims}d</span>
-                    )}
-                    {!entry.loaded && (
-                      <span className="shrink-0 text-[9px] text-muted-foreground/50">load</span>
-                    )}
-                  </button>
-                ))}
-              </div>
-            ))}
+                    <span className="ml-auto text-[10px] text-muted-foreground">{entries.length}</span>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <div className="ml-3 border-border border-l pl-1">{items}</div>
+                  </CollapsibleContent>
+                </Collapsible>
+              );
+            })}
           </div>
         </ScrollArea>
       </PopoverContent>
