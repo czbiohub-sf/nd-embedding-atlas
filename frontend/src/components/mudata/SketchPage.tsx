@@ -1,8 +1,16 @@
-import { useState } from "react";
+/**
+ * SketchPage — renders all MuData UI sketches with mock data.
+ * Standalone page for design review.
+ */
+
+import { useCallback, useState } from "react";
+
 import { Separator } from "@/components/ui/separator";
-import { EmbeddingPicker } from "@/components/mudata/EmbeddingPicker";
-import { VarSearchPanel } from "@/components/mudata/VarSearchPanel";
-import { MultiPanelPreview } from "@/components/mudata/MultiPanelPreview";
+import { COLOR_NONE, type ColorSource, colorSourceObs } from "@/lib/color-source";
+
+import { EmbeddingPicker } from "./EmbeddingPicker";
+import { ModalityColorPicker } from "./ModalityColorPicker";
+import { MultiPanelPreview } from "./MultiPanelPreview";
 
 // ── Mock data ────────────────────────────────────────────────────────────────
 
@@ -16,90 +24,143 @@ const mockObsm = {
 
 const mockModalities = ["rna", "dinov2"];
 
-// ── Section wrapper ──────────────────────────────────────────────────────────
+const mockModalityObsColumns: Record<string, string[]> = {
+  rna: ["phase", "S_score", "G2M_score", "condition", "lane", "experiment", "n_genes", "cage_crop_file_name"],
+  dinov2: [
+    "object_class",
+    "cage_crop_file_name",
+    "zarr_position",
+    "zarr_path",
+    "cage_global_x_um",
+    "cage_global_y_um",
+    "is_cell",
+    "is_bead",
+  ],
+};
 
-function SketchSection({
-  title,
-  description,
-  children,
-}: {
-  title: string;
-  description: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="flex flex-col gap-4">
-      <div>
-        <h2 className="font-heading text-sm font-medium text-text-primary">{title}</h2>
-        <p className="mt-1 text-text-muted text-xs leading-relaxed">{description}</p>
-      </div>
-      <div className="rounded-lg border border-border-subtle bg-surface p-6">{children}</div>
-    </section>
-  );
-}
+const mockAllObsColumns = [
+  "cage_mates",
+  ...mockModalityObsColumns.rna,
+  ...mockModalityObsColumns.dinov2.filter((c) => !mockModalityObsColumns.rna.includes(c)),
+];
+
+const mockVarCount = { rna: 18144, dinov2: 768 };
+
+const mockVarResults: Record<string, string[]> = {
+  rna: ["TP53", "TP53BP1", "TP53BP2", "TP53I3", "TP53INP1", "TP53AIP1"],
+  dinov2: ["feat_0", "feat_1", "feat_2", "feat_3", "feat_4", "feat_5"],
+};
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 export function SketchPage() {
-  const [activeEmbedding, setActiveEmbedding] = useState("rna:X_umap");
+  const [activeKey, setActiveKey] = useState("rna:X_umap");
+  const [colorSource, setColorSource] = useState<ColorSource>(COLOR_NONE);
+  const [varQuery, setVarQuery] = useState("");
+  const [varMod, setVarMod] = useState("rna");
+
+  const handleVarQueryChange = useCallback((q: string, mod?: string) => {
+    setVarQuery(q);
+    if (mod) setVarMod(mod);
+  }, []);
+
+  const currentVarResults = varQuery
+    ? (mockVarResults[varMod]?.filter((n) => n.toLowerCase().includes(varQuery.toLowerCase())) ?? [])
+    : [];
 
   return (
     <div className="dark min-h-screen bg-base p-8 font-sans text-text-primary">
-      <div className="mx-auto max-w-3xl">
-        <header className="mb-8">
-          <h1 className="font-heading text-lg font-semibold text-text-primary">MuData UI Sketches</h1>
-          <p className="mt-1 text-text-secondary text-sm">Design explorations for multi-modal data support (MuData).</p>
-        </header>
+      <h1 className="mb-2 font-bold text-2xl">MuData UI Sketches</h1>
+      <p className="mb-8 text-sm text-text-muted">
+        Design explorations for multi-modal data support. Same cells, different feature spaces.
+      </p>
 
-        <div className="flex flex-col gap-8">
-          {/* 1. Embedding Picker */}
-          <SketchSection
-            title="1. Embedding Picker"
-            description="Popover-based embedding selector grouped by modality. Shows loaded state, dimension count, and modality badges."
-          >
-            <div className="flex items-center gap-3">
-              <span className="text-text-muted text-xs">Embedding:</span>
-              <EmbeddingPicker obsm={mockObsm} activeKey={activeEmbedding} onSelect={setActiveEmbedding} />
-              <span className="text-text-muted text-[10px]">
-                Selected: <code className="font-mono text-text-secondary">{activeEmbedding}</code>
-              </span>
-            </div>
-          </SketchSection>
-
-          <Separator />
-
-          {/* 2. Var Search Panel */}
-          <SketchSection
-            title="2. Var Search Panel"
-            description="Command palette for searching variables across modalities. Supports modality tabs, server-side search, and layer selection."
-          >
-            <div className="flex gap-6">
-              <div>
-                <p className="mb-2 text-text-muted text-[10px]">With modality tabs:</p>
-                <VarSearchPanel
-                  modalities={mockModalities}
-                  activeModality="rna"
-                  onSelectVar={(v, l, m) => console.log("select", v, l, m)}
-                />
-              </div>
-              <div>
-                <p className="mb-2 text-text-muted text-[10px]">Single modality:</p>
-                <VarSearchPanel onSelectVar={(v, l) => console.log("select", v, l)} />
-              </div>
-            </div>
-          </SketchSection>
-
-          <Separator />
-
-          {/* 3. Multi-Panel Preview */}
-          <SketchSection
-            title="3. Multi-Panel Cross-Filter"
-            description="Two scatter panels showing cross-filter highlighting. Lasso selection in one modality highlights corresponding observations in the other."
-          >
-            <MultiPanelPreview />
-          </SketchSection>
+      {/* ── Sketch 1: Embedding Picker ─────────────────────────────────── */}
+      <section className="mb-10">
+        <h2 className="mb-1 font-semibold text-lg">1. Embedding Picker</h2>
+        <p className="mb-4 text-xs text-text-muted">Embeddings grouped by modality. Click to switch.</p>
+        <div className="flex items-center gap-4">
+          <span className="text-xs text-text-muted">Embedding:</span>
+          <EmbeddingPicker obsm={mockObsm} activeKey={activeKey} onSelect={setActiveKey} />
+          <span className="font-mono text-xs text-text-secondary">active: {activeKey}</span>
         </div>
-      </div>
+      </section>
+
+      <Separator className="mb-10" />
+
+      {/* ── Sketch 2: Modality Color Picker ────────────────────────────── */}
+      <section className="mb-10">
+        <h2 className="mb-1 font-semibold text-lg">2. Color Source Picker (cross-modality)</h2>
+        <p className="mb-2 text-xs text-text-muted">
+          Color by obs or var from ANY modality — independent of the active embedding.
+        </p>
+        <p className="mb-4 text-xs text-text-muted">
+          Try: select &quot;phase&quot; (rna obs) while viewing dinov2 embedding → cross-modality indicator appears.
+        </p>
+
+        <div className="flex items-center gap-4">
+          <span className="text-xs text-text-muted">Color by:</span>
+          <ModalityColorPicker
+            colorSource={colorSource}
+            onSetColorSource={setColorSource}
+            obsColumns={mockAllObsColumns}
+            modalityObsColumns={mockModalityObsColumns}
+            modalities={mockModalities}
+            varCount={mockVarCount}
+            activeEmbeddingKey={activeKey}
+            varNames={currentVarResults}
+            varLoading={false}
+            onVarQueryChange={handleVarQueryChange}
+            onMaterializeVar={(name, layer, mod) => {
+              // eslint-disable-next-line no-console
+              console.log("Materialize:", { name, layer, mod });
+            }}
+            layers={["X"]}
+          />
+        </div>
+
+        {/* Demo buttons */}
+        <div className="mt-4 flex gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setActiveKey("dinov2:X_umap");
+              setColorSource(colorSourceObs("phase"));
+            }}
+            className="rounded border border-border px-2 py-1 text-xs hover:bg-elevated"
+          >
+            Demo: dinov2 UMAP + rna:phase
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setActiveKey("rna:X_umap");
+              setColorSource(colorSourceObs("object_class"));
+            }}
+            className="rounded border border-border px-2 py-1 text-xs hover:bg-elevated"
+          >
+            Demo: rna UMAP + dinov2:object_class
+          </button>
+          <button
+            type="button"
+            onClick={() => setColorSource(COLOR_NONE)}
+            className="rounded border border-border px-2 py-1 text-xs hover:bg-elevated"
+          >
+            Reset
+          </button>
+        </div>
+      </section>
+
+      <Separator className="mb-10" />
+
+      {/* ── Sketch 3: Multi-Panel Layout ───────────────────────────────── */}
+      <section className="mb-10">
+        <h2 className="mb-1 font-semibold text-lg">3. Multi-Panel Cross-Filter</h2>
+        <p className="mb-4 text-xs text-text-muted">
+          Lasso in one panel highlights the same cells in all other panels via shared __row_index__.
+        </p>
+        <MultiPanelPreview />
+      </section>
     </div>
   );
 }
