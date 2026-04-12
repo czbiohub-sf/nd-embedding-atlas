@@ -170,9 +170,14 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion }: UseFovLoa
         console.warn("[useFovLoader] getSourceDimensionMap failed", e);
       }
 
-      // Resolve channel definitions
+      // Resolve channel definitions.
+      // Prefer plate-level channels (from backend metadata, with auto-contrast)
+      // over per-FOV omeroChannels when the OME defaults are bad (0-65535).
+      const omeroHasBadDefaults =
+        omeroChannels?.every((ch) => !ch.window || (ch.window.start === 0 && ch.window.end >= 65535)) ?? true;
+
       let channelDefs: { color: Color; contrastLimits: [number, number] }[];
-      if (omeroChannels) {
+      if (omeroChannels && !omeroHasBadDefaults) {
         channelDefs = omeroChannels.map((ch) => ({
           color: ch.color ? Color.fromRgbHex(`#${ch.color}`) : Color.WHITE,
           contrastLimits: safeContrastLimits(ch.window ? [ch.window.start, ch.window.end] : [0, 65535]),
