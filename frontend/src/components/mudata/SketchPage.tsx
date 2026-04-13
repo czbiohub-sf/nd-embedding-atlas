@@ -3,7 +3,7 @@
  * Standalone page for design review.
  */
 
-import { useCallback, useState } from "react";
+import { useState } from "react";
 
 import { Separator } from "@/components/ui/separator";
 import { COLOR_NONE, type ColorSource, colorSourceObs } from "@/lib/color-source";
@@ -46,27 +46,11 @@ const mockAllObsColumns = [
 
 const mockVarCount = { rna: 18144, dinov2: 768 };
 
-const mockVarResults: Record<string, string[]> = {
-  rna: ["TP53", "TP53BP1", "TP53BP2", "TP53I3", "TP53INP1", "TP53AIP1"],
-  dinov2: ["feat_0", "feat_1", "feat_2", "feat_3", "feat_4", "feat_5"],
-};
-
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 export function SketchPage() {
   const [activeKey, setActiveKey] = useState("rna:X_umap");
   const [colorSource, setColorSource] = useState<ColorSource>(COLOR_NONE);
-  const [varQuery, setVarQuery] = useState("");
-  const [varMod, setVarMod] = useState("rna");
-
-  const handleVarQueryChange = useCallback((q: string, mod?: string) => {
-    setVarQuery(q);
-    if (mod) setVarMod(mod);
-  }, []);
-
-  const currentVarResults = varQuery
-    ? (mockVarResults[varMod]?.filter((n) => n.toLowerCase().includes(varQuery.toLowerCase())) ?? [])
-    : [];
 
   return (
     <div className="dark min-h-screen bg-base p-8 font-sans text-text-primary">
@@ -108,14 +92,6 @@ export function SketchPage() {
             modalities={mockModalities}
             varCount={mockVarCount}
             activeEmbeddingKey={activeKey}
-            varNames={currentVarResults}
-            varLoading={false}
-            onVarQueryChange={handleVarQueryChange}
-            onMaterializeVar={(name, layer, mod) => {
-              // eslint-disable-next-line no-console
-              console.log("Materialize:", { name, layer, mod });
-            }}
-            layers={["X"]}
           />
         </div>
 

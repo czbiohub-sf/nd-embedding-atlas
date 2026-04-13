@@ -98,9 +98,9 @@ export function LegendProvider({
   children,
 }: LegendProviderProps) {
   const [mode, setMode] = useState<"categorical" | "continuous">("categorical");
-  const [isolatedIndices, setIsolatedIndices] = useState(new Set());
-  const [colorOverrides, setColorOverrides] = useState(new Map());
-  const [disabledIndices, setDisabledIndices] = useState(new Set());
+  const [isolatedIndices, setIsolatedIndices] = useState(new Set<number>());
+  const [colorOverrides, setColorOverrides] = useState(new Map<number, string>());
+  const [disabledIndices, setDisabledIndices] = useState(new Set<number>());
 
   // ── Notify parent of isolation changes so it can update Mosaic ────────────
   // Mosaic's brushSelection.update() must be called from ScatterPanel where
@@ -110,7 +110,7 @@ export function LegendProvider({
   }, [isolatedIndices, onIsolationChange]);
   const [colormapName, setColormapName] = useState("viridis");
   const [colormapReversed, setColormapReversed] = useState(false);
-  const [range, setRange] = useState([0, 1]);
+  const [range, setRange] = useState([0, 1] as [number, number]);
   const [scale, setScale] = useState<"linear" | "log" | "sqrt">("linear");
 
   const toggleIsolation = useCallback((index: number, additive: boolean) => {

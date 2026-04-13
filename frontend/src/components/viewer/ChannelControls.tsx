@@ -14,10 +14,6 @@ const BLEND_OPTIONS: { label: string; value: BlendMode }[] = [
   { label: "Sub", value: "subtractive" },
 ];
 
-function fmtContrast(v: number): string {
-  return Math.abs(v) < 10 ? v.toFixed(2) : Math.round(v).toString();
-}
-
 export function ChannelControls() {
   const { state, actions } = useViewer();
   const { channels, viewMode } = state;
