@@ -17,7 +17,7 @@ export interface ViewerChannelsState {
   slots: Record<string, ChannelDef[]>;
 }
 
-export const viewerChannelsStore = new Store<ViewerChannelsState>({ slots: {} });
+export const viewerChannelsStore = new Store({ slots: {} });
 
 export function publishViewerChannels(instanceId: string, channels: ChannelDef[]): void {
   viewerChannelsStore.setState((prev) => ({

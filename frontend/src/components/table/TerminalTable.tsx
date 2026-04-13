@@ -15,7 +15,7 @@ const FALLBACK_TABLE_COLUMNS = ["_dataset"];
 
 export function TerminalTable() {
   const { open, height, toggle, setHeight } = useTerminalTable();
-  const [totalCount, setTotalCount] = useState<number>(0);
+  const [totalCount, setTotalCount] = useState(0);
   const { state, actions, meta } = useDashboard();
   const { metadata, highlightId, trajectories } = state;
   const hasAnyTrajectory = Object.keys(trajectories).length > 0;
@@ -23,7 +23,7 @@ export function TerminalTable() {
 
   // ── Drag-to-resize ───────────────────────────────────────────────────────
   const dragStartY = useRef<number | null>(null);
-  const dragStartH = useRef<number>(height);
+  const dragStartH = useRef(height);
 
   const onDragStart = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {

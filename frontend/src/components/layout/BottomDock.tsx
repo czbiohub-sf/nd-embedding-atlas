@@ -104,7 +104,7 @@ export function BottomDock({
 
   const [panels, setPanels] = useState<PanelEntry[]>([]);
   const [activePanelId, setActivePanelId] = useState<string | null>(null);
-  const scatterColorMapRef = useRef<Map<string, number>>(new Map());
+  const scatterColorMapRef = useRef(new Map());
   const scatterCounterRef = useRef(0);
 
   // Track panel additions, removals, and active changes

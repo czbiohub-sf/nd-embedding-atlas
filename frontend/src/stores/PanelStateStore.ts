@@ -7,7 +7,7 @@ export interface PanelState {
 }
 
 /** Live state of all active panels (docked + floating). Updated on every axes/color change. */
-export const panelStateStore = new Store<Map<string, PanelState>>(new Map());
+export const panelStateStore = new Store(new Map());
 
 export function broadcastPanelState(id: string, state: PanelState) {
   panelStateStore.setState((s) => new Map(s).set(id, state));

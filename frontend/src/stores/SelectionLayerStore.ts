@@ -42,7 +42,7 @@ function emptyPanelState(): PanelLayerState {
   };
 }
 
-export const selectionLayerStore = new Store<Map<PanelId, PanelLayerState>>(new Map());
+export const selectionLayerStore = new Store(new Map());
 
 export function initPanelLayerState(panelId: PanelId): void {
   selectionLayerStore.setState((m) => new Map(m).set(panelId, emptyPanelState()));

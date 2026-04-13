@@ -30,7 +30,7 @@ export function SaveObsSetDialog({ open, onClose, getRowIndices }: SaveObsSetDia
   const { coordinator } = meta;
 
   const [name, setName] = useState("");
-  const [color, setColor] = useState<string>("#6366f1");
+  const [color, setColor] = useState("#6366f1");
   const [members, setMembers] = useState<Member[] | null>(null);
   const [resolving, setResolving] = useState(false);
   const [resolveError, setResolveError] = useState<string | null>(null);
