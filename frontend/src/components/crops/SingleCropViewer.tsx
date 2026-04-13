@@ -90,7 +90,6 @@ export function SingleCropViewer({ cropSize, datasetKey }: Props) {
   useEffect(() => {
     if (!isForThisDataset || !obsInfo || !viewerState.initialized) return;
 
-
     if (viewerState.viewMode === "2d") {
       updateBbox(obsInfo.x, obsInfo.y, cropSize / 2, obsInfo.bbox);
 

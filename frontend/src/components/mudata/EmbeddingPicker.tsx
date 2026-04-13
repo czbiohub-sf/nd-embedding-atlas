@@ -141,9 +141,7 @@ export function EmbeddingPicker({ obsm, activeKey, onSelect, triggerClassName }:
                   {entry.n_dims != null && (
                     <span className="shrink-0 text-[10px] text-muted-foreground">{entry.n_dims}d</span>
                   )}
-                  {!entry.loaded && (
-                    <span className="shrink-0 text-[9px] text-muted-foreground/50">load</span>
-                  )}
+                  {!entry.loaded && <span className="shrink-0 text-[9px] text-muted-foreground/50">load</span>}
                 </button>
               ));
 

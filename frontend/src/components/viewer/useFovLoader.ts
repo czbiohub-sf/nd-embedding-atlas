@@ -95,7 +95,6 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion }: UseFovLoa
 
   // ── Main FOV load effect ──────────────────────────────────────────
   useEffect(() => {
-
     if (!sourceUrl || !viewerState.initialized) return;
 
     // Skip if same FOV + same mode + same generation (runtime hasn't been recreated)
@@ -106,7 +105,6 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion }: UseFovLoa
     ) {
       return;
     }
-
 
     let cancelled = false;
 
@@ -259,7 +257,6 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion }: UseFovLoa
 
       if (cancelled) return;
 
-
       // Commit refs
       currentFovRef.current = sourceUrl;
       currentModeRef.current = viewMode;
@@ -268,7 +265,6 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion }: UseFovLoa
       multiChannelRef.current = multiChannel;
 
       actionsRef.current.setLayers(layerEntries);
-
 
       // Build default channel state from source metadata
       const defaultChannelState: ChannelDef[] = channelDefs.map((ch, i) => {

@@ -100,7 +100,7 @@ export function ViewerProvider({ children, channelInstance = "docked" }: Props) 
   const [viewMode, setViewMode] = useState<ViewMode>("2d");
   const [zRange, setZRange] = useState<[number, number] | null>(null);
   const [generation, setGeneration] = useState(0);
-  const [worldOrigin, setWorldOrigin] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [worldOrigin, setWorldOrigin] = useState({ x: 0, y: 0 });
   const [worldScale, setWorldScale] = useState<{ x: number; y: number } | null>(null);
   const multiChannelRef = useRef<MultiChannelLayers | null>(null);
 
@@ -299,7 +299,21 @@ export function ViewerProvider({ children, channelInstance = "docked" }: Props) 
       worldOrigin,
       worldScale,
     }),
-    [initialized, trackedLayers, aggregateState, zIndex, tIndex, bounds, error, channels, viewMode, zRange, generation, worldOrigin, worldScale],
+    [
+      initialized,
+      trackedLayers,
+      aggregateState,
+      zIndex,
+      tIndex,
+      bounds,
+      error,
+      channels,
+      viewMode,
+      zRange,
+      generation,
+      worldOrigin,
+      worldScale,
+    ],
   );
 
   const actions = useMemo(
