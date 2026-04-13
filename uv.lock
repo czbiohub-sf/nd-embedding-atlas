@@ -1328,6 +1328,24 @@ wheels = [
 ]
 
 [[package]]
+name = "mudata"
+version = "0.3.4"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "anndata" },
+    { name = "h5py" },
+    { name = "numpy" },
+    { name = "pandas" },
+    { name = "scipy" },
+    { name = "scverse-misc" },
+    { name = "session-info2" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/2c/d9/17d2220c1e68198adb030433e353c86c531295bf971a35490b79ad908154/mudata-0.3.4.tar.gz", hash = "sha256:36ac8c58bd1869c2dd865caa8dfad6811ddc23b522a239ae534b328fcd4357d4", size = 327150, upload-time = "2026-04-10T15:54:59.464Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/6a/ee/ae7614fdafdf5f9a4cf7f71d1c6d5ea7478580c9b7b6491d56eaa5ef8130/mudata-0.3.4-py3-none-any.whl", hash = "sha256:5c16316155538cab7b4c0c56eb91e22b5aca9150351d18a3eb14837fd8a2f768", size = 43371, upload-time = "2026-04-10T15:54:58.137Z" },
+]
+
+[[package]]
 name = "multidict"
 version = "6.7.1"
 source = { registry = "https://pypi.org/simple" }
@@ -1411,6 +1429,7 @@ dependencies = [
     { name = "fastapi" },
     { name = "gunicorn" },
     { name = "iohub" },
+    { name = "mudata" },
     { name = "obstore" },
     { name = "pyarrow" },
     { name = "pyyaml" },
@@ -1464,6 +1483,7 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.128" },
     { name = "gunicorn", specifier = ">=25" },
     { name = "iohub", git = "https://github.com/czbiohub-sf/iohub?branch=main" },
+    { name = "mudata", specifier = ">=0.3.4" },
     { name = "obstore", specifier = ">=0.8.2" },
     { name = "pyarrow", specifier = ">=18" },
     { name = "pyyaml", specifier = ">=6" },
@@ -2485,6 +2505,19 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/bd/12/d19da97efde68ca1ee5538bb261d5d2c062f0c055575128f11a2730e3ac1/scipy-1.17.1-cp313-cp313t-musllinux_1_2_x86_64.whl", hash = "sha256:94055a11dfebe37c656e70317e1996dc197e1a15bbcc351bcdd4610e128fe1ca", size = 37665910, upload-time = "2026-02-23T00:20:34.743Z" },
     { url = "https://files.pythonhosted.org/packages/06/1c/1172a88d507a4baaf72c5a09bb6c018fe2ae0ab622e5830b703a46cc9e44/scipy-1.17.1-cp313-cp313t-win_amd64.whl", hash = "sha256:e30bdeaa5deed6bc27b4cc490823cd0347d7dae09119b8803ae576ea0ce52e4c", size = 36562980, upload-time = "2026-02-23T00:20:40.575Z" },
     { url = "https://files.pythonhosted.org/packages/70/b0/eb757336e5a76dfa7911f63252e3b7d1de00935d7705cf772db5b45ec238/scipy-1.17.1-cp313-cp313t-win_arm64.whl", hash = "sha256:a720477885a9d2411f94a93d16f9d89bad0f28ca23c3f8daa521e2dcc3f44d49", size = 24856543, upload-time = "2026-02-23T00:20:45.313Z" },
+]
+
+[[package]]
+name = "scverse-misc"
+version = "0.0.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "session-info2" },
+    { name = "typing-extensions", marker = "python_full_version < '3.13'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/f7/05/6123a4362e2810ef216f152e249a66799f9c37975dabf89b69abb2d68c42/scverse_misc-0.0.3.tar.gz", hash = "sha256:18c46eeeac8ccef8f435e41a8ee86173b3d7ef6ea1167fde97a17553f70d3210", size = 23128, upload-time = "2026-04-10T15:12:21.731Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/bd/3e/9dad188e00d08f5381b95dd1f8f7b1dc9eb244250d93fea3e9cb7d0e61f0/scverse_misc-0.0.3-py3-none-any.whl", hash = "sha256:295702368db8f5fe946b5296135990492b3fc891a45bd6dd27798775db4c61c6", size = 8845, upload-time = "2026-04-10T15:12:20.366Z" },
 ]
 
 [[package]]
