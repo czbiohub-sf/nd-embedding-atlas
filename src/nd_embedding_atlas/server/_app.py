@@ -302,16 +302,83 @@ def _assemble_app(
     app.include_router(make_scatter_router(get_state))
     app.include_router(make_var_router(get_state))
 
-    # Plate mounts
+    # ── Plate mounts ────────────────────────────────────────────────────
+    # Intercept zarr.json requests to strip OME coordinate translations.
+    # idetik has a rendering bug where non-zero translations cause black tiles.
+    # We serve modified metadata with translations zeroed out so tiles render
+    # at the array origin; the frontend handles world-space positioning via
+    # worldOrigin/worldScale from the original (unmodified) metadata that
+    # idetik still reads internally for dimension info.
+
+    import json as _json
+
+    from fastapi.responses import Response as _Response
+
+    def _strip_ome_translations(plate_dir: pathlib.Path):
+        """Register a route that intercepts zarr.json and zeros out translations."""
+        # Cache stripped metadata to avoid re-reading on every request
+        _cache: dict[str, bytes] = {}
+
+        def _strip(raw: bytes) -> bytes:
+            data = _json.loads(raw)
+            attrs = data.get("attributes", {})
+            ome = attrs.get("ome", {})
+            changed = False
+            for ms in ome.get("multiscales", []):
+                for ds in ms.get("datasets", []):
+                    ct_list = ds.get("coordinateTransformations", [])
+                    # Remove translation transforms entirely
+                    filtered = [ct for ct in ct_list if ct.get("type") != "translation"]
+                    if len(filtered) != len(ct_list):
+                        changed = True
+                    # Absolute-value negative scales — idetik can't handle negative
+                    # axis scales (negative z-scale is an OME axis direction hint,
+                    # not meaningful for tile positioning)
+                    for ct in filtered:
+                        if ct.get("type") == "scale":
+                            s = ct.get("scale", [])
+                            fixed = [abs(v) for v in s]
+                            if fixed != s:
+                                ct["scale"] = fixed
+                                changed = True
+                    ds["coordinateTransformations"] = filtered
+            if not changed:
+                return raw
+            return _json.dumps(data).encode()
+
+        return _strip, _cache
+
+    def _mount_plate_with_intercept(app_: FastAPI, prefix: str, plate_dir: pathlib.Path, mount_name: str):
+        _strip_fn, _cache = _strip_ome_translations(plate_dir)
+        # Capture plate_dir in a default arg to avoid closure issues
+        _plate_dir = plate_dir
+
+        @app_.get(f"{prefix}/{{path:path}}/zarr.json")
+        async def _serve_zarr_json(path: str, _pd: pathlib.Path = _plate_dir) -> _Response:
+            try:
+                full = _pd / path / "zarr.json"
+                if not full.exists():
+                    return _Response(status_code=404)
+                cache_key = str(full)
+                if cache_key not in _cache:
+                    _cache[cache_key] = _strip_fn(full.read_bytes())
+                return _Response(content=_cache[cache_key], media_type="application/json")
+            except Exception as exc:
+                import traceback
+                traceback.print_exc()
+                return _Response(content=str(exc), status_code=500)
+
+        app_.mount(prefix, StaticFiles(directory=str(plate_dir)), name=mount_name)
+
     if plate_path is not None:
-        app.mount("/plate", StaticFiles(directory=str(plate_path)), name="plate")
+        _mount_plate_with_intercept(app, "/plate", plate_path, "plate")
 
     if dataset_plates:
         first_mounted = False
         for _key, _ds_plate_path in dataset_plates.items():
-            app.mount(f"/plates/{_key}", StaticFiles(directory=str(_ds_plate_path)), name=f"plate_{_key}")
+            _mount_plate_with_intercept(app, f"/plates/{_key}", _ds_plate_path, f"plate_{_key}")
             if not first_mounted and plate_path is None:
-                app.mount("/plate", StaticFiles(directory=str(_ds_plate_path)), name="plate")
+                _mount_plate_with_intercept(app, "/plate", _ds_plate_path, "plate")
                 first_mounted = True
 
     if not no_static:

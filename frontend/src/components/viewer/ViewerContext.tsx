@@ -53,6 +53,10 @@ export interface ViewerState {
   zRange: [number, number] | null;
   /** Increments on runtime recreation (mode switch). Used by hooks to detect layer invalidation. */
   generation: number;
+  /** World-space origin of the current FOV from OME translation (µm). */
+  worldOrigin: { x: number; y: number };
+  /** World-space pixel scale from OME metadata (µm/px). Null means use backend pixel_scale. */
+  worldScale: { x: number; y: number } | null;
 }
 
 // ── Actions ──────────────────────────────────────────────────────────────────
@@ -77,6 +81,8 @@ export interface ViewerActions {
   setViewMode: (mode: ViewMode) => void;
   setZRange: (range: [number, number]) => void;
   setError: (error: string | null) => void;
+  setWorldOrigin: (origin: { x: number; y: number }) => void;
+  setWorldScale: (scale: { x: number; y: number } | null) => void;
   /** Pause the render loop (frees GPU frame budget for other WebGL canvases). */
   pause: () => void;
   /** Resume the render loop. */

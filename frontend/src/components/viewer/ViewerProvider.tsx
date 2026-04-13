@@ -87,7 +87,7 @@ export function ViewerProvider({ children, channelInstance = "docked" }: Props) 
   const cameraRef = useRef<OrthographicCamera | null>(null);
   const perspCameraRef = useRef<PerspectiveCamera | null>(null);
   const canvasElRef = useRef<HTMLCanvasElement | null>(null);
-  const layerMapRef = useRef<Map<string, LayerEntry>>(new Map());
+  const layerMapRef = useRef(new Map());
 
   // ── Reactive state ────────────────────────────────────────────────────
   const [trackedLayers, setTrackedLayers] = useState<TrackedLayer[]>([]);
@@ -100,6 +100,8 @@ export function ViewerProvider({ children, channelInstance = "docked" }: Props) 
   const [viewMode, setViewMode] = useState<ViewMode>("2d");
   const [zRange, setZRange] = useState<[number, number] | null>(null);
   const [generation, setGeneration] = useState(0);
+  const [worldOrigin, setWorldOrigin] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [worldScale, setWorldScale] = useState<{ x: number; y: number } | null>(null);
   const multiChannelRef = useRef<MultiChannelLayers | null>(null);
 
   const aggregateState = useMemo(() => computeAggregate(trackedLayers), [trackedLayers]);
@@ -294,8 +296,10 @@ export function ViewerProvider({ children, channelInstance = "docked" }: Props) 
       viewMode,
       zRange,
       generation,
+      worldOrigin,
+      worldScale,
     }),
-    [initialized, trackedLayers, aggregateState, zIndex, tIndex, bounds, error, channels, viewMode, zRange, generation],
+    [initialized, trackedLayers, aggregateState, zIndex, tIndex, bounds, error, channels, viewMode, zRange, generation, worldOrigin, worldScale],
   );
 
   const actions = useMemo(
@@ -311,6 +315,8 @@ export function ViewerProvider({ children, channelInstance = "docked" }: Props) 
       setViewMode,
       setZRange,
       setError,
+      setWorldOrigin,
+      setWorldScale,
       pause,
       resume,
     }),

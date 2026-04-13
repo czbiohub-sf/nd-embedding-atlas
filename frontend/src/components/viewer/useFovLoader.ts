@@ -17,10 +17,15 @@ import type { ChannelDef, ViewMode } from "./ViewerContext";
 // Keyed by sourceUrl; avoids re-fetching zarr metadata for recently-visited FOVs.
 
 /** Minimal interface for the idetik loader returned by OmeZarrImageSource.open(). */
+interface DimInfo {
+  lods: { size: number; scale?: number; translation?: number; offset?: number }[];
+}
 interface IdetikLoader {
   getSourceDimensionMap(): {
-    z?: { lods: { size: number }[] };
-    t?: { lods: { size: number }[] };
+    x?: DimInfo;
+    y?: DimInfo;
+    z?: DimInfo;
+    t?: DimInfo;
   };
 }
 
@@ -72,6 +77,8 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion }: UseFovLoa
   plateChsRef.current = plateChannels;
   const omeVersionRef = useRef(omeVersion);
   omeVersionRef.current = omeVersion;
+  const channelsRef = useRef(viewerState.channels);
+  channelsRef.current = viewerState.channels;
 
   // ── FOV caching refs ──────────────────────────────────────────────
   const currentFovRef = useRef<string | null>(null);
@@ -88,15 +95,6 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion }: UseFovLoa
 
   // ── Main FOV load effect ──────────────────────────────────────────
   useEffect(() => {
-    console.log("[useFovLoader] effect fired", {
-      sourceUrl,
-      initialized: viewerState.initialized,
-      viewMode,
-      generation: viewerState.generation,
-      currentFov: currentFovRef.current,
-      currentMode: currentModeRef.current,
-      currentGen: currentGenRef.current,
-    });
 
     if (!sourceUrl || !viewerState.initialized) return;
 
@@ -106,16 +104,13 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion }: UseFovLoa
       viewMode === currentModeRef.current &&
       viewerState.generation === currentGenRef.current
     ) {
-      console.log("[useFovLoader] early-exit (no structural change)");
       return;
     }
 
-    console.log("[useFovLoader] reloading", { sourceUrl, viewMode, generation: viewerState.generation });
 
     let cancelled = false;
 
     const loadLayers = async () => {
-      console.log("[useFovLoader] loadLayers started", sourceUrl);
       // Dispose previous MultiChannelLayers
       if (multiChannelRef.current) {
         multiChannelRef.current.dispose();
@@ -126,9 +121,10 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion }: UseFovLoa
       // Use cached source if available — avoids re-fetching zarr metadata
       let cached = SOURCE_CACHE.get(sourceUrl);
       if (!cached) {
+        const resolvedVersion = omeVersionRef.current ?? "0.4";
         const source = OmeZarrImageSource.fromHttp({
           url: sourceUrl,
-          version: omeVersionRef.current ?? "0.4",
+          version: resolvedVersion,
         });
         const [loader, omeroChannels] = await Promise.all([source.open(), loadOmeroChannels(source).catch(() => null)]);
         if (SOURCE_CACHE.size >= SOURCE_CACHE_MAX) {
@@ -137,9 +133,7 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion }: UseFovLoa
         }
         cached = { source, loader, omeroChannels };
         SOURCE_CACHE.set(sourceUrl, cached);
-        console.log("[useFovLoader] source cache miss — fetched metadata", sourceUrl);
       } else {
-        console.log("[useFovLoader] source cache hit", sourceUrl);
       }
       const { source, loader, omeroChannels } = cached;
 
@@ -150,21 +144,25 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion }: UseFovLoa
         const dims = loader.getSourceDimensionMap();
         const zMax = dims.z ? dims.z.lods[0].size - 1 : null;
         const tMax = dims.t ? dims.t.lods[0].size - 1 : null;
-        // Capture z scale/offset so sliceCoords getter can convert index → physical
-        // Capture scale/offset for index→physical conversion (idetik uses physical coords)
-        // idetik LOD types don't expose scale/translation but the runtime object has them
-        type LodWithPhysical = { size: number; scale?: number; translation?: number; offset?: number };
+        // Capture z/t scale/offset so sliceCoords getter can convert index → physical.
+        // Abs negative z-scale — idetik can't handle negative axis scales.
         if (dims.z) {
-          const lod0 = dims.z.lods[0] as LodWithPhysical;
-          zScaleRef.current = lod0.scale ?? 1;
+          const lod0 = dims.z.lods[0];
+          zScaleRef.current = Math.abs(lod0.scale ?? 1);
           zOffsetRef.current = lod0.translation ?? lod0.offset ?? 0;
         }
         if (dims.t) {
-          const lod0 = dims.t.lods[0] as LodWithPhysical;
+          const lod0 = dims.t.lods[0];
           tScaleRef.current = lod0.scale ?? 1;
           tOffsetRef.current = lod0.translation ?? lod0.offset ?? 0;
         }
-        console.log("[useFovLoader] setBounds", { zMax, tMax });
+        // Extract world-space origin from OME translation (idetik places image here)
+        const xTranslation = dims.x?.lods[0]?.translation ?? dims.x?.lods[0]?.offset ?? 0;
+        const yTranslation = dims.y?.lods[0]?.translation ?? dims.y?.lods[0]?.offset ?? 0;
+        const xScale = dims.x?.lods[0]?.scale ?? 0;
+        const yScale = dims.y?.lods[0]?.scale ?? 0;
+        actionsRef.current.setWorldOrigin({ x: xTranslation, y: yTranslation });
+        actionsRef.current.setWorldScale(xScale > 0 && yScale > 0 ? { x: xScale, y: yScale } : null);
         actionsRef.current.setBounds({ zMax, tMax });
       } catch (e) {
         console.warn("[useFovLoader] getSourceDimensionMap failed", e);
@@ -261,7 +259,6 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion }: UseFovLoa
 
       if (cancelled) return;
 
-      console.log("[useFovLoader] setLayers called", sourceUrl, performance.now().toFixed(1));
 
       // Commit refs
       currentFovRef.current = sourceUrl;
@@ -271,6 +268,7 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion }: UseFovLoa
       multiChannelRef.current = multiChannel;
 
       actionsRef.current.setLayers(layerEntries);
+
 
       // Build default channel state from source metadata
       const defaultChannelState: ChannelDef[] = channelDefs.map((ch, i) => {
@@ -289,7 +287,7 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion }: UseFovLoa
       // Preserve user's channel settings (visibility, contrast, blend) if the
       // channel lineup hasn't changed (same count + labels). This keeps
       // user adjustments stable when clicking between observations in the same plate.
-      const existing = viewerState.channels;
+      const existing = channelsRef.current;
       const canReuse =
         existing.length === defaultChannelState.length &&
         existing.every((ch, i) => ch.label === defaultChannelState[i].label);
@@ -319,10 +317,9 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion }: UseFovLoa
     });
 
     return () => {
-      console.log("[useFovLoader] cleanup — cancelling", sourceUrl);
       cancelled = true;
     };
-  }, [sourceUrl, viewerState.initialized, viewMode, viewerState.generation, safeContrastLimits, viewerState.channels]);
+  }, [sourceUrl, viewerState.initialized, viewMode, viewerState.generation, safeContrastLimits]);
 
   // ── Cleanup on unmount ─────────────────────────────────────────────
   useEffect(() => {

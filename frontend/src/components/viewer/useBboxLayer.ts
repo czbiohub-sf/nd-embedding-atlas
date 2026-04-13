@@ -7,6 +7,7 @@ type BboxPath = [number, number, number][];
 interface UseBboxLayerOptions {
   viewport: Viewport | null;
   scale: { x: number; y: number };
+  worldOrigin?: { x: number; y: number };
 }
 
 interface UseBboxLayerReturn {
@@ -20,8 +21,10 @@ interface UseBboxLayerReturn {
  */
 const LINE_WIDTH_NDC = 0.01;
 
-export function useBboxLayer({ viewport, scale }: UseBboxLayerOptions): UseBboxLayerReturn {
+export function useBboxLayer({ viewport, scale, worldOrigin }: UseBboxLayerOptions): UseBboxLayerReturn {
   const bboxRef = useRef<Layer | null>(null);
+  const ox = worldOrigin?.x ?? 0;
+  const oy = worldOrigin?.y ?? 0;
 
   const updateBbox = useCallback(
     (cx: number, cy: number, half: number, explicitBbox?: ObsBbox) => {
@@ -36,15 +39,15 @@ export function useBboxLayer({ viewport, scale }: UseBboxLayerOptions): UseBboxL
       if (explicitBbox) {
         const { y_min, x_min, y_max, x_max } = explicitBbox;
         path = [
-          [x_min * scale.x, y_min * scale.y, 0],
-          [x_max * scale.x, y_min * scale.y, 0],
-          [x_max * scale.x, y_max * scale.y, 0],
-          [x_min * scale.x, y_max * scale.y, 0],
-          [x_min * scale.x, y_min * scale.y, 0],
+          [ox + x_min * scale.x, oy + y_min * scale.y, 0],
+          [ox + x_max * scale.x, oy + y_min * scale.y, 0],
+          [ox + x_max * scale.x, oy + y_max * scale.y, 0],
+          [ox + x_min * scale.x, oy + y_max * scale.y, 0],
+          [ox + x_min * scale.x, oy + y_min * scale.y, 0],
         ];
       } else {
-        const sx = cx * scale.x;
-        const sy = cy * scale.y;
+        const sx = ox + cx * scale.x;
+        const sy = oy + cy * scale.y;
         const hx = half * scale.x;
         const hy = half * scale.y;
         path = [
@@ -71,7 +74,7 @@ export function useBboxLayer({ viewport, scale }: UseBboxLayerOptions): UseBboxL
       viewport.layerManager.add(bbox);
       bboxRef.current = bbox;
     },
-    [viewport, scale.x, scale.y],
+    [viewport, scale.x, scale.y, ox, oy],
   );
 
   useEffect(() => {
