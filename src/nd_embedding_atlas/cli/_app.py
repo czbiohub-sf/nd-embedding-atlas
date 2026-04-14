@@ -14,16 +14,23 @@ app = typer.Typer(
 )
 
 
+def _is_mudata(p: Path) -> bool:
+    """Check if a path is a MuData store (.h5mu file or .zarr with mod/)."""
+    from nd_embedding_atlas.io._mudata import is_mudata
+
+    return is_mudata(p)
+
+
 def _is_anndata(p: Path) -> bool:
     """Check if a path is an AnnData store (.h5ad file or .zarr with obs/)."""
     if p.is_file() and p.suffix == ".h5ad":
         return True
-    return p.is_dir() and p.suffix == ".zarr" and (p / "obs").is_dir()
+    return p.is_dir() and p.suffix == ".zarr" and (p / "obs").is_dir() and not (p / "mod").is_dir()
 
 
 def _is_ome_zarr(p: Path) -> bool:
     """Check if a path is an OME-Zarr store (.zarr without obs/)."""
-    return p.is_dir() and p.suffix == ".zarr" and not (p / "obs").is_dir()
+    return p.is_dir() and p.suffix == ".zarr" and not (p / "obs").is_dir() and not (p / "mod").is_dir()
 
 
 def _resolve_anndata(paths: list[Path]) -> list[Path]:
@@ -96,6 +103,25 @@ def view(
 
         view_project(
             resolved_first,
+            export_dir=export_dir,
+            duckdb_threads=duckdb_threads,
+            pool_workers=pool_workers,
+            host=host,
+            port=port,
+            no_static=no_static,
+        )
+        return
+
+    # MuData detection — must come before AnnData classification since MuData
+    # zarrs also have obs/ but are distinguished by the mod/ group.
+    mudata_paths = [p.resolve() for p in paths if _is_mudata(p.resolve())]
+    if mudata_paths:
+        from nd_embedding_atlas.cli._mudata import view_mudata
+
+        ome_paths = [p.resolve() for p in paths if _is_ome_zarr(p.resolve())]
+        view_mudata(
+            mudata_paths[0],
+            ome_zarr=ome_paths[0] if ome_paths else None,
             export_dir=export_dir,
             duckdb_threads=duckdb_threads,
             pool_workers=pool_workers,

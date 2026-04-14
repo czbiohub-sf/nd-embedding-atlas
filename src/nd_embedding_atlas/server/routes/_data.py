@@ -8,16 +8,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 
 from nd_embedding_atlas._server import build_parquet_bytes, get_package_version
+from nd_embedding_atlas.io._mudata import MuDataSource
 from nd_embedding_atlas.server._state import DatasetConfig, ViewerState
 from nd_embedding_atlas.vz._prepare import _obsm_column_prefix
-
-
-def _safe_var_count(collection: "Any") -> int:  # type: ignore[type-arg]
-    """Return var count without triggering ad.concat on lazy multi-dataset collections."""
-    try:
-        return len(collection.var_names)
-    except Exception:  # noqa: BLE001
-        return 0
 
 
 def _build_obsm_metadata(state: ViewerState) -> dict[str, Any]:
@@ -27,9 +20,14 @@ def _build_obsm_metadata(state: ViewerState) -> dict[str, Any]:
         prefix = _obsm_column_prefix(key)
         if key in state.store.loaded_embeddings:
             info = state.store.loaded_embeddings[key]
-            meta[key] = {"prefix": prefix, "n_dims": info["n_dims"], "loaded": True}
+            entry: dict[str, Any] = {"prefix": prefix, "n_dims": info["n_dims"], "loaded": True}
         else:
-            meta[key] = {"prefix": prefix, "n_dims": None, "loaded": False}
+            entry = {"prefix": prefix, "n_dims": None, "loaded": False}
+        # Tag modality for MuData keys with "modality:obsm_key" format
+        if ":" in key:
+            mod, _, _obsm_key = key.partition(":")
+            entry["modality"] = mod
+        meta[key] = entry
     return meta
 
 
@@ -69,10 +67,13 @@ def make_data_router(get_state: Callable[[], ViewerState], config: DatasetConfig
 
     @router.get("/data/metadata.json")
     async def get_metadata(state: State) -> dict:
-        try:
-            layer_keys = list(state.collection._concat.layers.keys())
-        except Exception:  # noqa: BLE001
-            layer_keys = []
+        layer_keys: list[str] = []
+        collection = state.collection
+        if collection is not None:
+            try:
+                layer_keys = list(collection._concat.layers.keys())
+            except Exception:  # noqa: BLE001
+                pass
 
         result: dict = {
             "version": get_package_version(),
@@ -82,9 +83,13 @@ def make_data_router(get_state: Callable[[], ViewerState], config: DatasetConfig
             "obs_columns": config.obs_column_names,
             "plate": config.has_plate,
             "export_dir": str(state.export_dir),
-            "var_count": _safe_var_count(state.collection),
+            "var_count": state.source.n_vars,
             "layers": ["X", *layer_keys],
         }
+        if isinstance(state.source, MuDataSource):
+            result["modalities"] = state.source.modalities
+            result["var_count"] = dict(state.source.var_counts)
+            result["modality_obs_columns"] = dict(state.source.obs_columns_by_modality)
         if config.plate_meta:
             result.update(config.plate_meta)
         if config.dataset_keys is not None:
@@ -104,6 +109,7 @@ def make_data_router(get_state: Callable[[], ViewerState], config: DatasetConfig
         result["spatial"] = {
             "fov_col": state.spatial.fov,
             "t_col": state.spatial.t,
+            "z_col": state.spatial.z,
             "bbox_col": state.spatial.bbox,
             "x_col": state.spatial.x,
             "y_col": state.spatial.y,

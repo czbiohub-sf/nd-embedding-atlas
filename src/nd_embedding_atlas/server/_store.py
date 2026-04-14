@@ -105,9 +105,10 @@ class EmbeddingStore:
             table_name = f"emb_{prefix}"
             n_dims = coords.shape[1]
 
-            df = pd.DataFrame({"__row_index__": np.arange(coords.shape[0], dtype=np.int64)})
-            for i in range(n_dims):
-                df[f"{prefix}_{i}"] = np.asarray(coords[:, i], dtype=np.float32)
+            df = pd.DataFrame(
+                {"__row_index__": np.arange(coords.shape[0], dtype=np.int64)}
+                | {f"{prefix}_{i}": np.asarray(coords[:, i], dtype=np.float32) for i in range(n_dims)}
+            )
 
             _ = df  # prevent GC — DuckDB scans local Python objects by name
             self.con.sql(f"CREATE TABLE {table_name} AS (SELECT * FROM df)")

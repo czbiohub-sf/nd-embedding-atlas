@@ -1,10 +1,12 @@
 /**
  * PointInfoPane — selected point metadata card.
- * Positioned as a canvas overlay; renders when a point is clicked.
+ * Draggable overlay positioned on the scatter canvas, using the same
+ * useDrag hook as FloatingWindow for consistent drag behavior.
  */
 
-import { Waypoints } from "lucide-react";
+import { GripHorizontal, Waypoints } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useDrag } from "../../hooks/useDrag";
 import { jsonFetcher } from "../../lib/fetcher";
 import { cn } from "../../lib/utils";
 import { Separator } from "../ui/separator";
@@ -25,6 +27,12 @@ export function PointInfoPane({
   onClearTrajectory,
 }: PointInfoPaneProps) {
   const [row, setRow] = useState<Record<string, string | null> | null>(null);
+  const [pos, setPos] = useState({ x: 0, y: 0 });
+
+  const drag = useDrag<{ originX: number; originY: number }>({
+    onMove: (dx, dy, origin) => setPos({ x: origin.originX + dx, y: origin.originY + dy }),
+    skipInteractive: true,
+  });
 
   useEffect(() => {
     if (!highlightId) {
@@ -43,6 +51,11 @@ export function PointInfoPane({
     };
   }, [highlightId]);
 
+  // Reset position when a new point is selected
+  useEffect(() => {
+    setPos({ x: 0, y: 0 });
+  }, [highlightId]);
+
   if (!highlightId || !row) return null;
 
   const fields = [...additionalFields];
@@ -52,14 +65,24 @@ export function PointInfoPane({
 
   return (
     <div
+      style={{ transform: `translate(${pos.x}px, ${pos.y}px)` }}
       className={cn(
         "rounded-lg border border-white/[0.07] bg-card/80 backdrop-blur-md",
         "min-w-[160px] max-w-[220px] p-2.5 shadow-md",
         "font-mono text-[11px]",
+        "select-none",
       )}
     >
-      {/* Header */}
-      <p className="mb-1.5 font-sans font-semibold text-[9px] text-muted-foreground uppercase tracking-widest">Point</p>
+      {/* Drag handle + header */}
+      <div
+        className="mb-1.5 flex cursor-grab items-center gap-1 active:cursor-grabbing"
+        onPointerDown={(e) => drag.start(e, { originX: pos.x, originY: pos.y })}
+      >
+        <GripHorizontal className="size-3 shrink-0 text-muted-foreground/30" />
+        <p className="flex-1 font-sans font-semibold text-[9px] text-muted-foreground uppercase tracking-widest">
+          Point
+        </p>
+      </div>
       <Separator className="mb-1.5 opacity-40" />
 
       {/* Key–value rows */}

@@ -22,12 +22,6 @@ export interface SortState {
   direction: SortDirection;
 }
 
-interface PageEntry {
-  rows: Row[];
-  lastAccessed: number;
-  cacheKey: string;
-}
-
 export interface UseTableQueryOptions {
   coordinator: Coordinator;
   table: string;
@@ -55,8 +49,8 @@ export function useTableQuery(opts: UseTableQueryOptions): UseTableQueryResult {
   const { coordinator, table, columns, selection, sort } = opts;
 
   // ── Page cache ──────────────────────────────────────────────────
-  const pagesRef = useRef<Map<number, PageEntry>>(new Map());
-  const pendingRef = useRef<Set<number>>(new Set());
+  const pagesRef = useRef(new Map());
+  const pendingRef = useRef(new Set());
   const activeCacheKeyRef = useRef("");
   const [, forceUpdate] = useState(0);
   const [_filterVersion, setFilterVersion] = useState(0);

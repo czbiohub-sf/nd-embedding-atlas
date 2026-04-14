@@ -16,7 +16,7 @@ brew install gh && gh auth login   # macOS; see https://cli.github.com for other
 
 **2. Download and install nd-embedding-atlas:**
 ```bash
-gh release download --repo czbiohub-sf/nd-embedding-atlas \
+gh release download v0.0.4 --repo czbiohub-sf/nd-embedding-atlas \
   -p "nd_embedding_atlas-*.whl" -D /tmp/ndea/
 uv tool install /tmp/ndea/nd_embedding_atlas-*.whl
 ```
@@ -36,7 +36,7 @@ Then open **Chrome or Edge** at `http://localhost:5055`.
 ## Upgrade
 
 ```bash
-gh release download --repo czbiohub-sf/nd-embedding-atlas \
+gh release download v0.0.4 --repo czbiohub-sf/nd-embedding-atlas \
   -p "nd_embedding_atlas-*.whl" -D /tmp/ndea/
 uv tool install /tmp/ndea/nd_embedding_atlas-*.whl --force
 ```

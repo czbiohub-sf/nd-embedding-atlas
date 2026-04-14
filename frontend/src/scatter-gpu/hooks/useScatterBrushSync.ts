@@ -57,7 +57,7 @@ export function useScatterBrushSync({
   setSelection,
 }: UseScatterBrushSyncOptions): UseScatterBrushSyncResult {
   // Stable ref to capture myPanelId for use inside throttler/debouncer callbacks
-  const panelIdRef = useRef<PanelId>(myPanelId);
+  const panelIdRef = useRef(myPanelId);
   panelIdRef.current = myPanelId;
 
   // ── Live + debounced activeFilterStore update ─────────────────────────────

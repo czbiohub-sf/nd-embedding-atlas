@@ -1328,6 +1328,24 @@ wheels = [
 ]
 
 [[package]]
+name = "mudata"
+version = "0.3.4"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "anndata" },
+    { name = "h5py" },
+    { name = "numpy" },
+    { name = "pandas" },
+    { name = "scipy" },
+    { name = "scverse-misc" },
+    { name = "session-info2" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/2c/d9/17d2220c1e68198adb030433e353c86c531295bf971a35490b79ad908154/mudata-0.3.4.tar.gz", hash = "sha256:36ac8c58bd1869c2dd865caa8dfad6811ddc23b522a239ae534b328fcd4357d4", size = 327150, upload-time = "2026-04-10T15:54:59.464Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/6a/ee/ae7614fdafdf5f9a4cf7f71d1c6d5ea7478580c9b7b6491d56eaa5ef8130/mudata-0.3.4-py3-none-any.whl", hash = "sha256:5c16316155538cab7b4c0c56eb91e22b5aca9150351d18a3eb14837fd8a2f768", size = 43371, upload-time = "2026-04-10T15:54:58.137Z" },
+]
+
+[[package]]
 name = "multidict"
 version = "6.7.1"
 source = { registry = "https://pypi.org/simple" }
@@ -1411,12 +1429,14 @@ dependencies = [
     { name = "fastapi" },
     { name = "gunicorn" },
     { name = "iohub" },
+    { name = "mudata" },
     { name = "obstore" },
     { name = "pyarrow" },
     { name = "pyyaml" },
     { name = "rich" },
     { name = "scanpy" },
     { name = "session-info2" },
+    { name = "sse-starlette" },
     { name = "structlog" },
     { name = "typer" },
     { name = "uvicorn" },
@@ -1463,12 +1483,14 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.128" },
     { name = "gunicorn", specifier = ">=25" },
     { name = "iohub", git = "https://github.com/czbiohub-sf/iohub?branch=main" },
+    { name = "mudata", specifier = ">=0.3.4" },
     { name = "obstore", specifier = ">=0.8.2" },
     { name = "pyarrow", specifier = ">=18" },
     { name = "pyyaml", specifier = ">=6" },
     { name = "rich", specifier = ">=14.3.1" },
     { name = "scanpy", specifier = ">=1.11.5" },
     { name = "session-info2" },
+    { name = "sse-starlette", specifier = ">=3.3.4" },
     { name = "structlog", specifier = ">=25.5" },
     { name = "typer", specifier = ">=0.21.1" },
     { name = "uvicorn", specifier = ">=0.34" },
@@ -2486,6 +2508,19 @@ wheels = [
 ]
 
 [[package]]
+name = "scverse-misc"
+version = "0.0.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "session-info2" },
+    { name = "typing-extensions", marker = "python_full_version < '3.13'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/f7/05/6123a4362e2810ef216f152e249a66799f9c37975dabf89b69abb2d68c42/scverse_misc-0.0.3.tar.gz", hash = "sha256:18c46eeeac8ccef8f435e41a8ee86173b3d7ef6ea1167fde97a17553f70d3210", size = 23128, upload-time = "2026-04-10T15:12:21.731Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/bd/3e/9dad188e00d08f5381b95dd1f8f7b1dc9eb244250d93fea3e9cb7d0e61f0/scverse_misc-0.0.3-py3-none-any.whl", hash = "sha256:295702368db8f5fe946b5296135990492b3fc891a45bd6dd27798775db4c61c6", size = 8845, upload-time = "2026-04-10T15:12:20.366Z" },
+]
+
+[[package]]
 name = "seaborn"
 version = "0.13.2"
 source = { registry = "https://pypi.org/simple" }
@@ -2533,6 +2568,19 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/e8/c4/ba2f8066cceb6f23394729afe52f3bf7adec04bf9ed2c820b39e19299111/sortedcontainers-2.4.0.tar.gz", hash = "sha256:25caa5a06cc30b6b83d11423433f65d1f9d76c4c6a0c90e3379eaa43b9bfdb88", size = 30594, upload-time = "2021-05-16T22:03:42.897Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/32/46/9cb0e58b2deb7f82b84065f37f3bffeb12413f947f9388e4cac22c4621ce/sortedcontainers-2.4.0-py2.py3-none-any.whl", hash = "sha256:a163dcaede0f1c021485e957a39245190e74249897e2ae4b2aa38595db237ee0", size = 29575, upload-time = "2021-05-16T22:03:41.177Z" },
+]
+
+[[package]]
+name = "sse-starlette"
+version = "3.3.4"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "anyio" },
+    { name = "starlette" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/26/8c/f9290339ef6d79badbc010f067cd769d6601ec11a57d78569c683fb4dd87/sse_starlette-3.3.4.tar.gz", hash = "sha256:aaf92fc067af8a5427192895ac028e947b484ac01edbc3caf00e7e7137c7bef1", size = 32427, upload-time = "2026-03-29T09:00:23.307Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f8/7f/3de5402f39890ac5660b86bcf5c03f9d855dad5c4ed764866d7b592b46fd/sse_starlette-3.3.4-py3-none-any.whl", hash = "sha256:84bb06e58939a8b38d8341f1bc9792f06c2b53f48c608dd207582b664fc8f3c1", size = 14330, upload-time = "2026-03-29T09:00:21.846Z" },
 ]
 
 [[package]]

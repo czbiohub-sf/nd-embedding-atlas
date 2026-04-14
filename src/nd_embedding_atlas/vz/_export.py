@@ -1,4 +1,4 @@
-"""Export a subset of an AnnDataCollection to zarr v3 with sharding."""
+"""Export a subset of an DatasetCollection to zarr v3 with sharding."""
 
 from __future__ import annotations
 
@@ -10,11 +10,11 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 if TYPE_CHECKING:
-    from nd_embedding_atlas.io import AnnDataCollection
+    from nd_embedding_atlas.io import DatasetCollection
 
 
 def export_subset(
-    collection: AnnDataCollection,
+    collection: DatasetCollection,
     indices: np.ndarray,
     output_path: Path,
     *,
@@ -26,7 +26,7 @@ def export_subset(
     Parameters
     ----------
     collection
-        The source AnnDataCollection.
+        The source DatasetCollection.
     indices
         Integer row indices into the concatenated collection.
     output_path

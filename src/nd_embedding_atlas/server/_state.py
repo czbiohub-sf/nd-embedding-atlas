@@ -8,7 +8,8 @@ import pathlib
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from nd_embedding_atlas.io import AnnDataCollection
+    from nd_embedding_atlas.io import DatasetCollection
+    from nd_embedding_atlas.io._protocol import DataSource
     from nd_embedding_atlas.server._store import EmbeddingStore
 
 
@@ -18,6 +19,7 @@ class SpatialColumns:
 
     fov: str | None = None
     t: str | None = None
+    z: str | None = None
     bbox: str | None = None
     x: str | None = None
     y: str | None = None
@@ -30,7 +32,7 @@ class SpatialColumns:
     @property
     def all_columns(self) -> set[str]:
         """All non-None spatial column names."""
-        return {c for c in [self.fov, self.t, self.bbox, self.x, self.y] if c is not None}
+        return {c for c in [self.fov, self.t, self.z, self.bbox, self.x, self.y] if c is not None}
 
 
 @dataclasses.dataclass(frozen=True)
@@ -61,14 +63,16 @@ class ExportTaskState:
 
 
 @dataclasses.dataclass
-class GeneTaskState:
-    """Typed state for a single gene-column materialization task."""
+class VarTaskState:
+    """Typed state for a single var-column materialization task."""
 
     task_id: str
     task: asyncio.Task[None]
     status: str = "loading"  # "loading" | "ready" | "error"
     column: str = ""
     error: str | None = None
+    vmin: float | None = None
+    vmax: float | None = None
 
 
 class ViewerState:
@@ -77,7 +81,7 @@ class ViewerState:
     Parameters
     ----------
     collection
-        The AnnDataCollection being served.
+        The DatasetCollection being served.
     store
         Initialized EmbeddingStore (obs already loaded into DuckDB).
     available_obsm_keys
@@ -92,7 +96,7 @@ class ViewerState:
 
     def __init__(
         self,
-        collection: AnnDataCollection,
+        source: DataSource,
         store: EmbeddingStore,
         *,
         available_obsm_keys: list[str],
@@ -103,7 +107,7 @@ class ViewerState:
         dataset_pixel_scales: dict[str, dict[str, float]] | None = None,
         project_config_path: pathlib.Path | None = None,
     ) -> None:
-        self.collection = collection
+        self.source: DataSource = source
         self.store = store
         self.available_obsm_keys = available_obsm_keys
         self.spatial = spatial
@@ -117,7 +121,14 @@ class ViewerState:
         self.load_errors: dict[str, str] = {}
         self.parquet_cache: bytes | None = None
         self.export_task: ExportTaskState | None = None
-        self.gene_tasks: dict[str, GeneTaskState] = {}
+        self.var_tasks: dict[str, VarTaskState] = {}
+
+    @property
+    def collection(self) -> DatasetCollection | None:
+        """Return the DatasetCollection if source is one, else None."""
+        from nd_embedding_atlas.io import DatasetCollection
+
+        return self.source if isinstance(self.source, DatasetCollection) else None
 
     @property
     def executor(self):

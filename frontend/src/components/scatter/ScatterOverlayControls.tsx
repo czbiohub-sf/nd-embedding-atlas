@@ -55,6 +55,8 @@ import type { ColorMode } from "../../scatter-gpu/hooks/useMosaicScatterData";
 import { addFloatingScatter } from "../../stores/FloatingScatterStore";
 import { toggleViewLock, viewSyncStore } from "../../stores/ViewSyncStore";
 import type { AxisState } from "../../types";
+import { EmbeddingPicker } from "../mudata/EmbeddingPicker";
+import { ModalityColorPicker } from "../mudata/ModalityColorPicker";
 import { ColorSourcePicker } from "../scatter/ColorSourcePicker";
 import { ButtonGroup } from "../ui/button-group";
 import { Combobox, type ComboboxOption } from "../ui/combobox";
@@ -80,6 +82,14 @@ interface Props {
   hasVar: boolean;
   onSetColorSource: (src: ColorSource) => void;
   onToggleColorMode: () => void;
+
+  // MuData modality support (all optional — absent for single AnnData)
+  modalities?: string[];
+  modalityObsColumns?: Record<string, string[]>;
+  varCount?: number | Record<string, number>;
+  activeEmbeddingKey?: string;
+  /** Full obsm metadata — used by modality-grouped EmbeddingPicker */
+  obsm?: Record<string, { prefix: string; n_dims?: number | null; loaded: boolean; modality?: string }>;
 
   // Selection tool
   selectionTool: "pan" | "marquee" | "lasso";
@@ -118,6 +128,11 @@ export function ScatterOverlayControls({
   hasVar,
   onSetColorSource,
   onToggleColorMode,
+  modalities,
+  modalityObsColumns,
+  varCount,
+  activeEmbeddingKey,
+  obsm,
   selectionTool,
   onSetSelectionTool,
   onFitView,
@@ -147,16 +162,24 @@ export function ScatterOverlayControls({
       {/* ── Top-left: embedding + dims + color ── */}
       <div className={cn("absolute top-2 left-2 z-20 flex items-center gap-1 px-2 py-1", glass)}>
         {/* Embedding */}
-        <Combobox
-          value={axes.obsmKey}
-          onValueChange={(v) => v && onSetAxes({ obsmKey: v, xDim: 0, yDim: 1 })}
-          options={embeddingOptions}
-          placeholder="embedding"
-          searchPlaceholder="Search embeddings…"
-          disabled={disabled}
-          triggerClassName={cn(glassTrigger, "max-w-32")}
-          contentClassName="w-48"
-        />
+        {modalities && obsm ? (
+          <EmbeddingPicker
+            obsm={obsm}
+            activeKey={axes.obsmKey}
+            onSelect={(v) => onSetAxes({ obsmKey: v, xDim: 0, yDim: 1 })}
+          />
+        ) : (
+          <Combobox
+            value={axes.obsmKey}
+            onValueChange={(v) => v && onSetAxes({ obsmKey: v, xDim: 0, yDim: 1 })}
+            options={embeddingOptions}
+            placeholder="embedding"
+            searchPlaceholder="Search embeddings…"
+            disabled={disabled}
+            triggerClassName={cn(glassTrigger, "max-w-32")}
+            contentClassName="w-48"
+          />
+        )}
 
         <Separator orientation="vertical" className="h-3 bg-white/[0.07]" />
 
@@ -190,14 +213,27 @@ export function ScatterOverlayControls({
 
         {/* Color column */}
         <span className="text-[10px] text-muted-foreground/60 uppercase tracking-wide">col</span>
-        <ColorSourcePicker
-          colorSource={colorSource}
-          obsColumns={obsColumns}
-          hasVar={hasVar}
-          onSetColorSource={onSetColorSource}
-          triggerClassName={cn(glassTrigger, "max-w-36")}
-          contentClassName="w-64"
-        />
+        {modalities && modalities.length > 0 ? (
+          <ModalityColorPicker
+            colorSource={colorSource}
+            onSetColorSource={onSetColorSource}
+            obsColumns={obsColumns}
+            modalityObsColumns={modalityObsColumns}
+            modalities={modalities}
+            varCount={varCount}
+            activeEmbeddingKey={activeEmbeddingKey}
+            triggerClassName={cn(glassTrigger, "max-w-36")}
+          />
+        ) : (
+          <ColorSourcePicker
+            colorSource={colorSource}
+            obsColumns={obsColumns}
+            hasVar={hasVar}
+            onSetColorSource={onSetColorSource}
+            triggerClassName={cn(glassTrigger, "max-w-36")}
+            contentClassName="w-64"
+          />
+        )}
 
         {colorModeCanToggle && (
           <>

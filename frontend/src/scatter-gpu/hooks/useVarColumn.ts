@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type VarColumnStatus = "idle" | "loading" | "ready" | "error";
 
@@ -9,30 +9,32 @@ interface VarColumnState {
 }
 
 export interface VarColumnResult {
-  materialize: (gene: string, layer: string) => void;
+  materialize: (varName: string, layer: string, modality?: string) => void;
   status: VarColumnStatus;
   column: string | null;
   error: string | null;
-}
-
-interface TaskStatusResponse {
-  status: "pending" | "running" | "ready" | "error";
-  column?: string;
-  error?: string;
 }
 
 interface PostVarColumnResponse {
   task_id: string;
 }
 
+interface SseVarStatusEvent {
+  status: "loading" | "ready" | "error";
+  column?: string;
+  vmin?: number;
+  vmax?: number;
+  error?: string;
+}
+
 /**
- * Materializes a gene expression column in DuckDB on demand.
+ * Materializes a var (gene/feature) expression column in DuckDB on demand.
  *
  * Flow:
- *   POST /api/gene-column { gene, layer }
- *   → poll GET /api/gene-column/{task_id}/status every 800ms
- *   → on status="ready": set column
- *   → on status="error": set error
+ *   POST /api/var-column { gene, layer }
+ *   -> open SSE stream GET /api/var-column/{task_id}/stream
+ *   -> on status="ready": set column
+ *   -> on status="error": set error
  */
 interface UseVarColumnOptions {
   /** Called with a status message when loading starts/ends — use to update the bottom bar. */
@@ -49,74 +51,97 @@ export function useVarColumn(options?: UseVarColumnOptions): VarColumnResult {
     error: null,
   });
 
-  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const eventSourceRef = useRef<EventSource | null>(null);
+  const generationRef = useRef(0);
 
-  const stopPolling = useCallback(() => {
-    if (pollIntervalRef.current !== null) {
-      clearInterval(pollIntervalRef.current);
-      pollIntervalRef.current = null;
+  const closeStream = useCallback(() => {
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
     }
   }, []);
 
+  // Clean up on unmount
+  useEffect(() => closeStream, [closeStream]);
+
   const materialize = useCallback(
-    (gene: string, layer: string) => {
-      stopPolling();
+    (varName: string, layer: string, modality?: string) => {
+      // Tear down any previous stream
+      closeStream();
       setState({ status: "loading", column: null, error: null });
-      onStatusRef.current?.(`Materializing ${gene}…`);
+      onStatusRef.current?.(`Materializing ${varName}…`);
+
+      const gen = ++generationRef.current;
 
       const run = async () => {
         let taskId: string;
         try {
-          const res = await fetch("/api/gene-column", {
+          const body: Record<string, string> = { gene: varName, layer };
+          if (modality) body.modality = modality;
+          const res = await fetch("/api/var-column", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ gene, layer }),
+            body: JSON.stringify(body),
           });
           if (!res.ok) {
             const text = await res.text();
             setState({ status: "error", column: null, error: text });
+            onStatusRef.current?.(null);
             return;
           }
           const data = (await res.json()) as PostVarColumnResponse;
           taskId = data.task_id;
         } catch (err) {
           setState({ status: "error", column: null, error: String(err) });
+          onStatusRef.current?.(null);
           return;
         }
 
-        // eslint-disable-next-line no-misused-promises
-        pollIntervalRef.current = setInterval(async () => {
+        // Superseded by a newer call — don't open EventSource
+        if (gen !== generationRef.current) return;
+
+        // Open SSE stream for status updates
+        const es = new EventSource(`/api/var-column/${taskId}/stream`);
+        eventSourceRef.current = es;
+
+        es.addEventListener("status", (evt: MessageEvent) => {
+          let data: SseVarStatusEvent;
           try {
-            const res = await fetch(`/api/gene-column/${taskId}/status`);
-            if (!res.ok) {
-              stopPolling();
-              setState({ status: "error", column: null, error: `Poll failed: ${res.status}` });
-              return;
-            }
-            const data = (await res.json()) as TaskStatusResponse;
-            if (data.status === "ready") {
-              stopPolling();
-              setState({ status: "ready", column: data.column ?? null, error: null });
-              onStatusRef.current?.(null);
-            } else if (data.status === "error") {
-              stopPolling();
-              setState({ status: "error", column: null, error: data.error ?? "Unknown error" });
-              onStatusRef.current?.(null);
-            }
-            // "pending" | "running" → keep polling
-          } catch (err) {
-            stopPolling();
-            setState({ status: "error", column: null, error: String(err) });
+            data = JSON.parse(evt.data) as SseVarStatusEvent;
+          } catch {
+            es.close();
+            eventSourceRef.current = null;
+            setState({ status: "error", column: null, error: "Malformed SSE data" });
+            onStatusRef.current?.(null);
+            return;
+          }
+          if (data.status === "ready") {
+            es.close();
+            eventSourceRef.current = null;
+            setState({ status: "ready", column: data.column ?? null, error: null });
+            onStatusRef.current?.(null);
+          } else if (data.status === "error") {
+            es.close();
+            eventSourceRef.current = null;
+            setState({ status: "error", column: null, error: data.error ?? "Unknown error" });
             onStatusRef.current?.(null);
           }
-        }, 800);
+        });
+
+        es.addEventListener("error", () => {
+          es.close();
+          eventSourceRef.current = null;
+          setState({ status: "error", column: null, error: "SSE connection failed" });
+          onStatusRef.current?.(null);
+        });
       };
 
       run().catch((err) => {
         setState({ status: "error", column: null, error: String(err) });
+        onStatusRef.current?.(null);
       });
     },
-    [stopPolling],
+    [closeStream],
   );
 
   return {

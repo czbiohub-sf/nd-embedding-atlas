@@ -27,31 +27,33 @@ export function useGalleryCropQuery({ fovName, datasetKey, frame, channels, hash
   return useQuery<string>({
     queryKey: ["crop", fovName, frame.t ?? null, hash],
     queryFn: async ({ signal }) => {
-      // Resolve FOV-local pixel coordinates.
+      // Resolve FOV-local pixel coordinates + z slice.
       // Prefer pre-populated cache (from batch prefetch in TrackGallery);
       // fall back to individual obs fetch if not yet cached.
       let xPx = 0;
       let yPx = 0;
+      let zIdx = 0;
       if (frame.rowIndex != null) {
-        const cached = queryClient.getQueryData<{ x: number; y: number }>(obsCoordKey(frame.rowIndex));
+        const cached = queryClient.getQueryData<{ x: number; y: number; z?: number }>(obsCoordKey(frame.rowIndex));
         if (cached) {
           xPx = Math.round(cached.x);
           yPx = Math.round(cached.y);
+          zIdx = cached.z ?? 0;
         } else {
           const obsR = await fetch(`/api/obs/${frame.rowIndex}`, { signal });
           if (obsR.ok) {
-            const obs = (await obsR.json()) as { x?: number; y?: number };
+            const obs = (await obsR.json()) as { x?: number; y?: number; z?: number };
             xPx = Math.round(obs.x ?? 0);
             yPx = Math.round(obs.y ?? 0);
-            // Populate cache so subsequent renders skip the fetch
-            queryClient.setQueryData(obsCoordKey(frame.rowIndex), { x: xPx, y: yPx });
+            zIdx = obs.z ?? 0;
+            queryClient.setQueryData(obsCoordKey(frame.rowIndex), { x: xPx, y: yPx, z: zIdx });
           }
         }
       }
 
       const body = {
         t: frame.t,
-        z: 0,
+        z: zIdx,
         x: xPx,
         y: yPx,
         half: 150,

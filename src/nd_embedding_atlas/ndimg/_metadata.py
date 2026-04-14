@@ -15,7 +15,9 @@ from nd_embedding_atlas.io import ChannelColors
 def get_plate_metadata(plate_path: str | pathlib.Path) -> dict[str, Any]:
     """Extract positions, channels, and scales from an OME-Zarr plate or position.
 
-    Uses iohub for robust OME-NGFF v0.4/v0.5 metadata handling.
+    Reads metadata directly from zarr.json / .zattrs — no pixel data access.
+    Uses precomputed ``clims_per_level`` for contrast when available, falls
+    back to OMERO ``window`` fields, then to iohub auto-contrast as last resort.
 
     Parameters
     ----------
@@ -32,40 +34,234 @@ def get_plate_metadata(plate_path: str | pathlib.Path) -> dict[str, Any]:
         - ``scale``: voxel scale in micrometers
         - ``pixel_scale``: ``{"y": ..., "x": ...}`` in micrometers
     """
+    p = pathlib.Path(plate_path)
+
+    # Try fast path: read everything from zarr.json metadata (no iohub, no pixel reads)
+    result = _try_fast_metadata(p)
+    if result is not None:
+        return result
+
+    # Fallback: iohub path (opens zarr store, may sample pixels for auto-contrast)
+    return _iohub_metadata(p)
+
+
+def _try_fast_metadata(plate_path: pathlib.Path) -> dict[str, Any] | None:
+    """Read plate metadata entirely from zarr.json files — no pixel data access.
+
+    Returns None if the metadata is insufficient (missing channels, shape, etc.).
+    """
+    # Find the first FOV path
+    plate_json = plate_path / "zarr.json"
+    zattrs = plate_path / ".zattrs"
+
+    if plate_json.exists():
+        attrs = json.loads(plate_json.read_text()).get("attributes", {})
+        ome = attrs.get("ome", {})
+        plate_meta = ome.get("plate")
+        if plate_meta:
+            # It's a plate — find first well/image
+            wells = plate_meta.get("wells", [])
+            if not wells:
+                return None
+            first_well = wells[0]["path"]
+            # Read well to find first image
+            well_json = plate_path / first_well / "zarr.json"
+            if well_json.exists():
+                well_attrs = json.loads(well_json.read_text()).get("attributes", {})
+                images = well_attrs.get("ome", {}).get("well", {}).get("images", [])
+                first_image = images[0]["path"] if images else "0"
+            else:
+                first_image = "0"
+            fov_path = plate_path / first_well / first_image
+            store_type = "plate"
+            positions = _enumerate_positions_from_json(plate_path, plate_meta)
+        else:
+            # Single position
+            fov_path = plate_path
+            store_type = "position"
+            positions = ["/"]
+    elif zattrs.exists():
+        attrs = json.loads(zattrs.read_text())
+        plate_meta = attrs.get("plate")
+        if plate_meta:
+            wells = plate_meta.get("wells", [])
+            if not wells:
+                return None
+            first_well = wells[0]["path"]
+            well_zattrs = plate_path / first_well / ".zattrs"
+            if well_zattrs.exists():
+                well_attrs = json.loads(well_zattrs.read_text())
+                images = well_attrs.get("well", {}).get("images", [])
+                first_image = images[0]["path"] if images else "0"
+            else:
+                first_image = "0"
+            fov_path = plate_path / first_well / first_image
+            store_type = "plate"
+            positions = _enumerate_positions_from_json(plate_path, plate_meta)
+        else:
+            fov_path = plate_path
+            store_type = "position"
+            positions = ["/"]
+    else:
+        return None
+
+    # Read FOV-level metadata
+    fov_attrs = _read_fov_attrs(fov_path)
+    if fov_attrs is None:
+        return None
+
+    ome = fov_attrs.get("ome", {})
+    multiscales = ome.get("multiscales", [])
+    omero = ome.get("omero", {})
+    omero_channels = omero.get("channels", [])
+
+    if not multiscales or not omero_channels:
+        return None
+
+    # Shape from first dataset array
+    ms = multiscales[0]
+    datasets = ms.get("datasets", [])
+    shape = _read_array_shape(fov_path, datasets[0]["path"] if datasets else "0")
+    if shape is None:
+        return None
+
+    # Scale from coordinate transformations
+    scale = [1.0] * len(shape)
+    if datasets:
+        transforms = datasets[0].get("coordinateTransformations", [])
+        for t in transforms:
+            if t.get("type") == "scale":
+                scale = t["scale"]
+
+    # Channels: use precomputed clims_per_level if available, else OMERO windows
+    clims = fov_attrs.get("clims_per_level", {})
+    level0_clims = clims.get("0", {}).get("contrast_limits_per_channel", [])
+
+    channels = []
+    for i, ch in enumerate(omero_channels):
+        label = ch.get("label", f"Channel {i}")
+        color = ch.get("color") or ChannelColors.hex(label)
+        window = ch.get("window", {})
+
+        # Prefer precomputed contrast limits over OMERO window defaults
+        if i < len(level0_clims):
+            lo, hi = level0_clims[i]
+            window = {"start": lo, "end": hi, "min": lo, "max": hi}
+
+        channels.append({"label": label, "color": color, "window": window})
+
+    result: dict[str, Any] = {
+        "type": store_type,
+        "positions": sorted(positions),
+        "shape": shape,
+        "scale": scale,
+        "channel_names": [ch["label"] for ch in channels],
+        "channels": channels,
+    }
+
+    if len(scale) >= 2:
+        result["pixel_scale"] = {"y": scale[-2], "x": scale[-1]}
+
+    return result
+
+
+def _enumerate_positions_from_json(
+    plate_path: pathlib.Path,
+    plate_meta: dict,
+) -> list[str]:
+    """Enumerate position paths from plate JSON metadata without opening zarr."""
+    positions = []
+    for well in plate_meta.get("wells", []):
+        well_path = well["path"]
+        well_json = plate_path / well_path / "zarr.json"
+        well_zattrs = plate_path / well_path / ".zattrs"
+
+        images = ["0"]  # default
+        if well_json.exists():
+            well_attrs = json.loads(well_json.read_text()).get("attributes", {})
+            imgs = well_attrs.get("ome", {}).get("well", {}).get("images", [])
+            if imgs:
+                images = [img["path"] for img in imgs]
+        elif well_zattrs.exists():
+            well_attrs = json.loads(well_zattrs.read_text())
+            imgs = well_attrs.get("well", {}).get("images", [])
+            if imgs:
+                images = [img["path"] for img in imgs]
+
+        positions.extend(f"{well_path}/{img}" for img in images)
+    return positions
+
+
+def _read_fov_attrs(fov_path: pathlib.Path) -> dict | None:
+    """Read attributes from a FOV's zarr.json or .zattrs."""
+    zarr_json = fov_path / "zarr.json"
+    if zarr_json.exists():
+        try:
+            return json.loads(zarr_json.read_text()).get("attributes", {})
+        except (json.JSONDecodeError, KeyError):
+            return None
+
+    zattrs = fov_path / ".zattrs"
+    if zattrs.exists():
+        try:
+            return json.loads(zattrs.read_text())
+        except (json.JSONDecodeError, KeyError):
+            return None
+
+    return None
+
+
+def _read_array_shape(fov_path: pathlib.Path, dataset_path: str) -> list[int] | None:
+    """Read array shape from zarr.json metadata without opening the array."""
+    arr_path = fov_path / dataset_path / "zarr.json"
+    if arr_path.exists():
+        try:
+            meta = json.loads(arr_path.read_text())
+            return meta.get("shape")
+        except (json.JSONDecodeError, KeyError):
+            return None
+
+    # Zarr v2: .zarray
+    zarray = fov_path / dataset_path / ".zarray"
+    if zarray.exists():
+        try:
+            meta = json.loads(zarray.read_text())
+            return meta.get("shape")
+        except (json.JSONDecodeError, KeyError):
+            return None
+
+    return None
+
+
+def _iohub_metadata(plate_path: pathlib.Path) -> dict[str, Any]:
+    """Fallback: extract metadata via iohub (may sample pixels for auto-contrast)."""
     from iohub.ngff import open_ome_zarr
 
     dataset = open_ome_zarr(str(plate_path), mode="r")
 
     result: dict[str, Any] = {}
 
-    # Determine type and enumerate positions
     if hasattr(dataset, "positions"):
         result["type"] = "plate"
         positions_list = list(dataset.positions())
         result["positions"] = [key for key, _ in positions_list]
-        # Use first position for channel/shape info
         _, first_pos = positions_list[0]
     else:
         result["type"] = "position"
         result["positions"] = ["/"]
         first_pos = dataset
 
-    # Shape and scale
     result["shape"] = list(first_pos.data.shape)
     result["scale"] = list(first_pos.scale)
 
-    # Channel names
     channel_names = list(first_pos.channel_names)
     result["channel_names"] = channel_names
 
-    # Pixel scale (Y, X from the last 2 spatial dims)
     scale = first_pos.scale
     if len(scale) >= 2:
         result["pixel_scale"] = {"y": scale[-2], "x": scale[-1]}
 
-    # Channel metadata from OME/OMERO (colors, windows).
     channels = _read_omero_channels(plate_path, first_pos)
-    # Fill missing windows via auto-contrast (1-percentile / 99-percentile sampling).
     _apply_auto_contrast(first_pos, channels)
     result["channels"] = channels
 

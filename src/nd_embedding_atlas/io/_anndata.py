@@ -1,7 +1,8 @@
-"""Accessors for AnnData obs / obsm / var.
+"""AnnData I/O — obs/obsm access via targeted ``read_elem``.
 
-Uses anndata + scanpy for obs/var (correct handling of all encodings).
-For obsm, reads directly from zarr/h5py to skip dask overhead.
+Only touches the specific zarr/h5py group needed, skipping the expensive
+full-store load of ``read_zarr``.  For a 1.38M x 2,345 dataset this cuts
+startup from ~20s to ~6s.
 """
 
 from __future__ import annotations
@@ -13,23 +14,55 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 
+from nd_embedding_atlas.io._store import store_ctx
+
 if TYPE_CHECKING:
     import anndata as ad
 
-    PathOrAdata = str | Path | "ad.AnnData" | "AnnDataCollection"
+    PathOrAdata = str | Path | "ad.AnnData" | "DatasetCollection"
 
 
-# ── Internal helpers ───────────────────────────────────────────────────────
+# ── Internal helpers ──────────────────────────────────────────────────────
 
 
-def _read_adata(path: str | Path) -> ad.AnnData:
-    """Read an AnnData from a zarr store or h5ad file."""
+def _read_obs_from_store(path: str | Path, *, columns: list[str] | None = None, include_index: bool = False) -> pd.DataFrame:
+    """Read obs via ``read_elem`` — skips X, obsm, layers."""
     import anndata as ad
 
-    p = Path(path)
-    if p.is_dir() or p.suffix == ".zarr":
-        return ad.read_zarr(p)
-    return ad.read_h5ad(p)
+    with store_ctx(path) as s:
+        df = ad.io.read_elem(s["obs"])
+
+    if include_index:
+        df = df.copy()
+        df["obs_name"] = list(df.index)
+
+    if columns is not None:
+        missing = [c for c in columns if c not in df.columns]
+        if missing:
+            warnings.warn(f"get_obs: columns not found and skipped: {missing}", stacklevel=3)
+        df = df[[c for c in columns if c in df.columns]]
+
+    return df
+
+
+def _read_obsm_from_store(
+    path: str | Path,
+    key: str,
+    *,
+    dtype: np.dtype | None = np.float32,
+    columns: list[int] | None = None,
+) -> np.ndarray:
+    """Read a single obsm array via ``read_elem``."""
+    import anndata as ad
+
+    with store_ctx(path) as s:
+        raw = ad.io.read_elem(s[f"obsm/{key}"])
+
+    if columns is not None:
+        raw = raw[:, columns]
+    if hasattr(raw, "compute"):
+        raw = raw.compute()
+    return np.asarray(raw, dtype=dtype) if dtype else np.asarray(raw)
 
 
 def _obs_from_adata(
@@ -38,7 +71,7 @@ def _obs_from_adata(
     columns: list[str] | None = None,
     include_index: bool = False,
 ) -> pd.DataFrame:
-    """Extract obs DataFrame from an AnnData via ``scanpy.get.obs_df``."""
+    """Extract obs from an in-memory AnnData via ``scanpy.get.obs_df``."""
     import scanpy as sc
 
     keys = list(adata.obs.columns) if columns is None else [c for c in columns if c in adata.obs.columns]
@@ -53,7 +86,7 @@ def _obs_from_adata(
     return df
 
 
-# ── Public API ─────────────────────────────────────────────────────────────
+# ── Public API ────────────────────────────────────────────────────────────
 
 
 def get_obs(
@@ -62,32 +95,17 @@ def get_obs(
     columns: list[str] | None = None,
     include_index: bool = False,
 ) -> pd.DataFrame:
-    """Return a DataFrame of obs metadata.
+    """Return obs metadata as a DataFrame.
 
-    Uses ``scanpy.get.obs_df`` for correct handling of all column encodings
-    (categoricals, nullable strings, etc.).  For multi-dataset collections,
-    reads each entry individually and concatenates to avoid lazy-concat issues.
-
-    Parameters
-    ----------
-    source
-        Path to a ``.zarr`` store or ``.h5ad`` file, an ``AnnData`` object,
-        or an ``AnnDataCollection``.
-    columns
-        Subset of columns to return.  ``None`` returns all columns.
-    include_index
-        When ``True``, inject the AnnData string obs index as ``obs_name``.
-
-    Returns
-    -------
-    pandas.DataFrame
+    Dispatches by source type: path → targeted zarr/h5py read,
+    DatasetCollection → per-dataset concat, AnnData → scanpy.
     """
     if isinstance(source, (str, Path)):
-        return _obs_from_adata(_read_adata(source), columns=columns, include_index=include_index)
+        return _read_obs_from_store(source, columns=columns, include_index=include_index)
 
-    from nd_embedding_atlas.io import AnnDataCollection
+    from nd_embedding_atlas.io import DatasetCollection
 
-    if isinstance(source, AnnDataCollection):
+    if isinstance(source, DatasetCollection):
         datasets = source.datasets
         if len(datasets) == 1:
             entry = next(iter(datasets.data.values()))
@@ -120,37 +138,13 @@ def get_obsm(
     dtype: np.dtype | None = np.float32,
     columns: list[int] | None = None,
 ) -> np.ndarray:
-    """Return an obsm embedding array, reading directly from zarr/h5py.
-
-    Bypasses dask task-graph construction for 60x speedup on large datasets.
-
-    Parameters
-    ----------
-    source
-        Path, AnnData, or AnnDataCollection.
-    key
-        obsm key, e.g. ``"X_umap"``.
-    dtype
-        Target numpy dtype.  ``None`` keeps the on-disk dtype.
-    columns
-        Integer column indices to extract.  ``None`` returns all.
-
-    Returns
-    -------
-    numpy.ndarray
-    """
+    """Return an obsm embedding array via targeted ``read_elem``."""
     if isinstance(source, (str, Path)):
-        adata = _read_adata(source)
-        raw = adata.obsm[key]
-        if columns is not None:
-            raw = raw[:, columns]
-        if hasattr(raw, "compute"):
-            raw = raw.compute()
-        return np.asarray(raw, dtype=dtype) if dtype else np.asarray(raw)
+        return _read_obsm_from_store(source, key, dtype=dtype, columns=columns)
 
-    from nd_embedding_atlas.io import AnnDataCollection
+    from nd_embedding_atlas.io import DatasetCollection
 
-    if isinstance(source, AnnDataCollection):
+    if isinstance(source, DatasetCollection):
         if len(source) == 1:
             entry = next(iter(source.datasets.data.values()))
             if entry.path is not None:
@@ -176,3 +170,19 @@ def get_obsm(
     if hasattr(raw, "compute"):
         raw = raw.compute()
     return np.asarray(raw, dtype=dtype) if dtype else np.asarray(raw)
+
+
+def list_obsm_keys(source: PathOrAdata) -> list[str]:
+    """Return available obsm keys without loading the full AnnData."""
+    if isinstance(source, (str, Path)):
+        with store_ctx(source) as s:
+            return list(s["obsm"].keys()) if "obsm" in s else []
+
+    from nd_embedding_atlas.io import DatasetCollection
+
+    if isinstance(source, DatasetCollection):
+        entry = next(iter(source.datasets.data.values()))
+        if entry.path is not None:
+            return list_obsm_keys(entry.path)
+
+    return list(source.obsm.keys())

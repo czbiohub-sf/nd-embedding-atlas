@@ -34,12 +34,12 @@ def view_project(
     no_static
         Skip mounting the built frontend.
     """
-    from nd_embedding_atlas.io import AnnDataCollection
+    from nd_embedding_atlas.io import DatasetCollection
     from nd_embedding_atlas.io._project import load_project
     from nd_embedding_atlas.server._app import serve
 
     project = load_project(config_path)
-    collection = AnnDataCollection()
+    collection = DatasetCollection()
     dataset_plates: dict[str, Path] = {}
 
     for key, spec in project.datasets.items():

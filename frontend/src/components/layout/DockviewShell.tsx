@@ -160,6 +160,15 @@ export function DockviewShell({ hasPlate: _hasPlate, hasEmbeddings, onApiReady }
         try {
           event.api.fromJSON(JSON.parse(saved));
 
+          // Close on-demand panels that shouldn't auto-restore
+          for (const id of ["obssets"]) {
+            try {
+              event.api.getPanel(id)?.api.close();
+            } catch {
+              // panel may not exist
+            }
+          }
+
           // Re-add any expected panels that were closed in a previous session
           // Note: image-viewer is intentionally excluded — user opens it on demand.
           const basePanels = hasEmbeddings ? ["scatter"] : [];

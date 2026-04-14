@@ -28,5 +28,5 @@ export const trajectoryKeys = {
 } as const;
 
 export const varKeys = {
-  names: (query: string) => ["var", "names", query] as const,
+  names: (query: string, modality?: string) => ["var", "names", query, modality ?? null] as const,
 } as const;

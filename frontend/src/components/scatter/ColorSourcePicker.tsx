@@ -13,7 +13,7 @@ import {
 } from "@/lib/color-source";
 import { cn } from "@/lib/utils";
 import { useVarColumn } from "@/scatter-gpu/hooks/useVarColumn";
-import { useGeneSearch } from "@/scatter-gpu/hooks/useGeneSearch";
+import { useVarSearch } from "@/scatter-gpu/hooks/useVarSearch";
 import { useLayerNames } from "@/scatter-gpu/hooks/useLayerNames";
 
 // ── Trigger label helpers ─────────────────────────────────────────────────────
@@ -79,7 +79,7 @@ export function ColorSourcePicker({
   const [varQuery, setVarQuery] = useState("");
   const [selectedLayer, setSelectedLayer] = useState("X");
 
-  const { names, isLoading: varsLoading } = useGeneSearch(varQuery);
+  const { names, isLoading: varsLoading } = useVarSearch(varQuery);
   const layers = useLayerNames();
   const { setStatus } = useScatterUIDispatch();
   const { materialize, status: varStatus, column: varColumn } = useVarColumn({ onStatus: setStatus });

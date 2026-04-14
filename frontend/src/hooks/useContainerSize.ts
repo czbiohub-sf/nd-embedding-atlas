@@ -6,7 +6,7 @@ interface Size {
 }
 
 export function useContainerSize(ref: RefObject<HTMLElement | null>): Size {
-  const [size, setSize] = useState<Size>({ width: 0, height: 0 });
+  const [size, setSize] = useState({ width: 0, height: 0 });
 
   useEffect(() => {
     const el = ref.current;

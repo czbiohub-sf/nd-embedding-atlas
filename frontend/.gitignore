@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# Auto-generated OpenAPI types (run `pnpm codegen` to regenerate)
+src/generated
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

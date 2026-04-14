@@ -14,10 +14,6 @@ const BLEND_OPTIONS: { label: string; value: BlendMode }[] = [
   { label: "Sub", value: "subtractive" },
 ];
 
-function fmtContrast(v: number): string {
-  return Math.abs(v) < 10 ? v.toFixed(2) : Math.round(v).toString();
-}
-
 export function ChannelControls() {
   const { state, actions } = useViewer();
   const { channels, viewMode } = state;
@@ -41,7 +37,7 @@ export function ChannelControls() {
 
   // ── Expanded panel ─────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col overflow-hidden rounded-lg border border-white/[0.07] bg-card/80 backdrop-blur-md">
+    <div className="flex max-h-[min(50vh,360px)] flex-col overflow-hidden rounded-lg border border-white/[0.07] bg-card/80 backdrop-blur-md">
       {/* Header */}
       <div className="flex shrink-0 items-center gap-1.5 px-2 py-1.5">
         <Layers className="size-3 shrink-0 text-muted-foreground/60" />
@@ -57,7 +53,7 @@ export function ChannelControls() {
       </div>
 
       {/* Scrollable channel list */}
-      <ScrollArea className="max-h-72">
+      <ScrollArea className="min-h-0 flex-1">
         <div className="flex flex-col gap-2 px-2 pb-2">
           {channels.map((ch, i) => {
             const step = (ch.contrastRange[1] - ch.contrastRange[0]) / 200 || 1;
@@ -109,11 +105,19 @@ export function ChannelControls() {
                   )}
                 </div>
 
-                {/* Contrast range (dual-thumb slider) */}
+                {/* Contrast range (dual-thumb slider + editable inputs) */}
                 <div className="flex items-center gap-1.5 pl-7">
-                  <span className="w-8 text-right text-[10px] text-muted-foreground tabular-nums">
-                    {fmtContrast(ch.contrastLimits[0])}
-                  </span>
+                  <input
+                    type="number"
+                    value={Math.round(ch.contrastLimits[0])}
+                    onChange={(e) => {
+                      const v = Number(e.target.value);
+                      if (!Number.isNaN(v)) {
+                        actions.setChannelProp(i, { contrastLimits: [v, ch.contrastLimits[1]] });
+                      }
+                    }}
+                    className="w-10 rounded border border-border bg-transparent px-1 text-right text-[10px] text-muted-foreground tabular-nums outline-none focus:border-primary/50 focus:text-foreground"
+                  />
                   <Slider
                     className="flex-1"
                     value={[ch.contrastLimits[0], ch.contrastLimits[1]]}
@@ -125,9 +129,17 @@ export function ChannelControls() {
                       actions.setChannelProp(i, { contrastLimits: [vals[0], vals[1]] });
                     }}
                   />
-                  <span className="w-8 text-[10px] text-muted-foreground tabular-nums">
-                    {fmtContrast(ch.contrastLimits[1])}
-                  </span>
+                  <input
+                    type="number"
+                    value={Math.round(ch.contrastLimits[1])}
+                    onChange={(e) => {
+                      const v = Number(e.target.value);
+                      if (!Number.isNaN(v)) {
+                        actions.setChannelProp(i, { contrastLimits: [ch.contrastLimits[0], v] });
+                      }
+                    }}
+                    className="w-10 rounded border border-border bg-transparent px-1 text-[10px] text-muted-foreground tabular-nums outline-none focus:border-primary/50 focus:text-foreground"
+                  />
                 </div>
               </div>
             );

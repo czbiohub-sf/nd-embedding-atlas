@@ -61,24 +61,34 @@ export function SingleCropViewer({ cropSize, datasetKey }: Props) {
     omeVersion,
   });
 
+  // Prefer OME-derived scale (from idetik dims) over backend pixel_scale for camera framing.
+  // This ensures the camera uses the same coordinate system as idetik's rendering.
+  const { worldOrigin, worldScale } = viewerState;
+  const effectiveScale = worldScale ?? scale;
+
   const { updateBbox } = useBboxLayer({
     viewport: meta.viewport,
-    scale,
+    scale: effectiveScale,
+    worldOrigin,
   });
 
   // ── Helper: 2D camera framing ───────────────────────────────────
+  // idetik places the image at worldOrigin (from OME translation), so we
+  // must offset the camera by that amount to look at the right world coords.
   const frameRegion = useCallback(
     (cx: number, cy: number, hx: number, hy: number) => {
-      actions.setFrame((cx - hx) * scale.x, (cx + hx) * scale.x, (cy + hy) * scale.y, (cy - hy) * scale.y);
+      const left = worldOrigin.x + (cx - hx) * effectiveScale.x;
+      const right = worldOrigin.x + (cx + hx) * effectiveScale.x;
+      const bottom = worldOrigin.y + (cy + hy) * effectiveScale.y;
+      const top = worldOrigin.y + (cy - hy) * effectiveScale.y;
+      actions.setFrame(left, right, bottom, top);
     },
-    [actions, scale.x, scale.y],
+    [actions, effectiveScale.x, effectiveScale.y, worldOrigin.x, worldOrigin.y],
   );
 
   // ── Effect: Observation framing (mode-aware) ──────────────────────
   useEffect(() => {
     if (!isForThisDataset || !obsInfo || !viewerState.initialized) return;
-
-    console.log("[frame] setFrame called", { x: obsInfo.x, y: obsInfo.y, t: performance.now().toFixed(1) });
 
     if (viewerState.viewMode === "2d") {
       updateBbox(obsInfo.x, obsInfo.y, cropSize / 2, obsInfo.bbox);
@@ -92,13 +102,13 @@ export function SingleCropViewer({ cropSize, datasetKey }: Props) {
       }
     } else {
       // 3D: position orbit camera to look at observation center
-      const cx = obsInfo.x * scale.x;
-      const cy = obsInfo.y * scale.y;
+      const cx = worldOrigin.x + obsInfo.x * effectiveScale.x;
+      const cy = worldOrigin.y + obsInfo.y * effectiveScale.y;
       const controls = meta.viewport?.cameraControls;
       const hasLookAt = controls && "lookAt" in controls;
       console.log("[3d] lookAt", { cx, cy, hasLookAt, controls: !!controls });
       if (hasLookAt) {
-        const radius = cropSize * Math.max(scale.x, scale.y) * 1.5;
+        const radius = cropSize * Math.max(effectiveScale.x, effectiveScale.y) * 1.5;
         (controls as OrbitControls).lookAt(vec3.fromValues(cx, cy, 0), radius);
       }
     }
@@ -110,8 +120,8 @@ export function SingleCropViewer({ cropSize, datasetKey }: Props) {
     viewerState.viewMode,
     updateBbox,
     frameRegion,
-    scale.x,
-    scale.y,
+    effectiveScale.x,
+    effectiveScale.y,
     meta.viewport,
   ]);
 
@@ -120,6 +130,7 @@ export function SingleCropViewer({ cropSize, datasetKey }: Props) {
     if (!isForThisDataset) return;
     if (obsInfo) {
       actions.setTIndex(obsInfo.t ?? 0);
+      actions.setZIndex(obsInfo.z ?? 0);
     }
   }, [isForThisDataset, obsInfo, actions]);
 

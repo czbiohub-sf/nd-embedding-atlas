@@ -35,7 +35,7 @@ export function CountPlot({ field, limit = 11 }: Props) {
   const { meta } = useDashboard();
   const { coordinator, brushSelection, table } = meta;
 
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [selected, setSelected] = useState(new Set());
   const sourceRef = useRef({ reset: () => setSelected(new Set()) });
 
   const textExpr = useMemo(() => cast(column(field), "TEXT"), [field]);

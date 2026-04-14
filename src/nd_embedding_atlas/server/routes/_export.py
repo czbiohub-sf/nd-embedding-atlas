@@ -75,6 +75,10 @@ def make_export_router(get_state: Callable[[], ViewerState]) -> APIRouter:
 
     @router.post("/api/export")
     async def start_export(request: ExportRequest, state: State) -> JSONResponse:
+        # MuData sources don't expose a DatasetCollection — export is unsupported
+        if state.collection is None:
+            return JSONResponse({"error": "Export not supported for MuData stores"}, status_code=501)
+
         # Check for concurrent export
         if state.export_task is not None and not state.export_task.task.done():
             return JSONResponse({"error": "An export is already in progress"}, status_code=409)
