@@ -13,5 +13,5 @@ export type {
     CategoricalArray,
     NullableArray,
     SparseArray,
-    AxialConfig,
+    ZarrConfig,
 } from "./zarr/index.ts";

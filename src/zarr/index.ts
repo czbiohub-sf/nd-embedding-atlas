@@ -12,7 +12,7 @@ export type {
     CategoricalArray,
     NullableArray,
     SparseArray,
-    AxialConfig,
+    ZarrConfig,
 } from "./types.ts";
 
 // Public runtime API: open a store, read AnnData, convert to Arrow.

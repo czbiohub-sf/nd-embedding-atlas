@@ -1,7 +1,7 @@
 import * as zarr from "zarrita";
 import type { Readable } from "zarrita";
 import FileSystemStore from "@zarrita/storage/fs";
-import type { AxialConfig, Convention, DataTree } from "./types.ts";
+import type { Convention, DataTree, ZarrConfig } from "./types.ts";
 import { detectOmeZarr } from "./ome-zarr.ts";
 import { detectAnnData } from "./anndata.ts";
 import { detectMuData } from "./mudata.ts";
@@ -11,7 +11,7 @@ export interface OpenOptions {
     /** Override convention detection. */
     convention?: "ome-zarr" | "anndata" | "mudata" | "xarray";
     /** Configuration overrides. */
-    config?: Partial<AxialConfig>;
+    config?: Partial<ZarrConfig>;
 }
 
 const CONVENTIONS: Convention[] = [detectOmeZarr, detectMuData, detectAnnData, detectXarray];

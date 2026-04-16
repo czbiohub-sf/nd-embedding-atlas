@@ -1,17 +1,21 @@
 /**
- * Core types for axial — labeled N-D arrays for scientific computing.
+ * Core types for the vendored zarr reader.
  *
- * Modern TS features used:
- * - Symbol.asyncDispose for automatic resource cleanup
- * - Iterator helpers (.map/.filter/.take on iterators)
+ * Originally the public type surface of a planned standalone library ("axial"); now
+ * trimmed to exactly what nd-embedding-atlas consumes — the AnnData/MuData/OME-Zarr
+ * parsing pipeline plus the Arrow-conversion surface exposed to the server.
  */
+
+// ---------------------------------------------------------------------------
+// Primitive aliases
+// ---------------------------------------------------------------------------
 
 export type DimName = string;
 
-// ---------------------------------------------------------------------------
-// Dtype & TypedArray mapping
-// ---------------------------------------------------------------------------
+/** Scalar values that can appear in a coord array, categorical, or nullable column. */
+export type Scalar = number | string | bigint | boolean;
 
+/** Zarr dtypes we round-trip through this reader. */
 export type Dtype =
     | "int8"
     | "int16"
@@ -27,51 +31,18 @@ export type Dtype =
     | "string"
     | "object";
 
-export type TypedArrayFor<D extends Dtype> = D extends "int8"
-    ? Int8Array
-    : D extends "int16"
-      ? Int16Array
-      : D extends "int32"
-        ? Int32Array
-        : D extends "int64"
-          ? BigInt64Array
-          : D extends "uint8"
-            ? Uint8Array
-            : D extends "uint16"
-              ? Uint16Array
-              : D extends "uint32"
-                ? Uint32Array
-                : D extends "uint64"
-                  ? BigUint64Array
-                  : D extends "float32"
-                    ? Float32Array
-                    : D extends "float64"
-                      ? Float64Array
-                      : D extends "bool"
-                        ? Uint8Array
-                        : never;
-
 // ---------------------------------------------------------------------------
-// Selector types (for .sel / .isel)
+// Slice — used by CoordArray.labelSlice
 // ---------------------------------------------------------------------------
-
-export type Scalar = number | string | bigint | boolean;
 
 export interface Slice {
-    start?: number;
-    stop?: number;
-    step?: number;
+    readonly start?: number;
+    readonly stop?: number;
+    readonly step?: number;
 }
-
-export function slice(start?: number, stop?: number, step?: number): Slice {
-    return { start, stop, step };
-}
-
-export type IndexSelector = number | Slice | number[];
-export type LabelSelector = Scalar | Slice | Scalar[];
 
 // ---------------------------------------------------------------------------
-// Coordinate types — iterable by design
+// Coordinate types
 // ---------------------------------------------------------------------------
 
 export interface CoordArray {
@@ -84,7 +55,6 @@ export interface CoordArray {
     indexOf(label: Scalar): number;
     labelSlice(start: Scalar, stop: Scalar): Slice;
 
-    /** Iterate over coordinate values. Supports iterator helpers (.map, .filter, .take). */
     [Symbol.iterator](): Iterator<Scalar>;
 }
 
@@ -94,77 +64,21 @@ export interface CoordSet extends Iterable<CoordArray> {
     dims(): DimName[];
     readonly size: number;
 
-    /** Iterate over all CoordArrays. Supports iterator helpers. */
     [Symbol.iterator](): Iterator<CoordArray>;
-}
-
-// ---------------------------------------------------------------------------
-// DataArray — labeled N-D array (read-only, disposable)
-// ---------------------------------------------------------------------------
-
-export interface DataArray<D extends Dtype = Dtype> extends AsyncDisposable {
-    readonly name: string | undefined;
-    readonly dims: readonly DimName[];
-    readonly shape: readonly number[];
-    readonly dtype: D;
-    readonly coords: CoordSet;
-    readonly attrs: Record<string, unknown>;
-
-    sel(labels: Record<DimName, LabelSelector>): LazyDataArray<D>;
-    isel(indices: Record<DimName, IndexSelector>): LazyDataArray<D>;
-    compute(): Promise<MaterializedDataArray<D>>;
-
-    /** Release any cached chunks / resources. */
-    [Symbol.asyncDispose](): Promise<void>;
-}
-
-export interface MaterializedDataArray<D extends Dtype = Dtype> extends DataArray<D> {
-    readonly data: TypedArrayFor<D>;
-}
-
-export interface LazyDataArray<D extends Dtype = Dtype> extends DataArray<D> {
-    mean(dim: DimName): LazyDataArray<D>;
-    sum(dim: DimName): LazyDataArray<D>;
-    min(dim: DimName): LazyDataArray<D>;
-    max(dim: DimName): LazyDataArray<D>;
-    add(other: DataArray): LazyDataArray<D>;
-    mul(other: DataArray): LazyDataArray<D>;
-    sub(other: DataArray): LazyDataArray<D>;
-    div(other: DataArray): LazyDataArray<D>;
-    where(pred: (val: number) => boolean): LazyDataArray<D>;
-}
-
-// ---------------------------------------------------------------------------
-// Sparse arrays (AnnData CSR/CSC)
-// ---------------------------------------------------------------------------
-
-export interface SparseArray {
-    readonly shape: readonly [number, number];
-    readonly format: "csr" | "csc";
-    readonly data: Float32Array | Float64Array;
-    readonly indices: Int32Array;
-    readonly indptr: Int32Array;
-    readonly dtype: Dtype;
-    readonly nnz: number;
-
-    row(i: number): { indices: Int32Array; values: Float32Array | Float64Array };
-    col(j: number): { indices: Int32Array; values: Float32Array | Float64Array };
-    sliceRows(start: number, end: number): SparseArray;
-
-    /** Iterate rows as sparse vectors. Supports iterator helpers. */
-    rows(): Iterator<{
-        index: number;
-        indices: Int32Array;
-        values: Float32Array | Float64Array;
-    }>;
 }
 
 // ---------------------------------------------------------------------------
 // AnnData encoding types
 // ---------------------------------------------------------------------------
 
+/**
+ * Discriminator tag found on `encoding-type` attrs in AnnData/MuData stores.
+ * We only match the values actually encountered by our readers; unknown values
+ * fall through to plain-array handling.
+ */
 export type EncodingType =
     | "anndata"
+    | "MuData"
     | "dataframe"
     | "categorical"
     | "csr_matrix"
@@ -177,8 +91,7 @@ export type EncodingType =
     | "numeric-scalar"
     | "string"
     | "array"
-    | "null"
-    | "MuData";
+    | "null";
 
 export interface CategoricalArray extends Iterable<Scalar | null> {
     readonly categories: readonly Scalar[];
@@ -198,6 +111,28 @@ export interface NullableArray extends Iterable<Scalar | null> {
     [Symbol.iterator](): Iterator<Scalar | null>;
 }
 
+/** Sparse CSR/CSC matrix from AnnData X or layers. */
+export interface SparseArray {
+    readonly shape: readonly [number, number];
+    readonly format: "csr" | "csc";
+    readonly data: Float32Array | Float64Array;
+    readonly indices: Int32Array;
+    readonly indptr: Int32Array;
+    readonly dtype: Dtype;
+    readonly nnz: number;
+
+    row(i: number): { indices: Int32Array; values: Float32Array | Float64Array };
+    col(j: number): { indices: Int32Array; values: Float32Array | Float64Array };
+    sliceRows(start: number, end: number): SparseArray;
+
+    rows(): Iterator<{
+        index: number;
+        indices: Int32Array;
+        values: Float32Array | Float64Array;
+    }>;
+}
+
+/** Union of all column representations inside an AnnDataFrame. */
 export type ColumnData =
     | Float32Array
     | Float64Array
@@ -218,26 +153,27 @@ export interface AnnDataFrame extends Iterable<Record<string, Scalar | null>> {
     readonly columns: ReadonlyMap<string, ColumnData>;
     readonly columnOrder: readonly string[];
     column(name: string): ColumnData | undefined;
-    /** Iterate rows as objects. Supports iterator helpers (.filter, .take, etc). */
     [Symbol.iterator](): Iterator<Record<string, Scalar | null>>;
 }
 
 // ---------------------------------------------------------------------------
-// Dataset — collection of DataArrays (disposable)
+// Dataset & DataTree
 // ---------------------------------------------------------------------------
 
+/**
+ * Collection of lazy data_vars + coords. Convention parsers populate this;
+ * the server consumes it via `AnnDataAccessor` which treats `data_vars`
+ * entries as opaque lazy handles.
+ */
 export interface Dataset extends AsyncDisposable {
-    readonly data_vars: ReadonlyMap<string, DataArray>;
+    readonly data_vars: ReadonlyMap<string, unknown>;
     readonly coords: CoordSet;
     readonly attrs: Record<string, unknown>;
 
     [Symbol.asyncDispose](): Promise<void>;
 }
 
-// ---------------------------------------------------------------------------
-// DataTree — hierarchical dataset (disposable, iterable)
-// ---------------------------------------------------------------------------
-
+/** Hierarchical dataset (mirrors xarray's DataTree). */
 export interface DataTree extends AsyncDisposable {
     readonly name: string;
     readonly dataset: Dataset | undefined;
@@ -249,56 +185,35 @@ export interface DataTree extends AsyncDisposable {
     paths(): string[];
     datasets(): Map<string, Dataset>;
 
-    /** Iterate child nodes. Supports iterator helpers. */
     [Symbol.iterator](): Iterator<DataTree>;
-
-    /** Dispose all resources in the tree. Use with `await using`. */
     [Symbol.asyncDispose](): Promise<void>;
 }
 
 // ---------------------------------------------------------------------------
-// MultimodalDataset (MuData) — extends DataTree
+// Convention parser
 // ---------------------------------------------------------------------------
 
-export interface MultimodalDataset extends DataTree {
-    readonly mod: ReadonlyMap<string, Dataset>;
-    readonly obs: AnnDataFrame;
-    readonly var: AnnDataFrame;
-    readonly obsmap: ReadonlyMap<string, Int32Array>;
-    readonly varmap: ReadonlyMap<string, Int32Array>;
-}
+/** Registered convention names. Each `Convention.name` is one of these literals. */
+export type ConventionName = "ome-zarr" | "anndata" | "mudata" | "xarray";
 
-// ---------------------------------------------------------------------------
-// Structural type for Zarr group-like objects
-// ---------------------------------------------------------------------------
-
-export interface ZarrGroupLike {
-    readonly attrs: Record<string, unknown>;
-    resolve(path: string): unknown;
-}
-
-// ---------------------------------------------------------------------------
-// Convention parser interface
-// ---------------------------------------------------------------------------
-
+/**
+ * Implemented by `detectOmeZarr`, `detectAnnData`, `detectMuData`, `detectXarray`.
+ * `group` is a zarrita `Group` — we keep it structural to avoid a hard type
+ * dependency on zarrita internals at the type layer.
+ */
 export interface Convention {
-    readonly name: string;
+    readonly name: ConventionName;
     detect(rootAttrs: Record<string, unknown>): boolean;
-    parse(group: ZarrGroupLike, storePath?: string): Promise<DataTree>;
+    parse(group: unknown, storePath?: string): Promise<DataTree>;
 }
 
 // ---------------------------------------------------------------------------
 // Config
 // ---------------------------------------------------------------------------
 
-export interface AxialConfig {
+export interface ZarrConfig {
     /** Max parallel chunk fetches. Default: 6 */
     concurrency: number;
     /** Max memory budget in bytes for chunk cache. Default: 512MB */
     maxCacheBytes: number;
 }
-
-export const DEFAULT_CONFIG: AxialConfig = {
-    concurrency: 6,
-    maxCacheBytes: 512 * 1024 * 1024,
-};
