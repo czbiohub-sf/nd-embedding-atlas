@@ -13,7 +13,8 @@
 
 import { resolve, extname, join } from "node:path";
 import { existsSync } from "node:fs";
-import { isCompiled, BUNFS_FRONTEND_DIST } from "./embedded-assets.ts";
+import { isCompiled } from "./embedded-assets.ts";
+import { EMBEDDED_ASSETS } from "./__generated-embedded-assets.ts";
 
 // ─── MIME type mapping ──────────────────────────────────────────────────────
 
@@ -57,9 +58,10 @@ export function resolveFrontendDir(frontendDir?: string): string | null {
     const devDist = resolve("frontend/dist");
     if (existsSync(join(devDist, "index.html"))) return devDist;
 
-    // 3. Compiled binary: embedded assets under $bunfs
-    if (isCompiled) {
-        return BUNFS_FRONTEND_DIST;
+    // 3. Compiled binary: resolution happens via EMBEDDED_ASSETS map in
+    //    serveStatic — return a sentinel so the caller knows we're good.
+    if (isCompiled && "index.html" in EMBEDDED_ASSETS) {
+        return "__embedded__";
     }
 
     return null;
@@ -77,6 +79,19 @@ export function resolveFrontendDir(frontendDir?: string): string | null {
  * @param frontendDir  Resolved frontend directory path (from resolveFrontendDir).
  * @returns Response with correct Content-Type, or null if the directory is unavailable.
  */
+/** Resolve a URL pathname to the file path that actually backs it. */
+function resolveAssetPath(pathname: string, frontendDir: string): string | null {
+    const rel = pathname === "/" ? "index.html" : pathname.replace(/^\/+/, "");
+
+    if (frontendDir === "__embedded__") {
+        // Compiled binary: consult the generated manifest for a $bunfs path.
+        return EMBEDDED_ASSETS[rel] ?? null;
+    }
+
+    const abs = join(frontendDir, rel);
+    return existsSync(abs) ? abs : null;
+}
+
 export function serveStatic(pathname: string, frontendDir: string | null): Response {
     if (!frontendDir) {
         return new Response("Frontend not found. Run `cd frontend && vp build` first.", {
@@ -85,15 +100,8 @@ export function serveStatic(pathname: string, frontendDir: string | null): Respo
         });
     }
 
-    // Map "/" to "index.html"
-    const filePath =
-        pathname === "/" ? join(frontendDir, "index.html") : join(frontendDir, pathname);
-
-    // Bun.file() works for both disk paths and $bunfs/ paths in compiled binaries.
-    // For disk paths we can use existsSync; for $bunfs we try Bun.file().size > 0.
-    const file = Bun.file(filePath);
-
-    if (isCompiled ? file.size > 0 : existsSync(filePath)) {
+    const filePath = resolveAssetPath(pathname, frontendDir);
+    if (filePath) {
         const ext = extname(filePath);
         const contentType = MIME[ext] ?? "application/octet-stream";
 
@@ -103,7 +111,7 @@ export function serveStatic(pathname: string, frontendDir: string | null): Respo
             ? "public, max-age=31536000, immutable"
             : "public, max-age=0, must-revalidate";
 
-        return new Response(file, {
+        return new Response(Bun.file(filePath), {
             headers: {
                 "Content-Type": contentType,
                 "Cache-Control": cacheControl,
@@ -111,15 +119,11 @@ export function serveStatic(pathname: string, frontendDir: string | null): Respo
         });
     }
 
-    // SPA fallback: if the path has no extension, serve index.html
-    // This supports client-side routing (e.g. /scatter, /table)
-    const ext = extname(pathname);
-    if (!ext) {
-        const indexPath = join(frontendDir, "index.html");
-        const indexFile = Bun.file(indexPath);
-
-        if (isCompiled ? indexFile.size > 0 : existsSync(indexPath)) {
-            return new Response(indexFile, {
+    // SPA fallback: if the path has no extension, serve index.html.
+    if (!extname(pathname)) {
+        const indexPath = resolveAssetPath("/", frontendDir);
+        if (indexPath) {
+            return new Response(Bun.file(indexPath), {
                 headers: {
                     "Content-Type": "text/html; charset=utf-8",
                     "Cache-Control": "public, max-age=0, must-revalidate",
