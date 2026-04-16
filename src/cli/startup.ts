@@ -183,6 +183,9 @@ export async function startup(config: ResolvedConfig): Promise<void> {
     // ── 3. Build ViewerState ────────────────────────────────────────────────
     // Will be passed to createApp once server routes are wired up.
 
+    // Build accessor map for on-demand obsm loading
+    const accessors = new Map(loaded.map((ds) => [ds.entry.name, ds.accessor]));
+
     const state: ViewerState = {
         store,
         datasets: datasetConfigs,
@@ -192,6 +195,7 @@ export async function startup(config: ResolvedConfig): Promise<void> {
         availableObsmKeys,
         loadingTasks: new Map(),
         loadErrors: new Map(),
+        accessors,
     };
     // ── 4. Resolve frontend ─────────────────────────────────────────────────
 

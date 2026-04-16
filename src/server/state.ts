@@ -4,6 +4,7 @@
  * Ports the Python `server/_state.py` dataclasses to TypeScript interfaces.
  */
 
+import type { AnnDataAccessor } from "../axial/core/anndata-accessor.ts";
 import type { EmbeddingStore } from "./store.ts";
 
 /** Resolved spatial column names (from config or auto-detection). */
@@ -69,4 +70,6 @@ export interface ViewerState {
     availableObsmKeys: string[];
     loadingTasks: Map<string, Promise<void>>;
     loadErrors: Map<string, string>;
+    /** axial accessors by dataset name — for loading obsm from zarr on demand. */
+    accessors: Map<string, AnnDataAccessor>;
 }
