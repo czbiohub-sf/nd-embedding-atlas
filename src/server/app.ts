@@ -50,17 +50,17 @@ export {
     isAllowedSql,
     ARROW_IPC_CONTENT_TYPE,
 } from "./mosaic.ts";
-export { detectSpatialColumns, parseBbox, prepareObs } from "./prepare.ts";
+export { detectSpatialColumns, parseBbox } from "./state.ts";
 export type {
     SpatialColumns,
     ChannelConfig,
     DatasetConfig,
     DatasetMeta,
     ViewerState,
+    BboxRect,
 } from "./state.ts";
 export type { MosaicQuery } from "./mosaic.ts";
 export type { EmbeddingMeta } from "./store.ts";
-export type { BboxRect, PrepareResult } from "./prepare.ts";
 export type { NdeaProtocol } from "./protocol.ts";
 
 // ─── CORS ───────────────────────────────────────────────────────────────────

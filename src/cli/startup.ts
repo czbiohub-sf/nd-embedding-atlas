@@ -19,8 +19,7 @@ import { tableToIPC, tableFromArrays } from "@uwdata/flechette";
 import { EmbeddingStore, DEFAULT_OBSM_PRIORITY } from "../server/store.ts";
 import { buildPlateMounts, readPlateMeta } from "../server/plate.ts";
 import type { PlateChannel, PlateMount } from "../server/plate.ts";
-import { prepareObs } from "../server/prepare.ts";
-import { spatialHiddenColumns } from "../server/state.ts";
+import { detectSpatialColumns, spatialHiddenColumns } from "../server/state.ts";
 import type { DatasetConfig, DatasetMeta, ViewerState } from "../server/state.ts";
 import type { ResolvedConfig, DatasetEntry } from "./config.ts";
 import { getNetworkAddress } from "./resolve.ts";
@@ -164,20 +163,20 @@ export async function startup(config: ResolvedConfig): Promise<void> {
         }
     };
 
-    // Prepare obs result for spatial detection and column filtering
-    const firstIpcBytes = new Uint8Array(tableToIPC(datasetObs[0].arrowTable, { format: "file" }));
-    const prepResult = prepareObs(
-        firstIpcBytes,
-        firstColumns,
-        isMultiDataset ? loaded[0].entry.name : undefined,
-    );
+    // Detect spatial columns and filter internals for the obs column list
+    const colSet = new Set(firstColumns);
+    const detected = detectSpatialColumns(colSet);
+    const hasSpatial =
+        detected.fov != null || detected.bbox != null || detected.x != null;
+    const spatial = hasSpatial ? detected : null;
+    const detectedObsColumns = firstColumns.filter((c) => !c.startsWith("__"));
 
-    const hidden = spatialHiddenColumns(prepResult.spatial);
+    const hidden = spatialHiddenColumns(spatial);
 
     const store = await EmbeddingStore.fromInit(initStore, { hidden });
 
     // Apply obs column filter if configured
-    const obsColumns = config.obsColumns ?? prepResult.obsColumns;
+    const obsColumns = config.obsColumns ?? detectedObsColumns;
 
     console.log(
         `    ${GREEN}✓${RESET} ${formatNumber(store.nObs)} observations loaded into DuckDB`,
@@ -196,7 +195,7 @@ export async function startup(config: ResolvedConfig): Promise<void> {
     const state: ViewerState = {
         store,
         datasets: datasetConfigs,
-        spatial: prepResult.spatial,
+        spatial,
         obsColumns,
         port: config.port,
         availableObsmKeys,

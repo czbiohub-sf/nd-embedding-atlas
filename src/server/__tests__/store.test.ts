@@ -5,7 +5,7 @@
 import { describe, expect, test, afterEach } from "vitest";
 import { EmbeddingStore } from "../store.ts";
 import { handleMosaicQuery, isAllowedSql } from "../mosaic.ts";
-import { detectSpatialColumns, parseBbox } from "../prepare.ts";
+import { detectSpatialColumns, parseBbox } from "../state.ts";
 import type { DuckDBConnection } from "@duckdb/node-api";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

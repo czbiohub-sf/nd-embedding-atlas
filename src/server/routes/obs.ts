@@ -7,8 +7,7 @@
  * GET /api/health              — Health check
  */
 
-import type { ViewerState } from "../state.ts";
-import { parseBbox } from "../prepare.ts";
+import { parseBbox, type ViewerState } from "../state.ts";
 
 /**
  * Handle GET /api/obs/batch?ids=1,2,3
