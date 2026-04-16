@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { WsReconnectError, wsClient } from "../../lib/ws-client";
 
 type VarColumnStatus = "idle" | "loading" | "ready" | "error";
 
@@ -15,8 +16,8 @@ export interface VarColumnResult {
   error: string | null;
 }
 
-interface TaskStatusResponse {
-  status: "pending" | "running" | "ready" | "error";
+interface StatusMsg {
+  status: string;
   column?: string;
   error?: string;
 }
@@ -30,7 +31,9 @@ interface PostVarColumnResponse {
  *
  * Flow:
  *   POST /api/var-column { name, layer }
- *   → poll GET /api/var-column/{task_id}/status every 800ms
+ *   → if WS connected: subscribe("var-column/status") — server pushes
+ *     loading → ready/error transitions.
+ *   → else: fall back to HTTP polling every 800 ms.
  *   → on status="ready": set column
  *   → on status="error": set error
  */
@@ -49,22 +52,92 @@ export function useVarColumn(options?: UseVarColumnOptions): VarColumnResult {
     error: null,
   });
 
-  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Disposer for whichever watcher is active (WS sub or poll interval).
+  const stopRef = useRef<(() => void) | null>(null);
 
-  const stopPolling = useCallback(() => {
-    if (pollIntervalRef.current !== null) {
-      clearInterval(pollIntervalRef.current);
-      pollIntervalRef.current = null;
-    }
+  const stopWatching = useCallback(() => {
+    stopRef.current?.();
+    stopRef.current = null;
   }, []);
 
-  // Clear any in-flight poll on unmount so an abandoned materialize() call
-  // doesn't keep hitting /status forever.
-  useEffect(() => stopPolling, [stopPolling]);
+  // Clear any in-flight watcher on unmount so an abandoned materialize()
+  // call doesn't keep pushing updates.
+  useEffect(() => stopWatching, [stopWatching]);
+
+  const handleReady = useCallback((column: string | null) => {
+    stopRef.current = null;
+    setState({ status: "ready", column, error: null });
+    onStatusRef.current?.(null);
+  }, []);
+
+  const handleError = useCallback((error: string) => {
+    stopRef.current = null;
+    setState({ status: "error", column: null, error });
+    onStatusRef.current?.(null);
+  }, []);
+
+  const startHttpPoll = useCallback(
+    (taskId: string) => {
+      // eslint-disable-next-line no-misused-promises
+      const handle = setInterval(async () => {
+        try {
+          const res = await fetch(`/api/var-column/${taskId}/status`);
+          if (!res.ok) {
+            clearInterval(handle);
+            handleError(`Poll failed: ${res.status}`);
+            return;
+          }
+          const data = (await res.json()) as StatusMsg;
+          if (data.status === "ready") {
+            clearInterval(handle);
+            handleReady(data.column ?? null);
+          } else if (data.status === "error") {
+            clearInterval(handle);
+            handleError(data.error ?? "Unknown error");
+          }
+          // "loading" → keep polling
+        } catch (err) {
+          clearInterval(handle);
+          handleError(String(err));
+        }
+      }, 800);
+      stopRef.current = () => clearInterval(handle);
+    },
+    [handleError, handleReady],
+  );
+
+  const startWsSubscribe = useCallback(
+    (taskId: string) => {
+      const sub = wsClient.subscribe(
+        "var-column/status",
+        { task_id: taskId },
+        (msg: StatusMsg) => {
+          if (msg.status === "ready") {
+            sub.unsubscribe();
+            handleReady(msg.column ?? null);
+          } else if (msg.status === "error") {
+            sub.unsubscribe();
+            handleError(msg.error ?? "Unknown error");
+          }
+          // "loading" → keep the subscription alive
+        },
+        (err) => {
+          if (err instanceof WsReconnectError) {
+            // WS dropped mid-stream — switch to HTTP polling for the same task.
+            startHttpPoll(taskId);
+          } else {
+            handleError(err.message);
+          }
+        },
+      );
+      stopRef.current = () => sub.unsubscribe();
+    },
+    [handleError, handleReady, startHttpPoll],
+  );
 
   const materialize = useCallback(
     (name: string, layer: string) => {
-      stopPolling();
+      stopWatching();
       setState({ status: "loading", column: null, error: null });
       onStatusRef.current?.(`Materializing ${name}…`);
 
@@ -78,57 +151,26 @@ export function useVarColumn(options?: UseVarColumnOptions): VarColumnResult {
           });
           if (!res.ok) {
             const text = await res.text();
-            setState({ status: "error", column: null, error: text });
+            handleError(text);
             return;
           }
           const data = (await res.json()) as PostVarColumnResponse;
           taskId = data.task_id;
         } catch (err) {
-          setState({ status: "error", column: null, error: String(err) });
+          handleError(String(err));
           return;
         }
 
-        // eslint-disable-next-line no-misused-promises
-        pollIntervalRef.current = setInterval(async () => {
-          try {
-            const res = await fetch(`/api/var-column/${taskId}/status`);
-            if (!res.ok) {
-              stopPolling();
-              setState({
-                status: "error",
-                column: null,
-                error: `Poll failed: ${res.status}`,
-              });
-              return;
-            }
-            const data = (await res.json()) as TaskStatusResponse;
-            if (data.status === "ready") {
-              stopPolling();
-              setState({ status: "ready", column: data.column ?? null, error: null });
-              onStatusRef.current?.(null);
-            } else if (data.status === "error") {
-              stopPolling();
-              setState({
-                status: "error",
-                column: null,
-                error: data.error ?? "Unknown error",
-              });
-              onStatusRef.current?.(null);
-            }
-            // "pending" | "running" → keep polling
-          } catch (err) {
-            stopPolling();
-            setState({ status: "error", column: null, error: String(err) });
-            onStatusRef.current?.(null);
-          }
-        }, 800);
+        if (wsClient.isConnected) {
+          startWsSubscribe(taskId);
+        } else {
+          startHttpPoll(taskId);
+        }
       };
 
-      run().catch((err) => {
-        setState({ status: "error", column: null, error: String(err) });
-      });
+      run().catch((err) => handleError(String(err)));
     },
-    [stopPolling],
+    [handleError, startHttpPoll, startWsSubscribe, stopWatching],
   );
 
   return {
