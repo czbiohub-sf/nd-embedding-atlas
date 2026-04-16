@@ -11,7 +11,6 @@ import type { DockviewPanelApi } from "dockview-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { selectAnyTrajectory } from "../../dashboard/DashboardContext";
 import { useDashboard } from "../../hooks/useDashboard";
-import { useFloatingWindow } from "../../hooks/useFloatingWindow";
 import { colorSourceToString } from "../../lib/color-source";
 import type { IsolationCapability } from "../../scatter-gpu/handle-capabilities";
 import { useEmbeddingLoader } from "../../scatter-gpu/hooks/useEmbeddingLoader";
@@ -21,7 +20,6 @@ import type { PanelId } from "../../scatter-gpu/types";
 import { broadcastPanelState, clearPanelState } from "../../stores/PanelStateStore";
 import { disposeBitmap } from "../../stores/RoaringBroadcastStore";
 import type { AxisState } from "../../types";
-import { FloatingWindow } from "../FloatingWindow";
 import { LegendProvider } from "./LegendContext";
 import { ScatterOverlayControls } from "./ScatterOverlayControls";
 import { ScatterView } from "./ScatterView";
@@ -136,7 +134,6 @@ export function ScatterContent({
     const yCol = effectiveAxes ? `${prefix}_${effectiveAxes.yDim}` : "";
 
     const isLoading = !!loadingKey || categoryLoading;
-    const floatingWindow = useFloatingWindow({ initialWidth: 480, initialHeight: 480 });
 
     // ── Broadcast panel state for cross-panel sync ─────────────────────────────
     useEffect(() => {
@@ -210,7 +207,6 @@ export function ScatterContent({
             selectionTool={selectionTool}
             onSetSelectionTool={setSelectionTool}
             onFitView={() => fitViewRef.current?.()}
-            floatingWindow={floatingWindow}
             panelApi={panelApi}
             trajectoryActive={!!trajectory}
             onToggleTrajectory={
@@ -236,28 +232,6 @@ export function ScatterContent({
             >
                 <ScatterView {...scatterViewProps} overlayControls={overlayControls} />
             </LegendProvider>
-
-            {/* Nested in-app PiP floating window */}
-            <FloatingWindow
-                handle={floatingWindow}
-                title={
-                    effectiveAxes
-                        ? `${effectiveAxes.obsmKey.replace(/^X_/, "")} · x:${effectiveAxes.xDim} y:${effectiveAxes.yDim}`
-                        : "Scatter"
-                }
-            >
-                <LegendProvider
-                    categoryMapping={coloredCategoryMapping}
-                    coordinator={coordinator}
-                    selection={brushSelection}
-                    table={table}
-                    categoryCol={categoryCol}
-                    onIsolationChange={handleIsolationChange}
-                    onStaleColumn={clearCategoryMapping}
-                >
-                    <ScatterView {...scatterViewProps} overlayControls={overlayControls} />
-                </LegendProvider>
-            </FloatingWindow>
         </div>
     );
 }

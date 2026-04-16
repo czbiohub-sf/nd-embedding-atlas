@@ -47,7 +47,6 @@ function ScanDotIcon({ size = 12 }: { size?: number }) {
 
 import { useStore } from "@tanstack/react-store";
 import type { DockviewPanelApi } from "dockview-react";
-import type { FloatingWindowHandle } from "../../hooks/useFloatingWindow";
 import type { ColorSource } from "../../lib/color-source";
 import { colorSourceToString } from "../../lib/color-source";
 import { cn } from "../../lib/utils";
@@ -85,7 +84,6 @@ interface Props {
     selectionTool: "pan" | "marquee" | "lasso";
     onSetSelectionTool: (t: "pan" | "marquee" | "lasso") => void;
     onFitView?: () => void;
-    floatingWindow?: FloatingWindowHandle;
     panelApi?: DockviewPanelApi;
     trajectoryActive?: boolean;
     onToggleTrajectory?: () => void;
@@ -121,7 +119,6 @@ export function ScatterOverlayControls({
     selectionTool,
     onSetSelectionTool,
     onFitView,
-    floatingWindow,
     panelApi,
     trajectoryActive,
     onToggleTrajectory,
@@ -355,34 +352,23 @@ export function ScatterOverlayControls({
                         {isLinked ? <Lock className="size-3" /> : <LockOpen className="size-3" />}
                     </HoverTip>
 
-                    {floatingWindow && (
+                    {panelApi && (
                         <HoverTip
-                            label={floatingWindow.state.open ? "Floating" : "Float"}
-                            description={
-                                floatingWindow.state.open
-                                    ? "Return to docked panel"
-                                    : "Detach to a floating window"
-                            }
+                            label="Float"
+                            description="Detach to a floating window"
                             side="bottom"
                             render={
                                 <button
                                     type="button"
                                     onClick={() => {
-                                        if (floatingWindow.state.open) {
-                                            floatingWindow.close();
-                                        } else {
-                                            addFloatingScatter({
-                                                id: `float-${Date.now()}`,
-                                                axes,
-                                                colorByColumn: colorSourceToString(colorSource),
-                                            });
-                                            panelApi?.close();
-                                        }
+                                        addFloatingScatter({
+                                            id: `float-${Date.now()}`,
+                                            axes,
+                                            colorByColumn: colorSourceToString(colorSource),
+                                        });
+                                        panelApi.close();
                                     }}
-                                    className={cn(
-                                        "flex size-[22px] items-center justify-center bg-transparent text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground",
-                                        floatingWindow.state.open && "text-primary",
-                                    )}
+                                    className="flex size-[22px] items-center justify-center bg-transparent text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
                                 />
                             }
                         >
