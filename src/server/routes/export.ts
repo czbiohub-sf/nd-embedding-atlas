@@ -38,7 +38,7 @@ export function exportDir(): string {
 /** Sanitise a user-supplied filename into a safe Parquet basename. */
 function sanitiseFilename(name: string): string {
     const trimmed = name.trim().replace(/\.parquet$/i, "");
-    const safe = trimmed.replace(/[^\w.\-]+/g, "_").slice(0, 128);
+    const safe = trimmed.replace(/[^\w.-]+/g, "_").slice(0, 128);
     return (safe.length > 0 ? safe : "export") + ".parquet";
 }
 
@@ -74,10 +74,7 @@ export async function handleExport(req: Request, store: EmbeddingStore): Promise
         }
 
         if (matchCount === 0) {
-            return Response.json(
-                { error: "No observations match the predicate" },
-                { status: 400 },
-            );
+            return Response.json({ error: "No observations match the predicate" }, { status: 400 });
         }
 
         // Resolve the output path — caller can override via output_path.

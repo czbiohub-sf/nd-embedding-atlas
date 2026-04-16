@@ -64,9 +64,7 @@ export async function servePlateFile(
     mounts: readonly PlateMount[],
 ): Promise<Response | null> {
     // Mounts are expected longest-first (see `buildPlateMounts`).
-    const match = mounts.find(
-        (m) => pathname === m.mount || pathname.startsWith(m.mount + "/"),
-    );
+    const match = mounts.find((m) => pathname === m.mount || pathname.startsWith(m.mount + "/"));
     if (!match) return null;
 
     const rel = pathname.slice(match.mount.length).replace(/^\/+/, "");
@@ -244,4 +242,3 @@ function extractChannels(imageAttrs: Record<string, unknown>): PlateChannel[] {
     }
     return out;
 }
-

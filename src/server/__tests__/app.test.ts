@@ -233,9 +233,7 @@ describe("createApp", () => {
         });
         activeServer = server;
 
-        const res = await fetch(
-            `http://localhost:${server.port}/api/embeddings/X_umap/status`,
-        );
+        const res = await fetch(`http://localhost:${server.port}/api/embeddings/X_umap/status`);
         expect(res.status).toBe(200);
 
         const body = await res.json();

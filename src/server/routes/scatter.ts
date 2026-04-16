@@ -55,10 +55,7 @@ function binaryResponse(body: Uint8Array): Response {
  * Returns float32 interleaved x/y positions normalized to [-1, 1].
  * Query params: embedding, x_col, y_col
  */
-export async function handleScatterPositions(
-    url: URL,
-    store: EmbeddingStore,
-): Promise<Response> {
+export async function handleScatterPositions(url: URL, store: EmbeddingStore): Promise<Response> {
     const embedding = url.searchParams.get("embedding");
     const xCol = url.searchParams.get("x_col");
     const yCol = url.searchParams.get("y_col");
@@ -125,10 +122,7 @@ export async function handleScatterPositions(
  * Returns uint8 category indices, one per observation.
  * Query params: cat_col, original_col (optional)
  */
-export async function handleScatterCategories(
-    url: URL,
-    store: EmbeddingStore,
-): Promise<Response> {
+export async function handleScatterCategories(url: URL, store: EmbeddingStore): Promise<Response> {
     const catCol = url.searchParams.get("cat_col");
     const originalCol = url.searchParams.get("original_col");
 
@@ -280,7 +274,10 @@ export async function handleScatterSelectionPost(
             await store.execute("CREATE TEMP TABLE __scatter_selection (row_index UINTEGER)");
             for (let start = 0; start < rowIndices.length; start += batchSize) {
                 const end = Math.min(start + batchSize, rowIndices.length);
-                const values = rowIndices.slice(start, end).map((i) => `(${i})`).join(", ");
+                const values = rowIndices
+                    .slice(start, end)
+                    .map((i) => `(${i})`)
+                    .join(", ");
                 await store.execute(`INSERT INTO __scatter_selection VALUES ${values}`);
             }
         }

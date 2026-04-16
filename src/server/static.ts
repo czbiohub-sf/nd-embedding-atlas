@@ -86,7 +86,8 @@ export function serveStatic(pathname: string, frontendDir: string | null): Respo
     }
 
     // Map "/" to "index.html"
-    const filePath = pathname === "/" ? join(frontendDir, "index.html") : join(frontendDir, pathname);
+    const filePath =
+        pathname === "/" ? join(frontendDir, "index.html") : join(frontendDir, pathname);
 
     // Bun.file() works for both disk paths and $bunfs/ paths in compiled binaries.
     // For disk paths we can use existsSync; for $bunfs we try Bun.file().size > 0.

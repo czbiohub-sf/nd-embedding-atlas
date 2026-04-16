@@ -101,12 +101,14 @@ function normaliseHex(value: string): string {
         if (value.length === 7) return value.toUpperCase();
         if (value.length === 4) {
             // #rgb → #rrggbb
-            return ("#" +
+            return (
+                "#" +
                 value
                     .slice(1)
                     .split("")
                     .map((c) => c + c)
-                    .join("")).toUpperCase();
+                    .join("")
+            ).toUpperCase();
         }
     }
     if (value.startsWith("rgb")) {
@@ -141,7 +143,11 @@ function hslToHex(h: number, s: number, l: number): string {
     return (
         "#" +
         [f(0), f(8), f(4)]
-            .map((v) => Math.round(v * 255).toString(16).padStart(2, "0"))
+            .map((v) =>
+                Math.round(v * 255)
+                    .toString(16)
+                    .padStart(2, "0"),
+            )
             .join("")
             .toUpperCase()
     );

@@ -80,9 +80,15 @@ export const ARROW_IPC_CONTENT_TYPE = "application/vnd.apache.arrow.stream";
  *
  * @returns A Response object with the appropriate content type.
  */
-export async function handleMosaicQuery(body: MosaicQuery, store: EmbeddingStore): Promise<Response> {
+export async function handleMosaicQuery(
+    body: MosaicQuery,
+    store: EmbeddingStore,
+): Promise<Response> {
     if (!body.sql || !body.type) {
-        return Response.json({ error: "Missing 'sql' or 'type' in query payload" }, { status: 400 });
+        return Response.json(
+            { error: "Missing 'sql' or 'type' in query payload" },
+            { status: 400 },
+        );
     }
 
     const { sql, type: command } = body;

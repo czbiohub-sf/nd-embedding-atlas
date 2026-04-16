@@ -34,7 +34,9 @@ export async function handleListObsSets(store: EmbeddingStore): Promise<Response
         const result = rows.map((row) => ({
             ...row,
             created_at:
-                row.created_at && typeof row.created_at === "object" && "toISOString" in row.created_at
+                row.created_at &&
+                typeof row.created_at === "object" &&
+                "toISOString" in row.created_at
                     ? (row.created_at as Date).toISOString()
                     : row.created_at != null
                       ? String(row.created_at)
@@ -145,19 +147,13 @@ export async function handleActivateObsSet(
 ): Promise<Response> {
     try {
         const safeId = obssetId.replace(/'/g, "''");
-        const rows = await store.queryJson(
-            `SELECT 1 FROM obssets WHERE obsset_id = '${safeId}'`,
-        );
+        const rows = await store.queryJson(`SELECT 1 FROM obssets WHERE obsset_id = '${safeId}'`);
 
         if (rows.length === 0) {
-            return Response.json(
-                { error: `ObsSet '${obssetId}' not found` },
-                { status: 404 },
-            );
+            return Response.json({ error: `ObsSet '${obssetId}' not found` }, { status: 404 });
         }
 
-        const predicate =
-            `(_dataset, obs_name) IN (SELECT dataset_key, obs_name FROM obsset_members WHERE obsset_id = '${safeId}')`;
+        const predicate = `(_dataset, obs_name) IN (SELECT dataset_key, obs_name FROM obsset_members WHERE obsset_id = '${safeId}')`;
 
         return Response.json({ predicate });
     } catch (err) {

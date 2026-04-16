@@ -11,7 +11,10 @@ import type { DuckDBConnection } from "@duckdb/node-api";
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 /** Create an EmbeddingStore with mock obs data via SQL. */
-async function createMockStore(n = 100, options?: { hidden?: Set<string> }): Promise<EmbeddingStore> {
+async function createMockStore(
+    n = 100,
+    options?: { hidden?: Set<string> },
+): Promise<EmbeddingStore> {
     return EmbeddingStore.fromInit(async (conn: DuckDBConnection) => {
         // Build VALUES clause
         const rows: string[] = [];
@@ -62,7 +65,9 @@ describe("EmbeddingStore", () => {
         const store = await createMockStore(5);
         activeStore = store;
 
-        const rows = await store.queryJson("SELECT obs_name FROM obs_base ORDER BY __row_index__ LIMIT 3");
+        const rows = await store.queryJson(
+            "SELECT obs_name FROM obs_base ORDER BY __row_index__ LIMIT 3",
+        );
         expect(rows).toHaveLength(3);
         expect(rows[0]).toHaveProperty("obs_name");
         expect(rows[0].obs_name).toBe("obs_0");
@@ -276,10 +281,7 @@ describe("handleMosaicQuery", () => {
         const store = await createMockStore(5);
         activeStore = store;
 
-        const res = await handleMosaicQuery(
-            { type: "exec", sql: "DROP TABLE obs_base" },
-            store,
-        );
+        const res = await handleMosaicQuery({ type: "exec", sql: "DROP TABLE obs_base" }, store);
         expect(res.status).toBe(400);
         const body = await res.json();
         expect(body.error).toContain("not allowed");
@@ -290,10 +292,7 @@ describe("handleMosaicQuery", () => {
         activeStore = store;
 
         // Create mosaic schema first
-        await handleMosaicQuery(
-            { type: "exec", sql: "CREATE SCHEMA IF NOT EXISTS mosaic" },
-            store,
-        );
+        await handleMosaicQuery({ type: "exec", sql: "CREATE SCHEMA IF NOT EXISTS mosaic" }, store);
 
         // Create preagg table
         const res = await handleMosaicQuery(
@@ -340,10 +339,7 @@ describe("handleMosaicQuery", () => {
         const store = await createMockStore(5);
         activeStore = store;
 
-        const res = await handleMosaicQuery(
-            { type: "csv", sql: "SELECT * FROM dataset" },
-            store,
-        );
+        const res = await handleMosaicQuery({ type: "csv", sql: "SELECT * FROM dataset" }, store);
         expect(res.status).toBe(400);
         const body = await res.json();
         expect(body.error).toContain("Unknown command");

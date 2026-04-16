@@ -141,7 +141,11 @@ export interface NdeaProtocol extends ProtocolMap {
         res: Array<Record<string, unknown>>;
     };
     "obssets/create": {
-        req: { name: string; color?: string; members: Array<{ dataset_key: string; obs_name: string }> };
+        req: {
+            name: string;
+            color?: string;
+            members: Array<{ dataset_key: string; obs_name: string }>;
+        };
         res: Record<string, unknown>;
     };
     "obssets/delete": {
@@ -153,7 +157,12 @@ export interface NdeaProtocol extends ProtocolMap {
         res: { predicate: string };
     };
     "export/start": {
-        req: { predicate: string; filename: string; selection_type?: string; embedding_key?: string };
+        req: {
+            predicate: string;
+            filename: string;
+            selection_type?: string;
+            embedding_key?: string;
+        };
         res: { task_id: string; status: string };
     };
     "export/status": {

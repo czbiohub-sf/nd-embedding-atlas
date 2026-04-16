@@ -53,9 +53,7 @@ function buildChunk(typeCode: string, data: Uint8Array): Uint8Array {
  */
 export function encodePng(rgba: Uint8Array, width: number, height: number): Uint8Array {
     if (rgba.length !== width * height * 4) {
-        throw new Error(
-            `encodePng: expected ${width * height * 4} bytes, got ${rgba.length}`,
-        );
+        throw new Error(`encodePng: expected ${width * height * 4} bytes, got ${rgba.length}`);
     }
 
     // IHDR: width, height, bit_depth=8, color_type=6 (RGBA), compression=0, filter=0, interlace=0
@@ -85,9 +83,12 @@ export function encodePng(rgba: Uint8Array, width: number, height: number): Uint
     const total = PNG_SIG.length + ihdrChunk.length + idatChunk.length + iendChunk.length;
     const out = new Uint8Array(total);
     let off = 0;
-    out.set(PNG_SIG, off); off += PNG_SIG.length;
-    out.set(ihdrChunk, off); off += ihdrChunk.length;
-    out.set(idatChunk, off); off += idatChunk.length;
+    out.set(PNG_SIG, off);
+    off += PNG_SIG.length;
+    out.set(ihdrChunk, off);
+    off += ihdrChunk.length;
+    out.set(idatChunk, off);
+    off += idatChunk.length;
     out.set(iendChunk, off);
     return out;
 }

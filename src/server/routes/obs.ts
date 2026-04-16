@@ -33,7 +33,10 @@ export async function handleObsBatch(url: URL, state: ViewerState): Promise<Resp
         if (!trimmed) continue;
         const n = Number(trimmed);
         if (!Number.isInteger(n)) {
-            return Response.json({ error: "ids must be comma-separated integers" }, { status: 422 });
+            return Response.json(
+                { error: "ids must be comma-separated integers" },
+                { status: 422 },
+            );
         }
         rowIndices.push(n);
     }
@@ -146,9 +149,7 @@ export async function handleObsInfo(rowIndex: number, state: ViewerState): Promi
 export async function handleObsDetail(rowIndex: number, state: ViewerState): Promise<Response> {
     try {
         // Get column names from obs_base, excluding hidden columns
-        const descRows = await state.store.queryJson(
-            "SELECT column_name FROM (DESCRIBE obs_base)",
-        );
+        const descRows = await state.store.queryJson("SELECT column_name FROM (DESCRIBE obs_base)");
         const allCols = descRows.map((r) => String(r.column_name));
         // Filter out hidden columns (we don't track hidden in TS ViewerState yet,
         // but obs_base has all columns; the VIEW filters them)
