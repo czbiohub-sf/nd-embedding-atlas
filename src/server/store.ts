@@ -44,7 +44,10 @@ function concatBuffers(buffers: Array<Buffer | Uint8Array>): Uint8Array {
     const result = new Uint8Array(totalLength);
     let offset = 0;
     for (const buf of buffers) {
-        result.set(new Uint8Array(buf.buffer ?? buf, (buf as Uint8Array).byteOffset ?? 0, buf.byteLength), offset);
+        result.set(
+            new Uint8Array(buf.buffer ?? buf, (buf as Uint8Array).byteOffset ?? 0, buf.byteLength),
+            offset,
+        );
         offset += buf.byteLength;
     }
     return result;
@@ -61,6 +64,8 @@ export class EmbeddingStore {
     nObs: number = 0;
     /** Registered embeddings and their metadata. */
     private _loaded: Map<string, EmbeddingMeta> = new Map();
+    /** Registered gene columns: colName → { table, colName }. */
+    private _geneCols: Map<string, { table: string; colName: string }> = new Map();
     /** Columns to exclude from the dataset VIEW. */
     private _hidden: Set<string>;
     /** Whether nanoarrow extension is loaded (for Arrow IPC output). */
@@ -78,7 +83,10 @@ export class EmbeddingStore {
      * The Parquet file should contain the obs DataFrame. A `__row_index__`
      * column is added if not present, along with `obs_name` for identity.
      */
-    static async fromParquet(parquetPath: string, options?: { hidden?: Set<string> }): Promise<EmbeddingStore> {
+    static async fromParquet(
+        parquetPath: string,
+        options?: { hidden?: Set<string> },
+    ): Promise<EmbeddingStore> {
         const db = await DuckDBInstance.create(":memory:");
         const conn = await db.connect();
         const store = new EmbeddingStore(db, conn, options?.hidden);
@@ -196,6 +204,49 @@ export class EmbeddingStore {
         await this._rebuildView();
     }
 
+    /** True if a gene column with this name has already been materialised. */
+    hasGeneColumn(colName: string): boolean {
+        return this._geneCols.has(colName);
+    }
+
+    /**
+     * Register a materialised gene/var column in DuckDB and rebuild the VIEW.
+     *
+     * Values are aligned to obs_base by `__row_index__`, so `values.length`
+     * must equal `nObs`.
+     */
+    async registerGeneColumn(colName: string, values: Float64Array): Promise<void> {
+        if (values.length !== this.nObs) {
+            throw new Error(
+                `registerGeneColumn: values.length=${values.length} != nObs=${this.nObs}`,
+            );
+        }
+        if (this._geneCols.has(colName)) return;
+
+        const safe = colName.replace(/[^a-zA-Z0-9_]/g, "_");
+        const tableName = `gene_${safe}`;
+
+        await this.conn.run(
+            `CREATE TABLE ${tableName} (__row_index__ INTEGER, "${colName}" DOUBLE)`,
+        );
+
+        const batchSize = 1000;
+        for (let start = 0; start < values.length; start += batchSize) {
+            const end = Math.min(start + batchSize, values.length);
+            const rows: string[] = [];
+            for (let i = start; i < end; i++) {
+                const v = values[i];
+                rows.push(`(${i}, ${Number.isFinite(v) ? v : "NULL"})`);
+            }
+            await this.conn.run(
+                `INSERT INTO ${tableName} (__row_index__, "${colName}") VALUES ${rows.join(", ")}`,
+            );
+        }
+
+        this._geneCols.set(colName, { table: tableName, colName });
+        await this._rebuildView();
+    }
+
     /**
      * Recreate the `dataset` VIEW to include all registered embeddings.
      *
@@ -205,7 +256,9 @@ export class EmbeddingStore {
     async _rebuildView(): Promise<void> {
         let select: string;
         if (this._hidden.size > 0) {
-            const reader = await this.conn.runAndReadAll("SELECT column_name FROM (DESCRIBE obs_base)");
+            const reader = await this.conn.runAndReadAll(
+                "SELECT column_name FROM (DESCRIBE obs_base)",
+            );
             const allCols = reader.getColumnsJS()[0] as string[];
             const visibleCols = allCols.filter((c) => !this._hidden.has(c));
             select = visibleCols.map((c) => `obs_base."${c}"`).join(", ");
@@ -214,21 +267,26 @@ export class EmbeddingStore {
         }
 
         const joins: string[] = [];
-        const embCols: string[] = [];
+        const extraCols: string[] = [];
 
         for (const meta of this._loaded.values()) {
             joins.push(`LEFT JOIN ${meta.table} USING (__row_index__)`);
             for (let i = 0; i < meta.nDims; i++) {
-                embCols.push(`${meta.table}."${meta.prefix}_${i}"`);
+                extraCols.push(`${meta.table}."${meta.prefix}_${i}"`);
             }
         }
 
-        const embSelect = embCols.join(", ");
+        for (const gene of this._geneCols.values()) {
+            joins.push(`LEFT JOIN ${gene.table} USING (__row_index__)`);
+            extraCols.push(`${gene.table}."${gene.colName}"`);
+        }
+
+        const extraSelect = extraCols.join(", ");
         const joinClause = joins.join(" ");
 
-        if (embSelect) {
+        if (extraSelect) {
             await this.conn.run(
-                `CREATE OR REPLACE VIEW dataset AS SELECT ${select}, ${embSelect} FROM obs_base ${joinClause}`,
+                `CREATE OR REPLACE VIEW dataset AS SELECT ${select}, ${extraSelect} FROM obs_base ${joinClause}`,
             );
         } else {
             await this.conn.run(`CREATE OR REPLACE VIEW dataset AS SELECT ${select} FROM obs_base`);

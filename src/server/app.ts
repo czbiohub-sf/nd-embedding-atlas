@@ -30,14 +30,24 @@ import {
     handleDeleteObsSet,
     handleActivateObsSet,
 } from "./routes/obssets.ts";
-import { handleVarNames, handleVarLayers, handleGeneColumn, handleGeneColumnStatus } from "./routes/var.ts";
+import {
+    handleVarNames,
+    handleVarLayers,
+    handleGeneColumn,
+    handleGeneColumnStatus,
+} from "./routes/var.ts";
 import { handleExport, handleExportStatus } from "./routes/export.ts";
 import { handleCrop } from "./routes/crops.ts";
 import { serveStatic, resolveFrontendDir } from "./static.ts";
 
 // Re-exports for public API
 export { EmbeddingStore, obsmColumnPrefix, DEFAULT_OBSM_PRIORITY } from "./store.ts";
-export { handleMosaicQuery, parseMosaicQuery, isAllowedSql, ARROW_IPC_CONTENT_TYPE } from "./mosaic.ts";
+export {
+    handleMosaicQuery,
+    parseMosaicQuery,
+    isAllowedSql,
+    ARROW_IPC_CONTENT_TYPE,
+} from "./mosaic.ts";
 export { detectSpatialColumns, parseBbox, prepareObs } from "./prepare.ts";
 export type {
     SpatialColumns,
@@ -137,7 +147,16 @@ export function createApp(options: AppOptions) {
 
             // ── Route dispatch ──────────────────────────────────────────
             try {
-                const response = await routeRequest(req, url, pathname, store, state, config, frontendDir, options);
+                const response = await routeRequest(
+                    req,
+                    url,
+                    pathname,
+                    store,
+                    state,
+                    config,
+                    frontendDir,
+                    options,
+                );
                 return withCors(response);
             } catch (err) {
                 const message = err instanceof Error ? err.message : String(err);
@@ -302,15 +321,15 @@ async function routeApi(
 
     // ── Var / Gene column ───────────────────────────────────────────
     if (pathname === "/api/var/names" && method === "GET") {
-        return handleVarNames(url, store);
+        return handleVarNames(url, state);
     }
 
     if (pathname === "/api/var/layers" && method === "GET") {
-        return handleVarLayers(store);
+        return handleVarLayers(state);
     }
 
     if (pathname === "/api/gene-column" && method === "POST") {
-        return handleGeneColumn(req, store);
+        return handleGeneColumn(req, state);
     }
 
     const geneStatusMatch = pathname.match(/^\/api\/gene-column\/(.+)\/status$/);
