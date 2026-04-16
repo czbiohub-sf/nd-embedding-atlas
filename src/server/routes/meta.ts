@@ -35,7 +35,13 @@ function buildObsmMetadata(
 export function handleMetadata(state: ViewerState, config: DatasetMeta): Response {
     const result: Record<string, unknown> = {
         version: "0.0.0-dev",
-        props: config.embeddingProps,
+        props: {
+            data: {
+                id: config.idColumn,
+                projection: { x: config.defaultX, y: config.defaultY },
+            },
+            ...config.embeddingProps,
+        },
         database: { type: "rest" },
         obsm: buildObsmMetadata(state.availableObsmKeys, state.store),
         obs_columns: config.obsColumnNames,

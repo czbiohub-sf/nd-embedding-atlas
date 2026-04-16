@@ -9,7 +9,8 @@
     },
     "type": "module",
     "scripts": {
-        "dev": "bun run src/cli/index.ts",
+        "dev": "bun run scripts/dev.ts",
+        "dev:backend": "bun run src/cli/index.ts",
         "build": "bun run scripts/build.ts",
         "build:frontend": "cd frontend && vp build",
         "build:binary": "bun build ./src/cli/index.ts --compile --outfile dist/ndea",
