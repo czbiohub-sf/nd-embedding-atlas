@@ -172,7 +172,9 @@ function parseDictEntry(name: string, entry: unknown, baseDir: string): DatasetE
         path: resolve(baseDir, dataPath),
     };
 
-    const platePath = (e.hcs_plate ?? e["ome-zarr"] ?? e.ome_zarr ?? e.plate_path) as string | undefined;
+    const platePath = (e.hcs_plate ?? e["ome-zarr"] ?? e.ome_zarr ?? e.plate_path) as
+        | string
+        | undefined;
     if (platePath != null) {
         if (typeof platePath !== "string") {
             throw new Error(`Dataset '${name}': hcs_plate/plate_path must be a string`);
@@ -205,7 +207,9 @@ function parseChannels(raw: unknown, datasetId: number | string): Record<string,
 
         if (c.contrast != null) {
             if (!Array.isArray(c.contrast) || c.contrast.length !== 2) {
-                throw new Error(`Dataset ${datasetId}, channel '${name}': contrast must be [min, max]`);
+                throw new Error(
+                    `Dataset ${datasetId}, channel '${name}': contrast must be [min, max]`,
+                );
             }
             channel.contrast = c.contrast as [number, number];
         }

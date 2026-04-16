@@ -114,7 +114,10 @@ function parseArgs(argv: string[]): ParsedArgs {
                 console.error("Error: --obs-columns requires a value");
                 process.exit(1);
             }
-            result.obsColumns = argv[i].split(",").map((s) => s.trim()).filter(Boolean);
+            result.obsColumns = argv[i]
+                .split(",")
+                .map((s) => s.trim())
+                .filter(Boolean);
             i++;
         } else if (arg.startsWith("--")) {
             console.error(`Error: unknown option: ${arg}`);

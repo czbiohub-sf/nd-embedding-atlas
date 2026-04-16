@@ -1,5 +1,5 @@
-import type { Convention, DataTree } from "../core/types.ts";
-import { SimpleDataTree } from "../core/data-tree.ts";
+import type { Convention, DataTree } from "./types.ts";
+import { SimpleDataTree } from "./data-tree.ts";
 
 /**
  * xarray convention parser (fallback).

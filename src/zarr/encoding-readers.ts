@@ -18,9 +18,9 @@ import type {
     NullableArray,
     Scalar,
     SparseArray,
-} from "../core/types.ts";
-import { SimpleCategorical, SimpleNullable } from "../core/categorical.ts";
-import { CsrCscArray } from "../core/sparse.ts";
+} from "./types.ts";
+import { SimpleCategorical, SimpleNullable } from "./categorical.ts";
+import { CsrCscArray } from "./sparse.ts";
 
 // zarrita group/array types are complex — use structural typing
 type ZarrGroup = Awaited<ReturnType<typeof zarr.open<Readable>>> & {

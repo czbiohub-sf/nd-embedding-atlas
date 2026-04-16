@@ -129,7 +129,7 @@ const DUCKDB_PLATFORM_EXTERNALS = [
 // to the main entry inside $bunfs; parallel-reader.ts switches its URL
 // extension to match when running compiled.
 const WORKER_ENTRYPOINTS = [
-    "./src/axial/conventions/column-worker.ts",
+    "./src/zarr/column-worker.ts",
 ];
 
 const compileArgs = [

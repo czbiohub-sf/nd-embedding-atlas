@@ -22,7 +22,7 @@ import type {
     SparseArray,
 } from "./types.ts";
 import { CsrCscArray } from "./sparse.ts";
-import { readSparse } from "../conventions/encoding-readers.ts";
+import { readSparse } from "./encoding-readers.ts";
 
 // TypedArray union for dense matrix results
 type TypedArray =

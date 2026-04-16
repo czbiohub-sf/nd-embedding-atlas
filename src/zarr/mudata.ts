@@ -1,7 +1,7 @@
 import * as zarr from "zarrita";
-import type { AnnDataFrame, Convention, DataTree } from "../core/types.ts";
-import { SimpleDataTree } from "../core/data-tree.ts";
-import { SimpleCoordSet, SimpleCoordArray } from "../core/coord-set.ts";
+import type { AnnDataFrame, Convention, DataTree } from "./types.ts";
+import { SimpleDataTree } from "./data-tree.ts";
+import { SimpleCoordSet, SimpleCoordArray } from "./coord-set.ts";
 import { detectAnnData } from "./anndata.ts";
 import { readDataFrame } from "./encoding-readers.ts";
 

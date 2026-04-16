@@ -14,7 +14,7 @@
 import { unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { open, AnnDataAccessor, toArrowTable } from "../axial/index.ts";
+import { open, AnnDataAccessor, toArrowTable } from "../zarr/index.ts";
 import { tableToIPC, tableFromArrays } from "@uwdata/flechette";
 import { EmbeddingStore, DEFAULT_OBSM_PRIORITY } from "../server/store.ts";
 import { buildPlateMounts, readPlateMeta } from "../server/plate.ts";

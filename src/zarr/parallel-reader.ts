@@ -4,8 +4,8 @@
  * Reassembles results on the main thread into an AnnDataFrame.
  */
 
-import type { AnnDataFrame, ColumnData, Scalar } from "../core/types.ts";
-import { SimpleCategorical, SimpleNullable } from "../core/categorical.ts";
+import type { AnnDataFrame, ColumnData, Scalar } from "./types.ts";
+import { SimpleCategorical, SimpleNullable } from "./categorical.ts";
 
 interface ColumnResult {
     encoding: "typed" | "categorical" | "nullable" | "string-array" | "bool-array";
@@ -57,7 +57,7 @@ export async function readDataFrameParallel(
         Array.isArray(Bun.embeddedFiles) &&
         Bun.embeddedFiles.length > 0;
     const workerUrl = isCompiled
-        ? "/$bunfs/root/axial/conventions/column-worker.js"
+        ? "/$bunfs/root/zarr/column-worker.js"
         : new URL("./column-worker.ts", import.meta.url).href;
     const workers: Worker[] = [];
     const busy = new Set<number>();

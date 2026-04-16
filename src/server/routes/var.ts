@@ -7,8 +7,8 @@
  * GET  /api/gene-column/{task_id}/status — Poll materialization status
  */
 
-import type { AnnDataAccessor } from "../../axial/core/anndata-accessor.ts";
-import type { SparseArray } from "../../axial/core/types.ts";
+import type { AnnDataAccessor } from "../../zarr/anndata-accessor.ts";
+import type { SparseArray } from "../../zarr/types.ts";
 import { GeneColumnBodySchema, parseJsonBody } from "../protocol.ts";
 import type { ViewerState } from "../state.ts";
 
