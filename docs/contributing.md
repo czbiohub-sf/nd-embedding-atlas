@@ -15,7 +15,7 @@ icon: lucide/git-pull-request
 
 ### Clone and install
 
-``` bash
+```bash
 git clone https://github.com/czbiohub-sf/nd-embedding-atlas.git
 cd nd-embedding-atlas
 uv sync --all-groups # (1)!
@@ -25,7 +25,7 @@ uv sync --all-groups # (1)!
 
 ### Build the frontend
 
-``` bash
+```bash
 cd frontend && pnpm install && vp build
 cd ..
 ```
@@ -43,13 +43,13 @@ Enforced by [Ruff](https://docs.astral.sh/ruff/) (config in `pyproject.toml`).
 
 Function signatures use keyword-only params after the first positional arg:
 
-``` python
+```python
 def prepare_obs(collection, *, obs_columns=None): ...
 ```
 
 Error messages go through a `msg` variable:
 
-``` python
+```python
 msg = f"Unknown key: {key}"
 raise ValueError(msg)
 ```
@@ -61,7 +61,7 @@ Config lives in `frontend/oxlint.json` and the `lint:` / `fmt:` sections of `fro
 
 ## Linting and formatting
 
-``` bash
+```bash
 uvx prek # (1)!
 ```
 
@@ -87,7 +87,7 @@ Or run tools individually:
 
 ## Testing
 
-``` bash
+```bash
 uv run pytest # (1)!
 ```
 
@@ -99,15 +99,15 @@ Tests live in `tests/` with fixtures in `tests/conftest.py`.
 
 The CI runs via [Hatch](https://hatch.pypa.io/) across:
 
-| Python | Dependencies |
-|--------|-------------|
-| 3.12 | Stable |
-| 3.13 | Stable |
-| 3.13 | Pre-release (non-blocking) |
+| Python | Dependencies               |
+| ------ | -------------------------- |
+| 3.12   | Stable                     |
+| 3.13   | Stable                     |
+| 3.13   | Pre-release (non-blocking) |
 
 ## Frontend development
 
-``` bash
+```bash
 cd frontend
 vp dev   # (1)!
 vp build # (2)!
@@ -118,13 +118,13 @@ vp build # (2)!
 
 Full dev stack (backend + frontend together):
 
-``` bash
+```bash
 mise run dev data/annotations_zv3.zarr
 ```
 
 ## Project structure
 
-``` text
+```text
 src/nd_embedding_atlas/
   cli/          # Typer CLI — auto-detects AnnData / OME-Zarr / YAML config
   io/           # AnnDataCollection, fast zarr readers, ProjectConfig YAML model
@@ -144,20 +144,19 @@ scripts/        # Standalone data-prep scripts (typer + rich)
 tests/          # pytest
 ```
 
-
 ## Common commands
 
-| Command | Description |
-|---------|-------------|
-| `uv sync` | Install dependencies |
-| `uv run pytest` | Run tests |
-| `uvx prek` | Lint + format (all pre-commit hooks) |
-| `ndea <paths>` | Launch the viewer |
-| `mise run dev <path>` | Full dev stack (backend + frontend) |
-| `uv build` | Build wheel (auto-builds frontend) |
-| `cd frontend && vp build` | Rebuild frontend only |
-| `uv run zensical serve` | Preview docs locally (live reload) |
-| `uv run zensical build` | Build static docs site |
+| Command                   | Description                          |
+| ------------------------- | ------------------------------------ |
+| `uv sync`                 | Install dependencies                 |
+| `uv run pytest`           | Run tests                            |
+| `uvx prek`                | Lint + format (all pre-commit hooks) |
+| `ndea <paths>`            | Launch the viewer                    |
+| `mise run dev <path>`     | Full dev stack (backend + frontend)  |
+| `uv build`                | Build wheel (auto-builds frontend)   |
+| `cd frontend && vp build` | Rebuild frontend only                |
+| `uv run zensical serve`   | Preview docs locally (live reload)   |
+| `uv run zensical build`   | Build static docs site               |
 
 ## Versioning
 

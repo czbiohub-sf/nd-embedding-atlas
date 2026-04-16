@@ -5,7 +5,7 @@ on:
     branches: [main]
   pull_request:
   schedule:
-    - cron: "0 5 1,15 * *"  # 1st and 15th of every month
+    - cron: "0 5 1,15 * *" # 1st and 15th of every month
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

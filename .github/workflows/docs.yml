@@ -8,7 +8,7 @@ on:
     branches: [main]
 
 permissions:
-  contents: write  # required for mike to push to gh-pages
+  contents: write # required for mike to push to gh-pages
 
 jobs:
   # Verify docs build cleanly on PRs (no deployment)
@@ -31,7 +31,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          fetch-depth: 0  # mike needs full history to manage gh-pages branch
+          fetch-depth: 0 # mike needs full history to manage gh-pages branch
 
       - uses: astral-sh/setup-uv@v7
         with:

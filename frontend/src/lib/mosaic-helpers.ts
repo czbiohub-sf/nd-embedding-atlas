@@ -12,16 +12,18 @@ import { and, type ExprNode, type FilterExpr, literal } from "@uwdata/mosaic-sql
  * If the filter is empty/null, returns literal(true) so all rows count.
  */
 export function filterExprToExpr(filter: FilterExpr | null | undefined): ExprNode {
-  if (filter == null) return literal(true);
-  if (typeof filter === "boolean") return literal(filter);
-  if (typeof filter === "string") return literal(true);
-  if (Array.isArray(filter)) {
-    const exprs = filter.filter((f): f is ExprNode => f != null && typeof f !== "boolean" && typeof f !== "string");
-    if (exprs.length === 0) return literal(true);
-    if (exprs.length === 1) return exprs[0];
-    return and(...exprs);
-  }
-  return filter;
+    if (filter == null) return literal(true);
+    if (typeof filter === "boolean") return literal(filter);
+    if (typeof filter === "string") return literal(true);
+    if (Array.isArray(filter)) {
+        const exprs = filter.filter(
+            (f): f is ExprNode => f != null && typeof f !== "boolean" && typeof f !== "string",
+        );
+        if (exprs.length === 0) return literal(true);
+        if (exprs.length === 1) return exprs[0];
+        return and(...exprs);
+    }
+    return filter;
 }
 
 /**
@@ -29,7 +31,7 @@ export function filterExprToExpr(filter: FilterExpr | null | undefined): ExprNod
  * Mosaic may return an Array or an Arrow-like Iterable.
  */
 export function toRows<T = Record<string, unknown>>(result: unknown): T[] {
-  return Array.isArray(result) ? result : Array.from(result as Iterable<T>);
+    return Array.isArray(result) ? result : Array.from(result as Iterable<T>);
 }
 
 /**
@@ -39,17 +41,17 @@ export function toRows<T = Record<string, unknown>>(result: unknown): T[] {
  * Follows Apple's predicateToString() pattern from embedding-atlas.
  */
 export function predicateToSql(selection: Selection): string | null {
-  const predicate = selection.predicate(null);
-  if (predicate == null) return null;
-  if (Array.isArray(predicate)) {
-    if (predicate.length === 0) return null;
-    return and(...predicate)
-      .toString()
-      .trim();
-  }
-  if (typeof predicate === "string") return predicate.trim() || null;
-  if (typeof predicate === "boolean") return literal(predicate).toString();
-  return predicate.toString().trim();
+    const predicate = selection.predicate(null);
+    if (predicate == null) return null;
+    if (Array.isArray(predicate)) {
+        if (predicate.length === 0) return null;
+        return and(...predicate)
+            .toString()
+            .trim();
+    }
+    if (typeof predicate === "string") return predicate.trim() || null;
+    if (typeof predicate === "boolean") return literal(predicate).toString();
+    return predicate.toString().trim();
 }
 
 /**
@@ -64,8 +66,8 @@ export function predicateToSql(selection: Selection): string | null {
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function stringPredicate(sql: string): ExprNode {
-  // biome-ignore lint/suspicious/noExplicitAny: intentional bridge — see JSDoc
-  return { toString: () => sql } as unknown as ExprNode;
+    // biome-ignore lint/suspicious/noExplicitAny: intentional bridge — see JSDoc
+    return { toString: () => sql } as unknown as ExprNode;
 }
 
 /**
@@ -75,13 +77,13 @@ export function stringPredicate(sql: string): ExprNode {
  * the cached schema. This rebuilds the VIEW with all emb_* LEFT JOINs.
  */
 export async function rebuildDatasetView(coordinator: Coordinator): Promise<void> {
-  const tables = await coordinator.query(
-    `SELECT table_name FROM information_schema.tables
+    const tables = await coordinator.query(
+        `SELECT table_name FROM information_schema.tables
          WHERE table_schema = 'main' AND table_name LIKE 'emb_%'`,
-    { type: "json" },
-  );
-  const embTables = toRows<{ table_name: string }>(tables).map((r) => r.table_name);
+        { type: "json" },
+    );
+    const embTables = toRows<{ table_name: string }>(tables).map((r) => r.table_name);
 
-  const joins = embTables.map((t) => `LEFT JOIN ${t} USING (__row_index__)`).join(" ");
-  await coordinator.exec(`CREATE OR REPLACE VIEW dataset AS SELECT * FROM obs_base ${joins}`);
+    const joins = embTables.map((t) => `LEFT JOIN ${t} USING (__row_index__)`).join(" ");
+    await coordinator.exec(`CREATE OR REPLACE VIEW dataset AS SELECT * FROM obs_base ${joins}`);
 }

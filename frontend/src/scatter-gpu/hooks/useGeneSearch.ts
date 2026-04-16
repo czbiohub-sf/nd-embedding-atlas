@@ -4,12 +4,12 @@ import { useEffect, useState } from "react";
 import { varKeys } from "./queryKeys";
 
 interface VarNamesResponse {
-  names: string[];
+    names: string[];
 }
 
 export interface GeneSearchResult {
-  names: string[];
-  isLoading: boolean;
+    names: string[];
+    isLoading: boolean;
 }
 
 /**
@@ -18,30 +18,30 @@ export interface GeneSearchResult {
  * Empty query returns the first 50 gene names.
  */
 export function useGeneSearch(query: string): GeneSearchResult {
-  const [debouncedQuery, setDebouncedQuery] = useState(query);
-  const geneDebouncer = useDebouncer((q: string) => setDebouncedQuery(q), {
-    wait: 200,
-    leading: false,
-    trailing: true,
-  });
-  useEffect(() => {
-    geneDebouncer.maybeExecute(query);
-  }, [query, geneDebouncer.maybeExecute]); // eslint-disable-line react-hooks/exhaustive-deps
+    const [debouncedQuery, setDebouncedQuery] = useState(query);
+    const geneDebouncer = useDebouncer((q: string) => setDebouncedQuery(q), {
+        wait: 200,
+        leading: false,
+        trailing: true,
+    });
+    useEffect(() => {
+        geneDebouncer.maybeExecute(query);
+    }, [query, geneDebouncer.maybeExecute]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const { data, isLoading } = useQuery<VarNamesResponse>({
-    queryKey: varKeys.names(debouncedQuery),
-    queryFn: async () => {
-      const params = new URLSearchParams({ limit: "50" });
-      if (debouncedQuery) params.set("q", debouncedQuery);
-      const res = await fetch(`/api/var/names?${params}`);
-      if (!res.ok) throw new Error(`var/names fetch failed: ${res.status}`);
-      return res.json() as Promise<VarNamesResponse>;
-    },
-    staleTime: 60_000,
-  });
+    const { data, isLoading } = useQuery<VarNamesResponse>({
+        queryKey: varKeys.names(debouncedQuery),
+        queryFn: async () => {
+            const params = new URLSearchParams({ limit: "50" });
+            if (debouncedQuery) params.set("q", debouncedQuery);
+            const res = await fetch(`/api/var/names?${params}`);
+            if (!res.ok) throw new Error(`var/names fetch failed: ${res.status}`);
+            return res.json() as Promise<VarNamesResponse>;
+        },
+        staleTime: 60_000,
+    });
 
-  return {
-    names: data?.names ?? [],
-    isLoading,
-  };
+    return {
+        names: data?.names ?? [],
+        isLoading,
+    };
 }

@@ -10,11 +10,11 @@ usage, and interactivity. This page explains what to do and why.
 
 ## At a glance
 
-| | Recommended | Avoid |
-|---|---|---|
-| **Zarr version** | Zarr v3 (OME-NGFF 0.5) with `sharding_indexed` | Zarr v2 or unsharded v3 |
-| **Pyramid** | ≥ 4 resolution levels (LODs) | Single LOD |
-| **Inner chunk (XY)** | 512 × 512 px or 256 × 256 | Anything that covers a full XY plane |
+|                      | Recommended                                    | Avoid                                |
+| -------------------- | ---------------------------------------------- | ------------------------------------ |
+| **Zarr version**     | Zarr v3 (OME-NGFF 0.5) with `sharding_indexed` | Zarr v2 or unsharded v3              |
+| **Pyramid**          | ≥ 4 resolution levels (LODs)                   | Single LOD                           |
+| **Inner chunk (XY)** | 512 × 512 px or 256 × 256                      | Anything that covers a full XY plane |
 
 ---
 
@@ -34,7 +34,7 @@ back to the only LOD available (full resolution), downloading the entire image
 every time.
 
 **2. Chunk granularity.**
-The smallest unit of data the viewer can fetch using idetik *one* chunk. If your chunks cover an entire
+The smallest unit of data the viewer can fetch using idetik _one_ chunk. If your chunks cover an entire
 XY plane (e.g. `(1, 1, 1, 748, 1135)`), loading even a single pixel requires
 downloading the entire plane. With 512 × 512 inner chunks the visible crop
 typically intersects ≤ 4 chunks per channel.
@@ -54,7 +54,6 @@ access because:
   means one shard-index read covers all 12 channels simultaneously.
 
 ### Recommended layout
-
 
 ```shell
 Shard shape  :  (T, C, Z, Y, X) - For now feel free to use any sharding configuration you prefer

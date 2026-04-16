@@ -9,15 +9,15 @@ import { useViewer } from "../viewer/useViewer";
  * Must be rendered inside a Viewer.Provider.
  */
 export function ViewerPauseGate({ active }: { active: boolean }) {
-  const { actions } = useViewer();
+    const { actions } = useViewer();
 
-  useEffect(() => {
-    if (active) {
-      actions.resume();
-    } else {
-      actions.pause();
-    }
-  }, [active, actions]);
+    useEffect(() => {
+        if (active) {
+            actions.resume();
+        } else {
+            actions.pause();
+        }
+    }, [active, actions]);
 
-  return null;
+    return null;
 }

@@ -1,34 +1,22 @@
-# mise.toml — unified toolchain for nd-embedding-atlas
+# mise.toml — unified toolchain for nd-embedding-atlas (Bun binary)
 # https://mise.jdx.dev
-#
-# Install everything:  mise install
-# Start dev stack:     mise run dev path/to/data.zarr
-# Sync deps:           mise run sync
-# Quality gate:        mise run check
 
 [tools]
-uv     = "latest"            # managed by mise — used as Python backend + project venv
-python = "3.13"
-node   = "24"
-pnpm   = "10"
+node = "24"
 # vp (vite-plus) is self-managed at ~/.vite-plus — update with: vp update
+# bun is managed via packageManager field in package.json
 
 [env]
-# Backend port — override with NDEA_PORT=XXXX mise run dev
-NDEA_PORT          = "5055"
-# Frontend picks this up via vite.config.ts server.proxy (already hardcoded to 5055)
-# Exposed here so scripts can read it without hardcoding
+NDEA_PORT = "5055"
 
 [tasks.dev]
 description = "Start backend + frontend dev server concurrently"
 run = """
 #!/bin/bash
 set -e
-uv run ndea "$@" --port $NDEA_PORT --no-static &
+bun run src/cli/index.ts "$@" --port $NDEA_PORT --no-static &
 BACKEND=$!
 trap "kill $BACKEND 2>/dev/null; wait $BACKEND 2>/dev/null" EXIT INT TERM
-# Wait for backend to accept connections before starting the dev server
-# (avoids ECONNREFUSED spam on first load)
 until curl -sf "http://localhost:$NDEA_PORT/data/metadata.json" >/dev/null 2>&1; do
   sleep 0.2
 done
@@ -40,29 +28,17 @@ description = "Frontend dev server only (assumes backend already running)"
 run = "cd frontend && vp dev"
 
 [tasks.sync]
-description = "Sync all dependencies — uv + pnpm in one shot"
-run = "uv sync --all-groups && cd frontend && pnpm install --frozen-lockfile"
-
-[tasks.update]
-description = "Upgrade all dependencies — uv + pnpm"
-run = "uv sync --upgrade --all-groups && cd frontend && pnpm update"
+description = "Sync all dependencies"
+run = "bun install && cd frontend && bun install"
 
 [tasks.check]
-description = "Full quality gate: pytest + vp check (typecheck + lint + fmt)"
-run = ["uv run pytest -q", "cd frontend && vp check"]
-
-[tasks.check-frontend]
-description = "Frontend quality gate only"
-run = "cd frontend && vp check"
-
-[tasks.check-python]
-description = "Python quality gate only"
-run = ["uv run pytest -q", "uvx prek"]
+description = "Full quality gate: vp check (backend) + vp check (frontend)"
+run = ["vp check", "cd frontend && vp check"]
 
 [tasks.build]
-description = "Production build — frontend then wheel"
-run = "cd frontend && vp build && cd .. && uv build --wheel"
+description = "Production build — frontend then Bun binary"
+run = "cd frontend && vp build && cd .. && bun run build"
 
 [tasks.clean]
 description = "Remove build artifacts"
-run = "rm -rf frontend/dist dist src/nd_embedding_atlas/_frontend"
+run = "rm -rf frontend/dist dist"

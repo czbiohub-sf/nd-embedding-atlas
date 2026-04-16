@@ -1,36 +1,37 @@
 # Temp files
 .DS_Store
 *~
-buck-out/
 
-# Compiled files
-.venv/
-__pycache__/
-.*cache/
-
-# Distribution / packaging
-/dist/
-
-# Tests and coverage
+# Dependencies
 /node_modules/
+frontend/node_modules/
+
+# Build output
+/dist/
+frontend/dist/
+
+# Cache
+.*cache/
+.vite/
+
+# Test & coverage
 /.coverage*
 
-# docs
+# Docs
 /docs/generated/
 /docs/_build/
 
-# Bundled frontend (built by hatch hook)
-src/nd_embedding_atlas/_frontend/
-
-# misc
+# Claude / notes
 .claude/
 notes/
 .playwright-cli/
 
-# built docs
-site/
-
-
-# data
+# Data
 /data/
 /exports/
+
+# Bun
+*.lockb
+
+# Planning files (local only)
+.planning/

@@ -25,57 +25,57 @@ import { brushPredicateStore } from "../stores/BrushPredicateStore";
 // ── Static query (no Selection dependency) ──────────────────────────────────
 
 export function useMosaicQuery<T>(
-  coordinator: Coordinator,
-  sql: string | null,
-  transform: (result: unknown) => T,
-  opts?: {
-    enabled?: boolean;
-    staleTime?: number;
-    resultType?: "json" | "arrow";
-    queryKeyExtra?: readonly unknown[];
-  },
-): UseQueryResult<T> {
-  return useQuery<T>({
-    queryKey: ["mosaic", coordinator, sql, ...(opts?.queryKeyExtra ?? [])],
-    queryFn: async () => {
-      const result =
-        opts?.resultType === "arrow"
-          ? await coordinator.query(sql!, { type: "arrow" })
-          : await coordinator.query(sql!, { type: "json" });
-      return transform(result);
+    coordinator: Coordinator,
+    sql: string | null,
+    transform: (result: unknown) => T,
+    opts?: {
+        enabled?: boolean;
+        staleTime?: number;
+        resultType?: "json" | "arrow";
+        queryKeyExtra?: readonly unknown[];
     },
-    enabled: !!sql && opts?.enabled !== false,
-    staleTime: opts?.staleTime ?? 30_000,
-    placeholderData: keepPreviousData,
-  });
+): UseQueryResult<T> {
+    return useQuery<T>({
+        queryKey: ["mosaic", coordinator, sql, ...(opts?.queryKeyExtra ?? [])],
+        queryFn: async () => {
+            const result =
+                opts?.resultType === "arrow"
+                    ? await coordinator.query(sql!, { type: "arrow" })
+                    : await coordinator.query(sql!, { type: "json" });
+            return transform(result);
+        },
+        enabled: !!sql && opts?.enabled !== false,
+        staleTime: opts?.staleTime ?? 30_000,
+        placeholderData: keepPreviousData,
+    });
 }
 
 // ── Selection-reactive query (re-runs when brush predicate changes) ──────────
 
 export function useMosaicSelectionQuery<T>(
-  coordinator: Coordinator,
-  buildSql: (predicate: FilterExpr | null) => string | null,
-  transform: (result: unknown) => T,
-  cacheKeyPrefix: string,
-  opts: { enabled?: boolean; staleTime?: number } = {},
+    coordinator: Coordinator,
+    buildSql: (predicate: FilterExpr | null) => string | null,
+    transform: (result: unknown) => T,
+    cacheKeyPrefix: string,
+    opts: { enabled?: boolean; staleTime?: number } = {},
 ) {
-  // brushPredicateStore.version drives cache invalidation — when isolation
-  // or lasso selection changes, version increments and this query re-runs.
-  const version = useStore(brushPredicateStore, (s) => s.version);
-  const predicateStr = brushPredicateStore.state.predicate;
+    // brushPredicateStore.version drives cache invalidation — when isolation
+    // or lasso selection changes, version increments and this query re-runs.
+    const version = useStore(brushPredicateStore, (s) => s.version);
+    const predicateStr = brushPredicateStore.state.predicate;
 
-  // Build SQL using current predicate string wrapped as a FilterExpr-compatible
-  // object so callers can call .toString() on it when building WHERE clauses.
-  const sql = buildSql(predicateStr != null ? stringPredicate(predicateStr) : null);
+    // Build SQL using current predicate string wrapped as a FilterExpr-compatible
+    // object so callers can call .toString() on it when building WHERE clauses.
+    const sql = buildSql(predicateStr != null ? stringPredicate(predicateStr) : null);
 
-  return useQuery<T>({
-    queryKey: [cacheKeyPrefix, coordinator, version, sql],
-    queryFn: async () => {
-      const result = await coordinator.query(sql!, { type: "json" });
-      return transform(result);
-    },
-    enabled: !!sql && opts.enabled !== false,
-    staleTime: opts.staleTime ?? 30_000,
-    placeholderData: keepPreviousData,
-  });
+    return useQuery<T>({
+        queryKey: [cacheKeyPrefix, coordinator, version, sql],
+        queryFn: async () => {
+            const result = await coordinator.query(sql!, { type: "json" });
+            return transform(result);
+        },
+        enabled: !!sql && opts.enabled !== false,
+        staleTime: opts.staleTime ?? 30_000,
+        placeholderData: keepPreviousData,
+    });
 }

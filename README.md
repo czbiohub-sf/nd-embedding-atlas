@@ -1,20 +1,22 @@
 # nd-embedding-atlas
 
-|             |                                                                                                                                                                          |
-| :---------: | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
-|  **Meta**   | [![Hatch][badge-hatch]][link-hatch] [![uv][badge-uv]][link-uv] [![Ruff][badge-ruff]][link-ruff] [![prek][badge-prek]][link-prek] [![License][badge-license]][link-license] |
+|          |                                                                                                                                                                            |
+| :------: | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
+| **Meta** | [![Hatch][badge-hatch]][link-hatch] [![uv][badge-uv]][link-uv] [![Ruff][badge-ruff]][link-ruff] [![prek][badge-prek]][link-prek] [![License][badge-license]][link-license] |
 
 An interactive browser-based dashboard that links high-dimensional AI embeddings to source 5D (TCZYX) image data for rapid exploration and annotation.
 
 ## Quick start
 
 **1. Install [uv](https://docs.astral.sh/uv/) and the [GitHub CLI](https://cli.github.com/) if you don't have them:**
+
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
 brew install gh && gh auth login   # macOS; see https://cli.github.com for other platforms
 ```
 
 **2. Download and install nd-embedding-atlas:**
+
 ```bash
 gh release download --repo czbiohub-sf/nd-embedding-atlas \
   -p "nd_embedding_atlas-*.whl" -D /tmp/ndea/
@@ -22,6 +24,7 @@ uv tool install /tmp/ndea/nd_embedding_atlas-*.whl
 ```
 
 **3. Launch the viewer:**
+
 ```bash
 ndea path/to/data.zarr
 ndea path/to/data.zarr path/to/plate.zarr   # with OME-Zarr image viewer
@@ -69,12 +72,12 @@ For bugs or feature requests, use the [issue tracker][issue-tracker].
 See the [changelog][].
 
 <!-- badges -->
+
 [badge-hatch]: https://img.shields.io/badge/%F0%9F%A5%9A-Hatch-4051b5.svg
 [badge-uv]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json
 [badge-ruff]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json
 [badge-prek]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/j178/prek/master/docs/assets/badge-v0.json
 [badge-license]: https://img.shields.io/badge/License-BSD--3--Clause-blue.svg
-
 [link-hatch]: https://github.com/pypa/hatch
 [link-uv]: https://github.com/astral-sh/uv
 [link-ruff]: https://github.com/astral-sh/ruff
@@ -82,6 +85,7 @@ See the [changelog][].
 [link-license]: https://opensource.org/licenses/BSD-3-Clause
 
 <!-- links -->
+
 [issue-tracker]: https://github.com/czbiohub-sf/nd-embedding-atlas/issues
 [discussions-link]: https://github.com/czbiohub-sf/nd-embedding-atlas/discussions
 [docs-link]: https://super-adventure-yv3eleq.pages.github.io/

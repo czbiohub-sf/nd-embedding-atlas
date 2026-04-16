@@ -14,21 +14,21 @@ import { Store } from "@tanstack/store";
 import type { ChannelDef } from "../components/viewer/ViewerContext";
 
 export interface ViewerChannelsState {
-  slots: Record<string, ChannelDef[]>;
+    slots: Record<string, ChannelDef[]>;
 }
 
 export const viewerChannelsStore = new Store<ViewerChannelsState>({ slots: {} });
 
 export function publishViewerChannels(instanceId: string, channels: ChannelDef[]): void {
-  viewerChannelsStore.setState((prev) => ({
-    slots: { ...prev.slots, [instanceId]: channels },
-  }));
+    viewerChannelsStore.setState((prev) => ({
+        slots: { ...prev.slots, [instanceId]: channels },
+    }));
 }
 
 export function clearViewerChannels(instanceId: string): void {
-  viewerChannelsStore.setState((prev) => {
-    const next = { ...prev.slots };
-    delete next[instanceId];
-    return { slots: next };
-  });
+    viewerChannelsStore.setState((prev) => {
+        const next = { ...prev.slots };
+        delete next[instanceId];
+        return { slots: next };
+    });
 }

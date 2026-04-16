@@ -23,7 +23,7 @@ to their source 5D (TCZYX) image data for rapid exploration and annotation.
 
 Requires **[uv](https://docs.astral.sh/uv/)** and the **[GitHub CLI](https://cli.github.com/)** (`gh auth login` once to authenticate).
 
-``` bash
+```bash
 # Download the latest release wheel
 gh release download --repo czbiohub-sf/nd-embedding-atlas \
   -p "nd_embedding_atlas-*.whl" -D /tmp/ndea/

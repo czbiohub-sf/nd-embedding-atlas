@@ -13,29 +13,29 @@ import type { PanelId } from "../lib/branded-types";
 const panelBitmaps = new Map<PanelId, RoaringBitmap32>();
 
 export function getOrCreateBitmap(panelId: PanelId): RoaringBitmap32 {
-  if (!panelBitmaps.has(panelId)) {
-    panelBitmaps.set(panelId, new RoaringBitmap32());
-  }
-  // biome-ignore lint/style/noNonNullAssertion: just set above
-  return panelBitmaps.get(panelId)!;
+    if (!panelBitmaps.has(panelId)) {
+        panelBitmaps.set(panelId, new RoaringBitmap32());
+    }
+    // biome-ignore lint/style/noNonNullAssertion: just set above
+    return panelBitmaps.get(panelId)!;
 }
 
 export function updateBroadcastBitmap(panelId: PanelId, rowIds: number[]): RoaringBitmap32 {
-  const bm = getOrCreateBitmap(panelId);
-  bm.clear();
-  if (rowIds.length > 0) bm.addMany(rowIds);
-  return bm;
+    const bm = getOrCreateBitmap(panelId);
+    bm.clear();
+    if (rowIds.length > 0) bm.addMany(rowIds);
+    return bm;
 }
 
 export function disposeBitmap(panelId: PanelId): void {
-  const bm = panelBitmaps.get(panelId);
-  if (bm) {
-    bm.dispose();
-    panelBitmaps.delete(panelId);
-  }
+    const bm = panelBitmaps.get(panelId);
+    if (bm) {
+        bm.dispose();
+        panelBitmaps.delete(panelId);
+    }
 }
 
 /** Get the row IDs currently in a panel's bitmap. */
 export function getBitmapRowIds(panelId: PanelId): number[] {
-  return panelBitmaps.get(panelId)?.toArray() ?? [];
+    return panelBitmaps.get(panelId)?.toArray() ?? [];
 }

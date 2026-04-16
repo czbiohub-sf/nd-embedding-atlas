@@ -11,34 +11,34 @@ import type { IPointSet } from "./IPointSet";
  * constructing a SparsePointSet that will be broadcast cross-panel.
  */
 export class SparsePointSet implements IPointSet {
-  private readonly _indices: number[];
-  private readonly _set: Set<number>;
+    private readonly _indices: number[];
+    private readonly _set: Set<number>;
 
-  constructor(pointIndices: number[]) {
-    this._indices = pointIndices;
-    this._set = new Set(pointIndices);
-  }
-
-  get size(): number {
-    return this._indices.length;
-  }
-
-  expandToMaskArray(out: Uint32Array): void {
-    out.fill(0);
-    for (const i of this._indices) {
-      if (i >= 0 && i < out.length) out[i] = 1;
+    constructor(pointIndices: number[]) {
+        this._indices = pointIndices;
+        this._set = new Set(pointIndices);
     }
-  }
 
-  toPointIndices(): number[] {
-    return this._indices;
-  }
+    get size(): number {
+        return this._indices.length;
+    }
 
-  has(pointIndex: number): boolean {
-    return this._set.has(pointIndex);
-  }
+    expandToMaskArray(out: Uint32Array): void {
+        out.fill(0);
+        for (const i of this._indices) {
+            if (i >= 0 && i < out.length) out[i] = 1;
+        }
+    }
 
-  static empty(): SparsePointSet {
-    return new SparsePointSet([]);
-  }
+    toPointIndices(): number[] {
+        return this._indices;
+    }
+
+    has(pointIndex: number): boolean {
+        return this._set.has(pointIndex);
+    }
+
+    static empty(): SparsePointSet {
+        return new SparsePointSet([]);
+    }
 }

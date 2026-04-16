@@ -10,23 +10,23 @@
  * These layouts are incompatible — the expansion pass is mandatory.
  */
 export interface IPointSet {
-  /** Number of selected points in this set. */
-  readonly size: number;
+    /** Number of selected points in this set. */
+    readonly size: number;
 
-  /**
-   * Expand to a per-point GPU mask buffer.
-   * out[i] = 1 if point i is selected, 0 otherwise.
-   * out.length MUST equal numPoints. Method fills the entire array.
-   * O(numPoints) — not zero-copy.
-   */
-  expandToMaskArray(out: Uint32Array): void;
+    /**
+     * Expand to a per-point GPU mask buffer.
+     * out[i] = 1 if point i is selected, 0 otherwise.
+     * out.length MUST equal numPoints. Method fills the entire array.
+     * O(numPoints) — not zero-copy.
+     */
+    expandToMaskArray(out: Uint32Array): void;
 
-  /**
-   * Return selected point indices (0-based GPU buffer positions).
-   * Used for cross-panel broadcast path after row-index mapping.
-   */
-  toPointIndices(): number[];
+    /**
+     * Return selected point indices (0-based GPU buffer positions).
+     * Used for cross-panel broadcast path after row-index mapping.
+     */
+    toPointIndices(): number[];
 
-  /** O(1) membership test. */
-  has(pointIndex: number): boolean;
+    /** O(1) membership test. */
+    has(pointIndex: number): boolean;
 }
