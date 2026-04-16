@@ -64,7 +64,10 @@ export function ScatterContent({
 
     useEffect(() => {
         if (axes || !metadata) return;
-        const key = initialObsmKey ?? Object.entries(metadata.obsm).find(([, v]) => v.loaded)?.[0];
+        const key =
+            initialObsmKey ??
+            Object.entries(metadata.obsm).find(([, v]) => v.loaded)?.[0] ??
+            Object.keys(metadata.obsm)[0];
         if (!key) return;
         const entry = metadata.obsm[key];
         if (entry && !entry.loaded) {
