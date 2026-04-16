@@ -1,53 +1,22 @@
 /**
- * axial — Labeled N-D arrays for scientific computing in TypeScript.
+ * axial — labeled N-D arrays for OME-Zarr, AnnData, MuData, xarray stores.
  *
- * Read OME-Zarr, AnnData, MuData, and xarray Zarr stores
- * with labeled dimensions, lazy evaluation, and named-axis algebra.
+ * Originally a standalone library; now vendored into nd-embedding-atlas and
+ * trimmed to the surface actually consumed by the server + CLI. If more of
+ * the legacy API becomes useful, add it back from core/index.ts.
  */
 
-// Core types
+// Public types consumed by server routes and startup.
 export type {
-  AxialConfig,
-  CoordArray,
-  CoordSet,
-  DataArray,
-  DataTree,
-  Dataset,
-  DimName,
-  Dtype,
-  EncodingType,
-  IndexSelector,
-  LabelSelector,
-  LazyDataArray,
-  MaterializedDataArray,
-  MultimodalDataset,
-  CategoricalArray,
-  NullableArray,
-  AnnDataFrame,
-  ColumnData,
-  Convention,
-  Scalar,
-  Slice,
-  SparseArray,
-  ZarrGroupLike,
-} from "./core/index.ts";
+    AnnDataFrame,
+    ColumnData,
+    CategoricalArray,
+    NullableArray,
+    SparseArray,
+    AxialConfig,
+} from "./core/types.ts";
 
-// Core constructors & utilities
-export {
-  slice,
-  DEFAULT_CONFIG,
-  SimpleCoordArray,
-  SimpleCoordSet,
-  SimpleDataTree,
-  CsrCscArray,
-  SimpleCategorical,
-  SimpleNullable,
-  AnnDataAccessor,
-  toArrowTable,
-  WorkerPool,
-} from "./core/index.ts";
-
-export type { DenseResult, MatrixResult } from "./core/index.ts";
-
-// Store opener (convention auto-detect)
+// Public runtime API: open a store, read AnnData, convert to Arrow.
 export { open } from "./store/open.ts";
+export { AnnDataAccessor } from "./core/anndata-accessor.ts";
+export { toArrowTable } from "./core/to-arrow.ts";

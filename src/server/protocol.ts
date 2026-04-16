@@ -11,7 +11,20 @@
  */
 
 import { z } from "zod";
-import type { ProtocolMap } from "../axial/net/protocol.ts";
+
+/**
+ * Typed WebSocket-style method map. Keys are method names, values declare
+ * request/response shapes. `stream: true` indicates chunked binary responses.
+ * Kept here because the server is the only consumer — the rest of the axial
+ * WebSocket scaffolding was removed as dead code.
+ */
+export interface ProtocolMap {
+    [method: string]: {
+        req: unknown;
+        res: unknown;
+        stream?: boolean;
+    };
+}
 
 // ─── Shared JSON body parser ─────────────────────────────────────────────────
 

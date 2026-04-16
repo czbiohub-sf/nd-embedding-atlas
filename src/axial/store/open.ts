@@ -8,10 +8,10 @@ import { detectMuData } from "../conventions/mudata.ts";
 import { detectXarray } from "../conventions/xarray.ts";
 
 export interface OpenOptions {
-  /** Override convention detection. */
-  convention?: "ome-zarr" | "anndata" | "mudata" | "xarray";
-  /** Configuration overrides. */
-  config?: Partial<AxialConfig>;
+    /** Override convention detection. */
+    convention?: "ome-zarr" | "anndata" | "mudata" | "xarray";
+    /** Configuration overrides. */
+    config?: Partial<AxialConfig>;
 }
 
 const CONVENTIONS: Convention[] = [detectOmeZarr, detectMuData, detectAnnData, detectXarray];
@@ -35,45 +35,45 @@ const CONVENTIONS: Convention[] = [detectOmeZarr, detectMuData, detectAnnData, d
  * ```
  */
 export async function open(location: string | Readable, options?: OpenOptions): Promise<DataTree> {
-  void options?.config;
+    void options?.config;
 
-  // Resolve store + detect if local filesystem
-  let store: Readable;
-  let storePath: string | undefined;
+    // Resolve store + detect if local filesystem
+    let store: Readable;
+    let storePath: string | undefined;
 
-  if (typeof location === "string") {
-    const isRemote = location.startsWith("http://") || location.startsWith("https://");
-    if (isRemote) {
-      store = new zarr.FetchStore(location);
+    if (typeof location === "string") {
+        const isRemote = location.startsWith("http://") || location.startsWith("https://");
+        if (isRemote) {
+            store = new zarr.FetchStore(location);
+        } else {
+            store = new FileSystemStore(location);
+            storePath = location; // enables parallel worker reads
+        }
     } else {
-      store = new FileSystemStore(location);
-      storePath = location; // enables parallel worker reads
+        store = location;
     }
-  } else {
-    store = location;
-  }
 
-  // Open root group
-  const root = await zarr.open(store as any, { kind: "group" });
-  const rootAttrs = (root.attrs ?? {}) as Record<string, unknown>;
+    // Open root group
+    const root = await zarr.open(store as any, { kind: "group" });
+    const rootAttrs = (root.attrs ?? {}) as Record<string, unknown>;
 
-  // Convention detection
-  if (options?.convention) {
-    const conv = CONVENTIONS.find((c) => c.name === options.convention);
-    if (!conv) throw new Error(`Unknown convention: ${options.convention}`);
-    return conv.parse(root, storePath);
-  }
-
-  for (const conv of CONVENTIONS) {
-    if (conv.detect(rootAttrs)) {
-      return conv.parse(root, storePath);
+    // Convention detection
+    if (options?.convention) {
+        const conv = CONVENTIONS.find((c) => c.name === options.convention);
+        if (!conv) throw new Error(`Unknown convention: ${options.convention}`);
+        return conv.parse(root, storePath);
     }
-  }
 
-  throw new Error(
-    "Could not detect Zarr store convention. " +
-      "Expected OME-Zarr (multiscales), AnnData (encoding-type: anndata), " +
-      "MuData (encoding-type: MuData), or xarray (_ARRAY_DIMENSIONS). " +
-      `Root attrs: ${JSON.stringify(Object.keys(rootAttrs))}`,
-  );
+    for (const conv of CONVENTIONS) {
+        if (conv.detect(rootAttrs)) {
+            return conv.parse(root, storePath);
+        }
+    }
+
+    throw new Error(
+        "Could not detect Zarr store convention. " +
+            "Expected OME-Zarr (multiscales), AnnData (encoding-type: anndata), " +
+            "MuData (encoding-type: MuData), or xarray (_ARRAY_DIMENSIONS). " +
+            `Root attrs: ${JSON.stringify(Object.keys(rootAttrs))}`,
+    );
 }

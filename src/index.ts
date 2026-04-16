@@ -5,25 +5,13 @@
  * to source 5D (TCZYX) image data.
  */
 
-// Phase 1a: axial I/O library for zarr/AnnData/MuData reading
-export { open } from "./axial/store/open.ts";
-export { AnnDataAccessor } from "./axial/core/anndata-accessor.ts";
-export { toArrowTable } from "./axial/core/to-arrow.ts";
+// Re-export the axial zarr I/O surface actually consumed by callers.
+export { open, AnnDataAccessor, toArrowTable } from "./axial/index.ts";
 export type {
-  DataTree,
-  AnnDataFrame,
-  ColumnData,
-  CategoricalArray,
-  NullableArray,
-  SparseArray,
-  Dataset,
-  MultimodalDataset,
-  CoordArray,
-  CoordSet,
-  Convention,
-  Dtype,
-  Scalar,
-  Slice,
-  AxialConfig,
-} from "./axial/core/types.ts";
-export type { DenseResult, MatrixResult } from "./axial/core/anndata-accessor.ts";
+    AnnDataFrame,
+    ColumnData,
+    CategoricalArray,
+    NullableArray,
+    SparseArray,
+    AxialConfig,
+} from "./axial/index.ts";
