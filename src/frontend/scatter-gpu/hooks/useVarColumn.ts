@@ -9,7 +9,7 @@ interface VarColumnState {
 }
 
 export interface VarColumnResult {
-  materialize: (gene: string, layer: string) => void;
+  materialize: (name: string, layer: string) => void;
   status: VarColumnStatus;
   column: string | null;
   error: string | null;
@@ -26,11 +26,11 @@ interface PostVarColumnResponse {
 }
 
 /**
- * Materializes a gene expression column in DuckDB on demand.
+ * Materializes a var column (one feature's values) in DuckDB on demand.
  *
  * Flow:
- *   POST /api/gene-column { gene, layer }
- *   → poll GET /api/gene-column/{task_id}/status every 800ms
+ *   POST /api/var-column { name, layer }
+ *   → poll GET /api/var-column/{task_id}/status every 800ms
  *   → on status="ready": set column
  *   → on status="error": set error
  */
@@ -63,18 +63,18 @@ export function useVarColumn(options?: UseVarColumnOptions): VarColumnResult {
   useEffect(() => stopPolling, [stopPolling]);
 
   const materialize = useCallback(
-    (gene: string, layer: string) => {
+    (name: string, layer: string) => {
       stopPolling();
       setState({ status: "loading", column: null, error: null });
-      onStatusRef.current?.(`Materializing ${gene}…`);
+      onStatusRef.current?.(`Materializing ${name}…`);
 
       const run = async () => {
         let taskId: string;
         try {
-          const res = await fetch("/api/gene-column", {
+          const res = await fetch("/api/var-column", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ gene, layer }),
+            body: JSON.stringify({ name, layer }),
           });
           if (!res.ok) {
             const text = await res.text();
@@ -91,7 +91,7 @@ export function useVarColumn(options?: UseVarColumnOptions): VarColumnResult {
         // eslint-disable-next-line no-misused-promises
         pollIntervalRef.current = setInterval(async () => {
           try {
-            const res = await fetch(`/api/gene-column/${taskId}/status`);
+            const res = await fetch(`/api/var-column/${taskId}/status`);
             if (!res.ok) {
               stopPolling();
               setState({

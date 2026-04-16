@@ -80,12 +80,12 @@ export const ScatterSelectionBodySchema = z.object({
 });
 export type ScatterSelectionBody = z.infer<typeof ScatterSelectionBodySchema>;
 
-/** POST /api/gene-column — start gene column materialization. */
-export const GeneColumnBodySchema = z.object({
-  gene: z.string().min(1),
+/** POST /api/var-column — start materialization of a var (feature) column. */
+export const VarColumnBodySchema = z.object({
+  name: z.string().min(1),
   layer: z.string().optional(),
 });
-export type GeneColumnBody = z.infer<typeof GeneColumnBodySchema>;
+export type VarColumnBody = z.infer<typeof VarColumnBodySchema>;
 
 // ─── Response schemas ──────────────────────────────────────────────────────
 
@@ -301,11 +301,11 @@ export interface NdeaProtocol extends ProtocolMap {
     req: Record<string, never>;
     res: { layers: string[] };
   };
-  "gene-column/load": {
-    req: { gene: string; layer: string };
+  "var-column/load": {
+    req: { name: string; layer: string };
     res: { task_id: string; status: string; column: string };
   };
-  "gene-column/status": {
+  "var-column/status": {
     req: { task_id: string };
     res: { status: string; column?: string; error?: string };
   };

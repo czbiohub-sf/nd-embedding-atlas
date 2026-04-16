@@ -28,7 +28,7 @@ import {
   subscribeEmbeddingStatus,
   type EmbeddingStatusEvent,
 } from "./routes/embeddings.ts";
-import { handleGeneColumn, getGeneTask, subscribeGeneTask, type GeneTask } from "./routes/var.ts";
+import { handleVarColumn, getVarTask, subscribeVarTask, type VarTask } from "./routes/var.ts";
 import { handleExport, getExportTask, subscribeExportTask, type ExportTask } from "./routes/export.ts";
 
 /** Data attached to every ServerWebSocket via server.upgrade(req, { data }). */
@@ -140,8 +140,8 @@ type Handler = (ws: WS, id: number, frame: Frame) => void | Promise<void>;
 const HANDLERS: Record<string, Handler> = {
   "embeddings/load": handleEmbeddingsLoadWs,
   "embeddings/status": handleEmbeddingsStatusWs,
-  "gene-column/load": handleGeneColumnLoadWs,
-  "gene-column/status": handleGeneColumnStatusWs,
+  "var-column/load": handleVarColumnLoadWs,
+  "var-column/status": handleVarColumnStatusWs,
   "export/start": handleExportStartWs,
   "export/status": handleExportStatusWs,
 };
@@ -216,54 +216,54 @@ function embeddingPayload(ev: EmbeddingStatusEvent): Record<string, unknown> {
   return out;
 }
 
-// ─── gene-column/load ───────────────────────────────────────────────────────
+// ─── var-column/load ────────────────────────────────────────────────────────
 
-async function handleGeneColumnLoadWs(ws: WS, id: number, frame: Frame): Promise<void> {
-  const gene = typeof frame["gene"] === "string" ? frame["gene"] : "";
+async function handleVarColumnLoadWs(ws: WS, id: number, frame: Frame): Promise<void> {
+  const name = typeof frame["name"] === "string" ? frame["name"] : "";
   const layer = typeof frame["layer"] === "string" ? frame["layer"] : undefined;
-  if (gene === "") {
-    sendError(ws, id, "Missing required field: gene");
+  if (name === "") {
+    sendError(ws, id, "Missing required field: name");
     return;
   }
-  const payload: Record<string, unknown> = { gene };
+  const payload: Record<string, unknown> = { name };
   if (layer !== undefined) payload["layer"] = layer;
   const req = synthPostRequest(payload);
-  const resp = await handleGeneColumn(req, ws.data.state);
+  const resp = await handleVarColumn(req, ws.data.state);
   await respondFromHttp(ws, id, resp);
 }
 
-// ─── gene-column/status ─────────────────────────────────────────────────────
+// ─── var-column/status ──────────────────────────────────────────────────────
 
-function handleGeneColumnStatusWs(ws: WS, id: number, frame: Frame): void {
+function handleVarColumnStatusWs(ws: WS, id: number, frame: Frame): void {
   const taskId = typeof frame["task_id"] === "string" ? frame["task_id"] : "";
   const subscribe = frame["subscribe"] === true;
   if (taskId === "") {
     sendError(ws, id, "Missing required field: task_id");
     return;
   }
-  const task = getGeneTask(taskId);
+  const task = getVarTask(taskId);
   if (!task) {
     sendError(ws, id, "Unknown task_id");
     return;
   }
 
   if (!subscribe) {
-    sendEnd(ws, id, genePayload(task));
+    sendEnd(ws, id, varPayload(task));
     return;
   }
 
-  const dispose = subscribeGeneTask(taskId, (t) => {
+  const dispose = subscribeVarTask(taskId, (t) => {
     if (t.status === "ready" || t.status === "error") {
-      sendEnd(ws, id, genePayload(t));
+      sendEnd(ws, id, varPayload(t));
       disposeSub(ws, id);
     } else {
-      sendData(ws, id, genePayload(t));
+      sendData(ws, id, varPayload(t));
     }
   });
   socketSubs.get(ws)?.set(id, dispose);
 }
 
-function genePayload(task: GeneTask): Record<string, unknown> {
+function varPayload(task: VarTask): Record<string, unknown> {
   const out: Record<string, unknown> = { status: task.status, column: task.column };
   if (task.error !== undefined) out["error"] = task.error;
   return out;

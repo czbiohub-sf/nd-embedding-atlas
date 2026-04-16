@@ -19,7 +19,7 @@ open, close }` handlers. No dispatch yet.
   - `src/frontend/scatter-gpu/hooks/useEmbeddingLoader.ts` — polls
     `/api/embeddings/{key}/status` every 200 ms.
   - `src/frontend/scatter-gpu/hooks/useVarColumn.ts` — polls
-    `/api/gene-column/{task_id}/status` every 800 ms.
+    `/api/var-column/{task_id}/status` every 800 ms.
   - `src/frontend/components/toolbar/ExportDialog.tsx` — polls
     `/api/export/{task_id}/status` every 1 s.
 
@@ -59,13 +59,13 @@ Text + binary frames, multiplexed via request IDs.
 ### Text frame (JSON)
 
 ```json
-{ "_id": 42, "_type": "gene-column/load", "_ch": "data", "gene": "MALAT1" }
+{ "_id": 42, "_type": "var-column/load", "_ch": "data", "name": "MALAT1" }
 ```
 
 - `_id: number` — monotonic from the client. Server echoes it on all
   replies + push messages for the same request.
-- `_type: string` — method key from `NdeaProtocol` (e.g. `"gene-column/load"`,
-  `"gene-column/status"`, `"embeddings/load"`).
+- `_type: string` — method key from `NdeaProtocol` (e.g. `"var-column/load"`,
+  `"var-column/status"`, `"embeddings/load"`).
 - `_ch: "data" | "end" | "error"` — for streaming/push responses.
   - Single-shot reply: omit `_ch` (implicit `"end"`).
   - Streaming: multiple `"data"` frames then one `"end"`.
@@ -89,11 +89,11 @@ Reuse `src/protocol/index.ts:NdeaProtocol`:
 
 ```ts
 export interface NdeaProtocol extends ProtocolMap {
-  "gene-column/load": {
-    req: { gene: string; layer: string };
+  "var-column/load": {
+    req: { name: string; layer: string };
     res: { task_id: string; status: string; column: string };
   };
-  "gene-column/status": {
+  "var-column/status": {
     req: { task_id: string };
     res: { status: string; column?: string; error?: string };
   };
@@ -117,8 +117,8 @@ a typed `call<M>(method: M, req: ReqOf<M>): Promise<ResOf<M>>` (or
    - Handler table keyed by method name:
      ```ts
      const HANDLERS: { [M in keyof NdeaProtocol]?: WsHandler<M> } = {
-       "gene-column/load": handleGeneColumnLoadWs,
-       "gene-column/status": handleGeneColumnStatusWs,
+       "var-column/load": handleVarColumnLoadWs,
+       "var-column/status": handleVarColumnStatusWs,
        "embeddings/load": handleEmbeddingsLoadWs,
        "embeddings/status": handleEmbeddingsStatusWs,
        "export/start": handleExportStartWs,
@@ -132,14 +132,14 @@ a typed `call<M>(method: M, req: ReqOf<M>): Promise<ResOf<M>>` (or
 2. **`src/server/app.ts`** — wire the existing `websocket: { message,
 open, close }` stub to `handleWsMessage`. Pass `state` + `store` through.
 
-3. **`src/server/routes/var.ts`** — existing `handleGeneColumn` logic
+3. **`src/server/routes/var.ts`** — existing `handleVarColumn` logic
    triggers materialization and returns `task_id`. Extract the
    materialization-complete hook so both the HTTP poll and the WS push
    can drain it:
 
    ```ts
    // Existing:
-   void materialiseGeneColumn(...)
+   void materialiseVarColumn(...)
        .then(() => { task.status = "ready"; })
        .catch((err) => { task.status = "error"; task.error = ...; });
    // Add: subscriber callback list on the task, fired alongside status set.
@@ -206,7 +206,7 @@ lastError: string | null }`. Status bar reads from this.
    `pollUntilReady` instead.
 
 2. **`src/frontend/scatter-gpu/hooks/useVarColumn.ts`** — same pattern.
-   Subscribe to `gene-column/status`, unsubscribe on unmount (already has
+   Subscribe to `var-column/status`, unsubscribe on unmount (already has
    the ref + cleanup from the earlier leak fix).
 
 3. **`src/frontend/components/toolbar/ExportDialog.tsx`** — same pattern.
@@ -239,12 +239,12 @@ Keep HTTP endpoints live throughout. Migration is additive.
 - No call sites yet — just the plumbing.
 - Verify: open devtools Network → WS tab; see one upgrade, stable.
 
-**Phase 3** — migrate `gene-column/status` (simplest: one frontend hook,
+**Phase 3** — migrate `var-column/status` (simplest: one frontend hook,
 one server handler, well-isolated).
 
 - Change `useVarColumn.ts` to use `wsClient.subscribe`.
 - Fall back to HTTP on `!wsClient.state.connected`.
-- Test: materialise a gene, verify no more `/status` polling in network
+- Test: materialise a var column, verify no more `/status` polling in network
   tab; verify the loading→ready transition fires the subscribe callback.
 - Commit.
 

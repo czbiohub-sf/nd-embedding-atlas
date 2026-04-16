@@ -94,8 +94,8 @@ export class EmbeddingStore {
   nObs: number = 0;
   /** Registered embeddings and their metadata. */
   private _loaded: Map<string, EmbeddingMeta> = new Map();
-  /** Registered gene columns: colName → { table, colName }. */
-  private _geneCols: Map<string, { table: string; colName: string }> = new Map();
+  /** Registered var columns: colName → { table, colName }. */
+  private _varCols: Map<string, { table: string; colName: string }> = new Map();
   /** Columns to exclude from the dataset VIEW. */
   private _hidden: Set<string>;
   /** Whether nanoarrow extension is loaded (for Arrow IPC output). */
@@ -229,25 +229,25 @@ export class EmbeddingStore {
     await this._rebuildView();
   }
 
-  /** True if a gene column with this name has already been materialised. */
-  hasGeneColumn(colName: string): boolean {
-    return this._geneCols.has(colName);
+  /** True if a var column with this name has already been materialised. */
+  hasVarColumn(colName: string): boolean {
+    return this._varCols.has(colName);
   }
 
   /**
-   * Register a materialised gene/var column in DuckDB and rebuild the VIEW.
+   * Register a materialised var column in DuckDB and rebuild the VIEW.
    *
    * Values are aligned to obs_base by `__row_index__`, so `values.length`
    * must equal `nObs`.
    */
-  async registerGeneColumn(colName: string, values: Float64Array): Promise<void> {
+  async registerVarColumn(colName: string, values: Float64Array): Promise<void> {
     if (values.length !== this.nObs) {
-      throw new Error(`registerGeneColumn: values.length=${values.length} != nObs=${this.nObs}`);
+      throw new Error(`registerVarColumn: values.length=${values.length} != nObs=${this.nObs}`);
     }
-    if (this._geneCols.has(colName)) return;
+    if (this._varCols.has(colName)) return;
 
     const safe = colName.replace(/[^a-zA-Z0-9_]/g, "_");
-    const tableName = `gene_${safe}`;
+    const tableName = `var_${safe}`;
 
     await this.conn.run(`CREATE TABLE ${tableName} (__row_index__ INTEGER, "${colName}" DOUBLE)`);
 
@@ -262,7 +262,7 @@ export class EmbeddingStore {
       await this.conn.run(`INSERT INTO ${tableName} (__row_index__, "${colName}") VALUES ${rows.join(", ")}`);
     }
 
-    this._geneCols.set(colName, { table: tableName, colName });
+    this._varCols.set(colName, { table: tableName, colName });
     await this._rebuildView();
   }
 
@@ -293,9 +293,9 @@ export class EmbeddingStore {
       }
     }
 
-    for (const gene of this._geneCols.values()) {
-      joins.push(`LEFT JOIN ${gene.table} USING (__row_index__)`);
-      extraCols.push(`${gene.table}."${gene.colName}"`);
+    for (const varCol of this._varCols.values()) {
+      joins.push(`LEFT JOIN ${varCol.table} USING (__row_index__)`);
+      extraCols.push(`${varCol.table}."${varCol.colName}"`);
     }
 
     const extraSelect = extraCols.join(", ");

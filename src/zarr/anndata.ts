@@ -73,7 +73,6 @@ export const detectAnnData: Convention = {
       console.warn(`Warning: Failed to read var DataFrame: ${e instanceof Error ? e.message : String(e)}`);
     }
 
-    // Build coords from obs index (cell IDs) and var index (gene/feature IDs)
     const coords: SimpleCoordArray[] = [];
     if (obs) {
       coords.push(

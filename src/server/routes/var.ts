@@ -1,61 +1,65 @@
 /**
- * Var (gene) name search, layer listing, and gene-expression column endpoints.
+ * Var (feature) name search, layer listing, and var-column endpoints.
  *
- * GET  /api/var/names                 — Search gene names
- * GET  /api/var/layers                — List expression layers
- * POST /api/gene-column               — Start gene column materialization
- * GET  /api/gene-column/{task_id}/status — Poll materialization status
+ * "var" is AnnData's variable dimension — genes for transcriptomics,
+ * proteins for proteomics, features for image embeddings, etc. This
+ * module is data-type agnostic.
+ *
+ * GET  /api/var/names                   — Search var names
+ * GET  /api/var/layers                  — List expression layers
+ * POST /api/var-column                  — Start var column materialization
+ * GET  /api/var-column/{task_id}/status — Poll materialization status
  */
 
 import type { AnnDataAccessor } from "../../zarr/anndata-accessor.ts";
 import type { SparseArray } from "../../zarr/types.ts";
-import { GeneColumnBodySchema, parseJsonBody } from "../protocol.ts";
+import { VarColumnBodySchema, parseJsonBody } from "../protocol.ts";
 import type { ViewerState } from "../state.ts";
 
-/** In-flight gene column materialization tasks. */
-export interface GeneTask {
+/** In-flight var column materialization tasks. */
+export interface VarTask {
   taskId: string;
   status: "loading" | "ready" | "error";
   column: string;
   error?: string;
 }
 
-/** Module-level state for gene tasks. Keyed by task_id. */
-const geneTasks = new Map<string, GeneTask>();
+/** Module-level state for var-column tasks. Keyed by task_id. */
+const varTasks = new Map<string, VarTask>();
 
 /** Per-task subscribers notified on status transitions. */
-const geneSubscribers = new Map<string, Set<(task: GeneTask) => void>>();
+const varSubscribers = new Map<string, Set<(task: VarTask) => void>>();
 
-function fireGeneStatus(taskId: string): void {
-  const task = geneTasks.get(taskId);
-  const subs = geneSubscribers.get(taskId);
+function fireVarStatus(taskId: string): void {
+  const task = varTasks.get(taskId);
+  const subs = varSubscribers.get(taskId);
   if (!task || !subs) return;
   for (const cb of subs) cb(task);
 }
 
 /**
- * Subscribe to gene-task status transitions. Fires immediately with the
+ * Subscribe to var-task status transitions. Fires immediately with the
  * current task state, then on every status change until disposed.
  * Returns a no-op disposer if the task doesn't exist.
  */
-export function subscribeGeneTask(taskId: string, cb: (task: GeneTask) => void): () => void {
-  const task = geneTasks.get(taskId);
+export function subscribeVarTask(taskId: string, cb: (task: VarTask) => void): () => void {
+  const task = varTasks.get(taskId);
   if (!task) return () => {};
   cb(task);
-  let set = geneSubscribers.get(taskId);
+  let set = varSubscribers.get(taskId);
   if (!set) {
     set = new Set();
-    geneSubscribers.set(taskId, set);
+    varSubscribers.set(taskId, set);
   }
   set.add(cb);
   return () => {
     set.delete(cb);
-    if (set.size === 0) geneSubscribers.delete(taskId);
+    if (set.size === 0) varSubscribers.delete(taskId);
   };
 }
 
-export function getGeneTask(taskId: string): GeneTask | undefined {
-  return geneTasks.get(taskId);
+export function getVarTask(taskId: string): VarTask | undefined {
+  return varTasks.get(taskId);
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -164,50 +168,51 @@ async function discoverLayers(accessor: AnnDataAccessor): Promise<string[]> {
 }
 
 /**
- * Handle POST /api/gene-column  body: { gene, layer? }
+ * Handle POST /api/var-column  body: { name, layer? }
  *
- * Materialises an expression column aligned to obs_base's `__row_index__`:
- *   1. For each dataset, find gene's position in var.index
+ * Materialises a var column (one feature's values) aligned to obs_base's
+ * `__row_index__`:
+ *   1. For each dataset, find name's position in var.index
  *   2. isel({ var: [idx] }).getX() → length-nObs column (NaN where missing)
  *   3. Concatenate in obs_base insertion order → Float64Array of length nObs
- *   4. store.registerGeneColumn(colName, values) → table + VIEW rebuild
+ *   4. store.registerVarColumn(colName, values) → table + VIEW rebuild
  *
  * Returns 202 with { task_id, status: "loading", column }. Poll
- * /api/gene-column/{task_id}/status for completion.
+ * /api/var-column/{task_id}/status for completion.
  */
-export async function handleGeneColumn(req: Request, state: ViewerState): Promise<Response> {
-  const parsed = await parseJsonBody(req, GeneColumnBodySchema);
+export async function handleVarColumn(req: Request, state: ViewerState): Promise<Response> {
+  const parsed = await parseJsonBody(req, VarColumnBodySchema);
   if (!parsed.ok) return parsed.response;
-  const gene = parsed.data.gene;
+  const name = parsed.data.name;
   const layer = parsed.data.layer ?? "X";
 
   try {
-    const safeVar = gene.replace(/[^a-zA-Z0-9]/g, "_");
+    const safeVar = name.replace(/[^a-zA-Z0-9]/g, "_");
     const safeLayer = layer.replace(/[^a-zA-Z0-9]/g, "_");
     const colName = `__var_${safeVar}_${safeLayer}__`;
 
     const taskId = crypto.randomUUID();
 
     // Short-circuit if the column already exists.
-    if (state.store.hasGeneColumn(colName)) {
-      const task: GeneTask = { taskId, status: "ready", column: colName };
-      geneTasks.set(taskId, task);
+    if (state.store.hasVarColumn(colName)) {
+      const task: VarTask = { taskId, status: "ready", column: colName };
+      varTasks.set(taskId, task);
       return Response.json({ task_id: taskId, status: "ready", column: colName });
     }
 
-    const task: GeneTask = { taskId, status: "loading", column: colName };
-    geneTasks.set(taskId, task);
+    const task: VarTask = { taskId, status: "loading", column: colName };
+    varTasks.set(taskId, task);
 
     // Kick off materialization asynchronously.
-    void materialiseGeneColumn(state, gene, layer, colName)
+    void materialiseVarColumn(state, name, layer, colName)
       .then(() => {
         task.status = "ready";
-        fireGeneStatus(taskId);
+        fireVarStatus(taskId);
       })
       .catch((err) => {
         task.status = "error";
         task.error = err instanceof Error ? err.message : String(err);
-        fireGeneStatus(taskId);
+        fireVarStatus(taskId);
       });
 
     return Response.json({ task_id: taskId, status: "loading", column: colName }, { status: 202 });
@@ -217,9 +222,9 @@ export async function handleGeneColumn(req: Request, state: ViewerState): Promis
   }
 }
 
-// ─── Gene column materialization ────────────────────────────────────────────
+// ─── Var column materialization ─────────────────────────────────────────────
 
-async function materialiseGeneColumn(state: ViewerState, gene: string, layer: string, colName: string): Promise<void> {
+async function materialiseVarColumn(state: ViewerState, name: string, layer: string, colName: string): Promise<void> {
   const nObs = state.store.nObs;
   const values = new Float64Array(nObs);
   values.fill(Number.NaN);
@@ -228,10 +233,10 @@ async function materialiseGeneColumn(state: ViewerState, gene: string, layer: st
   let cursor = 0;
   for (const [dsName, accessor] of state.accessors) {
     const dsN = accessor.nObs;
-    const varIdx = findVarIndex(accessor, gene);
+    const varIdx = findVarIndex(accessor, name);
 
     if (varIdx >= 0) {
-      const slice = await loadGeneSlice(accessor, varIdx, layer, dsN);
+      const slice = await loadVarSlice(accessor, varIdx, layer, dsN);
       values.set(slice, cursor);
     } // else: leave NaN for this dataset
     cursor += dsN;
@@ -241,20 +246,20 @@ async function materialiseGeneColumn(state: ViewerState, gene: string, layer: st
   }
 
   if (cursor !== nObs) {
-    throw new Error(`Gene column row alignment mismatch: obs_base.nObs=${nObs} but accessors sum to ${cursor}`);
+    throw new Error(`Var column row alignment mismatch: obs_base.nObs=${nObs} but accessors sum to ${cursor}`);
   }
 
-  await state.store.registerGeneColumn(colName, values);
+  await state.store.registerVarColumn(colName, values);
 }
 
-/** Find a gene's position in accessor.var.index (or -1 if absent). */
-function findVarIndex(accessor: AnnDataAccessor, gene: string): number {
+/** Find a var name's position in accessor.var.index (or -1 if absent). */
+function findVarIndex(accessor: AnnDataAccessor, name: string): number {
   const idx = accessor.var.index;
   if (Array.isArray(idx)) {
-    return idx.indexOf(gene);
+    return idx.indexOf(name);
   }
-  // Numeric var index — try parsing gene as integer
-  const n = Number(gene);
+  // Numeric var index — try parsing name as integer
+  const n = Number(name);
   if (!Number.isInteger(n)) return -1;
   for (let i = 0; i < idx.length; i++) {
     if (idx[i] === n) return i;
@@ -266,7 +271,7 @@ function findVarIndex(accessor: AnnDataAccessor, gene: string): number {
  * Load one column of X (or layer) for a dataset as a length-nObs Float64Array.
  * Works for dense or sparse (CSR/CSC) matrices.
  */
-async function loadGeneSlice(
+async function loadVarSlice(
   accessor: AnnDataAccessor,
   varIdx: number,
   layer: string,
@@ -304,10 +309,10 @@ async function loadGeneSlice(
 }
 
 /**
- * Handle GET /api/gene-column/{task_id}/status
+ * Handle GET /api/var-column/{task_id}/status
  */
-export function handleGeneColumnStatus(taskId: string): Response {
-  const task = geneTasks.get(taskId);
+export function handleVarColumnStatus(taskId: string): Response {
+  const task = varTasks.get(taskId);
   if (!task) {
     return Response.json({ error: "Unknown task_id" }, { status: 404 });
   }

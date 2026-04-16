@@ -25,7 +25,7 @@ import {
 } from "./routes/scatter.ts";
 import { handleObsBatch, handleObsInfo, handleObsDetail, handleHealth } from "./routes/obs.ts";
 import { handleListObsSets, handleCreateObsSet, handleDeleteObsSet, handleActivateObsSet } from "./routes/obssets.ts";
-import { handleVarNames, handleVarLayers, handleGeneColumn, handleGeneColumnStatus } from "./routes/var.ts";
+import { handleVarNames, handleVarLayers, handleVarColumn, handleVarColumnStatus } from "./routes/var.ts";
 import { handleExport, handleExportStatus } from "./routes/export.ts";
 import { handleCrop } from "./routes/crops.ts";
 import { categoricalNames, continuousNames, getPalette } from "./colormaps.ts";
@@ -294,7 +294,7 @@ function routeApi(
     return handleDeleteObsSet(decodeURIComponent(obssetDeleteMatch[1]), store);
   }
 
-  // ── Var / Gene column ───────────────────────────────────────────
+  // ── Var / Var column ────────────────────────────────────────────
   if (pathname === "/api/var/names" && method === "GET") {
     return handleVarNames(url, state);
   }
@@ -303,13 +303,13 @@ function routeApi(
     return handleVarLayers(state);
   }
 
-  if (pathname === "/api/gene-column" && method === "POST") {
-    return handleGeneColumn(req, state);
+  if (pathname === "/api/var-column" && method === "POST") {
+    return handleVarColumn(req, state);
   }
 
-  const geneStatusMatch = pathname.match(/^\/api\/gene-column\/(.+)\/status$/);
-  if (geneStatusMatch && method === "GET") {
-    return handleGeneColumnStatus(decodeURIComponent(geneStatusMatch[1]));
+  const varColStatusMatch = pathname.match(/^\/api\/var-column\/(.+)\/status$/);
+  if (varColStatusMatch && method === "GET") {
+    return handleVarColumnStatus(decodeURIComponent(varColStatusMatch[1]));
   }
 
   // ── Export ───────────────────────────────────────────────────────
