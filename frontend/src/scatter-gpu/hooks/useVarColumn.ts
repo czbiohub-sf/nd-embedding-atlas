@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type VarColumnStatus = "idle" | "loading" | "ready" | "error";
 
@@ -57,6 +57,10 @@ export function useVarColumn(options?: UseVarColumnOptions): VarColumnResult {
             pollIntervalRef.current = null;
         }
     }, []);
+
+    // Clear any in-flight poll on unmount so an abandoned materialize() call
+    // doesn't keep hitting /status forever.
+    useEffect(() => stopPolling, [stopPolling]);
 
     const materialize = useCallback(
         (gene: string, layer: string) => {
