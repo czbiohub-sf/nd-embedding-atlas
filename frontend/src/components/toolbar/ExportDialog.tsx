@@ -30,6 +30,16 @@ export default function ExportDialog({ open, onOpenChange, filtered }: Props) {
     }, [filename]);
     const previewPath = exportDir ? `${exportDir}/${sanitizedFilename}.zarr` : null;
 
+    // Tracks any setInterval started by handleExport so we can clear it on
+    // unmount. Without this the poll runs forever and the loading toast
+    // remains if the user navigates away mid-export.
+    const pollIdRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    useEffect(() => {
+        return () => {
+            if (pollIdRef.current) clearInterval(pollIdRef.current);
+        };
+    }, []);
+
     // Snapshot predicate + query dataset breakdown when dialog opens
     useEffect(() => {
         if (!open) return;
@@ -72,13 +82,20 @@ export default function ExportDialog({ open, onOpenChange, filtered }: Props) {
                 return;
             }
 
+            if (pollIdRef.current) clearInterval(pollIdRef.current);
+            const stop = () => {
+                if (pollIdRef.current) {
+                    clearInterval(pollIdRef.current);
+                    pollIdRef.current = null;
+                }
+            };
             // eslint-disable-next-line no-misused-promises
-            const pollId = setInterval(async () => {
+            pollIdRef.current = setInterval(async () => {
                 try {
                     const statusRes = await fetch(`/api/export/${data.task_id}/status`);
                     const statusData = await statusRes.json();
                     if (statusData.status === "done") {
-                        clearInterval(pollId);
+                        stop();
                         toast.success(
                             `Export complete — ${statusData.n_obs?.toLocaleString()} observations`,
                             {
@@ -88,11 +105,11 @@ export default function ExportDialog({ open, onOpenChange, filtered }: Props) {
                             },
                         );
                     } else if (statusData.status === "error") {
-                        clearInterval(pollId);
+                        stop();
                         toast.error(statusData.error ?? "Export failed", { id: toastId });
                     }
                 } catch {
-                    clearInterval(pollId);
+                    stop();
                     toast.error("Failed to check export status", { id: toastId });
                 }
             }, 1000);
