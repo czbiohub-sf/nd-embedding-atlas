@@ -1,4 +1,5 @@
 import type { Coordinator } from "@uwdata/mosaic-core";
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import type { ColorMode } from "../../hooks/useColorMode";
 import { resolveColorMode } from "../../hooks/useColorMode";
@@ -84,52 +85,33 @@ export function useScatterColorState(
     const palette = useMemo(() => paletteQuery.data ?? [], [paletteQuery.data]);
 
     // ── Category column mapping ─────────────────────────────────────────────────
-    const [categoryMapping, setCategoryMapping] = useState<CategoryMapping | null>(null);
-    const [categoryLoading, setCategoryLoading] = useState(false);
-
-    // Clear stale category mapping when coordinator changes (e.g. backend restart).
-    // The __ev__* columns in obs_base are gone after restart — any cached mapping
-    // referencing them would cause trajectory queries to fail.
-    useEffect(() => {
-        setCategoryMapping(null);
-    }, [coordinator]);
-
-    useEffect(() => {
-        if (!colorByColumn || colorMode !== "categorical") {
-            setCategoryMapping(null);
-            return;
-        }
-        let cancelled = false;
-        setCategoryLoading(true);
-
-        const run = async () => {
+    // useQuery handles cancellation on unmount + cross-panel dedup (two panels
+    // coloring by the same column share one DuckDB materialization). Coordinator
+    // identity in the key drops stale mappings on backend restart.
+    const categoryQuery = useQuery({
+        queryKey: ["category-mapping", colorByColumn, colorMode] as const,
+        enabled: !!colorByColumn && colorMode === "categorical",
+        staleTime: Infinity,
+        gcTime: 0,
+        queryFn: async () => {
+            const col = colorByColumn as string;
             const countResult = await coordinator.query(
-                `SELECT COUNT(DISTINCT CAST("${colorByColumn}" AS TEXT))::INT AS n FROM obs_base`,
+                `SELECT COUNT(DISTINCT CAST("${col}" AS TEXT))::INT AS n FROM obs_base`,
                 { type: "json" },
             );
-            if (cancelled) return;
             const n = Math.min(toRows<{ n: number }>(countResult)[0]?.n ?? 64, 256);
-            setMaxCategories(n);
+            const mapping = await makeCategoryColumn(coordinator, col, n);
+            return { n, mapping };
+        },
+    });
 
-            const mapping = await makeCategoryColumn(coordinator, colorByColumn, n);
-            if (!cancelled) {
-                setCategoryMapping(mapping);
-                setCategoryLoading(false);
-            }
-        };
+    const categoryMapping = categoryQuery.data?.mapping ?? null;
+    const categoryLoading = categoryQuery.isFetching;
 
-        run().catch((err) => {
-            console.error("Failed to create category column:", err);
-            if (!cancelled) {
-                setCategoryMapping(null);
-                setCategoryLoading(false);
-            }
-        });
-
-        return () => {
-            cancelled = true;
-        };
-    }, [coordinator, colorByColumn, colorMode]);
+    // Propagate the discovered category count up so the palette sizes correctly.
+    useEffect(() => {
+        if (categoryQuery.data?.n != null) setMaxCategories(categoryQuery.data.n);
+    }, [categoryQuery.data?.n]);
 
     // Re-apply palette to existing mapping without touching DuckDB.
     // Return null (not categoryMapping) when palette isn't loaded yet — empty
@@ -176,6 +158,10 @@ export function useScatterColorState(
         categoryLoading,
         coloredCategoryMapping,
         categoryCol,
-        clearCategoryMapping: () => setCategoryMapping(null),
+        clearCategoryMapping: () => {
+            // Drop the cached category query entry so a subsequent switch
+            // back to this column refetches rather than serving stale data.
+            void categoryQuery.refetch();
+        },
     };
 }
