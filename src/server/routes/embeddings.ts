@@ -7,6 +7,58 @@
 
 import type { ViewerState } from "../state.ts";
 
+/** Status event emitted to embedding-status subscribers. */
+export interface EmbeddingStatusEvent {
+  status: "loading" | "ready" | "error" | "not_started";
+  error?: string;
+  nDims?: number;
+}
+
+/** Per-key subscriber set for server-pushed status transitions. */
+const embeddingSubscribers = new Map<string, Set<(ev: EmbeddingStatusEvent) => void>>();
+
+/** Compute the current status for an embedding key. */
+export function currentEmbeddingStatus(key: string, state: ViewerState): EmbeddingStatusEvent {
+  if (state.store.loadedEmbeddings.has(key)) {
+    const meta = state.store.loadedEmbeddings.get(key)!;
+    return { status: "ready", nDims: meta.nDims };
+  }
+  const err = state.loadErrors.get(key);
+  if (err) return { status: "error", error: err };
+  if (state.loadingTasks.has(key)) return { status: "loading" };
+  return { status: "not_started" };
+}
+
+/** Fan out the current status to all subscribers of `key`. */
+function fireEmbeddingStatus(key: string, state: ViewerState): void {
+  const subs = embeddingSubscribers.get(key);
+  if (!subs || subs.size === 0) return;
+  const ev = currentEmbeddingStatus(key, state);
+  for (const cb of subs) cb(ev);
+}
+
+/**
+ * Subscribe to status transitions for `key`. Emits the current status
+ * synchronously, then on every mutation until the returned disposer runs.
+ */
+export function subscribeEmbeddingStatus(
+  key: string,
+  state: ViewerState,
+  cb: (ev: EmbeddingStatusEvent) => void,
+): () => void {
+  cb(currentEmbeddingStatus(key, state));
+  let set = embeddingSubscribers.get(key);
+  if (!set) {
+    set = new Set();
+    embeddingSubscribers.set(key, set);
+  }
+  set.add(cb);
+  return () => {
+    set.delete(cb);
+    if (set.size === 0) embeddingSubscribers.delete(key);
+  };
+}
+
 /**
  * Handle POST /api/embeddings/{key}
  *
@@ -36,6 +88,7 @@ export function handleLoadEmbedding(key: string, state: ViewerState): Response {
   // Start async loading task
   const loadPromise = loadEmbeddingAsync(key, state);
   state.loadingTasks.set(key, loadPromise);
+  fireEmbeddingStatus(key, state);
 
   return Response.json({ status: "loading" }, { status: 202 });
 }
@@ -79,10 +132,12 @@ async function loadEmbeddingAsync(key: string, state: ViewerState): Promise<void
     await state.store.registerEmbedding(key, coords, nDims);
 
     console.log(`    ✓ Loaded ${key} (${nDims}D, ${coords.length / nDims} points)`);
+    fireEmbeddingStatus(key, state);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     state.loadErrors.set(key, msg);
     console.error(`    ✗ Failed to load ${key}: ${msg}`);
+    fireEmbeddingStatus(key, state);
   }
 }
 
@@ -92,22 +147,8 @@ async function loadEmbeddingAsync(key: string, state: ViewerState): Promise<void
  * Returns the current load status for an embedding.
  */
 export function handleEmbeddingStatus(key: string, state: ViewerState): Response {
-  // Already loaded in DuckDB
-  if (state.store.loadedEmbeddings.has(key)) {
-    const meta = state.store.loadedEmbeddings.get(key)!;
-    return Response.json({ status: "ready", n_dims: meta.nDims });
-  }
-
-  // Check for error
-  const errorMsg = state.loadErrors.get(key);
-  if (errorMsg) {
-    return Response.json({ status: "error", error: errorMsg }, { status: 500 });
-  }
-
-  // Check for in-flight loading task
-  if (state.loadingTasks.has(key)) {
-    return Response.json({ status: "loading" });
-  }
-
-  return Response.json({ status: "not_started" });
+  const ev = currentEmbeddingStatus(key, state);
+  if (ev.status === "ready") return Response.json({ status: "ready", n_dims: ev.nDims });
+  if (ev.status === "error") return Response.json({ status: "error", error: ev.error }, { status: 500 });
+  return Response.json({ status: ev.status });
 }

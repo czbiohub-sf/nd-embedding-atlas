@@ -31,6 +31,7 @@ import { handleCrop } from "./routes/crops.ts";
 import { categoricalNames, continuousNames, getPalette } from "./colormaps.ts";
 import { servePlateFile } from "./plate.ts";
 import { serveStatic, resolveFrontendDir } from "./static.ts";
+import { handleWsMessage, handleWsOpen, handleWsClose, type WsContext } from "./ws.ts";
 
 // Re-exports for public API
 export { EmbeddingStore, obsmColumnPrefix, DEFAULT_OBSM_PRIORITY } from "./store.ts";
@@ -103,7 +104,7 @@ export function createApp(options: AppOptions) {
   const { store, state, config } = options;
   const frontendDir = options.noStatic ? null : resolveFrontendDir(options.frontendDir);
 
-  return Bun.serve({
+  return Bun.serve<WsContext>({
     port: options.port,
     hostname: options.host,
 
@@ -113,7 +114,7 @@ export function createApp(options: AppOptions) {
 
       // ── WebSocket upgrade ───────────────────────────────────────
       if (req.headers.get("upgrade") === "websocket") {
-        const upgraded = server.upgrade(req);
+        const upgraded = server.upgrade(req, { data: { state, store } });
         if (!upgraded) {
           return withCors(new Response("WebSocket upgrade failed", { status: 400 }));
         }
@@ -138,16 +139,14 @@ export function createApp(options: AppOptions) {
     },
 
     websocket: {
-      message(_ws, _raw) {
-        // Future: dispatch typed WS messages via NdeaProtocol
-        // For now, basic Mosaic socketConnector compat is deferred.
-        // The frontend uses HTTP fetch() for all data operations.
+      message(ws, raw) {
+        handleWsMessage(ws, raw);
       },
-      open(_ws) {
-        // Future: track connected clients
+      open(ws) {
+        handleWsOpen(ws);
       },
-      close(_ws) {
-        // Future: cleanup client state
+      close(ws) {
+        handleWsClose(ws);
       },
     },
   });

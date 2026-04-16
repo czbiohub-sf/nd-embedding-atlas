@@ -23,6 +23,41 @@ export interface GeneTask {
 /** Module-level state for gene tasks. Keyed by task_id. */
 const geneTasks = new Map<string, GeneTask>();
 
+/** Per-task subscribers notified on status transitions. */
+const geneSubscribers = new Map<string, Set<(task: GeneTask) => void>>();
+
+function fireGeneStatus(taskId: string): void {
+  const task = geneTasks.get(taskId);
+  const subs = geneSubscribers.get(taskId);
+  if (!task || !subs) return;
+  for (const cb of subs) cb(task);
+}
+
+/**
+ * Subscribe to gene-task status transitions. Fires immediately with the
+ * current task state, then on every status change until disposed.
+ * Returns a no-op disposer if the task doesn't exist.
+ */
+export function subscribeGeneTask(taskId: string, cb: (task: GeneTask) => void): () => void {
+  const task = geneTasks.get(taskId);
+  if (!task) return () => {};
+  cb(task);
+  let set = geneSubscribers.get(taskId);
+  if (!set) {
+    set = new Set();
+    geneSubscribers.set(taskId, set);
+  }
+  set.add(cb);
+  return () => {
+    set.delete(cb);
+    if (set.size === 0) geneSubscribers.delete(taskId);
+  };
+}
+
+export function getGeneTask(taskId: string): GeneTask | undefined {
+  return geneTasks.get(taskId);
+}
+
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 /** Return the first accessor in the state (or null if none). */
@@ -167,10 +202,12 @@ export async function handleGeneColumn(req: Request, state: ViewerState): Promis
     void materialiseGeneColumn(state, gene, layer, colName)
       .then(() => {
         task.status = "ready";
+        fireGeneStatus(taskId);
       })
       .catch((err) => {
         task.status = "error";
         task.error = err instanceof Error ? err.message : String(err);
+        fireGeneStatus(taskId);
       });
 
     return Response.json({ task_id: taskId, status: "loading", column: colName }, { status: 202 });
