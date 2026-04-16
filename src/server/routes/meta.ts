@@ -8,6 +8,7 @@
 import type { ViewerState, DatasetMeta } from "../state.ts";
 import type { EmbeddingStore } from "../store.ts";
 import { obsmColumnPrefix } from "../store.ts";
+import { exportDir } from "./export.ts";
 
 /** Return var count of the first accessor (or 0 if none registered). */
 function firstVarCount(state: ViewerState): number {
@@ -52,7 +53,7 @@ export function handleMetadata(state: ViewerState, config: DatasetMeta): Respons
         obsm: buildObsmMetadata(state.availableObsmKeys, state.store),
         obs_columns: config.obsColumnNames,
         plate: config.hasPlate,
-        export_dir: "",
+        export_dir: exportDir(),
         var_count: firstVarCount(state),
         layers: ["X"],
         spatial: state.spatial
