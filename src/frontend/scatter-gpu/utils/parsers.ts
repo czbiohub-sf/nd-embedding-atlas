@@ -16,7 +16,7 @@ import {
     ContinuousColorsHeaderSchema,
     type PositionHeader,
     PositionHeaderSchema,
-} from "./schemas";
+} from "../../../protocol/index.ts";
 
 /** Parsed result from /api/scatter-positions */
 export interface PositionBlob {

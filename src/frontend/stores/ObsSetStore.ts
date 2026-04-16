@@ -1,6 +1,6 @@
 import { Store } from "@tanstack/store";
 import type { ObsSetId } from "../lib/branded-types";
-import type { ObsSet } from "../lib/schemas";
+import type { ObsSet } from "../../protocol/index.ts";
 
 export type { ObsSet };
 

@@ -12,7 +12,7 @@ import {
 import { useColumnTypes } from "../hooks/useColumnTypes";
 import { generateDefaultPanels } from "../lib/chart-spec";
 import { stringPredicate } from "../lib/mosaic-helpers";
-import { MetadataSchema } from "../lib/schemas";
+import { MetadataSchema } from "../../protocol/index.ts";
 import { scatterKeys } from "../scatter-gpu/hooks/queryKeys";
 import { activeFilterStore, clearObsSetFilter, setObsSetFilter } from "../stores/ActiveFilterStore";
 import { obsSetStore } from "../stores/ObsSetStore";

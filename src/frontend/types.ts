@@ -1,16 +1,10 @@
-export type { Metadata, ObsInfo } from "./lib/schemas";
+export type { Metadata, ObsInfo, ObsBbox } from "../protocol/index.ts";
 
 /** Pan/zoom state for a scatter view. */
 export interface ViewState {
     panX: number;
     panY: number;
     zoom: number;
-}
-
-export interface ObsmEntry {
-    prefix: string;
-    n_dims: number | null;
-    loaded: boolean;
 }
 
 export interface AxisState {
@@ -85,11 +79,3 @@ export interface ChartPanelEntry {
     collapsed?: boolean;
 }
 
-// ── Observation info (from /api/obs/:id) ─────────────────────────────────────
-
-export interface ObsBbox {
-    y_min: number;
-    x_min: number;
-    y_max: number;
-    x_max: number;
-}

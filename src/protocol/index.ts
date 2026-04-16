@@ -1,11 +1,11 @@
 /**
  * Wire-format schemas and types shared by the ndea server and frontend.
- * Single source of truth: Zod schemas + their inferred types + HTTP response
- * shapes + the WebSocket method map.
  *
- * Server imports `*Schema` to validate incoming request bodies.
- * Frontend imports inferred types (`CropBody`, etc.) and is free to reach
- * for the same Zod runtime if it wants client-side validation.
+ * Single source of truth for anything that crosses the HTTP boundary:
+ *   - POST body schemas (server validates with .safeParse; frontend types via z.infer)
+ *   - Response schemas (frontend parses; backend returns z.infer-shaped objects)
+ *   - Binary-blob header schemas (scatter endpoints)
+ *   - WebSocket method map (future migration)
  */
 
 import { z } from "zod";
@@ -15,7 +15,7 @@ import { z } from "zod";
 /** Non-negative 32-bit integer, safe to interpolate into SQL after validation. */
 const NonNegativeInt = z.number().int().nonnegative().finite();
 
-// ─── Request-body schemas (per POST route) ──────────────────────────────────
+// ─── POST body schemas ──────────────────────────────────────────────────────
 
 /** POST /data/query — Mosaic SQL passthrough. Discriminated on `type`. */
 export const MosaicQueryBodySchema = z.object({
@@ -87,38 +87,89 @@ export const GeneColumnBodySchema = z.object({
 });
 export type GeneColumnBody = z.infer<typeof GeneColumnBodySchema>;
 
-// ─── HTTP response shapes ───────────────────────────────────────────────────
+// ─── Response schemas ──────────────────────────────────────────────────────
 
-/** Mosaic query request — mirrors MosaicQueryBodySchema as a plain interface. */
-export interface MosaicQueryReq {
-    type: "arrow" | "json" | "exec";
-    sql: string;
-}
+/** Embedding status response. */
+export const EmbeddingStatusSchema = z.object({
+    status: z.enum(["loading", "ready", "error"]),
+    error: z.string().optional(),
+});
+export type EmbeddingStatus = z.infer<typeof EmbeddingStatusSchema>;
 
-/** Metadata response shape (matches /data/metadata.json). */
-export interface MetadataRes {
-    version?: string;
-    props: Record<string, unknown>;
-    database: { type: string };
-    obsm: Record<string, { prefix: string; n_dims: number | null; loaded: boolean }>;
-    obs_columns: string[];
-    var_count: number;
-    layers: string[];
-    export_dir: string;
-    spatial: {
-        fov_col: string | null;
-        t_col: string | null;
-        bbox_col: string | null;
-        x_col: string | null;
-        y_col: string | null;
-    };
-    plate: boolean;
-    dataset_keys?: string[];
-    plate_channels?: Array<Record<string, unknown>>;
-    dataset_channels?: Record<string, Array<Record<string, unknown>>>;
-    plate_stores?: Array<{ mount: string; name: string; ome_version: string }>;
-    [key: string]: unknown;
-}
+/** Obs spatial-column response (bbox sub-shape). */
+export const ObsBboxSchema = z.object({
+    y_min: z.number(),
+    x_min: z.number(),
+    y_max: z.number(),
+    x_max: z.number(),
+});
+export type ObsBbox = z.infer<typeof ObsBboxSchema>;
+
+/** Observation info response — matches /api/obs/{row_index}. */
+export const ObsInfoSchema = z
+    .object({
+        fov_name: z.string(),
+        t: z.number(),
+        x: z.number(),
+        y: z.number(),
+        bbox: ObsBboxSchema.optional(),
+        store_index: z.number().optional(),
+    })
+    .passthrough();
+export type ObsInfo = z.infer<typeof ObsInfoSchema>;
+
+/** Metadata response — matches /data/metadata.json. */
+export const ObsmEntrySchema = z.object({
+    prefix: z.string(),
+    n_dims: z.number().nullable().optional(),
+    loaded: z.boolean(),
+});
+export const SpatialMetaSchema = z.object({
+    fov_col: z.string().nullable().optional(),
+    t_col: z.string().nullable().optional(),
+    bbox_col: z.string().nullable().optional(),
+    x_col: z.string().nullable().optional(),
+    y_col: z.string().nullable().optional(),
+});
+export const PlateChannelSchema = z.object({
+    label: z.string(),
+    color: z.string(),
+    window: z.object({ start: z.number(), end: z.number(), min: z.number(), max: z.number() }),
+});
+export const PlateStoreSchema = z.object({
+    mount: z.string(),
+    name: z.string(),
+    ome_version: z.enum(["0.4", "0.5"]),
+});
+export const MetadataSchema = z
+    .object({
+        version: z.string().optional(),
+        props: z.object({
+            data: z.object({
+                id: z.string(),
+                projection: z.object({ x: z.string(), y: z.string() }),
+            }),
+        }),
+        database: z.object({ type: z.string(), uri: z.string().optional() }),
+        obsm: z.record(z.string(), ObsmEntrySchema),
+        obs_columns: z.array(z.string()).optional(),
+        var_count: z.number().optional(),
+        layers: z.array(z.string()).optional(),
+        export_dir: z.string().optional(),
+        spatial: SpatialMetaSchema.optional(),
+        plate: z.boolean().optional(),
+        dataset_keys: z.array(z.string()).optional(),
+        plate_ome_version: z.enum(["0.4", "0.5"]).optional(),
+        plate_pixel_scale: z.object({ x: z.number(), y: z.number() }).optional(),
+        plate_channels: z.array(PlateChannelSchema).optional(),
+        dataset_channels: z.record(z.string(), z.array(PlateChannelSchema)).optional(),
+        plate_stores: z.array(PlateStoreSchema).optional(),
+        plate_shape: z.array(z.number()).optional(),
+        plate_scale: z.array(z.number()).optional(),
+        time_points: z.array(z.number()).optional(),
+    })
+    .passthrough();
+export type Metadata = z.infer<typeof MetadataSchema>;
 
 /** Viewer config response. */
 export interface ConfigRes {
@@ -129,24 +180,56 @@ export interface ConfigRes {
     [key: string]: unknown;
 }
 
-/** Embedding status response. */
-export interface EmbeddingStatusRes {
-    status: "loading" | "ready" | "error" | "not_started";
-    error?: string;
-}
+/** ObsSet response row from /api/obssets listing. */
+export const ObsSetSchema = z.object({
+    obsset_id: z.string(),
+    name: z.string(),
+    color: z.string().nullable(),
+    created_count: z.number(),
+    current_count: z.number(),
+    created_at: z.string(),
+});
+export type ObsSet = z.infer<typeof ObsSetSchema>;
 
-/** Observation info response. */
-export interface ObsInfoRes {
-    fov_name?: string;
-    t: number;
-    x?: number;
-    y?: number;
-    bbox?: { y_min: number; x_min: number; y_max: number; x_max: number };
-    store_index?: number;
-    [key: string]: unknown;
-}
+// ─── Binary-blob header schemas (scatter endpoints) ─────────────────────────
 
-// ─── WebSocket protocol map ─────────────────────────────────────────────────
+/**
+ * GET /api/scatter-positions — binary format:
+ *   byte 0       version (uint8) = 1
+ *   bytes 1..4   header_len (uint32 LE)
+ *   bytes 5..    JSON header (this shape) + padding + Float32Array[positions]
+ */
+export const PositionHeaderSchema = z.object({
+    numCells: z.number().int().positive(),
+    embeddingKey: z.string().min(1),
+    ndim: z.literal(2),
+    rowIndices: z.array(z.number().int().nonnegative()),
+    positionScale: z.number().positive().default(1),
+});
+export type PositionHeader = z.infer<typeof PositionHeaderSchema>;
+
+/** GET /api/scatter-categories — header preceding Uint8Array[categoryIndex]. */
+export const CategoryHeaderSchema = z.object({
+    categoryNames: z.array(z.string()),
+});
+export type CategoryHeader = z.infer<typeof CategoryHeaderSchema>;
+
+/** GET /api/scatter-continuous-colors — header preceding Uint8Array[rgba]. */
+export const ContinuousColorsHeaderSchema = z.object({
+    numPoints: z.number().int().positive(),
+    vmin: z.number(),
+    vmax: z.number(),
+    colormap: z.string().min(1),
+});
+export type ContinuousColorsHeader = z.infer<typeof ContinuousColorsHeaderSchema>;
+
+// ─── WebSocket protocol map (future migration) ──────────────────────────────
+
+/** Mosaic query request — mirrors MosaicQueryBodySchema as a plain interface. */
+export interface MosaicQueryReq {
+    type: "arrow" | "json" | "exec";
+    sql: string;
+}
 
 /**
  * Typed WebSocket-style method map. Keys are method names, values declare
@@ -169,7 +252,7 @@ export interface NdeaProtocol extends ProtocolMap {
     };
     meta: {
         req: Record<string, never>;
-        res: MetadataRes;
+        res: Metadata;
     };
     config: {
         req: Record<string, never>;
@@ -181,7 +264,7 @@ export interface NdeaProtocol extends ProtocolMap {
     };
     "embeddings/status": {
         req: { key: string };
-        res: EmbeddingStatusRes;
+        res: EmbeddingStatus;
     };
     "scatter/positions": {
         req: { embedding: string; x_col: string; y_col: string };
@@ -200,7 +283,7 @@ export interface NdeaProtocol extends ProtocolMap {
     };
     "obs/info": {
         req: { row_index: number };
-        res: ObsInfoRes;
+        res: ObsInfo;
     };
     "obs/detail": {
         req: { row_index: number };
@@ -228,7 +311,7 @@ export interface NdeaProtocol extends ProtocolMap {
     };
     "obssets/list": {
         req: Record<string, never>;
-        res: Array<Record<string, unknown>>;
+        res: ObsSet[];
     };
     "obssets/create": {
         req: {
@@ -236,7 +319,7 @@ export interface NdeaProtocol extends ProtocolMap {
             color?: string;
             members: Array<{ dataset_key: string; obs_name: string }>;
         };
-        res: Record<string, unknown>;
+        res: ObsSet;
     };
     "obssets/delete": {
         req: { obsset_id: string };

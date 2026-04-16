@@ -9,7 +9,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { Trash2 } from "lucide-react";
 import { useRef } from "react";
 import { obsSetId } from "../../../lib/branded-types";
-import type { ObsSet } from "../../../lib/schemas";
+import type { ObsSet } from "../../../../protocol/index.ts";
 import { cn } from "../../../lib/utils";
 import { obsSetStore, setActiveObsSet } from "../../../stores/ObsSetStore";
 import { useDeleteObsSet, useObsSets } from "../../scatter/useObsSets";

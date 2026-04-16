@@ -2,8 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { z } from "zod";
 import type { ObsSetId } from "../../lib/branded-types";
-import type { ObsSet } from "../../lib/schemas";
-import { ObsSetSchema } from "../../lib/schemas";
+import type { ObsSet } from "../../../protocol/index.ts";
+import { ObsSetSchema } from "../../../protocol/index.ts";
 import { obsSetStore, setActiveObsSet, updateObsSets } from "../../stores/ObsSetStore";
 
 const ObsSetListSchema = z.array(ObsSetSchema);

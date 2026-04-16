@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { EmbeddingStatusSchema } from "../../lib/schemas";
+import { EmbeddingStatusSchema } from "../../../protocol/index.ts";
 import type { Metadata } from "../../types";
 
 async function pollUntilReady(key: string, signal: AbortSignal): Promise<void> {

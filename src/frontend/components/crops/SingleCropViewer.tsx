@@ -3,7 +3,7 @@ import { vec3 } from "gl-matrix";
 import { useCallback, useEffect } from "react";
 import { selectTrajectory } from "../../dashboard/DashboardContext";
 import { useDashboard } from "../../hooks/useDashboard";
-import { ObsInfoSchema } from "../../lib/schemas";
+import { ObsInfoSchema } from "../../../protocol/index.ts";
 import type { OrbitControls } from "../viewer/OrbitControls";
 import { useBboxLayer } from "../viewer/useBboxLayer";
 import { useFovLoader } from "../viewer/useFovLoader";
