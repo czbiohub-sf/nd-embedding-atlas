@@ -96,62 +96,116 @@ export function pathsToConfig(paths: string[]): ProjectConfig {
 // ─── Internal parsers ───────────────────────────────────────────────────────
 
 function parseDatasets(raw: unknown, baseDir: string): DatasetEntry[] {
-    if (!Array.isArray(raw)) {
-        throw new Error("Config 'datasets' must be an array");
+    if (!raw || typeof raw !== "object") {
+        throw new Error("Config 'datasets' must be an array or object");
     }
 
-    return raw.map((entry: unknown, i: number) => {
-        if (!entry || typeof entry !== "object") {
-            throw new Error(`Dataset entry ${i} must be an object`);
-        }
-        const e = entry as Record<string, unknown>;
+    // Support both formats:
+    //   Array:  [{ name, path, plate_path }]
+    //   Dict:   { "dataset_name": { anndata, hcs_plate } }
+    if (Array.isArray(raw)) {
+        return raw.map((entry: unknown, i: number) => parseArrayEntry(entry, i, baseDir));
+    }
 
-        if (typeof e.name !== "string" || !e.name) {
-            throw new Error(`Dataset entry ${i} must have a 'name' string`);
-        }
-        if (typeof e.path !== "string" || !e.path) {
-            throw new Error(`Dataset entry ${i} must have a 'path' string`);
-        }
-
-        const dataset: DatasetEntry = {
-            name: e.name,
-            path: resolve(baseDir, e.path),
-        };
-
-        if (e.plate_path != null) {
-            if (typeof e.plate_path !== "string") {
-                throw new Error(`Dataset entry ${i}: plate_path must be a string`);
-            }
-            dataset.platePath = resolve(baseDir, e.plate_path);
-        }
-
-        if (e.channels != null) {
-            dataset.channels = parseChannels(e.channels, i);
-        }
-
-        return dataset;
-    });
+    // Dict format: keys are dataset names, values have anndata + hcs_plate
+    return Object.entries(raw as Record<string, unknown>).map(([name, entry]) =>
+        parseDictEntry(name, entry, baseDir),
+    );
 }
 
-function parseChannels(raw: unknown, datasetIndex: number): Record<string, ChannelConfig> {
+/** Parse array-style entry: { name, path, plate_path?, channels? } */
+function parseArrayEntry(entry: unknown, i: number, baseDir: string): DatasetEntry {
+    if (!entry || typeof entry !== "object") {
+        throw new Error(`Dataset entry ${i} must be an object`);
+    }
+    const e = entry as Record<string, unknown>;
+
+    if (typeof e.name !== "string" || !e.name) {
+        throw new Error(`Dataset entry ${i} must have a 'name' string`);
+    }
+    if (typeof e.path !== "string" || !e.path) {
+        throw new Error(`Dataset entry ${i} must have a 'path' string`);
+    }
+
+    const dataset: DatasetEntry = {
+        name: e.name,
+        path: resolve(baseDir, e.path),
+    };
+
+    if (e.plate_path != null) {
+        if (typeof e.plate_path !== "string") {
+            throw new Error(`Dataset entry ${i}: plate_path must be a string`);
+        }
+        dataset.platePath = resolve(baseDir, e.plate_path);
+    }
+
+    if (e.channels != null) {
+        dataset.channels = parseChannels(e.channels, i);
+    }
+
+    return dataset;
+}
+
+/**
+ * Parse dict-style entry: { anndata, hcs_plate?, channels? }
+ *
+ * This is the format used by infectomics YAML configs:
+ *   datasets:
+ *     "experiment_name":
+ *       anndata: /path/to/anndata.zarr
+ *       hcs_plate: /path/to/plate.zarr
+ */
+function parseDictEntry(name: string, entry: unknown, baseDir: string): DatasetEntry {
+    if (!entry || typeof entry !== "object") {
+        throw new Error(`Dataset '${name}' must be an object`);
+    }
+    const e = entry as Record<string, unknown>;
+
+    // Support both key names: path/anndata, plate_path/hcs_plate
+    const dataPath = (e.anndata ?? e.path) as string | undefined;
+    if (typeof dataPath !== "string" || !dataPath) {
+        throw new Error(`Dataset '${name}' must have an 'anndata' or 'path' string`);
+    }
+
+    const dataset: DatasetEntry = {
+        name,
+        path: resolve(baseDir, dataPath),
+    };
+
+    const platePath = (e.hcs_plate ?? e["ome-zarr"] ?? e.ome_zarr ?? e.plate_path) as string | undefined;
+    if (platePath != null) {
+        if (typeof platePath !== "string") {
+            throw new Error(`Dataset '${name}': hcs_plate/plate_path must be a string`);
+        }
+        dataset.platePath = resolve(baseDir, platePath);
+    }
+
+    if (e.channels != null) {
+        dataset.channels = parseChannels(e.channels, name);
+    }
+
+    return dataset;
+}
+
+function parseChannels(raw: unknown, datasetId: number | string): Record<string, ChannelConfig> {
     if (!raw || typeof raw !== "object") {
-        throw new Error(`Dataset ${datasetIndex}: channels must be an object`);
+        throw new Error(`Dataset ${datasetId}: channels must be an object`);
     }
 
     const result: Record<string, ChannelConfig> = {};
     for (const [name, cfg] of Object.entries(raw as Record<string, unknown>)) {
         if (!cfg || typeof cfg !== "object") {
-            throw new Error(`Dataset ${datasetIndex}, channel '${name}': expected an object`);
+            throw new Error(`Dataset ${datasetId}, channel '${name}': expected an object`);
         }
         const c = cfg as Record<string, unknown>;
         if (typeof c.color !== "string") {
-            throw new Error(`Dataset ${datasetIndex}, channel '${name}': color must be a string`);
+            throw new Error(`Dataset ${datasetId}, channel '${name}': color must be a string`);
         }
         const channel: ChannelConfig = { color: c.color };
 
         if (c.contrast != null) {
             if (!Array.isArray(c.contrast) || c.contrast.length !== 2) {
-                throw new Error(`Dataset ${datasetIndex}, channel '${name}': contrast must be [min, max]`);
+                throw new Error(`Dataset ${datasetId}, channel '${name}': contrast must be [min, max]`);
             }
             channel.contrast = c.contrast as [number, number];
         }

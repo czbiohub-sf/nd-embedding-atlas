@@ -15,11 +15,11 @@ import { unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { open, AnnDataAccessor, toArrowTable } from "../axial/index.ts";
-import { tableToIPC } from "@uwdata/flechette";
+import { tableToIPC, tableFromArrays } from "@uwdata/flechette";
 import { EmbeddingStore, DEFAULT_OBSM_PRIORITY } from "../server/store.ts";
 import { prepareObs } from "../server/prepare.ts";
 import { spatialHiddenColumns } from "../server/state.ts";
-import type { DatasetConfig, ViewerState } from "../server/state.ts";
+import type { DatasetConfig, DatasetMeta, ViewerState } from "../server/state.ts";
 import type { ResolvedConfig, DatasetEntry } from "./config.ts";
 import { resolveFrontendDir, getNetworkAddress } from "./resolve.ts";
 import type { DuckDBConnection } from "@duckdb/node-api";
@@ -101,47 +101,60 @@ export async function startup(config: ResolvedConfig): Promise<void> {
     // Determine which obsm keys are available across all datasets
     const availableObsmKeys = sortObsmKeys([...allObsmKeys]);
 
-    // Convert each dataset's obs to Arrow IPC bytes
-    const datasetArrows: Array<{ name: string; ipcBytes: Uint8Array; columnNames: string[] }> = [];
+    // Convert each dataset's obs to Arrow table + CSV for DuckDB ingestion
+    const datasetObs: Array<{ name: string; arrowTable: any; columnNames: string[] }> = [];
 
     for (const ds of loaded) {
         const arrowTable = toArrowTable(ds.accessor.obs);
         const columnNames = arrowTable.names as string[];
-        const ipcBytes = tableToIPC(arrowTable);
-        datasetArrows.push({ name: ds.entry.name, ipcBytes: new Uint8Array(ipcBytes), columnNames });
+        datasetObs.push({ name: ds.entry.name, arrowTable, columnNames });
     }
 
     // Determine obs columns from the first dataset (or config override)
-    const firstColumns = datasetArrows[0].columnNames;
+    const firstColumns = datasetObs[0].columnNames;
+
+    // Compute union of all columns across datasets (for multi-dataset alignment)
+    const allColumnNames = new Set<string>();
+    for (const ds of datasetObs) {
+        for (const col of ds.columnNames) allColumnNames.add(col);
+    }
+    const unionColumns = [...allColumnNames];
 
     // Build EmbeddingStore via init callback
     const initStore = async (conn: DuckDBConnection): Promise<void> => {
-        // Write each dataset's Arrow IPC to a temp file, load into DuckDB
-        for (let i = 0; i < datasetArrows.length; i++) {
-            const { name, ipcBytes } = datasetArrows[i];
+        for (let i = 0; i < datasetObs.length; i++) {
+            const { name, arrowTable, columnNames } = datasetObs[i];
 
-            // Write Arrow IPC to a temp file so DuckDB can read it
-            const tmpIpcPath = join(tmpdir(), `ndea_obs_${name}_${Date.now()}.arrow`);
-            await Bun.write(tmpIpcPath, ipcBytes);
+            // Write obs as CSV temp file — DuckDB reads CSV natively (no extensions needed)
+            const tmpCsvPath = join(tmpdir(), `ndea_obs_${name}_${Date.now()}.csv`);
+            await Bun.write(tmpCsvPath, arrowTableToCSV(arrowTable));
 
-            // DuckDB can read Arrow IPC files directly
+            // Build SELECT with NULL padding for missing columns (multi-dataset alignment)
+            const selectCols = unionColumns
+                .map((col) => (columnNames.includes(col) ? `"${col}"` : `NULL AS "${col}"`))
+                .join(", ");
+
             if (i === 0) {
                 if (isMultiDataset) {
                     await conn.run(
-                        `CREATE TABLE obs_base AS SELECT '${name}' AS _dataset, * FROM '${tmpIpcPath}'`,
+                        `CREATE TABLE obs_base AS SELECT '${name}' AS _dataset, ${selectCols} FROM read_csv_auto('${tmpCsvPath}')`,
                     );
                 } else {
-                    await conn.run(`CREATE TABLE obs_base AS SELECT * FROM '${tmpIpcPath}'`);
+                    await conn.run(
+                        `CREATE TABLE obs_base AS SELECT ${selectCols} FROM read_csv_auto('${tmpCsvPath}')`,
+                    );
                 }
             } else {
+                const insertCols = isMultiDataset
+                    ? `'${name}' AS _dataset, ${selectCols}`
+                    : selectCols;
                 await conn.run(
-                    `INSERT INTO obs_base SELECT '${name}' AS _dataset, * FROM '${tmpIpcPath}'`,
+                    `INSERT INTO obs_base SELECT ${insertCols} FROM read_csv_auto('${tmpCsvPath}')`,
                 );
             }
 
-            // Clean up temp file
             try {
-                await unlink(tmpIpcPath);
+                await unlink(tmpCsvPath);
             } catch {
                 // best-effort cleanup
             }
@@ -149,8 +162,9 @@ export async function startup(config: ResolvedConfig): Promise<void> {
     };
 
     // Prepare obs result for spatial detection and column filtering
+    const firstIpcBytes = new Uint8Array(tableToIPC(datasetObs[0].arrowTable, { format: "file" }));
     const prepResult = prepareObs(
-        datasetArrows[0].ipcBytes,
+        firstIpcBytes,
         firstColumns,
         isMultiDataset ? loaded[0].entry.name : undefined,
     );
@@ -179,8 +193,6 @@ export async function startup(config: ResolvedConfig): Promise<void> {
         loadingTasks: new Map(),
         loadErrors: new Map(),
     };
-    void state;
-
     // ── 4. Resolve frontend ─────────────────────────────────────────────────
 
     let staticDir: string | undefined;
@@ -195,39 +207,27 @@ export async function startup(config: ResolvedConfig): Promise<void> {
 
     // ── 5. Start server ─────────────────────────────────────────────────────
 
-    // Import createApp — it may still be a stub from Phase 2
     const { createApp } = await import("../server/app.ts");
-    const app = createApp();
+    const datasetMeta: DatasetMeta = {
+        obsColumnNames: obsColumns,
+        embeddingProps: {},
+        hasPlate: [...datasetConfigs.values()].some((d) => !!d.platePath),
+        plateMeta: null,
+        defaultX: "x",
+        defaultY: "y",
+        idColumn: "_index",
+        datasetKeys: isMultiDataset ? [...datasetConfigs.keys()] : null,
+        datasetChannels: null,
+    };
 
-    // If createApp returns a real server config, use Bun.serve.
-    // Otherwise fall back to a minimal health-check server so the CLI is testable.
-    const server = Bun.serve({
+    const server = createApp({
         port: config.port,
-        hostname: config.host,
-        fetch: app?.fetch ??
-            (async (_req: Request): Promise<Response> => {
-                const url = new URL(_req.url);
-
-                if (url.pathname === "/health") {
-                    return Response.json({ status: "ok", nObs: store.nObs });
-                }
-
-                // Serve static frontend files if available
-                if (staticDir && _req.method === "GET") {
-                    const filePath = join(staticDir, url.pathname === "/" ? "index.html" : url.pathname);
-                    const file = Bun.file(filePath);
-                    if (await file.exists()) {
-                        return new Response(file);
-                    }
-                    // SPA fallback — serve index.html for unmatched routes
-                    const indexFile = Bun.file(join(staticDir, "index.html"));
-                    if (await indexFile.exists()) {
-                        return new Response(indexFile);
-                    }
-                }
-
-                return Response.json({ error: "Not found" }, { status: 404 });
-            }),
+        host: config.host,
+        store,
+        state,
+        config: datasetMeta,
+        frontendDir: staticDir,
+        noStatic: config.noStatic,
     });
 
     // ── 6. Print startup info ───────────────────────────────────────────────
@@ -319,6 +319,40 @@ async function discoverObsmKeys(accessor: AnnDataAccessor): Promise<string[]> {
     }
 
     return keys;
+}
+
+/**
+ * Convert a flechette Arrow Table to CSV string for DuckDB ingestion.
+ * DuckDB reads CSV natively — no extensions needed.
+ */
+function arrowTableToCSV(table: any): string {
+    const names: string[] = table.names;
+    const numRows: number = table.numRows;
+    const columns: any[] = names.map((_: string, i: number) => table.getChildAt(i));
+
+    const lines: string[] = [names.map(csvEscape).join(",")];
+
+    for (let r = 0; r < numRows; r++) {
+        const row: string[] = [];
+        for (let c = 0; c < columns.length; c++) {
+            const val = columns[c].at(r);
+            if (val == null) {
+                row.push("");
+            } else {
+                row.push(csvEscape(String(val)));
+            }
+        }
+        lines.push(row.join(","));
+    }
+
+    return lines.join("\n") + "\n";
+}
+
+function csvEscape(val: string): string {
+    if (val.includes(",") || val.includes('"') || val.includes("\n")) {
+        return `"${val.replace(/"/g, '""')}"`;
+    }
+    return val;
 }
 
 /** Sort obsm keys by priority (UMAP > tSNE > PHATE > PCA > rest). */
