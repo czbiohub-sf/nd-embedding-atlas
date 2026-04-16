@@ -12,10 +12,10 @@ Firefox will **not** work, the ESR build on HPC systems typically does not suppo
 
 1. Open Chrome and go to `chrome://flags`
 2. Search and **Enable** each of these flags:
-    - `#enable-vulkan`
-    - `#default-angle-vulkan`
-    - `#vulkan-from-angle`
-    - `#enable-unsafe-webgpu`
+   - `#enable-vulkan`
+   - `#default-angle-vulkan`
+   - `#vulkan-from-angle`
+   - `#enable-unsafe-webgpu`
 3. Click **Relaunch**
 
 ---
@@ -26,11 +26,7 @@ Open the browser console (`F12`) and run:
 
 ```js
 const adapter = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
-console.log(
-    adapter
-        ? "WebGPU ready: " + (await adapter.requestAdapterInfo()).device
-        : "WebGPU not available",
-);
+console.log(adapter ? "WebGPU ready: " + (await adapter.requestAdapterInfo()).device : "WebGPU not available");
 ```
 
 You should see something like: `WebGPU ready: NVIDIA A40`

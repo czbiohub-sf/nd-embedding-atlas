@@ -6,14 +6,7 @@
  */
 
 // Public types consumed by server routes and startup.
-export type {
-    AnnDataFrame,
-    ColumnData,
-    CategoricalArray,
-    NullableArray,
-    SparseArray,
-    ZarrConfig,
-} from "./types.ts";
+export type { AnnDataFrame, ColumnData, CategoricalArray, NullableArray, SparseArray, ZarrConfig } from "./types.ts";
 
 // Public runtime API: open a store, read AnnData, convert to Arrow.
 export { open } from "./open.ts";

@@ -13,15 +13,15 @@ import wasmSimdPath from "@jsquash/webp/codec/enc/webp_enc_simd.wasm" with { typ
 
 let ready: Promise<void> | null = null;
 
-async function ensureWebp(): Promise<void> {
-    if (ready) return ready;
-    ready = (async () => {
-        const useSimd = await simd();
-        const bytes = await Bun.file(useSimd ? wasmSimdPath : wasmPath).arrayBuffer();
-        const mod = await WebAssembly.compile(bytes);
-        await initWebpEncode(mod);
-    })();
-    return ready;
+function ensureWebp(): Promise<void> {
+  if (ready) return ready;
+  ready = (async () => {
+    const useSimd = await simd();
+    const bytes = await Bun.file(useSimd ? wasmSimdPath : wasmPath).arrayBuffer();
+    const mod = await WebAssembly.compile(bytes);
+    await initWebpEncode(mod);
+  })();
+  return ready;
 }
 
 /**
@@ -29,19 +29,19 @@ async function ensureWebp(): Promise<void> {
  * Defaults to quality 90 (visually near-lossless for microscopy crops).
  */
 export async function encodeWebpImage(
-    rgba: Uint8Array,
-    width: number,
-    height: number,
-    quality: number = 90,
+  rgba: Uint8Array,
+  width: number,
+  height: number,
+  quality: number = 90,
 ): Promise<Uint8Array> {
-    await ensureWebp();
-    const clamped = new Uint8ClampedArray(rgba.buffer, rgba.byteOffset, rgba.byteLength);
-    const imageData = {
-        data: clamped,
-        width,
-        height,
-        colorSpace: "srgb",
-    } as unknown as ImageData;
-    const buf = await encodeWebp(imageData, { quality });
-    return new Uint8Array(buf);
+  await ensureWebp();
+  const clamped = new Uint8ClampedArray(rgba.buffer, rgba.byteOffset, rgba.byteLength);
+  const imageData = {
+    data: clamped,
+    width,
+    height,
+    colorSpace: "srgb",
+  } as unknown as ImageData;
+  const buf = await encodeWebp(imageData, { quality });
+  return new Uint8Array(buf);
 }

@@ -10,29 +10,29 @@
 import type { z } from "zod";
 
 export {
-    CropBodySchema,
-    CropChannelSchema,
-    CreateObsSetBodySchema,
-    ExportBodySchema,
-    GeneColumnBodySchema,
-    MosaicQueryBodySchema,
-    ObsSetMemberSchema,
-    ScatterSelectionBodySchema,
+  CropBodySchema,
+  CropChannelSchema,
+  CreateObsSetBodySchema,
+  ExportBodySchema,
+  GeneColumnBodySchema,
+  MosaicQueryBodySchema,
+  ObsSetMemberSchema,
+  ScatterSelectionBodySchema,
 } from "../protocol/index.ts";
 export type {
-    ConfigRes,
-    CreateObsSetBody,
-    CropBody,
-    EmbeddingStatus,
-    ExportBody,
-    GeneColumnBody,
-    Metadata,
-    MosaicQueryBody,
-    MosaicQueryReq,
-    NdeaProtocol,
-    ObsInfo,
-    ProtocolMap,
-    ScatterSelectionBody,
+  ConfigRes,
+  CreateObsSetBody,
+  CropBody,
+  EmbeddingStatus,
+  ExportBody,
+  GeneColumnBody,
+  Metadata,
+  MosaicQueryBody,
+  MosaicQueryReq,
+  NdeaProtocol,
+  ObsInfo,
+  ProtocolMap,
+  ScatterSelectionBody,
 } from "../protocol/index.ts";
 
 /**
@@ -48,27 +48,27 @@ export type {
  *   const body = parsed.data;
  */
 export async function parseJsonBody<T extends z.ZodTypeAny>(
-    req: Request,
-    schema: T,
+  req: Request,
+  schema: T,
 ): Promise<{ ok: true; data: z.infer<T> } | { ok: false; response: Response }> {
-    let raw: unknown;
-    try {
-        raw = await req.json();
-    } catch {
-        return {
-            ok: false,
-            response: Response.json({ error: "Invalid JSON body" }, { status: 400 }),
-        };
-    }
-    const result = schema.safeParse(raw);
-    if (!result.success) {
-        return {
-            ok: false,
-            response: Response.json(
-                { error: "Request body failed validation", issues: result.error.issues },
-                { status: 400 },
-            ),
-        };
-    }
-    return { ok: true, data: result.data };
+  let raw: unknown;
+  try {
+    raw = await req.json();
+  } catch {
+    return {
+      ok: false,
+      response: Response.json({ error: "Invalid JSON body" }, { status: 400 }),
+    };
+  }
+  const result = schema.safeParse(raw);
+  if (!result.success) {
+    return {
+      ok: false,
+      response: Response.json(
+        { error: "Request body failed validation", issues: result.error.issues },
+        { status: 400 },
+      ),
+    };
+  }
+  return { ok: true, data: result.data };
 }

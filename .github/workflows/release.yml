@@ -21,13 +21,13 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-14           # Apple Silicon
+          - os: macos-14 # Apple Silicon
             target: bun-darwin-arm64
             artifact: ndea-darwin-arm64
-          - os: macos-13           # Intel Mac
+          - os: macos-13 # Intel Mac
             target: bun-darwin-x64
             artifact: ndea-darwin-x64
-          - os: ubuntu-latest      # Linux x64
+          - os: ubuntu-latest # Linux x64
             target: bun-linux-x64
             artifact: ndea-linux-x64
 

@@ -8,10 +8,10 @@
 // Re-export the axial zarr I/O surface actually consumed by callers.
 export { open, AnnDataAccessor, toArrowTable } from "./zarr/index.ts";
 export type {
-    AnnDataFrame,
-    ColumnData,
-    CategoricalArray,
-    NullableArray,
-    SparseArray,
-    ZarrConfig,
+  AnnDataFrame,
+  ColumnData,
+  CategoricalArray,
+  NullableArray,
+  SparseArray,
+  ZarrConfig,
 } from "./zarr/index.ts";

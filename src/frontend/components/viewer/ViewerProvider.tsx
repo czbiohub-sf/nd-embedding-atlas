@@ -27,11 +27,6 @@ interface Props {
   channelInstance?: string;
 }
 
-interface LayerEntry {
-  layer: Layer;
-  callback: (state: LayerState, prev?: LayerState) => void;
-}
-
 function computeAggregate(layers: TrackedLayer[]): LayerState | null {
   if (layers.length === 0) return null;
   if (layers.some((l) => l.state === "loading")) return "loading";

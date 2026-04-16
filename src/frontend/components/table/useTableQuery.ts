@@ -22,12 +22,6 @@ export interface SortState {
   direction: SortDirection;
 }
 
-interface PageEntry {
-  rows: Row[];
-  lastAccessed: number;
-  cacheKey: string;
-}
-
 export interface UseTableQueryOptions {
   coordinator: Coordinator;
   table: string;

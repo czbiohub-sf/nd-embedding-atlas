@@ -7,5 +7,5 @@ export const POINT_RADIUS_DEFAULT = 0.002;
 export const pointRadiusStore = new Store({ radius: POINT_RADIUS_DEFAULT });
 
 export function setPointRadius(radius: number): void {
-    pointRadiusStore.setState(() => ({ radius }));
+  pointRadiusStore.setState(() => ({ radius }));
 }

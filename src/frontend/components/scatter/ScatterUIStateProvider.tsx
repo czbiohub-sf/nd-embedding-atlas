@@ -8,90 +8,78 @@
 import { createContext, use, useCallback, useReducer } from "react";
 
 interface ScatterUIState {
-    fps: number | null;
-    zoom: number;
-    selectedCount: number | null;
-    embeddingKey: string | null;
-    numPoints: number;
-    /** Transient status message shown in the bottom dock (e.g. "Materializing ACTB…"). Null = nothing. */
-    statusMsg: string | null;
+  fps: number | null;
+  zoom: number;
+  selectedCount: number | null;
+  embeddingKey: string | null;
+  numPoints: number;
+  /** Transient status message shown in the bottom dock (e.g. "Materializing ACTB…"). Null = nothing. */
+  statusMsg: string | null;
 }
 
 type ScatterUIAction =
-    | { type: "SET_FPS"; fps: number }
-    | { type: "SET_ZOOM"; zoom: number }
-    | { type: "SET_SELECTION"; count: number | null }
-    | { type: "SET_EMBEDDING"; key: string | null }
-    | { type: "SET_NUM_POINTS"; n: number }
-    | { type: "SET_STATUS"; msg: string | null };
+  | { type: "SET_FPS"; fps: number }
+  | { type: "SET_ZOOM"; zoom: number }
+  | { type: "SET_SELECTION"; count: number | null }
+  | { type: "SET_EMBEDDING"; key: string | null }
+  | { type: "SET_NUM_POINTS"; n: number }
+  | { type: "SET_STATUS"; msg: string | null };
 
 const initial: ScatterUIState = {
-    fps: null,
-    zoom: 1,
-    selectedCount: null,
-    embeddingKey: null,
-    numPoints: 0,
-    statusMsg: null,
+  fps: null,
+  zoom: 1,
+  selectedCount: null,
+  embeddingKey: null,
+  numPoints: 0,
+  statusMsg: null,
 };
 
 function reducer(state: ScatterUIState, action: ScatterUIAction): ScatterUIState {
-    switch (action.type) {
-        case "SET_FPS":
-            return { ...state, fps: action.fps };
-        case "SET_ZOOM":
-            return { ...state, zoom: action.zoom };
-        case "SET_SELECTION":
-            return { ...state, selectedCount: action.count };
-        case "SET_EMBEDDING":
-            return { ...state, embeddingKey: action.key };
-        case "SET_NUM_POINTS":
-            return { ...state, numPoints: action.n };
-        case "SET_STATUS":
-            return { ...state, statusMsg: action.msg };
-        default:
-            return state;
-    }
+  switch (action.type) {
+    case "SET_FPS":
+      return { ...state, fps: action.fps };
+    case "SET_ZOOM":
+      return { ...state, zoom: action.zoom };
+    case "SET_SELECTION":
+      return { ...state, selectedCount: action.count };
+    case "SET_EMBEDDING":
+      return { ...state, embeddingKey: action.key };
+    case "SET_NUM_POINTS":
+      return { ...state, numPoints: action.n };
+    case "SET_STATUS":
+      return { ...state, statusMsg: action.msg };
+    default:
+      return state;
+  }
 }
 
 const StateContext = createContext(initial);
 const DispatchContext = createContext<React.Dispatch<ScatterUIAction>>(() => {});
 
 export function ScatterUIStateProvider({ children }: { children: React.ReactNode }) {
-    const [state, dispatch] = useReducer(reducer, initial);
-    return (
-        <StateContext value={state}>
-            <DispatchContext value={dispatch}>{children}</DispatchContext>
-        </StateContext>
-    );
+  const [state, dispatch] = useReducer(reducer, initial);
+  return (
+    <StateContext value={state}>
+      <DispatchContext value={dispatch}>{children}</DispatchContext>
+    </StateContext>
+  );
 }
 
 // eslint-disable-next-line react/only-export-components
 export function useScatterUIState(): ScatterUIState {
-    return use(StateContext);
+  return use(StateContext);
 }
 
 /** Returns stable dispatch callbacks for the scatter panel to call. */
 // eslint-disable-next-line react/only-export-components
 export function useScatterUIDispatch() {
-    const dispatch = use(DispatchContext);
-    return {
-        setFps: useCallback((fps: number) => dispatch({ type: "SET_FPS", fps }), [dispatch]),
-        setZoom: useCallback((zoom: number) => dispatch({ type: "SET_ZOOM", zoom }), [dispatch]),
-        setSelection: useCallback(
-            (count: number | null) => dispatch({ type: "SET_SELECTION", count }),
-            [dispatch],
-        ),
-        setEmbedding: useCallback(
-            (key: string | null) => dispatch({ type: "SET_EMBEDDING", key }),
-            [dispatch],
-        ),
-        setNumPoints: useCallback(
-            (n: number) => dispatch({ type: "SET_NUM_POINTS", n }),
-            [dispatch],
-        ),
-        setStatus: useCallback(
-            (msg: string | null) => dispatch({ type: "SET_STATUS", msg }),
-            [dispatch],
-        ),
-    };
+  const dispatch = use(DispatchContext);
+  return {
+    setFps: useCallback((fps: number) => dispatch({ type: "SET_FPS", fps }), [dispatch]),
+    setZoom: useCallback((zoom: number) => dispatch({ type: "SET_ZOOM", zoom }), [dispatch]),
+    setSelection: useCallback((count: number | null) => dispatch({ type: "SET_SELECTION", count }), [dispatch]),
+    setEmbedding: useCallback((key: string | null) => dispatch({ type: "SET_EMBEDDING", key }), [dispatch]),
+    setNumPoints: useCallback((n: number) => dispatch({ type: "SET_NUM_POINTS", n }), [dispatch]),
+    setStatus: useCallback((msg: string | null) => dispatch({ type: "SET_STATUS", msg }), [dispatch]),
+  };
 }

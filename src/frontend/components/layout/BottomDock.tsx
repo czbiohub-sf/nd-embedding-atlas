@@ -110,7 +110,7 @@ export function BottomDock({
   // Track panel additions, removals, and active changes
   useEffect(() => {
     const api = dockviewApi;
-    if (!api) return;
+    if (!api) return () => {};
 
     function buildPanels() {
       const entries: PanelEntry[] = api!.panels.map((p) => {
@@ -139,7 +139,9 @@ export function BottomDock({
       api.onDidActivePanelChange((e) => setActivePanelId(e?.id ?? null)),
     ];
 
-    return () => subs.forEach((s) => s.dispose());
+    return () => {
+      subs.forEach((s) => s.dispose());
+    };
   }, [dockviewApi]);
 
   const scatterPanels = panels.filter((p) => p.colorIndex !== undefined);

@@ -20,59 +20,59 @@ import type { ObsSetId, PanelId } from "../lib/branded-types";
 export type FilterSource = "lasso" | "obsset" | null;
 
 export interface ActiveFilterState {
-    /** SQL WHERE fragment, or null for "no filter" */
-    predicate: string | null;
-    /** Stable source object for Mosaic cross-filter source tracking (one per session) */
-    source: object;
-    /** Panel that originated this filter (null for obsset filters) */
-    sourcePanelId: PanelId | null;
-    /** Discriminates lasso vs obsset vs no filter */
-    filterSource: FilterSource;
-    /** Monotonically increasing — use as dep for TanStack Query cache keys */
-    version: number;
+  /** SQL WHERE fragment, or null for "no filter" */
+  predicate: string | null;
+  /** Stable source object for Mosaic cross-filter source tracking (one per session) */
+  source: object;
+  /** Panel that originated this filter (null for obsset filters) */
+  sourcePanelId: PanelId | null;
+  /** Discriminates lasso vs obsset vs no filter */
+  filterSource: FilterSource;
+  /** Monotonically increasing — use as dep for TanStack Query cache keys */
+  version: number;
 }
 
 const stableSource = {};
 
 export const activeFilterStore = new Store<ActiveFilterState>({
-    predicate: null,
-    source: stableSource,
-    sourcePanelId: null,
-    filterSource: null,
-    version: 0,
+  predicate: null,
+  source: stableSource,
+  sourcePanelId: null,
+  filterSource: null,
+  version: 0,
 });
 
 export function setActiveFilter(panelId: PanelId, predicate: string | null): void {
-    activeFilterStore.setState((s) => ({
-        ...s,
-        predicate,
-        source: stableSource,
-        sourcePanelId: panelId,
-        filterSource: "lasso",
-        version: s.version + 1,
-    }));
+  activeFilterStore.setState((s) => ({
+    ...s,
+    predicate,
+    source: stableSource,
+    sourcePanelId: panelId,
+    filterSource: "lasso",
+    version: s.version + 1,
+  }));
 }
 
 export function clearActiveFilter(panelId: PanelId): void {
-    setActiveFilter(panelId, null);
+  setActiveFilter(panelId, null);
 }
 
 export function setObsSetFilter(_obsSetId: ObsSetId, predicate: string): void {
-    activeFilterStore.setState((s) => ({
-        ...s,
-        predicate,
-        source: stableSource,
-        sourcePanelId: null,
-        filterSource: "obsset",
-        version: s.version + 1,
-    }));
+  activeFilterStore.setState((s) => ({
+    ...s,
+    predicate,
+    source: stableSource,
+    sourcePanelId: null,
+    filterSource: "obsset",
+    version: s.version + 1,
+  }));
 }
 
 export function clearObsSetFilter(): void {
-    activeFilterStore.setState((s) => ({
-        ...s,
-        predicate: null,
-        filterSource: null,
-        version: s.version + 1,
-    }));
+  activeFilterStore.setState((s) => ({
+    ...s,
+    predicate: null,
+    filterSource: null,
+    version: s.version + 1,
+  }));
 }

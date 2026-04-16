@@ -21,23 +21,21 @@ import { resolve } from "node:path";
  * @throws If the path doesn't exist or doesn't look like zarr.
  */
 export function validateZarrPath(path: string): string {
-    const abs = resolve(path);
+  const abs = resolve(path);
 
-    if (!existsSync(abs)) {
-        throw new Error(`Path does not exist: ${abs}`);
-    }
+  if (!existsSync(abs)) {
+    throw new Error(`Path does not exist: ${abs}`);
+  }
 
-    // Check for zarr markers
-    const markers = [".zgroup", ".zarray", "zarr.json", ".zattrs"];
-    const hasMarker = markers.some((m) => existsSync(resolve(abs, m)));
+  // Check for zarr markers
+  const markers = [".zgroup", ".zarray", "zarr.json", ".zattrs"];
+  const hasMarker = markers.some((m) => existsSync(resolve(abs, m)));
 
-    if (!hasMarker) {
-        throw new Error(
-            `Path does not look like a zarr store (no .zgroup, .zarray, or zarr.json): ${abs}`,
-        );
-    }
+  if (!hasMarker) {
+    throw new Error(`Path does not look like a zarr store (no .zgroup, .zarray, or zarr.json): ${abs}`);
+  }
 
-    return abs;
+  return abs;
 }
 
 // ─── Network helpers ────────────────────────────────────────────────────────
@@ -48,18 +46,18 @@ export function validateZarrPath(path: string): string {
  * @returns The first non-internal IPv4 address, or undefined.
  */
 export function getNetworkAddress(): string | undefined {
-    try {
-        const interfaces = networkInterfaces();
-        for (const iface of Object.values(interfaces)) {
-            if (!iface) continue;
-            for (const info of iface) {
-                if (info.family === "IPv4" && !info.internal) {
-                    return info.address;
-                }
-            }
+  try {
+    const interfaces = networkInterfaces();
+    for (const iface of Object.values(interfaces)) {
+      if (!iface) continue;
+      for (const info of iface) {
+        if (info.family === "IPv4" && !info.internal) {
+          return info.address;
         }
-    } catch {
-        // networkInterfaces unavailable — skip
+      }
     }
-    return undefined;
+  } catch {
+    // networkInterfaces unavailable — skip
+  }
+  return undefined;
 }

@@ -8,17 +8,17 @@ import { type ChannelHash, channelHash } from "./branded-types";
  * Fields are selected explicitly with fixed ordering to avoid JSON key-order variance.
  */
 export function hashChannels(channels: readonly ChannelDef[]): ChannelHash {
-    return channelHash(
-        JSON.stringify(
-            channels.map((ch) => ({
-                visible: ch.visible,
-                lo: ch.contrastLimits[0],
-                hi: ch.contrastLimits[1],
-                color: ch.color,
-                blend: ch.blendMode,
-            })),
-        ),
-    );
+  return channelHash(
+    JSON.stringify(
+      channels.map((ch) => ({
+        visible: ch.visible,
+        lo: ch.contrastLimits[0],
+        hi: ch.contrastLimits[1],
+        color: ch.color,
+        blend: ch.blendMode,
+      })),
+    ),
+  );
 }
 
 /** Hash value for empty/no channels. */

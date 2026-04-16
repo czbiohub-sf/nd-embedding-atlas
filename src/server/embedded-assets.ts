@@ -19,17 +19,17 @@
  * Falls back to checking `Bun.embeddedFiles` length for robustness.
  */
 function detectCompiled(): boolean {
-    try {
-        // Primary: check if the main entry lives in $bunfs
-        if (import.meta.path.startsWith("/$bunfs/")) return true;
+  try {
+    // Primary: check if the main entry lives in $bunfs
+    if (import.meta.path.startsWith("/$bunfs/")) return true;
 
-        // Secondary: check if Bun has any embedded files
-        const files = Bun.embeddedFiles;
-        if (Array.isArray(files) && files.length > 0) return true;
-    } catch {
-        // Not in a Bun environment at all
-    }
-    return false;
+    // Secondary: check if Bun has any embedded files
+    const files = Bun.embeddedFiles;
+    if (Array.isArray(files) && files.length > 0) return true;
+  } catch {
+    // Not in a Bun environment at all
+  }
+  return false;
 }
 
 export const isCompiled: boolean = detectCompiled();

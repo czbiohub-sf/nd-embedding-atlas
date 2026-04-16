@@ -98,9 +98,9 @@ export function LegendProvider({
   children,
 }: LegendProviderProps) {
   const [mode, setMode] = useState<"categorical" | "continuous">("categorical");
-  const [isolatedIndices, setIsolatedIndices] = useState(new Set());
-  const [colorOverrides, setColorOverrides] = useState(new Map());
-  const [disabledIndices, setDisabledIndices] = useState(new Set());
+  const [isolatedIndices, setIsolatedIndices] = useState<Set<number>>(() => new Set());
+  const [colorOverrides, setColorOverrides] = useState<Map<number, string>>(() => new Map());
+  const [disabledIndices, setDisabledIndices] = useState<Set<number>>(() => new Set());
 
   // ── Notify parent of isolation changes so it can update Mosaic ────────────
   // Mosaic's brushSelection.update() must be called from ScatterPanel where
@@ -110,7 +110,7 @@ export function LegendProvider({
   }, [isolatedIndices, onIsolationChange]);
   const [colormapName, setColormapName] = useState("viridis");
   const [colormapReversed, setColormapReversed] = useState(false);
-  const [range, setRange] = useState([0, 1]);
+  const [range, setRange] = useState<[number, number]>(() => [0, 1]);
   const [scale, setScale] = useState<"linear" | "log" | "sqrt">("linear");
 
   const toggleIsolation = useCallback((index: number, additive: boolean) => {
@@ -122,18 +122,18 @@ export function LegendProvider({
         } else {
           next.add(index);
         }
-        return next.size > 0 ? next : new Set();
+        return next.size > 0 ? next : new Set<number>();
       }
       // Non-additive: if already the sole selection, deselect; otherwise isolate just this
       if (prev.size === 1 && prev.has(index)) {
-        return new Set();
+        return new Set<number>();
       }
-      return new Set([index]);
+      return new Set<number>([index]);
     });
   }, []);
 
   const clearIsolation = useCallback(() => {
-    setIsolatedIndices(new Set());
+    setIsolatedIndices(new Set<number>());
   }, []);
 
   const setColorOverride = useCallback((index: number, color: string) => {
@@ -164,7 +164,7 @@ export function LegendProvider({
     });
   }, []);
 
-  const clearDisabled = useCallback(() => setDisabledIndices(new Set()), []);
+  const clearDisabled = useCallback(() => setDisabledIndices(new Set<number>()), []);
 
   const state: LegendState = useMemo(
     () => ({
