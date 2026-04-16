@@ -357,7 +357,7 @@ async function routeApi(
     // ── Image crop ──────────────────────────────────────────────────
     const cropParam = extractPathParam(pathname, "/api/crop/");
     if (cropParam != null) {
-        return handleCrop(cropParam, req);
+        return handleCrop(cropParam, req, state);
     }
 
     // ── 404 ─────────────────────────────────────────────────────────
