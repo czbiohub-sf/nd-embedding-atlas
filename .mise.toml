@@ -20,25 +20,25 @@ trap "kill $BACKEND 2>/dev/null; wait $BACKEND 2>/dev/null" EXIT INT TERM
 until curl -sf "http://localhost:$NDEA_PORT/data/metadata.json" >/dev/null 2>&1; do
   sleep 0.2
 done
-cd frontend && vp dev
+vp dev
 """
 
 [tasks.dev-frontend]
 description = "Frontend dev server only (assumes backend already running)"
-run = "cd frontend && vp dev"
+run = "vp dev"
 
 [tasks.sync]
 description = "Sync all dependencies"
-run = "bun install && cd frontend && bun install"
+run = "bun install && bun install"
 
 [tasks.check]
 description = "Full quality gate: vp check (backend) + vp check (frontend)"
-run = ["vp check", "cd frontend && vp check"]
+run = "vp check"
 
 [tasks.build]
 description = "Production build — frontend then Bun binary"
-run = "cd frontend && vp build && cd .. && bun run build"
+run = "bun run build"
 
 [tasks.clean]
 description = "Remove build artifacts"
-run = "rm -rf frontend/dist dist"
+run = "rm -rf dist"

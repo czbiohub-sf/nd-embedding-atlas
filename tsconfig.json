@@ -4,7 +4,8 @@
         "target": "ESNext",
         "module": "ESNext",
         "moduleResolution": "bundler",
-        "lib": ["ESNext", "DOM"],
+        "lib": ["ESNext", "DOM", "DOM.Iterable"],
+        "jsx": "react-jsx",
         "strict": true,
         "noEmit": true,
         "allowImportingTsExtensions": true,
@@ -13,11 +14,18 @@
         "isolatedModules": true,
         "verbatimModuleSyntax": true,
         "resolveJsonModule": true,
-        "types": ["bun"],
+        "useDefineForClassFields": true,
+        "moduleDetection": "force",
+        "erasableSyntaxOnly": true,
+        "noFallthroughCasesInSwitch": true,
+        "noUncheckedSideEffectImports": true,
+        "noUnusedLocals": true,
+        "noUnusedParameters": true,
+        "types": ["bun", "@webgpu/types", "vite/client"],
         "paths": {
-            "@/*": ["./src/*"]
+            "@/*": ["./src/frontend/*"]
         }
     },
-    "include": ["src/**/*.ts"],
-    "exclude": ["node_modules", "dist", "frontend", "src/**/__tests__"]
+    "include": ["src/**/*.ts", "src/**/*.tsx"],
+    "exclude": ["node_modules", "dist", "src/**/__tests__"]
 }

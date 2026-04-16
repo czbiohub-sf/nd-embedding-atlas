@@ -3,7 +3,7 @@
     "rsc": false,
     "tsx": true,
     "tailwind": {
-        "css": "src/app.css",
+        "css": "src/frontend/app.css",
         "baseColor": "neutral",
         "cssVariables": true
     },

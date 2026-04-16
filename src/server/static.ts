@@ -55,7 +55,7 @@ export function resolveFrontendDir(frontendDir?: string): string | null {
     }
 
     // 2. Dev mode: look for frontend/dist relative to CWD
-    const devDist = resolve("frontend/dist");
+    const devDist = resolve("dist/frontend");
     if (existsSync(join(devDist, "index.html"))) return devDist;
 
     // 3. Compiled binary: resolution happens via EMBEDDED_ASSETS map in

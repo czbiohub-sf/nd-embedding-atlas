@@ -9,7 +9,7 @@
  *
  * Usage:
  *   bun run scripts/build-all.ts
- *   bun run scripts/build-all.ts --skip-frontend   # reuse existing frontend/dist
+ *   bun run scripts/build-all.ts --skip-frontend   # reuse existing dist/frontend
  */
 
 import { existsSync } from "node:fs";
@@ -20,7 +20,7 @@ import { resolve } from "node:path";
 const skipFrontend = Bun.argv.includes("--skip-frontend");
 
 const ROOT = resolve(import.meta.dir, "..");
-const FRONTEND_DIST = resolve(ROOT, "frontend/dist");
+const FRONTEND_DIST = resolve(ROOT, "dist/frontend");
 const OUT_DIR = resolve(ROOT, "dist");
 
 // ─── ANSI helpers ──────────────────────────────────────────────────────────
@@ -46,7 +46,7 @@ const TARGETS = [
 if (!skipFrontend) {
     console.log(`\n  ${BOLD}Building frontend...${RESET}\n`);
     const proc = Bun.spawn(["vp", "build"], {
-        cwd: resolve(ROOT, "frontend"),
+        cwd: ROOT,
         stdout: "inherit",
         stderr: "inherit",
     });
@@ -58,7 +58,7 @@ if (!skipFrontend) {
 }
 
 if (!existsSync(FRONTEND_DIST)) {
-    console.error(`\n  ${RED}Error:${RESET} frontend/dist/ not found.`);
+    console.error(`\n  ${RED}Error:${RESET} dist/frontend/ not found.`);
     process.exit(1);
 }
 
@@ -67,7 +67,7 @@ if (!existsSync(FRONTEND_DIST)) {
 const glob = new Bun.Glob("**/*");
 const frontendFiles: string[] = [];
 for await (const path of glob.scan({ cwd: FRONTEND_DIST, onlyFiles: true })) {
-    frontendFiles.push(`frontend/dist/${path}`);
+    frontendFiles.push(`dist/frontend/${path}`);
 }
 
 console.log(`  ${DIM}${frontendFiles.length} frontend files to embed${RESET}\n`);

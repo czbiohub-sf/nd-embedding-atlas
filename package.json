@@ -11,12 +11,12 @@
     "scripts": {
         "dev": "bun run scripts/dev.ts",
         "dev:backend": "bun run src/cli/index.ts",
-        "dev:frontend": "cd frontend && vp dev",
+        "dev:frontend": "vp dev",
         "build": "bun run scripts/build.ts",
-        "build:frontend": "cd frontend && vp build",
+        "build:frontend": "vp build",
         "build:binary": "bun build ./src/cli/index.ts --compile --outfile dist/ndea",
         "build:all-platforms": "bun run scripts/build-all.ts",
-        "check": "vp check && (cd frontend && vp check)",
+        "check": "vp check",
         "test": "vp test"
     },
     "dependencies": {
