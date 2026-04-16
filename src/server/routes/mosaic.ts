@@ -17,14 +17,7 @@ import { handleMosaicQuery, parseMosaicQuery } from "../mosaic.ts";
  * POST uses JSON body.
  */
 export async function handleMosaicRoute(req: Request, store: EmbeddingStore): Promise<Response> {
-    const query = await parseMosaicQuery(req);
-
-    if (!query) {
-        return Response.json(
-            { error: "Missing or invalid query payload. Expected { type, sql }." },
-            { status: 400 },
-        );
-    }
-
-    return handleMosaicQuery(query, store);
+    const parsed = await parseMosaicQuery(req);
+    if (!parsed.ok) return parsed.response;
+    return handleMosaicQuery(parsed.query, store);
 }

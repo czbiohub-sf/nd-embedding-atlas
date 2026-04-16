@@ -11,6 +11,7 @@
 import { mkdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
+import { ExportBodySchema, parseJsonBody } from "../protocol.ts";
 import type { EmbeddingStore } from "../store.ts";
 
 /** In-flight export task state. */
@@ -44,23 +45,15 @@ function sanitiseFilename(name: string): string {
 
 /** POST /api/export */
 export async function handleExport(req: Request, store: EmbeddingStore): Promise<Response> {
+    if (currentExport && currentExport.status === "running") {
+        return Response.json({ error: "An export is already in progress" }, { status: 409 });
+    }
+
+    const parsed = await parseJsonBody(req, ExportBodySchema);
+    if (!parsed.ok) return parsed.response;
+    const body = parsed.data;
+
     try {
-        if (currentExport && currentExport.status === "running") {
-            return Response.json({ error: "An export is already in progress" }, { status: 409 });
-        }
-
-        const body = (await req.json()) as {
-            predicate?: string;
-            filename?: string;
-            output_path?: string;
-            selection_type?: string;
-            embedding_key?: string | null;
-        };
-
-        if (!body.predicate) {
-            return Response.json({ error: "Missing required field: predicate" }, { status: 400 });
-        }
-
         // Validate the predicate up-front by counting matches.
         let matchCount: number;
         try {

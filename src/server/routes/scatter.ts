@@ -8,6 +8,7 @@
  * DELETE /api/scatter-selection    — Clear selection temp table
  */
 
+import { parseJsonBody, ScatterSelectionBodySchema } from "../protocol.ts";
 import type { ViewerState } from "../state.ts";
 import type { EmbeddingStore } from "../store.ts";
 
@@ -259,14 +260,13 @@ export async function handleScatterSelectionPost(
     req: Request,
     store: EmbeddingStore,
 ): Promise<Response> {
+    const parsed = await parseJsonBody(req, ScatterSelectionBodySchema);
+    if (!parsed.ok) return parsed.response;
+    // SECURITY: Zod guarantees every element is a finite non-negative integer
+    // (see ScatterSelectionBodySchema). Interpolating `${i}` into SQL is safe.
+    const rowIndices = parsed.data.row_indices;
+
     try {
-        const body = (await req.json()) as { row_indices?: number[] };
-        const rowIndices = body.row_indices;
-
-        if (!Array.isArray(rowIndices)) {
-            return Response.json({ error: "Expected { row_indices: number[] }" }, { status: 400 });
-        }
-
         await store.execute("DROP TABLE IF EXISTS __scatter_selection");
         if (rowIndices.length > 0) {
             // Build in batches to avoid overly long SQL

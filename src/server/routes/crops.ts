@@ -9,25 +9,8 @@
  */
 
 import { renderCrop, type CropFormat } from "../crop.ts";
+import { CropBodySchema, parseJsonBody } from "../protocol.ts";
 import type { ViewerState } from "../state.ts";
-
-interface CropBody {
-    t?: number;
-    z?: number;
-    x?: number;
-    y?: number;
-    half?: number;
-    size?: number;
-    fmt?: string;
-    quality?: number;
-    dataset_key?: string;
-    channels?: Array<{
-        visible?: boolean;
-        lo?: number;
-        hi?: number;
-        color?: string;
-    }>;
-}
 
 export async function handleCrop(
     fovPath: string,
@@ -40,12 +23,9 @@ export async function handleCrop(
         return Response.json({ error: "Only POST is supported" }, { status: 405 });
     }
 
-    let body: CropBody;
-    try {
-        body = (await req.json()) as CropBody;
-    } catch {
-        return Response.json({ error: "Invalid JSON body" }, { status: 400 });
-    }
+    const parsed = await parseJsonBody(req, CropBodySchema);
+    if (!parsed.ok) return parsed.response;
+    const body = parsed.data;
 
     const t = body.t ?? 0;
     const z = body.z ?? 0;

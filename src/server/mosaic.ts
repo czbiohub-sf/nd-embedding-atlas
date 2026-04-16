@@ -9,6 +9,7 @@
  * Ports Python `server/routes/_mosaic.py`.
  */
 
+import { MosaicQueryBodySchema } from "./protocol.ts";
 import type { EmbeddingStore } from "./store.ts";
 
 // ─── SQL Security Filter ─────────────────────────────────────────────────────
@@ -135,23 +136,54 @@ export async function handleMosaicQuery(
  * Parse a Mosaic query from a Request object.
  *
  * Handles both GET (query string) and POST (JSON body) patterns.
+ * Validates the payload against MosaicQueryBodySchema (discriminated
+ * union on `type`) and returns a 400 Response on validation failure.
  */
-export async function parseMosaicQuery(req: Request): Promise<MosaicQuery | null> {
+export async function parseMosaicQuery(
+    req: Request,
+): Promise<{ ok: true; query: MosaicQuery } | { ok: false; response: Response }> {
+    let raw: unknown;
     if (req.method === "GET") {
         const url = new URL(req.url);
         const queryParam = url.searchParams.get("query");
-        if (!queryParam) return null;
+        if (!queryParam) {
+            return {
+                ok: false,
+                response: Response.json({ error: "Missing 'query' parameter" }, { status: 400 }),
+            };
+        }
         try {
-            return JSON.parse(queryParam) as MosaicQuery;
+            raw = JSON.parse(queryParam);
         } catch {
-            return null;
+            return {
+                ok: false,
+                response: Response.json(
+                    { error: "Invalid JSON in 'query' parameter" },
+                    { status: 400 },
+                ),
+            };
+        }
+    } else {
+        // POST
+        try {
+            raw = await req.json();
+        } catch {
+            return {
+                ok: false,
+                response: Response.json({ error: "Invalid JSON body" }, { status: 400 }),
+            };
         }
     }
 
-    // POST
-    try {
-        return (await req.json()) as MosaicQuery;
-    } catch {
-        return null;
+    const result = MosaicQueryBodySchema.safeParse(raw);
+    if (!result.success) {
+        return {
+            ok: false,
+            response: Response.json(
+                { error: "Query payload failed validation", issues: result.error.issues },
+                { status: 400 },
+            ),
+        };
     }
+    return { ok: true, query: result.data };
 }

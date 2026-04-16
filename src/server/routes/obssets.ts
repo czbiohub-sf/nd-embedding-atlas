@@ -7,6 +7,7 @@
  * POST   /api/obssets/{obsset_id}/activate — Get SQL predicate for filtering
  */
 
+import { CreateObsSetBodySchema, parseJsonBody } from "../protocol.ts";
 import type { EmbeddingStore } from "../store.ts";
 
 /**
@@ -56,17 +57,11 @@ export async function handleListObsSets(store: EmbeddingStore): Promise<Response
  * Creates a new ObsSet from the request body.
  */
 export async function handleCreateObsSet(req: Request, store: EmbeddingStore): Promise<Response> {
+    const parsed = await parseJsonBody(req, CreateObsSetBodySchema);
+    if (!parsed.ok) return parsed.response;
+    const body = parsed.data;
+
     try {
-        const body = (await req.json()) as {
-            name?: string;
-            color?: string | null;
-            members?: Array<{ dataset_key: string; obs_name: string }>;
-        };
-
-        if (!body.name) {
-            return Response.json({ error: "Missing required field: name" }, { status: 400 });
-        }
-
         const obssetId = crypto.randomUUID();
         const createdAt = new Date().toISOString();
         const members = body.members ?? [];

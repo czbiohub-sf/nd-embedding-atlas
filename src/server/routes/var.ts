@@ -9,6 +9,7 @@
 
 import type { AnnDataAccessor } from "../../axial/core/anndata-accessor.ts";
 import type { SparseArray } from "../../axial/core/types.ts";
+import { GeneColumnBodySchema, parseJsonBody } from "../protocol.ts";
 import type { ViewerState } from "../state.ts";
 
 /** In-flight gene column materialization tasks. */
@@ -140,15 +141,12 @@ async function discoverLayers(accessor: AnnDataAccessor): Promise<string[]> {
  * /api/gene-column/{task_id}/status for completion.
  */
 export async function handleGeneColumn(req: Request, state: ViewerState): Promise<Response> {
+    const parsed = await parseJsonBody(req, GeneColumnBodySchema);
+    if (!parsed.ok) return parsed.response;
+    const gene = parsed.data.gene;
+    const layer = parsed.data.layer ?? "X";
+
     try {
-        const body = (await req.json()) as { gene?: string; layer?: string };
-        if (!body.gene) {
-            return Response.json({ error: "Missing required field: gene" }, { status: 400 });
-        }
-
-        const gene = body.gene;
-        const layer = body.layer ?? "X";
-
         const safeVar = gene.replace(/[^a-zA-Z0-9]/g, "_");
         const safeLayer = layer.replace(/[^a-zA-Z0-9]/g, "_");
         const colName = `__var_${safeVar}_${safeLayer}__`;
