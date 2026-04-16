@@ -17,6 +17,8 @@ import { join } from "node:path";
 import { open, AnnDataAccessor, toArrowTable } from "../axial/index.ts";
 import { tableToIPC, tableFromArrays } from "@uwdata/flechette";
 import { EmbeddingStore, DEFAULT_OBSM_PRIORITY } from "../server/store.ts";
+import { buildPlateMounts, readPlateMeta } from "../server/plate.ts";
+import type { PlateChannel, PlateMount } from "../server/plate.ts";
 import { prepareObs } from "../server/prepare.ts";
 import { spatialHiddenColumns } from "../server/state.ts";
 import type { DatasetConfig, DatasetMeta, ViewerState } from "../server/state.ts";
@@ -186,6 +188,10 @@ export async function startup(config: ResolvedConfig): Promise<void> {
     // Build accessor map for on-demand obsm loading
     const accessors = new Map(loaded.map((ds) => [ds.entry.name, ds.accessor]));
 
+    // Build plate mounts + read minimal HCS metadata (omero channels, scale).
+    const plateMounts: PlateMount[] = buildPlateMounts(datasetConfigs, isMultiDataset);
+    const platesByDataset = await readPlateMetaForDatasets(plateMounts);
+
     const state: ViewerState = {
         store,
         datasets: datasetConfigs,
@@ -196,6 +202,7 @@ export async function startup(config: ResolvedConfig): Promise<void> {
         loadingTasks: new Map(),
         loadErrors: new Map(),
         accessors,
+        plateMounts,
     };
     // ── 4. Resolve frontend ─────────────────────────────────────────────────
 
@@ -212,16 +219,22 @@ export async function startup(config: ResolvedConfig): Promise<void> {
     // ── 5. Start server ─────────────────────────────────────────────────────
 
     const { createApp } = await import("../server/app.ts");
+    const { plateMeta, datasetChannels } = buildPlateMetadata(
+        plateMounts,
+        platesByDataset,
+        isMultiDataset,
+    );
+
     const datasetMeta: DatasetMeta = {
         obsColumnNames: obsColumns,
         embeddingProps: {},
-        hasPlate: [...datasetConfigs.values()].some((d) => !!d.platePath),
-        plateMeta: null,
+        hasPlate: plateMounts.length > 0,
+        plateMeta,
         defaultX: "x",
         defaultY: "y",
         idColumn: "_index",
         datasetKeys: isMultiDataset ? [...datasetConfigs.keys()] : null,
-        datasetChannels: null,
+        datasetChannels,
     };
 
     const server = createApp({
@@ -357,6 +370,67 @@ function csvEscape(val: string): string {
         return `"${val.replace(/"/g, '""')}"`;
     }
     return val;
+}
+
+/** Read plate metadata for each mount in parallel. */
+async function readPlateMetaForDatasets(
+    mounts: readonly PlateMount[],
+): Promise<Map<string /* mount */, Awaited<ReturnType<typeof readPlateMeta>>>> {
+    const entries = await Promise.all(
+        mounts.map(async (m) => [m.mount, await readPlateMeta(m.diskPath)] as const),
+    );
+    return new Map(entries);
+}
+
+/**
+ * Derive the plate sub-object embedded in /data/metadata.json
+ * (plate_stores, plate_channels, plate_pixel_scale, plate_ome_version)
+ * plus the per-dataset channel mapping.
+ */
+function buildPlateMetadata(
+    mounts: readonly PlateMount[],
+    metaByMount: Map<string, Awaited<ReturnType<typeof readPlateMeta>>>,
+    isMultiDataset: boolean,
+): {
+    plateMeta: Record<string, unknown> | null;
+    datasetChannels: Record<string, PlateChannel[]> | null;
+} {
+    if (mounts.length === 0) return { plateMeta: null, datasetChannels: null };
+
+    const plateStores: Array<{ mount: string; name: string; ome_version: "0.4" | "0.5" }> = [];
+    const datasetChannels: Record<string, PlateChannel[]> = {};
+
+    // Prefer 0.5 if any dataset declares it, so the frontend picks the newer reader.
+    let globalOmeVersion: "0.4" | "0.5" = "0.4";
+    let firstChannels: PlateChannel[] | null = null;
+    let firstPixelScale: { x: number; y: number } | null = null;
+
+    for (const m of mounts) {
+        const info = metaByMount.get(m.mount);
+        const ome = info?.omeVersion ?? "0.4";
+        if (ome === "0.5") globalOmeVersion = "0.5";
+
+        const name = m.datasetKey ?? "";
+        plateStores.push({ mount: m.mount, name, ome_version: ome });
+
+        if (info && name) datasetChannels[name] = info.channels;
+        if (!firstChannels && info) firstChannels = info.channels;
+        if (!firstPixelScale && info) firstPixelScale = info.pixelScale;
+    }
+
+    const plateMeta: Record<string, unknown> = {
+        plate_stores: plateStores,
+        plate_ome_version: globalOmeVersion,
+    };
+    if (firstChannels) plateMeta.plate_channels = firstChannels;
+    if (firstPixelScale) plateMeta.plate_pixel_scale = firstPixelScale;
+
+    return {
+        plateMeta,
+        datasetChannels: isMultiDataset && Object.keys(datasetChannels).length > 0
+            ? datasetChannels
+            : null,
+    };
 }
 
 /** Sort obsm keys by priority (UMAP > tSNE > PHATE > PCA > rest). */

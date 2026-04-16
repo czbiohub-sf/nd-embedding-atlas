@@ -5,6 +5,7 @@
  */
 
 import type { AnnDataAccessor } from "../axial/core/anndata-accessor.ts";
+import type { PlateMount } from "./plate.ts";
 import type { EmbeddingStore } from "./store.ts";
 
 /** Resolved spatial column names (from config or auto-detection). */
@@ -72,4 +73,6 @@ export interface ViewerState {
     loadErrors: Map<string, string>;
     /** axial accessors by dataset name — for loading obsm from zarr on demand. */
     accessors: Map<string, AnnDataAccessor>;
+    /** URL-mount → disk-path descriptors for OME-Zarr HCS stores. */
+    plateMounts: PlateMount[];
 }

@@ -38,6 +38,7 @@ import {
 } from "./routes/var.ts";
 import { handleExport, handleExportStatus } from "./routes/export.ts";
 import { handleCrop } from "./routes/crops.ts";
+import { servePlateFile } from "./plate.ts";
 import { serveStatic, resolveFrontendDir } from "./static.ts";
 
 // Re-exports for public API
@@ -223,6 +224,12 @@ async function routeRequest(
     // ── API routes (/api/*) ─────────────────────────────────────────
     if (pathname.startsWith("/api/")) {
         return routeApi(req, url, pathname, store, state);
+    }
+
+    // ── Plate static (/plate/**) for OME-Zarr HCS stores ────────────
+    if (pathname === "/plate" || pathname.startsWith("/plate/")) {
+        const plateResp = await servePlateFile(pathname, state.plateMounts);
+        if (plateResp) return plateResp;
     }
 
     // ── Static frontend files ───────────────────────────────────────
