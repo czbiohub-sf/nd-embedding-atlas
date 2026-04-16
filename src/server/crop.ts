@@ -2,7 +2,7 @@
  * Zarr-backed image crop for the gallery viewer.
  *
  * Reads a 2D slab per visible channel out of the OME-Zarr HCS store,
- * composites them into an RGBA image, and returns PNG bytes.
+ * composites them into an RGBA image, and returns PNG or WebP bytes.
  *
  * The input FOV path is relative to the plate mount
  * (e.g. "A/1/000000"). We read resolution level "0" for now — adaptive
@@ -12,6 +12,9 @@
 import * as zarr from "zarrita";
 import { compositeChannels, encodePng, type ChannelRequest } from "./image.ts";
 import type { PlateMount } from "./plate.ts";
+import { encodeWebpImage } from "./webp.ts";
+
+export type CropFormat = "png" | "webp";
 
 export interface CropRequest {
     fovPath: string;
@@ -24,6 +27,10 @@ export interface CropRequest {
     half: number;
     /** Output image size (pixels, square). Defaults to 2*half. */
     size?: number;
+    /** Output encoding. Defaults to "png". */
+    format?: CropFormat;
+    /** WebP quality 0-100. Ignored for PNG. Defaults to 90. */
+    quality?: number;
     channels: Array<{
         visible: boolean;
         lo: number;
@@ -31,6 +38,11 @@ export interface CropRequest {
         /** Hex without '#'. */
         color: string;
     }>;
+}
+
+export interface CropResult {
+    bytes: Uint8Array;
+    mime: string;
 }
 
 /** Resolve which plate mount hosts this crop, given (optional) dataset_key. */
@@ -44,15 +56,15 @@ function resolveMount(mounts: readonly PlateMount[], datasetKey?: string): Plate
 }
 
 /**
- * Produce a PNG crop from the OME-Zarr plate.
+ * Produce a crop from the OME-Zarr plate in PNG or WebP.
  *
  * Coordinates are interpreted in source-image pixel space (level 0).
  * Channels in the request are mapped 1:1 onto the C axis by array order.
  */
-export async function renderCropPng(
+export async function renderCrop(
     req: CropRequest,
     mounts: readonly PlateMount[],
-): Promise<Uint8Array> {
+): Promise<CropResult> {
     const mount = resolveMount(mounts, req.datasetKey);
     if (!mount) throw new Error("No plate mount available for crop");
 
@@ -101,7 +113,12 @@ export async function renderCropPng(
 
     const size = req.size ?? 2 * req.half;
     const rgba = compositeChannels(slabs, channelReqs, srcW, srcH, size, size);
-    return encodePng(rgba, size, size);
+
+    if (req.format === "webp") {
+        const bytes = await encodeWebpImage(rgba, size, size, req.quality ?? 90);
+        return { bytes, mime: "image/webp" };
+    }
+    return { bytes: encodePng(rgba, size, size), mime: "image/png" };
 }
 
 /**

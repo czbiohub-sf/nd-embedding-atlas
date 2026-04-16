@@ -2,14 +2,13 @@
  * Image crop endpoint.
  *
  * POST /api/crop/{fov_path}
- *   body: { t, z, x, y, half, size?, fmt?, dataset_key?, channels: [...] }
+ *   body: { t, z, x, y, half, size?, fmt?, quality?, dataset_key?, channels: [...] }
  *
- * Returns a composited PNG of the requested region. The `fmt` field is
- * accepted for forward compatibility (the browser treats the blob URL as
- * whatever the Content-Type says), but only PNG is implemented currently.
+ * Returns a composited image of the requested region. `fmt` selects the
+ * encoding — "png" (default, zero-dep) or "webp" (via @jsquash wasm).
  */
 
-import { renderCropPng } from "../crop.ts";
+import { renderCrop, type CropFormat } from "../crop.ts";
 import type { ViewerState } from "../state.ts";
 
 interface CropBody {
@@ -20,6 +19,7 @@ interface CropBody {
     half?: number;
     size?: number;
     fmt?: string;
+    quality?: number;
     dataset_key?: string;
     channels?: Array<{
         visible?: boolean;
@@ -61,8 +61,10 @@ export async function handleCrop(
         return Response.json({ error: "No plate configured" }, { status: 400 });
     }
 
+    const format: CropFormat = body.fmt === "webp" ? "webp" : "png";
+
     try {
-        const png = await renderCropPng(
+        const { bytes, mime } = await renderCrop(
             {
                 fovPath: decodeURIComponent(fovPath),
                 datasetKey: body.dataset_key,
@@ -72,6 +74,8 @@ export async function handleCrop(
                 y,
                 half,
                 size: body.size,
+                format,
+                quality: body.quality,
                 channels: (body.channels ?? []).map((ch) => ({
                     visible: ch.visible ?? true,
                     lo: ch.lo ?? 0,
@@ -82,9 +86,9 @@ export async function handleCrop(
             state.plateMounts,
         );
 
-        return new Response(png as unknown as BodyInit, {
+        return new Response(bytes as unknown as BodyInit, {
             headers: {
-                "Content-Type": "image/png",
+                "Content-Type": mime,
                 "Cache-Control": "public, max-age=300",
             },
         });
