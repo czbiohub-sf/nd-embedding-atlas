@@ -6,8 +6,7 @@ React 19 + Vite 8 + TypeGPU/WebGPU scatter + Mosaic DuckDB analytics.
 
 ```bash
 which vp      # Vite+ unified CLI (preferred)
-which pnpm    # standard dev environment
-npx pnpm ...  # HPC / no global installs
+which bun     # package manager (bun@1.3.12)
 ```
 
 ## Commands
@@ -19,33 +18,23 @@ vp dev              # dev server (proxies /api /data /plate → localhost:5055)
 vp build            # production build via Rolldown
 vp check            # typecheck + Oxlint + Oxfmt in one pass
 vp check --fix      # auto-fix lint + format
-vp install          # install dependencies
-vp add <pkg>        # add a dependency
 ```
 
-### Fallback: pnpm
+### Package management: bun
 
 ```bash
-pnpm install && pnpm dev    # install + start dev server
-pnpm build                  # production build
-pnpm exec tsc --noEmit      # typecheck only
+bun install             # install dependencies
+bun add <pkg>           # add a dependency
+bun add -D <pkg>        # add a dev dependency
 ```
 
-### HPC / restricted: npx pnpm
+## Bun.serve backend
+
+The frontend proxies all `/api`, `/data`, and `/plate` requests to the Bun.serve backend on port 5055.
 
 ```bash
-npx pnpm install
-npx pnpm dev
-npx pnpm exec tsc --noEmit
-```
-
-## Python backend
-
-The frontend proxies all `/api`, `/data`, and `/plate` requests to FastAPI on port 5055.
-
-```bash
-uv run ndea view path/to/data.zarr   # start backend
-mise run dev path/to/data.zarr       # start both concurrently
+bun run src/index.ts path/to/data.zarr   # start backend on :5055
+mise run dev path/to/data.zarr           # start both concurrently
 ```
 
 ## Stack

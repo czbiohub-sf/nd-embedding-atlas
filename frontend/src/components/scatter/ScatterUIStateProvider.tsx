@@ -53,7 +53,7 @@ function reducer(state: ScatterUIState, action: ScatterUIAction): ScatterUIState
     }
 }
 
-const StateContext = createContext<ScatterUIState>(initial);
+const StateContext = createContext(initial);
 const DispatchContext = createContext<React.Dispatch<ScatterUIAction>>(() => {});
 
 export function ScatterUIStateProvider({ children }: { children: React.ReactNode }) {
