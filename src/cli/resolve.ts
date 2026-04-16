@@ -1,42 +1,13 @@
 /**
  * Path resolution utilities for the CLI.
  *
- * Handles frontend dist directory resolution (dev vs compiled binary)
- * and zarr store path validation.
+ * Handles zarr store path validation and network address lookup.
+ * Frontend dist resolution lives in `server/static.ts`.
  */
 
 import { existsSync } from "node:fs";
 import { networkInterfaces } from "node:os";
 import { resolve } from "node:path";
-
-// ─── Frontend directory resolution ──────────────────────────────────────────
-
-/**
- * Resolve the frontend dist directory.
- *
- * Search order:
- *   1. `frontend/dist/` relative to the project root (dev mode)
- *   2. Embedded files in compiled Bun binary ($bunfs)
- *
- * @returns Absolute path to the frontend dist, or undefined if not found.
- */
-export function resolveFrontendDir(): string | undefined {
-    // Dev mode: frontend/dist/ relative to project root (3 levels up from src/cli/)
-    const devPath = new URL("../../../frontend/dist", import.meta.url).pathname;
-    if (existsSync(devPath)) return devPath;
-
-    // Compiled binary: check if we're running inside $bunfs
-    // Bun compiles with --compile and embeds assets via bun build --asset-naming
-    // The embedded files are accessible via Bun.embeddedFiles or direct import
-    try {
-        const bunfsPath = "/$bunfs/frontend/dist";
-        if (existsSync(bunfsPath)) return bunfsPath;
-    } catch {
-        // Not in a compiled binary — fine
-    }
-
-    return undefined;
-}
 
 // ─── Zarr path validation ───────────────────────────────────────────────────
 

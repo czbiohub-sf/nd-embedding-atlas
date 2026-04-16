@@ -23,7 +23,8 @@ import { prepareObs } from "../server/prepare.ts";
 import { spatialHiddenColumns } from "../server/state.ts";
 import type { DatasetConfig, DatasetMeta, ViewerState } from "../server/state.ts";
 import type { ResolvedConfig, DatasetEntry } from "./config.ts";
-import { resolveFrontendDir, getNetworkAddress } from "./resolve.ts";
+import { getNetworkAddress } from "./resolve.ts";
+import { resolveFrontendDir } from "../server/static.ts";
 import type { DuckDBConnection } from "@duckdb/node-api";
 
 // ─── ANSI helpers ───────────────────────────────────────────────────────────
@@ -208,7 +209,7 @@ export async function startup(config: ResolvedConfig): Promise<void> {
 
     let staticDir: string | undefined;
     if (!config.noStatic) {
-        staticDir = resolveFrontendDir();
+        staticDir = resolveFrontendDir() ?? undefined;
         if (!staticDir) {
             console.log(
                 `\n  ${YELLOW}⚠${RESET}  No frontend dist found. Run ${DIM}cd frontend && vp build${RESET} or use ${DIM}--no-static${RESET}`,
@@ -427,9 +428,8 @@ function buildPlateMetadata(
 
     return {
         plateMeta,
-        datasetChannels: isMultiDataset && Object.keys(datasetChannels).length > 0
-            ? datasetChannels
-            : null,
+        datasetChannels:
+            isMultiDataset && Object.keys(datasetChannels).length > 0 ? datasetChannels : null,
     };
 }
 
