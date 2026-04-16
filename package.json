@@ -25,6 +25,7 @@
         "@uwdata/mosaic-sql": "^0.24.2",
         "@zarrita/ndarray": "^0.1.9",
         "@zarrita/storage": "^0.2.0",
+        "d3-scale-chromatic": "^3.1.0",
         "duckdb": "^1.4.4",
         "ndarray": "^1.0.19",
         "yaml": "^2.8.3",

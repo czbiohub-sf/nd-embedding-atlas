@@ -38,6 +38,7 @@ import {
 } from "./routes/var.ts";
 import { handleExport, handleExportStatus } from "./routes/export.ts";
 import { handleCrop } from "./routes/crops.ts";
+import { categoricalNames, continuousNames, getPalette } from "./colormaps.ts";
 import { servePlateFile } from "./plate.ts";
 import { serveStatic, resolveFrontendDir } from "./static.ts";
 
@@ -206,19 +207,17 @@ async function routeRequest(
 
     // ── Colormaps (GET /data/colormaps) ─────────────────────────────
     if (pathname === "/data/colormaps" && req.method === "GET") {
-        // TODO: Integrate colormap library for listing available colormaps
-        return Response.json({ categorical: [], continuous: [] });
+        return Response.json({
+            categorical: categoricalNames(),
+            continuous: continuousNames(),
+        });
     }
 
     // ── Categorical palette (GET /data/categorical-palette) ─────────
     if (pathname === "/data/categorical-palette" && req.method === "GET") {
-        // TODO: Integrate colormap library for palette generation
+        const name = url.searchParams.get("colormap") ?? "tab10";
         const n = Number(url.searchParams.get("n") ?? "10");
-        const colors = Array.from({ length: n }, (_, i) => {
-            const hue = Math.round((i * 360) / n);
-            return `hsl(${hue}, 70%, 50%)`;
-        });
-        return Response.json({ colors });
+        return Response.json({ colors: getPalette(name, n) });
     }
 
     // ── API routes (/api/*) ─────────────────────────────────────────
