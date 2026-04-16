@@ -4,7 +4,8 @@
  * Resolution order:
  * 1. Explicit `frontendDir` option
  * 2. `frontend/dist/` relative to project root (dev mode)
- * 3. Return 404
+ * 3. Embedded `$bunfs/frontend/dist` (compiled binary mode)
+ * 4. Return 404
  *
  * Uses Bun.file() for efficient zero-copy serving.
  * SPA fallback: non-file requests (no extension) serve index.html.
@@ -12,6 +13,7 @@
 
 import { resolve, extname, join } from "node:path";
 import { existsSync } from "node:fs";
+import { isCompiled, BUNFS_FRONTEND_DIST } from "./embedded-assets.ts";
 
 // ─── MIME type mapping ──────────────────────────────────────────────────────
 
@@ -45,14 +47,20 @@ const MIME: Record<string, string> = {
  * @returns Absolute path to the frontend dist directory, or null if not found.
  */
 export function resolveFrontendDir(frontendDir?: string): string | null {
+    // 1. Explicit override
     if (frontendDir) {
         const resolved = resolve(frontendDir);
         if (existsSync(join(resolved, "index.html"))) return resolved;
     }
 
-    // Dev mode: look for frontend/dist relative to CWD
+    // 2. Dev mode: look for frontend/dist relative to CWD
     const devDist = resolve("frontend/dist");
     if (existsSync(join(devDist, "index.html"))) return devDist;
+
+    // 3. Compiled binary: embedded assets under $bunfs
+    if (isCompiled) {
+        return BUNFS_FRONTEND_DIST;
+    }
 
     return null;
 }
@@ -62,13 +70,16 @@ export function resolveFrontendDir(frontendDir?: string): string | null {
 /**
  * Serve a static file from the frontend directory.
  *
+ * Works with both disk-based paths and `$bunfs/` virtual paths in compiled binaries.
+ * Bun.file() handles both transparently.
+ *
  * @param pathname     URL pathname (e.g. "/" or "/assets/index-abc.js")
  * @param frontendDir  Resolved frontend directory path (from resolveFrontendDir).
  * @returns Response with correct Content-Type, or null if the directory is unavailable.
  */
 export function serveStatic(pathname: string, frontendDir: string | null): Response {
     if (!frontendDir) {
-        return new Response("Frontend not found. Run `cd frontend && pnpm build` first.", {
+        return new Response("Frontend not found. Run `cd frontend && vp build` first.", {
             status: 404,
             headers: { "Content-Type": "text/plain" },
         });
@@ -77,9 +88,11 @@ export function serveStatic(pathname: string, frontendDir: string | null): Respo
     // Map "/" to "index.html"
     const filePath = pathname === "/" ? join(frontendDir, "index.html") : join(frontendDir, pathname);
 
-    // If the file exists, serve it
-    if (existsSync(filePath)) {
-        const file = Bun.file(filePath);
+    // Bun.file() works for both disk paths and $bunfs/ paths in compiled binaries.
+    // For disk paths we can use existsSync; for $bunfs we try Bun.file().size > 0.
+    const file = Bun.file(filePath);
+
+    if (isCompiled ? file.size > 0 : existsSync(filePath)) {
         const ext = extname(filePath);
         const contentType = MIME[ext] ?? "application/octet-stream";
 
@@ -102,8 +115,10 @@ export function serveStatic(pathname: string, frontendDir: string | null): Respo
     const ext = extname(pathname);
     if (!ext) {
         const indexPath = join(frontendDir, "index.html");
-        if (existsSync(indexPath)) {
-            return new Response(Bun.file(indexPath), {
+        const indexFile = Bun.file(indexPath);
+
+        if (isCompiled ? indexFile.size > 0 : existsSync(indexPath)) {
+            return new Response(indexFile, {
                 headers: {
                     "Content-Type": "text/html; charset=utf-8",
                     "Cache-Control": "public, max-age=0, must-revalidate",

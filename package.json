@@ -10,8 +10,10 @@
     "type": "module",
     "scripts": {
         "dev": "bun run src/cli/index.ts",
-        "build": "bun build ./src/cli/index.ts --compile --outfile dist/ndea",
+        "build": "bun run scripts/build.ts",
         "build:frontend": "cd frontend && vp build",
+        "build:binary": "bun build ./src/cli/index.ts --compile --outfile dist/ndea",
+        "build:all-platforms": "bun run scripts/build-all.ts",
         "check": "vp check",
         "test": "vp test"
     },
