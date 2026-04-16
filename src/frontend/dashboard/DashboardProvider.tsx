@@ -5,6 +5,7 @@ import { useColumnTypes } from "../hooks/useColumnTypes";
 import { generateDefaultPanels } from "../lib/chart-spec";
 import { stringPredicate } from "../lib/mosaic-helpers";
 import { MetadataSchema } from "../../protocol/index.ts";
+import { wsClient } from "../lib/ws-client";
 import { scatterKeys } from "../scatter-gpu/hooks/queryKeys";
 import { activeFilterStore, clearObsSetFilter, setObsSetFilter } from "../stores/ActiveFilterStore";
 import { obsSetStore } from "../stores/ObsSetStore";
@@ -53,6 +54,14 @@ export function DashboardProvider({ children }: Props) {
   }, []);
 
   const brushSelection = useMemo(() => Selection.crossfilter(), []);
+
+  // ── WebSocket connection ──────────────────────────────────────────────
+  // Opens one persistent /ws connection for the tab. Stays connected for
+  // the lifetime of the dashboard; reconnects automatically on drop.
+  useEffect(() => {
+    wsClient.connect();
+    return () => wsClient.close();
+  }, []);
 
   // ── ActiveFilterStore → brushSelection bridge ─────────────────────────
   // Subscribes to the Store and calls brushSelection.update() via
