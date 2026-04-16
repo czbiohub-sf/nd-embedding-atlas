@@ -53,6 +53,39 @@ function concatBuffers(buffers: Array<Buffer | Uint8Array>): Uint8Array {
     return result;
 }
 
+const SAFE_MIN = BigInt(Number.MIN_SAFE_INTEGER);
+const SAFE_MAX = BigInt(Number.MAX_SAFE_INTEGER);
+
+/**
+ * Normalise DuckDB-native JS values for JSON transport: bigints collapse to
+ * numbers when safe (else strings), Dates → ISO strings, Buffers/typed arrays
+ * → base64. Plain numbers / strings / nulls / nested objects pass through.
+ */
+function coerceRow(row: RowData): RowData {
+    const out: RowData = {};
+    for (const key of Object.keys(row)) {
+        out[key] = coerceValue(row[key]);
+    }
+    return out;
+}
+
+function coerceValue(value: unknown): unknown {
+    if (value === null || value === undefined) return value;
+    if (typeof value === "bigint") {
+        return value >= SAFE_MIN && value <= SAFE_MAX ? Number(value) : value.toString();
+    }
+    if (value instanceof Date) return value.toISOString();
+    if (Array.isArray(value)) return value.map(coerceValue);
+    if (typeof value === "object") {
+        const nested: RowData = {};
+        for (const k of Object.keys(value as Record<string, unknown>)) {
+            nested[k] = coerceValue((value as Record<string, unknown>)[k]);
+        }
+        return nested;
+    }
+    return value;
+}
+
 // ─── EmbeddingStore ──────────────────────────────────────────────────────────
 
 export class EmbeddingStore {
@@ -332,10 +365,18 @@ export class EmbeddingStore {
         return concatBuffers(chunks ?? []);
     }
 
-    /** Execute SQL and return an array of row objects. */
+    /**
+     * Execute SQL and return an array of row objects.
+     *
+     * BIGINTs are returned as JS numbers when they fit within
+     * Number.MAX_SAFE_INTEGER (so `.toFixed`, arithmetic, and JSON round-trips
+     * work on the frontend). Out-of-range bigints fall back to strings to
+     * preserve precision.
+     */
     async queryJson(sql: string): Promise<RowData[]> {
         const reader = await this.conn.runAndReadAll(sql);
-        return reader.getRowObjectsJson() as RowData[];
+        const rows = reader.getRowObjectsJS() as RowData[];
+        return rows.map(coerceRow);
     }
 
     /** Execute SQL with no return value (DDL / DML). */
