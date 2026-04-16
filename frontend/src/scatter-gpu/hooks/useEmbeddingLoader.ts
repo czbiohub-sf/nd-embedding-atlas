@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { EmbeddingStatusSchema } from "../../lib/schemas";
 import type { Metadata } from "../../types";
 
@@ -23,6 +23,10 @@ export function useEmbeddingLoader(
 ) {
     const abortRef = useRef<AbortController | null>(null);
     const [loadingKey, setLoadingKey] = useState<string | null>(null);
+
+    // Abort any in-flight load on unmount so the poll loop doesn't outlive
+    // the component and setState on a ghost.
+    useEffect(() => () => abortRef.current?.abort(), []);
 
     const loadEmbedding = useCallback(
         async (key: string) => {
