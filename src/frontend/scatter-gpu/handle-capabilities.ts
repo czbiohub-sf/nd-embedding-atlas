@@ -43,7 +43,16 @@ export interface RenderCapability {
 
 export interface ColorCapability {
   setColors(palette: readonly (readonly [number, number, number, number?])[], indices?: Uint8Array): void;
-  setColorsDirect(rgba: Uint8Array): void;
+  setContinuousColors(args: {
+    values: Float32Array;
+    vmin: number;
+    vmax: number;
+    lut: Uint32Array;
+    reversed: boolean;
+  }): void;
+  setContinuousRange(vmin: number, vmax: number): void;
+  setContinuousReversed(reversed: boolean): void;
+  setContinuousLut(lut: Uint32Array): void;
 }
 
 /**

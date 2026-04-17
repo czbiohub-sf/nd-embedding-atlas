@@ -24,9 +24,23 @@ export interface ScatterData {
   /** Number of dimensions (2 or 3) */
   ndim: 2 | 3;
 
-  // v2 extension slots (currently unused; keep fields for protocol stability)
-  /** RGBA uint8 per point — enables gradient coloring (4 bytes/pt, backend-mapped) */
-  colorValues?: Uint8Array;
+  /**
+   * Continuous-coloring context. When present, the scatter GPU host should
+   * dispatch the continuous color-pack kernel (normalize → LUT lookup) via
+   * `updateContinuousColors`. Absent for categorical coloring.
+   *
+   * Values are raw (NaNs preserved); `vmin`/`vmax` are the autocomputed
+   * absolute range from the backend. Per-session user-overridden range lives
+   * outside ScatterData and is applied via `setContinuousRange`.
+   */
+  continuous?: {
+    values: Float32Array;
+    vmin: number;
+    vmax: number;
+    colormap: string;
+    reversed: boolean;
+  };
+
   /** relative size per point — enables encoding by expression */
   sizeValues?: Float32Array;
   /** LOD tile viewport */
@@ -79,8 +93,26 @@ export interface ScatterplotHandle {
   destroy(): void;
   /** Update color buffer from palette without GPU re-initialization (categorical coloring). */
   updateColors(palette: readonly (readonly [number, number, number, number?])[], categoryIndices?: Uint8Array): void;
-  /** Write pre-computed RGBA uint8 array directly to colorBuffer (continuous coloring). */
-  updateColorsDirect(rgba: Uint8Array): void;
+  /**
+   * Configure continuous coloring (Phase 7 — GPU LUT lookup).
+   * Uploads raw values + 256-entry packed-u32 LUT + config, then dispatches the
+   * continuous color-pack kernel. Subsequent slider drags or reverse toggles
+   * should go through {@link setContinuousRange} / {@link setContinuousReversed}
+   * to skip the values + LUT upload.
+   */
+  updateContinuousColors(args: {
+    values: Float32Array;
+    vmin: number;
+    vmax: number;
+    lut: Uint32Array;
+    reversed: boolean;
+  }): void;
+  /** Write new vmin/vmax and re-dispatch (no network, no buffer upload). */
+  setContinuousRange(vmin: number, vmax: number): void;
+  /** Flip the reversed flag and re-dispatch (no network, no buffer upload). */
+  setContinuousReversed(reversed: boolean): void;
+  /** Upload a fresh LUT (colormap change) and re-dispatch. */
+  setContinuousLut(lut: Uint32Array): void;
   /** Current pan/zoom state of the viewport. */
   getViewState(): ViewState;
   /** Convert world coordinates to screen pixel coordinates using the current view transform. */

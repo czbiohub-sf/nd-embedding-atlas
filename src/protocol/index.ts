@@ -210,14 +210,19 @@ export const CategoryHeaderSchema = z.object({
 });
 export type CategoryHeader = z.infer<typeof CategoryHeaderSchema>;
 
-/** GET /api/scatter-continuous-colors — header preceding Uint8Array[rgba]. */
-export const ContinuousColorsHeaderSchema = z.object({
+/**
+ * GET /api/scatter-continuous-values — header preceding Float32Array[values].
+ *
+ * Values are raw (un-normalized) — the GPU normalizes with (vmin, vmax) so that
+ * a slider drag is a uniform write + re-dispatch, not a re-fetch. NaNs are
+ * preserved; the GPU kernel maps them to mid-gradient.
+ */
+export const ContinuousValuesHeaderSchema = z.object({
   numPoints: z.number().int().positive(),
   vmin: z.number(),
   vmax: z.number(),
-  colormap: z.string().min(1),
 });
-export type ContinuousColorsHeader = z.infer<typeof ContinuousColorsHeaderSchema>;
+export type ContinuousValuesHeader = z.infer<typeof ContinuousValuesHeaderSchema>;
 
 // ─── WebSocket protocol map (future migration) ──────────────────────────────
 

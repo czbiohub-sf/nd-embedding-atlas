@@ -19,7 +19,7 @@ import { handleLoadEmbedding, handleEmbeddingStatus } from "./routes/embeddings.
 import {
   handleScatterPositions,
   handleScatterCategories,
-  handleScatterContinuousColors,
+  handleScatterContinuousValues,
   handleScatterSelectionPost,
   handleScatterSelectionDelete,
 } from "./routes/scatter.ts";
@@ -239,9 +239,9 @@ function routeApi(
     return handleScatterCategories(url, store);
   }
 
-  // ── Scatter continuous colors ───────────────────────────────────
-  if (pathname === "/api/scatter-continuous-colors" && method === "GET") {
-    return handleScatterContinuousColors(url, store);
+  // ── Scatter continuous values (Phase 7: GPU-side colormap) ──────
+  if (pathname === "/api/scatter-continuous-values" && method === "GET") {
+    return handleScatterContinuousValues(url, store);
   }
 
   // ── Scatter selection ───────────────────────────────────────────

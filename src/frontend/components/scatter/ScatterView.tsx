@@ -19,6 +19,7 @@ import { useScatterBrushSync } from "../../scatter-gpu/hooks/useScatterBrushSync
 import { useTrajectoryLoader } from "../../scatter-gpu/hooks/useTrajectoryLoader";
 import type { PanelId, ScatterplotConfig } from "../../scatter-gpu/types";
 import { hexToRgbPalette } from "../../scatter-gpu/utils/colors";
+import { buildColormapLut } from "../../lib/ochre-lut";
 import { setBrushPredicate } from "../../stores/BrushPredicateStore";
 import { pointRadiusStore } from "../../stores/PointRadiusStore";
 import { getBitmapRowIds } from "../../stores/RoaringBroadcastStore";
@@ -319,8 +320,15 @@ export function ScatterView({
         paletteRef.current = palette;
         hostRef.current?.setColors(palette, data?.categoryIndices);
       }
-    } else if (colorMode === "continuous" && data?.colorValues) {
-      hostRef.current?.setColorsDirect(data.colorValues);
+    } else if (colorMode === "continuous" && data?.continuous) {
+      const c = data.continuous;
+      hostRef.current?.setContinuousColors({
+        values: c.values,
+        vmin: c.vmin,
+        vmax: c.vmax,
+        lut: buildColormapLut(c.colormap, c.reversed),
+        reversed: c.reversed,
+      });
     }
     // Point radius
     hostRef.current?.setPointRadius(pointRadiusStore.state.radius);
@@ -341,9 +349,23 @@ export function ScatterView({
   }, [categoryColors, colorMode, data?.categoryIndices]);
 
   useEffect(() => {
-    if (colorMode !== "continuous" || !data?.colorValues) return;
-    hostRef.current?.setColorsDirect(data.colorValues);
-  }, [data?.colorValues, colorMode]);
+    if (colorMode !== "continuous" || !data?.continuous) return;
+    const c = data.continuous;
+    hostRef.current?.setContinuousColors({
+      values: c.values,
+      vmin: c.vmin,
+      vmax: c.vmax,
+      lut: buildColormapLut(c.colormap, c.reversed),
+      reversed: c.reversed,
+    });
+  }, [data?.continuous, colorMode]);
+
+  // Phase 7: slider-driven vmin/vmax → GPU uniform + re-dispatch, no re-fetch.
+  useEffect(() => {
+    if (colorMode !== "continuous" || !data?.continuous) return;
+    if (userVmin === undefined || userVmax === undefined) return;
+    hostRef.current?.setContinuousRange(userVmin, userVmax);
+  }, [userVmin, userVmax, colorMode, data?.continuous]);
 
   useEffect(() => {
     const sub = selectionSyncStore.subscribe(() => {

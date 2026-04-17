@@ -210,8 +210,17 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
       setPointRadius(radius) {
         gpuRef.current?.setPointRadius(radius);
       },
-      setColorsDirect(rgba) {
-        gpuRef.current?.updateColorsDirect(rgba);
+      setContinuousColors(args) {
+        gpuRef.current?.updateContinuousColors(args);
+      },
+      setContinuousRange(vmin, vmax) {
+        gpuRef.current?.setContinuousRange(vmin, vmax);
+      },
+      setContinuousReversed(reversed) {
+        gpuRef.current?.setContinuousReversed(reversed);
+      },
+      setContinuousLut(lut) {
+        gpuRef.current?.setContinuousLut(lut);
       },
       getViewState() {
         return gpuRef.current?.getViewState() ?? { panX: 0, panY: 0, zoom: 1 };

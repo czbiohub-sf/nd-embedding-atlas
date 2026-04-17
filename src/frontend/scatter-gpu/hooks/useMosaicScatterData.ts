@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import type { AxisState } from "../../types";
 import type { ScatterData } from "../types";
-import { parseCategoryBlob, parseContinuousColorsBlob, parsePositionBlob } from "../utils/parsers";
+import { parseCategoryBlob, parseContinuousValuesBlob, parsePositionBlob } from "../utils/parsers";
 import { scatterKeys } from "./queryKeys";
 
 export type ColorMode = "categorical" | "continuous";
@@ -70,8 +70,8 @@ export function useMosaicScatterData({
   continuousColCol,
   continuousColormap = "viridis",
   continuousReversed = false,
-  vmin,
-  vmax,
+  vmin: _vmin,
+  vmax: _vmax,
   embeddingLoaded = true,
 }: UseMosaicScatterDataOptions): UseMosaicScatterDataResult {
   // 1. Positions query
@@ -116,27 +116,23 @@ export function useMosaicScatterData({
     staleTime: 30_000,
   });
 
-  // 3. Continuous colors — NOT blocked by positions (parallel)
-  //    `continuousReversed` is in the query key for cache differentiation.
-  //    The server ignores unknown params — safe before backend ships reversed support.
+  // 3. Continuous values — NOT blocked by positions (parallel).
+  //    Phase 7: fetch raw f32 values only. vmin/vmax come back from the
+  //    backend's autocompute; user-driven slider range is applied via the
+  //    handle uniform without re-fetching. Colormap and reversed also stay
+  //    frontend-only (LUT generated via ochre), so they're NOT in the query
+  //    key — only column change triggers a re-fetch.
   const continuousQuery = useQuery({
-    queryKey: [...scatterKeys.continuousColors(continuousColCol!, continuousColormap, vmin, vmax), continuousReversed],
+    queryKey: scatterKeys.continuousColors(continuousColCol!, "values"),
     queryFn: async ({ signal }) => {
-      const params = new URLSearchParams({
-        color_col: continuousColCol!,
-        colormap: continuousColormap,
-      });
-      if (vmin != null) params.set("vmin", String(vmin));
-      if (vmax != null) params.set("vmax", String(vmax));
-      // TODO: add scale to query key when /api/scatter-continuous-colors supports ?scale=log
-      if (continuousReversed) params.set("reversed", "true");
-      const r = await fetch(`/api/scatter-continuous-colors?${params}`, { signal });
-      if (!r.ok) throw new Error(`scatter-continuous-colors failed: ${r.status}`);
+      const params = new URLSearchParams({ color_col: continuousColCol! });
+      const r = await fetch(`/api/scatter-continuous-values?${params}`, { signal });
+      if (!r.ok) throw new Error(`scatter-continuous-values failed: ${r.status}`);
       const buf = await r.arrayBuffer();
-      const { header, rgba } = parseContinuousColorsBlob(buf);
-      return { rgba, vmin: header.vmin, vmax: header.vmax };
+      const { header, values } = parseContinuousValuesBlob(buf);
+      return { values, vmin: header.vmin, vmax: header.vmax };
     },
-    enabled: colorMode === "continuous" && !!continuousColCol, // no !!positionQuery.data — parallel
+    enabled: colorMode === "continuous" && !!continuousColCol,
     staleTime: 30_000,
   });
 
@@ -165,10 +161,18 @@ export function useMosaicScatterData({
         ...base,
         categoryIndices: new Uint8Array(positionQuery.data.numCells),
         categoryNames: [],
-        colorValues: contData?.rgba ?? undefined,
+        continuous: contData
+          ? {
+              values: contData.values,
+              vmin: contData.vmin,
+              vmax: contData.vmax,
+              colormap: continuousColormap,
+              reversed: continuousReversed ?? false,
+            }
+          : undefined,
       };
     }
-  }, [positionQuery.data, colorMode, categoryQuery.data, continuousQuery.data]);
+  }, [positionQuery.data, colorMode, categoryQuery.data, continuousQuery.data, continuousColormap, continuousReversed]);
 
   const positionKey = positionQuery.data ? `${positionQuery.data.embeddingKey}:${positionQuery.data.numCells}` : null;
 

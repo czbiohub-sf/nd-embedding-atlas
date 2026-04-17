@@ -1,14 +1,14 @@
 /**
  * Binary scatter data endpoints for the WebGPU scatter renderer.
  *
- * GET /api/scatter-positions       — Float32 interleaved x/y positions
- * GET /api/scatter-categories      — Uint8 category indices
- * GET /api/scatter-continuous-colors — Uint8 RGBA per point
- * POST /api/scatter-selection      — Upload selection to temp table
- * DELETE /api/scatter-selection    — Clear selection temp table
+ * GET /api/scatter-positions          — v1, Float32 interleaved x/y positions
+ * GET /api/scatter-categories         — v1, Uint8 category indices
+ * GET /api/scatter-continuous-values  — v2, Float32 raw values + vmin/vmax header
+ *                                        (frontend applies colormap via ochre LUT on GPU)
+ * POST /api/scatter-selection         — Upload selection to temp table
+ * DELETE /api/scatter-selection       — Clear selection temp table
  */
 
-import { sampleContinuous } from "../colormaps.ts";
 import { parseJsonBody, ScatterSelectionBodySchema } from "../protocol.ts";
 import type { EmbeddingStore } from "../store.ts";
 
@@ -20,7 +20,7 @@ import type { EmbeddingStore } from "../store.ts";
 //   [0-3 bytes]        zero padding to align to 4-byte boundary
 //   [data bytes]       the actual typed array data
 
-function packBinary(header: Record<string, unknown>, data: Uint8Array): Uint8Array {
+function packBinary(header: Record<string, unknown>, data: Uint8Array, version = 1): Uint8Array {
   const headerBytes = new TextEncoder().encode(JSON.stringify(header));
   const prefixLen = 1 + 4 + headerBytes.byteLength;
   const padding = (4 - (prefixLen % 4)) % 4;
@@ -29,14 +29,10 @@ function packBinary(header: Record<string, unknown>, data: Uint8Array): Uint8Arr
   const result = new Uint8Array(totalLen);
   const view = new DataView(result.buffer);
 
-  // Version byte
-  result[0] = 1;
-  // Header length (uint32 LE)
+  result[0] = version;
   view.setUint32(1, headerBytes.byteLength, true);
-  // Header JSON
   result.set(headerBytes, 5);
   // Padding is already zeros
-  // Data payload
   result.set(data, prefixLen + padding);
 
   return result;
@@ -158,22 +154,23 @@ export async function handleScatterCategories(url: URL, store: EmbeddingStore): 
   }
 }
 
-// ─── Scatter continuous colors ──────────────────────────────────────────────
+// ─── Scatter continuous values (Phase 7) ────────────────────────────────────
 
 /**
- * Handle GET /api/scatter-continuous-colors
+ * Handle GET /api/scatter-continuous-values
  *
- * Returns uint8 RGBA per observation, pre-mapped through a colormap
- * (d3-scale-chromatic interpolators via sampleContinuous). Falls back
- * to grayscale when the named colormap isn't in the continuous catalog.
+ * Returns raw Float32 values per observation plus autocomputed vmin/vmax
+ * (from finite values). The frontend GPU kernel normalizes via a uniform
+ * and looks up an ochre-generated LUT — so colormap swaps and slider
+ * drags happen without re-fetching. NaN values are preserved in the
+ * payload; the kernel maps them to mid-gradient.
  *
- * Query params: color_col, colormap, vmin (optional), vmax (optional)
+ * Query params: color_col
+ *
+ * Binary frame v2: header { numPoints, vmin, vmax }, data Float32Array[N].
  */
-export async function handleScatterContinuousColors(url: URL, store: EmbeddingStore): Promise<Response> {
+export async function handleScatterContinuousValues(url: URL, store: EmbeddingStore): Promise<Response> {
   const colorCol = url.searchParams.get("color_col");
-  const colormap = url.searchParams.get("colormap") ?? "viridis";
-  const vminParam = url.searchParams.get("vmin");
-  const vmaxParam = url.searchParams.get("vmax");
 
   if (!colorCol) {
     return Response.json({ error: "Missing required param: color_col" }, { status: 400 });
@@ -183,58 +180,24 @@ export async function handleScatterContinuousColors(url: URL, store: EmbeddingSt
     const rows = await store.queryJson(`SELECT "${colorCol}" FROM dataset ORDER BY __row_index__ ASC`);
 
     const n = rows.length;
-    const values = new Float64Array(n);
+    const values = new Float32Array(n);
+    let vmin = Infinity;
+    let vmax = -Infinity;
     for (let i = 0; i < n; i++) {
-      const v = rows[i][colorCol];
-      values[i] = v != null ? Number(v) : Number.NaN;
-    }
-
-    // Compute vmin/vmax from data when not provided
-    let actualVmin = vminParam != null ? Number(vminParam) : Infinity;
-    let actualVmax = vmaxParam != null ? Number(vmaxParam) : -Infinity;
-    if (vminParam == null || vmaxParam == null) {
-      for (let i = 0; i < n; i++) {
-        if (Number.isFinite(values[i])) {
-          if (vminParam == null) actualVmin = Math.min(actualVmin, values[i]);
-          if (vmaxParam == null) actualVmax = Math.max(actualVmax, values[i]);
-        }
+      const raw = rows[i][colorCol];
+      const v = raw != null ? Number(raw) : Number.NaN;
+      values[i] = v;
+      if (Number.isFinite(v)) {
+        if (v < vmin) vmin = v;
+        if (v > vmax) vmax = v;
       }
     }
-    if (!Number.isFinite(actualVmin)) actualVmin = 0;
-    if (!Number.isFinite(actualVmax)) actualVmax = 1;
+    if (!Number.isFinite(vmin)) vmin = 0;
+    if (!Number.isFinite(vmax)) vmax = 1;
 
-    const span = actualVmax - actualVmin;
-
-    // Map through the requested continuous colormap (grayscale fallback).
-    const rgba = new Uint8Array(n * 4);
-    for (let i = 0; i < n; i++) {
-      let normalized: number;
-      if (Number.isFinite(values[i]) && span > 0) {
-        normalized = Math.max(0, Math.min(1, (values[i] - actualVmin) / span));
-      } else {
-        normalized = 0.5;
-      }
-      const rgb = sampleContinuous(colormap, normalized);
-      if (rgb !== null) {
-        rgba[i * 4] = rgb[0];
-        rgba[i * 4 + 1] = rgb[1];
-        rgba[i * 4 + 2] = rgb[2];
-      } else {
-        const v = Math.round(normalized * 255);
-        rgba[i * 4] = v;
-        rgba[i * 4 + 1] = v;
-        rgba[i * 4 + 2] = v;
-      }
-      rgba[i * 4 + 3] = 255;
-    }
-
-    const header = {
-      numPoints: n,
-      vmin: actualVmin,
-      vmax: actualVmax,
-      colormap,
-    };
-    return binaryResponse(packBinary(header, rgba));
+    const header = { numPoints: n, vmin, vmax };
+    // Values are already Float32Array; packBinary writes bytes verbatim.
+    return binaryResponse(packBinary(header, new Uint8Array(values.buffer), 2));
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return Response.json({ error: message }, { status: 400 });

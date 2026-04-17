@@ -1,5 +1,6 @@
 import { tgpu } from "typegpu";
 import * as d from "typegpu/data";
+import * as std from "typegpu/std";
 import type { ViewState } from "../../types";
 import { createInteractionController } from "../hooks/useScatterInteraction";
 import type { ScatterData, ScatterplotConfig, ScatterplotHandle } from "../types";
@@ -123,6 +124,82 @@ export async function createScatterplot(
     colorPackPipeline.dispatchThreads(data.numCells);
   }
 
+  // ── Continuous color-pack pipeline (Phase 7) ───────────────────────────────
+  // Reads raw value buffer + 256-entry packed-u32 LUT + config uniform,
+  // writes packed u32 RGBA to the same colorBuffer as the categorical path.
+  //   flags bit 0: reversed
+  //   flags bits 1-2: scale (0=linear, 1=log, 2=sqrt) — linear MVP; others TODO
+  const continuousValuesBuffer = root.createBuffer(d.arrayOf(d.f32, data.numCells)).$usage("storage");
+  const continuousLutBuffer = root.createBuffer(d.arrayOf(d.u32, 256)).$usage("storage");
+  const ContinuousConfig = d.struct({ vmin: d.f32, vmax: d.f32, flags: d.u32 });
+  const continuousConfigUniform = root.createUniform(ContinuousConfig, { vmin: 0, vmax: 1, flags: 0 });
+
+  const continuousValuesReadonly = continuousValuesBuffer.as("readonly");
+  const continuousLutReadonly = continuousLutBuffer.as("readonly");
+
+  // NaN → mid-gradient (0.5). Degenerate range → span clamped to 1e-20.
+  const continuousColorPackPipeline = root.createGuardedComputePipeline((x: number) => {
+    "use gpu";
+    const idx = x;
+    const cfg = continuousConfigUniform.$;
+    const v = continuousValuesReadonly.$[idx];
+    const span = std.max(cfg.vmax - cfg.vmin, 1e-20);
+    const tRaw = std.select((v - cfg.vmin) / span, 0.5, v !== v); // NaN check: v !== v
+    const reversed = (cfg.flags & 1) !== 0;
+    const tClamped = std.clamp(std.select(tRaw, 1 - tRaw, reversed), 0, 1);
+    const lutIdx = d.u32(tClamped * 255);
+    colorMutable.$[idx] = continuousLutReadonly.$[lutIdx];
+  });
+
+  // CPU mirror of the continuous config — lets partial setters (range only,
+  // reversed only, lut only) re-emit the full uniform without reading GPU state.
+  let currentContinuousVmin = 0;
+  let currentContinuousVmax = 1;
+  let currentContinuousFlags = 0;
+
+  function writeContinuousConfig() {
+    continuousConfigUniform.write({
+      vmin: currentContinuousVmin,
+      vmax: currentContinuousVmax,
+      flags: currentContinuousFlags,
+    });
+  }
+
+  function updateContinuousColors(args: {
+    values: Float32Array;
+    vmin: number;
+    vmax: number;
+    lut: Uint32Array;
+    reversed: boolean;
+  }) {
+    // Defense in depth for swapped range (see R4 in Phase 7 plan).
+    currentContinuousVmin = Math.min(args.vmin, args.vmax);
+    currentContinuousVmax = Math.max(args.vmin, args.vmax);
+    currentContinuousFlags = args.reversed ? 1 : 0;
+    continuousValuesBuffer.write(args.values);
+    continuousLutBuffer.write(args.lut);
+    writeContinuousConfig();
+    continuousColorPackPipeline.dispatchThreads(data.numCells);
+  }
+
+  function setContinuousRange(vmin: number, vmax: number) {
+    currentContinuousVmin = Math.min(vmin, vmax);
+    currentContinuousVmax = Math.max(vmin, vmax);
+    writeContinuousConfig();
+    continuousColorPackPipeline.dispatchThreads(data.numCells);
+  }
+
+  function setContinuousReversed(reversed: boolean) {
+    currentContinuousFlags = reversed ? 1 : 0;
+    writeContinuousConfig();
+    continuousColorPackPipeline.dispatchThreads(data.numCells);
+  }
+
+  function setContinuousLut(lut: Uint32Array) {
+    continuousLutBuffer.write(lut);
+    continuousColorPackPipeline.dispatchThreads(data.numCells);
+  }
+
   const tPipelines = performance.now();
   console.log(`Pipeline setup: ${(tPipelines - tUpload).toFixed(1)}ms`);
 
@@ -243,13 +320,20 @@ export async function createScatterplot(
       gpuUpdateColors(palette, categoryIndices);
       interaction.requestRender();
     },
-    updateColorsDirect(rgba: Uint8Array) {
-      // rgba is Uint8Array [R,G,B,A, R,G,B,A, ...] in [0,255].
-      // On little-endian hardware a Uint32Array view of this memory gives
-      // R|(G<<8)|(B<<16)|(A<<24) per element -> packed color format.
-      // This is a zero-copy reinterpretation; no per-pixel loop needed.
-      const colorData = new Uint32Array(rgba.buffer, rgba.byteOffset, data.numCells);
-      device.queue.writeBuffer(root.unwrap(buffers.colorBuffer), 0, colorData);
+    updateContinuousColors(args) {
+      updateContinuousColors(args);
+      interaction.requestRender();
+    },
+    setContinuousRange(vmin: number, vmax: number) {
+      setContinuousRange(vmin, vmax);
+      interaction.requestRender();
+    },
+    setContinuousReversed(reversed: boolean) {
+      setContinuousReversed(reversed);
+      interaction.requestRender();
+    },
+    setContinuousLut(lut: Uint32Array) {
+      setContinuousLut(lut);
       interaction.requestRender();
     },
     getViewState() {

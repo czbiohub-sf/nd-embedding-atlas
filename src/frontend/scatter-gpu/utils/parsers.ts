@@ -12,8 +12,8 @@
 import {
   type CategoryHeader,
   CategoryHeaderSchema,
-  type ContinuousColorsHeader,
-  ContinuousColorsHeaderSchema,
+  type ContinuousValuesHeader,
+  ContinuousValuesHeaderSchema,
   type PositionHeader,
   PositionHeaderSchema,
 } from "../../../protocol/index.ts";
@@ -30,20 +30,19 @@ export interface CategoryBlob {
   categoryIndices: Uint8Array;
 }
 
-/** Parsed result from /api/scatter-continuous-colors */
-export interface ContinuousColorsBlob {
-  header: ContinuousColorsHeader;
-  /** RGBA uint8 values, length = numPoints * 4, each channel in [0, 255].
-   *  4× smaller than float32 RGBA — backend applies colormap, we just upload. */
-  rgba: Uint8Array;
+/** Parsed result from /api/scatter-continuous-values (Phase 7+). */
+export interface ContinuousValuesBlob {
+  header: ContinuousValuesHeader;
+  /** Raw values, length = numPoints. NaNs preserved; GPU kernel handles them. */
+  values: Float32Array;
 }
 
 /** Shared binary framing logic: reads version byte, returns aligned data offset. */
-function parseFrame(buf: ArrayBuffer, label: string): { header: unknown; dataOffset: number } {
+function parseFrame(buf: ArrayBuffer, label: string, expectedVersion = 1): { header: unknown; dataOffset: number } {
   const view = new DataView(buf);
   const version = view.getUint8(0);
-  if (version !== 1) {
-    throw new Error(`Unsupported ${label} format v${version} (expected 1)`);
+  if (version !== expectedVersion) {
+    throw new Error(`Unsupported ${label} format v${version} (expected ${expectedVersion})`);
   }
   const headerLen = view.getUint32(1, true);
   const headerBytes = new Uint8Array(buf, 5, headerLen);
@@ -76,11 +75,19 @@ export function parseCategoryBlob(buf: ArrayBuffer): CategoryBlob {
 }
 
 /**
- * Parse the binary continuous-colors blob returned by /api/scatter-continuous-colors.
+ * Parse the binary continuous-values blob returned by /api/scatter-continuous-values.
+ *
+ * The Float32Array payload must be 4-byte aligned; parseFrame already pads
+ * dataOffset to a 4-byte boundary but we assert it explicitly to catch a
+ * future framing change that silently breaks f32 alignment (RangeError on
+ * some engines, garbage reads on others).
  */
-export function parseContinuousColorsBlob(buf: ArrayBuffer): ContinuousColorsBlob {
-  const { header: rawHeader, dataOffset } = parseFrame(buf, "scatter-continuous-colors");
-  const header = ContinuousColorsHeaderSchema.parse(rawHeader);
-  const rgba = new Uint8Array(buf, dataOffset, header.numPoints * 4);
-  return { header, rgba };
+export function parseContinuousValuesBlob(buf: ArrayBuffer): ContinuousValuesBlob {
+  const { header: rawHeader, dataOffset } = parseFrame(buf, "scatter-continuous-values", 2);
+  const header = ContinuousValuesHeaderSchema.parse(rawHeader);
+  if (dataOffset % 4 !== 0) {
+    throw new Error(`scatter-continuous-values: dataOffset ${dataOffset} not 4-byte aligned`);
+  }
+  const values = new Float32Array(buf, dataOffset, header.numPoints);
+  return { header, values };
 }
