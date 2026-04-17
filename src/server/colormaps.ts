@@ -56,6 +56,35 @@ export function continuousNames(): string[] {
 }
 
 /**
+ * Sample a continuous colormap at `t ∈ [0, 1]`. Returns [r, g, b] byte
+ * triple, or null if the colormap isn't in the catalog.
+ */
+export function sampleContinuous(name: string, t: number): [number, number, number] | null {
+  const interpolator = CONTINUOUS_SAMPLERS[name];
+  if (!interpolator) return null;
+  const clamped = Math.max(0, Math.min(1, t));
+  return parseRgbBytes(interpolator(clamped));
+}
+
+/** Parse a d3-returned color ("#rrggbb", "#rgb", or "rgb(r, g, b)") into byte triple. */
+function parseRgbBytes(value: string): [number, number, number] {
+  if (value.startsWith("#")) {
+    const hex = value.length === 4 ? `#${value[1]}${value[1]}${value[2]}${value[2]}${value[3]}${value[3]}` : value;
+    const r = Number.parseInt(hex.slice(1, 3), 16);
+    const g = Number.parseInt(hex.slice(3, 5), 16);
+    const b = Number.parseInt(hex.slice(5, 7), 16);
+    return [r, g, b];
+  }
+  const m = value.match(/rgb\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)/i);
+  if (!m) return [0, 0, 0];
+  return [
+    Math.max(0, Math.min(255, Math.round(Number.parseFloat(m[1])))),
+    Math.max(0, Math.min(255, Math.round(Number.parseFloat(m[2])))),
+    Math.max(0, Math.min(255, Math.round(Number.parseFloat(m[3])))),
+  ];
+}
+
+/**
  * Get `n` hex colors for a colormap. Tries the categorical catalog first
  * (cycling if `n` exceeds the scheme size), then the continuous catalog
  * (uniform samples), then falls back to an HSL rainbow.

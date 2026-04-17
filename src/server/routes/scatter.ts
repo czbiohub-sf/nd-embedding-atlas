@@ -8,6 +8,7 @@
  * DELETE /api/scatter-selection    — Clear selection temp table
  */
 
+import { sampleContinuous } from "../colormaps.ts";
 import { parseJsonBody, ScatterSelectionBodySchema } from "../protocol.ts";
 import type { EmbeddingStore } from "../store.ts";
 
@@ -162,12 +163,11 @@ export async function handleScatterCategories(url: URL, store: EmbeddingStore): 
 /**
  * Handle GET /api/scatter-continuous-colors
  *
- * Returns uint8 RGBA per observation, pre-mapped through a colormap.
- * Query params: color_col, colormap, vmin (optional), vmax (optional)
+ * Returns uint8 RGBA per observation, pre-mapped through a colormap
+ * (d3-scale-chromatic interpolators via sampleContinuous). Falls back
+ * to grayscale when the named colormap isn't in the continuous catalog.
  *
- * NOTE: Full colormap support requires a colormap library. This stub
- * returns a grayscale linear mapping. Integrate a colormap library
- * (e.g. d3-scale-chromatic) for production use.
+ * Query params: color_col, colormap, vmin (optional), vmax (optional)
  */
 export async function handleScatterContinuousColors(url: URL, store: EmbeddingStore): Promise<Response> {
   const colorCol = url.searchParams.get("color_col");
@@ -205,7 +205,7 @@ export async function handleScatterContinuousColors(url: URL, store: EmbeddingSt
 
     const span = actualVmax - actualVmin;
 
-    // Map through a simple grayscale → RGBA (TODO: integrate colormap library)
+    // Map through the requested continuous colormap (grayscale fallback).
     const rgba = new Uint8Array(n * 4);
     for (let i = 0; i < n; i++) {
       let normalized: number;
@@ -214,11 +214,17 @@ export async function handleScatterContinuousColors(url: URL, store: EmbeddingSt
       } else {
         normalized = 0.5;
       }
-      // Simple viridis-like approximation (grayscale for now)
-      const v = Math.round(normalized * 255);
-      rgba[i * 4] = v;
-      rgba[i * 4 + 1] = v;
-      rgba[i * 4 + 2] = v;
+      const rgb = sampleContinuous(colormap, normalized);
+      if (rgb !== null) {
+        rgba[i * 4] = rgb[0];
+        rgba[i * 4 + 1] = rgb[1];
+        rgba[i * 4 + 2] = rgb[2];
+      } else {
+        const v = Math.round(normalized * 255);
+        rgba[i * 4] = v;
+        rgba[i * 4 + 1] = v;
+        rgba[i * 4 + 2] = v;
+      }
       rgba[i * 4 + 3] = 255;
     }
 
