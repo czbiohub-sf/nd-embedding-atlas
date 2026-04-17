@@ -98,11 +98,12 @@ export function createCompositor(
     else layerActiveBits &= ~layerBit;
   }
 
-  function dispatchIfDirty(): void {
+  function dispatchIfDirty(encoder?: GPUCommandEncoder): void {
     if (!isDirty) return;
     isDirty = false;
     layerBitsUniform.write(layerActiveBits);
-    compositorPipeline.dispatchThreads(numPoints);
+    if (encoder) compositorPipeline.with(encoder).dispatchThreads(numPoints);
+    else compositorPipeline.dispatchThreads(numPoints);
     selectionModeUniform.write(layerActiveBits !== 0 ? 1 : 0);
   }
 

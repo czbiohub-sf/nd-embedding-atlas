@@ -54,10 +54,17 @@ export function createRenderPipeline(
   const renderBundle = bundleEncoder.finish();
 
   return {
-    render(context: GPUCanvasContext, _numPoints: number, loadOp: "clear" | "load" = "clear") {
+    render(
+      context: GPUCanvasContext,
+      _numPoints: number,
+      loadOp: "clear" | "load" = "clear",
+      externalEncoder?: GPUCommandEncoder,
+    ) {
       // Raw WebGPU render pass — avoids ~unstable beginRenderPass while still
       // supporting render bundles (which have no stable TypeGPU equivalent yet).
-      const encoder = root.device.createCommandEncoder();
+      // If an external encoder is passed, we record into it and let the caller
+      // submit (used to batch cull + compositor + render into one submit per frame).
+      const encoder = externalEncoder ?? root.device.createCommandEncoder();
       const pass = encoder.beginRenderPass({
         colorAttachments: [
           {
@@ -70,7 +77,7 @@ export function createRenderPipeline(
       });
       pass.executeBundles([renderBundle]);
       pass.end();
-      root.device.queue.submit([encoder.finish()]);
+      if (!externalEncoder) root.device.queue.submit([encoder.finish()]);
     },
   };
 }

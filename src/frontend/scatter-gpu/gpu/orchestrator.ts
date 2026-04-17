@@ -137,9 +137,12 @@ export async function createScatterplot(
     () => {
       // Guard against 0-size canvas (hidden/collapsed Dockview panel)
       if (canvas.width === 0 || canvas.height === 0) return;
-      culling.dispatchCulling(viewVersion);
-      compositor.dispatchIfDirty();
-      render(context, data.numCells, "clear");
+      // Single encoder, single submit — cull → compositor → render in one batch.
+      const encoder = device.createCommandEncoder();
+      culling.dispatchCulling(viewVersion, encoder);
+      compositor.dispatchIfDirty(encoder);
+      render(context, data.numCells, "clear", encoder);
+      device.queue.submit([encoder.finish()]);
     },
     {
       onViewChange: (state: ViewState) => {

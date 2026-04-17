@@ -44,10 +44,11 @@ export function createCullingEngine(
 
   let lastViewVersion = -1;
 
-  function dispatchCulling(viewVersion = 0) {
+  function dispatchCulling(viewVersion = 0, encoder?: GPUCommandEncoder) {
     if (viewVersion === lastViewVersion) return;
     lastViewVersion = viewVersion;
-    pipeline.dispatchThreads(numPoints);
+    if (encoder) pipeline.with(encoder).dispatchThreads(numPoints);
+    else pipeline.dispatchThreads(numPoints);
   }
 
   return {
