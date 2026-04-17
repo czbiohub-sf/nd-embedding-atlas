@@ -13,7 +13,7 @@
  */
 
 import * as zarr from "zarrita";
-import type { Readable } from "zarrita";
+import type { AsyncReadable, Readable } from "zarrita";
 import type {
   AnnDataFrame,
   CategoricalArray,
@@ -171,20 +171,60 @@ export class AnnDataAccessor {
   }
 
   /**
-   * List the embedding keys present under `obsm/`. Uses direct `readdir`
-   * when the store is a local filesystem (the common case for AnnData on
-   * disk); returns `null` when the store has no filesystem path (e.g.
-   * HTTP / in-memory stores), so callers can fall back to a probe list.
+   * List the embedding keys present under `obsm/`.
    *
-   * Entries that don't look like zarr arrays/groups (no `.zarray`,
-   * `.zgroup`, or `zarr.json` child) are filtered out so we don't surface
-   * hidden files or unrelated siblings.
+   * Strategy (most-portable first):
+   *   1. Wrap the backing store with `withConsolidatedMetadata` — reads
+   *      `.zmetadata` (v2) or `consolidated_metadata` in `zarr.json` (v3).
+   *      AnnData-Python writes consolidated metadata by default, so this
+   *      covers most on-disk and HTTP-hosted AnnData stores in one request.
+   *   2. Fall back to filesystem `readdir` when we have a local store path.
+   *   3. Return `null` so callers can probe a known-names list (no
+   *      generic store listing exists in the Zarr spec).
+   *
+   * Entries that don't look like zarr arrays/groups are filtered out.
    */
   async listObsmKeys(): Promise<string[] | null> {
-    if (!this._storePath) return null;
+    const group = this._group;
+    if (group) {
+      const consolidated = await this._listObsmKeysConsolidated(group);
+      if (consolidated) return consolidated;
+    }
+    if (this._storePath) {
+      return this._listObsmKeysReaddir(this._storePath);
+    }
+    return null;
+  }
+
+  private async _listObsmKeysConsolidated(group: ZarrGroup): Promise<string[] | null> {
+    try {
+      // Narrowing: zarrita's Location.store is typed `Store` — treat as Readable
+      // for the consolidated-metadata extension.
+      const store = (group as unknown as { store: AsyncReadable }).store;
+      const listable = await zarr.withConsolidatedMetadata(store);
+      const groupPath = group.path.endsWith("/") ? group.path : `${group.path}/`;
+      const obsmPrefix = `${groupPath}obsm/`;
+      const keys = new Set<string>();
+      for (const entry of listable.contents()) {
+        if (!entry.path.startsWith(obsmPrefix)) continue;
+        const rest = entry.path.slice(obsmPrefix.length);
+        if (!rest) continue;
+        // Take the first path segment — arrays show as "obsm/X_umap", groups
+        // show as "obsm/X_umap" (then children at deeper paths).
+        const first = rest.split("/")[0];
+        if (first) keys.add(first);
+      }
+      return [...keys].toSorted();
+    } catch {
+      // No consolidated metadata available — let caller try the next strategy.
+      return null;
+    }
+  }
+
+  private async _listObsmKeysReaddir(storePath: string): Promise<string[]> {
     const { readdir, stat } = await import("node:fs/promises");
     const { join } = await import("node:path");
-    const obsmDir = join(this._storePath, "obsm");
+    const obsmDir = join(storePath, "obsm");
     let entries: string[];
     try {
       entries = await readdir(obsmDir);
@@ -198,7 +238,6 @@ export class AnnDataAccessor {
         const full = join(obsmDir, entry);
         const s = await stat(full);
         if (!s.isDirectory()) continue;
-        // Zarr v2 array: .zarray, v2 group: .zgroup, v3: zarr.json
         const contents = await readdir(full);
         const isZarr = contents.some((f) => f === ".zarray" || f === ".zgroup" || f === "zarr.json");
         if (isZarr) keys.push(entry);
