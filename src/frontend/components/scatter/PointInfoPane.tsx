@@ -36,7 +36,7 @@ export function PointInfoPane({
       (data: Record<string, string | null>) => {
         if (!cancelled) setRow(data);
       },
-      (err) => console.error("PointInfoPane fetch failed:", err),
+      (err: unknown) => console.error("PointInfoPane fetch failed:", err),
     );
     return () => {
       cancelled = true;

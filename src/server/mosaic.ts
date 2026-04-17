@@ -122,7 +122,14 @@ export async function handleMosaicQuery(body: MosaicQuery, store: EmbeddingStore
     return Response.json({ error: `Unknown command: ${command}` }, { status: 400 });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error(`[mosaic] ${command} failed: ${message}\n  SQL: ${sql}`);
+    let schemaSummary = "<n/a>";
+    try {
+      const rows = await store.queryJson("SELECT column_name FROM (DESCRIBE dataset)");
+      schemaSummary = rows.map((r) => r["column_name"]).join(", ");
+    } catch {
+      /* ignore */
+    }
+    console.error(`[mosaic] ${command} failed: ${message}\n  SQL: ${sql}\n  dataset cols: ${schemaSummary}`);
     return Response.json({ error: message }, { status: 500 });
   }
 }

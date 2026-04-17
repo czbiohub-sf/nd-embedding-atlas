@@ -209,7 +209,7 @@ export async function handleVarColumn(req: Request, state: ViewerState): Promise
         task.status = "ready";
         fireVarStatus(taskId);
       })
-      .catch((err) => {
+      .catch((err: unknown) => {
         task.status = "error";
         task.error = err instanceof Error ? err.message : String(err);
         fireVarStatus(taskId);

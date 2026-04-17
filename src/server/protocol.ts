@@ -47,7 +47,7 @@ export type {
  *   if (!parsed.ok) return parsed.response;
  *   const body = parsed.data;
  */
-export async function parseJsonBody<T extends z.ZodTypeAny>(
+export async function parseJsonBody<T extends z.ZodType>(
   req: Request,
   schema: T,
 ): Promise<{ ok: true; data: z.infer<T> } | { ok: false; response: Response }> {

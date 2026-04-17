@@ -1,5 +1,5 @@
 import { useDebouncer } from "@tanstack/react-pacer";
-import { useStore } from "@tanstack/react-store";
+import { useSelector } from "@tanstack/react-store";
 import { useEffect, useMemo, useState } from "react";
 import type { ChannelHash } from "../../lib/branded-types";
 import { EMPTY_CHANNEL_HASH, hashChannels } from "../../lib/channel-hash";
@@ -31,7 +31,7 @@ export function useGalleryChannels(
   wait = 300,
   plateChannels?: Metadata["plate_channels"],
 ): GalleryChannels {
-  const storeChannels = useStore(viewerChannelsStore, (s) => s.slots[instanceId] ?? ([] as ChannelDef[]));
+  const storeChannels = useSelector(viewerChannelsStore, (s) => s.slots[instanceId] ?? ([] as ChannelDef[]));
   const defaults = useMemo(() => plateChannelsToDefaults(plateChannels), [plateChannels]);
   const liveChannels = storeChannels.length > 0 ? storeChannels : defaults;
 

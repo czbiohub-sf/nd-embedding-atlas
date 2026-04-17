@@ -5,7 +5,7 @@
  * Supports optional axis sync from a linked docked panel via PanelStateStore.
  */
 
-import { useStore } from "@tanstack/react-store";
+import { useSelector } from "@tanstack/react-store";
 import { Link2OffIcon, LinkIcon } from "lucide-react";
 import { useEffect } from "react";
 import { useFloatingWindow } from "../../hooks/useFloatingWindow";
@@ -19,11 +19,13 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 // ── One floating window per store entry ──────────────────────────────────────
 
 function FloatingScatterItem({ entryId }: { entryId: string }) {
-  const entry = useStore(floatingScatterStore, (s) => s.find((e) => e.id === entryId));
+  const entry = useSelector(floatingScatterStore, (s) => s.find((e) => e.id === entryId));
   const fw = useFloatingWindow({ initialWidth: 440, initialHeight: 440 });
 
   // Resolve synced axes from linked panel
-  const linkedState = useStore(panelStateStore, (s) => (entry?.linkedPanelId ? s.get(entry.linkedPanelId) : undefined));
+  const linkedState = useSelector(panelStateStore, (s) =>
+    entry?.linkedPanelId ? s.get(entry.linkedPanelId) : undefined,
+  );
 
   useEffect(() => {
     fw.open();
@@ -91,7 +93,7 @@ function FloatingScatterItem({ entryId }: { entryId: string }) {
 // ── Root ──────────────────────────────────────────────────────────────────────
 
 export function FloatingScatterRoot() {
-  const entries = useStore(floatingScatterStore, (s) => s);
+  const entries = useSelector(floatingScatterStore, (s) => s);
   return (
     <>
       {entries.map((e) => (

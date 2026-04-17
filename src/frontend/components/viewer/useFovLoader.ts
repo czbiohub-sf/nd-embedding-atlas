@@ -294,7 +294,7 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion }: UseFovLoa
       }
     };
 
-    loadLayers().catch((err) => {
+    loadLayers().catch((err: unknown) => {
       if (!cancelled) {
         console.error(`[useFovLoader] Failed to load FOV layers for ${sourceUrl}:`, err);
       }

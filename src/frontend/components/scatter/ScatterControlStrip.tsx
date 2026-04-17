@@ -5,7 +5,7 @@
  * All state and callbacks live in ScatterPanel; this component is pure UI.
  */
 
-import { useStore } from "@tanstack/react-store";
+import { useSelector } from "@tanstack/react-store";
 import { BoxSelect, LassoSelect, Lock, LockOpen } from "lucide-react";
 import type { ColorMode } from "../../scatter-gpu/hooks/useMosaicScatterData";
 import { toggleViewLock, viewSyncStore } from "../../stores/ViewSyncStore";
@@ -69,7 +69,7 @@ export function ScatterControlStrip({
   selectionTool,
   onSetSelectionTool,
 }: ScatterControlStripProps) {
-  const lockMode = useStore(viewSyncStore, (s) => s.lockMode);
+  const lockMode = useSelector(viewSyncStore, (s) => s.lockMode);
   const isLinked = lockMode === "linked";
 
   return (

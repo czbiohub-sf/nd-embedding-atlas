@@ -4,7 +4,7 @@
  * Uses TanStack Virtual for the list so large ObsSet collections render efficiently.
  */
 
-import { useStore } from "@tanstack/react-store";
+import { useSelector } from "@tanstack/react-store";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Trash2 } from "lucide-react";
 import { useRef } from "react";
@@ -17,7 +17,7 @@ import { useDeleteObsSet, useObsSets } from "../../scatter/useObsSets";
 export function ObsSetPanel() {
   const { data: obssets = [], isLoading, isError } = useObsSets();
   const deleteObsSet = useDeleteObsSet();
-  const activeObsSetId = useStore(obsSetStore, (s) => s.activeObsSetId);
+  const activeObsSetId = useSelector(obsSetStore, (s) => s.activeObsSetId);
 
   const parentRef = useRef<HTMLDivElement>(null);
 

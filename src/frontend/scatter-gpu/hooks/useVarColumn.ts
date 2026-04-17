@@ -168,7 +168,7 @@ export function useVarColumn(options?: UseVarColumnOptions): VarColumnResult {
         }
       };
 
-      run().catch((err) => handleError(String(err)));
+      run().catch((err: unknown) => handleError(String(err)));
     },
     [handleError, startHttpPoll, startWsSubscribe, stopWatching],
   );

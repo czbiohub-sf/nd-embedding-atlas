@@ -86,7 +86,7 @@ export function SaveObsSetDialog({ open, onClose, getRowIndices }: SaveObsSetDia
 
   const canSubmit = name.trim().length > 0 && members != null && !resolving && !createObsSet.isPending;
 
-  function handleSubmit(e: React.FormEvent) {
+  function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!canSubmit || !members) return;
     createObsSet.mutate({ name: name.trim(), color: color || null, members }, { onSuccess: () => onClose() });

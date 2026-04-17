@@ -106,7 +106,9 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
         gpuRef.current = gpu;
         onRowIndicesChangeRef.current(currentData.rowIndices ?? []);
       })
-      .catch((err: Error) => onGpuErrorRef.current(err.message));
+      .catch((err: unknown) => {
+        onGpuErrorRef.current(err instanceof Error ? err.message : String(err));
+      });
   }, []); // stable — all reads through refs
 
   // Canvas callback refs — fire when the canvas element mounts/unmounts.

@@ -6,7 +6,7 @@
  * Table/viewer as minimal icons.
  */
 
-import { useStore } from "@tanstack/react-store";
+import { useSelector } from "@tanstack/react-store";
 import type { DockviewApi } from "dockview-react";
 import {
   BookmarkIcon,
@@ -31,7 +31,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 
 // ── Point size slider ─────────────────────────────────────────────────────
 function PointSizeSlider() {
-  const radius = useStore(pointRadiusStore, (s) => s.radius);
+  const radius = useSelector(pointRadiusStore, (s) => s.radius);
   const pct = (radius - POINT_RADIUS_MIN) / (POINT_RADIUS_MAX - POINT_RADIUS_MIN);
 
   return (

@@ -3,7 +3,7 @@
  * Rendered as a tab inside TanStackDevtools.
  */
 
-import { useStore } from "@tanstack/react-store";
+import { useSelector } from "@tanstack/react-store";
 import { brushPredicateStore } from "../../stores/BrushPredicateStore";
 import { getBitmapRowIds } from "../../stores/RoaringBroadcastStore";
 import { selectionSyncStore } from "../../stores/SelectionSyncStore";
@@ -30,9 +30,9 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 export function ScatterStatePlugin() {
-  const brush = useStore(brushPredicateStore, (s) => s);
-  const selection = useStore(selectionSyncStore, (s) => s);
-  const view = useStore(viewSyncStore, (s) => s);
+  const brush = useSelector(brushPredicateStore, (s) => s);
+  const selection = useSelector(selectionSyncStore, (s) => s);
+  const view = useSelector(viewSyncStore, (s) => s);
 
   return (
     <div className="h-full overflow-y-auto bg-[#0d0d14] text-white">

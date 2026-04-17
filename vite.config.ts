@@ -16,9 +16,13 @@ export default defineConfig({
     // enable globally (no noise on backend .ts).
     plugins: ["eslint", "typescript", "unicorn", "oxc", "react", "react-perf", "import"],
 
+    // JS plugins (alpha) — ESLint plugins loaded by Oxlint. Required for
+    // TypeGPU `'use gpu'` rules (no Rust port).
+    jsPlugins: ["eslint-plugin-typegpu"],
+
     env: {
       browser: true,
-      es2022: true,
+      builtin: true,
     },
 
     settings: {
@@ -48,6 +52,7 @@ export default defineConfig({
       "react/rules-of-hooks": "error",
       "react/exhaustive-deps": "warn",
       "react/only-export-components": ["warn", { allowConstantExport: true }],
+      "react/iframe-missing-sandbox": "error",
 
       // TYPE SAFETY
       "@typescript-eslint/no-explicit-any": "warn",
@@ -56,6 +61,23 @@ export default defineConfig({
       "typescript/no-misused-promises": "error",
       "typescript/return-await": "error",
       "typescript/only-throw-error": "error",
+      "typescript/no-deprecated": "error",
+      "typescript/no-base-to-string": "error",
+      "typescript/no-misused-spread": "error",
+      "typescript/no-array-delete": "error",
+      "typescript/no-unsafe-enum-comparison": "error",
+      "typescript/no-unsafe-function-type": "error",
+      "typescript/no-non-null-asserted-nullish-coalescing": "error",
+      "typescript/no-non-null-asserted-optional-chain": "error",
+      "typescript/no-duplicate-type-constituents": "error",
+      "typescript/no-redundant-type-constituents": "error",
+      "typescript/no-import-type-side-effects": "error",
+      "typescript/no-unnecessary-template-expression": "warn",
+      "typescript/prefer-find": "warn",
+      "typescript/no-confusing-non-null-assertion": "error",
+      "typescript/no-duplicate-enum-values": "error",
+      "typescript/no-unnecessary-type-conversion": "warn",
+      "typescript/use-unknown-in-catch-callback-variable": "error",
 
       // TS MODERNIZATION
       "typescript/prefer-nullish-coalescing": "warn",
@@ -117,6 +139,13 @@ export default defineConfig({
       "import/no-duplicates": "error",
       "import/no-self-import": "error",
       "import/no-cycle": "warn",
+
+      // TYPEGPU (JS plugin) — WGSL-correctness rules for `'use gpu'` functions.
+      "typegpu/no-integer-division": "warn",
+      "typegpu/no-math": "warn",
+      "typegpu/no-uninitialized-variables": "error",
+      "typegpu/no-unwrapped-objects": "error",
+      "typegpu/no-invalid-assignment": "error",
 
       // REACT JSX STYLE
       "react/jsx-fragments": ["warn", "syntax"],

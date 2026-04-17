@@ -16,7 +16,7 @@
 
 import type { UseQueryResult } from "@tanstack/react-query";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { useStore } from "@tanstack/react-store";
+import { useSelector } from "@tanstack/react-store";
 import type { Coordinator } from "@uwdata/mosaic-core";
 import type { FilterExpr } from "@uwdata/mosaic-sql";
 import { stringPredicate } from "../lib/mosaic-helpers";
@@ -61,7 +61,7 @@ export function useMosaicSelectionQuery<T>(
 ) {
   // brushPredicateStore.version drives cache invalidation — when isolation
   // or lasso selection changes, version increments and this query re-runs.
-  const version = useStore(brushPredicateStore, (s) => s.version);
+  const version = useSelector(brushPredicateStore, (s) => s.version);
   const predicateStr = brushPredicateStore.state.predicate;
 
   // Build SQL using current predicate string wrapped as a FilterExpr-compatible

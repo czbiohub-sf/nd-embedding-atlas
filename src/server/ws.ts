@@ -127,7 +127,7 @@ export function handleWsMessage(ws: WS, raw: string | Buffer): void {
 
   void Promise.resolve()
     .then(() => handler(ws, id, frame))
-    .catch((err) => {
+    .catch((err: unknown) => {
       const msg = err instanceof Error ? err.message : String(err);
       sendError(ws, id, msg);
     });

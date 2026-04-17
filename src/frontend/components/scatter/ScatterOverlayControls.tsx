@@ -45,7 +45,7 @@ function ScanDotIcon({ size = 12 }: { size?: number }) {
   );
 }
 
-import { useStore } from "@tanstack/react-store";
+import { useSelector } from "@tanstack/react-store";
 import type { DockviewPanelApi } from "dockview-react";
 import type { ColorSource } from "../../lib/color-source";
 import { colorSourceToString } from "../../lib/color-source";
@@ -128,7 +128,7 @@ export function ScatterOverlayControls({
   selectionPath,
 }: Props) {
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
-  const lockMode = useStore(viewSyncStore, (s) => s.lockMode);
+  const lockMode = useSelector(viewSyncStore, (s) => s.lockMode);
   const isLinked = lockMode === "linked";
   const disabled = loadingKey !== null;
 

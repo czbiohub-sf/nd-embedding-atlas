@@ -13,7 +13,7 @@ import { z } from "zod";
 // ─── Shared primitives ──────────────────────────────────────────────────────
 
 /** Non-negative 32-bit integer, safe to interpolate into SQL after validation. */
-const NonNegativeInt = z.number().int().nonnegative().finite();
+const NonNegativeInt = z.number().int().nonnegative();
 
 // ─── POST body schemas ──────────────────────────────────────────────────────
 
@@ -27,8 +27,8 @@ export type MosaicQueryBody = z.infer<typeof MosaicQueryBodySchema>;
 /** POST /api/crop/{fovPath} — image crop request. */
 export const CropChannelSchema = z.object({
   visible: z.boolean().optional(),
-  lo: z.number().finite().optional(),
-  hi: z.number().finite().optional(),
+  lo: z.number().optional(),
+  hi: z.number().optional(),
   color: z.string().optional(),
   /** Frontend sends `blend` (blend mode) for layer compositing. */
   blend: z.string().optional(),
@@ -36,12 +36,12 @@ export const CropChannelSchema = z.object({
 export const CropBodySchema = z.object({
   t: z.number().int().optional(),
   z: z.number().int().optional(),
-  x: z.number().finite().optional(),
-  y: z.number().finite().optional(),
+  x: z.number().optional(),
+  y: z.number().optional(),
   half: z.number().int().positive().optional(),
   size: z.number().int().positive().optional(),
   fmt: z.string().optional(),
-  quality: z.number().finite().optional(),
+  quality: z.number().optional(),
   dataset_key: z.string().optional(),
   channels: z.array(CropChannelSchema).max(32).optional(),
 });
@@ -106,16 +106,14 @@ export const ObsBboxSchema = z.object({
 export type ObsBbox = z.infer<typeof ObsBboxSchema>;
 
 /** Observation info response — matches /api/obs/{row_index}. */
-export const ObsInfoSchema = z
-  .object({
-    fov_name: z.string(),
-    t: z.number(),
-    x: z.number(),
-    y: z.number(),
-    bbox: ObsBboxSchema.optional(),
-    store_index: z.number().optional(),
-  })
-  .passthrough();
+export const ObsInfoSchema = z.looseObject({
+  fov_name: z.string(),
+  t: z.number(),
+  x: z.number(),
+  y: z.number(),
+  bbox: ObsBboxSchema.optional(),
+  store_index: z.number().optional(),
+});
 export type ObsInfo = z.infer<typeof ObsInfoSchema>;
 
 /** Metadata response — matches /data/metadata.json. */
@@ -141,34 +139,32 @@ export const PlateStoreSchema = z.object({
   name: z.string(),
   ome_version: z.enum(["0.4", "0.5"]),
 });
-export const MetadataSchema = z
-  .object({
-    version: z.string().optional(),
-    props: z.object({
-      data: z.object({
-        id: z.string(),
-        projection: z.object({ x: z.string(), y: z.string() }),
-      }),
+export const MetadataSchema = z.looseObject({
+  version: z.string().optional(),
+  props: z.object({
+    data: z.object({
+      id: z.string(),
+      projection: z.object({ x: z.string(), y: z.string() }),
     }),
-    database: z.object({ type: z.string(), uri: z.string().optional() }),
-    obsm: z.record(z.string(), ObsmEntrySchema),
-    obs_columns: z.array(z.string()).optional(),
-    var_count: z.number().optional(),
-    layers: z.array(z.string()).optional(),
-    export_dir: z.string().optional(),
-    spatial: SpatialMetaSchema.optional(),
-    plate: z.boolean().optional(),
-    dataset_keys: z.array(z.string()).optional(),
-    plate_ome_version: z.enum(["0.4", "0.5"]).optional(),
-    plate_pixel_scale: z.object({ x: z.number(), y: z.number() }).optional(),
-    plate_channels: z.array(PlateChannelSchema).optional(),
-    dataset_channels: z.record(z.string(), z.array(PlateChannelSchema)).optional(),
-    plate_stores: z.array(PlateStoreSchema).optional(),
-    plate_shape: z.array(z.number()).optional(),
-    plate_scale: z.array(z.number()).optional(),
-    time_points: z.array(z.number()).optional(),
-  })
-  .passthrough();
+  }),
+  database: z.object({ type: z.string(), uri: z.string().optional() }),
+  obsm: z.record(z.string(), ObsmEntrySchema),
+  obs_columns: z.array(z.string()).optional(),
+  var_count: z.number().optional(),
+  layers: z.array(z.string()).optional(),
+  export_dir: z.string().optional(),
+  spatial: SpatialMetaSchema.optional(),
+  plate: z.boolean().optional(),
+  dataset_keys: z.array(z.string()).optional(),
+  plate_ome_version: z.enum(["0.4", "0.5"]).optional(),
+  plate_pixel_scale: z.object({ x: z.number(), y: z.number() }).optional(),
+  plate_channels: z.array(PlateChannelSchema).optional(),
+  dataset_channels: z.record(z.string(), z.array(PlateChannelSchema)).optional(),
+  plate_stores: z.array(PlateStoreSchema).optional(),
+  plate_shape: z.array(z.number()).optional(),
+  plate_scale: z.array(z.number()).optional(),
+  time_points: z.array(z.number()).optional(),
+});
 export type Metadata = z.infer<typeof MetadataSchema>;
 
 /** Viewer config response. */
