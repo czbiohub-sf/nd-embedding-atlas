@@ -29,7 +29,12 @@ export default defineConfig({
       react: { version: "19.0.0" },
     },
 
-    ignorePatterns: ["dist/**", "node_modules/**", "src/frontend/components/ui/**"],
+    ignorePatterns: [
+      "dist/**",
+      "node_modules/**",
+      "src/frontend/components/ui/**",
+      "src/frontend/ochre/colormap/data/**",
+    ],
 
     categories: {
       correctness: "error",

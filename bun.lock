@@ -17,6 +17,7 @@
         "@tanstack/react-table": "^8.21.3",
         "@tanstack/react-virtual": "^3.13.24",
         "@tanstack/store": "^0.11.0",
+        "@typegpu/color": "^0.11.0",
         "@typegpu/sdf": "^0.11.0",
         "@uwdata/flechette": "^2.4.0",
         "@uwdata/mosaic-core": "^0.24.2",
@@ -442,6 +443,8 @@
     "@tanstack/virtual-core": ["@tanstack/virtual-core@3.14.0", "", {}, "sha512-JLANqGy/D6k4Ujmh8Tr25lGimuOXNiaVyXaCAZS0W+1390sADdGnyUdSWNIfd49gebtIxGMij4IktRVzrdr12Q=="],
 
     "@ts-morph/common": ["@ts-morph/common@0.27.0", "", { "dependencies": { "fast-glob": "^3.3.3", "minimatch": "^10.0.1", "path-browserify": "^1.0.1" } }, "sha512-Wf29UqxWDpc+i61k3oIOzcUfQt79PIT9y/MWfAGlrkjg6lBC1hwDECLXPVJAhWjiGbfBCxZd65F/LIZF3+jeJQ=="],
+
+    "@typegpu/color": ["@typegpu/color@0.11.0", "", { "peerDependencies": { "typegpu": "^0.11.0" } }, "sha512-Ft/f5y6nL9LG325l3B7r6KKgq+Y6QKmk1Oe4rKNSgUJu1+jFCCJUoTxJmEoyCUlS2jxvlBubcVZN4X4QC0qhug=="],
 
     "@typegpu/sdf": ["@typegpu/sdf@0.11.0", "", { "peerDependencies": { "typegpu": "^0.11.0" } }, "sha512-CUDZA1ZMtldawCXgUQDYLx+Dj6HEuuoaaQ2wF9SDwvjRpL7aHpgTmlypu7DbNRgzS3/3y+9PG5dkSRqG6t506A=="],
 
