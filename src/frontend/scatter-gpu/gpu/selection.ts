@@ -14,7 +14,7 @@ export function createSelectionEngine(
   buffers: ScatterBuffers,
   numPoints: number,
   onSelectionChange: (count: number | null, indices?: number[]) => void,
-  wgSize: 64 | 256 = 64,
+  _wgSize: 64 | 256 = 64,
   compositor: CompositorEngine,
 ) {
   const { posBuffer, selectedBuffer } = buffers;
@@ -36,7 +36,6 @@ export function createSelectionEngine(
   const lassoMutable = compositor.lassoBuffer.as("mutable");
 
   // ── PIP kernel ─────────────────────────────────────────────────────────
-  const PIP_BATCH = [0, 1] as const;
 
   // Raw WGSL for the inner dynamic loop (numVerts is runtime, cannot unroll)
   const pipTest = tgpu.fn([d.vec2f, d.u32], d.bool)`
@@ -57,59 +56,32 @@ export function createSelectionEngine(
     }
   `.$uses({ polygon: polygonReadonly });
 
-  const pipComputeFn = tgpu
-    .computeFn({
-      workgroupSize: [wgSize],
-      in: { gid: d.builtin.globalInvocationId },
-    })((input) => {
-      "use gpu";
-      const base = input.gid.x * PIP_BATCH.length;
-      const numVerts = polygonCountUniform.$;
-      for (const k of tgpu.unroll(PIP_BATCH)) {
-        const idx = base + k;
-        if (idx < numPoints) {
-          const pt = pointsReadonly.$[idx];
-          if (pipTest(pt, numVerts)) {
-            lassoMutable.$[idx] = 1;
-          } else {
-            lassoMutable.$[idx] = 0;
-          }
-        }
-      }
-    })
-    .$uses({ pointsReadonly, lassoMutable, polygonCountUniform, pipTest });
-
-  const pipPipeline = root.createComputePipeline({ compute: pipComputeFn });
-  const workgroups = Math.ceil(numPoints / (wgSize * PIP_BATCH.length));
+  const pipPipeline = root.createGuardedComputePipeline((x: number) => {
+    "use gpu";
+    const idx = x;
+    const numVerts = polygonCountUniform.$;
+    const pt = pointsReadonly.$[idx];
+    if (pipTest(pt, numVerts)) {
+      lassoMutable.$[idx] = 1;
+    } else {
+      lassoMutable.$[idx] = 0;
+    }
+  });
 
   // ── AABB kernel ────────────────────────────────────────────────────────
-  const AABB_BATCH = [0, 1, 2, 3] as const;
   const marqueeUniform = root.createUniform(d.vec4f, d.vec4f(0, 0, 0, 0));
 
-  const aabbComputeFn = tgpu
-    .computeFn({
-      workgroupSize: [wgSize],
-      in: { gid: d.builtin.globalInvocationId },
-    })((input) => {
-      "use gpu";
-      const base = input.gid.x * AABB_BATCH.length;
-      const r = marqueeUniform.$;
-      for (const k of tgpu.unroll(AABB_BATCH)) {
-        const idx = base + k;
-        if (idx < numPoints) {
-          const pt = pointsReadonly.$[idx];
-          if (pt.x >= r.x && pt.x <= r.z && pt.y >= r.y && pt.y <= r.w) {
-            lassoMutable.$[idx] = 1;
-          } else {
-            lassoMutable.$[idx] = 0;
-          }
-        }
-      }
-    })
-    .$uses({ pointsReadonly, lassoMutable, marqueeUniform });
-
-  const aabbPipeline = root.createComputePipeline({ compute: aabbComputeFn });
-  const aabbWorkgroups = Math.ceil(numPoints / (wgSize * AABB_BATCH.length));
+  const aabbPipeline = root.createGuardedComputePipeline((x: number) => {
+    "use gpu";
+    const idx = x;
+    const r = marqueeUniform.$;
+    const pt = pointsReadonly.$[idx];
+    if (pt.x >= r.x && pt.x <= r.z && pt.y >= r.y && pt.y <= r.w) {
+      lassoMutable.$[idx] = 1;
+    } else {
+      lassoMutable.$[idx] = 0;
+    }
+  });
 
   // ── Readback ───────────────────────────────────────────────────────────
   let readbackFrame = 0;
@@ -155,7 +127,7 @@ export function createSelectionEngine(
     while (polyData.length < MAX_POLYGON_VERTS) polyData.push(d.vec2f(0, 0));
     polygonBuffer.write(polyData);
     polygonCountUniform.write(vertCount);
-    pipPipeline.dispatchWorkgroups(workgroups);
+    pipPipeline.dispatchThreads(numPoints);
     compositor.markDirty(LAYER_LASSO, true);
     debugLogSelection();
     if (readback) readbackSelectionCount();
@@ -163,7 +135,7 @@ export function createSelectionEngine(
 
   function runMarqueeSelection(rect: { xMin: number; yMin: number; xMax: number; yMax: number }, readback = true) {
     marqueeUniform.write(d.vec4f(rect.xMin, rect.yMin, rect.xMax, rect.yMax));
-    aabbPipeline.dispatchWorkgroups(aabbWorkgroups);
+    aabbPipeline.dispatchThreads(numPoints);
     compositor.markDirty(LAYER_LASSO, true);
     debugLogSelection();
     if (readback) readbackSelectionCount();
@@ -381,8 +353,6 @@ export function createSelectionEngine(
     clearContinuousIsolation,
     rehydrateIsolation,
     debugLogSelection,
-    pipComputeFn,
-    aabbComputeFn,
     destroy() {
       stagingBuffer.destroy();
     },

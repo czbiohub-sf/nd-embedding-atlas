@@ -84,36 +84,18 @@ export async function createScatterplot(
   // Instead of a O(n) CPU loop per palette change, pack colors on GPU:
   //   categoryBuffer[i] → paletteBuffer[cat] → colorBuffer[i]
   // CPU work per updateColors: O(palette_size) ≤ 64 entries (constant).
-  const COLOR_PACK_BATCH = [0, 1, 2, 3] as const;
   const categoryReadonly = buffers.categoryBuffer.as("readonly");
   const colorMutable = buffers.colorBuffer.as("mutable");
   const paletteReadonly = buffers.paletteBuffer.as("readonly");
+  const paletteLenUniform = buffers.paletteLenUniform;
 
-  const colorPackFn = tgpu
-    .computeFn({
-      workgroupSize: [preferredWorkgroupSize],
-      in: { gid: d.builtin.globalInvocationId },
-    })((input) => {
-      "use gpu";
-      const base = input.gid.x * COLOR_PACK_BATCH.length;
-      const numCats = buffers.paletteLenUniform.$;
-      for (const k of tgpu.unroll(COLOR_PACK_BATCH)) {
-        const idx = base + k;
-        if (idx < data.numCells) {
-          const cat = categoryReadonly.$[idx] % numCats;
-          colorMutable.$[idx] = paletteReadonly.$[cat];
-        }
-      }
-    })
-    .$uses({
-      categoryReadonly,
-      colorMutable,
-      paletteReadonly,
-      paletteLenUniform: buffers.paletteLenUniform,
-    });
-
-  const colorPackPipeline = root.createComputePipeline({ compute: colorPackFn });
-  const colorPackWorkgroups = Math.ceil(data.numCells / (preferredWorkgroupSize * COLOR_PACK_BATCH.length));
+  const colorPackPipeline = root.createGuardedComputePipeline((x: number) => {
+    "use gpu";
+    const idx = x;
+    const numCats = paletteLenUniform.$;
+    const cat = categoryReadonly.$[idx] % numCats;
+    colorMutable.$[idx] = paletteReadonly.$[cat];
+  });
 
   /** Pack a JS palette into the GPU palette buffer and dispatch the color-pack shader. */
   function gpuUpdateColors(
@@ -138,7 +120,7 @@ export async function createScatterplot(
       for (let i = 0; i < data.numCells; i++) catStaging[i] = categoryIndices[i]!;
       buffers.categoryBuffer.write(catStaging);
     }
-    colorPackPipeline.dispatchWorkgroups(colorPackWorkgroups);
+    colorPackPipeline.dispatchThreads(data.numCells);
   }
 
   const tPipelines = performance.now();
@@ -231,17 +213,7 @@ export async function createScatterplot(
   if (typeof location !== "undefined" && new URLSearchParams(location.search).has("debug-wgsl")) {
     console.log("=== Vertex + Fragment WGSL ===");
     console.log(tgpu.resolve([mainVertex, mainFragment]));
-    console.log("=== PIP Compute WGSL ===");
-    console.log(tgpu.resolve([selection.pipComputeFn]));
-    console.log("=== Compositor Compute WGSL ===");
-    console.log(tgpu.resolve([compositor.compositorFn]));
-    if (culling.legacyComputeFn) {
-      console.log("=== Culling Compute WGSL (legacy) ===");
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      console.log(tgpu.resolve([culling.legacyComputeFn as any]));
-    } else {
-      console.log("=== Culling Compute: guarded pipeline (WGSL not dumpable via resolve) ===");
-    }
+    console.log("=== Compute kernels: guarded pipelines (WGSL not dumpable via resolve) ===");
   }
 
   return {
