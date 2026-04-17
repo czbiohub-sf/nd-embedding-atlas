@@ -72,16 +72,20 @@ export function stringPredicate(sql: string): ExprNode {
  * Rebuild the `dataset` VIEW after ALTER TABLE on obs_base.
  *
  * DuckDB VIEWs cache column types — adding a column to obs_base invalidates
- * the cached schema. This rebuilds the VIEW with all emb_* LEFT JOINs.
+ * the cached schema. This rebuilds the VIEW with LEFT JOINs onto every
+ * auxiliary table (embedding coords in `emb_*`, materialized var columns in
+ * `var_*`). Missing any family would silently drop those columns from
+ * cross-filter queries on the VIEW.
  */
 export async function rebuildDatasetView(coordinator: Coordinator): Promise<void> {
   const tables = await coordinator.query(
     `SELECT table_name FROM information_schema.tables
-         WHERE table_schema = 'main' AND table_name LIKE 'emb_%'`,
+         WHERE table_schema = 'main'
+           AND (table_name LIKE 'emb_%' OR table_name LIKE 'var_%')`,
     { type: "json" },
   );
-  const embTables = toRows<{ table_name: string }>(tables).map((r) => r.table_name);
+  const auxTables = toRows<{ table_name: string }>(tables).map((r) => r.table_name);
 
-  const joins = embTables.map((t) => `LEFT JOIN ${t} USING (__row_index__)`).join(" ");
+  const joins = auxTables.map((t) => `LEFT JOIN ${t} USING (__row_index__)`).join(" ");
   await coordinator.exec(`CREATE OR REPLACE VIEW dataset AS SELECT * FROM obs_base ${joins}`);
 }

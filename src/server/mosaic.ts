@@ -122,6 +122,7 @@ export async function handleMosaicQuery(body: MosaicQuery, store: EmbeddingStore
     return Response.json({ error: `Unknown command: ${command}` }, { status: 400 });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    console.error(`[mosaic] ${command} failed: ${message}\n  SQL: ${sql}`);
     return Response.json({ error: message }, { status: 500 });
   }
 }

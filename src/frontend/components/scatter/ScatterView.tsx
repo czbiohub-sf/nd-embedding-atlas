@@ -200,7 +200,7 @@ export function ScatterView({
     let cancelled = false;
     const tid = setTimeout(() => {
       coordinator
-        .query(`SELECT __row_index__ FROM obs_base WHERE "${col}" >= ${vmin} AND "${col}" <= ${vmax}`, {
+        .query(`SELECT __row_index__ FROM dataset WHERE "${col}" >= ${vmin} AND "${col}" <= ${vmax}`, {
           type: "json",
         })
         .then((result: unknown) => {
