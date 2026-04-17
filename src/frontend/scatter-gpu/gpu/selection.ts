@@ -1,5 +1,6 @@
 import { tgpu } from "typegpu";
 import * as d from "typegpu/data";
+import * as std from "typegpu/std";
 import { MAX_POLYGON_VERTS } from "../constants";
 import type { TgpuRoot } from "../types";
 import { simplifyPath } from "../utils/geometry";
@@ -230,28 +231,61 @@ export function createSelectionEngine(
     // Status bar is updated via the separate onExternalClear callback in orchestrator.
   }
 
-  // ── Composable isolation masks ──────────────────────────────────────────
-  // Three features independently own their mask. recomposeIsolation() ANDs
-  // active masks (with trajectory OR'd so it's never hidden by category)
-  // and writes the result to the single GPU isolation buffer.
+  // ── Composable isolation masks (GPU-composed) ───────────────────────────
+  // Three features independently own their source: category (bitmask over the
+  // already-on-GPU categoryBuffer), trajectory (u32[N] uploaded), continuous
+  // (u32[N] uploaded). A guarded compute kernel composes them on the GPU
+  // into compositor.isolationBuffer. CPU keeps the raw trajectory/continuous
+  // masks + catBitmask + cachedCategoryIndices so isPointVisible can compute
+  // per-point visibility synchronously without a GPU readback.
 
-  const categoryMask = new Uint32Array(numPoints);
-  const trajectoryMask = new Uint32Array(numPoints);
-  const continuousMask = new Uint32Array(numPoints);
+  const trajectoryMaskBuffer = root.createBuffer(d.arrayOf(d.u32, numPoints)).$usage("storage");
+  const continuousMaskBuffer = root.createBuffer(d.arrayOf(d.u32, numPoints)).$usage("storage");
+
+  // activeFlags bit 0=category, 1=trajectory, 2=continuous. catBitmask: bit i set
+  // if category index i is isolated (supports ≤32 categories, matches our cap).
+  const IsolationConfig = d.struct({ activeFlags: d.u32, catBitmask: d.u32 });
+  const isolationConfigUniform = root.createUniform(IsolationConfig, { activeFlags: 0, catBitmask: 0 });
+
+  const categoryReadonly = buffers.categoryBuffer.as("readonly");
+  const trajectoryReadonly = trajectoryMaskBuffer.as("readonly");
+  const continuousReadonly = continuousMaskBuffer.as("readonly");
+  const isolationMutable = compositor.isolationBuffer.as("mutable");
+
+  const composeIsolationPipeline = root.createGuardedComputePipeline((x: number) => {
+    "use gpu";
+    const idx = x;
+    const cfg = isolationConfigUniform.$;
+    const catActive = (cfg.activeFlags & 1) !== 0;
+    const trajActive = (cfg.activeFlags & 2) !== 0;
+    const contActive = (cfg.activeFlags & 4) !== 0;
+
+    const catIdx = categoryReadonly.$[idx];
+    const catBit = (cfg.catBitmask >> catIdx) & 1;
+    const cat = std.select(1, catBit, catActive);
+    const traj = std.select(0, trajectoryReadonly.$[idx], trajActive);
+    const cont = std.select(1, continuousReadonly.$[idx], contActive);
+
+    isolationMutable.$[idx] = traj | (cat & cont);
+  });
+
+  // CPU mirror state — lets isPointVisible answer O(1) without GPU readback.
+  const trajectoryMaskCpu = new Uint32Array(numPoints);
+  const continuousMaskCpu = new Uint32Array(numPoints);
+  let catBitmask = 0;
+  let cachedCategoryIndices: Uint8Array | null = null;
   let categoryActive = false;
   let trajectoryActive = false;
   let continuousActive = false;
 
-  // Scratch buffer for the composed result — avoids allocation per recompose.
-  const composedMask = new Uint32Array(numPoints);
+  function writeIsolationConfig() {
+    const activeFlags = (categoryActive ? 1 : 0) | (trajectoryActive ? 2 : 0) | (continuousActive ? 4 : 0);
+    isolationConfigUniform.write({ activeFlags, catBitmask });
+  }
 
   /**
-   * Compose all active masks → single GPU upload.
-   *
-   * Semantics: `(trajectory OR (category AND continuous))`
-   * - Trajectory points are always visible (never masked by category).
-   * - Category and continuous intersect normally.
-   * - If no masks are active, the isolation layer is deactivated.
+   * Dispatch the GPU compose kernel and flag the isolation layer active.
+   * If no source is active, clear the isolation buffer and deactivate the layer.
    */
   function recomposeIsolation() {
     const anyActive = categoryActive || trajectoryActive || continuousActive;
@@ -262,17 +296,8 @@ export function createSelectionEngine(
       compositor.markDirty(LAYER_ISOLATION, false);
       return;
     }
-
-    for (let i = 0; i < numPoints; i++) {
-      // Start with all-ones for inactive masks (identity for AND)
-      const cat = categoryActive ? categoryMask[i] : 1;
-      const cont = continuousActive ? continuousMask[i] : 1;
-      const traj = trajectoryActive ? trajectoryMask[i] : 0;
-      // trajectory OR (category AND continuous)
-      composedMask[i] = traj | (cat & cont);
-    }
-
-    compositor.isolationBuffer.write(composedMask);
+    writeIsolationConfig();
+    composeIsolationPipeline.dispatchThreads(numPoints);
     compositor.markDirty(LAYER_ISOLATION, true);
   }
 
@@ -281,39 +306,42 @@ export function createSelectionEngine(
       clearCategoryIsolation();
       return;
     }
-    for (let i = 0; i < numPoints; i++) {
-      categoryMask[i] = isolatedSet.has(categoryIndices[i]) ? 1 : 0;
-    }
+    let bitmask = 0 >>> 0;
+    for (const cat of isolatedSet) bitmask = (bitmask | (1 << cat)) >>> 0;
+    catBitmask = bitmask;
+    cachedCategoryIndices = categoryIndices;
     categoryActive = true;
     recomposeIsolation();
   }
 
   function clearCategoryIsolation() {
-    categoryMask.fill(0);
+    catBitmask = 0;
     categoryActive = false;
     recomposeIsolation();
   }
 
   function setTrajectoryIsolation(mask: Uint32Array) {
-    trajectoryMask.set(mask);
+    trajectoryMaskCpu.set(mask);
+    trajectoryMaskBuffer.write(trajectoryMaskCpu);
     trajectoryActive = true;
     recomposeIsolation();
   }
 
   function clearTrajectoryIsolation() {
-    trajectoryMask.fill(0);
+    trajectoryMaskCpu.fill(0);
     trajectoryActive = false;
     recomposeIsolation();
   }
 
   function setContinuousIsolation(mask: Uint32Array) {
-    continuousMask.set(mask);
+    continuousMaskCpu.set(mask);
+    continuousMaskBuffer.write(continuousMaskCpu);
     continuousActive = true;
     recomposeIsolation();
   }
 
   function clearContinuousIsolation() {
-    continuousMask.fill(0);
+    continuousMaskCpu.fill(0);
     continuousActive = false;
     recomposeIsolation();
   }
@@ -326,7 +354,11 @@ export function createSelectionEngine(
   /** Check if a point is visible under current isolation (for click filtering). */
   function isPointVisible(pointIndex: number): boolean {
     if (!categoryActive && !trajectoryActive && !continuousActive) return true;
-    return composedMask[pointIndex] === 1;
+    const catIdx = cachedCategoryIndices?.[pointIndex] ?? 0;
+    const cat = categoryActive ? (catBitmask >>> catIdx) & 1 : 1;
+    const traj = trajectoryActive ? trajectoryMaskCpu[pointIndex] : 0;
+    const cont = continuousActive ? continuousMaskCpu[pointIndex] : 1;
+    return (traj | (cat & cont)) === 1;
   }
 
   return {
