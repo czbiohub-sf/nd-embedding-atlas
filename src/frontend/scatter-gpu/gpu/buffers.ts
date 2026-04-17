@@ -96,8 +96,7 @@ export function uploadData(
   const numPoints = data.numCells;
 
   // 1. Positions: direct upload (already Float32Array, layout matches vec2f)
-  const rawPosBuffer = root.unwrap(buffers.posBuffer);
-  device.queue.writeBuffer(rawPosBuffer, 0, data.positions);
+  buffers.posBuffer.write(data.positions);
   const tPos = performance.now();
 
   // 2. Upload category indices as u32 buffer (used by density engine)
@@ -105,8 +104,7 @@ export function uploadData(
   for (let i = 0; i < numPoints; i++) {
     catStaging[i] = data.categoryIndices[i]!;
   }
-  const rawCatBuffer = root.unwrap(buffers.categoryBuffer);
-  device.queue.writeBuffer(rawCatBuffer, 0, catStaging);
+  buffers.categoryBuffer.write(catStaging);
 
   // 3. Pack colors on CPU: category index → palette → u32 packed RGBA (4 bytes/point).
   // Palette values are 0–255; pack as R|(G<<8)|(B<<16)|(255<<24) for little-endian unorm8x4.
@@ -129,8 +127,7 @@ export function uploadData(
     }
     colorData[i] = (r | (g << 8) | (b << 16) | (alpha << 24)) >>> 0;
   }
-  const rawColorBuffer = root.unwrap(buffers.colorBuffer);
-  device.queue.writeBuffer(rawColorBuffer, 0, colorData);
+  buffers.colorBuffer.write(colorData);
   const tColor = performance.now();
 
   // 4. Clear selection buffer

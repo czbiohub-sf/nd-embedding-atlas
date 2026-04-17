@@ -215,7 +215,7 @@ export function createSelectionEngine(
       if (idx >= 0 && idx < numPoints) highlightMask[idx] = 1;
     }
     if (hasClick) highlightMask[clickedPointIdx] = 2;
-    device.queue.writeBuffer(root.unwrap(compositor.highlightBuffer), 0, highlightMask);
+    compositor.highlightBuffer.write(highlightMask);
     compositor.markDirty(LAYER_HIGHLIGHT, true);
   }
 
@@ -245,13 +245,13 @@ export function createSelectionEngine(
     for (const idx of pointIndices) {
       if (idx >= 0 && idx < numPoints) externalSelectionMask[idx] = 1;
     }
-    device.queue.writeBuffer(root.unwrap(compositor.externalBuffer), 0, externalSelectionMask);
+    compositor.externalBuffer.write(externalSelectionMask);
     compositor.markDirty(LAYER_EXTERNAL, true);
   }
 
   function clearSelectionExternal() {
     externalSelectionMask.fill(0);
-    device.queue.writeBuffer(root.unwrap(compositor.externalBuffer), 0, externalSelectionMask);
+    compositor.externalBuffer.write(externalSelectionMask);
     compositor.markDirty(LAYER_EXTERNAL, false);
     // Do NOT call onSelectionChange here — that path calls clearSelectionSync,
     // which notifies other panels, which call clearExternalSelection, which loops.
@@ -300,7 +300,7 @@ export function createSelectionEngine(
       composedMask[i] = traj | (cat & cont);
     }
 
-    device.queue.writeBuffer(root.unwrap(compositor.isolationBuffer), 0, composedMask);
+    compositor.isolationBuffer.write(composedMask);
     compositor.markDirty(LAYER_ISOLATION, true);
   }
 

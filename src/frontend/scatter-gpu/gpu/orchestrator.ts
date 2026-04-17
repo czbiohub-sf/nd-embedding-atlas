@@ -130,13 +130,13 @@ export async function createScatterplot(
       const a = c[3] !== undefined ? Math.round(c[3] * 255) : 255;
       packed[i] = (r | (g << 8) | (b << 16) | (a << 24)) >>> 0;
     }
-    device.queue.writeBuffer(root.unwrap(buffers.paletteBuffer), 0, packed);
+    buffers.paletteBuffer.write(packed);
     buffers.paletteLenUniform.write(len);
     // If custom categoryIndices supplied (e.g. fresh from React), re-upload them first
     if (categoryIndices) {
       const catStaging = new Uint32Array(data.numCells);
       for (let i = 0; i < data.numCells; i++) catStaging[i] = categoryIndices[i]!;
-      device.queue.writeBuffer(root.unwrap(buffers.categoryBuffer), 0, catStaging);
+      buffers.categoryBuffer.write(catStaging);
     }
     colorPackPipeline.dispatchWorkgroups(colorPackWorkgroups);
   }
