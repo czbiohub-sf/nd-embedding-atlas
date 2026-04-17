@@ -5,16 +5,15 @@ import type { Convention, DataTree, ZarrConfig } from "./types.ts";
 import { detectOmeZarr } from "./ome-zarr.ts";
 import { detectAnnData } from "./anndata.ts";
 import { detectMuData } from "./mudata.ts";
-import { detectXarray } from "./xarray.ts";
 
 export interface OpenOptions {
   /** Override convention detection. */
-  convention?: "ome-zarr" | "anndata" | "mudata" | "xarray";
+  convention?: "ome-zarr" | "anndata" | "mudata";
   /** Configuration overrides. */
   config?: Partial<ZarrConfig>;
 }
 
-const CONVENTIONS: Convention[] = [detectOmeZarr, detectMuData, detectAnnData, detectXarray];
+const CONVENTIONS: Convention[] = [detectOmeZarr, detectMuData, detectAnnData];
 
 /**
  * Open a Zarr store and auto-detect its convention.
@@ -73,7 +72,7 @@ export async function open(location: string | Readable, options?: OpenOptions): 
   throw new Error(
     "Could not detect Zarr store convention. " +
       "Expected OME-Zarr (multiscales), AnnData (encoding-type: anndata), " +
-      "MuData (encoding-type: MuData), or xarray (_ARRAY_DIMENSIONS). " +
+      "or MuData (encoding-type: MuData). " +
       `Root attrs: ${JSON.stringify(Object.keys(rootAttrs))}`,
   );
 }
