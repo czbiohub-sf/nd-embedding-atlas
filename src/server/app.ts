@@ -28,7 +28,6 @@ import { handleListObsSets, handleCreateObsSet, handleDeleteObsSet, handleActiva
 import { handleVarNames, handleVarLayers, handleVarColumn, handleVarColumnStatus } from "./routes/var.ts";
 import { handleExport, handleExportStatus } from "./routes/export.ts";
 import { handleCrop } from "./routes/crops.ts";
-import { categoricalNames, continuousNames, getPalette } from "./colormaps.ts";
 import { servePlateFile } from "./plate.ts";
 import { serveStatic, resolveFrontendDir } from "./static.ts";
 import { handleWsMessage, handleWsOpen, handleWsClose, type WsContext } from "./ws.ts";
@@ -174,20 +173,9 @@ async function routeRequest(
     return handleMetadata(state, config);
   }
 
-  // ── Colormaps (GET /data/colormaps) ─────────────────────────────
-  if (pathname === "/data/colormaps" && req.method === "GET") {
-    return Response.json({
-      categorical: categoricalNames(),
-      continuous: continuousNames(),
-    });
-  }
-
-  // ── Categorical palette (GET /data/categorical-palette) ─────────
-  if (pathname === "/data/categorical-palette" && req.method === "GET") {
-    const name = url.searchParams.get("colormap") ?? "tab10";
-    const n = Number(url.searchParams.get("n") ?? "10");
-    return Response.json({ colors: getPalette(name, n) });
-  }
+  // Colormap surface moved to the frontend in Phase 8 — see
+  // src/frontend/lib/ochre-palette.ts. Backend no longer serves
+  // /data/colormaps or /data/categorical-palette.
 
   // ── API routes (/api/*) ─────────────────────────────────────────
   if (pathname.startsWith("/api/")) {

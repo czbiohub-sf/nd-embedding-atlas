@@ -4,12 +4,9 @@
  * Byte layout per entry (little-endian): R | (G<<8) | (B<<16) | (A<<24).
  * Suitable for direct upload to a TypeGPU `d.arrayOf(d.u32, 256)` buffer.
  */
-import * as catalog from "@/ochre/colormap/catalog";
-import type { ColorMap } from "@/ochre/colormap/types";
+import { resolveColormap } from "./ochre-palette";
 
 export const LUT_SIZE = 256;
-
-const catalogLookup = catalog as unknown as Record<string, ColorMap | undefined>;
 
 function packSrgb(r: number, g: number, b: number, a: number): number {
   const ri = Math.max(0, Math.min(255, Math.round(r * 255)));
@@ -36,8 +33,8 @@ function grayscaleLut(reversed: boolean): Uint32Array {
  * perceptually-uniform gradients even for user-defined two-color palettes.
  */
 export function buildColormapLut(name: string, reversed = false): Uint32Array {
-  const cmap = catalogLookup[name];
-  if (!cmap || typeof cmap.map !== "function") return grayscaleLut(reversed);
+  const cmap = resolveColormap(name);
+  if (!cmap) return grayscaleLut(reversed);
 
   const out = new Uint32Array(LUT_SIZE);
   for (let i = 0; i < LUT_SIZE; i++) {
