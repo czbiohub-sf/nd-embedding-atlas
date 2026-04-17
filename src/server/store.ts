@@ -264,6 +264,9 @@ export class EmbeddingStore {
 
     this._varCols.set(colName, { table: tableName, colName });
     await this._rebuildView();
+    console.log(
+      `[store] registerVarColumn ${colName} → table ${tableName}; VIEW vars now: ${[...this._varCols.keys()].join(", ")}`,
+    );
   }
 
   /**
