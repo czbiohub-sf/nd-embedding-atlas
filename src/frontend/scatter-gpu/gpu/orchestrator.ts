@@ -128,7 +128,7 @@ export async function createScatterplot(
   // Reads raw value buffer + 256-entry packed-u32 LUT + config uniform,
   // writes packed u32 RGBA to the same colorBuffer as the categorical path.
   //   flags bit 0: reversed
-  //   flags bits 1-2: scale (0=linear, 1=log, 2=sqrt) — linear MVP; others TODO
+  //   flags bits 1-2: scale mode (0 = linear, 1 = log, 2 = sqrt)
   const continuousValuesBuffer = root.createBuffer(d.arrayOf(d.f32, data.numCells)).$usage("storage");
   const continuousLutBuffer = root.createBuffer(d.arrayOf(d.u32, 256)).$usage("storage");
   const ContinuousConfig = d.struct({ vmin: d.f32, vmax: d.f32, flags: d.u32 });
@@ -137,15 +137,41 @@ export async function createScatterplot(
   const continuousValuesReadonly = continuousValuesBuffer.as("readonly");
   const continuousLutReadonly = continuousLutBuffer.as("readonly");
 
-  // NaN → mid-gradient (0.5). Degenerate range → span clamped to 1e-20.
+  // NaN → mid-gradient. Degenerate spans → clamped to 1e-20. Log scale is only
+  // valid when vmin > 0 and value > 0; otherwise the branch falls back to
+  // linear. Sqrt scale maps sqrt(v - vmin) / sqrt(span), which handles any
+  // vmin/vmax but clamps v < vmin to 0.
   const continuousColorPackPipeline = root.createGuardedComputePipeline((x: number) => {
     "use gpu";
     const idx = x;
     const cfg = continuousConfigUniform.$;
     const v = continuousValuesReadonly.$[idx];
-    const span = std.max(cfg.vmax - cfg.vmin, 1e-20);
-    const tRaw = std.select((v - cfg.vmin) / span, 0.5, v !== v); // NaN check: v !== v
+
+    const linearSpan = std.max(cfg.vmax - cfg.vmin, 1e-20);
+    const tLinear = (v - cfg.vmin) / linearSpan;
+
+    // Log: ln(v) − ln(vmin) / (ln(vmax) − ln(vmin)) when vmin > 0 AND v > 0.
+    // Use tiny-but-positive fallback for the log args when the guard fails so
+    // no NaN/Inf escapes; the `useLog` select below picks tLinear in that case.
+    const vSafe = std.max(v, 1e-20);
+    const vminSafe = std.max(cfg.vmin, 1e-20);
+    const vmaxSafe = std.max(cfg.vmax, vminSafe * 10);
+    const logSpan = std.max(std.log(vmaxSafe) - std.log(vminSafe), 1e-20);
+    const tLog = (std.log(vSafe) - std.log(vminSafe)) / logSpan;
+
+    // Sqrt: monotonic, defined for v ≥ vmin. Values < vmin clamp to 0.
+    const sqrtSpan = std.max(std.sqrt(linearSpan), 1e-20);
+    const tSqrt = std.sqrt(std.max(v - cfg.vmin, 0)) / sqrtSpan;
+
     const reversed = (cfg.flags & 1) !== 0;
+    const scaleMode = (cfg.flags >> 1) & 3;
+    const useLog = scaleMode === 1 && cfg.vmin > 0 && v > 0;
+    const useSqrt = scaleMode === 2;
+
+    let tRaw = std.select(tLinear, tLog, useLog);
+    tRaw = std.select(tRaw, tSqrt, useSqrt);
+    tRaw = std.select(tRaw, 0.5, v !== v); // NaN check: v !== v
+
     const tClamped = std.clamp(std.select(tRaw, 1 - tRaw, reversed), 0, 1);
     const lutIdx = d.u32(tClamped * 255);
     colorMutable.$[idx] = continuousLutReadonly.$[lutIdx];
@@ -171,11 +197,13 @@ export async function createScatterplot(
     vmax: number;
     lut: Uint32Array;
     reversed: boolean;
+    scale?: "linear" | "log" | "sqrt";
   }) {
     // Defense in depth for swapped range (see R4 in Phase 7 plan).
     currentContinuousVmin = Math.min(args.vmin, args.vmax);
     currentContinuousVmax = Math.max(args.vmin, args.vmax);
-    currentContinuousFlags = args.reversed ? 1 : 0;
+    const mode = args.scale === "log" ? 1 : args.scale === "sqrt" ? 2 : 0;
+    currentContinuousFlags = (args.reversed ? 1 : 0) | (mode << 1);
     continuousValuesBuffer.write(args.values);
     continuousLutBuffer.write(args.lut);
     writeContinuousConfig();
@@ -190,7 +218,14 @@ export async function createScatterplot(
   }
 
   function setContinuousReversed(reversed: boolean) {
-    currentContinuousFlags = reversed ? 1 : 0;
+    currentContinuousFlags = (currentContinuousFlags & ~1) | (reversed ? 1 : 0);
+    writeContinuousConfig();
+    continuousColorPackPipeline.dispatchThreads(data.numCells);
+  }
+
+  function setContinuousScale(scale: "linear" | "log" | "sqrt") {
+    const mode = scale === "log" ? 1 : scale === "sqrt" ? 2 : 0;
+    currentContinuousFlags = (currentContinuousFlags & ~0b110) | (mode << 1);
     writeContinuousConfig();
     continuousColorPackPipeline.dispatchThreads(data.numCells);
   }
@@ -330,6 +365,10 @@ export async function createScatterplot(
     },
     setContinuousReversed(reversed: boolean) {
       setContinuousReversed(reversed);
+      interaction.requestRender();
+    },
+    setContinuousScale(scale: "linear" | "log" | "sqrt") {
+      setContinuousScale(scale);
       interaction.requestRender();
     },
     setContinuousLut(lut: Uint32Array) {

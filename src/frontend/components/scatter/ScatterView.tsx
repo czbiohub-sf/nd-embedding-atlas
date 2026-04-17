@@ -326,8 +326,9 @@ export function ScatterView({
         values: c.values,
         vmin: c.vmin,
         vmax: c.vmax,
-        lut: buildColormapLut(c.colormap, c.reversed),
+        lut: buildColormapLut(c.colormap),
         reversed: c.reversed,
+        scale: legendState.scale,
       });
     }
     // Point radius
@@ -355,10 +356,11 @@ export function ScatterView({
       values: c.values,
       vmin: c.vmin,
       vmax: c.vmax,
-      lut: buildColormapLut(c.colormap, c.reversed),
+      lut: buildColormapLut(c.colormap),
       reversed: c.reversed,
+      scale: legendState.scale,
     });
-  }, [data?.continuous, colorMode]);
+  }, [data?.continuous, colorMode, legendState.scale]);
 
   // Phase 7: slider-driven vmin/vmax → GPU uniform + re-dispatch, no re-fetch.
   useEffect(() => {
@@ -366,6 +368,17 @@ export function ScatterView({
     if (userVmin === undefined || userVmax === undefined) return;
     hostRef.current?.setContinuousRange(userVmin, userVmax);
   }, [userVmin, userVmax, colorMode, data?.continuous]);
+
+  // Legend toggle handlers that skip LUT/value re-upload.
+  useEffect(() => {
+    if (colorMode !== "continuous" || !data?.continuous) return;
+    hostRef.current?.setContinuousReversed(legendState.colormapReversed);
+  }, [legendState.colormapReversed, colorMode, data?.continuous]);
+
+  useEffect(() => {
+    if (colorMode !== "continuous" || !data?.continuous) return;
+    hostRef.current?.setContinuousScale(legendState.scale);
+  }, [legendState.scale, colorMode, data?.continuous]);
 
   useEffect(() => {
     const sub = selectionSyncStore.subscribe(() => {

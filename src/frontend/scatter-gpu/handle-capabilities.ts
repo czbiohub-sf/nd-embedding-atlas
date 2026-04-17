@@ -49,9 +49,11 @@ export interface ColorCapability {
     vmax: number;
     lut: Uint32Array;
     reversed: boolean;
+    scale?: "linear" | "log" | "sqrt";
   }): void;
   setContinuousRange(vmin: number, vmax: number): void;
   setContinuousReversed(reversed: boolean): void;
+  setContinuousScale(scale: "linear" | "log" | "sqrt"): void;
   setContinuousLut(lut: Uint32Array): void;
 }
 

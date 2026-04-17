@@ -16,10 +16,10 @@ function packSrgb(r: number, g: number, b: number, a: number): number {
   return (ri | (gi << 8) | (bi << 16) | (ai << 24)) >>> 0;
 }
 
-function grayscaleLut(reversed: boolean): Uint32Array {
+function grayscaleLut(): Uint32Array {
   const out = new Uint32Array(LUT_SIZE);
   for (let i = 0; i < LUT_SIZE; i++) {
-    const t = reversed ? 1 - i / (LUT_SIZE - 1) : i / (LUT_SIZE - 1);
+    const t = i / (LUT_SIZE - 1);
     out[i] = packSrgb(t, t, t, 1);
   }
   return out;
@@ -29,17 +29,20 @@ function grayscaleLut(reversed: boolean): Uint32Array {
  * Sample the named colormap at 256 evenly-spaced `t ∈ [0, 1]` values and pack
  * into u32 RGBA. Falls back to grayscale when the name isn't in ochre's catalog.
  *
+ * LUT is always built in forward direction (`t = i / (LUT_SIZE - 1)`); the
+ * reverse flag is handled by the GPU kernel via a uniform bit so that toggling
+ * reversed is a uniform write + re-dispatch, not a CPU LUT regeneration.
+ *
  * Ochre's default interpolation space is OkLab for linear colormaps, giving
  * perceptually-uniform gradients even for user-defined two-color palettes.
  */
-export function buildColormapLut(name: string, reversed = false): Uint32Array {
+export function buildColormapLut(name: string): Uint32Array {
   const cmap = resolveColormap(name);
-  if (!cmap) return grayscaleLut(reversed);
+  if (!cmap) return grayscaleLut();
 
   const out = new Uint32Array(LUT_SIZE);
   for (let i = 0; i < LUT_SIZE; i++) {
-    const t = reversed ? 1 - i / (LUT_SIZE - 1) : i / (LUT_SIZE - 1);
-    const c = cmap.map(t);
+    const c = cmap.map(i / (LUT_SIZE - 1));
     out[i] = packSrgb(c.r, c.g, c.b, c.alpha);
   }
   return out;

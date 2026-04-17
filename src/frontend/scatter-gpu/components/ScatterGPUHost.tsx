@@ -219,6 +219,9 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
       setContinuousReversed(reversed) {
         gpuRef.current?.setContinuousReversed(reversed);
       },
+      setContinuousScale(scale) {
+        gpuRef.current?.setContinuousScale(scale);
+      },
       setContinuousLut(lut) {
         gpuRef.current?.setContinuousLut(lut);
       },

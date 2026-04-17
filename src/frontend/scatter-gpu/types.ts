@@ -106,11 +106,14 @@ export interface ScatterplotHandle {
     vmax: number;
     lut: Uint32Array;
     reversed: boolean;
+    scale?: "linear" | "log" | "sqrt";
   }): void;
   /** Write new vmin/vmax and re-dispatch (no network, no buffer upload). */
   setContinuousRange(vmin: number, vmax: number): void;
   /** Flip the reversed flag and re-dispatch (no network, no buffer upload). */
   setContinuousReversed(reversed: boolean): void;
+  /** Set the normalization scale (linear | log | sqrt) and re-dispatch. */
+  setContinuousScale(scale: "linear" | "log" | "sqrt"): void;
   /** Upload a fresh LUT (colormap change) and re-dispatch. */
   setContinuousLut(lut: Uint32Array): void;
   /** Current pan/zoom state of the viewport. */

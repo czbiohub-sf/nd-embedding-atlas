@@ -1,19 +1,6 @@
 import { cn } from "@/lib/utils";
+import { getColormapList } from "../../lib/ochre-palette";
 import { useColormapPalette } from "../../hooks/useColormaps";
-
-// eslint-disable-next-line react/only-export-components
-export const CONTINUOUS_COLORMAPS = [
-  "viridis",
-  "plasma",
-  "magma",
-  "inferno",
-  "coolwarm",
-  "RdBu",
-  "greys",
-  "cividis",
-] as const;
-
-export type ContinuousColormapName = (typeof CONTINUOUS_COLORMAPS)[number];
 
 interface ColormapSwatchProps {
   name: string;
@@ -47,9 +34,10 @@ interface ColormapGridProps {
 }
 
 export function ColormapGrid({ active, onSelect }: ColormapGridProps) {
+  const { continuous } = getColormapList();
   return (
-    <div className="grid grid-cols-2 gap-1">
-      {CONTINUOUS_COLORMAPS.map((name) => (
+    <div className="grid max-h-64 grid-cols-2 gap-1 overflow-y-auto pr-1">
+      {continuous.map((name) => (
         <ColormapSwatch key={name} name={name} active={active === name} onSelect={onSelect} />
       ))}
     </div>
