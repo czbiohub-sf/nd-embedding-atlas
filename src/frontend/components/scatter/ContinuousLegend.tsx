@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useId } from "react";
 import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
+import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
 import { useColormapPalette } from "../../hooks/useColormaps";
 import { ColormapGrid } from "./ColormapGrid";
@@ -33,13 +34,40 @@ interface Props {
   onResetRange?: () => void;
 }
 
-const COLORMAP_FALLBACKS: Record<string, string> = {
-  viridis: "#440154, #414487, #2a788e, #22a884, #7ad151, #fde725",
-  plasma: "#0d0887, #7e03a8, #cb4678, #f89441, #f0f921",
-  magma: "#000004, #3b0f70, #8c2981, #de4968, #fe9f6d, #fcfdbf",
-  inferno: "#000004, #420a68, #932667, #dd513a, #fca50a, #fcffa4",
-  coolwarm: "#3b4cc0, #6788ee, #9bbcff, #f7f7f7, #ffaa8d, #e26952, #b40426",
+const COLORMAP_FALLBACKS: Record<string, string[]> = {
+  viridis: ["#440154", "#414487", "#2a788e", "#22a884", "#7ad151", "#fde725"],
+  plasma: ["#0d0887", "#7e03a8", "#cb4678", "#f89441", "#f0f921"],
+  magma: ["#000004", "#3b0f70", "#8c2981", "#de4968", "#fe9f6d", "#fcfdbf"],
+  inferno: ["#000004", "#420a68", "#932667", "#dd513a", "#fca50a", "#fcffa4"],
+  coolwarm: ["#3b4cc0", "#6788ee", "#9bbcff", "#f7f7f7", "#ffaa8d", "#e26952", "#b40426"],
 };
+
+/**
+ * Small circular swatch filled with the colormap gradient. Doubles as the
+ * right-click target for colormap / reverse / scale / reset options.
+ * Built as an inline SVG so the gradient definition stays self-contained.
+ */
+function ColormapCircle({ colormap, reversed, size = 14 }: { colormap: string; reversed: boolean; size?: number }) {
+  const paletteQuery = useColormapPalette(colormap, 16);
+  const colors = paletteQuery.data ?? COLORMAP_FALLBACKS[colormap] ?? COLORMAP_FALLBACKS.viridis;
+  const gradientId = useId();
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" className="shrink-0">
+      <defs>
+        <linearGradient id={gradientId} x1={reversed ? "100%" : "0%"} y1="0%" x2={reversed ? "0%" : "100%"} y2="0%">
+          {colors.map((color, i) => (
+            <stop
+              key={`${i}-${color}`}
+              offset={`${colors.length > 1 ? (i / (colors.length - 1)) * 100 : 0}%`}
+              stopColor={color}
+            />
+          ))}
+        </linearGradient>
+      </defs>
+      <circle cx="12" cy="12" r="10" fill={`url(#${gradientId})`} stroke="currentColor" strokeWidth="1" />
+    </svg>
+  );
+}
 
 function formatValue(v: number): string {
   if (Math.abs(v) >= 10000 || (Math.abs(v) < 0.01 && v !== 0)) return v.toExponential(2);
@@ -72,6 +100,13 @@ function ActionButton({ active, disabled, onClick, children }: ActionButtonProps
   );
 }
 
+/**
+ * Dual native <input type="range"> overlaid in the same track. Track is
+ * pointer-events:none on the input element; only the ::-webkit-slider-thumb
+ * (and its Firefox sibling) pick up clicks. This lets each thumb be
+ * independently draggable while sharing the same space, and piggybacks on
+ * the browser's native drag handling — same primitive as PointSizeSlider.
+ */
 export function ContinuousLegend({
   columnName,
   colormap,
@@ -87,186 +122,75 @@ export function ContinuousLegend({
   onScaleChange,
   onResetRange,
 }: Props) {
-  const paletteQuery = useColormapPalette(colormap, 16);
-  const gradientStops = paletteQuery.data
-    ? paletteQuery.data.join(", ")
-    : (COLORMAP_FALLBACKS[colormap] ?? COLORMAP_FALLBACKS.viridis);
-
   const absMin = absoluteVmin ?? vmin;
   const absMax = absoluteVmax ?? vmax;
   const hasRange = absMax > absMin && onRangeChange != null;
+  const span = absMax - absMin;
+  const step = span > 0 ? span / 1000 : 0.001;
 
-  const toFrac = useCallback((v: number) => (absMax > absMin ? (v - absMin) / (absMax - absMin) : 0), [absMin, absMax]);
-  const toVal = useCallback((f: number) => absMin + f * (absMax - absMin), [absMin, absMax]);
-
-  const [localMin, setLocalMin] = useState(() => toFrac(vmin));
-  const [localMax, setLocalMax] = useState(() => toFrac(vmax));
-
-  const localMinRef = useRef(localMin);
-  const localMaxRef = useRef(localMax);
-  const onRangeChangeRef = useRef(onRangeChange);
-  const toValRef = useRef(toVal);
-  localMinRef.current = localMin;
-  localMaxRef.current = localMax;
-  onRangeChangeRef.current = onRangeChange;
-  toValRef.current = toVal;
-
-  const draggingRef = useRef<"min" | "max" | null>(null);
-  const barRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!draggingRef.current) {
-      setLocalMin(toFrac(vmin));
-      setLocalMax(toFrac(vmax));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vmin, vmax, toFrac]);
-
-  const fracFromClientX = useCallback((clientX: number): number => {
-    const bar = barRef.current;
-    if (!bar) return 0;
-    const rect = bar.getBoundingClientRect();
-    return Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-  }, []);
-
-  const startDrag = useCallback(
-    (which: "min" | "max", thumb: HTMLElement, pointerId: number) => {
-      draggingRef.current = which;
-      // Capture pointer to the thumb so moves keep firing even when the
-      // cursor leaves the bar or passes over the sibling thumb / overlays.
-      try {
-        thumb.setPointerCapture(pointerId);
-      } catch {
-        /* ignore — some browsers reject if pointer is gone */
-      }
-
-      function onMove(e: PointerEvent) {
-        if (e.pointerId !== pointerId) return;
-        e.preventDefault();
-        const f = fracFromClientX(e.clientX);
-        if (which === "min") {
-          const next = Math.min(f, localMaxRef.current - 0.01);
-          setLocalMin(next);
-          localMinRef.current = next;
-        } else {
-          const next = Math.max(f, localMinRef.current + 0.01);
-          setLocalMax(next);
-          localMaxRef.current = next;
-        }
-        onRangeChangeRef.current?.(toValRef.current(localMinRef.current), toValRef.current(localMaxRef.current));
-      }
-
-      function cleanup() {
-        draggingRef.current = null;
-        thumb.removeEventListener("pointermove", onMove);
-        thumb.removeEventListener("pointerup", cleanup);
-        thumb.removeEventListener("pointercancel", cleanup);
-        thumb.removeEventListener("lostpointercapture", cleanup);
-      }
-
-      thumb.addEventListener("pointermove", onMove);
-      thumb.addEventListener("pointerup", cleanup);
-      thumb.addEventListener("pointercancel", cleanup);
-      thumb.addEventListener("lostpointercapture", cleanup);
-    },
-    [fracFromClientX],
-  );
-
-  const minPct = `${(localMin * 100).toFixed(1)}%`;
-  const maxPct = `${(localMax * 100).toFixed(1)}%`;
-  const scaleBadge = scale && scale !== "linear" ? (scale === "sqrt" ? "√" : scale) : null;
+  void scale;
 
   return (
-    <div className="absolute top-10 left-2 z-20 w-44 rounded-lg border border-white/[0.07] bg-card/80 p-2.5 backdrop-blur-md">
-      {/* Column name + optional scale badge */}
-      <p className="mb-1.5 flex items-center gap-1 font-mono text-[10px] text-muted-foreground">
-        <span className="flex-1 truncate" title={columnName}>
-          {columnName}
-        </span>
-        {scaleBadge && <span className="shrink-0 text-[9px] text-accent-cyan">{scaleBadge}</span>}
-      </p>
+    <div
+      className="absolute top-10 left-2 z-20 w-52 rounded-lg border border-white/[0.07] bg-card/80 px-2.5 py-2 backdrop-blur-md"
+      title={columnName}
+    >
+      {/* Single row: [colormap circle] [range slider] */}
+      <div className="flex items-center gap-2">
+        <ContextMenu>
+          <ContextMenuTrigger
+            aria-label="Colormap options"
+            className="inline-flex shrink-0 cursor-context-menu items-center text-muted-foreground/70 transition-colors hover:text-foreground focus-visible:outline-none"
+          >
+            <ColormapCircle colormap={colormap} reversed={reversed} />
+          </ContextMenuTrigger>
 
-      {/* Gradient bar — right-click opens colormap/scale context menu */}
-      <ContextMenu>
-        <ContextMenuTrigger>
-          <div ref={barRef} className="relative h-3 w-full cursor-context-menu select-none rounded-sm">
-            {/* Full gradient — scaleX(-1) for reversed display */}
-            <div
-              className="absolute inset-0 rounded-sm"
-              style={{
-                background: `linear-gradient(to right, ${gradientStops})`,
-                transform: reversed ? "scaleX(-1)" : undefined,
-              }}
-            />
+          <ContextMenuContent className="w-60 rounded-lg border border-white/[0.07] bg-card/80 p-2 font-mono shadow-black/20 shadow-lg backdrop-blur-md">
+            <ColormapGrid active={colormap} onSelect={onColormapChange ?? (() => {})} />
 
-            {hasRange && (
-              <>
-                <div className="absolute inset-y-0 left-0 rounded-l-sm bg-black/50" style={{ width: minPct }} />
-                <div
-                  className="absolute inset-y-0 right-0 rounded-r-sm bg-black/50"
-                  style={{ width: `${((1 - localMax) * 100).toFixed(1)}%` }}
-                />
+            <ContextMenuSeparator />
 
-                <button
-                  type="button"
-                  aria-label="Set minimum value"
-                  className="absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 cursor-ew-resize rounded-sm border-2 border-white/90 bg-white/20 shadow hover:bg-white/40 focus-visible:outline-none"
-                  style={{ left: minPct, touchAction: "none" }}
-                  onPointerDown={(e) => {
-                    e.stopPropagation();
-                    e.preventDefault();
-                    startDrag("min", e.currentTarget, e.pointerId);
-                  }}
-                />
-
-                <button
-                  type="button"
-                  aria-label="Set maximum value"
-                  className="absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 cursor-ew-resize rounded-sm border-2 border-white/90 bg-white/20 shadow hover:bg-white/40 focus-visible:outline-none"
-                  style={{ left: maxPct, touchAction: "none" }}
-                  onPointerDown={(e) => {
-                    e.stopPropagation();
-                    e.preventDefault();
-                    startDrag("max", e.currentTarget, e.pointerId);
-                  }}
-                />
-              </>
-            )}
-          </div>
-        </ContextMenuTrigger>
-
-        <ContextMenuContent className="w-60 rounded-lg border border-white/[0.07] bg-card/80 p-2 font-mono shadow-black/20 shadow-lg backdrop-blur-md">
-          <ColormapGrid active={colormap} onSelect={onColormapChange ?? (() => {})} />
-
-          <ContextMenuSeparator />
-
-          {/* Reverse + Reset range */}
-          <div className="flex gap-1 px-1 py-0.5">
-            <ActionButton active={reversed} onClick={() => onReversedChange?.(!reversed)}>
-              ⇄ Reverse
-            </ActionButton>
-            <ActionButton disabled={onResetRange == null} onClick={onResetRange}>
-              ↺ Reset range
-            </ActionButton>
-          </div>
-
-          {/* Scale selector — wired but NOT in query key until backend ships */}
-          {onScaleChange && (
             <div className="flex gap-1 px-1 py-0.5">
-              {(["linear", "log", "sqrt"] as const).map((s) => (
-                <ActionButton key={s} active={scale === s} onClick={() => onScaleChange(s)}>
-                  {s === "sqrt" ? "√" : s}
-                </ActionButton>
-              ))}
+              <ActionButton active={reversed} onClick={() => onReversedChange?.(!reversed)}>
+                ⇄ Reverse
+              </ActionButton>
+              <ActionButton disabled={onResetRange == null} onClick={onResetRange}>
+                ↺ Reset range
+              </ActionButton>
             </div>
-          )}
-        </ContextMenuContent>
-      </ContextMenu>
+
+            {onScaleChange && (
+              <div className="flex gap-1 px-1 py-0.5">
+                {(["linear", "log", "sqrt"] as const).map((s) => (
+                  <ActionButton key={s} active={scale === s} onClick={() => onScaleChange(s)}>
+                    {s === "sqrt" ? "√" : s}
+                  </ActionButton>
+                ))}
+              </div>
+            )}
+          </ContextMenuContent>
+        </ContextMenu>
+
+        {/* shadcn Slider — same component as ChannelControls contrast slider,
+            no wrapping elements that could swallow pointer events. */}
+        {hasRange && (
+          <Slider
+            className="flex-1"
+            min={absMin}
+            max={absMax}
+            step={step}
+            value={[vmin, vmax]}
+            onValueChange={(v) => {
+              if (Array.isArray(v) && v.length === 2) onRangeChange?.(v[0], v[1]);
+            }}
+          />
+        )}
+      </div>
 
       {/* Min / max labels */}
-      <div className="mt-1 flex justify-between font-mono text-[9px] text-muted-foreground/70 tabular-nums">
-        <span>{formatValue(toVal(localMin))}</span>
-        <span>{formatValue(toVal(localMax))}</span>
+      <div className="mt-1 flex justify-between px-0.5 font-mono text-[9px] text-muted-foreground/70 tabular-nums">
+        <span>{formatValue(vmin)}</span>
+        <span>{formatValue(vmax)}</span>
       </div>
     </div>
   );
