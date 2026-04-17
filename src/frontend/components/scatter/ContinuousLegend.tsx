@@ -130,10 +130,19 @@ export function ContinuousLegend({
   }, []);
 
   const startDrag = useCallback(
-    (which: "min" | "max") => {
+    (which: "min" | "max", thumb: HTMLElement, pointerId: number) => {
       draggingRef.current = which;
+      // Capture pointer to the thumb so moves keep firing even when the
+      // cursor leaves the bar or passes over the sibling thumb / overlays.
+      try {
+        thumb.setPointerCapture(pointerId);
+      } catch {
+        /* ignore — some browsers reject if pointer is gone */
+      }
 
       function onMove(e: PointerEvent) {
+        if (e.pointerId !== pointerId) return;
+        e.preventDefault();
         const f = fracFromClientX(e.clientX);
         if (which === "min") {
           const next = Math.min(f, localMaxRef.current - 0.01);
@@ -147,14 +156,18 @@ export function ContinuousLegend({
         onRangeChangeRef.current?.(toValRef.current(localMinRef.current), toValRef.current(localMaxRef.current));
       }
 
-      function onUp() {
+      function cleanup() {
         draggingRef.current = null;
-        window.removeEventListener("pointermove", onMove);
-        window.removeEventListener("pointerup", onUp);
+        thumb.removeEventListener("pointermove", onMove);
+        thumb.removeEventListener("pointerup", cleanup);
+        thumb.removeEventListener("pointercancel", cleanup);
+        thumb.removeEventListener("lostpointercapture", cleanup);
       }
 
-      window.addEventListener("pointermove", onMove);
-      window.addEventListener("pointerup", onUp);
+      thumb.addEventListener("pointermove", onMove);
+      thumb.addEventListener("pointerup", cleanup);
+      thumb.addEventListener("pointercancel", cleanup);
+      thumb.addEventListener("lostpointercapture", cleanup);
     },
     [fracFromClientX],
   );
@@ -202,7 +215,7 @@ export function ContinuousLegend({
                   onPointerDown={(e) => {
                     e.stopPropagation();
                     e.preventDefault();
-                    startDrag("min");
+                    startDrag("min", e.currentTarget, e.pointerId);
                   }}
                 />
 
@@ -214,7 +227,7 @@ export function ContinuousLegend({
                   onPointerDown={(e) => {
                     e.stopPropagation();
                     e.preventDefault();
-                    startDrag("max");
+                    startDrag("max", e.currentTarget, e.pointerId);
                   }}
                 />
               </>
