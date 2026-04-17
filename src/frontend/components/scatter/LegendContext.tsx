@@ -10,6 +10,8 @@ export interface LegendState {
   isolatedIndices: Set<number>;
   colorOverrides: Map<number, string>;
   disabledIndices: Set<number>;
+  /** Name of the named categorical palette (tab10, Paired, glasbey, …). */
+  categoricalColormap: string;
   // Continuous (Phase 2)
   colormapName: string;
   colormapReversed: boolean;
@@ -29,6 +31,8 @@ export interface LegendActions {
   clearDisabled: () => void;
   setColormap: (name: string) => void;
   setColormapReversed: (reversed: boolean) => void;
+  /** Change the named categorical palette (swaps the whole scatter palette). */
+  setCategoricalColormap: (name: string) => void;
   setRange: (range: [number, number]) => void;
   setScale: (scale: "linear" | "log" | "sqrt") => void;
 }
@@ -80,6 +84,10 @@ interface LegendProviderProps {
   selection: Selection;
   table: string;
   categoryCol: string | null;
+  /** Current categorical palette name (owned by useScatterColorState). */
+  categoricalColormap: string;
+  /** Setter for the categorical palette — fires user-explicit flag. */
+  setCategoricalColormap: (name: string) => void;
   /** Called whenever the set of isolated category indices changes. */
   onIsolationChange?: (isolatedIndices: Set<number>) => void;
   /** Called when the __ev__* column is missing from the VIEW (stale after backend restart). */
@@ -93,6 +101,8 @@ export function LegendProvider({
   selection,
   table,
   categoryCol,
+  categoricalColormap,
+  setCategoricalColormap,
   onIsolationChange,
   onStaleColumn,
   children,
@@ -172,12 +182,23 @@ export function LegendProvider({
       isolatedIndices,
       colorOverrides,
       disabledIndices,
+      categoricalColormap,
       colormapName,
       colormapReversed,
       range,
       scale,
     }),
-    [mode, isolatedIndices, colorOverrides, disabledIndices, colormapName, colormapReversed, range, scale],
+    [
+      mode,
+      isolatedIndices,
+      colorOverrides,
+      disabledIndices,
+      categoricalColormap,
+      colormapName,
+      colormapReversed,
+      range,
+      scale,
+    ],
   );
 
   const actions: LegendActions = useMemo(
@@ -191,10 +212,19 @@ export function LegendProvider({
       clearDisabled,
       setColormap: setColormapName,
       setColormapReversed,
+      setCategoricalColormap,
       setRange,
       setScale,
     }),
-    [toggleIsolation, clearIsolation, setColorOverride, clearColorOverride, toggleDisabled, clearDisabled],
+    [
+      toggleIsolation,
+      clearIsolation,
+      setColorOverride,
+      clearColorOverride,
+      toggleDisabled,
+      clearDisabled,
+      setCategoricalColormap,
+    ],
   );
 
   const legend = categoryMapping?.legend ?? EMPTY_LEGEND;

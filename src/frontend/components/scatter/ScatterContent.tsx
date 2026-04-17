@@ -91,8 +91,8 @@ export function ScatterContent({
     colorMode,
     setColorModeOverride,
     colorModeInfo,
-    categoricalColormap: _categoricalColormap,
-    setCategoricalColormap: _setCategoricalColormap,
+    categoricalColormap,
+    setCategoricalColormap,
     continuousColormap,
     setContinuousColormap: _setContinuousColormap,
     maxCategories: _maxCategories,
@@ -219,6 +219,8 @@ export function ScatterContent({
         selection={brushSelection}
         table={table}
         categoryCol={categoryCol}
+        categoricalColormap={categoricalColormap}
+        setCategoricalColormap={setCategoricalColormap}
         onIsolationChange={handleIsolationChange}
         onStaleColumn={clearCategoryMapping}
       >

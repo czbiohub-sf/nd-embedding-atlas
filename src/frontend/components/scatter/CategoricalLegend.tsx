@@ -7,9 +7,11 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { OklchColorPicker } from "@/components/ui/oklch-color-picker";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { OklchColor } from "@/lib/color-conversions";
 import { hexToOklch, oklchToHex } from "@/lib/color-conversions";
 import { cn } from "@/lib/utils";
+import { CategoricalPaletteGrid } from "./CategoricalPaletteGrid";
 import { useLegend } from "./LegendContext";
 import { useLegendCounts } from "./useLegendCounts";
 
@@ -51,8 +53,23 @@ export function CategoricalLegend() {
       ref={containerRef}
       className="absolute top-10 left-2 z-20 w-52 rounded-lg border border-white/[0.07] bg-card/80 font-mono text-[11px] backdrop-blur-md"
     >
-      <div className="px-2.5 pt-2 pb-1 text-[10px] text-text-muted uppercase tracking-wider">
-        Categories · {legend.length}
+      <div className="flex items-center justify-between px-2.5 pt-2 pb-1 text-[10px] text-text-muted uppercase tracking-wider">
+        <span>Categories · {legend.length}</span>
+        <Popover>
+          <PopoverTrigger
+            aria-label="Change palette"
+            title={`Palette · ${state.categoricalColormap}`}
+            className="rounded-sm px-1 py-0.5 font-mono text-[9px] text-muted-foreground/70 normal-case transition-colors hover:bg-white/[0.06] hover:text-foreground focus-visible:outline-none"
+          >
+            {state.categoricalColormap} ▾
+          </PopoverTrigger>
+          <PopoverContent
+            align="end"
+            className="w-60 rounded-lg border border-white/[0.07] bg-card/80 p-2 font-mono shadow-black/20 shadow-lg backdrop-blur-md"
+          >
+            <CategoricalPaletteGrid active={state.categoricalColormap} onSelect={actions.setCategoricalColormap} />
+          </PopoverContent>
+        </Popover>
       </div>
       <div className="max-h-[200px] overflow-y-auto px-2.5 pb-2">
         <div className="flex flex-col gap-0.5">

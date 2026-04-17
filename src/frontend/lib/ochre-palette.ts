@@ -27,7 +27,13 @@ import * as napari from "@/ochre/colormap/catalog/napari";
 import * as observable from "@/ochre/colormap/catalog/observable";
 import * as paraview from "@/ochre/colormap/catalog/paraview";
 import * as seaborn from "@/ochre/colormap/catalog/seaborn";
-import { tab10 as OchreTab10 } from "@/ochre/colormap/catalog/tableau";
+import {
+  tab10 as OchreTab10,
+  tab20 as OchreTab20,
+  tab20b as OchreTab20b,
+  tab20c as OchreTab20c,
+} from "@/ochre/colormap/catalog/tableau";
+import { glasbey as OchreGlasbey } from "@/ochre/colormap/catalog/glasbey";
 import * as tol from "@/ochre/colormap/catalog/tol";
 import * as vispy from "@/ochre/colormap/catalog/vispy";
 import * as yorick from "@/ochre/colormap/catalog/yorick";
@@ -59,6 +65,9 @@ const TABLEAU10_HEX: readonly string[] = [
 const CATEGORICAL_CMAPS: Record<string, DiscreteColormap> = {
   // "tab10" handled separately via TABLEAU10_HEX.
   Category10: OchreTab10,
+  tab20: OchreTab20,
+  tab20b: OchreTab20b,
+  tab20c: OchreTab20c,
   Set1,
   Set2,
   Set3,
@@ -68,6 +77,24 @@ const CATEGORICAL_CMAPS: Record<string, DiscreteColormap> = {
   Pastel1,
   Pastel2,
 };
+
+// glasbey is a LinearColormap rather than discrete; keep a direct reference
+// so resolveColormap / the picker can still look it up by name.
+const GLASBEY_CMAP: LinearColormap = OchreGlasbey;
+
+/**
+ * Pick a reasonable default categorical palette for `n` categories.
+ * - ≤10 → tab10 (Tableau10, widely recognized)
+ * - ≤12 → Paired (qualitative, maximally distinct)
+ * - ≤20 → tab20
+ * - >20 → glasbey (designed for many categories, up to 256)
+ */
+export function pickDefaultCategoricalPalette(n: number): string {
+  if (n <= 10) return "tab10";
+  if (n <= 12) return "Paired";
+  if (n <= 20) return "tab20";
+  return "glasbey";
+}
 
 // ─── Continuous catalog (every ochre linear colormap) ───────────────────────
 // Iterate each source namespace, collect every entry whose kind === "linear".
@@ -122,6 +149,7 @@ const CATEGORICAL_NAMES: readonly string[] = [
   "tab10",
   "Category10",
   ...Object.keys(CATEGORICAL_CMAPS).filter((n) => n !== "Category10"),
+  "glasbey",
 ];
 const CONTINUOUS_NAMES: readonly string[] = Object.keys(CONTINUOUS_CMAPS);
 
@@ -206,6 +234,8 @@ export function getCategoricalPalette(name: string, n: number): string[] {
     out = buildTableau10Palette(n);
   } else if (CATEGORICAL_CMAPS[name]) {
     out = sampleDiscreteCycling(CATEGORICAL_CMAPS[name], n);
+  } else if (name === "glasbey") {
+    out = sampleLinear(GLASBEY_CMAP, n);
   } else if (CONTINUOUS_CMAPS[name]) {
     out = sampleLinear(CONTINUOUS_CMAPS[name], n);
   } else {
@@ -224,5 +254,6 @@ export function getCategoricalPalette(name: string, n: number): string[] {
 export function resolveColormap(name: string): ColorMap | null {
   if (CONTINUOUS_CMAPS[name]) return CONTINUOUS_CMAPS[name];
   if (CATEGORICAL_CMAPS[name]) return CATEGORICAL_CMAPS[name];
+  if (name === "glasbey") return GLASBEY_CMAP;
   return null;
 }

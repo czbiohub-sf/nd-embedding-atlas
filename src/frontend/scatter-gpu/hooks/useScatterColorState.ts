@@ -1,6 +1,6 @@
 import type { Coordinator } from "@uwdata/mosaic-core";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ColorMode } from "../../hooks/useColorMode";
 import { resolveColorMode } from "../../hooks/useColorMode";
 import { useColormapList, useColormapPalette } from "../../hooks/useColormaps";
@@ -8,6 +8,7 @@ import { useColumnTypes } from "../../hooks/useColumnTypes";
 import { type CategoryMapping, makeCategoryColumn } from "../../lib/category-column";
 import { type ColorSource, colorSourceFromString, colorSourceToString } from "../../lib/color-source";
 import { toRows } from "../../lib/mosaic-helpers";
+import { pickDefaultCategoricalPalette } from "../../lib/ochre-palette";
 import type { Metadata } from "../../types";
 
 export interface ScatterColorState {
@@ -65,7 +66,15 @@ export function useScatterColorState(coordinator: Coordinator, metadata: Metadat
   const colorMode: ColorMode = colorModeInfo.mode;
 
   // ── Colormap state ──────────────────────────────────────────────────────────
-  const [categoricalColormap, setCategoricalColormap] = useState("glasbey");
+  // Default is auto-picked per category count on column change (see effect
+  // below). User's explicit pick via setCategoricalColormap is preserved
+  // within a column but reset when the column changes.
+  const [categoricalColormap, setCategoricalColormapInternal] = useState("tab10");
+  const userExplicitPaletteRef = useRef(false);
+  const setCategoricalColormap = (c: string) => {
+    userExplicitPaletteRef.current = true;
+    setCategoricalColormapInternal(c);
+  };
   const [continuousColormap, setContinuousColormap] = useState("viridis");
   const [maxCategories, setMaxCategories] = useState(64);
 
@@ -104,6 +113,21 @@ export function useScatterColorState(coordinator: Coordinator, metadata: Metadat
   // Propagate the discovered category count up so the palette sizes correctly.
   useEffect(() => {
     if (categoryQuery.data?.n != null) setMaxCategories(categoryQuery.data.n);
+  }, [categoryQuery.data?.n]);
+
+  // Reset "user explicit" when the column changes — the next count-derived
+  // auto-pick should take over for a fresh column.
+  useEffect(() => {
+    userExplicitPaletteRef.current = false;
+  }, [colorByColumn]);
+
+  // Auto-pick the default palette based on category count unless the user
+  // has explicitly chosen one for this column.
+  useEffect(() => {
+    if (userExplicitPaletteRef.current) return;
+    const n = categoryQuery.data?.n;
+    if (n == null) return;
+    setCategoricalColormapInternal(pickDefaultCategoricalPalette(n));
   }, [categoryQuery.data?.n]);
 
   // Re-apply palette to existing mapping without touching DuckDB.
