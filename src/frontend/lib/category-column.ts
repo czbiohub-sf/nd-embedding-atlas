@@ -9,7 +9,7 @@
  */
 
 import type { Coordinator } from "@uwdata/mosaic-core";
-import { rebuildDatasetView, toRows } from "./mosaic-helpers";
+import { toRows } from "./mosaic-helpers";
 
 export interface CategoryLegendItem {
   label: string;
@@ -70,8 +70,11 @@ export async function makeCategoryColumn(
   // Build the CASE WHEN expression
   const whenClauses = values.map(({ value }, i) => `WHEN '${value.replace(/'/g, "''")}' THEN ${i}`).join(" ");
 
-  // Add column + update (idempotent via IF NOT EXISTS)
-  // Then rebuild the `dataset` VIEW so DuckDB's cached schema picks up the new column.
+  // Add column + update (idempotent via IF NOT EXISTS).
+  // The server detects ALTER TABLE obs_base ADD COLUMN and calls its own
+  // _rebuildView() afterwards, which rejoins every emb_* and var_* table.
+  // Rebuilding from the frontend here races with the server's state and
+  // can drop var columns the frontend doesn't know about — don't.
   if (!createdColumns.has(indexCol)) {
     await coordinator.exec(`ALTER TABLE obs_base ADD COLUMN IF NOT EXISTS "${indexCol}" INTEGER DEFAULT 0`);
     createdColumns.add(indexCol);
@@ -83,8 +86,6 @@ export async function makeCategoryColumn(
             ELSE (CASE WHEN "${column}" IS NULL THEN ${nullIndex} ELSE ${otherIndex} END)
          END`,
   );
-
-  await rebuildDatasetView(coordinator);
 
   // Build legend — colors are intentionally empty here; the component applies
   // the palette via a useMemo so that re-coloring never re-runs this DB work.
