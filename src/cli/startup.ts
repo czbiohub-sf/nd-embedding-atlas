@@ -11,9 +11,6 @@
  *   7. Handle graceful shutdown
  */
 
-import { unlink } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { open, AnnDataAccessor, toArrowTable } from "../zarr/index.ts";
 import type { Table as FlechetteTable } from "@uwdata/flechette";
 import { EmbeddingStore, DEFAULT_OBSM_PRIORITY } from "../server/store.ts";
@@ -122,38 +119,54 @@ export async function startup(config: ResolvedConfig): Promise<void> {
   }
   const unionColumns = [...allColumnNames];
 
-  // Build EmbeddingStore via init callback
+  // Resolve a DuckDB column type from the Arrow column's type info. Decides
+  // the CREATE TABLE schema. First dataset to carry a column wins the type;
+  // downstream datasets that lack it append NULL.
+  const unionColumnTypes = new Map<string, ReturnType<FlechetteTable["getChild"]>["type"]>();
+  for (const ds of datasetObs) {
+    for (const colName of ds.columnNames) {
+      if (unionColumnTypes.has(colName)) continue;
+      const col = ds.arrowTable.getChild(colName);
+      if (col) unionColumnTypes.set(colName, col.type);
+    }
+  }
+
+  // Build EmbeddingStore via init callback — DuckDB Appender path, no CSV.
+  // Skips the CSV round-trip entirely (was a correctness bug on CxG data with
+  // free-form comma-containing text, and the backlog-flagged perf bottleneck).
   const initStore = async (conn: DuckDBConnection): Promise<void> => {
-    for (let i = 0; i < datasetObs.length; i++) {
-      const { name, arrowTable, columnNames } = datasetObs[i];
+    // CREATE TABLE with explicit column types.
+    const colDefs: string[] = [];
+    if (isMultiDataset) colDefs.push(`"_dataset" VARCHAR`);
+    for (const colName of unionColumns) {
+      const type = unionColumnTypes.get(colName);
+      colDefs.push(`"${colName}" ${arrowTypeToDuckDB(type)}`);
+    }
+    await conn.run(`CREATE TABLE obs_base (${colDefs.join(", ")})`);
 
-      // Write obs as CSV temp file — DuckDB reads CSV natively (no extensions needed)
-      const tmpCsvPath = join(tmpdir(), `ndea_obs_${name}_${Date.now()}.csv`);
-      await Bun.write(tmpCsvPath, arrowTableToCSV(arrowTable));
+    // Append each dataset's rows via the Appender API — typed, no string
+    // serialization, no ambiguity about escaping.
+    for (const { name: datasetName, arrowTable, columnNames } of datasetObs) {
+      const nameSet = new Set(columnNames);
+      const columnRefs = unionColumns.map((n) => (nameSet.has(n) ? arrowTable.getChild(n) : null));
+      const appender = await conn.createAppender("obs_base");
+      const numRows = arrowTable.numRows;
 
-      // Build SELECT with NULL padding for missing columns (multi-dataset alignment)
-      const selectCols = unionColumns
-        .map((col) => (columnNames.includes(col) ? `"${col}"` : `NULL AS "${col}"`))
-        .join(", ");
-
-      if (i === 0) {
-        if (isMultiDataset) {
-          await conn.run(
-            `CREATE TABLE obs_base AS SELECT '${name}' AS _dataset, ${selectCols} FROM read_csv_auto('${tmpCsvPath}')`,
-          );
-        } else {
-          await conn.run(`CREATE TABLE obs_base AS SELECT ${selectCols} FROM read_csv_auto('${tmpCsvPath}')`);
+      for (let r = 0; r < numRows; r++) {
+        if (isMultiDataset) appender.appendVarchar(datasetName);
+        for (let c = 0; c < unionColumns.length; c++) {
+          const col = columnRefs[c];
+          if (col == null) {
+            appender.appendNull();
+            continue;
+          }
+          const val = col.at(r);
+          appendArrowValue(appender, val, col.type);
         }
-      } else {
-        const insertCols = isMultiDataset ? `'${name}' AS _dataset, ${selectCols}` : selectCols;
-        await conn.run(`INSERT INTO obs_base SELECT ${insertCols} FROM read_csv_auto('${tmpCsvPath}')`);
+        appender.endRow();
       }
 
-      try {
-        await unlink(tmpCsvPath);
-      } catch {
-        // best-effort cleanup
-      }
+      appender.closeSync();
     }
   };
 
@@ -326,37 +339,123 @@ async function discoverObsmKeys(accessor: AnnDataAccessor): Promise<string[]> {
 }
 
 /**
- * Convert a flechette Arrow Table to CSV string for DuckDB ingestion.
- * DuckDB reads CSV natively — no extensions needed.
+ * Map a flechette Arrow column type to a DuckDB SQL type.
+ *
+ * typeId values come from @uwdata/flechette's DataType union:
+ *   -1 = Dictionary (AnnData categoricals — `.at()` returns the decoded string)
+ *    1 = Null
+ *    2 = Int (has `bitWidth` + `signed`)
+ *    3 = Float (has `precision`: 0=half, 1=single, 2=double)
+ *    5 = Utf8
+ *    6 = Bool
+ * Anything else falls back to VARCHAR — stringified via `.at()` — so temporal /
+ * list / struct columns remain queryable even if we don't type them precisely.
  */
-function arrowTableToCSV(table: FlechetteTable): string {
-  const names = table.names.map(String);
-  const numRows = table.numRows;
-  const columns = names.map((_name, i) => table.getChildAt(i));
-
-  const lines: string[] = [names.map(csvEscape).join(",")];
-
-  for (let r = 0; r < numRows; r++) {
-    const row: string[] = [];
-    for (let c = 0; c < columns.length; c++) {
-      const val = columns[c]?.at(r);
-      if (val == null) {
-        row.push("");
-      } else {
-        row.push(csvEscape(String(val)));
-      }
+function arrowTypeToDuckDB(type: unknown): string {
+  if (!type || typeof type !== "object") return "VARCHAR";
+  const t = type as { typeId: number; bitWidth?: number; signed?: boolean; precision?: number };
+  switch (t.typeId) {
+    case 1: // Null
+      return "VARCHAR";
+    case 2: {
+      // Integer
+      const width = t.bitWidth ?? 32;
+      const signed = t.signed ?? true;
+      if (width === 8) return signed ? "TINYINT" : "UTINYINT";
+      if (width === 16) return signed ? "SMALLINT" : "USMALLINT";
+      if (width === 32) return signed ? "INTEGER" : "UINTEGER";
+      return signed ? "BIGINT" : "UBIGINT";
     }
-    lines.push(row.join(","));
+    case 3:
+      // Float: precision 2 = f64, 0|1 = f32/f16 (DuckDB has no half → FLOAT)
+      return t.precision === 2 ? "DOUBLE" : "FLOAT";
+    case 5:
+      return "VARCHAR";
+    case 6:
+      return "BOOLEAN";
+    case -1:
+      return "VARCHAR"; // Dictionary-encoded string (AnnData categorical)
+    default:
+      return "VARCHAR";
   }
-
-  return `${lines.join("\n")}\n`;
 }
 
-function csvEscape(val: string): string {
-  if (val.includes(",") || val.includes('"') || val.includes("\n")) {
-    return `"${val.replace(/"/g, '""')}"`;
+/**
+ * Dispatch a single Arrow value to the right DuckDB Appender method based on
+ * the column's type. Null/undefined → appendNull. Unknown types fall back to
+ * VARCHAR via String().
+ */
+interface AppenderLike {
+  appendNull(): void;
+  appendBoolean(v: boolean): void;
+  appendTinyInt(v: number): void;
+  appendSmallInt(v: number): void;
+  appendInteger(v: number): void;
+  appendBigInt(v: bigint): void;
+  appendUTinyInt(v: number): void;
+  appendUSmallInt(v: number): void;
+  appendUInteger(v: number): void;
+  appendUBigInt(v: bigint): void;
+  appendFloat(v: number): void;
+  appendDouble(v: number): void;
+  appendVarchar(v: string): void;
+}
+
+function stringifyPrimitive(val: unknown): string {
+  // AnnData obs values are primitives (Utf8 / Dictionary of Utf8 decode to string
+  // via Column.at(); other types hit the default branch only on schema drift).
+  // JSON.stringify ensures objects don't silently become "[object Object]".
+  if (typeof val === "string") return val;
+  if (typeof val === "number" || typeof val === "bigint" || typeof val === "boolean") return String(val);
+  return JSON.stringify(val) ?? "";
+}
+
+function appendArrowValue(appender: AppenderLike, val: unknown, type: unknown): void {
+  if (val == null) {
+    appender.appendNull();
+    return;
   }
-  return val;
+  if (!type || typeof type !== "object") {
+    appender.appendVarchar(stringifyPrimitive(val));
+    return;
+  }
+  const t = type as { typeId: number; bitWidth?: number; signed?: boolean; precision?: number };
+  switch (t.typeId) {
+    case 1:
+      appender.appendNull();
+      return;
+    case 2: {
+      const width = t.bitWidth ?? 32;
+      const signed = t.signed ?? true;
+      if (width === 64) {
+        // bigint required for BIGINT / UBIGINT
+        const big = typeof val === "bigint" ? val : BigInt(Math.trunc(Number(val)));
+        if (signed) appender.appendBigInt(big);
+        else appender.appendUBigInt(big);
+        return;
+      }
+      const num = typeof val === "bigint" ? Number(val) : Number(val);
+      if (width === 8) (signed ? appender.appendTinyInt : appender.appendUTinyInt).call(appender, num);
+      else if (width === 16) (signed ? appender.appendSmallInt : appender.appendUSmallInt).call(appender, num);
+      else (signed ? appender.appendInteger : appender.appendUInteger).call(appender, num);
+      return;
+    }
+    case 3: {
+      const num = Number(val);
+      if (t.precision === 2) appender.appendDouble(num);
+      else appender.appendFloat(num);
+      return;
+    }
+    case 5:
+    case -1:
+      appender.appendVarchar(stringifyPrimitive(val));
+      return;
+    case 6:
+      appender.appendBoolean(Boolean(val));
+      return;
+    default:
+      appender.appendVarchar(stringifyPrimitive(val));
+  }
 }
 
 /** Read plate metadata for each mount in parallel. */
