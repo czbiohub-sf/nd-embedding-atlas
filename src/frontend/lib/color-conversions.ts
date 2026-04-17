@@ -1,10 +1,6 @@
-import { converter, formatHex, modeOklch, modeRgb, parse, useMode as registerMode } from "culori/fn";
-
-// Register oklch and rgb modes so formatHex can convert oklch → sRGB → hex
-registerMode(modeOklch);
-registerMode(modeRgb);
-
-const toOklch = converter("oklch");
+import { okLchToSrgb, srgbToOkLch } from "@/ochre/color/convert";
+import { srgbFromHex, srgbToHex } from "@/ochre/color/srgb";
+import { ParseColorError } from "@/ochre/color/types";
 
 export interface OklchColor {
   l: number;
@@ -12,13 +8,18 @@ export interface OklchColor {
   h: number;
 }
 
+/** Parse a hex string to OkLch. Returns null on invalid input (parity with the culori-backed API). */
 export function hexToOklch(hex: string): OklchColor | null {
-  const parsed = parse(hex);
-  if (!parsed) return null;
-  const ok = toOklch(parsed);
-  return { l: ok.l, c: ok.c ?? 0, h: ok.h ?? 0 };
+  try {
+    const { l, c, h } = srgbToOkLch(srgbFromHex(hex));
+    return { l, c, h };
+  } catch (err) {
+    if (err instanceof ParseColorError) return null;
+    throw err;
+  }
 }
 
+/** Convert OkLch → #rrggbb. Clamps out-of-gamut colors to sRGB. */
 export function oklchToHex(color: OklchColor): string {
-  return formatHex({ mode: "oklch", l: color.l, c: color.c, h: color.h });
+  return srgbToHex(okLchToSrgb({ l: color.l, c: color.c, h: color.h, alpha: 1 }));
 }
