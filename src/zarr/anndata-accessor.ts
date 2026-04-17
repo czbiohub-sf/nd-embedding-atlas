@@ -171,6 +171,45 @@ export class AnnDataAccessor {
   }
 
   /**
+   * List the embedding keys present under `obsm/`. Uses direct `readdir`
+   * when the store is a local filesystem (the common case for AnnData on
+   * disk); returns `null` when the store has no filesystem path (e.g.
+   * HTTP / in-memory stores), so callers can fall back to a probe list.
+   *
+   * Entries that don't look like zarr arrays/groups (no `.zarray`,
+   * `.zgroup`, or `zarr.json` child) are filtered out so we don't surface
+   * hidden files or unrelated siblings.
+   */
+  async listObsmKeys(): Promise<string[] | null> {
+    if (!this._storePath) return null;
+    const { readdir, stat } = await import("node:fs/promises");
+    const { join } = await import("node:path");
+    const obsmDir = join(this._storePath, "obsm");
+    let entries: string[];
+    try {
+      entries = await readdir(obsmDir);
+    } catch {
+      return [];
+    }
+    const keys: string[] = [];
+    for (const entry of entries) {
+      if (entry.startsWith(".") || entry === "__pycache__") continue;
+      try {
+        const full = join(obsmDir, entry);
+        const s = await stat(full);
+        if (!s.isDirectory()) continue;
+        // Zarr v2 array: .zarray, v2 group: .zgroup, v3: zarr.json
+        const contents = await readdir(full);
+        const isZarr = contents.some((f) => f === ".zarray" || f === ".zgroup" || f === "zarr.json");
+        if (isZarr) keys.push(entry);
+      } catch {
+        /* skip unreadable entries */
+      }
+    }
+    return keys.toSorted();
+  }
+
+  /**
    * Load an obsm embedding by name (e.g. "X_pca", "X_umap").
    * Returns a dense array. Applies obs selection.
    */

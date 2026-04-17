@@ -304,15 +304,18 @@ export async function startup(config: ResolvedConfig): Promise<void> {
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 /**
- * Discover obsm keys by probing the zarr group for known embedding paths.
+ * Discover obsm embedding keys present under the zarr store's `obsm/` group.
  *
- * Since AnnDataAccessor doesn't expose the obsm keys directly,
- * we try loading known embedding names and catch failures.
+ * Prefers filesystem `readdir` via `accessor.listObsmKeys()` — surfaces
+ * arbitrary user-defined embedding names, not just a hardcoded shortlist.
+ * Falls back to probing a common candidate list for stores without a local
+ * filesystem path (e.g. HTTP / in-memory).
  */
 async function discoverObsmKeys(accessor: AnnDataAccessor): Promise<string[]> {
-  const keys: string[] = [];
+  const listed = await accessor.listObsmKeys();
+  if (listed) return listed;
 
-  // Try common embedding keys
+  // Fallback: probe known keys for non-filesystem stores.
   const candidates = [
     "X_umap",
     "X_tsne",
@@ -324,17 +327,15 @@ async function discoverObsmKeys(accessor: AnnDataAccessor): Promise<string[]> {
     "X_harmony",
     "X_scanorama",
   ];
-
+  const keys: string[] = [];
   for (const key of candidates) {
     try {
-      // Just try to access — if it throws, the key doesn't exist
       await accessor.getObsm(key);
       keys.push(key);
     } catch {
-      // Key doesn't exist — skip
+      /* not present */
     }
   }
-
   return keys;
 }
 
