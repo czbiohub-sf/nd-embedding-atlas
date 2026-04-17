@@ -55,10 +55,9 @@ if (!ready) {
   process.exit(1);
 }
 
-// Start frontend dev server
+// Start frontend dev server (root cwd — vite.config.ts is at repo root).
 const frontend = spawn({
-  cmd: ["vp", "dev"],
-  cwd: "frontend",
+  cmd: ["bunx", "vp", "dev"],
   stdout: "inherit",
   stderr: "inherit",
 });
