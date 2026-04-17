@@ -17,9 +17,10 @@ if (args.length === 0) {
   process.exit(1);
 }
 
-// Start backend with --no-static --no-open (frontend dev server handles both)
+// Start backend with --no-static --no-open (frontend dev server handles both).
+// --hot reloads on server source changes without dropping the port listener.
 const backend = spawn({
-  cmd: ["bun", "run", "src/cli/index.ts", ...args, "--no-static", "--no-open"],
+  cmd: ["bun", "--hot", "run", "src/cli/index.ts", ...args, "--no-static", "--no-open"],
   stdout: "inherit",
   stderr: "inherit",
 });

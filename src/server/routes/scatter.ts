@@ -180,7 +180,7 @@ export async function handleScatterContinuousColors(url: URL, store: EmbeddingSt
   }
 
   try {
-    const rows = await store.queryJson(`SELECT "${colorCol}" FROM obs_base ORDER BY __row_index__ ASC`);
+    const rows = await store.queryJson(`SELECT "${colorCol}" FROM dataset ORDER BY __row_index__ ASC`);
 
     const n = rows.length;
     const values = new Float64Array(n);
