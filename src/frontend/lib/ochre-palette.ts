@@ -5,30 +5,33 @@
  * endpoints. Everything is synchronous — ochre's catalog is bundled, and
  * palette generation is tens of µs even at n=256.
  *
- * Import narrowly (named, not `import * as catalog`) so the bundler can
- * tree-shake unused colormap modules.
+ * Continuous colormaps: every linear colormap in ochre's catalog (all
+ * sources — bids, colorbrewer, cmocean, cmasher, colorcet, crameri,
+ * matplotlib, paraview, seaborn, etc.). ~300 names. Categorical is kept
+ * curated since the picker UX shows all entries at once.
  */
 
+import * as bids from "@/ochre/colormap/catalog/bids";
+import * as chrisluts from "@/ochre/colormap/catalog/chrisluts";
+import * as cmasher from "@/ochre/colormap/catalog/cmasher";
+import * as cmocean from "@/ochre/colormap/catalog/cmocean";
+import * as colorbrewer from "@/ochre/colormap/catalog/colorbrewer";
+import * as colorcet from "@/ochre/colormap/catalog/colorcet";
+import * as contrib from "@/ochre/colormap/catalog/contrib";
+import * as crameri from "@/ochre/colormap/catalog/crameri";
+import * as ibm from "@/ochre/colormap/catalog/ibm";
+import * as imagej from "@/ochre/colormap/catalog/imagej";
+import * as matlab from "@/ochre/colormap/catalog/matlab";
+import * as matplotlib from "@/ochre/colormap/catalog/matplotlib";
+import * as napari from "@/ochre/colormap/catalog/napari";
+import * as observable from "@/ochre/colormap/catalog/observable";
+import * as paraview from "@/ochre/colormap/catalog/paraview";
+import * as seaborn from "@/ochre/colormap/catalog/seaborn";
 import { tab10 as OchreTab10 } from "@/ochre/colormap/catalog/tableau";
-import {
-  Accent,
-  Blues,
-  Dark2,
-  Greens,
-  Greys,
-  Oranges,
-  Paired,
-  Pastel1,
-  Pastel2,
-  RdBu,
-  RdYlBu,
-  Reds,
-  Set1,
-  Set2,
-  Set3,
-  Spectral,
-} from "@/ochre/colormap/catalog/colorbrewer";
-import { cividis, coolwarm, inferno, magma, plasma, turbo, viridis } from "@/ochre/colormap/popular";
+import * as tol from "@/ochre/colormap/catalog/tol";
+import * as vispy from "@/ochre/colormap/catalog/vispy";
+import * as yorick from "@/ochre/colormap/catalog/yorick";
+import { Accent, Dark2, Paired, Pastel1, Pastel2, Set1, Set2, Set3 } from "@/ochre/colormap/catalog/colorbrewer";
 import { srgbToHex } from "@/ochre/color/srgb";
 import type { ColorMap, DiscreteColormap, LinearColormap } from "@/ochre/colormap/types";
 
@@ -51,10 +54,10 @@ const TABLEAU10_HEX: readonly string[] = [
   "#BAB0AB",
 ];
 
-// ─── Name → ochre ColorMap ──────────────────────────────────────────────────
+// ─── Categorical catalog (curated) ──────────────────────────────────────────
 
 const CATEGORICAL_CMAPS: Record<string, DiscreteColormap> = {
-  // "tab10" handled separately via TABLEAU10_HEX — see buildCategoricalHex.
+  // "tab10" handled separately via TABLEAU10_HEX.
   Category10: OchreTab10,
   Set1,
   Set2,
@@ -66,23 +69,53 @@ const CATEGORICAL_CMAPS: Record<string, DiscreteColormap> = {
   Pastel2,
 };
 
-const CONTINUOUS_CMAPS: Record<string, LinearColormap> = {
-  viridis,
-  plasma,
-  magma,
-  inferno,
-  cividis,
-  turbo,
-  coolwarm,
-  Greys,
-  Blues,
-  Greens,
-  Oranges,
-  Reds,
-  RdBu,
-  RdYlBu,
-  Spectral,
-};
+// ─── Continuous catalog (every ochre linear colormap) ───────────────────────
+// Iterate each source namespace, collect every entry whose kind === "linear".
+// First source to export a name wins on collisions; duplicates from other
+// sources are prefixed with the source name (e.g. `matplotlib:twilight`).
+
+const CONTINUOUS_SOURCES: (readonly [string, Record<string, unknown>])[] = [
+  // Ordered by preference — earlier sources win on name collision.
+  ["bids", bids],
+  ["colorbrewer", colorbrewer],
+  ["cmocean", cmocean],
+  ["crameri", crameri],
+  ["matplotlib", matplotlib],
+  ["colorcet", colorcet],
+  ["cmasher", cmasher],
+  ["paraview", paraview],
+  ["seaborn", seaborn],
+  ["tol", tol],
+  ["vispy", vispy],
+  ["observable", observable],
+  ["ibm", ibm],
+  ["matlab", matlab],
+  ["napari", napari],
+  ["imagej", imagej],
+  ["yorick", yorick],
+  ["chrisluts", chrisluts],
+  ["contrib", contrib],
+];
+
+function isLinear(value: unknown): value is LinearColormap {
+  return (
+    typeof value === "object" &&
+    (value as { kind?: unknown })?.kind === "linear" &&
+    typeof (value as { map?: unknown }).map === "function"
+  );
+}
+
+const CONTINUOUS_CMAPS: Record<string, LinearColormap> = (() => {
+  const acc: Record<string, LinearColormap> = {};
+  for (const [source, ns] of CONTINUOUS_SOURCES) {
+    for (const [key, value] of Object.entries(ns)) {
+      if (!isLinear(value)) continue;
+      const name = key in acc ? `${source}:${key}` : key;
+      acc[name] = value;
+    }
+  }
+  return acc;
+})();
 
 // Explicit name lists (ordered for picker display).
 const CATEGORICAL_NAMES: readonly string[] = [

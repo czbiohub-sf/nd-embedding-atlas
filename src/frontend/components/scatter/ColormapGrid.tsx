@@ -1,6 +1,7 @@
+import { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
-import { getColormapList } from "../../lib/ochre-palette";
 import { useColormapPalette } from "../../hooks/useColormaps";
+import { getColormapList } from "../../lib/ochre-palette";
 
 interface ColormapSwatchProps {
   name: string;
@@ -23,7 +24,7 @@ function ColormapSwatch({ name, active, onSelect }: ColormapSwatchProps) {
     >
       {/* gradient is computed — inline style is required */}
       <div className="h-2 rounded-sm" style={{ background: gradient }} />
-      <span className="text-center text-[9px] text-muted-foreground leading-none">{name}</span>
+      <span className="truncate text-center text-[9px] text-muted-foreground leading-none">{name}</span>
     </button>
   );
 }
@@ -35,11 +36,39 @@ interface ColormapGridProps {
 
 export function ColormapGrid({ active, onSelect }: ColormapGridProps) {
   const { continuous } = getColormapList();
+  const [query, setQuery] = useState("");
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return continuous;
+    return continuous.filter((name) => name.toLowerCase().includes(q));
+  }, [continuous, query]);
+
   return (
-    <div className="grid max-h-64 grid-cols-2 gap-1 overflow-y-auto pr-1">
-      {continuous.map((name) => (
-        <ColormapSwatch key={name} name={name} active={active === name} onSelect={onSelect} />
-      ))}
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center gap-2 px-0.5">
+        <input
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search colormaps…"
+          className="h-6 w-full rounded-sm border border-white/10 bg-background/40 px-2 font-mono text-[10px] text-foreground placeholder:text-muted-foreground/50 focus:border-white/20 focus:outline-none"
+          autoFocus={false}
+        />
+        <span className="shrink-0 font-mono text-[9px] text-muted-foreground/70 tabular-nums">
+          {filtered.length}/{continuous.length}
+        </span>
+      </div>
+      <div className="grid max-h-64 grid-cols-2 gap-1 overflow-y-auto pr-1">
+        {filtered.map((name) => (
+          <ColormapSwatch key={name} name={name} active={active === name} onSelect={onSelect} />
+        ))}
+        {filtered.length === 0 && (
+          <div className="col-span-2 py-2 text-center font-mono text-[10px] text-muted-foreground/60">
+            No colormaps match “{query}”
+          </div>
+        )}
+      </div>
     </div>
   );
 }
