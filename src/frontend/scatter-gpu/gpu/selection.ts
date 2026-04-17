@@ -38,24 +38,28 @@ export function createSelectionEngine(
 
   // ── PIP kernel ─────────────────────────────────────────────────────────
 
-  // Raw WGSL for the inner dynamic loop (numVerts is runtime, cannot unroll)
-  const pipTest = tgpu.fn([d.vec2f, d.u32], d.bool)`
-    (pt: vec2f, numVerts: u32) -> bool {
-      var c = false;
-      var j = numVerts - 1u;
-      for (var i = 0u; i < numVerts; i++) {
-        let vi = polygon[i];
-        let vj = polygon[j];
-        let b = (vi.y <= pt.y && pt.y < vj.y) || (vj.y <= pt.y && pt.y < vi.y);
-        if (b) {
-          let xd = (vj.x - vi.x) * (pt.y - vi.y) / (vj.y - vi.y) + vi.x;
-          if (pt.x < xd) { c = !c; }
-        }
-        j = i;
+  // Point-in-polygon ray-crossing test. `j` rolls to the previous vertex
+  // each iteration, forming the edge polygon[j] → polygon[i]. std.range(n)
+  // (0.11+) generates the WGSL `for (var i = 0u; i < n; i++)` loop.
+  const pipTest = tgpu.fn(
+    [d.vec2f, d.u32],
+    d.bool,
+  )((pt, numVerts) => {
+    "use gpu";
+    let c = false;
+    let j = numVerts - 1;
+    for (const i of std.range(numVerts)) {
+      const vi = polygonReadonly.$[i];
+      const vj = polygonReadonly.$[j];
+      const b = (vi.y <= pt.y && pt.y < vj.y) || (vj.y <= pt.y && pt.y < vi.y);
+      if (b) {
+        const xd = ((vj.x - vi.x) * (pt.y - vi.y)) / (vj.y - vi.y) + vi.x;
+        if (pt.x < xd) c = !c;
       }
-      return c;
+      j = i;
     }
-  `.$uses({ polygon: polygonReadonly });
+    return c;
+  });
 
   const pipPipeline = root.createGuardedComputePipeline((x: number) => {
     "use gpu";
