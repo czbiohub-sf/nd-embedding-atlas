@@ -235,8 +235,13 @@ export async function createScatterplot(
     console.log(tgpu.resolve([selection.pipComputeFn]));
     console.log("=== Compositor Compute WGSL ===");
     console.log(tgpu.resolve([compositor.compositorFn]));
-    console.log("=== Culling Compute WGSL ===");
-    console.log(tgpu.resolve([culling.cullComputeFn]));
+    if (culling.legacyComputeFn) {
+      console.log("=== Culling Compute WGSL (legacy) ===");
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      console.log(tgpu.resolve([culling.legacyComputeFn as any]));
+    } else {
+      console.log("=== Culling Compute: guarded pipeline (WGSL not dumpable via resolve) ===");
+    }
   }
 
   return {

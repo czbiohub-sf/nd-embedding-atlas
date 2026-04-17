@@ -3,6 +3,8 @@ import * as d from "typegpu/data";
 import type { TgpuRoot } from "../types";
 import type { ScatterBuffers, ScatterUniforms } from "./buffers";
 
+const LEGACY_MODE = typeof location !== "undefined" && new URLSearchParams(location.search).has("scatter-legacy");
+
 /**
  * GPU viewport culling via compute shader.
  *
@@ -10,9 +12,9 @@ import type { ScatterBuffers, ScatterUniforms } from "./buffers";
  * (plus a small margin for point quads). Writes a visibility flag (0 or 1)
  * to a buffer that the vertex shader uses to collapse invisible points.
  *
- * Batch size 4: each thread tests 4 consecutive points, reducing dispatch
- * overhead. Uses tgpu.unroll for compile-time loop unrolling instead of
- * manual WGSL string template building.
+ * Default path (0.11+): guarded compute pipeline, one thread per point.
+ * Legacy path (`?scatter-legacy=1`): BATCH=4 unroll + manual bounds guard,
+ * preserved for rollback during the 0.11 transition.
  */
 export function createCullingEngine(
   root: TgpuRoot,
@@ -24,58 +26,81 @@ export function createCullingEngine(
 ) {
   // Visibility buffer: 1 = visible, 0 = culled
   const visibilityBuffer = root.createBuffer(d.arrayOf(d.u32, numPoints)).$usage("storage", "vertex");
-
   const visibilityLayout = tgpu.vertexLayout((n: number) => d.arrayOf(d.u32, n), "instance");
 
   const posReadonly = buffers.posBuffer.as("readonly");
   const visMutable = visibilityBuffer.as("mutable");
   const { viewUniform } = uniforms;
 
-  // Compile-time constant — tgpu.unroll expands this to 4 explicit blocks
-  const BATCH = [0, 1, 2, 3] as const;
+  const margin = 0.05;
 
-  const cullComputeFn = tgpu
-    .computeFn({
-      workgroupSize: [wgSize],
-      in: { gid: d.builtin.globalInvocationId },
-    })((input) => {
-      "use gpu";
-      const base = input.gid.x * BATCH.length;
-      const view = viewUniform.$;
-      const m = 0.05;
-      const xb = (1.0 + m) * view.w;
-      for (const k of tgpu.unroll(BATCH)) {
-        const idx = base + k;
-        if (idx < numPoints) {
-          const pos = posReadonly.$[idx];
-          const sx = (pos.x + view.x) * view.z;
-          const sy = (pos.y + view.y) * view.z;
-          if (sx >= -xb && sx <= xb && sy >= -(1.0 + m) && sy <= 1.0 + m) {
-            visMutable.$[idx] = 1;
-          } else {
-            visMutable.$[idx] = 0;
+  let dispatchFn: () => void;
+  // Only populated in legacy mode — guarded pipelines don't expose a shell for tgpu.resolve().
+  let legacyComputeFn: unknown = null;
+
+  if (LEGACY_MODE) {
+    const BATCH = [0, 1, 2, 3] as const;
+
+    const legacyFn = tgpu
+      .computeFn({
+        workgroupSize: [wgSize],
+        in: { gid: d.builtin.globalInvocationId },
+      })((input) => {
+        "use gpu";
+        const base = input.gid.x * BATCH.length;
+        const view = viewUniform.$;
+        const xb = (1.0 + margin) * view.w;
+        for (const k of tgpu.unroll(BATCH)) {
+          const idx = base + k;
+          if (idx < numPoints) {
+            const pos = posReadonly.$[idx];
+            const sx = (pos.x + view.x) * view.z;
+            const sy = (pos.y + view.y) * view.z;
+            if (sx >= -xb && sx <= xb && sy >= -(1.0 + margin) && sy <= 1.0 + margin) {
+              visMutable.$[idx] = 1;
+            } else {
+              visMutable.$[idx] = 0;
+            }
           }
         }
+      })
+      .$uses({ posReadonly, visMutable, viewUniform });
+
+    const pipeline = root.createComputePipeline({ compute: legacyFn });
+    const workgroups = Math.ceil(numPoints / (wgSize * BATCH.length));
+    legacyComputeFn = legacyFn;
+    dispatchFn = () => pipeline.dispatchWorkgroups(workgroups);
+  } else {
+    const pipeline = root.createGuardedComputePipeline((x: number) => {
+      "use gpu";
+      const idx = x;
+      const pos = posReadonly.$[idx];
+      const view = viewUniform.$;
+      const xb = (1.0 + margin) * view.w;
+      const sx = (pos.x + view.x) * view.z;
+      const sy = (pos.y + view.y) * view.z;
+      if (sx >= -xb && sx <= xb && sy >= -(1.0 + margin) && sy <= 1.0 + margin) {
+        visMutable.$[idx] = 1;
+      } else {
+        visMutable.$[idx] = 0;
       }
-    })
-    .$uses({ posReadonly, visMutable, viewUniform });
+    });
+    dispatchFn = () => pipeline.dispatchThreads(numPoints);
+  }
 
-  const cullPipeline = root.createComputePipeline({ compute: cullComputeFn });
-
-  const workgroups = Math.ceil(numPoints / (wgSize * BATCH.length));
   let lastViewVersion = -1;
 
   function dispatchCulling(viewVersion = 0) {
     if (viewVersion === lastViewVersion) return;
     lastViewVersion = viewVersion;
-    cullPipeline.dispatchWorkgroups(workgroups);
+    dispatchFn();
   }
 
   return {
     visibilityBuffer,
     visibilityLayout,
     dispatchCulling,
-    cullComputeFn,
+    legacyComputeFn,
     destroy() {
       // TypeGPU buffers are cleaned up by root.destroy()
     },
