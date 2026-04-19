@@ -7,6 +7,20 @@ import type { PanelId } from "../types";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+/**
+ * Mosaic's QueryManager caches query results by raw SQL text. Large-selection
+ * predicates always read the same temp table (__scatter_selection), so the
+ * cache-key string would be identical across different lassos and return stale
+ * counts. Suffixing the predicate with a per-selection tag makes the SQL
+ * unique per lasso — the extra `AND ''=''` is a no-op at execution time.
+ */
+let largeSelectionVersion = 0;
+
+function largeSelectionPredicate(): string {
+  largeSelectionVersion++;
+  return `__row_index__ IN (SELECT row_index FROM __scatter_selection) AND 'v${largeSelectionVersion}' = 'v${largeSelectionVersion}'`;
+}
+
 async function syncLargeSelection(rowIds: number[]): Promise<string | null> {
   if (rowIds.length === 0) {
     await fetch("/api/scatter-selection", { method: "DELETE" }).catch(() => {});
@@ -17,7 +31,7 @@ async function syncLargeSelection(rowIds: number[]): Promise<string | null> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ row_indices: rowIds }),
   }).catch(() => {});
-  return `__row_index__ IN (SELECT row_index FROM __scatter_selection)`;
+  return largeSelectionPredicate();
 }
 
 /**
@@ -25,6 +39,8 @@ async function syncLargeSelection(rowIds: number[]): Promise<string | null> {
  *
  * Small selections (< 5000): `__row_index__ IN (1,2,3,...)`
  * DuckDB converts IN lists to hash sets — much faster than 100K OR clauses.
+ * The inline id list varies per selection, so Mosaic's SQL-text cache key
+ * naturally differs and no version tag is needed here.
  *
  * Large selections (≥ 5000): subquery against the __scatter_selection temp
  * table that is populated via POST /api/scatter-selection before this
@@ -35,7 +51,7 @@ export function buildSelectionPredicate(rowIds: number[]): string | null {
   if (rowIds.length < 5000) {
     return `__row_index__ IN (${rowIds.join(",")})`;
   }
-  return `__row_index__ IN (SELECT row_index FROM __scatter_selection)`;
+  return largeSelectionPredicate();
 }
 
 // ── Hook ──────────────────────────────────────────────────────────────────────
