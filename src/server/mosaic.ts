@@ -18,16 +18,16 @@ import type { EmbeddingStore } from "./store.ts";
  * Mutations the frontend legitimately needs.
  * Checked first — if any matches, the statement is allowed.
  */
-const ALLOWED_MUTATIONS: readonly string[] = [
-  "ALTER TABLE OBS_BASE ADD COLUMN",
-  "UPDATE OBS_BASE SET",
-  "CREATE OR REPLACE VIEW DATASET",
-  // Mosaic pre-aggregation tables
-  "CREATE SCHEMA",
-  "CREATE TABLE",
-  "DROP TABLE IF EXISTS",
-  "DROP SCHEMA",
-];
+/**
+ * Mosaic coordinator + preaggregator emit CREATE SCHEMA / CREATE TABLE /
+ * DROP TABLE IF EXISTS / DROP SCHEMA (for `mosaic.preagg_*` materializations).
+ * Those are the ONLY legitimate mutations flowing through `/data/query`.
+ *
+ * Frontend-driven schema changes (categorical index columns, var materialization)
+ * now go through dedicated REST endpoints (`/api/categorize`, `/api/var-column`)
+ * that use `store.execute()` directly — they don't hit this path.
+ */
+const ALLOWED_MUTATIONS: readonly string[] = ["CREATE SCHEMA", "CREATE TABLE", "DROP TABLE IF EXISTS", "DROP SCHEMA"];
 
 /**
  * Everything else that mutates state is blocked.
@@ -94,20 +94,16 @@ export async function handleMosaicQuery(body: MosaicQuery, store: EmbeddingStore
   }
 
   try {
-    // After ALTER TABLE obs_base ADD COLUMN, the cached dataset VIEW schema
-    // is stale — rebuild it so the new column is visible.
-    const stripped = sql.trim().toUpperCase();
-    const needsRebuild = stripped.startsWith("ALTER TABLE OBS_BASE ADD COLUMN");
-
+    // No VIEW-rebuild hook needed — ALTER TABLE obs_base ADD COLUMN now flows
+    // through /api/categorize and /api/var-column, both of which rebuild the
+    // VIEW explicitly.
     if (command === "exec") {
       await store.execute(sql);
-      if (needsRebuild) await store._rebuildView();
       return Response.json({});
     }
 
     if (command === "arrow") {
       const ipcBytes = await store.queryArrow(sql);
-      if (needsRebuild) await store._rebuildView();
       return new Response(ipcBytes as unknown as BodyInit, {
         headers: { "Content-Type": ARROW_IPC_CONTENT_TYPE },
       });
@@ -115,7 +111,6 @@ export async function handleMosaicQuery(body: MosaicQuery, store: EmbeddingStore
 
     if (command === "json") {
       const rows = await store.queryJson(sql);
-      if (needsRebuild) await store._rebuildView();
       return Response.json(rows);
     }
 

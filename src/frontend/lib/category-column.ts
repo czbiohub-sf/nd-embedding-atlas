@@ -1,15 +1,18 @@
 /**
- * Create an integer category index column in DuckDB for coloring the scatter plot.
+ * Client stub for categorical-index materialization.
  *
- * Mirrors the pattern from embedding-atlas's `category_column.ts`:
- * 1. Query top-N distinct values by count
- * 2. ALTER TABLE obs_base ADD COLUMN __ev_{col}_id INTEGER
- * 3. UPDATE obs_base SET __ev_{col}_id = CASE WHEN col='A' THEN 0 ...
- * 4. The `dataset` VIEW automatically picks up the new column.
+ * The heavy lift (ALTER TABLE / UPDATE / VIEW rebuild + legend computation)
+ * lives server-side at `POST /api/categorize`. This module owns the client
+ * contract + palette colors; nothing else.
+ *
+ * Previously this file called `coordinator.exec(ALTER ...)` + `coordinator.exec(UPDATE ...)`.
+ * Those mutations raced with the server's `_rebuildView()` and forced the Mosaic
+ * SQL allow-list to accept ALTER/UPDATE traffic through `/data/query`. Moving
+ * them server-side removes both problems.
  */
 
 import type { Coordinator } from "@uwdata/mosaic-core";
-import { toRows } from "./mosaic-helpers";
+import type { CategorizeResponse } from "../../protocol/index.ts";
 
 export interface CategoryLegendItem {
   label: string;
@@ -28,103 +31,33 @@ export const NULL_COLOR = "#4b5563";
 
 const DEFAULT_MAX_CATEGORIES = 64;
 
-/**
- * Cache of already-created columns so we don't re-run ALTER TABLE.
- * WeakMap keyed on coordinator instance — automatically cleared when
- * the coordinator is garbage-collected (e.g. on HMR or server restart).
- */
-const createdColumnsCache = new WeakMap<Coordinator, Set<string>>();
-
-function getCreatedColumns(coordinator: Coordinator): Set<string> {
-  let set = createdColumnsCache.get(coordinator);
-  if (!set) {
-    set = new Set();
-    createdColumnsCache.set(coordinator, set);
-  }
-  return set;
-}
-
 export async function makeCategoryColumn(
   coordinator: Coordinator,
   column: string,
   maxCategories: number = DEFAULT_MAX_CATEGORIES,
 ): Promise<CategoryMapping> {
-  const indexCol = `__ev_${column}_id`;
-  const createdColumns = getCreatedColumns(coordinator);
+  // `coordinator` retained in the signature for API stability — the server
+  // owns DuckDB state now, but existing call sites pass it through.
+  void coordinator;
 
-  // Query top categories by count
-  const result = await coordinator.query(
-    `SELECT CAST("${column}" AS TEXT) AS value, COUNT(*) AS count
-         FROM obs_base
-         WHERE CAST("${column}" AS TEXT) IS NOT NULL
-         GROUP BY CAST("${column}" AS TEXT)
-         ORDER BY count DESC
-         LIMIT ${maxCategories}`,
-    { type: "json" },
-  );
-  const values = toRows<{ value: string; count: number }>(result);
-
-  const otherIndex = values.length;
-  const nullIndex = values.length + 1;
-
-  // Build the CASE WHEN expression
-  const whenClauses = values.map(({ value }, i) => `WHEN '${value.replace(/'/g, "''")}' THEN ${i}`).join(" ");
-
-  // Add column + update (idempotent via IF NOT EXISTS).
-  // The server detects ALTER TABLE obs_base ADD COLUMN and calls its own
-  // _rebuildView() afterwards, which rejoins every emb_* and var_* table.
-  // Rebuilding from the frontend here races with the server's state and
-  // can drop var columns the frontend doesn't know about — don't.
-  if (!createdColumns.has(indexCol)) {
-    await coordinator.exec(`ALTER TABLE obs_base ADD COLUMN IF NOT EXISTS "${indexCol}" INTEGER DEFAULT 0`);
-    createdColumns.add(indexCol);
+  const res = await fetch("/api/categorize", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ column, maxCategories }),
+  });
+  if (!res.ok) {
+    throw new Error(`categorize failed: ${res.status} ${await res.text()}`);
   }
+  const body = (await res.json()) as CategorizeResponse;
 
-  await coordinator.exec(
-    `UPDATE obs_base SET "${indexCol}" = CASE CAST("${column}" AS TEXT)
-            ${whenClauses}
-            ELSE (CASE WHEN "${column}" IS NULL THEN ${nullIndex} ELSE ${otherIndex} END)
-         END`,
-  );
+  const legend: CategoryLegendItem[] = body.legend.map((item) => {
+    // Colors applied by the UI layer (useMemo picks a palette). For the
+    // reserved (other) / (null) buckets, the color is fixed.
+    let color = "";
+    if (item.index === body.otherIndex) color = OTHER_COLOR;
+    if (item.index === body.nullIndex) color = NULL_COLOR;
+    return { label: item.label, color, index: item.index, count: item.count };
+  });
 
-  // Build legend — colors are intentionally empty here; the component applies
-  // the palette via a useMemo so that re-coloring never re-runs this DB work.
-  const legend: CategoryLegendItem[] = values.map(({ value, count }, i) => ({
-    label: value,
-    color: "",
-    index: i,
-    count,
-  }));
-
-  // Query other/null counts
-  const countResult = await coordinator.query(
-    `SELECT "${indexCol}" AS idx, COUNT(*)::INT AS cnt
-         FROM obs_base GROUP BY "${indexCol}"`,
-    { type: "json" },
-  );
-  const counts = toRows<{ idx: number; cnt: number }>(countResult);
-
-  const countMap = new Map(counts.map((r) => [r.idx, r.cnt]));
-
-  const otherCount = countMap.get(otherIndex) ?? 0;
-  if (otherCount > 0) {
-    legend.push({
-      label: `(other)`,
-      color: OTHER_COLOR,
-      index: otherIndex,
-      count: otherCount,
-    });
-  }
-
-  const nullCount = countMap.get(nullIndex) ?? 0;
-  if (nullCount > 0) {
-    legend.push({
-      label: "(null)",
-      color: NULL_COLOR,
-      index: nullIndex,
-      count: nullCount,
-    });
-  }
-
-  return { indexColumn: indexCol, legend };
+  return { indexColumn: body.indexColumn, legend };
 }

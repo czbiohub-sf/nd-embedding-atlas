@@ -87,6 +87,26 @@ export const VarColumnBodySchema = z.object({
 });
 export type VarColumnBody = z.infer<typeof VarColumnBodySchema>;
 
+export const CategorizeBodySchema = z.object({
+  column: z.string().min(1),
+  maxCategories: z.number().int().positive().max(1024).optional(),
+});
+export type CategorizeBody = z.infer<typeof CategorizeBodySchema>;
+
+export const CategoryLegendItemSchema = z.object({
+  label: z.string(),
+  index: z.number().int().nonnegative(),
+  count: z.number().int().nonnegative(),
+});
+export const CategorizeResponseSchema = z.object({
+  indexColumn: z.string(),
+  legend: z.array(CategoryLegendItemSchema),
+  otherIndex: z.number().int().nonnegative(),
+  nullIndex: z.number().int().nonnegative(),
+});
+export type CategoryLegendItem = z.infer<typeof CategoryLegendItemSchema>;
+export type CategorizeResponse = z.infer<typeof CategorizeResponseSchema>;
+
 // ─── Response schemas ──────────────────────────────────────────────────────
 
 /** Embedding status response. */

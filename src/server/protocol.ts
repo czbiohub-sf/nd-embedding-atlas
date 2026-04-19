@@ -10,6 +10,7 @@
 import type { z } from "zod";
 
 export {
+  CategorizeBodySchema,
   CropBodySchema,
   CropChannelSchema,
   CreateObsSetBodySchema,
@@ -20,6 +21,9 @@ export {
   ScatterSelectionBodySchema,
 } from "../protocol/index.ts";
 export type {
+  CategorizeBody,
+  CategorizeResponse,
+  CategoryLegendItem,
   ConfigRes,
   CreateObsSetBody,
   CropBody,
