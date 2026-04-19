@@ -5,13 +5,16 @@
  * to source 5D (TCZYX) image data.
  */
 
-// Re-export the axial zarr I/O surface actually consumed by callers.
-export { open, AnnDataAccessor, toArrowTable } from "./zarr/index.ts";
+// Re-export the zarr I/O surface actually consumed by callers.
+export { open, AnnData, toArrowTable } from "./zarr/index.ts";
 export type {
   AnnDataFrame,
   ColumnData,
   CategoricalArray,
   NullableArray,
   SparseArray,
-  ZarrConfig,
+  ParsedStore,
+  ParsedAnnData,
+  ParsedMuData,
+  ParsedOmeZarr,
 } from "./zarr/index.ts";
