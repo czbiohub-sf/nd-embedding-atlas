@@ -1,42 +1,37 @@
+/**
+ * Open a zarr store and detect its convention.
+ *
+ * Local filesystem paths use BunFileStore + parallel-worker reads (42x
+ * speed-up on large stores). HTTP(S) URLs use zarrita's FetchStore.
+ *
+ * Returns a `ParsedStore` discriminated by `kind`. Callers branch:
+ *
+ *   const parsed = await open("./data.zarr");
+ *   if (parsed.kind === "anndata") { ... }
+ */
+
 import * as zarr from "zarrita";
 import type { Readable } from "zarrita";
-import FileSystemStore from "@zarrita/storage/fs";
-import type { Convention, DataTree, ZarrConfig } from "./types.ts";
-import { detectOmeZarr } from "./ome-zarr.ts";
-import { detectAnnData } from "./anndata.ts";
-import { detectMuData } from "./mudata.ts";
+import { BunFileStore } from "./bun-store.ts";
+import { asReadable } from "./zarr-boundary.ts";
+import type { ParsedStore } from "./types.ts";
+import { detectOmeZarr, parseOmeZarr } from "./ome-zarr.ts";
+import { detectAnnData, parseAnnData } from "./anndata.ts";
+import { detectMuData, parseMuData } from "./mudata.ts";
 
-export interface OpenOptions {
-  /** Override convention detection. */
-  convention?: "ome-zarr" | "anndata" | "mudata";
-  /** Configuration overrides. */
-  config?: Partial<ZarrConfig>;
-}
+type ZarrGroup = zarr.Group<Readable>;
 
-const CONVENTIONS: Convention[] = [detectOmeZarr, detectMuData, detectAnnData];
+/** Detector + parser pairs, probed in order. First `detect()` win parses. */
+const CONVENTIONS: readonly {
+  detect: (attrs: Record<string, unknown>) => boolean;
+  parse: (group: ZarrGroup, storePath?: string) => Promise<ParsedStore>;
+}[] = [
+  { detect: detectOmeZarr, parse: parseOmeZarr },
+  { detect: detectMuData, parse: parseMuData },
+  { detect: detectAnnData, parse: parseAnnData },
+];
 
-/**
- * Open a Zarr store and auto-detect its convention.
- *
- * Local filesystem paths use parallel worker reads (42x faster for large datasets).
- * HTTP/HTTPS URLs use FetchStore with sequential reads.
- *
- * @param location - Path to local Zarr store, or URL for remote.
- * @param options - Optional overrides.
- * @returns A DataTree representing the store hierarchy.
- *
- * @example
- * ```ts
- * import { open } from "axial";
- *
- * const tree = await open("./experiment.zarr");        // local, parallel
- * const remote = await open("https://s3.../data.zarr"); // remote, sequential
- * ```
- */
-export async function open(location: string | Readable, options?: OpenOptions): Promise<DataTree> {
-  void options?.config;
-
-  // Resolve store + detect if local filesystem
+export async function open(location: string | Readable): Promise<ParsedStore> {
   let store: Readable;
   let storePath: string | undefined;
 
@@ -45,34 +40,23 @@ export async function open(location: string | Readable, options?: OpenOptions): 
     if (isRemote) {
       store = new zarr.FetchStore(location);
     } else {
-      store = new FileSystemStore(location);
-      storePath = location; // enables parallel worker reads
+      store = asReadable(new BunFileStore(location));
+      storePath = location;
     }
   } else {
     store = location;
   }
 
-  // Open root group
   const root = await zarr.open(store, { kind: "group" });
   const rootAttrs = (root.attrs ?? {}) as Record<string, unknown>;
 
-  // Convention detection
-  if (options?.convention) {
-    const conv = CONVENTIONS.find((c) => c.name === options.convention);
-    if (!conv) throw new Error(`Unknown convention: ${options.convention}`);
-    return conv.parse(root, storePath);
-  }
-
   for (const conv of CONVENTIONS) {
-    if (conv.detect(rootAttrs)) {
-      return conv.parse(root, storePath);
-    }
+    if (conv.detect(rootAttrs)) return conv.parse(root, storePath);
   }
 
   throw new Error(
-    "Could not detect Zarr store convention. " +
-      "Expected OME-Zarr (multiscales), AnnData (encoding-type: anndata), " +
-      "or MuData (encoding-type: MuData). " +
+    "Unknown zarr convention. Expected OME-Zarr (multiscales), AnnData " +
+      "(encoding-type: anndata), or MuData (encoding-type: MuData). " +
       `Root attrs: ${JSON.stringify(Object.keys(rootAttrs))}`,
   );
 }

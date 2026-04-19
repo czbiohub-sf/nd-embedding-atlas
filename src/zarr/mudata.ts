@@ -1,154 +1,107 @@
+/**
+ * MuData convention detector + parser.
+ *
+ * Detects: root `.zattrs` has `"encoding-type": "MuData"`.
+ * Structure:
+ *   mod/<name>/   — each is a full AnnData
+ *   obs/, var/    — shared annotations across modalities
+ *   obsmap/       — integer maps from shared obs-axis to per-modality rows
+ *
+ * Returns a `ParsedMuData`. Phase E (obsmap-driven slicing) will wire the
+ * `modalities` map into the `AnnData` class; today it's read + exposed only.
+ */
+
 import * as zarr from "zarrita";
 import type { Readable } from "zarrita";
-import type { AnnDataFrame, Convention, DataTree } from "./types.ts";
-import { SimpleDataTree } from "./data-tree.ts";
-import { SimpleCoordSet, SimpleCoordArray } from "./coord-set.ts";
-import { detectAnnData } from "./anndata.ts";
+import type { AnnDataFrame, ParsedAnnData, ParsedMuData } from "./types.ts";
+import { parseAnnData } from "./anndata.ts";
 import { readDataFrame } from "./encoding-readers.ts";
 
 type ZarrGroup = zarr.Group<Readable>;
 
-/**
- * MuData convention parser.
- *
- * Detects: root .zattrs has "encoding-type": "MuData".
- * Structure:
- *   mod/<name>/  — each is a full AnnData subtree
- *   obs/, var/   — shared annotations across modalities
- *   obsmap/, varmap/ — integer index mappings (shared ↔ per-modality)
- *   obsm/, varm/ — includes boolean masks linking shared to modality-specific
- */
-export const detectMuData: Convention = {
-  name: "mudata",
+export function detectMuData(rootAttrs: Record<string, unknown>): boolean {
+  return rootAttrs["encoding-type"] === "MuData";
+}
 
-  detect(rootAttrs: Record<string, unknown>): boolean {
-    return rootAttrs["encoding-type"] === "MuData";
-  },
+export async function parseMuData(group: ZarrGroup, storePath?: string): Promise<ParsedMuData> {
+  const attrs = (group.attrs ?? {}) as Record<string, unknown>;
 
-  async parse(group: unknown, storePath?: string): Promise<DataTree> {
-    const g = group as ZarrGroup;
-    const attrs = (g.attrs ?? {}) as Record<string, unknown>;
+  const sharedObs = await readSharedAxis(group, "obs");
+  const sharedVar = await readSharedAxis(group, "var");
 
-    // Parse shared obs/var DataFrames
-    let sharedObs: AnnDataFrame | undefined;
-    let sharedVar: AnnDataFrame | undefined;
-
-    try {
-      const obsGroup = await zarr.open(g.resolve("obs"), { kind: "group" });
-      sharedObs = await readDataFrame(obsGroup as unknown as Parameters<typeof readDataFrame>[0]);
-    } catch {
-      // Shared obs may be minimal or missing
-    }
-
-    try {
-      const varGroup = await zarr.open(g.resolve("var"), { kind: "group" });
-      sharedVar = await readDataFrame(varGroup as unknown as Parameters<typeof readDataFrame>[0]);
-    } catch {
-      // Shared var may be minimal
-    }
-
-    // Build shared coords
-    const coords: SimpleCoordArray[] = [];
-    if (sharedObs) {
-      coords.push(
-        new SimpleCoordArray(
-          "obs",
-          Array.isArray(sharedObs.index) ? sharedObs.index : Array.from(sharedObs.index),
-          "string",
-          { source: "shared_obs._index" },
-        ),
-      );
-    }
-    const coordSet = new SimpleCoordSet(coords);
-
-    // Build root dataset with shared obs/var
-    const rootDataset: Record<string, unknown> & {
-      data_vars: Map<string, unknown>;
-      coords: typeof coordSet;
-      attrs: Record<string, unknown>;
-      obs?: AnnDataFrame;
-      var?: AnnDataFrame;
-      [Symbol.asyncDispose]: () => Promise<void>;
-    } = {
-      data_vars: new Map<string, unknown>(),
-      coords: coordSet,
-      attrs,
-      obs: sharedObs,
-      var: sharedVar,
-      async [Symbol.asyncDispose]() {},
-    };
-
-    const root = new SimpleDataTree("", { dataset: rootDataset, attrs });
-
-    // Parse modalities from mod/ group
-    try {
-      const modGroup = await zarr.open(g.resolve("mod"), { kind: "group" });
-
-      // Try known modality names from fixture or discover by listing
-      // zarrita doesn't have a list-children API, so we try to detect modalities
-      // from the consolidated metadata or by probing
-      const modNames = await discoverModalities(g);
-
-      for (const modName of modNames) {
-        try {
-          const modLocation = modGroup.resolve(modName);
-          const modZarrGroup = await zarr.open(modLocation, { kind: "group" });
-          const modAttrs = (modZarrGroup.attrs ?? {}) as Record<string, unknown>;
-
-          // Each modality is a full AnnData
-          if (modAttrs["encoding-type"] === "anndata") {
-            const modStorePath = storePath ? `${storePath}/mod/${modName}` : undefined;
-            const modTree = await detectAnnData.parse(modZarrGroup, modStorePath);
-
-            // Wrap as child of root
-            const child = new SimpleDataTree(modName, {
-              dataset: modTree.dataset,
-              attrs: modAttrs,
-              parent: root,
-            });
-            root.addChild(child);
-          }
-        } catch (e) {
-          console.warn(`Failed to parse modality "${modName}":`, e);
-        }
+  const modalities = new Map<string, ParsedAnnData>();
+  const modNames = await discoverModalities(group, storePath);
+  const modGroup = await tryOpenGroup(group, "mod");
+  if (modGroup) {
+    for (const modName of modNames) {
+      try {
+        const modZarrGroup = await zarr.open(modGroup.resolve(modName), { kind: "group" });
+        const modAttrs = (modZarrGroup.attrs ?? {}) as Record<string, unknown>;
+        if (modAttrs["encoding-type"] !== "anndata") continue;
+        const modStorePath = storePath ? `${storePath}/mod/${modName}` : undefined;
+        modalities.set(modName, await parseAnnData(modZarrGroup, modStorePath));
+      } catch (e) {
+        console.warn(`MuData: failed to parse modality "${modName}":`, e);
       }
-    } catch {
-      console.warn("No mod/ group found in MuData store");
     }
+  }
 
-    // Parse obsmap/varmap (integer index mappings)
-    try {
-      const obsmapGroup = await zarr.open(g.resolve("obsmap"), { kind: "group" });
-      const modNames = [...root.children.keys()];
-      for (const modName of modNames) {
-        try {
-          const arr = await zarr.open(obsmapGroup.resolve(modName), {
-            kind: "array",
-          });
-          const data = await zarr.get(arr);
-          // Store obsmap on root dataset for access
-          rootDataset[`obsmap_${modName}`] = data.data;
-        } catch {
-          // obsmap entry may not exist for all modalities
+  const obsmap = new Map<string, Int32Array | Uint32Array>();
+  const obsmapGroup = await tryOpenGroup(group, "obsmap");
+  if (obsmapGroup) {
+    for (const modName of modalities.keys()) {
+      try {
+        const arr = await zarr.open(obsmapGroup.resolve(modName), { kind: "array" });
+        const result = await zarr.get(arr);
+        const data = result.data;
+        if (data instanceof Int32Array || data instanceof Uint32Array) {
+          obsmap.set(modName, data);
         }
+      } catch {
+        // obsmap entry may not exist for all modalities.
       }
-    } catch {
-      // No obsmap
     }
+  }
 
-    return root;
-  },
-};
+  return {
+    kind: "mudata",
+    obs: sharedObs,
+    var: sharedVar,
+    attrs,
+    group,
+    storePath,
+    modalities,
+    obsmap,
+  };
+}
+
+async function readSharedAxis(group: ZarrGroup, axis: "obs" | "var"): Promise<AnnDataFrame | undefined> {
+  try {
+    const g = await zarr.open(group.resolve(axis), { kind: "group" });
+    return await readDataFrame(g as unknown as Parameters<typeof readDataFrame>[0]);
+  } catch {
+    return undefined;
+  }
+}
+
+async function tryOpenGroup(parent: ZarrGroup, name: string): Promise<ZarrGroup | undefined> {
+  try {
+    return await zarr.open(parent.resolve(name), { kind: "group" });
+  } catch {
+    return undefined;
+  }
+}
 
 /**
- * Discover modality names in a MuData store.
- * zarrita has no list-children API, so we check consolidated metadata
- * or probe the filesystem.
+ * zarrita has no list-children API. Probe in order:
+ *   1. consolidated metadata in root or mod/ group
+ *   2. filesystem readdir on mod/ (local stores only)
+ *   3. hardcoded common modality names (rna, atac, protein, …)
  */
-async function discoverModalities(rootGroup: ZarrGroup): Promise<string[]> {
-  // Strategy 1: Check consolidated metadata (zarr v3 has it in zarr.json)
+async function discoverModalities(rootGroup: ZarrGroup, storePath: string | undefined): Promise<string[]> {
   const rootAttrs = (rootGroup.attrs ?? {}) as Record<string, unknown>;
   type ConsolidatedShape = { metadata?: Record<string, unknown> };
+
   const rootConsolidated = rootAttrs.consolidated_metadata as
     | { metadata?: { mod?: { consolidated_metadata?: ConsolidatedShape } } }
     | undefined;
@@ -157,41 +110,31 @@ async function discoverModalities(rootGroup: ZarrGroup): Promise<string[]> {
     return Object.keys(consolidated);
   }
 
-  // Strategy 2: Try to read the mod/ group's consolidated metadata
-  try {
-    const modGroup = await zarr.open(rootGroup.resolve("mod"), { kind: "group" });
+  const modGroup = await tryOpenGroup(rootGroup, "mod");
+  if (modGroup) {
     const modAttrs = (modGroup.attrs ?? {}) as Record<string, unknown>;
-    // Some stores list children in attrs
     if (modAttrs.consolidated_metadata) {
-      const modConsolidated = modAttrs.consolidated_metadata as ConsolidatedShape;
-      const meta = modConsolidated.metadata;
-      if (meta && typeof meta === "object") {
-        return Object.keys(meta);
-      }
+      const meta = (modAttrs.consolidated_metadata as ConsolidatedShape).metadata;
+      if (meta && typeof meta === "object") return Object.keys(meta);
     }
-  } catch {
-    // No consolidated metadata
   }
 
-  // Strategy 3: For filesystem stores, list the directory
-  try {
-    const storeRoot = (rootGroup as unknown as { store?: { root?: string } }).store?.root;
-    if (storeRoot) {
+  if (storePath) {
+    try {
       const fs = await import("node:fs");
       const path = await import("node:path");
-      const modDir = path.join(storeRoot, "mod");
+      const modDir = path.join(storePath, "mod");
       if (fs.existsSync(modDir)) {
-        return fs.readdirSync(modDir).filter((entry: string) => {
+        return fs.readdirSync(modDir).filter((entry) => {
           const full = path.join(modDir, entry);
           return fs.statSync(full).isDirectory() && !entry.startsWith(".");
         });
       }
+    } catch {
+      /* not a filesystem store or no mod/ dir */
     }
-  } catch {
-    // Not a filesystem store
   }
 
-  // Strategy 4: Probe common modality names
   const common = ["rna", "atac", "protein", "cite", "spatial", "adt", "hto"];
   const found: string[] = [];
   for (const name of common) {
@@ -199,7 +142,7 @@ async function discoverModalities(rootGroup: ZarrGroup): Promise<string[]> {
       await zarr.open(rootGroup.resolve(`mod/${name}`), { kind: "group" });
       found.push(name);
     } catch {
-      // Not present
+      /* not present */
     }
   }
   return found;

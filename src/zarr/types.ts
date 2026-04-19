@@ -1,18 +1,17 @@
 /**
  * Core types for the vendored zarr reader.
  *
- * Originally the public type surface of a planned standalone library ("axial"); now
- * trimmed to exactly what nd-embedding-atlas consumes — the AnnData/MuData/OME-Zarr
- * parsing pipeline plus the Arrow-conversion surface exposed to the server.
+ * Trimmed to exactly what nd-embedding-atlas consumes:
+ *   - AnnData / MuData / OME-Zarr detection + parsed-store results
+ *   - Column-level value types for obs/var DataFrames
+ *   - Sparse matrix shape for X / layers
+ *
+ * Consumers branch on `ParsedStore.kind` for convention-specific handling.
  */
 
-// ---------------------------------------------------------------------------
-// Primitive aliases
-// ---------------------------------------------------------------------------
+// ─── Primitive aliases ──────────────────────────────────────────────────────
 
-export type DimName = string;
-
-/** Scalar values that can appear in a coord array, categorical, or nullable column. */
+/** Scalar values appearing inside DataFrame columns. */
 export type Scalar = number | string | bigint | boolean;
 
 /** Zarr dtypes we round-trip through this reader. */
@@ -31,50 +30,11 @@ export type Dtype =
   | "string"
   | "object";
 
-// ---------------------------------------------------------------------------
-// Slice — used by CoordArray.labelSlice
-// ---------------------------------------------------------------------------
-
-export interface Slice {
-  readonly start?: number;
-  readonly stop?: number;
-  readonly step?: number;
-}
-
-// ---------------------------------------------------------------------------
-// Coordinate types
-// ---------------------------------------------------------------------------
-
-export interface CoordArray {
-  readonly dim: DimName;
-  readonly values: ArrayLike<Scalar>;
-  readonly dtype: Dtype;
-  readonly attrs: Record<string, unknown>;
-  readonly length: number;
-
-  indexOf(label: Scalar): number;
-  labelSlice(start: Scalar, stop: Scalar): Slice;
-
-  [Symbol.iterator](): Iterator<Scalar>;
-}
-
-export interface CoordSet extends Iterable<CoordArray> {
-  get(dim: DimName): CoordArray | undefined;
-  has(dim: DimName): boolean;
-  dims(): DimName[];
-  readonly size: number;
-
-  [Symbol.iterator](): Iterator<CoordArray>;
-}
-
-// ---------------------------------------------------------------------------
-// AnnData encoding types
-// ---------------------------------------------------------------------------
+// ─── AnnData encoding types ─────────────────────────────────────────────────
 
 /**
- * Discriminator tag found on `encoding-type` attrs in AnnData/MuData stores.
- * We only match the values actually encountered by our readers; unknown values
- * fall through to plain-array handling.
+ * `encoding-type` attrs on AnnData / MuData stores. We match only the values
+ * actually encountered; unknown values fall through to plain-array handling.
  */
 export type EncodingType =
   | "anndata"
@@ -111,7 +71,7 @@ export interface NullableArray extends Iterable<Scalar | null> {
   [Symbol.iterator](): Iterator<Scalar | null>;
 }
 
-/** Sparse CSR/CSC matrix from AnnData X or layers. */
+/** CSR / CSC sparse matrix (X, layers). */
 export interface SparseArray {
   readonly shape: readonly [number, number];
   readonly format: "csr" | "csc";
@@ -132,7 +92,7 @@ export interface SparseArray {
   }>;
 }
 
-/** Union of all column representations inside an AnnDataFrame. */
+/** Every representation a DataFrame column can take. */
 export type ColumnData =
   | Float32Array
   | Float64Array
@@ -148,6 +108,12 @@ export type ColumnData =
   | CategoricalArray
   | NullableArray;
 
+/**
+ * Column-oriented DataFrame shape — the natural output of `readDataFrame`.
+ *
+ * Not exported as the public API — consumers see `DataFrame` from
+ * `./data-frame.ts` which wraps this with a stable indexed-access surface.
+ */
 export interface AnnDataFrame extends Iterable<Record<string, Scalar | null>> {
   readonly index: string[] | Int32Array;
   readonly columns: ReadonlyMap<string, ColumnData>;
@@ -156,64 +122,38 @@ export interface AnnDataFrame extends Iterable<Record<string, Scalar | null>> {
   [Symbol.iterator](): Iterator<Record<string, Scalar | null>>;
 }
 
-// ---------------------------------------------------------------------------
-// Dataset & DataTree
-// ---------------------------------------------------------------------------
+// ─── ParsedStore — discriminated result of open() ───────────────────────────
 
-/**
- * Collection of lazy data_vars + coords. Convention parsers populate this;
- * the server consumes it via `AnnDataAccessor` which treats `data_vars`
- * entries as opaque lazy handles.
- */
-export interface Dataset extends AsyncDisposable {
-  readonly data_vars: ReadonlyMap<string, unknown>;
-  readonly coords: CoordSet;
+/** Opaque zarrita Group handle. Parsers hold it; public classes don't expose it. */
+export type ZarrGroupHandle = unknown;
+
+export interface ParsedAnnData {
+  readonly kind: "anndata";
+  readonly obs: AnnDataFrame | undefined;
+  readonly var: AnnDataFrame | undefined;
   readonly attrs: Record<string, unknown>;
-
-  [Symbol.asyncDispose](): Promise<void>;
+  readonly group: ZarrGroupHandle;
+  readonly storePath: string | undefined;
 }
 
-/** Hierarchical dataset (mirrors xarray's DataTree). */
-export interface DataTree extends AsyncDisposable {
-  readonly name: string;
-  readonly dataset: Dataset | undefined;
-  readonly children: ReadonlyMap<string, DataTree>;
+export interface ParsedMuData {
+  readonly kind: "mudata";
+  readonly obs: AnnDataFrame | undefined;
+  readonly var: AnnDataFrame | undefined;
   readonly attrs: Record<string, unknown>;
-  readonly parent: DataTree | undefined;
-
-  get(path: string): DataTree | undefined;
-  paths(): string[];
-  datasets(): Map<string, Dataset>;
-
-  [Symbol.iterator](): Iterator<DataTree>;
-  [Symbol.asyncDispose](): Promise<void>;
+  readonly group: ZarrGroupHandle;
+  readonly storePath: string | undefined;
+  readonly modalities: ReadonlyMap<string, ParsedAnnData>;
+  readonly obsmap: ReadonlyMap<string, Int32Array | Uint32Array>;
 }
 
-// ---------------------------------------------------------------------------
-// Convention parser
-// ---------------------------------------------------------------------------
-
-/** Registered convention names. Each `Convention.name` is one of these literals. */
-export type ConventionName = "ome-zarr" | "anndata" | "mudata" | "xarray";
-
-/**
- * Implemented by `detectOmeZarr`, `detectAnnData`, `detectMuData`, `detectXarray`.
- * `group` is a zarrita `Group` — we keep it structural to avoid a hard type
- * dependency on zarrita internals at the type layer.
- */
-export interface Convention {
-  readonly name: ConventionName;
-  detect(rootAttrs: Record<string, unknown>): boolean;
-  parse(group: unknown, storePath?: string): Promise<DataTree>;
+export interface ParsedOmeZarr {
+  readonly kind: "ome-zarr";
+  readonly attrs: Record<string, unknown>;
+  readonly group: ZarrGroupHandle;
+  readonly storePath: string | undefined;
+  /** `multiscales[0].axes` from root `.zattrs`. */
+  readonly multiscales: readonly unknown[];
 }
 
-// ---------------------------------------------------------------------------
-// Config
-// ---------------------------------------------------------------------------
-
-export interface ZarrConfig {
-  /** Max parallel chunk fetches. Default: 6 */
-  concurrency: number;
-  /** Max memory budget in bytes for chunk cache. Default: 512MB */
-  maxCacheBytes: number;
-}
+export type ParsedStore = ParsedAnnData | ParsedMuData | ParsedOmeZarr;

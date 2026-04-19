@@ -13,18 +13,20 @@
  */
 
 import * as zarr from "zarrita";
-import type { AsyncReadable, Readable } from "zarrita";
+import type { Readable } from "zarrita";
 import type {
   AnnDataFrame,
   CategoricalArray,
   ColumnData,
-  DataTree,
   NullableArray,
+  ParsedAnnData,
+  ParsedMuData,
   Scalar,
   SparseArray,
 } from "./types.ts";
 import { CsrCscArray } from "./sparse.ts";
 import { readSparse } from "./encoding-readers.ts";
+import { extractStore } from "./zarr-boundary.ts";
 
 type ZarrGroup = zarr.Group<Readable>;
 
@@ -48,14 +50,12 @@ export interface DenseResult {
 /** Result type for getX / getLayer — sparse or dense. */
 export type MatrixResult = SparseArray | DenseResult;
 
-/** Extended dataset type from anndata parser. */
-interface AnnDataDataset {
-  data_vars: ReadonlyMap<string, unknown>;
+/** Internal view over the relevant slice of `ParsedAnnData` / `ParsedMuData`. */
+interface AxisSource {
   obs?: AnnDataFrame;
   var?: AnnDataFrame;
-  _group?: ZarrGroup;
-  _storePath?: string;
-  attrs: Record<string, unknown>;
+  group?: ZarrGroup;
+  storePath?: string;
 }
 
 /**
@@ -81,47 +81,46 @@ interface AnnDataDataset {
  * ```
  */
 export class AnnDataAccessor {
-  private readonly _dataset: AnnDataDataset;
+  private readonly _source: AxisSource;
   private readonly _group: ZarrGroup | undefined;
   private readonly _storePath: string | undefined;
   private readonly _obsIndices: number[] | null;
   private readonly _varIndices: number[] | null;
 
   constructor(
-    dataset: AnnDataDataset,
+    source: AxisSource,
     group?: ZarrGroup,
     storePath?: string,
     obsIndices?: number[] | null,
     varIndices?: number[] | null,
   ) {
-    this._dataset = dataset;
-    this._group = group ?? dataset._group;
-    this._storePath = storePath ?? dataset._storePath;
+    this._source = source;
+    this._group = group ?? source.group;
+    this._storePath = storePath ?? source.storePath;
     this._obsIndices = obsIndices ?? null;
     this._varIndices = varIndices ?? null;
   }
 
-  /**
-   * Create an AnnDataAccessor from a DataTree returned by open().
-   * Works with both AnnData trees and MuData modality subtrees.
-   */
-  static from(treeOrDataset: DataTree | AnnDataDataset | { dataset: AnnDataDataset }): AnnDataAccessor {
-    // If it's a DataTree, grab its dataset
-    const maybeTree = treeOrDataset as { dataset?: AnnDataDataset };
-    const ds = maybeTree.dataset ?? (treeOrDataset as AnnDataDataset);
-    return new AnnDataAccessor(ds);
+  /** Create an AnnDataAccessor from a `ParsedAnnData` or `ParsedMuData`. */
+  static from(parsed: ParsedAnnData | ParsedMuData): AnnDataAccessor {
+    return new AnnDataAccessor({
+      obs: parsed.obs,
+      var: parsed.var,
+      group: parsed.group as ZarrGroup | undefined,
+      storePath: parsed.storePath,
+    });
   }
 
   /** The obs DataFrame (already loaded). */
   get obs(): AnnDataFrame {
-    const o = this._dataset.obs;
+    const o = this._source.obs;
     if (!o) throw new Error("No obs DataFrame available");
     return o;
   }
 
   /** The var DataFrame (already loaded). */
   get var(): AnnDataFrame {
-    const v = this._dataset.var;
+    const v = this._source.var;
     if (!v) throw new Error("No var DataFrame available");
     return v;
   }
@@ -139,15 +138,15 @@ export class AnnDataAccessor {
   /** Number of selected observations. */
   get nObs(): number {
     if (this._obsIndices) return this._obsIndices.length;
-    const idx = this._dataset.obs?.index;
-    return idx ? (Array.isArray(idx) ? idx.length : idx.length) : 0;
+    const idx = this._source.obs?.index;
+    return idx ? idx.length : 0;
   }
 
   /** Number of selected variables. */
   get nVar(): number {
     if (this._varIndices) return this._varIndices.length;
-    const idx = this._dataset.var?.index;
-    return idx ? (Array.isArray(idx) ? idx.length : idx.length) : 0;
+    const idx = this._source.var?.index;
+    return idx ? idx.length : 0;
   }
 
   // ---------------------------------------------------------------------------
@@ -198,9 +197,8 @@ export class AnnDataAccessor {
 
   private async _listObsmKeysConsolidated(group: ZarrGroup): Promise<string[] | null> {
     try {
-      // Narrowing: zarrita's Location.store is typed `Store` — treat as Readable
-      // for the consolidated-metadata extension.
-      const store = (group as unknown as { store: AsyncReadable }).store;
+      const store = extractStore(group);
+      if (!store) return null;
       const listable = await zarr.withConsolidatedMetadata(store);
       const groupPath = group.path.endsWith("/") ? group.path : `${group.path}/`;
       const obsmPrefix = `${groupPath}obsm/`;
@@ -330,7 +328,7 @@ export class AnnDataAccessor {
       });
     }
 
-    return new AnnDataAccessor(this._dataset, this._group, this._storePath, candidates, this._varIndices);
+    return new AnnDataAccessor(this._source, this._group, this._storePath, candidates, this._varIndices);
   }
 
   /**
@@ -377,7 +375,7 @@ export class AnnDataAccessor {
       }
     }
 
-    return new AnnDataAccessor(this._dataset, this._group, this._storePath, newObs, newVar);
+    return new AnnDataAccessor(this._source, this._group, this._storePath, newObs, newVar);
   }
 
   // ---------------------------------------------------------------------------
