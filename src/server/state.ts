@@ -4,7 +4,7 @@
  * Ports the Python `server/_state.py` dataclasses to TypeScript interfaces.
  */
 
-import type { AnnDataAccessor } from "../zarr/anndata-accessor.ts";
+import type { AnnData } from "../zarr/anndata-class.ts";
 import type { PlateChannel, PlateMount } from "./plate.ts";
 import type { EmbeddingStore } from "./store.ts";
 
@@ -112,8 +112,8 @@ export interface ViewerState {
   availableObsmKeys: string[];
   loadingTasks: Map<string, Promise<void>>;
   loadErrors: Map<string, string>;
-  /** axial accessors by dataset name — for loading obsm from zarr on demand. */
-  accessors: Map<string, AnnDataAccessor>;
+  /** AnnData handles by dataset name — for loading obsm / getX on demand. */
+  accessors: Map<string, AnnData>;
   /** URL-mount → disk-path descriptors for OME-Zarr HCS stores. */
   plateMounts: PlateMount[];
 }

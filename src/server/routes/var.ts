@@ -11,7 +11,7 @@
  * GET  /api/var-column/{task_id}/status — Poll materialization status
  */
 
-import type { AnnDataAccessor } from "../../zarr/anndata-accessor.ts";
+import type { AnnData } from "../../zarr/anndata-class.ts";
 import type { SparseArray } from "../../zarr/types.ts";
 import { VarColumnBodySchema, parseJsonBody } from "../protocol.ts";
 import type { ViewerState } from "../state.ts";
@@ -64,18 +64,21 @@ export function getVarTask(taskId: string): VarTask | undefined {
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-/** Return the first accessor in the state (or null if none). */
-function firstAccessor(state: ViewerState): AnnDataAccessor | null {
+/** Return the first AnnData in the state (or null if none). */
+function firstAdata(state: ViewerState): AnnData | null {
   const iter = state.accessors.values().next();
   return iter.done ? null : iter.value;
 }
 
 /** Materialise var.index (whatever its runtime type) as a plain string array. */
-function varNamesOf(accessor: AnnDataAccessor): string[] {
-  const idx = accessor.var.index;
-  if (Array.isArray(idx)) return idx;
+function varNamesOf(adata: AnnData): string[] {
+  const idx = adata.var.index;
+  if (Array.isArray(idx)) return [...idx];
   // Int32Array index — fall back to numeric strings
-  return Array.from(idx, (n) => String(n));
+  const typed = idx as Int32Array;
+  const out: string[] = [];
+  for (let i = 0; i < typed.length; i++) out.push(String(typed[i]));
+  return out;
 }
 
 // ─── Routes ─────────────────────────────────────────────────────────────────
@@ -90,10 +93,10 @@ export function handleVarNames(url: URL, state: ViewerState): Response {
   const q = (url.searchParams.get("q") ?? "").toLowerCase();
   const limit = Math.max(1, Math.min(500, Number(url.searchParams.get("limit") ?? "50")));
 
-  const accessor = firstAccessor(state);
-  if (!accessor) return Response.json({ names: [] });
+  const adata = firstAdata(state);
+  if (!adata) return Response.json({ names: [] });
 
-  const names = varNamesOf(accessor);
+  const names = varNamesOf(adata);
 
   const matches: string[] = [];
   if (q === "") {
@@ -127,13 +130,13 @@ export function handleVarNames(url: URL, state: ViewerState): Response {
  * `layers/` group on first call.
  */
 export async function handleVarLayers(state: ViewerState): Promise<Response> {
-  const accessor = firstAccessor(state);
-  if (!accessor) return Response.json({ layers: ["X"] });
+  const adata = firstAdata(state);
+  if (!adata) return Response.json({ layers: ["X"] });
 
   // Try to discover extra layers by probing the zarr `layers` group.
   // The accessor doesn't currently expose this, so we fall back to ["X"]
   // unless we can read layer keys via a private hook in the future.
-  const extra = await discoverLayers(accessor);
+  const extra = await discoverLayers(adata);
   const all = ["X", ...extra];
   return Response.json({ layers: all });
 }
@@ -142,12 +145,11 @@ export async function handleVarLayers(state: ViewerState): Promise<Response> {
  * Probe the zarr store for `layers/` children. Returns [] if not accessible.
  * Uses the accessor's internal zarr group reference if available.
  */
-async function discoverLayers(accessor: AnnDataAccessor): Promise<string[]> {
-  // The accessor's private _group field holds a zarrita location. We can
-  // attempt to open "layers" as a group and enumerate children by reading
-  // the zarr store's hierarchy. Since the accessor API doesn't expose this
-  // yet, we leave the hook here for a future wire-up.
-  const group = (accessor as unknown as { _group?: unknown })._group;
+async function discoverLayers(adata: AnnData): Promise<string[]> {
+  // Reach through AnnData → internal accessor → private _group (zarrita
+  // Location). Hack pending Phase C's AnnDataView API; then we'll expose
+  // a proper `listLayers()` method.
+  const group = (adata.accessor as unknown as { _group?: unknown })._group;
   if (!group) return [];
 
   try {
@@ -231,12 +233,12 @@ async function materialiseVarColumn(state: ViewerState, name: string, layer: str
 
   // Iterate datasets in insertion order (same order as obs_base was built).
   let cursor = 0;
-  for (const [dsName, accessor] of state.accessors) {
-    const dsN = accessor.nObs;
-    const varIdx = findVarIndex(accessor, name);
+  for (const [dsName, adata] of state.accessors) {
+    const dsN = adata.nObs;
+    const varIdx = findVarIndex(adata, name);
 
     if (varIdx >= 0) {
-      const slice = await loadVarSlice(accessor, varIdx, layer, dsN);
+      const slice = await loadVarSlice(adata, varIdx, layer, dsN);
       values.set(slice, cursor);
     } // else: leave NaN for this dataset
     cursor += dsN;
@@ -252,9 +254,9 @@ async function materialiseVarColumn(state: ViewerState, name: string, layer: str
   await state.store.registerVarColumn(colName, values);
 }
 
-/** Find a var name's position in accessor.var.index (or -1 if absent). */
-function findVarIndex(accessor: AnnDataAccessor, name: string): number {
-  const idx = accessor.var.index;
+/** Find a var name's position in adata.var.index (or -1 if absent). */
+function findVarIndex(adata: AnnData, name: string): number {
+  const idx = adata.var.index;
   if (Array.isArray(idx)) {
     return idx.indexOf(name);
   }
@@ -271,13 +273,8 @@ function findVarIndex(accessor: AnnDataAccessor, name: string): number {
  * Load one column of X (or layer) for a dataset as a length-nObs Float64Array.
  * Works for dense or sparse (CSR/CSC) matrices.
  */
-async function loadVarSlice(
-  accessor: AnnDataAccessor,
-  varIdx: number,
-  layer: string,
-  nObs: number,
-): Promise<Float64Array> {
-  const sliced = accessor.isel({ var: [varIdx] });
+async function loadVarSlice(adata: AnnData, varIdx: number, layer: string, nObs: number): Promise<Float64Array> {
+  const sliced = adata.isel({ var: [varIdx] });
   const mat = layer === "X" ? await sliced.getX() : await sliced.getLayer(layer);
 
   const out = new Float64Array(nObs);

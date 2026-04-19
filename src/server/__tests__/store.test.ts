@@ -184,16 +184,16 @@ describe("isAllowedSql", () => {
     expect(isAllowedSql("DROP TABLE IF EXISTS mosaic.preagg_scatter")).toBe(true);
   });
 
-  test("allows ALTER TABLE obs_base ADD COLUMN", () => {
-    expect(isAllowedSql('ALTER TABLE obs_base ADD COLUMN "__ev__umap_id" INTEGER')).toBe(true);
+  test("blocks ALTER TABLE via /data/query — goes through /api/categorize instead", () => {
+    expect(isAllowedSql('ALTER TABLE obs_base ADD COLUMN "__ev__umap_id" INTEGER')).toBe(false);
   });
 
-  test("allows UPDATE obs_base SET", () => {
-    expect(isAllowedSql('UPDATE obs_base SET "__ev__umap_id" = 42')).toBe(true);
+  test("blocks UPDATE via /data/query — goes through /api/categorize instead", () => {
+    expect(isAllowedSql('UPDATE obs_base SET "__ev__umap_id" = 42')).toBe(false);
   });
 
-  test("allows CREATE OR REPLACE VIEW dataset", () => {
-    expect(isAllowedSql("CREATE OR REPLACE VIEW dataset AS SELECT * FROM obs_base")).toBe(true);
+  test("blocks CREATE OR REPLACE VIEW via /data/query — server owns VIEW rebuilds", () => {
+    expect(isAllowedSql("CREATE OR REPLACE VIEW dataset AS SELECT * FROM obs_base")).toBe(false);
   });
 
   test("blocks DROP TABLE (without IF EXISTS)", () => {

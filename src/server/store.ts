@@ -92,6 +92,10 @@ export class EmbeddingStore {
   readonly conn: DuckDBConnection;
   /** Number of observations in obs_base. */
   nObs: number = 0;
+  /** Number of variables in var_base. 0 if var wasn't ingested. */
+  nVars: number = 0;
+  /** True once var_base exists. Mosaic queries can target `var_base` or the `var` VIEW. */
+  hasVarTable: boolean = false;
   /** Registered embeddings and their metadata. */
   private _loaded: Map<string, EmbeddingMeta> = new Map();
   /** Registered var columns: colName → { table, colName }. */
@@ -133,7 +137,11 @@ export class EmbeddingStore {
    */
   static async fromInit(
     init: (conn: DuckDBConnection) => Promise<void>,
-    options?: { hidden?: Set<string> },
+    options?: {
+      hidden?: Set<string>;
+      /** Optional var-axis initializer. Creates `var_base` table. */
+      initVar?: (conn: DuckDBConnection) => Promise<void>;
+    },
   ): Promise<EmbeddingStore> {
     const db = await DuckDBInstance.create(":memory:");
     const conn = await db.connect();
@@ -143,10 +151,23 @@ export class EmbeddingStore {
     await store._ensureIdentityColumns();
     await store._finishInit();
 
+    if (options?.initVar) {
+      await options.initVar(conn);
+      await store._finishVarInit();
+    }
+
     return store;
   }
 
-  /** Ensure __row_index__ and obs_name columns exist. */
+  /**
+   * Ensure obs identity columns exist:
+   *   `__row_index__` — legacy name referenced by scatter/table/frontend code
+   *   `__obs_index__` — symmetric counterpart to `__var_index__` on var_base
+   *   `obs_name`      — string identity (axis name)
+   *
+   * Keeping both index columns (same value) lets new code query obs/var
+   * uniformly without touching 17 files of frontend SQL.
+   */
   private async _ensureIdentityColumns(): Promise<void> {
     const reader = await this.conn.runAndReadAll("SELECT column_name FROM (DESCRIBE obs_base)");
     const colNames = new Set(reader.getColumnsJS()[0] as string[]);
@@ -154,6 +175,11 @@ export class EmbeddingStore {
     if (!colNames.has("__row_index__")) {
       await this.conn.run("ALTER TABLE obs_base ADD COLUMN __row_index__ INTEGER");
       await this.conn.run("UPDATE obs_base SET __row_index__ = rowid");
+    }
+
+    if (!colNames.has("__obs_index__")) {
+      await this.conn.run("ALTER TABLE obs_base ADD COLUMN __obs_index__ INTEGER");
+      await this.conn.run("UPDATE obs_base SET __obs_index__ = __row_index__");
     }
 
     if (!colNames.has("obs_name")) {
@@ -165,6 +191,7 @@ export class EmbeddingStore {
   /** Shared init: indexes, obsset tables, VIEW, row count, nanoarrow. */
   private async _finishInit(): Promise<void> {
     await this.conn.run("CREATE INDEX obs_base_row_index ON obs_base(__row_index__)");
+    await this.conn.run("CREATE INDEX obs_base_obs_index ON obs_base(__obs_index__)");
     await this.conn.run("CREATE INDEX obs_base_obs_name ON obs_base(obs_name)");
     await this._initObssetTables();
     await this._rebuildView();
@@ -311,6 +338,47 @@ export class EmbeddingStore {
     } else {
       await this.conn.run(`CREATE OR REPLACE VIEW dataset AS SELECT ${select} FROM obs_base`);
     }
+  }
+
+  /**
+   * Finalize var_base after the initVar callback has created it.
+   *
+   * `ingestDataFrames(..., { axis: "var", includeNameColumn: true })` already
+   * emits `__var_index__` + `var_name`. This method indexes them and creates
+   * a standalone `var` VIEW. var_base is NOT joined to the dataset VIEW —
+   * cardinality is n_vars, not n_obs.
+   *
+   * Collision semantics (multi-dataset):
+   *   When the `_dataset` column is present, `var_name` is only unique
+   *   WITHIN a dataset — different AnnCollection members can legitimately
+   *   share a var_name (same feature) OR collide (same string, different
+   *   features). A composite index on (_dataset, var_name) + generated
+   *   `var_uid` (= `_dataset || '::' || var_name`) gives callers a single
+   *   column to join on safely.
+   */
+  private async _finishVarInit(): Promise<void> {
+    await this.conn.run("CREATE INDEX IF NOT EXISTS var_base_row_index ON var_base(__var_index__)");
+    await this.conn.run("CREATE INDEX IF NOT EXISTS var_base_var_name ON var_base(var_name)");
+
+    // Detect whether the ingestion path wrote a `_dataset` column (multi-DF case).
+    const schema = await this.conn.runAndReadAll("SELECT column_name FROM (DESCRIBE var_base)");
+    const cols = new Set(schema.getColumnsJS()[0] as string[]);
+    const isMulti = cols.has("_dataset");
+
+    if (isMulti) {
+      await this.conn.run("CREATE INDEX IF NOT EXISTS var_base_dataset_var ON var_base(_dataset, var_name)");
+    }
+
+    // `var_uid` lives on the `var` VIEW — DuckDB doesn't support ALTER TABLE
+    // ADD COLUMN with GENERATED expressions. Safe single-column join key even
+    // when `var_name` collides across datasets.
+    const uidExpr = isMulti ? "_dataset || '::' || var_name" : "var_name";
+    await this.conn.run(`CREATE OR REPLACE VIEW var AS SELECT *, (${uidExpr}) AS var_uid FROM var_base`);
+
+    const reader = await this.conn.runAndReadAll("SELECT COUNT(*) AS cnt FROM var_base");
+    const rows = reader.getRowObjectsJson();
+    this.nVars = Number(rows[0].cnt);
+    this.hasVarTable = true;
   }
 
   /** Initialize obsset tables (selection bookmarks). */

@@ -13,7 +13,7 @@ import { exportDir } from "./export.ts";
 /** Return var count of the first accessor (or 0 if none registered). */
 function firstVarCount(state: ViewerState): number {
   const iter = state.accessors.values().next();
-  return iter.done ? 0 : iter.value.nVar;
+  return iter.done ? 0 : iter.value.nVars;
 }
 
 /** Build obsm metadata including loaded status. */
