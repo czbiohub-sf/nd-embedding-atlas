@@ -33,6 +33,12 @@ import { handleExport, getExportTask, subscribeExportTask, type ExportTask } fro
 
 /** Data attached to every ServerWebSocket via server.upgrade(req, { data }). */
 export interface WsContext {
+  /**
+   * Socket role. `ndea` uses the framed `{_id,_type,...}` protocol handled
+   * in this file. `mosaic` uses the Mosaic socketConnector framing (raw
+   * `{type, sql}` in, Arrow IPC / JSON out) handled in mosaic-ws.ts.
+   */
+  kind: "ndea" | "mosaic";
   state: ViewerState;
   store: EmbeddingStore;
 }

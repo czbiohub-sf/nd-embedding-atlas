@@ -66,6 +66,43 @@ function createMockConfig(): DatasetMeta {
   };
 }
 
+/**
+ * Send one request over the Mosaic WS connector and return the decoded reply.
+ * socketConnector framing: send JSON text, receive either ArrayBuffer (arrow)
+ * or JSON text (exec / json / error).
+ */
+function mosaicWsRequest<T>(
+  port: number | undefined,
+  query: { type: "arrow" | "json" | "exec"; sql: string },
+): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(`ws://localhost:${port}/mosaic`);
+    ws.binaryType = "arraybuffer";
+    const timer = setTimeout(() => {
+      ws.close();
+      reject(new Error("ws timeout"));
+    }, 5000);
+    ws.addEventListener("open", () => ws.send(JSON.stringify(query)));
+    ws.addEventListener("message", (ev) => {
+      clearTimeout(timer);
+      ws.close();
+      if (typeof ev.data === "string") {
+        try {
+          resolve(JSON.parse(ev.data) as T);
+        } catch (err) {
+          reject(err);
+        }
+      } else {
+        resolve(ev.data as T);
+      }
+    });
+    ws.addEventListener("error", (err) => {
+      clearTimeout(timer);
+      reject(err instanceof Error ? err : new Error("ws error"));
+    });
+  });
+}
+
 // ─── Lifecycle ──────────────────────────────────────────────────────────────
 
 let activeServer: NdeaServer | null = null;
@@ -170,6 +207,56 @@ describe("createApp", () => {
 
     const buf = await res.arrayBuffer();
     expect(buf.byteLength).toBeGreaterThan(0);
+  });
+
+  test("Mosaic WS /mosaic handles JSON query", async () => {
+    const store = await createMockStore(10);
+    activeStore = store;
+    const state = createMockState(store);
+    const config = createMockConfig();
+
+    const server = createApp({ port: 0, host: "localhost", store, state, config, noStatic: true });
+    activeServer = server;
+
+    const rows = await mosaicWsRequest<{ _dataset: string }[]>(server.port, {
+      type: "json",
+      sql: "SELECT DISTINCT _dataset FROM dataset",
+    });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?._dataset).toBe("test_dataset");
+  });
+
+  test("Mosaic WS /mosaic returns binary Arrow IPC", async () => {
+    const store = await createMockStore(10);
+    activeStore = store;
+    const state = createMockState(store);
+    const config = createMockConfig();
+
+    const server = createApp({ port: 0, host: "localhost", store, state, config, noStatic: true });
+    activeServer = server;
+
+    const buf = await mosaicWsRequest<ArrayBuffer>(server.port, {
+      type: "arrow",
+      sql: "SELECT __row_index__, category FROM dataset LIMIT 5",
+    });
+    expect(buf).toBeInstanceOf(ArrayBuffer);
+    expect(buf.byteLength).toBeGreaterThan(0);
+  });
+
+  test("Mosaic WS /mosaic blocks disallowed statements", async () => {
+    const store = await createMockStore(10);
+    activeStore = store;
+    const state = createMockState(store);
+    const config = createMockConfig();
+
+    const server = createApp({ port: 0, host: "localhost", store, state, config, noStatic: true });
+    activeServer = server;
+
+    const resp = await mosaicWsRequest<{ error: string }>(server.port, {
+      type: "exec",
+      sql: "DROP TABLE obs_base",
+    });
+    expect(resp.error).toBe("Statement type not allowed");
   });
 
   test("GET /api/health returns status ok", async () => {

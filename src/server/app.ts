@@ -26,11 +26,13 @@ import {
 import { handleObsBatch, handleObsInfo, handleObsDetail, handleHealth } from "./routes/obs.ts";
 import { handleListObsSets, handleCreateObsSet, handleDeleteObsSet, handleActivateObsSet } from "./routes/obssets.ts";
 import { handleVarNames, handleVarLayers, handleVarColumn, handleVarColumnStatus } from "./routes/var.ts";
+import { handleCategorize } from "./routes/categorize.ts";
 import { handleExport, handleExportStatus } from "./routes/export.ts";
 import { handleCrop } from "./routes/crops.ts";
 import { servePlateFile } from "./plate.ts";
 import { serveStatic, resolveFrontendDir } from "./static.ts";
 import { handleWsMessage, handleWsOpen, handleWsClose, type WsContext } from "./ws.ts";
+import { handleMosaicWsMessage } from "./mosaic-ws.ts";
 
 // Re-exports for public API
 export { EmbeddingStore, obsmColumnPrefix, DEFAULT_OBSM_PRIORITY } from "./store.ts";
@@ -112,8 +114,11 @@ export function createApp(options: AppOptions) {
       const { pathname } = url;
 
       // ── WebSocket upgrade ───────────────────────────────────────
+      // /mosaic → Mosaic socketConnector framing (raw {type, sql}, binary arrow)
+      // any other path → ndea framed protocol (_id/_type JSON)
       if (req.headers.get("upgrade") === "websocket") {
-        const upgraded = server.upgrade(req, { data: { state, store } });
+        const kind: WsContext["kind"] = pathname === "/mosaic" ? "mosaic" : "ndea";
+        const upgraded = server.upgrade(req, { data: { kind, state, store } });
         if (!upgraded) {
           return withCors(new Response("WebSocket upgrade failed", { status: 400 }));
         }
@@ -139,12 +144,18 @@ export function createApp(options: AppOptions) {
 
     websocket: {
       message(ws, raw) {
+        if (ws.data.kind === "mosaic") {
+          void handleMosaicWsMessage(ws, raw);
+          return;
+        }
         handleWsMessage(ws, raw);
       },
       open(ws) {
+        if (ws.data.kind === "mosaic") return;
         handleWsOpen(ws);
       },
       close(ws) {
+        if (ws.data.kind === "mosaic") return;
         handleWsClose(ws);
       },
     },
@@ -298,6 +309,11 @@ function routeApi(
   const varColStatusMatch = pathname.match(/^\/api\/var-column\/(.+)\/status$/);
   if (varColStatusMatch && method === "GET") {
     return handleVarColumnStatus(decodeURIComponent(varColStatusMatch[1]));
+  }
+
+  // ── Categorical index materialization ────────────────────────────
+  if (pathname === "/api/categorize" && method === "POST") {
+    return handleCategorize(req, state);
   }
 
   // ── Export ───────────────────────────────────────────────────────

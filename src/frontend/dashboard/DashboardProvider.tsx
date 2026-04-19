@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Coordinator, restConnector, Selection } from "@uwdata/mosaic-core";
+import { Coordinator, Selection, socketConnector } from "@uwdata/mosaic-core";
 import { type ReactNode, useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { useColumnTypes } from "../hooks/useColumnTypes";
 import { generateDefaultPanels } from "../lib/chart-spec";
@@ -46,11 +46,16 @@ interface Props {
 const TABLE = "dataset";
 
 export function DashboardProvider({ children }: Props) {
-  // Infrastructure — created once
+  // Infrastructure — created once.
+  // socketConnector: one long-lived WS to /mosaic, no per-query HTTP handshake.
+  // Fallback `/data/query` REST endpoint remains for tests and curl.
   const coordinator = useMemo(() => {
-    const c = new Coordinator();
-    c.databaseConnector(restConnector({ uri: "/data/query" }));
-    return c;
+    const wsProto = location.protocol === "https:" ? "wss:" : "ws:";
+    const uri = `${wsProto}//${location.host}/mosaic`;
+    return new Coordinator(socketConnector({ uri }), {
+      // keep cache / consolidate / preagg defaults
+      logger: import.meta.env.PROD ? null : console,
+    });
   }, []);
 
   const brushSelection = useMemo(() => Selection.crossfilter(), []);
