@@ -27,7 +27,10 @@ export function createSelectionEngine(
   let isReadingBack = false;
 
   const polygonBuffer = root.createBuffer(d.arrayOf(d.vec2f, MAX_POLYGON_VERTS)).$usage("storage");
-  const polygonCountUniform = root.createUniform(d.u32, 0);
+  // i32 (not u32) — `std.range(N)` yields i32 indices in the pip kernel, and
+  // WGSL is strict about mixed i32/u32 comparisons. Value is always small
+  // (≤ MAX_POLYGON_VERTS = 512) so signedness has no semantic effect.
+  const polygonCountUniform = root.createUniform(d.i32, 0);
 
   const pointsReadonly = posBuffer.as("readonly");
   const selectedMutable = selectedBuffer.as("mutable");
@@ -39,18 +42,24 @@ export function createSelectionEngine(
   // ── PIP kernel ─────────────────────────────────────────────────────────
 
   // Point-in-polygon ray-crossing test. `j` rolls to the previous vertex
-  // each iteration, forming the edge polygon[j] → polygon[i]. std.range(n)
-  // (0.11+) generates the WGSL `for (var i = 0u; i < n; i++)` loop.
+  // each iteration, forming the edge polygon[j] → polygon[i].
+  //
+  // Loop bound: std.range(numVerts) needs comptime bounds (TypeGPU 0.11+
+  // rejects runtime uniforms there). Iterate the static MAX_POLYGON_VERTS
+  // upper bound and early-out when i >= numVerts. numVerts must be i32 to
+  // match std.range's i32 loop index under WGSL's strict type rules.
   const pipTest = tgpu.fn(
-    [d.vec2f, d.u32],
+    [d.vec2f, d.i32],
     d.bool,
   )((pt, numVerts) => {
     "use gpu";
     let c = false;
     let j = numVerts - 1;
-    for (const i of std.range(numVerts)) {
-      const vi = polygonReadonly.$[i];
-      const vj = polygonReadonly.$[j];
+    for (const i of std.range(MAX_POLYGON_VERTS)) {
+      if (i >= numVerts) break;
+      // Array indexing: explicit u32 conversion silences TypeGPU's implicit-cast warning.
+      const vi = polygonReadonly.$[d.u32(i)];
+      const vj = polygonReadonly.$[d.u32(j)];
       const b = (vi.y <= pt.y && pt.y < vj.y) || (vj.y <= pt.y && pt.y < vi.y);
       if (b) {
         const xd = ((vj.x - vi.x) * (pt.y - vi.y)) / (vj.y - vi.y) + vi.x;
