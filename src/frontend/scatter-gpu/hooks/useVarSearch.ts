@@ -14,10 +14,11 @@ export interface VarSearchResult {
 
 /**
  * Debounced var name search via TanStack Query.
- * GET /api/var/names?q=<query>&limit=50
+ * GET /api/var/names?q=<query>&limit=50[&modality=<name>]
  * Empty query returns the first 50 var names.
+ * `modality` narrows the search to one modality's var (MuData).
  */
-export function useVarSearch(query: string): VarSearchResult {
+export function useVarSearch(query: string, modality?: string): VarSearchResult {
   const [debouncedQuery, setDebouncedQuery] = useState(query);
   const varDebouncer = useDebouncer((q: string) => setDebouncedQuery(q), {
     wait: 200,
@@ -29,10 +30,11 @@ export function useVarSearch(query: string): VarSearchResult {
   }, [query, varDebouncer.maybeExecute]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const { data, isLoading } = useQuery<VarNamesResponse>({
-    queryKey: varKeys.names(debouncedQuery),
+    queryKey: varKeys.names(debouncedQuery, modality),
     queryFn: async () => {
       const params = new URLSearchParams({ limit: "50" });
       if (debouncedQuery) params.set("q", debouncedQuery);
+      if (modality) params.set("modality", modality);
       const res = await fetch(`/api/var/names?${params}`);
       if (!res.ok) throw new Error(`var/names fetch failed: ${res.status}`);
       return res.json() as Promise<VarNamesResponse>;

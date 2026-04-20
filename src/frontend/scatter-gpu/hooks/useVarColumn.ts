@@ -10,7 +10,7 @@ interface VarColumnState {
 }
 
 export interface VarColumnResult {
-  materialize: (name: string, layer: string) => void;
+  materialize: (name: string, layer: string, modality?: string) => void;
   status: VarColumnStatus;
   column: string | null;
   error: string | null;
@@ -136,7 +136,7 @@ export function useVarColumn(options?: UseVarColumnOptions): VarColumnResult {
   );
 
   const materialize = useCallback(
-    (name: string, layer: string) => {
+    (name: string, layer: string, modality?: string) => {
       stopWatching();
       setState({ status: "loading", column: null, error: null });
       onStatusRef.current?.(`Materializing ${name}…`);
@@ -144,10 +144,12 @@ export function useVarColumn(options?: UseVarColumnOptions): VarColumnResult {
       const run = async () => {
         let taskId: string;
         try {
+          const body: Record<string, string> = { name, layer };
+          if (modality) body.modality = modality;
           const res = await fetch("/api/var-column", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name, layer }),
+            body: JSON.stringify(body),
           });
           if (!res.ok) {
             const text = await res.text();
