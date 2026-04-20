@@ -24,7 +24,7 @@ import type {
   Scalar,
   SparseArray,
 } from "./types.ts";
-import { CsrCscArray } from "./sparse.ts";
+import { CsrCscArray } from "./helpers.ts";
 import { readSparse } from "./encoding-readers.ts";
 import { extractStore } from "./zarr-boundary.ts";
 

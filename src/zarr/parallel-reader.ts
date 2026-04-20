@@ -5,7 +5,7 @@
  */
 
 import type { AnnDataFrame, ColumnData, Scalar } from "./types.ts";
-import { SimpleCategorical, SimpleNullable } from "./categorical.ts";
+import { SimpleCategorical, SimpleNullable } from "./helpers.ts";
 
 type TypedArrayCtor =
   | Float32ArrayConstructor

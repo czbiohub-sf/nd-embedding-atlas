@@ -1,8 +1,8 @@
 # nd-embedding-atlas
 
-|             |                                                                                                                                                                          |
-| :---------: | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
-|  **Meta**   | [![Hatch][badge-hatch]][link-hatch] [![uv][badge-uv]][link-uv] [![Ruff][badge-ruff]][link-ruff] [![prek][badge-prek]][link-prek] [![License][badge-license]][link-license] |
+|          |                                                                                                                                                                            |
+| :------: | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
+| **Meta** | [![Hatch][badge-hatch]][link-hatch] [![uv][badge-uv]][link-uv] [![Ruff][badge-ruff]][link-ruff] [![prek][badge-prek]][link-prek] [![License][badge-license]][link-license] |
 
 An interactive browser-based dashboard that links high-dimensional AI embeddings to source 5D (TCZYX) image data for rapid exploration and annotation.
 
@@ -30,10 +30,10 @@ Downloads a checksum-verified native binary (~80 MB) and drops it into `$HOME/.l
 
 Environment variables:
 
-| Variable | Default | Notes |
-| --- | --- | --- |
-| `NDEA_VERSION` | `latest` | Release tag (e.g. `v0.2.0`). |
-| `NDEA_BIN_DIR` | `$HOME/.local/bin` | Install destination. |
+| Variable       | Default            | Notes                        |
+| -------------- | ------------------ | ---------------------------- |
+| `NDEA_VERSION` | `latest`           | Release tag (e.g. `v0.2.0`). |
+| `NDEA_BIN_DIR` | `$HOME/.local/bin` | Install destination.         |
 
 Example: `curl -fsSL .../install.sh | NDEA_VERSION=v0.2.0 NDEA_BIN_DIR=/usr/local/bin sh`.
 
@@ -101,12 +101,12 @@ For bugs or feature requests, use the [issue tracker][issue-tracker].
 See the [changelog][].
 
 <!-- badges -->
+
 [badge-hatch]: https://img.shields.io/badge/%F0%9F%A5%9A-Hatch-4051b5.svg
 [badge-uv]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json
 [badge-ruff]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json
 [badge-prek]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/j178/prek/master/docs/assets/badge-v0.json
 [badge-license]: https://img.shields.io/badge/License-BSD--3--Clause-blue.svg
-
 [link-hatch]: https://github.com/pypa/hatch
 [link-uv]: https://github.com/astral-sh/uv
 [link-ruff]: https://github.com/astral-sh/ruff
@@ -114,6 +114,7 @@ See the [changelog][].
 [link-license]: https://opensource.org/licenses/BSD-3-Clause
 
 <!-- links -->
+
 [issue-tracker]: https://github.com/czbiohub-sf/nd-embedding-atlas/issues
 [discussions-link]: https://github.com/czbiohub-sf/nd-embedding-atlas/discussions
 [releases-link]: https://github.com/czbiohub-sf/nd-embedding-atlas/releases
