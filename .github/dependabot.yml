@@ -1,0 +1,32 @@
+version: 2
+
+# Weekly dependency updates for the Bun + GitHub Actions stack.
+# Python ecosystem is intentionally absent — this is a Bun-only project.
+updates:
+  # npm / Bun packages (bun install reads package.json)
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 10
+    labels:
+      - dependencies
+      - javascript
+    groups:
+      # Batch minor/patch updates so the PR queue stays manageable
+      minor-and-patch:
+        update-types:
+          - minor
+          - patch
+
+  # GitHub Actions versions referenced in .github/workflows/*.yml
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - github-actions
