@@ -145,22 +145,26 @@ export async function startup(config: ResolvedConfig): Promise<void> {
   }
 
   const datasetNames = loaded.map((ds) => ds.entry.name);
-  const initStore = async (conn: DuckDBConnection): Promise<void> => {
-    await ingestDataFrames(
-      conn,
-      "obs_base",
-      loaded.map((ds) => ds.adata.obs),
-      { datasetNames },
-    );
-  };
 
+  let initStore: (conn: DuckDBConnection) => Promise<void>;
   let initVar: ((conn: DuckDBConnection) => Promise<void>) | undefined;
+
   if (hasMuData) {
-    // Delegate var ingest to MuData.toDuckDB — it knows how to union shared
-    // root var with each modality's var and emit the `_modality` discriminator.
+    // MuData owns both obs (collision-merged across modalities) and var
+    // (unioned with `_modality` discriminator). Route both through
+    // MuData.toDuckDB so the merge logic stays in one place.
     const muHandle = loaded[0].adata as MuData;
+    initStore = (conn) => muHandle.toDuckDB(conn, { skipVar: true });
     initVar = (conn) => muHandle.toDuckDB(conn, { skipObs: true });
   } else {
+    initStore = async (conn) => {
+      await ingestDataFrames(
+        conn,
+        "obs_base",
+        loaded.map((ds) => ds.adata.obs),
+        { datasetNames },
+      );
+    };
     initVar = async (conn) => {
       await ingestDataFrames(
         conn,

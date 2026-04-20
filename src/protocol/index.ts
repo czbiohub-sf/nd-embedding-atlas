@@ -84,6 +84,8 @@ export type ScatterSelectionBody = z.infer<typeof ScatterSelectionBodySchema>;
 export const VarColumnBodySchema = z.object({
   name: z.string().min(1),
   layer: z.string().optional(),
+  /** MuData modality (e.g. "rna"). Ignored for plain AnnData stores. */
+  modality: z.string().optional(),
 });
 export type VarColumnBody = z.infer<typeof VarColumnBodySchema>;
 

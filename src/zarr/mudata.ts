@@ -19,7 +19,7 @@
 import type { DuckDBConnection } from "@duckdb/node-api";
 import * as zarr from "zarrita";
 import type { Readable } from "zarrita";
-import type { AnnDataFrame, ParsedAnnData, ParsedMuData } from "./types.ts";
+import type { AnnDataFrame, ColumnData, ParsedAnnData, ParsedMuData, Scalar } from "./types.ts";
 import { AnnData, parseAnnData, type DatasetHandle, type DenseResult, type ToDuckDBOptions } from "./anndata.ts";
 import { LazyDataFrame } from "./data-frame.ts";
 import { ingestDataFrames } from "./duckdb-ingest.ts";
@@ -269,7 +269,11 @@ export class MuData implements DatasetHandle {
   /**
    * Register obs + var tables on DuckDB.
    *
-   * - obs_base: one row per shared observation (root-level obs columns only).
+   * - obs_base: merged columns across root obs + every modality's obs.
+   *   Root columns keep their names (shared). Per-modality columns are
+   *   renamed `<mod>:<col>` when they would collide with an already-seen
+   *   name; non-colliding names are kept as-is. Matches the scverse
+   *   convention `get_obs_mudata` uses.
    * - var_base: union of each modality's var, with a `_modality` VARCHAR
    *   column identifying the source modality. Shared root var (if present)
    *   is emitted under `_modality = "__shared__"`.
@@ -283,7 +287,8 @@ export class MuData implements DatasetHandle {
     const varTable = options.varTable ?? "var_base";
 
     if (!options.skipObs) {
-      await ingestDataFrames(conn, obsTable, [this.obs], {
+      const mergedObs = this._buildMergedObs();
+      await ingestDataFrames(conn, obsTable, [new LazyDataFrame(mergedObs, "obs_name")], {
         axis: "obs",
         includeNameColumn: true,
       });
@@ -317,4 +322,70 @@ export class MuData implements DatasetHandle {
       }
     }
   }
+
+  /**
+   * Merge per-modality obs columns into the root obs frame. Collision-only
+   * prefix: if a column name already exists in the merged frame, the
+   * modality's column is added as `<mod>:<col>`. Otherwise the bare name
+   * is kept.
+   *
+   * Assumes axis=0 and 1-to-1 obs_names across modalities (the supported
+   * subset — see module docstring).
+   */
+  private _buildMergedObs(): AnnDataFrame {
+    const rootSource = this.obs.source;
+    const merged = new Map<string, ColumnData>();
+    const columnOrder: string[] = [];
+    const seen = new Set<string>();
+
+    // 1. Root columns first, name-preserving.
+    for (const name of rootSource.columnOrder) {
+      const col = rootSource.column(name);
+      if (!col) continue;
+      merged.set(name, col);
+      columnOrder.push(name);
+      seen.add(name);
+    }
+
+    // 2. Each modality's columns. Prefix on collision.
+    for (const [modName, modAdata] of this.mod) {
+      const modSource = modAdata.obs.source;
+      for (const name of modSource.columnOrder) {
+        const col = modSource.column(name);
+        if (!col) continue;
+        const key = seen.has(name) ? `${modName}:${name}` : name;
+        merged.set(key, col);
+        columnOrder.push(key);
+        seen.add(key);
+      }
+    }
+
+    return {
+      index: rootSource.index,
+      columns: merged,
+      columnOrder,
+      column(name: string) {
+        return merged.get(name);
+      },
+      *[Symbol.iterator]() {
+        const idx = rootSource.index;
+        const len = Array.isArray(idx) ? idx.length : idx.length;
+        for (let i = 0; i < len; i++) {
+          const row: Record<string, Scalar | null> = {};
+          for (const [colName, col] of merged) {
+            row[colName] = getColumnValue(col, i);
+          }
+          yield row;
+        }
+      },
+    };
+  }
+}
+
+/** Fetch a scalar from any ColumnData representation. */
+function getColumnValue(col: ColumnData, i: number): Scalar | null {
+  const withAt = col as { at?: (i: number) => Scalar | null };
+  if (typeof withAt.at === "function") return withAt.at(i);
+  if (Array.isArray(col)) return col[i];
+  return (col as ArrayLike<number>)[i];
 }

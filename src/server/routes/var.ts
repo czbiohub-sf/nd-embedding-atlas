@@ -211,11 +211,15 @@ export async function handleVarColumn(req: Request, state: ViewerState): Promise
   if (!parsed.ok) return parsed.response;
   const name = parsed.data.name;
   const layer = parsed.data.layer ?? "X";
+  const modality = parsed.data.modality;
 
   try {
     const safeVar = name.replace(/[^a-zA-Z0-9]/g, "_");
     const safeLayer = layer.replace(/[^a-zA-Z0-9]/g, "_");
-    const colName = `__var_${safeVar}_${safeLayer}__`;
+    const safeMod = modality?.replace(/[^a-zA-Z0-9]/g, "_");
+    // Include modality in the DuckDB column name so the same gene
+    // symbol in different modalities doesn't collide.
+    const colName = safeMod ? `__var_${safeMod}_${safeVar}_${safeLayer}__` : `__var_${safeVar}_${safeLayer}__`;
 
     const taskId = crypto.randomUUID();
 
@@ -230,7 +234,7 @@ export async function handleVarColumn(req: Request, state: ViewerState): Promise
     varTasks.set(taskId, task);
 
     // Kick off materialization asynchronously.
-    void materialiseVarColumn(state, name, layer, colName)
+    void materialiseVarColumn(state, name, layer, colName, modality)
       .then(() => {
         task.status = "ready";
         fireVarStatus(taskId);
@@ -250,7 +254,13 @@ export async function handleVarColumn(req: Request, state: ViewerState): Promise
 
 // ─── Var column materialization ─────────────────────────────────────────────
 
-async function materialiseVarColumn(state: ViewerState, name: string, layer: string, colName: string): Promise<void> {
+async function materialiseVarColumn(
+  state: ViewerState,
+  name: string,
+  layer: string,
+  colName: string,
+  modality?: string,
+): Promise<void> {
   const nObs = state.store.nObs;
   const values = new Float64Array(nObs);
   values.fill(Number.NaN);
@@ -259,14 +269,26 @@ async function materialiseVarColumn(state: ViewerState, name: string, layer: str
   let cursor = 0;
   for (const [dsName, handle] of state.accessors) {
     const dsN = handle.nObs;
-    // MuData var loading is per-modality — requires picking which modality
-    // owns `name`. Deferred to the modality-aware UX work; skip MuData
-    // datasets here so the non-MuData path stays functional.
-    if (handle.kind !== "anndata") {
-      cursor += dsN;
-      continue;
+
+    // Resolve which AnnData holds the var: for MuData, the named modality's
+    // inner AnnData; for plain AnnData, the handle itself.
+    let adata: AnnData | null = null;
+    if (handle.kind === "mudata") {
+      if (!modality) {
+        // No modality specified on a MuData dataset — can't disambiguate.
+        cursor += dsN;
+        continue;
+      }
+      const mu = handle as unknown as { mod: ReadonlyMap<string, AnnData> };
+      adata = mu.mod.get(modality) ?? null;
+      if (!adata) {
+        cursor += dsN;
+        continue;
+      }
+    } else {
+      adata = handle as AnnData;
     }
-    const adata = handle as AnnData;
+
     const varIdx = findVarIndex(adata, name);
 
     if (varIdx >= 0) {
