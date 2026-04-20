@@ -11,7 +11,7 @@
  * GET  /api/var-column/{task_id}/status — Poll materialization status
  */
 
-import type { AnnData } from "../../zarr/anndata-class.ts";
+import type { AnnData } from "../../zarr/anndata.ts";
 import type { SparseArray } from "../../zarr/types.ts";
 import { VarColumnBodySchema, parseJsonBody } from "../protocol.ts";
 import type { ViewerState } from "../state.ts";

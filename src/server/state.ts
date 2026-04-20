@@ -4,7 +4,7 @@
  * Ports the Python `server/_state.py` dataclasses to TypeScript interfaces.
  */
 
-import type { AnnData } from "../zarr/anndata-class.ts";
+import type { AnnData } from "../zarr/anndata.ts";
 import type { PlateChannel, PlateMount } from "./plate.ts";
 import type { EmbeddingStore } from "./store.ts";
 
