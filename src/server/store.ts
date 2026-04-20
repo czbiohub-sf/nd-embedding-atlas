@@ -235,9 +235,14 @@ export class EmbeddingStore {
       colNames.push(`"${prefix}_${d}"`);
     }
 
+    // DROP first so a failed prior load (e.g. partial insert) doesn't
+    // leave a phantom table blocking the retry.
+    await this.conn.run(`DROP TABLE IF EXISTS ${tableName}`);
     await this.conn.run(`CREATE TABLE ${tableName} (${colDefs.join(", ")})`);
 
-    // Insert in batches to avoid overly long SQL
+    // Insert in batches to avoid overly long SQL. Non-finite floats
+    // (NaN / ±Infinity) are emitted as NULL — DuckDB parses the bare
+    // token `NaN` as an identifier, not a float literal.
     const batchSize = 1000;
     for (let start = 0; start < nRows; start += batchSize) {
       const end = Math.min(start + batchSize, nRows);
@@ -245,7 +250,8 @@ export class EmbeddingStore {
       for (let i = start; i < end; i++) {
         const vals = [String(i)];
         for (let d = 0; d < nDims; d++) {
-          vals.push(String(coords[i * nDims + d]));
+          const v = coords[i * nDims + d];
+          vals.push(Number.isFinite(v) ? String(v) : "NULL");
         }
         valueRows.push(`(${vals.join(", ")})`);
       }
