@@ -19,7 +19,6 @@ import type {
   ColumnData,
   NullableArray,
   ParsedAnnData,
-  ParsedMuData,
   Scalar,
   SparseArray,
 } from "./types.ts";
@@ -157,8 +156,8 @@ export class AnnDataAccessor {
     this._varIndices = varIndices ?? null;
   }
 
-  /** Create an AnnDataAccessor from a `ParsedAnnData` or `ParsedMuData`. */
-  static from(parsed: ParsedAnnData | ParsedMuData): AnnDataAccessor {
+  /** Create an AnnDataAccessor from a `ParsedAnnData`. */
+  static from(parsed: ParsedAnnData): AnnDataAccessor {
     return new AnnDataAccessor({
       obs: parsed.obs,
       var: parsed.var,
@@ -238,17 +237,40 @@ export class AnnDataAccessor {
    *      generic store listing exists in the Zarr spec).
    *
    * Entries that don't look like zarr arrays/groups are filtered out.
+   * Each surviving candidate is validated as a real 2-D numeric array —
+   * 1-D arrays, bool columns, and scalar entries are dropped. This
+   * matches the actual embedding shape, and (on MuData stores) skips
+   * `obsm/<modName>` — that's the obs-to-modality binary mapping, not
+   * an embedding.
    */
   async listObsmKeys(): Promise<string[] | null> {
     const group = this._group;
+    let candidates: string[] | null = null;
     if (group) {
-      const consolidated = await this._listObsmKeysConsolidated(group);
-      if (consolidated) return consolidated;
+      candidates = await this._listObsmKeysConsolidated(group);
     }
-    if (this._storePath) {
-      return this._listObsmKeysReaddir(this._storePath);
+    if (!candidates && this._storePath) {
+      candidates = await this._listObsmKeysReaddir(this._storePath);
     }
-    return null;
+    if (!candidates) return null;
+    const validated: string[] = [];
+    for (const key of candidates) {
+      if (await this._isValidEmbedding(key)) validated.push(key);
+    }
+    return validated;
+  }
+
+  /** True if `obsm/<name>` is a numeric 2-D array with ≥ 2 columns. */
+  private async _isValidEmbedding(name: string): Promise<boolean> {
+    if (!this._group) return false;
+    try {
+      const arr = await zarr.open(this._group.resolve(`obsm/${name}`), { kind: "array" });
+      if (arr.shape.length !== 2 || arr.shape[1] < 2) return false;
+      const dtype = String(arr.dtype);
+      return /^(float|int|uint)/.test(dtype);
+    } catch {
+      return false;
+    }
   }
 
   private async _listObsmKeysConsolidated(group: ZarrGroup): Promise<string[] | null> {
@@ -632,7 +654,24 @@ export interface ToDuckDBOptions {
   skipVar?: boolean;
 }
 
-export class AnnData {
+/**
+ * Shared contract implemented by both `AnnData` and `MuData`. The server
+ * types against this for ops that don't care about modality structure
+ * (discovery, embedding load, DuckDB ingest). Callers that need modality
+ * structure narrow via `handle.kind === "mudata"`.
+ */
+export interface DatasetHandle {
+  readonly kind: "anndata" | "mudata";
+  readonly obs: LazyDataFrame;
+  readonly var: LazyDataFrame;
+  readonly nObs: number;
+  listObsmKeys(): Promise<string[] | null>;
+  getObsm(name: string): Promise<DenseResult>;
+  toDuckDB(conn: DuckDBConnection, options?: ToDuckDBOptions): Promise<void>;
+}
+
+export class AnnData implements DatasetHandle {
+  readonly kind = "anndata" as const;
   readonly obs: LazyDataFrame;
   readonly var: LazyDataFrame;
   private readonly _accessor: AnnDataAccessor;
@@ -643,16 +682,16 @@ export class AnnData {
     this.var = new LazyDataFrame(accessor.var, "var_name");
   }
 
-  /** Build from a parsed AnnData / MuData result. */
-  static from(parsed: ParsedAnnData | ParsedMuData): AnnData {
+  /** Build from a parsed AnnData result. For MuData, use `MuData.from`. */
+  static from(parsed: ParsedAnnData): AnnData {
     return new AnnData(AnnDataAccessor.from(parsed));
   }
 
   /** One-call opener: resolve store + detect convention + wrap. */
   static async open(location: string | Readable): Promise<AnnData> {
     const parsed = await openStore(location);
-    if (parsed.kind === "ome-zarr") {
-      throw new Error("AnnData.open: store is OME-Zarr, not AnnData/MuData");
+    if (parsed.kind !== "anndata") {
+      throw new Error(`AnnData.open: store is ${parsed.kind}, not AnnData. Use MuData.open for MuData stores.`);
     }
     return AnnData.from(parsed);
   }

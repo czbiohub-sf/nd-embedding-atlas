@@ -6,7 +6,7 @@
  */
 
 // Re-export the zarr I/O surface actually consumed by callers.
-export { open, AnnData, toArrowTable } from "./zarr/index.ts";
+export { open, AnnData, MuData, toArrowTable } from "./zarr/index.ts";
 export type {
   AnnDataFrame,
   ColumnData,
@@ -17,4 +17,5 @@ export type {
   ParsedAnnData,
   ParsedMuData,
   ParsedOmeZarr,
+  DatasetHandle,
 } from "./zarr/index.ts";

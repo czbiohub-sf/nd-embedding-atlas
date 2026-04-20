@@ -17,11 +17,12 @@ export type {
   ParsedMuData,
   ParsedOmeZarr,
 } from "./types.ts";
-export type { DenseResult, MatrixResult } from "./anndata.ts";
+export type { DatasetHandle, DenseResult, MatrixResult, ToDuckDBOptions } from "./anndata.ts";
 
-// Public runtime API: open a store, read AnnData, convert to Arrow.
+// Public runtime API: open a store, read AnnData/MuData, convert to Arrow.
 export { open } from "./open.ts";
 export { AnnData } from "./anndata.ts";
+export { MuData } from "./mudata.ts";
 export { LazyDataFrame, toArrowTable } from "./data-frame.ts";
 export { BunFileStore, openBunStore } from "./bun-store.ts";
 export { ingestDataFrame, ingestDataFrames, arrowTypeToDuckDB, appendArrowValue } from "./duckdb-ingest.ts";

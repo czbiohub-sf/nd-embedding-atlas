@@ -1,20 +1,29 @@
 /**
- * MuData convention detector + parser.
+ * MuData — convention detector, parser, and public class.
+ *
+ * MuData is a root object above AnnData that holds a map of per-modality
+ * AnnData objects (`mdata.mod["rna"]`, etc.) plus shared annotations at
+ * the root level.
  *
  * Detects: root `.zattrs` has `"encoding-type": "MuData"`.
  * Structure:
  *   mod/<name>/   — each is a full AnnData
- *   obs/, var/    — shared annotations across modalities
- *   obsmap/       — integer maps from shared obs-axis to per-modality rows
+ *   obs/, var/    — root-level annotations (axis=0: obs shared)
+ *   obsm/<name>/  — NOT an embedding — obs→modality binary mapping
+ *   obsmap/<name> — integer map from shared obs-axis to per-modality rows
  *
- * Returns a `ParsedMuData`. Phase E (obsmap-driven slicing) will wire the
- * `modalities` map into the `AnnData` class; today it's read + exposed only.
+ * This PR supports axis=0 stores with 1-to-1 obs_names across modalities.
+ * Other axes and sparse modality coverage come later.
  */
 
+import type { DuckDBConnection } from "@duckdb/node-api";
 import * as zarr from "zarrita";
 import type { Readable } from "zarrita";
 import type { AnnDataFrame, ParsedAnnData, ParsedMuData } from "./types.ts";
-import { parseAnnData } from "./anndata.ts";
+import { AnnData, parseAnnData, type DatasetHandle, type DenseResult, type ToDuckDBOptions } from "./anndata.ts";
+import { LazyDataFrame } from "./data-frame.ts";
+import { ingestDataFrames } from "./duckdb-ingest.ts";
+import { open as openStore } from "./open.ts";
 import { readDataFrame } from "./readers.ts";
 
 type ZarrGroup = zarr.Group<Readable>;
@@ -146,4 +155,164 @@ async function discoverModalities(rootGroup: ZarrGroup, storePath: string | unde
     }
   }
   return found;
+}
+
+// ─── MuData public class ───────────────────────────────────────────────────
+
+export class MuData implements DatasetHandle {
+  readonly kind = "mudata" as const;
+  /**
+   * MuData axis attribute from the store's root `.zattrs`:
+   *   0  — observations shared across modalities (default)
+   *   1  — variables shared, observations concatenated
+   *   -1 — both shared
+   * Only axis=0 is supported in this release.
+   */
+  readonly axis: 0 | 1 | -1;
+  /** Root-level obs annotation. For axis=0, 1-to-1 with each modality's obs. */
+  readonly obs: LazyDataFrame;
+  /** Root-level var annotation (when present). */
+  readonly var: LazyDataFrame;
+  /** Per-modality AnnData handles, keyed by modality name. */
+  readonly mod: ReadonlyMap<string, AnnData>;
+
+  constructor(axis: 0 | 1 | -1, obs: LazyDataFrame, varDf: LazyDataFrame, mod: ReadonlyMap<string, AnnData>) {
+    this.axis = axis;
+    this.obs = obs;
+    this.var = varDf;
+    this.mod = mod;
+  }
+
+  /** Build from a parsed MuData result. */
+  static from(parsed: ParsedMuData): MuData {
+    const axisAttr = parsed.attrs.axis;
+    const axis: 0 | 1 | -1 = axisAttr === 1 ? 1 : axisAttr === -1 ? -1 : 0; // default 0 per spec
+
+    if (axis !== 0) {
+      throw new Error(`MuData axis=${axis} is not yet supported (only axis=0).`);
+    }
+
+    const emptyFrame: AnnDataFrame = {
+      index: [],
+      columns: new Map(),
+      columnOrder: [],
+      column: () => {},
+      *[Symbol.iterator]() {},
+    };
+    const obs = new LazyDataFrame(parsed.obs ?? emptyFrame, "obs_name");
+    const varDf = new LazyDataFrame(parsed.var ?? emptyFrame, "var_name");
+    const mod = new Map<string, AnnData>();
+    for (const [name, modParsed] of parsed.modalities) {
+      mod.set(name, AnnData.from(modParsed));
+    }
+    return new MuData(axis, obs, varDf, mod);
+  }
+
+  /** One-call opener: resolve store + detect convention + wrap. */
+  static async open(location: string | Readable): Promise<MuData> {
+    const parsed = await openStore(location);
+    if (parsed.kind !== "mudata") {
+      throw new Error(`MuData.open: store is ${parsed.kind}, not MuData. Use AnnData.open for AnnData stores.`);
+    }
+    return MuData.from(parsed);
+  }
+
+  get nObs(): number {
+    return this.obs.length;
+  }
+
+  /** Modality names in insertion order. */
+  get modNames(): string[] {
+    return [...this.mod.keys()];
+  }
+
+  // ── DatasetHandle contract ──────────────────────────────────────────────
+
+  /**
+   * List obsm embeddings across every modality, namespaced by modality:
+   *   ["dinov2/X_pca", "dinov2/X_umap", "rna/X_umap", ...]
+   *
+   * Root-level obsm is intentionally not enumerated — those keys are the
+   * MuData obs-to-modality binary mapping, not embeddings.
+   */
+  async listObsmKeys(): Promise<string[] | null> {
+    const out: string[] = [];
+    for (const [modName, modAdata] of this.mod) {
+      const keys = await modAdata.listObsmKeys();
+      if (!keys) continue;
+      for (const key of keys) out.push(`${modName}/${key}`);
+    }
+    return out.toSorted();
+  }
+
+  /**
+   * Load a namespaced embedding. The key must be `"<modality>/<obsmKey>"`.
+   */
+  getObsm(name: string): Promise<DenseResult> {
+    const slash = name.indexOf("/");
+    if (slash < 0) {
+      return Promise.reject(new Error(`MuData.getObsm: key "${name}" must be namespaced as "<modality>/<obsmKey>".`));
+    }
+    const modName = name.slice(0, slash);
+    const obsmKey = name.slice(slash + 1);
+    const modAdata = this.mod.get(modName);
+    if (!modAdata) {
+      return Promise.reject(
+        new Error(`MuData.getObsm: unknown modality "${modName}". Available: [${this.modNames.join(", ")}]`),
+      );
+    }
+    return modAdata.getObsm(obsmKey);
+  }
+
+  /**
+   * Register obs + var tables on DuckDB.
+   *
+   * - obs_base: one row per shared observation (root-level obs columns only).
+   * - var_base: union of each modality's var, with a `_modality` VARCHAR
+   *   column identifying the source modality. Shared root var (if present)
+   *   is emitted under `_modality = "__shared__"`.
+   *
+   * The `_modality` discriminator lets the frontend scope var-level picks
+   * to a modality (e.g. a gene from rna.var) while keeping a single
+   * `var_base` table the server queries uniformly.
+   */
+  async toDuckDB(conn: DuckDBConnection, options: ToDuckDBOptions = {}): Promise<void> {
+    const obsTable = options.obsTable ?? "obs_base";
+    const varTable = options.varTable ?? "var_base";
+
+    if (!options.skipObs) {
+      await ingestDataFrames(conn, obsTable, [this.obs], {
+        axis: "obs",
+        includeNameColumn: true,
+      });
+    }
+
+    if (!options.skipVar) {
+      // Build var_base as a union of shared root var (if any) + each
+      // modality's var, tagged with `_modality`. ingestDataFrames's
+      // datasetNames option + column-order union handle the schema merge.
+      const varFrames: LazyDataFrame[] = [];
+      const tags: string[] = [];
+      if (this.var.length > 0) {
+        varFrames.push(this.var);
+        tags.push("__shared__");
+      }
+      for (const [modName, modAdata] of this.mod) {
+        if (modAdata.var.length > 0) {
+          varFrames.push(modAdata.var);
+          tags.push(modName);
+        }
+      }
+      if (varFrames.length > 0) {
+        await ingestDataFrames(conn, varTable, varFrames, {
+          axis: "var",
+          includeNameColumn: true,
+          datasetNames: tags,
+        });
+        // `ingestDataFrames` emits `_dataset` when datasetNames is set.
+        // Rename to `_modality` for domain clarity.
+        await conn.run(`ALTER TABLE ${varTable} RENAME COLUMN _dataset TO _modality`);
+      }
+    }
+  }
 }
