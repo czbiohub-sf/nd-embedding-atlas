@@ -11,7 +11,8 @@
  *   7. Handle graceful shutdown
  */
 
-import { open, AnnData, ingestDataFrames } from "../zarr/index.ts";
+import { open, AnnData, MuData, ingestDataFrames } from "../zarr/index.ts";
+import type { DatasetHandle } from "../zarr/anndata.ts";
 import { EmbeddingStore, DEFAULT_OBSM_PRIORITY } from "../server/store.ts";
 import { buildPlateMounts, readPlateMeta } from "../server/plate.ts";
 import type { PlateChannel, PlateMount } from "../server/plate.ts";
@@ -40,7 +41,7 @@ function formatNumber(n: number): string {
 
 interface LoadedDataset {
   entry: DatasetEntry;
-  adata: AnnData;
+  adata: DatasetHandle;
   obsmKeys: string[];
 }
 
@@ -60,17 +61,30 @@ export async function startup(config: ResolvedConfig): Promise<void> {
   for (const ds of config.datasets) {
     try {
       const parsed = await open(ds.path);
-      if (parsed.kind === "ome-zarr") {
-        throw new Error(`${ds.name}: store is OME-Zarr, not AnnData/MuData`);
+      let adata: DatasetHandle;
+      let nVars: number;
+      if (parsed.kind === "anndata") {
+        const a = AnnData.from(parsed);
+        adata = a;
+        nVars = a.nVars;
+      } else if (parsed.kind === "mudata") {
+        const m = MuData.from(parsed);
+        adata = m;
+        // MuData nVars is the sum across modalities (shared root var is
+        // usually empty on axis=0; each modality owns its own var).
+        let vars = m.var.length;
+        for (const modAdata of m.mod.values()) vars += modAdata.nVars;
+        nVars = vars;
+      } else {
+        throw new Error(`${ds.name}: store is ${parsed.kind}, not AnnData/MuData`);
       }
-      const adata = AnnData.from(parsed);
 
       // Discover available obsm keys
       const obsmKeys = await discoverObsmKeys(adata);
 
       loaded.push({ entry: ds, adata, obsmKeys });
       console.log(
-        `    ${GREEN}✓${RESET} ${ds.name}  ${DIM}${formatNumber(adata.nObs)} obs × ${formatNumber(adata.nVars)} var${RESET}`,
+        `    ${GREEN}✓${RESET} ${ds.name}  ${DIM}${formatNumber(adata.nObs)} obs × ${formatNumber(nVars)} var${RESET}`,
       );
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -119,6 +133,17 @@ export async function startup(config: ResolvedConfig): Promise<void> {
   // added only when there's > 1 DF. obs identity (`__row_index__` / `obs_name`)
   // is added by `EmbeddingStore._ensureIdentityColumns`; var identity
   // (`__var_index__` / `var_name`) is emitted inline via `axis: "var"`.
+  //
+  // MuData: currently supported only as a single dataset. Multi-dataset
+  // unions mixing AnnData + MuData (or multiple MuData stores) are not
+  // supported yet — the per-modality var structure differs and merging
+  // requires a separate design. Reject loudly.
+  const hasMuData = loaded.some((ds) => ds.adata.kind === "mudata");
+  if (hasMuData && loaded.length > 1) {
+    console.error(`    ${RED}✗${RESET} Multi-dataset unions with MuData are not supported yet.`);
+    process.exit(1);
+  }
+
   const datasetNames = loaded.map((ds) => ds.entry.name);
   const initStore = async (conn: DuckDBConnection): Promise<void> => {
     await ingestDataFrames(
@@ -128,14 +153,23 @@ export async function startup(config: ResolvedConfig): Promise<void> {
       { datasetNames },
     );
   };
-  const initVar = async (conn: DuckDBConnection): Promise<void> => {
-    await ingestDataFrames(
-      conn,
-      "var_base",
-      loaded.map((ds) => ds.adata.var),
-      { datasetNames, axis: "var", includeNameColumn: true },
-    );
-  };
+
+  let initVar: ((conn: DuckDBConnection) => Promise<void>) | undefined;
+  if (hasMuData) {
+    // Delegate var ingest to MuData.toDuckDB — it knows how to union shared
+    // root var with each modality's var and emit the `_modality` discriminator.
+    const muHandle = loaded[0].adata as MuData;
+    initVar = (conn) => muHandle.toDuckDB(conn, { skipObs: true });
+  } else {
+    initVar = async (conn) => {
+      await ingestDataFrames(
+        conn,
+        "var_base",
+        loaded.map((ds) => ds.adata.var),
+        { datasetNames, axis: "var", includeNameColumn: true },
+      );
+    };
+  }
 
   const store = await EmbeddingStore.fromInit(initStore, { hidden, initVar });
 
@@ -216,8 +250,17 @@ export async function startup(config: ResolvedConfig): Promise<void> {
   console.log(`\n  ${BOLD}Datasets:${RESET}`);
   for (const ds of loaded) {
     const plateTag = ds.entry.platePath ? ` ${DIM}+ plate${RESET}` : "";
+    const nVars =
+      ds.adata.kind === "mudata"
+        ? (() => {
+            const m = ds.adata as MuData;
+            let total = m.var.length;
+            for (const mod of m.mod.values()) total += mod.nVars;
+            return total;
+          })()
+        : (ds.adata as AnnData).nVars;
     console.log(
-      `    ${ds.entry.name}  ${DIM}${formatNumber(ds.adata.nObs)} obs × ${formatNumber(ds.adata.nVars)} var${RESET}${plateTag}`,
+      `    ${ds.entry.name}  ${DIM}${formatNumber(ds.adata.nObs)} obs × ${formatNumber(nVars)} var${RESET}${plateTag}`,
     );
   }
 
@@ -272,7 +315,7 @@ export async function startup(config: ResolvedConfig): Promise<void> {
  * Falls back to probing a common candidate list for stores without a local
  * filesystem path (e.g. HTTP / in-memory).
  */
-async function discoverObsmKeys(adata: AnnData): Promise<string[]> {
+async function discoverObsmKeys(adata: DatasetHandle): Promise<string[]> {
   const listed = await adata.listObsmKeys();
   if (listed) return listed;
 

@@ -13,7 +13,19 @@ import { exportDir } from "./export.ts";
 /** Return var count of the first accessor (or 0 if none registered). */
 function firstVarCount(state: ViewerState): number {
   const iter = state.accessors.values().next();
-  return iter.done ? 0 : iter.value.nVars;
+  if (iter.done) return 0;
+  // For AnnData: var.length is the modality's nVars.
+  // For MuData: root var.length + sum of per-modality var lengths (axis=0).
+  const handle = iter.value;
+  if (handle.kind === "mudata") {
+    // Narrowing via kind — MuData type lives in mudata.ts. To avoid a
+    // cross-import cycle here, inspect the shape duck-typed.
+    const mu = handle as unknown as { var: { length: number }; mod: ReadonlyMap<string, { var: { length: number } }> };
+    let total = mu.var.length;
+    for (const m of mu.mod.values()) total += m.var.length;
+    return total;
+  }
+  return handle.var.length;
 }
 
 /** Build obsm metadata including loaded status. */

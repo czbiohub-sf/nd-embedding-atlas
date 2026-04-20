@@ -11,7 +11,7 @@
  * GET  /api/var-column/{task_id}/status — Poll materialization status
  */
 
-import type { AnnData } from "../../zarr/anndata.ts";
+import type { AnnData, DatasetHandle } from "../../zarr/anndata.ts";
 import type { SparseArray } from "../../zarr/types.ts";
 import { VarColumnBodySchema, parseJsonBody } from "../protocol.ts";
 import type { ViewerState } from "../state.ts";
@@ -64,17 +64,23 @@ export function getVarTask(taskId: string): VarTask | undefined {
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-/** Return the first AnnData in the state (or null if none). */
-function firstAdata(state: ViewerState): AnnData | null {
+/** Return the first dataset handle in the state (or null if none). */
+function firstAdata(state: ViewerState): DatasetHandle | null {
   const iter = state.accessors.values().next();
   return iter.done ? null : iter.value;
 }
 
-/** Materialise var.index (whatever its runtime type) as a plain string array. */
-function varNamesOf(adata: AnnData): string[] {
+/**
+ * Materialise var.index as a plain string array.
+ *
+ * For MuData, var.index is the shared root var — typically empty on
+ * axis=0 stores where each modality owns its own var. A follow-up will
+ * pull names from the union of per-modality var. For this PR we return
+ * the root-level index as-is.
+ */
+function varNamesOf(adata: DatasetHandle): string[] {
   const idx = adata.var.index;
   if (Array.isArray(idx)) return [...idx];
-  // Int32Array index — fall back to numeric strings
   const typed = idx as Int32Array;
   const out: string[] = [];
   for (let i = 0; i < typed.length; i++) out.push(String(typed[i]));
@@ -144,12 +150,18 @@ export async function handleVarLayers(state: ViewerState): Promise<Response> {
 /**
  * Probe the zarr store for `layers/` children. Returns [] if not accessible.
  * Uses the accessor's internal zarr group reference if available.
+ *
+ * AnnData only — MuData's layers are per-modality; a cross-modality layer
+ * listing is a follow-up. For MuData, return [] so callers fall back to
+ * the default "X".
  */
-async function discoverLayers(adata: AnnData): Promise<string[]> {
+async function discoverLayers(adata: DatasetHandle): Promise<string[]> {
+  if (adata.kind !== "anndata") return [];
+  const anndata = adata as AnnData;
   // Reach through AnnData → internal accessor → private _group (zarrita
   // Location). Hack pending Phase C's AnnDataView API; then we'll expose
   // a proper `listLayers()` method.
-  const group = (adata.accessor as unknown as { _group?: unknown })._group;
+  const group = (anndata.accessor as unknown as { _group?: unknown })._group;
   if (!group) return [];
 
   try {
@@ -233,8 +245,16 @@ async function materialiseVarColumn(state: ViewerState, name: string, layer: str
 
   // Iterate datasets in insertion order (same order as obs_base was built).
   let cursor = 0;
-  for (const [dsName, adata] of state.accessors) {
-    const dsN = adata.nObs;
+  for (const [dsName, handle] of state.accessors) {
+    const dsN = handle.nObs;
+    // MuData var loading is per-modality — requires picking which modality
+    // owns `name`. Deferred to the modality-aware UX work; skip MuData
+    // datasets here so the non-MuData path stays functional.
+    if (handle.kind !== "anndata") {
+      cursor += dsN;
+      continue;
+    }
+    const adata = handle as AnnData;
     const varIdx = findVarIndex(adata, name);
 
     if (varIdx >= 0) {
@@ -255,7 +275,7 @@ async function materialiseVarColumn(state: ViewerState, name: string, layer: str
 }
 
 /** Find a var name's position in adata.var.index (or -1 if absent). */
-function findVarIndex(adata: AnnData, name: string): number {
+function findVarIndex(adata: AnnData | DatasetHandle, name: string): number {
   const idx = adata.var.index;
   if (Array.isArray(idx)) {
     return idx.indexOf(name);
