@@ -28,7 +28,7 @@ import { readDataFrame, readDataFrameParallel, readSparse } from "./readers.ts";
 import { extractStore } from "./zarr-boundary.ts";
 import { LazyDataFrame } from "./data-frame.ts";
 import { open as openStore } from "./open.ts";
-import { ingestDataFrame } from "./to-duckdb.ts";
+import { ingestDataFrame } from "./duckdb-ingest.ts";
 
 type ZarrGroup = zarr.Group<Readable>;
 

@@ -24,4 +24,4 @@ export { open } from "./open.ts";
 export { AnnData } from "./anndata.ts";
 export { LazyDataFrame, toArrowTable } from "./data-frame.ts";
 export { BunFileStore, openBunStore } from "./bun-store.ts";
-export { ingestDataFrame, ingestDataFrames, arrowTypeToDuckDB, appendArrowValue } from "./to-duckdb.ts";
+export { ingestDataFrame, ingestDataFrames, arrowTypeToDuckDB, appendArrowValue } from "./duckdb-ingest.ts";
