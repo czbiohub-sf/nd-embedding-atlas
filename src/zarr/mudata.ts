@@ -230,31 +230,33 @@ export class MuData implements DatasetHandle {
 
   /**
    * List obsm embeddings across every modality, namespaced by modality:
-   *   ["dinov2/X_pca", "dinov2/X_umap", "rna/X_umap", ...]
+   *   ["dinov2:X_pca", "dinov2:X_umap", "rna:X_umap", ...]
    *
-   * Root-level obsm is intentionally not enumerated — those keys are the
-   * MuData obs-to-modality binary mapping, not embeddings.
+   * Separator is `:` per the MuData Python convention (mdata.mod["rna"]
+   * obsm exposed as "rna:X_umap"). Root-level obsm is intentionally not
+   * enumerated — those keys are the MuData obs-to-modality binary mapping,
+   * not embeddings.
    */
   async listObsmKeys(): Promise<string[] | null> {
     const out: string[] = [];
     for (const [modName, modAdata] of this.mod) {
       const keys = await modAdata.listObsmKeys();
       if (!keys) continue;
-      for (const key of keys) out.push(`${modName}/${key}`);
+      for (const key of keys) out.push(`${modName}:${key}`);
     }
     return out.toSorted();
   }
 
   /**
-   * Load a namespaced embedding. The key must be `"<modality>/<obsmKey>"`.
+   * Load a namespaced embedding. The key must be `"<modality>:<obsmKey>"`.
    */
   getObsm(name: string): Promise<DenseResult> {
-    const slash = name.indexOf("/");
-    if (slash < 0) {
-      return Promise.reject(new Error(`MuData.getObsm: key "${name}" must be namespaced as "<modality>/<obsmKey>".`));
+    const colon = name.indexOf(":");
+    if (colon < 0) {
+      return Promise.reject(new Error(`MuData.getObsm: key "${name}" must be namespaced as "<modality>:<obsmKey>".`));
     }
-    const modName = name.slice(0, slash);
-    const obsmKey = name.slice(slash + 1);
+    const modName = name.slice(0, colon);
+    const obsmKey = name.slice(colon + 1);
     const modAdata = this.mod.get(modName);
     if (!modAdata) {
       return Promise.reject(

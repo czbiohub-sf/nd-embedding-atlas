@@ -98,11 +98,23 @@ function varNamesOf(adata: DatasetHandle): string[] {
 export function handleVarNames(url: URL, state: ViewerState): Response {
   const q = (url.searchParams.get("q") ?? "").toLowerCase();
   const limit = Math.max(1, Math.min(500, Number(url.searchParams.get("limit") ?? "50")));
+  const modality = url.searchParams.get("modality") ?? undefined;
 
-  const adata = firstAdata(state);
-  if (!adata) return Response.json({ names: [] });
+  const handle = firstAdata(state);
+  if (!handle) return Response.json({ names: [] });
 
-  const names = varNamesOf(adata);
+  // MuData: resolve to the named modality's AnnData.
+  let source: DatasetHandle = handle;
+  if (handle.kind === "mudata" && modality) {
+    const mu = handle as unknown as { mod: ReadonlyMap<string, DatasetHandle> };
+    const modHandle = mu.mod.get(modality);
+    if (!modHandle) {
+      return Response.json({ error: `Unknown modality "${modality}"` }, { status: 404 });
+    }
+    source = modHandle;
+  }
+
+  const names = varNamesOf(source);
 
   const matches: string[] = [];
   if (q === "") {

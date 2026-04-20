@@ -28,14 +28,14 @@ type RowData = Record<string, unknown>;
  * Derive a SQL-safe column prefix from an obsm key.
  *
  * Strips leading "X_" (e.g. "X_umap" → "umap"). For MuData namespaced
- * keys, replaces the `/` path separator so the result stays a valid
- * identifier and strips `X_` from every segment:
- *   "rna/X_umap"   → "rna_umap"
- *   "dinov2/X_pca" → "dinov2_pca"
+ * keys (`mod:key`), replaces the `:` separator with `_` so the result
+ * stays a valid identifier and strips `X_` from every segment:
+ *   "rna:X_umap"   → "rna_umap"
+ *   "dinov2:X_pca" → "dinov2_pca"
  */
 export function obsmColumnPrefix(obsmKey: string): string {
   return obsmKey
-    .split("/")
+    .split(":")
     .map((seg) => (seg.startsWith("X_") ? seg.slice(2) : seg))
     .join("_");
 }

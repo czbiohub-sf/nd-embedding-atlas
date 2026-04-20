@@ -28,20 +28,26 @@ function firstVarCount(state: ViewerState): number {
   return handle.var.length;
 }
 
-/** Build obsm metadata including loaded status. */
-function buildObsmMetadata(
-  availableKeys: string[],
-  store: EmbeddingStore,
-): Record<string, { prefix: string; n_dims: number | null; loaded: boolean }> {
-  const meta: Record<string, { prefix: string; n_dims: number | null; loaded: boolean }> = {};
+interface ObsmEntry {
+  prefix: string;
+  n_dims: number | null;
+  loaded: boolean;
+  modality?: string;
+}
+
+/** Build obsm metadata including loaded status + modality tag for MuData keys. */
+function buildObsmMetadata(availableKeys: string[], store: EmbeddingStore): Record<string, ObsmEntry> {
+  const meta: Record<string, ObsmEntry> = {};
   for (const key of availableKeys) {
     const prefix = obsmColumnPrefix(key);
     const loaded = store.loadedEmbeddings.get(key);
-    if (loaded) {
-      meta[key] = { prefix, n_dims: loaded.nDims, loaded: true };
-    } else {
-      meta[key] = { prefix, n_dims: null, loaded: false };
-    }
+    const entry: ObsmEntry = loaded
+      ? { prefix, n_dims: loaded.nDims, loaded: true }
+      : { prefix, n_dims: null, loaded: false };
+    // Tag modality for MuData keys formatted "<mod>:<obsm_key>"
+    const colon = key.indexOf(":");
+    if (colon > 0) entry.modality = key.slice(0, colon);
+    meta[key] = entry;
   }
   return meta;
 }
@@ -78,6 +84,25 @@ export function handleMetadata(state: ViewerState, config: DatasetMeta): Respons
         }
       : { fov_col: null, t_col: null, bbox_col: null, x_col: null, y_col: null },
   };
+
+  // MuData-specific fields (only when the first handle is a MuData)
+  const firstHandle = state.accessors.values().next().value;
+  if (firstHandle?.kind === "mudata") {
+    const mu = firstHandle as unknown as {
+      mod: ReadonlyMap<string, { var: { length: number }; obs: { columns: readonly string[] } }>;
+    };
+    const modalities = [...mu.mod.keys()];
+    result.modalities = modalities;
+
+    const varCount: Record<string, number> = {};
+    const modalityObsColumns: Record<string, string[]> = {};
+    for (const [modName, modAdata] of mu.mod) {
+      varCount[modName] = modAdata.var.length;
+      modalityObsColumns[modName] = [...modAdata.obs.columns];
+    }
+    result.var_count = varCount;
+    result.modality_obs_columns = modalityObsColumns;
+  }
 
   if (config.plateMeta) {
     Object.assign(result, config.plateMeta);
