@@ -25,18 +25,9 @@ jobs:
           - os: macos-14 # Apple Silicon
             target: bun-darwin-arm64
             artifact: ndea-darwin-arm64
-          - os: macos-13 # Intel Mac
-            target: bun-darwin-x64
-            artifact: ndea-darwin-x64
           - os: ubuntu-latest # Linux x64
             target: bun-linux-x64
             artifact: ndea-linux-x64
-          - os: ubuntu-24.04-arm # Linux arm64 (Graviton, RPi5)
-            target: bun-linux-arm64
-            artifact: ndea-linux-arm64
-          - os: windows-latest # Windows x64
-            target: bun-windows-x64
-            artifact: ndea-windows-x64.exe
 
     runs-on: ${{ matrix.os }}
 
@@ -89,13 +80,7 @@ jobs:
             $FRONTEND_FILES
 
       - name: Smoke test
-        if: runner.os != 'Windows'
         run: ./dist/${{ matrix.artifact }} --version
-
-      - name: Smoke test (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: .\dist\${{ matrix.artifact }} --version
 
       - name: Report binary size
         shell: bash
