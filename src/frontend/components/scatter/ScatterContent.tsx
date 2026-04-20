@@ -24,6 +24,13 @@ import { LegendProvider } from "./LegendContext";
 import { ScatterOverlayControls } from "./ScatterOverlayControls";
 import { ScatterView } from "./ScatterView";
 
+/** `var_count` is a number for AnnData, a per-modality map for MuData. */
+function hasVarForMetadata(v: number | Record<string, number> | undefined): boolean {
+  if (typeof v === "number") return v > 0;
+  if (v && typeof v === "object") return Object.values(v).some((n) => n > 0);
+  return false;
+}
+
 // ── Props ─────────────────────────────────────────────────────────────────────
 
 export interface ScatterContentProps {
@@ -192,12 +199,16 @@ export function ScatterContent({
       obsColumns={obsColumns}
       colorMode={colorMode}
       colorModeCanToggle={colorModeInfo.canToggle}
-      hasVar={(metadata.var_count ?? 0) > 0}
+      hasVar={hasVarForMetadata(metadata.var_count)}
       onSetAxes={(newAxes) => {
         void handleSetAxes(newAxes);
       }}
       onSetColorSource={setColorSource}
       onToggleColorMode={() => setColorModeOverride(colorMode === "continuous" ? "categorical" : "continuous")}
+      modalities={metadata.modalities}
+      modalityObsColumns={metadata.modality_obs_columns}
+      varCount={metadata.var_count}
+      obsm={metadata.obsm}
       selectionTool={selectionTool}
       onSetSelectionTool={setSelectionTool}
       onFitView={() => fitViewRef.current?.()}

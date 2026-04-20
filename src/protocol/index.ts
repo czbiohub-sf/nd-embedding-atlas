@@ -141,6 +141,8 @@ export const ObsmEntrySchema = z.object({
   prefix: z.string(),
   n_dims: z.number().nullable().optional(),
   loaded: z.boolean(),
+  /** Modality name for MuData keys (e.g. "rna" for "rna:X_umap"). */
+  modality: z.string().optional(),
 });
 export const SpatialMetaSchema = z.object({
   fov_col: z.string().nullable().optional(),
@@ -170,8 +172,13 @@ export const MetadataSchema = z.looseObject({
   database: z.object({ type: z.string(), uri: z.string().optional() }),
   obsm: z.record(z.string(), ObsmEntrySchema),
   obs_columns: z.array(z.string()).optional(),
-  var_count: z.number().optional(),
+  /** Number for AnnData; per-modality map for MuData. */
+  var_count: z.union([z.number(), z.record(z.string(), z.number())]).optional(),
   layers: z.array(z.string()).optional(),
+  /** MuData modality names (absent for single AnnData). */
+  modalities: z.array(z.string()).optional(),
+  /** MuData per-modality obs column names. */
+  modality_obs_columns: z.record(z.string(), z.array(z.string())).optional(),
   export_dir: z.string().optional(),
   spatial: SpatialMetaSchema.optional(),
   plate: z.boolean().optional(),
