@@ -193,6 +193,10 @@ export default defineConfig({
           "@typescript-eslint/no-explicit-any": "off",
           "typescript/no-non-null-assertion": "off",
           "typescript/no-floating-promises": "off",
+          // `bun:test`'s `expect(...).rejects` returns a thenable that
+          // typescript-eslint doesn't recognise — disable the check to keep
+          // the common `await expect(fn()).rejects.toThrow()` pattern working.
+          "typescript/await-thenable": "off",
         },
       },
       {

@@ -209,9 +209,10 @@ describe("CLI --help and --version", () => {
     const stdout = await new Response(proc.stdout).text();
 
     expect(exitCode).toBe(0);
-    expect(stdout).toContain("nd-embedding-atlas");
-    expect(stdout).toContain("--port");
-    expect(stdout).toContain("--no-open");
+    // Citty prints combined stdout — look for the subcommand list rendered by citty.
+    expect(stdout).toContain("view");
+    expect(stdout).toContain("update");
+    expect(stdout).toContain("ndea");
   });
 
   test("--version prints version and exits 0", async () => {
@@ -224,33 +225,31 @@ describe("CLI --help and --version", () => {
     const stdout = await new Response(proc.stdout).text();
 
     expect(exitCode).toBe(0);
-    expect(stdout).toContain("ndea 0.1.0");
+    expect(stdout.trim()).toContain("0.1.0");
   });
 
-  test("no args prints error and exits 1", async () => {
+  test("view --help includes --port and --no-open", async () => {
+    const proc = Bun.spawn(["bun", "run", "src/cli/index.ts", "view", "--help"], {
+      cwd: join(import.meta.dir, ".."),
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const exitCode = await proc.exited;
+    const stdout = await new Response(proc.stdout).text();
+
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("--port");
+    expect(stdout).toContain("--no-open");
+  });
+
+  test("no args prints usage and exits 1", async () => {
     const proc = Bun.spawn(["bun", "run", "src/cli/index.ts"], {
       cwd: join(import.meta.dir, ".."),
       stdout: "pipe",
       stderr: "pipe",
     });
     const exitCode = await proc.exited;
-    const stderr = await new Response(proc.stderr).text();
-
     expect(exitCode).toBe(1);
-    expect(stderr).toContain("at least one path is required");
-  });
-
-  test("unknown option prints error and exits 1", async () => {
-    const proc = Bun.spawn(["bun", "run", "src/cli/index.ts", "--bogus"], {
-      cwd: join(import.meta.dir, ".."),
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-    const exitCode = await proc.exited;
-    const stderr = await new Response(proc.stderr).text();
-
-    expect(exitCode).toBe(1);
-    expect(stderr).toContain("unknown option");
   });
 
   test("nonexistent zarr path prints error and exits 1", async () => {
