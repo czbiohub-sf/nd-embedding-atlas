@@ -61,10 +61,21 @@ export async function handleScatterPositions(url: URL, store: EmbeddingStore): P
     return Response.json({ error: "Missing required params: embedding, x_col, y_col" }, { status: 400 });
   }
 
-  try {
-    const rows = await store.queryJson(
-      `SELECT __row_index__, "${xCol}", "${yCol}" FROM dataset ORDER BY __row_index__ ASC`,
+  // Guard: embedding must be registered before we can SELECT its columns from
+  // the dataset VIEW. Early-out with a precise error instead of letting DuckDB
+  // throw a cryptic "Referenced column not found" from the generic catch.
+  if (!store.loadedEmbeddings.has(embedding)) {
+    const loaded = [...store.loadedEmbeddings.keys()];
+    return Response.json(
+      { error: `Embedding "${embedding}" not registered. Loaded: [${loaded.join(", ") || "none"}]` },
+      { status: 409 },
     );
+  }
+
+  const sql = `SELECT __row_index__, "${xCol}", "${yCol}" FROM dataset ORDER BY __row_index__ ASC`;
+
+  try {
+    const rows = await store.queryJson(sql);
 
     const n = rows.length;
     const rowIndices: number[] = Array.from<number>({ length: n });
@@ -104,7 +115,8 @@ export async function handleScatterPositions(url: URL, store: EmbeddingStore): P
     return binaryResponse(packBinary(header, new Uint8Array(interleaved.buffer)));
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return Response.json({ error: message }, { status: 400 });
+    console.error(`[scatter-positions] ${message}\n  SQL: ${sql}`);
+    return Response.json({ error: message, sql }, { status: 500 });
   }
 }
 
