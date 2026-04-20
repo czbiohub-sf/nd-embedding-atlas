@@ -85,8 +85,8 @@ frontend     ──→  @uwdata/mosaic-core socketConnector (ws /mosaic),
 - REST endpoints: `/api/embeddings/*`, `/api/obs/*`, `/api/scatter-*`,
   `/api/var/*`, `/api/categorize`, `/api/obssets/*`, `/api/export`, `/api/crop/*`.
 - `EmbeddingStore` — single DuckDB connection; `obs_base` + `var_base` tables
-  + `dataset` VIEW joining registered obsm tables. Temp tables
-  (`__scatter_selection`, `mosaic.preagg_*`) live on the same connection.
+  - `dataset` VIEW joining registered obsm tables. Temp tables
+    (`__scatter_selection`, `mosaic.preagg_*`) live on the same connection.
 
 ### Frontend (`src/frontend/`)
 
@@ -103,10 +103,9 @@ frontend     ──→  @uwdata/mosaic-core socketConnector (ws /mosaic),
 ## Commands
 
 ```zsh
-# Dev stack (backend + frontend concurrently) — three equivalent entrypoints today
-mise run dev /path/to/data.zarr
-bun run dev /path/to/data.zarr       # uses scripts/dev.ts
-vp run dev /path/to/data.zarr        # same script via Vite+ task runner
+# Dev stack (backend + frontend concurrently)
+bun run dev /path/to/data.zarr       # primary — invokes scripts/dev.ts
+vp run dev /path/to/data.zarr        # alias — Vite+ dispatches to the same script
 
 # Or separately
 bun run src/cli/index.ts view /path/to/data.zarr   # backend on :5055
@@ -125,24 +124,6 @@ vp test                           # vitest
 bun test                          # Bun-native .test.ts suites
 ```
 
-### Dev-entrypoint consolidation (open)
-
-Three current paths — `mise run dev`, `bun run dev`, `vp run dev` — all
-eventually call `scripts/dev.ts`. Pick one and retire the others.
-
-| Option | Owner | Pros | Cons |
-|---|---|---|---|
-| `vp run dev` | Vite+ | Already the recommended toolchain entrypoint; `vp check` + `vp test` already land here; hooks + staged-files wiring on the same command surface | Requires `vp` installed globally; `vp run` is thin over `package.json` scripts so you're one layer removed from the actual script |
-| `bun run dev` | Bun | Zero-indirection — runs `scripts/dev.ts` under Bun directly; matches the rest of the toolchain (we already use `bun build --compile`, `bun test`, `bun install`) | Doesn't coexist as cleanly with Vite+ task cache; users need both `bun` and `vp` on PATH anyway |
-| `mise run dev` | mise | Handles runtime version pinning + env vars in one place; drop-in for contributors who use mise for Node/Bun version management | Adds a third tool on top of Bun and Vite+; overkill when the project is Bun-only |
-
-Recommendation worth debating: **kill `mise run dev`, keep `bun run dev`**
-as the primary path and leave `vp run dev` as an alias (Vite+ reads
-`package.json` scripts already). Rationale: the project is Bun-only,
-`scripts/dev.ts` is a Bun script, and pushing everything through
-`bun run` keeps the runtime story one-layer deep. Vite+ stays the owner
-of frontend-specific things (`vp dev`, `vp build`, `vp check`, `vp test`).
-
 ## Code style
 
 Oxlint + Oxfmt via `vp check` (config in `vite.config.ts`).
@@ -160,7 +141,7 @@ Oxlint + Oxfmt via `vp check` (config in `vite.config.ts`).
   `__scatter_selection`) needs a unique suffix per revision, else stale hits.
 - **Mosaic preagg tables**: Server emits `CREATE TABLE mosaic.preagg_*` — SQL
   allow-list in `mosaic.ts` must permit `CREATE SCHEMA / CREATE TABLE /
-  DROP TABLE IF EXISTS / DROP SCHEMA`; nothing else.
+DROP TABLE IF EXISTS / DROP SCHEMA`; nothing else.
 - **VIEW schema invalidation**: `ALTER TABLE obs_base ADD COLUMN` invalidates
   the `dataset` VIEW schema. `EmbeddingStore._rebuildView()` handles this on
   embedding / var-column / categorize registration.
@@ -168,7 +149,7 @@ Oxlint + Oxfmt via `vp check` (config in `vite.config.ts`).
   `/api/var-column`, not `/data/query`. The mosaic allow-list blocks
   client-side `ALTER` / `UPDATE`.
 - **Worker URL in compiled binary**: `new URL("./column-worker.ts",
-  import.meta.url)` must resolve in both dev and `bun build --compile`. Bun
+import.meta.url)` must resolve in both dev and `bun build --compile`. Bun
   embeds Workers automatically.
 - **Frontend static serving**: dev reads from `dist/frontend/` on disk,
   compiled binary reads from `$bunfs/` embedded filesystem — same
@@ -176,7 +157,7 @@ Oxlint + Oxfmt via `vp check` (config in `vite.config.ts`).
 - **Native `.node` addon**: `duckdb.node` (~53 MB) embeds into the compiled
   binary but prevents cross-compilation. Build per-platform.
 - **Zarr v3 sharding**: shard index is read via `getRange(path,
-  {suffixLength})`. `BunFileStore.getRange` must support the suffix form or
+{suffixLength})`. `BunFileStore.getRange` must support the suffix form or
   the crc32c codec throws "Failed to decode chunk".
 
 ## Key decisions
