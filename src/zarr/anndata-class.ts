@@ -15,7 +15,6 @@ import type { Readable } from "zarrita";
 import type { ParsedAnnData, ParsedMuData } from "./types.ts";
 import { AnnDataAccessor } from "./anndata-accessor.ts";
 import type { DenseResult, MatrixResult } from "./anndata-accessor.ts";
-import type { DataFrame } from "./data-frame.ts";
 import { LazyDataFrame } from "./data-frame.ts";
 import { open as openStore } from "./open.ts";
 import { ingestDataFrame } from "./to-duckdb.ts";
@@ -31,8 +30,8 @@ export interface ToDuckDBOptions {
 }
 
 export class AnnData {
-  readonly obs: DataFrame;
-  readonly var: DataFrame;
+  readonly obs: LazyDataFrame;
+  readonly var: LazyDataFrame;
   private readonly _accessor: AnnDataAccessor;
 
   constructor(accessor: AnnDataAccessor) {

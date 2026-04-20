@@ -8,7 +8,7 @@
 
 import type { DuckDBConnection } from "@duckdb/node-api";
 import type { Column } from "@uwdata/flechette";
-import type { DataFrame } from "./data-frame.ts";
+import type { LazyDataFrame } from "./data-frame.ts";
 
 type ArrowColumn = Column<unknown>;
 
@@ -37,7 +37,7 @@ export interface IngestOptions {
 export function ingestDataFrame(
   conn: DuckDBConnection,
   tableName: string,
-  df: DataFrame,
+  df: LazyDataFrame,
   options: Omit<IngestOptions, "datasetNames"> & { datasetName?: string } = {},
 ): Promise<readonly string[]> {
   const { datasetName, ...rest } = options;
@@ -61,7 +61,7 @@ export function ingestDataFrame(
 export async function ingestDataFrames(
   conn: DuckDBConnection,
   tableName: string,
-  dfs: readonly DataFrame[],
+  dfs: readonly LazyDataFrame[],
   options: IngestOptions = {},
 ): Promise<readonly string[]> {
   if (dfs.length === 0) throw new Error(`ingestDataFrames: no DataFrames for table "${tableName}"`);
