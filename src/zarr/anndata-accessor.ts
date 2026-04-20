@@ -25,7 +25,7 @@ import type {
   SparseArray,
 } from "./types.ts";
 import { CsrCscArray } from "./helpers.ts";
-import { readSparse } from "./encoding-readers.ts";
+import { readSparse } from "./readers.ts";
 import { extractStore } from "./zarr-boundary.ts";
 
 type ZarrGroup = zarr.Group<Readable>;

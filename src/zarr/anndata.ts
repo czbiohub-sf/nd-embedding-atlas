@@ -12,8 +12,7 @@
 import * as zarr from "zarrita";
 import type { Readable } from "zarrita";
 import type { AnnDataFrame, ParsedAnnData } from "./types.ts";
-import { readDataFrame } from "./encoding-readers.ts";
-import { readDataFrameParallel } from "./parallel-reader.ts";
+import { readDataFrame, readDataFrameParallel } from "./readers.ts";
 
 type ZarrGroup = zarr.Group<Readable>;
 
