@@ -155,7 +155,7 @@ export function ModalityColorPicker({
   }, [obsModTab, obsGroups]);
 
   // Derive color modality for cross-mod indicator
-  const colorMod = useMemo(() => {
+  const colorMod = useMemo<string | undefined>(() => {
     if (colorSource.kind === "var" && isMuData) {
       return varModTab;
     }
@@ -164,7 +164,7 @@ export function ModalityColorPicker({
         if (cols.includes(colorSource.column)) return mod;
       }
     }
-    return;
+    return undefined;
   }, [colorSource, isMuData, varModTab, modalityObsColumns]);
 
   // ── Trigger ─────────────────────────────────────────────────────────────────

@@ -22,9 +22,9 @@ function TabsTrigger({ className, ...props }: TabsPrimitive.Tab.Props) {
         "relative px-3 py-1.5 font-medium text-[11px] text-muted-foreground/60 transition-colors",
         "cursor-pointer select-none outline-none",
         "hover:text-muted-foreground",
-        "data-[selected]:text-foreground",
+        "data-selected:text-foreground",
         "after:absolute after:right-0 after:bottom-0 after:left-0 after:h-px after:bg-foreground/0",
-        "data-[selected]:after:bg-foreground/60",
+        "data-selected:after:bg-foreground/60",
         className,
       )}
       {...props}
