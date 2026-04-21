@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import type { AxisState } from "../../types";
 import type { ScatterData } from "../types";
@@ -97,7 +97,11 @@ export function useMosaicScatterData({
       };
     },
     enabled: !!axes && embeddingLoaded,
-    staleTime: 5 * 60 * 1000,
+    // Embedding coords are immutable for a dataset — hold forever.
+    staleTime: Infinity,
+    // Keep the prior dim's positions rendering while the new slice
+    // resolves; avoids a flash-of-nothing when the user switches axes.
+    placeholderData: keepPreviousData,
   });
 
   // 2. Categories — NOT blocked by positions (parallel)
@@ -174,7 +178,17 @@ export function useMosaicScatterData({
     }
   }, [positionQuery.data, colorMode, categoryQuery.data, continuousQuery.data, continuousColormap, continuousReversed]);
 
-  const positionKey = positionQuery.data ? `${positionQuery.data.embeddingKey}:${positionQuery.data.numCells}` : null;
+  // Derive positionKey from the *data snapshot*, not from the hook's
+  // props. With `placeholderData: keepPreviousData`, `positionQuery.data`
+  // lags behind xCol/yCol during the fetch — keying off props here would
+  // advance the key before the fetch resolved, causing the GPU to re-init
+  // with stale positions. `dataUpdatedAt` only ticks when fresh data
+  // actually lands in the cache (fetch resolution OR cache-hit on an
+  // already-populated key), so it always matches the currently rendered
+  // `data.positions`.
+  const positionKey = positionQuery.data
+    ? `${positionQuery.data.embeddingKey}:${positionQuery.data.numCells}:${positionQuery.dataUpdatedAt}`
+    : null;
 
   const categoryNames = categoryQuery.data?.categoryNames ?? [];
   const colorRange: [number, number] | null = continuousQuery.data
