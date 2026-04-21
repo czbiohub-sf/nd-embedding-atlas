@@ -251,19 +251,32 @@ export class MuData implements DatasetHandle {
    * Load a namespaced embedding. The key must be `"<modality>:<obsmKey>"`.
    */
   getObsm(name: string): Promise<DenseResult> {
+    const { modAdata, obsmKey } = this._resolveObsmKey(name);
+    return modAdata.getObsm(obsmKey);
+  }
+
+  getObsmShape(name: string): Promise<readonly [number, number]> {
+    const { modAdata, obsmKey } = this._resolveObsmKey(name);
+    return modAdata.getObsmShape(obsmKey);
+  }
+
+  getObsmColumn(name: string, colIndex: number, signal?: AbortSignal): Promise<Float32Array> {
+    const { modAdata, obsmKey } = this._resolveObsmKey(name);
+    return modAdata.getObsmColumn(obsmKey, colIndex, signal);
+  }
+
+  private _resolveObsmKey(name: string): { modAdata: AnnData; obsmKey: string } {
     const colon = name.indexOf(":");
     if (colon < 0) {
-      return Promise.reject(new Error(`MuData.getObsm: key "${name}" must be namespaced as "<modality>:<obsmKey>".`));
+      throw new Error(`MuData obsm key "${name}" must be namespaced as "<modality>:<obsmKey>".`);
     }
     const modName = name.slice(0, colon);
     const obsmKey = name.slice(colon + 1);
     const modAdata = this.mod.get(modName);
     if (!modAdata) {
-      return Promise.reject(
-        new Error(`MuData.getObsm: unknown modality "${modName}". Available: [${this.modNames.join(", ")}]`),
-      );
+      throw new Error(`MuData: unknown modality "${modName}". Available: [${this.modNames.join(", ")}]`);
     }
-    return modAdata.getObsm(obsmKey);
+    return { modAdata, obsmKey };
   }
 
   /**

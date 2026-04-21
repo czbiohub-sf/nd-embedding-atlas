@@ -266,8 +266,7 @@ export class AnnDataAccessor {
     try {
       const arr = await zarr.open(this._group.resolve(`obsm/${name}`), { kind: "array" });
       if (arr.shape.length !== 2 || arr.shape[1] < 2) return false;
-      const dtype = String(arr.dtype);
-      return /^(float|int|uint)/.test(dtype);
+      return /^(float|int|uint)/.test(arr.dtype);
     } catch {
       return false;
     }
@@ -359,6 +358,82 @@ export class AnnDataAccessor {
     }
 
     return this._applyDenseSelection(data, shape);
+  }
+
+  /**
+   * Open `obsm/<name>` as a zarr array, transparently unwrapping the
+   * AnnData-"array" group encoding (same two-step dance as `getObsm`).
+   */
+  private async _openObsmArray(name: string) {
+    if (!this._group) throw new Error("No zarr group available — cannot access obsm");
+    const location = this._group.resolve(`obsm/${name}`);
+    try {
+      const grp = await zarr.open(location, { kind: "group" });
+      const attrs = (grp.attrs ?? {}) as Record<string, unknown>;
+      if (attrs["encoding-type"] === "array") {
+        return await zarr.open(location, { kind: "array" });
+      }
+    } catch {
+      /* fall through to direct array open */
+    }
+    return zarr.open(location, { kind: "array" });
+  }
+
+  /**
+   * Metadata-only shape read for obsm/<name>. Returns [nRows, nCols]
+   * without loading any data. Used by SliceLoader to validate colIndex
+   * without incurring a full matrix read.
+   */
+  async getObsmShape(name: string): Promise<readonly [number, number]> {
+    const arr = await this._openObsmArray(name);
+    if (arr.shape.length !== 2) {
+      throw new Error(`obsm/${name} must be 2-D (got shape ${arr.shape.join("×")})`);
+    }
+    return [arr.shape[0], arr.shape[1]] as const;
+  }
+
+  /**
+   * Load a single column of an obsm embedding as a Float32Array of length nObs.
+   *
+   * Uses zarrita's fancy indexing (`[null, colIndex]`) to pull one stride
+   * instead of the full matrix — for 1024-dim embeddings this drops the
+   * read from ~115 MB to ~224 KB.
+   *
+   * Obs selection is applied after the slice read. Cancellation is
+   * cooperative: `signal.aborted` is checked before and after the
+   * (potentially slow) zarr fetch.
+   */
+  async getObsmColumn(name: string, colIndex: number, signal?: AbortSignal): Promise<Float32Array> {
+    const arr = await this._openObsmArray(name);
+
+    if (arr.shape.length !== 2) {
+      throw new Error(`obsm/${name} must be 2-D (got shape ${arr.shape.join("×")})`);
+    }
+    const [nRows, nCols] = arr.shape;
+    if (colIndex < 0 || colIndex >= nCols) {
+      throw new Error(`colIndex ${colIndex} out of range [0, ${nCols}) for obsm/${name}`);
+    }
+
+    if (signal?.aborted) throw signal.reason ?? new Error("Aborted");
+
+    // Fancy indexing: select all rows, single col → 1-D chunk.
+    const result = await zarr.get(arr, [null, colIndex]);
+
+    if (signal?.aborted) throw signal.reason ?? new Error("Aborted");
+
+    const data = result.data as TypedArray;
+    const col = data instanceof Float32Array ? data : Float32Array.from(data as unknown as ArrayLike<number>);
+
+    if (col.length !== nRows) {
+      throw new Error(`getObsmColumn: expected ${nRows} values, got ${col.length}`);
+    }
+
+    if (!this._obsIndices) return col;
+    const selected = new Float32Array(this._obsIndices.length);
+    for (let i = 0; i < this._obsIndices.length; i++) {
+      selected[i] = col[this._obsIndices[i]];
+    }
+    return selected;
   }
 
   // ---------------------------------------------------------------------------
@@ -667,6 +742,13 @@ export interface DatasetHandle {
   readonly nObs: number;
   listObsmKeys(): Promise<string[] | null>;
   getObsm(name: string): Promise<DenseResult>;
+  /** Metadata-only shape of obsm/<name>; returns [nRows, nCols]. */
+  getObsmShape(name: string): Promise<readonly [number, number]>;
+  /**
+   * Load one column of an obsm embedding (length-nObs Float32 aligned to
+   * this handle's obs order). Cheaper than `getObsm` for high-dim sources.
+   */
+  getObsmColumn(name: string, colIndex: number, signal?: AbortSignal): Promise<Float32Array>;
   toDuckDB(conn: DuckDBConnection, options?: ToDuckDBOptions): Promise<void>;
 }
 
@@ -720,6 +802,14 @@ export class AnnData implements DatasetHandle {
 
   getObsm(name: string): Promise<DenseResult> {
     return this._accessor.getObsm(name);
+  }
+
+  getObsmShape(name: string): Promise<readonly [number, number]> {
+    return this._accessor.getObsmShape(name);
+  }
+
+  getObsmColumn(name: string, colIndex: number, signal?: AbortSignal): Promise<Float32Array> {
+    return this._accessor.getObsmColumn(name, colIndex, signal);
   }
 
   listObsmKeys(): Promise<string[] | null> {
