@@ -17,12 +17,17 @@ if (args.length === 0) {
   process.exit(1);
 }
 
-// Start backend with --no-static --no-open (frontend dev server handles both).
-// --hot reloads on server source changes without dropping the port listener.
+// Start backend with --no-static + NDEA_NO_OPEN=1 (Vite handles the
+// frontend, so the backend should never auto-open a browser window).
+// `--hot` reloads on server source changes without dropping the port.
+// We pass the open-suppressor as an env var rather than a CLI flag
+// because citty's handling of `--no-<name>` flags is ambiguous when the
+// declared option is itself named `no-open`.
 const backend = spawn({
-  cmd: ["bun", "--hot", "run", "src/cli/index.ts", ...args, "--no-static", "--no-open"],
+  cmd: ["bun", "--hot", "run", "src/cli/index.ts", ...args, "--no-static"],
   stdout: "inherit",
   stderr: "inherit",
+  env: { ...process.env, NDEA_NO_OPEN: "1" },
 });
 
 // Parse port from args (default 5055)
@@ -62,6 +67,29 @@ const frontend = spawn({
   stdout: "inherit",
   stderr: "inherit",
 });
+
+// Auto-open the Vite dev URL once it's serving. Mirrors the compiled
+// binary's auto-open behavior so `vp run dev` isn't a blank terminal.
+// Honors `--no-open` when passed through the dev args.
+if (!args.includes("--no-open")) {
+  void (async () => {
+    const frontendUrl = "http://localhost:5173";
+    const openStart = Date.now();
+    while (Date.now() - openStart < 30_000) {
+      try {
+        const res = await fetch(frontendUrl);
+        if (res.ok) {
+          const opener = process.platform === "darwin" ? "open" : process.platform === "linux" ? "xdg-open" : null;
+          if (opener) spawn({ cmd: [opener, frontendUrl] });
+          return;
+        }
+      } catch {
+        /* Vite not ready yet */
+      }
+      await sleep(200);
+    }
+  })();
+}
 
 // Forward signals to both processes
 const shutdown = () => {

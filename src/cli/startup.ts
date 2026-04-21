@@ -282,7 +282,11 @@ export async function startup(config: ResolvedConfig): Promise<void> {
 
   // ── 7. Auto-open browser ────────────────────────────────────────────────
 
-  if (!config.noOpen) {
+  // `NDEA_NO_OPEN=1` is an unambiguous escape hatch for callers that spawn
+  // the backend programmatically (e.g. `scripts/dev.ts`), since citty's
+  // parse of `--no-open` depends on how the flag is declared.
+  const suppressOpen = config.noOpen || process.env.NDEA_NO_OPEN === "1";
+  if (!suppressOpen) {
     const url = `http://${config.host}:${config.port}`;
     try {
       if (process.platform === "darwin") {

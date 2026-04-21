@@ -204,6 +204,15 @@ async function routeRequest(
     return serveStatic(pathname, frontendDir);
   }
 
+  // `--no-static` mode: backend is API-only and the Vite dev server owns
+  // the HTML bundle on :5173. Anyone landing here in a browser probably
+  // guessed the backend port — point them at the dev URL.
+  if (req.headers.get("accept")?.includes("text/html")) {
+    return new Response(
+      `<!doctype html><html><body style="font-family:system-ui;padding:2rem;line-height:1.5"><h2>Backend (no static)</h2><p>The API backend is running on this port (${options.port}). The dev frontend is served by Vite — open <a href="http://${options.host}:5173">http://${options.host}:5173</a>.</p></body></html>`,
+      { status: 404, headers: { "Content-Type": "text/html; charset=utf-8" } },
+    );
+  }
   return new Response("Not Found", { status: 404 });
 }
 
