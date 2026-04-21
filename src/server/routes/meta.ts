@@ -6,7 +6,6 @@
  */
 
 import type { ViewerState, DatasetMeta } from "../state.ts";
-import type { EmbeddingStore } from "../store.ts";
 import { obsmColumnPrefix } from "../store.ts";
 import { exportDir } from "./export.ts";
 
@@ -36,13 +35,13 @@ interface ObsmEntry {
 }
 
 /** Build obsm metadata including loaded status + modality tag for MuData keys. */
-function buildObsmMetadata(availableKeys: string[], store: EmbeddingStore): Record<string, ObsmEntry> {
+function buildObsmMetadata(availableKeys: string[], state: ViewerState): Record<string, ObsmEntry> {
   const meta: Record<string, ObsmEntry> = {};
   for (const key of availableKeys) {
     const prefix = obsmColumnPrefix(key);
-    const loaded = store.loadedEmbeddings.get(key);
-    const entry: ObsmEntry = loaded
-      ? { prefix, n_dims: loaded.nDims, loaded: true }
+    const loader = state.obsmLoaders.get(key);
+    const entry: ObsmEntry = loader
+      ? { prefix, n_dims: loader.width, loaded: true }
       : { prefix, n_dims: null, loaded: false };
     // Tag modality for MuData keys formatted "<mod>:<obsm_key>"
     const colon = key.indexOf(":");
@@ -68,7 +67,7 @@ export function handleMetadata(state: ViewerState, config: DatasetMeta): Respons
       ...config.embeddingProps,
     },
     database: { type: "rest" },
-    obsm: buildObsmMetadata(state.availableObsmKeys, state.store),
+    obsm: buildObsmMetadata(state.availableObsmKeys, state),
     obs_columns: config.obsColumnNames,
     plate: config.hasPlate,
     export_dir: exportDir(),

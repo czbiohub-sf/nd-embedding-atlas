@@ -230,7 +230,7 @@ function routeApi(
 
   // ── Scatter positions ───────────────────────────────────────────
   if (pathname === "/api/scatter-positions" && method === "GET") {
-    return handleScatterPositions(url, store);
+    return handleScatterPositions(url, state, req.signal);
   }
 
   // ── Scatter categories ──────────────────────────────────────────

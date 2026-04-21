@@ -187,7 +187,7 @@ export function handleHealth(state: ViewerState): Response {
   return Response.json({
     status: "ok",
     n_obs: state.store.nObs,
-    loaded_embeddings: Array.from(state.store.loadedEmbeddings.keys()),
+    loaded_embeddings: Array.from(state.obsmLoaders.keys()),
     available_embeddings: state.availableObsmKeys,
   });
 }

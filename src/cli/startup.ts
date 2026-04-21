@@ -206,6 +206,7 @@ export async function startup(config: ResolvedConfig): Promise<void> {
     loadErrors: new Map(),
     accessors,
     plateMounts,
+    obsmLoaders: new Map(),
   };
   // ── 4. Resolve frontend ─────────────────────────────────────────────────
 

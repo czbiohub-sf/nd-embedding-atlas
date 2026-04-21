@@ -10,6 +10,8 @@
  */
 
 import { parseJsonBody, ScatterSelectionBodySchema } from "../protocol.ts";
+import { ObsmSliceLoader } from "../slice-loader.ts";
+import type { ViewerState } from "../state.ts";
 import type { EmbeddingStore } from "../store.ts";
 
 // ─── Binary format helpers ──────────────────────────────────────────────────
@@ -47,12 +49,40 @@ function binaryResponse(body: Uint8Array): Response {
 // ─── Scatter positions ──────────────────────────────────────────────────────
 
 /**
+ * Parse a trailing `_<digits>` dim index off a SQL-safe obsm column name
+ * like `dinov2_pca_7` → 7. Returns null if the suffix isn't present.
+ */
+function parseDimIndex(col: string): number | null {
+  const m = /_(\d+)$/.exec(col);
+  return m ? Number(m[1]) : null;
+}
+
+/**
+ * Lazily construct the `ObsmSliceLoader` for an embedding key and cache it
+ * on `state.obsmLoaders`. Width is discovered via a metadata-only shape
+ * read against the first accessor that carries the key — no data load.
+ */
+async function getOrCreateLoader(state: ViewerState, embedding: string): Promise<ObsmSliceLoader> {
+  const existing = state.obsmLoaders.get(embedding);
+  if (existing) return existing;
+  const width = await ObsmSliceLoader.detectWidth(embedding, state.accessors.entries());
+  const loader = new ObsmSliceLoader(embedding, state.accessors.entries(), width);
+  state.obsmLoaders.set(embedding, loader);
+  return loader;
+}
+
+/**
  * Handle GET /api/scatter-positions
  *
  * Returns float32 interleaved x/y positions normalized to [-1, 1].
  * Query params: embedding, x_col, y_col
+ *
+ * Phase 0: bypasses DuckDB entirely. Reads two columns directly from the
+ * ObsmSliceLoader (zarr slice reads, ~one column per dim) and builds the
+ * interleaved Float32 buffer in JS. Aborts propagate through `req.signal`
+ * into the zarr read so abandoned fetches don't waste bandwidth.
  */
-export async function handleScatterPositions(url: URL, store: EmbeddingStore): Promise<Response> {
+export async function handleScatterPositions(url: URL, state: ViewerState, signal: AbortSignal): Promise<Response> {
   const embedding = url.searchParams.get("embedding");
   const xCol = url.searchParams.get("x_col");
   const yCol = url.searchParams.get("y_col");
@@ -61,48 +91,63 @@ export async function handleScatterPositions(url: URL, store: EmbeddingStore): P
     return Response.json({ error: "Missing required params: embedding, x_col, y_col" }, { status: 400 });
   }
 
-  // Guard: embedding must be registered before we can SELECT its columns from
-  // the dataset VIEW. Early-out with a precise error instead of letting DuckDB
-  // throw a cryptic "Referenced column not found" from the generic catch.
-  if (!store.loadedEmbeddings.has(embedding)) {
-    const loaded = [...store.loadedEmbeddings.keys()];
+  if (!state.availableObsmKeys.includes(embedding)) {
     return Response.json(
-      { error: `Embedding "${embedding}" not registered. Loaded: [${loaded.join(", ") || "none"}]` },
-      { status: 409 },
+      { error: `Unknown embedding "${embedding}". Available: [${state.availableObsmKeys.join(", ") || "none"}]` },
+      { status: 404 },
     );
   }
 
-  const sql = `SELECT __row_index__, "${xCol}", "${yCol}" FROM dataset ORDER BY __row_index__ ASC`;
+  const xDim = parseDimIndex(xCol);
+  const yDim = parseDimIndex(yCol);
+  if (xDim === null || yDim === null) {
+    return Response.json(
+      { error: `x_col / y_col must end in "_<dim>" (got x_col="${xCol}", y_col="${yCol}")` },
+      { status: 400 },
+    );
+  }
 
   try {
-    const rows = await store.queryJson(sql);
+    const loader = await getOrCreateLoader(state, embedding);
+    // Fetch both dims in parallel — they share the loader's dedup map, so
+    // repeat calls with the same colIndex don't double-read.
+    const [xs, ys] = await Promise.all([loader.loadColumn(xDim, signal), loader.loadColumn(yDim, signal)]);
 
-    const n = rows.length;
-    const rowIndices: number[] = Array.from<number>({ length: n });
-    const xs = new Float64Array(n);
-    const ys = new Float64Array(n);
-
-    for (let i = 0; i < n; i++) {
-      rowIndices[i] = Number(rows[i].__row_index__);
-      const xVal = Number(rows[i][xCol]);
-      const yVal = Number(rows[i][yCol]);
-      xs[i] = Number.isFinite(xVal) ? xVal : 0;
-      ys[i] = Number.isFinite(yVal) ? yVal : 0;
+    if (signal.aborted) {
+      return new Response("aborted", { status: 499 });
     }
 
-    // Normalize to [-1, 1]
+    if (xs.length !== ys.length) {
+      throw new Error(`dim length mismatch: x=${xs.length}, y=${ys.length}`);
+    }
+    const n = xs.length;
+
+    // Normalize to [-1, 1]. NaN values are coerced to 0 for rendering;
+    // downstream consumers already treat non-finite positions as hidden.
     let maxAbs = 0;
     for (let i = 0; i < n; i++) {
-      maxAbs = Math.max(maxAbs, Math.abs(xs[i]), Math.abs(ys[i]));
+      const xv = xs[i];
+      const yv = ys[i];
+      const ax = Number.isFinite(xv) ? Math.abs(xv) : 0;
+      const ay = Number.isFinite(yv) ? Math.abs(yv) : 0;
+      if (ax > maxAbs) maxAbs = ax;
+      if (ay > maxAbs) maxAbs = ay;
     }
 
     const interleaved = new Float32Array(n * 2);
     if (maxAbs > 0) {
       for (let i = 0; i < n; i++) {
-        interleaved[i * 2] = xs[i] / maxAbs;
-        interleaved[i * 2 + 1] = ys[i] / maxAbs;
+        const xv = xs[i];
+        const yv = ys[i];
+        interleaved[i * 2] = Number.isFinite(xv) ? xv / maxAbs : 0;
+        interleaved[i * 2 + 1] = Number.isFinite(yv) ? yv / maxAbs : 0;
       }
     }
+
+    // rowIndices are the trivial 0..n-1 ordering; the loader already
+    // aligns columns to obs_base row order.
+    const rowIndices = Array.from<number>({ length: n });
+    for (let i = 0; i < n; i++) rowIndices[i] = i;
 
     const header = {
       numCells: n,
@@ -114,9 +159,10 @@ export async function handleScatterPositions(url: URL, store: EmbeddingStore): P
 
     return binaryResponse(packBinary(header, new Uint8Array(interleaved.buffer)));
   } catch (err) {
+    if (signal.aborted) return new Response("aborted", { status: 499 });
     const message = err instanceof Error ? err.message : String(err);
-    console.error(`[scatter-positions] ${message}\n  SQL: ${sql}`);
-    return Response.json({ error: message, sql }, { status: 500 });
+    console.error(`[scatter-positions] ${message}`);
+    return Response.json({ error: message }, { status: 500 });
   }
 }
 

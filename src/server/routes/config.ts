@@ -25,7 +25,7 @@ export function handleConfig(state: ViewerState): Response {
     spatial: state.spatial,
     obsColumns: state.obsColumns,
     availableObsmKeys: state.availableObsmKeys,
-    loadedEmbeddings: Array.from(state.store.loadedEmbeddings.keys()),
+    loadedEmbeddings: Array.from(state.obsmLoaders.keys()),
     nObs: state.store.nObs,
     port: state.port,
   });

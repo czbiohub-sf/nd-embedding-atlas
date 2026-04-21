@@ -43,6 +43,7 @@ function createMockState(store: EmbeddingStore): ViewerState {
     loadErrors: new Map(),
     accessors: new Map(),
     plateMounts: [],
+    obsmLoaders: new Map(),
   };
 }
 
