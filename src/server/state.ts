@@ -6,6 +6,7 @@
 
 import type { DatasetHandle } from "../zarr/anndata.ts";
 import type { PlateChannel, PlateMount } from "./plate.ts";
+import type { ObsmSliceLoader } from "./slice-loader.ts";
 import type { EmbeddingStore } from "./store.ts";
 
 /** Resolved spatial column names (from config or auto-detection). */
@@ -116,4 +117,10 @@ export interface ViewerState {
   accessors: Map<string, DatasetHandle>;
   /** URL-mount → disk-path descriptors for OME-Zarr HCS stores. */
   plateMounts: PlateMount[];
+  /**
+   * Column-wise obsm loaders, keyed by embedding key (e.g. "rna:X_umap").
+   * Lazily constructed on first use; stitches columns across every
+   * accessor so the result aligns to obs_base row order.
+   */
+  obsmLoaders: Map<string, ObsmSliceLoader>;
 }
