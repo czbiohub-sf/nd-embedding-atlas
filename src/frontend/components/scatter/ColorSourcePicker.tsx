@@ -2,6 +2,7 @@ import { ChevronDownIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useScatterUIDispatch } from "@/components/scatter/ScatterUIStateProvider";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { DimensionBadge } from "@/components/ui/dimension-badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   COLOR_NONE,
@@ -19,19 +20,11 @@ import { useLayerNames } from "@/scatter-gpu/hooks/useLayerNames";
 // ── Trigger label helpers ─────────────────────────────────────────────────────
 
 function ObsBadge() {
-  return (
-    <span className="shrink-0 rounded-sm border border-blue-500/30 bg-blue-500/20 px-1 font-sans text-[9px] text-blue-400 leading-none">
-      obs
-    </span>
-  );
+  return <DimensionBadge tone="obs">obs</DimensionBadge>;
 }
 
 function VarBadge({ layer }: { layer: string }) {
-  return (
-    <span className="shrink-0 rounded-sm border border-emerald-500/30 bg-emerald-500/20 px-1 font-sans text-[9px] text-emerald-400 leading-none">
-      {layer}
-    </span>
-  );
+  return <DimensionBadge tone="var">{layer}</DimensionBadge>;
 }
 
 // ── Tab button ────────────────────────────────────────────────────────────────

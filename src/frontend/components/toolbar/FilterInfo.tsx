@@ -4,6 +4,7 @@ import { useCallback } from "react";
 import { useDashboard } from "../../hooks/useDashboard";
 import { useMosaicClient } from "../../hooks/useMosaicClient";
 import { filterExprToExpr, toRows } from "../../lib/mosaic-helpers";
+import { FilterBadge } from "../ui/filter-badge";
 
 interface PointCounts {
   total: number;
@@ -41,17 +42,7 @@ export function FilterInfo() {
     transform,
   });
 
-  if (!data) {
-    return <div className="ml-auto font-mono text-2xs text-text-muted tabular-nums" />;
-  }
+  if (!data) return <div className="ml-auto" />;
 
-  const isFiltered = data.filtered < data.total;
-
-  return (
-    <div className="ml-auto font-mono text-2xs text-text-muted tabular-nums">
-      {isFiltered
-        ? `${data.filtered.toLocaleString()} / ${data.total.toLocaleString()} points`
-        : `${data.total.toLocaleString()} points`}
-    </div>
-  );
+  return <FilterBadge className="ml-auto" total={data.total} filtered={data.filtered} label="points" />;
 }

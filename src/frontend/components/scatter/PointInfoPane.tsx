@@ -7,6 +7,7 @@ import { Waypoints } from "lucide-react";
 import { useEffect, useState } from "react";
 import { jsonFetcher } from "../../lib/fetcher";
 import { cn } from "../../lib/utils";
+import { KeyValueRow } from "../ui/key-value-row";
 import { Separator } from "../ui/separator";
 
 interface PointInfoPaneProps {
@@ -65,10 +66,9 @@ export function PointInfoPane({
       {/* Key–value rows */}
       <div className="flex flex-col gap-0.5">
         {fields.map((key) => (
-          <div key={key} className="flex items-baseline justify-between gap-3">
-            <span className="max-w-[90px] truncate text-muted-foreground/70">{key}</span>
-            <span className="text-foreground/90 tabular-nums">{row[key] ?? "—"}</span>
-          </div>
+          <KeyValueRow key={key} label={key}>
+            {row[key] ?? "—"}
+          </KeyValueRow>
         ))}
       </div>
 
