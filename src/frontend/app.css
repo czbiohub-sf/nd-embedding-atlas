@@ -19,10 +19,31 @@
 /* ── Class-based dark mode variant ──────────────────────────────────── */
 @custom-variant dark (&:is(.dark *));
 
-/* ── Design tokens ────────────────────────────────────────────────────
- *  @theme injects these into :root AND generates Tailwind utilities.
- *  Light values are the defaults. .dark overrides them below.
- * ──────────────────────────────────────────────────────────────────── */
+/* ════════════════════════════════════════════════════════════════════
+ * TIER 1 — PRIMITIVES
+ * ────────────────────────────────────────────────────────────────────
+ * Raw source values. Never used directly by components.
+ * The --*-hue anchors are consumed by the --*-emphasis family below
+ * via relative-color syntax.
+ * ════════════════════════════════════════════════════════════════════ */
+:root {
+  /* Master hue knob — shift UI tone (cool/warm/neutral) in one place */
+  --base-hue: 277.117;
+
+  /* Hue anchors — source colors for --emphasis family */
+  --accent-hue: oklch(0.585 0.233 var(--base-hue));
+  --danger-hue: oklch(0.577 0.245 27.325);
+  --warning-hue: oklch(0.741 0.181 60);
+  --success-hue: oklch(0.69 0.19 170);
+}
+
+/* ════════════════════════════════════════════════════════════════════
+ * TIER 2 — SEMANTICS (our custom vocab)
+ * ────────────────────────────────────────────────────────────────────
+ * @theme generates Tailwind utilities. Light values here; .dark below.
+ * shadcn-canonical vocab (--background, --card, etc.) lives in the
+ * separate :root/@theme inline blocks near the bottom of this file.
+ * ════════════════════════════════════════════════════════════════════ */
 @theme {
   /* Fonts */
   --font-sans: "DM Sans", system-ui, -apple-system, sans-serif;
@@ -48,8 +69,12 @@
   --color-accent-rose: #f43f5e;
 
   /* ── Charts ── */
-  --color-chart-mark: oklch(0.585 0.233 277.117);
-  --color-chart-mark-fade: oklch(0.585 0.233 277.117 / 0.125);
+  --color-chart-mark: oklch(0.585 0.233 var(--base-hue));
+  --color-chart-mark-fade: oklch(from var(--color-chart-mark) l c h / 0.125);
+
+  /* ── Status bar (was orphan — now defined) ── */
+  --color-status-bar: #f7f7f7; /* matches --color-surface */
+  --color-status-bar-border: #e8e8e8; /* matches --color-border-subtle */
 
   /* ── Layout ── */
   --footer-height: 1.5rem;
@@ -62,6 +87,40 @@
   --z-popover: 200;
   --z-modal: 300;
   --z-toast: 400;
+
+  /* ── Typography scale ──
+   * Tailwind v4 ships --text-xs (0.75rem / 12px) and larger. Add a tighter
+   * rung for dense instrument UI labels so arbitrary text-[10px]/text-[11px]
+   * can migrate to named utilities. */
+  --text-2xs: 0.6875rem; /* 11px — tight label */
+  --text-3xs: 0.625rem; /* 10px — dense legend */
+
+  /* ── Density scale ──
+   * Named heights/padding for compact controls. Phase-3 primitives
+   * (SliderRow, IconButton, ControlStrip) select a density rung instead
+   * of hardcoding size-[22px] style arbitrary values. */
+  --control-height-sm: 22px;
+  --control-height-md: 26px;
+  --control-height-lg: 32px;
+  --row-padding-y-sm: 2px;
+  --row-padding-y-md: 4px;
+  --row-padding-y-lg: 8px;
+
+  /* ── Glass surface blur (exposed as blur-glass utility) ── */
+  --blur-glass: 12px;
+}
+
+/* ── Tier 2 — Emphasis family + glass tokens (light) ──
+ * Not in @theme because they're derived via relative color from
+ * Tier 1 anchors. Exposed to Tailwind via @theme inline at bottom. */
+:root {
+  --emphasis: oklch(from var(--accent-hue) l c h / 5%);
+  --danger-emphasis: oklch(from var(--danger-hue) l c h / 10%);
+  --warning-emphasis: oklch(from var(--warning-hue) l c h / 7%);
+  --success-emphasis: oklch(from var(--success-hue) l c h / 10%);
+
+  --glass-bg: oklch(1 0 0 / 80%);
+  --glass-border: oklch(0 0 0 / 7%);
 }
 
 /* ── Dark mode overrides ──────────────────────────────────────────────
@@ -85,6 +144,20 @@ html.dark {
   --color-text-primary: var(--foreground); /* oklch(0.985 0 0)   */
   --color-text-secondary: var(--muted-foreground); /* oklch(0.708 0 0)   */
   --color-text-muted: oklch(0.62 0 0);
+
+  /* Status bar — dark overrides for the orphan tokens fixed above */
+  --color-status-bar: var(--card); /* = oklch(0.205 0 0) */
+  --color-status-bar-border: var(--border); /* = oklch(1 0 0 / 16%) */
+
+  /* Emphasis family — bumped alpha for dark surfaces (hues carry less on dark) */
+  --emphasis: oklch(from var(--accent-hue) l c h / 10%);
+  --danger-emphasis: oklch(from var(--danger-hue) l c h / 15%);
+  --warning-emphasis: oklch(from var(--warning-hue) l c h / 12%);
+  --success-emphasis: oklch(from var(--success-hue) l c h / 15%);
+
+  /* Glass surface — dark panels need a darker tint, paler border */
+  --glass-bg: oklch(0 0 0 / 60%);
+  --glass-border: oklch(1 0 0 / 7%);
 
   /* Preset OKLCH dark values follow — they set --background, --card, --muted etc.
    * which our bridge vars above reference via var(). */
@@ -393,6 +466,19 @@ select:disabled {
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+
+  /* ── Emphasis family — tinted-background utilities ──
+   * Usage: bg-emphasis, bg-danger-emphasis, bg-warning-emphasis, bg-success-emphasis.
+   * These reference :root / html.dark vars so theme swap propagates. */
+  --color-emphasis: var(--emphasis);
+  --color-danger-emphasis: var(--danger-emphasis);
+  --color-warning-emphasis: var(--warning-emphasis);
+  --color-success-emphasis: var(--success-emphasis);
+
+  /* ── Glass surface utilities ──
+   * bg-glass-bg / border-glass-border / backdrop-blur-glass. */
+  --color-glass-bg: var(--glass-bg);
+  --color-glass-border: var(--glass-border);
 }
 /*
  ---break---
