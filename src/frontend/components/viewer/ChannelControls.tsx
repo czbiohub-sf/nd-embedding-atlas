@@ -1,5 +1,6 @@
 import { EyeIcon, EyeOffIcon, Layers } from "lucide-react";
 import { useState } from "react";
+import { Panel } from "../ui/panel";
 import { ScrollArea } from "../ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { Slider } from "../ui/slider";
@@ -28,20 +29,22 @@ export function ChannelControls() {
   // ── Minimized: icon badge ──────────────────────────────────────────────────
   if (minimized) {
     return (
-      <button
-        type="button"
-        onClick={() => setMinimized(false)}
-        aria-label="Open channel controls"
-        className="flex size-7 items-center justify-center rounded-lg border border-white/[0.07] bg-card/80 text-muted-foreground backdrop-blur-md transition-colors hover:text-foreground"
-      >
-        <Layers className="size-3.5" />
-      </button>
+      <Panel variant="glass" className="size-7">
+        <button
+          type="button"
+          onClick={() => setMinimized(false)}
+          aria-label="Open channel controls"
+          className="flex size-full items-center justify-center text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <Layers className="size-3.5" />
+        </button>
+      </Panel>
     );
   }
 
   // ── Expanded panel ─────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col overflow-hidden rounded-lg border border-white/[0.07] bg-card/80 backdrop-blur-md">
+    <Panel variant="glass" className="flex flex-col">
       {/* Header */}
       <div className="flex shrink-0 items-center gap-1.5 px-2 py-1.5">
         <Layers className="size-3 shrink-0 text-muted-foreground/60" />
@@ -140,6 +143,6 @@ export function ChannelControls() {
           })}
         </div>
       </ScrollArea>
-    </div>
+    </Panel>
   );
 }

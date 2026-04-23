@@ -5,6 +5,7 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
+import { Panel } from "@/components/ui/panel";
 import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
 import { useColormapPalette } from "../../hooks/useColormaps";
@@ -131,10 +132,7 @@ export function ContinuousLegend({
   void scale;
 
   return (
-    <div
-      className="absolute top-10 left-2 z-20 w-52 rounded-lg border border-white/[0.07] bg-card/80 px-2.5 py-2 backdrop-blur-md"
-      title={columnName}
-    >
+    <Panel variant="glass" className="absolute top-10 left-2 z-20 w-52 px-2.5 py-2" title={columnName}>
       {/* Single row: [colormap circle] [range slider] */}
       <div className="flex items-center gap-2">
         <ContextMenu>
@@ -192,6 +190,6 @@ export function ContinuousLegend({
         <span>{formatValue(vmin)}</span>
         <span>{formatValue(vmax)}</span>
       </div>
-    </div>
+    </Panel>
   );
 }

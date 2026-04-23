@@ -60,6 +60,7 @@ import { ColorSourcePicker } from "../scatter/ColorSourcePicker";
 import { ButtonGroup } from "../ui/button-group";
 import { Combobox, type ComboboxOption } from "../ui/combobox";
 import { HoverTip } from "../ui/hover-tip";
+import { IconButton } from "../ui/icon-button";
 import { Separator } from "../ui/separator";
 import { ToggleGroup, ToggleGroupItem } from "../ui/toggle-group";
 
@@ -286,20 +287,13 @@ export function ScatterOverlayControls({
         {hasSelection && (
           <>
             <Separator orientation="vertical" className="mx-0.5 h-3 bg-white/[0.07]" />
-            <HoverTip
+            <IconButton
               label="Save selection"
               description={`Save ${selectionCount} obs as an ObsSet`}
-              side="bottom"
-              render={
-                <button
-                  type="button"
-                  onClick={() => setSaveDialogOpen(true)}
-                  className="flex size-[22px] items-center justify-center bg-transparent text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
-                />
-              }
+              onClick={() => setSaveDialogOpen(true)}
             >
               <Bookmark className="size-3.5" />
-            </HoverTip>
+            </IconButton>
           </>
         )}
 

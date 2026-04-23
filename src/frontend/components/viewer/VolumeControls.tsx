@@ -1,4 +1,5 @@
 import { useCallback, useRef } from "react";
+import { Panel } from "../ui/panel";
 import { Slider } from "../ui/slider";
 import { useViewer } from "./useViewer";
 
@@ -55,7 +56,7 @@ export function VolumeControls() {
   if (state.viewMode !== "3d") return null;
 
   return (
-    <div className="flex min-w-44 flex-col gap-1.5 rounded-lg border border-white/[0.07] bg-card/80 p-2 backdrop-blur-md">
+    <Panel variant="glass" className="flex min-w-44 flex-col gap-1.5 p-2">
       <VolumeRow
         label="α"
         title="Opacity (log scale)"
@@ -83,7 +84,7 @@ export function VolumeControls() {
         step={0.01}
         onValueChange={handleEarlyStop}
       />
-    </div>
+    </Panel>
   );
 }
 

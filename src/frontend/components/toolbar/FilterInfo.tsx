@@ -42,13 +42,13 @@ export function FilterInfo() {
   });
 
   if (!data) {
-    return <div className="ml-auto font-mono text-[11px] text-text-muted tabular-nums" />;
+    return <div className="ml-auto font-mono text-2xs text-text-muted tabular-nums" />;
   }
 
   const isFiltered = data.filtered < data.total;
 
   return (
-    <div className="ml-auto font-mono text-[11px] text-text-muted tabular-nums">
+    <div className="ml-auto font-mono text-2xs text-text-muted tabular-nums">
       {isFiltered
         ? `${data.filtered.toLocaleString()} / ${data.total.toLocaleString()} points`
         : `${data.total.toLocaleString()} points`}
