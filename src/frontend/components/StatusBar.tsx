@@ -5,14 +5,11 @@
  */
 import { MoonIcon, SunIcon } from "lucide-react";
 import { useTheme } from "../ThemeProvider";
+import { cn } from "../lib/utils";
 import { useScatterUIState } from "./scatter/ScatterUIStateProvider";
 
 function Dot() {
-  return (
-    <span className="mx-1.5" style={{ color: "var(--color-border-active)" }}>
-      ·
-    </span>
-  );
+  return <span className="mx-1.5 text-border-active">·</span>;
 }
 
 export function StatusBar() {
@@ -23,12 +20,12 @@ export function StatusBar() {
   return (
     <div className="status-bar">
       {/* ── Left: branding + context ── */}
-      <span style={{ color: "var(--color-text-secondary)", fontWeight: 500 }}>ndea</span>
+      <span className="font-medium text-text-secondary">ndea</span>
 
       {embeddingKey && (
         <>
           <Dot />
-          <span style={{ color: "var(--color-text-muted)" }}>{embeddingKey.replace(/^X_/, "")}</span>
+          <span className="text-text-muted">{embeddingKey.replace(/^X_/, "")}</span>
         </>
       )}
 
@@ -38,44 +35,37 @@ export function StatusBar() {
       {/* ── Right: metrics ── */}
       {numPoints > 0 && (
         <>
-          <span style={{ color: "var(--color-text-secondary)" }}>{numPoints.toLocaleString()} obs</span>
+          <span className="text-text-secondary">{numPoints.toLocaleString()} obs</span>
           <Dot />
         </>
       )}
 
       {selectedCount !== null && selectedCount > 0 && (
         <>
-          <span style={{ color: "var(--color-accent-cyan)" }}>{selectedCount.toLocaleString()} sel</span>
+          <span className="text-accent-cyan">{selectedCount.toLocaleString()} sel</span>
           <Dot />
         </>
       )}
 
-      <span style={{ fontVariantNumeric: "tabular-nums" }}>{zoom.toFixed(1)}×</span>
+      <span className="tabular-nums">{zoom.toFixed(1)}×</span>
 
       {fps !== null && (
         <>
           <Dot />
-          <span style={{ color: "var(--color-text-muted)" }}>{Math.round(fps)} fps</span>
+          <span className="text-text-muted">{Math.round(fps)} fps</span>
         </>
       )}
 
       <Dot />
-      <span style={{ color: "var(--color-text-muted)", letterSpacing: "0.05em" }}>⌘K</span>
+      <span className="text-text-muted tracking-[0.05em]">⌘K</span>
 
       {/* ── Theme toggle ── */}
       <button
         onClick={toggle}
-        className="ml-3 flex items-center justify-center rounded"
-        style={{
-          width: 18,
-          height: 18,
-          color: "var(--color-text-muted)",
-          background: "transparent",
-          border: "none",
-          cursor: "pointer",
-          padding: 0,
-          flexShrink: 0,
-        }}
+        className={cn(
+          "ml-3 flex size-[18px] shrink-0 cursor-pointer items-center justify-center",
+          "rounded border-none bg-transparent p-0 text-text-muted",
+        )}
         aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
       >
         {theme === "dark" ? <SunIcon size={12} /> : <MoonIcon size={12} />}

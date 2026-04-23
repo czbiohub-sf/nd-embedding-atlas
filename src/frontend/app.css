@@ -50,9 +50,11 @@
   --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Code", monospace;
 
   /* ── Surface backgrounds (light defaults — overridden in .dark via preset vars) ── */
-  --color-base: #ffffff; /* = oklch(1 0 0)     — page root bg    */
-  --color-surface: #f7f7f7; /* = oklch(0.97 0 0)  — panel bg        */
-  --color-elevated: #ebebeb; /* = oklch(0.93 0 0)  — hover / raised  */
+  --color-base: #ffffff; /* = oklch(1 0 0)     — page root bg            */
+  --color-surface: #f7f7f7; /* = oklch(0.97 0 0)  — panel bg                */
+  --color-surface-secondary: #f0f0f0; /* = oklch(0.95 0 0)  — input / inset bg        */
+  --color-surface-tertiary: #e8e8e8; /* = oklch(0.93 0 0)  — hover / raised hover    */
+  --color-elevated: #ebebeb; /* = oklch(0.93 0 0)  — hover / raised          */
 
   /* ── Borders ── */
   --color-border-subtle: #e8e8e8; /* = oklch(0.922 0 0) */
@@ -136,6 +138,8 @@ html.dark {
    * in its own .dark block below — we reference them here so everything stays in sync. */
   --color-base: var(--background); /* oklch(0.145 0 0) ≈ #1a1a1a */
   --color-surface: var(--card); /* oklch(0.205 0 0) ≈ #282828 */
+  --color-surface-secondary: var(--muted); /* oklch(0.269 0 0) ≈ #363636 */
+  --color-surface-tertiary: oklch(0.32 0 0); /* one step above muted       */
   --color-elevated: var(--muted); /* oklch(0.269 0 0) ≈ #363636 */
 
   --color-border-subtle: var(--border); /* oklch(1 0 0 / 10%)         */

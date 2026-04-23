@@ -69,10 +69,10 @@ export function ObsSetPanel() {
                 isActive ? "bg-primary/10" : "hover:bg-surface-secondary",
               )}
             >
-              {/* Color swatch */}
+              {/* Color swatch (fallback to muted-foreground when obsset.color is unset) */}
               <div
                 className="size-3 shrink-0 rounded-full border border-white/20"
-                style={{ backgroundColor: obsset.color ?? "#6366f1" }}
+                style={{ backgroundColor: obsset.color ?? "var(--muted-foreground)" }}
               />
 
               {/* Name + count */}
