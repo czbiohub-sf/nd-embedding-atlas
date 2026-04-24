@@ -9,9 +9,7 @@
   },
   "type": "module",
   "scripts": {
-    "dev": "bun run scripts/dev.ts",
-    "dev:backend": "bun run src/cli/index.ts",
-    "dev:frontend": "vp dev",
+    "dev": "NDEA_NO_STATIC=1 NDEA_NO_OPEN=1 vp run --parallel dev:all",
     "build": "bun run scripts/build.ts",
     "build:frontend": "vp build",
     "build:binary": "bun build ./src/cli/index.ts --compile --outfile dist/ndea",

@@ -2,6 +2,7 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import typegpuPlugin from "unplugin-typegpu/vite";
 import { defineConfig } from "vite-plus";
+import { devErrorReporter } from "./scripts/dev-error-reporter.ts";
 
 export default defineConfig({
   // ── Oxlint ────────────────────────────────────────────────────────────────
@@ -244,12 +245,46 @@ export default defineConfig({
     "src/**": "vp check --fix",
   },
 
+  // ── Task runner (vp run) ─────────────────────────────────────────────────
+  // `vp run --parallel dev:all` boots backend + Vite concurrently. Dataset
+  // path is read from NDEA_DATASET so the task doesn't need positional args
+  // (vp task commands don't forward positionals to sub-tasks via dependsOn).
+  //
+  // Usage:
+  //   NDEA_DATASET=/path/to/data.zarr vp run --parallel dev:all
+  //   NDEA_DATASET=/path/to/config.yaml vp run --parallel dev:all
+  run: {
+    tasks: {
+      "dev:all": {
+        // Composite aggregator — --parallel runs deps simultaneously.
+        // vp requires a command field; `true` is a no-op that exits 0.
+        dependsOn: ["dev:backend", "dev:frontend"],
+        command: "true",
+      },
+      "dev:backend": {
+        // --hot preserves globalThis (DuckDB, zarr handles) across edits.
+        // env: allowlist of environment variables forwarded to the task.
+        // vp strips env vars by default; this re-exposes the ones we need.
+        command: "bun --hot run src/cli/index.ts",
+        env: ["NDEA_DATASET", "NDEA_NO_STATIC", "NDEA_NO_OPEN"],
+      },
+      "dev:frontend": {
+        command: "vp dev",
+      },
+    },
+  },
+
   // ── Vite bundler (frontend) ───────────────────────────────────────────────
-  plugins: [react(), tailwindcss(), typegpuPlugin({})],
+  plugins: [react(), tailwindcss(), typegpuPlugin({}), devErrorReporter()],
   resolve: {
     alias: { "@": new URL("./src/frontend", import.meta.url).pathname },
   },
   server: {
+    // strictPort: false (default) lets Vite walk up from 5173 → 5174 → ...
+    // when a worktree sibling is already on 5173. `open: true` opens the
+    // actual URL Vite bound (not a hardcoded :5173), solving the "auto-open
+    // points at the wrong port" problem we used to patch in scripts/dev.ts.
+    open: true,
     proxy: {
       "/data": "http://localhost:5055",
       "/api": "http://localhost:5055",

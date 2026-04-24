@@ -50,10 +50,16 @@ export default defineCommand({
     const result = await applyPendingUpdate();
     if (result === "applied") return;
 
-    const paths = extractPaths(args);
+    // Positional args first; fall back to NDEA_DATASET env var. The env var
+    // is how `vp run --parallel dev:all` forwards the dataset path to this
+    // task (vp's dependsOn chain can't forward positional args).
+    let paths = extractPaths(args);
+    if (paths.length === 0 && typeof process.env.NDEA_DATASET === "string" && process.env.NDEA_DATASET.length > 0) {
+      paths = [process.env.NDEA_DATASET];
+    }
     if (paths.length === 0) {
       console.error("Error: at least one path is required.\n");
-      console.error("Run 'ndea view --help' for usage.");
+      console.error("Run 'ndea view --help' for usage, or set NDEA_DATASET.");
       process.exit(1);
     }
 

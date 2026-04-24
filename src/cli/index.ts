@@ -49,10 +49,17 @@ const main = defineCommand({
  * we leave it alone; otherwise we prepend `view` so the dashboard opens with
  * the original arguments intact. `--help` / `--version` without a subcommand
  * stay at the root so citty's built-in usage/version output runs.
+ *
+ * Additional fallback: if no positional is given but NDEA_DATASET is set in
+ * the environment (the dev-orchestration path via `vp run --parallel dev:all`),
+ * route to `view` so the env-var gets picked up inside view.ts.
  */
 function normalizeArgs(rawArgs: string[]): string[] {
   const firstPositional = rawArgs.find((a) => !a.startsWith("-"));
   if (firstPositional && !KNOWN_SUBCOMMANDS.has(firstPositional)) {
+    return ["view", ...rawArgs];
+  }
+  if (!firstPositional && typeof process.env.NDEA_DATASET === "string" && process.env.NDEA_DATASET.length > 0) {
     return ["view", ...rawArgs];
   }
   return rawArgs;

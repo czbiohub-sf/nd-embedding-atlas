@@ -50,6 +50,13 @@ interface LoadedDataset {
 export async function startup(config: ResolvedConfig): Promise<void> {
   const startTime = performance.now();
 
+  // In dev (--no-static or NDEA_NO_STATIC), bridge backend errors into Vite's
+  // HMR overlay so uncaught exceptions show up as a red panel in the browser
+  // instead of a silent terminal crash.
+  if (config.noStatic || process.env.NDEA_NO_STATIC === "1") {
+    installDevErrorBridge();
+  }
+
   // Print banner
   console.log(`\n  ${BOLD}nd-embedding-atlas${RESET} ${DIM}v0.1.0${RESET}\n`);
 
@@ -417,5 +424,54 @@ function sortObsmKeys(keys: string[]): string[] {
     const pb = priorityMap.get(b) ?? 999;
     if (pa !== pb) return pa - pb;
     return a.localeCompare(b);
+  });
+}
+
+// ─── Dev error bridge → Vite HMR overlay ────────────────────────────────────
+
+/**
+ * Hooks uncaughtException / unhandledRejection and forwards a compact error
+ * payload to Vite's /__dev_error endpoint, which broadcasts to the HMR WS
+ * and shows the red overlay in the browser.
+ *
+ * Reads the Vite URL lazily on each error from `.vite/dev-server.json` so
+ * we don't care which port Vite walked up to (worktree coexistence).
+ * Best-effort — any failure silently falls through to the existing terminal
+ * output path.
+ */
+async function readViteDevUrl(): Promise<string | null> {
+  try {
+    const { readFileSync } = await import("node:fs");
+    const raw = readFileSync(".vite/dev-server.json", "utf8");
+    const { url } = JSON.parse(raw) as { url?: string };
+    return typeof url === "string" ? url : null;
+  } catch {
+    return null;
+  }
+}
+
+async function reportBackendError(err: unknown): Promise<void> {
+  const url = await readViteDevUrl();
+  if (!url) return;
+  const payload =
+    err instanceof Error ? { message: err.message, stack: err.stack ?? "" } : { message: String(err), stack: "" };
+  try {
+    await fetch(`${url}/__dev_error`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    // Vite is down or busy — the original handler's terminal output stays
+    // as the primary channel. Nothing to do here.
+  }
+}
+
+function installDevErrorBridge(): void {
+  process.on("uncaughtException", (err) => {
+    void reportBackendError(err);
+  });
+  process.on("unhandledRejection", (reason) => {
+    void reportBackendError(reason);
   });
 }
