@@ -463,9 +463,11 @@ export function ScatterView({
 
   const showLoading = isLoading || dataLoading;
 
-  // ── ContinuousLegendBound — defined here so colorRange is in scope ─────────
-  function ContinuousLegendBound() {
-    return colorMode === "continuous" && colorByColumn && colorRange ? (
+  // Inline JSX below — a nested component would get a fresh function
+  // identity on every render, unmounting the slider mid-drag and dropping
+  // pointer capture (track clicks still worked; thumb drags didn't).
+  const continuousLegend =
+    colorMode === "continuous" && colorByColumn && colorRange ? (
       <ContinuousLegend
         columnName={colorSourceLegendLabel(colorSourceFromString(colorByColumn))}
         colormap={legendState.colormapName}
@@ -488,7 +490,6 @@ export function ScatterView({
         }}
       />
     ) : null;
-  }
 
   if (!axes) {
     return (
@@ -557,7 +558,7 @@ export function ScatterView({
         />
       </div>
       {colorMode === "categorical" && categoryMapping && !showLoading ? <CategoricalLegend /> : null}
-      <ContinuousLegendBound />
+      {continuousLegend}
     </div>
   );
 }

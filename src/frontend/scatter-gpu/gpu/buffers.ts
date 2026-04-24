@@ -19,7 +19,10 @@ export function createUniforms(root: TgpuRoot, aspectRatio: number, renderConfig
   );
   const viewUniform = root.createUniform(d.vec4f, d.vec4f(0, 0, 1, aspectRatio));
   const selectionModeUniform = root.createUniform(d.f32, 0);
-  return { paramsUniform, viewUniform, selectionModeUniform };
+  // 1 = tier-0 points (failed isolation) render at zero radius; 0 = dim per tierAlpha.
+  // Raised by the continuous range slider so out-of-range points are hidden, not dimmed.
+  const filterHideUniform = root.createUniform(d.u32, 0);
+  return { paramsUniform, viewUniform, selectionModeUniform, filterHideUniform };
 }
 
 export type ScatterUniforms = ReturnType<typeof createUniforms>;

@@ -447,6 +447,7 @@ export async function createScatterplot(
     setContinuousIsolation(rowIndices: number[]) {
       if (rowIndices.length === 0) {
         selection.clearContinuousIsolation();
+        uniforms.filterHideUniform.write(0);
       } else {
         continuousStagingMask.fill(0);
         for (const r of rowIndices) {
@@ -454,11 +455,13 @@ export async function createScatterplot(
           if (i !== undefined) continuousStagingMask[i] = 1;
         }
         selection.setContinuousIsolation(continuousStagingMask);
+        uniforms.filterHideUniform.write(1);
       }
       interaction.requestRender();
     },
     clearContinuousIsolation() {
       selection.clearContinuousIsolation();
+      uniforms.filterHideUniform.write(0);
       interaction.requestRender();
     },
     rehydrateIsolation() {

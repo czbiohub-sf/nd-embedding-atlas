@@ -18,7 +18,7 @@ const unpackColor = tgpu.fn([d.u32], d.vec4f)`
 `;
 
 export function createVertexShader(uniforms: ScatterUniforms) {
-  const { paramsUniform, viewUniform, selectionModeUniform } = uniforms;
+  const { paramsUniform, viewUniform, selectionModeUniform, filterHideUniform } = uniforms;
 
   return tgpu
     .vertexFn({
@@ -47,15 +47,19 @@ export function createVertexShader(uniforms: ScatterUniforms) {
       const offsetY = view.y;
       const zoom = view.z;
 
-      // Visibility: collapse culled points to degenerate (zero-area) position
-      const vis = d.f32(input.instanceVisible);
+      // Four-tier dim: 0 = heavy, 1 = moderate, 2 = full bright, 3 = clicked (outline)
+      const sel = input.instanceSelected;
+
+      // Visibility: collapse culled points to degenerate (zero-area) position.
+      // Also collapses tier-0 points when filterHide is raised (continuous range slider).
+      const filterHide = filterHideUniform.$;
+      const hideFiltered = sel === 0 && selMode >= 1 && filterHide >= 1;
+      const vis = d.f32(input.instanceVisible) * std.select(1.0, 0.0, hideFiltered);
 
       const worldX = (input.instancePos.x + offsetX) * zoom;
       const worldY = (input.instancePos.y + offsetY) * zoom;
 
       const adaptiveScale = params.w;
-      // Four-tier dim: 0 = heavy, 1 = moderate, 2 = full bright, 3 = clicked (outline)
-      const sel = input.instanceSelected;
       const isClicked = sel >= 3 && selMode >= 1;
       // Clicked point gets a 1.6x size boost for the outline ring
       const clickedScale = std.select(1.0, 1.6, isClicked);
