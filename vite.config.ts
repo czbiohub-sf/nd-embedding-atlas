@@ -257,19 +257,25 @@ export default defineConfig({
     tasks: {
       "dev:all": {
         // Composite aggregator — --parallel runs deps simultaneously.
-        // vp requires a command field; `true` is a no-op that exits 0.
+        // cache:false so repeat runs always re-enter the task (a cache hit
+        // would replay stdout and mark the task "done", tearing down the
+        // still-running children). `true` is a no-op that exits 0.
         dependsOn: ["dev:backend", "dev:frontend"],
         command: "true",
+        cache: false,
       },
       "dev:backend": {
         // --hot preserves globalThis (DuckDB, zarr handles) across edits.
-        // env: allowlist of environment variables forwarded to the task.
-        // vp strips env vars by default; this re-exposes the ones we need.
+        // cache:false because a cache hit would kill the dev server.
+        // Env vars (NDEA_DATASET, NDEA_NO_STATIC, NDEA_NO_OPEN) flow through
+        // the shell that launches `vp run` — with cache disabled vp does not
+        // sandbox the child env.
         command: "bun --hot run src/cli/index.ts",
-        env: ["NDEA_DATASET", "NDEA_NO_STATIC", "NDEA_NO_OPEN"],
+        cache: false,
       },
       "dev:frontend": {
         command: "vp dev",
+        cache: false,
       },
     },
   },
