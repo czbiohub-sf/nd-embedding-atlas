@@ -52,7 +52,7 @@ function binaryResponse(body: Uint8Array): Response {
  * Parse a trailing `_<digits>` dim index off a SQL-safe obsm column name
  * like `dinov2_pca_7` → 7. Returns null if the suffix isn't present.
  */
-function parseDimIndex(col: string): number | null {
+export function parseDimIndex(col: string): number | null {
   const m = /_(\d+)$/.exec(col);
   return m ? Number(m[1]) : null;
 }
@@ -62,7 +62,7 @@ function parseDimIndex(col: string): number | null {
  * on `state.obsmLoaders`. Width is discovered via a metadata-only shape
  * read against the first accessor that carries the key — no data load.
  */
-async function getOrCreateLoader(state: ViewerState, embedding: string): Promise<ObsmSliceLoader> {
+export async function getOrCreateObsmLoader(state: ViewerState, embedding: string): Promise<ObsmSliceLoader> {
   const existing = state.obsmLoaders.get(embedding);
   if (existing) return existing;
   const width = await ObsmSliceLoader.detectWidth(embedding, state.accessors.entries());
@@ -108,7 +108,7 @@ export async function handleScatterPositions(url: URL, state: ViewerState, signa
   }
 
   try {
-    const loader = await getOrCreateLoader(state, embedding);
+    const loader = await getOrCreateObsmLoader(state, embedding);
     // Fetch both dims in parallel — they share the loader's dedup map, so
     // repeat calls with the same colIndex don't double-read.
     const [xs, ys] = await Promise.all([loader.loadColumn(xDim, signal), loader.loadColumn(yDim, signal)]);

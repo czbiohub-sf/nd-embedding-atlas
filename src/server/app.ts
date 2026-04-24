@@ -23,6 +23,7 @@ import {
   handleScatterSelectionPost,
   handleScatterSelectionDelete,
 } from "./routes/scatter.ts";
+import { handleTrajectory } from "./routes/trajectory.ts";
 import { handleObsBatch, handleObsInfo, handleObsDetail, handleHealth } from "./routes/obs.ts";
 import { handleListObsSets, handleCreateObsSet, handleDeleteObsSet, handleActivateObsSet } from "./routes/obssets.ts";
 import { handleVarNames, handleVarLayers, handleVarColumn, handleVarColumnStatus } from "./routes/var.ts";
@@ -256,6 +257,11 @@ function routeApi(
   if (pathname === "/api/scatter-selection") {
     if (method === "POST") return handleScatterSelectionPost(req, store);
     if (method === "DELETE") return handleScatterSelectionDelete(store);
+  }
+
+  // ── Trajectory (server-side join of metadata + obsm positions) ──
+  if (pathname === "/api/trajectory" && method === "GET") {
+    return handleTrajectory(url, state, req.signal);
   }
 
   // ── Obs batch (must match before /api/obs/{row_index}) ──────────

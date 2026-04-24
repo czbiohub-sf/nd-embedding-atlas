@@ -76,7 +76,7 @@ export function ScatterView({
   loadingKey,
   currentEntryLoaded,
   coordinator,
-  table,
+  table: _table,
   xCol,
   yCol,
   colorMode,
@@ -453,12 +453,10 @@ export function ScatterView({
   }, [highlightId, trajectory, actions]);
 
   const { showTrajectory } = useTrajectoryLoader({
-    coordinator,
-    table,
+    embedding: axes?.obsmKey ?? "",
     xCol,
     yCol,
     categoryCol,
-    metadata,
   });
 
   const showLoading = isLoading || dataLoading;

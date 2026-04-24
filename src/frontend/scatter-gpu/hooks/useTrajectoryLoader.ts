@@ -1,19 +1,16 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type { Coordinator } from "@uwdata/mosaic-core";
 import { useMemo } from "react";
 import { selectAnyTrajectory } from "../../dashboard/DashboardContext";
 import { useDashboard } from "../../hooks/useDashboard";
-import { toRows } from "../../lib/mosaic-helpers";
-import type { Metadata, TrajectoryFrame } from "../../types";
+import type { TrajectoryFrame } from "../../types";
 import { trajectoryKeys } from "./queryKeys";
 
 interface UseTrajectoryLoaderOptions {
-  coordinator: Coordinator;
-  table: string;
+  /** Obsm key for the active embedding (e.g. `X_phate`). */
+  embedding: string;
   xCol: string;
   yCol: string;
   categoryCol: string | null;
-  metadata: Metadata;
 }
 
 interface UseTrajectoryLoaderResult {
@@ -24,65 +21,59 @@ interface UseTrajectoryLoaderResult {
 /**
  * Manages trajectory loading and active-index derivation.
  *
- * Queries DuckDB for the full trajectory of a given (trackId, fovName) pair,
- * stores the result in DashboardContext, and derives the activeIndex from the
- * current tIndex in trajectory state.
+ * Fetches `/api/trajectory` (server-side join of DuckDB metadata + obsm
+ * positions) for a given (trackId, fovName) pair, stores the result in
+ * DashboardContext, and derives the activeIndex from the current tIndex.
  *
- * Uses useMutation so there is no manual cancelled flag, and trajectory data
- * is cached in TanStack Query cache keyed by trajectoryKeys.track.
+ * Previously built Mosaic SQL on the client and paid a Binder Error
+ * whenever the embedding's obsm columns weren't materialized into the
+ * `dataset` VIEW (which, as of the scatter-positions refactor, is always).
+ * The endpoint owns schema knowledge now; this hook is thin.
  */
 export function useTrajectoryLoader(opts: UseTrajectoryLoaderOptions): UseTrajectoryLoaderResult {
-  const { coordinator, table, xCol, yCol, categoryCol, metadata } = opts;
+  const { embedding, xCol, yCol, categoryCol } = opts;
   const { state, actions } = useDashboard();
   const queryClient = useQueryClient();
 
   const mutation = useMutation({
     mutationFn: async (params: { trackId: number; fovName: string; clickedT?: number; datasetKey?: string }) => {
       const { trackId, fovName, datasetKey } = params;
-      const key = trajectoryKeys.track(table, trackId, fovName);
+      const key = trajectoryKeys.track(embedding, trackId, fovName);
 
-      // Return cached rows if available
       const cached = queryClient.getQueryData<TrajectoryFrame[]>(key);
       if (cached) return { rows: cached, params };
 
-      const spatialX = metadata.spatial?.x_col ?? "x";
-      const spatialY = metadata.spatial?.y_col ?? "y";
-      const catSelect = categoryCol ? `, ${categoryCol} AS category` : "";
-      const safeFovName = fovName.replace(/'/g, "''");
-      const safeTrackId = Number.isFinite(trackId) ? trackId : 0;
-      const datasetFilter = datasetKey ? ` AND _dataset = '${datasetKey.replace(/'/g, "''")}'` : "";
-      const baseSql = `SELECT __row_index__ AS "rowIndex", ${xCol} AS emb_x, ${yCol} AS emb_y, ${spatialX} AS spatial_x, ${spatialY} AS spatial_y, t, _dataset AS datasetKey`;
-      const whereClause = `FROM ${table} WHERE track_id = ${safeTrackId} AND fov_name = '${safeFovName}'${datasetFilter} ORDER BY t ASC`;
-      const sql = `${baseSql}${catSelect} ${whereClause}`;
+      const search = new URLSearchParams({
+        track_id: String(trackId),
+        fov_name: fovName,
+        embedding,
+        x_col: xCol,
+        y_col: yCol,
+      });
+      if (datasetKey != null) search.set("dataset", datasetKey);
+      if (categoryCol != null) search.set("category_col", categoryCol);
 
-      let result;
-      try {
-        result = await coordinator.query(sql, { type: "json" });
-      } catch (e) {
-        // __ev__* column missing from VIEW (stale after backend restart) — retry without it
-        if (catSelect && String(e).includes("not found in FROM clause")) {
-          result = await coordinator.query(`${baseSql} ${whereClause}`, { type: "json" });
-        } else {
-          throw e;
-        }
+      const res = await fetch(`/api/trajectory?${search.toString()}`);
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        throw new Error(`[/api/trajectory] ${res.status} ${res.statusText}: ${body}`);
       }
-      const rows = toRows<TrajectoryFrame>(result);
+      const rows = (await res.json()) as TrajectoryFrame[];
 
       queryClient.setQueryData(key, rows);
       return { rows, params };
     },
     onSuccess: ({ rows, params }) => {
       const { trackId, fovName, clickedT } = params;
-      if (rows.length > 0) {
-        const initialT = clickedT != null && rows.some((r) => r.t === clickedT) ? clickedT : rows[0].t;
-        actions.setTrajectory({
-          trackId,
-          fovName,
-          datasetKey: rows[0]?.datasetKey,
-          tIndex: initialT,
-          points: rows,
-        });
-      }
+      if (rows.length === 0) return;
+      const initialT = clickedT != null && rows.some((r) => r.t === clickedT) ? clickedT : rows[0].t;
+      actions.setTrajectory({
+        trackId,
+        fovName,
+        datasetKey: rows[0].datasetKey ?? undefined,
+        tIndex: initialT,
+        points: rows,
+      });
     },
   });
 
