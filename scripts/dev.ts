@@ -17,17 +17,17 @@ if (args.length === 0) {
   process.exit(1);
 }
 
-// Start backend with --no-static + NDEA_NO_OPEN=1 (Vite handles the
-// frontend, so the backend should never auto-open a browser window).
+// Start backend in API-only mode (Vite handles the frontend, so the backend
+// should neither serve static files nor auto-open a browser window).
 // `--hot` reloads on server source changes without dropping the port.
-// We pass the open-suppressor as an env var rather than a CLI flag
-// because citty's handling of `--no-<name>` flags is ambiguous when the
-// declared option is itself named `no-open`.
+// citty silently drops `--no-*` CLI flags, so we pass both suppressors as
+// env vars. The --no-static CLI flag was observed to be ignored; NDEA_NO_STATIC
+// is the reliable path.
 const backend = spawn({
-  cmd: ["bun", "--hot", "run", "src/cli/index.ts", ...args, "--no-static"],
+  cmd: ["bun", "--hot", "run", "src/cli/index.ts", ...args],
   stdout: "inherit",
   stderr: "inherit",
-  env: { ...process.env, NDEA_NO_OPEN: "1" },
+  env: { ...process.env, NDEA_NO_OPEN: "1", NDEA_NO_STATIC: "1" },
 });
 
 // Parse port from args (default 5055)

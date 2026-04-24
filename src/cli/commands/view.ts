@@ -60,7 +60,9 @@ export default defineCommand({
     const port = parsePort(args.port);
     const host = typeof args.host === "string" && args.host.length > 0 ? args.host : undefined;
     const noOpen = args["no-open"] === true;
-    const noStatic = args["no-static"] === true;
+    // citty silently drops `--no-*` CLI flags, so mirror NDEA_NO_OPEN's env-var
+    // escape hatch. scripts/dev.ts sets NDEA_NO_STATIC=1 before spawning.
+    const noStatic = args["no-static"] === true || process.env.NDEA_NO_STATIC === "1";
     const obsColumns = parseObsColumns(args["obs-columns"]);
 
     const config = await resolveConfig({ paths, port, host, noOpen, noStatic, obsColumns });
