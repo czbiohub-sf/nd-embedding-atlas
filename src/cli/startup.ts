@@ -215,7 +215,7 @@ export async function startup(config: ResolvedConfig): Promise<void> {
     staticDir = resolveFrontendDir() ?? undefined;
     if (!staticDir) {
       console.log(
-        `\n  ${YELLOW}⚠${RESET}  No frontend dist found. Run ${DIM}cd frontend && vp build${RESET} or use ${DIM}--no-static${RESET}`,
+        `\n  ${YELLOW}⚠${RESET}  No frontend dist found. Run ${DIM}vp build${RESET} (or ${DIM}vp run dev${RESET} for dev mode with Vite HMR).`,
       );
     }
   }
