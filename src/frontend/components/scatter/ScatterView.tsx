@@ -16,7 +16,6 @@ import { toRows } from "../../lib/mosaic-helpers";
 import { ScatterGPUHost, type ScatterGPUHostHandle } from "../../scatter-gpu/components/ScatterGPUHost";
 import { type ColorMode, useMosaicScatterData } from "../../scatter-gpu/hooks/useMosaicScatterData";
 import { useScatterBrushSync } from "../../scatter-gpu/hooks/useScatterBrushSync";
-import { useTrajectoryLoader } from "../../scatter-gpu/hooks/useTrajectoryLoader";
 import type { PanelId, ScatterplotConfig } from "../../scatter-gpu/types";
 import { hexToRgbPalette } from "../../scatter-gpu/utils/colors";
 import { buildColormapLut } from "../../lib/ochre-lut";
@@ -29,7 +28,6 @@ import type { AxisState, Metadata, TrajectoryData } from "../../types";
 import { CategoricalLegend } from "./CategoricalLegend";
 import { ContinuousLegend } from "./ContinuousLegend";
 import { useEffectiveCategoryColors, useLegend } from "./LegendContext";
-import { PointInfoPane } from "./PointInfoPane";
 import { useScatterUIDispatch } from "./ScatterUIStateProvider";
 import type { TrajectoryOverlaySvgHandle } from "./TrajectoryOverlaySvg";
 import { TrajectoryOverlaySvg } from "./TrajectoryOverlaySvg";
@@ -86,7 +84,7 @@ export function ScatterView({
   continuousColormap,
   trajectory,
   activeTrajectories,
-  metadata,
+  metadata: _metadata,
   actions,
   highlightId,
   overlayControls,
@@ -452,13 +450,6 @@ export function ScatterView({
     if (!highlightId && trajectory) actions.clearTrajectory(trajectory.datasetKey ?? "");
   }, [highlightId, trajectory, actions]);
 
-  const { showTrajectory } = useTrajectoryLoader({
-    embedding: axes?.obsmKey ?? "",
-    xCol,
-    yCol,
-    categoryCol,
-  });
-
   const showLoading = isLoading || dataLoading;
 
   // Inline JSX below — a nested component would get a fresh function
@@ -540,21 +531,6 @@ export function ScatterView({
         );
       })}
       {overlayControls}
-      <div className="absolute bottom-10 left-2 z-hud">
-        <PointInfoPane
-          highlightId={highlightId}
-          additionalFields={["t", "fov_name", "track_id"].filter((f) => metadata.obs_columns?.includes(f))}
-          trajectoryActive={!!trajectory}
-          onShowTrajectory={
-            isLoading
-              ? undefined
-              : (...args: Parameters<typeof showTrajectory>) => {
-                  void showTrajectory(...args);
-                }
-          }
-          onClearTrajectory={() => actions.clearTrajectory(trajectory?.datasetKey ?? "")}
-        />
-      </div>
       {colorMode === "categorical" && categoryMapping && !showLoading ? <CategoricalLegend /> : null}
       {continuousLegend}
     </div>

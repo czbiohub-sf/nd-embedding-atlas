@@ -6,9 +6,8 @@ import { cn } from "@/lib/utils";
  * KeyValueRow — label/value pair with monospace right-aligned value.
  *
  * For metadata displays where you want the keys left-aligned and truncated,
- * and the values right-aligned with tabular numerals (PointInfoPane is the
- * canonical case). Value area accepts children so callers can drop in
- * badges, pills, or multi-part content.
+ * and the values right-aligned with tabular numerals. Value area accepts
+ * children so callers can drop in badges, pills, or multi-part content.
  */
 
 interface KeyValueRowProps extends Omit<React.ComponentPropsWithoutRef<"div">, "children"> {

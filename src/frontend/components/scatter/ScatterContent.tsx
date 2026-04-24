@@ -16,6 +16,8 @@ import type { IsolationCapability } from "../../scatter-gpu/handle-capabilities"
 import { useEmbeddingLoader } from "../../scatter-gpu/hooks/useEmbeddingLoader";
 import { useIsolationBridge } from "../../scatter-gpu/hooks/useIsolationBridge";
 import { useScatterColorState } from "../../scatter-gpu/hooks/useScatterColorState";
+import { useTrajectoryLoader } from "../../scatter-gpu/hooks/useTrajectoryLoader";
+import { useHighlightedPointMeta } from "../../hooks/useHighlightedPointMeta";
 import type { PanelId } from "../../scatter-gpu/types";
 import { broadcastPanelState, clearPanelState } from "../../stores/PanelStateStore";
 import { disposeBitmap } from "../../stores/RoaringBroadcastStore";
@@ -138,6 +140,33 @@ export function ScatterContent({
 
   const isLoading = !!loadingKey || categoryLoading;
 
+  // ── Trajectory toggle (wired against the currently-highlighted point) ───
+  // The toolbar button in ScatterOverlayControls is the only entry point
+  // now — PointInfoPane was removed. If a trajectory is active, the toggle
+  // clears it. Otherwise, if the highlighted point is trackable, the toggle
+  // starts one. No highlight + no active trajectory → onToggleTrajectory is
+  // undefined and ScatterOverlayControls hides the button.
+  const { showTrajectory } = useTrajectoryLoader({
+    embedding: effectiveAxes?.obsmKey ?? "",
+    xCol,
+    yCol,
+    categoryCol,
+  });
+  const highlightMeta = useHighlightedPointMeta(highlightId);
+
+  const onToggleTrajectory = trajectory
+    ? () => actions.clearTrajectory(trajectory.datasetKey ?? "")
+    : highlightMeta.trackable
+      ? () => {
+          void showTrajectory(
+            highlightMeta.trackId ?? 0,
+            highlightMeta.fovName ?? "",
+            highlightMeta.t,
+            highlightMeta.datasetKey,
+          );
+        }
+      : undefined;
+
   // ── Broadcast panel state for cross-panel sync ─────────────────────────────
   useEffect(() => {
     broadcastPanelState(String(myPanelId), {
@@ -214,7 +243,7 @@ export function ScatterContent({
       onFitView={() => fitViewRef.current?.()}
       panelApi={panelApi}
       trajectoryActive={!!trajectory}
-      onToggleTrajectory={trajectory ? () => actions.clearTrajectory(trajectory.datasetKey ?? "") : undefined}
+      onToggleTrajectory={onToggleTrajectory}
       hasSelection={hasSelection}
       selectionCount={selectionCount}
       getRowIndices={getRowIndices}
