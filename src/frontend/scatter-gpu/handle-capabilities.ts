@@ -53,6 +53,8 @@ export interface RenderCapability {
     bloomThreshold?: number;
     exposure?: number;
   }): void;
+  /** Switch scatter blend mode (additive / premultiplied / max). */
+  setBlendMode(mode: "additive" | "premultiplied" | "max"): void;
 }
 
 export interface ColorCapability {

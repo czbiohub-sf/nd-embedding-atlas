@@ -11,7 +11,7 @@ import { acquireDevice, releaseDevice } from "./device-manager";
 import { createHdrPipeline } from "./hdr";
 import { initGPU } from "./init";
 import { createPickingSystem } from "./picking";
-import { createRenderPipeline } from "./pipeline";
+import { type BlendMode, createBlendableRenderPipelines } from "./pipeline";
 import { createSelectionEngine } from "./selection";
 import { createFragmentShader, createVertexShader } from "./shaders";
 
@@ -69,8 +69,10 @@ export async function createScatterplot(
 
   const mainVertex = createVertexShader(uniforms);
   const mainFragment = createFragmentShader();
-  // eslint-disable-next-line @typescript-eslint/unbound-method
-  const { render } = createRenderPipeline(
+  // Build all three blend-mode variants up front; switching at runtime is a
+  // single object lookup. Pipelines and bundles are cheap; trading the
+  // ~3× build cost at init for jank-free toggle.
+  const renderPipelines = createBlendableRenderPipelines(
     root,
     mainVertex,
     mainFragment,
@@ -81,7 +83,10 @@ export async function createScatterplot(
     hdr.hdrFormat,
     backgroundColor,
     data.numCells,
+    config?.render?.blendMode ?? "additive",
   );
+  // eslint-disable-next-line @typescript-eslint/unbound-method
+  const { render } = renderPipelines;
 
   const selection = createSelectionEngine(
     root,
@@ -439,6 +444,10 @@ export async function createScatterplot(
     },
     setHdrSettings(settings) {
       hdr.setSettings(settings);
+      interaction.requestRender();
+    },
+    setBlendMode(mode: BlendMode) {
+      renderPipelines.setBlendMode(mode);
       interaction.requestRender();
     },
     updateColors(palette: readonly (readonly [number, number, number, number?])[], categoryIndices?: Uint8Array) {

@@ -213,6 +213,9 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
       setPointOpacity(opacity) {
         gpuRef.current?.setPointOpacity(opacity);
       },
+      setBlendMode(mode) {
+        gpuRef.current?.setBlendMode(mode);
+      },
       setHdrSettings(settings) {
         gpuRef.current?.setHdrSettings(settings);
       },

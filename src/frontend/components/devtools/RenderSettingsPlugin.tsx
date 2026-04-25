@@ -10,6 +10,8 @@
 
 import { useSelector } from "@tanstack/react-store";
 import {
+  BLEND_MODE_DEFAULT,
+  type BlendMode,
   BLOOM_STRENGTH_DEFAULT,
   BLOOM_STRENGTH_MAX,
   BLOOM_STRENGTH_MIN,
@@ -23,6 +25,7 @@ import {
   POINT_OPACITY_MAX,
   POINT_OPACITY_MIN,
   renderSettingsStore,
+  setBlendMode,
   setBloomStrength,
   setBloomThreshold,
   setExposure,
@@ -150,6 +153,12 @@ const TONE_MAPPING_OPTIONS = [
   { value: "agx", label: "AgX" },
 ] as const satisfies readonly { value: ToneMapping; label: string }[];
 
+const BLEND_MODE_OPTIONS = [
+  { value: "additive", label: "Additive" },
+  { value: "premultiplied", label: "Premul" },
+  { value: "max", label: "Max" },
+] as const satisfies readonly { value: BlendMode; label: string }[];
+
 export function RenderSettingsPlugin() {
   const settings = useSelector(renderSettingsStore, (s) => s);
 
@@ -165,6 +174,16 @@ export function RenderSettingsPlugin() {
           step={0.01}
           defaultValue={POINT_OPACITY_DEFAULT}
           onChange={setPointOpacity}
+        />
+      </Section>
+      <Section title="Compositing">
+        <SegmentedRow<BlendMode>
+          label="Blend mode"
+          description="Additive = order-independent, dense regions sum (recommended). Premul = preserves category color identity, order-dependent. Max = brightest-fragment-wins, useful for max-projection style views."
+          value={settings.blendMode}
+          options={BLEND_MODE_OPTIONS}
+          onChange={setBlendMode}
+          defaultValue={BLEND_MODE_DEFAULT}
         />
       </Section>
       <Section title="HDR + tone mapping">

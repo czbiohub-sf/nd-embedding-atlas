@@ -3,6 +3,36 @@ import type { ScatterBuffers } from "./buffers";
 import type { CullingEngine } from "./culling";
 import type { createFragmentShader, createVertexShader } from "./shaders";
 
+/**
+ * Blend modes supported by the scatter pipeline.
+ *
+ * - `additive` — order-independent. Each premultiplied fragment sums
+ *   into the framebuffer; dense regions roll off via the HDR + tone-map
+ *   stage. Recommended default.
+ * - `premultiplied` — order-dependent classic alpha-over. Preserves
+ *   category color identity in dense overlap, but flickers as the GPU
+ *   reorders coincident points.
+ * - `max` — brightest-fragment-wins via `blendOperation: "max"`. Useful
+ *   for max-projection style readouts; never sums color so the result
+ *   is bounded to the brightest single point.
+ */
+export type BlendMode = "additive" | "premultiplied" | "max";
+
+const BLEND_MODES: Record<BlendMode, GPUBlendState> = {
+  additive: {
+    color: { srcFactor: "one", dstFactor: "one", operation: "add" },
+    alpha: { srcFactor: "one", dstFactor: "one", operation: "add" },
+  },
+  premultiplied: {
+    color: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" },
+    alpha: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" },
+  },
+  max: {
+    color: { srcFactor: "one", dstFactor: "one", operation: "max" },
+    alpha: { srcFactor: "one", dstFactor: "one", operation: "max" },
+  },
+};
+
 export function createRenderPipeline(
   root: TgpuRoot,
   mainVertex: ReturnType<typeof createVertexShader>,
@@ -16,6 +46,7 @@ export function createRenderPipeline(
   format: GPUTextureFormat,
   backgroundColor: [number, number, number, number],
   numPoints: number,
+  blendMode: BlendMode = "additive",
 ) {
   const { quadLayout, posLayout, colorLayout, selectedLayout } = buffers;
   const { visibilityLayout } = culling;
@@ -32,15 +63,7 @@ export function createRenderPipeline(
     fragment: mainFragment,
     targets: {
       format,
-      // Order-independent additive blending. Fragments are already
-      // premultiplied (`vec4f(rgb * α, α)`), so srcFactor:"one" sums each
-      // contribution into the framebuffer without re-applying alpha. The
-      // HDR target absorbs the >1 overflow which the tone-map pass then
-      // rolls off (Path A — additive blending).
-      blend: {
-        color: { srcFactor: "one", dstFactor: "one" },
-        alpha: { srcFactor: "one", dstFactor: "one" },
-      },
+      blend: BLEND_MODES[blendMode],
     },
     primitive: { topology: "triangle-list" },
   });
@@ -88,6 +111,75 @@ export function createRenderPipeline(
       pass.executeBundles([renderBundle]);
       pass.end();
       if (!externalEncoder) root.device.queue.submit([encoder.finish()]);
+    },
+  };
+}
+
+/**
+ * Build all three blend-mode variants of the scatter pipeline up front and
+ * return a `render(view, numPoints, loadOp, encoder)` that dispatches to
+ * the currently-selected one. Pipelines + render bundles are cheap to
+ * keep around; switching modes at runtime is a single object lookup, so
+ * we avoid the cost of rebuilding (and the latency hitch) on toggle.
+ */
+export function createBlendableRenderPipelines(
+  root: TgpuRoot,
+  mainVertex: ReturnType<typeof createVertexShader>,
+  mainFragment: ReturnType<typeof createFragmentShader>,
+  buffers: ScatterBuffers,
+  culling: CullingEngine,
+  format: GPUTextureFormat,
+  backgroundColor: [number, number, number, number],
+  numPoints: number,
+  initialBlendMode: BlendMode = "additive",
+) {
+  const variants: Record<BlendMode, ReturnType<typeof createRenderPipeline>> = {
+    additive: createRenderPipeline(
+      root,
+      mainVertex,
+      mainFragment,
+      buffers,
+      culling,
+      format,
+      backgroundColor,
+      numPoints,
+      "additive",
+    ),
+    premultiplied: createRenderPipeline(
+      root,
+      mainVertex,
+      mainFragment,
+      buffers,
+      culling,
+      format,
+      backgroundColor,
+      numPoints,
+      "premultiplied",
+    ),
+    max: createRenderPipeline(
+      root,
+      mainVertex,
+      mainFragment,
+      buffers,
+      culling,
+      format,
+      backgroundColor,
+      numPoints,
+      "max",
+    ),
+  };
+
+  let active: BlendMode = initialBlendMode;
+
+  return {
+    render(view: GPUTextureView, n: number, loadOp: "clear" | "load" = "clear", externalEncoder?: GPUCommandEncoder) {
+      variants[active].render(view, n, loadOp, externalEncoder);
+    },
+    setBlendMode(mode: BlendMode) {
+      active = mode;
+    },
+    getBlendMode(): BlendMode {
+      return active;
     },
   };
 }

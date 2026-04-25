@@ -169,6 +169,12 @@ export interface ScatterplotHandle {
     bloomThreshold?: number;
     exposure?: number;
   }): void;
+  /**
+   * Switch the scatter pipeline blend mode at runtime. All three variants
+   * are pre-built at init, so this is a single-object-lookup swap with no
+   * pipeline rebuild cost.
+   */
+  setBlendMode(mode: "additive" | "premultiplied" | "max"): void;
 }
 
 export interface RenderConfig {
@@ -186,6 +192,11 @@ export interface RenderConfig {
    * blending.
    */
   pointOpacity?: number;
+  /**
+   * Initial scatter blend mode. Default `"additive"`. See
+   * `pipeline.ts:BlendMode` for the trade-offs of each mode.
+   */
+  blendMode?: "additive" | "premultiplied" | "max";
   /**
    * Color mode for points. Default: "categorical".
    * v2: "continuous" uses colorValues Float32Array for gradient coloring.

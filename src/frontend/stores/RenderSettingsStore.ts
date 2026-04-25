@@ -47,9 +47,15 @@ export type ToneMapping = "none" | "reinhard" | "aces" | "agx";
 // linear (the curve is near-identity below 1.0).
 export const TONE_MAPPING_DEFAULT: ToneMapping = "agx";
 
+export type BlendMode = "additive" | "premultiplied" | "max";
+// Additive by default — order-independent, dense regions sum into HDR
+// space and tone-map cleanly. See pipeline.ts:BlendMode for trade-offs.
+export const BLEND_MODE_DEFAULT: BlendMode = "additive";
+
 export interface RenderSettingsState {
   pointOpacity: number;
   toneMapping: ToneMapping;
+  blendMode: BlendMode;
   bloomStrength: number;
   bloomThreshold: number;
   exposure: number;
@@ -58,6 +64,7 @@ export interface RenderSettingsState {
 export const renderSettingsStore = new Store<RenderSettingsState>({
   pointOpacity: POINT_OPACITY_DEFAULT,
   toneMapping: TONE_MAPPING_DEFAULT,
+  blendMode: BLEND_MODE_DEFAULT,
   bloomStrength: BLOOM_STRENGTH_DEFAULT,
   bloomThreshold: BLOOM_THRESHOLD_DEFAULT,
   exposure: EXPOSURE_DEFAULT,
@@ -70,6 +77,10 @@ export function setPointOpacity(opacity: number): void {
 
 export function setToneMapping(toneMapping: ToneMapping): void {
   renderSettingsStore.setState((s) => ({ ...s, toneMapping }));
+}
+
+export function setBlendMode(blendMode: BlendMode): void {
+  renderSettingsStore.setState((s) => ({ ...s, blendMode }));
 }
 
 export function setBloomStrength(bloomStrength: number): void {
