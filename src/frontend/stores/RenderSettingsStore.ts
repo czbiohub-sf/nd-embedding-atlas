@@ -26,9 +26,10 @@ export const SHARPNESS_DEFAULT = 8.0;
 
 export const BLOOM_STRENGTH_MIN = 0;
 export const BLOOM_STRENGTH_MAX = 1.5;
-// Off by default — flat 2D is the baseline. Crank up for cinematic density
-// rendering (pairs with tone mapping = AgX).
-export const BLOOM_STRENGTH_DEFAULT = 0;
+// Subtle bloom on by default — pairs with additive blending + AgX tone
+// mapping to roll off >1 HDR overflow in dense clusters. Drag to 0 for a
+// pure flat-disk look without halo.
+export const BLOOM_STRENGTH_DEFAULT = 0.3;
 
 export const BLOOM_THRESHOLD_MIN = 0;
 export const BLOOM_THRESHOLD_MAX = 4;
@@ -39,9 +40,11 @@ export const EXPOSURE_MAX = 3;
 export const EXPOSURE_DEFAULT = 0;
 
 export type ToneMapping = "none" | "reinhard" | "aces" | "agx";
-// "none" by default keeps colors linear and avoids the film-curve sphere
-// look. AgX/ACES are opt-in for the cinematic density mode.
-export const TONE_MAPPING_DEFAULT: ToneMapping = "none";
+// AgX by default — additive blending overflows past 1.0 in dense clusters
+// by design, and AgX's gentle filmic shoulder rolls that overflow off into
+// readable color rather than clipping to flat white. Sparse points stay
+// linear (the curve is near-identity below 1.0).
+export const TONE_MAPPING_DEFAULT: ToneMapping = "agx";
 
 export interface RenderSettingsState {
   sharpness: number;
