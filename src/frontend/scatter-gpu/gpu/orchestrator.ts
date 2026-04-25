@@ -349,6 +349,13 @@ export async function createScatterplot(
       );
       interaction.requestRender();
     },
+    setSharpness(s: number) {
+      // Clamp to a reasonable range. The vertex-shader compensation already
+      // guards `s = 0`; we still avoid pathological cost on the slider.
+      const clamped = Math.max(0.5, Math.min(16, s));
+      uniforms.sharpnessUniform.write(clamped);
+      interaction.requestRender();
+    },
     updateColors(palette: readonly (readonly [number, number, number, number?])[], categoryIndices?: Uint8Array) {
       // GPU compute shader packs category indices → palette → colorBuffer.
       // CPU work: O(palette_size) ≤ 64 entries (constant, not O(numPoints)).

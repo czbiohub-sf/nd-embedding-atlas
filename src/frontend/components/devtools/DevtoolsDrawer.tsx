@@ -1,17 +1,18 @@
 /**
  * DevtoolsDrawer — tabbed devtools panel that slides up from the bottom dock.
- * Tabs: Query (ReactQueryDevtoolsPanel) | Scatter (live store state)
+ * Tabs: Query | Scatter (live store state) | Render (per-point sharpness etc.)
  */
 
 import { lazy, Suspense, useState } from "react";
 import { cn } from "../../lib/utils";
+import { RenderSettingsPlugin } from "./RenderSettingsPlugin";
 import { ScatterStatePlugin } from "./ScatterStatePlugin";
 
 const ReactQueryDevtoolsPanel = lazy(() =>
   import("@tanstack/react-query-devtools").then((m) => ({ default: m.ReactQueryDevtoolsPanel })),
 );
 
-type Tab = "query" | "scatter";
+type Tab = "query" | "scatter" | "render";
 
 interface Props {
   open: boolean;
@@ -27,7 +28,7 @@ export function DevtoolsDrawer({ open, onClose }: Props) {
     <div className="flex flex-col border-border border-t" style={{ height: 380, background: "oklch(0.10 0 0)" }}>
       {/* Tab bar */}
       <div className="flex h-8 shrink-0 items-center border-white/5 border-b bg-[#0d0d14] px-2">
-        {(["query", "scatter"] as Tab[]).map((t) => (
+        {(["query", "scatter", "render"] as Tab[]).map((t) => (
           <button
             key={t}
             type="button"
@@ -37,7 +38,7 @@ export function DevtoolsDrawer({ open, onClose }: Props) {
               tab === t ? "bg-white/10 text-white" : "text-white/30 hover:text-white/60",
             )}
           >
-            {t === "query" ? "Query" : "Scatter State"}
+            {t === "query" ? "Query" : t === "scatter" ? "Scatter State" : "Render"}
           </button>
         ))}
         <button
@@ -61,6 +62,7 @@ export function DevtoolsDrawer({ open, onClose }: Props) {
           </Suspense>
         )}
         {tab === "scatter" && <ScatterStatePlugin />}
+        {tab === "render" && <RenderSettingsPlugin />}
       </div>
     </div>
   );

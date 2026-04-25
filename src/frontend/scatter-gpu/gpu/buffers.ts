@@ -9,6 +9,12 @@ export const MAX_PALETTE_SIZE = 64;
 const DEFAULTS = {
   pointRadius: 0.002,
   selectionDimFactor: 0.08,
+  /**
+   * Default sharpness for the per-point falloff `pow(1-r, sharpness)`.
+   * 2.0 reproduces the previous soft-halo look; higher values harden the edge
+   * while the visibility-compensation factor keeps the visible disk size constant.
+   */
+  sharpness: 2.0,
 } as const;
 
 export function createUniforms(root: TgpuRoot, aspectRatio: number, renderConfig?: RenderConfig) {
@@ -22,7 +28,11 @@ export function createUniforms(root: TgpuRoot, aspectRatio: number, renderConfig
   // 1 = tier-0 points (failed isolation) render at zero radius; 0 = dim per tierAlpha.
   // Raised by the continuous range slider so out-of-range points are hidden, not dimmed.
   const filterHideUniform = root.createUniform(d.u32, 0);
-  return { paramsUniform, viewUniform, selectionModeUniform, filterHideUniform };
+  // Per-point falloff exponent. Used by the vertex shader to scale the quad
+  // (visibility compensation) and by the fragment shader to evaluate
+  // `pow(1-r, sharpness)`. Single uniform for v1; per-instance is a follow-up.
+  const sharpnessUniform = root.createUniform(d.f32, renderConfig?.sharpness ?? DEFAULTS.sharpness);
+  return { paramsUniform, viewUniform, selectionModeUniform, filterHideUniform, sharpnessUniform };
 }
 
 export type ScatterUniforms = ReturnType<typeof createUniforms>;

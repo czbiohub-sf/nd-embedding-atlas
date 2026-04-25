@@ -41,6 +41,8 @@ export interface ViewCapability {
 
 export interface RenderCapability {
   setPointRadius(radius: number): void;
+  /** Update per-point falloff exponent (default 2.0). */
+  setSharpness(sharpness: number): void;
 }
 
 export interface ColorCapability {

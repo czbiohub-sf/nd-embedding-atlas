@@ -156,6 +156,12 @@ export interface ScatterplotHandle {
   animateToViewState(state: ViewState, durationMs?: number): void;
   /** Update point size without GPU re-initialization. */
   setPointRadius(radius: number): void;
+  /**
+   * Update the per-point falloff exponent. Default 2.0 (soft halo).
+   * Higher values produce harder edges; the visible point size stays
+   * constant thanks to a compensation factor in the vertex shader.
+   */
+  setSharpness(sharpness: number): void;
 }
 
 export interface RenderConfig {
@@ -167,6 +173,12 @@ export interface RenderConfig {
   selectionDimFactor?: number;
   /** Display gamma for compositing pass. Default: 2.2 */
   gamma?: number;
+  /**
+   * Per-point falloff exponent for the fragment shader. Default 2.0
+   * (soft halo). Higher values harden the edge while a compensation
+   * factor in the vertex shader keeps the visible disk size constant.
+   */
+  sharpness?: number;
   /**
    * Color mode for points. Default: "categorical".
    * v2: "continuous" uses colorValues Float32Array for gradient coloring.

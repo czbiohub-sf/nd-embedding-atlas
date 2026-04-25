@@ -21,6 +21,7 @@ import { hexToRgbPalette } from "../../scatter-gpu/utils/colors";
 import { buildColormapLut } from "../../lib/ochre-lut";
 import { setBrushPredicate } from "../../stores/BrushPredicateStore";
 import { pointRadiusStore } from "../../stores/PointRadiusStore";
+import { renderSettingsStore } from "../../stores/RenderSettingsStore";
 import { getBitmapRowIds } from "../../stores/RoaringBroadcastStore";
 import { selectionSyncStore } from "../../stores/SelectionSyncStore";
 import { broadcastViewState, viewSyncStore } from "../../stores/ViewSyncStore";
@@ -331,6 +332,8 @@ export function ScatterView({
     }
     // Point radius
     hostRef.current?.setPointRadius(pointRadiusStore.state.radius);
+    // Sharpness — re-applied on GPU reinit so it survives data swaps
+    hostRef.current?.setSharpness(renderSettingsStore.state.sharpness);
     // Selection tool
     hostRef.current?.setForcedSelectionMode(selectionTool);
     // Re-upload all isolation masks from CPU state after GPU reinit
@@ -405,6 +408,14 @@ export function ScatterView({
   useEffect(() => {
     const sub = pointRadiusStore.subscribe(() => {
       hostRef.current?.setPointRadius(pointRadiusStore.state.radius);
+    });
+    return () => sub.unsubscribe();
+  }, []);
+
+  // Sync global sharpness to this panel's GPU instance
+  useEffect(() => {
+    const sub = renderSettingsStore.subscribe(() => {
+      hostRef.current?.setSharpness(renderSettingsStore.state.sharpness);
     });
     return () => sub.unsubscribe();
   }, []);
