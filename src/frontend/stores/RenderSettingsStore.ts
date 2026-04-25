@@ -27,10 +27,9 @@ export const POINT_OPACITY_DEFAULT = 0.7;
 
 export const BLOOM_STRENGTH_MIN = 0;
 export const BLOOM_STRENGTH_MAX = 1.5;
-// Subtle bloom on by default — pairs with additive blending + AgX tone
-// mapping to roll off >1 HDR overflow in dense clusters. Drag to 0 for a
-// pure flat-disk look without halo.
-export const BLOOM_STRENGTH_DEFAULT = 0.3;
+// Off by default — flat 2D markers are the baseline. Crank up for a
+// cinematic glow effect (best paired with tone mapping = AgX).
+export const BLOOM_STRENGTH_DEFAULT = 0;
 
 export const BLOOM_THRESHOLD_MIN = 0;
 export const BLOOM_THRESHOLD_MAX = 4;
@@ -41,16 +40,16 @@ export const EXPOSURE_MAX = 3;
 export const EXPOSURE_DEFAULT = 0;
 
 export type ToneMapping = "none" | "reinhard" | "aces" | "agx";
-// AgX by default — additive blending overflows past 1.0 in dense clusters
-// by design, and AgX's gentle filmic shoulder rolls that overflow off into
-// readable color rather than clipping to flat white. Sparse points stay
-// linear (the curve is near-identity below 1.0).
-export const TONE_MAPPING_DEFAULT: ToneMapping = "agx";
+// "none" by default — keeps colors linear and unsaturated. AgX/ACES are
+// opt-in for cinematic-density rendering when paired with bloom and/or
+// the additive blend mode.
+export const TONE_MAPPING_DEFAULT: ToneMapping = "none";
 
 export type BlendMode = "additive" | "premultiplied" | "max";
-// Additive by default — order-independent, dense regions sum into HDR
-// space and tone-map cleanly. See pipeline.ts:BlendMode for trade-offs.
-export const BLEND_MODE_DEFAULT: BlendMode = "additive";
+// Premultiplied by default — preserves category-color identity in dense
+// regions. Additive (order-independent, sums into HDR) is opt-in via the
+// Render tab; trades color identity for clean density visualization.
+export const BLEND_MODE_DEFAULT: BlendMode = "premultiplied";
 
 export interface RenderSettingsState {
   pointOpacity: number;
