@@ -41,8 +41,11 @@ export interface ViewCapability {
 
 export interface RenderCapability {
   setPointRadius(radius: number): void;
-  /** Update per-point falloff exponent (default 2.0). */
-  setSharpness(sharpness: number): void;
+  /**
+   * Update per-point alpha multiplier (default 0.7). Drives how
+   * aggressively overlapping points sum under additive blending.
+   */
+  setPointOpacity(opacity: number): void;
   /** Update HDR settings (tone mapping, bloom, exposure). */
   setHdrSettings(settings: {
     toneMapping?: "none" | "reinhard" | "aces" | "agx";

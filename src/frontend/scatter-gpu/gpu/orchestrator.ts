@@ -428,10 +428,12 @@ export async function createScatterplot(
       );
       interaction.requestRender();
     },
-    setSharpness(s: number) {
-      // Clamp to a reasonable range. The vertex-shader compensation already
-      // guards `s = 0`; we still avoid pathological cost on the slider.
-      const clamped = Math.max(0.5, Math.min(16, s));
+    setPointOpacity(opacity: number) {
+      // Per-point alpha multiplier in [0.05, 1.0]. Drives how aggressively
+      // points sum under additive blending.
+      const clamped = Math.max(0.05, Math.min(1.0, opacity));
+      // The GPU uniform retains its historical `sharpnessUniform` name to
+      // avoid re-binding indices across the main + picking pipelines.
       uniforms.sharpnessUniform.write(clamped);
       interaction.requestRender();
     },

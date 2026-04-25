@@ -1,6 +1,6 @@
 /**
  * DevtoolsDrawer — tabbed devtools panel that slides up from the bottom dock.
- * Tabs: Query | Scatter (live store state) | Render (per-point sharpness etc.)
+ * Tabs: Query | Scatter (live store state) | Render (point opacity, HDR, blend mode etc.)
  */
 
 import { lazy, Suspense, useState } from "react";

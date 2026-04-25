@@ -17,9 +17,11 @@ const unpackColor = tgpu.fn([d.u32], d.vec4f)`
   }
 `;
 
-// Sharpness compensation is no longer needed: with the flat-AA-disk falloff
-// (smoothstep over `1/sharpness`) the visible disk radius is always `radius`,
-// regardless of sharpness. Kept as a code reference of the old approach.
+// Path A renames `sharpness` → `pointOpacity` at the public surface. The
+// GPU-side uniform retains the historical `sharpnessUniform` name because
+// picking-shaders.ts binds it at @binding(4) by string; the fragment
+// shader now reads it as an alpha multiplier rather than a falloff
+// exponent.
 
 export function createVertexShader(uniforms: ScatterUniforms) {
   const { paramsUniform, viewUniform, selectionModeUniform, filterHideUniform, sharpnessUniform } = uniforms;
@@ -39,8 +41,8 @@ export function createVertexShader(uniforms: ScatterUniforms) {
         uv: d.vec2f,
         /** 1.0 when this point is the highlighted (clicked) point, 0.0 otherwise. */
         highlight: d.f32,
-        /** Per-point falloff exponent forwarded to the fragment shader. */
-        sharpness: d.f32,
+        /** Per-point alpha multiplier forwarded to the fragment shader. */
+        pointOpacity: d.f32,
       },
     })((input) => {
       "use gpu";
@@ -69,10 +71,9 @@ export function createVertexShader(uniforms: ScatterUniforms) {
       const isClicked = sel >= 3 && selMode >= 1;
       // Clicked point gets a 1.6x size boost for the outline ring
       const clickedScale = std.select(1.0, 1.6, isClicked);
-      // Sharpness now drives the fragment-shader edge AA width (flat AA disk),
-      // not a falloff exponent — so the visible disk is always exactly `radius`
-      // and no per-point compensation is needed in the vertex stage.
-      const sharpness = sharpnessUniform.$;
+      // Path A: forwarded as the per-point alpha multiplier (uniform still
+      // named `sharpnessUniform` on the GPU; see buffers.ts comment).
+      const pointOpacity = sharpnessUniform.$;
       const zoomedRadius = radius * std.sqrt(zoom) * vis * adaptiveScale * clickedScale;
       const scaledQuad = d.vec2f(input.quadPos.x * zoomedRadius, input.quadPos.y * zoomedRadius);
 
@@ -87,7 +88,7 @@ export function createVertexShader(uniforms: ScatterUniforms) {
         color: d.vec4f(rgba.x, rgba.y, rgba.z, rgba.w * dimFactor),
         uv: input.quadPos,
         highlight: std.select(0.0, 1.0, isClicked),
-        sharpness: sharpness,
+        pointOpacity: pointOpacity,
       };
     })
     .$uses({ unpackColor });
@@ -95,7 +96,7 @@ export function createVertexShader(uniforms: ScatterUniforms) {
 
 export function createFragmentShader() {
   return tgpu.fragmentFn({
-    in: { color: d.vec4f, uv: d.vec2f, highlight: d.f32, sharpness: d.f32 },
+    in: { color: d.vec4f, uv: d.vec2f, highlight: d.f32, pointOpacity: d.f32 },
     out: d.vec4f,
   })((input) => {
     "use gpu";
@@ -104,14 +105,13 @@ export function createFragmentShader() {
     const dist = sdDisk(input.uv, 1.0);
     const fw = std.max(std.fwidth(dist), 0.001);
 
-    // Crisp flat disk: full alpha across the body, single-pixel AA at the
-    // silhouette via `fwidth` (so the AA window is in screen-space pixels,
-    // not a fraction of the disk radius). Reads as a clean 2D marker at any
-    // zoom level. Sharpness uniform is intentionally ignored here — was a
-    // luxar-style falloff exponent, but the gradient body made points look
-    // like shaded 3D balls under HDR. Slider retained for future halo mode.
-    void input.sharpness;
-    const falloff = 1 - std.smoothstep(-fw, fw, dist);
+    // Crisp flat disk: full coverage across the body, single-pixel AA at
+    // the silhouette via `fwidth` (so the AA window is in screen-space
+    // pixels, not a fraction of the disk radius). Reads as a clean 2D
+    // marker at any zoom level. The `pointOpacity` uniform multiplies the
+    // coverage to scale how aggressively overlapping points sum under
+    // additive blending (Path A).
+    const falloff = (1 - std.smoothstep(-fw, fw, dist)) * input.pointOpacity;
 
     if (input.highlight > 0.5) {
       // Highlighted point: white outline ring + filled center.

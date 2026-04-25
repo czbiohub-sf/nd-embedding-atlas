@@ -2,7 +2,7 @@
  * RenderSettingsPlugin — dev tools panel for global render-quality knobs.
  *
  * Houses:
- *   - Sharpness slider (per-point falloff exponent; 0.5 → 16, default 2.0)
+ *   - Point opacity slider (per-point alpha multiplier; 0.05 → 1.0, default 0.7)
  *   - Tone mapping selector (None / Reinhard / ACES / AgX, default AgX)
  *   - Exposure slider (-3 → +3 stops)
  *   - Bloom strength + threshold sliders
@@ -19,15 +19,15 @@ import {
   EXPOSURE_DEFAULT,
   EXPOSURE_MAX,
   EXPOSURE_MIN,
+  POINT_OPACITY_DEFAULT,
+  POINT_OPACITY_MAX,
+  POINT_OPACITY_MIN,
   renderSettingsStore,
   setBloomStrength,
   setBloomThreshold,
   setExposure,
-  setSharpness,
+  setPointOpacity,
   setToneMapping,
-  SHARPNESS_DEFAULT,
-  SHARPNESS_MAX,
-  SHARPNESS_MIN,
   TONE_MAPPING_DEFAULT,
   type ToneMapping,
 } from "../../stores/RenderSettingsStore";
@@ -157,14 +157,14 @@ export function RenderSettingsPlugin() {
     <div className="h-full overflow-y-auto bg-[#0d0d14] text-white">
       <Section title="Point appearance">
         <SliderRow
-          label="Sharpness"
-          description="Falloff exponent: pow(1 - r, sharpness). 2 = soft halo, 8 = hard dot. The visible disk size stays constant — the vertex shader compensates."
-          value={settings.sharpness}
-          min={SHARPNESS_MIN}
-          max={SHARPNESS_MAX}
-          step={0.1}
-          defaultValue={SHARPNESS_DEFAULT}
-          onChange={setSharpness}
+          label="Point opacity"
+          description="Alpha multiplier per point. Under additive blending: 1.0 = a single point dominates, 0.3 = ~3 overlapping points are needed to saturate. Lower values give more headroom for HDR rolloff."
+          value={settings.pointOpacity}
+          min={POINT_OPACITY_MIN}
+          max={POINT_OPACITY_MAX}
+          step={0.01}
+          defaultValue={POINT_OPACITY_DEFAULT}
+          onChange={setPointOpacity}
         />
       </Section>
       <Section title="HDR + tone mapping">

@@ -210,8 +210,8 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
       setPointRadius(radius) {
         gpuRef.current?.setPointRadius(radius);
       },
-      setSharpness(sharpness) {
-        gpuRef.current?.setSharpness(sharpness);
+      setPointOpacity(opacity) {
+        gpuRef.current?.setPointOpacity(opacity);
       },
       setHdrSettings(settings) {
         gpuRef.current?.setHdrSettings(settings);

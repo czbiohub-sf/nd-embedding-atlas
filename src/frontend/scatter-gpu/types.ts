@@ -157,11 +157,11 @@ export interface ScatterplotHandle {
   /** Update point size without GPU re-initialization. */
   setPointRadius(radius: number): void;
   /**
-   * Update the per-point falloff exponent. Default 2.0 (soft halo).
-   * Higher values produce harder edges; the visible point size stays
-   * constant thanks to a compensation factor in the vertex shader.
+   * Update the per-point alpha multiplier. Default 0.7. Drives how
+   * aggressively overlapping points sum under additive blending — at
+   * 1.0 a single point dominates, at 0.3 you need ~3 to saturate.
    */
-  setSharpness(sharpness: number): void;
+  setPointOpacity(opacity: number): void;
   /** Update HDR settings (tone mapping, bloom strength, exposure). */
   setHdrSettings(settings: {
     toneMapping?: "none" | "reinhard" | "aces" | "agx";
@@ -181,11 +181,11 @@ export interface RenderConfig {
   /** Display gamma for compositing pass. Default: 2.2 */
   gamma?: number;
   /**
-   * Per-point falloff exponent for the fragment shader. Default 2.0
-   * (soft halo). Higher values harden the edge while a compensation
-   * factor in the vertex shader keeps the visible disk size constant.
+   * Per-point alpha multiplier for the fragment shader. Default 0.7.
+   * Drives how aggressively overlapping points sum under additive
+   * blending.
    */
-  sharpness?: number;
+  pointOpacity?: number;
   /**
    * Color mode for points. Default: "categorical".
    * v2: "continuous" uses colorValues Float32Array for gradient coloring.

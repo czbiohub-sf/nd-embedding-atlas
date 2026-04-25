@@ -332,8 +332,8 @@ export function ScatterView({
     }
     // Point radius
     hostRef.current?.setPointRadius(pointRadiusStore.state.radius);
-    // Sharpness — re-applied on GPU reinit so it survives data swaps
-    hostRef.current?.setSharpness(renderSettingsStore.state.sharpness);
+    // Point opacity — re-applied on GPU reinit so it survives data swaps
+    hostRef.current?.setPointOpacity(renderSettingsStore.state.pointOpacity);
     // HDR settings — re-applied on GPU reinit
     {
       const s = renderSettingsStore.state;
@@ -422,13 +422,13 @@ export function ScatterView({
     return () => sub.unsubscribe();
   }, []);
 
-  // Sync global sharpness + HDR settings to this panel's GPU instance.
+  // Sync global point opacity + HDR settings to this panel's GPU instance.
   // Single subscription — we always re-apply both on any change to keep
   // the GPU in lockstep with the store.
   useEffect(() => {
     const sub = renderSettingsStore.subscribe(() => {
       const s = renderSettingsStore.state;
-      hostRef.current?.setSharpness(s.sharpness);
+      hostRef.current?.setPointOpacity(s.pointOpacity);
       hostRef.current?.setHdrSettings({
         toneMapping: s.toneMapping,
         bloomStrength: s.bloomStrength,
