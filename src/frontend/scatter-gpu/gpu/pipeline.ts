@@ -32,9 +32,14 @@ export function createRenderPipeline(
     fragment: mainFragment,
     targets: {
       format,
+      // Order-independent additive blending. Fragments are already
+      // premultiplied (`vec4f(rgb * α, α)`), so srcFactor:"one" sums each
+      // contribution into the framebuffer without re-applying alpha. The
+      // HDR target absorbs the >1 overflow which the tone-map pass then
+      // rolls off (Path A — additive blending).
       blend: {
-        color: { srcFactor: "one", dstFactor: "one-minus-src-alpha" },
-        alpha: { srcFactor: "one", dstFactor: "one-minus-src-alpha" },
+        color: { srcFactor: "one", dstFactor: "one" },
+        alpha: { srcFactor: "one", dstFactor: "one" },
       },
     },
     primitive: { topology: "triangle-list" },
