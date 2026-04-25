@@ -17,19 +17,9 @@ const unpackColor = tgpu.fn([d.u32], d.vec4f)`
   }
 `;
 
-/**
- * Visibility-compensation factor for the per-point sharpness control.
- *
- * Falloff is `pow(1 - r, sharpness)`. The "visible" radius (where intensity
- * drops to 1% of the peak) shrinks as sharpness grows. Multiplying the quad
- * size by `1 / (1 - 0.01^(1/s))` keeps the visible disk size constant as
- * the user tunes sharpness — see luxar's `point-shaders.ts:62`.
- */
-const sharpnessCompensation = tgpu.fn([d.f32], d.f32)`
-  (s: f32) -> f32 {
-    return 1.0 / (1.0 - pow(0.01, 1.0 / max(s, 0.01)));
-  }
-`;
+// Sharpness compensation is no longer needed: with the flat-AA-disk falloff
+// (smoothstep over `1/sharpness`) the visible disk radius is always `radius`,
+// regardless of sharpness. Kept as a code reference of the old approach.
 
 export function createVertexShader(uniforms: ScatterUniforms) {
   const { paramsUniform, viewUniform, selectionModeUniform, filterHideUniform, sharpnessUniform } = uniforms;
@@ -79,12 +69,11 @@ export function createVertexShader(uniforms: ScatterUniforms) {
       const isClicked = sel >= 3 && selMode >= 1;
       // Clicked point gets a 1.6x size boost for the outline ring
       const clickedScale = std.select(1.0, 1.6, isClicked);
-      // Sharpness compensation keeps the visible disk size constant as
-      // sharpness grows — without it, raising the falloff exponent makes
-      // points appear smaller even though `radius` is unchanged.
+      // Sharpness now drives the fragment-shader edge AA width (flat AA disk),
+      // not a falloff exponent — so the visible disk is always exactly `radius`
+      // and no per-point compensation is needed in the vertex stage.
       const sharpness = sharpnessUniform.$;
-      const sharpnessScale = sharpnessCompensation(sharpness);
-      const zoomedRadius = radius * std.sqrt(zoom) * vis * adaptiveScale * clickedScale * sharpnessScale;
+      const zoomedRadius = radius * std.sqrt(zoom) * vis * adaptiveScale * clickedScale;
       const scaledQuad = d.vec2f(input.quadPos.x * zoomedRadius, input.quadPos.y * zoomedRadius);
 
       const selDimFactor = params.z; // heavy dim (default 0.08)
@@ -101,7 +90,7 @@ export function createVertexShader(uniforms: ScatterUniforms) {
         sharpness: sharpness,
       };
     })
-    .$uses({ unpackColor, sharpnessCompensation });
+    .$uses({ unpackColor });
 }
 
 export function createFragmentShader() {
@@ -110,31 +99,30 @@ export function createFragmentShader() {
     out: d.vec4f,
   })((input) => {
     "use gpu";
-    // `r` is the normalized radial distance from the quad center, 0 at center
-    // and 1 at the disk edge (uv ∈ [-1, 1]).
-    const r = std.length(input.uv);
-    // Anti-aliased clip at the disk edge — keeps the silhouette crisp without
-    // introducing a halo. We use the SDF for crispness because `sharpness`
-    // alone does not guarantee a hard edge for low values.
+    // Compute screen-space derivatives at the TOP of main, in uniform control
+    // flow — `fwidth()` is undefined when called inside a divergent branch.
     const dist = sdDisk(input.uv, 1.0);
-    const fw = std.max(std.fwidth(dist), 0.01);
-    const edgeMask = 1 - std.smoothstep(-fw, fw, dist);
+    const fw = std.max(std.fwidth(dist), 0.001);
 
-    // Per-point falloff: `pow(1 - r, sharpness)` — luxar's POINT_FRAGMENT_SHADER.
-    // sharpness=2 reproduces the existing soft-halo look; sharpness=8 produces
-    // a near-hard disk; arbitrarily high sharpness produces a 1-pixel disk
-    // (clipped by edgeMask).
-    const falloff = std.pow(std.max(1 - r, 0), input.sharpness);
+    // Crisp flat disk: full alpha across the body, single-pixel AA at the
+    // silhouette via `fwidth` (so the AA window is in screen-space pixels,
+    // not a fraction of the disk radius). Reads as a clean 2D marker at any
+    // zoom level. Sharpness uniform is intentionally ignored here — was a
+    // luxar-style falloff exponent, but the gradient body made points look
+    // like shaded 3D balls under HDR. Slider retained for future halo mode.
+    void input.sharpness;
+    const falloff = 1 - std.smoothstep(-fw, fw, dist);
 
     if (input.highlight > 0.5) {
-      // Highlighted point: white outline ring + filled center
-      // The quad is 1.6x bigger, so the inner disk sits at r=0.625 (1/1.6)
+      // Highlighted point: white outline ring + filled center.
+      // The quad is 1.6x bigger, so the inner disk sits at r=0.625 (1/1.6).
+      // Uses the SDF + fwidth (computed above) so the outline reads as a
+      // crisp 1-pixel ring around the marker, independent of sharpness.
+      const edgeMask = 1 - std.smoothstep(-fw, fw, dist);
       const innerRadius = 0.625;
       const innerDist = sdDisk(input.uv, innerRadius);
       const innerAlpha = 1 - std.smoothstep(-fw, fw, innerDist);
-      // Ring = outer disk minus inner disk
       const ringAlpha = edgeMask * (1 - innerAlpha);
-      // Composite: white ring + colored fill
       const ringColor = d.vec4f(1.0, 1.0, 1.0, ringAlpha * 0.9);
       const fillColor = d.vec4f(
         input.color.x * innerAlpha,
@@ -152,7 +140,7 @@ export function createFragmentShader() {
       return d.vec4f(rO, gO, bO, aO);
     }
 
-    const finalAlpha = falloff * edgeMask * input.color.w;
+    const finalAlpha = falloff * input.color.w;
     if (finalAlpha < 0.004) {
       std.discard();
     }
