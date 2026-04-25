@@ -75,7 +75,8 @@ read-only inspiration; everything below is fresh WGSL via TypeGPU.
 
 ## Feature 2 — Render-to-texture picking with caching
 
-**Status:** in progress.
+**Status:** shipped. Default-on; opt-out via
+`localStorage.setItem('ndea.useGpuPicking', '0')`.
 
 ### Why
 
@@ -127,12 +128,29 @@ selects whichever neighbor is nearest in world space — wrong target.
   on a clean buffer, ~1–2 frames on a dirty rebuild.
 - 24-bit float mantissa caps `pointIndex` at 16M points — fine for
   ndea (typical AnnData is ~1.5M obs, hard-capped well below 16M).
-- `rgba32f` requires `float32-filterable` feature in some browsers —
-  Bun's WebGPU device gets it by default but we still request it
-  defensively in `device-manager.ts`. (Already requested for the
-  scatter render path.)
+- We don't store the pointId as `i+1` to reserve `0` as a "no hit"
+  sentinel — `clearValue: { r: 0, ... }` paints empty space with 0
+  and the readback skips any pixel where `R < 0.5`.
 - Brightness-as-depth requires `depthCompare: 'less-equal'` (NOT
   `less`) so the brightest fragment wins ties.
+- `root.unwrap` rejects scalar (`f32`/`u32`) `TgpuUniform`s — go
+  through `.buffer` to get the underlying `TgpuBuffer` first.
+  TypeGPU 0.11.2 issue.
+- Pick-buffer invalidation is conservative: marked dirty on every
+  render submit. Picks happen on click (rare), so a re-render per
+  pick after any scatter state change is acceptable. A finer cache
+  (only invalidate on real geometry / view changes) would help if
+  we ever pick on hover.
+- The pick pipeline uses raw WebGPU + hand-written WGSL because
+  TypeGPU's render pipeline shape didn't fit cleanly with the
+  multi-output fragment (`color + frag_depth`) plus the need to
+  share vertex layouts with the existing render bundle. The
+  shaders themselves are short enough that hand-written WGSL is
+  more readable than the typegpu DSL for this case.
+- `resizeAll(width, height)` helper added to the orchestrator —
+  walks `interaction.resize()` + `picking.resize()` + the params
+  uniform aspect refresh in one call. Adaptive-DPR (#4, deferred)
+  hooks into this single seam.
 
 ## Feature 3 — HDR + bloom + AgX tone mapping
 

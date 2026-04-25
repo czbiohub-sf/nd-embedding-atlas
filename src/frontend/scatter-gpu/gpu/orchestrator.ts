@@ -9,6 +9,7 @@ import { createCompositor } from "./compositor";
 import { createCullingEngine } from "./culling";
 import { acquireDevice, releaseDevice } from "./device-manager";
 import { initGPU } from "./init";
+import { createPickingSystem } from "./picking";
 import { createRenderPipeline } from "./pipeline";
 import { createSelectionEngine } from "./selection";
 import { createFragmentShader, createVertexShader } from "./shaders";
@@ -45,6 +46,14 @@ export async function createScatterplot(
   const culling = createCullingEngine(root, device, buffers, uniforms, data.numCells, preferredWorkgroupSize);
 
   const compositor = createCompositor(root, device, buffers, uniforms, data.numCells, preferredWorkgroupSize);
+
+  // GPU pick buffer — replaces the CPU spatial-grid hit test when the user
+  // opts in via `localStorage.ndea.useGpuPicking`. Renders to an offscreen
+  // rgba32f target with brightness-as-depth so overlapping points pick by
+  // visual frontmost (brightest), not geometric nearest. Same vertex
+  // attributes as the main render — stays in lockstep automatically.
+  const picking = createPickingSystem(root, canvas, buffers, uniforms, culling, data.numCells);
+  picking.updateBoundingBox(data.positions);
 
   // Default to transparent — let the CSS background-color of the container
   // show through. This makes the scatter canvas respond to dark/light theme
@@ -255,54 +264,101 @@ export async function createScatterplot(
       compositor.dispatchIfDirty(encoder);
       render(context, data.numCells, "clear", encoder);
       device.queue.submit([encoder.finish()]);
+      // Conservatively invalidate the pick buffer on every render. Picks
+      // happen on click (rarely), so re-rendering once per pick after a
+      // state change is fine. Hover-driven picks would benefit from a
+      // tighter cache, but ndea picks only on click for now.
+      picking.markDirty();
     },
     {
       onViewChange: (state: ViewState) => {
         currentZoom = state.zoom;
         viewVersion++;
+        // View change → pick buffer is stale. Cheap O(1) flag toggle.
+        picking.markDirty();
         config?.callbacks?.onViewChange?.(state);
       },
       onFps: (fps: number) => {
         config?.callbacks?.onFps?.(fps);
       },
-      onPointClick: (worldX: number, worldY: number) => {
-        const hitRadiusWorld = 20 / ((currentZoom * canvas.height) / 2);
-        const maxDist2 = hitRadiusWorld * hitRadiusWorld;
-        let bestIdx = -1;
-        let bestDist2 = maxDist2;
-        // Grid spatial index: query only cells that overlap the hit radius
-        const r = Math.ceil((hitRadiusWorld / 2) * GRID) + 1;
-        const cx = Math.floor(((worldX + 1) / 2) * GRID);
-        const cy = Math.floor(((worldY + 1) / 2) * GRID);
-        for (let gx = Math.max(0, cx - r); gx <= Math.min(GRID - 1, cx + r); gx++) {
-          for (let gy = Math.max(0, cy - r); gy <= Math.min(GRID - 1, cy + r); gy++) {
-            for (const i of gridCells[gx * GRID + gy]) {
-              const px = data.positions[i * 2];
-              const py = data.positions[i * 2 + 1];
-              const dx = px - worldX;
-              const dy = py - worldY;
-              const d2 = dx * dx + dy * dy;
-              if (d2 < bestDist2 && selection.isPointVisible(i)) {
-                bestDist2 = d2;
-                bestIdx = i;
-              }
-            }
+      onPointClick: (worldX: number, worldY: number, pixelX: number, pixelY: number) => {
+        // Two paths:
+        //   1. GPU pick (default, opt-out via `localStorage.ndea.useGpuPicking = '0'`):
+        //      render to a cached pick buffer, sample 5×5 around the cursor,
+        //      brightness-weighted vote. Picks the visually frontmost point.
+        //   2. Legacy CPU grid (fallback): geometrically-nearest visible point.
+        const useGpuPicking = localStorage?.getItem("ndea.useGpuPicking") !== "0";
+
+        const finishHit = (idx: number) => {
+          if (idx >= 0 && idx < data.numCells && selection.isPointVisible(idx)) {
+            selection.selectPoint(idx);
+            const px = data.positions[idx * 2];
+            const py = data.positions[idx * 2 + 1];
+            const catIdx = data.categoryIndices[idx];
+            config?.callbacks?.onPointClick?.(idx, [px, py], catIdx, data.categoryNames[catIdx]);
+            return true;
           }
-        }
-        if (bestIdx >= 0) {
-          selection.selectPoint(bestIdx);
-          const px = data.positions[bestIdx * 2];
-          const py = data.positions[bestIdx * 2 + 1];
-          const catIdx = data.categoryIndices[bestIdx];
-          config?.callbacks?.onPointClick?.(bestIdx, [px, py], catIdx, data.categoryNames[catIdx]);
-        } else {
+          return false;
+        };
+
+        const finishMiss = () => {
           selection.clearHighlight();
           config?.callbacks?.onBackgroundClick?.();
+        };
+
+        if (useGpuPicking) {
+          // Async — readback is one frame on a clean buffer, ~1–2 frames on a
+          // dirty rebuild. Latency is below human click perception.
+          picking.pick(pixelX, pixelY).then(
+            (result) => {
+              if (result === null || !finishHit(result.pointIndex)) finishMiss();
+            },
+            (err: unknown) => {
+              // GPU pick failed (rare). Fall through to the CPU grid path.
+              console.warn("GPU pick failed, falling back to CPU grid:", err);
+              cpuGridPick(worldX, worldY, finishHit, finishMiss);
+            },
+          );
+          return;
         }
+
+        cpuGridPick(worldX, worldY, finishHit, finishMiss);
       },
     },
     config?.interaction,
   );
+
+  /**
+   * Legacy CPU spatial-grid hit test — kept as fallback. Picks the
+   * geometrically nearest visible point within a screen-space radius.
+   * Loses to overlapping points (the GPU path handles that).
+   */
+  function cpuGridPick(worldX: number, worldY: number, hit: (i: number) => boolean, miss: () => void) {
+    const hitRadiusWorld = 20 / ((currentZoom * canvas.height) / 2);
+    const maxDist2 = hitRadiusWorld * hitRadiusWorld;
+    let bestIdx = -1;
+    let bestDist2 = maxDist2;
+    const r = Math.ceil((hitRadiusWorld / 2) * GRID) + 1;
+    const cx = Math.floor(((worldX + 1) / 2) * GRID);
+    const cy = Math.floor(((worldY + 1) / 2) * GRID);
+    for (let gx = Math.max(0, cx - r); gx <= Math.min(GRID - 1, cx + r); gx++) {
+      for (let gy = Math.max(0, cy - r); gy <= Math.min(GRID - 1, cy + r); gy++) {
+        for (const i of gridCells[gx * GRID + gy]) {
+          const px = data.positions[i * 2];
+          const py = data.positions[i * 2 + 1];
+          const dx = px - worldX;
+          const dy = py - worldY;
+          const d2 = dx * dx + dy * dy;
+          if (d2 < bestDist2 && selection.isPointVisible(i)) {
+            bestDist2 = d2;
+            bestIdx = i;
+          }
+        }
+      }
+    }
+    if (bestIdx >= 0 && hit(bestIdx)) return;
+    miss();
+  }
 
   // ── Row index → point index lookup (built once, used by setExternalSelection) ──
   // Pre-building this Map avoids O(n) reconstruction on every selection sync event.
@@ -331,14 +387,23 @@ export async function createScatterplot(
     console.log("=== Compute kernels: guarded pipelines (WGSL not dumpable via resolve) ===");
   }
 
+  /**
+   * Resize every render-target-bearing subsystem in one call. Currently
+   * just the pick buffer; future passes (HDR target, bloom mip chain) hook
+   * in here. Adaptive-DPR (#4, deferred) plugs into this single seam.
+   */
+  function resizeAll(width: number, height: number) {
+    const dpr = window.devicePixelRatio || 1;
+    const gpuW = Math.floor(width * dpr);
+    const gpuH = Math.floor(height * dpr);
+    uniforms.paramsUniform.write(d.vec4f(pointRadius, gpuW / gpuH, selectionDimFactor, adaptiveScale));
+    interaction.resize();
+    picking.resize();
+  }
+
   return {
     resize(width: number, height: number) {
-      const dpr = window.devicePixelRatio || 1;
-      const gpuW = Math.floor(width * dpr);
-      const gpuH = Math.floor(height * dpr);
-
-      uniforms.paramsUniform.write(d.vec4f(pointRadius, gpuW / gpuH, selectionDimFactor, adaptiveScale));
-      interaction.resize();
+      resizeAll(width, height);
     },
     setPointRadius(r: number) {
       pointRadius = r;
@@ -498,6 +563,7 @@ export async function createScatterplot(
       selection.destroy();
       compositor.destroy();
       culling.destroy();
+      picking.destroy();
       root.destroy();
       releaseDevice();
     },

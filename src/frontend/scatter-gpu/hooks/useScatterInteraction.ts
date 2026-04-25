@@ -6,7 +6,13 @@ import type { InteractionConfig } from "../types";
 
 interface InteractionCallbacks {
   onViewChange?: (state: ViewState) => void;
-  onPointClick?: (worldX: number, worldY: number) => void;
+  /**
+   * Click hit test. World coords drive the legacy CPU spatial-grid path;
+   * `pixelX`/`pixelY` (CSS pixels relative to the overlay) drive the GPU
+   * pick buffer. Both are provided so the orchestrator can A/B between
+   * them via a localStorage flag.
+   */
+  onPointClick?: (worldX: number, worldY: number, pixelX: number, pixelY: number) => void;
   onFps?: (fps: number) => void;
 }
 
@@ -280,7 +286,7 @@ export function createInteractionController(
       const dy = e.offsetY - pointerDownPos.y;
       if (dx * dx + dy * dy < 25 && callbacks?.onPointClick) {
         const [wx, wy] = pixelToWorld(e.offsetX, e.offsetY);
-        callbacks.onPointClick(wx, wy);
+        callbacks.onPointClick(wx, wy, e.offsetX, e.offsetY);
         needsRender = true;
         scheduleLoop();
       }
