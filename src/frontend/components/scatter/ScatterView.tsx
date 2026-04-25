@@ -334,6 +334,16 @@ export function ScatterView({
     hostRef.current?.setPointRadius(pointRadiusStore.state.radius);
     // Sharpness — re-applied on GPU reinit so it survives data swaps
     hostRef.current?.setSharpness(renderSettingsStore.state.sharpness);
+    // HDR settings — re-applied on GPU reinit
+    {
+      const s = renderSettingsStore.state;
+      hostRef.current?.setHdrSettings({
+        toneMapping: s.toneMapping,
+        bloomStrength: s.bloomStrength,
+        bloomThreshold: s.bloomThreshold,
+        exposure: s.exposure,
+      });
+    }
     // Selection tool
     hostRef.current?.setForcedSelectionMode(selectionTool);
     // Re-upload all isolation masks from CPU state after GPU reinit
@@ -412,10 +422,19 @@ export function ScatterView({
     return () => sub.unsubscribe();
   }, []);
 
-  // Sync global sharpness to this panel's GPU instance
+  // Sync global sharpness + HDR settings to this panel's GPU instance.
+  // Single subscription — we always re-apply both on any change to keep
+  // the GPU in lockstep with the store.
   useEffect(() => {
     const sub = renderSettingsStore.subscribe(() => {
-      hostRef.current?.setSharpness(renderSettingsStore.state.sharpness);
+      const s = renderSettingsStore.state;
+      hostRef.current?.setSharpness(s.sharpness);
+      hostRef.current?.setHdrSettings({
+        toneMapping: s.toneMapping,
+        bloomStrength: s.bloomStrength,
+        bloomThreshold: s.bloomThreshold,
+        exposure: s.exposure,
+      });
     });
     return () => sub.unsubscribe();
   }, []);

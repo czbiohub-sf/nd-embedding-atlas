@@ -8,6 +8,7 @@ import { createBuffers, createUniforms, MAX_PALETTE_SIZE, uploadData } from "./b
 import { createCompositor } from "./compositor";
 import { createCullingEngine } from "./culling";
 import { acquireDevice, releaseDevice } from "./device-manager";
+import { createHdrPipeline } from "./hdr";
 import { initGPU } from "./init";
 import { createPickingSystem } from "./picking";
 import { createRenderPipeline } from "./pipeline";
@@ -60,6 +61,12 @@ export async function createScatterplot(
   // without requiring GPU re-initialization.
   const backgroundColor = config?.render?.backgroundColor ?? ([0, 0, 0, 0] as [number, number, number, number]);
 
+  // HDR pipeline — scatter draws into an rgba16float target instead of the
+  // canvas swap chain. The HDR pass then runs brightpass → blur → tone map
+  // and writes to the canvas. Lets dense overlapping points actually
+  // accumulate above 1.0 and bloom + AgX reshape the response curve.
+  const hdr = createHdrPipeline(device, format, canvas.width || 1, canvas.height || 1);
+
   const mainVertex = createVertexShader(uniforms);
   const mainFragment = createFragmentShader();
   // eslint-disable-next-line @typescript-eslint/unbound-method
@@ -69,7 +76,9 @@ export async function createScatterplot(
     mainFragment,
     buffers,
     culling,
-    format,
+    // Scatter writes to the HDR target. The HDR composite pass converts to
+    // the canvas swap chain format below.
+    hdr.hdrFormat,
     backgroundColor,
     data.numCells,
   );
@@ -258,11 +267,15 @@ export async function createScatterplot(
     () => {
       // Guard against 0-size canvas (hidden/collapsed Dockview panel)
       if (canvas.width === 0 || canvas.height === 0) return;
-      // Single encoder, single submit — cull → compositor → render in one batch.
+      // Single encoder, single submit — cull → compositor → scatter (HDR) →
+      // brightpass → blur → tonemap (canvas) in one batch.
       const encoder = device.createCommandEncoder();
       culling.dispatchCulling(viewVersion, encoder);
       compositor.dispatchIfDirty(encoder);
-      render(context, data.numCells, "clear", encoder);
+      // Scatter writes into the HDR target.
+      render(hdr.hdrView(), data.numCells, "clear", encoder);
+      // Brightpass + blur + tonemap composites HDR + bloom into the canvas.
+      hdr.composite(context.getCurrentTexture().createView(), encoder);
       device.queue.submit([encoder.finish()]);
       // Conservatively invalidate the pick buffer on every render. Picks
       // happen on click (rarely), so re-rendering once per pick after a
@@ -399,6 +412,7 @@ export async function createScatterplot(
     uniforms.paramsUniform.write(d.vec4f(pointRadius, gpuW / gpuH, selectionDimFactor, adaptiveScale));
     interaction.resize();
     picking.resize();
+    hdr.resize(gpuW, gpuH);
   }
 
   return {
@@ -419,6 +433,10 @@ export async function createScatterplot(
       // guards `s = 0`; we still avoid pathological cost on the slider.
       const clamped = Math.max(0.5, Math.min(16, s));
       uniforms.sharpnessUniform.write(clamped);
+      interaction.requestRender();
+    },
+    setHdrSettings(settings) {
+      hdr.setSettings(settings);
       interaction.requestRender();
     },
     updateColors(palette: readonly (readonly [number, number, number, number?])[], categoryIndices?: Uint8Array) {
@@ -564,6 +582,7 @@ export async function createScatterplot(
       compositor.destroy();
       culling.destroy();
       picking.destroy();
+      hdr.destroy();
       root.destroy();
       releaseDevice();
     },

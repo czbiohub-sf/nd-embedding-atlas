@@ -162,6 +162,13 @@ export interface ScatterplotHandle {
    * constant thanks to a compensation factor in the vertex shader.
    */
   setSharpness(sharpness: number): void;
+  /** Update HDR settings (tone mapping, bloom strength, exposure). */
+  setHdrSettings(settings: {
+    toneMapping?: "none" | "reinhard" | "aces" | "agx";
+    bloomStrength?: number;
+    bloomThreshold?: number;
+    exposure?: number;
+  }): void;
 }
 
 export interface RenderConfig {

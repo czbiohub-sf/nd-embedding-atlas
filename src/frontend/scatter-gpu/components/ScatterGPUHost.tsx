@@ -213,6 +213,9 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
       setSharpness(sharpness) {
         gpuRef.current?.setSharpness(sharpness);
       },
+      setHdrSettings(settings) {
+        gpuRef.current?.setHdrSettings(settings);
+      },
       setContinuousColors(args) {
         gpuRef.current?.updateContinuousColors(args);
       },

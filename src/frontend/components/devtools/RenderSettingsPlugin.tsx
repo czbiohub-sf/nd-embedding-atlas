@@ -1,19 +1,35 @@
 /**
  * RenderSettingsPlugin — dev tools panel for global render-quality knobs.
  *
- * Currently houses:
+ * Houses:
  *   - Sharpness slider (per-point falloff exponent; 0.5 → 16, default 2.0)
- *
- * Future entries (HDR, bloom, tone mapping, exposure) land here.
+ *   - Tone mapping selector (None / Reinhard / ACES / AgX, default AgX)
+ *   - Exposure slider (-3 → +3 stops)
+ *   - Bloom strength + threshold sliders
  */
 
 import { useSelector } from "@tanstack/react-store";
 import {
+  BLOOM_STRENGTH_DEFAULT,
+  BLOOM_STRENGTH_MAX,
+  BLOOM_STRENGTH_MIN,
+  BLOOM_THRESHOLD_DEFAULT,
+  BLOOM_THRESHOLD_MAX,
+  BLOOM_THRESHOLD_MIN,
+  EXPOSURE_DEFAULT,
+  EXPOSURE_MAX,
+  EXPOSURE_MIN,
   renderSettingsStore,
+  setBloomStrength,
+  setBloomThreshold,
+  setExposure,
   setSharpness,
+  setToneMapping,
   SHARPNESS_DEFAULT,
   SHARPNESS_MAX,
   SHARPNESS_MIN,
+  TONE_MAPPING_DEFAULT,
+  type ToneMapping,
 } from "../../stores/RenderSettingsStore";
 
 interface SliderRowProps {
@@ -65,6 +81,57 @@ function SliderRow({ label, description, value, min, max, step, defaultValue, on
   );
 }
 
+interface SegmentedRowProps<T extends string> {
+  label: string;
+  description?: string;
+  value: T;
+  options: readonly { value: T; label: string }[];
+  onChange: (v: T) => void;
+  defaultValue: T;
+}
+
+function SegmentedRow<T extends string>({
+  label,
+  description,
+  value,
+  options,
+  onChange,
+  defaultValue,
+}: SegmentedRowProps<T>) {
+  return (
+    <div className="border-white/5 border-b px-4 py-3">
+      <div className="mb-1.5 flex items-center justify-between">
+        <span className="font-mono text-white/70 text-xs">{label}</span>
+        <button
+          type="button"
+          onClick={() => onChange(defaultValue)}
+          className="rounded-sm px-1.5 py-0.5 font-mono text-[10px] text-white/30 transition-colors hover:bg-white/5 hover:text-white/70"
+          title="Reset to default"
+        >
+          reset
+        </button>
+      </div>
+      <div className="flex gap-1">
+        {options.map((opt) => (
+          <button
+            key={opt.value}
+            type="button"
+            onClick={() => onChange(opt.value)}
+            className={`flex-1 rounded-sm px-2 py-1 font-mono text-[11px] transition-colors ${
+              value === opt.value
+                ? "bg-purple-500/30 text-white"
+                : "bg-white/5 text-white/40 hover:bg-white/10 hover:text-white/70"
+            }`}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+      {description && <div className="mt-1.5 font-mono text-[10px] text-white/30 leading-snug">{description}</div>}
+    </div>
+  );
+}
+
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="mb-2">
@@ -76,8 +143,15 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
+const TONE_MAPPING_OPTIONS = [
+  { value: "none", label: "None" },
+  { value: "reinhard", label: "Reinhard" },
+  { value: "aces", label: "ACES" },
+  { value: "agx", label: "AgX" },
+] as const satisfies readonly { value: ToneMapping; label: string }[];
+
 export function RenderSettingsPlugin() {
-  const sharpness = useSelector(renderSettingsStore, (s) => s.sharpness);
+  const settings = useSelector(renderSettingsStore, (s) => s);
 
   return (
     <div className="h-full overflow-y-auto bg-[#0d0d14] text-white">
@@ -85,12 +159,53 @@ export function RenderSettingsPlugin() {
         <SliderRow
           label="Sharpness"
           description="Falloff exponent: pow(1 - r, sharpness). 2 = soft halo, 8 = hard dot. The visible disk size stays constant — the vertex shader compensates."
-          value={sharpness}
+          value={settings.sharpness}
           min={SHARPNESS_MIN}
           max={SHARPNESS_MAX}
           step={0.1}
           defaultValue={SHARPNESS_DEFAULT}
           onChange={setSharpness}
+        />
+      </Section>
+      <Section title="HDR + tone mapping">
+        <SegmentedRow<ToneMapping>
+          label="Tone mapping"
+          description="AgX = Filament/Three.js film-curve. ACES = UE4 fit. Reinhard = simple. None = clamp."
+          value={settings.toneMapping}
+          options={TONE_MAPPING_OPTIONS}
+          onChange={setToneMapping}
+          defaultValue={TONE_MAPPING_DEFAULT}
+        />
+        <SliderRow
+          label="Exposure"
+          description="Stops (log2). +1 = 2× brighter, -1 = half brightness. Applied before tone mapping."
+          value={settings.exposure}
+          min={EXPOSURE_MIN}
+          max={EXPOSURE_MAX}
+          step={0.05}
+          defaultValue={EXPOSURE_DEFAULT}
+          onChange={setExposure}
+          formatValue={(v) => `${v >= 0 ? "+" : ""}${v.toFixed(2)} EV`}
+        />
+        <SliderRow
+          label="Bloom strength"
+          description="Mix amount of the blurred bright extract. 0 = off."
+          value={settings.bloomStrength}
+          min={BLOOM_STRENGTH_MIN}
+          max={BLOOM_STRENGTH_MAX}
+          step={0.01}
+          defaultValue={BLOOM_STRENGTH_DEFAULT}
+          onChange={setBloomStrength}
+        />
+        <SliderRow
+          label="Bloom threshold"
+          description="HDR luminance above which bloom is extracted. Higher = only the brightest cores glow."
+          value={settings.bloomThreshold}
+          min={BLOOM_THRESHOLD_MIN}
+          max={BLOOM_THRESHOLD_MAX}
+          step={0.05}
+          defaultValue={BLOOM_THRESHOLD_DEFAULT}
+          onChange={setBloomThreshold}
         />
       </Section>
     </div>

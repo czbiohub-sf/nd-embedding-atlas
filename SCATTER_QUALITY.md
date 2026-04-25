@@ -154,7 +154,8 @@ selects whichever neighbor is nearest in world space — wrong target.
 
 ## Feature 3 — HDR + bloom + AgX tone mapping
 
-**Status:** in progress.
+**Status:** shipped. Always-on; tone-mapping mode + bloom + exposure
+controls live in the dev-tools "Render" tab.
 
 ### Why
 
@@ -168,63 +169,78 @@ image with a film-like roll-off.
 
 ```
 scatter (instanced quads, additive blend)
-    ↓ → HDR rgba16float target
-bloom 4-level mip chain (downsample / upsample with two-tap blur)
-    ↓ → bloom rgba16float target
-tone map (AgX | ACES | Reinhard | None) + EOG (exposure / offset / gamma)
-    ↓ → canvas swapchain (rgba8unorm, premultiplied)
+    ↓ → HDR rgba16float target  (full resolution)
+brightpass (luminance > threshold, soft knee)
+    ↓ → bloom-A  (half resolution)
+horizontal blur (5-tap Gaussian via 4 bilinear fetches)
+    ↓ → bloom-B
+vertical blur (same kernel, transposed)
+    ↓ → bloom-A   (final blurred bloom)
+tone map (AgX | ACES | Reinhard | None) + exposure + bloom composite
+    ↓ → canvas swap chain (bgra8unorm, premultiplied)
 ```
 
 - `src/frontend/scatter-gpu/gpu/hdr.ts` — owns the HDR target, bloom
-  mip chain, and tone-map fullscreen pass. Resize-aware via
-  `resize(width, height)`.
-- `src/frontend/scatter-gpu/gpu/hdr-shaders.ts` — WGSL: brightpass +
-  blur kernel (Kawase dual-filter, two taps) + tone-map.
-- AgX coefficients are 3×3 input/output matrices and a sigmoid
-  tone curve. WGSL port from the public-domain implementation in
-  Three.js / Filament. Constants embedded as module-level
-  `d.mat3x3f`s.
-- ACES, Reinhard, None modes via a `u32` switch in the tone-map
+  ping-pong textures (A/B at half res), and tone-map fullscreen pass.
+  Resize-aware via `resize(width, height)`.
+- `src/frontend/scatter-gpu/gpu/hdr-shaders.ts` — WGSL fullscreen
+  triangle vertex; brightpass fragment; separable Gaussian blur
+  fragment; tone-map fragment.
+- One bloom level for now. The architecture supports going to a 4-mip
+  chain by swapping the brightpass + blur passes for downsample-then-
+  upsample steps; left as a future tweak — single-level already
+  delivers the visual lift on dense clusters.
+- AgX coefficients: 3×3 input/output matrices + 7th-order polynomial
+  fit of the Sobotka sigmoid. Public-domain port via Filament/Three.js.
+  Constants embedded as `mat3x3<f32>` constants in the WGSL.
+- ACES = Krzysztof Narkowicz's UE4 fit. Reinhard = simple `c/(1+c)`.
+  None = clamp to [0, 1]. Selected via a `u32` mode in the tone-map
   uniform.
-- Color space: canvas configured with `format: 'bgra8unorm'`
-  (no `-srgb`); explicit linear-to-sRGB encoding in the tone-map
-  fragment via `pow(c, 1/2.2)`. AgX produces sRGB-encoded output
-  directly, so when AgX is selected the explicit gamma is skipped.
+- Color space: canvas uses the device's preferred format
+  (`bgra8unorm` on macOS, no `-srgb`); the tone-map fragment encodes
+  sRGB explicitly via the standard piecewise function. AgX produces
+  REC.709-linear output, so the same encoder handles every mode.
 
 ### Settings (Render tab in DevtoolsDrawer)
 
 | param           | default | range                        |
 | --------------- | ------- | ---------------------------- |
 | toneMapping     | AgX     | None / Reinhard / ACES / AgX |
-| exposure        | 0.0     | -3 → +3 stops                |
+| exposure        | 0.0 EV  | -3 → +3 stops                |
 | bloom strength  | 0.3     | 0 → 1.5                      |
 | bloom threshold | 1.0     | 0 → 4                        |
-| bloom radius    | 0.85    | 0 → 1                        |
 
 ### Gotchas
 
 - HDR target needs `RENDER_ATTACHMENT | TEXTURE_BINDING` usage. The
-  scatter pipeline's blend state still works on `rgba16float`.
-- Sample with `'unfilterable-float'` if the browser refuses
-  `'float'` filtering at 16-bit. Bloom blur needs filtering; on
-  Bun's webgpu_dawn this works without extra features.
-- `resizeAll(width, height)` helper added to the orchestrator —
-  resizes HDR, bloom mips, pick buffer in one call. Adaptive-DPR
-  (#4, deferred) plugs in here.
-- The render bundle in `pipeline.ts` needs the HDR target's color
-  format to match (`'rgba16float'`). The bundle is rebuilt on init
-  but kept stable across pan/zoom — no hot path cost.
+  scatter pipeline's premultiplied-alpha blend state works on
+  `rgba16float` without changes.
+- The render bundle in `pipeline.ts` had a hard-coded color format —
+  now it takes the format as a parameter and we pass `rgba16float`
+  from the orchestrator. The bundle is built once at init and stays
+  stable across pan/zoom; no hot-path cost.
+- Linear-to-sRGB encoding is done explicitly in the tone-map shader
+  via the standard piecewise function. The canvas uses
+  `bgra8unorm` (no implicit `-srgb`), so we own the encoding.
+- Bloom uses two ping-pong textures (`bloomA` / `bloomB`). The
+  brightpass writes to A, horizontal blur reads A → writes B,
+  vertical blur reads B → writes A; tone map then reads A as the
+  final bloom. Three render passes per frame.
+- AgX needs to be applied **after** `exp2(exposure)`. Reordering
+  swaps which highlights get rolled off vs clipped.
+- `resizeAll(width, height)` walks `interaction.resize()` +
+  `picking.resize()` + `hdr.resize()` in one call. Adaptive-DPR
+  (#4, deferred) plugs into this single seam.
+- TypeScript `target instanceof GPUCanvasContext` was removed from
+  pipeline.ts — the orchestrator now always passes a
+  `GPUTextureView` (the HDR target's), so the dual-mode branch was
+  dead code.
 
-### Performance
+### Not measured
 
-Measured on 1.5M-point dataset, M3 Pro:
-
-| step               | time / frame |
-| ------------------ | ------------ |
-| scatter draw (HDR) | 1.6 ms       |
-| bloom 4-level      | 0.8 ms       |
-| tone map           | 0.2 ms       |
-| total              | 2.6 ms       |
+I did not have a 1.5M-point dataset configured at the test fixture
+path during this iteration. Performance numbers will land in a
+follow-up commit once the test data is available.
 
 Pre-HDR baseline was ~1.4 ms, so the cost is roughly +1.2 ms /
 frame (under the 16ms budget on this hardware).

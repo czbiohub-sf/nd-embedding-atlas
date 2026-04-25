@@ -9,6 +9,10 @@ export function createRenderPipeline(
   mainFragment: ReturnType<typeof createFragmentShader>,
   buffers: ScatterBuffers,
   culling: CullingEngine,
+  /**
+   * Format of the color target. With HDR enabled this is `'rgba16float'`
+   * (the HDR target); without HDR it is the canvas format (e.g. bgra8unorm).
+   */
   format: GPUTextureFormat,
   backgroundColor: [number, number, number, number],
   numPoints: number,
@@ -54,21 +58,22 @@ export function createRenderPipeline(
   const renderBundle = bundleEncoder.finish();
 
   return {
+    /**
+     * Render the scatter into a color attachment view. With HDR enabled this
+     * is the HDR target; without HDR it would be the canvas's current
+     * texture view (`context.getCurrentTexture().createView()`).
+     */
     render(
-      context: GPUCanvasContext,
+      view: GPUTextureView,
       _numPoints: number,
       loadOp: "clear" | "load" = "clear",
       externalEncoder?: GPUCommandEncoder,
     ) {
-      // Raw WebGPU render pass — avoids ~unstable beginRenderPass while still
-      // supporting render bundles (which have no stable TypeGPU equivalent yet).
-      // If an external encoder is passed, we record into it and let the caller
-      // submit (used to batch cull + compositor + render into one submit per frame).
       const encoder = externalEncoder ?? root.device.createCommandEncoder();
       const pass = encoder.beginRenderPass({
         colorAttachments: [
           {
-            view: context.getCurrentTexture().createView(),
+            view,
             loadOp,
             storeOp: "store",
             ...(loadOp === "clear" ? { clearValue: backgroundColor } : {}),

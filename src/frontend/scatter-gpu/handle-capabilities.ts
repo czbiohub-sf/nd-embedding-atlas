@@ -43,6 +43,13 @@ export interface RenderCapability {
   setPointRadius(radius: number): void;
   /** Update per-point falloff exponent (default 2.0). */
   setSharpness(sharpness: number): void;
+  /** Update HDR settings (tone mapping, bloom, exposure). */
+  setHdrSettings(settings: {
+    toneMapping?: "none" | "reinhard" | "aces" | "agx";
+    bloomStrength?: number;
+    bloomThreshold?: number;
+    exposure?: number;
+  }): void;
 }
 
 export interface ColorCapability {
