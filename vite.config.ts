@@ -246,15 +246,24 @@ export default defineConfig({
   },
 
   // ── Task runner (vp run) ─────────────────────────────────────────────────
-  // `vp run --parallel dev:all` boots backend + Vite concurrently. Dataset
-  // path is read from NDEA_DATASET so the task doesn't need positional args
-  // (vp task commands don't forward positionals to sub-tasks via dependsOn).
+  // `vp run dev <dataset>` (and `bun run dev <dataset>`) both delegate to
+  // `scripts/dev.ts`, which captures the positional arg into NDEA_DATASET
+  // and dispatches to `dev:all`. Routing the path through env avoids vp's
+  // task runner forwarding the positional to every sub-task (which breaks
+  // Vite — it interprets a positional path as a project root).
   //
   // Usage:
-  //   NDEA_DATASET=/path/to/data.zarr vp run --parallel dev:all
-  //   NDEA_DATASET=/path/to/config.yaml vp run --parallel dev:all
+  //   vp run dev /path/to/data.zarr
+  //   bun run dev /path/to/data.zarr
+  //   NDEA_DATASET=/path vp run --parallel dev:all  (low-level, skips wrapper)
   run: {
     tasks: {
+      dev: {
+        // Convenience alias. Forwards positional args to the wrapper, which
+        // re-enters `vp run --parallel dev:all` with NDEA_DATASET populated.
+        command: "bun scripts/dev.ts",
+        cache: false,
+      },
       "dev:all": {
         // Composite aggregator — --parallel runs deps simultaneously.
         // cache:false so repeat runs always re-enter the task (a cache hit

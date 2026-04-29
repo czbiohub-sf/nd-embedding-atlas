@@ -7,8 +7,8 @@
  * a `dependsOn` chain, and Vite interprets a positional path as a project
  * root. Routing the path through env avoids that cross-task contamination.
  *
- *   bun run dev ../data.zarr              → NDEA_DATASET=../data.zarr vp run ...
- *   NDEA_DATASET=... bun run dev          → env var passes through unchanged
+ *   vp run dev ../data.zarr               → NDEA_DATASET=../data.zarr vp run ...
+ *   NDEA_DATASET=... vp run dev           → env var passes through unchanged
  */
 
 import { spawn } from "bun";
