@@ -246,6 +246,12 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
       clearCategoryIsolation() {
         gpuRef.current?.clearCategoryIsolation();
       },
+      setCategoryDisabled(disabledSet: Set<number>, categoryIndices: Uint8Array) {
+        gpuRef.current?.setCategoryDisabled(disabledSet, categoryIndices);
+      },
+      clearCategoryDisabled() {
+        gpuRef.current?.clearCategoryDisabled();
+      },
       setTrajectoryIsolation(rowIndices: number[]) {
         gpuRef.current?.setTrajectoryIsolation(rowIndices);
       },

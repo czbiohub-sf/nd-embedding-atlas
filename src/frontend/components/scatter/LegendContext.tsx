@@ -90,6 +90,8 @@ interface LegendProviderProps {
   setCategoricalColormap: (name: string) => void;
   /** Called whenever the set of isolated category indices changes. */
   onIsolationChange?: (isolatedIndices: Set<number>) => void;
+  /** Called whenever the set of disabled (hidden via legend) category indices changes. */
+  onDisabledChange?: (disabledIndices: Set<number>) => void;
   /** Called when the __ev__* column is missing from the VIEW (stale after backend restart). */
   onStaleColumn?: () => void;
   children: React.ReactNode;
@@ -104,6 +106,7 @@ export function LegendProvider({
   categoricalColormap,
   setCategoricalColormap,
   onIsolationChange,
+  onDisabledChange,
   onStaleColumn,
   children,
 }: LegendProviderProps) {
@@ -118,6 +121,13 @@ export function LegendProvider({
   useEffect(() => {
     onIsolationChange?.(isolatedIndices);
   }, [isolatedIndices, onIsolationChange]);
+
+  // ── Notify parent of disabled-set changes so it can gate the click handler.
+  // Render alpha is already handled by effectiveCategoryColors below
+  // (disabled → "#00000000"); this is purely for click-filter sync.
+  useEffect(() => {
+    onDisabledChange?.(disabledIndices);
+  }, [disabledIndices, onDisabledChange]);
   const [colormapName, setColormapName] = useState("viridis");
   const [colormapReversed, setColormapReversed] = useState(false);
   const [range, setRange] = useState<[number, number]>(() => [0, 1]);
