@@ -165,11 +165,16 @@ export async function startup(config: ResolvedConfig): Promise<void> {
     initVar = (conn) => muHandle.toDuckDB(conn, { skipObs: true });
   } else {
     initStore = async (conn) => {
+      // axis + includeNameColumn make `obs_name VARCHAR` come from each DF's
+      // index (AnnData.obs.index in Pandas → obs/_index in Zarr). Without
+      // this, `_ensureIdentityColumns` in store.ts synthesizes obs_name from
+      // the row index and stamps `provenance.synthetic_identity` on every
+      // collection — which breaks durability across re-ingest.
       await ingestDataFrames(
         conn,
         "obs_base",
         loaded.map((ds) => ds.adata.obs),
-        { datasetNames },
+        { datasetNames, axis: "obs", includeNameColumn: true },
       );
     };
     initVar = async (conn) => {
