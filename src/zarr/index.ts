@@ -20,9 +20,30 @@ export type {
 export type { DatasetHandle, DenseResult, MatrixResult, ToDuckDBOptions } from "./anndata.ts";
 
 // Public runtime API: open a store, read AnnData/MuData, convert to Arrow.
-export { open } from "./open.ts";
-export { AnnData } from "./anndata.ts";
-export { MuData } from "./mudata.ts";
+import type { Readable } from "zarrita";
+import { open } from "./open.ts";
+import { AnnData } from "./anndata.ts";
+import { MuData } from "./mudata.ts";
+
+export { open };
+export { AnnData };
+export { MuData };
 export { LazyDataFrame, toArrowTable } from "./data-frame.ts";
 export { BunFileStore, openBunStore } from "./bun-store.ts";
 export { ingestDataFrame, ingestDataFrames, arrowTypeToDuckDB, appendArrowValue } from "./duckdb-ingest.ts";
+
+export async function openAnnData(location: string | Readable): Promise<AnnData> {
+  const parsed = await open(location);
+  if (parsed.kind !== "anndata") {
+    throw new Error(`openAnnData: store is ${parsed.kind}, not AnnData. Use openMuData for MuData stores.`);
+  }
+  return AnnData.from(parsed);
+}
+
+export async function openMuData(location: string | Readable): Promise<MuData> {
+  const parsed = await open(location);
+  if (parsed.kind !== "mudata") {
+    throw new Error(`openMuData: store is ${parsed.kind}, not MuData. Use openAnnData for AnnData stores.`);
+  }
+  return MuData.from(parsed);
+}

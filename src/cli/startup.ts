@@ -45,6 +45,165 @@ interface LoadedDataset {
   obsmKeys: string[];
 }
 
+function countVars(adata: DatasetHandle): number {
+  if (adata.kind === "anndata") return (adata as AnnData).nVars;
+  const m = adata as MuData;
+  // MuData nVars is the sum across modalities (shared root var is usually
+  // empty on axis=0; each modality owns its own var).
+  let vars = m.var.length;
+  for (const modAdata of m.mod.values()) vars += modAdata.nVars;
+  return vars;
+}
+
+async function openOneDataset(ds: DatasetEntry): Promise<LoadedDataset> {
+  const parsed = await open(ds.path);
+  let adata: DatasetHandle;
+  if (parsed.kind === "anndata") {
+    adata = AnnData.from(parsed);
+  } else if (parsed.kind === "mudata") {
+    adata = MuData.from(parsed);
+  } else {
+    throw new Error(`${ds.name}: store is ${parsed.kind}, not AnnData/MuData`);
+  }
+  const obsmKeys = await discoverObsmKeys(adata);
+  return { entry: ds, adata, obsmKeys };
+}
+
+async function openDatasets(config: ResolvedConfig): Promise<LoadedDataset[]> {
+  console.log(`  ${DIM}Opening ${config.datasets.length} dataset(s)...${RESET}`);
+  const loaded: LoadedDataset[] = [];
+  for (const ds of config.datasets) {
+    try {
+      const result = await openOneDataset(ds);
+      loaded.push(result);
+      console.log(
+        `    ${GREEN}✓${RESET} ${ds.name}  ${DIM}${formatNumber(result.adata.nObs)} obs × ${formatNumber(countVars(result.adata))} var${RESET}`,
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`    ${RED}✗${RESET} ${ds.name}: ${msg}`);
+      process.exit(1);
+    }
+  }
+  return loaded;
+}
+
+function buildIngestCallbacks(
+  loaded: readonly LoadedDataset[],
+  datasetNames: string[],
+): {
+  initStore: (conn: DuckDBConnection) => Promise<void>;
+  initVar: (conn: DuckDBConnection) => Promise<void>;
+} {
+  const hasMuData = loaded.some((ds) => ds.adata.kind === "mudata");
+  if (hasMuData) {
+    // MuData owns both obs (collision-merged across modalities) and var
+    // (unioned with `_modality` discriminator). Route both through
+    // MuData.toDuckDB so the merge logic stays in one place.
+    const muHandle = loaded[0].adata as MuData;
+    return {
+      initStore: (conn) => muHandle.toDuckDB(conn, { skipVar: true }),
+      initVar: (conn) => muHandle.toDuckDB(conn, { skipObs: true }),
+    };
+  }
+  return {
+    initStore: async (conn) => {
+      await ingestDataFrames(
+        conn,
+        "obs_base",
+        loaded.map((ds) => ds.adata.obs),
+        { datasetNames },
+      );
+    },
+    initVar: async (conn) => {
+      await ingestDataFrames(
+        conn,
+        "var_base",
+        loaded.map((ds) => ds.adata.var),
+        { datasetNames, axis: "var", includeNameColumn: true },
+      );
+    },
+  };
+}
+
+interface ObsPrep {
+  isMultiDataset: boolean;
+  spatial: ReturnType<typeof detectSpatialColumns> | null;
+  hidden: ReturnType<typeof spatialHiddenColumns>;
+  detectedObsColumns: string[];
+  datasetConfigs: Map<string, DatasetConfig>;
+  availableObsmKeys: string[];
+}
+
+function prepareObsMetadata(loaded: readonly LoadedDataset[]): ObsPrep {
+  const allObsmKeys = new Set<string>();
+  const datasetConfigs = new Map<string, DatasetConfig>();
+  for (const ds of loaded) {
+    for (const key of ds.obsmKeys) allObsmKeys.add(key);
+    datasetConfigs.set(ds.entry.name, {
+      path: ds.entry.path,
+      platePath: ds.entry.platePath,
+      channels: ds.entry.channels,
+    });
+  }
+
+  const firstColumns = [...loaded[0].adata.obs.columns];
+  const detected = detectSpatialColumns(new Set(firstColumns));
+  const hasSpatial = detected.fov != null || detected.bbox != null || detected.x != null;
+  const spatial = hasSpatial ? detected : null;
+
+  return {
+    isMultiDataset: loaded.length > 1,
+    spatial,
+    hidden: spatialHiddenColumns(spatial),
+    detectedObsColumns: firstColumns.filter((c) => !c.startsWith("__")),
+    datasetConfigs,
+    availableObsmKeys: sortObsmKeys([...allObsmKeys]),
+  };
+}
+
+function printStartupSummary(
+  loaded: readonly LoadedDataset[],
+  availableObsmKeys: readonly string[],
+  config: ResolvedConfig,
+  startTime: number,
+): void {
+  const elapsed = ((performance.now() - startTime) / 1000).toFixed(1);
+  const networkAddr = getNetworkAddress();
+
+  console.log(`\n  ${BOLD}Datasets:${RESET}`);
+  for (const ds of loaded) {
+    const plateTag = ds.entry.platePath ? ` ${DIM}+ plate${RESET}` : "";
+    console.log(
+      `    ${ds.entry.name}  ${DIM}${formatNumber(ds.adata.nObs)} obs × ${formatNumber(countVars(ds.adata))} var${RESET}${plateTag}`,
+    );
+  }
+
+  if (availableObsmKeys.length > 0) {
+    console.log(`\n  ${BOLD}Embeddings:${RESET} ${DIM}${availableObsmKeys.join(", ")}${RESET}`);
+  }
+
+  console.log(`\n  ${BOLD}Server:${RESET}`);
+  console.log(`    ${CYAN}Local:${RESET}   http://${config.host}:${config.port}`);
+  if (networkAddr && config.host !== "127.0.0.1") {
+    console.log(`    ${CYAN}Network:${RESET} http://${networkAddr}:${config.port}`);
+  }
+  console.log(`\n  ${DIM}Ready in ${elapsed}s${RESET}`);
+}
+
+function maybeOpenBrowser(host: string, port: number): void {
+  const url = `http://${host}:${port}`;
+  try {
+    if (process.platform === "darwin") {
+      Bun.spawn(["open", url]);
+    } else if (process.platform === "linux") {
+      Bun.spawn(["xdg-open", url]);
+    }
+  } catch {
+    // Non-critical — user can open manually
+  }
+}
+
 // ─── Main startup ───────────────────────────────────────────────────────────
 
 export async function startup(config: ResolvedConfig): Promise<void> {
@@ -61,131 +220,27 @@ export async function startup(config: ResolvedConfig): Promise<void> {
   console.log(`\n  ${BOLD}nd-embedding-atlas${RESET} ${DIM}v0.1.0${RESET}\n`);
 
   // ── 1. Open zarr stores ─────────────────────────────────────────────────
-
-  console.log(`  ${DIM}Opening ${config.datasets.length} dataset(s)...${RESET}`);
-  const loaded: LoadedDataset[] = [];
-
-  for (const ds of config.datasets) {
-    try {
-      const parsed = await open(ds.path);
-      let adata: DatasetHandle;
-      let nVars: number;
-      if (parsed.kind === "anndata") {
-        const a = AnnData.from(parsed);
-        adata = a;
-        nVars = a.nVars;
-      } else if (parsed.kind === "mudata") {
-        const m = MuData.from(parsed);
-        adata = m;
-        // MuData nVars is the sum across modalities (shared root var is
-        // usually empty on axis=0; each modality owns its own var).
-        let vars = m.var.length;
-        for (const modAdata of m.mod.values()) vars += modAdata.nVars;
-        nVars = vars;
-      } else {
-        throw new Error(`${ds.name}: store is ${parsed.kind}, not AnnData/MuData`);
-      }
-
-      // Discover available obsm keys
-      const obsmKeys = await discoverObsmKeys(adata);
-
-      loaded.push({ entry: ds, adata, obsmKeys });
-      console.log(
-        `    ${GREEN}✓${RESET} ${ds.name}  ${DIM}${formatNumber(adata.nObs)} obs × ${formatNumber(nVars)} var${RESET}`,
-      );
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.error(`    ${RED}✗${RESET} ${ds.name}: ${msg}`);
-      process.exit(1);
-    }
-  }
+  const loaded = await openDatasets(config);
 
   // ── 2. Prepare obs data ─────────────────────────────────────────────────
 
   console.log(`\n  ${DIM}Preparing obs metadata...${RESET}`);
+  const prep = prepareObsMetadata(loaded);
 
-  const isMultiDataset = loaded.length > 1;
-
-  // Build combined Parquet via DuckDB init callback
-  // For each dataset: convert obs → Arrow IPC → register as temp table → UNION ALL into obs_base
-  const allObsmKeys = new Set<string>();
-  const datasetConfigs = new Map<string, DatasetConfig>();
-
-  for (const ds of loaded) {
-    for (const key of ds.obsmKeys) allObsmKeys.add(key);
-    datasetConfigs.set(ds.entry.name, {
-      path: ds.entry.path,
-      platePath: ds.entry.platePath,
-      channels: ds.entry.channels,
-    });
-  }
-
-  // Determine which obsm keys are available across all datasets
-  const availableObsmKeys = sortObsmKeys([...allObsmKeys]);
-
-  // Determine obs columns from the first dataset (for spatial detection + UI).
-  const firstColumns = [...loaded[0].adata.obs.columns];
-
-  // Detect spatial columns and filter internals for the obs column list
-  const colSet = new Set(firstColumns);
-  const detected = detectSpatialColumns(colSet);
-  const hasSpatial = detected.fov != null || detected.bbox != null || detected.x != null;
-  const spatial = hasSpatial ? detected : null;
-  const detectedObsColumns = firstColumns.filter((c) => !c.startsWith("__"));
-
-  const hidden = spatialHiddenColumns(spatial);
-
-  // Both axes ingest through the same helper — columns are unioned across
-  // datasets, per-column type wins on first sighting, `_dataset` column is
-  // added only when there's > 1 DF. obs identity (`__row_index__` / `obs_name`)
-  // is added by `EmbeddingStore._ensureIdentityColumns`; var identity
-  // (`__var_index__` / `var_name`) is emitted inline via `axis: "var"`.
-  //
   // MuData: currently supported only as a single dataset. Multi-dataset
   // unions mixing AnnData + MuData (or multiple MuData stores) are not
   // supported yet — the per-modality var structure differs and merging
   // requires a separate design. Reject loudly.
-  const hasMuData = loaded.some((ds) => ds.adata.kind === "mudata");
-  if (hasMuData && loaded.length > 1) {
+  if (loaded.some((ds) => ds.adata.kind === "mudata") && loaded.length > 1) {
     console.error(`    ${RED}✗${RESET} Multi-dataset unions with MuData are not supported yet.`);
     process.exit(1);
   }
 
   const datasetNames = loaded.map((ds) => ds.entry.name);
+  const { initStore, initVar } = buildIngestCallbacks(loaded, datasetNames);
+  const store = await EmbeddingStore.fromInit(initStore, { hidden: prep.hidden, initVar });
 
-  let initStore: (conn: DuckDBConnection) => Promise<void>;
-  let initVar: ((conn: DuckDBConnection) => Promise<void>) | undefined;
-
-  if (hasMuData) {
-    // MuData owns both obs (collision-merged across modalities) and var
-    // (unioned with `_modality` discriminator). Route both through
-    // MuData.toDuckDB so the merge logic stays in one place.
-    const muHandle = loaded[0].adata as MuData;
-    initStore = (conn) => muHandle.toDuckDB(conn, { skipVar: true });
-    initVar = (conn) => muHandle.toDuckDB(conn, { skipObs: true });
-  } else {
-    initStore = async (conn) => {
-      await ingestDataFrames(
-        conn,
-        "obs_base",
-        loaded.map((ds) => ds.adata.obs),
-        { datasetNames },
-      );
-    };
-    initVar = async (conn) => {
-      await ingestDataFrames(
-        conn,
-        "var_base",
-        loaded.map((ds) => ds.adata.var),
-        { datasetNames, axis: "var", includeNameColumn: true },
-      );
-    };
-  }
-
-  const store = await EmbeddingStore.fromInit(initStore, { hidden, initVar });
-
-  // Apply obs column filter if configured
-  const obsColumns = config.obsColumns ?? detectedObsColumns;
+  const obsColumns = config.obsColumns ?? prep.detectedObsColumns;
 
   console.log(`    ${GREEN}✓${RESET} ${formatNumber(store.nObs)} observations loaded into DuckDB`);
   if (store.hasVarTable) {
@@ -193,44 +248,35 @@ export async function startup(config: ResolvedConfig): Promise<void> {
   }
 
   // ── 3. Build ViewerState ────────────────────────────────────────────────
-  // Will be passed to createApp once server routes are wired up.
-
-  // Build accessor map for on-demand obsm loading
   const accessors = new Map(loaded.map((ds) => [ds.entry.name, ds.adata]));
-
-  // Build plate mounts + read minimal HCS metadata (omero channels, scale).
-  const plateMounts: PlateMount[] = buildPlateMounts(datasetConfigs, isMultiDataset);
+  const plateMounts: PlateMount[] = buildPlateMounts(prep.datasetConfigs, prep.isMultiDataset);
   const platesByDataset = await readPlateMetaForDatasets(plateMounts);
 
   const state: ViewerState = {
     store,
-    datasets: datasetConfigs,
-    spatial,
+    datasets: prep.datasetConfigs,
+    spatial: prep.spatial,
     obsColumns,
     port: config.port,
-    availableObsmKeys,
+    availableObsmKeys: prep.availableObsmKeys,
     loadingTasks: new Map(),
     loadErrors: new Map(),
     accessors,
     plateMounts,
     obsmLoaders: new Map(),
   };
-  // ── 4. Resolve frontend ─────────────────────────────────────────────────
 
-  let staticDir: string | undefined;
-  if (!config.noStatic) {
-    staticDir = resolveFrontendDir() ?? undefined;
-    if (!staticDir) {
-      console.log(
-        `\n  ${YELLOW}⚠${RESET}  No frontend dist found. Run ${DIM}vp build${RESET} (or ${DIM}vp run dev${RESET} for dev mode with Vite HMR).`,
-      );
-    }
+  // ── 4. Resolve frontend ─────────────────────────────────────────────────
+  const staticDir = config.noStatic ? undefined : (resolveFrontendDir() ?? undefined);
+  if (!config.noStatic && !staticDir) {
+    console.log(
+      `\n  ${YELLOW}⚠${RESET}  No frontend dist found. Run ${DIM}vp build${RESET} (or ${DIM}vp run dev${RESET} for dev mode with Vite HMR).`,
+    );
   }
 
   // ── 5. Start server ─────────────────────────────────────────────────────
-
   const { createApp } = await import("../server/app.ts");
-  const { plateMeta, datasetChannels } = buildPlateMetadata(plateMounts, platesByDataset, isMultiDataset);
+  const { plateMeta, datasetChannels } = buildPlateMetadata(plateMounts, platesByDataset, prep.isMultiDataset);
 
   const datasetMeta: DatasetMeta = {
     obsColumnNames: obsColumns,
@@ -240,7 +286,7 @@ export async function startup(config: ResolvedConfig): Promise<void> {
     defaultX: "x",
     defaultY: "y",
     idColumn: "_index",
-    datasetKeys: isMultiDataset ? [...datasetConfigs.keys()] : null,
+    datasetKeys: prep.isMultiDataset ? [...prep.datasetConfigs.keys()] : null,
     datasetChannels,
   };
 
@@ -255,55 +301,14 @@ export async function startup(config: ResolvedConfig): Promise<void> {
   });
 
   // ── 6. Print startup info ───────────────────────────────────────────────
-
-  const elapsed = ((performance.now() - startTime) / 1000).toFixed(1);
-  const networkAddr = getNetworkAddress();
-
-  console.log(`\n  ${BOLD}Datasets:${RESET}`);
-  for (const ds of loaded) {
-    const plateTag = ds.entry.platePath ? ` ${DIM}+ plate${RESET}` : "";
-    const nVars =
-      ds.adata.kind === "mudata"
-        ? (() => {
-            const m = ds.adata as MuData;
-            let total = m.var.length;
-            for (const mod of m.mod.values()) total += mod.nVars;
-            return total;
-          })()
-        : (ds.adata as AnnData).nVars;
-    console.log(
-      `    ${ds.entry.name}  ${DIM}${formatNumber(ds.adata.nObs)} obs × ${formatNumber(nVars)} var${RESET}${plateTag}`,
-    );
-  }
-
-  if (availableObsmKeys.length > 0) {
-    console.log(`\n  ${BOLD}Embeddings:${RESET} ${DIM}${availableObsmKeys.join(", ")}${RESET}`);
-  }
-
-  console.log(`\n  ${BOLD}Server:${RESET}`);
-  console.log(`    ${CYAN}Local:${RESET}   http://${config.host}:${config.port}`);
-  if (networkAddr && config.host !== "127.0.0.1") {
-    console.log(`    ${CYAN}Network:${RESET} http://${networkAddr}:${config.port}`);
-  }
-  console.log(`\n  ${DIM}Ready in ${elapsed}s${RESET}`);
+  printStartupSummary(loaded, prep.availableObsmKeys, config, startTime);
 
   // ── 7. Auto-open browser ────────────────────────────────────────────────
-
   // `NDEA_NO_OPEN=1` is an unambiguous escape hatch for callers that spawn
   // the backend programmatically (e.g. `scripts/dev.ts`), since citty's
   // parse of `--no-open` depends on how the flag is declared.
-  const suppressOpen = config.noOpen || process.env.NDEA_NO_OPEN === "1";
-  if (!suppressOpen) {
-    const url = `http://${config.host}:${config.port}`;
-    try {
-      if (process.platform === "darwin") {
-        Bun.spawn(["open", url]);
-      } else if (process.platform === "linux") {
-        Bun.spawn(["xdg-open", url]);
-      }
-    } catch {
-      // Non-critical — user can open manually
-    }
+  if (!(config.noOpen || process.env.NDEA_NO_OPEN === "1")) {
+    maybeOpenBrowser(config.host, config.port);
   }
 
   // ── 8. Graceful shutdown ────────────────────────────────────────────────

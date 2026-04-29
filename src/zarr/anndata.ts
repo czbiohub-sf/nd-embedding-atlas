@@ -26,7 +26,6 @@ import { CsrCscArray } from "./helpers.ts";
 import { readDataFrame, readDataFrameParallel, readSparse } from "./readers.ts";
 import { extractStore } from "./zarr-boundary.ts";
 import { LazyDataFrame } from "./data-frame.ts";
-import { open as openStore } from "./open.ts";
 import { ingestDataFrame } from "./duckdb-ingest.ts";
 
 type ZarrGroup = zarr.Group<Readable>;
@@ -767,15 +766,6 @@ export class AnnData implements DatasetHandle {
   /** Build from a parsed AnnData result. For MuData, use `MuData.from`. */
   static from(parsed: ParsedAnnData): AnnData {
     return new AnnData(AnnDataAccessor.from(parsed));
-  }
-
-  /** One-call opener: resolve store + detect convention + wrap. */
-  static async open(location: string | Readable): Promise<AnnData> {
-    const parsed = await openStore(location);
-    if (parsed.kind !== "anndata") {
-      throw new Error(`AnnData.open: store is ${parsed.kind}, not AnnData. Use MuData.open for MuData stores.`);
-    }
-    return AnnData.from(parsed);
   }
 
   get shape(): readonly [number, number] {

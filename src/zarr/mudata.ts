@@ -23,7 +23,6 @@ import type { AnnDataFrame, ColumnData, ParsedAnnData, ParsedMuData, Scalar } fr
 import { AnnData, parseAnnData, type DatasetHandle, type DenseResult, type ToDuckDBOptions } from "./anndata.ts";
 import { LazyDataFrame } from "./data-frame.ts";
 import { ingestDataFrames } from "./duckdb-ingest.ts";
-import { open as openStore } from "./open.ts";
 import { readDataFrame } from "./readers.ts";
 
 type ZarrGroup = zarr.Group<Readable>;
@@ -206,15 +205,6 @@ export class MuData implements DatasetHandle {
       mod.set(name, AnnData.from(modParsed));
     }
     return new MuData(axis, obs, varDf, mod);
-  }
-
-  /** One-call opener: resolve store + detect convention + wrap. */
-  static async open(location: string | Readable): Promise<MuData> {
-    const parsed = await openStore(location);
-    if (parsed.kind !== "mudata") {
-      throw new Error(`MuData.open: store is ${parsed.kind}, not MuData. Use AnnData.open for AnnData stores.`);
-    }
-    return MuData.from(parsed);
   }
 
   get nObs(): number {

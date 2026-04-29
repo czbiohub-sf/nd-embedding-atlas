@@ -65,16 +65,6 @@ function withCors(response: Response): Response {
   return response;
 }
 
-// ─── URL path routing helpers ───────────────────────────────────────────────
-
-/** Extract a path parameter from a URL pattern like /api/obs/{id}. */
-function extractPathParam(pathname: string, prefix: string): string | null {
-  if (!pathname.startsWith(prefix)) return null;
-  const rest = pathname.slice(prefix.length);
-  // Strip trailing slash
-  return rest.endsWith("/") ? rest.slice(0, -1) : rest;
-}
-
 // ─── App options ────────────────────────────────────────────────────────────
 
 export interface AppOptions {
@@ -219,6 +209,106 @@ async function routeRequest(
 
 // ─── API sub-router ─────────────────────────────────────────────────────────
 
+interface ApiCtx {
+  req: Request;
+  url: URL;
+  store: EmbeddingStore;
+  state: ViewerState;
+}
+
+type ApiHandler = (ctx: ApiCtx, params: string[]) => Response | Promise<Response>;
+
+interface ApiRoute {
+  method: "GET" | "POST" | "DELETE";
+  match: string | RegExp;
+  handler: ApiHandler;
+}
+
+const API_ROUTES: ApiRoute[] = [
+  { method: "GET", match: "/api/health", handler: ({ state }) => handleHealth(state) },
+  { method: "GET", match: "/api/config", handler: ({ state }) => handleConfig(state) },
+  {
+    method: "GET",
+    match: "/api/scatter-positions",
+    handler: ({ url, req, state }) => handleScatterPositions(url, state, req.signal),
+  },
+  { method: "GET", match: "/api/scatter-categories", handler: ({ url, store }) => handleScatterCategories(url, store) },
+  {
+    method: "GET",
+    match: "/api/scatter-continuous-values",
+    handler: ({ url, store }) => handleScatterContinuousValues(url, store),
+  },
+  {
+    method: "POST",
+    match: "/api/scatter-selection",
+    handler: ({ req, store }) => handleScatterSelectionPost(req, store),
+  },
+  {
+    method: "DELETE",
+    match: "/api/scatter-selection",
+    handler: ({ store }) => handleScatterSelectionDelete(store),
+  },
+  {
+    method: "GET",
+    match: "/api/trajectory",
+    handler: ({ url, req, state }) => handleTrajectory(url, state, req.signal),
+  },
+  // Obs batch + detail must be ordered before /api/obs/{row_index}.
+  { method: "GET", match: "/api/obs/batch", handler: ({ url, state }) => handleObsBatch(url, state) },
+  {
+    method: "GET",
+    match: /^\/api\/obs\/(\d+)\/detail$/,
+    handler: ({ state }, [id]) => handleObsDetail(Number(id), state),
+  },
+  {
+    method: "GET",
+    match: /^\/api\/obs\/(\d+)$/,
+    handler: ({ state }, [id]) => handleObsInfo(Number(id), state),
+  },
+  {
+    method: "GET",
+    match: /^\/api\/embeddings\/(.+)\/status$/,
+    handler: ({ state }, [name]) => handleEmbeddingStatus(decodeURIComponent(name), state),
+  },
+  {
+    method: "POST",
+    match: /^\/api\/embeddings\/(.+)$/,
+    handler: ({ state }, [name]) => handleLoadEmbedding(decodeURIComponent(name), state),
+  },
+  { method: "GET", match: "/api/obssets", handler: ({ store }) => handleListObsSets(store) },
+  { method: "POST", match: "/api/obssets", handler: ({ req, store }) => handleCreateObsSet(req, store) },
+  {
+    method: "POST",
+    match: /^\/api\/obssets\/(.+)\/activate$/,
+    handler: ({ store }, [name]) => handleActivateObsSet(decodeURIComponent(name), store),
+  },
+  {
+    method: "DELETE",
+    match: /^\/api\/obssets\/(.+)$/,
+    handler: ({ store }, [name]) => handleDeleteObsSet(decodeURIComponent(name), store),
+  },
+  { method: "GET", match: "/api/var/names", handler: ({ url, state }) => handleVarNames(url, state) },
+  { method: "GET", match: "/api/var/layers", handler: ({ state }) => handleVarLayers(state) },
+  { method: "POST", match: "/api/var-column", handler: ({ req, state }) => handleVarColumn(req, state) },
+  {
+    method: "GET",
+    match: /^\/api\/var-column\/(.+)\/status$/,
+    handler: (_, [name]) => handleVarColumnStatus(decodeURIComponent(name)),
+  },
+  { method: "POST", match: "/api/categorize", handler: ({ req, state }) => handleCategorize(req, state) },
+  { method: "POST", match: "/api/export", handler: ({ req, store }) => handleExport(req, store) },
+  {
+    method: "GET",
+    match: /^\/api\/export\/(.+)\/status$/,
+    handler: (_, [name]) => handleExportStatus(decodeURIComponent(name)),
+  },
+  {
+    method: "GET",
+    match: /^\/api\/crop\/(.+?)\/?$/,
+    handler: ({ req, state }, [param]) => handleCrop(param, req, state),
+  },
+];
+
 function routeApi(
   req: Request,
   url: URL,
@@ -226,127 +316,15 @@ function routeApi(
   store: EmbeddingStore,
   state: ViewerState,
 ): Promise<Response> | Response {
-  const method = req.method;
-
-  // ── Health ───────────────────────────────────────────────────────
-  if (pathname === "/api/health" && method === "GET") {
-    return handleHealth(state);
+  const ctx: ApiCtx = { req, url, store, state };
+  for (const route of API_ROUTES) {
+    if (route.method !== req.method) continue;
+    if (typeof route.match === "string") {
+      if (pathname === route.match) return route.handler(ctx, []);
+    } else {
+      const m = pathname.match(route.match);
+      if (m) return route.handler(ctx, m.slice(1));
+    }
   }
-
-  // ── Config ──────────────────────────────────────────────────────
-  if (pathname === "/api/config" && method === "GET") {
-    return handleConfig(state);
-  }
-
-  // ── Scatter positions ───────────────────────────────────────────
-  if (pathname === "/api/scatter-positions" && method === "GET") {
-    return handleScatterPositions(url, state, req.signal);
-  }
-
-  // ── Scatter categories ──────────────────────────────────────────
-  if (pathname === "/api/scatter-categories" && method === "GET") {
-    return handleScatterCategories(url, store);
-  }
-
-  // ── Scatter continuous values (Phase 7: GPU-side colormap) ──────
-  if (pathname === "/api/scatter-continuous-values" && method === "GET") {
-    return handleScatterContinuousValues(url, store);
-  }
-
-  // ── Scatter selection ───────────────────────────────────────────
-  if (pathname === "/api/scatter-selection") {
-    if (method === "POST") return handleScatterSelectionPost(req, store);
-    if (method === "DELETE") return handleScatterSelectionDelete(store);
-  }
-
-  // ── Trajectory (server-side join of metadata + obsm positions) ──
-  if (pathname === "/api/trajectory" && method === "GET") {
-    return handleTrajectory(url, state, req.signal);
-  }
-
-  // ── Obs batch (must match before /api/obs/{row_index}) ──────────
-  if (pathname === "/api/obs/batch" && method === "GET") {
-    return handleObsBatch(url, state);
-  }
-
-  // ── Obs detail (must match before /api/obs/{row_index}) ─────────
-  const detailMatch = pathname.match(/^\/api\/obs\/(\d+)\/detail$/);
-  if (detailMatch && method === "GET") {
-    return handleObsDetail(Number(detailMatch[1]), state);
-  }
-
-  // ── Obs info ────────────────────────────────────────────────────
-  const obsMatch = pathname.match(/^\/api\/obs\/(\d+)$/);
-  if (obsMatch && method === "GET") {
-    return handleObsInfo(Number(obsMatch[1]), state);
-  }
-
-  // ── Embeddings ──────────────────────────────────────────────────
-  const embStatusMatch = pathname.match(/^\/api\/embeddings\/(.+)\/status$/);
-  if (embStatusMatch && method === "GET") {
-    return handleEmbeddingStatus(decodeURIComponent(embStatusMatch[1]), state);
-  }
-
-  const embLoadMatch = pathname.match(/^\/api\/embeddings\/(.+)$/);
-  if (embLoadMatch && method === "POST") {
-    return handleLoadEmbedding(decodeURIComponent(embLoadMatch[1]), state);
-  }
-
-  // ── ObsSets ─────────────────────────────────────────────────────
-  if (pathname === "/api/obssets") {
-    if (method === "GET") return handleListObsSets(store);
-    if (method === "POST") return handleCreateObsSet(req, store);
-  }
-
-  const obssetActivateMatch = pathname.match(/^\/api\/obssets\/(.+)\/activate$/);
-  if (obssetActivateMatch && method === "POST") {
-    return handleActivateObsSet(decodeURIComponent(obssetActivateMatch[1]), store);
-  }
-
-  const obssetDeleteMatch = pathname.match(/^\/api\/obssets\/(.+)$/);
-  if (obssetDeleteMatch && method === "DELETE") {
-    return handleDeleteObsSet(decodeURIComponent(obssetDeleteMatch[1]), store);
-  }
-
-  // ── Var / Var column ────────────────────────────────────────────
-  if (pathname === "/api/var/names" && method === "GET") {
-    return handleVarNames(url, state);
-  }
-
-  if (pathname === "/api/var/layers" && method === "GET") {
-    return handleVarLayers(state);
-  }
-
-  if (pathname === "/api/var-column" && method === "POST") {
-    return handleVarColumn(req, state);
-  }
-
-  const varColStatusMatch = pathname.match(/^\/api\/var-column\/(.+)\/status$/);
-  if (varColStatusMatch && method === "GET") {
-    return handleVarColumnStatus(decodeURIComponent(varColStatusMatch[1]));
-  }
-
-  // ── Categorical index materialization ────────────────────────────
-  if (pathname === "/api/categorize" && method === "POST") {
-    return handleCategorize(req, state);
-  }
-
-  // ── Export ───────────────────────────────────────────────────────
-  if (pathname === "/api/export" && method === "POST") {
-    return handleExport(req, store);
-  }
-
-  const exportStatusMatch = pathname.match(/^\/api\/export\/(.+)\/status$/);
-  if (exportStatusMatch && method === "GET") {
-    return handleExportStatus(decodeURIComponent(exportStatusMatch[1]));
-  }
-
-  // ── Image crop ──────────────────────────────────────────────────
-  const cropParam = extractPathParam(pathname, "/api/crop/");
-  if (cropParam != null) {
-    return handleCrop(cropParam, req, state);
-  }
-
-  // ── 404 ─────────────────────────────────────────────────────────
-  return Response.json({ error: `Unknown API endpoint: ${method} ${pathname}` }, { status: 404 });
+  return Response.json({ error: `Unknown API endpoint: ${req.method} ${pathname}` }, { status: 404 });
 }

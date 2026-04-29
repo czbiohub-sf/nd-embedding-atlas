@@ -8,7 +8,7 @@
 import { describe, expect, test } from "bun:test";
 import path from "node:path";
 import { existsSync } from "node:fs";
-import { AnnData } from "../../zarr/index.ts";
+import { openAnnData } from "../../zarr/index.ts";
 import type { DatasetHandle } from "../../zarr/anndata.ts";
 import { ObsmSliceLoader } from "../slice-loader.ts";
 
@@ -18,7 +18,7 @@ const HAS_FIXTURE = existsSync(FIXTURE);
 describe("ObsmSliceLoader — zarr fixture", () => {
   test("detectWidth reads zarr metadata only (no data fetch)", async () => {
     if (!HAS_FIXTURE) return;
-    const adata = await AnnData.open(FIXTURE);
+    const adata = await openAnnData(FIXTURE);
     const accessors = new Map<string, DatasetHandle>([["fixture", adata]]);
     const width = await ObsmSliceLoader.detectWidth("X_pca", accessors.entries());
     // X_pca shape depends on fixture; just assert it's a sane positive int.
@@ -28,7 +28,7 @@ describe("ObsmSliceLoader — zarr fixture", () => {
 
   test("loadColumn(0) matches full-matrix column 0 byte-for-byte", async () => {
     if (!HAS_FIXTURE) return;
-    const adata = await AnnData.open(FIXTURE);
+    const adata = await openAnnData(FIXTURE);
     const full = await adata.getObsm("X_pca");
     const [nRows, nCols] = full.shape as [number, number];
 
@@ -49,7 +49,7 @@ describe("ObsmSliceLoader — zarr fixture", () => {
 
   test("loadColumn is cached: second call hits the cache (same reference)", async () => {
     if (!HAS_FIXTURE) return;
-    const adata = await AnnData.open(FIXTURE);
+    const adata = await openAnnData(FIXTURE);
     const loader = new ObsmSliceLoader(
       "X_pca",
       new Map<string, DatasetHandle>([["fixture", adata]]).entries(),
@@ -62,7 +62,7 @@ describe("ObsmSliceLoader — zarr fixture", () => {
 
   test("loadColumn rejects out-of-range colIndex", async () => {
     if (!HAS_FIXTURE) return;
-    const adata = await AnnData.open(FIXTURE);
+    const adata = await openAnnData(FIXTURE);
     const width = (await adata.getObsmShape("X_pca"))[1];
     const loader = new ObsmSliceLoader("X_pca", new Map<string, DatasetHandle>([["fixture", adata]]).entries(), width);
     await expect(loader.loadColumn(-1)).rejects.toThrow(/out of range/);
@@ -71,7 +71,7 @@ describe("ObsmSliceLoader — zarr fixture", () => {
 
   test("concurrent loadColumn calls dedup via inflight map", async () => {
     if (!HAS_FIXTURE) return;
-    const adata = await AnnData.open(FIXTURE);
+    const adata = await openAnnData(FIXTURE);
     const loader = new ObsmSliceLoader(
       "X_pca",
       new Map<string, DatasetHandle>([["fixture", adata]]).entries(),
@@ -84,7 +84,7 @@ describe("ObsmSliceLoader — zarr fixture", () => {
 
   test("AbortSignal pre-aborted: throws without caching", async () => {
     if (!HAS_FIXTURE) return;
-    const adata = await AnnData.open(FIXTURE);
+    const adata = await openAnnData(FIXTURE);
     const loader = new ObsmSliceLoader(
       "X_pca",
       new Map<string, DatasetHandle>([["fixture", adata]]).entries(),

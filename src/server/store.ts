@@ -1,9 +1,6 @@
 /**
  * EmbeddingStore — in-process DuckDB for serving Mosaic queries.
  *
- * Ports the Python `server/_store.py` EmbeddingStore to TypeScript
- * using the @duckdb/node-api bindings (same as @uwdata/mosaic-duckdb).
- *
  * Data ingestion uses Parquet temp files (DuckDB reads these natively).
  * Arrow IPC output uses the nanoarrow extension's `to_arrow_ipc()`.
  */

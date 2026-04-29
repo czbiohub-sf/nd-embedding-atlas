@@ -1,0 +1,71 @@
+{
+  "$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json",
+  "entry": [
+    "src/index.ts",
+    "src/cli/index.ts",
+    "src/server/app.ts",
+    "src/frontend/main.tsx",
+    "scripts/**/*.ts",
+    "vite.config.ts",
+    "index.html"
+  ],
+  "ignoreDependencies": ["agent-browser", "eslint-plugin-typegpu", "shadcn"],
+  "rules": {
+    "unused-dependencies": "warn"
+  },
+  "duplicates": {
+    "ignore": ["**/*.generated.ts"]
+  },
+  "framework": [
+    {
+      "name": "vite-plus",
+      "detection": {
+        "type": "any",
+        "conditions": [
+          { "type": "dependency", "package": "vite-plus" },
+          { "type": "fileExists", "pattern": "vite.config.ts" },
+          { "type": "fileExists", "pattern": "vite.config.js" },
+          { "type": "fileExists", "pattern": "vite.config.mjs" }
+        ]
+      },
+      "configPatterns": ["vite.config.{ts,js,mjs}"],
+      "alwaysUsed": ["index.html"],
+      "toolingDependencies": [
+        "vite-plus",
+        "@vitejs/plugin-react",
+        "@tailwindcss/vite",
+        "unplugin-typegpu",
+        "eslint-plugin-typegpu"
+      ]
+    },
+    {
+      "name": "oxlint-via-vite-plus",
+      "detection": {
+        "type": "any",
+        "conditions": [
+          { "type": "dependency", "package": "vite-plus" },
+          { "type": "dependency", "package": "oxlint" },
+          { "type": "fileExists", "pattern": ".oxlintrc.json" },
+          { "type": "fileExists", "pattern": "oxlint.json" }
+        ]
+      },
+      "configPatterns": [".oxlintrc.json", "oxlint.json"],
+      "toolingDependencies": ["oxlint", "oxfmt", "eslint-plugin-typegpu"]
+    },
+    {
+      "name": "bun",
+      "detection": {
+        "type": "any",
+        "conditions": [
+          { "type": "fileExists", "pattern": "bun.lock" },
+          { "type": "fileExists", "pattern": "bun.lockb" },
+          { "type": "fileExists", "pattern": "bunfig.toml" },
+          { "type": "dependency", "package": "@types/bun" }
+        ]
+      },
+      "configPatterns": ["bunfig.toml"],
+      "alwaysUsed": ["bun.lock", "bun.lockb"],
+      "toolingDependencies": ["@types/bun", "bun-types"]
+    }
+  ]
+}
