@@ -8,17 +8,7 @@
 
 import { useSelector } from "@tanstack/react-store";
 import type { DockviewApi } from "dockview-react";
-import {
-  BookmarkIcon,
-  ChevronRightIcon,
-  DatabaseIcon,
-  LogsIcon,
-  MoonIcon,
-  ScanIcon,
-  SunIcon,
-  TableIcon,
-  XIcon,
-} from "lucide-react";
+import { ChevronRightIcon, DatabaseIcon, LogsIcon, MoonIcon, ScanIcon, SunIcon, TableIcon, XIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "../../lib/utils";
 import { POINT_RADIUS_MAX, POINT_RADIUS_MIN, pointRadiusStore, setPointRadius } from "../../stores/PointRadiusStore";
@@ -147,15 +137,6 @@ export function BottomDock({
   const scatterPanels = panels.filter((p) => p.colorIndex !== undefined);
   const hasTable = panels.some((p) => p.id === "table");
   const hasViewer = panels.some((p) => p.id === "image-viewer");
-  const hasObsSets = panels.some((p) => p.id === "obssets");
-
-  function openObsSets() {
-    if (hasObsSets) {
-      activate("obssets");
-    } else {
-      dockviewApi?.addPanel({ id: "obssets", component: "obssets", title: "Obs Sets" });
-    }
-  }
 
   function activate(id: string) {
     dockviewApi?.getPanel(id)?.focus();
@@ -204,29 +185,6 @@ export function BottomDock({
           +
         </TooltipTrigger>
         <TooltipContent side="top">New scatter (⌘K)</TooltipContent>
-      </Tooltip>
-
-      {<Separator orientation="vertical" className="mx-1.5 h-3" />}
-
-      {/* ObsSets panel toggle */}
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <button
-              type="button"
-              onClick={openObsSets}
-              className={cn(
-                "mx-0.5 flex size-4 items-center justify-center rounded-sm transition-colors",
-                hasObsSets && activePanelId === "obssets"
-                  ? "text-foreground"
-                  : "text-muted-foreground/60 hover:text-muted-foreground",
-              )}
-            />
-          }
-        >
-          <BookmarkIcon className="size-3" />
-        </TooltipTrigger>
-        <TooltipContent side="top">Obs Sets</TooltipContent>
       </Tooltip>
 
       {/* Table icon */}

@@ -17,8 +17,8 @@ import {
   Waypoints,
   X,
 } from "lucide-react";
-import { useMemo, useState } from "react";
-import { SaveObsSetDialog } from "./SaveObsSetDialog";
+import { useMemo } from "react";
+import { useCollectionsSheet } from "../collections/CollectionsSheetProvider";
 
 /** Scan + Dot combined — "fit embedding to view" */
 function ScanDotIcon({ size = 12 }: { size?: number }) {
@@ -98,7 +98,7 @@ interface Props {
   trajectoryActive?: boolean;
   onToggleTrajectory?: () => void;
 
-  // ObsSet save
+  // Collection save
   hasSelection: boolean;
   selectionCount: number;
   /** Reads rowIndicesRef.current at call time — never stale */
@@ -139,9 +139,9 @@ export function ScatterOverlayControls({
   hasSelection,
   selectionCount,
   getRowIndices,
-  selectionPath,
+  selectionPath: _selectionPath,
 }: Props) {
-  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const { openSheet } = useCollectionsSheet();
   const lockMode = useSelector(viewSyncStore, (s) => s.lockMode);
   const isLinked = lockMode === "linked";
   const disabled = loadingKey !== null;
@@ -156,7 +156,10 @@ export function ScatterOverlayControls({
   return (
     <>
       {/* ── Top-left: embedding + dims + color ── */}
-      <div className={cn("absolute top-2 left-2 z-20 flex items-center gap-1 px-2 py-1", glass)}>
+      {/* max-w cap leaves room for the right utility group; the COL picker absorbs slack first. */}
+      <div
+        className={cn("absolute top-2 left-2 z-20 flex max-w-[calc(100%-15rem)] items-center gap-1 px-2 py-1", glass)}
+      >
         {/* Embedding — modality-aware picker when MuData, plain combobox otherwise */}
         {modalities && obsm ? (
           <EmbeddingPicker
@@ -284,18 +287,20 @@ export function ScatterOverlayControls({
           </HoverTip>
         </ToggleGroup>
 
-        {hasSelection && (
-          <>
-            <Separator orientation="vertical" className="mx-0.5 h-3 bg-white/[0.07]" />
-            <IconButton
-              label="Save selection"
-              description={`Save ${selectionCount} obs as an ObsSet`}
-              onClick={() => setSaveDialogOpen(true)}
-            >
-              <Bookmark className="size-3.5" />
-            </IconButton>
-          </>
-        )}
+        <Separator orientation="vertical" className="mx-0.5 h-3 bg-white/[0.07]" />
+        <IconButton
+          label="Collections"
+          description={
+            hasSelection
+              ? `Open Collections — save ${selectionCount.toLocaleString()} obs or browse saved sets`
+              : "Open Collections — browse saved sets (lasso a region to save a new one)"
+          }
+          onClick={() =>
+            openSheet(hasSelection ? { selectionCount, getRowIndices } : null, { expandSave: hasSelection })
+          }
+        >
+          <Bookmark className="size-3.5" />
+        </IconButton>
 
         <Separator orientation="vertical" className="mx-0.5 h-3 bg-white/[0.07]" />
 
@@ -413,13 +418,6 @@ export function ScatterOverlayControls({
           )}
         </ButtonGroup>
       </div>
-
-      <SaveObsSetDialog
-        open={saveDialogOpen}
-        onClose={() => setSaveDialogOpen(false)}
-        selectionPath={selectionPath}
-        getRowIndices={getRowIndices}
-      />
     </>
   );
 }

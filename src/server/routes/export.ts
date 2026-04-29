@@ -71,6 +71,28 @@ export function exportDir(): string {
   return resolve(join(homedir(), "ndea-exports"));
 }
 
+/**
+ * GET /api/export-dir
+ *
+ * Returns the server's resolved default export directory plus a writable
+ * probe. Frontend uses this to prefill the export dialog before any user
+ * input — avoids hardcoding a path on the client.
+ */
+export async function handleGetExportDir(): Promise<Response> {
+  const path = exportDir();
+  let writable = false;
+  try {
+    const { mkdir, access } = await import("node:fs/promises");
+    const { constants } = await import("node:fs");
+    await mkdir(path, { recursive: true });
+    await access(path, constants.W_OK);
+    writable = true;
+  } catch {
+    writable = false;
+  }
+  return Response.json({ default_dir: path, writable });
+}
+
 /** Sanitise a user-supplied filename into a safe Parquet basename. */
 function sanitiseFilename(name: string): string {
   const trimmed = name.trim().replace(/\.parquet$/i, "");

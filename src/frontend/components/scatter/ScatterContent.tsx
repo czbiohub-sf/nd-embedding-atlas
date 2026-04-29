@@ -22,9 +22,11 @@ import { useHighlightedPointMeta } from "../../hooks/useHighlightedPointMeta";
 import type { PanelId } from "../../scatter-gpu/types";
 import { broadcastPanelState, clearPanelState } from "../../stores/PanelStateStore";
 import { disposeBitmap } from "../../stores/RoaringBroadcastStore";
+import { panelSource } from "../../stores/SelectionSyncStore";
 import type { AxisState } from "../../types";
 import { LegendProvider } from "./LegendContext";
 import { ScatterOverlayControls } from "./ScatterOverlayControls";
+import { useScatterUIState } from "./ScatterUIStateProvider";
 import { ScatterView } from "./ScatterView";
 
 /** `var_count` is a number for AnnData, a per-modality map for MuData. */
@@ -121,9 +123,16 @@ export function ScatterContent({
   const fitViewRef = useRef<(() => void) | null>(null);
 
   // ── Selection state (hoisted so overlayControls can read row indices) ──────
+  // `rowIndicesRef` is the panel-level mapping (every row in the panel,
+  // populated once on GPU init). `lassoRowIdsRef` is the *user lasso*
+  // subset — populated by useScatterBrushSync on each lasso readback.
+  // Save dialog reads the lasso subset, not the panel-level mapping.
   const rowIndicesRef = useRef<number[]>([]);
-  const [selectionCount, setSelectionCount] = useState(0);
-  const getRowIndices = useCallback((): readonly number[] => rowIndicesRef.current, []);
+  const lassoRowIdsRef = useRef<number[]>([]);
+  const getRowIndices = useCallback((): readonly number[] => lassoRowIdsRef.current, []);
+  // `selectedCount` from useScatterUIState is null when no lasso, count otherwise.
+  const { selectedCount } = useScatterUIState();
+  const selectionCount = selectedCount ?? 0;
   const { handleIsolationChange } = useIsolationBridge({
     coloredCategoryMapping,
     colorByColumn,
@@ -183,7 +192,7 @@ export function ScatterContent({
   useEffect(() => {
     return () => {
       clearPanelState(String(myPanelId));
-      disposeBitmap(String(myPanelId) as PanelId);
+      disposeBitmap(panelSource(myPanelId));
     };
   }, [myPanelId]);
 
@@ -213,13 +222,15 @@ export function ScatterContent({
     categoryIndicesRef,
     fitViewRef,
     rowIndicesRef,
+    lassoRowIdsRef,
     onRowIndicesChange: (indices: number[]) => {
       rowIndicesRef.current = indices;
-      setSelectionCount(indices.length);
     },
   };
 
-  const selectionPath = rowIndicesRef.current.length >= 5000 ? "temp_table" : "inline";
+  // selectionPath gates the inline-vs-temp-table strategy in the save flow.
+  // It now sizes against the lasso subset, not the panel-level total.
+  const selectionPath = selectionCount >= 5000 ? "temp_table" : "inline";
   const hasSelection = selectionCount > 0;
 
   const overlayControls = effectiveAxes ? (

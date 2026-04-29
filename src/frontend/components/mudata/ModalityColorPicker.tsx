@@ -164,7 +164,7 @@ export function ModalityColorPicker({
         if (cols.includes(colorSource.column)) return mod;
       }
     }
-    return undefined;
+    return;
   }, [colorSource, isMuData, varModTab, modalityObsColumns]);
 
   // ── Trigger ─────────────────────────────────────────────────────────────────
@@ -175,24 +175,28 @@ export function ModalityColorPicker({
       break;
     case "obs":
       triggerLabel = (
-        <span className="flex items-center gap-1.5">
-          <span className="truncate">{colorSource.column}</span>
-          <Badge variant="outline" className="px-1 py-0 text-[9px]">
+        <>
+          <span className="min-w-0 flex-1 truncate text-left" title={colorSource.column}>
+            {colorSource.column}
+          </span>
+          <Badge variant="outline" className="shrink-0 px-1 py-0 text-[9px]">
             obs
           </Badge>
-          {colorMod && <ModBadge mod={colorMod} />}
-        </span>
+          {colorMod && <ModBadge mod={colorMod} className="shrink-0" />}
+        </>
       );
       break;
     case "var":
       triggerLabel = (
-        <span className="flex items-center gap-1.5">
-          <span className="truncate font-mono">{colorSource.varName}</span>
-          <Badge variant="outline" className="border-emerald-500/30 px-1 py-0 text-[9px] text-emerald-400">
+        <>
+          <span className="min-w-0 flex-1 truncate text-left font-mono" title={colorSource.varName}>
+            {colorSource.varName}
+          </span>
+          <Badge variant="outline" className="shrink-0 border-emerald-500/30 px-1 py-0 text-[9px] text-emerald-400">
             {colorSource.layer}
           </Badge>
-          {colorMod && <ModBadge mod={colorMod} />}
-        </span>
+          {colorMod && <ModBadge mod={colorMod} className="shrink-0" />}
+        </>
       );
       break;
   }

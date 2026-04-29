@@ -7,8 +7,16 @@ import { stringPredicate } from "../lib/mosaic-helpers";
 import { MetadataSchema } from "../../protocol/index.ts";
 import { wsClient } from "../lib/ws-client";
 import { scatterKeys } from "../scatter-gpu/hooks/queryKeys";
-import { activeFilterStore, clearObsSetFilter, setObsSetFilter } from "../stores/ActiveFilterStore";
-import { obsSetStore } from "../stores/ObsSetStore";
+import {
+  activeFilterStore,
+  clearActiveSetFilter,
+  clearLassoFilter,
+  composedPredicate,
+  setActiveSetFilter,
+} from "../stores/ActiveFilterStore";
+import { activeCollectionStore } from "../stores/ActiveCollectionStore";
+import { broadcastSelection, clearSelectionSync, externalSource } from "../stores/SelectionSyncStore";
+import { panelId } from "../lib/branded-types";
 import type { ChartPanelEntry, ChartSpec, Metadata, TrajectoryData } from "../types";
 import { DashboardContext, type DashboardState } from "./DashboardContext";
 
@@ -71,16 +79,18 @@ export function DashboardProvider({ children }: Props) {
   // ── ActiveFilterStore → brushSelection bridge ─────────────────────────
   // Subscribes to the Store and calls brushSelection.update() via
   // requestAnimationFrame, outside React's render cycle and outside any
-  // active Mosaic AsyncDispatch cycle.  Components write to the Store
-  // (setActiveFilter / clearActiveFilter); this is the single place that
-  // actually updates Mosaic's brushSelection.
+  // active Mosaic AsyncDispatch cycle. Components write the lasso facet
+  // (setLassoFilter) and the active-set facet (setActiveSetFilter); this
+  // bridge composes them via AND (composedPredicate) and pushes the result
+  // to Mosaic — implicit intersect, no precedence rule.
   useEffect(() => {
     const sub = activeFilterStore.subscribe(() => {
-      const { source, predicate, version } = activeFilterStore.state;
-      if (version === 0) return; // skip initial state
+      const state = activeFilterStore.state;
+      if (state.version === 0) return; // skip initial state
+      const predicate = composedPredicate(state);
       requestAnimationFrame(() => {
         brushSelection.update({
-          source,
+          source: state.source,
           clients: new Set(),
           value: predicate ? [predicate] : [],
           predicate: predicate ? stringPredicate(predicate) : null,
@@ -90,37 +100,85 @@ export function DashboardProvider({ children }: Props) {
     return () => sub.unsubscribe();
   }, [brushSelection]);
 
-  // ── obsSetStore → activeFilterStore bridge ────────────────────────────────
-  // Subscribes to obsSetStore; on activation fetches the SQL predicate from the
-  // backend and applies it via setObsSetFilter. Uses AbortController to cancel
-  // in-flight requests when the active obsset changes before the response arrives.
-  // TanStack Store subscribe() fires on setState only — no initial-mount guard needed.
+  // ── activeCollectionStore → server /api/active-selection ─────────────
+  // Single-active for v1. When activeId flips:
+  //   set:   POST /api/active-selection {collection_ids: [id]} → set
+  //          ActiveFilterStore.activeSetPredicate; clear lasso (collection
+  //          is the new scope; lasso is reset so user can sub-select fresh);
+  //          GET row-indices and broadcastSelection(externalSource("collections"))
+  //          so the GPU dim mask lights up the members.
+  //   clear: DELETE /api/active-selection; clearActiveSetFilter();
+  //          clearSelectionSync(externalSource("collections")).
+  // AbortController cancels in-flight requests if the user activates a
+  // different collection (or deactivates) while one is loading.
   useEffect(() => {
     const abortRef = { current: new AbortController() };
+    const COLLECTIONS_SRC = externalSource("collections");
+    const BRIDGE_PANEL_ID = panelId("__collections-bridge__");
 
-    const sub = obsSetStore.subscribe(() => {
+    const sub = activeCollectionStore.subscribe(() => {
       abortRef.current.abort();
       abortRef.current = new AbortController();
+      const signal = abortRef.current.signal;
 
-      const { activeObsSetId } = obsSetStore.state;
-      if (!activeObsSetId) {
-        clearObsSetFilter();
+      const { activeId } = activeCollectionStore.state;
+
+      if (!activeId) {
+        // Deactivate path: drop server state + filter facet + GPU dim mask.
+        clearActiveSetFilter();
+        clearSelectionSync(COLLECTIONS_SRC);
+        fetch("/api/active-selection", { method: "DELETE", signal }).catch(() => {});
         return;
       }
 
-      const idAtRequest = activeObsSetId;
-      fetch(`/api/obssets/${activeObsSetId}/activate`, {
+      const idAtRequest = activeId;
+
+      // 1. Activate clears any existing lasso (per product semantic:
+      //    collection is the new working scope; lasso resets so user can
+      //    sub-select within the collection without intersecting stale state).
+      clearLassoFilter(BRIDGE_PANEL_ID);
+      // Clear server-side scatter-selection temp table too, so any Mosaic
+      // query that still references __scatter_selection sees zero rows.
+      fetch("/api/scatter-selection", { method: "DELETE", signal }).catch(() => {});
+      // Notify scatter panels to drop their visual lasso polygon.
+      window.dispatchEvent(new CustomEvent("ndea:clear-lasso"));
+
+      // 2. Set the server's active selection. Server creates the
+      //    `__active_selection` temp table and returns a predicate that
+      //    references it (with an inline tok=... comment for cache busting).
+      fetch("/api/active-selection", {
         method: "POST",
-        signal: abortRef.current.signal,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ collection_ids: [activeId] }),
+        signal,
       })
         .then((r) => r.json())
-        .then(({ predicate }: { predicate: string }) => {
-          if (obsSetStore.state.activeObsSetId === idAtRequest) {
-            setObsSetFilter(idAtRequest, predicate);
+        .then(async ({ predicate }: { predicate: string; resolved_count: number }) => {
+          if (activeCollectionStore.state.activeId !== idAtRequest) return;
+          setActiveSetFilter(predicate);
+
+          // 3. Pull the row indices binary so the GPU dim mask can light up
+          //    members. Skip the broadcast if the response is empty (the
+          //    server may not have populated yet) or if a different
+          //    collection was activated in flight (idempotency guard).
+          try {
+            const r = await fetch("/api/active-selection/row-indices", { signal });
+            if (!r.ok) return;
+            const buf = await r.arrayBuffer();
+            if (activeCollectionStore.state.activeId !== idAtRequest) return;
+            const ids = new Uint32Array(buf);
+            // Cap at 500k for the GPU dim path. Above that, Mosaic-side
+            // filtering still works via predicate; the scatter just won't
+            // visually dim non-members. (Real datasets cross this rarely.)
+            const HARD_CAP = 500_000;
+            if (ids.length === 0 || ids.length > HARD_CAP) return;
+            broadcastSelection(COLLECTIONS_SRC, Array.from(ids));
+          } catch {
+            // Aborted or network error — ignore.
           }
         })
         .catch(() => {
-          // AbortError on unmount or rapid re-activation — ignore
+          // Aborted on rapid switch — ignore.
         });
     });
 

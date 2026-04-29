@@ -51,10 +51,10 @@ export function ScatterStatePlugin() {
         />
         {selection.type === "active" && (
           <>
-            <Row label="sourcePanelId" value={selection.sourcePanelId} />
+            <Row label="source" value={JSON.stringify(selection.source)} />
             <Row label="version" value={<span className="text-purple-400">{selection.version}</span>} />
             {(() => {
-              const ids = getBitmapRowIds(selection.sourcePanelId);
+              const ids = getBitmapRowIds(selection.source);
               return (
                 <>
                   <Row
