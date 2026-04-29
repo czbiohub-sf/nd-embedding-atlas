@@ -13,6 +13,7 @@ frontend/dist/
 # Cache
 .*cache/
 .vite/
+.fallow/
 
 # Test & coverage
 /.coverage*
