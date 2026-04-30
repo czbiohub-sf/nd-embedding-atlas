@@ -427,6 +427,15 @@ export async function createScatterplot(
       selection.clearCategoryIsolation();
       interaction.requestRender();
     },
+    setCategoryDisabled(disabledSet: Set<number>, categoryIndices: Uint8Array) {
+      // No render dispatch needed — disabled categories already render
+      // alpha=0 via legend's color-override. This only updates the click
+      // filter so disabled points aren't pickable.
+      selection.setCategoryDisabled(disabledSet, categoryIndices);
+    },
+    clearCategoryDisabled() {
+      selection.clearCategoryDisabled();
+    },
     setTrajectoryIsolation(rowIndices: number[]) {
       if (rowIndices.length === 0) {
         selection.clearTrajectoryIsolation();

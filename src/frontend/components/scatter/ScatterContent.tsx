@@ -14,6 +14,7 @@ import { useDashboard } from "../../hooks/useDashboard";
 import { colorSourceToString } from "../../lib/color-source";
 import type { IsolationCapability } from "../../scatter-gpu/handle-capabilities";
 import { useEmbeddingLoader } from "../../scatter-gpu/hooks/useEmbeddingLoader";
+import { useDisabledBridge } from "../../scatter-gpu/hooks/useDisabledBridge";
 import { useIsolationBridge } from "../../scatter-gpu/hooks/useIsolationBridge";
 import { useScatterColorState } from "../../scatter-gpu/hooks/useScatterColorState";
 import { useTrajectoryLoader } from "../../scatter-gpu/hooks/useTrajectoryLoader";
@@ -126,6 +127,10 @@ export function ScatterContent({
   const { handleIsolationChange } = useIsolationBridge({
     coloredCategoryMapping,
     colorByColumn,
+    scatterRef: isolationHandleRef,
+    categoryIndicesRef,
+  });
+  const { handleDisabledChange } = useDisabledBridge({
     scatterRef: isolationHandleRef,
     categoryIndicesRef,
   });
@@ -262,6 +267,7 @@ export function ScatterContent({
         categoricalColormap={categoricalColormap}
         setCategoricalColormap={setCategoricalColormap}
         onIsolationChange={handleIsolationChange}
+        onDisabledChange={handleDisabledChange}
         onStaleColumn={clearCategoryMapping}
       >
         <ScatterView {...scatterViewProps} overlayControls={overlayControls} />

@@ -132,6 +132,10 @@ export interface ScatterplotHandle {
   setCategoryIsolation(isolatedSet: Set<number>, categoryIndices: Uint8Array): void;
   /** Remove category isolation dimming. */
   clearCategoryIsolation(): void;
+  /** Mark categories as disabled — points are not clickable. Render alpha=0 is handled by legend. */
+  setCategoryDisabled(disabledSet: Set<number>, categoryIndices: Uint8Array): void;
+  /** Clear all disabled-category click filtering. */
+  clearCategoryDisabled(): void;
   /** Isolate trajectory points (always visible regardless of category filter). */
   setTrajectoryIsolation(rowIndices: number[]): void;
   /** Remove trajectory isolation. */

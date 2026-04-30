@@ -35,6 +35,13 @@ export function createSelectionEngine(
   const pointsReadonly = posBuffer.as("readonly");
   const selectedMutable = selectedBuffer.as("mutable");
   const polygonReadonly = polygonBuffer.as("readonly");
+  // Category buffer reused by lasso/marquee shaders to skip points whose
+  // category is in the disabled bitmask. (Same buffer the isolation kernel
+  // reads further down — declaring the view once keeps both consumers in sync.)
+  const lassoCategoryReadonly = buffers.categoryBuffer.as("readonly");
+  // Bitmask of disabled categories — bit i set if category i is hidden via
+  // the legend. Lasso/marquee kernels skip points whose category bit is set.
+  const lassoDisabledMaskUniform = root.createUniform(d.u32, 0);
 
   // Buffer view into the compositor's lasso layer
   const lassoMutable = compositor.lassoBuffer.as("mutable");
@@ -75,7 +82,11 @@ export function createSelectionEngine(
     const idx = x;
     const numVerts = polygonCountUniform.$;
     const pt = pointsReadonly.$[idx];
-    if (pipTest(pt, numVerts)) {
+    const catIdx = lassoCategoryReadonly.$[idx];
+    const isDisabled = (lassoDisabledMaskUniform.$ >> catIdx) & 1;
+    if (isDisabled === 1) {
+      lassoMutable.$[idx] = 0;
+    } else if (pipTest(pt, numVerts)) {
       lassoMutable.$[idx] = 1;
     } else {
       lassoMutable.$[idx] = 0;
@@ -90,7 +101,11 @@ export function createSelectionEngine(
     const idx = x;
     const r = marqueeUniform.$;
     const pt = pointsReadonly.$[idx];
-    if (pt.x >= r.x && pt.x <= r.z && pt.y >= r.y && pt.y <= r.w) {
+    const catIdx = lassoCategoryReadonly.$[idx];
+    const isDisabled = (lassoDisabledMaskUniform.$ >> catIdx) & 1;
+    if (isDisabled === 1) {
+      lassoMutable.$[idx] = 0;
+    } else if (pt.x >= r.x && pt.x <= r.z && pt.y >= r.y && pt.y <= r.w) {
       lassoMutable.$[idx] = 1;
     } else {
       lassoMutable.$[idx] = 0;
@@ -290,6 +305,10 @@ export function createSelectionEngine(
   let categoryActive = false;
   let trajectoryActive = false;
   let continuousActive = false;
+  // Disabled-category bitmask — CPU-only (GPU renders alpha=0 via color override,
+  // so no shader plumbing needed). Used to gate the click handler so points in a
+  // disabled category aren't selectable.
+  let disabledCatBitmask = 0;
 
   function writeIsolationConfig() {
     const activeFlags = (categoryActive ? 1 : 0) | (trajectoryActive ? 2 : 0) | (continuousActive ? 4 : 0);
@@ -333,6 +352,29 @@ export function createSelectionEngine(
     recomposeIsolation();
   }
 
+  /**
+   * Mark categories as disabled — points in any disabled category are skipped
+   * by:
+   *   - `isPointVisible` (CPU) → no point-click selection.
+   *   - the lasso/marquee compute kernels (via `lassoDisabledMaskUniform`)
+   *     → no rectangle/polygon selection.
+   *
+   * GPU rendering already hides them via legend's color-alpha override,
+   * so the compositor isolation kernel doesn't need this signal.
+   */
+  function setCategoryDisabled(disabledSet: Set<number>, categoryIndices: Uint8Array) {
+    let bitmask = 0 >>> 0;
+    for (const cat of disabledSet) bitmask = (bitmask | (1 << cat)) >>> 0;
+    disabledCatBitmask = bitmask;
+    cachedCategoryIndices = categoryIndices;
+    lassoDisabledMaskUniform.write(bitmask);
+  }
+
+  function clearCategoryDisabled() {
+    disabledCatBitmask = 0;
+    lassoDisabledMaskUniform.write(0);
+  }
+
   function setTrajectoryIsolation(mask: Uint32Array) {
     trajectoryMaskCpu.set(mask);
     trajectoryMaskBuffer.write(trajectoryMaskCpu);
@@ -366,6 +408,13 @@ export function createSelectionEngine(
 
   /** Check if a point is visible under current isolation (for click filtering). */
   function isPointVisible(pointIndex: number): boolean {
+    // Disabled-category gate: a point in a disabled category is never visible,
+    // regardless of isolation/trajectory/continuous state. Matches the legend's
+    // semantic that disabled = hidden everywhere (render and clicks).
+    if (disabledCatBitmask !== 0) {
+      const catIdx = cachedCategoryIndices?.[pointIndex] ?? 0;
+      if ((disabledCatBitmask >>> catIdx) & 1) return false;
+    }
     if (!categoryActive && !trajectoryActive && !continuousActive) return true;
     const catIdx = cachedCategoryIndices?.[pointIndex] ?? 0;
     const cat = categoryActive ? (catBitmask >>> catIdx) & 1 : 1;
@@ -392,6 +441,8 @@ export function createSelectionEngine(
     clearSelectionExternal,
     setCategoryIsolation,
     clearCategoryIsolation,
+    setCategoryDisabled,
+    clearCategoryDisabled,
     setTrajectoryIsolation,
     clearTrajectoryIsolation,
     setContinuousIsolation,

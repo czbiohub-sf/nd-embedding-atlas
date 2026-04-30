@@ -21,6 +21,8 @@ export interface SelectionCapability {
 export interface IsolationCapability {
   setCategoryIsolation(isolatedSet: Set<number>, categoryIndices: Uint8Array): void;
   clearCategoryIsolation(): void;
+  setCategoryDisabled(disabledSet: Set<number>, categoryIndices: Uint8Array): void;
+  clearCategoryDisabled(): void;
   setTrajectoryIsolation(rowIndices: number[]): void;
   clearTrajectoryIsolation(): void;
   setContinuousIsolation(rowIndices: number[]): void;
