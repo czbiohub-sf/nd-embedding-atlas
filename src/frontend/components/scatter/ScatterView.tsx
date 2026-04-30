@@ -21,6 +21,7 @@ import { hexToRgbPalette } from "../../scatter-gpu/utils/colors";
 import { buildColormapLut } from "../../lib/ochre-lut";
 import { setBrushPredicate } from "../../stores/BrushPredicateStore";
 import { pointRadiusStore } from "../../stores/PointRadiusStore";
+import { renderSettingsStore } from "../../stores/RenderSettingsStore";
 import { getBitmapRowIds } from "../../stores/RoaringBroadcastStore";
 import { selectionSyncStore } from "../../stores/SelectionSyncStore";
 import { broadcastViewState, viewSyncStore } from "../../stores/ViewSyncStore";
@@ -331,6 +332,20 @@ export function ScatterView({
     }
     // Point radius
     hostRef.current?.setPointRadius(pointRadiusStore.state.radius);
+    // Point opacity — re-applied on GPU reinit so it survives data swaps
+    hostRef.current?.setPointOpacity(renderSettingsStore.state.pointOpacity);
+    // Blend mode — re-applied on GPU reinit
+    hostRef.current?.setBlendMode(renderSettingsStore.state.blendMode);
+    // HDR settings — re-applied on GPU reinit
+    {
+      const s = renderSettingsStore.state;
+      hostRef.current?.setHdrSettings({
+        toneMapping: s.toneMapping,
+        bloomStrength: s.bloomStrength,
+        bloomThreshold: s.bloomThreshold,
+        exposure: s.exposure,
+      });
+    }
     // Selection tool
     hostRef.current?.setForcedSelectionMode(selectionTool);
     // Re-upload all isolation masks from CPU state after GPU reinit
@@ -405,6 +420,24 @@ export function ScatterView({
   useEffect(() => {
     const sub = pointRadiusStore.subscribe(() => {
       hostRef.current?.setPointRadius(pointRadiusStore.state.radius);
+    });
+    return () => sub.unsubscribe();
+  }, []);
+
+  // Sync global point opacity + blend mode + HDR settings to this panel's
+  // GPU instance. Single subscription — we always re-apply on any change
+  // to keep the GPU in lockstep with the store.
+  useEffect(() => {
+    const sub = renderSettingsStore.subscribe(() => {
+      const s = renderSettingsStore.state;
+      hostRef.current?.setPointOpacity(s.pointOpacity);
+      hostRef.current?.setBlendMode(s.blendMode);
+      hostRef.current?.setHdrSettings({
+        toneMapping: s.toneMapping,
+        bloomStrength: s.bloomStrength,
+        bloomThreshold: s.bloomThreshold,
+        exposure: s.exposure,
+      });
     });
     return () => sub.unsubscribe();
   }, []);

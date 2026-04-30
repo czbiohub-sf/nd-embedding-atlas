@@ -9,6 +9,12 @@ export const MAX_PALETTE_SIZE = 64;
 const DEFAULTS = {
   pointRadius: 0.002,
   selectionDimFactor: 0.08,
+  /**
+   * Default per-point alpha multiplier. With Path A's additive blending,
+   * 0.7 lets a single point read clearly while leaving headroom for
+   * overlap accumulation that tone mapping then rolls off.
+   */
+  pointOpacity: 0.7,
 } as const;
 
 export function createUniforms(root: TgpuRoot, aspectRatio: number, renderConfig?: RenderConfig) {
@@ -22,7 +28,14 @@ export function createUniforms(root: TgpuRoot, aspectRatio: number, renderConfig
   // 1 = tier-0 points (failed isolation) render at zero radius; 0 = dim per tierAlpha.
   // Raised by the continuous range slider so out-of-range points are hidden, not dimmed.
   const filterHideUniform = root.createUniform(d.u32, 0);
-  return { paramsUniform, viewUniform, selectionModeUniform, filterHideUniform };
+  // Per-point alpha multiplier (Path A pointOpacity). Internally still named
+  // `sharpnessUniform` because the picking-shaders.ts WGSL strings reference
+  // it by that name at @binding(4); renaming would force a binding-layout
+  // refactor in the picking pipeline. The fragment shader uses it as an
+  // alpha multiplier, picking uses it as a falloff exponent — both work in
+  // the [0.05, 1.0] opacity range without tuning.
+  const sharpnessUniform = root.createUniform(d.f32, renderConfig?.pointOpacity ?? DEFAULTS.pointOpacity);
+  return { paramsUniform, viewUniform, selectionModeUniform, filterHideUniform, sharpnessUniform };
 }
 
 export type ScatterUniforms = ReturnType<typeof createUniforms>;

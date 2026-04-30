@@ -156,6 +156,25 @@ export interface ScatterplotHandle {
   animateToViewState(state: ViewState, durationMs?: number): void;
   /** Update point size without GPU re-initialization. */
   setPointRadius(radius: number): void;
+  /**
+   * Update the per-point alpha multiplier. Default 0.7. Drives how
+   * aggressively overlapping points sum under additive blending — at
+   * 1.0 a single point dominates, at 0.3 you need ~3 to saturate.
+   */
+  setPointOpacity(opacity: number): void;
+  /** Update HDR settings (tone mapping, bloom strength, exposure). */
+  setHdrSettings(settings: {
+    toneMapping?: "none" | "reinhard" | "aces" | "agx";
+    bloomStrength?: number;
+    bloomThreshold?: number;
+    exposure?: number;
+  }): void;
+  /**
+   * Switch the scatter pipeline blend mode at runtime. All three variants
+   * are pre-built at init, so this is a single-object-lookup swap with no
+   * pipeline rebuild cost.
+   */
+  setBlendMode(mode: "additive" | "premultiplied" | "max"): void;
 }
 
 export interface RenderConfig {
@@ -167,6 +186,17 @@ export interface RenderConfig {
   selectionDimFactor?: number;
   /** Display gamma for compositing pass. Default: 2.2 */
   gamma?: number;
+  /**
+   * Per-point alpha multiplier for the fragment shader. Default 0.7.
+   * Drives how aggressively overlapping points sum under additive
+   * blending.
+   */
+  pointOpacity?: number;
+  /**
+   * Initial scatter blend mode. Default `"additive"`. See
+   * `pipeline.ts:BlendMode` for the trade-offs of each mode.
+   */
+  blendMode?: "additive" | "premultiplied" | "max";
   /**
    * Color mode for points. Default: "categorical".
    * v2: "continuous" uses colorValues Float32Array for gradient coloring.

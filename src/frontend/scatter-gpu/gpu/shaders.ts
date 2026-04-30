@@ -17,8 +17,14 @@ const unpackColor = tgpu.fn([d.u32], d.vec4f)`
   }
 `;
 
+// Path A renames `sharpness` → `pointOpacity` at the public surface. The
+// GPU-side uniform retains the historical `sharpnessUniform` name because
+// picking-shaders.ts binds it at @binding(4) by string; the fragment
+// shader now reads it as an alpha multiplier rather than a falloff
+// exponent.
+
 export function createVertexShader(uniforms: ScatterUniforms) {
-  const { paramsUniform, viewUniform, selectionModeUniform, filterHideUniform } = uniforms;
+  const { paramsUniform, viewUniform, selectionModeUniform, filterHideUniform, sharpnessUniform } = uniforms;
 
   return tgpu
     .vertexFn({
@@ -35,6 +41,8 @@ export function createVertexShader(uniforms: ScatterUniforms) {
         uv: d.vec2f,
         /** 1.0 when this point is the highlighted (clicked) point, 0.0 otherwise. */
         highlight: d.f32,
+        /** Per-point alpha multiplier forwarded to the fragment shader. */
+        pointOpacity: d.f32,
       },
     })((input) => {
       "use gpu";
@@ -63,6 +71,9 @@ export function createVertexShader(uniforms: ScatterUniforms) {
       const isClicked = sel >= 3 && selMode >= 1;
       // Clicked point gets a 1.6x size boost for the outline ring
       const clickedScale = std.select(1.0, 1.6, isClicked);
+      // Path A: forwarded as the per-point alpha multiplier (uniform still
+      // named `sharpnessUniform` on the GPU; see buffers.ts comment).
+      const pointOpacity = sharpnessUniform.$;
       const zoomedRadius = radius * std.sqrt(zoom) * vis * adaptiveScale * clickedScale;
       const scaledQuad = d.vec2f(input.quadPos.x * zoomedRadius, input.quadPos.y * zoomedRadius);
 
@@ -77,6 +88,7 @@ export function createVertexShader(uniforms: ScatterUniforms) {
         color: d.vec4f(rgba.x, rgba.y, rgba.z, rgba.w * dimFactor),
         uv: input.quadPos,
         highlight: std.select(0.0, 1.0, isClicked),
+        pointOpacity: pointOpacity,
       };
     })
     .$uses({ unpackColor });
@@ -84,23 +96,33 @@ export function createVertexShader(uniforms: ScatterUniforms) {
 
 export function createFragmentShader() {
   return tgpu.fragmentFn({
-    in: { color: d.vec4f, uv: d.vec2f, highlight: d.f32 },
+    in: { color: d.vec4f, uv: d.vec2f, highlight: d.f32, pointOpacity: d.f32 },
     out: d.vec4f,
   })((input) => {
     "use gpu";
+    // Compute screen-space derivatives at the TOP of main, in uniform control
+    // flow — `fwidth()` is undefined when called inside a divergent branch.
     const dist = sdDisk(input.uv, 1.0);
-    const fw = std.max(std.fwidth(dist), 0.01);
-    const alpha = 1 - std.smoothstep(-fw, fw, dist);
+    const fw = std.max(std.fwidth(dist), 0.001);
+
+    // Crisp flat disk: full coverage across the body, single-pixel AA at
+    // the silhouette via `fwidth` (so the AA window is in screen-space
+    // pixels, not a fraction of the disk radius). Reads as a clean 2D
+    // marker at any zoom level. The `pointOpacity` uniform multiplies the
+    // coverage to scale how aggressively overlapping points sum under
+    // additive blending (Path A).
+    const falloff = (1 - std.smoothstep(-fw, fw, dist)) * input.pointOpacity;
 
     if (input.highlight > 0.5) {
-      // Highlighted point: white outline ring + filled center
-      // The quad is 1.6x bigger, so the inner disk sits at r=0.625 (1/1.6)
+      // Highlighted point: white outline ring + filled center.
+      // The quad is 1.6x bigger, so the inner disk sits at r=0.625 (1/1.6).
+      // Uses the SDF + fwidth (computed above) so the outline reads as a
+      // crisp 1-pixel ring around the marker, independent of sharpness.
+      const edgeMask = 1 - std.smoothstep(-fw, fw, dist);
       const innerRadius = 0.625;
       const innerDist = sdDisk(input.uv, innerRadius);
       const innerAlpha = 1 - std.smoothstep(-fw, fw, innerDist);
-      // Ring = outer disk minus inner disk
-      const ringAlpha = alpha * (1 - innerAlpha);
-      // Composite: white ring + colored fill
+      const ringAlpha = edgeMask * (1 - innerAlpha);
       const ringColor = d.vec4f(1.0, 1.0, 1.0, ringAlpha * 0.9);
       const fillColor = d.vec4f(
         input.color.x * innerAlpha,
@@ -108,17 +130,17 @@ export function createFragmentShader() {
         input.color.z * innerAlpha,
         innerAlpha * input.color.w,
       );
-      const r = fillColor.x + ringColor.x * ringColor.w * (1 - fillColor.w);
-      const g = fillColor.y + ringColor.y * ringColor.w * (1 - fillColor.w);
-      const b = fillColor.z + ringColor.z * ringColor.w * (1 - fillColor.w);
-      const a = fillColor.w + ringColor.w * (1 - fillColor.w);
-      if (a < 0.004) {
+      const rO = fillColor.x + ringColor.x * ringColor.w * (1 - fillColor.w);
+      const gO = fillColor.y + ringColor.y * ringColor.w * (1 - fillColor.w);
+      const bO = fillColor.z + ringColor.z * ringColor.w * (1 - fillColor.w);
+      const aO = fillColor.w + ringColor.w * (1 - fillColor.w);
+      if (aO < 0.004) {
         std.discard();
       }
-      return d.vec4f(r, g, b, a);
+      return d.vec4f(rO, gO, bO, aO);
     }
 
-    const finalAlpha = alpha * input.color.w;
+    const finalAlpha = falloff * input.color.w;
     if (finalAlpha < 0.004) {
       std.discard();
     }
