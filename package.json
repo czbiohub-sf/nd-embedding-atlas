@@ -37,7 +37,6 @@
     "@typegpu/sdf": "^0.11.0",
     "@uwdata/flechette": "^2.4.0",
     "@uwdata/mosaic-core": "^0.24.2",
-    "@uwdata/mosaic-duckdb": "^0.24.2",
     "@uwdata/mosaic-inputs": "^0.24.2",
     "@uwdata/mosaic-sql": "^0.24.2",
     "@zarrita/storage": "^0.2.0",

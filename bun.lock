@@ -24,7 +24,6 @@
         "@typegpu/sdf": "^0.11.0",
         "@uwdata/flechette": "^2.4.0",
         "@uwdata/mosaic-core": "^0.24.2",
-        "@uwdata/mosaic-duckdb": "^0.24.2",
         "@uwdata/mosaic-inputs": "^0.24.2",
         "@uwdata/mosaic-sql": "^0.24.2",
         "@zarrita/storage": "^0.2.0",
@@ -497,8 +496,6 @@
     "@uwdata/flechette": ["@uwdata/flechette@2.4.0", "", {}, "sha512-cwxeYWe2iua4zPUopiqhYXkxaQWr0GK4Kbak7i0zemo3sgmNJ3IE+pNi6XD1dOK7q50SEXTLwieP5JycG6D56A=="],
 
     "@uwdata/mosaic-core": ["@uwdata/mosaic-core@0.24.2", "", { "dependencies": { "@duckdb/duckdb-wasm": "1.33.1-dev42.0", "@uwdata/flechette": "^2.4.0", "@uwdata/mosaic-sql": "^0.24.2" } }, "sha512-GWhLgiXhE1ZyM6fmpiajCo8jbZRrrExN+TQSPxOqPTF+4FTWeGQYkSHZALbvnoyG3JtJxIjd0A5LW6VoIXYTuA=="],
-
-    "@uwdata/mosaic-duckdb": ["@uwdata/mosaic-duckdb@0.24.2", "", { "dependencies": { "@duckdb/node-api": "~1.5.1-r.2", "@uwdata/mosaic-sql": "^0.24.2", "ws": "^8.20.0" }, "bin": { "to-arrow": "bin/to-arrow.js", "to-csv": "bin/to-csv.js", "to-parquet": "bin/to-parquet.js" } }, "sha512-GEkK4RYAQcyPa17e3dgh3HohcN5BflLnSnoEieEfXzPBl0tTI7ZiNW2mKju0AO4Ux0Jzpfi4r8Yf+8Ss8BbBeQ=="],
 
     "@uwdata/mosaic-inputs": ["@uwdata/mosaic-inputs@0.24.2", "", { "dependencies": { "@uwdata/mosaic-core": "^0.24.2", "@uwdata/mosaic-sql": "^0.24.2" } }, "sha512-uafUs28HAaZBdEQd7d1hNzhrZwztusG8iuDhyotbc9CeN1T1JXa4j4l6iG1L/vt7OZ13RPbuPGve4Tjemk1sQQ=="],
 
