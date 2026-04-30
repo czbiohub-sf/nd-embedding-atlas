@@ -62,11 +62,7 @@ export interface BoxPlotSpec {
   groupField?: string;
 }
 
-export interface ObsSetsSpec {
-  type: "obssets";
-}
-
-export type ChartSpec = CountPlotSpec | HistogramSpec | ScatterChartSpec | BoxPlotSpec | ObsSetsSpec;
+export type ChartSpec = CountPlotSpec | HistogramSpec | ScatterChartSpec | BoxPlotSpec;
 
 export interface ChartPanelEntry {
   id: string;

@@ -356,63 +356,7 @@ describe("createApp", () => {
     expect(body.status).toBe("loading");
   });
 
-  test("GET /api/obssets returns empty array initially", async () => {
-    const store = await createMockStore(10);
-    activeStore = store;
-    const state = createMockState(store);
-    const config = createMockConfig();
-
-    const server = createApp({
-      port: 0,
-      host: "localhost",
-      store,
-      state,
-      config,
-      noStatic: true,
-    });
-    activeServer = server;
-
-    const res = await fetch(`http://localhost:${server.port}/api/obssets`);
-    expect(res.status).toBe(200);
-
-    const body = await res.json();
-    expect(body).toEqual([]);
-  });
-
-  test("POST /api/obssets creates a new ObsSet", async () => {
-    const store = await createMockStore(10);
-    activeStore = store;
-    const state = createMockState(store);
-    const config = createMockConfig();
-
-    const server = createApp({
-      port: 0,
-      host: "localhost",
-      store,
-      state,
-      config,
-      noStatic: true,
-    });
-    activeServer = server;
-
-    const res = await fetch(`http://localhost:${server.port}/api/obssets`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: "Test Set",
-        color: "FF0000",
-        members: [
-          { dataset_key: "test_dataset", obs_name: "obs_0" },
-          { dataset_key: "test_dataset", obs_name: "obs_1" },
-        ],
-      }),
-    });
-    expect(res.status).toBe(201);
-
-    const body = await res.json();
-    expect(body.name).toBe("Test Set");
-    expect(body.created_count).toBe(2);
-  });
+  // Collections CRUD coverage lives in collections-routes.test.ts.
 
   test("CORS headers are set on responses", async () => {
     const store = await createMockStore(5);

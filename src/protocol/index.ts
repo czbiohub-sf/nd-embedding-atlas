@@ -6,6 +6,22 @@
  *   - Response schemas (frontend parses; backend returns z.infer-shaped objects)
  *   - Binary-blob header schemas (scatter endpoints)
  *   - WebSocket method map (future migration)
+ *
+ * # Threat model (v1)
+ *
+ * ndea today is a single-user local tool — collection authors are trusted,
+ * the only client is the same process tree that owns the data. The
+ * `CollectionNameSchema` / `TagSchema` regex below excludes control chars,
+ * the HTML metas `<>&`, and Unicode bidi overrides `‪-‮` as
+ * defense-in-depth. JSX escapes them at render today, but disallowing
+ * them here means a future markdown / dangerouslySetInnerHTML pass cannot
+ * silently turn these strings into a script vector without also widening
+ * this schema.
+ *
+ * **Re-run security review** when any of these change:
+ *   1. collections become shareable between users / sessions
+ *   2. a sync/import path accepts collections from disk or network
+ *   3. notes/provenance render as anything other than escaped text
  */
 
 import { z } from "zod";
@@ -56,18 +72,6 @@ export const ExportBodySchema = z.object({
   embedding_key: z.string().nullable().optional(),
 });
 export type ExportBody = z.infer<typeof ExportBodySchema>;
-
-/** POST /api/obssets — create a new observation set. */
-export const ObsSetMemberSchema = z.object({
-  dataset_key: z.string(),
-  obs_name: z.string(),
-});
-export const CreateObsSetBodySchema = z.object({
-  name: z.string().min(1),
-  color: z.string().nullable().optional(),
-  members: z.array(ObsSetMemberSchema).optional(),
-});
-export type CreateObsSetBody = z.infer<typeof CreateObsSetBodySchema>;
 
 /**
  * POST /api/scatter-selection — upload selected row indices.
@@ -205,16 +209,200 @@ export interface ConfigRes {
   [key: string]: unknown;
 }
 
-/** ObsSet response row from /api/obssets listing. */
-export const ObsSetSchema = z.object({
-  obsset_id: z.string(),
+// ─── Collections ─────────────────────────────────────────────────────────────
+//
+// Replaces the rough `ObsSet` feature. Schema is intentionally close so that
+// the frontend swap in PR 4 is mechanical, but adds tags (many-to-many),
+// notes, optional provenance JSON (only set for derived collections),
+// soft-delete + version (optimistic concurrency), and per-dataset drift
+// breakdown in the list response.
+
+/**
+ * Trust-safe string regex: rejects control chars (\x00–\x1F, \x7F),
+ * HTML metas (`<>&`), and Unicode bidi overrides (\u202A–\u202E).
+ *
+ * See the file header for the threat model + re-review triggers.
+ */
+// oxlint-disable-next-line no-control-regex -- intentional: this regex's job is to reject control chars + HTML metas + bidi overrides as render-safety defense.
+const TRUST_SAFE_RE = /^[^\u0000-\u001f\u007f<>&\u202a-\u202e]+$/;
+
+/**
+ * CollectionNameSchema — shared primitive used by the wire body schemas
+ * AND by frontend Field validation (re-export).
+ *
+ * 1..200 chars, trust-safe regex. Add stricter client-only rules in the
+ * frontend by composing on top, not by widening this base.
+ */
+export const CollectionNameSchema = z.string().min(1).max(200).regex(TRUST_SAFE_RE, "Invalid character in name");
+
+/** Tag — short, trust-safe regex, capped to keep sidecar small. */
+const TagSchema = z.string().min(1).max(64).regex(TRUST_SAFE_RE, "Invalid character in tag");
+
+/** Member identity: durable obs_name within a dataset_key. */
+export const CollectionMemberSchema = z.object({
+  dataset_key: z.string().min(1).max(256),
+  obs_name: z.string().min(1).max(512),
+});
+export type CollectionMember = z.infer<typeof CollectionMemberSchema>;
+
+/**
+ * Members source — one of these three discriminators, shared by
+ * CreateCollectionBodySchema (Create) and AppendMembersBodySchema (Append).
+ *
+ * Refined separately on each consuming schema since the .refine error
+ * doesn't compose cleanly when split across .merge / .extend.
+ */
+const MembersSourceFields = {
+  members: z.array(CollectionMemberSchema).max(2_000_000).optional(),
+  row_indices: z.array(NonNegativeInt).max(2_000_000).optional(),
+  /**
+   * Read members from the existing `__scatter_selection` temp table —
+   * tiny request body, server already has the indices in memory. Frontend
+   * should POST `/api/scatter-selection` first to populate it.
+   */
+  from_scatter_selection: z.boolean().optional(),
+} as const;
+
+const MEMBERS_SOURCE_REFINE = "One of `members`, `row_indices`, or `from_scatter_selection: true` is required";
+const hasMembersSource = (b: {
+  members?: unknown[] | undefined;
+  row_indices?: unknown[] | undefined;
+  from_scatter_selection?: boolean | undefined;
+}) =>
+  (b.members != null && b.members.length > 0) ||
+  (b.row_indices != null && b.row_indices.length > 0) ||
+  b.from_scatter_selection === true;
+
+/** POST /api/collections — create a new collection. */
+export const CreateCollectionBodySchema = z
+  .object({
+    name: CollectionNameSchema,
+    color: z.string().nullable().optional(),
+    notes: z.string().max(4096).nullable().optional(),
+    tags: z.array(TagSchema).max(32).default([]),
+    ...MembersSourceFields,
+    /** Optional structured recipe; only meaningful for derived sets. */
+    provenance: z.unknown().optional(),
+  })
+  .refine(hasMembersSource, MEMBERS_SOURCE_REFINE);
+export type CreateCollectionBody = z.infer<typeof CreateCollectionBodySchema>;
+
+/**
+ * POST /api/collections/:id/members — append members to an existing collection.
+ *
+ * Distinct from CreateCollectionBodySchema: no `name` (the collection
+ * already exists), no `color`/`notes`/`tags` (those go through PATCH).
+ * The append handler previously reused the create schema, which is why
+ * older `useAddMembers` call sites had to pass `{name: "ignored"}` —
+ * fixed by this split.
+ */
+export const AppendMembersBodySchema = z
+  .object({
+    ...MembersSourceFields,
+  })
+  .refine(hasMembersSource, MEMBERS_SOURCE_REFINE);
+export type AppendMembersBody = z.infer<typeof AppendMembersBodySchema>;
+
+/**
+ * CollectionMutationResult — envelope returned by Create + Append.
+ *
+ * Contains the resulting collection plus dedupe accounting:
+ *   - added:          new rows actually inserted
+ *   - already_member: input rows that collided with existing PK
+ *   - total:          sum (== input row count)
+ *
+ * Frontend uses these for the save toast: "Saved · 1,240 added, 87 already
+ * in collection". PR3 set algebra returns a different envelope shape
+ * (multiple collections, different stats) — name this one `Member*` so
+ * `Set*` is free for that.
+ */
+export const MemberMutationStatsSchema = z.object({
+  added: z.number().int().nonnegative(),
+  already_member: z.number().int().nonnegative(),
+  total: z.number().int().nonnegative(),
+});
+export type MemberMutationStats = z.infer<typeof MemberMutationStatsSchema>;
+
+/** PATCH /api/collections/:id — partial update with optimistic concurrency. */
+export const PatchCollectionBodySchema = z.object({
+  name: CollectionNameSchema.optional(),
+  color: z.string().nullable().optional(),
+  notes: z.string().max(4096).nullable().optional(),
+  tags: z.array(TagSchema).max(32).optional(),
+  /** Required — server rejects with 409 on mismatch. */
+  version: z.number().int().nonnegative(),
+});
+export type PatchCollectionBody = z.infer<typeof PatchCollectionBodySchema>;
+
+/**
+ * POST /api/active-selection — set the active set composition.
+ *
+ * Today: `{collection_ids: [id]}` with one element. PR3 generalises to
+ * `{ops: [{op:"union"|"intersect"|"subtract", id:"..."}, ...]}` for set
+ * algebra without changing the route or response shape.
+ *
+ * The empty `collection_ids: []` body clears the active selection (same as
+ * DELETE /api/active-selection).
+ */
+export const SetActiveSelectionBodySchema = z.object({
+  collection_ids: z.array(z.uuid()).max(32),
+});
+export type SetActiveSelectionBody = z.infer<typeof SetActiveSelectionBodySchema>;
+
+/**
+ * Response from POST /api/active-selection.
+ *
+ * Contract is intentionally generic so PR3 multi-active set algebra fits
+ * without a schema break. `token` rides in the predicate as an inline SQL
+ * comment so Mosaic's SQL-text query cache busts on each set change
+ * without needing a per-activation temp-table name.
+ */
+export const ActiveSelectionResponseSchema = z.object({
+  token: z.string(),
+  predicate: z.string(),
+  resolved_count: z.number().int().nonnegative(),
+  version: z.number().int().nonnegative(),
+});
+export type ActiveSelectionResponse = z.infer<typeof ActiveSelectionResponseSchema>;
+
+/** Per-dataset drift breakdown surfaced in list responses. */
+export const CollectionDriftSchema = z.object({
+  dataset_key: z.string(),
+  stored: z.number().int().nonnegative(),
+  resolved: z.number().int().nonnegative(),
+});
+export type CollectionDrift = z.infer<typeof CollectionDriftSchema>;
+
+/** GET /api/collections — list response row. */
+export const CollectionSchema = z.object({
+  collection_id: z.string(),
   name: z.string(),
   color: z.string().nullable(),
-  created_count: z.number(),
-  current_count: z.number(),
+  notes: z.string().nullable(),
+  tags: z.array(z.string()),
+  provenance: z.unknown().nullable(),
   created_at: z.string(),
+  updated_at: z.string(),
+  created_count: z.number().int().nonnegative(),
+  current_count: z.number().int().nonnegative(),
+  drift: z.array(CollectionDriftSchema),
+  version: z.number().int().nonnegative(),
 });
-export type ObsSet = z.infer<typeof ObsSetSchema>;
+export type Collection = z.infer<typeof CollectionSchema>;
+
+/**
+ * Envelope returned by POST /api/collections and POST /api/collections/:id/members.
+ *
+ * `result` carries the full Collection (post-mutation), `stats` carries
+ * dedupe accounting. PR3 will introduce a sibling envelope for set-algebra
+ * mutations (compose/derive) with a different `result` shape; this type
+ * name reserves "Member*" for the member-mutation case.
+ */
+export const CollectionMutationResultSchema = z.object({
+  result: CollectionSchema,
+  stats: MemberMutationStatsSchema,
+});
+export type CollectionMutationResult = z.infer<typeof CollectionMutationResultSchema>;
 
 // ─── Binary-blob header schemas (scatter endpoints) ─────────────────────────
 
@@ -339,25 +527,17 @@ export interface NdeaProtocol extends ProtocolMap {
     req: { task_id: string };
     res: { status: string; column?: string; error?: string };
   };
-  "obssets/list": {
+  "collections/list": {
     req: Record<string, never>;
-    res: ObsSet[];
+    res: Collection[];
   };
-  "obssets/create": {
-    req: {
-      name: string;
-      color?: string;
-      members: { dataset_key: string; obs_name: string }[];
-    };
-    res: ObsSet;
+  "collections/create": {
+    req: CreateCollectionBody;
+    res: Collection;
   };
-  "obssets/delete": {
-    req: { obsset_id: string };
+  "collections/delete": {
+    req: { collection_id: string };
     res: { deleted: string };
-  };
-  "obssets/activate": {
-    req: { obsset_id: string };
-    res: { predicate: string };
   };
   "export/start": {
     req: {

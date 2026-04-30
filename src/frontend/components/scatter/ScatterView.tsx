@@ -23,6 +23,7 @@ import { setBrushPredicate } from "../../stores/BrushPredicateStore";
 import { pointRadiusStore } from "../../stores/PointRadiusStore";
 import { renderSettingsStore } from "../../stores/RenderSettingsStore";
 import { getBitmapRowIds } from "../../stores/RoaringBroadcastStore";
+import { activeCollectionStore, setActiveCollection } from "../../stores/ActiveCollectionStore";
 import { selectionSyncStore } from "../../stores/SelectionSyncStore";
 import { broadcastViewState, viewSyncStore } from "../../stores/ViewSyncStore";
 import type { AxisState, Metadata, TrajectoryData } from "../../types";
@@ -46,6 +47,8 @@ export interface ScatterViewProps {
   rowIndicesRef?: RefObject<number[]>;
   /** Called when GPU readback updates the row index list */
   onRowIndicesChange?: (indices: number[]) => void;
+  /** Out-ref populated with the *lasso* row IDs (subset of rowIndicesRef). */
+  lassoRowIdsRef?: RefObject<number[]>;
   overlayControls?: ReactNode;
   axes: AxisState | null;
   isLoading: boolean;
@@ -94,6 +97,7 @@ export function ScatterView({
   fitViewRef,
   rowIndicesRef: externalRowIndicesRef,
   onRowIndicesChange,
+  lassoRowIdsRef,
 }: ScatterViewProps) {
   const categoryColors = useEffectiveCategoryColors();
   const { setFps, setZoom, setSelection, setEmbedding, setNumPoints } = useScatterUIDispatch();
@@ -261,6 +265,7 @@ export function ScatterView({
     myPanelId,
     rowIndicesRef,
     setSelection,
+    lassoRowIdsRef,
   });
 
   const callbacksRef = useRef({
@@ -396,12 +401,13 @@ export function ScatterView({
   useEffect(() => {
     const sub = selectionSyncStore.subscribe(() => {
       const s = selectionSyncStore.state;
+      const isSelf = s.source?.kind === "panel" && s.source.panelId === myPanelId;
       if (s.type === "empty") {
-        if (s.sourcePanelId === myPanelId) return;
+        if (isSelf) return;
         hostRef.current?.clearExternalSelection();
       } else {
-        if (s.sourcePanelId === myPanelId) return;
-        hostRef.current?.setExternalSelection(getBitmapRowIds(s.sourcePanelId));
+        if (isSelf) return;
+        hostRef.current?.setExternalSelection(getBitmapRowIds(s.source));
       }
     });
     return () => sub.unsubscribe();
@@ -449,7 +455,12 @@ export function ScatterView({
     }
   }, [highlightId]);
 
-  // Escape cascade: highlight → trajectory → lasso → (category handled by CategoricalLegend)
+  // Escape cascade: highlight → trajectory → lasso → active collection
+  //                                              → (category handled by CategoricalLegend)
+  // Active collection sits between lasso and category because:
+  //   - lasso-in-progress is the most recent transient state
+  //   - active collection is the persistent scope; the user wants Esc to
+  //     drop the scope only after they've already cleared a lasso within it
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
@@ -461,6 +472,8 @@ export function ScatterView({
         hostRef.current?.clearSelection();
         setSelection(null);
         hasLassoRef.current = false;
+      } else if (activeCollectionStore.state.activeId !== null) {
+        setActiveCollection(null);
       } else {
         return; // let event propagate to CategoricalLegend's Escape handler
       }
@@ -469,6 +482,20 @@ export function ScatterView({
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [highlightId, trajectory, actions, setSelection]);
+
+  // Listen for global "clear lasso" requests (e.g. fired by the
+  // collections bridge when a collection is activated — collection becomes
+  // the new working scope and any prior lasso is reset).
+  useEffect(() => {
+    const handler = () => {
+      if (!hasLassoRef.current) return;
+      hostRef.current?.clearSelection();
+      setSelection(null);
+      hasLassoRef.current = false;
+    };
+    window.addEventListener("ndea:clear-lasso", handler);
+    return () => window.removeEventListener("ndea:clear-lasso", handler);
+  }, [setSelection]);
 
   const axesKeyRef = useRef<string | null>(null);
   useEffect(() => {

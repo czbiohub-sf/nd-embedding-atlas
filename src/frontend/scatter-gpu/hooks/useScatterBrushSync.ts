@@ -1,8 +1,8 @@
 import { useDebouncer, useThrottler } from "@tanstack/react-pacer";
 import type { RefObject } from "react";
 import { useRef } from "react";
-import { clearActiveFilter, setActiveFilter } from "../../stores/ActiveFilterStore";
-import { broadcastSelection, clearSelectionSync } from "../../stores/SelectionSyncStore";
+import { clearLassoFilter, setLassoFilter } from "../../stores/ActiveFilterStore";
+import { broadcastSelection, clearSelectionSync, panelSource } from "../../stores/SelectionSyncStore";
 import type { PanelId } from "../types";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -60,6 +60,13 @@ export interface UseScatterBrushSyncOptions {
   myPanelId: PanelId;
   rowIndicesRef: RefObject<number[]>;
   setSelection: (n: number | null) => void;
+  /**
+   * Optional out-ref that receives the *lasso* row IDs (mapped from GPU
+   * buffer indices to app-level row indices). Used by the save-collection
+   * sheet — `rowIndicesRef` is the panel-level mapping (all rows), this is
+   * the actual user selection.
+   */
+  lassoRowIdsRef?: RefObject<number[]>;
 }
 
 export interface UseScatterBrushSyncResult {
@@ -71,6 +78,7 @@ export function useScatterBrushSync({
   myPanelId,
   rowIndicesRef,
   setSelection,
+  lassoRowIdsRef,
 }: UseScatterBrushSyncOptions): UseScatterBrushSyncResult {
   // Stable ref to capture myPanelId for use inside throttler/debouncer callbacks
   const panelIdRef = useRef(myPanelId);
@@ -88,14 +96,14 @@ export function useScatterBrushSync({
   // The debouncer also fires a trailing accurate update for small selections
   // (usually a no-op since the throttler already set the same predicate).
   //
-  // NOTE: setActiveFilter / clearActiveFilter write to ActiveFilterStore.
-  // DashboardProvider is the SOLE caller of brushSelection.update() — it
-  // subscribes to this store and dispatches via requestAnimationFrame.
+  // NOTE: setLassoFilter / clearLassoFilter write to ActiveFilterStore's
+  // lasso facet. DashboardProvider is the SOLE caller of
+  // brushSelection.update() — it subscribes and dispatches via rAF.
   const brushThrottler = useThrottler(
     (rowIds: number[]) => {
       if (rowIds.length === 0 || rowIds.length >= 5000) return;
       const predicate = buildSelectionPredicate(rowIds);
-      setActiveFilter(panelIdRef.current, predicate);
+      setLassoFilter(panelIdRef.current, predicate);
     },
     {
       wait: 50, // matches GPU readback gate (~20 fps)
@@ -109,11 +117,11 @@ export function useScatterBrushSync({
       if (rowIds.length < 5000) {
         // Small: throttler already updated live; ensure final predicate is accurate.
         const predicate = buildSelectionPredicate(rowIds);
-        setActiveFilter(panelIdRef.current, predicate);
+        setLassoFilter(panelIdRef.current, predicate);
       } else {
         // Large: expensive temp-table sync — only run after drawing stops.
         const predicate = await syncLargeSelection(rowIds);
-        setActiveFilter(panelIdRef.current, predicate);
+        setLassoFilter(panelIdRef.current, predicate);
       }
     },
     {
@@ -128,17 +136,18 @@ export function useScatterBrushSync({
   const onSelectionChange = (_count: number | null, indices?: number[]) => {
     const rowIds = (indices ?? []).map((i) => rowIndicesRef.current[i] ?? i);
     setSelection(rowIds.length > 0 ? rowIds.length : null); // status bar — immediate
+    if (lassoRowIdsRef) lassoRowIdsRef.current = rowIds;
 
     if (rowIds.length === 0) {
       // Clear is time-sensitive — cancel both and update right away
       brushThrottler.cancel();
       brushDebouncer.cancel();
-      clearActiveFilter(myPanelId);
-      clearSelectionSync(myPanelId);
+      clearLassoFilter(myPanelId);
+      clearSelectionSync(panelSource(myPanelId));
     } else {
       brushThrottler.maybeExecute(rowIds); // live update for small selections (~50ms)
       brushDebouncer.maybeExecute(rowIds); // debounced final + large selections (200ms)
-      broadcastSelection(myPanelId, rowIds);
+      broadcastSelection(panelSource(myPanelId), rowIds);
     }
   };
 

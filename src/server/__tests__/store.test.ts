@@ -146,15 +146,21 @@ describe("EmbeddingStore", () => {
     expect(obsRows[0]).toHaveProperty("category");
   });
 
-  test("obsset tables exist after creation", async () => {
+  test("collection tables exist after creation", async () => {
     const store = await createMockStore(5);
     activeStore = store;
 
-    // Should not throw
-    await store.execute("INSERT INTO obssets VALUES ('s1', 'Selection 1', 'FF0000', NOW(), 3)");
-    const rows = await store.queryJson("SELECT * FROM obssets");
+    // collections / collection_tags / collection_members must all be queryable
+    await store.execute(
+      "INSERT INTO collections (collection_id, name, created_at, updated_at, created_count) " +
+        "VALUES ('c1', 'Test', NOW(), NOW(), 0)",
+    );
+    const rows = await store.queryJson("SELECT * FROM collections");
     expect(rows).toHaveLength(1);
-    expect(rows[0].name).toBe("Selection 1");
+    expect(rows[0].name).toBe("Test");
+    // member + tag tables should also exist (queryable, empty)
+    expect(await store.queryJson("SELECT * FROM collection_members")).toHaveLength(0);
+    expect(await store.queryJson("SELECT * FROM collection_tags")).toHaveLength(0);
   });
 
   test("close does not throw", async () => {

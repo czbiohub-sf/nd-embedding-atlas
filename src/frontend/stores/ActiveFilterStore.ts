@@ -1,78 +1,85 @@
 import { Store } from "@tanstack/store";
-import type { ObsSetId, PanelId } from "../lib/branded-types";
+import type { PanelId } from "../lib/branded-types";
 
 /**
- * ActiveFilterStore — single source of truth for the Mosaic brushSelection predicate.
+ * ActiveFilterStore — composed source of truth for the Mosaic brushSelection.
  *
- * Components write here (via setActiveFilter / setObsSetFilter). DashboardProvider is the
- * SOLE subscriber that calls brushSelection.update() — via the existing
- * requestAnimationFrame bridge in DashboardProvider.
+ * Two orthogonal facets compose via AND:
+ *   - `lassoPredicate`     — drawn by the user on the scatter canvas
+ *   - `activeSetPredicate` — server-built predicate for the active collection
  *
- * filterSource discriminates the origin of the current predicate:
- *   "lasso"  — drawn by the user on the scatter canvas
- *   "obsset" — activated from the ObsSet panel
- *   null     — no active filter
+ * They are independent: a user can lasso while a collection is active and
+ * the predicate becomes `(active_set) AND (lasso)`. Activating a new
+ * collection does NOT touch lasso state (the bridge clears the lasso
+ * separately when a collection is activated, by design).
  *
- * The two-tier timing in useScatterBrushSync (50ms throttle / 200ms debounce)
- * is PRESERVED — it gates writes to this store, not brushSelection.update() calls.
+ * Components write via the typed setters below. DashboardProvider is the
+ * SOLE subscriber that calls brushSelection.update() — via the
+ * requestAnimationFrame bridge.
  */
 
-export type FilterSource = "lasso" | "obsset" | null;
-
 export interface ActiveFilterState {
-  /** SQL WHERE fragment, or null for "no filter" */
-  predicate: string | null;
-  /** Stable source object for Mosaic cross-filter source tracking (one per session) */
+  /** Lasso predicate, or null when no lasso is drawn. */
+  lassoPredicate: string | null;
+  /** Active-set predicate, or null when no collection is active. */
+  activeSetPredicate: string | null;
+  /** Stable source object for Mosaic cross-filter source tracking. */
   source: object;
-  /** Panel that originated this filter (null for obsset filters) */
+  /** Panel that originated the lasso (null for the active-set source). */
   sourcePanelId: PanelId | null;
-  /** Discriminates lasso vs obsset vs no filter */
-  filterSource: FilterSource;
-  /** Monotonically increasing — use as dep for TanStack Query cache keys */
+  /** Monotonically increasing — use as dep for TanStack Query cache keys. */
   version: number;
 }
 
 const stableSource = {};
 
 export const activeFilterStore = new Store<ActiveFilterState>({
-  predicate: null,
+  lassoPredicate: null,
+  activeSetPredicate: null,
   source: stableSource,
   sourcePanelId: null,
-  filterSource: null,
   version: 0,
 });
 
-export function setActiveFilter(panelId: PanelId, predicate: string | null): void {
+/**
+ * Compose the two facets into a single SQL predicate Mosaic can consume.
+ * Returns null when both are null. Wraps each facet in parens so AND
+ * binds correctly across complex expressions.
+ */
+export function composedPredicate(s: ActiveFilterState): string | null {
+  if (s.lassoPredicate && s.activeSetPredicate) {
+    return `(${s.activeSetPredicate}) AND (${s.lassoPredicate})`;
+  }
+  return s.lassoPredicate ?? s.activeSetPredicate;
+}
+
+export function setLassoFilter(panelId: PanelId, predicate: string | null): void {
   activeFilterStore.setState((s) => ({
     ...s,
-    predicate,
+    lassoPredicate: predicate,
     source: stableSource,
     sourcePanelId: panelId,
-    filterSource: "lasso",
     version: s.version + 1,
   }));
 }
 
-export function clearActiveFilter(panelId: PanelId): void {
-  setActiveFilter(panelId, null);
+export function clearLassoFilter(panelId: PanelId): void {
+  setLassoFilter(panelId, null);
 }
 
-export function setObsSetFilter(_obsSetId: ObsSetId, predicate: string): void {
+export function setActiveSetFilter(predicate: string): void {
   activeFilterStore.setState((s) => ({
     ...s,
-    predicate,
+    activeSetPredicate: predicate,
     source: stableSource,
-    sourcePanelId: null,
-    filterSource: "obsset",
     version: s.version + 1,
   }));
 }
 
-export function clearObsSetFilter(): void {
+export function clearActiveSetFilter(): void {
   activeFilterStore.setState((s) => ({
     ...s,
-    predicate: null,
-    filterSource: null,
+    activeSetPredicate: null,
     version: s.version + 1,
   }));
 }

@@ -1,3 +1,4 @@
+import { MOD_KEY } from "@/lib/platform";
 import { cn } from "@/lib/utils";
 
 function Kbd({ className, ...props }: React.ComponentProps<"kbd">) {
@@ -17,4 +18,16 @@ function KbdGroup({ className, ...props }: React.ComponentProps<"div">) {
   return <kbd data-slot="kbd-group" className={cn("inline-flex items-center gap-1", className)} {...props} />;
 }
 
-export { Kbd, KbdGroup };
+/**
+ * Platform-aware modifier key. Renders ⌘ on macOS, Ctrl elsewhere.
+ * Use in keyboard-shortcut hints next to other Kbd elements.
+ */
+function KbdMod({ className, ...props }: Omit<React.ComponentProps<"kbd">, "children">) {
+  return (
+    <Kbd className={className} {...props}>
+      {MOD_KEY}
+    </Kbd>
+  );
+}
+
+export { Kbd, KbdGroup, KbdMod };

@@ -107,6 +107,16 @@ export class EmbeddingStore {
   nVars: number = 0;
   /** True once var_base exists. Mosaic queries can target `var_base` or the `var` VIEW. */
   hasVarTable: boolean = false;
+  /**
+   * Origin of `obs_name` values:
+   *   "explicit"  — provided by the dataset (durable identity)
+   *   "synthetic" — generated from `__row_index__` as a fallback
+   *
+   * Collections endpoints refuse to save against synthetic-name datasets
+   * (409) because saved obs_names would re-resolve to whatever row 42 happens
+   * to be on the next load — meaningless drift behavior.
+   */
+  obsNameOrigin: "explicit" | "synthetic" = "explicit";
   /** Registered embeddings and their metadata. */
   private _loaded: Map<string, EmbeddingMeta> = new Map();
   /** Registered var columns: colName → { table, colName }. */
@@ -115,6 +125,8 @@ export class EmbeddingStore {
   private _hidden: Set<string>;
   /** Whether nanoarrow extension is loaded (for Arrow IPC output). */
   private _nanoarrowLoaded: boolean = false;
+  /** Cached: does obs_base carry the multi-dataset `_dataset` column? */
+  private _hasDatasetColumn: boolean | null = null;
 
   private constructor(db: DuckDBInstance, conn: DuckDBConnection, hidden?: Set<string>) {
     this.db = db;
@@ -196,15 +208,18 @@ export class EmbeddingStore {
     if (!colNames.has("obs_name")) {
       await this.conn.run("ALTER TABLE obs_base ADD COLUMN obs_name VARCHAR");
       await this.conn.run("UPDATE obs_base SET obs_name = CAST(__row_index__ AS VARCHAR)");
+      // Synthetic — values are stringified row indices. Collections endpoints
+      // refuse this case so users don't save sets that drift on every reload.
+      this.obsNameOrigin = "synthetic";
     }
   }
 
-  /** Shared init: indexes, obsset tables, VIEW, row count, nanoarrow. */
+  /** Shared init: indexes, collection tables, VIEW, row count, nanoarrow. */
   private async _finishInit(): Promise<void> {
     await this.conn.run("CREATE INDEX obs_base_row_index ON obs_base(__row_index__)");
     await this.conn.run("CREATE INDEX obs_base_obs_index ON obs_base(__obs_index__)");
     await this.conn.run("CREATE INDEX obs_base_obs_name ON obs_base(obs_name)");
-    await this._initObssetTables();
+    await this._initCollectionTables();
     await this._rebuildView();
 
     const reader = await this.conn.runAndReadAll("SELECT COUNT(*) AS cnt FROM obs_base");
@@ -398,26 +413,53 @@ export class EmbeddingStore {
     this.hasVarTable = true;
   }
 
-  /** Initialize obsset tables (selection bookmarks). */
-  private async _initObssetTables(): Promise<void> {
+  /**
+   * Initialize collection tables.
+   *
+   * `obs_name` is the canonical identity column. `obs_index` is a per-load
+   * cache that gets recomputed from `obs_name JOIN obs_base USING (_dataset, obs_name)`
+   * after every attach (PR 3). Drift is computed at read time by joining
+   * stored `obs_name` against current `obs_base` — the stored row count
+   * (`created_count`) is immutable post-creation; the resolved count is the
+   * live one and may shrink if obs disappear.
+   */
+  private async _initCollectionTables(): Promise<void> {
     await this.conn.run(`
-            CREATE TABLE IF NOT EXISTS obssets (
-                obsset_id     TEXT PRIMARY KEY,
-                name          TEXT NOT NULL,
-                color         TEXT,
-                created_at    TIMESTAMP,
-                created_count INTEGER
+            CREATE TABLE IF NOT EXISTS collections (
+                collection_id   TEXT PRIMARY KEY,
+                name            TEXT NOT NULL,
+                color           TEXT,
+                notes           TEXT,
+                provenance      JSON,
+                created_at      TIMESTAMP NOT NULL,
+                updated_at      TIMESTAMP NOT NULL,
+                created_count   INTEGER NOT NULL,
+                deleted_at      TIMESTAMP,
+                version         INTEGER NOT NULL DEFAULT 1
             )
         `);
     await this.conn.run(`
-            CREATE TABLE IF NOT EXISTS obsset_members (
-                obsset_id   TEXT NOT NULL,
-                dataset_key TEXT NOT NULL,
-                obs_name    TEXT NOT NULL,
-                PRIMARY KEY (obsset_id, dataset_key, obs_name)
+            CREATE TABLE IF NOT EXISTS collection_tags (
+                collection_id   TEXT NOT NULL,
+                tag             TEXT NOT NULL,
+                PRIMARY KEY (collection_id, tag)
             )
         `);
-    await this.conn.run("CREATE INDEX IF NOT EXISTS idx_obsset_members_id ON obsset_members(obsset_id)");
+    await this.conn.run(`
+            CREATE TABLE IF NOT EXISTS collection_members (
+                collection_id   TEXT NOT NULL,
+                dataset_key     TEXT NOT NULL,
+                obs_index       INTEGER NOT NULL,
+                obs_name        TEXT NOT NULL,
+                PRIMARY KEY (collection_id, dataset_key, obs_index)
+            )
+        `);
+    await this.conn.run("CREATE INDEX IF NOT EXISTS idx_collection_members_id ON collection_members(collection_id)");
+    await this.conn.run(
+      "CREATE INDEX IF NOT EXISTS idx_collection_members_dataset ON collection_members(dataset_key, obs_index)",
+    );
+    await this.conn.run("CREATE INDEX IF NOT EXISTS idx_collection_tags_id ON collection_tags(collection_id)");
+    await this.conn.run("CREATE INDEX IF NOT EXISTS idx_collection_tags_tag ON collection_tags(tag)");
   }
 
   /**
@@ -452,6 +494,25 @@ export class EmbeddingStore {
   /** Execute SQL with no return value (DDL / DML). */
   async execute(sql: string): Promise<void> {
     await this.conn.run(sql);
+  }
+
+  /**
+   * True iff `obs_base` carries the `_dataset` column (multi-dataset stores).
+   * Cached because it never changes after init — `_rebuildView()` operates on
+   * `dataset` (the VIEW), not `obs_base`. Tests that mutate `obs_base` schema
+   * should call `invalidateSchemaCache()`.
+   */
+  async hasDatasetColumn(): Promise<boolean> {
+    if (this._hasDatasetColumn != null) return this._hasDatasetColumn;
+    const reader = await this.conn.runAndReadAll("SELECT column_name FROM (DESCRIBE obs_base)");
+    const cols = reader.getColumnsJS()[0] as string[];
+    this._hasDatasetColumn = cols.includes("_dataset");
+    return this._hasDatasetColumn;
+  }
+
+  /** Reset cached schema introspection (for tests / DDL paths that alter obs_base). */
+  invalidateSchemaCache(): void {
+    this._hasDatasetColumn = null;
   }
 
   /** Shut down: close connection and database. */

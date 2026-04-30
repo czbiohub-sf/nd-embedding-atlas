@@ -13,7 +13,6 @@ import { useTheme } from "../../ThemeProvider";
 import { PanelErrorBoundary } from "./PanelErrorBoundary";
 import { ChartGroupPanel } from "./panels/ChartGroupPanel";
 import { ImageViewerPanel } from "./panels/ImageViewerPanel";
-import { ObsSetPanel } from "./panels/ObsSetPanel";
 import { ScatterPanel } from "./panels/ScatterPanel";
 import { TablePanel } from "./panels/TablePanel";
 
@@ -96,14 +95,9 @@ const COMPONENTS = {
       <ChartGroupPanel {...props} />
     </PanelErrorBoundary>
   ),
-  obssets: () => (
-    <PanelErrorBoundary panelName="ObsSets">
-      <ObsSetPanel />
-    </PanelErrorBoundary>
-  ),
 };
 
-const STORAGE_KEY = "ndea_layout_v2"; // v2: table removed from Dockview (now TerminalTable ⌘J)
+const STORAGE_KEY = "ndea_layout_v3"; // v3: obssets panel removed (Collections lives in Mod+B sheet)
 
 // ── Default layout ───────────────────────────────────────────────────────
 

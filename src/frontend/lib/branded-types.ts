@@ -15,6 +15,6 @@ export const rowIndex = (n: number): RowIndex => n as RowIndex;
 export type ChannelHash = string & { readonly __brand: "ChannelHash" };
 export const channelHash = (s: string): ChannelHash => s as ChannelHash;
 
-/** ObsSet identifier — branded to prevent accidental mixing with other string IDs. */
-export type ObsSetId = string & { readonly __brand: "ObsSetId" };
-export const obsSetId = (s: string): ObsSetId => s as ObsSetId;
+/** Collection identifier — branded to prevent accidental mixing with other string IDs. */
+export type CollectionId = string & { readonly __brand: "CollectionId" };
+export const collectionId = (s: string): CollectionId => s as CollectionId;
