@@ -128,9 +128,7 @@ describe("AnnData class — symmetric obs/var + toDuckDB", () => {
       const schema = await store.conn.runAndReadAll(
         "SELECT column_name FROM (DESCRIBE obs_base) WHERE column_name IN ('__row_index__', '__obs_index__', 'obs_name')",
       );
-      const names = (schema.getColumnsJS()[0] as string[])
-        .slice()
-        .toSorted((a: string, b: string) => a.localeCompare(b));
+      const names = (schema.getColumnsJS()[0] as string[]).slice().sort((a: string, b: string) => a.localeCompare(b));
       expect(names).toEqual(["__obs_index__", "__row_index__", "obs_name"]);
 
       // Values match between the two index columns
@@ -162,9 +160,7 @@ describe("AnnData class — symmetric obs/var + toDuckDB", () => {
     try {
       // var_uid is exposed on the `var` VIEW (not the underlying table).
       const uids = await store.conn.runAndReadAll("SELECT var_uid FROM var ORDER BY __var_index__");
-      const values = (uids.getColumnsJS()[0] as string[])
-        .slice()
-        .toSorted((a: string, b: string) => a.localeCompare(b));
+      const values = (uids.getColumnsJS()[0] as string[]).slice().sort((a: string, b: string) => a.localeCompare(b));
       expect(values).toEqual(["ds1::geneA", "ds1::geneB", "ds2::geneA"]);
 
       // Same var_name across datasets is allowed (not uniquely indexed)
