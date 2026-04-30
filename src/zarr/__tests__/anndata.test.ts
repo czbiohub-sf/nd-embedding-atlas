@@ -10,7 +10,7 @@ import { describe, expect, test } from "bun:test";
 import path from "node:path";
 import { existsSync } from "node:fs";
 import { DuckDBInstance } from "@duckdb/node-api";
-import { AnnData, BunFileStore, ingestDataFrames, LazyDataFrame } from "../index.ts";
+import { BunFileStore, ingestDataFrames, LazyDataFrame, openAnnData } from "../index.ts";
 import { EmbeddingStore } from "../../server/store.ts";
 import { handleMosaicQuery } from "../../server/mosaic.ts";
 import type { AnnDataFrame } from "../types.ts";
@@ -44,7 +44,7 @@ describe("BunFileStore", () => {
 describe("AnnData class — symmetric obs/var + toDuckDB", () => {
   test("opens fixture, exposes obs/var DataFrames with correct shape", async () => {
     if (!HAS_FIXTURE) return;
-    const adata = await AnnData.open(FIXTURE);
+    const adata = await openAnnData(FIXTURE);
     expect(adata.nObs).toBeGreaterThan(0);
     expect(adata.nVars).toBeGreaterThan(0);
     expect(adata.obs.length).toBe(adata.nObs);
@@ -287,7 +287,7 @@ describe("AnnData class — symmetric obs/var + toDuckDB", () => {
 
   test("toDuckDB registers both obs_base and var_base queryable standalone", async () => {
     if (!HAS_FIXTURE) return;
-    const adata = await AnnData.open(FIXTURE);
+    const adata = await openAnnData(FIXTURE);
     const db = await DuckDBInstance.create(":memory:");
     const conn = await db.connect();
     try {

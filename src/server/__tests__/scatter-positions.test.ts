@@ -8,7 +8,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import path from "node:path";
 import { existsSync } from "node:fs";
-import { AnnData } from "../../zarr/index.ts";
+import { openAnnData } from "../../zarr/index.ts";
 import { createApp } from "../app.ts";
 import { EmbeddingStore } from "../store.ts";
 import type { DatasetMeta, ViewerState } from "../state.ts";
@@ -19,7 +19,7 @@ const HAS_FIXTURE = existsSync(FIXTURE);
 type Server = ReturnType<typeof createApp>;
 
 async function buildState(): Promise<{ state: ViewerState; server: Server; port: number }> {
-  const adata = await AnnData.open(FIXTURE);
+  const adata = await openAnnData(FIXTURE);
   const nObs = adata.nObs;
 
   // Minimal obs_base: row index + obs_name only. The positions route
