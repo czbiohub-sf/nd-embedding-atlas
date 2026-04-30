@@ -25,7 +25,12 @@ export function ActiveCollectionCallout() {
 
   return (
     <div
-      className="pointer-events-auto absolute top-3 left-3 z-30 flex items-center gap-2 rounded-md border border-primary/40 bg-popover/85 px-3 py-1.5 shadow-lg backdrop-blur-sm"
+      // Bottom-center "active scope" status banner. Top corners are owned by
+      // the embedding/column picker (top-2 left-2), the overlay icon group
+      // (top-2 right-2), and the legend (top-10 left-2). Bottom is free
+      // across all scatter panels, so the callout never collides regardless
+      // of which panel layout the user has.
+      className="pointer-events-auto -translate-x-1/2 absolute bottom-3 left-1/2 z-30 flex items-center gap-2 rounded-full border border-primary/40 bg-popover/85 px-3 py-1.5 shadow-lg backdrop-blur-sm"
       role="status"
       aria-live="polite"
     >
