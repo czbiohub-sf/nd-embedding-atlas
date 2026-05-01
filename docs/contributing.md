@@ -82,6 +82,7 @@ Enforced by `vp check`:
 src/
   index.ts            # Public API re-exports
   cli/                # Bun-compiled CLI (bunli framework)
+    commands/         # view, update, rollback, gc, doctor, completions
   protocol/           # Shared zod schemas (client + server contract)
   zarr/               # Custom zarr I/O — reads AnnData / MuData / OME-Zarr
   server/             # Bun.serve HTTP + WebSocket server
@@ -106,6 +107,8 @@ See [`AGENTS.md`](https://github.com/czbiohub-sf/nd-embedding-atlas/blob/main/AG
 
 A `pre-release` cut opens an auto-generated PR that bumps `manifest.json`'s `pre-release` pointer. Merge to activate.
 
+The release workflow uploads `scripts/install.sh` as a per-tag asset, so users can pin the installer URL: `curl …/releases/download/v0.X.Y/install.sh | sh`. The canonical `…/main/install.sh` always reflects the latest installer.
+
 After editing `src/cli/commands/**`, regenerate the completion metadata:
 
 ```bash
@@ -113,6 +116,15 @@ vp run gen
 ```
 
 Updates `.bunli/commands.gen.ts`, which feeds shell-completion script generation. CI fails on drift (`.github/scripts/check-bunli-gen.sh`).
+
+## Verifying a build
+
+```bash
+bun run build
+./dist/ndea doctor
+```
+
+`ndea doctor` prints binary path, symlink integrity, active version, and the installed-versions tree. Exit code 1 on hard anomalies (broken symlink, missing active binary). Add `--check-network` to probe `manifest.json` reachability with a 3-second timeout.
 
 ## Editing this docs site
 

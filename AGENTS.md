@@ -23,6 +23,7 @@ image data. Early-stage — APIs are in flux.
 src/
   index.ts            # Public API re-exports
   cli/                # CLI entry point
+    commands/         # view, update, rollback, gc, doctor, completions
   protocol/           # Shared request/response zod schemas (client + server)
   zarr/               # Custom zarr I/O (AnnData, MuData, OME-Zarr)
     bun-store.ts      # BunFileStore — AsyncReadable backed by Bun.file
@@ -90,7 +91,7 @@ frontend     ──→  @uwdata/mosaic-core socketConnector (ws /mosaic),
 
 ### Frontend (`src/frontend/`)
 
-- WebGPU scatter via TypeGPU v0.10 — instanced quads, GPU-side lasso/marquee
+- WebGPU scatter via TypeGPU v0.11 — instanced quads, GPU-side lasso/marquee
   with compute readback.
 - Mosaic cross-filter: scatter + table + charts all driven by server DuckDB.
 - TanStack Store singletons bridge React ↔ Mosaic:
@@ -115,7 +116,10 @@ bun install                       # backend + frontend share one node_modules
 
 # Build
 vp build                          # frontend bundle → dist/frontend/
-bun build ./src/cli/index.ts --compile --outfile dist/ndea   # single binary
+bun run build                     # frontend + single-file binary → dist/ndea
+                                  #   (delegates to scripts/build.ts; the embed
+                                  #   manifest pattern is required — direct
+                                  #   `bun build --compile` crashes on .woff2)
 
 # Quality gates
 vp check                          # typecheck + Oxlint + Oxfmt (all ~260 files)
@@ -173,6 +177,13 @@ import.meta.url)` must resolve in both dev and `bun build --compile`. Bun
 - **Server-side DuckDB** — Mosaic cross-filter, avoids browser memory limits.
 - **socketConnector over REST** — Mosaic queries share one WS connection;
   REST `/data/query` kept only for tests and curl.
+- **Versions-dir + symlink install layout** — `~/.ndea/versions/<tag>/ndea` holds
+  every binary that was ever installed; `$NDEA_BIN_DIR/ndea` is a symlink into it.
+  `ndea update` writes the new version, then atomically swaps the symlink via
+  `rename(2)`; running sessions keep their open handle to the old binary.
+  `ndea rollback` repoints to the previous entry. `ndea gc` prunes old ones.
+  Mirrors rustup / mise / Claude Code; replaced an earlier
+  staged-pending + apply-on-launch dance.
 
 ## Resources
 

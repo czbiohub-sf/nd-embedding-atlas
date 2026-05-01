@@ -30,6 +30,9 @@ bun run build
 
 # Regenerate CLI completion metadata (after editing src/cli/commands/**)
 vp run gen
+
+# Verify a built binary's install (paths, symlink, versions, manifest)
+./dist/ndea doctor
 ```
 
 See [`AGENTS.md`](./AGENTS.md) for the full command catalogue, project layout, key abstractions, and gotchas. That file is the source of truth.
