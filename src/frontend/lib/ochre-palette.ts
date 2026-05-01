@@ -13,12 +13,14 @@
 
 import * as bids from "@/ochre/colormap/catalog/bids";
 import * as chrisluts from "@/ochre/colormap/catalog/chrisluts";
+import * as cividis from "@/ochre/colormap/catalog/cividis";
 import * as cmasher from "@/ochre/colormap/catalog/cmasher";
 import * as cmocean from "@/ochre/colormap/catalog/cmocean";
 import * as colorbrewer from "@/ochre/colormap/catalog/colorbrewer";
 import * as colorcet from "@/ochre/colormap/catalog/colorcet";
 import * as contrib from "@/ochre/colormap/catalog/contrib";
 import * as crameri from "@/ochre/colormap/catalog/crameri";
+import * as google from "@/ochre/colormap/catalog/google";
 import * as ibm from "@/ochre/colormap/catalog/ibm";
 import * as imagej from "@/ochre/colormap/catalog/imagej";
 import * as matlab from "@/ochre/colormap/catalog/matlab";
@@ -34,6 +36,8 @@ import {
   tab20c as OchreTab20c,
 } from "@/ochre/colormap/catalog/tableau";
 import { glasbey as OchreGlasbey } from "@/ochre/colormap/catalog/glasbey";
+import { okabeito } from "@/ochre/colormap/catalog/okabeito";
+import { petroff10, petroff6, petroff8 } from "@/ochre/colormap/catalog/petroff";
 import * as tol from "@/ochre/colormap/catalog/tol";
 import * as vispy from "@/ochre/colormap/catalog/vispy";
 import * as yorick from "@/ochre/colormap/catalog/yorick";
@@ -76,6 +80,10 @@ const CATEGORICAL_CMAPS: Record<string, DiscreteColormap> = {
   Accent,
   Pastel1,
   Pastel2,
+  okabeito,
+  petroff6,
+  petroff8,
+  petroff10,
 };
 
 // glasbey is a LinearColormap rather than discrete; keep a direct reference
@@ -122,6 +130,8 @@ const CONTINUOUS_SOURCES: (readonly [string, Record<string, unknown>])[] = [
   ["yorick", yorick],
   ["chrisluts", chrisluts],
   ["contrib", contrib],
+  ["cividis", cividis],
+  ["google", google],
 ];
 
 function isLinear(value: unknown): value is LinearColormap {
