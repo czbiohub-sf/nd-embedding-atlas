@@ -4,33 +4,21 @@
 import type { Command, CLI, GeneratedOptionMeta, RegisteredCommands, CommandOptions, GeneratedCommandMeta } from '@bunli/core'
 import { createGeneratedHelpers, registerGeneratedStore } from '@bunli/core'
 
-import Install from '../src/cli/commands/install.js'
 import Rollback from '../src/cli/commands/rollback.js'
 import Update from '../src/cli/commands/update.js'
 import View from '../src/cli/commands/view.js'
 
 // Narrow list of command names to avoid typeof-cycles in types
-const names = ['install', 'rollback', 'update', 'view'] as const
+const names = ['rollback', 'update', 'view'] as const
 type GeneratedNames = typeof names[number]
 
 const modules: Record<GeneratedNames, Command<any>> = {
-  'install': Install,
   'rollback': Rollback,
   'update': Update,
   'view': View
 } as const
 
 const metadata: Record<GeneratedNames, GeneratedCommandMeta> = {
-  'install': {
-      name: 'install',
-      description: 'Place the ndea binary on PATH and set up state directories',
-      options: {
-        'from-bootstrap': { type: 'z.coerce.boolean.default', required: true, hasDefault: true, default: false, description: 'Called from install.sh (Stage A)', schema: {"type":"zod","method":"default","args":[{"type":"unknown","raw":{"type":"BooleanLiteral","start":1326,"end":1331,"loc":{"start":{"line":37,"column":56,"index":1326},"end":{"line":37,"column":61,"index":1331}},"value":false}}]}, validator: '(val) => true' },
-        'bin-dir': { type: 'z.string.optional', required: false, hasDefault: false, description: 'Override install destination (NDEA_BIN_DIR takes precedence)', fileType: 'directory', schema: {"type":"zod","method":"optional","args":[]}, validator: '(val) => true' },
-        'force': { type: 'z.coerce.boolean.default', required: true, hasDefault: true, default: false, description: 'Overwrite an existing binary without prompting', schema: {"type":"zod","method":"default","args":[{"type":"unknown","raw":{"type":"BooleanLiteral","start":1582,"end":1587,"loc":{"start":{"line":43,"column":45,"index":1582},"end":{"line":43,"column":50,"index":1587}},"value":false}}]}, validator: '(val) => true' }
-      },
-      path: './src/cli/commands/install'
-    },
   'rollback': {
       name: 'rollback',
       description: 'Restore the previous ndea binary from <self>.bak',

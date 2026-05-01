@@ -8,8 +8,9 @@
 # Environment variables:
 #   NDEA_VERSION   release tag to install (default: latest)
 #   NDEA_BIN_DIR   install destination   (default: $HOME/.local/bin)
-#   NDEA_CHANNEL   release channel: stable | canary (default: stable)
+#   NDEA_CHANNEL   release channel: stable | pre-release | canary (default: stable)
 #                  - stable: most recent semver-tagged release
+#                  - pre-release: latest active alpha / beta / rc (resolved via manifest.json)
 #                  - canary: rolling pre-release built from `main` on every push
 #
 # POSIX sh — no bashisms. Tested with dash, bash 3.2, bash 5.x, zsh.
@@ -22,8 +23,8 @@ CHANNEL="${NDEA_CHANNEL:-stable}"
 DEST="${NDEA_BIN_DIR:-$HOME/.local/bin}"
 
 case "$CHANNEL" in
-    stable | latest | canary) ;;
-    *) printf '  \033[31mERR\033[0m unknown NDEA_CHANNEL=%s (expected: stable|canary)\n' "$CHANNEL" >&2; exit 1 ;;
+    stable | latest | pre-release | canary) ;;
+    *) printf '  \033[31mERR\033[0m unknown NDEA_CHANNEL=%s (expected: stable|pre-release|canary)\n' "$CHANNEL" >&2; exit 1 ;;
 esac
 
 log() { printf '  \033[1m%s\033[0m %s\n' "->" "$*" >&2; }
@@ -58,13 +59,24 @@ esac
 artifact="ndea-${os}-${arch}"
 
 # --- Release URL ----------------------------------------------------------
-# Channel takes precedence over NDEA_VERSION when set to `canary` — the canary
-# release is a rolling tag rewritten on every push to `main`, so a fixed
-# version doesn't apply.
+# Channel takes precedence over NDEA_VERSION when set to `canary` or
+# `pre-release` — those map to a rolling or manifest-resolved tag, so a
+# fixed version doesn't apply.
 base="https://github.com/${REPO}/releases"
+manifest_url="https://raw.githubusercontent.com/${REPO}/main/manifest.json"
+
 if [ "$CHANNEL" = "canary" ]; then
     bin_url="${base}/download/canary/${artifact}"
     sha_url="${base}/download/canary/${artifact}.sha256"
+elif [ "$CHANNEL" = "pre-release" ]; then
+    log "Resolving pre-release channel via manifest.json"
+    pre_tag=$(curl -fsSL --proto '=https' --tlsv1.2 "$manifest_url" \
+        | sed -n 's/.*"pre-release"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
+        | head -n 1)
+    [ -n "$pre_tag" ] || die "no active pre-release in manifest (channels.pre-release is null)"
+    bin_url="${base}/download/${pre_tag}/${artifact}"
+    sha_url="${base}/download/${pre_tag}/${artifact}.sha256"
+    VERSION="$pre_tag"
 elif [ "$VERSION" = "latest" ]; then
     bin_url="${base}/latest/download/${artifact}"
     sha_url="${base}/latest/download/${artifact}.sha256"

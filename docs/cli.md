@@ -13,7 +13,6 @@ Walkthroughs live in [Getting started](index.md). Dev-side commands (`vp run dev
 ```
 ndea [paths...]                                  # default — equivalent to `ndea view`
 ndea view [paths...] [options]
-ndea install [options]
 ndea update [options]
 ndea rollback
 ndea completions <bash|zsh|fish>
@@ -55,20 +54,6 @@ A single `.yaml` / `.yml` path is parsed as a multi-dataset project config (see 
 | `--obs-columns <list>` | string  | all columns | Comma-separated subset of obs columns to load                          |
 
 `--port` accepts integers in `[1, 65535]`.
-
-## `ndea install`
-
-Stage B of the self-installer. `install.sh` invokes it after downloading the binary; rarely run by hand.
-
-### Options
-
-| Option             | Type    | Default        | Description                                                    |
-| ------------------ | ------- | -------------- | -------------------------------------------------------------- |
-| `--from-bootstrap` | boolean | `false`        | Marks the call as originating from `install.sh` (Stage A)      |
-| `--bin-dir <dir>`  | string  | `~/.local/bin` | Override install destination (`NDEA_BIN_DIR` takes precedence) |
-| `--force`          | boolean | `false`        | Overwrite an existing binary without prompting                 |
-
-Refuses to run from `bun run` (i.e. uncompiled) unless `--from-bootstrap` is set.
 
 ## `ndea update`
 
