@@ -8,7 +8,7 @@ An interactive browser-based dashboard that links high-dimensional AI embeddings
 
 ## Install
 
-Three ways to install `ndea`, ordered from lowest to highest friction.
+Two ways, ordered by friction. The install script is the supported path; `bunx` is a zero-install option for trying it.
 
 ### 1. Try it now (requires [Bun](https://bun.com))
 
@@ -20,7 +20,7 @@ Pin a specific release by appending a tag: `bunx github:czbiohub-sf/nd-embedding
 
 First run is ~45 s (Bun clones the repo, installs deps, and builds the frontend). Subsequent runs are cached.
 
-### 2. Install (recommended)
+### 2. Install
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/czbiohub-sf/nd-embedding-atlas/main/scripts/install.sh | sh
@@ -56,21 +56,6 @@ curl -fsSL .../install.sh | NDEA_VERSION=v0.1.0-rc.1 sh
 Self-update via `ndea update --channel <stable|rc|canary>`. Roll back a bad
 update with `ndea rollback`.
 
-### 3. Manual
-
-Download the binary for your platform from the [Releases page][releases-link], mark it executable, and put it on your `PATH`:
-
-```bash
-chmod +x ndea-<os>-<arch>
-mv ndea-<os>-<arch> ~/.local/bin/ndea
-```
-
-**macOS only** — the binary is unsigned, so Gatekeeper will block it on first run. Strip the quarantine attribute once after downloading:
-
-```bash
-xattr -dr com.apple.quarantine ~/.local/bin/ndea
-```
-
 ### Update
 
 ```bash
@@ -97,7 +82,7 @@ ndea completions powershell | Out-String | Invoke-Expression
 The update is staged as `<self>.pending` and swapped on next launch (avoids
 mid-run binary replacement). Re-running the curl installer also works.
 
-Tier 0 (`bunx`): re-run the `bunx` command. Bun refreshes the clone on the next invocation.
+For the `bunx` path, re-run the `bunx` command — Bun refreshes the clone on the next invocation.
 
 ## Quick start
 
@@ -156,7 +141,6 @@ See the [changelog][].
 
 [issue-tracker]: https://github.com/czbiohub-sf/nd-embedding-atlas/issues
 [discussions-link]: https://github.com/czbiohub-sf/nd-embedding-atlas/discussions
-[releases-link]: https://github.com/czbiohub-sf/nd-embedding-atlas/releases
 [docs-link]: https://super-adventure-yv3eleq.pages.github.io/
 [docs-index]: https://super-adventure-yv3eleq.pages.github.io/
 [docs-data]: https://super-adventure-yv3eleq.pages.github.io/preparing-your-data/
