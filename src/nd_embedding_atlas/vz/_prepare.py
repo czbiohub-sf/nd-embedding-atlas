@@ -73,7 +73,7 @@ def detect_spatial_columns(
         cm = columns_config.columns
         return SpatialColumns(fov=cm.fov, t=cm.t, z=None, bbox=cm.bbox, x=cm.x, y=cm.y)
 
-    fov = next((c for c in ("fov_name", "well", "zarr_path") if c in obs_columns), None)
+    fov = "fov_name" if "fov_name" in obs_columns else None
     t = "t" if "t" in obs_columns else None
     z = "z" if "z" in obs_columns else None
     bbox = "bbox" if "bbox" in obs_columns else ("cp_bbox" if "cp_bbox" in obs_columns else None)
