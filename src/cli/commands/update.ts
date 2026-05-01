@@ -1,31 +1,37 @@
 /**
- * `ndea update` — fetch the manifest, download the matching asset, verify
- * the checksum, stage it as `<self>.pending`, and drop a pending-update
- * marker so the swap happens on next launch.
+ * `ndea update` — fetch the manifest, download the matching asset into the
+ * versions tree, and atomically repoint the active symlink.
  *
- * Rationale for "apply on next launch":
- *   - Windows won't let you rename the currently-running executable.
- *   - Linux/macOS *will* rename it but a long-running `ndea view` that's
- *     mmap'd shared libraries would get surprised.
+ * Layout:
+ *   ~/.ndea/versions/<tag>/ndea     — the binary for this version
+ *   $bin_dir/ndea                   — symlink → ~/.ndea/versions/<tag>/ndea
  *
- * So we always stage + mark, never swap in place. Cheap and uniform.
+ * The "atomic symlink swap" trick (write to a sibling temp name, then
+ * `rename(2)` over the live link) gives crash-safety without the
+ * pending/applier dance the old layout needed. Old versions stay on disk
+ * for `ndea rollback`.
  */
 
 import { defineCommand, option } from "@bunli/core";
-import { existsSync } from "node:fs";
-import { mkdir } from "node:fs/promises";
-import { dirname } from "node:path";
+import { chmod, mkdir, readlink, rename, symlink, unlink } from "node:fs/promises";
+import { resolve } from "node:path";
 import { z } from "zod";
 import { acquireLock } from "../lib/lock.ts";
 import type { Channel } from "../lib/manifest.ts";
 import { CHANNELS, detectTarget, fetchManifest, parseShaFile, sha256Hex } from "../lib/manifest.ts";
-import { installLockPath, isCompiledBinary, resolveSelfPath, stateDir } from "../lib/paths.ts";
-import { writePendingUpdateMarker } from "../lib/pending-update.ts";
+import {
+  currentVersionPath,
+  installLockPath,
+  isCompiledBinary,
+  resolveSelfPath,
+  versionDir,
+  versionedBinaryPath,
+} from "../lib/paths.ts";
 import { VERSION } from "../version.ts";
 
 export default defineCommand({
   name: "update" as const,
-  description: "Download the latest ndea release and stage it for next launch",
+  description: "Download the latest ndea release and switch to it",
   options: {
     force: option(z.coerce.boolean().default(false), {
       description: "Update even when already on the target version",
@@ -58,7 +64,9 @@ export default defineCommand({
     });
 
     try {
-      await mkdir(stateDir(), { recursive: true });
+      const targetDir = versionDir(asset.tag);
+      const targetBin = versionedBinaryPath(asset.tag);
+      await mkdir(targetDir, { recursive: true });
 
       console.log(`  Downloading ${asset.assetUrl}`);
       const [binRes, shaRes] = await Promise.all([fetch(asset.assetUrl), fetch(asset.shaUrl)]);
@@ -73,32 +81,23 @@ export default defineCommand({
       }
       console.log(`  Checksum OK (${expected.slice(0, 12)}…)`);
 
-      const self = resolveSelfPath();
-      const pendingPath = `${self}.pending`;
-      await mkdir(dirname(pendingPath), { recursive: true });
+      await Bun.write(targetBin, bytes);
+      await chmod(targetBin, 0o755);
 
-      // Remove any orphaned `.pending` from a prior aborted run.
-      if (existsSync(pendingPath)) {
-        await Bun.$`rm -f ${pendingPath}`.quiet().catch(() => {});
-      }
+      // Atomic symlink swap — write `<link>.tmp` then rename(2) over the
+      // live link. POSIX rename is atomic for both files and symlinks; the
+      // running binary keeps its open file handle to the old version, so
+      // long-lived `ndea view` sessions are unaffected.
+      const link = await resolveActiveLink();
+      const tmpLink = `${link}.tmp`;
+      await unlink(tmpLink).catch(() => {});
+      await symlink(targetBin, tmpLink);
+      await rename(tmpLink, link);
 
-      await Bun.write(pendingPath, bytes);
-      // Best-effort chmod — ignore errors on Windows.
-      try {
-        await Bun.$`chmod +x ${pendingPath}`.quiet();
-      } catch {
-        // non-fatal
-      }
+      await Bun.write(currentVersionPath(), `${asset.tag}\n${expected}\n`);
 
-      await writePendingUpdateMarker({
-        tag: asset.tag,
-        pendingPath,
-        sha256: expected,
-        stagedAt: new Date().toISOString(),
-      });
-
-      console.log(`  Staged ${asset.tag} — will apply on next launch.`);
-      console.log(`  Run any ndea command (e.g. 'ndea --version') to finalise the swap.`);
+      console.log(`  Installed ${asset.tag} → ${link}`);
+      console.log(`  Run \`ndea --version\` to confirm.`);
     } finally {
       await lock.release();
     }
@@ -106,6 +105,23 @@ export default defineCommand({
 });
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
+
+/**
+ * The symlink path users invoke as `ndea` — i.e. the file on PATH.
+ *
+ * On a fresh install via install.sh this is already a symlink. On systems
+ * upgraded from the pre-Phase-3 layout (binary-as-regular-file at the same
+ * path), `resolveSelfPath()` returns the regular file's path; the rename
+ * over it during update converts it to a symlink in one atomic step.
+ */
+async function resolveActiveLink(): Promise<string> {
+  const self = resolveSelfPath();
+  // If `self` is a symlink, the rename target is the link itself, not its
+  // resolved destination. `readlink` succeeds on a symlink and throws on
+  // a regular file — either way, the path we want to write is `self`.
+  await readlink(self).catch(() => {});
+  return resolve(self);
+}
 
 function resolveChannel(raw: Channel | undefined): Channel {
   const fromEnv = process.env.NDEA_CHANNEL;

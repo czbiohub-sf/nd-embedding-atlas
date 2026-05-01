@@ -57,7 +57,7 @@ A single `.yaml` / `.yml` path is parsed as a multi-dataset project config (see 
 
 ## `ndea update`
 
-Download the latest release for a channel, verify the checksum, stage it as `<self>.pending`. The swap applies on the next `ndea` invocation.
+Download the latest release for a channel, verify its SHA-256, write it under `~/.ndea/versions/<tag>/ndea`, and atomically repoint the active symlink. Old versions stay on disk for `ndea rollback`.
 
 ### Options
 
@@ -68,15 +68,13 @@ Download the latest release for a channel, verify the checksum, stage it as `<se
 
 Refuses to run uncompiled (i.e. via `bun run`).
 
-State lives at `~/.ndea/pending-update`. The applier runs at the start of every `ndea` command except `install` / `update` / `rollback` — those own the install lifecycle and skip it to avoid a swap race.
+The swap is atomic via `rename(2)` over a sibling `<link>.tmp`. Long-lived `ndea view` sessions keep their open file handle to the old binary and are unaffected.
 
 ## `ndea rollback`
 
-Restore the previous binary from `<self>.bak`.
+Switch the active symlink to the previous installed version.
 
-`ndea update` keeps one level of history: it renames the running binary to `.bak` before applying the staged `.pending`. `rollback` undoes that swap.
-
-No options. Refuses to run uncompiled.
+Walks `~/.ndea/versions/`, finds the most-recently-modified entry that isn't currently active, and atomically repoints `$NDEA_BIN_DIR/ndea` to it. Run again to step further back. No options. Refuses to run uncompiled.
 
 ## `ndea completions`
 
@@ -132,13 +130,15 @@ ndea completions fish > ~/.config/fish/completions/ndea.fish
 ```
 ~/.ndea/
   current-version       # Plain text: "<tag>\n<sha256>\n"
-  pending-update        # JSON marker; present only when an update is staged
+  versions/
+    v0.1.0/ndea         # One installed binary per tag — keeps history for rollback
+    v0.1.1/ndea
   locks/
     install.lock        # PID file backing the install/update mutex
   logs/                 # Reserved for future telemetry / install traces
 ```
 
-The current binary lives at `$NDEA_BIN_DIR/ndea`; the previous version (if any) at `$NDEA_BIN_DIR/ndea.bak`.
+`$NDEA_BIN_DIR/ndea` is a symlink into `~/.ndea/versions/<tag>/ndea`. `ndea update` and `ndea rollback` repoint the symlink atomically; the binary files in `versions/` are never deleted automatically — prune by hand to reclaim disk.
 
 ## Exit codes
 

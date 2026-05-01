@@ -33,9 +33,6 @@ export default defineCommand({
     }),
   },
   async handler({ flags, positional }) {
-    // The pending-update auto-applier runs at the root in `index.ts` so
-    // every command picks up a freshly-staged binary.
-
     // Positional args first; fall back to NDEA_DATASET env var. The env
     // var is how `vp run --parallel dev:all` forwards the dataset path
     // to this task (vp's dependsOn chain can't forward positional args).

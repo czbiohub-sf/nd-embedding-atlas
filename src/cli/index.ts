@@ -10,18 +10,13 @@
  *
  * Subcommands:
  *   view       Open zarr stores in the dashboard (default)
- *   install    Stage B of the self-installer (called by install.sh)
- *   update     Stage a new release for next launch
- *   rollback   Restore the previous binary
+ *   update     Download a new release and switch the active symlink
+ *   rollback   Switch to the previous installed version
  *
  * For backwards compatibility, invocations without a subcommand default
  * to `view`:
  *     ndea ./data.zarr
  *     ndea project.yaml --port 8080
- *
- * The pending-update auto-applier runs at the root so every command —
- * including `ndea --version` and `ndea --help` — picks up a freshly-
- * staged binary before dispatching.
  */
 
 import { createCLI } from "@bunli/core";
@@ -29,7 +24,6 @@ import { completionsPlugin } from "@bunli/plugin-completions";
 import rollbackCommand from "./commands/rollback.ts";
 import updateCommand from "./commands/update.ts";
 import viewCommand from "./commands/view.ts";
-import { applyPendingUpdate } from "./lib/pending-update.ts";
 import { viewCompletionPlugin } from "./lib/view-completion-plugin.ts";
 import { VERSION } from "./version.ts";
 
@@ -45,13 +39,6 @@ const DESCRIPTION =
  * zsh` would be reinterpreted as `ndea view completions zsh`.
  */
 const KNOWN_SUBCOMMANDS = new Set(["view", "update", "rollback", "completions", "complete"]);
-
-/**
- * Subcommands that own the install/update lifecycle and must skip the
- * auto-applier. Running it here would race with `update --force` or hide
- * a `rollback` intent.
- */
-const SKIP_AUTO_APPLY = new Set(["update", "rollback"]);
 
 /**
  * Normalize rawArgs so `ndea ./data.zarr` routes to `view ./data.zarr`.
@@ -79,16 +66,6 @@ function normalizeArgs(rawArgs: string[]): string[] {
 
 async function main(): Promise<void> {
   const argv = normalizeArgs(process.argv.slice(2));
-
-  // Apply any staged update BEFORE dispatching to subcommand. If the swap
-  // succeeds the function re-execs the new binary and never returns.
-  // Skip for install/update/rollback so we don't clobber an in-flight
-  // lifecycle command.
-  const subcommand = argv.find((a) => !a.startsWith("-")) ?? "view";
-  if (!SKIP_AUTO_APPLY.has(subcommand)) {
-    const result = await applyPendingUpdate();
-    if (result === "applied") return;
-  }
 
   const cli = await createCLI({
     name: "ndea",

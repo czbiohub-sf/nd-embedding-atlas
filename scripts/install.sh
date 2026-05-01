@@ -1,13 +1,21 @@
 #!/usr/bin/env sh
 # ndea installer — downloads a released binary, verifies its SHA-256
-# checksum, and drops it into $NDEA_BIN_DIR (default: $HOME/.local/bin).
+# checksum, places it in the versions tree, and creates a symlink on PATH.
+#
+# Layout:
+#   $NDEA_HOME/versions/<tag>/ndea     — installed binary (one per version)
+#   $NDEA_BIN_DIR/ndea                 — symlink to active versions/<tag>/ndea
+#
+# `ndea update` uses the same layout, so installs and updates share one
+# atomic-symlink-swap mechanism. Old versions stay on disk for `ndea rollback`.
 #
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/czbiohub-sf/nd-embedding-atlas/main/scripts/install.sh | sh
 #
 # Environment variables:
 #   NDEA_VERSION   release tag to install (default: latest)
-#   NDEA_BIN_DIR   install destination   (default: $HOME/.local/bin)
+#   NDEA_BIN_DIR   PATH directory holding the symlink (default: $HOME/.local/bin)
+#   NDEA_HOME      state root for versions/ + locks/ (default: $HOME/.ndea)
 #   NDEA_CHANNEL   release channel: stable | pre-release | canary (default: stable)
 #                  - stable: most recent semver-tagged release
 #                  - pre-release: latest active alpha / beta / rc (resolved via manifest.json)
@@ -21,6 +29,7 @@ REPO="czbiohub-sf/nd-embedding-atlas"
 VERSION="${NDEA_VERSION:-latest}"
 CHANNEL="${NDEA_CHANNEL:-stable}"
 DEST="${NDEA_BIN_DIR:-$HOME/.local/bin}"
+NDEA_HOME_DIR="${NDEA_HOME:-$HOME/.ndea}"
 
 case "$CHANNEL" in
     stable | latest | pre-release | canary) ;;
@@ -106,13 +115,48 @@ log "Verifying checksum"
 ok "checksum OK"
 
 # --- Install --------------------------------------------------------------
+# Resolve version tag for the versions directory. `latest` and `canary`
+# don't have a deterministic tag at this point in the script — we read
+# the GitHub redirect / use the channel name as the directory name.
+case "$VERSION" in
+    latest)
+        # Resolve `latest` to its actual tag by following the release redirect.
+        # `curl -sLo /dev/null -w '%{url_effective}'` returns the final URL,
+        # which contains the resolved tag in /releases/tag/<tag>.
+        resolved=$(curl -fsSLo /dev/null -w '%{url_effective}' --proto '=https' --tlsv1.2 \
+            "https://github.com/${REPO}/releases/latest" 2>/dev/null \
+            | sed -n 's|.*/releases/tag/\([^/?#]*\).*|\1|p')
+        version_tag="${resolved:-$VERSION}"
+        ;;
+    *)
+        version_tag="$VERSION"
+        ;;
+esac
+[ "$CHANNEL" = "canary" ] && version_tag="canary"
+
+versions_dir="$NDEA_HOME_DIR/versions/$version_tag"
+target_bin="$versions_dir/ndea"
+
+mkdir -p "$versions_dir" || die "cannot create $versions_dir"
 mkdir -p "$DEST" || die "cannot create $DEST"
-if [ -e "$DEST/ndea" ]; then
-    log "Existing ndea at $DEST/ndea will be replaced"
-fi
+
 chmod +x "$tmp/$artifact"
-mv "$tmp/$artifact" "$DEST/ndea" || die "cannot write $DEST/ndea (permission?)"
-ok "Installed ndea to $DEST/ndea"
+mv "$tmp/$artifact" "$target_bin" || die "cannot write $target_bin (permission?)"
+ok "Installed binary to $target_bin"
+
+# Atomic symlink swap: write to a sibling tmp name and rename(2) over the
+# live link. POSIX rename is atomic for both files and symlinks; the swap
+# survives a crash of this script with no torn state.
+link="$DEST/ndea"
+tmp_link="${link}.tmp"
+rm -f "$tmp_link"
+ln -s "$target_bin" "$tmp_link" || die "cannot create symlink at $tmp_link"
+mv -f "$tmp_link" "$link" || die "cannot move symlink into place at $link"
+ok "Linked $link → $target_bin"
+
+# Record the active version for `ndea --version` / diagnostics.
+mkdir -p "$NDEA_HOME_DIR"
+printf '%s\n' "$version_tag" > "$NDEA_HOME_DIR/current-version" 2>/dev/null || true
 
 # --- PATH guidance (shell-aware) ------------------------------------------
 case ":$PATH:" in

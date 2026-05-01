@@ -1,6 +1,13 @@
 /**
  * State-directory + binary-path helpers shared across install / update /
- * rollback / startup pending-update check.
+ * rollback.
+ *
+ * Layout:
+ *   ~/.ndea/                               — state root (override via NDEA_HOME)
+ *   ~/.ndea/versions/<tag>/ndea            — installed binaries, one per version
+ *   ~/.ndea/current-version                — plain-text pointer (tag + sha256)
+ *   ~/.ndea/locks/install.lock             — install/update mutex
+ *   $NDEA_BIN_DIR/ndea                     — symlink to active versions/<tag>/ndea
  */
 
 import { homedir } from "node:os";
@@ -24,6 +31,21 @@ export function stateDir(): string {
   return resolve(resolveHome(), ".ndea");
 }
 
+/** `~/.ndea/versions` — root of the installed-binaries tree. */
+export function versionsDir(): string {
+  return resolve(stateDir(), "versions");
+}
+
+/** `~/.ndea/versions/<tag>` — directory holding one installed binary. */
+export function versionDir(tag: string): string {
+  return resolve(versionsDir(), tag);
+}
+
+/** `~/.ndea/versions/<tag>/ndea` — the binary file inside a version dir. */
+export function versionedBinaryPath(tag: string): string {
+  return resolve(versionDir(tag), "ndea");
+}
+
 /** `~/.ndea/locks` — flock directory for install/update mutex. */
 export function locksDir(): string {
   return resolve(stateDir(), "locks");
@@ -42,11 +64,6 @@ export function installLockPath(): string {
 /** `~/.ndea/current-version` — plain-text file with the installed tag + checksum. */
 export function currentVersionPath(): string {
   return resolve(stateDir(), "current-version");
-}
-
-/** `~/.ndea/pending-update` — JSON marker pointing at a staged `.pending` binary. */
-export function pendingUpdateMarkerPath(): string {
-  return resolve(stateDir(), "pending-update");
 }
 
 /**

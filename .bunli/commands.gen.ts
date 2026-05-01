@@ -21,14 +21,14 @@ const modules: Record<GeneratedNames, Command<any>> = {
 const metadata: Record<GeneratedNames, GeneratedCommandMeta> = {
   'rollback': {
       name: 'rollback',
-      description: 'Restore the previous ndea binary from <self>.bak',
+      description: 'Switch the active ndea binary to the previous installed version',
       path: './src/cli/commands/rollback'
     },
   'update': {
       name: 'update',
-      description: 'Download the latest ndea release and stage it for next launch',
+      description: 'Download the latest ndea release and switch to it',
       options: {
-        'force': { type: 'z.coerce.boolean.default', required: true, hasDefault: true, default: false, description: 'Update even when already on the target version', schema: {"type":"zod","method":"default","args":[{"type":"unknown","raw":{"type":"BooleanLiteral","start":1312,"end":1317,"loc":{"start":{"line":30,"column":45,"index":1312},"end":{"line":30,"column":50,"index":1317}},"value":false}}]}, validator: '(val) => true' },
+        'force': { type: 'z.coerce.boolean.default', required: true, hasDefault: true, default: false, description: 'Update even when already on the target version', schema: {"type":"zod","method":"default","args":[{"type":"unknown","raw":{"type":"BooleanLiteral","start":1317,"end":1322,"loc":{"start":{"line":36,"column":45,"index":1317},"end":{"line":36,"column":50,"index":1322}},"value":false}}]}, validator: '(val) => true' },
         'channel': { type: 'z.enum.optional', required: false, hasDefault: false, schema: {"type":"zod","method":"optional","args":[]}, validator: '(val) => true' }
       },
       path: './src/cli/commands/update'
