@@ -28,38 +28,38 @@ Downloads a checksum-verified native binary (~80 MB) and drops it into `$HOME/.l
 
 Environment variables:
 
-| Variable       | Default            | Notes                                             |
-| -------------- | ------------------ | ------------------------------------------------- |
-| `NDEA_VERSION` | `latest`           | Release tag (e.g. `v0.2.0`).                      |
-| `NDEA_CHANNEL` | `stable`           | `stable`, `rc`, or `canary` — see Channels below. |
-| `NDEA_BIN_DIR` | `$HOME/.local/bin` | Install destination.                              |
+| Variable       | Default            | Notes                                                      |
+| -------------- | ------------------ | ---------------------------------------------------------- |
+| `NDEA_VERSION` | `latest`           | Release tag (e.g. `v0.2.0`).                               |
+| `NDEA_CHANNEL` | `stable`           | `stable`, `pre-release`, or `canary` — see Channels below. |
+| `NDEA_BIN_DIR` | `$HOME/.local/bin` | Install destination.                                       |
 
 Example: `curl -fsSL .../install.sh | NDEA_VERSION=v0.2.0 NDEA_BIN_DIR=/usr/local/bin sh`.
 
 **Channels:**
 
 - **`stable`** (default) — the latest tagged release (`v0.1.0`, `v0.2.0`, …). Hand-cut.
-- **`canary`** — rolling pre-release rebuilt on every push to `main`. Bleeding edge; expect breakage.
-- **`rc`** — latest active release candidate (`v0.1.0-rc.1`, `v0.1.0-rc.2`, …). Cut manually before a stable release; absent between RCs.
+- **`canary`** — rolling pre-release rebuilt on every push to `main`. Tracks the head of development.
+- **`pre-release`** — latest active alpha / beta / release candidate (`v0.1.0-alpha.1`, `v0.1.0-beta.2`, `v0.1.0-rc.1`, …). Cut manually ahead of a stable release; absent between cuts.
 
 ```bash
 # canary (rolling)
 curl -fsSL https://raw.githubusercontent.com/czbiohub-sf/nd-embedding-atlas/main/scripts/install.sh \
   | NDEA_CHANNEL=canary sh
 
-# specific RC by tag (works for any tag — alpha/beta/rc/dev)
+# specific pre-release by tag (any -alpha / -beta / -rc / -dev tag)
 curl -fsSL .../install.sh | NDEA_VERSION=v0.1.0-rc.1 sh
 ```
 
-Self-update via `ndea update --channel <stable|rc|canary>`. Roll back a bad
+Self-update via `ndea update --channel <stable|pre-release|canary>`. Roll back a bad
 update with `ndea rollback`.
 
 ### Update
 
 ```bash
 ndea update                       # latest stable
-ndea update --channel rc          # latest release candidate (when active)
-ndea update --channel canary      # bleeding edge (rebuilt on every push to main)
+ndea update --channel pre-release # latest alpha / beta / rc (when active)
+ndea update --channel canary      # rolling, rebuilt on every push to main
 ndea rollback                     # restore the previous binary
 ```
 
