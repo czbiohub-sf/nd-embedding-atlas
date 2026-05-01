@@ -1,20 +1,16 @@
 #!/usr/bin/env bash
 # Compile the platform-specific ndea binary with embedded frontend assets.
 #
-# Shared by release.yml + canary.yml. The frontend is built once per job
-# (via `vp build`); this script then enumerates dist/frontend/** and
-# passes each file as an extra entrypoint to `bun build --compile`.
-# Bun embeds those into $bunfs alongside the main entry.
+# Shared by release.yml + canary.yml. Delegates to scripts/build.ts, which
+# (unlike the prior inline approach) embeds dist/frontend/** via a generated
+# `import … with { type: "file" }` manifest. Passing binary assets like
+# .woff2 to `bun build --compile` directly crashes Bun with
+# "Internal error: missing asset file"; the manifest pattern is the
+# documented escape hatch.
 #
 # Required env:
 #   TARGET   — bun --target value, e.g. bun-darwin-arm64, bun-linux-x64
 #   ARTIFACT — output filename, e.g. ndea-darwin-arm64
-#
-# `--minify` shrinks unused code paths. `--bytecode` is intentionally
-# omitted: @opentui/core (transitive via @bunli/runtime) emits top-level
-# `await` that Bun's bytecode pre-compiler rejects. Skipping bytecode
-# costs ~10ms startup parsing — irrelevant for a CLI that goes on to
-# boot a server.
 set -euo pipefail
 
 : "${TARGET:?TARGET env var is required (bun --target)}"
@@ -22,12 +18,9 @@ set -euo pipefail
 
 mkdir -p dist
 
-# Enumerate frontend assets for embedding in the single-file binary.
-mapfile -t frontend_files < <(find dist/frontend -type f | sort)
+# `--skip-frontend` because the workflow already ran `vp build` in a
+# preceding step; re-running here would just be slower.
+bun run scripts/build.ts "--target=${TARGET}" --skip-frontend
 
-bun build ./src/cli/index.ts \
-    --compile \
-    --minify \
-    "--target=${TARGET}" \
-    "--outfile=dist/${ARTIFACT}" \
-    "${frontend_files[@]}"
+# scripts/build.ts hardcodes outfile=dist/ndea; rename for the matrix.
+mv "dist/ndea" "dist/${ARTIFACT}"
