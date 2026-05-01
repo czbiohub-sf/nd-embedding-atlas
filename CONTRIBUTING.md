@@ -5,8 +5,6 @@
 - **[Bun](https://bun.com)** — runtime + package manager. The version pinned in `package.json`'s `packageManager` field will be used by CI; locally any matching major works.
 - **[Vite+](https://viteplus.dev/)** (`vp`) — unified frontend toolchain (build, lint, fmt, dev). Install once globally per their setup; `vp` then drives every dev workflow in this repo.
 
-That's it — no Python, no pnpm, no uv, no separate Node manager. `vp env` handles the Node version automatically.
-
 ## Setup
 
 ```bash
