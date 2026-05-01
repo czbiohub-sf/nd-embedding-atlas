@@ -98,7 +98,7 @@ describe("ObsmSliceLoader — zarr fixture", () => {
 
 describe("ObsmSliceLoader — multi-dataset concat", () => {
   /** Minimal DatasetHandle stub that returns synthetic columns. */
-  function makeStub(name: string, nObs: number, width: number, baseValue: number): DatasetHandle {
+  function makeStub(_name: string, nObs: number, width: number, baseValue: number): DatasetHandle {
     return {
       kind: "anndata",
       nObs,
