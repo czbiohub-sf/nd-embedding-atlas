@@ -55,8 +55,8 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
-      pages: write          # deploy to the Pages site
-      id-token: write       # OIDC token for actions/deploy-pages
+      pages: write # deploy to the Pages site
+      id-token: write # OIDC token for actions/deploy-pages
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
