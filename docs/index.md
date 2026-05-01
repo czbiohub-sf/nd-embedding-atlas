@@ -77,6 +77,7 @@ The viewer ships:
 
 ## What's next?
 
+- [CLI reference](cli.md) — every subcommand, flag, env var, and channel
 - [Preparing your data](preparing-your-data.md) — OME-Zarr layout, sharding, pyramids
 - [Contributing](contributing.md) — dev setup, architecture, release flow
 - [WebGPU on HPC](webgpu-hpc-setup.md) — Chrome flags for HPC environments
