@@ -36,21 +36,8 @@ jobs:
         with:
           persist-credentials: false
 
-      # Fail loudly if the pushed tag does not match package.json version.
-      # Guards against "tag pushed without running scripts/sync-version.ts".
       - name: Verify tag matches package.json version
-        shell: bash
-        run: |
-          set -euo pipefail
-          tag=$(git describe --tags --exact-match)
-          pkg_version=$(node -p "require('./package.json').version")
-          expected="v${pkg_version}"
-          if [ "$tag" != "$expected" ]; then
-            echo "::error::Tag ($tag) does not match package.json version ($expected)"
-            echo "Run 'bun run scripts/sync-version.ts' + commit before tagging."
-            exit 1
-          fi
-          echo "Tag $tag matches package.json $expected"
+        run: bash .github/scripts/verify-tag-version.sh
 
       # `no-cache: true` — release builds run on tag push and must not load
       # a `~/.bun/install/cache` populated by an earlier PR. Mitigates the
@@ -69,20 +56,10 @@ jobs:
         run: vp build
 
       - name: Compile binary (native — duckdb.node embeds here)
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p dist
-          # Enumerate frontend assets for embedding in the single-file binary
-          FRONTEND_FILES=$(find dist/frontend -type f | sort)
-          # shellcheck disable=SC2086
-          bun build ./src/cli/index.ts \
-            --compile \
-            --bytecode \
-            --minify \
-            --target=${{ matrix.target }} \
-            --outfile dist/${{ matrix.artifact }} \
-            $FRONTEND_FILES
+        env:
+          TARGET: ${{ matrix.target }}
+          ARTIFACT: ${{ matrix.artifact }}
+        run: bash .github/scripts/build-binary.sh
 
       - name: Smoke test
         run: ./dist/${{ matrix.artifact }} --version
@@ -92,16 +69,9 @@ jobs:
         run: ls -lh dist/${{ matrix.artifact }}
 
       - name: Per-artifact SHA256 checksum
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd dist
-          if command -v sha256sum >/dev/null 2>&1; then
-            sha256sum "${{ matrix.artifact }}" > "${{ matrix.artifact }}.sha256"
-          else
-            shasum -a 256 "${{ matrix.artifact }}" > "${{ matrix.artifact }}.sha256"
-          fi
-          cat "${{ matrix.artifact }}.sha256"
+        env:
+          ARTIFACT: ${{ matrix.artifact }}
+        run: bash .github/scripts/sha256-artifact.sh
 
       - uses: actions/upload-artifact@v7
         with:
@@ -125,15 +95,7 @@ jobs:
           merge-multiple: true
 
       - name: Combined SHA256SUMS manifest
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd dist
-          ls -lh
-          # Exclude per-artifact *.sha256 files from the combined manifest
-          shasum -a 256 ndea-* | grep -v '\.sha256$' > SHA256SUMS
-          echo "---"
-          cat SHA256SUMS
+        run: bash .github/scripts/sha256sums-combined.sh
 
       # Tag-pattern auto-classification: semver pre-release identifiers are
       # always preceded by a `-` (e.g. v0.1.0-rc.1, v0.1.0-beta.2,
@@ -195,17 +157,9 @@ jobs:
           persist-credentials: false
 
       - name: Update manifest.json["rc"]
-        shell: bash
         env:
           NEW_TAG: ${{ github.ref_name }}
-        run: |
-          set -euo pipefail
-          # jq is preinstalled on ubuntu-latest runners.
-          tmp=$(mktemp)
-          jq --arg tag "$NEW_TAG" '.channels.rc = $tag' manifest.json > "$tmp"
-          mv "$tmp" manifest.json
-          echo "Updated manifest.json:"
-          cat manifest.json
+        run: bash .github/scripts/bump-manifest-rc.sh
 
       # Opens (or updates) a PR against main with the manifest change.
       # Idempotent: re-running on an already-bumped manifest is a no-op.
