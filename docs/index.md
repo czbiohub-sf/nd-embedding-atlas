@@ -57,15 +57,22 @@ git clone https://github.com/czbiohub-sf/ome-atlas-test-data.git ../ome-atlas-te
 
 ```bash
 # Single AnnData zarr store
-ndea path/to/data.zarr
+ndea view path/to/data.zarr
 
 # Multiple AnnData stores opened side-by-side
-ndea path/to/dataset_a.zarr path/to/dataset_b.zarr
+ndea view path/to/dataset_a.zarr path/to/dataset_b.zarr
 
 # Project config (the only way to pair an AnnData store with an OME-Zarr plate
 # for image crops on hover, configure channels, set per-dataset options, etc.)
-ndea path/to/config.yaml
+ndea view path/to/config.yaml
 ```
+
+!!! tip "Shorthand"
+
+    `view` is the default subcommand, so the leading `view` is optional —
+    `ndea path/to/data.zarr` works the same as `ndea view path/to/data.zarr`.
+    The explicit form is documented above to keep CLI examples uniform with
+    the other subcommands (`update`, `rollback`, `completions`, …).
 
 Then open Chrome or Edge at `http://localhost:5055`.
 
