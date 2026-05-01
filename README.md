@@ -26,7 +26,7 @@ First run is ~45 s (Bun clones the repo, installs deps, and builds the frontend)
 curl -fsSL https://raw.githubusercontent.com/czbiohub-sf/nd-embedding-atlas/main/scripts/install.sh | sh
 ```
 
-Downloads a checksum-verified native binary (~80 MB) and drops it into `$HOME/.local/bin`. No Bun required.
+Downloads a checksum-verified native binary (~80 MB) and drops it into `$HOME/.local/bin`.
 
 Environment variables:
 
@@ -74,9 +74,6 @@ source <(ndea completions zsh)
 
 # fish — drop into the completions dir
 ndea completions fish > ~/.config/fish/completions/ndea.fish
-
-# powershell
-ndea completions powershell | Out-String | Invoke-Expression
 ```
 
 The update is staged as `<self>.pending` and swapped on next launch (avoids

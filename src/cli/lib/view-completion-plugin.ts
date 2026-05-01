@@ -37,7 +37,7 @@ const FILTER_FILE_EXT = 1 << 3;
 /** Extensions matched against path components by every supported shell. */
 const VIEW_POSITIONAL_EXTENSIONS = ["zarr", "yaml", "yml"] as const;
 
-const SHELL_NAMES = new Set(["bash", "zsh", "fish", "powershell"]);
+const SHELL_NAMES = new Set(["bash", "zsh", "fish"]);
 
 export const viewCompletionPlugin = createPlugin({
   name: "ndea-view-completion",
