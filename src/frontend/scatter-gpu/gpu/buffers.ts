@@ -10,11 +10,11 @@ const DEFAULTS = {
   pointRadius: 0.002,
   selectionDimFactor: 0.08,
   /**
-   * Default per-point alpha multiplier. With Path A's additive blending,
-   * 0.7 lets a single point read clearly while leaving headroom for
-   * overlap accumulation that tone mapping then rolls off.
+   * Default per-point alpha multiplier — pinned to 1.0 for solid markers.
+   * Lower values are useful when overdraw should fade in via additive
+   * blending; users opt in via the dev-tools slider when needed.
    */
-  pointOpacity: 0.7,
+  pointOpacity: 1.0,
 } as const;
 
 export function createUniforms(root: TgpuRoot, aspectRatio: number, renderConfig?: RenderConfig) {
@@ -35,7 +35,11 @@ export function createUniforms(root: TgpuRoot, aspectRatio: number, renderConfig
   // alpha multiplier, picking uses it as a falloff exponent — both work in
   // the [0.05, 1.0] opacity range without tuning.
   const sharpnessUniform = root.createUniform(d.f32, renderConfig?.pointOpacity ?? DEFAULTS.pointOpacity);
-  return { paramsUniform, viewUniform, selectionModeUniform, filterHideUniform, sharpnessUniform };
+  // Minimum NDC quad half-extent — keeps point markers above ~1.5 device
+  // pixels at any zoom so the fragment-shader fwidth AA stays valid.
+  // Initialised to 0; orchestrator writes a real value on first resize.
+  const pixelFloorUniform = root.createUniform(d.f32, 0);
+  return { paramsUniform, viewUniform, selectionModeUniform, filterHideUniform, sharpnessUniform, pixelFloorUniform };
 }
 
 export type ScatterUniforms = ReturnType<typeof createUniforms>;

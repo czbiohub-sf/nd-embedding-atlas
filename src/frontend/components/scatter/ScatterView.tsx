@@ -346,8 +346,6 @@ export function ScatterView({
       const s = renderSettingsStore.state;
       hostRef.current?.setHdrSettings({
         toneMapping: s.toneMapping,
-        bloomStrength: s.bloomStrength,
-        bloomThreshold: s.bloomThreshold,
         exposure: s.exposure,
       });
     }
@@ -440,8 +438,6 @@ export function ScatterView({
       hostRef.current?.setBlendMode(s.blendMode);
       hostRef.current?.setHdrSettings({
         toneMapping: s.toneMapping,
-        bloomStrength: s.bloomStrength,
-        bloomThreshold: s.bloomThreshold,
         exposure: s.exposure,
       });
     });

@@ -37,8 +37,18 @@ export async function createScatterplot(
   const referenceCount = 50_000;
   const adaptiveScale = Math.max(0.3, Math.min(1.5, Math.sqrt(referenceCount / Math.max(1, data.numCells))));
 
+  // Minimum on-screen point half-size, in device pixels. Below this the
+  // SDF disk's fwidth-based AA degrades to "looks like a square."
+  const MIN_POINT_PIXEL_HALF = 1.5;
+
   const uniforms = createUniforms(root, canvas.width / canvas.height, config?.render);
   uniforms.paramsUniform.write(d.vec4f(pointRadius, canvas.width / canvas.height, selectionDimFactor, adaptiveScale));
+  // Initial pixel floor — recomputed on every resize.
+  {
+    const dpr = window.devicePixelRatio || 1;
+    const gpuH = Math.max(1, Math.floor(canvas.height * dpr));
+    uniforms.pixelFloorUniform.write((2 * MIN_POINT_PIXEL_HALF) / gpuH);
+  }
   const buffers = createBuffers(root, data.numCells, data.categoryNames.length);
   uploadData(root, device, buffers, data, config?.colorMapper, config?.palette);
   const tUpload = performance.now();
@@ -62,9 +72,8 @@ export async function createScatterplot(
   const backgroundColor = config?.render?.backgroundColor ?? ([0, 0, 0, 0] as [number, number, number, number]);
 
   // HDR pipeline — scatter draws into an rgba16float target instead of the
-  // canvas swap chain. The HDR pass then runs brightpass → blur → tone map
-  // and writes to the canvas. Lets dense overlapping points actually
-  // accumulate above 1.0 and bloom + AgX reshape the response curve.
+  // canvas swap chain. The HDR pass then tone-maps to the canvas. Lets dense
+  // overlapping points accumulate above 1.0 before the curve clips.
   const hdr = createHdrPipeline(device, format, canvas.width || 1, canvas.height || 1);
 
   const mainVertex = createVertexShader(uniforms);
@@ -273,13 +282,13 @@ export async function createScatterplot(
       // Guard against 0-size canvas (hidden/collapsed Dockview panel)
       if (canvas.width === 0 || canvas.height === 0) return;
       // Single encoder, single submit — cull → compositor → scatter (HDR) →
-      // brightpass → blur → tonemap (canvas) in one batch.
+      // tonemap (canvas) in one batch.
       const encoder = device.createCommandEncoder();
       culling.dispatchCulling(viewVersion, encoder);
       compositor.dispatchIfDirty(encoder);
       // Scatter writes into the HDR target.
       render(hdr.hdrView(), data.numCells, "clear", encoder);
-      // Brightpass + blur + tonemap composites HDR + bloom into the canvas.
+      // Tone-map composites HDR into the canvas.
       hdr.composite(context.getCurrentTexture().createView(), encoder);
       device.queue.submit([encoder.finish()]);
       // Conservatively invalidate the pick buffer on every render. Picks
@@ -406,15 +415,15 @@ export async function createScatterplot(
   }
 
   /**
-   * Resize every render-target-bearing subsystem in one call. Currently
-   * just the pick buffer; future passes (HDR target, bloom mip chain) hook
-   * in here. Adaptive-DPR (#4, deferred) plugs into this single seam.
+   * Resize every render-target-bearing subsystem in one call. Pick buffer +
+   * HDR target. Adaptive-DPR (#4, deferred) plugs into this single seam.
    */
   function resizeAll(width: number, height: number) {
     const dpr = window.devicePixelRatio || 1;
-    const gpuW = Math.floor(width * dpr);
-    const gpuH = Math.floor(height * dpr);
+    const gpuW = Math.max(1, Math.floor(width * dpr));
+    const gpuH = Math.max(1, Math.floor(height * dpr));
     uniforms.paramsUniform.write(d.vec4f(pointRadius, gpuW / gpuH, selectionDimFactor, adaptiveScale));
+    uniforms.pixelFloorUniform.write((2 * MIN_POINT_PIXEL_HALF) / gpuH);
     interaction.resize();
     picking.resize();
     hdr.resize(gpuW, gpuH);

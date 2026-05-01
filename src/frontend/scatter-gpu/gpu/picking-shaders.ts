@@ -30,6 +30,7 @@
  *   binding 2: selectionModeUniform (f32)
  *   binding 3: filterHideUniform (u32)
  *   binding 4: sharpnessUniform (f32)
+ *   binding 5: pixelFloorUniform (f32)          — min NDC quad half-extent
  */
 export const PICK_VERTEX_WGSL = /* wgsl */ `
 struct Params { v: vec4<f32> };
@@ -39,6 +40,7 @@ struct View   { v: vec4<f32> };
 @group(0) @binding(2) var<uniform> selMode: f32;
 @group(0) @binding(3) var<uniform> filterHide: u32;
 @group(0) @binding(4) var<uniform> sharpness: f32;
+@group(0) @binding(5) var<uniform> pixelFloor: f32;
 
 struct VsIn {
   @location(0) quadPos:          vec2<f32>,
@@ -86,7 +88,11 @@ fn main(in: VsIn) -> VsOut {
   // Tighter pick disk: 0.5x the visual size keeps picking precise to the
   // brightest core of overlapping points (luxar uses the same factor).
   let pickScale = 0.5;
-  let zoomedRadius = radius * sqrt(zoom) * pickVis * adaptiveScale * sCompensation * pickScale;
+  let baseRadius = radius * sqrt(zoom) * adaptiveScale * sCompensation * pickScale;
+  // Mirror the visual shader's pixel floor so picking remains reliable
+  // when the visual quads have been clamped up. Visibility multiplied
+  // afterward so culled points still collapse.
+  let zoomedRadius = max(baseRadius, pixelFloor) * pickVis;
 
   let scaledQuad = vec2<f32>(in.quadPos.x * zoomedRadius, in.quadPos.y * zoomedRadius);
 

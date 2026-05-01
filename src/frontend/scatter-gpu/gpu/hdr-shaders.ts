@@ -1,17 +1,14 @@
 /**
- * HDR + bloom + tone mapping shaders.
+ * HDR + tone mapping shaders.
  *
  * Inputs:
  *   - HDR scene texture (rgba16float)
  *   - Sampler
- *   - ToneMap config uniform: { exposure, bloomStrength, bloomThreshold, mode }
+ *   - ToneMap config uniform: { exposure, mode }
  *
- * Three fullscreen passes:
- *   1. brightpass — sample HDR, threshold + soft-knee, emit to bloom-mip-0
- *   2. blur       — separable two-tap blur in two passes (horizontal then
- *                   vertical) into a ping-pong texture
- *   3. tonemap    — sample HDR + bloom, exposure adjust, AgX/ACES/Reinhard
- *                   conversion, write to swap chain.
+ * One fullscreen pass:
+ *   tonemap — sample HDR, exposure adjust, AgX/ACES/Reinhard conversion,
+ *             write to swap chain.
  *
  * AgX implementation derived from the public-domain Filament / Three.js
  * port (Troy Sobotka). Constants embedded as `mat3x3<f32>` in the shader.
@@ -22,8 +19,9 @@ export const TONEMAP_NONE = 0;
 export const TONEMAP_REINHARD = 1;
 export const TONEMAP_ACES = 2;
 export const TONEMAP_AGX = 3;
+export const TONEMAP_NEUTRAL = 4;
 
-/** Fullscreen triangle vertex shader used by every HDR pass. */
+/** Fullscreen triangle vertex shader used by the HDR pass. */
 export const FULLSCREEN_VERTEX_WGSL = /* wgsl */ `
 struct VsOut {
   @builtin(position) position: vec4<f32>,
@@ -44,67 +42,8 @@ fn main(@builtin(vertex_index) vidx: u32) -> VsOut {
 `;
 
 /**
- * Brightpass: extract HDR pixels above the threshold with a soft knee, used
- * as input to the bloom blur. Output written to bloom mip 0 at half res.
- */
-export const BRIGHTPASS_FRAGMENT_WGSL = /* wgsl */ `
-struct ToneCfg {
-  exposure: f32,
-  bloomStrength: f32,
-  bloomThreshold: f32,
-  mode: u32,
-};
-@group(0) @binding(0) var hdrTex: texture_2d<f32>;
-@group(0) @binding(1) var samp: sampler;
-@group(0) @binding(2) var<uniform> cfg: ToneCfg;
-
-@fragment
-fn main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
-  let c = textureSample(hdrTex, samp, uv).rgb;
-  // Luminance (Rec. 709)
-  let lum = dot(c, vec3<f32>(0.2126, 0.7152, 0.0722));
-  // Soft knee: smooth transition over 0.5 wide window centered on threshold
-  let knee = 0.5;
-  let soft = clamp((lum - cfg.bloomThreshold + knee) / (2.0 * knee), 0.0, 1.0);
-  let weight = soft * soft * (3.0 - 2.0 * soft);
-  return vec4<f32>(c * weight, 1.0);
-}
-`;
-
-/**
- * Separable two-tap Gaussian-ish blur. `direction` selects horizontal (1,0)
- * or vertical (0,1) via the texelOffset uniform. Two passes per mip level.
- */
-export const BLUR_FRAGMENT_WGSL = /* wgsl */ `
-struct BlurCfg {
-  texelOffset: vec2<f32>,
-  pad: vec2<f32>,
-};
-@group(0) @binding(0) var srcTex: texture_2d<f32>;
-@group(0) @binding(1) var samp: sampler;
-@group(0) @binding(2) var<uniform> cfg: BlurCfg;
-
-@fragment
-fn main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
-  // 5-tap Gaussian (1, 2, 3, 2, 1) / 9 along the configured direction.
-  // Sample at fractional offsets so bilinear filtering combines pairs of
-  // taps for free (Kawase-style). 4 actual texture fetches per pass.
-  let off = cfg.texelOffset;
-  let w0 = 0.227027;
-  let w1 = 0.316216;
-  let w2 = 0.070270;
-  let s0 = textureSample(srcTex, samp, uv).rgb * w0;
-  let s1 = textureSample(srcTex, samp, uv + off * 1.3846153846).rgb * w1;
-  let s2 = textureSample(srcTex, samp, uv - off * 1.3846153846).rgb * w1;
-  let s3 = textureSample(srcTex, samp, uv + off * 3.2307692308).rgb * w2;
-  let s4 = textureSample(srcTex, samp, uv - off * 3.2307692308).rgb * w2;
-  return vec4<f32>(s0 + s1 + s2 + s3 + s4, 1.0);
-}
-`;
-
-/**
- * Final tone-map pass. Samples HDR + bloom, applies exposure, picks tone
- * mapper from `cfg.mode`, encodes sRGB on the way out.
+ * Tone-map pass. Samples HDR, applies exposure, picks tone mapper from
+ * `cfg.mode`, encodes sRGB on the way out.
  *
  * AgX implementation: input + output 3×3 matrices and a 7th-order
  * polynomial fit of the sigmoid section. Ported from the public-domain
@@ -113,19 +52,17 @@ fn main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
 export const TONEMAP_FRAGMENT_WGSL = /* wgsl */ `
 struct ToneCfg {
   exposure: f32,
-  bloomStrength: f32,
-  bloomThreshold: f32,
   mode: u32,
 };
 @group(0) @binding(0) var hdrTex: texture_2d<f32>;
-@group(0) @binding(1) var bloomTex: texture_2d<f32>;
-@group(0) @binding(2) var samp: sampler;
-@group(0) @binding(3) var<uniform> cfg: ToneCfg;
+@group(0) @binding(1) var samp: sampler;
+@group(0) @binding(2) var<uniform> cfg: ToneCfg;
 
 const MODE_NONE: u32 = 0u;
 const MODE_REINHARD: u32 = 1u;
 const MODE_ACES: u32 = 2u;
 const MODE_AGX: u32 = 3u;
+const MODE_NEUTRAL: u32 = 4u;
 
 // AgX input transform — REC.709 → AgX working space
 const AGX_IN = mat3x3<f32>(
@@ -182,6 +119,34 @@ fn tonemap_reinhard(c: vec3<f32>) -> vec3<f32> {
   return c / (vec3<f32>(1.0) + c);
 }
 
+// Khronos PBR Neutral tone mapper (glTF spec / three.js NeutralToneMapping).
+// Identity below ~0.76 luminance — preserves color identity exactly through
+// the entire low-/mid-tone range. Above the start-compression knee, peak
+// luminance is rolled off and a small chroma desaturation is applied so
+// extreme HDR clusters glow toward white instead of clipping. The right
+// pick for "HDR rolloff without bleaching" on categorical data.
+//   Reference: https://modelviewer.dev/examples/tone-mapping
+fn tonemap_neutral(c: vec3<f32>) -> vec3<f32> {
+  let startCompression = 0.8 - 0.04;
+  let desaturation = 0.15;
+
+  let x = min(c.r, min(c.g, c.b));
+  let offset = select(0.04, x - 6.25 * x * x, x < 0.08);
+  var color = c - vec3<f32>(offset);
+
+  let peak = max(color.r, max(color.g, color.b));
+  if (peak < startCompression) {
+    return color;
+  }
+
+  let d = 1.0 - startCompression;
+  let newPeak = 1.0 - d * d / (peak + d - startCompression);
+  color = color * (newPeak / peak);
+
+  let g = 1.0 - 1.0 / (desaturation * (peak - newPeak) + 1.0);
+  return mix(color, vec3<f32>(newPeak), g);
+}
+
 fn linear_to_srgb(c: vec3<f32>) -> vec3<f32> {
   let cutoff = vec3<f32>(0.0031308);
   let lo = c * 12.92;
@@ -191,10 +156,8 @@ fn linear_to_srgb(c: vec3<f32>) -> vec3<f32> {
 
 @fragment
 fn main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
-  let scene = textureSample(hdrTex, samp, uv).rgb;
-  let bloom = textureSample(bloomTex, samp, uv).rgb;
-  let combined = scene + bloom * cfg.bloomStrength;
-  let exposed = combined * exp2(cfg.exposure);
+  let sceneRgba = textureSample(hdrTex, samp, uv);
+  let exposed = sceneRgba.rgb * exp2(cfg.exposure);
 
   var mapped: vec3<f32>;
   if (cfg.mode == MODE_NONE) {
@@ -203,14 +166,18 @@ fn main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
     mapped = tonemap_reinhard(exposed);
   } else if (cfg.mode == MODE_ACES) {
     mapped = tonemap_aces(exposed);
-  } else {
-    // AgX. The polynomial+output transform already give a perceptually-
-    // calibrated curve; we still gamma-encode for sRGB display below.
+  } else if (cfg.mode == MODE_AGX) {
     mapped = tonemap_agx(exposed);
+  } else {
+    mapped = tonemap_neutral(exposed);
   }
 
   // Encode for sRGB display. Canvas is 'rgba8unorm' (no implicit gamma).
+  // Pass HDR alpha through (capped) so the swap chain respects untouched
+  // pixels — otherwise the CSS background can't show through under
+  // alphaMode: 'premultiplied' (light theme).
   let srgb = linear_to_srgb(mapped);
-  return vec4<f32>(srgb, 1.0);
+  let alpha = clamp(sceneRgba.a, 0.0, 1.0);
+  return vec4<f32>(srgb, alpha);
 }
 `;

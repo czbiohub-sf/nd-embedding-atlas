@@ -162,13 +162,8 @@ export interface ScatterplotHandle {
    * 1.0 a single point dominates, at 0.3 you need ~3 to saturate.
    */
   setPointOpacity(opacity: number): void;
-  /** Update HDR settings (tone mapping, bloom strength, exposure). */
-  setHdrSettings(settings: {
-    toneMapping?: "none" | "reinhard" | "aces" | "agx";
-    bloomStrength?: number;
-    bloomThreshold?: number;
-    exposure?: number;
-  }): void;
+  /** Update HDR settings (tone mapping, exposure). */
+  setHdrSettings(settings: { toneMapping?: "none" | "reinhard" | "aces" | "agx" | "neutral"; exposure?: number }): void;
   /**
    * Switch the scatter pipeline blend mode at runtime. All three variants
    * are pre-built at init, so this is a single-object-lookup swap with no

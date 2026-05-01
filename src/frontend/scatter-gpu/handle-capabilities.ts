@@ -46,13 +46,8 @@ export interface RenderCapability {
    * aggressively overlapping points sum under additive blending.
    */
   setPointOpacity(opacity: number): void;
-  /** Update HDR settings (tone mapping, bloom, exposure). */
-  setHdrSettings(settings: {
-    toneMapping?: "none" | "reinhard" | "aces" | "agx";
-    bloomStrength?: number;
-    bloomThreshold?: number;
-    exposure?: number;
-  }): void;
+  /** Update HDR settings (tone mapping, exposure). */
+  setHdrSettings(settings: { toneMapping?: "none" | "reinhard" | "aces" | "agx" | "neutral"; exposure?: number }): void;
   /** Switch scatter blend mode (additive / premultiplied / max). */
   setBlendMode(mode: "additive" | "premultiplied" | "max"): void;
 }

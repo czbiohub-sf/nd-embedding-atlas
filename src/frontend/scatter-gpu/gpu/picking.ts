@@ -100,6 +100,7 @@ export function createPickingSystem(
       { binding: 2, visibility: GPUShaderStage.VERTEX, buffer: { type: "uniform" } },
       { binding: 3, visibility: GPUShaderStage.VERTEX, buffer: { type: "uniform" } },
       { binding: 4, visibility: GPUShaderStage.VERTEX, buffer: { type: "uniform" } },
+      { binding: 5, visibility: GPUShaderStage.VERTEX, buffer: { type: "uniform" } },
     ],
   });
 
@@ -115,6 +116,7 @@ export function createPickingSystem(
       { binding: 2, resource: { buffer: root.unwrap(uniforms.selectionModeUniform.buffer) } },
       { binding: 3, resource: { buffer: root.unwrap(uniforms.filterHideUniform.buffer) } },
       { binding: 4, resource: { buffer: root.unwrap(uniforms.sharpnessUniform.buffer) } },
+      { binding: 5, resource: { buffer: root.unwrap(uniforms.pixelFloorUniform.buffer) } },
     ],
   });
 

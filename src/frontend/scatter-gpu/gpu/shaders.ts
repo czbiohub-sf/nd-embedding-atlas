@@ -24,7 +24,8 @@ const unpackColor = tgpu.fn([d.u32], d.vec4f)`
 // exponent.
 
 export function createVertexShader(uniforms: ScatterUniforms) {
-  const { paramsUniform, viewUniform, selectionModeUniform, filterHideUniform, sharpnessUniform } = uniforms;
+  const { paramsUniform, viewUniform, selectionModeUniform, filterHideUniform, sharpnessUniform, pixelFloorUniform } =
+    uniforms;
 
   return tgpu
     .vertexFn({
@@ -74,7 +75,13 @@ export function createVertexShader(uniforms: ScatterUniforms) {
       // Path A: forwarded as the per-point alpha multiplier (uniform still
       // named `sharpnessUniform` on the GPU; see buffers.ts comment).
       const pointOpacity = sharpnessUniform.$;
-      const zoomedRadius = radius * std.sqrt(zoom) * vis * adaptiveScale * clickedScale;
+      const baseRadius = radius * std.sqrt(zoom) * adaptiveScale * clickedScale;
+      // Floor the NDC quad half-extent at `pixelFloor` so the SDF disk's
+      // fwidth-based AA stays valid. Below the floor the AA window exceeds
+      // the quad and points read as squares. Visibility multiplied AFTER
+      // the floor so culled (vis=0) points still collapse to a degenerate
+      // quad.
+      const zoomedRadius = std.max(baseRadius, pixelFloorUniform.$) * vis;
       const scaledQuad = d.vec2f(input.quadPos.x * zoomedRadius, input.quadPos.y * zoomedRadius);
 
       const selDimFactor = params.z; // heavy dim (default 0.08)

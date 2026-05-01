@@ -2,22 +2,16 @@
  * RenderSettingsPlugin — dev tools panel for global render-quality knobs.
  *
  * Houses:
- *   - Point opacity slider (per-point alpha multiplier; 0.05 → 1.0, default 0.7)
- *   - Tone mapping selector (None / Reinhard / ACES / AgX, default AgX)
+ *   - Point opacity slider (per-point alpha multiplier; 0.05 → 1.0, default 1.0)
+ *   - Blend mode selector (additive / premultiplied / max)
+ *   - Tone mapping selector (None / Reinhard / ACES / AgX, default None)
  *   - Exposure slider (-3 → +3 stops)
- *   - Bloom strength + threshold sliders
  */
 
 import { useSelector } from "@tanstack/react-store";
 import {
   BLEND_MODE_DEFAULT,
   type BlendMode,
-  BLOOM_STRENGTH_DEFAULT,
-  BLOOM_STRENGTH_MAX,
-  BLOOM_STRENGTH_MIN,
-  BLOOM_THRESHOLD_DEFAULT,
-  BLOOM_THRESHOLD_MAX,
-  BLOOM_THRESHOLD_MIN,
   EXPOSURE_DEFAULT,
   EXPOSURE_MAX,
   EXPOSURE_MIN,
@@ -26,8 +20,6 @@ import {
   POINT_OPACITY_MIN,
   renderSettingsStore,
   setBlendMode,
-  setBloomStrength,
-  setBloomThreshold,
   setExposure,
   setPointOpacity,
   setToneMapping,
@@ -148,6 +140,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 const TONE_MAPPING_OPTIONS = [
   { value: "none", label: "None" },
+  { value: "neutral", label: "Neutral" },
   { value: "reinhard", label: "Reinhard" },
   { value: "aces", label: "ACES" },
   { value: "agx", label: "AgX" },
@@ -189,7 +182,7 @@ export function RenderSettingsPlugin() {
       <Section title="HDR + tone mapping">
         <SegmentedRow<ToneMapping>
           label="Tone mapping"
-          description="AgX = Filament/Three.js film-curve. ACES = UE4 fit. Reinhard = simple. None = clamp."
+          description="Neutral = Khronos PBR (preserves color, rolls off only HDR peaks). AgX = Filament film-curve (warm, desaturated). ACES = UE4 fit. Reinhard = simple. None = clamp."
           value={settings.toneMapping}
           options={TONE_MAPPING_OPTIONS}
           onChange={setToneMapping}
@@ -205,26 +198,6 @@ export function RenderSettingsPlugin() {
           defaultValue={EXPOSURE_DEFAULT}
           onChange={setExposure}
           formatValue={(v) => `${v >= 0 ? "+" : ""}${v.toFixed(2)} EV`}
-        />
-        <SliderRow
-          label="Bloom strength"
-          description="Mix amount of the blurred bright extract. 0 = off."
-          value={settings.bloomStrength}
-          min={BLOOM_STRENGTH_MIN}
-          max={BLOOM_STRENGTH_MAX}
-          step={0.01}
-          defaultValue={BLOOM_STRENGTH_DEFAULT}
-          onChange={setBloomStrength}
-        />
-        <SliderRow
-          label="Bloom threshold"
-          description="HDR luminance above which bloom is extracted. Higher = only the brightest cores glow."
-          value={settings.bloomThreshold}
-          min={BLOOM_THRESHOLD_MIN}
-          max={BLOOM_THRESHOLD_MAX}
-          step={0.05}
-          defaultValue={BLOOM_THRESHOLD_DEFAULT}
-          onChange={setBloomThreshold}
         />
       </Section>
     </div>
