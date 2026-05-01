@@ -24,7 +24,7 @@ src/
   index.ts            # Public API re-exports
   cli/                # CLI entry point
   protocol/           # Shared request/response zod schemas (client + server)
-  zarr/               # Vendored zarr I/O (AnnData, MuData, OME-Zarr)
+  zarr/               # Custom zarr I/O (AnnData, MuData, OME-Zarr)
     bun-store.ts      # BunFileStore — AsyncReadable backed by Bun.file
     anndata-class.ts  # AnnData public API (obs + var DataFrames + toDuckDB)
     data-frame.ts     # DataFrame surface over AnnDataFrame
@@ -46,7 +46,7 @@ src/
     stores/           # ActiveFilterStore, SelectionSyncStore, ViewSyncStore
     scatter-gpu/      # TypeGPU/WebGPU scatter renderer + hooks
     lib/              # mosaic-helpers, chart-spec, category-column, ws-client
-    ochre/            # Vendored ochre colormap library
+    ochre/            # Custom ochre colormap library
 ```
 
 ## Module dependency graph
@@ -167,7 +167,7 @@ import.meta.url)` must resolve in both dev and `bun build --compile`. Bun
 ## Key decisions
 
 - **Bun single binary** — zero-dependency distribution via `bun build --compile`.
-- **Vendored zarr I/O** — replaces Python anndata + zarr + dask.
+- **Custom zarr I/O** — built on `zarrita` + `flechette`; no anndata / dask runtime needed.
 - **Native DuckDB** (not WASM) — full speed, no 4 GB memory ceiling.
 - **Bun.serve** (no framework) — raw fetch handler, simple route dispatch.
 - **Custom React + Vite + TypeGPU frontend** — full control over WebGPU scatter.

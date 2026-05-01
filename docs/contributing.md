@@ -52,16 +52,16 @@ CI gates on `vp check` and the test suites (see `.github/workflows/ci.yml`).
 [Fallow](https://docs.fallow.tools/) is a static-analysis tool for TypeScript/JavaScript that flags dead code, duplication, complexity hotspots, and circular dependencies. Not a CI gate — run it on demand when working in an unfamiliar area or before opening a non-trivial PR.
 
 ```bash
-bunx fallow audit --changed-since main   # scoped to your branch's diff
-bunx fallow dead-code                    # unused files, exports, deps
-bunx fallow dupes                        # repeated code blocks
-bunx fallow health                       # cyclomatic / cognitive complexity
-bunx fallow fix --dry-run                # preview auto-fixes (delete unused exports etc.)
+vp run fallow audit --changed-since main   # scoped to your branch's diff
+vp run fallow dead-code                    # unused files, exports, deps
+vp run fallow dupes                        # repeated code blocks
+vp run fallow health                       # cyclomatic / cognitive complexity
+vp run fallow fix --dry-run                # preview auto-fixes (delete unused exports etc.)
 ```
 
 Good moments to run it:
 
-- **Before a non-trivial PR** — `fallow audit --changed-since main` returns a verdict on just the files you touched.
+- **Before a non-trivial PR** — `vp run fallow audit --changed-since main` returns a verdict on just the files you touched.
 - **After merging a large feature** — catches dead code, orphaned exports, or new duplication that the focused review missed.
 - **When picking up unfamiliar code** — `dead-code` and `health` give a quick picture of which files are load-bearing vs. detritus.
 
@@ -85,7 +85,7 @@ src/
   index.ts            # Public API re-exports
   cli/                # Bun-compiled CLI (bunli framework)
   protocol/           # Shared zod schemas (client + server contract)
-  zarr/               # Vendored zarr I/O — reads AnnData / MuData / OME-Zarr
+  zarr/               # Custom zarr I/O — reads AnnData / MuData / OME-Zarr
   server/             # Bun.serve HTTP + WebSocket server
     routes/           # Per-endpoint handlers
   frontend/           # React + Vite + Mosaic dashboard
@@ -93,7 +93,7 @@ src/
     dashboard/        # DashboardContext / Provider / Shell
     scatter-gpu/      # TypeGPU/WebGPU scatter renderer
     stores/           # TanStack Store singletons (selection, view, filter)
-    ochre/            # Vendored colormap library
+    ochre/            # Custom colormap library
 ```
 
 See [`AGENTS.md`](https://github.com/czbiohub-sf/nd-embedding-atlas/blob/main/AGENTS.md) for the canonical command catalogue, key abstractions, and gotchas.

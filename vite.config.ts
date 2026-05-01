@@ -309,6 +309,15 @@ export default defineConfig({
         command: "bunx bunli generate",
         cache: false,
       },
+
+      // Run the fallow code-health auditor. `vp run` forwards trailing
+      // args to the command, so `vp run fallow audit --changed-since
+      // main` invokes `bunx fallow audit --changed-since main`. Optional
+      // for contributors; not a CI gate. See docs/contributing.md.
+      fallow: {
+        command: "bunx fallow",
+        cache: false,
+      },
     },
   },
 
