@@ -71,11 +71,10 @@ datasets:
     plate_path: path/to/plate.zarr # optional — enables hover crops
 ```
 
-The viewer ships four panels:
+The viewer ships three panels:
 
 - **Embedding plot** — WebGPU scatter of the embedding space
 - **Data table** — sortable, cross-filtered with the scatter
-- **Charts** — distributions of obs columns
 - **OME-Zarr viewer** — image crops on hover (when `plate_path` is set)
 
 ## What's next?

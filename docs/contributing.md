@@ -89,7 +89,7 @@ src/
   server/             # Bun.serve HTTP + WebSocket server
     routes/           # Per-endpoint handlers
   frontend/           # React + Vite + Mosaic dashboard
-    components/       # Scatter, table, charts, toolbar, viewer panels
+    components/       # Scatter, table, toolbar, viewer panels
     dashboard/        # DashboardContext / Provider / Shell
     scatter-gpu/      # TypeGPU/WebGPU scatter renderer
     stores/           # TanStack Store singletons (selection, view, filter)
