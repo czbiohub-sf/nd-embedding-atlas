@@ -162,10 +162,17 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
+      # Inlined jq update — script lives on the rewrite branch but the
+      # checkout above pulls main, where the file doesn't exist yet.
       - name: Update manifest.json["pre-release"]
         env:
           NEW_TAG: ${{ github.ref_name }}
-        run: bash .github/scripts/bump-manifest-prerelease.sh
+        run: |
+          tmp=$(mktemp)
+          jq --arg tag "${NEW_TAG}" '.channels."pre-release" = $tag' manifest.json > "${tmp}"
+          mv "${tmp}" manifest.json
+          echo "Updated manifest.json:"
+          cat manifest.json
 
       # Opens (or updates) a PR against main with the manifest change.
       # Idempotent: re-running on an already-bumped manifest is a no-op.
