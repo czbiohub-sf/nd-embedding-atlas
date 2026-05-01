@@ -1,8 +1,6 @@
 # nd-embedding-atlas
 
-|          |                                                                                                                                                                            |
-| :------: | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
-| **Meta** | [![Hatch][badge-hatch]][link-hatch] [![uv][badge-uv]][link-uv] [![Ruff][badge-ruff]][link-ruff] [![prek][badge-prek]][link-prek] [![License][badge-license]][link-license] |
+[![CI][badge-ci]][link-ci] [![Canary][badge-canary]][link-canary] [![Release][badge-release]][link-release] [![Bun][badge-bun]][link-bun] [![License][badge-license]][link-license]
 
 An interactive browser-based dashboard that links high-dimensional AI embeddings to source 5D (TCZYX) image data for rapid exploration and annotation.
 
@@ -123,15 +121,15 @@ See the [changelog][].
 
 <!-- badges -->
 
-[badge-hatch]: https://img.shields.io/badge/%F0%9F%A5%9A-Hatch-4051b5.svg
-[badge-uv]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json
-[badge-ruff]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json
-[badge-prek]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/j178/prek/master/docs/assets/badge-v0.json
+[badge-ci]: https://github.com/czbiohub-sf/nd-embedding-atlas/actions/workflows/ci.yml/badge.svg?branch=main
+[badge-canary]: https://github.com/czbiohub-sf/nd-embedding-atlas/actions/workflows/canary.yml/badge.svg?branch=main
+[badge-release]: https://img.shields.io/github/v/release/czbiohub-sf/nd-embedding-atlas?label=release&color=blue
+[badge-bun]: https://img.shields.io/badge/Bun-1.x-000?logo=bun&logoColor=fbf0df
 [badge-license]: https://img.shields.io/badge/License-BSD--3--Clause-blue.svg
-[link-hatch]: https://github.com/pypa/hatch
-[link-uv]: https://github.com/astral-sh/uv
-[link-ruff]: https://github.com/astral-sh/ruff
-[link-prek]: https://github.com/j178/prek
+[link-ci]: https://github.com/czbiohub-sf/nd-embedding-atlas/actions/workflows/ci.yml
+[link-canary]: https://github.com/czbiohub-sf/nd-embedding-atlas/releases/tag/canary
+[link-release]: https://github.com/czbiohub-sf/nd-embedding-atlas/releases/latest
+[link-bun]: https://bun.com
 [link-license]: https://opensource.org/licenses/BSD-3-Clause
 
 <!-- links -->
