@@ -15,6 +15,8 @@ ndea [paths...]                                  # default — equivalent to `nd
 ndea view [paths...] [options]
 ndea update [options]
 ndea rollback
+ndea gc [options]
+ndea doctor [--check-network] [--strict]
 ndea completions <bash|zsh|fish>
 ndea complete -- <args...>                       # internal — called by completion scripts
 ndea --help | --version
@@ -76,6 +78,28 @@ Switch the active symlink to the previous installed version.
 
 Walks `~/.ndea/versions/`, finds the most-recently-modified entry that isn't currently active, and atomically repoints `$NDEA_BIN_DIR/ndea` to it. Run again to step further back. No options. Refuses to run uncompiled.
 
+## `ndea gc`
+
+Prune old installed versions from `~/.ndea/versions/`. The currently-active version (whatever the symlink points at) is always preserved.
+
+### Options
+
+| Option       | Type    | Default | Description                                       |
+| ------------ | ------- | ------- | ------------------------------------------------- |
+| `--keep <N>` | integer | `2`     | Number of versions to keep (active counts; min 1) |
+| `--all`      | boolean | `false` | Keep only the active version                      |
+
+## `ndea doctor`
+
+Diagnose the install. Prints binary path, symlink integrity, active version, installed versions with disk usage. Exit code 0 if healthy, 1 on hard anomalies (broken symlink, missing active binary).
+
+### Options
+
+| Option            | Type    | Default | Description                                                       |
+| ----------------- | ------- | ------- | ----------------------------------------------------------------- |
+| `--check-network` | boolean | `false` | Probe `manifest.json` reachability over the network (3 s timeout) |
+| `--strict`        | boolean | `false` | Treat warnings as errors (non-zero exit)                          |
+
 ## `ndea completions`
 
 Emit shell completion scripts.
@@ -101,16 +125,16 @@ ndea completions fish > ~/.config/fish/completions/ndea.fish
 
 ## Environment variables
 
-| Variable                   | Consumer               | Default        | Description                                                  |
-| -------------------------- | ---------------------- | -------------- | ------------------------------------------------------------ |
-| `NDEA_DATASET`             | `view`                 | unset          | Path forwarded as a positional when none is given            |
-| `NDEA_NO_OPEN`             | `view`                 | unset          | When `1`, equivalent to passing `--no-open`                  |
-| `NDEA_NO_STATIC`           | `view`                 | unset          | When `1`, equivalent to passing `--no-static`                |
-| `NDEA_CHANNEL`             | `update`, `install.sh` | `stable`       | Default release channel                                      |
-| `NDEA_VERSION`             | `install.sh`           | `latest`       | Pin first install to a specific tag (e.g. `v0.1.0-rc.1`)     |
-| `NDEA_BIN_DIR`             | `install`              | `~/.local/bin` | Install destination                                          |
-| `NDEA_HOME`                | all                    | `~/.ndea`      | State directory (logs, locks, backup, pending-update marker) |
-| `NDEA_DISABLE_AUTOUPDATER` | all                    | unset          | When `1`, the pending-update applier is skipped at startup   |
+| Variable               | Consumer               | Default        | Description                                               |
+| ---------------------- | ---------------------- | -------------- | --------------------------------------------------------- |
+| `NDEA_DATASET`         | `view`                 | unset          | Path forwarded as a positional when none is given         |
+| `NDEA_NO_OPEN`         | `view`                 | unset          | When `1`, equivalent to passing `--no-open`               |
+| `NDEA_NO_STATIC`       | `view`                 | unset          | When `1`, equivalent to passing `--no-static`             |
+| `NDEA_CHANNEL`         | `update`, `install.sh` | `stable`       | Default release channel                                   |
+| `NDEA_VERSION`         | `install.sh`           | `latest`       | Pin first install to a specific tag (e.g. `v0.1.0-rc.1`)  |
+| `NDEA_BIN_DIR`         | `install.sh`, `update` | `~/.local/bin` | Directory holding the symlink that's on PATH              |
+| `NDEA_HOME`            | all                    | `~/.ndea`      | State root (versions tree, locks, current-version)        |
+| `NDEA_DISABLE_UPDATES` | `update`, `rollback`   | unset          | When `1`, blocks both update and rollback (sysadmin lock) |
 
 ## Release channels
 

@@ -4,21 +4,43 @@
 import type { Command, CLI, GeneratedOptionMeta, RegisteredCommands, CommandOptions, GeneratedCommandMeta } from '@bunli/core'
 import { createGeneratedHelpers, registerGeneratedStore } from '@bunli/core'
 
+import Doctor from '../src/cli/commands/doctor.js'
+import Gc from '../src/cli/commands/gc.js'
 import Rollback from '../src/cli/commands/rollback.js'
 import Update from '../src/cli/commands/update.js'
 import View from '../src/cli/commands/view.js'
 
 // Narrow list of command names to avoid typeof-cycles in types
-const names = ['rollback', 'update', 'view'] as const
+const names = ['doctor', 'gc', 'rollback', 'update', 'view'] as const
 type GeneratedNames = typeof names[number]
 
 const modules: Record<GeneratedNames, Command<any>> = {
+  'doctor': Doctor,
+  'gc': Gc,
   'rollback': Rollback,
   'update': Update,
   'view': View
 } as const
 
 const metadata: Record<GeneratedNames, GeneratedCommandMeta> = {
+  'doctor': {
+      name: 'doctor',
+      description: 'Diagnose the ndea install (paths, symlink, versions, manifest)',
+      options: {
+        'check-network': { type: 'z.coerce.boolean.default', required: true, hasDefault: true, default: false, description: 'Also probe manifest.json reachability over the network', schema: {"type":"zod","method":"default","args":[{"type":"unknown","raw":{"type":"BooleanLiteral","start":1209,"end":1214,"loc":{"start":{"line":32,"column":55,"index":1209},"end":{"line":32,"column":60,"index":1214}},"value":false}}]}, validator: '(val) => true' },
+        'strict': { type: 'z.coerce.boolean.default', required: true, hasDefault: true, default: false, description: 'Treat soft warnings as errors (non-zero exit)', schema: {"type":"zod","method":"default","args":[{"type":"unknown","raw":{"type":"BooleanLiteral","start":1350,"end":1355,"loc":{"start":{"line":35,"column":46,"index":1350},"end":{"line":35,"column":51,"index":1355}},"value":false}}]}, validator: '(val) => true' }
+      },
+      path: './src/cli/commands/doctor'
+    },
+  'gc': {
+      name: 'gc',
+      description: 'Prune old installed ndea versions from the versions tree',
+      options: {
+        'keep': { type: 'z.coerce.number.int.min.default', required: true, hasDefault: true, default: 2, description: 'Number of versions to keep (active counts; default: 2)', min: 1, minLength: 1, schema: {"type":"zod","method":"default","args":[{"type":"unknown","raw":{"type":"NumericLiteral","start":1029,"end":1030,"loc":{"start":{"line":25,"column":56,"index":1029},"end":{"line":25,"column":57,"index":1030}},"extra":{"rawValue":2,"raw":"2"},"value":2}}]}, validator: '(val) => true' },
+        'all': { type: 'z.coerce.boolean.default', required: true, hasDefault: true, default: false, description: 'Keep only the active version (overrides --keep)', schema: {"type":"zod","method":"default","args":[{"type":"unknown","raw":{"type":"BooleanLiteral","start":1163,"end":1168,"loc":{"start":{"line":28,"column":43,"index":1163},"end":{"line":28,"column":48,"index":1168}},"value":false}}]}, validator: '(val) => true' }
+      },
+      path: './src/cli/commands/gc'
+    },
   'rollback': {
       name: 'rollback',
       description: 'Switch the active ndea binary to the previous installed version',

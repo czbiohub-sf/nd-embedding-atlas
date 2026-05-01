@@ -12,6 +12,8 @@
  *   view       Open zarr stores in the dashboard (default)
  *   update     Download a new release and switch the active symlink
  *   rollback   Switch to the previous installed version
+ *   gc         Prune old installed versions
+ *   doctor     Diagnose the install (paths, symlink, versions)
  *
  * For backwards compatibility, invocations without a subcommand default
  * to `view`:
@@ -21,6 +23,8 @@
 
 import { createCLI } from "@bunli/core";
 import { completionsPlugin } from "@bunli/plugin-completions";
+import doctorCommand from "./commands/doctor.ts";
+import gcCommand from "./commands/gc.ts";
 import rollbackCommand from "./commands/rollback.ts";
 import updateCommand from "./commands/update.ts";
 import viewCommand from "./commands/view.ts";
@@ -38,7 +42,7 @@ const DESCRIPTION =
  * `@bunli/plugin-completions`. Without these entries `ndea completions
  * zsh` would be reinterpreted as `ndea view completions zsh`.
  */
-const KNOWN_SUBCOMMANDS = new Set(["view", "update", "rollback", "completions", "complete"]);
+const KNOWN_SUBCOMMANDS = new Set(["view", "update", "rollback", "gc", "doctor", "completions", "complete"]);
 
 /**
  * Normalize rawArgs so `ndea ./data.zarr` routes to `view ./data.zarr`.
@@ -92,6 +96,8 @@ async function main(): Promise<void> {
   cli.command(viewCommand);
   cli.command(updateCommand);
   cli.command(rollbackCommand);
+  cli.command(gcCommand);
+  cli.command(doctorCommand);
 
   await cli.run(argv);
 }

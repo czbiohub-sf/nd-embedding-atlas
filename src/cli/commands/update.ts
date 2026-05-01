@@ -46,6 +46,11 @@ export default defineCommand({
       process.exit(1);
     }
 
+    if (process.env.NDEA_DISABLE_UPDATES === "1") {
+      console.error("ndea: updates disabled by NDEA_DISABLE_UPDATES");
+      process.exit(1);
+    }
+
     const channel = resolveChannel(flags.channel);
     detectTarget(); // validate platform early — throws if unsupported
 

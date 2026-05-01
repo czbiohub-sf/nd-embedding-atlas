@@ -102,6 +102,13 @@ jobs:
       - name: Combined SHA256SUMS manifest
         run: bash .github/scripts/sha256sums-combined.sh
 
+      # Bundle install.sh as a release asset so users can pin the
+      # installer URL to a specific tag — `curl …/v0.X.Y/install.sh | sh`
+      # gets the install script frozen at this release. The canonical
+      # `…/main/install.sh` always reflects the latest code on main.
+      - name: Bundle install.sh as a release asset
+        run: cp scripts/install.sh dist/install.sh
+
       # Tag-pattern auto-classification: semver pre-release identifiers are
       # always preceded by a `-` (e.g. v0.1.0-rc.1, v0.1.0-beta.2,
       # v0.1.0-alpha.5). Stable tags never contain `-`. So a single contains()

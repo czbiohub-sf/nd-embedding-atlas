@@ -13,19 +13,11 @@
  */
 
 import { defineCommand } from "@bunli/core";
-import { readdir, readlink, rename, stat, symlink, unlink } from "node:fs/promises";
-import { resolve } from "node:path";
-import { acquireLock } from "../lib/lock.ts";
-import {
-  currentVersionPath,
-  installLockPath,
-  isCompiledBinary,
-  resolveSelfPath,
-  versionDir,
-  versionedBinaryPath,
-  versionsDir,
-} from "../lib/paths.ts";
 import { existsSync } from "node:fs";
+import { readlink, rename, symlink, unlink } from "node:fs/promises";
+import { acquireLock } from "../lib/lock.ts";
+import { currentVersionPath, installLockPath, isCompiledBinary, resolveSelfPath, versionsDir } from "../lib/paths.ts";
+import { listVersions } from "../lib/versions.ts";
 
 export default defineCommand({
   name: "rollback" as const,
@@ -34,6 +26,11 @@ export default defineCommand({
   async handler() {
     if (!isCompiledBinary()) {
       console.error("Error: `ndea rollback` only works from a compiled binary.");
+      process.exit(1);
+    }
+
+    if (process.env.NDEA_DISABLE_UPDATES === "1") {
+      console.error("ndea: updates disabled by NDEA_DISABLE_UPDATES");
       process.exit(1);
     }
 
@@ -82,29 +79,3 @@ export default defineCommand({
     }
   },
 });
-
-interface VersionEntry {
-  tag: string;
-  binaryPath: string;
-  mtimeMs: number;
-}
-
-async function listVersions(root: string): Promise<VersionEntry[]> {
-  const tags = await readdir(root);
-  const out: VersionEntry[] = [];
-  for (const tag of tags) {
-    const binaryPath = versionedBinaryPath(tag);
-    const dir = versionDir(tag);
-    void dir; // referenced via versionedBinaryPath
-    if (!existsSync(binaryPath)) continue;
-    try {
-      const info = await stat(binaryPath);
-      out.push({ tag, binaryPath: resolve(binaryPath), mtimeMs: info.mtimeMs });
-    } catch {
-      // Skip unreadable entries silently.
-    }
-  }
-  // Most recent first.
-  out.sort((a, b) => b.mtimeMs - a.mtimeMs);
-  return out;
-}
