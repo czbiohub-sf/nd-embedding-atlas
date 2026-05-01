@@ -104,10 +104,9 @@ frontend     ──→  @uwdata/mosaic-core socketConnector (ws /mosaic),
 
 ```zsh
 # Dev stack (backend + frontend concurrently)
-vp run dev /path/to/data.zarr        # primary — invokes scripts/dev.ts via vp task
-bun scripts/dev.ts /path/to/data.zarr   # equivalent direct invocation
+vp run dev /path/to/data.zarr        # primary — backend :5055 + Vite :5173 with HMR
 
-# Or separately
+# Or separately when iterating on one half
 bun run src/cli/index.ts view /path/to/data.zarr   # backend on :5055
 vp dev                                             # frontend on :5173
 
