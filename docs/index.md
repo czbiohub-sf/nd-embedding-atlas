@@ -59,21 +59,31 @@ git clone https://github.com/czbiohub-sf/ome-atlas-test-data.git ../ome-atlas-te
 # Single AnnData zarr store
 ndea path/to/data.zarr
 
-# AnnData + OME-Zarr plate (cell crops on hover)
-ndea path/to/data.zarr path/to/plate.zarr
+# Multiple AnnData stores opened side-by-side
+ndea path/to/dataset_a.zarr path/to/dataset_b.zarr
 
-# Multi-dataset YAML config
+# Project config (the only way to pair an AnnData store with an OME-Zarr plate
+# for image crops on hover, configure channels, set per-dataset options, etc.)
 ndea path/to/config.yaml
 ```
 
 Then open Chrome or Edge at `http://localhost:5055`.
+
+A minimal multi-dataset YAML looks like:
+
+```yaml
+datasets:
+  - name: my-experiment
+    path: path/to/annotations.zarr
+    plate_path: path/to/plate.zarr # optional — enables image crops on hover
+```
 
 The viewer ships:
 
 - **Embedding plot** — interactive WebGPU scatter of the embedding space
 - **Data table** — sortable, filterable metadata table cross-filtered with the scatter
 - **Charts** — cross-filtered distributions of obs columns
-- **OME-Zarr image viewer** — image crops on point-hover (when a plate is provided)
+- **OME-Zarr image viewer** — image crops on point-hover (when a `plate_path` is configured)
 
 ## What's next?
 
