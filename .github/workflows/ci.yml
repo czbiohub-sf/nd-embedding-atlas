@@ -51,14 +51,15 @@ jobs:
       - name: bun test
         run: bun test
 
-  # ── Frontend build smoke (catches bundler regressions) ─────────────────
+  # ── Full build smoke (frontend + binary, catches release-time regressions
+  # at PR time rather than at canary-on-merge time) ──────────────────────
   build-smoke:
-    name: Frontend build smoke (${{ matrix.os }})
+    name: Build smoke (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-14]
+        os: [ubuntu-latest, macos-14, ubuntu-24.04-arm]
     steps:
       - uses: actions/checkout@v6
         with:
@@ -67,8 +68,13 @@ jobs:
       - uses: voidzero-dev/setup-vp@v1
       - name: Install dependencies
         run: bun install --frozen-lockfile
-      - name: vp build
-        run: vp build
+      # `bun run build` exercises the full release path: vp build (frontend)
+      # → embed-asset manifest generation → bun build --compile (binary).
+      # PRs that break any of these surface here instead of in canary.
+      - name: bun run build
+        run: bun run build
+      - name: Smoke (binary launches + reports version)
+        run: ./dist/ndea --version
 
   # ── Single required status check for branch protection ────────────────
   all-green:
