@@ -8,7 +8,9 @@
 # Environment variables:
 #   NDEA_VERSION   release tag to install (default: latest)
 #   NDEA_BIN_DIR   install destination   (default: $HOME/.local/bin)
-#   NDEA_CHANNEL   reserved for future channel selection (default: stable)
+#   NDEA_CHANNEL   release channel: stable | canary (default: stable)
+#                  - stable: most recent semver-tagged release
+#                  - canary: rolling pre-release built from `main` on every push
 #
 # POSIX sh — no bashisms. Tested with dash, bash 3.2, bash 5.x, zsh.
 
@@ -19,10 +21,10 @@ VERSION="${NDEA_VERSION:-latest}"
 CHANNEL="${NDEA_CHANNEL:-stable}"
 DEST="${NDEA_BIN_DIR:-$HOME/.local/bin}"
 
-# CHANNEL is reserved for future use (stable|latest). Reference it so
-# `set -u` does not error if the user exports it, and so shellcheck
-# does not flag it as unused.
-: "$CHANNEL"
+case "$CHANNEL" in
+    stable | latest | canary) ;;
+    *) printf '  \033[31mERR\033[0m unknown NDEA_CHANNEL=%s (expected: stable|canary)\n' "$CHANNEL" >&2; exit 1 ;;
+esac
 
 log() { printf '  \033[1m%s\033[0m %s\n' "->" "$*" >&2; }
 ok()  { printf '  \033[32mOK\033[0m %s\n' "$*" >&2; }
@@ -56,8 +58,14 @@ esac
 artifact="ndea-${os}-${arch}"
 
 # --- Release URL ----------------------------------------------------------
+# Channel takes precedence over NDEA_VERSION when set to `canary` — the canary
+# release is a rolling tag rewritten on every push to `main`, so a fixed
+# version doesn't apply.
 base="https://github.com/${REPO}/releases"
-if [ "$VERSION" = "latest" ]; then
+if [ "$CHANNEL" = "canary" ]; then
+    bin_url="${base}/download/canary/${artifact}"
+    sha_url="${base}/download/canary/${artifact}.sha256"
+elif [ "$VERSION" = "latest" ]; then
     bin_url="${base}/latest/download/${artifact}"
     sha_url="${base}/latest/download/${artifact}.sha256"
 else
@@ -70,7 +78,11 @@ tmp=$(mktemp -d 2>/dev/null || mktemp -d -t ndea)
 trap 'rm -rf "$tmp"' EXIT INT TERM HUP
 
 # --- Download + verify ----------------------------------------------------
-log "Downloading $artifact ($VERSION)"
+if [ "$CHANNEL" = "canary" ]; then
+    log "Downloading $artifact (canary — rolling pre-release)"
+else
+    log "Downloading $artifact ($VERSION)"
+fi
 curl -fsSL --proto '=https' --tlsv1.2 -o "$tmp/$artifact" "$bin_url" \
     || die "failed to download $bin_url"
 curl -fsSL --proto '=https' --tlsv1.2 -o "$tmp/$artifact.sha256" "$sha_url" \

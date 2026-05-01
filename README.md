@@ -30,12 +30,24 @@ Downloads a checksum-verified native binary (~80 MB) and drops it into `$HOME/.l
 
 Environment variables:
 
-| Variable       | Default            | Notes                        |
-| -------------- | ------------------ | ---------------------------- |
-| `NDEA_VERSION` | `latest`           | Release tag (e.g. `v0.2.0`). |
-| `NDEA_BIN_DIR` | `$HOME/.local/bin` | Install destination.         |
+| Variable       | Default            | Notes                                             |
+| -------------- | ------------------ | ------------------------------------------------- |
+| `NDEA_VERSION` | `latest`           | Release tag (e.g. `v0.2.0`).                      |
+| `NDEA_CHANNEL` | `stable`           | `stable` or `canary` (rolling build from `main`). |
+| `NDEA_BIN_DIR` | `$HOME/.local/bin` | Install destination.                              |
 
 Example: `curl -fsSL .../install.sh | NDEA_VERSION=v0.2.0 NDEA_BIN_DIR=/usr/local/bin sh`.
+
+**Canary** — bleeding-edge build rebuilt on every push to `main`. Use to test
+unreleased fixes; expect breakage:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/czbiohub-sf/nd-embedding-atlas/main/scripts/install.sh \
+  | NDEA_CHANNEL=canary sh
+```
+
+Self-update an already-installed canary in place with `ndea update --channel canary`.
+Roll back a bad canary with `ndea rollback`.
 
 ### 3. Manual
 
@@ -54,11 +66,16 @@ xattr -dr com.apple.quarantine ~/.local/bin/ndea
 
 ### Update
 
-Tier 1 (curl installer) and Tier 3 (manual): re-run the install step. The new binary replaces the old one in place.
+```bash
+ndea update                       # latest stable
+ndea update --channel canary      # bleeding edge (rebuilt on every push to main)
+ndea rollback                     # restore the previous binary
+```
+
+The update is staged as `<self>.pending` and swapped on next launch (avoids
+mid-run binary replacement). Re-running the curl installer also works.
 
 Tier 0 (`bunx`): re-run the `bunx` command. Bun refreshes the clone on the next invocation.
-
-Future releases will ship a self-updating binary with `ndea update` and `ndea rollback` (revert the last update). Track progress in [issue #TBD](https://github.com/czbiohub-sf/nd-embedding-atlas/issues).
 
 ## Quick start
 

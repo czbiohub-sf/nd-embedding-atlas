@@ -17,7 +17,7 @@ export const REPO = "czbiohub-sf/nd-embedding-atlas";
 export const MANIFEST_URL = `https://raw.githubusercontent.com/${REPO}/main/manifest.json`;
 
 /** Supported release channels. */
-export const CHANNELS = ["stable", "latest"] as const;
+export const CHANNELS = ["stable", "latest", "canary"] as const;
 
 export type Channel = (typeof CHANNELS)[number];
 
