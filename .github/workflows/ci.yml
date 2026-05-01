@@ -27,6 +27,11 @@ jobs:
         run: bun install --frozen-lockfile
       - name: vp check
         run: vp check
+      # Verify .bunli/commands.gen.ts is in sync with src/cli/commands/.
+      # The standard verify-no-drift / gen-check pattern (Buf, sqlc,
+      # Prisma, GraphQL Codegen all do this).
+      - name: Verify bunli gen output is in sync
+        run: bash .github/scripts/check-bunli-gen.sh
 
   # ── Bun test matrix ─────────────────────────────────────────────────────
   test:
