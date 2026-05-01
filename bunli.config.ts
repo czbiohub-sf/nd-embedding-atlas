@@ -9,10 +9,10 @@
  *
  * Run after every command-surface change:
  *
- *   bunx bunli generate
+ *   vp run gen
  *
  * Output is committed so completions stay in sync with source without
- * runtime regeneration.
+ * runtime regeneration; CI verifies via .github/scripts/check-bunli-gen.sh.
  */
 
 import { defineConfig, type BunliConfigInput } from "@bunli/core";

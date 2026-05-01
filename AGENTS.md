@@ -122,6 +122,10 @@ bun build ./src/cli/index.ts --compile --outfile dist/ndea   # single binary
 vp check                          # typecheck + Oxlint + Oxfmt (all ~260 files)
 vp test                           # vitest
 bun test                          # Bun-native .test.ts suites
+
+# Code generation
+vp run gen                        # regenerate .bunli/commands.gen.ts (CLI metadata
+                                  #   for shell completions; CI verifies no drift)
 ```
 
 ## Code style

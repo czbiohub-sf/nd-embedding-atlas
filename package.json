@@ -13,7 +13,6 @@
     "build:frontend": "vp build",
     "build:binary": "bun build ./src/cli/index.ts --compile --outfile dist/ndea",
     "build:all-platforms": "bun run scripts/build-all.ts",
-    "gen": "bunx bunli generate",
     "sync-version": "bun run scripts/sync-version.ts",
     "check": "vp check",
     "test": "vp test"

@@ -7,15 +7,15 @@
 # Standard "verify-no-drift" / "gen-check" pattern: regenerate, then
 # `git diff --exit-code` to fail with the diff if anything changed.
 #
-# Run locally with:  bun run gen   (regenerate + commit)
+# Run locally with:  vp run gen   (regenerate + commit)
 set -euo pipefail
 
-bunx bunli generate
+vp run gen
 
 if ! git diff --exit-code -- .bunli/; then
     echo
     echo "::error::.bunli/commands.gen.ts is stale."
-    echo "Run 'bun run gen' locally and commit the result."
+    echo "Run 'vp run gen' locally and commit the result."
     exit 1
 fi
 

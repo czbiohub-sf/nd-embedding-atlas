@@ -294,6 +294,17 @@ export default defineConfig({
         command: "vp dev",
         cache: false,
       },
+
+      // Regenerate `.bunli/commands.gen.ts` after any change to
+      // `src/cli/commands/**`. The output feeds `@bunli/plugin-completions`
+      // (shell completion script generation) and is committed; a CI step
+      // (`.github/scripts/check-bunli-gen.sh`) fails if it ever drifts
+      // from source. Cache disabled because the generator is fast and
+      // we never want a stale cached run.
+      gen: {
+        command: "bunx bunli generate",
+        cache: false,
+      },
     },
   },
 
