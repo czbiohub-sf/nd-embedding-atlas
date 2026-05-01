@@ -47,6 +47,28 @@ vp build        # frontend bundle smoke
 
 CI gates on `vp check` and the test suites (see `.github/workflows/ci.yml`).
 
+## Fallow (optional code-health audit)
+
+[Fallow](https://docs.fallow.tools/) is a static-analysis tool for TypeScript/JavaScript that flags dead code, duplication, complexity hotspots, and circular dependencies. Not a CI gate — run it on demand when working in an unfamiliar area or before opening a non-trivial PR.
+
+```bash
+bunx fallow audit --changed-since main   # scoped to your branch's diff
+bunx fallow dead-code                    # unused files, exports, deps
+bunx fallow dupes                        # repeated code blocks
+bunx fallow health                       # cyclomatic / cognitive complexity
+bunx fallow fix --dry-run                # preview auto-fixes (delete unused exports etc.)
+```
+
+Good moments to run it:
+
+- **Before a non-trivial PR** — `fallow audit --changed-since main` returns a verdict on just the files you touched.
+- **After merging a large feature** — catches dead code, orphaned exports, or new duplication that the focused review missed.
+- **When picking up unfamiliar code** — `dead-code` and `health` give a quick picture of which files are load-bearing vs. detritus.
+
+Skip it for trivial fixes; the signal-to-noise floor is high but real.
+
+The static layer is MIT-licensed and free. The runtime-coverage feature (tracking what actually executed in production) is paid; it's behind `fallow coverage` and isn't used in this repo.
+
 ## Code style
 
 Enforced by `vp check`:
