@@ -1,0 +1,65 @@
+name: Docs
+
+# Builds the zensical-rendered docs site under docs/ and deploys to
+# GitHub Pages on every push to main. Pull requests run the build only
+# (no deploy) so PR authors see breakage before merge.
+#
+# Renders via uvx — zensical is a Python tool, kept out of the project's
+# permanent dependency graph. uvx fetches and caches it on first run.
+#
+# One-time setup: in repo Settings → Pages, set "Build and deployment →
+# Source" to "GitHub Actions". The previous flow served from a gh-pages
+# branch via mike; this workflow uploads to the artifact-based Pages
+# pipeline instead.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions: {}
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  # ── Build the static site (runs on PRs + pushes) ────────────────────────
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      # uv ships uvx; we use it to fetch zensical on demand.
+      - uses: astral-sh/setup-uv@v7
+
+      - name: Build site
+        run: uvx --from zensical zensical build
+
+      # Pages artifact action expects the path to the built site root.
+      # `actions/upload-pages-artifact` tars + uploads in one step.
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  # ── Deploy to GitHub Pages (push to main only) ──────────────────────────
+  deploy:
+    name: Deploy
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write          # deploy to the Pages site
+      id-token: write       # OIDC token for actions/deploy-pages
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
