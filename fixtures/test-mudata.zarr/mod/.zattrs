@@ -1,7 +1,0 @@
-{
-  "mod-order": [
-    "rna",
-    "atac",
-    "protein"
-  ]
-}
