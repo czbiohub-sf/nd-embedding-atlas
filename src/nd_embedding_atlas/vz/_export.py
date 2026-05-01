@@ -55,15 +55,13 @@ def export_subset(
         "timestamp": datetime.now(tz=UTC).isoformat(),
     }
 
-    # annbatch rounds shard/chunk sizes down to multiples of chunk_size.
-    # When n_obs < chunk_size, _round_down produces 0 and write_sharded raises.
-    # Clamp chunk sizes to n_obs so small selections (e.g. 497 obs) still work.
+    # Clamp n_obs_per_chunk to n_obs so small selections still write
+    # (annbatch raises when chunk size > n_obs).
     n_obs = len(indices)
     group = zarr.open_group(output_path, mode="w", zarr_version=3)
     write_sharded(
         group,
         subset,
-        dense_chunk_size=min(1024, n_obs),
-        dense_shard_size=min(4_194_304, n_obs),
+        n_obs_per_chunk=min(64, n_obs),
     )
     zarr.consolidate_metadata(output_path)
