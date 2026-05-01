@@ -39,13 +39,13 @@ OME-NGFF 0.5 stores data as Zarr v3. The `sharding_indexed` codec packs many sma
 
 ### Recommended layout
 
-```shell
-Shard shape  :  (T, C, Z, Y, X) - For now feel free to use any sharding configuration you prefer
-Chunk Shape  :  (1, 1, 1,  256,  265) - Chunks are the most important aspect as this is how the viewer fetches data
-Codec        :  sharding_indexed → [bytes(little-endian), blosc/zstd clevel=1] # (1)!
-```
+| Field       | Value                                                  |
+| ----------- | ------------------------------------------------------ |
+| Chunk shape | `(1, 1, 1, 256, 256)` — drives every viewer fetch      |
+| Shard shape | `(T, C, Z, Y, X)` — any sharding configuration is fine |
+| Codec       | `sharding_indexed → [bytes(little-endian), blosc]`     |
 
-1. The codec used for compression is flexible, pick what suites you best.
+The chunk shape is the load-bearing setting; the shard shape and inner compression codec are flexible — pick whatever fits your write pipeline.
 
 At LOD 0 a 100 k × 100 k image lays out as a 12 × 12 shard grid (≈ 144 shards). Each shard is ~3 GB on disk; the viewer reads a few hundred KB via byte-range requests.
 
@@ -57,14 +57,14 @@ Any zarr inspector that exposes shape + chunking will do. [`iohub`](https://czbi
 uvx iohub info --verbose <plate.zarr>
 ```
 
-Look for:
+Look for inner chunks ≤ 512 × 512:
 
 ```
-Chunk size:  (1, 1, 1, 512, 512)          ← inner chunk
+Chunk size:  (1, 1, 1, 256, 256)          ← inner chunk
 No. bytes decompressed: 1.4 TiB           ← sanity check on total size
 ```
 
-And in the zarr hierarchy, confirm 4–5 resolution levels per position:
+And 4–5 resolution levels per position:
 
 ```
 0  (1, 12, 1, 104683, 104776)  float32    ← LOD 0 — full res
