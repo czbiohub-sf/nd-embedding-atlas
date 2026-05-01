@@ -21,104 +21,62 @@ to their source 5D (TCZYX) image data for rapid exploration and annotation.
 
 ## Installation
 
-Requires **[uv](https://docs.astral.sh/uv/)** and the **[GitHub CLI](https://cli.github.com/)** (`gh auth login` once to authenticate).
-
 ```bash
-# Download the latest release wheel
-gh release download --repo czbiohub-sf/nd-embedding-atlas \
-  -p "nd_embedding_atlas-*.whl" -D /tmp/ndea/
-
-# Install (no Node.js required — frontend is bundled)
-uv tool install /tmp/ndea/nd_embedding_atlas-*.whl
+curl -fsSL https://raw.githubusercontent.com/czbiohub-sf/nd-embedding-atlas/main/scripts/install.sh | sh
 ```
 
-To upgrade, re-run the above and add `--force` to the install command.
+Downloads a checksum-verified native binary (~80 MB) and drops it into `$HOME/.local/bin`. To upgrade in place:
+
+```bash
+ndea update                       # latest stable
+ndea update --channel pre-release # latest alpha / beta / rc (when active)
+ndea update --channel canary      # rolling, rebuilt on every push to main
+```
 
 For developer setup, see the [contributing guide](contributing.md).
 
-## Download test data
+## Test data
 
-The project includes scripts to download example datasets. Pick the one that fits your use case:
+Sample datasets live in the companion [ome-atlas-test-data](https://github.com/czbiohub-sf/ome-atlas-test-data) repo (clone alongside this one):
 
-=== "DynaCLR (cell tracking)"
+```bash
+git clone https://github.com/czbiohub-sf/ome-atlas-test-data.git ../ome-atlas-test-data
+```
 
-    Small zarr v3 stores with cell tracking annotations and PCA + PHATE embeddings. Good for quick testing.
+!!! tip "On the Bruno HPC"
 
-    ``` bash
-    uv run scripts/download_dynaclr_datasets.py [OUTPUT] # (1)!
+    Test datasets are also pre-staged at:
+
+    ```
+    /hpc/websites/public.czbiohub.org/comp.micro/nd-embedding-atlas-test-data
     ```
 
-    1. `OUTPUT` -- directory for `.zarr` stores (default: `data/`). Existing stores are skipped.
-       Requires `wget` on PATH.
-
-    This downloads two stores into the output directory:
-
-    | Store | Description |
-    |-------|-------------|
-    | `dataset.zarr` | OME-Zarr v0.5 HCS plate with 5D image data |
-    | `annotations_zv3.zarr` | AnnData with tracking annotations and embeddings |
-
-    !!! tip "On the Bruno HPC"
-
-        The DynaCLR datasets are already available at:
-
-        ```
-        /hpc/websites/public.czbiohub.org/comp.micro/nd-embedding-atlas-test-data
-        ```
-
-        You can symlink or point the viewer directly at these paths instead of downloading.
-
-=== "CellxGene (transcriptomics)"
-
-    Larger scRNA-seq datasets from [CellxGene](https://cellxgene.cziscience.com/).
-    Downloads `.h5ad` files and converts them to zarr v3 with sharding. The purpose is to inspect
-    the perfomance of the embedding atlas.
-
-    ``` bash
-    uv run scripts/download_cxg_datasets.py [OUTPUT] # (1)!
-    ```
-
-    1. `OUTPUT` -- directory for `.zarr` stores (default: `data/`). Existing stores are skipped.
-       Downloads to a temp directory first, converts to zarr v3, then cleans up the `.h5ad` files.
-
-    !!! info "This may take a while"
-
-        CellxGene datasets are several GB each. The script downloads to a temp
-        directory, converts to zarr v3, then cleans up the intermediate `.h5ad` files.
+    Symlink or point the viewer directly at these paths instead of cloning.
 
 ## Launch the viewer
 
-After downloading, launch the viewer on the datasets:
+```bash
+# Single AnnData zarr store
+ndea path/to/data.zarr
 
-=== "DynaCLR (cell tracking)"
+# AnnData + OME-Zarr plate (cell crops on hover)
+ndea path/to/data.zarr path/to/plate.zarr
 
-    ``` bash
-    uv run ndea view data/annotations_zv3.zarr --plate data/dataset.zarr
-    ```
+# Multi-dataset YAML config
+ndea path/to/config.yaml
+```
 
-    This loads the tracking annotations with embeddings and connects the
-    OME-Zarr HCS plate for cell crop viewing.
+Then open Chrome or Edge at `http://localhost:5055`.
 
-=== "CellxGene (transcriptomics)"
+The viewer ships:
 
-    ``` bash
-    uv run ndea view cxg-data/*.zarr  # (1)!
-    ```
-
-    1. You can use glob patterns to select the AnnData `.zarr` files with lazy concatenation.
-
-The viewer starts a local server at `http://localhost:5055` with:
-
-- **Embedding plot** -- interactive WebGL scatter of the embedding space
-- **Data table** -- sortable, filterable metadata table
-- **Charts** -- cross-filtered distributions of obs columns
-- **OME-Zarr Movie viewer** -- OME-Zarr image crops (when `--plate` is provided)
-
-!!! tip "Short alias"
-
-    `ndea` is an alias for `nd-embedding-atlas`. Both work interchangeably.
+- **Embedding plot** — interactive WebGPU scatter of the embedding space
+- **Data table** — sortable, filterable metadata table cross-filtered with the scatter
+- **Charts** — cross-filtered distributions of obs columns
+- **OME-Zarr image viewer** — image crops on point-hover (when a plate is provided)
 
 ## What's next?
 
-- Browse the [API documentation](api.md) for programmatic usage
-- Read the [contributing documentation](contributing.md) for architecture details and contribution patterns
+- [Preparing your data](preparing-your-data.md) — OME-Zarr layout, sharding, pyramids
+- [Contributing](contributing.md) — dev setup, architecture, release flow
+- [WebGPU on HPC](webgpu-hpc-setup.md) — Chrome flags for HPC environments

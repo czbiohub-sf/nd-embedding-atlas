@@ -69,8 +69,10 @@ hundred KB via byte-range requests.
 
 ### Verifying your layout
 
+Any zarr inspector that exposes shape + chunking metadata will do. [`iohub`](https://czbiohub-sf.github.io/iohub/) (a separate tool from this project) is convenient and doesn't need a permanent install:
+
 ```bash
-uv run iohub info --verbose <plate.zarr>
+uvx iohub info --verbose <plate.zarr>
 ```
 
 Look for:

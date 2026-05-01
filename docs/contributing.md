@@ -8,157 +8,88 @@ icon: lucide/git-pull-request
 
 ### Prerequisites
 
-- **Python 3.12--3.13** (managed with [uv](https://docs.astral.sh/uv/))
-- **[pnpm](https://pnpm.io/)** -- fast Node.js package manager; requires Node.js (load with `module load nodejs` on HPC, or install via [nvm](https://github.com/nvm-sh/nvm))
-- **[vite-plus](https://viteplus.dev/guide/)** -- unified frontend toolchain providing the `vp` CLI; installed automatically by `pnpm install`
-- **[prek](https://github.com/j178/prek)** for Git hooks (`uvx prek`)
+- **[Bun](https://bun.com)** — runtime + package manager. The version pinned in `package.json`'s `packageManager` field is what CI uses; locally any matching major works.
+- **[Vite+](https://viteplus.dev/)** (`vp`) — unified frontend toolchain (build, lint, fmt, dev). Install once globally; `vp` then drives every dev workflow in this repo.
 
 ### Clone and install
 
 ```bash
 git clone https://github.com/czbiohub-sf/nd-embedding-atlas.git
 cd nd-embedding-atlas
-uv sync --all-groups # (1)!
+bun install
 ```
 
-1. Installs all dependency groups: main, dev, test, and doc.
+`bun install` resolves both backend and frontend dependencies into a single `node_modules/`.
 
-### Build the frontend
+## Development workflow
 
 ```bash
-cd frontend && pnpm install && vp build
-cd ..
+# Full dev stack (backend on :5055 + Vite frontend on :5173, with HMR)
+vp run dev path/to/data.zarr
 ```
 
-!!! warning "Frontend must be built before serving"
+The wrapper boots `src/cli/index.ts view` for the backend and `vp dev` for the frontend, with cross-filter cache invalidation hooked up via Mosaic's WS.
 
-    The Python server resolves static files from `frontend/dist/`. If it doesn't
-    exist, you'll get a `FileNotFoundError` with instructions.
+For frontend-only iteration when the backend is already running separately:
+
+```bash
+vp dev
+```
+
+## Quality gates
+
+```bash
+vp check        # typecheck + Oxlint + Oxfmt + bunli gen drift
+bun test        # Bun-native .test.ts suites (server, cli, zarr)
+vp test         # vitest (frontend unit tests)
+vp build        # frontend bundle smoke
+```
+
+`vp check` and the test suites are what CI gates on (see `.github/workflows/ci.yml`).
 
 ## Code style
 
-### Python
+Enforced by `vp check`:
 
-Enforced by [Ruff](https://docs.astral.sh/ruff/) (config in `pyproject.toml`).
-
-Function signatures use keyword-only params after the first positional arg:
-
-```python
-def prepare_obs(collection, *, obs_columns=None): ...
-```
-
-Error messages go through a `msg` variable:
-
-```python
-msg = f"Unknown key: {key}"
-raise ValueError(msg)
-```
-
-### Frontend
-
-Enforced by [Oxlint](https://oxc.rs/docs/guide/usage/linter.html) + [Oxfmt](https://oxc.rs/docs/guide/usage/formatter.html) via vite-plus.
-Config lives in `frontend/oxlint.json` and the `lint:` / `fmt:` sections of `frontend/vite.config.ts`.
-
-## Linting and formatting
-
-```bash
-uvx prek # (1)!
-```
-
-1. Runs all pre-commit hooks: Oxlint + Oxfmt (TS/TSX), pyproject-fmt,
-   Ruff check + format, private key detection, AST checks, whitespace fixes.
-
-Or run tools individually:
-
-=== "Python"
-
-    ``` bash
-    uv run ruff check --fix src tests
-    uv run ruff format src tests
-    ```
-
-=== "Frontend"
-
-    ``` bash
-    cd frontend
-    vp lint --fix src
-    vp fmt --write src
-    ```
-
-## Testing
-
-```bash
-uv run pytest # (1)!
-```
-
-1. Uses `--import-mode=importlib` (configured in `pyproject.toml`).
-
-Tests live in `tests/` with fixtures in `tests/conftest.py`.
-
-### CI test matrix
-
-The CI runs via [Hatch](https://hatch.pypa.io/) across:
-
-| Python | Dependencies               |
-| ------ | -------------------------- |
-| 3.12   | Stable                     |
-| 3.13   | Stable                     |
-| 3.13   | Pre-release (non-blocking) |
-
-## Frontend development
-
-```bash
-cd frontend
-vp dev   # (1)!
-vp build # (2)!
-```
-
-1. Starts the dev server with hot reload. The Python backend must be running separately.
-2. Production build → `frontend/dist/`.
-
-Full dev stack (backend + frontend together):
-
-```bash
-mise run dev data/annotations_zv3.zarr
-```
+- **TypeScript 6 strict** — no implicit any, `import type` for type-only imports
+- **[Oxlint](https://oxc.rs/docs/guide/usage/linter.html)** + **[Oxfmt](https://oxc.rs/docs/guide/usage/formatter.html)** — config in `vite.config.ts` `lint` / `fmt` blocks
+- 4-space indent, double quotes, trailing commas, semicolons
+- `@/` path alias → `src/frontend/`
 
 ## Project structure
 
 ```text
-src/nd_embedding_atlas/
-  cli/          # Typer CLI — auto-detects AnnData / OME-Zarr / YAML config
-  io/           # AnnDataCollection, fast zarr readers, ProjectConfig YAML model
-  ndimg/        # OME-Zarr standalone viewer (metadata + FastAPI app)
-  server/       # Main FastAPI app, EmbeddingStore (DuckDB), route modules
-  vz/           # obs materialisation, spatial column detection, zarr export
-
-frontend/src/
-  scatter-gpu/  # TypeGPU/WebGPU scatter renderer — pipelines, shaders, selection
-  components/   # React panels: scatter, viewer, table, charts, toolbar, layout
-  dashboard/    # App-level DashboardProvider + DashboardContext
-  stores/       # TanStack Store singletons (selection, view sync, brush predicate)
-  hooks/        # Generic hooks (useMosaicClient, useDashboard, etc.)
-  lib/          # Utilities (mosaic-helpers, color-source, schemas, etc.)
-
-scripts/        # Standalone data-prep scripts (typer + rich)
-tests/          # pytest
+src/
+  index.ts            # Public API re-exports
+  cli/                # Bun-compiled CLI (bunli framework)
+  protocol/           # Shared zod schemas (client + server contract)
+  zarr/               # Vendored zarr I/O — reads AnnData / MuData / OME-Zarr
+  server/             # Bun.serve HTTP + WebSocket server
+    routes/           # Per-endpoint handlers
+  frontend/           # React + Vite + Mosaic dashboard
+    components/       # Scatter, table, charts, toolbar, viewer panels
+    dashboard/        # DashboardContext / Provider / Shell
+    scatter-gpu/      # TypeGPU/WebGPU scatter renderer
+    stores/           # TanStack Store singletons (selection, view, filter)
+    ochre/            # Vendored colormap library
 ```
 
-## Common commands
+See [`AGENTS.md`](https://github.com/czbiohub-sf/nd-embedding-atlas/blob/main/AGENTS.md) in the repo root for the canonical command catalogue, key abstractions, and gotchas.
 
-| Command                   | Description                          |
-| ------------------------- | ------------------------------------ |
-| `uv sync`                 | Install dependencies                 |
-| `uv run pytest`           | Run tests                            |
-| `uvx prek`                | Lint + format (all pre-commit hooks) |
-| `ndea <paths>`            | Launch the viewer                    |
-| `mise run dev <path>`     | Full dev stack (backend + frontend)  |
-| `uv build`                | Build wheel (auto-builds frontend)   |
-| `cd frontend && vp build` | Rebuild frontend only                |
-| `uv run zensical serve`   | Preview docs locally (live reload)   |
-| `uv run zensical build`   | Build static docs site               |
+## Releases
 
-## Versioning
+| Channel       | How it ships                                                      |
+| ------------- | ----------------------------------------------------------------- |
+| `stable`      | Manual: tag `vX.Y.Z` and push — `release.yml` builds + publishes  |
+| `pre-release` | Manual: tag `vX.Y.Z-alpha.N` / `-beta.N` / `-rc.N` and push       |
+| `canary`      | Automatic: every push to `main` rebuilds the rolling `canary` tag |
 
-The frontend reads the version at runtime from `/data/metadata.json` -- no build-time sync needed.
-`package.json` version is a placeholder (not published to npm).
+`pre-release` cuts open an automated PR that bumps the `pre-release` channel pointer in `manifest.json` — review and merge to make `ndea update --channel pre-release` resolve to the new tag.
+
+Code generation: after editing `src/cli/commands/**`, run:
+
+```bash
+vp run gen
+```
+
+This regenerates `.bunli/commands.gen.ts`, which feeds shell-completion script generation. CI fails if the generated file drifts from source (`.github/scripts/check-bunli-gen.sh`).
