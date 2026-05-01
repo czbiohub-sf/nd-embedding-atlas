@@ -43,6 +43,17 @@ Enforced by `vp check`:
 - 4-space indent, double quotes, trailing commas, semicolons
 - `@/` path alias → `src/frontend/`
 
+## Documentation
+
+User-facing docs live under `docs/` and are rendered by [zensical](https://zensical.org/) via the config at `zensical.toml`. To preview locally without installing Python tooling permanently:
+
+```bash
+uvx --from zensical zensical serve     # http://localhost:8000, live reload
+uvx --from zensical zensical build     # static output → site/ (gitignored)
+```
+
+`uvx` is part of [uv](https://docs.astral.sh/uv/) — install once via `brew install uv` or `curl -LsSf https://astral.sh/uv/install.sh | sh`. Zensical itself is fetched on demand and cached.
+
 ## Pull requests
 
 `ci.yml` runs typecheck + lint + fmt + gen drift + bun test on push and PR. `zizmor.yml` audits workflow security. Both must pass before merge.

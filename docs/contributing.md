@@ -93,3 +93,13 @@ vp run gen
 ```
 
 This regenerates `.bunli/commands.gen.ts`, which feeds shell-completion script generation. CI fails if the generated file drifts from source (`.github/scripts/check-bunli-gen.sh`).
+
+## Editing this docs site
+
+Pages under `docs/` are rendered by [zensical](https://zensical.org/) via the config at `zensical.toml`. Preview locally:
+
+```bash
+uvx --from zensical zensical serve
+```
+
+Live-reloads at `http://localhost:8000` as you edit. The build output goes to `site/` (gitignored). `uvx` is part of [uv](https://docs.astral.sh/uv/); zensical itself is fetched on demand and cached.

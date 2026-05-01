@@ -21,6 +21,7 @@ frontend/dist/
 # Docs
 /docs/generated/
 /docs/_build/
+/site/                  # zensical build output
 
 # Claude / notes
 .claude/
