@@ -249,7 +249,10 @@ export default defineConfig({
     //   walks the working tree).
     // - zensical.toml is a doc-tool config laid out for human reading;
     //   reflowing it would fight the upstream template's comments.
-    ignorePatterns: [".bunli/**", "site/**", "zensical.toml"],
+    // - ochre/colormap/data/** are vendored colormap LUTs hand-packed at
+    //   12 numbers per line; oxfmt's `Float32Array.of(...)` rule unpacks
+    //   to one number per line, blowing the diff up by 10×.
+    ignorePatterns: [".bunli/**", "site/**", "zensical.toml", "src/frontend/ochre/colormap/data/**"],
   },
 
   // ── Pre-commit (staged files only) ────────────────────────────────────────
