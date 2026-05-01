@@ -89,6 +89,11 @@ jobs:
       contents: write
 
     steps:
+      # Needed for the SHA256SUMS helper script under .github/scripts/.
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
       - uses: actions/download-artifact@v8
         with:
           path: dist
