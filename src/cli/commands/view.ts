@@ -6,7 +6,6 @@
  */
 
 import { defineCommand } from "citty";
-import { applyPendingUpdate } from "../lib/pending-update.ts";
 import { isYamlConfig, loadProjectConfig, pathsToConfig } from "../config.ts";
 import type { ResolvedConfig } from "../config.ts";
 import { validateZarrPath } from "../resolve.ts";
@@ -45,10 +44,9 @@ export default defineCommand({
     },
   },
   async run({ args }) {
-    // Apply any staged update BEFORE opening stores — if the swap succeeds we
-    // re-exec the replacement binary and never return.
-    const result = await applyPendingUpdate();
-    if (result === "applied") return;
+    // The pending-update auto-applier runs at the root in `index.ts` so every
+    // command picks up a freshly-staged binary. We keep no second call here
+    // to avoid double-checking the marker on every `ndea view` invocation.
 
     // Positional args first; fall back to NDEA_DATASET env var. The env var
     // is how `vp run --parallel dev:all` forwards the dataset path to this

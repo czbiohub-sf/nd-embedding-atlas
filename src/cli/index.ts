@@ -19,6 +19,7 @@
  */
 
 import { defineCommand, runMain } from "citty";
+import { applyPendingUpdate } from "./lib/pending-update.ts";
 import { VERSION } from "./version.ts";
 
 const DESCRIPTION = `Interactive browser-based dashboard linking AI embeddings to source 5D (TCZYX) image data.
@@ -27,6 +28,13 @@ Default (no subcommand) runs 'view' — e.g. 'ndea ./data.zarr'.`;
 
 /** Names of subcommands that should NOT fall through to `view`. */
 const KNOWN_SUBCOMMANDS = new Set(["view", "install", "update", "rollback"]);
+
+/**
+ * Subcommands that own the install/update lifecycle and must skip the auto-
+ * applier. Running it here would race with `update --force`, hide a `rollback`
+ * intent, or clobber a fresh `install`.
+ */
+const SKIP_AUTO_APPLY = new Set(["install", "update", "rollback"]);
 
 const main = defineCommand({
   meta: {
@@ -65,4 +73,18 @@ function normalizeArgs(rawArgs: string[]): string[] {
   return rawArgs;
 }
 
-void runMain(main, { rawArgs: normalizeArgs(process.argv.slice(2)) });
+async function runWithAutoUpdate(): Promise<void> {
+  const rawArgs = normalizeArgs(process.argv.slice(2));
+  // Detect the resolved subcommand (post-normalization) to decide whether to
+  // run the auto-applier. `--help` and `--version` have no positional, so they
+  // also benefit from a freshly-applied update.
+  const firstPositional = rawArgs.find((a) => !a.startsWith("-"));
+  const subcommand = firstPositional && KNOWN_SUBCOMMANDS.has(firstPositional) ? firstPositional : "view";
+  if (!SKIP_AUTO_APPLY.has(subcommand)) {
+    const result = await applyPendingUpdate();
+    if (result === "applied") return; // re-exec'd; the replacement handled the command.
+  }
+  await runMain(main, { rawArgs });
+}
+
+void runWithAutoUpdate();
