@@ -49,25 +49,25 @@ CI gates on `vp check` and the test suites (see `.github/workflows/ci.yml`).
 
 ## Fallow (optional code-health audit)
 
-[Fallow](https://docs.fallow.tools/) is a static-analysis tool for TypeScript/JavaScript that flags dead code, duplication, complexity hotspots, and circular dependencies. Not a CI gate — run it on demand when working in an unfamiliar area or before opening a non-trivial PR.
+[Fallow](https://docs.fallow.tools/) flags dead code, duplication, complexity hotspots, and circular dependencies in TypeScript / JavaScript projects. Not a CI gate; run it on demand.
 
 ```bash
 vp run fallow audit --changed-since main   # scoped to your branch's diff
 vp run fallow dead-code                    # unused files, exports, deps
 vp run fallow dupes                        # repeated code blocks
 vp run fallow health                       # cyclomatic / cognitive complexity
-vp run fallow fix --dry-run                # preview auto-fixes (delete unused exports etc.)
+vp run fallow fix --dry-run                # preview auto-fixes (e.g. unused-export removal)
 ```
 
-Good moments to run it:
+When to reach for it:
 
-- **Before a non-trivial PR** — `vp run fallow audit --changed-since main` returns a verdict on just the files you touched.
-- **After merging a large feature** — catches dead code, orphaned exports, or new duplication that the focused review missed.
-- **When picking up unfamiliar code** — `dead-code` and `health` give a quick picture of which files are load-bearing vs. detritus.
+- **Before a non-trivial PR** — `vp run fallow audit --changed-since main` returns a verdict on the files you touched.
+- **After merging a large feature** — catches dead code, orphaned exports, and duplication the review missed.
+- **Picking up unfamiliar code** — `dead-code` and `health` show which files are load-bearing vs. detritus.
 
-Skip it for trivial fixes; the signal-to-noise floor is high but real.
+Skip it for trivial fixes.
 
-The static layer is MIT-licensed and free. The runtime-coverage feature (tracking what actually executed in production) is paid; it's behind `fallow coverage` and isn't used in this repo.
+The static layer is MIT-licensed. The runtime-coverage feature (tracks what executed in production) is paid, lives behind `fallow coverage`, and isn't used here.
 
 ## Code style
 
