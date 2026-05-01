@@ -1,0 +1,120 @@
+name: Install script
+
+# Path-filtered: only fires when scripts/install.sh changes.
+# Tests POSIX sh portability across distros (catches dash-as-/bin/sh
+# regressions, Alpine BusyBox `ash` quirks, bash-3.2 macOS gaps that the
+# default ubuntu/macos runners alone wouldn't surface).
+#
+# Pattern adapted from starship/starship's install-script.yml: lint with
+# shellcheck/shfmt, then run `curl file://install.sh | sh` against a known
+# pinned release tag inside multiple base-image containers.
+
+on:
+  push:
+    branches: [main]
+    paths: [scripts/install.sh, .github/workflows/install-script.yml]
+  pull_request:
+    paths: [scripts/install.sh, .github/workflows/install-script.yml]
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Tag to install during portability tests. Bumped manually as we cut
+# releases; pinning a known-good tag keeps the test hermetic in inputs.
+env:
+  PIN_TAG: v0.1.0-alpha.2
+
+jobs:
+  # ── Lint ────────────────────────────────────────────────────────────────
+  lint:
+    name: Lint install.sh
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: shellcheck
+        run: shellcheck -s sh scripts/install.sh
+
+      - name: shfmt (POSIX flag)
+        run: |
+          curl -fsSL https://github.com/mvdan/sh/releases/download/v3.10.0/shfmt_v3.10.0_linux_amd64 -o /tmp/shfmt
+          chmod +x /tmp/shfmt
+          /tmp/shfmt -d -ln=posix scripts/install.sh
+
+  # ── Portability matrix ─────────────────────────────────────────────────
+  install:
+    name: Install on ${{ matrix.label }}
+    needs: lint
+    runs-on: ${{ matrix.runner }}
+    container: ${{ matrix.container }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: ubuntu-latest (bash)
+            runner: ubuntu-latest
+            container: ""
+            prep: ""
+          - label: macos-14 (bash 3.2)
+            runner: macos-14
+            container: ""
+            prep: ""
+          - label: alpine 3.20 (BusyBox ash, musl)
+            runner: ubuntu-latest
+            container: alpine:3.20
+            prep: apk add --no-cache curl ca-certificates bash
+          - label: debian 12 slim (dash as /bin/sh)
+            runner: ubuntu-latest
+            container: debian:12-slim
+            prep: apt-get update && apt-get install -y curl ca-certificates
+          - label: ubuntu-24.04-arm (native arm64)
+            runner: ubuntu-24.04-arm
+            container: ""
+            prep: ""
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Prepare base image
+        if: matrix.prep != ''
+        run: ${{ matrix.prep }}
+
+      # Use POSIX sh explicitly to catch bashisms even on systems where
+      # bash is the default. Run from `file://` so the test exercises the
+      # local install.sh under review, not whatever's on raw.githubusercontent.com.
+      - name: Run install.sh
+        env:
+          NDEA_VERSION: ${{ env.PIN_TAG }}
+          NDEA_BIN_DIR: ${{ runner.temp }}/bin
+          NDEA_HOME: ${{ runner.temp }}/state
+        run: sh scripts/install.sh
+
+      - name: Verify installed binary
+        env:
+          NDEA_BIN_DIR: ${{ runner.temp }}/bin
+          NDEA_HOME: ${{ runner.temp }}/state
+        run: |
+          test -L "$NDEA_BIN_DIR/ndea" || { echo "::error::not a symlink"; exit 1; }
+          test -d "$NDEA_HOME/versions/$PIN_TAG" || { echo "::error::missing versions dir"; exit 1; }
+          test -x "$NDEA_HOME/versions/$PIN_TAG/ndea" || { echo "::error::binary not executable"; exit 1; }
+          # Alpine ships musl; the bun-compiled binary needs glibc — skip
+          # the actual --version exec there. install.sh portability is what
+          # we're testing.
+          if [ "$(uname -m)" = "x86_64" ] || [ "$(uname -m)" = "arm64" ] || [ "$(uname -m)" = "aarch64" ]; then
+            if ldd --version 2>&1 | grep -qi musl; then
+              echo "musl runtime — skipping binary --version exec"
+            else
+              "$NDEA_BIN_DIR/ndea" --version
+            fi
+          fi

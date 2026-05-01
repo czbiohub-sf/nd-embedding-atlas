@@ -28,6 +28,9 @@ jobs:
           - os: ubuntu-latest # Linux x64
             target: bun-linux-x64
             artifact: ndea-linux-x64
+          - os: ubuntu-24.04-arm # Linux ARM64 (native, no QEMU)
+            target: bun-linux-arm64
+            artifact: ndea-linux-arm64
 
     runs-on: ${{ matrix.os }}
 

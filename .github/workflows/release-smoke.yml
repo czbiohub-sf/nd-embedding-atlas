@@ -1,0 +1,117 @@
+name: Release smoke
+
+# Fires after release.yml publishes a release. Exercises the per-tag
+# install path end-to-end: install.sh (downloaded from the release URL,
+# not the working tree), version check, doctor diagnostics, symlink
+# integrity, NDEA_DISABLE_UPDATES gate, gc no-op.
+#
+# Pattern: mise's `scripts/test-standalone.sh` (real release endpoint),
+# scoped down to ndea's actual subcommands.
+
+on:
+  release:
+    types: [published, prereleased]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to smoke-test (default = latest release)
+        required: false
+
+permissions: {}
+
+concurrency:
+  group: release-smoke-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    name: Smoke ${{ matrix.label }}
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: macos-14 (darwin-arm64)
+            runner: macos-14
+          - label: ubuntu-latest (linux-x64)
+            runner: ubuntu-latest
+          - label: ubuntu-24.04-arm (linux-arm64)
+            runner: ubuntu-24.04-arm
+
+    steps:
+      - name: Resolve tag
+        id: tag
+        run: |
+          tag="${{ github.event.release.tag_name || inputs.tag }}"
+          if [ -z "$tag" ]; then
+            tag=$(curl -fsSL --proto '=https' --tlsv1.2 \
+              https://api.github.com/repos/${{ github.repository }}/releases/latest \
+              | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -n 1)
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "Resolved release tag: $tag"
+
+      - name: Install via per-tag install.sh
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          NDEA_BIN_DIR: ${{ runner.temp }}/bin
+          NDEA_HOME: ${{ runner.temp }}/state
+          NDEA_VERSION: ${{ steps.tag.outputs.tag }}
+        run: |
+          curl -fsSL --proto '=https' --tlsv1.2 \
+            "https://github.com/${{ github.repository }}/releases/download/${TAG}/install.sh" \
+            | sh
+
+      - name: Verify symlink layout
+        env:
+          NDEA_BIN_DIR: ${{ runner.temp }}/bin
+          NDEA_HOME: ${{ runner.temp }}/state
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          test -L "$NDEA_BIN_DIR/ndea" || { echo "::error::ndea is not a symlink"; exit 1; }
+          target=$(readlink "$NDEA_BIN_DIR/ndea")
+          echo "symlink → $target"
+          case "$target" in
+            *"versions/${TAG}/ndea") echo "ok: points at versions/${TAG}";;
+            *) echo "::error::symlink target unexpected: $target"; exit 1;;
+          esac
+
+      - name: ndea --version
+        env:
+          NDEA_BIN_DIR: ${{ runner.temp }}/bin
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          out=$("$NDEA_BIN_DIR/ndea" --version)
+          echo "$out"
+          # Tag has a leading 'v'; binary reports the bare semver.
+          expected="${TAG#v}"
+          echo "$out" | grep -q "$expected" \
+            || { echo "::error::version output missing $expected"; exit 1; }
+
+      - name: ndea doctor
+        env:
+          NDEA_BIN_DIR: ${{ runner.temp }}/bin
+          NDEA_HOME: ${{ runner.temp }}/state
+        run: |
+          "$NDEA_BIN_DIR/ndea" doctor
+
+      - name: NDEA_DISABLE_UPDATES gate
+        env:
+          NDEA_BIN_DIR: ${{ runner.temp }}/bin
+          NDEA_HOME: ${{ runner.temp }}/state
+          NDEA_DISABLE_UPDATES: "1"
+        run: |
+          if "$NDEA_BIN_DIR/ndea" update; then
+            echo "::error::ndea update should have exited non-zero under NDEA_DISABLE_UPDATES=1"
+            exit 1
+          fi
+          echo "ok: update blocked"
+
+      - name: ndea gc --keep 1 (no-op with one version)
+        env:
+          NDEA_BIN_DIR: ${{ runner.temp }}/bin
+          NDEA_HOME: ${{ runner.temp }}/state
+        run: |
+          "$NDEA_BIN_DIR/ndea" gc --keep 1
