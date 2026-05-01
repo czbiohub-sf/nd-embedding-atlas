@@ -66,8 +66,7 @@ export function CollectionRowActions({ collection, onRequestRename }: Collection
           toast.info(`No new members · ${already_member.toLocaleString()} already in collection`);
         } else {
           toast.success(
-            `Added ${added.toLocaleString()} · ${collection.name}` +
-              (already_member > 0 ? ` (${already_member.toLocaleString()} already in collection)` : ""),
+            `Added ${added.toLocaleString()} · ${collection.name}${already_member > 0 ? ` (${already_member.toLocaleString()} already in collection)` : ""}`,
           );
         }
       } catch (err) {
