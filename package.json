@@ -13,6 +13,7 @@
     "build:frontend": "vp build",
     "build:binary": "bun build ./src/cli/index.ts --compile --outfile dist/ndea",
     "build:all-platforms": "bun run scripts/build-all.ts",
+    "gen": "bunx bunli generate",
     "sync-version": "bun run scripts/sync-version.ts",
     "check": "vp check",
     "test": "vp test"
@@ -72,6 +73,7 @@
     "@vitejs/plugin-react": "^6.0.1",
     "@webgpu/types": "^0.1.69",
     "agent-browser": "^0.26.0",
+    "bunli": "^0.9.1",
     "eslint-plugin-typegpu": "^0.11.0",
     "playwright": "^1.59.1",
     "shadcn": "^4.3.1",

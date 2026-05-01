@@ -80,6 +80,20 @@ ndea update --channel canary      # bleeding edge (rebuilt on every push to main
 ndea rollback                     # restore the previous binary
 ```
 
+### Shell completions
+
+```bash
+# bash / zsh — load on demand
+source <(ndea completions bash)
+source <(ndea completions zsh)
+
+# fish — drop into the completions dir
+ndea completions fish > ~/.config/fish/completions/ndea.fish
+
+# powershell
+ndea completions powershell | Out-String | Invoke-Expression
+```
+
 The update is staged as `<self>.pending` and swapped on next launch (avoids
 mid-run binary replacement). Re-running the curl installer also works.
 
