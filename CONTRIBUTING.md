@@ -2,43 +2,51 @@
 
 ## Prerequisites
 
-- **Python 3.12--3.13** (managed with [uv](https://docs.astral.sh/uv/))
-- **[pnpm](https://pnpm.io/)** -- fast Node.js package manager; requires Node.js (load with `module load nodejs` on HPC, or install via [nvm](https://github.com/nvm-sh/nvm))
-- **[vite-plus](https://viteplus.dev/guide/)** -- unified frontend toolchain providing the `vp` CLI (build, lint, fmt, dev); installed automatically by `pnpm install`
-- **[mise](https://mise.jdx.dev/)** -- polyglot dev tool manager used to run the combined backend + frontend dev stack (`mise run dev`)
-- **[prek](https://github.com/j178/prek)** -- Git hook runner (`uvx prek`)
+- **[Bun](https://bun.com)** — runtime + package manager. The version pinned in `package.json`'s `packageManager` field will be used by CI; locally any matching major works.
+- **[Vite+](https://viteplus.dev/)** (`vp`) — unified frontend toolchain (build, lint, fmt, dev). Install once globally per their setup; `vp` then drives every dev workflow in this repo.
+
+That's it — no Python, no pnpm, no uv, no separate Node manager. `vp env` handles the Node version automatically.
 
 ## Setup
 
 ```bash
 git clone https://github.com/czbiohub-sf/nd-embedding-atlas.git
 cd nd-embedding-atlas
-uv sync --all-groups
-cd frontend && pnpm install && vp build && cd ..
+bun install
 ```
 
 ## Development workflow
 
 ```bash
-# Lint + format (Python + frontend)
-uvx prek
+# Full dev stack (backend on :5055 + Vite frontend on :5173, with HMR)
+vp run dev path/to/data.zarr
 
-# Run tests
-uv run pytest
+# Quality gates (typecheck + Oxlint + Oxfmt + bunli gen drift)
+vp check
 
-# Launch viewer — backend + frontend dev server together
-mise run dev data/annotations_zv3.zarr
+# Tests (Bun-native .test.ts suites)
+bun test
 
-# Rebuild frontend only (after component changes)
-cd frontend && vp build
+# Production build (frontend bundle + single-file binary)
+bun run build
+
+# Regenerate CLI completion metadata (after editing src/cli/commands/**)
+vp run gen
 ```
+
+See [`AGENTS.md`](./AGENTS.md) for the full command catalogue, project layout, key abstractions, and gotchas. That file is the source of truth.
 
 ## Code style
 
-- **Python** -- enforced by [Ruff](https://docs.astral.sh/ruff/) (config in `pyproject.toml`)
-- **Frontend** -- enforced by [Oxlint](https://oxc.rs/docs/guide/usage/linter.html) + [Oxfmt](https://oxc.rs/docs/guide/usage/formatter.html) (config in `frontend/oxlint.json` and `frontend/vite.config.ts`)
-- **Git hooks** -- run via [prek](https://github.com/j178/prek) (`uvx prek`)
+Enforced by `vp check`:
 
-## Full guide
+- **TypeScript 6 strict** — no implicit any, `import type` for type-only imports
+- **Oxlint** + **Oxfmt** — config lives in `vite.config.ts`
+- 4-space indent, double quotes, trailing commas, semicolons
+- `@/` path alias → `src/frontend/`
 
-See the [contributing docs](https://czbiohub-sf.github.io/nd-embedding-atlas/contributing/) for detailed conventions, project structure, and CI details.
+## Pull requests
+
+`ci.yml` runs typecheck + lint + fmt + gen drift + bun test on push and PR. `zizmor.yml` audits workflow security. Both must pass before merge.
+
+For releases, see [`AGENTS.md`](./AGENTS.md#commands) — release tags trigger `release.yml`, push to main triggers `canary.yml` (rolling pre-release).
