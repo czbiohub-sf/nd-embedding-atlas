@@ -4,20 +4,15 @@ icon: lucide/rocket
 
 # Getting started
 
-nd-embedding-atlas is an interactive dashboard that links high-dimensional AI embeddings
-to their source 5D (TCZYX) image data for rapid exploration and annotation.
+nd-embedding-atlas is an interactive dashboard linking high-dimensional AI embeddings to source 5D (TCZYX) image data.
 
-!!! warning "AnnData schema expectations are in flux"
+!!! warning "AnnData schema is unstable"
 
-    The column names, layout of `obs`/`obsm`/`layers`, and general AnnData
-    structure that the viewer recognizes are not yet standardized and will
-    change. You may need to adjust your AnnData as we formalize the structure.
+    The viewer's expected `obs` / `obsm` / `layers` shape will change. Expect to adjust your AnnData as the schema firms up.
 
 !!! info "Browser requirement"
 
-    **Chrome or Edge is required.** The scatter renderer uses WebGPU, which Firefox
-    does not support by default. On HPC systems, see the
-    [WebGPU setup guide](webgpu-hpc-setup.md) to enable WebGPU in Chrome.
+    **Chrome or Edge required.** The scatter renderer uses WebGPU; Firefox lacks WebGPU support by default. On HPC, see the [WebGPU setup guide](webgpu-hpc-setup.md).
 
 ## Installation
 
@@ -25,7 +20,7 @@ to their source 5D (TCZYX) image data for rapid exploration and annotation.
 curl -fsSL https://raw.githubusercontent.com/czbiohub-sf/nd-embedding-atlas/main/scripts/install.sh | sh
 ```
 
-Downloads a checksum-verified native binary (~80 MB) and drops it into `$HOME/.local/bin`. To upgrade in place:
+Downloads a checksum-verified ~80 MB native binary into `$HOME/.local/bin`. To upgrade in place:
 
 ```bash
 ndea update                       # latest stable
@@ -37,7 +32,7 @@ For developer setup, see the [contributing guide](contributing.md).
 
 ## Test data
 
-Sample datasets live in the companion [ome-atlas-test-data](https://github.com/czbiohub-sf/ome-atlas-test-data) repo (clone alongside this one):
+Sample datasets live in the companion [ome-atlas-test-data](https://github.com/czbiohub-sf/ome-atlas-test-data) repo. Clone alongside this one:
 
 ```bash
 git clone https://github.com/czbiohub-sf/ome-atlas-test-data.git ../ome-atlas-test-data
@@ -45,13 +40,7 @@ git clone https://github.com/czbiohub-sf/ome-atlas-test-data.git ../ome-atlas-te
 
 !!! tip "On the Bruno HPC"
 
-    Test datasets are also pre-staged at:
-
-    ```
-    /hpc/websites/public.czbiohub.org/comp.micro/nd-embedding-atlas-test-data
-    ```
-
-    Symlink or point the viewer directly at these paths instead of cloning.
+    Test datasets are pre-staged at `/hpc/websites/public.czbiohub.org/comp.micro/nd-embedding-atlas-test-data` — symlink or point the viewer at that path directly.
 
 ## Launch the viewer
 
@@ -59,38 +48,35 @@ git clone https://github.com/czbiohub-sf/ome-atlas-test-data.git ../ome-atlas-te
 # Single AnnData zarr store
 ndea view path/to/data.zarr
 
-# Multiple AnnData stores opened side-by-side
+# Multiple stores side-by-side
 ndea view path/to/dataset_a.zarr path/to/dataset_b.zarr
 
-# Project config (the only way to pair an AnnData store with an OME-Zarr plate
-# for image crops on hover, configure channels, set per-dataset options, etc.)
+# Project config — the only form that pairs an AnnData store with an OME-Zarr
+# plate for hover crops, sets channels, configures per-dataset options.
 ndea view path/to/config.yaml
 ```
 
+Open Chrome or Edge at `http://localhost:5055`.
+
 !!! tip "Shorthand"
 
-    `view` is the default subcommand, so the leading `view` is optional —
-    `ndea path/to/data.zarr` works the same as `ndea view path/to/data.zarr`.
-    The explicit form is documented above to keep CLI examples uniform with
-    the other subcommands (`update`, `rollback`, `completions`, …).
+    `view` is the default subcommand. `ndea path/to/data.zarr` works the same as `ndea view path/to/data.zarr`. Examples use the explicit form to match `update`, `rollback`, `completions`.
 
-Then open Chrome or Edge at `http://localhost:5055`.
-
-A minimal multi-dataset YAML looks like:
+A minimal multi-dataset YAML:
 
 ```yaml
 datasets:
   - name: my-experiment
     path: path/to/annotations.zarr
-    plate_path: path/to/plate.zarr # optional — enables image crops on hover
+    plate_path: path/to/plate.zarr # optional — enables hover crops
 ```
 
-The viewer ships:
+The viewer ships four panels:
 
-- **Embedding plot** — interactive WebGPU scatter of the embedding space
-- **Data table** — sortable, filterable metadata table cross-filtered with the scatter
-- **Charts** — cross-filtered distributions of obs columns
-- **OME-Zarr image viewer** — image crops on point-hover (when a `plate_path` is configured)
+- **Embedding plot** — WebGPU scatter of the embedding space
+- **Data table** — sortable, cross-filtered with the scatter
+- **Charts** — distributions of obs columns
+- **OME-Zarr viewer** — image crops on hover (when `plate_path` is set)
 
 ## What's next?
 

@@ -4,9 +4,9 @@ icon: lucide/terminal
 
 # CLI reference
 
-Complete description of the `ndea` command surface — subcommands, options, environment variables, and channels.
+Every `ndea` subcommand, flag, environment variable, and channel.
 
-For workflow-oriented walkthroughs, see [Getting started](index.md). For dev-side commands (`vp run dev`, `vp run gen`, …) see [Contributing](contributing.md).
+Walkthroughs live in [Getting started](index.md). Dev-side commands (`vp run dev`, `vp run gen`, …) live in [Contributing](contributing.md).
 
 ## Synopsis
 
@@ -23,14 +23,14 @@ ndea --help | --version
 
 ## Default subcommand fall-through
 
-When the first positional argument is not a known subcommand, `ndea` routes the invocation to `view`. These two commands are equivalent:
+When the first positional isn't a known subcommand, `ndea` routes to `view`. These two are equivalent:
 
 ```
 ndea path/to/data.zarr
 ndea view path/to/data.zarr
 ```
 
-If no positional is provided and `NDEA_DATASET` is set, the value of that variable is forwarded to `view`. This is the path used by `vp run dev` to inject the dataset argument across the orchestrated dev tasks.
+With no positional and `NDEA_DATASET` set, `view` reads that path. `vp run dev` uses this to inject the dataset across orchestrated dev tasks.
 
 ## `ndea view`
 
@@ -42,7 +42,7 @@ Open one or more zarr stores (or a YAML project config) in the dashboard.
 | -------- | ----------------- | ------------------------------------------- |
 | `paths…` | one or more paths | Zarr stores or a single YAML project config |
 
-A single path with a `.yaml` / `.yml` extension is parsed as a multi-dataset project config (see [Preparing your data](preparing-your-data.md)).
+A single `.yaml` / `.yml` path is parsed as a multi-dataset project config (see [Preparing your data](preparing-your-data.md)).
 
 ### Options
 
@@ -58,7 +58,7 @@ A single path with a `.yaml` / `.yml` extension is parsed as a multi-dataset pro
 
 ## `ndea install`
 
-Stage B of the self-installer. Invoked by `install.sh` after the binary is downloaded; not normally run by hand.
+Stage B of the self-installer. `install.sh` invokes it after downloading the binary; rarely run by hand.
 
 ### Options
 
@@ -72,36 +72,36 @@ Refuses to run from `bun run` (i.e. uncompiled) unless `--from-bootstrap` is set
 
 ## `ndea update`
 
-Download the latest release for a channel, verify its checksum, and stage it as `<self>.pending`. The swap is applied on the next `ndea` invocation.
+Download the latest release for a channel, verify the checksum, stage it as `<self>.pending`. The swap applies on the next `ndea` invocation.
 
 ### Options
 
-| Option                | Type                                              | Default  | Description                                    |
-| --------------------- | ------------------------------------------------- | -------- | ---------------------------------------------- |
-| `--channel <channel>` | `stable` \| `latest` \| `pre-release` \| `canary` | `stable` | Release channel to resolve                     |
-| `--force`             | boolean                                           | `false`  | Update even when already on the target version |
+| Option                | Type                                              | Default  | Description                                |
+| --------------------- | ------------------------------------------------- | -------- | ------------------------------------------ |
+| `--channel <channel>` | `stable` \| `latest` \| `pre-release` \| `canary` | `stable` | Release channel to resolve                 |
+| `--force`             | boolean                                           | `false`  | Re-install even when already on the target |
 
-Refuses to run from `bun run` (i.e. uncompiled). The check is skipped when `NDEA_CHANNEL` is set in the environment to the same value.
+Refuses to run uncompiled (i.e. via `bun run`).
 
-The pending-update state lives at `~/.ndea/pending-update`. The applier runs at the start of every `ndea` invocation except `install` / `update` / `rollback` (which own the install lifecycle and must not have a swap race).
+State lives at `~/.ndea/pending-update`. The applier runs at the start of every `ndea` command except `install` / `update` / `rollback` — those own the install lifecycle and skip it to avoid a swap race.
 
 ## `ndea rollback`
 
 Restore the previous binary from `<self>.bak`.
 
-`ndea update` preserves one level of history: before applying a staged `.pending`, the existing binary is renamed to `.bak`. `rollback` undoes that swap.
+`ndea update` keeps one level of history: it renames the running binary to `.bak` before applying the staged `.pending`. `rollback` undoes that swap.
 
-No options. Refuses to run from `bun run`.
+No options. Refuses to run uncompiled.
 
 ## `ndea completions`
 
-Generate shell completion scripts.
+Emit shell completion scripts.
 
 ### Arguments
 
-| Name  | Type                      | Description               |
-| ----- | ------------------------- | ------------------------- |
-| shell | `bash` \| `zsh` \| `fish` | Shell flavour to emit for |
+| Name  | Type                      | Description       |
+| ----- | ------------------------- | ----------------- |
+| shell | `bash` \| `zsh` \| `fish` | Shell to emit for |
 
 ### Usage
 
@@ -114,7 +114,7 @@ source <(ndea completions zsh)
 ndea completions fish > ~/.config/fish/completions/ndea.fish
 ```
 
-Completions for `ndea view` positional paths filter to `*.zarr` directories and `*.yaml` / `*.yml` files.
+`view`'s positional completion filters to `*.zarr` directories and `*.yaml` / `*.yml` files.
 
 ## Environment variables
 
@@ -138,7 +138,7 @@ Completions for `ndea view` positional paths filter to `*.zarr` directories and 
 | `pre-release` | latest active alpha / beta / rc tag          | Manual; absent between cuts (manifest pointer is `null`) |
 | `canary`      | rolling `canary` tag                         | Automatic on every push to `main`                        |
 
-The mapping from channel name to git tag lives in [`manifest.json`](https://github.com/czbiohub-sf/nd-embedding-atlas/blob/main/manifest.json) at the repo root, fetched from `raw.githubusercontent.com` at update time. Ops can hand-edit the manifest to roll back a channel without re-cutting a release.
+[`manifest.json`](https://github.com/czbiohub-sf/nd-embedding-atlas/blob/main/manifest.json) maps each channel to a git tag. `ndea update` fetches it from `raw.githubusercontent.com` at update time. Ops can hand-edit the manifest to roll a channel back without re-cutting a release.
 
 ## State directory layout
 
@@ -153,7 +153,7 @@ The mapping from channel name to git tag lives in [`manifest.json`](https://gith
   logs/                 # Reserved for future telemetry / install traces
 ```
 
-The currently-installed binary is at `$NDEA_BIN_DIR/ndea`; its previous version (if any) at `$NDEA_BIN_DIR/ndea.bak`.
+The current binary lives at `$NDEA_BIN_DIR/ndea`; the previous version (if any) at `$NDEA_BIN_DIR/ndea.bak`.
 
 ## Exit codes
 

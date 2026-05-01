@@ -8,8 +8,8 @@ icon: lucide/git-pull-request
 
 ### Prerequisites
 
-- **[Bun](https://bun.com)** — runtime + package manager. The version pinned in `package.json`'s `packageManager` field is what CI uses; locally any matching major works.
-- **[Vite+](https://viteplus.dev/)** (`vp`) — unified frontend toolchain (build, lint, fmt, dev). Install once globally; `vp` then drives every dev workflow in this repo.
+- **[Bun](https://bun.com)** — runtime + package manager. CI uses the version pinned in `package.json`'s `packageManager` field; locally any matching major works.
+- **[Vite+](https://viteplus.dev/)** (`vp`) — frontend toolchain (build, lint, fmt, dev). Install once globally; `vp` drives every dev workflow.
 
 ### Clone and install
 
@@ -19,18 +19,18 @@ cd nd-embedding-atlas
 bun install
 ```
 
-`bun install` resolves both backend and frontend dependencies into a single `node_modules/`.
+Backend and frontend share one `node_modules/`.
 
 ## Development workflow
 
 ```bash
-# Full dev stack (backend on :5055 + Vite frontend on :5173, with HMR)
+# Full dev stack: backend on :5055 + Vite frontend on :5173 with HMR
 vp run dev path/to/data.zarr
 ```
 
-The wrapper boots `src/cli/index.ts view` for the backend and `vp dev` for the frontend, with cross-filter cache invalidation hooked up via Mosaic's WS.
+Wraps `src/cli/index.ts view` (backend) and `vp dev` (frontend), with cross-filter cache invalidation over Mosaic's WS.
 
-For frontend-only iteration when the backend is already running separately:
+Frontend-only when the backend already runs separately:
 
 ```bash
 vp dev
@@ -45,7 +45,7 @@ vp test         # vitest (frontend unit tests)
 vp build        # frontend bundle smoke
 ```
 
-`vp check` and the test suites are what CI gates on (see `.github/workflows/ci.yml`).
+CI gates on `vp check` and the test suites (see `.github/workflows/ci.yml`).
 
 ## Code style
 
@@ -74,7 +74,7 @@ src/
     ochre/            # Vendored colormap library
 ```
 
-See [`AGENTS.md`](https://github.com/czbiohub-sf/nd-embedding-atlas/blob/main/AGENTS.md) in the repo root for the canonical command catalogue, key abstractions, and gotchas.
+See [`AGENTS.md`](https://github.com/czbiohub-sf/nd-embedding-atlas/blob/main/AGENTS.md) for the canonical command catalogue, key abstractions, and gotchas.
 
 ## Releases
 
@@ -84,22 +84,22 @@ See [`AGENTS.md`](https://github.com/czbiohub-sf/nd-embedding-atlas/blob/main/AG
 | `pre-release` | Manual: tag `vX.Y.Z-alpha.N` / `-beta.N` / `-rc.N` and push       |
 | `canary`      | Automatic: every push to `main` rebuilds the rolling `canary` tag |
 
-`pre-release` cuts open an automated PR that bumps the `pre-release` channel pointer in `manifest.json` — review and merge to make `ndea update --channel pre-release` resolve to the new tag.
+A `pre-release` cut opens an auto-generated PR that bumps `manifest.json`'s `pre-release` pointer. Merge to activate.
 
-Code generation: after editing `src/cli/commands/**`, run:
+After editing `src/cli/commands/**`, regenerate the completion metadata:
 
 ```bash
 vp run gen
 ```
 
-This regenerates `.bunli/commands.gen.ts`, which feeds shell-completion script generation. CI fails if the generated file drifts from source (`.github/scripts/check-bunli-gen.sh`).
+Updates `.bunli/commands.gen.ts`, which feeds shell-completion script generation. CI fails on drift (`.github/scripts/check-bunli-gen.sh`).
 
 ## Editing this docs site
 
-Pages under `docs/` are rendered by [zensical](https://zensical.org/) via the config at `zensical.toml`. Preview locally:
+[zensical](https://zensical.org/) renders the pages under `docs/` using `zensical.toml`. Preview locally:
 
 ```bash
 uvx --from zensical zensical serve
 ```
 
-Live-reloads at `http://localhost:8000` as you edit. The build output goes to `site/` (gitignored). `uvx` is part of [uv](https://docs.astral.sh/uv/); zensical itself is fetched on demand and cached.
+Live-reloads at `http://localhost:8000`. Build output goes to `site/` (gitignored). `uvx` is part of [uv](https://docs.astral.sh/uv/); zensical is fetched on demand and cached.
