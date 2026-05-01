@@ -32,10 +32,10 @@ def _sanitize_filename(name: str) -> str:
 
 
 def _query_indices(predicate: str, state: ViewerState) -> np.ndarray:
-    """Query DuckDB for row indices matching *predicate* (runs in thread pool)."""
-    with state.store.cursor() as cur:
-        result = cur.execute(f"SELECT __row_index__ FROM dataset WHERE {predicate}")
-        rows = result.fetchall()
+    # Use the main connection (not cursor()) so temp tables like __scatter_selection
+    # — created on con by the scatter route — are visible. DuckDB scopes temp tables
+    # per-connection; a fresh cursor() opens a new connection with its own temp schema.
+    rows = state.store.con.execute(f"SELECT __row_index__ FROM dataset WHERE {predicate}").fetchall()
     return np.array([r[0] for r in rows], dtype=np.int64)
 
 
