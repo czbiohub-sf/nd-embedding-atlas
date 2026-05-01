@@ -18,10 +18,11 @@
  *   - the marker or `.pending` file is corrupt (logged, not fatal)
  */
 
+import { log } from "@bunli/utils";
 import { existsSync } from "node:fs";
 import { readFile, rename, rm, stat } from "node:fs/promises";
-import { currentVersionPath, isCompiledBinary, pendingUpdateMarkerPath, resolveSelfPath } from "./paths.ts";
 import { sha256Hex } from "./manifest.ts";
+import { currentVersionPath, isCompiledBinary, pendingUpdateMarkerPath, resolveSelfPath } from "./paths.ts";
 
 /** JSON shape of `~/.ndea/pending-update`. */
 export interface PendingUpdateMarker {
@@ -167,8 +168,13 @@ function errMsg(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+/**
+ * Diagnostic logger for pending-update path. Uses @bunli/utils `log()` so
+ * output is structured (level + prefix), routes to stderr, and auto-strips
+ * ANSI when stdout is piped (e.g. agent / CI consumers reading our output).
+ */
 function logWarn(msg: string): void {
-  console.error(`  [ndea] ${msg}`);
+  log(msg, { level: "warn", prefix: "ndea" });
 }
 
 /**
