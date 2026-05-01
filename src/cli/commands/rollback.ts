@@ -6,18 +6,17 @@
  * that swap so users can recover from a bad release without reinstalling.
  */
 
-import { defineCommand } from "citty";
+import { defineCommand } from "@bunli/core";
 import { existsSync } from "node:fs";
 import { rename, rm } from "node:fs/promises";
 import { acquireLock } from "../lib/lock.ts";
 import { installLockPath, isCompiledBinary, resolveSelfPath } from "../lib/paths.ts";
 
 export default defineCommand({
-  meta: {
-    name: "rollback",
-    description: "Restore the previous ndea binary from <self>.bak",
-  },
-  async run() {
+  name: "rollback" as const,
+  description: "Restore the previous ndea binary from <self>.bak",
+  options: {},
+  async handler() {
     if (!isCompiledBinary()) {
       console.error("Error: `ndea rollback` only works from a compiled binary.");
       process.exit(1);

@@ -89,7 +89,7 @@ for (const { target, suffix, label } of TARGETS) {
     "--compile",
     `--target=${target}`,
     `--outfile=${outfile}`,
-    "--bytecode",
+    // See scripts/build.ts: --bytecode incompatible with @opentui/core TLA.
     "--minify",
     ...frontendFiles,
   ];

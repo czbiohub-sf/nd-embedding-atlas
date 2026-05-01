@@ -3,64 +3,61 @@
 /**
  * ndea CLI — nd-embedding-atlas viewer + self-updater.
  *
+ * Built on @bunli/core: type-safe commands with Zod-validated options, a
+ * plugin lifecycle (setup → beforeCommand → handler → afterCommand), and
+ * built-in shell-completion / agent-format support. See bunli.dev for
+ * the full feature set.
+ *
  * Subcommands:
  *   view       Open zarr stores in the dashboard (default)
  *   install    Stage B of the self-installer (called by install.sh)
  *   update     Stage a new release for next launch
  *   rollback   Restore the previous binary
  *
- * For backwards compatibility, invocations without a subcommand default to
- * `view`:
+ * For backwards compatibility, invocations without a subcommand default
+ * to `view`:
  *     ndea ./data.zarr
  *     ndea project.yaml --port 8080
  *
- * Subcommands lazy-load through dynamic `import()` so `ndea update` doesn't
- * pay the zarr-open / DuckDB cost, and vice versa.
+ * The pending-update auto-applier runs at the root so every command —
+ * including `ndea --version` and `ndea --help` — picks up a freshly-
+ * staged binary before dispatching.
  */
 
-import { defineCommand, runMain } from "citty";
+import { createCLI } from "@bunli/core";
+import installCommand from "./commands/install.ts";
+import rollbackCommand from "./commands/rollback.ts";
+import updateCommand from "./commands/update.ts";
+import viewCommand from "./commands/view.ts";
 import { applyPendingUpdate } from "./lib/pending-update.ts";
 import { VERSION } from "./version.ts";
 
-const DESCRIPTION = `Interactive browser-based dashboard linking AI embeddings to source 5D (TCZYX) image data.
-
-Default (no subcommand) runs 'view' — e.g. 'ndea ./data.zarr'.`;
+const DESCRIPTION =
+  "Interactive browser-based dashboard linking AI embeddings to source 5D (TCZYX) image data.\n\n" +
+  "Default (no subcommand) runs 'view' — e.g. 'ndea ./data.zarr'.";
 
 /** Names of subcommands that should NOT fall through to `view`. */
 const KNOWN_SUBCOMMANDS = new Set(["view", "install", "update", "rollback"]);
 
 /**
- * Subcommands that own the install/update lifecycle and must skip the auto-
- * applier. Running it here would race with `update --force`, hide a `rollback`
- * intent, or clobber a fresh `install`.
+ * Subcommands that own the install/update lifecycle and must skip the
+ * auto-applier. Running it here would race with `update --force`, hide a
+ * `rollback` intent, or clobber a fresh `install`.
  */
 const SKIP_AUTO_APPLY = new Set(["install", "update", "rollback"]);
-
-const main = defineCommand({
-  meta: {
-    name: "ndea",
-    version: VERSION,
-    description: DESCRIPTION,
-  },
-  subCommands: {
-    view: () => import("./commands/view.ts").then((m) => m.default),
-    install: () => import("./commands/install.ts").then((m) => m.default),
-    update: () => import("./commands/update.ts").then((m) => m.default),
-    rollback: () => import("./commands/rollback.ts").then((m) => m.default),
-  },
-});
 
 /**
  * Normalize rawArgs so `ndea ./data.zarr` routes to `view ./data.zarr`.
  *
- * Citty dispatches on the first positional token: if it's a known subcommand
- * we leave it alone; otherwise we prepend `view` so the dashboard opens with
- * the original arguments intact. `--help` / `--version` without a subcommand
- * stay at the root so citty's built-in usage/version output runs.
+ * Bunli dispatches on the first positional token: if it's a known
+ * subcommand we leave it alone; otherwise we prepend `view` so the
+ * dashboard opens with the original arguments intact. `--help` /
+ * `--version` without a subcommand stay at the root so bunli's built-in
+ * usage/version output runs.
  *
- * Additional fallback: if no positional is given but NDEA_DATASET is set in
- * the environment (the dev-orchestration path via `vp run --parallel dev:all`),
- * route to `view` so the env-var gets picked up inside view.ts.
+ * Additional fallback: if no positional is given but NDEA_DATASET is set
+ * (the dev-orchestration path via `vp run --parallel dev:all`), route to
+ * `view` so the env-var gets picked up inside view.ts.
  */
 function normalizeArgs(rawArgs: string[]): string[] {
   const firstPositional = rawArgs.find((a) => !a.startsWith("-"));
@@ -73,18 +70,31 @@ function normalizeArgs(rawArgs: string[]): string[] {
   return rawArgs;
 }
 
-async function runWithAutoUpdate(): Promise<void> {
-  const rawArgs = normalizeArgs(process.argv.slice(2));
-  // Detect the resolved subcommand (post-normalization) to decide whether to
-  // run the auto-applier. `--help` and `--version` have no positional, so they
-  // also benefit from a freshly-applied update.
-  const firstPositional = rawArgs.find((a) => !a.startsWith("-"));
-  const subcommand = firstPositional && KNOWN_SUBCOMMANDS.has(firstPositional) ? firstPositional : "view";
+async function main(): Promise<void> {
+  const argv = normalizeArgs(process.argv.slice(2));
+
+  // Apply any staged update BEFORE dispatching to subcommand. If the swap
+  // succeeds the function re-execs the new binary and never returns.
+  // Skip for install/update/rollback so we don't clobber an in-flight
+  // lifecycle command.
+  const subcommand = argv.find((a) => !a.startsWith("-")) ?? "view";
   if (!SKIP_AUTO_APPLY.has(subcommand)) {
     const result = await applyPendingUpdate();
-    if (result === "applied") return; // re-exec'd; the replacement handled the command.
+    if (result === "applied") return;
   }
-  await runMain(main, { rawArgs });
+
+  const cli = await createCLI({
+    name: "ndea",
+    version: VERSION,
+    description: DESCRIPTION,
+  });
+
+  cli.command(viewCommand);
+  cli.command(installCommand);
+  cli.command(updateCommand);
+  cli.command(rollbackCommand);
+
+  await cli.run(argv);
 }
 
-void runWithAutoUpdate();
+void main();

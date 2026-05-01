@@ -11,11 +11,12 @@
  *   - warning if destination isn't on PATH
  */
 
-import { defineCommand } from "citty";
-import { chmod, mkdir, rename, stat } from "node:fs/promises";
+import { defineCommand, option } from "@bunli/core";
 import { existsSync } from "node:fs";
+import { chmod, mkdir, rename, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, dirname, resolve } from "node:path";
+import { z } from "zod";
 import { acquireLock } from "../lib/lock.ts";
 import { sha256Hex } from "../lib/manifest.ts";
 import {
@@ -30,32 +31,27 @@ import {
 import { VERSION } from "../version.ts";
 
 export default defineCommand({
-  meta: {
-    name: "install",
-    description: "Place the ndea binary on PATH and set up state directories",
-  },
-  args: {
-    "from-bootstrap": {
-      type: "boolean",
+  name: "install" as const,
+  description: "Place the ndea binary on PATH and set up state directories",
+  options: {
+    "from-bootstrap": option(z.coerce.boolean().default(false), {
       description: "Called from install.sh (Stage A)",
-    },
-    "bin-dir": {
-      type: "string",
+    }),
+    "bin-dir": option(z.string().optional(), {
       description: "Override install destination (NDEA_BIN_DIR takes precedence)",
-    },
-    force: {
-      type: "boolean",
+    }),
+    force: option(z.coerce.boolean().default(false), {
       description: "Overwrite an existing binary without prompting",
-    },
+    }),
   },
-  async run({ args }) {
-    if (!isCompiledBinary() && args["from-bootstrap"] !== true) {
+  async handler({ flags }) {
+    if (!isCompiledBinary() && !flags["from-bootstrap"]) {
       console.error("Error: `ndea install` can only run from a compiled binary (you ran via `bun run`).");
       console.error("In dev, run `bun run src/cli/index.ts view ./data.zarr` instead.");
       process.exit(1);
     }
 
-    const dest = resolveDestination(typeof args["bin-dir"] === "string" ? args["bin-dir"] : undefined);
+    const dest = resolveDestination(flags["bin-dir"]);
 
     const lock = await acquireLock(installLockPath()).catch((err: unknown) => {
       const msg = err instanceof Error ? err.message : String(err);
@@ -78,7 +74,7 @@ export default defineCommand({
       } else {
         await mkdir(dirname(target), { recursive: true });
         if (existsSync(target)) {
-          if (args.force !== true) {
+          if (!flags.force) {
             console.error(
               `  existing ndea at ${target} will be replaced (use --force or set NDEA_OVERWRITE=1 to silence)`,
             );

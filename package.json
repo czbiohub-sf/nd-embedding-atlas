@@ -19,6 +19,8 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",
+    "@bunli/core": "^0.9.1",
+    "@bunli/plugin-completions": "^0.3.5",
     "@duckdb/node-api": "1.5.1-r.2",
     "@fontsource-variable/geist-mono": "^5.2.7",
     "@idetik/core": "^0.16.2",
@@ -40,7 +42,6 @@
     "@uwdata/mosaic-inputs": "^0.24.2",
     "@uwdata/mosaic-sql": "^0.24.2",
     "@zarrita/storage": "^0.2.0",
-    "citty": "^0.2.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",

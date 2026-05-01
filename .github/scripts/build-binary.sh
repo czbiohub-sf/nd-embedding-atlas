@@ -10,7 +10,11 @@
 #   TARGET   — bun --target value, e.g. bun-darwin-arm64, bun-linux-x64
 #   ARTIFACT — output filename, e.g. ndea-darwin-arm64
 #
-# `--bytecode` precompiles, `--minify` shrinks unused code paths.
+# `--minify` shrinks unused code paths. `--bytecode` is intentionally
+# omitted: @opentui/core (transitive via @bunli/runtime) emits top-level
+# `await` that Bun's bytecode pre-compiler rejects. Skipping bytecode
+# costs ~10ms startup parsing — irrelevant for a CLI that goes on to
+# boot a server.
 set -euo pipefail
 
 : "${TARGET:?TARGET env var is required (bun --target)}"
@@ -23,7 +27,6 @@ mapfile -t frontend_files < <(find dist/frontend -type f | sort)
 
 bun build ./src/cli/index.ts \
     --compile \
-    --bytecode \
     --minify \
     "--target=${TARGET}" \
     "--outfile=dist/${ARTIFACT}" \

@@ -136,7 +136,8 @@ const compileArgs = [
   "--compile",
   `--target=${target}`,
   `--outfile=${outfile}`,
-  "--bytecode",
+  // `--bytecode` omitted: @opentui/core (transitive via @bunli/runtime)
+  // emits top-level await that Bun's bytecode pre-compiler rejects.
   "--minify",
   ...DUCKDB_PLATFORM_EXTERNALS.flatMap((m) => ["--external", m]),
 ];

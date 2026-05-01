@@ -11,10 +11,11 @@
  * So we always stage + mark, never swap in place. Cheap and uniform.
  */
 
-import { defineCommand } from "citty";
+import { defineCommand, option } from "@bunli/core";
 import { existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
+import { z } from "zod";
 import { acquireLock } from "../lib/lock.ts";
 import type { Channel } from "../lib/manifest.ts";
 import { CHANNELS, detectTarget, fetchManifest, parseShaFile, sha256Hex } from "../lib/manifest.ts";
@@ -23,34 +24,30 @@ import { writePendingUpdateMarker } from "../lib/pending-update.ts";
 import { VERSION } from "../version.ts";
 
 export default defineCommand({
-  meta: {
-    name: "update",
-    description: "Download the latest ndea release and stage it for next launch",
-  },
-  args: {
-    force: {
-      type: "boolean",
+  name: "update" as const,
+  description: "Download the latest ndea release and stage it for next launch",
+  options: {
+    force: option(z.coerce.boolean().default(false), {
       description: "Update even when already on the target version",
-    },
-    channel: {
-      type: "string",
-      description: "Release channel: stable | latest",
-    },
+    }),
+    channel: option(z.enum(CHANNELS).optional(), {
+      description: `Release channel: ${CHANNELS.join(" | ")}`,
+    }),
   },
-  async run({ args }) {
+  async handler({ flags }) {
     if (!isCompiledBinary()) {
       console.error("Error: `ndea update` only works from a compiled binary (not `bun run`).");
       process.exit(1);
     }
 
-    const channel = resolveChannel(args.channel);
+    const channel = resolveChannel(flags.channel);
     detectTarget(); // validate platform early — throws if unsupported
 
     console.log(`  Checking for updates on channel "${channel}"…`);
     const asset = await fetchManifest(channel);
     const targetVersion = asset.tag.replace(/^v/, "");
 
-    if (targetVersion === VERSION && args.force !== true) {
+    if (targetVersion === VERSION && !flags.force) {
       console.log(`  Already on v${VERSION}. Use --force to re-install.`);
       return;
     }
@@ -110,13 +107,13 @@ export default defineCommand({
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-function resolveChannel(raw: unknown): Channel {
+function resolveChannel(raw: Channel | undefined): Channel {
   const fromEnv = process.env.NDEA_CHANNEL;
-  const candidate = typeof raw === "string" && raw.length > 0 ? raw : (fromEnv ?? "stable");
+  const candidate: string = raw ?? fromEnv ?? "stable";
   if ((CHANNELS as readonly string[]).includes(candidate)) return candidate as Channel;
   console.error(`Error: unknown channel "${candidate}" (expected: ${CHANNELS.join(", ")})`);
   process.exit(1);
-  // `process.exit` is `: never`, but ESLint's consistent-return still wants a
-  // throw/return from the control-flow end — throw is clearer than a dead path.
+  // `process.exit` is `: never`, but the lint rule's control-flow analysis
+  // doesn't pick that up — throw explicitly so consistent-return is happy.
   throw new Error("unreachable");
 }

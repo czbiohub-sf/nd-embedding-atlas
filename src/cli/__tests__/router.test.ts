@@ -1,5 +1,5 @@
 /**
- * End-to-end smoke tests for the citty-backed subcommand router.
+ * End-to-end smoke tests for the bunli-backed subcommand router.
  *
  * We spawn `bun run src/cli/index.ts …` subprocesses so the test exercises
  * the real argv → command dispatch pipeline — no mocks. Each subprocess is
@@ -14,7 +14,7 @@ const ROOT = join(import.meta.dir, "..", "..", "..");
 
 // ANSI escape pattern built from a `String.fromCharCode` call to sidestep the
 // `no-control-regex` lint while still matching the ESC (0x1B) character that
-// citty embeds for colour output.
+// bunli embeds for colour output.
 const ESC = String.fromCharCode(27);
 const ANSI_PATTERN = new RegExp(`${ESC}\\[[0-9;]*m`, "g");
 
@@ -83,9 +83,16 @@ describe("router / help + version", () => {
 });
 
 describe("router / default routing", () => {
-  test("`ndea` with no args exits non-zero and shows usage", async () => {
+  test("`ndea` with no args shows usage and exits 0", async () => {
+    // bunli defaults to printing help on bare invocation — same convention
+    // as git/gh/uv. Previous citty behaviour was to exit 1 because it
+    // routed to `view` which then errored on missing positional. The
+    // bunli default is friendlier; just verify usage shows up.
     const r = await run([]);
-    expect(r.code).toBe(1);
+    expect(r.code).toBe(0);
+    const combined = (r.stdout + r.stderr).replace(ANSI_PATTERN, "");
+    expect(combined).toContain("view");
+    expect(combined).toContain("install");
   });
 
   test("`ndea ./nonexistent.zarr` falls through to view and surfaces a path error", async () => {
