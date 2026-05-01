@@ -38,14 +38,19 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      # actions/checkout@v6.0.2
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
-      # oven-sh/setup-bun@v2.2.0
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+      # `no-cache: true` — canary builds publish artifacts that users
+      # download via `ndea update --channel canary`. Skipping the bun
+      # install cache keeps the build pipeline immune to cache poisoning
+      # by an earlier PR (zizmor `cache-poisoning` audit).
+      - uses: oven-sh/setup-bun@v2
+        with:
+          no-cache: true
 
-      # voidzero-dev/setup-vp@v1.8.0
-      - uses: voidzero-dev/setup-vp@b69666a3d815beb21ce968bbfc9c17e63973986b
+      - uses: voidzero-dev/setup-vp@v1
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -97,8 +102,7 @@ jobs:
             shasum -a 256 "${{ matrix.artifact }}" > "${{ matrix.artifact }}.sha256"
           fi
 
-      # actions/upload-artifact@v7.0.1
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      - uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact }}
           path: dist/${{ matrix.artifact }}*
@@ -114,11 +118,13 @@ jobs:
       contents: write
 
     steps:
-      # actions/checkout@v6.0.2 — needed for `gh release` to know the repo
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      # Needed for `gh release` to know the repo. The token is consumed
+      # via env: GH_TOKEN (not via .git/config), so we drop persistence.
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
-      # actions/download-artifact@v8.0.1
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true

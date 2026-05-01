@@ -19,6 +19,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
       - uses: oven-sh/setup-bun@v2
       - uses: voidzero-dev/setup-vp@v1
       - name: Install dependencies
@@ -36,6 +38,8 @@ jobs:
         os: [ubuntu-latest, macos-14]
     steps:
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
       - uses: oven-sh/setup-bun@v2
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -52,6 +56,8 @@ jobs:
         os: [ubuntu-latest, macos-14]
     steps:
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
       - uses: oven-sh/setup-bun@v2
       - uses: voidzero-dev/setup-vp@v1
       - name: Install dependencies

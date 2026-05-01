@@ -32,8 +32,9 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      # actions/checkout@v6.0.2
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
       # Fail loudly if the pushed tag does not match package.json version.
       # Guards against "tag pushed without running scripts/sync-version.ts".
@@ -51,11 +52,15 @@ jobs:
           fi
           echo "Tag $tag matches package.json $expected"
 
-      # oven-sh/setup-bun@v2.2.0
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+      # `no-cache: true` — release builds run on tag push and must not load
+      # a `~/.bun/install/cache` populated by an earlier PR. Mitigates the
+      # zizmor `cache-poisoning` audit; release infra is infrequent so the
+      # extra ~10s per platform is acceptable.
+      - uses: oven-sh/setup-bun@v2
+        with:
+          no-cache: true
 
-      # voidzero-dev/setup-vp@v1.8.0
-      - uses: voidzero-dev/setup-vp@b69666a3d815beb21ce968bbfc9c17e63973986b
+      - uses: voidzero-dev/setup-vp@v1
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -98,8 +103,7 @@ jobs:
           fi
           cat "${{ matrix.artifact }}.sha256"
 
-      # actions/upload-artifact@v7.0.1
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      - uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact }}
           path: dist/${{ matrix.artifact }}*
@@ -115,8 +119,7 @@ jobs:
       contents: write
 
     steps:
-      # actions/download-artifact@v8.0.1
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
@@ -132,8 +135,6 @@ jobs:
           echo "---"
           cat SHA256SUMS
 
-      # softprops/action-gh-release@v3.0.0
-      #
       # Tag-pattern auto-classification: semver pre-release identifiers are
       # always preceded by a `-` (e.g. v0.1.0-rc.1, v0.1.0-beta.2,
       # v0.1.0-alpha.5). Stable tags never contain `-`. So a single contains()
@@ -141,7 +142,7 @@ jobs:
       #   v0.1.0       → release, marked latest
       #   v0.1.0-rc.1  → pre-release, NOT marked latest
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda
+        uses: softprops/action-gh-release@v3
         with:
           files: dist/*
           generate_release_notes: true
@@ -164,3 +165,68 @@ jobs:
 
             > macOS users: unsigned binaries may be blocked by Gatekeeper. Run
             > `xattr -dr com.apple.quarantine ./ndea` after download.
+
+  # ── Bump manifest.json["rc"] when an *-rc.* tag is published ──────────────
+  # Stable / beta / alpha cuts are hand-edited in manifest.json by ops.
+  # RC cuts happen often enough during stabilisation that automating the
+  # pointer bump avoids the "I forgot to update the manifest" footgun.
+  #
+  # Opens a PR rather than pushing directly so a human reviews + merges.
+  # Keeps `main` honest: every change to the canonical manifest is
+  # auditable in PR history, and a bad RC can be vetoed before users see
+  # `ndea update --channel rc` resolve to it.
+  bump-rc-manifest:
+    name: Open manifest.rc bump PR
+    needs: publish
+    if: contains(github.ref_name, '-rc.')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      # Fetch main (not the tag) to base the PR on. peter-evans receives
+      # the token via its `token` input (defaults to `${{ github.token }}`)
+      # rather than via .git/config, so we drop persist-credentials.
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Update manifest.json["rc"]
+        shell: bash
+        env:
+          NEW_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          # jq is preinstalled on ubuntu-latest runners.
+          tmp=$(mktemp)
+          jq --arg tag "$NEW_TAG" '.channels.rc = $tag' manifest.json > "$tmp"
+          mv "$tmp" manifest.json
+          echo "Updated manifest.json:"
+          cat manifest.json
+
+      # Opens (or updates) a PR against main with the manifest change.
+      # Idempotent: re-running on an already-bumped manifest is a no-op.
+      - name: Open / update bump PR
+        uses: peter-evans/create-pull-request@v8
+        with:
+          branch: chore/manifest-rc-bump
+          base: main
+          delete-branch: true
+          commit-message: "chore(manifest): bump rc → ${{ github.ref_name }}"
+          title: "chore(manifest): bump rc → ${{ github.ref_name }}"
+          body: |
+            Automated by `release.yml` after publishing
+            [`${{ github.ref_name }}`](https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}).
+
+            Once merged, `ndea update --channel rc` will resolve to this tag.
+
+            Reviewers: confirm the RC is the intended `rc` channel pointer
+            before merging. To skip activating this RC (e.g. because it
+            superseded an earlier RC and you want users on the older one),
+            close this PR without merging.
+          labels: |
+            release
+            automated

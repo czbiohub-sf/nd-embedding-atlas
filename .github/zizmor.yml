@@ -1,0 +1,20 @@
+# Zizmor — GitHub Actions security audit
+# https://docs.zizmor.sh
+
+rules:
+  # Project preference is to track major-version tags (`@v6`, `@v2`) rather
+  # than full commit SHAs. The supply-chain risk we accept is that a
+  # compromised maintainer of `actions/*`, `oven-sh/*`, etc. could retag a
+  # major to a malicious commit; we judge that the readability and
+  # auto-update ergonomics are worth that residual risk for this repo.
+  unpinned-uses:
+    disable: true
+
+  # softprops/action-gh-release is "superfluous" only in the narrow sense
+  # that `gh release create` exists. We use the action for the templated
+  # `body:` block (markdown install snippet rendered into release notes)
+  # and the auto-generated changelog from PR titles. Re-implementing both
+  # in a `gh` script is more code, not less.
+  superfluous-actions:
+    ignore:
+      - release.yml
