@@ -33,21 +33,28 @@ Environment variables:
 | Variable       | Default            | Notes                                             |
 | -------------- | ------------------ | ------------------------------------------------- |
 | `NDEA_VERSION` | `latest`           | Release tag (e.g. `v0.2.0`).                      |
-| `NDEA_CHANNEL` | `stable`           | `stable` or `canary` (rolling build from `main`). |
+| `NDEA_CHANNEL` | `stable`           | `stable`, `rc`, or `canary` — see Channels below. |
 | `NDEA_BIN_DIR` | `$HOME/.local/bin` | Install destination.                              |
 
 Example: `curl -fsSL .../install.sh | NDEA_VERSION=v0.2.0 NDEA_BIN_DIR=/usr/local/bin sh`.
 
-**Canary** — bleeding-edge build rebuilt on every push to `main`. Use to test
-unreleased fixes; expect breakage:
+**Channels:**
+
+- **`stable`** (default) — the latest tagged release (`v0.1.0`, `v0.2.0`, …). Hand-cut.
+- **`canary`** — rolling pre-release rebuilt on every push to `main`. Bleeding edge; expect breakage.
+- **`rc`** — latest active release candidate (`v0.1.0-rc.1`, `v0.1.0-rc.2`, …). Cut manually before a stable release; absent between RCs.
 
 ```bash
+# canary (rolling)
 curl -fsSL https://raw.githubusercontent.com/czbiohub-sf/nd-embedding-atlas/main/scripts/install.sh \
   | NDEA_CHANNEL=canary sh
+
+# specific RC by tag (works for any tag — alpha/beta/rc/dev)
+curl -fsSL .../install.sh | NDEA_VERSION=v0.1.0-rc.1 sh
 ```
 
-Self-update an already-installed canary in place with `ndea update --channel canary`.
-Roll back a bad canary with `ndea rollback`.
+Self-update via `ndea update --channel <stable|rc|canary>`. Roll back a bad
+update with `ndea rollback`.
 
 ### 3. Manual
 
@@ -68,6 +75,7 @@ xattr -dr com.apple.quarantine ~/.local/bin/ndea
 
 ```bash
 ndea update                       # latest stable
+ndea update --channel rc          # latest release candidate (when active)
 ndea update --channel canary      # bleeding edge (rebuilt on every push to main)
 ndea rollback                     # restore the previous binary
 ```

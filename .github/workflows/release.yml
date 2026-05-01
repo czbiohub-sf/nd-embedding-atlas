@@ -133,12 +133,21 @@ jobs:
           cat SHA256SUMS
 
       # softprops/action-gh-release@v3.0.0
+      #
+      # Tag-pattern auto-classification: semver pre-release identifiers are
+      # always preceded by a `-` (e.g. v0.1.0-rc.1, v0.1.0-beta.2,
+      # v0.1.0-alpha.5). Stable tags never contain `-`. So a single contains()
+      # check correctly routes `prerelease` and `make_latest`:
+      #   v0.1.0       → release, marked latest
+      #   v0.1.0-rc.1  → pre-release, NOT marked latest
       - name: Create GitHub Release
         uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda
         with:
           files: dist/*
           generate_release_notes: true
           fail_on_unmatched_files: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          make_latest: ${{ !contains(github.ref_name, '-') }}
           body: |
             ## Install
 

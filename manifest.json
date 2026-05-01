@@ -4,6 +4,7 @@
   "channels": {
     "stable": "v0.1.0",
     "latest": "v0.1.0",
+    "rc": null,
     "canary": "canary"
   }
 }
