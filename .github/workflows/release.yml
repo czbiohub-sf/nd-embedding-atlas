@@ -171,19 +171,29 @@ jobs:
 
       # Inlined jq update — script lives on the rewrite branch but the
       # checkout above pulls main, where the file doesn't exist yet.
+      # Skip gracefully if manifest.json isn't on main yet (pre-rewrite-merge
+      # state); once the rewrite lands on main, this runs normally.
       - name: Update manifest.json["pre-release"]
+        id: bump
         env:
           NEW_TAG: ${{ github.ref_name }}
         run: |
+          if [ ! -f manifest.json ]; then
+            echo "::warning::manifest.json not on main yet — skipping pre-release pointer bump"
+            echo "skipped=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           tmp=$(mktemp)
           jq --arg tag "${NEW_TAG}" '.channels."pre-release" = $tag' manifest.json > "${tmp}"
           mv "${tmp}" manifest.json
           echo "Updated manifest.json:"
           cat manifest.json
+          echo "skipped=false" >> "$GITHUB_OUTPUT"
 
       # Opens (or updates) a PR against main with the manifest change.
       # Idempotent: re-running on an already-bumped manifest is a no-op.
       - name: Open / update bump PR
+        if: steps.bump.outputs.skipped != 'true'
         uses: peter-evans/create-pull-request@v8
         with:
           branch: chore/manifest-prerelease-bump
