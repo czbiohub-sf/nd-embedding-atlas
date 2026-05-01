@@ -58,7 +58,7 @@ def export_subset(
     # Clamp n_obs_per_chunk to n_obs so small selections still write
     # (annbatch raises when chunk size > n_obs).
     n_obs = len(indices)
-    group = zarr.open_group(output_path, mode="w", zarr_version=3)
+    group = zarr.open_group(output_path, mode="w", zarr_format=3)
     write_sharded(
         group,
         subset,
