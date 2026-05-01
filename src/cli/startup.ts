@@ -285,10 +285,23 @@ export async function startup(config: ResolvedConfig): Promise<void> {
     console.log(`\n  ${BOLD}Embeddings:${RESET} ${DIM}${availableObsmKeys.join(", ")}${RESET}`);
   }
 
-  console.log(`\n  ${BOLD}Server:${RESET}`);
-  console.log(`    ${CYAN}Local:${RESET}   http://${config.host}:${config.port}`);
-  if (networkAddr && config.host !== "127.0.0.1") {
-    console.log(`    ${CYAN}Network:${RESET} http://${networkAddr}:${config.port}`);
+  // In dev mode (NDEA_NO_STATIC=1, set by `vp run dev`) the backend serves
+  // the API only — Vite serves the app on :5173 with HMR. Label both URLs
+  // so contributors know which one to open.
+  const isDevMode = process.env.NDEA_NO_STATIC === "1";
+  if (isDevMode) {
+    console.log(
+      `\n  ${BOLD}App:${RESET}  ${GREEN}http://${config.host}:5173${RESET}  ${DIM}← open this (Vite + HMR)${RESET}`,
+    );
+    console.log(
+      `  ${BOLD}API:${RESET}  ${DIM}http://${config.host}:${config.port}  (backend — for /api/* and debugging)${RESET}`,
+    );
+  } else {
+    console.log(`\n  ${BOLD}Server:${RESET}`);
+    console.log(`    ${CYAN}Local:${RESET}   http://${config.host}:${config.port}`);
+    if (networkAddr && config.host !== "127.0.0.1") {
+      console.log(`    ${CYAN}Network:${RESET} http://${networkAddr}:${config.port}`);
+    }
   }
   console.log(`\n  ${DIM}Ready in ${elapsed}s${RESET}`);
 
