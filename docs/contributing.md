@@ -65,8 +65,6 @@ When to reach for it:
 - **After merging a large feature** — catches dead code, orphaned exports, and duplication the review missed.
 - **Picking up unfamiliar code** — `dead-code` and `health` show which files are load-bearing vs. detritus.
 
-Skip it for trivial fixes.
-
 The static layer is MIT-licensed. The runtime-coverage feature (tracks what executed in production) is paid, lives behind `fallow coverage`, and isn't used here.
 
 ## Code style

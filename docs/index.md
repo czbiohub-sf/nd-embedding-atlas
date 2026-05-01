@@ -32,12 +32,6 @@ For developer setup, see the [contributing guide](contributing.md).
 
 ## Test data
 
-Sample datasets live in the companion [ome-atlas-test-data](https://github.com/czbiohub-sf/ome-atlas-test-data) repo. Clone alongside this one:
-
-```bash
-git clone https://github.com/czbiohub-sf/ome-atlas-test-data.git ../ome-atlas-test-data
-```
-
 !!! tip "On the Bruno HPC"
 
     Test datasets are pre-staged at `/hpc/websites/public.czbiohub.org/comp.micro/nd-embedding-atlas-test-data` — symlink or point the viewer at that path directly.
