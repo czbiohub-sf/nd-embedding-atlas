@@ -42,11 +42,11 @@ jobs:
       - name: shellcheck
         run: shellcheck -s sh scripts/install.sh
 
-      - name: shfmt (POSIX flag)
+      - name: shfmt (POSIX flag, 4-space indent, indented case)
         run: |
           curl -fsSL https://github.com/mvdan/sh/releases/download/v3.10.0/shfmt_v3.10.0_linux_amd64 -o /tmp/shfmt
           chmod +x /tmp/shfmt
-          /tmp/shfmt -d -ln=posix scripts/install.sh
+          /tmp/shfmt -d -ln=posix -i 4 -ci scripts/install.sh
 
   # ── Portability matrix ─────────────────────────────────────────────────
   install:
