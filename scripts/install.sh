@@ -33,12 +33,18 @@ NDEA_HOME_DIR="${NDEA_HOME:-$HOME/.ndea}"
 
 case "$CHANNEL" in
     stable | latest | pre-release | canary) ;;
-    *) printf '  \033[31mERR\033[0m unknown NDEA_CHANNEL=%s (expected: stable|pre-release|canary)\n' "$CHANNEL" >&2; exit 1 ;;
+    *)
+        printf '  \033[31mERR\033[0m unknown NDEA_CHANNEL=%s (expected: stable|pre-release|canary)\n' "$CHANNEL" >&2
+        exit 1
+        ;;
 esac
 
 log() { printf '  \033[1m%s\033[0m %s\n' "->" "$*" >&2; }
-ok()  { printf '  \033[32mOK\033[0m %s\n' "$*" >&2; }
-die() { printf '  \033[31mERR\033[0m %s\n' "$*" >&2; exit 1; }
+ok() { printf '  \033[32mOK\033[0m %s\n' "$*" >&2; }
+die() {
+    printf '  \033[31mERR\033[0m %s\n' "$*" >&2
+    exit 1
+}
 
 # --- Dependency checks ----------------------------------------------------
 command -v curl >/dev/null 2>&1 || die "curl is required"
@@ -79,9 +85,9 @@ if [ "$CHANNEL" = "canary" ]; then
     sha_url="${base}/download/canary/${artifact}.sha256"
 elif [ "$CHANNEL" = "pre-release" ]; then
     log "Resolving pre-release channel via manifest.json"
-    pre_tag=$(curl -fsSL --proto '=https' --tlsv1.2 "$manifest_url" \
-        | sed -n 's/.*"pre-release"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
-        | head -n 1)
+    pre_tag=$(curl -fsSL --proto '=https' --tlsv1.2 "$manifest_url" |
+        sed -n 's/.*"pre-release"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' |
+        head -n 1)
     [ -n "$pre_tag" ] || die "no active pre-release in manifest (channels.pre-release is null)"
     bin_url="${base}/download/${pre_tag}/${artifact}"
     sha_url="${base}/download/${pre_tag}/${artifact}.sha256"
@@ -104,14 +110,14 @@ if [ "$CHANNEL" = "canary" ]; then
 else
     log "Downloading $artifact ($VERSION)"
 fi
-curl -fsSL --proto '=https' --tlsv1.2 -o "$tmp/$artifact" "$bin_url" \
-    || die "failed to download $bin_url"
-curl -fsSL --proto '=https' --tlsv1.2 -o "$tmp/$artifact.sha256" "$sha_url" \
-    || die "failed to download checksum (release may be missing $artifact.sha256)"
+curl -fsSL --proto '=https' --tlsv1.2 -o "$tmp/$artifact" "$bin_url" ||
+    die "failed to download $bin_url"
+curl -fsSL --proto '=https' --tlsv1.2 -o "$tmp/$artifact.sha256" "$sha_url" ||
+    die "failed to download checksum (release may be missing $artifact.sha256)"
 
 log "Verifying checksum"
-(cd "$tmp" && sha_verify "$artifact.sha256" >/dev/null) \
-    || die "checksum verification failed - aborting"
+(cd "$tmp" && sha_verify "$artifact.sha256" >/dev/null) ||
+    die "checksum verification failed - aborting"
 ok "checksum OK"
 
 # --- Install --------------------------------------------------------------
@@ -124,8 +130,8 @@ case "$VERSION" in
         # `curl -sLo /dev/null -w '%{url_effective}'` returns the final URL,
         # which contains the resolved tag in /releases/tag/<tag>.
         resolved=$(curl -fsSLo /dev/null -w '%{url_effective}' --proto '=https' --tlsv1.2 \
-            "https://github.com/${REPO}/releases/latest" 2>/dev/null \
-            | sed -n 's|.*/releases/tag/\([^/?#]*\).*|\1|p')
+            "https://github.com/${REPO}/releases/latest" 2>/dev/null |
+            sed -n 's|.*/releases/tag/\([^/?#]*\).*|\1|p')
         version_tag="${resolved:-$VERSION}"
         ;;
     *)
@@ -156,7 +162,7 @@ ok "Linked $link → $target_bin"
 
 # Record the active version for `ndea --version` / diagnostics.
 mkdir -p "$NDEA_HOME_DIR"
-printf '%s\n' "$version_tag" > "$NDEA_HOME_DIR/current-version" 2>/dev/null || true
+printf '%s\n' "$version_tag" >"$NDEA_HOME_DIR/current-version" 2>/dev/null || true
 
 # --- PATH guidance (shell-aware) ------------------------------------------
 case ":$PATH:" in
