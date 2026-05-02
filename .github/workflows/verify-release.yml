@@ -1,12 +1,14 @@
-name: Release smoke
+name: Verify release
 
-# Fires after release.yml publishes a release. Exercises the per-tag
-# install path end-to-end: install.sh (downloaded from the release URL,
-# not the working tree), version check, doctor diagnostics, symlink
-# integrity, NDEA_DISABLE_UPDATES gate, gc no-op.
+# Fires after release.yml publishes a release. Exercises the full
+# user-facing path against the real release artifacts: install.sh
+# (downloaded from the release URL, not the working tree), version
+# check, doctor diagnostics, symlink integrity, NDEA_DISABLE_UPDATES
+# gate, gc no-op. The only thing that proves a freshly-cut release
+# is actually installable + the lifecycle commands work end-to-end.
 #
 # Pattern: mise's `scripts/test-standalone.sh` (real release endpoint),
-# scoped down to ndea's actual subcommands.
+# scoped to ndea's actual subcommands.
 
 on:
   release:
@@ -14,18 +16,18 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Release tag to smoke-test (default = latest release)
+        description: Release tag to verify (default = latest release)
         required: false
 
 permissions: {}
 
 concurrency:
-  group: release-smoke-${{ github.event.release.tag_name || inputs.tag }}
+  group: verify-release-${{ github.event.release.tag_name || inputs.tag }}
   cancel-in-progress: false
 
 jobs:
-  smoke:
-    name: Smoke ${{ matrix.label }}
+  verify:
+    name: Verify ${{ matrix.label }}
     runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
