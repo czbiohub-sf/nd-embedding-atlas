@@ -55,6 +55,8 @@ jobs:
     runs-on: ${{ matrix.runner }}
     container: ${{ matrix.container }}
     permissions:
+      # Read-only release assets — repo is internal so install.sh
+      # downloads via the authenticated API path.
       contents: read
     strategy:
       fail-fast: false
@@ -98,6 +100,9 @@ jobs:
           NDEA_VERSION: ${{ env.PIN_TAG }}
           NDEA_BIN_DIR: ${{ runner.temp }}/bin
           NDEA_HOME: ${{ runner.temp }}/state
+          # Repo is private/internal — anonymous downloads 404. The
+          # runner-provided GITHUB_TOKEN authenticates the API path.
+          NDEA_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: sh scripts/install.sh
 
       - name: Verify installed binary
