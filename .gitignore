@@ -37,3 +37,6 @@ notes/
 
 # Planning files (local only)
 .planning/
+
+# bun --compile leaves these temp artifacts on failure
+.*-00000000.bun-build
