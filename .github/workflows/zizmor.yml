@@ -1,0 +1,35 @@
+name: Zizmor
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Default to no permissions; the audit job opts in to the minimum it needs.
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    name: Audit workflows
+    runs-on: ubuntu-latest
+    permissions:
+      # Required to upload SARIF findings to GitHub Code Scanning.
+      security-events: write
+      # Required to read workflow YAML.
+      contents: read
+      actions: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          # We don't need the GITHUB_TOKEN persisted in .git/config for
+          # subsequent steps — zizmor only reads files. Disabling persistence
+          # is the conservative default and cuts off one exfiltration path.
+          persist-credentials: false
+
+      - name: Run zizmor
+        uses: zizmorcore/zizmor-action@v0.5.3

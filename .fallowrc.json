@@ -1,0 +1,16 @@
+{
+  "$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json",
+  "entry": [
+    "src/cli/index.ts",
+    "src/frontend/main.tsx",
+    "src/index.ts",
+    "vite.config.ts",
+    "bunli.config.ts",
+    "scripts/build.ts",
+    "scripts/build-all.ts",
+    "scripts/sync-version.ts",
+    "scripts/dev.ts",
+    "src/**/__tests__/**/*.test.ts"
+  ],
+  "ignorePatterns": ["site/**", "dist/**", ".fallow/**", ".bunli/**", ".source/**"]
+}

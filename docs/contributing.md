@@ -8,158 +8,130 @@ icon: lucide/git-pull-request
 
 ### Prerequisites
 
-- **Python 3.12--3.13** (managed with [uv](https://docs.astral.sh/uv/))
-- **[pnpm](https://pnpm.io/)** -- fast Node.js package manager; requires Node.js (load with `module load nodejs` on HPC, or install via [nvm](https://github.com/nvm-sh/nvm))
-- **[vite-plus](https://viteplus.dev/guide/)** -- unified frontend toolchain providing the `vp` CLI; installed automatically by `pnpm install`
-- **[prek](https://github.com/j178/prek)** for Git hooks (`uvx prek`)
+- **[Bun](https://bun.com)** — runtime + package manager. CI uses the version pinned in `package.json`'s `packageManager` field; locally any matching major works.
+- **[Vite+](https://viteplus.dev/)** (`vp`) — frontend toolchain (build, lint, fmt, dev). Install once globally; `vp` drives every dev workflow.
 
 ### Clone and install
 
-``` bash
+```bash
 git clone https://github.com/czbiohub-sf/nd-embedding-atlas.git
 cd nd-embedding-atlas
-uv sync --all-groups # (1)!
+bun install
 ```
 
-1. Installs all dependency groups: main, dev, test, and doc.
+Backend and frontend share one `node_modules/`.
 
-### Build the frontend
+## Development workflow
 
-``` bash
-cd frontend && pnpm install && vp build
-cd ..
+```bash
+# Full dev stack: backend on :5055 + Vite frontend on :5173 with HMR
+vp run dev path/to/data.zarr
 ```
 
-!!! warning "Frontend must be built before serving"
+Wraps `src/cli/index.ts view` (backend) and `vp dev` (frontend), with cross-filter cache invalidation over Mosaic's WS.
 
-    The Python server resolves static files from `frontend/dist/`. If it doesn't
-    exist, you'll get a `FileNotFoundError` with instructions.
+Frontend-only when the backend already runs separately:
+
+```bash
+vp dev
+```
+
+## Quality gates
+
+```bash
+vp check        # typecheck + Oxlint + Oxfmt + bunli gen drift
+bun test        # Bun-native .test.ts suites (server, cli, zarr)
+vp test         # vitest (frontend unit tests)
+vp build        # frontend bundle smoke
+```
+
+CI gates on `vp check` and the test suites (see `.github/workflows/ci.yml`).
+
+## Fallow (optional code-health audit)
+
+[Fallow](https://docs.fallow.tools/) flags dead code, duplication, complexity hotspots, and circular dependencies in TypeScript / JavaScript projects. Not a CI gate; run it on demand.
+
+```bash
+vp run fallow audit --changed-since main   # scoped to your branch's diff
+vp run fallow dead-code                    # unused files, exports, deps
+vp run fallow dupes                        # repeated code blocks
+vp run fallow health                       # cyclomatic / cognitive complexity
+vp run fallow fix --dry-run                # preview auto-fixes (e.g. unused-export removal)
+```
+
+When to reach for it:
+
+- **Before a non-trivial PR** — `vp run fallow audit --changed-since main` returns a verdict on the files you touched.
+- **After merging a large feature** — catches dead code, orphaned exports, and duplication the review missed.
+- **Picking up unfamiliar code** — `dead-code` and `health` show which files are load-bearing vs. detritus.
+
+The static layer is MIT-licensed. The runtime-coverage feature (tracks what executed in production) is paid, lives behind `fallow coverage`, and isn't used here.
 
 ## Code style
 
-### Python
+Enforced by `vp check`:
 
-Enforced by [Ruff](https://docs.astral.sh/ruff/) (config in `pyproject.toml`).
-
-Function signatures use keyword-only params after the first positional arg:
-
-``` python
-def prepare_obs(collection, *, obs_columns=None): ...
-```
-
-Error messages go through a `msg` variable:
-
-``` python
-msg = f"Unknown key: {key}"
-raise ValueError(msg)
-```
-
-### Frontend
-
-Enforced by [Oxlint](https://oxc.rs/docs/guide/usage/linter.html) + [Oxfmt](https://oxc.rs/docs/guide/usage/formatter.html) via vite-plus.
-Config lives in `frontend/oxlint.json` and the `lint:` / `fmt:` sections of `frontend/vite.config.ts`.
-
-## Linting and formatting
-
-``` bash
-uvx prek # (1)!
-```
-
-1. Runs all pre-commit hooks: Oxlint + Oxfmt (TS/TSX), pyproject-fmt,
-   Ruff check + format, private key detection, AST checks, whitespace fixes.
-
-Or run tools individually:
-
-=== "Python"
-
-    ``` bash
-    uv run ruff check --fix src tests
-    uv run ruff format src tests
-    ```
-
-=== "Frontend"
-
-    ``` bash
-    cd frontend
-    vp lint --fix src
-    vp fmt --write src
-    ```
-
-## Testing
-
-``` bash
-uv run pytest # (1)!
-```
-
-1. Uses `--import-mode=importlib` (configured in `pyproject.toml`).
-
-Tests live in `tests/` with fixtures in `tests/conftest.py`.
-
-### CI test matrix
-
-The CI runs via [Hatch](https://hatch.pypa.io/) across:
-
-| Python | Dependencies |
-|--------|-------------|
-| 3.12 | Stable |
-| 3.13 | Stable |
-| 3.13 | Pre-release (non-blocking) |
-
-## Frontend development
-
-``` bash
-cd frontend
-vp dev   # (1)!
-vp build # (2)!
-```
-
-1. Starts the dev server with hot reload. The Python backend must be running separately.
-2. Production build → `frontend/dist/`.
-
-Full dev stack (backend + frontend together):
-
-``` bash
-mise run dev data/annotations_zv3.zarr
-```
+- **TypeScript 6 strict** — no implicit any, `import type` for type-only imports
+- **[Oxlint](https://oxc.rs/docs/guide/usage/linter.html)** + **[Oxfmt](https://oxc.rs/docs/guide/usage/formatter.html)** — config in `vite.config.ts` `lint` / `fmt` blocks
+- 4-space indent, double quotes, trailing commas, semicolons
+- `@/` path alias → `src/frontend/`
 
 ## Project structure
 
-``` text
-src/nd_embedding_atlas/
-  cli/          # Typer CLI — auto-detects AnnData / OME-Zarr / YAML config
-  io/           # AnnDataCollection, fast zarr readers, ProjectConfig YAML model
-  ndimg/        # OME-Zarr standalone viewer (metadata + FastAPI app)
-  server/       # Main FastAPI app, EmbeddingStore (DuckDB), route modules
-  vz/           # obs materialisation, spatial column detection, zarr export
-
-frontend/src/
-  scatter-gpu/  # TypeGPU/WebGPU scatter renderer — pipelines, shaders, selection
-  components/   # React panels: scatter, viewer, table, charts, toolbar, layout
-  dashboard/    # App-level DashboardProvider + DashboardContext
-  stores/       # TanStack Store singletons (selection, view sync, brush predicate)
-  hooks/        # Generic hooks (useMosaicClient, useDashboard, etc.)
-  lib/          # Utilities (mosaic-helpers, color-source, schemas, etc.)
-
-scripts/        # Standalone data-prep scripts (typer + rich)
-tests/          # pytest
+```text
+src/
+  index.ts            # Public API re-exports
+  cli/                # Bun-compiled CLI (bunli framework)
+    commands/         # view, update, rollback, gc, doctor, completions
+  protocol/           # Shared zod schemas (client + server contract)
+  zarr/               # Custom zarr I/O — reads AnnData / MuData / OME-Zarr
+  server/             # Bun.serve HTTP + WebSocket server
+    routes/           # Per-endpoint handlers
+  frontend/           # React + Vite + Mosaic dashboard
+    components/       # Scatter, table, toolbar, viewer panels
+    dashboard/        # DashboardContext / Provider / Shell
+    scatter-gpu/      # TypeGPU/WebGPU scatter renderer
+    stores/           # TanStack Store singletons (selection, view, filter)
+    ochre/            # Custom colormap library
 ```
 
+See [`AGENTS.md`](https://github.com/czbiohub-sf/nd-embedding-atlas/blob/main/AGENTS.md) for the canonical command catalogue, key abstractions, and gotchas.
 
-## Common commands
+## Releases
 
-| Command | Description |
-|---------|-------------|
-| `uv sync` | Install dependencies |
-| `uv run pytest` | Run tests |
-| `uvx prek` | Lint + format (all pre-commit hooks) |
-| `ndea <paths>` | Launch the viewer |
-| `mise run dev <path>` | Full dev stack (backend + frontend) |
-| `uv build` | Build wheel (auto-builds frontend) |
-| `cd frontend && vp build` | Rebuild frontend only |
-| `uv run zensical serve` | Preview docs locally (live reload) |
-| `uv run zensical build` | Build static docs site |
+| Channel       | How it ships                                                      |
+| ------------- | ----------------------------------------------------------------- |
+| `stable`      | Manual: tag `vX.Y.Z` and push — `release.yml` builds + publishes  |
+| `pre-release` | Manual: tag `vX.Y.Z-alpha.N` / `-beta.N` / `-rc.N` and push       |
+| `canary`      | Automatic: every push to `main` rebuilds the rolling `canary` tag |
 
-## Versioning
+A `pre-release` cut opens an auto-generated PR that bumps `manifest.json`'s `pre-release` pointer. Merge to activate.
 
-The frontend reads the version at runtime from `/data/metadata.json` -- no build-time sync needed.
-`package.json` version is a placeholder (not published to npm).
+The release workflow uploads `scripts/install.sh` as a per-tag asset, so users can pin the installer URL: `curl …/releases/download/v0.X.Y/install.sh | sh`. The canonical `…/main/install.sh` always reflects the latest installer.
+
+After editing `src/cli/commands/**`, regenerate the completion metadata:
+
+```bash
+vp run gen
+```
+
+Updates `.bunli/commands.gen.ts`, which feeds shell-completion script generation. CI fails on drift (`.github/scripts/check-bunli-gen.sh`).
+
+## Verifying a build
+
+```bash
+bun run build
+./dist/ndea doctor
+```
+
+`ndea doctor` prints binary path, symlink integrity, active version, and the installed-versions tree. Exit code 1 on hard anomalies (broken symlink, missing active binary). Add `--check-network` to probe `manifest.json` reachability with a 3-second timeout.
+
+## Editing this docs site
+
+[zensical](https://zensical.org/) renders the pages under `docs/` using `zensical.toml`. Preview locally:
+
+```bash
+uvx --from zensical zensical serve
+```
+
+Live-reloads at `http://localhost:8000`. Build output goes to `site/` (gitignored). `uvx` is part of [uv](https://docs.astral.sh/uv/); zensical is fetched on demand and cached.

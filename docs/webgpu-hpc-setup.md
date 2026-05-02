@@ -1,9 +1,10 @@
 ---
 icon: lucide/compass
 ---
+
 # WebGPU Setup on HPC (Chrome)
 
-Firefox will **not** work,  the ESR build on HPC systems typically does not support WebGPU.
+Firefox will **not** work, the ESR build on HPC systems typically does not support WebGPU.
 
 ---
 

@@ -4,121 +4,76 @@ icon: lucide/rocket
 
 # Getting started
 
-nd-embedding-atlas is an interactive dashboard that links high-dimensional AI embeddings
-to their source 5D (TCZYX) image data for rapid exploration and annotation.
+nd-embedding-atlas is an interactive dashboard linking high-dimensional AI embeddings to source 5D (TCZYX) image data.
 
-!!! warning "AnnData schema expectations are in flux"
+!!! warning "AnnData schema is unstable"
 
-    The column names, layout of `obs`/`obsm`/`layers`, and general AnnData
-    structure that the viewer recognizes are not yet standardized and will
-    change. You may need to adjust your AnnData as we formalize the structure.
+    The viewer's expected `obs` / `obsm` / `layers` shape will change. Expect to adjust your AnnData as the schema firms up.
 
 !!! info "Browser requirement"
 
-    **Chrome or Edge is required.** The scatter renderer uses WebGPU, which Firefox
-    does not support by default. On HPC systems, see the
-    [WebGPU setup guide](webgpu-hpc-setup.md) to enable WebGPU in Chrome.
+    **Chrome or Edge required.** The scatter renderer uses WebGPU; Firefox lacks WebGPU support by default. On HPC, see the [WebGPU setup guide](webgpu-hpc-setup.md).
 
 ## Installation
 
-Requires **[uv](https://docs.astral.sh/uv/)** and the **[GitHub CLI](https://cli.github.com/)** (`gh auth login` once to authenticate).
-
-``` bash
-# Download the latest release wheel
-gh release download --repo czbiohub-sf/nd-embedding-atlas \
-  -p "nd_embedding_atlas-*.whl" -D /tmp/ndea/
-
-# Install (no Node.js required — frontend is bundled)
-uv tool install /tmp/ndea/nd_embedding_atlas-*.whl
+```bash
+curl -fsSL https://raw.githubusercontent.com/czbiohub-sf/nd-embedding-atlas/main/scripts/install.sh | sh
 ```
 
-To upgrade, re-run the above and add `--force` to the install command.
+Downloads a checksum-verified ~80 MB native binary into `$HOME/.local/bin`. To upgrade in place:
+
+```bash
+ndea update                       # latest stable
+ndea update --channel pre-release # latest alpha / beta / rc (when active)
+ndea update --channel canary      # rolling, rebuilt on every push to main
+```
 
 For developer setup, see the [contributing guide](contributing.md).
 
-## Download test data
+## Test data
 
-The project includes scripts to download example datasets. Pick the one that fits your use case:
+!!! tip "On the Bruno HPC"
 
-=== "DynaCLR (cell tracking)"
-
-    Small zarr v3 stores with cell tracking annotations and PCA + PHATE embeddings. Good for quick testing.
-
-    ``` bash
-    uv run scripts/download_dynaclr_datasets.py [OUTPUT] # (1)!
-    ```
-
-    1. `OUTPUT` -- directory for `.zarr` stores (default: `data/`). Existing stores are skipped.
-       Requires `wget` on PATH.
-
-    This downloads two stores into the output directory:
-
-    | Store | Description |
-    |-------|-------------|
-    | `dataset.zarr` | OME-Zarr v0.5 HCS plate with 5D image data |
-    | `annotations_zv3.zarr` | AnnData with tracking annotations and embeddings |
-
-    !!! tip "On the Bruno HPC"
-
-        The DynaCLR datasets are already available at:
-
-        ```
-        /hpc/websites/public.czbiohub.org/comp.micro/nd-embedding-atlas-test-data
-        ```
-
-        You can symlink or point the viewer directly at these paths instead of downloading.
-
-=== "CellxGene (transcriptomics)"
-
-    Larger scRNA-seq datasets from [CellxGene](https://cellxgene.cziscience.com/).
-    Downloads `.h5ad` files and converts them to zarr v3 with sharding. The purpose is to inspect
-    the perfomance of the embedding atlas.
-
-    ``` bash
-    uv run scripts/download_cxg_datasets.py [OUTPUT] # (1)!
-    ```
-
-    1. `OUTPUT` -- directory for `.zarr` stores (default: `data/`). Existing stores are skipped.
-       Downloads to a temp directory first, converts to zarr v3, then cleans up the `.h5ad` files.
-
-    !!! info "This may take a while"
-
-        CellxGene datasets are several GB each. The script downloads to a temp
-        directory, converts to zarr v3, then cleans up the intermediate `.h5ad` files.
+    Test datasets are pre-staged at `/hpc/websites/public.czbiohub.org/comp.micro/nd-embedding-atlas-test-data` — symlink or point the viewer at that path directly.
 
 ## Launch the viewer
 
-After downloading, launch the viewer on the datasets:
+```bash
+# Single AnnData zarr store
+ndea view path/to/data.zarr
 
-=== "DynaCLR (cell tracking)"
+# Multiple stores side-by-side
+ndea view path/to/dataset_a.zarr path/to/dataset_b.zarr
 
-    ``` bash
-    uv run ndea view data/annotations_zv3.zarr --plate data/dataset.zarr
-    ```
+# Project config — the only form that pairs an AnnData store with an OME-Zarr
+# plate for hover crops, sets channels, configures per-dataset options.
+ndea view path/to/config.yaml
+```
 
-    This loads the tracking annotations with embeddings and connects the
-    OME-Zarr HCS plate for cell crop viewing.
+Open Chrome or Edge at `http://localhost:5055`.
 
-=== "CellxGene (transcriptomics)"
+!!! tip "Shorthand"
 
-    ``` bash
-    uv run ndea view cxg-data/*.zarr  # (1)!
-    ```
+    `view` is the default subcommand. `ndea path/to/data.zarr` works the same as `ndea view path/to/data.zarr`. Examples use the explicit form to match `update`, `rollback`, `completions`.
 
-    1. You can use glob patterns to select the AnnData `.zarr` files with lazy concatenation.
+A minimal multi-dataset YAML:
 
-The viewer starts a local server at `http://localhost:5055` with:
+```yaml
+datasets:
+  - name: my-experiment
+    path: path/to/annotations.zarr
+    plate_path: path/to/plate.zarr # optional — enables hover crops
+```
 
-- **Embedding plot** -- interactive WebGL scatter of the embedding space
-- **Data table** -- sortable, filterable metadata table
-- **Charts** -- cross-filtered distributions of obs columns
-- **OME-Zarr Movie viewer** -- OME-Zarr image crops (when `--plate` is provided)
+The viewer ships three panels:
 
-!!! tip "Short alias"
-
-    `ndea` is an alias for `nd-embedding-atlas`. Both work interchangeably.
+- **Embedding plot** — WebGPU scatter of the embedding space
+- **Data table** — sortable, cross-filtered with the scatter
+- **OME-Zarr viewer** — image crops on hover (when `plate_path` is set)
 
 ## What's next?
 
-- Browse the [API documentation](api.md) for programmatic usage
-- Read the [contributing documentation](contributing.md) for architecture details and contribution patterns
+- [CLI reference](cli.md) — every subcommand, flag, env var, and channel
+- [Preparing your data](preparing-your-data.md) — OME-Zarr layout, sharding, pyramids
+- [Contributing](contributing.md) — dev setup, architecture, release flow
+- [WebGPU on HPC](webgpu-hpc-setup.md) — Chrome flags for HPC environments

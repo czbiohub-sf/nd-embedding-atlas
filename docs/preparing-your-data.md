@@ -4,84 +4,67 @@ icon: lucide/layers
 
 # Preparing your imaging data
 
-The viewer streams image data directly from OME-Zarr over HTTP using tile-based
-fetching. How your data is stored has a large impact on loading speed, memory
-usage, and interactivity. This page explains what to do and why.
+The viewer streams OME-Zarr image data over HTTP, tile by tile. Storage layout dominates loading speed, memory, and interactivity. This page covers what to do and why.
 
 ## At a glance
 
-| | Recommended | Avoid |
-|---|---|---|
-| **Zarr version** | Zarr v3 (OME-NGFF 0.5) with `sharding_indexed` | Zarr v2 or unsharded v3 |
-| **Pyramid** | ≥ 4 resolution levels (LODs) | Single LOD |
-| **Inner chunk (XY)** | 512 × 512 px or 256 × 256 | Anything that covers a full XY plane |
+|                      | Recommended                                    | Avoid                                |
+| -------------------- | ---------------------------------------------- | ------------------------------------ |
+| **Zarr version**     | Zarr v3 (OME-NGFF 0.5) with `sharding_indexed` | Zarr v2 or unsharded v3              |
+| **Pyramid**          | ≥ 4 resolution levels (LODs)                   | Single LOD                           |
+| **Inner chunk (XY)** | 512 × 512 px or 256 × 256                      | Anything that covers a full XY plane |
 
 ---
 
 ## Why storage format matters
 
-The viewer uses [idetik's][idetik-gh] tile-based renderer which fetches only the chunks
-that intersect the current camera viewport (the crop region). Two things determine
-how much data is transferred on every obs click:
+The viewer uses [idetik's][idetik-gh] tile renderer, which fetches only the chunks intersecting the current viewport. Two factors drive the bytes transferred per obs click:
 
 [idetik-gh]: https://github.com/chanzuckerberg/idetik
 
 **1. Background thumbnail loading.**
-The renderer always pre-loads a low-resolution thumbnail of the full FOV in the
-background so that panning feels smooth. With a proper pyramid the thumbnail is
-the coarsest LOD, a small amount of data. Without a pyramid the renderer falls
-back to the only LOD available (full resolution), downloading the entire image
-every time.
+The renderer pre-loads a full-FOV thumbnail to keep panning smooth. With a pyramid the thumbnail is the coarsest LOD — small. Without a pyramid the renderer downloads the full-resolution image as the thumbnail on every click.
 
 **2. Chunk granularity.**
-The smallest unit of data the viewer can fetch using idetik *one* chunk. If your chunks cover an entire
-XY plane (e.g. `(1, 1, 1, 748, 1135)`), loading even a single pixel requires
-downloading the entire plane. With 512 × 512 inner chunks the visible crop
-typically intersects ≤ 4 chunks per channel.
+The smallest unit idetik can fetch is one chunk. Chunks that cover an entire XY plane (e.g. `(1, 1, 1, 748, 1135)`) force a full-plane download for any pixel inside. With 512 × 512 inner chunks the visible crop typically intersects ≤ 4 chunks per channel.
 
 ---
 
 ## Zarr v3 with sharding (recommended)
 
-OME-NGFF 0.5 stores data as Zarr v3. Use the `sharding_indexed` codec to pack
-many small inner chunks into larger shard files on disk. This is ideal for HTTP
-access because:
+OME-NGFF 0.5 stores data as Zarr v3. The `sharding_indexed` codec packs many small inner chunks into larger shard files on disk — ideal for HTTP access:
 
-- Each shard file has an index table at the end. The client issues one byte-range
-  request to read the index, then one more to fetch the specific inner chunk it
-  needs. No unnecessary data is transferred.
-- Packing all channels into a single shard (`C` dimension = full channel count)
-  means one shard-index read covers all 12 channels simultaneously.
+- Each shard file ends with an index table. The client makes one byte-range request to read the index, then one more for the specific inner chunk. Two requests, zero wasted bytes.
+- Packing all channels into one shard (full `C` dimension per shard) means a single index read covers every channel at once.
 
 ### Recommended layout
 
+| Field       | Value                                                  |
+| ----------- | ------------------------------------------------------ |
+| Chunk shape | `(1, 1, 1, 256, 256)` — drives every viewer fetch      |
+| Shard shape | `(T, C, Z, Y, X)` — any sharding configuration is fine |
+| Codec       | `sharding_indexed → [bytes(little-endian), blosc]`     |
 
-```shell
-Shard shape  :  (T, C, Z, Y, X) - For now feel free to use any sharding configuration you prefer
-Chunk Shape  :  (1, 1, 1,  256,  265) - Chunks are the most important aspect as this is how the viewer fetches data
-Codec        :  sharding_indexed → [bytes(little-endian), blosc/zstd clevel=1] # (1)!
-```
+The chunk shape is the load-bearing setting; the shard shape and inner compression codec are flexible — pick whatever fits your write pipeline.
 
-1. The codec used for compression is flexible, pick what suites you best.
-
-At LOD 0 for a 100 k × 100 k image this gives a 12 × 12 grid of shard files
-(≈ 144 shards). Each shard is ~3 GB on disk but the viewer only reads a few
-hundred KB via byte-range requests.
+At LOD 0 a 100 k × 100 k image lays out as a 12 × 12 shard grid (≈ 144 shards). Each shard is ~3 GB on disk; the viewer reads a few hundred KB via byte-range requests.
 
 ### Verifying your layout
 
+Any zarr inspector that exposes shape + chunking will do. [`iohub`](https://czbiohub-sf.github.io/iohub/) (a separate tool) needs no permanent install:
+
 ```bash
-uv run iohub info --verbose <plate.zarr>
+uvx iohub info --verbose <plate.zarr>
 ```
 
-Look for:
+Look for inner chunks ≤ 512 × 512:
 
 ```
-Chunk size:  (1, 1, 1, 512, 512)          ← inner chunk
+Chunk size:  (1, 1, 1, 256, 256)          ← inner chunk
 No. bytes decompressed: 1.4 TiB           ← sanity check on total size
 ```
 
-And in the zarr hierarchy, confirm 4–5 resolution levels per position:
+And 4–5 resolution levels per position:
 
 ```
 0  (1, 12, 1, 104683, 104776)  float32    ← LOD 0 — full res
@@ -95,9 +78,7 @@ And in the zarr hierarchy, confirm 4–5 resolution levels per position:
 
 ## Multi-scale pyramids
 
-Pyramids (multi-scale / multi-resolution) are **strongly recommended** for a good viewer
-experience. Without them the viewer cannot distinguish between "immediately important data" (the current crop in the viewer) and "background thumbnail tiles"
-(the image outside of the one being displayed ).
+Pyramids (multi-scale / multi-resolution) are **strongly recommended**. Without them the viewer can't tell foreground tiles (the current crop) from background tiles (the rest of the image) — every level downloads as if it were the focus.
 
 ### Generating pyramids with iohub
 
@@ -117,15 +98,9 @@ with open_ome_zarr("plate.zarr", mode="r+") as plate:
 
 ## Zarr v2
 
-Zarr v2 (OME-NGFF 0.4) is supported but has limitations:
+Zarr v2 (OME-NGFF 0.4) works, with caveats:
 
-- **No byte-range sharding.** Each chunk is stored as a separate file. Reading
-  a 512 × 512 px crop fetches one file per chunk. This might be fine if are
-  small.
-- **Chunk size still matters.** Make sure the XY chunk dimensions do **not**
-  cover the full image plane. A chunk of `(1, 1, 1, 748, 1135)` forces the
-  client to download an entire 748 × 1135 px plane to display a 10 × 10 px
-  region.
+- **No byte-range sharding.** Each chunk lives in its own file. A 512 × 512 px crop fetches one file per chunk — fine for small datasets, costly at scale.
+- **Chunk size still matters.** Keep XY chunk dimensions below the full image plane. A `(1, 1, 1, 748, 1135)` chunk forces the client to download a 748 × 1135 px plane to display a 10 × 10 px region.
 
-Multi-scale pyramids are equally important for zarr v2 as the viewer's
-background-loading behaviour is the same regardless of storage version.
+Pyramids matter as much for v2 as for v3 — the background-loading path doesn't change with storage version.

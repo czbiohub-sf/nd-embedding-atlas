@@ -4,27 +4,83 @@ on:
   push:
     branches: [main]
   pull_request:
-  schedule:
-    - cron: "0 5 1,15 * *"  # 1st and 15th of every month
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
-  frontend:
-    uses: ./.github/workflows/build-frontend.yml
-
-  python:
-    uses: ./.github/workflows/test-python.yml
-
-  # Single required status for branch protection — checks all jobs including
-  # the matrix inside test-python.yml. Pre-release failures are allowed via
-  # continue-on-error inside the reusable workflow.
+  # ── Typecheck + lint + fmt (Linux only — deterministic, fast) ───────────
   check:
+    name: Typecheck + lint + fmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@v2
+      - uses: voidzero-dev/setup-vp@v1
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: vp check
+        run: vp check
+      # Verify .bunli/commands.gen.ts is in sync with src/cli/commands/.
+      # The standard verify-no-drift / gen-check pattern (Buf, sqlc,
+      # Prisma, GraphQL Codegen all do this).
+      - name: Verify bunli gen output is in sync
+        run: bash .github/scripts/check-bunli-gen.sh
+
+  # ── Bun test matrix ─────────────────────────────────────────────────────
+  test:
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@v2
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: bun test
+        run: bun test
+
+  # ── Full build smoke (frontend + binary, catches release-time regressions
+  # at PR time rather than at canary-on-merge time) ──────────────────────
+  build-smoke:
+    name: Build smoke (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14, ubuntu-24.04-arm]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@v2
+      - uses: voidzero-dev/setup-vp@v1
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      # `bun run build` exercises the full release path: vp build (frontend)
+      # → embed-asset manifest generation → bun build --compile (binary).
+      # PRs that break any of these surface here instead of in canary.
+      - name: bun run build
+        run: bun run build
+      - name: Smoke (binary launches + reports version)
+        run: ./dist/ndea --version
+
+  # ── Single required status check for branch protection ────────────────
+  all-green:
     name: All checks pass
     if: always()
-    needs: [frontend, python]
+    needs: [check, test, build-smoke]
     runs-on: ubuntu-latest
     steps:
       - uses: re-actors/alls-green@release/v1
