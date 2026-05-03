@@ -13,13 +13,18 @@
 #   curl -fsSL https://raw.githubusercontent.com/czbiohub-sf/nd-embedding-atlas/main/scripts/install.sh | sh
 #
 # Environment variables:
-#   NDEA_VERSION   release tag to install (default: latest)
-#   NDEA_BIN_DIR   PATH directory holding the symlink (default: $HOME/.local/bin)
-#   NDEA_HOME      state root for versions/ + locks/ (default: $HOME/.ndea)
-#   NDEA_CHANNEL   release channel: stable | pre-release | canary (default: stable)
-#                  - stable: most recent semver-tagged release
-#                  - pre-release: latest active alpha / beta / rc (resolved via manifest.json)
-#                  - canary: rolling pre-release built from `main` on every push
+#   NDEA_VERSION         release tag to install (default: latest)
+#   NDEA_BIN_DIR         PATH directory holding the symlink (default: $HOME/.local/bin)
+#   NDEA_HOME            state root for versions/ + locks/ (default: $HOME/.ndea)
+#   NDEA_CHANNEL         release channel: stable | pre-release | canary (default: stable)
+#                        - stable: most recent semver-tagged release
+#                        - pre-release: latest active alpha / beta / rc (resolved via manifest.json)
+#                        - canary: rolling pre-release built from `main` on every push
+#   NDEA_GITHUB_TOKEN    GitHub token for private/internal repos. Falls back to
+#                        GITHUB_TOKEN if unset. When present, downloads go via
+#                        the GitHub Releases API (Accept: application/octet-stream)
+#                        so private-repo asset URLs resolve. Get a token via
+#                        \`gh auth token\` if you have the gh CLI.
 #
 # POSIX sh — no bashisms. Tested with dash, bash 3.2, bash 5.x, zsh.
 
@@ -49,6 +54,67 @@ die() {
 # --- Dependency checks ----------------------------------------------------
 command -v curl >/dev/null 2>&1 || die "curl is required"
 
+# --- Auth + API helpers ---------------------------------------------------
+# When the repo is private/internal, anonymous downloads return 404 even
+# for the standard \`releases/download\` URL. The fix is to authenticate
+# and use the API endpoint with \`Accept: application/octet-stream\` so
+# the response is the binary, not JSON metadata.
+TOKEN="${NDEA_GITHUB_TOKEN:-${GITHUB_TOKEN:-}}"
+
+# Curl wrapper: adds bearer auth when a token is present, otherwise
+# behaves like plain anonymous curl. Single source of truth for the
+# common flags too.
+gh_curl() {
+    if [ -n "$TOKEN" ]; then
+        curl -fsSL --proto '=https' --tlsv1.2 -H "Authorization: Bearer $TOKEN" "$@"
+    else
+        curl -fsSL --proto '=https' --tlsv1.2 "$@"
+    fi
+}
+
+# Look up an asset's numeric ID by name within a release. POSIX-ish — uses
+# only awk + curl. Works on BusyBox awk (Alpine) and gawk (Debian/Ubuntu).
+# Args: $1 = release tag (e.g. v0.1.0), $2 = asset name (e.g. ndea-linux-x64)
+resolve_asset_id() {
+    release_tag=$1
+    asset_name=$2
+    api_url="https://api.github.com/repos/${REPO}/releases/tags/${release_tag}"
+    gh_curl "$api_url" |
+        awk -v target="$asset_name" '
+            /"id":[[:space:]]*[0-9]+/ {
+                last_id = $0
+                sub(/.*"id":[[:space:]]*/, "", last_id)
+                sub(/[^0-9].*/, "", last_id)
+            }
+            /"name":[[:space:]]*"/ {
+                line = $0
+                sub(/.*"name":[[:space:]]*"/, "", line)
+                sub(/".*/, "", line)
+                if (line == target) { print last_id; exit }
+            }
+        '
+}
+
+# Download a release asset to a local path. Picks the right URL/headers
+# based on whether we have a token (private-repo path vs public path).
+# Args: $1 = release tag, $2 = asset name, $3 = output path
+download_asset() {
+    release_tag=$1
+    asset_name=$2
+    out=$3
+    if [ -n "$TOKEN" ]; then
+        asset_id=$(resolve_asset_id "$release_tag" "$asset_name")
+        [ -n "$asset_id" ] || die "asset ${asset_name} not found in release ${release_tag} (token issue or wrong tag?)"
+        gh_curl -H "Accept: application/octet-stream" \
+            -o "$out" \
+            "https://api.github.com/repos/${REPO}/releases/assets/${asset_id}"
+    else
+        url="https://github.com/${REPO}/releases/download/${release_tag}/${asset_name}"
+        gh_curl -o "$out" "$url" ||
+            die "failed to download ${url} (private repo? set NDEA_GITHUB_TOKEN)"
+    fi
+}
+
 if command -v sha256sum >/dev/null 2>&1; then
     sha_verify() { sha256sum -c "$1"; }
 elif command -v shasum >/dev/null 2>&1; then
@@ -73,32 +139,38 @@ esac
 
 artifact="ndea-${os}-${arch}"
 
-# --- Release URL ----------------------------------------------------------
-# Channel takes precedence over NDEA_VERSION when set to `canary` or
-# `pre-release` — those map to a rolling or manifest-resolved tag, so a
-# fixed version doesn't apply.
-base="https://github.com/${REPO}/releases"
+# --- Release tag resolution ---------------------------------------------
+# Resolve channel + version into the concrete tag we want assets from.
+# canary → rolling 'canary' tag.
+# pre-release → resolved via manifest.json's `channels.pre-release` pointer.
+# latest → resolved via the `releases/latest` redirect (or API when authed).
 manifest_url="https://raw.githubusercontent.com/${REPO}/main/manifest.json"
 
 if [ "$CHANNEL" = "canary" ]; then
-    bin_url="${base}/download/canary/${artifact}"
-    sha_url="${base}/download/canary/${artifact}.sha256"
+    release_tag="canary"
 elif [ "$CHANNEL" = "pre-release" ]; then
     log "Resolving pre-release channel via manifest.json"
-    pre_tag=$(curl -fsSL --proto '=https' --tlsv1.2 "$manifest_url" |
+    release_tag=$(gh_curl "$manifest_url" |
         sed -n 's/.*"pre-release"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' |
         head -n 1)
-    [ -n "$pre_tag" ] || die "no active pre-release in manifest (channels.pre-release is null)"
-    bin_url="${base}/download/${pre_tag}/${artifact}"
-    sha_url="${base}/download/${pre_tag}/${artifact}.sha256"
-    VERSION="$pre_tag"
+    [ -n "$release_tag" ] || die "no active pre-release in manifest (channels.pre-release is null)"
 elif [ "$VERSION" = "latest" ]; then
-    bin_url="${base}/latest/download/${artifact}"
-    sha_url="${base}/latest/download/${artifact}.sha256"
+    if [ -n "$TOKEN" ]; then
+        release_tag=$(gh_curl "https://api.github.com/repos/${REPO}/releases/latest" |
+            sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' |
+            head -n 1)
+        [ -n "$release_tag" ] || die "could not resolve latest release tag via API"
+    else
+        # Anonymous: follow the redirect on the public latest URL.
+        release_tag=$(curl -fsSLo /dev/null -w '%{url_effective}' --proto '=https' --tlsv1.2 \
+            "https://github.com/${REPO}/releases/latest" 2>/dev/null |
+            sed -n 's|.*/releases/tag/\([^/?#]*\).*|\1|p')
+        [ -n "$release_tag" ] || die "could not resolve latest release tag"
+    fi
 else
-    bin_url="${base}/download/${VERSION}/${artifact}"
-    sha_url="${base}/download/${VERSION}/${artifact}.sha256"
+    release_tag="$VERSION"
 fi
+VERSION="$release_tag"
 
 # --- Tmp workspace with guaranteed cleanup --------------------------------
 tmp=$(mktemp -d 2>/dev/null || mktemp -d -t ndea)
@@ -110,10 +182,8 @@ if [ "$CHANNEL" = "canary" ]; then
 else
     log "Downloading $artifact ($VERSION)"
 fi
-curl -fsSL --proto '=https' --tlsv1.2 -o "$tmp/$artifact" "$bin_url" ||
-    die "failed to download $bin_url"
-curl -fsSL --proto '=https' --tlsv1.2 -o "$tmp/$artifact.sha256" "$sha_url" ||
-    die "failed to download checksum (release may be missing $artifact.sha256)"
+download_asset "$release_tag" "$artifact" "$tmp/$artifact"
+download_asset "$release_tag" "$artifact.sha256" "$tmp/$artifact.sha256"
 
 log "Verifying checksum"
 (cd "$tmp" && sha_verify "$artifact.sha256" >/dev/null) ||
@@ -121,26 +191,10 @@ log "Verifying checksum"
 ok "checksum OK"
 
 # --- Install --------------------------------------------------------------
-# Resolve version tag for the versions directory. `latest` and `canary`
-# don't have a deterministic tag at this point in the script — we read
-# the GitHub redirect / use the channel name as the directory name.
-case "$VERSION" in
-    latest)
-        # Resolve `latest` to its actual tag by following the release redirect.
-        # `curl -sLo /dev/null -w '%{url_effective}'` returns the final URL,
-        # which contains the resolved tag in /releases/tag/<tag>.
-        resolved=$(curl -fsSLo /dev/null -w '%{url_effective}' --proto '=https' --tlsv1.2 \
-            "https://github.com/${REPO}/releases/latest" 2>/dev/null |
-            sed -n 's|.*/releases/tag/\([^/?#]*\).*|\1|p')
-        version_tag="${resolved:-$VERSION}"
-        ;;
-    *)
-        version_tag="$VERSION"
-        ;;
-esac
-[ "$CHANNEL" = "canary" ] && version_tag="canary"
-
-versions_dir="$NDEA_HOME_DIR/versions/$version_tag"
+# release_tag was resolved above (canary → "canary", latest → real tag,
+# pre-release → manifest pointer, otherwise the user-supplied tag). Use
+# it directly as the versions/ subdir name.
+versions_dir="$NDEA_HOME_DIR/versions/$release_tag"
 target_bin="$versions_dir/ndea"
 
 mkdir -p "$versions_dir" || die "cannot create $versions_dir"
@@ -162,7 +216,7 @@ ok "Linked $link → $target_bin"
 
 # Record the active version for `ndea --version` / diagnostics.
 mkdir -p "$NDEA_HOME_DIR"
-printf '%s\n' "$version_tag" >"$NDEA_HOME_DIR/current-version" 2>/dev/null || true
+printf '%s\n' "$release_tag" >"$NDEA_HOME_DIR/current-version" 2>/dev/null || true
 
 # --- PATH guidance (shell-aware) ------------------------------------------
 case ":$PATH:" in

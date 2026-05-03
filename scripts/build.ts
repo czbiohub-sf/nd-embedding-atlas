@@ -113,6 +113,15 @@ const outfile = resolve(OUT_DIR, "ndea");
 // @duckdb/node-bindings/duckdb.js branches through every platform's
 // native addon via require(). Only the matching optional dep is installed;
 // the others must be externalized so the bundler doesn't try to resolve them.
+//
+// KNOWN ISSUE: even with the matching addon NOT externalized, bun extracts
+// duckdb.node to /tmp at runtime but the sibling libduckdb.dylib (~110 MB,
+// referenced via @rpath/libduckdb.dylib) isn't co-located, so dlopen fails.
+// As a result, the compiled binary only runs from a working tree where
+// node_modules is a filesystem sibling (which we rely on by externalizing
+// all 6). Real users on a fresh machine hit "Cannot find module @duckdb/...".
+// Tracked separately — fixing properly requires a "binary + sidecar dylib"
+// distribution + install_name_tool patching, or a different DuckDB binding.
 const DUCKDB_PLATFORM_EXTERNALS = [
   "@duckdb/node-bindings-linux-x64/duckdb.node",
   "@duckdb/node-bindings-linux-arm64/duckdb.node",

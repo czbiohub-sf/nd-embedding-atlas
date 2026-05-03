@@ -61,10 +61,15 @@ jobs:
           NDEA_BIN_DIR: ${{ runner.temp }}/bin
           NDEA_HOME: ${{ runner.temp }}/state
           NDEA_VERSION: ${{ steps.tag.outputs.tag }}
+          # Private repo — fetch install.sh + binaries via authenticated
+          # API. NDEA_GITHUB_TOKEN flows into install.sh; GH_TOKEN is for
+          # the gh-cli call that downloads install.sh itself.
+          NDEA_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          curl -fsSL --proto '=https' --tlsv1.2 \
-            "https://github.com/${{ github.repository }}/releases/download/${TAG}/install.sh" \
-            | sh
+          mkdir -p "$(dirname "$0")"
+          gh release download "$TAG" -R ${{ github.repository }} -p install.sh -O /tmp/install.sh
+          sh /tmp/install.sh
 
       - name: Verify symlink layout
         env:
