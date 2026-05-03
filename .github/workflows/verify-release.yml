@@ -43,13 +43,20 @@ jobs:
             runner: ubuntu-24.04-arm
 
     steps:
+      # Hoist event-derived inputs into env vars so zizmor's
+      # template-injection audit doesn't flag inline `${{ … }}` expansions
+      # in the `run:` body. Same data, safer interpolation path.
       - name: Resolve tag
         id: tag
+        env:
+          RELEASE_TAG_NAME: ${{ github.event.release.tag_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+          REPO: ${{ github.repository }}
         run: |
-          tag="${{ github.event.release.tag_name || inputs.tag }}"
+          tag="${RELEASE_TAG_NAME:-$INPUT_TAG}"
           if [ -z "$tag" ]; then
             tag=$(curl -fsSL --proto '=https' --tlsv1.2 \
-              https://api.github.com/repos/${{ github.repository }}/releases/latest \
+              "https://api.github.com/repos/${REPO}/releases/latest" \
               | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -n 1)
           fi
           echo "tag=$tag" >> "$GITHUB_OUTPUT"

@@ -1,5 +1,18 @@
 name: Zizmor
 
+# zizmor audits .github/workflows/* for security issues (cache poisoning,
+# token leakage, untrusted-input flows, etc). We invoke it directly via
+# uvx instead of the official zizmor-action because the action's final
+# step uploads findings as SARIF to GitHub Code Scanning, which requires
+# GitHub Advanced Security on the org. This repo is internal and the org
+# doesn't currently subscribe to GHAS, so the upload step always errored
+# out and turned the workflow red on every push. Findings still appear in
+# this job's log; CI fails iff zizmor exits non-zero (real violations).
+#
+# To re-enable the SARIF upload + PR annotations: enable GHAS on the
+# repo's Settings → Code security and analysis page, then revert this
+# job back to `uses: zizmorcore/zizmor-action@vX`.
+
 on:
   push:
     branches: [main]
@@ -17,19 +30,21 @@ jobs:
     name: Audit workflows
     runs-on: ubuntu-latest
     permissions:
-      # Required to upload SARIF findings to GitHub Code Scanning.
-      security-events: write
-      # Required to read workflow YAML.
+      # zizmor only reads workflow YAML. No SARIF upload, so no
+      # `security-events: write`.
       contents: read
-      actions: read
     steps:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          # We don't need the GITHUB_TOKEN persisted in .git/config for
-          # subsequent steps — zizmor only reads files. Disabling persistence
-          # is the conservative default and cuts off one exfiltration path.
+          # zizmor only reads files; no need to persist GITHUB_TOKEN
+          # in .git/config for subsequent steps.
           persist-credentials: false
 
+      - uses: astral-sh/setup-uv@v7
+
+      # `uvx` fetches zizmor on demand (cached across runs by setup-uv)
+      # and runs it. The default exit-code policy fails on any finding
+      # at "informational" severity or higher.
       - name: Run zizmor
-        uses: zizmorcore/zizmor-action@v0.5.3
+        run: uvx zizmor .
