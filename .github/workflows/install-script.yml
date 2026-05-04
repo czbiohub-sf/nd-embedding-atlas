@@ -62,11 +62,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - label: ubuntu-latest (bash)
+          - label: ubuntu-latest (bash, glibc)
             runner: ubuntu-latest
             container: ""
             prep: ""
-          - label: ubuntu-24.04-arm (linux-arm64)
+          - label: ubuntu-24.04-arm (linux-arm64, glibc)
             runner: ubuntu-24.04-arm
             container: ""
             prep: ""
@@ -74,14 +74,23 @@ jobs:
             runner: macos-14
             container: ""
             prep: ""
-          - label: alpine 3.20 (BusyBox ash, musl)
+          - label: rockylinux 8.10 (RHEL-compatible, glibc 2.28)
+            # Real production target — confirms the binary built on
+            # ubuntu-latest's newer glibc still launches on EL8's older
+            # glibc 2.28. Rocky 8.10 ships curl + ca-certificates by
+            # default; prep is a no-op for the canonical image.
             runner: ubuntu-latest
-            container: alpine:3.20
-            prep: apk add --no-cache curl ca-certificates bash
+            container: rockylinux:8.10
+            prep: ""
           - label: debian 12 slim (dash as /bin/sh)
             runner: ubuntu-latest
             container: debian:12-slim
             prep: apt-get update && apt-get install -y curl ca-certificates
+          # Alpine deliberately omitted: musl-libc Alpine can't launch
+          # the glibc-linked bun-compiled binary, and install.sh now
+          # invokes the binary itself (`__write-wrapper`) so install.sh
+          # can't even complete on Alpine. Lint (shellcheck + shfmt POSIX)
+          # already covers BusyBox-ash shell-portability concerns.
 
     steps:
       - uses: actions/checkout@v6
@@ -119,14 +128,12 @@ jobs:
             echo "::error::missing libduckdb.$ext sidecar"; exit 1;
           }
 
-      # Run --version through the wrapper. Skipped on Alpine because the
-      # bun-compiled binary needs glibc; musl-libc Alpine can resolve
-      # install.sh's downloads but can't actually launch the binary
-      # (no glibc-compat package in the matrix). Catches the "binary
+      # Run --version through the wrapper. Catches the "binary
       # downloaded but won't launch" regression that motivated the
-      # whole sidecar effort.
-      - name: ndea --version (skipped on musl)
-        if: matrix.label != 'alpine 3.20 (BusyBox ash, musl)'
+      # whole sidecar effort. Particularly load-bearing on Rocky 8.10
+      # (glibc 2.28) — older than ubuntu-latest's build glibc; this
+      # step proves the binary's symbol requirements are compatible.
+      - name: ndea --version
         env:
           NDEA_BIN_DIR: ${{ runner.temp }}/bin
         run: |
