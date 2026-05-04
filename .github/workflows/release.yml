@@ -25,12 +25,15 @@ jobs:
           - os: macos-14 # Apple Silicon
             target: bun-darwin-arm64
             artifact: ndea-darwin-arm64
+            dylib: libduckdb-bun-darwin-arm64.dylib
           - os: ubuntu-latest # Linux x64
             target: bun-linux-x64
             artifact: ndea-linux-x64
+            dylib: libduckdb-bun-linux-x64.so
           - os: ubuntu-24.04-arm # Linux ARM64 (native, no QEMU)
             target: bun-linux-arm64
             artifact: ndea-linux-arm64
+            dylib: libduckdb-bun-linux-arm64.so
 
     runs-on: ${{ matrix.os }}
 
@@ -75,7 +78,7 @@ jobs:
         shell: bash
         run: ls -lh dist/${{ matrix.artifact }}
 
-      - name: Per-artifact SHA256 checksum
+      - name: Per-artifact SHA256 checksum (binary + dylib)
         env:
           ARTIFACT: ${{ matrix.artifact }}
         run: bash .github/scripts/sha256-artifact.sh
@@ -83,7 +86,9 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact }}
-          path: dist/${{ matrix.artifact }}*
+          path: |
+            dist/${{ matrix.artifact }}*
+            dist/${{ matrix.dylib }}*
           retention-days: 7
           if-no-files-found: error
 
