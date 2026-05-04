@@ -241,7 +241,7 @@ ok "Installed sidecar to $target_dylib"
 # Source of truth lives in `src/cli/lib/wrapper-script.ts`. The binary
 # self-extracts via the hidden `__write-wrapper` subcommand so install.sh
 # and `ndea update` always produce byte-identical files for a given tag.
-LD_LIBRARY_PATH="$versions_dir" "$target_bin" __write-wrapper > "$target_wrapper" ||
+LD_LIBRARY_PATH="$versions_dir" "$target_bin" __write-wrapper >"$target_wrapper" ||
     die "cannot extract wrapper script via $target_bin __write-wrapper"
 chmod +x "$target_wrapper" || die "cannot chmod $target_wrapper"
 ok "Wrote wrapper to $target_wrapper"
