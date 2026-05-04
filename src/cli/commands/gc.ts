@@ -11,12 +11,12 @@
 
 import { defineCommand, option } from "@bunli/core";
 import { existsSync } from "node:fs";
-import { readlink, rm, stat } from "node:fs/promises";
+import { readlink } from "node:fs/promises";
 import { resolve } from "node:path";
 import { z } from "zod";
 import { acquireLock } from "../lib/lock.ts";
-import { installLockPath, isCompiledBinary, resolveSelfPath, versionDir, versionsDir } from "../lib/paths.ts";
-import { listVersions } from "../lib/versions.ts";
+import { activeLauncher, installLockPath, isCompiledBinary, versionsDir } from "../lib/paths.ts";
+import { pruneVersions } from "../lib/prune.ts";
 
 export default defineCommand({
   name: "gc" as const,
@@ -41,29 +41,13 @@ export default defineCommand({
       return;
     }
 
-    const link = resolveSelfPath();
-    const activeBinary = await readlink(link).catch(() => null);
-    const activeAbs = activeBinary ? resolve(activeBinary) : null;
-
-    const all = await listVersions(root);
-    if (all.length === 0) {
-      console.log("Nothing to prune — versions/ is empty.");
-      return;
-    }
-
-    // Active first, then most recent → least recent.
-    const active = all.find((e) => e.binaryPath === activeAbs);
-    const others = all.filter((e) => e.binaryPath !== activeAbs);
-
-    const keepCount = flags.all ? 0 : Math.max(0, flags.keep - (active ? 1 : 0));
-    const keepOthers = others.slice(0, keepCount);
-    const prune = others.slice(keepCount);
-
-    if (prune.length === 0) {
-      const kept = (active ? 1 : 0) + keepOthers.length;
-      console.log(`Nothing to prune — ${kept} version(s) currently installed, all kept.`);
-      return;
-    }
+    // gc is read-mostly: missing NDEA_LAUNCHER means "can't mark active",
+    // not a hard error. Mutating side (rm of dirs) is gated by the
+    // pruneVersions logic, which always preserves the active version
+    // when one is detected.
+    const link = activeLauncher();
+    const activeTarget = link ? await readlink(link).catch(() => null) : null;
+    const activeAbs = activeTarget ? resolve(activeTarget) : null;
 
     const lock = await acquireLock(installLockPath()).catch((err: unknown) => {
       console.error(`  ${err instanceof Error ? err.message : String(err)}`);
@@ -71,35 +55,19 @@ export default defineCommand({
     });
 
     try {
-      let freed = 0;
-      for (const entry of prune) {
-        const dir = versionDir(entry.tag);
-        const size = await directorySize(dir).catch(() => 0);
-        await rm(dir, { recursive: true, force: true });
-        freed += size;
+      const result = await pruneVersions({ root, activeAbs, keep: flags.all ? 1 : flags.keep });
+      if (result.pruned.length === 0) {
+        console.log(`Nothing to prune — ${result.kept.length} version(s) currently installed, all kept.`);
+        return;
+      }
+      for (const entry of result.pruned) {
         console.log(`  removed ${entry.tag}`);
       }
-      const mb = (freed / (1024 * 1024)).toFixed(1);
-      console.log(`\nPruned ${prune.length} version(s), freed ${mb} MB.`);
-      const kept = (active ? 1 : 0) + keepOthers.length;
-      console.log(`Kept ${kept} version(s).`);
+      const mb = (result.freedBytes / (1024 * 1024)).toFixed(1);
+      console.log(`\nPruned ${result.pruned.length} version(s), freed ${mb} MB.`);
+      console.log(`Kept ${result.kept.length} version(s).`);
     } finally {
       await lock.release();
     }
   },
 });
-
-async function directorySize(path: string): Promise<number> {
-  let total = 0;
-  const entries = await import("node:fs/promises").then((m) => m.readdir(path, { withFileTypes: true }));
-  for (const entry of entries) {
-    const child = resolve(path, entry.name);
-    if (entry.isDirectory()) {
-      total += await directorySize(child).catch(() => 0);
-    } else if (entry.isFile()) {
-      const info = await stat(child).catch(() => null);
-      if (info) total += info.size;
-    }
-  }
-  return total;
-}

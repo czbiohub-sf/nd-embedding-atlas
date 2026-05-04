@@ -1,10 +1,13 @@
 /**
- * `ndea update` — fetch the manifest, download the matching asset into the
- * versions tree, and atomically repoint the active symlink.
+ * `ndea update` — fetch the manifest, download the matching binary +
+ * libduckdb sidecar into the versions tree, regenerate the wrapper script,
+ * and atomically repoint the active symlink.
  *
- * Layout:
- *   ~/.ndea/versions/<tag>/ndea     — the binary for this version
- *   $bin_dir/ndea                   — symlink → ~/.ndea/versions/<tag>/ndea
+ * Layout written by this command (mirrors install.sh):
+ *   ~/.ndea/versions/<tag>/ndea               — POSIX-sh wrapper
+ *   ~/.ndea/versions/<tag>/ndea.bin           — bun-compiled binary
+ *   ~/.ndea/versions/<tag>/libduckdb.{dylib,so} — DuckDB sidecar
+ *   $bin_dir/ndea                             — symlink → versions/<tag>/ndea
  *
  * The "atomic symlink swap" trick (write to a sibling temp name, then
  * `rename(2)` over the live link) gives crash-safety without the
@@ -13,8 +16,7 @@
  */
 
 import { defineCommand, option } from "@bunli/core";
-import { chmod, mkdir, readlink, rename, symlink, unlink } from "node:fs/promises";
-import { resolve } from "node:path";
+import { chmod, mkdir, rename, symlink, unlink } from "node:fs/promises";
 import { z } from "zod";
 import { acquireLock } from "../lib/lock.ts";
 import type { Channel } from "../lib/manifest.ts";
@@ -23,11 +25,23 @@ import {
   currentVersionPath,
   installLockPath,
   isCompiledBinary,
-  resolveSelfPath,
+  requireActiveLauncher,
   versionDir,
   versionedBinaryPath,
+  versionedDylibPath,
+  versionedWrapperPath,
+  versionsDir,
 } from "../lib/paths.ts";
+import { pruneVersions } from "../lib/prune.ts";
 import { VERSION } from "../version.ts";
+import { WRAPPER_SCRIPT_CONTENT } from "../lib/wrapper-script.ts";
+
+/**
+ * Default versions retained after auto-gc on a successful update.
+ * Active + one rollback target = 2. Each version is ~190 MB on disk
+ * (binary + libduckdb sidecar), so the steady-state ceiling is ~380 MB.
+ */
+const AUTO_GC_KEEP = 2;
 
 export default defineCommand({
   name: "update" as const,
@@ -38,6 +52,9 @@ export default defineCommand({
     }),
     channel: option(z.enum(CHANNELS).optional(), {
       description: `Release channel: ${CHANNELS.join(" | ")}`,
+    }),
+    "no-gc": option(z.coerce.boolean().default(false), {
+      description: `Skip the post-update gc that prunes to ${AUTO_GC_KEEP} versions`,
     }),
   },
   async handler({ flags }) {
@@ -71,37 +88,82 @@ export default defineCommand({
     try {
       const targetDir = versionDir(asset.tag);
       const targetBin = versionedBinaryPath(asset.tag);
+      const targetWrapper = versionedWrapperPath(asset.tag);
+      const targetDylib = versionedDylibPath(asset.tag);
       await mkdir(targetDir, { recursive: true });
 
+      // Download binary + sidecar in parallel; fetch SHAs alongside so we
+      // hit the network once per asset rather than serializing.
       console.log(`  Downloading ${asset.assetUrl}`);
-      const [binRes, shaRes] = await Promise.all([fetch(asset.assetUrl), fetch(asset.shaUrl)]);
+      console.log(`  Downloading ${asset.dylibAssetUrl}`);
+      const [binRes, binShaRes, dylibRes, dylibShaRes] = await Promise.all([
+        fetch(asset.assetUrl),
+        fetch(asset.shaUrl),
+        fetch(asset.dylibAssetUrl),
+        fetch(asset.dylibShaUrl),
+      ]);
       if (!binRes.ok) throw new Error(`asset fetch failed: ${binRes.status} ${binRes.statusText}`);
-      if (!shaRes.ok) throw new Error(`checksum fetch failed: ${shaRes.status} ${shaRes.statusText}`);
+      if (!binShaRes.ok) throw new Error(`checksum fetch failed: ${binShaRes.status} ${binShaRes.statusText}`);
+      if (!dylibRes.ok) throw new Error(`dylib fetch failed: ${dylibRes.status} ${dylibRes.statusText}`);
+      if (!dylibShaRes.ok)
+        throw new Error(`dylib checksum fetch failed: ${dylibShaRes.status} ${dylibShaRes.statusText}`);
 
-      const [bytes, shaBody] = await Promise.all([binRes.arrayBuffer(), shaRes.text()]);
+      const [bytes, shaBody, dylibBytes, dylibShaBody] = await Promise.all([
+        binRes.arrayBuffer(),
+        binShaRes.text(),
+        dylibRes.arrayBuffer(),
+        dylibShaRes.text(),
+      ]);
       const expected = parseShaFile(shaBody);
       const actual = sha256Hex(bytes);
       if (actual !== expected) {
-        throw new Error(`checksum mismatch: expected ${expected}, got ${actual}`);
+        throw new Error(`binary checksum mismatch: expected ${expected}, got ${actual}`);
       }
-      console.log(`  Checksum OK (${expected.slice(0, 12)}…)`);
+      const dylibExpected = parseShaFile(dylibShaBody);
+      const dylibActual = sha256Hex(dylibBytes);
+      if (dylibActual !== dylibExpected) {
+        throw new Error(`dylib checksum mismatch: expected ${dylibExpected}, got ${dylibActual}`);
+      }
+      console.log(`  Checksum OK (binary ${expected.slice(0, 12)}…, dylib ${dylibExpected.slice(0, 12)}…)`);
 
       await Bun.write(targetBin, bytes);
       await chmod(targetBin, 0o755);
+      await Bun.write(targetDylib, dylibBytes);
+      await Bun.write(targetWrapper, WRAPPER_SCRIPT_CONTENT);
+      await chmod(targetWrapper, 0o755);
 
       // Atomic symlink swap — write `<link>.tmp` then rename(2) over the
       // live link. POSIX rename is atomic for both files and symlinks; the
       // running binary keeps its open file handle to the old version, so
-      // long-lived `ndea view` sessions are unaffected.
-      const link = await resolveActiveLink();
+      // long-lived `ndea view` sessions are unaffected. Symlink points at
+      // the wrapper, not the binary, so the LD_LIBRARY_PATH plumbing runs
+      // on every invocation.
+      const link = requireActiveLauncher();
       const tmpLink = `${link}.tmp`;
       await unlink(tmpLink).catch(() => {});
-      await symlink(targetBin, tmpLink);
+      await symlink(targetWrapper, tmpLink);
       await rename(tmpLink, link);
 
       await Bun.write(currentVersionPath(), `${asset.tag}\n${expected}\n`);
 
       console.log(`  Installed ${asset.tag} → ${link}`);
+
+      // Auto-prune: each version takes ~190 MB (binary + libduckdb sidecar).
+      // Default keeps current + 1 rollback target. `--no-gc` opts out for
+      // users who want history (debugging, bisecting, multi-channel).
+      if (!flags["no-gc"]) {
+        const result = await pruneVersions({
+          root: versionsDir(),
+          activeAbs: targetWrapper,
+          keep: AUTO_GC_KEEP,
+        });
+        if (result.pruned.length > 0) {
+          const mb = (result.freedBytes / (1024 * 1024)).toFixed(1);
+          const tags = result.pruned.map((e) => e.tag).join(", ");
+          console.log(`  Auto-gc: pruned ${result.pruned.length} version(s) [${tags}], freed ${mb} MB`);
+        }
+      }
+
       console.log(`  Run \`ndea --version\` to confirm.`);
     } finally {
       await lock.release();
@@ -110,23 +172,6 @@ export default defineCommand({
 });
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
-
-/**
- * The symlink path users invoke as `ndea` — i.e. the file on PATH.
- *
- * On a fresh install via install.sh this is already a symlink. On systems
- * upgraded from the pre-Phase-3 layout (binary-as-regular-file at the same
- * path), `resolveSelfPath()` returns the regular file's path; the rename
- * over it during update converts it to a symlink in one atomic step.
- */
-async function resolveActiveLink(): Promise<string> {
-  const self = resolveSelfPath();
-  // If `self` is a symlink, the rename target is the link itself, not its
-  // resolved destination. `readlink` succeeds on a symlink and throws on
-  // a regular file — either way, the path we want to write is `self`.
-  await readlink(self).catch(() => {});
-  return resolve(self);
-}
 
 function resolveChannel(raw: Channel | undefined): Channel {
   const fromEnv = process.env.NDEA_CHANNEL;

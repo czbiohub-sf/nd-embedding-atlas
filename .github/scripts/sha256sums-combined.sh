@@ -9,6 +9,8 @@ set -euo pipefail
 
 cd dist
 ls -lh
-shasum -a 256 ndea-* | grep -v '\.sha256$' > SHA256SUMS
+# Hash both binaries (ndea-*) and DuckDB sidecars (libduckdb-*) so users can
+# verify either with `shasum -a 256 -c SHA256SUMS --ignore-missing`.
+shasum -a 256 ndea-* libduckdb-* 2>/dev/null | grep -v '\.sha256$' > SHA256SUMS
 echo "---"
 cat SHA256SUMS
