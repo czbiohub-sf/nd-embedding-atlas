@@ -1,6 +1,6 @@
 {
   "name": "nd-embedding-atlas",
-  "version": "0.1.0-alpha.2",
+  "version": "0.1.0-alpha.3",
   "description": "Interactive browser-based dashboard linking AI embeddings to source 5D (TCZYX) image data.",
   "license": "MIT",
   "author": "Sricharan Varra <sricharan.varra@czbiohub.org>",
