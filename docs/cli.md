@@ -59,16 +59,19 @@ A single `.yaml` / `.yml` path is parsed as a multi-dataset project config (see 
 
 ## `ndea update`
 
-Download the latest release for a channel, verify its SHA-256, write it under `~/.ndea/versions/<tag>/ndea`, and atomically repoint the active symlink. Old versions stay on disk for `ndea rollback`.
+Download the latest release for a channel, verify SHA-256 for both the binary and its libduckdb sidecar, write everything under `~/.ndea/versions/<tag>/`, regenerate the wrapper script, atomically repoint the active symlink, and prune to 2 versions (current + 1 rollback target). Each version is ~190 MB on disk; auto-gc keeps `~/.ndea/` from growing without bound.
 
 ### Options
 
-| Option                | Type                                              | Default  | Description                                |
-| --------------------- | ------------------------------------------------- | -------- | ------------------------------------------ |
-| `--channel <channel>` | `stable` \| `latest` \| `pre-release` \| `canary` | `stable` | Release channel to resolve                 |
-| `--force`             | boolean                                           | `false`  | Re-install even when already on the target |
+| Option                | Type                                              | Default  | Description                                            |
+| --------------------- | ------------------------------------------------- | -------- | ------------------------------------------------------ |
+| `--channel <channel>` | `stable` \| `latest` \| `pre-release` \| `canary` | `stable` | Release channel to resolve                             |
+| `--force`             | boolean                                           | `false`  | Re-install even when already on the target             |
+| `--no-gc`             | boolean                                           | `false`  | Skip the post-update auto-gc that prunes to 2 versions |
 
 Refuses to run uncompiled (i.e. via `bun run`).
+
+By default, a successful update runs `gc --keep 2` afterward — keeping the new active version plus one rollback target, pruning anything older. Pass `--no-gc` to retain history (debugging, bisecting, multi-channel testing); manually prune later with `ndea gc`.
 
 The swap is atomic via `rename(2)` over a sibling `<link>.tmp`. Long-lived `ndea view` sessions keep their open file handle to the old binary and are unaffected.
 
@@ -153,16 +156,24 @@ ndea completions fish > ~/.config/fish/completions/ndea.fish
 
 ```
 ~/.ndea/
-  current-version       # Plain text: "<tag>\n<sha256>\n"
+  current-version              # Plain text: "<tag>\n<sha256>\n"
   versions/
-    v0.1.0/ndea         # One installed binary per tag — keeps history for rollback
-    v0.1.1/ndea
+    v0.1.0/
+      ndea                     # POSIX-sh wrapper (symlink target)
+      ndea.bin                 # bun-compiled binary (~80 MB)
+      libduckdb.{dylib,so}     # DuckDB engine sidecar (~110 MB)
+    v0.1.1/
+      …
   locks/
-    install.lock        # PID file backing the install/update mutex
-  logs/                 # Reserved for future telemetry / install traces
+    install.lock               # PID file backing the install/update mutex
+  logs/                        # Reserved for future telemetry / install traces
 ```
 
-`$NDEA_BIN_DIR/ndea` is a symlink into `~/.ndea/versions/<tag>/ndea`. `ndea update` and `ndea rollback` repoint the symlink atomically; the binary files in `versions/` are never deleted automatically — prune by hand to reclaim disk.
+Each version takes ~190 MB on disk (binary + sidecar). `ndea gc` prunes old ones; the active version is always preserved.
+
+`$NDEA_BIN_DIR/ndea` is a symlink into `~/.ndea/versions/<tag>/ndea` — the wrapper script. The wrapper sets `LD_LIBRARY_PATH` so the embedded duckdb.node can find its sibling libduckdb at dlopen time, then `exec`s `ndea.bin`. macOS resolves the sidecar via a `@executable_path` rpath patched at build time; the wrapper is harmless there.
+
+`ndea update` and `ndea rollback` repoint the symlink at the new wrapper atomically via `rename(2)`. Old versions stay on disk until `ndea gc` or manual cleanup.
 
 ## Exit codes
 

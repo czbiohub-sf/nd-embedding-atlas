@@ -37,7 +37,7 @@ jobs:
           persist-credentials: false
 
       # uv ships uvx; we use it to fetch zensical on demand.
-      - uses: astral-sh/setup-uv@v7
+      - uses: astral-sh/setup-uv@v8.1.0
 
       - name: Build site
         run: uvx --from zensical zensical build

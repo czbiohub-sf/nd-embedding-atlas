@@ -16,7 +16,13 @@ import { defineCommand } from "@bunli/core";
 import { existsSync } from "node:fs";
 import { readlink, rename, symlink, unlink } from "node:fs/promises";
 import { acquireLock } from "../lib/lock.ts";
-import { currentVersionPath, installLockPath, isCompiledBinary, resolveSelfPath, versionsDir } from "../lib/paths.ts";
+import {
+  currentVersionPath,
+  installLockPath,
+  isCompiledBinary,
+  requireActiveLauncher,
+  versionsDir,
+} from "../lib/paths.ts";
 import { listVersions } from "../lib/versions.ts";
 
 export default defineCommand({
@@ -41,7 +47,7 @@ export default defineCommand({
       process.exit(1);
     }
 
-    const link = resolveSelfPath();
+    const link = requireActiveLauncher();
     const activeTarget = await readlink(link).catch(() => null);
 
     const entries = await listVersions(root);
@@ -50,10 +56,11 @@ export default defineCommand({
       process.exit(1);
     }
 
-    // Pick the most-recently-modified version whose binary path differs
+    // Pick the most-recently-modified version whose wrapper path differs
     // from the currently-resolved one. Mtime ordering is stable across
-    // installs because `Bun.write` updates it on every download.
-    const candidate = entries.find((e) => e.binaryPath !== activeTarget);
+    // installs because `Bun.write` updates ndea.bin on every download.
+    // Symlinks target the wrapper, so wrapperPath is what `readlink` returns.
+    const candidate = entries.find((e) => e.wrapperPath !== activeTarget);
     if (!candidate) {
       console.error("Error: only one version installed — nothing to roll back to.");
       process.exit(1);
@@ -67,7 +74,7 @@ export default defineCommand({
     try {
       const tmpLink = `${link}.tmp`;
       await unlink(tmpLink).catch(() => {});
-      await symlink(candidate.binaryPath, tmpLink);
+      await symlink(candidate.wrapperPath, tmpLink);
       await rename(tmpLink, link);
 
       await Bun.write(currentVersionPath(), `${candidate.tag}\n`);

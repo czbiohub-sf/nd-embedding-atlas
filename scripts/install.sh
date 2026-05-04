@@ -3,8 +3,14 @@
 # checksum, places it in the versions tree, and creates a symlink on PATH.
 #
 # Layout:
-#   $NDEA_HOME/versions/<tag>/ndea     — installed binary (one per version)
-#   $NDEA_BIN_DIR/ndea                 — symlink to active versions/<tag>/ndea
+#   $NDEA_HOME/versions/<tag>/ndea               — POSIX-sh wrapper (symlink target)
+#   $NDEA_HOME/versions/<tag>/ndea.bin           — bun-compiled binary
+#   $NDEA_HOME/versions/<tag>/libduckdb.{dylib,so} — DuckDB engine sidecar
+#   $NDEA_BIN_DIR/ndea                           — symlink → versions/<tag>/ndea
+#
+# The wrapper sets LD_LIBRARY_PATH so the embedded duckdb.node can resolve
+# its sibling libduckdb shared library at dlopen time. Same layout on macOS
+# (where rpath is patched at build time and LD_LIBRARY_PATH is harmless).
 #
 # `ndea update` uses the same layout, so installs and updates share one
 # atomic-symlink-swap mechanism. Old versions stay on disk for `ndea rollback`.
@@ -139,6 +145,15 @@ esac
 
 artifact="ndea-${os}-${arch}"
 
+# Sidecar libduckdb shared library — shipped alongside every binary release.
+# Names match scripts/build.ts's TARGET_TO_DUCKDB.distName.
+case "$os" in
+    darwin) dylib_ext=dylib ;;
+    linux) dylib_ext=so ;;
+    *) die "no libduckdb sidecar mapping for $os" ;;
+esac
+dylib_artifact="libduckdb-bun-${os}-${arch}.${dylib_ext}"
+
 # --- Release tag resolution ---------------------------------------------
 # Resolve channel + version into the concrete tag we want assets from.
 # canary → rolling 'canary' tag.
@@ -185,17 +200,32 @@ fi
 download_asset "$release_tag" "$artifact" "$tmp/$artifact"
 download_asset "$release_tag" "$artifact.sha256" "$tmp/$artifact.sha256"
 
-log "Verifying checksum"
+log "Verifying $artifact checksum"
 (cd "$tmp" && sha_verify "$artifact.sha256" >/dev/null) ||
     die "checksum verification failed - aborting"
-ok "checksum OK"
+ok "$artifact checksum OK"
+
+# DuckDB sidecar: the compiled binary's embedded duckdb.node loads
+# libduckdb at runtime. The dylib lives next to the binary (resolved
+# via @executable_path on macOS, LD_LIBRARY_PATH on Linux); without it
+# `ndea --version` itself fails to start.
+log "Downloading $dylib_artifact"
+download_asset "$release_tag" "$dylib_artifact" "$tmp/$dylib_artifact"
+download_asset "$release_tag" "$dylib_artifact.sha256" "$tmp/$dylib_artifact.sha256"
+
+log "Verifying $dylib_artifact checksum"
+(cd "$tmp" && sha_verify "$dylib_artifact.sha256" >/dev/null) ||
+    die "dylib checksum verification failed - aborting"
+ok "$dylib_artifact checksum OK"
 
 # --- Install --------------------------------------------------------------
 # release_tag was resolved above (canary → "canary", latest → real tag,
 # pre-release → manifest pointer, otherwise the user-supplied tag). Use
 # it directly as the versions/ subdir name.
 versions_dir="$NDEA_HOME_DIR/versions/$release_tag"
-target_bin="$versions_dir/ndea"
+target_bin="$versions_dir/ndea.bin"
+target_wrapper="$versions_dir/ndea"
+target_dylib="$versions_dir/libduckdb.${dylib_ext}"
 
 mkdir -p "$versions_dir" || die "cannot create $versions_dir"
 mkdir -p "$DEST" || die "cannot create $DEST"
@@ -204,15 +234,28 @@ chmod +x "$tmp/$artifact"
 mv "$tmp/$artifact" "$target_bin" || die "cannot write $target_bin (permission?)"
 ok "Installed binary to $target_bin"
 
+mv "$tmp/$dylib_artifact" "$target_dylib" || die "cannot write $target_dylib (permission?)"
+ok "Installed sidecar to $target_dylib"
+
+# Wrapper script — POSIX sh, sets LD_LIBRARY_PATH and execs the binary.
+# Source of truth lives in `src/cli/lib/wrapper-script.ts`. The binary
+# self-extracts via the hidden `__write-wrapper` subcommand so install.sh
+# and `ndea update` always produce byte-identical files for a given tag.
+LD_LIBRARY_PATH="$versions_dir" "$target_bin" __write-wrapper > "$target_wrapper" ||
+    die "cannot extract wrapper script via $target_bin __write-wrapper"
+chmod +x "$target_wrapper" || die "cannot chmod $target_wrapper"
+ok "Wrote wrapper to $target_wrapper"
+
 # Atomic symlink swap: write to a sibling tmp name and rename(2) over the
 # live link. POSIX rename is atomic for both files and symlinks; the swap
-# survives a crash of this script with no torn state.
+# survives a crash of this script with no torn state. Symlink targets the
+# wrapper, so users always invoke through the LD_LIBRARY_PATH plumbing.
 link="$DEST/ndea"
 tmp_link="${link}.tmp"
 rm -f "$tmp_link"
-ln -s "$target_bin" "$tmp_link" || die "cannot create symlink at $tmp_link"
+ln -s "$target_wrapper" "$tmp_link" || die "cannot create symlink at $tmp_link"
 mv -f "$tmp_link" "$link" || die "cannot move symlink into place at $link"
-ok "Linked $link → $target_bin"
+ok "Linked $link → $target_wrapper"
 
 # Record the active version for `ndea --version` / diagnostics.
 mkdir -p "$NDEA_HOME_DIR"

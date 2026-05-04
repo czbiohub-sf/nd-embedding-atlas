@@ -24,7 +24,7 @@ First run is ~45 s (Bun clones the repo, installs deps, and builds the frontend)
 curl -fsSL https://raw.githubusercontent.com/czbiohub-sf/nd-embedding-atlas/main/scripts/install.sh | sh
 ```
 
-Downloads a checksum-verified native binary (~80 MB) and drops it into `$HOME/.local/bin`.
+Downloads a checksum-verified native binary (~80 MB) plus its libduckdb sidecar (~110 MB) and drops a `ndea` symlink into `$HOME/.local/bin`. Total install size ~190 MB per version under `~/.ndea/versions/<tag>/`.
 
 Environment variables:
 
@@ -74,8 +74,7 @@ source <(ndea completions zsh)
 ndea completions fish > ~/.config/fish/completions/ndea.fish
 ```
 
-The update is staged as `<self>.pending` and swapped on next launch (avoids
-mid-run binary replacement). Re-running the curl installer also works.
+Updates download the new binary + sidecar into a fresh `~/.ndea/versions/<tag>/` directory and atomically retarget the symlink via `rename(2)`. Long-running `ndea view` sessions keep their open file handle to the old binary — no mid-run replacement. Re-running the curl installer also works.
 
 For the `bunx` path, re-run the `bunx` command — Bun refreshes the clone on the next invocation.
 

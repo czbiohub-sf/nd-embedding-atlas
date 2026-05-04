@@ -78,7 +78,7 @@ jobs:
           gh release download "$TAG" -R ${{ github.repository }} -p install.sh -O /tmp/install.sh
           sh /tmp/install.sh
 
-      - name: Verify symlink layout
+      - name: Verify symlink layout + sidecar presence
         env:
           NDEA_BIN_DIR: ${{ runner.temp }}/bin
           NDEA_HOME: ${{ runner.temp }}/state
@@ -87,10 +87,22 @@ jobs:
           test -L "$NDEA_BIN_DIR/ndea" || { echo "::error::ndea is not a symlink"; exit 1; }
           target=$(readlink "$NDEA_BIN_DIR/ndea")
           echo "symlink → $target"
+          # Symlink targets the wrapper script, NOT the binary directly.
           case "$target" in
-            *"versions/${TAG}/ndea") echo "ok: points at versions/${TAG}";;
+            *"versions/${TAG}/ndea") echo "ok: points at versions/${TAG}/ndea (wrapper)";;
             *) echo "::error::symlink target unexpected: $target"; exit 1;;
           esac
+
+          version_dir="$NDEA_HOME/versions/${TAG}"
+          test -x "$version_dir/ndea"     || { echo "::error::wrapper missing or not executable"; exit 1; }
+          test -x "$version_dir/ndea.bin" || { echo "::error::ndea.bin missing or not executable"; exit 1; }
+          ext=so; case "$RUNNER_OS" in macOS) ext=dylib ;; esac
+          test -f "$version_dir/libduckdb.$ext" || {
+            echo "::error::missing libduckdb.$ext sidecar"
+            ls -la "$version_dir"
+            exit 1
+          }
+          echo "ok: $version_dir contains ndea (wrapper), ndea.bin, libduckdb.$ext"
 
       - name: ndea --version
         env:

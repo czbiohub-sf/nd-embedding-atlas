@@ -59,7 +59,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-14, ubuntu-24.04-arm]
+        include:
+          - os: ubuntu-latest
+            artifact: ndea-linux-x64
+            dylib: libduckdb-bun-linux-x64.so
+          - os: macos-14
+            artifact: ndea-darwin-arm64
+            dylib: libduckdb-bun-darwin-arm64.dylib
+          - os: ubuntu-24.04-arm
+            artifact: ndea-linux-arm64
+            dylib: libduckdb-bun-linux-arm64.so
     steps:
       - uses: actions/checkout@v6
         with:
@@ -69,12 +78,30 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
       # `bun run build` exercises the full release path: vp build (frontend)
-      # → embed-asset manifest generation → bun build --compile (binary).
-      # PRs that break any of these surface here instead of in canary.
+      # → embed-asset manifest generation → bun build --compile (binary)
+      # → install_name_tool rpath patch + libduckdb sidecar copy. PRs that
+      # break any of these surface here instead of in canary.
       - name: bun run build
         run: bun run build
-      - name: Smoke (binary launches + reports version)
-        run: ./dist/ndea --version
+      # In-tree smoke: build.ts also drops `dist/libduckdb.<ext>` (symlink)
+      # and `dist/ndea-launcher` (the wrapper) so the dev-tree layout
+      # mirrors the install layout. Catches any drift between build output
+      # and what install.sh / update.ts will produce in the field.
+      - name: Smoke (in-tree wrapper)
+        run: ./dist/ndea-launcher --version
+      # Out-of-tree smoke: copy binary + sidecar to a fresh dir with no
+      # node_modules. This catches the bug class the dylib-sidecar plan
+      # solves — a binary whose duckdb.node can't find libduckdb at
+      # runtime. Without this step the bug only shows up at install time
+      # for end users.
+      - name: Smoke (isolated dir — binary + sidecar only)
+        env:
+          ARTIFACT: ndea
+          DYLIB: ${{ matrix.dylib }}
+        run: |
+          # build.ts emits dist/ndea (not dist/$ARTIFACT) when run locally;
+          # rename so smoke-isolated.sh's lookup works without forking it.
+          ARTIFACT=ndea bash .github/scripts/smoke-isolated.sh
 
   # ── Single required status check for branch protection ────────────────
   all-green:

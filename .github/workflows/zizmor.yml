@@ -41,7 +41,7 @@ jobs:
           # in .git/config for subsequent steps.
           persist-credentials: false
 
-      - uses: astral-sh/setup-uv@v7
+      - uses: astral-sh/setup-uv@v8.1.0
 
       # `uvx` fetches zizmor on demand (cached across runs by setup-uv)
       # and runs it. The default exit-code policy fails on any finding
