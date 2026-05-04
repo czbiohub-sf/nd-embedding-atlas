@@ -64,8 +64,12 @@ jobs:
           ARTIFACT: ${{ matrix.artifact }}
         run: bash .github/scripts/build-binary.sh
 
+      # macOS resolves libduckdb via the @executable_path rpath patch;
+      # Linux needs LD_LIBRARY_PATH (no $ORIGIN-relative search for the
+      # .node, which bun extracts to /tmp at runtime). Setting it
+      # unconditionally is harmless on macOS (dyld ignores it).
       - name: Verify binary launches
-        run: ./dist/${{ matrix.artifact }} --version
+        run: LD_LIBRARY_PATH="$PWD/dist" ./dist/${{ matrix.artifact }} --version
 
       - name: Report binary size
         shell: bash

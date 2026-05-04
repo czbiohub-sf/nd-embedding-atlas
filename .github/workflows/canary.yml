@@ -73,8 +73,14 @@ jobs:
           ARTIFACT: ${{ matrix.artifact }}
         run: bash .github/scripts/build-binary.sh
 
-      - name: Verify binary launches (with node_modules sibling)
-        run: ./dist/${{ matrix.artifact }} --version
+      # In-tree launch check. macOS resolves libduckdb via the
+      # @executable_path rpath patched into duckdb.node at build time;
+      # Linux needs LD_LIBRARY_PATH because there's no $ORIGIN-relative
+      # search path for the .node (bun extracts it to /tmp at runtime).
+      # Setting LD_LIBRARY_PATH unconditionally is harmless on macOS
+      # (dyld ignores it).
+      - name: Verify binary launches (in-tree)
+        run: LD_LIBRARY_PATH="$PWD/dist" ./dist/${{ matrix.artifact }} --version
 
       - name: Verify isolated dir (catches missing-dylib regressions)
         env:
