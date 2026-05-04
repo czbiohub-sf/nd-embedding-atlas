@@ -73,14 +73,14 @@ jobs:
           ARTIFACT: ${{ matrix.artifact }}
         run: bash .github/scripts/build-binary.sh
 
-      - name: Smoke test (with node_modules sibling — exercises native loading)
+      - name: Verify binary launches (with node_modules sibling)
         run: ./dist/${{ matrix.artifact }} --version
 
-      - name: Smoke test (isolated dir — catches missing-dylib regressions)
+      - name: Verify isolated dir (catches missing-dylib regressions)
         env:
           ARTIFACT: ${{ matrix.artifact }}
           DYLIB: ${{ matrix.dylib }}
-        run: bash .github/scripts/smoke-isolated.sh
+        run: bash .github/scripts/verify-isolated.sh
 
       - name: Per-artifact SHA256 checksum (binary + dylib)
         env:

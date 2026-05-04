@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Validate that a freshly-built ndea binary + libduckdb sidecar actually
+# Verify that a freshly-built ndea binary + libduckdb sidecar actually
 # launches when isolated from the working tree (no node_modules siblings).
 #
-# This catches the bug class that motivated the dylib-sidecar plan: the
+# Catches the bug class that motivated the dylib-sidecar plan: the
 # bun-compiled binary loads duckdb.node from $bunfs/, which then tries to
 # resolve libduckdb relative to its own location. Inside the working tree
 # that "happens to work" because of the @duckdb/node-bindings-* node_modules
@@ -10,7 +10,7 @@
 #
 # We isolate the binary into runner.temp/ndea-iso/ alongside ONLY the
 # sidecar dylib, set LD_LIBRARY_PATH manually (mirroring what the wrapper
-# does in production), and run --version. The wrapper itself is tested
+# does in production), and run --version. The wrapper itself is exercised
 # end-to-end by install-script.yml + verify-release.yml; this step's job
 # is to validate the binary <-> sidecar pair, not the wrapper.
 #

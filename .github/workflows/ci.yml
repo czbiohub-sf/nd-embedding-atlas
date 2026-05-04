@@ -51,10 +51,10 @@ jobs:
       - name: bun test
         run: bun test
 
-  # ── Full build smoke (frontend + binary, catches release-time regressions
-  # at PR time rather than at canary-on-merge time) ──────────────────────
-  build-smoke:
-    name: Build smoke (${{ matrix.os }})
+  # ── Full build + launch verify (frontend + binary, catches release-time
+  # regressions at PR time rather than at canary-on-merge time) ──────────
+  build-verify:
+    name: Build + verify (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -83,31 +83,31 @@ jobs:
       # break any of these surface here instead of in canary.
       - name: bun run build
         run: bun run build
-      # In-tree smoke: build.ts also drops `dist/libduckdb.<ext>` (symlink)
-      # and `dist/ndea-launcher` (the wrapper) so the dev-tree layout
-      # mirrors the install layout. Catches any drift between build output
-      # and what install.sh / update.ts will produce in the field.
-      - name: Smoke (in-tree wrapper)
+      # In-tree launch check: build.ts also drops `dist/libduckdb.<ext>`
+      # (symlink) and `dist/ndea-launcher` (the wrapper) so the dev-tree
+      # layout mirrors the install layout. Catches any drift between
+      # build output and what install.sh / update.ts will produce.
+      - name: Verify in-tree wrapper launches
         run: ./dist/ndea-launcher --version
-      # Out-of-tree smoke: copy binary + sidecar to a fresh dir with no
-      # node_modules. This catches the bug class the dylib-sidecar plan
-      # solves — a binary whose duckdb.node can't find libduckdb at
+      # Isolated-dir launch check: copy binary + sidecar to a fresh dir
+      # with no node_modules. This catches the bug class the dylib-sidecar
+      # plan solves — a binary whose duckdb.node can't find libduckdb at
       # runtime. Without this step the bug only shows up at install time
       # for end users.
-      - name: Smoke (isolated dir — binary + sidecar only)
+      - name: Verify isolated dir (binary + sidecar)
         env:
           ARTIFACT: ndea
           DYLIB: ${{ matrix.dylib }}
         run: |
           # build.ts emits dist/ndea (not dist/$ARTIFACT) when run locally;
-          # rename so smoke-isolated.sh's lookup works without forking it.
-          ARTIFACT=ndea bash .github/scripts/smoke-isolated.sh
+          # the helper expects ARTIFACT to name the file in dist/.
+          ARTIFACT=ndea bash .github/scripts/verify-isolated.sh
 
   # ── Single required status check for branch protection ────────────────
   all-green:
     name: All checks pass
     if: always()
-    needs: [check, test, build-smoke]
+    needs: [check, test, build-verify]
     runs-on: ubuntu-latest
     steps:
       - uses: re-actors/alls-green@release/v1

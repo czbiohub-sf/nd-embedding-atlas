@@ -64,7 +64,7 @@ jobs:
           ARTIFACT: ${{ matrix.artifact }}
         run: bash .github/scripts/build-binary.sh
 
-      - name: Smoke test
+      - name: Verify binary launches
         run: ./dist/${{ matrix.artifact }} --version
 
       - name: Report binary size

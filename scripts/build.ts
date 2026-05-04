@@ -311,7 +311,7 @@ if (duckdbTarget) {
   await symlink(duckdbTarget.distName, dylibLink);
 }
 
-// ── Wrapper script in dist/ for in-tree smoke parity ──────────────────────
+// ── Wrapper script in dist/ for dev-tree parity ──────────────────────────
 //
 // `./dist/ndea-launcher --version` post-build mirrors what users get from
 // install.sh (wrapper → ndea.bin → libduckdb sibling). The wrapper itself
@@ -337,4 +337,4 @@ const sizeMB = (stat.size / 1024 / 1024).toFixed(1);
 
 console.log(`\n  ${GREEN}✓${RESET} Binary: ${BOLD}${outfile}${RESET} (${sizeMB} MB)`);
 console.log(`  ${DIM}Target: ${target}${RESET}\n`);
-console.log(`  ${DIM}Run \`./dist/ndea-launcher --version\` to smoke the install layout in dev.${RESET}\n`);
+console.log(`  ${DIM}Run \`./dist/ndea-launcher --version\` to verify the install layout in dev.${RESET}\n`);
