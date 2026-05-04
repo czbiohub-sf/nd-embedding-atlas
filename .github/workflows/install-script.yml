@@ -24,11 +24,13 @@ concurrency:
 
 # Tag to install during portability tests. Bumped manually as we cut
 # releases; pinning a known-good tag keeps the test hermetic in inputs.
-# Bumped to alpha.3 — the first release to ship the libduckdb sidecar +
-# wrapper layout, so this workflow can finally exec --version on the
-# installed binary instead of stopping at "binary on disk".
+#
+# TODO(post-alpha.3): bump to v0.1.0-alpha.3, add the dylib presence
+# assertion to the layout step, re-enable `--version` exec on non-musl,
+# add ubuntu-24.04-arm to the matrix. Sequencing constraint: those checks
+# only pass once the alpha.3 release ships the libduckdb sidecar.
 env:
-  PIN_TAG: v0.1.0-alpha.3
+  PIN_TAG: v0.1.0-alpha.2
 
 jobs:
   # ── Lint ────────────────────────────────────────────────────────────────
@@ -81,10 +83,10 @@ jobs:
             runner: ubuntu-latest
             container: debian:12-slim
             prep: apt-get update && apt-get install -y curl ca-certificates
-          - label: ubuntu-24.04-arm (linux-arm64)
-            runner: ubuntu-24.04-arm
-            container: ""
-            prep: ""
+          # ubuntu-24.04-arm omitted: the PIN_TAG (v0.1.0-alpha.2) was cut
+          # before linux-arm64 was added to release.yml's matrix, so no
+          # ndea-linux-arm64 asset exists yet. Re-add once a release with
+          # all 3 platform binaries lands and PIN_TAG bumps to it.
 
     steps:
       - uses: actions/checkout@v6
@@ -115,22 +117,9 @@ jobs:
         run: |
           test -L "$NDEA_BIN_DIR/ndea" || { echo "::error::not a symlink"; exit 1; }
           test -d "$NDEA_HOME/versions/$PIN_TAG" || { echo "::error::missing versions dir"; exit 1; }
-          test -x "$NDEA_HOME/versions/$PIN_TAG/ndea" || { echo "::error::wrapper not executable"; exit 1; }
-          test -x "$NDEA_HOME/versions/$PIN_TAG/ndea.bin" || { echo "::error::ndea.bin not executable"; exit 1; }
-          ext=so; case "$RUNNER_OS" in macOS) ext=dylib ;; esac
-          test -f "$NDEA_HOME/versions/$PIN_TAG/libduckdb.$ext" || {
-            echo "::error::missing libduckdb.$ext sidecar"; exit 1;
-          }
-
-      # Run --version through the wrapper. Skipped on Alpine because the
-      # bun-compiled binary needs glibc; musl-libc Alpine can resolve
-      # install.sh's downloads but can't actually launch the binary
-      # (no glibc-compat package in the matrix). Catches the "binary
-      # downloaded but won't launch" regression that motivated this
-      # whole sidecar effort.
-      - name: ndea --version (skipped on musl)
-        if: matrix.label != 'alpine 3.20 (BusyBox ash, musl)'
-        env:
-          NDEA_BIN_DIR: ${{ runner.temp }}/bin
-        run: |
-          "$NDEA_BIN_DIR/ndea" --version
+          test -x "$NDEA_HOME/versions/$PIN_TAG/ndea" || { echo "::error::binary not executable"; exit 1; }
+          # NB: we deliberately don't `--version` the binary here. The
+          # bun-compiled binary's libduckdb.dylib loading is broken on any
+          # machine without a sibling node_modules tree (see scripts/build.ts
+          # KNOWN ISSUE). This workflow's job is install.sh portability —
+          # the binary's own runtime is tested in ci.yml's build-smoke job.
