@@ -77,11 +77,14 @@ jobs:
           - label: rockylinux 8.10 (RHEL-compatible, glibc 2.28)
             # Real production target — confirms the binary built on
             # ubuntu-latest's newer glibc still launches on EL8's older
-            # glibc 2.28. Rocky 8.10 ships curl + ca-certificates by
-            # default; prep is a no-op for the canonical image.
+            # glibc 2.28. The `library/rockylinux` namespace is
+            # archived; the active maintained image is
+            # `rockylinux/rockylinux`. The minimal variant ships
+            # microdnf only — install full curl + ca-certificates so
+            # install.sh's authenticated download path works.
             runner: ubuntu-latest
-            container: rockylinux:8.10
-            prep: ""
+            container: rockylinux/rockylinux:8.10
+            prep: dnf install -y curl ca-certificates
           - label: debian 12 slim (dash as /bin/sh)
             runner: ubuntu-latest
             container: debian:12-slim
