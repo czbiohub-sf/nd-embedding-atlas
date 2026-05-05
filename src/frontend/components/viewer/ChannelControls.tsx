@@ -1,5 +1,6 @@
 import { EyeIcon, EyeOffIcon, Layers } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { Input } from "../ui/input";
 import { Panel } from "../ui/panel";
 import { ScrollArea } from "../ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
@@ -17,6 +18,62 @@ const BLEND_OPTIONS: { label: string; value: BlendMode }[] = [
 
 function fmtContrast(v: number): string {
   return Math.abs(v) < 10 ? v.toFixed(2) : Math.round(v).toString();
+}
+
+/**
+ * Editable contrast bound. Tracks a local string while focused so the user can
+ * type freely (incl. partial values like "-" or "1."), commits on blur/Enter
+ * by parsing + clamping. Reverts on Escape. The displayed value resyncs from
+ * `value` whenever the source-of-truth changes (e.g. slider drag).
+ */
+function ContrastInput({
+  value,
+  min,
+  max,
+  onCommit,
+  ariaLabel,
+}: {
+  value: number;
+  min: number;
+  max: number;
+  onCommit: (next: number) => void;
+  ariaLabel: string;
+}) {
+  const [draft, setDraft] = useState(() => fmtContrast(value));
+  useEffect(() => {
+    setDraft(fmtContrast(value));
+  }, [value]);
+
+  const commit = () => {
+    const parsed = Number.parseFloat(draft);
+    if (!Number.isFinite(parsed)) {
+      setDraft(fmtContrast(value));
+      return;
+    }
+    const clamped = Math.min(max, Math.max(min, parsed));
+    onCommit(clamped);
+    setDraft(fmtContrast(clamped));
+  };
+
+  return (
+    <Input
+      type="number"
+      inputMode="decimal"
+      aria-label={ariaLabel}
+      value={draft}
+      onChange={(e) => setDraft(e.currentTarget.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.currentTarget.blur();
+        } else if (e.key === "Escape") {
+          setDraft(fmtContrast(value));
+          e.currentTarget.blur();
+        }
+      }}
+      className="h-5 w-14 px-1 text-right text-[10px] tabular-nums"
+    />
+  );
 }
 
 export function ChannelControls() {
@@ -116,11 +173,19 @@ export function ChannelControls() {
                   )}
                 </div>
 
-                {/* Contrast range (dual-thumb slider) */}
+                {/* Contrast range (dual-thumb slider + typed numeric bounds) */}
                 <div className="flex items-center gap-1.5 pl-7">
-                  <span className="w-8 text-right text-[10px] text-muted-foreground tabular-nums">
-                    {fmtContrast(ch.contrastLimits[0])}
-                  </span>
+                  <ContrastInput
+                    value={ch.contrastLimits[0]}
+                    min={ch.contrastRange[0]}
+                    max={ch.contrastLimits[1]}
+                    ariaLabel={`${ch.label} contrast minimum`}
+                    onCommit={(lo) =>
+                      actions.setChannelProp(i, {
+                        contrastLimits: [lo, ch.contrastLimits[1]],
+                      })
+                    }
+                  />
                   <Slider
                     className="flex-1"
                     value={[ch.contrastLimits[0], ch.contrastLimits[1]]}
@@ -134,9 +199,17 @@ export function ChannelControls() {
                       });
                     }}
                   />
-                  <span className="w-8 text-[10px] text-muted-foreground tabular-nums">
-                    {fmtContrast(ch.contrastLimits[1])}
-                  </span>
+                  <ContrastInput
+                    value={ch.contrastLimits[1]}
+                    min={ch.contrastLimits[0]}
+                    max={ch.contrastRange[1]}
+                    ariaLabel={`${ch.label} contrast maximum`}
+                    onCommit={(hi) =>
+                      actions.setChannelProp(i, {
+                        contrastLimits: [ch.contrastLimits[0], hi],
+                      })
+                    }
+                  />
                 </div>
               </div>
             );
