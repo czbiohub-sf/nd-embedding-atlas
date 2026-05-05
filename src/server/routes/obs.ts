@@ -1,10 +1,10 @@
 /**
  * Observation lookup endpoints.
  *
- * GET /api/obs/batch           — Batch x/y centroids for multiple observations
- * GET /api/obs/{row_index}     — Spatial info for a single observation
- * GET /api/obs/{row_index}/detail — All obs columns for a single observation
- * GET /api/health              — Health check
+ * POST /api/obs/batch           — Batch spatial metadata for many observations
+ * GET  /api/obs/{row_index}     — Spatial info for a single observation
+ * GET  /api/obs/{row_index}/detail — All obs columns for a single observation
+ * GET  /api/health              — Health check
  */
 
 import { parseBbox, type ViewerState } from "../state.ts";
@@ -20,31 +20,36 @@ function scalarToString(value: unknown): string {
 }
 
 /**
- * Handle GET /api/obs/batch?ids=1,2,3
+ * Handle POST /api/obs/batch with body `{ row_indices: number[] }`.
  *
- * Returns x/y centroids for multiple observations in one query.
+ * Returns spatial metadata (x, y, fov, t) per observation. POST not GET so
+ * a 5k-row lasso selection doesn't blow past Bun's request header size cap.
  */
-export async function handleObsBatch(url: URL, state: ViewerState): Promise<Response> {
-  const ids = url.searchParams.get("ids");
+export async function handleObsBatch(req: Request, state: ViewerState): Promise<Response> {
   const sp = state.spatial;
 
   if (!sp?.x || !sp?.y) {
     return Response.json({});
   }
 
-  if (!ids) {
-    return Response.json({ error: "ids must be comma-separated integers" }, { status: 422 });
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return Response.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  const list = (body as { row_indices?: unknown }).row_indices;
+  if (!Array.isArray(list)) {
+    return Response.json({ error: "row_indices must be an array of integers" }, { status: 422 });
   }
 
   const rowIndices: number[] = [];
-  for (const s of ids.split(",")) {
-    const trimmed = s.trim();
-    if (!trimmed) continue;
-    const n = Number(trimmed);
-    if (!Number.isInteger(n)) {
-      return Response.json({ error: "ids must be comma-separated integers" }, { status: 422 });
+  for (const v of list) {
+    if (!Number.isInteger(v)) {
+      return Response.json({ error: "row_indices must be integers" }, { status: 422 });
     }
-    rowIndices.push(n);
+    rowIndices.push(v as number);
   }
 
   if (rowIndices.length === 0) {
@@ -53,16 +58,26 @@ export async function handleObsBatch(url: URL, state: ViewerState): Promise<Resp
 
   try {
     const placeholders = rowIndices.join(", ");
+    const isMulti = state.datasets.size > 1;
+    const selectCols = [`"${sp.x}"`, `"${sp.y}"`];
+    if (sp.fov) selectCols.push(`"${sp.fov}"`);
+    if (sp.t) selectCols.push(`"${sp.t}"`);
+    if (isMulti) selectCols.push("_dataset");
+
     const rows = await state.store.queryJson(
-      `SELECT __row_index__, "${sp.x}", "${sp.y}" FROM obs_base WHERE __row_index__ IN (${placeholders})`,
+      `SELECT __row_index__, ${selectCols.join(", ")} FROM obs_base WHERE __row_index__ IN (${placeholders})`,
     );
 
-    const result: Record<string, { x: number; y: number }> = {};
+    const result: Record<string, { x: number; y: number; fov?: string; t?: number; dataset?: string }> = {};
     for (const row of rows) {
-      result[String(row.__row_index__)] = {
+      const entry: { x: number; y: number; fov?: string; t?: number; dataset?: string } = {
         x: Number(row[sp.x]),
         y: Number(row[sp.y]),
       };
+      if (sp.fov && row[sp.fov] != null) entry.fov = scalarToString(row[sp.fov]);
+      if (sp.t && row[sp.t] != null) entry.t = Number(row[sp.t]);
+      if (isMulti && row._dataset != null) entry.dataset = scalarToString(row._dataset);
+      result[String(row.__row_index__)] = entry;
     }
     return Response.json(result);
   } catch (err) {

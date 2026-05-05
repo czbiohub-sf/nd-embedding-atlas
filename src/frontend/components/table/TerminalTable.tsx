@@ -1,12 +1,15 @@
 /**
  * TerminalTable — ⌘J-toggled drawer above the status footer.
- * Tabs: Table | Track
+ * Tabs: Table | Track | Gallery
  */
 
 import { XIcon } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
+import { useSelector } from "@tanstack/react-store";
 import { useDashboard } from "../../hooks/useDashboard";
+import { selectionSyncStore } from "../../stores/SelectionSyncStore";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
+import { GalleryPane } from "../gallery/GalleryPane";
 import { DataTable } from "./DataTable";
 import { useTerminalTable } from "./TerminalTableProvider";
 import { TrackPane } from "./TrackPane";
@@ -19,6 +22,8 @@ export function TerminalTable() {
   const { state, actions, meta } = useDashboard();
   const { metadata, highlightId, trajectories } = state;
   const hasAnyTrajectory = Object.keys(trajectories).length > 0;
+  const hasGallerySelection = useSelector(selectionSyncStore, (s) => s.type === "active");
+  const galleryEnabled = !!metadata.plate;
   const { coordinator, brushSelection, table } = meta;
 
   // ── Drag-to-resize ───────────────────────────────────────────────────────
@@ -85,6 +90,12 @@ export function TerminalTable() {
                 Track
                 {hasAnyTrajectory && <span className="ml-1.5 inline-block size-1.5 rounded-full bg-primary/70" />}
               </TabsTrigger>
+              {galleryEnabled && (
+                <TabsTrigger value="gallery">
+                  Gallery
+                  {hasGallerySelection && <span className="ml-1.5 inline-block size-1.5 rounded-full bg-primary/70" />}
+                </TabsTrigger>
+              )}
             </TabsList>
             <span className="flex-1" />
             <button
@@ -112,6 +123,12 @@ export function TerminalTable() {
           <TabsContent value="track" className="flex flex-col overflow-hidden">
             <TrackPane />
           </TabsContent>
+
+          {galleryEnabled && (
+            <TabsContent value="gallery" className="flex flex-col overflow-hidden">
+              <GalleryPane />
+            </TabsContent>
+          )}
         </Tabs>
       )}
     </div>

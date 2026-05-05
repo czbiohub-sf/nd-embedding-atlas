@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ChannelHash } from "../../lib/branded-types";
 import type { TrajectoryFrame } from "../../types";
 import type { ChannelDef } from "../viewer/ViewerContext";
@@ -54,11 +54,20 @@ export function useGalleryCropQuery({ fovName, datasetKey, frame, channels, hash
         z: 0,
         x: xPx,
         y: yPx,
+        // half stays at 150 src-pixels (same spatial framing as before so the
+        // cell-in-crop ratio doesn't change). size bumped to 320 so the WebP
+        // is roughly 1:1 with the source region instead of downsampling →
+        // sharp at retina 220–240px CSS cards. Adds maybe 5 KB per crop at
+        // q=78, well within budget.
         half: 150,
-        size: 200,
-        fmt: "webp",
+        size: 320,
         ...(datasetKey ? { dataset_key: datasetKey } : {}),
-        channels: channels.map((ch) => ({
+        // Send cIndex explicitly: today it equals array index (1:1 with the
+        // zarr C-axis), but a future channel-reorder UI would let the user
+        // shuffle the array without changing which physical channel each
+        // entry refers to. Server reads the right C-axis slab via cIndex.
+        channels: channels.map((ch, idx) => ({
+          cIndex: idx,
           visible: ch.visible,
           lo: ch.contrastLimits[0],
           hi: ch.contrastLimits[1],
@@ -90,7 +99,14 @@ export function useGalleryCropQuery({ fovName, datasetKey, frame, channels, hash
     },
     enabled,
     staleTime: Infinity, // same (fov, t, hash) always produces same image
-    gcTime: 0, // evict immediately when no observer → triggers revocation subscription
-    placeholderData: undefined,
+    // Brief grace period (1s) before evicting + revoking. With gcTime=0, the
+    // old query was evicted the instant the card swapped to a new (fov, t, hash),
+    // which fired URL.revokeObjectURL on the URL that `placeholderData:
+    // keepPreviousData` was still painting → ~1 frame of broken-image black
+    // between selections. 1s is well past typical fetch latency (50-500ms)
+    // but still aggressive enough to keep blob memory bounded.
+    gcTime: 1000,
+    // Hold the prior blob URL while a new (fov, t, hash) query is fetching.
+    placeholderData: keepPreviousData,
   });
 }
