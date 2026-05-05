@@ -7,6 +7,13 @@ type BboxPath = [number, number, number][];
 interface UseBboxLayerOptions {
   viewport: Viewport | null;
   scale: { x: number; y: number };
+  /**
+   * World-space offset of the FOV image origin. Mirrors the camera-frame
+   * adjustment in SingleCropViewer — without it the bbox is drawn at
+   * `(obs * scale)` while idetik renders the underlying image at
+   * `(obs * scale + translation)`, leaving the box stranded near (0,0).
+   */
+  translation?: { x: number; y: number } | null;
 }
 
 interface UseBboxLayerReturn {
@@ -20,8 +27,10 @@ interface UseBboxLayerReturn {
  */
 const LINE_WIDTH_NDC = 0.01;
 
-export function useBboxLayer({ viewport, scale }: UseBboxLayerOptions): UseBboxLayerReturn {
+export function useBboxLayer({ viewport, scale, translation }: UseBboxLayerOptions): UseBboxLayerReturn {
   const bboxRef = useRef<Layer | null>(null);
+  const tx = translation?.x ?? 0;
+  const ty = translation?.y ?? 0;
 
   const updateBbox = useCallback(
     (cx: number, cy: number, half: number, explicitBbox?: ObsBbox) => {
@@ -36,15 +45,15 @@ export function useBboxLayer({ viewport, scale }: UseBboxLayerOptions): UseBboxL
       if (explicitBbox) {
         const { y_min, x_min, y_max, x_max } = explicitBbox;
         path = [
-          [x_min * scale.x, y_min * scale.y, 0],
-          [x_max * scale.x, y_min * scale.y, 0],
-          [x_max * scale.x, y_max * scale.y, 0],
-          [x_min * scale.x, y_max * scale.y, 0],
-          [x_min * scale.x, y_min * scale.y, 0],
+          [x_min * scale.x + tx, y_min * scale.y + ty, 0],
+          [x_max * scale.x + tx, y_min * scale.y + ty, 0],
+          [x_max * scale.x + tx, y_max * scale.y + ty, 0],
+          [x_min * scale.x + tx, y_max * scale.y + ty, 0],
+          [x_min * scale.x + tx, y_min * scale.y + ty, 0],
         ];
       } else {
-        const sx = cx * scale.x;
-        const sy = cy * scale.y;
+        const sx = cx * scale.x + tx;
+        const sy = cy * scale.y + ty;
         const hx = half * scale.x;
         const hy = half * scale.y;
         path = [
@@ -71,7 +80,7 @@ export function useBboxLayer({ viewport, scale }: UseBboxLayerOptions): UseBboxL
       viewport.layerManager.add(bbox);
       bboxRef.current = bbox;
     },
-    [viewport, scale.x, scale.y],
+    [viewport, scale.x, scale.y, tx, ty],
   );
 
   useEffect(() => {

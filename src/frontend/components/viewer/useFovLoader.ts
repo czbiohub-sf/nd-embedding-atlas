@@ -19,6 +19,8 @@ import type { ChannelDef, ViewMode } from "./ViewerContext";
 /** Minimal interface for the idetik loader returned by OmeZarrImageSource.open(). */
 interface IdetikLoader {
   getSourceDimensionMap(): {
+    x: { lods: { size: number; scale?: number; translation?: number }[] };
+    y: { lods: { size: number; scale?: number; translation?: number }[] };
     z?: { lods: { size: number }[] };
     t?: { lods: { size: number }[] };
   };
@@ -77,6 +79,25 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion }: UseFovLoa
   /** Ensure contrast limits are strictly increasing — idetik throws if lo >= hi. */
   const safeContrastLimits = useCallback(
     (limits: [number, number]): [number, number] => (limits[0] < limits[1] ? limits : [limits[0], limits[0] + 1]),
+    [],
+  );
+
+  /**
+   * Default OME-Zarr writers often emit `window: {start: 0, end: dtypeMax}` —
+   * the full dtype range, not a useful display range. Real fluorescence data
+   * fills <10% of the range, so it renders black at full contrast. When we
+   * detect that pattern (start==min && end==max with a >1000 span), shrink
+   * `end` to 1/16 of the range. Users can still adjust via ChannelControls.
+   */
+  const resolveContrastWindow = useCallback(
+    (window: { start: number; end: number; min: number; max: number } | undefined): [number, number] => {
+      if (!window) return [0, 65535];
+      const { start, end, min, max } = window;
+      const range = max - min;
+      const isUninformativeDefault = start === min && end === max && range > 1000;
+      const resolvedEnd = isUninformativeDefault ? min + range / 16 : end;
+      return [start, resolvedEnd];
+    },
     [],
   );
 
@@ -143,13 +164,23 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion }: UseFovLoa
 
       if (cancelled) return;
 
-      // Set Z/T bounds from source dimensions
+      // Set Z/T bounds + world-space translation from source dimensions.
+      // Translation lets the camera target the image origin instead of (0,0)
+      // — HCS plates embed each FOV's plate position in the OME-Zarr
+      // coordinateTransformations.translation, so without this the camera
+      // looks at empty space.
       try {
         const dims = loader.getSourceDimensionMap();
         const zMax = dims.z ? dims.z.lods[0].size - 1 : null;
         const tMax = dims.t ? dims.t.lods[0].size - 1 : null;
-        console.log("[useFovLoader] setBounds", { zMax, tMax });
-        actionsRef.current.setBounds({ zMax, tMax });
+        const tx = dims.x.lods[0].translation ?? 0;
+        const ty = dims.y.lods[0].translation ?? 0;
+        const sx = dims.x.lods[0].scale;
+        const sy = dims.y.lods[0].scale;
+        const translation = tx !== 0 || ty !== 0 ? { x: tx, y: ty } : null;
+        const scale = sx != null && sy != null ? { x: sx, y: sy } : null;
+        console.log("[useFovLoader] setBounds", { zMax, tMax, translation, scale });
+        actionsRef.current.setBounds({ zMax, tMax, translation, scale });
       } catch (e) {
         console.warn("[useFovLoader] getSourceDimensionMap failed", e);
       }
@@ -159,12 +190,12 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion }: UseFovLoa
       if (omeroChannels) {
         channelDefs = omeroChannels.map((ch) => ({
           color: ch.color ? Color.fromRgbHex(`#${ch.color}`) : Color.WHITE,
-          contrastLimits: safeContrastLimits(ch.window ? [ch.window.start, ch.window.end] : [0, 65535]),
+          contrastLimits: safeContrastLimits(resolveContrastWindow(ch.window)),
         }));
       } else if (plateChsRef.current) {
         channelDefs = plateChsRef.current.map((ch) => ({
           color: Color.fromRgbHex(`#${ch.color}`),
-          contrastLimits: safeContrastLimits([ch.window.start, ch.window.end]),
+          contrastLimits: safeContrastLimits(resolveContrastWindow(ch.window)),
         }));
       } else {
         channelDefs = [{ color: Color.WHITE, contrastLimits: [0, 65535] }];
@@ -304,7 +335,15 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion }: UseFovLoa
       console.log("[useFovLoader] cleanup — cancelling", sourceUrl);
       cancelled = true;
     };
-  }, [sourceUrl, viewerState.initialized, viewMode, viewerState.generation, safeContrastLimits, viewerState.channels]);
+  }, [
+    sourceUrl,
+    viewerState.initialized,
+    viewMode,
+    viewerState.generation,
+    safeContrastLimits,
+    resolveContrastWindow,
+    viewerState.channels,
+  ]);
 
   // ── Cleanup on unmount ─────────────────────────────────────────────
   useEffect(() => {

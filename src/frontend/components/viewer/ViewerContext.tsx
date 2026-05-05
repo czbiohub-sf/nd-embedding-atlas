@@ -34,6 +34,26 @@ export interface DimensionBounds {
   zMax: number | null;
   /** Max T index, or null if no T dimension. */
   tMax: number | null;
+  /**
+   * World-space translation of the image origin in physical units (typically
+   * micrometers), as declared by the OME-Zarr `coordinateTransformations`
+   * `translation` entry. For HCS plates each FOV embeds its plate-global
+   * placement here (FOV name `xxxxxxyyyyyy` ↔ translation `[y, x]`). The
+   * camera frame must add this offset to obs-pixel × scale; otherwise the
+   * camera looks at (0,0) while idetik renders the image at its world origin.
+   * `null` when no translation transform is present.
+   */
+  translation: { x: number; y: number } | null;
+  /**
+   * Pixel-to-physical scale (µm/px) for THIS FOV, from the OME-Zarr
+   * `coordinateTransformations` `scale` entry. We can't reuse
+   * `metadata.plate_pixel_scale` because it's plate-wide and snapshotted from
+   * the first FOV at startup — datasets with mixed magnifications/objectives
+   * have per-FOV scales that disagree with the plate-level value. Using the
+   * wrong scale leaves the bbox at e.g. 2.5× the correct world offset, off
+   * the image entirely. `null` when no scale transform is present.
+   */
+  scale: { x: number; y: number } | null;
 }
 
 // ── State: reactive ──────────────────────────────────────────────────────────

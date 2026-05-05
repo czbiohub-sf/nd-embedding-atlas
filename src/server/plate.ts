@@ -11,6 +11,9 @@
  * This module also reads HCS plate metadata (omero.channels,
  * coordinateTransformations, version) from the first discoverable image
  * so the dashboard can render channel controls without a second round-trip.
+ *
+ * Supports both OME-Zarr v0.4 (zarr v2: `.zattrs`) and v0.5 (zarr v3:
+ * `zarr.json` with attributes nested under `attributes.ome`).
  */
 
 import { readdir } from "node:fs/promises";
@@ -127,7 +130,8 @@ export function buildPlateMounts(
 export async function readPlateMeta(platePath: string): Promise<PlateMetaInfo | null> {
   try {
     const plateRoot = resolve(platePath);
-    const plateAttrs = await readJson(join(plateRoot, ".zattrs"));
+    const plateAttrs = await readZarrAttrs(plateRoot);
+    if (!plateAttrs) return null;
     const plate = (plateAttrs["plate"] ?? {}) as {
       version?: string;
       wells?: { path?: string }[];
@@ -139,7 +143,8 @@ export async function readPlateMeta(platePath: string): Promise<PlateMetaInfo | 
     const images = await listImageDirs(wellDir);
     if (images.length === 0) return null;
 
-    const imageAttrs = await readJson(join(wellDir, images[0], ".zattrs"));
+    const imageAttrs = await readZarrAttrs(join(wellDir, images[0]));
+    if (!imageAttrs) return null;
     const multiscales = (imageAttrs["multiscales"] as unknown[]) ?? [];
     const first = (multiscales[0] ?? {}) as {
       version?: string;
@@ -167,9 +172,31 @@ async function readJson(path: string): Promise<Record<string, unknown>> {
 }
 
 /**
+ * Read OME-Zarr group attributes from either v2 (`.zattrs`) or v3 (`zarr.json`).
+ *
+ * v3 nests under `attributes.ome` per the OME-Zarr 0.5 spec; the returned
+ * shape matches v2 `.zattrs` (top-level `plate` / `multiscales` / `omero`)
+ * so downstream extractors work unchanged.
+ */
+async function readZarrAttrs(dir: string): Promise<Record<string, unknown> | null> {
+  const v3Path = join(dir, "zarr.json");
+  if (await Bun.file(v3Path).exists()) {
+    const root = await readJson(v3Path);
+    const attrs = root["attributes"] as Record<string, unknown> | undefined;
+    const ome = attrs?.["ome"] as Record<string, unknown> | undefined;
+    return ome ?? attrs ?? null;
+  }
+  const v2Path = join(dir, ".zattrs");
+  if (await Bun.file(v2Path).exists()) {
+    return readJson(v2Path);
+  }
+  return null;
+}
+
+/**
  * List subdirectories of `wellDir` that look like OME-Zarr images
- * (i.e. contain a `.zattrs`). Some stores include non-image entries
- * (e.g. `.zgroup` file) which we filter out via the directory check.
+ * (contain `.zattrs` for v2 or `zarr.json` for v3). Filters out non-image
+ * entries like a bare `.zgroup` file.
  */
 async function listImageDirs(wellDir: string): Promise<string[]> {
   const names = await readdir(wellDir);
@@ -177,8 +204,9 @@ async function listImageDirs(wellDir: string): Promise<string[]> {
   await Promise.all(
     names.map(async (name) => {
       if (name.startsWith(".")) return;
-      const attrsPath = join(wellDir, name, ".zattrs");
-      if (await Bun.file(attrsPath).exists()) {
+      const v2 = Bun.file(join(wellDir, name, ".zattrs")).exists();
+      const v3 = Bun.file(join(wellDir, name, "zarr.json")).exists();
+      if ((await v2) || (await v3)) {
         imageDirs.push(name);
       }
     }),

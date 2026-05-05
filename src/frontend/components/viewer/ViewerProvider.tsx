@@ -89,7 +89,12 @@ export function ViewerProvider({ children, channelInstance = "docked" }: Props) 
   const [initialized, setInitialized] = useState(false);
   const [zIndex, setZIndex] = useState(0);
   const [tIndex, setTIndex] = useState(0);
-  const [bounds, setBounds] = useState<DimensionBounds>({ zMax: null, tMax: null });
+  const [bounds, setBounds] = useState<DimensionBounds>({
+    zMax: null,
+    tMax: null,
+    translation: null,
+    scale: null,
+  });
   const [error, setError] = useState<string | null>(null);
   const [channels, setChannelsState] = useState<ChannelDef[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>("2d");

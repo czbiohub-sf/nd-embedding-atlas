@@ -42,7 +42,11 @@ export function SingleCropViewer({ cropSize, datasetKey }: Props) {
   const isForThisDataset = !datasetKey || activeStoreName === datasetKey;
 
   // ── Derive source URL and OME version ────────────────────────────
-  const scale = metadata.plate_pixel_scale ?? { x: 1, y: 1 };
+  // Prefer the FOV's own scale (idetik reads it from this FOV's
+  // coordinateTransformations) over the plate-level fallback. The plate scale
+  // is a snapshot of the *first* FOV at startup and disagrees with later FOVs
+  // when the dataset mixes magnifications / objectives.
+  const plateScale = metadata.plate_pixel_scale ?? { x: 1, y: 1 };
   const activeStore = metadata.plate_stores?.[obsInfo?.store_index ?? 0];
   const mountPrefix = activeStore ? activeStore.mount : "/plate";
   const omeVersion = activeStore?.ome_version ?? metadata.plate_ome_version;
@@ -61,17 +65,30 @@ export function SingleCropViewer({ cropSize, datasetKey }: Props) {
     omeVersion,
   });
 
+  const scale = viewerState.bounds.scale ?? plateScale;
+
   const { updateBbox } = useBboxLayer({
     viewport: meta.viewport,
     scale,
+    translation: viewerState.bounds.translation,
   });
 
   // ── Helper: 2D camera framing ───────────────────────────────────
+  // obs.x / obs.y are FOV-local pixel coordinates; idetik renders the FOV at
+  // its world-space origin from `coordinateTransformations.translation`. Add
+  // that translation so the camera lines up with the image instead of (0,0).
+  const tx = viewerState.bounds.translation?.x ?? 0;
+  const ty = viewerState.bounds.translation?.y ?? 0;
   const frameRegion = useCallback(
     (cx: number, cy: number, hx: number, hy: number) => {
-      actions.setFrame((cx - hx) * scale.x, (cx + hx) * scale.x, (cy + hy) * scale.y, (cy - hy) * scale.y);
+      actions.setFrame(
+        (cx - hx) * scale.x + tx,
+        (cx + hx) * scale.x + tx,
+        (cy + hy) * scale.y + ty,
+        (cy - hy) * scale.y + ty,
+      );
     },
-    [actions, scale.x, scale.y],
+    [actions, scale.x, scale.y, tx, ty],
   );
 
   // ── Effect: Observation framing (mode-aware) ──────────────────────
@@ -95,9 +112,10 @@ export function SingleCropViewer({ cropSize, datasetKey }: Props) {
         frameRegion(obsInfo.x, obsInfo.y, CAMERA_VIEW_HALF, CAMERA_VIEW_HALF);
       }
     } else {
-      // 3D: position orbit camera to look at observation center
-      const cx = obsInfo.x * scale.x;
-      const cy = obsInfo.y * scale.y;
+      // 3D: position orbit camera to look at observation center.
+      // Same translation correction as the 2D path — see frameRegion above.
+      const cx = obsInfo.x * scale.x + tx;
+      const cy = obsInfo.y * scale.y + ty;
       const controls = meta.viewport?.cameraControls;
       const hasLookAt = controls && "lookAt" in controls;
       console.log("[3d] lookAt", { cx, cy, hasLookAt, controls: !!controls });
@@ -116,6 +134,8 @@ export function SingleCropViewer({ cropSize, datasetKey }: Props) {
     frameRegion,
     scale.x,
     scale.y,
+    tx,
+    ty,
     meta.viewport,
   ]);
 
