@@ -60,6 +60,13 @@ export async function handleCategorize(req: Request, state: ViewerState): Promis
     // 4. Rebuild VIEW so the new column is visible through `dataset`.
     await store._rebuildView();
 
+    // Keep state.obsColumns in sync — endpoints that validate `category_col`
+    // (e.g. /api/trajectory) read this list and would otherwise reject the
+    // freshly created column with 400 "Unknown category_col".
+    if (!state.obsColumns.includes(indexColumn)) {
+      state.obsColumns.push(indexColumn);
+    }
+
     // 5. Counts per bucket (including other/null if present).
     const countRows = await store.queryJson(
       `SELECT "${indexColumn}" AS idx, COUNT(*)::BIGINT AS cnt FROM obs_base GROUP BY "${indexColumn}"`,
