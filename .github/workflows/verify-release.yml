@@ -22,7 +22,12 @@ name: Verify release
 #   - workflow_dispatch: manual fallback with a tag override.
 
 on:
-  workflow_run:
+  # zizmor flags workflow_run as "almost always insecure", but we accept it
+  # here: this workflow runs with `permissions: {}` at workflow scope and
+  # `contents: read` per job, doesn't checkout PR-controlled code, and only
+  # consumes published release artifacts via the install.sh URL. Rationale
+  # for needing workflow_run is documented in the comment block above.
+  workflow_run: # zizmor: ignore[dangerous-triggers]
     workflows: [Release]
     types: [completed]
   release:
