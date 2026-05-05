@@ -24,13 +24,8 @@ concurrency:
 
 # Tag to install during portability tests. Bumped manually as we cut
 # releases; pinning a known-good tag keeps the test hermetic in inputs.
-#
-# TODO(post-alpha.3): bump to v0.1.0-alpha.3, add the dylib presence
-# assertion to the layout step, re-enable `--version` exec on non-musl,
-# add ubuntu-24.04-arm to the matrix. Sequencing constraint: those checks
-# only pass once the alpha.3 release ships the libduckdb sidecar.
 env:
-  PIN_TAG: v0.1.0-alpha.2
+  PIN_TAG: v0.1.0-alpha.3
 
 jobs:
   # ── Lint ────────────────────────────────────────────────────────────────
@@ -54,13 +49,7 @@ jobs:
           /tmp/shfmt -d -ln=posix -i 4 -ci scripts/install.sh
 
   # ── Portability matrix ─────────────────────────────────────────────────
-  # Paused until v0.1.0-alpha.3 is cut. The new install.sh always
-  # downloads the libduckdb sidecar; alpha.2 (the current PIN_TAG)
-  # predates the sidecar, so install.sh can't succeed against any
-  # currently-published release. Re-enable in the post-alpha.3 PR that
-  # bumps PIN_TAG (see the TODO above the env: block).
   install:
-    if: false
     name: Install on ${{ matrix.label }}
     needs: lint
     runs-on: ${{ matrix.runner }}
@@ -73,26 +62,38 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - label: ubuntu-latest (bash)
+          - label: ubuntu-latest (bash, glibc)
             runner: ubuntu-latest
+            container: ""
+            prep: ""
+          - label: ubuntu-24.04-arm (linux-arm64, glibc)
+            runner: ubuntu-24.04-arm
             container: ""
             prep: ""
           - label: macos-14 (bash 3.2)
             runner: macos-14
             container: ""
             prep: ""
-          - label: alpine 3.20 (BusyBox ash, musl)
+          - label: rockylinux 8.10 (RHEL-compatible, glibc 2.28)
+            # Real production target — confirms the binary built on
+            # ubuntu-latest's newer glibc still launches on EL8's older
+            # glibc 2.28. The `library/rockylinux` namespace is
+            # archived; the active maintained image is
+            # `rockylinux/rockylinux`. The minimal variant ships
+            # microdnf only — install full curl + ca-certificates so
+            # install.sh's authenticated download path works.
             runner: ubuntu-latest
-            container: alpine:3.20
-            prep: apk add --no-cache curl ca-certificates bash
+            container: rockylinux/rockylinux:8.10
+            prep: dnf install -y curl ca-certificates
           - label: debian 12 slim (dash as /bin/sh)
             runner: ubuntu-latest
             container: debian:12-slim
             prep: apt-get update && apt-get install -y curl ca-certificates
-          # ubuntu-24.04-arm omitted: the PIN_TAG (v0.1.0-alpha.2) was cut
-          # before linux-arm64 was added to release.yml's matrix, so no
-          # ndea-linux-arm64 asset exists yet. Re-add once a release with
-          # all 3 platform binaries lands and PIN_TAG bumps to it.
+          # Alpine deliberately omitted: musl-libc Alpine can't launch
+          # the glibc-linked bun-compiled binary, and install.sh now
+          # invokes the binary itself (`__write-wrapper`) so install.sh
+          # can't even complete on Alpine. Lint (shellcheck + shfmt POSIX)
+          # already covers BusyBox-ash shell-portability concerns.
 
     steps:
       - uses: actions/checkout@v6
@@ -123,9 +124,20 @@ jobs:
         run: |
           test -L "$NDEA_BIN_DIR/ndea" || { echo "::error::not a symlink"; exit 1; }
           test -d "$NDEA_HOME/versions/$PIN_TAG" || { echo "::error::missing versions dir"; exit 1; }
-          test -x "$NDEA_HOME/versions/$PIN_TAG/ndea" || { echo "::error::binary not executable"; exit 1; }
-          # NB: we deliberately don't `--version` the binary here. The
-          # bun-compiled binary's libduckdb.dylib loading is broken on any
-          # machine without a sibling node_modules tree (see scripts/build.ts
-          # KNOWN ISSUE). This workflow's job is install.sh portability —
-          # the binary's own runtime is tested in ci.yml's build-smoke job.
+          test -x "$NDEA_HOME/versions/$PIN_TAG/ndea" || { echo "::error::wrapper not executable"; exit 1; }
+          test -x "$NDEA_HOME/versions/$PIN_TAG/ndea.bin" || { echo "::error::ndea.bin not executable"; exit 1; }
+          ext=so; case "$RUNNER_OS" in macOS) ext=dylib ;; esac
+          test -f "$NDEA_HOME/versions/$PIN_TAG/libduckdb.$ext" || {
+            echo "::error::missing libduckdb.$ext sidecar"; exit 1;
+          }
+
+      # Run --version through the wrapper. Catches the "binary
+      # downloaded but won't launch" regression that motivated the
+      # whole sidecar effort. Particularly load-bearing on Rocky 8.10
+      # (glibc 2.28) — older than ubuntu-latest's build glibc; this
+      # step proves the binary's symbol requirements are compatible.
+      - name: ndea --version
+        env:
+          NDEA_BIN_DIR: ${{ runner.temp }}/bin
+        run: |
+          "$NDEA_BIN_DIR/ndea" --version

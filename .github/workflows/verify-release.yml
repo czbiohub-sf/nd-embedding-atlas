@@ -9,8 +9,22 @@ name: Verify release
 #
 # Pattern: mise's `scripts/test-standalone.sh` (real release endpoint),
 # scoped to ndea's actual subcommands.
+#
+# Triggers:
+#   - workflow_run on Release: release.yml uses GITHUB_TOKEN to publish,
+#     and GitHub deliberately does NOT chain follow-up workflows from
+#     token-issued events (recursion guard). The `release:` event below
+#     is a no-op for token-published releases. workflow_run is the
+#     supported escape hatch — it fires on the parent workflow's
+#     completion regardless of how the parent was triggered.
+#   - release: kept for releases authored by a human / PAT (GitHub Apps)
+#     so manual edits or out-of-band publishes still get verified.
+#   - workflow_dispatch: manual fallback with a tag override.
 
 on:
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
   release:
     types: [published, prereleased]
   workflow_dispatch:
@@ -22,12 +36,15 @@ on:
 permissions: {}
 
 concurrency:
-  group: verify-release-${{ github.event.release.tag_name || inputs.tag }}
+  group: verify-release-${{ github.event.release.tag_name || github.event.workflow_run.head_branch || inputs.tag }}
   cancel-in-progress: false
 
 jobs:
   verify:
     name: Verify ${{ matrix.label }}
+    # When chained from release.yml via workflow_run, only run on a
+    # successful parent run. Other trigger types always run.
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
@@ -46,19 +63,35 @@ jobs:
       # Hoist event-derived inputs into env vars so zizmor's
       # template-injection audit doesn't flag inline `${{ … }}` expansions
       # in the `run:` body. Same data, safer interpolation path.
+      #
+      # Tag resolution priority:
+      #   1. release.tag_name           (release event)
+      #   2. workflow_run.head_branch   (chained from release.yml — head_branch
+      #                                  carries the tag ref for tag-triggered runs)
+      #   3. inputs.tag                 (manual workflow_dispatch override)
+      #   4. /releases/latest API       (last-resort fallback)
       - name: Resolve tag
         id: tag
         env:
           RELEASE_TAG_NAME: ${{ github.event.release.tag_name }}
+          WORKFLOW_RUN_REF: ${{ github.event.workflow_run.head_branch }}
           INPUT_TAG: ${{ inputs.tag }}
           REPO: ${{ github.repository }}
         run: |
-          tag="${RELEASE_TAG_NAME:-$INPUT_TAG}"
+          tag="${RELEASE_TAG_NAME:-${WORKFLOW_RUN_REF:-$INPUT_TAG}}"
           if [ -z "$tag" ]; then
             tag=$(curl -fsSL --proto '=https' --tlsv1.2 \
               "https://api.github.com/repos/${REPO}/releases/latest" \
               | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -n 1)
           fi
+          # Sanity guard: workflow_run on a non-tag push (e.g. a manual
+          # release.yml dispatch on main) would surface a branch name
+          # here. Bail out with a clear error so we don't try to download
+          # nonsense tags.
+          case "$tag" in
+            v*) ;;
+            *) echo "::error::resolved tag '$tag' does not look like a release tag (must start with 'v')"; exit 1 ;;
+          esac
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "Resolved release tag: $tag"
 
