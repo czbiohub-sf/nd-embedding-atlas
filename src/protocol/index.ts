@@ -42,6 +42,14 @@ export type MosaicQueryBody = z.infer<typeof MosaicQueryBodySchema>;
 
 /** POST /api/crop/{fovPath} — image crop request. */
 export const CropChannelSchema = z.object({
+  /**
+   * Zero-based zarr C-axis index this channel draws from. Optional for
+   * backward compat — when omitted, the server falls back to the channel's
+   * position in the array. Send explicitly so a future channel-reorder UI
+   * doesn't silently swap clims/colors when the array order diverges from
+   * the underlying C dimension.
+   */
+  cIndex: z.number().int().nonnegative().optional(),
   visible: z.boolean().optional(),
   lo: z.number().optional(),
   hi: z.number().optional(),
@@ -56,7 +64,6 @@ export const CropBodySchema = z.object({
   y: z.number().optional(),
   half: z.number().int().positive().optional(),
   size: z.number().int().positive().optional(),
-  fmt: z.string().optional(),
   quality: z.number().optional(),
   dataset_key: z.string().optional(),
   channels: z.array(CropChannelSchema).max(32).optional(),

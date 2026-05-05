@@ -40,6 +40,7 @@ import { handleVarNames, handleVarLayers, handleVarColumn, handleVarColumnStatus
 import { handleCategorize } from "./routes/categorize.ts";
 import { handleExport, handleExportStatus, handleGetExportDir } from "./routes/export.ts";
 import { handleCrop } from "./routes/crops.ts";
+import { CropPool } from "./crop-pool.ts";
 import { servePlateFile } from "./plate.ts";
 import { serveStatic, resolveFrontendDir } from "./static.ts";
 import { handleWsMessage, handleWsOpen, handleWsClose, type WsContext } from "./ws.ts";
@@ -115,6 +116,13 @@ export interface AppOptions {
 export function createApp(options: AppOptions) {
   const { store, state, config } = options;
   const frontendDir = options.noStatic ? null : resolveFrontendDir(options.frontendDir);
+
+  // Spin up the Bun Worker pool for crop rendering when a plate is
+  // available. Pool persists for the lifetime of the server; workers keep
+  // their zarr Array LRU + WebP WASM init warm across requests.
+  if (state.plateMounts.length > 0 && !state.cropPool) {
+    state.cropPool = new CropPool(state.plateMounts);
+  }
 
   // Boot banner — lets the dev terminal show *exactly* which routes the
   // running process has registered. If a `bun --hot` reload missed the new
@@ -283,8 +291,8 @@ function routeApi(
   }
 
   // ── Obs batch (must match before /api/obs/{row_index}) ──────────
-  if (pathname === "/api/obs/batch" && method === "GET") {
-    return handleObsBatch(url, state);
+  if (pathname === "/api/obs/batch" && method === "POST") {
+    return handleObsBatch(req, state);
   }
 
   // ── Obs detail (must match before /api/obs/{row_index}) ─────────

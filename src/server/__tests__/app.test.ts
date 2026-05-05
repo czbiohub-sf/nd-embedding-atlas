@@ -44,6 +44,7 @@ function createMockState(store: EmbeddingStore): ViewerState {
     accessors: new Map(),
     plateMounts: [],
     obsmLoaders: new Map(),
+    cropPool: null,
   };
 }
 
