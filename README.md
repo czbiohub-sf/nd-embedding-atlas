@@ -60,17 +60,7 @@ Environment variables:
 - **`pre-release`** — latest active alpha / beta / release candidate (`v0.1.0-alpha.1`, `v0.1.0-beta.0`, `v0.1.0-rc.1`, …). Cut manually ahead of a stable release; what most internal testers track.
 - **`canary`** — rolling pre-release rebuilt on every push to `main`. Tracks the head of development.
 
-### 2. Try it without installing (requires [Bun](https://bun.com))
-
-```bash
-bunx github:czbiohub-sf/nd-embedding-atlas ./data.zarr
-```
-
-Pin a tag: `bunx github:czbiohub-sf/nd-embedding-atlas#v0.1.0-beta.0 ./data.zarr`.
-
-First run is ~45 s (Bun clones the repo, installs deps, and builds the frontend). Subsequent runs are cached. Bun reads the same git auth that `gh` writes — if `gh auth login` works, `bunx` works.
-
-### 3. Public install (for once the repo is public)
+### 2. Public install (for once the repo is public)
 
 ```bash
 # These commands won't work today — kept here as the future canonical path.
@@ -106,9 +96,7 @@ source <(ndea completions zsh)
 ndea completions fish > ~/.config/fish/completions/ndea.fish
 ```
 
-Updates download the new binary + sidecar into a fresh `~/.ndea/versions/<tag>/` directory and atomically retarget the symlink via `rename(2)`. Long-running `ndea view` sessions keep their open file handle to the old binary — no mid-run replacement. Re-running the curl installer also works.
-
-For the `bunx` path, re-run the `bunx` command — Bun refreshes the clone on the next invocation.
+Updates download the new binary + sidecar into a fresh `~/.ndea/versions/<tag>/` directory and atomically retarget the symlink via `rename(2)`. Long-running `ndea view` sessions keep their open file handle to the old binary — no mid-run replacement. Re-running the install command also works.
 
 ## Quick start
 
