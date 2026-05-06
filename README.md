@@ -6,55 +6,87 @@ An interactive browser-based dashboard that links high-dimensional AI embeddings
 
 ## Install
 
-Two ways, ordered by friction. The install script is the supported path; `bunx` is a zero-install option for trying it.
+> **Repo is private** — release assets and the install script are gated behind the
+> czbiohub-sf GitHub org. Every install / update command needs a token that can
+> read the repo. The simplest path uses [`gh`](https://cli.github.com) (the GitHub CLI)
+> which most internal users already have for code review.
 
-### 1. Try it now (requires [Bun](https://bun.com))
+### 1. Install (recommended, internal)
+
+Authenticate `gh` once, then pipe the script + token in:
+
+```bash
+gh auth login   # one-time, if you haven't already
+
+gh api repos/czbiohub-sf/nd-embedding-atlas/contents/scripts/install.sh --jq '.content' \
+  | base64 -d \
+  | NDEA_GITHUB_TOKEN="$(gh auth token)" sh
+```
+
+Downloads a checksum-verified native binary (~80 MB) plus its libduckdb sidecar
+(~110 MB) and drops a `ndea` symlink into `$HOME/.local/bin`. Total install size
+~190 MB per version under `~/.ndea/versions/<tag>/`.
+
+Pin a specific release with `NDEA_VERSION`:
+
+```bash
+gh api repos/czbiohub-sf/nd-embedding-atlas/contents/scripts/install.sh --jq '.content' \
+  | base64 -d \
+  | NDEA_VERSION=v0.1.0-beta.0 NDEA_GITHUB_TOKEN="$(gh auth token)" sh
+```
+
+Switch channel with `NDEA_CHANNEL`:
+
+```bash
+# pre-release (alpha / beta / rc) — most common for internal testers right now
+... | NDEA_CHANNEL=pre-release NDEA_GITHUB_TOKEN="$(gh auth token)" sh
+
+# canary (rolling, rebuilt on every push to main)
+... | NDEA_CHANNEL=canary NDEA_GITHUB_TOKEN="$(gh auth token)" sh
+```
+
+Environment variables:
+
+| Variable            | Default            | Notes                                                                            |
+| ------------------- | ------------------ | -------------------------------------------------------------------------------- |
+| `NDEA_GITHUB_TOKEN` | _(required)_       | GitHub token with repo read scope. Use `$(gh auth token)` if `gh` is configured. |
+| `NDEA_VERSION`      | `latest`           | Release tag (e.g. `v0.1.0-beta.0`).                                              |
+| `NDEA_CHANNEL`      | `stable`           | `stable`, `pre-release`, or `canary` — see Channels below.                       |
+| `NDEA_BIN_DIR`      | `$HOME/.local/bin` | Install destination.                                                             |
+
+**Channels:**
+
+- **`stable`** (default) — the latest tagged release (`v0.1.0`, `v0.2.0`, …). Hand-cut.
+- **`pre-release`** — latest active alpha / beta / release candidate (`v0.1.0-alpha.1`, `v0.1.0-beta.0`, `v0.1.0-rc.1`, …). Cut manually ahead of a stable release; what most internal testers track.
+- **`canary`** — rolling pre-release rebuilt on every push to `main`. Tracks the head of development.
+
+### 2. Try it without installing (requires [Bun](https://bun.com))
 
 ```bash
 bunx github:czbiohub-sf/nd-embedding-atlas ./data.zarr
 ```
 
-Pin a specific release by appending a tag: `bunx github:czbiohub-sf/nd-embedding-atlas#v0.2.0 ./data.zarr`.
+Pin a tag: `bunx github:czbiohub-sf/nd-embedding-atlas#v0.1.0-beta.0 ./data.zarr`.
 
-First run is ~45 s (Bun clones the repo, installs deps, and builds the frontend). Subsequent runs are cached.
+First run is ~45 s (Bun clones the repo, installs deps, and builds the frontend). Subsequent runs are cached. Bun reads the same git auth that `gh` writes — if `gh auth login` works, `bunx` works.
 
-### 2. Install
+### 3. Public install (for once the repo is public)
 
 ```bash
+# These commands won't work today — kept here as the future canonical path.
 curl -fsSL https://raw.githubusercontent.com/czbiohub-sf/nd-embedding-atlas/main/scripts/install.sh | sh
+curl -fsSL .../install.sh | NDEA_VERSION=v0.1.0-beta.0 sh
 ```
-
-Downloads a checksum-verified native binary (~80 MB) plus its libduckdb sidecar (~110 MB) and drops a `ndea` symlink into `$HOME/.local/bin`. Total install size ~190 MB per version under `~/.ndea/versions/<tag>/`.
-
-Environment variables:
-
-| Variable       | Default            | Notes                                                      |
-| -------------- | ------------------ | ---------------------------------------------------------- |
-| `NDEA_VERSION` | `latest`           | Release tag (e.g. `v0.2.0`).                               |
-| `NDEA_CHANNEL` | `stable`           | `stable`, `pre-release`, or `canary` — see Channels below. |
-| `NDEA_BIN_DIR` | `$HOME/.local/bin` | Install destination.                                       |
-
-Example: `curl -fsSL .../install.sh | NDEA_VERSION=v0.2.0 NDEA_BIN_DIR=/usr/local/bin sh`.
-
-**Channels:**
-
-- **`stable`** (default) — the latest tagged release (`v0.1.0`, `v0.2.0`, …). Hand-cut.
-- **`canary`** — rolling pre-release rebuilt on every push to `main`. Tracks the head of development.
-- **`pre-release`** — latest active alpha / beta / release candidate (`v0.1.0-alpha.1`, `v0.1.0-beta.2`, `v0.1.0-rc.1`, …). Cut manually ahead of a stable release; absent between cuts.
-
-```bash
-# canary (rolling)
-curl -fsSL https://raw.githubusercontent.com/czbiohub-sf/nd-embedding-atlas/main/scripts/install.sh \
-  | NDEA_CHANNEL=canary sh
-
-# specific pre-release by tag (any -alpha / -beta / -rc / -dev tag)
-curl -fsSL .../install.sh | NDEA_VERSION=v0.1.0-rc.1 sh
-```
-
-Self-update via `ndea update --channel <stable|pre-release|canary>`. Roll back a bad
-update with `ndea rollback`.
 
 ### Update
+
+`ndea update` re-runs the same auth flow. Export the token in your shell rc so
+self-update + rollback don't need it on the command line:
+
+```bash
+# ~/.zshrc / ~/.bashrc
+export NDEA_GITHUB_TOKEN="$(gh auth token)"
+```
 
 ```bash
 ndea update                       # latest stable
