@@ -16,17 +16,48 @@ nd-embedding-atlas is an interactive dashboard linking high-dimensional AI embed
 
 ## Installation
 
+!!! info "Repo is private"
+
+    Release assets and the install script are gated behind the czbiohub-sf GitHub
+    org. Every install / update command needs a GitHub token with repo read scope.
+    The simplest path uses [`gh`](https://cli.github.com), which most internal
+    users already have for code review.
+
 ```bash
-curl -fsSL https://raw.githubusercontent.com/czbiohub-sf/nd-embedding-atlas/main/scripts/install.sh | sh
+gh auth login   # one-time, if you haven't already
+
+gh api repos/czbiohub-sf/nd-embedding-atlas/contents/scripts/install.sh --jq '.content' \
+  | base64 -d \
+  | NDEA_GITHUB_TOKEN="$(gh auth token)" sh
 ```
 
-Downloads a checksum-verified ~80 MB native binary into `$HOME/.local/bin`. To upgrade in place:
+Downloads a checksum-verified ~80 MB native binary plus a libduckdb sidecar into `$HOME/.local/bin`.
+
+Pin a tag with `NDEA_VERSION` or pick a channel with `NDEA_CHANNEL`:
+
+```bash
+gh api repos/czbiohub-sf/nd-embedding-atlas/contents/scripts/install.sh --jq '.content' \
+  | base64 -d \
+  | NDEA_VERSION=v0.1.0-beta.0 NDEA_GITHUB_TOKEN="$(gh auth token)" sh
+
+# pre-release (alpha / beta / rc) — most common for internal testers
+... | NDEA_CHANNEL=pre-release NDEA_GITHUB_TOKEN="$(gh auth token)" sh
+```
+
+To self-update, export the token in your shell rc once so `ndea update` doesn't need it inline:
+
+```bash
+# ~/.zshrc / ~/.bashrc
+export NDEA_GITHUB_TOKEN="$(gh auth token)"
+```
 
 ```bash
 ndea update                       # latest stable
 ndea update --channel pre-release # latest alpha / beta / rc (when active)
 ndea update --channel canary      # rolling, rebuilt on every push to main
 ```
+
+The canonical `curl … raw.githubusercontent.com … | sh` form will work once the repo flips public; until then use the `gh` flow above.
 
 For developer setup, see the [contributing guide](contributing.md).
 
