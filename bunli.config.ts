@@ -17,9 +17,13 @@
 
 import { defineConfig, type BunliConfigInput } from "@bunli/core";
 
+// `version` deliberately omitted — bunli reads it for `bunli release` /
+// `bunli build`, neither of which we use (release is GitHub Actions +
+// `scripts/build.ts`). The user-visible `ndea --version` reads from
+// `src/cli/version.ts`, which `scripts/sync-version.ts` keeps in lock-step
+// with `package.json`. Adding a static literal here would silently drift.
 const config: BunliConfigInput = {
   name: "ndea",
-  version: "0.1.0",
   description: "Interactive browser-based dashboard linking AI embeddings to source 5D image data.",
   commands: {
     entry: "./src/cli/index.ts",
