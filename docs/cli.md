@@ -128,16 +128,17 @@ ndea completions fish > ~/.config/fish/completions/ndea.fish
 
 ## Environment variables
 
-| Variable               | Consumer               | Default        | Description                                               |
-| ---------------------- | ---------------------- | -------------- | --------------------------------------------------------- |
-| `NDEA_DATASET`         | `view`                 | unset          | Path forwarded as a positional when none is given         |
-| `NDEA_NO_OPEN`         | `view`                 | unset          | When `1`, equivalent to passing `--no-open`               |
-| `NDEA_NO_STATIC`       | `view`                 | unset          | When `1`, equivalent to passing `--no-static`             |
-| `NDEA_CHANNEL`         | `update`, `install.sh` | `stable`       | Default release channel                                   |
-| `NDEA_VERSION`         | `install.sh`           | `latest`       | Pin first install to a specific tag (e.g. `v0.1.0-rc.1`)  |
-| `NDEA_BIN_DIR`         | `install.sh`, `update` | `~/.local/bin` | Directory holding the symlink that's on PATH              |
-| `NDEA_HOME`            | all                    | `~/.ndea`      | State root (versions tree, locks, current-version)        |
-| `NDEA_DISABLE_UPDATES` | `update`, `rollback`   | unset          | When `1`, blocks both update and rollback (sysadmin lock) |
+| Variable               | Consumer               | Default        | Description                                                                       |
+| ---------------------- | ---------------------- | -------------- | --------------------------------------------------------------------------------- |
+| `NDEA_DATASET`         | `view`                 | unset          | Path forwarded as a positional when none is given                                 |
+| `NDEA_NO_OPEN`         | `view`                 | unset          | When `1`, equivalent to passing `--no-open`                                       |
+| `NDEA_NO_STATIC`       | `view`                 | unset          | When `1`, equivalent to passing `--no-static`                                     |
+| `NDEA_GITHUB_TOKEN`    | `install.sh`, `update` | unset          | Required while the repo is private. Use `$(gh auth token)` if `gh` is configured. |
+| `NDEA_CHANNEL`         | `update`, `install.sh` | `stable`       | Default release channel                                                           |
+| `NDEA_VERSION`         | `install.sh`           | `latest`       | Pin first install to a specific tag (e.g. `v0.1.0-beta.0`)                        |
+| `NDEA_BIN_DIR`         | `install.sh`, `update` | `~/.local/bin` | Directory holding the symlink that's on PATH                                      |
+| `NDEA_HOME`            | all                    | `~/.ndea`      | State root (versions tree, locks, current-version)                                |
+| `NDEA_DISABLE_UPDATES` | `update`, `rollback`   | unset          | When `1`, blocks both update and rollback (sysadmin lock)                         |
 
 ## Release channels
 
