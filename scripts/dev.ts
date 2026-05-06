@@ -9,9 +9,32 @@
  *
  *   vp run dev ../data.zarr               → NDEA_DATASET=../data.zarr vp run ...
  *   NDEA_DATASET=... vp run dev           → env var passes through unchanged
+ *
+ * Pre-flight: kill anything still bound to the backend port. vp's task
+ * runner doesn't always propagate SIGINT cleanly to `bun --hot run` children,
+ * so a Ctrl+C on a previous `vp run dev` can leave an orphan backend that
+ * silently serves a stale dataset to your next `vp run dev`. We free the
+ * port up front so the new backend always wins.
  */
 
 import { spawn } from "bun";
+
+const BACKEND_PORT = 5055;
+
+async function killPortHolder(port: number): Promise<void> {
+  const lsof = spawn(["lsof", "-ti", `:${port}`], { stdout: "pipe", stderr: "pipe" });
+  const out = await new Response(lsof.stdout).text();
+  await lsof.exited;
+  const pids = out
+    .split(/\s+/)
+    .map((s) => Number.parseInt(s, 10))
+    .filter((n) => Number.isInteger(n) && n > 0);
+  if (pids.length === 0) return;
+  console.warn(`[dev] freeing port ${port} (orphan pid${pids.length > 1 ? "s" : ""}: ${pids.join(", ")})`);
+  await spawn(["kill", "-9", ...pids.map(String)]).exited;
+}
+
+await killPortHolder(BACKEND_PORT);
 
 const [positional] = Bun.argv.slice(2);
 const env: Record<string, string> = {

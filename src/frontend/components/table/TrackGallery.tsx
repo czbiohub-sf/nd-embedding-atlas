@@ -125,7 +125,11 @@ export function TrackGallery({ activeFrame, onFrameSelect, datasetKey }: TrackGa
     const missing = rowIndices.filter((id) => !queryClient.getQueryData(obsCoordKey(id)));
     if (missing.length === 0) return;
 
-    void fetch(`/api/obs/batch?ids=${missing.join(",")}`)
+    void fetch(`/api/obs/batch`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ row_indices: missing }),
+    })
       .then((r) => r.json())
       .then((data: Record<string, { x: number; y: number }>) => {
         for (const [idStr, coords] of Object.entries(data)) {
@@ -167,7 +171,6 @@ export function TrackGallery({ activeFrame, onFrameSelect, datasetKey }: TrackGa
             y: Math.round(cachedObs.y),
             half: 150,
             size: 200,
-            fmt: "webp",
             ...(trajectory.datasetKey ? { dataset_key: trajectory.datasetKey } : {}),
             channels: settledChannels.map((ch) => ({
               visible: ch.visible,

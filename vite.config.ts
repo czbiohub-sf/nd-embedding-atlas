@@ -2,6 +2,7 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import typegpuPlugin from "unplugin-typegpu/vite";
 import { defineConfig } from "vite-plus";
+import { devConsoleEcho } from "./scripts/dev-console-echo.ts";
 import { devErrorReporter } from "./scripts/dev-error-reporter.ts";
 
 export default defineConfig({
@@ -325,7 +326,7 @@ export default defineConfig({
   },
 
   // ── Vite bundler (frontend) ───────────────────────────────────────────────
-  plugins: [react(), tailwindcss(), typegpuPlugin({}), devErrorReporter()],
+  plugins: [react(), tailwindcss(), typegpuPlugin({}), devErrorReporter(), devConsoleEcho()],
   resolve: {
     alias: { "@": new URL("./src/frontend", import.meta.url).pathname },
   },

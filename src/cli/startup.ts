@@ -219,6 +219,9 @@ export async function startup(config: ResolvedConfig): Promise<void> {
     accessors,
     plateMounts,
     obsmLoaders: new Map(),
+    // Crop pool is attached lazily by createApp() so tests / non-server
+    // consumers don't pay the worker spawn cost.
+    cropPool: null,
   };
   // ── 4. Resolve frontend ─────────────────────────────────────────────────
 

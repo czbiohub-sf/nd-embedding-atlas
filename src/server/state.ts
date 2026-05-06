@@ -5,6 +5,7 @@
  */
 
 import type { DatasetHandle } from "../zarr/anndata.ts";
+import type { CropPool } from "./crop-pool.ts";
 import type { PlateChannel, PlateMount } from "./plate.ts";
 import type { ObsmSliceLoader } from "./slice-loader.ts";
 import type { EmbeddingStore } from "./store.ts";
@@ -123,4 +124,9 @@ export interface ViewerState {
    * accessor so the result aligns to obs_base row order.
    */
   obsmLoaders: Map<string, ObsmSliceLoader>;
+  /**
+   * Bun Worker pool for OME-Zarr crop rendering. Null when no plate is
+   * configured. Lifetime = server lifetime; created in createApp().
+   */
+  cropPool: CropPool | null;
 }

@@ -47,6 +47,7 @@ async function buildState(): Promise<{ state: ViewerState; server: Server; port:
     accessors: new Map([["fixture", adata]]),
     plateMounts: [],
     obsmLoaders: new Map(),
+    cropPool: null,
   };
 
   const meta: DatasetMeta = {
