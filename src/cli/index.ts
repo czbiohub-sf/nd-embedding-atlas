@@ -21,6 +21,14 @@
  *     ndea project.yaml --port 8080
  */
 
+// Side-effect import: extracts embedded libduckdb (when bundled at build
+// time) and dlopen's it with RTLD_GLOBAL BEFORE any duckdb-touching module
+// loads. ES module post-order evaluation guarantees this runs ahead of
+// `viewCommand` → `startup.ts` → `server/store.ts` (the first place
+// @duckdb/node-api is evaluated). No-op in dev mode.
+// eslint-disable-next-line import/no-unassigned-import
+import "./lib/preload-libduckdb.ts";
+
 import { createCLI } from "@bunli/core";
 import { completionsPlugin } from "@bunli/plugin-completions";
 import doctorCommand from "./commands/doctor.ts";
