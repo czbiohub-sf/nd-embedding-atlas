@@ -25,15 +25,12 @@ jobs:
           - os: macos-14 # Apple Silicon
             target: bun-darwin-arm64
             artifact: ndea-darwin-arm64
-            dylib: libduckdb-bun-darwin-arm64.dylib
           - os: ubuntu-latest # Linux x64
             target: bun-linux-x64
             artifact: ndea-linux-x64
-            dylib: libduckdb-bun-linux-x64.so
           - os: ubuntu-24.04-arm # Linux ARM64 (native, no QEMU)
             target: bun-linux-arm64
             artifact: ndea-linux-arm64
-            dylib: libduckdb-bun-linux-arm64.so
 
     runs-on: ${{ matrix.os }}
 
@@ -61,24 +58,20 @@ jobs:
       - name: Build frontend
         run: vp build
 
-      - name: Compile binary (native — duckdb.node embeds here)
+      - name: Compile single-file binary (libduckdb embedded)
         env:
           TARGET: ${{ matrix.target }}
           ARTIFACT: ${{ matrix.artifact }}
         run: bash .github/scripts/build-binary.sh
 
-      # macOS resolves libduckdb via the @executable_path rpath patch;
-      # Linux needs LD_LIBRARY_PATH (no $ORIGIN-relative search for the
-      # .node, which bun extracts to /tmp at runtime). Setting it
-      # unconditionally is harmless on macOS (dyld ignores it).
       - name: Verify binary launches
-        run: LD_LIBRARY_PATH="$PWD/dist" ./dist/${{ matrix.artifact }} --version
+        run: ./dist/${{ matrix.artifact }} --version
 
       - name: Report binary size
         shell: bash
         run: ls -lh dist/${{ matrix.artifact }}
 
-      - name: Per-artifact SHA256 checksum (binary + dylib)
+      - name: Per-artifact SHA256 checksum
         env:
           ARTIFACT: ${{ matrix.artifact }}
         run: bash .github/scripts/sha256-artifact.sh
@@ -86,9 +79,7 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact }}
-          path: |
-            dist/${{ matrix.artifact }}*
-            dist/${{ matrix.dylib }}*
+          path: dist/${{ matrix.artifact }}*
           retention-days: 7
           if-no-files-found: error
 

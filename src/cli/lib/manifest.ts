@@ -33,10 +33,6 @@ export interface ResolvedAsset {
   assetUrl: string;
   /** Matching `.sha256` URL for integrity verification. */
   shaUrl: string;
-  /** DuckDB sidecar download URL (`libduckdb-bun-<os>-<arch>.{dylib,so}`). */
-  dylibAssetUrl: string;
-  /** Matching `.sha256` URL for the DuckDB sidecar. */
-  dylibShaUrl: string;
 }
 
 // ─── Platform detection ─────────────────────────────────────────────────────
@@ -46,8 +42,6 @@ export interface Target {
   arch: "x64" | "arm64";
   /** Final asset filename matching `release.yml`'s upload step. */
   assetName: string;
-  /** DuckDB sidecar filename matching `scripts/build.ts`'s emit. */
-  dylibAssetName: string;
 }
 
 /**
@@ -73,11 +67,7 @@ export function detectTarget(): Target {
   else throw new Error(`Unsupported arch: ${arch}`);
 
   const assetName = `ndea-${os}-${normArch}${os === "windows" ? ".exe" : ""}`;
-  // Sidecar names mirror scripts/build.ts's TARGET_TO_DUCKDB.distName entries.
-  // Windows isn't a build target; the .dll branch is nominal.
-  const dylibExt = os === "darwin" ? "dylib" : os === "linux" ? "so" : "dll";
-  const dylibAssetName = `libduckdb-bun-${os}-${normArch}.${dylibExt}`;
-  return { os, arch: normArch, assetName, dylibAssetName };
+  return { os, arch: normArch, assetName };
 }
 
 // ─── Fetcher ────────────────────────────────────────────────────────────────
@@ -124,8 +114,6 @@ export async function fetchManifest(channel: Channel, options: FetchManifestOpti
     tag,
     assetUrl: `${base}/${target.assetName}`,
     shaUrl: `${base}/${target.assetName}.sha256`,
-    dylibAssetUrl: `${base}/${target.dylibAssetName}`,
-    dylibShaUrl: `${base}/${target.dylibAssetName}.sha256`,
   };
 }
 

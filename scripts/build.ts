@@ -6,7 +6,8 @@
  * Steps:
  *   1. Build frontend (vp build)
  *   2. Enumerate dist/frontend/** files for embedding
- *   3. Compile binary (bun build --compile) with embedded frontend assets
+ *   3. Embed libduckdb manifest so the preloader can dlopen it at runtime
+ *   4. Compile binary (bun build --compile)
  *
  * The `--compile` flag is only available via the Bun CLI, not the JS API,
  * so this script shells out to `bun build`.
@@ -15,18 +16,20 @@
  *   bun run scripts/build.ts                          # current platform
  *   bun run scripts/build.ts bun-linux-x64            # specific target
  *   bun run scripts/build.ts --skip-frontend          # skip frontend build
- *   bun run scripts/build.ts --bundle-duckdb          # embed libduckdb (no sidecar / no wrapper)
+ *
+ * Output: dist/ndea — single self-contained binary. Embeds libduckdb;
+ * the preloader extracts it to ~/.cache/ndea/<version>/ at first run and
+ * dlopens it before @duckdb/node-api evaluates. No sidecar file, no
+ * wrapper script.
  */
 
 import { existsSync } from "node:fs";
-import { chmod, copyFile, symlink, unlink } from "node:fs/promises";
 import { dirname, relative, resolve } from "node:path";
 
 // ─── Args ──────────────────────────────────────────────────────────────────
 
 const args = Bun.argv.slice(2);
 const skipFrontend = args.includes("--skip-frontend");
-const bundleDuckDB = args.includes("--bundle-duckdb");
 const targetArg = args.find((a) => !a.startsWith("--") || a.startsWith("--target="));
 const target =
   (targetArg?.startsWith("--target=") ? targetArg.slice("--target=".length) : targetArg) ??
@@ -38,49 +41,30 @@ const OUT_DIR = resolve(ROOT, "dist");
 
 // ─── Target → DuckDB binding mapping ───────────────────────────────────────
 //
-// Each `bun --target` value maps to a `@duckdb/node-bindings-<platform>` dir
-// inside node_modules. We un-externalize the matching one (so duckdb.node
-// gets embedded into $bunfs by bun build --compile), patch its rpath on
-// macOS (so the embedded .node loads libduckdb from `@executable_path/`),
-// and copy the sibling libduckdb shared library into dist/ as a sidecar.
-//
-// The matching libduckdb is what install.sh / `ndea update` ship next to
-// the binary, resolved at runtime via @executable_path on macOS or
-// LD_LIBRARY_PATH (set by a wrapper script) on Linux.
+// Each `bun --target` value maps to a `@duckdb/node-bindings-<platform>`
+// dir in node_modules that ships duckdb.node + libduckdb.<ext>. Both get
+// embedded into $bunfs/ — duckdb.node via bun's native-addon extraction,
+// libduckdb via `with { type: "file" }` import in __generated-libduckdb.ts.
 
 interface DuckDBTarget {
-  /** Subdir under node_modules/@duckdb/ that ships duckdb.node + libduckdb. */
+  /** Subdir under node_modules/@duckdb/. */
   bindingsDir: string;
-  /** Native shared-library extension. */
+  /** Native shared-library extension on the target platform. */
   dylibExt: "dylib" | "so";
-  /** Output filename for the sidecar — matches install.sh / update.ts naming. */
-  distName: string;
 }
 
 const TARGET_TO_DUCKDB: Record<string, DuckDBTarget> = {
-  "bun-darwin-arm64": {
-    bindingsDir: "node-bindings-darwin-arm64",
-    dylibExt: "dylib",
-    distName: "libduckdb-bun-darwin-arm64.dylib",
-  },
-  "bun-darwin-x64": {
-    bindingsDir: "node-bindings-darwin-x64",
-    dylibExt: "dylib",
-    distName: "libduckdb-bun-darwin-x64.dylib",
-  },
-  "bun-linux-arm64": {
-    bindingsDir: "node-bindings-linux-arm64",
-    dylibExt: "so",
-    distName: "libduckdb-bun-linux-arm64.so",
-  },
-  "bun-linux-x64": {
-    bindingsDir: "node-bindings-linux-x64",
-    dylibExt: "so",
-    distName: "libduckdb-bun-linux-x64.so",
-  },
+  "bun-darwin-arm64": { bindingsDir: "node-bindings-darwin-arm64", dylibExt: "dylib" },
+  "bun-darwin-x64": { bindingsDir: "node-bindings-darwin-x64", dylibExt: "dylib" },
+  "bun-linux-arm64": { bindingsDir: "node-bindings-linux-arm64", dylibExt: "so" },
+  "bun-linux-x64": { bindingsDir: "node-bindings-linux-x64", dylibExt: "so" },
 };
 
 const duckdbTarget = TARGET_TO_DUCKDB[target];
+if (!duckdbTarget) {
+  console.error(`\n  Error: unknown target ${target}. Supported: ${Object.keys(TARGET_TO_DUCKDB).join(", ")}\n`);
+  process.exit(1);
+}
 
 // ─── ANSI helpers ──────────────────────────────────────────────────────────
 
@@ -109,21 +93,20 @@ if (!skipFrontend) {
   console.log(`\n  ${DIM}Skipping frontend build (--skip-frontend)${RESET}`);
 }
 
-// Verify dist/frontend exists
 if (!existsSync(FRONTEND_DIST)) {
   console.error(`\n  ${RED}Error:${RESET} dist/frontend/ not found. Run without --skip-frontend.`);
   process.exit(1);
 }
 
-// ─── Step 2: Enumerate frontend assets + generate import manifest ──────────
+// ─── Step 2: Generate embedded-asset manifests ─────────────────────────────
 //
 // We can't pass the JS bundle as an entrypoint to `bun build --compile`
-// (it would try to parse it — top-level await in the minified output fails).
-// Instead, generate a TS module with `import ... with { type: "file" }`
-// declarations. Bun embeds those files into $bunfs at compile time, and the
-// import returns a path string that works in both dev and compiled mode.
+// (it would try to parse it — top-level await in the minified output
+// fails). Instead, generate TS modules with `import ... with { type: "file" }`
+// declarations. Bun embeds those files into $bunfs at compile time, and
+// the imports return path strings that work in both dev and compiled mode.
 
-console.log(`\n  ${BOLD}Step 2:${RESET} Generating embedded-assets manifest...`);
+console.log(`\n  ${BOLD}Step 2:${RESET} Generating embedded-asset manifests...`);
 
 const glob = new Bun.Glob("**/*");
 const assetPaths: string[] = [];
@@ -131,7 +114,7 @@ for await (const path of glob.scan({ cwd: FRONTEND_DIST, onlyFiles: true })) {
   assetPaths.push(path);
 }
 
-const manifestLines: string[] = [
+const frontendManifestLines: string[] = [
   "// AUTO-GENERATED by scripts/build.ts — do not edit.",
   "// Maps frontend asset relative paths to their resolved file paths.",
   "// In dev mode paths point at dist/frontend/; in compiled binaries they",
@@ -139,53 +122,45 @@ const manifestLines: string[] = [
   "",
 ];
 for (let i = 0; i < assetPaths.length; i++) {
-  const p = assetPaths[i];
-  manifestLines.push(`import _${i} from "../../dist/frontend/${p}" with { type: "file" };`);
+  frontendManifestLines.push(`import _${i} from "../../dist/frontend/${assetPaths[i]}" with { type: "file" };`);
 }
-manifestLines.push("");
-manifestLines.push("export const EMBEDDED_ASSETS: Record<string, string> = {");
+frontendManifestLines.push("");
+frontendManifestLines.push("export const EMBEDDED_ASSETS: Record<string, string> = {");
 for (let i = 0; i < assetPaths.length; i++) {
-  manifestLines.push(`    ${JSON.stringify(assetPaths[i])}: _${i},`);
+  frontendManifestLines.push(`    ${JSON.stringify(assetPaths[i])}: _${i},`);
 }
-manifestLines.push("};");
-manifestLines.push("");
+frontendManifestLines.push("};");
+frontendManifestLines.push("");
 
-const manifestPath = resolve(ROOT, "src/server/__generated-embedded-assets.ts");
-await Bun.write(manifestPath, manifestLines.join("\n"));
+const frontendManifestPath = resolve(ROOT, "src/server/__generated-embedded-assets.ts");
+await Bun.write(frontendManifestPath, frontendManifestLines.join("\n"));
+console.log(`  ${GREEN}✓${RESET} ${assetPaths.length} frontend assets manifested`);
 
-console.log(`  ${GREEN}✓${RESET} ${assetPaths.length} assets manifested → ${manifestPath.replace(`${ROOT}/`, "")}`);
-
-// ─── Step 2b: Generate libduckdb embed manifest (--bundle-duckdb only) ─────
-//
-// When bundling, overwrite the committed stub at
-// src/cli/lib/__generated-libduckdb.ts so the preloader's
-// `with { type: "file" }` import resolves to the dylib in node_modules.
-// Restored via `git restore` in the finally block, same pattern as
-// src/server/__generated-embedded-assets.ts.
-
+// libduckdb embed manifest — overwrites the committed dev stub
+// (LIBDUCKDB_EMBEDDED_PATH = null) with a real `with { type: "file" }`
+// import for the build target's libduckdb. Restored in the finally block.
 const libduckdbStubPath = resolve(ROOT, "src/cli/lib/__generated-libduckdb.ts");
-
-if (bundleDuckDB && duckdbTarget) {
-  const dylibAbsPath = resolve(
-    ROOT,
-    "node_modules/@duckdb",
-    duckdbTarget.bindingsDir,
-    `libduckdb.${duckdbTarget.dylibExt}`,
-  );
-  if (!existsSync(dylibAbsPath)) {
-    console.error(`\n  ${RED}Error:${RESET} ${dylibAbsPath} not found. \`bun install\` first?`);
-    process.exit(1);
-  }
-  const dylibRelPath = relative(dirname(libduckdbStubPath), dylibAbsPath);
-  const stub = [
-    "// AUTO-GENERATED by scripts/build.ts --bundle-duckdb — do not commit.",
+const dylibAbsPath = resolve(
+  ROOT,
+  "node_modules/@duckdb",
+  duckdbTarget.bindingsDir,
+  `libduckdb.${duckdbTarget.dylibExt}`,
+);
+if (!existsSync(dylibAbsPath)) {
+  console.error(`\n  ${RED}Error:${RESET} ${dylibAbsPath} not found. \`bun install\` first?`);
+  process.exit(1);
+}
+const dylibRelPath = relative(dirname(libduckdbStubPath), dylibAbsPath);
+await Bun.write(
+  libduckdbStubPath,
+  [
+    "// AUTO-GENERATED by scripts/build.ts — do not commit.",
     `import libduckdbPath from "${dylibRelPath}" with { type: "file" };`,
     "export const LIBDUCKDB_EMBEDDED_PATH: string | null = libduckdbPath;",
     "",
-  ].join("\n");
-  await Bun.write(libduckdbStubPath, stub);
-  console.log(`  ${GREEN}✓${RESET} libduckdb embed manifest: ${dylibRelPath}`);
-}
+  ].join("\n"),
+);
+console.log(`  ${GREEN}✓${RESET} libduckdb embedded: ${dylibRelPath}`);
 
 // ─── Step 3: Compile binary ────────────────────────────────────────────────
 
@@ -199,12 +174,11 @@ const outfile = resolve(OUT_DIR, "ndea");
 // bundler doesn't try to resolve missing optional deps.
 //
 // The matching one is NOT externalized — bun build --compile embeds
-// duckdb.node into $bunfs/, where it's extracted to /tmp at runtime
-// and dlopen'd. The sibling libduckdb shared library is shipped as a
-// dist/ sidecar; the embedded .node is rpath-patched (macOS) or its
-// path is set via LD_LIBRARY_PATH from a wrapper script (Linux) so it
-// loads from the install dir at runtime.
-// musl variants are externalized only — we never build for Alpine/musl targets.
+// duckdb.node into $bunfs/, where it's extracted to a temp path at
+// runtime and dlopen'd. libduckdb resolves via the preloader's
+// process-level dlopen, not via duckdb.node's rpath.
+//
+// musl variants are externalized only — we never build for Alpine/musl.
 const ALL_DUCKDB_TARGETS = [
   "darwin-arm64",
   "darwin-x64",
@@ -215,17 +189,10 @@ const ALL_DUCKDB_TARGETS = [
   "win32-arm64",
   "win32-x64",
 ];
-const matchingPlatform = duckdbTarget?.bindingsDir.replace(/^node-bindings-/, "");
+const matchingPlatform = duckdbTarget.bindingsDir.replace(/^node-bindings-/, "");
 const DUCKDB_PLATFORM_EXTERNALS = ALL_DUCKDB_TARGETS.filter((p) => p !== matchingPlatform).map(
   (p) => `@duckdb/node-bindings-${p}/duckdb.node`,
 );
-
-if (!duckdbTarget) {
-  console.warn(
-    `\n  ${RED}Warning:${RESET} unknown target ${target} — no DuckDB sidecar will be produced.\n` +
-      `  All ${ALL_DUCKDB_TARGETS.length} platform .node files externalized; binary will not run standalone.\n`,
-  );
-}
 
 // Worker scripts must be passed as additional entrypoints so the bundler
 // recursively resolves their imports. Bun emits each as `<name>.js` next
@@ -247,59 +214,8 @@ const compileArgs = [
   ...DUCKDB_PLATFORM_EXTERNALS.flatMap((m) => ["--external", m]),
 ];
 
-// ── duckdb.node patch + restore (build-target-conditional) ────────────────
-//
-// On macOS we need to swap the install_name from `@rpath/libduckdb.dylib`
-// to `@executable_path/libduckdb.dylib`. install_name_tool mutates the
-// file in place; we read the original bytes BEFORE patching and write
-// them back unconditionally in finally so node_modules stays clean.
-//
-// `git restore` would NOT work here — node_modules/ is gitignored.
-
-let nodeFile: string | null = null;
-let origNodeBytes: Uint8Array | null = null;
-
-if (duckdbTarget) {
-  nodeFile = resolve(ROOT, "node_modules/@duckdb", duckdbTarget.bindingsDir, "duckdb.node");
-  if (!existsSync(nodeFile)) {
-    console.error(
-      `\n  ${RED}Error:${RESET} ${nodeFile} not found. Did \`bun install\` skip optional deps for this target?`,
-    );
-    process.exit(1);
-  }
-  origNodeBytes = await Bun.file(nodeFile).bytes();
-}
-
 let compileExit = 1;
 try {
-  if (nodeFile && target.includes("darwin") && !bundleDuckDB) {
-    // Strip ad-hoc signature first; install_name_tool invalidates it,
-    // and recent macOS dyld refuses to load .dylibs / bundles whose
-    // signature doesn't match. Re-sign ad-hoc after patching.
-    //
-    // Skipped under --bundle-duckdb: the preloader dlopens libduckdb
-    // before duckdb.node loads, so dyld matches by install_name (still
-    // @rpath/libduckdb.dylib) against the already-loaded image without
-    // ever consulting rpath.
-    Bun.spawnSync({
-      cmd: ["codesign", "--remove-signature", nodeFile],
-      stderr: "ignore",
-      stdout: "ignore",
-    });
-
-    const patch = Bun.spawnSync({
-      cmd: ["install_name_tool", "-change", "@rpath/libduckdb.dylib", "@executable_path/libduckdb.dylib", nodeFile],
-      stderr: "inherit",
-    });
-    if (patch.exitCode !== 0) throw new Error("install_name_tool failed");
-
-    Bun.spawnSync({
-      cmd: ["codesign", "-s", "-", nodeFile],
-      stderr: "ignore",
-      stdout: "ignore",
-    });
-  }
-
   const compileProc = Bun.spawn(compileArgs, {
     cwd: ROOT,
     stdout: "inherit",
@@ -307,83 +223,21 @@ try {
   });
   compileExit = await compileProc.exited;
 } finally {
-  // Restore original duckdb.node bytes regardless of compile success.
-  // Survives crashes mid-build; only an OS kill (-9) can leak a patched .node.
-  if (nodeFile && origNodeBytes) {
-    await Bun.write(nodeFile, origNodeBytes);
-  }
-
-  // Always restore the manifest stubs so the working tree stays clean.
-  const stubsToRestore = ["src/server/__generated-embedded-assets.ts"];
-  if (bundleDuckDB) stubsToRestore.push("src/cli/lib/__generated-libduckdb.ts");
-  const restoreProc = Bun.spawn(["git", "restore", ...stubsToRestore], {
-    cwd: ROOT,
-    stdout: "ignore",
-    stderr: "ignore",
-  });
+  // Restore the generated stubs so the working tree stays clean.
+  const restoreProc = Bun.spawn(
+    ["git", "restore", "src/server/__generated-embedded-assets.ts", "src/cli/lib/__generated-libduckdb.ts"],
+    {
+      cwd: ROOT,
+      stdout: "ignore",
+      stderr: "ignore",
+    },
+  );
   await restoreProc.exited;
 }
 
 if (compileExit !== 0) {
   console.error(`\n  ${RED}Compile failed with exit code ${compileExit}${RESET}`);
   process.exit(1);
-}
-
-// ── Sidecar libduckdb copy ─────────────────────────────────────────────────
-//
-// install.sh + update.ts download this alongside the binary and place it
-// next to the installed `ndea.bin`. macOS resolves it via patched rpath;
-// Linux resolves it via LD_LIBRARY_PATH set by the wrapper script.
-
-if (duckdbTarget && !bundleDuckDB) {
-  const dylibSrc = resolve(
-    ROOT,
-    "node_modules/@duckdb",
-    duckdbTarget.bindingsDir,
-    `libduckdb.${duckdbTarget.dylibExt}`,
-  );
-  const dylibDst = resolve(OUT_DIR, duckdbTarget.distName);
-  if (!existsSync(dylibSrc)) {
-    console.error(`\n  ${RED}Error:${RESET} ${dylibSrc} not found.`);
-    process.exit(1);
-  }
-  await copyFile(dylibSrc, dylibDst);
-  const dylibStat = Bun.file(dylibDst);
-  const dylibMb = (dylibStat.size / 1024 / 1024).toFixed(1);
-  console.log(`  ${GREEN}✓${RESET} Sidecar: ${BOLD}${dylibDst}${RESET} (${dylibMb} MB)`);
-
-  // Dev-tree parity: drop a `dist/libduckdb.<ext>` symlink so the binary's
-  // patched rpath (@executable_path/libduckdb.dylib on macOS) and the
-  // wrapper's LD_LIBRARY_PATH lookup both find the sidecar without a
-  // simulated install layout. Without this, `./dist/ndea-launcher --version`
-  // post-build fails with a dlopen error.
-  const dylibLink = resolve(OUT_DIR, `libduckdb.${duckdbTarget.dylibExt}`);
-  await unlink(dylibLink).catch(() => {});
-  await symlink(duckdbTarget.distName, dylibLink);
-}
-
-// ── Wrapper script in dist/ for dev-tree parity ──────────────────────────
-//
-// `./dist/ndea-launcher --version` post-build mirrors what users get from
-// install.sh (wrapper → ndea.bin → libduckdb sibling). The wrapper itself
-// is content-identical to what install.sh / update.ts write into the
-// versions tree; importing the constant here keeps a single source of
-// truth.
-//
-// Skipped under --bundle-duckdb: the binary is genuinely standalone, so
-// the wrapper layer is unnecessary.
-
-if (!bundleDuckDB) {
-  const wrapperPath = resolve(OUT_DIR, "ndea-launcher");
-  const { WRAPPER_SCRIPT_CONTENT } = await import(resolve(ROOT, "src/cli/lib/wrapper-script.ts"));
-  await Bun.write(wrapperPath, WRAPPER_SCRIPT_CONTENT);
-  await chmod(wrapperPath, 0o755);
-  // `dist/ndea-launcher` expects to find `dist/ndea.bin` next to it; the
-  // compile step emits `dist/ndea`. Mirror to `ndea.bin` so the wrapper
-  // path resolves locally without renaming.
-  const ndeaBinLink = resolve(OUT_DIR, "ndea.bin");
-  await unlink(ndeaBinLink).catch(() => {});
-  await symlink("ndea", ndeaBinLink);
 }
 
 // ─── Done ──────────────────────────────────────────────────────────────────
@@ -393,8 +247,4 @@ const sizeMB = (stat.size / 1024 / 1024).toFixed(1);
 
 console.log(`\n  ${GREEN}✓${RESET} Binary: ${BOLD}${outfile}${RESET} (${sizeMB} MB)`);
 console.log(`  ${DIM}Target: ${target}${RESET}\n`);
-if (bundleDuckDB) {
-  console.log(`  ${DIM}libduckdb bundled — run \`./dist/ndea --version\` directly (no wrapper, no sidecar).${RESET}\n`);
-} else {
-  console.log(`  ${DIM}Run \`./dist/ndea-launcher --version\` to verify the install layout in dev.${RESET}\n`);
-}
+console.log(`  ${DIM}Run \`./dist/ndea --version\` to smoke-test.${RESET}\n`);

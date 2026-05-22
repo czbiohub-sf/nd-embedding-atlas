@@ -31,15 +31,12 @@ jobs:
           - os: macos-14
             target: bun-darwin-arm64
             artifact: ndea-darwin-arm64
-            dylib: libduckdb-bun-darwin-arm64.dylib
           - os: ubuntu-latest
             target: bun-linux-x64
             artifact: ndea-linux-x64
-            dylib: libduckdb-bun-linux-x64.so
           - os: ubuntu-24.04-arm
             target: bun-linux-arm64
             artifact: ndea-linux-arm64
-            dylib: libduckdb-bun-linux-arm64.so
 
     runs-on: ${{ matrix.os }}
 
@@ -67,28 +64,21 @@ jobs:
       - name: Build frontend
         run: vp build
 
-      - name: Compile binary
+      - name: Compile single-file binary (libduckdb embedded)
         env:
           TARGET: ${{ matrix.target }}
           ARTIFACT: ${{ matrix.artifact }}
         run: bash .github/scripts/build-binary.sh
 
-      # In-tree launch check. macOS resolves libduckdb via the
-      # @executable_path rpath patched into duckdb.node at build time;
-      # Linux needs LD_LIBRARY_PATH because there's no $ORIGIN-relative
-      # search path for the .node (bun extracts it to /tmp at runtime).
-      # Setting LD_LIBRARY_PATH unconditionally is harmless on macOS
-      # (dyld ignores it).
       - name: Verify binary launches (in-tree)
-        run: LD_LIBRARY_PATH="$PWD/dist" ./dist/${{ matrix.artifact }} --version
+        run: ./dist/${{ matrix.artifact }} --version
 
-      - name: Verify isolated dir (catches missing-dylib regressions)
+      - name: Verify isolated dir (no siblings)
         env:
           ARTIFACT: ${{ matrix.artifact }}
-          DYLIB: ${{ matrix.dylib }}
         run: bash .github/scripts/verify-isolated.sh
 
-      - name: Per-artifact SHA256 checksum (binary + dylib)
+      - name: Per-artifact SHA256 checksum
         env:
           ARTIFACT: ${{ matrix.artifact }}
         run: bash .github/scripts/sha256-artifact.sh
@@ -96,9 +86,7 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact }}
-          path: |
-            dist/${{ matrix.artifact }}*
-            dist/${{ matrix.dylib }}*
+          path: dist/${{ matrix.artifact }}*
           retention-days: 1
           if-no-files-found: error
 

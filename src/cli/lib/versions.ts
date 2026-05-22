@@ -2,14 +2,11 @@
  * Helpers for the `~/.ndea/versions/<tag>/` tree.
  * Shared by `rollback`, `gc`, and `doctor`.
  *
- * Each version dir contains:
- *   - `ndea`     — POSIX-sh wrapper (the file `$NDEA_BIN_DIR/ndea` symlinks at)
- *   - `ndea.bin` — bun-compiled binary
- *   - `libduckdb.{dylib,so}` — DuckDB engine sidecar
+ * Each version dir contains a single file:
+ *   - `ndea` — bun-compiled binary
  *
- * `wrapperPath` is the symlink target — what `readlink($NDEA_BIN_DIR/ndea)`
- * returns. `binaryPath` is what runs after the wrapper `exec`s the actual
- * binary; downloads / writes target it directly.
+ * The symlink at `$NDEA_BIN_DIR/ndea` points directly at this binary;
+ * `readlink` returns the binary path.
  */
 
 import { existsSync } from "node:fs";
@@ -18,23 +15,18 @@ import { resolve } from "node:path";
 
 export interface VersionEntry {
   tag: string;
-  /** `<versionDir>/ndea` — the wrapper script the symlink points at. */
-  wrapperPath: string;
-  /** `<versionDir>/ndea.bin` — the bun-compiled binary. */
+  /** `<versionDir>/ndea` — the bun-compiled binary the symlink points at. */
   binaryPath: string;
   mtimeMs: number;
 }
 
 /**
  * Enumerate installed versions, sorted most-recent → least-recent by mtime.
- * Skips entries whose `ndea.bin` is missing (partial install / manual edit).
+ * Skips entries whose `ndea` is missing (partial install / manual edit).
  *
  * Resolves paths relative to the supplied `root` so callers can pass a
  * versions/ tree at a non-default location (e.g. tests with a sandboxed
  * NDEA_HOME).
- *
- * mtime is taken from `ndea.bin` because the wrapper script is regenerated
- * on every update and would otherwise dominate ordering.
  */
 export async function listVersions(root: string): Promise<VersionEntry[]> {
   if (!existsSync(root)) return [];
@@ -42,12 +34,11 @@ export async function listVersions(root: string): Promise<VersionEntry[]> {
   const out: VersionEntry[] = [];
   for (const tag of tags) {
     const versionRoot = resolve(root, tag);
-    const wrapperPath = resolve(versionRoot, "ndea");
-    const binaryPath = resolve(versionRoot, "ndea.bin");
+    const binaryPath = resolve(versionRoot, "ndea");
     if (!existsSync(binaryPath)) continue;
     try {
       const info = await stat(binaryPath);
-      out.push({ tag, wrapperPath, binaryPath, mtimeMs: info.mtimeMs });
+      out.push({ tag, binaryPath, mtimeMs: info.mtimeMs });
     } catch {
       // Skip unreadable entries silently.
     }

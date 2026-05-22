@@ -56,11 +56,12 @@ export default defineCommand({
       process.exit(1);
     }
 
-    // Pick the most-recently-modified version whose wrapper path differs
+    // Pick the most-recently-modified version whose binary path differs
     // from the currently-resolved one. Mtime ordering is stable across
-    // installs because `Bun.write` updates ndea.bin on every download.
-    // Symlinks target the wrapper, so wrapperPath is what `readlink` returns.
-    const candidate = entries.find((e) => e.wrapperPath !== activeTarget);
+    // installs because `Bun.write` updates the binary on every download.
+    // Symlinks target the binary directly, so binaryPath is what
+    // `readlink` returns.
+    const candidate = entries.find((e) => e.binaryPath !== activeTarget);
     if (!candidate) {
       console.error("Error: only one version installed — nothing to roll back to.");
       process.exit(1);
@@ -74,7 +75,7 @@ export default defineCommand({
     try {
       const tmpLink = `${link}.tmp`;
       await unlink(tmpLink).catch(() => {});
-      await symlink(candidate.wrapperPath, tmpLink);
+      await symlink(candidate.binaryPath, tmpLink);
       await rename(tmpLink, link);
 
       await Bun.write(currentVersionPath(), `${candidate.tag}\n`);

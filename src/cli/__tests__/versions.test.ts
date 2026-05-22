@@ -24,10 +24,8 @@ afterEach(async () => {
 async function makeVersion(tag: string, mtime?: Date): Promise<void> {
   const dir = resolve(TMP_HOME, "versions", tag);
   await mkdir(dir, { recursive: true });
-  const bin = resolve(dir, "ndea.bin");
-  const wrapper = resolve(dir, "ndea");
+  const bin = resolve(dir, "ndea");
   await writeFile(bin, `fake binary ${tag}`);
-  await writeFile(wrapper, `#!/bin/sh\nexec "${bin}" "$@"\n`);
   if (mtime) {
     const { utimes } = await import("node:fs/promises");
     await utimes(bin, mtime, mtime);
@@ -50,23 +48,21 @@ describe("listVersions", () => {
     expect(out.map((e) => e.tag)).toEqual(["v0.2.0", "v0.1.1", "v0.1.0"]);
   });
 
-  test("skips entries whose ndea.bin is missing", async () => {
+  test("skips entries whose ndea binary is missing", async () => {
     await makeVersion("v0.1.0");
-    // Make a tag dir without ndea.bin inside (wrapper-only is incomplete).
+    // Make an empty tag dir.
     const broken = resolve(TMP_HOME, "versions", "v0.2.0-broken");
     await mkdir(broken, { recursive: true });
-    await writeFile(resolve(broken, "ndea"), "#!/bin/sh\nexit 0\n");
 
     const root = resolve(TMP_HOME, "versions");
     const out = await listVersions(root);
     expect(out.map((e) => e.tag)).toEqual(["v0.1.0"]);
   });
 
-  test("entries carry both wrapper and binary paths", async () => {
+  test("entries carry binaryPath", async () => {
     await makeVersion("v0.1.0");
     const root = resolve(TMP_HOME, "versions");
     const [entry] = await listVersions(root);
-    expect(entry.wrapperPath).toBe(resolve(root, "v0.1.0", "ndea"));
-    expect(entry.binaryPath).toBe(resolve(root, "v0.1.0", "ndea.bin"));
+    expect(entry.binaryPath).toBe(resolve(root, "v0.1.0", "ndea"));
   });
 });
