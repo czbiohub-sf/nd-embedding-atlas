@@ -10,6 +10,14 @@ rules:
   unpinned-uses:
     disable: true
 
+  # Same reasoning extended to container images in the install-script
+  # portability matrix: we pin to named tags (`rockylinux:8.10`,
+  # `debian:12-slim`) rather than digests so CI tracks upstream security
+  # patches automatically. The matrix's purpose is to catch glibc / shell
+  # portability regressions — using a moving tag is by design.
+  unpinned-images:
+    disable: true
+
   # softprops/action-gh-release is "superfluous" only in the narrow sense
   # that `gh release create` exists. We use the action for the templated
   # `body:` block (markdown install snippet rendered into release notes)
