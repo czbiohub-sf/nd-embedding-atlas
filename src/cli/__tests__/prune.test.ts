@@ -21,15 +21,13 @@ afterEach(async () => {
   delete process.env.NDEA_HOME;
 });
 
-async function makeVersion(tag: string, mtime: Date): Promise<{ wrapper: string; bin: string }> {
+async function makeVersion(tag: string, mtime: Date): Promise<{ bin: string }> {
   const dir = resolve(TMP_HOME, "versions", tag);
   await mkdir(dir, { recursive: true });
-  const bin = resolve(dir, "ndea.bin");
-  const wrapper = resolve(dir, "ndea");
+  const bin = resolve(dir, "ndea");
   await writeFile(bin, `binary ${tag}`);
-  await writeFile(wrapper, `wrapper ${tag}`);
   await utimes(bin, mtime, mtime);
-  return { wrapper, bin };
+  return { bin };
 }
 
 describe("pruneVersions", () => {
@@ -40,7 +38,7 @@ describe("pruneVersions", () => {
     await makeVersion("v0.3.0", new Date("2026-03-01"));
 
     // Active = oldest. keep=1 means "active only" — prune the two newer ones.
-    const result = await pruneVersions({ root, activeAbs: old.wrapper, keep: 1 });
+    const result = await pruneVersions({ root, activeAbs: old.bin, keep: 1 });
     expect(result.pruned.map((e) => e.tag).toSorted()).toEqual(["v0.2.0", "v0.3.0"]);
     expect(result.active?.tag).toBe("v0.1.0");
     expect(existsSync(resolve(root, "v0.1.0"))).toBe(true);
@@ -54,7 +52,7 @@ describe("pruneVersions", () => {
     await makeVersion("v0.2.0", new Date("2026-02-01"));
     const active = await makeVersion("v0.3.0", new Date("2026-03-01"));
 
-    const result = await pruneVersions({ root, activeAbs: active.wrapper, keep: 2 });
+    const result = await pruneVersions({ root, activeAbs: active.bin, keep: 2 });
     expect(result.pruned.map((e) => e.tag)).toEqual(["v0.1.0"]);
     expect(result.kept.map((e) => e.tag).toSorted()).toEqual(["v0.2.0", "v0.3.0"]);
   });

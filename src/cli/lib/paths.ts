@@ -4,19 +4,16 @@
  *
  * Layout:
  *   ~/.ndea/                                  — state root (override via NDEA_HOME)
- *   ~/.ndea/versions/<tag>/ndea               — POSIX-sh wrapper (symlink target)
- *   ~/.ndea/versions/<tag>/ndea.bin           — bun-compiled binary
- *   ~/.ndea/versions/<tag>/libduckdb.{dylib,so} — DuckDB engine sidecar
+ *   ~/.ndea/versions/<tag>/ndea               — bun-compiled binary (symlink target)
  *   ~/.ndea/current-version                   — plain-text pointer (tag + sha256)
  *   ~/.ndea/locks/install.lock                — install/update mutex
- *   $NDEA_BIN_DIR/ndea                        — symlink → versions/<tag>/ndea (the wrapper)
+ *   $NDEA_BIN_DIR/ndea                        — symlink → versions/<tag>/ndea
  *
- * Why a wrapper script: the bun-compiled binary's embedded duckdb.node loads
- * libduckdb.so at runtime, which dyld/ld.so resolves via the binary's
- * directory. On Linux that requires `LD_LIBRARY_PATH`; the wrapper sets it
- * and `exec`s the actual binary with correct signal/TTY semantics.
+ * The compiled binary embeds libduckdb; the preloader extracts it to
+ * ~/.cache/ndea/<version>/ on first run. No sidecar file, no wrapper.
  */
 
+import { realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
 
@@ -48,28 +45,9 @@ export function versionDir(tag: string): string {
   return resolve(versionsDir(), tag);
 }
 
-/** `~/.ndea/versions/<tag>/ndea.bin` — the bun-compiled binary inside a version dir. */
+/** `~/.ndea/versions/<tag>/ndea` — the bun-compiled binary inside a version dir. */
 export function versionedBinaryPath(tag: string): string {
-  return resolve(versionDir(tag), "ndea.bin");
-}
-
-/**
- * `~/.ndea/versions/<tag>/ndea` — the POSIX-sh wrapper that sets
- * `LD_LIBRARY_PATH` and execs `ndea.bin`. This is the file the symlink on
- * `$NDEA_BIN_DIR/ndea` points at; users always invoke the wrapper.
- */
-export function versionedWrapperPath(tag: string): string {
   return resolve(versionDir(tag), "ndea");
-}
-
-/**
- * `~/.ndea/versions/<tag>/libduckdb.<ext>` — sidecar shared library that
- * the embedded `duckdb.node` loads at runtime. Extension matches the host
- * platform (`dylib` on macOS, `so` on Linux).
- */
-export function versionedDylibPath(tag: string): string {
-  const ext = process.platform === "darwin" ? "dylib" : "so";
-  return resolve(versionDir(tag), `libduckdb.${ext}`);
 }
 
 /** `~/.ndea/locks` — flock directory for install/update mutex. */
@@ -95,28 +73,49 @@ export function currentVersionPath(): string {
 /** True if we're running a compiled `ndea` binary (vs. `bun run src/cli/index.ts`). */
 export function isCompiledBinary(): boolean {
   const exec = process.execPath;
-  // A compiled single-file binary's execPath points at `ndea.bin` (the
-  // wrapper `exec`s it via /bin/sh). Running via `bun run` leaves
-  // execPath pointing at `bun` — that's the only basename we exclude.
+  // Bun resolves symlinks in execPath, so a compiled binary's execPath
+  // is the real file path inside the versions tree. The basename is
+  // always `ndea` (no .bin suffix). Running via `bun run` leaves
+  // execPath pointing at `bun` — that's what we exclude.
   const base = exec.split(/[\\/]/).pop() ?? "";
   return !/^bun(\.exe)?$/i.test(base);
 }
 
 /**
- * Read `NDEA_LAUNCHER` — the symlink path the user actually invoked.
+ * Find the user-facing symlink that points at our running binary.
  *
- * The wrapper (see `wrapper-script.ts`) exports this as `$0` before
- * `exec`ing `ndea.bin`. After exec, `process.execPath` points at the
- * binary, so update / rollback / doctor / gc all need this env var to
- * find the symlink they should manipulate or audit. Returns `undefined`
- * when invoked without the wrapper (e.g. running `ndea.bin` directly).
+ * The install layout puts the symlink at `$NDEA_BIN_DIR/ndea` (default
+ * `~/.local/bin/ndea`), pointing at `~/.ndea/versions/<tag>/ndea`. To
+ * update or rollback, we need to swap that symlink — but `process.execPath`
+ * resolves through it to the canonical binary path inside the versions
+ * tree.
+ *
+ * Strategy: walk `$PATH` for any `ndea` entry whose `realpath()` matches
+ * `process.execPath`. Returns the symlink path on the first match, else
+ * `undefined`.
+ *
+ * Honours `$NDEA_LAUNCHER` if set, for advanced setups / overrides.
  */
 export function activeLauncher(): string | undefined {
-  return process.env.NDEA_LAUNCHER;
+  const override = process.env.NDEA_LAUNCHER;
+  if (override) return override;
+
+  const binAbs = realpathSync(process.execPath);
+  const pathEntries = (process.env.PATH ?? "").split(":").filter(Boolean);
+  for (const dir of pathEntries) {
+    const candidate = resolve(dir, "ndea");
+    try {
+      const resolved = realpathSync(candidate);
+      if (resolved === binAbs) return candidate;
+    } catch {
+      // Candidate doesn't exist or isn't readable; skip.
+    }
+  }
+  return undefined;
 }
 
 /**
- * Require `NDEA_LAUNCHER` and exit with a clear error if missing.
+ * Require the active launcher path and exit with a clear error if missing.
  *
  * Used by commands that mutate the install (`update`, `rollback`) — they
  * can't operate sensibly without knowing which symlink to swap.
@@ -124,7 +123,10 @@ export function activeLauncher(): string | undefined {
 export function requireActiveLauncher(): string {
   const launcher = activeLauncher();
   if (!launcher) {
-    console.error("Error: NDEA_LAUNCHER not set. Invoke `ndea` (the wrapper on PATH), not `ndea.bin` directly.");
+    console.error(
+      "Error: cannot locate the `ndea` symlink on $PATH. " +
+        "Reinstall via scripts/install.sh, or set NDEA_LAUNCHER to the symlink path.",
+    );
     process.exit(1);
   }
   return resolve(launcher);

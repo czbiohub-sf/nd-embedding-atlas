@@ -23,9 +23,10 @@ gh api repos/czbiohub-sf/nd-embedding-atlas/contents/scripts/install.sh --jq '.c
   | NDEA_GITHUB_TOKEN="$(gh auth token)" sh
 ```
 
-Downloads a checksum-verified native binary (~80 MB) plus its libduckdb sidecar
-(~110 MB) and drops a `ndea` symlink into `$HOME/.local/bin`. Total install size
-~190 MB per version under `~/.ndea/versions/<tag>/`.
+Downloads a checksum-verified single binary (~185 MB) and drops an `ndea`
+symlink into `$HOME/.local/bin`. The binary embeds libduckdb; on first
+launch it extracts a copy to `~/.cache/ndea/<tag>/` and dlopens it before
+the DuckDB engine boots. One file per version under `~/.ndea/versions/<tag>/`.
 
 Pin a specific release with `NDEA_VERSION`:
 
@@ -96,7 +97,7 @@ source <(ndea completions zsh)
 ndea completions fish > ~/.config/fish/completions/ndea.fish
 ```
 
-Updates download the new binary + sidecar into a fresh `~/.ndea/versions/<tag>/` directory and atomically retarget the symlink via `rename(2)`. Long-running `ndea view` sessions keep their open file handle to the old binary — no mid-run replacement. Re-running the install command also works.
+Updates download the new binary into a fresh `~/.ndea/versions/<tag>/` directory and atomically retarget the symlink via `rename(2)`. Long-running `ndea view` sessions keep their open file handle to the old binary — no mid-run replacement. Re-running the install command also works.
 
 ## Quick start
 

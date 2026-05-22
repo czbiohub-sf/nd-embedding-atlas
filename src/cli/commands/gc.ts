@@ -41,10 +41,10 @@ export default defineCommand({
       return;
     }
 
-    // gc is read-mostly: missing NDEA_LAUNCHER means "can't mark active",
-    // not a hard error. Mutating side (rm of dirs) is gated by the
-    // pruneVersions logic, which always preserves the active version
-    // when one is detected.
+    // gc is read-mostly: failure to find the launcher symlink means
+    // "can't mark active", not a hard error. The mutating side (rm of
+    // dirs) is gated by pruneVersions, which always preserves the active
+    // version when one is detected.
     const link = activeLauncher();
     const activeTarget = link ? await readlink(link).catch(() => null) : null;
     const activeAbs = activeTarget ? resolve(activeTarget) : null;

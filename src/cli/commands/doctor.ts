@@ -12,7 +12,8 @@
 import { defineCommand, option } from "@bunli/core";
 import { existsSync } from "node:fs";
 import { readFile, readlink, stat } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { homedir } from "node:os";
+import { resolve } from "node:path";
 import { z } from "zod";
 import { fetchManifest } from "../lib/manifest.ts";
 import { activeLauncher, currentVersionPath, isCompiledBinary, stateDir, versionsDir } from "../lib/paths.ts";
@@ -69,16 +70,15 @@ export default defineCommand({
     console.log(`  versions dir ${versionsDir()}`);
 
     // ── Symlink integrity ──────────────────────────────────────────────────
-    // After the wrapper exec's `ndea.bin`, `process.execPath` points at the
-    // binary and not the symlink. NDEA_LAUNCHER is set by the wrapper to
-    // the path the user actually invoked. Missing env means the user ran
-    // ndea.bin directly — supported for diagnostics (we just can't audit
-    // the symlink) but explicitly flagged.
+    // `activeLauncher()` walks $PATH for an `ndea` entry whose realpath
+    // matches `process.execPath`. Missing means the binary was invoked
+    // directly (not via the installed symlink) — supported for
+    // diagnostics, just can't audit the symlink layout.
     const launcher = activeLauncher();
     if (isCompiledBinary()) {
       console.log(`\n${BOLD}Symlink${RESET}`);
       if (!launcher) {
-        warn("NDEA_LAUNCHER not set — invoked ndea.bin directly; symlink not auditable");
+        warn("no `ndea` symlink on $PATH resolves to this binary — symlink not auditable");
       } else {
         const linkTarget = await readlink(launcher).catch(() => null);
         if (linkTarget) {
@@ -92,21 +92,22 @@ export default defineCommand({
       }
     }
 
-    // ── Sidecar dylib presence ─────────────────────────────────────────────
-    // The bun-compiled binary's embedded duckdb.node loads libduckdb at
-    // runtime. Without the sidecar next to ndea.bin, every command that
-    // touches DuckDB (incl. `ndea view`) crashes during startup.
+    // ── Embedded libduckdb cache ───────────────────────────────────────────
+    // The binary embeds libduckdb; on first launch the preloader extracts
+    // it to ~/.cache/ndea/<version>/. A missing cache file is fine (gets
+    // re-extracted on next launch); we just report presence here so users
+    // know where the 100+ MB went.
     if (isCompiledBinary()) {
-      console.log(`\n${BOLD}DuckDB sidecar${RESET}`);
-      const binaryDir = dirname(self);
+      console.log(`\n${BOLD}libduckdb cache${RESET}`);
+      const cacheRoot = process.env.XDG_CACHE_HOME ?? resolve(homedir(), ".cache");
       const dylibExt = process.platform === "darwin" ? "dylib" : "so";
-      const dylibPath = resolve(binaryDir, `libduckdb.${dylibExt}`);
+      const dylibPath = resolve(cacheRoot, "ndea", VERSION, `libduckdb.${dylibExt}`);
       if (existsSync(dylibPath)) {
         const info = await stat(dylibPath).catch(() => null);
         const sizeMb = info ? (info.size / (1024 * 1024)).toFixed(1) : "?";
         ok(`${dylibPath} (${sizeMb} MB)`);
       } else {
-        err(`missing libduckdb.${dylibExt} next to binary — DuckDB ops will fail on launch`);
+        warn(`${dylibPath} not yet extracted — will populate on next DuckDB-using command`);
       }
     }
 
@@ -132,14 +133,11 @@ export default defineCommand({
     } else {
       let totalBytes = 0;
       const linkTarget = launcher && isCompiledBinary() ? await readlink(launcher).catch(() => null) : null;
-      const dylibExt = process.platform === "darwin" ? "dylib" : "so";
       for (const v of versions) {
         const info = await stat(v.binaryPath).catch(() => null);
         const sizeMb = info ? (info.size / (1024 * 1024)).toFixed(1) : "?";
-        const marker = linkTarget === v.wrapperPath ? `${GREEN}*${RESET}` : " ";
-        const sidecarPath = resolve(versionsDir(), v.tag, `libduckdb.${dylibExt}`);
-        const sidecar = existsSync(sidecarPath) ? "" : ` ${YELLOW}(missing libduckdb.${dylibExt})${RESET}`;
-        console.log(`  ${marker} ${v.tag.padEnd(24)} ${sizeMb} MB${sidecar}`);
+        const marker = linkTarget === v.binaryPath ? `${GREEN}*${RESET}` : " ";
+        console.log(`  ${marker} ${v.tag.padEnd(24)} ${sizeMb} MB`);
         if (info) totalBytes += info.size;
       }
       console.log(`  ${DIM}(${(totalBytes / (1024 * 1024)).toFixed(1)} MB total — \`ndea gc\` to prune)${RESET}`);

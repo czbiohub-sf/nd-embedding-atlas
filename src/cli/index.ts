@@ -77,17 +77,6 @@ function normalizeArgs(rawArgs: string[]): string[] {
 }
 
 async function main(): Promise<void> {
-  // Hidden self-introspection: install.sh and update.ts both write the
-  // POSIX-sh wrapper to disk on every install. Rather than duplicate the
-  // wrapper string in install.sh's heredoc and risk drift, install.sh
-  // invokes the binary with this flag to get the wrapper bytes. Keeps
-  // src/cli/lib/wrapper-script.ts as the single source of truth.
-  if (process.argv[2] === "__write-wrapper") {
-    const { WRAPPER_SCRIPT_CONTENT } = await import("./lib/wrapper-script.ts");
-    process.stdout.write(WRAPPER_SCRIPT_CONTENT);
-    return;
-  }
-
   const argv = normalizeArgs(process.argv.slice(2));
 
   const cli = await createCLI({

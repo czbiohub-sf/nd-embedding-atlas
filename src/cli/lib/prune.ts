@@ -2,9 +2,9 @@
  * Shared prune logic — used by `ndea gc` (explicit) and `ndea update`
  * (auto-gc after a successful update).
  *
- * Each version dir is ~190 MB on disk (binary + libduckdb sidecar). Without
- * pruning, aggressive update cadences fill `~/.ndea/` quickly. The auto-gc
- * path runs with `keep=2` by default — current + one rollback target.
+ * Each version dir is ~185 MB on disk. Without pruning, aggressive update
+ * cadences fill `~/.ndea/` quickly. The auto-gc path runs with `keep=2`
+ * by default — current + one rollback target.
  */
 
 import { rm, stat } from "node:fs/promises";
@@ -14,7 +14,7 @@ import { listVersions, type VersionEntry } from "./versions.ts";
 interface PruneOptions {
   /** Versions tree root (`versionsDir()`). */
   root: string;
-  /** Path the symlink points at — the wrapper for the active version. */
+  /** Path the symlink points at — the binary for the active version. */
   activeAbs: string | null;
   /** Total entries to keep, *including* the active one. `Infinity` = keep all. */
   keep: number;
@@ -40,7 +40,7 @@ export async function pruneVersions(opts: PruneOptions): Promise<PruneResult> {
     return { pruned: [], kept: [], active: undefined, freedBytes: 0 };
   }
 
-  const active = all.find((e) => e.wrapperPath === opts.activeAbs);
+  const active = all.find((e) => e.binaryPath === opts.activeAbs);
   const others = all.filter((e) => e !== active);
 
   const keepCount = opts.keep === Infinity ? others.length : Math.max(0, opts.keep - (active ? 1 : 0));

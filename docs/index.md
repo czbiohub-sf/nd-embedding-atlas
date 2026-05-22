@@ -31,7 +31,7 @@ gh api repos/czbiohub-sf/nd-embedding-atlas/contents/scripts/install.sh --jq '.c
   | NDEA_GITHUB_TOKEN="$(gh auth token)" sh
 ```
 
-Downloads a checksum-verified ~80 MB native binary plus a libduckdb sidecar into `$HOME/.local/bin`.
+Downloads a checksum-verified ~185 MB single binary into `$HOME/.local/bin`. The binary embeds libduckdb and extracts a runtime copy to `~/.cache/ndea/<tag>/` on first launch.
 
 Pin a tag with `NDEA_VERSION` or pick a channel with `NDEA_CHANNEL`:
 

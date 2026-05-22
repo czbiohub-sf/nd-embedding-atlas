@@ -59,7 +59,7 @@ A single `.yaml` / `.yml` path is parsed as a multi-dataset project config (see 
 
 ## `ndea update`
 
-Download the latest release for a channel, verify SHA-256 for both the binary and its libduckdb sidecar, write everything under `~/.ndea/versions/<tag>/`, regenerate the wrapper script, atomically repoint the active symlink, and prune to 2 versions (current + 1 rollback target). Each version is ~190 MB on disk; auto-gc keeps `~/.ndea/` from growing without bound.
+Download the latest release for a channel, verify its SHA-256, write the single binary under `~/.ndea/versions/<tag>/`, atomically repoint the active symlink, and prune to 2 versions (current + 1 rollback target). Each version is ~185 MB on disk; auto-gc keeps `~/.ndea/` from growing without bound.
 
 ### Options
 
@@ -160,21 +160,22 @@ ndea completions fish > ~/.config/fish/completions/ndea.fish
   current-version              # Plain text: "<tag>\n<sha256>\n"
   versions/
     v0.1.0/
-      ndea                     # POSIX-sh wrapper (symlink target)
-      ndea.bin                 # bun-compiled binary (~80 MB)
-      libduckdb.{dylib,so}     # DuckDB engine sidecar (~110 MB)
+      ndea                     # bun-compiled binary (~185 MB, embeds libduckdb)
     v0.1.1/
       …
   locks/
     install.lock               # PID file backing the install/update mutex
   logs/                        # Reserved for future telemetry / install traces
+~/.cache/ndea/
+  v0.1.0/
+    libduckdb.{dylib,so}       # Extracted from the binary on first launch
 ```
 
-Each version takes ~190 MB on disk (binary + sidecar). `ndea gc` prunes old ones; the active version is always preserved.
+Each version takes ~185 MB on disk. `ndea gc` prunes old versions; the active version is always preserved. The `~/.cache/ndea/` extraction also accumulates as new versions are installed but isn't pruned by `ndea gc` — clear it manually if disk pressure is a concern.
 
-`$NDEA_BIN_DIR/ndea` is a symlink into `~/.ndea/versions/<tag>/ndea` — the wrapper script. The wrapper sets `LD_LIBRARY_PATH` so the embedded duckdb.node can find its sibling libduckdb at dlopen time, then `exec`s `ndea.bin`. macOS resolves the sidecar via a `@executable_path` rpath patched at build time; the wrapper is harmless there.
+`$NDEA_BIN_DIR/ndea` is a symlink pointing directly at `~/.ndea/versions/<tag>/ndea`. The binary embeds libduckdb; the preloader extracts it to `~/.cache/ndea/<tag>/` on first run and dlopens it before any DuckDB code touches the engine.
 
-`ndea update` and `ndea rollback` repoint the symlink at the new wrapper atomically via `rename(2)`. Old versions stay on disk until `ndea gc` or manual cleanup.
+`ndea update` and `ndea rollback` repoint the symlink atomically via `rename(2)`. Old versions stay on disk until `ndea gc` or manual cleanup.
 
 ## Exit codes
 
