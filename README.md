@@ -102,9 +102,9 @@ Updates download the new binary into a fresh `~/.ndea/versions/<tag>/` directory
 ## Quick start
 
 ```bash
-ndea path/to/data.zarr
-ndea path/to/data.zarr path/to/plate.zarr   # with OME-Zarr image viewer
-ndea path/to/config.yaml                     # multi-dataset config
+ndea path/to/data.zarr            # single AnnData store
+ndea a.zarr b.zarr c.zarr         # multiple AnnData stores
+ndea path/to/config.yaml          # multi-dataset config (pairs an HCS plate with each AnnData store for the image viewer)
 ```
 
 Then open **Chrome or Edge** at `http://localhost:5055`.
@@ -114,11 +114,11 @@ Then open **Chrome or Edge** at `http://localhost:5055`.
 
 ## Documentation
 
-Full documentation at [czbiohub-sf.github.io/nd-embedding-atlas][docs-link]:
+[Full documentation][docs-link]:
 
 - [Getting started][docs-index] — installation and first run
+- [CLI reference][docs-cli] — every subcommand and flag
 - [Preparing your data][docs-data] — OME-Zarr layout, sharding, pyramids
-- [OPS datasets][docs-ops] — optical pooled screening workflow
 - [WebGPU on HPC][webgpu-hpc] — Chrome flags for HPC systems
 - [Contributing][docs-contrib] — dev setup and contribution guide
 
@@ -158,8 +158,8 @@ See the [changelog][].
 [discussions-link]: https://github.com/czbiohub-sf/nd-embedding-atlas/discussions
 [docs-link]: https://super-adventure-yv3eleq.pages.github.io/
 [docs-index]: https://super-adventure-yv3eleq.pages.github.io/
+[docs-cli]: https://super-adventure-yv3eleq.pages.github.io/cli/
 [docs-data]: https://super-adventure-yv3eleq.pages.github.io/preparing-your-data/
-[docs-ops]: https://super-adventure-yv3eleq.pages.github.io/ops-datasets/
 [webgpu-hpc]: https://super-adventure-yv3eleq.pages.github.io/webgpu-hpc-setup/
 [docs-contrib]: https://super-adventure-yv3eleq.pages.github.io/contributing/
 [changelog]: CHANGELOG.md
