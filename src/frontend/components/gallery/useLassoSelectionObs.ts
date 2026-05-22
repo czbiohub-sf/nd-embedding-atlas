@@ -52,6 +52,9 @@ export function useLassoSelectionObs(): UseLassoSelectionObsResult {
     if (sync.type !== "active") return [] as number[];
     const all = getBitmapRowIds(sync.source);
     return all.length > MAX_GALLERY_OBS ? all.slice(0, MAX_GALLERY_OBS) : all;
+    // filterVersion participates as a sentinel — collection toggles bump it
+    // even when sync.source identity is unchanged, forcing recomputation.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sync, filterVersion]);
 
   const totalCount = sync.type === "active" ? getBitmapRowIds(sync.source).length : 0;

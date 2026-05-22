@@ -8,7 +8,8 @@
  * Default output directory is $NDEA_EXPORT_DIR, else ~/ndea-exports/.
  */
 
-import { mkdir } from "node:fs/promises";
+import { access, mkdir } from "node:fs/promises";
+import { constants } from "node:fs";
 import { homedir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import { ExportBodySchema, parseJsonBody } from "../protocol.ts";
@@ -82,8 +83,6 @@ export async function handleGetExportDir(): Promise<Response> {
   const path = exportDir();
   let writable = false;
   try {
-    const { mkdir, access } = await import("node:fs/promises");
-    const { constants } = await import("node:fs");
     await mkdir(path, { recursive: true });
     await access(path, constants.W_OK);
     writable = true;

@@ -109,6 +109,12 @@ export default defineConfig({
       // STYLE
       "prefer-const": "error",
       "no-console": "off",
+      // Conventional `_`-prefixed private fields (AnnData class, math
+      // shorthands like `l_`/`m_`/`s_` in Oklab, exhaustiveness guards
+      // `const _exhaustive: never = ...`). Oxlint started enforcing this
+      // after the vite-plus 0.1.22 bump; the codebase uses these patterns
+      // intentionally.
+      "no-underscore-dangle": "off",
       eqeqeq: ["error", "always", { null: "ignore" }],
       "no-var": "error",
       "no-eval": "error",
@@ -181,6 +187,9 @@ export default defineConfig({
       "typescript/array-type": ["warn", { default: "array" }],
       "typescript/unbound-method": "off",
       "typescript/no-unsafe-type-assertion": "off",
+      // Overly strict on the React useEffect cleanup-return idiom (return a
+      // cleanup on the branch that needs one, otherwise fall through).
+      "typescript/consistent-return": "off",
     },
 
     overrides: [
@@ -218,9 +227,16 @@ export default defineConfig({
       {
         // Dedicated Worker globals — `self` is a DedicatedWorkerGlobalScope,
         // so postMessage takes no targetOrigin and async event listeners are fine.
-        // parallel-reader.ts calls worker.postMessage (also no targetOrigin needed
-        // for dedicated workers from the main thread).
-        files: ["src/zarr/column-worker.ts", "src/zarr/parallel-reader.ts"],
+        // Also covers the main-thread call sites that post to dedicated
+        // workers (crop-pool.ts, readers.ts) — same reason: no targetOrigin
+        // is required for Worker postMessage, only for window postMessage.
+        files: [
+          "src/zarr/column-worker.ts",
+          "src/zarr/parallel-reader.ts",
+          "src/zarr/readers.ts",
+          "src/server/crop-pool.ts",
+          "src/server/crop-worker.ts",
+        ],
         rules: {
           "unicorn/require-post-message-target-origin": "off",
           "unicorn/prefer-add-event-listener": "off",
