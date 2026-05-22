@@ -62,13 +62,10 @@ jobs:
         include:
           - os: ubuntu-latest
             artifact: ndea-linux-x64
-            dylib: libduckdb-bun-linux-x64.so
           - os: macos-14
             artifact: ndea-darwin-arm64
-            dylib: libduckdb-bun-darwin-arm64.dylib
           - os: ubuntu-24.04-arm
             artifact: ndea-linux-arm64
-            dylib: libduckdb-bun-linux-arm64.so
     steps:
       - uses: actions/checkout@v6
         with:
@@ -78,30 +75,21 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
       # `bun run build` exercises the full release path: vp build (frontend)
-      # → embed-asset manifest generation → bun build --compile (binary)
-      # → install_name_tool rpath patch + libduckdb sidecar copy. PRs that
-      # break any of these surface here instead of in canary.
+      # → embed-asset manifest generation → bun build --compile (single
+      # self-contained binary with embedded libduckdb). PRs that break any
+      # of these surface here instead of in canary.
       - name: bun run build
         run: bun run build
-      # In-tree launch check: build.ts also drops `dist/libduckdb.<ext>`
-      # (symlink) and `dist/ndea-launcher` (the wrapper) so the dev-tree
-      # layout mirrors the install layout. Catches any drift between
-      # build output and what install.sh / update.ts will produce.
-      - name: Verify in-tree wrapper launches
-        run: ./dist/ndea-launcher --version
-      # Isolated-dir launch check: copy binary + sidecar to a fresh dir
-      # with no node_modules. This catches the bug class the dylib-sidecar
-      # plan solves — a binary whose duckdb.node can't find libduckdb at
-      # runtime. Without this step the bug only shows up at install time
-      # for end users.
-      - name: Verify isolated dir (binary + sidecar)
+      # In-tree launch check.
+      - name: Verify binary launches
+        run: ./dist/ndea --version
+      # Isolated-dir launch check: copy binary to a fresh dir with no
+      # siblings. Catches any regression that reintroduces sibling-file
+      # lookups (rpath / LD_LIBRARY_PATH).
+      - name: Verify isolated dir (single-file binary)
         env:
           ARTIFACT: ndea
-          DYLIB: ${{ matrix.dylib }}
-        run: |
-          # build.ts emits dist/ndea (not dist/$ARTIFACT) when run locally;
-          # the helper expects ARTIFACT to name the file in dist/.
-          ARTIFACT=ndea bash .github/scripts/verify-isolated.sh
+        run: bash .github/scripts/verify-isolated.sh
 
   # ── Single required status check for branch protection ────────────────
   all-green:

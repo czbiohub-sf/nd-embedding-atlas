@@ -27,8 +27,8 @@ const metadata: Record<GeneratedNames, GeneratedCommandMeta> = {
       name: 'doctor',
       description: 'Diagnose the ndea install (paths, symlink, versions, manifest)',
       options: {
-        'check-network': { type: 'z.coerce.boolean.default', required: true, hasDefault: true, default: false, description: 'Also probe manifest.json reachability over the network', schema: {"type":"zod","method":"default","args":[{"type":"unknown","raw":{"type":"BooleanLiteral","start":1254,"end":1259,"loc":{"start":{"line":33,"column":55,"index":1254},"end":{"line":33,"column":60,"index":1259}},"value":false}}]}, validator: '(val) => true' },
-        'strict': { type: 'z.coerce.boolean.default', required: true, hasDefault: true, default: false, description: 'Treat soft warnings as errors (non-zero exit)', schema: {"type":"zod","method":"default","args":[{"type":"unknown","raw":{"type":"BooleanLiteral","start":1395,"end":1400,"loc":{"start":{"line":36,"column":46,"index":1395},"end":{"line":36,"column":51,"index":1400}},"value":false}}]}, validator: '(val) => true' }
+        'check-network': { type: 'z.coerce.boolean.default', required: true, hasDefault: true, default: false, description: 'Also probe manifest.json reachability over the network', schema: {"type":"zod","method":"default","args":[{"type":"unknown","raw":{"type":"BooleanLiteral","start":1280,"end":1285,"loc":{"start":{"line":34,"column":55,"index":1280},"end":{"line":34,"column":60,"index":1285}},"value":false}}]}, validator: '(val) => true' },
+        'strict': { type: 'z.coerce.boolean.default', required: true, hasDefault: true, default: false, description: 'Treat soft warnings as errors (non-zero exit)', schema: {"type":"zod","method":"default","args":[{"type":"unknown","raw":{"type":"BooleanLiteral","start":1421,"end":1426,"loc":{"start":{"line":37,"column":46,"index":1421},"end":{"line":37,"column":51,"index":1426}},"value":false}}]}, validator: '(val) => true' }
       },
       path: './src/cli/commands/doctor'
     },
@@ -50,9 +50,9 @@ const metadata: Record<GeneratedNames, GeneratedCommandMeta> = {
       name: 'update',
       description: 'Download the latest ndea release and switch to it',
       options: {
-        'force': { type: 'z.coerce.boolean.default', required: true, hasDefault: true, default: false, description: 'Update even when already on the target version', schema: {"type":"zod","method":"default","args":[{"type":"unknown","raw":{"type":"BooleanLiteral","start":1931,"end":1936,"loc":{"start":{"line":50,"column":45,"index":1931},"end":{"line":50,"column":50,"index":1936}},"value":false}}]}, validator: '(val) => true' },
+        'force': { type: 'z.coerce.boolean.default', required: true, hasDefault: true, default: false, description: 'Update even when already on the target version', schema: {"type":"zod","method":"default","args":[{"type":"unknown","raw":{"type":"BooleanLiteral","start":1669,"end":1674,"loc":{"start":{"line":46,"column":45,"index":1669},"end":{"line":46,"column":50,"index":1674}},"value":false}}]}, validator: '(val) => true' },
         'channel': { type: 'z.enum.optional', required: false, hasDefault: false, schema: {"type":"zod","method":"optional","args":[]}, validator: '(val) => true' },
-        'no-gc': { type: 'z.coerce.boolean.default', required: true, hasDefault: true, default: false, schema: {"type":"zod","method":"default","args":[{"type":"unknown","raw":{"type":"BooleanLiteral","start":2187,"end":2192,"loc":{"start":{"line":56,"column":47,"index":2187},"end":{"line":56,"column":52,"index":2192}},"value":false}}]}, validator: '(val) => true' }
+        'no-gc': { type: 'z.coerce.boolean.default', required: true, hasDefault: true, default: false, schema: {"type":"zod","method":"default","args":[{"type":"unknown","raw":{"type":"BooleanLiteral","start":1925,"end":1930,"loc":{"start":{"line":52,"column":47,"index":1925},"end":{"line":52,"column":52,"index":1930}},"value":false}}]}, validator: '(val) => true' }
       },
       path: './src/cli/commands/update'
     },
