@@ -170,7 +170,17 @@ const outfile = resolve(OUT_DIR, "ndea");
 // dist/ sidecar; the embedded .node is rpath-patched (macOS) or its
 // path is set via LD_LIBRARY_PATH from a wrapper script (Linux) so it
 // loads from the install dir at runtime.
-const ALL_DUCKDB_TARGETS = ["darwin-arm64", "darwin-x64", "linux-arm64", "linux-x64", "win32-arm64", "win32-x64"];
+// musl variants are externalized only — we never build for Alpine/musl targets.
+const ALL_DUCKDB_TARGETS = [
+  "darwin-arm64",
+  "darwin-x64",
+  "linux-arm64",
+  "linux-arm64-musl",
+  "linux-x64",
+  "linux-x64-musl",
+  "win32-arm64",
+  "win32-x64",
+];
 const matchingPlatform = duckdbTarget?.bindingsDir.replace(/^node-bindings-/, "");
 const DUCKDB_PLATFORM_EXTERNALS = ALL_DUCKDB_TARGETS.filter((p) => p !== matchingPlatform).map(
   (p) => `@duckdb/node-bindings-${p}/duckdb.node`,
