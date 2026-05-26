@@ -262,6 +262,25 @@ export async function startup(config: ResolvedConfig): Promise<void> {
     noStatic: config.noStatic,
   });
 
+  // ── 5b. Pre-warm obsm loaders ───────────────────────────────────────────
+  //
+  // Resolve every available embedding's width via zarr metadata before
+  // printing "Ready". Without this, the frontend wins the race: it
+  // POSTs `/api/embeddings/X_phate`, issues its initial scatter
+  // materialization query against an unregistered loader, gets an empty
+  // result, and `@uwdata/mosaic-core`'s SQL-text-keyed query cache
+  // poisons every subsequent re-render with the same empty answer.
+  //
+  // `detectWidth` is metadata-only (one zarr `.zarray` / `zarr.json`
+  // shape read per embedding) so the wall-clock cost is typically
+  // <50ms total even for ~10 embeddings. Failures are stashed in
+  // `state.loadErrors` and surfaced via the existing status endpoint —
+  // the server still boots even if one obsm key is broken.
+  if (availableObsmKeys.length > 0) {
+    const { loadEmbeddingAsync } = await import("../server/routes/embeddings.ts");
+    await Promise.all(availableObsmKeys.map((key) => loadEmbeddingAsync(key, state)));
+  }
+
   // ── 6. Print startup info ───────────────────────────────────────────────
 
   const elapsed = ((performance.now() - startTime) / 1000).toFixed(1);
