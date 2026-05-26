@@ -20,7 +20,7 @@ export default defineCommand({
       description: "Server port (default: 5055)",
     }),
     host: option(z.string().optional(), {
-      description: "Server host (default: localhost)",
+      description: "Server host (default: 127.0.0.1)",
     }),
     "no-open": option(z.coerce.boolean().default(false), {
       description: "Do not auto-open the browser",
@@ -99,7 +99,7 @@ async function resolveConfig(raw: RawArgs): Promise<ResolvedConfig> {
         datasets: project.datasets,
         obsColumns: obsColumns ?? project.obsColumns,
         port: port ?? project.settings?.port ?? 5055,
-        host: host ?? project.settings?.host ?? "localhost",
+        host: host ?? project.settings?.host ?? "127.0.0.1",
         noOpen,
         noStatic,
       };
@@ -123,7 +123,7 @@ async function resolveConfig(raw: RawArgs): Promise<ResolvedConfig> {
     datasets: project.datasets,
     obsColumns,
     port: port ?? 5055,
-    host: host ?? "localhost",
+    host: host ?? "127.0.0.1",
     noOpen,
     noStatic,
   };
