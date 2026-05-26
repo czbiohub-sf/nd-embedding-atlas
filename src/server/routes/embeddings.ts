@@ -94,14 +94,22 @@ export function handleLoadEmbedding(key: string, state: ViewerState): Response {
 /**
  * "Load" an obsm embedding: detect its width via metadata, register a
  * column-wise loader. No data bytes are read at this step.
+ *
+ * Idempotent — a second call for an already-registered key is a no-op.
+ * Safe to call from both the startup pre-warm path (silent, all keys
+ * await'd in parallel) and the lazy `POST /api/embeddings/{key}` path.
+ *
+ * Doesn't log on success — startup prints the consolidated "Embeddings:"
+ * line, and the lazy path serves status via `subscribeEmbeddingStatus`,
+ * so per-key console output would just be noise.
  */
-async function loadEmbeddingAsync(key: string, state: ViewerState): Promise<void> {
+export async function loadEmbeddingAsync(key: string, state: ViewerState): Promise<void> {
+  if (state.obsmLoaders.has(key)) return;
   try {
     const accessors = [...state.accessors.entries()];
     const width = await ObsmSliceLoader.detectWidth(key, accessors);
     const loader = new ObsmSliceLoader(key, accessors, width);
     state.obsmLoaders.set(key, loader);
-    console.log(`    ✓ Registered ${key} (${width}D, lazy)`);
     fireEmbeddingStatus(key, state);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
