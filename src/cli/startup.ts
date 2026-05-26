@@ -252,15 +252,40 @@ export async function startup(config: ResolvedConfig): Promise<void> {
     datasetChannels,
   };
 
-  const server = createApp({
-    port: config.port,
-    host: config.host,
-    store,
-    state,
-    config: datasetMeta,
-    frontendDir: staticDir,
-    noStatic: config.noStatic,
-  });
+  let server;
+  try {
+    server = createApp({
+      port: config.port,
+      host: config.host,
+      store,
+      state,
+      config: datasetMeta,
+      frontendDir: staticDir,
+      noStatic: config.noStatic,
+    });
+  } catch (err) {
+    // Likely cause: another ndea process already holds this port. With
+    // `host = "127.0.0.1"` (the default since this PR) the bind is
+    // single-family, so a port collision throws here rather than
+    // silently succeeding next to a sibling IPv6 zombie.
+    //
+    // Bun.serve's error message varies ("Failed to start server. Is
+    // port X in use?" vs the raw Node-style "EADDRINUSE: address
+    // already in use") so we match on multiple substrings.
+    const msg = err instanceof Error ? err.message : String(err);
+    const isPortInUse =
+      msg.includes("address already in use") ||
+      msg.includes("EADDRINUSE") ||
+      (msg.includes("Is port") && msg.includes("in use"));
+    if (isPortInUse) {
+      console.error(`\n  ${RED}✗${RESET} Port ${config.port} is already in use on ${config.host}.`);
+      console.error(`    Find the existing process:  ${DIM}lsof -nP -iTCP:${config.port} -sTCP:LISTEN${RESET}`);
+      console.error(`    Kill it:                    ${DIM}pkill -f "ndea view"${RESET}`);
+      console.error(`    Or pick a different port:   ${DIM}ndea view ... --port 5056${RESET}\n`);
+      process.exit(1);
+    }
+    throw err;
+  }
 
   // ── 5b. Pre-warm obsm loaders ───────────────────────────────────────────
   //
@@ -307,25 +332,35 @@ export async function startup(config: ResolvedConfig): Promise<void> {
     console.log(`\n  ${BOLD}Embeddings:${RESET} ${DIM}${availableObsmKeys.join(", ")}${RESET}`);
   }
 
+  // Display "localhost" in user-facing URLs when binding to the loopback
+  // address. `Bun.serve` resolves "localhost" via DNS at bind time, which
+  // can land on IPv4 or IPv6 nondeterministically — two ndea processes
+  // can then bind the same port on different families and both report
+  // success, with `localhost` from the client side hitting whichever
+  // one resolves first. So we bind literal `127.0.0.1` (single-family,
+  // collisions throw EADDRINUSE loudly) but show "localhost" in the
+  // printed URL because that's what users type.
+  const displayHost = config.host === "127.0.0.1" ? "localhost" : config.host;
+
   // In dev mode (NDEA_NO_STATIC=1, set by `vp run dev`) the backend serves
   // the API only — Vite serves the app on :5173 with HMR. Label both URLs
   // so contributors know which one to open.
   const isDevMode = process.env.NDEA_NO_STATIC === "1";
   if (isDevMode) {
     console.log(
-      `\n  ${BOLD}App:${RESET}  ${GREEN}http://${config.host}:5173${RESET}  ${DIM}← open this (Vite + HMR)${RESET}`,
+      `\n  ${BOLD}App:${RESET}  ${GREEN}http://${displayHost}:5173${RESET}  ${DIM}← open this (Vite + HMR)${RESET}`,
     );
     console.log(
-      `  ${BOLD}API:${RESET}  ${DIM}http://${config.host}:${config.port}  (backend — for /api/* and debugging)${RESET}`,
+      `  ${BOLD}API:${RESET}  ${DIM}http://${displayHost}:${config.port}  (backend — for /api/* and debugging)${RESET}`,
     );
   } else {
     console.log(`\n  ${BOLD}Server:${RESET}`);
-    console.log(`    ${CYAN}Local:${RESET}   http://${config.host}:${config.port}`);
+    console.log(`    ${CYAN}Local:${RESET}   http://${displayHost}:${config.port}`);
     if (networkAddr && config.host !== "127.0.0.1") {
       console.log(`    ${CYAN}Network:${RESET} http://${networkAddr}:${config.port}`);
     }
   }
-  console.log(`\n  ${DIM}Ready in ${elapsed}s${RESET}`);
+  console.log(`\n  ${DIM}Ready in ${elapsed}s${RESET}  ${DIM}(pid ${process.pid})${RESET}`);
 
   // ── 7. Auto-open browser ────────────────────────────────────────────────
 
@@ -334,7 +369,7 @@ export async function startup(config: ResolvedConfig): Promise<void> {
   // parse of `--no-open` depends on how the flag is declared.
   const suppressOpen = config.noOpen || process.env.NDEA_NO_OPEN === "1";
   if (!suppressOpen) {
-    const url = `http://${config.host}:${config.port}`;
+    const url = `http://${displayHost}:${config.port}`;
     try {
       if (process.platform === "darwin") {
         Bun.spawn(["open", url]);
