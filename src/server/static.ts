@@ -2,10 +2,17 @@
  * Static file serving for the React SPA frontend.
  *
  * Resolution order:
- * 1. Explicit `frontendDir` option
- * 2. `frontend/dist/` relative to project root (dev mode)
- * 3. Embedded `$bunfs/frontend/dist` (compiled binary mode)
+ * 1. Explicit `frontendDir` option (caller passed an absolute path)
+ * 2. Compiled binary: embedded `$bunfs/frontend/dist` (wins over CWD)
+ * 3. Dev mode (uncompiled): `dist/frontend/` relative to CWD
  * 4. Return 404
+ *
+ * The compiled-vs-CWD priority is intentional: a stale `dist/frontend/`
+ * in some unrelated CWD (e.g. another worktree the user happens to be
+ * in) used to silently shadow the embedded bundle, leading to "I
+ * rebuilt but the browser still shows the old code" debugging dead-
+ * ends. For compiled binaries, the embedded bundle is the source of
+ * truth; users who want to override it pass `--frontend-dir`.
  *
  * Uses Bun.file() for efficient zero-copy serving.
  * SPA fallback: non-file requests (no extension) serve index.html.
@@ -48,21 +55,26 @@ const MIME: Record<string, string> = {
  * @returns Absolute path to the frontend dist directory, or null if not found.
  */
 export function resolveFrontendDir(frontendDir?: string): string | null {
-  // 1. Explicit override
+  // 1. Explicit override always wins — this is the documented escape
+  //    hatch for "I have a custom frontend at /tmp/whatever, use it".
   if (frontendDir) {
     const resolved = resolve(frontendDir);
     if (existsSync(join(resolved, "index.html"))) return resolved;
   }
 
-  // 2. Dev mode: look for frontend/dist relative to CWD
-  const devDist = resolve("dist/frontend");
-  if (existsSync(join(devDist, "index.html"))) return devDist;
-
-  // 3. Compiled binary: resolution happens via EMBEDDED_ASSETS map in
-  //    serveStatic — return a sentinel so the caller knows we're good.
+  // 2. Compiled binary: embedded assets are the source of truth.
+  //    Checked BEFORE the CWD-based dev path so a stale `dist/frontend/`
+  //    in an unrelated worktree can't silently shadow the bundle that
+  //    was actually compiled into the binary.
   if (isCompiled && "index.html" in EMBEDDED_ASSETS) {
     return "__embedded__";
   }
+
+  // 3. Uncompiled (dev) mode: look for `dist/frontend/` relative to CWD.
+  //    `bun run src/cli/index.ts ...` from a project root finds the
+  //    `vp build` output here.
+  const devDist = resolve("dist/frontend");
+  if (existsSync(join(devDist, "index.html"))) return devDist;
 
   return null;
 }
