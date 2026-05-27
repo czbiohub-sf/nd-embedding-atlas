@@ -1,11 +1,11 @@
-import { type Layer, ProjectedLineLayer, type Viewport } from "@idetik/core";
+import type { Idetik, Overlay } from "@idetik/core";
+import { mat4, vec4 } from "gl-matrix";
 import { useCallback, useEffect, useRef } from "react";
 import type { ObsBbox } from "../../types";
 
-type BboxPath = [number, number, number][];
-
 interface UseBboxLayerOptions {
-  viewport: Viewport | null;
+  /** The Idetik runtime — pulled from useViewer().meta.runtime. */
+  idetik: Idetik | null;
   scale: { x: number; y: number };
   /**
    * World-space offset of the FOV image origin. Mirrors the camera-frame
@@ -20,77 +20,147 @@ interface UseBboxLayerReturn {
   updateBbox: (cx: number, cy: number, half: number, explicitBbox?: ObsBbox) => void;
 }
 
-/**
- * Line width in NDC (normalized device coordinates).
- * ProjectedLineLayer applies width in screen space after projection,
- * so this value is zoom-independent. 0.01 ≈ 1% of screen width.
- */
-const LINE_WIDTH_NDC = 0.01;
+const BBOX_COLOR = "rgb(204, 26, 26)";
+const BBOX_BORDER_PX = 2;
 
-export function useBboxLayer({ viewport, scale, translation }: UseBboxLayerOptions): UseBboxLayerReturn {
-  const bboxRef = useRef<Layer | null>(null);
+/**
+ * Draws a bounding box around the active observation as an HTML overlay.
+ *
+ * Why HTML and not an idetik layer? @idetik/core@0.19.0 removed
+ * `ProjectedLineLayer` and no public replacement exists (upstream
+ * chanzuckerberg/idetik#90 tracks adding a simple line renderable). The
+ * remaining options were vendoring internal `ProjectedLine` +
+ * `ProjectedLineGeometry` (fragile, depends on minified internals) or
+ * drawing the bbox in DOM. DOM wins: zero GPU resources for a 4-edge
+ * rectangle, decoupled from idetik's render graph, and visually identical.
+ *
+ * The bbox <div> is repositioned every frame via idetik's public `Overlay`
+ * API (`idetik.overlays.push({ update(i) {...} })`). World-space corners
+ * are projected through `camera.projectionMatrix * camera.viewMatrix` and
+ * mapped to client pixels.
+ */
+export function useBboxLayer({ idetik, scale, translation }: UseBboxLayerOptions): UseBboxLayerReturn {
+  // World-space corners of the bbox. Empty = hidden.
+  const cornersRef = useRef<[number, number][]>([]);
+  const divRef = useRef<HTMLDivElement | null>(null);
   const tx = translation?.x ?? 0;
   const ty = translation?.y ?? 0;
 
+  // Mount overlay + div for the active idetik instance. Re-runs on mode
+  // switch (ViewerProvider recreates the runtime).
+  useEffect(() => {
+    if (!idetik) return;
+    const parent = idetik.canvas.parentElement;
+    if (!parent) return;
+
+    // Reset stale corners from a previous runtime instance.
+    cornersRef.current = [];
+
+    const div = document.createElement("div");
+    div.style.position = "absolute";
+    div.style.pointerEvents = "none";
+    div.style.border = `${BBOX_BORDER_PX}px solid ${BBOX_COLOR}`;
+    div.style.boxSizing = "border-box";
+    div.style.display = "none";
+    div.style.zIndex = "10";
+    parent.appendChild(div);
+    divRef.current = div;
+
+    const vpMatrix = mat4.create();
+    const worldVec = vec4.create();
+    const clipVec = vec4.create();
+
+    const overlay: Overlay = {
+      update(i: Idetik) {
+        const corners = cornersRef.current;
+        const el = divRef.current;
+        if (!el) return;
+        if (corners.length === 0) {
+          if (el.style.display !== "none") el.style.display = "none";
+          return;
+        }
+
+        const viewport = i.viewports[0];
+        if (!viewport) return;
+        const camera = viewport.camera;
+
+        mat4.multiply(vpMatrix, camera.projectionMatrix, camera.viewMatrix);
+
+        const canvas = i.canvas;
+        const w = canvas.clientWidth;
+        const h = canvas.clientHeight;
+        if (w === 0 || h === 0) return;
+
+        let minX = Number.POSITIVE_INFINITY;
+        let minY = Number.POSITIVE_INFINITY;
+        let maxX = Number.NEGATIVE_INFINITY;
+        let maxY = Number.NEGATIVE_INFINITY;
+
+        for (const [wx, wy] of corners) {
+          vec4.set(worldVec, wx, wy, 0, 1);
+          vec4.transformMat4(clipVec, worldVec, vpMatrix);
+          // Bail if any corner is behind the camera (perspective only).
+          if (clipVec[3] <= 0) return;
+          const ndcX = clipVec[0] / clipVec[3];
+          const ndcY = clipVec[1] / clipVec[3];
+          const cx = (ndcX + 1) * 0.5 * w;
+          const cy = (1 - ndcY) * 0.5 * h;
+          if (cx < minX) minX = cx;
+          if (cy < minY) minY = cy;
+          if (cx > maxX) maxX = cx;
+          if (cy > maxY) maxY = cy;
+        }
+
+        const canvasRect = canvas.getBoundingClientRect();
+        const parentRect = parent.getBoundingClientRect();
+        const offsetX = canvasRect.left - parentRect.left;
+        const offsetY = canvasRect.top - parentRect.top;
+
+        el.style.left = `${offsetX + minX}px`;
+        el.style.top = `${offsetY + minY}px`;
+        el.style.width = `${maxX - minX}px`;
+        el.style.height = `${maxY - minY}px`;
+        if (el.style.display !== "block") el.style.display = "block";
+      },
+    };
+
+    idetik.overlays.push(overlay);
+
+    return () => {
+      const idx = idetik.overlays.indexOf(overlay);
+      if (idx >= 0) idetik.overlays.splice(idx, 1);
+      div.remove();
+      divRef.current = null;
+    };
+  }, [idetik]);
+
   const updateBbox = useCallback(
     (cx: number, cy: number, half: number, explicitBbox?: ObsBbox) => {
-      if (!viewport) return;
-
-      if (bboxRef.current) {
-        viewport.layerManager.remove(bboxRef.current);
-        bboxRef.current = null;
-      }
-
-      let path: BboxPath;
+      let corners: [number, number][];
       if (explicitBbox) {
         const { y_min, x_min, y_max, x_max } = explicitBbox;
-        path = [
-          [x_min * scale.x + tx, y_min * scale.y + ty, 0],
-          [x_max * scale.x + tx, y_min * scale.y + ty, 0],
-          [x_max * scale.x + tx, y_max * scale.y + ty, 0],
-          [x_min * scale.x + tx, y_max * scale.y + ty, 0],
-          [x_min * scale.x + tx, y_min * scale.y + ty, 0],
+        corners = [
+          [x_min * scale.x + tx, y_min * scale.y + ty],
+          [x_max * scale.x + tx, y_min * scale.y + ty],
+          [x_max * scale.x + tx, y_max * scale.y + ty],
+          [x_min * scale.x + tx, y_max * scale.y + ty],
         ];
       } else {
         const sx = cx * scale.x + tx;
         const sy = cy * scale.y + ty;
         const hx = half * scale.x;
         const hy = half * scale.y;
-        path = [
-          [sx - hx, sy - hy, 0],
-          [sx + hx, sy - hy, 0],
-          [sx + hx, sy + hy, 0],
-          [sx - hx, sy + hy, 0],
-          [sx - hx, sy - hy, 0],
+        corners = [
+          [sx - hx, sy - hy],
+          [sx + hx, sy - hy],
+          [sx + hx, sy + hy],
+          [sx - hx, sy + hy],
         ];
       }
-
-      // Draw 4 separate edges to avoid corner overlap artifacts
-      const [a, b, c, d] = path;
-      const color: [number, number, number] = [0.8, 0.1, 0.1];
-      const bbox = new ProjectedLineLayer([
-        { path: [a, b], color, width: LINE_WIDTH_NDC },
-        { path: [b, c], color, width: LINE_WIDTH_NDC },
-        { path: [c, d], color, width: LINE_WIDTH_NDC },
-        { path: [d, a], color, width: LINE_WIDTH_NDC },
-      ]);
-      // Mark as transparent so idetik renders it AFTER opaque image layers
-      bbox.transparent = true;
-
-      viewport.layerManager.add(bbox);
-      bboxRef.current = bbox;
+      cornersRef.current = corners;
     },
-    [viewport, scale.x, scale.y, tx, ty],
+    [scale.x, scale.y, tx, ty],
   );
-
-  useEffect(() => {
-    return () => {
-      if (bboxRef.current && viewport) {
-        viewport.layerManager.remove(bboxRef.current);
-      }
-      bboxRef.current = null;
-    };
-  }, [viewport]);
 
   return { updateBbox };
 }
