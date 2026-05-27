@@ -246,7 +246,17 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion }: UseFovLoa
           lod: { min: 0, bias: 0.5 },
           priorityOrder: ["visibleCurrent", "fallbackVisible", "prefetchTime", "prefetchSpace", "fallbackBackground"],
         });
-        const imageLayers = channelDefs.map((ch, i) => {
+        // v0.23+ requires channelProps.length === source.channelCount on every
+        // ImageLayer, even when sliceCoords.c selects a single channel. Each
+        // layer gets the full per-channel styling array; `c: [i]` then picks
+        // which slot actually renders. The non-active entries are unused
+        // (no texture is loaded for them) but must be present to pass
+        // validateChannelPropsCount.
+        const allChannelProps = channelDefs.map((ch) => ({
+          color: ch.color,
+          contrastLimits: ch.contrastLimits,
+        }));
+        const imageLayers = channelDefs.map((_ch, i) => {
           const sliceCoords = {
             get t() {
               return tRef.current;
@@ -260,7 +270,7 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion }: UseFovLoa
             source,
             sliceCoords,
             policy,
-            channelProps: [{ color: ch.color, contrastLimits: ch.contrastLimits }],
+            channelProps: allChannelProps,
             blendMode: i > 0 ? "additive" : undefined,
           });
         });

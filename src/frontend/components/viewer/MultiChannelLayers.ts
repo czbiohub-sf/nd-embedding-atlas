@@ -7,8 +7,12 @@ type ChannelLayer = ChannelsEnabled & Layer;
  * Aggregates one or more ChannelsEnabled layers into a single interface.
  *
  * Supports two patterns:
- * - **Multi-layer** (2D): N ImageLayers, each with 1 channel.
- *   `setChannelProps` delegates `[props]` to each layer individually.
+ * - **Multi-layer** (2D): N ImageLayers, each rendering one channel
+ *   (selected via `sliceCoords.c: [i]`). Per @idetik/core@0.23+, every
+ *   ImageLayer's `channelProps` array must have length === source channel
+ *   count, so every layer holds the full per-channel styling array — but
+ *   only the entry at `[i]` (matching the layer's slice index) is actually
+ *   drawn for layer `i`.
  * - **Single-layer** (3D): 1 VolumeLayer with N channels.
  *   `setChannelProps` passes all props to the single layer.
  *
@@ -54,14 +58,16 @@ export class MultiChannelLayers implements ChannelsEnabled {
       return this.channelProps_;
     }
 
-    // Multi-layer: one channel prop per layer
-    for (const layer of this.layers_) {
+    // Multi-layer: each layer holds the full per-channel array but only its
+    // slot `i` (matching `sliceCoords.c: [i]`) is drawn. Pick slot `i` from
+    // layer `i` to build the user-facing aggregate.
+    for (const [i, layer] of this.layers_.entries()) {
       const props = layer.channelProps;
-      if (props === undefined || props.length === 0) {
+      if (props === undefined || props.length <= i) {
         this.channelProps_ = undefined;
         return this.channelProps_;
       }
-      this.channelProps_.push(props[0]);
+      this.channelProps_.push(props[i]);
     }
     return this.channelProps_;
   }
@@ -71,13 +77,11 @@ export class MultiChannelLayers implements ChannelsEnabled {
       // Single layer owns all channels — pass the full array
       this.layers_[0].setChannelProps(channelProps);
     } else {
-      // Multi-layer — one prop per layer
-      for (const [index, props] of channelProps.entries()) {
-        const layer = this.layers_[index];
-        const existing = layer?.channelProps;
-        if (existing && existing[0] !== props) {
-          layer.setChannelProps([props]);
-        }
+      // Multi-layer — every layer's channelProps must equal source channel
+      // count. Push the same full array to all layers; each layer's `c: [i]`
+      // ensures only slot `i` actually renders.
+      for (const layer of this.layers_) {
+        layer.setChannelProps(channelProps);
       }
     }
   }
