@@ -1,7 +1,12 @@
 /**
  * Orbit camera controls for PerspectiveCamera.
  *
- * Vendored from idetik (not exported from @idetik/core).
+ * Vendored from idetik. @idetik/core@0.23.1 publicly exports its own
+ * `OrbitControls`, but the public class doesn't expose `lookAt(target, radius)`,
+ * which SingleCropViewer uses to recenter the camera on the active obs. Keeping
+ * the vendored copy until that extension lands upstream (or we re-implement
+ * lookAt via the public surface).
+ *
  * Implements the CameraControls interface:
  * - Left drag: orbit (rotate around target)
  * - Shift+left drag or middle drag: pan

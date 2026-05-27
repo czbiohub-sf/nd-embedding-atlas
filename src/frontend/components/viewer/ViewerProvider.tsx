@@ -264,12 +264,11 @@ export function ViewerProvider({ children, channelInstance = "docked" }: Props) 
                   : [ch.contrastLimits[0], ch.contrastLimits[0] + 1],
             })),
           );
-          // Blend mode only applies to 2D layers (individual ChunkedImageLayers)
+          // Blend mode only applies to 2D layers (individual ImageLayers)
           if (update.blendMode && mc.layers.length > 1) {
             const layer = mc.layers[index];
             if (layer) {
               layer.blendMode = update.blendMode;
-              layer.transparent = update.blendMode !== "normal";
             }
           }
         }

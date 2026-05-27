@@ -1,7 +1,7 @@
 import {
-  ChunkedImageLayer,
   Color,
   createPlaybackPolicy,
+  ImageLayer,
   loadOmeroChannels,
   type OmeroChannel,
   OmeZarrImageSource,
@@ -43,7 +43,7 @@ interface UseFovLoaderOptions {
 /**
  * Loads OME-Zarr FOV layers into the current Viewer context.
  *
- * In 2D mode, creates one ChunkedImageLayer per channel with a specific Z slice.
+ * In 2D mode, creates one ImageLayer per channel with a specific Z slice.
  * In 3D mode, creates a single VolumeLayer with all channels and z: undefined
  * (loads the full Z stack for ray marching).
  */
@@ -210,7 +210,7 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion }: UseFovLoa
 
       // ── Create layers based on view mode ─────────────────────────
       let multiChannel: MultiChannelLayers;
-      let layerEntries: { id: string; layer: ChunkedImageLayer | VolumeLayer }[];
+      let layerEntries: { id: string; layer: ImageLayer | VolumeLayer }[];
 
       if (viewMode === "3d") {
         // 3D: single VolumeLayer with all channels
@@ -224,7 +224,7 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion }: UseFovLoa
             return tRef.current;
           },
           z: undefined as number | undefined,
-          c: undefined as number | undefined,
+          c: undefined as number[] | undefined,
         };
         const volumeLayer = new VolumeLayer({
           source,
@@ -238,7 +238,7 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion }: UseFovLoa
         multiChannel = new MultiChannelLayers([volumeLayer]);
         layerEntries = [{ id: "volume", layer: volumeLayer }];
       } else {
-        // 2D: one ChunkedImageLayer per channel.
+        // 2D: one ImageLayer per channel.
         // priorityOrder omits fallbackBackground/prefetchSpace to prevent idetik from
         // loading the entire image as a background task (very expensive with single-LOD data).
         const policy = createPlaybackPolicy({
@@ -254,14 +254,13 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion }: UseFovLoa
             get z() {
               return zRef.current;
             },
-            c: i,
+            c: [i],
           };
-          return new ChunkedImageLayer({
+          return new ImageLayer({
             source,
             sliceCoords,
             policy,
             channelProps: [{ color: ch.color, contrastLimits: ch.contrastLimits }],
-            transparent: i > 0,
             blendMode: i > 0 ? "additive" : undefined,
           });
         });

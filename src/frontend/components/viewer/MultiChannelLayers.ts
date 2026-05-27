@@ -7,7 +7,7 @@ type ChannelLayer = ChannelsEnabled & Layer;
  * Aggregates one or more ChannelsEnabled layers into a single interface.
  *
  * Supports two patterns:
- * - **Multi-layer** (2D): N ChunkedImageLayers, each with 1 channel.
+ * - **Multi-layer** (2D): N ImageLayers, each with 1 channel.
  *   `setChannelProps` delegates `[props]` to each layer individually.
  * - **Single-layer** (3D): 1 VolumeLayer with N channels.
  *   `setChannelProps` passes all props to the single layer.
