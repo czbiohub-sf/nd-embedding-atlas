@@ -68,7 +68,7 @@ export function SingleCropViewer({ cropSize, datasetKey }: Props) {
   const scale = viewerState.bounds.scale ?? plateScale;
 
   const { updateBbox } = useBboxLayer({
-    viewport: meta.viewport,
+    idetik: meta.runtime,
     scale,
     translation: viewerState.bounds.translation,
   });
