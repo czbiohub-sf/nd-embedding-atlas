@@ -33,7 +33,7 @@ Pin a specific release with `NDEA_VERSION`:
 ```bash
 gh api repos/czbiohub-sf/nd-embedding-atlas/contents/scripts/install.sh --jq '.content' \
   | base64 -d \
-  | NDEA_VERSION=v0.1.0-beta.0 NDEA_GITHUB_TOKEN="$(gh auth token)" sh
+  | NDEA_VERSION=v0.1.0-beta.2 NDEA_GITHUB_TOKEN="$(gh auth token)" sh
 ```
 
 Switch channel with `NDEA_CHANNEL`:
@@ -51,7 +51,7 @@ Environment variables:
 | Variable            | Default            | Notes                                                                            |
 | ------------------- | ------------------ | -------------------------------------------------------------------------------- |
 | `NDEA_GITHUB_TOKEN` | _(required)_       | GitHub token with repo read scope. Use `$(gh auth token)` if `gh` is configured. |
-| `NDEA_VERSION`      | `latest`           | Release tag (e.g. `v0.1.0-beta.0`).                                              |
+| `NDEA_VERSION`      | `latest`           | Release tag (e.g. `v0.1.0-beta.2`).                                              |
 | `NDEA_CHANNEL`      | `stable`           | `stable`, `pre-release`, or `canary` — see Channels below.                       |
 | `NDEA_BIN_DIR`      | `$HOME/.local/bin` | Install destination.                                                             |
 
@@ -66,7 +66,7 @@ Environment variables:
 ```bash
 # These commands won't work today — kept here as the future canonical path.
 curl -fsSL https://raw.githubusercontent.com/czbiohub-sf/nd-embedding-atlas/main/scripts/install.sh | sh
-curl -fsSL .../install.sh | NDEA_VERSION=v0.1.0-beta.0 sh
+curl -fsSL .../install.sh | NDEA_VERSION=v0.1.0-beta.2 sh
 ```
 
 ### Update
