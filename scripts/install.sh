@@ -83,7 +83,13 @@ resolve_asset_id() {
     release_tag=$1
     asset_name=$2
     api_url="https://api.github.com/repos/${REPO}/releases/tags/${release_tag}"
-    gh_curl "$api_url" |
+    # Buffer the full response before piping to awk. awk `exit`s on the first
+    # matching asset, which would close the pipe mid-stream and leave curl
+    # writing into a dead reader → `curl: (23) Failed writing body`. Draining
+    # into a variable first means curl finishes cleanly regardless of when awk
+    # stops reading.
+    release_json=$(gh_curl "$api_url")
+    printf '%s\n' "$release_json" |
         awk -v target="$asset_name" '
             /"id":[[:space:]]*[0-9]+/ {
                 last_id = $0
