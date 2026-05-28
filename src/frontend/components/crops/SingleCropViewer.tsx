@@ -95,12 +95,6 @@ export function SingleCropViewer({ cropSize, datasetKey }: Props) {
   useEffect(() => {
     if (!isForThisDataset || !obsInfo || !viewerState.initialized) return;
 
-    console.log("[frame] setFrame called", {
-      x: obsInfo.x,
-      y: obsInfo.y,
-      t: performance.now().toFixed(1),
-    });
-
     if (viewerState.viewMode === "2d") {
       updateBbox(obsInfo.x, obsInfo.y, cropSize / 2, obsInfo.bbox);
 
@@ -118,7 +112,6 @@ export function SingleCropViewer({ cropSize, datasetKey }: Props) {
       const cy = obsInfo.y * scale.y + ty;
       const controls = meta.viewport?.cameraControls;
       const hasLookAt = controls && "lookAt" in controls;
-      console.log("[3d] lookAt", { cx, cy, hasLookAt, controls: !!controls });
       if (hasLookAt) {
         const radius = cropSize * Math.max(scale.x, scale.y) * 1.5;
         (controls as OrbitControls).lookAt(vec3.fromValues(cx, cy, 0), radius);
