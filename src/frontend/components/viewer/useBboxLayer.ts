@@ -102,7 +102,13 @@ export function useBboxLayer({ idetik, scale, translation }: UseBboxLayerOptions
           // Bail if any corner is behind the camera (perspective only).
           if (clipVec[3] <= 0) return;
           const ndcX = clipVec[0] / clipVec[3];
-          const ndcY = clipVec[1] / clipVec[3];
+          // idetik's WebGL renderer premultiplies the projection by a Y-flip
+          // (`Ei = mat4.fromScaling([1,-1,1])` → `Projection = Ei · projectionMatrix`)
+          // so image rows render top-down. We project through the bare
+          // `projectionMatrix`, so we must apply the same flip here or the box
+          // mirrors the image about the viewport center — invisible when the
+          // feature is centered, drifting ∝ off-center distance under pan/zoom.
+          const ndcY = -clipVec[1] / clipVec[3];
           const cx = (ndcX + 1) * 0.5 * w;
           const cy = (1 - ndcY) * 0.5 * h;
           if (cx < minX) minX = cx;
