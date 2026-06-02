@@ -23,13 +23,16 @@
  * wrapper script.
  */
 
-import { existsSync } from "node:fs";
+import { existsSync, rmSync } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
 
 // ─── Args ──────────────────────────────────────────────────────────────────
 
 const args = Bun.argv.slice(2);
 const skipFrontend = args.includes("--skip-frontend");
+// Experimental: bundle the frontend with Bun's own bundler instead of `vp build`
+// (Vite/Rolldown), so the whole build is Bun. See buildFrontendWithBun() below.
+const bunFrontend = args.includes("--bun-frontend");
 const targetArg = args.find((a) => !a.startsWith("--") || a.startsWith("--target="));
 const target =
   (targetArg?.startsWith("--target=") ? targetArg.slice("--target=".length) : targetArg) ??
@@ -74,19 +77,60 @@ const GREEN = "\x1b[32m";
 const RED = "\x1b[31m";
 const RESET = "\x1b[0m";
 
+// ─── Bun-native frontend bundle (`--bun-frontend`) ──────────────────────────
+//
+// Replaces `vp build` (Vite/Rolldown) with Bun's own bundler so the entire
+// build is Bun. Tailwind v4 (bun-plugin-tailwind) and the TypeGPU `'use gpu'`
+// transform (unplugin-typegpu/bun) run as Bun.build plugins. The output shape
+// (dist/frontend/**) is whatever Step 2 globs, so the embed-manifest + compile
+// tail downstream is unchanged regardless of which bundler produced it.
+async function buildFrontendWithBun(): Promise<void> {
+  const tailwind = (await import("bun-plugin-tailwind")).default;
+  const typegpu = (await import("unplugin-typegpu/bun")).default;
+
+  // Bun.build writes into outdir without clearing it — wipe any stale Vite
+  // output first so the manifest globs only Bun's emitted files.
+  rmSync(FRONTEND_DIST, { recursive: true, force: true });
+
+  const result = await Bun.build({
+    entrypoints: [resolve(ROOT, "index.html")],
+    outdir: FRONTEND_DIST,
+    target: "browser",
+    minify: true,
+    // No sourcemaps: they'd be globbed into the embed manifest and bloat the
+    // compiled binary by ~15MB (Vite emits none here either).
+    sourcemap: "none",
+    splitting: true,
+    // The frontend reads `import.meta.env.PROD` (DashboardProvider) — Vite
+    // injects it; Bun does not, so define it for the production bundle.
+    define: { "import.meta.env.PROD": "true", "import.meta.env.DEV": "false" },
+    plugins: [tailwind, typegpu({})],
+  });
+
+  if (!result.success) {
+    console.error(`\n  ${RED}Bun.build frontend failed:${RESET}`);
+    for (const log of result.logs) console.error(log);
+    process.exit(1);
+  }
+}
+
 // ─── Step 1: Build frontend ────────────────────────────────────────────────
 
 if (!skipFrontend) {
-  console.log(`\n  ${BOLD}Step 1:${RESET} Building frontend...\n`);
-  const frontendProc = Bun.spawn(["vp", "build"], {
-    cwd: ROOT,
-    stdout: "inherit",
-    stderr: "inherit",
-  });
-  const exitCode = await frontendProc.exited;
-  if (exitCode !== 0) {
-    console.error(`\n  ${RED}Frontend build failed with exit code ${exitCode}${RESET}`);
-    process.exit(1);
+  console.log(`\n  ${BOLD}Step 1:${RESET} Building frontend${bunFrontend ? " (Bun.build)" : " (vp/Vite)"}...\n`);
+  if (bunFrontend) {
+    await buildFrontendWithBun();
+  } else {
+    const frontendProc = Bun.spawn(["vp", "build"], {
+      cwd: ROOT,
+      stdout: "inherit",
+      stderr: "inherit",
+    });
+    const exitCode = await frontendProc.exited;
+    if (exitCode !== 0) {
+      console.error(`\n  ${RED}Frontend build failed with exit code ${exitCode}${RESET}`);
+      process.exit(1);
+    }
   }
   console.log(`  ${GREEN}✓${RESET} Frontend built`);
 } else {
