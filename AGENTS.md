@@ -114,12 +114,15 @@ vp dev                                             # frontend on :5173
 # Dependencies
 bun install                       # backend + frontend share one node_modules
 
-# Build
-vp build                          # frontend bundle → dist/frontend/
-bun run build                     # frontend + single-file binary → dist/ndea
-                                  #   (delegates to scripts/build.ts; the embed
-                                  #   manifest pattern is required — direct
-                                  #   `bun build --compile` crashes on .woff2)
+# Build (all-Bun: Bun.build bundles the frontend, then bun build --compile)
+vp run build                      # primary — full single-file binary → dist/ndea
+bun run build                     # same; both run scripts/build.ts
+                                  #   Bun.build (tailwind + typegpu plugins) →
+                                  #   embed-asset manifest → bun build --compile.
+                                  #   The manifest pattern is required (direct
+                                  #   `bun build --compile` crashes on .woff2).
+                                  #   NB: the bare `vp build` built-in is Vite+'s
+                                  #   Rolldown and is NOT used — use `vp run build`.
 
 # Quality gates
 vp check                          # typecheck + Oxlint + Oxfmt (all ~260 files)
