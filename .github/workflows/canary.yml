@@ -53,16 +53,11 @@ jobs:
         with:
           no-cache: true
 
-      - uses: voidzero-dev/setup-vp@v1
-
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
       - name: Stamp canary version
         run: bash .github/scripts/stamp-canary-version.sh
-
-      - name: Build frontend
-        run: vp build
 
       - name: Compile single-file binary (libduckdb embedded)
         env:
