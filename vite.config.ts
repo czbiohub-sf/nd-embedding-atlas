@@ -361,13 +361,4 @@ export default defineConfig({
     },
   },
   optimizeDeps: { exclude: ["roaring-wasm"] },
-  build: {
-    target: "esnext",
-    outDir: "dist/frontend",
-    rolldownOptions: {
-      output: {
-        codeSplitting: true,
-      },
-    },
-  },
 });

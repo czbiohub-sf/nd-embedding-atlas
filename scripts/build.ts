@@ -4,7 +4,7 @@
  * Build the nd-embedding-atlas single binary.
  *
  * Steps:
- *   1. Build frontend (vp build)
+ *   1. Build frontend (Bun.build)
  *   2. Enumerate dist/frontend/** files for embedding
  *   3. Embed libduckdb manifest so the preloader can dlopen it at runtime
  *   4. Compile binary (bun build --compile)
@@ -15,7 +15,6 @@
  * Usage:
  *   bun run scripts/build.ts                          # current platform
  *   bun run scripts/build.ts bun-linux-x64            # specific target
- *   bun run scripts/build.ts --skip-frontend          # skip frontend build
  *
  * Output: dist/ndea — single self-contained binary. Embeds libduckdb;
  * the preloader extracts it to ~/.cache/ndea/<version>/ at first run and
@@ -23,13 +22,12 @@
  * wrapper script.
  */
 
-import { existsSync } from "node:fs";
+import { existsSync, rmSync } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
 
 // ─── Args ──────────────────────────────────────────────────────────────────
 
 const args = Bun.argv.slice(2);
-const skipFrontend = args.includes("--skip-frontend");
 const targetArg = args.find((a) => !a.startsWith("--") || a.startsWith("--target="));
 const target =
   (targetArg?.startsWith("--target=") ? targetArg.slice("--target=".length) : targetArg) ??
@@ -74,29 +72,48 @@ const GREEN = "\x1b[32m";
 const RED = "\x1b[31m";
 const RESET = "\x1b[0m";
 
-// ─── Step 1: Build frontend ────────────────────────────────────────────────
+// ─── Frontend bundle (Bun.build) ────────────────────────────────────────────
+//
+// Bundles the frontend with Bun's own bundler (replaced `vp build`/Vite) so the
+// whole build runs on Bun. Tailwind v4 (bun-plugin-tailwind) and the TypeGPU
+// `'use gpu'` transform (unplugin-typegpu/bun) run as Bun.build plugins. The
+// output (dist/frontend/**) is what Step 2 globs, so the embed-manifest +
+// --compile tail downstream is unchanged. Vite is now only used for `vp dev`.
+async function buildFrontendWithBun(): Promise<void> {
+  const tailwind = (await import("bun-plugin-tailwind")).default;
+  const typegpu = (await import("unplugin-typegpu/bun")).default;
 
-if (!skipFrontend) {
-  console.log(`\n  ${BOLD}Step 1:${RESET} Building frontend...\n`);
-  const frontendProc = Bun.spawn(["vp", "build"], {
-    cwd: ROOT,
-    stdout: "inherit",
-    stderr: "inherit",
+  // Bun.build writes into outdir without clearing it — wipe any stale Vite
+  // output first so the manifest globs only Bun's emitted files.
+  rmSync(FRONTEND_DIST, { recursive: true, force: true });
+
+  const result = await Bun.build({
+    entrypoints: [resolve(ROOT, "index.html")],
+    outdir: FRONTEND_DIST,
+    target: "browser",
+    minify: true,
+    // No sourcemaps: they'd be globbed into the embed manifest and bloat the
+    // compiled binary by ~15MB (Vite emits none here either).
+    sourcemap: "none",
+    splitting: true,
+    // The frontend reads `import.meta.env.PROD` (DashboardProvider) — Vite
+    // injects it; Bun does not, so define it for the production bundle.
+    define: { "import.meta.env.PROD": "true", "import.meta.env.DEV": "false" },
+    plugins: [tailwind, typegpu({})],
   });
-  const exitCode = await frontendProc.exited;
-  if (exitCode !== 0) {
-    console.error(`\n  ${RED}Frontend build failed with exit code ${exitCode}${RESET}`);
+
+  if (!result.success) {
+    console.error(`\n  ${RED}Bun.build frontend failed:${RESET}`);
+    for (const log of result.logs) console.error(log);
     process.exit(1);
   }
-  console.log(`  ${GREEN}✓${RESET} Frontend built`);
-} else {
-  console.log(`\n  ${DIM}Skipping frontend build (--skip-frontend)${RESET}`);
 }
 
-if (!existsSync(FRONTEND_DIST)) {
-  console.error(`\n  ${RED}Error:${RESET} dist/frontend/ not found. Run without --skip-frontend.`);
-  process.exit(1);
-}
+// ─── Step 1: Build frontend ────────────────────────────────────────────────
+
+console.log(`\n  ${BOLD}Step 1:${RESET} Building frontend (Bun.build)...\n`);
+await buildFrontendWithBun();
+console.log(`  ${GREEN}✓${RESET} Frontend built`);
 
 // ─── Step 2: Generate embedded-asset manifests ─────────────────────────────
 //

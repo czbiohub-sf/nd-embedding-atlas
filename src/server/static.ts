@@ -107,7 +107,7 @@ function resolveAssetPath(pathname: string, frontendDir: string): string | null 
 export function serveStatic(pathname: string, frontendDir: string | null): Response {
   if (!frontendDir) {
     return new Response(
-      "Frontend bundle not found. For dev use `vp run dev <dataset>` (serves the frontend on :5173). For a standalone backend, run `vp build` first.",
+      "Frontend bundle not found. For dev use `vp run dev <dataset>` (serves the frontend on :5173). For a standalone backend, run `vp run build` first.",
       {
         status: 404,
         headers: { "Content-Type": "text/plain" },
@@ -120,8 +120,10 @@ export function serveStatic(pathname: string, frontendDir: string | null): Respo
     const ext = extname(filePath);
     const contentType = MIME[ext] ?? "application/octet-stream";
 
-    // Cache immutable hashed assets aggressively
-    const isHashed = pathname.includes("/assets/") && /\.[a-f0-9]{8,}\./.test(pathname);
+    // Cache fingerprinted assets aggressively. Bun emits hashed files flat at
+    // the root as `<name>-<hash>.<ext>` (base36 hash), so match that fingerprint
+    // rather than Vite's old `/assets/` + hex convention.
+    const isHashed = /-[a-z0-9]{8,}\.[a-z0-9]+$/i.test(pathname);
     const cacheControl = isHashed ? "public, max-age=31536000, immutable" : "public, max-age=0, must-revalidate";
 
     return new Response(Bun.file(filePath), {
