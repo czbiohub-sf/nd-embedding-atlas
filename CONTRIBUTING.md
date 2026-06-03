@@ -3,7 +3,7 @@
 ## Prerequisites
 
 - **[Bun](https://bun.com)** — runtime + package manager. The version pinned in `package.json`'s `packageManager` field will be used by CI; locally any matching major works.
-- **[Vite+](https://viteplus.dev/)** (`vp`) — unified toolchain for lint, fmt, test, and the dev server. Install once globally per their setup; `vp` drives every dev workflow in this repo. (The app *build* runs on Bun — see `vp run build` below.)
+- **[Vite+](https://viteplus.dev/)** (`vp`) — unified toolchain for lint, fmt, test, and the dev server. Install once globally per their setup; `vp` drives every dev workflow in this repo. (The app _build_ runs on Bun — see `vp run build` below.)
 
 ## Setup
 

@@ -42,7 +42,7 @@ vp dev
 vp check        # typecheck + Oxlint + Oxfmt + bunli gen drift
 bun test        # Bun-native .test.ts suites (server, cli, zarr)
 vp test         # vitest (frontend unit tests)
-vp run build    # full Bun build smoke (frontend + single-file binary)
+vp run build    # full Bun build (frontend + single-file binary)
 ```
 
 CI gates on `vp check` and the test suites (see `.github/workflows/ci.yml`).
