@@ -9,7 +9,7 @@ icon: lucide/git-pull-request
 ### Prerequisites
 
 - **[Bun](https://bun.com)** — runtime + package manager. CI uses the version pinned in `package.json`'s `packageManager` field; locally any matching major works.
-- **[Vite+](https://viteplus.dev/)** (`vp`) — frontend toolchain (build, lint, fmt, dev). Install once globally; `vp` drives every dev workflow.
+- **[Vite+](https://viteplus.dev/)** (`vp`) — toolchain for lint, fmt, test, and the dev server. Install once globally; `vp` drives every dev workflow. (The app build runs on Bun — `vp run build`.)
 
 ### Clone and install
 
@@ -42,7 +42,7 @@ vp dev
 vp check        # typecheck + Oxlint + Oxfmt + bunli gen drift
 bun test        # Bun-native .test.ts suites (server, cli, zarr)
 vp test         # vitest (frontend unit tests)
-vp build        # frontend bundle smoke
+vp run build    # full Bun build smoke (frontend + single-file binary)
 ```
 
 CI gates on `vp check` and the test suites (see `.github/workflows/ci.yml`).
