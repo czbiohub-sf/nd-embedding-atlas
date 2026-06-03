@@ -4,7 +4,7 @@
  * Build the nd-embedding-atlas single binary.
  *
  * Steps:
- *   1. Build frontend (vp build)
+ *   1. Build frontend (Bun.build)
  *   2. Enumerate dist/frontend/** files for embedding
  *   3. Embed libduckdb manifest so the preloader can dlopen it at runtime
  *   4. Compile binary (bun build --compile)
@@ -15,7 +15,6 @@
  * Usage:
  *   bun run scripts/build.ts                          # current platform
  *   bun run scripts/build.ts bun-linux-x64            # specific target
- *   bun run scripts/build.ts --skip-frontend          # skip frontend build
  *
  * Output: dist/ndea — single self-contained binary. Embeds libduckdb;
  * the preloader extracts it to ~/.cache/ndea/<version>/ at first run and
@@ -29,7 +28,6 @@ import { dirname, relative, resolve } from "node:path";
 // ─── Args ──────────────────────────────────────────────────────────────────
 
 const args = Bun.argv.slice(2);
-const skipFrontend = args.includes("--skip-frontend");
 const targetArg = args.find((a) => !a.startsWith("--") || a.startsWith("--target="));
 const target =
   (targetArg?.startsWith("--target=") ? targetArg.slice("--target=".length) : targetArg) ??
@@ -113,18 +111,9 @@ async function buildFrontendWithBun(): Promise<void> {
 
 // ─── Step 1: Build frontend ────────────────────────────────────────────────
 
-if (!skipFrontend) {
-  console.log(`\n  ${BOLD}Step 1:${RESET} Building frontend (Bun.build)...\n`);
-  await buildFrontendWithBun();
-  console.log(`  ${GREEN}✓${RESET} Frontend built`);
-} else {
-  console.log(`\n  ${DIM}Skipping frontend build (--skip-frontend)${RESET}`);
-}
-
-if (!existsSync(FRONTEND_DIST)) {
-  console.error(`\n  ${RED}Error:${RESET} dist/frontend/ not found. Run without --skip-frontend.`);
-  process.exit(1);
-}
+console.log(`\n  ${BOLD}Step 1:${RESET} Building frontend (Bun.build)...\n`);
+await buildFrontendWithBun();
+console.log(`  ${GREEN}✓${RESET} Frontend built`);
 
 // ─── Step 2: Generate embedded-asset manifests ─────────────────────────────
 //
