@@ -20,7 +20,7 @@ export function ZRangeSlider({ min, max, value, onChange }: Props) {
           const v = Math.min(Number(e.target.value), hi - 1);
           onChange([v, hi]);
         }}
-        className="absolute h-1 w-full accent-accent-cyan"
+        className="absolute h-1 w-full accent-primary"
         style={{ zIndex: lo > max - 2 ? 5 : 3 }}
         aria-label="Z range minimum"
       />
@@ -33,7 +33,7 @@ export function ZRangeSlider({ min, max, value, onChange }: Props) {
           const v = Math.max(Number(e.target.value), lo + 1);
           onChange([lo, v]);
         }}
-        className="absolute h-1 w-full accent-accent-cyan"
+        className="absolute h-1 w-full accent-primary"
         style={{ zIndex: 4 }}
         aria-label="Z range maximum"
       />

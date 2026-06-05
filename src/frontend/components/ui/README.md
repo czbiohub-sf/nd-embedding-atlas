@@ -57,12 +57,8 @@ Two vocabularies coexist. **shadcn vocab is canonical** (every shadcn primitive 
 | `text-2xs` | `0.6875rem` / 11px | Tight labels.                |
 | `text-3xs` | `0.625rem` / 10px  | Dense legend / tooltip text. |
 
-**Density** (for Phase-3 domain primitives — rarely applied directly):
-
-| Token                | `sm` | `md` | `lg` |
-| -------------------- | ---- | ---- | ---- |
-| `--control-height-*` | 22px | 26px | 32px |
-| `--row-padding-y-*`  | 2px  | 4px  | 8px  |
+**Density**: compact controls use the named text rungs (`text-2xs` / `text-3xs`) plus Tailwind
+height/padding utilities (`h-*`, `py-*`). There are no bespoke `--control-height-*` tokens.
 
 ## Primitive matrix
 

@@ -76,10 +76,7 @@
   --color-text-secondary: #444444; /* = oklch(0.36 0 0)  */
   --color-text-muted: #6e6e6e; /* = oklch(0.50 0 0)  */
 
-  /* ── Data visualization accents ── */
-  --color-accent-cyan: oklch(
-    0.554 0.236 281
-  ); /* repointed to Biohub periwinkle (brand: one accent, no cyan); name retained until call sites rename to --color-primary */
+  /* ── Data visualization accents (interactive accents use --primary periwinkle) ── */
   --color-accent-amber: #f59e0b;
   --color-accent-rose: #f43f5e;
 
@@ -92,7 +89,7 @@
   --color-status-bar-border: #e8e8e8; /* matches --color-border-subtle */
 
   /* ── Layout ── */
-  --footer-height: 1.5rem;
+  --footer-height: 1.25rem;
 
   /* ── Z-index layer system ── */
   --z-canvas: 10;
@@ -110,16 +107,9 @@
   --text-2xs: 0.6875rem; /* 11px — tight label */
   --text-3xs: 0.625rem; /* 10px — dense legend */
 
-  /* ── Density scale ──
-   * Named heights/padding for compact controls. Phase-3 primitives
-   * (SliderRow, IconButton, ControlStrip) select a density rung instead
-   * of hardcoding size-[22px] style arbitrary values. */
-  --control-height-sm: 22px;
-  --control-height-md: 26px;
-  --control-height-lg: 32px;
-  --row-padding-y-sm: 2px;
-  --row-padding-y-md: 4px;
-  --row-padding-y-lg: 8px;
+  /* ── Density ──
+   * Compact controls select named text rungs (--text-2xs / --text-3xs) plus
+   * Tailwind height/padding utilities; no bespoke control-height tokens. */
 
   /* ── Glass surface blur (exposed as blur-glass utility) ── */
   --blur-glass: 12px;
@@ -225,7 +215,7 @@ body {
   background-color: var(--color-base);
   color: var(--color-text-primary);
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: 12px; /* 85% density base (was 13px); named rungs/utilities layer on top */
   line-height: 1.4;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -254,8 +244,8 @@ select {
   color: var(--color-text-primary);
   border: 1px solid var(--color-border-subtle);
   border-radius: 4px;
-  padding: 2px 20px 2px 6px;
-  font-size: 12px;
+  padding: 2px 18px 2px 5px;
+  font-size: 11px;
   font-family: var(--font-sans);
   cursor: pointer;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238892b0' d='M3 5l3 3 3-3'/%3E%3C/svg%3E");
@@ -295,7 +285,7 @@ select:disabled {
 .time-slider .input input[type="range"] {
   width: 120px;
   height: 4px;
-  accent-color: var(--color-accent-cyan);
+  accent-color: var(--color-primary);
   cursor: pointer;
 }
 
