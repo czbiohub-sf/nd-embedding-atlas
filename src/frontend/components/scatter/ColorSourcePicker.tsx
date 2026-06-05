@@ -55,6 +55,8 @@ export interface ColorSourcePickerProps {
   /** Glass-override for the trigger button className */
   triggerClassName?: string;
   contentClassName?: string;
+  /** Hide the dropdown chevron (compact overlay "chip" trigger). */
+  hideChevron?: boolean;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -66,6 +68,7 @@ export function ColorSourcePicker({
   onSetColorSource,
   triggerClassName,
   contentClassName,
+  hideChevron = false,
 }: ColorSourcePickerProps) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<"obs" | "var">("obs");
@@ -136,7 +139,7 @@ export function ColorSourcePicker({
         )}
       >
         {triggerContent}
-        <ChevronDownIcon className="size-3.5 shrink-0 text-muted-foreground" />
+        {!hideChevron && <ChevronDownIcon className="size-3.5 shrink-0 text-muted-foreground" />}
       </PopoverTrigger>
 
       <PopoverContent className={cn("w-64 gap-0 p-0", contentClassName)} side="bottom" align="start" sideOffset={4}>

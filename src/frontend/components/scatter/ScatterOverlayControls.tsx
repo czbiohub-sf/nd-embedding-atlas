@@ -1,14 +1,18 @@
 /**
- * ScatterOverlayControls — glassmorphic controls overlaid on the scatter canvas.
+ * ScatterOverlayControls — controls imposed directly on the scatter canvas
+ * (no glass bar). Per Sketch A: chip-style triggers float on the canvas, the
+ * active embedding is the primary-filled bracketed chip [embedding].
  *
  * Two zones, both absolute-positioned:
- *  top-left  → embedding + x/y dim comboboxes + color column combobox
- *  top-right → selection tool toggles + utility button group (lock, pip, fullscreen, close)
+ *  top-left  → [⋰] bracket icon + embedding chip + X/Y dim chips + COL chip
+ *  top-right → borderless icon buttons (tools, Collections, track, fit, lock,
+ *              pip, fullscreen, close)
  */
 
 import {
   Bookmark,
   BoxSelect,
+  ChartScatter,
   LassoSelect,
   Lock,
   LockOpen,
@@ -18,6 +22,7 @@ import {
   X,
 } from "lucide-react";
 import { useMemo } from "react";
+import { BracketIcon } from "../ui/bracket-icon";
 import { useCollectionsSheet } from "../collections/CollectionsSheetProvider";
 
 /** Scan + Dot combined — "fit embedding to view" */
@@ -57,11 +62,8 @@ import type { AxisState } from "../../types";
 import { EmbeddingPicker } from "../mudata/EmbeddingPicker";
 import { ModalityColorPicker } from "../mudata/ModalityColorPicker";
 import { ColorSourcePicker } from "../scatter/ColorSourcePicker";
-import { ButtonGroup } from "../ui/button-group";
 import { Combobox, type ComboboxOption } from "../ui/combobox";
 import { HoverTip } from "../ui/hover-tip";
-import { IconButton } from "../ui/icon-button";
-import { Separator } from "../ui/separator";
 import { ToggleGroup, ToggleGroupItem } from "../ui/toggle-group";
 
 interface Props {
@@ -106,11 +108,20 @@ interface Props {
   selectionPath: "inline" | "temp_table";
 }
 
-const glass = "bg-glass-bg backdrop-blur-md border border-glass-border rounded-lg shadow-sm";
+// Controls float directly on the canvas (no glass bar). Each interactive value
+// is a "chip": a solid card pill so it reads over busy point clouds. The active
+// embedding is the primary-filled, bracketed chip — [phate].
+const chipBase =
+  "h-7 max-w-44 rounded-md border border-border bg-card px-2.5 font-mono text-2xs text-foreground/85 shadow-sm hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/30";
+const chipActive =
+  "h-7 max-w-44 gap-0 rounded-md border border-transparent bg-primary px-2.5 font-mono text-2xs text-primary-foreground shadow-sm hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring/40 before:mr-px before:text-primary-foreground/60 before:content-['['] after:ml-px after:text-primary-foreground/60 after:content-[']']";
 
-/** Glass-styled combobox trigger for use inside the overlay zones. */
-const glassTrigger =
-  "h-6 max-w-28 border-0 bg-transparent px-1.5 text-2xs gap-1 text-foreground/80 hover:bg-muted hover:text-foreground focus-visible:ring-0";
+/** X / Y / COL caption labels — mono, uppercase, dim. */
+const captionCls = "font-mono text-3xs uppercase tracking-[0.12em] text-muted-foreground";
+
+/** Borderless square icon button for the top-right utility cluster. */
+const iconBtn =
+  "flex size-7 items-center justify-center rounded-md bg-transparent text-muted-foreground transition-colors hover:bg-muted hover:text-foreground";
 
 export function ScatterOverlayControls({
   axes,
@@ -155,18 +166,19 @@ export function ScatterOverlayControls({
 
   return (
     <>
-      {/* ── Top-left: embedding + dims + color ── */}
-      {/* max-w cap leaves room for the right utility group; the COL picker absorbs slack first. */}
-      <div
-        className={cn("absolute top-2 left-2 z-20 flex max-w-[calc(100%-15rem)] items-center gap-1 px-2 py-1", glass)}
-      >
-        {/* Embedding — modality-aware picker when MuData, plain combobox otherwise */}
+      {/* ── Top-left: embedding + dims + color — floats on the canvas, no glass bar ── */}
+      {/* max-w cap leaves room for the right utility cluster; the COL chip truncates first. */}
+      <div className="absolute top-0 left-0 z-20 flex max-w-[calc(100%-13rem)] items-center gap-2 px-3 py-2.5">
+        <BracketIcon icon={ChartScatter} className="mr-0.5 size-6 text-foreground/75" />
+
+        {/* Embedding — primary-filled bracketed chip. Modality picker for MuData, combobox otherwise. */}
         {modalities && obsm ? (
           <EmbeddingPicker
             obsm={obsm}
             activeKey={axes.obsmKey}
             onSelect={(v) => onSetAxes({ obsmKey: v, xDim: 0, yDim: 1 })}
-            triggerClassName={cn(glassTrigger, "max-w-40")}
+            triggerClassName={chipActive}
+            hideChevron
           />
         ) : (
           <Combobox
@@ -176,15 +188,14 @@ export function ScatterOverlayControls({
             placeholder="embedding"
             searchPlaceholder="Search embeddings…"
             disabled={disabled}
-            triggerClassName={cn(glassTrigger, "max-w-32")}
+            triggerClassName={chipActive}
             contentClassName="w-48"
+            hideChevron
           />
         )}
 
-        <Separator orientation="vertical" className="h-3 bg-border" />
-
-        {/* X dim */}
-        <span className="text-3xs text-muted-foreground/60">x</span>
+        {/* X / Y dims — caption + card chip */}
+        <span className={captionCls}>X</span>
         <Combobox
           value={String(axes.xDim)}
           onValueChange={(v) => v !== "" && onSetAxes({ ...axes, xDim: Number(v) })}
@@ -192,12 +203,11 @@ export function ScatterOverlayControls({
           placeholder="0"
           searchPlaceholder="Search dims…"
           disabled={disabled || !currentEntryLoaded}
-          triggerClassName={cn(glassTrigger, "max-w-[3rem]")}
+          triggerClassName={cn(chipBase, "max-w-[3rem] justify-center")}
           contentClassName="w-32"
+          hideChevron
         />
-
-        {/* Y dim */}
-        <span className="text-3xs text-muted-foreground/60">y</span>
+        <span className={captionCls}>Y</span>
         <Combobox
           value={String(axes.yDim)}
           onValueChange={(v) => v !== "" && onSetAxes({ ...axes, yDim: Number(v) })}
@@ -205,14 +215,13 @@ export function ScatterOverlayControls({
           placeholder="1"
           searchPlaceholder="Search dims…"
           disabled={disabled || !currentEntryLoaded}
-          triggerClassName={cn(glassTrigger, "max-w-[3rem]")}
+          triggerClassName={cn(chipBase, "max-w-[3rem] justify-center")}
           contentClassName="w-32"
+          hideChevron
         />
 
-        <Separator orientation="vertical" className="h-3 bg-border" />
-
-        {/* Color column — modality-aware picker when MuData, plain otherwise */}
-        <span className="text-3xs text-muted-foreground/60 uppercase tracking-wide">col</span>
+        {/* Color column */}
+        <span className={cn(captionCls, "ml-1")}>COL</span>
         {modalities && modalities.length > 0 ? (
           <ModalityColorPicker
             colorSource={colorSource}
@@ -222,7 +231,7 @@ export function ScatterOverlayControls({
             modalities={modalities}
             varCount={varCount}
             activeEmbeddingKey={axes.obsmKey}
-            triggerClassName={cn(glassTrigger, "max-w-40")}
+            triggerClassName={chipBase}
           />
         ) : (
           <ColorSourcePicker
@@ -230,32 +239,30 @@ export function ScatterOverlayControls({
             obsColumns={obsColumns}
             hasVar={hasVar}
             onSetColorSource={onSetColorSource}
-            triggerClassName={cn(glassTrigger, "max-w-36")}
+            triggerClassName={chipBase}
             contentClassName="w-64"
+            hideChevron
           />
         )}
 
         {colorModeCanToggle && (
-          <>
-            <Separator orientation="vertical" className="h-3 bg-border" />
-            <button
-              type="button"
-              onClick={onToggleColorMode}
-              className="px-0.5 text-3xs text-muted-foreground/60 transition-colors hover:text-foreground"
-            >
-              {colorMode === "continuous" ? "scale" : "palette"}
-            </button>
-          </>
+          <button
+            type="button"
+            onClick={onToggleColorMode}
+            className="px-0.5 font-mono text-3xs text-muted-foreground/70 uppercase tracking-wide transition-colors hover:text-foreground"
+          >
+            {colorMode === "continuous" ? "scale" : "palette"}
+          </button>
         )}
       </div>
 
-      {/* ── Top-right: selection tools + utility actions ── */}
-      <div className={cn("absolute top-2 right-2 z-20 flex items-center gap-1.5 px-1.5 py-1", glass)}>
+      {/* ── Top-right: selection tools + utility actions — borderless icons, no glass ── */}
+      <div className="absolute top-0 right-0 z-20 flex items-center gap-1 px-3 py-2.5">
         {/* Selection tool toggles */}
         <ToggleGroup
           value={selectionTool === "pan" ? [] : [selectionTool]}
           onValueChange={(v: string[]) => onSetSelectionTool((v[v.length - 1] as "marquee" | "lasso") ?? "pan")}
-          className="gap-0"
+          className="gap-1"
         >
           <HoverTip
             label="Rectangle"
@@ -265,7 +272,7 @@ export function ScatterOverlayControls({
               <ToggleGroupItem
                 value="marquee"
                 size="sm"
-                className="size-[22px] border-0 bg-transparent text-muted-foreground data-[state=on]:bg-accent data-[state=on]:text-foreground"
+                className={cn(iconBtn, "data-[state=on]:bg-accent data-[state=on]:text-foreground")}
               />
             }
           >
@@ -279,7 +286,7 @@ export function ScatterOverlayControls({
               <ToggleGroupItem
                 value="lasso"
                 size="sm"
-                className="size-[22px] border-0 bg-transparent text-muted-foreground data-[state=on]:bg-accent data-[state=on]:text-foreground"
+                className={cn(iconBtn, "data-[state=on]:bg-accent data-[state=on]:text-foreground")}
               />
             }
           >
@@ -287,136 +294,120 @@ export function ScatterOverlayControls({
           </HoverTip>
         </ToggleGroup>
 
-        <Separator orientation="vertical" className="mx-0.5 h-3 bg-border" />
-        <IconButton
+        <HoverTip
           label="Collections"
           description={
             hasSelection
               ? `Open Collections — save ${selectionCount.toLocaleString()} obs or browse saved sets`
               : "Open Collections — browse saved sets (lasso a region to save a new one)"
           }
-          onClick={() =>
-            openSheet(hasSelection ? { selectionCount, getRowIndices } : null, { expandSave: hasSelection })
+          side="bottom"
+          render={
+            <button
+              type="button"
+              onClick={() =>
+                openSheet(hasSelection ? { selectionCount, getRowIndices } : null, { expandSave: hasSelection })
+              }
+              aria-label="Collections"
+              className={iconBtn}
+            />
           }
         >
           <Bookmark className="size-3.5" />
-        </IconButton>
+        </HoverTip>
 
-        <Separator orientation="vertical" className="mx-0.5 h-3 bg-border" />
-
-        {/* Utility actions as a ButtonGroup */}
-        <ButtonGroup className="border-glass-border bg-transparent">
-          {onToggleTrajectory && (
-            <HoverTip
-              label="Track"
-              description={trajectoryActive ? "Hide the trajectory" : "Show the cell's trajectory"}
-              side="bottom"
-              render={
-                <button
-                  type="button"
-                  onClick={onToggleTrajectory}
-                  className={cn(
-                    "flex size-[22px] items-center justify-center bg-transparent transition-colors hover:bg-muted",
-                    trajectoryActive ? "text-primary" : "text-muted-foreground hover:text-foreground",
-                  )}
-                />
-              }
-            >
-              <Waypoints className="size-3" />
-            </HoverTip>
-          )}
-          {onFitView && (
-            <HoverTip
-              label="Fit view"
-              description="Zoom out to show all points"
-              side="bottom"
-              render={
-                <button
-                  type="button"
-                  onClick={onFitView}
-                  className="flex size-[22px] items-center justify-center bg-transparent text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                />
-              }
-            >
-              <ScanDotIcon size={12} />
-            </HoverTip>
-          )}
+        {onToggleTrajectory && (
           <HoverTip
-            label={isLinked ? "Views linked" : "Link views"}
-            description={isLinked ? "Click to pan each panel freely" : "Sync pan and zoom across panels"}
+            label="Track"
+            description={trajectoryActive ? "Hide the trajectory" : "Show the cell's trajectory"}
             side="bottom"
             render={
               <button
                 type="button"
-                onClick={toggleViewLock}
-                className={cn(
-                  "flex size-[22px] items-center justify-center bg-transparent text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
-                  isLinked && "text-primary",
-                )}
+                onClick={onToggleTrajectory}
+                className={cn(iconBtn, trajectoryActive && "text-primary")}
               />
             }
           >
-            {isLinked ? <Lock className="size-3" /> : <LockOpen className="size-3" />}
+            <Waypoints className="size-3.5" />
           </HoverTip>
+        )}
+        {onFitView && (
+          <HoverTip
+            label="Fit view"
+            description="Zoom out to show all points"
+            side="bottom"
+            render={<button type="button" onClick={onFitView} className={iconBtn} />}
+          >
+            <ScanDotIcon size={14} />
+          </HoverTip>
+        )}
+        <HoverTip
+          label={isLinked ? "Views linked" : "Link views"}
+          description={isLinked ? "Click to pan each panel freely" : "Sync pan and zoom across panels"}
+          side="bottom"
+          render={<button type="button" onClick={toggleViewLock} className={cn(iconBtn, isLinked && "text-primary")} />}
+        >
+          {isLinked ? <Lock className="size-3.5" /> : <LockOpen className="size-3.5" />}
+        </HoverTip>
 
-          {panelApi && (
-            <HoverTip
-              label="Float"
-              description="Detach to a floating window"
-              side="bottom"
-              render={
-                <button
-                  type="button"
-                  onClick={() => {
-                    addFloatingScatter({
-                      id: `float-${Date.now()}`,
-                      axes,
-                      colorByColumn: colorSourceToString(colorSource),
-                    });
-                    panelApi.close();
-                  }}
-                  className="flex size-[22px] items-center justify-center bg-transparent text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                />
-              }
-            >
-              <PictureInPicture2Icon className="size-3" />
-            </HoverTip>
-          )}
+        {panelApi && (
+          <HoverTip
+            label="Float"
+            description="Detach to a floating window"
+            side="bottom"
+            render={
+              <button
+                type="button"
+                onClick={() => {
+                  addFloatingScatter({
+                    id: `float-${Date.now()}`,
+                    axes,
+                    colorByColumn: colorSourceToString(colorSource),
+                  });
+                  panelApi.close();
+                }}
+                className={iconBtn}
+              />
+            }
+          >
+            <PictureInPicture2Icon className="size-3.5" />
+          </HoverTip>
+        )}
 
-          {panelApi && (
-            <HoverTip
-              label="Fullscreen"
-              description="Fill the workspace"
-              side="bottom"
-              render={
-                <button
-                  type="button"
-                  onClick={() => (panelApi.isMaximized() ? panelApi.exitMaximized() : panelApi.maximize())}
-                  className="flex size-[22px] items-center justify-center bg-transparent text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                />
-              }
-            >
-              <Maximize2 className="size-3" />
-            </HoverTip>
-          )}
+        {panelApi && (
+          <HoverTip
+            label="Fullscreen"
+            description="Fill the workspace"
+            side="bottom"
+            render={
+              <button
+                type="button"
+                onClick={() => (panelApi.isMaximized() ? panelApi.exitMaximized() : panelApi.maximize())}
+                className={iconBtn}
+              />
+            }
+          >
+            <Maximize2 className="size-3.5" />
+          </HoverTip>
+        )}
 
-          {panelApi && (
-            <HoverTip
-              label="Close"
-              description="Remove this panel"
-              side="bottom"
-              render={
-                <button
-                  type="button"
-                  onClick={() => panelApi.close()}
-                  className="flex size-[22px] items-center justify-center bg-transparent text-muted-foreground transition-colors hover:bg-muted hover:text-destructive"
-                />
-              }
-            >
-              <X className="size-3" />
-            </HoverTip>
-          )}
-        </ButtonGroup>
+        {panelApi && (
+          <HoverTip
+            label="Close"
+            description="Remove this panel"
+            side="bottom"
+            render={
+              <button
+                type="button"
+                onClick={() => panelApi.close()}
+                className={cn(iconBtn, "hover:text-destructive")}
+              />
+            }
+          >
+            <X className="size-3.5" />
+          </HoverTip>
+        )}
       </div>
     </>
   );

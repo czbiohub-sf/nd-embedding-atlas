@@ -21,6 +21,8 @@ export interface EmbeddingPickerProps {
   activeKey: string;
   onSelect: (key: string) => void;
   triggerClassName?: string;
+  /** Hide the dropdown chevron (compact overlay "chip" trigger). */
+  hideChevron?: boolean;
 }
 
 // ── Modality colors (shared with ModalityColorPicker) ────────────────────────
@@ -56,7 +58,13 @@ function groupByModality(obsm: Record<string, ObsmEntry>): Map<string, [string, 
 
 // ── Component ────────────────────────────────────────────────────────────────
 
-export function EmbeddingPicker({ obsm, activeKey, onSelect, triggerClassName }: EmbeddingPickerProps) {
+export function EmbeddingPicker({
+  obsm,
+  activeKey,
+  onSelect,
+  triggerClassName,
+  hideChevron = false,
+}: EmbeddingPickerProps) {
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState<string | null>(null);
   const groups = useMemo(() => groupByModality(obsm), [obsm]);
@@ -82,7 +90,7 @@ export function EmbeddingPicker({ obsm, activeKey, onSelect, triggerClassName }:
             {activeMod}
           </Badge>
         )}
-        <ChevronDownIcon className="size-3 shrink-0 text-muted-foreground" />
+        {!hideChevron && <ChevronDownIcon className="size-3 shrink-0 text-muted-foreground" />}
       </PopoverTrigger>
 
       <PopoverContent className="w-56 gap-0 p-0" side="bottom" align="start" sideOffset={4}>
