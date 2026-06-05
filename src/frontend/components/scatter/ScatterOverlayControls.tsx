@@ -111,10 +111,13 @@ interface Props {
 // Controls float directly on the canvas (no glass bar). Each interactive value
 // is a "chip": a solid card pill so it reads over busy point clouds. The active
 // embedding is the primary-filled, bracketed chip — [phate].
+// NB: the Combobox/ColorSourcePicker trigger base sets `dark:bg-input/30`
+// (translucent). A bare `bg-card` only wins the unprefixed variant, so we must
+// set `dark:bg-card` too or the chips go see-through in dark mode.
 const chipBase =
-  "h-7 max-w-44 rounded-md border border-border bg-card px-2.5 font-mono text-2xs text-foreground/85 shadow-sm hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/30";
+  "h-7 max-w-44 rounded-md border border-border bg-card dark:bg-card px-2.5 font-mono text-2xs text-foreground/85 shadow-sm hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/30";
 const chipActive =
-  "h-7 max-w-44 gap-0 rounded-md border border-transparent bg-primary px-2.5 font-mono text-2xs text-primary-foreground shadow-sm hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring/40 before:mr-px before:text-primary-foreground/60 before:content-['['] after:ml-px after:text-primary-foreground/60 after:content-[']']";
+  "h-7 max-w-44 gap-0 rounded-md border border-transparent bg-primary dark:bg-primary px-2.5 font-mono text-2xs text-primary-foreground shadow-sm hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring/40 before:mr-px before:text-primary-foreground/60 before:content-['['] after:ml-px after:text-primary-foreground/60 after:content-[']']";
 
 /** X / Y / COL caption labels — mono, uppercase, dim. */
 const captionCls = "font-mono text-3xs uppercase tracking-[0.12em] text-muted-foreground";
@@ -168,7 +171,7 @@ export function ScatterOverlayControls({
     <>
       {/* ── Top-left: embedding + dims + color — floats on the canvas, no glass bar ── */}
       {/* max-w cap leaves room for the right utility cluster; the COL chip truncates first. */}
-      <div className="absolute top-0 left-0 z-20 flex max-w-[calc(100%-13rem)] items-center gap-2 px-3 py-2.5">
+      <div className="absolute top-2 left-2 z-20 flex max-w-[calc(100%-14rem)] items-center gap-2 px-1 py-1">
         <BracketIcon icon={ChartScatter} className="mr-0.5 size-6 text-foreground/75" />
 
         {/* Embedding — primary-filled bracketed chip. Modality picker for MuData, combobox otherwise. */}
@@ -256,8 +259,9 @@ export function ScatterOverlayControls({
         )}
       </div>
 
-      {/* ── Top-right: selection tools + utility actions — borderless icons, no glass ── */}
-      <div className="absolute top-0 right-0 z-20 flex items-center gap-1 px-3 py-2.5">
+      {/* ── Top-right: selection tools + utility actions — solid card pill so the
+          icons stay legible over dense point clouds ── */}
+      <div className="absolute top-2 right-2 z-20 flex items-center gap-0.5 rounded-lg border border-border bg-card px-1 py-1 shadow-sm">
         {/* Selection tool toggles */}
         <ToggleGroup
           value={selectionTool === "pan" ? [] : [selectionTool]}
