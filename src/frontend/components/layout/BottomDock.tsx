@@ -18,6 +18,8 @@ import { useScatterUIState } from "../scatter/ScatterUIStateProvider";
 import { useTerminalTable } from "../table/TerminalTableProvider";
 import { Separator } from "../ui/separator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
+import { BiohubMark } from "../BiohubMark";
+import { Bracketed } from "../ui/bracketed";
 
 // ── Point size slider ─────────────────────────────────────────────────────
 function PointSizeSlider() {
@@ -307,29 +309,33 @@ export function BottomDock({
         </>
       )}
 
-      {/* ── Metrics ── */}
-      {numPoints > 0 && <span className="text-muted-foreground tabular-nums">{numPoints.toLocaleString()}</span>}
+      {/* ── Metrics (HUD signage — Geist Pixel, bracketed readouts) ── */}
+      {numPoints > 0 && (
+        <span className="font-hud text-muted-foreground tabular-nums">
+          <Bracketed>{numPoints.toLocaleString()}</Bracketed>
+        </span>
+      )}
       {selectedCount !== null && selectedCount > 0 && (
         <>
           <span className="mx-1 text-muted-foreground/60">·</span>
           <span
-            className="tabular-nums"
+            className="font-hud tabular-nums"
             style={{ color: "color-mix(in oklab, var(--color-primary) 80%, transparent)" }}
           >
-            {selectedCount.toLocaleString()} sel
+            <Bracketed>{selectedCount.toLocaleString()} sel</Bracketed>
           </span>
         </>
       )}
       {zoom !== 1 && (
         <>
           <span className="mx-1 text-muted-foreground/60">·</span>
-          <span className="text-muted-foreground tabular-nums">{zoom.toFixed(1)}×</span>
+          <span className="font-hud text-muted-foreground tabular-nums">{zoom.toFixed(1)}×</span>
         </>
       )}
       {fps !== null && (
         <>
           <span className="mx-1 text-muted-foreground/60">·</span>
-          <span className="text-muted-foreground/75 tabular-nums">{Math.round(fps)}fps</span>
+          <span className="font-hud text-muted-foreground/75 tabular-nums">{Math.round(fps)}fps</span>
         </>
       )}
 
@@ -394,6 +400,10 @@ export function BottomDock({
       >
         {theme === "dark" ? <SunIcon className="size-2.5" /> : <MoonIcon className="size-2.5" />}
       </button>
+
+      {/* Biohub mark — bottom-right corner (brand-sanctioned placement) */}
+      <Separator orientation="vertical" className="mx-1.5 h-3" />
+      <BiohubMark className="h-3 w-auto shrink-0 text-primary/80" title="Biohub" />
     </div>
   );
 }
