@@ -59,7 +59,7 @@ export function CategoricalLegend() {
           <PopoverTrigger
             aria-label="Change palette"
             title={`Palette · ${state.categoricalColormap}`}
-            className="rounded-sm px-1 py-0.5 font-mono text-[9px] text-muted-foreground/70 normal-case transition-colors hover:bg-white/[0.06] hover:text-foreground focus-visible:outline-none"
+            className="rounded-sm px-1 py-0.5 font-mono text-3xs text-muted-foreground/70 normal-case outline-none transition-colors focus-ring hover:bg-white/[0.06] hover:text-foreground"
           >
             {state.categoricalColormap} ▾
           </PopoverTrigger>

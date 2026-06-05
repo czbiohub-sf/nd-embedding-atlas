@@ -19,8 +19,8 @@ function TabsTrigger({ className, ...props }: TabsPrimitive.Tab.Props) {
     <TabsPrimitive.Tab
       data-slot="tabs-trigger"
       className={cn(
-        "relative px-3 py-1.5 font-medium text-[11px] text-muted-foreground/60 transition-colors",
-        "cursor-pointer select-none outline-none",
+        "relative rounded-sm px-3 py-1.5 font-medium text-[11px] text-muted-foreground/60 transition-colors",
+        "cursor-pointer select-none outline-none focus-ring",
         "hover:text-muted-foreground",
         "data-selected:text-foreground",
         "after:absolute after:right-0 after:bottom-0 after:left-0 after:h-px after:bg-foreground/0",

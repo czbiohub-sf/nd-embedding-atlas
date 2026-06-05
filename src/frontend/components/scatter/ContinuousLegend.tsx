@@ -138,7 +138,7 @@ export function ContinuousLegend({
         <ContextMenu>
           <ContextMenuTrigger
             aria-label="Colormap options"
-            className="inline-flex shrink-0 cursor-context-menu items-center text-muted-foreground/70 transition-colors hover:text-foreground focus-visible:outline-none"
+            className="inline-flex shrink-0 cursor-context-menu items-center rounded-sm text-muted-foreground/70 outline-none transition-colors focus-ring hover:text-foreground"
           >
             <ColormapCircle colormap={colormap} reversed={reversed} />
           </ContextMenuTrigger>

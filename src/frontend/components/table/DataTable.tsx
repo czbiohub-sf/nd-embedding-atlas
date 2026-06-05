@@ -233,11 +233,20 @@ export function DataTable({
                 >
                   <button
                     type="button"
-                    className="flex h-full w-full cursor-pointer select-none items-center px-2 font-medium font-sans text-[11px] text-text-secondary hover:text-text-primary"
+                    className="flex h-full w-full cursor-pointer select-none items-center gap-1 px-2 font-medium font-mono text-[11px] text-text-secondary outline-none focus-ring hover:text-text-primary"
                     onClick={header.column.getToggleSortingHandler()}
+                    title={header.isPlaceholder ? undefined : String(header.column.columnDef.header ?? header.id)}
                   >
-                    {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
-                    {{ asc: " ↑", desc: " ↓" }[header.column.getIsSorted() as string] ?? null}
+                    {header.isPlaceholder ? null : (
+                      <span className="min-w-0 truncate">
+                        {flexRender(header.column.columnDef.header, header.getContext())}
+                      </span>
+                    )}
+                    {{ asc: "↑", desc: "↓" }[header.column.getIsSorted() as string] ? (
+                      <span className="shrink-0 text-text-muted">
+                        {{ asc: "↑", desc: "↓" }[header.column.getIsSorted() as string]}
+                      </span>
+                    ) : null}
                   </button>
                   {/* biome-ignore lint/a11y/noStaticElementInteractions: column resize handle is drag-only */}
                   <div
