@@ -71,7 +71,7 @@ function ContrastInput({
           e.currentTarget.blur();
         }
       }}
-      className="h-5 w-14 px-1 text-right text-[10px] tabular-nums"
+      className="h-5 w-14 px-1 text-right text-3xs tabular-nums"
     />
   );
 }
@@ -105,14 +105,14 @@ export function ChannelControls() {
       {/* Header */}
       <div className="flex shrink-0 items-center gap-1.5 px-2 py-1.5">
         <Layers className="size-3 shrink-0 text-muted-foreground/60" />
-        <span className="flex-1 font-medium text-[10px] text-muted-foreground/70">Channels</span>
+        <span className="flex-1 font-medium text-3xs text-muted-foreground/70">Channels</span>
         <button
           type="button"
           onClick={() => setMinimized(true)}
           aria-label="Minimize channel controls"
           className="flex size-4 items-center justify-center rounded text-muted-foreground/40 transition-colors hover:text-muted-foreground"
         >
-          <span className="text-[11px] leading-none">—</span>
+          <span className="text-2xs leading-none">—</span>
         </button>
       </div>
 
@@ -148,7 +148,7 @@ export function ChannelControls() {
                     aria-label={`${ch.label} color`}
                   />
 
-                  <span className="flex-1 truncate text-[10px] text-foreground/80">{ch.label}</span>
+                  <span className="flex-1 truncate text-3xs text-foreground/80">{ch.label}</span>
 
                   {viewMode === "2d" && (
                     <Select
@@ -159,12 +159,12 @@ export function ChannelControls() {
                         })
                       }
                     >
-                      <SelectTrigger className="h-5 w-16 rounded px-1.5 text-[10px]">
+                      <SelectTrigger className="h-5 w-16 rounded px-1.5 text-3xs">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
                         {BLEND_OPTIONS.map((o) => (
-                          <SelectItem key={o.value} value={o.value} className="text-[10px]">
+                          <SelectItem key={o.value} value={o.value} className="text-3xs">
                             {o.label}
                           </SelectItem>
                         ))}

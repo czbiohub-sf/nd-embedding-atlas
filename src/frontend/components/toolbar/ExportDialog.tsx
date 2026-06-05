@@ -120,7 +120,7 @@ export default function ExportDialog({ open, onOpenChange, filtered }: Props) {
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Export Selection</DialogTitle>
-          <p className="font-mono text-[11px] text-muted-foreground tabular-nums">
+          <p className="font-mono text-2xs text-muted-foreground tabular-nums">
             {filtered.toLocaleString()} observations
           </p>
         </DialogHeader>
@@ -131,7 +131,7 @@ export default function ExportDialog({ open, onOpenChange, filtered }: Props) {
             {breakdown.map((d) => (
               <span
                 key={d._dataset}
-                className="inline-flex items-center gap-1.5 rounded bg-muted px-2 py-0.5 font-mono text-[10px]"
+                className="inline-flex items-center gap-1.5 rounded bg-muted px-2 py-0.5 font-mono text-3xs"
               >
                 <span className="text-foreground">{d._dataset}</span>
                 <span className="text-muted-foreground">{d.n.toLocaleString()}</span>
@@ -162,7 +162,7 @@ export default function ExportDialog({ open, onOpenChange, filtered }: Props) {
             </InputGroupAddon>
           </InputGroup>
           {previewPath && (
-            <p className="truncate font-mono text-[10px] text-muted-foreground" title={previewPath}>
+            <p className="truncate font-mono text-3xs text-muted-foreground" title={previewPath}>
               {previewPath}
             </p>
           )}

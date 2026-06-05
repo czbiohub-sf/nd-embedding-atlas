@@ -27,7 +27,7 @@ function renderChart(spec: ChartSpec): ReactNode {
     case "histogram":
       return <Histogram field={spec.field} bins={spec.bins} />;
     default:
-      return <div className="py-1 text-[10px] text-text-muted">Unsupported chart type: {spec.type}</div>;
+      return <div className="py-1 text-3xs text-text-muted">Unsupported chart type: {spec.type}</div>;
   }
 }
 

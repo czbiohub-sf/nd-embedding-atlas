@@ -111,7 +111,7 @@ function VolumeRow({ label, title, defaultValue, min, max, step, onValueChange }
 
   return (
     <div className="flex items-center gap-1.5" title={title}>
-      <span className="w-7 shrink-0 text-right text-[10px] text-muted-foreground">{label}</span>
+      <span className="w-7 shrink-0 text-right text-3xs text-muted-foreground">{label}</span>
       <Slider
         className="flex-1"
         defaultValue={[defaultValue]}
@@ -120,7 +120,7 @@ function VolumeRow({ label, title, defaultValue, min, max, step, onValueChange }
         step={step}
         onValueChange={handleChange}
       />
-      <span ref={displayRef} className="w-8 text-right text-[10px] text-muted-foreground tabular-nums">
+      <span ref={displayRef} className="w-8 text-right text-3xs text-muted-foreground tabular-nums">
         {defaultValue.toFixed(2)}
       </span>
     </div>

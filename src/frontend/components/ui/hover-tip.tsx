@@ -26,7 +26,7 @@ export function HoverTip({ label, description, render, children, side = "bottom"
         <TooltipTrigger render={render}>{children}</TooltipTrigger>
         <TooltipContent side={side} sideOffset={6} variant="glass">
           <span className="font-semibold text-foreground text-xs leading-none">{label}</span>
-          <span className="mt-1 text-[10px] text-muted-foreground leading-snug">{description}</span>
+          <span className="mt-1 text-3xs text-muted-foreground leading-snug">{description}</span>
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>

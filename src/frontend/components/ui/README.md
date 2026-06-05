@@ -10,13 +10,13 @@ Two tiers live in the CSS file; a third is available but used sparingly.
 
 Raw source values. Never used directly by components.
 
-| Token           | Light                                | Dark | Purpose                                                        |
-| --------------- | ------------------------------------ | ---- | -------------------------------------------------------------- |
-| `--base-hue`    | `277.117`                            | same | Master hue knob — shifts the UI tone (cool/warm) in one place. |
-| `--accent-hue`  | `oklch(0.585 0.233 var(--base-hue))` | same | Source for `--emphasis` tints.                                 |
-| `--danger-hue`  | `oklch(0.577 0.245 27.325)`          | same | Source for `--danger-emphasis`.                                |
-| `--warning-hue` | `oklch(0.741 0.181 60)`              | same | Source for `--warning-emphasis`.                               |
-| `--success-hue` | `oklch(0.69 0.19 170)`               | same | Source for `--success-emphasis`.                               |
+| Token           | Light                                | Dark | Purpose                                                                |
+| --------------- | ------------------------------------ | ---- | ---------------------------------------------------------------------- |
+| `--base-hue`    | `281`                                | same | Master hue knob (Biohub periwinkle hue) — shifts UI tone in one place. |
+| `--accent-hue`  | `oklch(0.554 0.236 var(--base-hue))` | same | Source for `--emphasis` tints.                                         |
+| `--danger-hue`  | `oklch(0.577 0.245 27.325)`          | same | Source for `--danger-emphasis`.                                        |
+| `--warning-hue` | `oklch(0.741 0.181 60)`              | same | Source for `--warning-emphasis`.                                       |
+| `--success-hue` | `oklch(0.69 0.19 170)`               | same | Source for `--success-emphasis`.                                       |
 
 ### Tier 2 — semantics
 
@@ -80,7 +80,7 @@ Edit in place when you need variants — `Button`'s CVA block is the template.
 | `<Pill>`                                 | Inline tone-tinted chip. Same tone vocabulary as Callout plus `muted`.  | Counts, selection markers, status words. Lighter sibling of shadcn's `<Badge>`.                                                            |
 | `<KeyValueRow>`                          | `[label]: [value]` with truncating label column and tabular-nums value. | Metadata readouts, settings key-value lists.                                                                                               |
 | `<DimensionBadge>`                       | Small technical label. `tone`: `obs` / `var` / `accent` / `muted`.      | Labeling categories, layer names, axis dimensions.                                                                                         |
-| `<FilterBadge>`                          | Filtered/total count display with accent-cyan when filtered.            | Anywhere a filtered subset count is shown.                                                                                                 |
+| `<FilterBadge>`                          | Filtered/total count display, periwinkle (`--primary`) when filtered.   | Anywhere a filtered subset count is shown.                                                                                                 |
 | `<LegendRow>`                            | Swatch + label + count with `disabled` / `dimmed` / `isolated` state.   | Categorical legends. Caller supplies the swatch (wrap it in ContextMenu if you need color-picking).                                        |
 
 ### Where things live outside `ui/`
@@ -105,10 +105,10 @@ Exported: `focusRing`, `panelSurface`, `glassSurface`, `dataMono`.
 ## Migration notes
 
 - **`<Panel variant="glass">` not inline `bg-card/80 border-white/[0.07] backdrop-blur-md`.** The inline string renders white-on-white in light mode; the Panel variant uses `--glass-*` tokens that swap correctly.
-- **`<DimensionBadge>` not hand-rolled `<span className="border-*/30 bg-*/20 text-[9px]">`.** Every new color tone otherwise adds another one-off copy of the same structure.
+- **`<DimensionBadge>` not hand-rolled `<span className="border-*/30 bg-*/20 text-3xs">`.** Every new color tone otherwise adds another one-off copy of the same structure.
 - **`<IconButton>` not `HoverTip + <button size-[22px]>`.** Enforces `aria-label` and the 22/26 px density rungs.
 - **`<Panel>` not `<Card>` on the canvas.** shadcn's `<Card>` targets docked sidebars and lacks a glass variant. Use `<Panel>` for floating overlays.
-- **Named typography rungs (`text-2xs`, `text-3xs`) not arbitrary `text-[10px]` / `text-[11px]`.** Drift reintroduces unnamed sizes; reviewers should push back on arbitrary pixel sizes.
+- **Named typography rungs (`text-2xs`, `text-3xs`) not arbitrary `text-3xs` / `text-2xs`.** Drift reintroduces unnamed sizes; reviewers should push back on arbitrary pixel sizes.
 
 ## Adding a new shadcn primitive
 

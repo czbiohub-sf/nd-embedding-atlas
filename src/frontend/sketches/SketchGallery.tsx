@@ -104,7 +104,7 @@ function Bk({ children }: { children: React.ReactNode }) {
 }
 
 function Label({ children }: { children: React.ReactNode }) {
-  return <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">{children}</span>;
+  return <span className="font-mono text-3xs uppercase tracking-[0.12em] text-muted-foreground">{children}</span>;
 }
 
 /** Compose any lucide icon inside the brand's brackets — [icon].
@@ -122,7 +122,7 @@ function Chip({ children, active = false }: { children: React.ReactNode; active?
   return (
     <button
       type="button"
-      className={`flex h-7 items-center gap-1.5 rounded-md border px-2.5 font-mono text-[11px] transition-colors ${
+      className={`flex h-7 items-center gap-1.5 rounded-md border px-2.5 font-mono text-2xs transition-colors ${
         active
           ? "border-transparent bg-primary text-primary-foreground"
           : "border-border bg-card text-foreground/85 hover:bg-muted"
@@ -172,11 +172,11 @@ function Surface({ spec }: { spec: VariantSpec }) {
           <Chip active>
             <Bk>phate</Bk>
           </Chip>
-          <span className="font-mono text-[10px] text-muted-foreground">X</span>
+          <span className="font-mono text-3xs text-muted-foreground">X</span>
           <Chip>0</Chip>
-          <span className="font-mono text-[10px] text-muted-foreground">Y</span>
+          <span className="font-mono text-3xs text-muted-foreground">Y</span>
           <Chip>1</Chip>
-          <span className="ml-1 font-mono text-[10px] text-muted-foreground">COL</span>
+          <span className="ml-1 font-mono text-3xs text-muted-foreground">COL</span>
           <Chip>predicted_infection_state</Chip>
           <div className="ml-auto flex items-center gap-1.5">
             {["▦", "◫", "◰", "⤢", "✕"].map((g, i) => (
@@ -191,7 +191,7 @@ function Surface({ spec }: { spec: VariantSpec }) {
           </div>
         </div>
 
-        <div className="absolute top-14 right-6 font-mono text-[10px] text-muted-foreground/80">
+        <div className="absolute top-14 right-6 font-mono text-3xs text-muted-foreground/80">
           <Bk>OBS · 70,121</Bk>
         </div>
 
@@ -201,12 +201,12 @@ function Surface({ spec }: { spec: VariantSpec }) {
             <Label>Categories · 2</Label>
             <button
               type="button"
-              className="rounded-sm px-1 py-0.5 font-mono text-[10px] text-muted-foreground/80 transition-colors hover:bg-muted hover:text-foreground"
+              className="rounded-sm px-1 py-0.5 font-mono text-3xs text-muted-foreground/80 transition-colors hover:bg-muted hover:text-foreground"
             >
               tab10 ▾
             </button>
           </div>
-          <div className="p-1.5 font-mono text-[11px]">
+          <div className="p-1.5 font-mono text-2xs">
             {[
               ["infected", "39,217", blue],
               ["uninfected", "30,904", amber],
@@ -234,7 +234,7 @@ function Surface({ spec }: { spec: VariantSpec }) {
             <button
               key={t}
               type="button"
-              className={`relative rounded-sm px-2 py-1 font-mono text-[11px] uppercase tracking-wider transition-colors ${
+              className={`relative rounded-sm px-2 py-1 font-mono text-2xs uppercase tracking-wider transition-colors ${
                 i === 0
                   ? "text-foreground after:absolute after:inset-x-2 after:-bottom-1.5 after:h-px after:bg-primary"
                   : "text-muted-foreground/60 hover:text-muted-foreground"
@@ -243,7 +243,7 @@ function Surface({ spec }: { spec: VariantSpec }) {
               {t}
             </button>
           ))}
-          <span className="ml-auto font-mono text-[10px] text-muted-foreground/70">
+          <span className="ml-auto font-mono text-3xs text-muted-foreground/70">
             <Bk>ROWS · 70,121</Bk>
           </span>
           <button
@@ -259,7 +259,7 @@ function Surface({ spec }: { spec: VariantSpec }) {
             {TABLE_COLS.map((c) => (
               <div
                 key={c}
-                className="shrink-0 truncate px-2 py-1.5 font-medium font-mono text-[11px] uppercase tracking-wider text-muted-foreground"
+                className="shrink-0 truncate px-2 py-1.5 font-medium font-mono text-2xs uppercase tracking-wider text-muted-foreground"
                 style={{ width: colWidth(c) }}
                 title={c}
               >
@@ -271,7 +271,7 @@ function Surface({ spec }: { spec: VariantSpec }) {
           {TABLE_ROWS.map((row, ri) => (
             <div
               key={ri}
-              className={`group flex border-border/40 border-b font-mono text-[11px] transition-colors ${
+              className={`group flex border-border/40 border-b font-mono text-2xs transition-colors ${
                 ri === 2 ? "bg-primary/10" : "hover:bg-muted"
               }`}
             >
@@ -287,7 +287,7 @@ function Surface({ spec }: { spec: VariantSpec }) {
                     {ri === 2 && ci === 0 && <span className="absolute inset-y-0 left-0 w-0.5 bg-primary" />}
                     {isState ? (
                       <span
-                        className="rounded-[3px] px-1.5 py-0.5 text-[10px]"
+                        className="rounded-[3px] px-1.5 py-0.5 text-3xs"
                         style={{
                           background: isInfected ? blue.replace(")", " / 0.18)") : amber.replace(")", " / 0.18)"),
                           color: isInfected
@@ -311,18 +311,18 @@ function Surface({ spec }: { spec: VariantSpec }) {
           ))}
         </div>
         {/* footer — keyboard hint, like the Collections card */}
-        <div className="flex items-center justify-between border-border border-t px-3 py-1.5 font-mono text-[10px] text-muted-foreground/60">
+        <div className="flex items-center justify-between border-border border-t px-3 py-1.5 font-mono text-3xs text-muted-foreground/60">
           <span className="flex items-center gap-1.5">
-            Toggle <kbd className="rounded border border-border bg-muted px-1 py-px text-[9px]">⌘J</kbd>
+            Toggle <kbd className="rounded border border-border bg-muted px-1 py-px text-3xs">⌘J</kbd>
           </span>
           <span className="flex items-center gap-1.5">
-            <kbd className="rounded border border-border bg-muted px-1 py-px text-[9px]">Esc</kbd> to close
+            <kbd className="rounded border border-border bg-muted px-1 py-px text-3xs">Esc</kbd> to close
           </span>
         </div>
       </div>
 
       {/* ── Status bar — HUD, bracketed readouts ─────────────── */}
-      <div className="flex items-center gap-2.5 border-border border-t bg-card px-3 py-1 font-mono text-[10px] text-muted-foreground">
+      <div className="flex items-center gap-2.5 border-border border-t bg-card px-3 py-1 font-mono text-3xs text-muted-foreground">
         <span className="uppercase tracking-wider">phate</span>
         <span className="opacity-40">·</span>
         <Bk>OBS · 70,121</Bk>
@@ -352,7 +352,7 @@ export function SketchGallery({ variant = "a" }: { variant?: string }) {
 
       {/* throwaway dev switcher — tiny floating pill, bottom-right, out of the way */}
       <div
-        className="fixed top-14 right-3 z-50 flex items-center gap-0.5 rounded-md border px-1 py-1 font-mono text-[10px]"
+        className="fixed top-14 right-3 z-50 flex items-center gap-0.5 rounded-md border px-1 py-1 font-mono text-3xs"
         style={{ background: "#0a0a0c", color: "#f5f5f7", borderColor: "rgba(255,255,255,0.12)" }}
         title={spec.blurb}
       >

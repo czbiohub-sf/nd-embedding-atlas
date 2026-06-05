@@ -99,7 +99,7 @@ export function CollectionRow({
               className="h-6 px-1.5 text-xs"
               aria-label={`Rename ${c.name}`}
             />
-            <span className="flex items-center gap-2 text-[10px] text-muted-foreground">
+            <span className="flex items-center gap-2 text-3xs text-muted-foreground">
               <KbdGroup>
                 <Kbd>↵</Kbd> save
               </KbdGroup>

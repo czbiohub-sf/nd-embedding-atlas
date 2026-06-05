@@ -75,7 +75,7 @@ export function TrackPane() {
   if (!trajectory) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
-        <span className="select-none text-[11px] text-muted-foreground/50">
+        <span className="select-none text-2xs text-muted-foreground/50">
           Click a point, then <span className="text-muted-foreground/70">→ Show Trajectory</span> to start tracking
         </span>
       </div>
@@ -85,7 +85,7 @@ export function TrackPane() {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       {/* Track identity header */}
-      <div className="flex shrink-0 items-center gap-2 border-border/40 border-b bg-muted/10 px-3 py-1.5 text-[10px]">
+      <div className="flex shrink-0 items-center gap-2 border-border/40 border-b bg-muted/10 px-3 py-1.5 text-3xs">
         <span className="text-foreground/60">track</span>
         <span className="font-semibold text-primary/80 tabular-nums">{trajectory.trackId}</span>
         <span className="text-muted-foreground/30">·</span>
@@ -105,7 +105,7 @@ export function TrackPane() {
 
       {/* T* scrubber */}
       <div className="flex shrink-0 items-center gap-2 border-border/30 border-b px-3 py-1.5">
-        <span className="text-[10px] text-primary/70">T*</span>
+        <span className="text-3xs text-primary/70">T*</span>
         <input
           type="range"
           min={0}
@@ -119,7 +119,7 @@ export function TrackPane() {
           className="flex-1 accent-primary"
           style={{ height: "3px" }}
         />
-        <span className="min-w-[36px] text-right text-[10px] text-primary/70 tabular-nums">{trajectory.tIndex}</span>
+        <span className="min-w-[36px] text-right text-3xs text-primary/70 tabular-nums">{trajectory.tIndex}</span>
         <div className="flex items-center gap-0.5">
           <button
             type="button"

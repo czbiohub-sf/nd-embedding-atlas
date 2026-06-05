@@ -112,7 +112,7 @@ export function CollectionsList() {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-1 px-4 text-red-400 text-xs">
         <p>Failed to load collections</p>
-        <p className="text-[10px] text-text-muted">{error instanceof Error ? error.message : String(error)}</p>
+        <p className="text-3xs text-text-muted">{error instanceof Error ? error.message : String(error)}</p>
       </div>
     );
   }

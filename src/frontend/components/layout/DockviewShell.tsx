@@ -29,7 +29,7 @@ function CustomTab({ api }: IDockviewPanelHeaderProps) {
   return (
     <div
       className={[
-        "group flex h-full select-none items-center gap-2 border-border-subtle border-r px-3 font-medium text-[11px] transition-colors",
+        "group flex h-full select-none items-center gap-2 border-border-subtle border-r px-3 font-medium text-2xs transition-colors",
         isActive ? "bg-elevated text-text-primary" : "bg-surface text-text-muted hover:text-text-secondary",
       ].join(" ")}
     >

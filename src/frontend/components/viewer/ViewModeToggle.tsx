@@ -8,7 +8,7 @@ export function ViewModeToggle() {
   if (bounds.zMax === null || bounds.zMax === 0) return null;
 
   return (
-    <div className="flex h-5 overflow-hidden rounded border border-border-subtle text-[10px]">
+    <div className="flex h-5 overflow-hidden rounded border border-border-subtle text-3xs">
       <button
         type="button"
         aria-pressed={viewMode === "2d"}

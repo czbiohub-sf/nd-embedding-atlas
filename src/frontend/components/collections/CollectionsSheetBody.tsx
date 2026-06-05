@@ -20,7 +20,7 @@ export function CollectionsSheetBody() {
       <div className="min-h-0 flex-1 overflow-y-auto">
         <CollectionsList />
       </div>
-      <div className="flex items-center justify-between gap-2 border-border-subtle border-t bg-surface-secondary/40 px-4 py-2 text-[11px] text-text-muted">
+      <div className="flex items-center justify-between gap-2 border-border-subtle border-t bg-surface-secondary/40 px-4 py-2 text-2xs text-text-muted">
         <span className="inline-flex items-center gap-1.5">
           Toggle{" "}
           <KbdGroup>
