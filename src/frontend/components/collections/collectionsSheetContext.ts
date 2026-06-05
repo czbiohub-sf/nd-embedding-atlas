@@ -19,13 +19,11 @@ export interface OpenOptions {
 }
 
 export interface CollectionsSheetState {
-  open: boolean;
-  setOpen: (open: boolean) => void;
-  toggle: () => void;
   /**
-   * Open the sheet from the bookmark trigger. Pass the live selection
+   * Open the panel from the bookmark trigger. Pass the live selection
    * source so the save section can read indices at submit time and the
-   * banner can show the current count.
+   * banner can show the current count. Open/close state itself lives in the
+   * panel registry (`usePanel("collections")`); this only stashes selection.
    */
   openSheet: (source: SelectionSource | null, options?: OpenOptions) => void;
   /** Live selection state for descendants — null when no selection. */

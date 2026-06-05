@@ -1,11 +1,15 @@
 /**
- * DevtoolsDrawer — tabbed devtools panel that slides up from the bottom dock.
+ * DevtoolsDrawer — tabbed devtools floating card. Open/size driven by the panel
+ * registry (`usePanel("devtools")`); shares the bottom slot with the table.
  * Tabs: Query | Scatter (live store state) | Render (point opacity, HDR, blend mode etc.)
  */
 
+import { LogsIcon } from "lucide-react";
 import { lazy, Suspense, useState } from "react";
 import { cn } from "../../lib/utils";
+import { usePanel } from "../../stores/panelRegistry";
 import { useTheme } from "../../ThemeProvider";
+import { SlidePanel } from "../ui/slide-panel";
 import { RenderSettingsPlugin } from "./RenderSettingsPlugin";
 import { ScatterStatePlugin } from "./ScatterStatePlugin";
 
@@ -15,59 +19,50 @@ const ReactQueryDevtoolsPanel = lazy(() =>
 
 type Tab = "query" | "scatter" | "render";
 
-interface Props {
-  open: boolean;
-  onClose: () => void;
-}
-
-export function DevtoolsDrawer({ open, onClose }: Props) {
+export function DevtoolsDrawer() {
   const [tab, setTab] = useState<Tab>("query");
+  const { setOpen } = usePanel("devtools");
   const { theme } = useTheme();
-
-  if (!open) return null;
+  const onClose = () => setOpen(false);
 
   return (
-    <div className="flex flex-col border-border border-t bg-card" style={{ height: 380 }}>
-      {/* Tab bar */}
-      <div className="flex h-8 shrink-0 items-center border-glass-border border-b bg-card px-2">
-        {(["query", "scatter", "render"] as Tab[]).map((t) => (
-          <button
-            key={t}
-            type="button"
-            onClick={() => setTab(t)}
-            className={cn(
-              "rounded-sm px-3 py-1 font-mono text-2xs transition-colors",
-              tab === t ? "bg-accent text-foreground" : "text-foreground/30 hover:text-foreground/60",
-            )}
-          >
-            {t === "query" ? "Query" : t === "scatter" ? "Scatter State" : "Render"}
-          </button>
-        ))}
-        <button
-          type="button"
-          onClick={onClose}
-          className="ml-auto px-2 text-2xs text-foreground/20 transition-colors hover:text-foreground/60"
-        >
-          ✕
-        </button>
-      </div>
+    <SlidePanel id="devtools">
+      <SlidePanel.Content>
+        <SlidePanel.ResizeHandle />
+        <SlidePanel.Header icon={LogsIcon} className="gap-0 py-1.5 pr-2 pl-3">
+          <div className="flex items-center gap-0.5">
+            {(["query", "scatter", "render"] as Tab[]).map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setTab(t)}
+                className={cn(
+                  "rounded-sm px-2.5 py-1 font-mono text-2xs transition-colors",
+                  tab === t ? "bg-accent text-foreground" : "text-foreground/40 hover:text-foreground/70",
+                )}
+              >
+                {t === "query" ? "Query" : t === "scatter" ? "Scatter State" : "Render"}
+              </button>
+            ))}
+          </div>
+        </SlidePanel.Header>
 
-      {/* Panel content */}
-      <div className="min-h-0 flex-1 overflow-hidden">
-        {tab === "query" && (
-          <Suspense
-            fallback={
-              <div className="flex h-full items-center justify-center font-mono text-foreground/30 text-xs">
-                Loading...
-              </div>
-            }
-          >
-            <ReactQueryDevtoolsPanel onClose={onClose} style={{ height: "100%", width: "100%" }} theme={theme} />
-          </Suspense>
-        )}
-        {tab === "scatter" && <ScatterStatePlugin />}
-        {tab === "render" && <RenderSettingsPlugin />}
-      </div>
-    </div>
+        <SlidePanel.Body>
+          {tab === "query" && (
+            <Suspense
+              fallback={
+                <div className="flex h-full items-center justify-center font-mono text-foreground/30 text-xs">
+                  Loading...
+                </div>
+              }
+            >
+              <ReactQueryDevtoolsPanel onClose={onClose} style={{ height: "100%", width: "100%" }} theme={theme} />
+            </Suspense>
+          )}
+          {tab === "scatter" && <ScatterStatePlugin />}
+          {tab === "render" && <RenderSettingsPlugin />}
+        </SlidePanel.Body>
+      </SlidePanel.Content>
+    </SlidePanel>
   );
 }

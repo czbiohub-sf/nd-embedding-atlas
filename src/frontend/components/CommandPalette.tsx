@@ -5,8 +5,8 @@ import { lazy, type RefObject, Suspense, useCallback, useEffect, useState } from
 import { useDashboard } from "../hooks/useDashboard";
 import { useMosaicClient } from "../hooks/useMosaicClient";
 import { filterExprToExpr } from "../lib/mosaic-helpers";
+import { usePanel } from "../stores/panelRegistry";
 import { useTheme } from "../ThemeProvider";
-import { useTerminalTable } from "./table/TerminalTableProvider";
 import {
   CommandDialog,
   CommandEmpty,
@@ -37,8 +37,7 @@ export function CommandPalette({ onAddScatter, onOpenViewer, onFloatViewer, open
     state: { metadata },
     meta: { coordinator, brushSelection, table },
   } = useDashboard();
-  // eslint-disable-next-line @typescript-eslint/unbound-method
-  const { toggle: toggleTable } = useTerminalTable();
+  const { toggle: toggleTable } = usePanel("table");
   // eslint-disable-next-line @typescript-eslint/unbound-method
   const { theme, toggle: toggleTheme } = useTheme();
 

@@ -7,9 +7,11 @@ import { DevtoolsDrawer } from "../components/devtools/DevtoolsDrawer";
 import { BottomDock } from "../components/layout/BottomDock";
 import { DockviewShell } from "../components/layout/DockviewShell";
 import { FloatingScatterRoot } from "../components/layout/FloatingScatterWindow";
+import { PanelHotkeys } from "../components/layout/PanelHotkeys";
 import { DatasetViewerPiP, ViewerPiP } from "../components/layout/ViewerPiP";
 import { TerminalTable } from "../components/table/TerminalTable";
 import { useDashboard } from "../hooks/useDashboard";
+import { togglePanel } from "../stores/panelRegistry";
 import { openViewerPiP } from "../stores/ViewerPiPStore";
 
 export function DashboardShell() {
@@ -21,7 +23,6 @@ export function DashboardShell() {
   const dockviewApiRef = useRef<DockviewApi | null>(null);
   const [dockviewApi, setDockviewApi] = useState<DockviewApi | null>(null);
   const cmdPaletteOpenRef = useRef<((page: "scatter") => void) | null>(null);
-  const [devtoolsOpen, setDevtoolsOpen] = useState(false);
 
   const prevHighlightRef = useRef<string | null>(null);
   useEffect(() => {
@@ -94,11 +95,10 @@ export function DashboardShell() {
           <ActiveCollectionCallout />
         </div>
 
-        {/* ⌘J terminal table — slides up above the dock */}
+        {/* Floating panels — open/size driven by the panel registry */}
         <TerminalTable />
-
-        {/* Devtools drawer — sits directly above the dock */}
-        <DevtoolsDrawer open={devtoolsOpen} onClose={() => setDevtoolsOpen(false)} />
+        <DevtoolsDrawer />
+        <PanelHotkeys />
 
         {/* Bottom dock — 20px navigation + metrics */}
         <BottomDock
@@ -107,8 +107,7 @@ export function DashboardShell() {
           onCloseViewer={closeViewerPanel}
           onFloatViewer={hasPlate ? openFloatViewer : undefined}
           hasPlate={hasPlate}
-          devtoolsOpen={devtoolsOpen}
-          onToggleDevtools={() => setDevtoolsOpen((o) => !o)}
+          onToggleDevtools={() => togglePanel("devtools")}
           datasetKeys={metadata.dataset_keys ?? undefined}
         />
 

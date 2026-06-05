@@ -40,8 +40,16 @@ function useSlidePanel(): SlidePanelCtx {
 
 function SlidePanelRoot({ id, children }: { id: string; children: React.ReactNode }) {
   const { open, setOpen, side, size, setSize } = usePanel(id);
+  // These are persistent workspace panels, not transient sheets: clicking the
+  // scatter canvas (or another dock control) must NOT dismiss them. Honor only
+  // explicit closes — Esc, the close button, the toggle — and ignore Base-UI's
+  // outside-press / focus-out dismissals.
+  const onOpenChange = (next: boolean, details: { reason?: string }) => {
+    if (!next && (details.reason === "outside-press" || details.reason === "focus-out")) return;
+    setOpen(next);
+  };
   return (
-    <SheetRoot open={open} onOpenChange={setOpen}>
+    <SheetRoot open={open} onOpenChange={onOpenChange}>
       <Ctx.Provider value={{ side, size, setSize }}>{children}</Ctx.Provider>
     </SheetRoot>
   );
@@ -50,7 +58,9 @@ function SlidePanelRoot({ id, children }: { id: string; children: React.ReactNod
 function Content({ className, children }: { className?: string; children: React.ReactNode }) {
   const { side, size } = useSlidePanel();
   // Inline style wins over the Sheet's utility classes — clean override for the
-  // resizable size + the wide-bottom-above-footer placement.
+  // resizable size + placement. NB: Tailwind v4 centering (`-translate-x-1/2`)
+  // uses the `translate` property, not `transform`, so we must zero `translate`
+  // (not `transform`) to defeat it.
   const style: React.CSSProperties =
     side === "bottom"
       ? {
@@ -60,9 +70,14 @@ function Content({ className, children }: { className?: string; children: React.
           bottom: "calc(var(--footer-height) + 0.25rem)",
           width: "auto",
           maxHeight: "none",
-          transform: "none",
+          translate: "none",
         }
-      : { width: size };
+      : {
+          width: size,
+          top: "4rem",
+          bottom: "calc(var(--footer-height) + 0.25rem)",
+          maxHeight: "none",
+        };
   return (
     <SheetContent
       side={side}

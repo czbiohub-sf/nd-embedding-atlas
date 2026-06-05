@@ -12,10 +12,10 @@ import { ChevronRightIcon, DatabaseIcon, LogsIcon, MoonIcon, ScanIcon, SunIcon, 
 import { useEffect, useRef, useState } from "react";
 import { cn } from "../../lib/utils";
 import { POINT_RADIUS_MAX, POINT_RADIUS_MIN, pointRadiusStore, setPointRadius } from "../../stores/PointRadiusStore";
+import { usePanel } from "../../stores/panelRegistry";
 import { openDatasetViewerPiP } from "../../stores/ViewerPiPStore";
 import { useTheme } from "../../ThemeProvider";
 import { useScatterUIState } from "../scatter/ScatterUIStateProvider";
-import { useTerminalTable } from "../table/TerminalTableProvider";
 import { Separator } from "../ui/separator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import { BiohubMark } from "../BiohubMark";
@@ -72,7 +72,6 @@ interface Props {
   onCloseViewer?: () => void;
   onFloatViewer?: () => void;
   hasPlate?: boolean;
-  devtoolsOpen?: boolean;
   onToggleDevtools?: () => void;
   /** Dataset keys for multi-dataset mode — renders per-dataset viewer buttons. */
   datasetKeys?: string[];
@@ -84,13 +83,12 @@ export function BottomDock({
   onCloseViewer,
   onFloatViewer,
   hasPlate,
-  devtoolsOpen,
   onToggleDevtools,
   datasetKeys,
 }: Props) {
   const { fps, zoom, selectedCount, numPoints, statusMsg } = useScatterUIState();
-  // eslint-disable-next-line @typescript-eslint/unbound-method
-  const { toggle: toggleTable, open: tableOpen } = useTerminalTable();
+  const { toggle: toggleTable, open: tableOpen } = usePanel("table");
+  const { open: devtoolsOpen } = usePanel("devtools");
   // eslint-disable-next-line @typescript-eslint/unbound-method
   const { theme, toggle: toggleTheme } = useTheme();
 
