@@ -3,7 +3,7 @@
 ## Prerequisites
 
 - **[Bun](https://bun.com)** — runtime + package manager. The version pinned in `package.json`'s `packageManager` field will be used by CI; locally any matching major works.
-- **[Vite+](https://viteplus.dev/)** (`vp`) — unified frontend toolchain (build, lint, fmt, dev). Install once globally per their setup; `vp` then drives every dev workflow in this repo.
+- **[Vite+](https://viteplus.dev/)** (`vp`) — unified toolchain for lint, fmt, test, and the dev server. Install once globally per their setup; `vp` drives every dev workflow in this repo. (The app _build_ runs on Bun — see `vp run build` below.)
 
 ## Setup
 
@@ -25,8 +25,8 @@ vp check
 # Tests (Bun-native .test.ts suites)
 bun test
 
-# Production build (frontend bundle + single-file binary)
-bun run build
+# Production build — all-Bun (Bun.build frontend → single-file binary)
+vp run build    # or `bun run build`
 
 # Regenerate CLI completion metadata (after editing src/cli/commands/**)
 vp run gen

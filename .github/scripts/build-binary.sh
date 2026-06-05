@@ -18,9 +18,9 @@ set -euo pipefail
 
 mkdir -p dist
 
-# `--skip-frontend` because the workflow already ran `vp build` in a
-# preceding step; re-running here would just be slower.
-bun run scripts/build.ts "--target=${TARGET}" --skip-frontend
+# Builds the frontend (Bun.build, in-process ~300ms) and compiles in one
+# shot — no separate frontend step needed.
+bun run scripts/build.ts "--target=${TARGET}"
 
 # scripts/build.ts hardcodes outfile=dist/ndea; rename for the matrix.
 mv "dist/ndea" "dist/${ARTIFACT}"
