@@ -113,9 +113,9 @@ export function GalleryPane({ datasetKey }: GalleryPaneProps) {
     <div className="flex h-full w-full flex-col bg-card">
       {/* Header */}
       <div className="flex h-7 shrink-0 items-center gap-1.5 border-border-subtle/60 border-b px-2 select-none">
-        <span className="font-medium text-foreground/90 text-[11px]">Gallery</span>
+        <span className="font-medium text-foreground/90 text-2xs">Gallery</span>
         {headerCount && (
-          <Badge variant="outline" className="font-mono text-[10px]">
+          <Badge variant="outline" className="font-mono text-3xs">
             {headerCount}
           </Badge>
         )}

@@ -233,7 +233,7 @@ export function DataTable({
                 >
                   <button
                     type="button"
-                    className="flex h-full w-full cursor-pointer select-none items-center gap-1 px-2 font-medium font-mono text-[11px] text-text-secondary outline-none focus-ring hover:text-text-primary"
+                    className="flex h-full w-full cursor-pointer select-none items-center gap-1 px-2 font-medium font-mono text-2xs text-text-secondary outline-none focus-ring hover:text-text-primary"
                     onClick={header.column.getToggleSortingHandler()}
                     title={header.isPlaceholder ? undefined : String(header.column.columnDef.header ?? header.id)}
                   >

@@ -26,7 +26,7 @@ function PointSizeSlider() {
 
   return (
     <div className="flex items-center gap-1.5">
-      <span className="select-none text-[9px] text-muted-foreground/50">●</span>
+      <span className="select-none text-3xs text-muted-foreground/50">●</span>
       <input
         type="range"
         min={POINT_RADIUS_MIN}
@@ -34,9 +34,9 @@ function PointSizeSlider() {
         step={0.0001}
         value={radius}
         onChange={(e) => setPointRadius(parseFloat(e.target.value))}
-        className="h-1 w-16 cursor-pointer appearance-none rounded-full bg-white/10 [&::-webkit-slider-thumb]:size-2 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-muted-foreground/60 [&::-webkit-slider-thumb]:transition-colors hover:[&::-webkit-slider-thumb]:bg-foreground"
+        className="h-1 w-16 cursor-pointer appearance-none rounded-full bg-muted [&::-webkit-slider-thumb]:size-2 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-muted-foreground/60 [&::-webkit-slider-thumb]:transition-colors hover:[&::-webkit-slider-thumb]:bg-foreground"
         style={{
-          background: `linear-gradient(to right, oklch(0.585 0.233 277.117 / 60%) ${pct * 100}%, oklch(1 0 0 / 10%) ${pct * 100}%)`,
+          background: `linear-gradient(to right, color-mix(in oklab, var(--color-primary) 60%, transparent) ${pct * 100}%, transparent ${pct * 100}%)`,
         }}
         aria-label="Point size"
         title="Point size"
@@ -143,7 +143,7 @@ export function BottomDock({
   }
 
   return (
-    <div className="flex h-6 shrink-0 items-center gap-0 border-white/[0.07] border-t bg-card/80 px-2 text-[11px] text-muted-foreground backdrop-blur-md">
+    <div className="flex h-6 shrink-0 items-center gap-0 border-glass-border border-t bg-glass-bg px-2 text-2xs text-muted-foreground backdrop-blur-md">
       {/* ── Scatter dots ── */}
       {scatterPanels.map((p) => (
         <Tooltip key={p.id}>
@@ -178,7 +178,7 @@ export function BottomDock({
             <button
               type="button"
               onClick={onAddScatter}
-              className="mx-0.5 flex size-4 items-center justify-center rounded-sm text-[10px] text-muted-foreground/60 transition-colors hover:text-muted-foreground"
+              className="mx-0.5 flex size-4 items-center justify-center rounded-sm text-3xs text-muted-foreground/60 transition-colors hover:text-muted-foreground"
             />
           }
         >
@@ -312,7 +312,10 @@ export function BottomDock({
       {selectedCount !== null && selectedCount > 0 && (
         <>
           <span className="mx-1 text-muted-foreground/60">·</span>
-          <span className="tabular-nums" style={{ color: "oklch(0.585 0.233 277.117 / 80%)" }}>
+          <span
+            className="tabular-nums"
+            style={{ color: "color-mix(in oklab, var(--color-primary) 80%, transparent)" }}
+          >
             {selectedCount.toLocaleString()} sel
           </span>
         </>

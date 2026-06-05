@@ -66,7 +66,9 @@
   --color-text-muted: #6e6e6e; /* = oklch(0.50 0 0)  */
 
   /* ── Data visualization accents ── */
-  --color-accent-cyan: #06b6d4;
+  --color-accent-cyan: oklch(
+    0.554 0.236 281
+  ); /* repointed to Biohub periwinkle (brand: one accent, no cyan); name retained until call sites rename to --color-primary */
   --color-accent-amber: #f59e0b;
   --color-accent-rose: #f43f5e;
 

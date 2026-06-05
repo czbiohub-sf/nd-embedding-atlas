@@ -51,21 +51,21 @@ export function CategoricalLegend() {
   return (
     <div
       ref={containerRef}
-      className="absolute top-10 left-2 z-20 w-52 rounded-lg border border-white/[0.07] bg-card/80 font-mono text-[11px] backdrop-blur-md"
+      className="absolute top-10 left-2 z-20 w-52 rounded-lg border border-glass-border bg-glass-bg font-mono text-2xs backdrop-blur-md"
     >
-      <div className="flex items-center justify-between px-2.5 pt-2 pb-1 text-[10px] text-text-muted uppercase tracking-wider">
+      <div className="flex items-center justify-between px-2.5 pt-2 pb-1 text-3xs text-text-muted uppercase tracking-wider">
         <span>Categories · {legend.length}</span>
         <Popover>
           <PopoverTrigger
             aria-label="Change palette"
             title={`Palette · ${state.categoricalColormap}`}
-            className="rounded-sm px-1 py-0.5 font-mono text-3xs text-muted-foreground/70 normal-case outline-none transition-colors focus-ring hover:bg-white/[0.06] hover:text-foreground"
+            className="rounded-sm px-1 py-0.5 font-mono text-3xs text-muted-foreground/70 normal-case outline-none transition-colors focus-ring hover:bg-muted hover:text-foreground"
           >
             {state.categoricalColormap} ▾
           </PopoverTrigger>
           <PopoverContent
             align="end"
-            className="w-60 rounded-lg border border-white/[0.07] bg-card/80 p-2 font-mono shadow-black/20 shadow-lg backdrop-blur-md"
+            className="w-60 rounded-lg border border-glass-border bg-glass-bg p-2 font-mono shadow-black/20 shadow-lg backdrop-blur-md"
           >
             <CategoricalPaletteGrid active={state.categoricalColormap} onSelect={actions.setCategoricalColormap} />
           </PopoverContent>
@@ -142,7 +142,7 @@ export function CategoricalLegend() {
                       title="Click to toggle visibility · Shift+Click to isolate · Right-click for color"
                     />
                   </ContextMenuTrigger>
-                  <ContextMenuContent className="w-52 rounded-lg border border-white/[0.07] bg-card/80 p-1 font-mono shadow-black/20 shadow-lg backdrop-blur-md">
+                  <ContextMenuContent className="w-52 rounded-lg border border-glass-border bg-glass-bg p-1 font-mono shadow-black/20 shadow-lg backdrop-blur-md">
                     <OklchColorPicker
                       label={item.label}
                       color={effectiveOklch}
@@ -166,7 +166,7 @@ export function CategoricalLegend() {
                 <span className={cn("shrink-0 text-text-muted", isDisabled && "opacity-40")}>
                   {isFiltered ? (
                     <>
-                      <span className="text-accent-cyan">{filtered.toLocaleString()}</span>
+                      <span className="text-primary">{filtered.toLocaleString()}</span>
                       {`/${total.toLocaleString()}`}
                     </>
                   ) : (

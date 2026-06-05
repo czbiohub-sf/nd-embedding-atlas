@@ -42,17 +42,17 @@ interface SliderRowProps {
 function SliderRow({ label, description, value, min, max, step, defaultValue, onChange, formatValue }: SliderRowProps) {
   const pct = ((value - min) / (max - min)) * 100;
   return (
-    <div className="border-white/5 border-b px-4 py-3">
+    <div className="border-glass-border border-b px-4 py-3">
       <div className="mb-1.5 flex items-center justify-between">
-        <span className="font-mono text-white/70 text-xs">{label}</span>
+        <span className="font-mono text-foreground/70 text-xs">{label}</span>
         <div className="flex items-center gap-2">
-          <span className="font-mono text-white/90 text-xs tabular-nums">
+          <span className="font-mono text-foreground/90 text-xs tabular-nums">
             {formatValue ? formatValue(value) : value.toFixed(2)}
           </span>
           <button
             type="button"
             onClick={() => onChange(defaultValue)}
-            className="rounded-sm px-1.5 py-0.5 font-mono text-[10px] text-white/30 transition-colors hover:bg-white/5 hover:text-white/70"
+            className="rounded-sm px-1.5 py-0.5 font-mono text-3xs text-foreground/30 transition-colors hover:bg-muted hover:text-foreground/70"
             title="Reset to default"
           >
             reset
@@ -66,12 +66,12 @@ function SliderRow({ label, description, value, min, max, step, defaultValue, on
         step={step}
         value={value}
         onChange={(e) => onChange(parseFloat(e.target.value))}
-        className="h-1 w-full cursor-pointer appearance-none rounded-full bg-white/10 [&::-webkit-slider-thumb]:size-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white/80 [&::-webkit-slider-thumb]:transition-colors hover:[&::-webkit-slider-thumb]:bg-white"
+        className="h-1 w-full cursor-pointer appearance-none rounded-full bg-muted [&::-webkit-slider-thumb]:size-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-foreground/80 [&::-webkit-slider-thumb]:transition-colors hover:[&::-webkit-slider-thumb]:bg-foreground"
         style={{
-          background: `linear-gradient(to right, oklch(0.585 0.233 277.117 / 60%) ${pct}%, oklch(1 0 0 / 10%) ${pct}%)`,
+          background: `linear-gradient(to right, color-mix(in oklch, var(--color-primary), transparent 40%) ${pct}%, var(--color-muted) ${pct}%)`,
         }}
       />
-      {description && <div className="mt-1.5 font-mono text-[10px] text-white/30 leading-snug">{description}</div>}
+      {description && <div className="mt-1.5 font-mono text-3xs text-foreground/30 leading-snug">{description}</div>}
     </div>
   );
 }
@@ -94,13 +94,13 @@ function SegmentedRow<T extends string>({
   defaultValue,
 }: SegmentedRowProps<T>) {
   return (
-    <div className="border-white/5 border-b px-4 py-3">
+    <div className="border-glass-border border-b px-4 py-3">
       <div className="mb-1.5 flex items-center justify-between">
-        <span className="font-mono text-white/70 text-xs">{label}</span>
+        <span className="font-mono text-foreground/70 text-xs">{label}</span>
         <button
           type="button"
           onClick={() => onChange(defaultValue)}
-          className="rounded-sm px-1.5 py-0.5 font-mono text-[10px] text-white/30 transition-colors hover:bg-white/5 hover:text-white/70"
+          className="rounded-sm px-1.5 py-0.5 font-mono text-3xs text-foreground/30 transition-colors hover:bg-muted hover:text-foreground/70"
           title="Reset to default"
         >
           reset
@@ -112,17 +112,17 @@ function SegmentedRow<T extends string>({
             key={opt.value}
             type="button"
             onClick={() => onChange(opt.value)}
-            className={`flex-1 rounded-sm px-2 py-1 font-mono text-[11px] transition-colors ${
+            className={`flex-1 rounded-sm px-2 py-1 font-mono text-2xs transition-colors ${
               value === opt.value
-                ? "bg-purple-500/30 text-white"
-                : "bg-white/5 text-white/40 hover:bg-white/10 hover:text-white/70"
+                ? "bg-primary/30 text-foreground"
+                : "bg-muted text-foreground/40 hover:bg-accent hover:text-foreground/70"
             }`}
           >
             {opt.label}
           </button>
         ))}
       </div>
-      {description && <div className="mt-1.5 font-mono text-[10px] text-white/30 leading-snug">{description}</div>}
+      {description && <div className="mt-1.5 font-mono text-3xs text-foreground/30 leading-snug">{description}</div>}
     </div>
   );
 }
@@ -130,7 +130,7 @@ function SegmentedRow<T extends string>({
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="mb-2">
-      <div className="sticky top-0 bg-[#0d0d14] px-4 py-1.5 font-semibold text-[10px] text-white/30 uppercase tracking-widest">
+      <div className="sticky top-0 bg-card px-4 py-1.5 font-semibold text-3xs text-foreground/30 uppercase tracking-widest">
         {title}
       </div>
       {children}
@@ -156,7 +156,7 @@ export function RenderSettingsPlugin() {
   const settings = useSelector(renderSettingsStore, (s) => s);
 
   return (
-    <div className="h-full overflow-y-auto bg-[#0d0d14] text-white">
+    <div className="h-full overflow-y-auto bg-card text-foreground">
       <Section title="Point appearance">
         <SliderRow
           label="Point opacity"

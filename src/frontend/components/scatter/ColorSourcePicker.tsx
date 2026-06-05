@@ -224,7 +224,7 @@ export function ColorSourcePicker({
                     }
                   }}
                   className={cn(
-                    "rounded-sm border px-1.5 py-0.5 font-mono text-[10px] transition-colors",
+                    "rounded-sm border px-1.5 py-0.5 font-mono text-3xs transition-colors",
                     selectedLayer === layer
                       ? "border-primary/50 bg-primary text-primary-foreground"
                       : "border-border bg-card text-muted-foreground hover:border-border hover:bg-muted hover:text-foreground",

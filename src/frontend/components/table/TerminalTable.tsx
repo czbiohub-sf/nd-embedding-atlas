@@ -81,7 +81,7 @@ export function TerminalTable() {
               <TabsTrigger value="table">
                 Table
                 {totalCount > 0 && (
-                  <span className="ml-1.5 text-[9px] text-muted-foreground/50 tabular-nums">
+                  <span className="ml-1.5 text-3xs text-muted-foreground/50 tabular-nums">
                     {totalCount.toLocaleString()}
                   </span>
                 )}

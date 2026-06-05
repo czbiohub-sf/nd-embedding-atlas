@@ -5,6 +5,7 @@
 
 import { lazy, Suspense, useState } from "react";
 import { cn } from "../../lib/utils";
+import { useTheme } from "../../ThemeProvider";
 import { RenderSettingsPlugin } from "./RenderSettingsPlugin";
 import { ScatterStatePlugin } from "./ScatterStatePlugin";
 
@@ -21,21 +22,22 @@ interface Props {
 
 export function DevtoolsDrawer({ open, onClose }: Props) {
   const [tab, setTab] = useState<Tab>("query");
+  const { theme } = useTheme();
 
   if (!open) return null;
 
   return (
-    <div className="flex flex-col border-border border-t" style={{ height: 380, background: "oklch(0.10 0 0)" }}>
+    <div className="flex flex-col border-border border-t bg-card" style={{ height: 380 }}>
       {/* Tab bar */}
-      <div className="flex h-8 shrink-0 items-center border-white/5 border-b bg-[#0d0d14] px-2">
+      <div className="flex h-8 shrink-0 items-center border-glass-border border-b bg-card px-2">
         {(["query", "scatter", "render"] as Tab[]).map((t) => (
           <button
             key={t}
             type="button"
             onClick={() => setTab(t)}
             className={cn(
-              "rounded-sm px-3 py-1 font-mono text-[11px] transition-colors",
-              tab === t ? "bg-white/10 text-white" : "text-white/30 hover:text-white/60",
+              "rounded-sm px-3 py-1 font-mono text-2xs transition-colors",
+              tab === t ? "bg-accent text-foreground" : "text-foreground/30 hover:text-foreground/60",
             )}
           >
             {t === "query" ? "Query" : t === "scatter" ? "Scatter State" : "Render"}
@@ -44,7 +46,7 @@ export function DevtoolsDrawer({ open, onClose }: Props) {
         <button
           type="button"
           onClick={onClose}
-          className="ml-auto px-2 text-[11px] text-white/20 transition-colors hover:text-white/60"
+          className="ml-auto px-2 text-2xs text-foreground/20 transition-colors hover:text-foreground/60"
         >
           ✕
         </button>
@@ -55,10 +57,12 @@ export function DevtoolsDrawer({ open, onClose }: Props) {
         {tab === "query" && (
           <Suspense
             fallback={
-              <div className="flex h-full items-center justify-center font-mono text-white/30 text-xs">Loading...</div>
+              <div className="flex h-full items-center justify-center font-mono text-foreground/30 text-xs">
+                Loading...
+              </div>
             }
           >
-            <ReactQueryDevtoolsPanel onClose={onClose} style={{ height: "100%", width: "100%" }} theme="dark" />
+            <ReactQueryDevtoolsPanel onClose={onClose} style={{ height: "100%", width: "100%" }} theme={theme} />
           </Suspense>
         )}
         {tab === "scatter" && <ScatterStatePlugin />}

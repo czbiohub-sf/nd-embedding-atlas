@@ -106,11 +106,11 @@ interface Props {
   selectionPath: "inline" | "temp_table";
 }
 
-const glass = "bg-card/75 backdrop-blur-md border border-white/[0.07] rounded-lg shadow-sm";
+const glass = "bg-glass-bg backdrop-blur-md border border-glass-border rounded-lg shadow-sm";
 
 /** Glass-styled combobox trigger for use inside the overlay zones. */
 const glassTrigger =
-  "h-6 max-w-28 border-0 bg-transparent px-1.5 text-[11px] gap-1 text-foreground/80 hover:bg-white/10 hover:text-foreground focus-visible:ring-0";
+  "h-6 max-w-28 border-0 bg-transparent px-1.5 text-2xs gap-1 text-foreground/80 hover:bg-muted hover:text-foreground focus-visible:ring-0";
 
 export function ScatterOverlayControls({
   axes,
@@ -181,10 +181,10 @@ export function ScatterOverlayControls({
           />
         )}
 
-        <Separator orientation="vertical" className="h-3 bg-white/[0.07]" />
+        <Separator orientation="vertical" className="h-3 bg-border" />
 
         {/* X dim */}
-        <span className="text-[10px] text-muted-foreground/60">x</span>
+        <span className="text-3xs text-muted-foreground/60">x</span>
         <Combobox
           value={String(axes.xDim)}
           onValueChange={(v) => v !== "" && onSetAxes({ ...axes, xDim: Number(v) })}
@@ -197,7 +197,7 @@ export function ScatterOverlayControls({
         />
 
         {/* Y dim */}
-        <span className="text-[10px] text-muted-foreground/60">y</span>
+        <span className="text-3xs text-muted-foreground/60">y</span>
         <Combobox
           value={String(axes.yDim)}
           onValueChange={(v) => v !== "" && onSetAxes({ ...axes, yDim: Number(v) })}
@@ -209,10 +209,10 @@ export function ScatterOverlayControls({
           contentClassName="w-32"
         />
 
-        <Separator orientation="vertical" className="h-3 bg-white/[0.07]" />
+        <Separator orientation="vertical" className="h-3 bg-border" />
 
         {/* Color column — modality-aware picker when MuData, plain otherwise */}
-        <span className="text-[10px] text-muted-foreground/60 uppercase tracking-wide">col</span>
+        <span className="text-3xs text-muted-foreground/60 uppercase tracking-wide">col</span>
         {modalities && modalities.length > 0 ? (
           <ModalityColorPicker
             colorSource={colorSource}
@@ -237,11 +237,11 @@ export function ScatterOverlayControls({
 
         {colorModeCanToggle && (
           <>
-            <Separator orientation="vertical" className="h-3 bg-white/[0.07]" />
+            <Separator orientation="vertical" className="h-3 bg-border" />
             <button
               type="button"
               onClick={onToggleColorMode}
-              className="px-0.5 text-[10px] text-muted-foreground/60 transition-colors hover:text-foreground"
+              className="px-0.5 text-3xs text-muted-foreground/60 transition-colors hover:text-foreground"
             >
               {colorMode === "continuous" ? "scale" : "palette"}
             </button>
@@ -265,7 +265,7 @@ export function ScatterOverlayControls({
               <ToggleGroupItem
                 value="marquee"
                 size="sm"
-                className="size-[22px] border-0 bg-transparent text-muted-foreground data-[state=on]:bg-white/15 data-[state=on]:text-foreground"
+                className="size-[22px] border-0 bg-transparent text-muted-foreground data-[state=on]:bg-accent data-[state=on]:text-foreground"
               />
             }
           >
@@ -279,7 +279,7 @@ export function ScatterOverlayControls({
               <ToggleGroupItem
                 value="lasso"
                 size="sm"
-                className="size-[22px] border-0 bg-transparent text-muted-foreground data-[state=on]:bg-white/15 data-[state=on]:text-foreground"
+                className="size-[22px] border-0 bg-transparent text-muted-foreground data-[state=on]:bg-accent data-[state=on]:text-foreground"
               />
             }
           >
@@ -287,7 +287,7 @@ export function ScatterOverlayControls({
           </HoverTip>
         </ToggleGroup>
 
-        <Separator orientation="vertical" className="mx-0.5 h-3 bg-white/[0.07]" />
+        <Separator orientation="vertical" className="mx-0.5 h-3 bg-border" />
         <IconButton
           label="Collections"
           description={
@@ -302,10 +302,10 @@ export function ScatterOverlayControls({
           <Bookmark className="size-3.5" />
         </IconButton>
 
-        <Separator orientation="vertical" className="mx-0.5 h-3 bg-white/[0.07]" />
+        <Separator orientation="vertical" className="mx-0.5 h-3 bg-border" />
 
         {/* Utility actions as a ButtonGroup */}
-        <ButtonGroup className="border-white/[0.07] bg-transparent">
+        <ButtonGroup className="border-glass-border bg-transparent">
           {onToggleTrajectory && (
             <HoverTip
               label="Track"
@@ -316,7 +316,7 @@ export function ScatterOverlayControls({
                   type="button"
                   onClick={onToggleTrajectory}
                   className={cn(
-                    "flex size-[22px] items-center justify-center bg-transparent transition-colors hover:bg-white/10",
+                    "flex size-[22px] items-center justify-center bg-transparent transition-colors hover:bg-muted",
                     trajectoryActive ? "text-primary" : "text-muted-foreground hover:text-foreground",
                   )}
                 />
@@ -334,7 +334,7 @@ export function ScatterOverlayControls({
                 <button
                   type="button"
                   onClick={onFitView}
-                  className="flex size-[22px] items-center justify-center bg-transparent text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
+                  className="flex size-[22px] items-center justify-center bg-transparent text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 />
               }
             >
@@ -350,7 +350,7 @@ export function ScatterOverlayControls({
                 type="button"
                 onClick={toggleViewLock}
                 className={cn(
-                  "flex size-[22px] items-center justify-center bg-transparent text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground",
+                  "flex size-[22px] items-center justify-center bg-transparent text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
                   isLinked && "text-primary",
                 )}
               />
@@ -375,7 +375,7 @@ export function ScatterOverlayControls({
                     });
                     panelApi.close();
                   }}
-                  className="flex size-[22px] items-center justify-center bg-transparent text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
+                  className="flex size-[22px] items-center justify-center bg-transparent text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 />
               }
             >
@@ -392,7 +392,7 @@ export function ScatterOverlayControls({
                 <button
                   type="button"
                   onClick={() => (panelApi.isMaximized() ? panelApi.exitMaximized() : panelApi.maximize())}
-                  className="flex size-[22px] items-center justify-center bg-transparent text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
+                  className="flex size-[22px] items-center justify-center bg-transparent text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 />
               }
             >
@@ -409,7 +409,7 @@ export function ScatterOverlayControls({
                 <button
                   type="button"
                   onClick={() => panelApi.close()}
-                  className="flex size-[22px] items-center justify-center bg-transparent text-muted-foreground transition-colors hover:bg-white/10 hover:text-destructive"
+                  className="flex size-[22px] items-center justify-center bg-transparent text-muted-foreground transition-colors hover:bg-muted hover:text-destructive"
                 />
               }
             >

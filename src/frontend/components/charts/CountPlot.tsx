@@ -105,7 +105,7 @@ export function CountPlot({ field, limit = 11 }: Props) {
   };
 
   if (!data || data.length === 0) {
-    return <div className="py-2 text-[11px] text-text-muted">{loading ? "Loading..." : "No data"}</div>;
+    return <div className="py-2 text-2xs text-text-muted">{loading ? "Loading..." : "No data"}</div>;
   }
 
   const maxCount = Math.max(...data.map((d) => d.count), 1);
@@ -129,7 +129,7 @@ export function CountPlot({ field, limit = 11 }: Props) {
           >
             {/* Label */}
             <span
-              className="min-w-0 max-w-[40%] shrink-0 truncate font-mono text-[11px] text-text-secondary"
+              className="min-w-0 max-w-[40%] shrink-0 truncate font-mono text-2xs text-text-secondary"
               title={row.value ?? "(null)"}
             >
               {row.value ?? "(null)"}
@@ -148,7 +148,7 @@ export function CountPlot({ field, limit = 11 }: Props) {
             </div>
 
             {/* Count */}
-            <span className="shrink-0 font-mono text-[11px] text-text-muted tabular-nums">
+            <span className="shrink-0 font-mono text-2xs text-text-muted tabular-nums">
               {row.countSelected.toLocaleString()}
             </span>
           </button>

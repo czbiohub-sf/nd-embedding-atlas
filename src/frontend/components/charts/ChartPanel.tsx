@@ -19,7 +19,7 @@ export function ChartPanel({ id, title, children, collapsible = true }: Props) {
         {collapsible ? (
           <button
             type="button"
-            className="w-4 shrink-0 text-[10px] text-text-muted hover:text-text-secondary"
+            className="w-4 shrink-0 text-3xs text-text-muted hover:text-text-secondary"
             onClick={() => setCollapsed(!collapsed)}
           >
             {collapsed ? "\u25B6" : "\u25BC"}
@@ -30,7 +30,7 @@ export function ChartPanel({ id, title, children, collapsible = true }: Props) {
         </span>
         <button
           type="button"
-          className="w-4 shrink-0 text-[10px] text-text-muted opacity-0 transition-opacity hover:text-accent-rose group-hover/panel:opacity-100"
+          className="w-4 shrink-0 text-3xs text-text-muted opacity-0 transition-opacity hover:text-accent-rose group-hover/panel:opacity-100"
           onClick={() => actions.removePanel(id)}
           title="Remove panel"
         >
