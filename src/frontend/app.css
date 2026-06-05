@@ -413,6 +413,18 @@ select:disabled {
   display: none !important;
 }
 
+/* ── Resize sash between tiled panels (side-by-side embeddings) ─────────
+ *  dockview-react renders `.dockview-theme-abyss` regardless of the
+ *  dark/light className we pass, so target it directly (one rule, both
+ *  themes — the tint is theme-neutral periwinkle at 30% alpha). The sash
+ *  is invisible at rest (the 1px --dv-separator-border draws the seam) and
+ *  picks up the brand tint on hover/drag, matching SlidePanel.ResizeHandle.
+ *  Kill Dockview's 0.5s reveal delay so the grab affordance shows at once. */
+.dockview-theme-abyss {
+  --dv-active-sash-color: color-mix(in oklab, var(--color-primary) 30%, transparent);
+  --dv-active-sash-transition-delay: 0s;
+}
+
 .dv-header-action {
   display: flex;
   align-items: center;
