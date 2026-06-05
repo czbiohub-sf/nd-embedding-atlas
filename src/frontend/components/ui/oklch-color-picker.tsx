@@ -71,7 +71,7 @@ export function OklchColorPicker({ label, color, defaultColor, onChange, onReset
   return (
     <div className="flex flex-col gap-2 p-1">
       <div className="flex items-center justify-between gap-2">
-        <span className="truncate text-3xs text-text-secondary" title={label}>
+        <span className="truncate text-3xs text-muted-foreground" title={label}>
           {label}
         </span>
         <button

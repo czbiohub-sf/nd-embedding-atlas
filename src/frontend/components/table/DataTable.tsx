@@ -98,7 +98,7 @@ export function DataTable({
         maxSize: 600,
         cell: (info) => {
           const val = info.getValue();
-          if (val == null) return <span className="text-text-muted">—</span>;
+          if (val == null) return <span className="text-muted-foreground">—</span>;
           if (typeof val === "number") {
             return (
               <span className="tabular-nums">{Number.isInteger(val) ? val.toLocaleString() : val.toFixed(3)}</span>
@@ -215,12 +215,12 @@ export function DataTable({
   const totalWidth = tableInstance.getTotalSize();
 
   return (
-    <div className="flex h-full w-full flex-col overflow-hidden bg-surface font-mono text-text-primary text-xs">
+    <div className="flex h-full w-full flex-col overflow-hidden bg-card font-mono text-foreground text-xs">
       {/* Scrollable container */}
       <div ref={containerRef} className="flex-1 overflow-auto">
         {/* Sticky header via TanStack Table header groups */}
         <div
-          className="sticky top-0 z-10 border-border-subtle border-b bg-base"
+          className="sticky top-0 z-10 border-border border-b bg-background"
           style={{ height: HEADER_HEIGHT, minWidth: totalWidth }}
         >
           {headerGroups.map((headerGroup) => (
@@ -233,7 +233,7 @@ export function DataTable({
                 >
                   <button
                     type="button"
-                    className="flex h-full w-full cursor-pointer select-none items-center gap-1 px-2 font-medium font-mono text-2xs text-text-secondary outline-none focus-ring hover:text-text-primary"
+                    className="flex h-full w-full cursor-pointer select-none items-center gap-1 px-2 font-medium font-mono text-2xs text-muted-foreground outline-none focus-ring hover:text-foreground"
                     onClick={header.column.getToggleSortingHandler()}
                     title={header.isPlaceholder ? undefined : String(header.column.columnDef.header ?? header.id)}
                   >
@@ -243,7 +243,7 @@ export function DataTable({
                       </span>
                     )}
                     {{ asc: "↑", desc: "↓" }[header.column.getIsSorted() as string] ? (
-                      <span className="shrink-0 text-text-muted">
+                      <span className="shrink-0 text-muted-foreground">
                         {{ asc: "↑", desc: "↓" }[header.column.getIsSorted() as string]}
                       </span>
                     ) : null}
@@ -281,7 +281,7 @@ export function DataTable({
                 type="button"
                 key={virtualRow.key}
                 data-index={virtualRow.index}
-                className={`absolute flex cursor-pointer border-border-subtle/50 border-b text-left ${
+                className={`absolute flex cursor-pointer border-border/50 border-b text-left ${
                   isHighlighted ? "bg-elevated" : "hover:bg-elevated"
                 }`}
                 style={{
@@ -304,7 +304,7 @@ export function DataTable({
                           }}
                         >
                           {val == null ? (
-                            <span className="text-text-muted">—</span>
+                            <span className="text-muted-foreground">—</span>
                           ) : typeof val === "number" ? (
                             <span className="tabular-nums">
                               {Number.isInteger(val) ? val.toLocaleString() : val.toFixed(3)}

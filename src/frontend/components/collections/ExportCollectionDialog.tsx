@@ -269,7 +269,7 @@ export function ExportCollectionDialog({ collection, open, onOpenChange }: Props
               </div>
             </Field>
 
-            <div className="rounded-md border border-border-subtle bg-muted/20 px-2 py-1.5">
+            <div className="rounded-md border border-border bg-muted/20 px-2 py-1.5">
               <div className="text-3xs text-muted-foreground">Path preview</div>
               <div className="break-all font-mono text-2xs">{previewPath}</div>
             </div>

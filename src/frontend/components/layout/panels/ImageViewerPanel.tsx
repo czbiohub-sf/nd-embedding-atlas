@@ -8,7 +8,7 @@ export function ImageViewerPanel(props: IDockviewPanelProps<{ datasetKey?: strin
 
   if (!state.metadata.plate) {
     return (
-      <div className="flex h-full w-full items-center justify-center text-text-muted text-xs">
+      <div className="flex h-full w-full items-center justify-center text-muted-foreground text-xs">
         No plate data available
       </div>
     );

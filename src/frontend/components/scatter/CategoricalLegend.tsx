@@ -53,7 +53,7 @@ export function CategoricalLegend() {
       ref={containerRef}
       className="absolute top-10 left-2 z-20 w-52 rounded-lg border border-glass-border bg-glass-bg font-mono text-2xs backdrop-blur-md"
     >
-      <div className="flex items-center justify-between px-2.5 pt-2 pb-1 text-3xs text-text-muted uppercase tracking-wider">
+      <div className="flex items-center justify-between px-2.5 pt-2 pb-1 text-3xs text-muted-foreground uppercase tracking-wider">
         <span>Categories · {legend.length}</span>
         <Popover>
           <PopoverTrigger
@@ -158,12 +158,12 @@ export function CategoricalLegend() {
                 </ContextMenu>
 
                 {/* Label */}
-                <span className={cn("flex-1 truncate text-text-secondary", isDisabled && "line-through opacity-60")}>
+                <span className={cn("flex-1 truncate text-muted-foreground", isDisabled && "line-through opacity-60")}>
                   {item.label}
                 </span>
 
                 {/* Count */}
-                <span className={cn("shrink-0 text-text-muted", isDisabled && "opacity-40")}>
+                <span className={cn("shrink-0 text-muted-foreground", isDisabled && "opacity-40")}>
                   {isFiltered ? (
                     <>
                       <span className="text-primary">{filtered.toLocaleString()}</span>

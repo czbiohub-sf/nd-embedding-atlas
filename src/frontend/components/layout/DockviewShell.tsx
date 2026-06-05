@@ -29,14 +29,14 @@ function CustomTab({ api }: IDockviewPanelHeaderProps) {
   return (
     <div
       className={[
-        "group flex h-full select-none items-center gap-2 border-border-subtle border-r px-3 font-medium text-2xs transition-colors",
-        isActive ? "bg-elevated text-text-primary" : "bg-surface text-text-muted hover:text-text-secondary",
+        "group flex h-full select-none items-center gap-2 border-border border-r px-3 font-medium text-2xs transition-colors",
+        isActive ? "bg-elevated text-foreground" : "bg-card text-muted-foreground hover:text-muted-foreground",
       ].join(" ")}
     >
       <span>{api.title}</span>
       <button
         type="button"
-        className="hover:!opacity-100 flex h-3.5 w-3.5 items-center justify-center rounded opacity-0 transition-opacity hover:text-text-primary group-hover:opacity-60"
+        className="hover:!opacity-100 flex h-3.5 w-3.5 items-center justify-center rounded opacity-0 transition-opacity hover:text-foreground group-hover:opacity-60"
         onClick={(e) => {
           e.stopPropagation();
           api.close();

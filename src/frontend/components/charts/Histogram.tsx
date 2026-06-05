@@ -126,14 +126,14 @@ export function Histogram({ field, bins: binCount = 20 }: Props) {
         <span className="inline-block rounded bg-muted px-1.5 py-0.5 font-medium text-2xs text-foreground">
           {formatTick(stats.min)}
         </span>
-        <span className="ml-1 text-3xs text-text-muted">({stats.count.toLocaleString()} rows)</span>
+        <span className="ml-1 text-3xs text-muted-foreground">({stats.count.toLocaleString()} rows)</span>
       </div>
     );
   }
 
   if (!binParams || !data || data.length === 0) {
     return (
-      <div ref={containerRef} className="py-2 text-2xs text-text-muted">
+      <div ref={containerRef} className="py-2 text-2xs text-muted-foreground">
         {loading ? "Loading..." : "No data"}
       </div>
     );
@@ -237,20 +237,13 @@ export function Histogram({ field, bins: binCount = 20 }: Props) {
           : null}
 
         {/* Axis line */}
-        <line
-          x1={0}
-          y1={CHART_HEIGHT + 0.5}
-          x2={w}
-          y2={CHART_HEIGHT + 0.5}
-          className="stroke-border-subtle"
-          strokeWidth={1}
-        />
+        <line x1={0} y1={CHART_HEIGHT + 0.5} x2={w} y2={CHART_HEIGHT + 0.5} className="stroke-border" strokeWidth={1} />
 
         {/* X axis labels */}
         <text
           x={0}
           y={TOTAL_HEIGHT - 3}
-          className="fill-text-muted"
+          className="fill-muted-foreground"
           fontSize={10}
           fontFamily="JetBrains Mono, monospace"
         >
@@ -260,7 +253,7 @@ export function Histogram({ field, bins: binCount = 20 }: Props) {
           x={w}
           y={TOTAL_HEIGHT - 3}
           textAnchor="end"
-          className="fill-text-muted"
+          className="fill-muted-foreground"
           fontSize={10}
           fontFamily="JetBrains Mono, monospace"
         >

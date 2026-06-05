@@ -248,7 +248,7 @@ export function SaveCollectionForm({ getRowIndices, selectionCount, onSaved, onC
         Adds {selectionCount.toLocaleString()} obs · server dedupes by member key.
       </p>
 
-      <div className="flex flex-row items-center gap-2 border-border-subtle border-t pt-3">
+      <div className="flex flex-row items-center gap-2 border-border border-t pt-3">
         <span className="mr-auto inline-flex items-center gap-1.5 text-2xs text-muted-foreground">
           <KbdGroup>
             <KbdMod />

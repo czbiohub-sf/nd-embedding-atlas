@@ -33,7 +33,7 @@ export function SaveCollectionSection({ getRowIndices, selectionCount, autoExpan
   }, [autoExpand, onAutoExpandConsumed]);
 
   return (
-    <div className="border-border-subtle border-b">
+    <div className="border-border border-b">
       <button
         type="button"
         onClick={() => setExpanded((x) => !x)}

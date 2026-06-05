@@ -37,7 +37,7 @@ function ViewerContent() {
   }
 
   return (
-    <div className="h-full w-full overflow-hidden bg-base">
+    <div className="h-full w-full overflow-hidden bg-background">
       <CropViewer channelInstance="pip" />
     </div>
   );
