@@ -1,12 +1,11 @@
 /**
- * ScatterOverlayControls — controls imposed directly on the scatter canvas
- * (no glass bar). Per Sketch A: chip-style triggers float on the canvas, the
- * active embedding is the primary-filled bracketed chip [embedding].
+ * ScatterOverlayControls — two solid card "strips" overlaid on the scatter
+ * canvas (crisp, not glass). Per Sketch A: the active embedding is the primary-
+ * filled bracketed chip [embedding]; everything else sits ghosted inside.
  *
  * Two zones, both absolute-positioned:
- *  top-left  → [⋰] bracket icon + embedding chip + X/Y dim chips + COL chip
- *  top-right → borderless icon buttons (tools, Collections, track, fit, lock,
- *              pip, fullscreen, close)
+ *  top-left  → [⋰] bracket icon + embedding chip + X/Y dim + COL pickers
+ *  top-right → selection tools + Collections + track/fit/lock/pip/fullscreen/close
  */
 
 import {
@@ -108,16 +107,16 @@ interface Props {
   selectionPath: "inline" | "temp_table";
 }
 
-// Controls float directly on the canvas (no glass bar). Each interactive value
-// is a "chip": a solid card pill so it reads over busy point clouds. The active
-// embedding is the primary-filled, bracketed chip — [phate].
-// NB: the Combobox/ColorSourcePicker trigger base sets `dark:bg-input/30`
-// (translucent). A bare `bg-card` only wins the unprefixed variant, so we must
-// set `dark:bg-card` too or the chips go see-through in dark mode.
-const chipBase =
-  "h-7 max-w-44 rounded-md border border-border bg-card dark:bg-card px-2.5 font-mono text-2xs text-foreground/85 shadow-sm hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/30";
+// Both control zones are solid card "strips"; the components sit inside. The
+// strip carries the background, so the dim/COL triggers are ghost (transparent
+// → shows the strip, no box-in-box). The active embedding is the one filled
+// accent. NB: dark:bg-transparent is required — the Combobox/ColorSourcePicker
+// base sets dark:bg-input/30, which (a dark-variant rule) outranks a bare bg.
+const strip = "absolute top-2 z-20 flex items-center rounded-lg border border-border bg-card px-1.5 py-1 shadow-sm";
+const ghostTrigger =
+  "h-7 max-w-44 rounded-md border-0 bg-transparent dark:bg-transparent px-2 font-mono text-2xs text-foreground/85 hover:bg-muted hover:text-foreground focus-visible:ring-0";
 const chipActive =
-  "h-7 max-w-44 gap-0 rounded-md border border-transparent bg-primary dark:bg-primary px-2.5 font-mono text-2xs text-primary-foreground shadow-sm hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring/40 before:mr-px before:text-primary-foreground/60 before:content-['['] after:ml-px after:text-primary-foreground/60 after:content-[']']";
+  "h-7 max-w-44 gap-0 rounded-md border border-transparent bg-primary dark:bg-primary px-2.5 font-mono text-2xs text-primary-foreground hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring/40 before:mr-px before:text-primary-foreground/60 before:content-['['] after:ml-px after:text-primary-foreground/60 after:content-[']']";
 
 /** X / Y / COL caption labels — mono, uppercase, dim. */
 const captionCls = "font-mono text-3xs uppercase tracking-[0.12em] text-muted-foreground";
@@ -169,10 +168,10 @@ export function ScatterOverlayControls({
 
   return (
     <>
-      {/* ── Top-left: embedding + dims + color — floats on the canvas, no glass bar ── */}
-      {/* max-w cap leaves room for the right utility cluster; the COL chip truncates first. */}
-      <div className="absolute top-2 left-2 z-20 flex max-w-[calc(100%-14rem)] items-center gap-2 px-1 py-1">
-        <BracketIcon icon={ChartScatter} className="mr-0.5 size-6 text-foreground/75" />
+      {/* ── Top-left strip: embedding + dims + color ── */}
+      {/* max-w cap leaves room for the right utility cluster; the COL picker truncates first. */}
+      <div className={cn(strip, "left-2 max-w-[calc(100%-14rem)] gap-1.5")}>
+        <BracketIcon icon={ChartScatter} className="size-6 text-foreground/75" />
 
         {/* Embedding — primary-filled bracketed chip. Modality picker for MuData, combobox otherwise. */}
         {modalities && obsm ? (
@@ -206,7 +205,7 @@ export function ScatterOverlayControls({
           placeholder="0"
           searchPlaceholder="Search dims…"
           disabled={disabled || !currentEntryLoaded}
-          triggerClassName={cn(chipBase, "max-w-[3rem] justify-center")}
+          triggerClassName={cn(ghostTrigger, "max-w-[3rem] justify-center")}
           contentClassName="w-32"
           hideChevron
         />
@@ -218,7 +217,7 @@ export function ScatterOverlayControls({
           placeholder="1"
           searchPlaceholder="Search dims…"
           disabled={disabled || !currentEntryLoaded}
-          triggerClassName={cn(chipBase, "max-w-[3rem] justify-center")}
+          triggerClassName={cn(ghostTrigger, "max-w-[3rem] justify-center")}
           contentClassName="w-32"
           hideChevron
         />
@@ -234,7 +233,7 @@ export function ScatterOverlayControls({
             modalities={modalities}
             varCount={varCount}
             activeEmbeddingKey={axes.obsmKey}
-            triggerClassName={chipBase}
+            triggerClassName={ghostTrigger}
           />
         ) : (
           <ColorSourcePicker
@@ -242,7 +241,7 @@ export function ScatterOverlayControls({
             obsColumns={obsColumns}
             hasVar={hasVar}
             onSetColorSource={onSetColorSource}
-            triggerClassName={chipBase}
+            triggerClassName={ghostTrigger}
             contentClassName="w-64"
             hideChevron
           />
@@ -259,9 +258,8 @@ export function ScatterOverlayControls({
         )}
       </div>
 
-      {/* ── Top-right: selection tools + utility actions — solid card pill so the
-          icons stay legible over dense point clouds ── */}
-      <div className="absolute top-2 right-2 z-20 flex items-center gap-0.5 rounded-lg border border-border bg-card px-1 py-1 shadow-sm">
+      {/* ── Top-right: selection tools + utility actions — same solid strip ── */}
+      <div className={cn(strip, "right-2 gap-0.5 px-1")}>
         {/* Selection tool toggles */}
         <ToggleGroup
           value={selectionTool === "pan" ? [] : [selectionTool]}
