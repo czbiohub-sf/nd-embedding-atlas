@@ -2,7 +2,17 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@import "@fontsource-variable/martian-mono";
+@import "@fontsource-variable/geist-mono";
+
+/* Geist Pixel — HUD signage face. Vendored from Vercel Geist (SIL OFL 1.1); the `geist` npm package only
+ * ships Pixel as a next/font module, unusable in this Vite+Bun app. See src/frontend/fonts/README.md.
+ * Size at pixel-grid multiples to stay crisp. */
+@font-face {
+  font-family: "Geist Pixel";
+  src: url("./fonts/GeistPixel-Square.woff2") format("woff2");
+  font-weight: 400 700;
+  font-display: swap;
+}
 
 /*
  * nd-embedding-atlas — design token system
@@ -13,7 +23,7 @@
  *   .dark   → overrides the same CSS variables → utilities switch automatically
  *   Components → use only Tailwind utilities, no inline styles or pure CSS
  *
- * Design: Scientific instrument panel. DM Sans (UI) + JetBrains Mono (data).
+ * Design: Scientific instrument panel. DM Sans (UI prose) + Geist Mono (data/IDs) + Geist Pixel (HUD signage).
  */
 
 /* ── Class-based dark mode variant ──────────────────────────────────── */
@@ -47,7 +57,8 @@
 @theme {
   /* Fonts */
   --font-sans: "DM Sans", system-ui, -apple-system, sans-serif;
-  --font-mono: "Martian Mono Variable", ui-monospace, monospace;
+  --font-mono: "Geist Mono Variable", ui-monospace, monospace;
+  --font-hud: "Geist Pixel", "Geist Mono Variable", ui-monospace, monospace;
 
   /* ── Surface backgrounds (light defaults — overridden in .dark via preset vars) ── */
   --color-base: #ffffff; /* = oklch(1 0 0)     — page root bg            */
@@ -433,7 +444,6 @@ select:disabled {
  */
 @theme inline {
   --font-heading: var(--font-mono);
-  --font-mono: "Martian Mono Variable", ui-monospace, monospace;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -534,7 +544,7 @@ select:disabled {
     @apply bg-background text-foreground;
   }
   html {
-    @apply font-mono;
+    @apply font-sans;
   }
 }
 

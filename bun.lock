@@ -11,7 +11,6 @@
         "@bunli/utils": "^0.6.0",
         "@duckdb/node-api": "1.5.3-r.1",
         "@fontsource-variable/geist-mono": "^5.2.8",
-        "@fontsource-variable/martian-mono": "^5.2.7",
         "@idetik/core": "^0.23.1",
         "@jsquash/webp": "^1.5.0",
         "@tanstack/react-hotkeys": "^0.10.0",
@@ -201,8 +200,6 @@
     "@floating-ui/utils": ["@floating-ui/utils@0.2.11", "", {}, "sha512-RiB/yIh78pcIxl6lLMG0CgBXAZ2Y0eVHqMPYugu+9U0AeT6YBeiJpf7lbdJNIugFP5SIjwNRgo4DhR1Qxi26Gg=="],
 
     "@fontsource-variable/geist-mono": ["@fontsource-variable/geist-mono@5.2.8", "", {}, "sha512-KI5bj+hkkRiHttYHmccotUZ80ZuZyai+RwI1d7UId0clkx/jXxlo8qYK8j54WzmpBjtMoEMPyllV7faDcj+6RA=="],
-
-    "@fontsource-variable/martian-mono": ["@fontsource-variable/martian-mono@5.2.7", "", {}, "sha512-tchlJXmyjMLQLbhYh5kCwZIVXsTxfvfTAZ32nIrszWCJnEIqTpRloMvJPOpQA9BBCaOvvV5k0nI633dlqJsPRw=="],
 
     "@hono/node-server": ["@hono/node-server@1.19.14", "", { "peerDependencies": { "hono": "^4" } }, "sha512-GwtvgtXxnWsucXvbQXkRgqksiH2Qed37H9xHZocE5sA3N8O8O8/8FA3uclQXxXVzc9XBZuEOMK7+r02FmSpHtw=="],
 

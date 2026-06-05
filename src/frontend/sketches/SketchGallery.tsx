@@ -49,7 +49,6 @@ const DARK_VARS: Record<string, string> = {
   "--primary-foreground": "#ffffff",
   "--ring": "oklch(0.554 0.236 281 / 0.6)",
   "--radius": "0.25rem",
-  "--font-mono": '"Martian Mono", ui-monospace, monospace',
 };
 
 const LIGHT_VARS: Record<string, string> = {
@@ -69,7 +68,6 @@ const LIGHT_VARS: Record<string, string> = {
   "--primary-foreground": "#ffffff",
   "--ring": "oklch(0.554 0.236 281 / 0.5)",
   "--radius": "0.25rem",
-  "--font-mono": '"Martian Mono", ui-monospace, monospace',
 };
 
 const VARIANTS: Record<Variant, VariantSpec> = {
@@ -345,13 +343,7 @@ export function SketchGallery({ variant = "a" }: { variant?: string }) {
   const spec = VARIANTS[(variant as Variant) in VARIANTS ? (variant as Variant) : "a"];
   return (
     <div className="sketch-root fixed inset-0">
-      {/* preview-only: load Martian Mono + force it onto the mono/data role.
-       * (Tailwind v4 inlines --font-mono into .font-mono, so a var override is ignored.) */}
-      <link
-        rel="stylesheet"
-        href="https://fonts.googleapis.com/css2?family=Martian+Mono:wght@300;400;500;600&display=swap"
-      />
-      <style>{`.sketch-root .font-mono { font-family: "Martian Mono", ui-monospace, monospace !important; }`}</style>
+      {/* mono = Geist Mono (the app's --font-mono); HUD readouts use font-hud = Geist Pixel. */}
 
       {/* preview-only: scale the whole UI to 85% (uniform) — over-size by 1/0.85 so it still fills the viewport */}
       <div style={{ transform: "scale(0.85)", transformOrigin: "top left", width: "117.647%", height: "117.647%" }}>
