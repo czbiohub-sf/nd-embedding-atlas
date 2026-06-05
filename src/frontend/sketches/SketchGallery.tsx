@@ -15,9 +15,11 @@
  * Tokens are remapped on the wrapper so real shadcn utilities render in the new
  * language. Delete this folder + the main.tsx gate to remove.
  */
+import { Brackets, ChartScatter, Database, type LucideIcon } from "lucide-react";
 import type { CSSProperties } from "react";
+import { BiohubMark } from "../components/BiohubMark";
 
-type Variant = "a" | "b" | "c";
+type Variant = "a" | "b";
 
 const PERIWINKLE = "#6E4FF9"; // Biohub brand accent (exact)
 
@@ -89,14 +91,6 @@ const VARIANTS: Record<Variant, VariantSpec> = {
     signage: "full",
     vars: LIGHT_VARS,
   },
-  c: {
-    id: "c",
-    name: "C · DARK / MINIMAL",
-    blurb: "Least signage — lifted near-black + periwinkle + mono data, brackets only on the count readout. Baseline.",
-    mode: "dark",
-    signage: "min",
-    vars: DARK_VARS,
-  },
 };
 
 // ── Bracket primitives — the brand's signature device ────────────────
@@ -113,6 +107,17 @@ function Bk({ children }: { children: React.ReactNode }) {
 
 function Label({ children }: { children: React.ReactNode }) {
   return <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">{children}</span>;
+}
+
+/** Compose any lucide icon inside the brand's brackets — [icon].
+ * Brackets are stretched horizontally so the inner glyph reads larger. */
+function BracketIcon({ icon: Icon, className = "size-6" }: { icon: LucideIcon; className?: string }) {
+  return (
+    <span className={`relative inline-flex shrink-0 items-center justify-center ${className}`}>
+      <Brackets className="absolute inset-0 size-full scale-x-[1.35]" strokeWidth={1.5} />
+      <Icon className="size-[62%]" strokeWidth={2} />
+    </span>
+  );
 }
 
 function Chip({ children, active = false }: { children: React.ReactNode; active?: boolean }) {
@@ -144,14 +149,13 @@ function colWidth(c: string): number {
 }
 
 function Surface({ spec }: { spec: VariantSpec }) {
-  const full = spec.signage === "full";
   const light = spec.mode === "light";
   // data colors — data owns the chroma; nudge stronger on white so it reads
   const blue = light ? "oklch(0.55 0.2 250)" : "oklch(0.64 0.16 250)";
   const amber = light ? "oklch(0.68 0.16 65)" : "oklch(0.78 0.14 70)";
 
   return (
-    <div className="flex h-full flex-col bg-background text-foreground" style={spec.vars as CSSProperties}>
+    <div className="relative flex h-full flex-col bg-background text-foreground" style={spec.vars as CSSProperties}>
       {/* ── Scatter region (FULL height) — chrome floats on top ── */}
       <div className="relative min-h-0 flex-1 overflow-hidden">
         <div
@@ -166,12 +170,7 @@ function Surface({ spec }: { spec: VariantSpec }) {
 
         {/* floating controls — imposed directly on the canvas, no bar behind them */}
         <div className="absolute top-0 right-0 left-0 z-20 flex items-center gap-2 px-3 py-2.5">
-          <span className="mr-1 font-mono text-[13px] tracking-tight">
-            <span style={{ color: PERIWINKLE }}>[</span>
-            <span className="text-foreground">o</span>
-            <span style={{ color: PERIWINKLE }}>]</span>
-          </span>
-          {full && <Label>embedding</Label>}
+          <BracketIcon icon={ChartScatter} className="mr-1 size-6 text-foreground/75" />
           <Chip active>
             <Bk>phate</Bk>
           </Chip>
@@ -194,23 +193,6 @@ function Surface({ spec }: { spec: VariantSpec }) {
           </div>
         </div>
 
-        {/* bracket frame (below the floating toolbar) */}
-        {full && (
-          <>
-            <span
-              className="pointer-events-none absolute top-16 bottom-6 left-3 font-mono font-light text-[64px] leading-none opacity-25"
-              aria-hidden
-            >
-              [
-            </span>
-            <span
-              className="pointer-events-none absolute top-16 right-3 bottom-6 font-mono font-light text-[64px] leading-none opacity-25"
-              aria-hidden
-            >
-              ]
-            </span>
-          </>
-        )}
         <div className="absolute top-14 right-6 font-mono text-[10px] text-muted-foreground/80">
           <Bk>OBS · 70,121</Bk>
         </div>
@@ -246,9 +228,10 @@ function Surface({ spec }: { spec: VariantSpec }) {
         </div>
       </div>
 
-      {/* ── Table ────────────────────────────────────────────── */}
-      <div className="h-[230px] border-border border-t bg-background">
-        <div className="flex items-center gap-3 border-border border-b bg-card px-3 py-1.5">
+      {/* ── Table — floating card panel (like the Collections sidebar) ── */}
+      <div className="absolute inset-x-4 bottom-8 z-30 flex h-[300px] flex-col overflow-hidden rounded-xl border border-border bg-card shadow-2xl">
+        <div className="flex items-center gap-3 border-border border-b px-3 py-2.5">
+          <BracketIcon icon={Database} className="size-6 text-primary" />
           {["TABLE", "TRACK", "GALLERY"].map((t, i) => (
             <button
               key={t}
@@ -265,62 +248,79 @@ function Surface({ spec }: { spec: VariantSpec }) {
           <span className="ml-auto font-mono text-[10px] text-muted-foreground/70">
             <Bk>ROWS · 70,121</Bk>
           </span>
+          <button
+            type="button"
+            className="flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <span className="text-[12px] leading-none">✕</span>
+          </button>
         </div>
-        {/* header */}
-        <div className="flex border-border border-b bg-background">
-          {TABLE_COLS.map((c) => (
+        <div className="min-h-0 flex-1 overflow-auto">
+          {/* header */}
+          <div className="sticky top-0 z-10 flex border-border border-b bg-card">
+            {TABLE_COLS.map((c) => (
+              <div
+                key={c}
+                className="shrink-0 truncate px-2 py-1.5 font-medium font-mono text-[11px] uppercase tracking-wider text-muted-foreground"
+                style={{ width: colWidth(c) }}
+                title={c}
+              >
+                {c}
+              </div>
+            ))}
+          </div>
+          {/* rows */}
+          {TABLE_ROWS.map((row, ri) => (
             <div
-              key={c}
-              className="shrink-0 truncate px-2 py-1.5 font-medium font-mono text-[11px] uppercase tracking-wider text-muted-foreground"
-              style={{ width: colWidth(c) }}
-              title={c}
+              key={ri}
+              className={`group flex border-border/40 border-b font-mono text-[11px] transition-colors ${
+                ri === 2 ? "bg-primary/10" : "hover:bg-muted"
+              }`}
             >
-              {c}
+              {row.map((cell, ci) => {
+                const isState = ci === 4;
+                const isInfected = cell === "infected";
+                return (
+                  <div
+                    key={ci}
+                    className="relative shrink-0 truncate px-2 py-1.5 tabular-nums text-foreground/90"
+                    style={{ width: colWidth(TABLE_COLS[ci]) }}
+                  >
+                    {ri === 2 && ci === 0 && <span className="absolute inset-y-0 left-0 w-0.5 bg-primary" />}
+                    {isState ? (
+                      <span
+                        className="rounded-[3px] px-1.5 py-0.5 text-[10px]"
+                        style={{
+                          background: isInfected ? blue.replace(")", " / 0.18)") : amber.replace(")", " / 0.18)"),
+                          color: isInfected
+                            ? light
+                              ? blue
+                              : "oklch(0.8 0.1 250)"
+                            : light
+                              ? amber
+                              : "oklch(0.85 0.1 70)",
+                        }}
+                      >
+                        {cell}
+                      </span>
+                    ) : (
+                      cell
+                    )}
+                  </div>
+                );
+              })}
             </div>
           ))}
         </div>
-        {/* rows */}
-        {TABLE_ROWS.map((row, ri) => (
-          <div
-            key={ri}
-            className={`group flex border-border/40 border-b font-mono text-[11px] transition-colors ${
-              ri === 2 ? "bg-primary/10" : "hover:bg-muted"
-            }`}
-          >
-            {row.map((cell, ci) => {
-              const isState = ci === 4;
-              const isInfected = cell === "infected";
-              return (
-                <div
-                  key={ci}
-                  className="relative shrink-0 truncate px-2 py-1.5 tabular-nums text-foreground/90"
-                  style={{ width: colWidth(TABLE_COLS[ci]) }}
-                >
-                  {ri === 2 && ci === 0 && <span className="absolute inset-y-0 left-0 w-0.5 bg-primary" />}
-                  {isState ? (
-                    <span
-                      className="rounded-[3px] px-1.5 py-0.5 text-[10px]"
-                      style={{
-                        background: isInfected ? blue.replace(")", " / 0.18)") : amber.replace(")", " / 0.18)"),
-                        color: isInfected
-                          ? light
-                            ? blue
-                            : "oklch(0.8 0.1 250)"
-                          : light
-                            ? amber
-                            : "oklch(0.85 0.1 70)",
-                      }}
-                    >
-                      {cell}
-                    </span>
-                  ) : (
-                    cell
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        ))}
+        {/* footer — keyboard hint, like the Collections card */}
+        <div className="flex items-center justify-between border-border border-t px-3 py-1.5 font-mono text-[10px] text-muted-foreground/60">
+          <span className="flex items-center gap-1.5">
+            Toggle <kbd className="rounded border border-border bg-muted px-1 py-px text-[9px]">⌘J</kbd>
+          </span>
+          <span className="flex items-center gap-1.5">
+            <kbd className="rounded border border-border bg-muted px-1 py-px text-[9px]">Esc</kbd> to close
+          </span>
+        </div>
       </div>
 
       {/* ── Status bar — HUD, bracketed readouts ─────────────── */}
@@ -334,6 +334,8 @@ function Surface({ spec }: { spec: VariantSpec }) {
           <span className="size-1.5 rounded-full" style={{ background: PERIWINKLE }} />
           <Bk>READY</Bk>
         </span>
+        <span className="text-muted-foreground/30">·</span>
+        <BiohubMark className="h-3.5 w-auto shrink-0 text-primary" title="Biohub" />
       </div>
     </div>
   );
@@ -351,16 +353,19 @@ export function SketchGallery({ variant = "a" }: { variant?: string }) {
       />
       <style>{`.sketch-root .font-mono { font-family: "Martian Mono", ui-monospace, monospace !important; }`}</style>
 
-      <Surface spec={spec} />
+      {/* preview-only: scale the whole UI to 85% (uniform) — over-size by 1/0.85 so it still fills the viewport */}
+      <div style={{ transform: "scale(0.85)", transformOrigin: "top left", width: "117.647%", height: "117.647%" }}>
+        <Surface spec={spec} />
+      </div>
 
       {/* throwaway dev switcher — tiny floating pill, bottom-right, out of the way */}
       <div
-        className="fixed right-3 bottom-9 z-50 flex items-center gap-0.5 rounded-md border px-1 py-1 font-mono text-[10px]"
+        className="fixed top-14 right-3 z-50 flex items-center gap-0.5 rounded-md border px-1 py-1 font-mono text-[10px]"
         style={{ background: "#0a0a0c", color: "#f5f5f7", borderColor: "rgba(255,255,255,0.12)" }}
         title={spec.blurb}
       >
         <span className="px-1 uppercase tracking-[0.14em] opacity-40">sketch</span>
-        {(["a", "b", "c"] as const).map((v) => (
+        {(["a", "b"] as const).map((v) => (
           <a
             key={v}
             href={`?sketch=${v}`}
