@@ -409,7 +409,18 @@ export function ScatterView({
     hostRef.current?.setContinuousScale(legendState.scale);
   }, [legendState.scale, colorMode, data?.continuous]);
 
+  // External (cross-panel, non-self) selection → GPU dim-mask. Docked path reads
+  // it through the host (BroadcastBus side, §6.7); the floating/host-less path
+  // keeps the legacy direct selectionSyncStore subscription.
   useEffect(() => {
+    const apply = (rowIds: readonly number[] | null) => {
+      if (rowIds === null) hostRef.current?.clearExternalSelection();
+      else hostRef.current?.setExternalSelection(rowIds as number[]);
+    };
+    if (host) {
+      apply(host.externalRowSet()); // seed an already-active selection on mount
+      return host.onExternalRowSet(apply);
+    }
     const sub = selectionSyncStore.subscribe(() => {
       const s = selectionSyncStore.state;
       const isSelf = s.source?.kind === "panel" && s.source.panelId === myPanelId;
@@ -422,7 +433,7 @@ export function ScatterView({
       }
     });
     return () => sub.unsubscribe();
-  }, [myPanelId]);
+  }, [host, myPanelId]);
 
   useEffect(() => {
     const sub = viewSyncStore.subscribe(() => {
