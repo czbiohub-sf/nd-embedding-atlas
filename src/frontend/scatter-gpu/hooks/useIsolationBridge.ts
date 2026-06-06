@@ -1,5 +1,6 @@
 import type { RefObject } from "react";
 import { useCallback, useRef } from "react";
+import { useOptionalHost } from "../../core/host/host-context";
 import type { CategoryMapping } from "../../lib/category-column";
 import { setBrushPredicate } from "../../stores/BrushPredicateStore";
 import type { IsolationCapability } from "../handle-capabilities";
@@ -31,6 +32,11 @@ export function useIsolationBridge(opts: UseIsolationBridgeOptions): UseIsolatio
   catMapRef.current = coloredCategoryMapping;
   const colByColRef = useRef(colorByColumn);
   colByColRef.current = colorByColumn;
+  // Route the isolation predicate through host.* on the plugin path; the
+  // floating/host-less path falls back to the legacy BrushPredicateStore write.
+  const host = useOptionalHost();
+  const hostRef = useRef(host);
+  hostRef.current = host;
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const handleIsolationChange = useCallback(
@@ -40,9 +46,14 @@ export function useIsolationBridge(opts: UseIsolationBridgeOptions): UseIsolatio
       const col = colByColRef.current;
       const catIndices = categoryIndicesRef.current;
       const scatter = scatterRef.current;
+      const currentHost = hostRef.current;
+      const publishIsolation = (sql: string | null) => {
+        if (currentHost) currentHost.publishPredicate("isolation", sql);
+        else setBrushPredicate(source, sql);
+      };
 
       if (isolatedIndices.size === 0 || !catMap || !col) {
-        setBrushPredicate(source, null);
+        publishIsolation(null);
         scatter?.clearCategoryIsolation();
         return;
       }
@@ -51,11 +62,11 @@ export function useIsolationBridge(opts: UseIsolationBridgeOptions): UseIsolatio
         .filter((item) => isolatedIndices.has(item.index))
         .map((item) => `'${item.label.replace(/'/g, "''")}'`);
       if (labels.length === 0) {
-        setBrushPredicate(source, null);
+        publishIsolation(null);
         scatter?.clearCategoryIsolation();
         return;
       }
-      setBrushPredicate(source, `${col} IN (${labels.join(", ")})`);
+      publishIsolation(`${col} IN (${labels.join(", ")})`);
 
       if (scatter && catIndices) {
         scatter.setCategoryIsolation(isolatedIndices, catIndices);

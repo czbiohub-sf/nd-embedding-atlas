@@ -1,6 +1,7 @@
 import { useDebouncer, useThrottler } from "@tanstack/react-pacer";
 import type { RefObject } from "react";
 import { useRef } from "react";
+import { useOptionalHost } from "../../core/host/host-context";
 import { clearLassoFilter, setLassoFilter } from "../../stores/ActiveFilterStore";
 import { broadcastSelection, clearSelectionSync, panelSource } from "../../stores/SelectionSyncStore";
 import type { PanelId } from "../types";
@@ -84,6 +85,14 @@ export function useScatterBrushSync({
   const panelIdRef = useRef(myPanelId);
   panelIdRef.current = myPanelId;
 
+  // When this scatter is mounted as a plugin (docked path), route selection-out
+  // through host.* instead of the global stores; the floating/host-less path
+  // keeps the legacy direct-store writes (host === null). Read via a ref so the
+  // throttler/debouncer closures see the current host.
+  const host = useOptionalHost();
+  const hostRef = useRef(host);
+  hostRef.current = host;
+
   // ── Live + debounced activeFilterStore update ─────────────────────────────
   // Visual feedback (point dimming, status bar count) stays immediate.
   //
@@ -103,7 +112,9 @@ export function useScatterBrushSync({
     (rowIds: number[]) => {
       if (rowIds.length === 0 || rowIds.length >= 5000) return;
       const predicate = buildSelectionPredicate(rowIds);
-      setLassoFilter(panelIdRef.current, predicate);
+      const h = hostRef.current;
+      if (h) h.publishPredicate("lasso", predicate);
+      else setLassoFilter(panelIdRef.current, predicate);
     },
     {
       wait: 50, // matches GPU readback gate (~20 fps)
@@ -114,15 +125,17 @@ export function useScatterBrushSync({
 
   const brushDebouncer = useDebouncer(
     async (rowIds: number[]) => {
-      if (rowIds.length < 5000) {
-        // Small: throttler already updated live; ensure final predicate is accurate.
-        const predicate = buildSelectionPredicate(rowIds);
-        setLassoFilter(panelIdRef.current, predicate);
-      } else {
-        // Large: expensive temp-table sync — only run after drawing stops.
-        const predicate = await syncLargeSelection(rowIds);
-        setLassoFilter(panelIdRef.current, predicate);
-      }
+      // Compute the predicate first (the large branch's /api/scatter-selection
+      // POST + version-suffix stays here — per-instance namespacing is Phase 3).
+      const predicate =
+        rowIds.length < 5000
+          ? // Small: throttler already updated live; ensure final predicate is accurate.
+            buildSelectionPredicate(rowIds)
+          : // Large: expensive temp-table sync — only run after drawing stops.
+            await syncLargeSelection(rowIds);
+      const h = hostRef.current;
+      if (h) h.publishPredicate("lasso", predicate);
+      else setLassoFilter(panelIdRef.current, predicate);
     },
     {
       wait: 200,
@@ -142,12 +155,18 @@ export function useScatterBrushSync({
       // Clear is time-sensitive — cancel both and update right away
       brushThrottler.cancel();
       brushDebouncer.cancel();
-      clearLassoFilter(myPanelId);
-      clearSelectionSync(panelSource(myPanelId));
+      if (host) {
+        host.publishPredicate("lasso", null);
+        host.clearRowSet(); // true clear — NOT publishRowSet([])
+      } else {
+        clearLassoFilter(myPanelId);
+        clearSelectionSync(panelSource(myPanelId));
+      }
     } else {
       brushThrottler.maybeExecute(rowIds); // live update for small selections (~50ms)
       brushDebouncer.maybeExecute(rowIds); // debounced final + large selections (200ms)
-      broadcastSelection(panelSource(myPanelId), rowIds);
+      if (host) host.publishRowSet(rowIds);
+      else broadcastSelection(panelSource(myPanelId), rowIds);
     }
   };
 

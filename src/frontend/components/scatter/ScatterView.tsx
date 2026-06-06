@@ -15,6 +15,7 @@ import { colorSourceFromString, colorSourceLegendLabel } from "../../lib/color-s
 import { toRows } from "../../lib/mosaic-helpers";
 import { ScatterGPUHost, type ScatterGPUHostHandle } from "../../scatter-gpu/components/ScatterGPUHost";
 import { GpuDeviceProvider } from "../../core/gpu/gpu-device-context";
+import { useOptionalHost } from "../../core/host/host-context";
 import { type ColorMode, useMosaicScatterData } from "../../scatter-gpu/hooks/useMosaicScatterData";
 import { useScatterBrushSync } from "../../scatter-gpu/hooks/useScatterBrushSync";
 import type { PanelId, ScatterplotConfig } from "../../scatter-gpu/types";
@@ -102,6 +103,8 @@ export function ScatterView({
 }: ScatterViewProps) {
   const categoryColors = useEffectiveCategoryColors();
   const { setFps, setZoom, setSelection, setEmbedding, setNumPoints } = useScatterUIDispatch();
+  // Plugin host on the docked path (null on the floating/host-less path).
+  const host = useOptionalHost();
 
   // ── Bridge legendState colormap + reversed to useMosaicScatterData ─────────
   // LegendContext owns colormapName and colormapReversed for continuous mode.
@@ -142,12 +145,22 @@ export function ScatterView({
   const [userVmax, setUserVmax] = useState<number | undefined>();
   const rangeFilterSourceRef = useRef<object>({});
 
+  // Route the continuous-range predicate through host.* on the docked path; the
+  // floating/host-less path falls back to the legacy BrushPredicateStore write.
+  const publishRange = useCallback(
+    (sql: string | null) => {
+      if (host) host.publishPredicate("range", sql);
+      else setBrushPredicate(rangeFilterSourceRef.current, sql);
+    },
+    [host],
+  );
+
   // Reset filter when column changes
   useEffect(() => {
     setUserVmin(undefined);
     setUserVmax(undefined);
-    setBrushPredicate(rangeFilterSourceRef.current, null);
-  }, [colorByColumn]);
+    publishRange(null);
+  }, [colorByColumn, publishRange]);
 
   const {
     data,
@@ -192,16 +205,15 @@ export function ScatterView({
 
   // Continuous range isolation — independent mask; no trajectory guards needed.
   useEffect(() => {
-    const source = rangeFilterSourceRef.current;
     if (colorMode !== "continuous" || !colorByColumn || userVmin === undefined || userVmax === undefined) {
       hostRef.current?.clearContinuousIsolation();
-      setBrushPredicate(source, null);
+      publishRange(null);
       return () => {};
     }
     const col = colorByColumn;
     const vmin = userVmin;
     const vmax = userVmax;
-    setBrushPredicate(source, `"${col}" >= ${vmin} AND "${col}" <= ${vmax}`);
+    publishRange(`"${col}" >= ${vmin} AND "${col}" <= ${vmax}`);
     let cancelled = false;
     const tid = setTimeout(() => {
       coordinator
@@ -222,7 +234,7 @@ export function ScatterView({
       clearTimeout(tid);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [colorMode, colorByColumn, userVmin, userVmax, coordinator]);
+  }, [colorMode, colorByColumn, userVmin, userVmax, coordinator, publishRange]);
 
   // ── Fit-view ──────────────────────────────────────────────────────────────
   const handleFitView = useCallback(() => {
