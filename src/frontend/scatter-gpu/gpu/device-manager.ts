@@ -95,3 +95,11 @@ export function releaseDevice(): void {
 export function deviceRefCount(): number {
   return _refCount;
 }
+
+// DEV diagnostic (PLUGIN-ARCHITECTURE §7.3) — exposes the shared-device refcount
+// to the in-browser QA loop so leases can be asserted (`window.__ndeaDeviceRefCount()`
+// should equal the number of GPU-initialized scatter instances). Tree-shaken out
+// of production builds.
+if (import.meta.env.DEV && typeof window !== "undefined") {
+  (window as unknown as { __ndeaDeviceRefCount?: () => number }).__ndeaDeviceRefCount = deviceRefCount;
+}

@@ -4,11 +4,10 @@
  * acquire/releaseDevice and exposes `liveLeases()` so `openPlugin` can enforce
  * `meta.maxInstances` truthfully (decision #4).
  *
- * Phase 0: a thin, faithful wrapper that tracks leases by `instanceId` and makes
- * release idempotent. The full AbortSignal-aware acquire that fixes the
- * "device born ownerless" leak (§7.2) is a Phase-2 rework of `device-manager.ts`
- * itself; here we honor an already-aborted signal and release on abort, but do
- * not yet thread cancellation into the in-flight refcount path.
+ * A thin, faithful wrapper that tracks leases by `instanceId` and makes release
+ * idempotent. `acquire` is AbortSignal-aware end to end: it forwards `host.signal`
+ * into `device-manager`'s §7.2-complete refcount path, so aborting a pending init
+ * both rejects and undoes the increment — no "device born ownerless" leak.
  */
 
 import { acquireDevice, type DeviceInfo, deviceRefCount, releaseDevice } from "@/scatter-gpu/gpu/device-manager";
@@ -24,9 +23,9 @@ export interface DeviceLease {
 
 export interface DeviceBroker {
   /**
-   * AbortSignal-aware acquire (`host.signal`). Phase 2 will make aborting a
-   * pending init reject AND undo the refcount; Phase 0 honors a pre-aborted
-   * signal and releases the lease if the signal fires after acquisition.
+   * AbortSignal-aware acquire (`host.signal`). Aborting a pending init rejects
+   * the promise AND undoes the refcount increment (forwarded into
+   * `device-manager`'s §7.2 path), so no device is born ownerless.
    */
   acquire(instanceId: PluginInstanceId, signal?: AbortSignal): Promise<DeviceLease>;
   /** Live lease count — what `openPlugin` reads to enforce `maxInstances`. */
@@ -49,10 +48,14 @@ export function createDeviceBroker(): DeviceBroker {
     async acquire(instanceId, signal) {
       if (signal?.aborted) throw new DOMException("device acquire aborted", "AbortError");
 
-      const info = await acquireDevice();
+      // Thread the signal into the refcount path: device-manager's acquire is
+      // AbortSignal-aware end to end (§7.2 — undoes its own increment and never
+      // strands a device if aborted mid-init), so a fast add/delete cannot leak
+      // a live ownerless device. acquireDevice throws AbortError on abort.
+      const info = await acquireDevice(signal);
 
-      // The instance was torn down while the device was initializing — release
-      // immediately so we don't strand a lease. (§7.2 will make this airtight.)
+      // Defensive: if the signal fired in the window between acquireDevice
+      // resolving and us registering the lease, release immediately.
       if (signal?.aborted) {
         releaseDevice();
         throw new DOMException("device acquire aborted", "AbortError");

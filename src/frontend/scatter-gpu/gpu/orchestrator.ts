@@ -7,7 +7,7 @@ import type { ScatterData, ScatterplotConfig, ScatterplotHandle } from "../types
 import { createBuffers, createUniforms, MAX_PALETTE_SIZE, uploadData } from "./buffers";
 import { createCompositor } from "./compositor";
 import { createCullingEngine } from "./culling";
-import { acquireDevice, releaseDevice } from "./device-manager";
+import { acquireDevice, type DeviceInfo, releaseDevice } from "./device-manager";
 import { createHdrPipeline } from "./hdr";
 import { initGPU } from "./init";
 import { createPickingSystem } from "./picking";
@@ -19,6 +19,15 @@ export interface CreateScatterplotOpts {
   /** Aborted on host teardown — threaded into device acquire so a fast
    *  add/delete cannot strand a device mid-init (PLUGIN-ARCHITECTURE §7.2). */
   signal?: AbortSignal;
+  /**
+   * Pre-acquired device lease from `host.acquireDeviceLease()` (PLUGIN-ARCHITECTURE
+   * §7.1). When supplied, this instance uses the lease's already-leased device and
+   * does NOT acquire/release the shared refcount itself — the lease owner
+   * (`host.dispose`) controls the device lifetime, so the device survives data
+   * swaps (positionKey re-init) instead of churning. Typed structurally to avoid a
+   * `scatter-gpu → core` import cycle; the broker's `DeviceLease` is compatible.
+   */
+  lease?: { readonly info: DeviceInfo };
 }
 
 export async function createScatterplot(
@@ -30,7 +39,10 @@ export async function createScatterplot(
 ): Promise<ScatterplotHandle> {
   const t0 = performance.now();
 
-  const deviceInfo = await acquireDevice(opts?.signal);
+  // Leased device (host-managed) is authoritative — skip the self-acquire so the
+  // broker refcount is incremented exactly once per instance, by the lease owner.
+  const ownsDevice = !opts?.lease;
+  const deviceInfo = opts?.lease ? opts.lease.info : await acquireDevice(opts?.signal);
   const gpu = initGPU(canvas, deviceInfo);
   const { root, device, context, format, preferredWorkgroupSize } = gpu;
   const tGpu = performance.now();
@@ -634,7 +646,10 @@ export async function createScatterplot(
             // Device may already be released by the last lease holder — ignore.
           });
       }
-      releaseDevice();
+      // Only the self-acquire path releases here. A host-leased device is
+      // released by the lease owner (host.dispose), so it persists across this
+      // instance's data swaps (PLUGIN-ARCHITECTURE §7.1).
+      if (ownsDevice) releaseDevice();
     },
   };
 }

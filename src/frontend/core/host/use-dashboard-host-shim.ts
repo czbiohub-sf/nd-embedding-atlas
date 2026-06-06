@@ -26,7 +26,7 @@ import { useCallback, useRef } from "react";
 import type { MosaicClient } from "@uwdata/mosaic-core";
 import { useDashboard } from "@/hooks/useDashboard";
 import { broadcastBus, renderBus, selectionBus, viewSyncBus } from "@/core/buses";
-import { deviceBroker } from "@/core/gpu/device-broker";
+import { deviceBroker, type DeviceLease } from "@/core/gpu/device-broker";
 import type {
   DataApi,
   HighlightApi,
@@ -81,7 +81,9 @@ export function useDashboardHostShim() {
       const controller = new AbortController();
       const disposers: (() => void)[] = [];
       let config = init.config;
-      let deviceLease: { release(): void } | null = null;
+      let deviceLease: DeviceLease | null = null;
+      // Memoized so `acquireDeviceLease` is idempotent (see below).
+      let deviceLeasePromise: Promise<DeviceLease> | null = null;
       let disposed = false;
 
       const viewSync: ViewSyncApi = {
@@ -166,10 +168,17 @@ export function useDashboardHostShim() {
         render,
         ui,
 
-        async acquireDeviceLease() {
-          const lease = await deviceBroker.acquire(instanceId, controller.signal);
-          deviceLease = lease;
-          return lease;
+        acquireDeviceLease() {
+          // Idempotent (PLUGIN-ARCHITECTURE §7.1): one lease per instance for its
+          // whole lifetime. Memoizing the promise on the (frozen-for-the-mount)
+          // host gives React's effects/use() a STABLE promise, so a double-render
+          // (StrictMode) or two consumers can never double-increment the device
+          // refcount. `host.dispose()` owns release — the React layer never does.
+          deviceLeasePromise ??= deviceBroker.acquire(instanceId, controller.signal).then((lease) => {
+            deviceLease = lease;
+            return lease;
+          });
+          return deviceLeasePromise;
         },
         api,
 

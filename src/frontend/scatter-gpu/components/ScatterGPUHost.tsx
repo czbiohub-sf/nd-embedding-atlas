@@ -13,6 +13,7 @@
  */
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from "react";
 import type { PanelId } from "../../lib/branded-types";
+import { useDeviceLease } from "../../core/gpu/gpu-device-context";
 import { clearPanelLayerState, initPanelLayerState, selectionLayerStore } from "../../stores/SelectionLayerStore";
 import { createScatterplot } from "../gpu/orchestrator";
 import type { ScatterGPUHostHandle } from "../handle-capabilities";
@@ -65,6 +66,15 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
   const configRef = useRef(config);
   configRef.current = config;
 
+  // Device-lease state from the core DeviceBroker (PLUGIN-ARCHITECTURE §7.1).
+  // On the host-managed (docked) path this provides the instance's shared device
+  // lease; on the unmanaged (floating/host-less) path it is `{ managed: false }`
+  // and we self-acquire as before. Read through a ref so the stable maybeInitGpu
+  // sees the current value.
+  const leaseState = useDeviceLease();
+  const leaseStateRef = useRef(leaseState);
+  leaseStateRef.current = leaseState;
+
   /**
    * Attempt GPU initialization. Called from both the canvas callback ref
    * (fires on mount) and the positionKey effect (fires when data arrives).
@@ -78,8 +88,21 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
     const currentKey = positionKeyRef.current;
 
     if (!canvas || !overlay || !currentData || !currentKey) return;
-    if (initKeyRef.current === currentKey) return; // already initialized
 
+    // Device-lease gating (PLUGIN-ARCHITECTURE §7.1). On the host-managed path the
+    // device comes from host.acquireDeviceLease(): wait for the lease and NEVER
+    // self-acquire (else the broker refcount double-counts this instance). On the
+    // unmanaged path, fall through to the self-acquire orchestrator call below.
+    const currentLease = leaseStateRef.current;
+    if (currentLease.managed) {
+      if (currentLease.error) {
+        onGpuErrorRef.current(currentLease.error.message);
+        return;
+      }
+      if (!currentLease.lease) return; // lease in flight — re-runs when it resolves
+    }
+
+    if (initKeyRef.current === currentKey) return; // already initialized
     initKeyRef.current = currentKey;
 
     if (!navigator.gpu) {
@@ -107,7 +130,13 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
       if (ctx) ctx.scale(dpr, dpr);
     }
 
-    createScatterplot(canvas, overlay, currentData, configRef.current, { signal: abort.signal })
+    // Managed path: pass the leased device so the orchestrator does NOT acquire
+    // (or release) the shared refcount — the lease owner (host) controls it.
+    const lease = currentLease.managed ? currentLease.lease : null;
+    createScatterplot(canvas, overlay, currentData, configRef.current, {
+      signal: abort.signal,
+      lease: lease ?? undefined,
+    })
       .then((gpu) => {
         // Superseded by a newer init or unmounted while initializing — discard.
         if (abort.signal.aborted) {
@@ -155,6 +184,13 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
     }
     maybeInitGpu();
   }, [positionKey, maybeInitGpu]);
+
+  // Re-attempt init when the device lease resolves or its state changes (managed
+  // path). maybeInitGpu is guarded by initKeyRef, so this is a no-op once
+  // initialized; on first lease resolution it is what kicks off GPU init.
+  useEffect(() => {
+    maybeInitGpu();
+  }, [leaseState, maybeInitGpu]);
 
   // ResizeObserver — keeps canvas pixel dimensions in sync with CSS size
   useEffect(() => {

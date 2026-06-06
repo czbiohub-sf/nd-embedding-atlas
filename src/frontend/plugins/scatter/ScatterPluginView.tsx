@@ -11,6 +11,7 @@
 
 import type { DockviewPanelApi } from "dockview-react";
 import { ScatterContent } from "@/components/scatter/ScatterContent";
+import { HostProvider } from "@/core/host/host-context";
 import { panelId } from "@/scatter-gpu/types";
 import type { PluginViewProps } from "@/core/plugin/types";
 
@@ -27,12 +28,17 @@ export interface ScatterOptions {
 
 export function ScatterPluginView({ host }: PluginViewProps<ScatterConfig, ScatterOptions>) {
   const panelApi = host.ui.container.panelApi as DockviewPanelApi | undefined;
+  // Put the host on context so the scatter subtree (incl. the GPU host's device
+  // lease) can read host.* without prop-drilling. The Phase-2b conversion of
+  // ScatterContent's internals to host.* consumes this same provider.
   return (
-    <ScatterContent
-      panelId={panelId(host.instanceId)}
-      initialObsmKey={host.config.obsmKey}
-      initialColorByColumn={host.config.colorByColumn}
-      panelApi={panelApi}
-    />
+    <HostProvider host={host}>
+      <ScatterContent
+        panelId={panelId(host.instanceId)}
+        initialObsmKey={host.config.obsmKey}
+        initialColorByColumn={host.config.colorByColumn}
+        panelApi={panelApi}
+      />
+    </HostProvider>
   );
 }

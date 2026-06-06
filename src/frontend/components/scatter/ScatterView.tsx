@@ -14,6 +14,7 @@ import type { CategoryMapping } from "../../lib/category-column";
 import { colorSourceFromString, colorSourceLegendLabel } from "../../lib/color-source";
 import { toRows } from "../../lib/mosaic-helpers";
 import { ScatterGPUHost, type ScatterGPUHostHandle } from "../../scatter-gpu/components/ScatterGPUHost";
+import { GpuDeviceProvider } from "../../core/gpu/gpu-device-context";
 import { type ColorMode, useMosaicScatterData } from "../../scatter-gpu/hooks/useMosaicScatterData";
 import { useScatterBrushSync } from "../../scatter-gpu/hooks/useScatterBrushSync";
 import type { PanelId, ScatterplotConfig } from "../../scatter-gpu/types";
@@ -549,18 +550,23 @@ export function ScatterView({
       ref={containerRef}
       className={`relative min-h-0 flex-1 overflow-hidden${trajectory ? "trajectory-active" : ""}`}
     >
-      <ScatterGPUHost
-        ref={hostRef}
-        data={data}
-        positionKey={positionKey}
-        config={configRef.current}
-        onGpuError={setGpuError}
-        onRowIndicesChange={(indices) => {
-          rowIndicesRef.current = indices;
-          setNumPoints(indices.length);
-          onRowIndicesChange?.(indices);
-        }}
-      />
+      {/* GpuDeviceProvider sits BELOW the `!axes` guard above, so an empty scatter
+          acquires zero device. With a host on context (docked path) the GPU host
+          waits for its lease; without one (floating path) it self-acquires. */}
+      <GpuDeviceProvider>
+        <ScatterGPUHost
+          ref={hostRef}
+          data={data}
+          positionKey={positionKey}
+          config={configRef.current}
+          onGpuError={setGpuError}
+          onRowIndicesChange={(indices) => {
+            rowIndicesRef.current = indices;
+            setNumPoints(indices.length);
+            onRowIndicesChange?.(indices);
+          }}
+        />
+      </GpuDeviceProvider>
       {showLoading && (
         <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-background/50 text-sm text-muted-foreground">
           Loading{loadingKey ? ` ${loadingKey.replace(/^X_/, "")}...` : "..."}
