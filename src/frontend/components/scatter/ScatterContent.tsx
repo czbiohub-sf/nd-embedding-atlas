@@ -20,6 +20,7 @@ import { useScatterColorState } from "../../scatter-gpu/hooks/useScatterColorSta
 import { useTrajectoryLoader } from "../../scatter-gpu/hooks/useTrajectoryLoader";
 import { useHighlightedPointMeta } from "../../hooks/useHighlightedPointMeta";
 import type { PanelId } from "../../scatter-gpu/types";
+import { useOptionalHost } from "../../core/host/host-context";
 import { broadcastPanelState, clearPanelState } from "../../stores/PanelStateStore";
 import { disposeBitmap } from "../../stores/RoaringBroadcastStore";
 import { panelSource } from "../../stores/SelectionSyncStore";
@@ -58,6 +59,8 @@ export function ScatterContent({
   syncedAxes,
 }: ScatterContentProps) {
   const { state, actions, meta } = useDashboard();
+  // Docked path: the host owns this instance's WASM bitmap lifecycle (§6.6).
+  const host = useOptionalHost();
   const { metadata, highlightId } = state;
   const trajectory = selectAnyTrajectory(state.trajectories);
   const activeTrajectories = Object.values(state.trajectories).filter((t): t is NonNullable<typeof t> => t != null);
@@ -192,9 +195,12 @@ export function ScatterContent({
   useEffect(() => {
     return () => {
       clearPanelState(String(myPanelId));
-      disposeBitmap(panelSource(myPanelId));
+      // On the docked path the host owns the bitmap lifecycle (host.dispose ->
+      // broadcastBus.disposeFor(instanceId), §6.6 — keyed by instanceId, which
+      // equals this panelId). Only the host-less floating path frees it here.
+      if (!host) disposeBitmap(panelSource(myPanelId));
     };
-  }, [myPanelId]);
+  }, [myPanelId, host]);
 
   // Shared ScatterView props
   const scatterViewProps = {
