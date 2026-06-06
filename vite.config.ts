@@ -243,6 +243,32 @@ export default defineConfig({
           "typescript/no-misused-promises": "off",
         },
       },
+      {
+        // Plugin boundary (PLUGIN-ARCHITECTURE §3, §7.6). Plugins talk to the app
+        // ONLY through the injected PluginHost — never the cross-view stores or
+        // the DashboardContext directly. Warn in Phase 0; promoted to error in
+        // Phase 3 once the views are converted. The `/api/*` literal ban is
+        // enforced by the capability-gated DataApi (ungranted methods undefined).
+        files: ["src/frontend/plugins/**/*.ts", "src/frontend/plugins/**/*.tsx"],
+        rules: {
+          "no-restricted-imports": [
+            "warn",
+            {
+              patterns: [
+                {
+                  group: ["@/stores/*", "**/stores/*"],
+                  message:
+                    "Plugins must not touch cross-view stores directly — go through the injected PluginHost (PLUGIN-ARCHITECTURE §7.6).",
+                },
+                {
+                  group: ["@/dashboard/*", "**/dashboard/*"],
+                  message: "Plugins must not import DashboardContext — read state via the PluginHost.",
+                },
+              ],
+            },
+          ],
+        },
+      },
     ],
   },
 
