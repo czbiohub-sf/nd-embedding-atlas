@@ -1,21 +1,30 @@
 /**
  * SelectionBus (PLUGIN-ARCHITECTURE §6) — the core seam between a plugin's
- * `publishPredicate` and today's `ActiveFilterStore`. Phase 0 forwards each
- * facet to the existing global setters, preserving exact behavior: lasso +
- * active-set compose via AND, DashboardProvider stays the sole subscriber that
- * drives `brushSelection.update()` through its rAF bridge.
+ * `publishPredicate` and today's predicate stores. It forwards each facet to the
+ * existing global setter, preserving exact behavior so nothing observable
+ * changes:
+ *   - `lasso` / `activeSet` → `ActiveFilterStore` (AND-composed, the LIVE
+ *     cross-filter; DashboardProvider is the sole subscriber that drives
+ *     `brushSelection.update()` through its rAF bridge).
+ *   - `range` / `isolation` → `BrushPredicateStore` (today a dead-end: no
+ *     subscriber, drives only the scatter's GPU dim-mask). Routed here so the
+ *     produced state is byte-identical; promoting them to a real cross-filter
+ *     clause is an INTENTIONAL behavior change deferred to Phase 4 (§6.3), at
+ *     which point this branch flips and `BrushPredicateStore` is retired.
  *
  * The per-instance clause-source model (one Mosaic clause source keyed by
- * `instanceId`, §6.3) lands in Phase 4. Here a published facet still routes
- * through the single shared `stableSource`, so nothing observable changes.
+ * `instanceId`, §6.3) lands in Phase 4. Here lasso/activeSet still route through
+ * the single shared `stableSource`, and range/isolation through a stable
+ * per-(instance, facet) source.
  */
 
 import { clearActiveSetFilter, clearLassoFilter, setActiveSetFilter, setLassoFilter } from "@/stores/ActiveFilterStore";
+import { setBrushPredicate } from "@/stores/BrushPredicateStore";
 import { panelId } from "@/lib/branded-types";
 import type { PluginInstanceId } from "@/core/plugin/host";
 
-/** Canonical predicate facets a view can publish in Phase 0. */
-export type SelectionFacet = "lasso" | "activeSet";
+/** Canonical predicate facets a view can publish. */
+export type SelectionFacet = "lasso" | "activeSet" | "range" | "isolation";
 
 export interface SelectionBus {
   /**
@@ -29,17 +38,45 @@ export interface SelectionBus {
 }
 
 export function createSelectionBus(): SelectionBus {
+  // Stable source object per (instance, facet) for the BrushPredicateStore-backed
+  // facets, so repeated range/isolation updates from one instance keep a stable
+  // Mosaic source identity (the store keys updates by this object).
+  const brushSources = new Map<string, object>();
+  const brushSourceFor = (instanceId: PluginInstanceId, facet: SelectionFacet): object => {
+    const key = `${instanceId}:${facet}`;
+    let src = brushSources.get(key);
+    if (!src) {
+      src = {};
+      brushSources.set(key, src);
+    }
+    return src;
+  };
+
   return {
     publishPredicate(instanceId, facet, sql) {
-      if (facet === "activeSet") {
-        if (sql === null) clearActiveSetFilter();
-        else setActiveSetFilter(sql);
-        return;
+      switch (facet) {
+        case "activeSet":
+          if (sql === null) clearActiveSetFilter();
+          else setActiveSetFilter(sql);
+          return;
+        case "lasso": {
+          const pid = panelId(instanceId as string);
+          if (sql === null) clearLassoFilter(pid);
+          else setLassoFilter(pid, sql);
+          return;
+        }
+        case "range":
+        case "isolation":
+          // Behavior-preserving: today these dead-end in BrushPredicateStore
+          // (no subscriber, never reaches brushSelection). Keep them there so
+          // the produced state is byte-identical; the real effect is the
+          // scatter's sibling GPU dim-mask. Promotion to a cross-filter clause
+          // is a deferred, explicitly-flagged Phase-4 behavior change.
+          setBrushPredicate(brushSourceFor(instanceId, facet), sql);
+          return;
+        default:
+          console.warn(`[selectionBus] unknown facet '${String(facet)}' — ignored`);
       }
-      // facet === "lasso"
-      const pid = panelId(instanceId as string);
-      if (sql === null) clearLassoFilter(pid);
-      else setLassoFilter(pid, sql);
     },
 
     externalRowSet() {

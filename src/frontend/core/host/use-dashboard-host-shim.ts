@@ -162,6 +162,10 @@ export function useDashboardHostShim() {
         publishRowSet(ids) {
           broadcastBus.publishRowSet(instanceId, ids);
         },
+        clearRowSet() {
+          // True clear (sync store -> "empty"), not an empty "active" set.
+          broadcastBus.clear(instanceId);
+        },
 
         viewSync,
         highlight,

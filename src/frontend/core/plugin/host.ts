@@ -129,6 +129,12 @@ export interface PluginHost<Config = unknown, Options = unknown> {
   publishPredicate(facet: string, sql: string | null): void;
   /** GPU dim-mask broadcast (selection-out + wasm-bitmap). */
   publishRowSet(ids: number[]): void;
+  /**
+   * Clear this instance's row-set broadcast — a TRUE clear (downstream sees
+   * "empty"), distinct from `publishRowSet([])` which would broadcast an empty
+   * "active" set. Use on lasso/selection clear.
+   */
+  clearRowSet(): void;
 
   // ── Cross-view ──
   readonly viewSync: ViewSyncApi;

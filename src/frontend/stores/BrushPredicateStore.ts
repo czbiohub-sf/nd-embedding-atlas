@@ -1,10 +1,14 @@
 /**
  * @deprecated Use ActiveFilterStore instead.
  *
- * BrushPredicateStore is retained only because ScatterContent.tsx still calls
- * setBrushPredicate for the continuous range filter (colormap range slider).
- * It has no subscribers in DashboardProvider and does not drive brushSelection.
- * Do not add new writers or subscribers here.
+ * BrushPredicateStore is a dead-end: it has no subscribers in DashboardProvider
+ * and does not drive brushSelection. It is retained only as the byte-identical
+ * sink for the scatter's `range` (colormap range slider) and `isolation`
+ * (legend category isolation) facets, which today drive ONLY the GPU dim-mask.
+ * The sole writer is now `core/buses/selection-bus.ts` (the `range`/`isolation`
+ * facets) — do not add other writers or subscribers. This store is retired in
+ * Phase 4 when those facets are promoted to a real per-instance cross-filter
+ * clause source (PLUGIN-ARCHITECTURE §6.3).
  *
  * ---
  * Original purpose: TanStack Store bridge between Mosaic brushSelection and React.
