@@ -121,8 +121,14 @@ export interface PluginHost<Config = unknown, Options = unknown> {
   // ── Selection IN ──
   /** Stable identity for the instance's lifetime; bus migrates contents (§6.1). */
   readonly inputSelection: Selection;
-  /** Upstream row-set (selection-in), or null. */
+  /** Upstream / cross-panel row-set (selection-in), or null. */
   externalRowSet(): readonly number[] | null;
+  /**
+   * Subscribe to external (non-self) cross-panel row-set changes; `rowIds` is
+   * null on clear/empty. Returns an unsubscribe. The selection-IN counterpart to
+   * `publishRowSet`/`clearRowSet` (§6.7); broadcast/last-write-wins, not an edge.
+   */
+  onExternalRowSet(cb: (rowIds: readonly number[] | null) => void): () => void;
 
   // ── Selection OUT (selection-out capability) ──
   /** Publish one of the instance's predicate facets; null clears it. */

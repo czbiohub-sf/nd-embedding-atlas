@@ -153,7 +153,14 @@ export function useDashboardHostShim() {
 
         inputSelection: brushSelection,
         externalRowSet() {
-          return selectionBus.externalRowSet();
+          // Cross-panel selection-in is the BroadcastBus side (§6.7), NOT the
+          // SelectionBus (whose externalRowSet is the Phase-5 xyflow-edge stub).
+          return broadcastBus.externalRowSet(instanceId);
+        },
+        onExternalRowSet(cb) {
+          const off = broadcastBus.subscribeExternal(instanceId, cb);
+          disposers.push(off);
+          return off;
         },
 
         publishPredicate(facet, sql) {
