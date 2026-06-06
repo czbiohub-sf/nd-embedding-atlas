@@ -4,17 +4,19 @@ import {
   type DockviewReadyEvent,
   type IDockviewHeaderActionsProps,
   type IDockviewPanelHeaderProps,
+  type IDockviewPanelProps,
 } from "dockview-react";
 import { Maximize2, Minimize2, XIcon } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 // eslint-disable-next-line import/no-unassigned-import
 import "dockview-react/dist/styles/dockview.css";
+import { PluginMount } from "../../core/layout/plugin-mount";
+import { registerPlugins } from "../../plugins";
 import { useTheme } from "../../ThemeProvider";
-import { PanelErrorBoundary } from "./PanelErrorBoundary";
-import { ChartGroupPanel } from "./panels/ChartGroupPanel";
-import { ImageViewerPanel } from "./panels/ImageViewerPanel";
-import { ScatterPanel } from "./panels/ScatterPanel";
-import { TablePanel } from "./panels/TablePanel";
+
+// Register plugin metadata once, before any panel renders. Engine code stays
+// lazy (each descriptor's Component is behind `load() => import()`).
+registerPlugins();
 
 // ── Custom tab ───────────────────────────────────────────────────────────
 
@@ -74,26 +76,33 @@ function RightHeaderActions({ api, containerApi }: IDockviewHeaderActionsProps) 
 }
 
 // ── Panel component registry ─────────────────────────────────────────────
+// Each Dockview component now routes through the unified <PluginMount>, which
+// looks up the descriptor, lazy-loads the engine chunk in <Suspense>, builds the
+// PluginHost, and wraps the Component in PanelErrorBoundary. The Dockview panel
+// id is the instanceId; `props.api` is threaded through as the PanelContext.
 const COMPONENTS = {
-  scatter: (props: Parameters<typeof ScatterPanel>[0]) => (
-    <PanelErrorBoundary panelName="Scatter">
-      <ScatterPanel {...props} />
-    </PanelErrorBoundary>
+  scatter: (props: IDockviewPanelProps) => {
+    const obsmKey = (props.params as { initialObsmKey?: string } | undefined)?.initialObsmKey ?? null;
+    return (
+      <PluginMount
+        id="scatter"
+        panel={{ id: props.api.id, title: props.api.title, panelApi: props.api }}
+        config={{ obsmKey, colorByColumn: null }}
+      />
+    );
+  },
+  table: (props: IDockviewPanelProps) => (
+    <PluginMount id="table" panel={{ id: props.api.id, title: props.api.title, panelApi: props.api }} />
   ),
-  table: (props: Parameters<typeof TablePanel>[0]) => (
-    <PanelErrorBoundary panelName="Table">
-      <TablePanel {...props} />
-    </PanelErrorBoundary>
+  "image-viewer": (props: IDockviewPanelProps<{ datasetKey?: string }>) => (
+    <PluginMount
+      id="image-viewer"
+      panel={{ id: props.api.id, title: props.api.title, panelApi: props.api }}
+      config={{ datasetKey: props.params?.datasetKey ?? null }}
+    />
   ),
-  "image-viewer": (props: Parameters<typeof ImageViewerPanel>[0]) => (
-    <PanelErrorBoundary panelName="Image Viewer">
-      <ImageViewerPanel {...props} />
-    </PanelErrorBoundary>
-  ),
-  charts: (props: Parameters<typeof ChartGroupPanel>[0]) => (
-    <PanelErrorBoundary panelName="Charts">
-      <ChartGroupPanel {...props} />
-    </PanelErrorBoundary>
+  charts: (props: IDockviewPanelProps) => (
+    <PluginMount id="charts" panel={{ id: props.api.id, title: props.api.title, panelApi: props.api }} />
   ),
 };
 

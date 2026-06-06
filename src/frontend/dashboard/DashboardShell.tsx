@@ -10,6 +10,7 @@ import { FloatingScatterRoot } from "../components/layout/FloatingScatterWindow"
 import { PanelHotkeys } from "../components/layout/PanelHotkeys";
 import { DatasetViewerPiP, ViewerPiP } from "../components/layout/ViewerPiP";
 import { TerminalTable } from "../components/table/TerminalTable";
+import { openPlugin, registerDockApi } from "../core/layout/layout-host";
 import { useDashboard } from "../hooks/useDashboard";
 import { togglePanel } from "../stores/panelRegistry";
 import { openViewerPiP } from "../stores/ViewerPiPStore";
@@ -36,18 +37,10 @@ export function DashboardShell() {
   }, [state.highlightId, state.metadata.plate, dockviewApi]);
 
   const addScatterPanel = useCallback((obsmKey: string) => {
-    const api = dockviewApiRef.current;
-    if (!api) return;
-    const id = `scatter-${Math.random().toString(36).slice(2, 10)}`;
     const label = obsmKey.replace(/^X_/, "").toUpperCase();
-    const existingScatter = api.panels.find((p) => p.id === "scatter" || p.id.startsWith("scatter-"));
-    api.addPanel({
-      id,
-      component: "scatter",
-      title: `Scatter: ${label}`,
-      params: { initialObsmKey: obsmKey },
-      position: existingScatter ? { referencePanel: existingScatter.id, direction: "right" } : undefined,
-    });
+    // Routed through the unified LayoutHost — identical placement to the prior
+    // inline `addPanel` (multi-instance id, positioned right of any scatter).
+    openPlugin("scatter", { title: `Scatter: ${label}`, params: { initialObsmKey: obsmKey } });
   }, []);
 
   const openScatterPicker = useCallback(() => {
@@ -88,6 +81,7 @@ export function DashboardShell() {
             hasEmbeddings={hasEmbeddings}
             onApiReady={(api) => {
               dockviewApiRef.current = api;
+              registerDockApi(api);
               setDockviewApi(api);
             }}
           />

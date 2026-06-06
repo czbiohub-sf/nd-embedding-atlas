@@ -1,16 +1,19 @@
 /**
- * useDashboardHostShim (PLUGIN-ARCHITECTURE §4.3, §12) — the Phase-0 bridge that
+ * useDashboardHostShim (PLUGIN-ARCHITECTURE §4.3, §12) — the bridge that
  * assembles a concrete `PluginHost` from today's infrastructure: `useDashboard`
  * (coordinator / table / metadata / highlight) + the cross-view buses +
- * `deviceBroker`. It is the single consumer of the contract layer, so it proves
- * the types compose end-to-end before any view is converted (Phase 2).
+ * `deviceBroker`. It is the consumer that proves the contract types compose
+ * end-to-end; `<PluginMount>` (Phase 1) uses it to build a host per instance.
  *
- * Nothing mounts a plugin yet, so the returned factory is intentionally unused
- * until `<PluginMount>` lands. The factory returns `{ host, dispose }`: the
- * mount will own `dispose`, which aborts `host.signal`, runs `onDispose`/tracked
- * unsubscribes, releases the device lease, and frees the broadcast bitmap.
+ * The returned factory is STABLE across volatile dashboard state (highlight is
+ * read through a ref, not closed over) so a mounted plugin's host is NOT
+ * disposed/rebuilt on every highlight change — only on a genuine
+ * session-infrastructure swap (coordinator/table/metadata). It returns
+ * `{ host, dispose }`; the mount owns `dispose`, which aborts `host.signal`,
+ * runs `onDispose`/tracked unsubscribes LIFO, releases the device lease, and
+ * frees the broadcast bitmap.
  *
- * Phase-0 simplifications (each promoted later, noted inline):
+ * Phase-1 simplifications (each promoted later, noted inline):
  *   - `inputSelection` is the shared `brushSelection`; per-instance selections
  *     with stable identity arrive in Phase 4 (§6.1).
  *   - `config` is held in a closure ref with no reactive re-render wiring; the
@@ -19,12 +22,21 @@
  *     the server grows per-instance namespacing (Phase 3, §6.5).
  */
 
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 import type { MosaicClient } from "@uwdata/mosaic-core";
 import { useDashboard } from "@/hooks/useDashboard";
 import { broadcastBus, renderBus, selectionBus, viewSyncBus } from "@/core/buses";
 import { deviceBroker } from "@/core/gpu/device-broker";
-import type { DataApi, HighlightApi, PluginHost, PluginInstanceId, RenderApi, ViewSyncApi } from "@/core/plugin/host";
+import type {
+  DataApi,
+  HighlightApi,
+  PanelContext,
+  PluginHost,
+  PluginInstanceId,
+  RenderApi,
+  UiApi,
+  ViewSyncApi,
+} from "@/core/plugin/host";
 import type { MountReason, PluginMeta } from "@/core/plugin/types";
 import type { SelectionFacet } from "@/core/buses";
 
@@ -34,24 +46,38 @@ export interface HostInit<Config, Options> {
   reason: MountReason;
   config: Config;
   options: Options;
+  /** Container handle (Dockview panel api, float window, …) — §4.3. */
+  panel: PanelContext;
 }
 
 export interface HostHandle<Config, Options> {
   host: PluginHost<Config, Options>;
-  /** Owned by `<PluginMount>` (Phase 2). Idempotent full teardown. */
+  /** Owned by `<PluginMount>`. Idempotent full teardown. */
   dispose(): void;
 }
+
+const notify = (msg: string, level: "info" | "warn" | "error" = "info"): void => {
+  if (level === "error") console.error(msg);
+  else if (level === "warn") console.warn(msg);
+  else console.info(msg);
+};
 
 /** Build a live `PluginHost` factory bound to the current dashboard context. */
 export function useDashboardHostShim() {
   const { state, actions, meta } = useDashboard();
   const { coordinator, brushSelection, table } = meta;
-  const { metadata, highlightId } = state;
+  const { metadata } = state;
   const { setHighlight } = actions;
+
+  // Volatile state read through refs so the factory stays stable.
+  const highlightRef = useRef(state.highlightId);
+  highlightRef.current = state.highlightId;
+  const setHighlightRef = useRef(setHighlight);
+  setHighlightRef.current = setHighlight;
 
   return useCallback(
     <Config, Options>(init: HostInit<Config, Options>): HostHandle<Config, Options> => {
-      const { instanceId, meta: pluginMeta, reason, options } = init;
+      const { instanceId, meta: pluginMeta, reason, options, panel } = init;
       const controller = new AbortController();
       const disposers: (() => void)[] = [];
       let config = init.config;
@@ -79,14 +105,12 @@ export function useDashboardHostShim() {
         },
       };
 
-      // Phase 0: highlight reads the value captured at build time. The
-      // mount rebuilds the host (or threads a ref) for liveness in Phase 2.
       const highlight: HighlightApi = {
         get() {
-          return highlightId;
+          return highlightRef.current;
         },
         set(id) {
-          setHighlight(id);
+          setHighlightRef.current(id);
         },
       };
 
@@ -97,6 +121,11 @@ export function useDashboardHostShim() {
         setPointRadius(r) {
           renderBus.setPointRadius(r);
         },
+      };
+
+      const ui: UiApi = {
+        container: panel,
+        notify,
       };
 
       // "read" is universal; richer methods stay undefined until Phase 3.
@@ -135,6 +164,7 @@ export function useDashboardHostShim() {
         viewSync,
         highlight,
         render,
+        ui,
 
         async acquireDeviceLease() {
           const lease = await deviceBroker.acquire(instanceId, controller.signal);
@@ -173,6 +203,6 @@ export function useDashboardHostShim() {
 
       return { host, dispose };
     },
-    [coordinator, brushSelection, table, metadata, highlightId, setHighlight],
+    [coordinator, brushSelection, table, metadata],
   );
 }

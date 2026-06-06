@@ -72,6 +72,26 @@ export interface RenderApi {
   setPointRadius(r: number): void;
 }
 
+// ── UI surface (Pi ctx.ui — always browser; §4.3) ─────────────────────────────
+
+/**
+ * Container abstraction across all four mount surfaces (docked / slide / float /
+ * pip — later xyflow node). `panelApi` is the container-native handle (e.g. a
+ * Dockview `DockviewPanelApi`); it is typed `unknown` so core stays decoupled
+ * from any one layout library, and the owning plugin casts it.
+ */
+export interface PanelContext {
+  readonly id: string;
+  readonly title?: string;
+  readonly panelApi?: unknown;
+  close?(): void;
+}
+
+export interface UiApi {
+  readonly container: PanelContext;
+  notify(msg: string, level?: "info" | "warn" | "error"): void;
+}
+
 // ── Options (deferred editor — decision #3) ────────────────────────────────────
 
 /**
@@ -114,6 +134,9 @@ export interface PluginHost<Config = unknown, Options = unknown> {
   readonly viewSync: ViewSyncApi;
   readonly highlight: HighlightApi;
   readonly render: RenderApi;
+
+  // ── UI surface ──
+  readonly ui: UiApi;
 
   // ── Resources ──
   /** GPU device lease via the core DeviceBroker (gpu capability). */

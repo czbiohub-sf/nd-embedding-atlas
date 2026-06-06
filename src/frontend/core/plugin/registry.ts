@@ -12,9 +12,12 @@ import type { PluginDescriptor, PluginKind } from "./types";
 
 const REGISTRY = new Map<string, PluginDescriptor>();
 
-export function registerPlugin(d: PluginDescriptor): void {
+export function registerPlugin<Config, Options>(d: PluginDescriptor<Config, Options>): void {
   if (REGISTRY.has(d.id)) throw new Error(`duplicate plugin id: ${d.id}`);
-  REGISTRY.set(d.id, d);
+  // The map is intentionally type-erased; the typed view is `registry-types.ts`.
+  // A specific descriptor (e.g. `<ScatterConfig>`) is NOT assignable to
+  // `<unknown>` due to Component param contravariance, so erase at the boundary.
+  REGISTRY.set(d.id, d as unknown as PluginDescriptor);
 }
 
 export function getPlugin(id: string): PluginDescriptor | undefined {
