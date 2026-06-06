@@ -15,15 +15,22 @@ import { type BlendMode, createBlendableRenderPipelines } from "./pipeline";
 import { createSelectionEngine } from "./selection";
 import { createFragmentShader, createVertexShader } from "./shaders";
 
+export interface CreateScatterplotOpts {
+  /** Aborted on host teardown — threaded into device acquire so a fast
+   *  add/delete cannot strand a device mid-init (PLUGIN-ARCHITECTURE §7.2). */
+  signal?: AbortSignal;
+}
+
 export async function createScatterplot(
   canvas: HTMLCanvasElement,
   overlay: HTMLCanvasElement,
   data: ScatterData,
   config?: ScatterplotConfig,
+  opts?: CreateScatterplotOpts,
 ): Promise<ScatterplotHandle> {
   const t0 = performance.now();
 
-  const deviceInfo = await acquireDevice();
+  const deviceInfo = await acquireDevice(opts?.signal);
   const gpu = initGPU(canvas, deviceInfo);
   const { root, device, context, format, preferredWorkgroupSize } = gpu;
   const tGpu = performance.now();
@@ -597,13 +604,36 @@ export async function createScatterplot(
       interaction.animateToViewState(state, durationMs);
     },
     destroy() {
+      // Deterministic disposal order (PLUGIN-ARCHITECTURE §7.3): raw-device
+      // owners free their own resources → context.unconfigure (§7.4) →
+      // root.destroy (tgpu-owned) → release the device lease. A dev-only
+      // validation error scope makes "no leaks" verified, not asserted.
+      const auditLeaks = import.meta.env.DEV;
+      if (auditLeaks) device.pushErrorScope("validation");
+
       interaction.destroy();
       selection.destroy();
       compositor.destroy();
       culling.destroy();
       picking.destroy();
       hdr.destroy();
+      try {
+        context.unconfigure();
+      } catch {
+        // Some browsers throw if the context was never configured — ignore.
+      }
       root.destroy();
+
+      if (auditLeaks) {
+        device
+          .popErrorScope()
+          .then((err) => {
+            if (err) console.error("[scatter dispose] GPU validation error:", err.message);
+          })
+          .catch(() => {
+            // Device may already be released by the last lease holder — ignore.
+          });
+      }
       releaseDevice();
     },
   };

@@ -8,11 +8,26 @@ let _shared: DeviceInfo | null = null;
 let _initPromise: Promise<DeviceInfo> | null = null;
 let _refCount = 0;
 
-export async function acquireDevice(): Promise<DeviceInfo> {
+/**
+ * Acquire the shared WebGPU device, refcounted across all scatter instances.
+ *
+ * AbortSignal-aware (PLUGIN-ARCHITECTURE §7.2): if the caller is torn down while
+ * device init is still in flight, passing an aborted (or abort-during-init)
+ * signal makes this acquisition undo its own refcount increment and destroy the
+ * device the instant it resolves if it was the last holder — so a node added
+ * then deleted before init resolves can never strand a live, ownerless device.
+ *
+ * On the abort/error path the increment is undone HERE (the caller will not get
+ * a handle, so it will not call `releaseDevice`). On the success path the caller
+ * owns the matching `releaseDevice()`.
+ */
+export async function acquireDevice(signal?: AbortSignal): Promise<DeviceInfo> {
+  if (signal?.aborted) throw new DOMException("device acquire aborted", "AbortError");
+
   _refCount++;
   if (_shared) return _shared;
-  if (_initPromise) return _initPromise;
-  _initPromise = (async () => {
+
+  _initPromise ??= (async () => {
     if (!navigator.gpu) {
       throw new Error(
         "WebGPU is not supported in this browser. " +
@@ -32,12 +47,39 @@ export async function acquireDevice(): Promise<DeviceInfo> {
       requiredFeatures: adapter.features.has("timestamp-query") ? ["timestamp-query"] : [],
     });
     const format = navigator.gpu.getPreferredCanvasFormat();
-    _shared = { device, format, preferredWorkgroupSize };
-    return _shared;
+    return { device, format, preferredWorkgroupSize };
   })();
-  const result = await _initPromise;
-  _shared = result;
-  return result;
+
+  let info: DeviceInfo;
+  try {
+    info = await _initPromise;
+  } catch (e) {
+    undoAcquire();
+    throw e;
+  }
+
+  // Torn down (signal) or every holder released while init was pending → do not
+  // strand the device. Destroy it now if we were the last holder.
+  if (signal?.aborted || _refCount === 0) {
+    undoAcquire(info);
+    throw new DOMException("device acquire aborted", "AbortError");
+  }
+
+  _shared = info;
+  return _shared;
+}
+
+/** Undo a single in-flight acquisition's increment; destroy if it was the last. */
+function undoAcquire(pendingInfo?: DeviceInfo): void {
+  _refCount = Math.max(0, _refCount - 1);
+  if (_refCount > 0) return;
+  if (_shared) {
+    _shared.device.destroy();
+    _shared = null;
+  } else if (pendingInfo) {
+    pendingInfo.device.destroy();
+  }
+  _initPromise = null;
 }
 
 export function releaseDevice(): void {
@@ -47,4 +89,9 @@ export function releaseDevice(): void {
     _shared = null;
     _initPromise = null;
   }
+}
+
+/** Live acquisitions — the truthful count the DeviceBroker exposes to openPlugin. */
+export function deviceRefCount(): number {
+  return _refCount;
 }

@@ -49,6 +49,8 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
   const overlayElRef = useRef<HTMLCanvasElement | null>(null);
   const gpuRef = useRef<ScatterplotHandle | null>(null);
   const initKeyRef = useRef<string | null>(null);
+  // Aborts an in-flight createScatterplot on re-init / unmount (§7.2).
+  const initAbortRef = useRef<AbortController | null>(null);
 
   // Refs to latest props — lets maybeInitGpu be stable (empty deps)
   // while always reading current values.
@@ -85,9 +87,13 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
       return;
     }
 
-    // Destroy previous GPU instance before re-initializing
+    // Abort any in-flight init and destroy the previous instance before
+    // re-initializing (PLUGIN-ARCHITECTURE §7.2 — no stranded device on churn).
+    initAbortRef.current?.abort();
     gpuRef.current?.destroy();
     gpuRef.current = null;
+    const abort = new AbortController();
+    initAbortRef.current = abort;
 
     const dpr = window.devicePixelRatio || 1;
     const w = canvas.clientWidth;
@@ -101,12 +107,19 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
       if (ctx) ctx.scale(dpr, dpr);
     }
 
-    createScatterplot(canvas, overlay, currentData, configRef.current)
+    createScatterplot(canvas, overlay, currentData, configRef.current, { signal: abort.signal })
       .then((gpu) => {
+        // Superseded by a newer init or unmounted while initializing — discard.
+        if (abort.signal.aborted) {
+          gpu.destroy();
+          return;
+        }
         gpuRef.current = gpu;
         onRowIndicesChangeRef.current(currentData.rowIndices ?? []);
       })
       .catch((err: unknown) => {
+        // Expected when teardown aborted the in-flight device acquire.
+        if (err instanceof DOMException && err.name === "AbortError") return;
         onGpuErrorRef.current(err instanceof Error ? err.message : String(err));
       });
   }, []); // stable — all reads through refs
@@ -135,6 +148,7 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
     if (!positionKey) {
       // No positions: reset so the next positionKey triggers re-init
       initKeyRef.current = null;
+      initAbortRef.current?.abort();
       gpuRef.current?.destroy();
       gpuRef.current = null;
       return;
@@ -178,6 +192,7 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
   // Destroy GPU on unmount
   useEffect(() => {
     return () => {
+      initAbortRef.current?.abort();
       gpuRef.current?.destroy();
       gpuRef.current = null;
     };

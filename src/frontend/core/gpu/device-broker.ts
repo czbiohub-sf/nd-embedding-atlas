@@ -11,7 +11,7 @@
  * not yet thread cancellation into the in-flight refcount path.
  */
 
-import { acquireDevice, type DeviceInfo, releaseDevice } from "@/scatter-gpu/gpu/device-manager";
+import { acquireDevice, type DeviceInfo, deviceRefCount, releaseDevice } from "@/scatter-gpu/gpu/device-manager";
 import type { PluginInstanceId } from "@/core/plugin/host";
 
 export interface DeviceLease {
@@ -76,7 +76,11 @@ export function createDeviceBroker(): DeviceBroker {
     },
 
     liveLeases() {
-      return leases.size;
+      // The authoritative count is the shared device refcount — it includes
+      // every live scatter instance, whether it acquired via this broker
+      // (Phase 2b) or directly through createScatterplot (today). Falls back to
+      // the broker's own lease map if larger (defensive).
+      return Math.max(deviceRefCount(), leases.size);
     },
 
     releaseFor,
