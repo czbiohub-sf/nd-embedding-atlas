@@ -4,6 +4,7 @@ import { ChevronRight, Download, LayoutGrid, Moon, RotateCcw, ScanIcon, Sun, Tab
 import { lazy, type RefObject, Suspense, useCallback, useEffect, useState } from "react";
 import { useDashboard } from "../hooks/useDashboard";
 import { useMosaicClient } from "../hooks/useMosaicClient";
+import { capabilitiesOf } from "../lib/capabilities";
 import { filterExprToExpr } from "../lib/mosaic-helpers";
 import { usePanel } from "../stores/panelRegistry";
 import { useTheme } from "../ThemeProvider";
@@ -95,6 +96,7 @@ export function CommandPalette({ onAddScatter, onOpenViewer, onFloatViewer, open
   }, [openRef]);
 
   const obsmEntries = Object.entries(metadata.obsm ?? {});
+  const hasPlate = capabilitiesOf(metadata).has("plate-image");
 
   function dispatch(fn: () => void) {
     fn();
@@ -151,13 +153,13 @@ export function CommandPalette({ onAddScatter, onOpenViewer, onFloatViewer, open
                     <Kbd>J</Kbd>
                   </KbdGroup>
                 </CommandItem>
-                {metadata.plate && onOpenViewer && (
+                {hasPlate && onOpenViewer && (
                   <CommandItem onSelect={() => dispatch(onOpenViewer)}>
                     <ScanIcon data-icon="inline-start" />
                     Open Image Viewer
                   </CommandItem>
                 )}
-                {metadata.plate && onFloatViewer && (
+                {hasPlate && onFloatViewer && (
                   <CommandItem onSelect={() => dispatch(onFloatViewer)}>
                     <ScanIcon data-icon="inline-start" />
                     Float Image Viewer

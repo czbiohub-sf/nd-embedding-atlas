@@ -20,7 +20,7 @@ export const galleryDescriptor: PluginDescriptor<GalleryConfig, GalleryOptions> 
   capabilities: CAPABILITIES,
   placement: { container: "slide", side: "bottom" },
   instancePolicy: "unique-per-container",
-  isAvailable: (ctx) => ctx.hasPlate,
+  requires: ["plate-image"],
   icon: "gallery",
   load: async () => {
     const { GalleryPluginView } = await import("./GalleryPluginView");

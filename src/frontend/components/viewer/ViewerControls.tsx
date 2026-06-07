@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { selectTrajectory } from "../../dashboard/DashboardContext";
 import { useDashboard } from "../../hooks/useDashboard";
+import { capabilitiesOf } from "../../lib/capabilities";
 import { cn } from "../../lib/utils";
 import { Panel } from "../ui/panel";
 import { SliderRow } from "../ui/slider-row";
@@ -18,7 +19,7 @@ export function ViewerControls({ cropSize, setCropSize, datasetKey }: Props) {
   const { bounds, zIndex, tIndex, viewMode } = state;
   const { trajectories, metadata } = dashState;
   const trajectory = selectTrajectory(trajectories, datasetKey);
-  const hasCellCoords = !!metadata.spatial?.x_col;
+  const hasCellCoords = capabilitiesOf(metadata).has("spatial");
 
   const traj = trajectory?.points;
   const trajTimepoints = useMemo(() => (traj ? traj.map((p) => p.t) : null), [traj]);

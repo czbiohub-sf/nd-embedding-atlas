@@ -12,6 +12,7 @@
  */
 
 import type { ComponentType } from "react";
+import type { DataCapability } from "@/types";
 import type { JsonValue } from "./json";
 import type { OptionsBuilder, PluginHost } from "./host";
 
@@ -84,19 +85,18 @@ export interface PluginMeta {
   /** Soft cap on concurrent live instances of GPU plugins (decision #4). */
   maxInstances?: number;
 
-  /** VS Code `when`-style availability gate against the loaded dataset. */
-  isAvailable?: (ctx: DataAvailabilityContext) => boolean;
+  /**
+   * Data capabilities this plugin needs to be available, in the shared
+   * `DataCapability` vocabulary (CAPABILITY-CONTRACT.md §4). Availability is the
+   * subset predicate `requires.every((c) => caps.has(c))` against the dataset's
+   * provided set (`capabilitiesOf(metadata)`). Forward-contract alongside
+   * `inputs`/`outputs`: it is also the xyflow node port-type used by
+   * `isValidConnection`. Omit/empty = always available.
+   */
+  requires?: readonly DataCapability[];
 
   /** Lightweight icon name (string token, NOT a ComponentType — no import cost). */
   icon?: string;
-}
-
-/** Minimal context for `isAvailable` checks — kept tiny so it stays cheap. */
-export interface DataAvailabilityContext {
-  hasEmbeddings: boolean;
-  hasPlate: boolean;
-  hasVar: boolean;
-  modalities: string[];
 }
 
 /** React render surface for a `view` plugin. */

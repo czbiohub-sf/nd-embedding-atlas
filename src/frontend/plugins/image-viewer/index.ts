@@ -22,7 +22,7 @@ export const imageViewerDescriptor: PluginDescriptor<ViewerConfig, ViewerOptions
   capabilities: CAPABILITIES,
   placement: { container: "docked" },
   instancePolicy: "unique-per-container",
-  isAvailable: (ctx) => ctx.hasPlate,
+  requires: ["plate-image"],
   icon: "image",
   load: async () => {
     const { ImageViewerPluginView } = await import("./ImageViewerPluginView");

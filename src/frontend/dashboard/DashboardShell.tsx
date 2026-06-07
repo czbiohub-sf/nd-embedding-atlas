@@ -12,14 +12,16 @@ import { DatasetViewerPiP, ViewerPiP } from "../components/layout/ViewerPiP";
 import { TerminalTable } from "../components/table/TerminalTable";
 import { openPlugin, registerDockApi } from "../core/layout/layout-host";
 import { useDashboard } from "../hooks/useDashboard";
+import { capabilitiesOf } from "../lib/capabilities";
 import { togglePanel } from "../stores/panelRegistry";
 import { openViewerPiP } from "../stores/ViewerPiPStore";
 
 export function DashboardShell() {
   const { state } = useDashboard();
   const { metadata } = state;
-  const hasEmbeddings = Object.keys(metadata.obsm ?? {}).length > 0;
-  const hasPlate = !!metadata.plate;
+  const caps = capabilitiesOf(metadata);
+  const hasEmbeddings = caps.has("obsm");
+  const hasPlate = caps.has("plate-image");
 
   const dockviewApiRef = useRef<DockviewApi | null>(null);
   const [dockviewApi, setDockviewApi] = useState<DockviewApi | null>(null);
@@ -31,10 +33,10 @@ export function DashboardShell() {
     const isNowSet = state.highlightId !== null;
     prevHighlightRef.current = state.highlightId;
     if (!wasNull || !isNowSet) return;
-    if (!state.metadata.plate) return;
+    if (!hasPlate) return;
     const dockedExists = dockviewApi?.getPanel("image-viewer") != null;
     if (!dockedExists) openViewerPiP();
-  }, [state.highlightId, state.metadata.plate, dockviewApi]);
+  }, [state.highlightId, hasPlate, dockviewApi]);
 
   const addScatterPanel = useCallback((obsmKey: string) => {
     const label = obsmKey.replace(/^X_/, "").toUpperCase();
@@ -77,7 +79,7 @@ export function DashboardShell() {
       <div className="relative flex h-full flex-col overflow-hidden bg-background">
         <div className="relative min-h-0 flex-1">
           <DockviewShell
-            hasPlate={!!metadata.plate}
+            hasPlate={hasPlate}
             hasEmbeddings={hasEmbeddings}
             onApiReady={(api) => {
               dockviewApiRef.current = api;
