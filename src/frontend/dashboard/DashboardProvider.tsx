@@ -1,4 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useSelector } from "@tanstack/react-store";
 import { Coordinator, Selection, socketConnector } from "@uwdata/mosaic-core";
 import { type ReactNode, useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { useColumnTypes } from "../hooks/useColumnTypes";
@@ -6,7 +7,7 @@ import { generateDefaultPanels } from "../lib/chart-spec";
 import { MetadataSchema } from "../../protocol/index.ts";
 import { wsClient } from "../lib/ws-client";
 import { scatterKeys } from "../scatter-gpu/hooks/queryKeys";
-import { selectionBus } from "../core/buses";
+import { highlightBus, selectionBus } from "../core/buses";
 import { asInstanceId } from "../core/plugin/host";
 import { activeCollectionStore } from "../stores/ActiveCollectionStore";
 import { broadcastSelection, clearSelectionSync, externalSource } from "../stores/SelectionSyncStore";
@@ -181,8 +182,10 @@ export function DashboardProvider({ children }: Props) {
   });
   const metadata = metadataQuery.data ?? null;
 
-  // UI state
-  const [highlightId, setHighlightId] = useState<string | null>(null);
+  // UI state — highlight lives on the HighlightBus (§6.7); mirror it into state
+  // so the many non-plugin readers (scatter, gallery, crop viewer, PiP) and the
+  // `state.highlightId` consumers keep working unchanged.
+  const highlightId = useSelector(highlightBus.store, (s) => s);
 
   // Trajectory state — per-dataset, keyed by datasetKey (empty string for single-dataset mode)
   const [trajectories, setTrajectoriesState] = useState<Record<string, TrajectoryData | null>>({});
@@ -238,7 +241,7 @@ export function DashboardProvider({ children }: Props) {
   // Memoize stable objects (must be before early return to satisfy rules of hooks)
   const actions = useMemo(
     () => ({
-      setHighlight: setHighlightId,
+      setHighlight: highlightBus.set,
       addPanel,
       removePanel,
       reorderPanels,

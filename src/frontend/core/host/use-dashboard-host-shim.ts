@@ -5,9 +5,9 @@
  * `deviceBroker`. It is the consumer that proves the contract types compose
  * end-to-end; `<PluginMount>` (Phase 1) uses it to build a host per instance.
  *
- * The returned factory is STABLE across volatile dashboard state (highlight is
- * read through a ref, not closed over) so a mounted plugin's host is NOT
- * disposed/rebuilt on every highlight change — only on a genuine
+ * The returned factory is STABLE across volatile dashboard state (highlight now
+ * lives on the HighlightBus, not in the factory's closure) so a mounted plugin's
+ * host is NOT disposed/rebuilt on every highlight change — only on a genuine
  * session-infrastructure swap (coordinator/table/metadata). It returns
  * `{ host, dispose }`; the mount owns `dispose`, which aborts `host.signal`,
  * runs `onDispose`/tracked unsubscribes LIFO, releases the device lease, and
@@ -22,10 +22,10 @@
  *     the server grows per-instance namespacing (Phase 3, §6.5).
  */
 
-import { useCallback, useRef } from "react";
+import { useCallback } from "react";
 import type { MosaicClient } from "@uwdata/mosaic-core";
 import { useDashboard } from "@/hooks/useDashboard";
-import { broadcastBus, renderBus, selectionBus, viewSyncBus } from "@/core/buses";
+import { broadcastBus, highlightBus, renderBus, selectionBus, viewSyncBus } from "@/core/buses";
 import { deviceBroker, type DeviceLease } from "@/core/gpu/device-broker";
 import type {
   DataApi,
@@ -64,16 +64,9 @@ const notify = (msg: string, level: "info" | "warn" | "error" = "info"): void =>
 
 /** Build a live `PluginHost` factory bound to the current dashboard context. */
 export function useDashboardHostShim() {
-  const { state, actions, meta } = useDashboard();
+  const { state, meta } = useDashboard();
   const { coordinator, brushSelection, table } = meta;
   const { metadata } = state;
-  const { setHighlight } = actions;
-
-  // Volatile state read through refs so the factory stays stable.
-  const highlightRef = useRef(state.highlightId);
-  highlightRef.current = state.highlightId;
-  const setHighlightRef = useRef(setHighlight);
-  setHighlightRef.current = setHighlight;
 
   return useCallback(
     <Config, Options>(init: HostInit<Config, Options>): HostHandle<Config, Options> => {
@@ -109,10 +102,10 @@ export function useDashboardHostShim() {
 
       const highlight: HighlightApi = {
         get() {
-          return highlightRef.current;
+          return highlightBus.get();
         },
         set(id) {
-          setHighlightRef.current(id);
+          highlightBus.set(id);
         },
       };
 

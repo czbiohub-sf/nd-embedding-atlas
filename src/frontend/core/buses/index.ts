@@ -8,3 +8,4 @@ export { type SelectionBus, type SelectionFacet, createSelectionBus, selectionBu
 export { type BroadcastBus, createBroadcastBus, broadcastBus } from "./broadcast-bus";
 export { type ViewSyncBus, createViewSyncBus, viewSyncBus } from "./view-sync-bus";
 export { type RenderBus, createRenderBus, renderBus } from "./render-bus";
+export { type HighlightBus, createHighlightBus, highlightBus } from "./highlight-bus";
