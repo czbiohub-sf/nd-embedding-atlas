@@ -174,6 +174,34 @@ export const PlateStoreSchema = z.object({
   name: z.string(),
   ome_version: z.enum(["0.4", "0.5"]),
 });
+
+/**
+ * Data-capability vocabulary (CAPABILITY-CONTRACT.md §3). One flat enum, the
+ * single source of truth for "what shapes of data does this dataset provide."
+ *
+ * Computed server-side at open()/ingest and baked into `Metadata.capabilities`
+ * below; the frontend reads it through `capabilitiesOf()` so every feature gate
+ * speaks one vocabulary instead of ad-hoc `metadata.plate` / `obsm` checks. The
+ * SAME set is the future xyflow node port-type (`requires ⊆ provides`).
+ *
+ * Flat first (set-membership, not parameterized) — `obsm:X_phate`-grained
+ * discrimination is a structural-subtype extension deferred until a view needs
+ * to target a specific embedding/channel. `obsp`/`temporal` are reserved here
+ * but only emitted once their server-side detection (neighbor graph / tracks)
+ * formalizes — see the §3.1 derivation table.
+ */
+export const DataCapabilitySchema = z.enum([
+  "obs", // observation dataframe (effectively always present)
+  "var", // variable dataframe (var_count > 0)
+  "obsm", // embeddings (X_phate, X_pca, …) → scatter
+  "obsp", // pairwise / neighbor graph → knn gallery, trajectory  [reserved]
+  "spatial", // x/y coordinates → spatial overlays
+  "plate-image", // HCS pixel data (OME-Zarr) → image viewer
+  "multimodal", // MuData (rna + protein …)
+  "temporal", // tracks / time series                             [reserved]
+]);
+export type DataCapability = z.infer<typeof DataCapabilitySchema>;
+
 export const MetadataSchema = z.looseObject({
   version: z.string().optional(),
   props: z.object({
@@ -204,6 +232,12 @@ export const MetadataSchema = z.looseObject({
   plate_shape: z.array(z.number()).optional(),
   plate_scale: z.array(z.number()).optional(),
   time_points: z.array(z.number()).optional(),
+  /**
+   * Provided data capabilities (CAPABILITY-CONTRACT.md §3). Server-derived;
+   * `.default([])` so an older payload parses to the empty set rather than
+   * throwing — the single compiled binary version-locks this in practice.
+   */
+  capabilities: z.array(DataCapabilitySchema).default([]),
 });
 export type Metadata = z.infer<typeof MetadataSchema>;
 
