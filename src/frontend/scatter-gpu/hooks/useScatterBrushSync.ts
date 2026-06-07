@@ -9,20 +9,23 @@ import type { PanelId } from "../types";
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /**
- * Mosaic's QueryManager caches query results by raw SQL text. Large-selection
- * predicates always read the same temp table (__scatter_selection), so the
- * cache-key string would be identical across different lassos and return stale
- * counts. Suffixing the predicate with a per-selection tag makes the SQL
- * unique per lasso — the extra `AND ''=''` is a no-op at execution time.
+ * LEGACY large-selection path — the host-less floating scatter ONLY. The
+ * docked/plugin path now stages rows via `host.api.publishSelection` → a
+ * per-instance `sel_<instanceId>` table with the bus-owned `tok=N` SQL-comment
+ * cache-buster (§6.5). This fixed `__scatter_selection` path remains because the
+ * floating scatter has no host.
+ *
+ * Mosaic's QueryManager caches by raw SQL text, so the changing temp table needs
+ * a unique suffix per revision; the `AND 'vN'='vN'` is a no-op at execution time.
  */
 let largeSelectionVersion = 0;
 
-function largeSelectionPredicate(): string {
+function largeSelectionPredicateLegacy(): string {
   largeSelectionVersion++;
   return `__row_index__ IN (SELECT row_index FROM __scatter_selection) AND 'v${largeSelectionVersion}' = 'v${largeSelectionVersion}'`;
 }
 
-async function syncLargeSelection(rowIds: number[]): Promise<string | null> {
+async function syncLargeSelectionLegacy(rowIds: number[]): Promise<string | null> {
   if (rowIds.length === 0) {
     await fetch("/api/scatter-selection", { method: "DELETE" }).catch(() => {});
     return null;
@@ -32,7 +35,7 @@ async function syncLargeSelection(rowIds: number[]): Promise<string | null> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ row_indices: rowIds }),
   }).catch(() => {});
-  return largeSelectionPredicate();
+  return largeSelectionPredicateLegacy();
 }
 
 /**
@@ -45,14 +48,15 @@ async function syncLargeSelection(rowIds: number[]): Promise<string | null> {
  *
  * Large selections (≥ 5000): subquery against the __scatter_selection temp
  * table that is populated via POST /api/scatter-selection before this
- * predicate is applied. See syncLargeSelection().
+ * predicate is applied. See syncLargeSelectionLegacy() (host-less path only;
+ * the docked path uses host.api.publishSelection → sel_<id>).
  */
 export function buildSelectionPredicate(rowIds: number[]): string | null {
   if (rowIds.length === 0) return null;
   if (rowIds.length < 5000) {
     return `__row_index__ IN (${rowIds.join(",")})`;
   }
-  return largeSelectionPredicate();
+  return largeSelectionPredicateLegacy();
 }
 
 // ── Hook ──────────────────────────────────────────────────────────────────────
@@ -125,15 +129,26 @@ export function useScatterBrushSync({
 
   const brushDebouncer = useDebouncer(
     async (rowIds: number[]) => {
-      // Compute the predicate first (the large branch's /api/scatter-selection
-      // POST + version-suffix stays here — per-instance namespacing is Phase 3).
-      const predicate =
-        rowIds.length < 5000
-          ? // Small: throttler already updated live; ensure final predicate is accurate.
-            buildSelectionPredicate(rowIds)
-          : // Large: expensive temp-table sync — only run after drawing stops.
-            await syncLargeSelection(rowIds);
       const h = hostRef.current;
+      // Small (<5000): inline IN-list, host-agnostic (the id list self-busts the cache).
+      if (rowIds.length < 5000) {
+        const predicate = buildSelectionPredicate(rowIds);
+        if (h) h.publishPredicate("lasso", predicate);
+        else setLassoFilter(panelIdRef.current, predicate);
+        return;
+      }
+      // Large (≥5000): stage server-side, then reference the temp table.
+      if (h?.api.publishSelection) {
+        // Per-instance sel_<id> (§6.5). Bail if the instance is being torn down so
+        // a flush-after-dispose can't strand an orphaned sel_<id> table.
+        if (h.signal.aborted) return;
+        const token = await h.api.publishSelection(rowIds);
+        if (h.signal.aborted) return;
+        h.publishPredicate("lasso", token.predicate); // references sel_<id> + /* tok=N */
+        return;
+      }
+      // Floating / host-less (or no selection-out): legacy fixed __scatter_selection.
+      const predicate = await syncLargeSelectionLegacy(rowIds);
       if (h) h.publishPredicate("lasso", predicate);
       else setLassoFilter(panelIdRef.current, predicate);
     },
@@ -158,6 +173,7 @@ export function useScatterBrushSync({
       if (host) {
         host.publishPredicate("lasso", null);
         host.clearRowSet(); // true clear — NOT publishRowSet([])
+        host.api.disposeSelection?.(); // drop sel_<id> on explicit lasso clear (§6.5)
       } else {
         clearLassoFilter(myPanelId);
         clearSelectionSync(panelSource(myPanelId));

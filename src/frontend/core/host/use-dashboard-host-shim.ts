@@ -130,11 +130,33 @@ export function useDashboardHostShim() {
         notify,
       };
 
-      // "read" is universal; richer methods stay undefined until Phase 3.
+      // "read" is universal; the selection-out methods are capability-gated —
+      // ungranted → absent from the object → `undefined` at runtime (the
+      // §6.5/§4.3 guardrail). The `/api/*` literal lives HERE in core, never in
+      // plugins/** — a plugin only ever calls `host.api.publishSelection`.
+      const canSelectionOut = pluginMeta.capabilities.has("selection-out");
       const api: DataApi = {
         query<T = unknown>(sql: string) {
           return coordinator.query(sql) as unknown as Promise<T>;
         },
+        ...(canSelectionOut
+          ? {
+              async publishSelection(rowIds: number[]) {
+                // Per-instance temp table sel_<instanceId> (§6.5).
+                const res = await fetch(`/api/selection/${encodeURIComponent(instanceId)}`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ row_indices: rowIds }),
+                });
+                const { table: selTable, count } = (await res.json()) as { table: string; count: number };
+                // The bus owns the tok=N cache-buster — plugins never invent it.
+                return selectionBus.makeToken(selTable, count);
+              },
+              disposeSelection() {
+                void fetch(`/api/selection/${encodeURIComponent(instanceId)}`, { method: "DELETE" }).catch(() => {});
+              },
+            }
+          : {}),
       };
 
       const host: PluginHost<Config, Options> = {
@@ -219,6 +241,8 @@ export function useDashboardHostShim() {
         deviceLease?.release();
         deviceBroker.releaseFor(instanceId);
         broadcastBus.disposeFor(instanceId);
+        // Drop this instance's server-side sel_<id> temp table (§6.5/§6.9).
+        api.disposeSelection?.();
       }
 
       return { host, dispose };

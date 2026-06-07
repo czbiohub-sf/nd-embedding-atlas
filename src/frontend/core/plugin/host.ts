@@ -29,8 +29,21 @@ export interface DataContext {
   readonly metadata: Metadata;
 }
 
-/** Opaque server token for a namespaced temp-table-backed predicate (§6.5). */
-export type SelectionToken = string & { readonly __brand: "SelectionToken" };
+/**
+ * Server token for a namespaced temp-table-backed predicate (§6.5). The canonical
+ * payload an xyflow edge carries (Phase 5). Built by `SelectionBus.makeToken` so
+ * plugins never invent the cache-buster comment.
+ */
+export interface SelectionToken {
+  /** SQL predicate referencing `sel_<id>`, carrying the bus's `tok=N` SQL-comment cache-buster. */
+  readonly predicate: string;
+  /** Monotonic cache-buster value (the `tok=N` source). */
+  readonly token: number;
+  /** Selected row count. */
+  readonly count: number;
+  /** Instance-namespaced temp-table name (`sel_<id>`). */
+  readonly table: string;
+}
 
 /**
  * Capability-gated data API (§6.5). Ungranted methods are `undefined` at
