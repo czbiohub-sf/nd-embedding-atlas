@@ -246,13 +246,16 @@ export default defineConfig({
       {
         // Plugin boundary (PLUGIN-ARCHITECTURE §3, §7.6). Plugins talk to the app
         // ONLY through the injected PluginHost — never the cross-view stores or
-        // the DashboardContext directly. Warn in Phase 0; promoted to error in
-        // Phase 3 once the views are converted. The `/api/*` literal ban is
-        // enforced by the capability-gated DataApi (ungranted methods undefined).
+        // the DashboardContext directly. ERROR (Phase 3): the views are converted
+        // and no plugin imports a cross-view store / dashboard context, so the
+        // boundary is now CI-enforced. (The reactive highlight read in
+        // table/charts uses @/hooks/useDashboard, which is intentionally NOT
+        // banned — it moves to a HighlightBus in Phase 4, §6.7.) The `/api/*`
+        // literal ban stays enforced by the capability-gated DataApi.
         files: ["src/frontend/plugins/**/*.ts", "src/frontend/plugins/**/*.tsx"],
         rules: {
           "no-restricted-imports": [
-            "warn",
+            "error",
             {
               patterns: [
                 {
