@@ -12,7 +12,7 @@
  * `obsp` / `temporal` are reserved and land with their features.
  */
 
-import type { DataCapability } from "../protocol/index.ts";
+import { type DataCapability, DataCapabilitySchema } from "../protocol/index.ts";
 
 export interface CapabilityInputs {
   /** obs dataframe present (obs_columns non-empty). Effectively always true. */
@@ -36,16 +36,29 @@ function hasAnyVar(varCount: number | Record<string, number> | undefined): boole
   return Object.values(varCount).some((v) => v > 0);
 }
 
+/**
+ * The §3.1 derivation table, encoded as data. `Record<DataCapability, …>` makes
+ * it provably TOTAL: adding a member to `DataCapabilitySchema` is a compile
+ * error here until a predicate is supplied (CAPABILITY-CONTRACT.md §3, R9 —
+ * the enum is the single source of truth, no silent drift). `obsp` / `temporal`
+ * are reserved with an explicit `() => false` — "named, not yet detectable" —
+ * rather than a silent omission; they flip on once their server-side detection
+ * (neighbor graph / tracks) formalizes.
+ */
+const DERIVERS: Record<DataCapability, (i: CapabilityInputs) => boolean> = {
+  obs: (i) => i.hasObs,
+  var: (i) => hasAnyVar(i.varCount),
+  obsm: (i) => i.obsmKeys.length > 0,
+  obsp: () => false,
+  spatial: (i) => i.hasSpatialXY,
+  "plate-image": (i) => i.hasPlate,
+  multimodal: (i) => i.isMultimodal,
+  temporal: () => false,
+};
+
 /** Map already-computed metadata facts to the flat capability vocabulary. */
 export function deriveDataCapabilities(input: CapabilityInputs): DataCapability[] {
-  const caps: DataCapability[] = [];
-  if (input.hasObs) caps.push("obs");
-  if (hasAnyVar(input.varCount)) caps.push("var");
-  if (input.obsmKeys.length > 0) caps.push("obsm");
-  if (input.hasSpatialXY) caps.push("spatial");
-  if (input.hasPlate) caps.push("plate-image");
-  if (input.isMultimodal) caps.push("multimodal");
-  // obsp / temporal: additive — emitted once the neighbor-gallery / tracks
-  // features formalize their server-side detection (doc §3.1, §8.3).
-  return caps;
+  // Iterate the enum tuple (single source) so output order is deterministic and
+  // every member is considered exactly once.
+  return DataCapabilitySchema.options.filter((cap) => DERIVERS[cap](input));
 }
