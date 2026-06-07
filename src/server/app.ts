@@ -22,6 +22,8 @@ import {
   handleScatterContinuousValues,
   handleScatterSelectionPost,
   handleScatterSelectionDelete,
+  handleSelectionPost,
+  handleSelectionDelete,
 } from "./routes/scatter.ts";
 import { handleTrajectory } from "./routes/trajectory.ts";
 import { handleObsBatch, handleObsInfo, handleObsDetail, handleHealth } from "./routes/obs.ts";
@@ -283,6 +285,14 @@ function routeApi(
   if (pathname === "/api/scatter-selection") {
     if (method === "POST") return handleScatterSelectionPost(req, store);
     if (method === "DELETE") return handleScatterSelectionDelete(store);
+  }
+
+  // ── Per-instance scatter selection (§6.5 — sel_<instanceId>) ─────
+  if (pathname.startsWith("/api/selection/")) {
+    const instanceId = decodeURIComponent(pathname.slice("/api/selection/".length));
+    if (!instanceId) return new Response("Not Found", { status: 404 });
+    if (method === "POST") return handleSelectionPost(req, store, instanceId);
+    if (method === "DELETE") return handleSelectionDelete(store, instanceId);
   }
 
   // ── Trajectory (server-side join of metadata + obsm positions) ──
