@@ -141,6 +141,7 @@ export function ScatterContent({
     colorByColumn,
     scatterRef: isolationHandleRef,
     categoryIndicesRef,
+    myPanelId,
   });
   const { handleDisabledChange } = useDisabledBridge({
     scatterRef: isolationHandleRef,

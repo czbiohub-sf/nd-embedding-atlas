@@ -17,11 +17,11 @@ import { ScatterGPUHost, type ScatterGPUHostHandle } from "../../scatter-gpu/com
 import { GpuDeviceProvider } from "../../core/gpu/gpu-device-context";
 import { useOptionalHost } from "../../core/host/host-context";
 import { type ColorMode, useMosaicScatterData } from "../../scatter-gpu/hooks/useMosaicScatterData";
-import { useScatterBrushSync } from "../../scatter-gpu/hooks/useScatterBrushSync";
+import { floatingInstanceId, useScatterBrushSync } from "../../scatter-gpu/hooks/useScatterBrushSync";
 import type { PanelId, ScatterplotConfig } from "../../scatter-gpu/types";
 import { hexToRgbPalette } from "../../scatter-gpu/utils/colors";
 import { buildColormapLut } from "../../lib/ochre-lut";
-import { setBrushPredicate } from "../../stores/BrushPredicateStore";
+import { selectionBus } from "../../core/buses";
 import { pointRadiusStore } from "../../stores/PointRadiusStore";
 import { renderSettingsStore } from "../../stores/RenderSettingsStore";
 import { getBitmapRowIds } from "../../stores/RoaringBroadcastStore";
@@ -143,16 +143,15 @@ export function ScatterView({
   // ── Continuous range filter handles (dim-only — colormap is NOT remapped) ──
   const [userVmin, setUserVmin] = useState<number | undefined>();
   const [userVmax, setUserVmax] = useState<number | undefined>();
-  const rangeFilterSourceRef = useRef<object>({});
-
   // Route the continuous-range predicate through host.* on the docked path; the
-  // floating/host-less path falls back to the legacy BrushPredicateStore write.
+  // host-less floating window publishes to the bus directly under the same
+  // floating instance id as its lasso, so range composes into one clause (§6.3).
   const publishRange = useCallback(
     (sql: string | null) => {
       if (host) host.publishPredicate("range", sql);
-      else setBrushPredicate(rangeFilterSourceRef.current, sql);
+      else selectionBus.publishPredicate(floatingInstanceId(myPanelId), "range", sql);
     },
-    [host],
+    [host, myPanelId],
   );
 
   // Reset filter when column changes

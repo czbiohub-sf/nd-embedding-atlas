@@ -12,7 +12,7 @@ import type { PanelId } from "../types";
  * host / instanceId). Derived from the panel id so its lasso composes as its own
  * per-instance crossfilter clause (§6.3), just like a docked scatter's.
  */
-const floatingInstanceId = (pid: PanelId) => asInstanceId(`floating:${pid}`);
+export const floatingInstanceId = (pid: PanelId) => asInstanceId(`floating:${pid}`);
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

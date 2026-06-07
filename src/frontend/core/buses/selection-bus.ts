@@ -17,19 +17,17 @@
  * documented). DashboardProvider injects the destination Selection once via
  * `attachDestination` and is no longer a writer.
  *
- * Facet routing:
- *   - `lasso` / `activeSet` → composed per-instance clause on the destination
- *     crossfilter (the LIVE cross-filter).
- *   - `range` / `isolation` → still the deprecated `BrushPredicateStore` (no
- *     subscriber reaches the crossfilter; drives only the scatter GPU dim-mask).
- *     Promotion to a real composed facet is the explicitly-flagged Phase-4
- *     step-3 behavior change; until then this branch is byte-identical.
+ * Facet routing: ALL facets (`lasso` / `activeSet` / `chart` / `range` /
+ * `isolation`) compose into the instance's single clause on the destination
+ * crossfilter. `range` (colormap range) and `isolation` (legend category
+ * isolation) were promoted here from a dead-end `BrushPredicateStore` write — a
+ * deliberate behavior change: they now filter the table and charts, not only the
+ * scatter's own GPU dim-mask (which they still drive separately).
  */
 
 import { Store } from "@tanstack/store";
 import type { Selection } from "@uwdata/mosaic-core";
 import { stringPredicate } from "@/lib/mosaic-helpers";
-import { setBrushPredicate } from "@/stores/BrushPredicateStore";
 import type { PluginInstanceId, SelectionToken } from "@/core/plugin/host";
 
 /** Canonical predicate facets a view can publish. */
@@ -125,20 +123,6 @@ export function createSelectionBus(): SelectionBus {
   const pendingEmpty = new Set<ClauseSource>();
   const revision = new Store(0);
 
-  // Stable per-(instance, facet) source for the deprecated BrushPredicateStore
-  // facets (range / isolation), so repeated updates keep a stable Mosaic source
-  // identity. Unchanged from Phase 3 — this branch is still a dead-end.
-  const brushSources = new Map<string, object>();
-  const brushSourceFor = (instanceId: PluginInstanceId, facet: SelectionFacet): object => {
-    const key = `${instanceId}:${facet}`;
-    let src = brushSources.get(key);
-    if (!src) {
-      src = {};
-      brushSources.set(key, src);
-    }
-    return src;
-  };
-
   let destination: Selection | null = null;
   let rafHandle: number | null = null;
   // Monotonic SQL cache-buster, shared across instances (per-instance table
@@ -205,21 +189,18 @@ export function createSelectionBus(): SelectionBus {
       switch (facet) {
         case "lasso":
         case "activeSet":
-        case "chart": {
+        case "chart":
+        case "range":
+        case "isolation": {
           // Composed facets: record + re-compose the instance's single clause.
+          // range/isolation also drive the scatter's GPU dim-mask separately;
+          // here they additionally filter the table/charts (the §6.3 promotion).
           const clause = ensure(instanceId);
           if (sql === null) clause.facets.delete(facet);
           else clause.facets.set(facet, sql);
           markDirty(instanceId);
           return;
         }
-        case "range":
-        case "isolation":
-          // Deprecated BrushPredicateStore path (still dead; no subscriber
-          // forwards it to the crossfilter). Phase-4 step 3 flips this branch
-          // onto the composed instance clause.
-          setBrushPredicate(brushSourceFor(instanceId, facet), sql);
-          return;
         default: {
           // Defensive: the shim casts an arbitrary string to SelectionFacet, so
           // a runtime-invalid facet can reach here even though it is `never` to TS.
