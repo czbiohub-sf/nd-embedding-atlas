@@ -3,20 +3,13 @@ import { Coordinator, Selection, socketConnector } from "@uwdata/mosaic-core";
 import { type ReactNode, useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { useColumnTypes } from "../hooks/useColumnTypes";
 import { generateDefaultPanels } from "../lib/chart-spec";
-import { stringPredicate } from "../lib/mosaic-helpers";
 import { MetadataSchema } from "../../protocol/index.ts";
 import { wsClient } from "../lib/ws-client";
 import { scatterKeys } from "../scatter-gpu/hooks/queryKeys";
-import {
-  activeFilterStore,
-  clearActiveSetFilter,
-  clearLassoFilter,
-  composedPredicate,
-  setActiveSetFilter,
-} from "../stores/ActiveFilterStore";
+import { selectionBus } from "../core/buses";
+import { asInstanceId } from "../core/plugin/host";
 import { activeCollectionStore } from "../stores/ActiveCollectionStore";
 import { broadcastSelection, clearSelectionSync, externalSource } from "../stores/SelectionSyncStore";
-import { panelId } from "../lib/branded-types";
 import type { ChartPanelEntry, ChartSpec, Metadata, TrajectoryData } from "../types";
 import { DashboardContext, type DashboardState } from "./DashboardContext";
 
@@ -76,45 +69,32 @@ export function DashboardProvider({ children }: Props) {
     return () => wsClient.close();
   }, []);
 
-  // ── ActiveFilterStore → brushSelection bridge ─────────────────────────
-  // Subscribes to the Store and calls brushSelection.update() via
-  // requestAnimationFrame, outside React's render cycle and outside any
-  // active Mosaic AsyncDispatch cycle. Components write the lasso facet
-  // (setLassoFilter) and the active-set facet (setActiveSetFilter); this
-  // bridge composes them via AND (composedPredicate) and pushes the result
-  // to Mosaic — implicit intersect, no precedence rule.
-  useEffect(() => {
-    const sub = activeFilterStore.subscribe(() => {
-      const state = activeFilterStore.state;
-      if (state.version === 0) return; // skip initial state
-      const predicate = composedPredicate(state);
-      requestAnimationFrame(() => {
-        brushSelection.update({
-          source: state.source,
-          clients: new Set(),
-          value: predicate ? [predicate] : [],
-          predicate: predicate ? stringPredicate(predicate) : null,
-        });
-      });
-    });
-    return () => sub.unsubscribe();
-  }, [brushSelection]);
+  // ── SelectionBus → brushSelection destination (§6.3 / §6.7) ───────────
+  // The SelectionBus is the SOLE writer of the crossfilter Selection: it mints
+  // one clause source per instance, AND-composes that instance's facets, and
+  // flushes `brushSelection.update()` via requestAnimationFrame (outside any
+  // active Mosaic AsyncDispatch cycle). We just hand it the destination once.
+  useEffect(() => selectionBus.attachDestination(brushSelection), [brushSelection]);
 
   // ── activeCollectionStore → server /api/active-selection ─────────────
   // Single-active for v1. When activeId flips:
-  //   set:   POST /api/active-selection {collection_ids: [id]} → set
-  //          ActiveFilterStore.activeSetPredicate; clear lasso (collection
-  //          is the new scope; lasso is reset so user can sub-select fresh);
-  //          GET row-indices and broadcastSelection(externalSource("collections"))
-  //          so the GPU dim mask lights up the members.
-  //   clear: DELETE /api/active-selection; clearActiveSetFilter();
+  //   set:   POST /api/active-selection {collection_ids: [id]} → publish the
+  //          "activeSet" facet on the collections pseudo-instance; clear lasso
+  //          across all instances (collection is the new scope; lasso resets so
+  //          the user can sub-select fresh); GET row-indices and
+  //          broadcastSelection(externalSource("collections")) so the GPU dim
+  //          mask lights up the members.
+  //   clear: DELETE /api/active-selection; clear the "activeSet" facet;
   //          clearSelectionSync(externalSource("collections")).
   // AbortController cancels in-flight requests if the user activates a
   // different collection (or deactivates) while one is loading.
   useEffect(() => {
     const abortRef = { current: new AbortController() };
     const COLLECTIONS_SRC = externalSource("collections");
-    const BRIDGE_PANEL_ID = panelId("__collections-bridge__");
+    // The active collection is published as its own pseudo-instance clause
+    // (§6.3); it intersects every other instance's clause exactly as the old
+    // single composed (activeSet ∧ lasso) clause did.
+    const COLLECTIONS_INSTANCE = asInstanceId("__collections__");
 
     const sub = activeCollectionStore.subscribe(() => {
       abortRef.current.abort();
@@ -125,7 +105,7 @@ export function DashboardProvider({ children }: Props) {
 
       if (!activeId) {
         // Deactivate path: drop server state + filter facet + GPU dim mask.
-        clearActiveSetFilter();
+        selectionBus.publishPredicate(COLLECTIONS_INSTANCE, "activeSet", null);
         clearSelectionSync(COLLECTIONS_SRC);
         fetch("/api/active-selection", { method: "DELETE", signal }).catch(() => {});
         return;
@@ -136,7 +116,7 @@ export function DashboardProvider({ children }: Props) {
       // 1. Activate clears any existing lasso (per product semantic:
       //    collection is the new working scope; lasso resets so user can
       //    sub-select within the collection without intersecting stale state).
-      clearLassoFilter(BRIDGE_PANEL_ID);
+      selectionBus.clearFacet("lasso");
       // Clear server-side scatter-selection temp table too, so any Mosaic
       // query that still references __scatter_selection sees zero rows.
       fetch("/api/scatter-selection", { method: "DELETE", signal }).catch(() => {});
@@ -155,7 +135,7 @@ export function DashboardProvider({ children }: Props) {
         .then((r) => r.json())
         .then(async ({ predicate }: { predicate: string; resolved_count: number }) => {
           if (activeCollectionStore.state.activeId !== idAtRequest) return;
-          setActiveSetFilter(predicate);
+          selectionBus.publishPredicate(COLLECTIONS_INSTANCE, "activeSet", predicate);
 
           // 3. Pull the row indices binary so the GPU dim mask can light up
           //    members. Skip the broadcast if the response is empty (the

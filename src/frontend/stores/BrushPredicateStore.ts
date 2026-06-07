@@ -1,23 +1,22 @@
 /**
- * @deprecated Use ActiveFilterStore instead.
+ * @deprecated The SelectionBus is the source of truth for the crossfilter.
  *
  * BrushPredicateStore is a dead-end: it has no subscribers in DashboardProvider
- * and does not drive brushSelection. It is retained only as the byte-identical
+ * and does not drive the crossfilter. It is retained only as the byte-identical
  * sink for the scatter's `range` (colormap range slider) and `isolation`
  * (legend category isolation) facets, which today drive ONLY the GPU dim-mask.
  * The sole writer is now `core/buses/selection-bus.ts` (the `range`/`isolation`
  * facets) — do not add other writers or subscribers. This store is retired in
- * Phase 4 when those facets are promoted to a real per-instance cross-filter
- * clause source (PLUGIN-ARCHITECTURE §6.3).
+ * Phase-4 step 3 when those facets are promoted to a real per-instance
+ * cross-filter clause source (PLUGIN-ARCHITECTURE §6.3).
  *
  * ---
  * Original purpose: TanStack Store bridge between Mosaic brushSelection and React.
  *
  * Problem: calling brushSelection.update() directly from React useEffect races with
  * Mosaic's AsyncDispatch event queue (Param.cancel('value') clears queued updates
- * when consecutive null-predicate calls hit distinct([], []) = false).
- *
- * Solution replaced by ActiveFilterStore + DashboardProvider bridge.
+ * when consecutive null-predicate calls hit distinct([], []) = false). The
+ * SelectionBus now owns the rAF defer that resolves this (§6.7).
  */
 import { Store } from "@tanstack/store";
 

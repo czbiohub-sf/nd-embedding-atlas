@@ -1,26 +1,35 @@
 /**
- * SelectionBus (PLUGIN-ARCHITECTURE §6) — the core seam between a plugin's
- * `publishPredicate` and today's predicate stores. It forwards each facet to the
- * existing global setter, preserving exact behavior so nothing observable
- * changes:
- *   - `lasso` / `activeSet` → `ActiveFilterStore` (AND-composed, the LIVE
- *     cross-filter; DashboardProvider is the sole subscriber that drives
- *     `brushSelection.update()` through its rAF bridge).
- *   - `range` / `isolation` → `BrushPredicateStore` (today a dead-end: no
- *     subscriber, drives only the scatter's GPU dim-mask). Routed here so the
- *     produced state is byte-identical; promoting them to a real cross-filter
- *     clause is an INTENTIONAL behavior change deferred to Phase 4 (§6.3), at
- *     which point this branch flips and `BrushPredicateStore` is retired.
+ * SelectionBus (PLUGIN-ARCHITECTURE §6.1 / §6.3 / §6.7) — the sole writer of the
+ * shared Mosaic crossfilter Selection.
  *
- * The per-instance clause-source model (one Mosaic clause source keyed by
- * `instanceId`, §6.3) lands in Phase 4. Here lasso/activeSet still route through
- * the single shared `stableSource`, and range/isolation through a stable
- * per-(instance, facet) source.
+ * Per-instance clause-source model (§6.3): the bus mints exactly ONE branded,
+ * stable-for-life Mosaic clause source per `instanceId` (`sourceFor`). Each
+ * instance's publishable facets are AND-composed locally into ONE clause that
+ * carries `source = sourceFor(instanceId)`, so `Selection.crossfilter` keeps its
+ * self-exclusion property (a client is never filtered by a clause whose source
+ * it owns) AND distinct instances compose across views. This supersedes the
+ * single module-global `stableSource` that used to live in `ActiveFilterStore`.
+ *
+ * Sole writer + rAF defer (§6.7): `publishPredicate` only records facet state
+ * and marks the instance dirty; the actual `destination.update()` is flushed
+ * once per frame via `requestAnimationFrame`, outside any active Mosaic dispatch
+ * cycle (the `Param.cancel('value')` race the old DashboardProvider bridge
+ * documented). DashboardProvider injects the destination Selection once via
+ * `attachDestination` and is no longer a writer.
+ *
+ * Facet routing:
+ *   - `lasso` / `activeSet` → composed per-instance clause on the destination
+ *     crossfilter (the LIVE cross-filter).
+ *   - `range` / `isolation` → still the deprecated `BrushPredicateStore` (no
+ *     subscriber reaches the crossfilter; drives only the scatter GPU dim-mask).
+ *     Promotion to a real composed facet is the explicitly-flagged Phase-4
+ *     step-3 behavior change; until then this branch is byte-identical.
  */
 
-import { clearActiveSetFilter, clearLassoFilter, setActiveSetFilter, setLassoFilter } from "@/stores/ActiveFilterStore";
+import { Store } from "@tanstack/store";
+import type { Selection } from "@uwdata/mosaic-core";
+import { stringPredicate } from "@/lib/mosaic-helpers";
 import { setBrushPredicate } from "@/stores/BrushPredicateStore";
-import { panelId } from "@/lib/branded-types";
 import type { PluginInstanceId, SelectionToken } from "@/core/plugin/host";
 
 /** Canonical predicate facets a view can publish. */
@@ -29,20 +38,66 @@ export type SelectionFacet = "lasso" | "activeSet" | "range" | "isolation";
 // A temp-table-backed predicate may only enter via `api.publishSelection`, which
 // tokens it through `makeToken` (§6.5). `publishPredicate` rejects a raw
 // `FROM sel_<id>` / `FROM __scatter_selection` reference that lacks the bus's
-// `/* tok=N */` stamp, so a plugin physically cannot publish stable SQL over a
-// changing temp table (the Mosaic SQL-text cache gotcha). Scoped to the FROM
-// clause so a column literally named `sel_*` in a WHERE predicate is unaffected.
+// `tok=N` SQL-comment stamp, so a plugin physically cannot publish stable SQL
+// over a changing temp table (the Mosaic SQL-text cache gotcha). Scoped to the
+// FROM clause so a column literally named `sel_*` in a WHERE predicate is fine.
 const SELECTION_TABLE_RE = /\bFROM\s+(?:sel_[A-Za-z0-9_]+|__scatter_selection)\b/i;
 const TOK_RE = /\/\* tok=\d+ \*\//;
+
+/**
+ * Stable per-instance clause source — a plain object branded by `instanceId`.
+ * Not a Mosaic client (exactly like the old single `stableSource`), so in this
+ * step no client self-excludes from it; the per-instance structure exists so a
+ * later step can grant true self-exclusion by sourcing an instance's own Mosaic
+ * clients against this object.
+ */
+interface ClauseSource {
+  readonly __ndeaInstance: PluginInstanceId;
+}
+
+interface InstanceClause {
+  readonly source: ClauseSource;
+  /** facet → SQL; insertion-ordered. Only the composed (lasso/activeSet) facets land here. */
+  readonly facets: Map<SelectionFacet, string>;
+}
+
+/**
+ * AND-compose an instance's facets in insertion order. A single facet returns
+ * its bare predicate (matches the old single-facet `composedPredicate`); two+
+ * wrap each in parens so AND binds correctly across complex expressions.
+ */
+function composeFacets(facets: Map<SelectionFacet, string>): string | null {
+  const parts = [...facets.values()];
+  if (parts.length === 0) return null;
+  if (parts.length === 1) return parts[0];
+  return parts.map((p) => `(${p})`).join(" AND ");
+}
 
 export interface SelectionBus {
   /**
    * Publish (or clear, when `sql` is null) one of an instance's predicate
-   * facets. `instanceId` becomes the originating panel id for the lasso facet
-   * (Phase 4 promotes it to a real clause source). Throws on a raw temp-table
-   * reference lacking a `tok=` SQL-comment stamp (§6.5).
+   * facets. Composed facets re-compose the instance's single clause and flush
+   * it to the destination crossfilter via the rAF defer. Throws on a raw
+   * temp-table reference lacking a `tok=` SQL-comment stamp (§6.5).
    */
   publishPredicate(instanceId: PluginInstanceId, facet: SelectionFacet, sql: string | null): void;
+  /**
+   * Clear `facet` for EVERY registered instance — the collections bridge resets
+   * all lassos when a collection becomes the new working scope (the multi-
+   * instance equivalent of the old single global lasso slot).
+   */
+  clearFacet(facet: SelectionFacet): void;
+  /**
+   * Drop an instance's clause + registry entry on teardown (the per-instance
+   * clause leak fix). Publishes an empty clause for its source first so the
+   * crossfilter stops filtering by a closed view.
+   */
+  disposeInstance(instanceId: PluginInstanceId): void;
+  /**
+   * Inject the destination crossfilter Selection. Returns a detach fn. Called
+   * once by DashboardProvider; the bus is the sole writer thereafter (§6.7).
+   */
+  attachDestination(selection: Selection): () => void;
   /**
    * Stamp a tokened predicate for a namespaced selection table (§6.5). The bus
    * owns the monotonic `tok=N` SQL-comment cache-buster so plugins never invent it.
@@ -50,12 +105,29 @@ export interface SelectionBus {
   makeToken(table: string, count: number): SelectionToken;
   /** Upstream row-set fed in by an edge — null until xyflow edges exist (Phase 5). */
   externalRowSet(): readonly number[] | null;
+  /**
+   * Monotonic revision — bumped on every composed-facet change and on dispose.
+   * A cache-key sentinel for consumers that need to recompute when the selection
+   * changes even if a row-set bitmap's identity did not (e.g. the gallery's obs
+   * batch fetch). Replaces `ActiveFilterStore.version`.
+   */
+  readonly revision: Store<number>;
 }
 
 export function createSelectionBus(): SelectionBus {
-  // Stable source object per (instance, facet) for the BrushPredicateStore-backed
-  // facets, so repeated range/isolation updates from one instance keep a stable
-  // Mosaic source identity (the store keys updates by this object).
+  const registry = new Map<PluginInstanceId, InstanceClause>();
+  const dirty = new Set<PluginInstanceId>();
+  // Sources of disposed instances awaiting an empty-clause publish. Keyed by the
+  // source OBJECT (not instanceId) so a recreated instanceId — which mints a
+  // fresh source — never cancels a prior source's pending removal (no leak), and
+  // the removal still rides the rAF defer (§6.7) rather than a synchronous
+  // update() from a React effect-cleanup path.
+  const pendingEmpty = new Set<ClauseSource>();
+  const revision = new Store(0);
+
+  // Stable per-(instance, facet) source for the deprecated BrushPredicateStore
+  // facets (range / isolation), so repeated updates keep a stable Mosaic source
+  // identity. Unchanged from Phase 3 — this branch is still a dead-end.
   const brushSources = new Map<string, object>();
   const brushSourceFor = (instanceId: PluginInstanceId, facet: SelectionFacet): object => {
     const key = `${instanceId}:${facet}`;
@@ -67,12 +139,63 @@ export function createSelectionBus(): SelectionBus {
     return src;
   };
 
-  // Monotonic SQL cache-buster, shared across all instances (per-instance table
+  let destination: Selection | null = null;
+  let rafHandle: number | null = null;
+  // Monotonic SQL cache-buster, shared across instances (per-instance table
   // names already disambiguate WHICH selection; this only needs global SQL-text
   // uniqueness). Replaces the scatter hook's old `largeSelectionVersion`.
   let tokN = 0;
 
+  const ensure = (instanceId: PluginInstanceId): InstanceClause => {
+    let clause = registry.get(instanceId);
+    if (!clause) {
+      clause = { source: { __ndeaInstance: instanceId }, facets: new Map() };
+      registry.set(instanceId, clause);
+    }
+    return clause;
+  };
+
+  const emit = (clause: InstanceClause): void => {
+    if (!destination) return;
+    const pred = composeFacets(clause.facets);
+    destination.update({
+      source: clause.source,
+      clients: new Set(),
+      value: pred ? [pred] : [],
+      predicate: pred ? stringPredicate(pred) : null,
+    });
+  };
+
+  const flush = (): void => {
+    rafHandle = null;
+    if (!destination) return; // not yet attached — entries stay queued for attach
+    for (const id of dirty) {
+      const clause = registry.get(id);
+      if (clause) emit(clause);
+    }
+    dirty.clear();
+    // Drain disposed instances: remove each source's contribution from the
+    // crossfilter (deferred — same dispatch-safety as every other write).
+    for (const source of pendingEmpty) {
+      destination.update({ source, clients: new Set(), value: [], predicate: null });
+    }
+    pendingEmpty.clear();
+  };
+
+  const scheduleFlush = (): void => {
+    if (rafHandle !== null) return;
+    rafHandle = requestAnimationFrame(flush);
+  };
+
+  const markDirty = (instanceId: PluginInstanceId): void => {
+    dirty.add(instanceId);
+    revision.setState((v) => v + 1);
+    scheduleFlush();
+  };
+
   return {
+    revision,
+
     publishPredicate(instanceId, facet, sql) {
       if (sql !== null && SELECTION_TABLE_RE.test(sql) && !TOK_RE.test(sql)) {
         throw new Error(
@@ -80,28 +203,60 @@ export function createSelectionBus(): SelectionBus {
         );
       }
       switch (facet) {
-        case "activeSet":
-          if (sql === null) clearActiveSetFilter();
-          else setActiveSetFilter(sql);
-          return;
-        case "lasso": {
-          const pid = panelId(instanceId as string);
-          if (sql === null) clearLassoFilter(pid);
-          else setLassoFilter(pid, sql);
+        case "lasso":
+        case "activeSet": {
+          // Composed facets: record + re-compose the instance's single clause.
+          const clause = ensure(instanceId);
+          if (sql === null) clause.facets.delete(facet);
+          else clause.facets.set(facet, sql);
+          markDirty(instanceId);
           return;
         }
         case "range":
         case "isolation":
-          // Behavior-preserving: today these dead-end in BrushPredicateStore
-          // (no subscriber, never reaches brushSelection). Keep them there so
-          // the produced state is byte-identical; the real effect is the
-          // scatter's sibling GPU dim-mask. Promotion to a cross-filter clause
-          // is a deferred, explicitly-flagged Phase-4 behavior change.
+          // Deprecated BrushPredicateStore path (still dead; no subscriber
+          // forwards it to the crossfilter). Phase-4 step 3 flips this branch
+          // onto the composed instance clause.
           setBrushPredicate(brushSourceFor(instanceId, facet), sql);
           return;
-        default:
-          console.warn(`[selectionBus] unknown facet '${String(facet)}' — ignored`);
+        default: {
+          // Defensive: the shim casts an arbitrary string to SelectionFacet, so
+          // a runtime-invalid facet can reach here even though it is `never` to TS.
+          const unknownFacet: string = facet;
+          console.warn(`[selectionBus] unknown facet '${unknownFacet}' — ignored`);
+        }
       }
+    },
+
+    clearFacet(facet) {
+      // Only the composed facets (lasso/activeSet) ever land in the registry;
+      // clearing any other is a harmless no-op.
+      for (const [id, clause] of registry) {
+        if (clause.facets.delete(facet)) markDirty(id);
+      }
+    },
+
+    disposeInstance(instanceId) {
+      const clause = registry.get(instanceId);
+      if (!clause) return;
+      registry.delete(instanceId);
+      dirty.delete(instanceId);
+      // Queue this source's empty clause and flush it through the SAME rAF defer
+      // as every other write (§6.7) — never a synchronous update() from the
+      // React effect-cleanup path that host.dispose() runs on.
+      pendingEmpty.add(clause.source);
+      revision.setState((v) => v + 1);
+      scheduleFlush();
+    },
+
+    attachDestination(selection) {
+      destination = selection;
+      // Drain anything queued before the destination existed (child mount effects
+      // can run before the provider's attach effect; a dispose can land too).
+      if (dirty.size > 0 || pendingEmpty.size > 0) scheduleFlush();
+      return () => {
+        if (destination === selection) destination = null;
+      };
     },
 
     makeToken(table, count) {
@@ -120,5 +275,5 @@ export function createSelectionBus(): SelectionBus {
   };
 }
 
-/** Process-wide selection bus — one composed brushSelection across the app. */
+/** Process-wide selection bus — one composed crossfilter across the app. */
 export const selectionBus: SelectionBus = createSelectionBus();

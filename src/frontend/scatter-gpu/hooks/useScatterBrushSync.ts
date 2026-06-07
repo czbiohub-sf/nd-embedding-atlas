@@ -2,9 +2,17 @@ import { useDebouncer, useThrottler } from "@tanstack/react-pacer";
 import type { RefObject } from "react";
 import { useRef } from "react";
 import { useOptionalHost } from "../../core/host/host-context";
-import { clearLassoFilter, setLassoFilter } from "../../stores/ActiveFilterStore";
+import { selectionBus } from "../../core/buses";
+import { asInstanceId } from "../../core/plugin/host";
 import { broadcastSelection, clearSelectionSync, panelSource } from "../../stores/SelectionSyncStore";
 import type { PanelId } from "../types";
+
+/**
+ * Clause-source key for the host-less floating scatter (which has no plugin
+ * host / instanceId). Derived from the panel id so its lasso composes as its own
+ * per-instance crossfilter clause (§6.3), just like a docked scatter's.
+ */
+const floatingInstanceId = (pid: PanelId) => asInstanceId(`floating:${pid}`);
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -97,7 +105,7 @@ export function useScatterBrushSync({
   const hostRef = useRef(host);
   hostRef.current = host;
 
-  // ── Live + debounced activeFilterStore update ─────────────────────────────
+  // ── Live + debounced lasso-facet publish ──────────────────────────────────
   // Visual feedback (point dimming, status bar count) stays immediate.
   //
   // Two-tier strategy matched to selection size:
@@ -109,16 +117,17 @@ export function useScatterBrushSync({
   // The debouncer also fires a trailing accurate update for small selections
   // (usually a no-op since the throttler already set the same predicate).
   //
-  // NOTE: setLassoFilter / clearLassoFilter write to ActiveFilterStore's
-  // lasso facet. DashboardProvider is the SOLE caller of
-  // brushSelection.update() — it subscribes and dispatches via rAF.
+  // NOTE: the docked path publishes the "lasso" facet through host → the
+  // SelectionBus; the host-less floating path publishes it to the bus directly
+  // under a floating instance id. The bus is the SOLE writer of the crossfilter
+  // Selection and dispatches via rAF (§6.3 / §6.7).
   const brushThrottler = useThrottler(
     (rowIds: number[]) => {
       if (rowIds.length === 0 || rowIds.length >= 5000) return;
       const predicate = buildSelectionPredicate(rowIds);
       const h = hostRef.current;
       if (h) h.publishPredicate("lasso", predicate);
-      else setLassoFilter(panelIdRef.current, predicate);
+      else selectionBus.publishPredicate(floatingInstanceId(panelIdRef.current), "lasso", predicate);
     },
     {
       wait: 50, // matches GPU readback gate (~20 fps)
@@ -134,7 +143,7 @@ export function useScatterBrushSync({
       if (rowIds.length < 5000) {
         const predicate = buildSelectionPredicate(rowIds);
         if (h) h.publishPredicate("lasso", predicate);
-        else setLassoFilter(panelIdRef.current, predicate);
+        else selectionBus.publishPredicate(floatingInstanceId(panelIdRef.current), "lasso", predicate);
         return;
       }
       // Large (≥5000): stage server-side, then reference the temp table.
@@ -150,7 +159,7 @@ export function useScatterBrushSync({
       // Floating / host-less (or no selection-out): legacy fixed __scatter_selection.
       const predicate = await syncLargeSelectionLegacy(rowIds);
       if (h) h.publishPredicate("lasso", predicate);
-      else setLassoFilter(panelIdRef.current, predicate);
+      else selectionBus.publishPredicate(floatingInstanceId(panelIdRef.current), "lasso", predicate);
     },
     {
       wait: 200,
@@ -175,7 +184,7 @@ export function useScatterBrushSync({
         host.clearRowSet(); // true clear — NOT publishRowSet([])
         host.api.disposeSelection?.(); // drop sel_<id> on explicit lasso clear (§6.5)
       } else {
-        clearLassoFilter(myPanelId);
+        selectionBus.publishPredicate(floatingInstanceId(myPanelId), "lasso", null);
         clearSelectionSync(panelSource(myPanelId));
       }
     } else {

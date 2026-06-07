@@ -241,6 +241,9 @@ export function useDashboardHostShim() {
         deviceLease?.release();
         deviceBroker.releaseFor(instanceId);
         broadcastBus.disposeFor(instanceId);
+        // Drop this instance's crossfilter clause so a closed view stops
+        // filtering everyone else (§6.3).
+        selectionBus.disposeInstance(instanceId);
         // Drop this instance's server-side sel_<id> temp table (§6.5/§6.9).
         api.disposeSelection?.();
       }
