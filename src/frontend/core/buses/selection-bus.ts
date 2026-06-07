@@ -33,7 +33,7 @@ import { setBrushPredicate } from "@/stores/BrushPredicateStore";
 import type { PluginInstanceId, SelectionToken } from "@/core/plugin/host";
 
 /** Canonical predicate facets a view can publish. */
-export type SelectionFacet = "lasso" | "activeSet" | "range" | "isolation";
+export type SelectionFacet = "lasso" | "activeSet" | "chart" | "range" | "isolation";
 
 // A temp-table-backed predicate may only enter via `api.publishSelection`, which
 // tokens it through `makeToken` (§6.5). `publishPredicate` rejects a raw
@@ -57,7 +57,7 @@ interface ClauseSource {
 
 interface InstanceClause {
   readonly source: ClauseSource;
-  /** facet → SQL; insertion-ordered. Only the composed (lasso/activeSet) facets land here. */
+  /** facet → SQL; insertion-ordered. Only the composed (lasso/activeSet/chart) facets land here. */
   readonly facets: Map<SelectionFacet, string>;
 }
 
@@ -204,7 +204,8 @@ export function createSelectionBus(): SelectionBus {
       }
       switch (facet) {
         case "lasso":
-        case "activeSet": {
+        case "activeSet":
+        case "chart": {
           // Composed facets: record + re-compose the instance's single clause.
           const clause = ensure(instanceId);
           if (sql === null) clause.facets.delete(facet);
@@ -229,8 +230,8 @@ export function createSelectionBus(): SelectionBus {
     },
 
     clearFacet(facet) {
-      // Only the composed facets (lasso/activeSet) ever land in the registry;
-      // clearing any other is a harmless no-op.
+      // Only the composed facets (lasso/activeSet/chart) ever land in the
+      // registry; clearing any other is a harmless no-op.
       for (const [id, clause] of registry) {
         if (clause.facets.delete(facet)) markDirty(id);
       }

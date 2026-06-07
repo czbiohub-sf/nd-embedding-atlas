@@ -1,10 +1,12 @@
 /**
  * Charts plugin view (PLUGIN-ARCHITECTURE §10.3).
  *
- * Phase 1: renders the existing `ChartPanelList` unchanged (it reads
- * `DashboardState.panels` internally). Phase 3 moves `ChartSpec[]` into this
- * plugin's `config` and routes the `CountPlot`/`Histogram`
- * `brushSelection.update()` bypass through `host.publishPredicate("chart", …)`.
+ * Renders `ChartPanelList` (it reads `DashboardState.panels` internally). Each
+ * chart leaf now publishes its filter as the "chart" facet of its OWN
+ * SelectionBus instance (`chart:<panel.id>`, §6.3), so the legacy direct
+ * `brushSelection.update()` bypass is gone and the bus is the sole writer.
+ * Still deferred: moving `ChartSpec[]` into this plugin's `config` (needs
+ * reactive options) and threading `host.data` to the leaves (§10.3).
  */
 
 import { ChartPanelList } from "@/components/charts/ChartPanelList";
