@@ -12,7 +12,7 @@
  */
 
 import { statSync } from "node:fs";
-import { memoryTableDriver } from "./drivers.ts";
+import { DRIVERS } from "./drivers.ts";
 
 function arg(name: string, fallback?: string): string {
   const i = process.argv.indexOf(`--${name}`);
@@ -27,7 +27,7 @@ async function main() {
   const out = arg("out");
 
   console.log(`synth: building source store from ${from} …`);
-  const { store, nObs } = await memoryTableDriver.build(from);
+  const { store, nObs } = await DRIVERS["memory-table"].build(from);
 
   const k = Math.ceil(rows / nObs);
   console.log(`synth: tiling ${nObs.toLocaleString()} obs ×${k} → ${rows.toLocaleString()} rows`);

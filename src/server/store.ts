@@ -96,6 +96,19 @@ function coerceValue(value: unknown): unknown {
 
 // ─── EmbeddingStore ──────────────────────────────────────────────────────────
 
+/**
+ * DuckDB open options (I/O scalability loop, Cycle 1). Defaults preserve the
+ * historical `:memory:` behavior; passing `dbPath` makes the store file-backed
+ * (out-of-core — base tables page to disk under `memoryLimit`).
+ */
+export interface StoreOpenOptions {
+  hidden?: Set<string>;
+  /** DuckDB database path. Default `:memory:`. A file path = out-of-core. */
+  dbPath?: string;
+  /** DuckDB PRAGMAs applied right after connect. */
+  pragmas?: { memoryLimit?: string; tempDirectory?: string; threads?: number };
+}
+
 export class EmbeddingStore {
   /** The underlying DuckDB instance. */
   readonly db: DuckDBInstance;
@@ -134,15 +147,25 @@ export class EmbeddingStore {
     this._hidden = hidden ?? new Set();
   }
 
+  /** Create the DuckDB instance + connection and apply open PRAGMAs. */
+  private static async _open(options?: StoreOpenOptions): Promise<{ db: DuckDBInstance; conn: DuckDBConnection }> {
+    const db = await DuckDBInstance.create(options?.dbPath ?? ":memory:");
+    const conn = await db.connect();
+    const p = options?.pragmas;
+    if (p?.memoryLimit) await conn.run(`SET memory_limit='${p.memoryLimit}'`);
+    if (p?.tempDirectory) await conn.run(`SET temp_directory='${p.tempDirectory}'`);
+    if (p?.threads != null) await conn.run(`SET threads=${p.threads}`);
+    return { db, conn };
+  }
+
   /**
    * Create an EmbeddingStore from a Parquet file.
    *
    * The Parquet file should contain the obs DataFrame. A `__row_index__`
    * column is added if not present, along with `obs_name` for identity.
    */
-  static async fromParquet(parquetPath: string, options?: { hidden?: Set<string> }): Promise<EmbeddingStore> {
-    const db = await DuckDBInstance.create(":memory:");
-    const conn = await db.connect();
+  static async fromParquet(parquetPath: string, options?: StoreOpenOptions): Promise<EmbeddingStore> {
+    const { db, conn } = await EmbeddingStore._open(options);
     const store = new EmbeddingStore(db, conn, options?.hidden);
 
     await conn.run(`CREATE TABLE obs_base AS SELECT * FROM '${parquetPath}'`);
@@ -160,14 +183,12 @@ export class EmbeddingStore {
    */
   static async fromInit(
     init: (conn: DuckDBConnection) => Promise<void>,
-    options?: {
-      hidden?: Set<string>;
+    options?: StoreOpenOptions & {
       /** Optional var-axis initializer. Creates `var_base` table. */
       initVar?: (conn: DuckDBConnection) => Promise<void>;
     },
   ): Promise<EmbeddingStore> {
-    const db = await DuckDBInstance.create(":memory:");
-    const conn = await db.connect();
+    const { db, conn } = await EmbeddingStore._open(options);
     const store = new EmbeddingStore(db, conn, options?.hidden);
 
     await init(conn);

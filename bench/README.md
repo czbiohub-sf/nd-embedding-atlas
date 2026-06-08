@@ -101,3 +101,29 @@ bun run bench/report.ts --all      # every run
    reads directly, ideally as a `read_parquet` VIEW so it never materializes at
    all). Cycle 1 should pair file-backed DuckDB **with** the sidecar path, not
    file-backed alone.
+
+## Cycle 1a — file-backed DuckDB + memory_limit (`StoreOpenOptions` seam)
+
+Added a backward-compatible `dbPath`/`pragmas` option to `EmbeddingStore`
+factories (default `:memory:` unchanged). New drivers `file-table` /
+`parquet-file` open a temp `.duckdb` with `memory_limit='1GB'`.
+
+| driver           | dataset  | n_obs | open  | peak RSS    | DuckDB mem |
+| ---------------- | -------- | ----- | ----- | ----------- | ---------- |
+| memory-table     | 86a284b2 | 1M    | 11.3s | 4726 MB     | 848 MiB    |
+| **file-table**   | 86a284b2 | 1M    | 12.7s | **4682 MB** | **67 MiB** |
+| parquet          | synth-5m | 5M    | 1.1s  | 3402 MB     | 3.0 GiB    |
+| **parquet-file** | synth-5m | 5M    | 5.8s  | **615 MB**  | 113 MiB    |
+
+**Verdict — confirms the Cycle 0 thesis, decisively:**
+
+- **zarr path: REJECTED as a standalone fix.** file-backed cut DuckDB's resident
+  memory 848→67 MiB (it pages) but peak RSS barely moved (4726→4682 MB) — the
+  ~3.9 GB JS ingest pipeline is untouched.
+- **parquet path: out-of-core works.** 5M peak RSS 3402→615 MB (**5.5×**) under a
+  1 GB cap, cost ~5× slower open (paging). So file-backed is the right
+  _substrate_ once data is columnar-on-disk — useless while JS ingest dominates.
+- **The `StoreOpenOptions` seam is kept** (the out-of-core substrate); file-backed
+  alone is not the win. → **Cycle 2 attacks the JS ingest pipeline directly:**
+  stream the zarr→columnar transcode so peak JS memory is O(batch), not O(all
+  obs), then read_parquet view + file-backed.
