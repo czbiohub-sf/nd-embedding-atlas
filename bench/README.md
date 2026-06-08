@@ -127,3 +127,29 @@ factories (default `:memory:` unchanged). New drivers `file-table` /
   alone is not the win. → **Cycle 2 attacks the JS ingest pipeline directly:**
   stream the zarr→columnar transcode so peak JS memory is O(batch), not O(all
   obs), then read_parquet view + file-backed.
+
+## Cycle 2 — diagnose the JS ingest peak (measurement cycle, no accepted code)
+
+Two findings, both steering Cycle 3:
+
+1. **RSS is sticky — `steady_rss` is not a leak signal.** A forced `Bun.gc(true)`
+   after build (the `--gc` flag on run.ts) left steady RSS unchanged at 1M
+   (4701 MB). JSC/Bun frees the JS heap but does not return pages to the OS, so
+   steady ≈ peak regardless of liveness. **The metric that matters is the peak
+   allocation high-water** — that's what OOMs at 5–10M. Release/GC tricks can't
+   lower a high-water that already happened.
+2. **The peak is multiple coexisting full copies** in `ingestDataFrames`
+   (`duckdb-ingest.ts`) → `df.toArrow()` (`data-frame.ts`): the zarr-decoded
+   `AnnDataFrame` source, the per-column conversions (`convertCategorical` even
+   **decodes** categoricals back to full `(string|null)[]` arrays — undoing
+   AnnData's compact codes), and the flechette Arrow Table — all live at once
+   before the DuckDB Appender drains them.
+
+**Key realization:** the Appender appends **per-row values** and never needs the
+Arrow Table — it could read straight from the source columns. → **Cycle 3:
+`ingestDataFrameStreaming` — feed the Appender directly from `AnnDataFrame`
+source columns (apply the per-type conversion inline per value), skipping the
+whole intermediate Arrow Table.** Eliminates one full coexisting copy with no
+lazy-zarr work. Gate: golden queries identical to baseline; peak_rss ↓ at 1M.
+Later sub-levers: keep categoricals dict-encoded (avoid the string-decode
+blow-up); batch/lazy per-column zarr reads to bound the source copy too.

@@ -108,6 +108,9 @@ async function main() {
   const t0 = performance.now();
   const { store, nObs, nCols } = await driver.build(dataset);
   const coldOpenMs = Math.round(performance.now() - t0);
+  // --gc probe: force a full GC after build to distinguish "leaked/retained"
+  // from "uncollected" obs Arrow Table before sampling steady RSS.
+  if (process.argv.includes("--gc")) Bun.gc(true);
   const steadyRss = rss();
 
   const { cat, num } = await pickColumns(store.conn);
