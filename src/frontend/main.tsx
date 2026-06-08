@@ -12,4 +12,6 @@ await roaringLibraryInitialize();
 // the double-mount/unmount cycle (canvas.getContext returns the same
 // context, but Idetik's stop() may invalidate internal state).
 const root = document.getElementById("root");
-if (root) createRoot(root).render(<App />);
+if (root) {
+  createRoot(root).render(<App />);
+}

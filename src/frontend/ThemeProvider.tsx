@@ -30,8 +30,8 @@ function getInitialTheme(): Theme {
   } catch {
     // localStorage unavailable
   }
-  // Respect OS preference on first visit; default to dark
-  return window.matchMedia?.("(prefers-color-scheme: light)").matches ? "light" : "dark";
+  // Brand-canonical default is light (Biohub technical mode); honor an explicit OS dark pref.
+  return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {

@@ -71,7 +71,7 @@ export function CollectionRow({
     <div
       className={cn(
         "flex items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors",
-        isActive ? "bg-primary/15 ring-1 ring-primary/40 ring-inset hover:bg-primary/20" : "hover:bg-surface-secondary",
+        isActive ? "bg-primary/15 ring-1 ring-primary/40 ring-inset hover:bg-primary/20" : "hover:bg-muted",
       )}
     >
       <div
@@ -99,7 +99,7 @@ export function CollectionRow({
               className="h-6 px-1.5 text-xs"
               aria-label={`Rename ${c.name}`}
             />
-            <span className="flex items-center gap-2 text-[10px] text-muted-foreground">
+            <span className="flex items-center gap-2 text-3xs text-muted-foreground">
               <KbdGroup>
                 <Kbd>↵</Kbd> save
               </KbdGroup>
@@ -119,12 +119,12 @@ export function CollectionRow({
                   onRequestRename(id);
                 }
               }}
-              className="block w-full truncate text-left font-medium text-text-primary hover:underline"
+              className="block w-full truncate text-left font-medium text-foreground hover:underline"
               title="Click or press F2 to rename"
             >
               {c.name}
             </button>
-            <div className="text-text-muted">
+            <div className="text-muted-foreground">
               <span className="mr-1.5">{c.current_count.toLocaleString()} obs</span>
               <CollectionBadges
                 tags={c.tags}
@@ -143,7 +143,7 @@ export function CollectionRow({
         onClick={() => onActivateToggle(id)}
         className={cn(
           "shrink-0 rounded p-1 transition-colors",
-          isActive ? "text-primary" : "text-text-muted hover:bg-surface-secondary hover:text-text-primary",
+          isActive ? "text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground",
         )}
         title={isActive ? "Deactivate filter (show all)" : "Filter dataset to this collection"}
         aria-pressed={isActive}

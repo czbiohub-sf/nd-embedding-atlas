@@ -5,8 +5,8 @@ import { lazy, type RefObject, Suspense, useCallback, useEffect, useState } from
 import { useDashboard } from "../hooks/useDashboard";
 import { useMosaicClient } from "../hooks/useMosaicClient";
 import { filterExprToExpr } from "../lib/mosaic-helpers";
+import { usePanel } from "../stores/panelRegistry";
 import { useTheme } from "../ThemeProvider";
-import { useTerminalTable } from "./table/TerminalTableProvider";
 import {
   CommandDialog,
   CommandEmpty,
@@ -37,8 +37,7 @@ export function CommandPalette({ onAddScatter, onOpenViewer, onFloatViewer, open
     state: { metadata },
     meta: { coordinator, brushSelection, table },
   } = useDashboard();
-  // eslint-disable-next-line @typescript-eslint/unbound-method
-  const { toggle: toggleTable } = useTerminalTable();
+  const { toggle: toggleTable } = usePanel("table");
   // eslint-disable-next-line @typescript-eslint/unbound-method
   const { theme, toggle: toggleTheme } = useTheme();
 
@@ -190,7 +189,7 @@ export function CommandPalette({ onAddScatter, onOpenViewer, onFloatViewer, open
                   <Download data-icon="inline-start" />
                   Export selection…
                   {exportData && (
-                    <span className="ml-auto text-[10px] text-muted-foreground/50 tabular-nums">
+                    <span className="ml-auto text-3xs text-muted-foreground/50 tabular-nums">
                       {canExport ? exportData.filtered.toLocaleString() : "no selection"}
                     </span>
                   )}
@@ -207,9 +206,7 @@ export function CommandPalette({ onAddScatter, onOpenViewer, onFloatViewer, open
 
               {/* Version footer */}
               {metadata.version && (
-                <div className="select-none px-3 py-2 text-[10px] text-muted-foreground/40">
-                  ndea v{metadata.version}
-                </div>
+                <div className="select-none px-3 py-2 text-3xs text-muted-foreground/40">ndea v{metadata.version}</div>
               )}
             </>
           )}

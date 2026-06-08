@@ -40,7 +40,7 @@ export function ActiveCollectionCallout() {
         aria-hidden
       />
       <span className="font-medium text-foreground text-xs">{c.name}</span>
-      <span className="text-muted-foreground text-[10px] tabular-nums">{c.current_count.toLocaleString()} obs</span>
+      <span className="text-muted-foreground text-3xs tabular-nums">{c.current_count.toLocaleString()} obs</span>
       <button
         type="button"
         onClick={() => setActiveCollection(null)}

@@ -44,6 +44,12 @@ export interface ComboboxProps<O extends ComboboxOption = ComboboxOption> {
   trailing?: (opt: O) => ReactNode;
   /** When true (default false), renders `trailing` inside the trigger too. */
   triggerTrailing?: boolean;
+  /**
+   * When true, hide the dropdown chevron and let the trigger size to its
+   * content (no `flex-1` on the label). Used for the compact "chip" triggers
+   * in the scatter overlay where the brackets/fill carry the affordance.
+   */
+  hideChevron?: boolean;
 }
 
 /**
@@ -72,6 +78,7 @@ export function Combobox<O extends ComboboxOption = ComboboxOption>({
   leading,
   trailing,
   triggerTrailing = false,
+  hideChevron = false,
 }: ComboboxProps<O>) {
   const [open, setOpen] = useState(false);
   const selected = options.find((o) => o.value === value);
@@ -92,11 +99,11 @@ export function Combobox<O extends ComboboxOption = ComboboxOption>({
         )}
       >
         {selected && leading ? leading(selected) : null}
-        <span className={cn("flex-1 truncate text-left", !selected && "text-muted-foreground")}>
+        <span className={cn("truncate text-left", !hideChevron && "flex-1", !selected && "text-muted-foreground")}>
           {selected?.label ?? placeholder}
         </span>
         {selected && triggerTrailing && trailing ? trailing(selected) : null}
-        <ChevronDownIcon className="size-3.5 shrink-0 text-muted-foreground" />
+        {!hideChevron && <ChevronDownIcon className="size-3.5 shrink-0 text-muted-foreground" />}
       </PopoverTrigger>
       <PopoverContent
         className={cn("max-h-[240px] w-52 overflow-hidden p-0", contentClassName)}

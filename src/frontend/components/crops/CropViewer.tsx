@@ -29,7 +29,7 @@ export function CropViewer({ channelInstance = "docked", datasetKey }: CropViewe
   // Once mounted, keep it alive to avoid WebGL teardown/recreation.
   if (!hasEverSelected.current) {
     return (
-      <div className="flex h-full w-full items-center justify-center text-text-muted text-xs">
+      <div className="flex h-full w-full items-center justify-center text-muted-foreground text-xs">
         Click an observation to view
       </div>
     );
@@ -51,7 +51,7 @@ export function CropViewer({ channelInstance = "docked", datasetKey }: CropViewe
             <ViewerControls cropSize={cropSize} setCropSize={setCropSize} datasetKey={datasetKey} />
           </div>
           {!state.highlightId && (
-            <div className="absolute inset-0 flex items-center justify-center text-text-muted text-xs">
+            <div className="absolute inset-0 flex items-center justify-center text-muted-foreground text-xs">
               Click an observation to view
             </div>
           )}

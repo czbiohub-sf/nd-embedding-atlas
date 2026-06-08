@@ -1,0 +1,55 @@
+/**
+ * BiohubMark — the official Biohub symbol: the bracketed "[o]" (a cell viewed
+ * through a microscope). Source: czbiohub-sf/biohub-chatbot public/biohub-icon.svg.
+ *
+ * Monochrome by brand rule ("don't use two colors in the symbol") — fill is
+ * currentColor, so color it via text-* (e.g. text-primary for the periwinkle
+ * highlight, an approved small-graphic/logo use of the accent).
+ *
+ * The source artwork carries the full "biohub" wordmark; the 0 0 33 42 viewBox
+ * + clip isolates just the [o] symbol.
+ */
+import { useId } from "react";
+
+export function BiohubMark({ className, title }: { className?: string; title?: string }) {
+  const a = useId();
+  const b = useId();
+  return (
+    <svg
+      viewBox="0 0 33 42"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+      role={title ? "img" : "presentation"}
+      aria-label={title}
+      aria-hidden={title ? undefined : true}
+    >
+      <g clipPath={`url(#${a})`}>
+        <g clipPath={`url(#${b})`}>
+          <path
+            d="M7.669 3.936H3.458V38.047H7.668V41H0.548004V1.026H7.668L7.669 3.936ZM32.466 41H25.346V38.047H29.557V3.937H25.345V1.025H32.466V41Z"
+            fill="currentColor"
+          />
+          <path
+            fillRule="evenodd"
+            clipRule="evenodd"
+            d="M16.495 10.388C22.225 10.388 27.045 14.514 27.045 20.898C27.045 27.282 22.225 31.495 16.495 31.495C10.721 31.495 5.945 27.282 5.945 20.898C5.945 14.514 10.721 10.388 16.495 10.388ZM16.495 15.6C13.587 15.6 11.199 17.684 11.198 20.898C11.198 24.198 13.587 26.326 16.495 26.326C19.403 26.326 21.792 24.198 21.792 20.898C21.792 17.684 19.404 15.6 16.495 15.6ZM-25.703 13.397C-24.618 11.357 -22.056 10.27 -19.364 10.27C-14.024 10.27 -9.424 14.397 -9.424 20.867C-9.424 27.294 -14.068 31.42 -19.364 31.421C-22.013 31.421 -24.618 30.291 -25.704 28.249V30.986H-31V1.025H-25.703V13.397ZM-20.233 15.308C-22.968 15.308 -25.617 17.306 -25.617 20.781C-25.617 24.168 -23.098 26.338 -20.233 26.338C-17.281 26.338 -14.894 24.124 -14.893 20.78C-14.893 17.48 -17.281 15.308 -20.233 15.308Z"
+            fill="currentColor"
+          />
+          <path
+            d="M-2.458 30.986H-7.71V10.704H-2.457L-2.458 30.986ZM40.793 13.832C41.748 11.356 45.09 10.27 47.087 10.27C52.341 10.27 55.25 13.745 55.25 19.695V30.986H49.954V19.954C49.954 17.044 47.826 15.439 45.654 15.439C43.441 15.439 40.793 16.654 40.793 20.172V30.986H35.496V1.025H40.793V13.832ZM-5.104 0.628C-4.27069 0.628 -3.47151 0.959031 -2.88227 1.54827C-2.29303 2.13751 -1.962 2.93669 -1.962 3.77C-1.962 4.60331 -2.29303 5.40249 -2.88227 5.99173C-3.47151 6.58097 -4.27069 6.912 -5.104 6.912C-5.93731 6.912 -6.73649 6.58097 -7.32573 5.99173C-7.91497 5.40249 -8.246 4.60331 -8.246 3.77C-8.246 2.93669 -7.91497 2.13751 -7.32573 1.54827C-6.73649 0.959031 -5.93731 0.628 -5.104 0.628Z"
+            fill="currentColor"
+          />
+        </g>
+      </g>
+      <defs>
+        <clipPath id={a}>
+          <rect width="33" height="42" fill="white" />
+        </clipPath>
+        <clipPath id={b}>
+          <rect width="131" height="41" fill="white" transform="translate(-31)" />
+        </clipPath>
+      </defs>
+    </svg>
+  );
+}

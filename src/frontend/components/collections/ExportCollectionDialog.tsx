@@ -190,10 +190,8 @@ export function ExportCollectionDialog({ collection, open, onOpenChange }: Props
         {conflict ? (
           <div className="flex flex-col gap-3">
             <p className="text-xs">A file already exists at:</p>
-            <p className="break-all rounded-md bg-muted/40 px-2 py-1.5 font-mono text-[11px]">
-              {conflict.existing_path}
-            </p>
-            <p className="text-[11px] text-muted-foreground">
+            <p className="break-all rounded-md bg-muted/40 px-2 py-1.5 font-mono text-2xs">{conflict.existing_path}</p>
+            <p className="text-2xs text-muted-foreground">
               Existing size: {Math.max(1, Math.round(conflict.existing_size_bytes / 1024)).toLocaleString()} KB.
               Overwrite?
             </p>
@@ -239,13 +237,13 @@ export function ExportCollectionDialog({ collection, open, onOpenChange }: Props
               />
               {recentDirs.length > 0 && (
                 <div className="mt-1.5 flex flex-wrap items-center gap-1">
-                  <span className="text-[10px] text-muted-foreground">Recent:</span>
+                  <span className="text-3xs text-muted-foreground">Recent:</span>
                   {recentDirs.map((d) => (
                     <button
                       key={d}
                       type="button"
                       onClick={() => setOutputDir(d)}
-                      className="rounded-md border border-dashed border-border bg-muted/40 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground"
+                      className="rounded-md border border-dashed border-border bg-muted/40 px-1.5 py-0.5 font-mono text-3xs text-muted-foreground hover:bg-muted hover:text-foreground"
                       title={d}
                     >
                       {d.length > 28 ? `…${d.slice(-26)}` : d}
@@ -267,16 +265,16 @@ export function ExportCollectionDialog({ collection, open, onOpenChange }: Props
                   data-1p-ignore
                   data-lpignore="true"
                 />
-                <span className="select-none font-mono text-[11px] text-muted-foreground">.{ext}</span>
+                <span className="select-none font-mono text-2xs text-muted-foreground">.{ext}</span>
               </div>
             </Field>
 
-            <div className="rounded-md border border-border-subtle bg-muted/20 px-2 py-1.5">
-              <div className="text-[10px] text-muted-foreground">Path preview</div>
-              <div className="break-all font-mono text-[11px]">{previewPath}</div>
+            <div className="rounded-md border border-border bg-muted/20 px-2 py-1.5">
+              <div className="text-3xs text-muted-foreground">Path preview</div>
+              <div className="break-all font-mono text-2xs">{previewPath}</div>
             </div>
 
-            {genericError && <p className="text-[11px] text-destructive">{genericError}</p>}
+            {genericError && <p className="text-2xs text-destructive">{genericError}</p>}
           </div>
         )}
 

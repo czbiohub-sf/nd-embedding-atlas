@@ -51,8 +51,8 @@ export function FloatingWindow({ handle, title, children, className, extraTitleA
     <div
       className={cn(
         "fixed z-float flex flex-col overflow-hidden",
-        "rounded-xl border border-white/[0.07] shadow-2xl shadow-black/60",
-        "bg-card/80 backdrop-blur-md",
+        "rounded-xl border border-glass-border shadow-2xl shadow-black/60",
+        "bg-glass-bg backdrop-blur-md",
         className,
       )}
       style={{
@@ -64,10 +64,10 @@ export function FloatingWindow({ handle, title, children, className, extraTitleA
     >
       {/* ── Title bar — drag handle ── */}
       <div
-        className="flex h-8 shrink-0 cursor-grab select-none items-center gap-2 border-white/[0.07] border-b px-3 active:cursor-grabbing"
+        className="flex h-8 shrink-0 cursor-grab select-none items-center gap-2 border-glass-border border-b px-3 active:cursor-grabbing"
         {...dragHandleProps}
       >
-        {title && <span className="flex-1 truncate font-medium text-[11px] text-muted-foreground/60">{title}</span>}
+        {title && <span className="flex-1 truncate font-medium text-2xs text-muted-foreground/60">{title}</span>}
         {extraTitleActions}
         <button
           type="button"
@@ -103,7 +103,10 @@ export function FloatingWindow({ handle, title, children, className, extraTitleA
 
       {/* Subtle grip dots at bottom-right corner */}
       {!state.minimized && (
-        <svg viewBox="0 0 12 12" className="pointer-events-none absolute right-1 bottom-1 z-10 size-3 text-white/20">
+        <svg
+          viewBox="0 0 12 12"
+          className="pointer-events-none absolute right-1 bottom-1 z-10 size-3 text-foreground/20"
+        >
           <circle cx="9" cy="9" r="1.2" fill="currentColor" />
           <circle cx="5" cy="9" r="1.2" fill="currentColor" />
           <circle cx="9" cy="5" r="1.2" fill="currentColor" />

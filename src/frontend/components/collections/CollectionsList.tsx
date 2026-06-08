@@ -104,7 +104,7 @@ export function CollectionsList() {
 
   if (isLoading) {
     return (
-      <div className="flex h-full items-center justify-center text-text-secondary text-xs">Loading collections…</div>
+      <div className="flex h-full items-center justify-center text-muted-foreground text-xs">Loading collections…</div>
     );
   }
 
@@ -112,25 +112,25 @@ export function CollectionsList() {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-1 px-4 text-red-400 text-xs">
         <p>Failed to load collections</p>
-        <p className="text-[10px] text-text-muted">{error instanceof Error ? error.message : String(error)}</p>
+        <p className="text-3xs text-muted-foreground">{error instanceof Error ? error.message : String(error)}</p>
       </div>
     );
   }
 
   if (collections.length === 0) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-1 px-4 text-text-secondary text-xs">
+      <div className="flex h-full flex-col items-center justify-center gap-1 px-4 text-muted-foreground text-xs">
         <p>No collections saved yet.</p>
-        <p className="text-text-muted">Use the lasso, then click the bookmark icon to save a selection.</p>
+        <p className="text-muted-foreground">Use the lasso, then click the bookmark icon to save a selection.</p>
       </div>
     );
   }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="border-border-subtle border-b px-2 py-1.5">
+      <div className="border-border border-b px-2 py-1.5">
         <div className="relative">
-          <Search className="pointer-events-none absolute top-1/2 left-2 size-3 -translate-y-1/2 text-text-muted" />
+          <Search className="pointer-events-none absolute top-1/2 left-2 size-3 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -142,7 +142,7 @@ export function CollectionsList() {
             <button
               type="button"
               onClick={() => setQuery("")}
-              className="absolute top-1/2 right-1.5 -translate-y-1/2 rounded p-0.5 text-text-muted hover:bg-surface-secondary hover:text-text-primary"
+              className="absolute top-1/2 right-1.5 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
               aria-label="Clear search"
             >
               <X className="size-3" />
@@ -152,7 +152,7 @@ export function CollectionsList() {
       </div>
 
       {filtered.length === 0 ? (
-        <div className="flex h-full flex-col items-center justify-center gap-1 px-4 text-text-secondary text-xs">
+        <div className="flex h-full flex-col items-center justify-center gap-1 px-4 text-muted-foreground text-xs">
           <p>No collections match "{query}".</p>
         </div>
       ) : (

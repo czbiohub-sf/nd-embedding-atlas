@@ -19,12 +19,12 @@ function ColormapSwatch({ name, active, onSelect }: ColormapSwatchProps) {
       onClick={() => onSelect(name)}
       className={cn(
         "flex flex-col gap-1 rounded-md border p-1 transition-colors",
-        active ? "border-white/30 bg-white/[0.06]" : "border-transparent hover:bg-white/[0.04]",
+        active ? "border-border-active bg-accent" : "border-transparent hover:bg-muted",
       )}
     >
       {/* gradient is computed — inline style is required */}
       <div className="h-2 rounded-sm" style={{ background: gradient }} />
-      <span className="truncate text-center text-[9px] text-muted-foreground leading-none">{name}</span>
+      <span className="truncate text-center text-3xs text-muted-foreground leading-none">{name}</span>
     </button>
   );
 }
@@ -52,10 +52,10 @@ export function ColormapGrid({ active, onSelect }: ColormapGridProps) {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search colormaps…"
-          className="h-6 w-full rounded-sm border border-white/10 bg-background/40 px-2 font-mono text-[10px] text-foreground placeholder:text-muted-foreground/50 focus:border-white/20 focus:outline-none"
+          className="h-6 w-full rounded-sm border border-border bg-background/40 px-2 font-mono text-3xs text-foreground placeholder:text-muted-foreground/50 focus:border-border-active focus:outline-none"
           autoFocus={false}
         />
-        <span className="shrink-0 font-mono text-[9px] text-muted-foreground/70 tabular-nums">
+        <span className="shrink-0 font-mono text-3xs text-muted-foreground/70 tabular-nums">
           {filtered.length}/{continuous.length}
         </span>
       </div>
@@ -64,7 +64,7 @@ export function ColormapGrid({ active, onSelect }: ColormapGridProps) {
           <ColormapSwatch key={name} name={name} active={active === name} onSelect={onSelect} />
         ))}
         {filtered.length === 0 && (
-          <div className="col-span-2 py-2 text-center font-mono text-[10px] text-muted-foreground/60">
+          <div className="col-span-2 py-2 text-center font-mono text-3xs text-muted-foreground/60">
             No colormaps match “{query}”
           </div>
         )}

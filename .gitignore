@@ -40,3 +40,7 @@ notes/
 
 # bun --compile leaves these temp artifacts on failure
 .*-00000000.bun-build
+.design-audit/
+
+# dex task state (ephemeral)
+.dex/

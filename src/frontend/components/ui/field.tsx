@@ -38,7 +38,7 @@ function FieldDescription({ className, ...props }: FieldPrimitive.Description.Pr
   return (
     <FieldPrimitive.Description
       data-slot="field-description"
-      className={cn("text-[10px]/relaxed text-muted-foreground", className)}
+      className={cn("text-3xs/relaxed text-muted-foreground", className)}
       {...props}
     />
   );
@@ -68,7 +68,7 @@ function FieldError({
       data-slot="field-error"
       data-error-source={clientError ? "client" : "server"}
       forceShow
-      className={cn("flex items-center gap-1 text-[10px]/relaxed text-destructive", className)}
+      className={cn("flex items-center gap-1 text-3xs/relaxed text-destructive", className)}
       {...props}
     >
       {message}
@@ -79,11 +79,7 @@ function FieldError({
 /** A small "optional" / "required" annotation for Field.Label. */
 function FieldHint({ className, ...props }: React.ComponentProps<"span">) {
   return (
-    <span
-      data-slot="field-hint"
-      className={cn("font-normal text-[10px] text-muted-foreground", className)}
-      {...props}
-    />
+    <span data-slot="field-hint" className={cn("font-normal text-3xs text-muted-foreground", className)} {...props} />
   );
 }
 

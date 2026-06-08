@@ -168,7 +168,7 @@ export function SingleCropViewer({ cropSize, datasetKey }: Props) {
   // ── Placeholder when this viewer is for a different dataset ──────
   if (!isForThisDataset) {
     return (
-      <div className="absolute inset-0 flex items-center justify-center text-text-muted text-xs">
+      <div className="absolute inset-0 flex items-center justify-center text-muted-foreground text-xs">
         <span>Select a cell</span>
       </div>
     );
