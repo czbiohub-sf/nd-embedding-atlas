@@ -89,7 +89,7 @@ export function CollectionRowActions({ collection, onRequestRename }: Collection
     <>
       <DropdownMenu>
         <DropdownMenuTrigger
-          className="inline-flex size-6 shrink-0 items-center justify-center rounded text-text-muted transition-colors hover:bg-surface-secondary hover:text-text-primary"
+          className="inline-flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           aria-label={`Actions for ${collection.name}`}
         >
           <MoreHorizontal className="size-3.5" />

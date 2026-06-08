@@ -1,6 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ScatterUIStateProvider } from "./components/scatter/ScatterUIStateProvider";
-import { TerminalTableProvider } from "./components/table/TerminalTableProvider";
 import { Toaster } from "./components/ui/sonner";
 import { TooltipProvider } from "./components/ui/tooltip";
 import { DashboardProvider, DashboardShell } from "./dashboard";
@@ -37,10 +36,8 @@ export default function App() {
         <TooltipProvider delay={400}>
           <ScatterUIStateProvider>
             <DashboardProvider>
-              <TerminalTableProvider>
-                <DashboardShell />
-                <Toaster position="bottom-right" />
-              </TerminalTableProvider>
+              <DashboardShell />
+              <Toaster position="bottom-right" />
             </DashboardProvider>
           </ScatterUIStateProvider>
         </TooltipProvider>

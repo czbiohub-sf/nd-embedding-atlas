@@ -3,7 +3,7 @@ import { ChartPanelList } from "../../charts/ChartPanelList";
 
 export function ChartGroupPanel(_props: IDockviewPanelProps) {
   return (
-    <div className="h-full w-full overflow-y-auto bg-surface">
+    <div className="h-full w-full overflow-y-auto bg-card">
       <ChartPanelList />
     </div>
   );

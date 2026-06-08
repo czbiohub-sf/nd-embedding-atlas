@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
  * DimensionBadge — small technical label for layers, categories, dimensions.
  *
  * Replaces inline badges in ColorSourcePicker (obs/var badges) and similar
- * dimension labelers that repeat a `shrink-0 rounded-sm border … text-[9px]`
+ * dimension labelers that repeat a `shrink-0 rounded-sm border … text-3xs`
  * class bundle.
  *
  *   <DimensionBadge tone="obs">obs</DimensionBadge>
@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
  */
 
 const dimensionBadgeVariants = cva(
-  "inline-flex shrink-0 items-center rounded-sm border px-1 font-sans text-[9px] leading-none",
+  "inline-flex shrink-0 items-center rounded-sm border px-1 font-sans text-3xs leading-none",
   {
     variants: {
       tone: {

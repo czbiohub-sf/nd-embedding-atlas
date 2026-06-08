@@ -21,6 +21,8 @@ export interface EmbeddingPickerProps {
   activeKey: string;
   onSelect: (key: string) => void;
   triggerClassName?: string;
+  /** Hide the dropdown chevron (compact overlay "chip" trigger). */
+  hideChevron?: boolean;
 }
 
 // ── Modality colors (shared with ModalityColorPicker) ────────────────────────
@@ -56,7 +58,13 @@ function groupByModality(obsm: Record<string, ObsmEntry>): Map<string, [string, 
 
 // ── Component ────────────────────────────────────────────────────────────────
 
-export function EmbeddingPicker({ obsm, activeKey, onSelect, triggerClassName }: EmbeddingPickerProps) {
+export function EmbeddingPicker({
+  obsm,
+  activeKey,
+  onSelect,
+  triggerClassName,
+  hideChevron = false,
+}: EmbeddingPickerProps) {
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState<string | null>(null);
   const groups = useMemo(() => groupByModality(obsm), [obsm]);
@@ -71,18 +79,18 @@ export function EmbeddingPicker({ obsm, activeKey, onSelect, triggerClassName }:
       <PopoverTrigger
         className={cn(
           "flex h-6 min-w-0 items-center gap-1.5 whitespace-nowrap rounded-md",
-          "border-0 bg-transparent px-1.5 text-[11px] outline-none transition-colors",
-          "text-foreground/80 hover:bg-white/10 hover:text-foreground focus-visible:ring-0",
+          "border-0 bg-transparent px-1.5 text-2xs outline-none transition-colors",
+          "text-foreground/80 hover:bg-muted hover:text-foreground focus-visible:ring-0",
           triggerClassName,
         )}
       >
         <span className="truncate font-mono">{bareLabel(activeKey)}</span>
         {activeMod && (
-          <Badge variant="outline" className={cn("px-1 py-0 text-[9px]", modColor(activeMod))}>
+          <Badge variant="outline" className={cn("px-1 py-0 text-3xs", modColor(activeMod))}>
             {activeMod}
           </Badge>
         )}
-        <ChevronDownIcon className="size-3 shrink-0 text-muted-foreground" />
+        {!hideChevron && <ChevronDownIcon className="size-3 shrink-0 text-muted-foreground" />}
       </PopoverTrigger>
 
       <PopoverContent className="w-56 gap-0 p-0" side="bottom" align="start" sideOffset={4}>
@@ -93,7 +101,7 @@ export function EmbeddingPicker({ obsm, activeKey, onSelect, triggerClassName }:
               type="button"
               onClick={() => setFilter(null)}
               className={cn(
-                "rounded-sm px-1.5 py-0.5 text-[10px] transition-colors",
+                "rounded-sm px-1.5 py-0.5 text-3xs transition-colors",
                 !filter ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
               )}
             >
@@ -105,13 +113,13 @@ export function EmbeddingPicker({ obsm, activeKey, onSelect, triggerClassName }:
                 type="button"
                 onClick={() => setFilter(filter === mod ? null : mod)}
                 className={cn(
-                  "rounded-sm px-1.5 py-0.5 text-[10px] transition-colors",
+                  "rounded-sm px-1.5 py-0.5 text-3xs transition-colors",
                   filter === mod
                     ? "bg-muted text-foreground"
                     : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
                 )}
               >
-                <Badge variant="outline" className={cn("px-1 py-0 text-[9px]", modColor(mod))}>
+                <Badge variant="outline" className={cn("px-1 py-0 text-3xs", modColor(mod))}>
                   {mod}
                 </Badge>
               </button>
@@ -139,9 +147,9 @@ export function EmbeddingPicker({ obsm, activeKey, onSelect, triggerClassName }:
                 >
                   <span className="flex-1 truncate font-mono">{bareLabel(key)}</span>
                   {entry.n_dims != null && (
-                    <span className="shrink-0 text-[10px] text-muted-foreground">{entry.n_dims}d</span>
+                    <span className="shrink-0 text-3xs text-muted-foreground">{entry.n_dims}d</span>
                   )}
-                  {!entry.loaded && <span className="shrink-0 text-[9px] text-muted-foreground/50">load</span>}
+                  {!entry.loaded && <span className="shrink-0 text-3xs text-muted-foreground/50">load</span>}
                 </button>
               ));
 
@@ -158,10 +166,10 @@ export function EmbeddingPicker({ obsm, activeKey, onSelect, triggerClassName }:
                     )}
                   >
                     <ChevronRightIcon className="size-3 shrink-0 transition-transform [[data-open]>&]:rotate-90" />
-                    <Badge variant="outline" className={cn("px-1 py-0 text-[9px]", modColor(mod))}>
+                    <Badge variant="outline" className={cn("px-1 py-0 text-3xs", modColor(mod))}>
                       {mod}
                     </Badge>
-                    <span className="ml-auto text-[10px] text-muted-foreground">{entries.length}</span>
+                    <span className="ml-auto text-3xs text-muted-foreground">{entries.length}</span>
                   </CollapsibleTrigger>
                   <CollapsibleContent>
                     <div className="ml-3 border-border border-l pl-1">{items}</div>

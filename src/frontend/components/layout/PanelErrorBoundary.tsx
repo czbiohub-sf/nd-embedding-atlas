@@ -24,10 +24,10 @@ export class PanelErrorBoundary extends Component<Props, State> {
     if (this.state.error) {
       return (
         <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
-          <div className="font-medium text-sm text-text-primary">{this.props.panelName} crashed</div>
-          <div className="max-w-xs break-all font-mono text-text-muted text-xs">{this.state.error.message}</div>
+          <div className="font-medium text-sm text-foreground">{this.props.panelName} crashed</div>
+          <div className="max-w-xs break-all font-mono text-muted-foreground text-xs">{this.state.error.message}</div>
           <button
-            className="rounded border border-border-subtle px-3 py-1 text-text-secondary text-xs hover:bg-elevated"
+            className="rounded border border-border px-3 py-1 text-muted-foreground text-xs hover:bg-elevated"
             onClick={() => this.setState({ error: null })}
           >
             Retry

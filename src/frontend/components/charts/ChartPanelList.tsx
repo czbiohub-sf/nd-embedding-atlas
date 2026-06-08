@@ -27,7 +27,7 @@ function renderChart(spec: ChartSpec): ReactNode {
     case "histogram":
       return <Histogram field={spec.field} bins={spec.bins} />;
     default:
-      return <div className="py-1 text-[10px] text-text-muted">Unsupported chart type: {spec.type}</div>;
+      return <div className="py-1 text-3xs text-muted-foreground">Unsupported chart type: {spec.type}</div>;
   }
 }
 
@@ -35,7 +35,7 @@ export function ChartPanelList() {
   const { state } = useDashboard();
 
   if (state.panels.length === 0) {
-    return <div className="p-3 text-text-muted text-xs">No charts configured</div>;
+    return <div className="p-3 text-muted-foreground text-xs">No charts configured</div>;
   }
 
   return (

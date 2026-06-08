@@ -3,6 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/src/frontend/assets/favicon.svg" />
     <title>nd-embedding-atlas</title>
     <!-- Anti-FOUC: apply theme before React loads -->
     <script>
@@ -13,9 +14,9 @@
             ? "light"
             : stored === "dark"
               ? "dark"
-              : window.matchMedia("(prefers-color-scheme: light)").matches
-                ? "light"
-                : "dark";
+              : window.matchMedia("(prefers-color-scheme: dark)").matches
+                ? "dark"
+                : "light";
         if (theme === "dark") document.documentElement.classList.add("dark");
       })();
     </script>

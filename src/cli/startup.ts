@@ -147,9 +147,13 @@ export async function startup(config: ResolvedConfig): Promise<void> {
   const detected = detectSpatialColumns(colSet);
   const hasSpatial = detected.fov != null || detected.bbox != null || detected.x != null;
   const spatial = hasSpatial ? detected : null;
-  const detectedObsColumns = firstColumns.filter((c) => !c.startsWith("__"));
 
   const hidden = spatialHiddenColumns(spatial);
+  // Hidden columns (e.g. the string `bbox`) are excluded from the Mosaic
+  // `dataset` VIEW — they're served per-row via /api/obs, not aggregated.
+  // Drop them from the obs column list too, or the frontend table/charts
+  // would SELECT them from the VIEW and hit a Binder error.
+  const detectedObsColumns = firstColumns.filter((c) => !c.startsWith("__") && !hidden.has(c));
 
   // Both axes ingest through the same helper — columns are unioned across
   // datasets, per-column type wins on first sighting, `_dataset` column is

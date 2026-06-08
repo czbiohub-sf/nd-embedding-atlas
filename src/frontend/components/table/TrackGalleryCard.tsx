@@ -48,7 +48,7 @@ export function TrackGalleryCard({
         {(isLoading || !blobUrl) && <div className="absolute inset-0 animate-pulse bg-muted/20" />}
         {blobUrl && <img src={blobUrl} alt={`T=${frame.t}`} className="absolute inset-0 h-full w-full object-cover" />}
         {isActive && (
-          <div className="absolute top-1.5 right-1.5 rounded bg-primary px-1.5 py-0.5 font-semibold text-[9px] text-primary-foreground">
+          <div className="absolute top-1.5 right-1.5 rounded bg-primary px-1.5 py-0.5 font-semibold text-3xs text-primary-foreground">
             NOW
           </div>
         )}
@@ -59,11 +59,11 @@ export function TrackGalleryCard({
           isActive ? "border-primary/30 bg-primary/5" : "border-border/30 bg-muted/10",
         )}
       >
-        <span className={cn("font-medium text-[11px] tabular-nums", isActive ? "text-primary" : "text-foreground/70")}>
+        <span className={cn("font-medium text-2xs tabular-nums", isActive ? "text-primary" : "text-foreground/70")}>
           T = {frame.t}
         </span>
-        {frame.category != null && <span className="text-[9px] text-muted-foreground/60">{frame.category}</span>}
-        <span className="text-[9px] text-muted-foreground/40 tabular-nums">
+        {frame.category != null && <span className="text-3xs text-muted-foreground/60">{frame.category}</span>}
+        <span className="text-3xs text-muted-foreground/40 tabular-nums">
           {frame.spatial_x.toFixed(1)} · {frame.spatial_y.toFixed(1)} µm
         </span>
       </div>
