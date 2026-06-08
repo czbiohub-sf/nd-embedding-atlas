@@ -153,3 +153,45 @@ whole intermediate Arrow Table.** Eliminates one full coexisting copy with no
 lazy-zarr work. Gate: golden queries identical to baseline; peak_rss ↓ at 1M.
 Later sub-levers: keep categoricals dict-encoded (avoid the string-decode
 blow-up); batch/lazy per-column zarr reads to bound the source copy too.
+
+## Research synthesis (2026-06-07) — concrete targets folded in
+
+Deep-research pass (19 confirmed claims, primary sources) validated the loop's
+direction and sharpened it:
+
+- **Bounded chunk-streaming is the fix, and it's language-independent** (X100,
+  CIDR'05: process cache-resident vectors, not full columns → peak O(chunk)).
+- **Batch target ≥ 122,880 rows** (DuckDB row-group = 2048×60) for fast insert.
+- **Don't switch to Arrow/ADBC for throughput** — "ADBC beats Appender" (0-3) and
+  "ADBC 38× ODBC" (1-2) were REFUTED; "zero-copy = no copy" overreached. The
+  Appender is fine; the win is the streaming _producer_, not Appender-vs-Arrow.
+- **Keep categoricals dictionary-encoded end-to-end** — `convertCategorical`
+  (data-frame.ts) decoding codes → full `(string|null)[]` is a needless copy.
+- **Don't rewrite DuckDB** — out-of-core hash aggregation degrades gracefully
+  (ICDE'24; sole engine to finish TPC-H SF128 in 32GB). Validates Cycle 1a's
+  file-backed + read_parquet + pushdown. Cross-filter = late-materialization
+  regime (Abadi ICDE'07).
+- **Rust: DEFER** (research-backed, medium conf). napi-rs (zarrs+arrow-rs+duckdb
+  crate + native ArrowArrayStream) is sound but the win is the streaming
+  discipline, not the language; a 2nd non-cross-compilable native artifact on
+  duckdb.node + per-platform builds + FFI + eroding single-binary/shared-Zod
+  dominate. Revisit ONLY if the experiment below shows decode CPU as the wall —
+  and even then a worker-pool TS decode before a native artifact.
+
+**The decisive experiment (settles Rust):** after streaming-TS ingest, does peak
+RSS @1M drop near DuckDB's footprint, OR does zarrita decode itself
+(decompression + CSR-sparse reconstruction) stay multi-copy? Cycle 3's
+measurement IS the Rust gate.
+
+**Cycle 3 feasibility unknown:** can flechette emit incremental record batches /
+an ArrowArrayStream to duckdb-node, or does the JS path force a full-table build?
+(Arrow C-Stream bounds peak only if the producer streams without a full table.)
+
+**Two adjacent levers (added to backlog):**
+
+7. **Server-side density binning** (datashader): DuckDB `GROUP BY floor(x/binW),
+floor(y/binH)` over the active predicate → fixed-size grid → WebGPU heatmap.
+   Row-count-independent; back-stops per-point GPU at 5-10M (folds into WBOIT).
+8. **Data-virtualized table** (pierre "slice-first" `getVisibleSlice`): fetch only
+   the visible row range from DuckDB, never client-materialize all rows. We have
+   the windowing half (TanStack Virtual); verify the data half at scale.
