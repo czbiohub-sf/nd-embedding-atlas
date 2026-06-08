@@ -9,6 +9,7 @@
 import type { DuckDBConnection } from "@duckdb/node-api";
 import type { Column } from "@uwdata/flechette";
 import type { LazyDataFrame } from "./data-frame.ts";
+import { readDataFrameBatches } from "./readers.ts";
 import type { CategoricalArray, ColumnData, NullableArray } from "./types.ts";
 
 type ArrowColumn = Column<unknown>;
@@ -429,5 +430,56 @@ export async function ingestDataFramesStreaming(
     }
     appender.closeSync();
   }
+  return columnOrder;
+}
+
+/**
+ * Chunked streaming ingest — reads the zarr DataFrame in row-windows
+ * (`readDataFrameBatches`) and appends each batch, so peak JS allocation is
+ * O(batch) not O(whole obs). Single-DF / AnnData layout only (no `_dataset`
+ * union). Same `_index`-prepended schema + null semantics as the other paths;
+ * verified result-identical by bench/verify.ts.
+ */
+export async function ingestDataFrameChunked(
+  conn: DuckDBConnection,
+  tableName: string,
+  store: Parameters<typeof readDataFrameBatches>[0],
+  groupPath: string,
+  options: Pick<IngestOptions, "axis" | "includeNameColumn"> & { datasetName?: string } = {},
+  batchSize = 250_000,
+): Promise<readonly string[]> {
+  const axis = options.axis;
+  const includeName = options.includeNameColumn === true && axis !== undefined;
+
+  let appender: Awaited<ReturnType<DuckDBConnection["createAppender"]>> | null = null;
+  let columnOrder: string[] = [];
+  let globalIndex = 0;
+
+  for await (const batch of readDataFrameBatches(store, groupPath, batchSize)) {
+    const names = appender === null ? ["_index", ...batch.columns.keys()] : columnOrder;
+    // colSpec closures bind to THIS batch's freshly-sliced arrays — rebuilt per batch.
+    const specs = names.map((n) => colSpec(n === "_index" ? batch.index : (batch.columns.get(n) as ColumnData)));
+
+    if (appender === null) {
+      const colDefs: string[] = [];
+      if (axis) colDefs.push(`__${axis}_index__ INTEGER`);
+      if (includeName) colDefs.push(`${axis}_name VARCHAR`);
+      names.forEach((n, i) => colDefs.push(`"${n}" ${specs[i].type}`));
+      await conn.run(`CREATE TABLE ${tableName} (${colDefs.join(", ")})`);
+      columnOrder = names;
+      appender = await conn.createAppender(tableName);
+    }
+
+    const idx = batch.index as unknown as ArrayLike<unknown>;
+    for (let r = 0; r < batch.n; r++) {
+      if (axis) appender.appendInteger(globalIndex++);
+      if (includeName) appender.appendVarchar(stringifyPrimitive(idx[r] ?? ""));
+      for (let c = 0; c < specs.length; c++) specs[c].append(appender, r);
+      appender.endRow();
+    }
+  }
+
+  if (appender === null) throw new Error(`ingestDataFrameChunked: "${groupPath}" yielded no rows`);
+  appender.closeSync();
   return columnOrder;
 }

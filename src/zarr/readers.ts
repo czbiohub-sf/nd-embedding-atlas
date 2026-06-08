@@ -238,6 +238,133 @@ function getValueAt(col: ColumnData, i: number): Scalar | null {
   return (col as ArrayLike<Scalar>)[i];
 }
 
+// ─── Windowed (streaming) reader ────────────────────────────────────────────
+//
+// `readDataFrame*` above materialize EVERY column in full before anything
+// downstream runs — at 10M obs that one copy alone is multi-GB. `readDataFrameBatches`
+// instead yields row-windows: it resolves each column's structure once (opening
+// arrays, reading the small shared categorical dictionaries), then slices the
+// per-row arrays per batch via `zarr.get(arr, [zarr.slice(r0, r1)])`. Peak JS is
+// O(batch), not O(dataset). Consumed by `ingestDataFrameChunked` (duckdb-ingest.ts).
+
+export interface DataFrameBatch {
+  /** Windowed index values for rows [r0, r1). */
+  index: ColumnData;
+  /** Windowed column → data for rows [r0, r1). */
+  columns: Map<string, ColumnData>;
+  /** Row count in this batch (r1 - r0). */
+  n: number;
+}
+
+interface WindowReader {
+  read(r0: number, r1: number): Promise<ColumnData>;
+}
+
+/** Read a categorical's `categories` dictionary once (plain array or values group). */
+async function readCategories(group: ZarrGroup): Promise<Scalar[]> {
+  try {
+    const { data } = await readArray(group.resolve("categories"));
+    return (Array.isArray(data) ? data : Array.from(data as Iterable<unknown>)) as Scalar[];
+  } catch {
+    const catGroup = await zarr.open(group.resolve("categories"), { kind: "group" });
+    const { data } = await readArray((catGroup as unknown as ZarrGroup).resolve("values"));
+    return (Array.isArray(data) ? data : Array.from(data as Iterable<unknown>)) as Scalar[];
+  }
+}
+
+/** Resolve a column's structure ONCE → a closure that slices rows [r0, r1) per batch. */
+async function resolveWindowReader(group: ZarrGroup, name: string): Promise<WindowReader> {
+  const location = group.resolve(name);
+  try {
+    const g = (await zarr.open(location, { kind: "group" })) as unknown as ZarrGroup;
+    const encoding = getEncodingType(g.attrs);
+    if (encoding === "categorical") {
+      const codesArr = await zarr.open(g.resolve("codes"), { kind: "array" });
+      const categories = await readCategories(g);
+      const ordered = (g.attrs.ordered as boolean) ?? false;
+      return {
+        async read(r0, r1) {
+          const codes = (await zarr.get(codesArr, [zarr.slice(r0, r1)])).data;
+          return new SimpleCategorical(
+            categories,
+            codes as Int8Array | Int16Array | Int32Array,
+            ordered,
+          ) as unknown as ColumnData;
+        },
+      };
+    }
+    if (
+      encoding === "nullable-integer" ||
+      encoding === "nullable-boolean" ||
+      encoding === "nullable-string" ||
+      encoding === "nullable-string-array"
+    ) {
+      const valsArr = await zarr.open(g.resolve("values"), { kind: "array" });
+      const maskArr = await zarr.open(g.resolve("mask"), { kind: "array" });
+      return {
+        async read(r0, r1) {
+          const values = (await zarr.get(valsArr, [zarr.slice(r0, r1)])).data;
+          const maskRaw = (await zarr.get(maskArr, [zarr.slice(r0, r1)])).data;
+          const mask =
+            maskRaw instanceof Uint8Array
+              ? maskRaw
+              : Uint8Array.from(maskRaw as Iterable<number | boolean>, (v) => (v ? 1 : 0));
+          return new SimpleNullable(values as ArrayLike<Scalar>, mask) as unknown as ColumnData;
+        },
+      };
+    }
+    // Unknown group encoding — fall through to a plain-array read.
+  } catch {
+    // Not a group — read as a plain array below.
+  }
+  const arr = await zarr.open(location, { kind: "array" });
+  return {
+    async read(r0, r1) {
+      const data = (await zarr.get(arr, [zarr.slice(r0, r1)])).data;
+      // Normalize exotic array-likes (zarrita BoolArray isn't index-accessible) →
+      // plain array, matching the eager path's convertColumn. Standard TypedArrays
+      // and string[] pass through untouched.
+      if (!Array.isArray(data) && !ArrayBuffer.isView(data)) {
+        return Array.from(data as Iterable<unknown>) as unknown as ColumnData;
+      }
+      return data as unknown as ColumnData;
+    },
+  };
+}
+
+/**
+ * Stream an AnnData DataFrame (obs/var) in row-windows. AnnData layout only
+ * (single group; MuData merge is a separate path). Default batch is chunk-sized.
+ */
+export async function* readDataFrameBatches(
+  store: Parameters<typeof zarr.open>[0],
+  groupPath: string,
+  batchSize = 250_000,
+): AsyncGenerator<DataFrameBatch> {
+  const root = await zarr.open(store);
+  const group = (await zarr.open((root as unknown as ZarrGroup).resolve(groupPath), {
+    kind: "group",
+  })) as unknown as ZarrGroup;
+  const indexName = group.attrs._index as string | undefined;
+  if (!indexName) throw new Error(`DataFrame "${groupPath}" missing "_index" attr`);
+  const columnOrder = (group.attrs["column-order"] as string[]) ?? [];
+
+  const indexReader = await resolveWindowReader(group, indexName);
+  const colReaders: [string, WindowReader][] = [];
+  for (const n of columnOrder) colReaders.push([n, await resolveWindowReader(group, n)]);
+
+  const idxArr = await zarr.open(group.resolve(indexName), { kind: "array" });
+  const nObs = idxArr.shape[0];
+
+  for (let r0 = 0; r0 < nObs; r0 += batchSize) {
+    const r1 = Math.min(r0 + batchSize, nObs);
+    const index = await indexReader.read(r0, r1);
+    const columns = new Map<string, ColumnData>();
+    for (const [n, reader] of colReaders) columns.set(n, await reader.read(r0, r1));
+    yield { index, columns, n: r1 - r0 };
+  }
+}
+
 // ─── Parallel reader (Bun Workers) ─────────────────────────────────────────
 
 type TypedArrayCtor =

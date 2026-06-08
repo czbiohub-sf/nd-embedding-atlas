@@ -19,7 +19,15 @@
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DuckDBConnection } from "@duckdb/node-api";
-import { AnnData, ingestDataFrames, ingestDataFramesStreaming, MuData, open } from "../src/zarr/index.ts";
+import {
+  AnnData,
+  ingestDataFrameChunked,
+  ingestDataFrames,
+  ingestDataFramesStreaming,
+  MuData,
+  open,
+  openBunStore,
+} from "../src/zarr/index.ts";
 import { EmbeddingStore, type StoreOpenOptions } from "../src/server/store.ts";
 
 export interface BuiltStore {
@@ -93,6 +101,27 @@ async function buildParquet(source: string, options?: StoreOpenOptions): Promise
   return { store, nObs: store.nObs, nCols: await describeCols(store) };
 }
 
+/**
+ * Chunked streaming — opens the zarr store DIRECTLY (bypassing open()/AnnData.from,
+ * which materialize the full obs eagerly) and streams obs/var in row-windows so
+ * peak JS never holds the whole dataset. AnnData layout only.
+ */
+async function buildChunked(source: string, options?: StoreOpenOptions): Promise<BuiltStore> {
+  const { store } = await openBunStore(source);
+  const es = await EmbeddingStore.fromInit(
+    async (conn) => {
+      await ingestDataFrameChunked(conn, "obs_base", store, "obs", { axis: "obs", includeNameColumn: true });
+    },
+    {
+      ...options,
+      initVar: async (conn) => {
+        await ingestDataFrameChunked(conn, "var_base", store, "var", { axis: "var", includeNameColumn: true });
+      },
+    },
+  );
+  return { store: es, nObs: es.nObs, nCols: await describeCols(es) };
+}
+
 export const DRIVERS: Record<string, BenchDriver> = {
   "memory-table": { id: "memory-table", build: (s) => buildZarr(s) },
   parquet: { id: "parquet", build: (s) => buildParquet(s) },
@@ -104,4 +133,9 @@ export const DRIVERS: Record<string, BenchDriver> = {
   // Cycle 4: both wins stacked — streaming ingest (JS side −90%) + file-backed
   // DuckDB + memory_limit (pages the residual DuckDB-native footprint).
   "stream-file": { id: "stream-file", build: (s) => buildZarr(s, fileBacked("stream"), ingestDataFramesStreaming) },
+  // Cycle 5: chunked source streaming — never materialize the whole obs in JS
+  // (peak ≈ one row-window). :memory: to isolate the read-path delta.
+  "stream-chunked": { id: "stream-chunked", build: (s) => buildChunked(s) },
+  // Cycle 5 + out-of-core: chunked source + file-backed DuckDB.
+  "stream-chunked-file": { id: "stream-chunked-file", build: (s) => buildChunked(s, fileBacked("chunked")) },
 };

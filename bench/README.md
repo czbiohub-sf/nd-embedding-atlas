@@ -260,3 +260,34 @@ in production before this.
 then `/autoresearch:plan`→`/autoresearch` to sweep tuning knobs (guard =
 stream-vs-snapshot via verify.ts). And the filter-latency loop (preagg/density)
 for crossfilter_suite at 5-10M.
+
+## Cycle 5 — chunked source streaming (peak ≈ one batch, scale-invariant) ✅
+
+The deepest lever: even stream-table held **one full decoded copy** of obs in JS.
+`readDataFrameBatches` (readers.ts) reads the zarr DataFrame in **row-windows** —
+resolve each column's structure once (open arrays, read the small shared
+categorical dicts), then slice the per-row arrays per batch via
+`zarr.get(arr, [zarr.slice(r0,r1)])`. `ingestDataFrameChunked` (duckdb-ingest.ts)
+appends each batch to one Appender and releases it. The driver opens the store
+directly, **bypassing open()/AnnData.from** (which materialize obs eagerly).
+Batch = the 250k-row zarr chunk.
+
+| driver @1M              | peak RSS    | heap | arrayBuf | ddb | open  |
+| ----------------------- | ----------- | ---- | -------- | --- | ----- |
+| memory-table            | 5365 MB     | 1420 | 848      | 889 | 10.7s |
+| stream-table            | 2679 MB     | 158  | 75       | 889 | 6.1s  |
+| stream-chunked          | 1958 MB     | 276  | 181      | 889 | 6.3s  |
+| **stream-chunked-file** | **1202 MB** | 251  | 166      | 70  | 8.2s  |
+
+**stream-chunked-file = −78% from baseline at 1M**, 0 golden-query mismatches at
+93k _and_ 1M (4×250k multi-batch). The honest read: at 1M chunked is only a
+modest RSS win over stream-table (code-encoded categoricals already made the
+source compact ~233 MB). **The payoff is scale-invariance** — chunked's JS peak
+is one batch _regardless of total rows_, so at 10M it stays ~flat (~280 MB) while
+stream-table's source would balloon ~10× (~1.5 GB+). That's the difference
+between bounded and OOM at the 5–10M target. **stream-chunked-file is the config
+to ship.**
+
+Validation still open: an empirical 5M/10M run needs a large zarr source (the
+synth is parquet, which the chunked path doesn't read). The mechanism is
+flat-by-construction; the ceiling run would confirm it.

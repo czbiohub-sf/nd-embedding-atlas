@@ -34,6 +34,7 @@ export {
   ingestDataFrame,
   ingestDataFrames,
   ingestDataFramesStreaming,
+  ingestDataFrameChunked,
   arrowTypeToDuckDB,
   appendArrowValue,
 } from "./duckdb-ingest.ts";
