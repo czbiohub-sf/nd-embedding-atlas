@@ -101,4 +101,7 @@ export const DRIVERS: Record<string, BenchDriver> = {
   // Cycle 3: stream from source columns, no Arrow table. :memory: so the delta
   // vs memory-table is purely the streaming ingest (not file-backing).
   "stream-table": { id: "stream-table", build: (s) => buildZarr(s, undefined, ingestDataFramesStreaming) },
+  // Cycle 4: both wins stacked — streaming ingest (JS side −90%) + file-backed
+  // DuckDB + memory_limit (pages the residual DuckDB-native footprint).
+  "stream-file": { id: "stream-file", build: (s) => buildZarr(s, fileBacked("stream"), ingestDataFramesStreaming) },
 };
