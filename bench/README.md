@@ -38,14 +38,21 @@ hard), so read query/memory numbers at the ceiling as a mechanism signal.
 ## Commands
 
 ```bash
-# Measure one (driver × dataset) in an isolated process → appends to ledger
+# Measure one (driver × dataset) → appends a rich row to the ledger
 bun run bench/run.ts --driver memory-table --dataset <zarr|parquet> --label <name>
+
+# Emit ONE metric as a bare number (autoresearch Verify command)
+bun run bench/run.ts --driver memory-table --dataset <zarr> --metric peak_rss_mb
+
+# Correctness guard: golden queries identical baseline-vs-candidate (autoresearch Guard)
+bun run bench/verify.ts --baseline memory-table --candidate stream-table --dataset <zarr>
 
 # Synthesize a ceiling obs parquet
 bun run bench/synth.ts --from <zarr> --rows 5000000 --out bench/synth-5m.parquet
 
 # Render the ledger
-bun run bench/report.ts            # latest per (driver × dataset)
+bun run bench/report.ts            # memory view (latest per driver × dataset)
+bun run bench/report.ts --filter   # selection/cross-filter latency view
 bun run bench/report.ts --all      # every run
 ```
 
@@ -53,13 +60,37 @@ bun run bench/report.ts --all      # every run
 
 - **`drivers.ts`** — the swappable I/O backend. Each lever = one `BenchDriver`
   built the same way real startup builds the store, so measurements are genuine.
-  Handles AnnData **and** MuData. Cycle 1 converges this with a production
-  `ObsBackend` param on `EmbeddingStore` when the file-backed driver lands.
-- **`run.ts`** — measures `cold_open_ms`, `peak_rss_mb` (sampled — the
-  scalability number), `steady_rss_mb`, `duckdb_memory`, and an auto-selected
-  query suite (categorical histogram, point lookup, numeric stats/histogram,
-  cross-filter predicate; median/max ms). One process per measurement.
-- **`results/ledger.jsonl`** — committed baseline record; cycles append.
+  Handles AnnData **and** MuData.
+- **`queries.ts`** — one source of SQL for `run.ts` (timing) and `verify.ts`
+  (correctness): `goldenQueries` (deterministic, compared across drivers),
+  `filterQueries` + `crossfilterDependents` (selection-latency suite).
+- **`run.ts`** — `--metric NAME` emits a bare number (autoresearch Verify);
+  normal mode appends a rich row + prints a summary.
+- **`verify.ts`** — runs the golden suite on baseline vs candidate, exits
+  non-zero on any result mismatch (autoresearch Guard).
+- **`results/ledger.jsonl`** — committed record; cycles append.
+
+## Measurable surface (the numbers a loop can chase)
+
+**Memory (targets) — peak high-water, broken out so a win is _attributable_:**
+`peak_rss_mb` (all-in, the OOM signal) · `peak_heap_mb` (JS objects/**strings** —
+catches the categorical decode-to-string blowup) · `peak_arraybuffers_mb`
+(TypedArray + flechette Arrow buffers) · `peak_external_mb`/`duckdb_memory_mb`
+(native DuckDB). Skipping the Arrow table should drop `arrayBuffers`;
+dict-encoding categoricals should drop `heap`; file-backed drops `external`.
+
+**Selection / cross-filter latency (the felt interactivity at 5-10M):**
+`crossfilter_suite_ms` (dependent aggregates under one ~1% predicate — the
+round-trip) · `filter_box_ms` (brush window) · `filter_rowset_ms` (lasso /
+`__scatter_selection` temp-table path) · `filter_sel_{0p1,1,10,50}_ms`
+(selectivity sweep). Time: `cold_open_ms`.
+
+**Guards (quality floor):** `golden_query_mismatches = 0` (verify.ts exit code) ·
+`query p95 ≤ budget` · `vp check` green.
+
+→ Two autoresearch loops fall out: **(A) ingest-memory** — target `peak_rss_mb @1M`
+(↓), guard = verify.ts + `vp check`; **(B) filter-latency** — target
+`crossfilter_suite_ms @5M` (↓), lever = preagg/density/pushdown, same guard.
 
 ## Gates (each accepted change must pass)
 

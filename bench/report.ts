@@ -1,9 +1,11 @@
 /**
- * Ledger report (CYCLE workflow) — render bench/results/ledger.jsonl as a
- * scannable table. Latest row per (driver × dataset) wins; pass --all to show
- * every run, --baseline <commit> to diff peak_rss/cold_open against a baseline.
+ * Ledger report (CYCLE workflow) — render bench/results/ledger.jsonl. Latest row
+ * per (driver × dataset) unless --all. Two views: memory (default) and
+ * --filter (selection/cross-filter latency).
  *
- *   bun run bench/report.ts
+ *   bun run bench/report.ts            # memory view, latest per driver×dataset
+ *   bun run bench/report.ts --filter   # selection/filter latency view
+ *   bun run bench/report.ts --all      # every run
  */
 
 import { existsSync, readFileSync } from "node:fs";
@@ -12,29 +14,18 @@ import { resolve } from "node:path";
 const LEDGER = resolve(import.meta.dir, "results/ledger.jsonl");
 
 interface Row {
-  ts: string;
-  commit: string;
   driver: string;
   dataset: string;
   n_obs: number;
-  cold_open_ms: number;
-  peak_rss_mb: number;
-  steady_rss_mb: number;
-  duckdb_memory: string;
-  queries: Record<string, { median_ms: number | null }>;
+  metrics: Record<string, number>;
 }
 
-function pad(s: string, n: number): string {
-  return s.length >= n ? s : s + " ".repeat(n - s.length);
-}
-function padL(s: string, n: number): string {
-  return s.length >= n ? s : " ".repeat(n - s.length) + s;
-}
+const pad = (s: string, n: number) => (s.length >= n ? s : s + " ".repeat(n - s.length));
+const padL = (s: string, n: number) => (s.length >= n ? s : " ".repeat(n - s.length) + s);
 
-/** Median ms for a query key, or em-dash if absent. */
-function q(r: Row, k: string): string {
-  const v = r.queries[k]?.median_ms;
-  return v == null ? "—" : String(v);
+function cell(r: Row, key: string, suffix = ""): string {
+  const v = r.metrics?.[key];
+  return v == null ? "—" : `${v}${suffix}`;
 }
 
 function main() {
@@ -46,46 +37,44 @@ function main() {
     .trim()
     .split("\n")
     .filter(Boolean)
-    .map((l) => JSON.parse(l) as Row);
+    .map((l) => JSON.parse(l) as Row)
+    .filter((r) => r.metrics); // skip pre-schema rows
 
-  const showAll = process.argv.includes("--all");
-  // Latest per (driver,dataset) unless --all.
-  const rows = showAll ? all : [...new Map(all.map((r) => [`${r.driver}:${r.dataset}`, r])).values()];
-
+  const rows = process.argv.includes("--all")
+    ? all
+    : [...new Map(all.map((r) => [`${r.driver}:${r.dataset}`, r])).values()];
   rows.sort((a, b) => a.n_obs - b.n_obs || a.driver.localeCompare(b.driver));
 
-  const header = [
-    pad("driver", 14),
-    pad("dataset", 12),
-    padL("n_obs", 10),
-    padL("open_ms", 9),
-    padL("peakRSS", 9),
-    padL("steadyRSS", 10),
-    padL("ddb_mem", 12),
-    padL("count", 7),
-    padL("point", 7),
-    padL("cat_hist", 9),
-    padL("filter", 8),
-    padL("num_hist", 9),
-  ].join("  ");
-  console.log(header);
-  console.log("─".repeat(header.length));
+  const filterView = process.argv.includes("--filter");
+  const cols: [string, string, string][] = filterView
+    ? [
+        ["xf_suite", "crossfilter_suite_ms", "ms"],
+        ["box", "filter_box_ms", "ms"],
+        ["rowset", "filter_rowset_ms", "ms"],
+        ["sel0.1", "filter_sel_0p1_ms", ""],
+        ["sel1", "filter_sel_1_ms", ""],
+        ["sel10", "filter_sel_10_ms", ""],
+        ["sel50", "filter_sel_50_ms", ""],
+      ]
+    : [
+        ["open_ms", "cold_open_ms", ""],
+        ["peakRSS", "peak_rss_mb", "MB"],
+        ["heap", "peak_heap_mb", "MB"],
+        ["arrayBuf", "peak_arraybuffers_mb", "MB"],
+        ["ext", "peak_external_mb", "MB"],
+        ["ddb", "duckdb_memory_mb", "MB"],
+      ];
 
+  const head = [pad("driver", 14), pad("dataset", 12), padL("n_obs", 10), ...cols.map(([h]) => padL(h, 10))].join("  ");
+  console.log(head);
+  console.log("─".repeat(head.length));
   for (const r of rows) {
     console.log(
       [
         pad(r.driver, 14),
         pad(r.dataset, 12),
         padL(r.n_obs.toLocaleString(), 10),
-        padL(String(r.cold_open_ms), 9),
-        padL(`${r.peak_rss_mb}MB`, 9),
-        padL(`${r.steady_rss_mb}MB`, 10),
-        padL(r.duckdb_memory, 12),
-        padL(q(r, "count"), 7),
-        padL(q(r, "point"), 7),
-        padL(q(r, "cat_hist"), 9),
-        padL(q(r, "filter"), 8),
-        padL(q(r, "num_hist"), 9),
+        ...cols.map(([, key, suf]) => padL(cell(r, key, suf), 10)),
       ].join("  "),
     );
   }

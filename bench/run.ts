@@ -1,18 +1,21 @@
 /**
  * Bench harness (CYCLE workflow, seam B) — measure one (driver × dataset) in an
- * isolated process and append a row to the ledger.
+ * isolated process. Two modes:
  *
- *   bun run bench/run.ts --driver memory-table --dataset <zarr|parquet> --label <name>
+ *   normal:        append a rich row to results/ledger.jsonl + print a summary
+ *   --metric NAME: print ONLY that metric's number to stdout (autoresearch Verify)
  *
- * Metrics: cold_open_ms (open+ingest+ready), peak_rss_mb (sampled — the
- * scalability number), steady_rss_mb (post-load), duckdb_memory, and an
- * auto-selected query suite (median/max ms over N runs). One process per
- * measurement keeps the RSS peak clean.
+ * Metrics: memory high-water broken into rss / heap / arrayBuffers / external
+ * (peak is the OOM signal; the breakdown attributes which copy a lever kills),
+ * cold_open_ms, duckdb_memory_mb, a golden query suite, and a selection/
+ * cross-filter latency suite (filter_box, selectivity sweep, rowset/lasso,
+ * crossfilter_suite). One process per measurement keeps peaks clean.
  */
 
 import { appendFileSync, mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { DRIVERS } from "./drivers.ts";
+import { crossfilterDependents, filterQueries, goldenQueries, pickColumns } from "./queries.ts";
 
 const LEDGER = resolve(import.meta.dir, "results/ledger.jsonl");
 
@@ -22,72 +25,44 @@ function arg(name: string, fallback?: string): string {
   if (fallback !== undefined) return fallback;
   throw new Error(`missing --${name}`);
 }
+function hasFlag(name: string): boolean {
+  return process.argv.includes(`--${name}`);
+}
 
 function gitCommit(): string {
   const r = Bun.spawnSync(["git", "rev-parse", "--short", "HEAD"], { cwd: import.meta.dir });
   return r.stdout.toString().trim() || "unknown";
 }
 
-const rss = () => process.memoryUsage().rss;
 const mb = (bytes: number) => Math.round(bytes / 1e6);
+const round2 = (n: number) => Math.round(n * 100) / 100;
 
-interface QueryResult {
-  median_ms: number | null;
-  max_ms: number | null;
+/** Parse DuckDB's pragma_database_size memory_usage string ("67.8 MiB") → MB. */
+function parseMem(s: string): number {
+  const m = /([\d.]+)\s*(KiB|MiB|GiB)?/.exec(s);
+  if (!m) return 0;
+  const v = Number(m[1]);
+  const unit = m[2] ?? "MiB";
+  const toMiB = unit === "GiB" ? v * 1024 : unit === "KiB" ? v / 1024 : v;
+  return round2(toMiB * 1.048576); // MiB → MB
 }
 
-/** Run `sql` once to warm, then `runs` timed iterations → median/max ms. */
-async function timeQuery(
-  conn: { runAndReadAll: (sql: string) => Promise<unknown> },
-  sql: string,
-  runs: number,
-): Promise<QueryResult> {
-  try {
-    await conn.runAndReadAll(sql); // warm
-    const samples: number[] = [];
-    for (let i = 0; i < runs; i++) {
-      const t = performance.now();
-      await conn.runAndReadAll(sql);
-      samples.push(performance.now() - t);
-    }
-    samples.sort((a, b) => a - b);
-    return {
-      median_ms: Math.round(samples[Math.floor(samples.length / 2)] * 100) / 100,
-      max_ms: Math.round(samples[samples.length - 1] * 100) / 100,
-    };
-  } catch (err) {
-    console.error(`  query failed: ${(err as Error).message}\n    ${sql}`);
-    return { median_ms: null, max_ms: null };
-  }
-}
-
-const NUMERIC_TYPES = new Set([
-  "DOUBLE",
-  "FLOAT",
-  "INTEGER",
-  "BIGINT",
-  "HUGEINT",
-  "SMALLINT",
-  "TINYINT",
-  "UINTEGER",
-  "UBIGINT",
-]);
-const IDENTITY = new Set(["__row_index__", "__obs_index__"]);
-
-async function pickColumns(conn: {
+interface ReadConn {
   runAndReadAll: (sql: string) => Promise<{ getRowObjectsJson: () => Record<string, unknown>[] }>;
-}): Promise<{ cat: string | null; num: string | null }> {
-  const rows = (await conn.runAndReadAll("DESCRIBE dataset")).getRowObjectsJson();
-  let cat: string | null = null;
-  let num: string | null = null;
-  for (const r of rows) {
-    const name = String(r.column_name);
-    const type = String(r.column_type);
-    if (name.startsWith("__") || IDENTITY.has(name)) continue;
-    if (!cat && type === "VARCHAR" && name !== "obs_name") cat = name;
-    if (!num && NUMERIC_TYPES.has(type)) num = name;
+  run: (sql: string) => Promise<unknown>;
+}
+
+/** Median ms over `runs` timed iterations (one warm-up first). */
+async function timeMedian(fn: () => Promise<void>, runs: number): Promise<number> {
+  await fn(); // warm
+  const samples: number[] = [];
+  for (let i = 0; i < runs; i++) {
+    const t = performance.now();
+    await fn();
+    samples.push(performance.now() - t);
   }
-  return { cat, num };
+  samples.sort((a, b) => a - b);
+  return round2(samples[Math.floor(samples.length / 2)]);
 }
 
 async function main() {
@@ -95,69 +70,102 @@ async function main() {
   const dataset = arg("dataset");
   const label = arg("label", dataset.split("/").pop() ?? dataset);
   const runs = Number(arg("runs", "5"));
+  const metricOnly = hasFlag("metric") ? arg("metric") : null;
 
   const driver = DRIVERS[driverId];
   if (!driver) throw new Error(`unknown driver: ${driverId} (have: ${Object.keys(DRIVERS).join(", ")})`);
 
-  let peak = rss();
-  const sampler = setInterval(() => {
-    const r = rss();
-    if (r > peak) peak = r;
-  }, 25);
+  // Peak high-water across the whole run, broken out by allocation kind.
+  const peak = { rss: 0, heapUsed: 0, arrayBuffers: 0, external: 0 };
+  const sample = () => {
+    const m = process.memoryUsage();
+    if (m.rss > peak.rss) peak.rss = m.rss;
+    if (m.heapUsed > peak.heapUsed) peak.heapUsed = m.heapUsed;
+    if (m.arrayBuffers > peak.arrayBuffers) peak.arrayBuffers = m.arrayBuffers;
+    if (m.external > peak.external) peak.external = m.external;
+  };
+  sample();
+  const sampler = setInterval(sample, 25);
 
   const t0 = performance.now();
   const { store, nObs, nCols } = await driver.build(dataset);
   const coldOpenMs = Math.round(performance.now() - t0);
-  // --gc probe: force a full GC after build to distinguish "leaked/retained"
-  // from "uncollected" obs Arrow Table before sampling steady RSS.
-  if (process.argv.includes("--gc")) Bun.gc(true);
-  const steadyRss = rss();
+  if (hasFlag("gc")) Bun.gc(true);
+  sample();
 
-  const { cat, num } = await pickColumns(store.conn);
-  const mid = Math.floor(nObs / 2);
+  const conn = store.conn as unknown as ReadConn;
+  const cols = await pickColumns(conn);
 
-  const queries: Record<string, QueryResult> = {};
-  queries.count = await timeQuery(store.conn, "SELECT COUNT(*) FROM dataset", runs);
-  queries.point = await timeQuery(store.conn, `SELECT * FROM dataset WHERE __row_index__ = ${mid}`, runs);
-  if (cat) {
-    queries.cat_hist = await timeQuery(
-      store.conn,
-      `SELECT "${cat}" AS k, COUNT(*) AS n FROM dataset GROUP BY 1 ORDER BY n DESC LIMIT 100`,
-      runs,
-    );
-    queries.filter = await timeQuery(
-      store.conn,
-      `SELECT COUNT(*) FROM dataset WHERE "${cat}" = (SELECT "${cat}" FROM dataset WHERE "${cat}" IS NOT NULL LIMIT 1)`,
-      runs,
-    );
-  }
-  if (num) {
-    queries.num_stats = await timeQuery(
-      store.conn,
-      `SELECT MIN("${num}") a, MAX("${num}") b, AVG("${num}") c FROM dataset`,
-      runs,
-    );
-    queries.num_hist = await timeQuery(
-      store.conn,
-      `WITH b AS (SELECT MIN("${num}") mn, MAX("${num}") mx FROM dataset)
-             SELECT CAST(50 * ("${num}" - mn) / NULLIF(mx - mn, 0) AS INTEGER) AS bin, COUNT(*) AS n
-             FROM dataset, b GROUP BY 1 ORDER BY 1`,
-      runs,
-    );
+  const metrics: Record<string, number> = {};
+
+  // ── Golden suite (timed; results are the correctness guard, see verify.ts) ──
+  for (const q of goldenQueries(cols, nObs)) {
+    metrics[`q_${q.name}_ms`] = await timeMedian(async () => {
+      await conn.runAndReadAll(q.sql);
+    }, runs);
   }
 
-  let duckdbMemory = "n/a";
+  // ── Selection / cross-filter latency suite ─────────────────────────────────
+  for (const q of filterQueries(cols)) {
+    metrics[`${q.name}_ms`] = await timeMedian(async () => {
+      await conn.runAndReadAll(q.sql);
+    }, runs);
+  }
+
+  // crossfilter_suite_ms — all dependent aggregates under one ~1% predicate.
+  const deps = crossfilterDependents(cols);
+  if (deps.length > 0) {
+    metrics.crossfilter_suite_ms = await timeMedian(async () => {
+      for (const q of deps) await conn.runAndReadAll(q.sql);
+    }, runs);
+  }
+
+  // filter_rowset_ms — the lasso path: create a ~1% row-id temp table, aggregate
+  // joined to it, drop. Models the per-selection __scatter_selection churn.
+  const stride = Math.max(1, Math.floor(nObs / Math.max(1, Math.round(nObs * 0.01))));
+  const rowsetAgg = cols.cat
+    ? `SELECT COUNT(*) c, COUNT(DISTINCT d."${cols.cat}") k FROM dataset d JOIN __bench_sel s USING (__row_index__)`
+    : "SELECT COUNT(*) c FROM dataset d JOIN __bench_sel s USING (__row_index__)";
+  metrics.filter_rowset_ms = await timeMedian(async () => {
+    await conn.run(
+      `CREATE TEMP TABLE __bench_sel AS SELECT __row_index__ FROM dataset WHERE __row_index__ % ${stride} = 0`,
+    );
+    await conn.runAndReadAll(rowsetAgg);
+    await conn.run("DROP TABLE __bench_sel");
+  }, runs);
+
+  // ── DuckDB native footprint ─────────────────────────────────────────────────
+  let duckdbMemMb = 0;
   try {
-    const r = (await store.conn.runAndReadAll("SELECT memory_usage FROM pragma_database_size()")).getRowObjectsJson();
+    const r = (await conn.runAndReadAll("SELECT memory_usage FROM pragma_database_size()")).getRowObjectsJson();
     const v = r[0]?.memory_usage;
-    duckdbMemory = typeof v === "string" ? v : "n/a";
+    if (typeof v === "string") duckdbMemMb = parseMem(v);
   } catch {
-    // pragma may be unavailable for :memory: — leave n/a
+    // pragma may be unavailable for :memory: — leave 0
   }
 
   clearInterval(sampler);
-  if (rss() > peak) peak = rss();
+  sample();
 
+  metrics.peak_rss_mb = mb(peak.rss);
+  metrics.peak_heap_mb = mb(peak.heapUsed);
+  metrics.peak_arraybuffers_mb = mb(peak.arrayBuffers);
+  metrics.peak_external_mb = mb(peak.external);
+  metrics.cold_open_ms = coldOpenMs;
+  metrics.duckdb_memory_mb = duckdbMemMb;
+
+  // ── --metric mode: bare number for autoresearch Verify ──────────────────────
+  if (metricOnly) {
+    const v = metrics[metricOnly];
+    if (v === undefined) {
+      console.error(`unknown metric "${metricOnly}". have: ${Object.keys(metrics).join(", ")}`);
+      process.exit(1);
+    }
+    console.log(v);
+    process.exit(0);
+  }
+
+  // ── Normal mode: append rich row + print summary ────────────────────────────
   const row = {
     ts: new Date().toISOString(),
     commit: gitCommit(),
@@ -165,26 +173,20 @@ async function main() {
     dataset: label,
     n_obs: nObs,
     n_cols: nCols,
-    cat_col: cat,
-    num_col: num,
-    cold_open_ms: coldOpenMs,
-    peak_rss_mb: mb(peak),
-    steady_rss_mb: mb(steadyRss),
-    duckdb_memory: duckdbMemory,
-    queries,
+    cat_col: cols.cat,
+    num_col: cols.num,
+    metrics,
   };
-
   mkdirSync(resolve(import.meta.dir, "results"), { recursive: true });
   appendFileSync(LEDGER, `${JSON.stringify(row)}\n`);
 
-  const q = (k: string) => queries[k]?.median_ms ?? "—";
   console.log(
-    `[${driverId}] ${label}  n=${nObs.toLocaleString()} cols=${nCols}  ` +
-      `open=${coldOpenMs}ms  peakRSS=${mb(peak)}MB  steadyRSS=${mb(steadyRss)}MB  ddb=${duckdbMemory}  ` +
-      `count=${q("count")}ms point=${q("point")}ms cat_hist=${q("cat_hist")}ms filter=${q("filter")}ms num_hist=${q("num_hist")}ms`,
+    `[${driverId}] ${label}  n=${nObs.toLocaleString()} cols=${nCols}\n` +
+      `  mem  peakRSS=${metrics.peak_rss_mb}MB  heap=${metrics.peak_heap_mb}MB  arrayBuf=${metrics.peak_arraybuffers_mb}MB  ext=${metrics.peak_external_mb}MB  ddb=${metrics.duckdb_memory_mb}MB  open=${coldOpenMs}ms\n` +
+      `  query  count=${metrics.q_count_ms} cat_hist=${metrics.q_cat_hist_ms} num_hist=${metrics.q_num_hist_ms}\n` +
+      `  filter box=${metrics.filter_box_ms} rowset=${metrics.filter_rowset_ms} xf_suite=${metrics.crossfilter_suite_ms}  sel[0.1/1/10/50]=${metrics.filter_sel_0p1_ms}/${metrics.filter_sel_1_ms}/${metrics.filter_sel_10_ms}/${metrics.filter_sel_50_ms}`,
   );
 
-  // Force process exit — DuckDB native handles can keep the event loop alive.
   process.exit(0);
 }
 
