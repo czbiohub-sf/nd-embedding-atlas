@@ -30,7 +30,14 @@ export { AnnData };
 export { MuData };
 export { LazyDataFrame, toArrowTable } from "./data-frame.ts";
 export { BunFileStore, openBunStore } from "./bun-store.ts";
-export { ingestDataFrame, ingestDataFrames, arrowTypeToDuckDB, appendArrowValue } from "./duckdb-ingest.ts";
+export {
+  ingestDataFrame,
+  ingestDataFrames,
+  ingestDataFramesStreaming,
+  ingestDataFrameChunked,
+  arrowTypeToDuckDB,
+  appendArrowValue,
+} from "./duckdb-ingest.ts";
 
 /**
  * One-call AnnData opener — resolves the store, detects the convention,

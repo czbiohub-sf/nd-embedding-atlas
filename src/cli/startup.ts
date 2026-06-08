@@ -11,7 +11,15 @@
  *   7. Handle graceful shutdown
  */
 
-import { open, AnnData, MuData, ingestDataFrames } from "../zarr/index.ts";
+import {
+  open,
+  AnnData,
+  MuData,
+  ingestDataFrames,
+  ingestDataFramesStreaming,
+  ingestDataFrameChunked,
+  openBunStore,
+} from "../zarr/index.ts";
 import type { DatasetHandle } from "../zarr/anndata.ts";
 import { EmbeddingStore, DEFAULT_OBSM_PRIORITY } from "../server/store.ts";
 import { buildPlateMounts, readPlateMeta } from "../server/plate.ts";
@@ -22,6 +30,14 @@ import type { ResolvedConfig, DatasetEntry } from "./config.ts";
 import { getNetworkAddress } from "./resolve.ts";
 import { resolveFrontendDir } from "../server/static.ts";
 import type { DuckDBConnection } from "@duckdb/node-api";
+import { existsSync, mkdirSync, rmSync } from "node:fs";
+import {
+  resolveIngestMode,
+  isLocalPath,
+  ingestCacheKey,
+  resolveIngestCachePath,
+  ingestPragmas,
+} from "../server/ingest-cache.ts";
 
 // ─── ANSI helpers ───────────────────────────────────────────────────────────
 
@@ -157,41 +173,121 @@ export async function startup(config: ResolvedConfig): Promise<void> {
 
   const datasetNames = loaded.map((ds) => ds.entry.name);
 
+  // I/O-scalability cutover (loop `perf/io-scalability`): route obs/var ingest
+  // through the proven streaming/chunked paths and page base tables to a
+  // file-backed, content-keyed DuckDB cache that skips re-ingest on reopen.
+  // `NDEA_INGEST` selects the mode (default `chunked`); `eager` restores the
+  // original in-memory Arrow path verbatim. MuData stays on the in-memory merge
+  // path for now — its cross-modality obs merge has no chunked/streaming
+  // equivalent, and its cache key can't yet fingerprint per-modality var.
+  const ingestMode = resolveIngestMode();
+  const allLocal = loaded.every((ds) => isLocalPath(ds.entry.path));
+  const cacheEnabled = ingestMode !== "eager" && allLocal && !hasMuData && process.env.NDEA_NO_INGEST_CACHE !== "1";
+
   let initStore: (conn: DuckDBConnection) => Promise<void>;
   let initVar: ((conn: DuckDBConnection) => Promise<void>) | undefined;
 
   if (hasMuData) {
     // MuData owns both obs (collision-merged across modalities) and var
     // (unioned with `_modality` discriminator). Route both through
-    // MuData.toDuckDB so the merge logic stays in one place.
+    // MuData.toDuckDB so the merge logic stays in one place. Unchanged by the
+    // cutover — chunked/streaming cannot reproduce the merge.
     const muHandle = loaded[0].adata as MuData;
     initStore = (conn) => muHandle.toDuckDB(conn, { skipVar: true });
     initVar = (conn) => muHandle.toDuckDB(conn, { skipObs: true });
-  } else {
+  } else if (ingestMode === "chunked" && !isMultiDataset) {
+    // Single AnnData → chunked SOURCE streaming: peak JS allocation is one
+    // row-window, not the whole obs (scale-invariant toward 5-10M obs). Needs
+    // the raw zarr store, not the AnnData handle — open it directly, like the
+    // `stream-chunked` bench driver. The eager `AnnData.from` above still ran
+    // (obsm discovery + accessors need the handle); chunked only replaces the
+    // obs/var DuckDB ingest.
+    let rawStore: Awaited<ReturnType<typeof openBunStore>>["store"];
+    try {
+      ({ store: rawStore } = await openBunStore(loaded[0].entry.path));
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`    ${RED}✗${RESET} ${loaded[0].entry.name}: ${msg}`);
+      process.exit(1);
+    }
     initStore = async (conn) => {
-      // axis + includeNameColumn make `obs_name VARCHAR` come from each DF's
-      // index (AnnData.obs.index in Pandas → obs/_index in Zarr). Without
-      // this, `_ensureIdentityColumns` in store.ts synthesizes obs_name from
-      // the row index and stamps `provenance.synthetic_identity` on every
-      // collection — which breaks durability across re-ingest.
-      await ingestDataFrames(
+      await ingestDataFrameChunked(conn, "obs_base", rawStore, "obs", { axis: "obs", includeNameColumn: true });
+    };
+    initVar = async (conn) => {
+      await ingestDataFrameChunked(conn, "var_base", rawStore, "var", { axis: "var", includeNameColumn: true });
+    };
+  } else {
+    // Multi-dataset union (always — chunked can't emit `_dataset`) or
+    // `stream`/`eager` single. `ingestDataFramesStreaming` is a drop-in for
+    // `ingestDataFrames` (same union semantics, verified result-identical);
+    // `eager` keeps the original Arrow path for an instant revert.
+    //
+    // axis + includeNameColumn make `obs_name VARCHAR` come from each DF's
+    // index (AnnData.obs.index in Pandas → obs/_index in Zarr). Without this,
+    // `_ensureIdentityColumns` in store.ts synthesizes obs_name from the row
+    // index and stamps `provenance.synthetic_identity` on every collection —
+    // which breaks durability across re-ingest.
+    const ingest = ingestMode === "eager" ? ingestDataFrames : ingestDataFramesStreaming;
+    initStore = async (conn) => {
+      await ingest(
         conn,
         "obs_base",
         loaded.map((ds) => ds.adata.obs),
-        { datasetNames, axis: "obs", includeNameColumn: true },
+        {
+          datasetNames,
+          axis: "obs",
+          includeNameColumn: true,
+        },
       );
     };
     initVar = async (conn) => {
-      await ingestDataFrames(
+      await ingest(
         conn,
         "var_base",
         loaded.map((ds) => ds.adata.var),
-        { datasetNames, axis: "var", includeNameColumn: true },
+        {
+          datasetNames,
+          axis: "var",
+          includeNameColumn: true,
+        },
       );
     };
   }
 
-  const store = await EmbeddingStore.fromInit(initStore, { hidden, initVar });
+  // Open the store. Non-eager local ingests page base tables to a file-backed,
+  // content-keyed `.duckdb` under ~/.cache/ndea/ingest/ and skip re-ingest on
+  // reopen (the `_ndea_meta` key marker, written last, makes a crashed
+  // mid-ingest file fail the hit check → rebuild). `eager` keeps `:memory:`.
+  let store: EmbeddingStore;
+  if (cacheEnabled) {
+    const key = ingestCacheKey(
+      loaded.map((ds) => ({ name: ds.entry.name, path: ds.entry.path })),
+      ingestMode,
+      hidden,
+    );
+    const { cacheDir, dbPath } = resolveIngestCachePath(key);
+    const pragmas = ingestPragmas();
+    let cached: EmbeddingStore | null = null;
+    if (existsSync(dbPath)) {
+      try {
+        cached = await EmbeddingStore.fromCachedDb(dbPath, { hidden, pragmas, expectKey: key });
+        console.log(`    ${DIM}↻ reusing cached ingest ${key}${RESET}`);
+      } catch {
+        cached = null; // stale / partial / unreadable — rebuild below
+      }
+    }
+    if (cached) {
+      store = cached;
+    } else {
+      if (existsSync(dbPath)) rmSync(dbPath, { force: true });
+      if (existsSync(`${dbPath}.wal`)) rmSync(`${dbPath}.wal`, { force: true });
+      mkdirSync(cacheDir, { recursive: true });
+      store = await EmbeddingStore.fromInit(initStore, { hidden, initVar, dbPath, pragmas });
+      await store.writeIngestMeta(key);
+    }
+  } else {
+    store = await EmbeddingStore.fromInit(initStore, { hidden, initVar });
+  }
 
   // Apply obs column filter if configured
   const obsColumns = config.obsColumns ?? detectedObsColumns;

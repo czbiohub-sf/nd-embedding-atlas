@@ -1,0 +1,4 @@
+# Generated synthetic-ceiling artifacts — regenerate via bench/synth.ts.
+*.parquet
+synth-*
+# Keep results/ledger.jsonl (the committed baseline record).

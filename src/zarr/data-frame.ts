@@ -133,9 +133,14 @@ function convertColumn(data: ColumnData | string[] | Int32Array): ConvertResult 
     return convertNullable(data);
   }
 
-  // string[] → pass through (flechette infers Utf8)
+  // Plain array → Utf8. flechette's utf8 builder empties NON-string values (a
+  // boolean obs column like `is_primary_data` became "" — silent data loss), so
+  // stringify first. Strings pass through unchanged; null stays null.
   if (Array.isArray(data)) {
-    return { col: data, type: utf8() };
+    const arr = data as unknown as (string | number | boolean | bigint | null)[];
+    const allStrings = arr.length === 0 || typeof arr[0] === "string";
+    const col = allStrings ? data : arr.map((v) => (v == null ? null : String(v)));
+    return { col, type: utf8() };
   }
 
   // BigInt64Array → Int64

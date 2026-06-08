@@ -96,6 +96,19 @@ function coerceValue(value: unknown): unknown {
 
 // ─── EmbeddingStore ──────────────────────────────────────────────────────────
 
+/**
+ * DuckDB open options (I/O scalability loop, Cycle 1). Defaults preserve the
+ * historical `:memory:` behavior; passing `dbPath` makes the store file-backed
+ * (out-of-core — base tables page to disk under `memoryLimit`).
+ */
+export interface StoreOpenOptions {
+  hidden?: Set<string>;
+  /** DuckDB database path. Default `:memory:`. A file path = out-of-core. */
+  dbPath?: string;
+  /** DuckDB PRAGMAs applied right after connect. */
+  pragmas?: { memoryLimit?: string; tempDirectory?: string; threads?: number };
+}
+
 export class EmbeddingStore {
   /** The underlying DuckDB instance. */
   readonly db: DuckDBInstance;
@@ -134,15 +147,25 @@ export class EmbeddingStore {
     this._hidden = hidden ?? new Set();
   }
 
+  /** Create the DuckDB instance + connection and apply open PRAGMAs. */
+  private static async _open(options?: StoreOpenOptions): Promise<{ db: DuckDBInstance; conn: DuckDBConnection }> {
+    const db = await DuckDBInstance.create(options?.dbPath ?? ":memory:");
+    const conn = await db.connect();
+    const p = options?.pragmas;
+    if (p?.memoryLimit) await conn.run(`SET memory_limit='${p.memoryLimit}'`);
+    if (p?.tempDirectory) await conn.run(`SET temp_directory='${p.tempDirectory}'`);
+    if (p?.threads != null) await conn.run(`SET threads=${p.threads}`);
+    return { db, conn };
+  }
+
   /**
    * Create an EmbeddingStore from a Parquet file.
    *
    * The Parquet file should contain the obs DataFrame. A `__row_index__`
    * column is added if not present, along with `obs_name` for identity.
    */
-  static async fromParquet(parquetPath: string, options?: { hidden?: Set<string> }): Promise<EmbeddingStore> {
-    const db = await DuckDBInstance.create(":memory:");
-    const conn = await db.connect();
+  static async fromParquet(parquetPath: string, options?: StoreOpenOptions): Promise<EmbeddingStore> {
+    const { db, conn } = await EmbeddingStore._open(options);
     const store = new EmbeddingStore(db, conn, options?.hidden);
 
     await conn.run(`CREATE TABLE obs_base AS SELECT * FROM '${parquetPath}'`);
@@ -160,14 +183,12 @@ export class EmbeddingStore {
    */
   static async fromInit(
     init: (conn: DuckDBConnection) => Promise<void>,
-    options?: {
-      hidden?: Set<string>;
+    options?: StoreOpenOptions & {
       /** Optional var-axis initializer. Creates `var_base` table. */
       initVar?: (conn: DuckDBConnection) => Promise<void>;
     },
   ): Promise<EmbeddingStore> {
-    const db = await DuckDBInstance.create(":memory:");
-    const conn = await db.connect();
+    const { db, conn } = await EmbeddingStore._open(options);
     const store = new EmbeddingStore(db, conn, options?.hidden);
 
     await init(conn);
@@ -179,6 +200,77 @@ export class EmbeddingStore {
       await store._finishVarInit();
     }
 
+    return store;
+  }
+
+  /**
+   * Reopen a file-backed DuckDB that already holds `obs_base` (+ optional
+   * `var_base`) from a prior ingest — the skip-re-ingest cache-hit path.
+   *
+   * Recovers in-memory state WITHOUT re-creating base tables or their indexes
+   * (`fromInit`/`fromParquet` unconditionally CREATE and would collide). Throws
+   * if the file lacks `obs_base` or its `_ndea_meta` key doesn't match
+   * `expectKey` (a crashed mid-ingest file has no matching marker → the caller
+   * rebuilds), closing the connection first so the caller can safely delete it.
+   */
+  static async fromCachedDb(
+    dbPath: string,
+    options?: StoreOpenOptions & { expectKey?: string },
+  ): Promise<EmbeddingStore> {
+    const { db, conn } = await EmbeddingStore._open({ ...options, dbPath });
+
+    const tables = await EmbeddingStore._tableNames(conn);
+    const fail = (msg: string): never => {
+      conn.closeSync();
+      db.closeSync();
+      throw new Error(`fromCachedDb: ${msg}`);
+    };
+    if (!tables.has("obs_base")) fail("no obs_base in cached db");
+    if (options?.expectKey != null) {
+      const cachedKey = tables.has("_ndea_meta")
+        ? ((await conn.runAndReadAll("SELECT key FROM _ndea_meta LIMIT 1")).getRowObjectsJson()[0]?.key as
+            | string
+            | undefined)
+        : undefined;
+      if (cachedKey !== options.expectKey) fail("cache key mismatch / incomplete ingest");
+    }
+
+    const store = new EmbeddingStore(db, conn, options?.hidden);
+
+    const obsReader = await conn.runAndReadAll("SELECT COUNT(*) AS cnt FROM obs_base");
+    store.nObs = Number(obsReader.getRowObjectsJson()[0].cnt);
+
+    if (tables.has("_ndea_meta")) {
+      const origin = (await conn.runAndReadAll("SELECT obs_name_origin FROM _ndea_meta LIMIT 1")).getRowObjectsJson()[0]
+        ?.obs_name_origin;
+      if (origin === "synthetic" || origin === "explicit") store.obsNameOrigin = origin;
+    }
+
+    // var axis — `_finishVarInit` rebuilds indexes (IF NOT EXISTS) + the `var`
+    // VIEW (CREATE OR REPLACE) and sets nVars/hasVarTable. Idempotent on reopen.
+    if (tables.has("var_base")) await store._finishVarInit();
+
+    // Re-register persisted var columns (var_* tables, NOT var_base) so
+    // hasVarColumn()/registerVarColumn() see them and the dataset VIEW joins
+    // them. Embeddings (emb_*) are intentionally NOT re-registered here —
+    // startup's obsm pre-warm re-creates each via registerEmbedding (DROP+CREATE).
+    for (const t of tables) {
+      if (!t.startsWith("var_") || t === "var_base") continue;
+      const cols = (
+        await conn.runAndReadAll(`SELECT column_name FROM (DESCRIBE "${t}")`)
+      ).getColumnsJS()[0] as string[];
+      const colName = cols.find((c) => c !== "__row_index__");
+      if (colName) store._varCols.set(colName, { table: t, colName });
+    }
+
+    try {
+      await conn.run("INSTALL nanoarrow FROM community; LOAD nanoarrow;");
+      store._nanoarrowLoaded = true;
+    } catch {
+      store._nanoarrowLoaded = false;
+    }
+
+    await store._rebuildView();
     return store;
   }
 
@@ -216,9 +308,9 @@ export class EmbeddingStore {
 
   /** Shared init: indexes, collection tables, VIEW, row count, nanoarrow. */
   private async _finishInit(): Promise<void> {
-    await this.conn.run("CREATE INDEX obs_base_row_index ON obs_base(__row_index__)");
-    await this.conn.run("CREATE INDEX obs_base_obs_index ON obs_base(__obs_index__)");
-    await this.conn.run("CREATE INDEX obs_base_obs_name ON obs_base(obs_name)");
+    await this.conn.run("CREATE INDEX IF NOT EXISTS obs_base_row_index ON obs_base(__row_index__)");
+    await this.conn.run("CREATE INDEX IF NOT EXISTS obs_base_obs_index ON obs_base(__obs_index__)");
+    await this.conn.run("CREATE INDEX IF NOT EXISTS obs_base_obs_name ON obs_base(obs_name)");
     await this._initCollectionTables();
     await this._rebuildView();
 
@@ -513,6 +605,26 @@ export class EmbeddingStore {
   /** Reset cached schema introspection (for tests / DDL paths that alter obs_base). */
   invalidateSchemaCache(): void {
     this._hasDatasetColumn = null;
+  }
+
+  /** Set of table names in the `main` schema (cache-reopen introspection). */
+  private static async _tableNames(conn: DuckDBConnection): Promise<Set<string>> {
+    const reader = await conn.runAndReadAll(
+      "SELECT table_name FROM information_schema.tables WHERE table_schema = 'main'",
+    );
+    return new Set(reader.getColumnsJS()[0] as string[]);
+  }
+
+  /**
+   * Persist ingest provenance into the file-backed db so a later reopen
+   * (`fromCachedDb`) can validate the cache and recover `obsNameOrigin`.
+   * Written last, after a successful ingest — a crashed mid-ingest file has no
+   * matching row and so fails the cache-hit key check.
+   */
+  async writeIngestMeta(key: string): Promise<void> {
+    await this.conn.run("CREATE TABLE IF NOT EXISTS _ndea_meta (key TEXT, obs_name_origin TEXT)");
+    await this.conn.run("DELETE FROM _ndea_meta");
+    await this.conn.run(`INSERT INTO _ndea_meta VALUES ('${key}', '${this.obsNameOrigin}')`);
   }
 
   /** Shut down: close connection and database. */
