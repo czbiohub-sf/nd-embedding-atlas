@@ -19,7 +19,7 @@
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DuckDBConnection } from "@duckdb/node-api";
-import { AnnData, MuData, ingestDataFrames, open } from "../src/zarr/index.ts";
+import { AnnData, ingestDataFrames, ingestDataFramesStreaming, MuData, open } from "../src/zarr/index.ts";
 import { EmbeddingStore, type StoreOpenOptions } from "../src/server/store.ts";
 
 export interface BuiltStore {
@@ -48,8 +48,15 @@ function fileBacked(tag: string): StoreOpenOptions {
   };
 }
 
+/** AnnData obs/var ingest — `ingestDataFrames` (Arrow) or its streaming variant. */
+type Ingest = typeof ingestDataFrames;
+
 /** Open a zarr store and ingest obs/var the way startup does (AnnData + MuData). */
-async function buildZarr(source: string, options?: StoreOpenOptions): Promise<BuiltStore> {
+async function buildZarr(
+  source: string,
+  options?: StoreOpenOptions,
+  ingest: Ingest = ingestDataFrames,
+): Promise<BuiltStore> {
   const parsed = await open(source);
 
   let initStore: (conn: DuckDBConnection) => Promise<void>;
@@ -67,18 +74,10 @@ async function buildZarr(source: string, options?: StoreOpenOptions): Promise<Bu
   } else if (parsed.kind === "anndata") {
     const ad = AnnData.from(parsed);
     initStore = async (conn) => {
-      await ingestDataFrames(conn, "obs_base", [ad.obs], {
-        datasetNames: [name],
-        axis: "obs",
-        includeNameColumn: true,
-      });
+      await ingest(conn, "obs_base", [ad.obs], { datasetNames: [name], axis: "obs", includeNameColumn: true });
     };
     initVar = async (conn) => {
-      await ingestDataFrames(conn, "var_base", [ad.var], {
-        datasetNames: [name],
-        axis: "var",
-        includeNameColumn: true,
-      });
+      await ingest(conn, "var_base", [ad.var], { datasetNames: [name], axis: "var", includeNameColumn: true });
     };
   } else {
     throw new Error(`bench: ${source} is ${parsed.kind}, not AnnData/MuData`);
@@ -99,4 +98,7 @@ export const DRIVERS: Record<string, BenchDriver> = {
   parquet: { id: "parquet", build: (s) => buildParquet(s) },
   "file-table": { id: "file-table", build: (s) => buildZarr(s, fileBacked("table")) },
   "parquet-file": { id: "parquet-file", build: (s) => buildParquet(s, fileBacked("parquet")) },
+  // Cycle 3: stream from source columns, no Arrow table. :memory: so the delta
+  // vs memory-table is purely the streaming ingest (not file-backing).
+  "stream-table": { id: "stream-table", build: (s) => buildZarr(s, undefined, ingestDataFramesStreaming) },
 };

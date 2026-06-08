@@ -226,3 +226,37 @@ floor(y/binH)` over the active predicate → fixed-size grid → WebGPU heatmap.
 8. **Data-virtualized table** (pierre "slice-first" `getVisibleSlice`): fetch only
    the visible row range from DuckDB, never client-materialize all rows. We have
    the windowing half (TanStack Virtual); verify the data half at scale.
+
+## Cycle 3 — streaming ingest (append from source, no Arrow table) ✅
+
+`ingestDataFramesStreaming` (duckdb-ingest.ts) feeds the DuckDB Appender directly
+from `AnnDataFrame` source columns, skipping the intermediate flechette Arrow
+Table and keeping categoricals **code-encoded** (the category string is looked
+up per row, never materialized as a JS array). Driver: `stream-table` (:memory:,
+so the delta vs `memory-table` is purely the ingest path).
+
+| driver           | n_obs | open     | peak RSS    | heap       | arrayBuf  | ddb    |
+| ---------------- | ----- | -------- | ----------- | ---------- | --------- | ------ |
+| memory-table     | 1M    | 10.7s    | 5365 MB     | 1420 MB    | 848 MB    | 889 MB |
+| **stream-table** | 1M    | **6.1s** | **2679 MB** | **158 MB** | **75 MB** | 889 MB |
+
+**Result: peak RSS −50%, JS heap −89%, arrayBuffers −91%, open −46% at 1M** —
+identical query/filter latency, **0 golden-query mismatches** (verify.ts, at 93k
+and 1M). The JS ingest cost collapsed from ~2.2 GB to ~233 MB; the residual is
+DuckDB-native (889 MB), which Cycle 1a's file-backed driver pages → they stack.
+
+**Answers the Rust question** (the research's decisive experiment): after
+streaming-TS, the JS side drops near DuckDB's footprint — zarrita decode did NOT
+remain a multi-copy wall → **Rust is not needed for ingest.**
+
+**Bug fix (the harness earned its keep):** the golden guard caught
+`is_primary_data` (a boolean obs column) coming out `""` — flechette's `utf8()`
+builder silently empties non-strings. Fixed in `data-frame.ts convertColumn`
+(stringify plain-array elements before flechette) so BOTH paths preserve it;
+verify then passes 0. Plain-array obs columns (booleans) were silently dropped
+in production before this.
+
+**Next:** combine stream-table + file-backed (page the residual 889 MB DuckDB);
+then `/autoresearch:plan`→`/autoresearch` to sweep tuning knobs (guard =
+stream-vs-snapshot via verify.ts). And the filter-latency loop (preagg/density)
+for crossfilter_suite at 5-10M.
