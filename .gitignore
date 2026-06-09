@@ -44,3 +44,6 @@ notes/
 
 # dex task state (ephemeral)
 .dex/
+
+# I/O-scalability bench harness — dev-only measurement scaffolding, not shipped
+bench/
