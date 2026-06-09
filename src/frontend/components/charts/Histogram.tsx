@@ -1,10 +1,12 @@
-import type { ExprNode, FilterExpr } from "@uwdata/mosaic-sql";
+import type { FilterExpr } from "@uwdata/mosaic-sql";
 import { cast, column, isBetween, literal } from "@uwdata/mosaic-sql";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useContainerSize } from "../../hooks/useContainerSize";
 import { useDashboard } from "../../hooks/useDashboard";
 import { useMosaicClient } from "../../hooks/useMosaicClient";
 import { filterExprToExpr, toRows } from "../../lib/mosaic-helpers";
+import { selectionBus } from "../../core/buses";
+import { asInstanceId } from "../../core/plugin/host";
 
 interface HistBin {
   bin: number;
@@ -21,15 +23,23 @@ interface Stats {
 interface Props {
   field: string;
   bins?: number;
+  /** Per-leaf clause-source key (the chart panel's stable id, §6.3). */
+  instanceKey: string;
 }
 
 const CHART_HEIGHT = 64;
 const AXIS_HEIGHT = 18;
 const TOTAL_HEIGHT = CHART_HEIGHT + AXIS_HEIGHT;
 
-export function Histogram({ field, bins: binCount = 20 }: Props) {
+export function Histogram({ field, bins: binCount = 20, instanceKey }: Props) {
   const { meta } = useDashboard();
   const { coordinator, brushSelection } = meta;
+
+  // Per-leaf "chart" facet on this histogram's OWN bus instance, so it composes
+  // with other charts/views as a distinct crossfilter source (§6.3). Clear the
+  // clause when the leaf unmounts.
+  const leafId = useMemo(() => asInstanceId(`chart:${instanceKey}`), [instanceKey]);
+  useEffect(() => () => selectionBus.disposeInstance(leafId), [leafId]);
 
   // Container size tracking
   const containerRef = useRef<HTMLDivElement>(null);
@@ -117,7 +127,6 @@ export function Histogram({ field, bins: binCount = 20 }: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [brushRange, setBrushRange] = useState<[number, number] | null>(null);
   const brushing = useRef(false);
-  const sourceRef = useRef({ reset: () => setBrushRange(null) });
 
   // Constant-value column: show the value with count instead of empty histogram
   if (stats && stats.count > 0 && stats.min === stats.max) {
@@ -183,12 +192,7 @@ export function Histogram({ field, bins: binCount = 20 }: Props) {
             const hi = Math.max(brushRange[0], brushRange[1]);
             if (lo < hi) {
               const fieldExpr = cast(column(field), "DOUBLE");
-              brushSelection.update({
-                source: sourceRef.current,
-                clients: new Set(),
-                value: [lo, hi],
-                predicate: isBetween(fieldExpr, [literal(lo), literal(hi)]) as ExprNode,
-              });
+              selectionBus.publishPredicate(leafId, "chart", String(isBetween(fieldExpr, [literal(lo), literal(hi)])));
             }
           }
         }}

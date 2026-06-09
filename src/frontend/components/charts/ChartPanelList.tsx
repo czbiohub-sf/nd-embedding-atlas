@@ -20,12 +20,12 @@ function titleFor(spec: ChartSpec): string {
   }
 }
 
-function renderChart(spec: ChartSpec): ReactNode {
+function renderChart(spec: ChartSpec, instanceKey: string): ReactNode {
   switch (spec.type) {
     case "count-plot":
-      return <CountPlot field={spec.field} limit={spec.limit} />;
+      return <CountPlot field={spec.field} limit={spec.limit} instanceKey={instanceKey} />;
     case "histogram":
-      return <Histogram field={spec.field} bins={spec.bins} />;
+      return <Histogram field={spec.field} bins={spec.bins} instanceKey={instanceKey} />;
     default:
       return <div className="py-1 text-3xs text-muted-foreground">Unsupported chart type: {spec.type}</div>;
   }
@@ -42,7 +42,7 @@ export function ChartPanelList() {
     <>
       {state.panels.map((panel) => (
         <ChartPanel key={panel.id} id={panel.id} title={titleFor(panel.spec)}>
-          {renderChart(panel.spec)}
+          {renderChart(panel.spec, panel.id)}
         </ChartPanel>
       ))}
     </>

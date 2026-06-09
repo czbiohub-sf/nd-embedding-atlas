@@ -5,6 +5,7 @@
  * The frontend loads this once on startup via TanStack Query.
  */
 
+import { deriveDataCapabilities } from "../capabilities.ts";
 import type { ViewerState, DatasetMeta } from "../state.ts";
 import { obsmColumnPrefix } from "../store.ts";
 import { exportDir } from "./export.ts";
@@ -112,6 +113,20 @@ export function handleMetadata(state: ViewerState, config: DatasetMeta): Respons
   if (config.datasetChannels) {
     result.dataset_channels = config.datasetChannels;
   }
+
+  // Provided data-capability set (CAPABILITY-CONTRACT.md §3) — derived from the
+  // metadata facts assembled above; the wire single-source-of-truth the
+  // frontend reads through `capabilitiesOf()`.
+  const spatialMeta = result.spatial as { x_col?: string | null } | undefined;
+  const modalities = result.modalities as string[] | undefined;
+  result.capabilities = deriveDataCapabilities({
+    hasObs: (config.obsColumnNames?.length ?? 0) > 0,
+    varCount: result.var_count as number | Record<string, number> | undefined,
+    obsmKeys: Object.keys(result.obsm as Record<string, unknown>),
+    hasSpatialXY: spatialMeta?.x_col != null,
+    hasPlate: config.hasPlate,
+    isMultimodal: Array.isArray(modalities) && modalities.length > 0,
+  });
 
   return Response.json(result);
 }

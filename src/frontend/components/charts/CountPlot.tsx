@@ -13,10 +13,12 @@ import {
   Query,
   sum,
 } from "@uwdata/mosaic-sql";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useDashboard } from "../../hooks/useDashboard";
 import { useMosaicClient } from "../../hooks/useMosaicClient";
 import { filterExprToExpr, toRows } from "../../lib/mosaic-helpers";
+import { selectionBus } from "../../core/buses";
+import { asInstanceId } from "../../core/plugin/host";
 
 const NULL_VALUE = "__null__";
 
@@ -29,14 +31,20 @@ interface CountPlotRow {
 interface Props {
   field: string;
   limit?: number;
+  /** Per-leaf clause-source key (the chart panel's stable id, §6.3). */
+  instanceKey: string;
 }
 
-export function CountPlot({ field, limit = 11 }: Props) {
+export function CountPlot({ field, limit = 11, instanceKey }: Props) {
   const { meta } = useDashboard();
   const { coordinator, brushSelection, table } = meta;
 
   const [selected, setSelected] = useState(new Set());
-  const sourceRef = useRef({ reset: () => setSelected(new Set()) });
+  // This chart leaf publishes its filter as the "chart" facet of its OWN bus
+  // instance, so it composes with other charts/views as a distinct crossfilter
+  // source (§6.3). Clear the clause when the leaf unmounts.
+  const leafId = useMemo(() => asInstanceId(`chart:${instanceKey}`), [instanceKey]);
+  useEffect(() => () => selectionBus.disposeInstance(leafId), [leafId]);
 
   const textExpr = useMemo(() => cast(column(field), "TEXT"), [field]);
 
@@ -84,23 +92,13 @@ export function CountPlot({ field, limit = 11 }: Props) {
     setSelected(next);
 
     if (next.size === 0) {
-      brushSelection.update({
-        source: sourceRef.current,
-        clients: new Set(),
-        value: null,
-        predicate: null,
-      });
+      selectionBus.publishPredicate(leafId, "chart", null);
     } else {
       const predicates = [...next].map((v) => {
         if (v === NULL_VALUE) return isNull(textExpr) as ExprNode;
         return isNotDistinct(textExpr, literal(v)) as ExprNode;
       });
-      brushSelection.update({
-        source: sourceRef.current,
-        clients: new Set(),
-        value: [...next],
-        predicate: or(...predicates) as ExprNode,
-      });
+      selectionBus.publishPredicate(leafId, "chart", String(or(...predicates)));
     }
   };
 

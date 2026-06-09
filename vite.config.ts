@@ -243,6 +243,35 @@ export default defineConfig({
           "typescript/no-misused-promises": "off",
         },
       },
+      {
+        // Plugin boundary (PLUGIN-ARCHITECTURE §3, §7.6). Plugins talk to the app
+        // ONLY through the injected PluginHost — never the cross-view stores or
+        // the DashboardContext directly. ERROR (Phase 3): the views are converted
+        // and no plugin imports a cross-view store / dashboard context, so the
+        // boundary is now CI-enforced. (The reactive highlight read in
+        // table/charts uses @/hooks/useDashboard, which is intentionally NOT
+        // banned — it moves to a HighlightBus in Phase 4, §6.7.) The `/api/*`
+        // literal ban stays enforced by the capability-gated DataApi.
+        files: ["src/frontend/plugins/**/*.ts", "src/frontend/plugins/**/*.tsx"],
+        rules: {
+          "no-restricted-imports": [
+            "error",
+            {
+              patterns: [
+                {
+                  group: ["@/stores/*", "**/stores/*"],
+                  message:
+                    "Plugins must not touch cross-view stores directly — go through the injected PluginHost (PLUGIN-ARCHITECTURE §7.6).",
+                },
+                {
+                  group: ["@/dashboard/*", "**/dashboard/*"],
+                  message: "Plugins must not import DashboardContext — read state via the PluginHost.",
+                },
+              ],
+            },
+          ],
+        },
+      },
     ],
   },
 

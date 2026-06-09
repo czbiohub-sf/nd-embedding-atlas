@@ -15,6 +15,7 @@ import { SquareDashedMousePointer } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "../ui/badge";
 import { useDashboard } from "../../hooks/useDashboard";
+import { capabilitiesOf } from "../../lib/capabilities";
 import { useGalleryChannels } from "../table/useGalleryChannels";
 import { LassoGalleryCard } from "./LassoGalleryCard";
 import { MAX_GALLERY_OBS, useLassoSelectionObs } from "./useLassoSelectionObs";
@@ -31,6 +32,7 @@ interface GalleryPaneProps {
 export function GalleryPane({ datasetKey }: GalleryPaneProps) {
   const { state, actions } = useDashboard();
   const queryClient = useQueryClient();
+  const hasPlate = capabilitiesOf(state.metadata).has("plate-image");
 
   const { obs, rowCount, isLoading, sourceKind } = useLassoSelectionObs();
 
@@ -107,7 +109,7 @@ export function GalleryPane({ datasetKey }: GalleryPaneProps) {
     return truncated ? `${MAX_GALLERY_OBS}/${rowCount}` : `${rowCount}`;
   }, [rowCount, truncated]);
 
-  const fetchEnabled = !channelsPending && settledChannels.length > 0 && !!state.metadata.plate;
+  const fetchEnabled = !channelsPending && settledChannels.length > 0 && hasPlate;
 
   return (
     <div className="flex h-full w-full flex-col bg-card">
@@ -134,7 +136,7 @@ export function GalleryPane({ datasetKey }: GalleryPaneProps) {
       <div ref={parentRef} className="min-h-0 flex-1 overflow-y-auto p-2">
         {rowCount === 0 ? (
           <EmptyState />
-        ) : !state.metadata.plate ? (
+        ) : !hasPlate ? (
           <div className="flex h-full items-center justify-center text-muted-foreground text-xs">
             No plate data available
           </div>

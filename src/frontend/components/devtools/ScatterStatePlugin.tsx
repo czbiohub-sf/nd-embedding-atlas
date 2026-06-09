@@ -1,10 +1,9 @@
 /**
- * ScatterStatePlugin — live view of the three TanStack Store singletons.
+ * ScatterStatePlugin — live view of the selection-sync + view-sync stores.
  * Rendered as a tab inside TanStackDevtools.
  */
 
 import { useSelector } from "@tanstack/react-store";
-import { brushPredicateStore } from "../../stores/BrushPredicateStore";
 import { getBitmapRowIds } from "../../stores/RoaringBroadcastStore";
 import { selectionSyncStore } from "../../stores/SelectionSyncStore";
 import { viewSyncStore } from "../../stores/ViewSyncStore";
@@ -30,18 +29,11 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 export function ScatterStatePlugin() {
-  const brush = useSelector(brushPredicateStore, (s) => s);
   const selection = useSelector(selectionSyncStore, (s) => s);
   const view = useSelector(viewSyncStore, (s) => s);
 
   return (
     <div className="h-full overflow-y-auto bg-card text-foreground">
-      <Section title="Brush Predicate Store">
-        <Row label="version" value={brush.version} />
-        <Row label="predicate" value={brush.predicate ?? <span className="text-foreground/20">null</span>} />
-        <Row label="source" value={JSON.stringify(brush.source)} />
-      </Section>
-
       <Section title="Selection Sync Store">
         <Row
           label="type"

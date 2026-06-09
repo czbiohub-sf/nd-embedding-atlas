@@ -7,6 +7,7 @@ import { DatabaseIcon } from "lucide-react";
 import { useState } from "react";
 import { useSelector } from "@tanstack/react-store";
 import { useDashboard } from "../../hooks/useDashboard";
+import { capabilitiesOf } from "../../lib/capabilities";
 import { selectionSyncStore } from "../../stores/SelectionSyncStore";
 import { Kbd, KbdGroup, KbdMod } from "../ui/kbd";
 import { SlidePanel } from "../ui/slide-panel";
@@ -23,7 +24,7 @@ export function TerminalTable() {
   const { metadata, highlightId, trajectories } = state;
   const hasAnyTrajectory = Object.keys(trajectories).length > 0;
   const hasGallerySelection = useSelector(selectionSyncStore, (s) => s.type === "active");
-  const galleryEnabled = !!metadata.plate;
+  const galleryEnabled = capabilitiesOf(metadata).has("plate-image");
   const { coordinator, brushSelection, table } = meta;
 
   return (

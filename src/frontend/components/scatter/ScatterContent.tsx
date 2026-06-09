@@ -11,6 +11,7 @@ import type { DockviewPanelApi } from "dockview-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { selectAnyTrajectory } from "../../dashboard/DashboardContext";
 import { useDashboard } from "../../hooks/useDashboard";
+import { capabilitiesOf } from "../../lib/capabilities";
 import { colorSourceToString } from "../../lib/color-source";
 import type { IsolationCapability } from "../../scatter-gpu/handle-capabilities";
 import { useEmbeddingLoader } from "../../scatter-gpu/hooks/useEmbeddingLoader";
@@ -20,6 +21,7 @@ import { useScatterColorState } from "../../scatter-gpu/hooks/useScatterColorSta
 import { useTrajectoryLoader } from "../../scatter-gpu/hooks/useTrajectoryLoader";
 import { useHighlightedPointMeta } from "../../hooks/useHighlightedPointMeta";
 import type { PanelId } from "../../scatter-gpu/types";
+import { useOptionalHost } from "../../core/host/host-context";
 import { broadcastPanelState, clearPanelState } from "../../stores/PanelStateStore";
 import { disposeBitmap } from "../../stores/RoaringBroadcastStore";
 import { panelSource } from "../../stores/SelectionSyncStore";
@@ -28,13 +30,6 @@ import { LegendProvider } from "./LegendContext";
 import { ScatterOverlayControls } from "./ScatterOverlayControls";
 import { useScatterUIState } from "./ScatterUIStateProvider";
 import { ScatterView } from "./ScatterView";
-
-/** `var_count` is a number for AnnData, a per-modality map for MuData. */
-function hasVarForMetadata(v: number | Record<string, number> | undefined): boolean {
-  if (typeof v === "number") return v > 0;
-  if (v && typeof v === "object") return Object.values(v).some((n) => n > 0);
-  return false;
-}
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
@@ -58,6 +53,8 @@ export function ScatterContent({
   syncedAxes,
 }: ScatterContentProps) {
   const { state, actions, meta } = useDashboard();
+  // Docked path: the host owns this instance's WASM bitmap lifecycle (§6.6).
+  const host = useOptionalHost();
   const { metadata, highlightId } = state;
   const trajectory = selectAnyTrajectory(state.trajectories);
   const activeTrajectories = Object.values(state.trajectories).filter((t): t is NonNullable<typeof t> => t != null);
@@ -138,6 +135,7 @@ export function ScatterContent({
     colorByColumn,
     scatterRef: isolationHandleRef,
     categoryIndicesRef,
+    myPanelId,
   });
   const { handleDisabledChange } = useDisabledBridge({
     scatterRef: isolationHandleRef,
@@ -192,9 +190,12 @@ export function ScatterContent({
   useEffect(() => {
     return () => {
       clearPanelState(String(myPanelId));
-      disposeBitmap(panelSource(myPanelId));
+      // On the docked path the host owns the bitmap lifecycle (host.dispose ->
+      // broadcastBus.disposeFor(instanceId), §6.6 — keyed by instanceId, which
+      // equals this panelId). Only the host-less floating path frees it here.
+      if (!host) disposeBitmap(panelSource(myPanelId));
     };
-  }, [myPanelId]);
+  }, [myPanelId, host]);
 
   // Shared ScatterView props
   const scatterViewProps = {
@@ -244,7 +245,7 @@ export function ScatterContent({
       obsColumns={obsColumns}
       colorMode={colorMode}
       colorModeCanToggle={colorModeInfo.canToggle}
-      hasVar={hasVarForMetadata(metadata.var_count)}
+      hasVar={capabilitiesOf(metadata).has("var")}
       onSetAxes={(newAxes) => {
         void handleSetAxes(newAxes);
       }}

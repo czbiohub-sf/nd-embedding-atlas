@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useDashboard } from "../../hooks/useDashboard";
 import { useFloatingWindow } from "../../hooks/useFloatingWindow";
+import { capabilitiesOf } from "../../lib/capabilities";
 import {
   registerDatasetViewerHandle,
   registerViewerPiPHandle,
@@ -28,7 +29,7 @@ export function ViewerPiP() {
 function ViewerContent() {
   const { state } = useDashboard();
 
-  if (!state.metadata.plate) {
+  if (!capabilitiesOf(state.metadata).has("plate-image")) {
     return (
       <div className="flex h-full w-full items-center justify-center text-muted-foreground text-xs">
         No plate data available

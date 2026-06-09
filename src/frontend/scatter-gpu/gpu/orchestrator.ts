@@ -7,7 +7,7 @@ import type { ScatterData, ScatterplotConfig, ScatterplotHandle } from "../types
 import { createBuffers, createUniforms, MAX_PALETTE_SIZE, uploadData } from "./buffers";
 import { createCompositor } from "./compositor";
 import { createCullingEngine } from "./culling";
-import { acquireDevice, releaseDevice } from "./device-manager";
+import { acquireDevice, type DeviceInfo, releaseDevice } from "./device-manager";
 import { createHdrPipeline } from "./hdr";
 import { initGPU } from "./init";
 import { createPickingSystem } from "./picking";
@@ -15,15 +15,34 @@ import { type BlendMode, createBlendableRenderPipelines } from "./pipeline";
 import { createSelectionEngine } from "./selection";
 import { createFragmentShader, createVertexShader } from "./shaders";
 
+export interface CreateScatterplotOpts {
+  /** Aborted on host teardown — threaded into device acquire so a fast
+   *  add/delete cannot strand a device mid-init (PLUGIN-ARCHITECTURE §7.2). */
+  signal?: AbortSignal;
+  /**
+   * Pre-acquired device lease from `host.acquireDeviceLease()` (PLUGIN-ARCHITECTURE
+   * §7.1). When supplied, this instance uses the lease's already-leased device and
+   * does NOT acquire/release the shared refcount itself — the lease owner
+   * (`host.dispose`) controls the device lifetime, so the device survives data
+   * swaps (positionKey re-init) instead of churning. Typed structurally to avoid a
+   * `scatter-gpu → core` import cycle; the broker's `DeviceLease` is compatible.
+   */
+  lease?: { readonly info: DeviceInfo };
+}
+
 export async function createScatterplot(
   canvas: HTMLCanvasElement,
   overlay: HTMLCanvasElement,
   data: ScatterData,
   config?: ScatterplotConfig,
+  opts?: CreateScatterplotOpts,
 ): Promise<ScatterplotHandle> {
   const t0 = performance.now();
 
-  const deviceInfo = await acquireDevice();
+  // Leased device (host-managed) is authoritative — skip the self-acquire so the
+  // broker refcount is incremented exactly once per instance, by the lease owner.
+  const ownsDevice = !opts?.lease;
+  const deviceInfo = opts?.lease ? opts.lease.info : await acquireDevice(opts?.signal);
   const gpu = initGPU(canvas, deviceInfo);
   const { root, device, context, format, preferredWorkgroupSize } = gpu;
   const tGpu = performance.now();
@@ -597,14 +616,40 @@ export async function createScatterplot(
       interaction.animateToViewState(state, durationMs);
     },
     destroy() {
+      // Deterministic disposal order (PLUGIN-ARCHITECTURE §7.3): raw-device
+      // owners free their own resources → context.unconfigure (§7.4) →
+      // root.destroy (tgpu-owned) → release the device lease. A dev-only
+      // validation error scope makes "no leaks" verified, not asserted.
+      const auditLeaks = import.meta.env.DEV;
+      if (auditLeaks) device.pushErrorScope("validation");
+
       interaction.destroy();
       selection.destroy();
       compositor.destroy();
       culling.destroy();
       picking.destroy();
       hdr.destroy();
+      try {
+        context.unconfigure();
+      } catch {
+        // Some browsers throw if the context was never configured — ignore.
+      }
       root.destroy();
-      releaseDevice();
+
+      if (auditLeaks) {
+        device
+          .popErrorScope()
+          .then((err) => {
+            if (err) console.error("[scatter dispose] GPU validation error:", err.message);
+          })
+          .catch(() => {
+            // Device may already be released by the last lease holder — ignore.
+          });
+      }
+      // Only the self-acquire path releases here. A host-leased device is
+      // released by the lease owner (host.dispose), so it persists across this
+      // instance's data swaps (PLUGIN-ARCHITECTURE §7.1).
+      if (ownsDevice) releaseDevice();
     },
   };
 }

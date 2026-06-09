@@ -1,4 +1,4 @@
-export type { Metadata, ObsInfo, ObsBbox } from "../protocol/index.ts";
+export type { DataCapability, Metadata, ObsInfo, ObsBbox } from "../protocol/index.ts";
 
 /** Pan/zoom state for a scatter view. */
 export interface ViewState {

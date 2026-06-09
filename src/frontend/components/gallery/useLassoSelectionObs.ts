@@ -2,9 +2,9 @@
  * useLassoSelectionObs — selection store + active-filter store → obs metadata.
  *
  * Subscribes to selectionSyncStore for the live row-ID set (Roaring bitmap)
- * and activeFilterStore for the predicate version. When either changes,
- * batch-fetches spatial metadata (fov, t, x, y) for the selected rows via
- * POST `/api/obs/batch`.
+ * and the SelectionBus revision sentinel for predicate changes. When either
+ * changes, batch-fetches spatial metadata (fov, t, x, y) for the selected rows
+ * via POST `/api/obs/batch`.
  *
  * Returns the resolved obs list, ready to feed into the gallery's per-card
  * crop fetch (useGalleryCropQuery). N is bounded — caller is expected to
@@ -14,7 +14,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSelector } from "@tanstack/react-store";
 import { useMemo } from "react";
-import { activeFilterStore } from "../../stores/ActiveFilterStore";
+import { selectionBus } from "../../core/buses";
 import { getBitmapRowIds } from "../../stores/RoaringBroadcastStore";
 import { selectionSyncStore } from "../../stores/SelectionSyncStore";
 import { obsCoordKey } from "../table/useGalleryCropQuery";
@@ -43,9 +43,9 @@ const MAX_GALLERY_OBS = 5000;
 
 export function useLassoSelectionObs(): UseLassoSelectionObsResult {
   const sync = useSelector(selectionSyncStore, (s) => s);
-  // Track filter version so collection toggles re-trigger the batch fetch
-  // even if the bitmap source identity hasn't changed.
-  const filterVersion = useSelector(activeFilterStore, (s) => s.version);
+  // Track the SelectionBus revision so collection toggles re-trigger the batch
+  // fetch even if the bitmap source identity hasn't changed.
+  const filterVersion = useSelector(selectionBus.revision, (v) => v);
   const queryClient = useQueryClient();
 
   const rowIds = useMemo(() => {

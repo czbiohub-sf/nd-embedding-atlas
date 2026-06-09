@@ -8,9 +8,9 @@ import type { CollectionId } from "../lib/branded-types";
  * op composition (UNION / INTERSECT / SUBTRACT).
  *
  * The filter wiring lives in DashboardProvider: when activeCollectionId
- * flips, it fetches `/api/collections/:id/activate` and writes the returned
- * predicate to ActiveFilterStore (which is the single source of truth for
- * Mosaic's brushSelection).
+ * flips, it fetches `/api/collections/:id/activate` and publishes the returned
+ * predicate as the "activeSet" facet on the collections pseudo-instance via the
+ * SelectionBus (the sole writer of Mosaic's crossfilter Selection, §6.3).
  */
 
 interface ActiveCollectionState {

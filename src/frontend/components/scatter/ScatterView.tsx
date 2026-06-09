@@ -14,12 +14,14 @@ import type { CategoryMapping } from "../../lib/category-column";
 import { colorSourceFromString, colorSourceLegendLabel } from "../../lib/color-source";
 import { toRows } from "../../lib/mosaic-helpers";
 import { ScatterGPUHost, type ScatterGPUHostHandle } from "../../scatter-gpu/components/ScatterGPUHost";
+import { GpuDeviceProvider } from "../../core/gpu/gpu-device-context";
+import { useOptionalHost } from "../../core/host/host-context";
 import { type ColorMode, useMosaicScatterData } from "../../scatter-gpu/hooks/useMosaicScatterData";
-import { useScatterBrushSync } from "../../scatter-gpu/hooks/useScatterBrushSync";
+import { floatingInstanceId, useScatterBrushSync } from "../../scatter-gpu/hooks/useScatterBrushSync";
 import type { PanelId, ScatterplotConfig } from "../../scatter-gpu/types";
 import { hexToRgbPalette } from "../../scatter-gpu/utils/colors";
 import { buildColormapLut } from "../../lib/ochre-lut";
-import { setBrushPredicate } from "../../stores/BrushPredicateStore";
+import { selectionBus } from "../../core/buses";
 import { pointRadiusStore } from "../../stores/PointRadiusStore";
 import { renderSettingsStore } from "../../stores/RenderSettingsStore";
 import { getBitmapRowIds } from "../../stores/RoaringBroadcastStore";
@@ -101,6 +103,8 @@ export function ScatterView({
 }: ScatterViewProps) {
   const categoryColors = useEffectiveCategoryColors();
   const { setFps, setZoom, setSelection, setEmbedding, setNumPoints } = useScatterUIDispatch();
+  // Plugin host on the docked path (null on the floating/host-less path).
+  const host = useOptionalHost();
 
   // ── Bridge legendState colormap + reversed to useMosaicScatterData ─────────
   // LegendContext owns colormapName and colormapReversed for continuous mode.
@@ -139,14 +143,23 @@ export function ScatterView({
   // ── Continuous range filter handles (dim-only — colormap is NOT remapped) ──
   const [userVmin, setUserVmin] = useState<number | undefined>();
   const [userVmax, setUserVmax] = useState<number | undefined>();
-  const rangeFilterSourceRef = useRef<object>({});
+  // Route the continuous-range predicate through host.* on the docked path; the
+  // host-less floating window publishes to the bus directly under the same
+  // floating instance id as its lasso, so range composes into one clause (§6.3).
+  const publishRange = useCallback(
+    (sql: string | null) => {
+      if (host) host.publishPredicate("range", sql);
+      else selectionBus.publishPredicate(floatingInstanceId(myPanelId), "range", sql);
+    },
+    [host, myPanelId],
+  );
 
   // Reset filter when column changes
   useEffect(() => {
     setUserVmin(undefined);
     setUserVmax(undefined);
-    setBrushPredicate(rangeFilterSourceRef.current, null);
-  }, [colorByColumn]);
+    publishRange(null);
+  }, [colorByColumn, publishRange]);
 
   const {
     data,
@@ -191,16 +204,15 @@ export function ScatterView({
 
   // Continuous range isolation — independent mask; no trajectory guards needed.
   useEffect(() => {
-    const source = rangeFilterSourceRef.current;
     if (colorMode !== "continuous" || !colorByColumn || userVmin === undefined || userVmax === undefined) {
       hostRef.current?.clearContinuousIsolation();
-      setBrushPredicate(source, null);
+      publishRange(null);
       return () => {};
     }
     const col = colorByColumn;
     const vmin = userVmin;
     const vmax = userVmax;
-    setBrushPredicate(source, `"${col}" >= ${vmin} AND "${col}" <= ${vmax}`);
+    publishRange(`"${col}" >= ${vmin} AND "${col}" <= ${vmax}`);
     let cancelled = false;
     const tid = setTimeout(() => {
       coordinator
@@ -221,7 +233,7 @@ export function ScatterView({
       clearTimeout(tid);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [colorMode, colorByColumn, userVmin, userVmax, coordinator]);
+  }, [colorMode, colorByColumn, userVmin, userVmax, coordinator, publishRange]);
 
   // ── Fit-view ──────────────────────────────────────────────────────────────
   const handleFitView = useCallback(() => {
@@ -396,7 +408,18 @@ export function ScatterView({
     hostRef.current?.setContinuousScale(legendState.scale);
   }, [legendState.scale, colorMode, data?.continuous]);
 
+  // External (cross-panel, non-self) selection → GPU dim-mask. Docked path reads
+  // it through the host (BroadcastBus side, §6.7); the floating/host-less path
+  // keeps the legacy direct selectionSyncStore subscription.
   useEffect(() => {
+    const apply = (rowIds: readonly number[] | null) => {
+      if (rowIds === null) hostRef.current?.clearExternalSelection();
+      else hostRef.current?.setExternalSelection(rowIds as number[]);
+    };
+    if (host) {
+      apply(host.externalRowSet()); // seed an already-active selection on mount
+      return host.onExternalRowSet(apply);
+    }
     const sub = selectionSyncStore.subscribe(() => {
       const s = selectionSyncStore.state;
       const isSelf = s.source?.kind === "panel" && s.source.panelId === myPanelId;
@@ -409,7 +432,7 @@ export function ScatterView({
       }
     });
     return () => sub.unsubscribe();
-  }, [myPanelId]);
+  }, [host, myPanelId]);
 
   useEffect(() => {
     const sub = viewSyncStore.subscribe(() => {
@@ -549,18 +572,23 @@ export function ScatterView({
       ref={containerRef}
       className={`relative min-h-0 flex-1 overflow-hidden${trajectory ? "trajectory-active" : ""}`}
     >
-      <ScatterGPUHost
-        ref={hostRef}
-        data={data}
-        positionKey={positionKey}
-        config={configRef.current}
-        onGpuError={setGpuError}
-        onRowIndicesChange={(indices) => {
-          rowIndicesRef.current = indices;
-          setNumPoints(indices.length);
-          onRowIndicesChange?.(indices);
-        }}
-      />
+      {/* GpuDeviceProvider sits BELOW the `!axes` guard above, so an empty scatter
+          acquires zero device. With a host on context (docked path) the GPU host
+          waits for its lease; without one (floating path) it self-acquires. */}
+      <GpuDeviceProvider>
+        <ScatterGPUHost
+          ref={hostRef}
+          data={data}
+          positionKey={positionKey}
+          config={configRef.current}
+          onGpuError={setGpuError}
+          onRowIndicesChange={(indices) => {
+            rowIndicesRef.current = indices;
+            setNumPoints(indices.length);
+            onRowIndicesChange?.(indices);
+          }}
+        />
+      </GpuDeviceProvider>
       {showLoading && (
         <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-background/50 text-sm text-muted-foreground">
           Loading{loadingKey ? ` ${loadingKey.replace(/^X_/, "")}...` : "..."}

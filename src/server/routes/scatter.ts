@@ -314,3 +314,69 @@ export async function handleScatterSelectionDelete(store: EmbeddingStore): Promi
     return Response.json({ error: message }, { status: 500 });
   }
 }
+
+// ─── Per-instance scatter selection (PLUGIN-ARCHITECTURE §6.5) ─────────────────
+// Each plugin instance gets its own `sel_<instanceId>` temp table so two
+// selection-out plugins on the one shared DuckDB connection cannot clobber each
+// other. The legacy fixed `__scatter_selection` (above) stays for the host-less
+// floating scatter and the collections "save from selection" two-step.
+
+/**
+ * Validate a per-instance selection id and map it to a safe SQL table identifier.
+ *
+ * SECURITY: the id is interpolated into a TABLE NAME, which DuckDB cannot
+ * parameter-bind, so it MUST be validated here (server-side, on the decoded path
+ * segment) BEFORE any SQL is built. Returns null for an invalid id — the caller
+ * responds 400 and builds no SQL. Never coerce an arbitrary string.
+ */
+function toSelectionTable(instanceId: string): string | null {
+  if (!/^[A-Za-z0-9_-]{1,64}$/.test(instanceId)) return null;
+  // The regex is the security gate; collapsing `-` to `_` makes the final name a
+  // legal bare SQL identifier (belt-and-suspenders).
+  return `sel_${instanceId.replace(/[^A-Za-z0-9_]/g, "_")}`;
+}
+
+/** Handle POST /api/selection/:instanceId — populate this instance's `sel_<id>` table. */
+export async function handleSelectionPost(req: Request, store: EmbeddingStore, instanceId: string): Promise<Response> {
+  const table = toSelectionTable(instanceId);
+  if (!table) return Response.json({ error: "invalid selection id" }, { status: 400 });
+
+  const parsed = await parseJsonBody(req, ScatterSelectionBodySchema);
+  if (!parsed.ok) return parsed.response;
+  // Zod guarantees every element is a finite non-negative integer, so `${i}` is
+  // safe; `table` is the regex-gated identifier from toSelectionTable above.
+  const rowIndices = parsed.data.row_indices;
+
+  try {
+    await store.execute(`DROP TABLE IF EXISTS ${table}`);
+    if (rowIndices.length > 0) {
+      const batchSize = 1000;
+      await store.execute(`CREATE TEMP TABLE ${table} (row_index UINTEGER)`);
+      for (let start = 0; start < rowIndices.length; start += batchSize) {
+        const end = Math.min(start + batchSize, rowIndices.length);
+        const values = rowIndices
+          .slice(start, end)
+          .map((i) => `(${i})`)
+          .join(", ");
+        await store.execute(`INSERT INTO ${table} VALUES ${values}`);
+      }
+    }
+    return Response.json({ ok: true, table, count: rowIndices.length });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return Response.json({ error: message }, { status: 500 });
+  }
+}
+
+/** Handle DELETE /api/selection/:instanceId — drop this instance's `sel_<id>` table. */
+export async function handleSelectionDelete(store: EmbeddingStore, instanceId: string): Promise<Response> {
+  const table = toSelectionTable(instanceId);
+  if (!table) return Response.json({ error: "invalid selection id" }, { status: 400 });
+  try {
+    await store.execute(`DROP TABLE IF EXISTS ${table}`);
+    return Response.json({ ok: true });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return Response.json({ error: message }, { status: 500 });
+  }
+}

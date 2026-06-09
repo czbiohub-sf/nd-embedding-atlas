@@ -10,15 +10,18 @@ import { FloatingScatterRoot } from "../components/layout/FloatingScatterWindow"
 import { PanelHotkeys } from "../components/layout/PanelHotkeys";
 import { DatasetViewerPiP, ViewerPiP } from "../components/layout/ViewerPiP";
 import { TerminalTable } from "../components/table/TerminalTable";
+import { openPlugin, registerDockApi } from "../core/layout/layout-host";
 import { useDashboard } from "../hooks/useDashboard";
+import { capabilitiesOf } from "../lib/capabilities";
 import { togglePanel } from "../stores/panelRegistry";
 import { openViewerPiP } from "../stores/ViewerPiPStore";
 
 export function DashboardShell() {
   const { state } = useDashboard();
   const { metadata } = state;
-  const hasEmbeddings = Object.keys(metadata.obsm ?? {}).length > 0;
-  const hasPlate = !!metadata.plate;
+  const caps = capabilitiesOf(metadata);
+  const hasEmbeddings = caps.has("obsm");
+  const hasPlate = caps.has("plate-image");
 
   const dockviewApiRef = useRef<DockviewApi | null>(null);
   const [dockviewApi, setDockviewApi] = useState<DockviewApi | null>(null);
@@ -30,24 +33,16 @@ export function DashboardShell() {
     const isNowSet = state.highlightId !== null;
     prevHighlightRef.current = state.highlightId;
     if (!wasNull || !isNowSet) return;
-    if (!state.metadata.plate) return;
+    if (!hasPlate) return;
     const dockedExists = dockviewApi?.getPanel("image-viewer") != null;
     if (!dockedExists) openViewerPiP();
-  }, [state.highlightId, state.metadata.plate, dockviewApi]);
+  }, [state.highlightId, hasPlate, dockviewApi]);
 
   const addScatterPanel = useCallback((obsmKey: string) => {
-    const api = dockviewApiRef.current;
-    if (!api) return;
-    const id = `scatter-${Math.random().toString(36).slice(2, 10)}`;
     const label = obsmKey.replace(/^X_/, "").toUpperCase();
-    const existingScatter = api.panels.find((p) => p.id === "scatter" || p.id.startsWith("scatter-"));
-    api.addPanel({
-      id,
-      component: "scatter",
-      title: `Scatter: ${label}`,
-      params: { initialObsmKey: obsmKey },
-      position: existingScatter ? { referencePanel: existingScatter.id, direction: "right" } : undefined,
-    });
+    // Routed through the unified LayoutHost — identical placement to the prior
+    // inline `addPanel` (multi-instance id, positioned right of any scatter).
+    openPlugin("scatter", { title: `Scatter: ${label}`, params: { initialObsmKey: obsmKey } });
   }, []);
 
   const openScatterPicker = useCallback(() => {
@@ -84,10 +79,11 @@ export function DashboardShell() {
       <div className="relative flex h-full flex-col overflow-hidden bg-background">
         <div className="relative min-h-0 flex-1">
           <DockviewShell
-            hasPlate={!!metadata.plate}
+            hasPlate={hasPlate}
             hasEmbeddings={hasEmbeddings}
             onApiReady={(api) => {
               dockviewApiRef.current = api;
+              registerDockApi(api);
               setDockviewApi(api);
             }}
           />
