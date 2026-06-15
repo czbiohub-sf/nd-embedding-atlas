@@ -3,6 +3,7 @@ import { useSelector } from "@tanstack/react-store";
 import { useEffect, useMemo, useState } from "react";
 import type { ChannelHash } from "../../lib/branded-types";
 import { EMPTY_CHANNEL_HASH, hashChannels } from "../../lib/channel-hash";
+import { resolveContrastWindow, safeContrastLimits } from "../../lib/contrast-window";
 import type { Metadata } from "../../types";
 import { viewerChannelsStore } from "../../stores/ViewerChannelsStore";
 import type { ChannelDef } from "../viewer/ViewerContext";
@@ -13,14 +14,21 @@ export interface GalleryChannels {
   isPending: boolean;
 }
 
-/** Convert metadata plate_channels to ChannelDef[] as fallback when viewer is closed. */
+/**
+ * Convert metadata plate_channels to ChannelDef[] as fallback when viewer is closed.
+ *
+ * Contrast must come from `resolveContrastWindow`, NOT the raw `window.start/end`:
+ * default OME writers emit the full dtype range (e.g. 0–65535), which maps real
+ * fluorescence to ~0 → black crops. This is the same heuristic the live viewer
+ * applies (see useFovLoader), so a fallback crop is contrasted like the viewer.
+ */
 function plateChannelsToDefaults(plateChannels: Metadata["plate_channels"]): ChannelDef[] {
   if (!plateChannels?.length) return [];
   return plateChannels.map((ch) => ({
     label: ch.label,
     color: ch.color,
     visible: true,
-    contrastLimits: [ch.window.start, ch.window.end] as [number, number],
+    contrastLimits: safeContrastLimits(resolveContrastWindow(ch.window)),
     contrastRange: [ch.window.min, ch.window.max] as [number, number],
     blendMode: "additive" as const,
   }));
