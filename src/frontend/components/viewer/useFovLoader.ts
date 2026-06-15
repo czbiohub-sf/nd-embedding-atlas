@@ -269,9 +269,16 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion }: UseFovLoa
           return new ImageLayer({
             source,
             sliceCoords,
+            // The base channel renders with "normal" rather than the default
+            // "none": "none" disables GPU blending, which makes the fragment's
+            // alpha (and therefore layer opacity) a no-op — so visibility
+            // toggling via opacity would silently fail for channel 0. "normal"
+            // is pixel-identical over the cleared (black) framebuffer at full
+            // opacity, and lets opacity=0 hide the layer. Matches the channel's
+            // own ChannelDef blendMode ("normal" for the base in 2D).
             policy,
             channelProps: allChannelProps,
-            blendMode: i > 0 ? "additive" : undefined,
+            blendMode: i > 0 ? "additive" : "normal",
           });
         });
         multiChannel = new MultiChannelLayers(imageLayers);
