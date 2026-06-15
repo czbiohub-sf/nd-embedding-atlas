@@ -7,7 +7,8 @@ import {
   OmeZarrImageSource,
   VolumeLayer,
 } from "@idetik/core";
-import { useCallback, useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
+import { resolveContrastWindow, safeContrastLimits } from "../../lib/contrast-window";
 import type { Metadata } from "../../types";
 import { MultiChannelLayers } from "./MultiChannelLayers";
 import { useViewer } from "./useViewer";
@@ -75,31 +76,6 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion }: UseFovLoa
   const currentGenRef = useRef(viewerState.generation);
   const multiChannelRef = useRef<MultiChannelLayers | null>(null);
   const sourceRef = useRef<OmeZarrImageSource | null>(null);
-
-  /** Ensure contrast limits are strictly increasing — idetik throws if lo >= hi. */
-  const safeContrastLimits = useCallback(
-    (limits: [number, number]): [number, number] => (limits[0] < limits[1] ? limits : [limits[0], limits[0] + 1]),
-    [],
-  );
-
-  /**
-   * Default OME-Zarr writers often emit `window: {start: 0, end: dtypeMax}` —
-   * the full dtype range, not a useful display range. Real fluorescence data
-   * fills <10% of the range, so it renders black at full contrast. When we
-   * detect that pattern (start==min && end==max with a >1000 span), shrink
-   * `end` to 1/16 of the range. Users can still adjust via ChannelControls.
-   */
-  const resolveContrastWindow = useCallback(
-    (window: { start: number; end: number; min: number; max: number } | undefined): [number, number] => {
-      if (!window) return [0, 65535];
-      const { start, end, min, max } = window;
-      const range = max - min;
-      const isUninformativeDefault = start === min && end === max && range > 1000;
-      const resolvedEnd = isUninformativeDefault ? min + range / 16 : end;
-      return [start, resolvedEnd];
-    },
-    [],
-  );
 
   // ── Main FOV load effect ──────────────────────────────────────────
   useEffect(() => {
@@ -269,9 +245,16 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion }: UseFovLoa
           return new ImageLayer({
             source,
             sliceCoords,
+            // The base channel renders with "normal" rather than the default
+            // "none": "none" disables GPU blending, which makes the fragment's
+            // alpha (and therefore layer opacity) a no-op — so visibility
+            // toggling via opacity would silently fail for channel 0. "normal"
+            // is pixel-identical over the cleared (black) framebuffer at full
+            // opacity, and lets opacity=0 hide the layer. Matches the channel's
+            // own ChannelDef blendMode ("normal" for the base in 2D).
             policy,
             channelProps: allChannelProps,
-            blendMode: i > 0 ? "additive" : undefined,
+            blendMode: i > 0 ? "additive" : "normal",
           });
         });
         multiChannel = new MultiChannelLayers(imageLayers);
@@ -344,15 +327,7 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion }: UseFovLoa
       console.log("[useFovLoader] cleanup — cancelling", sourceUrl);
       cancelled = true;
     };
-  }, [
-    sourceUrl,
-    viewerState.initialized,
-    viewMode,
-    viewerState.generation,
-    safeContrastLimits,
-    resolveContrastWindow,
-    viewerState.channels,
-  ]);
+  }, [sourceUrl, viewerState.initialized, viewMode, viewerState.generation, viewerState.channels]);
 
   // ── Cleanup on unmount ─────────────────────────────────────────────
   useEffect(() => {

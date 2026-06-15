@@ -84,6 +84,28 @@ export class MultiChannelLayers implements ChannelsEnabled {
         layer.setChannelProps(channelProps);
       }
     }
+    this.applyImageLayerVisibility(channelProps);
+  }
+
+  /**
+   * Apply per-channel visibility to 2D ImageLayers via layer opacity.
+   *
+   * idetik's 2D `ImageRenderable.getUniforms()` ignores `ChannelProps.visible`
+   * entirely (only the 3D `VolumeRenderable` honors it), so toggling `visible`
+   * has no rendered effect on ImageLayers. Each ImageLayer renders exactly one
+   * channel (slice `c: [i]`), so layer `i` ↔ channel `i`; drive its visibility
+   * through opacity instead. Opacity fully hides under the default `normal`
+   * (base) and `additive` blend modes — both fold src-alpha into the result.
+   *
+   * The single-layer VolumeLayer (3D) is left untouched: its opacity is
+   * volume-wide, and it already honors per-channel `visible` directly.
+   */
+  private applyImageLayerVisibility(channelProps: ChannelProps[]): void {
+    this.layers_.forEach((layer, i) => {
+      if (layer.type === "ImageLayer") {
+        layer.opacity = channelProps[i]?.visible === false ? 0 : 1;
+      }
+    });
   }
 
   resetChannelProps(): void {
