@@ -10,6 +10,7 @@ import {
 } from "@idetik/core";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { clearViewerChannels, publishViewerChannels } from "../../stores/ViewerChannelsStore";
+import { clearViewerZ, publishViewerZ } from "../../stores/ViewerZStore";
 import type { MultiChannelLayers } from "./MultiChannelLayers";
 import { OrbitControls } from "./OrbitControls";
 import {
@@ -339,6 +340,15 @@ export function ViewerProvider({ children, channelInstance = "docked" }: Props) 
       clearViewerChannels(channelInstance);
     };
   }, [channels, channelInstance]);
+
+  // Publish the live Z plane so the gallery can fall back to it when the obs
+  // dataframe has no per-obs `z` column.
+  useEffect(() => {
+    publishViewerZ(channelInstance, zIndex);
+    return () => {
+      clearViewerZ(channelInstance);
+    };
+  }, [zIndex, channelInstance]);
 
   const value = useMemo<ViewerInternalContext>(
     () => ({ state, actions, meta, _canvasRef: canvasRef }),

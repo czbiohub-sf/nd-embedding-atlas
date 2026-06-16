@@ -24,6 +24,8 @@ export interface TrajectoryFrame {
   category?: number;
   rowIndex?: number;
   datasetKey?: string;
+  /** Per-obs Z plane, when the dataset provides one. Crops render at this Z. */
+  z?: number;
 }
 
 export interface TrajectoryData {

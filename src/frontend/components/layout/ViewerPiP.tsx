@@ -39,7 +39,11 @@ function ViewerContent() {
 
   return (
     <div className="h-full w-full overflow-hidden bg-background">
-      <CropViewer channelInstance="pip" />
+      {/* Slot key must match what the galleries read for the single-dataset
+          case (useGalleryChannels(datasetKey ?? "docked", …) in GalleryPane /
+          TrackGallery), so viewer contrast/color/visibility flows to crops.
+          It is also ViewerProvider's own default channelInstance. */}
+      <CropViewer channelInstance="docked" />
     </div>
   );
 }

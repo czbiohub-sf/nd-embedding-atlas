@@ -35,7 +35,7 @@ function createMockState(store: EmbeddingStore): ViewerState {
   return {
     store,
     datasets: new Map([["test_dataset", { path: "/tmp/test.zarr" }]]),
-    spatial: { fov: null, t: null, bbox: null, x: null, y: null },
+    spatial: { fov: null, t: null, bbox: null, x: null, y: null, z: null },
     obsColumns: ["obs_name", "_dataset", "category", "value"],
     port: 0,
     availableObsmKeys: ["X_umap", "X_tsne"],

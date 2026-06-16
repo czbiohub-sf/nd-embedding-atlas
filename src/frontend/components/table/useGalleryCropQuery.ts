@@ -1,5 +1,7 @@
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useSelector } from "@tanstack/react-store";
 import type { ChannelHash } from "../../lib/branded-types";
+import { viewerZStore } from "../../stores/ViewerZStore";
 import type { TrajectoryFrame } from "../../types";
 import type { ChannelDef } from "../viewer/ViewerContext";
 
@@ -18,14 +20,25 @@ interface GalleryCropQueryParams {
 /**
  * Fetches a composited WebP crop from POST /api/crop/{fov_path}.
  *
- * Coordinates are converted from µm to pixels using plate_pixel_scale.
+ * x/y are FOV-local pixel coordinates straight from obs (the obsCoordKey cache,
+ * else /api/obs/{rowIndex}); z is resolved per-obs with a viewer-Z fallback.
  * Blob URL lifecycle is managed at the gallery level (gcTime: 0 + cleanup revocation).
  */
 export function useGalleryCropQuery({ fovName, datasetKey, frame, channels, hash, enabled }: GalleryCropQueryParams) {
   const queryClient = useQueryClient();
 
+  // Z plane: per-obs `z` from the dataframe wins; otherwise fall back to the
+  // viewer's live Z plane (what was set in idetik), then 0. Rounded because the
+  // crop endpoint indexes the zarr Z axis (integer slab).
+  const viewerZ = useSelector(viewerZStore, (s) => s.slots[datasetKey ?? "docked"]);
+  const z = Math.round(frame.z ?? viewerZ ?? 0);
+
   return useQuery<string>({
-    queryKey: ["crop", fovName, frame.t ?? null, hash],
+    // rowIndex is essential: many cells share (fov, t) — a lasso selection
+    // routinely has multiple obs in the same FOV at the same timepoint. Without
+    // the per-obs id they collide on one cache entry and the gallery paints the
+    // first-fetched cell's crop for all of them (it diverges from the viewer).
+    queryKey: ["crop", fovName, frame.t ?? null, z, frame.rowIndex ?? null, hash],
     queryFn: async ({ signal }) => {
       // Resolve FOV-local pixel coordinates.
       // Prefer pre-populated cache (from batch prefetch in TrackGallery);
@@ -51,7 +64,7 @@ export function useGalleryCropQuery({ fovName, datasetKey, frame, channels, hash
 
       const body = {
         t: frame.t,
-        z: 0,
+        z,
         x: xPx,
         y: yPx,
         // half stays at 150 src-pixels (same spatial framing as before so the
@@ -85,7 +98,7 @@ export function useGalleryCropQuery({ fovName, datasetKey, frame, channels, hash
 
       if (!res.ok) {
         const detail = await res.json().catch(() => null);
-        console.error("[useGalleryCropQuery] 422 detail:", detail, "body sent:", body);
+        console.error(`[useGalleryCropQuery] crop failed ${res.status}:`, detail, "body sent:", body);
         throw new Error(`crop fetch failed: ${res.status}`);
       }
 

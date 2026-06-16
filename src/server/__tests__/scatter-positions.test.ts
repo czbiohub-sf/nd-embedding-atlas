@@ -38,7 +38,7 @@ async function buildState(): Promise<{ state: ViewerState; server: Server; port:
   const state: ViewerState = {
     store,
     datasets: new Map([["fixture", { path: FIXTURE }]]),
-    spatial: { fov: null, t: null, bbox: null, x: null, y: null },
+    spatial: { fov: null, t: null, bbox: null, x: null, y: null, z: null },
     obsColumns: ["obs_name"],
     port: 0,
     availableObsmKeys: ["X_pca"],

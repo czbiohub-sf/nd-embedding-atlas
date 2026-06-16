@@ -83,7 +83,7 @@ function makeState(store: EmbeddingStore): ViewerState {
       ["A", { path: "/tmp/A.zarr" }],
       ["B", { path: "/tmp/B.zarr" }],
     ]),
-    spatial: { fov: null, t: null, bbox: null, x: null, y: null },
+    spatial: { fov: null, t: null, bbox: null, x: null, y: null, z: null },
     obsColumns: ["obs_name", "_dataset"],
     port: 0,
     availableObsmKeys: [],
