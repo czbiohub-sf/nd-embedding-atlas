@@ -9,6 +9,7 @@
 import { Maximize2 } from "lucide-react";
 import type { ChannelHash } from "../../lib/branded-types";
 import { cn } from "../../lib/utils";
+import { openDatasetViewerPiP, openViewerPiP } from "../../stores/ViewerPiPStore";
 import type { ChannelDef } from "../viewer/ViewerContext";
 import { useGalleryCropQuery } from "../table/useGalleryCropQuery";
 import type { LassoObs } from "./useLassoSelectionObs";
@@ -37,6 +38,7 @@ export function LassoGalleryCard({ obs, channels, hash, enabled, isHighlighted, 
     emb_y: 0,
     spatial_x: obs.x,
     spatial_y: obs.y,
+    z: obs.z,
     rowIndex: obs.rowIndex,
     datasetKey,
   };
@@ -72,7 +74,23 @@ export function LassoGalleryCard({ obs, channels, hash, enabled, isHighlighted, 
           />
         )}
         <div className="absolute inset-0 flex items-end justify-end bg-gradient-to-t from-black/60 to-transparent p-1.5 opacity-0 transition-opacity group-hover:opacity-100">
-          <Maximize2 className="size-3 text-white/90" />
+          {/* Expand: highlight this obs, then open the floating Image Viewer on
+              it. stopPropagation so it doesn't double-fire the card's onClick. */}
+          <span
+            role="button"
+            tabIndex={-1}
+            aria-label="Open in image viewer"
+            title="Open in image viewer"
+            className="pointer-events-auto cursor-pointer rounded p-0.5 hover:bg-white/15"
+            onClick={(e) => {
+              e.stopPropagation();
+              onClick(); // sets highlight → viewer targets this obs
+              if (datasetKey) openDatasetViewerPiP(datasetKey);
+              else openViewerPiP();
+            }}
+          >
+            <Maximize2 className="size-3 text-white/90" />
+          </span>
         </div>
       </div>
       <div
@@ -97,7 +115,7 @@ export function LassoGalleryCard({ obs, channels, hash, enabled, isHighlighted, 
               isHighlighted ? "text-primary/70" : "text-muted-foreground/70",
             )}
           >
-            T {obs.t}
+            {obs.trackId != null ? `#${obs.trackId} · T ${obs.t}` : `T ${obs.t}`}
           </span>
         </div>
         {obs.datasetKey && (

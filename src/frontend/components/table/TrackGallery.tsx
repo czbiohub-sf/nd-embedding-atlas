@@ -9,10 +9,12 @@
  */
 
 import { useQueryClient } from "@tanstack/react-query";
+import { useSelector } from "@tanstack/react-store";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useEffect, useRef, useState } from "react";
 import { selectAnyTrajectory } from "../../dashboard/DashboardContext";
 import { useDashboard } from "../../hooks/useDashboard";
+import { viewerZStore } from "../../stores/ViewerZStore";
 import { TrackGalleryCard } from "./TrackGalleryCard";
 import { useGalleryChannels } from "./useGalleryChannels";
 import { obsCoordKey } from "./useGalleryCropQuery";
@@ -44,6 +46,10 @@ export function TrackGallery({ activeFrame, onFrameSelect, datasetKey }: TrackGa
   } = useGalleryChannels(resolvedDatasetKey ?? "docked", 300, resolvedPlateChannels);
 
   const queryClient = useQueryClient();
+
+  // Viewer Z-plane fallback for crops (matches useGalleryCropQuery). Per-obs
+  // `z` on the frame wins; otherwise use whatever Z the viewer is showing.
+  const viewerZ = useSelector(viewerZStore, (s) => s.slots[resolvedDatasetKey ?? "docked"]);
 
   // ── Blob URL revocation ─────────────────────────────────────────────────────
   // gcTime=0 evicts queries immediately when no subscriber → "removed" event fires.
@@ -154,7 +160,8 @@ export function TrackGallery({ activeFrame, onFrameSelect, datasetKey }: TrackGa
     for (let i = maxVisible + 1; i <= prefetchEnd; i++) {
       const frame = trajectory.points[i];
       if (!frame) continue;
-      const qKey = ["crop", trajectory.fovName, frame.t ?? null, settledHash];
+      const z = Math.round(frame.z ?? viewerZ ?? 0);
+      const qKey = ["crop", trajectory.fovName, frame.t ?? null, z, frame.rowIndex ?? null, settledHash];
       if (queryClient.getQueryData(qKey)) continue; // already cached
 
       const cachedObs =
@@ -166,7 +173,7 @@ export function TrackGallery({ activeFrame, onFrameSelect, datasetKey }: TrackGa
         queryFn: async ({ signal }) => {
           const body = {
             t: frame.t,
-            z: 0,
+            z,
             x: Math.round(cachedObs.x),
             y: Math.round(cachedObs.y),
             half: 150,
@@ -196,7 +203,7 @@ export function TrackGallery({ activeFrame, onFrameSelect, datasetKey }: TrackGa
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, trajectory, settledChannels, settledHash, colCount, queryClient, isPending]);
+  }, [items, trajectory, settledChannels, settledHash, colCount, queryClient, isPending, viewerZ]);
 
   if (!trajectory) return null;
 

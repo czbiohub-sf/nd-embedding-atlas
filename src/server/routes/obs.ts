@@ -22,7 +22,7 @@ function scalarToString(value: unknown): string {
 /**
  * Handle POST /api/obs/batch with body `{ row_indices: number[] }`.
  *
- * Returns spatial metadata (x, y, fov, t) per observation. POST not GET so
+ * Returns spatial metadata (x, y, fov, t, z) per observation. POST not GET so
  * a 5k-row lasso selection doesn't blow past Bun's request header size cap.
  */
 export async function handleObsBatch(req: Request, state: ViewerState): Promise<Response> {
@@ -59,23 +59,32 @@ export async function handleObsBatch(req: Request, state: ViewerState): Promise<
   try {
     const placeholders = rowIndices.join(", ");
     const isMulti = state.datasets.size > 1;
+    const hasTrack = state.obsColumns.includes("track_id");
     const selectCols = [`"${sp.x}"`, `"${sp.y}"`];
     if (sp.fov) selectCols.push(`"${sp.fov}"`);
     if (sp.t) selectCols.push(`"${sp.t}"`);
+    if (sp.z) selectCols.push(`"${sp.z}"`);
+    if (hasTrack) selectCols.push(`"track_id"`);
     if (isMulti) selectCols.push("_dataset");
 
     const rows = await state.store.queryJson(
       `SELECT __row_index__, ${selectCols.join(", ")} FROM obs_base WHERE __row_index__ IN (${placeholders})`,
     );
 
-    const result: Record<string, { x: number; y: number; fov?: string; t?: number; dataset?: string }> = {};
+    const result: Record<
+      string,
+      { x: number; y: number; fov?: string; t?: number; z?: number; track_id?: number; dataset?: string }
+    > = {};
     for (const row of rows) {
-      const entry: { x: number; y: number; fov?: string; t?: number; dataset?: string } = {
-        x: Number(row[sp.x]),
-        y: Number(row[sp.y]),
-      };
+      const entry: { x: number; y: number; fov?: string; t?: number; z?: number; track_id?: number; dataset?: string } =
+        {
+          x: Number(row[sp.x]),
+          y: Number(row[sp.y]),
+        };
       if (sp.fov && row[sp.fov] != null) entry.fov = scalarToString(row[sp.fov]);
       if (sp.t && row[sp.t] != null) entry.t = Number(row[sp.t]);
+      if (sp.z && row[sp.z] != null) entry.z = Number(row[sp.z]);
+      if (hasTrack && row.track_id != null) entry.track_id = Number(row.track_id);
       if (isMulti && row._dataset != null) entry.dataset = scalarToString(row._dataset);
       result[String(row.__row_index__)] = entry;
     }
@@ -98,11 +107,14 @@ export async function handleObsInfo(rowIndex: number, state: ViewerState): Promi
   if (state.datasets.size > 1) {
     selectCols.push("_dataset");
   }
+  const hasTrack = state.obsColumns.includes("track_id");
   if (sp?.fov) selectCols.push(sp.fov);
   if (sp?.t) selectCols.push(sp.t);
   if (sp?.bbox) selectCols.push(sp.bbox);
   if (sp?.x) selectCols.push(sp.x);
   if (sp?.y) selectCols.push(sp.y);
+  if (sp?.z) selectCols.push(sp.z);
+  if (hasTrack) selectCols.push("track_id");
 
   if (selectCols.length === 0) {
     return Response.json({ error: "No spatial columns configured" }, { status: 404 });
@@ -124,6 +136,14 @@ export async function handleObsInfo(rowIndex: number, state: ViewerState): Promi
     }
 
     response.t = sp?.t && row[sp.t] != null ? Number(row[sp.t]) : 0;
+
+    if (sp?.z && row[sp.z] != null) {
+      response.z = Number(row[sp.z]);
+    }
+
+    if (hasTrack && row.track_id != null) {
+      response.track_id = Number(row.track_id);
+    }
 
     if (sp?.bbox && row[sp.bbox] != null) {
       const bbox = parseBbox(String(row[sp.bbox]));

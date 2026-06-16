@@ -31,6 +31,8 @@ interface CropChannel {
   lo: number;
   hi: number;
   color: string;
+  /** Compositing mode (matches viewer's blendMode). Defaults to "additive". */
+  blend?: string;
 }
 
 interface CropObsRequest {
@@ -112,9 +114,17 @@ async function readSlab2D(
   return out;
 }
 
+// Warn at most once per FOV when its requested t/z is out of range, so the log
+// shows which FOV's obs t/z doesn't line up with the image dims (e.g. obs `z`
+// is a physical coordinate, not a Z-plane index) without flooding per-crop.
+const clampWarned = new Set<string>();
+
 async function renderOne(
   arr: zarr.Array<zarr.DataType>,
+  fovPath: string,
+  nT: number,
   nC: number,
+  nZ: number,
   nY: number,
   nX: number,
   channels: CropChannel[],
@@ -123,6 +133,25 @@ async function renderOne(
   size: number,
   quality: number,
 ): Promise<Uint8Array> {
+  // Resolve t/z into the FOV's actual bounds, rendering the nearest valid
+  // frame/plane instead of throwing "index out of bounds".
+  //
+  // 2D image (nZ=1): obs `z` is not a plane index here (e.g. a physical/global
+  // z) — collapse to the single plane silently. Only treat obs `z` as a plane
+  // index for genuine 3D stacks, and only then is an out-of-range z an anomaly
+  // worth flagging. `t` is always a frame index, so an out-of-range t is.
+  const t = req.t < 0 ? 0 : req.t >= nT ? nT - 1 : req.t;
+  const z = nZ <= 1 ? 0 : req.z < 0 ? 0 : req.z >= nZ ? nZ - 1 : req.z;
+  const tClamped = t !== req.t;
+  const zClamped = nZ > 1 && z !== req.z;
+  if ((tClamped || zClamped) && !clampWarned.has(fovPath)) {
+    clampWarned.add(fovPath);
+    const parts: string[] = [];
+    if (tClamped) parts.push(`t=${req.t}→${t} (nT=${nT})`);
+    if (zClamped) parts.push(`z=${req.z}→${z} (nZ=${nZ})`);
+    console.warn(`[crop] obs index out of range for fov=${fovPath}: ${parts.join(", ")} — clamped to nearest valid.`);
+  }
+
   const y0 = Math.max(0, req.y - half);
   const y1 = Math.min(nY, req.y + half);
   const x0 = Math.max(0, req.x - half);
@@ -141,9 +170,9 @@ async function renderOne(
     // channels whose cIndex falls outside the FOV's C dimension.
     const c = ch.cIndex ?? i;
     if (c < 0 || c >= nC) continue;
-    channelReqs.push({ cIndex: c, visible: ch.visible, lo: ch.lo, hi: ch.hi, color: ch.color });
+    channelReqs.push({ cIndex: c, visible: ch.visible, lo: ch.lo, hi: ch.hi, color: ch.color, blend: ch.blend });
     slabPromises.push(
-      ch.visible ? readSlab2D(arr, req.t, c, req.z, y0, y1, x0, x1) : Promise.resolve(new Float32Array(srcH * srcW)),
+      ch.visible ? readSlab2D(arr, t, c, z, y0, y1, x0, x1) : Promise.resolve(new Float32Array(srcH * srcW)),
     );
   }
   const slabs = await Promise.all(slabPromises);
@@ -169,9 +198,7 @@ async function handleTask(task: CropTaskMessage): Promise<void> {
   }
 
   // Shape: [T, C, Z, Y, X] per OME-Zarr.
-  const [_t, nC, _z, nY, nX] = arr.shape;
-  void _t;
-  void _z;
+  const [nT, nC, nZ, nY, nX] = arr.shape;
 
   // Pre-sort requests by (t, y, x) so chunk reads land in spatial order →
   // higher hit rate against zarrita's internal chunk cache.
@@ -182,7 +209,7 @@ async function handleTask(task: CropTaskMessage): Promise<void> {
   // it's encoded.
   for (const req of sorted) {
     try {
-      const bytes = await renderOne(arr, nC, nY, nX, channels, req, half, size, quality);
+      const bytes = await renderOne(arr, fovPath, nT, nC, nZ, nY, nX, channels, req, half, size, quality);
       // Transfer the underlying ArrayBuffer so the bytes don't get copied
       // across the worker boundary. Per Bun docs (web-compatible Worker
       // API), postMessage takes `(data, transferList)`.

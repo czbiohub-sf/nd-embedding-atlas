@@ -50,6 +50,7 @@ export async function handleCrop(fovPath: string, req: Request, state: ViewerSta
     lo: ch.lo ?? 0,
     hi: ch.hi ?? 1,
     color: ch.color ?? "FFFFFF",
+    blend: ch.blend,
   }));
 
   try {

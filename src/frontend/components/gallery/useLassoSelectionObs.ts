@@ -25,6 +25,10 @@ export interface LassoObs {
   t: number;
   x: number;
   y: number;
+  /** Per-obs Z plane, when the dataset has a `z` spatial column. */
+  z: number | undefined;
+  /** Track id, when the dataset has a `track_id` column (shown on the card). */
+  trackId: number | undefined;
   /** Dataset key in multi-dataset mode; undefined for single-dataset stores. */
   datasetKey: string | undefined;
 }
@@ -74,7 +78,7 @@ export function useLassoSelectionObs(): UseLassoSelectionObsResult {
       if (!r.ok) throw new Error(`obs/batch failed: ${r.status}`);
       const data = (await r.json()) as Record<
         string,
-        { x: number; y: number; fov?: string; t?: number; dataset?: string }
+        { x: number; y: number; fov?: string; t?: number; z?: number; track_id?: number; dataset?: string }
       >;
 
       // Pre-populate the per-obs coord cache that useGalleryCropQuery falls
@@ -94,6 +98,8 @@ export function useLassoSelectionObs(): UseLassoSelectionObsResult {
             t: entry.t ?? 0,
             x: entry.x,
             y: entry.y,
+            z: entry.z,
+            trackId: entry.track_id,
             datasetKey: entry.dataset,
           };
         })

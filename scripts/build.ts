@@ -215,7 +215,7 @@ const DUCKDB_PLATFORM_EXTERNALS = ALL_DUCKDB_TARGETS.filter((p) => p !== matchin
 // recursively resolves their imports. Bun emits each as `<name>.js` next
 // to the main entry inside $bunfs; parallel-reader.ts switches its URL
 // extension to match when running compiled.
-const WORKER_ENTRYPOINTS = ["./src/zarr/column-worker.ts"];
+const WORKER_ENTRYPOINTS = ["./src/zarr/column-worker.ts", "./src/server/crop-worker.ts"];
 
 const compileArgs = [
   "bun",

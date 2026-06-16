@@ -32,7 +32,7 @@ export interface FovGroupRequest {
   quality: number;
   size: number;
   half: number;
-  channels: { visible: boolean; lo: number; hi: number; color: string }[];
+  channels: { visible: boolean; lo: number; hi: number; color: string; blend?: string }[];
   requests: { rowIndex: number; t: number; z: number; x: number; y: number }[];
 }
 
