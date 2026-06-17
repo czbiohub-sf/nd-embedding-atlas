@@ -62,8 +62,13 @@ jobs:
       # into src/cli/version.ts before compiling. sync-version's semver check
       # fails the build on a mistyped tag (replaces the old tag==package.json
       # guard). No package.json bump, no commit-back.
+      # Pass the tag through env (not inline ${{ }} in run) — git tag names can
+      # contain shell metacharacters; this avoids a template-injection surface
+      # and matches the env-var pattern used elsewhere in this workflow.
       - name: Stamp version from release tag
-        run: bun run scripts/sync-version.ts "${{ github.event.release.tag_name }}"
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: bun run scripts/sync-version.ts "$RELEASE_TAG"
 
       - name: Compile single-file binary (libduckdb embedded)
         env:
@@ -123,13 +128,15 @@ jobs:
       # updates that existing release, attaching the binaries + SHA256SUMS +
       # install.sh. Channel + "Latest" badge mirror the author's pre-release
       # checkbox (github.event.release.prerelease) — CI echoes the UI choice,
-      # never overrides it. Leave the notes blank in the UI and
-      # generate_release_notes fills them.
+      # never overrides it. append_body keeps whatever notes the author typed
+      # in the UI (or generate_release_notes produced) and appends the install
+      # instructions below, rather than replacing them.
       - name: Attach binaries to the release
         uses: softprops/action-gh-release@v3
         with:
           files: dist/*
           generate_release_notes: true
+          append_body: true
           fail_on_unmatched_files: true
           prerelease: ${{ github.event.release.prerelease }}
           make_latest: ${{ !github.event.release.prerelease }}
@@ -137,7 +144,7 @@ jobs:
             ## Install
 
             ```bash
-            curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/scripts/install.sh | sh
+            curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/${{ github.event.release.tag_name }}/scripts/install.sh | sh
             ```
 
             Or download a binary directly from the asset list below and verify
@@ -185,7 +192,7 @@ jobs:
       - name: Update manifest.json["pre-release"]
         id: bump
         env:
-          NEW_TAG: ${{ github.ref_name }}
+          NEW_TAG: ${{ github.event.release.tag_name }}
         run: |
           if [ ! -f manifest.json ]; then
             echo "::warning::manifest.json not on main yet — skipping pre-release pointer bump"
@@ -208,11 +215,11 @@ jobs:
           branch: chore/manifest-prerelease-bump
           base: main
           delete-branch: true
-          commit-message: "chore(manifest): bump pre-release → ${{ github.ref_name }}"
-          title: "chore(manifest): bump pre-release → ${{ github.ref_name }}"
+          commit-message: "chore(manifest): bump pre-release → ${{ github.event.release.tag_name }}"
+          title: "chore(manifest): bump pre-release → ${{ github.event.release.tag_name }}"
           body: |
             Automated by `release.yml` after publishing
-            [`${{ github.ref_name }}`](https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}).
+            [`${{ github.event.release.tag_name }}`](https://github.com/${{ github.repository }}/releases/tag/${{ github.event.release.tag_name }}).
 
             Once merged, `ndea update --channel pre-release` will resolve
             to this tag.
