@@ -22,6 +22,7 @@ const dimensionBadgeVariants = cva(
         obs: "border-blue-500/30 bg-blue-500/20 text-blue-400",
         var: "border-emerald-500/30 bg-emerald-500/20 text-emerald-400",
         accent: "border-primary/30 bg-primary/15 text-primary",
+        amber: "border-wire-sel/35 bg-wire-sel/15 text-amber-400",
         muted: "border-border bg-muted text-muted-foreground",
       },
     },

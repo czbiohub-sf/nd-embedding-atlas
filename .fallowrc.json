@@ -12,5 +12,16 @@
     "scripts/dev.ts",
     "src/**/__tests__/**/*.test.ts"
   ],
-  "ignorePatterns": ["site/**", "dist/**", ".fallow/**", ".bunli/**", ".source/**"]
+  "ignorePatterns": [
+    "site/**",
+    "dist/**",
+    ".fallow/**",
+    ".bunli/**",
+    ".source/**",
+    "src/frontend/ochre/**"
+  ],
+  "ignoreExportsUsedInFile": true,
+  "rules": {
+    "unused-class-members": "off"
+  }
 }

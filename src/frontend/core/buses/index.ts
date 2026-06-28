@@ -1,5 +1,5 @@
 /**
- * Cross-view buses (PLUGIN-ARCHITECTURE §6) — the thin seams a `PluginHost`
+ * Cross-view buses (PLUGIN-ARCHITECTURE §6) — the thin seams a `NodeHost`
  * maps its facets onto. Each wraps exactly one of today's TanStack stores with
  * zero behavior change; `useDashboardHostShim` composes them into a live host.
  */

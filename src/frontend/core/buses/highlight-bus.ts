@@ -1,7 +1,7 @@
 /**
  * HighlightBus (PLUGIN-ARCHITECTURE §6.7) — the single source of truth for the
  * highlighted row id. A broadcast, idempotent, last-write-wins bus — NOT a graph
- * edge (acyclicity §6.8 only concerns the selection/predicate/rowset edges).
+ * edge (acyclicity §6.8 only concerns the pred/sel/focus edges).
  *
  * `DashboardProvider` mirrors `store` into `DashboardState.highlightId`, so the
  * many non-plugin readers (scatter, gallery, crop viewer, PiP) keep reading core

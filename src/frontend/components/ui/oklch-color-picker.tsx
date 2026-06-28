@@ -1,5 +1,5 @@
 import { Slider } from "@/components/ui/slider";
-import type { OklchColor } from "@/lib/color-conversions";
+import type { OklchColor } from "@/lib/color/color-conversions";
 import { cn } from "@/lib/utils";
 
 interface OklchColorPickerProps {

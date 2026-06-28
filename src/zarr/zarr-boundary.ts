@@ -8,7 +8,7 @@
  * the intent is explicit and future zarrita type changes break in one file.
  */
 
-import type { AsyncReadable, Readable } from "zarrita";
+import type { AsyncReadable, Mutable, Readable } from "zarrita";
 
 /**
  * Wrap our own store (`BunFileStore`, `FetchStore` mock, etc.) as the
@@ -17,6 +17,16 @@ import type { AsyncReadable, Readable } from "zarrita";
  */
 export function asReadable(store: AsyncReadable): Readable {
   return store as unknown as Readable;
+}
+
+/**
+ * Wrap a writable store (`BunFileStore` with `set`) as zarrita's `Mutable`
+ * (Readable + Writeable) so `zarr.create()` / `zarr.set()` accept it. Safe
+ * because we implement the `.get`/`.set` methods zarrita calls; the structural
+ * mismatch is only zarrita's branded `AbsolutePath` key type.
+ */
+export function asMutable(store: AsyncReadable): Mutable {
+  return store as unknown as Mutable;
 }
 
 /**

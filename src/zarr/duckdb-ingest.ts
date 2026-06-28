@@ -112,10 +112,7 @@ export async function ingestDataFrames(
 
     for (let r = 0; r < n; r++) {
       if (axis) appender.appendInteger(globalIndex++);
-      if (includeName) {
-        const name = typeof idx === "object" && "length" in idx ? String(idx[r]) : "";
-        appender.appendVarchar(name);
-      }
+      if (includeName) appender.appendVarchar(indexLabel(idx, r));
       if (hasDatasetCol) appender.appendVarchar(datasetName ?? "");
       for (let c = 0; c < columnOrder.length; c++) {
         const col = columnRefs[c];
@@ -195,6 +192,25 @@ function stringifyPrimitive(val: unknown): string {
   if (typeof val === "string") return val;
   if (typeof val === "number" || typeof val === "bigint" || typeof val === "boolean") return String(val);
   return JSON.stringify(val) ?? "";
+}
+
+/**
+ * Read the DataFrame index label at row `r` as a string (the source of the
+ * `{axis}_name` identity column).
+ *
+ * The index may be a plain `string[]`/`Int32Array` (raw `[r]` works) OR a
+ * wrapper class — `SimpleNullable` (from a `nullable-string-array` index) or
+ * `SimpleCategorical` — whose values are ONLY reachable via `.at(r)`; raw `[r]`
+ * on the wrapper is `undefined`. That mismatch silently wrote `""` for every
+ * `obs_name`, which then made `commitObsColumns` (alignment by obs_name vs the
+ * on-disk `_index`) match nothing → an all-NA written-back column.
+ */
+function indexLabel(idx: unknown, r: number): string {
+  const v =
+    idx != null && typeof (idx as { at?: unknown }).at === "function"
+      ? (idx as { at(i: number): unknown }).at(r)
+      : (idx as ArrayLike<unknown> | undefined)?.[r];
+  return v == null ? "" : stringifyPrimitive(v);
 }
 
 export function appendArrowValue(appender: AppenderLike, val: unknown, type: unknown): void {
@@ -419,7 +435,7 @@ export async function ingestDataFramesStreaming(
     const appender = await conn.createAppender(tableName);
     for (let r = 0; r < n; r++) {
       if (axis) appender.appendInteger(globalIndex++);
-      if (includeName) appender.appendVarchar(String(idx[r] ?? ""));
+      if (includeName) appender.appendVarchar(indexLabel(idx, r));
       if (hasDatasetCol) appender.appendVarchar(datasetName ?? "");
       for (let c = 0; c < appenders.length; c++) {
         const ap = appenders[c];
@@ -473,7 +489,7 @@ export async function ingestDataFrameChunked(
     const idx = batch.index as unknown as ArrayLike<unknown>;
     for (let r = 0; r < batch.n; r++) {
       if (axis) appender.appendInteger(globalIndex++);
-      if (includeName) appender.appendVarchar(stringifyPrimitive(idx[r] ?? ""));
+      if (includeName) appender.appendVarchar(indexLabel(idx, r));
       for (let c = 0; c < specs.length; c++) specs[c].append(appender, r);
       appender.endRow();
     }

@@ -1,6 +1,6 @@
 /**
  * useDashboardHostShim (PLUGIN-ARCHITECTURE §4.3, §12) — the bridge that
- * assembles a concrete `PluginHost` from today's infrastructure: `useDashboard`
+ * assembles a concrete `NodeHost` from today's infrastructure: `useDashboard`
  * (coordinator / table / metadata / highlight) + the cross-view buses +
  * `deviceBroker`. It is the consumer that proves the contract types compose
  * end-to-end; `<PluginMount>` (Phase 1) uses it to build a host per instance.
@@ -23,7 +23,7 @@
  */
 
 import { useCallback } from "react";
-import type { MosaicClient } from "@uwdata/mosaic-core";
+import type { MosaicClient, Selection } from "@uwdata/mosaic-core";
 import { useDashboard } from "@/hooks/useDashboard";
 import { broadcastBus, highlightBus, renderBus, selectionBus, viewSyncBus } from "@/core/buses";
 import { deviceBroker, type DeviceLease } from "@/core/gpu/device-broker";
@@ -31,27 +31,33 @@ import type {
   DataApi,
   HighlightApi,
   PanelContext,
-  PluginHost,
-  PluginInstanceId,
+  NodeHost,
+  NodeInstanceId,
   RenderApi,
   UiApi,
   ViewSyncApi,
-} from "@/core/plugin/host";
-import type { MountReason, PluginMeta } from "@/core/plugin/types";
+} from "@/core/node/host";
+import type { MountReason, NodeMeta } from "@/core/node/types";
 import type { SelectionFacet } from "@/core/buses";
 
 export interface HostInit<Config, Options> {
-  instanceId: PluginInstanceId;
-  meta: PluginMeta;
+  instanceId: NodeInstanceId;
+  meta: NodeMeta;
   reason: MountReason;
   config: Config;
   options: Options;
   /** Container handle (Dockview panel api, float window, …) — §4.3. */
   panel: PanelContext;
+  /**
+   * Per-instance input Selection override (§6.1). Dockview/float mounts omit it
+   * and share the dashboard `brushSelection`; a graph node passes its OWN
+   * Selection so an edge predicate filters only that node, not the whole app.
+   */
+  inputSelection?: Selection;
 }
 
 export interface HostHandle<Config, Options> {
-  host: PluginHost<Config, Options>;
+  host: NodeHost<Config, Options>;
   /** Owned by `<PluginMount>`. Idempotent full teardown. */
   dispose(): void;
 }
@@ -62,15 +68,17 @@ const notify = (msg: string, level: "info" | "warn" | "error" = "info"): void =>
   else console.info(msg);
 };
 
-/** Build a live `PluginHost` factory bound to the current dashboard context. */
+/** Build a live `NodeHost` factory bound to the current dashboard context. */
 export function useDashboardHostShim() {
-  const { state, meta } = useDashboard();
+  const { state, meta, actions } = useDashboard();
   const { coordinator, brushSelection, table } = meta;
   const { metadata } = state;
+  const { refreshMetadata } = actions;
 
   return useCallback(
     <Config, Options>(init: HostInit<Config, Options>): HostHandle<Config, Options> => {
       const { instanceId, meta: pluginMeta, reason, options, panel } = init;
+      const inputSelection = init.inputSelection ?? brushSelection;
       const controller = new AbortController();
       const disposers: (() => void)[] = [];
       let config = init.config;
@@ -98,6 +106,9 @@ export function useDashboardHostShim() {
         toggleLock() {
           viewSyncBus.toggleLock();
         },
+        subscribe(cb) {
+          return viewSyncBus.subscribe(instanceId, cb);
+        },
       };
 
       const highlight: HighlightApi = {
@@ -106,6 +117,10 @@ export function useDashboardHostShim() {
         },
         set(id) {
           highlightBus.set(id);
+        },
+        subscribe(cb) {
+          const sub = highlightBus.store.subscribe(() => cb(highlightBus.get()));
+          return () => sub.unsubscribe();
         },
       };
 
@@ -150,9 +165,46 @@ export function useDashboardHostShim() {
               },
             }
           : {}),
+        // "annotate" — create/list user annotation columns + stamp a label onto a
+        // predicate's rows (the node-graph Annotate node). `/api/*` lives in core.
+        ...(pluginMeta.capabilities.has("annotate")
+          ? {
+              async listAnnotationColumns() {
+                const res = await fetch("/api/annotations/columns");
+                const body = (await res.json()) as { columns?: { name: string; dtype: string }[] };
+                return body.columns ?? [];
+              },
+              async createAnnotationColumn(name: string, dtype: "categorical" | "string" | "integer" = "categorical") {
+                const res = await fetch("/api/annotations/columns", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ name, dtype }),
+                });
+                if (!res.ok)
+                  throw new Error(((await res.json()) as { error?: string }).error ?? `create failed (${res.status})`);
+                // Surface the new column in the Table + pickers (obs_columns refetch).
+                await refreshMetadata();
+              },
+              async writeAnnotationByPredicate(column: string, label: string, predicate: string) {
+                const res = await fetch("/api/annotations/values", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ column, label, predicate }),
+                });
+                if (!res.ok)
+                  throw new Error(((await res.json()) as { error?: string }).error ?? `write failed (${res.status})`);
+                const out = (await res.json()) as { n: number };
+                // New columns appear in the Table (obs_columns refetch → the table's
+                // query SQL changes → re-query shows the values). ponytail: re-labeling
+                // an ALREADY-shown column still needs a Mosaic cache-bust — not here.
+                await refreshMetadata();
+                return out;
+              },
+            }
+          : {}),
       };
 
-      const host: PluginHost<Config, Options> = {
+      const host: NodeHost<Config, Options> = {
         instanceId,
         meta: pluginMeta,
         reason,
@@ -166,7 +218,7 @@ export function useDashboardHostShim() {
           return unregister;
         },
 
-        inputSelection: brushSelection,
+        inputSelection,
         externalRowSet() {
           // Cross-panel selection-in is the BroadcastBus side (§6.7), NOT the
           // SelectionBus (whose externalRowSet is the Phase-5 xyflow-edge stub).
@@ -243,6 +295,6 @@ export function useDashboardHostShim() {
 
       return { host, dispose };
     },
-    [coordinator, brushSelection, table, metadata],
+    [coordinator, brushSelection, table, metadata, refreshMetadata],
   );
 }

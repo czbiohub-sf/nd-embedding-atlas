@@ -11,6 +11,7 @@ import path from "node:path";
 import { existsSync } from "node:fs";
 import { DuckDBInstance } from "@duckdb/node-api";
 import { BunFileStore, ingestDataFrames, LazyDataFrame, openAnnData } from "../index.ts";
+import { SimpleNullable } from "../helpers.ts";
 import { EmbeddingStore } from "../../server/store.ts";
 import { handleMosaicQuery } from "../../server/mosaic.ts";
 import type { AnnDataFrame } from "../types.ts";
@@ -112,6 +113,39 @@ describe("AnnData class — symmetric obs/var + toDuckDB", () => {
       const r = idxRange.getRowObjectsJson()[0] as { lo: number | bigint; hi: number | bigint };
       expect(Number(r.lo)).toBe(0);
       expect(Number(r.hi)).toBe(3);
+    } finally {
+      conn.closeSync();
+      db.closeSync();
+    }
+  });
+
+  test("ingestDataFrames reads obs_name from a nullable-string-array index (not empty)", async () => {
+    // Regression: a `nullable-string-array` index arrives as a SimpleNullable
+    // wrapper whose values are reachable only via `.at()` — raw `idx[r]` is
+    // undefined. The name-column emission used `idx[r]`, so obs_name became ""
+    // for every row, and annotation write-back (aligns by obs_name) then wrote
+    // an all-NA column.
+    const labels = ["c0", "c1", "c2"];
+    const df = new LazyDataFrame({
+      index: new SimpleNullable(labels, new Uint8Array(labels.length)), // mask all 0 = all valid
+      columns: new Map<string, number[]>([["score", [0.1, 0.2, 0.3]]]),
+      columnOrder: ["score"],
+      column(n: string): unknown {
+        return (this as { columns: Map<string, unknown> }).columns.get(n);
+      },
+      [Symbol.iterator]() {
+        return [][Symbol.iterator]();
+      },
+    } as unknown as AnnDataFrame);
+
+    const db = await DuckDBInstance.create(":memory:");
+    const conn = await db.connect();
+    try {
+      await ingestDataFrames(conn, "t_nullable_idx", [df], { axis: "obs", includeNameColumn: true });
+      const rows = (
+        await conn.runAndReadAll("SELECT obs_name FROM t_nullable_idx ORDER BY __obs_index__")
+      ).getColumnsJS()[0] as string[];
+      expect(rows).toEqual(labels); // was ["", "", ""] before the fix
     } finally {
       conn.closeSync();
       db.closeSync();

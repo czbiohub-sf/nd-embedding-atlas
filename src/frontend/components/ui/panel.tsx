@@ -27,8 +27,7 @@ const panelVariants = cva("overflow-hidden rounded-lg border", {
   variants: {
     variant: {
       solid: "border-border bg-card text-card-foreground",
-      glass:
-        "border-glass-border bg-glass-bg text-card-foreground backdrop-blur-[var(--blur-glass)] backdrop-saturate-150",
+      glass: "glass text-card-foreground",
       ghost: "border-transparent bg-transparent text-card-foreground",
     },
     depth: {

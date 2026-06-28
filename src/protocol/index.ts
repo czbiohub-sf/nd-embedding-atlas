@@ -594,3 +594,98 @@ export interface NdeaProtocol extends ProtocolMap {
     res: { status: string; output_path?: string; n_obs?: number; error?: string };
   };
 }
+
+// ─── Annotation schemas ──────────────────────────────────────────────────────
+
+/**
+ * Annotation/var column names flow into SQL as quoted identifiers. Unlike
+ * TRUST_SAFE_RE (render-safety), this MUST exclude characters that are
+ * dangerous inside a SQL identifier — above all the double-quote, which could
+ * break out of `"…"` quoting. Allow letters, digits, space, underscore, dot,
+ * hyphen; require a leading letter/digit/underscore. The SQL sink also escapes
+ * via quoteIdent() (defense in depth), but rejecting at the door keeps weird
+ * names out of table-name derivation and downstream tooling.
+ */
+const COLUMN_NAME_RE = /^[A-Za-z0-9_][A-Za-z0-9 _.-]*$/;
+
+/**
+ * Annotation column data type. `categorical`/`string` both stage as TEXT in
+ * DuckDB (they differ only in on-disk AnnData encoding + how the frontend
+ * colors them); `integer` stages as INTEGER and colors continuously.
+ */
+export const AnnotationDtypeSchema = z.enum(["categorical", "string", "integer"]);
+export type AnnotationDtype = z.infer<typeof AnnotationDtypeSchema>;
+
+/** POST /api/annotations/columns — create a new annotation column. */
+export const AnnotationColumnBodySchema = z.object({
+  name: z.string().min(1).max(200).regex(COLUMN_NAME_RE, "Invalid character in column name"),
+  dtype: AnnotationDtypeSchema.default("categorical"),
+});
+export type AnnotationColumnBody = z.infer<typeof AnnotationColumnBodySchema>;
+
+/** One value row for POST /api/annotations/values (explicit rows path). */
+export const AnnotationValueRowSchema = z.object({
+  rowIndex: NonNegativeInt,
+  datasetKey: z.string().min(1).max(256),
+  obsName: z.string().min(1).max(512),
+  value: z.string().nullable(),
+});
+export type AnnotationValueRow = z.infer<typeof AnnotationValueRowSchema>;
+
+/**
+ * POST /api/annotations/values — write values into an annotation column.
+ * Exactly one source:
+ *   - `rows`               explicit row-index list (per-cell edits)
+ *   - `collectionId`       promote a saved collection (label = collection name)
+ *   - `fromScatterSelection` stamp the staged `__scatter_selection` (lasso) —
+ *                          the client POSTs row indices to /api/scatter-selection
+ *                          first, then the server resolves obs identity by JOIN.
+ *   - `predicate`          stamp `label` onto every obs matching a SQL WHERE
+ *                          fragment (the node-graph Annotate node's batch door).
+ */
+export const WriteAnnotationValuesBodySchema = z.object({
+  column: z.string().min(1).max(200).regex(COLUMN_NAME_RE, "Invalid character in column name"),
+  rows: z.array(AnnotationValueRowSchema).max(2_000_000).optional(),
+  collectionId: z.string().optional(),
+  fromScatterSelection: z.boolean().optional(),
+  /**
+   * Stamp `label` onto every obs matching this SQL predicate. Trust model =
+   * `/api/annotations/export`: a single-user local tool, so the client's Mosaic
+   * WHERE-fragment is interpolated server-side against the `dataset` VIEW.
+   */
+  predicate: z.string().min(1).optional(),
+  /** Label applied to a collectionId promotion (defaults to collection name) or a selection/predicate stamp. */
+  label: z.string().min(1).max(200).optional(),
+});
+export type WriteAnnotationValuesBody = z.infer<typeof WriteAnnotationValuesBodySchema>;
+
+/** Row scope for the annotation export: all obs, the active filter, or a collection. */
+export const ExportScopeSchema = z.union([
+  z.object({ kind: z.literal("all") }),
+  z.object({ kind: z.literal("filter"), predicate: z.string().min(1) }),
+  z.object({ kind: z.literal("collection"), collectionId: z.string().min(1) }),
+]);
+export type ExportScope = z.infer<typeof ExportScopeSchema>;
+
+const AnnotationColumnNames = z.array(z.string().min(1).max(200).regex(COLUMN_NAME_RE, "Invalid column name"));
+
+/**
+ * POST /api/annotations/export — write a wide table (obs_name + chosen annotation
+ * columns) for the row scope to the server export-dir.
+ */
+export const AnnotationExportBodySchema = z.object({
+  columns: AnnotationColumnNames.min(1),
+  scope: ExportScopeSchema,
+  format: z.enum(["parquet", "csv"]).default("parquet"),
+  filename: z.string().max(200).optional(),
+});
+export type AnnotationExportBody = z.infer<typeof AnnotationExportBodySchema>;
+
+/**
+ * POST /api/annotations/commit[?dryRun=1] — write annotation columns into each
+ * source AnnData `.obs` on disk. Omitting `columns` commits all of them.
+ */
+export const CommitAnnotationsBodySchema = z.object({
+  columns: AnnotationColumnNames.optional(),
+});
+export type CommitAnnotationsBody = z.infer<typeof CommitAnnotationsBodySchema>;

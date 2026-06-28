@@ -22,10 +22,10 @@ function Slider({ className, defaultValue, value, min = 0, max = 100, ...props }
       thumbAlignment="edge"
       {...props}
     >
-      <SliderPrimitive.Control className="relative flex w-full touch-none select-none items-center data-horizontal:py-2 data-vertical:h-full data-vertical:min-h-40 data-vertical:w-auto data-vertical:flex-col data-disabled:opacity-50">
+      <SliderPrimitive.Control className="relative flex w-full touch-none select-none items-center data-horizontal:py-1 data-vertical:h-full data-vertical:min-h-40 data-vertical:w-auto data-vertical:flex-col data-disabled:opacity-50">
         <SliderPrimitive.Track
           data-slot="slider-track"
-          className="relative grow select-none overflow-hidden rounded-md bg-muted data-horizontal:h-3 data-vertical:h-full data-horizontal:w-full data-vertical:w-3"
+          className="relative grow select-none overflow-hidden rounded-full bg-muted data-horizontal:h-1.5 data-vertical:h-full data-horizontal:w-full data-vertical:w-1.5"
         >
           <SliderPrimitive.Indicator
             data-slot="slider-range"
@@ -36,7 +36,7 @@ function Slider({ className, defaultValue, value, min = 0, max = 100, ...props }
           <SliderPrimitive.Thumb
             data-slot="slider-thumb"
             key={index}
-            className="block size-4 shrink-0 select-none rounded-md border border-primary bg-white shadow-sm ring-ring/30 transition-colors hover:ring-4 focus-visible:outline-hidden focus-visible:ring-4 disabled:pointer-events-none disabled:opacity-50"
+            className="block size-3 shrink-0 select-none rounded-full border border-primary bg-white shadow-sm ring-ring/30 transition-colors hover:ring-4 focus-visible:outline-hidden focus-visible:ring-4 disabled:pointer-events-none disabled:opacity-50"
           />
         ))}
       </SliderPrimitive.Control>

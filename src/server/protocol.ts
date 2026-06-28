@@ -11,6 +11,9 @@ import type { z } from "zod";
 
 export {
   ActiveSelectionResponseSchema,
+  AnnotationColumnBodySchema,
+  AnnotationExportBodySchema,
+  CommitAnnotationsBodySchema,
   AppendMembersBodySchema,
   CategorizeBodySchema,
   CollectionMemberSchema,
@@ -27,10 +30,15 @@ export {
   PatchCollectionBodySchema,
   ScatterSelectionBodySchema,
   SetActiveSelectionBodySchema,
+  WriteAnnotationValuesBodySchema,
 } from "../protocol/index.ts";
 export type {
   ActiveSelectionResponse,
+  AnnotationColumnBody,
+  AnnotationDtype,
+  AnnotationValueRow,
   AppendMembersBody,
+  WriteAnnotationValuesBody,
   CategorizeBody,
   CategorizeResponse,
   CategoryLegendItem,

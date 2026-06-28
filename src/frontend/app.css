@@ -17,13 +17,15 @@
 /*
  * nd-embedding-atlas — design token system
  *
- * Architecture (Tailwind v4):
- *   @theme  → defines tokens WITH light values → generates Tailwind utilities
- *             (bg-base, text-text-muted, border-border-subtle, etc.)
- *   .dark   → overrides the same CSS variables → utilities switch automatically
- *   Components → use only Tailwind utilities, no inline styles or pure CSS
+ * Architecture (Tailwind v4) — ONE token vocabulary (shadcn-canonical):
+ *   :root / html.dark → canonical tokens (--background/--card/--primary/--foreground/…)
+ *   @theme inline      → maps them to utilities (bg-background, text-foreground, border-border)
+ *   @theme (Tier-3)    → app-only extensions shadcn lacks (text-muted, surface-tertiary,
+ *                        border-active, status-bar, wires/LEDs, emphasis, glass, z-scale)
+ *   .dark switches every CSS var → utilities flip automatically (no dark: prefix needed)
+ *   Components use Tailwind utilities only — no rival --color-* surface/text vocab.
  *
- * Design: Scientific instrument panel. DM Sans (UI prose) + Geist Mono (data/IDs) + Geist Pixel (HUD signage).
+ * Design: Scientific instrument panel. Geist Mono everywhere (UI + data/IDs) + Geist Pixel (HUD signage).
  */
 
 /* ── Class-based dark mode variant ──────────────────────────────────── */
@@ -48,33 +50,67 @@
 }
 
 /* ════════════════════════════════════════════════════════════════════
- * TIER 2 — SEMANTICS (our custom vocab)
+ * TIER 2 — CANONICAL TOKENS (shadcn vocab) · LIGHT
  * ────────────────────────────────────────────────────────────────────
- * @theme generates Tailwind utilities. Light values here; .dark below.
- * shadcn-canonical vocab (--background, --card, etc.) lives in the
- * separate :root/@theme inline blocks near the bottom of this file.
+ * The ONE surface/text/border vocabulary. Dark values live in html.dark
+ * below; both are mapped to Tailwind utilities (bg-background, text-
+ * foreground, border-border, …) by the @theme inline block lower down.
+ * ════════════════════════════════════════════════════════════════════ */
+:root {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(0.988 0.001 281); /* faint off-white so panels separate from the white page */
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.554 0.236 281); /* Biohub periwinkle #6E4FF9 */
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.967 0.001 286.375);
+  --secondary-foreground: oklch(0.21 0.006 285.885);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.46 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.87 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.554 0.236 281); /* periwinkle focus ring */
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --radius: 0.45rem;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.554 0.236 281);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+}
+
+/* ════════════════════════════════════════════════════════════════════
+ * TIER 3 — APP EXTENSIONS (no shadcn equivalent)
+ * ────────────────────────────────────────────────────────────────────
+ * @theme generates Tailwind utilities. Light values here; dark in html.dark.
  * ════════════════════════════════════════════════════════════════════ */
 @theme {
-  /* Fonts */
-  --font-sans: "DM Sans", system-ui, -apple-system, sans-serif;
+  /* Fonts — ONE text face: Geist Mono carries everything (instrument-panel
+   * voice; no separate prose face). --font-sans stays as the alias every
+   * `font-sans` utility and third-party var resolves through. */
+  --font-sans: "Geist Mono Variable", ui-monospace, monospace;
   --font-mono: "Geist Mono Variable", ui-monospace, monospace;
   --font-hud: "Geist Pixel", "Geist Mono Variable", ui-monospace, monospace;
 
-  /* ── Surface backgrounds (light defaults — overridden in .dark via preset vars) ── */
-  --color-base: #ffffff; /* = oklch(1 0 0)     — page root bg            */
-  --color-surface: #f7f7f7; /* = oklch(0.97 0 0)  — panel bg                */
-  --color-surface-secondary: #f0f0f0; /* = oklch(0.95 0 0)  — input / inset bg        */
-  --color-surface-tertiary: #e8e8e8; /* = oklch(0.93 0 0)  — hover / raised hover    */
-  --color-elevated: #ebebeb; /* = oklch(0.93 0 0)  — hover / raised          */
-
-  /* ── Borders ── */
-  --color-border-subtle: #e8e8e8; /* = oklch(0.922 0 0) */
-  --color-border-active: #b8b8b8; /* = oklch(0.72 0 0)  */
-
-  /* ── Text ── */
-  --color-text-primary: #111111; /* = oklch(0.13 0 0)  */
-  --color-text-secondary: #444444; /* = oklch(0.36 0 0)  */
-  --color-text-muted: #6e6e6e; /* = oklch(0.50 0 0)  */
+  /* ── Tier-3 surface/border/text EXTENSIONS — levels shadcn has no token for ──
+   * Canonical tokens cover the rest: page → bg-background, panel → bg-card,
+   * inset → bg-muted, border → border-border, ink → text-foreground,
+   * secondary → text-muted-foreground. Only these three have no canonical twin. */
+  --color-surface-tertiary: #e8e8e8; /* oklch(0.93) — hover-LIGHTEN, one step above muted */
+  --color-border-active: #b8b8b8; /* oklch(0.72) — stronger border on hover/active        */
+  --color-text-muted: #6e6e6e; /* oklch(0.50) — 3rd/dimmest text, below muted-foreground   */
 
   /* ── Data visualization accents (interactive accents use --primary periwinkle) ── */
   --color-accent-amber: #f59e0b;
@@ -128,29 +164,18 @@
   --glass-border: oklch(0 0 0 / 7%);
 }
 
-/* ── Dark mode overrides ──────────────────────────────────────────────
- *  Override the same CSS vars defined in @theme above.
- *  Tailwind utilities (bg-base, text-text-muted, etc.) pick up the
- *  new values automatically — no dark: prefix needed in components.
- * ──────────────────────────────────────────────────────────────────── */
-/* html.dark has specificity (0,2,0) vs :root (0,1,0) — ensures dark vars win
- * even when the preset's :root block appears later in the file.            */
+/* ════════════════════════════════════════════════════════════════════
+ * TIER 2 — CANONICAL TOKENS · DARK   (+ Tier-3 extension dark values)
+ * ────────────────────────────────────────────────────────────────────
+ *  Overrides the same CSS vars as the light :root above; Tailwind utilities
+ *  (bg-background, text-foreground, …) flip automatically — no dark: prefix.
+ *  html.dark (specificity 0,1,1) intentionally beats any plain :root block.
+ * ════════════════════════════════════════════════════════════════════ */
 html.dark {
-  /* Bridge old --color-* tokens to the preset's OKLCH dark vars.
-   * Preset sets --background, --card, --muted, --foreground, --border
-   * in its own .dark block below — we reference them here so everything stays in sync. */
-  --color-base: var(--background); /* oklch(0.145 0 0) ≈ #1a1a1a */
-  --color-surface: var(--card); /* oklch(0.205 0 0) ≈ #282828 */
-  --color-surface-secondary: var(--muted); /* oklch(0.269 0 0) ≈ #363636 */
-  --color-surface-tertiary: oklch(0.32 0 0); /* one step above muted       */
-  --color-elevated: var(--muted); /* oklch(0.269 0 0) ≈ #363636 */
-
-  --color-border-subtle: var(--border); /* oklch(1 0 0 / 10%)         */
-  --color-border-active: oklch(1 0 0 / 22%);
-
-  --color-text-primary: var(--foreground); /* oklch(0.985 0 0)   */
-  --color-text-secondary: var(--muted-foreground); /* oklch(0.708 0 0)   */
-  --color-text-muted: oklch(0.62 0 0);
+  /* Tier-3 extension dark values (canonical dark set is below in this same block) */
+  --color-surface-tertiary: oklch(0.32 0 0); /* one step above muted (hover-lighten) */
+  --color-border-active: oklch(1 0 0 / 22%); /* stronger border on hover/active       */
+  --color-text-muted: oklch(0.62 0 0); /* 3rd/dimmest text, below muted-foreground    */
 
   /* Status bar — dark overrides for the orphan tokens fixed above */
   --color-status-bar: var(--card); /* = oklch(0.205 0 0) */
@@ -166,8 +191,7 @@ html.dark {
   --glass-bg: oklch(0 0 0 / 60%);
   --glass-border: oklch(1 0 0 / 7%);
 
-  /* Preset OKLCH dark values follow — they set --background, --card, --muted etc.
-   * which our bridge vars above reference via var(). */
+  /* Canonical dark values — mirror the light :root above (--background/--card/--primary/…). */
   --background: oklch(0.13 0.004 281); /* lifted near-black, faint periwinkle-cool tint (was pure #000) */
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);
@@ -201,6 +225,68 @@ html.dark {
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+/* ════════════════════════════════════════════════════════════════════
+ * NODE WORKSPACE (nd) — typed-wire kinds, cook-state LEDs, morph motion
+ * ────────────────────────────────────────────────────────────────────
+ * Vocabulary: .design/VOCABULARY.md (binding). Wire/port kinds are
+ * theme-invariant (periwinkle-on-dark family from the design handoff).
+ * ════════════════════════════════════════════════════════════════════ */
+@theme {
+  /* Typed wire/port kinds — pred (pull predicate) · sel (push row set) · focus (push single record) */
+  --color-wire-pred: #8b7bf7;
+  --color-wire-sel: #f59e0b;
+  --color-wire-focus: #38bdf8;
+  /* feedback channel — a writer's output re-entering its source (wireless ↻ pair) */
+  --color-wire-feedback: #2dd4bf;
+
+  /* Cook-state hues as color tokens (anchors live in Tier 1) */
+  --color-success: var(--success-hue);
+  --color-warning: var(--warning-hue);
+
+  /* LED pulse — cooking state */
+  --animate-nd-led-pulse: nd-led-pulse 0.9s ease-in-out infinite;
+  @keyframes nd-led-pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.35;
+    }
+  }
+
+  /* Wire flow — cooking pull wires (pair with stroke-dasharray 7 7) */
+  --animate-nd-wire-flow: nd-wire-flow 0.6s linear infinite;
+  @keyframes nd-wire-flow {
+    to {
+      stroke-dashoffset: -14;
+    }
+  }
+
+  /* Wire push — sel/focus emission (pair with stroke-dasharray 2 10, round caps) */
+  --animate-nd-wire-push: nd-wire-push 0.45s linear infinite;
+  @keyframes nd-wire-push {
+    to {
+      stroke-dashoffset: -24;
+    }
+  }
+
+  /* Render-state morph — node content eases in on chip↔card↔full swaps.
+   * Keep the from-frame usable (≥0.55 opacity): a suspended animation
+   * timeline must never strand invisible UI. */
+  --animate-nd-rs-morph: nd-rs-morph 200ms cubic-bezier(0.25, 0.8, 0.3, 1);
+  @keyframes nd-rs-morph {
+    from {
+      opacity: 0.55;
+      transform: scale(0.97);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+}
+
 /* ── Base layout ──────────────────────────────────────────────────── */
 html,
 body,
@@ -212,8 +298,8 @@ body,
 }
 
 body {
-  background-color: var(--color-base);
-  color: var(--color-text-primary);
+  background-color: var(--background);
+  color: var(--foreground);
   font-family: var(--font-sans);
   font-size: 12px; /* 85% density base (was 13px); named rungs/utilities layer on top */
   line-height: 1.4;
@@ -230,19 +316,24 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--color-border-subtle);
+  background: var(--border);
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
   background: var(--color-border-active);
 }
+/* Corner where the h+v scrollbars meet — UA default is an opaque light square.
+ * Transparent so it disappears against any surface (the bottom-right "white box"). */
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
 
 /* ── Native select ────────────────────────────────────────────────── */
 select {
   appearance: none;
-  background-color: var(--color-surface);
-  color: var(--color-text-primary);
-  border: 1px solid var(--color-border-subtle);
+  background-color: var(--card);
+  color: var(--foreground);
+  border: 1px solid var(--border);
   border-radius: 4px;
   padding: 2px 18px 2px 5px;
   font-size: 11px;
@@ -271,7 +362,7 @@ select:disabled {
   gap: 6px;
   font-size: 11px;
   font-family: var(--font-mono);
-  color: var(--color-text-secondary);
+  color: var(--muted-foreground);
 }
 .time-slider .input label {
   white-space: nowrap;
@@ -279,7 +370,7 @@ select:disabled {
 .time-slider .input label.value {
   min-width: 2ch;
   text-align: right;
-  color: var(--color-text-primary);
+  color: var(--foreground);
   font-variant-numeric: tabular-nums;
 }
 .time-slider .input input[type="range"] {
@@ -314,24 +405,24 @@ select:disabled {
 /* Override Dockview's hardcoded abyss-light blue tint */
 .dockview-theme-abyss,
 .dockview-theme-dark {
-  --dv-color-abyss-light: var(--color-elevated);
+  --dv-color-abyss-light: var(--muted);
 }
 
 .dockview-theme-dark {
-  --dv-background-color: var(--color-base);
-  --dv-group-view-background-color: var(--color-base);
-  --dv-paneview-header-border-color: var(--color-border-subtle);
-  --dv-tabs-container-background-color: var(--color-surface);
-  --dv-activegroup-visiblepanel-tab-background-color: var(--color-elevated);
-  --dv-activegroup-hiddenpanel-tab-background-color: var(--color-surface);
-  --dv-inactivegroup-visiblepanel-tab-background-color: var(--color-surface);
-  --dv-inactivegroup-hiddenpanel-tab-background-color: var(--color-base);
-  --dv-separator-border: var(--color-border-subtle);
+  --dv-background-color: var(--background);
+  --dv-group-view-background-color: var(--background);
+  --dv-paneview-header-border-color: var(--border);
+  --dv-tabs-container-background-color: var(--card);
+  --dv-activegroup-visiblepanel-tab-background-color: var(--muted);
+  --dv-activegroup-hiddenpanel-tab-background-color: var(--card);
+  --dv-inactivegroup-visiblepanel-tab-background-color: var(--card);
+  --dv-inactivegroup-hiddenpanel-tab-background-color: var(--background);
+  --dv-separator-border: var(--border);
   --dv-tab-font-size: 12px;
   --dv-font-family: var(--font-sans);
-  --dv-activegroup-visiblepanel-tab-color: var(--color-text-primary);
+  --dv-activegroup-visiblepanel-tab-color: var(--foreground);
   --dv-activegroup-hiddenpanel-tab-color: var(--color-text-muted);
-  --dv-inactivegroup-visiblepanel-tab-color: var(--color-text-secondary);
+  --dv-inactivegroup-visiblepanel-tab-color: var(--muted-foreground);
   --dv-inactivegroup-hiddenpanel-tab-color: var(--color-text-muted);
 }
 
@@ -368,44 +459,57 @@ select:disabled {
   @apply aria-invalid:border-destructive aria-invalid:ring-1 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40;
 }
 
+/* ── Glass — THE one frosted-surface recipe ───────────────────────────
+ *  Floating chrome OVER live content (canvas / imagery / data-viz) only —
+ *  docked panels and overlays on solid backgrounds use `Panel` solid instead.
+ *  Sourced from the --glass-* tokens so the Tweakpane viewer theme shares the
+ *  exact recipe. Pair with `border rounded-* shadow-*` for shape.
+ *  Change glass in ONE place: here (+ the --glass-* / --blur-glass tokens). */
+@utility glass {
+  background-color: var(--glass-bg);
+  border-color: var(--glass-border);
+  backdrop-filter: blur(var(--blur-glass)) saturate(1.5);
+  -webkit-backdrop-filter: blur(var(--blur-glass)) saturate(1.5);
+}
+
 /* Dockview light + abyss override (abyss hardcodes dark colors) */
 :root:not(.dark) .dockview-theme-abyss,
 .dockview-theme-light {
-  --dv-background-color: var(--color-base);
-  --dv-paneview-header-border-color: var(--color-border-subtle);
-  --dv-tabs-container-background-color: var(--color-surface);
-  --dv-activegroup-visiblepanel-tab-background-color: var(--color-elevated);
-  --dv-activegroup-hiddenpanel-tab-background-color: var(--color-surface);
-  --dv-inactivegroup-visiblepanel-tab-background-color: var(--color-surface);
-  --dv-inactivegroup-hiddenpanel-tab-background-color: var(--color-base);
-  --dv-separator-border: var(--color-border-subtle);
+  --dv-background-color: var(--background);
+  --dv-paneview-header-border-color: var(--border);
+  --dv-tabs-container-background-color: var(--card);
+  --dv-activegroup-visiblepanel-tab-background-color: var(--muted);
+  --dv-activegroup-hiddenpanel-tab-background-color: var(--card);
+  --dv-inactivegroup-visiblepanel-tab-background-color: var(--card);
+  --dv-inactivegroup-hiddenpanel-tab-background-color: var(--background);
+  --dv-separator-border: var(--border);
   --dv-tab-font-size: 12px;
   --dv-font-family: var(--font-sans);
-  --dv-activegroup-visiblepanel-tab-color: var(--color-text-primary);
+  --dv-activegroup-visiblepanel-tab-color: var(--foreground);
   --dv-activegroup-hiddenpanel-tab-color: var(--color-text-muted);
-  --dv-inactivegroup-visiblepanel-tab-color: var(--color-text-secondary);
+  --dv-inactivegroup-visiblepanel-tab-color: var(--muted-foreground);
   --dv-inactivegroup-hiddenpanel-tab-color: var(--color-text-muted);
 }
 :root:not(.dark) .dv-grid-view.dv-dockview,
 :root:not(.dark) .dv-groupview {
-  background-color: var(--color-base);
+  background-color: var(--background);
 }
 :root:not(.dark) .dv-tabs-and-actions-container {
-  background-color: var(--color-surface);
+  background-color: var(--card);
 }
 :root:not(.dark) .dv-tab {
-  color: var(--color-text-primary);
+  color: var(--foreground);
 }
 :root:not(.dark) .dv-tab.dv-active-tab {
-  background-color: var(--color-elevated);
+  background-color: var(--muted);
 }
 :root:not(.dark) .dv-tab:not(.dv-active-tab) {
-  background-color: var(--color-surface);
-  color: var(--color-text-secondary);
+  background-color: var(--card);
+  color: var(--muted-foreground);
 }
 :root:not(.dark) .dv-pane-header {
-  background-color: var(--color-surface);
-  color: var(--color-text-secondary);
+  background-color: var(--card);
+  color: var(--muted-foreground);
 }
 
 /* ── Hide Dockview tab strip — navigation handled by BottomDock ── */
@@ -438,8 +542,8 @@ select:disabled {
   border-radius: 4px;
 }
 .dv-header-action:hover {
-  color: var(--color-text-primary);
-  background: var(--color-elevated);
+  color: var(--foreground);
+  background: var(--muted);
 }
 /*
  ---break---
@@ -498,46 +602,6 @@ select:disabled {
   --color-glass-bg: var(--glass-bg);
   --color-glass-border: var(--glass-border);
 }
-/*
- ---break---
- */
-:root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(0.988 0.001 281); /* faint off-white so panels separate from the white page */
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.554 0.236 281); /* Biohub periwinkle #6E4FF9 */
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.967 0.001 286.375);
-  --secondary-foreground: oklch(0.21 0.006 285.885);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.46 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.87 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.554 0.236 281); /* periwinkle focus ring */
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.45rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.554 0.236 281);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
-}
-/*
- ---break---
- */
 @layer base {
   * {
     @apply border-border outline-ring/50;

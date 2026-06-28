@@ -40,6 +40,15 @@ import {
 } from "./routes/collections.ts";
 import { handleVarNames, handleVarLayers, handleVarColumn, handleVarColumnStatus } from "./routes/var.ts";
 import { handleCategorize } from "./routes/categorize.ts";
+import {
+  handleListAnnotationColumns,
+  handleCreateAnnotationColumn,
+  handleDeleteAnnotationColumn,
+  handleWriteAnnotationValues,
+  handleSaveAnnotations,
+  handleExportAnnotations,
+  handleCommitAnnotations,
+} from "./routes/annotate.ts";
 import { handleExport, handleExportStatus, handleGetExportDir } from "./routes/export.ts";
 import { handleCrop } from "./routes/crops.ts";
 import { CropPool } from "./crop-pool.ts";
@@ -382,6 +391,33 @@ function routeApi(
   // ── Categorical index materialization ────────────────────────────
   if (pathname === "/api/categorize" && method === "POST") {
     return handleCategorize(req, state);
+  }
+
+  // ── Annotations ──────────────────────────────────────────────────
+  if (pathname === "/api/annotations/columns") {
+    if (method === "GET") return handleListAnnotationColumns(state);
+    if (method === "POST") return handleCreateAnnotationColumn(req, state);
+  }
+
+  const annotationColMatch = pathname.match(/^\/api\/annotations\/columns\/(.+)$/);
+  if (annotationColMatch && method === "DELETE") {
+    return handleDeleteAnnotationColumn(decodeURIComponent(annotationColMatch[1]), state);
+  }
+
+  if (pathname === "/api/annotations/values" && method === "POST") {
+    return handleWriteAnnotationValues(req, state);
+  }
+
+  if (pathname === "/api/annotations/save" && method === "POST") {
+    return handleSaveAnnotations(state);
+  }
+
+  if (pathname === "/api/annotations/export" && method === "POST") {
+    return handleExportAnnotations(req, state);
+  }
+
+  if (pathname === "/api/annotations/commit" && method === "POST") {
+    return handleCommitAnnotations(req, state, url.searchParams.get("dryRun") === "1");
   }
 
   // ── Export ───────────────────────────────────────────────────────

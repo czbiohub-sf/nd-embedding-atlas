@@ -6,18 +6,20 @@ import { cn } from "@/lib/utils";
 import { HoverTip } from "./hover-tip";
 
 /**
- * IconButton — icon-only control with required tooltip.
+ * IconButton — standalone icon-only chrome control with a required tooltip.
  *
- * Consolidates ~20 call sites in BottomDock, ScatterOverlayControls,
- * and toolbar strips that repeat:
+ * Use for general chrome (panels, headers, future toolbars) needing a single
+ * tooltipped icon button. NOT for:
+ *  - canvas instrument buttons → use `nd-icon-button` (same Base UI Button
+ *    base, tiny instrument styling, data-nodrag);
+ *  - toolbars that group controls in a ToggleGroup and tip them uniformly
+ *    (e.g. ScatterToolbar derives its buttons from `iconButtonVariants`
+ *    directly, keeping HoverTip + ToggleGroupItem composition caller-side).
  *
- *   <HoverTip label="…" description="…" render={
- *     <ToggleGroupItem className="size-[22px] …"><Icon /></ToggleGroupItem>
- *   } />
- *
- * Enforces the tooltip via required `label` + `description` props —
- * icon-only controls without labels fail accessibility without one.
- * Caller passes `pressed` for toggle semantics (aria-pressed).
+ * Shares `iconButtonVariants` with those callers so the icon-button look has
+ * one source. Enforces the tooltip via required `label` + `description` —
+ * icon-only controls without an accessible name fail a11y. `pressed` mirrors
+ * aria-pressed for toggle semantics.
  */
 
 const iconButtonVariants = cva(

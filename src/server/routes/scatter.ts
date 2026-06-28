@@ -183,18 +183,19 @@ export async function handleScatterCategories(url: URL, store: EmbeddingStore): 
   }
 
   try {
-    // Fetch category indices ordered by row
-    const idxRows = await store.queryJson(`SELECT "${catCol}" FROM obs_base ORDER BY __row_index__ ASC`);
+    // Read through the `dataset` VIEW (logical obs table), not obs_base — so
+    // var + annotation columns colour identically to native obs columns.
+    const idxRows = await store.queryJson(`SELECT "${catCol}" FROM dataset ORDER BY __row_index__ ASC`);
 
     // Build category name list
     let categoryNames: string[];
     if (originalCol) {
       const nameRows = await store.queryJson(
-        `SELECT DISTINCT "${originalCol}" FROM obs_base ORDER BY "${originalCol}" ASC`,
+        `SELECT DISTINCT "${originalCol}" FROM dataset ORDER BY "${originalCol}" ASC`,
       );
       categoryNames = nameRows.map((r) => String(r[originalCol]));
     } else {
-      const distinctRows = await store.queryJson(`SELECT DISTINCT "${catCol}" FROM obs_base ORDER BY "${catCol}" ASC`);
+      const distinctRows = await store.queryJson(`SELECT DISTINCT "${catCol}" FROM dataset ORDER BY "${catCol}" ASC`);
       categoryNames = distinctRows.map((r) => String(r[catCol]));
     }
 

@@ -126,8 +126,8 @@ export class SimpleCategorical implements CategoricalArray {
 
   at(i: number): Scalar | null {
     const code = this.codes[i];
-    if (code === -1) return null;
-    return this.categories[code];
+    if (code === undefined || code === -1) return null;
+    return this.categories[code] ?? null;
   }
 
   toArray(): (Scalar | null)[] {
@@ -160,7 +160,7 @@ export class SimpleNullable implements NullableArray {
 
   at(i: number): Scalar | null {
     if (this.mask[i]) return null;
-    return this.values[i];
+    return this.values[i] ?? null;
   }
 
   *[Symbol.iterator](): IterableIterator<Scalar | null> {

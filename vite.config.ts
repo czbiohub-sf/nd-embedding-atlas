@@ -40,6 +40,10 @@ export default defineConfig({
       // it carries embedded JSON literals + raw AST nodes that fmt/lint
       // would churn on every regeneration.
       ".bunli/**",
+      // Design-handoff docs, critique snapshots, vendored impeccable skill.
+      ".design/**",
+      ".impeccable/**",
+      ".github/skills/**",
     ],
 
     categories: {
@@ -194,6 +198,15 @@ export default defineConfig({
 
     overrides: [
       {
+        // nd component layer co-locates contract data with its component by
+        // design (ND_ICONS registry + NdIcon, ND_PORT_KINDS + NdPort, mock
+        // PRNG + mocks) — fast-refresh purity doesn't apply to this layer.
+        files: ["src/frontend/components/nd/**/*.tsx", "src/frontend/core/workspace/**/*.tsx"],
+        rules: {
+          "react/only-export-components": "off",
+        },
+      },
+      {
         // TypeGPU opaque APIs + GPU handle non-null assertions
         files: ["src/frontend/scatter-gpu/**/*.ts", "src/frontend/scatter-gpu/**/*.tsx"],
         rules: {
@@ -272,6 +285,62 @@ export default defineConfig({
           ],
         },
       },
+      {
+        // Node cross-view boundary (host-seam single-channel refactor). Node
+        // bodies render inside a plugin host, so their cross-view focus/selection
+        // MUST flow through the injected `host.*` (sync-group & edge-aware), never
+        // the global cross-view bus hub or the cross-view selection stores. The
+        // lint half of the conformance backstop (core/node/host-routing.test.ts
+        // is the behavioral half).
+        //
+        // Also banned: the coordination plane (`@/core/coordination`) — the
+        // symmetric cross-view channel (focus/viewSync/ordering scopes) is reached
+        // ONLY through the host facets the body-dock seam injects, never by a node
+        // importing the backbone (coordination-model plan U5); and ViewSyncStore,
+        // now that `host.viewSync.subscribe` exists and scatter routes pan/zoom
+        // through the seam (U2 closed that follow-up).
+        //
+        // NOT banned here: the render/collection/panel stores (different concern);
+        // `@/hooks/useDashboard` + the DashboardContext *type* imports (still the
+        // read path for non-cross-view metadata/trajectories). `components/charts`
+        // (not yet under nodes/) is excluded — host-less today, still reads
+        // selectionBus; its host migration is the remaining follow-up.
+        files: ["src/frontend/nodes/**/*.{ts,tsx}", "src/frontend/scatter-gpu/**/*.{ts,tsx}"],
+        rules: {
+          "no-restricted-imports": [
+            "error",
+            {
+              patterns: [
+                {
+                  group: [
+                    "@/core/buses",
+                    "**/core/buses",
+                    "@/core/coordination",
+                    "**/core/coordination",
+                    "**/core/coordination/**",
+                    "@/stores/SelectionSyncStore",
+                    "**/SelectionSyncStore",
+                    "@/stores/RoaringBroadcastStore",
+                    "**/RoaringBroadcastStore",
+                    "@/stores/ViewSyncStore",
+                    "**/ViewSyncStore",
+                  ],
+                  message:
+                    "Cross-view focus/selection/coordination in a plugin-rendered body must route through the injected host.* (host-seam single-channel refactor + coordination plane), never the global bus/store or the coordination backbone directly.",
+                },
+              ],
+            },
+          ],
+        },
+      },
+      {
+        // Node spec files (`*.node.tsx`) legitimately co-locate a small inline
+        // Body / config export with the node spec (e.g. the threshold instance
+        // node). Fast-refresh's only-export-components rule doesn't apply — these
+        // aren't hot-edited leaf components.
+        files: ["src/frontend/nodes/**/node.tsx"],
+        rules: { "react/only-export-components": "off" },
+      },
     ],
   },
 
@@ -298,7 +367,18 @@ export default defineConfig({
     // - ochre/colormap/data/** are vendored colormap LUTs hand-packed at
     //   12 numbers per line; oxfmt's `Float32Array.of(...)` rule unpacks
     //   to one number per line, blowing the diff up by 10×.
-    ignorePatterns: [".bunli/**", "site/**", "zensical.toml", "src/frontend/ochre/colormap/data/**"],
+    // - .design/** is the design-handoff doc tree (specs, vocabulary);
+    //   .impeccable/** is critique snapshots; .github/skills/** is the
+    //   vendored impeccable skill — none are project source.
+    ignorePatterns: [
+      ".bunli/**",
+      "site/**",
+      "zensical.toml",
+      "src/frontend/ochre/colormap/data/**",
+      ".design/**",
+      ".impeccable/**",
+      ".github/skills/**",
+    ],
   },
 
   // ── Pre-commit (staged files only) ────────────────────────────────────────

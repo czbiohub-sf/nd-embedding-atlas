@@ -34,7 +34,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { collectionId, type CollectionId } from "../../lib/branded-types";
 import type { Collection } from "../../../protocol/index.ts";
-import { useScatterUIState } from "../scatter/ScatterUIStateProvider";
+import { useScatterUIState } from "@/nodes/scatter/ScatterUIStateProvider";
 import { useAddMembers, useDeleteCollection } from "./useCollections";
 
 export interface CollectionRowActionsProps {

@@ -10,8 +10,8 @@
  * both rejects and undoes the increment — no "device born ownerless" leak.
  */
 
-import { acquireDevice, type DeviceInfo, deviceRefCount, releaseDevice } from "@/scatter-gpu/gpu/device-manager";
-import type { PluginInstanceId } from "@/core/plugin/host";
+import { acquireDevice, type DeviceInfo, deviceRefCount, releaseDevice } from "@/core/gpu/device-manager";
+import type { NodeInstanceId } from "@/core/node/host";
 
 export interface DeviceLease {
   /** Lease id, tied to the owning instance. */
@@ -27,17 +27,17 @@ export interface DeviceBroker {
    * the promise AND undoes the refcount increment (forwarded into
    * `device-manager`'s §7.2 path), so no device is born ownerless.
    */
-  acquire(instanceId: PluginInstanceId, signal?: AbortSignal): Promise<DeviceLease>;
+  acquire(instanceId: NodeInstanceId, signal?: AbortSignal): Promise<DeviceLease>;
   /** Live lease count — what `openPlugin` reads to enforce `maxInstances`. */
   liveLeases(): number;
   /** Force-release an instance's lease on teardown (idempotent). */
-  releaseFor(instanceId: PluginInstanceId): void;
+  releaseFor(instanceId: NodeInstanceId): void;
 }
 
 export function createDeviceBroker(): DeviceBroker {
-  const leases = new Map<PluginInstanceId, DeviceLease>();
+  const leases = new Map<NodeInstanceId, DeviceLease>();
 
-  function releaseFor(instanceId: PluginInstanceId): void {
+  function releaseFor(instanceId: NodeInstanceId): void {
     const lease = leases.get(instanceId);
     if (!lease) return;
     leases.delete(instanceId);

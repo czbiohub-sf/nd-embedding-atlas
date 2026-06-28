@@ -24,6 +24,8 @@ export interface TrajectoryFrame {
   category?: number;
   rowIndex?: number;
   datasetKey?: string;
+  /** Per-obs Z plane, when the dataset provides one. Crops render at this Z. */
+  z?: number;
 }
 
 export interface TrajectoryData {
@@ -32,40 +34,4 @@ export interface TrajectoryData {
   datasetKey?: string;
   tIndex: number;
   points: TrajectoryFrame[];
-}
-
-// ── Chart panel specs ──────────────────────────────────────────────────────
-
-export interface CountPlotSpec {
-  type: "count-plot";
-  field: string;
-  limit?: number;
-  order?: "total-descending" | "alphabetical" | "selected-descending";
-}
-
-export interface HistogramSpec {
-  type: "histogram";
-  field: string;
-  bins?: number;
-  scaleType?: "linear" | "log" | "symlog";
-}
-
-export interface ScatterChartSpec {
-  type: "scatter";
-  xField: string;
-  yField: string;
-}
-
-export interface BoxPlotSpec {
-  type: "boxplot";
-  field: string;
-  groupField?: string;
-}
-
-export type ChartSpec = CountPlotSpec | HistogramSpec | ScatterChartSpec | BoxPlotSpec;
-
-export interface ChartPanelEntry {
-  id: string;
-  spec: ChartSpec;
-  collapsed?: boolean;
 }

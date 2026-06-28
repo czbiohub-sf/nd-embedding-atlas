@@ -31,10 +31,15 @@ export async function handleCategorize(req: Request, state: ViewerState): Promis
   const indexColumn = `__ev_${column}_id`;
 
   try {
+    // Source column reads go through the `dataset` VIEW, not `obs_base`:
+    // `dataset` is the logical obs table (obs_base columns + var/annotation
+    // joins), so this categorizes obs, var, AND user-annotation columns
+    // uniformly. obs_base is just the physical base.
+
     // 1. Top-N values by count.
     const topRows = await store.queryJson(
       `SELECT CAST("${column}" AS TEXT) AS value, COUNT(*) AS count
-             FROM obs_base
+             FROM dataset
              WHERE CAST("${column}" AS TEXT) IS NOT NULL
              GROUP BY CAST("${column}" AS TEXT)
              ORDER BY count DESC
@@ -45,20 +50,24 @@ export async function handleCategorize(req: Request, state: ViewerState): Promis
     const otherIndex = values.length;
     const nullIndex = values.length + 1;
 
-    // 2. ALTER TABLE — idempotent via IF NOT EXISTS.
+    // 2. Materialise the index column on obs_base, then rebuild the VIEW
+    // BEFORE the UPDATE: `ALTER TABLE obs_base ADD COLUMN` invalidates the
+    // `dataset` VIEW schema, and step 3 reads the source value through that
+    // VIEW (the source may live in an ann_/var_ join, not on obs_base).
     await store.execute(`ALTER TABLE obs_base ADD COLUMN IF NOT EXISTS "${indexColumn}" INTEGER DEFAULT 0`);
+    await store._rebuildView();
 
-    // 3. UPDATE with CASE mapping. Escape single quotes in values.
+    // 3. Populate via a JOIN back to `dataset` — d."${column}" resolves whether
+    // the source is an obs_base column or an annotation/var join. CASE maps the
+    // top-N values to indices; everything else falls to (other)/(null).
     const whenClauses = values.map(({ value }, i) => `WHEN '${value.replace(/'/g, "''")}' THEN ${i}`).join(" ");
     await store.execute(
-      `UPDATE obs_base SET "${indexColumn}" = CASE CAST("${column}" AS TEXT)
+      `UPDATE obs_base SET "${indexColumn}" = CASE CAST(d."${column}" AS TEXT)
                ${whenClauses}
-               ELSE (CASE WHEN "${column}" IS NULL THEN ${nullIndex} ELSE ${otherIndex} END)
-             END`,
+               ELSE (CASE WHEN d."${column}" IS NULL THEN ${nullIndex} ELSE ${otherIndex} END)
+             END
+             FROM dataset d WHERE d.__row_index__ = obs_base.__row_index__`,
     );
-
-    // 4. Rebuild VIEW so the new column is visible through `dataset`.
-    await store._rebuildView();
 
     // Keep state.obsColumns in sync — endpoints that validate `category_col`
     // (e.g. /api/trajectory) read this list and would otherwise reject the

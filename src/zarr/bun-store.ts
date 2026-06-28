@@ -9,6 +9,7 @@
  * and resolve under the constructor `root`.
  */
 
+import { mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 
 /**
@@ -25,7 +26,17 @@ export interface AsyncReadable {
   getRange?(key: string, range: RangeQuery): Promise<Uint8Array | undefined>;
 }
 
-export class BunFileStore implements AsyncReadable {
+/**
+ * zarrita's `Writeable` shape — the write half of a `Mutable` store. Only `set`
+ * is required by zarrita's `create`/`set`; `delete` supports cleanup (e.g.
+ * dropping stale consolidated metadata) but is never called by zarrita itself.
+ */
+export interface AsyncWritable {
+  set(key: string, value: Uint8Array): Promise<void>;
+  delete?(key: string): Promise<void>;
+}
+
+export class BunFileStore implements AsyncReadable, AsyncWritable {
   readonly root: string;
 
   constructor(root: string) {
@@ -69,6 +80,18 @@ export class BunFileStore implements AsyncReadable {
 
   exists(key: string): Promise<boolean> {
     return Bun.file(this._resolve(key)).exists();
+  }
+
+  /** Write a key (creating parent dirs). Makes the store a zarrita `Mutable`. */
+  async set(key: string, value: Uint8Array): Promise<void> {
+    const p = this._resolve(key);
+    await mkdir(path.dirname(p), { recursive: true });
+    await Bun.write(p, value);
+  }
+
+  /** Remove a key. Used to drop stale consolidated metadata after a write. */
+  async delete(key: string): Promise<void> {
+    await rm(this._resolve(key), { force: true });
   }
 
   private _resolve(key: string): string {

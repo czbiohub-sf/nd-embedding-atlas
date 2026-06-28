@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { type ColormapList, getCategoricalPalette, getColormapList } from "../lib/ochre-palette";
-import { colormapKeys } from "../scatter-gpu/hooks/queryKeys";
+import { type ColormapList, getCategoricalPalette, getColormapList } from "../lib/color/ochre-palette";
+import { colormapKeys } from "../lib/query-keys";
 
 /**
  * Phase 8: colormap lists + palettes come from vendored ochre on the frontend,

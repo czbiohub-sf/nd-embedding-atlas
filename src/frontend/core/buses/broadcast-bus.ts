@@ -10,32 +10,32 @@ import { broadcastSelection, clearSelectionSync, selectionSyncStore } from "@/st
 import { disposeBitmap, getBitmapRowIds } from "@/stores/RoaringBroadcastStore";
 import { panelSource, type SelectionSource, sourcesEqual } from "@/stores/SelectionSource";
 import { panelId } from "@/lib/branded-types";
-import type { PluginInstanceId } from "@/core/plugin/host";
+import type { NodeInstanceId } from "@/core/node/host";
 
 export interface BroadcastBus {
   /** Broadcast this instance's selected row ids (WASM bitmap + sync store). */
-  publishRowSet(instanceId: PluginInstanceId, ids: number[]): void;
+  publishRowSet(instanceId: NodeInstanceId, ids: number[]): void;
   /** Read back the row ids currently broadcast by this instance. */
-  rowIds(instanceId: PluginInstanceId): number[];
+  rowIds(instanceId: NodeInstanceId): number[];
   /** Clear the broadcast without disposing the bitmap (reusable). */
-  clear(instanceId: PluginInstanceId): void;
+  clear(instanceId: NodeInstanceId): void;
   /** Release the instance's WASM bitmap on teardown. */
-  disposeFor(instanceId: PluginInstanceId): void;
+  disposeFor(instanceId: NodeInstanceId): void;
   /**
    * Current external (non-self) broadcast row-set — the active source's bitmap,
    * or null when empty or when the active source IS this instance. The read side
    * of the cross-panel selection-in mirror (PLUGIN-ARCHITECTURE §6.7).
    */
-  externalRowSet(instanceId: PluginInstanceId): readonly number[] | null;
+  externalRowSet(instanceId: NodeInstanceId): readonly number[] | null;
   /**
    * Subscribe to external (non-self) row-set changes for this instance; fires on
    * every broadcast/clear from a DIFFERENT source (self updates filtered out).
    * `rowIds` is null on clear/empty. Returns an unsubscribe.
    */
-  subscribeExternal(instanceId: PluginInstanceId, cb: (rowIds: readonly number[] | null) => void): () => void;
+  subscribeExternal(instanceId: NodeInstanceId, cb: (rowIds: readonly number[] | null) => void): () => void;
 }
 
-const sourceFor = (instanceId: PluginInstanceId): SelectionSource => panelSource(panelId(instanceId as string));
+const sourceFor = (instanceId: NodeInstanceId): SelectionSource => panelSource(panelId(instanceId as string));
 
 export function createBroadcastBus(): BroadcastBus {
   return {

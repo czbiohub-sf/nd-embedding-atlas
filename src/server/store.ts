@@ -8,8 +8,10 @@
  * Arrow IPC output uses the nanoarrow extension's `to_arrow_ipc()`.
  */
 
+import { rm } from "node:fs/promises";
 import { DuckDBInstance } from "@duckdb/node-api";
 import type { DuckDBConnection } from "@duckdb/node-api";
+import type { AnnotationDtype } from "./protocol.ts";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -45,6 +47,56 @@ export function obsmColumnPrefix(obsmKey: string): string {
 export const DEFAULT_OBSM_PRIORITY = ["X_umap", "X_tsne", "X_phate", "X_pca"];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+/**
+ * Quote a value as a SQL identifier: wrap in double quotes, double any embedded
+ * double-quote. The ONLY safe way to interpolate a user-influenced column name
+ * into SQL — a bare `"${name}"` lets a name containing `"` break out of the
+ * identifier and inject arbitrary statements (conn.run executes multiple).
+ */
+export function quoteIdent(id: string): string {
+  return `"${id.replace(/"/g, '""')}"`;
+}
+
+/** djb2 hash → short hex. Stable across runs (no Math.random / Date). */
+function djb2Hex(s: string): string {
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0;
+  return h.toString(16);
+}
+
+/**
+ * Collision-free physical table name for an annotation column.
+ *
+ * The sanitized stem (`[^a-zA-Z0-9_]→_`) is lossy: `col 1` and `col.1` both
+ * sanitize to `col_1`. Appending a hash of the *full* name keeps distinct
+ * columns in distinct tables, so a second registration can't DROP the first's
+ * data. The result is always `[a-z0-9_]` → safe as a bare SQL identifier.
+ */
+function annTableName(colName: string): string {
+  const stem = colName.replace(/[^a-zA-Z0-9_]/g, "_").slice(0, 48);
+  return `ann_${stem}__${djb2Hex(colName)}`;
+}
+
+/** DuckDB column type backing each annotation dtype. categorical/string both TEXT. */
+function annSqlType(dtype: AnnotationDtype): string {
+  return dtype === "integer" ? "INTEGER" : "TEXT";
+}
+
+/**
+ * SQL literal for an annotation value, typed by the column's dtype. Integer
+ * columns take a bare numeric literal (and reject non-integers at the door);
+ * text columns take a single-quote-escaped string. NULL passes through.
+ */
+function annValueLiteral(value: string | null, dtype: AnnotationDtype): string {
+  if (value == null) return "NULL";
+  if (dtype === "integer") {
+    const n = Number(value);
+    if (!Number.isInteger(n)) throw new Error(`Value "${value}" is not an integer`);
+    return String(n);
+  }
+  return `'${value.replace(/'/g, "''")}'`;
+}
 
 /** Concatenate multiple Uint8Array/Buffer chunks into a single Uint8Array. */
 function concatBuffers(buffers: (Buffer | Uint8Array)[]): Uint8Array {
@@ -134,6 +186,8 @@ export class EmbeddingStore {
   private _loaded: Map<string, EmbeddingMeta> = new Map();
   /** Registered var columns: colName → { table, colName }. */
   private _varCols: Map<string, { table: string; colName: string }> = new Map();
+  /** Registered user annotation columns: colName → { table, colName, dtype }. */
+  private _annotationCols: Map<string, { table: string; colName: string; dtype: AnnotationDtype }> = new Map();
   /** Columns to exclude from the dataset VIEW. */
   private _hidden: Set<string>;
   /** Whether nanoarrow extension is loaded (for Arrow IPC output). */
@@ -261,6 +315,32 @@ export class EmbeddingStore {
       ).getColumnsJS()[0] as string[];
       const colName = cols.find((c) => c !== "__row_index__");
       if (colName) store._varCols.set(colName, { table: t, colName });
+    }
+
+    // Re-register persisted annotation columns (ann_* tables). The dtype lives
+    // in __ann_meta__ (persists in the cached .db); fall back to inferring from
+    // the physical column type — INTEGER → integer, else categorical.
+    const annDtypes = new Map<string, AnnotationDtype>();
+    if (tables.has("__ann_meta__")) {
+      const [names, dtypes] = (await conn.runAndReadAll(`SELECT col_name, dtype FROM __ann_meta__`)).getColumnsJS() as [
+        string[],
+        string[],
+      ];
+      names.forEach((n, i) => {
+        const d = dtypes[i];
+        annDtypes.set(n, d === "integer" || d === "string" ? d : "categorical");
+      });
+    }
+    for (const t of tables) {
+      if (!t.startsWith("ann_")) continue;
+      const [cols, types] = (
+        await conn.runAndReadAll(`SELECT column_name, column_type FROM (DESCRIBE "${t}")`)
+      ).getColumnsJS() as [string[], string[]];
+      const idx = cols.findIndex((c) => c !== "__row_index__" && c !== "dataset_key" && c !== "obs_name");
+      if (idx === -1) continue;
+      const colName = cols[idx];
+      const dtype = annDtypes.get(colName) ?? (/INT/i.test(types[idx]) ? "integer" : "categorical");
+      store._annotationCols.set(colName, { table: t, colName, dtype });
     }
 
     try {
@@ -420,6 +500,211 @@ export class EmbeddingStore {
     );
   }
 
+  /** True if an annotation column with this name has been registered. */
+  hasAnnotationColumn(colName: string): boolean {
+    return this._annotationCols.has(colName);
+  }
+
+  /** Read-only snapshot of registered annotation columns. */
+  get annotationColumns(): ReadonlyMap<string, { table: string; colName: string; dtype: AnnotationDtype }> {
+    return this._annotationCols;
+  }
+
+  /**
+   * True if `name` is already a column on the dataset VIEW (obs_base column,
+   * embedding, var column, or another annotation). Used to reject annotation
+   * names that would be silently shadowed/auto-renamed by `_rebuildView`.
+   */
+  async datasetColumnExists(name: string): Promise<boolean> {
+    const reader = await this.conn.runAndReadAll("SELECT column_name FROM (DESCRIBE dataset)");
+    return (reader.getColumnsJS()[0] as string[]).includes(name);
+  }
+
+  /**
+   * Ensure the annotation dtype registry exists. Persists with the cached
+   * `.duckdb` file so dtypes (esp. the string-vs-categorical distinction the
+   * column type alone can't recover) survive a reopen.
+   */
+  private async _ensureAnnMeta(): Promise<void> {
+    await this.conn.run(`CREATE TABLE IF NOT EXISTS __ann_meta__ (col_name TEXT PRIMARY KEY, dtype TEXT NOT NULL)`);
+  }
+
+  /**
+   * Create a new user annotation column and add it to the dataset VIEW.
+   * No-op if the column already exists.
+   */
+  async registerAnnotationColumn(colName: string, dtype: AnnotationDtype = "categorical"): Promise<void> {
+    if (this._annotationCols.has(colName)) return;
+    const tableName = annTableName(colName);
+    await this._ensureAnnMeta();
+    await this.conn.run(`DROP TABLE IF EXISTS ${tableName}`);
+    await this.conn.run(
+      `CREATE TABLE ${tableName} (` +
+        `__row_index__ UINTEGER PRIMARY KEY, ` +
+        `dataset_key TEXT, ` +
+        `obs_name TEXT, ` +
+        `${quoteIdent(colName)} ${annSqlType(dtype)}` +
+        `)`,
+    );
+    await this.conn.run(`INSERT OR REPLACE INTO __ann_meta__ VALUES ('${colName.replace(/'/g, "''")}', '${dtype}')`);
+    this._annotationCols.set(colName, { table: tableName, colName, dtype });
+    await this._rebuildView();
+  }
+
+  /**
+   * Upsert annotation values. Rows already in the table are replaced.
+   * The column must exist (call registerAnnotationColumn first).
+   */
+  async writeAnnotationValues(
+    colName: string,
+    rows: { rowIndex: number; datasetKey: string; obsName: string; value: string | null }[],
+  ): Promise<void> {
+    const entry = this._annotationCols.get(colName);
+    if (!entry) throw new Error(`Unknown annotation column: ${colName}`);
+    const batchSize = 1000;
+    for (let start = 0; start < rows.length; start += batchSize) {
+      const batch = rows.slice(start, Math.min(start + batchSize, rows.length));
+      const vals = batch.map((r) => {
+        const v = annValueLiteral(r.value, entry.dtype);
+        const dk = `'${r.datasetKey.replace(/'/g, "''")}'`;
+        const on = `'${r.obsName.replace(/'/g, "''")}'`;
+        return `(${r.rowIndex}, ${dk}, ${on}, ${v})`;
+      });
+      await this.conn.run(
+        `INSERT OR REPLACE INTO ${entry.table} ` +
+          `(__row_index__, dataset_key, obs_name, ${quoteIdent(colName)}) ` +
+          `VALUES ${vals.join(", ")}`,
+      );
+    }
+  }
+
+  /**
+   * Stamp `value` onto every obs in the staged `__scatter_selection` temp
+   * table. Resolves durable identity (dataset_key, obs_name) server-side by
+   * JOINing against obs_base — the client only has row indices. Mirrors the
+   * collections create-from-selection path.
+   */
+  async writeAnnotationFromScatterSelection(colName: string, value: string | null): Promise<void> {
+    const entry = this._annotationCols.get(colName);
+    if (!entry) throw new Error(`Unknown annotation column: ${colName}`);
+    const datasetKeyExpr = (await this.hasDatasetColumn()) ? "ob._dataset" : "''";
+    const v = annValueLiteral(value, entry.dtype);
+    await this.conn.run(
+      `INSERT OR REPLACE INTO ${entry.table} (__row_index__, dataset_key, obs_name, ${quoteIdent(colName)}) ` +
+        `SELECT ob.__row_index__, ${datasetKeyExpr}, ob.obs_name, ${v} ` +
+        `FROM __scatter_selection ss JOIN obs_base ob ON ob.__row_index__ = ss.row_index`,
+    );
+  }
+
+  /**
+   * Stamp `value` onto every obs matching `predicate` (a client Mosaic WHERE
+   * fragment) — the node-graph Annotate node's batch door. Resolves identity
+   * from the `dataset` VIEW so the predicate may reference embeddings / var /
+   * other annotation columns, not just obs_base. Trust model =
+   * `/api/annotations/export`: single-user local tool. Returns the matched count.
+   *
+   * ponytail: two passes (INSERT…SELECT then COUNT). Fine at v1 scale; collapse
+   * to one if the count cost ever shows up.
+   */
+  async writeAnnotationFromPredicate(colName: string, value: string | null, predicate: string): Promise<number> {
+    const entry = this._annotationCols.get(colName);
+    if (!entry) throw new Error(`Unknown annotation column: ${colName}`);
+    const datasetKeyExpr = (await this.hasDatasetColumn()) ? "ds._dataset" : "''";
+    const v = annValueLiteral(value, entry.dtype);
+    await this.conn.run(
+      `INSERT OR REPLACE INTO ${entry.table} (__row_index__, dataset_key, obs_name, ${quoteIdent(colName)}) ` +
+        `SELECT ds.__row_index__, ${datasetKeyExpr}, ds.obs_name, ${v} ` +
+        `FROM dataset ds WHERE ${predicate}`,
+    );
+    const rows = await this.queryJson(`SELECT count(*)::INT AS n FROM dataset WHERE ${predicate}`);
+    return Number(rows[0]?.n ?? 0);
+  }
+
+  /** Drop an annotation column and remove it from the VIEW. */
+  async dropAnnotationColumn(colName: string): Promise<void> {
+    const entry = this._annotationCols.get(colName);
+    if (!entry) return;
+    // Rebuild the VIEW (which no longer references entry.table) BEFORE dropping
+    // the table. Reversed, an interleaving Mosaic query on the shared
+    // connection would hit the still-current VIEW referencing a dropped table.
+    this._annotationCols.delete(colName);
+    await this._rebuildView();
+    await this.conn.run(`DROP TABLE IF EXISTS ${entry.table}`);
+    await this.conn.run(`DELETE FROM __ann_meta__ WHERE col_name = '${colName.replace(/'/g, "''")}'`).catch(() => {});
+  }
+
+  /**
+   * Write all annotation columns to a combined parquet sidecar.
+   *
+   * `USE_TMP_FILE true` makes the write atomic (DuckDB writes `path.tmp` then
+   * renames), so a crash mid-write can't corrupt the prior sidecar — no manual
+   * backup rotation needed. When the last column is dropped, the sidecar is
+   * removed so the deletion persists (else a stale file resurrects it on load).
+   *
+   * ponytail: no point-in-time backups. If ever wanted, write base.N copies
+   * AND make loadAnnotationsSidecar fall back to them — backups nothing reads
+   * are pure debt.
+   */
+  async saveAnnotationsSidecar(sidecarPath: string): Promise<void> {
+    if (this._annotationCols.size === 0) {
+      await rm(sidecarPath, { force: true });
+      return;
+    }
+    const parts = [...this._annotationCols.values()].map(
+      ({ table, colName, dtype }) =>
+        `SELECT '${colName.replace(/'/g, "''")}' AS column_name, '${dtype}' AS dtype, __row_index__, dataset_key, obs_name, CAST(${quoteIdent(colName)} AS TEXT) AS value FROM ${table}`,
+    );
+    const escaped = sidecarPath.replace(/'/g, "''");
+    await this.conn.run(`COPY (${parts.join(" UNION ALL ")}) TO '${escaped}' (FORMAT parquet, USE_TMP_FILE true)`);
+  }
+
+  /**
+   * Load annotation columns from a parquet sidecar written by saveAnnotationsSidecar.
+   * Silently returns if the file does not exist.
+   *
+   * Re-keys the JOIN on the stored `__row_index__`. This is correct only while
+   * the in-memory ingest is order-deterministic across runs (it is — the MuData
+   * merge is deterministic). The durable identity (dataset_key, obs_name) is
+   * preserved in the table; if ingest order ever becomes non-deterministic,
+   * re-resolve __row_index__ by joining obs_name against obs_base here.
+   */
+  async loadAnnotationsSidecar(sidecarPath: string): Promise<void> {
+    let cols: { column_name: string; dtype: string | null }[];
+    const escaped = sidecarPath.replace(/'/g, "''");
+    try {
+      // `dtype` was added later — COALESCE a missing/legacy column to categorical.
+      const hasDtype = (
+        await this.conn.runAndReadAll(
+          `SELECT COUNT(*) FROM (DESCRIBE SELECT * FROM read_parquet('${escaped}')) WHERE column_name = 'dtype'`,
+        )
+      ).getColumnsJS()[0][0];
+      const dtypeExpr = Number(hasDtype) > 0 ? "ANY_VALUE(dtype)" : "'categorical'";
+      const reader = await this.conn.runAndReadAll(
+        `SELECT column_name, ${dtypeExpr} AS dtype FROM read_parquet('${escaped}') GROUP BY column_name`,
+      );
+      const [names, dtypes] = reader.getColumnsJS() as [string[], (string | null)[]];
+      cols = names.map((column_name, i) => ({ column_name, dtype: dtypes[i] }));
+    } catch {
+      return; // file doesn't exist or is unreadable
+    }
+    if (cols.length > 0) await this._ensureAnnMeta();
+    for (const { column_name: colName, dtype: rawDtype } of cols) {
+      if (this._annotationCols.has(colName)) continue;
+      const dtype: AnnotationDtype = rawDtype === "integer" || rawDtype === "string" ? rawDtype : "categorical";
+      const tableName = annTableName(colName);
+      const escapedCol = colName.replace(/'/g, "''");
+      await this.conn.run(`DROP TABLE IF EXISTS ${tableName}`);
+      await this.conn.run(
+        `CREATE TABLE ${tableName} AS ` +
+          `SELECT __row_index__, dataset_key, obs_name, CAST(value AS ${annSqlType(dtype)}) AS ${quoteIdent(colName)} ` +
+          `FROM read_parquet('${escaped}') WHERE column_name = '${escapedCol}'`,
+      );
+      await this.conn.run(`INSERT OR REPLACE INTO __ann_meta__ VALUES ('${escapedCol}', '${dtype}')`);
+      this._annotationCols.set(colName, { table: tableName, colName, dtype });
+    }
+    if (cols.length > 0) await this._rebuildView();
+  }
+
   /**
    * Recreate the `dataset` VIEW to include all registered embeddings.
    *
@@ -450,6 +735,11 @@ export class EmbeddingStore {
     for (const varCol of this._varCols.values()) {
       joins.push(`LEFT JOIN ${varCol.table} USING (__row_index__)`);
       extraCols.push(`${varCol.table}."${varCol.colName}"`);
+    }
+
+    for (const annCol of this._annotationCols.values()) {
+      joins.push(`LEFT JOIN ${annCol.table} USING (__row_index__)`);
+      extraCols.push(`${annCol.table}.${quoteIdent(annCol.colName)}`);
     }
 
     const extraSelect = extraCols.join(", ");

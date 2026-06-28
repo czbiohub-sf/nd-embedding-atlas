@@ -1,8 +1,12 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { ScatterUIStateProvider } from "./components/scatter/ScatterUIStateProvider";
+import { useEffect, useState } from "react";
+import { CollectionsSheetProvider } from "./components/collections/CollectionsSheetProvider";
+import { NdSpecPage } from "./components/nd/NdSpecPage";
+import { ScatterUIStateProvider } from "./nodes/scatter/ScatterUIStateProvider";
 import { Toaster } from "./components/ui/sonner";
 import { TooltipProvider } from "./components/ui/tooltip";
-import { DashboardProvider, DashboardShell } from "./dashboard";
+import { WorkspaceShell } from "./core/workspace/WorkspaceShell";
+import { DashboardProvider } from "./dashboard";
 import { ThemeProvider } from "./ThemeProvider";
 
 // No client-side persistence. The previous PersistQueryClientProvider
@@ -29,14 +33,42 @@ const queryClient = new QueryClient({
   },
 });
 
+/**
+ * Routes:
+ *  · `/` (and `#/graph`, a legacy alias) — the node workspace, the only
+ *    dashboard. `#/graph` renders the same shell with the URL left untouched
+ *    (no redirect), so existing links keep working.
+ *  · `#/nd-spec` — living spec for the nd component layer (no data deps).
+ */
+function useHashRoute(): string {
+  const [hash, setHash] = useState(() => window.location.hash);
+  useEffect(() => {
+    const onHash = () => setHash(window.location.hash);
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+  return hash;
+}
+
 export default function App() {
+  const hash = useHashRoute();
+  if (hash === "#/nd-spec") {
+    // Living spec for the nd component layer — no data deps, no providers.
+    return (
+      <ThemeProvider>
+        <NdSpecPage />
+      </ThemeProvider>
+    );
+  }
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <TooltipProvider delay={400}>
           <ScatterUIStateProvider>
             <DashboardProvider>
-              <DashboardShell />
+              <CollectionsSheetProvider>
+                <WorkspaceShell />
+              </CollectionsSheetProvider>
               <Toaster position="bottom-right" />
             </DashboardProvider>
           </ScatterUIStateProvider>

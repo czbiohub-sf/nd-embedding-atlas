@@ -1,4 +1,4 @@
-import type { ChannelDef } from "../components/viewer/ViewerContext";
+import type { ChannelDef } from "@/nodes/image-viewer/viewer/ViewerContext";
 import { type ChannelHash, channelHash } from "./branded-types";
 
 /**

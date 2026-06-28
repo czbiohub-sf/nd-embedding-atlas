@@ -22,6 +22,7 @@
  * wrapper script.
  */
 
+import type { BunPlugin } from "bun";
 import { existsSync, rmSync } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
 
@@ -83,6 +84,19 @@ async function buildFrontendWithBun(): Promise<void> {
   const tailwind = (await import("bun-plugin-tailwind")).default;
   const typegpu = (await import("unplugin-typegpu/bun")).default;
 
+  // Vite's `?url` asset suffix (e.g. prql.ts's `prql_js_bg.wasm?url`) has no
+  // Bun.build equivalent: strip it and resolve the bare specifier, then let the
+  // `.wasm` file loader below emit it as an asset whose import returns the URL.
+  // Vite handles `?url` natively in dev; this keeps the one source working in both.
+  const urlAssetSuffix: BunPlugin = {
+    name: "url-asset-suffix",
+    setup(build) {
+      build.onResolve({ filter: /\?url$/ }, (a) => ({
+        path: Bun.resolveSync(a.path.replace(/\?url$/, ""), dirname(a.importer)),
+      }));
+    },
+  };
+
   // Bun.build writes into outdir without clearing it — wipe any stale Vite
   // output first so the manifest globs only Bun's emitted files.
   rmSync(FRONTEND_DIST, { recursive: true, force: true });
@@ -96,10 +110,13 @@ async function buildFrontendWithBun(): Promise<void> {
     // compiled binary by ~15MB (Vite emits none here either).
     sourcemap: "none",
     splitting: true,
+    // `?url` imports (and any other large binary asset) emit as a hashed file
+    // whose default export is the served URL — matching Vite's `?url` behavior.
+    loader: { ".wasm": "file" },
     // The frontend reads `import.meta.env.PROD` (DashboardProvider) — Vite
     // injects it; Bun does not, so define it for the production bundle.
     define: { "import.meta.env.PROD": "true", "import.meta.env.DEV": "false" },
-    plugins: [tailwind, typegpu({})],
+    plugins: [tailwind, typegpu({}), urlAssetSuffix],
   });
 
   if (!result.success) {
@@ -110,6 +127,8 @@ async function buildFrontendWithBun(): Promise<void> {
 }
 
 // ─── Step 1: Build frontend ────────────────────────────────────────────────
+
+const startedAt = performance.now();
 
 console.log(`\n  ${BOLD}Step 1:${RESET} Building frontend (Bun.build)...\n`);
 await buildFrontendWithBun();
@@ -215,7 +234,7 @@ const DUCKDB_PLATFORM_EXTERNALS = ALL_DUCKDB_TARGETS.filter((p) => p !== matchin
 // recursively resolves their imports. Bun emits each as `<name>.js` next
 // to the main entry inside $bunfs; parallel-reader.ts switches its URL
 // extension to match when running compiled.
-const WORKER_ENTRYPOINTS = ["./src/zarr/column-worker.ts"];
+const WORKER_ENTRYPOINTS = ["./src/zarr/column-worker.ts", "./src/server/crop-worker.ts"];
 
 const compileArgs = [
   "bun",
@@ -233,11 +252,22 @@ const compileArgs = [
 
 let compileExit = 1;
 try {
+  // Stream Bun's compile output but drop its `minify … (estimate)` line — the
+  // savings estimate is noise next to the real binary size we print below.
   const compileProc = Bun.spawn(compileArgs, {
     cwd: ROOT,
-    stdout: "inherit",
+    stdout: "pipe",
     stderr: "inherit",
   });
+  const decoder = new TextDecoder();
+  let pending = "";
+  for await (const chunk of compileProc.stdout) {
+    pending += decoder.decode(chunk, { stream: true });
+    const lines = pending.split("\n");
+    pending = lines.pop() ?? "";
+    for (const line of lines) if (!line.includes("(estimate)")) process.stdout.write(`${line}\n`);
+  }
+  if (pending && !pending.includes("(estimate)")) process.stdout.write(`${pending}\n`);
   compileExit = await compileProc.exited;
 } finally {
   // Restore the generated stubs so the working tree stays clean.
@@ -259,9 +289,10 @@ if (compileExit !== 0) {
 
 // ─── Done ──────────────────────────────────────────────────────────────────
 
-const stat = Bun.file(outfile);
-const sizeMB = (stat.size / 1024 / 1024).toFixed(1);
+const sizeMB = (Bun.file(outfile).size / 1024 / 1024).toFixed(1);
+const relOut = relative(process.cwd(), outfile);
+const elapsed = `${((performance.now() - startedAt) / 1000).toFixed(1)}s`;
 
-console.log(`\n  ${GREEN}✓${RESET} Binary: ${BOLD}${outfile}${RESET} (${sizeMB} MB)`);
-console.log(`  ${DIM}Target: ${target}${RESET}\n`);
-console.log(`  ${DIM}Run \`./dist/ndea --version\` to smoke-test.${RESET}\n`);
+console.log(`\n  ${GREEN}✓${RESET} Binary: ${BOLD}${relOut}${RESET} ${DIM}(${sizeMB} MB)${RESET}`);
+console.log(`  ${DIM}Target: ${target} · built in ${elapsed}${RESET}\n`);
+console.log(`  ${DIM}Version: \`${relOut} --version\`${RESET}\n`);

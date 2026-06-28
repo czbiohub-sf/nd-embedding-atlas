@@ -1,6 +1,6 @@
 /**
  * HostContext (PLUGIN-ARCHITECTURE §4.3, §10.1) — puts the per-instance
- * `PluginHost` on React context so a plugin's deep subtree (e.g. `ScatterContent`
+ * `NodeHost` on React context so a plugin's deep subtree (e.g. `ScatterContent`
  * → `ScatterView` → `ScatterGPUHost`) can read `host.*` without prop-drilling.
  *
  * `PluginMount` builds one host per instance and passes it as a prop to the
@@ -16,12 +16,12 @@
  */
 
 import { createContext, type ReactNode, useContext } from "react";
-import type { PluginHost } from "@/core/plugin/host";
+import type { NodeHost } from "@/core/node/host";
 
-const HostContext = createContext<PluginHost | null>(null);
+const HostContext = createContext<NodeHost | null>(null);
 
 export interface HostProviderProps {
-  host: PluginHost;
+  host: NodeHost;
   children: ReactNode;
 }
 
@@ -31,13 +31,13 @@ export function HostProvider({ host, children }: HostProviderProps) {
 
 /** Read the current plugin host, or `null` when rendered outside a host (e.g. the floating-scatter path). */
 // eslint-disable-next-line react/only-export-components
-export function useOptionalHost(): PluginHost | null {
+export function useOptionalHost(): NodeHost | null {
   return useContext(HostContext);
 }
 
 /** Read the current plugin host; throws if rendered outside a `<HostProvider>`. */
 // eslint-disable-next-line react/only-export-components
-export function useHost(): PluginHost {
+export function useHost(): NodeHost {
   const host = useContext(HostContext);
   if (!host) throw new Error("useHost must be used within a <HostProvider>");
   return host;

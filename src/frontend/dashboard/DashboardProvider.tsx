@@ -1,43 +1,16 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSelector } from "@tanstack/react-store";
 import { Coordinator, Selection, socketConnector } from "@uwdata/mosaic-core";
-import { type ReactNode, useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
-import { useColumnTypes } from "../hooks/useColumnTypes";
-import { generateDefaultPanels } from "../lib/chart-spec";
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { MetadataSchema } from "../../protocol/index.ts";
 import { wsClient } from "../lib/ws-client";
-import { scatterKeys } from "../scatter-gpu/hooks/queryKeys";
+import { scatterKeys } from "../lib/query-keys";
 import { highlightBus, selectionBus } from "../core/buses";
-import { asInstanceId } from "../core/plugin/host";
+import { asInstanceId } from "../core/node/host";
 import { activeCollectionStore } from "../stores/ActiveCollectionStore";
 import { broadcastSelection, clearSelectionSync, externalSource } from "../stores/SelectionSyncStore";
-import type { ChartPanelEntry, ChartSpec, Metadata, TrajectoryData } from "../types";
+import type { Metadata, TrajectoryData } from "../types";
 import { DashboardContext, type DashboardState } from "./DashboardContext";
-
-// ── Panel reducer ──────────────────────────────────────────────────────────
-
-type PanelAction =
-  | { type: "SET_PANELS"; panels: ChartPanelEntry[] }
-  | { type: "ADD_PANEL"; spec: ChartSpec }
-  | { type: "REMOVE_PANEL"; id: string }
-  | { type: "REORDER_PANELS"; ids: string[] };
-
-function panelReducer(state: ChartPanelEntry[], action: PanelAction): ChartPanelEntry[] {
-  switch (action.type) {
-    case "SET_PANELS":
-      return action.panels;
-    case "ADD_PANEL":
-      return [...state, { id: crypto.randomUUID(), spec: action.spec }];
-    case "REMOVE_PANEL":
-      return state.filter((p) => p.id !== action.id);
-    case "REORDER_PANELS": {
-      const byId = new Map(state.map((p) => [p.id, p]));
-      return action.ids.map((id) => byId.get(id)).filter((p): p is ChartPanelEntry => p != null);
-    }
-    default:
-      return state;
-  }
-}
 
 // ── Provider ───────────────────────────────────────────────────────────────
 
@@ -190,23 +163,6 @@ export function DashboardProvider({ children }: Props) {
   // Trajectory state — per-dataset, keyed by datasetKey (empty string for single-dataset mode)
   const [trajectories, setTrajectoriesState] = useState<Record<string, TrajectoryData | null>>({});
 
-  // Panel state
-  const [panels, dispatchPanels] = useReducer(panelReducer, []);
-
-  // Column types — used for auto-generating chart panels
-  const columnTypes = useColumnTypes(coordinator);
-
-  // Auto-generate default panels once column types are available
-  const panelsInitialized = useRef(false);
-  useEffect(() => {
-    if (!metadata || !columnTypes || panelsInitialized.current) return;
-    panelsInitialized.current = true;
-    const defaultPanels = generateDefaultPanels(columnTypes, metadata);
-    if (defaultPanels.length > 0) {
-      dispatchPanels({ type: "SET_PANELS", panels: defaultPanels });
-    }
-  }, [metadata, columnTypes]);
-
   // Actions
   const refreshMetadata = useCallback(async () => {
     await queryClient.invalidateQueries({ queryKey: scatterKeys.metadata() });
@@ -234,31 +190,24 @@ export function DashboardProvider({ children }: Props) {
     });
   }, []);
 
-  const addPanel = useCallback((spec: ChartSpec) => dispatchPanels({ type: "ADD_PANEL", spec }), []);
-  const removePanel = useCallback((id: string) => dispatchPanels({ type: "REMOVE_PANEL", id }), []);
-  const reorderPanels = useCallback((ids: string[]) => dispatchPanels({ type: "REORDER_PANELS", ids }), []);
-
   // Memoize stable objects (must be before early return to satisfy rules of hooks)
   const actions = useMemo(
     () => ({
       setHighlight: highlightBus.set,
-      addPanel,
-      removePanel,
-      reorderPanels,
       refreshMetadata,
       setTrajectory,
       setTrajectoryTIndex,
       clearTrajectory,
     }),
-    [addPanel, removePanel, reorderPanels, refreshMetadata, setTrajectory, setTrajectoryTIndex, clearTrajectory],
+    [refreshMetadata, setTrajectory, setTrajectoryTIndex, clearTrajectory],
   );
 
   const meta = useMemo(() => ({ coordinator, brushSelection, table: TABLE }), [coordinator, brushSelection]);
 
   // Memoize state to prevent unnecessary consumer re-renders
   const state = useMemo<DashboardState | null>(
-    () => (metadata ? { metadata, highlightId, panels, trajectories } : null),
-    [metadata, highlightId, panels, trajectories],
+    () => (metadata ? { metadata, highlightId, trajectories } : null),
+    [metadata, highlightId, trajectories],
   );
 
   const contextValue = useMemo(() => (state ? { state, actions, meta } : null), [state, actions, meta]);

@@ -27,7 +27,7 @@ export class PanelErrorBoundary extends Component<Props, State> {
           <div className="font-medium text-sm text-foreground">{this.props.panelName} crashed</div>
           <div className="max-w-xs break-all font-mono text-muted-foreground text-xs">{this.state.error.message}</div>
           <button
-            className="rounded border border-border px-3 py-1 text-muted-foreground text-xs hover:bg-elevated"
+            className="rounded border border-border px-3 py-1 text-muted-foreground text-xs hover:bg-muted"
             onClick={() => this.setState({ error: null })}
           >
             Retry

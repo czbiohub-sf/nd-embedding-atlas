@@ -9,12 +9,16 @@
 import { broadcastViewState, toggleViewLock, viewSyncStore, type ViewSyncState } from "@/stores/ViewSyncStore";
 import { panelId } from "@/lib/branded-types";
 import type { ViewState } from "@/types";
-import type { PluginInstanceId } from "@/core/plugin/host";
+import type { NodeInstanceId } from "@/core/node/host";
 
 export interface ViewSyncBus {
   snapshot(): ViewSyncState;
-  broadcast(instanceId: PluginInstanceId, state: ViewState): void;
+  broadcast(instanceId: NodeInstanceId, state: ViewState): void;
   toggleLock(): void;
+  /** Fire on an incoming (linked, non-self) pan/zoom broadcast. The global-bus
+   *  backing for `host.viewSync.subscribe`; the workspace overrides this with a
+   *  coordination-scoped subscribe at the body-dock seam. */
+  subscribe(instanceId: NodeInstanceId, cb: (state: { panX: number; panY: number; zoom: number }) => void): () => void;
 }
 
 export function createViewSyncBus(): ViewSyncBus {
@@ -27,6 +31,15 @@ export function createViewSyncBus(): ViewSyncBus {
     },
     toggleLock() {
       toggleViewLock();
+    },
+    subscribe(instanceId, cb) {
+      const self = panelId(instanceId as string);
+      const sub = viewSyncStore.subscribe(() => {
+        const s = viewSyncStore.state;
+        if (s.lockMode !== "linked" || s.sourcePanelId === self) return;
+        cb({ panX: s.panX, panY: s.panY, zoom: s.zoom });
+      });
+      return () => sub.unsubscribe();
     },
   };
 }

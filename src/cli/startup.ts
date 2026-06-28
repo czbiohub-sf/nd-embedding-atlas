@@ -29,8 +29,11 @@ import type { DatasetConfig, DatasetMeta, ViewerState } from "../server/state.ts
 import type { ResolvedConfig, DatasetEntry } from "./config.ts";
 import { getNetworkAddress } from "./resolve.ts";
 import { resolveFrontendDir } from "../server/static.ts";
+import { flushAnnotationSaves } from "../server/routes/annotate.ts";
 import type { DuckDBConnection } from "@duckdb/node-api";
 import { existsSync, mkdirSync, rmSync } from "node:fs";
+import { homedir } from "node:os";
+import { resolve } from "node:path";
 import {
   resolveIngestMode,
   isLocalPath,
@@ -307,6 +310,30 @@ export async function startup(config: ResolvedConfig): Promise<void> {
   const plateMounts: PlateMount[] = buildPlateMounts(datasetConfigs, isMultiDataset);
   const platesByDataset = await readPlateMetaForDatasets(plateMounts);
 
+  // File-backed DuckDB: ann_* tables persist in the .duckdb cache file and are
+  // re-registered by fromCachedDb — no sidecar needed. In-memory sessions
+  // (MuData / remote zarr) lose ann_* on exit, so the sidecar is their only
+  // persistence layer. Reload it now (before serving) so annotations from a
+  // prior in-memory session are restored.
+  const annotationsSidecarPath = cacheEnabled ? null : resolveAnnotationsSidecarPath(config.datasets[0].path);
+  if (annotationsSidecarPath) {
+    try {
+      await store.loadAnnotationsSidecar(annotationsSidecarPath);
+      const restored = store.annotationColumns.size;
+      if (restored > 0) {
+        // Surface restored columns in obs_columns so they appear in the table
+        // + color picker (same array handleMetadata serves).
+        for (const name of store.annotationColumns.keys()) {
+          if (!obsColumns.includes(name)) obsColumns.push(name);
+        }
+        console.log(`    ${GREEN}✓${RESET} restored ${restored} annotation column(s) from sidecar`);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(`    ${YELLOW}⚠${RESET}  annotations sidecar load failed: ${msg}`);
+    }
+  }
+
   const state: ViewerState = {
     store,
     datasets: datasetConfigs,
@@ -322,6 +349,7 @@ export async function startup(config: ResolvedConfig): Promise<void> {
     // Crop pool is attached lazily by createApp() so tests / non-server
     // consumers don't pay the worker spawn cost.
     cropPool: null,
+    annotationsSidecarPath,
   };
   // ── 4. Resolve frontend ─────────────────────────────────────────────────
 
@@ -485,15 +513,18 @@ export async function startup(config: ResolvedConfig): Promise<void> {
 
   console.log(`\n  ${DIM}Press Ctrl+C to stop${RESET}\n`);
 
-  const shutdown = () => {
+  const shutdown = async () => {
     console.log(`\n  ${DIM}Shutting down...${RESET}`);
+    // Flush a pending debounced annotation save before exit — for in-memory
+    // (MuData / remote zarr) sessions the sidecar is the only persistence.
+    await flushAnnotationSaves(state);
     void server.stop();
     store.close();
     process.exit(0);
   };
 
-  process.on("SIGINT", shutdown);
-  process.on("SIGTERM", shutdown);
+  process.on("SIGINT", () => void shutdown());
+  process.on("SIGTERM", () => void shutdown());
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -589,6 +620,23 @@ function buildPlateMetadata(
     plateMeta,
     datasetChannels: isMultiDataset && Object.keys(datasetChannels).length > 0 ? datasetChannels : null,
   };
+}
+
+/**
+ * Derive the annotations sidecar path for in-memory DuckDB sessions.
+ *
+ * Always writes to `~/.cache/ndea/annotations/{hex}.parquet` — never next
+ * to the zarr store. The djb2 hash of the primary dataset path gives a
+ * stable discriminator across restarts.
+ */
+function resolveAnnotationsSidecarPath(zarr_path: string): string {
+  const cacheRoot = process.env.XDG_CACHE_HOME ?? resolve(homedir(), ".cache");
+  const dir = resolve(cacheRoot, "ndea", "annotations");
+  mkdirSync(dir, { recursive: true });
+  // ponytail: djb2 hash — stable path discriminator, not a security primitive
+  let h = 5381;
+  for (let i = 0; i < zarr_path.length; i++) h = ((h << 5) + h + zarr_path.charCodeAt(i)) >>> 0;
+  return resolve(dir, `${h.toString(16)}.parquet`);
 }
 
 /** Sort obsm keys by priority (UMAP > tSNE > PHATE > PCA > rest). */

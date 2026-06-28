@@ -4,7 +4,7 @@ Local design system: shadcn/ui primitives we own + domain primitives tuned for s
 
 ## Token tiers (`src/frontend/app.css`)
 
-Two tiers live in the CSS file; a third is available but used sparingly.
+Three tiers live in `src/frontend/app.css`: primitives, canonical tokens, and app extensions.
 
 ### Tier 1 — primitives
 
@@ -18,20 +18,19 @@ Raw source values. Never used directly by components.
 | `--warning-hue` | `oklch(0.741 0.181 60)`              | same | Source for `--warning-emphasis`.                                       |
 | `--success-hue` | `oklch(0.69 0.19 170)`               | same | Source for `--success-emphasis`.                                       |
 
-### Tier 2 — semantics
+### Tier 2 — canonical tokens (ONE vocabulary)
 
-Two vocabularies coexist. **shadcn vocab is canonical** (every shadcn primitive depends on it). Custom vocab (`--color-base`, `--color-surface`, etc.) stays for historical call sites; new code should prefer shadcn names.
+**shadcn-canonical is the only surface/text/border vocabulary.** Components use `bg-background`, `bg-card`, `bg-muted`, `text-foreground`, `text-muted-foreground`, `border-border`, `ring-ring`, etc. — defined in the `:root` (light) and `html.dark` (dark) blocks in `app.css`. The old parallel `--color-*` vocab (`bg-base`, `bg-surface`, `text-text-primary`, …) and its dark-mode bridge layer were removed; **don't reintroduce them.**
 
-**shadcn-canonical** (utilities like `bg-background`, `text-foreground`, `border-border`, `ring-ring`): see `:root` and `html.dark` blocks near the bottom of `app.css`.
+### Tier 3 — app extensions
 
-**Our custom vocab** (utilities like `bg-base`, `text-text-primary`):
+Levels shadcn has no token for. These are kept (genuine extensions, not a revived rival vocab):
 
-| Utility                                                         | Light                             | Dark                                                                |
-| --------------------------------------------------------------- | --------------------------------- | ------------------------------------------------------------------- |
-| `bg-base` / `bg-surface` / `bg-elevated`                        | `#ffffff` / `#f7f7f7` / `#ebebeb` | `var(--background)` / `var(--card)` / `var(--muted)`                |
-| `bg-surface-secondary` / `bg-surface-tertiary`                  | `#f0f0f0` / `#e8e8e8`             | `var(--muted)` / `oklch(0.32 0 0)`                                  |
-| `border-border-subtle` / `border-border-active`                 | `#e8e8e8` / `#b8b8b8`             | `var(--border)` / `oklch(1 0 0 / 22%)`                              |
-| `text-text-primary` / `text-text-secondary` / `text-text-muted` | `#111` / `#444` / `#6e6e6e`       | `var(--foreground)` / `var(--muted-foreground)` / `oklch(0.62 0 0)` |
+| Utility                | Light     | Dark                 | Purpose                                   |
+| ---------------------- | --------- | -------------------- | ----------------------------------------- |
+| `bg-surface-tertiary`  | `#e8e8e8` | `oklch(0.32 0 0)`    | Hover-lighten, one step above `bg-muted`. |
+| `border-border-active` | `#b8b8b8` | `oklch(1 0 0 / 22%)` | Stronger border on hover/active.          |
+| `text-text-muted`      | `#6e6e6e` | `oklch(0.62 0 0)`    | 3rd/dimmest text, below muted-foreground. |
 
 **Emphasis family** (tinted backgrounds for pills, callouts, selected rows):
 
@@ -42,13 +41,7 @@ Two vocabularies coexist. **shadcn vocab is canonical** (every shadcn primitive 
 | `bg-warning-emphasis` | `--warning-hue` | 7%          | 12%        |
 | `bg-success-emphasis` | `--success-hue` | 10%         | 15%        |
 
-**Glass surface** (frosted overlays):
-
-| Utility                             | Light                | Dark                 |
-| ----------------------------------- | -------------------- | -------------------- |
-| `bg-glass-bg`                       | `oklch(1 0 0 / 80%)` | `oklch(0 0 0 / 60%)` |
-| `border-glass-border`               | `oklch(0 0 0 / 7%)`  | `oklch(1 0 0 / 7%)`  |
-| `backdrop-blur-[var(--blur-glass)]` | `12px`               | same                 |
+**Glass surface** (frosted overlays over live content): ONE recipe — the `glass` utility (`@utility glass` in `app.css`), sourced from `--glass-bg` / `--glass-border` / `--blur-glass` (12px). Apply `glass` + `border rounded-* shadow-*`, or use `<Panel variant="glass">`. The shadcn overlays (context-menu/select/dropdown) and the Tweakpane viewer panels share it (via the utility and the `--glass-*` tokens respectively). **Earn-it rule:** glass only for chrome floating over live content (canvas / imagery / data-viz); docked panels and overlays on solid backgrounds use `<Panel variant="solid">`.
 
 **Typography** (named rungs below Tailwind's default `text-xs`):
 
@@ -82,6 +75,15 @@ Edit in place when you need variants — `Button`'s CVA block is the template.
 | `<DimensionBadge>`                       | Small technical label. `tone`: `obs` / `var` / `accent` / `muted`.      | Labeling categories, layer names, axis dimensions.                                                                                         |
 | `<FilterBadge>`                          | Filtered/total count display, periwinkle (`--primary`) when filtered.   | Anywhere a filtered subset count is shown.                                                                                                 |
 | `<LegendRow>`                            | Swatch + label + count with `disabled` / `dimmed` / `isolated` state.   | Categorical legends. Caller supplies the swatch (wrap it in ContextMenu if you need color-picking).                                        |
+
+### `nd/` ↔ `ui/` boundary
+
+`components/nd/` is the canvas instrument layer. It **derives from `ui/`, never duplicates it**:
+
+- `NdBracketed` / `NdChip` are re-exports of `ui/bracketed` / `ui/dimension-badge` — vocabulary aliases (the workspace speaks "bracketed" / "chip"). Not copies.
+- `nd-icon-button` is the tiny canvas instrument button. It derives from the same `@base-ui/react/button` base as `ui/icon-button`, adding instrument styling (14–15px, tones) + `data-nodrag` + propagation-stop. Two variants, one primitive.
+- All form controls are already on `ui/` (sliders → `ui/slider` / `SliderRow`; toggles → `ui/toggle`; inputs → `ui/input`). The Idetik channel contrast and scatter continuous-color domain use two-thumb range `ui/slider`s.
+- Genuinely bespoke (no shadcn twin — stay in `nd/`): `nd-node-frame`, `nd-port`, `nd-resize-grips`, `nd-breadcrumb`, `NdSpecPage`, `PrqlEditor`, and the telemetry atoms `NdLed` / `NdHud` / `NdKv` / `NdCaption`.
 
 ### Where things live outside `ui/`
 

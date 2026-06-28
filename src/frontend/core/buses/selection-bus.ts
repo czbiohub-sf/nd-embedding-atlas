@@ -28,7 +28,7 @@
 import { Store } from "@tanstack/store";
 import type { Selection } from "@uwdata/mosaic-core";
 import { stringPredicate } from "@/lib/mosaic-helpers";
-import type { PluginInstanceId, SelectionToken } from "@/core/plugin/host";
+import type { NodeInstanceId, SelectionToken } from "@/core/node/host";
 
 /** Canonical predicate facets a view can publish. */
 export type SelectionFacet = "lasso" | "activeSet" | "chart" | "range" | "isolation";
@@ -50,7 +50,7 @@ const TOK_RE = /\/\* tok=\d+ \*\//;
  * clients against this object.
  */
 interface ClauseSource {
-  readonly __ndeaInstance: PluginInstanceId;
+  readonly __ndeaInstance: NodeInstanceId;
 }
 
 interface InstanceClause {
@@ -78,7 +78,7 @@ export interface SelectionBus {
    * it to the destination crossfilter via the rAF defer. Throws on a raw
    * temp-table reference lacking a `tok=` SQL-comment stamp (§6.5).
    */
-  publishPredicate(instanceId: PluginInstanceId, facet: SelectionFacet, sql: string | null): void;
+  publishPredicate(instanceId: NodeInstanceId, facet: SelectionFacet, sql: string | null): void;
   /**
    * Clear `facet` for EVERY registered instance — the collections bridge resets
    * all lassos when a collection becomes the new working scope (the multi-
@@ -90,7 +90,7 @@ export interface SelectionBus {
    * clause leak fix). Publishes an empty clause for its source first so the
    * crossfilter stops filtering by a closed view.
    */
-  disposeInstance(instanceId: PluginInstanceId): void;
+  disposeInstance(instanceId: NodeInstanceId): void;
   /**
    * Inject the destination crossfilter Selection. Returns a detach fn. Called
    * once by DashboardProvider; the bus is the sole writer thereafter (§6.7).
@@ -113,8 +113,8 @@ export interface SelectionBus {
 }
 
 export function createSelectionBus(): SelectionBus {
-  const registry = new Map<PluginInstanceId, InstanceClause>();
-  const dirty = new Set<PluginInstanceId>();
+  const registry = new Map<NodeInstanceId, InstanceClause>();
+  const dirty = new Set<NodeInstanceId>();
   // Sources of disposed instances awaiting an empty-clause publish. Keyed by the
   // source OBJECT (not instanceId) so a recreated instanceId — which mints a
   // fresh source — never cancels a prior source's pending removal (no leak), and
@@ -130,7 +130,7 @@ export function createSelectionBus(): SelectionBus {
   // uniqueness). Replaces the scatter hook's old `largeSelectionVersion`.
   let tokN = 0;
 
-  const ensure = (instanceId: PluginInstanceId): InstanceClause => {
+  const ensure = (instanceId: NodeInstanceId): InstanceClause => {
     let clause = registry.get(instanceId);
     if (!clause) {
       clause = { source: { __ndeaInstance: instanceId }, facets: new Map() };
@@ -171,7 +171,7 @@ export function createSelectionBus(): SelectionBus {
     rafHandle = requestAnimationFrame(flush);
   };
 
-  const markDirty = (instanceId: PluginInstanceId): void => {
+  const markDirty = (instanceId: NodeInstanceId): void => {
     dirty.add(instanceId);
     revision.setState((v) => v + 1);
     scheduleFlush();

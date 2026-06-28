@@ -47,3 +47,9 @@ notes/
 
 # I/O-scalability bench harness — dev-only measurement scaffolding, not shipped
 bench/
+
+# impeccable critique snapshots (ignore.md is tracked — it's run input)
+.impeccable/*
+!.impeccable/critique/
+.impeccable/critique/*
+!.impeccable/critique/ignore.md

@@ -17,6 +17,8 @@ export interface SpatialColumns {
   bbox: string | null;
   x: string | null;
   y: string | null;
+  /** Per-obs Z plane (optional). Crops render at this Z when present. */
+  z: string | null;
 }
 
 /** Returns the set of columns that should be hidden from the Mosaic VIEW. */
@@ -47,6 +49,13 @@ export function detectSpatialColumns(obsColumns: Set<string>): SpatialColumns {
   const fov = obsColumns.has("fov_name") ? "fov_name" : obsColumns.has("well") ? "well" : null;
   const t = obsColumns.has("t") ? "t" : null;
   const bbox = obsColumns.has("bbox") ? "bbox" : obsColumns.has("cp_bbox") ? "cp_bbox" : null;
+  const z = obsColumns.has("z")
+    ? "z"
+    : obsColumns.has("z_slice")
+      ? "z_slice"
+      : obsColumns.has("plane")
+        ? "plane"
+        : null;
 
   let x: string | null = null;
   let y: string | null = null;
@@ -63,14 +72,14 @@ export function detectSpatialColumns(obsColumns: Set<string>): SpatialColumns {
     }
   }
 
-  return { fov, t, bbox, x, y };
+  return { fov, t, bbox, x, y, z };
 }
 
 /** Returns all non-null spatial column names. */
 export function spatialAllColumns(spatial: SpatialColumns | null): Set<string> {
   if (!spatial) return new Set();
   const cols = new Set<string>();
-  for (const v of [spatial.fov, spatial.t, spatial.bbox, spatial.x, spatial.y]) {
+  for (const v of [spatial.fov, spatial.t, spatial.bbox, spatial.x, spatial.y, spatial.z]) {
     if (v != null) cols.add(v);
   }
   return cols;
@@ -129,4 +138,10 @@ export interface ViewerState {
    * configured. Lifetime = server lifetime; created in createApp().
    */
   cropPool: CropPool | null;
+  /**
+   * Path for the combined annotations parquet sidecar.
+   * Null if no writable location could be determined (read-only zarr + no
+   * ~/.ndea fallback configured). Derived once at startup.
+   */
+  annotationsSidecarPath: string | null;
 }

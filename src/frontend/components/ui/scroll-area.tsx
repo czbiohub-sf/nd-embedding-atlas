@@ -2,14 +2,36 @@ import { ScrollArea as ScrollAreaPrimitive } from "@base-ui/react/scroll-area";
 
 import { cn } from "@/lib/utils";
 
-function ScrollArea({ className, children, ...props }: ScrollAreaPrimitive.Root.Props) {
+function ScrollArea({
+  className,
+  viewportClassName,
+  contentClassName,
+  children,
+  ...props
+}: ScrollAreaPrimitive.Root.Props & {
+  /** Applied to the scroll Viewport — put a `max-h-*`/`h-*` bound HERE (the
+   *  actual scroll element), not on the Root: the Viewport is height:100%, so a
+   *  bound on a max-height-only Root never bites. */
+  viewportClassName?: string;
+  /** Applied to the content wrapper. Base UI defaults it to `max-content`
+   *  width (for horizontal scroll); pass `min-w-0` for a vertical-only list so
+   *  content can't exceed the viewport and force a horizontal scrollbar. */
+  contentClassName?: string;
+}) {
   return (
     <ScrollAreaPrimitive.Root data-slot="scroll-area" className={cn("relative", className)} {...props}>
       <ScrollAreaPrimitive.Viewport
         data-slot="scroll-area-viewport"
-        className="size-full rounded-[inherit] outline-none transition-[color,box-shadow] focus-visible:outline-1 focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        className={cn(
+          "size-full rounded-[inherit] outline-none transition-[color,box-shadow] focus-visible:outline-1 focus-visible:ring-[3px] focus-visible:ring-ring/50",
+          viewportClassName,
+        )}
       >
-        {children}
+        {/* Base UI's content wrapper (Root > Viewport > Content > children): lets the
+         *  Viewport measure overflow and size the scrollbar thumb correctly. */}
+        <ScrollAreaPrimitive.Content data-slot="scroll-area-content" className={contentClassName}>
+          {children}
+        </ScrollAreaPrimitive.Content>
       </ScrollAreaPrimitive.Viewport>
       <ScrollBar />
       <ScrollAreaPrimitive.Corner />
