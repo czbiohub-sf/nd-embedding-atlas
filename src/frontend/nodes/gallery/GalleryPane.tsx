@@ -9,7 +9,6 @@
  * (see TrackGallery.tsx:97-103, 51-74).
  */
 
-import { useQueryClient } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { Coordinator } from "@uwdata/mosaic-core";
 import { SquareDashedMousePointer } from "lucide-react";
@@ -43,7 +42,6 @@ export function GalleryPane({ coordinator, predicate, highlightId, onSelect, dat
   // Dashboard is read ONLY for metadata (channels / plate). Highlight routes
   // through the host seam via props so it stays on the workspace sync group.
   const { state } = useDashboard();
-  const queryClient = useQueryClient();
   const hasPlate = capabilitiesOf(state.metadata).has("plate-image");
 
   // Scoped to THIS node's wired input predicate (not the global selection bus).
@@ -58,27 +56,10 @@ export function GalleryPane({ coordinator, predicate, highlightId, onSelect, dat
     isPending: channelsPending,
   } = useGalleryChannels(datasetKey ?? "docked", 300, resolvedPlateChannels);
 
-  // ── Blob URL revocation (mirror TrackGallery.tsx:51-74) ──────────────────
-  useEffect(() => {
-    const cache = queryClient.getQueryCache();
-    const unsub = cache.subscribe((event) => {
-      if (event.type === "removed" && Array.isArray(event.query.queryKey) && event.query.queryKey[0] === "crop") {
-        const url = event.query.state.data;
-        if (typeof url === "string" && url.startsWith("blob:")) {
-          URL.revokeObjectURL(url);
-        }
-      }
-    });
-    return () => {
-      unsub();
-      for (const query of queryClient.getQueryCache().findAll({ queryKey: ["crop"] })) {
-        const url = query.state.data;
-        if (typeof url === "string" && url.startsWith("blob:")) {
-          URL.revokeObjectURL(url);
-        }
-      }
-    };
-  }, [queryClient]);
+  // Crops are data URLs (see useGalleryCropQuery) — no blob-URL revocation to
+  // manage. The old findAll(["crop"]) revoke-all-on-unmount nuked every crop
+  // URL globally (breaking other consumers + this pane on remount), and the
+  // per-removal revoke raced keepPreviousData. Both are gone with data URLs.
 
   // ── Container size for column count ──────────────────────────────────────
   const parentRef = useRef<HTMLDivElement>(null);

@@ -22,7 +22,8 @@ interface GalleryCropQueryParams {
  *
  * x/y are FOV-local pixel coordinates straight from obs (the obsCoordKey cache,
  * else /api/obs/{rowIndex}); z is resolved per-obs with a viewer-Z fallback.
- * Blob URL lifecycle is managed at the gallery level (gcTime: 0 + cleanup revocation).
+ * Returns a data URL (not a blob URL) so the crop lifecycle is the cache entry's
+ * lifecycle — no URL.revokeObjectURL to race against a mounted <img>.
  */
 export function useGalleryCropQuery({ fovName, datasetKey, frame, channels, hash, enabled }: GalleryCropQueryParams) {
   const queryClient = useQueryClient();
@@ -102,24 +103,30 @@ export function useGalleryCropQuery({ fovName, datasetKey, frame, channels, hash
         throw new Error(`crop fetch failed: ${res.status}`);
       }
 
+      // Data URL, NOT a blob URL: the crop string lives and dies with the
+      // React Query cache entry, so there is no URL.revokeObjectURL lifecycle to
+      // get wrong. Blob URLs broke here — a revoke fired (gallery unmount, or a
+      // gcTime eviction while `keepPreviousData` was still painting the old URL)
+      // on a string a mounted <img> was still showing, leaving a broken image.
+      // Crops are small (~5–15 KB webp) and the gallery is virtualized (only the
+      // visible + overscan cards hold a query), so base64 in cache is cheap.
       const blob = await res.blob();
-
-      // Check abort before allocating blob URL — prevents orphaned URLs
-      // if abort fires between res.blob() and URL.createObjectURL()
-      if (signal.aborted) throw new DOMException("Aborted before blob URL allocation", "AbortError");
-
-      return URL.createObjectURL(blob);
+      if (signal.aborted) throw new DOMException("Aborted before decode", "AbortError");
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.addEventListener("load", () => resolve(reader.result as string), { once: true });
+        reader.addEventListener("error", () => reject(reader.error ?? new Error("crop decode failed")), { once: true });
+        reader.readAsDataURL(blob);
+      });
+      return dataUrl;
     },
     enabled,
     staleTime: Infinity, // same (fov, t, hash) always produces same image
-    // Brief grace period (1s) before evicting + revoking. With gcTime=0, the
-    // old query was evicted the instant the card swapped to a new (fov, t, hash),
-    // which fired URL.revokeObjectURL on the URL that `placeholderData:
-    // keepPreviousData` was still painting → ~1 frame of broken-image black
-    // between selections. 1s is well past typical fetch latency (50-500ms)
-    // but still aggressive enough to keep blob memory bounded.
+    // Brief grace period before eviction so a card swapping back to a recent
+    // (fov, t, hash) hits the cache. Data URLs need no revocation, so this is
+    // now purely a cache-retention knob (kept small to bound memory).
     gcTime: 1000,
-    // Hold the prior blob URL while a new (fov, t, hash) query is fetching.
+    // Hold the prior crop while a new (fov, t, hash) query is fetching.
     placeholderData: keepPreviousData,
   });
 }
