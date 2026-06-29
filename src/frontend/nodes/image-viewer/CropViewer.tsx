@@ -55,6 +55,7 @@ export function CropViewer({ channelInstance = "docked", datasetKey }: CropViewe
 
   const hasEverSelected = useRef(false);
   const [cropSize, setCropSize] = useState(100);
+  const [showBbox, setShowBbox] = useState(true);
 
   if (highlightId) {
     hasEverSelected.current = true;
@@ -76,7 +77,7 @@ export function CropViewer({ channelInstance = "docked", datasetKey }: CropViewe
         <ViewerPauseGate active={!!highlightId} />
         <div className="relative h-full">
           <Viewer.Canvas className="absolute inset-0 h-full w-full" />
-          <SingleCropViewer cropSize={cropSize} datasetKey={datasetKey} />
+          <SingleCropViewer cropSize={cropSize} showBbox={showBbox} datasetKey={datasetKey} />
           <ViewerObsReadout />
           <ViewerLoadingOverlay />
           <div className="absolute top-2 left-2 z-20 flex flex-col gap-1">
@@ -84,7 +85,13 @@ export function CropViewer({ channelInstance = "docked", datasetKey }: CropViewe
             <VolumeControls />
           </div>
           <div className="absolute bottom-2 left-2 z-20">
-            <ViewerControls cropSize={cropSize} setCropSize={setCropSize} datasetKey={datasetKey} />
+            <ViewerControls
+              cropSize={cropSize}
+              setCropSize={setCropSize}
+              showBbox={showBbox}
+              setShowBbox={setShowBbox}
+              datasetKey={datasetKey}
+            />
           </div>
           {!highlightId && (
             <div className="absolute inset-0 flex items-center justify-center text-muted-foreground text-xs">

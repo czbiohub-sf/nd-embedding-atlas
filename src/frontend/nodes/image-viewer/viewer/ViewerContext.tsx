@@ -1,5 +1,6 @@
 import type { Idetik, Layer, LayerState, OrthographicCamera, PerspectiveCamera } from "@idetik/core";
 import { createContext } from "react";
+import type { ChannelStat } from "@/../protocol/index.ts";
 
 // idetik 0.27 doesn't export `Viewport`; recover the exact type from Idetik.addViewport.
 type Viewport = ReturnType<Idetik["addViewport"]>;
@@ -24,6 +25,12 @@ export interface ChannelDef {
   contrastLimits: [number, number];
   contrastRange: [number, number]; // full range for slider min/max
   blendMode: BlendMode;
+  /**
+   * Per-channel pixel stats from /api/channel-stats (coarsest pyramid level),
+   * fetched once when the FOV loads. Feeds the per-channel autocontrast button
+   * (and, later, the levels histogram). Null until fetched, or if it failed.
+   */
+  stats?: ChannelStat | null;
 }
 
 // ── View mode ────────────────────────────────────────────────────────────────

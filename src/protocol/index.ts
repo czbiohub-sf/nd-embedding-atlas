@@ -70,6 +70,26 @@ export const CropBodySchema = z.object({
 });
 export type CropBody = z.infer<typeof CropBodySchema>;
 
+/**
+ * GET /api/channel-stats/{fov} — per-channel pixel statistics for autocontrast.
+ * Computed once per FOV from the coarsest pyramid level, server-cached.
+ * `lo`/`hi` are the saturation-percentile limits (Fiji-style); `dataMin`/`dataMax`
+ * are the raw extent (napari-style min–max). The frontend derives display limits
+ * from whichever method is selected — both ship in one response, so toggling the
+ * method never re-fetches. `bins` is a 256-bin histogram for the levels display.
+ */
+export const ChannelStatSchema = z.object({
+  lo: z.number(),
+  hi: z.number(),
+  dataMin: z.number(),
+  dataMax: z.number(),
+  bins: z.array(z.number()),
+});
+export type ChannelStat = z.infer<typeof ChannelStatSchema>;
+export const ChannelStatsResponseSchema = z.object({
+  channels: z.array(ChannelStatSchema),
+});
+
 /** POST /api/export — start async export. Frontend may send embedding_key: null. */
 export const ExportBodySchema = z.object({
   predicate: z.string().min(1),

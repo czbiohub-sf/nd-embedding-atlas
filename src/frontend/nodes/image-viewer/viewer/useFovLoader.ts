@@ -7,7 +7,9 @@ import {
   VolumeLayer,
 } from "@idetik/core";
 import { useEffect, useRef } from "react";
-import { resolveContrastWindow, safeContrastLimits } from "@/lib/contrast-window";
+import { ChannelStatsResponseSchema } from "@/../protocol/index.ts";
+import type { ChannelStat } from "@/../protocol/index.ts";
+import { resolveContrastRange, resolveContrastWindow, safeContrastLimits } from "@/lib/contrast-window";
 import type { Metadata } from "@/types";
 import { MultiChannelLayers } from "./MultiChannelLayers";
 import { useViewer } from "./useViewer";
@@ -42,6 +44,13 @@ interface UseFovLoaderOptions {
   sourceUrl: string | null;
   plateChannels: Metadata["plate_channels"];
   omeVersion?: "0.4" | "0.5";
+  /**
+   * `/api/channel-stats/{fov}` URL for this FOV (or null). Fetched once when the
+   * FOV loads to attach per-channel pixel stats (autocontrast). Tracks the same
+   * FOV identity as `sourceUrl`, so it's read from a ref — it never re-triggers
+   * the load effect on its own.
+   */
+  statsUrl?: string | null;
 }
 
 /**
@@ -51,7 +60,7 @@ interface UseFovLoaderOptions {
  * In 3D mode, creates a single VolumeLayer with all channels and z: undefined
  * (loads the full Z stack for ray marching).
  */
-export function useFovLoader({ sourceUrl, plateChannels, omeVersion }: UseFovLoaderOptions): void {
+export function useFovLoader({ sourceUrl, plateChannels, omeVersion, statsUrl }: UseFovLoaderOptions): void {
   const { state: viewerState, actions } = useViewer();
   const { viewMode } = viewerState;
   // ── Refs for reactive sliceCoords getters ─────────────────────────
@@ -72,6 +81,8 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion }: UseFovLoa
   plateChsRef.current = plateChannels;
   const omeVersionRef = useRef(omeVersion);
   omeVersionRef.current = omeVersion;
+  const statsUrlRef = useRef(statsUrl);
+  statsUrlRef.current = statsUrl;
 
   // ── FOV caching refs ──────────────────────────────────────────────
   const currentFovRef = useRef<string | null>(null);
@@ -282,17 +293,39 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion }: UseFovLoa
 
       actionsRef.current.setLayers(layerEntries);
 
+      // Fetch per-channel pixel stats (autocontrast). Happens after setLayers so
+      // it never delays the image; the result rides along on each ChannelDef.
+      // Resilient: a failed/missing fetch just leaves stats null (button hidden).
+      let stats: ChannelStat[] | null = null;
+      const fovStatsUrl = statsUrlRef.current;
+      if (fovStatsUrl) {
+        stats = await fetch(fovStatsUrl)
+          .then((r) => (r.ok ? (r.json() as Promise<unknown>) : null))
+          .then((j) => (j ? ChannelStatsResponseSchema.parse(j).channels : null))
+          .catch(() => null);
+      }
+
+      if (cancelled) return;
+
       // Build default channel state from source metadata
       const defaultChannelState: ChannelDef[] = channelDefs.map((ch, i) => {
         const label = omeroChannels?.[i]?.label ?? plateChsRef.current?.[i]?.label ?? `Ch ${i}`;
         const hex = ch.color.rgbHex?.substring(1) ?? "FFFFFF";
+        const stat = stats?.[i] ?? null;
+        // Widen the slider range to encompass the real data extent so both
+        // autocontrast methods' limits (esp. min–max) land inside the track.
+        const metaRange = resolveContrastRange(plateChsRef.current?.[i]?.window);
+        const contrastRange: [number, number] = stat
+          ? [Math.min(metaRange[0], stat.dataMin), Math.max(metaRange[1], stat.dataMax)]
+          : metaRange;
         return {
           label,
           color: hex,
           visible: true,
           contrastLimits: ch.contrastLimits,
-          contrastRange: [plateChsRef.current?.[i]?.window?.min ?? 0, plateChsRef.current?.[i]?.window?.max ?? 65535],
+          contrastRange,
           blendMode: viewMode === "3d" ? "additive" : i > 0 ? "additive" : "normal",
+          stats: stat,
         };
       });
 
@@ -307,7 +340,10 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion }: UseFovLoa
       const channelState = canReuse
         ? existing.map((ch, i) => ({
             ...ch,
+            // Range + stats are per-FOV — refresh them even when reusing the
+            // user's visibility/contrast/blend across obs clicks in one plate.
             contrastRange: defaultChannelState[i].contrastRange,
+            stats: defaultChannelState[i].stats ?? ch.stats,
           }))
         : defaultChannelState;
 

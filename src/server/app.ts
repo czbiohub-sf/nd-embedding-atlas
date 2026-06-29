@@ -51,6 +51,7 @@ import {
 } from "./routes/annotate.ts";
 import { handleExport, handleExportStatus, handleGetExportDir } from "./routes/export.ts";
 import { handleCrop } from "./routes/crops.ts";
+import { handleChannelStats } from "./routes/channel-stats.ts";
 import { CropPool } from "./crop-pool.ts";
 import { servePlateFile } from "./plate.ts";
 import { serveStatic, resolveFrontendDir } from "./static.ts";
@@ -438,6 +439,12 @@ function routeApi(
   const cropParam = extractPathParam(pathname, "/api/crop/");
   if (cropParam != null) {
     return handleCrop(cropParam, req, state);
+  }
+
+  // ── Per-channel pixel stats (autocontrast) ──────────────────────
+  const statsParam = extractPathParam(pathname, "/api/channel-stats/");
+  if (statsParam != null) {
+    return handleChannelStats(statsParam, req, state);
   }
 
   // ── 404 ─────────────────────────────────────────────────────────

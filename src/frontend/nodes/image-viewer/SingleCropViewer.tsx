@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useHost } from "@/core/host/host-context";
 import { selectTrajectory } from "@/dashboard/DashboardContext";
 import { useDashboard } from "@/hooks/useDashboard";
+import { capabilitiesOf } from "@/lib/capabilities";
 import { ObsInfoSchema } from "@/../protocol/index.ts";
 import type { OrbitControls } from "@/nodes/image-viewer/viewer/OrbitControls";
 import { useBboxLayer } from "@/nodes/image-viewer/viewer/useBboxLayer";
@@ -15,11 +16,13 @@ const CAMERA_VIEW_HALF = 150;
 
 interface Props {
   cropSize: number;
+  /** Draw the bounding box overlay. Off → never draw, regardless of data. */
+  showBbox: boolean;
   /** If set, this viewer only responds to cells from this dataset key. */
   datasetKey?: string;
 }
 
-export function SingleCropViewer({ cropSize, datasetKey }: Props) {
+export function SingleCropViewer({ cropSize, showBbox, datasetKey }: Props) {
   const { state: dashState } = useDashboard();
   const { state: viewerState, actions, meta } = useViewer();
   const { metadata } = dashState;
@@ -61,6 +64,15 @@ export function SingleCropViewer({ cropSize, datasetKey }: Props) {
   // Gate sourceUrl — null prevents useFovLoader from loading the wrong plate.
   const sourceUrl = isForThisDataset && obsInfo ? `${window.location.origin}${mountPrefix}/${obsInfo.fov_name}` : null;
 
+  // Autocontrast stats endpoint for this FOV (dataset_key picks the plate mount
+  // server-side, mirroring the crop path). Same FOV identity as sourceUrl.
+  const statsUrl =
+    isForThisDataset && obsInfo
+      ? `/api/channel-stats/${encodeURIComponent(obsInfo.fov_name)}${
+          activeStoreName ? `?dataset_key=${encodeURIComponent(activeStoreName)}` : ""
+        }`
+      : null;
+
   // ── Hooks for imperative plumbing ─────────────────────────────────
   // Resolve per-dataset channels when available, falling back to global plate_channels
   const resolvedChannels =
@@ -70,15 +82,22 @@ export function SingleCropViewer({ cropSize, datasetKey }: Props) {
     sourceUrl,
     plateChannels: resolvedChannels,
     omeVersion,
+    statsUrl,
   });
 
   const scale = viewerState.bounds.scale ?? plateScale;
 
-  const { updateBbox } = useBboxLayer({
+  const { updateBbox, clearBbox } = useBboxLayer({
     idetik: meta.runtime,
     scale,
     translation: viewerState.bounds.translation,
   });
+
+  // Whether this dataset resolved obs centroids (x/y). Combined with the
+  // per-obs `bbox`, this decides if there is anything to draw at all — a
+  // dataset with neither (no crops) draws no box, and rows that lack both
+  // never show a stale fallback rectangle at the origin.
+  const hasCentroid = capabilitiesOf(metadata).has("spatial");
 
   // ── Helper: 2D camera framing ───────────────────────────────────
   // obs.x / obs.y are FOV-local pixel coordinates; idetik renders the FOV at
@@ -99,12 +118,13 @@ export function SingleCropViewer({ cropSize, datasetKey }: Props) {
   );
 
   // ── Effect: Observation framing (mode-aware) ──────────────────────
+  // Camera only. Deliberately does NOT depend on showBbox/cropSize-for-2d so
+  // that toggling or resizing the bounding box never moves the camera — the
+  // box draw lives in its own effect below.
   useEffect(() => {
     if (!isForThisDataset || !obsInfo || !viewerState.initialized) return;
 
     if (viewerState.viewMode === "2d") {
-      updateBbox(obsInfo.x, obsInfo.y, cropSize / 2, obsInfo.bbox);
-
       if (obsInfo.bbox) {
         const { y_min, x_min, y_max, x_max } = obsInfo.bbox;
         const pad = 50;
@@ -130,13 +150,36 @@ export function SingleCropViewer({ cropSize, datasetKey }: Props) {
     cropSize,
     viewerState.initialized,
     viewerState.viewMode,
-    updateBbox,
     frameRegion,
     scale.x,
     scale.y,
     tx,
     ty,
     meta.viewport,
+  ]);
+
+  // ── Effect: Bounding-box overlay (2D) ─────────────────────────────
+  // Decoupled from camera framing so toggling / resizing the box never moves
+  // the camera. Draws only when enabled AND there is real geometry (explicit
+  // bbox, or a centroid to synthesize one); otherwise hides it.
+  useEffect(() => {
+    if (!isForThisDataset || !obsInfo || !viewerState.initialized) return;
+    if (viewerState.viewMode !== "2d") return;
+    if (showBbox && (obsInfo.bbox || hasCentroid)) {
+      updateBbox(obsInfo.x, obsInfo.y, cropSize / 2, obsInfo.bbox);
+    } else {
+      clearBbox();
+    }
+  }, [
+    isForThisDataset,
+    obsInfo,
+    cropSize,
+    showBbox,
+    hasCentroid,
+    viewerState.initialized,
+    viewerState.viewMode,
+    updateBbox,
+    clearBbox,
   ]);
 
   // ── Effect: Sync T index from selected observation ──────────────
@@ -156,17 +199,20 @@ export function SingleCropViewer({ cropSize, datasetKey }: Props) {
     if (!frame) return;
     // Drive the viewer T index so the image updates alongside the bbox
     actions.setTIndex(trajectory.tIndex);
-    // Only update bbox in 2D mode
+    // Only update bbox in 2D mode, and only when the overlay is enabled.
     if (viewerState.viewMode === "2d") {
-      updateBbox(frame.spatial_x, frame.spatial_y, cropSize / 2);
+      if (showBbox) updateBbox(frame.spatial_x, frame.spatial_y, cropSize / 2);
+      else clearBbox();
     }
   }, [
     isForThisDataset,
     trajectory?.tIndex,
     trajectory?.points,
     cropSize,
+    showBbox,
     obsInfo,
     updateBbox,
+    clearBbox,
     viewerState.viewMode,
     trajectory,
     actions,

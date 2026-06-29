@@ -1,19 +1,26 @@
+import { Frame } from "lucide-react";
 import { useMemo } from "react";
 import { selectTrajectory } from "@/dashboard/DashboardContext";
 import { useDashboard } from "@/hooks/useDashboard";
 import { capabilitiesOf } from "@/lib/capabilities";
-import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { ButtonGroup } from "@/components/ui/button-group";
 import { Panel } from "@/components/ui/panel";
+import { Separator } from "@/components/ui/separator";
+import { Slider } from "@/components/ui/slider";
 import { SliderRow } from "@/components/ui/slider-row";
+import { Toggle } from "@/components/ui/toggle";
 import { useViewer } from "./useViewer";
 
 interface Props {
   cropSize: number;
   setCropSize: (size: number) => void;
+  showBbox: boolean;
+  setShowBbox: (show: boolean) => void;
   datasetKey?: string;
 }
 
-export function ViewerControls({ cropSize, setCropSize, datasetKey }: Props) {
+export function ViewerControls({ cropSize, setCropSize, showBbox, setShowBbox, datasetKey }: Props) {
   const { state: dashState, actions: dashActions } = useDashboard();
   const { state, actions } = useViewer();
   const { bounds, zIndex, tIndex, viewMode } = state;
@@ -46,7 +53,7 @@ export function ViewerControls({ cropSize, setCropSize, datasetKey }: Props) {
   }
 
   return (
-    <Panel variant="glass" className="flex min-w-44 flex-col gap-1.5 p-2">
+    <Panel variant="glass" depth={2} className="flex min-w-44 flex-col gap-1.5 p-2">
       {hasT && (
         <SliderRow
           label={isTrajectoryMode ? "T*" : "T"}
@@ -67,36 +74,57 @@ export function ViewerControls({ cropSize, setCropSize, datasetKey }: Props) {
         />
       )}
 
-      {hasCellCoords && (
-        <SliderRow
-          label="px"
-          value={cropSize}
-          min={50}
-          max={500}
-          step={10}
-          onValueChange={(v) => setCropSize(Math.round(v))}
-        />
-      )}
-
       {showModeToggle && (
         <div className="flex items-center gap-1.5">
-          <span className="w-5 shrink-0 text-3xs text-muted-foreground" />
-          <div className="flex overflow-hidden rounded-md border border-border/60">
+          <span className="w-5 shrink-0" />
+          <ButtonGroup>
             {(["2d", "3d"] as const).map((mode) => (
-              <button
+              <Button
                 key={mode}
                 type="button"
+                size="xs"
+                variant={viewMode === mode ? "secondary" : "ghost"}
+                aria-pressed={viewMode === mode}
                 onClick={() => actions.setViewMode(mode)}
-                className={cn(
-                  "px-2 py-0.5 text-3xs transition-colors",
-                  viewMode === mode ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground",
-                )}
               >
                 {mode.toUpperCase()}
-              </button>
+              </Button>
             ))}
-          </div>
+          </ButtonGroup>
         </div>
+      )}
+
+      {/* Bounding box — one compact row at the slider density: a small show/hide
+          toggle + the size slider (disabled, not removed, when hidden so the
+          panel never reflows) + a px readout. Split from the T/Z/mode group
+          above by the separator. Only shown when the dataset resolved centroids. */}
+      {hasCellCoords && (
+        <>
+          <Separator className="my-0.5 bg-border/50" />
+          <div className="flex items-center gap-1.5 text-3xs">
+            <Toggle
+              size="sm"
+              variant="outline"
+              pressed={showBbox}
+              onPressedChange={setShowBbox}
+              title="bounding box"
+              className="h-5 shrink-0 gap-1 px-1.5 text-3xs"
+            >
+              <Frame />
+              bbox
+            </Toggle>
+            <Slider
+              className="flex-1"
+              value={[cropSize]}
+              min={50}
+              max={500}
+              step={10}
+              disabled={!showBbox}
+              onValueChange={(v) => setCropSize(Math.round(Array.isArray(v) ? v[0] : v))}
+            />
+            <span className="w-9 shrink-0 text-right text-muted-foreground tabular-nums">{cropSize}px</span>
+          </div>
+        </>
       )}
     </Panel>
   );

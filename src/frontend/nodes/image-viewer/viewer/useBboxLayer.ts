@@ -18,9 +18,13 @@ interface UseBboxLayerOptions {
 
 interface UseBboxLayerReturn {
   updateBbox: (cx: number, cy: number, half: number, explicitBbox?: ObsBbox) => void;
+  /** Hide the box (no bbox / no centroid, or the user toggled it off). */
+  clearBbox: () => void;
 }
 
-const BBOX_COLOR = "rgb(204, 26, 26)";
+// Themed via the destructive token (red across light/dark) instead of a
+// hard-coded rgb — tracks the palette like every other chrome color.
+const BBOX_COLOR = "var(--destructive)";
 const BBOX_BORDER_PX = 2;
 
 /**
@@ -168,5 +172,9 @@ export function useBboxLayer({ idetik, scale, translation }: UseBboxLayerOptions
     [scale.x, scale.y, tx, ty],
   );
 
-  return { updateBbox };
+  const clearBbox = useCallback(() => {
+    cornersRef.current = [];
+  }, []);
+
+  return { updateBbox, clearBbox };
 }
