@@ -1,10 +1,10 @@
 /**
  * WorkspaceShell — the workspace frame: Stage pane + wiring Canvas on the
- * two state axes. Canvas disposition (bottom Strip ↔ Full canvas) is a
- * camera/geometry animation (420 ms, panes + camera together), never a
+ * two state axes. Canvas disposition (full ↔ split ↔ hidden) is a
+ * camera/geometry animation (dispoMs, panes + camera together), never a
  * mount change — ONE ReactFlow stays mounted throughout. Body placement
  * (embedded ↔ staged) reparents through the body-dock. Status bar is the
- * only chrome bar: identity · engine · STAGE|CANVAS · hints · ws LED.
+ * only chrome bar: identity · engine · disposition control · hints · ws LED.
  */
 
 import { useSelector } from "@tanstack/react-store";
@@ -13,6 +13,9 @@ import { useEffect } from "react";
 import { NdHud, NdLed } from "@/components/nd/nd-primitives";
 import { NdBreadcrumb } from "@/components/nd/nd-breadcrumb";
 import { NdIconButton } from "@/components/nd/nd-icon-button";
+import { PanelBottom, PanelBottomClose, Workflow } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { ButtonGroup } from "@/components/ui/button-group";
 import { useDashboard } from "@/hooks/useDashboard";
 import { BodySocket, HeaderSocket, WorkspaceBodies } from "./body-dock";
 import { WorkspaceCanvas } from "./canvas/WorkspaceCanvas";
@@ -26,6 +29,9 @@ const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
 const WELL = 8; // strip gutter — aligned to stage padding
 const WIRE_HDR = 26; // wiring tile header height (strip mode)
 const STATUS_H = 22;
+
+// emphasis axis order for the ⇧F cycle + the status-bar segmented control
+const DISPOSITIONS = ["full", "strip", "hidden"] as const;
 
 /* ── FLIP relocation ghost ───────────────────────────────────────── */
 function FlipGhost({ ghost }: { ghost: GhostState }) {
@@ -145,27 +151,33 @@ function StatusBar() {
           onClick={() => ws.setZoomForms(!zoomForms)}
         />
       </div>
-      <span className="inline-flex shrink-0 rounded-md border border-border bg-muted p-0.5">
-        {(["stage", "canvas"] as const).map((m) => {
-          const active = (m === "canvas") === (disposition === "full");
+      <ButtonGroup className="shrink-0">
+        {(
+          [
+            { disp: "full", Icon: Workflow, title: "wiring fills the workspace" },
+            { disp: "strip", Icon: PanelBottom, title: "split — stage above, wiring docked" },
+            { disp: "hidden", Icon: PanelBottomClose, title: "stage fills, wiring collapsed" },
+          ] as const
+        ).map(({ disp, Icon, title }) => {
+          const active = disposition === disp;
           return (
-            <button
+            <Button
+              key={disp}
               type="button"
-              key={m}
-              onClick={() => ws.setDisposition(m === "canvas" ? "full" : "strip")}
-              className={`cursor-pointer rounded px-[11px] py-0.5 font-hud text-[9px] uppercase ${
-                active
-                  ? "border border-border-active bg-surface-tertiary text-foreground"
-                  : "border border-transparent text-text-muted"
-              }`}
+              variant={active ? "secondary" : "ghost"}
+              size="icon-xs"
+              aria-pressed={active}
+              title={title}
+              aria-label={title}
+              onClick={() => ws.setDisposition(disp)}
             >
-              {m}
-            </button>
+              <Icon strokeWidth={1.75} />
+            </Button>
           );
         })}
-      </span>
+      </ButtonGroup>
       <div className="flex min-w-0 items-center justify-end gap-3.5">
-        <span>drag select · tab add · y knife · ⇧F {disposition === "full" ? "collapse" : "expand"} · esc</span>
+        <span>drag select · tab add · y knife · ⇧F wiring · esc</span>
         <span className="inline-flex items-center gap-[5px]">
           ws <NdLed state="clean" size={5} />
         </span>
@@ -190,30 +202,41 @@ function WorkspaceFrame() {
   const ghost = useSelector(ws.ui, (u) => u.ghost);
 
   const full = disposition === "full";
+  const hidden = disposition === "hidden";
   const stagedCount = ws.stagedIds().length;
   const stageOccupied = stageHasContent(stageTree, stagedCount);
 
-  // ⇧F toggles the disposition
+  // ⇧F cycles the emphasis axis: full → strip → hidden → full
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = document.activeElement;
       if (el && ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName)) return;
-      if (e.key === "F" && e.shiftKey) ws.setDisposition(ws.store.state.disposition === "full" ? "strip" : "full");
+      if (e.key === "F" && e.shiftKey) {
+        const cur = ws.store.state.disposition;
+        const i = DISPOSITIONS.indexOf(cur as (typeof DISPOSITIONS)[number]);
+        ws.setDisposition(DISPOSITIONS[(i + 1) % DISPOSITIONS.length]);
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [ws]);
 
-  // refit the camera with the pane animation
+  // refit the camera with the pane animation — but not while hidden (fitView on
+  // a 0-height pane yields a garbage viewport that would persist on show).
+  // Matches the pane timing so camera + geometry settle together.
   useEffect(() => {
-    const t = setTimeout(() => ws.requestFit?.(ND_TIMING.seamMs), 30);
+    if (disposition === "hidden") return;
+    const t = setTimeout(() => ws.requestFit?.(ND_TIMING.dispoMs), 30);
     return () => clearTimeout(t);
   }, [ws, disposition]);
 
-  const paneTransition = `left ${ND_TIMING.seamMs}ms ${ND_TIMING.seamEase}, top ${ND_TIMING.seamMs}ms ${ND_TIMING.seamEase}, width ${ND_TIMING.seamMs}ms ${ND_TIMING.seamEase}, height ${ND_TIMING.seamMs}ms ${ND_TIMING.seamEase}`;
+  // disposition geometry rides dispoMs (snappy) — not the camera-fly-to seamMs
+  const paneTransition = `left ${ND_TIMING.dispoMs}ms ${ND_TIMING.dispoEase}, top ${ND_TIMING.dispoMs}ms ${ND_TIMING.dispoEase}, width ${ND_TIMING.dispoMs}ms ${ND_TIMING.dispoEase}, height ${ND_TIMING.dispoMs}ms ${ND_TIMING.dispoEase}`;
 
-  // pane rects (percent/px hybrid via absolute insets)
-  const stageStyle: React.CSSProperties = { left: 0, top: 0, right: 0, bottom: stripH };
+  // pane rects (percent/px hybrid via absolute insets). When hidden, the stage
+  // takes the whole frame (the wiring handle folds into the status bar); when
+  // stripped, it sits above the strip.
+  const stageStyle: React.CSSProperties = { left: 0, top: 0, right: 0, bottom: hidden ? 0 : stripH };
   const sideStageStyle: React.CSSProperties = {
     top: 0,
     right: 0,
@@ -229,13 +252,23 @@ function WorkspaceFrame() {
         height: "100%",
         borderRadius: 0,
       }
-    : {
-        left: WELL + 1,
-        top: `calc(100% - ${stripH - WIRE_HDR - 1}px)`,
-        width: `calc(100% - ${WELL * 2 + 2}px)`,
-        height: stripH - WIRE_HDR - WELL - 2,
-        borderRadius: "0 0 6px 6px",
-      };
+    : hidden
+      ? {
+          // collapsed: the ONE ReactFlow stays mounted, slid below the viewport
+          // (height 0) so WebGPU + camera survive a hide → show round-trip
+          left: WELL + 1,
+          top: "100%",
+          width: `calc(100% - ${WELL * 2 + 2}px)`,
+          height: 0,
+          borderRadius: 0,
+        }
+      : {
+          left: WELL + 1,
+          top: `calc(100% - ${stripH - WIRE_HDR - 1}px)`,
+          width: `calc(100% - ${WELL * 2 + 2}px)`,
+          height: stripH - WIRE_HDR - WELL - 2,
+          borderRadius: "0 0 6px 6px",
+        };
 
   const divDrag = (e: React.PointerEvent) => {
     e.preventDefault();
@@ -266,7 +299,7 @@ function WorkspaceFrame() {
         ) : null}
 
         {/* wiring tile chrome (strip mode): the canvas wears tile anatomy */}
-        {!full ? (
+        {disposition === "strip" ? (
           <div
             className="absolute box-border flex flex-col overflow-hidden rounded-[7px] border border-border bg-card"
             style={{
@@ -316,7 +349,10 @@ function WorkspaceFrame() {
         {/* the ONE canvas — re-disposed, never remounted */}
         <div
           className="absolute overflow-hidden"
-          style={{ ...canvasStyle, transition: `${paneTransition}, border-radius 420ms ease` }}
+          style={{
+            ...canvasStyle,
+            transition: `${paneTransition}, border-radius ${ND_TIMING.dispoMs}ms ${ND_TIMING.dispoEase}`,
+          }}
         >
           <WorkspaceCanvas />
         </div>

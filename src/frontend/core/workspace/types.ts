@@ -25,8 +25,10 @@ export type WsValue =
 
 /** where a node's body materializes */
 export type WsPlacement = "embedded" | "staged";
-/** canvas disposition — a camera/geometry change, never a mode switch */
-export type WsDisposition = "strip" | "full";
+/** canvas disposition — a camera/geometry change, never a mode switch.
+ *  One emphasis axis: full (wiring fills) ↔ strip (split dock) ↔ hidden
+ *  (wiring collapsed to a tab, Stage takes the whole frame). */
+export type WsDisposition = "strip" | "full" | "hidden";
 
 // "cache" is the source-agnostic checkpoint kind. "selection" is its retired
 // predecessor — kept in the union (deprecated, not deleted) so older documents

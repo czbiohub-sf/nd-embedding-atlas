@@ -24,6 +24,10 @@ export const ND_TIMING = {
   /** strip ↔ full canvas seam: pane rects + camera together */
   seamMs: 420,
   seamEase: "cubic-bezier(0.3, 0.8, 0.3, 1)",
+  /** disposition pane geometry (full↔split↔hidden) — snappier than a camera
+   *  fly-to; ease-out-expo front-loads the motion so it reads as done early */
+  dispoMs: 200,
+  dispoEase: "cubic-bezier(0.16, 1, 0.3, 1)",
   /** frame morph: width/height/border-radius on form change */
   morphMs: 220,
   morphEase: "cubic-bezier(0.25, 0.8, 0.3, 1)",

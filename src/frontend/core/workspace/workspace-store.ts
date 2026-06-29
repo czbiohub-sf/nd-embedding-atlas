@@ -111,6 +111,12 @@ export class Workspace {
       passthrough: (inputs) => ({ kind: "pred", sql: andPreds(predSqls(inputs)) }),
     });
     this.store = new Store<WsState>(EMPTY);
+    // restore the persisted disposition (a loaded document overrides this via
+    // loadDocument's {...EMPTY, ...state}; the seed path keeps it)
+    const savedDisp = typeof localStorage !== "undefined" ? localStorage.getItem("ndea.disposition") : null;
+    if (savedDisp === "strip" || savedDisp === "full" || savedDisp === "hidden") {
+      this.store.setState((s) => ({ ...s, disposition: savedDisp }));
+    }
     this.coordination = new Coordination(this.store);
     this.telemetry = new Store<TelemetryState>({ epoch: 0, cooking: {}, dirty: {}, cookMs: {}, enabled: true });
     this.counts = new NodeCounts({
@@ -975,6 +981,11 @@ export class Workspace {
 
   setDisposition(d: WsDisposition): void {
     this.store.setState((s) => ({ ...s, disposition: d, claimed: null }));
+    try {
+      localStorage.setItem("ndea.disposition", d);
+    } catch {
+      /* headless / storage denied — preference just won't persist */
+    }
   }
 
   setStripH(h: number): void {
