@@ -22,11 +22,28 @@ export interface GalleryChannels {
  * fluorescence to ~0 → black crops. This is the same heuristic the live viewer
  * applies (see useFovLoader), so a fallback crop is contrasted like the viewer.
  */
+/** Normalize a channel color to a bare hex string ("RRGGBB"). plate_channels
+ *  emit an RGB array at runtime; the crop endpoint + viewer want hex. */
+function toHex(c: unknown): string {
+  if (typeof c === "string") return c.replace(/^#/, "");
+  if (Array.isArray(c)) {
+    return c
+      .slice(0, 3)
+      .map((n) =>
+        Math.max(0, Math.min(255, Math.round(Number(n))))
+          .toString(16)
+          .padStart(2, "0"),
+      )
+      .join("");
+  }
+  return "FFFFFF";
+}
+
 function plateChannelsToDefaults(plateChannels: Metadata["plate_channels"]): ChannelDef[] {
   if (!plateChannels?.length) return [];
   return plateChannels.map((ch) => ({
     label: ch.label,
-    color: ch.color,
+    color: toHex(ch.color as unknown),
     visible: true,
     contrastLimits: safeContrastLimits(resolveContrastWindow(ch.window)),
     contrastRange: [ch.window.min, ch.window.max] as [number, number],

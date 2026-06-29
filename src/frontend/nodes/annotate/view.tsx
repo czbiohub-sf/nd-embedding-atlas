@@ -1,50 +1,41 @@
 /**
- * Annotate node body — a labeling cursor over a working set (two doors, one node).
+ * Annotate node body — a TABLE-first labeling surface (one door, one node).
  *
- * IN: the upstream predicate (a lasso `sel` or a PRQL/SQL `pred`), delivered on
- * `host.inputSelection` like Table/Gallery. That predicate is the iteration
- * domain. OUT: a `focus` — the obs under the cursor — pushed via
- * `host.highlight.set`, so wired viewers (Idetik, Gallery) follow it.
+ * Rows = the scoped obs (the wired predicate, delivered as `host.inputSelection`
+ * and consumed straight by `AnnotateTable`/`useTableQuery` — the same plumbing
+ * the Table node uses, so it scopes off a Filter/Wrangle edge correctly).
  *
- * Two shadcn Base UI tabs flip the write mode:
- *  - "Many"        batch — stamp one label across the whole scope (server-side
- *                  `WHERE`, scales to millions; never materializes row ids).
- *  - "One by one"  cursor — step obs-by-obs; a label key writes THAT obs
- *                  (`writeAnnotationByPredicate` over `__row_index__ = id`) and
- *                  auto-advances. Eyes on the viewers, hands here.
+ * Selection is SPREADSHEET-style (click / shift / ⌘) and a label key or chip
+ * stamps the whole current selection. The focused (last-clicked) row drives
+ * `host.highlight.set`, so wired viewers (Idetik, Gallery) follow it. A
+ * separate "stamp all in scope" path writes server-side over the full predicate.
  *
- * Plugins never touch `/api/*` — reads go through `host.api.query` (the "read"
- * seam), writes through `host.api.write/createAnnotationColumn` ("annotate").
+ * Writes go through `host.api.write*`; reads through `host.api.query` / the
+ * coordinator. Stamps reflect instantly via a local overlay (`localLabels`).
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import type { FilterExpr } from "@uwdata/mosaic-sql";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Bracketed } from "@/components/ui/bracketed";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Kbd } from "@/components/ui/kbd";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { predicateToSql, toRows } from "@/lib/mosaic-helpers";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { filterExprToExpr } from "@/lib/mosaic-helpers";
 import { cn } from "@/lib/utils";
+import { AnnotateTable, type CropFields, type FocusCrop } from "@/nodes/annotate/AnnotateTable";
+import { CropThumb } from "@/nodes/annotate/CropThumb";
+import { useGalleryChannels } from "@/nodes/table/useGalleryChannels";
 import type { NodeViewProps } from "@/core/node/sdk";
 
 export interface AnnotateConfig {
-  /** Target annotation column (existing or freshly created). */
   column: string | null;
-  /** Label vocabulary the cursor stamps; index 0 is the batch default. */
   labels: string[];
 }
 export type AnnotateOptions = Record<never, never>;
 
-// ponytail: the cursor reviews a bounded set; the batch path is server-side
-// WHERE (unbounded), so only the one-by-one list is capped. Raise if a real
-// review set exceeds it.
-const WORKING_SET_CAP = 5000;
-const LOOKAHEAD = 4;
-
-interface WorkRow {
-  id: string;
-  value: string | null;
-}
+const RAIL_MIN_WIDTH = 520;
+const MAX_CONTEXT_COLS = 2;
 
 /** One-key hotkey per label: first unused letter, else its 1-based digit. */
 function hotkeysFor(labels: string[]): string[] {
@@ -60,19 +51,21 @@ function hotkeysFor(labels: string[]): string[] {
 }
 
 export function AnnotateView({ host }: NodeViewProps<AnnotateConfig, AnnotateOptions>) {
+  const { coordinator, table, metadata } = host.data;
+
   const [columns, setColumns] = useState<string[]>([]);
   const [column, setColumn] = useState<string | null>(host.config.column);
   const [newColumn, setNewColumn] = useState("");
+  const [creating, setCreating] = useState(false);
   const [labelsText, setLabelsText] = useState((host.config.labels ?? []).join(", "));
-  const [tab, setTab] = useState<"many" | "one">("many");
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
 
-  // cursor state
-  const [work, setWork] = useState<WorkRow[]>([]);
-  const [count, setCount] = useState<number | null>(null);
-  const [cursor, setCursor] = useState(0);
-  const [labeled, setLabeled] = useState<Set<string>>(() => new Set());
+  const [localLabels, setLocalLabels] = useState<Map<string, string>>(() => new Map());
+  const [sel, setSel] = useState<{ selectedIds: Set<string>; focusId: string | null; focusCrop: FocusCrop | null }>(
+    () => ({ selectedIds: new Set(), focusId: null, focusCrop: null }),
+  );
+  const [total, setTotal] = useState(0);
 
   const labels = useMemo(
     () =>
@@ -83,74 +76,67 @@ export function AnnotateView({ host }: NodeViewProps<AnnotateConfig, AnnotateOpt
     [labelsText],
   );
   const hotkeys = useMemo(() => hotkeysFor(labels), [labels]);
-  const [batchValue, setBatchValue] = useState<string>("");
-
-  const scopePredicate = predicateToSql(host.inputSelection);
-  const hasScope = scopePredicate != null;
   const targetColumn = newColumn.trim() || column;
 
-  // Load existing annotation columns once.
+  // scope predicate (same path useTableQuery uses → works off Filter edges)
+  const scopeExpr: FilterExpr | null = host.inputSelection?.predicate?.(null) ?? null;
+  const hasScope = scopeExpr != null;
+  const contextColumns = useMemo(
+    () =>
+      (metadata.obs_columns ?? []).filter((c) => c !== targetColumn && !c.startsWith("__")).slice(0, MAX_CONTEXT_COLS),
+    [metadata.obs_columns, targetColumn],
+  );
+
+  // gallery link: crop-locator columns + channels. Channels come from the shared
+  // viewerChannelsStore (the "docked" slot), so thumbnails are contrasted/colored
+  // identically to the Gallery node and the live viewer — change channels in one,
+  // they change here too.
+  const cropFields = useMemo<CropFields | null>(() => {
+    const cols = metadata.obs_columns ?? [];
+    if (!cols.includes("fov_name") || !cols.includes("t")) return null;
+    return {
+      fov: "fov_name",
+      t: "t",
+      dataset: cols.includes("_dataset") ? "_dataset" : undefined,
+      x: cols.includes("x") ? "x" : undefined,
+      y: cols.includes("y") ? "y" : undefined,
+    };
+  }, [metadata.obs_columns]);
+  // Channels follow the focused obs's dataset slot — shared with the viewer/Gallery
+  // via viewerChannelsStore, so live channel edits flow into the crops. Falls back
+  // to "docked" (single-dataset stores) until a dataset is resolved.
+  const channelSlot = sel.focusCrop?.datasetKey ?? "docked";
+  const { channels, hash } = useGalleryChannels(channelSlot, 300, metadata.plate_channels);
+
+  // responsive: show the focus rail only when the body is wide enough
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const [wide, setWide] = useState(false);
+  useEffect(() => {
+    const el = bodyRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([e]) => setWide(e.contentRect.width >= RAIL_MIN_WIDTH));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // existing annotation columns
   useEffect(() => {
     let alive = true;
     void host.api
       .listAnnotationColumns?.()
-      ?.then((cols) => {
-        if (alive) setColumns(cols.map((c) => c.name));
-      })
+      ?.then((cols) => alive && setColumns(cols.map((c) => c.name)))
       .catch(() => {});
     return () => {
       alive = false;
     };
   }, [host]);
 
-  // Fetch the scope count + the (capped, ordered) working set whenever the scope
-  // or the target column changes. Values are read for the target column so the
-  // cursor shows what's already labeled. Reflected locally on write (no refetch),
-  // so the QueryManager's SQL-text cache never serves a stale value back.
+  // drive the focus wire
   useEffect(() => {
-    if (scopePredicate == null) {
-      setWork([]);
-      setCount(null);
-      setCursor(0);
-      return;
-    }
-    const ctrl = new AbortController();
-    const valueCol = targetColumn && columns.includes(targetColumn) ? `, "${targetColumn}"` : "";
-    const table = host.data.table;
-    void (async () => {
-      try {
-        const [countRows, workRows] = await Promise.all([
-          host.api
-            .query(`SELECT count(*)::INT AS n FROM "${table}" WHERE ${scopePredicate}`, ctrl.signal)
-            .then(toRows<{ n: number }>),
-          host.api
-            .query(
-              `SELECT __row_index__${valueCol} FROM "${table}" WHERE ${scopePredicate} ORDER BY __row_index__ LIMIT ${WORKING_SET_CAP}`,
-              ctrl.signal,
-            )
-            .then(toRows<Record<string, unknown>>),
-        ]);
-        if (ctrl.signal.aborted) return;
-        setCount(countRows[0]?.n ?? 0);
-        setWork(
-          workRows.map((r) => ({
-            id: String(r.__row_index__),
-            value: valueCol && r[targetColumn!] != null ? String(r[targetColumn!]) : null,
-          })),
-        );
-        setCursor(0);
-      } catch {
-        /* superseded / aborted — leave prior state */
-      }
-    })();
-    return () => ctrl.abort();
-  }, [scopePredicate, targetColumn, columns, host]);
+    if (sel.focusId) host.highlight.set(sel.focusId);
+  }, [sel.focusId, host]);
 
-  // Drive the focus wire: the obs under the cursor → Idetik / Gallery follow.
-  const current = work[cursor];
-  useEffect(() => {
-    if (tab === "one" && current) host.highlight.set(current.id);
-  }, [tab, current, host]);
+  const persistLabels = useCallback(() => host.patchConfig({ labels }), [host, labels]);
 
   const ensureColumn = useCallback(
     async (col: string) => {
@@ -159,246 +145,313 @@ export function AnnotateView({ host }: NodeViewProps<AnnotateConfig, AnnotateOpt
       setColumns((c) => [...c, col]);
       setColumn(col);
       setNewColumn("");
+      setCreating(false);
       host.patchConfig({ column: col });
     },
     [columns, host],
   );
 
-  async function applyMany() {
-    const value = batchValue.trim() || labels[0];
-    if (!targetColumn || !value || busy || scopePredicate == null) return;
-    setBusy(true);
-    setStatus(null);
-    try {
-      await ensureColumn(targetColumn);
-      const res = await host.api.writeAnnotationByPredicate?.(targetColumn, value, scopePredicate);
-      const n = res?.n ?? 0;
-      persistLabels();
-      setStatus(`✓ ${n.toLocaleString()} obs → ${targetColumn} = "${value}"`);
-    } catch (err) {
-      setStatus(`✗ ${err instanceof Error ? err.message : String(err)}`);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function labelCurrent(value: string) {
-    if (!targetColumn || !current || busy) return;
-    const id = current.id;
-    setBusy(true);
-    try {
-      await ensureColumn(targetColumn);
-      await host.api.writeAnnotationByPredicate?.(targetColumn, value, `__row_index__ = ${id}`);
-      setWork((w) => w.map((r, i) => (i === cursor ? { ...r, value } : r)));
-      setLabeled((s) => new Set(s).add(id));
-      persistLabels();
-      advance();
-    } catch (err) {
-      setStatus(`✗ ${err instanceof Error ? err.message : String(err)}`);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  function advance() {
-    setCursor((c) => Math.min(c + 1, work.length - 1));
-  }
-  function persistLabels() {
-    host.patchConfig({ labels });
-  }
-
-  // Cursor keyboard: label hotkeys write + advance, Space skips, arrows nudge.
-  // Container-scoped (tabIndex) so it never fights other nodes' inputs.
-  function onCursorKey(e: React.KeyboardEvent) {
-    if (tab !== "one") return;
-    const k = e.key.toLowerCase();
-    if (e.key === " ") {
-      e.preventDefault();
-      advance();
-      return;
-    }
-    if (e.key === "ArrowLeft") {
-      e.preventDefault();
-      setCursor((c) => Math.max(c - 1, 0));
-      return;
-    }
-    if (e.key === "ArrowRight") {
-      e.preventDefault();
-      advance();
-      return;
-    }
-    const idx = hotkeys.indexOf(k);
-    if (idx >= 0) {
-      e.preventDefault();
-      void labelCurrent(labels[idx]);
-    }
-  }
-
-  const noScope = (
-    <span className="text-warning">
-      ⚠ No input wired — connect a Filter / Selection so labels are scoped, not the whole dataset.
-    </span>
+  // stamp the current row selection (or focus row) with `value`
+  const onStamp = useCallback(
+    async (value: string) => {
+      const ids = sel.selectedIds.size ? [...sel.selectedIds] : sel.focusId ? [sel.focusId] : [];
+      if (!targetColumn || !value || !ids.length || busy) return;
+      setBusy(true);
+      try {
+        await ensureColumn(targetColumn);
+        await host.api.writeAnnotationByPredicate?.(targetColumn, value, `__row_index__ IN (${ids.join(", ")})`);
+        setLocalLabels((m) => {
+          const next = new Map(m);
+          for (const id of ids) next.set(id, value);
+          return next;
+        });
+        persistLabels();
+      } catch (err) {
+        setStatus(`✗ ${err instanceof Error ? err.message : String(err)}`);
+      } finally {
+        setBusy(false);
+      }
+    },
+    [sel, targetColumn, busy, ensureColumn, host, persistLabels],
   );
 
-  return (
-    <div className="flex h-full w-full flex-col gap-2 p-2 text-xs">
-      {/* ── always-visible target: column + label vocabulary ── */}
-      <div className="flex flex-col gap-1.5">
-        <div className="flex items-center gap-1.5">
-          <span className="shrink-0 text-text-muted">col</span>
-          <select
-            className="min-w-0 flex-1 rounded border border-border bg-background px-1.5 py-0.5"
-            value={newColumn ? "" : (column ?? "")}
-            onChange={(e) => {
-              setNewColumn("");
-              setColumn(e.target.value || null);
-              host.patchConfig({ column: e.target.value || null });
-            }}
-          >
-            <option value="">— select —</option>
-            {columns.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
+  // stamp the ENTIRE scope server-side (the true bulk path, beyond loaded rows)
+  const stampAllInScope = useCallback(
+    async (value: string) => {
+      if (!targetColumn || !value || busy) return;
+      const where = scopeExpr ? String(filterExprToExpr(scopeExpr)) : "TRUE";
+      setBusy(true);
+      setStatus(null);
+      try {
+        await ensureColumn(targetColumn);
+        const res = await host.api.writeAnnotationByPredicate?.(targetColumn, value, where);
+        persistLabels();
+        setStatus(
+          `✓ ${(res?.n ?? total).toLocaleString()} obs → ${targetColumn} = "${value}" (re-scope to refresh cells)`,
+        );
+      } catch (err) {
+        setStatus(`✗ ${err instanceof Error ? err.message : String(err)}`);
+      } finally {
+        setBusy(false);
+      }
+    },
+    [targetColumn, busy, scopeExpr, ensureColumn, host, persistLabels, total],
+  );
+
+  const onSkip = useCallback(() => setStatus(null), []);
+  const stamped = localLabels.size;
+  const stampValue = labels[0] ?? "";
+
+  // ── focus rail — vertical beside (wide) / compact strip below (narrow) ──
+  const railWide = (
+    <aside className="flex w-[212px] min-h-0 shrink-0 flex-col gap-3 overflow-y-auto border-border-subtle border-l bg-surface-tertiary/20 p-3">
+      <div className="flex items-baseline justify-between">
+        <span className="font-medium text-foreground">obs {sel.focusId ?? "—"}</span>
+        <span className="text-2xs text-text-muted">
+          {sel.selectedIds.size > 1 ? `${sel.selectedIds.size} selected` : "1"}
+        </span>
+      </div>
+      {cropFields && sel.focusCrop?.fovName && channels.length > 0 ? (
+        <CropThumb
+          fovName={sel.focusCrop.fovName}
+          t={sel.focusCrop.t}
+          rowIndex={sel.focusCrop.rowIndex}
+          datasetKey={sel.focusCrop.datasetKey}
+          channels={channels}
+          hash={hash}
+          className="aspect-square w-full border border-border"
+        />
+      ) : null}
+      {channels.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {channels
+            .filter((c) => c.visible)
+            .map((c) => (
+              <span
+                key={c.label}
+                className="inline-flex items-center gap-1 rounded bg-surface-tertiary px-1.5 py-px text-3xs text-muted-foreground"
+              >
+                <span className="size-1.5 rounded-full" style={{ background: `#${c.color}` }} />
+                {c.label}
+              </span>
             ))}
-          </select>
-          <Input
-            className="h-6 w-24 px-1.5 py-0.5 text-xs"
-            placeholder="+ new…"
-            value={newColumn}
-            onChange={(e) => setNewColumn(e.target.value)}
-          />
         </div>
+      )}
+      {labels.length === 0 ? (
+        <p className="text-2xs text-text-muted">Add labels above to start.</p>
+      ) : (
+        <div className="flex flex-col gap-1.5">
+          {labels.map((l, i) => (
+            <Button
+              key={l}
+              variant="outline"
+              size="sm"
+              className="h-8 justify-between px-3"
+              disabled={busy || !sel.focusId}
+              onClick={() => void onStamp(l)}
+            >
+              {l} <Kbd>{hotkeys[i]}</Kbd>
+            </Button>
+          ))}
+        </div>
+      )}
+      <p className="mt-auto text-3xs text-text-muted">
+        click a row to focus · ↑↓ moves · keys stamp the selection · viewers follow
+      </p>
+    </aside>
+  );
+
+  const railNarrow = (
+    <aside className="flex max-h-[46%] shrink-0 items-start gap-3 overflow-y-auto border-border-subtle border-t bg-surface-tertiary/20 p-2.5">
+      {cropFields && sel.focusCrop?.fovName && channels.length > 0 ? (
+        <CropThumb
+          fovName={sel.focusCrop.fovName}
+          t={sel.focusCrop.t}
+          rowIndex={sel.focusCrop.rowIndex}
+          datasetKey={sel.focusCrop.datasetKey}
+          channels={channels}
+          hash={hash}
+          className="size-24 shrink-0 rounded border border-border"
+        />
+      ) : null}
+      <div className="flex min-w-0 flex-1 flex-col gap-2">
+        <span className="font-medium text-foreground">
+          obs {sel.focusId ?? "—"}
+          {sel.selectedIds.size > 1 ? ` · ${sel.selectedIds.size} selected` : ""}
+        </span>
+        {labels.length === 0 ? (
+          <p className="text-2xs text-text-muted">Add labels above to start.</p>
+        ) : (
+          <div className="flex flex-wrap gap-1.5">
+            {labels.map((l, i) => (
+              <Button
+                key={l}
+                variant="outline"
+                size="sm"
+                className="h-7 gap-1 px-2.5"
+                disabled={busy || !sel.focusId}
+                onClick={() => void onStamp(l)}
+              >
+                {l} <Kbd>{hotkeys[i]}</Kbd>
+              </Button>
+            ))}
+          </div>
+        )}
+      </div>
+    </aside>
+  );
+  const rail = wide ? railWide : railNarrow;
+
+  return (
+    <div ref={bodyRef} className="flex h-full min-h-0 w-full flex-col overflow-hidden text-xs">
+      {/* palette / target bar */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-border-subtle border-b p-2.5">
         <div className="flex items-center gap-1.5">
-          <span className="shrink-0 text-text-muted">labels</span>
+          <span className="text-2xs text-text-muted">col</span>
+          {creating ? (
+            <>
+              <Input
+                autoFocus
+                aria-label="new annotation column name"
+                className="h-7 w-36 px-2 text-xs"
+                placeholder="new column…"
+                value={newColumn}
+                onChange={(e) => setNewColumn(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") {
+                    setCreating(false);
+                    setNewColumn("");
+                  }
+                }}
+              />
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-text-muted"
+                onClick={() => {
+                  setCreating(false);
+                  setNewColumn("");
+                }}
+              >
+                ✕
+              </Button>
+            </>
+          ) : (
+            <>
+              <Select
+                value={column ?? undefined}
+                onValueChange={(v) => {
+                  setColumn(v ?? null);
+                  host.patchConfig({ column: v ?? null });
+                }}
+              >
+                <SelectTrigger aria-label="annotation column" className="h-7 w-40">
+                  <SelectValue placeholder="— select —" />
+                </SelectTrigger>
+                <SelectContent>
+                  {columns.length === 0 ? (
+                    <div className="px-2 py-1.5 text-2xs text-text-muted">no columns yet — create one →</div>
+                  ) : (
+                    columns.map((c) => (
+                      <SelectItem key={c} value={c}>
+                        {c}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+              <Button variant="outline" size="sm" className="h-7 px-2 text-2xs" onClick={() => setCreating(true)}>
+                + new
+              </Button>
+            </>
+          )}
+        </div>
+        <div className="flex min-w-0 flex-1 items-center gap-1.5">
+          <span className="text-2xs text-text-muted">labels</span>
           <Input
-            className="h-6 min-w-0 flex-1 px-1.5 py-0.5 text-xs"
+            aria-label="label vocabulary, comma separated"
+            className="h-7 min-w-0 flex-1 px-2 text-xs"
             placeholder="infected, uninfected…"
             value={labelsText}
             onChange={(e) => setLabelsText(e.target.value)}
             onBlur={persistLabels}
           />
         </div>
+        {labels.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1">
+            {labels.map((l, i) => (
+              <Button
+                key={l}
+                variant="outline"
+                size="sm"
+                className="h-6 gap-1 px-2 text-2xs"
+                disabled={busy || (!sel.selectedIds.size && !sel.focusId)}
+                onClick={() => void onStamp(l)}
+              >
+                {l} <Kbd>{hotkeys[i]}</Kbd>
+              </Button>
+            ))}
+          </div>
+        )}
       </div>
 
-      <Tabs value={tab} onValueChange={(v) => setTab(v as "many" | "one")} className="flex min-h-0 flex-1 flex-col">
-        <TabsList>
-          <TabsTrigger value="many">
-            Many {count != null && <Bracketed className="ml-1">{count.toLocaleString()}</Bracketed>}
-          </TabsTrigger>
-          <TabsTrigger value="one">One by one</TabsTrigger>
-        </TabsList>
+      {/* no-scope caution (table still usable per-row) */}
+      {!hasScope && (
+        <div className="flex items-start gap-1.5 border-warning/30 border-b bg-warning/10 px-2.5 py-1.5 text-2xs text-warning">
+          <span aria-hidden>⚠</span>
+          <span>No scope wired — labeling the whole dataset. Connect a Filter or Selection upstream to scope it.</span>
+        </div>
+      )}
 
-        {/* ── batch door ── */}
-        <TabsContent value="many" className="flex flex-col gap-2 pt-2">
-          {!hasScope ? (
-            noScope
-          ) : (
-            <>
-              <div className="flex flex-wrap gap-1">
-                {labels.length === 0 && <span className="text-text-muted">add labels above ↑</span>}
-                {labels.map((l) => (
-                  <Button
-                    key={l}
-                    variant={batchValue === l ? "default" : "outline"}
-                    size="sm"
-                    className="h-6 px-2"
-                    onClick={() => setBatchValue(l)}
-                  >
-                    {l}
-                  </Button>
-                ))}
-              </div>
-              <Button
-                variant="default"
-                size="sm"
-                className="h-7"
-                disabled={busy || !targetColumn || !(batchValue.trim() || labels[0])}
-                onClick={() => void applyMany()}
-              >
-                {busy ? "Applying…" : `Apply to ${count?.toLocaleString() ?? "all"} obs`}
-              </Button>
-              {status && <span className="break-words text-text-muted">{status}</span>}
-            </>
+      {/* table + focus rail (beside when wide, stacked below when narrow) */}
+      <div className={cn("flex min-h-0 flex-1", wide ? "flex-row" : "flex-col")}>
+        <AnnotateTable
+          coordinator={coordinator}
+          table={table}
+          selection={host.inputSelection}
+          contextColumns={contextColumns}
+          labelColumn={targetColumn}
+          localLabels={localLabels}
+          labels={labels}
+          hotkeys={hotkeys}
+          cropFields={cropFields}
+          channels={channels}
+          hash={hash}
+          onChange={setSel}
+          onStamp={(v) => void onStamp(v)}
+          onSkip={onSkip}
+          onTotalCount={setTotal}
+        />
+        {rail}
+      </div>
+
+      {/* footer */}
+      <div className="flex items-center gap-2.5 border-border-subtle border-t px-2.5 py-1.5 text-3xs">
+        <span className="text-muted-foreground">
+          scope <Bracketed>{total.toLocaleString()}</Bracketed>
+        </span>
+        <span className="text-text-muted">stamped {stamped.toLocaleString()} this session</span>
+        <div className="ml-auto flex items-center gap-2">
+          {status && (
+            <span
+              className={cn("max-w-[260px] truncate", status.startsWith("✓") ? "text-success" : "text-destructive")}
+              title={status}
+            >
+              {status}
+            </span>
           )}
-        </TabsContent>
-
-        {/* ── cursor door ── */}
-        <TabsContent
-          value="one"
-          tabIndex={0}
-          onKeyDown={onCursorKey}
-          className="flex flex-col gap-2 pt-2 outline-none focus-visible:ring-1 focus-visible:ring-ring/40"
-        >
-          {!hasScope ? (
-            noScope
-          ) : work.length === 0 ? (
-            <span className="text-text-muted">empty scope</span>
-          ) : (
-            <>
-              <div className="flex items-baseline justify-between font-mono">
-                <span>
-                  obs <span className="text-foreground">{current?.id}</span>
-                </span>
-                <span className="text-text-muted tabular-nums">
-                  {cursor + 1} / {work.length.toLocaleString()}
-                  {work.length >= WORKING_SET_CAP ? "+" : ""}
-                </span>
-              </div>
-              <div className="text-text-muted">
-                {targetColumn ?? "—"} ={" "}
-                <span className={current?.value ? "text-primary" : "text-text-muted/60"}>
-                  {current?.value ?? "unlabeled"}
-                </span>
-              </div>
-
-              <div className="flex flex-wrap gap-1">
-                {labels.length === 0 && <span className="text-text-muted">add labels above ↑</span>}
-                {labels.map((l, i) => (
-                  <Button
-                    key={l}
-                    variant={current?.value === l ? "default" : "outline"}
-                    size="sm"
-                    className="h-6 gap-1 px-2"
-                    disabled={busy}
-                    onClick={() => void labelCurrent(l)}
-                  >
-                    {l} <Kbd>{hotkeys[i]}</Kbd>
-                  </Button>
-                ))}
-                <Button variant="ghost" size="sm" className="h-6 gap-1 px-2 text-text-muted" onClick={advance}>
-                  skip <Kbd>␣</Kbd>
-                </Button>
-              </div>
-
-              {/* lookahead — the next few obs in the set */}
-              <div className="flex items-center gap-1 font-mono text-2xs text-text-muted/70">
-                <span>next</span>
-                {work.slice(cursor + 1, cursor + 1 + LOOKAHEAD).map((r) => (
-                  <span key={r.id} className={cn(r.value && "text-primary/70")}>
-                    {r.id}
-                  </span>
-                ))}
-                {cursor + 1 >= work.length && <span>— end —</span>}
-              </div>
-
-              {/* tally */}
-              <div className="flex items-center gap-2">
-                <div className="h-1 flex-1 overflow-hidden rounded-full bg-surface-tertiary">
-                  <div
-                    className="h-full bg-primary transition-[width]"
-                    style={{ width: `${work.length ? (labeled.size / work.length) * 100 : 0}%` }}
-                  />
-                </div>
-                <span className="shrink-0 text-text-muted tabular-nums">
-                  {labeled.size} / {work.length.toLocaleString()}
-                </span>
-              </div>
-              <span className="text-2xs text-text-muted/60">click to focus, then key the label</span>
-            </>
-          )}
-        </TabsContent>
-      </Tabs>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 px-2 text-3xs text-text-muted"
+            disabled={busy || !targetColumn || !stampValue}
+            onClick={() => void stampAllInScope(stampValue)}
+            title={`stamp every obs in scope = ${stampValue || "(no label)"}`}
+          >
+            stamp all {total.toLocaleString()} = {stampValue || "…"}
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }
