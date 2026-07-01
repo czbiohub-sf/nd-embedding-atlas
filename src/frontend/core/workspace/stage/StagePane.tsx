@@ -9,6 +9,7 @@
 
 import { useSelector } from "@tanstack/react-store";
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { NdIconButton } from "@/components/nd/nd-icon-button";
 import { NdBracketed, NdCaption, NdHud, NdLed, type NdLedState } from "@/components/nd/nd-primitives";
@@ -161,10 +162,24 @@ function ThresholdFilterPane({ id }: { id: string }) {
   return host ? <ThresholdFilterView host={host} /> : null;
 }
 
-/** split-direction picker (glass, 4 directions) */
+/** split-direction picker (glass, 4 directions). The popover is PORTALED to
+ *  document.body with fixed positioning: the tile header is `overflow-hidden`,
+ *  so an in-flow absolute popover would be clipped and never show. */
 function SplitButton({ id }: { id: string }) {
   const ws = useWorkspace();
   const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
+  const anchorRef = useRef<HTMLSpanElement>(null);
+
+  const toggle = () => {
+    const next = !open;
+    if (next && anchorRef.current) {
+      const r = anchorRef.current.getBoundingClientRect();
+      setPos({ top: r.bottom + 4, right: window.innerWidth - r.right });
+    }
+    setOpen(next);
+  };
+
   useEffect(() => {
     if (!open) return;
     const close = (e: PointerEvent) => {
@@ -173,32 +188,40 @@ function SplitButton({ id }: { id: string }) {
     window.addEventListener("pointerdown", close);
     return () => window.removeEventListener("pointerdown", close);
   }, [open, id]);
+
   return (
-    <span data-split-pop={id} className="relative inline-flex">
+    <span ref={anchorRef} data-split-pop={id} className="relative inline-flex">
       <NdIconButton
         icon="split"
         title="split this tile — pick a side for the new slot"
         active={open}
-        onClick={() => setOpen((o) => !o)}
+        onClick={toggle}
       />
-      {open ? (
-        <span className="absolute top-[20px] right-0 z-30 flex items-center gap-[3px] rounded-[5px] border glass px-1.5 py-[5px] shadow-[0_6px_20px_rgba(0,0,0,0.45)]">
-          <NdHud size={8} className="mr-0.5">
-            split
-          </NdHud>
-          {(["left", "up", "down", "right"] as const).map((d) => (
-            <NdIconButton
-              key={d}
-              icon={`split-${d}`}
-              title={`empty slot ${d === "left" ? "to the left" : d === "right" ? "to the right" : d === "up" ? "above" : "below"}`}
-              onClick={() => {
-                setOpen(false);
-                ws.splitTile(id, d);
-              }}
-            />
-          ))}
-        </span>
-      ) : null}
+      {open && pos
+        ? createPortal(
+            <span
+              data-split-pop={id}
+              style={{ position: "fixed", top: pos.top, right: pos.right }}
+              className="z-popover flex items-center gap-[3px] rounded-[5px] border glass px-1.5 py-[5px] shadow-[0_6px_20px_rgba(0,0,0,0.45)]"
+            >
+              <NdHud size={8} className="mr-0.5">
+                split
+              </NdHud>
+              {(["left", "up", "down", "right"] as const).map((d) => (
+                <NdIconButton
+                  key={d}
+                  icon={`split-${d}`}
+                  title={`empty slot ${d === "left" ? "to the left" : d === "right" ? "to the right" : d === "up" ? "above" : "below"}`}
+                  onClick={() => {
+                    setOpen(false);
+                    ws.splitTile(id, d);
+                  }}
+                />
+              ))}
+            </span>,
+            document.body,
+          )
+        : null}
     </span>
   );
 }
@@ -373,6 +396,10 @@ export function StagePane({ vertical }: { vertical: boolean }) {
   });
   const view = reconcileStageTree(stageTree, stagedIds);
   useEffect(() => {
+    // full-mode (vertical) stage is a sidebar projection: implicit nodes default
+    // to embedded there, so stagedIds shrinks — persisting that would prune the
+    // split layout. Render the projection, but never rewrite the memory from it.
+    if (vertical) return;
     if (JSON.stringify(view) !== JSON.stringify(stageTree)) ws.setStageTree(view);
   });
 
