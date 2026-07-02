@@ -545,35 +545,20 @@ export function AnnotateView({ host }: NodeViewProps<AnnotateConfig, AnnotateOpt
             )}
           </span>
         ) : (
-          <>
-            <div className="flex min-w-0 flex-1 items-center gap-1.5">
-              <span className="text-2xs text-text-muted">labels</span>
-              <Input
-                aria-label="label vocabulary, comma separated"
-                className="h-7 min-w-0 flex-1 px-2 text-xs"
-                placeholder="infected, uninfected…"
-                value={labelsText}
-                onChange={(e) => setLabelsText(e.target.value)}
-                onBlur={persistLabels}
-              />
-            </div>
-            {labels.length > 0 && (
-              <div className="flex flex-wrap items-center gap-1">
-                {labels.map((l, i) => (
-                  <Button
-                    key={l}
-                    variant="outline"
-                    size="sm"
-                    className="h-6 gap-1 px-2 text-2xs"
-                    disabled={busy || (!sel.selectedIds.size && !sel.focusId)}
-                    onClick={() => void onStamp(l)}
-                  >
-                    {l} <Kbd>{hotkeys[i]}</Kbd>
-                  </Button>
-                ))}
-              </div>
-            )}
-          </>
+          <div className="flex min-w-0 flex-1 items-center gap-1.5">
+            {/* vocabulary editor only — quick-stamp buttons live in the focus rail,
+                so the header input keeps a stable width instead of shrinking as
+                chips parse in beside it */}
+            <span className="text-2xs text-text-muted">labels</span>
+            <Input
+              aria-label="label vocabulary, comma separated"
+              className="h-7 min-w-0 flex-1 px-2 text-xs"
+              placeholder="infected, uninfected…"
+              value={labelsText}
+              onChange={(e) => setLabelsText(e.target.value)}
+              onBlur={persistLabels}
+            />
+          </div>
         )}
       </div>
 
