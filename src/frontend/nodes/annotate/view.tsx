@@ -19,7 +19,7 @@
  */
 
 import type { FilterExpr } from "@uwdata/mosaic-sql";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { Bracketed } from "@/components/ui/bracketed";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -162,6 +162,12 @@ export function AnnotateView({ host }: NodeViewProps<AnnotateConfig, AnnotateOpt
   useEffect(() => {
     if (sel.focusId) host.highlight.set(sel.focusId);
   }, [sel.focusId, host]);
+
+  // Follow an external focus (Gallery/Scatter/Idetik crop click) — read the
+  // group-aware host.highlight reactively so the table can jump to that obs,
+  // mirroring how those views already follow ours.
+  const subscribeHighlight = useCallback((cb: () => void) => host.highlight.subscribe?.(cb) ?? (() => {}), [host]);
+  const externalFocusId = useSyncExternalStore(subscribeHighlight, () => host.highlight.get());
 
   const persistLabels = useCallback(() => host.patchConfig({ labels }), [host, labels]);
 
@@ -589,6 +595,7 @@ export function AnnotateView({ host }: NodeViewProps<AnnotateConfig, AnnotateOpt
           onStamp={mode === "range" ? () => {} : (v) => void onStamp(v)}
           onSkip={onSkip}
           onTotalCount={setTotal}
+          externalFocusId={externalFocusId}
         />
         {rail}
       </div>

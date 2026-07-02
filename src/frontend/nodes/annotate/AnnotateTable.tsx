@@ -83,6 +83,9 @@ export interface AnnotateTableProps {
   onStamp: (value: string) => void;
   onSkip: () => void;
   onTotalCount: (n: number) => void;
+  /** Follow an external focus (Gallery/Scatter/Idetik via host.highlight): jump the
+   *  cursor to that obs. */
+  externalFocusId?: string | null;
 }
 
 export function AnnotateTable({
@@ -102,6 +105,7 @@ export function AnnotateTable({
   onStamp,
   onSkip,
   onTotalCount,
+  externalFocusId,
 }: AnnotateTableProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const thumbs = cropFields != null && channels.length > 0;
@@ -120,7 +124,12 @@ export function AnnotateTable({
     }
     return [...new Set(c)];
   }, [contextColumns, labelColumn, cropFields]);
-  const { totalCount, getRow, ensureRange } = useTableQuery({ coordinator, table, columns, selection });
+  const { totalCount, getRow, ensureRange, findRowPosition } = useTableQuery({
+    coordinator,
+    table,
+    columns,
+    selection,
+  });
   const queryClient = useQueryClient();
 
   // ── selection state (spreadsheet model) ─────────────────────────
@@ -221,6 +230,20 @@ export function AnnotateTable({
     },
     [totalCount, idAt, rowVirtualizer, ensureRange],
   );
+
+  // Follow an external focus (Gallery/Scatter/Idetik crop click → host.highlight):
+  // resolve the obs's position in the current scope+sort, then jump the cursor
+  // there. Guarded on focusId so our own emitted focus never loops back.
+  useEffect(() => {
+    if (externalFocusId == null || externalFocusId === focusId) return;
+    let alive = true;
+    void findRowPosition(externalFocusId).then((pos) => {
+      if (alive && pos != null && pos >= 0) focusTo(pos);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [externalFocusId, focusId, findRowPosition, focusTo]);
 
   const onRowMouseDown = useCallback(
     (index: number, e: React.MouseEvent) => {
