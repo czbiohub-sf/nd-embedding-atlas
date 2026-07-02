@@ -80,7 +80,9 @@ function annTableName(colName: string): string {
 
 /** DuckDB column type backing each annotation dtype. categorical/string both TEXT. */
 function annSqlType(dtype: AnnotationDtype): string {
-  return dtype === "integer" ? "INTEGER" : "TEXT";
+  if (dtype === "integer") return "INTEGER";
+  if (dtype === "float") return "DOUBLE";
+  return "TEXT";
 }
 
 /**
@@ -93,6 +95,11 @@ function annValueLiteral(value: string | null, dtype: AnnotationDtype): string {
   if (dtype === "integer") {
     const n = Number(value);
     if (!Number.isInteger(n)) throw new Error(`Value "${value}" is not an integer`);
+    return String(n);
+  }
+  if (dtype === "float") {
+    const n = Number(value);
+    if (!Number.isFinite(n)) throw new Error(`Value "${value}" is not a finite number`);
     return String(n);
   }
   return `'${value.replace(/'/g, "''")}'`;
@@ -690,7 +697,8 @@ export class EmbeddingStore {
     if (cols.length > 0) await this._ensureAnnMeta();
     for (const { column_name: colName, dtype: rawDtype } of cols) {
       if (this._annotationCols.has(colName)) continue;
-      const dtype: AnnotationDtype = rawDtype === "integer" || rawDtype === "string" ? rawDtype : "categorical";
+      const dtype: AnnotationDtype =
+        rawDtype === "integer" || rawDtype === "string" || rawDtype === "float" ? rawDtype : "categorical";
       const tableName = annTableName(colName);
       const escapedCol = colName.replace(/'/g, "''");
       await this.conn.run(`DROP TABLE IF EXISTS ${tableName}`);

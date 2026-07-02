@@ -5,10 +5,14 @@
  * and consumed straight by `AnnotateTable`/`useTableQuery` — the same plumbing
  * the Table node uses, so it scopes off a Filter/Wrangle edge correctly).
  *
- * Selection is SPREADSHEET-style (click / shift / ⌘) and a label key or chip
- * stamps the whole current selection. The focused (last-clicked) row drives
- * `host.highlight.set`, so wired viewers (Idetik, Gallery) follow it. A
- * separate "stamp all in scope" path writes server-side over the full predicate.
+ * Two modes share the surface:
+ *  - `label` — a vocabulary palette + hotkeys stamp the focused row / selection.
+ *  - `range` — a min/max bracket instrument (`RangeBracket`) authors a numeric
+ *    interval per obs, committed as two float columns `{metric}_min`/`_max`.
+ *
+ * Selection is SPREADSHEET-style (click / shift / ⌘). The focused (last-clicked)
+ * row drives `host.highlight.set`, so wired viewers (Idetik, Gallery) follow it.
+ * A separate "all in scope" path writes server-side over the full predicate.
  *
  * Writes go through `host.api.write*`; reads through `host.api.query` / the
  * coordinator. Stamps reflect instantly via a local overlay (`localLabels`).
@@ -25,12 +29,16 @@ import { filterExprToExpr } from "@/lib/mosaic-helpers";
 import { cn } from "@/lib/utils";
 import { AnnotateTable, type CropFields, type FocusCrop } from "@/nodes/annotate/AnnotateTable";
 import { CropThumb } from "@/nodes/annotate/CropThumb";
+import { RangeBracket } from "@/nodes/annotate/RangeBracket";
+import { fmtVal } from "@/nodes/annotate/range-scale";
 import { useGalleryChannels } from "@/nodes/table/useGalleryChannels";
 import type { NodeViewProps } from "@/core/node/sdk";
 
 export interface AnnotateConfig {
   column: string | null;
   labels: string[];
+  /** "label" (default) = vocabulary palette; "range" = min/max bracket instrument. */
+  mode?: "label" | "range";
 }
 export type AnnotateOptions = Record<never, never>;
 
@@ -61,7 +69,13 @@ export function AnnotateView({ host }: NodeViewProps<AnnotateConfig, AnnotateOpt
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
 
-  const [localLabels, setLocalLabels] = useState<Map<string, string>>(() => new Map());
+  const [mode, setMode] = useState<"label" | "range">(host.config.mode ?? "label");
+  const [rangeLo, setRangeLo] = useState<number | null>(null);
+  const [rangeHi, setRangeHi] = useState<number | null>(null);
+
+  // Per-obs, per-column overlay (id → column → value) so a write reflects
+  // instantly. Range mode stamps BOTH `{m}_min` and `{m}_max` for the row.
+  const [localLabels, setLocalLabels] = useState<Map<string, Map<string, string>>>(() => new Map());
   const [sel, setSel] = useState<{ selectedIds: Set<string>; focusId: string | null; focusCrop: FocusCrop | null }>(
     () => ({ selectedIds: new Set(), focusId: null, focusCrop: null }),
   );
@@ -77,6 +91,17 @@ export function AnnotateView({ host }: NodeViewProps<AnnotateConfig, AnnotateOpt
   );
   const hotkeys = useMemo(() => hotkeysFor(labels), [labels]);
   const targetColumn = newColumn.trim() || column;
+
+  // range mode derives two float columns from the metric base name. `rangeReady`
+  // gates on the ANNOTATION-COLUMNS list (created + server-registered into the
+  // `dataset` VIEW), NOT `metadata.obs_columns` — the latter lags creation, so
+  // the table never surfaced the pair until a manual re-scope.
+  const rangeBase = (targetColumn ?? "").trim();
+  const minCol = rangeBase ? `${rangeBase}_min` : null;
+  const maxCol = rangeBase ? `${rangeBase}_max` : null;
+  const rangeReady = !!(minCol && maxCol && columns.includes(minCol) && columns.includes(maxCol));
+  const rangeInvalid = rangeLo != null && rangeHi != null && rangeLo > rangeHi;
+  const rangeComplete = rangeLo != null && rangeHi != null && !rangeInvalid;
 
   // scope predicate (same path useTableQuery uses → works off Filter edges)
   const scopeExpr: FilterExpr | null = host.inputSelection?.predicate?.(null) ?? null;
@@ -138,6 +163,14 @@ export function AnnotateView({ host }: NodeViewProps<AnnotateConfig, AnnotateOpt
 
   const persistLabels = useCallback(() => host.patchConfig({ labels }), [host, labels]);
 
+  const setModePersist = useCallback(
+    (m: "label" | "range") => {
+      setMode(m);
+      host.patchConfig({ mode: m });
+    },
+    [host],
+  );
+
   const ensureColumn = useCallback(
     async (col: string) => {
       if (columns.includes(col)) return;
@@ -162,7 +195,7 @@ export function AnnotateView({ host }: NodeViewProps<AnnotateConfig, AnnotateOpt
         await host.api.writeAnnotationByPredicate?.(targetColumn, value, `__row_index__ IN (${ids.join(", ")})`);
         setLocalLabels((m) => {
           const next = new Map(m);
-          for (const id of ids) next.set(id, value);
+          for (const id of ids) next.set(id, new Map([[targetColumn, value]]));
           return next;
         });
         persistLabels();
@@ -175,36 +208,119 @@ export function AnnotateView({ host }: NodeViewProps<AnnotateConfig, AnnotateOpt
     [sel, targetColumn, busy, ensureColumn, host, persistLabels],
   );
 
-  // stamp the ENTIRE scope server-side (the true bulk path, beyond loaded rows)
-  const stampAllInScope = useCallback(
-    async (value: string) => {
-      if (!targetColumn || !value || busy) return;
-      const where = scopeExpr ? String(filterExprToExpr(scopeExpr)) : "TRUE";
+  // ── range mode: write {base}_min / {base}_max over a predicate ──
+  const ensureRangeColumns = useCallback(
+    async (base: string) => {
+      const mn = `${base}_min`;
+      const mx = `${base}_max`;
+      if (!columns.includes(mn)) await host.api.createAnnotationColumn?.(mn, "float");
+      if (!columns.includes(mx)) await host.api.createAnnotationColumn?.(mx, "float");
+      setColumns((c) => [...new Set([...c, mn, mx])]);
+      host.patchConfig({ column: base });
+    },
+    [columns, host],
+  );
+
+  const writeRange = useCallback(
+    async (where: string): Promise<number | null> => {
+      if (!rangeBase || rangeLo == null || rangeHi == null || rangeLo > rangeHi || busy) return null;
       setBusy(true);
       setStatus(null);
       try {
-        await ensureColumn(targetColumn);
-        const res = await host.api.writeAnnotationByPredicate?.(targetColumn, value, where);
-        persistLabels();
-        setStatus(
-          `✓ ${(res?.n ?? total).toLocaleString()} obs → ${targetColumn} = "${value}" (re-scope to refresh cells)`,
-        );
+        await ensureRangeColumns(rangeBase);
+        await host.api.writeAnnotationByPredicate?.(`${rangeBase}_min`, String(rangeLo), where);
+        const res = await host.api.writeAnnotationByPredicate?.(`${rangeBase}_max`, String(rangeHi), where);
+        return res?.n ?? 0;
       } catch (err) {
         setStatus(`✗ ${err instanceof Error ? err.message : String(err)}`);
+        return null;
       } finally {
         setBusy(false);
       }
     },
-    [targetColumn, busy, scopeExpr, ensureColumn, host, persistLabels, total],
+    [rangeBase, rangeLo, rangeHi, busy, ensureRangeColumns, host],
   );
+
+  const onStampRange = useCallback(async () => {
+    const ids = sel.selectedIds.size ? [...sel.selectedIds] : sel.focusId ? [sel.focusId] : [];
+    if (!ids.length) return;
+    const n = await writeRange(`__row_index__ IN (${ids.join(", ")})`);
+    if (n == null) return;
+    // Overlay BOTH the min and max cells for instant feedback (the table shows
+    // `{m}_min` as a context column and `{m}_max` as the label column).
+    if (minCol && maxCol) {
+      setLocalLabels((m) => {
+        const next = new Map(m);
+        for (const id of ids)
+          next.set(
+            id,
+            new Map([
+              [minCol, String(rangeLo)],
+              [maxCol, String(rangeHi)],
+            ]),
+          );
+        return next;
+      });
+    }
+    setStatus(`✓ ${ids.length} obs → [${fmtVal(rangeLo)}, ${fmtVal(rangeHi)}]`);
+  }, [sel, writeRange, rangeLo, rangeHi, minCol, maxCol]);
+
+  const stampRangeScope = useCallback(async () => {
+    const where = scopeExpr ? String(filterExprToExpr(scopeExpr)) : "TRUE";
+    const n = await writeRange(where);
+    if (n != null)
+      setStatus(`✓ ${n.toLocaleString()} obs → [${fmtVal(rangeLo)}, ${fmtVal(rangeHi)}] (re-scope to refresh cells)`);
+  }, [scopeExpr, writeRange, rangeLo, rangeHi]);
 
   const onSkip = useCallback(() => setStatus(null), []);
   const stamped = localLabels.size;
-  const stampValue = labels[0] ?? "";
+
+  // table wiring differs by mode: range shows {base}_min (context) + {base}_max (label col)
+  const tableContext = mode === "range" ? (rangeReady && minCol ? [minCol] : []) : contextColumns;
+  const tableLabelCol = mode === "range" ? (rangeReady ? maxCol : null) : targetColumn;
+  const tableLabels = mode === "range" ? [] : labels;
+  const tableHotkeys = mode === "range" ? [] : hotkeys;
+
+  // the range instrument + its commit controls (shared by both rail layouts)
+  const rangeControls = (
+    <div className="flex flex-col gap-2.5">
+      <RangeBracket
+        lo={rangeLo}
+        hi={rangeHi}
+        onChange={(lo, hi) => {
+          setRangeLo(lo);
+          setRangeHi(hi);
+        }}
+        onCommit={() => void onStampRange()}
+        disabled={busy}
+        metric={rangeBase || "value"}
+      />
+      <div className="flex gap-2">
+        <Button
+          size="sm"
+          className="h-8 flex-1 justify-between px-3"
+          disabled={busy || !rangeComplete || !sel.focusId}
+          onClick={() => void onStampRange()}
+        >
+          set {sel.focusId ?? "—"} <Kbd>↵</Kbd>
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-8 px-3"
+          disabled={busy || !rangeComplete}
+          onClick={() => void stampRangeScope()}
+          title={`apply bracket to all ${total.toLocaleString()} obs in scope`}
+        >
+          scope
+        </Button>
+      </div>
+    </div>
+  );
 
   // ── focus rail — vertical beside (wide) / compact strip below (narrow) ──
   const railWide = (
-    <aside className="flex w-[212px] min-h-0 shrink-0 flex-col gap-3 overflow-y-auto border-border-subtle border-l bg-surface-tertiary/20 p-3">
+    <aside className="flex w-[232px] min-h-0 shrink-0 flex-col gap-3 overflow-y-auto border-border-subtle border-l bg-surface-tertiary/20 p-3">
       <div className="flex items-baseline justify-between">
         <span className="font-medium text-foreground">obs {sel.focusId ?? "—"}</span>
         <span className="text-2xs text-text-muted">
@@ -237,7 +353,13 @@ export function AnnotateView({ host }: NodeViewProps<AnnotateConfig, AnnotateOpt
             ))}
         </div>
       )}
-      {labels.length === 0 ? (
+      {mode === "range" ? (
+        rangeBase ? (
+          rangeControls
+        ) : (
+          <p className="text-2xs text-text-muted">Name a metric above to start bracketing.</p>
+        )
+      ) : labels.length === 0 ? (
         <p className="text-2xs text-text-muted">Add labels above to start.</p>
       ) : (
         <div className="flex flex-col gap-1.5">
@@ -256,7 +378,8 @@ export function AnnotateView({ host }: NodeViewProps<AnnotateConfig, AnnotateOpt
         </div>
       )}
       <p className="mt-auto text-3xs text-text-muted">
-        click a row to focus · ↑↓ moves · keys stamp the selection · viewers follow
+        click a row to focus · ↑↓ moves · {mode === "range" ? "↵ writes the bracket" : "keys stamp the selection"} ·
+        viewers follow
       </p>
     </aside>
   );
@@ -279,7 +402,13 @@ export function AnnotateView({ host }: NodeViewProps<AnnotateConfig, AnnotateOpt
           obs {sel.focusId ?? "—"}
           {sel.selectedIds.size > 1 ? ` · ${sel.selectedIds.size} selected` : ""}
         </span>
-        {labels.length === 0 ? (
+        {mode === "range" ? (
+          rangeBase ? (
+            rangeControls
+          ) : (
+            <p className="text-2xs text-text-muted">Name a metric above to start bracketing.</p>
+          )
+        ) : labels.length === 0 ? (
           <p className="text-2xs text-text-muted">Add labels above to start.</p>
         ) : (
           <div className="flex flex-wrap gap-1.5">
@@ -307,8 +436,17 @@ export function AnnotateView({ host }: NodeViewProps<AnnotateConfig, AnnotateOpt
       {/* palette / target bar */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-border-subtle border-b p-2.5">
         <div className="flex items-center gap-1.5">
-          <span className="text-2xs text-text-muted">col</span>
-          {creating ? (
+          <span className="text-2xs text-text-muted">{mode === "range" ? "metric" : "col"}</span>
+          {mode === "range" ? (
+            <Input
+              aria-label="range metric name"
+              className="h-7 w-40 px-2 text-xs"
+              placeholder="regularization…"
+              value={column ?? ""}
+              onChange={(e) => setColumn(e.target.value)}
+              onBlur={() => host.patchConfig({ column })}
+            />
+          ) : creating ? (
             <>
               <Input
                 autoFocus
@@ -366,32 +504,74 @@ export function AnnotateView({ host }: NodeViewProps<AnnotateConfig, AnnotateOpt
             </>
           )}
         </div>
-        <div className="flex min-w-0 flex-1 items-center gap-1.5">
-          <span className="text-2xs text-text-muted">labels</span>
-          <Input
-            aria-label="label vocabulary, comma separated"
-            className="h-7 min-w-0 flex-1 px-2 text-xs"
-            placeholder="infected, uninfected…"
-            value={labelsText}
-            onChange={(e) => setLabelsText(e.target.value)}
-            onBlur={persistLabels}
-          />
-        </div>
-        {labels.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1">
-            {labels.map((l, i) => (
-              <Button
-                key={l}
-                variant="outline"
-                size="sm"
-                className="h-6 gap-1 px-2 text-2xs"
-                disabled={busy || (!sel.selectedIds.size && !sel.focusId)}
-                onClick={() => void onStamp(l)}
-              >
-                {l} <Kbd>{hotkeys[i]}</Kbd>
-              </Button>
-            ))}
+
+        {/* mode toggle */}
+        <div className="flex items-center gap-1.5">
+          <span className="text-2xs text-text-muted">mode</span>
+          <div className="inline-flex h-7 overflow-hidden rounded-md border border-input">
+            <button
+              type="button"
+              className={cn(
+                "px-2.5 text-2xs transition-colors",
+                mode === "label" ? "bg-primary text-primary-foreground" : "text-text-muted hover:text-foreground",
+              )}
+              onClick={() => setModePersist("label")}
+            >
+              label
+            </button>
+            <button
+              type="button"
+              className={cn(
+                "border-input border-l px-2.5 text-2xs transition-colors",
+                mode === "range" ? "bg-primary text-primary-foreground" : "text-text-muted hover:text-foreground",
+              )}
+              onClick={() => setModePersist("range")}
+            >
+              range
+            </button>
           </div>
+        </div>
+
+        {mode === "range" ? (
+          <span className="text-2xs text-text-muted">
+            {rangeBase ? (
+              <>
+                writes <span className="text-primary">{`${rangeBase}_min · ${rangeBase}_max`}</span>
+              </>
+            ) : (
+              "float · float"
+            )}
+          </span>
+        ) : (
+          <>
+            <div className="flex min-w-0 flex-1 items-center gap-1.5">
+              <span className="text-2xs text-text-muted">labels</span>
+              <Input
+                aria-label="label vocabulary, comma separated"
+                className="h-7 min-w-0 flex-1 px-2 text-xs"
+                placeholder="infected, uninfected…"
+                value={labelsText}
+                onChange={(e) => setLabelsText(e.target.value)}
+                onBlur={persistLabels}
+              />
+            </div>
+            {labels.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1">
+                {labels.map((l, i) => (
+                  <Button
+                    key={l}
+                    variant="outline"
+                    size="sm"
+                    className="h-6 gap-1 px-2 text-2xs"
+                    disabled={busy || (!sel.selectedIds.size && !sel.focusId)}
+                    onClick={() => void onStamp(l)}
+                  >
+                    {l} <Kbd>{hotkeys[i]}</Kbd>
+                  </Button>
+                ))}
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -409,16 +589,17 @@ export function AnnotateView({ host }: NodeViewProps<AnnotateConfig, AnnotateOpt
           coordinator={coordinator}
           table={table}
           selection={host.inputSelection}
-          contextColumns={contextColumns}
-          labelColumn={targetColumn}
+          contextColumns={tableContext}
+          labelColumn={tableLabelCol}
           localLabels={localLabels}
-          labels={labels}
-          hotkeys={hotkeys}
+          labels={tableLabels}
+          hotkeys={tableHotkeys}
+          numericLabel={mode === "range"}
           cropFields={cropFields}
           channels={channels}
           hash={hash}
           onChange={setSel}
-          onStamp={(v) => void onStamp(v)}
+          onStamp={mode === "range" ? () => {} : (v) => void onStamp(v)}
           onSkip={onSkip}
           onTotalCount={setTotal}
         />
@@ -440,16 +621,18 @@ export function AnnotateView({ host }: NodeViewProps<AnnotateConfig, AnnotateOpt
               {status}
             </span>
           )}
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-6 px-2 text-3xs text-text-muted"
-            disabled={busy || !targetColumn || !stampValue}
-            onClick={() => void stampAllInScope(stampValue)}
-            title={`stamp every obs in scope = ${stampValue || "(no label)"}`}
-          >
-            stamp all {total.toLocaleString()} = {stampValue || "…"}
-          </Button>
+          {mode === "range" && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 px-2 text-3xs text-text-muted"
+              disabled={busy || !rangeBase || !rangeComplete}
+              onClick={() => void stampRangeScope()}
+              title={`bracket every obs in scope = [${fmtVal(rangeLo)}, ${fmtVal(rangeHi)}]`}
+            >
+              bracket all {total.toLocaleString()} = [{fmtVal(rangeLo) || "…"}, {fmtVal(rangeHi) || "…"}]
+            </Button>
+          )}
         </div>
       </div>
     </div>

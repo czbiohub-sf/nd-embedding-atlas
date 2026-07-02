@@ -66,11 +66,15 @@ export interface AnnotateTableProps {
   contextColumns: string[];
   /** The annotation column whose value each row shows (or null if none yet). */
   labelColumn: string | null;
-  /** Locally-stamped values, keyed by obs id — overlays the queried value. */
-  localLabels: Map<string, string>;
+  /** Locally-stamped values, keyed by obs id → column → value — overlays the queried cell.
+   *  Per-column so range mode can reflect BOTH `{m}_min` and `{m}_max` at once. */
+  localLabels: Map<string, Map<string, string>>;
   /** Label hotkeys (index-aligned with `labels`). */
   labels: string[];
   hotkeys: string[];
+  /** Render the label column as a plain numeric (range mode) rather than a
+   *  categorical pill — so a float `{m}_max` matches its `{m}_min` sibling. */
+  numericLabel?: boolean;
   /** Gallery crops: a leading thumbnail per row when set + channels present. */
   cropFields: CropFields | null;
   channels: readonly ChannelDef[];
@@ -90,6 +94,7 @@ export function AnnotateTable({
   localLabels,
   labels,
   hotkeys,
+  numericLabel,
   cropFields,
   channels,
   hash,
@@ -307,8 +312,12 @@ export function AnnotateTable({
     [contextColumns, thumbs],
   );
 
-  const labelValue = (row: Row | undefined, id: string | null) =>
-    (id && localLabels.get(id)) ?? (labelColumn && row ? (row[labelColumn] as string | null) : null) ?? null;
+  const labelValue = (row: Row | undefined, id: string | null): string | null => {
+    if (!labelColumn) return null;
+    const overlay = id ? localLabels.get(id)?.get(labelColumn) : undefined;
+    if (overlay != null) return overlay;
+    return row ? ((row[labelColumn] as string | null) ?? null) : null;
+  };
 
   return (
     <div
@@ -387,21 +396,23 @@ export function AnnotateTable({
               <span role="gridcell" className="truncate text-text-muted tabular-nums">
                 {id ?? "·"}
               </span>
-              {contextColumns.map((c) => (
-                <span
-                  key={c}
-                  role="gridcell"
-                  className="truncate text-muted-foreground"
-                  title={row ? cellText(row[c]) : ""}
-                >
-                  {row ? cellText(row[c]) : ""}
-                </span>
-              ))}
+              {contextColumns.map((c) => {
+                // Overlay a locally-stamped cell (range mode's `{m}_min`) so it
+                // reflects instantly, same as the label column.
+                const text = (id ? localLabels.get(id)?.get(c) : undefined) ?? (row ? cellText(row[c]) : "");
+                return (
+                  <span key={c} role="gridcell" className="truncate text-muted-foreground tabular-nums" title={text}>
+                    {text}
+                  </span>
+                );
+              })}
               <span role="gridcell">
-                {val != null ? (
-                  <span className="rounded-full bg-primary/25 px-2 py-px text-2xs text-foreground">{val}</span>
-                ) : (
+                {val == null ? (
                   <span className="text-text-muted">—</span>
+                ) : numericLabel ? (
+                  <span className="truncate text-muted-foreground tabular-nums">{val}</span>
+                ) : (
+                  <span className="rounded-full bg-primary/25 px-2 py-px text-2xs text-foreground">{val}</span>
                 )}
               </span>
             </div>

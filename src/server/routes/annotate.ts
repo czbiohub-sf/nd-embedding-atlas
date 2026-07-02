@@ -18,6 +18,7 @@
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import {
+  type AnnotationDtype,
   AnnotationColumnBodySchema,
   AnnotationExportBodySchema,
   CommitAnnotationsBodySchema,
@@ -255,7 +256,7 @@ export async function handleCommitAnnotations(req: Request, state: ViewerState, 
 
   // Group the labeled values by dataset_key → column → Map<obs_name, value>.
   const perDataset = new Map<string, Map<string, Map<string, string | null>>>();
-  const colDtype = new Map<string, "categorical" | "string" | "integer">();
+  const colDtype = new Map<string, AnnotationDtype>();
   for (const name of names) {
     const entry = state.store.annotationColumns.get(name);
     if (!entry) continue;
@@ -288,10 +289,10 @@ export async function handleCommitAnnotations(req: Request, state: ViewerState, 
     }
     const obsCols: ObsColumnInput[] = [...cols.entries()].map(([name, values]) => {
       const dtype = colDtype.get(name) ?? "categorical";
-      if (dtype === "integer") {
-        const ints = new Map<string, number | null>();
-        for (const [k, v] of values) ints.set(k, v == null ? null : Number(v));
-        return { name, kind: "int", values: ints };
+      if (dtype === "integer" || dtype === "float") {
+        const nums = new Map<string, number | null>();
+        for (const [k, v] of values) nums.set(k, v == null ? null : Number(v));
+        return { name, kind: dtype === "float" ? "float" : "int", values: nums };
       }
       return { name, kind: dtype === "string" ? "string" : "categorical", values };
     });
