@@ -631,9 +631,11 @@ const COLUMN_NAME_RE = /^[A-Za-z0-9_][A-Za-z0-9 _.-]*$/;
 /**
  * Annotation column data type. `categorical`/`string` both stage as TEXT in
  * DuckDB (they differ only in on-disk AnnData encoding + how the frontend
- * colors them); `integer` stages as INTEGER and colors continuously.
+ * colors them); `integer` stages as INTEGER and `float` as DOUBLE, both
+ * colored continuously. `float` backs range annotations (a range is authored
+ * as two float columns, `{name}_min` / `{name}_max`).
  */
-export const AnnotationDtypeSchema = z.enum(["categorical", "string", "integer"]);
+export const AnnotationDtypeSchema = z.enum(["categorical", "string", "integer", "float"]);
 export type AnnotationDtype = z.infer<typeof AnnotationDtypeSchema>;
 
 /** POST /api/annotations/columns — create a new annotation column. */
@@ -709,3 +711,34 @@ export const CommitAnnotationsBodySchema = z.object({
   columns: AnnotationColumnNames.optional(),
 });
 export type CommitAnnotationsBody = z.infer<typeof CommitAnnotationsBodySchema>;
+
+/**
+ * One dataset's entry in the commit response — a discriminated union. A success
+ * item spreads the zarr `CommitReport` (`format`/`nObs`/`columns`/`written`); an
+ * error/skip item (remote store, missing source, or a thrown write) carries only
+ * `error` and NO `format`/`columns`. Consumers MUST discriminate on `error`
+ * before reading `columns`/`format`, else remote-skip and failure rows throw.
+ */
+export const CommitDatasetReportSchema = z.union([
+  z.object({
+    datasetKey: z.string(),
+    path: z.string(),
+    format: z.enum(["v2", "v3"]),
+    nObs: z.number(),
+    columns: z.array(z.object({ name: z.string(), kind: z.string(), nNonNull: z.number() })),
+    written: z.boolean(),
+  }),
+  z.object({
+    datasetKey: z.string(),
+    path: z.string().optional(),
+    error: z.string(),
+  }),
+]);
+export type CommitDatasetReport = z.infer<typeof CommitDatasetReportSchema>;
+
+/** Response of POST /api/annotations/commit[?dryRun=1]. */
+export const CommitAnnotationsResponseSchema = z.object({
+  dryRun: z.boolean(),
+  datasets: z.array(CommitDatasetReportSchema),
+});
+export type CommitAnnotationsResponse = z.infer<typeof CommitAnnotationsResponseSchema>;

@@ -39,6 +39,7 @@ import type {
 } from "@/core/node/host";
 import type { MountReason, NodeMeta } from "@/core/node/types";
 import type { SelectionFacet } from "@/core/buses";
+import type { CommitAnnotationsResponse } from "@/types";
 
 export interface HostInit<Config, Options> {
   instanceId: NodeInstanceId;
@@ -174,7 +175,10 @@ export function useDashboardHostShim() {
                 const body = (await res.json()) as { columns?: { name: string; dtype: string }[] };
                 return body.columns ?? [];
               },
-              async createAnnotationColumn(name: string, dtype: "categorical" | "string" | "integer" = "categorical") {
+              async createAnnotationColumn(
+                name: string,
+                dtype: "categorical" | "string" | "integer" | "float" = "categorical",
+              ) {
                 const res = await fetch("/api/annotations/columns", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
@@ -199,6 +203,18 @@ export function useDashboardHostShim() {
                 // an ALREADY-shown column still needs a Mosaic cache-bust — not here.
                 await refreshMetadata();
                 return out;
+              },
+              async commitAnnotations(opts: { dryRun: boolean; columns?: string[] }) {
+                const res = await fetch(`/api/annotations/commit${opts.dryRun ? "?dryRun=1" : ""}`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify(opts.columns ? { columns: opts.columns } : {}),
+                });
+                if (!res.ok)
+                  throw new Error(((await res.json()) as { error?: string }).error ?? `commit failed (${res.status})`);
+                // No refreshMetadata: a commit writes on-disk `.obs`, not the DuckDB
+                // `dataset` VIEW, so the client schema is unchanged.
+                return (await res.json()) as CommitAnnotationsResponse;
               },
             }
           : {}),

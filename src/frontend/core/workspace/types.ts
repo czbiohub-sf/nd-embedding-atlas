@@ -51,6 +51,7 @@ export type WsNodeType =
   | "fov"
   | "collection"
   | "export"
+  | "write-back"
   | "cache"
   // deprecated — superseded by "cache"; retained so old documents still load.
   | "selection"

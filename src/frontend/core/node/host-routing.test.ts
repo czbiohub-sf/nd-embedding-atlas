@@ -48,6 +48,7 @@ const ROUTING_COVERAGE: Record<string, "routed" | { exempt: string }> = {
   fov: { exempt: "focus consumer — no cross-view write gesture" },
   count: { exempt: "display-only — no cross-view gesture" },
   annotate: { exempt: "focus emitter via cursor effect, not a discrete gesture handler" },
+  "write-back": { exempt: "terminal sink — commits staged columns to disk, no cross-view gesture" },
 };
 
 describe("cross-view routing conformance", () => {

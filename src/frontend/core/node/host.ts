@@ -10,7 +10,7 @@
  */
 
 import type { Coordinator, MosaicClient, Selection } from "@uwdata/mosaic-core";
-import type { Metadata } from "@/types";
+import type { CommitAnnotationsResponse, Metadata } from "@/types";
 import type { DeviceLease } from "@/core/gpu/device-broker";
 import type { MountReason, NodeCapability, NodeMeta } from "./types";
 
@@ -64,9 +64,16 @@ export interface DataApi {
   fetchCrop?(params: unknown): Promise<Blob>;
   /** "annotate" — user annotation columns (node-graph Annotate node). */
   listAnnotationColumns?(): Promise<{ name: string; dtype: string }[]>;
-  createAnnotationColumn?(name: string, dtype?: "categorical" | "string" | "integer"): Promise<void>;
+  createAnnotationColumn?(name: string, dtype?: "categorical" | "string" | "integer" | "float"): Promise<void>;
   /** Stamp `label` onto every obs matching `predicate` (server-side WHERE); returns the matched count. */
   writeAnnotationByPredicate?(column: string, label: string, predicate: string): Promise<{ n: number }>;
+  /**
+   * Commit staged annotation columns into the source AnnData `.obs` on disk.
+   * `dryRun` returns the report without writing; omit `columns` to commit every
+   * staged column (the server groups by dataset). The write is full-column
+   * (un-annotated obs become NA) and irreversible.
+   */
+  commitAnnotations?(opts: { dryRun: boolean; columns?: string[] }): Promise<CommitAnnotationsResponse>;
 }
 
 // ── Cross-view facets (mapped onto buses) ──────────────────────────────────────
