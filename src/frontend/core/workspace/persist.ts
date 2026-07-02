@@ -12,7 +12,7 @@
 import type { JsonValue } from "@/core/node/json";
 import { parseConfig } from "@/core/node/registry";
 import { getWsNode } from "./node-kit";
-import type { WsState } from "./types";
+import type { WsEdge, WsNode, WsState } from "./types";
 
 /** Bumped when the persisted document shape changes (migration anchor).
  *  v2: `syncGroups`/`groupFocus` → the `focus` coordination plane
@@ -88,6 +88,38 @@ export function validateDoc(doc: PersistedDoc): { ok: boolean; errors: string[] 
   return { ok: errors.length === 0, errors };
 }
 
+/**
+ * Drop nodes whose type is no longer registered (a node type removed since the
+ * doc was saved) and any edges touching them, so removing a node type self-heals
+ * a persisted graph instead of crashing at render on the dangling
+ * `NODE_DEFS[type]` lookup. Also clears selection state pointing at a dropped
+ * node/edge. Returns the doc unchanged when every node type resolves.
+ */
+export function dropUnknownNodes(doc: PersistedDoc): PersistedDoc {
+  const s = doc.state;
+  const dropped = Object.values(s.nodes).filter((n) => getWsNode(n.type) === undefined);
+  if (dropped.length === 0) return doc;
+  const ids = new Set(dropped.map((n) => n.id));
+  console.warn(
+    `[workspace] dropping ${ids.size} node(s) of unregistered type(s): ${[...new Set(dropped.map((n) => n.type))].join(", ")}`,
+  );
+  const nodes: Record<string, WsNode> = {};
+  for (const [id, n] of Object.entries(s.nodes)) if (!ids.has(id)) nodes[id] = n;
+  const edges: Record<string, WsEdge> = {};
+  for (const [id, e] of Object.entries(s.edges)) if (!ids.has(e.from) && !ids.has(e.to)) edges[id] = e;
+  return {
+    ...doc,
+    state: {
+      ...s,
+      nodes,
+      edges,
+      selection: s.selection && ids.has(s.selection) ? null : s.selection,
+      selSet: s.selSet.filter((id) => !ids.has(id)),
+      selectedEdge: s.selectedEdge && !edges[s.selectedEdge] ? null : s.selectedEdge,
+    },
+  };
+}
+
 /* ── storage backend (localStorage; swappable behind the seam) ────────── */
 
 /** localStorage key prefix; the dataset session is appended for per-doc isolation. */
@@ -146,7 +178,7 @@ export function loadFromStorage(key: string): LoadResult {
     return { kind: "invalid", errors: ["stored document has an unexpected shape"] };
   }
   // migrate older docs forward BEFORE validation (which rejects on version skew).
-  const migrated = migrate(parsed);
+  const migrated = dropUnknownNodes(migrate(parsed));
   const res = validateDoc(migrated);
   return res.ok ? { kind: "ok", state: migrated.state } : { kind: "invalid", errors: res.errors };
 }

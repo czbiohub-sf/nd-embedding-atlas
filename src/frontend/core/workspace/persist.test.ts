@@ -7,7 +7,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { registerBuiltinNodes } from "./nodes";
-import { DOC_VERSION, migrate, type PersistedDoc, toPersistedDoc, validateDoc } from "./persist";
+import { DOC_VERSION, dropUnknownNodes, migrate, type PersistedDoc, toPersistedDoc, validateDoc } from "./persist";
 import { scopeColor } from "@/core/coordination/coordination";
 import type { WsNode, WsState } from "./types";
 
@@ -114,5 +114,34 @@ describe("v1 → v2 migration (focus coordination plane; R6 — load-bearing)", 
     const out = migrate(v1Doc({}, {}));
     expect(out.state.coordinationScopes).toEqual({});
     expect(out.state.coordinationSpace).toEqual({});
+  });
+});
+
+describe("dropUnknownNodes (self-heal on a removed node type)", () => {
+  test("drops nodes of unregistered type + their edges, clears stale selection", () => {
+    const state = emptyState();
+    state.nodes.d1 = datasetNode({ datasetKey: "plateA" });
+    state.nodes.x1 = {
+      id: "x1",
+      type: "write-back" as unknown as WsNode["type"],
+      kind: "view",
+      label: "gone",
+      pluginId: "write-back",
+    };
+    state.edges.e1 = { id: "e1", from: "d1", to: "x1", toPort: "in", kind: "pred" };
+    state.selection = "x1";
+    state.selSet = ["x1", "d1"];
+
+    const out = dropUnknownNodes(toPersistedDoc(state));
+    expect(out.state.nodes.x1).toBeUndefined();
+    expect(out.state.nodes.d1).toBeDefined();
+    expect(out.state.edges.e1).toBeUndefined();
+    expect(out.state.selection).toBeNull();
+    expect(out.state.selSet).toEqual(["d1"]);
+  });
+
+  test("returns the doc unchanged when every node type is registered", () => {
+    const doc = docWith(datasetNode({ datasetKey: "plateA" }));
+    expect(dropUnknownNodes(doc)).toBe(doc);
   });
 });
