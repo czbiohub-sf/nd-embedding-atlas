@@ -1,42 +1,39 @@
 /**
- * Write-back node body — commit staged annotation columns into the source AnnData
- * `.obs` on disk. A terminal action node: it reads the staged annotation columns,
- * lets the user pick which to write, previews the effect with a server dry-run,
- * and writes only after an explicit confirm (the write is full-column, NA for
- * un-annotated obs, and irreversible).
+ * CommitPanel — the "Write to .obs on disk" surface, folded into the Annotate node
+ * (rendered as an overlay over the body). Lists the dataset's staged annotation
+ * columns, previews the write with a server dry-run, and commits only after an
+ * explicit confirm. The write is full-column (NA for un-annotated obs) and
+ * irreversible.
  *
- * Column selection lives here, not on a wire: "which columns to commit" is
- * server-side state grouped by dataset, not an edge payload. The optional `pred`
- * input scopes only the preview badge, never the write.
- *
- * Report/summary logic (union discrimination, all-remote handling) is in
- * `./report.ts` so it stays unit-testable without a React DOM harness.
+ * "Which columns to commit" is server-side state grouped by dataset, not an edge
+ * payload — so selection lives here. Union/all-remote logic is in `./commit-report`
+ * so it stays unit-testable without a React DOM harness.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { commitStatusMessage, commitSummary, datasetRows } from "@/nodes/write-back/report";
+import { commitStatusMessage, commitSummary, datasetRows } from "@/nodes/annotate/commit-report";
 import type { CommitAnnotationsResponse } from "@/types";
-import type { NodeViewProps } from "@/core/node/sdk";
-
-export interface WriteBackConfig {
-  /** Columns selected to commit; null → all staged columns. */
-  columns: string[] | null;
-}
-export type WriteBackOptions = Record<never, never>;
+import type { NodeHost } from "@/core/node/host";
 
 type Phase = "idle" | "checking" | "confirming" | "writing" | "done";
 
-export function WriteBackView({ host }: NodeViewProps<WriteBackConfig, WriteBackOptions>) {
+export function CommitPanel({
+  host,
+  onClose,
+}: {
+  host: Pick<NodeHost, "api" | "inputSelection" | "ui">;
+  onClose: () => void;
+}) {
   const [columns, setColumns] = useState<{ name: string; dtype: string }[]>([]);
-  const [selected, setSelected] = useState<Set<string>>(() => new Set(host.config.columns ?? []));
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [report, setReport] = useState<CommitAnnotationsResponse | null>(null);
   const [phase, setPhase] = useState<Phase>("idle");
   const [status, setStatus] = useState<{ tone: "ok" | "err"; msg: string } | null>(null);
   const inited = useRef(false);
 
-  // Load staged columns; default-select all the first time (unless config pins a set).
+  // Load staged columns; default-select all on first open.
   useEffect(() => {
     let alive = true;
     void host.api
@@ -46,7 +43,7 @@ export function WriteBackView({ host }: NodeViewProps<WriteBackConfig, WriteBack
         setColumns(cols);
         if (!inited.current) {
           inited.current = true;
-          setSelected(host.config.columns ? new Set(host.config.columns) : new Set(cols.map((c) => c.name)));
+          setSelected(new Set(cols.map((c) => c.name)));
         }
       })
       .catch(() => {});
@@ -77,12 +74,11 @@ export function WriteBackView({ host }: NodeViewProps<WriteBackConfig, WriteBack
         const next = new Set(prev);
         if (next.has(name)) next.delete(name);
         else next.add(name);
-        host.patchConfig({ columns: [...next] });
         return next;
       });
       invalidate();
     },
-    [host, invalidate],
+    [invalidate],
   );
 
   const runDryRun = useCallback(async () => {
@@ -120,20 +116,23 @@ export function WriteBackView({ host }: NodeViewProps<WriteBackConfig, WriteBack
   const noColumns = columns.length === 0;
 
   return (
-    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden text-xs">
+    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-card text-xs">
       <div className="flex items-center justify-between gap-2 border-border-subtle border-b p-2.5">
         <span className="font-medium text-foreground">Write to .obs on disk</span>
-        {scoped && (
-          <span className="rounded bg-surface-tertiary px-1.5 py-px text-3xs text-text-muted">scoped preview</span>
-        )}
+        <div className="flex items-center gap-2">
+          {scoped && (
+            <span className="rounded bg-surface-tertiary px-1.5 py-px text-3xs text-text-muted">scoped preview</span>
+          )}
+          <Button variant="ghost" size="sm" className="h-6 px-2 text-text-muted" onClick={onClose} title="close">
+            ✕
+          </Button>
+        </div>
       </div>
 
       {/* staged-column selection */}
       <div className="min-h-0 flex-1 overflow-y-auto p-2.5">
         {noColumns ? (
-          <p className="text-2xs text-text-muted">
-            No staged annotation columns yet. Label some obs in an Annotate node first.
-          </p>
+          <p className="text-2xs text-text-muted">No staged annotation columns yet. Label some obs first.</p>
         ) : (
           <div className="flex flex-col gap-1">
             {columns.map((c) => (
@@ -229,7 +228,7 @@ export function WriteBackView({ host }: NodeViewProps<WriteBackConfig, WriteBack
                 disabled={busy}
                 onClick={invalidate}
               >
-                cancel
+                back
               </Button>
             )}
           </>

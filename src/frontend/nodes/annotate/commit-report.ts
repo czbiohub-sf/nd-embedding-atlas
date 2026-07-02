@@ -1,5 +1,5 @@
 /**
- * Pure helpers for the Write-back node body. Kept separate from `view.tsx` so the
+ * Pure helpers for the annotate commit panel. Kept separate from the panel so the
  * union-discrimination and all-remote logic — the parts that would otherwise
  * dereference `columns`/`format` on an error member and crash — are unit-testable
  * without a React DOM harness (this repo has none).
@@ -20,7 +20,7 @@ export interface DatasetRow {
 
 /**
  * Normalize the commit response's discriminated union into one row shape, so the
- * view maps over a single type and never reads `columns`/`format` on an error row.
+ * panel maps over a single type and never reads `columns`/`format` on an error row.
  */
 export function datasetRows(report: CommitAnnotationsResponse | null): DatasetRow[] {
   if (!report) return [];

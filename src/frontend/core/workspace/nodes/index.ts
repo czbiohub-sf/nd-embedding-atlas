@@ -33,7 +33,6 @@ import { subnetNode } from "@/nodes/utils/subnet/node";
 import { tableNode } from "@/nodes/table/node";
 import { thresholdNode } from "@/nodes/transform-filter/node";
 import { wrangleNode } from "@/nodes/utils/wrangle/node";
-import { writeBackNode } from "@/nodes/write-back/node";
 
 let registered = false;
 
@@ -59,7 +58,6 @@ export function registerBuiltinNodes(): void {
     fovNode,
     collectionNode,
     exportNode,
-    writeBackNode,
     cacheNode,
     subnetNode,
     proxyNode,

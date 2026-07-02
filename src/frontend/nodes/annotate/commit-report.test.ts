@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { CommitAnnotationsResponse } from "@/types";
-import { commitStatusMessage, commitSummary, datasetRows } from "./report.ts";
+import { commitStatusMessage, commitSummary, datasetRows } from "./commit-report.ts";
 
 const success = {
   datasetKey: "a",

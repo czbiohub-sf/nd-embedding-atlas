@@ -22,7 +22,6 @@ import { imageViewerDescriptor } from "@/nodes/image-viewer/plugin";
 import { scatterDescriptor } from "@/nodes/scatter/plugin";
 import { tableDescriptor } from "@/nodes/table/plugin";
 import { transformFilterDescriptor } from "@/nodes/transform-filter/plugin";
-import { writeBackDescriptor } from "@/nodes/write-back/plugin";
 
 let registered = false;
 
@@ -40,7 +39,6 @@ export function registerDescriptors(): void {
   registerDescriptor(galleryDescriptor);
   registerDescriptor(transformFilterDescriptor);
   registerDescriptor(annotateDescriptor);
-  registerDescriptor(writeBackDescriptor);
 
   // Phase 1 — runtime-discovered user plugins (inert until Phase 2).
   discoverRuntimeDescriptors();

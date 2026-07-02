@@ -29,6 +29,7 @@ import { filterExprToExpr } from "@/lib/mosaic-helpers";
 import { cn } from "@/lib/utils";
 import { AnnotateTable, type CropFields, type FocusCrop } from "@/nodes/annotate/AnnotateTable";
 import { CropThumb } from "@/nodes/annotate/CropThumb";
+import { CommitPanel } from "@/nodes/annotate/CommitPanel";
 import { RangeBracket } from "@/nodes/annotate/RangeBracket";
 import { fmtVal } from "@/nodes/annotate/range-scale";
 import { useGalleryChannels } from "@/nodes/table/useGalleryChannels";
@@ -68,6 +69,7 @@ export function AnnotateView({ host }: NodeViewProps<AnnotateConfig, AnnotateOpt
   const [labelsText, setLabelsText] = useState((host.config.labels ?? []).join(", "));
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+  const [showCommit, setShowCommit] = useState(false);
 
   const [mode, setMode] = useState<"label" | "range">(host.config.mode ?? "label");
   const [rangeLo, setRangeLo] = useState<number | null>(null);
@@ -432,7 +434,7 @@ export function AnnotateView({ host }: NodeViewProps<AnnotateConfig, AnnotateOpt
   const rail = wide ? railWide : railNarrow;
 
   return (
-    <div ref={bodyRef} className="flex h-full min-h-0 w-full flex-col overflow-hidden text-xs">
+    <div ref={bodyRef} className="relative flex h-full min-h-0 w-full flex-col overflow-hidden text-xs">
       {/* palette / target bar */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-border-subtle border-b p-2.5">
         <div className="flex items-center gap-1.5">
@@ -613,6 +615,15 @@ export function AnnotateView({ host }: NodeViewProps<AnnotateConfig, AnnotateOpt
         </span>
         <span className="text-text-muted">stamped {stamped.toLocaleString()} this session</span>
         <div className="ml-auto flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-6 px-2 text-3xs"
+            onClick={() => setShowCommit(true)}
+            title="commit staged annotation columns to the source .obs on disk"
+          >
+            write to .obs…
+          </Button>
           {status && (
             <span
               className={cn("max-w-[260px] truncate", status.startsWith("✓") ? "text-success" : "text-destructive")}
@@ -635,6 +646,11 @@ export function AnnotateView({ host }: NodeViewProps<AnnotateConfig, AnnotateOpt
           )}
         </div>
       </div>
+      {showCommit && (
+        <div className="absolute inset-0 z-20">
+          <CommitPanel host={host} onClose={() => setShowCommit(false)} />
+        </div>
+      )}
     </div>
   );
 }
