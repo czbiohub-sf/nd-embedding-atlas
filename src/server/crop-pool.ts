@@ -39,6 +39,9 @@ export interface FovGroupRequest {
 export interface CropFrame {
   rowIndex: number;
   bytes: Uint8Array;
+  /** Rendered crop dimensions (aspect-preserving; `size` is the longest edge). */
+  width: number;
+  height: number;
 }
 
 export interface FovGroupResult {
@@ -57,6 +60,8 @@ interface InboundMessage {
   taskId: number;
   rowIndex?: number;
   bytes?: Uint8Array;
+  width?: number;
+  height?: number;
   done?: boolean;
   errors?: { rowIndex: number; message: string }[];
   error?: string;
@@ -131,7 +136,7 @@ export class CropPool {
     size: number,
     quality: number,
     channels: { visible: boolean; lo: number; hi: number; color: string }[],
-  ): Promise<Uint8Array> {
+  ): Promise<CropFrame> {
     const mount = resolveMount(this.mounts, datasetKey);
     if (!mount) return Promise.reject(new Error("No plate mount available for crop"));
 
@@ -153,7 +158,7 @@ export class CropPool {
       ).then(
         (result) => {
           if (captured) {
-            resolve(captured.bytes);
+            resolve(captured);
           } else {
             const err = result.errors[0];
             reject(new Error(err?.message ?? "Crop produced no result"));
@@ -203,7 +208,7 @@ export class CropPool {
     // Per-crop result frame.
     if (msg.bytes && msg.rowIndex !== undefined) {
       try {
-        task.onResult({ rowIndex: msg.rowIndex, bytes: msg.bytes });
+        task.onResult({ rowIndex: msg.rowIndex, bytes: msg.bytes, width: msg.width ?? 0, height: msg.height ?? 0 });
       } catch (err) {
         console.error(`[crop-pool] onResult callback threw:`, err);
       }

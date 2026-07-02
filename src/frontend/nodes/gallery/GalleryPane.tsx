@@ -12,7 +12,7 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { Coordinator } from "@uwdata/mosaic-core";
 import { SquareDashedMousePointer } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { useDashboard } from "@/hooks/useDashboard";
 import { capabilitiesOf } from "@/lib/capabilities";
@@ -79,18 +79,23 @@ export function GalleryPane({ coordinator, predicate, highlightId, onSelect, dat
 
   const colCount = Math.max(1, Math.floor((containerWidth + COL_GAP) / (MIN_COL_WIDTH + COL_GAP)));
   const colWidth = containerWidth > 0 ? (containerWidth - COL_GAP * (colCount - 1)) / colCount : MIN_COL_WIDTH;
-  // Image is aspect-square at colWidth, footer is fixed → row pitch =
-  // colWidth + footer + vertical gap. Recomputing from colWidth keeps the
-  // virtualizer's row positions exact at any container width (no overlap
-  // when columns get wide).
-  const rowPitch = colWidth + FOOTER_HEIGHT + ROW_GAP;
 
   const count = obs.length;
+  // Masonry: crops keep their true aspect, so cards have different heights.
+  // `measureElement` reads each card's real height (image box + footer) and
+  // `laneAssignmentMode:'measured'` packs it into the shortest column by that
+  // measured size. `estimateSize` is only the pre-measure guess (assume a
+  // square image at colWidth); `gap` handles the inter-row spacing so the
+  // measured element itself carries no padding to double-count.
+  const getItemKey = useCallback((i: number) => obs[i]?.rowIndex ?? i, [obs]);
   const virtualizer = useVirtualizer({
     count,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => rowPitch,
+    getItemKey,
+    estimateSize: () => colWidth + FOOTER_HEIGHT,
     lanes: colCount,
+    laneAssignmentMode: "measured",
+    gap: ROW_GAP,
     overscan: colCount * 2,
   });
 
@@ -140,7 +145,7 @@ export function GalleryPane({ coordinator, predicate, highlightId, onSelect, dat
           to fire with width=0 once the prior div detached, ping-ponging
           containerWidth back to 0 and stranding the gallery in its
           loading-skeleton branch. */}
-      <div ref={parentRef} className="min-h-0 flex-1 overflow-y-auto p-2">
+      <div ref={parentRef} className="min-h-0 flex-1 overflow-y-auto p-2 [contain:strict] [overflow-anchor:none]">
         {rowCount === 0 ? (
           <EmptyState />
         ) : !hasPlate ? (
@@ -159,12 +164,13 @@ export function GalleryPane({ coordinator, predicate, highlightId, onSelect, dat
                 <div
                   key={vItem.key}
                   data-index={vItem.index}
+                  ref={virtualizer.measureElement}
                   style={{
                     position: "absolute",
-                    top: vItem.start,
+                    top: 0,
                     left,
                     width: colWidth,
-                    paddingBottom: ROW_GAP,
+                    transform: `translateY(${vItem.start}px)`,
                   }}
                 >
                   <LassoGalleryCard

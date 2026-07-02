@@ -8,6 +8,14 @@ import type { ChannelDef } from "@/nodes/image-viewer/viewer/ViewerContext";
 /** Stable query key for a single obs coordinate lookup. */
 export const obsCoordKey = (rowIndex: number) => ["obs-coord", rowIndex] as const;
 
+/** A rendered crop: data URL + its aspect-preserving pixel dimensions. */
+export interface CropResult {
+  url: string;
+  /** Rendered width/height from the `X-Crop-*` headers; 0 if unavailable. */
+  w: number;
+  h: number;
+}
+
 interface GalleryCropQueryParams {
   fovName: string;
   datasetKey?: string;
@@ -34,7 +42,7 @@ export function useGalleryCropQuery({ fovName, datasetKey, frame, channels, hash
   const viewerZ = useSelector(viewerZStore, (s) => s.slots[datasetKey ?? "docked"]);
   const z = Math.round(frame.z ?? viewerZ ?? 0);
 
-  return useQuery<string>({
+  return useQuery<CropResult>({
     // rowIndex is essential: many cells share (fov, t) — a lasso selection
     // routinely has multiple obs in the same FOV at the same timepoint. Without
     // the per-obs id they collide on one cache entry and the gallery paints the
@@ -103,6 +111,11 @@ export function useGalleryCropQuery({ fovName, datasetKey, frame, channels, hash
         throw new Error(`crop fetch failed: ${res.status}`);
       }
 
+      // Rendered dims from the server (aspect-preserving) — lets masonry size
+      // each tile before the image decodes. 0 if the header is missing.
+      const w = Number(res.headers.get("X-Crop-Width")) || 0;
+      const h = Number(res.headers.get("X-Crop-Height")) || 0;
+
       // Data URL, NOT a blob URL: the crop string lives and dies with the
       // React Query cache entry, so there is no URL.revokeObjectURL lifecycle to
       // get wrong. Blob URLs broke here — a revoke fired (gallery unmount, or a
@@ -118,7 +131,7 @@ export function useGalleryCropQuery({ fovName, datasetKey, frame, channels, hash
         reader.addEventListener("error", () => reject(reader.error ?? new Error("crop decode failed")), { once: true });
         reader.readAsDataURL(blob);
       });
-      return dataUrl;
+      return { url: dataUrl, w, h };
     },
     enabled,
     staleTime: Infinity, // same (fov, t, hash) always produces same image

@@ -211,7 +211,11 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion, statsUrl }:
         // 3D: single VolumeLayer with all channels
         const policy = createPlaybackPolicy({
           lod: { min: 0, bias: 0.5 },
-          prefetch: { x: 0, y: 0, z: 0, t: 0 },
+          // t:2 keeps neighboring timepoints warm (idetik marks them via
+          // `prefetchTime`) so scrubbing swaps to an already-loaded frame instead
+          // of tearing down the current one and loading cold — kills the blink
+          // that idetik ≥0.28 exposes when the prefetch window is 0.
+          prefetch: { x: 0, y: 0, z: 0, t: 2 },
           priorityOrder: ["visibleCurrent", "fallbackVisible", "prefetchTime", "prefetchSpace", "fallbackBackground"],
         });
         const sliceCoords = {
@@ -237,7 +241,11 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion, statsUrl }:
         // priorityOrder omits fallbackBackground/prefetchSpace to prevent idetik from
         // loading the entire image as a background task (very expensive with single-LOD data).
         const policy = createPlaybackPolicy({
-          prefetch: { x: 0, y: 0, z: 0, t: 0 },
+          // t:2 keeps neighboring timepoints warm (idetik marks them via
+          // `prefetchTime`) so scrubbing swaps to an already-loaded frame instead
+          // of tearing down the current one and loading cold — kills the blink
+          // that idetik ≥0.28 exposes when the prefetch window is 0.
+          prefetch: { x: 0, y: 0, z: 0, t: 2 },
           lod: { min: 0, bias: 0.5 },
           priorityOrder: ["visibleCurrent", "fallbackVisible", "prefetchTime", "prefetchSpace", "fallbackBackground"],
         });

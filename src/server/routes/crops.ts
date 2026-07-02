@@ -54,7 +54,7 @@ export async function handleCrop(fovPath: string, req: Request, state: ViewerSta
   }));
 
   try {
-    const bytes = await state.cropPool.renderOne(
+    const { bytes, width, height } = await state.cropPool.renderOne(
       decodeURIComponent(fovPath),
       body.dataset_key,
       t,
@@ -71,6 +71,11 @@ export async function handleCrop(fovPath: string, req: Request, state: ViewerSta
       headers: {
         "Content-Type": "image/webp",
         "Cache-Control": "public, max-age=300",
+        // Rendered dimensions (aspect-preserving) so the client can lay out
+        // masonry tiles without waiting for image decode. Same-origin fetch
+        // (Vite proxy in dev, single server compiled) → readable without CORS.
+        "X-Crop-Width": String(width),
+        "X-Crop-Height": String(height),
       },
     });
   } catch (err) {

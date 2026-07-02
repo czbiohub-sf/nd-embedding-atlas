@@ -25,7 +25,7 @@ export interface CropThumbProps {
 }
 
 export function CropThumb({ fovName, t, rowIndex, z, datasetKey, channels, hash, className }: CropThumbProps) {
-  const { data: url, isLoading } = useGalleryCropQuery({
+  const { data, isLoading } = useGalleryCropQuery({
     fovName,
     datasetKey,
     frame: { t: t ?? 0, emb_x: 0, emb_y: 0, spatial_x: 0, spatial_y: 0, z: z ?? undefined, rowIndex, datasetKey },
@@ -33,6 +33,7 @@ export function CropThumb({ fovName, t, rowIndex, z, datasetKey, channels, hash,
     hash,
     enabled: !!fovName && t != null && channels.length > 0,
   });
+  const url = data?.url;
   return (
     <div className={cn("relative overflow-hidden rounded bg-black", className)}>
       {(isLoading || !url) && <div className="absolute inset-0 animate-pulse bg-muted/20" />}

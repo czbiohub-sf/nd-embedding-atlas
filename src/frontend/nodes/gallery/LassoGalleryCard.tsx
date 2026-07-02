@@ -41,7 +41,7 @@ export function LassoGalleryCard({ obs, channels, hash, enabled, isHighlighted, 
     datasetKey,
   };
 
-  const { data: blobUrl, isLoading } = useGalleryCropQuery({
+  const { data, isLoading } = useGalleryCropQuery({
     fovName: obs.fov ?? "",
     frame,
     channels,
@@ -49,6 +49,11 @@ export function LassoGalleryCard({ obs, channels, hash, enabled, isHighlighted, 
     datasetKey,
     enabled: enabled && !!obs.fov && channels.length > 0,
   });
+  const blobUrl = data?.url;
+  // True aspect from the server dims; 1 (square) until the crop resolves so the
+  // skeleton doesn't jump. The image box matches this exactly, so nothing is
+  // stretched or center-cropped.
+  const aspect = data?.w && data?.h ? data.w / data.h : 1;
 
   return (
     <button
@@ -62,7 +67,7 @@ export function LassoGalleryCard({ obs, channels, hash, enabled, isHighlighted, 
         isHighlighted ? "border-primary ring-2 ring-primary/30" : "border-border/40 hover:border-border/70",
       )}
     >
-      <div className="relative aspect-square w-full overflow-hidden bg-black">
+      <div className="relative w-full overflow-hidden bg-black" style={{ aspectRatio: aspect }}>
         {(isLoading || !blobUrl) && <div className="absolute inset-0 animate-pulse bg-muted/20" />}
         {blobUrl && (
           <img

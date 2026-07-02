@@ -132,7 +132,7 @@ async function renderOne(
   half: number,
   size: number,
   quality: number,
-): Promise<Uint8Array> {
+): Promise<{ bytes: Uint8Array; width: number; height: number }> {
   // Resolve t/z into the FOV's actual bounds, rendering the nearest valid
   // frame/plane instead of throwing "index out of bounds".
   //
@@ -177,8 +177,15 @@ async function renderOne(
   }
   const slabs = await Promise.all(slabPromises);
 
-  const rgba = compositeChannels(slabs, channelReqs, srcW, srcH, size, size);
-  return encodeWebpImage(rgba, size, size, quality);
+  // Preserve source aspect: `size` is the longest-edge budget, never upscale.
+  // A window fully in-bounds is square (srcW==srcH); edge-clamped windows and
+  // full-FOV reads keep their true rectangle instead of being squished.
+  const scale = Math.min(1, size / Math.max(srcW, srcH));
+  const dstW = Math.max(1, Math.round(srcW * scale));
+  const dstH = Math.max(1, Math.round(srcH * scale));
+  const rgba = compositeChannels(slabs, channelReqs, srcW, srcH, dstW, dstH);
+  const bytes = await encodeWebpImage(rgba, dstW, dstH, quality);
+  return { bytes, width: dstW, height: dstH };
 }
 
 // ─── Task handler ───────────────────────────────────────────────────────────
@@ -209,11 +216,24 @@ async function handleTask(task: CropTaskMessage): Promise<void> {
   // it's encoded.
   for (const req of sorted) {
     try {
-      const bytes = await renderOne(arr, fovPath, nT, nC, nZ, nY, nX, channels, req, half, size, quality);
+      const { bytes, width, height } = await renderOne(
+        arr,
+        fovPath,
+        nT,
+        nC,
+        nZ,
+        nY,
+        nX,
+        channels,
+        req,
+        half,
+        size,
+        quality,
+      );
       // Transfer the underlying ArrayBuffer so the bytes don't get copied
       // across the worker boundary. Per Bun docs (web-compatible Worker
       // API), postMessage takes `(data, transferList)`.
-      self.postMessage({ taskId, rowIndex: req.rowIndex, bytes }, [bytes.buffer]);
+      self.postMessage({ taskId, rowIndex: req.rowIndex, bytes, width, height }, [bytes.buffer]);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       errors.push({ rowIndex: req.rowIndex, message });
