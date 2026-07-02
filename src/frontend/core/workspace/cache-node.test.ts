@@ -106,6 +106,22 @@ describe("Cache node", () => {
     expect(cookSql(ws, cache)).toBe("__row_index__ IN (1, 2, 3)");
   });
 
+  test("pin materializes a durable IN-list from rowIds, not a transient temp-table sql", () => {
+    const ws = makeWs();
+    const obs = ws.addNode("obs", { x: 0, y: 0 }, "obs");
+    const sc = ws.addNode("scatter", { x: 100, y: 0 });
+    const cache = ws.addNode("cache", { x: 200, y: 0 });
+    ws.connect(obs, sc);
+    ws.connect(sc, cache);
+
+    // Large-lasso shape: live sql references a per-session server temp table
+    // (dropped when the scatter clears), but the rows travel alongside it.
+    ws.emitLasso(sc, "__row_index__ IN (SELECT row FROM sel_scatter_x /* tok=3 */)", [10, 11, 12]);
+    expect(ws.pinCache(cache)).toBe(true);
+    // Frozen predicate is the self-contained rows, NOT the temp-table ref.
+    expect(cookSql(ws, cache)).toBe("__row_index__ IN (10, 11, 12)");
+  });
+
   test("scatter freeze affordance mints a ◆ Cache node wired to the lasso (R7)", () => {
     const ws = makeWs();
     const obs = ws.addNode("obs", { x: 0, y: 0 }, "obs");

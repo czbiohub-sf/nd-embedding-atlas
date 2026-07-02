@@ -181,7 +181,9 @@ export function CacheNodeBody({ node }: { node: WsNode }) {
   const stale = cached && node.stamp !== undefined && epoch > node.stamp;
   const live = ws.liveCacheInput(node.id);
   const liveCount = live?.kind === "sel" ? (live.rowIds?.length ?? null) : null;
-  const hasLive = !!live?.sql;
+  // Pinnable when there's a sql predicate OR a row set (a rowset-only sel, e.g.
+  // a large lasso staged server-side, is materialized into an IN-list on pin).
+  const hasLive = !!live?.sql || (live?.kind === "sel" && (live.rowIds?.length ?? 0) > 0);
 
   return (
     <div className="flex flex-col gap-[7px]" data-nodrag="1">

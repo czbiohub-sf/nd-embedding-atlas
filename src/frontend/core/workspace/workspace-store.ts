@@ -544,9 +544,20 @@ export class Workspace {
    *  nothing live to pin. */
   pinCache(cacheId: string): boolean {
     const live = this.liveCacheInput(cacheId);
-    if (!live?.sql) return false;
-    this.frozenPredicates.set(cacheId, live.sql);
-    this.frozenRows.set(cacheId, live.kind === "sel" && live.rowIds ? [...live.rowIds] : null);
+    if (!live) return false;
+    const rowIds = live.kind === "sel" && live.rowIds ? [...live.rowIds] : null;
+    // Freeze a SELF-CONTAINED predicate. A live sel's sql may reference a
+    // transient server temp table (`sel_<id>`) that's dropped when the source
+    // clears/unmounts — fatal for a pin that must outlive it. If we have the
+    // rows, freeze an `IN (…)` literal instead so the pin is durable at any
+    // size; fall back to the live sql for pred inputs (Filters etc.), which are
+    // already self-contained.
+    // ponytail: an N-item IN-list is fine for realistic lasso sizes; swap to a
+    // persisted `cache_<id>` table if selections routinely run into 6 figures.
+    const frozen = rowIds && rowIds.length > 0 ? `__row_index__ IN (${rowIds.join(", ")})` : live.sql;
+    if (!frozen) return false;
+    this.frozenPredicates.set(cacheId, frozen);
+    this.frozenRows.set(cacheId, rowIds);
     this.engine.markDirty(cacheId);
     const stamp = this.engine.epoch;
     this.store.setState((s) => ({
