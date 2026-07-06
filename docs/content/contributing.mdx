@@ -1,8 +1,7 @@
 ---
-icon: lucide/git-pull-request
+title: Contributing
+description: Dev setup, quality gates, project structure, and release flow.
 ---
-
-# Contributing
 
 ## Development setup
 
@@ -128,10 +127,12 @@ bun run build
 
 ## Editing this docs site
 
-[zensical](https://zensical.org/) renders the pages under `docs/` using `zensical.toml`. Preview locally:
+This site is built with [Fumapress](https://press.fumadocs.dev/) (Fumadocs + Waku). Pages are MDX under `docs/content/`; the app lives in `docs/` with its own `package.json` and `node_modules`, isolated from the main project's dependency graph.
 
 ```bash
-uvx --from zensical zensical serve
+cd docs
+bun install
+bun run dev      # local preview with hot reload
 ```
 
-Live-reloads at `http://localhost:8000`. Build output goes to `site/` (gitignored). `uvx` is part of [uv](https://docs.astral.sh/uv/); zensical is fetched on demand and cached.
+Because pages are MDX, they can embed live React — video clips, and (planned) interactive node graphs users can play with inline. Build output goes to `docs/dist/` (gitignored); CI builds and deploys it to GitHub Pages on every push to `main` (see `.github/workflows/docs.yml`).

@@ -1,27 +1,27 @@
 ---
-icon: lucide/rocket
+title: Getting started
+description: Interactive dashboard linking AI embeddings to source 5D image data.
 ---
-
-# Getting started
 
 nd-embedding-atlas is an interactive dashboard linking high-dimensional AI embeddings to source 5D (TCZYX) image data.
 
-!!! warning "AnnData schema is unstable"
+<Callout type="warn" title="AnnData schema is unstable">
+  The viewer's expected `obs` / `obsm` / `layers` shape will change. Expect to adjust your AnnData as the schema firms
+  up.
+</Callout>
 
-    The viewer's expected `obs` / `obsm` / `layers` shape will change. Expect to adjust your AnnData as the schema firms up.
-
-!!! info "Browser requirement"
-
-    **Chrome or Edge required.** The scatter renderer uses WebGPU; Firefox lacks WebGPU support by default. On HPC, see the [WebGPU setup guide](webgpu-hpc-setup.md).
+<Callout type="info" title="Browser requirement">
+  **Chrome or Edge required.** The scatter renderer uses WebGPU; Firefox lacks WebGPU support by default. On HPC, see
+  the [WebGPU setup guide](/webgpu-hpc-setup).
+</Callout>
 
 ## Installation
 
-!!! info "Repo is private"
-
-    Release assets and the install script are gated behind the czbiohub-sf GitHub
-    org. Every install / update command needs a GitHub token with repo read scope.
-    The simplest path uses [`gh`](https://cli.github.com), which most internal
-    users already have for code review.
+<Callout type="info" title="Repo is private">
+  Release assets and the install script are gated behind the czbiohub-sf GitHub org. Every install / update command
+  needs a GitHub token with repo read scope. The simplest path uses [`gh`](https://cli.github.com), which most internal
+  users already have for code review.
+</Callout>
 
 ```bash
 gh auth login   # one-time, if you haven't already
@@ -59,13 +59,14 @@ ndea update --channel canary      # rolling, rebuilt on every push to main
 
 The canonical `curl … raw.githubusercontent.com … | sh` form will work once the repo flips public; until then use the `gh` flow above.
 
-For developer setup, see the [contributing guide](contributing.md).
+For developer setup, see the [contributing guide](/contributing).
 
 ## Test data
 
-!!! tip "On the Bruno HPC"
-
-    Test datasets are pre-staged at `/hpc/websites/public.czbiohub.org/comp.micro/nd-embedding-atlas-test-data` — symlink or point the viewer at that path directly.
+<Callout type="info" title="On the Bruno HPC">
+  Test datasets are pre-staged at `/hpc/websites/public.czbiohub.org/comp.micro/nd-embedding-atlas-test-data` — symlink
+  or point the viewer at that path directly.
+</Callout>
 
 ## Launch the viewer
 
@@ -83,9 +84,10 @@ ndea view path/to/config.yaml
 
 Open Chrome or Edge at `http://localhost:5055`.
 
-!!! tip "Shorthand"
-
-    `view` is the default subcommand. `ndea path/to/data.zarr` works the same as `ndea view path/to/data.zarr`. Examples use the explicit form to match `update`, `rollback`, `completions`.
+<Callout type="info" title="Shorthand">
+  `view` is the default subcommand. `ndea path/to/data.zarr` works the same as `ndea view path/to/data.zarr`. Examples
+  use the explicit form to match `update`, `rollback`, `completions`.
+</Callout>
 
 A minimal multi-dataset YAML:
 
@@ -104,7 +106,7 @@ The viewer ships three panels:
 
 ## What's next?
 
-- [CLI reference](cli.md) — every subcommand, flag, env var, and channel
-- [Preparing your data](preparing-your-data.md) — OME-Zarr layout, sharding, pyramids
-- [Contributing](contributing.md) — dev setup, architecture, release flow
-- [WebGPU on HPC](webgpu-hpc-setup.md) — Chrome flags for HPC environments
+- [CLI reference](/cli) — every subcommand, flag, env var, and channel
+- [Preparing your data](/preparing-your-data) — OME-Zarr layout, sharding, pyramids
+- [Contributing](/contributing) — dev setup, architecture, release flow
+- [WebGPU on HPC](/webgpu-hpc-setup) — Chrome flags for HPC environments

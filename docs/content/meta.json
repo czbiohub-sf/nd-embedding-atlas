@@ -1,0 +1,3 @@
+{
+  "pages": ["index", "cli", "preparing-your-data", "webgpu-hpc-setup", "contributing"]
+}
