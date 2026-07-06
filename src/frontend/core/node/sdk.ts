@@ -18,6 +18,7 @@ export type {
   NodeSpec,
   NodeDescriptor,
   NodeMeta,
+  NodeDoc,
   NodePort,
   DescriptorKind,
   NodeCapability,

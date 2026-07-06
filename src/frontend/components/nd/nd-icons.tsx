@@ -51,6 +51,13 @@ export const ND_ICONS = {
       <circle cx="3.6" cy="6.8" r="1.3" fill="currentColor" />
     </g>
   ),
+  info: (
+    <g fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round">
+      <circle cx="5" cy="5" r="4" />
+      <line x1="5" y1="4.6" x2="5" y2="7.2" />
+      <circle cx="5" cy="2.8" r="0.35" fill="currentColor" stroke="none" />
+    </g>
+  ),
   split: (
     <g>
       <rect x="1.5" y="1.5" width="7" height="7" rx="1" fill="none" stroke="currentColor" strokeWidth="1" />

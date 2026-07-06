@@ -25,6 +25,11 @@ export const transformFilterDescriptor = defineDescriptor<ThresholdFilterConfig,
   placement: { container: "docked" },
   instancePolicy: "multi",
   icon: "filter",
+  doc: {
+    summary: "Keeps only the cells whose value clears a threshold.",
+    use: "Use it to narrow the data before it flows to the next node.",
+    note: "Set the column and cutoff in the node's options.",
+  },
   load: async () => {
     const [{ ThresholdFilterView }, { createThresholdFilterInstance }] = await Promise.all([
       import("./view"),

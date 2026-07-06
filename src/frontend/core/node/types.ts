@@ -42,6 +42,11 @@ export interface NodePort {
   multiple?: boolean;
   /** Required when `multiple === true`. v1: must be "and". */
   fanIn?: FanInOp;
+  /**
+   * One-line, user-facing description of what flows through this port (Tier 1
+   * hover). Plain language, not the port id. See `docs-integration-plan.md`.
+   */
+  doc?: string;
 }
 
 export type NodeCapability =
@@ -99,6 +104,22 @@ export interface NodeSpec {
 }
 
 /**
+ * Contextual documentation for a node (Tier 1 · Peek). Plain strings so the
+ * whole record stays side-effect-free metadata — safe on the palette/enumeration
+ * path, no lazy import, no engine code. Tiers 2–3 (the full reference drawer +
+ * browser) add lazy `overview`/`example` fields alongside these once the in-app
+ * MDX pipeline lands. See `.design/docs-integration-plan.md`.
+ */
+export interface NodeDoc {
+  /** One plain sentence: what this node does. Domain language, no internals. */
+  summary: string;
+  /** When to reach for it — starts "Use it to …". */
+  use: string;
+  /** Optional single prerequisite / gotcha, in user words. */
+  note?: string;
+}
+
+/**
  * Side-effect-free metadata. Importing the barrel that registers these must NOT
  * pull in any engine code (TypeGPU, Idetik, ochre, roaring-wasm). The node
  * palette enumerates THIS only.
@@ -125,6 +146,9 @@ export interface NodeMeta extends NodeSpec {
 
   /** Lightweight icon name (string token, NOT a ComponentType — no import cost). */
   icon?: string;
+
+  /** Contextual documentation shown on hover (Tier 1) and in the reference drawer. */
+  doc?: NodeDoc;
 
   /**
    * Host-API version this plugin targets (semver), checked MAJOR-wise by the

@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { CollectionsSheetProvider } from "./components/collections/CollectionsSheetProvider";
+import { DocsProvider } from "./components/docs/DocsProvider";
 import { NdSpecPage } from "./components/nd/NdSpecPage";
 import { ScatterUIStateProvider } from "./nodes/scatter/ScatterUIStateProvider";
 import { Toaster } from "./components/ui/sonner";
@@ -67,7 +68,9 @@ export default function App() {
           <ScatterUIStateProvider>
             <DashboardProvider>
               <CollectionsSheetProvider>
-                <WorkspaceShell />
+                <DocsProvider>
+                  <WorkspaceShell />
+                </DocsProvider>
               </CollectionsSheetProvider>
               <Toaster position="bottom-right" />
             </DashboardProvider>

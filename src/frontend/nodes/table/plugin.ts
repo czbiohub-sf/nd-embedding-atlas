@@ -21,6 +21,10 @@ export const tableDescriptor = defineDescriptor<TableConfig, TableOptions>({
   placement: { container: "docked", side: "bottom" },
   instancePolicy: "unique-per-container",
   icon: "table",
+  doc: {
+    summary: "Shows your cells as rows, one column per measurement.",
+    use: "Use it to read exact values, sort, and scan the cells you selected.",
+  },
   load: async () => {
     const { TablePluginView } = await import("./view");
     return {

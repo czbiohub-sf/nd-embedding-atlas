@@ -13,6 +13,7 @@ import { useSelector } from "@tanstack/react-store";
 import { useReactFlow, useUpdateNodeInternals, type Node, type NodeProps } from "@xyflow/react";
 import { memo, useEffect } from "react";
 
+import { NodeDocButton } from "@/components/nd/node-doc";
 import { NdIconButton } from "@/components/nd/nd-icon-button";
 import { NdNodeFrame } from "@/components/nd/nd-node-frame";
 import { NdHud, type NdLedState } from "@/components/nd/nd-primitives";
@@ -240,6 +241,7 @@ function NdGraphNodeInner({ id, selected }: NodeProps<NdGraphNodeType>) {
         }
         actions={
           <>
+            <NodeDocButton nodeType={node.type} compact={form === "chip"} />
             <FlagButton node={node} compact={form === "chip"} />
             {def.kind === "view" && form !== "chip" ? <SyncGroupButton nodeId={id} /> : null}
             {node.pluginId && def.kind === "view" ? (

@@ -32,6 +32,11 @@ export const scatterDescriptor = defineDescriptor<ScatterConfig, ScatterOptions>
   instancePolicy: "multi",
   maxInstances: 6,
   icon: "scatter-chart",
+  doc: {
+    summary: "Plots your cells in embedding space, like a UMAP.",
+    use: "Use it to spot structure, then lasso a region to select those cells.",
+    note: "Pick which embedding to show in the node's options.",
+  },
   load: async () => {
     const { ScatterPluginView } = await import("./view");
     return {

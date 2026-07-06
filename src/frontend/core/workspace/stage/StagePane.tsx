@@ -11,6 +11,7 @@ import { useSelector } from "@tanstack/react-store";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
+import { NodeDocButton } from "@/components/nd/node-doc";
 import { NdIconButton } from "@/components/nd/nd-icon-button";
 import { NdBracketed, NdCaption, NdHud, NdLed, type NdLedState } from "@/components/nd/nd-primitives";
 import { ThresholdFilterView } from "@/nodes/transform-filter/view";
@@ -114,6 +115,7 @@ function StageTile({
         <span className={`font-mono text-[9.5px] whitespace-nowrap ${selected ? "text-primary" : "text-text-muted"}`}>
           ◆ {id}
         </span>
+        <NodeDocButton nodeType={node.type} />
         <FlagButton node={node} />
         {node.pluginId ? (
           <NdIconButton icon="fullscreen" title="fullscreen body" onClick={() => ws.setFullscreen(id)} />

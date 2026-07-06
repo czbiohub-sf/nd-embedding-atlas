@@ -15,7 +15,7 @@ import type * as React from "react";
 import { cn } from "@/lib/utils";
 import { NdIcon, type NdIconName } from "./nd-icons";
 
-const ndIconButtonVariants = cva(
+export const ndIconButtonVariants = cva(
   "box-border inline-flex shrink-0 cursor-pointer items-center justify-center gap-[3px] rounded-[3px] border font-mono leading-none whitespace-nowrap",
   {
     variants: {
