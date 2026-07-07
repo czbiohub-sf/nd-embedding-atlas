@@ -9,7 +9,7 @@ import { createContext, useContext, useEffect, useState } from "react";
 import { useDashboard } from "@/hooks/useDashboard";
 import type { Metadata } from "@/types";
 import { loadFromStorage, saveToStorage, storageKey } from "./persist";
-import { resolvePreset } from "./presets";
+import { resolvePreset, seedAnnotate } from "./presets";
 import { seedWorkspace, Workspace, type TelemetryState } from "./workspace-store";
 import type { WsState } from "./types";
 
@@ -55,12 +55,12 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       }
       (window as unknown as { __ndeaWs?: Workspace }).__ndeaWs = w;
     } else {
-      // Shipped build: the bundled preset is authoritative on every launch (R7,
-      // read-only). A typo'd or unknown --preset falls back to the annotate
-      // default, never the canvas-less seedWorkspace layout.
-      const preset = resolvePreset(metadata.preset ?? "annotate") ?? resolvePreset("annotate");
-      if (preset) w.loadDocument(preset);
-      else seedWorkspace(w);
+      // Shipped build: the named preset (default annotate) seeds a fresh graph +
+      // layout against the mounted dataset — dataset-agnostic, authoritative on
+      // every launch (R7, read-only). A typo'd/unknown --preset falls back to the
+      // annotate default.
+      const seed = resolvePreset(metadata.preset ?? "annotate") ?? seedAnnotate;
+      seed(w);
     }
     return w;
   });
