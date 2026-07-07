@@ -378,6 +378,7 @@ export async function startup(config: ResolvedConfig): Promise<void> {
     idColumn: "_index",
     datasetKeys: isMultiDataset ? [...datasetConfigs.keys()] : null,
     datasetChannels,
+    preset: config.preset,
   };
 
   let server;

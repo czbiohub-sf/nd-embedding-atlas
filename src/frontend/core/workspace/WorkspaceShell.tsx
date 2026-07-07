@@ -151,33 +151,39 @@ function StatusBar() {
           onClick={() => ws.setZoomForms(!zoomForms)}
         />
       </div>
-      <ButtonGroup className="shrink-0">
-        {(
-          [
-            { disp: "full", Icon: Workflow, title: "wiring fills the workspace" },
-            { disp: "strip", Icon: PanelBottom, title: "split — stage above, wiring docked" },
-            { disp: "hidden", Icon: PanelBottomClose, title: "stage fills, wiring collapsed" },
-          ] as const
-        ).map(({ disp, Icon, title }) => {
-          const active = disposition === disp;
-          return (
-            <Button
-              key={disp}
-              type="button"
-              variant={active ? "secondary" : "ghost"}
-              size="icon-xs"
-              aria-pressed={active}
-              title={title}
-              aria-label={title}
-              onClick={() => ws.setDisposition(disp)}
-            >
-              <Icon strokeWidth={1.75} />
-            </Button>
-          );
-        })}
-      </ButtonGroup>
+      {/* disposition control — reveals the wiring canvas, so dev-only (R4). A
+          build stays on the preset's saved disposition with no way to switch. */}
+      {import.meta.env.DEV ? (
+        <ButtonGroup className="shrink-0">
+          {(
+            [
+              { disp: "full", Icon: Workflow, title: "wiring fills the workspace" },
+              { disp: "strip", Icon: PanelBottom, title: "split — stage above, wiring docked" },
+              { disp: "hidden", Icon: PanelBottomClose, title: "stage fills, wiring collapsed" },
+            ] as const
+          ).map(({ disp, Icon, title }) => {
+            const active = disposition === disp;
+            return (
+              <Button
+                key={disp}
+                type="button"
+                variant={active ? "secondary" : "ghost"}
+                size="icon-xs"
+                aria-pressed={active}
+                title={title}
+                aria-label={title}
+                onClick={() => ws.setDisposition(disp)}
+              >
+                <Icon strokeWidth={1.75} />
+              </Button>
+            );
+          })}
+        </ButtonGroup>
+      ) : (
+        <span />
+      )}
       <div className="flex min-w-0 items-center justify-end gap-3.5">
-        <span>drag select · tab add · y knife · ⇧F wiring · esc</span>
+        {import.meta.env.DEV ? <span>drag select · tab add · y knife · ⇧F wiring · esc</span> : null}
         <span className="inline-flex items-center gap-[5px]">
           ws <NdLed state="clean" size={5} />
         </span>
@@ -206,8 +212,10 @@ function WorkspaceFrame() {
   const stagedCount = ws.stagedIds().length;
   const stageOccupied = stageHasContent(stageTree, stagedCount);
 
-  // ⇧F cycles the emphasis axis: full → strip → hidden → full
+  // ⇧F cycles the emphasis axis: full → strip → hidden → full. Dev-only — a
+  // build has no canvas to reveal, so disposition switching is compiled out (R4/R5).
   useEffect(() => {
+    if (!import.meta.env.DEV) return;
     const onKey = (e: KeyboardEvent) => {
       const el = document.activeElement;
       if (el && ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName)) return;
@@ -298,8 +306,9 @@ function WorkspaceFrame() {
           </div>
         ) : null}
 
-        {/* wiring tile chrome (strip mode): the canvas wears tile anatomy */}
-        {disposition === "strip" ? (
+        {/* wiring tile chrome (strip mode): the canvas wears tile anatomy. Dev-only —
+            a build never enters strip (no disposition control) and mounts no canvas. */}
+        {import.meta.env.DEV && disposition === "strip" ? (
           <div
             className="absolute box-border flex flex-col overflow-hidden rounded-[7px] border border-border bg-card"
             style={{
@@ -346,16 +355,22 @@ function WorkspaceFrame() {
           </div>
         ) : null}
 
-        {/* the ONE canvas — re-disposed, never remounted */}
-        <div
-          className="absolute overflow-hidden"
-          style={{
-            ...canvasStyle,
-            transition: `${paneTransition}, border-radius ${ND_TIMING.dispoMs}ms ${ND_TIMING.dispoEase}`,
-          }}
-        >
-          <WorkspaceCanvas />
-        </div>
+        {/* the ONE canvas — re-disposed, never remounted. Dev-only: the wiring
+            canvas is the sole home of the Tab palette, right-click add-menu, knife,
+            connect, and node-delete listeners, so a build simply does not mount it —
+            authoring is absent, and the stage (its bodies live in the body-dock)
+            is unaffected (R4/R5). */}
+        {import.meta.env.DEV ? (
+          <div
+            className="absolute overflow-hidden"
+            style={{
+              ...canvasStyle,
+              transition: `${paneTransition}, border-radius ${ND_TIMING.dispoMs}ms ${ND_TIMING.dispoEase}`,
+            }}
+          >
+            <WorkspaceCanvas />
+          </div>
+        ) : null}
 
         {/* fullscreen body — covers the panes, leaves the status bar */}
         <FullscreenOverlay />

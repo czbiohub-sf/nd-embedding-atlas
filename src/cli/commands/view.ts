@@ -31,6 +31,9 @@ export default defineCommand({
     "obs-columns": option(z.string().optional(), {
       description: "Comma-separated obs columns to include",
     }),
+    preset: option(z.string().optional(), {
+      description: "Named preset a shipped build opens (default: annotate)",
+    }),
   },
   async handler({ flags, positional }) {
     // Positional args first; fall back to NDEA_DATASET env var. The env
@@ -52,8 +55,9 @@ export default defineCommand({
     // Mirror the env-var escape hatch — scripts/dev.ts sets NDEA_NO_STATIC=1.
     const noStatic = flags["no-static"] || process.env.NDEA_NO_STATIC === "1";
     const obsColumns = parseObsColumns(flags["obs-columns"]);
+    const preset = flags.preset && flags.preset.length > 0 ? flags.preset : undefined;
 
-    const config = await resolveConfig({ paths, port, host, noOpen, noStatic, obsColumns });
+    const config = await resolveConfig({ paths, port, host, noOpen, noStatic, obsColumns, preset });
 
     try {
       await startup(config);
@@ -77,6 +81,7 @@ interface RawArgs {
   noOpen: boolean;
   noStatic: boolean;
   obsColumns?: string[];
+  preset?: string;
 }
 
 function parseObsColumns(raw: string | undefined): string[] | undefined {
@@ -89,7 +94,7 @@ function parseObsColumns(raw: string | undefined): string[] | undefined {
 }
 
 async function resolveConfig(raw: RawArgs): Promise<ResolvedConfig> {
-  const { paths, port, host, noOpen, noStatic, obsColumns } = raw;
+  const { paths, port, host, noOpen, noStatic, obsColumns, preset } = raw;
 
   if (paths.length === 1 && isYamlConfig(paths[0])) {
     try {
@@ -102,6 +107,8 @@ async function resolveConfig(raw: RawArgs): Promise<ResolvedConfig> {
         host: host ?? project.settings?.host ?? "127.0.0.1",
         noOpen,
         noStatic,
+        // CLI --preset overrides the YAML preset: field.
+        preset: preset ?? project.preset,
       };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -126,5 +133,6 @@ async function resolveConfig(raw: RawArgs): Promise<ResolvedConfig> {
     host: host ?? "127.0.0.1",
     noOpen,
     noStatic,
+    preset,
   };
 }

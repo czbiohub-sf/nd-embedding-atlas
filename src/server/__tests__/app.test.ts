@@ -149,6 +149,8 @@ describe("createApp", () => {
     expect(body).toHaveProperty("obs_columns");
     expect(body.obs_columns).toContain("category");
     expect(body.database).toEqual({ type: "rest" });
+    // No --preset / preset: set on the mock config → the annotate default (R2/R3).
+    expect(body.preset).toBe("annotate");
   });
 
   test("Mosaic JSON query works", async () => {

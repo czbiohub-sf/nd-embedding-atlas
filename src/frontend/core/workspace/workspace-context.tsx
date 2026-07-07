@@ -9,6 +9,7 @@ import { createContext, useContext, useEffect, useState } from "react";
 import { useDashboard } from "@/hooks/useDashboard";
 import type { Metadata } from "@/types";
 import { loadFromStorage, saveToStorage, storageKey } from "./persist";
+import { resolvePreset } from "./presets";
 import { seedWorkspace, Workspace, type TelemetryState } from "./workspace-store";
 import type { WsState } from "./types";
 
@@ -37,21 +38,30 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
 
   const [ws] = useState(() => {
     const w = new Workspace({ coordinator, table, metadata });
-    // load-or-seed seam (U7→persistence): read the saved PersistedDoc for this
-    // dataset session, validate it (parse-on-load), and hydrate it into the fresh
-    // Workspace — engine registration + edges included so it actually cooks.
-    // Fall back to seedWorkspace on a miss or an invalid/corrupt doc.
-    const key = storageKey(sessionKeyOf(metadata, table));
-    const loaded = loadFromStorage(key);
-    if (loaded.kind === "ok") {
-      w.loadDocument(loaded.state);
-    } else {
-      if (loaded.kind === "invalid") {
-        console.warn("[workspace] saved document rejected, seeding fresh:", loaded.errors.join("; "));
+    if (import.meta.env.DEV) {
+      // Dev server: editable session. Load-or-seed seam (U7→persistence) — read
+      // the saved PersistedDoc for this dataset session, validate it
+      // (parse-on-load), and hydrate it (engine registration + edges included so
+      // it actually cooks); fall back to seedWorkspace on a miss or corrupt doc.
+      const key = storageKey(sessionKeyOf(metadata, table));
+      const loaded = loadFromStorage(key);
+      if (loaded.kind === "ok") {
+        w.loadDocument(loaded.state);
+      } else {
+        if (loaded.kind === "invalid") {
+          console.warn("[workspace] saved document rejected, seeding fresh:", loaded.errors.join("; "));
+        }
+        seedWorkspace(w);
       }
-      seedWorkspace(w);
+      (window as unknown as { __ndeaWs?: Workspace }).__ndeaWs = w;
+    } else {
+      // Shipped build: the bundled preset is authoritative on every launch (R7,
+      // read-only). A typo'd or unknown --preset falls back to the annotate
+      // default, never the canvas-less seedWorkspace layout.
+      const preset = resolvePreset(metadata.preset ?? "annotate") ?? resolvePreset("annotate");
+      if (preset) w.loadDocument(preset);
+      else seedWorkspace(w);
     }
-    if (import.meta.env.DEV) (window as unknown as { __ndeaWs?: Workspace }).__ndeaWs = w;
     return w;
   });
 
@@ -61,6 +71,8 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   // the topology/presentation authority — engine-only runtime (lassoes, cache
   // pins) is intentionally not persisted; the doc round-trips and re-cooks.
   useEffect(() => {
+    // Builds persist nothing — the bundled preset is authoritative every launch (R7).
+    if (!import.meta.env.DEV) return;
     const key = storageKey(sessionKeyOf(metadata, table));
     let timer: ReturnType<typeof setTimeout> | null = null;
     const sub = ws.store.subscribe(() => {

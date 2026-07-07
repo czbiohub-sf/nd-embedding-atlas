@@ -27,6 +27,8 @@ export interface ProjectConfig {
     port?: number;
     host?: string;
   };
+  /** Named preset a shipped build opens (top-level YAML `preset:`). */
+  preset?: string;
 }
 
 /** Fully resolved config with CLI overrides applied. */
@@ -37,6 +39,7 @@ export interface ResolvedConfig {
   host: string;
   noOpen: boolean;
   noStatic: boolean;
+  preset?: string;
 }
 
 // ─── Detection ──────────────────────────────────────────────────────────────
@@ -71,8 +74,9 @@ export async function loadProjectConfig(yamlPath: string): Promise<ProjectConfig
 
   const obsColumns = parseObsColumns(raw.obs_columns);
   const settings = parseSettings(raw.settings);
+  const preset = typeof raw.preset === "string" ? raw.preset : undefined;
 
-  return { datasets, obsColumns, settings };
+  return { datasets, obsColumns, settings, preset };
 }
 
 // ─── Path-based config ──────────────────────────────────────────────────────

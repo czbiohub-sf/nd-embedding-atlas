@@ -91,17 +91,20 @@ function StageTile({
       {/* header — grip · LED · title · count · ◆ id · pull. leading-none is
           inherited row-wide so mixed fonts sit on one visual line */}
       <div className="flex h-[26px] shrink-0 items-center gap-1.5 overflow-hidden border-b border-border px-[9px] leading-none whitespace-nowrap">
-        <span
-          title="drag to rearrange"
-          onPointerDown={(e) => {
-            e.stopPropagation();
-            ws.select(id);
-            beginTileDrag(id);
-          }}
-          className="shrink-0 cursor-grab text-[10px] tracking-[1px] text-text-muted select-none"
-        >
-          ⠿
-        </span>
+        {/* drag-to-rearrange grip — authoring (re-tile), dev-only (R4) */}
+        {import.meta.env.DEV ? (
+          <span
+            title="drag to rearrange"
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              ws.select(id);
+              beginTileDrag(id);
+            }}
+            className="shrink-0 cursor-grab text-[10px] tracking-[1px] text-text-muted select-none"
+          >
+            ⠿
+          </span>
+        ) : null}
         {led ? <NdLed state={led} /> : null}
         <span className="text-[11.5px] leading-none font-medium whitespace-nowrap">{node.label}</span>
         {/* plugin's compact toolbar follows the body — staged ⇒ tile header */}
@@ -116,16 +119,20 @@ function StageTile({
           ◆ {id}
         </span>
         <NodeDocButton nodeType={node.type} />
-        <FlagButton node={node} />
+        {/* bypass / display-off mutates persisted graph state — authoring, dev-only (R4) */}
+        {import.meta.env.DEV ? <FlagButton node={node} /> : null}
         {node.pluginId ? (
           <NdIconButton icon="fullscreen" title="fullscreen body" onClick={() => ws.setFullscreen(id)} />
         ) : null}
-        <SplitButton id={id} />
-        <NdIconButton
-          icon="pin-down"
-          title="pull body to canvas"
-          onClick={() => ws.togglePlacement(id, ND_TIMING.seamMs)}
-        />
+        {/* split (re-tile) + pull-to-canvas (re-placement) — authoring, dev-only (R4) */}
+        {import.meta.env.DEV ? <SplitButton id={id} /> : null}
+        {import.meta.env.DEV ? (
+          <NdIconButton
+            icon="pin-down"
+            title="pull body to canvas"
+            onClick={() => ws.togglePlacement(id, ND_TIMING.seamMs)}
+          />
+        ) : null}
       </div>
       {/* body — the ONE live body, adopted from the dock */}
       <div
@@ -240,15 +247,17 @@ function StageSash({
   const [hot, setHot] = useState(false);
   return (
     <div
-      onPointerDown={onPointerDown}
-      onPointerEnter={() => setHot(true)}
-      onPointerLeave={() => setHot(false)}
-      title="drag to resize"
+      // resizing a seam re-tiles the stage — authoring, dev-only (R4). In a build
+      // the sash stays as a passive separator with no drag / hover / cursor.
+      onPointerDown={import.meta.env.DEV ? onPointerDown : undefined}
+      onPointerEnter={import.meta.env.DEV ? () => setHot(true) : undefined}
+      onPointerLeave={import.meta.env.DEV ? () => setHot(false) : undefined}
+      title={import.meta.env.DEV ? "drag to resize" : undefined}
       className="z-[5] grid shrink-0 place-items-center touch-none"
       style={{
         width: horizontal ? "auto" : ND_STAGE.sashHitPx,
         height: horizontal ? ND_STAGE.sashHitPx : "auto",
-        cursor: horizontal ? "row-resize" : "col-resize",
+        cursor: import.meta.env.DEV ? (horizontal ? "row-resize" : "col-resize") : "default",
       }}
     >
       <div
@@ -275,16 +284,21 @@ function StageEmptySlot({ slotId }: { slotId: string }) {
       data-stage-tile={slotId}
       className="relative box-border flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center gap-2 overflow-hidden rounded-[7px] border-[1.5px] border-dashed border-border-active p-3"
     >
-      <button
-        type="button"
-        title="dismiss slot"
-        onClick={() => ws.dismissSlot(slotId)}
-        className="absolute top-[5px] right-[7px] cursor-pointer border-0 bg-transparent p-0 text-2xs text-text-muted"
-      >
-        ✕
-      </button>
+      {/* dismiss + fill are layout authoring — dev-only (R4). A build can't create
+          slots (split is gated), so this path is normally unreachable; the gate is
+          defense-in-depth against a preset doc that ships a bare slot. */}
+      {import.meta.env.DEV ? (
+        <button
+          type="button"
+          title="dismiss slot"
+          onClick={() => ws.dismissSlot(slotId)}
+          className="absolute top-[5px] right-[7px] cursor-pointer border-0 bg-transparent p-0 text-2xs text-text-muted"
+        >
+          ✕
+        </button>
+      ) : null}
       <NdHud size={9.5}>empty slot</NdHud>
-      {candidates.length ? (
+      {import.meta.env.DEV && candidates.length ? (
         <div className="flex max-w-[260px] flex-wrap justify-center gap-[5px]">
           {candidates.map((id) => (
             <button

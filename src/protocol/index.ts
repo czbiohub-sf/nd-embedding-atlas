@@ -257,6 +257,8 @@ export const MetadataSchema = z.looseObject({
    * `.default([])` so an older payload parses to the empty set rather than
    * throwing — the single compiled binary version-locks this in practice.
    */
+  /** Active preset name — a build resolves it to a bundled graph; default "annotate". */
+  preset: z.string().optional(),
   capabilities: z.array(DataCapabilitySchema).default([]),
 });
 export type Metadata = z.infer<typeof MetadataSchema>;
