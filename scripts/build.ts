@@ -109,7 +109,13 @@ async function buildFrontendWithBun(): Promise<void> {
     // No sourcemaps: they'd be globbed into the embed manifest and bloat the
     // compiled binary by ~15MB (Vite emits none here either).
     sourcemap: "none",
-    splitting: true,
+    // ponytail: splitting disabled — with `splitting: true`, Bun.build emitted an
+    // index.html whose entry chunk's import closure never reached the createRoot
+    // chunk, so the compiled binary served a blank page (React never mounted). A
+    // single self-contained bundle is fine for a locally-served single binary —
+    // there's no network to amortize split chunks over. Re-enable if Bun fixes the
+    // HTML-entry-under-splitting wiring.
+    splitting: false,
     // `?url` imports (and any other large binary asset) emit as a hashed file
     // whose default export is the served URL — matching Vite's `?url` behavior.
     loader: { ".wasm": "file" },
