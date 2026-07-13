@@ -31,7 +31,7 @@ import {
   PatchCollectionBodySchema,
   SetActiveSelectionBodySchema,
 } from "../protocol.ts";
-import type { EmbeddingStore } from "../store.ts";
+import type { DatasetQuerySession } from "../store.ts";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -40,7 +40,7 @@ interface Row {
 }
 
 /** Run SQL with optional bound parameters and read all rows as plain objects. */
-async function selectRows(store: EmbeddingStore, sql: string, params?: unknown[]): Promise<Row[]> {
+async function selectRows(store: DatasetQuerySession, sql: string, params?: unknown[]): Promise<Row[]> {
   const reader = await store.conn.runAndReadAll(sql, params as never);
   return reader.getRowObjectsJS() as Row[];
 }
@@ -100,7 +100,7 @@ function scalarNumber(v: unknown): number {
  * PR2). PK-collisions are silently skipped and do not appear in the
  * RETURNING result set.
  */
-async function runInsertOrIgnoreReturning(store: EmbeddingStore, sql: string, params: unknown[]): Promise<number> {
+async function runInsertOrIgnoreReturning(store: DatasetQuerySession, sql: string, params: unknown[]): Promise<number> {
   const reader = await store.conn.runAndReadAll(sql, params as never);
   return reader.getRowObjectsJS().length;
 }
@@ -112,7 +112,7 @@ async function runInsertOrIgnoreReturning(store: EmbeddingStore, sql: string, pa
  * obs_name doesn't match a current obs_base row are silently dropped (drift).
  */
 async function insertMembers(
-  store: EmbeddingStore,
+  store: DatasetQuerySession,
   collectionId: string,
   members: { dataset_key: string; obs_name: string }[],
 ): Promise<MemberMutationStats> {
@@ -156,7 +156,7 @@ async function insertMembers(
  * direct interpolation is injection-safe.
  */
 async function insertMembersByRowIndex(
-  store: EmbeddingStore,
+  store: DatasetQuerySession,
   collectionId: string,
   rowIndices: number[],
 ): Promise<MemberMutationStats> {
@@ -201,7 +201,7 @@ async function insertMembersByRowIndex(
  * against obs_base here. Tiny request body, fast.
  */
 async function insertMembersFromScatterSelection(
-  store: EmbeddingStore,
+  store: DatasetQuerySession,
   collectionId: string,
 ): Promise<MemberMutationStats> {
   const exists = await selectRows(
@@ -238,7 +238,7 @@ async function insertMembersFromScatterSelection(
 
 // ─── Tag helpers ────────────────────────────────────────────────────────────
 
-async function insertTags(store: EmbeddingStore, collectionId: string, tags: string[]): Promise<void> {
+async function insertTags(store: DatasetQuerySession, collectionId: string, tags: string[]): Promise<void> {
   if (tags.length === 0) return;
   for (const tag of tags) {
     await store.conn.run("INSERT OR IGNORE INTO collection_tags (collection_id, tag) VALUES (?, ?)", [
@@ -248,12 +248,12 @@ async function insertTags(store: EmbeddingStore, collectionId: string, tags: str
   }
 }
 
-async function replaceTags(store: EmbeddingStore, collectionId: string, tags: string[]): Promise<void> {
+async function replaceTags(store: DatasetQuerySession, collectionId: string, tags: string[]): Promise<void> {
   await store.conn.run("DELETE FROM collection_tags WHERE collection_id = ?", [collectionId]);
   await insertTags(store, collectionId, tags);
 }
 
-async function loadTags(store: EmbeddingStore, collectionId: string): Promise<string[]> {
+async function loadTags(store: DatasetQuerySession, collectionId: string): Promise<string[]> {
   const rows = await selectRows(store, "SELECT tag FROM collection_tags WHERE collection_id = ? ORDER BY tag", [
     collectionId,
   ]);
@@ -268,7 +268,7 @@ async function loadTags(store: EmbeddingStore, collectionId: string): Promise<st
  * drops or renames obs.
  */
 async function loadDrift(
-  store: EmbeddingStore,
+  store: DatasetQuerySession,
   collectionId: string,
 ): Promise<{ stored: { dataset_key: string; stored: number }[] }> {
   const rows = await selectRows(
@@ -318,7 +318,7 @@ function parseProvenance(v: unknown): unknown {
   return v;
 }
 
-async function serializeCollection(store: EmbeddingStore, collectionId: string): Promise<CollectionRow | null> {
+async function serializeCollection(store: DatasetQuerySession, collectionId: string): Promise<CollectionRow | null> {
   const rows = await selectRows(
     store,
     `SELECT
@@ -371,7 +371,7 @@ async function serializeCollection(store: EmbeddingStore, collectionId: string):
 // ─── Handlers ───────────────────────────────────────────────────────────────
 
 /** GET /api/collections — list non-deleted collections. */
-export async function handleListCollections(store: EmbeddingStore): Promise<Response> {
+export async function handleListCollections(store: DatasetQuerySession): Promise<Response> {
   try {
     const ids = await selectRows(
       store,
@@ -397,7 +397,7 @@ export async function handleListCollections(store: EmbeddingStore): Promise<Resp
  * RETURNING; `stats.already_member` is the input-vs-added gap (collisions
  * + drift, both bucketed together for v1 — see helper docs).
  */
-export async function handleCreateCollection(req: Request, store: EmbeddingStore): Promise<Response> {
+export async function handleCreateCollection(req: Request, store: DatasetQuerySession): Promise<Response> {
   const parsed = await parseJsonBody(req, CreateCollectionBodySchema);
   if (!parsed.ok) return parsed.response;
   const body = parsed.data;
@@ -476,7 +476,7 @@ export async function handleCreateCollection(req: Request, store: EmbeddingStore
 export async function handlePatchCollection(
   collectionId: string,
   req: Request,
-  store: EmbeddingStore,
+  store: DatasetQuerySession,
 ): Promise<Response> {
   const parsed = await parseJsonBody(req, PatchCollectionBodySchema);
   if (!parsed.ok) return parsed.response;
@@ -551,7 +551,11 @@ export async function handlePatchCollection(
  * whole multi-statement flow runs in a transaction so concurrent appends
  * to the same collection serialize correctly at the connection layer.
  */
-export async function handleAddMembers(collectionId: string, req: Request, store: EmbeddingStore): Promise<Response> {
+export async function handleAddMembers(
+  collectionId: string,
+  req: Request,
+  store: DatasetQuerySession,
+): Promise<Response> {
   // Validate collection exists and isn't deleted.
   const existing = await selectRows(
     store,
@@ -644,7 +648,7 @@ function buildActiveSelectionPredicate(token: string, isMulti: boolean): string 
  * body shape to `{ops}` for set algebra without changing this URL or the
  * response shape.
  */
-export async function handleSetActiveSelection(req: Request, store: EmbeddingStore): Promise<Response> {
+export async function handleSetActiveSelection(req: Request, store: DatasetQuerySession): Promise<Response> {
   const parsed = await parseJsonBody(req, SetActiveSelectionBodySchema);
   if (!parsed.ok) return parsed.response;
   const { collection_ids } = parsed.data;
@@ -713,7 +717,7 @@ export async function handleSetActiveSelection(req: Request, store: EmbeddingSto
  * reads via `new Uint32Array(buffer)` for direct GPU upload into the dim
  * mask. JSON would 3x the wire size for no benefit.
  */
-export async function handleGetActiveSelectionRowIndices(store: EmbeddingStore): Promise<Response> {
+export async function handleGetActiveSelectionRowIndices(store: DatasetQuerySession): Promise<Response> {
   try {
     const exists = await selectRows(
       store,
@@ -742,11 +746,11 @@ export async function handleGetActiveSelectionRowIndices(store: EmbeddingStore):
 }
 
 /** DELETE /api/active-selection — drop the temp table; bump version. */
-export function handleClearActiveSelection(store: EmbeddingStore): Promise<Response> {
+export function handleClearActiveSelection(store: DatasetQuerySession): Promise<Response> {
   return clearActiveSelection(store);
 }
 
-async function clearActiveSelection(store: EmbeddingStore): Promise<Response> {
+async function clearActiveSelection(store: DatasetQuerySession): Promise<Response> {
   try {
     await store.conn.run("DROP TABLE IF EXISTS __active_selection");
     activeSelectionVersion++;
@@ -758,7 +762,7 @@ async function clearActiveSelection(store: EmbeddingStore): Promise<Response> {
 }
 
 /** DELETE /api/collections/{id} — soft delete (sets deleted_at). */
-export async function handleDeleteCollection(collectionId: string, store: EmbeddingStore): Promise<Response> {
+export async function handleDeleteCollection(collectionId: string, store: DatasetQuerySession): Promise<Response> {
   try {
     const existing = await selectRows(
       store,
@@ -844,7 +848,7 @@ function sanitizeFilename(raw: string): string {
 export async function handleExportCollection(
   collectionId: string,
   req: Request,
-  store: EmbeddingStore,
+  store: DatasetQuerySession,
 ): Promise<Response> {
   let body: { format?: unknown; output_dir?: unknown; filename?: unknown; overwrite?: unknown };
   try {

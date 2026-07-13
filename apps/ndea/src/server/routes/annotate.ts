@@ -27,19 +27,19 @@ import {
 } from "../protocol.ts";
 import { exportDir, sanitiseFilename } from "../export-util.ts";
 import { quoteIdent } from "../store.ts";
-import type { ViewerState } from "../state.ts";
+import type { ServerSession } from "../state.ts";
 import { commitObsColumns, type ObsColumnInput } from "@ndea/zarr";
 
 // ─── Debounced auto-save ─────────────────────────────────────────────────────
 //
 // ponytail: module-global timer — fine for the single-process, single-session
-// server (verified: the multi-ViewerState concern was refuted in review). If
+// server (verified: the multi-session concern was refuted in review). If
 // the server ever hosts concurrent sessions, key this by session id.
 
 let _saveTimer: ReturnType<typeof setTimeout> | null = null;
 let _savePending = false;
 
-function scheduleSave(state: ViewerState): void {
+function scheduleSave(state: ServerSession): void {
   if (!state.annotationsSidecarPath) return;
   if (_saveTimer) clearTimeout(_saveTimer);
   _savePending = true;
@@ -58,7 +58,7 @@ function scheduleSave(state: ViewerState): void {
  * handler — for in-memory sessions the sidecar is the ONLY persistence, so a
  * pending save dropped on SIGINT loses up to 2s of edits.
  */
-export async function flushAnnotationSaves(state: ViewerState): Promise<void> {
+export async function flushAnnotationSaves(state: ServerSession): Promise<void> {
   if (_saveTimer) {
     clearTimeout(_saveTimer);
     _saveTimer = null;
@@ -79,13 +79,13 @@ const _creating = new Set<string>();
 // ─── Handlers ────────────────────────────────────────────────────────────────
 
 /** GET /api/annotations/columns — `[{ name, dtype }]`. */
-export function handleListAnnotationColumns(state: ViewerState): Response {
+export function handleListAnnotationColumns(state: ServerSession): Response {
   const columns = [...state.store.annotationColumns.values()].map((e) => ({ name: e.colName, dtype: e.dtype }));
   return Response.json({ columns });
 }
 
 /** POST /api/annotations/columns */
-export async function handleCreateAnnotationColumn(req: Request, state: ViewerState): Promise<Response> {
+export async function handleCreateAnnotationColumn(req: Request, state: ServerSession): Promise<Response> {
   const parsed = await parseJsonBody(req, AnnotationColumnBodySchema);
   if (!parsed.ok) return parsed.response;
   const { name, dtype } = parsed.data;
@@ -119,7 +119,7 @@ export async function handleCreateAnnotationColumn(req: Request, state: ViewerSt
 }
 
 /** DELETE /api/annotations/columns/:name */
-export async function handleDeleteAnnotationColumn(colName: string, state: ViewerState): Promise<Response> {
+export async function handleDeleteAnnotationColumn(colName: string, state: ServerSession): Promise<Response> {
   if (!state.store.hasAnnotationColumn(colName)) {
     return Response.json({ error: "Column not found" }, { status: 404 });
   }
@@ -145,7 +145,7 @@ export async function handleDeleteAnnotationColumn(colName: string, state: Viewe
  *   predicate            — stamp `label` onto every obs matching a SQL WHERE
  *                          (the node-graph batch door); returns the matched count
  */
-export async function handleWriteAnnotationValues(req: Request, state: ViewerState): Promise<Response> {
+export async function handleWriteAnnotationValues(req: Request, state: ServerSession): Promise<Response> {
   const parsed = await parseJsonBody(req, WriteAnnotationValuesBodySchema);
   if (!parsed.ok) return parsed.response;
   const body = parsed.data;
@@ -180,7 +180,7 @@ export async function handleWriteAnnotationValues(req: Request, state: ViewerSta
 }
 
 /** POST /api/annotations/save — explicit sidecar checkpoint. */
-export async function handleSaveAnnotations(state: ViewerState): Promise<Response> {
+export async function handleSaveAnnotations(state: ServerSession): Promise<Response> {
   if (!state.annotationsSidecarPath) {
     return Response.json({ error: "No writable sidecar path configured" }, { status: 503 });
   }
@@ -204,7 +204,7 @@ export async function handleSaveAnnotations(state: ViewerState): Promise<Respons
  * annotation columns — for the row scope (all · active filter · a collection) to
  * the server export-dir as parquet/csv.
  */
-export async function handleExportAnnotations(req: Request, state: ViewerState): Promise<Response> {
+export async function handleExportAnnotations(req: Request, state: ServerSession): Promise<Response> {
   const parsed = await parseJsonBody(req, AnnotationExportBodySchema);
   if (!parsed.ok) return parsed.response;
   const { columns, scope, format, filename } = parsed.data;
@@ -246,7 +246,7 @@ export async function handleExportAnnotations(req: Request, state: ViewerState):
  * `dataset_key` and aligned by `obs_name`. `dryRun` returns the report without
  * writing. Omitting `columns` commits all of them.
  */
-export async function handleCommitAnnotations(req: Request, state: ViewerState, dryRun: boolean): Promise<Response> {
+export async function handleCommitAnnotations(req: Request, state: ServerSession, dryRun: boolean): Promise<Response> {
   const parsed = await parseJsonBody(req, CommitAnnotationsBodySchema);
   if (!parsed.ok) return parsed.response;
   const names = (parsed.data.columns ?? [...state.store.annotationColumns.keys()]).filter((n) =>
@@ -312,7 +312,7 @@ async function _writeFromCollection(
   colName: string,
   collectionId: string,
   labelOverride: string | undefined,
-  state: ViewerState,
+  state: ServerSession,
 ): Promise<void> {
   const entry = state.store.annotationColumns.get(colName);
   if (!entry) throw new Error(`Unknown annotation column: ${colName}`);

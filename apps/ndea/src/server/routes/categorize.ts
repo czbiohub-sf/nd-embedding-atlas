@@ -17,12 +17,12 @@
  */
 
 import { CategorizeBodySchema, parseJsonBody } from "../protocol.ts";
-import type { ViewerState } from "../state.ts";
+import type { ServerSession } from "../state.ts";
 import type { CategorizeResponse, CategoryLegendItem } from "../protocol.ts";
 
 const DEFAULT_MAX_CATEGORIES = 64;
 
-export async function handleCategorize(req: Request, state: ViewerState): Promise<Response> {
+export async function handleCategorize(req: Request, state: ServerSession): Promise<Response> {
   const parsed = await parseJsonBody(req, CategorizeBodySchema);
   if (!parsed.ok) return parsed.response;
   const { column, maxCategories = DEFAULT_MAX_CATEGORIES } = parsed.data;

@@ -15,10 +15,10 @@
 import type { ServerWebSocket } from "bun";
 import { isAllowedSql } from "./mosaic.ts";
 import { MosaicQueryBodySchema } from "./protocol.ts";
-import type { EmbeddingStore } from "./store.ts";
-import type { WsContext } from "./ws.ts";
+import type { DatasetQuerySession } from "./store.ts";
+import type { ServerSocketContext } from "./ws.ts";
 
-type WS = ServerWebSocket<WsContext>;
+type WS = ServerWebSocket<ServerSocketContext>;
 
 function sendError(ws: WS, message: string): void {
   ws.send(JSON.stringify({ error: message }));
@@ -51,7 +51,7 @@ export async function handleMosaicWsMessage(ws: WS, raw: string | Buffer): Promi
     return;
   }
 
-  const store: EmbeddingStore = ws.data.store;
+  const store: DatasetQuerySession = ws.data.store;
 
   try {
     if (type === "exec") {

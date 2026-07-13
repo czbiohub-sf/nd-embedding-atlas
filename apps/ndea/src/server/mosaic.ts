@@ -10,7 +10,7 @@
  */
 
 import { MosaicQueryBodySchema } from "./protocol.ts";
-import type { EmbeddingStore } from "./store.ts";
+import type { DatasetQuerySession } from "./store.ts";
 
 // ─── SQL Security Filter ─────────────────────────────────────────────────────
 
@@ -77,11 +77,11 @@ export const ARROW_IPC_CONTENT_TYPE = "application/vnd.apache.arrow.stream";
 // ─── Query Handler ───────────────────────────────────────────────────────────
 
 /**
- * Handle a Mosaic query against the EmbeddingStore.
+ * Handle a Mosaic query against the analytical dataset query session.
  *
  * @returns A Response object with the appropriate content type.
  */
-export async function handleMosaicQuery(body: MosaicQuery, store: EmbeddingStore): Promise<Response> {
+export async function handleMosaicQuery(body: MosaicQuery, store: DatasetQuerySession): Promise<Response> {
   if (!body.sql || !body.type) {
     return Response.json({ error: "Missing 'sql' or 'type' in query payload" }, { status: 400 });
   }

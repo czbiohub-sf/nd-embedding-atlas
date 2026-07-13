@@ -10,21 +10,21 @@ import path from "node:path";
 import { existsSync } from "node:fs";
 import { openAnnData } from "@ndea/zarr";
 import { createApp } from "../app.ts";
-import { EmbeddingStore } from "../store.ts";
-import type { DatasetMeta, ViewerState } from "../state.ts";
+import { DatasetQuerySession } from "../store.ts";
+import type { DatasetSessionMetadata, ServerSession } from "../state.ts";
 
 const FIXTURE = path.resolve(import.meta.dir, "../../../../../../ome-atlas-test-data/annotations.zarr");
 const HAS_FIXTURE = existsSync(FIXTURE);
 
 type Server = ReturnType<typeof createApp>;
 
-async function buildState(): Promise<{ state: ViewerState; server: Server; port: number }> {
+async function buildState(): Promise<{ state: ServerSession; server: Server; port: number }> {
   const adata = await openAnnData(FIXTURE);
   const nObs = adata.nObs;
 
   // Minimal obs_base: row index + obs_name only. The positions route
   // doesn't read from obs_base in Phase 0 — it goes straight to the loader.
-  const store = await EmbeddingStore.fromInit(async (conn) => {
+  const store = await DatasetQuerySession.fromInit(async (conn) => {
     const rows: string[] = [];
     for (let i = 0; i < nObs; i++) rows.push(`(${i}, 'obs_${i}')`);
     // Batch the VALUES clause to avoid overlong SQL on large fixtures.
@@ -35,7 +35,7 @@ async function buildState(): Promise<{ state: ViewerState; server: Server; port:
     }
   });
 
-  const state: ViewerState = {
+  const state: ServerSession = {
     store,
     datasets: new Map([["fixture", { path: FIXTURE }]]),
     spatial: { fov: null, t: null, bbox: null, x: null, y: null, z: null },
@@ -51,7 +51,7 @@ async function buildState(): Promise<{ state: ViewerState; server: Server; port:
     annotationsSidecarPath: null,
   };
 
-  const meta: DatasetMeta = {
+  const meta: DatasetSessionMetadata = {
     obsColumnNames: ["obs_name"],
     embeddingProps: {},
     hasPlate: false,

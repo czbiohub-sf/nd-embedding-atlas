@@ -11,8 +11,8 @@
 
 import { parseJsonBody, ScatterSelectionBodySchema } from "../protocol.ts";
 import { ObsmSliceLoader } from "../slice-loader.ts";
-import type { ViewerState } from "../state.ts";
-import type { EmbeddingStore } from "../store.ts";
+import type { ServerSession } from "../state.ts";
+import type { DatasetQuerySession } from "../store.ts";
 
 // ─── Binary format helpers ──────────────────────────────────────────────────
 // Format (version 1):
@@ -62,7 +62,7 @@ export function parseDimIndex(col: string): number | null {
  * on `state.obsmLoaders`. Width is discovered via a metadata-only shape
  * read against the first accessor that carries the key — no data load.
  */
-export async function getOrCreateObsmLoader(state: ViewerState, embedding: string): Promise<ObsmSliceLoader> {
+export async function getOrCreateObsmLoader(state: ServerSession, embedding: string): Promise<ObsmSliceLoader> {
   const existing = state.obsmLoaders.get(embedding);
   if (existing) return existing;
   const width = await ObsmSliceLoader.detectWidth(embedding, state.accessors.entries());
@@ -82,7 +82,7 @@ export async function getOrCreateObsmLoader(state: ViewerState, embedding: strin
  * interleaved Float32 buffer in JS. Aborts propagate through `req.signal`
  * into the zarr read so abandoned fetches don't waste bandwidth.
  */
-export async function handleScatterPositions(url: URL, state: ViewerState, signal: AbortSignal): Promise<Response> {
+export async function handleScatterPositions(url: URL, state: ServerSession, signal: AbortSignal): Promise<Response> {
   const embedding = url.searchParams.get("embedding");
   const xCol = url.searchParams.get("x_col");
   const yCol = url.searchParams.get("y_col");
@@ -174,7 +174,7 @@ export async function handleScatterPositions(url: URL, state: ViewerState, signa
  * Returns uint8 category indices, one per observation.
  * Query params: cat_col, original_col (optional)
  */
-export async function handleScatterCategories(url: URL, store: EmbeddingStore): Promise<Response> {
+export async function handleScatterCategories(url: URL, store: DatasetQuerySession): Promise<Response> {
   const catCol = url.searchParams.get("cat_col");
   const originalCol = url.searchParams.get("original_col");
 
@@ -228,7 +228,7 @@ export async function handleScatterCategories(url: URL, store: EmbeddingStore): 
  *
  * Binary frame v2: header { numPoints, vmin, vmax }, data Float32Array[N].
  */
-export async function handleScatterContinuousValues(url: URL, store: EmbeddingStore): Promise<Response> {
+export async function handleScatterContinuousValues(url: URL, store: DatasetQuerySession): Promise<Response> {
   const colorCol = url.searchParams.get("color_col");
 
   if (!colorCol) {
@@ -271,7 +271,7 @@ export async function handleScatterContinuousValues(url: URL, store: EmbeddingSt
  * Writes selected row indices into a DuckDB temp table for efficient
  * hash-join filtering in Mosaic table queries.
  */
-export async function handleScatterSelectionPost(req: Request, store: EmbeddingStore): Promise<Response> {
+export async function handleScatterSelectionPost(req: Request, store: DatasetQuerySession): Promise<Response> {
   const parsed = await parseJsonBody(req, ScatterSelectionBodySchema);
   if (!parsed.ok) return parsed.response;
   // SECURITY: Zod guarantees every element is a finite non-negative integer
@@ -306,7 +306,7 @@ export async function handleScatterSelectionPost(req: Request, store: EmbeddingS
  *
  * Drops the __scatter_selection temp table.
  */
-export async function handleScatterSelectionDelete(store: EmbeddingStore): Promise<Response> {
+export async function handleScatterSelectionDelete(store: DatasetQuerySession): Promise<Response> {
   try {
     await store.execute("DROP TABLE IF EXISTS __scatter_selection");
     return Response.json({ ok: true });
@@ -338,7 +338,11 @@ function toSelectionTable(instanceId: string): string | null {
 }
 
 /** Handle POST /api/selection/:instanceId — populate this instance's `sel_<id>` table. */
-export async function handleSelectionPost(req: Request, store: EmbeddingStore, instanceId: string): Promise<Response> {
+export async function handleSelectionPost(
+  req: Request,
+  store: DatasetQuerySession,
+  instanceId: string,
+): Promise<Response> {
   const table = toSelectionTable(instanceId);
   if (!table) return Response.json({ error: "invalid selection id" }, { status: 400 });
 
@@ -370,7 +374,7 @@ export async function handleSelectionPost(req: Request, store: EmbeddingStore, i
 }
 
 /** Handle DELETE /api/selection/:instanceId — drop this instance's `sel_<id>` table. */
-export async function handleSelectionDelete(store: EmbeddingStore, instanceId: string): Promise<Response> {
+export async function handleSelectionDelete(store: DatasetQuerySession, instanceId: string): Promise<Response> {
   const table = toSelectionTable(instanceId);
   if (!table) return Response.json({ error: "invalid selection id" }, { status: 400 });
   try {

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { handleMosaicQuery } from "../mosaic.ts";
-import { EmbeddingStore } from "../store.ts";
+import { DatasetQuerySession } from "../store.ts";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -26,7 +26,7 @@ function numberField(record: Record<string, unknown>, key: string): number {
 
 describe("Zarr ingestion integration", () => {
   test("obs_base carries both row index names", async () => {
-    const store = await EmbeddingStore.fromInit(async (conn) => {
+    const store = await DatasetQuerySession.fromInit(async (conn) => {
       await conn.run(
         `CREATE TABLE obs_base AS SELECT * FROM (VALUES (0, 'o_0'), (1, 'o_1'), (2, 'o_2')) AS t(placeholder, obs_name)`,
       );
@@ -52,7 +52,7 @@ describe("Zarr ingestion integration", () => {
   });
 
   test("var view generates collision-safe identifiers", async () => {
-    const store = await EmbeddingStore.fromInit(
+    const store = await DatasetQuerySession.fromInit(
       async (conn) => {
         await conn.run(`CREATE TABLE obs_base AS SELECT * FROM (VALUES (0, 'o_0')) AS t(x, obs_name)`);
       },
@@ -88,7 +88,7 @@ describe("Zarr ingestion integration", () => {
   });
 
   test("Mosaic queries both ingested axes", async () => {
-    const store = await EmbeddingStore.fromInit(
+    const store = await DatasetQuerySession.fromInit(
       async (conn) => {
         await conn.run(`CREATE TABLE obs_base AS SELECT * FROM (VALUES (0, 'o_0')) AS t(x, obs_name)`);
       },

@@ -13,7 +13,7 @@ import { constants } from "node:fs";
 import { homedir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import { ExportBodySchema, parseJsonBody } from "../protocol.ts";
-import type { EmbeddingStore } from "../store.ts";
+import type { DatasetQuerySession } from "../store.ts";
 
 /** In-flight export task state. */
 export interface ExportTask {
@@ -100,7 +100,7 @@ function sanitiseFilename(name: string): string {
 }
 
 /** POST /api/export */
-export async function handleExport(req: Request, store: EmbeddingStore): Promise<Response> {
+export async function handleExport(req: Request, store: DatasetQuerySession): Promise<Response> {
   if (currentExport?.status === "running") {
     return Response.json({ error: "An export is already in progress" }, { status: 409 });
   }
@@ -174,7 +174,7 @@ export function handleExportStatus(taskId: string): Response {
 
 async function runExport(
   task: ExportTask,
-  store: EmbeddingStore,
+  store: DatasetQuerySession,
   predicate: string,
   outputPath: string,
   matchCount: number,

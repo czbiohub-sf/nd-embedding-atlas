@@ -1,18 +1,18 @@
 /**
- * Tests for EmbeddingStore + Mosaic query protocol.
+ * Tests for DatasetQuerySession + Mosaic query protocol.
  */
 
 import { describe, expect, test, afterEach } from "bun:test";
-import { EmbeddingStore } from "../store.ts";
+import { DatasetQuerySession } from "../store.ts";
 import { handleMosaicQuery, isAllowedSql } from "../mosaic.ts";
 import { detectSpatialColumns, parseBbox } from "../state.ts";
 import type { DuckDBConnection } from "@duckdb/node-api";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-/** Create an EmbeddingStore with mock obs data via SQL. */
-function createMockStore(n = 100, options?: { hidden?: Set<string> }): Promise<EmbeddingStore> {
-  return EmbeddingStore.fromInit(async (conn: DuckDBConnection) => {
+/** Create a DatasetQuerySession with mock obs data via SQL. */
+function createMockStore(n = 100, options?: { hidden?: Set<string> }): Promise<DatasetQuerySession> {
+  return DatasetQuerySession.fromInit(async (conn: DuckDBConnection) => {
     // Build VALUES clause
     const rows: string[] = [];
     for (let i = 0; i < n; i++) {
@@ -28,7 +28,7 @@ function createMockStore(n = 100, options?: { hidden?: Set<string> }): Promise<E
 
 // ─── Store lifecycle helper ──────────────────────────────────────────────────
 
-let activeStore: EmbeddingStore | null = null;
+let activeStore: DatasetQuerySession | null = null;
 
 afterEach(() => {
   if (activeStore) {
@@ -37,9 +37,9 @@ afterEach(() => {
   }
 });
 
-// ─── EmbeddingStore tests ────────────────────────────────────────────────────
+// ─── DatasetQuerySession tests ───────────────────────────────────────────────
 
-describe("EmbeddingStore", () => {
+describe("DatasetQuerySession", () => {
   test("create from init callback and query row count", async () => {
     const store = await createMockStore(50);
     activeStore = store;

@@ -4,8 +4,8 @@
  * Coordinates the full startup sequence:
  *   1. Open zarr stores via axial
  *   2. Convert obs DataFrames to Arrow IPC, inject _dataset column
- *   3. Init EmbeddingStore from Arrow IPC via DuckDB
- *   4. Build ViewerState
+ *   3. Init DatasetQuerySession from Arrow IPC via DuckDB
+ *   4. Build ServerSession
  *   5. Create and start server
  *   6. Auto-open browser
  *   7. Handle graceful shutdown
@@ -21,11 +21,11 @@ import {
   openBunStore,
 } from "@ndea/zarr";
 import type { DatasetHandle } from "@ndea/zarr";
-import { EmbeddingStore, DEFAULT_OBSM_PRIORITY } from "../server/store.ts";
+import { DatasetQuerySession, DEFAULT_OBSM_PRIORITY } from "../server/store.ts";
 import { buildPlateMounts, readPlateMeta } from "../server/plate.ts";
 import type { PlateChannel, PlateMount } from "../server/plate.ts";
 import { detectSpatialColumns, spatialHiddenColumns } from "../server/state.ts";
-import type { DatasetConfig, DatasetMeta, ViewerState } from "../server/state.ts";
+import type { DatasetMountConfig, DatasetSessionMetadata, ServerSession } from "../server/state.ts";
 import type { ResolvedConfig, DatasetEntry } from "./config.ts";
 import { getNetworkAddress } from "./resolve.ts";
 import { resolveFrontendDir } from "../server/static.ts";
@@ -129,7 +129,7 @@ export async function startup(config: ResolvedConfig): Promise<void> {
   // Build combined Parquet via DuckDB init callback
   // For each dataset: convert obs → Arrow IPC → register as temp table → UNION ALL into obs_base
   const allObsmKeys = new Set<string>();
-  const datasetConfigs = new Map<string, DatasetConfig>();
+  const datasetConfigs = new Map<string, DatasetMountConfig>();
 
   for (const ds of loaded) {
     for (const key of ds.obsmKeys) allObsmKeys.add(key);
@@ -162,7 +162,7 @@ export async function startup(config: ResolvedConfig): Promise<void> {
   // Both axes ingest through the same helper — columns are unioned across
   // datasets, per-column type wins on first sighting, `_dataset` column is
   // added only when there's > 1 DF. obs identity (`__row_index__` / `obs_name`)
-  // is added by `EmbeddingStore._ensureIdentityColumns`; var identity
+  // is added by `DatasetQuerySession._ensureIdentityColumns`; var identity
   // (`__var_index__` / `var_name`) is emitted inline via `axis: "var"`.
   //
   // MuData: currently supported only as a single dataset. Multi-dataset
@@ -262,7 +262,7 @@ export async function startup(config: ResolvedConfig): Promise<void> {
   // content-keyed `.duckdb` under ~/.cache/ndea/ingest/ and skip re-ingest on
   // reopen (the `_ndea_meta` key marker, written last, makes a crashed
   // mid-ingest file fail the hit check → rebuild). `eager` keeps `:memory:`.
-  let store: EmbeddingStore;
+  let store: DatasetQuerySession;
   if (cacheEnabled) {
     const key = ingestCacheKey(
       VERSION,
@@ -272,10 +272,10 @@ export async function startup(config: ResolvedConfig): Promise<void> {
     );
     const { cacheDir, dbPath } = resolveIngestCachePath(key);
     const pragmas = ingestPragmas();
-    let cached: EmbeddingStore | null = null;
+    let cached: DatasetQuerySession | null = null;
     if (existsSync(dbPath)) {
       try {
-        cached = await EmbeddingStore.fromCachedDb(dbPath, { hidden, pragmas, expectKey: key });
+        cached = await DatasetQuerySession.fromCachedDb(dbPath, { hidden, pragmas, expectKey: key });
         console.log(`    ${DIM}↻ reusing cached ingest ${key}${RESET}`);
       } catch {
         cached = null; // stale / partial / unreadable — rebuild below
@@ -287,11 +287,11 @@ export async function startup(config: ResolvedConfig): Promise<void> {
       if (existsSync(dbPath)) rmSync(dbPath, { force: true });
       if (existsSync(`${dbPath}.wal`)) rmSync(`${dbPath}.wal`, { force: true });
       mkdirSync(cacheDir, { recursive: true });
-      store = await EmbeddingStore.fromInit(initStore, { hidden, initVar, dbPath, pragmas });
+      store = await DatasetQuerySession.fromInit(initStore, { hidden, initVar, dbPath, pragmas });
       await store.writeIngestMeta(key);
     }
   } else {
-    store = await EmbeddingStore.fromInit(initStore, { hidden, initVar });
+    store = await DatasetQuerySession.fromInit(initStore, { hidden, initVar });
   }
 
   // Apply obs column filter if configured
@@ -302,7 +302,7 @@ export async function startup(config: ResolvedConfig): Promise<void> {
     console.log(`    ${GREEN}✓${RESET} ${formatNumber(store.nVars)} variables loaded into DuckDB (var_base)`);
   }
 
-  // ── 3. Build ViewerState ────────────────────────────────────────────────
+  // ── 3. Build ServerSession ──────────────────────────────────────────────
   // Will be passed to createApp once server routes are wired up.
 
   // Build accessor map for on-demand obsm loading
@@ -336,7 +336,7 @@ export async function startup(config: ResolvedConfig): Promise<void> {
     }
   }
 
-  const state: ViewerState = {
+  const state: ServerSession = {
     store,
     datasets: datasetConfigs,
     spatial,
@@ -370,7 +370,7 @@ export async function startup(config: ResolvedConfig): Promise<void> {
   const { createApp } = await import("../server/app.ts");
   const { plateMeta, datasetChannels } = buildPlateMetadata(plateMounts, platesByDataset, isMultiDataset);
 
-  const datasetMeta: DatasetMeta = {
+  const datasetMeta: DatasetSessionMetadata = {
     obsColumnNames: obsColumns,
     embeddingProps: {},
     hasPlate: plateMounts.length > 0,

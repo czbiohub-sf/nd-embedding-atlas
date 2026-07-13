@@ -1,7 +1,7 @@
 /**
- * EmbeddingStore — in-process DuckDB for serving Mosaic queries.
+ * DatasetQuerySession — in-process DuckDB for serving Mosaic queries.
  *
- * Ports the Python `server/_store.py` EmbeddingStore to TypeScript
+ * Ports the Python `server/_store.py` analytical session to TypeScript
  * using the @duckdb/node-api bindings (same as @uwdata/mosaic-duckdb).
  *
  * Data ingestion uses Parquet temp files (DuckDB reads these natively).
@@ -16,7 +16,7 @@ import type { AnnotationDtype } from "./protocol.ts";
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 /** Metadata about a registered embedding. */
-export interface EmbeddingMeta {
+export interface RegisteredEmbedding {
   prefix: string;
   nDims: number;
   table: string;
@@ -153,14 +153,14 @@ function coerceValue(value: unknown): unknown {
   return value;
 }
 
-// ─── EmbeddingStore ──────────────────────────────────────────────────────────
+// ─── DatasetQuerySession ─────────────────────────────────────────────────────
 
 /**
  * DuckDB open options (I/O scalability loop, Cycle 1). Defaults preserve the
  * historical `:memory:` behavior; passing `dbPath` makes the store file-backed
  * (out-of-core — base tables page to disk under `memoryLimit`).
  */
-export interface StoreOpenOptions {
+export interface DatasetQuerySessionOptions {
   hidden?: Set<string>;
   /** DuckDB database path. Default `:memory:`. A file path = out-of-core. */
   dbPath?: string;
@@ -168,7 +168,7 @@ export interface StoreOpenOptions {
   pragmas?: { memoryLimit?: string; tempDirectory?: string; threads?: number };
 }
 
-export class EmbeddingStore {
+export class DatasetQuerySession {
   /** The underlying DuckDB instance. */
   readonly db: DuckDBInstance;
   /** Shared connection — Mosaic temp tables persist on the same connection. */
@@ -190,7 +190,7 @@ export class EmbeddingStore {
    */
   obsNameOrigin: "explicit" | "synthetic" = "explicit";
   /** Registered embeddings and their metadata. */
-  private _loaded: Map<string, EmbeddingMeta> = new Map();
+  private _loaded: Map<string, RegisteredEmbedding> = new Map();
   /** Registered var columns: colName → { table, colName }. */
   private _varCols: Map<string, { table: string; colName: string }> = new Map();
   /** Registered user annotation columns: colName → { table, colName, dtype }. */
@@ -209,7 +209,9 @@ export class EmbeddingStore {
   }
 
   /** Create the DuckDB instance + connection and apply open PRAGMAs. */
-  private static async _open(options?: StoreOpenOptions): Promise<{ db: DuckDBInstance; conn: DuckDBConnection }> {
+  private static async _open(
+    options?: DatasetQuerySessionOptions,
+  ): Promise<{ db: DuckDBInstance; conn: DuckDBConnection }> {
     const db = await DuckDBInstance.create(options?.dbPath ?? ":memory:");
     const conn = await db.connect();
     const p = options?.pragmas;
@@ -220,14 +222,14 @@ export class EmbeddingStore {
   }
 
   /**
-   * Create an EmbeddingStore from a Parquet file.
+   * Create a DatasetQuerySession from a Parquet file.
    *
    * The Parquet file should contain the obs DataFrame. A `__row_index__`
    * column is added if not present, along with `obs_name` for identity.
    */
-  static async fromParquet(parquetPath: string, options?: StoreOpenOptions): Promise<EmbeddingStore> {
-    const { db, conn } = await EmbeddingStore._open(options);
-    const store = new EmbeddingStore(db, conn, options?.hidden);
+  static async fromParquet(parquetPath: string, options?: DatasetQuerySessionOptions): Promise<DatasetQuerySession> {
+    const { db, conn } = await DatasetQuerySession._open(options);
+    const store = new DatasetQuerySession(db, conn, options?.hidden);
 
     await conn.run(`CREATE TABLE obs_base AS SELECT * FROM '${parquetPath}'`);
     await store._ensureIdentityColumns();
@@ -237,20 +239,20 @@ export class EmbeddingStore {
   }
 
   /**
-   * Create an EmbeddingStore from an initialization callback.
+   * Create a DatasetQuerySession from an initialization callback.
    *
    * The callback receives the DuckDB connection and must create the
    * `obs_base` table. Useful for tests and programmatic data loading.
    */
   static async fromInit(
     init: (conn: DuckDBConnection) => Promise<void>,
-    options?: StoreOpenOptions & {
+    options?: DatasetQuerySessionOptions & {
       /** Optional var-axis initializer. Creates `var_base` table. */
       initVar?: (conn: DuckDBConnection) => Promise<void>;
     },
-  ): Promise<EmbeddingStore> {
-    const { db, conn } = await EmbeddingStore._open(options);
-    const store = new EmbeddingStore(db, conn, options?.hidden);
+  ): Promise<DatasetQuerySession> {
+    const { db, conn } = await DatasetQuerySession._open(options);
+    const store = new DatasetQuerySession(db, conn, options?.hidden);
 
     await init(conn);
     await store._ensureIdentityColumns();
@@ -276,11 +278,11 @@ export class EmbeddingStore {
    */
   static async fromCachedDb(
     dbPath: string,
-    options?: StoreOpenOptions & { expectKey?: string },
-  ): Promise<EmbeddingStore> {
-    const { db, conn } = await EmbeddingStore._open({ ...options, dbPath });
+    options?: DatasetQuerySessionOptions & { expectKey?: string },
+  ): Promise<DatasetQuerySession> {
+    const { db, conn } = await DatasetQuerySession._open({ ...options, dbPath });
 
-    const tables = await EmbeddingStore._tableNames(conn);
+    const tables = await DatasetQuerySession._tableNames(conn);
     const fail = (msg: string): never => {
       conn.closeSync();
       db.closeSync();
@@ -296,7 +298,7 @@ export class EmbeddingStore {
       if (cachedKey !== options.expectKey) fail("cache key mismatch / incomplete ingest");
     }
 
-    const store = new EmbeddingStore(db, conn, options?.hidden);
+    const store = new DatasetQuerySession(db, conn, options?.hidden);
 
     const obsReader = await conn.runAndReadAll("SELECT COUNT(*) AS cnt FROM obs_base");
     store.nObs = Number(obsReader.getRowObjectsJson()[0].cnt);
@@ -416,7 +418,7 @@ export class EmbeddingStore {
   }
 
   /** Read-only snapshot of loaded embeddings. */
-  get loadedEmbeddings(): ReadonlyMap<string, EmbeddingMeta> {
+  get loadedEmbeddings(): ReadonlyMap<string, RegisteredEmbedding> {
     return this._loaded;
   }
 

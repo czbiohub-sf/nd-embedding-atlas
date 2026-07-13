@@ -12,7 +12,7 @@
 
 import { computeChannelStats } from "../channel-stats.ts";
 import type { PlateMount } from "../plate.ts";
-import type { ViewerState } from "../state.ts";
+import type { ServerSession } from "../state.ts";
 
 /** Resolve which plate mount hosts this FOV, given an optional dataset_key. */
 function resolveMount(mounts: readonly PlateMount[], datasetKey: string | null): PlateMount | null {
@@ -21,7 +21,7 @@ function resolveMount(mounts: readonly PlateMount[], datasetKey: string | null):
   return mounts.find((m) => m.datasetKey === datasetKey) ?? null;
 }
 
-export async function handleChannelStats(fovPath: string, req: Request, state: ViewerState): Promise<Response> {
+export async function handleChannelStats(fovPath: string, req: Request, state: ServerSession): Promise<Response> {
   if (req.method !== "GET") {
     return Response.json({ error: "Only GET is supported" }, { status: 405 });
   }

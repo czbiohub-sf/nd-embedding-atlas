@@ -7,18 +7,19 @@
 
 import { describe, expect, test, afterEach } from "bun:test";
 import type { DuckDBConnection } from "@duckdb/node-api";
-import { EmbeddingStatusSchema, VarColumnResponseSchema } from "@ndea/protocol";
-import { EmbeddingStore } from "../store.ts";
-import { createApp } from "../app.ts";
-import type { ViewerState, DatasetMeta } from "../state.ts";
+import { ConfigResponseSchema, EmbeddingStatusSchema, MetadataSchema, VarColumnResponseSchema } from "@ndea/protocol";
+import { DatasetQuerySession } from "../store.ts";
+import { createApp, type CreateAppOptions } from "../app.ts";
+import type { ServerSession, DatasetSessionMetadata } from "../state.ts";
+import type { ServerSocketContext } from "../ws.ts";
 
 type NdeaServer = ReturnType<typeof createApp>;
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-/** Create a mock EmbeddingStore with test data. */
-function createMockStore(n = 100): Promise<EmbeddingStore> {
-  return EmbeddingStore.fromInit(async (conn: DuckDBConnection) => {
+/** Create a mock analytical dataset query session with test data. */
+function createMockStore(n = 100): Promise<DatasetQuerySession> {
+  return DatasetQuerySession.fromInit(async (conn: DuckDBConnection) => {
     const rows: string[] = [];
     for (let i = 0; i < n; i++) {
       const cat = i % 3 === 0 ? "A" : i % 3 === 1 ? "B" : "C";
@@ -31,8 +32,8 @@ function createMockStore(n = 100): Promise<EmbeddingStore> {
   });
 }
 
-/** Create a minimal ViewerState for testing. */
-function createMockState(store: EmbeddingStore): ViewerState {
+/** Create a minimal server session for testing. */
+function createMockState(store: DatasetQuerySession): ServerSession {
   return {
     store,
     datasets: new Map([["test_dataset", { path: "/tmp/test.zarr" }]]),
@@ -50,8 +51,8 @@ function createMockState(store: EmbeddingStore): ViewerState {
   };
 }
 
-/** Create a minimal DatasetMeta for testing. */
-function createMockConfig(): DatasetMeta {
+/** Create minimal dataset session metadata for testing. */
+function createMockConfig(): DatasetSessionMetadata {
   return {
     obsColumnNames: ["obs_name", "_dataset", "category", "value"],
     embeddingProps: {
@@ -135,7 +136,7 @@ function ndeaWsRequest<T>(port: number | undefined, frame: Record<string, unknow
 // ─── Lifecycle ──────────────────────────────────────────────────────────────
 
 let activeServer: NdeaServer | null = null;
-let activeStore: EmbeddingStore | null = null;
+let activeStore: DatasetQuerySession | null = null;
 
 afterEach(() => {
   if (activeServer) {
@@ -157,20 +158,25 @@ describe("createApp", () => {
     const state = createMockState(store);
     const config = createMockConfig();
 
-    const server = createApp({
+    const options = {
       port: 0, // random port
       host: "localhost",
       store,
       state,
       config,
       noStatic: true,
-    });
+    } satisfies CreateAppOptions;
+    const socketContext = { kind: "ndea", state, store } satisfies ServerSocketContext;
+    expect(socketContext.state).toBe(state);
+    expect(socketContext.store).toBe(store);
+
+    const server = createApp(options);
     activeServer = server;
 
     const res = await fetch(`http://localhost:${server.port}/data/metadata.json`);
     expect(res.status).toBe(200);
 
-    const body = await res.json();
+    const body = MetadataSchema.parse(await res.json());
     expect(body).toHaveProperty("obsm");
     expect(body).toHaveProperty("obs_columns");
     expect(body.obs_columns).toContain("category");
@@ -333,7 +339,7 @@ describe("createApp", () => {
     const res = await fetch(`http://localhost:${server.port}/api/config`);
     expect(res.status).toBe(200);
 
-    const body = await res.json();
+    const body = ConfigResponseSchema.parse(await res.json());
     expect(body.availableObsmKeys).toEqual(["X_umap", "X_tsne"]);
     expect(body.nObs).toBe(10);
   });

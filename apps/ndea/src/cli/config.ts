@@ -9,7 +9,7 @@
 import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { parse as parseYaml } from "yaml";
-import type { ChannelConfig } from "../server/state.ts";
+import type { DatasetChannelConfig } from "../server/state.ts";
 
 // ─── Public types ───────────────────────────────────────────────────────────
 
@@ -17,7 +17,7 @@ export interface DatasetEntry {
   name: string;
   path: string;
   platePath?: string;
-  channels?: Record<string, ChannelConfig>;
+  channels?: Record<string, DatasetChannelConfig>;
 }
 
 export interface ProjectConfig {
@@ -189,12 +189,12 @@ function parseDictEntry(name: string, entry: unknown, baseDir: string): DatasetE
   return dataset;
 }
 
-function parseChannels(raw: unknown, datasetId: number | string): Record<string, ChannelConfig> {
+function parseChannels(raw: unknown, datasetId: number | string): Record<string, DatasetChannelConfig> {
   if (!raw || typeof raw !== "object") {
     throw new Error(`Dataset ${datasetId}: channels must be an object`);
   }
 
-  const result: Record<string, ChannelConfig> = {};
+  const result: Record<string, DatasetChannelConfig> = {};
   for (const [name, cfg] of Object.entries(raw as Record<string, unknown>)) {
     if (!cfg || typeof cfg !== "object") {
       throw new Error(`Dataset ${datasetId}, channel '${name}': expected an object`);
@@ -203,7 +203,7 @@ function parseChannels(raw: unknown, datasetId: number | string): Record<string,
     if (typeof c.color !== "string") {
       throw new TypeError(`Dataset ${datasetId}, channel '${name}': color must be a string`);
     }
-    const channel: ChannelConfig = { color: c.color };
+    const channel: DatasetChannelConfig = { color: c.color };
 
     if (c.contrast != null) {
       if (!Array.isArray(c.contrast) || c.contrast.length !== 2) {

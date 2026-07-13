@@ -11,13 +11,13 @@ import { afterEach, describe, expect, test } from "bun:test";
 import type { DuckDBConnection } from "@duckdb/node-api";
 import { CollectionMutationResultSchema } from "@ndea/protocol";
 import { createApp } from "../app.ts";
-import type { DatasetMeta, ViewerState } from "../state.ts";
-import { EmbeddingStore } from "../store.ts";
+import type { DatasetSessionMetadata, ServerSession } from "../state.ts";
+import { DatasetQuerySession } from "../store.ts";
 
 type NdeaServer = ReturnType<typeof createApp>;
 
 let activeServer: NdeaServer | null = null;
-let activeStore: EmbeddingStore | null = null;
+let activeStore: DatasetQuerySession | null = null;
 
 afterEach(() => {
   if (activeServer) {
@@ -33,8 +33,8 @@ afterEach(() => {
 // ─── Fixtures ───────────────────────────────────────────────────────────────
 
 /** 50 obs across two datasets (`A`: 30 rows, `B`: 20 rows) with explicit obs_name. */
-function makeStore(): Promise<EmbeddingStore> {
-  return EmbeddingStore.fromInit(async (conn: DuckDBConnection) => {
+function makeStore(): Promise<DatasetQuerySession> {
+  return DatasetQuerySession.fromInit(async (conn: DuckDBConnection) => {
     const rows: string[] = [];
     for (let i = 0; i < 30; i++) {
       rows.push(`(${i}, 'cell_${i}', 'A')`);
@@ -50,8 +50,8 @@ function makeStore(): Promise<EmbeddingStore> {
 }
 
 /** Single-dataset store (no `_dataset` column) — exercises the alternate JOIN path. */
-function makeSingleDatasetStore(): Promise<EmbeddingStore> {
-  return EmbeddingStore.fromInit(async (conn: DuckDBConnection) => {
+function makeSingleDatasetStore(): Promise<DatasetQuerySession> {
+  return DatasetQuerySession.fromInit(async (conn: DuckDBConnection) => {
     const rows: string[] = [];
     for (let i = 0; i < 25; i++) {
       rows.push(`(${i}, 'cell_${i}')`);
@@ -64,8 +64,8 @@ function makeSingleDatasetStore(): Promise<EmbeddingStore> {
 }
 
 /** Synthetic obs_name store — has neither `obs_name` nor `_dataset`; identity is row index. */
-function makeSyntheticStore(): Promise<EmbeddingStore> {
-  return EmbeddingStore.fromInit(async (conn: DuckDBConnection) => {
+function makeSyntheticStore(): Promise<DatasetQuerySession> {
+  return DatasetQuerySession.fromInit(async (conn: DuckDBConnection) => {
     const rows: string[] = [];
     for (let i = 0; i < 10; i++) {
       rows.push(`(${i}, ${i % 2 === 0 ? "'A'" : "'B'"})`);
@@ -77,7 +77,7 @@ function makeSyntheticStore(): Promise<EmbeddingStore> {
   });
 }
 
-function makeState(store: EmbeddingStore): ViewerState {
+function makeState(store: DatasetQuerySession): ServerSession {
   return {
     store,
     datasets: new Map([
@@ -98,7 +98,7 @@ function makeState(store: EmbeddingStore): ViewerState {
   };
 }
 
-function makeConfig(): DatasetMeta {
+function makeConfig(): DatasetSessionMetadata {
   return {
     obsColumnNames: ["obs_name", "_dataset"],
     embeddingProps: { data: { id: "__row_index__", projection: { x: "x", y: "y" } } },
@@ -112,7 +112,7 @@ function makeConfig(): DatasetMeta {
   };
 }
 
-function bootServer(store: EmbeddingStore): NdeaServer {
+function bootServer(store: DatasetQuerySession): NdeaServer {
   const server = createApp({
     port: 0,
     host: "localhost",

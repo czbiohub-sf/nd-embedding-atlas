@@ -15,12 +15,12 @@
  */
 
 import { CropBodySchema, parseJsonBody } from "../protocol.ts";
-import type { ViewerState } from "../state.ts";
+import type { ServerSession } from "../state.ts";
 
 const DEFAULT_QUALITY = 78;
 const DEFAULT_HALF = 150;
 
-export async function handleCrop(fovPath: string, req: Request, state: ViewerState): Promise<Response> {
+export async function handleCrop(fovPath: string, req: Request, state: ServerSession): Promise<Response> {
   if (req.method !== "POST") {
     return Response.json({ error: "Only POST is supported" }, { status: 405 });
   }

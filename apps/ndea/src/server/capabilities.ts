@@ -6,7 +6,7 @@
  * baked into `Metadata.capabilities` (the wire single-source-of-truth); the
  * frontend never re-derives, it just reads that array (see `capabilitiesOf`).
  *
- * Inputs are primitives (not `ViewerState`) so the mapping is pure + unit
+ * Inputs are primitives (not `ServerSession`) so the mapping is pure + unit
  * testable, and so the derivation table in the doc maps 1:1 onto the branches
  * below. Six of eight capabilities are derivable from current metadata;
  * `obsp` / `temporal` are reserved and land with their features.

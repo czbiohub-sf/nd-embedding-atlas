@@ -11,10 +11,10 @@ import { rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DuckDBConnection } from "@duckdb/node-api";
-import { EmbeddingStore } from "../store.ts";
+import { DatasetQuerySession } from "../store.ts";
 
-function createMockStore(n = 20): Promise<EmbeddingStore> {
-  return EmbeddingStore.fromInit(async (conn: DuckDBConnection) => {
+function createMockStore(n = 20): Promise<DatasetQuerySession> {
+  return DatasetQuerySession.fromInit(async (conn: DuckDBConnection) => {
     const rows: string[] = [];
     for (let i = 0; i < n; i++) rows.push(`(${i}, 'obs_${i}', 'ds')`);
     await conn.run(
@@ -23,7 +23,7 @@ function createMockStore(n = 20): Promise<EmbeddingStore> {
   });
 }
 
-let activeStore: EmbeddingStore | null = null;
+let activeStore: DatasetQuerySession | null = null;
 const tmpFiles: string[] = [];
 
 afterEach(async () => {

@@ -7,12 +7,12 @@
 
 import { deriveDataCapabilities } from "../capabilities.ts";
 import { MetadataSchema, type ObsmEntry } from "../protocol.ts";
-import type { ViewerState, DatasetMeta } from "../state.ts";
+import type { ServerSession, DatasetSessionMetadata } from "../state.ts";
 import { obsmColumnPrefix } from "../store.ts";
 import { exportDir } from "./export.ts";
 
 /** Return var count of the first accessor (or 0 if none registered). */
-function firstVarCount(state: ViewerState): number {
+function firstVarCount(state: ServerSession): number {
   const iter = state.accessors.values().next();
   if (iter.done) return 0;
   // For AnnData: var.length is the modality's nVars.
@@ -30,7 +30,7 @@ function firstVarCount(state: ViewerState): number {
 }
 
 /** Build obsm metadata including loaded status + modality tag for MuData keys. */
-function buildObsmMetadata(availableKeys: string[], state: ViewerState): Record<string, ObsmEntry> {
+function buildObsmMetadata(availableKeys: string[], state: ServerSession): Record<string, ObsmEntry> {
   const meta: Record<string, ObsmEntry> = {};
   for (const key of availableKeys) {
     const prefix = obsmColumnPrefix(key);
@@ -51,7 +51,7 @@ function buildObsmMetadata(availableKeys: string[], state: ViewerState): Record<
  *
  * Returns the full dataset metadata used to initialize the dashboard.
  */
-export function handleMetadata(state: ViewerState, config: DatasetMeta): Response {
+export function handleMetadata(state: ServerSession, config: DatasetSessionMetadata): Response {
   const result: Record<string, unknown> = {
     version: "0.0.0-dev",
     props: {

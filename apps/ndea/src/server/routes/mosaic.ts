@@ -7,7 +7,7 @@
  * Endpoint: POST /data/query, GET /data/query
  */
 
-import type { EmbeddingStore } from "../store.ts";
+import type { DatasetQuerySession } from "../store.ts";
 import { handleMosaicQuery, parseMosaicQuery } from "../mosaic.ts";
 
 /**
@@ -16,7 +16,7 @@ import { handleMosaicQuery, parseMosaicQuery } from "../mosaic.ts";
  * GET uses ?query={json} query parameter.
  * POST uses JSON body.
  */
-export async function handleMosaicRoute(req: Request, store: EmbeddingStore): Promise<Response> {
+export async function handleMosaicRoute(req: Request, store: DatasetQuerySession): Promise<Response> {
   const parsed = await parseMosaicQuery(req);
   if (!parsed.ok) return parsed.response;
   return handleMosaicQuery(parsed.query, store);

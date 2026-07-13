@@ -8,8 +8,8 @@
  * - CORS headers for dev mode (Vite on :5173, backend on :5055)
  */
 
-import type { EmbeddingStore } from "./store.ts";
-import type { ViewerState, DatasetMeta } from "./state.ts";
+import type { DatasetQuerySession } from "./store.ts";
+import type { ServerSession, DatasetSessionMetadata } from "./state.ts";
 
 // Route handlers
 import { handleMosaicRoute } from "./routes/mosaic.ts";
@@ -55,16 +55,23 @@ import { handleChannelStats } from "./routes/channel-stats.ts";
 import { CropPool } from "./crop-pool.ts";
 import { servePlateFile } from "./plate.ts";
 import { serveStatic, resolveFrontendDir } from "./static.ts";
-import { handleWsMessage, handleWsOpen, handleWsClose, type WsContext } from "./ws.ts";
+import { handleWsMessage, handleWsOpen, handleWsClose, type ServerSocketContext } from "./ws.ts";
 import { handleMosaicWsMessage } from "./mosaic-ws.ts";
 
 // Re-exports for public API
-export { EmbeddingStore, obsmColumnPrefix, DEFAULT_OBSM_PRIORITY } from "./store.ts";
+export { DatasetQuerySession, obsmColumnPrefix, DEFAULT_OBSM_PRIORITY } from "./store.ts";
 export { handleMosaicQuery, parseMosaicQuery, isAllowedSql, ARROW_IPC_CONTENT_TYPE } from "./mosaic.ts";
 export { detectSpatialColumns, parseBbox } from "./state.ts";
-export type { SpatialColumns, ChannelConfig, DatasetConfig, DatasetMeta, ViewerState, BboxRect } from "./state.ts";
+export type {
+  SpatialColumns,
+  DatasetChannelConfig,
+  DatasetMountConfig,
+  DatasetSessionMetadata,
+  ServerSession,
+  BboxRect,
+} from "./state.ts";
 export type { MosaicQuery } from "./mosaic.ts";
-export type { EmbeddingMeta } from "./store.ts";
+export type { RegisteredEmbedding } from "./store.ts";
 export type { NdeaProtocol } from "./protocol.ts";
 
 // ─── CORS ───────────────────────────────────────────────────────────────────
@@ -100,17 +107,17 @@ function extractPathParam(pathname: string, prefix: string): string | null {
 
 // ─── App options ────────────────────────────────────────────────────────────
 
-export interface AppOptions {
+export interface CreateAppOptions {
   /** Port to listen on. */
   port: number;
   /** Hostname to bind to. */
   host: string;
-  /** Initialized EmbeddingStore (obs loaded into DuckDB). */
-  store: EmbeddingStore;
-  /** Viewer session state. */
-  state: ViewerState;
+  /** Initialized analytical dataset query session (obs loaded into DuckDB). */
+  store: DatasetQuerySession;
+  /** Mutable server session state. */
+  state: ServerSession;
   /** Static metadata for /data/metadata.json. */
-  config: DatasetMeta;
+  config: DatasetSessionMetadata;
   /** Path to frontend dist directory (optional; auto-resolved if omitted). */
   frontendDir?: string;
   /** Disable static file serving (API-only mode). */
@@ -125,7 +132,7 @@ export interface AppOptions {
  * HTTP routes match the frontend API contract (see frontend/API_CONTRACT.md).
  * WebSocket support is stubbed for future axial protocol migration.
  */
-export function createApp(options: AppOptions) {
+export function createApp(options: CreateAppOptions) {
   const { store, state, config } = options;
   const frontendDir = options.noStatic ? null : resolveFrontendDir(options.frontendDir);
 
@@ -144,7 +151,7 @@ export function createApp(options: AppOptions) {
       `(POST|GET row-indices|DELETE), /api/scatter-selection, ...other`,
   );
 
-  return Bun.serve<WsContext>({
+  return Bun.serve<ServerSocketContext>({
     port: options.port,
     hostname: options.host,
 
@@ -156,7 +163,7 @@ export function createApp(options: AppOptions) {
       // /mosaic → Mosaic socketConnector framing (raw {type, sql}, binary arrow)
       // any other path → ndea framed protocol (_id/_type JSON)
       if (req.headers.get("upgrade") === "websocket") {
-        const kind: WsContext["kind"] = pathname === "/mosaic" ? "mosaic" : "ndea";
+        const kind: ServerSocketContext["kind"] = pathname === "/mosaic" ? "mosaic" : "ndea";
         const upgraded = server.upgrade(req, { data: { kind, state, store } });
         if (!upgraded) {
           return withCors(new Response("WebSocket upgrade failed", { status: 400 }));
@@ -207,11 +214,11 @@ async function routeRequest(
   req: Request,
   url: URL,
   pathname: string,
-  store: EmbeddingStore,
-  state: ViewerState,
-  config: DatasetMeta,
+  store: DatasetQuerySession,
+  state: ServerSession,
+  config: DatasetSessionMetadata,
   frontendDir: string | null,
-  options: AppOptions,
+  options: CreateAppOptions,
 ): Promise<Response> {
   // ── Mosaic query protocol (POST/GET /data/query) ────────────────
   if (pathname === "/data/query") {
@@ -261,8 +268,8 @@ function routeApi(
   req: Request,
   url: URL,
   pathname: string,
-  store: EmbeddingStore,
-  state: ViewerState,
+  store: DatasetQuerySession,
+  state: ServerSession,
 ): Promise<Response> | Response {
   const method = req.method;
 

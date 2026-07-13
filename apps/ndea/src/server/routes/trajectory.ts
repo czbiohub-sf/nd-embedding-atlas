@@ -26,7 +26,7 @@
 
 import { getOrCreateObsmLoader, parseDimIndex } from "./scatter.ts";
 import { TrajectoryResponseSchema, type TrajectoryFrame } from "../protocol.ts";
-import type { ViewerState } from "../state.ts";
+import type { ServerSession } from "../state.ts";
 
 /**
  * Handle GET /api/trajectory
@@ -39,7 +39,7 @@ import type { ViewerState } from "../state.ts";
  *   dataset      — optional dataset key (multi-dataset filter)
  *   category_col — optional numeric obs column to include as `category`
  */
-export async function handleTrajectory(url: URL, state: ViewerState, signal: AbortSignal): Promise<Response> {
+export async function handleTrajectory(url: URL, state: ServerSession, signal: AbortSignal): Promise<Response> {
   // ── Parse params ──────────────────────────────────────────────────────
   const trackIdRaw = url.searchParams.get("track_id");
   const fovName = url.searchParams.get("fov_name");

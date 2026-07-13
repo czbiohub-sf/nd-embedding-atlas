@@ -13,7 +13,7 @@
 
 import type { AnnData, DatasetHandle, SparseArray } from "@ndea/zarr";
 import { VarColumnBodySchema, parseJsonBody } from "../protocol.ts";
-import type { ViewerState } from "../state.ts";
+import type { ServerSession } from "../state.ts";
 
 /** In-flight var column materialization tasks. */
 export interface VarTask {
@@ -64,7 +64,7 @@ export function getVarTask(taskId: string): VarTask | undefined {
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 /** Return the first dataset handle in the state (or null if none). */
-function firstAdata(state: ViewerState): DatasetHandle | null {
+function firstAdata(state: ServerSession): DatasetHandle | null {
   const iter = state.accessors.values().next();
   return iter.done ? null : iter.value;
 }
@@ -94,7 +94,7 @@ function varNamesOf(adata: DatasetHandle): string[] {
  * Case-insensitive prefix match on var.index from the first dataset's
  * AnnData accessor. Empty q returns the first `limit` names.
  */
-export function handleVarNames(url: URL, state: ViewerState): Response {
+export function handleVarNames(url: URL, state: ServerSession): Response {
   const q = (url.searchParams.get("q") ?? "").toLowerCase();
   const limit = Math.max(1, Math.min(500, Number(url.searchParams.get("limit") ?? "50")));
   const modality = url.searchParams.get("modality") ?? undefined;
@@ -146,7 +146,7 @@ export function handleVarNames(url: URL, state: ViewerState): Response {
  * primary matrix). Additional layers are discovered from the zarr store's
  * `layers/` group on first call.
  */
-export async function handleVarLayers(state: ViewerState): Promise<Response> {
+export async function handleVarLayers(state: ServerSession): Promise<Response> {
   const adata = firstAdata(state);
   if (!adata) return Response.json({ layers: ["X"] });
 
@@ -205,7 +205,7 @@ async function discoverLayers(adata: DatasetHandle): Promise<string[]> {
  * Returns 202 with { task_id, status: "loading", column }. Poll
  * /api/var-column/{task_id}/status for completion.
  */
-export async function handleVarColumn(req: Request, state: ViewerState): Promise<Response> {
+export async function handleVarColumn(req: Request, state: ServerSession): Promise<Response> {
   const parsed = await parseJsonBody(req, VarColumnBodySchema);
   if (!parsed.ok) return parsed.response;
   const name = parsed.data.name;
@@ -254,7 +254,7 @@ export async function handleVarColumn(req: Request, state: ViewerState): Promise
 // ─── Var column materialization ─────────────────────────────────────────────
 
 async function materialiseVarColumn(
-  state: ViewerState,
+  state: ServerSession,
   name: string,
   layer: string,
   colName: string,

@@ -6,7 +6,7 @@
  */
 
 import { ObsmSliceLoader } from "../slice-loader.ts";
-import type { ViewerState } from "../state.ts";
+import type { ServerSession } from "../state.ts";
 
 /** Status event emitted to embedding-status subscribers. */
 export interface EmbeddingStatusEvent {
@@ -19,7 +19,7 @@ export interface EmbeddingStatusEvent {
 const embeddingSubscribers = new Map<string, Set<(ev: EmbeddingStatusEvent) => void>>();
 
 /** Compute the current status for an embedding key. */
-export function currentEmbeddingStatus(key: string, state: ViewerState): EmbeddingStatusEvent {
+export function currentEmbeddingStatus(key: string, state: ServerSession): EmbeddingStatusEvent {
   const loader = state.obsmLoaders.get(key);
   if (loader) return { status: "ready", nDims: loader.width };
   const err = state.loadErrors.get(key);
@@ -29,7 +29,7 @@ export function currentEmbeddingStatus(key: string, state: ViewerState): Embeddi
 }
 
 /** Fan out the current status to all subscribers of `key`. */
-function fireEmbeddingStatus(key: string, state: ViewerState): void {
+function fireEmbeddingStatus(key: string, state: ServerSession): void {
   const subs = embeddingSubscribers.get(key);
   if (!subs || subs.size === 0) return;
   const ev = currentEmbeddingStatus(key, state);
@@ -42,7 +42,7 @@ function fireEmbeddingStatus(key: string, state: ViewerState): void {
  */
 export function subscribeEmbeddingStatus(
   key: string,
-  state: ViewerState,
+  state: ServerSession,
   cb: (ev: EmbeddingStatusEvent) => void,
 ): () => void {
   cb(currentEmbeddingStatus(key, state));
@@ -69,7 +69,7 @@ export function subscribeEmbeddingStatus(
  * The old DuckDB ingest path (full-matrix load + INSERT VALUES) is
  * skipped because no SQL consumer reads embedding columns today.
  */
-export function handleLoadEmbedding(key: string, state: ViewerState): Response {
+export function handleLoadEmbedding(key: string, state: ServerSession): Response {
   if (!state.availableObsmKeys.includes(key)) {
     return Response.json({ error: `Unknown obsm key: ${key}` }, { status: 404 });
   }
@@ -103,7 +103,7 @@ export function handleLoadEmbedding(key: string, state: ViewerState): Response {
  * line, and the lazy path serves status via `subscribeEmbeddingStatus`,
  * so per-key console output would just be noise.
  */
-export async function loadEmbeddingAsync(key: string, state: ViewerState): Promise<void> {
+export async function loadEmbeddingAsync(key: string, state: ServerSession): Promise<void> {
   if (state.obsmLoaders.has(key)) return;
   try {
     const accessors = [...state.accessors.entries()];
@@ -124,7 +124,7 @@ export async function loadEmbeddingAsync(key: string, state: ViewerState): Promi
  *
  * Returns the current load status for an embedding.
  */
-export function handleEmbeddingStatus(key: string, state: ViewerState): Response {
+export function handleEmbeddingStatus(key: string, state: ServerSession): Response {
   const ev = currentEmbeddingStatus(key, state);
   if (ev.status === "ready") return Response.json({ status: "ready", n_dims: ev.nDims });
   if (ev.status === "error") return Response.json({ status: "error", error: ev.error }, { status: 500 });

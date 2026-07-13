@@ -7,12 +7,12 @@
  */
 
 import { ConfigResponseSchema, type ConfigResponse } from "../protocol.ts";
-import type { ViewerState } from "../state.ts";
+import type { ServerSession } from "../state.ts";
 
 /**
  * Handle GET /api/config
  */
-export function handleConfig(state: ViewerState): Response {
+export function handleConfig(state: ServerSession): Response {
   const datasets: ConfigResponse["datasets"] = {};
   for (const [key, cfg] of state.datasets) {
     datasets[key] = {

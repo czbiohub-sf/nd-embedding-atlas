@@ -8,7 +8,7 @@ import type { DatasetHandle } from "@ndea/zarr";
 import type { CropPool } from "./crop-pool.ts";
 import type { PlateChannel, PlateMount } from "./plate.ts";
 import type { ObsmSliceLoader } from "./slice-loader.ts";
-import type { EmbeddingStore } from "./store.ts";
+import type { DatasetQuerySession } from "./store.ts";
 
 /** Resolved spatial column names (from config or auto-detection). */
 export interface SpatialColumns {
@@ -85,23 +85,23 @@ export function spatialAllColumns(spatial: SpatialColumns | null): Set<string> {
   return cols;
 }
 
-/** Per-channel rendering configuration. */
-export interface ChannelConfig {
+/** Per-channel rendering configuration for one mounted dataset. */
+export interface DatasetChannelConfig {
   /** Hex color without '#', e.g. "FF0000". */
   color: string;
   contrast?: [number, number];
   visible?: boolean;
 }
 
-/** Per-dataset configuration. */
-export interface DatasetConfig {
+/** Mount configuration for one dataset in a server session. */
+export interface DatasetMountConfig {
   path: string;
   platePath?: string;
-  channels?: Record<string, ChannelConfig>;
+  channels?: Record<string, DatasetChannelConfig>;
 }
 
 /** Static per-session metadata for the /data endpoints. */
-export interface DatasetMeta {
+export interface DatasetSessionMetadata {
   obsColumnNames: string[];
   embeddingProps: Record<string, unknown>;
   hasPlate: boolean;
@@ -115,10 +115,10 @@ export interface DatasetMeta {
   preset?: string;
 }
 
-/** All mutable server state for one viewer session. */
-export interface ViewerState {
-  store: EmbeddingStore;
-  datasets: Map<string, DatasetConfig>;
+/** All mutable server state for one server session. */
+export interface ServerSession {
+  store: DatasetQuerySession;
+  datasets: Map<string, DatasetMountConfig>;
   spatial: SpatialColumns | null;
   obsColumns: string[];
   port: number;

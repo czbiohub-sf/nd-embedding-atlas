@@ -7,7 +7,7 @@
  * GET  /api/health              — Health check
  */
 
-import { parseBbox, type ViewerState } from "../state.ts";
+import { parseBbox, type ServerSession } from "../state.ts";
 
 /** Stringify a DuckDB scalar without risking [object Object]. */
 function scalarToString(value: unknown): string {
@@ -25,7 +25,7 @@ function scalarToString(value: unknown): string {
  * Returns spatial metadata (x, y, fov, t, z) per observation. POST not GET so
  * a 5k-row lasso selection doesn't blow past Bun's request header size cap.
  */
-export async function handleObsBatch(req: Request, state: ViewerState): Promise<Response> {
+export async function handleObsBatch(req: Request, state: ServerSession): Promise<Response> {
   const sp = state.spatial;
 
   if (!sp?.x || !sp?.y) {
@@ -100,7 +100,7 @@ export async function handleObsBatch(req: Request, state: ViewerState): Promise<
  *
  * Returns spatial coordinates for a single observation.
  */
-export async function handleObsInfo(rowIndex: number, state: ViewerState): Promise<Response> {
+export async function handleObsInfo(rowIndex: number, state: ServerSession): Promise<Response> {
   const sp = state.spatial;
   const selectCols: string[] = [];
 
@@ -185,12 +185,12 @@ export async function handleObsInfo(rowIndex: number, state: ViewerState): Promi
  *
  * Returns all visible obs columns for a single observation.
  */
-export async function handleObsDetail(rowIndex: number, state: ViewerState): Promise<Response> {
+export async function handleObsDetail(rowIndex: number, state: ServerSession): Promise<Response> {
   try {
     // Get column names from obs_base, excluding hidden columns
     const descRows = await state.store.queryJson("SELECT column_name FROM (DESCRIBE obs_base)");
     const allCols = descRows.map((r) => String(r.column_name));
-    // Filter out hidden columns (we don't track hidden in TS ViewerState yet,
+    // Filter out hidden columns (the server session does not track hidden columns yet,
     // but obs_base has all columns; the VIEW filters them)
     const cols = allCols;
     const quoted = cols.map((c) => `"${c}"`).join(", ");
@@ -218,7 +218,7 @@ export async function handleObsDetail(rowIndex: number, state: ViewerState): Pro
 /**
  * Handle GET /api/health
  */
-export function handleHealth(state: ViewerState): Response {
+export function handleHealth(state: ServerSession): Response {
   return Response.json({
     status: "ok",
     n_obs: state.store.nObs,

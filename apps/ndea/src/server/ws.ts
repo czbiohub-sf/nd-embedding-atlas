@@ -20,8 +20,8 @@
  */
 
 import type { ServerWebSocket } from "bun";
-import type { ViewerState } from "./state.ts";
-import type { EmbeddingStore } from "./store.ts";
+import type { ServerSession } from "./state.ts";
+import type { DatasetQuerySession } from "./store.ts";
 import {
   handleLoadEmbedding,
   currentEmbeddingStatus,
@@ -33,18 +33,18 @@ import { handleExport, getExportTask, subscribeExportTask, type ExportTask } fro
 import { VarColumnBodySchema } from "./protocol.ts";
 
 /** Data attached to every ServerWebSocket via server.upgrade(req, { data }). */
-export interface WsContext {
+export interface ServerSocketContext {
   /**
    * Socket role. `ndea` uses the framed `{_id,_type,...}` protocol handled
    * in this file. `mosaic` uses the Mosaic socketConnector framing (raw
    * `{type, sql}` in, Arrow IPC / JSON out) handled in mosaic-ws.ts.
    */
   kind: "ndea" | "mosaic";
-  state: ViewerState;
-  store: EmbeddingStore;
+  state: ServerSession;
+  store: DatasetQuerySession;
 }
 
-type WS = ServerWebSocket<WsContext>;
+type WS = ServerWebSocket<ServerSocketContext>;
 
 interface Frame {
   _id?: unknown;

@@ -25,7 +25,7 @@ export interface SliceLoader {
  * Per-(obsm key, dataset-set) loader.
  *
  * `accessors` is the ordered list of `(name, handle)` pairs matching
- * `ViewerState.accessors.entries()`. Row ordering in the output matches
+ * `ServerSession.accessors.entries()`. Row ordering in the output matches
  * the insertion order of obs_base.
  */
 export class ObsmSliceLoader implements SliceLoader {
