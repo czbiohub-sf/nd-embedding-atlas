@@ -29,7 +29,7 @@ function node(id: string, type: string): GraphDocumentNode {
 }
 
 function edge(id: string, from: string, to: string): GraphDocumentEdge {
-  return { id, from, to, toPort: "in", kind: "pred" };
+  return { id, from, fromPort: "out", to, toPort: "in", kind: "pred" };
 }
 
 function fixture(resolved: readonly GraphRuntimeNodeSpec[] = [sourceSpec, transformSpec]) {
@@ -153,6 +153,7 @@ describe("GraphRuntimeSession", () => {
     edges.unresolved = {
       id: "unresolved",
       from: "missing",
+      fromPort: "future-output",
       to: "missing",
       toPort: "future-port",
       kind: "focus",
@@ -161,6 +162,7 @@ describe("GraphRuntimeSession", () => {
     expect(edges.unresolved).toEqual({
       id: "unresolved",
       from: "missing",
+      fromPort: "future-output",
       to: "missing",
       toPort: "future-port",
       kind: "focus",

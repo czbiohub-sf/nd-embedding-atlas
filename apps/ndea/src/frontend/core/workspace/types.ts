@@ -11,6 +11,7 @@
 import type { NdForm } from "@/components/nd/nd-resolve-form";
 import type { CoordinationSpace } from "@/core/coordination/coordination";
 import type { GraphDocumentEdge, GraphDocumentNode } from "@/core/graph/records";
+import type { WorkspaceNodeAssetRecord } from "@/core/node-asset/schema";
 import type { TreeNode } from "./stage/split-tree";
 
 /** where a node's body materializes */
@@ -30,6 +31,8 @@ export interface WorkspaceNodeSize {
 }
 
 export interface WorkspaceDocumentState {
+  /** Exact linked/embedded asset provenance. Expanded inner nodes never persist. */
+  nodeAssets: readonly WorkspaceNodeAssetRecord[];
   nodes: Record<string, GraphDocumentNode>;
   edges: Record<string, GraphDocumentEdge>;
   /** world positions (serialized with the document) */

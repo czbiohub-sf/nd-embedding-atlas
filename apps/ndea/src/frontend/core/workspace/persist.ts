@@ -10,10 +10,16 @@ import { z } from "zod";
 
 import { validateGraphRuntimeTopology } from "@/core/graph/runtime-session";
 import type { AppNodeLibrary } from "@/core/node/library";
+import { parseWorkspaceNodeAssetRecords } from "@/core/node-asset/schema";
+import {
+  createWorkspaceAppNodeLibrary,
+  resolveWorkspaceNodeAssets,
+  type WorkspaceAppNodeLibrary,
+} from "@/core/node-asset/resolver";
 import type { TreeNode } from "./stage/split-tree";
 import type { WorkspaceDocumentState } from "./types";
 
-export const DOC_VERSION = 3;
+export const DOC_VERSION = 4;
 
 const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
   z.union([
@@ -27,7 +33,7 @@ const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
 );
 const exactRefSchema = z
   .object({
-    nodeTypeId: z.string().regex(/^[a-z0-9]+(?:[.-][a-z0-9]+)*(?:\/[a-z0-9]+(?:-[a-z0-9]+)*)*$/),
+    nodeTypeId: z.string().regex(/^[a-z0-9]+(?:[.-][a-z0-9]+)*(?:\/[a-z0-9]+(?:[.-][a-z0-9]+)*)*$/),
     nodeTypeVersion: z.string().refine(isSemanticVersion, "node type version must be semantic"),
   })
   .strict();
@@ -37,9 +43,15 @@ const configSnapshotSchema = z
     value: jsonValueSchema,
   })
   .strict();
+const nodeIdSchema = z
+  .string()
+  .min(1)
+  .refine((id) => !id.includes("::asset::"), {
+    message: 'node id uses reserved runtime namespace "::asset::"',
+  });
 const nodeSchema = z
   .object({
-    id: z.string().min(1),
+    id: nodeIdSchema,
     definitionRef: exactRefSchema,
     label: z.string(),
     parent: z.string().nullable().optional(),
@@ -51,6 +63,7 @@ const edgeSchema = z
   .object({
     id: z.string().min(1),
     from: z.string().min(1),
+    fromPort: z.string().min(1),
     to: z.string().min(1),
     toPort: z.string().min(1),
     kind: z.enum(["pred", "sel", "focus"]),
@@ -76,6 +89,7 @@ const treeSchema: z.ZodType<TreeNode> = z.lazy(() =>
 const coordinationSpaceSchema = z.record(z.string(), z.record(z.string(), jsonValueSchema));
 const persistedStateSchema = z
   .object({
+    nodeAssets: z.array(z.unknown()),
     nodes: z.record(z.string(), nodeSchema),
     edges: z.record(z.string(), edgeSchema),
     positions: z.record(z.string(), positionSchema),
@@ -97,6 +111,15 @@ const persistedStateSchema = z
   })
   .strict()
   .superRefine((state, context) => {
+    try {
+      parseWorkspaceNodeAssetRecords(state.nodeAssets);
+    } catch (error) {
+      context.addIssue({
+        code: "custom",
+        path: ["nodeAssets"],
+        message: errorMessage(error),
+      });
+    }
     for (const [key, node] of Object.entries(state.nodes)) {
       if (key !== node.id) {
         context.addIssue({ code: "custom", path: ["nodes", key, "id"], message: "node key and id must match" });
@@ -121,7 +144,7 @@ const persistedStateSchema = z
 const persistedDocSchema = z.object({ version: z.literal(DOC_VERSION), state: persistedStateSchema }).strict();
 
 export interface PersistedDoc {
-  version: 3;
+  version: 4;
   state: WorkspaceDocumentState;
 }
 
@@ -148,6 +171,7 @@ export function toPersistedDoc(state: WorkspaceDocumentState): PersistedDoc {
     version: DOC_VERSION,
     state: {
       nodes: state.nodes,
+      nodeAssets: state.nodeAssets,
       edges: state.edges,
       positions: state.positions,
       sizeOverrides: state.sizeOverrides,
@@ -167,7 +191,7 @@ export function toPersistedDoc(state: WorkspaceDocumentState): PersistedDoc {
       coordinationSpace: state.coordinationSpace,
     },
   };
-  return persistedDocSchema.parse(persisted) as PersistedDoc;
+  return persistedDocSchema.parse(persisted) as unknown as PersistedDoc;
 }
 
 type LegacyDocument = { version: number; state: Record<string, unknown> };
@@ -229,7 +253,8 @@ export function migrate(doc: unknown, nodeLibrary: AppNodeLibrary): PersistedDoc
   let step = structuredClone(legacy);
   if (step.version === 1) step = migrateV1ToV2(step);
   if (step.version === 2) step = migrateV2ToV3(step, nodeLibrary);
-  return persistedDocSchema.parse(step) as PersistedDoc;
+  if (step.version === 3) step = migrateV3ToV4(step, nodeLibrary);
+  return persistedDocSchema.parse(step) as unknown as PersistedDoc;
 }
 
 function migrateV1ToV2(doc: LegacyDocument): LegacyDocument {
@@ -306,6 +331,26 @@ function migrateV2ToV3(doc: LegacyDocument, nodeLibrary: AppNodeLibrary): Legacy
   return { version: 3, state };
 }
 
+function migrateV3ToV4(doc: LegacyDocument, nodeLibrary: AppNodeLibrary): LegacyDocument {
+  const state = structuredClone(doc.state);
+  const nodes = objectRecord(state.nodes);
+  const edges = objectRecord(state.edges);
+  state.edges = Object.fromEntries(
+    Object.entries(edges).map(([key, rawEdge]) => {
+      const edge = { ...objectRecord(rawEdge) };
+      const source = objectRecord(nodes[stringField(edge, "from")]);
+      const rawRef = exactRefSchema.parse(source.definitionRef);
+      const ref = exactNodeTypeRef(rawRef.nodeTypeId, rawRef.nodeTypeVersion);
+      const spec = nodeLibrary.getSpecExact(ref);
+      const output = spec?.definition.outputs.find((port) => port.kind === edge.kind) ?? spec?.definition.outputs[0];
+      edge.fromPort = output?.id ?? "out";
+      return [key, edge];
+    }),
+  );
+  state.nodeAssets = [];
+  return { version: 4, state };
+}
+
 function normalizeLegacyConfig(ref: ExactNodeTypeRef, raw: unknown, nodeLibrary: AppNodeLibrary): NodeConfigSnapshot {
   const spec = nodeLibrary.getSpecExact(ref);
   const contract = spec?.definition.config;
@@ -325,8 +370,9 @@ function mergeLegacyConfig(value: Record<string, JsonValue>, defaults: JsonValue
 
 export function validateDoc(doc: unknown, nodeLibrary: AppNodeLibrary): { ok: boolean; errors: string[] } {
   try {
-    const parsed = persistedDocSchema.parse(doc) as PersistedDoc;
-    decodeCurrentConfigs(parsed.state, nodeLibrary);
+    const parsed = persistedDocSchema.parse(doc) as unknown as PersistedDoc;
+    const prepared = prepareWorkspaceAssetLibrary(nodeLibrary, parsed.state);
+    decodeCurrentConfigs({ ...parsed.state, nodeAssets: prepared.records }, prepared.library);
     return { ok: true, errors: [] };
   } catch (error) {
     return { ok: false, errors: [errorMessage(error)] };
@@ -338,11 +384,40 @@ export function fromPersistedDoc(
   nodeLibrary: AppNodeLibrary,
 ): { ok: true; state: WorkspaceDocumentState } | { ok: false; errors: string[] } {
   try {
-    const parsed = persistedDocSchema.parse(doc) as PersistedDoc;
-    return { ok: true, state: decodeCurrentConfigs(parsed.state, nodeLibrary) };
+    const parsed = persistedDocSchema.parse(doc) as unknown as PersistedDoc;
+    const prepared = prepareWorkspaceAssetLibrary(nodeLibrary, parsed.state);
+    const state = decodeCurrentConfigs({ ...parsed.state, nodeAssets: prepared.records }, prepared.library);
+    return { ok: true, state };
   } catch (error) {
     return { ok: false, errors: [errorMessage(error)] };
   }
+}
+
+function prepareWorkspaceAssetLibrary(
+  nodeLibrary: AppNodeLibrary,
+  state: WorkspaceDocumentState,
+): {
+  readonly library: AppNodeLibrary;
+  readonly records: WorkspaceDocumentState["nodeAssets"];
+} {
+  const records = parseWorkspaceNodeAssetRecords(state.nodeAssets);
+  if (!isWorkspaceAppNodeLibrary(nodeLibrary)) return { library: nodeLibrary, records };
+  const resolution = resolveWorkspaceNodeAssets(nodeLibrary.baseLibrary(), nodeLibrary.assetSnapshot().assets, records);
+  return {
+    library: createWorkspaceAppNodeLibrary(nodeLibrary.baseLibrary(), resolution.snapshot),
+    records: resolution.records,
+  };
+}
+
+function isWorkspaceAppNodeLibrary(nodeLibrary: AppNodeLibrary): nodeLibrary is WorkspaceAppNodeLibrary {
+  return (
+    "assetSnapshot" in nodeLibrary &&
+    typeof nodeLibrary.assetSnapshot === "function" &&
+    "replaceAssetSnapshot" in nodeLibrary &&
+    typeof nodeLibrary.replaceAssetSnapshot === "function" &&
+    "baseLibrary" in nodeLibrary &&
+    typeof nodeLibrary.baseLibrary === "function"
+  );
 }
 
 function decodeCurrentConfigs(state: WorkspaceDocumentState, nodeLibrary: AppNodeLibrary): WorkspaceDocumentState {
@@ -459,7 +534,7 @@ export function loadFromStorage(storage: WorkspaceStorage, key: string, nodeLibr
   const decoded = fromPersistedDoc(migrated, nodeLibrary);
   if (!decoded.ok) return recovery("config", decoded.errors.join("; "), raw);
   try {
-    validateGraphRuntimeTopology(decoded.state, nodeLibrary);
+    validateGraphRuntimeTopology(decoded.state, prepareWorkspaceAssetLibrary(nodeLibrary, decoded.state).library);
   } catch (error) {
     return recovery("topology", error, raw, decoded.state);
   }

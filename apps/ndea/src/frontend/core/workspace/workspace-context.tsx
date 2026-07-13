@@ -23,6 +23,14 @@ import {
   type WorkspaceStorage,
 } from "./persist";
 import type { AppNodeLibrary } from "@/core/node/library";
+import {
+  browserNodeAssetJsonStorage,
+  createNodeAssetLibrary,
+  loadUserNodeAssetSource,
+  type NodeAssetJsonStorage,
+  type NodeAssetLibrary,
+  type UserNodeAssetLoadResult,
+} from "@/core/node-asset/library";
 import { resolvePreset, seedAnnotate } from "./presets";
 import { seedWorkspace, Workspace } from "./workspace-store";
 import type { WorkspaceDocumentState } from "./types";
@@ -65,6 +73,17 @@ export function initializeWorkspaceDocument(
   };
 }
 
+export function applyNodeAssetRecovery(
+  persistence: WorkspacePersistenceState,
+  loaded: UserNodeAssetLoadResult,
+): WorkspacePersistenceState {
+  if (loaded.kind !== "recovery") return persistence;
+  const error = `user node asset storage: ${loaded.error}`;
+  return persistence.mode === "recovery"
+    ? { ...persistence, errors: [...persistence.errors, error] }
+    : { mode: "recovery", stage: "config", errors: [error] };
+}
+
 /**
  * A stable per-dataset session key for the persisted document. Derived from the
  * dataset identity (`metadata.props.data.id`) + the DuckDB table, so the same
@@ -82,10 +101,14 @@ export function WorkspaceProvider({
   children,
   nodeLibrary,
   storage,
+  nodeAssets,
+  nodeAssetStorage,
 }: {
   children: React.ReactNode;
   nodeLibrary: AppNodeLibrary;
   storage?: WorkspaceStorage;
+  nodeAssets?: NodeAssetLibrary;
+  nodeAssetStorage?: NodeAssetJsonStorage;
 }) {
   const { state, meta, actions } = useDashboard();
   const { coordinator, brushSelection, table } = meta;
@@ -93,15 +116,29 @@ export function WorkspaceProvider({
 
   const [{ workspace: ws, nodeRuntimes, persistence: initialPersistence, workspaceStorage, workspaceKey }] = useState(
     () => {
-      const w = new Workspace({ coordinator, table, metadata, nodeLibrary });
+      const resolvedAssetStorage = nodeAssetStorage ?? browserNodeAssetJsonStorage();
+      const loadedUserAssets = loadUserNodeAssetSource(resolvedAssetStorage);
+      const availableAssets = createNodeAssetLibrary([
+        ...(nodeAssets?.sources().filter((source) => source.kind !== "user") ?? []),
+        loadedUserAssets.source,
+      ]);
+      const w = new Workspace({
+        coordinator,
+        table,
+        metadata,
+        nodeLibrary,
+        nodeAssets: availableAssets,
+        ...(loadedUserAssets.kind === "recovery" ? {} : { nodeAssetStorage: resolvedAssetStorage }),
+      });
       const resolvedStorage = storage ?? browserWorkspaceStorage();
       const resolvedKey = storageKey(sessionKeyOf(metadata, table));
       let persistence: WorkspacePersistenceState = { mode: "writable", errors: [] };
       if (import.meta.env.DEV) {
         // Seed only after a confirmed miss. Any read, migration, backup, or
         // rewrite failure keeps a validated document read-only when possible.
-        const loaded = loadFromStorage(resolvedStorage, resolvedKey, nodeLibrary);
+        const loaded = loadFromStorage(resolvedStorage, resolvedKey, w.nodeLibrary);
         persistence = initializeWorkspaceDocument(w, loaded, () => seedWorkspace(w));
+        persistence = applyNodeAssetRecovery(persistence, loadedUserAssets);
         (window as unknown as { __ndeaWorkspace?: Workspace }).__ndeaWorkspace = w;
       } else {
         // Shipped build: the named preset (default annotate) seeds a fresh graph +
@@ -110,6 +147,7 @@ export function WorkspaceProvider({
         // annotate default.
         const seed = resolvePreset(metadata.preset ?? "annotate") ?? seedAnnotate;
         seed(w);
+        persistence = applyNodeAssetRecovery(persistence, loadedUserAssets);
       }
       const appHost = Object.freeze({
         coordinator,
@@ -130,7 +168,7 @@ export function WorkspaceProvider({
         workspaceKey: resolvedKey,
         nodeRuntimes: new WorkspaceNodeRuntimeManager({
           session: w,
-          nodeLibrary,
+          nodeLibrary: w.nodeLibrary,
           appHost,
         }),
       };

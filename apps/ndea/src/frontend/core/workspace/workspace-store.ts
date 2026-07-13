@@ -23,11 +23,27 @@ import type { GraphEvaluationStore } from "@/core/graph/evaluator";
 import type { GraphDocumentEdge, GraphDocumentNode } from "@/core/graph/records";
 import { GraphRuntimeSession, type GraphNodeResolution, type CheckpointInput } from "@/core/graph/runtime-session";
 import type { NodeRuntimeSessionPort } from "@/core/node/runtime/session-port";
-import type { ExactNodeTypeRef, RowIndex } from "@ndea/sdk";
+import { compareSemanticVersions, type ExactNodeTypeRef, type RowIndex } from "@ndea/sdk";
 import type { Metadata } from "@/types";
 import type { NdForm } from "@/components/nd/nd-resolve-form";
 import { toRows } from "@/lib/mosaic-helpers";
 import type { AppNodeDescriptor, AppNodeLibrary } from "@/core/node/library";
+import {
+  canonicalUserNodeAssetBytes,
+  createNodeAssetLibrary,
+  publishNodeAssetVersion,
+  type NodeAssetJsonStorage,
+  type NodeAssetLibrary,
+} from "@/core/node-asset/library";
+import {
+  compileNodeAssetSnapshot,
+  createWorkspaceAppNodeLibrary,
+  resolveWorkspaceNodeAssets,
+  type WorkspaceAppNodeLibrary,
+} from "@/core/node-asset/resolver";
+import { createNodeAssetDraftFromSubgraph, type NodeAssetParameterDraftBinding } from "@/core/node-asset/authoring";
+import { draftNextNodeAssetVersion } from "@/core/node-asset/migrations";
+import type { NodeAssetDefinition, WorkspaceNodeAssetRecord } from "@/core/node-asset/schema";
 import { NodeCounts } from "./node-counts";
 import {
   treeMapLeaves,
@@ -51,11 +67,14 @@ export interface WorkspaceDeps {
   table: string;
   metadata: Metadata;
   nodeLibrary: AppNodeLibrary;
+  nodeAssets?: NodeAssetLibrary;
+  nodeAssetStorage?: NodeAssetJsonStorage;
 }
 
 export type WorkspaceDocumentStore = Pick<Store<WorkspaceDocumentState>, "state" | "get" | "subscribe">;
 
 const EMPTY: WorkspaceDocumentState = {
+  nodeAssets: [],
   nodes: {},
   edges: {},
   positions: {},
@@ -88,7 +107,7 @@ export class Workspace {
   readonly store: WorkspaceDocumentStore;
   readonly telemetry: GraphEvaluationStore;
   readonly counts: NodeCounts;
-  readonly nodeLibrary: AppNodeLibrary;
+  readonly nodeLibrary: WorkspaceAppNodeLibrary;
   readonly coordination: CoordinationScopeCellPort;
 
   private readonly graphRuntime: GraphRuntimeSession;
@@ -98,11 +117,17 @@ export class Workspace {
 
   constructor(deps: WorkspaceDeps) {
     this.deps = deps;
-    this.nodeLibrary = deps.nodeLibrary;
+    this.nodeLibrary = createWorkspaceAppNodeLibrary(
+      deps.nodeLibrary,
+      compileNodeAssetSnapshot(
+        deps.nodeLibrary,
+        deps.nodeAssets ?? createNodeAssetLibrary([{ sourceId: "user", kind: "user", assets: [], current: {} }]),
+      ),
+    );
     this.documentStore = new Store<WorkspaceDocumentState>(EMPTY);
     this.store = this.documentStore;
     this.graphRuntime = new GraphRuntimeSession({
-      resolver: deps.nodeLibrary,
+      resolver: this.nodeLibrary,
       document: {
         node: (id) => this.documentStore.state.nodes[id],
         edges: () => Object.values(this.documentStore.state.edges),
@@ -149,6 +174,26 @@ export class Workspace {
     return this.graphRuntime.unresolvedNodes(this.store.state.nodes);
   }
 
+  replaceAvailableNodeAssets(assets: NodeAssetLibrary): void {
+    const previous = this.nodeLibrary.assetSnapshot();
+    const resolution = resolveWorkspaceNodeAssets(this.nodeLibrary.baseLibrary(), assets, this.store.state.nodeAssets);
+    this.nodeLibrary.replaceAssetSnapshot(resolution.snapshot);
+    try {
+      this.graphRuntime.refreshResolutions(this.store.state);
+    } catch (error) {
+      this.nodeLibrary.replaceAssetSnapshot(previous);
+      try {
+        this.graphRuntime.refreshResolutions(this.store.state);
+      } catch (rollbackError) {
+        // eslint-disable-next-line preserve-caught-error -- AggregateError preserves both independent failures
+        throw new AggregateError([error, rollbackError], "Node asset resolution refresh and rollback failed", {
+          cause: error,
+        });
+      }
+      throw error;
+    }
+  }
+
   private requireNodeDescriptor(ref: ExactNodeTypeRef): AppNodeDescriptor {
     const descriptor = this.nodeLibrary.getDescriptorExact(ref);
     if (!descriptor) throw new Error(`no registered node descriptor for "${ref.nodeTypeId}@${ref.nodeTypeVersion}"`);
@@ -156,17 +201,23 @@ export class Workspace {
   }
 
   /** kind-compatibility + no-duplicate + DAG — the full wire-legality rule */
-  canConnectWire(fromId: string, toId: string): boolean {
+  canConnectWire(fromId: string, toId: string, fromPortId?: string | null, toPortId?: string | null): boolean {
     if (fromId === toId) return false;
     const from = this.def(fromId);
     const to = this.def(toId);
     if (!from || !to || !from.hasOut || !to.hasIn) return false;
-    if (!to.inKinds.includes(from.outKind)) return false;
+    const output = fromPortId ? from.outputPorts.find((port) => port.id === fromPortId) : from.outputPorts[0];
+    const input = toPortId
+      ? to.inputPorts.find((port) => port.id === toPortId)
+      : to.inputPorts.find((port) => port.kind === output?.kind);
+    if (!output || !input || input.kind !== output.kind) return false;
     const nodes = this.store.state.nodes;
     if ((nodes[fromId]?.parent ?? null) !== (nodes[toId]?.parent ?? null)) return false; // wires live within one level
-    const dup = Object.values(this.store.state.edges).some((e) => e.from === fromId && e.to === toId);
+    const dup = Object.values(this.store.state.edges).some(
+      (edge) => edge.from === fromId && edge.fromPort === output.id && edge.to === toId && edge.toPort === input.id,
+    );
     if (dup) return false;
-    return this.graphRuntime.canConnect(fromId, toId);
+    return this.graphRuntime.canConnect(fromId, toId, undefined, output.id, input.id);
   }
 
   /* ── topology actions ─────────────────────────────────────────────── */
@@ -174,9 +225,33 @@ export class Workspace {
   addNode(nodeTypeId: string, pos: WorkspaceNodePosition, idOverride?: string): string {
     const def = this.nodeLibrary.getCurrentDescriptor(nodeTypeId);
     if (!def) throw new Error(`no current node descriptor for type "${nodeTypeId}"`);
+    return this.addNodeFromDescriptor(def, pos, idOverride);
+  }
+
+  private addNodeExact(ref: ExactNodeTypeRef, pos: WorkspaceNodePosition, idOverride?: string): string {
+    return this.addNodeFromDescriptor(this.requireNodeDescriptor(ref), pos, idOverride);
+  }
+
+  private addNodeFromDescriptor(def: AppNodeDescriptor, pos: WorkspaceNodePosition, idOverride?: string): string {
+    const nodeTypeId = def.definitionRef.nodeTypeId;
     const id = idOverride ?? `${nodeTypeId}-${++this.nodeSeq}`;
     const parent = this.store.state.graphPath;
     const node: GraphDocumentNode = { id, definitionRef: def.definitionRef, label: def.label, parent };
+    const assetEntry = this.nodeLibrary.assetSnapshot().assets.getExact(def.definitionRef);
+    let assetRecord: WorkspaceNodeAssetRecord | undefined;
+    if (assetEntry?.source.kind === "embedded") {
+      assetRecord = { kind: "embedded", definition: assetEntry.definition };
+    } else if (assetEntry) {
+      assetRecord = {
+        kind: "linked",
+        sourceId: assetEntry.source.sourceId,
+        assetRef: {
+          assetId: assetEntry.definition.assetId,
+          assetVersion: assetEntry.definition.assetVersion,
+        },
+        nodeTypeRef: assetEntry.definition.nodeTypeRef,
+      };
+    }
     const nodes = [node];
     const positions: Record<string, WorkspaceNodePosition> = { [id]: pos };
     if (nodeTypeId === "subnet") {
@@ -202,12 +277,24 @@ export class Workspace {
       if (nodeTypeId === "subnet" && !this.graphRuntime.connectSubnetSeam(id)) {
         throw new Error(`graph runtime rejected subnet seam for "${id}"`);
       }
-      this.documentStore.setState((state) => ({
-        ...state,
-        nodes: { ...state.nodes, ...Object.fromEntries(nodes.map((added) => [added.id, added])) },
-        positions: { ...state.positions, ...positions },
-        selectedNodeId: id,
-      }));
+      this.documentStore.setState((state) => {
+        let nodeAssets = state.nodeAssets;
+        if (assetRecord) {
+          const assetRef = assetRecord.kind === "linked" ? assetRecord.nodeTypeRef : assetRecord.definition.nodeTypeRef;
+          const alreadyRecorded = state.nodeAssets.some((record) => {
+            const ref = record.kind === "linked" ? record.nodeTypeRef : record.definition.nodeTypeRef;
+            return ref.nodeTypeId === assetRef.nodeTypeId && ref.nodeTypeVersion === assetRef.nodeTypeVersion;
+          });
+          if (!alreadyRecorded) nodeAssets = [...nodeAssets, assetRecord];
+        }
+        return {
+          ...state,
+          nodeAssets,
+          nodes: { ...state.nodes, ...Object.fromEntries(nodes.map((added) => [added.id, added])) },
+          positions: { ...state.positions, ...positions },
+          selectedNodeId: id,
+        };
+      });
     } catch (error) {
       for (let index = registered.length - 1; index >= 0; index -= 1) {
         this.graphRuntime.removeNode(registered[index]);
@@ -215,6 +302,96 @@ export class Workspace {
       throw error;
     }
     return id;
+  }
+
+  createNodeAssetDraft(options: {
+    assetId: string;
+    assetVersion: string;
+    title: string;
+    parameters?: readonly NodeAssetParameterDraftBinding[];
+    visibility?: NodeAssetDefinition["visibility"];
+  }): NodeAssetDefinition {
+    const state = this.store.state;
+    let selectedNodeIds = state.selectedNodeIds;
+    if (selectedNodeIds.length === 0 && state.selectedNodeId) selectedNodeIds = [state.selectedNodeId];
+    return createNodeAssetDraftFromSubgraph({
+      ...options,
+      selectedNodeIds,
+      nodes: state.nodes,
+      edges: state.edges,
+      resolveDefinition: (ref) => this.nodeLibrary.getSpecExact(ref)?.definition,
+      parameters: options.parameters ?? [],
+    });
+  }
+
+  editNodeAssetDefinition(nodeId: string, nextVersion: string, title?: string): NodeAssetDefinition {
+    const node = this.store.state.nodes[nodeId];
+    if (!node) throw new Error(`node "${nodeId}" is unavailable`);
+    const published = this.nodeLibrary.assetSnapshot().assets.getExact(node.definitionRef)?.definition;
+    if (!published) throw new Error(`node "${nodeId}" is not a resolved node asset instance`);
+    return draftNextNodeAssetVersion(published, nextVersion, title ? { title } : {});
+  }
+
+  publishNodeAssetDraft(
+    draft: NodeAssetDefinition,
+    options: {
+      disposition: "linked" | "embedded";
+      sourceId?: string;
+      includeFallback?: boolean;
+      position: WorkspaceNodePosition;
+    },
+  ): string {
+    const previousSnapshot = this.nodeLibrary.assetSnapshot();
+    const previousDocument = this.store.state;
+    const previousNodeSeq = this.nodeSeq;
+    let assets = previousSnapshot.assets;
+    let record: WorkspaceNodeAssetRecord;
+    let storedBytes: string | null = null;
+    if (options.disposition === "linked") {
+      const sourceId = options.sourceId ?? "user";
+      const source = assets.sources().find((candidate) => candidate.sourceId === sourceId);
+      if (!source) throw new Error(`node asset source "${sourceId}" is unavailable`);
+      if (source.kind === "user" && !this.deps.nodeAssetStorage) {
+        throw new Error("user node asset storage is unavailable");
+      }
+      assets = publishNodeAssetVersion(assets, sourceId, draft);
+      if (source.kind === "user") {
+        const nextSource = assets.sources().find((candidate) => candidate.sourceId === sourceId);
+        if (nextSource?.kind !== "user") throw new Error(`user node asset source "${sourceId}" disappeared`);
+        storedBytes = canonicalUserNodeAssetBytes(nextSource);
+      }
+      record = {
+        kind: "linked",
+        sourceId,
+        assetRef: { assetId: draft.assetId, assetVersion: draft.assetVersion },
+        nodeTypeRef: draft.nodeTypeRef,
+        ...(options.includeFallback ? { fallback: draft } : {}),
+      };
+    } else {
+      const current = assets.getCurrent(draft.assetId);
+      if (current && compareSemanticVersions(draft.assetVersion, current.definition.assetVersion) <= 0) {
+        throw new Error(
+          `published node asset version ${draft.assetVersion} must be newer than ${current.definition.assetVersion}`,
+        );
+      }
+      record = { kind: "embedded", definition: draft };
+    }
+    const records = [...this.store.state.nodeAssets, record];
+    const resolved = resolveWorkspaceNodeAssets(this.nodeLibrary.baseLibrary(), assets, records);
+    let id: string | null = null;
+    try {
+      this.nodeLibrary.replaceAssetSnapshot(resolved.snapshot);
+      id = this.addNodeExact(draft.nodeTypeRef, options.position);
+      this.documentStore.setState((state) => ({ ...state, nodeAssets: resolved.records }));
+      if (storedBytes !== null) this.deps.nodeAssetStorage!.replaceAtomically(storedBytes);
+      return id;
+    } catch (error) {
+      if (id) this.graphRuntime.removeNode(id);
+      this.documentStore.setState(() => previousDocument);
+      this.nodeLibrary.replaceAssetSnapshot(previousSnapshot);
+      this.nodeSeq = previousNodeSeq;
+      throw error;
+    }
   }
 
   removeNode(id: string): void {
@@ -252,11 +429,20 @@ export class Workspace {
     });
   }
 
-  connect(fromId: string, toId: string): boolean {
-    if (!this.canConnectWire(fromId, toId)) return false;
-    const kind = this.def(fromId)!.outKind;
+  connect(fromId: string, toId: string, fromPortId?: string | null, toPortId?: string | null): boolean {
+    if (!this.canConnectWire(fromId, toId, fromPortId, toPortId)) return false;
+    const source = this.def(fromId)!;
+    const target = this.def(toId)!;
+    const output = fromPortId ? source.outputPorts.find((port) => port.id === fromPortId) : source.outputPorts[0];
+    if (!output) return false;
+    const input = toPortId
+      ? target.inputPorts.find((port) => port.id === toPortId)!
+      : target.inputPorts.find((port) => port.kind === output.kind)!;
+    const kind = output.kind;
+    const fromPort = output.id;
+    const toPort = input.id;
     const id = `e${++this.edgeSeq}`;
-    const edge: GraphDocumentEdge = { id, from: fromId, to: toId, toPort: "in", kind };
+    const edge: GraphDocumentEdge = { id, from: fromId, fromPort, to: toId, toPort, kind };
     if (!this.graphRuntime.connect(edge)) return false;
     try {
       this.documentStore.setState((s) => ({ ...s, edges: { ...s.edges, [id]: edge } }));
@@ -305,16 +491,61 @@ export class Workspace {
    * `seedWorkspace`. Assumes the doc already passed {@link validateDoc}.
    */
   loadDocument(state: WorkspaceDocumentState): void {
-    this.graphRuntime.load(state);
+    const previousSnapshot = this.nodeLibrary.assetSnapshot();
+    const previousDocument = this.store.state;
+    const previousNodeSeq = this.nodeSeq;
+    const previousEdgeSeq = this.edgeSeq;
+    const resolvedAssets = resolveWorkspaceNodeAssets(
+      this.nodeLibrary.baseLibrary(),
+      previousSnapshot.assets,
+      state.nodeAssets,
+    );
+    const canonicalState = { ...state, nodeAssets: resolvedAssets.records };
+    let runtimeLoaded = false;
+    try {
+      this.nodeLibrary.replaceAssetSnapshot(resolvedAssets.snapshot);
+      this.graphRuntime.load(canonicalState);
+      runtimeLoaded = true;
 
-    // keep the id sequences ahead of every restored id so a subsequent addNode /
-    // connect can't mint a colliding id.
-    this.nodeSeq = Math.max(this.nodeSeq, maxSeq(Object.keys(state.nodes)));
-    this.edgeSeq = Math.max(this.edgeSeq, maxSeq(Object.keys(state.edges)));
+      // commit the document in one write — the store is the topology/presentation
+      // authority; the engine (above) is the cook authority.
+      this.documentStore.setState(() => ({ ...EMPTY, ...canonicalState }));
 
-    // commit the document in one write — the store is the topology/presentation
-    // authority; the engine (above) is the cook authority.
-    this.documentStore.setState(() => ({ ...EMPTY, ...state }));
+      // keep the id sequences ahead of every restored id so a subsequent
+      // addNode/connect can't mint a colliding id.
+      this.nodeSeq = Math.max(this.nodeSeq, maxSeq(Object.keys(canonicalState.nodes)));
+      this.edgeSeq = Math.max(this.edgeSeq, maxSeq(Object.keys(canonicalState.edges)));
+    } catch (error) {
+      const rollbackErrors: unknown[] = [];
+      if (runtimeLoaded) {
+        for (const id of Object.keys(canonicalState.nodes).toReversed()) {
+          try {
+            this.graphRuntime.removeNode(id);
+          } catch (rollbackError) {
+            rollbackErrors.push(rollbackError);
+          }
+        }
+      }
+      try {
+        this.nodeLibrary.replaceAssetSnapshot(previousSnapshot);
+      } catch (rollbackError) {
+        rollbackErrors.push(rollbackError);
+      }
+      try {
+        this.documentStore.setState(() => previousDocument);
+      } catch (rollbackError) {
+        rollbackErrors.push(rollbackError);
+      }
+      this.nodeSeq = previousNodeSeq;
+      this.edgeSeq = previousEdgeSeq;
+      if (rollbackErrors.length > 0) {
+        // eslint-disable-next-line preserve-caught-error -- AggregateError preserves activation plus rollback failures
+        throw new AggregateError([error, ...rollbackErrors], "Workspace document activation and rollback failed", {
+          cause: error,
+        });
+      }
+      throw error;
+    }
   }
 
   /* ── presentation actions ─────────────────────────────────────────── */
@@ -508,6 +739,7 @@ export class Workspace {
     resizing: string | null;
     /** node whose body fills the workspace (third dock adopter); esc exits */
     fullscreen: string | null;
+    assetAuthoring: { mode: "create" } | { mode: "edit"; nodeId: string } | null;
   }>({
     baseForm: "full",
     zoomForms: false,
@@ -515,10 +747,41 @@ export class Workspace {
     flipHide: null,
     resizing: null,
     fullscreen: null,
+    assetAuthoring: null,
   });
 
   setFullscreen(id: string | null): void {
     this.ui.setState((u) => ({ ...u, fullscreen: id }));
+  }
+
+  openNodeAssetAuthoring(): void {
+    this.ui.setState((state) => ({ ...state, assetAuthoring: { mode: "create" } }));
+  }
+
+  openSubnetAssetAuthoring(subnetId: string): void {
+    const childIds = Object.values(this.store.state.nodes)
+      .filter((node) => node.parent === subnetId && node.definitionRef.nodeTypeId !== "proxy")
+      .map((node) => node.id);
+    if (childIds.length === 0) throw new Error(`subnet "${subnetId}" has no authorable inner nodes`);
+    this.documentStore.setState((state) => ({
+      ...state,
+      selectedNodeId: childIds.length === 1 ? childIds[0] : null,
+      selectedNodeIds: childIds.length > 1 ? childIds : [],
+      selectedEdgeId: null,
+    }));
+    this.openNodeAssetAuthoring();
+  }
+
+  openNodeAssetEditor(nodeId: string): void {
+    const node = this.store.state.nodes[nodeId];
+    if (!node || !this.nodeLibrary.assetSnapshot().assets.getExact(node.definitionRef)) {
+      throw new Error(`node "${nodeId}" is not a resolved node asset instance`);
+    }
+    this.ui.setState((state) => ({ ...state, assetAuthoring: { mode: "edit", nodeId } }));
+  }
+
+  closeNodeAssetAuthoring(): void {
+    this.ui.setState((state) => ({ ...state, assetAuthoring: null }));
   }
 
   /** called by the canvas on zoom (zoomForms only); clears fresh (unlocked) form overrides on band change */

@@ -10,6 +10,7 @@ const library = createNativeAppNodeLibrary();
 
 function emptyState(): WorkspaceDocumentState {
   return {
+    nodeAssets: [],
     nodes: {},
     edges: {},
     positions: {},
@@ -80,6 +81,47 @@ function legacyV2() {
 }
 
 describe("WorkspaceStorage recovery contract", () => {
+  test("migrates v3 edges to explicit exact output ports and preserves the verified backup", () => {
+    const state = emptyState();
+    state.nodes.dataset = {
+      id: "dataset",
+      definitionRef: exactNodeTypeRef("dataset", "1.0.0"),
+      label: "Dataset",
+    };
+    state.nodes.count = {
+      id: "count",
+      definitionRef: exactNodeTypeRef("count", "1.0.0"),
+      label: "Count",
+    };
+    state.edges.e1 = {
+      id: "e1",
+      from: "dataset",
+      fromPort: "out",
+      to: "count",
+      toPort: "in",
+      kind: "pred",
+    };
+    const legacy = structuredClone(toPersistedDoc(state)) as unknown as {
+      version: number;
+      state: Record<string, unknown> & { edges: Record<string, Record<string, unknown>> };
+    };
+    legacy.version = 3;
+    delete legacy.state.nodeAssets;
+    delete legacy.state.edges.e1.fromPort;
+    const raw = JSON.stringify(legacy);
+    const storage = new MemoryStorage({ active: raw });
+
+    const loaded = loadFromStorage(storage, "active", library);
+
+    expect(loaded.kind).toBe("ok");
+    if (loaded.kind !== "ok") throw new Error(loaded.kind);
+    const datasetOutput = library.getSpecExact(exactNodeTypeRef("dataset", "1.0.0"))?.definition.outputs[0]?.id;
+    if (!datasetOutput) throw new Error("dataset output unavailable");
+    expect(loaded.state.edges.e1?.fromPort).toBe(datasetOutput);
+    expect(storage.bytes["active.backup.v3"]).toBe(raw);
+    expect(JSON.parse(storage.bytes.active).version).toBe(4);
+  });
+
   test("multiple session keys never cross-read or cross-write", () => {
     const storage = new MemoryStorage();
     const first = emptyState();
@@ -142,7 +184,7 @@ describe("WorkspaceStorage recovery contract", () => {
     expect(storage.writes).toEqual(["active.backup.v2", "active"]);
     expect(storage.bytes["active.backup.v2"]).toBe(raw);
     expect(JSON.parse(storage.bytes.active)).toMatchObject({
-      version: 3,
+      version: 4,
       state: {
         selectedNodeId: "dataset",
         selectedNodeIds: ["dataset"],
@@ -204,7 +246,7 @@ describe("WorkspaceStorage recovery contract", () => {
       label: "Dataset",
       config: { version: nodeConfigVersion(1), value: { datasetKey: null } },
     };
-    state.edges.edge = { id: "edge", from: "dataset", to: "missing", toPort: "in", kind: "pred" };
+    state.edges.edge = { id: "edge", from: "dataset", fromPort: "out", to: "missing", toPort: "in", kind: "pred" };
     state.positions.missing = { x: 10, y: 20 };
     state.sizeOverrides.missing = { card: { w: 310, h: 190 }, full: { w: 700, h: 420 } };
     state.formOverride.missing = "full";
@@ -254,18 +296,18 @@ describe("WorkspaceStorage recovery contract", () => {
       definitionRef: exactNodeTypeRef("proxy", "1.0.0"),
       label: "B",
     };
-    state.edges.forward = { id: "forward", from: "a", to: "b", toPort: "in", kind: "pred" };
-    state.edges.reverse = { id: "reverse", from: "b", to: "a", toPort: "in", kind: "pred" };
+    state.edges.forward = { id: "forward", from: "a", fromPort: "out", to: "b", toPort: "in", kind: "pred" };
+    state.edges.reverse = { id: "reverse", from: "b", fromPort: "out", to: "a", toPort: "in", kind: "pred" };
 
-    const v3Raw = JSON.stringify(toPersistedDoc(state));
-    const v3Storage = new MemoryStorage({ active: v3Raw });
-    expect(loadFromStorage(v3Storage, "active", library)).toMatchObject({
+    const v4Raw = JSON.stringify(toPersistedDoc(state));
+    const v4Storage = new MemoryStorage({ active: v4Raw });
+    expect(loadFromStorage(v4Storage, "active", library)).toMatchObject({
       kind: "recovery",
       stage: "topology",
       state: { edges: state.edges },
     });
-    expect(v3Storage.bytes.active).toBe(v3Raw);
-    expect(v3Storage.writes).toEqual([]);
+    expect(v4Storage.bytes.active).toBe(v4Raw);
+    expect(v4Storage.writes).toEqual([]);
 
     const legacyState = {
       ...state,
@@ -306,9 +348,9 @@ describe("WorkspaceStorage recovery contract", () => {
     };
 
     for (const malformed of [
-      { id: "missing", from: "dataset", to: "ghost", toPort: "in", kind: "pred" as const },
-      { id: "port", from: "dataset", to: "count", toPort: "not-an-input", kind: "pred" as const },
-      { id: "kind", from: "dataset", to: "count", toPort: "in", kind: "sel" as const },
+      { id: "missing", from: "dataset", fromPort: "out", to: "ghost", toPort: "in", kind: "pred" as const },
+      { id: "port", from: "dataset", fromPort: "out", to: "count", toPort: "not-an-input", kind: "pred" as const },
+      { id: "kind", from: "dataset", fromPort: "out", to: "count", toPort: "in", kind: "sel" as const },
     ]) {
       state.edges = { [malformed.id]: malformed };
       const raw = JSON.stringify(toPersistedDoc(state));
@@ -330,6 +372,7 @@ describe("WorkspaceStorage recovery contract", () => {
     state.edges.future = {
       id: "future",
       from: "missing",
+      fromPort: "future-output",
       to: "missing",
       toPort: "future-port",
       kind: "focus",

@@ -59,8 +59,8 @@ function NdGraphNodeInner({ id, selected }: NodeProps<NdGraphNodeType>) {
     (s) => Object.values(s.edges).filter((e) => e.to === id && e.kind === "pred").length,
   );
   const unresolvedPorts = useWorkspaceSelector((state) => {
-    const incoming = Object.values(state.edges).find((edge) => edge.to === id)?.kind;
-    const outgoing = Object.values(state.edges).find((edge) => edge.from === id)?.kind;
+    const incoming = Object.values(state.edges).find((edge) => edge.to === id);
+    const outgoing = Object.values(state.edges).find((edge) => edge.from === id);
     return { incoming, outgoing };
   });
   const feedback = useNodeFeedbackContext();
@@ -113,8 +113,22 @@ function NdGraphNodeInner({ id, selected }: NodeProps<NdGraphNodeType>) {
           actions={<NdIconButton icon="close" title="delete unresolved node" onClick={() => ws.removeNode(id)} />}
           portsSlot={
             <>
-              {unresolvedPorts.incoming ? <NdHandle nodeId={id} kind={unresolvedPorts.incoming} out={false} /> : null}
-              {unresolvedPorts.outgoing ? <NdHandle nodeId={id} kind={unresolvedPorts.outgoing} out /> : null}
+              {unresolvedPorts.incoming ? (
+                <NdHandle
+                  nodeId={id}
+                  portId={unresolvedPorts.incoming.toPort}
+                  kind={unresolvedPorts.incoming.kind}
+                  out={false}
+                />
+              ) : null}
+              {unresolvedPorts.outgoing ? (
+                <NdHandle
+                  nodeId={id}
+                  portId={unresolvedPorts.outgoing.fromPort}
+                  kind={unresolvedPorts.outgoing.kind}
+                  out
+                />
+              ) : null}
             </>
           }
         >
@@ -227,8 +241,19 @@ function NdGraphNodeInner({ id, selected }: NodeProps<NdGraphNodeType>) {
         data-nd-form="chip"
       >
         <span className="truncate font-mono text-[9.5px] text-text-muted">{node.label}</span>
-        {def.hasIn ? <NdHandle nodeId={id} kind={def.inKinds[0]} out={false} /> : null}
-        {def.hasOut ? <NdHandle nodeId={id} kind={def.outKind} out /> : null}
+        {def.inputPorts.map((port, index) => (
+          <NdHandle
+            key={`in:${port.id}`}
+            nodeId={id}
+            portId={port.id}
+            kind={port.kind}
+            out={false}
+            top={13 + index * 13}
+          />
+        ))}
+        {def.outputPorts.map((port, index) => (
+          <NdHandle key={`out:${port.id}`} nodeId={id} portId={port.id} kind={port.kind} out top={13 + index * 13} />
+        ))}
       </div>
     );
   }
@@ -267,6 +292,23 @@ function NdGraphNodeInner({ id, selected }: NodeProps<NdGraphNodeType>) {
         actions={
           <>
             <NodeDocButton definitionRef={node.definitionRef} compact={form === "chip"} />
+            {node.definitionRef.nodeTypeId.startsWith("asset/") ? (
+              <NdIconButton
+                icon="config"
+                title="edit node asset definition"
+                label={form === "chip" ? null : "edit definition"}
+                compact={form === "chip"}
+                onClick={() => ws.openNodeAssetEditor(id)}
+              />
+            ) : null}
+            {node.definitionRef.nodeTypeId === "subnet" ? (
+              <NdIconButton
+                icon="config"
+                title="create node asset from subnet contents"
+                compact={form === "chip"}
+                onClick={() => ws.openSubnetAssetAuthoring(id)}
+              />
+            ) : null}
             <FlagButton node={node} compact={form === "chip"} />
             {def.role === "view" && form !== "chip" ? <SyncGroupButton nodeId={id} /> : null}
             {hasBody && def.role === "view" ? (
@@ -293,7 +335,16 @@ function NdGraphNodeInner({ id, selected }: NodeProps<NdGraphNodeType>) {
         morphMs={resizing ? 0 : ND_TIMING.morphMs}
         portsSlot={
           <>
-            {def.hasIn ? <NdHandle nodeId={id} kind={def.inKinds[0]} out={false} /> : null}
+            {def.inputPorts.map((port, index) => (
+              <NdHandle
+                key={`in:${port.id}`}
+                nodeId={id}
+                portId={port.id}
+                kind={port.kind}
+                out={false}
+                top={13 + index * 14}
+              />
+            ))}
             {def.hasIn && fanIn > 1 ? (
               <span
                 className="font-hud absolute z-[8] rounded-[3px] border border-wire-pred/50 bg-muted px-1 text-[8.5px] text-wire-pred"
@@ -302,7 +353,16 @@ function NdGraphNodeInner({ id, selected }: NodeProps<NdGraphNodeType>) {
                 AND
               </span>
             ) : null}
-            {def.hasOut ? <NdHandle nodeId={id} kind={def.outKind} out /> : null}
+            {def.outputPorts.map((port, index) => (
+              <NdHandle
+                key={`out:${port.id}`}
+                nodeId={id}
+                portId={port.id}
+                kind={port.kind}
+                out
+                top={13 + index * 14}
+              />
+            ))}
           </>
         }
         style={

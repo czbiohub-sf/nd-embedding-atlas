@@ -7,6 +7,12 @@ import {
   type RowIndex,
 } from "@ndea/sdk";
 import {
+  instantiateNodeAssetExpansion,
+  type InstantiatedNodeAssetExpansion,
+  type NodeAssetExpansionDescriptor,
+} from "@/core/node-asset/compiler";
+import { nodeTypeRefForAsset } from "@/core/node-asset/library";
+import {
   patchNodeConfig,
   predicateSql,
   predicateSqls,
@@ -35,6 +41,7 @@ export interface GraphRuntimeNodeSpec {
 
 export interface GraphRuntimeNodeResolver {
   getSpecExact(ref: ExactNodeTypeRef): GraphRuntimeNodeSpec | undefined;
+  getAssetExpansionExact?(ref: ExactNodeTypeRef): NodeAssetExpansionDescriptor | undefined;
 }
 
 export interface GraphRuntimeDocumentPort {
@@ -100,8 +107,12 @@ export function validateGraphRuntimeTopology(topology: GraphRuntimeTopology, res
     const target = specs.get(edge.to);
     if (!source || !target) continue;
 
-    if (!source.definition.outputs.some((port) => port.kind === edge.kind)) {
-      throw new Error(`edge "${edge.id}" kind "${edge.kind}" has no compatible declared output`);
+    const output = source.definition.outputs.find((port) => port.id === edge.fromPort);
+    if (!output) throw new Error(`edge "${edge.id}" references undeclared output port "${edge.fromPort}"`);
+    if (output.kind !== edge.kind) {
+      throw new Error(
+        `edge "${edge.id}" kind "${edge.kind}" is incompatible with output port "${edge.fromPort}" kind "${output.kind}"`,
+      );
     }
     const input = target.definition.inputs.find((port) => port.id === edge.toPort);
     if (!input) throw new Error(`edge "${edge.id}" targets undeclared input port "${edge.toPort}"`);
@@ -111,9 +122,11 @@ export function validateGraphRuntimeTopology(topology: GraphRuntimeTopology, res
       );
     }
 
-    const wireKey = `${edge.from}\u0000${edge.to}`;
+    const wireKey = `${edge.from}\u0000${edge.fromPort}\u0000${edge.to}\u0000${edge.toPort}`;
     if (resolvedWires.has(wireKey)) {
-      throw new Error(`graph topology duplicates resolved wire "${edge.from}" -> "${edge.to}"`);
+      throw new Error(
+        `graph topology duplicates resolved wire "${edge.from}:${edge.fromPort}" -> "${edge.to}:${edge.toPort}"`,
+      );
     }
     resolvedWires.add(wireKey);
 
@@ -140,6 +153,11 @@ export interface GraphRuntimeSessionOptions {
   readonly onFlush?: () => void;
 }
 
+interface AssetSinkRegistration {
+  readonly listener: (value: GraphPortValue) => void;
+  dispose: () => void;
+}
+
 /**
  * Owns the live evaluator, authored values, sinks, and checkpoint snapshots for
  * one graph document. The document owner remains responsible for committing
@@ -153,6 +171,9 @@ export class GraphRuntimeSession {
   private readonly frozenPredicates = new Map<string, Predicate>();
   private readonly frozenRows = new Map<string, RowIndex[] | null>();
   private readonly pendingNodes = new Map<string, GraphDocumentNode>();
+  private readonly runtimeNodes = new Map<string, GraphDocumentNode>();
+  private readonly assetExpansions = new Map<string, InstantiatedNodeAssetExpansion>();
+  private readonly assetSinks = new Map<string, AssetSinkRegistration>();
 
   readonly telemetry: GraphEvaluationStore;
 
@@ -188,9 +209,27 @@ export class GraphRuntimeSession {
   registerNode(node: GraphDocumentNode): boolean {
     const spec = this.resolver.getSpecExact(node.definitionRef);
     if (!spec) return false;
+    const expansion = this.resolver.getAssetExpansionExact?.(node.definitionRef);
+    if (expansion) {
+      this.assertExpansionAcyclic(expansion, []);
+      const added: string[] = [];
+      try {
+        this.registerAssetExpansion(node, expansion, added);
+        return true;
+      } catch (error) {
+        if (this.registeredNodes.has(node.id)) this.removeNode(node.id, true);
+        else for (let index = added.length - 1; index >= 0; index -= 1) this.removeRuntimeNode(added[index]);
+        throw error;
+      }
+    }
+    this.registerRuntimeNode(node, spec);
+    return true;
+  }
+
+  private registerRuntimeNode(node: GraphDocumentNode, spec: GraphRuntimeNodeSpec): void {
     const host: GraphNodeCookHost = {
       id: node.id,
-      node: () => this.pendingNodes.get(node.id) ?? this.document.node(node.id),
+      node: () => this.pendingNodes.get(node.id) ?? this.runtimeNodes.get(node.id) ?? this.document.node(node.id),
       frozenPredicate: () =>
         this.frozenPredicates.has(node.id) ? (this.frozenPredicates.get(node.id) ?? null) : undefined,
     };
@@ -200,18 +239,83 @@ export class GraphRuntimeSession {
       cook: (inputs, context) => spec.cook(inputs, host, context),
     });
     this.registeredNodes.add(node.id);
-    return true;
+    this.runtimeNodes.set(node.id, node);
   }
 
-  removeNode(id: string): void {
+  removeNode(id: string, preserveSink = false): void {
+    if (!preserveSink) this.clearAssetSink(id);
+    const expansion = this.assetExpansions.get(id);
+    if (expansion) {
+      for (const node of expansion.nodes) {
+        if (this.assetExpansions.has(node.id)) this.removeNode(node.id, preserveSink);
+        else this.removeRuntimeNode(node.id);
+      }
+      this.assetExpansions.delete(id);
+      this.registeredNodes.delete(id);
+      return;
+    }
+    this.removeRuntimeNode(id);
+  }
+
+  private removeRuntimeNode(id: string): void {
     this.evaluator.removeNode(id);
     this.registeredNodes.delete(id);
+    this.runtimeNodes.delete(id);
     this.frozenPredicates.delete(id);
     this.frozenRows.delete(id);
   }
 
-  canConnect(fromId: string, toId: string, nodes?: Readonly<Record<string, GraphDocumentNode>>): boolean {
-    const endpoint = this.evaluationEndpoints(fromId, toId, nodes);
+  private registerAssetExpansion(
+    outer: GraphDocumentNode,
+    descriptor: NodeAssetExpansionDescriptor,
+    added: string[],
+  ): void {
+    const parameters = outer.config?.value ?? {};
+    const expansion = instantiateNodeAssetExpansion(descriptor, outer.id, parameters);
+    this.assetExpansions.set(outer.id, expansion);
+    this.registeredNodes.add(outer.id);
+    for (const expanded of expansion.nodes) {
+      const nested = expanded.boundary ? undefined : this.resolver.getAssetExpansionExact?.(expanded.definitionRef);
+      if (nested) {
+        this.registerAssetExpansion(expanded, nested, added);
+        continue;
+      }
+      this.registerRuntimeNode(expanded, expanded.runtimeSpec);
+      added.push(expanded.id);
+    }
+    for (const edge of expansion.edges) {
+      if (!this.evaluator.connect(this.evaluationEdge(edge))) {
+        throw new Error(`graph runtime rejected expanded edge "${edge.id}"`);
+      }
+    }
+  }
+
+  private assertExpansionAcyclic(descriptor: NodeAssetExpansionDescriptor, trace: readonly string[]): void {
+    const key = `${descriptor.definition.assetId}@${descriptor.definition.assetVersion}`;
+    const cycleAt = trace.indexOf(key);
+    if (cycleAt >= 0) {
+      throw new Error(`recursive node asset expansion: ${[...trace.slice(cycleAt), key].join(" -> ")}`);
+    }
+    for (const dependency of descriptor.definition.dependencies) {
+      if (dependency.kind !== "asset") continue;
+      const nested = this.resolver.getAssetExpansionExact?.(nodeTypeRefForAsset(dependency.assetRef));
+      if (!nested) {
+        throw new Error(
+          `node asset expansion dependency "${dependency.assetRef.assetId}@${dependency.assetRef.assetVersion}" is unavailable`,
+        );
+      }
+      this.assertExpansionAcyclic(nested, [...trace, key]);
+    }
+  }
+
+  canConnect(
+    fromId: string,
+    toId: string,
+    nodes?: Readonly<Record<string, GraphDocumentNode>>,
+    fromPort = "out",
+    toPort = "in",
+  ): boolean {
+    const endpoint = this.evaluationEndpoints(fromId, toId, nodes, fromPort, toPort);
     return this.evaluator.canConnect(endpoint);
   }
 
@@ -260,23 +364,94 @@ export class GraphRuntimeSession {
     }
   }
 
+  /** Reconciles asset expansions and definitions that returned after document load. */
+  refreshResolutions(topology: GraphRuntimeTopology): void {
+    validateGraphRuntimeTopology(topology, this.resolver);
+    const rebuild = Object.values(topology.nodes)
+      .filter((node) => this.registeredNodes.has(node.id) && this.assetExpansions.has(node.id))
+      .map((node) => node.id);
+    for (const id of rebuild.toReversed()) this.removeNode(id, true);
+    const added: string[] = [];
+    try {
+      for (const node of Object.values(topology.nodes)) {
+        if (this.registeredNodes.has(node.id) || !this.registerNode(node)) continue;
+        added.push(node.id);
+      }
+      const addedSet = new Set(added);
+      for (const edge of Object.values(topology.edges)) {
+        if (!addedSet.has(edge.from) && !addedSet.has(edge.to)) continue;
+        if (!this.edgeIsResolved(edge, topology.nodes)) continue;
+        if (!this.evaluator.connect(this.evaluationEdge(edge, topology.nodes))) {
+          throw new Error(`graph runtime rejected restored edge "${edge.id}"`);
+        }
+      }
+      for (const id of added) {
+        if (!topology.flags[id]?.bypass) continue;
+        this.setBypass(id, true);
+      }
+      for (const id of added) this.rebindAssetSink(id);
+    } catch (error) {
+      for (let index = added.length - 1; index >= 0; index -= 1) this.removeNode(added[index], true);
+      throw error;
+    }
+  }
+
   connectSubnetSeam(subnetId: string): boolean {
     return this.evaluator.connect({ from: `${subnetId}-out`, to: subnetId, toPort: "in" });
   }
 
   pull(id: string): GraphPortValue {
-    return this.evaluator.pull(id);
+    return this.evaluator.pull(this.primaryOutputNodeId(id));
   }
 
   registerSink(id: string, listener: (value: GraphPortValue) => void): () => void {
-    return this.evaluator.registerSink(id, listener);
+    if (!this.assetExpansions.has(id)) return this.evaluator.registerSink(id, listener);
+    this.clearAssetSink(id);
+    const registration: AssetSinkRegistration = {
+      listener,
+      dispose: this.evaluator.registerSink(this.primaryOutputNodeId(id), listener),
+    };
+    this.assetSinks.set(id, registration);
+    return () => {
+      if (this.assetSinks.get(id) !== registration) return;
+      registration.dispose();
+      this.assetSinks.delete(id);
+    };
   }
 
   markDirty(id: string): void {
-    this.evaluator.markDirty(id);
+    const expansion = this.assetExpansions.get(id);
+    if (!expansion) {
+      this.evaluator.markDirty(id);
+      return;
+    }
+    for (const node of expansion.nodes) this.markDirty(node.id);
   }
 
   recookNode(node: GraphDocumentNode): void {
+    if (this.assetExpansions.has(node.id)) {
+      const previous = this.document.node(node.id);
+      if (!previous) throw new Error(`node "${node.id}" is unavailable`);
+      const incident = this.document.edges().filter((edge) => edge.from === node.id || edge.to === node.id);
+      this.removeNode(node.id, true);
+      try {
+        this.registerNode(node);
+        for (const edge of incident) {
+          if (!this.edgeIsResolved(edge)) continue;
+          if (!this.connect(edge)) throw new Error(`graph runtime rejected restored edge "${edge.id}"`);
+        }
+        this.rebindAssetSink(node.id);
+      } catch (error) {
+        if (this.registeredNodes.has(node.id)) this.removeNode(node.id, true);
+        this.registerNode(previous);
+        for (const edge of incident) {
+          if (this.edgeIsResolved(edge)) this.connect(edge);
+        }
+        this.rebindAssetSink(node.id);
+        throw error;
+      }
+      return;
+    }
     this.pendingNodes.set(node.id, node);
     try {
       this.evaluator.markDirty(node.id);
@@ -286,7 +461,15 @@ export class GraphRuntimeSession {
   }
 
   setBypass(id: string, enabled: boolean): void {
-    this.evaluator.setBypass(id, enabled);
+    const expansion = this.assetExpansions.get(id);
+    if (!expansion) {
+      this.evaluator.setBypass(id, enabled);
+      return;
+    }
+    for (const node of expansion.nodes) {
+      if (this.assetExpansions.has(node.id)) this.setBypass(node.id, enabled);
+      else this.evaluator.setBypass(node.id, enabled);
+    }
   }
 
   setTelemetryEnabled(enabled: boolean): void {
@@ -321,11 +504,12 @@ export class GraphRuntimeSession {
     const predicateInputs: Predicate[] = [];
     for (const edge of this.document.edges()) {
       if (edge.to !== id || !this.registeredNodes.has(edge.from)) continue;
+      const sourceId = this.outputNodeId(edge.from, edge.fromPort);
       if (edge.kind === "sel") {
-        const value = this.evaluator.getEmission(edge.from, AUTHORED_GRAPH_OUTPUT_PORT);
+        const value = this.evaluator.getEmission(sourceId, AUTHORED_GRAPH_OUTPUT_PORT) ?? this.evaluator.pull(sourceId);
         if (value?.kind === "sel") selection = value;
       } else {
-        predicateInputs.push(predicateSql(this.evaluator.pull(edge.from)));
+        predicateInputs.push(predicateSql(this.evaluator.pull(sourceId)));
       }
     }
     if (selection) return selection;
@@ -382,8 +566,12 @@ export class GraphRuntimeSession {
   }
 
   dispose(): void {
+    for (const registration of this.assetSinks.values()) registration.dispose();
+    this.assetSinks.clear();
     this.evaluator.dispose();
     this.registeredNodes.clear();
+    this.runtimeNodes.clear();
+    this.assetExpansions.clear();
     this.frozenPredicates.clear();
     this.frozenRows.clear();
     this.pendingNodes.clear();
@@ -402,20 +590,56 @@ export class GraphRuntimeSession {
     fromId: string,
     toId: string,
     nodes?: Readonly<Record<string, GraphDocumentNode>>,
+    fromPort = "out",
+    toPort = "in",
   ): { from: string; to: string } {
+    const sourceExpansion = this.assetExpansions.get(fromId);
+    const source = sourceExpansion
+      ? (sourceExpansion.outputNodeIds[fromPort] ?? Object.values(sourceExpansion.outputNodeIds)[0] ?? fromId)
+      : fromId;
+    const targetExpansion = this.assetExpansions.get(toId);
+    if (targetExpansion) {
+      return { from: source, to: targetExpansion.inputNodeIds[toPort] ?? toId };
+    }
     const target = nodes?.[toId] ?? this.document.node(toId);
-    return { from: fromId, to: target?.definitionRef.nodeTypeId === "subnet" ? `${toId}-in` : toId };
+    return { from: source, to: target?.definitionRef.nodeTypeId === "subnet" ? `${toId}-in` : toId };
   }
 
   private evaluationEdge(
     edge: GraphDocumentEdge,
     nodes?: Readonly<Record<string, GraphDocumentNode>>,
   ): GraphEvaluationEdge {
-    const endpoint = this.evaluationEndpoints(edge.from, edge.to, nodes);
+    const sourceIsAsset = this.assetExpansions.has(edge.from);
+    const endpoint = this.evaluationEndpoints(edge.from, edge.to, nodes, edge.fromPort, edge.toPort);
     return {
       ...endpoint,
-      fromPort: edge.kind === "pred" ? DERIVED_GRAPH_OUTPUT_PORT : AUTHORED_GRAPH_OUTPUT_PORT,
-      toPort: edge.toPort,
+      fromPort: sourceIsAsset || edge.kind === "pred" ? DERIVED_GRAPH_OUTPUT_PORT : AUTHORED_GRAPH_OUTPUT_PORT,
+      toPort: this.assetExpansions.has(edge.to) ? "in" : edge.toPort,
     };
+  }
+
+  private primaryOutputNodeId(id: string): string {
+    return this.outputNodeId(id);
+  }
+
+  private outputNodeId(id: string, portId?: string): string {
+    const expansion = this.assetExpansions.get(id);
+    return expansion
+      ? ((portId ? expansion.outputNodeIds[portId] : undefined) ?? Object.values(expansion.outputNodeIds)[0] ?? id)
+      : id;
+  }
+
+  private rebindAssetSink(id: string): void {
+    const registration = this.assetSinks.get(id);
+    if (!registration) return;
+    registration.dispose();
+    registration.dispose = this.evaluator.registerSink(this.primaryOutputNodeId(id), registration.listener);
+  }
+
+  private clearAssetSink(id: string): void {
+    const registration = this.assetSinks.get(id);
+    if (!registration) return;
+    registration.dispose();
+    this.assetSinks.delete(id);
   }
 }

@@ -1,11 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
 import { workspaceSurfacePolicy } from "./WorkspaceShell";
-import { initializeWorkspaceDocument } from "./workspace-context";
+import { applyNodeAssetRecovery, initializeWorkspaceDocument } from "./workspace-context";
 import type { WorkspaceDocumentState } from "./types";
 
 function emptyState(): WorkspaceDocumentState {
   return {
+    nodeAssets: [],
     nodes: {},
     edges: {},
     positions: {},
@@ -77,6 +78,31 @@ describe("workspace recovery policy", () => {
       mountStatusBar: true,
       mountBodies: true,
       installAuthoringListeners: true,
+    });
+  });
+
+  test("node asset storage corruption enters recovery without hiding document failures", () => {
+    const assetFailure = {
+      kind: "recovery" as const,
+      error: "invalid user asset JSON",
+      raw: "{broken",
+      source: { sourceId: "user", kind: "user" as const, assets: [] },
+    };
+    expect(applyNodeAssetRecovery({ mode: "writable", errors: [] }, assetFailure)).toEqual({
+      mode: "recovery",
+      stage: "config",
+      errors: ["user node asset storage: invalid user asset JSON"],
+    });
+    expect(
+      applyNodeAssetRecovery(
+        { mode: "recovery", stage: "topology", errors: ["graph cycle"], recoveryState: emptyState() },
+        assetFailure,
+      ),
+    ).toEqual({
+      mode: "recovery",
+      stage: "topology",
+      errors: ["graph cycle", "user node asset storage: invalid user asset JSON"],
+      recoveryState: emptyState(),
     });
   });
 });

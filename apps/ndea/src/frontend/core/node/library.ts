@@ -21,7 +21,9 @@ export interface AppNodeSpec {
   readonly role: GraphNodeRole;
   readonly evaluationRole: "source" | "transform" | "view";
   readonly cook: GraphNodeCookFunction;
-  readonly source: NodeContributionSource;
+  readonly source:
+    | NodeContributionSource
+    | { readonly kind: "asset"; readonly sourceId: string; readonly sourceKind: "project" | "user" | "embedded" };
   readonly geometry: NativeNodeGeometry;
   readonly body?: "card-and-full" | "full-only";
   readonly stage: "stageable" | "pin-only" | "canvas-only";
@@ -42,7 +44,10 @@ export interface AppNodeDescriptor {
   readonly hasIn: boolean;
   readonly hasOut: boolean;
   readonly outKind: NdPortKind;
+  readonly outPortId: string;
+  readonly outputPorts: readonly { readonly id: string; readonly kind: NdPortKind }[];
   readonly inKinds: readonly NdPortKind[];
+  readonly inputPorts: readonly { readonly id: string; readonly kind: NdPortKind }[];
   readonly stage: "stageable" | "pin-only" | "canvas-only";
   readonly inPalette: boolean;
 }
@@ -140,7 +145,14 @@ export function nodeDescriptorOf(spec: AppNodeSpec): AppNodeDescriptor {
     hasIn: spec.definition.inputs.length > 0,
     hasOut: spec.definition.outputs.length > 0,
     outKind: outputPortKindOf(spec),
+    outPortId: spec.definition.outputs[0]?.id ?? "out",
+    outputPorts: Object.freeze(
+      spec.definition.outputs.map((port) => Object.freeze({ id: port.id, kind: port.kind as NdPortKind })),
+    ),
     inKinds: Object.freeze(inputPortKindsOf(spec)),
+    inputPorts: Object.freeze(
+      spec.definition.inputs.map((port) => Object.freeze({ id: port.id, kind: port.kind as NdPortKind })),
+    ),
     stage: spec.stage,
     inPalette: spec.inPalette,
   });

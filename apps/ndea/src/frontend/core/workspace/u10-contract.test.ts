@@ -31,6 +31,7 @@ const datasetRef = exactNodeTypeRef("dataset", "1.0.0");
 
 function emptyState(): WorkspaceDocumentState {
   return {
+    nodeAssets: [],
     nodes: {},
     edges: {},
     positions: {},
@@ -91,7 +92,7 @@ function versionedDefinition(nodeTypeVersion: string, sql: string) {
 }
 
 describe("U10 exact-reference persistence contract", () => {
-  test("1. v3 writes exact refs, versioned configs, canonical editor names, and numeric focus only", () => {
+  test("1. v4 writes exact refs, versioned configs, canonical editor names, and numeric focus only", () => {
     const state = emptyState();
     state.nodes.d1 = {
       id: "d1",
@@ -105,7 +106,7 @@ describe("U10 exact-reference persistence contract", () => {
 
     const raw = JSON.stringify(toPersistedDoc(state));
     expect(JSON.parse(raw)).toEqual({
-      version: 3,
+      version: 4,
       state: expect.objectContaining({
         nodes: {
           d1: {
@@ -124,7 +125,7 @@ describe("U10 exact-reference persistence contract", () => {
     for (const retired of ['"type"', '"kind"', '"pluginId"', '"selection"', '"selSet"', '"selectedEdge"']) {
       expect(raw).not.toContain(retired);
     }
-    expect(DOC_VERSION).toBe(3);
+    expect(DOC_VERSION).toBe(4);
   });
 
   test("2. two exact versions coexist, execute exactly, and current placement chooses current", () => {
@@ -197,12 +198,13 @@ describe("U10 exact-reference persistence contract", () => {
     (legacy.state.edges as Record<string, unknown>).e1 = {
       id: "e1",
       from: "d1",
+      fromPort: "selection-out",
       to: "viewer",
       toPort: "highlight-in",
       kind: "focus",
     };
     const out = migrate(legacy, library);
-    expect(out.version).toBe(3);
+    expect(out.version).toBe(4);
     expect(out.state.nodes.d1).toEqual({
       id: "d1",
       definitionRef: exactNodeTypeRef("transform-filter", "1.0.0"),
@@ -280,7 +282,7 @@ describe("U10 exact-reference persistence contract", () => {
     };
     expect(loadFromStorage(storage, "active", library).kind).toBe("ok");
     expect(storage.bytes["active.backup.v2"]).toBe(raw);
-    expect(JSON.parse(storage.bytes.active).version).toBe(3);
+    expect(JSON.parse(storage.bytes.active).version).toBe(4);
     expect(writes).toEqual(["active.backup.v2", "active"]);
   });
 
@@ -307,7 +309,7 @@ describe("U10 exact-reference persistence contract", () => {
       config: { version: nodeConfigVersion(17), value: { opaque: [1, null, "x"] } },
     };
     state.nodes.x1 = unavailable;
-    state.edges.e1 = { id: "e1", from: "x1", to: "x1", toPort: "in", kind: "pred" };
+    state.edges.e1 = { id: "e1", from: "x1", fromPort: "out", to: "x1", toPort: "in", kind: "pred" };
     state.positions.x1 = { x: 10, y: 20 };
     state.selectedNodeId = "x1";
     const decoded = fromPersistedDoc(toPersistedDoc(state), library);

@@ -13,7 +13,15 @@ import { useWorkspace } from "../workspace-context";
 
 const LEGAL_RING = "0 0 0 2.5px oklch(0.69 0.19 170 / 55%), 0 0 10px oklch(0.69 0.19 170 / 45%)";
 
-export function NdHandle({ nodeId, kind, out }: { nodeId: string; kind: NdPortKind; out: boolean }) {
+interface NdHandleProps {
+  readonly nodeId: string;
+  readonly portId?: string;
+  readonly kind: NdPortKind;
+  readonly out: boolean;
+  readonly top?: number;
+}
+
+export function NdHandle({ nodeId, portId, kind, out, top = 13 }: NdHandleProps): React.ReactElement {
   const ws = useWorkspace();
   const spec = ND_PORT_KINDS[kind];
   const conn = useConnection();
@@ -22,7 +30,7 @@ export function NdHandle({ nodeId, kind, out }: { nodeId: string; kind: NdPortKi
   let opacity = 1;
   if (conn.inProgress && conn.fromNode) {
     if (!out) {
-      if (ws.canConnectWire(conn.fromNode.id, nodeId)) ring = LEGAL_RING;
+      if (ws.canConnectWire(conn.fromNode.id, nodeId, conn.fromHandle?.id, portId)) ring = LEGAL_RING;
       else opacity = 0.3;
     } else if (conn.fromNode.id === nodeId) {
       ring = `0 0 0 2.5px color-mix(in oklab, ${spec.color} 33%, transparent)`;
@@ -40,13 +48,13 @@ export function NdHandle({ nodeId, kind, out }: { nodeId: string; kind: NdPortKi
     <Handle
       type={out ? "source" : "target"}
       position={out ? Position.Right : Position.Left}
-      id={out ? "out" : "in"}
+      id={portId ?? (out ? "out" : "in")}
       title={`${spec.label} ${out ? "out" : "in"}`}
       style={{
         width: 11,
         height: 11,
         boxSizing: "border-box",
-        top: 13,
+        top,
         [out ? "right" : "left"]: -6,
         background: out ? spec.color : "var(--card)",
         border: `1.5px solid ${spec.color}`,

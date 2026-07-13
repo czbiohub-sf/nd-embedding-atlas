@@ -380,6 +380,7 @@ describe("Workspace graph transactions", () => {
         [unknownEdgeId]: {
           id: unknownEdgeId,
           from: dataset,
+          fromPort: "out",
           to: unknownId,
           toPort: "in",
           kind: "pred" as const,
@@ -413,7 +414,7 @@ describe("Workspace graph transactions", () => {
       ...source.store.state,
       edges: {
         ...source.store.state.edges,
-        reverse: { id: "reverse", from: second, to: first, toPort: "in", kind: "pred" as const },
+        reverse: { id: "reverse", from: second, fromPort: "out", to: first, toPort: "in", kind: "pred" as const },
       },
     };
     const destination = createWorkspace();

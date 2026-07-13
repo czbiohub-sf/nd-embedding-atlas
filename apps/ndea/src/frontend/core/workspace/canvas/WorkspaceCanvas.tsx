@@ -50,6 +50,7 @@ import { AddNodeMenu, type AddMenuState } from "./AddNodeMenu";
 import { K1Cursor } from "./K1Cursor";
 import { KnifeLayer, useYHeld } from "./KnifeLayer";
 import { NdGraphNode, type NdGraphNodeType } from "./NdGraphNode";
+import { NodeAssetDialog } from "./NodeAssetDialog";
 import { NdWireEdge, type NdWireEdgeType } from "./NdWireEdge";
 import { portPos, resolveNodeSize } from "./port-positions";
 import { tidyLayout } from "./tidy";
@@ -110,6 +111,7 @@ function WorkspaceCanvasInner() {
   const selectedNodeIds = useWorkspaceSelector((s) => s.selectedNodeIds);
   const claimed = useWorkspaceSelector((s) => s.claimed);
   const baseForm = useSelector(ws.ui, (u) => u.baseForm);
+  const assetAuthoring = useSelector(ws.ui, (u) => u.assetAuthoring);
   // Derived ONCE here (the DFS), then shared with every node via context — a
   // per-node call would re-run it N times. Recomputes only on topology change.
   const feedbackChannels = useFeedbackChannels();
@@ -148,11 +150,11 @@ function WorkspaceCanvasInner() {
       .filter((e) => level.has(e.from) && level.has(e.to))
       .map((e) => ({
         id: e.id,
-        type: "ndwire" as const,
+        type: "ndwire",
         source: e.from,
-        sourceHandle: "out",
+        sourceHandle: e.fromPort,
         target: e.to,
-        targetHandle: "in",
+        targetHandle: e.toPort,
         data: { kind: e.kind },
         style: claimed ? { opacity: 0.25, transition: "opacity 200ms" } : undefined,
       }));
@@ -225,10 +227,16 @@ function WorkspaceCanvasInner() {
   );
 
   const isValidConnection: IsValidConnection = useCallback(
-    (conn) => Boolean(conn.source && conn.target && ws.canConnectWire(conn.source, conn.target)),
+    (conn) =>
+      Boolean(
+        conn.source && conn.target && ws.canConnectWire(conn.source, conn.target, conn.sourceHandle, conn.targetHandle),
+      ),
     [ws],
   );
-  const onConnect = useCallback((conn: Connection) => ws.connect(conn.source, conn.target), [ws]);
+  const onConnect = useCallback(
+    (conn: Connection) => ws.connect(conn.source, conn.target, conn.sourceHandle, conn.targetHandle),
+    [ws],
+  );
 
   const onSelectionChange = useCallback(
     ({ nodes: sel, edges: selEdges }: OnSelectionChangeParams) => {
@@ -468,12 +476,28 @@ function WorkspaceCanvasInner() {
               title="replace the selection with a subnet containing it"
               onClick={() => ws.collapseSelection()}
             />
+            <NdIconButton
+              icon="config"
+              label="create node asset"
+              title="publish the selection as a versioned declarative node asset"
+              onClick={() => ws.openNodeAssetAuthoring()}
+            />
             <span className="font-mono text-[9px] text-text-muted">esc clear</span>
           </div>
         ) : null}
         <K1Cursor paneRef={paneRef} />
         <KnifeLayer active={yHeld} />
         <AddNodeMenu menu={addMenu} onClose={() => setAddMenu(null)} />
+        {assetAuthoring ? (
+          <NodeAssetDialog
+            mode={assetAuthoring.mode}
+            nodeId={assetAuthoring.mode === "edit" ? assetAuthoring.nodeId : undefined}
+            open
+            onOpenChange={(open) => {
+              if (!open) ws.closeNodeAssetAuthoring();
+            }}
+          />
+        ) : null}
       </div>
     </FeedbackChannelsContext.Provider>
   );

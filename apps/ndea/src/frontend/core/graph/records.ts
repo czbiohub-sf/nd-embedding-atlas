@@ -17,6 +17,7 @@ export interface GraphDocumentNode {
 export interface GraphDocumentEdge {
   id: string;
   from: string;
+  fromPort: string;
   to: string;
   toPort: string;
   kind: PortKind;
