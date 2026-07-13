@@ -4,11 +4,11 @@
 import type { Command, CLI, GeneratedOptionMeta, RegisteredCommands, CommandOptions, GeneratedCommandMeta } from '@bunli/core'
 import { createGeneratedHelpers, registerGeneratedStore } from '@bunli/core'
 
-import Doctor from '../src/cli/commands/doctor.js'
-import Gc from '../src/cli/commands/gc.js'
-import Rollback from '../src/cli/commands/rollback.js'
-import Update from '../src/cli/commands/update.js'
-import View from '../src/cli/commands/view.js'
+import Doctor from '../apps/ndea/src/cli/commands/doctor.js'
+import Gc from '../apps/ndea/src/cli/commands/gc.js'
+import Rollback from '../apps/ndea/src/cli/commands/rollback.js'
+import Update from '../apps/ndea/src/cli/commands/update.js'
+import View from '../apps/ndea/src/cli/commands/view.js'
 
 // Narrow list of command names to avoid typeof-cycles in types
 const names = ['doctor', 'gc', 'rollback', 'update', 'view'] as const
@@ -30,7 +30,7 @@ const metadata: Record<GeneratedNames, GeneratedCommandMeta> = {
         'check-network': { type: 'z.coerce.boolean.default', required: true, hasDefault: true, default: false, description: 'Also probe manifest.json reachability over the network', schema: {"type":"zod","method":"default","args":[{"type":"unknown","raw":{"type":"BooleanLiteral","start":1280,"end":1285,"loc":{"start":{"line":34,"column":55,"index":1280},"end":{"line":34,"column":60,"index":1285}},"value":false}}]}, validator: '(val) => true' },
         'strict': { type: 'z.coerce.boolean.default', required: true, hasDefault: true, default: false, description: 'Treat soft warnings as errors (non-zero exit)', schema: {"type":"zod","method":"default","args":[{"type":"unknown","raw":{"type":"BooleanLiteral","start":1421,"end":1426,"loc":{"start":{"line":37,"column":46,"index":1421},"end":{"line":37,"column":51,"index":1426}},"value":false}}]}, validator: '(val) => true' }
       },
-      path: './src/cli/commands/doctor'
+      path: './apps/ndea/src/cli/commands/doctor'
     },
   'gc': {
       name: 'gc',
@@ -39,12 +39,12 @@ const metadata: Record<GeneratedNames, GeneratedCommandMeta> = {
         'keep': { type: 'z.coerce.number.int.min.default', required: true, hasDefault: true, default: 2, description: 'Number of versions to keep (active counts; default: 2)', min: 1, minLength: 1, schema: {"type":"zod","method":"default","args":[{"type":"unknown","raw":{"type":"NumericLiteral","start":1004,"end":1005,"loc":{"start":{"line":25,"column":56,"index":1004},"end":{"line":25,"column":57,"index":1005}},"extra":{"rawValue":2,"raw":"2"},"value":2}}]}, validator: '(val) => true' },
         'all': { type: 'z.coerce.boolean.default', required: true, hasDefault: true, default: false, description: 'Keep only the active version (overrides --keep)', schema: {"type":"zod","method":"default","args":[{"type":"unknown","raw":{"type":"BooleanLiteral","start":1138,"end":1143,"loc":{"start":{"line":28,"column":43,"index":1138},"end":{"line":28,"column":48,"index":1143}},"value":false}}]}, validator: '(val) => true' }
       },
-      path: './src/cli/commands/gc'
+      path: './apps/ndea/src/cli/commands/gc'
     },
   'rollback': {
       name: 'rollback',
       description: 'Switch the active ndea binary to the previous installed version',
-      path: './src/cli/commands/rollback'
+      path: './apps/ndea/src/cli/commands/rollback'
     },
   'update': {
       name: 'update',
@@ -54,7 +54,7 @@ const metadata: Record<GeneratedNames, GeneratedCommandMeta> = {
         'channel': { type: 'z.enum.optional', required: false, hasDefault: false, schema: {"type":"zod","method":"optional","args":[]}, validator: '(val) => true' },
         'no-gc': { type: 'z.coerce.boolean.default', required: true, hasDefault: true, default: false, schema: {"type":"zod","method":"default","args":[{"type":"unknown","raw":{"type":"BooleanLiteral","start":1925,"end":1930,"loc":{"start":{"line":52,"column":47,"index":1925},"end":{"line":52,"column":52,"index":1930}},"value":false}}]}, validator: '(val) => true' }
       },
-      path: './src/cli/commands/update'
+      path: './apps/ndea/src/cli/commands/update'
     },
   'view': {
       name: 'view',
@@ -64,9 +64,10 @@ const metadata: Record<GeneratedNames, GeneratedCommandMeta> = {
         'host': { type: 'z.string.optional', required: false, hasDefault: false, description: 'Server host (default: 127.0.0.1)', schema: {"type":"zod","method":"optional","args":[]}, validator: '(val) => true' },
         'no-open': { type: 'z.coerce.boolean.default', required: true, hasDefault: true, default: false, description: 'Do not auto-open the browser', schema: {"type":"zod","method":"default","args":[{"type":"unknown","raw":{"type":"BooleanLiteral","start":968,"end":973,"loc":{"start":{"line":25,"column":49,"index":968},"end":{"line":25,"column":54,"index":973}},"value":false}}]}, validator: '(val) => true' },
         'no-static': { type: 'z.coerce.boolean.default', required: true, hasDefault: true, default: false, description: 'Do not serve the frontend bundle (dev mode)', schema: {"type":"zod","method":"default","args":[{"type":"unknown","raw":{"type":"BooleanLiteral","start":1088,"end":1093,"loc":{"start":{"line":28,"column":51,"index":1088},"end":{"line":28,"column":56,"index":1093}},"value":false}}]}, validator: '(val) => true' },
-        'obs-columns': { type: 'z.string.optional', required: false, hasDefault: false, description: 'Comma-separated obs columns to include', schema: {"type":"zod","method":"optional","args":[]}, validator: '(val) => true' }
+        'obs-columns': { type: 'z.string.optional', required: false, hasDefault: false, description: 'Comma-separated obs columns to include', schema: {"type":"zod","method":"optional","args":[]}, validator: '(val) => true' },
+        'preset': { type: 'z.string.optional', required: false, hasDefault: false, description: 'Named preset a shipped build opens (default: annotate)', schema: {"type":"zod","method":"optional","args":[]}, validator: '(val) => true' }
       },
-      path: './src/cli/commands/view'
+      path: './apps/ndea/src/cli/commands/view'
     }
 } as const
 

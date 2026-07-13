@@ -29,7 +29,7 @@ This migration carries forward the local “extract after evidence” rule from 
 
 - R1. Root becomes a private Bun workspace over `apps/*` and `packages/*`, with one pinned Bun package manager, one workspace lock, one root Vite+ policy, and explicit workspace dependencies.
 - R2. `apps/ndea` remains the only product composition root: CLI, Bun.serve server, React shell, built-in nodes, static assets, and custom single-binary builder ship together.
-- R3. `@ndea/protocol`, `@ndea/zarr`, and `@ndea/plugin-sdk` expose narrow package entrypoints; no package imports from `apps/ndea` or another package's private source paths.
+- R3. `@ndea/protocol`, `@ndea/zarr`, and `@ndea/sdk` expose narrow package entrypoints; no package imports from `apps/ndea` or another package's private source paths.
 - R4. Runtime-specific TypeScript configs preserve browser, Bun/server, and runtime-neutral environments instead of sharing today's combined DOM/Bun/WebGPU type set.
 - R5. `docs/` remains an independent Bun/Waku project with its own lock, install, build, and Pages deployment; root workspace discovery and overrides exclude it.
 
@@ -79,7 +79,7 @@ flowchart TB
     App[apps/ndea\nCLI + server + frontend + built-ins + binary build]
     Protocol[packages/protocol\nZod wire contracts]
     Zarr[packages/zarr\nBun + Zarrita + DuckDB I/O]
-    SDK[packages/plugin-sdk\nnode author contract]
+    SDK[packages/sdk\nnode author contract]
     Future[future extensions/*\nnot created by this plan]
 
     Root --> App
@@ -136,7 +136,7 @@ Leaf extraction precedes relocation. This avoids changing package boundaries and
 │   │   ├── package.json
 │   │   ├── tsconfig.json
 │   │   └── src/
-│   └── plugin-sdk/
+│   └── sdk/
 │       ├── package.json
 │       ├── tsconfig.json
 │       └── src/
@@ -193,11 +193,11 @@ No empty `extensions/`, `extension-api`, `graph-runtime`, `server`, `web`, or `u
 - **Goal:** Make today's internal node author contract the first extension-ready package without freezing a general extension system.
 - **Requirements:** R3, R10, R11, R12, R13, R14.
 - **Dependencies:** U1.
-- **Files:** `packages/plugin-sdk/package.json`, `packages/plugin-sdk/tsconfig.json`, `packages/plugin-sdk/src/**`, `src/frontend/core/node/{sdk,types,host,json,version}.ts`, `src/frontend/core/node/registry.ts`, `src/frontend/core/workspace/descriptors.ts`, `src/frontend/core/workspace/nodes/index.ts`, `src/frontend/main.tsx`, `src/frontend/nodes/**`, node/registry tests under `src/frontend/core/node/**`.
+- **Files:** `packages/sdk/package.json`, `packages/sdk/tsconfig.json`, `packages/sdk/src/**`, `src/frontend/core/node/{sdk,types,host,json,version}.ts`, `src/frontend/core/node/registry.ts`, `src/frontend/core/workspace/descriptors.ts`, `src/frontend/core/workspace/nodes/index.ts`, `src/frontend/main.tsx`, `src/frontend/nodes/**`, node/registry tests under `src/frontend/core/node/**`.
 - **Approach:** Move only author-facing contracts. Replace app aliases and concrete GPU/service types with SDK-owned structural contracts or protocol imports. Declare every React, Zod, Mosaic, and protocol type visible in public declarations as a real dependency or peer. Keep registry, host construction, buses, workspace state, lazy view loading, and built-in implementations app-local. Make the app entrypoint register SDK consumers and built-ins through one idempotent bootstrap; reusable code stops importing the built-in catalog. Preserve node IDs, config versions, built-in-first conflict handling, registration order, and persisted document behavior.
 - **Patterns to follow:** Current node SDK compatibility version; local node anatomy requirements; OMP/Pi separation between public extension types and host composition; Pi's allowlisted exports.
 - **Test scenarios:**
-  1. Define a minimal node and descriptor through `@ndea/plugin-sdk`, then register and mount it through the app host.
+  1. Define a minimal node and descriptor through `@ndea/sdk`, then register and mount it through the app host.
   2. Reject incompatible SDK versions with the same diagnostic as today.
   3. Register every built-in exactly once in deterministic palette order; preserve persisted node IDs and config parsing.
   4. Import the SDK in isolation without registration side effects or resolution of app aliases, stores, components, registry singletons, or GPU implementations.
@@ -254,7 +254,7 @@ No empty `extensions/`, `extension-api`, `graph-runtime`, `server`, `web`, or `u
 
 - AE1. Given a contributor at repository root, when they run the current dev command with a Zarr path, then the same Bun backend and Vite frontend start with working API/WS proxies.
 - AE2. Given an app import of a shared schema, when Vite Task checks or tests transitively, then `@ndea/protocol` is discovered from the app's `workspace:*` dependency and runs before its dependent task.
-- AE3. Given a built-in node, when the app starts, then app composition registers it through `@ndea/plugin-sdk`; the SDK package never imports the built-in or app registry.
+- AE3. Given a built-in node, when the app starts, then app composition registers it through `@ndea/sdk`; the SDK package never imports the built-in or app registry.
 - AE4. Given a release checkout on a supported runner, when the custom build runs, then `dist/ndea` starts outside the repository, loads DuckDB and both workers, serves the embedded SPA, and returns a healthy API response.
 - AE5. Given clean product and docs checkouts, when each frozen install and build runs in its own dependency domain, then neither lock changes and both outputs remain stable.
 

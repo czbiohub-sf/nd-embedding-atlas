@@ -122,6 +122,24 @@ Then open **Chrome or Edge** at `http://localhost:5055`.
 - [WebGPU on HPC][webgpu-hpc] — Chrome flags for HPC systems
 - [Contributing][docs-contrib] — dev setup and contribution guide
 
+## Development
+
+This repository is a Bun and Vite+ monorepo. `apps/ndea` owns the shipped
+product; `packages/protocol`, `packages/sdk`, and `packages/zarr` expose its
+internal package boundaries. `docs` remains an independent Waku app.
+
+```bash
+bun install
+vp run dev path/to/data.zarr
+vp run -r check
+vp run -r test
+bun run check:boundaries
+vp run build
+```
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for focused package commands and
+documentation setup.
+
 ## What does the UI look like?
 
 <img width="1466" height="1083" alt="image" src="https://github.com/user-attachments/assets/9f70cbee-1853-445e-bb86-c9e5fdd143c1" />

@@ -1,0 +1,9 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ESNext", "DOM"],
+    "types": ["bun", "@webgpu/types"],
+    "rootDir": "src"
+  },
+  "include": ["src/**/*.ts"]
+}

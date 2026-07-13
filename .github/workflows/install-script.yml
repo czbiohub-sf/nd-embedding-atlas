@@ -129,19 +129,9 @@ jobs:
           test -d "$NDEA_HOME/versions/$PIN_TAG" || { echo "::error::missing versions dir"; exit 1; }
           test -x "$NDEA_HOME/versions/$PIN_TAG/ndea" || { echo "::error::ndea binary not executable"; exit 1; }
 
-      # Run --version through the symlink. Catches "binary downloaded but
-      # won't launch" regressions — particularly load-bearing on Rocky
-      # 8.10 (glibc 2.28, older than ubuntu-latest's build glibc) where
-      # this step proves the binary's symbol requirements are compatible.
-      #
-      # `continue-on-error` is here during the bundle-libduckdb migration:
-      # the rolling `canary` release still carries the pre-bundle binary
-      # (which expects a sibling libduckdb sidecar that install.sh no
-      # longer downloads), so `--version` fails until canary.yml
-      # republishes from main after this PR merges. Remove `continue-on-error`
-      # (and re-trigger this workflow) once the new canary binary is up.
+      # Run --version through the symlink. This blocks on launch failures,
+      # including glibc incompatibility on Rocky Linux 8.10.
       - name: ndea --version
-        continue-on-error: true
         env:
           NDEA_BIN_DIR: ${{ runner.temp }}/bin
         run: |

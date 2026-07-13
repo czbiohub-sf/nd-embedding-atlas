@@ -13,22 +13,37 @@ cd nd-embedding-atlas
 bun install
 ```
 
+The root install resolves `apps/*` and `packages/*`. Documentation has its
+own dependency graph and lockfile under `docs/`.
+
+## Workspace layout
+
+```text
+apps/ndea/         CLI, server, frontend, and binary builder
+packages/protocol/ Shared request and response schemas
+packages/sdk/      Node authoring and host contracts
+packages/zarr/     Bun-backed AnnData, MuData, and OME-Zarr I/O
+docs/              Independent Waku documentation app
+```
+
 ## Development workflow
 
 ```bash
 # Full dev stack (backend on :5055 + Vite frontend on :5173, with HMR)
 vp run dev path/to/data.zarr
 
-# Quality gates (typecheck + Oxlint + Oxfmt + bunli gen drift)
-vp check
+# Shared root tooling, then every workspace in dependency order
+vp check vite.config.ts bunli.config.ts scripts
+vp run -r check
+bun run check:boundaries
 
-# Tests (Bun-native .test.ts suites)
-bun test
+# Bun-native tests in every workspace
+vp run -r test
 
 # Production build — all-Bun (Bun.build frontend → single-file binary)
 vp run build    # or `bun run build`
 
-# Regenerate CLI completion metadata (after editing src/cli/commands/**)
+# Regenerate CLI completion metadata (after editing apps/ndea/src/cli/commands/**)
 vp run gen
 
 # Verify a built binary's install (paths, symlink, versions, manifest)
@@ -44,21 +59,30 @@ Enforced by `vp check`:
 - **TypeScript 6 strict** — no implicit any, `import type` for type-only imports
 - **Oxlint** + **Oxfmt** — config lives in `vite.config.ts`
 - 4-space indent, double quotes, trailing commas, semicolons
-- `@/` path alias → `src/frontend/`
+- `@/` path alias → `apps/ndea/src/frontend/`
+- Shared packages import only exported `@ndea/*` entrypoints; `bun run check:boundaries`
+  rejects package-to-app imports and relative
+  cross-workspace imports.
 
 ## Documentation
 
-User-facing docs live under `docs/` and are rendered by [zensical](https://zensical.org/) via the config at `zensical.toml`. To preview locally without installing Python tooling permanently:
+User-facing docs live under `docs/` as an independent
+[Waku](https://waku.gg/) app:
 
 ```bash
-uvx --from zensical zensical serve     # http://localhost:8000, live reload
-uvx --from zensical zensical build     # static output → site/ (gitignored)
-```
+# Production build from the repository root
+vp run docs:build
 
-`uvx` is part of [uv](https://docs.astral.sh/uv/) — install once via `brew install uv` or `curl -LsSf https://astral.sh/uv/install.sh | sh`. Zensical itself is fetched on demand and cached.
+# Local development inside the isolated docs package
+cd docs
+bun install --frozen-lockfile
+bun run dev
+```
 
 ## Pull requests
 
-`ci.yml` runs typecheck + lint + fmt + gen drift + bun test on push and PR. `zizmor.yml` audits workflow security. Both must pass before merge.
+`ci.yml` checks root tooling, workspace types, workspace boundaries, generated
+CLI metadata, Bun tests, and native binaries on push and PR. `docs.yml` builds
+the isolated docs app. `zizmor.yml` audits workflow security.
 
 For releases, see [`AGENTS.md`](./AGENTS.md#commands) — release tags trigger `release.yml`, push to main triggers `canary.yml` (rolling pre-release).

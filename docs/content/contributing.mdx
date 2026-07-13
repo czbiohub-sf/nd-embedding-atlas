@@ -18,7 +18,8 @@ cd nd-embedding-atlas
 bun install
 ```
 
-Backend and frontend share one `node_modules/`.
+The root install resolves product workspaces only. The docs app keeps its own
+lockfile and install under `docs/`.
 
 ## Development workflow
 
@@ -27,40 +28,42 @@ Backend and frontend share one `node_modules/`.
 vp run dev path/to/data.zarr
 ```
 
-Wraps `src/cli/index.ts view` (backend) and `vp dev` (frontend), with cross-filter cache invalidation over Mosaic's WS.
+The command starts `apps/ndea/src/cli/index.ts` and the app's Vite server.
 
 Frontend-only when the backend already runs separately:
 
 ```bash
-vp dev
+vp dev apps/ndea
 ```
 
 ## Quality gates
 
 ```bash
-vp check        # typecheck + Oxlint + Oxfmt + bunli gen drift
-bun test        # Bun-native .test.ts suites (server, cli, zarr)
-vp test         # vitest (frontend unit tests)
-vp run build    # full Bun build (frontend + single-file binary)
+vp check vite.config.ts bunli.config.ts scripts
+vp run -r check          # package checks in dependency order
+bun run check:boundaries # package direction and export contracts
+vp run -r test           # Bun-native suites per workspace
+vp run build             # frontend + single-file binary
 ```
 
-CI gates on `vp check` and the test suites (see `.github/workflows/ci.yml`).
+CI runs the same checks and tests, verifies generated CLI metadata, and builds
+the native binary matrix.
 
 ## Fallow (optional code-health audit)
 
 [Fallow](https://docs.fallow.tools/) flags dead code, duplication, complexity hotspots, and circular dependencies in TypeScript / JavaScript projects. Not a CI gate; run it on demand.
 
 ```bash
-vp run fallow audit --changed-since main   # scoped to your branch's diff
-vp run fallow dead-code                    # unused files, exports, deps
-vp run fallow dupes                        # repeated code blocks
-vp run fallow health                       # cyclomatic / cognitive complexity
-vp run fallow fix --dry-run                # preview auto-fixes (e.g. unused-export removal)
+bunx fallow audit --changed-since main   # scoped to your branch's diff
+bunx fallow dead-code                    # unused files, exports, deps
+bunx fallow dupes                        # repeated code blocks
+bunx fallow health                       # cyclomatic / cognitive complexity
+bunx fallow fix --dry-run                # preview auto-fixes
 ```
 
 When to reach for it:
 
-- **Before a non-trivial PR** — `vp run fallow audit --changed-since main` returns a verdict on the files you touched.
+- **Before a non-trivial PR** — `bunx fallow audit --changed-since main` returns a verdict on the files you touched.
 - **After merging a large feature** — catches dead code, orphaned exports, and duplication the review missed.
 - **Picking up unfamiliar code** — `dead-code` and `health` show which files are load-bearing vs. detritus.
 
@@ -73,25 +76,16 @@ Enforced by `vp check`:
 - **TypeScript 6 strict** — no implicit any, `import type` for type-only imports
 - **[Oxlint](https://oxc.rs/docs/guide/usage/linter.html)** + **[Oxfmt](https://oxc.rs/docs/guide/usage/formatter.html)** — config in `vite.config.ts` `lint` / `fmt` blocks
 - 4-space indent, double quotes, trailing commas, semicolons
-- `@/` path alias → `src/frontend/`
+- `@/` path alias → `apps/ndea/src/frontend/`
 
 ## Project structure
 
 ```text
-src/
-  index.ts            # Public API re-exports
-  cli/                # Bun-compiled CLI (bunli framework)
-    commands/         # view, update, rollback, gc, doctor, completions
-  protocol/           # Shared zod schemas (client + server contract)
-  zarr/               # Custom zarr I/O — reads AnnData / MuData / OME-Zarr
-  server/             # Bun.serve HTTP + WebSocket server
-    routes/           # Per-endpoint handlers
-  frontend/           # React + Vite + Mosaic dashboard
-    components/       # Scatter, table, toolbar, viewer panels
-    dashboard/        # DashboardContext / Provider / Shell
-    scatter-gpu/      # TypeGPU/WebGPU scatter renderer
-    stores/           # TanStack Store singletons (selection, view, filter)
-    ochre/            # Custom colormap library
+apps/ndea/         # CLI, server, frontend, and binary builder
+packages/protocol/ # Shared Zod request and response schemas
+packages/sdk/      # Node authoring and host contracts
+packages/zarr/     # Bun-backed AnnData, MuData, and OME-Zarr I/O
+docs/              # Independent Waku app and lockfile
 ```
 
 See [`AGENTS.md`](https://github.com/czbiohub-sf/nd-embedding-atlas/blob/main/AGENTS.md) for the canonical command catalogue, key abstractions, and gotchas.
@@ -108,7 +102,7 @@ A `pre-release` cut opens an auto-generated PR that bumps `manifest.json`'s `pre
 
 The release workflow uploads `scripts/install.sh` as a per-tag asset, so users can pin the installer URL: `curl …/releases/download/v0.X.Y/install.sh | sh`. The canonical `…/main/install.sh` always reflects the latest installer.
 
-After editing `src/cli/commands/**`, regenerate the completion metadata:
+After editing `apps/ndea/src/cli/commands/**`, regenerate the completion metadata:
 
 ```bash
 vp run gen
@@ -130,9 +124,14 @@ bun run build
 This site is built with [Fumapress](https://press.fumadocs.dev/) (Fumadocs + Waku). Pages are MDX under `docs/content/`; the app lives in `docs/` with its own `package.json` and `node_modules`, isolated from the main project's dependency graph.
 
 ```bash
+# From the repository root
+vp run docs:build
+
+# Local preview from the isolated docs package
 cd docs
-bun install
+bun install --frozen-lockfile
 bun run dev      # local preview with hot reload
 ```
 
-Because pages are MDX, they can embed live React — video clips, and (planned) interactive node graphs users can play with inline. Build output goes to `docs/dist/` (gitignored); CI builds and deploys it to GitHub Pages on every push to `main` (see `.github/workflows/docs.yml`).
+Because pages are MDX, they can embed React. `vp run docs:build` writes
+`docs/dist/public`; CI deploys that directory to GitHub Pages.

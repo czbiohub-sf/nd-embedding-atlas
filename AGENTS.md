@@ -8,7 +8,7 @@ image data. Early-stage — APIs are in flux.
 - **Bun** runtime + package manager (no Node.js, no Python)
 - **Vite+** (`vp`) unified toolchain — lint, fmt, test, build (see block at EOF)
 - **TypeScript 6** strict mode
-- **zarr (src/zarr/)** — vendored I/O, reads AnnData / MuData / OME-Zarr via
+- **zarr (`packages/zarr/`)** — vendored I/O, reads AnnData / MuData / OME-Zarr via
   zarrita on top of `BunFileStore`
 - **duckdb-node** native — analytical queries, Arrow IPC, Mosaic query protocol
 - **@uwdata/flechette** — Arrow columnar (pure JS, 14KB)
@@ -20,50 +20,35 @@ image data. Early-stage — APIs are in flux.
 ## Project layout
 
 ```text
-src/
-  index.ts            # Public API re-exports
-  cli/                # CLI entry point
-    commands/         # view, update, rollback, gc, doctor, completions
-  protocol/           # Shared request/response zod schemas (client + server)
-  zarr/               # Custom zarr I/O (AnnData, MuData, OME-Zarr)
-    bun-store.ts      # BunFileStore — AsyncReadable backed by Bun.file
-    anndata-class.ts  # AnnData public API (obs + var DataFrames + toDuckDB)
-    data-frame.ts     # DataFrame surface over AnnDataFrame
-    to-duckdb.ts      # DuckDB Appender-based ingest (obs_base, var_base)
-    zarr-boundary.ts  # One-file home for zarrita type casts
-    {anndata,mudata,ome-zarr,open,types}.ts  # Convention parsers + types
-  server/             # Bun.serve HTTP + WS server
-    app.ts            # createApp() factory — routes + WS upgrade
-    ws.ts             # Framed {_id,_type} ndea WS protocol
-    mosaic-ws.ts      # Mosaic socketConnector adapter at /mosaic
-    mosaic.ts         # SQL allow-list + handleMosaicQuery (REST fallback)
-    store.ts          # EmbeddingStore (DuckDB connection, views, appender)
-    state.ts          # ViewerState — AnnData handles, spatial, plate mounts
-    routes/           # Per-endpoint handlers (obs, var, embeddings, …)
-  frontend/           # React + Vite + Mosaic dashboard (same tree now)
-    components/       # scatter, table, charts, toolbar, viewer, layout
-    dashboard/        # DashboardContext / Provider / Shell
-    hooks/            # useDashboard, useColumnTypes, useMosaicClient, …
-    stores/           # ActiveFilterStore, SelectionSyncStore, ViewSyncStore
-    scatter-gpu/      # TypeGPU/WebGPU scatter renderer + hooks
-    lib/              # mosaic-helpers, chart-spec, category-column, ws-client
-    ochre/            # Custom ochre colormap library
+apps/
+  ndea/                    # Deployable CLI/server/frontend product
+    package.json           # Product version and native dependencies
+    scripts/               # Dev, version sync, and single-binary build
+    src/
+      cli/                 # view, update, rollback, gc, doctor, completions
+      server/              # Bun.serve routes, DuckDB, Mosaic, workers
+      frontend/            # React, Mosaic, TypeGPU/WebGPU dashboard
+packages/
+  protocol/src/            # Shared request/response Zod schemas
+  sdk/src/                 # Node authoring and host contracts
+  zarr/src/                # Bun-backed AnnData, MuData, OME-Zarr I/O
+docs/                      # Independent Waku app with its own lockfile
+scripts/                   # Root workspace and dependency-boundary tooling
 ```
 
 ## Module dependency graph
 
 ```text
-cli          ──→  zarr.open() / AnnData, server/app
-server/app   ──→  server/routes/*, zarr (AnnData), duckdb-node
-server/*     ──→  duckdb + Mosaic query protocol (REST + WS /mosaic)
-zarr         ──→  zarrita, flechette, BunFileStore (Bun.file)
-frontend     ──→  @uwdata/mosaic-core socketConnector (ws /mosaic),
-                  REST fallback /data/query
+apps/ndea    ──→  @ndea/protocol, @ndea/sdk, @ndea/zarr
+@ndea/sdk    ──→  @ndea/protocol
+@ndea/zarr   ──→  zarrita, flechette, BunFileStore (Bun.file)
+server       ──→  DuckDB + Mosaic query protocol (REST + WS /mosaic)
+frontend     ──→  @uwdata/mosaic-core socketConnector (ws /mosaic)
 ```
 
 ## Key abstractions
 
-### zarr (`src/zarr/`)
+### Zarr (`packages/zarr/src/`)
 
 - `open(path)` — auto-detect convention (AnnData, MuData, OME-Zarr); returns
   a discriminated `ParsedStore`.
@@ -74,7 +59,7 @@ frontend     ──→  @uwdata/mosaic-core socketConnector (ws /mosaic),
   (zarrita v3 sharding codec reads the shard index from the file tail).
 - Convention parsers detect store format from root `.zattrs` / `zarr.json`.
 
-### Server (`src/server/`)
+### Server (`apps/ndea/src/server/`)
 
 - `createApp()` — Bun.serve factory, wires routes + DuckDB + static serving.
 - Mosaic query protocol lives on two transports:
@@ -89,7 +74,14 @@ frontend     ──→  @uwdata/mosaic-core socketConnector (ws /mosaic),
   - `dataset` VIEW joining registered obsm tables. Temp tables
     (`__scatter_selection`, `mosaic.preagg_*`) live on the same connection.
 
-### Frontend (`src/frontend/`)
+### SDK (`packages/sdk/src/`)
+
+- `defineNode()` and `defineDescriptor()` form the author-facing node API.
+- `NodeHost` carries host services; the SDK never imports app registries,
+  built-in nodes, or frontend stores.
+- `SDK_VERSION` versions the extension contract independently from the app.
+
+### Frontend (`apps/ndea/src/frontend/`)
 
 - WebGPU scatter via TypeGPU v0.11 — instanced quads, GPU-side lasso/marquee
   with compute readback.
@@ -108,15 +100,15 @@ frontend     ──→  @uwdata/mosaic-core socketConnector (ws /mosaic),
 vp run dev /path/to/data.zarr        # primary — backend :5055 + Vite :5173 with HMR
 
 # Or separately when iterating on one half
-bun run src/cli/index.ts view /path/to/data.zarr   # backend on :5055
-vp dev                                             # frontend on :5173
+bun run apps/ndea/src/cli/index.ts view /path/to/data.zarr
+vp dev apps/ndea                                   # frontend on :5173
 
 # Dependencies
 bun install                       # backend + frontend share one node_modules
 
 # Build (all-Bun: Bun.build bundles the frontend, then bun build --compile)
 vp run build                      # primary — full single-file binary → dist/ndea
-bun run build                     # same; both run scripts/build.ts
+bun run build                     # same; delegates to @ndea/app
                                   #   Bun.build (tailwind + typegpu plugins) →
                                   #   embed-asset manifest → bun build --compile.
                                   #   The manifest pattern is required (direct
@@ -125,13 +117,17 @@ bun run build                     # same; both run scripts/build.ts
                                   #   Rolldown and is NOT used — use `vp run build`.
 
 # Quality gates
-vp check                          # typecheck + Oxlint + Oxfmt (all ~260 files)
-vp test                           # vitest
-bun test                          # Bun-native .test.ts suites
+vp check vite.config.ts bunli.config.ts scripts
+vp run -r check                  # workspace checks in dependency order
+bun run check:boundaries         # enforce package direction and exports
+vp run -r test                   # Bun-native suites per workspace
 
 # Code generation
 vp run gen                        # regenerate .bunli/commands.gen.ts (CLI metadata
                                   #   for shell completions; CI verifies no drift)
+
+# Documentation
+vp run docs:build                 # isolated Waku build → docs/dist/public
 ```
 
 ## Code style
@@ -142,7 +138,7 @@ Oxlint + Oxfmt via `vp check` (config in `vite.config.ts`).
 - **`import type`** for type-only imports (`verbatimModuleSyntax`)
 - **4-space indent** (Oxfmt default)
 - **Double quotes**, trailing commas, semicolons
-- **`@/` path alias** → `src/frontend/`
+- **`@/` path alias** → `apps/ndea/src/frontend/`
 
 ## Gotchas
 

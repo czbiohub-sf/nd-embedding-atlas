@@ -59,8 +59,15 @@ jobs:
           ARTIFACT: ${{ matrix.artifact }}
         run: bash .github/scripts/build-binary.sh
 
-      - name: Verify binary launches
-        run: ./dist/${{ matrix.artifact }} --version
+      - name: Verify binary version
+        env:
+          ARTIFACT: ${{ matrix.artifact }}
+        run: bash .github/scripts/verify-binary-version.sh
+
+      - name: Verify isolated dir (no siblings)
+        env:
+          ARTIFACT: ${{ matrix.artifact }}
+        run: bash .github/scripts/verify-isolated.sh
 
       - name: Report binary size
         shell: bash
