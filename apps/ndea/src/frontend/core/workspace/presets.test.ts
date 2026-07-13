@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
 import { resolvePreset } from "./presets";
-import { createNativeWorkspaceNodeLibrary } from "./definitions";
+import { createNativeAppNodeLibrary } from "@/core/node/library";
 import { Workspace } from "./workspace-store";
 import type { Metadata } from "@ndea/protocol";
 
-const nativeWorkspaceNodeLibrary = createNativeWorkspaceNodeLibrary();
+const nativeWorkspaceNodeLibrary = createNativeAppNodeLibrary();
 
 // rAF doesn't exist under bun:test — the Workspace ctor references it for the
 // flush scheduler. We only inspect the store synchronously, so a stub is enough.

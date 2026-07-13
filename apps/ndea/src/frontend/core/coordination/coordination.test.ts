@@ -3,7 +3,7 @@
  *
  * The backbone is the symmetric cross-view plane: N nodes referencing the same
  * (type, scope) share one latest-wins cell. These exercise it directly over a
- * bare `Store<WorkspaceDocumentState>` (no Workspace) — the body-dock seam is covered by the
+ * bare coordination document port — the body-dock seam is covered by the
  * host-routing conformance + manual verification.
  */
 
@@ -11,31 +11,20 @@ import { Store } from "@tanstack/store";
 import { describe, expect, test } from "bun:test";
 import { rowIndex, type RowIndex } from "@ndea/sdk";
 
-import { Coordination, scopeColor } from "./coordination";
-import type { WorkspaceDocumentState } from "@/core/workspace/types";
+import {
+  coordinationDocumentPort,
+  createCoordination,
+  scopeColor,
+  type CoordinationDocumentState,
+  type CoordinationScopeCellPort,
+} from "./coordination";
 
-function fresh(): { co: Coordination; store: Store<WorkspaceDocumentState> } {
-  const store = new Store<WorkspaceDocumentState>({
-    nodes: {},
-    edges: {},
-    positions: {},
-    sizeOverrides: {},
-    formOverride: {},
-    formLocked: {},
-    selectedNodeId: null,
-    selectedNodeIds: [],
-    selectedEdgeId: null,
-    explicit: {},
-    stageTree: null,
-    disposition: "strip",
-    stripH: 280,
-    claimed: null,
-    graphPath: null,
-    flags: {},
+function fresh(): { co: CoordinationScopeCellPort; store: Store<CoordinationDocumentState> } {
+  const store = new Store<CoordinationDocumentState>({
     coordinationScopes: {},
     coordinationSpace: {},
   });
-  return { co: new Coordination(store), store };
+  return { co: createCoordination(coordinationDocumentPort(store)), store };
 }
 
 describe("Coordination — assignment + shared reads", () => {

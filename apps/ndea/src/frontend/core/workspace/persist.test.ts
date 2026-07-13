@@ -1,21 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import { rowIndex } from "@ndea/sdk";
 
-import {
-  DOC_VERSION,
-  dropUnknownNodes,
-  fromPersistedDoc,
-  migrate,
-  type PersistedDoc,
-  toPersistedDoc,
-  validateDoc,
-} from "./persist";
+import { DOC_VERSION, fromPersistedDoc, migrate, type PersistedDoc, toPersistedDoc, validateDoc } from "./persist";
 import { scopeColor } from "@/core/coordination/coordination";
-import { createNativeWorkspaceNodeLibrary } from "./definitions";
+import { createNativeAppNodeLibrary } from "@/core/node/library";
 import type { WorkspaceDocumentState } from "./types";
 import type { GraphDocumentNode } from "@/core/graph/records";
 
-const nativeWorkspaceNodeLibrary = createNativeWorkspaceNodeLibrary();
+const nativeWorkspaceNodeLibrary = createNativeAppNodeLibrary();
 
 function emptyState(): WorkspaceDocumentState {
   return {
@@ -170,8 +162,8 @@ describe("v2 persistence boundary", () => {
   });
 });
 
-describe("dropUnknownNodes (self-heal on a removed node type)", () => {
-  test("drops nodes of unregistered type + their edges, clears stale selection", () => {
+describe("unresolved node persistence", () => {
+  test("preserves unknown nodes, incident edges, and editor selection", () => {
     const state = emptyState();
     state.nodes.d1 = datasetNode({ datasetKey: "plateA" });
     state.nodes.x1 = {
@@ -186,17 +178,17 @@ describe("dropUnknownNodes (self-heal on a removed node type)", () => {
     state.selectedNodeIds = ["x1", "d1"];
     state.selectedEdgeId = "e1";
 
-    const out = dropUnknownNodes(toPersistedDoc(state), nativeWorkspaceNodeLibrary);
-    expect(out.state.nodes.x1).toBeUndefined();
-    expect(out.state.nodes.d1).toBeDefined();
-    expect(out.state.edges.e1).toBeUndefined();
-    expect(out.state.selection).toBeNull();
-    expect(out.state.selSet).toEqual(["d1"]);
-    expect(out.state.selectedEdge).toBeNull();
-  });
-
-  test("returns the doc unchanged when every node type is registered", () => {
-    const doc = docWith(datasetNode({ datasetKey: "plateA" }));
-    expect(dropUnknownNodes(doc, nativeWorkspaceNodeLibrary)).toBe(doc);
+    const persisted = toPersistedDoc(state);
+    expect(validateDoc(persisted, nativeWorkspaceNodeLibrary).ok).toBe(true);
+    const decoded = fromPersistedDoc(persisted);
+    expect(decoded.ok).toBe(true);
+    if (decoded.ok) {
+      expect(decoded.state.nodes.x1).toEqual(state.nodes.x1);
+      expect(decoded.state.nodes.d1).toEqual(state.nodes.d1);
+      expect(decoded.state.edges.e1).toEqual(state.edges.e1);
+      expect(decoded.state.selectedNodeId).toBe("x1");
+      expect(decoded.state.selectedNodeIds).toEqual(["x1", "d1"]);
+      expect(decoded.state.selectedEdgeId).toBe("e1");
+    }
   });
 });

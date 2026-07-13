@@ -49,8 +49,8 @@ function StageTile({
   const flagsOff = useWorkspaceSelector((s) => s.flags[id]?.off ?? false);
   const fullscreen = useSelector(ws.ui, (u) => u.fullscreen === id);
 
-  const def = node ? ws.deps.nodeLibrary.getDescriptor(node.type) : null;
-  const hasBody = node ? ws.deps.nodeLibrary.getSpec(node.type)?.definition.load !== undefined : false;
+  const def = node ? ws.nodeLibrary.getDescriptor(node.type) : null;
+  const hasBody = node ? ws.nodeLibrary.getSpec(node.type)?.definition.load !== undefined : false;
   // count policy: a tile's body is visible and says its own scale — only
   // staged transforms keep a header count
   const countActive = Boolean(def && def.kind !== "view");

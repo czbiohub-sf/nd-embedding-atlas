@@ -9,7 +9,7 @@
  */
 
 import type { NdForm } from "@/components/nd/nd-resolve-form";
-import type { JsonValue, RowIndex } from "@ndea/sdk";
+import type { CoordinationSpace } from "@/core/coordination/coordination";
 import type { GraphDocumentEdge, GraphDocumentNode } from "@/core/graph/records";
 import type { TreeNode } from "./stage/split-tree";
 
@@ -28,10 +28,6 @@ export interface WorkspaceNodeSize {
   w: number;
   h: number;
 }
-
-export type WorkspaceCoordinationSpace = Record<string, Record<string, JsonValue> | undefined> & {
-  focus?: Record<string, RowIndex | null>;
-};
 
 export interface WorkspaceDocumentState {
   nodes: Record<string, GraphDocumentNode>;
@@ -69,5 +65,5 @@ export interface WorkspaceDocumentState {
   coordinationScopes: Record<string, Record<string, string>>;
   /** coordination plane — the live cells: `type → scope → shared value`.
    *  Focus cells are branded row indices; other types remain `JsonValue`. */
-  coordinationSpace: WorkspaceCoordinationSpace;
+  coordinationSpace: CoordinationSpace;
 }

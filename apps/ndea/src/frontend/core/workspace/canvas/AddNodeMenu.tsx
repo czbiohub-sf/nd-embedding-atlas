@@ -25,7 +25,7 @@ import {
   ContextMenuSubTrigger,
 } from "@/components/ui/context-menu";
 import { NdHud } from "@/components/nd/nd-primitives";
-import type { WorkspaceNodeDescriptor } from "../node-defs";
+import type { AppNodeDescriptor } from "../node-defs";
 import { useWorkspace } from "../workspace-context";
 import type { WorkspaceNodePosition } from "../types";
 import type { GraphNodeType } from "@/core/graph/records";
@@ -57,8 +57,8 @@ const CATEGORY: Partial<Record<GraphNodeType, Group>> = {
   export: "Output",
 };
 
-function bucketed(defs: readonly WorkspaceNodeDescriptor[]): { group: Group; defs: WorkspaceNodeDescriptor[] }[] {
-  const byGroup = new Map<Group, WorkspaceNodeDescriptor[]>();
+function bucketed(defs: readonly AppNodeDescriptor[]): { group: Group; defs: AppNodeDescriptor[] }[] {
+  const byGroup = new Map<Group, AppNodeDescriptor[]>();
   for (const d of defs) {
     const g = CATEGORY[d.type] ?? "Other";
     const list = byGroup.get(g) ?? [];
@@ -83,7 +83,7 @@ export function AddNodeMenu({ menu, onClose }: { menu: AddMenuState | null; onCl
     onClose();
   };
 
-  const row = (d: WorkspaceNodeDescriptor) => (
+  const row = (d: AppNodeDescriptor) => (
     <ContextMenuItem key={d.type} className="justify-between gap-6" onClick={() => spawn(d.type)}>
       <span>{d.label}</span>
       <ContextMenuShortcut>{d.stage}</ContextMenuShortcut>
@@ -103,7 +103,7 @@ export function AddNodeMenu({ menu, onClose }: { menu: AddMenuState | null; onCl
           <NdHud size={9}>add node</NdHud>
           <span className="font-mono text-[8.5px] text-text-muted">tab · right-click</span>
         </div>
-        {bucketed(ws.deps.nodeLibrary.paletteDescriptors()).map(({ group, defs }) => (
+        {bucketed(ws.nodeLibrary.paletteDescriptors()).map(({ group, defs }) => (
           <Fragment key={group}>
             <ContextMenuSeparator />
             {SUBMENU.has(group) ? (

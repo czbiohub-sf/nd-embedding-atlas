@@ -16,9 +16,9 @@ import { describe, expect, test } from "bun:test";
 import { Glob } from "bun";
 import { resolve } from "node:path";
 
-import { createNativeWorkspaceNodeLibrary } from "@/core/workspace/definitions";
+import { createNativeAppNodeLibrary } from "./library";
 
-const nativeNodeLibrary = createNativeWorkspaceNodeLibrary();
+const nativeNodeLibrary = createNativeAppNodeLibrary();
 
 const APP_ROOT = resolve(import.meta.dir, "../../../..");
 const glob = (pattern: string) => [...new Glob(pattern).scanSync(APP_ROOT)];

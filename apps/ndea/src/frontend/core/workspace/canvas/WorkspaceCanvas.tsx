@@ -427,7 +427,7 @@ function WorkspaceCanvasInner() {
               const node = ws.store.state.nodes[n.id];
               if (!node) return "oklch(0.62 0 0 / 60%)";
               if (n.id === ws.store.state.selectedNodeId) return "oklch(0.554 0.236 281)";
-              return ws.deps.nodeLibrary.getSpec(node.type)?.accent ?? "oklch(0.62 0 0 / 60%)";
+              return ws.nodeLibrary.getSpec(node.type)?.accent ?? "oklch(0.62 0 0 / 60%)";
             }}
             nodeStrokeWidth={0}
           />

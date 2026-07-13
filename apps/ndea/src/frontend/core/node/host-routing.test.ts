@@ -28,11 +28,11 @@ import {
   toggleViewLock,
 } from "@/nodes/scatter/routing";
 import { focusRow, publishOrdering } from "@/nodes/table/routing";
-import { createNativeWorkspaceNodeLibrary } from "@/core/workspace/definitions";
+import { createNativeAppNodeLibrary } from "./library";
 import { GraphEngine } from "@/core/graph/engine";
 import { createSpyHost } from "./spy-host";
 
-const nativeNodeLibrary = createNativeWorkspaceNodeLibrary();
+const nativeNodeLibrary = createNativeAppNodeLibrary();
 
 // Every view-kind node must appear here — "routed" (a routing module exercised
 // below) or { exempt } with a reason. Adding a view node without an entry fails

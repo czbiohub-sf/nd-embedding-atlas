@@ -14,10 +14,10 @@ import {
 import { z } from "zod";
 
 import type { GraphPortValue } from "@/core/graph/values";
-import type { WorkspaceNodeLibrary, WorkspaceNodeSpec } from "@/core/workspace/node-projection";
-import type { WorkspaceDocumentState } from "@/core/workspace/types";
-import type { Workspace } from "@/core/workspace/workspace-store";
+import type { AppNodeLibrary, AppNodeSpec } from "@/core/node/library";
+import type { GraphDocumentNode } from "@/core/graph/records";
 import type { AppNodeHostDependencies } from "./host";
+import type { NodeRuntimeSessionPort } from "./session-port";
 import { WorkspaceNodeRuntimeManager } from "./workspace-runtime";
 
 class FixtureElement {
@@ -92,15 +92,21 @@ function appHostDependencies(predicateCalls: { facet: string; sql: string | null
 }
 
 interface WorkspaceFixture {
-  readonly workspace: Workspace;
-  readonly documentStore: Store<WorkspaceDocumentState>;
+  readonly session: NodeRuntimeSessionPort;
+  readonly documentStore: Store<{
+    nodes: Record<string, GraphDocumentNode>;
+    flags: Record<string, { bypass?: boolean; off?: boolean }>;
+  }>;
   readonly emitLassoCalls: { sql: string | null; rowIds: readonly RowIndex[] | null }[];
   readonly emitFocusCalls: (RowIndex | null)[];
   deliverGraph(value: GraphPortValue): void;
 }
 
 function workspaceFixture(): WorkspaceFixture {
-  const documentStore = new Store<WorkspaceDocumentState>({
+  const documentStore = new Store<{
+    nodes: Record<string, GraphDocumentNode>;
+    flags: Record<string, { bypass?: boolean; off?: boolean }>;
+  }>({
     nodes: {
       "node-1": {
         id: "node-1",
@@ -111,23 +117,7 @@ function workspaceFixture(): WorkspaceFixture {
         config: { page: 4 },
       },
     },
-    edges: {},
-    positions: {},
-    sizeOverrides: {},
-    formOverride: {},
-    formLocked: {},
-    selectedNodeId: null,
-    selectedNodeIds: [],
-    selectedEdgeId: null,
-    explicit: {},
-    stageTree: null,
-    disposition: "strip",
-    stripH: 280,
-    claimed: null,
-    graphPath: null,
     flags: {},
-    coordinationScopes: {},
-    coordinationSpace: {},
   });
   const emitLassoCalls: { sql: string | null; rowIds: readonly RowIndex[] | null }[] = [];
   const emitFocusCalls: (RowIndex | null)[] = [];
@@ -135,7 +125,7 @@ function workspaceFixture(): WorkspaceFixture {
   const scopes = new Map<string, string>();
   const cells = new Map<string, unknown>();
   const coordinationListeners = new Set<(value: unknown) => void>();
-  const workspace = {
+  const session = {
     store: documentStore,
     coordination: {
       scopeOf(nodeId: string, type: string) {
@@ -185,10 +175,10 @@ function workspaceFixture(): WorkspaceFixture {
         },
       }));
     },
-  } as unknown as Workspace;
+  } as unknown as NodeRuntimeSessionPort;
 
   return {
-    workspace,
+    session,
     documentStore,
     emitLassoCalls,
     emitFocusCalls,
@@ -199,12 +189,12 @@ function workspaceFixture(): WorkspaceFixture {
   };
 }
 
-function nodeLibrary(definition: WorkspaceNodeSpec["definition"]): WorkspaceNodeLibrary {
-  const spec = { definition, type: "runtime-fixture", kind: "view" } as WorkspaceNodeSpec;
+function nodeLibrary(definition: AppNodeSpec["definition"]): AppNodeLibrary {
+  const spec = { definition, type: "runtime-fixture", kind: "view" } as AppNodeSpec;
   return {
-    catalog: { resolveExact: () => definition } as unknown as WorkspaceNodeLibrary["catalog"],
+    catalog: { resolveExact: () => definition } as unknown as AppNodeLibrary["catalog"],
     getSpec: () => spec,
-  } as unknown as WorkspaceNodeLibrary;
+  } as unknown as AppNodeLibrary;
 }
 
 describe("WorkspaceNodeRuntimeManager", () => {
@@ -243,7 +233,7 @@ describe("WorkspaceNodeRuntimeManager", () => {
     const fixture = workspaceFixture();
     const predicateCalls: { facet: string; sql: string | null }[] = [];
     const manager = new WorkspaceNodeRuntimeManager({
-      workspace: fixture.workspace,
+      session: fixture.session,
       nodeLibrary: nodeLibrary(definition),
       appHost: appHostDependencies(predicateCalls),
     });
@@ -308,7 +298,7 @@ describe("WorkspaceNodeRuntimeManager", () => {
     const fixture = workspaceFixture();
     const dependencies = appHostDependencies([]);
     const manager = new WorkspaceNodeRuntimeManager({
-      workspace: fixture.workspace,
+      session: fixture.session,
       nodeLibrary: nodeLibrary(definition),
       appHost: dependencies,
     });

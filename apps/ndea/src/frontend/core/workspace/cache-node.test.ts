@@ -15,11 +15,11 @@ import { describe, expect, test } from "bun:test";
 import { rowIndex } from "@ndea/sdk";
 
 import { predicateSql } from "@/core/graph/cook";
-import { createNativeWorkspaceNodeLibrary } from "./definitions";
+import { createNativeAppNodeLibrary } from "@/core/node/library";
 import { Workspace } from "./workspace-store";
 import type { Metadata } from "@ndea/protocol";
 
-const nativeWorkspaceNodeLibrary = createNativeWorkspaceNodeLibrary();
+const nativeWorkspaceNodeLibrary = createNativeAppNodeLibrary();
 
 // rAF doesn't exist under bun:test — the Workspace ctor references it for the
 // flush scheduler. We only pull synchronously, so a no-op stub is enough.
@@ -102,7 +102,6 @@ describe("Cache node", () => {
     expect(cookSql(ws, cache)).toBe("__row_index__ IN (1, 2, 3)");
 
     ws.pinCache(cache);
-    expect(ws.frozenRows.get(cache)).toEqual([rowIndex(1), rowIndex(2), rowIndex(3)]); // pinned BY VALUE
     // upstream lasso changes — cached output unaffected
     ws.emitLasso(sc, "__row_index__ IN (9)", [rowIndex(9)]);
     expect(cookSql(ws, cache)).toBe("__row_index__ IN (1, 2, 3)");

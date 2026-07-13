@@ -3,14 +3,13 @@ import { Glob } from "bun";
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
-import { createNativeWorkspaceNodeLibrary, nativePluginFactory } from "@/core/workspace/definitions";
-import { parseWorkspaceNodeConfig, workspaceNodeSpecOf } from "@/core/workspace/node-projection";
+import { createNativeAppNodeLibrary, nativePluginFactory, parseNodeConfig, nativeNodeSpecOf } from "./library";
 import { NATIVE_NODE_CONTRIBUTIONS, NATIVE_NODE_CURRENT_REFS, NATIVE_NODE_DEFINITIONS } from "./native-nodes";
 import { collectPluginContribution, NATIVE_NODE_SOURCE } from "@/core/plugin/registration";
 import { exactNodeTypeRef } from "@ndea/sdk";
 
 const APP_ROOT = resolve(import.meta.dir, "../../../..");
-const nativeNodeLibrary = createNativeWorkspaceNodeLibrary();
+const nativeNodeLibrary = createNativeAppNodeLibrary();
 const nativeNodeCatalog = nativeNodeLibrary.catalog;
 
 describe("native node catalog fitness functions", () => {
@@ -73,7 +72,7 @@ describe("native node catalog fitness functions", () => {
   });
 
   test("Workspace order and palette are tuple-derived without a second list", () => {
-    const tupleSpecs = NATIVE_NODE_CONTRIBUTIONS.map(workspaceNodeSpecOf);
+    const tupleSpecs = NATIVE_NODE_CONTRIBUTIONS.map(nativeNodeSpecOf);
     expect(nativeNodeLibrary.listSpecs().map(({ type }) => type)).toEqual(tupleSpecs.map(({ type }) => type));
     expect(nativeNodeLibrary.paletteDescriptors().map(({ type }) => type)).toEqual(
       tupleSpecs.filter(({ inPalette }) => inPalette).map(({ type }) => type),
@@ -195,9 +194,7 @@ describe("native node catalog fitness functions", () => {
       expect(config.schema.safeParse(config.defaultValue).success, `${spec.type} rejects its default config`).toBe(
         true,
       );
-      expect(parseWorkspaceNodeConfig(spec, config.defaultValue).ok, `${spec.type} rejects its default config`).toBe(
-        true,
-      );
+      expect(parseNodeConfig(spec, config.defaultValue).ok, `${spec.type} rejects its default config`).toBe(true);
     }
   });
 

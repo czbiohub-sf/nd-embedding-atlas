@@ -24,7 +24,7 @@ export function ScopePicker({ nodeId }: { nodeId: string }) {
   const allScopes = useWorkspaceSelector((s) => s.coordinationScopes);
   const assigned = allScopes[nodeId] ?? {};
 
-  const caps = nodeType ? ws.deps.nodeLibrary.getSpec(nodeType)?.definition.capabilities : undefined;
+  const caps = nodeType ? ws.nodeLibrary.getSpec(nodeType)?.definition.capabilities : undefined;
   const types = listCoordinationTypes().filter((type) => caps?.includes(type.capability));
   if (types.length === 0) return null;
 

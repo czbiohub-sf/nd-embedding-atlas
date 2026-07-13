@@ -83,10 +83,10 @@ export function useFeedbackChannels(): FeedbackChannel[] {
         edges,
         (node) => {
           if (!node.pluginId) return false;
-          const capabilities = ws.deps.nodeLibrary.catalog.resolveCurrent(node.pluginId)?.capabilities;
+          const capabilities = ws.nodeLibrary.catalog.resolveCurrent(node.pluginId)?.capabilities;
           return capabilities != null && DATA_WRITE_CAPS.some((capability) => capabilities.includes(capability));
         },
-        (node) => ws.deps.nodeLibrary.getDescriptor(node.type)?.kind === "source",
+        (node) => ws.nodeLibrary.getDescriptor(node.type)?.kind === "source",
       ),
     [edges, nodes, ws],
   );

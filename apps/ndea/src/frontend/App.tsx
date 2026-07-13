@@ -7,7 +7,7 @@ import { ScatterUIStateProvider } from "./nodes/scatter/ScatterUIStateProvider";
 import { Toaster } from "./components/ui/sonner";
 import { TooltipProvider } from "./components/ui/tooltip";
 import { WorkspaceShell } from "./core/workspace/WorkspaceShell";
-import type { WorkspaceNodeLibrary } from "./core/workspace/node-projection";
+import type { AppNodeLibrary } from "./core/node/library";
 import { DashboardProvider } from "./dashboard";
 import { ThemeProvider } from "./ThemeProvider";
 
@@ -52,7 +52,7 @@ function useHashRoute(): string {
   return hash;
 }
 
-export default function App({ nodeLibrary }: { nodeLibrary: WorkspaceNodeLibrary }) {
+export default function App({ nodeLibrary }: { nodeLibrary: AppNodeLibrary }) {
   const hash = useHashRoute();
   if (hash === "#/nd-spec") {
     // Living spec for the nd component layer — no data deps, no providers.

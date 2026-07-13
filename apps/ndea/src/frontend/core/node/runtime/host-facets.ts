@@ -9,7 +9,7 @@ import type {
   HierarchyNodeHost,
   HierarchyState,
 } from "@/core/node/app-node-host";
-import type { Workspace } from "./workspace-store";
+import type { NodeRuntimeSessionPort } from "./session-port";
 
 export interface EdgeInputRowSetBinding extends Pick<
   NodeHost<unknown, "row-set-subscribe">,
@@ -52,25 +52,23 @@ function sameCheckpointState(left: CheckpointState, right: CheckpointState): boo
   );
 }
 
-/** Compose only the checkpoint behavior a native Cache Body may observe or invoke. */
-export function createCheckpointNodeFacet(workspace: Workspace, nodeId: string): CheckpointNodeHost["checkpoint"] {
+export function createCheckpointNodeFacet(
+  session: NodeRuntimeSessionPort,
+  nodeId: string,
+): CheckpointNodeHost["checkpoint"] {
   let snapshot: CheckpointState | undefined;
   const read = (): CheckpointState => {
-    const live = workspace.liveCacheInput(nodeId);
+    const live = session.liveCacheInput(nodeId);
     const input: CheckpointInputState | null =
       live === null
         ? null
         : live.kind === "sel"
-          ? {
-              kind: "row-set",
-              predicate: live.sql,
-              rowCount: live.rowIds?.length ?? null,
-            }
+          ? { kind: "row-set", predicate: live.sql, rowCount: live.rowIds?.length ?? null }
           : { kind: "predicate", predicate: live.sql };
     const next: CheckpointState = {
-      epoch: workspace.telemetry.state.epoch,
-      pinned: workspace.isCached(nodeId),
-      pinnedEpoch: workspace.store.state.nodes[nodeId]?.stamp ?? null,
+      epoch: session.telemetry.state.epoch,
+      pinned: session.isCached(nodeId),
+      pinnedEpoch: session.store.state.nodes[nodeId]?.stamp ?? null,
       input,
     };
     if (snapshot && sameCheckpointState(snapshot, next)) return snapshot;
@@ -81,33 +79,32 @@ export function createCheckpointNodeFacet(workspace: Workspace, nodeId: string):
   return Object.freeze({
     getSnapshot: read,
     subscribe(onChange: () => void) {
-      const documentSubscription = workspace.store.subscribe(onChange);
-      const telemetrySubscription = workspace.telemetry.subscribe(onChange);
+      const documentSubscription = session.store.subscribe(onChange);
+      const telemetrySubscription = session.telemetry.subscribe(onChange);
       return () => {
         documentSubscription.unsubscribe();
         telemetrySubscription.unsubscribe();
       };
     },
-    pin: () => workspace.pinCache(nodeId),
-    unpin: () => workspace.uncache(nodeId),
+    pin: () => session.pinCache(nodeId),
+    unpin: () => session.uncache(nodeId),
   });
 }
 
-/** Compose the one topology action exposed to a row-set-producing native Body. */
 export function createCheckpointCreationNodeFacet(
-  workspace: Workspace,
+  session: NodeRuntimeSessionPort,
   nodeId: string,
 ): CheckpointCreationNodeHost["checkpointCreation"] {
-  return Object.freeze({
-    create: () => workspace.freezeSelection(nodeId),
-  });
+  return Object.freeze({ create: () => session.freezeSelection(nodeId) });
 }
 
-/** Compose only child-count observation and enter behavior for a native Subnet Body. */
-export function createHierarchyNodeFacet(workspace: Workspace, nodeId: string): HierarchyNodeHost["hierarchy"] {
+export function createHierarchyNodeFacet(
+  session: NodeRuntimeSessionPort,
+  nodeId: string,
+): HierarchyNodeHost["hierarchy"] {
   let snapshot: HierarchyState | undefined;
   const read = (): HierarchyState => {
-    const childCount = Object.values(workspace.store.state.nodes).filter(
+    const childCount = Object.values(session.store.state.nodes).filter(
       (node) => node.parent === nodeId && node.type !== "proxy",
     ).length;
     if (snapshot?.childCount === childCount) return snapshot;
@@ -118,9 +115,9 @@ export function createHierarchyNodeFacet(workspace: Workspace, nodeId: string): 
   return Object.freeze({
     getSnapshot: read,
     subscribe(onChange: () => void) {
-      const subscription = workspace.store.subscribe(onChange);
+      const subscription = session.store.subscribe(onChange);
       return () => subscription.unsubscribe();
     },
-    enter: () => workspace.enterSubnet(nodeId),
+    enter: () => session.enterSubnet(nodeId),
   });
 }

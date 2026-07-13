@@ -10,7 +10,7 @@
  *     reference the same (type, scope) see the same value, reactively, with no
  *     edge and no message passing.
  *
- * Storage lives in two `WorkspaceDocumentState` fields:
+ * Storage lives in two fields supplied by the document adapter:
  *   - `coordinationScopes[nodeId][type] = scope` — which cell a node references.
  *   - `coordinationSpace[type][scope] = value` — the live cell value.
  *
@@ -26,10 +26,57 @@ import { z } from "zod";
 import type { Store } from "@tanstack/store";
 
 import type { JsonValue, RowIndex } from "@ndea/sdk";
-import type { WorkspaceDocumentState } from "@/core/workspace/types";
 import { defineCoordinationType, defineGroupChannel, getCoordinationType } from "./define-type";
 
 type CoordinationValue<T extends string> = T extends "focus" ? RowIndex | null : JsonValue;
+
+export type CoordinationSpace = Record<string, Record<string, JsonValue> | undefined> & {
+  focus?: Record<string, RowIndex | null>;
+};
+
+export interface CoordinationDocumentState {
+  readonly coordinationScopes: Record<string, Record<string, string>>;
+  readonly coordinationSpace: CoordinationSpace;
+}
+
+export interface CoordinationDocumentPort {
+  snapshot(): CoordinationDocumentState;
+  update(mutator: (state: CoordinationDocumentState) => CoordinationDocumentState): void;
+  subscribe(listener: () => void): () => void;
+}
+
+export interface CoordinationScopeCellPort {
+  assignScope(nodeId: string, type: string, scope: string): void;
+  clearScope(nodeId: string, type: string): void;
+  scopeOf(nodeId: string, type: string): string | undefined;
+  mintScope(type: string): string;
+  setCoordinationValue<T extends string>(type: T, scope: string, value: CoordinationValue<T>): void;
+  readCoordination<T extends string>(type: T, scope: string): CoordinationValue<T> | undefined;
+  existingScopes(type: string): string[];
+  nodesInScope(type: string, scope: string): string[];
+  scopeColor(scope: string): string;
+  subscribe<T extends string>(
+    nodeId: string,
+    type: T,
+    listener: (value: CoordinationValue<T> | undefined) => void,
+  ): () => void;
+}
+
+/** Adapts a document store without exposing its concrete state to coordination. */
+export function coordinationDocumentPort<S extends CoordinationDocumentState>(
+  store: Store<S>,
+): CoordinationDocumentPort {
+  return {
+    snapshot: () => store.state,
+    update(mutator) {
+      store.setState((state) => mutator(state) as S);
+    },
+    subscribe(listener) {
+      const subscription = store.subscribe(listener);
+      return () => subscription.unsubscribe();
+    },
+  };
+}
 
 /* ── registered coordination types ───────────────────────────────────────
  * focus (U1) + viewSync (U2) re-expressed through the extracted primitive,
@@ -75,24 +122,22 @@ export function scopeColor(scope: string): string {
 }
 
 /**
- * The resolve/notify backbone over a `Store<WorkspaceDocumentState>`. Mutations go through
- * `store.setState`; reads are live off `store.state`. Held once on the
- * Workspace as `ws.coordination` and reached from nodes only via the `host`
- * seam (the body-dock Proxy), never imported into `nodes/**`.
+ * The resolve/notify backbone over a narrow document port. Workspace adapts
+ * its sole document store; node runtimes receive only the scope/cell port.
  */
-export class Coordination {
+class Coordination implements CoordinationScopeCellPort {
   private seq = 0;
-  private readonly store: Store<WorkspaceDocumentState>;
+  private readonly document: CoordinationDocumentPort;
 
-  constructor(store: Store<WorkspaceDocumentState>) {
-    this.store = store;
+  constructor(document: CoordinationDocumentPort) {
+    this.document = document;
   }
 
   /* ── scope assignment (which cell a node references) ──────────────── */
 
   /** Assign a node to a named scope of a coordination type. */
   assignScope(nodeId: string, type: string, scope: string): void {
-    this.store.setState((s) => ({
+    this.document.update((s) => ({
       ...s,
       coordinationScopes: {
         ...s.coordinationScopes,
@@ -103,7 +148,7 @@ export class Coordination {
 
   /** Drop a node's scope for one type (it stops participating in that type). */
   clearScope(nodeId: string, type: string): void {
-    this.store.setState((s) => {
+    this.document.update((s) => {
       const cur = s.coordinationScopes[nodeId];
       if (!cur || !(type in cur)) return s;
       const next = { ...cur };
@@ -117,14 +162,14 @@ export class Coordination {
 
   /** The scope a node references for a type, or undefined if unassigned. */
   scopeOf(nodeId: string, type: string): string | undefined {
-    return this.store.state.coordinationScopes[nodeId]?.[type];
+    return this.document.snapshot().coordinationScopes[nodeId]?.[type];
   }
 
   /** Mint a fresh, unused scope name for a type. Picker (U4) uses this for
    *  "New scope"; the U1 UI still hardcodes "A". */
   mintScope(type: string): string {
     const used = new Set<string>();
-    for (const byType of Object.values(this.store.state.coordinationScopes)) {
+    for (const byType of Object.values(this.document.snapshot().coordinationScopes)) {
       if (byType[type]) used.add(byType[type]);
     }
     for (let i = 0; i < 26; i++) {
@@ -142,7 +187,7 @@ export class Coordination {
     if (spec && !spec.schema.safeParse(value).success) {
       throw new TypeError(`coordination cell "${type}.${scope}" failed validation`);
     }
-    this.store.setState((s) => ({
+    this.document.update((s) => ({
       ...s,
       coordinationSpace: {
         ...s.coordinationSpace,
@@ -153,7 +198,7 @@ export class Coordination {
 
   /** Read a cell value, or undefined if no value has been written yet. */
   readCoordination<T extends string>(type: T, scope: string): CoordinationValue<T> | undefined {
-    return this.store.state.coordinationSpace[type]?.[scope] as CoordinationValue<T> | undefined;
+    return this.document.snapshot().coordinationSpace[type]?.[scope] as CoordinationValue<T> | undefined;
   }
 
   /** The scope names that currently EXIST for a type — every scope referenced by
@@ -161,10 +206,10 @@ export class Coordination {
    *  these (plus mint-new) so a node can never reference a dangling scope (KD9). */
   existingScopes(type: string): string[] {
     const out = new Set<string>();
-    for (const byType of Object.values(this.store.state.coordinationScopes)) {
+    for (const byType of Object.values(this.document.snapshot().coordinationScopes)) {
       if (byType[type]) out.add(byType[type]);
     }
-    for (const scope of Object.keys(this.store.state.coordinationSpace[type] ?? {})) out.add(scope);
+    for (const scope of Object.keys(this.document.snapshot().coordinationSpace[type] ?? {})) out.add(scope);
     return [...out].toSorted();
   }
 
@@ -172,7 +217,7 @@ export class Coordination {
    *  from `coordinationScopes` — O(nodes), only walked on a set/subscribe. */
   nodesInScope(type: string, scope: string): string[] {
     const out: string[] = [];
-    for (const [nodeId, byType] of Object.entries(this.store.state.coordinationScopes)) {
+    for (const [nodeId, byType] of Object.entries(this.document.snapshot().coordinationScopes)) {
       if (byType[type] === scope) out.push(nodeId);
     }
     return out;
@@ -203,13 +248,16 @@ export class Coordination {
       return scope === undefined ? undefined : this.readCoordination(type, scope);
     };
     let last = effective();
-    const sub = this.store.subscribe(() => {
+    return this.document.subscribe(() => {
       const v = effective();
       if (v !== last) {
         last = v;
         cb(v);
       }
     });
-    return () => sub.unsubscribe();
   }
+}
+
+export function createCoordination(document: CoordinationDocumentPort): CoordinationScopeCellPort {
+  return new Coordination(document);
 }

@@ -58,6 +58,11 @@ function NdGraphNodeInner({ id, selected }: NodeProps<NdGraphNodeType>) {
   const fanIn = useWorkspaceSelector(
     (s) => Object.values(s.edges).filter((e) => e.to === id && e.kind === "pred").length,
   );
+  const unresolvedPorts = useWorkspaceSelector((state) => {
+    const incoming = Object.values(state.edges).find((edge) => edge.to === id)?.kind;
+    const outgoing = Object.values(state.edges).find((edge) => edge.from === id)?.kind;
+    return { incoming, outgoing };
+  });
   const feedback = useNodeFeedbackContext();
 
   const telemetryOn = useTelemetrySelector((t) => t.enabled);
@@ -68,7 +73,7 @@ function NdGraphNodeInner({ id, selected }: NodeProps<NdGraphNodeType>) {
 
   const updateInternals = useUpdateNodeInternals();
 
-  const def = node ? ws.deps.nodeLibrary.getDescriptor(node.type) : null;
+  const def = node ? ws.nodeLibrary.getDescriptor(node.type) : null;
   const form = resolveNodeForm(ws, id);
   const size = resolveNodeSize(ws, id);
 
@@ -87,7 +92,39 @@ function NdGraphNodeInner({ id, selected }: NodeProps<NdGraphNodeType>) {
     updateInternals(id);
   }, [id, form, size.w, size.h, updateInternals]);
 
-  if (!node || !def) return null;
+  if (!node) return null;
+  if (!def) {
+    return (
+      <div ref={(element) => ws.registerEl(`canvas:${id}`, element)} className="relative">
+        <NdNodeFrame
+          nodeId={id}
+          form="card"
+          w={size.w}
+          h={size.h}
+          label={node.label}
+          led={null}
+          badge={<NdHud size={8.5}>unresolved</NdHud>}
+          selected={selected || inMarquee}
+          claimed={claimed}
+          staged={false}
+          locked={locked}
+          onCycleForm={null}
+          onToggleLock={null}
+          actions={<NdIconButton icon="close" title="delete unresolved node" onClick={() => ws.removeNode(id)} />}
+          portsSlot={
+            <>
+              {unresolvedPorts.incoming ? <NdHandle nodeId={id} kind={unresolvedPorts.incoming} out={false} /> : null}
+              {unresolvedPorts.outgoing ? <NdHandle nodeId={id} kind={unresolvedPorts.outgoing} out /> : null}
+            </>
+          }
+        >
+          <div className="grid min-h-12 flex-1 place-items-center rounded border border-dashed border-warning/50 px-3">
+            <NdHud size={8.5}>definition unavailable · {node.type}</NdHud>
+          </div>
+        </NdNodeFrame>
+      </div>
+    );
+  }
 
   const isProxy = node.type === "proxy";
   const staged = ws.placementOf(id) === "staged";
@@ -107,7 +144,7 @@ function NdGraphNodeInner({ id, selected }: NodeProps<NdGraphNodeType>) {
   // placeholder doesn't communicate scale)
   const showCount = countActive || (def.kind === "view" && staged);
   const countText = showCount ? (countError ? "✗" : countCooking ? "…" : count === null ? null : fmt(count)) : null;
-  const spec = ws.deps.nodeLibrary.getSpec(node.type);
+  const spec = ws.nodeLibrary.getSpec(node.type);
   const isSel = spec?.checkpoint ?? false;
   const hasBody = spec?.definition.load !== undefined;
 

@@ -13,17 +13,21 @@
 import { Store } from "@tanstack/store";
 import type { Coordinator } from "@uwdata/mosaic-core";
 
-import { Coordination } from "@/core/coordination/coordination";
-import { patchNodeConfig, predicateSql, predicateSqls, type GraphNodeCookHost } from "@/core/graph/cook";
-import { GraphEvaluator, type GraphEvaluationStore } from "@/core/graph/evaluator";
-import { andPreds, type Predicate } from "@/core/graph/engine";
+import {
+  coordinationDocumentPort,
+  createCoordination,
+  type CoordinationScopeCellPort,
+} from "@/core/coordination/coordination";
+import { predicateSql } from "@/core/graph/cook";
+import type { GraphEvaluationStore } from "@/core/graph/evaluator";
 import type { GraphDocumentEdge, GraphDocumentNode, GraphNodeType } from "@/core/graph/records";
-import { AUTHORED_GRAPH_OUTPUT_PORT, DERIVED_GRAPH_OUTPUT_PORT, type GraphPortValue } from "@/core/graph/values";
-import { rowIndex, type JsonValue, type RowIndex } from "@ndea/sdk";
+import { GraphRuntimeSession, type GraphNodeResolution, type CheckpointInput } from "@/core/graph/runtime-session";
+import type { NodeRuntimeSessionPort } from "@/core/node/runtime/session-port";
+import type { RowIndex } from "@ndea/sdk";
 import type { Metadata } from "@/types";
 import type { NdForm } from "@/components/nd/nd-resolve-form";
 import { toRows } from "@/lib/mosaic-helpers";
-import type { WorkspaceNodeDescriptor, WorkspaceNodeLibrary } from "./node-projection";
+import type { AppNodeDescriptor, AppNodeLibrary } from "@/core/node/library";
 import { NodeCounts } from "./node-counts";
 import {
   treeMapLeaves,
@@ -46,7 +50,7 @@ export interface WorkspaceDeps {
   coordinator: Coordinator;
   table: string;
   metadata: Metadata;
-  nodeLibrary: WorkspaceNodeLibrary;
+  nodeLibrary: AppNodeLibrary;
 }
 
 export type WorkspaceDocumentStore = Pick<Store<WorkspaceDocumentState>, "state" | "get" | "subscribe">;
@@ -84,32 +88,36 @@ export class Workspace {
   readonly store: WorkspaceDocumentStore;
   readonly telemetry: GraphEvaluationStore;
   readonly counts: NodeCounts;
-  readonly deps: WorkspaceDeps;
-  readonly coordination: Coordination;
+  readonly nodeLibrary: AppNodeLibrary;
+  readonly coordination: CoordinationScopeCellPort;
 
-  private readonly evaluator: GraphEvaluator;
+  private readonly graphRuntime: GraphRuntimeSession;
+  private readonly deps: WorkspaceDeps;
   private nodeSeq = 0;
   private edgeSeq = 0;
-  private evaluationNodeOverrides = new Map<string, GraphDocumentNode>();
 
   constructor(deps: WorkspaceDeps) {
     this.deps = deps;
-    this.evaluator = new GraphEvaluator({
-      schedule: (flush) => requestAnimationFrame(flush),
-      // bypass: pred inputs pass through uncooked (counts ripple as if absent)
-      passthrough: (inputs) => ({ kind: "pred", sql: andPreds(predicateSqls(inputs)) }),
-      onFlush: () => this.counts.refresh(),
-    });
+    this.nodeLibrary = deps.nodeLibrary;
     this.documentStore = new Store<WorkspaceDocumentState>(EMPTY);
     this.store = this.documentStore;
+    this.graphRuntime = new GraphRuntimeSession({
+      resolver: deps.nodeLibrary,
+      document: {
+        node: (id) => this.documentStore.state.nodes[id],
+        edges: () => Object.values(this.documentStore.state.edges),
+      },
+      schedule: (flush) => requestAnimationFrame(flush),
+      onFlush: () => this.counts.refresh(),
+    });
     // restore the persisted disposition (a loaded document overrides this via
     // loadDocument's {...EMPTY, ...state}; the seed path keeps it)
     const savedDisp = typeof localStorage !== "undefined" ? localStorage.getItem("ndea.disposition") : null;
     if (savedDisp === "strip" || savedDisp === "full" || savedDisp === "hidden") {
       this.documentStore.setState((s) => ({ ...s, disposition: savedDisp }));
     }
-    this.coordination = new Coordination(this.documentStore);
-    this.telemetry = this.evaluator.telemetry;
+    this.coordination = createCoordination(coordinationDocumentPort(this.documentStore));
+    this.telemetry = this.graphRuntime.telemetry;
     this.counts = new NodeCounts({
       // post-flush, cache-aware: the flush just cooked every registered node
       predicateOf: (id) => predicateSql(this.pullGraphNode(id)),
@@ -122,28 +130,33 @@ export class Workspace {
   /* ── document queries ─────────────────────────────────────────────── */
 
   get graphEpoch(): number {
-    return this.evaluator.epoch;
+    return this.graphRuntime.epoch;
   }
 
-  pullGraphNode(id: string): GraphPortValue {
-    return this.evaluator.pull(id);
+  pullGraphNode(id: string) {
+    return this.graphRuntime.pull(id);
   }
 
-  registerGraphSink(id: string, listener: (value: GraphPortValue) => void): () => void {
-    return this.evaluator.registerSink(id, listener);
+  registerGraphSink(id: string, listener: Parameters<NodeRuntimeSessionPort["registerGraphSink"]>[1]): () => void {
+    return this.graphRuntime.registerSink(id, listener);
   }
 
-  markGraphNodeDirty(id: string): void {
-    this.evaluator.markDirty(id);
-  }
-
-  def(id: string): WorkspaceNodeDescriptor | null {
+  def(id: string): AppNodeDescriptor | null {
     const n = this.store.state.nodes[id];
-    return n ? (this.deps.nodeLibrary.getDescriptor(n.type) ?? null) : null;
+    return n ? (this.nodeLibrary.getDescriptor(n.type) ?? null) : null;
   }
 
-  private requireNodeDescriptor(type: GraphNodeType): WorkspaceNodeDescriptor {
-    const descriptor = this.deps.nodeLibrary.getDescriptor(type);
+  nodeResolution(id: string): GraphNodeResolution | null {
+    const node = this.store.state.nodes[id];
+    return node ? this.graphRuntime.resolutionOf(node) : null;
+  }
+
+  unresolvedNodes(): readonly GraphDocumentNode[] {
+    return this.graphRuntime.unresolvedNodes(this.store.state.nodes);
+  }
+
+  private requireNodeDescriptor(type: GraphNodeType): AppNodeDescriptor {
+    const descriptor = this.nodeLibrary.getDescriptor(type);
     if (!descriptor) throw new Error(`no registered node descriptor for type "${type}"`);
     return descriptor;
   }
@@ -159,8 +172,7 @@ export class Workspace {
     if ((nodes[fromId]?.parent ?? null) !== (nodes[toId]?.parent ?? null)) return false; // wires live within one level
     const dup = Object.values(this.store.state.edges).some((e) => e.from === fromId && e.to === toId);
     if (dup) return false;
-    const ep = this.graphEvaluationEndpoints(fromId, toId);
-    return this.evaluator.canConnect({ from: ep.from, to: ep.to });
+    return this.graphRuntime.canConnect(fromId, toId);
   }
 
   /* ── topology actions ─────────────────────────────────────────────── */
@@ -170,44 +182,48 @@ export class Workspace {
     const id = idOverride ?? `${type}-${++this.nodeSeq}`;
     const parent = this.store.state.graphPath;
     const node: GraphDocumentNode = { id, type, kind: def.kind, label: def.label, pluginId: def.pluginId, parent };
-    this.registerGraphNode(id, def);
-    this.documentStore.setState((s) => ({
-      ...s,
-      nodes: { ...s.nodes, [id]: node },
-      positions: { ...s.positions, [id]: pos },
-      selectedNodeId: id,
-    }));
-    if (type === "subnet") this.birthSubnetSeam(id);
+    const nodes = [node];
+    const positions: Record<string, WorkspaceNodePosition> = { [id]: pos };
+    if (type === "subnet") {
+      this.requireNodeDescriptor("proxy");
+      nodes.push(
+        { id: `${id}-in`, type: "proxy", kind: "proxy", label: "⊳ in", pluginId: null, parent: id },
+        { id: `${id}-out`, type: "proxy", kind: "proxy", label: "⊲ out", pluginId: null, parent: id },
+      );
+      positions[`${id}-in`] = { x: 60, y: 160 };
+      positions[`${id}-out`] = { x: 760, y: 160 };
+    }
+    const registered: string[] = [];
+    try {
+      for (const added of nodes) {
+        if (!this.graphRuntime.registerNode(added)) {
+          throw new Error(`no graph evaluator registered for type "${added.type}"`);
+        }
+        registered.push(added.id);
+      }
+      if (type === "subnet" && !this.graphRuntime.connectSubnetSeam(id)) {
+        throw new Error(`graph runtime rejected subnet seam for "${id}"`);
+      }
+      this.documentStore.setState((state) => ({
+        ...state,
+        nodes: { ...state.nodes, ...Object.fromEntries(nodes.map((added) => [added.id, added])) },
+        positions: { ...state.positions, ...positions },
+        selectedNodeId: id,
+      }));
+    } catch (error) {
+      for (let index = registered.length - 1; index >= 0; index -= 1) {
+        this.graphRuntime.removeNode(registered[index]);
+      }
+      throw error;
+    }
     return id;
   }
 
-  /** a subnet is born with its proxy seam markers + the hidden ⊲out→subnet
-   *  engine edge that makes the subnet emit its inner result (C9) */
-  private birthSubnetSeam(subId: string): void {
-    for (const [suffix, label, x] of [
-      ["-in", "⊳ in", 60],
-      ["-out", "⊲ out", 760],
-    ] as const) {
-      const pid = `${subId}${suffix}`;
-      const pdef = this.requireNodeDescriptor("proxy");
-      const pnode: GraphDocumentNode = { id: pid, type: "proxy", kind: "proxy", label, pluginId: null, parent: subId };
-      this.registerGraphNode(pid, pdef);
-      this.documentStore.setState((s) => ({
-        ...s,
-        nodes: { ...s.nodes, [pid]: pnode },
-        positions: { ...s.positions, [pid]: { x, y: 160 } },
-      }));
-    }
-    this.evaluator.connect({ from: `${subId}-out`, to: subId, toPort: "in" });
-  }
-
   removeNode(id: string): void {
-    const def = this.def(id);
-    if (!def || def.type === "obs") return; // the source is permanent
-    this.evaluator.removeNode(id);
-    this.frozenPredicates.delete(id);
-    this.frozenRows.delete(id);
+    const node = this.store.state.nodes[id];
+    if (!node || node.type === "obs") return; // the source is permanent
     if (this.ui.state.fullscreen === id) this.setFullscreen(null);
+    this.graphRuntime.removeNode(id);
     this.documentStore.setState((s) => {
       const nodes = { ...s.nodes };
       delete nodes[id];
@@ -238,36 +254,25 @@ export class Workspace {
     });
   }
 
-  /** the engine endpoints for a presentation edge — a subnet target routes
-   *  to its ⊳ in proxy (the engine stays flat; C9) */
-  private graphEvaluationEndpoints(fromId: string, toId: string): { from: string; to: string } {
-    const to = this.store.state.nodes[toId]?.type === "subnet" ? `${toId}-in` : toId;
-    return { from: fromId, to };
-  }
-
   connect(fromId: string, toId: string): boolean {
     if (!this.canConnectWire(fromId, toId)) return false;
     const kind = this.def(fromId)!.outKind;
-    // every wire is an engine edge: pred reads the source's DERIVED output
-    // ("out"); sel/focus read its AUTHORED emission port (push unified into
-    // pull — engine.emit + ordinary delivery).
-    const ep = this.graphEvaluationEndpoints(fromId, toId);
-    const fromPort = kind === "pred" ? DERIVED_GRAPH_OUTPUT_PORT : AUTHORED_GRAPH_OUTPUT_PORT;
-    if (!this.evaluator.connect({ from: ep.from, fromPort, to: ep.to, toPort: "in" })) return false;
     const id = `e${++this.edgeSeq}`;
     const edge: GraphDocumentEdge = { id, from: fromId, to: toId, toPort: "in", kind };
-    this.documentStore.setState((s) => ({ ...s, edges: { ...s.edges, [id]: edge } }));
+    if (!this.graphRuntime.connect(edge)) return false;
+    try {
+      this.documentStore.setState((s) => ({ ...s, edges: { ...s.edges, [id]: edge } }));
+    } catch (error) {
+      this.graphRuntime.disconnect(edge);
+      throw error;
+    }
     return true;
   }
 
   deleteEdge(edgeId: string): void {
     const edge = this.store.state.edges[edgeId];
     if (!edge) return;
-    {
-      const ep = this.graphEvaluationEndpoints(edge.from, edge.to);
-      const fromPort = edge.kind === "pred" ? DERIVED_GRAPH_OUTPUT_PORT : AUTHORED_GRAPH_OUTPUT_PORT;
-      this.evaluator.disconnect({ from: ep.from, fromPort, to: ep.to, toPort: edge.toPort });
-    }
+    this.graphRuntime.disconnect(edge);
     this.documentStore.setState((s) => {
       const edges = { ...s.edges };
       delete edges[edgeId];
@@ -294,46 +299,15 @@ export class Workspace {
    * Engine-only runtime state that `WorkspaceDocumentState` doesn't carry is re-derived where it
    * can be (`bypass` from `flags`) and otherwise left to re-establish at the body
    * layer: a wrangle recompiles its `prql` → predicate on mount, a collection node
-   * rebinds from its `config`. A cache node's pin (`frozenPredicates`) is NOT
-   * persisted, so a loaded cache restarts live (passing its input through) even if
+   * rebinds from its `config`. A cache node's checkpoint pin is NOT persisted,
+   * so a loaded cache restarts live (passing its input through) even if
    * it was pinned when saved — a graceful degradation, never a corrupt-state load.
    *
    * Call once on a brand-new Workspace (the load-or-seed seam), in place of
    * `seedWorkspace`. Assumes the doc already passed {@link validateDoc}.
    */
   loadDocument(state: WorkspaceDocumentState): void {
-    // register each node's cook in the engine (the `addNode` engine half).
-    // Proxies are persisted store nodes (a subnet's ⊳in/⊲out seam markers), so
-    // they are registered here like any other node — only their hidden seam edge
-    // (added by `birthSubnetSeam`, never persisted) is recreated per subnet.
-    for (const node of Object.values(state.nodes)) {
-      const def = this.deps.nodeLibrary.getDescriptor(node.type);
-      if (!def) continue; // unknown type (older/newer doc) — skip rather than throw
-      this.registerGraphNode(node.id, def);
-    }
-    for (const node of Object.values(state.nodes)) {
-      if (node.type === "subnet") this.recreateSubnetSeam(node.id);
-    }
-
-    // reconnect presentation edges through the engine (the `connect` engine half):
-    // a pred edge reads the source's derived "out"; a sel/focus edge reads its
-    // authored push port; a subnet target routes to its ⊳in proxy. Endpoints are
-    // resolved against the doc being loaded — the store isn't committed yet.
-    for (const edge of Object.values(state.edges)) {
-      if (!state.nodes[edge.from] || !state.nodes[edge.to]) continue;
-      const to = state.nodes[edge.to]?.type === "subnet" ? `${edge.to}-in` : edge.to;
-      const fromPort = edge.kind === "pred" ? DERIVED_GRAPH_OUTPUT_PORT : AUTHORED_GRAPH_OUTPUT_PORT;
-      this.evaluator.connect({ from: edge.from, fromPort, to, toPort: edge.toPort });
-    }
-
-    // re-derive engine flags that live outside the document: a bypassed node (and
-    // a bypassed subnet's ⊲out seam) re-arms its pass-through.
-    for (const [id, f] of Object.entries(state.flags)) {
-      if (f?.bypass && state.nodes[id]) {
-        this.evaluator.setBypass(id, true);
-        if (state.nodes[id]?.type === "subnet") this.evaluator.setBypass(`${id}-out`, true);
-      }
-    }
+    this.graphRuntime.load(state);
 
     // keep the id sequences ahead of every restored id so a subsequent addNode /
     // connect can't mint a colliding id.
@@ -343,12 +317,6 @@ export class Workspace {
     // commit the document in one write — the store is the topology/presentation
     // authority; the engine (above) is the cook authority.
     this.documentStore.setState(() => ({ ...EMPTY, ...state }));
-  }
-
-  /** Recreate a subnet's hidden ⊲out→subnet engine edge on load (the seam edge
-   *  `birthSubnetSeam` adds — it is engine-only, never a persisted store edge). */
-  private recreateSubnetSeam(subId: string): void {
-    this.evaluator.connect({ from: `${subId}-out`, to: subId, toPort: "in" });
   }
 
   /* ── presentation actions ─────────────────────────────────────────── */
@@ -428,7 +396,7 @@ export class Workspace {
   }
 
   setTelemetryEnabled(on: boolean): void {
-    this.evaluator.setTelemetryEnabled(on);
+    this.graphRuntime.setTelemetryEnabled(on);
   }
 
   /* ── node flags (Houdini b / d) ───────────────────────────────────── */
@@ -445,12 +413,12 @@ export class Workspace {
     const next = !(this.store.state.flags[id]?.[flag] ?? false);
     if (flag === "bypass") {
       // a bypassed subnet bypasses its seam: route through the ⊲out proxy too
-      this.evaluator.setBypass(id, next);
-      if (this.store.state.nodes[id]?.type === "subnet") this.evaluator.setBypass(`${id}-out`, next);
+      this.graphRuntime.setBypass(id, next);
+      if (this.store.state.nodes[id]?.type === "subnet") this.graphRuntime.setBypass(`${id}-out`, next);
     } else {
       // display-off: the instance runtime unregisters its sink (branch never cooks);
       // dirty downstream so LEDs reflect the parked branch
-      this.evaluator.markDirty(id);
+      this.graphRuntime.markDirty(id);
     }
     this.documentStore.setState((s) => ({
       ...s,
@@ -464,79 +432,35 @@ export class Workspace {
    *  emission; edges deliver it, downstream dirties, and the UI reads it back
    *  via getLasso (reactive through the telemetry epoch). */
   emitLasso(nodeId: string, sql: string | null, rowIds: readonly RowIndex[] | null = null): void {
-    // inline small-lasso predicates carry the ids in the SQL text
-    let ids = rowIds;
-    if (!ids && sql) {
-      const m = sql.match(/__row_index__\s+IN\s*\(([^)]+)\)/i);
-      if (m)
-        ids = m[1]
-          .split(",")
-          .map((x) => rowIndex(Number(x.trim())))
-          .filter((n) => Number.isFinite(n));
-    }
-    this.evaluator.emit(nodeId, AUTHORED_GRAPH_OUTPUT_PORT, { kind: "sel", sql, rowIds: ids });
+    this.graphRuntime.emitSelection(nodeId, sql, rowIds);
   }
 
-  getLasso(nodeId: string): Extract<GraphPortValue, { kind: "sel" }> | undefined {
-    const v = this.evaluator.getEmission(nodeId, AUTHORED_GRAPH_OUTPUT_PORT);
-    return v?.kind === "sel" ? v : undefined;
+  getLasso(nodeId: string) {
+    return this.graphRuntime.selection(nodeId);
   }
 
   /** A table row focus lands on its push port (focus wires deliver it). */
   emitFocus(nodeId: string, focusedRowIndex: RowIndex | null): void {
-    this.evaluator.emit(nodeId, AUTHORED_GRAPH_OUTPUT_PORT, { kind: "focus", rowIndex: focusedRowIndex });
+    this.graphRuntime.emitFocus(nodeId, focusedRowIndex);
   }
-
-  /** pinned row-set snapshots per cache node (resolved ids at pin time; null =
-   *  pinned but ids unresolved, e.g. a pred input that carried no row list) */
-  readonly frozenRows = new Map<string, RowIndex[] | null>();
 
   /** Is this cache node currently holding a pinned snapshot (cached), or live? */
   isCached(id: string): boolean {
-    return this.frozenPredicates.has(id);
+    return this.graphRuntime.isCheckpointPinned(id);
   }
 
   /** Read this cache node's live input value (the same value its cook sees when
    *  uncached). Drives the body's "live count" + the pin action. */
-  liveCacheInput(id: string): Extract<GraphPortValue, { kind: "sel" }> | { kind: "pred"; sql: string | null } | null {
-    // a sel edge (scatter lasso / table selection) delivers via the source's
-    // push port; a pred edge pulls the source's cooked output.
-    let sel: Extract<GraphPortValue, { kind: "sel" }> | undefined;
-    const predSqlsIn: Predicate[] = [];
-    for (const e of Object.values(this.store.state.edges)) {
-      if (e.to !== id) continue;
-      if (e.kind === "sel") {
-        const v = this.evaluator.getEmission(e.from, AUTHORED_GRAPH_OUTPUT_PORT);
-        if (v?.kind === "sel") sel = v;
-      } else {
-        const v = this.evaluator.pull(e.from);
-        predSqlsIn.push(predicateSql(v));
-      }
-    }
-    if (sel) return sel;
-    const sql = andPreds(predSqlsIn);
-    return sql !== null || predSqlsIn.length > 0 ? { kind: "pred", sql } : null;
+  liveCacheInput(id: string): CheckpointInput | null {
+    return this.graphRuntime.liveCheckpointInput(id);
   }
 
   /** ◆ Cache / Recache: PIN the cache node's current live input by value. The
    *  push→pull conversion happens exactly here. Returns false if there's
    *  nothing live to pin. */
   pinCache(cacheId: string): boolean {
-    const live = this.liveCacheInput(cacheId);
-    if (!live) return false;
-    const rowIds = live.kind === "sel" && live.rowIds ? [...live.rowIds] : null;
-    // Freeze a SELF-CONTAINED predicate. A live sel's sql may reference a
-    // transient server temp table (`sel_<id>`) that's dropped when the source
-    // clears/unmounts — fatal for a pin that must outlive it. If we have the
-    // rows, freeze an `IN (…)` literal instead so the pin is durable at any
-    // size; fall back to the live sql for pred inputs (Filters etc.), which are
-    // Materialize very large selections if realistic lasso sizes outgrow this IN-list.
-    const frozen = rowIds && rowIds.length > 0 ? `__row_index__ IN (${rowIds.join(", ")})` : live.sql;
-    if (!frozen) return false;
-    this.frozenPredicates.set(cacheId, frozen);
-    this.frozenRows.set(cacheId, rowIds);
-    this.evaluator.markDirty(cacheId);
-    const stamp = this.evaluator.epoch;
+    const stamp = this.graphRuntime.pinCheckpoint(cacheId);
+    if (stamp === null) return false;
     this.documentStore.setState((s) => ({
       ...s,
       nodes: { ...s.nodes, [cacheId]: { ...s.nodes[cacheId], stamp } },
@@ -547,9 +471,7 @@ export class Workspace {
 
   /** Drop the pin — return the cache node to live pass-through. */
   uncache(cacheId: string): void {
-    if (!this.frozenPredicates.delete(cacheId)) return;
-    this.frozenRows.delete(cacheId);
-    this.evaluator.markDirty(cacheId);
+    if (!this.graphRuntime.unpinCheckpoint(cacheId)) return;
     this.documentStore.setState((s) => ({
       ...s,
       nodes: { ...s.nodes, [cacheId]: { ...s.nodes[cacheId], stamp: undefined } },
@@ -572,31 +494,6 @@ export class Workspace {
     }
     this.pinCache(cacheId);
     return cacheId;
-  }
-
-  /* ── engine cook wiring per node type ─────────────────────────────── */
-
-  /** Build the lightweight cook host for a built-in node spec. Closes over the
-   *  workspace's per-node runtime maps; reads are live (called each cook). */
-  private makeCookHost(id: string): GraphNodeCookHost {
-    return {
-      id,
-      node: () => this.evaluationNodeOverrides.get(id) ?? this.store.state.nodes[id],
-      frozenPredicate: () => (this.frozenPredicates.has(id) ? (this.frozenPredicates.get(id) ?? null) : undefined),
-    };
-  }
-
-  private registerGraphNode(id: string, def: WorkspaceNodeDescriptor): void {
-    // Unified path: every node type resolves to a registered spec that owns its
-    // evaluator cook + kind (no switch).
-    const spec = this.deps.nodeLibrary.getSpec(def.type);
-    if (!spec) throw new Error(`no registered node spec for type "${def.type}"`);
-    const host = this.makeCookHost(id);
-    this.evaluator.addNode({
-      id,
-      kind: spec.evaluationRole,
-      cook: (inputs, context) => spec.cook(inputs, host, context),
-    });
   }
 
   /** global render band + FLIP ghost + resize. Forms default LOCKED to the
@@ -725,9 +622,10 @@ export class Workspace {
   /** un-staged stageable nodes — candidates for an empty slot */
   stageCandidates(): string[] {
     return Object.values(this.store.state.nodes)
-      .filter(
-        (n) => this.requireNodeDescriptor(n.type).stage !== "canvas-only" && this.placementOf(n.id) === "embedded",
-      )
+      .filter((node) => {
+        const descriptor = this.nodeLibrary.getDescriptor(node.type);
+        return descriptor?.stage !== "canvas-only" && this.placementOf(node.id) === "embedded";
+      })
       .map((n) => n.id);
   }
 
@@ -861,36 +759,21 @@ export class Workspace {
   /** camera-fit hook — registered by the canvas (fitView with duration) */
   requestFit: ((durationMs?: number) => void) | null = null;
 
-  /** cache-node pinned predicates — presence == "cached"; absence == "live"
-   *  (the cook passes its input through). The pin layer over live propagation. */
-  readonly frozenPredicates = new Map<string, Predicate>();
-
   /** SDK host config writes enter the document and invalidate graph evaluation here. */
   updateNodeConfig(id: string, patch: Record<string, unknown>): void {
     const current = this.store.state.nodes[id];
     if (!current) return;
-    const next: GraphDocumentNode = {
-      ...current,
-      config: patchNodeConfig(current, patch as Record<string, JsonValue>),
-    };
-    this.evaluationNodeOverrides.set(id, next);
-    try {
-      this.evaluator.markDirty(id);
-    } finally {
-      this.evaluationNodeOverrides.delete(id);
-    }
+    const next = this.graphRuntime.patchNodeConfig(current, patch);
     this.documentStore.setState((state) => ({
       ...state,
       nodes: { ...state.nodes, [id]: next },
     }));
+    this.graphRuntime.markDirty(id);
   }
 
   dispose(): void {
-    this.evaluator.dispose();
+    this.graphRuntime.dispose();
     this.counts.dispose();
-    this.evaluationNodeOverrides.clear();
-    this.frozenPredicates.clear();
-    this.frozenRows.clear();
   }
 }
 

@@ -7,10 +7,10 @@ import {
   createEdgeInputRowSetBinding,
   createHierarchyNodeFacet,
   deliverEdgeInputRowSet,
-} from "./node-host-facets";
-import type { Workspace } from "./workspace-store";
+} from "@/core/node/runtime/host-facets";
+import type { NodeRuntimeSessionPort } from "@/core/node/runtime/session-port";
 
-function workspaceFixture() {
+function runtimeSessionFixture() {
   const store = new Store({
     nodes: {
       cache: { id: "cache", type: "cache", stamp: undefined as number | undefined },
@@ -18,6 +18,7 @@ function workspaceFixture() {
       child: { id: "child", type: "count", parent: "subnet" },
       seam: { id: "seam", type: "proxy", parent: "subnet" },
     },
+    flags: {},
   });
   const telemetry = new Store({ epoch: 3 });
   let pinned = false;
@@ -26,7 +27,7 @@ function workspaceFixture() {
     | { kind: "pred"; sql: string | null }
     | null = { kind: "sel", sql: "id IN (2, 5)", rowIds: [2, 5] };
   const calls = { pin: 0, unpin: 0, create: 0, enter: 0 };
-  const workspace = {
+  const session = {
     store,
     telemetry,
     liveCacheInput: () => input,
@@ -47,9 +48,9 @@ function workspaceFixture() {
     enterSubnet: () => {
       calls.enter += 1;
     },
-  } as unknown as Workspace;
+  } as unknown as NodeRuntimeSessionPort;
   return {
-    workspace,
+    session,
     store,
     telemetry,
     calls,
@@ -83,8 +84,8 @@ describe("app-local node host facets", () => {
   });
 
   test("checkpoint exposes stable input/pin snapshots and only narrow actions", () => {
-    const fixture = workspaceFixture();
-    const checkpoint = createCheckpointNodeFacet(fixture.workspace, "cache");
+    const fixture = runtimeSessionFixture();
+    const checkpoint = createCheckpointNodeFacet(fixture.session, "cache");
 
     const initial = checkpoint.getSnapshot();
     expect(initial).toEqual({
@@ -116,8 +117,8 @@ describe("app-local node host facets", () => {
   });
 
   test("facet subscriptions disconnect from every backing state source", () => {
-    const fixture = workspaceFixture();
-    const checkpoint = createCheckpointNodeFacet(fixture.workspace, "cache");
+    const fixture = runtimeSessionFixture();
+    const checkpoint = createCheckpointNodeFacet(fixture.session, "cache");
     let changes = 0;
     const unsubscribe = checkpoint.subscribe(() => {
       changes += 1;
@@ -133,9 +134,9 @@ describe("app-local node host facets", () => {
   });
 
   test("checkpoint creation and hierarchy expose no Workspace-shaped command bag", () => {
-    const fixture = workspaceFixture();
-    const creation = createCheckpointCreationNodeFacet(fixture.workspace, "scatter");
-    const hierarchy = createHierarchyNodeFacet(fixture.workspace, "subnet");
+    const fixture = runtimeSessionFixture();
+    const creation = createCheckpointCreationNodeFacet(fixture.session, "scatter");
+    const hierarchy = createHierarchyNodeFacet(fixture.session, "subnet");
 
     expect(Object.keys(creation)).toEqual(["create"]);
     expect(creation.create()).toBe("created-cache");

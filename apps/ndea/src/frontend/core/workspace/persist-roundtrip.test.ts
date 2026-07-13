@@ -16,11 +16,11 @@ import { rowIndex } from "@ndea/sdk";
 
 import { fromPersistedDoc, loadFromStorage, saveToStorage, storageKey, toPersistedDoc, validateDoc } from "./persist";
 import { predicateSql } from "@/core/graph/cook";
-import { createNativeWorkspaceNodeLibrary } from "./definitions";
+import { createNativeAppNodeLibrary } from "@/core/node/library";
 import { seedWorkspace, Workspace } from "./workspace-store";
 import type { Metadata } from "@ndea/protocol";
 
-const nativeWorkspaceNodeLibrary = createNativeWorkspaceNodeLibrary();
+const nativeWorkspaceNodeLibrary = createNativeAppNodeLibrary();
 
 // rAF doesn't exist under bun:test — the Workspace ctor references it for the
 // flush scheduler. We pull synchronously, so a no-op stub is enough.
@@ -188,6 +188,40 @@ describe("storage backend + invalid-doc fallback", () => {
     if (res.kind === "ok") {
       expect(Object.keys(res.state.nodes).length).toBe(Object.keys(ws.store.state.nodes).length);
     }
+  });
+
+  test("loadFromStorage preserves unresolved nodes and their topology", () => {
+    const ws = makeWs();
+    const source = ws.addNode("dataset", { x: 0, y: 0 });
+    const unknownId = "external-missing";
+    const key = storageKey("unresolved");
+    const state = {
+      ...ws.store.state,
+      nodes: {
+        ...ws.store.state.nodes,
+        [unknownId]: {
+          id: unknownId,
+          type: "external-missing",
+          kind: "view" as const,
+          label: "Unavailable plugin",
+          pluginId: "external-missing",
+        },
+      },
+      edges: {
+        e900: { id: "e900", from: source, to: unknownId, toPort: "in", kind: "pred" as const },
+      },
+      positions: { ...ws.store.state.positions, [unknownId]: { x: 200, y: 0 } },
+    };
+    saveToStorage(key, state);
+
+    const result = loadFromStorage(key, nativeWorkspaceNodeLibrary);
+
+    expect(result.kind).toBe("ok");
+    if (result.kind === "ok") {
+      expect(result.state.nodes[unknownId]).toEqual(state.nodes[unknownId]);
+      expect(result.state.edges.e900).toEqual(state.edges.e900);
+    }
+    ws.dispose();
   });
 
   test("loads a current v2 document with legacy editor keys and string focus", () => {

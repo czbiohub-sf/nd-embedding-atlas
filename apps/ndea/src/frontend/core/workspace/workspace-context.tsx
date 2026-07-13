@@ -14,7 +14,7 @@ import { WorkspaceNodeRuntimeProvider } from "@/core/node/runtime/runtime-contex
 import { APP_NODE_HOST_CAPABILITIES, WorkspaceNodeRuntimeManager } from "@/core/node/runtime/workspace-runtime";
 import type { Metadata } from "@/types";
 import { loadFromStorage, saveToStorage, storageKey } from "./persist";
-import type { WorkspaceNodeLibrary } from "./node-projection";
+import type { AppNodeLibrary } from "@/core/node/library";
 import { resolvePreset, seedAnnotate } from "./presets";
 import { seedWorkspace, Workspace } from "./workspace-store";
 import type { WorkspaceDocumentState } from "./types";
@@ -42,7 +42,7 @@ export function WorkspaceProvider({
   nodeLibrary,
 }: {
   children: React.ReactNode;
-  nodeLibrary: WorkspaceNodeLibrary;
+  nodeLibrary: AppNodeLibrary;
 }) {
   const { state, meta, actions } = useDashboard();
   const { coordinator, brushSelection, table } = meta;
@@ -89,7 +89,7 @@ export function WorkspaceProvider({
     return {
       workspace: w,
       nodeRuntimes: new WorkspaceNodeRuntimeManager({
-        workspace: w,
+        session: w,
         nodeLibrary,
         appHost,
       }),

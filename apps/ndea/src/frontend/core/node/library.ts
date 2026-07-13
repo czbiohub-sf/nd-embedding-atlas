@@ -6,18 +6,19 @@ import {
   type GraphPortValueInputs,
 } from "@/core/graph/cook";
 import type { GraphNodeRole, GraphNodeType } from "@/core/graph/records";
-import type { NativeNodeGeometry, AnyNativeNodeContribution } from "@/core/node/native-contribution";
-import type { NodeCatalog } from "@/core/plugin/catalog";
+import { createNodeCatalog, type NodeCatalog } from "@/core/plugin/catalog";
+import { NATIVE_NODE_SOURCE } from "@/core/plugin/registration";
+import type { NativeNodeGeometry, AnyNativeNodeContribution } from "./native-contribution";
+import { NATIVE_NODE_CONTRIBUTIONS, NATIVE_NODE_DEFINITIONS } from "./native-nodes";
 import type { CatalogNodeDefinition } from "@/core/plugin/registration";
-import type { NodeComputeContext } from "@ndea/sdk";
+import type { ExactNodeTypeRef, NodeComputeContext, PluginFactory } from "@ndea/sdk";
 
-export interface WorkspaceNodeSpec {
+export interface AppNodeSpec {
   readonly definition: CatalogNodeDefinition;
   readonly type: GraphNodeType;
   readonly kind: GraphNodeRole;
   readonly evaluationRole: "source" | "transform" | "view";
   readonly cook: GraphNodeCookFunction;
-  /** Persisted module identity for definitions that own a runtime or Body. */
   readonly pluginId: string | null;
   readonly geometry: NativeNodeGeometry;
   readonly body?: "card-and-full" | "full-only";
@@ -28,7 +29,7 @@ export interface WorkspaceNodeSpec {
   readonly checkpointCreation?: boolean;
 }
 
-export interface WorkspaceNodeDescriptor {
+export interface AppNodeDescriptor {
   readonly type: GraphNodeType;
   readonly kind: GraphNodeRole;
   readonly label: string;
@@ -45,17 +46,17 @@ export interface WorkspaceNodeDescriptor {
   readonly inPalette: boolean;
 }
 
-/** Immutable resolver injected into each Workspace; it owns no document or runtime state. */
-export interface WorkspaceNodeLibrary {
+/** Immutable session projection of the one frozen node catalog. */
+export interface AppNodeLibrary {
   readonly catalog: NodeCatalog;
-  getSpec(type: string): WorkspaceNodeSpec | undefined;
-  getDescriptor(type: string): WorkspaceNodeDescriptor | undefined;
-  listSpecs(): readonly WorkspaceNodeSpec[];
-  listDescriptors(): readonly WorkspaceNodeDescriptor[];
-  paletteDescriptors(): readonly WorkspaceNodeDescriptor[];
+  getSpec(type: string): AppNodeSpec | undefined;
+  getDescriptor(type: string): AppNodeDescriptor | undefined;
+  listSpecs(): readonly AppNodeSpec[];
+  listDescriptors(): readonly AppNodeDescriptor[];
+  paletteDescriptors(): readonly AppNodeDescriptor[];
 }
 
-export function workspaceNodeSpecOf(contribution: AnyNativeNodeContribution): WorkspaceNodeSpec {
+export function nativeNodeSpecOf(contribution: AnyNativeNodeContribution): AppNodeSpec {
   const type: GraphNodeType = contribution.graph.persistedType ?? contribution.definition.ref.nodeTypeId;
   return Object.freeze({
     definition: contribution.definition,
@@ -74,23 +75,16 @@ export function workspaceNodeSpecOf(contribution: AnyNativeNodeContribution): Wo
   });
 }
 
-/**
- * Rejects portable definitions that the current single-output synchronous
- * Workspace evaluator cannot represent. The caller performs this check while
- * collecting a source batch so one unsafe definition rejects that source
- * atomically.
- */
-export function assertExternalDefinitionWorkspaceSafe(definition: CatalogNodeDefinition): void {
+export function assertExternalDefinitionGraphSafe(definition: CatalogNodeDefinition): void {
   const id = definition.ref.nodeTypeId;
-  if (!definition.evaluate) throw new Error(`node "${id}" requires evaluate for Workspace registration`);
+  if (!definition.evaluate) throw new Error(`node "${id}" requires evaluate for graph registration`);
   if (definition.outputs.length !== 1) {
-    throw new Error(`node "${id}" requires exactly one output for Workspace registration`);
+    throw new Error(`node "${id}" requires exactly one output for graph registration`);
   }
 }
 
-/** Derives generic product policy only after the external definition is validated and cataloged. */
-export function externalWorkspaceNodeSpecOf(definition: CatalogNodeDefinition): WorkspaceNodeSpec {
-  assertExternalDefinitionWorkspaceSafe(definition);
+export function externalNodeSpecOf(definition: CatalogNodeDefinition): AppNodeSpec {
+  assertExternalDefinitionGraphSafe(definition);
   const output = definition.outputs[0];
   const compute = adaptNodeCompute(definition.evaluate!, output.id, output.kind);
   const preferredSize = definition.presentation?.preferredBodySize;
@@ -123,15 +117,15 @@ export function externalWorkspaceNodeSpecOf(definition: CatalogNodeDefinition): 
   });
 }
 
-export function inputPortKindsOf(spec: WorkspaceNodeSpec): NdPortKind[] {
+export function inputPortKindsOf(spec: AppNodeSpec): NdPortKind[] {
   return spec.definition.inputs.map((port) => port.kind as NdPortKind);
 }
 
-export function outputPortKindOf(spec: WorkspaceNodeSpec): NdPortKind {
+export function outputPortKindOf(spec: AppNodeSpec): NdPortKind {
   return (spec.definition.outputs[0]?.kind as NdPortKind) ?? "pred";
 }
 
-export function workspaceNodeDescriptorOf(spec: WorkspaceNodeSpec): WorkspaceNodeDescriptor {
+export function nodeDescriptorOf(spec: AppNodeSpec): AppNodeDescriptor {
   return Object.freeze({
     type: spec.type,
     kind: spec.kind,
@@ -150,13 +144,69 @@ export function workspaceNodeDescriptorOf(spec: WorkspaceNodeSpec): WorkspaceNod
   });
 }
 
-/** Validates persisted config against the author-owned definition contract. */
-export function parseWorkspaceNodeConfig(
-  spec: WorkspaceNodeSpec,
+export function parseNodeConfig(
+  spec: AppNodeSpec,
   raw: unknown,
 ): { ok: true; value: unknown } | { ok: false; error: string } {
   const schema = spec.definition.config?.schema;
   if (!schema) return { ok: true, value: raw };
   const result = schema.safeParse(raw);
   return result.success ? { ok: true, value: result.data } : { ok: false, error: result.error.message };
+}
+
+/** The one registration-only factory for every app-owned node definition. */
+export const nativePluginFactory: PluginFactory = ({ registerNode }) => {
+  for (const definition of NATIVE_NODE_DEFINITIONS) registerNode(definition);
+};
+
+export function createAppNodeLibrary(
+  catalog: NodeCatalog,
+  nativeContributions: readonly AnyNativeNodeContribution[] = NATIVE_NODE_CONTRIBUTIONS,
+): AppNodeLibrary {
+  const nativeByRef = new Map(
+    nativeContributions.map((contribution) => [refKey(contribution.definition.ref), contribution]),
+  );
+  const specs: AppNodeSpec[] = [];
+
+  for (const definition of catalog.listDefinitions()) {
+    const entry = catalog.entryExact(definition.ref);
+    if (!entry) throw new Error(`catalog lost source for ${refKey(definition.ref)}`);
+    if (entry.source.kind === "native") {
+      const contribution = nativeByRef.get(refKey(definition.ref));
+      if (!contribution) throw new Error(`native node ${refKey(definition.ref)} has no app policy`);
+      specs.push(nativeNodeSpecOf(contribution));
+    } else if (catalog.resolveCurrent(definition.ref.nodeTypeId) === definition) {
+      specs.push(externalNodeSpecOf(definition));
+    }
+  }
+
+  const frozenSpecs = Object.freeze(specs);
+  const specsByType = new Map<GraphNodeType, AppNodeSpec>();
+  for (const spec of frozenSpecs) {
+    if (specsByType.has(spec.type)) throw new Error(`duplicate app node type "${spec.type}"`);
+    specsByType.set(spec.type, spec);
+  }
+  const descriptors = Object.freeze(frozenSpecs.map(nodeDescriptorOf));
+  const descriptorsByType = new Map(descriptors.map((descriptor) => [descriptor.type, descriptor]));
+  const palette = Object.freeze(descriptors.filter(({ inPalette }) => inPalette));
+
+  return Object.freeze({
+    catalog,
+    getSpec: (type: string) => specsByType.get(type),
+    getDescriptor: (type: string) => descriptorsByType.get(type),
+    listSpecs: () => frozenSpecs,
+    listDescriptors: () => descriptors,
+    paletteDescriptors: () => palette,
+  });
+}
+
+/** Test/support helper. Runtime boot owns its catalog through NodeCatalogRegistration. */
+export function createNativeAppNodeLibrary(): AppNodeLibrary {
+  return createAppNodeLibrary(
+    createNodeCatalog([{ source: NATIVE_NODE_SOURCE, definitions: NATIVE_NODE_DEFINITIONS }]),
+  );
+}
+
+function refKey(ref: ExactNodeTypeRef): string {
+  return `${ref.nodeTypeId}@${ref.nodeTypeVersion}`;
 }

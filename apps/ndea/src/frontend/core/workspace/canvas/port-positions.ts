@@ -37,7 +37,7 @@ export function resolveNodeSize(ws: Workspace, id: string): WorkspaceNodeSize {
     if (o) return o;
   }
   const descriptor = ws.def(id);
-  return descriptor ? workspaceNodeSize(descriptor, form) : { w: 0, h: 0 };
+  return descriptor ? workspaceNodeSize(descriptor, form) : { w: 240, h: 96 };
 }
 
 export function portPos(ws: Workspace, id: string, which: "in" | "out"): WorkspaceNodePosition {

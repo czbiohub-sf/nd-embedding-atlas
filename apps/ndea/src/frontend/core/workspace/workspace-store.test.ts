@@ -2,13 +2,12 @@ import { beforeEach, describe, expect, test } from "bun:test";
 import type { Metadata } from "@ndea/protocol";
 import { rowIndex } from "@ndea/sdk";
 import { predicateSql } from "@/core/graph/cook";
-import { createNativeWorkspaceNodeLibrary } from "./definitions";
-import type { WorkspaceNodeLibrary } from "./node-projection";
+import { createNativeAppNodeLibrary, type AppNodeLibrary } from "@/core/node/library";
 import { Workspace } from "./workspace-store";
 
-const nativeWorkspaceNodeLibrary = createNativeWorkspaceNodeLibrary();
+const nativeWorkspaceNodeLibrary = createNativeAppNodeLibrary();
 
-function createWorkspace(nodeLibrary: WorkspaceNodeLibrary = nativeWorkspaceNodeLibrary): Workspace {
+function createWorkspace(nodeLibrary: AppNodeLibrary = nativeWorkspaceNodeLibrary): Workspace {
   return new Workspace({
     coordinator: { query: () => Promise.resolve([]) } as never,
     table: "atlas",
@@ -27,7 +26,7 @@ beforeEach(() => {
 describe("Workspace graph transactions", () => {
   test("resolves node policy only through the injected immutable library", () => {
     expect(Object.isFrozen(nativeWorkspaceNodeLibrary)).toBe(true);
-    const emptyLibrary: WorkspaceNodeLibrary = Object.freeze({
+    const emptyLibrary: AppNodeLibrary = Object.freeze({
       catalog: nativeWorkspaceNodeLibrary.catalog,
       getSpec: (): undefined => {},
       getDescriptor: (): undefined => {},
@@ -37,6 +36,23 @@ describe("Workspace graph transactions", () => {
     });
     const workspace = createWorkspace(emptyLibrary);
     expect(() => workspace.addNode("obs", { x: 0, y: 0 })).toThrow('no registered node descriptor for type "obs"');
+  });
+
+  test("does not commit a document node when evaluator registration is unavailable", () => {
+    const descriptorOnlyLibrary: AppNodeLibrary = Object.freeze({
+      catalog: nativeWorkspaceNodeLibrary.catalog,
+      getSpec: (): undefined => {},
+      getDescriptor: (type: string) => nativeWorkspaceNodeLibrary.getDescriptor(type),
+      listSpecs: () => [],
+      listDescriptors: () => nativeWorkspaceNodeLibrary.listDescriptors(),
+      paletteDescriptors: () => nativeWorkspaceNodeLibrary.paletteDescriptors(),
+    });
+    const workspace = createWorkspace(descriptorOnlyLibrary);
+
+    expect(() => workspace.addNode("count", { x: 0, y: 0 })).toThrow('no graph evaluator registered for type "count"');
+    expect(workspace.store.state.nodes).toEqual({});
+    expect(workspace.store.state.positions).toEqual({});
+    workspace.dispose();
   });
 
   test("publishes an SDK host config patch only after synchronous sinks recook it", () => {
@@ -67,16 +83,17 @@ describe("Workspace graph transactions", () => {
 
   test("removing a checkpoint clears its runtime projection before ID reuse", () => {
     const workspace = createWorkspace();
+    const scatter = workspace.addNode("scatter", { x: 0, y: 0 });
     const cache = workspace.addNode("cache", { x: 0, y: 0 }, "reused-cache");
-
-    workspace.frozenPredicates.set(cache, "row_id > 10");
-    workspace.frozenRows.set(cache, [rowIndex(11), rowIndex(12)]);
+    expect(workspace.connect(scatter, cache)).toBe(true);
+    workspace.emitLasso(scatter, "__row_index__ IN (11, 12)", [rowIndex(11), rowIndex(12)]);
+    expect(workspace.pinCache(cache)).toBe(true);
+    expect(workspace.isCached(cache)).toBe(true);
 
     workspace.removeNode(cache);
     workspace.addNode("cache", { x: 0, y: 0 }, cache);
 
-    expect(workspace.frozenPredicates.has(cache)).toBe(false);
-    expect(workspace.frozenRows.has(cache)).toBe(false);
+    expect(workspace.isCached(cache)).toBe(false);
     workspace.dispose();
   });
 
@@ -180,6 +197,42 @@ describe("Workspace graph transactions", () => {
     workspace.dispose();
   });
 
+  test("keeps predicate, row-set, focus, editor, coordination, placement, and disposition state independent", () => {
+    const workspace = createWorkspace();
+    const dataset = workspace.addNode("dataset", { x: 0, y: 0 });
+    const count = workspace.addNode("count", { x: 100, y: 0 });
+    const scatter = workspace.addNode("scatter", { x: 200, y: 0 });
+    const table = workspace.addNode("table", { x: 300, y: 0 });
+    const imageViewer = workspace.addNode("image-viewer", { x: 400, y: 0 });
+    expect(workspace.connect(dataset, count)).toBe(true);
+    expect(workspace.connect(table, imageViewer)).toBe(true);
+    workspace.updateNodeConfig(dataset, { datasetKey: "plate-a" });
+
+    let focused: ReturnType<typeof rowIndex> | null = null;
+    const unregister = workspace.registerGraphSink(imageViewer, (value) => {
+      if (value.kind === "focus") focused = value.rowIndex;
+    });
+    workspace.emitLasso(scatter, "__row_index__ IN (2, 5)", [rowIndex(2), rowIndex(5)]);
+    workspace.emitFocus(table, rowIndex(9));
+    workspace.coordination.assignScope(scatter, "focus", "A");
+    workspace.coordination.setCoordinationValue("focus", "A", rowIndex(7));
+    workspace.setGraphSelection([scatter, table], []);
+    workspace.setStageTree("__slot");
+    workspace.fillSlot("__slot", imageViewer);
+    workspace.setDisposition("hidden");
+
+    expect(predicateSql(workspace.pullGraphNode(count))).toBe("_dataset = 'plate-a'");
+    expect(workspace.getLasso(scatter)?.rowIds).toEqual([rowIndex(2), rowIndex(5)]);
+    expect(Number(focused)).toBe(9);
+    expect(workspace.coordination.readCoordination("focus", "A")).toBe(rowIndex(7));
+    expect(workspace.store.state.selectedNodeIds).toEqual([scatter, table]);
+    expect(workspace.store.state.explicit[imageViewer]).toBe("staged");
+    expect(workspace.store.state.stageTree).toBe(imageViewer);
+    expect(workspace.store.state.disposition).toBe("hidden");
+    unregister();
+    workspace.dispose();
+  });
+
   test("rejects an illegal cycle without committing document topology", () => {
     const workspace = createWorkspace();
     const first = workspace.addNode("wrangle", { x: 0, y: 0 });
@@ -215,6 +268,75 @@ describe("Workspace graph transactions", () => {
     expect(notifications).toBe(1);
     expect(hydratedPredicate).toContain("collection_id = 'keepers'");
     subscription.unsubscribe();
+    source.dispose();
+    destination.dispose();
+  });
+
+  test("loads unresolved node records and incident edges without evaluator registration", () => {
+    const source = createWorkspace();
+    const dataset = source.addNode("dataset", { x: 0, y: 0 });
+    const unknownId = "external-missing";
+    const unknownEdgeId = "e900";
+    const state = {
+      ...source.store.state,
+      nodes: {
+        ...source.store.state.nodes,
+        [unknownId]: {
+          id: unknownId,
+          type: "external-missing",
+          kind: "view" as const,
+          label: "Unavailable plugin",
+          pluginId: "external-missing",
+        },
+      },
+      positions: { ...source.store.state.positions, [unknownId]: { x: 200, y: 100 } },
+      edges: {
+        ...source.store.state.edges,
+        [unknownEdgeId]: {
+          id: unknownEdgeId,
+          from: dataset,
+          to: unknownId,
+          toPort: "in",
+          kind: "pred" as const,
+        },
+      },
+      selectedNodeId: unknownId,
+    };
+    const destination = createWorkspace();
+
+    destination.loadDocument(state);
+
+    expect(destination.store.state.nodes[unknownId]).toEqual(state.nodes[unknownId]);
+    expect(destination.store.state.edges[unknownEdgeId]).toEqual(state.edges[unknownEdgeId]);
+    expect(destination.store.state.selectedNodeId).toBe(unknownId);
+    expect(destination.nodeResolution(unknownId)?.status).toBe("unresolved");
+    expect(destination.unresolvedNodes().map(({ id }) => id)).toEqual([unknownId]);
+
+    destination.removeNode(unknownId);
+    expect(destination.store.state.nodes[unknownId]).toBeUndefined();
+    expect(destination.store.state.edges[unknownEdgeId]).toBeUndefined();
+    source.dispose();
+    destination.dispose();
+  });
+
+  test("leaves both document and evaluator empty when loaded topology validation fails", () => {
+    const source = createWorkspace();
+    const first = source.addNode("wrangle", { x: 0, y: 0 });
+    const second = source.addNode("wrangle", { x: 100, y: 0 });
+    expect(source.connect(first, second)).toBe(true);
+    const invalidState = {
+      ...source.store.state,
+      edges: {
+        ...source.store.state.edges,
+        reverse: { id: "reverse", from: second, to: first, toPort: "in", kind: "pred" as const },
+      },
+    };
+    const destination = createWorkspace();
+
+    expect(() => destination.loadDocument(invalidState)).toThrow('graph runtime rejected edge "reverse"');
+    expect(destination.store.state.nodes).toEqual({});
+    expect(destination.store.state.edges).toEqual({});
+    expect(destination.addNode("count", { x: 0, y: 0 }, first)).toBe(first);
     source.dispose();
     destination.dispose();
   });

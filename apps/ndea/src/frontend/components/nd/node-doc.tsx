@@ -43,7 +43,7 @@ function PortToken({ port, out }: { port: NodePort; out: boolean }) {
 
 export function NodeDocButton({ nodeType, compact = false }: { nodeType: string; compact?: boolean }) {
   const workspace = useWorkspace();
-  const definition = workspace.deps.nodeLibrary.catalog.resolveCurrent(nodeType);
+  const definition = workspace.nodeLibrary.catalog.resolveCurrent(nodeType);
   const doc = definition?.documentation;
   const docs = useDocs();
   const [open, setOpen] = useState(false);

@@ -10,8 +10,12 @@ import {
   type PluginModuleImporter,
 } from "./loader";
 import { NATIVE_NODE_SOURCE, type NodeContributionSource, type PluginContributionBatch } from "./registration";
-import { nativePluginFactory, createWorkspaceNodeLibrary } from "@/core/workspace/definitions";
-import { assertExternalDefinitionWorkspaceSafe, type WorkspaceNodeLibrary } from "@/core/workspace/node-projection";
+import {
+  assertExternalDefinitionGraphSafe,
+  createAppNodeLibrary,
+  nativePluginFactory,
+  type AppNodeLibrary,
+} from "@/core/node/library";
 
 function aggregateSetupFailure(message: string, error: unknown, disposalError: unknown): AggregateError {
   return new AggregateError([error, disposalError], message, { cause: disposalError });
@@ -29,7 +33,7 @@ interface CatalogRegistration {
 
 export interface FrontendPluginSession {
   readonly catalog: NodeCatalog;
-  readonly nodeLibrary: WorkspaceNodeLibrary;
+  readonly nodeLibrary: AppNodeLibrary;
   readonly diagnostics: readonly PluginDiagnostic[];
   dispose(): void;
 }
@@ -74,7 +78,7 @@ export async function loadFrontendPluginSession(
 
       try {
         await registration.register({ kind: "plugin", manifest: entry.manifest }, factory, (batch) => {
-          for (const definition of batch.definitions) assertExternalDefinitionWorkspaceSafe(definition);
+          for (const definition of batch.definitions) assertExternalDefinitionGraphSafe(definition);
         });
       } catch (error) {
         diagnostics.push(pluginFailureDiagnostic(entry, "registration", "plugin-registration-failed", error));
@@ -82,7 +86,7 @@ export async function loadFrontendPluginSession(
     }
 
     const catalog = registration.freeze();
-    const nodeLibrary = createWorkspaceNodeLibrary(catalog);
+    const nodeLibrary = createAppNodeLibrary(catalog);
     return Object.freeze({
       catalog,
       nodeLibrary,
