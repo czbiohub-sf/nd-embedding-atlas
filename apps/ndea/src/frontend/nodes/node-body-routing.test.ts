@@ -3,12 +3,12 @@ import type { Collection, CollectionMutationResult, CreateCollectionBody } from 
 import { rowIndex } from "@ndea/sdk";
 
 import type { GraphNodeCookHost } from "@/core/graph/cook";
-import { bindCollection } from "@/nodes/collection/body";
-import { countQuery } from "@/nodes/utils/count/body";
-import { patchDatasetKey } from "@/nodes/utils/dataset/body";
-import { saveExportCollection } from "@/nodes/utils/export/body";
+import { bindCollection } from "@/nodes/collection/config-actions";
+import { countQuery } from "@/nodes/utils/count/query";
+import { patchDatasetKey } from "@/nodes/utils/dataset/config-actions";
 import { exportNode } from "@/nodes/utils/export/node";
-import { classifyWrangleSql } from "@/nodes/utils/wrangle/body";
+import { saveExportCollection } from "@/nodes/utils/export/save";
+import { classifyWrangleSql } from "@/nodes/utils/wrangle/prql";
 
 function collection(overrides: Partial<Collection> = {}): Collection {
   return {
@@ -70,9 +70,9 @@ describe("node Body host routing", () => {
       { patchConfig: (patch) => patches.push(patch) },
       "Saved rows",
       [rowIndex(11), rowIndex(12)],
-      async (body) => {
+      (body) => {
         requests.push(body);
-        return result;
+        return Promise.resolve(result);
       },
     );
 
@@ -98,17 +98,18 @@ describe("node Body host routing", () => {
 
   test("Wrangle classification queries through the data capability", async () => {
     const calls: string[] = [];
-    const filter = await classifyWrangleSql(async (sql) => {
+    const filter = await classifyWrangleSql((sql) => {
       calls.push(sql);
-      return [{ column_name: "__obs_index__" }, { column_name: "score" }];
+      return Promise.resolve([{ column_name: "__obs_index__" }, { column_name: "score" }]);
     }, "SELECT * FROM dataset");
     const reshape = await classifyWrangleSql(
-      async () => [{ column_name: "mean_score" }],
+      () => Promise.resolve([{ column_name: "mean_score" }]),
       "SELECT AVG(score) AS mean_score FROM dataset",
     );
-    const invalid = await classifyWrangleSql(async () => {
-      throw new Error("Binder Error: missing_column does not exist\nLINE 1");
-    }, "SELECT missing_column FROM dataset");
+    const invalid = await classifyWrangleSql(
+      () => Promise.reject(new Error("Binder Error: missing_column does not exist\nLINE 1")),
+      "SELECT missing_column FROM dataset",
+    );
 
     expect(calls).toEqual(["DESCRIBE (SELECT * FROM dataset)"]);
     expect(filter).toBe("filter");

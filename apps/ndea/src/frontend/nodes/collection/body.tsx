@@ -1,28 +1,12 @@
 import { useState } from "react";
-import type { Collection } from "@ndea/protocol";
 
 import { useCollections } from "@/components/collections/useCollections";
 import { NdBracketed, NdCaption, NdChip, NdHud } from "@/components/nd/nd-primitives";
 import type { NodeBodyProps } from "@/core/node/app-node-host";
 import type { CollectionCapabilities, CollectionConfig } from "./node";
+import { bindCollection } from "./config-actions";
 
 const formatCount = (count: number) => count.toLocaleString("en-US");
-
-interface CollectionConfigHost {
-  patchConfig(patch: Partial<CollectionConfig>): void;
-}
-
-export function bindCollection(host: CollectionConfigHost, collection: Collection | null): CollectionConfig {
-  const next: CollectionConfig = collection
-    ? {
-        collectionId: collection.collection_id,
-        collectionName: collection.name,
-        collectionVersion: collection.version,
-      }
-    : { collectionId: null, collectionName: null, collectionVersion: null };
-  host.patchConfig(next);
-  return next;
-}
 
 export function CollectionBody({ host }: NodeBodyProps<CollectionConfig, CollectionCapabilities>) {
   const { data: collections, isLoading } = useCollections();

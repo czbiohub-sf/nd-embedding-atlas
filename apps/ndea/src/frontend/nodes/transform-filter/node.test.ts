@@ -15,7 +15,7 @@ describe("threshold config-backed cook", () => {
         pluginId: "transform-filter",
         config: { column: 'score"raw', threshold: 0.25 },
       }),
-      frozenPredicate: () => undefined,
+      frozenPredicate: (): undefined => {},
     } as GraphNodeCookHost;
 
     expect(thresholdNode.graph.cook(new Map([["in", [{ kind: "pred", sql: "quality = 1" }]]]), host)).toEqual({
@@ -35,7 +35,7 @@ describe("threshold config-backed cook", () => {
         pluginId: "transform-filter",
         config: { column: null, threshold: 0 },
       }),
-      frozenPredicate: () => undefined,
+      frozenPredicate: (): undefined => {},
     } as GraphNodeCookHost;
 
     expect(thresholdNode.graph.cook(new Map([["in", [{ kind: "pred", sql: "score > 0.25" }]]]), host)).toEqual({

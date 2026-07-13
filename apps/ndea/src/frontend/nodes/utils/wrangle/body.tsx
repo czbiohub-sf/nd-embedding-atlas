@@ -4,32 +4,11 @@ import { PrqlEditor } from "@/components/nd/PrqlEditor";
 import { NdHud } from "@/components/nd/nd-primitives";
 import type { NodeBodyProps } from "@/core/node/app-node-host";
 import type { WrangleCapabilities, WrangleConfig } from "./node";
-import { compilePrql, type PrqlError } from "./prql";
+import { classifyWrangleSql, compilePrql, type PrqlError } from "./prql";
 
 const DEBOUNCE_MS = 280;
 
 type WrangleStatus = "clean" | "compiling" | "error" | "empty" | "reshaping";
-type WrangleSqlKind = "filter" | "reshaping" | { error: string };
-
-export async function classifyWrangleSql(
-  query: (sql: string, signal?: AbortSignal) => Promise<unknown>,
-  sql: string,
-  signal?: AbortSignal,
-): Promise<WrangleSqlKind> {
-  try {
-    const result = await query(`DESCRIBE (${sql})`, signal);
-    const columns = [...(result as Iterable<{ column_name: string }>)].map((row) => row.column_name);
-    return columns.includes("__obs_index__") ? "filter" : "reshaping";
-  } catch (error) {
-    const raw = String((error as { message?: string }).message ?? error);
-    return {
-      error: raw
-        .replace(/^[A-Za-z ]*Error:\s*/, "")
-        .split("\n")[0]
-        .slice(0, 160),
-    };
-  }
-}
 
 export function WrangleBody({ host }: NodeBodyProps<WrangleConfig, WrangleCapabilities>) {
   const [prql, setPrql] = useState(host.config.prql ?? "");

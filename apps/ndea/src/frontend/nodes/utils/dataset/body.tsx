@@ -2,15 +2,7 @@ import { useState } from "react";
 
 import type { NodeBodyProps } from "@/core/node/app-node-host";
 import type { DatasetCapabilities, DatasetConfig } from "./node";
-
-interface DatasetConfigHost {
-  patchConfig(patch: Partial<DatasetConfig>): void;
-}
-
-export function patchDatasetKey(host: DatasetConfigHost, value: string): string {
-  host.patchConfig({ datasetKey: value || null });
-  return value;
-}
+import { patchDatasetKey } from "./config-actions";
 
 export function DatasetBody({ host }: NodeBodyProps<DatasetConfig, DatasetCapabilities>) {
   const keys = host.data.metadata.dataset_keys ?? [];

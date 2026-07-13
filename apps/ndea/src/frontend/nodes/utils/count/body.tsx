@@ -3,10 +3,7 @@ import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import type { NodeBodyProps } from "@/core/node/app-node-host";
 import { predicateToSql, toRows } from "@/lib/mosaic-helpers";
 import type { CountCapabilities } from "./node";
-
-export function countQuery(table: string, predicate: string | null): string {
-  return `SELECT COUNT(*)::INT AS n FROM ${table}${predicate ? ` WHERE ${predicate}` : ""}`;
-}
+import { countQuery } from "./query";
 
 export function CountBody({ host }: NodeBodyProps<unknown, CountCapabilities>) {
   const selection = host.inputPredicate;
@@ -28,7 +25,7 @@ export function CountBody({ host }: NodeBodyProps<unknown, CountCapabilities>) {
     void host.dataAPI
       .query(countQuery(host.data.table, predicate), host.signal)
       .then((result) => {
-        if (active) setCount(Number(toRows<{ n: number }>(result)[0]?.n ?? 0));
+        if (active) setCount(toRows<{ n: number }>(result)[0]?.n ?? 0);
       })
       .catch((reason: unknown) => {
         if (active) setError(reason instanceof Error ? reason.message : String(reason));

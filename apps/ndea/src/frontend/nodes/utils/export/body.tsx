@@ -1,33 +1,13 @@
 import { useCallback, useState, useSyncExternalStore } from "react";
-import type { CollectionMutationResult, CreateCollectionBody } from "@ndea/protocol";
-import type { RowIndex } from "@ndea/sdk";
-
 import { NdIconButton } from "@/components/nd/nd-icon-button";
 import { NdBracketed, NdCaption, NdChip } from "@/components/nd/nd-primitives";
 import { useCreateCollection } from "@/components/collections/useCollections";
 import type { NodeBodyProps } from "@/core/node/app-node-host";
 import type { CollectionConfig } from "@/nodes/collection/node";
 import type { ExportCapabilities } from "./node";
+import { saveExportCollection } from "./save";
 
 const formatCount = (count: number) => count.toLocaleString("en-US");
-
-interface ExportConfigHost {
-  patchConfig(patch: Partial<CollectionConfig>): void;
-}
-
-export async function saveExportCollection(
-  host: ExportConfigHost,
-  name: string,
-  rowIds: readonly RowIndex[],
-  createCollection: (body: CreateCollectionBody) => Promise<CollectionMutationResult>,
-): Promise<void> {
-  const result = await createCollection({ name, tags: [], row_indices: [...rowIds] });
-  host.patchConfig({
-    collectionId: result.result.collection_id,
-    collectionName: result.result.name,
-    collectionVersion: result.result.version,
-  });
-}
 
 export function ExportBody({ host }: NodeBodyProps<CollectionConfig, ExportCapabilities>) {
   const createCollection = useCreateCollection();

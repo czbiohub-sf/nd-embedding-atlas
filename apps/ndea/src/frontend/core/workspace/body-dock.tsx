@@ -72,8 +72,8 @@ function BodyOwnerInner({ nodeId, definitionRef }: { nodeId: string; definitionR
     const nodeConfig = ws.store.state.nodes[nodeId]?.config;
     const defaultConfig = definition.config?.defaultValue;
     const config = {
-      ...(defaultConfig && typeof defaultConfig === "object" ? defaultConfig : {}),
-      ...(nodeConfig && typeof nodeConfig === "object" ? nodeConfig : {}),
+      ...(defaultConfig && typeof defaultConfig === "object" && !Array.isArray(defaultConfig) ? defaultConfig : {}),
+      ...(nodeConfig && typeof nodeConfig === "object" && !Array.isArray(nodeConfig) ? nodeConfig : {}),
     };
     const built = makeHost<unknown>({
       instanceId: nodeInstanceId(nodeId),

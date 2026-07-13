@@ -10,6 +10,7 @@ export interface PrqlError {
 }
 
 export type PrqlResult = { ok: true; sql: string } | { ok: false; error: PrqlError };
+export type WrangleSqlKind = "filter" | "reshaping" | { error: string };
 
 type WebModule = {
   default: (input?: unknown) => Promise<unknown>;
@@ -76,5 +77,25 @@ export async function compilePrql(prql: string, table: string): Promise<PrqlResu
     return { ok: true, sql: module.compile(src, options) };
   } catch (error) {
     return { ok: false, error: parseError((error as { message?: string }).message ?? String(error), src) };
+  }
+}
+
+export async function classifyWrangleSql(
+  query: (sql: string, signal?: AbortSignal) => Promise<unknown>,
+  sql: string,
+  signal?: AbortSignal,
+): Promise<WrangleSqlKind> {
+  try {
+    const result = await query(`DESCRIBE (${sql})`, signal);
+    const columns = [...(result as Iterable<{ column_name: string }>)].map((row) => row.column_name);
+    return columns.includes("__obs_index__") ? "filter" : "reshaping";
+  } catch (error) {
+    const raw = String((error as { message?: string }).message ?? error);
+    return {
+      error: raw
+        .replace(/^[A-Za-z ]*Error:\s*/, "")
+        .split("\n")[0]
+        .slice(0, 160),
+    };
   }
 }
