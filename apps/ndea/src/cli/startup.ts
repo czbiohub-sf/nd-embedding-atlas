@@ -26,7 +26,7 @@ import { buildPlateMounts, readPlateMeta } from "../server/plate.ts";
 import type { PlateChannel, PlateMount } from "../server/plate.ts";
 import { detectSpatialColumns, spatialHiddenColumns } from "../server/state.ts";
 import type { DatasetMountConfig, DatasetSessionMetadata, ServerSession } from "../server/state.ts";
-import type { ResolvedConfig, DatasetEntry } from "./config.ts";
+import type { LaunchConfig, ProjectDatasetMount } from "./config.ts";
 import { getNetworkAddress } from "./resolve.ts";
 import { resolveFrontendDir } from "../server/static.ts";
 import { flushAnnotationSaves } from "../server/routes/annotate.ts";
@@ -60,14 +60,14 @@ function formatNumber(n: number): string {
 // ─── Loaded dataset info ────────────────────────────────────────────────────
 
 interface LoadedDataset {
-  entry: DatasetEntry;
+  entry: ProjectDatasetMount;
   adata: DatasetHandle;
   obsmKeys: string[];
 }
 
 // ─── Main startup ───────────────────────────────────────────────────────────
 
-export async function startup(config: ResolvedConfig): Promise<void> {
+export async function startup(config: LaunchConfig): Promise<void> {
   const startTime = performance.now();
 
   // In dev (--no-static or NDEA_NO_STATIC), bridge backend errors into Vite's

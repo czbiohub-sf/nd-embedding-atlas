@@ -7,21 +7,21 @@
  */
 
 import { existsSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { parse as parseYaml } from "yaml";
 import type { DatasetChannelConfig } from "../server/state.ts";
 
 // ─── Public types ───────────────────────────────────────────────────────────
 
-export interface DatasetEntry {
+export interface ProjectDatasetMount {
   name: string;
   path: string;
   platePath?: string;
   channels?: Record<string, DatasetChannelConfig>;
 }
 
-export interface ProjectConfig {
-  datasets: DatasetEntry[];
+export interface ParsedProjectConfig {
+  datasets: ProjectDatasetMount[];
   obsColumns?: string[];
   settings?: {
     port?: number;
@@ -29,16 +29,28 @@ export interface ProjectConfig {
   };
   /** Named preset a shipped build opens (top-level YAML `preset:`). */
   preset?: string;
+  /** Absolute plugin paths resolved from top-level YAML `plugin_paths:`. */
+  pluginPaths?: string[];
 }
 
 /** Fully resolved config with CLI overrides applied. */
-export interface ResolvedConfig {
-  datasets: DatasetEntry[];
+export interface LaunchConfig {
+  datasets: ProjectDatasetMount[];
   obsColumns?: string[];
   port: number;
   host: string;
   noOpen: boolean;
   noStatic: boolean;
+  preset?: string;
+  pluginPaths?: string[];
+}
+
+export interface LaunchOverrides {
+  port?: number;
+  host?: string;
+  noOpen: boolean;
+  noStatic: boolean;
+  obsColumns?: string[];
   preset?: string;
 }
 
@@ -52,7 +64,7 @@ export function isYamlConfig(path: string): boolean {
 // ─── YAML loader ────────────────────────────────────────────────────────────
 
 /** Load and validate a YAML project config. Paths are resolved relative to the YAML file. */
-export async function loadProjectConfig(yamlPath: string): Promise<ProjectConfig> {
+export async function loadProjectConfig(yamlPath: string): Promise<ParsedProjectConfig> {
   const absPath = resolve(yamlPath);
   if (!existsSync(absPath)) {
     throw new Error(`Config file not found: ${absPath}`);
@@ -75,19 +87,20 @@ export async function loadProjectConfig(yamlPath: string): Promise<ProjectConfig
   const obsColumns = parseObsColumns(raw.obs_columns);
   const settings = parseSettings(raw.settings);
   const preset = typeof raw.preset === "string" ? raw.preset : undefined;
+  const pluginPaths = parsePluginPaths(raw.plugin_paths, baseDir);
 
-  return { datasets, obsColumns, settings, preset };
+  return { datasets, obsColumns, settings, preset, pluginPaths };
 }
 
 // ─── Path-based config ──────────────────────────────────────────────────────
 
 /**
- * Convert bare zarr paths into a ProjectConfig.
+ * Convert bare zarr paths into a ParsedProjectConfig.
  *
  * Each path becomes a dataset whose name is derived from the filename.
  */
-export function pathsToConfig(paths: string[]): ProjectConfig {
-  const datasets: DatasetEntry[] = paths.map((p) => {
+export function pathsToConfig(paths: string[]): ParsedProjectConfig {
+  const datasets: ProjectDatasetMount[] = paths.map((p) => {
     const abs = resolve(p);
     // Derive name: strip trailing slashes, take basename, drop .zarr extension
     const base = abs.replace(/\/+$/, "").split("/").pop()!;
@@ -97,9 +110,23 @@ export function pathsToConfig(paths: string[]): ProjectConfig {
   return { datasets };
 }
 
+/** Apply CLI overrides to a parsed project without changing boundary precedence. */
+export function resolveLaunchConfig(project: ParsedProjectConfig, overrides: LaunchOverrides): LaunchConfig {
+  return {
+    datasets: project.datasets,
+    obsColumns: overrides.obsColumns ?? project.obsColumns,
+    port: overrides.port ?? project.settings?.port ?? 5055,
+    host: overrides.host ?? project.settings?.host ?? "127.0.0.1",
+    noOpen: overrides.noOpen,
+    noStatic: overrides.noStatic,
+    preset: overrides.preset ?? project.preset,
+    pluginPaths: project.pluginPaths,
+  };
+}
+
 // ─── Internal parsers ───────────────────────────────────────────────────────
 
-function parseDatasets(raw: unknown, baseDir: string): DatasetEntry[] {
+function parseDatasets(raw: unknown, baseDir: string): ProjectDatasetMount[] {
   if (!raw || typeof raw !== "object") {
     throw new Error("Config 'datasets' must be an array or object");
   }
@@ -116,7 +143,7 @@ function parseDatasets(raw: unknown, baseDir: string): DatasetEntry[] {
 }
 
 /** Parse array-style entry: { name, path, plate_path?, channels? } */
-function parseArrayEntry(entry: unknown, i: number, baseDir: string): DatasetEntry {
+function parseArrayEntry(entry: unknown, i: number, baseDir: string): ProjectDatasetMount {
   if (!entry || typeof entry !== "object") {
     throw new Error(`Dataset entry ${i} must be an object`);
   }
@@ -129,7 +156,7 @@ function parseArrayEntry(entry: unknown, i: number, baseDir: string): DatasetEnt
     throw new Error(`Dataset entry ${i} must have a 'path' string`);
   }
 
-  const dataset: DatasetEntry = {
+  const dataset: ProjectDatasetMount = {
     name: e.name,
     path: resolve(baseDir, e.path),
   };
@@ -157,28 +184,25 @@ function parseArrayEntry(entry: unknown, i: number, baseDir: string): DatasetEnt
  *       anndata: /path/to/anndata.zarr
  *       hcs_plate: /path/to/plate.zarr
  */
-function parseDictEntry(name: string, entry: unknown, baseDir: string): DatasetEntry {
+function parseDictEntry(name: string, entry: unknown, baseDir: string): ProjectDatasetMount {
   if (!entry || typeof entry !== "object") {
     throw new Error(`Dataset '${name}' must be an object`);
   }
   const e = entry as Record<string, unknown>;
 
-  // Support both key names: path/anndata, plate_path/hcs_plate
-  const dataPath = (e.anndata ?? e.path) as string | undefined;
-  if (typeof dataPath !== "string" || !dataPath) {
+  const owner = `Dataset '${name}'`;
+  const dataPath = parseAliasedString(e, ["anndata", "path"], owner);
+  if (!dataPath) {
     throw new Error(`Dataset '${name}' must have an 'anndata' or 'path' string`);
   }
 
-  const dataset: DatasetEntry = {
+  const dataset: ProjectDatasetMount = {
     name,
     path: resolve(baseDir, dataPath),
   };
 
-  const platePath = (e.hcs_plate ?? e["ome-zarr"] ?? e.ome_zarr ?? e.plate_path) as string | undefined;
+  const platePath = parseAliasedString(e, ["hcs_plate", "ome-zarr", "ome_zarr", "plate_path"], owner);
   if (platePath != null) {
-    if (typeof platePath !== "string") {
-      throw new TypeError(`Dataset '${name}': hcs_plate/plate_path must be a string`);
-    }
     dataset.platePath = resolve(baseDir, platePath);
   }
 
@@ -187,6 +211,31 @@ function parseDictEntry(name: string, entry: unknown, baseDir: string): DatasetE
   }
 
   return dataset;
+}
+
+function parseAliasedString(
+  record: Record<string, unknown>,
+  keys: readonly string[],
+  owner: string,
+): string | undefined {
+  const defined = keys.flatMap((key) => {
+    const value = record[key];
+    return value == null ? [] : [{ key, value }];
+  });
+  if (defined.length === 0) return undefined;
+
+  for (const { key, value } of defined) {
+    if (typeof value !== "string") {
+      throw new TypeError(`${owner}: '${key}' must be a string`);
+    }
+  }
+
+  const values = new Set(defined.map(({ value }) => value));
+  if (values.size > 1) {
+    throw new Error(`${owner}: conflicting values for ${defined.map(({ key }) => `'${key}'`).join(", ")}`);
+  }
+
+  return defined[0].value as string;
 }
 
 function parseChannels(raw: unknown, datasetId: number | string): Record<string, DatasetChannelConfig> {
@@ -233,13 +282,13 @@ function parseObsColumns(raw: unknown): string[] | undefined {
   return raw as string[];
 }
 
-function parseSettings(raw: unknown): ProjectConfig["settings"] | undefined {
+function parseSettings(raw: unknown): ParsedProjectConfig["settings"] | undefined {
   if (raw == null) return undefined;
   if (typeof raw !== "object") {
     throw new TypeError("'settings' must be an object");
   }
   const s = raw as Record<string, unknown>;
-  const result: ProjectConfig["settings"] = {};
+  const result: ParsedProjectConfig["settings"] = {};
 
   if (s.port != null) {
     if (typeof s.port !== "number" || !Number.isInteger(s.port)) {
@@ -255,4 +304,33 @@ function parseSettings(raw: unknown): ProjectConfig["settings"] | undefined {
   }
 
   return result;
+}
+
+function parsePluginPaths(raw: unknown, baseDir: string): string[] | undefined {
+  if (raw === undefined) return undefined;
+  if (!Array.isArray(raw)) {
+    throw new TypeError("'plugin_paths' must be an array of relative path strings");
+  }
+
+  return raw.map((entry, index) => {
+    if (typeof entry !== "string") {
+      throw new TypeError(`plugin_paths entry ${index} must be a string`);
+    }
+    if (entry.length === 0) {
+      throw new Error(`plugin_paths entry ${index} must not be empty`);
+    }
+    if (entry.includes("\0")) {
+      throw new Error(`plugin_paths entry ${index} must not contain NUL`);
+    }
+    if (isAbsolute(entry)) {
+      throw new Error(`plugin_paths entry ${index} must be relative`);
+    }
+
+    const pluginPath = resolve(baseDir, entry);
+    const relativePath = relative(baseDir, pluginPath);
+    if (relativePath === ".." || relativePath.startsWith(`..${sep}`) || isAbsolute(relativePath)) {
+      throw new Error(`plugin_paths entry ${index} escapes the project directory`);
+    }
+    return pluginPath;
+  });
 }

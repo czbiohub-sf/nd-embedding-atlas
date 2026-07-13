@@ -8,6 +8,8 @@
  */
 
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const ROOT = join(import.meta.dir, "..", "..", "..");
@@ -105,6 +107,28 @@ describe("router / default routing", () => {
     const r = await run(["view", "/definitely/does/not/exist/data.zarr"]);
     expect(r.code).toBe(1);
     expect(r.stderr).toMatch(/does not exist/);
+  });
+
+  test("default YAML routing reports alias conflicts and exits 1", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "ndea-router-config-"));
+    const path = join(dir, "project.yaml");
+    try {
+      await Bun.write(
+        path,
+        `datasets:
+  cells:
+    anndata: data/a.zarr
+    path: data/b.zarr
+`,
+      );
+      const r = await run([path]);
+      expect(r.code).toBe(1);
+      expect(r.stderr).toContain("Error loading config:");
+      expect(r.stderr).toContain("'anndata'");
+      expect(r.stderr).toContain("'path'");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   test("`ndea rollback` without a compiled binary errors cleanly", async () => {

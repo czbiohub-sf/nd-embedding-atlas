@@ -7,8 +7,8 @@
 
 import { defineCommand, option } from "@bunli/core";
 import { z } from "zod";
-import { isYamlConfig, loadProjectConfig, pathsToConfig } from "../config.ts";
-import type { ResolvedConfig } from "../config.ts";
+import { isYamlConfig, loadProjectConfig, pathsToConfig, resolveLaunchConfig } from "../config.ts";
+import type { LaunchConfig } from "../config.ts";
 import { validateZarrPath } from "../resolve.ts";
 import { startup } from "../startup.ts";
 
@@ -93,23 +93,21 @@ function parseObsColumns(raw: string | undefined): string[] | undefined {
   return cols.length > 0 ? cols : undefined;
 }
 
-async function resolveConfig(raw: RawArgs): Promise<ResolvedConfig> {
+async function resolveConfig(raw: RawArgs): Promise<LaunchConfig> {
   const { paths, port, host, noOpen, noStatic, obsColumns, preset } = raw;
 
   if (paths.length === 1 && isYamlConfig(paths[0])) {
     try {
       const project = await loadProjectConfig(paths[0]);
       for (const ds of project.datasets) validateZarrPath(ds.path);
-      return {
-        datasets: project.datasets,
-        obsColumns: obsColumns ?? project.obsColumns,
-        port: port ?? project.settings?.port ?? 5055,
-        host: host ?? project.settings?.host ?? "127.0.0.1",
+      return resolveLaunchConfig(project, {
+        obsColumns,
+        port,
+        host,
         noOpen,
         noStatic,
-        // CLI --preset overrides the YAML preset: field.
-        preset: preset ?? project.preset,
-      };
+        preset,
+      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`Error loading config: ${msg}`);
@@ -126,13 +124,12 @@ async function resolveConfig(raw: RawArgs): Promise<ResolvedConfig> {
   }
 
   const project = pathsToConfig(paths);
-  return {
-    datasets: project.datasets,
+  return resolveLaunchConfig(project, {
     obsColumns,
-    port: port ?? 5055,
-    host: host ?? "127.0.0.1",
+    port,
+    host,
     noOpen,
     noStatic,
     preset,
-  };
+  });
 }
