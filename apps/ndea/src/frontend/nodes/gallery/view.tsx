@@ -16,6 +16,7 @@ import { focusObs } from "@/nodes/gallery/routing";
 import { GalleryPane } from "@/nodes/gallery/GalleryPane";
 import { predicateToSql } from "@/lib/mosaic-helpers";
 import type { NodeBodyProps } from "@/core/node/app-node-host";
+import { useNodeFocus } from "@/core/node/use-node-focus";
 import type { GalleryCapabilities } from "./plugin";
 
 export interface GalleryConfig {
@@ -44,8 +45,7 @@ export function GalleryPluginView({ host }: NodeBodyProps<GalleryConfig, Gallery
   // state — same as ScatterView/Table. A crop click writes through
   // host.focus.set so a shared sync group ("A") fans it out to Scatter +
   // Idetik; the read reflects the group's effective focus so the card lights up.
-  const subscribeFocus = useCallback((onChange: () => void) => host.focus.subscribe?.(onChange) ?? (() => {}), [host]);
-  const focusedRowIndex = useSyncExternalStore(subscribeFocus, () => host.focus.get());
+  const focusedRowIndex = useNodeFocus(host);
   const onSelect = useCallback((rowIndex: Parameters<typeof focusObs>[1]) => focusObs(host, rowIndex), [host]);
 
   if (predicate == null) {

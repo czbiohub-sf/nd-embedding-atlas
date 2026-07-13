@@ -1,23 +1,19 @@
-/**
- * wrangle — PRQL filter. The node's own compiled predicate (held in the
- * workspace's `wranglePreds`, read via the host) ANDs with the upstream pred
- * inputs. Pure pred algebra, independent of upstream cooking.
- */
+/** wrangle — a PRQL-authored predicate transform. */
 
-import { z } from "zod";
 import { defineNode, exactNodeTypeRef, nodeConfigVersion } from "@ndea/sdk";
-import { WranglePane } from "@/core/workspace/canvas/WranglePane";
-import { defineNativeNodeContribution } from "@/core/workspace/node-kit";
-import { andGraphPredicate } from "@/core/graph/cook";
-import type { GraphDocumentNode } from "@/core/graph/records";
+import { z } from "zod";
+
+import { andGraphPredicate, nodeConfig } from "@/core/graph/cook";
+import { defineNativeNodeContribution } from "@/core/node/native-contribution";
+import { mountReactNodeBody } from "@/core/node/react-node-body";
 
 export interface WrangleConfig {
   prql?: string;
+  predicateSql?: string | null;
 }
 
-function WrangleBody({ node }: { node: GraphDocumentNode }) {
-  return <WranglePane id={node.id} />;
-}
+const CAPABILITIES = ["data-read"] as const;
+export type WrangleCapabilities = (typeof CAPABILITIES)[number];
 
 const wrangleDefinition = defineNode({
   ref: exactNodeTypeRef("wrangle", "1.0.0"),
@@ -25,11 +21,16 @@ const wrangleDefinition = defineNode({
   role: "transform",
   inputs: [{ id: "in", kind: "pred", label: "In" }],
   outputs: [{ id: "out", kind: "pred", label: "Out" }],
-  capabilities: [],
+  capabilities: CAPABILITIES,
   config: {
-    schema: z.object({ prql: z.string().optional() }),
+    schema: z.object({ prql: z.string().optional(), predicateSql: z.string().nullable().optional() }),
     version: nodeConfigVersion(1),
     defaultValue: {},
+  },
+  load: async () => {
+    // NodeDefinition.load is the intentional lazy plugin-module boundary.
+    const { WrangleBody } = await import("./body");
+    return { mountBody: (host) => mountReactNodeBody(WrangleBody, host, "Wrangle") };
   },
 });
 
@@ -38,13 +39,12 @@ export const wrangleNode = defineNativeNodeContribution({
   graph: {
     role: "transform",
     evaluationRole: "transform",
-    // Cook reads the compiled predicate, while config owns the PRQL source.
-    cook: (inputs, host) => andGraphPredicate(inputs, host.wranglePredicate()),
-    Body: WrangleBody,
+    cook: (inputs, host) => andGraphPredicate(inputs, nodeConfig<WrangleConfig>(host.node()).predicateSql ?? null),
   },
-  workspace: {
+  presentation: {
     geometry: { chipW: 148, card: { w: 280, h: 168 }, full: { w: 320, h: 280 }, canFull: true },
     stage: "pin-only",
     inPalette: true,
+    body: "card-and-full",
   },
 });

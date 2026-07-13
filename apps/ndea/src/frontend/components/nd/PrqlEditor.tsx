@@ -16,7 +16,7 @@ import { useEffect, useRef } from "react";
 import type { Diagnostic } from "@codemirror/lint";
 import type { EditorView } from "@codemirror/view";
 
-import type { PrqlError } from "@/core/workspace/prql";
+import type { PrqlError } from "@/nodes/utils/wrangle/prql";
 
 interface Props {
   value: string;

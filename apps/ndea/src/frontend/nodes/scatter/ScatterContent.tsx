@@ -23,6 +23,7 @@ import { useTrajectoryLoader } from "@/nodes/scatter/gpu/hooks/useTrajectoryLoad
 import { useFocusedPointMeta } from "@/hooks/useFocusedPointMeta";
 import type { PanelId } from "@/nodes/scatter/gpu/types";
 import { useHost } from "@/core/host/host-context";
+import { useNodeFocus } from "@/core/node/use-node-focus";
 import { broadcastPanelState, clearPanelState } from "@/stores/PanelStateStore";
 import type { AxisState } from "@/types";
 import { LegendProvider } from "./LegendContext";
@@ -42,6 +43,7 @@ export interface ScatterContentProps {
   /** container header slot — when present the toolbar portals there
    *  (compact, 26px-friendly) instead of docking above the canvas */
   toolbarTarget?: HTMLElement;
+  onCreateCheckpoint?: () => void;
 }
 
 // ── ScatterContent ────────────────────────────────────────────────────────────
@@ -52,6 +54,7 @@ export function ScatterContent({
   initialColorByColumn: _initialColorByColumn,
   syncedAxes,
   toolbarTarget,
+  onCreateCheckpoint,
 }: ScatterContentProps) {
   const { state, actions, meta } = useDashboard();
   // The host owns this instance's WASM bitmap lifecycle (§6.6).
@@ -59,8 +62,7 @@ export function ScatterContent({
   const { metadata } = state;
   // Focus read: scoped to this instance's host (sync group / focus wire), so the
   // Point metadata follows the instance's group-aware host focus.
-  const [focusedRowIndex, setFocusedRowIndex] = useState<RowIndex | null>(() => host.focus.get());
-  useEffect(() => host.focus.subscribe?.(setFocusedRowIndex), [host]);
+  const focusedRowIndex = useNodeFocus(host);
   const trajectory = selectAnyTrajectory(state.trajectories);
   const activeTrajectories = Object.values(state.trajectories).filter((t): t is NonNullable<typeof t> => t != null);
   const { coordinator, brushSelection, table } = meta;
@@ -266,6 +268,7 @@ export function ScatterContent({
       selectionCount={selectionCount}
       getRowIndices={getRowIndices}
       selectionPath={selectionPath}
+      onCreateCheckpoint={onCreateCheckpoint}
     />
   ) : null;
 

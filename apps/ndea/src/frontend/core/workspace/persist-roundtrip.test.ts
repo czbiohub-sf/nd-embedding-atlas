@@ -69,7 +69,7 @@ describe("persistence round-trip (Track B)", () => {
     // document — persist its source-of-truth (`prql` config) so the loaded body
     // recompiles. For this test we assert topology+cook; seed a doc-level pred via
     // a fresh wrangle compile after load (below) to prove the wire carries it.
-    src.setWranglePred(wr, "x > 1");
+    src.updateNodeConfig(wr, { predicateSql: "x > 1" });
     expect(cookSql(src, cache)).toBe("x > 1");
     expect(cookSql(src, count)).toBe("x > 1");
 
@@ -87,7 +87,7 @@ describe("persistence round-trip (Track B)", () => {
     // it genuinely COOKS: a freshly-compiled wrangle predicate flows obs → wrangle
     // → cache → count through the rehydrated engine edges (proves engine
     // registration + reconnection, not an inert store-only restore).
-    dst.setWranglePred(wr, "y < 5");
+    dst.updateNodeConfig(wr, { predicateSql: "y < 5" });
     expect(cookSql(dst, cache)).toBe("y < 5");
     expect(cookSql(dst, count)).toBe("y < 5");
   });
@@ -108,7 +108,7 @@ describe("persistence round-trip (Track B)", () => {
     // every node pulls a value (registered + cooks); count sink follows the wrangle
     const wrId = Object.values(dst.store.state.nodes).find((n) => n.type === "wrangle")!.id;
     const countId = Object.values(dst.store.state.nodes).find((n) => n.type === "count")!.id;
-    dst.setWranglePred(wrId, "z = 3");
+    dst.updateNodeConfig(wrId, { predicateSql: "z = 3" });
     expect(cookSql(dst, countId)).toBe("z = 3");
   });
 

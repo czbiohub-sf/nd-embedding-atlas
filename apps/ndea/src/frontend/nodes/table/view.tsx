@@ -8,12 +8,13 @@
  * conversion is localized to this wrapper.
  */
 
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { SortingState } from "@tanstack/react-table";
 import type { RowIndex } from "@ndea/sdk";
 import { focusRow, publishOrdering } from "@/nodes/table/routing";
 import { DataTable } from "@/nodes/table/DataTable";
 import type { NodeBodyProps } from "@/core/node/app-node-host";
+import { useNodeFocus } from "@/core/node/use-node-focus";
 import type { TableCapabilities } from "./plugin";
 
 /** The `ordering` coordination cell ⇄ TanStack `SortingState` bridge. */
@@ -33,8 +34,7 @@ const FALLBACK_TABLE_COLUMNS = ["_dataset"];
 
 export function TablePluginView({ host }: NodeBodyProps<TableConfig, TableCapabilities>) {
   const { coordinator, table, metadata } = host.data;
-  const subscribeFocus = useCallback((onChange: () => void) => host.focus.subscribe?.(onChange) ?? (() => {}), [host]);
-  const focusedRowIndex = useSyncExternalStore(subscribeFocus, () => host.focus.get());
+  const focusedRowIndex = useNodeFocus(host);
 
   const handleRowClick = useCallback(
     (nextFocusedRowIndex: RowIndex | null) => focusRow(host, nextFocusedRowIndex),

@@ -108,12 +108,9 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
   const highlightRowIdsRef = useRef(highlightRowIds);
   highlightRowIdsRef.current = highlightRowIds;
 
-  // Device-lease state from the core DeviceBroker (PLUGIN-ARCHITECTURE §7.1).
-  // On the host-managed (docked) path this provides the instance's shared device
-  // lease; on the unmanaged (floating/host-less) path it is `{ managed: false }`
-  // and we self-acquire as before. Read through a ref so the stable maybeInitGpu
-  // sees the current value.
+  // Device-lease state from the node host's DeviceBroker.
   const leaseState = useDeviceLease();
+  if (!leaseState.managed) throw new Error("ScatterGPUHost requires a node-managed GPU device lease");
   const leaseStateRef = useRef(leaseState);
   leaseStateRef.current = leaseState;
 
@@ -131,18 +128,14 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
 
     if (!canvas || !overlay || !currentData || !currentKey) return;
 
-    // Device-lease gating (PLUGIN-ARCHITECTURE §7.1). On the host-managed path the
-    // device comes from host.acquireDeviceLease(): wait for the lease and NEVER
-    // self-acquire (else the broker refcount double-counts this instance). On the
-    // unmanaged path, fall through to the self-acquire orchestrator call below.
+    // Wait for host.acquireDeviceLease() and never self-acquire, which would
+    // double-count this instance in the broker.
     const currentLease = leaseStateRef.current;
-    if (currentLease.managed) {
-      if (currentLease.error) {
-        onGpuErrorRef.current(currentLease.error.message);
-        return;
-      }
-      if (!currentLease.lease) return; // lease in flight — re-runs when it resolves
+    if (currentLease.error) {
+      onGpuErrorRef.current(currentLease.error.message);
+      return;
     }
+    if (!currentLease.lease) return; // lease in flight — re-runs when it resolves
 
     if (initKeyRef.current === currentKey) return; // already initialized
     initKeyRef.current = currentKey;
@@ -172,12 +165,9 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
       if (ctx) ctx.scale(dpr, dpr);
     }
 
-    // Managed path: pass the leased device so the orchestrator does NOT acquire
-    // (or release) the shared refcount — the lease owner (host) controls it.
-    const lease = currentLease.managed ? currentLease.lease : null;
     createScatterplot(canvas, overlay, currentData, configRef.current, {
       signal: abort.signal,
-      lease: lease ?? undefined,
+      lease: currentLease.lease,
     })
       .then((gpu) => {
         // Superseded by a newer init or unmounted while initializing — discard.

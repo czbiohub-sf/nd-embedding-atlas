@@ -10,7 +10,7 @@ import { useDashboard } from "@/hooks/useDashboard";
 import type { GraphEvaluationState } from "@/core/graph/evaluator";
 import type { Metadata } from "@/types";
 import { loadFromStorage, saveToStorage, storageKey } from "./persist";
-import type { WorkspaceNodeLibrary } from "./node-kit";
+import type { WorkspaceNodeLibrary } from "./node-projection";
 import { resolvePreset, seedAnnotate } from "./presets";
 import { seedWorkspace, Workspace } from "./workspace-store";
 import type { WorkspaceDocumentState } from "./types";

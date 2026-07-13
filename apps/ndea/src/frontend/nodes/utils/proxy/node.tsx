@@ -4,7 +4,7 @@
  */
 
 import { defineNode, exactNodeTypeRef } from "@ndea/sdk";
-import { defineNativeNodeContribution } from "@/core/workspace/node-kit";
+import { defineNativeNodeContribution } from "@/core/node/native-contribution";
 import { passthroughGraphPredicate } from "@/core/graph/cook";
 
 const proxyDefinition = defineNode({
@@ -20,10 +20,10 @@ export const proxyNode = defineNativeNodeContribution({
   definition: proxyDefinition,
   graph: {
     role: "proxy",
-    evaluationRole: "view",
+    evaluationRole: "transform",
     cook: (inputs) => passthroughGraphPredicate(inputs),
   },
-  workspace: {
+  presentation: {
     geometry: { chipW: 92, card: { w: 92, h: 28 }, full: { w: 92, h: 28 }, canFull: false },
     stage: "canvas-only",
     inPalette: false,

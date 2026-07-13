@@ -6,13 +6,16 @@
 
 import { z } from "zod";
 import { defineNode, exactNodeTypeRef, nodeConfigVersion } from "@ndea/sdk";
-import { DatasetSourceBody } from "@/core/workspace/canvas/node-extras";
-import { defineNativeNodeContribution } from "@/core/workspace/node-kit";
+import { defineNativeNodeContribution } from "@/core/node/native-contribution";
+import { mountReactNodeBody } from "@/core/node/react-node-body";
 import { nodeConfig } from "@/core/graph/cook";
 
 export interface DatasetConfig {
   datasetKey?: string | null;
 }
+
+const CAPABILITIES = ["data-read"] as const;
+export type DatasetCapabilities = (typeof CAPABILITIES)[number];
 
 const datasetDefinition = defineNode({
   ref: exactNodeTypeRef("dataset", "1.0.0"),
@@ -20,11 +23,16 @@ const datasetDefinition = defineNode({
   role: "transform",
   inputs: [],
   outputs: [{ id: "out", kind: "pred", label: "Out" }],
-  capabilities: [],
+  capabilities: CAPABILITIES,
   config: {
     schema: z.object({ datasetKey: z.string().nullable().optional() }),
     version: nodeConfigVersion(1),
     defaultValue: {},
+  },
+  load: async () => {
+    // NodeDefinition.load is the intentional lazy plugin-module boundary.
+    const { DatasetBody } = await import("./body");
+    return { mountBody: (host) => mountReactNodeBody(DatasetBody, host, "Dataset") };
   },
 });
 
@@ -37,11 +45,11 @@ export const datasetNode = defineNativeNodeContribution({
       const key = nodeConfig<DatasetConfig>(host.node()).datasetKey;
       return { kind: "pred", sql: key ? `_dataset = '${key.replace(/'/g, "''")}'` : null };
     },
-    Body: DatasetSourceBody,
   },
-  workspace: {
+  presentation: {
     geometry: { chipW: 148, card: { w: 196, h: 96 }, full: { w: 196, h: 96 }, canFull: false },
     stage: "canvas-only",
     inPalette: true,
+    body: "card-and-full",
   },
 });

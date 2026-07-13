@@ -12,7 +12,7 @@
  *  right → selection tools + Collections + track/fit
  */
 
-import { Bookmark, BoxSelect, ChartScatter, LassoSelect, Waypoints } from "lucide-react";
+import { Bookmark, BoxSelect, ChartScatter, LassoSelect, Snowflake, Waypoints } from "lucide-react";
 import { useMemo } from "react";
 import { BracketIcon } from "@/components/ui/bracket-icon";
 import { useCollectionsSheet } from "@/components/collections/CollectionsSheetProvider";
@@ -94,6 +94,7 @@ interface Props {
   /** Reads rowIndicesRef.current at call time — never stale */
   getRowIndices: () => readonly RowIndex[];
   selectionPath: "inline" | "temp_table";
+  onCreateCheckpoint?: () => void;
 
   /** docked (default) = full-width row above the canvas;
    *  header = compact 26px-friendly run for a node/tile header slot */
@@ -147,6 +148,7 @@ export function ScatterToolbar({
   selectionCount,
   getRowIndices,
   selectionPath: _selectionPath,
+  onCreateCheckpoint,
   variant = "docked",
 }: Props) {
   const { openSheet } = useCollectionsSheet();
@@ -348,6 +350,22 @@ export function ScatterToolbar({
         >
           <Bookmark className={icon} />
         </HoverTip>
+
+        {hasSelection && onCreateCheckpoint ? (
+          <>
+            <span className={cn("font-mono text-3xs text-wire-sel", compact && "hidden @[18rem]:inline")}>
+              lasso [{selectionCount.toLocaleString()}]
+            </span>
+            <HoverTip
+              label="Cache"
+              description="Create a Cache node pinned to the current lasso rows"
+              side="bottom"
+              render={<button type="button" onClick={onCreateCheckpoint} aria-label="Cache lasso" className={btn} />}
+            >
+              <Snowflake className={icon} />
+            </HoverTip>
+          </>
+        ) : null}
 
         {onToggleTrajectory && (
           <HoverTip

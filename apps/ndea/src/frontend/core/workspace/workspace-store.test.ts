@@ -3,7 +3,7 @@ import type { Metadata } from "@ndea/protocol";
 import { rowIndex } from "@ndea/sdk";
 import { predicateSql } from "@/core/graph/cook";
 import { nativeWorkspaceNodeLibrary } from "./definitions";
-import type { WorkspaceNodeLibrary } from "./node-kit";
+import type { WorkspaceNodeLibrary } from "./node-projection";
 import { Workspace } from "./workspace-store";
 
 function createWorkspace(nodeLibrary: WorkspaceNodeLibrary = nativeWorkspaceNodeLibrary): Workspace {
@@ -26,6 +26,7 @@ describe("Workspace graph transactions", () => {
   test("resolves node policy only through the injected immutable library", () => {
     expect(Object.isFrozen(nativeWorkspaceNodeLibrary)).toBe(true);
     const emptyLibrary: WorkspaceNodeLibrary = Object.freeze({
+      catalog: nativeWorkspaceNodeLibrary.catalog,
       getSpec: (): undefined => {},
       getDescriptor: (): undefined => {},
     });
@@ -33,7 +34,7 @@ describe("Workspace graph transactions", () => {
     expect(() => workspace.addNode("obs", { x: 0, y: 0 })).toThrow('no registered node descriptor for type "obs"');
   });
 
-  test("publishes a dataset config only after synchronous sinks recook it", () => {
+  test("publishes an SDK host config patch only after synchronous sinks recook it", () => {
     const workspace = createWorkspace();
     const dataset = workspace.addNode("dataset", { x: 0, y: 0 });
     const count = workspace.addNode("count", { x: 100, y: 0 });
@@ -50,7 +51,7 @@ describe("Workspace graph transactions", () => {
       }
     });
 
-    workspace.setDatasetKey(dataset, "donor-a");
+    workspace.updateNodeConfig(dataset, { datasetKey: "donor-a" });
 
     expect(sinkPredicate).toBe("_dataset = 'donor-a'");
     expect(subscriberPredicate).toBe("_dataset = 'donor-a'");
@@ -59,32 +60,18 @@ describe("Workspace graph transactions", () => {
     workspace.dispose();
   });
 
-  test("removing nodes clears every per-node runtime projection before ID reuse", () => {
+  test("removing a checkpoint clears its runtime projection before ID reuse", () => {
     const workspace = createWorkspace();
     const cache = workspace.addNode("cache", { x: 0, y: 0 }, "reused-cache");
-    const collection = workspace.addNode("collection", { x: 100, y: 0 }, "reused-collection");
-    const transform = workspace.addNode("threshold", { x: 200, y: 0 }, "reused-transform");
-    const wrangle = workspace.addNode("wrangle", { x: 300, y: 0 }, "reused-wrangle");
 
     workspace.frozenPredicates.set(cache, "row_id > 10");
     workspace.frozenRows.set(cache, [rowIndex(11), rowIndex(12)]);
-    workspace.bindCollection(collection, { id: "keepers", name: "Keepers", version: 1 });
-    workspace.setWranglePred(wrangle, "score > 0.5");
-    expect(workspace.transformHosts.has(transform)).toBe(true);
 
     workspace.removeNode(cache);
-    workspace.removeNode(collection);
-    workspace.removeNode(transform);
-    workspace.removeNode(wrangle);
     workspace.addNode("cache", { x: 0, y: 0 }, cache);
-    workspace.addNode("collection", { x: 100, y: 0 }, collection);
-    workspace.addNode("wrangle", { x: 300, y: 0 }, wrangle);
 
     expect(workspace.frozenPredicates.has(cache)).toBe(false);
     expect(workspace.frozenRows.has(cache)).toBe(false);
-    expect(workspace.collectionBindings.has(collection)).toBe(false);
-    expect(workspace.transformHosts.has(transform)).toBe(false);
-    expect(workspace.wranglePreds.has(wrangle)).toBe(false);
     workspace.dispose();
   });
 
@@ -92,7 +79,11 @@ describe("Workspace graph transactions", () => {
     const workspace = createWorkspace();
     const collection = workspace.addNode("collection", { x: 0, y: 0 });
     const count = workspace.addNode("count", { x: 100, y: 0 });
-    workspace.bindCollection(collection, { id: "keepers", name: "Keepers", version: 3 });
+    workspace.updateNodeConfig(collection, {
+      collectionId: "keepers",
+      collectionName: "Keepers",
+      collectionVersion: 3,
+    });
 
     let predicateSeenByDocumentSubscriber: string | null | undefined;
     const subscription = workspace.store.subscribe(() => {
@@ -111,7 +102,11 @@ describe("Workspace graph transactions", () => {
     const workspace = createWorkspace();
     const collection = workspace.addNode("collection", { x: 0, y: 0 });
     const count = workspace.addNode("count", { x: 100, y: 0 });
-    workspace.bindCollection(collection, { id: "keepers", name: "Keepers", version: 1 });
+    workspace.updateNodeConfig(collection, {
+      collectionId: "keepers",
+      collectionName: "Keepers",
+      collectionVersion: 1,
+    });
     expect(workspace.connect(collection, count)).toBe(true);
     const edgeId = Object.keys(workspace.store.state.edges)[0];
 
@@ -196,7 +191,11 @@ describe("Workspace graph transactions", () => {
     const source = createWorkspace();
     const collection = source.addNode("collection", { x: 0, y: 0 });
     const count = source.addNode("count", { x: 100, y: 0 });
-    source.bindCollection(collection, { id: "keepers", name: "Keepers", version: 2 });
+    source.updateNodeConfig(collection, {
+      collectionId: "keepers",
+      collectionName: "Keepers",
+      collectionVersion: 2,
+    });
     expect(source.connect(collection, count)).toBe(true);
 
     const destination = createWorkspace();

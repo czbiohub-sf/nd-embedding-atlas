@@ -15,17 +15,15 @@ import type { Coordinator } from "@uwdata/mosaic-core";
 
 import { Coordination } from "@/core/coordination/coordination";
 import { patchNodeConfig, predicateSql, predicateSqls, type GraphNodeCookHost } from "@/core/graph/cook";
-import { GraphEvaluator, type GraphEvaluationStore, type GraphNodeRegistrationContext } from "@/core/graph/evaluator";
+import { GraphEvaluator, type GraphEvaluationStore } from "@/core/graph/evaluator";
 import { andPreds, type Predicate } from "@/core/graph/engine";
 import type { GraphDocumentEdge, GraphDocumentNode, GraphNodeType } from "@/core/graph/records";
 import { AUTHORED_GRAPH_OUTPUT_PORT, DERIVED_GRAPH_OUTPUT_PORT, type GraphPortValue } from "@/core/graph/values";
-import type { TransformCapabilities } from "@/core/graph/graph-host";
-import { rowIndex, type NodeHost, type RowIndex } from "@ndea/sdk";
-import type { ThresholdFilterConfig } from "@/nodes/transform-filter/view";
+import { rowIndex, type JsonValue, type RowIndex } from "@ndea/sdk";
 import type { Metadata } from "@/types";
 import type { NdForm } from "@/components/nd/nd-resolve-form";
 import { toRows } from "@/lib/mosaic-helpers";
-import type { WorkspaceNodeDescriptor, WorkspaceNodeLibrary } from "./node-kit";
+import type { WorkspaceNodeDescriptor, WorkspaceNodeLibrary } from "./node-projection";
 import { NodeCounts } from "./node-counts";
 import {
   treeMapLeaves,
@@ -92,7 +90,6 @@ export class Workspace {
   private readonly evaluator: GraphEvaluator;
   private nodeSeq = 0;
   private edgeSeq = 0;
-  private disposers = new Map<string, () => void>();
   private evaluationNodeOverrides = new Map<string, GraphDocumentNode>();
 
   constructor(deps: WorkspaceDeps) {
@@ -207,16 +204,11 @@ export class Workspace {
   removeNode(id: string): void {
     const def = this.def(id);
     if (!def || def.type === "obs") return; // the source is permanent
-    this.disposers.get(id)?.();
-    this.disposers.delete(id);
     this.evaluator.removeNode(id);
     this.dropDockEl(id);
     this.dropHeaderEl(id);
     this.frozenPredicates.delete(id);
     this.frozenRows.delete(id);
-    this.collectionBindings.delete(id);
-    this.transformHosts.delete(id);
-    this.wranglePreds.delete(id);
     if (this.ui.state.fullscreen === id) this.setFullscreen(null);
     this.documentStore.setState((s) => {
       const nodes = { ...s.nodes };
@@ -342,15 +334,6 @@ export class Workspace {
       if (f?.bypass && state.nodes[id]) {
         this.evaluator.setBypass(id, true);
         if (state.nodes[id]?.type === "subnet") this.evaluator.setBypass(`${id}-out`, true);
-      }
-    }
-
-    // collection nodes rebind their members-subquery from persisted config so the
-    // cook emits the right predicate without waiting for a body mount.
-    for (const node of Object.values(state.nodes)) {
-      const cfg = node.config as { collectionId?: unknown; collectionName?: unknown } | undefined;
-      if (node.type === "collection" && typeof cfg?.collectionId === "string") {
-        this.collectionBindings.set(node.id, { id: cfg.collectionId, version: 0 });
       }
     }
 
@@ -593,80 +576,6 @@ export class Workspace {
     return cacheId;
   }
 
-  /* ── collections (C12): persisted selections ──────────────────────── */
-
-  /** collection-node bindings: cook emits a members-subquery predicate */
-  readonly collectionBindings = new Map<string, { id: string; version: number }>();
-
-  bindCollection(nodeId: string, c: { id: string; name: string; version: number }): void {
-    this.collectionBindings.set(nodeId, { id: c.id, version: c.version });
-    this.evaluator.markDirty(nodeId);
-    this.documentStore.setState((s) => ({
-      ...s,
-      nodes: {
-        ...s.nodes,
-        [nodeId]: {
-          ...s.nodes[nodeId],
-          config: patchNodeConfig(s.nodes[nodeId], { collectionId: c.id, collectionName: c.name }),
-        },
-      },
-    }));
-  }
-
-  unbindCollection(nodeId: string): void {
-    this.collectionBindings.delete(nodeId);
-    this.evaluator.markDirty(nodeId);
-    this.documentStore.setState((state) => ({
-      ...state,
-      nodes: {
-        ...state.nodes,
-        [nodeId]: {
-          ...state.nodes[nodeId],
-          config: patchNodeConfig(state.nodes[nodeId], { collectionId: null, collectionName: null }),
-        },
-      },
-    }));
-  }
-
-  /** Export node → saved collection (create API, row_indices mode). Reads the
-   *  node's *live* input directly (decoupled from Cache — no pinning). Only a
-   *  row-bearing input (a sel: lasso/cache snapshot) can be saved; a pred-only
-   *  input has no client-side row ids. */
-  async saveAsCollection(nodeId: string, name: string): Promise<{ ok: boolean; error?: string }> {
-    const input = this.liveCacheInput(nodeId);
-    const rowIds = input?.kind === "sel" ? input.rowIds : null;
-    if (!rowIds?.length) {
-      return { ok: false, error: "wire a row selection (lasso/cache) — predicates have no row ids to save" };
-    }
-    const res = await fetch("/api/collections", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, row_indices: rowIds }),
-    });
-    const data: unknown = await res.json().catch(() => null);
-    if (!res.ok) {
-      const msg =
-        data && typeof data === "object" && "error" in data
-          ? String((data as { error: unknown }).error)
-          : `HTTP ${res.status}`;
-      return { ok: false, error: msg };
-    }
-    const cid = (data as { result?: { collection_id?: string } }).result?.collection_id;
-    if (cid) {
-      this.documentStore.setState((s) => ({
-        ...s,
-        nodes: {
-          ...s.nodes,
-          [nodeId]: {
-            ...s.nodes[nodeId],
-            config: patchNodeConfig(s.nodes[nodeId], { collectionId: cid, collectionName: name }),
-          },
-        },
-      }));
-    }
-    return { ok: true };
-  }
-
   /* ── engine cook wiring per node type ─────────────────────────────── */
 
   /** Build the lightweight cook host for a built-in node spec. Closes over the
@@ -676,40 +585,16 @@ export class Workspace {
       id,
       node: () => this.evaluationNodeOverrides.get(id) ?? this.store.state.nodes[id],
       frozenPredicate: () => (this.frozenPredicates.has(id) ? (this.frozenPredicates.get(id) ?? null) : undefined),
-      wranglePredicate: () => this.wranglePreds.get(id) ?? null,
-      collectionBinding: () => this.collectionBindings.get(id),
     };
   }
 
   private registerGraphNode(id: string, def: WorkspaceNodeDescriptor): void {
     // Unified path: every node type resolves to a registered spec that owns its
-    // evaluator cook + kind (no switch). An instance-driven node (the threshold
-    // transform) supplies `registerEvaluation` and owns its evaluator registration.
+    // evaluator cook + kind (no switch).
     const spec = this.deps.nodeLibrary.getSpec(def.type);
     if (!spec) throw new Error(`no registered node spec for type "${def.type}"`);
-    if (spec.registerEvaluation) {
-      spec.registerEvaluation(this.makeGraphNodeRegistrationContext(id));
-      return;
-    }
     const host = this.makeCookHost(id);
     this.evaluator.addNode({ id, kind: spec.evaluationRole, cook: (inputs) => spec.cook(inputs, host) });
-  }
-
-  /** Workspace context handed to a spec's `registerEvaluation` escape hatch — the
-   *  minimal engine/runtime plumbing an instance-driven node (threshold) needs,
-   *  closed over this workspace's maps. */
-  private makeGraphNodeRegistrationContext(id: string): GraphNodeRegistrationContext {
-    return {
-      id,
-      coordinator: this.deps.coordinator,
-      table: this.deps.table,
-      metadata: this.deps.metadata,
-      addNode: (kind, cook) => this.evaluator.addNode({ id, kind, cook }),
-      markDirty: () => this.evaluator.markDirty(id),
-      onDispose: (fn) => this.disposers.set(id, fn),
-      setTransformHost: (host) =>
-        this.transformHosts.set(id, host as NodeHost<ThresholdFilterConfig, TransformCapabilities>),
-    };
   }
 
   /** global render band + FLIP ghost + resize. Forms default LOCKED to the
@@ -1020,34 +905,18 @@ export class Workspace {
   /** camera-fit hook — registered by the canvas (fitView with duration) */
   requestFit: ((durationMs?: number) => void) | null = null;
 
-  /** transform-node hosts (the node body renders the plugin Component against this) */
-  readonly transformHosts = new Map<string, NodeHost<ThresholdFilterConfig, TransformCapabilities>>();
   /** cache-node pinned predicates — presence == "cached"; absence == "live"
    *  (the cook passes its input through). The pin layer over live propagation. */
   readonly frozenPredicates = new Map<string, Predicate>();
-  /** wrangle-node compiled predicates (PRQL → SQL membership; cook reads this) */
-  readonly wranglePreds = new Map<string, Predicate>();
 
-  /** wrangle editor → document text (persist-ready); compile is the body's job */
-  setWranglePrql(id: string, prql: string): void {
-    this.documentStore.setState((s) => ({
-      ...s,
-      nodes: { ...s.nodes, [id]: { ...s.nodes[id], config: patchNodeConfig(s.nodes[id], { prql }) } },
-    }));
-  }
-
-  /** dataset source → selected `_dataset` key (undefined = all); re-cooks downstream */
-  setDatasetKey(id: string, datasetKey: string | undefined): void {
+  /** SDK host config writes enter the document and invalidate graph evaluation here. */
+  updateNodeConfig(id: string, patch: Record<string, unknown>): void {
     const current = this.store.state.nodes[id];
     if (!current) return;
     const next: GraphDocumentNode = {
       ...current,
-      config: patchNodeConfig(current, { datasetKey: datasetKey ?? null }),
+      config: patchNodeConfig(current, patch as Record<string, JsonValue>),
     };
-
-    // A synchronous evaluator scheduler must cook against the pending config
-    // before document subscribers can observe it. With the normal rAF scheduler,
-    // the committed document becomes the live cook source before the flush.
     this.evaluationNodeOverrides.set(id, next);
     try {
       this.evaluator.markDirty(id);
@@ -1060,25 +929,12 @@ export class Workspace {
     }));
   }
 
-  /** wrangle body → compiled predicate; dirties the node so the graph re-cooks */
-  setWranglePred(id: string, sql: Predicate): void {
-    const prev = this.wranglePreds.get(id) ?? null;
-    if (prev === sql) return;
-    this.wranglePreds.set(id, sql);
-    this.evaluator.markDirty(id);
-  }
-
   dispose(): void {
     this.evaluator.dispose();
     this.counts.dispose();
-    for (const d of this.disposers.values()) d();
-    this.disposers.clear();
     this.evaluationNodeOverrides.clear();
     this.frozenPredicates.clear();
     this.frozenRows.clear();
-    this.collectionBindings.clear();
-    this.transformHosts.clear();
-    this.wranglePreds.clear();
   }
 }
 

@@ -1,12 +1,13 @@
-/**
- * count — a terminal pred view: the body renders the live count of matching
- * rows. No output port (terminal) — matches the legacy WorkspaceNodeDescriptor (hasOut: false).
- */
+/** count — a terminal predicate view showing the live number of matching rows. */
 
-import { CountBody } from "@/core/workspace/canvas/node-extras";
 import { defineNode, exactNodeTypeRef } from "@ndea/sdk";
-import { defineNativeNodeContribution } from "@/core/workspace/node-kit";
+
 import { passthroughGraphPredicate } from "@/core/graph/cook";
+import { defineNativeNodeContribution } from "@/core/node/native-contribution";
+import { mountReactNodeBody } from "@/core/node/react-node-body";
+
+const CAPABILITIES = ["data-read"] as const;
+export type CountCapabilities = (typeof CAPABILITIES)[number];
 
 const countDefinition = defineNode({
   ref: exactNodeTypeRef("count", "1.0.0"),
@@ -14,7 +15,12 @@ const countDefinition = defineNode({
   role: "view",
   inputs: [{ id: "in", kind: "pred", label: "In" }],
   outputs: [],
-  capabilities: [],
+  capabilities: CAPABILITIES,
+  load: async () => {
+    // NodeDefinition.load is the intentional lazy plugin-module boundary.
+    const { CountBody } = await import("./body");
+    return { mountBody: (host) => mountReactNodeBody(CountBody, host, "Count") };
+  },
 });
 
 export const countNode = defineNativeNodeContribution({
@@ -23,11 +29,11 @@ export const countNode = defineNativeNodeContribution({
     role: "view",
     evaluationRole: "view",
     cook: (inputs) => passthroughGraphPredicate(inputs),
-    Body: CountBody,
   },
-  workspace: {
+  presentation: {
     geometry: { chipW: 128, card: { w: 152, h: 92 }, full: { w: 152, h: 92 }, canFull: false },
     stage: "canvas-only",
     inPalette: true,
+    body: "card-and-full",
   },
 });

@@ -110,6 +110,6 @@ export function usePredicateGalleryObs(coordinator: Coordinator, predicate: stri
     isLoading: query.isLoading,
     isError: query.isError,
     // Node-scoped: the source is the wired input edge, not the global bus.
-    sourceKind: predicate != null ? "panel" : null,
+    sourceKind: predicate != null ? "input" : null,
   };
 }

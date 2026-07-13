@@ -6,6 +6,7 @@
 
 import { z } from "zod";
 import { defineNode, exactNodeTypeRef, nodeConfigVersion } from "@ndea/sdk";
+import { mountReactNodeBody } from "@/core/node/react-node-body";
 import type { ThresholdFilterConfig } from "./view";
 
 const CAPABILITIES = ["data-read", "predicate-publish", "compute"] as const;
@@ -30,9 +31,10 @@ export const transformFilterDefinition = defineNode({
     note: "Set the column and cutoff in the node's options.",
   },
   load: async () => {
-    const { createThresholdFilterRuntime } = await import("./instance");
+    // NodeDefinition.load is the intentional lazy plugin-module boundary.
+    const { ThresholdFilterView } = await import("./view");
     return {
-      createRuntime: createThresholdFilterRuntime,
+      mountBody: (host) => mountReactNodeBody(ThresholdFilterView, host, "Threshold Filter"),
     };
   },
 });

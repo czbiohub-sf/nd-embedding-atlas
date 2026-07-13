@@ -1,8 +1,6 @@
 import { Store } from "@tanstack/store";
-import type { Metadata } from "@/types";
 import {
   GraphEngine,
-  type GraphCookFunction,
   type GraphEngineOptions,
   type GraphEvaluationEdge,
   type GraphNodeEvaluationSpec,
@@ -130,15 +128,4 @@ export class GraphEvaluator {
   dispose(): void {
     this.unsubscribeTelemetry();
   }
-}
-
-export interface GraphNodeRegistrationContext {
-  readonly id: string;
-  readonly coordinator: unknown;
-  readonly table: string;
-  readonly metadata: Metadata;
-  addNode(kind: "source" | "transform" | "view", cook: GraphCookFunction<GraphPortValue>): void;
-  markDirty(): void;
-  onDispose(dispose: () => void): void;
-  setTransformHost(host: unknown): void;
 }

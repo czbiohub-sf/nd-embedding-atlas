@@ -10,8 +10,8 @@ import {
   nativePluginFactory,
 } from "@/core/workspace/definitions";
 import { getWorkspaceNodeDescriptor, workspacePaletteNodeDescriptors } from "@/core/workspace/node-defs";
-import { parseWorkspaceNodeConfig, workspaceNodeSpecOf } from "@/core/workspace/node-kit";
-import { NATIVE_NODE_CONTRIBUTIONS, NATIVE_NODE_CURRENT_REFS, NATIVE_NODE_DEFINITIONS } from "@/core/workspace/nodes";
+import { parseWorkspaceNodeConfig, workspaceNodeSpecOf } from "@/core/workspace/node-projection";
+import { NATIVE_NODE_CONTRIBUTIONS, NATIVE_NODE_CURRENT_REFS, NATIVE_NODE_DEFINITIONS } from "./native-nodes";
 import { collectPluginContribution, NATIVE_NODE_SOURCE } from "@/core/plugin/registration";
 import { loadNodeModule } from "./load-module";
 
@@ -54,12 +54,28 @@ describe("native node catalog fitness functions", () => {
     );
   });
 
+  test("native graph and presentation policy is deeply frozen at the core/node boundary", () => {
+    for (const contribution of NATIVE_NODE_CONTRIBUTIONS) {
+      expect(Object.isFrozen(contribution)).toBe(true);
+      expect(Object.isFrozen(contribution.graph)).toBe(true);
+      expect(Object.isFrozen(contribution.presentation)).toBe(true);
+      expect(Object.isFrozen(contribution.presentation.geometry)).toBe(true);
+      expect(Object.isFrozen(contribution.presentation.geometry.card)).toBe(true);
+      expect(Object.isFrozen(contribution.presentation.geometry.full)).toBe(true);
+      expect("Body" in contribution.graph).toBe(false);
+      expect("usesDefinitionModule" in contribution.graph).toBe(false);
+    }
+  });
+
   test("definition metadata is authoritative while graph runtime and layout stay app-local", () => {
     for (const spec of listWorkspaceNodeSpecs()) {
       expect(nativeNodeCatalog.resolveExact(spec.definition.ref)).toBe(spec.definition);
       expect(getWorkspaceNodeDescriptor(spec.type).label).toBe(spec.definition.title);
       expect(spec.cook).toBeFunction();
       expect(spec.geometry.card.w).toBeGreaterThan(0);
+      expect(spec.pluginId).toBe(spec.definition.load ? spec.definition.ref.nodeTypeId : null);
+      if (spec.definition.load) expect(spec.body).toBeDefined();
+      else expect(spec.body).toBeUndefined();
     }
   });
 
@@ -120,10 +136,16 @@ describe("native node catalog fitness functions", () => {
     expect(nativeNodeCatalog.resolveCurrent("image-viewer")?.dataRequirements).toEqual(["plate-image"]);
   });
 
-  test("native view modules expose framework-neutral Body mounts", async () => {
-    const module = await loadNodeModule(nativeNodeCatalog, "scatter");
-    expect(module.mountBody).toBeFunction();
-    expect("Component" in module).toBe(false);
+  test("every native Body policy resolves a framework-neutral mount", async () => {
+    const bodyContributions = NATIVE_NODE_CONTRIBUTIONS.filter(({ presentation }) => presentation.body !== undefined);
+    expect(bodyContributions.length).toBeGreaterThan(0);
+    for (const contribution of bodyContributions) {
+      const module = await loadNodeModule(nativeNodeCatalog, contribution.definition.ref);
+      expect(module.mountBody, `${contribution.definition.ref.nodeTypeId} has no Body mount`).toBeFunction();
+      expect("Component" in module, `${contribution.definition.ref.nodeTypeId} leaked a framework component`).toBe(
+        false,
+      );
+    }
   });
 
   test("Scatter declares every optional host service used by its Body and routing", () => {

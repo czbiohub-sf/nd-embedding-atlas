@@ -20,7 +20,7 @@
 
 import type { RowIndex } from "@ndea/sdk";
 import type { FilterExpr } from "@uwdata/mosaic-sql";
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Bracketed } from "@/components/ui/bracketed";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,6 +35,7 @@ import { RangeBracket } from "@/nodes/annotate/RangeBracket";
 import { fmtVal } from "@/nodes/annotate/range-scale";
 import { useGalleryChannels } from "@/nodes/table/useGalleryChannels";
 import type { NodeBodyProps } from "@/core/node/app-node-host";
+import { useNodeFocus } from "@/core/node/use-node-focus";
 import type { AnnotateCapabilities } from "./plugin";
 
 export interface AnnotateConfig {
@@ -170,8 +171,7 @@ export function AnnotateView({ host }: NodeBodyProps<AnnotateConfig, AnnotateCap
   // Follow an external focus (Gallery/Scatter/Idetik crop click) — read the
   // group-aware host.focus reactively so the table can jump to that obs,
   // mirroring how those views already follow ours.
-  const subscribeFocus = useCallback((cb: () => void) => host.focus.subscribe?.(cb) ?? (() => {}), [host]);
-  const externalFocusedRowIndex = useSyncExternalStore(subscribeFocus, () => host.focus.get());
+  const externalFocusedRowIndex = useNodeFocus(host);
 
   const persistLabels = useCallback(() => host.patchConfig({ labels }), [host, labels]);
 

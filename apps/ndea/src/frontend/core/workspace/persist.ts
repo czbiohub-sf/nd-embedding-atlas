@@ -1,5 +1,5 @@
 import { rowIndex, type JsonValue, type RowIndex } from "@ndea/sdk";
-import { parseWorkspaceNodeConfig, type WorkspaceNodeLibrary } from "./node-kit";
+import { parseWorkspaceNodeConfig, type WorkspaceNodeLibrary } from "./node-projection";
 import type { WorkspaceCoordinationSpace, WorkspaceDocumentState } from "./types";
 import type { GraphDocumentEdge, GraphDocumentNode } from "@/core/graph/records";
 

@@ -1,36 +1,46 @@
 import { describe, expect, test } from "bun:test";
-import type { GraphNodeRegistrationContext } from "@/core/graph/evaluator";
-import type { GraphCookFunction } from "@/core/graph/engine";
-import type { GraphPortValue } from "@/core/graph/values";
+
+import type { GraphNodeCookHost } from "@/core/graph/cook";
 import { thresholdNode } from "./node";
 
-describe("threshold graph runtime adapter", () => {
-  test("routes the graph predicate through the SDK definition's filter-in port", () => {
-    let cook: GraphCookFunction<GraphPortValue> | undefined;
-    let dispose: (() => void) | undefined;
-    const registration: GraphNodeRegistrationContext = {
+describe("threshold config-backed cook", () => {
+  test("quotes the configured column and ANDs it with upstream", () => {
+    const host = {
       id: "threshold-1",
-      coordinator: { query: () => Promise.resolve([]) },
-      table: "atlas",
-      metadata: { dataset_keys: [] } as never,
-      addNode(_kind, registeredCook) {
-        cook = registeredCook;
-      },
-      markDirty() {},
-      onDispose(registeredDispose) {
-        dispose = registeredDispose;
-      },
-      setTransformHost() {},
-    };
+      node: () => ({
+        id: "threshold-1",
+        type: "threshold",
+        kind: "transform",
+        label: "Threshold Filter",
+        pluginId: "transform-filter",
+        config: { column: 'score"raw', threshold: 0.25 },
+      }),
+      frozenPredicate: () => undefined,
+    } as GraphNodeCookHost;
 
-    thresholdNode.graph.registerEvaluation?.(registration);
-    expect(cook).toBeDefined();
-    const result = cook!(new Map([["in", [{ kind: "pred", sql: "score > 0.25" }]]]), {
-      signal: new AbortController().signal,
-      epoch: 1,
+    expect(thresholdNode.graph.cook(new Map([["in", [{ kind: "pred", sql: "quality = 1" }]]]), host)).toEqual({
+      kind: "pred",
+      sql: '(quality = 1) AND ("score""raw" > 0.25)',
     });
+  });
 
-    expect(result).toEqual({ kind: "pred", sql: "score > 0.25" });
-    dispose?.();
+  test("passes upstream through when no column is configured", () => {
+    const host = {
+      id: "threshold-1",
+      node: () => ({
+        id: "threshold-1",
+        type: "threshold",
+        kind: "transform",
+        label: "Threshold Filter",
+        pluginId: "transform-filter",
+        config: { column: null, threshold: 0 },
+      }),
+      frozenPredicate: () => undefined,
+    } as GraphNodeCookHost;
+
+    expect(thresholdNode.graph.cook(new Map([["in", [{ kind: "pred", sql: "score > 0.25" }]]]), host)).toEqual({
+      kind: "pred",
+      sql: "score > 0.25",
+    });
   });
 });

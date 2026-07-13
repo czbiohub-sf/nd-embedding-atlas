@@ -7,57 +7,14 @@ import { clearLasso, publishLasso, publishLassoRowSet } from "@/nodes/scatter/ro
 import type { ScatterCapabilities } from "@/nodes/scatter/plugin";
 import type { GpuPointIndex } from "@/lib/branded-types";
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
 /**
- * LEGACY large-selection path — the host-less floating scatter ONLY. The
- * docked/plugin path stages rows via `host.dataAPI.publishRowSet` → a
- * per-instance `sel_<instanceId>` table with the bus-owned `tok=N` SQL-comment
- * cache-buster (§6.5). This fixed `__scatter_selection` path remains because the
- * floating scatter has no host.
- *
- * Mosaic's QueryManager caches by raw SQL text, so the changing temp table needs
- * a unique suffix per revision; the `AND 'vN'='vN'` is a no-op at execution time.
+ * Build the inline Mosaic predicate used below the server-row-set threshold.
+ * DuckDB converts IN lists to hash sets, and the changing IDs naturally make
+ * each Mosaic query cache key distinct.
  */
-let largeSelectionVersion = 0;
-
-function largeSelectionPredicateLegacy(): string {
-  largeSelectionVersion++;
-  return `__row_index__ IN (SELECT row_index FROM __scatter_selection) AND 'v${largeSelectionVersion}' = 'v${largeSelectionVersion}'`;
-}
-
-async function syncLargeSelectionLegacy(rowIds: RowIndex[]): Promise<string | null> {
-  if (rowIds.length === 0) {
-    await fetch("/api/scatter-selection", { method: "DELETE" }).catch(() => {});
-    return null;
-  }
-  await fetch("/api/scatter-selection", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ row_indices: rowIds }),
-  }).catch(() => {});
-  return largeSelectionPredicateLegacy();
-}
-
-/**
- * Build a Mosaic WHERE predicate for the given row IDs.
- *
- * Small selections (< 5000): `__row_index__ IN (1,2,3,...)`
- * DuckDB converts IN lists to hash sets — much faster than 100K OR clauses.
- * The inline id list varies per selection, so Mosaic's SQL-text cache key
- * naturally differs and no version tag is needed here.
- *
- * Large selections (≥ 5000): subquery against the __scatter_selection temp
- * table that is populated via POST /api/scatter-selection before this
- * predicate is applied. See syncLargeSelectionLegacy() (host-less path only;
- * the docked path uses host.dataAPI.publishRowSet → sel_<id>).
- */
-export function buildSelectionPredicate(rowIds: readonly RowIndex[]): string | null {
+function buildInlineSelectionPredicate(rowIds: readonly RowIndex[]): string | null {
   if (rowIds.length === 0) return null;
-  if (rowIds.length < 5000) {
-    return `__row_index__ IN (${rowIds.join(",")})`;
-  }
-  return largeSelectionPredicateLegacy();
+  return `__row_index__ IN (${rowIds.join(",")})`;
 }
 
 // ── Hook ──────────────────────────────────────────────────────────────────────
@@ -102,14 +59,10 @@ export function useScatterBrushSync({
   // The debouncer also fires a trailing accurate update for small selections
   // (usually a no-op since the throttler already set the same predicate).
   //
-  // NOTE: the docked path publishes the "lasso" facet through host → the
-  // PredicateBus; the host-less floating path publishes it under a floating
-  // instance id. The bus is the sole writer of the crossfilter
-  // Selection and dispatches via rAF (§6.3 / §6.7).
   const brushThrottler = useThrottler(
     (rowIds: RowIndex[]) => {
       if (rowIds.length === 0 || rowIds.length >= 5000) return;
-      publishLasso(hostRef.current, buildSelectionPredicate(rowIds));
+      publishLasso(hostRef.current, buildInlineSelectionPredicate(rowIds));
     },
     {
       wait: 50, // matches GPU readback gate (~20 fps)
@@ -123,21 +76,16 @@ export function useScatterBrushSync({
       const h = hostRef.current;
       // Small (<5000): inline IN-list (the id list self-busts the cache).
       if (rowIds.length < 5000) {
-        publishLasso(h, buildSelectionPredicate(rowIds));
+        publishLasso(h, buildInlineSelectionPredicate(rowIds));
         return;
       }
       // Large (≥5000): stage server-side, then reference the temp table.
-      if (h.dataAPI.publishRowSet) {
-        // Per-instance sel_<id> (§6.5). Bail if the instance is being torn down so
-        // a flush-after-dispose can't strand an orphaned sel_<id> table.
-        if (h.signal.aborted) return;
-        const token = await h.dataAPI.publishRowSet(rowIds);
-        if (h.signal.aborted) return;
-        publishLasso(h, token.predicate); // references sel_<id> + /* tok=N */
-        return;
-      }
-      // No row-set-publish capability: legacy server-staged table.
-      publishLasso(h, await syncLargeSelectionLegacy(rowIds));
+      // Per-instance sel_<id> (§6.5). Bail if the instance is being torn down so
+      // a flush-after-dispose can't strand an orphaned sel_<id> table.
+      if (h.signal.aborted) return;
+      const token = await h.dataAPI.publishRowSet(rowIds);
+      if (h.signal.aborted) return;
+      publishLasso(h, token.predicate); // references sel_<id> + /* tok=N */
     },
     {
       wait: 200,

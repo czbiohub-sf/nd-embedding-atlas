@@ -14,14 +14,11 @@ import { createPortal } from "react-dom";
 import { NodeDocButton } from "@/components/nd/node-doc";
 import { NdIconButton } from "@/components/nd/nd-icon-button";
 import { NdBracketed, NdCaption, NdHud, NdLed, type NdLedState } from "@/components/nd/nd-primitives";
-import { ThresholdFilterView } from "@/nodes/transform-filter/view";
 import { BodySocket, HeaderSocket } from "../body-dock";
 import { ND_STAGE, ND_TIMING } from "../constants";
-import { getWorkspaceNodeDescriptor } from "../node-defs";
 import { useNodeCount } from "../use-node-count";
 import { useTelemetrySelector, useWorkspace, useWorkspaceSelector } from "../workspace-context";
-import { FlagButton, ScatterLassoActions } from "../canvas/node-extras";
-import { WranglePane } from "../canvas/WranglePane";
+import { FlagButton } from "../canvas/node-extras";
 import { isSlot, reconcileStageTree, treeLeaves, type TreeNode } from "./split-tree";
 
 const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
@@ -52,7 +49,8 @@ function StageTile({
   const flagsOff = useWorkspaceSelector((s) => s.flags[id]?.off ?? false);
   const fullscreen = useSelector(ws.ui, (u) => u.fullscreen === id);
 
-  const def = node ? getWorkspaceNodeDescriptor(node.type) : null;
+  const def = node ? ws.deps.nodeLibrary.getDescriptor(node.type) : null;
+  const hasBody = node ? ws.deps.nodeLibrary.getSpec(node.type)?.definition.load !== undefined : false;
   // count policy: a tile's body is visible and says its own scale — only
   // staged transforms keep a header count
   const countActive = Boolean(def && def.kind !== "view");
@@ -108,20 +106,19 @@ function StageTile({
         {led ? <NdLed state={led} /> : null}
         <span className="text-[11.5px] leading-none font-medium whitespace-nowrap">{node.label}</span>
         {/* plugin's compact toolbar follows the body — staged ⇒ tile header */}
-        {node.pluginId && !fullscreen ? <HeaderSocket nodeId={id} /> : <span className="flex-1" />}
+        {hasBody && !fullscreen ? <HeaderSocket nodeId={id} /> : <span className="flex-1" />}
         {countActive && count !== null ? (
           <span className="font-mono text-[9.5px] tabular-nums text-text-muted">
             <NdBracketed>{count.toLocaleString("en-US")}</NdBracketed>
           </span>
         ) : null}
-        {node.type === "scatter" ? <ScatterLassoActions nodeId={id} compactLabel /> : null}
         <span className={`font-mono text-[9.5px] whitespace-nowrap ${selected ? "text-primary" : "text-text-muted"}`}>
           ◆ {id}
         </span>
         <NodeDocButton nodeType={node.type} />
         {/* bypass / display-off mutates persisted graph state — authoring, dev-only (R4) */}
         {import.meta.env.DEV ? <FlagButton node={node} /> : null}
-        {node.pluginId ? (
+        {hasBody ? (
           <NdIconButton icon="fullscreen" title="fullscreen body" onClick={() => ws.setFullscreen(id)} />
         ) : null}
         {/* split (re-tile) + pull-to-canvas (re-placement) — authoring, dev-only (R4) */}
@@ -141,12 +138,7 @@ function StageTile({
           flagsOff ? { opacity: 0.3, filter: "grayscale(0.8)", transition: "opacity 200ms, filter 200ms" } : undefined
         }
       >
-        {node.type === "threshold" ? (
-          // a staged transform earns a large scrubbable body (cheap config UI — rendered in place)
-          <ThresholdFilterPane id={id} />
-        ) : node.type === "wrangle" ? (
-          <WranglePane id={id} />
-        ) : fullscreen ? (
+        {fullscreen ? (
           <div className="grid h-full place-items-center rounded border border-dashed border-border">
             <NdHud size={8.5}>body fullscreen · esc</NdHud>
           </div>
@@ -163,12 +155,6 @@ function StageTile({
       ) : null}
     </div>
   );
-}
-
-function ThresholdFilterPane({ id }: { id: string }) {
-  const ws = useWorkspace();
-  const host = ws.transformHosts.get(id);
-  return host ? <ThresholdFilterView host={host} /> : null;
 }
 
 /** split-direction picker (glass, 4 directions). The popover is PORTALED to

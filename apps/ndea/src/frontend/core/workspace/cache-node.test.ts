@@ -45,7 +45,7 @@ describe("Cache node", () => {
     ws.connect(wr, cache);
 
     // upstream emits a predicate (wrangle compiled pred)
-    ws.setWranglePred(wr, "x > 1");
+    ws.updateNodeConfig(wr, { predicateSql: "x > 1" });
     expect(cookSql(ws, cache)).toBe("x > 1"); // live: follows input
     expect(ws.isCached(cache)).toBe(false);
 
@@ -55,7 +55,7 @@ describe("Cache node", () => {
     expect(cookSql(ws, cache)).toBe("x > 1");
 
     // upstream moves — cached output stays fixed (R3)
-    ws.setWranglePred(wr, "x > 999");
+    ws.updateNodeConfig(wr, { predicateSql: "x > 999" });
     expect(cookSql(ws, cache)).toBe("x > 1");
 
     // go live again — follows the (new) input
@@ -72,13 +72,13 @@ describe("Cache node", () => {
     ws.connect(obs, wr);
     ws.connect(wr, cache);
 
-    ws.setWranglePred(wr, "x > 1");
+    ws.updateNodeConfig(wr, { predicateSql: "x > 1" });
     ws.pinCache(cache);
     const stamp = ws.store.state.nodes[cache].stamp!;
     expect(stamp).toBeGreaterThanOrEqual(0);
 
     // upstream re-cooks → epoch advances past the pin → recache available
-    ws.setWranglePred(wr, "x > 2");
+    ws.updateNodeConfig(wr, { predicateSql: "x > 2" });
     expect(ws.graphEpoch).toBeGreaterThan(stamp);
 
     // Recache re-pins to the new live input (R4) and refreshes the stamp
@@ -153,51 +153,5 @@ describe("Cache node", () => {
     ws.connect(obs, cache); // obs emits null ("everything")
     expect(ws.pinCache(cache)).toBe(false);
     expect(ws.isCached(cache)).toBe(false);
-  });
-});
-
-describe("Export node (decoupled from Cache)", () => {
-  test("saves the live sel input's rows — no pinning, reads input directly", async () => {
-    const ws = makeWs();
-    const obs = ws.addNode("obs", { x: 0, y: 0 }, "obs");
-    const sc = ws.addNode("scatter", { x: 100, y: 0 });
-    const exp = ws.addNode("export", { x: 200, y: 0 });
-    ws.connect(obs, sc);
-    ws.connect(sc, exp); // sel push wire
-    ws.emitLasso(sc, "__row_index__ IN (1, 2, 3)", [rowIndex(1), rowIndex(2), rowIndex(3)]);
-
-    let captured: unknown = null;
-    const orig = globalThis.fetch;
-    globalThis.fetch = ((_url: string, init: RequestInit) => {
-      captured = JSON.parse(init.body as string);
-      return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({ result: { collection_id: "c1" } }),
-      } as Response);
-    }) as typeof fetch;
-
-    try {
-      const res = await ws.saveAsCollection(exp, "my set");
-      expect(res.ok).toBe(true);
-      expect(captured).toEqual({ name: "my set", row_indices: [1, 2, 3] });
-      // decoupled: the export node never pins (Cache's frozenRows untouched)
-      expect(ws.frozenRows.has(exp)).toBe(false);
-    } finally {
-      globalThis.fetch = orig;
-    }
-  });
-
-  test("refuses a pred-only input — no row ids to save", async () => {
-    const ws = makeWs();
-    const obs = ws.addNode("obs", { x: 0, y: 0 }, "obs");
-    const wr = ws.addNode("wrangle", { x: 100, y: 0 });
-    const exp = ws.addNode("export", { x: 200, y: 0 });
-    ws.connect(obs, wr);
-    ws.connect(wr, exp);
-    ws.setWranglePred(wr, "x > 1");
-
-    const res = await ws.saveAsCollection(exp, "preds");
-    expect(res.ok).toBe(false);
-    expect(res.error).toContain("row selection");
   });
 });

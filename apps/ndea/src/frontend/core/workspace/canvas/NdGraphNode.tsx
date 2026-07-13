@@ -20,22 +20,13 @@ import { NdHud, type NdLedState } from "@/components/nd/nd-primitives";
 import type { NdResizeCorner } from "@/components/nd/nd-resize-grips";
 import { BodySocket, HeaderSocket } from "../body-dock";
 import { ND_NODE, ND_TIMING } from "../constants";
-import { getWorkspaceNodeDescriptor, workspaceNodeSize } from "../node-defs";
+import { workspaceNodeSize } from "../node-defs";
 import { useNodeFeedbackContext } from "../feedback";
 import { useNodeCount } from "../use-node-count";
 import { useTelemetrySelector, useWorkspace, useWorkspaceSelector } from "../workspace-context";
 import { resolveNodeForm, resolveNodeSize } from "./port-positions";
 import { NdHandle } from "./NdHandle";
-import {
-  BypassOverlay,
-  DisplayOffBadge,
-  FeedbackBadges,
-  FlagButton,
-  ScatterLassoActions,
-  SyncBadge,
-  SyncGroupButton,
-} from "./node-extras";
-import { getWorkspaceNodeSpec } from "../definitions";
+import { BypassOverlay, DisplayOffBadge, FeedbackBadges, FlagButton, SyncBadge, SyncGroupButton } from "./node-extras";
 
 export interface NdGraphNodeData {
   wsId: string;
@@ -77,7 +68,7 @@ function NdGraphNodeInner({ id, selected }: NodeProps<NdGraphNodeType>) {
 
   const updateInternals = useUpdateNodeInternals();
 
-  const def = node ? getWorkspaceNodeDescriptor(node.type) : null;
+  const def = node ? ws.deps.nodeLibrary.getDescriptor(node.type) : null;
   const form = resolveNodeForm(ws, id);
   const size = resolveNodeSize(ws, id);
 
@@ -116,24 +107,23 @@ function NdGraphNodeInner({ id, selected }: NodeProps<NdGraphNodeType>) {
   // placeholder doesn't communicate scale)
   const showCount = countActive || (def.kind === "view" && staged);
   const countText = showCount ? (countError ? "✗" : countCooking ? "…" : count === null ? null : fmt(count)) : null;
-  const isSel = getWorkspaceNodeSpec(node.type)?.checkpoint ?? false;
+  const spec = ws.deps.nodeLibrary.getSpec(node.type);
+  const isSel = spec?.checkpoint ?? false;
+  const hasBody = spec?.definition.load !== undefined;
 
   const body = (() => {
     if (form === "chip" || staged) return null; // staged → frame renders "body on stage ◆"
-    // Unified path: the spec owns its body (built-in bodies + the threshold
-    // config editor). A plugin-backed view spec has no `Body` — its lazy module
-    // mounts the body adopted by BodySocket below (no switch).
-    const SpecBody = getWorkspaceNodeSpec(node.type)?.Body;
-    if (SpecBody) return <SpecBody node={node} />;
-    if (!node.pluginId) return null;
+    if (!hasBody) return null;
     if (fullscreen)
       return (
         <div className="grid min-h-12 flex-1 place-items-center rounded border border-dashed border-border">
           <NdHud size={8.5}>body fullscreen · esc</NdHud>
         </div>
       );
-    if (form === "full") return <BodySocket nodeId={id} claimable={node.type === "scatter" || node.type === "fov"} />;
-    // card: identity placeholder — the live body mounts at full form
+    if (form === "full" || spec?.body === "card-and-full") {
+      return <BodySocket nodeId={id} claimable={node.type === "scatter" || node.type === "fov"} />;
+    }
+    // Compact card for definitions whose Body is deliberately full-only.
     return (
       <div className="grid min-h-12 flex-1 place-items-center rounded border border-dashed border-border">
         <NdHud size={8.5}>{node.label.toLowerCase()} · full body at ⛶</NdHud>
@@ -142,19 +132,10 @@ function NdGraphNodeInner({ id, selected }: NodeProps<NdGraphNodeType>) {
   })();
 
   const footer =
-    form === "full" && (telemetryOn || node.type === "scatter") ? (
+    form === "full" && telemetryOn ? (
       <>
-        {telemetryOn ? (
-          <>
-            <span>epoch {String(epoch).padStart(4, "0")}</span>
-            <span>{cooking ? "cooking…" : cookMs !== undefined ? `cook ${cookMs.toFixed(1)}ms` : "cook —"}</span>
-          </>
-        ) : null}
-        {node.type === "scatter" ? (
-          <span className="ml-auto inline-flex">
-            <ScatterLassoActions nodeId={id} />
-          </span>
-        ) : null}
+        <span>epoch {String(epoch).padStart(4, "0")}</span>
+        <span>{cooking ? "cooking…" : cookMs !== undefined ? `cook ${cookMs.toFixed(1)}ms` : "cook —"}</span>
       </>
     ) : null;
 
@@ -238,15 +219,13 @@ function NdGraphNodeInner({ id, selected }: NodeProps<NdGraphNodeType>) {
         // the plugin's compact toolbar rides the header's middle gap; only
         // where the body is visible (full form, body on canvas) — staged
         // bodies put it in the stage tile's header instead
-        headerSlot={
-          node.pluginId && form === "full" && !staged && !fullscreen ? <HeaderSocket nodeId={id} /> : undefined
-        }
+        headerSlot={hasBody && form === "full" && !staged && !fullscreen ? <HeaderSocket nodeId={id} /> : undefined}
         actions={
           <>
             <NodeDocButton nodeType={node.type} compact={form === "chip"} />
             <FlagButton node={node} compact={form === "chip"} />
             {def.kind === "view" && form !== "chip" ? <SyncGroupButton nodeId={id} /> : null}
-            {node.pluginId && def.kind === "view" ? (
+            {hasBody && def.kind === "view" ? (
               <NdIconButton
                 icon="fullscreen"
                 title="fullscreen body"

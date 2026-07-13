@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
-import type { RowIndex } from "@ndea/sdk";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useHost } from "@/core/host/host-context";
+import { useNodeFocus } from "@/core/node/use-node-focus";
 import {
   ChannelControls,
   Viewer,
@@ -27,8 +27,7 @@ interface CropViewerProps {
  */
 function ViewerObsReadout() {
   const host = useHost<unknown, ImageViewerCapabilities>();
-  const [focusedRowIndex, setFocusedRowIndex] = useState<RowIndex | null>(() => host.focus.get());
-  useEffect(() => host.focus.subscribe?.(setFocusedRowIndex), [host]);
+  const focusedRowIndex = useNodeFocus(host);
   const { data } = useQuery({
     queryKey: ["obs", focusedRowIndex],
     queryFn: async () => {
@@ -50,8 +49,7 @@ function ViewerObsReadout() {
 export function CropViewer({ channelInstance = "docked", datasetKey }: CropViewerProps) {
   // Focus read: scoped to this instance's host (sync group / focus wire).
   const host = useHost<unknown, ImageViewerCapabilities>();
-  const [focusedRowIndex, setFocusedRowIndex] = useState<RowIndex | null>(() => host.focus.get());
-  useEffect(() => host.focus.subscribe?.(setFocusedRowIndex), [host]);
+  const focusedRowIndex = useNodeFocus(host);
 
   const hasEverSelected = useRef(false);
   const [cropSize, setCropSize] = useState(100);

@@ -105,18 +105,8 @@ export function ScatterView({
 }: ScatterViewProps) {
   const categoryColors = useEffectiveCategoryColors();
   const { setFps, setZoom, setSelection, setEmbedding, setNumPoints } = useScatterUIDispatch();
-  // Plugin host on the docked path (null on the floating/host-less path).
+  // Every scatter body is mounted with its capability-gated node host.
   const host = useHost<unknown, ScatterCapabilities>();
-
-  // Scoped focus: on the node/host path a point-click routes through
-  // Read from the same group-aware host focus that point clicks write.
-  const scopedFocus = Boolean(host?.focus.subscribe);
-  const [scopedFocusedRowIndex, setScopedFocusedRowIndex] = useState<RowIndex | null>(() => host.focus.get());
-  useEffect(() => {
-    if (!host.focus.subscribe) return;
-    return host.focus.subscribe(setScopedFocusedRowIndex);
-  }, [host]);
-  const effectiveFocusedRowIndex = scopedFocus ? scopedFocusedRowIndex : focusedRowIndex;
 
   // Point style as a declarative prop (slice 1 of the <ScatterCanvas> contract).
   // Human-cadence (sliders/settings) so re-rendering on change is fine — unlike
@@ -178,9 +168,7 @@ export function ScatterView({
   // ── Continuous range filter handles (dim-only — colormap is NOT remapped) ──
   const [userVmin, setUserVmin] = useState<number | undefined>();
   const [userVmax, setUserVmax] = useState<number | undefined>();
-  // Route the continuous-range predicate through host.* on the docked path; the
-  // host-less floating window publishes to the bus directly under the same
-  // floating instance id as its lasso, so range composes into one clause (§6.3).
+  // Route the continuous-range predicate through the node host.
   const publishRange = useCallback((sql: string | null) => publishRangeFilter(host, sql), [host]);
 
   // Reset filter when column changes
@@ -239,11 +227,11 @@ export function ScatterView({
     return m;
   }, [data?.rowIndices]);
   const highlightWorldPos = useMemo<[number, number] | null>(() => {
-    if (activeTrajectories.length > 0 || effectiveFocusedRowIndex == null || !data) return null;
-    const pi = rowToPoint.get(effectiveFocusedRowIndex);
+    if (activeTrajectories.length > 0 || focusedRowIndex == null || !data) return null;
+    const pi = rowToPoint.get(focusedRowIndex);
     if (pi == null) return null;
     return [data.positions[2 * pi], data.positions[2 * pi + 1]];
-  }, [effectiveFocusedRowIndex, activeTrajectories, data, rowToPoint]);
+  }, [focusedRowIndex, activeTrajectories, data, rowToPoint]);
 
   // Trajectory isolation mask — each feature owns its own mask; no mutual
   // exclusion needed. (Highlight moved to the prop above.)
@@ -497,7 +485,7 @@ export function ScatterView({
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
-      if (effectiveFocusedRowIndex != null) {
+      if (focusedRowIndex != null) {
         focusPoint(host, null);
       } else if (trajectory) {
         actions.clearTrajectory(trajectory.datasetKey ?? "");
@@ -514,7 +502,7 @@ export function ScatterView({
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [effectiveFocusedRowIndex, host, trajectory, actions, setSelection]);
+  }, [focusedRowIndex, host, trajectory, actions, setSelection]);
 
   // Listen for global "clear lasso" requests (e.g. fired by the
   // collections bridge when a collection is activated — collection becomes
@@ -540,8 +528,8 @@ export function ScatterView({
   }, [axes, actions, setEmbedding, trajectory]);
 
   useEffect(() => {
-    if (effectiveFocusedRowIndex == null && trajectory) actions.clearTrajectory(trajectory.datasetKey ?? "");
-  }, [effectiveFocusedRowIndex, trajectory, actions]);
+    if (focusedRowIndex == null && trajectory) actions.clearTrajectory(trajectory.datasetKey ?? "");
+  }, [focusedRowIndex, trajectory, actions]);
 
   const showLoading = isLoading || dataLoading;
 
@@ -586,9 +574,8 @@ export function ScatterView({
       ref={containerRef}
       className={`relative min-h-0 flex-1 overflow-hidden${trajectory ? "trajectory-active" : ""}`}
     >
-      {/* GpuDeviceProvider sits BELOW the `!axes` guard above, so an empty scatter
-          acquires zero device. With a host on context (docked path) the GPU host
-          waits for its lease; without one (floating path) it self-acquires. */}
+      {/* GpuDeviceProvider sits below the `!axes` guard, so an empty scatter
+          acquires no device. */}
       <GpuDeviceProvider>
         <ScatterGPUHost
           ref={hostRef}

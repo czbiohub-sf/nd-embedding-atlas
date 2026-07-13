@@ -4,7 +4,7 @@
  * push port (sel), delivered downstream outside the cook (mirrors scatter).
  */
 
-import { defineNativeNodeContribution } from "@/core/workspace/node-kit";
+import { defineNativeNodeContribution } from "@/core/node/native-contribution";
 import { passthroughGraphPredicate } from "@/core/graph/cook";
 import { histogramDefinition } from "./plugin";
 
@@ -14,11 +14,11 @@ export const histogramNode = defineNativeNodeContribution({
     role: "view",
     evaluationRole: "view",
     cook: (inputs) => passthroughGraphPredicate(inputs),
-    usesDefinitionModule: true,
   },
-  workspace: {
+  presentation: {
     geometry: { chipW: 132, card: { w: 240, h: 160 }, full: { w: 380, h: 300 }, canFull: true },
     stage: "stageable",
     inPalette: true,
+    body: "full-only",
   },
 });

@@ -8,7 +8,7 @@
  * batch path keeps a scope to stamp.
  */
 
-import { defineNativeNodeContribution } from "@/core/workspace/node-kit";
+import { defineNativeNodeContribution } from "@/core/node/native-contribution";
 import { passthroughGraphPredicate } from "@/core/graph/cook";
 import { annotateDefinition } from "./plugin";
 
@@ -18,11 +18,11 @@ export const annotateNode = defineNativeNodeContribution({
     role: "view",
     evaluationRole: "view",
     cook: (inputs) => passthroughGraphPredicate(inputs),
-    usesDefinitionModule: true,
   },
-  workspace: {
+  presentation: {
     geometry: { chipW: 148, card: { w: 256, h: 180 }, full: { w: 320, h: 360 }, canFull: true },
     stage: "stageable",
     inPalette: true,
+    body: "full-only",
   },
 });

@@ -4,7 +4,7 @@
  * port (sel), delivered downstream outside the cook. Out port is `sel`.
  */
 
-import { defineNativeNodeContribution } from "@/core/workspace/node-kit";
+import { defineNativeNodeContribution } from "@/core/node/native-contribution";
 import { passthroughGraphPredicate } from "@/core/graph/cook";
 import { scatterDefinition } from "./plugin";
 
@@ -14,11 +14,12 @@ export const scatterNode = defineNativeNodeContribution({
     role: "view",
     evaluationRole: "view",
     cook: (inputs) => passthroughGraphPredicate(inputs),
-    usesDefinitionModule: true,
   },
-  workspace: {
+  presentation: {
     geometry: { chipW: 132, card: { w: 220, h: 156 }, full: { w: 420, h: 380 }, canFull: true },
     stage: "stageable",
     inPalette: true,
+    body: "full-only",
+    checkpointCreation: true,
   },
 });

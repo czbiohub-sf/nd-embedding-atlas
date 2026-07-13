@@ -1,8 +1,8 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import type { RowIndex } from "@ndea/sdk";
 import { vec3 } from "gl-matrix";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect } from "react";
 import { useHost } from "@/core/host/host-context";
+import { useNodeFocus } from "@/core/node/use-node-focus";
 import { selectTrajectory } from "@/dashboard/DashboardContext";
 import { useDashboard } from "@/hooks/useDashboard";
 import { capabilitiesOf } from "@ndea/sdk";
@@ -33,8 +33,7 @@ export function SingleCropViewer({ cropSize, showBbox, datasetKey }: Props) {
   // Focus source: scoped to this instance's host (its focus WIRE is the input),
   // so deleting the wire genuinely disconnects the viewer (C6).
   const host = useHost<unknown, ImageViewerCapabilities>();
-  const [focusedRowIndex, setFocusedRowIndex] = useState<RowIndex | null>(() => host.focus.get());
-  useEffect(() => host.focus.subscribe?.(setFocusedRowIndex), [host]);
+  const focusedRowIndex = useNodeFocus(host);
 
   // ── Fetch obs info ────────────────────────────────────────────────
   const { data: obsInfo } = useQuery({

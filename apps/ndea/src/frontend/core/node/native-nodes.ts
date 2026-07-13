@@ -4,7 +4,7 @@ import { countPlotNode } from "@/nodes/charts/count-plot/node";
 import { histogramNode } from "@/nodes/charts/histogram/node";
 import { collectionNode } from "@/nodes/collection/node";
 import { galleryNode } from "@/nodes/gallery/node";
-import { fovNode } from "@/nodes/image-viewer/node";
+import { imageViewerNode } from "@/nodes/image-viewer/node";
 import { scatterNode } from "@/nodes/scatter/node";
 import { tableNode } from "@/nodes/table/node";
 import { thresholdNode } from "@/nodes/transform-filter/node";
@@ -16,7 +16,7 @@ import { obsNode } from "@/nodes/utils/obs/node";
 import { proxyNode } from "@/nodes/utils/proxy/node";
 import { subnetNode } from "@/nodes/utils/subnet/node";
 import { wrangleNode } from "@/nodes/utils/wrangle/node";
-import type { AnyNativeNodeContribution } from "../node-kit";
+import type { AnyNativeNodeContribution } from "./native-contribution";
 
 /**
  * The sole native-node inventory. Tuple order is the product order; filtering
@@ -34,7 +34,7 @@ export const NATIVE_NODE_CONTRIBUTIONS = Object.freeze([
   countPlotNode,
   histogramNode,
   galleryNode,
-  fovNode,
+  imageViewerNode,
   collectionNode,
   exportNode,
   cacheNode,
@@ -43,9 +43,9 @@ export const NATIVE_NODE_CONTRIBUTIONS = Object.freeze([
   selectionNode,
 ] as const satisfies readonly AnyNativeNodeContribution[]);
 
-// Heterogeneous immutable inventory: each definition retains its precise author type
-// before this sole existential collection boundary.
-// eslint-disable-next-line typescript/no-explicit-any -- generic erasure is required for the mixed-config tuple
+// Heterogeneous immutable inventory: each definition retains its precise author
+// type before this sole existential collection boundary.
+// oxlint-disable-next-line no-explicit-any -- generic erasure is required for the mixed-config tuple.
 export const NATIVE_NODE_DEFINITIONS: readonly NodeDefinition<any, any>[] = Object.freeze(
   NATIVE_NODE_CONTRIBUTIONS.map(({ definition }) => definition),
 );

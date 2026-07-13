@@ -67,8 +67,6 @@ export interface GraphNodeCookHost {
   readonly id: string;
   node(): GraphDocumentNode | undefined;
   frozenPredicate(): PredicatePortValue | undefined;
-  wranglePredicate(): PredicatePortValue;
-  collectionBinding(): { id: string; version: number } | undefined;
 }
 
 export type GraphNodeCookFunction = (inputs: GraphPortValueInputs, host: GraphNodeCookHost) => GraphPortValue;

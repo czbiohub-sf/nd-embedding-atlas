@@ -1,13 +1,13 @@
 /**
- * subnet — a hierarchy container. Its own cook passes input through (AND of
- * preds); the inner result reaches downstream via the hidden ⊲out→subnet edge
- * minted in `birthSubnetSeam`.
+ * subnet — a hierarchy container. Its cook passes input through; the inner
+ * result reaches downstream through the hidden subnet seam.
  */
 
-import { SubnetBody } from "@/core/workspace/canvas/node-extras";
 import { defineNode, exactNodeTypeRef } from "@ndea/sdk";
-import { defineNativeNodeContribution } from "@/core/workspace/node-kit";
+
 import { passthroughGraphPredicate } from "@/core/graph/cook";
+import { defineNativeNodeContribution } from "@/core/node/native-contribution";
+import { mountReactNodeBody } from "@/core/node/react-node-body";
 
 const subnetDefinition = defineNode({
   ref: exactNodeTypeRef("subnet", "1.0.0"),
@@ -16,6 +16,11 @@ const subnetDefinition = defineNode({
   inputs: [{ id: "in", kind: "pred", label: "In" }],
   outputs: [{ id: "out", kind: "pred", label: "Out" }],
   capabilities: [],
+  load: async () => {
+    // NodeDefinition.load is the intentional lazy plugin-module boundary.
+    const { SubnetBody } = await import("./body");
+    return { mountBody: (host) => mountReactNodeBody(SubnetBody, host, "Subnet") };
+  },
 });
 
 export const subnetNode = defineNativeNodeContribution({
@@ -24,11 +29,11 @@ export const subnetNode = defineNativeNodeContribution({
     role: "subnet",
     evaluationRole: "view",
     cook: (inputs) => passthroughGraphPredicate(inputs),
-    Body: SubnetBody,
   },
-  workspace: {
+  presentation: {
     geometry: { chipW: 150, card: { w: 220, h: 96 }, full: { w: 220, h: 96 }, canFull: false },
     stage: "canvas-only",
     inPalette: false,
+    body: "card-and-full",
   },
 });

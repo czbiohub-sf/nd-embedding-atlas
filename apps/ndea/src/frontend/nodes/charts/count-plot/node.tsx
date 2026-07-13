@@ -4,7 +4,7 @@
  * delivered downstream outside the cook (mirrors scatter).
  */
 
-import { defineNativeNodeContribution } from "@/core/workspace/node-kit";
+import { defineNativeNodeContribution } from "@/core/node/native-contribution";
 import { passthroughGraphPredicate } from "@/core/graph/cook";
 import { countPlotDefinition } from "./plugin";
 
@@ -14,11 +14,11 @@ export const countPlotNode = defineNativeNodeContribution({
     role: "view",
     evaluationRole: "view",
     cook: (inputs) => passthroughGraphPredicate(inputs),
-    usesDefinitionModule: true,
   },
-  workspace: {
+  presentation: {
     geometry: { chipW: 132, card: { w: 220, h: 200 }, full: { w: 360, h: 340 }, canFull: true },
     stage: "stageable",
     inPalette: true,
+    body: "full-only",
   },
 });

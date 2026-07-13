@@ -4,7 +4,7 @@
  * inputs. Sink (no out port); accepts a pred or sel input.
  */
 
-import { defineNativeNodeContribution } from "@/core/workspace/node-kit";
+import { defineNativeNodeContribution } from "@/core/node/native-contribution";
 import { lastPortValueOfKind, passthroughGraphPredicate } from "@/core/graph/cook";
 import { galleryDefinition } from "./plugin";
 
@@ -14,11 +14,11 @@ export const galleryNode = defineNativeNodeContribution({
     role: "view",
     evaluationRole: "view",
     cook: (inputs) => lastPortValueOfKind(inputs, "sel") ?? passthroughGraphPredicate(inputs),
-    usesDefinitionModule: true,
   },
-  workspace: {
+  presentation: {
     geometry: { chipW: 132, card: { w: 220, h: 140 }, full: { w: 420, h: 360 }, canFull: true },
     stage: "stageable",
     inPalette: true,
+    body: "full-only",
   },
 });

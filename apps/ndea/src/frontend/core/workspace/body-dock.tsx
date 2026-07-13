@@ -1,7 +1,7 @@
 /**
  * Body dock — ONE live body per node; bodies reparent, never remount (C4).
  *
- * Mechanism: each plugin-backed node gets a stable dock element
+ * Mechanism: each definition-backed node gets a stable dock element
  * (ws.dockEl(id), created once). `BodyOwner` — mounted under the
  * workspace-root `WorkspaceBodies`, NOT inside any container — owns the
  * NodeHost (built once, disposed only when the node is removed) and
@@ -26,12 +26,18 @@ import { createPortal } from "react-dom";
 
 import { PanelErrorBoundary } from "@/components/layout/PanelErrorBoundary";
 import { useDashboardHostShim } from "@/core/host/use-dashboard-host-shim";
+import { assertNodeHostCapabilities } from "@/core/node/host-capabilities";
 import { loadNodeModule } from "@/core/node/load-module";
-import type { OrderingCoordinationAPI, RowIndex, ViewCoordinationAPI } from "@ndea/sdk";
+import type { ExactNodeTypeRef, OrderingCoordinationAPI, RowIndex, ViewCoordinationAPI } from "@ndea/sdk";
 import { nodeInstanceId } from "@ndea/sdk";
 import { stringPredicate } from "@/lib/mosaic-helpers";
-import { nativeNodeCatalog } from "./definitions";
-import { getWorkspaceNodeDescriptor } from "./node-defs";
+import {
+  createCheckpointCreationNodeFacet,
+  createCheckpointNodeFacet,
+  createEdgeInputRowSetBinding,
+  createHierarchyNodeFacet,
+  deliverEdgeInputRowSet,
+} from "./node-host-facets";
 import { resolveNodeForm } from "./canvas/port-positions";
 import { useWorkspace, useWorkspaceSelector } from "./workspace-context";
 // (lasso capture + push wires need the workspace store inside the owner)
@@ -47,25 +53,46 @@ function bindMethod(value: unknown, target: object): unknown {
   return typeof value === "function" ? value.bind(target) : value;
 }
 
-function BodyOwnerInner({ nodeId, pluginId }: { nodeId: string; pluginId: string }) {
+function BodyOwnerInner({ nodeId, definitionRef }: { nodeId: string; definitionRef: ExactNodeTypeRef }) {
   const ws = useWorkspace();
-  const module = use(loadNodeModule(nativeNodeCatalog, pluginId));
-  const definition = nativeNodeCatalog.resolveCurrent(pluginId)!;
+  const catalog = ws.deps.nodeLibrary.catalog;
+  const module = use(loadNodeModule(catalog, definitionRef));
+  const definition = catalog.resolveExact(definitionRef);
+  if (!definition) {
+    throw new Error(`node definition not found: ${definitionRef.nodeTypeId}@${definitionRef.nodeTypeVersion}`);
+  }
+  const spec = ws.deps.nodeLibrary.getSpec(ws.store.state.nodes[nodeId]?.type ?? "");
   const makeHost = useDashboardHostShim();
 
   // Built EXACTLY ONCE per node lifetime — keyed by node identity, not
   // mount location. The per-node input Selection is the engine sink target;
   // the focus store mirrors pushed focus values for host.focus.subscribe.
-  const [{ handle, input, focus }] = useState(() => {
+  const [{ handle, input, inputRowSet, focus, appFacets }] = useState(() => {
     const sel = Selection.single();
+    const nodeConfig = ws.store.state.nodes[nodeId]?.config;
+    const defaultConfig = definition.config?.defaultValue;
+    const config = {
+      ...(defaultConfig && typeof defaultConfig === "object" ? defaultConfig : {}),
+      ...(nodeConfig && typeof nodeConfig === "object" ? nodeConfig : {}),
+    };
     const built = makeHost<unknown>({
       instanceId: nodeInstanceId(nodeId),
       definition,
-      config: { ...(definition.config?.defaultValue as Record<string, unknown> | undefined) },
+      config,
       bodyHeaderElement: ws.headerEl(nodeId),
       inputPredicate: sel,
     });
-    return { handle: built, input: sel, focus: new Store<RowIndex | null>(null) };
+    return {
+      handle: built,
+      input: sel,
+      inputRowSet: createEdgeInputRowSetBinding(),
+      focus: new Store<RowIndex | null>(null),
+      appFacets: {
+        ...(spec?.checkpoint ? { checkpoint: createCheckpointNodeFacet(ws, nodeId) } : {}),
+        ...(spec?.checkpointCreation ? { checkpointCreation: createCheckpointCreationNodeFacet(ws, nodeId) } : {}),
+        ...(spec?.kind === "subnet" ? { hierarchy: createHierarchyNodeFacet(ws, nodeId) } : {}),
+      },
+    };
   });
   const [mountError, setMountError] = useState<Error | null>(null);
 
@@ -80,9 +107,11 @@ function BodyOwnerInner({ nodeId, pluginId }: { nodeId: string; pluginId: string
     return ws.registerGraphSink(nodeId, (v) => {
       if (v === undefined) return;
       if (v.kind === "focus") {
+        deliverEdgeInputRowSet(inputRowSet, v);
         focus.setState(() => v.rowIndex);
         return;
       }
+      deliverEdgeInputRowSet(inputRowSet, v);
       const sql = v.sql;
       input.update({
         source,
@@ -91,7 +120,7 @@ function BodyOwnerInner({ nodeId, pluginId }: { nodeId: string; pluginId: string
         predicate: sql ? stringPredicate(sql) : null,
       });
     });
-  }, [ws, nodeId, input, focus, off]);
+  }, [ws, nodeId, input, inputRowSet, focus, off]);
 
   // Edge-bound host (C5/C6): on the workspace surface a plugin's authored
   // outputs flow down its wires, not onto the global buses. The lasso becomes
@@ -103,6 +132,23 @@ function BodyOwnerInner({ nodeId, pluginId }: { nodeId: string; pluginId: string
     const host = handle.host;
     return new Proxy(host, {
       get(t, prop, recv) {
+        if (typeof prop === "string" && Object.hasOwn(appFacets, prop)) {
+          return appFacets[prop as keyof typeof appFacets];
+        }
+        if (prop === "patchConfig") {
+          return (patch: Record<string, unknown>) => {
+            ws.updateNodeConfig(nodeId, patch);
+            t.patchConfig(patch);
+          };
+        }
+        if (prop === "externalRowSet") return inputRowSet.externalRowSet;
+        if (prop === "onExternalRowSet") {
+          return (callback: (rowIndices: readonly RowIndex[] | null) => void) => {
+            const unsubscribe = inputRowSet.onExternalRowSet(callback);
+            t.track(unsubscribe);
+            return unsubscribe;
+          };
+        }
         if (prop === "publishPredicate") {
           return (facet: string, sql: string | null) => {
             if (facet === "lasso") {
@@ -258,11 +304,17 @@ function BodyOwnerInner({ nodeId, pluginId }: { nodeId: string; pluginId: string
         return bindMethod(v, t);
       },
     });
-  }, [handle, ws, nodeId, focus]);
+  }, [handle, ws, nodeId, focus, inputRowSet, appFacets]);
 
   useEffect(() => {
     const mountBody = module.mountBody;
     if (!mountBody) return;
+    try {
+      assertNodeHostCapabilities(definition, edgeBoundHost);
+    } catch (error) {
+      setMountError(error instanceof Error ? error : new Error(String(error)));
+      return;
+    }
     let active = true;
     let mounted: Awaited<ReturnType<typeof mountBody>> | undefined;
     void Promise.resolve(mountBody(edgeBoundHost))
@@ -281,14 +333,22 @@ function BodyOwnerInner({ nodeId, pluginId }: { nodeId: string; pluginId: string
       active = false;
       mounted?.dispose();
     };
-  }, [module, edgeBoundHost, ws, nodeId]);
+  }, [module, definition, edgeBoundHost, ws, nodeId]);
   useEffect(() => () => handle.dispose(), [handle]);
 
   if (mountError) throw mountError;
   return null;
 }
 
-function BodyOwner({ nodeId, pluginId, label }: { nodeId: string; pluginId: string; label: string }) {
+function BodyOwner({
+  nodeId,
+  definitionRef,
+  label,
+}: {
+  nodeId: string;
+  definitionRef: ExactNodeTypeRef;
+  label: string;
+}) {
   const ws = useWorkspace();
   return createPortal(
     <PanelErrorBoundary panelName={label}>
@@ -297,7 +357,7 @@ function BodyOwner({ nodeId, pluginId, label }: { nodeId: string; pluginId: stri
           <div className="flex h-full items-center justify-center text-xs text-muted-foreground">Loading {label}…</div>
         }
       >
-        <BodyOwnerInner nodeId={nodeId} pluginId={pluginId} />
+        <BodyOwnerInner nodeId={nodeId} definitionRef={definitionRef} />
       </Suspense>
     </PanelErrorBoundary>,
     ws.dockEl(nodeId),
@@ -305,7 +365,7 @@ function BodyOwner({ nodeId, pluginId, label }: { nodeId: string; pluginId: stri
 }
 
 /**
- * WorkspaceBodies — mounts a BodyOwner per plugin-backed node, sticky from
+ * WorkspaceBodies — mounts a BodyOwner per loadable definition, sticky from
  * first need. Lives at the workspace root so no container unmount can take
  * a body down with it.
  */
@@ -319,13 +379,20 @@ export function WorkspaceBodies() {
   const fullscreen = useSelector(ws.ui, (u) => u.fullscreen);
   const activated = useRef(new Set<string>());
 
-  const live: { id: string; pluginId: string; label: string }[] = [];
+  const live: { id: string; definitionRef: ExactNodeTypeRef; label: string }[] = [];
   for (const n of Object.values(nodes)) {
-    const def = getWorkspaceNodeDescriptor(n.type);
-    if (def.kind !== "view" || !n.pluginId) continue;
-    const needs = ws.placementOf(n.id) === "staged" || resolveNodeForm(ws, n.id) === "full" || fullscreen === n.id;
+    const spec = ws.deps.nodeLibrary.getSpec(n.type);
+    if (!spec?.definition.load) continue;
+    const form = resolveNodeForm(ws, n.id);
+    const needs =
+      ws.placementOf(n.id) === "staged" ||
+      form === "full" ||
+      (form === "card" && spec.body === "card-and-full") ||
+      fullscreen === n.id;
     if (needs) activated.current.add(n.id);
-    if (activated.current.has(n.id)) live.push({ id: n.id, pluginId: n.pluginId, label: n.label });
+    if (activated.current.has(n.id)) {
+      live.push({ id: n.id, definitionRef: spec.definition.ref, label: n.label });
+    }
   }
   // drop activation for removed nodes
   for (const id of activated.current) if (!nodes[id]) activated.current.delete(id);
@@ -333,7 +400,7 @@ export function WorkspaceBodies() {
   return (
     <>
       {live.map((b) => (
-        <BodyOwner key={b.id} nodeId={b.id} pluginId={b.pluginId} label={b.label} />
+        <BodyOwner key={b.id} nodeId={b.id} definitionRef={b.definitionRef} label={b.label} />
       ))}
     </>
   );

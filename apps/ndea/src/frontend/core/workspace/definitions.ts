@@ -9,8 +9,8 @@ import {
   type WorkspaceNodeDescriptor,
   type WorkspaceNodeLibrary,
   type WorkspaceNodeSpec,
-} from "./node-kit";
-import { NATIVE_NODE_CONTRIBUTIONS, NATIVE_NODE_DEFINITIONS } from "./nodes";
+} from "./node-projection";
+import { NATIVE_NODE_CONTRIBUTIONS, NATIVE_NODE_DEFINITIONS } from "@/core/node/native-nodes";
 
 /** The one registration-only factory for every app-owned node definition. */
 export const nativePluginFactory: PluginFactory = ({ registerNode }) => {
@@ -82,6 +82,7 @@ export function workspacePaletteNodeDescriptors(): readonly WorkspaceNodeDescrip
 
 /** Session-immutable node policy injected into Workspace and persistence boundaries. */
 export const nativeWorkspaceNodeLibrary: WorkspaceNodeLibrary = Object.freeze({
+  catalog: nativeNodeCatalog,
   getSpec: getWorkspaceNodeSpec,
   getDescriptor: getWorkspaceNodeDescriptor,
 });
