@@ -27,7 +27,15 @@ export type {
 } from "@ndea/protocol";
 export type { DataCapability, Metadata };
 
-export { defineNode, exactNodeTypeRef, nodeConfigVersion, nodeInstanceId, nodeTypeId, nodeTypeVersion } from "./node";
+export {
+  defineNode,
+  exactNodeTypeRef,
+  nodeConfigVersion,
+  nodeInstanceId,
+  nodeTypeId,
+  nodeTypeVersion,
+  rowIndex,
+} from "./node";
 export type {
   ExactNodeTypeRef,
   FanInOperation,
@@ -55,6 +63,7 @@ export type {
   PortKind,
   PredicatePortValue,
   RowSetPortValue,
+  RowIndex,
 } from "./node";
 
 export type { MountedNodeBody, NodeModule, NodeRuntime } from "./module";

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { NodeCompute, NodeComputeContext } from "@ndea/sdk";
+import { rowIndex, type NodeCompute, type NodeComputeContext } from "@ndea/sdk";
 import { adaptNodeCompute, assertSynchronousNodeRuntime, toNodeComputeInputs } from "./cook";
 import type { GraphPortValueInputs } from "./cook";
 
@@ -19,15 +19,15 @@ describe("SDK compute graph adapter", () => {
   test("passes public SDK port payloads to author compute without Workspace contracts", () => {
     const inputs: GraphPortValueInputs = new Map([
       ["predicate", [{ kind: "pred", sql: "x > 2" }]],
-      ["rows", [{ kind: "sel", sql: "__row_index__ IN (2, 5)", rowIds: [2, 5] }]],
-      ["focus", [{ kind: "focus", obsId: "cell-5" }]],
+      ["rows", [{ kind: "sel", sql: "__row_index__ IN (2, 5)", rowIds: [rowIndex(2), rowIndex(5)] }]],
+      ["focus", [{ kind: "focus", rowIndex: rowIndex(5) }]],
     ]);
 
     expect(toNodeComputeInputs(inputs)).toEqual(
       new Map([
         ["predicate", ["x > 2"]],
-        ["rows", [[2, 5]]],
-        ["focus", ["cell-5"]],
+        ["rows", [[rowIndex(2), rowIndex(5)]]],
+        ["focus", [rowIndex(5)]],
       ]),
     );
   });

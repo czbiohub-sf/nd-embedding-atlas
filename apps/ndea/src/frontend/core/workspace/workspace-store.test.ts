@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import type { Metadata } from "@ndea/protocol";
+import { rowIndex } from "@ndea/sdk";
 import { predicateSql } from "@/core/graph/cook";
 import { nativeWorkspaceNodeLibrary } from "./definitions";
 import type { WorkspaceNodeLibrary } from "./node-kit";
@@ -66,7 +67,7 @@ describe("Workspace graph transactions", () => {
     const wrangle = workspace.addNode("wrangle", { x: 300, y: 0 }, "reused-wrangle");
 
     workspace.frozenPredicates.set(cache, "row_id > 10");
-    workspace.frozenRows.set(cache, [11, 12]);
+    workspace.frozenRows.set(cache, [rowIndex(11), rowIndex(12)]);
     workspace.bindCollection(collection, { id: "keepers", name: "Keepers", version: 1 });
     workspace.setWranglePred(wrangle, "score > 0.5");
     expect(workspace.transformHosts.has(transform)).toBe(true);
@@ -124,6 +125,58 @@ describe("Workspace graph transactions", () => {
     workspace.deleteEdge(edgeId);
     expect(predicateSeenByDocumentSubscriber).toBeNull();
     subscription.unsubscribe();
+    workspace.dispose();
+  });
+
+  test("node and edge removal clear only editor selections that reference dropped graph records", () => {
+    const workspace = createWorkspace();
+    const source = workspace.addNode("dataset", { x: 0, y: 0 });
+    const sink = workspace.addNode("count", { x: 100, y: 0 });
+    expect(workspace.connect(source, sink)).toBe(true);
+    const edgeId = Object.keys(workspace.store.state.edges)[0];
+
+    workspace.setGraphSelection([source, sink], [edgeId]);
+    workspace.deleteEdge(edgeId);
+    expect(workspace.store.state.selectedNodeIds).toEqual([source, sink]);
+    expect(workspace.store.state.selectedEdgeId).toBeNull();
+
+    expect(workspace.connect(source, sink)).toBe(true);
+    const replacementEdgeId = Object.keys(workspace.store.state.edges)[0];
+    workspace.setGraphSelection([source, sink], [replacementEdgeId]);
+    workspace.removeNode(sink);
+    expect(workspace.store.state.selectedNodeId).toBeNull();
+    expect(workspace.store.state.selectedNodeIds).toEqual([source]);
+    expect(workspace.store.state.selectedEdgeId).toBeNull();
+    workspace.dispose();
+  });
+
+  test("node click, marquee, edge Escape, and node Escape leave focus and claim independent", () => {
+    const workspace = createWorkspace();
+    const first = workspace.addNode("dataset", { x: 0, y: 0 });
+    const second = workspace.addNode("count", { x: 100, y: 0 });
+    expect(workspace.connect(first, second)).toBe(true);
+    const edgeId = Object.keys(workspace.store.state.edges)[0];
+    workspace.coordination.assignScope(first, "focus", "A");
+    workspace.coordination.setCoordinationValue("focus", "A", rowIndex(7));
+    workspace.claim(second);
+
+    workspace.selectNode(first);
+    expect(workspace.store.state.selectedNodeId).toBe(first);
+    expect(workspace.store.state.selectedNodeIds).toEqual([]);
+
+    workspace.setGraphSelection([first, second], []);
+    expect(workspace.store.state.selectedNodeId).toBeNull();
+    expect(workspace.store.state.selectedNodeIds).toEqual([first, second]);
+
+    workspace.selectEdge(edgeId);
+    workspace.selectEdge(null); // first Escape step: edge only
+    expect(workspace.store.state.selectedNodeIds).toEqual([first, second]);
+    workspace.setGraphSelection([], []); // next Escape step: node selection only
+    expect(workspace.store.state.selectedNodeId).toBeNull();
+    expect(workspace.store.state.selectedNodeIds).toEqual([]);
+    expect(workspace.store.state.selectedEdgeId).toBeNull();
+    expect(workspace.store.state.claimed).toBe(second);
+    expect(workspace.coordination.readCoordination("focus", "A")).toBe(rowIndex(7));
     workspace.dispose();
   });
 

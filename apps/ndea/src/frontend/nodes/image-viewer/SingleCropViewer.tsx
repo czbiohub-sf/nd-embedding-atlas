@@ -1,4 +1,5 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import type { RowIndex } from "@ndea/sdk";
 import { vec3 } from "gl-matrix";
 import { useCallback, useEffect, useState } from "react";
 import { useHost } from "@/core/host/host-context";
@@ -11,6 +12,7 @@ import { useBboxLayer } from "@/nodes/image-viewer/viewer/useBboxLayer";
 import { useFovLoader } from "@/nodes/image-viewer/viewer/useFovLoader";
 import { useViewer } from "@/nodes/image-viewer/viewer/useViewer";
 import type { ImageViewerCapabilities } from "./plugin";
+import { focusedObservationPath } from "./focus-behavior";
 
 /** Fixed camera view radius in pixels (independent of crop slider). */
 const CAMERA_VIEW_HALF = 150;
@@ -31,17 +33,17 @@ export function SingleCropViewer({ cropSize, showBbox, datasetKey }: Props) {
   // Focus source: scoped to this instance's host (its focus WIRE is the input),
   // so deleting the wire genuinely disconnects the viewer (C6).
   const host = useHost<unknown, ImageViewerCapabilities>();
-  const [highlightId, setHighlightId] = useState<string | null>(() => host.focus.get());
-  useEffect(() => host.focus.subscribe?.(setHighlightId), [host]);
+  const [focusedRowIndex, setFocusedRowIndex] = useState<RowIndex | null>(() => host.focus.get());
+  useEffect(() => host.focus.subscribe?.(setFocusedRowIndex), [host]);
 
   // ── Fetch obs info ────────────────────────────────────────────────
   const { data: obsInfo } = useQuery({
-    queryKey: ["obs", highlightId],
+    queryKey: ["obs", focusedRowIndex],
     queryFn: async () => {
-      const r = await fetch(`/api/obs/${highlightId}`);
+      const r = await fetch(focusedObservationPath(focusedRowIndex!));
       return ObsInfoSchema.parse(await r.json());
     },
-    enabled: !!highlightId,
+    enabled: focusedRowIndex != null,
     placeholderData: keepPreviousData,
     staleTime: 10_000,
   });
@@ -228,6 +230,6 @@ export function SingleCropViewer({ cropSize, showBbox, datasetKey }: Props) {
     );
   }
 
-  if (!highlightId || !obsInfo) return null;
+  if (focusedRowIndex == null || !obsInfo) return null;
   return null;
 }

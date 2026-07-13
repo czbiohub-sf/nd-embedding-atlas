@@ -8,6 +8,7 @@
 
 import { useThrottler } from "@tanstack/react-pacer";
 import { useSelector } from "@tanstack/react-store";
+import { type RowIndex, rowIndex } from "@ndea/sdk";
 import type { Coordinator } from "@uwdata/mosaic-core";
 import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { DashboardActions } from "@/dashboard/DashboardContext";
@@ -25,6 +26,7 @@ import { broadcastView, focusPoint, publishRangeFilter } from "./routing";
 import { type ColorMode, useMosaicScatterData } from "@/nodes/scatter/gpu/hooks/useMosaicScatterData";
 import { useScatterBrushSync } from "@/nodes/scatter/gpu/hooks/useScatterBrushSync";
 import type { ScatterplotConfig } from "@/nodes/scatter/gpu/types";
+import { type GpuPointIndex, gpuPointIndex } from "@/lib/branded-types";
 import { hexToRgbPalette } from "@/nodes/scatter/gpu/utils/colors";
 import { buildColormapLut } from "@/lib/color/ochre-lut";
 import { pointRadiusStore } from "@/stores/PointRadiusStore";
@@ -49,11 +51,11 @@ export interface ScatterViewProps {
   categoryIndicesRef?: RefObject<Uint8Array | null>;
   fitViewRef?: RefObject<(() => void) | null>;
   /** Hoisted ref — populated by ScatterView but owned by ScatterContent */
-  rowIndicesRef?: RefObject<number[]>;
+  rowIndicesRef?: RefObject<RowIndex[]>;
   /** Called when GPU readback updates the row index list */
-  onRowIndicesChange?: (indices: number[]) => void;
+  onRowIndicesChange?: (indices: RowIndex[]) => void;
   /** Out-ref populated with the *lasso* row IDs (subset of rowIndicesRef). */
-  lassoRowIdsRef?: RefObject<number[]>;
+  lassoRowIdsRef?: RefObject<RowIndex[]>;
   axes: AxisState | null;
   isLoading: boolean;
   loadingKey: string | null;
@@ -71,7 +73,7 @@ export interface ScatterViewProps {
   activeTrajectories: TrajectoryData[];
   metadata: Metadata;
   actions: DashboardActions;
-  highlightId: string | null;
+  focusedRowIndex: RowIndex | null;
 }
 
 export function ScatterView({
@@ -93,7 +95,7 @@ export function ScatterView({
   activeTrajectories,
   metadata: _metadata,
   actions,
-  highlightId,
+  focusedRowIndex,
   isolationHandleRef,
   categoryIndicesRef,
   fitViewRef,
@@ -107,16 +109,14 @@ export function ScatterView({
   const host = useHost<unknown, ScatterCapabilities>();
 
   // Scoped focus: on the node/host path a point-click routes through
-  // host.highlight.set (NOT the global dashboard state), so read the focused obs
-  // from there; fall back to the global highlightId prop on the host-less path.
-  // (Mirrors CropViewer — candidate for a shared useScopedHighlight hook.)
-  const scopedHighlight = Boolean(host?.focus.subscribe);
-  const [scopedHighlightId, setScopedHighlightId] = useState<string | null>(() => host.focus.get());
+  // Read from the same group-aware host focus that point clicks write.
+  const scopedFocus = Boolean(host?.focus.subscribe);
+  const [scopedFocusedRowIndex, setScopedFocusedRowIndex] = useState<RowIndex | null>(() => host.focus.get());
   useEffect(() => {
     if (!host.focus.subscribe) return;
-    return host.focus.subscribe(setScopedHighlightId);
+    return host.focus.subscribe(setScopedFocusedRowIndex);
   }, [host]);
-  const effectiveHighlightId = scopedHighlight ? scopedHighlightId : highlightId;
+  const effectiveFocusedRowIndex = scopedFocus ? scopedFocusedRowIndex : focusedRowIndex;
 
   // Point style as a declarative prop (slice 1 of the <ScatterCanvas> contract).
   // Human-cadence (sliders/settings) so re-rendering on change is fine — unlike
@@ -171,7 +171,7 @@ export function ScatterView({
   });
 
   const viewStateRef = useRef({ panX: 0, panY: 0, zoom: 1 });
-  const _localRowIndicesRef = useRef<number[]>([]);
+  const _localRowIndicesRef = useRef<RowIndex[]>([]);
   const rowIndicesRef = externalRowIndicesRef ?? _localRowIndicesRef;
   const [gpuError, setGpuError] = useState<string | null>(null);
 
@@ -215,32 +215,35 @@ export function ScatterView({
   // of the packed-flags contract). Single-point focus is handled by
   // HighlightFocusOverlay instead — a lone bright point is invisible under
   // additive blending.
-  const highlightRowIds = useMemo<number[] | null>(
+  const highlightRowIds = useMemo<RowIndex[] | null>(
     () =>
       activeTrajectories.length === 0
         ? null
-        : activeTrajectories.flatMap((t) => t.points.map((p) => p.rowIndex).filter((id): id is number => id != null)),
+        : activeTrajectories.flatMap((t) =>
+            t.points
+              .map((p) => p.rowIndex)
+              .filter((id): id is number => id != null)
+              .map(rowIndex),
+          ),
     [activeTrajectories],
   );
 
-  // Single-point focus → screen marker. highlightId is the clicked obs's
+  // Single-point focus → screen marker. focusedRowIndex is the clicked obs's
   // __row_index__; resolve it to a normalized world position via the
   // rowIndex→point inverse. Suppressed while a trajectory is active (that has
   // its own overlay).
   const rowToPoint = useMemo(() => {
-    const m = new Map<number, number>();
+    const m = new Map<RowIndex, GpuPointIndex>();
     const ri = data?.rowIndices;
-    if (ri) for (let i = 0; i < ri.length; i++) m.set(ri[i], i);
+    if (ri) for (let i = 0; i < ri.length; i++) m.set(ri[i], gpuPointIndex(i));
     return m;
   }, [data?.rowIndices]);
   const highlightWorldPos = useMemo<[number, number] | null>(() => {
-    if (activeTrajectories.length > 0 || effectiveHighlightId == null || !data) return null;
-    const n = Number(effectiveHighlightId);
-    if (!Number.isFinite(n)) return null;
-    const pi = rowToPoint.get(n);
+    if (activeTrajectories.length > 0 || effectiveFocusedRowIndex == null || !data) return null;
+    const pi = rowToPoint.get(effectiveFocusedRowIndex);
     if (pi == null) return null;
     return [data.positions[2 * pi], data.positions[2 * pi + 1]];
-  }, [effectiveHighlightId, activeTrajectories, data, rowToPoint]);
+  }, [effectiveFocusedRowIndex, activeTrajectories, data, rowToPoint]);
 
   // Trajectory isolation mask — each feature owns its own mask; no mutual
   // exclusion needed. (Highlight moved to the prop above.)
@@ -250,7 +253,10 @@ export function ScatterView({
       return () => {};
     }
     const rowIndices = activeTrajectories.flatMap((t) =>
-      t.points.map((p) => p.rowIndex).filter((id): id is number => id != null),
+      t.points
+        .map((p) => p.rowIndex)
+        .filter((id): id is number => id != null)
+        .map(rowIndex),
     );
     if (rowIndices.length > 0) {
       hostRef.current?.setTrajectoryIsolation(rowIndices);
@@ -279,7 +285,7 @@ export function ScatterView({
         })
         .then((result: unknown) => {
           if (cancelled) return;
-          const indices = toRows<{ __row_index__: number }>(result).map((r) => r.__row_index__);
+          const indices = toRows<{ __row_index__: number }>(result).map((r) => rowIndex(r.__row_index__));
           hostRef.current?.setContinuousIsolation(indices);
         })
         .catch(() => {
@@ -338,9 +344,9 @@ export function ScatterView({
   });
 
   const callbacksRef = useRef({
-    onSelectionChange: (_count: number | null, _indices?: number[]) => {},
+    onSelectionChange: (_count: number | null, _indices?: GpuPointIndex[]) => {},
     onExternalClear: () => {},
-    onPointClick: (_index: number, _pos: [number, number], _catIdx: number, _catName: string) => {},
+    onPointClick: (_index: GpuPointIndex, _pos: [number, number], _catIdx: number, _catName: string) => {},
     onBackgroundClick: () => {},
     onViewChange: (_state: { panX: number; panY: number; zoom: number }) => {},
     onFps: (_fps: number) => {},
@@ -352,17 +358,13 @@ export function ScatterView({
     onSelectionChange(...args);
   };
   callbacksRef.current.onExternalClear = () => setSelection(null);
-  // Focus write: on the docked/workspace path route through host.highlight so a
-  // sync group (or focus wire) carries it to other nodes; host-less floating path
-  // uses the global bus. Scatter's out-port is `sel`, not `focus`, so cross-node
-  // focus can ONLY travel via a shared sync group — which needs host.highlight.set.
-  const setHighlight = (id: string | null) => focusPoint(host, id);
+  const setFocus = (nextFocus: RowIndex | null) => focusPoint(host, nextFocus);
   callbacksRef.current.onBackgroundClick = () => {
-    setHighlight(null);
+    setFocus(null);
   };
-  callbacksRef.current.onPointClick = (index) => {
-    const rowIdx = rowIndicesRef.current[index] ?? index;
-    setHighlight(String(rowIdx));
+  callbacksRef.current.onPointClick = (pointIndex) => {
+    const clickedRowIndex = rowIndicesRef.current[pointIndex];
+    if (clickedRowIndex != null) setFocus(clickedRowIndex);
   };
   callbacksRef.current.onViewChange = (state) => {
     viewStateRef.current = state;
@@ -460,11 +462,11 @@ export function ScatterView({
   }, [legendState.scale, colorMode, data?.continuous]);
 
   // External (cross-panel, non-self) selection → GPU dim-mask, read through the
-  // host (BroadcastBus side, §6.7).
+  // host row-set channel.
   useEffect(() => {
-    const apply = (rowIds: readonly number[] | null) => {
-      if (rowIds === null) hostRef.current?.clearExternalSelection();
-      else hostRef.current?.setExternalSelection(rowIds as number[]);
+    const apply = (rowIndices: readonly RowIndex[] | null) => {
+      if (rowIndices === null) hostRef.current?.clearExternalSelection();
+      else hostRef.current?.setExternalSelection([...rowIndices]);
     };
     apply(host.externalRowSet()); // seed an already-active selection on mount
     return host.onExternalRowSet(apply);
@@ -483,10 +485,10 @@ export function ScatterView({
   // are gone.)
 
   // (GPU highlight now flows via the `highlightRowIds` prop, derived from
-  // activeTrajectories. When highlightId→null the trajectory is cleared, which
+  // activeTrajectories. When focus clears the trajectory is cleared, which
   // empties highlightRowIds → the host clears the glow. No separate effect.)
 
-  // Escape cascade: highlight → trajectory → lasso → active collection
+  // Escape cascade: focus → trajectory → lasso → active collection
   //                                              → (category handled by CategoricalLegend)
   // Active collection sits between lasso and category because:
   //   - lasso-in-progress is the most recent transient state
@@ -495,7 +497,7 @@ export function ScatterView({
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
-      if (effectiveHighlightId) {
+      if (effectiveFocusedRowIndex != null) {
         focusPoint(host, null);
       } else if (trajectory) {
         actions.clearTrajectory(trajectory.datasetKey ?? "");
@@ -512,7 +514,7 @@ export function ScatterView({
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [effectiveHighlightId, host, trajectory, actions, setSelection]);
+  }, [effectiveFocusedRowIndex, host, trajectory, actions, setSelection]);
 
   // Listen for global "clear lasso" requests (e.g. fired by the
   // collections bridge when a collection is activated — collection becomes
@@ -538,8 +540,8 @@ export function ScatterView({
   }, [axes, actions, setEmbedding, trajectory]);
 
   useEffect(() => {
-    if (!highlightId && trajectory) actions.clearTrajectory(trajectory.datasetKey ?? "");
-  }, [highlightId, trajectory, actions]);
+    if (effectiveFocusedRowIndex == null && trajectory) actions.clearTrajectory(trajectory.datasetKey ?? "");
+  }, [effectiveFocusedRowIndex, trajectory, actions]);
 
   const showLoading = isLoading || dataLoading;
 

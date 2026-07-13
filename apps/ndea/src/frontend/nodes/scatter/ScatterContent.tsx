@@ -9,6 +9,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import type { RowIndex } from "@ndea/sdk";
 import { selectAnyTrajectory } from "@/dashboard/DashboardContext";
 import { useDashboard } from "@/hooks/useDashboard";
 import { capabilitiesOf } from "@ndea/sdk";
@@ -19,7 +20,7 @@ import { useDisabledBridge } from "@/nodes/scatter/gpu/hooks/useDisabledBridge";
 import { useIsolationBridge } from "@/nodes/scatter/gpu/hooks/useIsolationBridge";
 import { useScatterColorState } from "@/nodes/scatter/gpu/hooks/useScatterColorState";
 import { useTrajectoryLoader } from "@/nodes/scatter/gpu/hooks/useTrajectoryLoader";
-import { useHighlightedPointMeta } from "@/hooks/useHighlightedPointMeta";
+import { useFocusedPointMeta } from "@/hooks/useFocusedPointMeta";
 import type { PanelId } from "@/nodes/scatter/gpu/types";
 import { useHost } from "@/core/host/host-context";
 import { broadcastPanelState, clearPanelState } from "@/stores/PanelStateStore";
@@ -57,9 +58,9 @@ export function ScatterContent({
   const host = useHost<unknown, ScatterCapabilities>();
   const { metadata } = state;
   // Focus read: scoped to this instance's host (sync group / focus wire), so the
-  // point-info pane follows group focus — not the global dashboard highlight.
-  const [highlightId, setHighlightId] = useState<string | null>(() => host.focus.get());
-  useEffect(() => host.focus.subscribe?.(setHighlightId), [host]);
+  // Point metadata follows the instance's group-aware host focus.
+  const [focusedRowIndex, setFocusedRowIndex] = useState<RowIndex | null>(() => host.focus.get());
+  useEffect(() => host.focus.subscribe?.(setFocusedRowIndex), [host]);
   const trajectory = selectAnyTrajectory(state.trajectories);
   const activeTrajectories = Object.values(state.trajectories).filter((t): t is NonNullable<typeof t> => t != null);
   const { coordinator, brushSelection, table } = meta;
@@ -128,9 +129,9 @@ export function ScatterContent({
   // populated once on GPU init). `lassoRowIdsRef` is the *user lasso*
   // subset — populated by useScatterBrushSync on each lasso readback.
   // Save dialog reads the lasso subset, not the panel-level mapping.
-  const rowIndicesRef = useRef<number[]>([]);
-  const lassoRowIdsRef = useRef<number[]>([]);
-  const getRowIndices = useCallback((): readonly number[] => lassoRowIdsRef.current, []);
+  const rowIndicesRef = useRef<RowIndex[]>([]);
+  const lassoRowIdsRef = useRef<RowIndex[]>([]);
+  const getRowIndices = useCallback((): readonly RowIndex[] => lassoRowIdsRef.current, []);
   // `selectedCount` from useScatterUIState is null when no lasso, count otherwise.
   const { selectedCount } = useScatterUIState();
   const selectionCount = selectedCount ?? 0;
@@ -155,11 +156,11 @@ export function ScatterContent({
 
   const isLoading = !!loadingKey || categoryLoading;
 
-  // ── Trajectory toggle (wired against the currently-highlighted point) ───
+  // ── Trajectory toggle (wired against the currently focused point) ──────
   // The ScatterToolbar button is the only entry point now — PointInfoPane
   // was removed. If a trajectory is active, the toggle clears it. Otherwise,
-  // if the highlighted point is trackable, the toggle starts one. No
-  // highlight + no active trajectory → onToggleTrajectory is undefined and
+  // if the focused point is trackable, the toggle starts one. No
+  // focus + no active trajectory → onToggleTrajectory is undefined and
   // ScatterToolbar hides the button.
   const { showTrajectory } = useTrajectoryLoader({
     embedding: effectiveAxes?.obsmKey ?? "",
@@ -167,17 +168,17 @@ export function ScatterContent({
     yCol,
     categoryCol,
   });
-  const highlightMeta = useHighlightedPointMeta(highlightId);
+  const focusedPointMeta = useFocusedPointMeta(focusedRowIndex);
 
   const onToggleTrajectory = trajectory
     ? () => actions.clearTrajectory(trajectory.datasetKey ?? "")
-    : highlightMeta.trackable
+    : focusedPointMeta.trackable
       ? () => {
           void showTrajectory(
-            highlightMeta.trackId ?? 0,
-            highlightMeta.fovName ?? "",
-            highlightMeta.t,
-            highlightMeta.datasetKey,
+            focusedPointMeta.trackId ?? 0,
+            focusedPointMeta.fovName ?? "",
+            focusedPointMeta.t,
+            focusedPointMeta.datasetKey,
           );
         }
       : undefined;
@@ -193,7 +194,7 @@ export function ScatterContent({
   useEffect(() => {
     return () => {
       clearPanelState(String(myPanelId));
-      // The host owns the bitmap lifecycle (host.dispose -> broadcastBus
+      // The host owns the row-set bitmap lifecycle
       // .disposeFor(instanceId), §6.6 — keyed by instanceId == this panelId).
     };
   }, [myPanelId]);
@@ -218,13 +219,13 @@ export function ScatterContent({
     activeTrajectories,
     metadata,
     actions,
-    highlightId,
+    focusedRowIndex,
     isolationHandleRef,
     categoryIndicesRef,
     fitViewRef,
     rowIndicesRef,
     lassoRowIdsRef,
-    onRowIndicesChange: (indices: number[]) => {
+    onRowIndicesChange: (indices: RowIndex[]) => {
       rowIndicesRef.current = indices;
     },
   };

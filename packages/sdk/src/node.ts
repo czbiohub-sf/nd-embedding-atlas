@@ -7,11 +7,13 @@ declare const NODE_TYPE_ID: unique symbol;
 declare const NODE_TYPE_VERSION: unique symbol;
 declare const NODE_CONFIG_VERSION: unique symbol;
 declare const NODE_INSTANCE_ID: unique symbol;
+declare const ROW_INDEX: unique symbol;
 
 export type NodeTypeId = string & { readonly [NODE_TYPE_ID]: true };
 export type NodeTypeVersion = string & { readonly [NODE_TYPE_VERSION]: true };
 export type NodeConfigVersion = number & { readonly [NODE_CONFIG_VERSION]: true };
 export type NodeInstanceId = string & { readonly [NODE_INSTANCE_ID]: true };
+export type RowIndex = number & { readonly [ROW_INDEX]: true };
 
 export function nodeTypeId(value: string): NodeTypeId {
   return value as NodeTypeId;
@@ -27,6 +29,10 @@ export function nodeConfigVersion(value: number): NodeConfigVersion {
 
 export function nodeInstanceId(value: string): NodeInstanceId {
   return value as NodeInstanceId;
+}
+
+export function rowIndex(value: number): RowIndex {
+  return value as RowIndex;
 }
 
 export interface ExactNodeTypeRef {
@@ -57,10 +63,10 @@ export interface NodePort {
 export type PredicatePortValue = string | null;
 
 /** An authored row set. `null` means absent; `[]` is an active empty set. */
-export type RowSetPortValue = readonly number[] | null;
+export type RowSetPortValue = readonly RowIndex[] | null;
 
-/** One dataset-defined observation identity. */
-export type FocusPortValue = string | null;
+/** One focused dataset row. */
+export type FocusPortValue = RowIndex | null;
 
 export type NodePortValue = PredicatePortValue | RowSetPortValue | FocusPortValue;
 

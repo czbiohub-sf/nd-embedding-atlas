@@ -1,14 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
+import type { RowIndex } from "@ndea/sdk";
 import { jsonFetcher } from "../lib/fetcher";
 
 /**
- * Fields needed to start a trajectory trace for a highlighted point.
+ * Fields needed to start a trajectory trace for a focused point.
  *
  * Populated only when the current dataset has `track_id` and `fov_name`
  * columns — otherwise `trackable` is false and the toolbar toggle stays
  * disabled.
  */
-export interface HighlightedPointMeta {
+export interface FocusedPointMeta {
   trackable: boolean;
   trackId?: number;
   fovName?: string;
@@ -16,21 +17,21 @@ export interface HighlightedPointMeta {
   datasetKey?: string;
 }
 
-const EMPTY: HighlightedPointMeta = { trackable: false };
+const EMPTY: FocusedPointMeta = { trackable: false };
 
 /**
- * Fetches `/api/obs/{highlightId}/detail` for the currently-highlighted
+ * Fetches `/api/obs/{focusedRowIndex}/detail` for the currently focused
  * point and extracts the trajectory-relevant fields.
  *
  * Previously lived inline inside PointInfoPane. Pulled out so the
  * trajectory toggle in ScatterOverlayControls can wire itself to the
- * highlighted point without re-mounting the old metadata card.
+ * focused point without re-mounting the old metadata card.
  */
-export function useHighlightedPointMeta(highlightId: string | null): HighlightedPointMeta {
+export function useFocusedPointMeta(focusedRowIndex: RowIndex | null): FocusedPointMeta {
   const { data } = useQuery<Record<string, string | null>>({
-    queryKey: ["obs-detail", highlightId],
-    queryFn: () => jsonFetcher(`/api/obs/${highlightId}/detail`) as Promise<Record<string, string | null>>,
-    enabled: highlightId != null,
+    queryKey: ["obs-detail", focusedRowIndex],
+    queryFn: () => jsonFetcher(`/api/obs/${focusedRowIndex}/detail`) as Promise<Record<string, string | null>>,
+    enabled: focusedRowIndex != null,
     staleTime: 60_000,
     gcTime: 5 * 60_000,
   });

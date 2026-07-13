@@ -2,6 +2,7 @@ import { tgpu } from "typegpu";
 import * as d from "typegpu/data";
 import { PALETTE, QUAD_VERTS } from "@/nodes/scatter/gpu/constants";
 import type { ColorMapper, RenderConfig, ScatterData, TgpuRoot } from "@/nodes/scatter/gpu/types";
+import { gpuPointIndex } from "@/lib/branded-types";
 
 // Maximum number of palette entries supported by the GPU color-pack shader.
 export const MAX_PALETTE_SIZE = 64;
@@ -136,7 +137,7 @@ export function uploadData(
     const cat = data.categoryIndices[i] % numCats;
     let r: number, g: number, b: number, alpha: number;
     if (colorMapper) {
-      [r, g, b] = colorMapper(cat, i, totalCats);
+      [r, g, b] = colorMapper(cat, gpuPointIndex(i), totalCats);
       alpha = 255;
     } else {
       const c = colors[cat];
@@ -179,7 +180,7 @@ export function buildCategoryColors(
   for (let i = 0; i < n; i++) {
     let r: number, g: number, b: number, a: number;
     if (colorMapper) {
-      [r, g, b] = colorMapper(i, 0, numCategories);
+      [r, g, b] = colorMapper(i, gpuPointIndex(0), numCategories);
       a = 1.0;
     } else {
       const c = colors[i % colors.length];

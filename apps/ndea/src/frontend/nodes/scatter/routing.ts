@@ -10,7 +10,7 @@
  * cross-view write to the global bus *through* them.
  */
 
-import type { NodeHost } from "@ndea/sdk";
+import type { NodeHost, RowIndex } from "@ndea/sdk";
 
 type ScatterFocusHost = Pick<NodeHost<unknown, "focus-coordination">, "focus">;
 type ScatterPredicateHost = Pick<NodeHost<unknown, "predicate-publish">, "publishPredicate">;
@@ -20,8 +20,8 @@ type ScatterRowSetHost = Pick<
 >;
 type ScatterViewHost = Pick<NodeHost<unknown, "view-coordination">, "viewCoordination">;
 /** Point/background click → focus the obs (or clear). Sync-group-aware host seam. */
-export function focusPoint(host: ScatterFocusHost, rowId: string | null): void {
-  host.focus.set(rowId);
+export function focusPoint(host: ScatterFocusHost, focusedRowIndex: RowIndex | null): void {
+  host.focus.set(focusedRowIndex);
 }
 
 /** Continuous-range filter → the instance's "range" predicate facet. */
@@ -35,8 +35,8 @@ export function publishLasso(host: ScatterPredicateHost, predicate: string | nul
 }
 
 /** Lasso row-set → GPU dim-mask broadcast. */
-export function publishLassoRowSet(host: ScatterRowSetHost, rowIds: number[]): void {
-  host.publishRowSet(rowIds);
+export function publishLassoRowSet(host: ScatterRowSetHost, rowIndices: RowIndex[]): void {
+  host.publishRowSet(rowIndices);
 }
 
 /** Clear the lasso: drop the facet, TRUE-clear the row-set, drop the staged sel table. */

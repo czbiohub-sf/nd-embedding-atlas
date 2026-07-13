@@ -20,7 +20,7 @@ export interface GraphRowSetPortValue {
 
 export interface GraphFocusPortValue {
   readonly kind: "focus";
-  readonly obsId: FocusPortValue;
+  readonly rowIndex: FocusPortValue;
 }
 
 export type GraphPortValue = GraphPredicatePortValue | GraphRowSetPortValue | GraphFocusPortValue;

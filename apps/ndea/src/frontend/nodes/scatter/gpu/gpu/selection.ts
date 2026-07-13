@@ -3,6 +3,7 @@ import * as d from "typegpu/data";
 import * as std from "typegpu/std";
 import { MAX_POLYGON_VERTS } from "@/nodes/scatter/gpu/constants";
 import type { TgpuRoot } from "@/nodes/scatter/gpu/types";
+import { type GpuPointIndex, gpuPointIndex } from "@/lib/branded-types";
 import { simplifyPath } from "@/nodes/scatter/gpu/utils/geometry";
 import type { ScatterBuffers } from "./buffers";
 import { type CompositorEngine, LAYER_EXTERNAL, LAYER_HIGHLIGHT, LAYER_ISOLATION, LAYER_LASSO } from "./compositor";
@@ -14,7 +15,7 @@ export function createSelectionEngine(
   device: GPUDevice,
   buffers: ScatterBuffers,
   numPoints: number,
-  onSelectionChange: (count: number | null, indices?: number[]) => void,
+  onSelectionChange: (count: number | null, indices?: GpuPointIndex[]) => void,
   _wgSize: 64 | 256 = 64,
   compositor: CompositorEngine,
 ) {
@@ -131,11 +132,11 @@ export function createSelectionEngine(
       .then(() => {
         const data = new Uint32Array(stagingBuffer.getMappedRange());
         let count = 0;
-        const indices: number[] = [];
+        const indices: GpuPointIndex[] = [];
         for (let i = 0; i < data.length; i++) {
           if (data[i]) {
             count++;
-            indices.push(i);
+            indices.push(gpuPointIndex(i));
           }
         }
         stagingBuffer.unmap();
@@ -197,11 +198,11 @@ export function createSelectionEngine(
   // Two independent sources merged into highlightBuffer: clicked point + trajectory points.
   // Same pattern as recomposeIsolation — each source owns its state, recomposeHighlight merges.
   const highlightMask = new Uint32Array(numPoints); // pre-allocated scratch
-  let clickedPointIdx = -1;
-  let trajectoryHighlightIndices: number[] = [];
+  let clickedPointIndex: GpuPointIndex | null = null;
+  let trajectoryHighlightIndices: GpuPointIndex[] = [];
 
   function recomposeHighlight() {
-    const hasClick = clickedPointIdx >= 0;
+    const hasClick = clickedPointIndex != null;
     const hasTrajectory = trajectoryHighlightIndices.length > 0;
     if (!hasClick && !hasTrajectory) {
       const encoder = device.createCommandEncoder();
@@ -215,24 +216,24 @@ export function createSelectionEngine(
     for (const idx of trajectoryHighlightIndices) {
       if (idx >= 0 && idx < numPoints) highlightMask[idx] = 1;
     }
-    if (hasClick) highlightMask[clickedPointIdx] = 2;
+    if (clickedPointIndex != null) highlightMask[clickedPointIndex] = 2;
     compositor.highlightBuffer.write(highlightMask);
     compositor.markDirty(LAYER_HIGHLIGHT, true);
   }
 
-  function selectPoint(index: number) {
-    clickedPointIdx = index;
+  function selectPoint(pointIndex: GpuPointIndex) {
+    clickedPointIndex = pointIndex;
     recomposeHighlight();
-    onSelectionChange(1, [index]);
+    onSelectionChange(1, [pointIndex]);
   }
 
-  function setHighlightPoints(pointIndices: number[]) {
+  function setHighlightPoints(pointIndices: GpuPointIndex[]) {
     trajectoryHighlightIndices = pointIndices;
     recomposeHighlight();
   }
 
   function clearHighlight() {
-    clickedPointIdx = -1;
+    clickedPointIndex = null;
     trajectoryHighlightIndices = [];
     recomposeHighlight();
   }
@@ -241,7 +242,7 @@ export function createSelectionEngine(
   // O(n) heap allocation per sync event (critical for 455K+ point datasets).
   const externalSelectionMask = new Uint32Array(numPoints);
 
-  function setSelectedPoints(pointIndices: number[]) {
+  function setSelectedPoints(pointIndices: GpuPointIndex[]) {
     externalSelectionMask.fill(0);
     for (const idx of pointIndices) {
       if (idx >= 0 && idx < numPoints) externalSelectionMask[idx] = 1;
@@ -254,8 +255,8 @@ export function createSelectionEngine(
     externalSelectionMask.fill(0);
     compositor.externalBuffer.write(externalSelectionMask);
     compositor.markDirty(LAYER_EXTERNAL, false);
-    // Do NOT call onSelectionChange here — that path calls clearSelectionSync,
-    // which notifies other panels, which call clearExternalSelection, which loops.
+    // Do not call onSelectionChange here: republishing the external clear would
+    // notify peers, which would clear and republish in a loop.
     // Status bar is updated via the separate onExternalClear callback in orchestrator.
   }
 
@@ -407,7 +408,7 @@ export function createSelectionEngine(
   }
 
   /** Check if a point is visible under current isolation (for click filtering). */
-  function isPointVisible(pointIndex: number): boolean {
+  function isPointVisible(pointIndex: GpuPointIndex): boolean {
     // Disabled-category gate: a point in a disabled category is never visible,
     // regardless of isolation/trajectory/continuous state. Matches the legend's
     // semantic that disabled = hidden everywhere (render and clicks).

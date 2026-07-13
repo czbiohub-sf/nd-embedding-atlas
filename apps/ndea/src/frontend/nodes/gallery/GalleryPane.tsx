@@ -14,6 +14,7 @@ import type { Coordinator } from "@uwdata/mosaic-core";
 import { SquareDashedMousePointer } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
+import type { RowIndex } from "@ndea/sdk";
 import { useDashboard } from "@/hooks/useDashboard";
 import { capabilitiesOf } from "@ndea/sdk";
 import { useGalleryChannels } from "@/nodes/table/useGalleryChannels";
@@ -29,17 +30,17 @@ const MIN_COL_WIDTH = 220;
 interface GalleryPaneProps {
   /** Mosaic coordinator from the gallery node's `host.data`. */
   coordinator: Coordinator;
-  /** Wired-input WHERE predicate from `predicateToSql(host.inputSelection)`. */
+  /** Wired-input WHERE predicate from `predicateToSql(host.inputPredicate)`. */
   predicate: string | null;
-  /** Scoped (group-aware) focus from `host.highlight` — NOT the global bus. */
-  highlightId: string | null;
-  /** Crop click → `host.highlight.set` so a sync group fans it out. */
-  onSelect: (id: string | null) => void;
+  /** Scoped, group-aware focused row from `host.focus`. */
+  focusedRowIndex: RowIndex | null;
+  /** Crop click → `host.focus.set` so a sync group fans it out. */
+  onSelect: (rowIndex: RowIndex | null) => void;
   datasetKey?: string;
 }
 
-export function GalleryPane({ coordinator, predicate, highlightId, onSelect, datasetKey }: GalleryPaneProps) {
-  // Dashboard is read ONLY for metadata (channels / plate). Highlight routes
+export function GalleryPane({ coordinator, predicate, focusedRowIndex, onSelect, datasetKey }: GalleryPaneProps) {
+  // Dashboard is read ONLY for metadata (channels / plate). Focus routes
   // through the host seam via props so it stays on the workspace sync group.
   const { state } = useDashboard();
   const hasPlate = capabilitiesOf(state.metadata).has("plate-image");
@@ -102,15 +103,15 @@ export function GalleryPane({ coordinator, predicate, highlightId, onSelect, dat
   // Auto-snap (the table-row → gallery jump): when the shared focus lands on an
   // obs we have, scroll its crop into view. align:"auto" is a no-op if it's
   // already visible (e.g. the crop you just clicked). A focus-scoped table click
-  // writes the shared cell, the gallery reads it via host.highlight (props), and
+  // writes the shared cell, the gallery reads it via host.focus (props), and
   // the matching crop scrolls in.
   // ponytail: obs is the windowed list (≤MAX_GALLERY_OBS); a focus outside the
   // window finds no index and doesn't scroll — fine until windowed fetch lands.
   useEffect(() => {
-    if (highlightId == null || count === 0) return;
-    const idx = obs.findIndex((o) => String(o.rowIndex) === highlightId);
+    if (focusedRowIndex == null || count === 0) return;
+    const idx = obs.findIndex((o) => o.rowIndex === focusedRowIndex);
     if (idx >= 0) virtualizer.scrollToIndex(idx, { align: "auto" });
-  }, [highlightId, obs, count, virtualizer]);
+  }, [focusedRowIndex, obs, count, virtualizer]);
 
   const totalSize = virtualizer.getTotalSize();
   const items = virtualizer.getVirtualItems();
@@ -178,8 +179,8 @@ export function GalleryPane({ coordinator, predicate, highlightId, onSelect, dat
                     channels={settledChannels}
                     hash={settledHash}
                     enabled={fetchEnabled}
-                    isHighlighted={highlightId === String(o.rowIndex)}
-                    onClick={() => onSelect(String(o.rowIndex))}
+                    isHighlighted={focusedRowIndex === o.rowIndex}
+                    onClick={() => onSelect(o.rowIndex)}
                   />
                 </div>
               );

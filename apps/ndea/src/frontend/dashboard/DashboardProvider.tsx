@@ -5,10 +5,10 @@ import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react
 import { MetadataSchema } from "@ndea/protocol";
 import { wsClient } from "../lib/ws-client";
 import { scatterKeys } from "../lib/query-keys";
-import { highlightBus, selectionBus } from "../core/buses";
-import { nodeInstanceId } from "@ndea/sdk";
+import { focusBus, predicateBus } from "../core/buses";
+import { nodeInstanceId, rowIndex } from "@ndea/sdk";
 import { activeCollectionStore } from "../stores/ActiveCollectionStore";
-import { broadcastSelection, clearSelectionSync, externalSource } from "../stores/SelectionSyncStore";
+import { broadcastRowSet, clearRowSetSync, externalSource } from "../stores/RowSetSyncStore";
 import type { Metadata, TrajectoryData } from "../types";
 import { DashboardContext, type DashboardState } from "./DashboardContext";
 
@@ -43,12 +43,12 @@ export function DashboardProvider({ children }: Props) {
     return () => wsClient.close();
   }, []);
 
-  // ── SelectionBus → brushSelection destination (§6.3 / §6.7) ───────────
-  // The SelectionBus is the SOLE writer of the crossfilter Selection: it mints
+  // ── PredicateBus → brushSelection destination (§6.3 / §6.7) ───────────
+  // The PredicateBus is the SOLE writer of the crossfilter Selection: it mints
   // one clause source per instance, AND-composes that instance's facets, and
   // flushes `brushSelection.update()` via requestAnimationFrame (outside any
   // active Mosaic AsyncDispatch cycle). We just hand it the destination once.
-  useEffect(() => selectionBus.attachDestination(brushSelection), [brushSelection]);
+  useEffect(() => predicateBus.attachDestination(brushSelection), [brushSelection]);
 
   // ── activeCollectionStore → server /api/active-selection ─────────────
   // Single-active for v1. When activeId flips:
@@ -56,10 +56,10 @@ export function DashboardProvider({ children }: Props) {
   //          "activeSet" facet on the collections pseudo-instance; clear lasso
   //          across all instances (collection is the new scope; lasso resets so
   //          the user can sub-select fresh); GET row-indices and
-  //          broadcastSelection(externalSource("collections")) so the GPU dim
+  //          broadcastRowSet(externalSource("collections")) so the GPU dim
   //          mask lights up the members.
   //   clear: DELETE /api/active-selection; clear the "activeSet" facet;
-  //          clearSelectionSync(externalSource("collections")).
+  //          clearRowSetSync(externalSource("collections")).
   // AbortController cancels in-flight requests if the user activates a
   // different collection (or deactivates) while one is loading.
   useEffect(() => {
@@ -79,8 +79,8 @@ export function DashboardProvider({ children }: Props) {
 
       if (!activeId) {
         // Deactivate path: drop server state + filter facet + GPU dim mask.
-        selectionBus.publishPredicate(COLLECTIONS_INSTANCE, "activeSet", null);
-        clearSelectionSync(COLLECTIONS_SRC);
+        predicateBus.publishPredicate(COLLECTIONS_INSTANCE, "activeSet", null);
+        clearRowSetSync(COLLECTIONS_SRC);
         fetch("/api/active-selection", { method: "DELETE", signal }).catch(() => {});
         return;
       }
@@ -90,7 +90,7 @@ export function DashboardProvider({ children }: Props) {
       // 1. Activate clears any existing lasso (per product semantic:
       //    collection is the new working scope; lasso resets so user can
       //    sub-select within the collection without intersecting stale state).
-      selectionBus.clearFacet("lasso");
+      predicateBus.clearFacet("lasso");
       // Clear server-side scatter-selection temp table too, so any Mosaic
       // query that still references __scatter_selection sees zero rows.
       fetch("/api/scatter-selection", { method: "DELETE", signal }).catch(() => {});
@@ -109,7 +109,7 @@ export function DashboardProvider({ children }: Props) {
         .then((r) => r.json())
         .then(async ({ predicate }: { predicate: string; resolved_count: number }) => {
           if (activeCollectionStore.state.activeId !== idAtRequest) return;
-          selectionBus.publishPredicate(COLLECTIONS_INSTANCE, "activeSet", predicate);
+          predicateBus.publishPredicate(COLLECTIONS_INSTANCE, "activeSet", predicate);
 
           // 3. Pull the row indices binary so the GPU dim mask can light up
           //    members. Skip the broadcast if the response is empty (the
@@ -126,7 +126,7 @@ export function DashboardProvider({ children }: Props) {
             // visually dim non-members. (Real datasets cross this rarely.)
             const HARD_CAP = 500_000;
             if (ids.length === 0 || ids.length > HARD_CAP) return;
-            broadcastSelection(COLLECTIONS_SRC, Array.from(ids));
+            broadcastRowSet(COLLECTIONS_SRC, Array.from(ids, rowIndex));
           } catch {
             // Aborted or network error — ignore.
           }
@@ -155,10 +155,9 @@ export function DashboardProvider({ children }: Props) {
   });
   const metadata = metadataQuery.data ?? null;
 
-  // UI state — highlight lives on the HighlightBus (§6.7); mirror it into state
-  // so the many non-plugin readers (scatter, gallery, crop viewer, PiP) and the
-  // `state.highlightId` consumers keep working unchanged.
-  const highlightId = useSelector(highlightBus.store, (s) => s);
+  // Process-wide focus. Host-scoped consumers use `host.focus`; dashboard
+  // consumers use this mirror without conflating focus with render emphasis.
+  const focusedRowIndex = useSelector(focusBus.store, (s) => s);
 
   // Trajectory state — per-dataset, keyed by datasetKey (empty string for single-dataset mode)
   const [trajectories, setTrajectoriesState] = useState<Record<string, TrajectoryData | null>>({});
@@ -193,7 +192,7 @@ export function DashboardProvider({ children }: Props) {
   // Memoize stable objects (must be before early return to satisfy rules of hooks)
   const actions = useMemo(
     () => ({
-      setHighlight: highlightBus.set,
+      setFocus: focusBus.set,
       refreshMetadata,
       setTrajectory,
       setTrajectoryTIndex,
@@ -206,8 +205,8 @@ export function DashboardProvider({ children }: Props) {
 
   // Memoize state to prevent unnecessary consumer re-renders
   const state = useMemo<DashboardState | null>(
-    () => (metadata ? { metadata, highlightId, trajectories } : null),
-    [metadata, highlightId, trajectories],
+    () => (metadata ? { metadata, focusedRowIndex, trajectories } : null),
+    [metadata, focusedRowIndex, trajectories],
   );
 
   const contextValue = useMemo(() => (state ? { state, actions, meta } : null), [state, actions, meta]);

@@ -1,4 +1,5 @@
 import type { Coordinator, Selection } from "@uwdata/mosaic-core";
+import type { RowIndex } from "@ndea/sdk";
 import { createContext } from "react";
 import type { Metadata, TrajectoryData } from "../types";
 
@@ -6,14 +7,14 @@ import type { Metadata, TrajectoryData } from "../types";
 
 export interface DashboardState {
   metadata: Metadata;
-  highlightId: string | null;
+  focusedRowIndex: RowIndex | null;
   trajectories: Record<string, TrajectoryData | null>;
 }
 
 // ── Actions: what the dashboard can do ─────────────────────────────────────
 
 export interface DashboardActions {
-  setHighlight: (id: string | null) => void;
+  setFocus: (rowIndex: RowIndex | null) => void;
   refreshMetadata: () => Promise<void>;
   setTrajectory: (data: TrajectoryData | null) => void;
   setTrajectoryTIndex: (key: string, t: number) => void;

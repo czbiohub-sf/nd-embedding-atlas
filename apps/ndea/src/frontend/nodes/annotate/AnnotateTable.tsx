@@ -7,7 +7,7 @@
  * unlike the old `predicateToSql` gate.
  *
  * Owns the SPREADSHEET selection model + keyboard, and reports up:
- *  - onChange({ selectedIds, focusId }) — selection mirror (rail + viewers)
+ *  - onChange({ selectedRowIndices, focusedRowIndex }) — selection mirror
  *  - onStamp(value)                     — a label key was pressed; stamp the
  *                                         current selection (view does the write)
  *  - onSkip()                           — advance without writing
@@ -17,6 +17,7 @@
  */
 
 import { useQueryClient } from "@tanstack/react-query";
+import { type RowIndex, rowIndex } from "@ndea/sdk";
 import type { Coordinator, Selection } from "@uwdata/mosaic-core";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -42,10 +43,10 @@ export interface CropFields {
   x?: string;
   y?: string;
 }
-export interface FocusCrop {
+export interface FocusedCrop {
   fovName: string;
   t: number | null;
-  rowIndex: number;
+  rowIndex: RowIndex;
   datasetKey?: string;
 }
 
@@ -68,7 +69,7 @@ export interface AnnotateTableProps {
   labelColumn: string | null;
   /** Locally-stamped values, keyed by obs id → column → value — overlays the queried cell.
    *  Per-column so range mode can reflect BOTH `{m}_min` and `{m}_max` at once. */
-  localLabels: Map<string, Map<string, string>>;
+  localLabels: Map<RowIndex, Map<string, string>>;
   /** Label hotkeys (index-aligned with `labels`). */
   labels: string[];
   hotkeys: string[];
@@ -79,13 +80,16 @@ export interface AnnotateTableProps {
   cropFields: CropFields | null;
   channels: readonly ChannelDef[];
   hash: ChannelHash;
-  onChange: (sel: { selectedIds: Set<string>; focusId: string | null; focusCrop: FocusCrop | null }) => void;
+  onChange: (selection: {
+    selectedRowIndices: Set<RowIndex>;
+    focusedRowIndex: RowIndex | null;
+    focusedCrop: FocusedCrop | null;
+  }) => void;
   onStamp: (value: string) => void;
   onSkip: () => void;
   onTotalCount: (n: number) => void;
-  /** Follow an external focus (Gallery/Scatter/Idetik via host.highlight): jump the
-   *  cursor to that obs. */
-  externalFocusId?: string | null;
+  /** Follow external focus from Gallery, Scatter, or Idetik. */
+  externalFocusedRowIndex?: RowIndex | null;
 }
 
 export function AnnotateTable({
@@ -105,7 +109,7 @@ export function AnnotateTable({
   onStamp,
   onSkip,
   onTotalCount,
-  externalFocusId,
+  externalFocusedRowIndex,
 }: AnnotateTableProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const thumbs = cropFields != null && channels.length > 0;
@@ -133,7 +137,7 @@ export function AnnotateTable({
   const queryClient = useQueryClient();
 
   // ── selection state (spreadsheet model) ─────────────────────────
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [selectedRowIndices, setSelectedRowIndices] = useState<Set<RowIndex>>(() => new Set());
   const [focusIndex, setFocusIndex] = useState(0);
   const anchorRef = useRef(0);
 
@@ -165,25 +169,25 @@ export function AnnotateTable({
       const x = r[xc];
       const y = r[yc];
       if (typeof x === "number" && typeof y === "number") {
-        queryClient.setQueryData(obsCoordKey(Number(ri)), { x, y });
+        queryClient.setQueryData(obsCoordKey(rowIndex(Number(ri))), { x, y });
       }
     }
   }, [virtualItems, getRow, cropFields, queryClient]);
 
   useEffect(() => onTotalCount(totalCount), [totalCount, onTotalCount]);
 
-  const idAt = useCallback(
-    (index: number) => {
+  const rowIndexAt = useCallback(
+    (index: number): RowIndex | null => {
       const r = getRow(index);
       const ri = r?.__row_index__;
-      return ri != null ? String(ri as number) : null;
+      return ri != null ? rowIndex(Number(ri)) : null;
     },
     [getRow],
   );
 
-  const focusId = idAt(focusIndex);
+  const focusedRowIndex = rowIndexAt(focusIndex);
 
-  const focusCrop = useMemo<FocusCrop | null>(() => {
+  const focusedCrop = useMemo<FocusedCrop | null>(() => {
     if (!cropFields) return null;
     const r = getRow(focusIndex);
     const ri = r?.__row_index__;
@@ -192,7 +196,7 @@ export function AnnotateTable({
     return {
       fovName: typeof r[cropFields.fov] === "string" ? (r[cropFields.fov] as string) : "",
       t: typeof t === "number" ? t : null,
-      rowIndex: Number(ri),
+      rowIndex: rowIndex(Number(ri)),
       datasetKey:
         cropFields.dataset && typeof r[cropFields.dataset] === "string" ? (r[cropFields.dataset] as string) : undefined,
     };
@@ -200,22 +204,22 @@ export function AnnotateTable({
 
   // emit selection mirror whenever it changes
   useEffect(() => {
-    onChange({ selectedIds, focusId, focusCrop });
-  }, [selectedIds, focusId, focusCrop, onChange]);
+    onChange({ selectedRowIndices, focusedRowIndex, focusedCrop });
+  }, [selectedRowIndices, focusedRowIndex, focusedCrop, onChange]);
 
   // ids in an inclusive virtual-index range (loaded rows only)
   const idsInRange = useCallback(
     (a: number, b: number) => {
       const lo = Math.min(a, b);
       const hi = Math.max(a, b);
-      const ids = new Set<string>();
+      const ids = new Set<RowIndex>();
       for (let i = lo; i <= hi; i++) {
-        const id = idAt(i);
+        const id = rowIndexAt(i);
         if (id != null) ids.add(id);
       }
       return ids;
     },
-    [idAt],
+    [rowIndexAt],
   );
 
   const focusTo = useCallback(
@@ -223,37 +227,37 @@ export function AnnotateTable({
       const i = Math.max(0, Math.min(index, totalCount - 1));
       setFocusIndex(i);
       anchorRef.current = i;
-      const id = idAt(i);
-      setSelectedIds(id ? new Set([id]) : new Set());
+      const id = rowIndexAt(i);
+      setSelectedRowIndices(id != null ? new Set([id]) : new Set());
       rowVirtualizer.scrollToIndex(i, { align: "auto" });
       ensureRange(Math.max(0, i - 25), i + 25);
     },
-    [totalCount, idAt, rowVirtualizer, ensureRange],
+    [totalCount, rowIndexAt, rowVirtualizer, ensureRange],
   );
 
-  // Follow an external focus (Gallery/Scatter/Idetik crop click → host.highlight):
+  // Follow an external focus from Gallery, Scatter, or Idetik:
   // resolve the obs's position in the current scope+sort, then jump the cursor
-  // there. Guarded on focusId so our own emitted focus never loops back.
+  // there. Guarded so our own emitted focus never loops back.
   useEffect(() => {
-    if (externalFocusId == null || externalFocusId === focusId) return;
+    if (externalFocusedRowIndex == null || externalFocusedRowIndex === focusedRowIndex) return;
     let alive = true;
-    void findRowPosition(externalFocusId).then((pos) => {
+    void findRowPosition(externalFocusedRowIndex).then((pos) => {
       if (alive && pos != null && pos >= 0) focusTo(pos);
     });
     return () => {
       alive = false;
     };
-  }, [externalFocusId, focusId, findRowPosition, focusTo]);
+  }, [externalFocusedRowIndex, focusedRowIndex, findRowPosition, focusTo]);
 
   const onRowMouseDown = useCallback(
     (index: number, e: React.MouseEvent) => {
-      const id = idAt(index);
+      const id = rowIndexAt(index);
       if (id == null) return;
       if (e.shiftKey) {
-        setSelectedIds(idsInRange(anchorRef.current, index));
+        setSelectedRowIndices(idsInRange(anchorRef.current, index));
         setFocusIndex(index);
       } else if (e.metaKey || e.ctrlKey) {
-        setSelectedIds((prev) => {
+        setSelectedRowIndices((prev) => {
           const next = new Set(prev);
           if (next.has(id)) next.delete(id);
           else next.add(id);
@@ -262,12 +266,12 @@ export function AnnotateTable({
         setFocusIndex(index);
         anchorRef.current = index;
       } else {
-        setSelectedIds(new Set([id]));
+        setSelectedRowIndices(new Set([id]));
         setFocusIndex(index);
         anchorRef.current = index;
       }
     },
-    [idAt, idsInRange],
+    [rowIndexAt, idsInRange],
   );
 
   // keyboard: nav + range-extend + label keys + skip + clear
@@ -280,7 +284,7 @@ export function AnnotateTable({
         const i = Math.max(0, Math.min(next, totalCount - 1));
         if (e.shiftKey) {
           setFocusIndex(i);
-          setSelectedIds(idsInRange(anchorRef.current, i));
+          setSelectedRowIndices(idsInRange(anchorRef.current, i));
           rowVirtualizer.scrollToIndex(i, { align: "auto" });
           ensureRange(Math.max(0, i - 25), i + 25);
         } else {
@@ -296,8 +300,8 @@ export function AnnotateTable({
       }
       if (k === "Escape") {
         e.preventDefault();
-        const id = idAt(focusIndex);
-        setSelectedIds(id ? new Set([id]) : new Set());
+        const id = rowIndexAt(focusIndex);
+        setSelectedRowIndices(id != null ? new Set([id]) : new Set());
         anchorRef.current = focusIndex;
         return;
       }
@@ -306,10 +310,10 @@ export function AnnotateTable({
         e.preventDefault();
         onStamp(labels[idx]);
         // single → advance; multi → collapse to focus (handled by parent re-stamp guard)
-        if (selectedIds.size <= 1) focusTo(focusIndex + 1);
+        if (selectedRowIndices.size <= 1) focusTo(focusIndex + 1);
         else {
-          const id = idAt(focusIndex);
-          setSelectedIds(id ? new Set([id]) : new Set());
+          const id = rowIndexAt(focusIndex);
+          setSelectedRowIndices(id != null ? new Set([id]) : new Set());
           anchorRef.current = focusIndex;
         }
       }
@@ -319,10 +323,10 @@ export function AnnotateTable({
       totalCount,
       hotkeys,
       labels,
-      selectedIds.size,
+      selectedRowIndices.size,
       idsInRange,
       focusTo,
-      idAt,
+      rowIndexAt,
       onStamp,
       onSkip,
       rowVirtualizer,
@@ -335,9 +339,9 @@ export function AnnotateTable({
     [contextColumns, thumbs],
   );
 
-  const labelValue = (row: Row | undefined, id: string | null): string | null => {
+  const labelValue = (row: Row | undefined, labelRowIndex: RowIndex | null): string | null => {
     if (!labelColumn) return null;
-    const overlay = id ? localLabels.get(id)?.get(labelColumn) : undefined;
+    const overlay = labelRowIndex != null ? localLabels.get(labelRowIndex)?.get(labelColumn) : undefined;
     if (overlay != null) return overlay;
     return row ? ((row[labelColumn] as string | null) ?? null) : null;
   };
@@ -371,8 +375,8 @@ export function AnnotateTable({
       <div style={{ height: rowVirtualizer.getTotalSize(), position: "relative" }}>
         {virtualItems.map((v) => {
           const row = getRow(v.index);
-          const id = idAt(v.index);
-          const isSel = id != null && selectedIds.has(id);
+          const id = rowIndexAt(v.index);
+          const isSel = id != null && selectedRowIndices.has(id);
           const isFocus = v.index === focusIndex;
           const val = labelValue(row, id);
           return (

@@ -1,5 +1,7 @@
 import type { TgpuRoot } from "typegpu";
+import type { RowIndex } from "@ndea/sdk";
 import type { ViewState } from "@/types";
+import type { GpuPointIndex } from "@/lib/branded-types";
 
 export type { PanelId } from "@/lib/branded-types";
 export { panelId } from "@/lib/branded-types";
@@ -18,7 +20,7 @@ export interface ScatterData {
   /** Number of cells */
   numCells: number;
   /** Float32Array index → __row_index__ in DuckDB */
-  rowIndices: number[];
+  rowIndices: RowIndex[];
   /** Name of the embedding used */
   embeddingKey: string;
   /** Number of dimensions (2 or 3) */
@@ -58,7 +60,7 @@ export interface EmbeddingInfo {
 
 export type ColorMapper = (
   categoryIndex: number,
-  pointIndex: number,
+  pointIndex: GpuPointIndex,
   totalCategories: number,
 ) => [r: number, g: number, b: number];
 
@@ -121,7 +123,7 @@ export interface ScatterplotHandle {
   /** Convert world coordinates to screen pixel coordinates using the current view transform. */
   worldToScreen(worldX: number, worldY: number, canvasWidth: number, canvasHeight: number): { x: number; y: number };
   /** Apply an externally-driven selection (from another panel). rowIndices = app-level row IDs; panelRowIndices = this panel's rowIndicesRef. */
-  setExternalSelection(rowIndices: number[]): void;
+  setExternalSelection(rowIndices: RowIndex[]): void;
   /** Switch the drag behaviour: 'pan' = default, 'marquee'/'lasso' = always-draw-selection. */
   setForcedSelectionMode(mode: "pan" | "marquee" | "lasso"): void;
   /** Clear an externally-driven selection. */
@@ -137,11 +139,11 @@ export interface ScatterplotHandle {
   /** Clear all disabled-category click filtering. */
   clearCategoryDisabled(): void;
   /** Isolate trajectory points (always visible regardless of category filter). */
-  setTrajectoryIsolation(rowIndices: number[]): void;
+  setTrajectoryIsolation(rowIndices: RowIndex[]): void;
   /** Remove trajectory isolation. */
   clearTrajectoryIsolation(): void;
   /** Isolate continuous range filter points. */
-  setContinuousIsolation(rowIndices: number[]): void;
+  setContinuousIsolation(rowIndices: RowIndex[]): void;
   /** Remove continuous range isolation. */
   clearContinuousIsolation(): void;
   /** Re-upload all isolation masks after GPU reinit. */
@@ -149,7 +151,7 @@ export interface ScatterplotHandle {
   /** Clear the single-point highlight. */
   clearHighlight(): void;
   /** Highlight multiple points (e.g. trajectory points — always full bright). */
-  setHighlightPoints(rowIndices: number[]): void;
+  setHighlightPoints(rowIndices: RowIndex[]): void;
   /** Programmatically set the view state (for view lock sync). Suppresses the onViewChange broadcast for this write. */
   setViewState(state: ViewState): void;
   /** Animate to a view state using easeInOutQuint over durationMs (default 600ms). */
@@ -207,12 +209,17 @@ export interface ScatterplotConfig {
   /** Color palette (RGB tuples). Used when no colorMapper is provided */
   palette?: readonly (readonly [number, number, number])[];
   callbacks?: {
-    onSelectionChange?: (count: number | null, indices?: number[]) => void;
-    /** Called when an external selection is cleared by another panel. Only updates
-     *  status bar — must NOT call clearSelectionSync to avoid cross-panel cascade. */
+    onSelectionChange?: (count: number | null, indices?: GpuPointIndex[]) => void;
+    /** Called when an external row set is cleared by another panel. Only updates
+     *  status bar; it must not republish a clear and create a cascade. */
     onExternalClear?: () => void;
     onViewChange?: (state: ViewState) => void;
-    onPointClick?: (index: number, position: [number, number], categoryIndex: number, categoryName: string) => void;
+    onPointClick?: (
+      pointIndex: GpuPointIndex,
+      position: [number, number],
+      categoryIndex: number,
+      categoryName: string,
+    ) => void;
     /** Called when the user clicks on empty space (no point hit). */
     onBackgroundClick?: () => void;
     onFps?: (fps: number) => void;

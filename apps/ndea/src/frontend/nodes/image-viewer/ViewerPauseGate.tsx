@@ -1,5 +1,7 @@
 import { useEffect } from "react";
+import type { RowIndex } from "@ndea/sdk";
 import { useViewer } from "@/nodes/image-viewer/viewer/useViewer";
+import { syncViewerActivity } from "./focus-behavior";
 
 /**
  * Pauses/resumes the idetik render loop based on whether an observation is selected.
@@ -8,16 +10,12 @@ import { useViewer } from "@/nodes/image-viewer/viewer/useViewer";
  * freeing GPU frame budget for the scatter plot's own WebGL canvas.
  * Must be rendered inside a Viewer.Provider.
  */
-export function ViewerPauseGate({ active }: { active: boolean }) {
+export function ViewerPauseGate({ focusedRowIndex }: { focusedRowIndex: RowIndex | null }) {
   const { actions } = useViewer();
 
   useEffect(() => {
-    if (active) {
-      actions.resume();
-    } else {
-      actions.pause();
-    }
-  }, [active, actions]);
+    syncViewerActivity(actions, focusedRowIndex);
+  }, [focusedRowIndex, actions]);
 
   return null;
 }

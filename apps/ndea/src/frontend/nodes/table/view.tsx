@@ -2,17 +2,17 @@
  * Table plugin view (PLUGIN-ARCHITECTURE §10.4).
  *
  * Sources coordinator/table/metadata from `host.data`, the filter from
- * `host.inputSelection`, routes row-click through `host.highlight.set`, and
- * reads the highlight reactively via `useHighlight()` (the HighlightBus, §6.7) —
+ * `host.inputPredicate`, routes row-click through `host.focus.set`, and
+ * reads focus reactively from the same host scope —
  * no `useDashboard` reach-in. `DataTable` is already fully prop-driven, so the
  * conversion is localized to this wrapper.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import type { SortingState } from "@tanstack/react-table";
+import type { RowIndex } from "@ndea/sdk";
 import { focusRow, publishOrdering } from "@/nodes/table/routing";
 import { DataTable } from "@/nodes/table/DataTable";
-import { useHighlight } from "@/hooks/useHighlight";
 import type { NodeBodyProps } from "@/core/node/app-node-host";
 import type { TableCapabilities } from "./plugin";
 
@@ -33,12 +33,13 @@ const FALLBACK_TABLE_COLUMNS = ["_dataset"];
 
 export function TablePluginView({ host }: NodeBodyProps<TableConfig, TableCapabilities>) {
   const { coordinator, table, metadata } = host.data;
-  // Reactive highlight read — re-renders the table on highlight change so the
-  // current row scrolls into view. Sourced from the HighlightBus; the write
-  // routes through host.highlight.set below.
-  const highlightId = useHighlight();
+  const subscribeFocus = useCallback((onChange: () => void) => host.focus.subscribe?.(onChange) ?? (() => {}), [host]);
+  const focusedRowIndex = useSyncExternalStore(subscribeFocus, () => host.focus.get());
 
-  const handleRowClick = useCallback((id: string | null) => focusRow(host, id), [host]);
+  const handleRowClick = useCallback(
+    (nextFocusedRowIndex: RowIndex | null) => focusRow(host, nextFocusedRowIndex),
+    [host],
+  );
 
   // Sort ⇄ `ordering` coordination scope. Local when unscoped (host.ordering.set
   // is a no-op); shared when the node is on an ordering scope. The sameCell guard
@@ -67,7 +68,7 @@ export function TablePluginView({ host }: NodeBodyProps<TableConfig, TableCapabi
       table={table}
       columns={columns}
       selection={host.inputPredicate}
-      highlightId={highlightId}
+      focusedRowIndex={focusedRowIndex}
       onRowClick={handleRowClick}
       sorting={sorting}
       onSortingChange={handleSortingChange}

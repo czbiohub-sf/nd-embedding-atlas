@@ -25,9 +25,11 @@
 import { z } from "zod";
 import type { Store } from "@tanstack/store";
 
-import type { JsonValue } from "@ndea/sdk";
+import type { JsonValue, RowIndex } from "@ndea/sdk";
 import type { WorkspaceDocumentState } from "@/core/workspace/types";
-import { defineCoordinationType, defineGroupChannel } from "./define-type";
+import { defineCoordinationType, defineGroupChannel, getCoordinationType } from "./define-type";
+
+type CoordinationValue<T extends string> = T extends "focus" ? RowIndex | null : JsonValue;
 
 /* ── registered coordination types ───────────────────────────────────────
  * focus (U1) + viewSync (U2) re-expressed through the extracted primitive,
@@ -35,9 +37,10 @@ import { defineCoordinationType, defineGroupChannel } from "./define-type";
  * needs no backbone changes. Registration is a module side effect — importing
  * this file (which the Workspace does) populates the registry. */
 
-/** `focus` — a shared obs id among the scope's members (group channel). */
+/** `focus` — a shared row index among the scope's members (group channel). */
 export const FOCUS_TYPE = defineGroupChannel({
   type: "focus",
+  value: z.number().int().nonnegative().nullable(),
   capability: "focus-coordination",
   hostFacet: "focus",
 });
@@ -134,19 +137,23 @@ export class Coordination {
   /* ── cell values (the shared, latest-wins parameter) ──────────────── */
 
   /** Write a cell value (latest-wins — replaces, never merges). */
-  setCoordinationValue(type: string, scope: string, value: JsonValue): void {
+  setCoordinationValue<T extends string>(type: T, scope: string, value: CoordinationValue<T>): void {
+    const spec = getCoordinationType(type);
+    if (spec && !spec.schema.safeParse(value).success) {
+      throw new TypeError(`coordination cell "${type}.${scope}" failed validation`);
+    }
     this.store.setState((s) => ({
       ...s,
       coordinationSpace: {
         ...s.coordinationSpace,
-        [type]: { ...s.coordinationSpace[type], [scope]: value },
+        [type]: { ...s.coordinationSpace[type], [scope]: value as JsonValue },
       },
     }));
   }
 
   /** Read a cell value, or undefined if no value has been written yet. */
-  readCoordination(type: string, scope: string): JsonValue | undefined {
-    return this.store.state.coordinationSpace[type]?.[scope];
+  readCoordination<T extends string>(type: T, scope: string): CoordinationValue<T> | undefined {
+    return this.store.state.coordinationSpace[type]?.[scope] as CoordinationValue<T> | undefined;
   }
 
   /** The scope names that currently EXIST for a type — every scope referenced by
@@ -186,8 +193,12 @@ export class Coordination {
    * render-storm guard). Returns an unsubscribe fn.
    * Emits `undefined` for unassigned nodes; the body-dock seam applies fallback.
    */
-  subscribe(nodeId: string, type: string, cb: (value: JsonValue | undefined) => void): () => void {
-    const effective = (): JsonValue | undefined => {
+  subscribe<T extends string>(
+    nodeId: string,
+    type: T,
+    cb: (value: CoordinationValue<T> | undefined) => void,
+  ): () => void {
+    const effective = (): CoordinationValue<T> | undefined => {
       const scope = this.scopeOf(nodeId, type);
       return scope === undefined ? undefined : this.readCoordination(type, scope);
     };

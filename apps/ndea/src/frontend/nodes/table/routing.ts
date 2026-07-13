@@ -7,13 +7,13 @@
  * headless-testable routing point every body shares — not the line count.
  */
 
-import type { NodeHost } from "@ndea/sdk";
+import type { NodeHost, RowIndex } from "@ndea/sdk";
 
 type TableFocusHost = Pick<NodeHost<unknown, "focus-coordination">, "focus">;
 type TableOrderingHost = Pick<NodeHost<unknown, "ordering-coordination">, "ordering">;
 /** Focus the obs of a clicked row. Routes through the group-aware host seam. */
-export function focusRow(host: TableFocusHost, rowId: string | null): void {
-  host.focus.set(rowId);
+export function focusRow(host: TableFocusHost, focusedRowIndex: RowIndex | null): void {
+  host.focus.set(focusedRowIndex);
 }
 
 /** Publish this table's sort onto its `ordering` coordination scope. A no-op

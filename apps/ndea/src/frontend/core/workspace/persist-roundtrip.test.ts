@@ -12,8 +12,9 @@
  */
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { rowIndex } from "@ndea/sdk";
 
-import { loadFromStorage, saveToStorage, storageKey, toPersistedDoc, validateDoc } from "./persist";
+import { fromPersistedDoc, loadFromStorage, saveToStorage, storageKey, toPersistedDoc, validateDoc } from "./persist";
 import { predicateSql } from "@/core/graph/cook";
 import { nativeWorkspaceNodeLibrary } from "./definitions";
 import { seedWorkspace, Workspace } from "./workspace-store";
@@ -33,6 +34,12 @@ function makeWs() {
 }
 
 const cookSql = (ws: Workspace, id: string) => predicateSql(ws.pullGraphNode(id));
+
+function runtimeState(doc: ReturnType<typeof toPersistedDoc>) {
+  const decoded = fromPersistedDoc(doc);
+  if (!decoded.ok) throw new Error(decoded.errors.join("; "));
+  return decoded.state;
+}
 
 // In-memory localStorage shim for the storage-key path (bun:test has none).
 function installStorageShim() {
@@ -71,7 +78,7 @@ describe("persistence round-trip (Track B)", () => {
     expect(validateDoc(doc, nativeWorkspaceNodeLibrary).ok).toBe(true);
 
     const dst = makeWs();
-    dst.loadDocument(doc.state);
+    dst.loadDocument(runtimeState(doc));
 
     // topology reproduced
     expect(Object.keys(dst.store.state.nodes).toSorted()).toEqual([cache, count, obs, wr].toSorted());
@@ -92,7 +99,7 @@ describe("persistence round-trip (Track B)", () => {
     expect(validateDoc(doc, nativeWorkspaceNodeLibrary).ok).toBe(true);
 
     const dst = makeWs();
-    dst.loadDocument(doc.state);
+    dst.loadDocument(runtimeState(doc));
 
     // same node + edge counts as the seed
     expect(Object.keys(dst.store.state.nodes).length).toBe(Object.keys(src.store.state.nodes).length);
@@ -114,11 +121,11 @@ describe("persistence round-trip (Track B)", () => {
     src.connect(sc, cache); // sel push wire
 
     const dst = makeWs();
-    dst.loadDocument(toPersistedDoc(src.store.state).state);
+    dst.loadDocument(runtimeState(toPersistedDoc(src.store.state)));
 
     // emissions are runtime (not persisted) — but the push wire is rehydrated, so a
     // fresh lasso emission delivers downstream through it.
-    dst.emitLasso(sc, "__row_index__ IN (1, 2)", [1, 2]);
+    dst.emitLasso(sc, "__row_index__ IN (1, 2)", [rowIndex(1), rowIndex(2)]);
     expect(cookSql(dst, cache)).toBe("__row_index__ IN (1, 2)");
   });
 
@@ -129,18 +136,18 @@ describe("persistence round-trip (Track B)", () => {
     src.connect(obs, sc);
     // link the scatter onto a focus scope + set the shared cell
     src.coordination.assignScope(sc, "focus", "A");
-    src.coordination.setCoordinationValue("focus", "A", "obs_8");
+    src.coordination.setCoordinationValue("focus", "A", rowIndex(8));
     src.coordination.assignScope(sc, "viewSync", "lock1");
 
     const doc = toPersistedDoc(src.store.state);
     expect(validateDoc(doc, nativeWorkspaceNodeLibrary).ok).toBe(true);
 
     const dst = makeWs();
-    dst.loadDocument(doc.state);
+    dst.loadDocument(runtimeState(doc));
 
     expect(dst.coordination.scopeOf(sc, "focus")).toBe("A");
     expect(dst.coordination.scopeOf(sc, "viewSync")).toBe("lock1");
-    expect(dst.coordination.readCoordination("focus", "A")).toBe("obs_8");
+    expect(dst.coordination.readCoordination("focus", "A")).toBe(rowIndex(8));
   });
 
   test("id sequences advance past restored ids — a subsequent addNode can't collide", () => {
@@ -150,7 +157,7 @@ describe("persistence round-trip (Track B)", () => {
     src.connect("obs", wr); // e1
 
     const dst = makeWs();
-    dst.loadDocument(toPersistedDoc(src.store.state).state);
+    dst.loadDocument(runtimeState(toPersistedDoc(src.store.state)));
 
     const fresh = dst.addNode("wrangle", { x: 0, y: 0 });
     expect(dst.store.state.nodes[fresh]).toBeDefined();
@@ -178,6 +185,25 @@ describe("storage backend + invalid-doc fallback", () => {
     expect(res.kind).toBe("ok");
     if (res.kind === "ok") {
       expect(Object.keys(res.state.nodes).length).toBe(Object.keys(ws.store.state.nodes).length);
+    }
+  });
+
+  test("loads a current v2 document with legacy editor keys and string focus", () => {
+    const key = storageKey("legacy-v2");
+    const persisted = toPersistedDoc(makeWs().store.state);
+    persisted.state.selection = "n1";
+    persisted.state.selSet = ["n1", "n2"];
+    persisted.state.selectedEdge = "e1";
+    persisted.state.coordinationSpace = { focus: { A: "8", B: null } };
+    localStorage.setItem(key, JSON.stringify(persisted));
+
+    const res = loadFromStorage(key, nativeWorkspaceNodeLibrary);
+    expect(res.kind).toBe("ok");
+    if (res.kind === "ok") {
+      expect(res.state.selectedNodeId).toBe("n1");
+      expect(res.state.selectedNodeIds).toEqual(["n1", "n2"]);
+      expect(res.state.selectedEdgeId).toBe("e1");
+      expect(res.state.coordinationSpace.focus).toEqual({ A: rowIndex(8), B: null });
     }
   });
 
@@ -214,6 +240,17 @@ describe("storage backend + invalid-doc fallback", () => {
     if (res.kind === "invalid") expect(res.errors.join(" ")).toContain("migration");
   });
 
+  test.each(["not-a-row", "-1", "1.5", "", 8])("rejects malformed persisted focus value %p", (value) => {
+    const key = storageKey(`bad-focus:${String(value)}`);
+    const persisted = toPersistedDoc(makeWs().store.state);
+    persisted.state.coordinationSpace = { focus: { A: value as never } };
+    localStorage.setItem(key, JSON.stringify(persisted));
+
+    const res = loadFromStorage(key, nativeWorkspaceNodeLibrary);
+    expect(res.kind).toBe("invalid");
+    if (res.kind === "invalid") expect(res.errors.join(" ")).toContain("coordinationSpace.focus.A");
+  });
+
   test("a stored v1 doc migrates to v2 on load — focus.A survives (R6)", () => {
     // a real v1 localStorage doc: a node + the old syncGroups/groupFocus fields.
     const key = storageKey("dsE:atlas");
@@ -237,7 +274,7 @@ describe("storage backend + invalid-doc fallback", () => {
         graphPath: null,
         flags: {},
         syncGroups: { obs: "A" },
-        groupFocus: { A: "obs_8" },
+        groupFocus: { A: "8" },
       },
     };
     localStorage.setItem(key, JSON.stringify(v1));
@@ -246,12 +283,12 @@ describe("storage backend + invalid-doc fallback", () => {
     expect(res.kind).toBe("ok");
     if (res.kind === "ok") {
       expect(res.state.coordinationScopes).toEqual({ obs: { focus: "A" } });
-      expect(res.state.coordinationSpace).toEqual({ focus: { A: "obs_8" } });
+      expect(res.state.coordinationSpace).toEqual({ focus: { A: rowIndex(8) } });
       // it hydrates into a fresh Workspace without throwing
       const ws = makeWs();
       ws.loadDocument(res.state);
       expect(ws.coordination.scopeOf("obs", "focus")).toBe("A");
-      expect(ws.coordination.readCoordination("focus", "A")).toBe("obs_8");
+      expect(ws.coordination.readCoordination("focus", "A")).toBe(rowIndex(8));
     }
   });
 });

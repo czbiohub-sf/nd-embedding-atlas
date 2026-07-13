@@ -1,15 +1,17 @@
 import { useDebouncer, useThrottler } from "@tanstack/react-pacer";
+import type { RowIndex } from "@ndea/sdk";
 import type { RefObject } from "react";
 import { useRef } from "react";
 import { useHost } from "@/core/host/host-context";
 import { clearLasso, publishLasso, publishLassoRowSet } from "@/nodes/scatter/routing";
 import type { ScatterCapabilities } from "@/nodes/scatter/plugin";
+import type { GpuPointIndex } from "@/lib/branded-types";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /**
  * LEGACY large-selection path — the host-less floating scatter ONLY. The
- * docked/plugin path now stages rows via `host.api.publishSelection` → a
+ * docked/plugin path stages rows via `host.dataAPI.publishRowSet` → a
  * per-instance `sel_<instanceId>` table with the bus-owned `tok=N` SQL-comment
  * cache-buster (§6.5). This fixed `__scatter_selection` path remains because the
  * floating scatter has no host.
@@ -24,7 +26,7 @@ function largeSelectionPredicateLegacy(): string {
   return `__row_index__ IN (SELECT row_index FROM __scatter_selection) AND 'v${largeSelectionVersion}' = 'v${largeSelectionVersion}'`;
 }
 
-async function syncLargeSelectionLegacy(rowIds: number[]): Promise<string | null> {
+async function syncLargeSelectionLegacy(rowIds: RowIndex[]): Promise<string | null> {
   if (rowIds.length === 0) {
     await fetch("/api/scatter-selection", { method: "DELETE" }).catch(() => {});
     return null;
@@ -48,9 +50,9 @@ async function syncLargeSelectionLegacy(rowIds: number[]): Promise<string | null
  * Large selections (≥ 5000): subquery against the __scatter_selection temp
  * table that is populated via POST /api/scatter-selection before this
  * predicate is applied. See syncLargeSelectionLegacy() (host-less path only;
- * the docked path uses host.api.publishSelection → sel_<id>).
+ * the docked path uses host.dataAPI.publishRowSet → sel_<id>).
  */
-export function buildSelectionPredicate(rowIds: number[]): string | null {
+export function buildSelectionPredicate(rowIds: readonly RowIndex[]): string | null {
   if (rowIds.length === 0) return null;
   if (rowIds.length < 5000) {
     return `__row_index__ IN (${rowIds.join(",")})`;
@@ -61,7 +63,7 @@ export function buildSelectionPredicate(rowIds: number[]): string | null {
 // ── Hook ──────────────────────────────────────────────────────────────────────
 
 export interface UseScatterBrushSyncOptions {
-  rowIndicesRef: RefObject<number[]>;
+  rowIndicesRef: RefObject<RowIndex[]>;
   setSelection: (n: number | null) => void;
   /**
    * Optional out-ref that receives the *lasso* row IDs (mapped from GPU
@@ -69,12 +71,12 @@ export interface UseScatterBrushSyncOptions {
    * sheet — `rowIndicesRef` is the panel-level mapping (all rows), this is
    * the actual user selection.
    */
-  lassoRowIdsRef?: RefObject<number[]>;
+  lassoRowIdsRef?: RefObject<RowIndex[]>;
 }
 
 export interface UseScatterBrushSyncResult {
   /** Stable callback to pass to ScatterGPUHost as onSelectionChange */
-  onSelectionChange: (count: number | null, indices?: number[]) => void;
+  onSelectionChange: (count: number | null, indices?: GpuPointIndex[]) => void;
 }
 
 export function useScatterBrushSync({
@@ -101,11 +103,11 @@ export function useScatterBrushSync({
   // (usually a no-op since the throttler already set the same predicate).
   //
   // NOTE: the docked path publishes the "lasso" facet through host → the
-  // SelectionBus; the host-less floating path publishes it to the bus directly
-  // under a floating instance id. The bus is the SOLE writer of the crossfilter
+  // PredicateBus; the host-less floating path publishes it under a floating
+  // instance id. The bus is the sole writer of the crossfilter
   // Selection and dispatches via rAF (§6.3 / §6.7).
   const brushThrottler = useThrottler(
-    (rowIds: number[]) => {
+    (rowIds: RowIndex[]) => {
       if (rowIds.length === 0 || rowIds.length >= 5000) return;
       publishLasso(hostRef.current, buildSelectionPredicate(rowIds));
     },
@@ -117,7 +119,7 @@ export function useScatterBrushSync({
   );
 
   const brushDebouncer = useDebouncer(
-    async (rowIds: number[]) => {
+    async (rowIds: RowIndex[]) => {
       const h = hostRef.current;
       // Small (<5000): inline IN-list (the id list self-busts the cache).
       if (rowIds.length < 5000) {
@@ -134,7 +136,7 @@ export function useScatterBrushSync({
         publishLasso(h, token.predicate); // references sel_<id> + /* tok=N */
         return;
       }
-      // No selection-out capability: legacy server-staged __scatter_selection table.
+      // No row-set-publish capability: legacy server-staged table.
       publishLasso(h, await syncLargeSelectionLegacy(rowIds));
     },
     {
@@ -146,8 +148,10 @@ export function useScatterBrushSync({
     },
   );
 
-  const onSelectionChange = (_count: number | null, indices?: number[]) => {
-    const rowIds = (indices ?? []).map((i) => rowIndicesRef.current[i] ?? i);
+  const onSelectionChange = (_count: number | null, indices?: GpuPointIndex[]) => {
+    const rowIds = (indices ?? [])
+      .map((pointIndex) => rowIndicesRef.current[pointIndex])
+      .filter((value): value is RowIndex => value != null);
     setSelection(rowIds.length > 0 ? rowIds.length : null); // status bar — immediate
     if (lassoRowIdsRef) lassoRowIdsRef.current = rowIds;
 

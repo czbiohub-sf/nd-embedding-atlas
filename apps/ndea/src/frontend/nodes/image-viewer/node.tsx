@@ -1,7 +1,7 @@
 /**
  * fov (Idetik image viewer) — plugin-backed view (the `image-viewer` descriptor
  * renders the body). Focus-consuming cook: the latest pushed single-record
- * highlight. Sink (no out port); accepts a focus input (table row → viewer).
+ * focus. Sink (no out port); accepts a focus input (table row → viewer).
  */
 
 import { defineNativeNodeContribution } from "@/core/workspace/node-kit";
@@ -14,7 +14,7 @@ export const fovNode = defineNativeNodeContribution({
     persistedType: "fov",
     role: "view",
     evaluationRole: "view",
-    cook: (inputs) => ({ kind: "focus", obsId: lastPortValueOfKind(inputs, "focus")?.obsId ?? null }),
+    cook: (inputs) => ({ kind: "focus", rowIndex: lastPortValueOfKind(inputs, "focus")?.rowIndex ?? null }),
     usesDefinitionModule: true,
   },
   workspace: {

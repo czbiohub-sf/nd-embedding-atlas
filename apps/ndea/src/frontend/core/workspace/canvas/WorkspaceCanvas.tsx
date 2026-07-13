@@ -108,7 +108,7 @@ function WorkspaceCanvasInner() {
   const wsEdges = useWorkspaceSelector((s) => s.edges);
   const positions = useWorkspaceSelector((s) => s.positions);
   const graphPath = useWorkspaceSelector((s) => s.graphPath);
-  const selSet = useWorkspaceSelector((s) => s.selSet);
+  const selectedNodeIds = useWorkspaceSelector((s) => s.selectedNodeIds);
   const claimed = useWorkspaceSelector((s) => s.claimed);
   const baseForm = useSelector(ws.ui, (u) => u.baseForm);
   // Derived ONCE here (the DFS), then shared with every node via context — a
@@ -243,8 +243,7 @@ function WorkspaceCanvasInner() {
 
   const clearSelection = useCallback(() => {
     setSelectedIds(new Set());
-    ws.select(null);
-    ws.setSelSet([]);
+    ws.setGraphSelection([], []);
   }, [ws]);
 
   const openAddMenuAt = useCallback(
@@ -260,7 +259,7 @@ function WorkspaceCanvasInner() {
   const tidy = useCallback(() => {
     const s = ws.store.state;
     const level = Object.values(s.nodes).filter((n) => (n.parent ?? null) === s.graphPath);
-    const scope = s.selSet.length > 1 ? new Set(s.selSet) : new Set(level.map((n) => n.id));
+    const scope = s.selectedNodeIds.length > 1 ? new Set(s.selectedNodeIds) : new Set(level.map((n) => n.id));
     const tidyNodes = level.map((n) => {
       const size = resolveNodeSize(ws, n.id);
       return { id: n.id, w: size.w, h: size.h };
@@ -283,7 +282,7 @@ function WorkspaceCanvasInner() {
         { x: pos.x - 50, y: pos.y - 40, width: size.w + 100, height: size.h + 80 },
         { duration: ND_TIMING.seamMs },
       );
-      ws.select(id);
+      ws.selectNode(id);
     },
     [ws, rf],
   );
@@ -357,14 +356,14 @@ function WorkspaceCanvasInner() {
       if (e.key === "u" && !e.metaKey && !e.ctrlKey && ws.store.state.graphPath) ws.exitSubnet();
       // node flags on the selected node (Houdini b / d)
       if ((e.key === "b" || e.key === "d") && !e.metaKey && !e.ctrlKey) {
-        const sel = ws.store.state.selection;
+        const sel = ws.store.state.selectedNodeId;
         if (sel) ws.toggleFlag(sel, e.key === "b" ? "bypass" : "off");
       }
       if (e.key === "Escape") {
         const s = ws.store.state;
         if (addMenu) setAddMenu(null);
-        else if (s.selectedEdge) ws.selectEdge(null);
-        else if (s.selection || s.selSet.length) clearSelection();
+        else if (s.selectedEdgeId) ws.selectEdge(null);
+        else if (s.selectedNodeId || s.selectedNodeIds.length) clearSelection();
         else if (s.claimed) ws.releaseClaim();
       }
     };
@@ -401,7 +400,7 @@ function WorkspaceCanvasInner() {
           }}
           onPaneClick={() => {
             setAddMenu(null);
-            ws.select(null);
+            ws.selectNode(null);
             ws.release();
           }}
           minZoom={ND_ZOOM.min}
@@ -427,7 +426,7 @@ function WorkspaceCanvasInner() {
             nodeColor={(n: Node) => {
               const node = ws.store.state.nodes[n.id];
               if (!node) return "oklch(0.62 0 0 / 60%)";
-              if (n.id === ws.store.state.selection) return "oklch(0.554 0.236 281)";
+              if (n.id === ws.store.state.selectedNodeId) return "oklch(0.554 0.236 281)";
               return getWorkspaceNodeSpec(node.type)?.accent ?? "oklch(0.62 0 0 / 60%)";
             }}
             nodeStrokeWidth={0}
@@ -459,9 +458,9 @@ function WorkspaceCanvasInner() {
           </div>
         ) : null}
         {/* marquee action bar — tidy · collapse into subnet */}
-        {selSet.length > 1 ? (
+        {selectedNodeIds.length > 1 ? (
           <div className="absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2 rounded-md border glass px-2.5 py-1.25 whitespace-nowrap">
-            <span className="font-mono text-[9.5px] text-foreground">{selSet.length} selected</span>
+            <span className="font-mono text-[9.5px] text-foreground">{selectedNodeIds.length} selected</span>
             <NdIconButton icon="tidy" label="tidy" title="lay out the selection (L)" onClick={tidy} />
             <NdIconButton
               icon="enter"

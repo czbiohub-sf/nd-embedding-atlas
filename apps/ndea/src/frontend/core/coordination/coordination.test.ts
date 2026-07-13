@@ -9,6 +9,7 @@
 
 import { Store } from "@tanstack/store";
 import { describe, expect, test } from "bun:test";
+import { rowIndex, type RowIndex } from "@ndea/sdk";
 
 import { Coordination, scopeColor } from "./coordination";
 import type { WorkspaceDocumentState } from "@/core/workspace/types";
@@ -21,9 +22,9 @@ function fresh(): { co: Coordination; store: Store<WorkspaceDocumentState> } {
     sizeOverrides: {},
     formOverride: {},
     formLocked: {},
-    selection: null,
-    selSet: [],
-    selectedEdge: null,
+    selectedNodeId: null,
+    selectedNodeIds: [],
+    selectedEdgeId: null,
     explicit: {},
     stageTree: null,
     disposition: "strip",
@@ -43,10 +44,10 @@ describe("Coordination — assignment + shared reads", () => {
     co.assignScope("n1", "focus", "A");
     co.assignScope("n2", "focus", "A");
 
-    co.setCoordinationValue("focus", "A", "obs_8");
+    co.setCoordinationValue("focus", "A", rowIndex(8));
     // both resolve the same cell
-    expect(co.readCoordination("focus", co.scopeOf("n1", "focus")!)).toBe("obs_8");
-    expect(co.readCoordination("focus", co.scopeOf("n2", "focus")!)).toBe("obs_8");
+    expect(co.readCoordination("focus", co.scopeOf("n1", "focus")!)).toBe(rowIndex(8));
+    expect(co.readCoordination("focus", co.scopeOf("n2", "focus")!)).toBe(rowIndex(8));
   });
 
   test("nodesInScope is the reverse index for fan-out", () => {
@@ -62,18 +63,25 @@ describe("Coordination — assignment + shared reads", () => {
     const { co } = fresh();
     co.assignScope("n1", "focus", "A");
     co.assignScope("n2", "focus", "B");
-    co.setCoordinationValue("focus", "A", "obs_1");
+    co.setCoordinationValue("focus", "A", rowIndex(1));
     expect(co.readCoordination("focus", "B")).toBeUndefined();
-    co.setCoordinationValue("focus", "B", "obs_2");
-    expect(co.readCoordination("focus", "A")).toBe("obs_1"); // unchanged
+    co.setCoordinationValue("focus", "B", rowIndex(2));
+    expect(co.readCoordination("focus", "A")).toBe(rowIndex(1)); // unchanged
   });
 
   test("latest-wins: the most recent set is the value read", () => {
     const { co } = fresh();
     co.assignScope("n1", "focus", "A");
-    co.setCoordinationValue("focus", "A", "obs_1");
-    co.setCoordinationValue("focus", "A", "obs_2");
-    expect(co.readCoordination("focus", "A")).toBe("obs_2");
+    co.setCoordinationValue("focus", "A", rowIndex(1));
+    co.setCoordinationValue("focus", "A", rowIndex(2));
+    expect(co.readCoordination("focus", "A")).toBe(rowIndex(2));
+  });
+
+  test("focus rejects values outside the RowIndex domain", () => {
+    const { co } = fresh();
+    expect(() => co.setCoordinationValue("focus", "A", -1 as RowIndex)).toThrow("failed validation");
+    expect(() => co.setCoordinationValue("focus", "A", 1.5 as RowIndex)).toThrow("failed validation");
+    expect(() => co.setCoordinationValue("focus", "A", "1" as unknown as RowIndex)).toThrow("failed validation");
   });
 
   test("clearScope removes the node's type entry (and prunes the empty record)", () => {
@@ -110,23 +118,23 @@ describe("Coordination — selector-scoped subscribe (KD5)", () => {
   test("fires on the resolved cell changing", () => {
     const { co } = fresh();
     co.assignScope("n1", "focus", "A");
-    const seen: (string | null | undefined)[] = [];
-    const off = co.subscribe("n1", "focus", (v) => seen.push(v as string | null));
-    co.setCoordinationValue("focus", "A", "obs_1");
-    co.setCoordinationValue("focus", "A", "obs_2");
+    const seen: (RowIndex | null | undefined)[] = [];
+    const off = co.subscribe("n1", "focus", (v) => seen.push(v));
+    co.setCoordinationValue("focus", "A", rowIndex(1));
+    co.setCoordinationValue("focus", "A", rowIndex(2));
     off();
-    expect(seen).toEqual(["obs_1", "obs_2"]);
+    expect(seen).toEqual([rowIndex(1), rowIndex(2)]);
   });
 
   test("fires when the node's scope membership flips", () => {
     const { co } = fresh();
-    co.setCoordinationValue("focus", "A", "obs_1");
-    const seen: (string | null | undefined)[] = [];
-    const off = co.subscribe("n1", "focus", (v) => seen.push(v as string | null));
-    co.assignScope("n1", "focus", "A"); // undefined → "obs_1"
-    co.clearScope("n1", "focus"); // "obs_1" → undefined
+    co.setCoordinationValue("focus", "A", rowIndex(1));
+    const seen: (RowIndex | null | undefined)[] = [];
+    const off = co.subscribe("n1", "focus", (v) => seen.push(v));
+    co.assignScope("n1", "focus", "A"); // undefined → 1
+    co.clearScope("n1", "focus"); // 1 → undefined
     off();
-    expect(seen).toEqual(["obs_1", undefined]);
+    expect(seen).toEqual([rowIndex(1), undefined]);
   });
 
   test("does NOT fire for a write to an unrelated scope (no render storm)", () => {
@@ -134,7 +142,7 @@ describe("Coordination — selector-scoped subscribe (KD5)", () => {
     co.assignScope("n1", "focus", "A");
     let fires = 0;
     const off = co.subscribe("n1", "focus", () => fires++);
-    co.setCoordinationValue("focus", "B", "obs_x"); // different scope
+    co.setCoordinationValue("focus", "B", rowIndex(9)); // different scope
     co.assignScope("n2", "focus", "B"); // different node
     off();
     expect(fires).toBe(0);

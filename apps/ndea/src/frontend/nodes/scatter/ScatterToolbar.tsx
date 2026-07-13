@@ -44,6 +44,7 @@ function ScanDotIcon({ size = 12 }: { size?: number }) {
 
 import type { ColorSource } from "@/lib/color/color-source";
 import { cn } from "@/lib/utils";
+import type { RowIndex } from "@ndea/sdk";
 import type { ColorMode } from "@/nodes/scatter/gpu/hooks/useMosaicScatterData";
 import type { AxisState } from "@/types";
 import { EmbeddingPicker } from "@/nodes/scatter/mudata/EmbeddingPicker";
@@ -91,7 +92,7 @@ interface Props {
   hasSelection: boolean;
   selectionCount: number;
   /** Reads rowIndicesRef.current at call time — never stale */
-  getRowIndices: () => readonly number[];
+  getRowIndices: () => readonly RowIndex[];
   selectionPath: "inline" | "temp_table";
 
   /** docked (default) = full-width row above the canvas;

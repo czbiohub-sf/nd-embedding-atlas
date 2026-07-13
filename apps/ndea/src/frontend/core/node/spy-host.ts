@@ -12,12 +12,12 @@
  * the static rule and this behavioral check are complementary, not redundant.
  */
 
-import type { NodeHost } from "@ndea/sdk";
+import type { NodeHost, RowIndex } from "@ndea/sdk";
 
 export interface SpyHostCalls {
-  highlightSet: (string | null)[];
+  focusSet: (RowIndex | null)[];
   publishPredicate: { facet: string; sql: string | null }[];
-  publishRowSet: number[][];
+  publishRowSet: RowIndex[][];
   clearRowSet: number;
   viewSyncBroadcast: { panX: number; panY: number; zoom: number }[];
   viewSyncToggleLock: number;
@@ -32,7 +32,7 @@ export interface SpyHost {
 /** Build a fresh spy host + its call log. */
 export function createSpyHost(): SpyHost {
   const calls: SpyHostCalls = {
-    highlightSet: [],
+    focusSet: [],
     publishPredicate: [],
     publishRowSet: [],
     clearRowSet: 0,
@@ -41,24 +41,29 @@ export function createSpyHost(): SpyHost {
     orderingSet: [],
   };
 
-  let focus: string | null = null;
+  let focus: RowIndex | null = null;
+  const focusSubscribers = new Set<(value: RowIndex | null) => void>();
   let viewLinked = false; // toggleLock flips it so broadcastView's gate can be exercised
   let ordering: { col: string; dir: "asc" | "desc" } | null = null;
 
   const host = {
     focus: {
       get: () => focus,
-      set: (id: string | null) => {
-        focus = id;
-        calls.highlightSet.push(id);
+      set: (rowIndex: RowIndex | null) => {
+        focus = rowIndex;
+        calls.focusSet.push(rowIndex);
+        for (const subscriber of focusSubscribers) subscriber(rowIndex);
       },
-      subscribe: () => () => {},
+      subscribe: (subscriber: (value: RowIndex | null) => void) => {
+        focusSubscribers.add(subscriber);
+        return () => focusSubscribers.delete(subscriber);
+      },
     },
     publishPredicate: (facet: string, sql: string | null) => {
       calls.publishPredicate.push({ facet, sql });
     },
-    publishRowSet: (ids: number[]) => {
-      calls.publishRowSet.push(ids);
+    publishRowSet: (rowIndices: RowIndex[]) => {
+      calls.publishRowSet.push(rowIndices);
     },
     clearRowSet: () => {
       calls.clearRowSet += 1;

@@ -35,6 +35,7 @@ import type { ScatterBuffers, ScatterUniforms } from "./buffers";
 import type { CullingEngine } from "./culling";
 import { PICK_FRAGMENT_WGSL, PICK_VERTEX_WGSL } from "./picking-shaders";
 import type { TgpuRoot } from "@/nodes/scatter/gpu/types";
+import { type GpuPointIndex, gpuPointIndex } from "@/lib/branded-types";
 
 /** Width/height of the 5×5 readback window in pick-buffer pixels. */
 const PICK_WINDOW = 5;
@@ -44,7 +45,7 @@ const NO_HIT = 0;
 
 export interface PickResult {
   /** Winning point index in the same numbering used by the rest of the system. */
-  pointIndex: number;
+  pointIndex: GpuPointIndex;
   /** Sum of brightness weights across the 5×5 window (debug / future tie-break). */
   brightness: number;
 }
@@ -387,7 +388,7 @@ export function createPickingSystem(
       }
       void NO_HIT; // documentation breadcrumb
       if (bestId < 0) return null;
-      return { pointIndex: bestId, brightness: bestWeight };
+      return { pointIndex: gpuPointIndex(bestId), brightness: bestWeight };
     })();
     inflight = job.finally(() => {
       if (inflight === job) inflight = null;

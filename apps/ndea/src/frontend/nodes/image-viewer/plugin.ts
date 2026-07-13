@@ -12,9 +12,8 @@ export const imageViewerDefinition = defineNode({
   ref: exactNodeTypeRef("image-viewer", "1.0.0"),
   title: "Image Viewer",
   role: "view",
-  // Highlight is a broadcast bus (§6.7); the sel port exists for graph wiring
-  // of a degenerate single-row highlight.
-  inputs: [{ id: "highlight-in", kind: "focus", label: "Highlight" }],
+  // Preserve the persisted port id while exposing its canonical focus meaning.
+  inputs: [{ id: "highlight-in", kind: "focus", label: "Focus" }],
   outputs: [],
   capabilities: CAPABILITIES,
   dataRequirements: ["plate-image"],

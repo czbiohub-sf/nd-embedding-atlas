@@ -9,7 +9,7 @@ import type { Selection } from "@uwdata/mosaic-core";
 import { stringPredicate } from "@/lib/mosaic-helpers";
 import type { NodeInstanceId, RowSetPublication } from "@ndea/sdk";
 
-export type SelectionFacet = "lasso" | "activeSet" | "chart" | "range" | "isolation";
+export type PredicateFacet = "lasso" | "activeSet" | "chart" | "range" | "isolation";
 
 // Changing temp tables need a unique SQL token or Mosaic returns cached rows.
 const SELECTION_TABLE_RE = /\bFROM\s+(?:sel_[A-Za-z0-9_]+|__scatter_selection)\b/i;
@@ -21,21 +21,21 @@ interface ClauseSource {
 
 interface InstanceClause {
   readonly source: ClauseSource;
-  readonly facets: Map<SelectionFacet, string>;
+  readonly facets: Map<PredicateFacet, string>;
 }
 
 /** Parentheses preserve each predicate's precedence when facets compose. */
-function composeFacets(facets: Map<SelectionFacet, string>): string | null {
+function composeFacets(facets: Map<PredicateFacet, string>): string | null {
   const parts = [...facets.values()];
   if (parts.length === 0) return null;
   if (parts.length === 1) return parts[0];
   return parts.map((p) => `(${p})`).join(" AND ");
 }
 
-export interface SelectionBus {
+export interface PredicateBus {
   /** Rejects temp-table predicates that lack a cache-busting token. */
-  publishPredicate(instanceId: NodeInstanceId, facet: SelectionFacet, sql: string | null): void;
-  clearFacet(facet: SelectionFacet): void;
+  publishPredicate(instanceId: NodeInstanceId, facet: PredicateFacet, sql: string | null): void;
+  clearFacet(facet: PredicateFacet): void;
   disposeInstance(instanceId: NodeInstanceId): void;
   attachDestination(selection: Selection): () => void;
   makeToken(table: string, count: number): RowSetPublication;
@@ -44,7 +44,7 @@ export interface SelectionBus {
   readonly revision: Store<number>;
 }
 
-export function createSelectionBus(): SelectionBus {
+export function createPredicateBus(): PredicateBus {
   const registry = new Map<NodeInstanceId, InstanceClause>();
   const dirty = new Set<NodeInstanceId>();
   // Keep the source object: a reused instance id must not cancel an old source's removal.
@@ -122,10 +122,10 @@ export function createSelectionBus(): SelectionBus {
           return;
         }
         default: {
-          // Defensive: the shim casts an arbitrary string to SelectionFacet, so
+          // Defensive: the shim casts an arbitrary string to PredicateFacet, so
           // a runtime-invalid facet can reach here even though it is `never` to TS.
           const unknownFacet: string = facet;
-          console.warn(`[selectionBus] unknown facet '${unknownFacet}' — ignored`);
+          console.warn(`[predicateBus] unknown facet '${unknownFacet}' — ignored`);
         }
       }
     },
@@ -173,5 +173,5 @@ export function createSelectionBus(): SelectionBus {
   };
 }
 
-/** Process-wide selection bus — one composed crossfilter across the app. */
-export const selectionBus: SelectionBus = createSelectionBus();
+/** Process-wide predicate bus — one composed crossfilter across the app. */
+export const predicateBus: PredicateBus = createPredicateBus();

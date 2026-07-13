@@ -1,5 +1,6 @@
 import { RoaringBitmap32 } from "roaring-wasm";
-import { type SelectionSource, sourceKey } from "./SelectionSource";
+import type { RowIndex } from "@ndea/sdk";
+import { type RowSetSource, sourceKey } from "./RowSetSource";
 
 /**
  * Singleton Roaring bitmaps per source — reused across readbacks to avoid
@@ -13,7 +14,7 @@ import { type SelectionSource, sourceKey } from "./SelectionSource";
  */
 const sourceBitmaps = new Map<string, RoaringBitmap32>();
 
-export function getOrCreateBitmap(source: SelectionSource): RoaringBitmap32 {
+export function getOrCreateBitmap(source: RowSetSource): RoaringBitmap32 {
   const key = sourceKey(source);
   let bm = sourceBitmaps.get(key);
   if (!bm) {
@@ -23,14 +24,14 @@ export function getOrCreateBitmap(source: SelectionSource): RoaringBitmap32 {
   return bm;
 }
 
-export function updateBroadcastBitmap(source: SelectionSource, rowIds: number[]): RoaringBitmap32 {
+export function updateBroadcastBitmap(source: RowSetSource, rowIndices: RowIndex[]): RoaringBitmap32 {
   const bm = getOrCreateBitmap(source);
   bm.clear();
-  if (rowIds.length > 0) bm.addMany(rowIds);
+  if (rowIndices.length > 0) bm.addMany(rowIndices);
   return bm;
 }
 
-export function disposeBitmap(source: SelectionSource): void {
+export function disposeBitmap(source: RowSetSource): void {
   const key = sourceKey(source);
   const bm = sourceBitmaps.get(key);
   if (bm) {
@@ -39,7 +40,7 @@ export function disposeBitmap(source: SelectionSource): void {
   }
 }
 
-/** Get the row IDs currently in a source's bitmap. */
-export function getBitmapRowIds(source: SelectionSource): number[] {
-  return sourceBitmaps.get(sourceKey(source))?.toArray() ?? [];
+/** Get the row indices currently in a source's bitmap. */
+export function getBitmapRowIndices(source: RowSetSource): RowIndex[] {
+  return (sourceBitmaps.get(sourceKey(source))?.toArray() ?? []) as RowIndex[];
 }

@@ -13,7 +13,7 @@ import {
   SelectionPublishResponseSchema,
 } from "@ndea/protocol";
 import { useDashboard } from "@/hooks/useDashboard";
-import { broadcastBus, highlightBus, selectionBus, viewSyncBus } from "@/core/buses";
+import { focusBus, predicateBus, rowSetBus, viewSyncBus } from "@/core/buses";
 import { deviceBroker, type DeviceLease } from "@/core/gpu/device-broker";
 import type {
   NodeDataAPI,
@@ -22,9 +22,10 @@ import type {
   NodeDefinition,
   NodeInstanceId,
   NodeNotificationAPI,
+  RowIndex,
   ViewCoordinationAPI,
 } from "@ndea/sdk";
-import type { SelectionFacet } from "@/core/buses";
+import type { PredicateFacet } from "@/core/buses";
 import type { AppNodeHost } from "@/core/node/app-node-host";
 
 export interface HostInit<Config> {
@@ -103,14 +104,13 @@ export function useDashboardHostShim() {
 
       const focus: FocusCoordinationAPI = {
         get() {
-          return highlightBus.get();
+          return focusBus.get();
         },
-        set(id) {
-          highlightBus.set(id);
+        set(rowIndex) {
+          focusBus.set(rowIndex);
         },
         subscribe(cb) {
-          const sub = highlightBus.store.subscribe(() => cb(highlightBus.get()));
-          return () => sub.unsubscribe();
+          return focusBus.subscribe(cb);
         },
       };
 
@@ -127,7 +127,7 @@ export function useDashboardHostShim() {
         },
         ...(canPublishRowSet
           ? {
-              async publishRowSet(rowIds: number[]) {
+              async publishRowSet(rowIds: RowIndex[]) {
                 // Per-instance temp table sel_<instanceId> (§6.5).
                 const res = await fetch(`/api/selection/${encodeURIComponent(instanceId)}`, {
                   method: "POST",
@@ -137,7 +137,7 @@ export function useDashboardHostShim() {
                 if (!res.ok) throw await responseError(res, `selection failed (${res.status})`);
                 const { table: selTable, count } = SelectionPublishResponseSchema.parse(await res.json());
                 // The bus owns the tok=N cache-buster — plugins never invent it.
-                return selectionBus.makeToken(selTable, count);
+                return predicateBus.makeToken(selTable, count);
               },
               disposePublishedRowSet() {
                 void fetch(`/api/selection/${encodeURIComponent(instanceId)}`, { method: "DELETE" }).catch(() => {});
@@ -208,23 +208,23 @@ export function useDashboardHostShim() {
 
         inputPredicate,
         externalRowSet() {
-          return broadcastBus.externalRowSet(instanceId);
+          return rowSetBus.externalRowSet(instanceId);
         },
-        onExternalRowSet(cb: (rowIds: readonly number[] | null) => void) {
-          const off = broadcastBus.subscribeExternal(instanceId, cb);
+        onExternalRowSet(cb: (rowIndices: readonly RowIndex[] | null) => void) {
+          const off = rowSetBus.subscribeExternal(instanceId, cb);
           disposers.push(off);
           return off;
         },
 
         publishPredicate(facet: string, sql: string | null) {
-          selectionBus.publishPredicate(instanceId, facet as SelectionFacet, sql);
+          predicateBus.publishPredicate(instanceId, facet as PredicateFacet, sql);
         },
-        publishRowSet(ids: number[]) {
-          broadcastBus.publishRowSet(instanceId, ids);
+        publishRowSet(rowIndices: RowIndex[]) {
+          rowSetBus.publishRowSet(instanceId, rowIndices);
         },
         clearRowSet() {
           // True clear (sync store -> "empty"), not an empty "active" set.
-          broadcastBus.clear(instanceId);
+          rowSetBus.clear(instanceId);
         },
 
         viewCoordination,
@@ -264,10 +264,10 @@ export function useDashboardHostShim() {
         for (let i = disposers.length - 1; i >= 0; i--) disposers[i]();
         deviceLease?.release();
         deviceBroker.releaseFor(instanceId);
-        broadcastBus.disposeFor(instanceId);
+        rowSetBus.disposeFor(instanceId);
         // Drop this instance's crossfilter clause so a closed view stops
         // filtering everyone else (§6.3).
-        selectionBus.disposeInstance(instanceId);
+        predicateBus.disposeInstance(instanceId);
         // Drop this instance's server-side sel_<id> temp table (§6.5/§6.9).
         if (canPublishRowSet) dataAPI.disposePublishedRowSet();
       }

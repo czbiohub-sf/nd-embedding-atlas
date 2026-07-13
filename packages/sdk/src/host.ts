@@ -2,7 +2,7 @@
 
 import type { Coordinator, MosaicClient, Selection } from "@uwdata/mosaic-core";
 import type { CommitAnnotationsResponse, Metadata } from "@ndea/protocol";
-import type { ExactNodeTypeRef, NodeCapability, NodeInstanceId } from "./node";
+import type { ExactNodeTypeRef, NodeCapability, NodeInstanceId, RowIndex } from "./node";
 
 export interface DeviceInfo {
   readonly device: GPUDevice;
@@ -38,7 +38,7 @@ export interface DataQueryAPI {
 }
 
 export interface RowSetPublishAPI {
-  publishRowSet(rowIds: number[]): Promise<RowSetPublication>;
+  publishRowSet(rowIds: RowIndex[]): Promise<RowSetPublication>;
   disposePublishedRowSet(): void;
 }
 
@@ -80,9 +80,9 @@ export interface OrderingCoordinationAPI {
 }
 
 export interface FocusCoordinationAPI {
-  get(): string | null;
-  set(id: string | null): void;
-  subscribe?(callback: (id: string | null) => void): () => void;
+  get(): RowIndex | null;
+  set(rowIndex: RowIndex | null): void;
+  subscribe?(callback: (rowIndex: RowIndex | null) => void): () => void;
 }
 
 export interface NodeNotificationAPI {
@@ -109,8 +109,8 @@ interface DataReadHost<Capabilities extends NodeCapability> {
 }
 
 interface RowSetSubscribeHost {
-  externalRowSet(): readonly number[] | null;
-  onExternalRowSet(callback: (rowIds: readonly number[] | null) => void): () => void;
+  externalRowSet(): readonly RowIndex[] | null;
+  onExternalRowSet(callback: (rowIndices: readonly RowIndex[] | null) => void): () => void;
 }
 
 interface PredicatePublishHost {
@@ -118,7 +118,7 @@ interface PredicatePublishHost {
 }
 
 interface RowSetPublishHost {
-  publishRowSet(ids: number[]): void;
+  publishRowSet(rowIndices: RowIndex[]): void;
   /** Clears the broadcast; publishing `[]` instead keeps an active empty set. */
   clearRowSet(): void;
 }

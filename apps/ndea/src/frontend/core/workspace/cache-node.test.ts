@@ -12,6 +12,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
+import { rowIndex } from "@ndea/sdk";
 
 import { predicateSql } from "@/core/graph/cook";
 import { nativeWorkspaceNodeLibrary } from "./definitions";
@@ -94,14 +95,14 @@ describe("Cache node", () => {
     ws.connect(obs, sc);
     ws.connect(sc, cache); // sel push wire
 
-    ws.emitLasso(sc, "__row_index__ IN (1, 2, 3)", [1, 2, 3]);
+    ws.emitLasso(sc, "__row_index__ IN (1, 2, 3)", [rowIndex(1), rowIndex(2), rowIndex(3)]);
     // live: the pushed sel takes over
     expect(cookSql(ws, cache)).toBe("__row_index__ IN (1, 2, 3)");
 
     ws.pinCache(cache);
-    expect(ws.frozenRows.get(cache)).toEqual([1, 2, 3]); // pinned BY VALUE
+    expect(ws.frozenRows.get(cache)).toEqual([rowIndex(1), rowIndex(2), rowIndex(3)]); // pinned BY VALUE
     // upstream lasso changes — cached output unaffected
-    ws.emitLasso(sc, "__row_index__ IN (9)", [9]);
+    ws.emitLasso(sc, "__row_index__ IN (9)", [rowIndex(9)]);
     expect(cookSql(ws, cache)).toBe("__row_index__ IN (1, 2, 3)");
   });
 
@@ -115,7 +116,11 @@ describe("Cache node", () => {
 
     // Large-lasso shape: live sql references a per-session server temp table
     // (dropped when the scatter clears), but the rows travel alongside it.
-    ws.emitLasso(sc, "__row_index__ IN (SELECT row FROM sel_scatter_x /* tok=3 */)", [10, 11, 12]);
+    ws.emitLasso(sc, "__row_index__ IN (SELECT row FROM sel_scatter_x /* tok=3 */)", [
+      rowIndex(10),
+      rowIndex(11),
+      rowIndex(12),
+    ]);
     expect(ws.pinCache(cache)).toBe(true);
     // Frozen predicate is the self-contained rows, NOT the temp-table ref.
     expect(cookSql(ws, cache)).toBe("__row_index__ IN (10, 11, 12)");
@@ -126,7 +131,7 @@ describe("Cache node", () => {
     const obs = ws.addNode("obs", { x: 0, y: 0 }, "obs");
     const sc = ws.addNode("scatter", { x: 100, y: 0 });
     ws.connect(obs, sc);
-    ws.emitLasso(sc, "__row_index__ IN (4, 5)", [4, 5]);
+    ws.emitLasso(sc, "__row_index__ IN (4, 5)", [rowIndex(4), rowIndex(5)]);
 
     const cacheId = ws.freezeSelection(sc);
     expect(cacheId).not.toBeNull();
@@ -135,7 +140,7 @@ describe("Cache node", () => {
     expect(cookSql(ws, cacheId!)).toBe("__row_index__ IN (4, 5)");
 
     // re-freezing the same scatter re-pins the SAME cache node (Recache)
-    ws.emitLasso(sc, "__row_index__ IN (7)", [7]);
+    ws.emitLasso(sc, "__row_index__ IN (7)", [rowIndex(7)]);
     const again = ws.freezeSelection(sc);
     expect(again).toBe(cacheId);
     expect(cookSql(ws, cacheId!)).toBe("__row_index__ IN (7)");
@@ -159,7 +164,7 @@ describe("Export node (decoupled from Cache)", () => {
     const exp = ws.addNode("export", { x: 200, y: 0 });
     ws.connect(obs, sc);
     ws.connect(sc, exp); // sel push wire
-    ws.emitLasso(sc, "__row_index__ IN (1, 2, 3)", [1, 2, 3]);
+    ws.emitLasso(sc, "__row_index__ IN (1, 2, 3)", [rowIndex(1), rowIndex(2), rowIndex(3)]);
 
     let captured: unknown = null;
     const orig = globalThis.fetch;

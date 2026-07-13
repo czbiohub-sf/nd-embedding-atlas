@@ -2,10 +2,10 @@
  * Gallery plugin view (PLUGIN-ARCHITECTURE §10.5).
  *
  * Node contract: a gallery node shows NOTHING until it is wired — so it gates on
- * its cooked input predicate (`host.inputSelection`). Unwired (null predicate) →
+ * its cooked input predicate (`host.inputPredicate`). Unwired (null predicate) →
  * a "connect an input" hint; wired → the crop gallery.
  *
- * The gallery CONTENT is scoped to `host.inputSelection` exactly: the cooked
+ * The gallery content is scoped to `host.inputPredicate` exactly: the cooked
  * input predicate is passed to `GalleryPane`, which resolves it to row ids via
  * `host.data.coordinator` (NOT the global selection bus). Two galleries wired to
  * different selections show different crops.
@@ -26,7 +26,7 @@ export interface GalleryConfig {
 export type GalleryOptions = Record<string, never>;
 
 export function GalleryPluginView({ host }: NodeBodyProps<GalleryConfig, GalleryCapabilities>) {
-  // host.inputSelection is a Mosaic Selection that MUTATES IN PLACE on re-cook
+  // host.inputPredicate is a Mosaic Selection that mutates in place on re-cook
   // and notifies Mosaic clients via "value" events — NOT React. Bridge it so the
   // unwired gate AND GalleryPane's query key recompute when the wired input
   // changes; without this the crops go stale after the upstream re-cooks.
@@ -40,16 +40,13 @@ export function GalleryPluginView({ host }: NodeBodyProps<GalleryConfig, Gallery
   );
   const predicate = useSyncExternalStore(subscribe, () => predicateToSql(selection));
 
-  // Highlight rides the SCOPED host seam (group-aware), NOT the global dashboard
+  // Focus rides the scoped host seam (group-aware), not the process-wide bus.
   // state — same as ScatterView/Table. A crop click writes through
-  // host.highlight.set so a shared sync group ("A") fans it out to Scatter +
+  // host.focus.set so a shared sync group ("A") fans it out to Scatter +
   // Idetik; the read reflects the group's effective focus so the card lights up.
-  const subscribeHighlight = useCallback(
-    (onChange: () => void) => host.focus.subscribe?.(onChange) ?? (() => {}),
-    [host],
-  );
-  const highlightId = useSyncExternalStore(subscribeHighlight, () => host.focus.get());
-  const onSelect = useCallback((id: string | null) => focusObs(host, id), [host]);
+  const subscribeFocus = useCallback((onChange: () => void) => host.focus.subscribe?.(onChange) ?? (() => {}), [host]);
+  const focusedRowIndex = useSyncExternalStore(subscribeFocus, () => host.focus.get());
+  const onSelect = useCallback((rowIndex: Parameters<typeof focusObs>[1]) => focusObs(host, rowIndex), [host]);
 
   if (predicate == null) {
     return (
@@ -65,7 +62,7 @@ export function GalleryPluginView({ host }: NodeBodyProps<GalleryConfig, Gallery
     <GalleryPane
       coordinator={host.data.coordinator}
       predicate={predicate}
-      highlightId={highlightId}
+      focusedRowIndex={focusedRowIndex}
       onSelect={onSelect}
     />
   );

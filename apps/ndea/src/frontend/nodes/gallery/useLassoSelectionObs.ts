@@ -4,14 +4,14 @@
  * Shared by the gallery body (`GalleryPane`), the card (`LassoGalleryCard`), and
  * the node-scoped selection hook (`usePredicateGalleryObs`).
  *
- * The legacy global-lasso hook that once lived here (subscribing to
- * `selectionSyncStore` / `selectionBus`) was superseded by
+ * The legacy process-wide lasso hook that once lived here was superseded by
  * `usePredicateGalleryObs`, which scopes the gallery to the node's wired
- * `host.inputSelection` — no global-bus read. Only the shared types + cap remain.
+ * `host.inputPredicate` — no process-wide predicate read. Only shared types remain.
  */
+import type { RowIndex } from "@ndea/sdk";
 
 export interface LassoObs {
-  rowIndex: number;
+  rowIndex: RowIndex;
   fov: string | null;
   t: number;
   x: number;

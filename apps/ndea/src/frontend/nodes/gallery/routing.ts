@@ -7,11 +7,11 @@
  * headless-testable routing point every body shares — not the line count.
  */
 
-import type { NodeHost } from "@ndea/sdk";
+import type { NodeHost, RowIndex } from "@ndea/sdk";
 
 type FocusHost = Pick<NodeHost<unknown, "focus-coordination">, "focus">;
 
 /** Focus the obs under a clicked crop. Routes through the group-aware host seam. */
-export function focusObs(host: FocusHost, rowId: string | null): void {
-  host.focus.set(rowId);
+export function focusObs(host: FocusHost, focusedRowIndex: RowIndex | null): void {
+  host.focus.set(focusedRowIndex);
 }

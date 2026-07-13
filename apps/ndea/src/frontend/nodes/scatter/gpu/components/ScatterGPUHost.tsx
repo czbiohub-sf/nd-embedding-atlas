@@ -12,6 +12,7 @@
  * caused the canvas to unmount exactly when positions arrived.
  */
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from "react";
+import type { RowIndex } from "@ndea/sdk";
 import type { PanelId } from "@/lib/branded-types";
 import { useDeviceLease } from "@/core/gpu/gpu-device-context";
 import { onDeviceLost } from "@/core/gpu/device-manager";
@@ -52,11 +53,11 @@ interface ScatterGPUHostProps {
    */
   config: ScatterplotConfig;
   onGpuError(msg: string): void;
-  onRowIndicesChange(indices: number[]): void;
+  onRowIndicesChange(indices: RowIndex[]): void;
   /** Declarative point style — applied on change, re-applied on GPU reinit. */
   pointStyle?: ScatterPointStyle;
   /** Declarative full-bright highlight set (e.g. trajectory points). null/empty = none. */
-  highlightRowIds?: readonly number[] | null;
+  highlightRowIds?: readonly RowIndex[] | null;
   /** Panel identity for SelectionLayerStore registration. Optional to avoid breaking call sites. */
   myPanelId?: PanelId;
 }
@@ -71,7 +72,7 @@ function applyPointStyle(gpu: ScatterplotHandle | null, style: ScatterPointStyle
 }
 
 /** Push the highlight set onto a live GPU handle (null/empty → clear). */
-function applyHighlight(gpu: ScatterplotHandle | null, rowIds: readonly number[] | null | undefined): void {
+function applyHighlight(gpu: ScatterplotHandle | null, rowIds: readonly RowIndex[] | null | undefined): void {
   if (!gpu) return;
   if (rowIds && rowIds.length > 0) gpu.setHighlightPoints([...rowIds]);
   else gpu.clearHighlight();
@@ -377,13 +378,13 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
       clearCategoryDisabled() {
         gpuRef.current?.clearCategoryDisabled();
       },
-      setTrajectoryIsolation(rowIndices: number[]) {
+      setTrajectoryIsolation(rowIndices: RowIndex[]) {
         gpuRef.current?.setTrajectoryIsolation(rowIndices);
       },
       clearTrajectoryIsolation() {
         gpuRef.current?.clearTrajectoryIsolation();
       },
-      setContinuousIsolation(rowIndices: number[]) {
+      setContinuousIsolation(rowIndices: RowIndex[]) {
         gpuRef.current?.setContinuousIsolation(rowIndices);
       },
       clearContinuousIsolation() {
@@ -392,7 +393,7 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
       rehydrateIsolation() {
         gpuRef.current?.rehydrateIsolation();
       },
-      setHighlightPoints(rowIndices: number[]) {
+      setHighlightPoints(rowIndices: RowIndex[]) {
         gpuRef.current?.setHighlightPoints(rowIndices);
       },
       clearHighlight() {

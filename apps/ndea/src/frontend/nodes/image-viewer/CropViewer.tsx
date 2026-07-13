@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import type { RowIndex } from "@ndea/sdk";
 import { useEffect, useRef, useState } from "react";
 import { useHost } from "@/core/host/host-context";
 import {
@@ -12,6 +13,7 @@ import {
 import { SingleCropViewer } from "./SingleCropViewer";
 import { ViewerPauseGate } from "./ViewerPauseGate";
 import type { ImageViewerCapabilities } from "./plugin";
+import { focusedObservationPath, formatViewerObsReadout, type ViewerObsSummary } from "./focus-behavior";
 
 interface CropViewerProps {
   channelInstance?: string;
@@ -21,29 +23,26 @@ interface CropViewerProps {
 /**
  * Small readout of what the viewer is actually showing — fov · track · T —
  * mirrors the gallery card label so the two can be compared at a glance.
- * Shares the ["obs", highlightId] query with SingleCropViewer (no extra fetch).
+ * Shares the ["obs", focusedRowIndex] query with SingleCropViewer.
  */
 function ViewerObsReadout() {
   const host = useHost<unknown, ImageViewerCapabilities>();
-  const [highlightId, setHighlightId] = useState<string | null>(() => host.focus.get());
-  useEffect(() => host.focus.subscribe?.(setHighlightId), [host]);
+  const [focusedRowIndex, setFocusedRowIndex] = useState<RowIndex | null>(() => host.focus.get());
+  useEffect(() => host.focus.subscribe?.(setFocusedRowIndex), [host]);
   const { data } = useQuery({
-    queryKey: ["obs", highlightId],
+    queryKey: ["obs", focusedRowIndex],
     queryFn: async () => {
-      const r = await fetch(`/api/obs/${highlightId}`);
-      return (await r.json()) as { fov_name?: string; t?: number; track_id?: number };
+      const r = await fetch(focusedObservationPath(focusedRowIndex!));
+      return (await r.json()) as ViewerObsSummary;
     },
-    enabled: !!highlightId,
+    enabled: focusedRowIndex != null,
     staleTime: 10_000,
   });
-  if (!highlightId || !data?.fov_name) return null;
-  const track = data.track_id != null ? ` · #${data.track_id}` : "";
-  const t = data.t != null ? ` · T ${data.t}` : "";
+  const readout = formatViewerObsReadout(data);
+  if (focusedRowIndex == null || readout == null) return null;
   return (
     <div className="pointer-events-none absolute top-2 right-2 z-20 rounded bg-black/60 px-1.5 py-0.5 font-mono text-2xs text-white/85">
-      {data.fov_name}
-      {track}
-      {t}
+      {readout}
     </div>
   );
 }
@@ -51,14 +50,14 @@ function ViewerObsReadout() {
 export function CropViewer({ channelInstance = "docked", datasetKey }: CropViewerProps) {
   // Focus read: scoped to this instance's host (sync group / focus wire).
   const host = useHost<unknown, ImageViewerCapabilities>();
-  const [highlightId, setHighlightId] = useState<string | null>(() => host.focus.get());
-  useEffect(() => host.focus.subscribe?.(setHighlightId), [host]);
+  const [focusedRowIndex, setFocusedRowIndex] = useState<RowIndex | null>(() => host.focus.get());
+  useEffect(() => host.focus.subscribe?.(setFocusedRowIndex), [host]);
 
   const hasEverSelected = useRef(false);
   const [cropSize, setCropSize] = useState(100);
   const [showBbox, setShowBbox] = useState(true);
 
-  if (highlightId) {
+  if (focusedRowIndex != null) {
     hasEverSelected.current = true;
   }
 
@@ -75,7 +74,7 @@ export function CropViewer({ channelInstance = "docked", datasetKey }: CropViewe
   return (
     <ViewerErrorBoundary>
       <Viewer.Provider channelInstance={channelInstance}>
-        <ViewerPauseGate active={!!highlightId} />
+        <ViewerPauseGate focusedRowIndex={focusedRowIndex} />
         <div className="relative h-full">
           <Viewer.Canvas className="absolute inset-0 h-full w-full" />
           <SingleCropViewer cropSize={cropSize} showBbox={showBbox} datasetKey={datasetKey} />
@@ -94,7 +93,7 @@ export function CropViewer({ channelInstance = "docked", datasetKey }: CropViewe
               datasetKey={datasetKey}
             />
           </div>
-          {!highlightId && (
+          {focusedRowIndex == null && (
             <div className="absolute inset-0 flex items-center justify-center text-muted-foreground text-xs">
               Click an observation to view
             </div>

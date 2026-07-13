@@ -23,7 +23,7 @@ export function seedAnnotate(ws: Workspace): void {
   ws.connect(cache, gallery); // gallery crops for the cached scope
   ws.connect(table, fov); // idetik shows the table-focused row's crop
   ws.setDisposition("hidden"); // opens to the tiled dashboard, not the canvas (R10)
-  ws.select(scatter);
+  ws.selectNode(scatter);
 }
 
 /** Known presets by name. `annotate` is the default a no-`--preset` build opens. */

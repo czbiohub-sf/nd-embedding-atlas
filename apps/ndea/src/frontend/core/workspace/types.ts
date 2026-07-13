@@ -9,7 +9,7 @@
  */
 
 import type { NdForm } from "@/components/nd/nd-resolve-form";
-import type { JsonValue } from "@ndea/sdk";
+import type { JsonValue, RowIndex } from "@ndea/sdk";
 import type { GraphDocumentEdge, GraphDocumentNode } from "@/core/graph/records";
 import type { TreeNode } from "./stage/split-tree";
 
@@ -29,6 +29,10 @@ export interface WorkspaceNodeSize {
   h: number;
 }
 
+export type WorkspaceCoordinationSpace = Record<string, Record<string, JsonValue> | undefined> & {
+  focus?: Record<string, RowIndex | null>;
+};
+
 export interface WorkspaceDocumentState {
   nodes: Record<string, GraphDocumentNode>;
   edges: Record<string, GraphDocumentEdge>;
@@ -38,12 +42,12 @@ export interface WorkspaceDocumentState {
   sizeOverrides: Record<string, Partial<Record<"card" | "full", WorkspaceNodeSize>>>;
   formOverride: Record<string, NdForm>;
   formLocked: Record<string, boolean>;
-  /** single primary selection (node id) */
-  selection: string | null;
-  /** marquee multi-selection */
-  selSet: string[];
-  /** selected edge (delete chip) */
-  selectedEdge: string | null;
+  /** single primary selected node id */
+  selectedNodeId: string | null;
+  /** marquee-selected node ids */
+  selectedNodeIds: string[];
+  /** selected edge id (delete chip) */
+  selectedEdgeId: string | null;
   /** explicit placement pins — override the by-disposition default, persist */
   explicit: Record<string, WorkspacePlacement>;
   /** stage split-tree layout memory (null → default disposition on demand) */
@@ -63,7 +67,7 @@ export interface WorkspaceDocumentState {
    *  this node references for each coordination type (e.g. `focus → "A"`). The
    *  N-node identity-of-reference channel, reached only via the host seam. */
   coordinationScopes: Record<string, Record<string, string>>;
-  /** coordination plane — the live cells: `type → scope → shared value`
-   *  (latest-wins, `JsonValue`-only). */
-  coordinationSpace: Record<string, Record<string, JsonValue>>;
+  /** coordination plane — the live cells: `type → scope → shared value`.
+   *  Focus cells are branded row indices; other types remain `JsonValue`. */
+  coordinationSpace: WorkspaceCoordinationSpace;
 }

@@ -20,7 +20,7 @@ import { andPreds, type Predicate } from "@/core/graph/engine";
 import type { GraphDocumentEdge, GraphDocumentNode, GraphNodeType } from "@/core/graph/records";
 import { AUTHORED_GRAPH_OUTPUT_PORT, DERIVED_GRAPH_OUTPUT_PORT, type GraphPortValue } from "@/core/graph/values";
 import type { TransformCapabilities } from "@/core/graph/graph-host";
-import type { NodeHost } from "@ndea/sdk";
+import { rowIndex, type NodeHost, type RowIndex } from "@ndea/sdk";
 import type { ThresholdFilterConfig } from "@/nodes/transform-filter/view";
 import type { Metadata } from "@/types";
 import type { NdForm } from "@/components/nd/nd-resolve-form";
@@ -60,9 +60,9 @@ const EMPTY: WorkspaceDocumentState = {
   sizeOverrides: {},
   formOverride: {},
   formLocked: {},
-  selection: null,
-  selSet: [],
-  selectedEdge: null,
+  selectedNodeId: null,
+  selectedNodeIds: [],
+  selectedEdgeId: null,
   explicit: {},
   stageTree: null,
   disposition: "strip",
@@ -178,7 +178,7 @@ export class Workspace {
       ...s,
       nodes: { ...s.nodes, [id]: node },
       positions: { ...s.positions, [id]: pos },
-      selection: id,
+      selectedNodeId: id,
     }));
     if (type === "subnet") this.birthSubnetSeam(id);
     return id;
@@ -241,8 +241,9 @@ export class Workspace {
         flags,
         coordinationScopes,
         stageTree: treeRemove(s.stageTree, id),
-        selection: s.selection === id ? null : s.selection,
-        selSet: s.selSet.filter((x) => x !== id),
+        selectedNodeId: s.selectedNodeId === id ? null : s.selectedNodeId,
+        selectedNodeIds: s.selectedNodeIds.filter((x) => x !== id),
+        selectedEdgeId: s.selectedEdgeId && !edges[s.selectedEdgeId] ? null : s.selectedEdgeId,
       };
     });
   }
@@ -280,7 +281,7 @@ export class Workspace {
     this.documentStore.setState((s) => {
       const edges = { ...s.edges };
       delete edges[edgeId];
-      return { ...s, edges, selectedEdge: s.selectedEdge === edgeId ? null : s.selectedEdge };
+      return { ...s, edges, selectedEdgeId: s.selectedEdgeId === edgeId ? null : s.selectedEdgeId };
     });
   }
 
@@ -384,24 +385,25 @@ export class Workspace {
     this.ui.setState((u) => ({ ...u, resizing: id }));
   }
 
-  select(id: string | null): void {
-    this.documentStore.setState((s) => ({ ...s, selection: id, selectedEdge: null }));
-  }
-
-  setSelSet(ids: string[]): void {
-    this.documentStore.setState((s) => ({ ...s, selSet: ids }));
+  selectNode(id: string | null): void {
+    this.documentStore.setState((s) => ({
+      ...s,
+      selectedNodeId: id,
+      selectedNodeIds: [],
+      selectedEdgeId: null,
+    }));
   }
 
   selectEdge(id: string | null): void {
-    this.documentStore.setState((s) => ({ ...s, selectedEdge: id }));
+    this.documentStore.setState((s) => ({ ...s, selectedEdgeId: id }));
   }
 
   setGraphSelection(nodeIds: readonly string[], edgeIds: readonly string[]): void {
     this.documentStore.setState((state) => ({
       ...state,
-      selection: nodeIds.length === 1 ? nodeIds[0] : null,
-      selSet: nodeIds.length > 1 ? [...nodeIds] : [],
-      selectedEdge: edgeIds.length === 1 ? edgeIds[0] : null,
+      selectedNodeId: nodeIds.length === 1 ? nodeIds[0] : null,
+      selectedNodeIds: nodeIds.length > 1 ? [...nodeIds] : [],
+      selectedEdgeId: edgeIds.length === 1 ? edgeIds[0] : null,
     }));
   }
 
@@ -480,7 +482,7 @@ export class Workspace {
   /** A scatter's live lasso lands on its push port as an authored engine
    *  emission; edges deliver it, downstream dirties, and the UI reads it back
    *  via getLasso (reactive through the telemetry epoch). */
-  emitLasso(nodeId: string, sql: string | null, rowIds: readonly number[] | null = null): void {
+  emitLasso(nodeId: string, sql: string | null, rowIds: readonly RowIndex[] | null = null): void {
     // inline small-lasso predicates carry the ids in the SQL text
     let ids = rowIds;
     if (!ids && sql) {
@@ -488,7 +490,7 @@ export class Workspace {
       if (m)
         ids = m[1]
           .split(",")
-          .map((x) => Number(x.trim()))
+          .map((x) => rowIndex(Number(x.trim())))
           .filter((n) => Number.isFinite(n));
     }
     this.evaluator.emit(nodeId, AUTHORED_GRAPH_OUTPUT_PORT, { kind: "sel", sql, rowIds: ids });
@@ -500,13 +502,13 @@ export class Workspace {
   }
 
   /** A table row focus lands on its push port (focus wires deliver it). */
-  emitFocus(nodeId: string, obsId: string | null): void {
-    this.evaluator.emit(nodeId, AUTHORED_GRAPH_OUTPUT_PORT, { kind: "focus", obsId });
+  emitFocus(nodeId: string, focusedRowIndex: RowIndex | null): void {
+    this.evaluator.emit(nodeId, AUTHORED_GRAPH_OUTPUT_PORT, { kind: "focus", rowIndex: focusedRowIndex });
   }
 
   /** pinned row-set snapshots per cache node (resolved ids at pin time; null =
    *  pinned but ids unresolved, e.g. a pred input that carried no row list) */
-  readonly frozenRows = new Map<string, number[] | null>();
+  readonly frozenRows = new Map<string, RowIndex[] | null>();
 
   /** Is this cache node currently holding a pinned snapshot (cached), or live? */
   isCached(id: string): boolean {
@@ -557,7 +559,7 @@ export class Workspace {
     this.documentStore.setState((s) => ({
       ...s,
       nodes: { ...s.nodes, [cacheId]: { ...s.nodes[cacheId], stamp } },
-      selection: cacheId,
+      selectedNodeId: cacheId,
     }));
     return true;
   }
@@ -905,7 +907,7 @@ export class Workspace {
   }
 
   enterSubnet(id: string): void {
-    this.documentStore.setState((s) => ({ ...s, graphPath: id, selection: id, claimed: null }));
+    this.documentStore.setState((s) => ({ ...s, graphPath: id, selectedNodeId: id, claimed: null }));
   }
 
   exitSubnet(): void {
@@ -936,7 +938,7 @@ export class Workspace {
    *  their nodes; members reparent (positions normalized toward origin) */
   collapseSelection(): string | null {
     const s = this.store.state;
-    const sel = s.selSet.filter((id) => {
+    const sel = s.selectedNodeIds.filter((id) => {
       const n = s.nodes[id];
       return n && n.type !== "obs" && n.type !== "proxy";
     });
@@ -977,7 +979,7 @@ export class Workspace {
       }
       positions[`${subId}-in`] = { x: 70, y: 90 + (maxY - minY) / 2 };
       positions[`${subId}-out`] = { x: 320 + (maxX - minX) + 90, y: 90 + (maxY - minY) / 2 };
-      return { ...st, nodes, positions, selSet: [], selection: subId };
+      return { ...st, nodes, positions, selectedNodeIds: [], selectedNodeId: subId };
     });
 
     // rewire through the proxy seam (dedupe by from>to)
@@ -1104,5 +1106,5 @@ export function seedWorkspace(ws: Workspace): void {
   ws.connect(wr, table);
   ws.connect(wr, scatter);
   ws.connect(table, fov); // focus push wire — routes outside the engine
-  ws.select(scatter);
+  ws.selectNode(scatter);
 }

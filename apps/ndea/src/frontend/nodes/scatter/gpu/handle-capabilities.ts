@@ -10,9 +10,10 @@
  */
 
 import type { ViewState } from "@/types";
+import type { RowIndex } from "@ndea/sdk";
 
 export interface SelectionCapability {
-  setExternalSelection(rowIndices: number[]): void;
+  setExternalSelection(rowIndices: RowIndex[]): void;
   clearExternalSelection(): void;
   clearSelection(): void;
   setForcedSelectionMode(mode: "pan" | "marquee" | "lasso"): void;
@@ -23,12 +24,12 @@ export interface IsolationCapability {
   clearCategoryIsolation(): void;
   setCategoryDisabled(disabledSet: Set<number>, categoryIndices: Uint8Array): void;
   clearCategoryDisabled(): void;
-  setTrajectoryIsolation(rowIndices: number[]): void;
+  setTrajectoryIsolation(rowIndices: RowIndex[]): void;
   clearTrajectoryIsolation(): void;
-  setContinuousIsolation(rowIndices: number[]): void;
+  setContinuousIsolation(rowIndices: RowIndex[]): void;
   clearContinuousIsolation(): void;
   rehydrateIsolation(): void;
-  setHighlightPoints(rowIndices: number[]): void;
+  setHighlightPoints(rowIndices: RowIndex[]): void;
   clearHighlight(): void;
 }
 

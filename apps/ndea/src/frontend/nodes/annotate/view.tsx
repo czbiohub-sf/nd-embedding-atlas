@@ -1,7 +1,7 @@
 /**
  * Annotate node body — a TABLE-first labeling surface (one door, one node).
  *
- * Rows = the scoped obs (the wired predicate, delivered as `host.inputSelection`
+ * Rows = the scoped obs (the wired predicate, delivered as `host.inputPredicate`
  * and consumed straight by `AnnotateTable`/`useTableQuery` — the same plumbing
  * the Table node uses, so it scopes off a Filter/Wrangle edge correctly).
  *
@@ -11,13 +11,14 @@
  *    interval per obs, committed as two float columns `{metric}_min`/`_max`.
  *
  * Selection is SPREADSHEET-style (click / shift / ⌘). The focused (last-clicked)
- * row drives `host.highlight.set`, so wired viewers (Idetik, Gallery) follow it.
+ * row drives `host.focus.set`, so wired viewers (Idetik, Gallery) follow it.
  * A separate "all in scope" path writes server-side over the full predicate.
  *
- * Writes go through `host.api.write*`; reads through `host.api.query` / the
+ * Writes and reads go through `host.dataAPI` and the
  * coordinator. Stamps reflect instantly via a local overlay (`localLabels`).
  */
 
+import type { RowIndex } from "@ndea/sdk";
 import type { FilterExpr } from "@uwdata/mosaic-sql";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { Bracketed } from "@/components/ui/bracketed";
@@ -27,7 +28,7 @@ import { Kbd } from "@/components/ui/kbd";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { filterExprToExpr } from "@/lib/mosaic-helpers";
 import { cn } from "@/lib/utils";
-import { AnnotateTable, type CropFields, type FocusCrop } from "@/nodes/annotate/AnnotateTable";
+import { AnnotateTable, type CropFields, type FocusedCrop } from "@/nodes/annotate/AnnotateTable";
 import { CropThumb } from "@/nodes/annotate/CropThumb";
 import { CommitPanel } from "@/nodes/annotate/CommitPanel";
 import { RangeBracket } from "@/nodes/annotate/RangeBracket";
@@ -78,10 +79,12 @@ export function AnnotateView({ host }: NodeBodyProps<AnnotateConfig, AnnotateCap
 
   // Per-obs, per-column overlay (id → column → value) so a write reflects
   // instantly. Range mode stamps BOTH `{m}_min` and `{m}_max` for the row.
-  const [localLabels, setLocalLabels] = useState<Map<string, Map<string, string>>>(() => new Map());
-  const [sel, setSel] = useState<{ selectedIds: Set<string>; focusId: string | null; focusCrop: FocusCrop | null }>(
-    () => ({ selectedIds: new Set(), focusId: null, focusCrop: null }),
-  );
+  const [localLabels, setLocalLabels] = useState<Map<RowIndex, Map<string, string>>>(() => new Map());
+  const [selection, setSelection] = useState<{
+    selectedRowIndices: Set<RowIndex>;
+    focusedRowIndex: RowIndex | null;
+    focusedCrop: FocusedCrop | null;
+  }>(() => ({ selectedRowIndices: new Set(), focusedRowIndex: null, focusedCrop: null }));
   const [total, setTotal] = useState(0);
 
   const labels = useMemo(
@@ -133,7 +136,7 @@ export function AnnotateView({ host }: NodeBodyProps<AnnotateConfig, AnnotateCap
   // Channels follow the focused obs's dataset slot — shared with the viewer/Gallery
   // via viewerChannelsStore, so live channel edits flow into the crops. Falls back
   // to "docked" (single-dataset stores) until a dataset is resolved.
-  const channelSlot = sel.focusCrop?.datasetKey ?? "docked";
+  const channelSlot = selection.focusedCrop?.datasetKey ?? "docked";
   const { channels, hash } = useGalleryChannels(channelSlot, 300, metadata.plate_channels);
 
   // responsive: show the focus rail only when the body is wide enough
@@ -161,14 +164,14 @@ export function AnnotateView({ host }: NodeBodyProps<AnnotateConfig, AnnotateCap
 
   // drive the focus wire
   useEffect(() => {
-    if (sel.focusId) host.focus.set(sel.focusId);
-  }, [sel.focusId, host]);
+    if (selection.focusedRowIndex != null) host.focus.set(selection.focusedRowIndex);
+  }, [selection.focusedRowIndex, host]);
 
   // Follow an external focus (Gallery/Scatter/Idetik crop click) — read the
-  // group-aware host.highlight reactively so the table can jump to that obs,
+  // group-aware host.focus reactively so the table can jump to that obs,
   // mirroring how those views already follow ours.
-  const subscribeHighlight = useCallback((cb: () => void) => host.focus.subscribe?.(cb) ?? (() => {}), [host]);
-  const externalFocusId = useSyncExternalStore(subscribeHighlight, () => host.focus.get());
+  const subscribeFocus = useCallback((cb: () => void) => host.focus.subscribe?.(cb) ?? (() => {}), [host]);
+  const externalFocusedRowIndex = useSyncExternalStore(subscribeFocus, () => host.focus.get());
 
   const persistLabels = useCallback(() => host.patchConfig({ labels }), [host, labels]);
 
@@ -196,7 +199,11 @@ export function AnnotateView({ host }: NodeBodyProps<AnnotateConfig, AnnotateCap
   // stamp the current row selection (or focus row) with `value`
   const onStamp = useCallback(
     async (value: string) => {
-      const ids = sel.selectedIds.size ? [...sel.selectedIds] : sel.focusId ? [sel.focusId] : [];
+      const ids = selection.selectedRowIndices.size
+        ? [...selection.selectedRowIndices]
+        : selection.focusedRowIndex != null
+          ? [selection.focusedRowIndex]
+          : [];
       if (!targetColumn || !value || !ids.length || busy) return;
       setBusy(true);
       try {
@@ -214,7 +221,7 @@ export function AnnotateView({ host }: NodeBodyProps<AnnotateConfig, AnnotateCap
         setBusy(false);
       }
     },
-    [sel, targetColumn, busy, ensureColumn, host, persistLabels],
+    [selection, targetColumn, busy, ensureColumn, host, persistLabels],
   );
 
   // ── range mode: write {base}_min / {base}_max over a predicate ──
@@ -251,7 +258,11 @@ export function AnnotateView({ host }: NodeBodyProps<AnnotateConfig, AnnotateCap
   );
 
   const onStampRange = useCallback(async () => {
-    const ids = sel.selectedIds.size ? [...sel.selectedIds] : sel.focusId ? [sel.focusId] : [];
+    const ids = selection.selectedRowIndices.size
+      ? [...selection.selectedRowIndices]
+      : selection.focusedRowIndex != null
+        ? [selection.focusedRowIndex]
+        : [];
     if (!ids.length) return;
     const n = await writeRange(`__row_index__ IN (${ids.join(", ")})`);
     if (n == null) return;
@@ -272,7 +283,7 @@ export function AnnotateView({ host }: NodeBodyProps<AnnotateConfig, AnnotateCap
       });
     }
     setStatus(`✓ ${ids.length} obs → [${fmtVal(rangeLo)}, ${fmtVal(rangeHi)}]`);
-  }, [sel, writeRange, rangeLo, rangeHi, minCol, maxCol]);
+  }, [selection, writeRange, rangeLo, rangeHi, minCol, maxCol]);
 
   const stampRangeScope = useCallback(async () => {
     const where = scopeExpr ? String(filterExprToExpr(scopeExpr)) : "TRUE";
@@ -308,10 +319,10 @@ export function AnnotateView({ host }: NodeBodyProps<AnnotateConfig, AnnotateCap
         <Button
           size="sm"
           className="h-8 flex-1 justify-between px-3"
-          disabled={busy || !rangeComplete || !sel.focusId}
+          disabled={busy || !rangeComplete || selection.focusedRowIndex == null}
           onClick={() => void onStampRange()}
         >
-          set {sel.focusId ?? "—"} <Kbd>↵</Kbd>
+          set {selection.focusedRowIndex ?? "—"} <Kbd>↵</Kbd>
         </Button>
         <Button
           variant="outline"
@@ -331,17 +342,17 @@ export function AnnotateView({ host }: NodeBodyProps<AnnotateConfig, AnnotateCap
   const railWide = (
     <aside className="flex w-[232px] min-h-0 shrink-0 flex-col gap-3 overflow-y-auto border-border-subtle border-l bg-surface-tertiary/20 p-3">
       <div className="flex items-baseline justify-between">
-        <span className="font-medium text-foreground">obs {sel.focusId ?? "—"}</span>
+        <span className="font-medium text-foreground">obs {selection.focusedRowIndex ?? "—"}</span>
         <span className="text-2xs text-text-muted">
-          {sel.selectedIds.size > 1 ? `${sel.selectedIds.size} selected` : "1"}
+          {selection.selectedRowIndices.size > 1 ? `${selection.selectedRowIndices.size} selected` : "1"}
         </span>
       </div>
-      {cropFields && sel.focusCrop?.fovName && channels.length > 0 ? (
+      {cropFields && selection.focusedCrop?.fovName && channels.length > 0 ? (
         <CropThumb
-          fovName={sel.focusCrop.fovName}
-          t={sel.focusCrop.t}
-          rowIndex={sel.focusCrop.rowIndex}
-          datasetKey={sel.focusCrop.datasetKey}
+          fovName={selection.focusedCrop.fovName}
+          t={selection.focusedCrop.t}
+          rowIndex={selection.focusedCrop.rowIndex}
+          datasetKey={selection.focusedCrop.datasetKey}
           channels={channels}
           hash={hash}
           className="aspect-square w-full border border-border"
@@ -375,10 +386,10 @@ export function AnnotateView({ host }: NodeBodyProps<AnnotateConfig, AnnotateCap
           {labels.map((l, i) => (
             <Button
               key={l}
-              variant="outline"
+              variant="secondary"
               size="sm"
               className="h-8 justify-between px-3"
-              disabled={busy || !sel.focusId}
+              disabled={busy || selection.focusedRowIndex == null}
               onClick={() => void onStamp(l)}
             >
               {l} <Kbd>{hotkeys[i]}</Kbd>
@@ -395,12 +406,12 @@ export function AnnotateView({ host }: NodeBodyProps<AnnotateConfig, AnnotateCap
 
   const railNarrow = (
     <aside className="flex max-h-[46%] shrink-0 items-start gap-3 overflow-y-auto border-border-subtle border-t bg-surface-tertiary/20 p-2.5">
-      {cropFields && sel.focusCrop?.fovName && channels.length > 0 ? (
+      {cropFields && selection.focusedCrop?.fovName && channels.length > 0 ? (
         <CropThumb
-          fovName={sel.focusCrop.fovName}
-          t={sel.focusCrop.t}
-          rowIndex={sel.focusCrop.rowIndex}
-          datasetKey={sel.focusCrop.datasetKey}
+          fovName={selection.focusedCrop.fovName}
+          t={selection.focusedCrop.t}
+          rowIndex={selection.focusedCrop.rowIndex}
+          datasetKey={selection.focusedCrop.datasetKey}
           channels={channels}
           hash={hash}
           className="size-24 shrink-0 rounded border border-border"
@@ -408,8 +419,8 @@ export function AnnotateView({ host }: NodeBodyProps<AnnotateConfig, AnnotateCap
       ) : null}
       <div className="flex min-w-0 flex-1 flex-col gap-2">
         <span className="font-medium text-foreground">
-          obs {sel.focusId ?? "—"}
-          {sel.selectedIds.size > 1 ? ` · ${sel.selectedIds.size} selected` : ""}
+          obs {selection.focusedRowIndex ?? "—"}
+          {selection.selectedRowIndices.size > 1 ? ` · ${selection.selectedRowIndices.size} selected` : ""}
         </span>
         {mode === "range" ? (
           rangeBase ? (
@@ -424,10 +435,10 @@ export function AnnotateView({ host }: NodeBodyProps<AnnotateConfig, AnnotateCap
             {labels.map((l, i) => (
               <Button
                 key={l}
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 className="h-7 gap-1 px-2.5"
-                disabled={busy || !sel.focusId}
+                disabled={busy || selection.focusedRowIndex == null}
                 onClick={() => void onStamp(l)}
               >
                 {l} <Kbd>{hotkeys[i]}</Kbd>
@@ -592,11 +603,11 @@ export function AnnotateView({ host }: NodeBodyProps<AnnotateConfig, AnnotateCap
           cropFields={cropFields}
           channels={channels}
           hash={hash}
-          onChange={setSel}
+          onChange={setSelection}
           onStamp={mode === "range" ? () => {} : (v) => void onStamp(v)}
           onSkip={onSkip}
           onTotalCount={setTotal}
-          externalFocusId={externalFocusId}
+          externalFocusedRowIndex={externalFocusedRowIndex}
         />
         {rail}
       </div>

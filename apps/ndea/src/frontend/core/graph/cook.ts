@@ -80,7 +80,7 @@ export function toNodePortValue(value: GraphPortValue): NodePortValue {
     case "sel":
       return value.rowIds;
     case "focus":
-      return value.obsId;
+      return value.rowIndex;
   }
 }
 
@@ -106,7 +106,7 @@ export function fromNodePortValue(kind: PortKind, value: NodePortValue): GraphPo
     case "sel":
       return { kind, sql: null, rowIds: value as GraphRowSetPortValue["rowIds"] };
     case "focus":
-      return { kind, obsId: value as GraphFocusPortValue["obsId"] };
+      return { kind, rowIndex: value as GraphFocusPortValue["rowIndex"] };
   }
 }
 

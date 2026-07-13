@@ -1,6 +1,15 @@
 import { describe, expect, test } from "bun:test";
+import { rowIndex } from "@ndea/sdk";
 
-import { DOC_VERSION, dropUnknownNodes, migrate, type PersistedDoc, toPersistedDoc, validateDoc } from "./persist";
+import {
+  DOC_VERSION,
+  dropUnknownNodes,
+  fromPersistedDoc,
+  migrate,
+  type PersistedDoc,
+  toPersistedDoc,
+  validateDoc,
+} from "./persist";
 import { scopeColor } from "@/core/coordination/coordination";
 import { nativeWorkspaceNodeLibrary } from "./definitions";
 import type { WorkspaceDocumentState } from "./types";
@@ -14,9 +23,9 @@ function emptyState(): WorkspaceDocumentState {
     sizeOverrides: {},
     formOverride: {},
     formLocked: {},
-    selection: null,
-    selSet: [],
-    selectedEdge: null,
+    selectedNodeId: null,
+    selectedNodeIds: [],
+    selectedEdgeId: null,
     explicit: {},
     stageTree: null,
     disposition: "strip",
@@ -60,7 +69,7 @@ describe("persisted doc validation (U7 foundation)", () => {
   });
 
   test("a future doc version is flagged for migration", () => {
-    const res = validateDoc({ version: DOC_VERSION + 1, state: emptyState() }, nativeWorkspaceNodeLibrary);
+    const res = validateDoc({ ...toPersistedDoc(emptyState()), version: DOC_VERSION + 1 }, nativeWorkspaceNodeLibrary);
     expect(res.ok).toBe(false);
     expect(res.errors[0]).toContain("migration");
   });
@@ -70,19 +79,22 @@ describe("v1 → v2 migration (focus coordination plane; R6 — load-bearing)", 
   // A v1 doc carried `syncGroups`/`groupFocus`; v2 carries the coordination plane.
   // Build one by hand (the v1 fields no longer exist on WorkspaceDocumentState).
   function v1Doc(syncGroups: Record<string, string>, groupFocus: Record<string, string | null>): PersistedDoc {
-    const state = emptyState() as WorkspaceDocumentState & { syncGroups?: unknown; groupFocus?: unknown };
+    const state = toPersistedDoc(emptyState()).state as PersistedDoc["state"] & {
+      syncGroups?: unknown;
+      groupFocus?: unknown;
+    };
     delete (state as { coordinationScopes?: unknown }).coordinationScopes;
     delete (state as { coordinationSpace?: unknown }).coordinationSpace;
     state.syncGroups = syncGroups;
     state.groupFocus = groupFocus;
-    return { version: 1, state: state as WorkspaceDocumentState };
+    return { version: 1, state };
   }
 
   test("maps syncGroups/groupFocus → coordinationScopes/coordinationSpace and bumps version", () => {
-    const out = migrate(v1Doc({ n1: "A", n2: "A" }, { A: "obs_8" }));
+    const out = migrate(v1Doc({ n1: "A", n2: "A" }, { A: "8" }));
     expect(out.version).toBe(DOC_VERSION);
     expect(out.state.coordinationScopes).toEqual({ n1: { focus: "A" }, n2: { focus: "A" } });
-    expect(out.state.coordinationSpace).toEqual({ focus: { A: "obs_8" } });
+    expect(out.state.coordinationSpace).toEqual({ focus: { A: "8" } });
   });
 
   test("drops the legacy fields and preserves the badge color (same string → same hash)", () => {
@@ -110,6 +122,52 @@ describe("v1 → v2 migration (focus coordination plane; R6 — load-bearing)", 
   });
 });
 
+describe("v2 persistence boundary", () => {
+  test("writes legacy editor keys and string focus values without leaking runtime keys", () => {
+    const state = emptyState();
+    state.selectedNodeId = "n1";
+    state.selectedNodeIds = ["n1", "n2"];
+    state.selectedEdgeId = "e1";
+    state.coordinationSpace = {
+      focus: { A: rowIndex(8), B: null },
+      ordering: { O: { col: "score", dir: "asc" } },
+    };
+
+    const serialized = JSON.stringify(toPersistedDoc(state));
+    const doc = JSON.parse(serialized) as { state: Record<string, unknown> };
+    expect(doc.state.selection).toBe("n1");
+    expect(doc.state.selSet).toEqual(["n1", "n2"]);
+    expect(doc.state.selectedEdge).toBe("e1");
+    expect(doc.state.coordinationSpace).toEqual({
+      focus: { A: "8", B: null },
+      ordering: { O: { col: "score", dir: "asc" } },
+    });
+    expect(doc.state.selectedNodeId).toBeUndefined();
+    expect(doc.state.selectedNodeIds).toBeUndefined();
+    expect(doc.state.selectedEdgeId).toBeUndefined();
+  });
+
+  test("reads legacy editor keys and numeric-string focus into canonical runtime state", () => {
+    const persisted = toPersistedDoc(emptyState());
+    persisted.state.selection = "n1";
+    persisted.state.selSet = ["n1", "n2"];
+    persisted.state.selectedEdge = "e1";
+    persisted.state.coordinationSpace = { focus: { A: "8", B: null } };
+
+    const decoded = fromPersistedDoc(persisted);
+    expect(decoded.ok).toBe(true);
+    if (decoded.ok) {
+      expect(decoded.state.selectedNodeId).toBe("n1");
+      expect(decoded.state.selectedNodeIds).toEqual(["n1", "n2"]);
+      expect(decoded.state.selectedEdgeId).toBe("e1");
+      expect(decoded.state.coordinationSpace.focus).toEqual({ A: rowIndex(8), B: null });
+      expect("selection" in decoded.state).toBe(false);
+      expect("selSet" in decoded.state).toBe(false);
+      expect("selectedEdge" in decoded.state).toBe(false);
+    }
+  });
+});
+
 describe("dropUnknownNodes (self-heal on a removed node type)", () => {
   test("drops nodes of unregistered type + their edges, clears stale selection", () => {
     const state = emptyState();
@@ -122,8 +180,9 @@ describe("dropUnknownNodes (self-heal on a removed node type)", () => {
       pluginId: "write-back",
     };
     state.edges.e1 = { id: "e1", from: "d1", to: "x1", toPort: "in", kind: "pred" };
-    state.selection = "x1";
-    state.selSet = ["x1", "d1"];
+    state.selectedNodeId = "x1";
+    state.selectedNodeIds = ["x1", "d1"];
+    state.selectedEdgeId = "e1";
 
     const out = dropUnknownNodes(toPersistedDoc(state), nativeWorkspaceNodeLibrary);
     expect(out.state.nodes.x1).toBeUndefined();
@@ -131,6 +190,7 @@ describe("dropUnknownNodes (self-heal on a removed node type)", () => {
     expect(out.state.edges.e1).toBeUndefined();
     expect(out.state.selection).toBeNull();
     expect(out.state.selSet).toEqual(["d1"]);
+    expect(out.state.selectedEdge).toBeNull();
   });
 
   test("returns the doc unchanged when every node type is registered", () => {

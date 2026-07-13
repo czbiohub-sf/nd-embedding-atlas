@@ -1,12 +1,13 @@
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSelector } from "@tanstack/react-store";
+import { type RowIndex, rowIndex } from "@ndea/sdk";
 import type { ChannelHash } from "@/lib/branded-types";
 import { viewerZStore } from "@/stores/ViewerZStore";
 import type { TrajectoryFrame } from "@/types";
 import type { ChannelDef } from "@/nodes/image-viewer/viewer/ViewerContext";
 
 /** Stable query key for a single obs coordinate lookup. */
-export const obsCoordKey = (rowIndex: number) => ["obs-coord", rowIndex] as const;
+export const obsCoordKey = (value: RowIndex) => ["obs-coord", value] as const;
 
 /** A rendered crop: data URL + its aspect-preserving pixel dimensions. */
 export interface CropResult {
@@ -55,7 +56,8 @@ export function useGalleryCropQuery({ fovName, datasetKey, frame, channels, hash
       let xPx = 0;
       let yPx = 0;
       if (frame.rowIndex != null) {
-        const cached = queryClient.getQueryData<{ x: number; y: number }>(obsCoordKey(frame.rowIndex));
+        const focusedRowIndex = rowIndex(frame.rowIndex);
+        const cached = queryClient.getQueryData<{ x: number; y: number }>(obsCoordKey(focusedRowIndex));
         if (cached) {
           xPx = Math.round(cached.x);
           yPx = Math.round(cached.y);
@@ -66,7 +68,7 @@ export function useGalleryCropQuery({ fovName, datasetKey, frame, channels, hash
             xPx = Math.round(obs.x ?? 0);
             yPx = Math.round(obs.y ?? 0);
             // Populate cache so subsequent renders skip the fetch
-            queryClient.setQueryData(obsCoordKey(frame.rowIndex), { x: xPx, y: yPx });
+            queryClient.setQueryData(obsCoordKey(focusedRowIndex), { x: xPx, y: yPx });
           }
         }
       }

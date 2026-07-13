@@ -3,7 +3,7 @@
  *
  * The node-scoped counterpart to `useLassoSelectionObs`: instead of reading the
  * GLOBAL selection bitmap, it resolves the gallery node's OWN cooked input
- * predicate (`host.inputSelection` → `predicateToSql`) to row ids via the
+ * predicate (`host.inputPredicate` → `predicateToSql`) to row ids via the
  * coordinator, then batch-fetches spatial metadata (fov, t, x, y) for those
  * rows via POST `/api/obs/batch`.
  *
@@ -12,13 +12,14 @@
  * "showing top N" hint when truncated.
  *
  * Reactivity: the obs query is keyed on the predicate SQL TEXT. When the
- * upstream node re-cooks and `host.inputSelection` emits a different predicate,
+ * upstream node re-cooks and `host.inputPredicate` emits a different predicate,
  * the key changes and the query refetches. A frozen Selection node emits a
  * STABLE predicate (no mutable temp-table reference), so no per-revision
  * cache-buster is needed — the predicate text fully identifies the result.
  */
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { rowIndex } from "@ndea/sdk";
 import type { Coordinator } from "@uwdata/mosaic-core";
 import { toRows } from "@/lib/mosaic-helpers";
 import { obsCoordKey } from "@/nodes/table/useGalleryCropQuery";
@@ -27,7 +28,7 @@ import { MAX_GALLERY_OBS } from "./useLassoSelectionObs";
 
 /**
  * @param coordinator Mosaic coordinator from the node's `host.data`.
- * @param predicate   SQL WHERE predicate from `predicateToSql(host.inputSelection)`;
+ * @param predicate   SQL WHERE predicate from `predicateToSql(host.inputPredicate)`;
  *                    null when the node is unwired (→ empty result).
  */
 export function usePredicateGalleryObs(coordinator: Coordinator, predicate: string | null): UseLassoSelectionObsResult {
@@ -50,7 +51,7 @@ export function usePredicateGalleryObs(coordinator: Coordinator, predicate: stri
         `SELECT __row_index__ FROM dataset WHERE ${predicate} ORDER BY __row_index__ LIMIT ${MAX_GALLERY_OBS}`,
         { type: "json" },
       );
-      const rowIds = toRows<{ __row_index__: number }>(rowResult).map((r) => r.__row_index__);
+      const rowIds = toRows<{ __row_index__: number }>(rowResult).map((r) => rowIndex(r.__row_index__));
 
       // True selection size (uncapped) for the header / "showing top N".
       const countResult = await coordinator.query(`SELECT COUNT(*)::INT AS n FROM dataset WHERE ${predicate}`, {
@@ -78,7 +79,7 @@ export function usePredicateGalleryObs(coordinator: Coordinator, predicate: stri
       //    falls back to — saves N redundant /api/obs/{rowIndex}
       //    round-trips when the cards mount.
       for (const [idStr, entry] of Object.entries(data)) {
-        queryClient.setQueryData(obsCoordKey(Number(idStr)), { x: entry.x, y: entry.y });
+        queryClient.setQueryData(obsCoordKey(rowIndex(Number(idStr))), { x: entry.x, y: entry.y });
       }
 
       const obs = rowIds

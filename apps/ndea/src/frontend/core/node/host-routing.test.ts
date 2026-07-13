@@ -14,6 +14,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
+import { rowIndex, type NodeHost, type RowIndex } from "@ndea/sdk";
 
 import { publishChartFilter } from "@/nodes/charts/core/routing";
 import { focusObs } from "@/nodes/gallery/routing";
@@ -28,6 +29,7 @@ import {
 } from "@/nodes/scatter/routing";
 import { focusRow, publishOrdering } from "@/nodes/table/routing";
 import { listWorkspaceNodeSpecs } from "@/core/workspace/definitions";
+import { GraphEngine } from "@/core/graph/engine";
 import { createSpyHost } from "./spy-host";
 
 // Every view-kind node must appear here — "routed" (a routing module exercised
@@ -59,14 +61,47 @@ describe("cross-view routing conformance", () => {
 
   test("gallery crop-click routes focus through the host seam", () => {
     const { host, calls } = createSpyHost();
-    focusObs(host, "4821");
-    expect(calls.highlightSet).toEqual(["4821"]);
+    focusObs(host, rowIndex(4821));
+    expect(calls.focusSet).toEqual([rowIndex(4821)]);
   });
 
   test("table row-click routes focus through the host seam", () => {
     const { host, calls } = createSpyHost();
-    focusRow(host, "17");
-    expect(calls.highlightSet).toEqual(["17"]);
+    focusRow(host, rowIndex(17));
+    expect(calls.focusSet).toEqual([rowIndex(17)]);
+  });
+
+  test("table focus reaches a viewer for first, replacement, and clear until its focus wire is deleted", () => {
+    const engine = new GraphEngine<RowIndex | null>({ schedule: (flush) => flush() });
+    engine.addNode({ id: "table", kind: "view", cook: () => null });
+    engine.addNode({
+      id: "viewer",
+      kind: "view",
+      cook: (inputs) => inputs.get("highlight-in")?.at(-1) ?? null,
+    });
+    engine.connect({ from: "table", fromPort: "out", to: "viewer", toPort: "highlight-in" });
+
+    const viewerFocus: (RowIndex | null)[] = [];
+    engine.registerSink("viewer", (value) => viewerFocus.push(value));
+    const host = {
+      focus: {
+        get: () => null,
+        set: (value: RowIndex | null) => engine.emit("table", "out", value),
+      },
+    } as NodeHost<unknown, "focus-coordination">;
+
+    expect(viewerFocus).toEqual([null]);
+    focusRow(host, rowIndex(17));
+    focusRow(host, rowIndex(42));
+    focusRow(host, null);
+    focusRow(host, rowIndex(7));
+
+    expect(viewerFocus).toEqual([null, rowIndex(17), rowIndex(42), null, rowIndex(7)]);
+
+    engine.disconnect({ from: "table", fromPort: "out", to: "viewer", toPort: "highlight-in" });
+    expect(viewerFocus.at(-1)).toBeNull();
+    focusRow(host, rowIndex(99));
+    expect(viewerFocus).toEqual([null, rowIndex(17), rowIndex(42), null, rowIndex(7), null]);
   });
 
   test("table sort routes through the host seam's ordering facet", () => {
@@ -78,21 +113,33 @@ describe("cross-view routing conformance", () => {
 
   test("scatter gestures route through the host seam", () => {
     const { host, calls } = createSpyHost();
-    focusPoint(host, "5"); // point click
+    focusPoint(host, rowIndex(5)); // point click
     focusPoint(host, null); // background / escape clear
     publishRangeFilter(host, "x > 1"); // continuous-range filter
     publishLasso(host, "__row_index__ IN (1,2,3)"); // lasso facet
-    publishLassoRowSet(host, [1, 2, 3]); // GPU dim-mask
+    publishLassoRowSet(host, [rowIndex(1), rowIndex(2), rowIndex(3)]); // GPU dim-mask
     clearLasso(host); // lasso clear
 
-    expect(calls.highlightSet).toEqual(["5", null]);
+    expect(calls.focusSet).toEqual([rowIndex(5), null]);
     expect(calls.publishPredicate).toEqual([
       { facet: "range", sql: "x > 1" },
       { facet: "lasso", sql: "__row_index__ IN (1,2,3)" },
       { facet: "lasso", sql: null }, // clearLasso drops the facet
     ]);
-    expect(calls.publishRowSet).toEqual([[1, 2, 3]]);
+    expect(calls.publishRowSet).toEqual([[rowIndex(1), rowIndex(2), rowIndex(3)]]);
     expect(calls.clearRowSet).toBe(1); // clearLasso true-clears
+  });
+
+  test("focus, row-set, and graph predicate routes remain independent", () => {
+    const { host, calls } = createSpyHost();
+    focusPoint(host, rowIndex(8));
+    publishLassoRowSet(host, [rowIndex(2), rowIndex(5)]);
+    publishLasso(host, "__row_index__ IN (2,5)");
+
+    expect(host.focus.get()).toBe(rowIndex(8));
+    expect(calls.focusSet).toEqual([rowIndex(8)]);
+    expect(calls.publishRowSet).toEqual([[rowIndex(2), rowIndex(5)]]);
+    expect(calls.publishPredicate).toEqual([{ facet: "lasso", sql: "__row_index__ IN (2,5)" }]);
   });
 
   test("scatter view-sync routes through the host seam (broadcast + toggleLock)", () => {

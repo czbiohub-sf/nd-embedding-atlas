@@ -6,6 +6,7 @@
  */
 
 import { useDebouncer } from "@tanstack/react-pacer";
+import type { RowIndex } from "@ndea/sdk";
 import type { Coordinator, Selection } from "@uwdata/mosaic-core";
 import { count, type FilterExpr, Query } from "@uwdata/mosaic-sql";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -42,7 +43,7 @@ export interface UseTableQueryResult {
   /** Whether the initial count query is loading. */
   loading: boolean;
   /** Find the position of a row by its __row_index__ value. */
-  findRowPosition: (rowIndex: string | number) => Promise<number | null>;
+  findRowPosition: (rowIndex: RowIndex) => Promise<number | null>;
 }
 
 export function useTableQuery(opts: UseTableQueryOptions): UseTableQueryResult {
@@ -195,16 +196,16 @@ export function useTableQuery(opts: UseTableQueryOptions): UseTableQueryResult {
 
   // ── Public: find row position for scroll-to-highlight ───────────
   const findRowPosition = useCallback(
-    async (rowIndex: string | number): Promise<number | null> => {
+    async (rowIndex: RowIndex): Promise<number | null> => {
       const filterExpr = selection?.predicate(null);
 
       try {
         // Count rows that come before this one in sort order
         const countSql = `
-                    WITH target AS (SELECT * FROM ${table} WHERE __row_index__ = ${Number(rowIndex)})
+                    WITH target AS (SELECT * FROM ${table} WHERE __row_index__ = ${rowIndex})
                     SELECT COUNT(*) AS pos FROM ${table}
                     WHERE ${filterExpr ? String(filterExprToExpr(filterExpr)) : "TRUE"}
-                    AND (${sort ? `("${sort.column}" < (SELECT "${sort.column}" FROM target) OR ("${sort.column}" = (SELECT "${sort.column}" FROM target) AND __row_index__ <= ${Number(rowIndex)}))` : `__row_index__ <= ${Number(rowIndex)}`})
+                    AND (${sort ? `("${sort.column}" < (SELECT "${sort.column}" FROM target) OR ("${sort.column}" = (SELECT "${sort.column}" FROM target) AND __row_index__ <= ${rowIndex}))` : `__row_index__ <= ${rowIndex}`})
                 `;
         const result = await coordinator.query(countSql, { type: "arrow" });
         const rows = toRows<{ pos: number }>(result);

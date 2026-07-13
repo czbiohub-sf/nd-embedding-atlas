@@ -27,7 +27,7 @@ import { createPortal } from "react-dom";
 import { PanelErrorBoundary } from "@/components/layout/PanelErrorBoundary";
 import { useDashboardHostShim } from "@/core/host/use-dashboard-host-shim";
 import { loadNodeModule } from "@/core/node/load-module";
-import type { OrderingCoordinationAPI, ViewCoordinationAPI } from "@ndea/sdk";
+import type { OrderingCoordinationAPI, RowIndex, ViewCoordinationAPI } from "@ndea/sdk";
 import { nodeInstanceId } from "@ndea/sdk";
 import { stringPredicate } from "@/lib/mosaic-helpers";
 import { nativeNodeCatalog } from "./definitions";
@@ -65,7 +65,7 @@ function BodyOwnerInner({ nodeId, pluginId }: { nodeId: string; pluginId: string
       bodyHeaderElement: ws.headerEl(nodeId),
       inputPredicate: sel,
     });
-    return { handle: built, input: sel, focus: new Store<string | null>(null) };
+    return { handle: built, input: sel, focus: new Store<RowIndex | null>(null) };
   });
   const [mountError, setMountError] = useState<Error | null>(null);
 
@@ -80,7 +80,7 @@ function BodyOwnerInner({ nodeId, pluginId }: { nodeId: string; pluginId: string
     return ws.registerGraphSink(nodeId, (v) => {
       if (v === undefined) return;
       if (v.kind === "focus") {
-        focus.setState(() => v.obsId);
+        focus.setState(() => v.rowIndex);
         return;
       }
       const sql = v.sql;
@@ -190,15 +190,14 @@ function BodyOwnerInner({ nodeId, pluginId }: { nodeId: string; pluginId: string
           // shared cell (coordinationSpace.focus[scope]) so every node on that scope
           // highlights the same obs. An unscoped node keeps the per-node /
           // focus-wire behavior. Generalizes the old syncGroups/groupFocus split.
-          const effective = (): string | null => {
+          const effective = (): RowIndex | null => {
             const scope = ws.coordination.scopeOf(nodeId, "focus");
             if (scope === undefined) return focus.state;
-            const v = ws.coordination.readCoordination("focus", scope);
-            return typeof v === "string" ? v : null; // null/undefined cell → null
+            return ws.coordination.readCoordination("focus", scope) ?? null;
           };
           return {
             get: effective,
-            set: (id: string | null) => {
+            set: (id: RowIndex | null) => {
               const scope = ws.coordination.scopeOf(nodeId, "focus");
               if (scope !== undefined) {
                 // scoped: write the shared cell only — do NOT also emitFocus, or a
@@ -213,7 +212,7 @@ function BodyOwnerInner({ nodeId, pluginId }: { nodeId: string; pluginId: string
                 ws.emitFocus(nodeId, id);
               }
             },
-            subscribe: (cb: (id: string | null) => void) => {
+            subscribe: (cb: (id: RowIndex | null) => void) => {
               // fire only on a real change to the EFFECTIVE focus. Selector-scoped
               // (KD5): the coordination subscribe wakes on this node's resolved
               // `focus` cell or its scope membership flipping; the per-node store
@@ -241,10 +240,10 @@ function BodyOwnerInner({ nodeId, pluginId }: { nodeId: string; pluginId: string
             get(at, ap, arecv) {
               const v = Reflect.get(at, ap, arecv);
               if (ap === "publishRowSet" && typeof v === "function") {
-                return async (ids: number[]) => {
+                return async (ids: RowIndex[]) => {
                   // the server-side token table is still wanted (the predicate
                   // references it) — only the global publish is bypassed
-                  const token = (await (v as (i: number[]) => Promise<{ predicate: string }>).call(at, ids)) as {
+                  const token = (await (v as (i: RowIndex[]) => Promise<{ predicate: string }>).call(at, ids)) as {
                     predicate: string;
                   };
                   ws.emitLasso(nodeId, token.predicate, ids);

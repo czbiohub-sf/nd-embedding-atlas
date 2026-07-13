@@ -61,7 +61,7 @@ function NdGraphNodeInner({ id, selected }: NodeProps<NdGraphNodeType>) {
   const flipHidden = useSelector(ws.ui, (u) => u.flipHide === `canvas:${id}`);
   const resizing = useSelector(ws.ui, (u) => u.resizing === id);
   const fullscreen = useSelector(ws.ui, (u) => u.fullscreen === id);
-  const inMarquee = useWorkspaceSelector((s) => s.selSet.includes(id));
+  const inMarquee = useWorkspaceSelector((s) => s.selectedNodeIds.includes(id));
   const flagsState = useWorkspaceSelector((s) => s.flags[id]);
   const claimed = useWorkspaceSelector((s) => s.claimed === id);
   const fanIn = useWorkspaceSelector(

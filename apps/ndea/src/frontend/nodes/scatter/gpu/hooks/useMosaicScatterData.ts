@@ -1,4 +1,5 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import type { RowIndex } from "@ndea/sdk";
 import { useMemo } from "react";
 import type { AxisState } from "@/types";
 import type { ScatterData } from "@/nodes/scatter/gpu/types";
@@ -90,7 +91,7 @@ export function useMosaicScatterData({
       // Copy to prevent stale ArrayBuffer reference across React Query cache evictions
       return {
         floats: new Float32Array(positions),
-        rowIndices: header.rowIndices,
+        rowIndices: header.rowIndices as RowIndex[],
         numCells: header.numCells,
         embeddingKey: header.embeddingKey,
         positionScale: header.positionScale,

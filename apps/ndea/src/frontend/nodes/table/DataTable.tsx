@@ -18,6 +18,7 @@ import {
 } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { Coordinator, Selection } from "@uwdata/mosaic-core";
+import { type RowIndex, rowIndex } from "@ndea/sdk";
 import { CheckIcon, Columns3Icon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -62,8 +63,8 @@ export interface DataTableProps {
   table: string;
   columns: string[];
   selection?: Selection;
-  highlightId?: string | null;
-  onRowClick?: (rowIndex: string | null) => void;
+  focusedRowIndex?: RowIndex | null;
+  onRowClick?: (rowIndex: RowIndex | null) => void;
   onTotalCountChange?: (n: number) => void;
   /** Controlled sort (the `ordering` coordination bridge). Omitted → DataTable
    *  owns its sort internally (uncontrolled, today's behavior). */
@@ -79,7 +80,7 @@ export function DataTable({
   table,
   columns: columnNames,
   selection,
-  highlightId,
+  focusedRowIndex,
   onRowClick,
   onTotalCountChange,
   sorting: controlledSorting,
@@ -225,24 +226,24 @@ export function DataTable({
     ensureRange(start, end);
   }, [virtualItems, ensureRange]);
 
-  // ── Scroll-to-highlight ─────────────────────────────────────────
+  // ── Scroll-to-focus ─────────────────────────────────────────────
   useEffect(() => {
-    if (highlightId == null) return;
-    void findRowPosition(highlightId).then((pos) => {
+    if (focusedRowIndex == null) return;
+    void findRowPosition(focusedRowIndex).then((pos) => {
       if (pos != null) {
         rowVirtualizer.scrollToIndex(pos, { align: "center" });
         ensureRange(Math.max(0, pos - 50), pos + 50);
       }
     });
-  }, [highlightId, findRowPosition, rowVirtualizer, ensureRange]);
+  }, [focusedRowIndex, findRowPosition, rowVirtualizer, ensureRange]);
 
   // ── Row click handler ───────────────────────────────────────────
   const handleRowClick = useCallback(
     (virtualIndex: number) => {
       const row = getRow(virtualIndex);
       if (!row || !onRowClick) return;
-      const rowIndex = row.__row_index__;
-      onRowClick(rowIndex != null ? String(rowIndex as number) : null);
+      const rawRowIndex = row.__row_index__;
+      onRowClick(rawRowIndex != null ? rowIndex(Number(rawRowIndex)) : null);
     },
     [getRow, onRowClick],
   );
@@ -387,7 +388,7 @@ export function DataTable({
           {virtualItems.map((virtualRow) => {
             const row = getRow(virtualRow.index);
             const isHighlighted =
-              highlightId != null && row?.__row_index__ != null && String(row.__row_index__ as number) === highlightId;
+              focusedRowIndex != null && row?.__row_index__ != null && Number(row.__row_index__) === focusedRowIndex;
 
             return (
               <button

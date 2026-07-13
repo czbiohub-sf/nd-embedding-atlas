@@ -1,7 +1,9 @@
 import { tgpu } from "typegpu";
 import * as d from "typegpu/data";
 import * as std from "typegpu/std";
+import type { RowIndex } from "@ndea/sdk";
 import type { ViewState } from "@/types";
+import { type GpuPointIndex, gpuPointIndex } from "@/lib/branded-types";
 import { createInteractionController } from "@/nodes/scatter/gpu/hooks/useScatterInteraction";
 import type { ScatterData, ScatterplotConfig, ScatterplotHandle } from "@/nodes/scatter/gpu/types";
 import { createBuffers, createUniforms, MAX_PALETTE_SIZE, uploadData } from "./buffers";
@@ -335,7 +337,7 @@ export async function createScatterplot(
         //   2. Legacy CPU grid (fallback): geometrically-nearest visible point.
         const useGpuPicking = localStorage?.getItem("ndea.useGpuPicking") !== "0";
 
-        const finishHit = (idx: number) => {
+        const finishHit = (idx: GpuPointIndex) => {
           if (idx >= 0 && idx < data.numCells && selection.isPointVisible(idx)) {
             selection.selectPoint(idx);
             const px = data.positions[idx * 2];
@@ -379,7 +381,7 @@ export async function createScatterplot(
    * geometrically nearest visible point within a screen-space radius.
    * Loses to overlapping points (the GPU path handles that).
    */
-  function cpuGridPick(worldX: number, worldY: number, hit: (i: number) => boolean, miss: () => void) {
+  function cpuGridPick(worldX: number, worldY: number, hit: (i: GpuPointIndex) => boolean, miss: () => void) {
     const hitRadiusWorld = 20 / ((currentZoom * canvas.height) / 2);
     const maxDist2 = hitRadiusWorld * hitRadiusWorld;
     let bestIdx = -1;
@@ -402,24 +404,24 @@ export async function createScatterplot(
         }
       }
     }
-    if (bestIdx >= 0 && hit(bestIdx)) return;
+    if (bestIdx >= 0 && hit(gpuPointIndex(bestIdx))) return;
     miss();
   }
 
   // ── Row index → point index lookup (built once, used by setExternalSelection) ──
   // Pre-building this Map avoids O(n) reconstruction on every selection sync event.
-  const rowToPoint = new Map<number, number>(data.rowIndices.map((r, i) => [r, i]));
+  const rowToPoint = new Map<RowIndex, GpuPointIndex>(data.rowIndices.map((r, i) => [r, gpuPointIndex(i)]));
 
   // ── Grid spatial index for O(1) hit testing ───────────────────────────
   // World space is [-1,1]×[-1,1]. Divide into GRID×GRID cells; each cell
   // stores the indices of points that fall within it. onPointClick queries
   // only the 1–4 cells that overlap the hit radius instead of scanning all points.
   const GRID = 128;
-  const gridCells: number[][] = Array.from({ length: GRID * GRID }, () => []);
+  const gridCells: GpuPointIndex[][] = Array.from({ length: GRID * GRID }, () => []);
   for (let i = 0; i < data.numCells; i++) {
     const gx = Math.min(GRID - 1, Math.max(0, Math.floor(((data.positions[i * 2] + 1) / 2) * GRID)));
     const gy = Math.min(GRID - 1, Math.max(0, Math.floor(((data.positions[i * 2 + 1] + 1) / 2) * GRID)));
-    gridCells[gx * GRID + gy]?.push(i);
+    gridCells[gx * GRID + gy]?.push(gpuPointIndex(i));
   }
 
   console.log(
@@ -524,8 +526,8 @@ export async function createScatterplot(
       selection.clearSelection();
       interaction.requestRender();
     },
-    setExternalSelection(rowIndices: number[]) {
-      const pointIndices: number[] = [];
+    setExternalSelection(rowIndices: RowIndex[]) {
+      const pointIndices: GpuPointIndex[] = [];
       for (const r of rowIndices) {
         const i = rowToPoint.get(r);
         if (i !== undefined) pointIndices.push(i);
@@ -542,8 +544,8 @@ export async function createScatterplot(
       selection.clearHighlight();
       interaction.requestRender();
     },
-    setHighlightPoints(rowIndices: number[]) {
-      const pointIndices: number[] = [];
+    setHighlightPoints(rowIndices: RowIndex[]) {
+      const pointIndices: GpuPointIndex[] = [];
       for (const r of rowIndices) {
         const i = rowToPoint.get(r);
         if (i !== undefined) pointIndices.push(i);
@@ -568,7 +570,7 @@ export async function createScatterplot(
     clearCategoryDisabled() {
       selection.clearCategoryDisabled();
     },
-    setTrajectoryIsolation(rowIndices: number[]) {
+    setTrajectoryIsolation(rowIndices: RowIndex[]) {
       if (rowIndices.length === 0) {
         selection.clearTrajectoryIsolation();
       } else {
@@ -585,7 +587,7 @@ export async function createScatterplot(
       selection.clearTrajectoryIsolation();
       interaction.requestRender();
     },
-    setContinuousIsolation(rowIndices: number[]) {
+    setContinuousIsolation(rowIndices: RowIndex[]) {
       if (rowIndices.length === 0) {
         selection.clearContinuousIsolation();
         uniforms.filterHideUniform.write(0);

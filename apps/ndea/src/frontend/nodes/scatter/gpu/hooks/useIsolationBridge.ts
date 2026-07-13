@@ -18,7 +18,7 @@ interface UseIsolationBridgeResult {
 
 /**
  * Bridges legend isolation state to:
- *  1. The SelectionBus "isolation" facet — composes into the scatter instance's
+ *  1. The PredicateBus "isolation" facet — composes into the scatter instance's
  *     crossfilter clause, so isolation filters the table + charts (§6.3).
  *  2. ScatterGPUHost.setCategoryIsolation — drives GPU alpha-dimming.
  *

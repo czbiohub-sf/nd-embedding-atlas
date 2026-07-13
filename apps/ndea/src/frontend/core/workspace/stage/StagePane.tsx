@@ -44,7 +44,7 @@ function StageTile({
 }) {
   const ws = useWorkspace();
   const node = useWorkspaceSelector((s) => s.nodes[id]);
-  const selected = useWorkspaceSelector((s) => s.selection === id);
+  const selected = useWorkspaceSelector((s) => s.selectedNodeId === id);
   const telemetryOn = useTelemetrySelector((t) => t.enabled);
   const cooking = useTelemetrySelector((t) => t.cooking[id] ?? false);
   const dirty = useTelemetrySelector((t) => t.dirty[id] ?? false);
@@ -76,7 +76,7 @@ function StageTile({
     <div
       data-stage-tile={id}
       ref={(el) => ws.registerEl(`stage:${id}`, el)}
-      onPointerDown={() => ws.select(id)}
+      onPointerDown={() => ws.selectNode(id)}
       className="relative box-border flex min-h-0 min-w-0 flex-1 flex-col rounded-[7px] bg-card"
       style={{
         border: `1px solid ${dropTarget || selected ? "var(--primary)" : "var(--border)"}`,
@@ -97,7 +97,7 @@ function StageTile({
             title="drag to rearrange"
             onPointerDown={(e) => {
               e.stopPropagation();
-              ws.select(id);
+              ws.selectNode(id);
               beginTileDrag(id);
             }}
             className="shrink-0 cursor-grab text-[10px] tracking-[1px] text-text-muted select-none"

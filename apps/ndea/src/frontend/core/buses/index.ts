@@ -1,5 +1,5 @@
-export { type SelectionBus, type SelectionFacet, createSelectionBus, selectionBus } from "./selection-bus";
-export { type BroadcastBus, createBroadcastBus, broadcastBus } from "./broadcast-bus";
+export { type PredicateBus, type PredicateFacet, createPredicateBus, predicateBus } from "./predicate-bus";
+export { type RowSetBus, createRowSetBus, rowSetBus } from "./row-set-bus";
 export { type ViewSyncBus, createViewSyncBus, viewSyncBus } from "./view-sync-bus";
 export { type RenderBus, createRenderBus, renderBus } from "./render-bus";
-export { type HighlightBus, createHighlightBus, highlightBus } from "./highlight-bus";
+export { type FocusBus, createFocusBus, focusBus } from "./focus-bus";
