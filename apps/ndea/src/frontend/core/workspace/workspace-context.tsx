@@ -7,7 +7,11 @@ import { useSelector } from "@tanstack/react-store";
 import { createContext, useContext, useEffect, useState } from "react";
 
 import { useDashboard } from "@/hooks/useDashboard";
+import { predicateBus, rowSetBus } from "@/core/buses";
 import type { GraphEvaluationState } from "@/core/graph/evaluator";
+import { deviceBroker } from "@/core/gpu/device-broker";
+import { WorkspaceNodeRuntimeProvider } from "@/core/node/runtime/runtime-context";
+import { APP_NODE_HOST_CAPABILITIES, WorkspaceNodeRuntimeManager } from "@/core/node/runtime/workspace-runtime";
 import type { Metadata } from "@/types";
 import { loadFromStorage, saveToStorage, storageKey } from "./persist";
 import type { WorkspaceNodeLibrary } from "./node-projection";
@@ -40,11 +44,11 @@ export function WorkspaceProvider({
   children: React.ReactNode;
   nodeLibrary: WorkspaceNodeLibrary;
 }) {
-  const { state, meta } = useDashboard();
-  const { coordinator, table } = meta;
+  const { state, meta, actions } = useDashboard();
+  const { coordinator, brushSelection, table } = meta;
   const { metadata } = state;
 
-  const [ws] = useState(() => {
+  const [{ workspace: ws, nodeRuntimes }] = useState(() => {
     const w = new Workspace({ coordinator, table, metadata, nodeLibrary });
     if (import.meta.env.DEV) {
       // Dev server: editable session. Load-or-seed seam (U7→persistence) — read
@@ -70,10 +74,46 @@ export function WorkspaceProvider({
       const seed = resolvePreset(metadata.preset ?? "annotate") ?? seedAnnotate;
       seed(w);
     }
-    return w;
+    const appHost = Object.freeze({
+      coordinator,
+      defaultInputPredicate: brushSelection,
+      table,
+      metadata,
+      refreshMetadata: actions.refreshMetadata,
+      availableCapabilities: new Set(APP_NODE_HOST_CAPABILITIES),
+      predicateBus,
+      rowSetBus,
+      deviceBroker,
+      fetch: globalThis.fetch,
+    });
+    return {
+      workspace: w,
+      nodeRuntimes: new WorkspaceNodeRuntimeManager({
+        workspace: w,
+        nodeLibrary,
+        appHost,
+      }),
+    };
   });
 
-  useEffect(() => () => ws.dispose(), [ws]);
+  useEffect(
+    () => () => {
+      const errors: unknown[] = [];
+      try {
+        nodeRuntimes.dispose();
+      } catch (error) {
+        errors.push(error);
+      }
+      try {
+        ws.dispose();
+      } catch (error) {
+        errors.push(error);
+      }
+      if (errors.length === 1) throw errors[0];
+      if (errors.length > 1) throw new AggregateError(errors, "Workspace teardown failed");
+    },
+    [nodeRuntimes, ws],
+  );
 
   // Autosave: persist the document on any store change, debounced. The store is
   // the topology/presentation authority — engine-only runtime (lassoes, cache
@@ -93,7 +133,11 @@ export function WorkspaceProvider({
     };
   }, [ws, metadata, table]);
 
-  return <WorkspaceContext.Provider value={ws}>{children}</WorkspaceContext.Provider>;
+  return (
+    <WorkspaceContext.Provider value={ws}>
+      <WorkspaceNodeRuntimeProvider value={nodeRuntimes}>{children}</WorkspaceNodeRuntimeProvider>
+    </WorkspaceContext.Provider>
+  );
 }
 
 export function useWorkspace(): Workspace {

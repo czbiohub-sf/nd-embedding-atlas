@@ -16,7 +16,6 @@ import {
   type PluginFactory,
 } from "@ndea/sdk";
 import { NATIVE_NODE_DEFINITIONS } from "@/core/node/native-nodes";
-import { loadNodeModule } from "@/core/node/load-module";
 import { NodeCatalogRegistration } from "./catalog";
 import type { PluginBootstrapFetch } from "./loader";
 import { bootFrontend, loadFrontendPluginSession } from "./runtime";
@@ -117,7 +116,7 @@ describe("frontend plugin session", () => {
         { signal: new AbortController().signal, epoch: 7 },
       ),
     ).toEqual({ kind: "pred", sql: null });
-    expect(await loadNodeModule(session.catalog, external.ref)).toBe(externalModule);
+    expect(await external.load!()).toBe(externalModule);
     expect("Component" in externalModule).toBe(false);
     expect(session.diagnostics).toEqual([]);
     expect(Object.isFrozen(session.catalog)).toBe(true);

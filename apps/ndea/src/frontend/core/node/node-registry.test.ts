@@ -7,7 +7,6 @@ import { createNativeWorkspaceNodeLibrary, nativePluginFactory } from "@/core/wo
 import { parseWorkspaceNodeConfig, workspaceNodeSpecOf } from "@/core/workspace/node-projection";
 import { NATIVE_NODE_CONTRIBUTIONS, NATIVE_NODE_CURRENT_REFS, NATIVE_NODE_DEFINITIONS } from "./native-nodes";
 import { collectPluginContribution, NATIVE_NODE_SOURCE } from "@/core/plugin/registration";
-import { loadNodeModule } from "./load-module";
 import { exactNodeTypeRef } from "@ndea/sdk";
 
 const APP_ROOT = resolve(import.meta.dir, "../../../..");
@@ -167,7 +166,7 @@ describe("native node catalog fitness functions", () => {
     const bodyContributions = NATIVE_NODE_CONTRIBUTIONS.filter(({ presentation }) => presentation.body !== undefined);
     expect(bodyContributions.length).toBeGreaterThan(0);
     for (const contribution of bodyContributions) {
-      const module = await loadNodeModule(nativeNodeCatalog, contribution.definition.ref);
+      const module = await contribution.definition.load!();
       expect(module.mountBody, `${contribution.definition.ref.nodeTypeId} has no Body mount`).toBeFunction();
       expect("Component" in module, `${contribution.definition.ref.nodeTypeId} leaked a framework component`).toBe(
         false,

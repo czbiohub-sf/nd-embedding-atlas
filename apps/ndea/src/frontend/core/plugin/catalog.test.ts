@@ -9,7 +9,6 @@ import {
   type NodeCapability,
 } from "@ndea/sdk";
 import { z } from "zod";
-import { loadNodeModule } from "@/core/node/load-module";
 import { NodeCatalogBuilder, NodeCatalogRegistration, NodeCatalogValidationError, createNodeCatalog } from "./catalog";
 import {
   NATIVE_NODE_SOURCE,
@@ -216,7 +215,7 @@ describe("immutable node catalog", () => {
     expect(catalog.resolveCurrent("late")).toBeUndefined();
   });
 
-  test("loads exact or current modules once per catalog and rejects missing modules", async () => {
+  test("resolves exact and current definitions without owning module state", async () => {
     let loads = 0;
     const value = definition("loadable", "2.0.0", {
       load: () => {
@@ -224,19 +223,16 @@ describe("immutable node catalog", () => {
         return Promise.resolve({ createRuntime: () => ({ dispose() {} }) });
       },
     });
-    const metadataOnly = definition("metadata-only");
-    const catalog = createNodeCatalog([batch(NATIVE_NODE_SOURCE, value, metadataOnly)]);
+    const catalog = createNodeCatalog([batch(NATIVE_NODE_SOURCE, value, definition("metadata-only"))]);
 
-    const [exact, current] = await Promise.all([
-      loadNodeModule(catalog, value.ref),
-      loadNodeModule(catalog, "loadable"),
-    ]);
-    expect(exact).toBe(current);
-    expect(loads).toBe(1);
-    await expect(loadNodeModule(catalog, "missing")).rejects.toThrow(/definition not found: missing/);
-    await expect(loadNodeModule(catalog, "metadata-only")).rejects.toThrow(
-      /definition has no module: metadata-only@1.0.0/,
-    );
+    expect(catalog.resolveExact(value.ref)).toBe(value);
+    expect(catalog.resolveCurrent("loadable")).toBe(value);
+    expect(catalog.resolveCurrent("missing")).toBeUndefined();
+    expect(loads).toBe(0);
+
+    await value.load!();
+    await value.load!();
+    expect(loads).toBe(2);
   });
 
   test("registration disposes a rejected batch, preserves prior batches, and closes in reverse", async () => {

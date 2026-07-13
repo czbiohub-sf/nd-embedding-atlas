@@ -205,8 +205,6 @@ export class Workspace {
     const def = this.def(id);
     if (!def || def.type === "obs") return; // the source is permanent
     this.evaluator.removeNode(id);
-    this.dropDockEl(id);
-    this.dropHeaderEl(id);
     this.frozenPredicates.delete(id);
     this.frozenRows.delete(id);
     if (this.ui.state.fullscreen === id) this.setFullscreen(null);
@@ -450,7 +448,7 @@ export class Workspace {
       this.evaluator.setBypass(id, next);
       if (this.store.state.nodes[id]?.type === "subnet") this.evaluator.setBypass(`${id}-out`, next);
     } else {
-      // display-off: the BodyOwner unregisters its sink (branch never cooks);
+      // display-off: the instance runtime unregisters its sink (branch never cooks);
       // dirty downstream so LEDs reflect the parked branch
       this.evaluator.markDirty(id);
     }
@@ -651,52 +649,6 @@ export class Workspace {
   registerEl(key: string, el: HTMLElement | null): void {
     if (el) this.els.set(key, el);
     else this.els.delete(key);
-  }
-
-  /** stable per-node dock element — the ONE live body's DOM home (C4).
-   *  Sockets adopt it via appendChild; React renders into it via portal. */
-  private dockEls = new Map<string, HTMLDivElement>();
-  dockEl(id: string): HTMLDivElement {
-    let el = this.dockEls.get(id);
-    if (!el) {
-      el = document.createElement("div");
-      el.className = "nd-body-dock";
-      el.style.cssText = "display:flex;flex-direction:column;flex:1;min-height:0;min-width:0;height:100%;width:100%;";
-      this.dockEls.set(id, el);
-    }
-    return el;
-  }
-  dropDockEl(id: string): void {
-    const el = this.dockEls.get(id);
-    el?.remove();
-    this.dockEls.delete(id);
-  }
-
-  /** stable per-node HEADER slot element — same reparenting contract as the
-   *  body dock, but for the frame/tile header's middle gap. Plugins portal a
-   *  compact toolbar into it (host.bodyHeaderElement); the canvas node
-   *  header (full form) or the stage tile header adopts it via HeaderSocket. */
-  private headerEls = new Map<string, HTMLDivElement>();
-  headerEl(id: string): HTMLDivElement {
-    let el = this.headerEls.get(id);
-    if (!el) {
-      el = document.createElement("div");
-      el.className = "nd-header-dock";
-      // container-type lets the toolbar inside gate its segments on the
-      // slot's width (@container queries) — items drop out instead of
-      // shrinking into slivers when the node/tile is narrow
-      // line-height:1 — portaled toolbar text inherits a flat line box and
-      // lands on the same visual line as the header's own furniture
-      el.style.cssText =
-        "display:flex;align-items:center;flex:1;min-width:0;height:100%;overflow:hidden;container-type:inline-size;line-height:1;";
-      this.headerEls.set(id, el);
-    }
-    return el;
-  }
-  dropHeaderEl(id: string): void {
-    const el = this.headerEls.get(id);
-    el?.remove();
-    this.headerEls.delete(id);
   }
 
   /** placement resolution: descriptor flag → explicit pin → by-disposition default */
