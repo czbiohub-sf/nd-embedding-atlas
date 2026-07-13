@@ -4,20 +4,22 @@
  * highlight. Sink (no out port); accepts a focus input (table row → viewer).
  */
 
-import { defineWorkspaceNodeSpec } from "@/core/workspace/node-kit";
+import { defineNativeNodeContribution } from "@/core/workspace/node-kit";
 import { lastPortValueOfKind } from "@/core/graph/cook";
+import { imageViewerDefinition } from "./plugin";
 
-export const fovNode = defineWorkspaceNodeSpec({
-  id: "fov",
-  type: "fov",
-  title: "Idetik",
-  kind: "view",
-  pluginId: "image-viewer",
-  inputs: [{ id: "in", kind: "focus", label: "Highlight" }],
-  outputs: [],
-  evaluationRole: "view",
-  cook: (inputs) => ({ kind: "focus", obsId: lastPortValueOfKind(inputs, "focus")?.obsId ?? null }),
-  geometry: { chipW: 148, card: { w: 220, h: 156 }, full: { w: 440, h: 420 }, canFull: true },
-  stage: "stageable",
-  inPalette: true,
+export const fovNode = defineNativeNodeContribution({
+  definition: imageViewerDefinition,
+  graph: {
+    persistedType: "fov",
+    role: "view",
+    evaluationRole: "view",
+    cook: (inputs) => ({ kind: "focus", obsId: lastPortValueOfKind(inputs, "focus")?.obsId ?? null }),
+    usesDefinitionModule: true,
+  },
+  workspace: {
+    geometry: { chipW: 148, card: { w: 220, h: 156 }, full: { w: 440, h: 420 }, canFull: true },
+    stage: "stageable",
+    inPalette: true,
+  },
 });

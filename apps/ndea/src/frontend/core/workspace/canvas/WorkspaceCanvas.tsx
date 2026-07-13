@@ -45,8 +45,8 @@ import { ndZoomBand, type NdForm } from "@/components/nd/nd-resolve-form";
 import { ND_PORT_KINDS } from "@/components/nd/nd-port";
 import { ND_CANVAS, ND_TIMING, ND_ZOOM } from "../constants";
 import { FeedbackChannelsContext, useFeedbackChannels } from "../feedback";
-import { WORKSPACE_NODE_DESCRIPTORS } from "../node-defs";
-import { getWorkspaceNodeSpec } from "../node-kit";
+import { getWorkspaceNodeSpec } from "../definitions";
+import { getWorkspaceNodeDescriptor } from "../node-defs";
 import { useWorkspace, useWorkspaceSelector } from "../workspace-context";
 import { AddNodeMenu, type AddMenuState } from "./AddNodeMenu";
 import { K1Cursor } from "./K1Cursor";
@@ -63,7 +63,7 @@ const edgeTypes = { ndwire: NdWireEdge };
 /** ghost wire in the dragged port's kind color */
 function NdConnectionLine({ fromX, fromY, toX, toY, fromNode }: ConnectionLineComponentProps) {
   const node = useWorkspaceSelector((s) => (fromNode ? s.nodes[fromNode.id] : undefined));
-  const kind = node ? WORKSPACE_NODE_DESCRIPTORS[node.type].outKind : "pred";
+  const kind = node ? getWorkspaceNodeDescriptor(node.type).outKind : "pred";
   return (
     <path
       d={wirePath(fromX, fromY, toX, toY)}
@@ -297,7 +297,7 @@ function WorkspaceCanvasInner() {
       let portNode: string | null = null;
       let best = 22 / zoom;
       for (const n of Object.values(ws.store.state.nodes)) {
-        const def = WORKSPACE_NODE_DESCRIPTORS[n.type];
+        const def = getWorkspaceNodeDescriptor(n.type);
         for (const which of ["in", "out"] as const) {
           if ((which === "in" && !def.hasIn) || (which === "out" && !def.hasOut)) continue;
           const p = portPos(ws, n.id, which);

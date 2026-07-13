@@ -1,12 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import { registerBuiltinNodes } from "./nodes";
 import { DOC_VERSION, dropUnknownNodes, migrate, type PersistedDoc, toPersistedDoc, validateDoc } from "./persist";
 import { scopeColor } from "@/core/coordination/coordination";
+import { nativeWorkspaceNodeLibrary } from "./definitions";
 import type { WorkspaceDocumentState } from "./types";
 import type { GraphDocumentNode } from "@/core/graph/records";
-
-registerBuiltinNodes();
 
 function emptyState(): WorkspaceDocumentState {
   return {
@@ -52,17 +50,17 @@ describe("persisted doc validation (U7 foundation)", () => {
   });
 
   test("a valid node config passes", () => {
-    expect(validateDoc(docWith(datasetNode({ datasetKey: "plateA" }))).ok).toBe(true);
+    expect(validateDoc(docWith(datasetNode({ datasetKey: "plateA" })), nativeWorkspaceNodeLibrary).ok).toBe(true);
   });
 
   test("a malformed node config is rejected (parse-on-load guard)", () => {
-    const res = validateDoc(docWith(datasetNode({ datasetKey: 42 as unknown as string })));
+    const res = validateDoc(docWith(datasetNode({ datasetKey: 42 as unknown as string })), nativeWorkspaceNodeLibrary);
     expect(res.ok).toBe(false);
     expect(res.errors[0]).toContain("d1");
   });
 
   test("a future doc version is flagged for migration", () => {
-    const res = validateDoc({ version: DOC_VERSION + 1, state: emptyState() });
+    const res = validateDoc({ version: DOC_VERSION + 1, state: emptyState() }, nativeWorkspaceNodeLibrary);
     expect(res.ok).toBe(false);
     expect(res.errors[0]).toContain("migration");
   });
@@ -97,7 +95,7 @@ describe("v1 → v2 migration (focus coordination plane; R6 — load-bearing)", 
   });
 
   test("a migrated v1 doc passes validation (no version-skew reject — R6)", () => {
-    expect(validateDoc(migrate(v1Doc({ n1: "A" }, { A: null }))).ok).toBe(true);
+    expect(validateDoc(migrate(v1Doc({ n1: "A" }, { A: null })), nativeWorkspaceNodeLibrary).ok).toBe(true);
   });
 
   test("migrate is a no-op for a current-version doc", () => {
@@ -127,7 +125,7 @@ describe("dropUnknownNodes (self-heal on a removed node type)", () => {
     state.selection = "x1";
     state.selSet = ["x1", "d1"];
 
-    const out = dropUnknownNodes(toPersistedDoc(state));
+    const out = dropUnknownNodes(toPersistedDoc(state), nativeWorkspaceNodeLibrary);
     expect(out.state.nodes.x1).toBeUndefined();
     expect(out.state.nodes.d1).toBeDefined();
     expect(out.state.edges.e1).toBeUndefined();
@@ -137,6 +135,6 @@ describe("dropUnknownNodes (self-heal on a removed node type)", () => {
 
   test("returns the doc unchanged when every node type is registered", () => {
     const doc = docWith(datasetNode({ datasetKey: "plateA" }));
-    expect(dropUnknownNodes(doc)).toBe(doc);
+    expect(dropUnknownNodes(doc, nativeWorkspaceNodeLibrary)).toBe(doc);
   });
 });

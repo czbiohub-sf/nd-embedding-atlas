@@ -4,8 +4,8 @@
  */
 
 import { createContext, useContext, useMemo } from "react";
-import { getDefinition } from "@/core/node/registry";
-import { WORKSPACE_NODE_DESCRIPTORS } from "./node-defs";
+import { nativeNodeCatalog } from "./definitions";
+import { getWorkspaceNodeDescriptor } from "./node-defs";
 import { useWorkspaceSelector } from "./workspace-context";
 import type { GraphDocumentEdge, GraphDocumentNode } from "@/core/graph/records";
 
@@ -25,7 +25,7 @@ const DATA_WRITE_CAPS = ["annotation-write"] as const;
  * node(s) it descends from and emit a `writer → source` channel. An unwired
  * writer reaches no source → no channel (so feedback only shows once it's
  * actually plumbed into the data). `isWriter` / `isSource` are injected so this
- * stays free of the registry + WORKSPACE_NODE_DESCRIPTORS for testing.
+ * stays free of catalog and descriptor selectors for testing.
  */
 export function deriveFeedbackChannels(
   nodes: Record<string, GraphDocumentNode>,
@@ -69,12 +69,12 @@ export function deriveFeedbackChannels(
 
 function isDataWriter(n: GraphDocumentNode): boolean {
   if (!n.pluginId) return false;
-  const caps = getDefinition(n.pluginId)?.capabilities;
+  const caps = nativeNodeCatalog.resolveCurrent(n.pluginId)?.capabilities;
   return caps != null && DATA_WRITE_CAPS.some((capability) => caps.includes(capability));
 }
 
 function isSourceNode(n: GraphDocumentNode): boolean {
-  return WORKSPACE_NODE_DESCRIPTORS[n.type]?.kind === "source";
+  return getWorkspaceNodeDescriptor(n.type)?.kind === "source";
 }
 
 /**

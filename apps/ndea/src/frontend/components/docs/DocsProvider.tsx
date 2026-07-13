@@ -16,7 +16,7 @@ import {
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { ND_PORT_KINDS, type NdPortKind } from "@/components/nd/nd-port";
 import { humanizedCapabilities } from "@/core/node/capability-docs";
-import { getDefinition, listDefinitions } from "@/core/node/registry";
+import { nativeNodeCatalog } from "@/core/workspace/definitions";
 import type { NodePort } from "@ndea/sdk";
 import { useTheme } from "@/ThemeProvider";
 import { DocsContext } from "./docs-context";
@@ -101,7 +101,8 @@ function DocsCommand({
   const entries = useMemo(
     () =>
       open
-        ? listDefinitions()
+        ? nativeNodeCatalog
+            .listDefinitions()
             .filter((definition) => definition.documentation)
             .toSorted((a, b) => a.title.localeCompare(b.title))
         : [],
@@ -198,7 +199,7 @@ function PortRow({ port, out }: { port: NodePort; out: boolean }) {
 }
 
 function NodeDocsSheet({ nodeType, onClose }: { nodeType: string | null; onClose: () => void }) {
-  const definition = nodeType ? getDefinition(nodeType) : undefined;
+  const definition = nodeType ? nativeNodeCatalog.resolveCurrent(nodeType) : undefined;
   const doc = definition?.documentation;
   const open = Boolean(definition && doc);
   const caps = definition ? humanizedCapabilities(definition.capabilities) : [];

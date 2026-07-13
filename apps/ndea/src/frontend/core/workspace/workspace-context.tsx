@@ -10,6 +10,7 @@ import { useDashboard } from "@/hooks/useDashboard";
 import type { GraphEvaluationState } from "@/core/graph/evaluator";
 import type { Metadata } from "@/types";
 import { loadFromStorage, saveToStorage, storageKey } from "./persist";
+import type { WorkspaceNodeLibrary } from "./node-kit";
 import { resolvePreset, seedAnnotate } from "./presets";
 import { seedWorkspace, Workspace } from "./workspace-store";
 import type { WorkspaceDocumentState } from "./types";
@@ -32,20 +33,26 @@ function sessionKeyOf(metadata: Metadata, table: string): string | null {
   return parts.length > 0 ? parts.join(":") : null;
 }
 
-export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
+export function WorkspaceProvider({
+  children,
+  nodeLibrary,
+}: {
+  children: React.ReactNode;
+  nodeLibrary: WorkspaceNodeLibrary;
+}) {
   const { state, meta } = useDashboard();
   const { coordinator, table } = meta;
   const { metadata } = state;
 
   const [ws] = useState(() => {
-    const w = new Workspace({ coordinator, table, metadata });
+    const w = new Workspace({ coordinator, table, metadata, nodeLibrary });
     if (import.meta.env.DEV) {
       // Dev server: editable session. Load-or-seed seam (U7→persistence) — read
       // the saved PersistedDoc for this dataset session, validate it
       // (parse-on-load), and hydrate it (engine registration + edges included so
       // it actually cooks); fall back to seedWorkspace on a miss or corrupt doc.
       const key = storageKey(sessionKeyOf(metadata, table));
-      const loaded = loadFromStorage(key);
+      const loaded = loadFromStorage(key, nodeLibrary);
       if (loaded.kind === "ok") {
         w.loadDocument(loaded.state);
       } else {

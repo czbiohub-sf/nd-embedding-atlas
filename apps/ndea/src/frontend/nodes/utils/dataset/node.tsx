@@ -5,30 +5,43 @@
  */
 
 import { z } from "zod";
+import { defineNode, exactNodeTypeRef, nodeConfigVersion } from "@ndea/sdk";
 import { DatasetSourceBody } from "@/core/workspace/canvas/node-extras";
-import { defineWorkspaceNodeSpec } from "@/core/workspace/node-kit";
+import { defineNativeNodeContribution } from "@/core/workspace/node-kit";
 import { nodeConfig } from "@/core/graph/cook";
 
 export interface DatasetConfig {
   datasetKey?: string | null;
 }
 
-export const datasetNode = defineWorkspaceNodeSpec({
-  id: "dataset",
-  type: "dataset",
+const datasetDefinition = defineNode({
+  ref: exactNodeTypeRef("dataset", "1.0.0"),
   title: "Dataset",
-  kind: "source",
+  role: "transform",
   inputs: [],
   outputs: [{ id: "out", kind: "pred", label: "Out" }],
-  config: z.object({ datasetKey: z.string().nullable().optional() }),
-  configVersion: 1,
-  evaluationRole: "source",
-  cook: (_inputs, host) => {
-    const key = nodeConfig<DatasetConfig>(host.node()).datasetKey;
-    return { kind: "pred", sql: key ? `_dataset = '${key.replace(/'/g, "''")}'` : null };
+  capabilities: [],
+  config: {
+    schema: z.object({ datasetKey: z.string().nullable().optional() }),
+    version: nodeConfigVersion(1),
+    defaultValue: {},
   },
-  Body: DatasetSourceBody,
-  geometry: { chipW: 148, card: { w: 196, h: 96 }, full: { w: 196, h: 96 }, canFull: false },
-  stage: "canvas-only",
-  inPalette: true,
+});
+
+export const datasetNode = defineNativeNodeContribution({
+  definition: datasetDefinition,
+  graph: {
+    role: "source",
+    evaluationRole: "source",
+    cook: (_inputs, host) => {
+      const key = nodeConfig<DatasetConfig>(host.node()).datasetKey;
+      return { kind: "pred", sql: key ? `_dataset = '${key.replace(/'/g, "''")}'` : null };
+    },
+    Body: DatasetSourceBody,
+  },
+  workspace: {
+    geometry: { chipW: 148, card: { w: 196, h: 96 }, full: { w: 196, h: 96 }, canFull: false },
+    stage: "canvas-only",
+    inPalette: true,
+  },
 });

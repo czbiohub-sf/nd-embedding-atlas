@@ -16,17 +16,13 @@ import { describe, expect, test } from "bun:test";
 import { Glob } from "bun";
 import { resolve } from "node:path";
 
-import { listWorkspaceNodeSpecs } from "@/core/workspace/node-kit";
-import { registerBuiltins } from "@/core/workspace/definitions";
-
-registerBuiltins();
+import { listWorkspaceNodeSpecs } from "@/core/workspace/definitions";
 
 const APP_ROOT = resolve(import.meta.dir, "../../../..");
 const glob = (pattern: string) => [...new Glob(pattern).scanSync(APP_ROOT)];
 
-// `selection` is a deprecated INLINE alias of cache (back-compat for persisted
-// docs — out of palette, no folder, registered as `{...cacheNode, ...}`). It is
-// the one registered spec without a node.tsx, by design.
+// `selection` is an explicit tuple compatibility definition without its own
+// implementation folder.
 const INLINE_ALIASES = new Set(["selection"]);
 
 describe("node anatomy (internal-plugin contract)", () => {

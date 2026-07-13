@@ -11,7 +11,6 @@ import { Link2 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { NdCaption, NdHud } from "@/components/nd/nd-primitives";
 import { listCoordinationTypes } from "@/core/coordination/define-type";
-import { getDefinition } from "@/core/node/registry";
 import { useWorkspace, useWorkspaceSelector } from "../workspace-context";
 
 /** Human label for a coordination type (the registry key is terse). */
@@ -19,13 +18,13 @@ const TYPE_LABEL: Record<string, string> = { focus: "focus", viewSync: "view syn
 
 export function ScopePicker({ nodeId }: { nodeId: string }) {
   const ws = useWorkspace();
-  const pluginId = useWorkspaceSelector((s) => s.nodes[nodeId]?.pluginId ?? null);
+  const nodeType = useWorkspaceSelector((s) => s.nodes[nodeId]?.type ?? null);
   // subscribe to the whole scope map so existing-scope lists + the node's own
   // assignments stay live as peers link/unlink.
   const allScopes = useWorkspaceSelector((s) => s.coordinationScopes);
   const assigned = allScopes[nodeId] ?? {};
 
-  const caps = pluginId ? getDefinition(pluginId)?.capabilities : undefined;
+  const caps = nodeType ? ws.deps.nodeLibrary.getSpec(nodeType)?.definition.capabilities : undefined;
   const types = listCoordinationTypes().filter((type) => caps?.includes(type.capability));
   if (types.length === 0) return null;
 

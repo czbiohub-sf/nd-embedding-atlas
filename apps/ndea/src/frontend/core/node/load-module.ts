@@ -1,20 +1,37 @@
-/**
- * Memoized plugin-module loader — each plugin's executable chunk is fetched at most
- * once per session and shared by every mount surface.
- */
+/** Catalog-scoped lazy module loading shared by every mount surface in one session. */
 
-import { getDefinition } from "./registry";
-import type { NodeModule } from "@ndea/sdk";
+import type { ExactNodeTypeRef, NodeTypeId } from "@ndea/sdk";
+import type { NodeCatalog } from "@/core/plugin/catalog";
+import type { CatalogNodeDefinition } from "@/core/plugin/registration";
 
-const moduleCache = new Map<string, Promise<NodeModule>>();
+type CatalogNodeModule = Awaited<ReturnType<NonNullable<CatalogNodeDefinition["load"]>>>;
 
-export function loadNodeModule(id: string): Promise<NodeModule> {
-  let modulePromise = moduleCache.get(id);
+const MODULE_CACHE = new WeakMap<NodeCatalog, Map<CatalogNodeDefinition, Promise<CatalogNodeModule>>>();
+
+export function loadNodeModule(
+  catalog: NodeCatalog,
+  ref: ExactNodeTypeRef | NodeTypeId | string,
+): Promise<CatalogNodeModule> {
+  const definition = typeof ref === "string" ? catalog.resolveCurrent(ref) : catalog.resolveExact(ref);
+  if (!definition) {
+    const label = typeof ref === "string" ? ref : `${ref.nodeTypeId}@${ref.nodeTypeVersion}`;
+    return Promise.reject(new Error(`node definition not found: ${label}`));
+  }
+  if (!definition.load) {
+    const { nodeTypeId, nodeTypeVersion } = definition.ref;
+    return Promise.reject(new Error(`node definition has no module: ${nodeTypeId}@${nodeTypeVersion}`));
+  }
+
+  let cache = MODULE_CACHE.get(catalog);
+  if (!cache) {
+    cache = new Map();
+    MODULE_CACHE.set(catalog, cache);
+  }
+
+  let modulePromise = cache.get(definition);
   if (!modulePromise) {
-    const definition = getDefinition(id);
-    if (!definition?.load) return Promise.reject(new Error(`node definition has no module: ${id}`));
     modulePromise = definition.load();
-    moduleCache.set(id, modulePromise);
+    cache.set(definition, modulePromise);
   }
   return modulePromise;
 }

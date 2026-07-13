@@ -9,33 +9,66 @@
  */
 
 import { CacheNodeBody } from "@/core/workspace/canvas/node-extras";
-import { defineWorkspaceNodeSpec } from "@/core/workspace/node-kit";
+import { defineNode, exactNodeTypeRef } from "@ndea/sdk";
+import { defineNativeNodeContribution, type NativeNodeContribution } from "@/core/workspace/node-kit";
 import { lastPortValueOfKind, passthroughGraphPredicate } from "@/core/graph/cook";
 
-export const cacheNode = defineWorkspaceNodeSpec({
-  id: "cache",
-  type: "cache",
+const cacheDefinition = defineNode({
+  ref: exactNodeTypeRef("cache", "1.0.0"),
   title: "Cache",
-  kind: "cache",
-  // single logical input ("in") that accepts ANY cooked input — a pred edge
-  // (filter/wrangle) or a sel edge (scatter lasso / table selection). The first
-  // port is the rendered/primary handle (pred); the second widens the accept-set.
+  role: "transform",
   inputs: [
     { id: "in", kind: "pred", label: "In" },
     { id: "in-sel", kind: "sel", label: "In" },
   ],
   outputs: [{ id: "out", kind: "pred", label: "Out" }],
-  evaluationRole: "transform",
-  accent: "#f59e0b", // amber — the checkpoint accent on the minimap
-  checkpoint: true, // renders the ◆ badge
-  cook: (inputs, host) => {
-    const frozen = host.frozenPredicate();
-    return frozen !== undefined
-      ? { kind: "pred", sql: frozen }
-      : (lastPortValueOfKind(inputs, "sel") ?? passthroughGraphPredicate(inputs));
+  capabilities: [],
+});
+
+const selectionDefinition = defineNode({
+  ...cacheDefinition,
+  ref: exactNodeTypeRef("selection", "1.0.0"),
+  title: "Selection",
+});
+
+const cacheCook: NativeNodeContribution["graph"]["cook"] = (inputs, host) => {
+  const frozen = host.frozenPredicate();
+  return frozen !== undefined
+    ? { kind: "pred", sql: frozen }
+    : (lastPortValueOfKind(inputs, "sel") ?? passthroughGraphPredicate(inputs));
+};
+
+export const cacheNode = defineNativeNodeContribution({
+  definition: cacheDefinition,
+  graph: {
+    role: "cache",
+    evaluationRole: "transform",
+    cook: cacheCook,
+    Body: CacheNodeBody,
   },
-  Body: CacheNodeBody,
-  geometry: { chipW: 148, card: { w: 236, h: 168 }, full: { w: 236, h: 168 }, canFull: false },
-  stage: "canvas-only",
-  inPalette: true,
+  workspace: {
+    geometry: { chipW: 148, card: { w: 236, h: 168 }, full: { w: 236, h: 168 }, canFull: false },
+    stage: "canvas-only",
+    inPalette: true,
+    accent: "#f59e0b",
+    checkpoint: true,
+  },
+});
+
+/** Persisted v2 compatibility definition; intentionally omitted from the palette. */
+export const selectionNode = defineNativeNodeContribution({
+  definition: selectionDefinition,
+  graph: {
+    role: "selection",
+    evaluationRole: "transform",
+    cook: cacheCook,
+    Body: CacheNodeBody,
+  },
+  workspace: {
+    geometry: { chipW: 148, card: { w: 232, h: 164 }, full: { w: 232, h: 164 }, canFull: false },
+    stage: "canvas-only",
+    inPalette: false,
+    accent: "#f59e0b",
+    checkpoint: true,
+  },
 });

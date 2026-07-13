@@ -23,7 +23,7 @@ describe("threshold graph runtime adapter", () => {
       setTransformHost() {},
     };
 
-    thresholdNode.registerEvaluation?.(registration);
+    thresholdNode.graph.registerEvaluation?.(registration);
     expect(cook).toBeDefined();
     const result = cook!(new Map([["in", [{ kind: "pred", sql: "score > 0.25" }]]]), {
       signal: new AbortController().signal,

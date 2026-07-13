@@ -13,8 +13,8 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { registerBuiltinNodes } from "./nodes";
 import { predicateSql } from "@/core/graph/cook";
+import { nativeWorkspaceNodeLibrary } from "./definitions";
 import { Workspace } from "./workspace-store";
 import type { Metadata } from "@ndea/protocol";
 
@@ -23,14 +23,12 @@ import type { Metadata } from "@ndea/protocol";
 (globalThis as { requestAnimationFrame?: unknown }).requestAnimationFrame ??= (() => 0) as unknown;
 
 // Register the built-in node specs so cooks drive through the spec path
-// (cache/obs/export) rather than the legacy switch — what U3 asserts.
-registerBuiltinNodes();
-
 function makeWs() {
   return new Workspace({
     coordinator: { query: () => Promise.resolve([]) } as never,
     table: "atlas",
     metadata: { dataset_keys: [] } as unknown as Metadata,
+    nodeLibrary: nativeWorkspaceNodeLibrary,
   });
 }
 

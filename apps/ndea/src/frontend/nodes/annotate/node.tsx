@@ -8,20 +8,21 @@
  * batch path keeps a scope to stamp.
  */
 
-import { defineWorkspaceNodeSpec } from "@/core/workspace/node-kit";
+import { defineNativeNodeContribution } from "@/core/workspace/node-kit";
 import { passthroughGraphPredicate } from "@/core/graph/cook";
+import { annotateDefinition } from "./plugin";
 
-export const annotateNode = defineWorkspaceNodeSpec({
-  id: "annotate",
-  type: "annotate",
-  title: "Annotate",
-  kind: "view",
-  pluginId: "annotate",
-  inputs: [{ id: "in", kind: "pred", label: "In" }],
-  outputs: [{ id: "out", kind: "focus", label: "Focus" }],
-  evaluationRole: "view",
-  cook: (inputs) => passthroughGraphPredicate(inputs),
-  geometry: { chipW: 148, card: { w: 256, h: 180 }, full: { w: 320, h: 360 }, canFull: true },
-  stage: "stageable",
-  inPalette: true,
+export const annotateNode = defineNativeNodeContribution({
+  definition: annotateDefinition,
+  graph: {
+    role: "view",
+    evaluationRole: "view",
+    cook: (inputs) => passthroughGraphPredicate(inputs),
+    usesDefinitionModule: true,
+  },
+  workspace: {
+    geometry: { chipW: 148, card: { w: 256, h: 180 }, full: { w: 320, h: 360 }, canFull: true },
+    stage: "stageable",
+    inPalette: true,
+  },
 });

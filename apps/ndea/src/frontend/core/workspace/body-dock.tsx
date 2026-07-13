@@ -28,10 +28,10 @@ import { PanelErrorBoundary } from "@/components/layout/PanelErrorBoundary";
 import { useDashboardHostShim } from "@/core/host/use-dashboard-host-shim";
 import { loadNodeModule } from "@/core/node/load-module";
 import type { OrderingCoordinationAPI, ViewCoordinationAPI } from "@ndea/sdk";
-import { getDefinition } from "@/core/node/registry";
 import { nodeInstanceId } from "@ndea/sdk";
 import { stringPredicate } from "@/lib/mosaic-helpers";
-import { WORKSPACE_NODE_DESCRIPTORS } from "./node-defs";
+import { nativeNodeCatalog } from "./definitions";
+import { getWorkspaceNodeDescriptor } from "./node-defs";
 import { resolveNodeForm } from "./canvas/port-positions";
 import { useWorkspace, useWorkspaceSelector } from "./workspace-context";
 // (lasso capture + push wires need the workspace store inside the owner)
@@ -49,8 +49,8 @@ function bindMethod(value: unknown, target: object): unknown {
 
 function BodyOwnerInner({ nodeId, pluginId }: { nodeId: string; pluginId: string }) {
   const ws = useWorkspace();
-  const module = use(loadNodeModule(pluginId));
-  const definition = getDefinition(pluginId)!;
+  const module = use(loadNodeModule(nativeNodeCatalog, pluginId));
+  const definition = nativeNodeCatalog.resolveCurrent(pluginId)!;
   const makeHost = useDashboardHostShim();
 
   // Built EXACTLY ONCE per node lifetime — keyed by node identity, not
@@ -322,7 +322,7 @@ export function WorkspaceBodies() {
 
   const live: { id: string; pluginId: string; label: string }[] = [];
   for (const n of Object.values(nodes)) {
-    const def = WORKSPACE_NODE_DESCRIPTORS[n.type];
+    const def = getWorkspaceNodeDescriptor(n.type);
     if (def.kind !== "view" || !n.pluginId) continue;
     const needs = ws.placementOf(n.id) === "staged" || resolveNodeForm(ws, n.id) === "full" || fullscreen === n.id;
     if (needs) activated.current.add(n.id);

@@ -1,14 +1,16 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import type { Metadata } from "@ndea/protocol";
 import { predicateSql } from "@/core/graph/cook";
-import { registerBuiltinNodes } from "./nodes";
+import { nativeWorkspaceNodeLibrary } from "./definitions";
+import type { WorkspaceNodeLibrary } from "./node-kit";
 import { Workspace } from "./workspace-store";
 
-function createWorkspace(): Workspace {
+function createWorkspace(nodeLibrary: WorkspaceNodeLibrary = nativeWorkspaceNodeLibrary): Workspace {
   return new Workspace({
     coordinator: { query: () => Promise.resolve([]) } as never,
     table: "atlas",
     metadata: { dataset_keys: [] } as unknown as Metadata,
+    nodeLibrary,
   });
 }
 
@@ -17,10 +19,19 @@ beforeEach(() => {
     callback(0);
     return 0;
   }) as typeof requestAnimationFrame;
-  registerBuiltinNodes();
 });
 
 describe("Workspace graph transactions", () => {
+  test("resolves node policy only through the injected immutable library", () => {
+    expect(Object.isFrozen(nativeWorkspaceNodeLibrary)).toBe(true);
+    const emptyLibrary: WorkspaceNodeLibrary = Object.freeze({
+      getSpec: (): undefined => {},
+      getDescriptor: (): undefined => {},
+    });
+    const workspace = createWorkspace(emptyLibrary);
+    expect(() => workspace.addNode("obs", { x: 0, y: 0 })).toThrow('no registered node descriptor for type "obs"');
+  });
+
   test("publishes a dataset config only after synchronous sinks recook it", () => {
     const workspace = createWorkspace();
     const dataset = workspace.addNode("dataset", { x: 0, y: 0 });

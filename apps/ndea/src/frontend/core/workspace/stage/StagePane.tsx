@@ -17,7 +17,7 @@ import { NdBracketed, NdCaption, NdHud, NdLed, type NdLedState } from "@/compone
 import { ThresholdFilterView } from "@/nodes/transform-filter/view";
 import { BodySocket, HeaderSocket } from "../body-dock";
 import { ND_STAGE, ND_TIMING } from "../constants";
-import { WORKSPACE_NODE_DESCRIPTORS } from "../node-defs";
+import { getWorkspaceNodeDescriptor } from "../node-defs";
 import { useNodeCount } from "../use-node-count";
 import { useTelemetrySelector, useWorkspace, useWorkspaceSelector } from "../workspace-context";
 import { FlagButton, ScatterLassoActions } from "../canvas/node-extras";
@@ -52,7 +52,7 @@ function StageTile({
   const flagsOff = useWorkspaceSelector((s) => s.flags[id]?.off ?? false);
   const fullscreen = useSelector(ws.ui, (u) => u.fullscreen === id);
 
-  const def = node ? WORKSPACE_NODE_DESCRIPTORS[node.type] : null;
+  const def = node ? getWorkspaceNodeDescriptor(node.type) : null;
   // count policy: a tile's body is visible and says its own scale — only
   // staged transforms keep a header count
   const countActive = Boolean(def && def.kind !== "view");

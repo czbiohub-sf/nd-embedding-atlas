@@ -27,12 +27,8 @@ import {
   toggleViewLock,
 } from "@/nodes/scatter/routing";
 import { focusRow, publishOrdering } from "@/nodes/table/routing";
-import { listWorkspaceNodeSpecs } from "@/core/workspace/node-kit";
-import { registerBuiltins } from "@/core/workspace/definitions";
+import { listWorkspaceNodeSpecs } from "@/core/workspace/definitions";
 import { createSpyHost } from "./spy-host";
-
-// Register both halves of the registry, exactly as the app does at boot.
-registerBuiltins();
 
 // Every view-kind node must appear here — "routed" (a routing module exercised
 // below) or { exempt } with a reason. Adding a view node without an entry fails

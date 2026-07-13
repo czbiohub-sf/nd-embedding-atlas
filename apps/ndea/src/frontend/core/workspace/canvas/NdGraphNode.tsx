@@ -20,7 +20,7 @@ import { NdHud, type NdLedState } from "@/components/nd/nd-primitives";
 import type { NdResizeCorner } from "@/components/nd/nd-resize-grips";
 import { BodySocket, HeaderSocket } from "../body-dock";
 import { ND_NODE, ND_TIMING } from "../constants";
-import { WORKSPACE_NODE_DESCRIPTORS, workspaceNodeSize } from "../node-defs";
+import { getWorkspaceNodeDescriptor, workspaceNodeSize } from "../node-defs";
 import { useNodeFeedbackContext } from "../feedback";
 import { useNodeCount } from "../use-node-count";
 import { useTelemetrySelector, useWorkspace, useWorkspaceSelector } from "../workspace-context";
@@ -35,7 +35,7 @@ import {
   SyncBadge,
   SyncGroupButton,
 } from "./node-extras";
-import { getWorkspaceNodeSpec } from "../node-kit";
+import { getWorkspaceNodeSpec } from "../definitions";
 
 export interface NdGraphNodeData {
   wsId: string;
@@ -77,7 +77,7 @@ function NdGraphNodeInner({ id, selected }: NodeProps<NdGraphNodeType>) {
 
   const updateInternals = useUpdateNodeInternals();
 
-  const def = node ? WORKSPACE_NODE_DESCRIPTORS[node.type] : null;
+  const def = node ? getWorkspaceNodeDescriptor(node.type) : null;
   const form = resolveNodeForm(ws, id);
   const size = resolveNodeSize(ws, id);
 

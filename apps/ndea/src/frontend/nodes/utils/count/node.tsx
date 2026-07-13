@@ -4,20 +4,30 @@
  */
 
 import { CountBody } from "@/core/workspace/canvas/node-extras";
-import { defineWorkspaceNodeSpec } from "@/core/workspace/node-kit";
+import { defineNode, exactNodeTypeRef } from "@ndea/sdk";
+import { defineNativeNodeContribution } from "@/core/workspace/node-kit";
 import { passthroughGraphPredicate } from "@/core/graph/cook";
 
-export const countNode = defineWorkspaceNodeSpec({
-  id: "count",
-  type: "count",
+const countDefinition = defineNode({
+  ref: exactNodeTypeRef("count", "1.0.0"),
   title: "Count",
-  kind: "view",
+  role: "view",
   inputs: [{ id: "in", kind: "pred", label: "In" }],
-  outputs: [], // terminal — no downstream wiring (legacy hasOut: false)
-  evaluationRole: "view",
-  cook: (inputs) => passthroughGraphPredicate(inputs),
-  Body: CountBody,
-  geometry: { chipW: 128, card: { w: 152, h: 92 }, full: { w: 152, h: 92 }, canFull: false },
-  stage: "canvas-only",
-  inPalette: true,
+  outputs: [],
+  capabilities: [],
+});
+
+export const countNode = defineNativeNodeContribution({
+  definition: countDefinition,
+  graph: {
+    role: "view",
+    evaluationRole: "view",
+    cook: (inputs) => passthroughGraphPredicate(inputs),
+    Body: CountBody,
+  },
+  workspace: {
+    geometry: { chipW: 128, card: { w: 152, h: 92 }, full: { w: 152, h: 92 }, canFull: false },
+    stage: "canvas-only",
+    inPalette: true,
+  },
 });

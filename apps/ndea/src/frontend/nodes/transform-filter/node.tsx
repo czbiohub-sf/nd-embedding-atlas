@@ -18,7 +18,7 @@ import { transformFilterDefinition } from "@/nodes/transform-filter/plugin";
 import { createThresholdFilterRuntime } from "@/nodes/transform-filter/instance";
 import type { ThresholdFilterConfig } from "@/nodes/transform-filter/view";
 import { ThresholdFilterView } from "@/nodes/transform-filter/view";
-import { defineWorkspaceNodeSpec } from "@/core/workspace/node-kit";
+import { defineNativeNodeContribution } from "@/core/workspace/node-kit";
 import { assertSynchronousNodeRuntime, predicateSqls } from "@/core/graph/cook";
 import { useWorkspace } from "@/core/workspace/workspace-context";
 import type { GraphDocumentNode } from "@/core/graph/records";
@@ -36,53 +36,50 @@ function ThresholdBody({ node }: { node: GraphDocumentNode }) {
   ) : null;
 }
 
-export const thresholdNode = defineWorkspaceNodeSpec<ThresholdFilterConfig>({
-  id: "threshold",
-  type: "threshold",
-  title: "Threshold Filter",
-  kind: "transform",
-  pluginId: "transform-filter",
-  inputs: [{ id: "in", kind: "pred", label: "In" }],
-  outputs: [{ id: "out", kind: "pred", label: "Out" }],
-  evaluationRole: "transform",
-  // never registered via the plain cook path (registerEvaluation owns it); this is
-  // an inert placeholder so the spec satisfies the `cook` contract / `isWorkspaceNodeSpec`.
-  cook: (inputs) => ({ kind: "pred", sql: andPreds(predicateSqls(inputs)) }),
-  registerEvaluation(ctx) {
-    // Driven by the real plugin instance through a transform-scoped host:
-    // recompute publishes via host.publishPredicate → captured → cook result.
-    let captured: Predicate = null;
-    const configContract = transformFilterDefinition.config;
-    if (!configContract) throw new Error("transform-filter definition requires a config contract");
-    const hostHandle = makeTransformHost<ThresholdFilterConfig>({
-      instanceId: nodeInstanceId(ctx.id),
-      definitionRef: transformFilterDefinition.ref,
-      config: { ...configContract.defaultValue },
-      coordinator: ctx.coordinator as Coordinator,
-      table: ctx.table,
-      metadata: ctx.metadata,
-      onPublish: (sql) => {
-        captured = sql;
-      },
-      onConfigPatch: () => ctx.markDirty(),
-    });
-    const { host } = hostHandle;
-    const runtime = createThresholdFilterRuntime(host);
-    ctx.onDispose(() => {
-      runtime.dispose();
-      hostHandle.dispose();
-    });
-    ctx.setTransformHost(host);
-    ctx.addNode("transform", (inputs, pluginCtx) => {
-      captured = null;
-      if (!runtime.recompute) throw new Error("transform-filter runtime must define synchronous recompute");
-      const result = runtime.recompute(new Map([["filter-in", [andPreds(predicateSqls(inputs))]]]), pluginCtx);
-      assertSynchronousNodeRuntime(result);
-      return { kind: "pred", sql: captured };
-    });
+export const thresholdNode = defineNativeNodeContribution({
+  definition: transformFilterDefinition,
+  graph: {
+    persistedType: "threshold",
+    role: "transform",
+    evaluationRole: "transform",
+    cook: (inputs) => ({ kind: "pred", sql: andPreds(predicateSqls(inputs)) }),
+    registerEvaluation(ctx) {
+      let captured: Predicate = null;
+      const configContract = transformFilterDefinition.config;
+      if (!configContract) throw new Error("transform-filter definition requires a config contract");
+      const hostHandle = makeTransformHost<ThresholdFilterConfig>({
+        instanceId: nodeInstanceId(ctx.id),
+        definitionRef: transformFilterDefinition.ref,
+        config: { ...configContract.defaultValue },
+        coordinator: ctx.coordinator as Coordinator,
+        table: ctx.table,
+        metadata: ctx.metadata,
+        onPublish: (sql) => {
+          captured = sql;
+        },
+        onConfigPatch: () => ctx.markDirty(),
+      });
+      const { host } = hostHandle;
+      const runtime = createThresholdFilterRuntime(host);
+      ctx.onDispose(() => {
+        runtime.dispose();
+        hostHandle.dispose();
+      });
+      ctx.setTransformHost(host);
+      ctx.addNode("transform", (inputs, pluginCtx) => {
+        captured = null;
+        if (!runtime.recompute) throw new Error("transform-filter runtime must define synchronous recompute");
+        const result = runtime.recompute(new Map([["filter-in", [andPreds(predicateSqls(inputs))]]]), pluginCtx);
+        assertSynchronousNodeRuntime(result);
+        return { kind: "pred", sql: captured };
+      });
+    },
+    Body: ThresholdBody,
+    usesDefinitionModule: true,
   },
-  Body: ThresholdBody,
-  geometry: { chipW: 148, card: { w: 236, h: 124 }, full: { w: 258, h: 232 }, canFull: true },
-  stage: "pin-only",
-  inPalette: false,
+  workspace: {
+    geometry: { chipW: 148, card: { w: 236, h: 124 }, full: { w: 258, h: 232 }, canFull: true },
+    stage: "pin-only",
+    inPalette: false,
+  },
 });

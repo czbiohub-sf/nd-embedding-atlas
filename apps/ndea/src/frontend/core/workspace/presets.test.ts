@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import { registerBuiltinNodes } from "./nodes";
 import { resolvePreset } from "./presets";
+import { nativeWorkspaceNodeLibrary } from "./definitions";
 import { Workspace } from "./workspace-store";
 import type { Metadata } from "@ndea/protocol";
 
@@ -9,15 +9,12 @@ import type { Metadata } from "@ndea/protocol";
 // flush scheduler. We only inspect the store synchronously, so a stub is enough.
 (globalThis as { requestAnimationFrame?: unknown }).requestAnimationFrame ??= (() => 0) as unknown;
 
-// Register the built-in node specs so addNode/connect resolve real defs (kinds
-// drive wire legality — a mismatched connect() is a silent no-op).
-registerBuiltinNodes();
-
 function makeWs() {
   return new Workspace({
     coordinator: { query: () => Promise.resolve([]) } as never,
     table: "atlas",
     metadata: { dataset_keys: [] } as unknown as Metadata,
+    nodeLibrary: nativeWorkspaceNodeLibrary,
   });
 }
 

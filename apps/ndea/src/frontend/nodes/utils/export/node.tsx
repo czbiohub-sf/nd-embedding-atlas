@@ -5,30 +5,39 @@
  */
 
 import { ExportNodeBody } from "@/core/workspace/canvas/node-extras";
-import { defineWorkspaceNodeSpec } from "@/core/workspace/node-kit";
+import { defineNode, exactNodeTypeRef, nodeConfigVersion } from "@ndea/sdk";
+import { defineNativeNodeContribution } from "@/core/workspace/node-kit";
 import { passthroughGraphPredicate } from "@/core/graph/cook";
 import { collectionConfigSchema } from "@/nodes/collection/node";
 
-export const exportNode = defineWorkspaceNodeSpec({
-  id: "export",
-  type: "export",
+const exportDefinition = defineNode({
+  ref: exactNodeTypeRef("export", "1.0.0"),
   title: "Export",
-  kind: "transform",
-  // accepts a pred or sel input (only a row-bearing sel is saveable); the first
-  // port is the rendered/primary handle (pred), the second widens the accept-set.
+  role: "view",
   inputs: [
     { id: "in", kind: "pred", label: "In" },
     { id: "in-sel", kind: "sel", label: "In" },
   ],
-  outputs: [], // sink
-  // export saves the wired rows as a collection; it stores the resulting
-  // collectionId/Name (same shape as a collection node) for its body.
-  config: collectionConfigSchema,
-  configVersion: 1,
-  evaluationRole: "view",
-  cook: (inputs) => passthroughGraphPredicate(inputs),
-  Body: ExportNodeBody,
-  geometry: { chipW: 148, card: { w: 232, h: 132 }, full: { w: 232, h: 132 }, canFull: false },
-  stage: "canvas-only",
-  inPalette: true,
+  outputs: [],
+  capabilities: [],
+  config: {
+    schema: collectionConfigSchema,
+    version: nodeConfigVersion(1),
+    defaultValue: {},
+  },
+});
+
+export const exportNode = defineNativeNodeContribution({
+  definition: exportDefinition,
+  graph: {
+    role: "transform",
+    evaluationRole: "view",
+    cook: (inputs) => passthroughGraphPredicate(inputs),
+    Body: ExportNodeBody,
+  },
+  workspace: {
+    geometry: { chipW: 148, card: { w: 232, h: 132 }, full: { w: 232, h: 132 }, canFull: false },
+    stage: "canvas-only",
+    inPalette: true,
+  },
 });

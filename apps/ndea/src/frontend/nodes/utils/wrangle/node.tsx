@@ -5,8 +5,9 @@
  */
 
 import { z } from "zod";
+import { defineNode, exactNodeTypeRef, nodeConfigVersion } from "@ndea/sdk";
 import { WranglePane } from "@/core/workspace/canvas/WranglePane";
-import { defineWorkspaceNodeSpec } from "@/core/workspace/node-kit";
+import { defineNativeNodeContribution } from "@/core/workspace/node-kit";
 import { andGraphPredicate } from "@/core/graph/cook";
 import type { GraphDocumentNode } from "@/core/graph/records";
 
@@ -18,21 +19,32 @@ function WrangleBody({ node }: { node: GraphDocumentNode }) {
   return <WranglePane id={node.id} />;
 }
 
-export const wrangleNode = defineWorkspaceNodeSpec({
-  id: "wrangle",
-  type: "wrangle",
+const wrangleDefinition = defineNode({
+  ref: exactNodeTypeRef("wrangle", "1.0.0"),
   title: "Wrangle",
-  kind: "transform",
+  role: "transform",
   inputs: [{ id: "in", kind: "pred", label: "In" }],
   outputs: [{ id: "out", kind: "pred", label: "Out" }],
-  config: z.object({ prql: z.string().optional() }),
-  configVersion: 1,
-  evaluationRole: "transform",
-  // cook reads the COMPILED predicate (wranglePreds), not the PRQL source; the
-  // config holds the source `prql` that WranglePane reads + recompiles.
-  cook: (inputs, host) => andGraphPredicate(inputs, host.wranglePredicate()),
-  Body: WrangleBody,
-  geometry: { chipW: 148, card: { w: 280, h: 168 }, full: { w: 320, h: 280 }, canFull: true },
-  stage: "pin-only",
-  inPalette: true,
+  capabilities: [],
+  config: {
+    schema: z.object({ prql: z.string().optional() }),
+    version: nodeConfigVersion(1),
+    defaultValue: {},
+  },
+});
+
+export const wrangleNode = defineNativeNodeContribution({
+  definition: wrangleDefinition,
+  graph: {
+    role: "transform",
+    evaluationRole: "transform",
+    // Cook reads the compiled predicate, while config owns the PRQL source.
+    cook: (inputs, host) => andGraphPredicate(inputs, host.wranglePredicate()),
+    Body: WrangleBody,
+  },
+  workspace: {
+    geometry: { chipW: 148, card: { w: 280, h: 168 }, full: { w: 320, h: 280 }, canFull: true },
+    stage: "pin-only",
+    inPalette: true,
+  },
 });

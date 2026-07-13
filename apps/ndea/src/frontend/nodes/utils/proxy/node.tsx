@@ -3,19 +3,29 @@
  * input through so the seam relays predicates across the hierarchy boundary.
  */
 
-import { defineWorkspaceNodeSpec } from "@/core/workspace/node-kit";
+import { defineNode, exactNodeTypeRef } from "@ndea/sdk";
+import { defineNativeNodeContribution } from "@/core/workspace/node-kit";
 import { passthroughGraphPredicate } from "@/core/graph/cook";
 
-export const proxyNode = defineWorkspaceNodeSpec({
-  id: "proxy",
-  type: "proxy",
+const proxyDefinition = defineNode({
+  ref: exactNodeTypeRef("proxy", "1.0.0"),
   title: "proxy",
-  kind: "proxy",
+  role: "transform",
   inputs: [{ id: "in", kind: "pred", label: "In" }],
   outputs: [{ id: "out", kind: "pred", label: "Out" }],
-  evaluationRole: "view",
-  cook: (inputs) => passthroughGraphPredicate(inputs),
-  geometry: { chipW: 92, card: { w: 92, h: 28 }, full: { w: 92, h: 28 }, canFull: false },
-  stage: "canvas-only",
-  inPalette: false,
+  capabilities: [],
+});
+
+export const proxyNode = defineNativeNodeContribution({
+  definition: proxyDefinition,
+  graph: {
+    role: "proxy",
+    evaluationRole: "view",
+    cook: (inputs) => passthroughGraphPredicate(inputs),
+  },
+  workspace: {
+    geometry: { chipW: 92, card: { w: 92, h: 28 }, full: { w: 92, h: 28 }, canFull: false },
+    stage: "canvas-only",
+    inPalette: false,
+  },
 });

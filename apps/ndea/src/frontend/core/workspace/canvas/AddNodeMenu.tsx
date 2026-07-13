@@ -57,7 +57,7 @@ const CATEGORY: Partial<Record<GraphNodeType, Group>> = {
   export: "Output",
 };
 
-function bucketed(defs: WorkspaceNodeDescriptor[]): { group: Group; defs: WorkspaceNodeDescriptor[] }[] {
+function bucketed(defs: readonly WorkspaceNodeDescriptor[]): { group: Group; defs: WorkspaceNodeDescriptor[] }[] {
   const byGroup = new Map<Group, WorkspaceNodeDescriptor[]>();
   for (const d of defs) {
     const g = CATEGORY[d.type] ?? "Other";

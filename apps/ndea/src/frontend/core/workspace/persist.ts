@@ -1,6 +1,5 @@
 import type { JsonValue } from "@ndea/sdk";
-import { parseConfig } from "@/core/node/registry";
-import { getWorkspaceNodeSpec } from "./node-kit";
+import { parseWorkspaceNodeConfig, type WorkspaceNodeLibrary } from "./node-kit";
 import type { WorkspaceDocumentState } from "./types";
 import type { GraphDocumentEdge, GraphDocumentNode } from "@/core/graph/records";
 
@@ -43,15 +42,15 @@ export function migrate(doc: PersistedDoc): PersistedDoc {
 }
 
 /** Checks the document version and every node configuration. */
-export function validateDoc(doc: PersistedDoc): { ok: boolean; errors: string[] } {
+export function validateDoc(doc: PersistedDoc, nodeLibrary: WorkspaceNodeLibrary): { ok: boolean; errors: string[] } {
   const errors: string[] = [];
   if (doc.version !== DOC_VERSION) {
     errors.push(`document version ${doc.version} != current ${DOC_VERSION} (migration needed)`);
   }
   for (const node of Object.values(doc.state.nodes)) {
-    const spec = getWorkspaceNodeSpec(node.type);
-    if (spec?.config && node.config !== undefined) {
-      const res = parseConfig(spec, node.config);
+    const spec = nodeLibrary.getSpec(node.type);
+    if (spec?.definition.config && node.config !== undefined) {
+      const res = parseWorkspaceNodeConfig(spec, node.config);
       if (!res.ok) errors.push(`node "${node.id}" (${node.type}): ${res.error}`);
     }
   }
@@ -61,13 +60,13 @@ export function validateDoc(doc: PersistedDoc): { ok: boolean; errors: string[] 
 /**
  * Drop nodes whose type is no longer registered (a node type removed since the
  * doc was saved) and any edges touching them, so removing a node type self-heals
- * a persisted graph instead of crashing at render on the dangling
- * `WORKSPACE_NODE_DESCRIPTORS[type]` lookup. Also clears selection state pointing at a dropped
+ * a persisted graph instead of crashing at render on a missing descriptor.
+ * Also clears selection state pointing at a dropped
  * node/edge. Returns the doc unchanged when every node type resolves.
  */
-export function dropUnknownNodes(doc: PersistedDoc): PersistedDoc {
+export function dropUnknownNodes(doc: PersistedDoc, nodeLibrary: WorkspaceNodeLibrary): PersistedDoc {
   const s = doc.state;
-  const dropped = Object.values(s.nodes).filter((n) => getWorkspaceNodeSpec(n.type) === undefined);
+  const dropped = Object.values(s.nodes).filter((n) => nodeLibrary.getSpec(n.type) === undefined);
   if (dropped.length === 0) return doc;
   const ids = new Set(dropped.map((n) => n.id));
   console.warn(
@@ -112,7 +111,7 @@ export type LoadResult =
   | { kind: "miss" } // nothing stored
   | { kind: "invalid"; errors: string[] }; // present but corrupt / wrong version
 
-export function loadFromStorage(key: string): LoadResult {
+export function loadFromStorage(key: string, nodeLibrary: WorkspaceNodeLibrary): LoadResult {
   let raw: string | null = null;
   try {
     if (typeof localStorage === "undefined") return { kind: "miss" };
@@ -131,8 +130,8 @@ export function loadFromStorage(key: string): LoadResult {
   if (!isPersistedDoc(parsed)) {
     return { kind: "invalid", errors: ["stored document has an unexpected shape"] };
   }
-  const migrated = dropUnknownNodes(migrate(parsed));
-  const res = validateDoc(migrated);
+  const migrated = dropUnknownNodes(migrate(parsed), nodeLibrary);
+  const res = validateDoc(migrated, nodeLibrary);
   return res.ok ? { kind: "ok", state: migrated.state } : { kind: "invalid", errors: res.errors };
 }
 

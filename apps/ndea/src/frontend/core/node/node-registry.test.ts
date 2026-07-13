@@ -3,102 +3,131 @@ import { Glob } from "bun";
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
-import { getWorkspaceNodeSpec, listWorkspaceNodeSpecs } from "@/core/workspace/node-kit";
-import type { GraphNodeType } from "@/core/graph/records";
-import { registerBuiltins } from "@/core/workspace/definitions";
-import { getDefinition, getNode, listNodes, parseConfig } from "./registry";
+import {
+  getWorkspaceNodeSpec,
+  listWorkspaceNodeSpecs,
+  nativeNodeCatalog,
+  nativePluginFactory,
+} from "@/core/workspace/definitions";
+import { getWorkspaceNodeDescriptor, workspacePaletteNodeDescriptors } from "@/core/workspace/node-defs";
+import { parseWorkspaceNodeConfig, workspaceNodeSpecOf } from "@/core/workspace/node-kit";
+import { NATIVE_NODE_CONTRIBUTIONS, NATIVE_NODE_CURRENT_REFS, NATIVE_NODE_DEFINITIONS } from "@/core/workspace/nodes";
+import { collectPluginContribution, NATIVE_NODE_SOURCE } from "@/core/plugin/registration";
 import { loadNodeModule } from "./load-module";
 
-registerBuiltins();
 const APP_ROOT = resolve(import.meta.dir, "../../../..");
 
-// Keep the compile-time union and runtime registry in lockstep.
-const ALL_TYPES: GraphNodeType[] = [
-  "obs",
-  "dataset",
-  "threshold",
-  "wrangle",
-  "annotate",
-  "count",
-  "table",
-  "scatter",
-  "count-plot",
-  "histogram",
-  "gallery",
-  "fov",
-  "collection",
-  "export",
-  "cache",
-  "selection",
-  "subnet",
-  "proxy",
-];
+describe("native node catalog fitness functions", () => {
+  test("the native factory registers every tuple definition exactly once", async () => {
+    const batch = await collectPluginContribution(NATIVE_NODE_SOURCE, nativePluginFactory);
+    expect(batch.definitions).toEqual(NATIVE_NODE_DEFINITIONS);
+    expect(batch.definitions).toHaveLength(NATIVE_NODE_CONTRIBUTIONS.length);
+    expect(new Set(batch.definitions.map(({ ref }) => `${ref.nodeTypeId}@${ref.nodeTypeVersion}`)).size).toBe(
+      batch.definitions.length,
+    );
+    expect(nativeNodeCatalog.size).toBe(batch.definitions.length);
+  });
 
-const REGISTRATION_ORDER: GraphNodeType[] = [
-  "obs",
-  "dataset",
-  "threshold",
-  "wrangle",
-  "annotate",
-  "count",
-  "table",
-  "scatter",
-  "count-plot",
-  "histogram",
-  "gallery",
-  "fov",
-  "collection",
-  "export",
-  "cache",
-  "subnet",
-  "proxy",
-  "selection",
-];
-
-const DEFINITION_IDS = ["scatter", "table", "count-plot", "histogram", "gallery", "annotate"] as const;
-
-describe("node registry fitness functions", () => {
-  test("every node type resolves to a registered node spec", () => {
-    for (const type of ALL_TYPES) {
-      expect(getWorkspaceNodeSpec(type), `node type "${type}" has no registered WorkspaceNodeSpec`).toBeDefined();
+  test("every tuple exact ref and current id resolves to its one authoritative definition", () => {
+    expect(NATIVE_NODE_CURRENT_REFS).toHaveLength(NATIVE_NODE_CONTRIBUTIONS.length);
+    for (const contribution of NATIVE_NODE_CONTRIBUTIONS) {
+      const { definition } = contribution;
+      expect(nativeNodeCatalog.resolveExact(definition.ref)).toBe(definition);
+      expect(nativeNodeCatalog.resolveCurrent(definition.ref.nodeTypeId)).toBe(definition);
+      expect(String(definition.ref.nodeTypeVersion)).toBe("1.0.0");
     }
   });
 
-  test("built-in bootstrap is idempotent and preserves registry order", () => {
-    registerBuiltins();
-    expect(listWorkspaceNodeSpecs().map((spec) => spec.type)).toEqual(REGISTRATION_ORDER);
+  test("persisted compatibility identities are explicit tuple policy", () => {
+    expect(String(getWorkspaceNodeSpec("fov")?.definition.ref.nodeTypeId)).toBe("image-viewer");
+    expect(getWorkspaceNodeDescriptor("fov").label).toBe("Image Viewer");
+    expect(String(getWorkspaceNodeSpec("threshold")?.definition.ref.nodeTypeId)).toBe("transform-filter");
+    expect(String(getWorkspaceNodeSpec("selection")?.definition.ref.nodeTypeId)).toBe("selection");
+    expect(getWorkspaceNodeDescriptor("selection").inPalette).toBe(false);
   });
 
-  test("each same-id built-in keeps graph runtime app-local and definition metadata authoritative", () => {
-    for (const id of DEFINITION_IDS) {
-      const node = getNode(id);
-      const definition = getDefinition(id);
-      expect(definition, `definition "${id}" is not registered`).toBeDefined();
-      expect(node, `node "${id}" is not registered`).toBeDefined();
-      expect(node).not.toBe(definition);
-      expect(node?.title).toBe(definition?.title);
-      expect(typeof (node as { cook?: unknown }).cook, `node "${id}" lost its graph runtime`).toBe("function");
-      expect(typeof definition?.load, `definition "${id}" lost its lazy module`).toBe("function");
+  test("Workspace order and palette are tuple-derived without a second list", () => {
+    const tupleSpecs = NATIVE_NODE_CONTRIBUTIONS.map(workspaceNodeSpecOf);
+    expect(listWorkspaceNodeSpecs().map(({ type }) => type)).toEqual(tupleSpecs.map(({ type }) => type));
+    expect(workspacePaletteNodeDescriptors().map(({ type }) => type)).toEqual(
+      tupleSpecs.filter(({ inPalette }) => inPalette).map(({ type }) => type),
+    );
+  });
+
+  test("definition metadata is authoritative while graph runtime and layout stay app-local", () => {
+    for (const spec of listWorkspaceNodeSpecs()) {
+      expect(nativeNodeCatalog.resolveExact(spec.definition.ref)).toBe(spec.definition);
+      expect(getWorkspaceNodeDescriptor(spec.type).label).toBe(spec.definition.title);
+      expect(spec.cook).toBeFunction();
+      expect(spec.geometry.card.w).toBeGreaterThan(0);
     }
   });
 
-  test("each built-in registry identity is unique while legacy split names remain unchanged", () => {
-    const ids = listNodes().map((node) => node.id);
-    expect(new Set(ids).size).toBe(ids.length);
-    expect(getNode("fov")?.title).toBe("Idetik");
-    expect(getDefinition("image-viewer")?.title).toBe("Image Viewer");
-    expect(getNode("threshold")?.title).toBe("Threshold Filter");
-    expect(getDefinition("transform-filter")?.title).toBe("Threshold Filter");
+  test("Scatter, charts, Table, Annotate, and Image Viewer preserve characterized ports and metadata", () => {
+    const characterized = {
+      scatter: {
+        role: "view",
+        inputs: [["in", "pred"]],
+        outputs: [["out", "sel"]],
+        icon: "scatter-chart",
+      },
+      "count-plot": {
+        role: "view",
+        inputs: [["in", "pred"]],
+        outputs: [["out", "sel"]],
+        icon: "bar-chart",
+      },
+      histogram: {
+        role: "view",
+        inputs: [["in", "pred"]],
+        outputs: [["out", "sel"]],
+        icon: "bar-chart",
+      },
+      table: {
+        role: "view",
+        inputs: [["in", "pred"]],
+        outputs: [["out", "focus"]],
+        icon: "table",
+      },
+      annotate: {
+        role: "view",
+        inputs: [["in", "pred"]],
+        outputs: [["out", "focus"]],
+        icon: "tag",
+      },
+      "image-viewer": {
+        role: "view",
+        inputs: [["highlight-in", "focus"]],
+        outputs: [],
+        icon: "image",
+      },
+    } as const;
+
+    for (const [nodeTypeId, expected] of Object.entries(characterized)) {
+      const definition = nativeNodeCatalog.resolveCurrent(nodeTypeId);
+      expect(definition, `${nodeTypeId} definition missing`).toBeDefined();
+      expect(definition?.role).toBe(expected.role);
+      expect(definition?.inputs.map(({ id, kind }) => [id, kind])).toEqual(
+        expected.inputs.map(([portId, kind]) => [portId, kind]),
+      );
+      expect(definition?.outputs.map(({ id, kind }) => [id, kind])).toEqual(
+        expected.outputs.map(([portId, kind]) => [portId, kind]),
+      );
+      expect(definition?.presentation?.icon).toBe(expected.icon);
+    }
+    expect(nativeNodeCatalog.resolveCurrent("scatter")?.documentation?.summary).toContain("embedding");
+    expect(nativeNodeCatalog.resolveCurrent("table")?.documentation?.summary).toContain("rows");
+    expect(nativeNodeCatalog.resolveCurrent("image-viewer")?.dataRequirements).toEqual(["plate-image"]);
   });
 
-  test("native view modules expose framework-neutral Body mounts, not React components", async () => {
-    const module = await loadNodeModule("scatter");
+  test("native view modules expose framework-neutral Body mounts", async () => {
+    const module = await loadNodeModule(nativeNodeCatalog, "scatter");
     expect(module.mountBody).toBeFunction();
     expect("Component" in module).toBe(false);
   });
 
   test("Scatter declares every optional host service used by its Body and routing", () => {
-    const capabilities = new Set(getDefinition("scatter")?.capabilities);
+    const capabilities = new Set(nativeNodeCatalog.resolveCurrent("scatter")?.capabilities);
     for (const capability of [
       "focus-coordination",
       "view-coordination",
@@ -111,28 +140,25 @@ describe("node registry fitness functions", () => {
     }
   });
 
-  test("every spec's config schema accepts a fresh (empty) config", () => {
-    for (const type of ALL_TYPES) {
-      const spec = getWorkspaceNodeSpec(type);
-      if (spec?.config) {
-        expect(parseConfig(spec, {}).ok, `spec "${type}" config schema rejects a fresh {} config`).toBe(true);
-      }
+  test("every config contract accepts its tuple-defined default and fresh persisted config", () => {
+    for (const spec of listWorkspaceNodeSpecs()) {
+      const config = spec.definition.config;
+      if (!config) continue;
+      expect(config.schema.safeParse(config.defaultValue).success, `${spec.type} rejects its default config`).toBe(
+        true,
+      );
+      expect(parseWorkspaceNodeConfig(spec, {}).ok, `${spec.type} rejects a fresh {} config`).toBe(true);
     }
   });
 
-  test("no node-type dispatch switch remains (ratchet at 0)", () => {
-    let count = 0;
+  test("no node-type dispatch switch remains", () => {
     const hits: string[] = [];
     for (const file of new Glob("src/frontend/**/*.{ts,tsx}").scanSync(APP_ROOT)) {
-      if (file.includes(".test.")) continue; // the guard targets production code
-      const matches = readFileSync(join(APP_ROOT, file), "utf8").match(/switch\s*\(\s*(node|def)\.type\s*\)/g);
-      if (matches) {
-        count += matches.length;
-        hits.push(`${file} (${matches.length})`);
-      }
+      if (file.includes(".test.")) continue;
+      const count =
+        readFileSync(join(APP_ROOT, file), "utf8").match(/switch\s*\(\s*(node|def)\.type\s*\)/g)?.length ?? 0;
+      if (count) hits.push(`${file} (${count})`);
     }
-    // Baseline 0: cook + body both dispatch through `getWorkspaceNodeSpec(type)`; threshold
-    // (the one instance-driven node) converges via `registerEvaluation`, not a switch.
-    expect(count, `unexpected node-type switch(es): ${hits.join(", ")}`).toBe(0);
+    expect(hits).toEqual([]);
   });
 });

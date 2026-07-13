@@ -25,8 +25,7 @@ import type { ThresholdFilterConfig } from "@/nodes/transform-filter/view";
 import type { Metadata } from "@/types";
 import type { NdForm } from "@/components/nd/nd-resolve-form";
 import { toRows } from "@/lib/mosaic-helpers";
-import { getWorkspaceNodeSpec } from "./node-kit";
-import { WORKSPACE_NODE_DESCRIPTORS, type WorkspaceNodeDescriptor } from "./node-defs";
+import type { WorkspaceNodeDescriptor, WorkspaceNodeLibrary } from "./node-kit";
 import { NodeCounts } from "./node-counts";
 import {
   treeMapLeaves,
@@ -49,6 +48,7 @@ export interface WorkspaceDeps {
   coordinator: Coordinator;
   table: string;
   metadata: Metadata;
+  nodeLibrary: WorkspaceNodeLibrary;
 }
 
 export type WorkspaceDocumentStore = Pick<Store<WorkspaceDocumentState>, "state" | "get" | "subscribe">;
@@ -142,7 +142,13 @@ export class Workspace {
 
   def(id: string): WorkspaceNodeDescriptor | null {
     const n = this.store.state.nodes[id];
-    return n ? WORKSPACE_NODE_DESCRIPTORS[n.type] : null;
+    return n ? (this.deps.nodeLibrary.getDescriptor(n.type) ?? null) : null;
+  }
+
+  private requireNodeDescriptor(type: GraphNodeType): WorkspaceNodeDescriptor {
+    const descriptor = this.deps.nodeLibrary.getDescriptor(type);
+    if (!descriptor) throw new Error(`no registered node descriptor for type "${type}"`);
+    return descriptor;
   }
 
   /** kind-compatibility + no-duplicate + DAG — the full wire-legality rule */
@@ -163,7 +169,7 @@ export class Workspace {
   /* ── topology actions ─────────────────────────────────────────────── */
 
   addNode(type: GraphNodeType, pos: WorkspaceNodePosition, idOverride?: string): string {
-    const def = WORKSPACE_NODE_DESCRIPTORS[type];
+    const def = this.requireNodeDescriptor(type);
     const id = idOverride ?? `${type}-${++this.nodeSeq}`;
     const parent = this.store.state.graphPath;
     const node: GraphDocumentNode = { id, type, kind: def.kind, label: def.label, pluginId: def.pluginId, parent };
@@ -186,7 +192,7 @@ export class Workspace {
       ["-out", "⊲ out", 760],
     ] as const) {
       const pid = `${subId}${suffix}`;
-      const pdef = WORKSPACE_NODE_DESCRIPTORS.proxy;
+      const pdef = this.requireNodeDescriptor("proxy");
       const pnode: GraphDocumentNode = { id: pid, type: "proxy", kind: "proxy", label, pluginId: null, parent: subId };
       this.registerGraphNode(pid, pdef);
       this.documentStore.setState((s) => ({
@@ -310,7 +316,7 @@ export class Workspace {
     // they are registered here like any other node — only their hidden seam edge
     // (added by `birthSubnetSeam`, never persisted) is recreated per subnet.
     for (const node of Object.values(state.nodes)) {
-      const def = WORKSPACE_NODE_DESCRIPTORS[node.type];
+      const def = this.deps.nodeLibrary.getDescriptor(node.type);
       if (!def) continue; // unknown type (older/newer doc) — skip rather than throw
       this.registerGraphNode(node.id, def);
     }
@@ -677,7 +683,7 @@ export class Workspace {
     // Unified path: every node type resolves to a registered spec that owns its
     // evaluator cook + kind (no switch). An instance-driven node (the threshold
     // transform) supplies `registerEvaluation` and owns its evaluator registration.
-    const spec = getWorkspaceNodeSpec(def.type);
+    const spec = this.deps.nodeLibrary.getSpec(def.type);
     if (!spec) throw new Error(`no registered node spec for type "${def.type}"`);
     if (spec.registerEvaluation) {
       spec.registerEvaluation(this.makeGraphNodeRegistrationContext(id));
@@ -877,7 +883,7 @@ export class Workspace {
   stageCandidates(): string[] {
     return Object.values(this.store.state.nodes)
       .filter(
-        (n) => WORKSPACE_NODE_DESCRIPTORS[n.type].stage !== "canvas-only" && this.placementOf(n.id) === "embedded",
+        (n) => this.requireNodeDescriptor(n.type).stage !== "canvas-only" && this.placementOf(n.id) === "embedded",
       )
       .map((n) => n.id);
   }
@@ -944,7 +950,7 @@ export class Workspace {
     let maxY = -1e9;
     for (const id of sel) {
       const p = s.positions[id] ?? { x: 0, y: 0 };
-      const def = WORKSPACE_NODE_DESCRIPTORS[s.nodes[id].type];
+      const def = this.requireNodeDescriptor(s.nodes[id].type);
       minX = Math.min(minX, p.x);
       minY = Math.min(minY, p.y);
       maxX = Math.max(maxX, p.x + def.card.w);

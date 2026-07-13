@@ -1,67 +1,55 @@
-/** Idempotent registration of every built-in workspace node. */
-
-import { getNode, registerNode } from "@/core/node/registry";
-import { defineWorkspaceNodeSpec } from "../node-kit";
+import type { ExactNodeTypeRef, NodeDefinition } from "@ndea/sdk";
 import { annotateNode } from "@/nodes/annotate/node";
-import { cacheNode } from "@/nodes/utils/cache/node";
-import { collectionNode } from "@/nodes/collection/node";
-import { countNode } from "@/nodes/utils/count/node";
 import { countPlotNode } from "@/nodes/charts/count-plot/node";
 import { histogramNode } from "@/nodes/charts/histogram/node";
-import { datasetNode } from "@/nodes/utils/dataset/node";
-import { exportNode } from "@/nodes/utils/export/node";
-import { fovNode } from "@/nodes/image-viewer/node";
+import { collectionNode } from "@/nodes/collection/node";
 import { galleryNode } from "@/nodes/gallery/node";
-import { obsNode } from "@/nodes/utils/obs/node";
-import { proxyNode } from "@/nodes/utils/proxy/node";
+import { fovNode } from "@/nodes/image-viewer/node";
 import { scatterNode } from "@/nodes/scatter/node";
-import { subnetNode } from "@/nodes/utils/subnet/node";
 import { tableNode } from "@/nodes/table/node";
 import { thresholdNode } from "@/nodes/transform-filter/node";
+import { cacheNode, selectionNode } from "@/nodes/utils/cache/node";
+import { countNode } from "@/nodes/utils/count/node";
+import { datasetNode } from "@/nodes/utils/dataset/node";
+import { exportNode } from "@/nodes/utils/export/node";
+import { obsNode } from "@/nodes/utils/obs/node";
+import { proxyNode } from "@/nodes/utils/proxy/node";
+import { subnetNode } from "@/nodes/utils/subnet/node";
 import { wrangleNode } from "@/nodes/utils/wrangle/node";
+import type { AnyNativeNodeContribution } from "../node-kit";
 
-let registered = false;
+/**
+ * The sole native-node inventory. Tuple order is the product order; filtering
+ * this tuple is the only palette, boot, and fitness enumeration path.
+ */
+export const NATIVE_NODE_CONTRIBUTIONS = Object.freeze([
+  obsNode,
+  datasetNode,
+  thresholdNode,
+  wrangleNode,
+  annotateNode,
+  countNode,
+  tableNode,
+  scatterNode,
+  countPlotNode,
+  histogramNode,
+  galleryNode,
+  fovNode,
+  collectionNode,
+  exportNode,
+  cacheNode,
+  subnetNode,
+  proxyNode,
+  selectionNode,
+] as const satisfies readonly AnyNativeNodeContribution[]);
 
-export function registerBuiltinNodes(): void {
-  if (registered || getNode("obs")) {
-    registered = true;
-    return;
-  }
-  // Registration order = the legacy WORKSPACE_NODE_DESCRIPTORS literal order, so the derived
-  // PALETTE (filtered to inPalette, in registry order) is byte-for-byte stable.
-  for (const spec of [
-    obsNode,
-    datasetNode,
-    thresholdNode,
-    wrangleNode,
-    annotateNode,
-    countNode,
-    tableNode,
-    scatterNode,
-    countPlotNode,
-    histogramNode,
-    galleryNode,
-    fovNode,
-    collectionNode,
-    exportNode,
-    cacheNode,
-    subnetNode,
-    proxyNode,
-  ]) {
-    registerNode(spec);
-  }
-  // Keep persisted "selection" nodes readable without offering them in the palette.
-  registerNode(
-    defineWorkspaceNodeSpec({
-      ...cacheNode,
-      id: "selection",
-      type: "selection",
-      kind: "selection",
-      title: "Selection",
-      inPalette: false,
-      // preserve the legacy Selection geometry (slightly smaller than cache).
-      geometry: { chipW: 148, card: { w: 232, h: 164 }, full: { w: 232, h: 164 }, canFull: false },
-    }),
-  );
-  registered = true;
-}
+// Heterogeneous immutable inventory: each definition retains its precise author type
+// before this sole existential collection boundary.
+// eslint-disable-next-line typescript/no-explicit-any -- generic erasure is required for the mixed-config tuple
+export const NATIVE_NODE_DEFINITIONS: readonly NodeDefinition<any, any>[] = Object.freeze(
+  NATIVE_NODE_CONTRIBUTIONS.map(({ definition }) => definition),
+);
+
+export const NATIVE_NODE_CURRENT_REFS: readonly ExactNodeTypeRef[] = Object.freeze(
+  NATIVE_NODE_DEFINITIONS.map(({ ref }) => ref),
+);

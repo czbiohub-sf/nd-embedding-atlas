@@ -13,9 +13,9 @@
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
-import { registerBuiltinNodes } from "./nodes";
 import { loadFromStorage, saveToStorage, storageKey, toPersistedDoc, validateDoc } from "./persist";
 import { predicateSql } from "@/core/graph/cook";
+import { nativeWorkspaceNodeLibrary } from "./definitions";
 import { seedWorkspace, Workspace } from "./workspace-store";
 import type { Metadata } from "@ndea/protocol";
 
@@ -23,13 +23,12 @@ import type { Metadata } from "@ndea/protocol";
 // flush scheduler. We pull synchronously, so a no-op stub is enough.
 (globalThis as { requestAnimationFrame?: unknown }).requestAnimationFrame ??= (() => 0) as unknown;
 
-registerBuiltinNodes();
-
 function makeWs() {
   return new Workspace({
     coordinator: { query: () => Promise.resolve([]) } as never,
     table: "atlas",
     metadata: { dataset_keys: [] } as unknown as Metadata,
+    nodeLibrary: nativeWorkspaceNodeLibrary,
   });
 }
 
@@ -69,7 +68,7 @@ describe("persistence round-trip (Track B)", () => {
 
     // ── save → validate → load into a brand-new Workspace ──
     const doc = toPersistedDoc(src.store.state);
-    expect(validateDoc(doc).ok).toBe(true);
+    expect(validateDoc(doc, nativeWorkspaceNodeLibrary).ok).toBe(true);
 
     const dst = makeWs();
     dst.loadDocument(doc.state);
@@ -90,7 +89,7 @@ describe("persistence round-trip (Track B)", () => {
     const src = makeWs();
     seedWorkspace(src);
     const doc = toPersistedDoc(src.store.state);
-    expect(validateDoc(doc).ok).toBe(true);
+    expect(validateDoc(doc, nativeWorkspaceNodeLibrary).ok).toBe(true);
 
     const dst = makeWs();
     dst.loadDocument(doc.state);
@@ -134,7 +133,7 @@ describe("persistence round-trip (Track B)", () => {
     src.coordination.assignScope(sc, "viewSync", "lock1");
 
     const doc = toPersistedDoc(src.store.state);
-    expect(validateDoc(doc).ok).toBe(true);
+    expect(validateDoc(doc, nativeWorkspaceNodeLibrary).ok).toBe(true);
 
     const dst = makeWs();
     dst.loadDocument(doc.state);
@@ -175,7 +174,7 @@ describe("storage backend + invalid-doc fallback", () => {
     const key = storageKey("dsA:atlas");
     saveToStorage(key, ws.store.state);
 
-    const res = loadFromStorage(key);
+    const res = loadFromStorage(key, nativeWorkspaceNodeLibrary);
     expect(res.kind).toBe("ok");
     if (res.kind === "ok") {
       expect(Object.keys(res.state.nodes).length).toBe(Object.keys(ws.store.state.nodes).length);
@@ -183,13 +182,13 @@ describe("storage backend + invalid-doc fallback", () => {
   });
 
   test("a missing key is a clean miss (seam seeds, no warning)", () => {
-    expect(loadFromStorage(storageKey("nope")).kind).toBe("miss");
+    expect(loadFromStorage(storageKey("nope"), nativeWorkspaceNodeLibrary).kind).toBe("miss");
   });
 
   test("a corrupt stored doc is rejected (seam warns + seeds)", () => {
     const key = storageKey("dsB:atlas");
     localStorage.setItem(key, "{ not json");
-    expect(loadFromStorage(key).kind).toBe("invalid");
+    expect(loadFromStorage(key, nativeWorkspaceNodeLibrary).kind).toBe("invalid");
   });
 
   test("a malformed node config is rejected by parse-on-load", () => {
@@ -202,7 +201,7 @@ describe("storage backend + invalid-doc fallback", () => {
     const key = storageKey("dsC:atlas");
     saveToStorage(key, malformed);
 
-    const res = loadFromStorage(key);
+    const res = loadFromStorage(key, nativeWorkspaceNodeLibrary);
     expect(res.kind).toBe("invalid");
     if (res.kind === "invalid") expect(res.errors.join(" ")).toContain(ds);
   });
@@ -210,7 +209,7 @@ describe("storage backend + invalid-doc fallback", () => {
   test("a future doc version is rejected (migration anchor)", () => {
     const key = storageKey("dsD:atlas");
     localStorage.setItem(key, JSON.stringify({ version: 999, state: { nodes: {}, edges: {} } }));
-    const res = loadFromStorage(key);
+    const res = loadFromStorage(key, nativeWorkspaceNodeLibrary);
     expect(res.kind).toBe("invalid");
     if (res.kind === "invalid") expect(res.errors.join(" ")).toContain("migration");
   });
@@ -243,7 +242,7 @@ describe("storage backend + invalid-doc fallback", () => {
     };
     localStorage.setItem(key, JSON.stringify(v1));
 
-    const res = loadFromStorage(key);
+    const res = loadFromStorage(key, nativeWorkspaceNodeLibrary);
     expect(res.kind).toBe("ok");
     if (res.kind === "ok") {
       expect(res.state.coordinationScopes).toEqual({ obs: { focus: "A" } });

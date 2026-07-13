@@ -15,7 +15,6 @@ import { NdIconButton } from "@/components/nd/nd-icon-button";
 import { NdBracketed, NdCaption, NdChip, NdHud } from "@/components/nd/nd-primitives";
 import { useCollections } from "@/components/collections/useCollections";
 import { ScopePicker } from "./scope-picker";
-import { WORKSPACE_NODE_DESCRIPTORS } from "../node-defs";
 import type { FeedbackChannel } from "../feedback";
 import { nodeConfig } from "@/core/graph/cook";
 import { useNodeCount } from "../use-node-count";
@@ -74,7 +73,8 @@ const fmt = (n: number) => n.toLocaleString("en-US");
 export function FlagButton({ node, compact = false }: { node: GraphDocumentNode; compact?: boolean }) {
   const ws = useWorkspace();
   const flags = useWorkspaceSelector((s) => s.flags[node.id] ?? {});
-  const def = WORKSPACE_NODE_DESCRIPTORS[node.type];
+  const def = ws.def(node.id);
+  if (!def) return null;
   if ((def.kind === "transform" || def.kind === "subnet") && node.type !== "selection") {
     return (
       <NdIconButton

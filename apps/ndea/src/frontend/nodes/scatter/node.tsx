@@ -4,20 +4,21 @@
  * port (sel), delivered downstream outside the cook. Out port is `sel`.
  */
 
-import { defineWorkspaceNodeSpec } from "@/core/workspace/node-kit";
+import { defineNativeNodeContribution } from "@/core/workspace/node-kit";
 import { passthroughGraphPredicate } from "@/core/graph/cook";
+import { scatterDefinition } from "./plugin";
 
-export const scatterNode = defineWorkspaceNodeSpec({
-  id: "scatter",
-  type: "scatter",
-  title: "Scatter",
-  kind: "view",
-  pluginId: "scatter",
-  inputs: [{ id: "in", kind: "pred", label: "In" }],
-  outputs: [{ id: "out", kind: "sel", label: "Selection" }],
-  evaluationRole: "view",
-  cook: (inputs) => passthroughGraphPredicate(inputs),
-  geometry: { chipW: 132, card: { w: 220, h: 156 }, full: { w: 420, h: 380 }, canFull: true },
-  stage: "stageable",
-  inPalette: true,
+export const scatterNode = defineNativeNodeContribution({
+  definition: scatterDefinition,
+  graph: {
+    role: "view",
+    evaluationRole: "view",
+    cook: (inputs) => passthroughGraphPredicate(inputs),
+    usesDefinitionModule: true,
+  },
+  workspace: {
+    geometry: { chipW: 132, card: { w: 220, h: 156 }, full: { w: 420, h: 380 }, canFull: true },
+    stage: "stageable",
+    inPalette: true,
+  },
 });

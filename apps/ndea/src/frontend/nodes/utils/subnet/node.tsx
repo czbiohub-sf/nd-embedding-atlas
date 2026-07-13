@@ -5,20 +5,30 @@
  */
 
 import { SubnetBody } from "@/core/workspace/canvas/node-extras";
-import { defineWorkspaceNodeSpec } from "@/core/workspace/node-kit";
+import { defineNode, exactNodeTypeRef } from "@ndea/sdk";
+import { defineNativeNodeContribution } from "@/core/workspace/node-kit";
 import { passthroughGraphPredicate } from "@/core/graph/cook";
 
-export const subnetNode = defineWorkspaceNodeSpec({
-  id: "subnet",
-  type: "subnet",
+const subnetDefinition = defineNode({
+  ref: exactNodeTypeRef("subnet", "1.0.0"),
   title: "Subnet",
-  kind: "subnet",
+  role: "transform",
   inputs: [{ id: "in", kind: "pred", label: "In" }],
   outputs: [{ id: "out", kind: "pred", label: "Out" }],
-  evaluationRole: "view",
-  cook: (inputs) => passthroughGraphPredicate(inputs),
-  Body: SubnetBody,
-  geometry: { chipW: 150, card: { w: 220, h: 96 }, full: { w: 220, h: 96 }, canFull: false },
-  stage: "canvas-only",
-  inPalette: false,
+  capabilities: [],
+});
+
+export const subnetNode = defineNativeNodeContribution({
+  definition: subnetDefinition,
+  graph: {
+    role: "subnet",
+    evaluationRole: "view",
+    cook: (inputs) => passthroughGraphPredicate(inputs),
+    Body: SubnetBody,
+  },
+  workspace: {
+    geometry: { chipW: 150, card: { w: 220, h: 96 }, full: { w: 220, h: 96 }, canFull: false },
+    stage: "canvas-only",
+    inPalette: false,
+  },
 });
