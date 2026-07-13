@@ -95,6 +95,113 @@ export interface NodeConfigContract<Config = unknown> {
   readonly migrations?: readonly NodeConfigMigration[];
 }
 
+export interface NodeConfigSnapshot {
+  readonly version: NodeConfigVersion;
+  readonly value: JsonValue;
+}
+
+export interface MigratedNodeConfig<Config> {
+  readonly version: NodeConfigVersion;
+  readonly value: Config;
+}
+
+export type NodeConfigMigrationErrorCode =
+  | "future-version"
+  | "invalid-migration-graph"
+  | "missing-migrator"
+  | "migration-failed"
+  | "invalid-config";
+
+export class NodeConfigMigrationError extends Error {
+  readonly code: NodeConfigMigrationErrorCode;
+  readonly sourceVersion: NodeConfigVersion;
+  readonly targetVersion: NodeConfigVersion;
+
+  constructor(
+    code: NodeConfigMigrationErrorCode,
+    sourceVersion: NodeConfigVersion,
+    targetVersion: NodeConfigVersion,
+    options?: ErrorOptions,
+  ) {
+    super(
+      `Cannot migrate node config from version ${sourceVersion as number} to ${targetVersion as number}: ${code}.`,
+      options,
+    );
+    this.name = "NodeConfigMigrationError";
+    this.code = code;
+    this.sourceVersion = sourceVersion;
+    this.targetVersion = targetVersion;
+  }
+}
+
+function indexNodeConfigMigrations(
+  contract: NodeConfigContract,
+  sourceVersion: NodeConfigVersion,
+): ReadonlyMap<NodeConfigVersion, NodeConfigMigration> {
+  const targetVersion = contract.version;
+  const migrationsBySource = new Map<NodeConfigVersion, NodeConfigMigration>();
+
+  if (!Number.isSafeInteger(targetVersion as number) || (targetVersion as number) < 0) {
+    throw new NodeConfigMigrationError("invalid-migration-graph", sourceVersion, targetVersion);
+  }
+
+  for (const migration of contract.migrations ?? []) {
+    const from = migration.from as number;
+    const to = migration.to as number;
+    if (
+      !Number.isSafeInteger(from) ||
+      from < 0 ||
+      !Number.isSafeInteger(to) ||
+      to <= from ||
+      to > (targetVersion as number) ||
+      typeof migration.migrate !== "function" ||
+      migrationsBySource.has(migration.from)
+    ) {
+      throw new NodeConfigMigrationError("invalid-migration-graph", sourceVersion, targetVersion);
+    }
+    migrationsBySource.set(migration.from, migration);
+  }
+
+  return migrationsBySource;
+}
+
+export function migrateNodeConfig<Config>(
+  contract: NodeConfigContract<Config>,
+  snapshot: NodeConfigSnapshot,
+): MigratedNodeConfig<Config> {
+  const sourceVersion = snapshot.version;
+  const targetVersion = contract.version;
+  const migrationsBySource = indexNodeConfigMigrations(contract, sourceVersion);
+
+  if ((sourceVersion as number) > (targetVersion as number)) {
+    throw new NodeConfigMigrationError("future-version", sourceVersion, targetVersion);
+  }
+
+  let version = sourceVersion;
+  let value = structuredClone(snapshot.value);
+  while (version !== targetVersion) {
+    const migration = migrationsBySource.get(version);
+    if (!migration) {
+      throw new NodeConfigMigrationError("missing-migrator", sourceVersion, targetVersion);
+    }
+    try {
+      value = migration.migrate(value);
+    } catch (cause) {
+      throw new NodeConfigMigrationError("migration-failed", sourceVersion, targetVersion, { cause });
+    }
+    version = migration.to;
+  }
+
+  let parsedValue: Config;
+  try {
+    parsedValue = contract.schema.parse(value);
+  } catch (cause) {
+    throw new NodeConfigMigrationError("invalid-config", sourceVersion, targetVersion, { cause });
+  }
+
+  return Object.freeze({ version: targetVersion, value: parsedValue });
+}
+
 export type NodeCapability =
   | "data-read"
   | "predicate-publish"

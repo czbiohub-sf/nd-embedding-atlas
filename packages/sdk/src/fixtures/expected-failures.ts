@@ -1,6 +1,7 @@
 import {
   defineNode,
   exactNodeTypeRef,
+  nodeConfigVersion,
   nodeAssetVersion,
   nodeTypeVersion,
   PluginManifestSchemaVersionSchema,
@@ -12,6 +13,7 @@ import {
   type NodeAvailability,
   type NodeCapability,
   type NodeConfigVersion,
+  type NodeConfigSnapshot,
   type NodeModule,
   // @ts-expect-error NodeSpec was retired from the public barrel.
   type NodeSpec,
@@ -51,6 +53,21 @@ const wrongManifestFromSDK: PluginManifestSchemaVersion = sdk;
 const wrongPackageFromNode: PluginPackageVersion = nodeType;
 // @ts-expect-error Plugin-package versions cannot stand in for SDK ranges.
 const wrongRangeFromPackage: SDKVersionRange = pluginPackage;
+
+const wrongNodeSnapshot: NodeConfigSnapshot = {
+  // @ts-expect-error Node-type and config versions are distinct axes.
+  version: nodeType,
+  value: null,
+};
+const wrongDocumentSnapshot: NodeConfigSnapshot = {
+  // @ts-expect-error Document and config versions are distinct axes.
+  version: documentVersion,
+  value: null,
+};
+const validConfigSnapshot: NodeConfigSnapshot = {
+  version: nodeConfigVersion(0),
+  value: null,
+};
 
 declare const permission: PluginPermission;
 declare const dataCapability: DataCapability;
@@ -92,6 +109,9 @@ void wrongSDKRange;
 void wrongManifestFromSDK;
 void wrongPackageFromNode;
 void wrongRangeFromPackage;
+void wrongNodeSnapshot;
+void wrongDocumentSnapshot;
+void validConfigSnapshot;
 void permissionAsCapability;
 void dataAsCapability;
 void availabilityAsCapability;
