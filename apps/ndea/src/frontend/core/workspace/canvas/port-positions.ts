@@ -15,7 +15,7 @@ export const PORT_Y = 13;
 export function resolveNodeForm(ws: Workspace, id: string): NdForm {
   const node = ws.store.state.nodes[id];
   if (!node) return "card";
-  if (node.type === "proxy") return "chip"; // seam markers never grow
+  if (node.definitionRef.nodeTypeId === "proxy") return "chip"; // seam markers never grow
   const def = ws.def(id);
   if (!def) return "card";
   const override = ws.store.state.formOverride[id] ?? null;

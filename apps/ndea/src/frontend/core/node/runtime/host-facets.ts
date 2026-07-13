@@ -105,7 +105,7 @@ export function createHierarchyNodeFacet(
   let snapshot: HierarchyState | undefined;
   const read = (): HierarchyState => {
     const childCount = Object.values(session.store.state.nodes).filter(
-      (node) => node.parent === nodeId && node.type !== "proxy",
+      (node) => node.parent === nodeId && node.definitionRef.nodeTypeId !== "proxy",
     ).length;
     if (snapshot?.childCount === childCount) return snapshot;
     snapshot = Object.freeze({ childCount });

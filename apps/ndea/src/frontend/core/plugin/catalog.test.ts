@@ -158,7 +158,7 @@ describe("immutable node catalog", () => {
     );
   });
 
-  test("requires deterministic contiguous config migrations and a valid default", () => {
+  test("requires deterministic declared config migrations and a valid default", () => {
     const schema = z.object({ count: z.number().int() });
     const gap = definition("migration-gap", "1.0.0", {
       config: {
@@ -176,12 +176,23 @@ describe("immutable node catalog", () => {
     const missing = definition("migration-missing", "1.0.0", {
       config: { schema, version: nodeConfigVersion(2), defaultValue: { count: 2 } },
     });
-    expect(() => createNodeCatalog([batch(NATIVE_NODE_SOURCE, missing)])).toThrow(/contiguous steps 1 through 2/);
+    expect(createNodeCatalog([batch(NATIVE_NODE_SOURCE, missing)]).resolveCurrent("migration-missing")).toBe(missing);
 
     const invalidDefault = definition("invalid-default", "1.0.0", {
       config: { schema, version: nodeConfigVersion(1), defaultValue: { count: 1.5 } },
     });
     expect(() => createNodeCatalog([batch(NATIVE_NODE_SOURCE, invalidDefault)])).toThrow(/invalid default config/);
+
+    const transformingDefault = definition("non-json-transformed-default", "1.0.0", {
+      config: {
+        schema: z.object({ value: z.string() }).transform(({ value }) => new Date(value)),
+        version: nodeConfigVersion(1),
+        defaultValue: { value: "2024-01-01T00:00:00.000Z" } as never,
+      },
+    });
+    expect(() => createNodeCatalog([batch(NATIVE_NODE_SOURCE, transformingDefault)])).toThrow(
+      /parsed default config must contain plain JSON objects/,
+    );
   });
 
   test("keeps app graph and layout policy out of SDK definitions", () => {

@@ -8,15 +8,15 @@ import { defineNativeNodeContribution } from "@/core/node/native-contribution";
 import { mountReactNodeBody } from "@/core/node/react-node-body";
 
 export interface CollectionConfig {
-  collectionId?: string | null;
-  collectionName?: string | null;
-  collectionVersion?: number | null;
+  collectionId: string | null;
+  collectionName: string | null;
+  collectionVersion: number | null;
 }
 
 export const collectionConfigSchema = z.object({
-  collectionId: z.string().nullable().optional(),
-  collectionName: z.string().nullable().optional(),
-  collectionVersion: z.number().int().nonnegative().nullable().optional(),
+  collectionId: z.string().nullable(),
+  collectionName: z.string().nullable(),
+  collectionVersion: z.number().int().nonnegative().nullable(),
 });
 
 const CAPABILITIES = ["collection-read"] as const;
@@ -32,7 +32,7 @@ const collectionDefinition = defineNode({
   config: {
     schema: collectionConfigSchema,
     version: nodeConfigVersion(1),
-    defaultValue: {},
+    defaultValue: { collectionId: null, collectionName: null, collectionVersion: null },
   },
   load: async () => {
     // NodeDefinition.load is the intentional lazy plugin-module boundary.

@@ -52,8 +52,8 @@ describe("cross-view routing conformance", () => {
   test("every view-kind node declares its cross-view routing", () => {
     const viewTypes = nativeNodeLibrary
       .listSpecs()
-      .filter((s) => s.kind === "view")
-      .map((s) => s.type);
+      .filter((s) => s.role === "view")
+      .map((s) => s.definition.ref.nodeTypeId);
     for (const type of viewTypes) {
       expect(
         ROUTING_COVERAGE[type],

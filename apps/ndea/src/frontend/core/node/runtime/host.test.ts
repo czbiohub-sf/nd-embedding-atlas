@@ -65,6 +65,28 @@ const facetDefinition = defineNode({
 });
 
 describe("createAppNodeHost", () => {
+  test("throws instead of mutating local config when no persistence patch handler exists", () => {
+    const definition = defineNode({
+      ref: exactNodeTypeRef("configless-fixture", "1.0.0"),
+      title: "Configless fixture",
+      role: "transform",
+      inputs: [],
+      outputs: [],
+      capabilities: [] as const,
+    });
+    const handle = createAppNodeHost(hostDependencies(), {
+      instanceId: nodeInstanceId("configless-1"),
+      definition,
+      config: {},
+    });
+
+    expect(() => handle.host.patchConfig({ fabricated: true })).toThrow(
+      "node host configless-1 does not accept configuration patches",
+    );
+    expect(handle.host.config).toEqual({});
+    handle.dispose();
+  });
+
   test("exposes only granted, implemented facets and routes config plus subscriptions", () => {
     let rowSet: readonly RowIndex[] | null = [rowIndex(2)];
     const focusEvents: (RowIndex | null)[] = [];

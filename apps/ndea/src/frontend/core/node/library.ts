@@ -5,21 +5,23 @@ import {
   type GraphNodeCookHost,
   type GraphPortValueInputs,
 } from "@/core/graph/cook";
-import type { GraphNodeRole, GraphNodeType } from "@/core/graph/records";
+import type { GraphNodeRole } from "@/core/graph/records";
 import { createNodeCatalog, type NodeCatalog } from "@/core/plugin/catalog";
-import { NATIVE_NODE_SOURCE } from "@/core/plugin/registration";
+import {
+  NATIVE_NODE_SOURCE,
+  type CatalogNodeDefinition,
+  type NodeContributionSource,
+} from "@/core/plugin/registration";
 import type { NativeNodeGeometry, AnyNativeNodeContribution } from "./native-contribution";
 import { NATIVE_NODE_CONTRIBUTIONS, NATIVE_NODE_DEFINITIONS } from "./native-nodes";
-import type { CatalogNodeDefinition } from "@/core/plugin/registration";
 import type { ExactNodeTypeRef, NodeComputeContext, PluginFactory } from "@ndea/sdk";
 
 export interface AppNodeSpec {
   readonly definition: CatalogNodeDefinition;
-  readonly type: GraphNodeType;
-  readonly kind: GraphNodeRole;
+  readonly role: GraphNodeRole;
   readonly evaluationRole: "source" | "transform" | "view";
   readonly cook: GraphNodeCookFunction;
-  readonly pluginId: string | null;
+  readonly source: NodeContributionSource;
   readonly geometry: NativeNodeGeometry;
   readonly body?: "card-and-full" | "full-only";
   readonly stage: "stageable" | "pin-only" | "canvas-only";
@@ -30,10 +32,9 @@ export interface AppNodeSpec {
 }
 
 export interface AppNodeDescriptor {
-  readonly type: GraphNodeType;
-  readonly kind: GraphNodeRole;
+  readonly definitionRef: ExactNodeTypeRef;
+  readonly role: GraphNodeRole;
   readonly label: string;
-  readonly pluginId: string | null;
   readonly chipW: number;
   readonly card: NativeNodeGeometry["card"];
   readonly full: NativeNodeGeometry["full"];
@@ -49,22 +50,25 @@ export interface AppNodeDescriptor {
 /** Immutable session projection of the one frozen node catalog. */
 export interface AppNodeLibrary {
   readonly catalog: NodeCatalog;
-  getSpec(type: string): AppNodeSpec | undefined;
-  getDescriptor(type: string): AppNodeDescriptor | undefined;
+  getSpecExact(ref: ExactNodeTypeRef): AppNodeSpec | undefined;
+  getCurrentSpec(nodeTypeId: string): AppNodeSpec | undefined;
+  getDescriptorExact(ref: ExactNodeTypeRef): AppNodeDescriptor | undefined;
+  getCurrentDescriptor(nodeTypeId: string): AppNodeDescriptor | undefined;
   listSpecs(): readonly AppNodeSpec[];
   listDescriptors(): readonly AppNodeDescriptor[];
   paletteDescriptors(): readonly AppNodeDescriptor[];
 }
 
-export function nativeNodeSpecOf(contribution: AnyNativeNodeContribution): AppNodeSpec {
-  const type: GraphNodeType = contribution.graph.persistedType ?? contribution.definition.ref.nodeTypeId;
+export function nativeNodeSpecOf(
+  contribution: AnyNativeNodeContribution,
+  source: NodeContributionSource = NATIVE_NODE_SOURCE,
+): AppNodeSpec {
   return Object.freeze({
     definition: contribution.definition,
-    type,
-    kind: contribution.graph.role,
+    role: contribution.graph.role,
     evaluationRole: contribution.graph.evaluationRole,
     cook: contribution.graph.cook,
-    pluginId: contribution.definition.load ? contribution.definition.ref.nodeTypeId : null,
+    source,
     geometry: contribution.presentation.geometry,
     body: contribution.presentation.body,
     stage: contribution.presentation.stage,
@@ -83,7 +87,7 @@ export function assertExternalDefinitionGraphSafe(definition: CatalogNodeDefinit
   }
 }
 
-export function externalNodeSpecOf(definition: CatalogNodeDefinition): AppNodeSpec {
+export function externalNodeSpecOf(definition: CatalogNodeDefinition, source: NodeContributionSource): AppNodeSpec {
   assertExternalDefinitionGraphSafe(definition);
   const output = definition.outputs[0];
   const compute = adaptNodeCompute(definition.evaluate!, output.id, output.kind);
@@ -102,14 +106,13 @@ export function externalNodeSpecOf(definition: CatalogNodeDefinition): AppNodeSp
 
   return Object.freeze({
     definition,
-    type: definition.ref.nodeTypeId,
-    kind: role,
+    role,
     evaluationRole: role,
     cook: (inputs: GraphPortValueInputs, _host: GraphNodeCookHost, context?: NodeComputeContext) => {
       if (!context) throw new Error(`node "${definition.ref.nodeTypeId}" requires a compute context`);
       return compute(inputs, context);
     },
-    pluginId: definition.load ? definition.ref.nodeTypeId : null,
+    source,
     geometry,
     ...(definition.load ? { body: "full-only" as const } : {}),
     stage: definition.load ? "stageable" : "canvas-only",
@@ -127,10 +130,9 @@ export function outputPortKindOf(spec: AppNodeSpec): NdPortKind {
 
 export function nodeDescriptorOf(spec: AppNodeSpec): AppNodeDescriptor {
   return Object.freeze({
-    type: spec.type,
-    kind: spec.kind,
+    definitionRef: spec.definition.ref,
+    role: spec.role,
     label: spec.definition.title,
-    pluginId: spec.pluginId,
     chipW: spec.geometry.chipW,
     card: spec.geometry.card,
     full: spec.geometry.full,
@@ -174,26 +176,40 @@ export function createAppNodeLibrary(
     if (entry.source.kind === "native") {
       const contribution = nativeByRef.get(refKey(definition.ref));
       if (!contribution) throw new Error(`native node ${refKey(definition.ref)} has no app policy`);
-      specs.push(nativeNodeSpecOf(contribution));
-    } else if (catalog.resolveCurrent(definition.ref.nodeTypeId) === definition) {
-      specs.push(externalNodeSpecOf(definition));
+      specs.push(nativeNodeSpecOf(contribution, entry.source));
+    } else {
+      specs.push(externalNodeSpecOf(definition, entry.source));
     }
   }
 
   const frozenSpecs = Object.freeze(specs);
-  const specsByType = new Map<GraphNodeType, AppNodeSpec>();
+  const specsByRef = new Map<string, AppNodeSpec>();
   for (const spec of frozenSpecs) {
-    if (specsByType.has(spec.type)) throw new Error(`duplicate app node type "${spec.type}"`);
-    specsByType.set(spec.type, spec);
+    const key = refKey(spec.definition.ref);
+    if (specsByRef.has(key)) throw new Error(`duplicate app node definition "${key}"`);
+    specsByRef.set(key, spec);
   }
   const descriptors = Object.freeze(frozenSpecs.map(nodeDescriptorOf));
-  const descriptorsByType = new Map(descriptors.map((descriptor) => [descriptor.type, descriptor]));
-  const palette = Object.freeze(descriptors.filter(({ inPalette }) => inPalette));
+  const descriptorsByRef = new Map(descriptors.map((descriptor) => [refKey(descriptor.definitionRef), descriptor]));
+  const palette = Object.freeze(
+    descriptors.filter(({ definitionRef, inPalette }) => {
+      const current = catalog.resolveCurrent(definitionRef.nodeTypeId);
+      return inPalette && current !== undefined && refKey(current.ref) === refKey(definitionRef);
+    }),
+  );
 
   return Object.freeze({
     catalog,
-    getSpec: (type: string) => specsByType.get(type),
-    getDescriptor: (type: string) => descriptorsByType.get(type),
+    getSpecExact: (ref: ExactNodeTypeRef) => specsByRef.get(refKey(ref)),
+    getCurrentSpec: (nodeTypeId: string) => {
+      const definition = catalog.resolveCurrent(nodeTypeId);
+      return definition ? specsByRef.get(refKey(definition.ref)) : undefined;
+    },
+    getDescriptorExact: (ref: ExactNodeTypeRef) => descriptorsByRef.get(refKey(ref)),
+    getCurrentDescriptor: (nodeTypeId: string) => {
+      const definition = catalog.resolveCurrent(nodeTypeId);
+      return definition ? descriptorsByRef.get(refKey(definition.ref)) : undefined;
+    },
     listSpecs: () => frozenSpecs,
     listDescriptors: () => descriptors,
     paletteDescriptors: () => palette,

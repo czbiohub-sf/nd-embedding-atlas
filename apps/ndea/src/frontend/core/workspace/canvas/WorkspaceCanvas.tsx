@@ -134,7 +134,7 @@ function WorkspaceCanvasInner() {
         position: positions[n.id] ?? { x: 0, y: 0 },
         data: { wsId: n.id },
         measured: measured[n.id],
-        deletable: n.type !== "obs" && n.type !== "proxy",
+        deletable: n.definitionRef.nodeTypeId !== "obs" && n.definitionRef.nodeTypeId !== "proxy",
         selected: selectedIds.has(n.id),
         // claiming: the claimed body rises; everything else recedes
         zIndex: claimed === n.id ? 6 : undefined,
@@ -314,7 +314,7 @@ function WorkspaceCanvasInner() {
       const nodeEl = target.closest("[data-nd-node]");
       if (nodeEl) {
         const nid = nodeEl.getAttribute("data-nd-node")!;
-        if (ws.store.state.nodes[nid]?.type === "subnet") ws.enterSubnet(nid);
+        if (ws.store.state.nodes[nid]?.definitionRef.nodeTypeId === "subnet") ws.enterSubnet(nid);
         else frameNode(nid);
         return;
       }
@@ -427,7 +427,7 @@ function WorkspaceCanvasInner() {
               const node = ws.store.state.nodes[n.id];
               if (!node) return "oklch(0.62 0 0 / 60%)";
               if (n.id === ws.store.state.selectedNodeId) return "oklch(0.554 0.236 281)";
-              return ws.nodeLibrary.getSpec(node.type)?.accent ?? "oklch(0.62 0 0 / 60%)";
+              return ws.nodeLibrary.getSpecExact(node.definitionRef)?.accent ?? "oklch(0.62 0 0 / 60%)";
             }}
             nodeStrokeWidth={0}
           />

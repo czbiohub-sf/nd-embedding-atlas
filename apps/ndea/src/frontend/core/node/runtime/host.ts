@@ -136,8 +136,9 @@ export function createAppNodeHost<Config, Facets extends object = object>(
     },
     patchConfig(patch: Partial<Config>) {
       assertActive();
+      if (!init.patchConfig) throw new Error(`node host ${instanceId} does not accept configuration patches`);
       const next = { ...config, ...patch };
-      init.patchConfig?.(patch);
+      init.patchConfig(patch);
       config = next;
     },
   };

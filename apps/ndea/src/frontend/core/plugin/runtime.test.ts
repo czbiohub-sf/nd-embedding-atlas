@@ -103,12 +103,17 @@ describe("frontend plugin session", () => {
     expect(session.catalog.resolveExact(external.ref)).toBe(external);
     expect(session.catalog.resolveExact(prior.ref)).toBe(prior);
     expect(session.catalog.resolveCurrent("acme.widgets/chart")).toBe(external);
-    expect(session.nodeLibrary.listSpecs().filter(({ type }) => type === "acme.widgets/chart")).toHaveLength(1);
-    const spec = session.nodeLibrary.getSpec("acme.widgets/chart");
+    expect(
+      session.nodeLibrary.listSpecs().filter(({ definition: spec }) => spec.ref.nodeTypeId === "acme.widgets/chart"),
+    ).toHaveLength(2);
+    expect(session.nodeLibrary.getSpecExact(prior.ref)?.definition).toBe(prior);
+    expect(session.nodeLibrary.getSpecExact(external.ref)?.definition).toBe(external);
+    const spec = session.nodeLibrary.getCurrentSpec("acme.widgets/chart");
     expect(spec?.geometry.full).toEqual({ w: 333, h: 222 });
     expect(spec?.stage).toBe("stageable");
     expect(spec?.inPalette).toBe(true);
-    expect(spec?.pluginId).toBe("acme.widgets/chart");
+    expect(spec?.source.kind).toBe("plugin");
+    if (spec?.source.kind === "plugin") expect(String(spec.source.manifest.pluginId)).toBe("acme.widgets");
     expect(
       spec?.cook(
         new Map([["in", [{ kind: "pred", sql: "value > 0" }]]]),

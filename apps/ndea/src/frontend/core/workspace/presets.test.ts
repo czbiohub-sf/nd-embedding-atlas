@@ -36,7 +36,7 @@ describe("seedAnnotate", () => {
     resolvePreset("annotate")!(ws);
 
     const nodes = Object.values(ws.store.state.nodes);
-    const types = new Set<string>(nodes.map((n) => n.type));
+    const types = new Set<string>(nodes.map((n) => n.definitionRef.nodeTypeId));
     for (const t of ["obs", "wrangle", "count", "table", "scatter", "cache", "annotate", "image-viewer", "gallery"]) {
       expect(types.has(t)).toBe(true);
     }
@@ -51,7 +51,9 @@ describe("seedAnnotate", () => {
     const ws = makeWs();
     resolvePreset("annotate")!(ws);
 
-    const byType = Object.fromEntries(Object.values(ws.store.state.nodes).map((n) => [n.type, n.id]));
+    const byType = Object.fromEntries(
+      Object.values(ws.store.state.nodes).map((n) => [n.definitionRef.nodeTypeId, n.id]),
+    );
     const edges = Object.values(ws.store.state.edges);
     const wired = (from: string, to: string) => edges.some((e) => e.from === byType[from] && e.to === byType[to]);
 
@@ -68,7 +70,7 @@ describe("seedAnnotate", () => {
     resolvePreset("annotate")!(ws);
     expect(ws.store.state.disposition).toBe("hidden");
     // The five stageable views tile; obs/wrangle/count/cache stay off-stage.
-    const staged = new Set<string>(ws.stagedIds().map((id) => ws.store.state.nodes[id].type));
+    const staged = new Set<string>(ws.stagedIds().map((id) => ws.store.state.nodes[id].definitionRef.nodeTypeId));
     for (const t of ["scatter", "table", "annotate", "image-viewer", "gallery"]) expect(staged.has(t)).toBe(true);
     for (const t of ["obs", "wrangle", "count", "cache"]) expect(staged.has(t)).toBe(false);
   });

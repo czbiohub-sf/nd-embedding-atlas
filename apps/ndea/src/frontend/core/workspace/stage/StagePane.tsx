@@ -49,11 +49,11 @@ function StageTile({
   const flagsOff = useWorkspaceSelector((s) => s.flags[id]?.off ?? false);
   const fullscreen = useSelector(ws.ui, (u) => u.fullscreen === id);
 
-  const def = node ? ws.nodeLibrary.getDescriptor(node.type) : null;
-  const hasBody = node ? ws.nodeLibrary.getSpec(node.type)?.definition.load !== undefined : false;
+  const def = node ? ws.nodeLibrary.getDescriptorExact(node.definitionRef) : null;
+  const hasBody = node ? ws.nodeLibrary.getSpecExact(node.definitionRef)?.definition.load !== undefined : false;
   // count policy: a tile's body is visible and says its own scale — only
   // staged transforms keep a header count
-  const countActive = Boolean(def && def.kind !== "view");
+  const countActive = Boolean(def && def.role !== "view");
   const { count } = useNodeCount(id, countActive);
 
   if (!node || !def) return null;
@@ -115,7 +115,7 @@ function StageTile({
         <span className={`font-mono text-[9.5px] whitespace-nowrap ${selected ? "text-primary" : "text-text-muted"}`}>
           ◆ {id}
         </span>
-        <NodeDocButton nodeType={node.type} />
+        <NodeDocButton definitionRef={node.definitionRef} />
         {/* bypass / display-off mutates persisted graph state — authoring, dev-only (R4) */}
         {import.meta.env.DEV ? <FlagButton node={node} /> : null}
         {hasBody ? (
@@ -392,8 +392,8 @@ export function StagePane({ vertical }: { vertical: boolean }) {
   // reconcile layout memory with the live staged set; persist on divergence
   const stagedIds = ws.stagedIds().toSorted((a, b) => {
     const P: Record<string, number> = { scatter: 0, "image-viewer": 1, table: 2, gallery: 3 };
-    const ta = ws.store.state.nodes[a]?.type ?? "";
-    const tb = ws.store.state.nodes[b]?.type ?? "";
+    const ta = ws.store.state.nodes[a]?.definitionRef.nodeTypeId ?? "";
+    const tb = ws.store.state.nodes[b]?.definitionRef.nodeTypeId ?? "";
     return (P[ta] ?? 4) - (P[tb] ?? 4);
   });
   const view = reconcileStageTree(stageTree, stagedIds);

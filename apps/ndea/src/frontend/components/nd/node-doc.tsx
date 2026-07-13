@@ -18,7 +18,7 @@ import { NdIcon } from "@/components/nd/nd-icons";
 import { ND_PORT_KINDS, type NdPortKind } from "@/components/nd/nd-port";
 import { humanizedCapabilities } from "@/core/node/capability-docs";
 import { useWorkspace } from "@/core/workspace/workspace-context";
-import type { NodePort } from "@ndea/sdk";
+import type { ExactNodeTypeRef, NodePort } from "@ndea/sdk";
 import { cn } from "@/lib/utils";
 
 /** A single typed-port token: kind glyph + label (filled = out, hollow = in). */
@@ -41,9 +41,15 @@ function PortToken({ port, out }: { port: NodePort; out: boolean }) {
   );
 }
 
-export function NodeDocButton({ nodeType, compact = false }: { nodeType: string; compact?: boolean }) {
+export function NodeDocButton({
+  definitionRef,
+  compact = false,
+}: {
+  definitionRef: ExactNodeTypeRef;
+  compact?: boolean;
+}) {
   const workspace = useWorkspace();
-  const definition = workspace.nodeLibrary.catalog.resolveCurrent(nodeType);
+  const definition = workspace.nodeLibrary.catalog.resolveExact(definitionRef);
   const doc = definition?.documentation;
   const docs = useDocs();
   const [open, setOpen] = useState(false);
@@ -125,7 +131,7 @@ export function NodeDocButton({ nodeType, compact = false }: { nodeType: string;
               type="button"
               onClick={() => {
                 setOpen(false);
-                docs.openDocs(nodeType);
+                docs.openDocs(definitionRef);
               }}
               className="inline-flex items-center gap-1 font-semibold text-[10px] text-primary hover:underline"
             >

@@ -2,7 +2,7 @@
 
 import type { NodeCapability, NodeDefinition } from "@ndea/sdk";
 import type { GraphNodeCookFunction } from "@/core/graph/cook";
-import type { GraphNodeRole, GraphNodeType } from "@/core/graph/records";
+import type { GraphNodeRole } from "@/core/graph/records";
 
 export interface NativeNodeSize {
   readonly w: number;
@@ -35,8 +35,6 @@ export interface NativeNodeContribution<
   readonly definition: NodeDefinition<Config, Capabilities>;
   /** App-owned graph evaluation and persisted-document compatibility. */
   readonly graph: {
-    /** Only legacy graph identities that differ from the exact definition id set this. */
-    readonly persistedType?: GraphNodeType;
     readonly role: GraphNodeRole;
     readonly evaluationRole: "source" | "transform" | "view";
     readonly cook: GraphNodeCookFunction;

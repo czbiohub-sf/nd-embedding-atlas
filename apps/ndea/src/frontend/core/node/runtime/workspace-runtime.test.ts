@@ -110,11 +110,9 @@ function workspaceFixture(): WorkspaceFixture {
     nodes: {
       "node-1": {
         id: "node-1",
-        type: "runtime-fixture",
-        kind: "view",
+        definitionRef: exactNodeTypeRef("runtime-fixture", "1.0.0"),
         label: "Runtime fixture",
-        pluginId: "runtime-fixture",
-        config: { page: 4 },
+        config: { version: nodeConfigVersion(1), value: { page: 4 } },
       },
     },
     flags: {},
@@ -171,7 +169,16 @@ function workspaceFixture(): WorkspaceFixture {
         ...state,
         nodes: {
           ...state.nodes,
-          [nodeId]: { ...state.nodes[nodeId], config: patch as unknown as JsonValue },
+          [nodeId]: {
+            ...state.nodes[nodeId],
+            config: {
+              version: nodeConfigVersion(1),
+              value: {
+                ...(state.nodes[nodeId].config?.value as Record<string, JsonValue> | undefined),
+                ...(patch as Record<string, JsonValue>),
+              },
+            },
+          },
         },
       }));
     },
@@ -190,10 +197,10 @@ function workspaceFixture(): WorkspaceFixture {
 }
 
 function nodeLibrary(definition: AppNodeSpec["definition"]): AppNodeLibrary {
-  const spec = { definition, type: "runtime-fixture", kind: "view" } as AppNodeSpec;
+  const spec = { definition, role: "view" } as unknown as AppNodeSpec;
   return {
     catalog: { resolveExact: () => definition } as unknown as AppNodeLibrary["catalog"],
-    getSpec: () => spec,
+    getSpecExact: () => spec,
   } as unknown as AppNodeLibrary;
 }
 
@@ -244,7 +251,10 @@ describe("WorkspaceNodeRuntimeManager", () => {
     const host = mounted.host;
     expect(host.config).toEqual({ page: 4, lanes: 3 });
     host.patchConfig({ page: 9 });
-    expect(fixture.documentStore.state.nodes["node-1"].config).toEqual({ page: 9 });
+    expect(fixture.documentStore.state.nodes["node-1"].config).toEqual({
+      version: nodeConfigVersion(1),
+      value: { page: 9 },
+    });
 
     fixture.deliverGraph({ kind: "sel", sql: "x > 2", rowIds: [] });
     expect(host.externalRowSet()).toEqual([]);
@@ -315,10 +325,8 @@ describe("WorkspaceNodeRuntimeManager", () => {
       nodes: {
         "node-2": {
           id: "node-2",
-          type: "runtime-fixture",
-          kind: "view",
+          definitionRef: exactNodeTypeRef("runtime-fixture", "1.0.0"),
           label: "Second runtime fixture",
-          pluginId: "runtime-fixture",
         },
       },
     }));

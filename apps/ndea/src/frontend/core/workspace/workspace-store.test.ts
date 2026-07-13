@@ -1,8 +1,17 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import type { Metadata } from "@ndea/protocol";
-import { rowIndex } from "@ndea/sdk";
+import {
+  PLUGIN_MANIFEST_SCHEMA_VERSION,
+  PluginManifestSchema,
+  SDK_VERSION,
+  defineNode,
+  exactNodeTypeRef,
+  rowIndex,
+} from "@ndea/sdk";
 import { predicateSql } from "@/core/graph/cook";
-import { createNativeAppNodeLibrary, type AppNodeLibrary } from "@/core/node/library";
+import { createAppNodeLibrary, createNativeAppNodeLibrary, type AppNodeLibrary } from "@/core/node/library";
+import { createNodeCatalog } from "@/core/plugin/catalog";
+import { fromPersistedDoc, toPersistedDoc } from "./persist";
 import { Workspace } from "./workspace-store";
 
 const nativeWorkspaceNodeLibrary = createNativeAppNodeLibrary();
@@ -24,34 +33,109 @@ beforeEach(() => {
 });
 
 describe("Workspace graph transactions", () => {
+  test("resolves every disposition and explicit placement against exact definition policy", () => {
+    const workspace = createWorkspace();
+    const stageable = workspace.addNode("scatter", { x: 0, y: 0 });
+    const pinOnly = workspace.addNode("transform-filter", { x: 100, y: 0 });
+    const canvasOnly = workspace.addNode("dataset", { x: 200, y: 0 });
+
+    expect(workspace.placementOf(stageable)).toBe("staged");
+    workspace.setDisposition("full");
+    expect(workspace.placementOf(stageable)).toBe("embedded");
+    workspace.setDisposition("hidden");
+    expect(workspace.placementOf(stageable)).toBe("staged");
+    workspace.togglePlacement(stageable, 0);
+    expect(workspace.placementOf(stageable)).toBe("embedded");
+    workspace.setDisposition("strip");
+    expect(workspace.placementOf(stageable)).toBe("embedded");
+
+    for (const disposition of ["full", "strip", "hidden"] as const) {
+      workspace.setDisposition(disposition);
+      expect(workspace.placementOf(pinOnly)).toBe("embedded");
+      expect(workspace.placementOf(canvasOnly)).toBe("embedded");
+    }
+    workspace.dispose();
+  });
+
   test("resolves node policy only through the injected immutable library", () => {
     expect(Object.isFrozen(nativeWorkspaceNodeLibrary)).toBe(true);
     const emptyLibrary: AppNodeLibrary = Object.freeze({
       catalog: nativeWorkspaceNodeLibrary.catalog,
-      getSpec: (): undefined => {},
-      getDescriptor: (): undefined => {},
+      getSpecExact: (): undefined => {},
+      getCurrentSpec: (): undefined => {},
+      getDescriptorExact: (): undefined => {},
+      getCurrentDescriptor: (): undefined => {},
       listSpecs: () => [],
       listDescriptors: () => [],
       paletteDescriptors: () => [],
     });
     const workspace = createWorkspace(emptyLibrary);
-    expect(() => workspace.addNode("obs", { x: 0, y: 0 })).toThrow('no registered node descriptor for type "obs"');
+    expect(() => workspace.addNode("obs", { x: 0, y: 0 })).toThrow('no current node descriptor for type "obs"');
   });
 
   test("does not commit a document node when evaluator registration is unavailable", () => {
     const descriptorOnlyLibrary: AppNodeLibrary = Object.freeze({
       catalog: nativeWorkspaceNodeLibrary.catalog,
-      getSpec: (): undefined => {},
-      getDescriptor: (type: string) => nativeWorkspaceNodeLibrary.getDescriptor(type),
+      getSpecExact: (): undefined => {},
+      getCurrentSpec: (): undefined => {},
+      getDescriptorExact: (ref: Parameters<AppNodeLibrary["getDescriptorExact"]>[0]) =>
+        nativeWorkspaceNodeLibrary.getDescriptorExact(ref),
+      getCurrentDescriptor: (nodeTypeId: string) => nativeWorkspaceNodeLibrary.getCurrentDescriptor(nodeTypeId),
       listSpecs: () => [],
       listDescriptors: () => nativeWorkspaceNodeLibrary.listDescriptors(),
       paletteDescriptors: () => nativeWorkspaceNodeLibrary.paletteDescriptors(),
     });
     const workspace = createWorkspace(descriptorOnlyLibrary);
 
-    expect(() => workspace.addNode("count", { x: 0, y: 0 })).toThrow('no graph evaluator registered for type "count"');
+    expect(() => workspace.addNode("count", { x: 0, y: 0 })).toThrow('no graph evaluator registered for "count@1.0.0"');
     expect(workspace.store.state.nodes).toEqual({});
     expect(workspace.store.state.positions).toEqual({});
+    workspace.dispose();
+  });
+
+  test("a configless external definition cannot dirty or persist fabricated configuration", () => {
+    const definition = defineNode({
+      ref: exactNodeTypeRef("example/plain", "1.0.0"),
+      title: "Plain",
+      role: "transform",
+      inputs: [],
+      outputs: [{ id: "out", kind: "pred", label: "Out" }],
+      capabilities: [] as const,
+      evaluate: () => new Map([["out", null]]),
+    });
+    const source = {
+      kind: "plugin" as const,
+      manifest: PluginManifestSchema.parse({
+        manifestSchemaVersion: PLUGIN_MANIFEST_SCHEMA_VERSION,
+        pluginId: "example",
+        pluginPackageVersion: "1.0.0",
+        sdkVersionRange: String(SDK_VERSION),
+        displayName: "Example",
+        clientEntry: "index.js",
+        hostCompatibility: { hostVersionRange: "*" },
+        license: "MIT",
+        permissions: [],
+      }),
+    };
+    const nodeLibrary = createAppNodeLibrary(createNodeCatalog([{ source, definitions: [definition] }]), []);
+    const workspace = createWorkspace(nodeLibrary);
+    const id = workspace.addNode("example/plain", { x: 0, y: 0 });
+    const before = structuredClone(workspace.store.state);
+    let storeChanges = 0;
+    const subscription = workspace.store.subscribe(() => {
+      storeChanges += 1;
+    });
+
+    expect(() => workspace.updateNodeConfig(id, { fabricated: true })).toThrow(
+      `node "${id}" does not accept configuration`,
+    );
+    expect(workspace.store.state).toEqual(before);
+    expect(storeChanges).toBe(0);
+    expect(fromPersistedDoc(toPersistedDoc(workspace.store.state), nodeLibrary)).toEqual({
+      ok: true,
+      state: workspace.store.state,
+    });
+    subscription.unsubscribe();
     workspace.dispose();
   });
 
@@ -67,7 +151,10 @@ describe("Workspace graph transactions", () => {
     });
     let subscriberPredicate: string | null | undefined;
     const subscription = workspace.store.subscribe(() => {
-      if ((workspace.store.state.nodes[dataset]?.config as { datasetKey?: string })?.datasetKey === "donor-a") {
+      if (
+        (workspace.store.state.nodes[dataset]?.config?.value as { datasetKey?: string } | undefined)?.datasetKey ===
+        "donor-a"
+      ) {
         subscriberPredicate = predicateSql(workspace.pullGraphNode(count));
       }
     });
@@ -283,10 +370,8 @@ describe("Workspace graph transactions", () => {
         ...source.store.state.nodes,
         [unknownId]: {
           id: unknownId,
-          type: "external-missing",
-          kind: "view" as const,
+          definitionRef: exactNodeTypeRef("external-missing", "1.0.0"),
           label: "Unavailable plugin",
-          pluginId: "external-missing",
         },
       },
       positions: { ...source.store.state.positions, [unknownId]: { x: 200, y: 100 } },

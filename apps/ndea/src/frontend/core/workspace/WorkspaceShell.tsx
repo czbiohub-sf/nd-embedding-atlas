@@ -22,7 +22,13 @@ import { WorkspaceCanvas } from "./canvas/WorkspaceCanvas";
 import { ND_TIMING } from "./constants";
 import type { AppNodeLibrary } from "@/core/node/library";
 import { StagePane, stageHasContent } from "./stage/StagePane";
-import { useTelemetrySelector, useWorkspace, useWorkspaceSelector, WorkspaceProvider } from "./workspace-context";
+import {
+  useTelemetrySelector,
+  useWorkspace,
+  useWorkspacePersistence,
+  useWorkspaceSelector,
+  WorkspaceProvider,
+} from "./workspace-context";
 import type { GhostState } from "./workspace-store";
 
 const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
@@ -194,7 +200,51 @@ function StatusBar() {
 }
 
 /* ── frame ───────────────────────────────────────────────────────── */
-function WorkspaceFrame() {
+export interface WorkspaceSurfacePolicy {
+  readonly recoveryOnly: boolean;
+  readonly mountStage: boolean;
+  readonly mountCanvas: boolean;
+  readonly mountStatusBar: boolean;
+  readonly mountBodies: boolean;
+  readonly installAuthoringListeners: boolean;
+}
+
+export function workspaceSurfacePolicy(mode: "writable" | "recovery"): WorkspaceSurfacePolicy {
+  const writable = mode === "writable";
+  return Object.freeze({
+    recoveryOnly: !writable,
+    mountStage: writable,
+    mountCanvas: writable,
+    mountStatusBar: writable,
+    mountBodies: writable,
+    installAuthoringListeners: writable,
+  });
+}
+
+function RecoveryWorkspaceSurface({ persistence }: { persistence: ReturnType<typeof useWorkspacePersistence> }) {
+  return (
+    <div className="fixed inset-0 grid place-items-center overflow-hidden bg-background p-8 select-none">
+      <div
+        role="alert"
+        className="max-w-xl rounded-md border border-warning/60 bg-card p-4 font-mono text-xs shadow-xl"
+      >
+        <div className="mb-2 font-semibold text-warning">Workspace opened read-only for recovery</div>
+        <div>stage: {persistence.stage ?? "unknown"}</div>
+        {persistence.backupKey ? <div>backup: {persistence.backupKey}</div> : null}
+        {persistence.errors.map((error) => (
+          <div key={error} className="mt-2 break-words text-text-muted">
+            {error}
+          </div>
+        ))}
+        <div className="mt-3 text-text-muted">
+          Authoring controls, node bodies, autosave, and migration rewrites are disabled.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function WritableWorkspaceFrame({ policy }: { policy: WorkspaceSurfacePolicy }) {
   const ws = useWorkspace();
   const disposition = useWorkspaceSelector((s) => s.disposition);
   const stripH = useWorkspaceSelector((s) => s.stripH);
@@ -216,7 +266,7 @@ function WorkspaceFrame() {
   // ⇧F cycles the emphasis axis: full → strip → hidden → full. Dev-only — a
   // build has no canvas to reveal, so disposition switching is compiled out (R4/R5).
   useEffect(() => {
-    if (!import.meta.env.DEV) return;
+    if (!import.meta.env.DEV || !policy.installAuthoringListeners) return;
     const onKey = (e: KeyboardEvent) => {
       const el = document.activeElement;
       if (el && ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName)) return;
@@ -228,7 +278,7 @@ function WorkspaceFrame() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [ws]);
+  }, [ws, policy.installAuthoringListeners]);
 
   // refit the camera with the pane animation — but not while hidden (fitView on
   // a 0-height pane yields a garbage viewport that would persist on show).
@@ -297,11 +347,11 @@ function WorkspaceFrame() {
     <div className="fixed inset-0 flex flex-col overflow-hidden bg-background select-none">
       <div className="relative min-h-0 flex-1">
         {/* stage — main area (strip) or right column (full canvas, only when occupied) */}
-        {!full ? (
+        {policy.mountStage && !full ? (
           <div className="absolute overflow-hidden" style={{ ...stageStyle, transition: paneTransition }}>
             <StagePane vertical={false} />
           </div>
-        ) : stageOccupied ? (
+        ) : policy.mountStage && stageOccupied ? (
           <div className="absolute overflow-hidden" style={{ ...sideStageStyle, transition: paneTransition }}>
             <StagePane vertical />
           </div>
@@ -309,7 +359,7 @@ function WorkspaceFrame() {
 
         {/* wiring tile chrome (strip mode): the canvas wears tile anatomy. Dev-only —
             a build never enters strip (no disposition control) and mounts no canvas. */}
-        {import.meta.env.DEV && disposition === "strip" ? (
+        {policy.mountCanvas && import.meta.env.DEV && disposition === "strip" ? (
           <div
             className="absolute box-border flex flex-col overflow-hidden rounded-[7px] border border-border bg-card"
             style={{
@@ -361,7 +411,7 @@ function WorkspaceFrame() {
             connect, and node-delete listeners, so a build simply does not mount it —
             authoring is absent, and the stage (its bodies live in the body-dock)
             is unaffected (R4/R5). */}
-        {import.meta.env.DEV ? (
+        {policy.mountCanvas && import.meta.env.DEV ? (
           <div
             className="absolute overflow-hidden"
             style={{
@@ -374,14 +424,21 @@ function WorkspaceFrame() {
         ) : null}
 
         {/* fullscreen body — covers the panes, leaves the status bar */}
-        <FullscreenOverlay />
+        {policy.mountBodies ? <FullscreenOverlay /> : null}
       </div>
 
-      <StatusBar />
+      {policy.mountStatusBar ? <StatusBar /> : null}
       {ghost ? <FlipGhost ghost={ghost} /> : null}
-      <WorkspaceBodies />
+      {policy.mountBodies ? <WorkspaceBodies /> : null}
     </div>
   );
+}
+
+function WorkspaceFrame() {
+  const persistence = useWorkspacePersistence();
+  const policy = workspaceSurfacePolicy(persistence.mode);
+  if (policy.recoveryOnly) return <RecoveryWorkspaceSurface persistence={persistence} />;
+  return <WritableWorkspaceFrame policy={policy} />;
 }
 
 export function WorkspaceShell({ nodeLibrary }: { nodeLibrary: AppNodeLibrary }) {

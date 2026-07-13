@@ -23,7 +23,7 @@ const exportDefinition = defineNode<CollectionConfig, typeof CAPABILITIES>({
   config: {
     schema: collectionConfigSchema,
     version: nodeConfigVersion(1),
-    defaultValue: {},
+    defaultValue: { collectionId: null, collectionName: null, collectionVersion: null },
   },
   load: async () => {
     // NodeDefinition.load is the intentional lazy plugin-module boundary.

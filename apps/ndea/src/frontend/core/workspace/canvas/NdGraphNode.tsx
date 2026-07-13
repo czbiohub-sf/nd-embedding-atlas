@@ -73,7 +73,7 @@ function NdGraphNodeInner({ id, selected }: NodeProps<NdGraphNodeType>) {
 
   const updateInternals = useUpdateNodeInternals();
 
-  const def = node ? ws.nodeLibrary.getDescriptor(node.type) : null;
+  const def = node ? ws.nodeLibrary.getDescriptorExact(node.definitionRef) : null;
   const form = resolveNodeForm(ws, id);
   const size = resolveNodeSize(ws, id);
 
@@ -81,10 +81,10 @@ function NdGraphNodeInner({ id, selected }: NodeProps<NdGraphNodeType>) {
   // staged-placeholder case). Count node owns its body number instead.
   const countActive = Boolean(
     def &&
-    def.type !== "count" &&
-    def.type !== "subnet" &&
-    def.type !== "proxy" &&
-    (def.kind !== "view" ? true : form === "chip"),
+    def.definitionRef.nodeTypeId !== "count" &&
+    def.definitionRef.nodeTypeId !== "subnet" &&
+    def.definitionRef.nodeTypeId !== "proxy" &&
+    (def.role !== "view" ? true : form === "chip"),
   );
   const { count, cooking: countCooking, error: countError } = useNodeCount(id, countActive);
 
@@ -119,14 +119,16 @@ function NdGraphNodeInner({ id, selected }: NodeProps<NdGraphNodeType>) {
           }
         >
           <div className="grid min-h-12 flex-1 place-items-center rounded border border-dashed border-warning/50 px-3">
-            <NdHud size={8.5}>definition unavailable · {node.type}</NdHud>
+            <NdHud size={8.5}>
+              definition unavailable · {node.definitionRef.nodeTypeId}@{node.definitionRef.nodeTypeVersion}
+            </NdHud>
           </div>
         </NdNodeFrame>
       </div>
     );
   }
 
-  const isProxy = node.type === "proxy";
+  const isProxy = node.definitionRef.nodeTypeId === "proxy";
   const staged = ws.placementOf(id) === "staged";
   const bypassed = flagsState?.bypass ?? false;
   const dispOff = flagsState?.off ?? false;
@@ -142,9 +144,9 @@ function NdGraphNodeInner({ id, selected }: NodeProps<NdGraphNodeType>) {
           : "clean";
   // count policy addendum: a staged view's canvas card shows the count (the
   // placeholder doesn't communicate scale)
-  const showCount = countActive || (def.kind === "view" && staged);
+  const showCount = countActive || (def.role === "view" && staged);
   const countText = showCount ? (countError ? "✗" : countCooking ? "…" : count === null ? null : fmt(count)) : null;
-  const spec = ws.nodeLibrary.getSpec(node.type);
+  const spec = ws.nodeLibrary.getSpecExact(node.definitionRef);
   const isSel = spec?.checkpoint ?? false;
   const hasBody = spec?.definition.load !== undefined;
 
@@ -158,7 +160,12 @@ function NdGraphNodeInner({ id, selected }: NodeProps<NdGraphNodeType>) {
         </div>
       );
     if (form === "full" || spec?.body === "card-and-full") {
-      return <BodySocket nodeId={id} claimable={node.type === "scatter" || node.type === "image-viewer"} />;
+      return (
+        <BodySocket
+          nodeId={id}
+          claimable={node.definitionRef.nodeTypeId === "scatter" || node.definitionRef.nodeTypeId === "image-viewer"}
+        />
+      );
     }
     // Compact card for definitions whose Body is deliberately full-only.
     return (
@@ -243,7 +250,7 @@ function NdGraphNodeInner({ id, selected }: NodeProps<NdGraphNodeType>) {
         form={form}
         w={size.w}
         h={form === "chip" ? undefined : size.h}
-        label={node.type === "subnet" ? `⊟ ${node.label}` : node.label}
+        label={node.definitionRef.nodeTypeId === "subnet" ? `⊟ ${node.label}` : node.label}
         led={led}
         count={countText}
         badge={isSel ? <NdHud size={9}>◆</NdHud> : undefined}
@@ -259,10 +266,10 @@ function NdGraphNodeInner({ id, selected }: NodeProps<NdGraphNodeType>) {
         headerSlot={hasBody && form === "full" && !staged && !fullscreen ? <HeaderSocket nodeId={id} /> : undefined}
         actions={
           <>
-            <NodeDocButton nodeType={node.type} compact={form === "chip"} />
+            <NodeDocButton definitionRef={node.definitionRef} compact={form === "chip"} />
             <FlagButton node={node} compact={form === "chip"} />
-            {def.kind === "view" && form !== "chip" ? <SyncGroupButton nodeId={id} /> : null}
-            {hasBody && def.kind === "view" ? (
+            {def.role === "view" && form !== "chip" ? <SyncGroupButton nodeId={id} /> : null}
+            {hasBody && def.role === "view" ? (
               <NdIconButton
                 icon="fullscreen"
                 title="fullscreen body"
@@ -271,7 +278,7 @@ function NdGraphNodeInner({ id, selected }: NodeProps<NdGraphNodeType>) {
               />
             ) : null}
             {pinButton}
-            {node.type !== "obs" ? (
+            {node.definitionRef.nodeTypeId !== "obs" ? (
               <NdIconButton
                 icon="close"
                 title="delete node"

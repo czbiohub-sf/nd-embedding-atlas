@@ -11,7 +11,7 @@ import { mountReactNodeBody } from "@/core/node/react-node-body";
 import { nodeConfig } from "@/core/graph/cook";
 
 export interface DatasetConfig {
-  datasetKey?: string | null;
+  datasetKey: string | null;
 }
 
 const CAPABILITIES = ["data-read"] as const;
@@ -25,9 +25,21 @@ const datasetDefinition = defineNode({
   outputs: [{ id: "out", kind: "pred", label: "Out" }],
   capabilities: CAPABILITIES,
   config: {
-    schema: z.object({ datasetKey: z.string().nullable().optional() }),
+    schema: z.object({ datasetKey: z.string().nullable() }),
     version: nodeConfigVersion(1),
-    defaultValue: {},
+    defaultValue: { datasetKey: null },
+    migrations: [
+      {
+        from: nodeConfigVersion(0),
+        to: nodeConfigVersion(1),
+        migrate: (value) => ({
+          datasetKey:
+            typeof value === "object" && value !== null && !Array.isArray(value)
+              ? (((value as Record<string, unknown>).datasetKey as string | null | undefined) ?? null)
+              : null,
+        }),
+      },
+    ],
   },
   load: async () => {
     // NodeDefinition.load is the intentional lazy plugin-module boundary.

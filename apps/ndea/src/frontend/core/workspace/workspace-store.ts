@@ -20,10 +20,10 @@ import {
 } from "@/core/coordination/coordination";
 import { predicateSql } from "@/core/graph/cook";
 import type { GraphEvaluationStore } from "@/core/graph/evaluator";
-import type { GraphDocumentEdge, GraphDocumentNode, GraphNodeType } from "@/core/graph/records";
+import type { GraphDocumentEdge, GraphDocumentNode } from "@/core/graph/records";
 import { GraphRuntimeSession, type GraphNodeResolution, type CheckpointInput } from "@/core/graph/runtime-session";
 import type { NodeRuntimeSessionPort } from "@/core/node/runtime/session-port";
-import type { RowIndex } from "@ndea/sdk";
+import type { ExactNodeTypeRef, RowIndex } from "@ndea/sdk";
 import type { Metadata } from "@/types";
 import type { NdForm } from "@/components/nd/nd-resolve-form";
 import { toRows } from "@/lib/mosaic-helpers";
@@ -110,12 +110,6 @@ export class Workspace {
       schedule: (flush) => requestAnimationFrame(flush),
       onFlush: () => this.counts.refresh(),
     });
-    // restore the persisted disposition (a loaded document overrides this via
-    // loadDocument's {...EMPTY, ...state}; the seed path keeps it)
-    const savedDisp = typeof localStorage !== "undefined" ? localStorage.getItem("ndea.disposition") : null;
-    if (savedDisp === "strip" || savedDisp === "full" || savedDisp === "hidden") {
-      this.documentStore.setState((s) => ({ ...s, disposition: savedDisp }));
-    }
     this.coordination = createCoordination(coordinationDocumentPort(this.documentStore));
     this.telemetry = this.graphRuntime.telemetry;
     this.counts = new NodeCounts({
@@ -143,7 +137,7 @@ export class Workspace {
 
   def(id: string): AppNodeDescriptor | null {
     const n = this.store.state.nodes[id];
-    return n ? (this.nodeLibrary.getDescriptor(n.type) ?? null) : null;
+    return n ? (this.nodeLibrary.getDescriptorExact(n.definitionRef) ?? null) : null;
   }
 
   nodeResolution(id: string): GraphNodeResolution | null {
@@ -155,9 +149,9 @@ export class Workspace {
     return this.graphRuntime.unresolvedNodes(this.store.state.nodes);
   }
 
-  private requireNodeDescriptor(type: GraphNodeType): AppNodeDescriptor {
-    const descriptor = this.nodeLibrary.getDescriptor(type);
-    if (!descriptor) throw new Error(`no registered node descriptor for type "${type}"`);
+  private requireNodeDescriptor(ref: ExactNodeTypeRef): AppNodeDescriptor {
+    const descriptor = this.nodeLibrary.getDescriptorExact(ref);
+    if (!descriptor) throw new Error(`no registered node descriptor for "${ref.nodeTypeId}@${ref.nodeTypeVersion}"`);
     return descriptor;
   }
 
@@ -177,18 +171,20 @@ export class Workspace {
 
   /* ── topology actions ─────────────────────────────────────────────── */
 
-  addNode(type: GraphNodeType, pos: WorkspaceNodePosition, idOverride?: string): string {
-    const def = this.requireNodeDescriptor(type);
-    const id = idOverride ?? `${type}-${++this.nodeSeq}`;
+  addNode(nodeTypeId: string, pos: WorkspaceNodePosition, idOverride?: string): string {
+    const def = this.nodeLibrary.getCurrentDescriptor(nodeTypeId);
+    if (!def) throw new Error(`no current node descriptor for type "${nodeTypeId}"`);
+    const id = idOverride ?? `${nodeTypeId}-${++this.nodeSeq}`;
     const parent = this.store.state.graphPath;
-    const node: GraphDocumentNode = { id, type, kind: def.kind, label: def.label, pluginId: def.pluginId, parent };
+    const node: GraphDocumentNode = { id, definitionRef: def.definitionRef, label: def.label, parent };
     const nodes = [node];
     const positions: Record<string, WorkspaceNodePosition> = { [id]: pos };
-    if (type === "subnet") {
-      this.requireNodeDescriptor("proxy");
+    if (nodeTypeId === "subnet") {
+      const proxy = this.nodeLibrary.getCurrentDescriptor("proxy");
+      if (!proxy) throw new Error('no current node descriptor for type "proxy"');
       nodes.push(
-        { id: `${id}-in`, type: "proxy", kind: "proxy", label: "⊳ in", pluginId: null, parent: id },
-        { id: `${id}-out`, type: "proxy", kind: "proxy", label: "⊲ out", pluginId: null, parent: id },
+        { id: `${id}-in`, definitionRef: proxy.definitionRef, label: "⊳ in", parent: id },
+        { id: `${id}-out`, definitionRef: proxy.definitionRef, label: "⊲ out", parent: id },
       );
       positions[`${id}-in`] = { x: 60, y: 160 };
       positions[`${id}-out`] = { x: 760, y: 160 };
@@ -197,11 +193,13 @@ export class Workspace {
     try {
       for (const added of nodes) {
         if (!this.graphRuntime.registerNode(added)) {
-          throw new Error(`no graph evaluator registered for type "${added.type}"`);
+          throw new Error(
+            `no graph evaluator registered for "${added.definitionRef.nodeTypeId}@${added.definitionRef.nodeTypeVersion}"`,
+          );
         }
         registered.push(added.id);
       }
-      if (type === "subnet" && !this.graphRuntime.connectSubnetSeam(id)) {
+      if (nodeTypeId === "subnet" && !this.graphRuntime.connectSubnetSeam(id)) {
         throw new Error(`graph runtime rejected subnet seam for "${id}"`);
       }
       this.documentStore.setState((state) => ({
@@ -221,7 +219,7 @@ export class Workspace {
 
   removeNode(id: string): void {
     const node = this.store.state.nodes[id];
-    if (!node || node.type === "obs") return; // the source is permanent
+    if (!node || node.definitionRef.nodeTypeId === "obs") return; // the source is permanent
     if (this.ui.state.fullscreen === id) this.setFullscreen(null);
     this.graphRuntime.removeNode(id);
     this.documentStore.setState((s) => {
@@ -408,13 +406,14 @@ export class Workspace {
   toggleFlag(id: string, flag: "bypass" | "off"): void {
     const def = this.def(id);
     if (!def) return;
-    if (flag === "bypass" && !(def.kind === "transform" || def.kind === "subnet")) return;
-    if (flag === "off" && !(def.kind === "view" && def.pluginId)) return;
+    if (flag === "bypass" && !(def.role === "transform" || def.role === "subnet")) return;
+    if (flag === "off" && !(def.role === "view" && def.canFull)) return;
     const next = !(this.store.state.flags[id]?.[flag] ?? false);
     if (flag === "bypass") {
       // a bypassed subnet bypasses its seam: route through the ⊲out proxy too
       this.graphRuntime.setBypass(id, next);
-      if (this.store.state.nodes[id]?.type === "subnet") this.graphRuntime.setBypass(`${id}-out`, next);
+      if (this.store.state.nodes[id]?.definitionRef.nodeTypeId === "subnet")
+        this.graphRuntime.setBypass(`${id}-out`, next);
     } else {
       // display-off: the instance runtime unregisters its sink (branch never cooks);
       // dirty downstream so LEDs reflect the parked branch
@@ -485,7 +484,8 @@ export class Workspace {
     const live = this.getLasso(scatterId);
     if (!live?.sql) return null;
     let cacheId = Object.values(this.store.state.edges).find(
-      (e) => e.from === scatterId && e.kind === "sel" && this.store.state.nodes[e.to]?.type === "cache",
+      (e) =>
+        e.from === scatterId && e.kind === "sel" && this.store.state.nodes[e.to]?.definitionRef.nodeTypeId === "cache",
     )?.to;
     if (!cacheId) {
       const p = this.store.state.positions[scatterId] ?? { x: 0, y: 0 };
@@ -510,7 +510,7 @@ export class Workspace {
     fullscreen: string | null;
   }>({
     baseForm: "full",
-    zoomForms: typeof localStorage !== "undefined" && localStorage.getItem("ndea.zoomForms") === "1",
+    zoomForms: false,
     ghost: null,
     flipHide: null,
     resizing: null,
@@ -531,11 +531,6 @@ export class Workspace {
   /** toggle zoom-semantic forms; off re-pins every unlocked node to largest */
   setZoomForms(on: boolean): void {
     this.ui.setState((u) => ({ ...u, zoomForms: on }));
-    try {
-      localStorage.setItem("ndea.zoomForms", on ? "1" : "0");
-    } catch {
-      /* headless / storage denied — preference just won't persist */
-    }
     if (!on) this.setBaseForm("full");
   }
 
@@ -623,7 +618,7 @@ export class Workspace {
   stageCandidates(): string[] {
     return Object.values(this.store.state.nodes)
       .filter((node) => {
-        const descriptor = this.nodeLibrary.getDescriptor(node.type);
+        const descriptor = this.nodeLibrary.getDescriptorExact(node.definitionRef);
         return descriptor?.stage !== "canvas-only" && this.placementOf(node.id) === "embedded";
       })
       .map((n) => n.id);
@@ -679,7 +674,7 @@ export class Workspace {
     const s = this.store.state;
     const sel = s.selectedNodeIds.filter((id) => {
       const n = s.nodes[id];
-      return n && n.type !== "obs" && n.type !== "proxy";
+      return n && n.definitionRef.nodeTypeId !== "obs" && n.definitionRef.nodeTypeId !== "proxy";
     });
     if (sel.length < 2) return null;
     const inSel = new Set(sel);
@@ -691,7 +686,7 @@ export class Workspace {
     let maxY = -1e9;
     for (const id of sel) {
       const p = s.positions[id] ?? { x: 0, y: 0 };
-      const def = this.requireNodeDescriptor(s.nodes[id].type);
+      const def = this.requireNodeDescriptor(s.nodes[id].definitionRef);
       minX = Math.min(minX, p.x);
       minY = Math.min(minY, p.y);
       maxX = Math.max(maxX, p.x + def.card.w);
@@ -745,11 +740,6 @@ export class Workspace {
 
   setDisposition(d: WorkspaceCanvasDisposition): void {
     this.documentStore.setState((s) => ({ ...s, disposition: d, claimed: null }));
-    try {
-      localStorage.setItem("ndea.disposition", d);
-    } catch {
-      /* headless / storage denied — preference just won't persist */
-    }
   }
 
   setStripH(h: number): void {
@@ -764,11 +754,11 @@ export class Workspace {
     const current = this.store.state.nodes[id];
     if (!current) return;
     const next = this.graphRuntime.patchNodeConfig(current, patch);
+    this.graphRuntime.recookNode(next);
     this.documentStore.setState((state) => ({
       ...state,
       nodes: { ...state.nodes, [id]: next },
     }));
-    this.graphRuntime.markDirty(id);
   }
 
   dispose(): void {

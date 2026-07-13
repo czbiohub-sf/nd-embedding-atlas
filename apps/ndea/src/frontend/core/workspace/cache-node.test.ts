@@ -136,7 +136,7 @@ describe("Cache node", () => {
 
     const cacheId = ws.freezeSelection(sc);
     expect(cacheId).not.toBeNull();
-    expect(ws.store.state.nodes[cacheId!].type).toBe("cache");
+    expect(String(ws.store.state.nodes[cacheId!].definitionRef.nodeTypeId)).toBe("cache");
     expect(ws.isCached(cacheId!)).toBe(true);
     expect(cookSql(ws, cacheId!)).toBe("__row_index__ IN (4, 5)");
 

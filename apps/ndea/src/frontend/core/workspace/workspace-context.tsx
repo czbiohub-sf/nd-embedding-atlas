@@ -13,16 +13,57 @@ import { deviceBroker } from "@/core/gpu/device-broker";
 import { WorkspaceNodeRuntimeProvider } from "@/core/node/runtime/runtime-context";
 import { APP_NODE_HOST_CAPABILITIES, WorkspaceNodeRuntimeManager } from "@/core/node/runtime/workspace-runtime";
 import type { Metadata } from "@/types";
-import { loadFromStorage, saveToStorage, storageKey } from "./persist";
+import {
+  browserWorkspaceStorage,
+  loadFromStorage,
+  storageKey,
+  type LoadResult,
+  type RecoveryStage,
+  WorkspaceAutosave,
+  type WorkspaceStorage,
+} from "./persist";
 import type { AppNodeLibrary } from "@/core/node/library";
 import { resolvePreset, seedAnnotate } from "./presets";
 import { seedWorkspace, Workspace } from "./workspace-store";
 import type { WorkspaceDocumentState } from "./types";
 
 const WorkspaceContext = createContext<Workspace | null>(null);
+export interface WorkspacePersistenceState {
+  readonly mode: "writable" | "recovery";
+  readonly stage?: RecoveryStage;
+  readonly errors: readonly string[];
+  readonly backupKey?: string;
+  readonly recoveryState?: WorkspaceDocumentState;
+}
+const WorkspacePersistenceContext = createContext<WorkspacePersistenceState>({
+  mode: "writable",
+  errors: [],
+});
 
 /** Debounce window for autosave — collapses a drag/edit burst into one write. */
 const AUTOSAVE_MS = 500;
+
+export function initializeWorkspaceDocument(
+  workspace: Pick<Workspace, "loadDocument">,
+  loaded: LoadResult,
+  seed: () => void,
+): WorkspacePersistenceState {
+  if (loaded.kind === "ok") {
+    workspace.loadDocument(loaded.state);
+    return { mode: "writable", errors: [] };
+  }
+  if (loaded.kind === "miss") {
+    seed();
+    return { mode: "writable", errors: [] };
+  }
+  return {
+    mode: "recovery",
+    stage: loaded.stage,
+    errors: loaded.errors,
+    ...(loaded.backupKey ? { backupKey: loaded.backupKey } : {}),
+    ...(loaded.state ? { recoveryState: loaded.state } : {}),
+  };
+}
 
 /**
  * A stable per-dataset session key for the persisted document. Derived from the
@@ -40,61 +81,62 @@ function sessionKeyOf(metadata: Metadata, table: string): string | null {
 export function WorkspaceProvider({
   children,
   nodeLibrary,
+  storage,
 }: {
   children: React.ReactNode;
   nodeLibrary: AppNodeLibrary;
+  storage?: WorkspaceStorage;
 }) {
   const { state, meta, actions } = useDashboard();
   const { coordinator, brushSelection, table } = meta;
   const { metadata } = state;
 
-  const [{ workspace: ws, nodeRuntimes }] = useState(() => {
-    const w = new Workspace({ coordinator, table, metadata, nodeLibrary });
-    if (import.meta.env.DEV) {
-      // Dev server: editable session. Load-or-seed seam (U7→persistence) — read
-      // the saved PersistedDoc for this dataset session, validate it
-      // (parse-on-load), and hydrate it (engine registration + edges included so
-      // it actually cooks); fall back to seedWorkspace on a miss or corrupt doc.
-      const key = storageKey(sessionKeyOf(metadata, table));
-      const loaded = loadFromStorage(key, nodeLibrary);
-      if (loaded.kind === "ok") {
-        w.loadDocument(loaded.state);
+  const [{ workspace: ws, nodeRuntimes, persistence: initialPersistence, workspaceStorage, workspaceKey }] = useState(
+    () => {
+      const w = new Workspace({ coordinator, table, metadata, nodeLibrary });
+      const resolvedStorage = storage ?? browserWorkspaceStorage();
+      const resolvedKey = storageKey(sessionKeyOf(metadata, table));
+      let persistence: WorkspacePersistenceState = { mode: "writable", errors: [] };
+      if (import.meta.env.DEV) {
+        // Seed only after a confirmed miss. Any read, migration, backup, or
+        // rewrite failure keeps a validated document read-only when possible.
+        const loaded = loadFromStorage(resolvedStorage, resolvedKey, nodeLibrary);
+        persistence = initializeWorkspaceDocument(w, loaded, () => seedWorkspace(w));
+        (window as unknown as { __ndeaWorkspace?: Workspace }).__ndeaWorkspace = w;
       } else {
-        if (loaded.kind === "invalid") {
-          console.warn("[workspace] saved document rejected, seeding fresh:", loaded.errors.join("; "));
-        }
-        seedWorkspace(w);
+        // Shipped build: the named preset (default annotate) seeds a fresh graph +
+        // layout against the mounted dataset — dataset-agnostic, authoritative on
+        // every launch (R7, read-only). A typo'd/unknown --preset falls back to the
+        // annotate default.
+        const seed = resolvePreset(metadata.preset ?? "annotate") ?? seedAnnotate;
+        seed(w);
       }
-      (window as unknown as { __ndeaWorkspace?: Workspace }).__ndeaWorkspace = w;
-    } else {
-      // Shipped build: the named preset (default annotate) seeds a fresh graph +
-      // layout against the mounted dataset — dataset-agnostic, authoritative on
-      // every launch (R7, read-only). A typo'd/unknown --preset falls back to the
-      // annotate default.
-      const seed = resolvePreset(metadata.preset ?? "annotate") ?? seedAnnotate;
-      seed(w);
-    }
-    const appHost = Object.freeze({
-      coordinator,
-      defaultInputPredicate: brushSelection,
-      table,
-      metadata,
-      refreshMetadata: actions.refreshMetadata,
-      availableCapabilities: new Set(APP_NODE_HOST_CAPABILITIES),
-      predicateBus,
-      rowSetBus,
-      deviceBroker,
-      fetch: globalThis.fetch,
-    });
-    return {
-      workspace: w,
-      nodeRuntimes: new WorkspaceNodeRuntimeManager({
-        session: w,
-        nodeLibrary,
-        appHost,
-      }),
-    };
-  });
+      const appHost = Object.freeze({
+        coordinator,
+        defaultInputPredicate: brushSelection,
+        table,
+        metadata,
+        refreshMetadata: actions.refreshMetadata,
+        availableCapabilities: new Set(APP_NODE_HOST_CAPABILITIES),
+        predicateBus,
+        rowSetBus,
+        deviceBroker,
+        fetch: globalThis.fetch,
+      });
+      return {
+        workspace: w,
+        persistence,
+        workspaceStorage: resolvedStorage,
+        workspaceKey: resolvedKey,
+        nodeRuntimes: new WorkspaceNodeRuntimeManager({
+          session: w,
+          nodeLibrary,
+          appHost,
+        }),
+      };
+    },
+  );
+  const [persistence, setPersistence] = useState(initialPersistence);
 
   useEffect(
     () => () => {
@@ -121,22 +163,31 @@ export function WorkspaceProvider({
   useEffect(() => {
     // Builds persist nothing — the bundled preset is authoritative every launch (R7).
     if (!import.meta.env.DEV) return;
-    const key = storageKey(sessionKeyOf(metadata, table));
+    if (persistence.mode === "recovery") return;
     let timer: ReturnType<typeof setTimeout> | null = null;
+    const autosave = new WorkspaceAutosave(workspaceStorage, workspaceKey, (error) => {
+      setPersistence({
+        mode: "recovery",
+        stage: "autosave",
+        errors: [error instanceof Error ? error.message : String(error)],
+      });
+    });
     const sub = ws.store.subscribe(() => {
       if (timer) clearTimeout(timer);
-      timer = setTimeout(() => saveToStorage(key, ws.store.state), AUTOSAVE_MS);
+      timer = setTimeout(() => autosave.save(ws.store.state), AUTOSAVE_MS);
     });
     return () => {
       if (timer) clearTimeout(timer);
       sub.unsubscribe();
     };
-  }, [ws, metadata, table]);
+  }, [ws, persistence.mode, workspaceStorage, workspaceKey]);
 
   return (
-    <WorkspaceContext.Provider value={ws}>
-      <WorkspaceNodeRuntimeProvider value={nodeRuntimes}>{children}</WorkspaceNodeRuntimeProvider>
-    </WorkspaceContext.Provider>
+    <WorkspacePersistenceContext.Provider value={persistence}>
+      <WorkspaceContext.Provider value={ws}>
+        <WorkspaceNodeRuntimeProvider value={nodeRuntimes}>{children}</WorkspaceNodeRuntimeProvider>
+      </WorkspaceContext.Provider>
+    </WorkspacePersistenceContext.Provider>
   );
 }
 
@@ -144,6 +195,10 @@ export function useWorkspace(): Workspace {
   const ws = useContext(WorkspaceContext);
   if (!ws) throw new Error("useWorkspace outside WorkspaceProvider");
   return ws;
+}
+
+export function useWorkspacePersistence(): WorkspacePersistenceState {
+  return useContext(WorkspacePersistenceContext);
 }
 
 export function useWorkspaceSelector<T>(selector: (s: WorkspaceDocumentState) => T): T {

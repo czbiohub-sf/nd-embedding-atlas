@@ -3,7 +3,13 @@ import { Glob } from "bun";
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
-import { createNativeAppNodeLibrary, nativePluginFactory, parseNodeConfig, nativeNodeSpecOf } from "./library";
+import {
+  createAppNodeLibrary,
+  createNativeAppNodeLibrary,
+  nativePluginFactory,
+  parseNodeConfig,
+  nativeNodeSpecOf,
+} from "./library";
 import { NATIVE_NODE_CONTRIBUTIONS, NATIVE_NODE_CURRENT_REFS, NATIVE_NODE_DEFINITIONS } from "./native-nodes";
 import { collectPluginContribution, NATIVE_NODE_SOURCE } from "@/core/plugin/registration";
 import { exactNodeTypeRef } from "@ndea/sdk";
@@ -53,29 +59,48 @@ describe("native node catalog fitness functions", () => {
   });
 
   test("current identities resolve exactly without retired aliases", () => {
-    const cache = nativeNodeLibrary.getSpec("cache");
-    const imageViewer = nativeNodeLibrary.getSpec("image-viewer");
+    const cache = nativeNodeLibrary.getCurrentSpec("cache");
+    const imageViewer = nativeNodeLibrary.getCurrentSpec("image-viewer");
     expect(cache?.definition.ref).toEqual(exactNodeTypeRef("cache", "1.0.0"));
     expect(imageViewer?.definition.ref).toEqual(exactNodeTypeRef("image-viewer", "1.0.0"));
-    expect(nativeNodeLibrary.getDescriptor("image-viewer")?.label).toBe("Image Viewer");
+    expect(nativeNodeLibrary.getCurrentDescriptor("image-viewer")?.label).toBe("Image Viewer");
     expect(imageViewer?.definition.inputs).toEqual([{ id: "focus-in", kind: "focus", label: "Focus" }]);
     expect(nativeNodeCatalog.resolveCurrent("selection")).toBeUndefined();
     expect(nativeNodeCatalog.resolveCurrent("fov")).toBeUndefined();
-    expect(nativeNodeLibrary.getSpec("selection")).toBeUndefined();
-    expect(nativeNodeLibrary.getSpec("fov")).toBeUndefined();
-    const paletteTypes = nativeNodeLibrary.paletteDescriptors().map(({ type }) => type);
+    expect(nativeNodeLibrary.getCurrentSpec("selection")).toBeUndefined();
+    expect(nativeNodeLibrary.getCurrentSpec("fov")).toBeUndefined();
+    const paletteTypes = nativeNodeLibrary
+      .paletteDescriptors()
+      .map(({ definitionRef }) => String(definitionRef.nodeTypeId));
     expect(paletteTypes).toContain("cache");
     expect(paletteTypes).toContain("image-viewer");
     expect(paletteTypes).not.toContain("selection");
     expect(paletteTypes).not.toContain("fov");
-    expect(String(nativeNodeLibrary.getSpec("threshold")?.definition.ref.nodeTypeId)).toBe("transform-filter");
+    expect(nativeNodeLibrary.getCurrentSpec("threshold")).toBeUndefined();
+    expect(nativeNodeLibrary.getCurrentSpec("transform-filter")?.inPalette).toBe(false);
   });
 
   test("Workspace order and palette are tuple-derived without a second list", () => {
-    const tupleSpecs = NATIVE_NODE_CONTRIBUTIONS.map(nativeNodeSpecOf);
-    expect(nativeNodeLibrary.listSpecs().map(({ type }) => type)).toEqual(tupleSpecs.map(({ type }) => type));
-    expect(nativeNodeLibrary.paletteDescriptors().map(({ type }) => type)).toEqual(
-      tupleSpecs.filter(({ inPalette }) => inPalette).map(({ type }) => type),
+    const tupleSpecs = NATIVE_NODE_CONTRIBUTIONS.map((contribution) => nativeNodeSpecOf(contribution));
+    expect(nativeNodeLibrary.listSpecs().map(({ definition }) => definition.ref)).toEqual(
+      tupleSpecs.map(({ definition }) => definition.ref),
+    );
+    expect(nativeNodeLibrary.paletteDescriptors().map(({ definitionRef }) => definitionRef)).toEqual(
+      tupleSpecs.filter(({ inPalette }) => inPalette).map(({ definition }) => definition.ref),
+    );
+  });
+
+  test("palette current matching compares exact refs by value", () => {
+    const clonedCurrentCatalog = {
+      ...nativeNodeCatalog,
+      resolveCurrent(nodeTypeId: string) {
+        const definition = nativeNodeCatalog.resolveCurrent(nodeTypeId);
+        return definition ? { ...definition, ref: { ...definition.ref } } : undefined;
+      },
+    };
+    const clonedCurrentLibrary = createAppNodeLibrary(clonedCurrentCatalog);
+    expect(clonedCurrentLibrary.paletteDescriptors().map(({ definitionRef }) => definitionRef)).toEqual(
+      nativeNodeLibrary.paletteDescriptors().map(({ definitionRef }) => definitionRef),
     );
   });
 
@@ -95,10 +120,10 @@ describe("native node catalog fitness functions", () => {
   test("definition metadata is authoritative while graph runtime and layout stay app-local", () => {
     for (const spec of nativeNodeLibrary.listSpecs()) {
       expect(nativeNodeCatalog.resolveExact(spec.definition.ref)).toBe(spec.definition);
-      expect(nativeNodeLibrary.getDescriptor(spec.type)?.label).toBe(spec.definition.title);
+      expect(nativeNodeLibrary.getDescriptorExact(spec.definition.ref)?.label).toBe(spec.definition.title);
       expect(spec.cook).toBeFunction();
       expect(spec.geometry.card.w).toBeGreaterThan(0);
-      expect(spec.pluginId).toBe(spec.definition.load ? spec.definition.ref.nodeTypeId : null);
+      expect(spec.source).toBe(nativeNodeCatalog.entryExact(spec.definition.ref)!.source);
       if (spec.definition.load) expect(spec.body).toBeDefined();
       else expect(spec.body).toBeUndefined();
     }
@@ -191,10 +216,14 @@ describe("native node catalog fitness functions", () => {
     for (const spec of nativeNodeLibrary.listSpecs()) {
       const config = spec.definition.config;
       if (!config) continue;
-      expect(config.schema.safeParse(config.defaultValue).success, `${spec.type} rejects its default config`).toBe(
-        true,
-      );
-      expect(parseNodeConfig(spec, config.defaultValue).ok, `${spec.type} rejects its default config`).toBe(true);
+      expect(
+        config.schema.safeParse(config.defaultValue).success,
+        `${spec.definition.ref.nodeTypeId} rejects its default config`,
+      ).toBe(true);
+      expect(
+        parseNodeConfig(spec, config.defaultValue).ok,
+        `${spec.definition.ref.nodeTypeId} rejects its default config`,
+      ).toBe(true);
     }
   });
 

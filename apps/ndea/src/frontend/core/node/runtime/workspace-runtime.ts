@@ -189,20 +189,20 @@ function createRuntimeHost(
   const { session, nodeLibrary, appHost } = dependencies;
   const node = session.store.state.nodes[nodeId];
   if (!node) throw new Error(`workspace node not found: ${nodeId}`);
-  const spec = nodeLibrary.getSpec(node.type);
+  const spec = nodeLibrary.getSpecExact(node.definitionRef);
   const inputPredicate = Selection.single();
   const inputRowSet = createEdgeInputRowSetBinding();
   const localFocus = new Store<RowIndex | null>(null);
   const facets = {
     ...(spec?.checkpoint ? { checkpoint: createCheckpointNodeFacet(session, nodeId) } : {}),
     ...(spec?.checkpointCreation ? { checkpointCreation: createCheckpointCreationNodeFacet(session, nodeId) } : {}),
-    ...(spec?.kind === "subnet" ? { hierarchy: createHierarchyNodeFacet(session, nodeId) } : {}),
+    ...(spec?.role === "subnet" ? { hierarchy: createHierarchyNodeFacet(session, nodeId) } : {}),
   };
 
   const handle = createAppNodeHost(appHost, {
     instanceId: nodeInstanceId(nodeId),
     definition,
-    config: mergeNodeConfig(definition, node.config),
+    config: mergeNodeConfig(definition, node.config?.value),
     bodyHeaderElement: headerElement,
     inputPredicate,
     rowSetInput: inputRowSet,

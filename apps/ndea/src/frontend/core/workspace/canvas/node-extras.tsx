@@ -51,7 +51,7 @@ export function FlagButton({ node, compact = false }: { node: GraphDocumentNode;
   const definition = workspace.def(node.id);
   if (!definition) return null;
 
-  if (definition.kind === "transform" || definition.kind === "subnet") {
+  if (definition.role === "transform" || definition.role === "subnet") {
     return (
       <NdIconButton
         icon="bypass"
@@ -67,7 +67,7 @@ export function FlagButton({ node, compact = false }: { node: GraphDocumentNode;
     );
   }
 
-  if (definition.kind === "view" && definition.pluginId) {
+  if (definition.role === "view" && definition.canFull) {
     return (
       <NdIconButton
         icon="power"

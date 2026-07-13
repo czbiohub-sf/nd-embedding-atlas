@@ -327,18 +327,22 @@ function validateConfig(definition: CatalogNodeDefinition, label: string): void 
   const defaultResult = config.schema.safeParse(config.defaultValue);
   if (!defaultResult.success) fail(label, `node "${id}" has an invalid default config: ${defaultResult.error.message}`);
   validateJsonValue(config.defaultValue, label, `node "${id}" default config`);
+  validateJsonValue(defaultResult.data, label, `node "${id}" parsed default config`);
 
   const migrations = config.migrations ?? [];
   if (!Array.isArray(migrations)) fail(label, `node "${id}" config migrations must be an array`);
-  if (migrations.length !== version - 1)
-    fail(label, `node "${id}" config migrations must contain contiguous steps 1 through ${version}`);
+  const firstFrom = migrations.length > 0 ? Number(migrations[0]!.from) : version;
+  if (migrations.length > 0 && (!Number.isSafeInteger(firstFrom) || firstFrom < 0 || firstFrom >= version))
+    fail(label, `node "${id}" config migrations have an invalid starting version`);
   for (let index = 0; index < migrations.length; index += 1) {
     const migration = migrations[index]!;
-    const expectedFrom = index + 1;
+    const expectedFrom = firstFrom + index;
     if (Number(migration.from) !== expectedFrom || Number(migration.to) !== expectedFrom + 1)
       fail(label, `node "${id}" config migration ${index} must be ${expectedFrom} -> ${expectedFrom + 1}`);
     if (typeof migration.migrate !== "function") fail(label, `node "${id}" config migration ${index} requires migrate`);
   }
+  if (migrations.length > 0 && Number(migrations.at(-1)!.to) !== version)
+    fail(label, `node "${id}" config migrations must terminate at version ${version}`);
 }
 
 function validateDocumentation(definition: CatalogNodeDefinition, label: string): void {

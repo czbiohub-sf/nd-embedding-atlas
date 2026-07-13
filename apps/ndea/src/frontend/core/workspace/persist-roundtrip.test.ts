@@ -1,330 +1,395 @@
-/**
- * Persistence round-trip (Track B) — the save → validate → load path, end to end.
- *
- * The foundation (`persist.test.ts`) asserts the versioned-doc + parse-on-load
- * hook in isolation. These exercise the actual plumbing:
- *   - a graph saved to storage reloads into a FRESH Workspace and reproduces the
- *     topology AND genuinely cooks (engine registration + edges rehydrated, not
- *     just `store.setState`) — the load-bearing requirement.
- *   - an invalid stored doc is rejected so the seam can fall back to seed.
- *
- * Reads are synchronous via engine.pull — no flush/rAF needed beyond the ctor stub.
- */
+import { describe, expect, test } from "bun:test";
+import { exactNodeTypeRef, nodeConfigVersion, rowIndex } from "@ndea/sdk";
+import { z } from "zod";
 
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { rowIndex } from "@ndea/sdk";
+import { createNativeAppNodeLibrary, type AppNodeLibrary, type AppNodeSpec } from "@/core/node/library";
+import type { WorkspaceDocumentState } from "./types";
+import { loadFromStorage, saveToStorage, storageKey, toPersistedDoc, type WorkspaceStorage } from "./persist";
 
-import { fromPersistedDoc, loadFromStorage, saveToStorage, storageKey, toPersistedDoc, validateDoc } from "./persist";
-import { predicateSql } from "@/core/graph/cook";
-import { createNativeAppNodeLibrary } from "@/core/node/library";
-import { seedWorkspace, Workspace } from "./workspace-store";
-import type { Metadata } from "@ndea/protocol";
+const library = createNativeAppNodeLibrary();
 
-const nativeWorkspaceNodeLibrary = createNativeAppNodeLibrary();
-
-// rAF doesn't exist under bun:test — the Workspace ctor references it for the
-// flush scheduler. We pull synchronously, so a no-op stub is enough.
-(globalThis as { requestAnimationFrame?: unknown }).requestAnimationFrame ??= (() => 0) as unknown;
-
-function makeWs() {
-  return new Workspace({
-    coordinator: { query: () => Promise.resolve([]) } as never,
-    table: "atlas",
-    metadata: { dataset_keys: [] } as unknown as Metadata,
-    nodeLibrary: nativeWorkspaceNodeLibrary,
-  });
-}
-
-const cookSql = (ws: Workspace, id: string) => predicateSql(ws.pullGraphNode(id));
-
-function runtimeState(doc: ReturnType<typeof toPersistedDoc>) {
-  const decoded = fromPersistedDoc(doc);
-  if (!decoded.ok) throw new Error(decoded.errors.join("; "));
-  return decoded.state;
-}
-
-// In-memory localStorage shim for the storage-key path (bun:test has none).
-function installStorageShim() {
-  const map = new Map<string, string>();
-  const shim = {
-    getItem: (k: string) => map.get(k) ?? null,
-    setItem: (k: string, v: string) => void map.set(k, v),
-    removeItem: (k: string) => void map.delete(k),
-    clear: () => map.clear(),
+function emptyState(): WorkspaceDocumentState {
+  return {
+    nodes: {},
+    edges: {},
+    positions: {},
+    sizeOverrides: {},
+    formOverride: {},
+    formLocked: {},
+    selectedNodeId: null,
+    selectedNodeIds: [],
+    selectedEdgeId: null,
+    explicit: {},
+    stageTree: null,
+    disposition: "strip",
+    stripH: 280,
+    claimed: null,
+    graphPath: null,
+    flags: {},
+    coordinationScopes: {},
+    coordinationSpace: {},
   };
-  (globalThis as { localStorage?: unknown }).localStorage = shim as unknown;
-  return map;
 }
 
-describe("persistence round-trip (Track B)", () => {
-  test("a saved graph reloads into a fresh Workspace, reproduces topology, and cooks", () => {
-    // ── author a graph: obs → wrangle(pred) → cache, plus a count sink ──
-    const src = makeWs();
-    const obs = src.addNode("obs", { x: 0, y: 0 }, "obs");
-    const wr = src.addNode("wrangle", { x: 100, y: 0 });
-    const cache = src.addNode("cache", { x: 200, y: 0 });
-    const count = src.addNode("count", { x: 300, y: 0 });
-    src.connect(obs, wr);
-    src.connect(wr, cache);
-    src.connect(cache, count);
-    // wrangle's compiled predicate lives in the body's runtime map, NOT the
-    // document — persist its source-of-truth (`prql` config) so the loaded body
-    // recompiles. For this test we assert topology+cook; seed a doc-level pred via
-    // a fresh wrangle compile after load (below) to prove the wire carries it.
-    src.updateNodeConfig(wr, { predicateSql: "x > 1" });
-    expect(cookSql(src, cache)).toBe("x > 1");
-    expect(cookSql(src, count)).toBe("x > 1");
+class MemoryStorage implements WorkspaceStorage {
+  readonly bytes: Record<string, string>;
+  readonly writes: string[] = [];
+  failRead: ((key: string) => Error | null) | null = null;
+  failWrite: ((key: string) => Error | null) | null = null;
 
-    // ── save → validate → load into a brand-new Workspace ──
-    const doc = toPersistedDoc(src.store.state);
-    expect(validateDoc(doc, nativeWorkspaceNodeLibrary).ok).toBe(true);
+  constructor(initial: Record<string, string> = {}) {
+    this.bytes = { ...initial };
+  }
 
-    const dst = makeWs();
-    dst.loadDocument(runtimeState(doc));
+  read(key: string): string | null {
+    const error = this.failRead?.(key);
+    if (error) throw error;
+    return this.bytes[key] ?? null;
+  }
 
-    // topology reproduced
-    expect(Object.keys(dst.store.state.nodes).toSorted()).toEqual([cache, count, obs, wr].toSorted());
-    expect(Object.keys(dst.store.state.edges).length).toBe(3);
+  write(key: string, value: string): void {
+    const error = this.failWrite?.(key);
+    if (error) throw error;
+    this.writes.push(key);
+    this.bytes[key] = value;
+  }
+}
 
-    // it genuinely COOKS: a freshly-compiled wrangle predicate flows obs → wrangle
-    // → cache → count through the rehydrated engine edges (proves engine
-    // registration + reconnection, not an inert store-only restore).
-    dst.updateNodeConfig(wr, { predicateSql: "y < 5" });
-    expect(cookSql(dst, cache)).toBe("y < 5");
-    expect(cookSql(dst, count)).toBe("y < 5");
+function legacyV2() {
+  const state = {
+    ...emptyState(),
+    nodes: {
+      dataset: {
+        id: "dataset",
+        type: "dataset",
+        kind: "source",
+        label: "Dataset",
+        pluginId: null,
+        config: {},
+      },
+    },
+    selection: "dataset",
+    selSet: ["dataset"],
+    selectedEdge: null,
+    coordinationSpace: { focus: { A: "8" } },
+  } as Record<string, unknown>;
+  delete state.selectedNodeId;
+  delete state.selectedNodeIds;
+  delete state.selectedEdgeId;
+  return { version: 2, state };
+}
+
+describe("WorkspaceStorage recovery contract", () => {
+  test("multiple session keys never cross-read or cross-write", () => {
+    const storage = new MemoryStorage();
+    const first = emptyState();
+    first.selectedNodeId = "first";
+    const second = emptyState();
+    second.selectedNodeId = "second";
+    saveToStorage(storage, storageKey("dataset-a"), first);
+    saveToStorage(storage, storageKey("dataset-b"), second);
+    expect(loadFromStorage(storage, storageKey("dataset-a"), library)).toMatchObject({
+      kind: "ok",
+      state: { selectedNodeId: "first" },
+    });
+    expect(loadFromStorage(storage, storageKey("dataset-b"), library)).toMatchObject({
+      kind: "ok",
+      state: { selectedNodeId: "second" },
+    });
   });
 
-  test("the realistic seed document round-trips and cooks", () => {
-    const src = makeWs();
-    seedWorkspace(src);
-    const doc = toPersistedDoc(src.store.state);
-    expect(validateDoc(doc, nativeWorkspaceNodeLibrary).ok).toBe(true);
-
-    const dst = makeWs();
-    dst.loadDocument(runtimeState(doc));
-
-    // same node + edge counts as the seed
-    expect(Object.keys(dst.store.state.nodes).length).toBe(Object.keys(src.store.state.nodes).length);
-    expect(Object.keys(dst.store.state.edges).length).toBe(Object.keys(src.store.state.edges).length);
-
-    // every node pulls a value (registered + cooks); count sink follows the wrangle
-    const wrId = Object.values(dst.store.state.nodes).find((n) => n.type === "wrangle")!.id;
-    const countId = Object.values(dst.store.state.nodes).find((n) => n.type === "count")!.id;
-    dst.updateNodeConfig(wrId, { predicateSql: "z = 3" });
-    expect(cookSql(dst, countId)).toBe("z = 3");
+  test("only a confirmed null read reports miss", () => {
+    const storage = new MemoryStorage();
+    expect(loadFromStorage(storage, "active", library)).toEqual({ kind: "miss" });
+    storage.failRead = () => new Error("read denied");
+    expect(loadFromStorage(storage, "active", library)).toMatchObject({
+      kind: "recovery",
+      stage: "read",
+      errors: ["read denied"],
+    });
   });
 
-  test("a sel (lasso) edge rehydrates on its push port — re-emit flows downstream", () => {
-    const src = makeWs();
-    const obs = src.addNode("obs", { x: 0, y: 0 }, "obs");
-    const sc = src.addNode("scatter", { x: 100, y: 0 });
-    const cache = src.addNode("cache", { x: 200, y: 0 });
-    src.connect(obs, sc);
-    src.connect(sc, cache); // sel push wire
+  test("invalid JSON and future documents preserve active bytes", () => {
+    const invalid = "{bad";
+    const storage = new MemoryStorage({ active: invalid });
+    expect(loadFromStorage(storage, "active", library)).toMatchObject({ kind: "recovery", stage: "parse" });
+    expect(storage.bytes.active).toBe(invalid);
+    expect(storage.writes).toEqual([]);
 
-    const dst = makeWs();
-    dst.loadDocument(runtimeState(toPersistedDoc(src.store.state)));
+    const future = JSON.stringify({ version: 99, state: {} });
+    storage.bytes.active = future;
+    expect(loadFromStorage(storage, "active", library)).toMatchObject({ kind: "recovery", stage: "version" });
+    expect(storage.bytes.active).toBe(future);
+    expect(storage.writes).toEqual([]);
 
-    // emissions are runtime (not persisted) — but the push wire is rehydrated, so a
-    // fresh lasso emission delivers downstream through it.
-    dst.emitLasso(sc, "__row_index__ IN (1, 2)", [rowIndex(1), rowIndex(2)]);
-    expect(cookSql(dst, cache)).toBe("__row_index__ IN (1, 2)");
+    const unknownLegacy = legacyV2();
+    (unknownLegacy.state.nodes as Record<string, { type: string }>).dataset.type = "removed-without-map";
+    const unknownRaw = JSON.stringify(unknownLegacy);
+    storage.bytes.active = unknownRaw;
+    expect(loadFromStorage(storage, "active", library)).toMatchObject({
+      kind: "recovery",
+      stage: "migration",
+    });
+    expect(storage.bytes.active).toBe(unknownRaw);
+    expect(storage.writes).toEqual([]);
   });
 
-  test("coordination scopes + cells survive a full Workspace save → load", () => {
-    const src = makeWs();
-    const obs = src.addNode("obs", { x: 0, y: 0 }, "obs");
-    const sc = src.addNode("scatter", { x: 100, y: 0 });
-    src.connect(obs, sc);
-    // link the scatter onto a focus scope + set the shared cell
-    src.coordination.assignScope(sc, "focus", "A");
-    src.coordination.setCoordinationValue("focus", "A", rowIndex(8));
-    src.coordination.assignScope(sc, "viewSync", "lock1");
-
-    const doc = toPersistedDoc(src.store.state);
-    expect(validateDoc(doc, nativeWorkspaceNodeLibrary).ok).toBe(true);
-
-    const dst = makeWs();
-    dst.loadDocument(runtimeState(doc));
-
-    expect(dst.coordination.scopeOf(sc, "focus")).toBe("A");
-    expect(dst.coordination.scopeOf(sc, "viewSync")).toBe("lock1");
-    expect(dst.coordination.readCoordination("focus", "A")).toBe(rowIndex(8));
+  test("migration writes raw source bytes to a versioned backup before canonical active bytes", () => {
+    const raw = JSON.stringify(legacyV2());
+    const storage = new MemoryStorage({ active: raw });
+    const loaded = loadFromStorage(storage, "active", library);
+    expect(loaded.kind).toBe("ok");
+    expect(storage.writes).toEqual(["active.backup.v2", "active"]);
+    expect(storage.bytes["active.backup.v2"]).toBe(raw);
+    expect(JSON.parse(storage.bytes.active)).toMatchObject({
+      version: 3,
+      state: {
+        selectedNodeId: "dataset",
+        selectedNodeIds: ["dataset"],
+        coordinationSpace: { focus: { A: 8 } },
+      },
+    });
+    expect(storage.bytes.active).not.toContain('"type"');
+    expect(storage.bytes.active).not.toContain('"kind":"source"');
+    expect(storage.bytes.active).not.toContain('"pluginId"');
+    expect(storage.bytes.active).not.toContain('"selection"');
   });
 
-  test("id sequences advance past restored ids — a subsequent addNode can't collide", () => {
-    const src = makeWs();
-    src.addNode("obs", { x: 0, y: 0 }, "obs");
-    const wr = src.addNode("wrangle", { x: 100, y: 0 }); // wrangle-1
-    src.connect("obs", wr); // e1
-
-    const dst = makeWs();
-    dst.loadDocument(runtimeState(toPersistedDoc(src.store.state)));
-
-    const fresh = dst.addNode("wrangle", { x: 0, y: 0 });
-    expect(dst.store.state.nodes[fresh]).toBeDefined();
-    expect(fresh).not.toBe(wr); // no id collision with the restored wrangle-1
-  });
-});
-
-describe("storage backend + invalid-doc fallback", () => {
-  let restore: unknown;
-  beforeEach(() => {
-    restore = (globalThis as { localStorage?: unknown }).localStorage;
-    installStorageShim();
-  });
-  afterEach(() => {
-    (globalThis as { localStorage?: unknown }).localStorage = restore;
+  test("denied backup verification exposes validated read-only state and preserves active bytes", () => {
+    const raw = JSON.stringify(legacyV2());
+    const storage = new MemoryStorage({ active: raw });
+    storage.failRead = (key) => (key.endsWith(".backup.v2") ? new Error("backup read denied") : null);
+    const loaded = loadFromStorage(storage, "active", library);
+    expect(loaded).toMatchObject({
+      kind: "recovery",
+      stage: "backup-verify",
+      backupKey: "active.backup.v2",
+      state: { selectedNodeId: "dataset" },
+    });
+    expect(storage.bytes.active).toBe(raw);
   });
 
-  test("save → loadFromStorage returns the validated state", () => {
-    const ws = makeWs();
-    seedWorkspace(ws);
-    const key = storageKey("dsA:atlas");
-    saveToStorage(key, ws.store.state);
+  test("interrupted canonical rewrite exposes validated state and preserves active bytes", () => {
+    const raw = JSON.stringify(legacyV2());
+    const storage = new MemoryStorage({ active: raw });
+    storage.failWrite = (key) => (key === "active" ? new Error("rewrite interrupted") : null);
+    const loaded = loadFromStorage(storage, "active", library);
+    expect(loaded).toMatchObject({
+      kind: "recovery",
+      stage: "rewrite",
+      backupKey: "active.backup.v2",
+      state: { selectedNodeId: "dataset" },
+    });
+    expect(storage.bytes.active).toBe(raw);
+    expect(storage.bytes["active.backup.v2"]).toBe(raw);
+  });
 
-    const res = loadFromStorage(key, nativeWorkspaceNodeLibrary);
-    expect(res.kind).toBe("ok");
-    if (res.kind === "ok") {
-      expect(Object.keys(res.state.nodes).length).toBe(Object.keys(ws.store.state.nodes).length);
+  test("unresolved exact definitions and opaque configs round-trip without validation", () => {
+    const state = emptyState();
+    state.nodes.missing = {
+      id: "missing",
+      definitionRef: exactNodeTypeRef("plugin.example/missing", "7.0.1"),
+      label: "Unavailable",
+      parent: "subnet",
+      config: { version: nodeConfigVersion(44), value: { future: true } },
+    };
+    state.nodes.subnet = {
+      id: "subnet",
+      definitionRef: exactNodeTypeRef("subnet", "1.0.0"),
+      label: "Authored subnet",
+    };
+    state.nodes.dataset = {
+      id: "dataset",
+      definitionRef: exactNodeTypeRef("dataset", "1.0.0"),
+      label: "Dataset",
+      config: { version: nodeConfigVersion(1), value: { datasetKey: null } },
+    };
+    state.edges.edge = { id: "edge", from: "dataset", to: "missing", toPort: "in", kind: "pred" };
+    state.positions.missing = { x: 10, y: 20 };
+    state.sizeOverrides.missing = { card: { w: 310, h: 190 }, full: { w: 700, h: 420 } };
+    state.formOverride.missing = "full";
+    state.formLocked.missing = true;
+    state.explicit.missing = "staged";
+    state.stageTree = { dir: "row", ratio: 0.4, a: "missing", b: "dataset" };
+    state.disposition = "hidden";
+    state.stripH = 333;
+    state.claimed = "missing";
+    state.graphPath = "subnet";
+    state.flags.missing = { off: true };
+    state.selectedNodeId = "missing";
+    state.selectedNodeIds = ["missing", "dataset"];
+    state.selectedEdgeId = "edge";
+    state.coordinationScopes.missing = { focus: "A" };
+    state.coordinationSpace.focus = { A: rowIndex(2) };
+
+    const storage = new MemoryStorage();
+    saveToStorage(storage, "active", state);
+    expect(loadFromStorage(storage, "active", library)).toEqual({ kind: "ok", state });
+  });
+
+  test("invalid known config enters config recovery and does not rewrite", () => {
+    const state = emptyState();
+    state.nodes.dataset = {
+      id: "dataset",
+      definitionRef: exactNodeTypeRef("dataset", "1.0.0"),
+      label: "Dataset",
+      config: { version: nodeConfigVersion(1), value: { datasetKey: 4 } },
+    };
+    const raw = JSON.stringify(toPersistedDoc(state));
+    const storage = new MemoryStorage({ active: raw });
+    expect(loadFromStorage(storage, "active", library)).toMatchObject({ kind: "recovery", stage: "config" });
+    expect(storage.bytes.active).toBe(raw);
+    expect(storage.writes).toEqual([]);
+  });
+
+  test("v2 and v3 resolved cycles enter topology recovery before backup or rewrite", () => {
+    const state = emptyState();
+    state.nodes.a = {
+      id: "a",
+      definitionRef: exactNodeTypeRef("proxy", "1.0.0"),
+      label: "A",
+    };
+    state.nodes.b = {
+      id: "b",
+      definitionRef: exactNodeTypeRef("proxy", "1.0.0"),
+      label: "B",
+    };
+    state.edges.forward = { id: "forward", from: "a", to: "b", toPort: "in", kind: "pred" };
+    state.edges.reverse = { id: "reverse", from: "b", to: "a", toPort: "in", kind: "pred" };
+
+    const v3Raw = JSON.stringify(toPersistedDoc(state));
+    const v3Storage = new MemoryStorage({ active: v3Raw });
+    expect(loadFromStorage(v3Storage, "active", library)).toMatchObject({
+      kind: "recovery",
+      stage: "topology",
+      state: { edges: state.edges },
+    });
+    expect(v3Storage.bytes.active).toBe(v3Raw);
+    expect(v3Storage.writes).toEqual([]);
+
+    const legacyState = {
+      ...state,
+      nodes: {
+        a: { id: "a", type: "proxy", kind: "transform", label: "A", pluginId: null },
+        b: { id: "b", type: "proxy", kind: "transform", label: "B", pluginId: null },
+      },
+      selection: null,
+      selSet: [],
+      selectedEdge: null,
+      coordinationSpace: {},
+    } as Record<string, unknown>;
+    delete legacyState.selectedNodeId;
+    delete legacyState.selectedNodeIds;
+    delete legacyState.selectedEdgeId;
+    const v2Raw = JSON.stringify({ version: 2, state: legacyState });
+    const v2Storage = new MemoryStorage({ active: v2Raw });
+    expect(loadFromStorage(v2Storage, "active", library)).toMatchObject({
+      kind: "recovery",
+      stage: "topology",
+      state: { edges: state.edges },
+    });
+    expect(v2Storage.bytes.active).toBe(v2Raw);
+    expect(v2Storage.writes).toEqual([]);
+  });
+
+  test("malformed edge endpoints, ports, and kinds recover before any write", () => {
+    const state = emptyState();
+    state.nodes.dataset = {
+      id: "dataset",
+      definitionRef: exactNodeTypeRef("dataset", "1.0.0"),
+      label: "Dataset",
+    };
+    state.nodes.count = {
+      id: "count",
+      definitionRef: exactNodeTypeRef("count", "1.0.0"),
+      label: "Count",
+    };
+
+    for (const malformed of [
+      { id: "missing", from: "dataset", to: "ghost", toPort: "in", kind: "pred" as const },
+      { id: "port", from: "dataset", to: "count", toPort: "not-an-input", kind: "pred" as const },
+      { id: "kind", from: "dataset", to: "count", toPort: "in", kind: "sel" as const },
+    ]) {
+      state.edges = { [malformed.id]: malformed };
+      const raw = JSON.stringify(toPersistedDoc(state));
+      const storage = new MemoryStorage({ active: raw });
+      expect(() => loadFromStorage(storage, "active", library)).not.toThrow();
+      expect(loadFromStorage(storage, "active", library)).toMatchObject({ kind: "recovery", stage: "topology" });
+      expect(storage.bytes.active).toBe(raw);
+      expect(storage.writes).toEqual([]);
     }
   });
 
-  test("loadFromStorage preserves unresolved nodes and their topology", () => {
-    const ws = makeWs();
-    const source = ws.addNode("dataset", { x: 0, y: 0 });
-    const unknownId = "external-missing";
-    const key = storageKey("unresolved");
-    const state = {
-      ...ws.store.state,
-      nodes: {
-        ...ws.store.state.nodes,
-        [unknownId]: {
-          id: unknownId,
-          type: "external-missing",
-          kind: "view" as const,
-          label: "Unavailable plugin",
-          pluginId: "external-missing",
+  test("unresolved-definition incident edges remain inert and byte-preserved", () => {
+    const state = emptyState();
+    state.nodes.missing = {
+      id: "missing",
+      definitionRef: exactNodeTypeRef("plugin.example/future", "9.0.0"),
+      label: "Future",
+    };
+    state.edges.future = {
+      id: "future",
+      from: "missing",
+      to: "missing",
+      toPort: "future-port",
+      kind: "focus",
+    };
+    const raw = JSON.stringify(toPersistedDoc(state));
+    const storage = new MemoryStorage({ active: raw });
+
+    expect(loadFromStorage(storage, "active", library)).toEqual({ kind: "ok", state });
+    expect(storage.bytes.active).toBe(raw);
+    expect(storage.writes).toEqual([]);
+  });
+
+  test("schema-transformed non-JSON config enters config recovery without escaping canonicalization", () => {
+    const definitionRef = exactNodeTypeRef("plugin.example/transforming", "1.0.0");
+    const schema = z.object({ date: z.boolean() }).transform(({ date }) => (date ? new Date(0) : { date }));
+    const spec = {
+      definition: {
+        ref: definitionRef,
+        inputs: [],
+        outputs: [{ id: "out", kind: "pred" }],
+        config: {
+          version: nodeConfigVersion(2),
+          defaultValue: { date: false },
+          schema,
+          migrations: [
+            {
+              from: nodeConfigVersion(1),
+              to: nodeConfigVersion(2),
+              migrate: () => ({ date: true }),
+            },
+          ],
         },
       },
-      edges: {
-        e900: { id: "e900", from: source, to: unknownId, toPort: "in", kind: "pred" as const },
+      evaluationRole: "source",
+      cook: () => ({ kind: "pred", sql: null }),
+    } as unknown as AppNodeSpec;
+    const transformingLibrary = {
+      ...library,
+      getSpecExact(ref: Parameters<AppNodeLibrary["getSpecExact"]>[0]) {
+        return ref.nodeTypeId === definitionRef.nodeTypeId && ref.nodeTypeVersion === definitionRef.nodeTypeVersion
+          ? spec
+          : library.getSpecExact(ref);
       },
-      positions: { ...ws.store.state.positions, [unknownId]: { x: 200, y: 0 } },
+    } satisfies AppNodeLibrary;
+    const state = emptyState();
+    state.nodes.transforming = {
+      id: "transforming",
+      definitionRef,
+      label: "Transforming",
+      config: { version: nodeConfigVersion(1), value: { date: false } },
     };
-    saveToStorage(key, state);
+    const raw = JSON.stringify(toPersistedDoc(state));
+    const storage = new MemoryStorage({ active: raw });
 
-    const result = loadFromStorage(key, nativeWorkspaceNodeLibrary);
-
-    expect(result.kind).toBe("ok");
-    if (result.kind === "ok") {
-      expect(result.state.nodes[unknownId]).toEqual(state.nodes[unknownId]);
-      expect(result.state.edges.e900).toEqual(state.edges.e900);
-    }
-    ws.dispose();
-  });
-
-  test("loads a current v2 document with legacy editor keys and string focus", () => {
-    const key = storageKey("legacy-v2");
-    const persisted = toPersistedDoc(makeWs().store.state);
-    persisted.state.selection = "n1";
-    persisted.state.selSet = ["n1", "n2"];
-    persisted.state.selectedEdge = "e1";
-    persisted.state.coordinationSpace = { focus: { A: "8", B: null } };
-    localStorage.setItem(key, JSON.stringify(persisted));
-
-    const res = loadFromStorage(key, nativeWorkspaceNodeLibrary);
-    expect(res.kind).toBe("ok");
-    if (res.kind === "ok") {
-      expect(res.state.selectedNodeId).toBe("n1");
-      expect(res.state.selectedNodeIds).toEqual(["n1", "n2"]);
-      expect(res.state.selectedEdgeId).toBe("e1");
-      expect(res.state.coordinationSpace.focus).toEqual({ A: rowIndex(8), B: null });
-    }
-  });
-
-  test("a missing key is a clean miss (seam seeds, no warning)", () => {
-    expect(loadFromStorage(storageKey("nope"), nativeWorkspaceNodeLibrary).kind).toBe("miss");
-  });
-
-  test("a corrupt stored doc is rejected (seam warns + seeds)", () => {
-    const key = storageKey("dsB:atlas");
-    localStorage.setItem(key, "{ not json");
-    expect(loadFromStorage(key, nativeWorkspaceNodeLibrary).kind).toBe("invalid");
-  });
-
-  test("a malformed node config is rejected by parse-on-load", () => {
-    const ws = makeWs();
-    const ds = ws.addNode("dataset", { x: 0, y: 0 });
-    const malformed = {
-      ...ws.store.state,
-      nodes: { ...ws.store.state.nodes, [ds]: { ...ws.store.state.nodes[ds], config: { datasetKey: 42 } } },
-    };
-    const key = storageKey("dsC:atlas");
-    saveToStorage(key, malformed);
-
-    const res = loadFromStorage(key, nativeWorkspaceNodeLibrary);
-    expect(res.kind).toBe("invalid");
-    if (res.kind === "invalid") expect(res.errors.join(" ")).toContain(ds);
-  });
-
-  test("a future doc version is rejected (migration anchor)", () => {
-    const key = storageKey("dsD:atlas");
-    localStorage.setItem(key, JSON.stringify({ version: 999, state: { nodes: {}, edges: {} } }));
-    const res = loadFromStorage(key, nativeWorkspaceNodeLibrary);
-    expect(res.kind).toBe("invalid");
-    if (res.kind === "invalid") expect(res.errors.join(" ")).toContain("migration");
-  });
-
-  test.each(["not-a-row", "-1", "1.5", "", 8])("rejects malformed persisted focus value %p", (value) => {
-    const key = storageKey(`bad-focus:${String(value)}`);
-    const persisted = toPersistedDoc(makeWs().store.state);
-    persisted.state.coordinationSpace = { focus: { A: value as never } };
-    localStorage.setItem(key, JSON.stringify(persisted));
-
-    const res = loadFromStorage(key, nativeWorkspaceNodeLibrary);
-    expect(res.kind).toBe("invalid");
-    if (res.kind === "invalid") expect(res.errors.join(" ")).toContain("coordinationSpace.focus.A");
-  });
-
-  test("a stored v1 doc migrates to v2 on load — focus.A survives (R6)", () => {
-    // a real v1 localStorage doc: a node + the old syncGroups/groupFocus fields.
-    const key = storageKey("dsE:atlas");
-    const v1 = {
-      version: 1,
-      state: {
-        nodes: { obs: { id: "obs", type: "obs", kind: "source", label: "obs", pluginId: null } },
-        edges: {},
-        positions: {},
-        sizeOverrides: {},
-        formOverride: {},
-        formLocked: {},
-        selection: null,
-        selSet: [],
-        selectedEdge: null,
-        explicit: {},
-        stageTree: null,
-        disposition: "strip",
-        stripH: 280,
-        claimed: null,
-        graphPath: null,
-        flags: {},
-        syncGroups: { obs: "A" },
-        groupFocus: { A: "8" },
-      },
-    };
-    localStorage.setItem(key, JSON.stringify(v1));
-
-    const res = loadFromStorage(key, nativeWorkspaceNodeLibrary);
-    expect(res.kind).toBe("ok");
-    if (res.kind === "ok") {
-      expect(res.state.coordinationScopes).toEqual({ obs: { focus: "A" } });
-      expect(res.state.coordinationSpace).toEqual({ focus: { A: rowIndex(8) } });
-      // it hydrates into a fresh Workspace without throwing
-      const ws = makeWs();
-      ws.loadDocument(res.state);
-      expect(ws.coordination.scopeOf("obs", "focus")).toBe("A");
-      expect(ws.coordination.readCoordination("focus", "A")).toBe(rowIndex(8));
-    }
+    expect(() => loadFromStorage(storage, "active", transformingLibrary)).not.toThrow();
+    expect(loadFromStorage(storage, "active", transformingLibrary)).toMatchObject({
+      kind: "recovery",
+      stage: "config",
+    });
+    expect(storage.bytes.active).toBe(raw);
+    expect(storage.writes).toEqual([]);
   });
 });

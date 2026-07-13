@@ -85,7 +85,7 @@ export function WorkspaceBodies() {
 
   const live: { id: string; definitionRef: ExactNodeTypeRef; label: string }[] = [];
   for (const node of Object.values(nodes)) {
-    const spec = ws.nodeLibrary.getSpec(node.type);
+    const spec = ws.nodeLibrary.getSpecExact(node.definitionRef);
     if (!spec?.definition.load) continue;
     const form = resolveNodeForm(ws, node.id);
     const needsBody =

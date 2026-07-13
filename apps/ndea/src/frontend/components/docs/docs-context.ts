@@ -1,4 +1,5 @@
 import { createContext, useContext } from "react";
+import type { ExactNodeTypeRef } from "@ndea/sdk";
 
 /**
  * Imperative controls for the in-app docs surfaces — the ⌘K search palette and
@@ -10,7 +11,7 @@ export interface DocsContextValue {
   /** Open the ⌘K docs search palette. */
   openCommand: () => void;
   /** Open the full-docs sheet for a node type. */
-  openDocs: (nodeType: string) => void;
+  openDocs: (definitionRef: ExactNodeTypeRef) => void;
 }
 
 export const DocsContext = createContext<DocsContextValue | null>(null);

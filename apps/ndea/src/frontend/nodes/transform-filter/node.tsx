@@ -1,4 +1,4 @@
-/** Retired Threshold Filter retained for persisted v2 documents. */
+/** Hidden compatibility definition retained for exact persisted documents. */
 
 import { andGraphPredicate, nodeConfig } from "@/core/graph/cook";
 import { defineNativeNodeContribution } from "@/core/node/native-contribution";
@@ -8,7 +8,6 @@ import type { ThresholdFilterConfig } from "@/nodes/transform-filter/view";
 export const thresholdNode = defineNativeNodeContribution({
   definition: transformFilterDefinition,
   graph: {
-    persistedType: "threshold",
     role: "transform",
     evaluationRole: "transform",
     cook: (inputs, host) => {

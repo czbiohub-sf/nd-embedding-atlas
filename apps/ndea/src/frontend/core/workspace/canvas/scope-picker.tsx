@@ -18,13 +18,13 @@ const TYPE_LABEL: Record<string, string> = { focus: "focus", viewSync: "view syn
 
 export function ScopePicker({ nodeId }: { nodeId: string }) {
   const ws = useWorkspace();
-  const nodeType = useWorkspaceSelector((s) => s.nodes[nodeId]?.type ?? null);
+  const definitionRef = useWorkspaceSelector((s) => s.nodes[nodeId]?.definitionRef ?? null);
   // subscribe to the whole scope map so existing-scope lists + the node's own
   // assignments stay live as peers link/unlink.
   const allScopes = useWorkspaceSelector((s) => s.coordinationScopes);
   const assigned = allScopes[nodeId] ?? {};
 
-  const caps = nodeType ? ws.nodeLibrary.getSpec(nodeType)?.definition.capabilities : undefined;
+  const caps = definitionRef ? ws.nodeLibrary.getSpecExact(definitionRef)?.definition.capabilities : undefined;
   const types = listCoordinationTypes().filter((type) => caps?.includes(type.capability));
   if (types.length === 0) return null;
 

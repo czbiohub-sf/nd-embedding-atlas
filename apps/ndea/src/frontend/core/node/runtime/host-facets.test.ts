@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { Store } from "@tanstack/store";
-import { rowIndex } from "@ndea/sdk";
+import { exactNodeTypeRef, rowIndex } from "@ndea/sdk";
 import {
   createCheckpointCreationNodeFacet,
   createCheckpointNodeFacet,
@@ -13,10 +13,25 @@ import type { NodeRuntimeSessionPort } from "@/core/node/runtime/session-port";
 function runtimeSessionFixture() {
   const store = new Store({
     nodes: {
-      cache: { id: "cache", type: "cache", stamp: undefined as number | undefined },
-      subnet: { id: "subnet", type: "subnet" },
-      child: { id: "child", type: "count", parent: "subnet" },
-      seam: { id: "seam", type: "proxy", parent: "subnet" },
+      cache: {
+        id: "cache",
+        definitionRef: exactNodeTypeRef("cache", "1.0.0"),
+        label: "Cache",
+        stamp: undefined as number | undefined,
+      },
+      subnet: { id: "subnet", definitionRef: exactNodeTypeRef("subnet", "1.0.0"), label: "Subnet" },
+      child: {
+        id: "child",
+        definitionRef: exactNodeTypeRef("count", "1.0.0"),
+        label: "Count",
+        parent: "subnet",
+      },
+      seam: {
+        id: "seam",
+        definitionRef: exactNodeTypeRef("proxy", "1.0.0"),
+        label: "Proxy",
+        parent: "subnet",
+      },
     },
     flags: {},
   });
@@ -153,7 +168,12 @@ describe("app-local node host facets", () => {
       ...state,
       nodes: {
         ...state.nodes,
-        second: { id: "second", type: "count", parent: "subnet" },
+        second: {
+          id: "second",
+          definitionRef: exactNodeTypeRef("count", "1.0.0"),
+          label: "Count",
+          parent: "subnet",
+        },
       },
     }));
     expect(hierarchy.getSnapshot()).toEqual({ childCount: 2 });

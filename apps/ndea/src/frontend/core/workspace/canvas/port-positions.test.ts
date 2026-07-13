@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { exactNodeTypeRef } from "@ndea/sdk";
 
 import type { Workspace } from "../workspace-store";
 import { portPos, resolveNodeForm, resolveNodeSize } from "./port-positions";
@@ -11,10 +12,8 @@ describe("Canvas node projection", () => {
           nodes: {
             missing: {
               id: "missing",
-              type: "external-missing",
-              kind: "view",
+              definitionRef: exactNodeTypeRef("external-missing", "1.0.0"),
               label: "Unavailable plugin",
-              pluginId: "external-missing",
             },
           },
           positions: { missing: { x: 40, y: 70 } },

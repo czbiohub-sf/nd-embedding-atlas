@@ -57,11 +57,11 @@ export function andGraphPredicate(inputs: GraphPortValueInputs, extra: Predicate
 }
 
 export function nodeConfig<C extends object>(node: GraphDocumentNode | undefined): Partial<C> {
-  return (node?.config as Partial<C> | undefined) ?? {};
+  return (node?.config?.value as Partial<C> | undefined) ?? {};
 }
 
 export function patchNodeConfig(node: GraphDocumentNode | undefined, patch: Record<string, JsonValue>): JsonValue {
-  return { ...(node?.config as Record<string, JsonValue> | undefined), ...patch };
+  return { ...(node?.config?.value as Record<string, JsonValue> | undefined), ...patch };
 }
 
 export interface GraphNodeCookHost {

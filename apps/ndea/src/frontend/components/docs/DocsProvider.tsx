@@ -17,7 +17,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { ND_PORT_KINDS, type NdPortKind } from "@/components/nd/nd-port";
 import { humanizedCapabilities } from "@/core/node/capability-docs";
 import type { NodeCatalog } from "@/core/plugin/catalog";
-import type { NodePort } from "@ndea/sdk";
+import type { ExactNodeTypeRef, NodePort } from "@ndea/sdk";
 import { useTheme } from "@/ThemeProvider";
 import { DocsContext } from "./docs-context";
 
@@ -25,18 +25,18 @@ import { DocsContext } from "./docs-context";
  * DocsProvider — mounts the in-app documentation surfaces once, near the app
  * root, and exposes imperative openers via `useDocs()`:
  *   · ⌘K / Ctrl+K → the docs search palette (`CommandDialog`)
- *   · openDocs(type) → the node's full reference (`Sheet`)
+ *   · openDocs(exactRef) → the node definition's full reference (`Sheet`)
  * Content is sourced from the definition's documentation, ports, and capabilities —
  * no MDX pipeline yet (tiers 2–3 rich prose land with it). See the plan doc.
  */
 export function DocsProvider({ children, catalog }: { children: ReactNode; catalog: NodeCatalog }) {
   const [commandOpen, setCommandOpen] = useState(false);
-  const [docsType, setDocsType] = useState<string | null>(null);
+  const [docsRef, setDocsRef] = useState<ExactNodeTypeRef | null>(null);
 
   const openCommand = useCallback(() => setCommandOpen(true), []);
-  const openDocs = useCallback((nodeType: string) => {
+  const openDocs = useCallback((definitionRef: ExactNodeTypeRef) => {
     setCommandOpen(false);
-    setDocsType(nodeType);
+    setDocsRef(definitionRef);
   }, []);
 
   // ⌘K / Ctrl+K toggles the docs search palette.
@@ -57,7 +57,7 @@ export function DocsProvider({ children, catalog }: { children: ReactNode; catal
     <DocsContext.Provider value={value}>
       {children}
       <DocsCommand catalog={catalog} open={commandOpen} onOpenChange={setCommandOpen} onPick={openDocs} />
-      <NodeDocsSheet catalog={catalog} nodeType={docsType} onClose={() => setDocsType(null)} />
+      <NodeDocsSheet catalog={catalog} definitionRef={docsRef} onClose={() => setDocsRef(null)} />
     </DocsContext.Provider>
   );
 }
@@ -96,7 +96,7 @@ function DocsCommand({
   catalog: NodeCatalog;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onPick: (nodeType: string) => void;
+  onPick: (definitionRef: ExactNodeTypeRef) => void;
 }) {
   const { theme, toggle } = useTheme();
   // Recompute when opened so newly registered definitions are included.
@@ -121,9 +121,9 @@ function DocsCommand({
             const kind = (d.outputs[0]?.kind ?? d.inputs[0]?.kind ?? "pred") as NdPortKind;
             return (
               <CommandItem
-                key={d.ref.nodeTypeId}
+                key={`${d.ref.nodeTypeId}@${d.ref.nodeTypeVersion}`}
                 value={`${d.title} ${d.documentation?.summary ?? ""}`}
-                onSelect={() => onPick(d.ref.nodeTypeId)}
+                onSelect={() => onPick(d.ref)}
                 className="gap-2.5"
               >
                 <NodeGlyph kind={kind} />
@@ -202,14 +202,14 @@ function PortRow({ port, out }: { port: NodePort; out: boolean }) {
 
 function NodeDocsSheet({
   catalog,
-  nodeType,
+  definitionRef,
   onClose,
 }: {
   catalog: NodeCatalog;
-  nodeType: string | null;
+  definitionRef: ExactNodeTypeRef | null;
   onClose: () => void;
 }) {
-  const definition = nodeType ? catalog.resolveCurrent(nodeType) : undefined;
+  const definition = definitionRef ? catalog.resolveExact(definitionRef) : undefined;
   const doc = definition?.documentation;
   const open = Boolean(definition && doc);
   const caps = definition ? humanizedCapabilities(definition.capabilities) : [];
