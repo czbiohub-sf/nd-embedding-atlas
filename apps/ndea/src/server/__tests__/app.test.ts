@@ -7,6 +7,7 @@
 
 import { describe, expect, test, afterEach } from "bun:test";
 import type { DuckDBConnection } from "@duckdb/node-api";
+import { EmbeddingStatusSchema, VarColumnResponseSchema } from "@ndea/protocol";
 import { EmbeddingStore } from "../store.ts";
 import { createApp } from "../app.ts";
 import type { ViewerState, DatasetMeta } from "../state.ts";
@@ -97,6 +98,31 @@ function mosaicWsRequest<T>(
         }
       } else {
         resolve(ev.data as T);
+      }
+    });
+    ws.addEventListener("error", (err) => {
+      clearTimeout(timer);
+      reject(err instanceof Error ? err : new Error("ws error"));
+    });
+  });
+}
+
+/** Send one framed request over the ndea WebSocket and return its first reply. */
+function ndeaWsRequest<T>(port: number | undefined, frame: Record<string, unknown>): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(`ws://localhost:${port}/ws`);
+    const timer = setTimeout(() => {
+      ws.close();
+      reject(new Error("ws timeout"));
+    }, 5000);
+    ws.addEventListener("open", () => ws.send(JSON.stringify(frame)));
+    ws.addEventListener("message", (ev) => {
+      clearTimeout(timer);
+      ws.close();
+      try {
+        resolve(JSON.parse(String(ev.data)) as T);
+      } catch (err) {
+        reject(err);
       }
     });
     ws.addEventListener("error", (err) => {
@@ -331,8 +357,9 @@ describe("createApp", () => {
     const res = await fetch(`http://localhost:${server.port}/api/embeddings/X_umap/status`);
     expect(res.status).toBe(200);
 
-    const body = await res.json();
-    expect(body.status).toBe("not_started");
+    const rawBody = await res.json();
+    expect(rawBody).toEqual({ status: "not_started" });
+    expect(EmbeddingStatusSchema.parse(rawBody)).toEqual(rawBody);
   });
 
   test("POST /api/embeddings/{key} triggers loading", async () => {
@@ -467,6 +494,40 @@ describe("createApp", () => {
 
     const body = await res.json();
     expect(body.layers).toEqual(["X"]);
+  });
+
+  test("var-column WebSocket preserves the optional modality", async () => {
+    const store = await createMockStore(5);
+    activeStore = store;
+    const state = createMockState(store);
+    const config = createMockConfig();
+
+    const server = createApp({
+      port: 0,
+      host: "localhost",
+      store,
+      state,
+      config,
+      noStatic: true,
+    });
+    activeServer = server;
+
+    const raw = await ndeaWsRequest<Record<string, unknown>>(server.port, {
+      _id: 1,
+      _type: "var-column/load",
+      name: "CD3D",
+      modality: "rna",
+    });
+    expect(raw).toMatchObject({
+      _id: 1,
+      _ch: "end",
+      status: "loading",
+      column: "__var_rna_CD3D_X__",
+    });
+    const parsed = VarColumnResponseSchema.parse(raw);
+    expect(parsed.task_id).toBeString();
+    expect(parsed.status).toBe("loading");
+    expect(parsed.column).toBe("__var_rna_CD3D_X__");
   });
 
   test("blocked SQL returns 400 via Mosaic endpoint", async () => {

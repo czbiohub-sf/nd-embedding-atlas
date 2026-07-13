@@ -9,6 +9,7 @@
 
 import { afterEach, describe, expect, test } from "bun:test";
 import type { DuckDBConnection } from "@duckdb/node-api";
+import { CollectionMutationResultSchema } from "@ndea/protocol";
 import { createApp } from "../app.ts";
 import type { DatasetMeta, ViewerState } from "../state.ts";
 import { EmbeddingStore } from "../store.ts";
@@ -165,8 +166,27 @@ describe("collections routes — list/create", () => {
       }),
     });
     expect(res.status).toBe(201);
-    const env = await res.json();
-    const c = env.result;
+    const rawBody = await res.text();
+    const env = JSON.parse(rawBody) as unknown;
+    expect(structuralShape(env)).toEqual({
+      result: {
+        collection_id: "string",
+        color: "string",
+        created_at: "string",
+        created_count: "number",
+        current_count: "number",
+        drift: [{ dataset_key: "string", resolved: "number", stored: "number" }],
+        name: "string",
+        notes: "string",
+        provenance: "null",
+        tags: ["string"],
+        updated_at: "string",
+        version: "number",
+      },
+      stats: { added: "number", already_member: "number", total: "number" },
+    });
+    const parsedEnvelope = CollectionMutationResultSchema.parse(env);
+    const c = parsedEnvelope.result;
     expect(c.name).toBe("Apoptotic clusters");
     expect(c.color).toBe("#ff0000");
     expect(c.notes).toBe("First saved set");
@@ -376,6 +396,17 @@ describe("collections routes — list/create", () => {
     expect(list[0].name).toBe(malicious);
   });
 });
+
+function structuralShape(value: unknown): unknown {
+  if (value === null) return "null";
+  if (Array.isArray(value)) return value.length === 0 ? [] : [structuralShape(value[0])];
+  if (typeof value !== "object") return typeof value;
+  return Object.fromEntries(
+    Object.entries(value)
+      .toSorted(([left], [right]) => left.localeCompare(right))
+      .map(([key, child]) => [key, structuralShape(child)]),
+  );
+}
 
 describe("collections routes — patch", () => {
   test("rename + recolor with correct version succeeds", async () => {

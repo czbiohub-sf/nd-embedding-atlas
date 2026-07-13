@@ -73,8 +73,8 @@ export class LazyDataFrame {
 // ─── AnnDataFrame → Arrow conversion ───────────────────────────────────────
 
 // flechette's tableFromArrays accepts `any[] | TypedArray` at runtime; we keep the
-// convert helpers typed as `unknown` and narrow at the build-callsite.
-type ConvertResult = { col: unknown; type: DataType | undefined };
+// Arrow conversion helpers retain unknown data until the build callsite narrows it.
+type ArrowColumnConversion = { col: unknown; type: DataType | undefined };
 
 // The shape tableFromArrays expects (union of TypedArray constructors + any[]).
 type FlechetteArray =
@@ -95,8 +95,11 @@ type FlechetteArray =
  *
  * @example
  * ```ts
- * const tree = await axial.open("./pbmc.zarr");
- * const obsTable = toArrowTable(tree.dataset.obs);
+ * import { open, toArrowTable } from "@ndea/zarr";
+ *
+ * const parsedStore = await open("./pbmc.zarr");
+ * if (parsedStore.kind !== "anndata" || !parsedStore.obs) throw new Error("AnnData obs is unavailable");
+ * const obsTable = toArrowTable(parsedStore.obs);
  * // obsTable is now a flechette Table — Arrow IPC compatible
  * ```
  */
@@ -122,7 +125,7 @@ export function toArrowTable(df: AnnDataFrame) {
   return tableFromArrays(arrays, { types });
 }
 
-function convertColumn(data: ColumnData | string[] | Int32Array): ConvertResult {
+function convertColumn(data: ColumnData | string[] | Int32Array): ArrowColumnConversion {
   // CategoricalArray → Dictionary
   if (isCategorical(data)) {
     return convertCategorical(data);
@@ -178,7 +181,7 @@ function convertColumn(data: ColumnData | string[] | Int32Array): ConvertResult 
  * AnnData: codes (int8/16/32, -1 = null) + categories (string[])
  * Arrow: Dictionary(index_type, Utf8) with validity bitmap for nulls
  */
-function convertCategorical(cat: CategoricalArray): ConvertResult {
+function convertCategorical(cat: CategoricalArray): ArrowColumnConversion {
   // Decode to plain string array — flechette will handle encoding.
   // Passing dictionary() type with a decoded string[] is incoherent,
   // so we use utf8() and let flechette build its own dictionary if needed.
@@ -196,7 +199,7 @@ function convertCategorical(cat: CategoricalArray): ConvertResult {
  * AnnData mask: Uint8Array where 1 = null, 0 = valid
  * Arrow validity: 1 = valid, 0 = null (inverted!)
  */
-function convertNullable(na: NullableArray): ConvertResult {
+function convertNullable(na: NullableArray): ArrowColumnConversion {
   const values = na.values;
   const len = na.mask.length;
 

@@ -7,8 +7,9 @@
  * `host.publishPredicate`. The graph's transform-scoped host captures that publish.
  */
 
-import type { NodeHost, NodeInstance } from "@ndea/sdk";
-import type { ThresholdFilterConfig, ThresholdFilterOptions } from "./view";
+import type { NodeHost, NodeRuntime } from "@ndea/sdk";
+import type { TransformCapabilities } from "@/core/graph/graph-host";
+import type { ThresholdFilterConfig } from "./view";
 
 /** AND two SQL predicates, dropping a null ("everything") operand. */
 function andPredicate(a: string | null, b: string | null): string | null {
@@ -16,12 +17,12 @@ function andPredicate(a: string | null, b: string | null): string | null {
   return a ?? b ?? null;
 }
 
-export function createThresholdFilterInstance(
-  host: NodeHost<ThresholdFilterConfig, ThresholdFilterOptions>,
-): NodeInstance {
+export function createThresholdFilterRuntime(
+  host: NodeHost<ThresholdFilterConfig, TransformCapabilities>,
+): NodeRuntime {
   return {
     recompute(inputs, _ctx) {
-      const upstream = (inputs.get("filter-in") ?? null) as string | null;
+      const upstream = (inputs.get("filter-in")?.at(-1) ?? null) as string | null;
       const { column, threshold } = host.config;
       const clause = column ? `"${column.replaceAll('"', '""')}" > ${threshold}` : null;
       host.publishPredicate("transform", andPredicate(upstream, clause));

@@ -1,31 +1,29 @@
 /** count-plot plugin descriptor — eager metadata; the body is behind the lazy load(). */
 
-import { defineDescriptor, type NodeCapability } from "@ndea/sdk";
-import type { CountPlotConfig, CountPlotOptions } from "./view";
+import { z } from "zod";
+import { defineNode, exactNodeTypeRef, nodeConfigVersion } from "@ndea/sdk";
+import { mountReactNodeBody } from "@/core/node/react-node-body";
+import type { CountPlotConfig } from "./view";
 
-declare module "@/core/node/registry-types" {
-  interface NodeTypeMap {
-    "count-plot": { config: CountPlotConfig; options: CountPlotOptions };
-  }
-}
+const CAPABILITIES = ["data-read", "predicate-publish", "row-set-subscribe"] as const;
 
-const CAPABILITIES = new Set<NodeCapability>(["read", "selection-out", "selection-in"]);
-
-export const countPlotDescriptor = defineDescriptor<CountPlotConfig, CountPlotOptions>({
-  id: "count-plot",
+export const countPlotDefinition = defineNode({
+  ref: exactNodeTypeRef("count-plot", "1.0.0"),
   title: "Count Plot",
-  kind: "view",
-  inputs: [{ id: "filter-in", kind: "pred", label: "Filter" }],
-  outputs: [{ id: "selection-out", kind: "pred", label: "Selection" }],
+  role: "view",
+  inputs: [{ id: "in", kind: "pred", label: "In" }],
+  outputs: [{ id: "out", kind: "sel", label: "Selection" }],
   capabilities: CAPABILITIES,
-  placement: { container: "docked" },
-  instancePolicy: "multi",
-  icon: "bar-chart",
+  config: {
+    schema: z.object({ field: z.string().nullable(), limit: z.number() }),
+    version: nodeConfigVersion(1),
+    defaultValue: { field: null, limit: 11 } satisfies CountPlotConfig,
+  },
+  presentation: { icon: "bar-chart" },
   load: async () => {
     const { CountPlotView } = await import("./view");
     return {
-      Component: CountPlotView,
-      defaultConfig: { field: null, limit: 11 },
+      mountBody: (host) => mountReactNodeBody(CountPlotView, host, "Count Plot"),
     };
   },
 });

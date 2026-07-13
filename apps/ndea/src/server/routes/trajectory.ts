@@ -25,18 +25,8 @@
  */
 
 import { getOrCreateObsmLoader, parseDimIndex } from "./scatter.ts";
+import { TrajectoryResponseSchema, type TrajectoryFrame } from "../protocol.ts";
 import type { ViewerState } from "../state.ts";
-
-interface TrajectoryFrame {
-  rowIndex: number;
-  t: number;
-  emb_x: number;
-  emb_y: number;
-  spatial_x: number;
-  spatial_y: number;
-  datasetKey: string | null;
-  category?: number;
-}
 
 /**
  * Handle GET /api/trajectory
@@ -114,7 +104,7 @@ export async function handleTrajectory(url: URL, state: ViewerState, signal: Abo
     if (signal.aborted) return new Response("aborted", { status: 499 });
 
     if (metadataRows.length === 0) {
-      return Response.json([] as TrajectoryFrame[]);
+      return Response.json([]);
     }
 
     // ── Obsm positions (via ObsmSliceLoader — shared with scatter-positions)
@@ -143,6 +133,7 @@ export async function handleTrajectory(url: URL, state: ViewerState, signal: Abo
       return frame;
     });
 
+    TrajectoryResponseSchema.parse(frames);
     return Response.json(frames);
   } catch (err) {
     if (signal.aborted) return new Response("aborted", { status: 499 });

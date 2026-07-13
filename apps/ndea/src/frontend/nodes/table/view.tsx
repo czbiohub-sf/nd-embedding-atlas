@@ -13,7 +13,7 @@ import type { SortingState } from "@tanstack/react-table";
 import { focusRow, publishOrdering } from "@/nodes/table/routing";
 import { DataTable } from "@/nodes/table/DataTable";
 import { useHighlight } from "@/hooks/useHighlight";
-import type { NodeViewProps } from "@ndea/sdk";
+import type { NodeBodyProps } from "@/core/node/app-node-host";
 
 /** The `ordering` coordination cell ⇄ TanStack `SortingState` bridge. */
 type OrderingCell = { col: string; dir: "asc" | "desc" } | null;
@@ -30,7 +30,7 @@ export type TableOptions = Record<string, never>;
 
 const FALLBACK_TABLE_COLUMNS = ["_dataset"];
 
-export function TablePluginView({ host }: NodeViewProps<TableConfig, TableOptions>) {
+export function TablePluginView({ host }: NodeBodyProps<TableConfig>) {
   const { coordinator, table, metadata } = host.data;
   // Reactive highlight read — re-renders the table on highlight change so the
   // current row scrolls into view. Sourced from the HighlightBus; the write
@@ -65,12 +65,12 @@ export function TablePluginView({ host }: NodeViewProps<TableConfig, TableOption
       coordinator={coordinator}
       table={table}
       columns={columns}
-      selection={host.inputSelection}
+      selection={host.inputPredicate}
       highlightId={highlightId}
       onRowClick={handleRowClick}
       sorting={sorting}
       onSortingChange={handleSortingChange}
-      headerEl={host.ui.container.headerEl}
+      headerEl={host.bodyHeaderElement}
     />
   );
 }

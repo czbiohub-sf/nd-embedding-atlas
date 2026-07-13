@@ -1,7 +1,7 @@
 import { createRoot } from "react-dom/client";
 import { roaringLibraryInitialize } from "roaring-wasm";
 import App from "./App";
-import { registerBuiltins } from "./core/workspace/descriptors";
+import { registerBuiltins } from "./core/workspace/definitions";
 // eslint-disable-next-line import/no-unassigned-import
 import "./app.css";
 

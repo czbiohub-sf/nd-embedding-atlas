@@ -6,13 +6,14 @@
  * this endpoint exists for backward compatibility.
  */
 
+import { ConfigResponseSchema, type ConfigResponse } from "../protocol.ts";
 import type { ViewerState } from "../state.ts";
 
 /**
  * Handle GET /api/config
  */
 export function handleConfig(state: ViewerState): Response {
-  const datasets: Record<string, unknown> = {};
+  const datasets: ConfigResponse["datasets"] = {};
   for (const [key, cfg] of state.datasets) {
     datasets[key] = {
       path: cfg.path,
@@ -20,7 +21,7 @@ export function handleConfig(state: ViewerState): Response {
     };
   }
 
-  return Response.json({
+  const result = {
     datasets,
     spatial: state.spatial,
     obsColumns: state.obsColumns,
@@ -28,5 +29,7 @@ export function handleConfig(state: ViewerState): Response {
     loadedEmbeddings: Array.from(state.obsmLoaders.keys()),
     nObs: state.store.nObs,
     port: state.port,
-  });
+  } satisfies ConfigResponse;
+  ConfigResponseSchema.parse(result);
+  return Response.json(result);
 }

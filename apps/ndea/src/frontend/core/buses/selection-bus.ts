@@ -7,7 +7,7 @@
 import { Store } from "@tanstack/store";
 import type { Selection } from "@uwdata/mosaic-core";
 import { stringPredicate } from "@/lib/mosaic-helpers";
-import type { NodeInstanceId, SelectionToken } from "@ndea/sdk";
+import type { NodeInstanceId, RowSetPublication } from "@ndea/sdk";
 
 export type SelectionFacet = "lasso" | "activeSet" | "chart" | "range" | "isolation";
 
@@ -38,7 +38,7 @@ export interface SelectionBus {
   clearFacet(facet: SelectionFacet): void;
   disposeInstance(instanceId: NodeInstanceId): void;
   attachDestination(selection: Selection): () => void;
-  makeToken(table: string, count: number): SelectionToken;
+  makeToken(table: string, count: number): RowSetPublication;
   externalRowSet(): readonly number[] | null;
   /** Changes even when a row-set bitmap keeps the same identity. */
   readonly revision: Store<number>;
@@ -106,7 +106,7 @@ export function createSelectionBus(): SelectionBus {
     publishPredicate(instanceId, facet, sql) {
       if (sql !== null && SELECTION_TABLE_RE.test(sql) && !TOK_RE.test(sql)) {
         throw new Error(
-          "publishPredicate: raw temp-table references are forbidden; route through api.publishSelection",
+          "publishPredicate: raw temp-table references are forbidden; route through dataAPI.publishRowSet",
         );
       }
       switch (facet) {

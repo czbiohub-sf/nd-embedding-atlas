@@ -46,7 +46,7 @@ export function createSpyHost(): SpyHost {
   let ordering: { col: string; dir: "asc" | "desc" } | null = null;
 
   const host = {
-    highlight: {
+    focus: {
       get: () => focus,
       set: (id: string | null) => {
         focus = id;
@@ -65,11 +65,11 @@ export function createSpyHost(): SpyHost {
     },
     externalRowSet: () => null,
     onExternalRowSet: () => () => {},
-    api: {
+    dataAPI: {
       // selection-out capability surface a routing module may touch on clear.
-      disposeSelection: () => {},
+      disposePublishedRowSet: () => {},
     },
-    viewSync: {
+    viewCoordination: {
       panX: 0,
       panY: 0,
       zoom: 1,

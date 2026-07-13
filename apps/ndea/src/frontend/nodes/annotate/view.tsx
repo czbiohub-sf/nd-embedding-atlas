@@ -33,7 +33,7 @@ import { CommitPanel } from "@/nodes/annotate/CommitPanel";
 import { RangeBracket } from "@/nodes/annotate/RangeBracket";
 import { fmtVal } from "@/nodes/annotate/range-scale";
 import { useGalleryChannels } from "@/nodes/table/useGalleryChannels";
-import type { NodeViewProps } from "@ndea/sdk";
+import type { NodeBodyProps } from "@/core/node/app-node-host";
 
 export interface AnnotateConfig {
   column: string | null;
@@ -59,7 +59,7 @@ function hotkeysFor(labels: string[]): string[] {
   });
 }
 
-export function AnnotateView({ host }: NodeViewProps<AnnotateConfig, AnnotateOptions>) {
+export function AnnotateView({ host }: NodeBodyProps<AnnotateConfig>) {
   const { coordinator, table, metadata } = host.data;
 
   const [columns, setColumns] = useState<string[]>([]);
@@ -106,7 +106,7 @@ export function AnnotateView({ host }: NodeViewProps<AnnotateConfig, AnnotateOpt
   const rangeComplete = rangeLo != null && rangeHi != null && !rangeInvalid;
 
   // scope predicate (same path useTableQuery uses → works off Filter edges)
-  const scopeExpr: FilterExpr | null = host.inputSelection?.predicate?.(null) ?? null;
+  const scopeExpr: FilterExpr | null = host.inputPredicate?.predicate?.(null) ?? null;
   const hasScope = scopeExpr != null;
   const contextColumns = useMemo(
     () =>
@@ -149,7 +149,7 @@ export function AnnotateView({ host }: NodeViewProps<AnnotateConfig, AnnotateOpt
   // existing annotation columns
   useEffect(() => {
     let alive = true;
-    void host.api
+    void host.dataAPI
       .listAnnotationColumns?.()
       ?.then((cols) => alive && setColumns(cols.map((c) => c.name)))
       .catch(() => {});
@@ -160,14 +160,14 @@ export function AnnotateView({ host }: NodeViewProps<AnnotateConfig, AnnotateOpt
 
   // drive the focus wire
   useEffect(() => {
-    if (sel.focusId) host.highlight.set(sel.focusId);
+    if (sel.focusId) host.focus.set(sel.focusId);
   }, [sel.focusId, host]);
 
   // Follow an external focus (Gallery/Scatter/Idetik crop click) — read the
   // group-aware host.highlight reactively so the table can jump to that obs,
   // mirroring how those views already follow ours.
-  const subscribeHighlight = useCallback((cb: () => void) => host.highlight.subscribe?.(cb) ?? (() => {}), [host]);
-  const externalFocusId = useSyncExternalStore(subscribeHighlight, () => host.highlight.get());
+  const subscribeHighlight = useCallback((cb: () => void) => host.focus.subscribe?.(cb) ?? (() => {}), [host]);
+  const externalFocusId = useSyncExternalStore(subscribeHighlight, () => host.focus.get());
 
   const persistLabels = useCallback(() => host.patchConfig({ labels }), [host, labels]);
 
@@ -182,7 +182,7 @@ export function AnnotateView({ host }: NodeViewProps<AnnotateConfig, AnnotateOpt
   const ensureColumn = useCallback(
     async (col: string) => {
       if (columns.includes(col)) return;
-      await host.api.createAnnotationColumn?.(col);
+      await host.dataAPI.createAnnotationColumn?.(col);
       setColumns((c) => [...c, col]);
       setColumn(col);
       setNewColumn("");
@@ -200,7 +200,7 @@ export function AnnotateView({ host }: NodeViewProps<AnnotateConfig, AnnotateOpt
       setBusy(true);
       try {
         await ensureColumn(targetColumn);
-        await host.api.writeAnnotationByPredicate?.(targetColumn, value, `__row_index__ IN (${ids.join(", ")})`);
+        await host.dataAPI.writeAnnotationByPredicate?.(targetColumn, value, `__row_index__ IN (${ids.join(", ")})`);
         setLocalLabels((m) => {
           const next = new Map(m);
           for (const id of ids) next.set(id, new Map([[targetColumn, value]]));
@@ -221,8 +221,8 @@ export function AnnotateView({ host }: NodeViewProps<AnnotateConfig, AnnotateOpt
     async (base: string) => {
       const mn = `${base}_min`;
       const mx = `${base}_max`;
-      if (!columns.includes(mn)) await host.api.createAnnotationColumn?.(mn, "float");
-      if (!columns.includes(mx)) await host.api.createAnnotationColumn?.(mx, "float");
+      if (!columns.includes(mn)) await host.dataAPI.createAnnotationColumn?.(mn, "float");
+      if (!columns.includes(mx)) await host.dataAPI.createAnnotationColumn?.(mx, "float");
       setColumns((c) => [...new Set([...c, mn, mx])]);
       host.patchConfig({ column: base });
     },
@@ -236,8 +236,8 @@ export function AnnotateView({ host }: NodeViewProps<AnnotateConfig, AnnotateOpt
       setStatus(null);
       try {
         await ensureRangeColumns(rangeBase);
-        await host.api.writeAnnotationByPredicate?.(`${rangeBase}_min`, String(rangeLo), where);
-        const res = await host.api.writeAnnotationByPredicate?.(`${rangeBase}_max`, String(rangeHi), where);
+        await host.dataAPI.writeAnnotationByPredicate?.(`${rangeBase}_min`, String(rangeLo), where);
+        const res = await host.dataAPI.writeAnnotationByPredicate?.(`${rangeBase}_max`, String(rangeHi), where);
         return res?.n ?? 0;
       } catch (err) {
         setStatus(`✗ ${err instanceof Error ? err.message : String(err)}`);
@@ -581,7 +581,7 @@ export function AnnotateView({ host }: NodeViewProps<AnnotateConfig, AnnotateOpt
         <AnnotateTable
           coordinator={coordinator}
           table={table}
-          selection={host.inputSelection}
+          selection={host.inputPredicate}
           contextColumns={tableContext}
           labelColumn={tableLabelCol}
           localLabels={localLabels}

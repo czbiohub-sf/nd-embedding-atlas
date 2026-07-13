@@ -11,7 +11,7 @@ import { Link2 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { NdCaption, NdHud } from "@/components/nd/nd-primitives";
 import { listCoordinationTypes } from "@/core/coordination/define-type";
-import { getDescriptor } from "@/core/node/registry";
+import { getDefinition } from "@/core/node/registry";
 import { useWorkspace, useWsSelector } from "../workspace-context";
 
 /** Human label for a coordination type (the registry key is terse). */
@@ -25,8 +25,8 @@ export function ScopePicker({ nodeId }: { nodeId: string }) {
   const allScopes = useWsSelector((s) => s.coordinationScopes);
   const assigned = allScopes[nodeId] ?? {};
 
-  const caps = pluginId ? getDescriptor(pluginId)?.capabilities : undefined;
-  const types = listCoordinationTypes().filter((t) => caps?.has(t.capability));
+  const caps = pluginId ? getDefinition(pluginId)?.capabilities : undefined;
+  const types = listCoordinationTypes().filter((type) => caps?.includes(type.capability));
   if (types.length === 0) return null;
 
   const activeScopes = types.map((t) => assigned[t.type]).filter(Boolean);

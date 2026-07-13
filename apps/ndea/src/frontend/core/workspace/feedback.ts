@@ -4,7 +4,7 @@
  */
 
 import { createContext, useContext, useMemo } from "react";
-import { getDescriptor } from "@/core/node/registry";
+import { getDefinition } from "@/core/node/registry";
 import { NODE_DEFS } from "./node-defs";
 import { useWsSelector } from "./workspace-context";
 import type { WsEdge, WsNode } from "./types";
@@ -18,7 +18,7 @@ export interface FeedbackChannel {
   kind: "data";
 }
 
-const DATA_WRITE_CAPS = ["annotate"] as const;
+const DATA_WRITE_CAPS = ["annotation-write"] as const;
 
 /**
  * Pure derivation: for each data-writing node, walk UPSTREAM to the source
@@ -69,8 +69,8 @@ export function deriveFeedbackChannels(
 
 function isDataWriter(n: WsNode): boolean {
   if (!n.pluginId) return false;
-  const caps = getDescriptor(n.pluginId)?.capabilities;
-  return caps != null && DATA_WRITE_CAPS.some((c) => caps.has(c));
+  const caps = getDefinition(n.pluginId)?.capabilities;
+  return caps != null && DATA_WRITE_CAPS.some((capability) => caps.includes(capability));
 }
 
 function isSourceNode(n: WsNode): boolean {

@@ -30,8 +30,8 @@ export function SingleCropViewer({ cropSize, showBbox, datasetKey }: Props) {
   // Focus source: scoped to this instance's host (its focus WIRE is the input),
   // so deleting the wire genuinely disconnects the viewer (C6).
   const host = useHost();
-  const [highlightId, setHighlightId] = useState<string | null>(() => host.highlight.get());
-  useEffect(() => host.highlight.subscribe?.(setHighlightId), [host]);
+  const [highlightId, setHighlightId] = useState<string | null>(() => host.focus.get());
+  useEffect(() => host.focus.subscribe?.(setHighlightId), [host]);
 
   // ── Fetch obs info ────────────────────────────────────────────────
   const { data: obsInfo } = useQuery({

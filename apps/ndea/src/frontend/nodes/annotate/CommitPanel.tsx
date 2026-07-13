@@ -23,7 +23,7 @@ export function CommitPanel({
   host,
   onClose,
 }: {
-  host: Pick<NodeHost, "api" | "inputSelection" | "ui">;
+  host: Pick<NodeHost, "dataAPI" | "inputPredicate" | "notifications">;
   onClose: () => void;
 }) {
   const [columns, setColumns] = useState<{ name: string; dtype: string }[]>([]);
@@ -36,7 +36,7 @@ export function CommitPanel({
   // Load staged columns; default-select all on first open.
   useEffect(() => {
     let alive = true;
-    void host.api
+    void host.dataAPI
       .listAnnotationColumns?.()
       ?.then((cols) => {
         if (!alive) return;
@@ -52,7 +52,7 @@ export function CommitPanel({
     };
   }, [host]);
 
-  const scoped = (host.inputSelection?.predicate?.(null) ?? null) != null;
+  const scoped = (host.inputPredicate?.predicate?.(null) ?? null) != null;
   const selectedList = useMemo(
     () => columns.filter((c) => selected.has(c.name)).map((c) => c.name),
     [columns, selected],
@@ -86,7 +86,7 @@ export function CommitPanel({
     setPhase("checking");
     setStatus(null);
     try {
-      const r = (await host.api.commitAnnotations?.({ dryRun: true, columns: selectedList })) ?? null;
+      const r = (await host.dataAPI.commitAnnotations?.({ dryRun: true, columns: selectedList })) ?? null;
       setReport(r);
       setPhase("confirming");
     } catch (err) {
@@ -99,14 +99,14 @@ export function CommitPanel({
     if (busy || !report || summary.allBlocked) return;
     setPhase("writing");
     try {
-      const r = (await host.api.commitAnnotations?.({ dryRun: false, columns: selectedList })) ?? null;
+      const r = (await host.dataAPI.commitAnnotations?.({ dryRun: false, columns: selectedList })) ?? null;
       const s = commitSummary(r);
       const msg = commitStatusMessage(s);
       setReport(r);
       setPhase("done");
       const tone = s.writableCount === 0 ? "err" : "ok";
       setStatus({ tone, msg });
-      host.ui.notify(msg, tone === "err" ? "error" : "info");
+      host.notifications.notify(msg, tone === "err" ? "error" : "info");
     } catch (err) {
       setStatus({ tone: "err", msg: err instanceof Error ? err.message : String(err) });
       setPhase("confirming");

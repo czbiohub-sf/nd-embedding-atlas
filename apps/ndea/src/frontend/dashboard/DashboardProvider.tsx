@@ -6,7 +6,7 @@ import { MetadataSchema } from "@ndea/protocol";
 import { wsClient } from "../lib/ws-client";
 import { scatterKeys } from "../lib/query-keys";
 import { highlightBus, selectionBus } from "../core/buses";
-import { asInstanceId } from "@ndea/sdk";
+import { nodeInstanceId } from "@ndea/sdk";
 import { activeCollectionStore } from "../stores/ActiveCollectionStore";
 import { broadcastSelection, clearSelectionSync, externalSource } from "../stores/SelectionSyncStore";
 import type { Metadata, TrajectoryData } from "../types";
@@ -68,7 +68,7 @@ export function DashboardProvider({ children }: Props) {
     // The active collection is published as its own pseudo-instance clause
     // (§6.3); it intersects every other instance's clause exactly as the old
     // single composed (activeSet ∧ lasso) clause did.
-    const COLLECTIONS_INSTANCE = asInstanceId("__collections__");
+    const COLLECTIONS_INSTANCE = nodeInstanceId("__collections__");
 
     const sub = activeCollectionStore.subscribe(() => {
       abortRef.current.abort();

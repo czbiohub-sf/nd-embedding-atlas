@@ -1,8 +1,30 @@
-/** Extension host API version, released independently from the app. */
+/** Named version axes that advance independently. */
 import packageJson from "../package.json";
 
-export const SDK_VERSION = packageJson.version;
+declare const SDK_VERSION_BRAND: unique symbol;
+declare const NODE_ASSET_VERSION: unique symbol;
+declare const WORKSPACE_DOCUMENT_VERSION: unique symbol;
 
-export function sdkMajor(version: string): string {
-  return version.split(".")[0];
+export type SDKVersion = string & { readonly [SDK_VERSION_BRAND]: true };
+export type NodeAssetVersion = string & { readonly [NODE_ASSET_VERSION]: true };
+export type WorkspaceDocumentVersion = number & {
+  readonly [WORKSPACE_DOCUMENT_VERSION]: true;
+};
+
+export function sdkVersion(value: string): SDKVersion {
+  return value as SDKVersion;
+}
+
+export function nodeAssetVersion(value: string): NodeAssetVersion {
+  return value as NodeAssetVersion;
+}
+
+export function workspaceDocumentVersion(value: number): WorkspaceDocumentVersion {
+  return value as WorkspaceDocumentVersion;
+}
+
+export const SDK_VERSION: SDKVersion = sdkVersion(packageJson.version);
+
+export function sdkMajor(version: SDKVersion): string {
+  return version.split(".")[0] ?? "";
 }

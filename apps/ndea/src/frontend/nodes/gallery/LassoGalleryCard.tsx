@@ -38,7 +38,7 @@ export function LassoGalleryCard({ obs, channels, hash, enabled, isHighlighted, 
     spatial_y: obs.y,
     z: obs.z,
     rowIndex: obs.rowIndex,
-    datasetKey,
+    datasetKey: datasetKey ?? null,
   };
 
   const { data, isLoading } = useGalleryCropQuery({

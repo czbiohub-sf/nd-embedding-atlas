@@ -30,6 +30,7 @@ import {
 } from "./routes/embeddings.ts";
 import { handleVarColumn, getVarTask, subscribeVarTask, type VarTask } from "./routes/var.ts";
 import { handleExport, getExportTask, subscribeExportTask, type ExportTask } from "./routes/export.ts";
+import { VarColumnBodySchema } from "./protocol.ts";
 
 /** Data attached to every ServerWebSocket via server.upgrade(req, { data }). */
 export interface WsContext {
@@ -227,13 +228,17 @@ function embeddingPayload(ev: EmbeddingStatusEvent): Record<string, unknown> {
 async function handleVarColumnLoadWs(ws: WS, id: number, frame: Frame): Promise<void> {
   const name = typeof frame["name"] === "string" ? frame["name"] : "";
   const layer = typeof frame["layer"] === "string" ? frame["layer"] : undefined;
+  const modality = typeof frame["modality"] === "string" ? frame["modality"] : undefined;
   if (name === "") {
     sendError(ws, id, "Missing required field: name");
     return;
   }
-  const payload: Record<string, unknown> = { name };
-  if (layer !== undefined) payload["layer"] = layer;
-  const req = synthPostRequest(payload);
+  const parsed = VarColumnBodySchema.safeParse({ name, layer, modality });
+  if (!parsed.success) {
+    sendError(ws, id, "Invalid var-column request");
+    return;
+  }
+  const req = synthPostRequest(parsed.data);
   const resp = await handleVarColumn(req, ws.data.state);
   await respondFromHttp(ws, id, resp);
 }

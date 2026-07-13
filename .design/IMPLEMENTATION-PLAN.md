@@ -1,8 +1,10 @@
 # Node Workspace — Implementation Plan
 
-> Maps the design handoff (`design_handoff_node_workspace/README.md`, v3) onto
-> this repo. VOCABULARY.md terms are binding. Prototype = visual ground truth;
-> tokens come from `app.css`/`DESIGN.md`. Sequenced as the README's 7
+> Historical design input. Maps the design handoff
+> (`design_handoff_node_workspace/README.md`, v3) onto this repo. The current
+> root [`VOCABULARY.md`](../VOCABULARY.md) overrides terminology in this
+> mechanism sketch. Prototype = visual ground truth; tokens come from
+> `app.css`/`DESIGN.md`. Sequenced as the README's 7
 > milestones. Conflicts between repo patterns and the design are flagged
 > inline as **C1…C11** and resolved (not silently chosen) — see the Conflict
 > Register at the end.

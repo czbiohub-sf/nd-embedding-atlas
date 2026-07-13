@@ -3,6 +3,7 @@
 > Impeccable context file. Drop at repo root before running `/impeccable init`
 > (init will confirm rather than interview), or paste these answers into the
 > interview.
+> Product and architecture terms follow [`VOCABULARY.md`](./VOCABULARY.md).
 
 ## Register
 
@@ -43,7 +44,8 @@ counts (`[2,418,309]`), epoch counters, LED states. It never exclaims.
 
 ## Hard rules
 
-- Dark theme is primary; tokens come from `src/frontend/app.css` — never
+- Dark theme is primary; tokens come from
+  `apps/ndea/src/frontend/app.css` — never
   invent colors (periwinkle primary `oklch(0.554 0.236 281)`, wire colors:
   pred `#8b7bf7` / sel `#f59e0b` / focus `#38bdf8`)
 - Telemetry is a feature, not noise — but it all sits behind one toggle

@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { TrajectoryResponseSchema } from "@ndea/protocol";
 import { useMemo } from "react";
 import { selectAnyTrajectory } from "@/dashboard/DashboardContext";
 import { useDashboard } from "@/hooks/useDashboard";
@@ -58,7 +59,7 @@ export function useTrajectoryLoader(opts: UseTrajectoryLoaderOptions): UseTrajec
         const body = await res.text().catch(() => "");
         throw new Error(`[/api/trajectory] ${res.status} ${res.statusText}: ${body}`);
       }
-      const rows = (await res.json()) as TrajectoryFrame[];
+      const rows = TrajectoryResponseSchema.parse(await res.json());
 
       queryClient.setQueryData(key, rows);
       return { rows, params };

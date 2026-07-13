@@ -14,7 +14,7 @@ import type { NodeHost } from "@ndea/sdk";
 
 /** Point/background click → focus the obs (or clear). Sync-group-aware host seam. */
 export function focusPoint(host: NodeHost, rowId: string | null): void {
-  host.highlight.set(rowId);
+  host.focus.set(rowId);
 }
 
 /** Continuous-range filter → the instance's "range" predicate facet. */
@@ -36,17 +36,17 @@ export function publishLassoRowSet(host: NodeHost, rowIds: number[]): void {
 export function clearLasso(host: NodeHost): void {
   host.publishPredicate("lasso", null);
   host.clearRowSet(); // true clear — NOT publishRowSet([])
-  host.api.disposeSelection?.();
+  host.dataAPI.disposePublishedRowSet();
 }
 
 /** Pan/zoom → broadcast on the instance's view-sync scope (no-op when unlinked).
  *  Cross-panel pan/zoom sharing flows through the host seam, never the
  *  process-wide ViewSyncStore directly. */
 export function broadcastView(host: NodeHost, state: { panX: number; panY: number; zoom: number }): void {
-  if (host.viewSync.linked) host.viewSync.broadcast(state);
+  if (host.viewCoordination.linked) host.viewCoordination.broadcast(state);
 }
 
 /** Toggle this instance's view-sync lock (assign/clear its view-sync scope). */
 export function toggleViewLock(host: NodeHost): void {
-  host.viewSync.toggleLock();
+  host.viewCoordination.toggleLock();
 }

@@ -12,7 +12,7 @@
  *   obsm/<name>/  — NOT an embedding — obs→modality binary mapping
  *   obsmap/<name> — integer map from shared obs-axis to per-modality rows
  *
- * This PR supports axis=0 stores with 1-to-1 obs_names across modalities.
+ * This reader supports axis=0 stores with 1-to-1 obs_names across modalities.
  * Other axes and sparse modality coverage come later.
  */
 
@@ -34,12 +34,12 @@ export function detectMuData(rootAttrs: Record<string, unknown>): boolean {
 export async function parseMuData(group: ZarrGroup, storePath?: string): Promise<ParsedMuData> {
   const attrs = (group.attrs ?? {}) as Record<string, unknown>;
 
-  const sharedObs = await readSharedAxis(group, "obs");
-  const sharedVar = await readSharedAxis(group, "var");
+  const sharedObs = await readMuDataSharedAxis(group, "obs");
+  const sharedVar = await readMuDataSharedAxis(group, "var");
 
   const modalities = new Map<string, ParsedAnnData>();
   const modNames = await discoverModalities(group, storePath);
-  const modGroup = await tryOpenGroup(group, "mod");
+  const modGroup = await tryOpenMuDataGroup(group, "mod");
   if (modGroup) {
     for (const modName of modNames) {
       try {
@@ -55,7 +55,7 @@ export async function parseMuData(group: ZarrGroup, storePath?: string): Promise
   }
 
   const obsmap = new Map<string, Int32Array | Uint32Array>();
-  const obsmapGroup = await tryOpenGroup(group, "obsmap");
+  const obsmapGroup = await tryOpenMuDataGroup(group, "obsmap");
   if (obsmapGroup) {
     for (const modName of modalities.keys()) {
       try {
@@ -83,16 +83,16 @@ export async function parseMuData(group: ZarrGroup, storePath?: string): Promise
   };
 }
 
-async function readSharedAxis(group: ZarrGroup, axis: "obs" | "var"): Promise<AnnDataFrame | undefined> {
+async function readMuDataSharedAxis(group: ZarrGroup, axis: "obs" | "var"): Promise<AnnDataFrame | undefined> {
   try {
-    const g = await zarr.open(group.resolve(axis), { kind: "group" });
-    return await readDataFrame(g as unknown as Parameters<typeof readDataFrame>[0]);
+    const sharedAxisGroup = await zarr.open(group.resolve(axis), { kind: "group" });
+    return await readDataFrame(sharedAxisGroup as unknown as Parameters<typeof readDataFrame>[0]);
   } catch {
     return undefined;
   }
 }
 
-async function tryOpenGroup(parent: ZarrGroup, name: string): Promise<ZarrGroup | undefined> {
+async function tryOpenMuDataGroup(parent: ZarrGroup, name: string): Promise<ZarrGroup | undefined> {
   try {
     return await zarr.open(parent.resolve(name), { kind: "group" });
   } catch {
@@ -118,7 +118,7 @@ async function discoverModalities(rootGroup: ZarrGroup, storePath: string | unde
     return Object.keys(consolidated);
   }
 
-  const modGroup = await tryOpenGroup(rootGroup, "mod");
+  const modGroup = await tryOpenMuDataGroup(rootGroup, "mod");
   if (modGroup) {
     const modAttrs = (modGroup.attrs ?? {}) as Record<string, unknown>;
     if (modAttrs.consolidated_metadata) {
@@ -175,10 +175,10 @@ export class MuData implements DatasetHandle {
   /** Per-modality AnnData handles, keyed by modality name. */
   readonly mod: ReadonlyMap<string, AnnData>;
 
-  constructor(axis: 0 | 1 | -1, obs: LazyDataFrame, varDf: LazyDataFrame, mod: ReadonlyMap<string, AnnData>) {
+  constructor(axis: 0 | 1 | -1, obs: LazyDataFrame, varFrame: LazyDataFrame, mod: ReadonlyMap<string, AnnData>) {
     this.axis = axis;
     this.obs = obs;
-    this.var = varDf;
+    this.var = varFrame;
     this.mod = mod;
   }
 
@@ -199,12 +199,12 @@ export class MuData implements DatasetHandle {
       *[Symbol.iterator]() {},
     };
     const obs = new LazyDataFrame(parsed.obs ?? emptyFrame, "obs_name");
-    const varDf = new LazyDataFrame(parsed.var ?? emptyFrame, "var_name");
+    const varFrame = new LazyDataFrame(parsed.var ?? emptyFrame, "var_name");
     const mod = new Map<string, AnnData>();
     for (const [name, modParsed] of parsed.modalities) {
       mod.set(name, AnnData.from(modParsed));
     }
-    return new MuData(axis, obs, varDf, mod);
+    return new MuData(axis, obs, varFrame, mod);
   }
 
   get nObs(): number {

@@ -1,126 +1,118 @@
 import { describe, expect, test } from "bun:test";
-import { createElement, type ComponentType } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
 import { z } from "zod";
-import {
-  getNode,
-  getDescriptor,
-  parseConfig,
-  registerNode,
-  registerDescriptor,
-  tryRegisterExternalDescriptor,
-} from "./registry";
-import {
-  defineDescriptor,
-  SDK_VERSION,
-  type NodeCapability,
-  type NodeDescriptor,
-  type NodeSpec,
-  type NodeViewProps,
-} from "@ndea/sdk";
+import { defineNode, exactNodeTypeRef, nodeConfigVersion, type NodeDefinition } from "@ndea/sdk";
 import { loadNodeModule } from "./load-module";
-import { createSpyHost } from "./spy-host";
+import {
+  getDefinition,
+  getNode,
+  parseConfig,
+  registerDefinition,
+  registerNode,
+  tryRegisterExternalDefinition,
+  type AppGraphNodeSpec,
+} from "./registry";
 
-// A minimal valid descriptor. `kind: "transform"` keeps it engine-free; the
-// Component is never rendered (these tests only exercise registration logic).
-const NoopView: ComponentType<NodeViewProps> = () => null;
+function definition(id: string, overrides: Partial<NodeDefinition> = {}): NodeDefinition {
+  return defineNode({
+    ref: exactNodeTypeRef(id, "1.0.0"),
+    title: id,
+    role: "transform",
+    inputs: [],
+    outputs: [],
+    capabilities: [] as const,
+    load: () => Promise.resolve({ createRuntime: () => ({ dispose() {} }) }),
+    ...overrides,
+  });
+}
 
-function descriptor(id: string, sdkVersion: string = SDK_VERSION): NodeDescriptor {
-  return defineDescriptor({
+function graphNode(
+  id: string,
+  overrides: Partial<AppGraphNodeSpec & { kind: "view" | "transform" }> = {},
+): AppGraphNodeSpec & { kind: "view" | "transform" } {
+  return {
     id,
     title: id,
     kind: "transform",
     inputs: [],
     outputs: [],
-    capabilities: new Set<NodeCapability>(["read"]),
-    placement: { container: "docked" },
-    instancePolicy: "multi",
-    sdkVersion,
-    load: () => Promise.resolve({ Component: NoopView, defaultConfig: {} }),
-  });
+    ...overrides,
+  };
 }
 
-// The shared module-level registry has no reset, so each test uses a unique id
-// and the plugin barrel is never imported (no built-ins preloaded here).
-describe("plugin registry", () => {
-  test("tryRegisterExternalDescriptor accepts a compatible, unique-id plugin", () => {
-    const res = tryRegisterExternalDescriptor(descriptor("test-ext-ok"));
-    expect(res.ok).toBe(true);
-    expect(getDescriptor("test-ext-ok")?.title).toBe("test-ext-ok");
+describe("canonical node registry", () => {
+  test("registers one exact definition and loads its framework-neutral module", async () => {
+    const value = definition("test-definition-load");
+    registerDefinition(value);
+
+    expect(getDefinition("test-definition-load")).toBe(value);
+    const module = await loadNodeModule("test-definition-load");
+    expect(module.createRuntime).toBeFunction();
+    expect("Component" in module).toBe(false);
   });
 
-  test("built-ins / already-loaded win: a conflicting external id is rejected (no throw)", () => {
-    registerDescriptor(descriptor("test-builtin"));
-    const res = tryRegisterExternalDescriptor(descriptor("test-builtin"));
-    expect(res.ok).toBe(false);
-    if (!res.ok) expect(res.error).toMatch(/conflicts/);
+  test("external registration reports duplicate definitions without replacing the first", () => {
+    const first = definition("test-definition-external");
+    registerDefinition(first);
+
+    const result = tryRegisterExternalDefinition(definition("test-definition-external"));
+    expect(result.ok).toBe(false);
+    expect(getDefinition("test-definition-external")).toBe(first);
   });
 
-  test("version gate: a major-incompatible sdkVersion is rejected (no throw)", () => {
-    const res = tryRegisterExternalDescriptor(descriptor("test-ext-oldsdk", "9.0.0"));
-    expect(res.ok).toBe(false);
-    if (!res.ok) expect(res.error).toMatch(/incompatible/);
+  test("graph records remain app-local and separate from author definitions", () => {
+    const id = "test-definition-separate";
+    const graph = graphNode(id);
+    const author = definition(id);
+    registerNode(graph);
+    registerDefinition(author);
+
+    expect(getNode(id)).toBe(graph);
+    expect(getDefinition(id)).toBe(author);
   });
 
-  test("registerDescriptor throws on duplicate id and on incompatible sdkVersion", () => {
-    registerDescriptor(descriptor("test-dup"));
-    expect(() => registerDescriptor(descriptor("test-dup"))).toThrow(/duplicate/);
-    expect(() => registerDescriptor(descriptor("test-bad-ver", "9.0.0"))).toThrow(/incompatible/);
+  test("author metadata conflicts fail regardless of registration order", () => {
+    const graphFirstId = "test-definition-conflict-graph-first";
+    registerNode(graphNode(graphFirstId, { title: "Graph title" }));
+    expect(() => registerDefinition(definition(graphFirstId, { title: "Author title" }))).toThrow(
+      /metadata conflict at "title"/,
+    );
+    expect(getDefinition(graphFirstId)).toBeUndefined();
+
+    const definitionFirstId = "test-definition-conflict-definition-first";
+    registerDefinition(definition(definitionFirstId, { title: "Author title" }));
+    expect(() => registerNode(graphNode(definitionFirstId, { title: "Graph title" }))).toThrow(
+      /metadata conflict at "title"/,
+    );
+    expect(getNode(definitionFirstId)).toBeUndefined();
   });
 
-  test("loads and mounts an SDK-defined descriptor through the app host", async () => {
-    const { host, calls } = createSpyHost();
-    const mounted = defineDescriptor({
-      ...descriptor("test-sdk-mount"),
-      load: () =>
-        Promise.resolve({
-          Component: ({ host: nodeHost }: NodeViewProps) => {
-            nodeHost.highlight.set("mounted");
-            return null;
-          },
-          defaultConfig: {},
-        }),
+  test("equal author metadata permits app graph registration", () => {
+    const id = "test-definition-equal-metadata";
+    const ports = [{ id: "in", kind: "pred" as const, label: "In" }];
+    registerDefinition(definition(id, { inputs: ports }));
+    registerNode(graphNode(id, { inputs: ports }));
+
+    expect(getNode(id)?.inputs).toEqual(ports);
+    expect(getDefinition(id)?.inputs).toEqual(ports);
+  });
+
+  test("validates persisted config with the supplied schema", () => {
+    const schema = z.object({ count: z.number().int() });
+    expect(parseConfig({ config: schema }, { count: 2 })).toEqual({ ok: true, value: { count: 2 } });
+    expect(parseConfig({ config: schema }, { count: 2.5 }).ok).toBe(false);
+    expect(parseConfig({}, { untouched: true })).toEqual({ ok: true, value: { untouched: true } });
+  });
+
+  test("definition config owns its version and default independently of graph state", () => {
+    const value = definition("test-definition-config", {
+      config: {
+        schema: z.object({ enabled: z.boolean() }),
+        version: nodeConfigVersion(1),
+        defaultValue: { enabled: true },
+      },
     });
-    registerDescriptor(mounted);
+    registerDefinition(value);
 
-    const module = await loadNodeModule(mounted.id);
-    renderToStaticMarkup(createElement(module.Component, { host }));
-    expect(calls.highlightSet).toEqual(["mounted"]);
-  });
-});
-
-const baseSpec = (id: string, config?: NodeSpec["config"]): NodeSpec => ({
-  id,
-  title: id,
-  inputs: [],
-  outputs: [],
-  config,
-});
-
-describe("node registry (built-in specs share the plugin registry)", () => {
-  test("registerNode + getNode round-trips a base spec", () => {
-    registerNode(baseSpec("test-node-basic"));
-    expect(getNode("test-node-basic")?.title).toBe("test-node-basic");
-  });
-
-  test("registerNode throws on duplicate id", () => {
-    registerNode(baseSpec("test-node-dup"));
-    expect(() => registerNode(baseSpec("test-node-dup"))).toThrow(/duplicate/);
-  });
-
-  test("getDescriptor narrows away non-descriptor specs (no load())", () => {
-    registerNode(baseSpec("test-node-notplugin"));
-    expect(getNode("test-node-notplugin")).toBeDefined();
-    expect(getDescriptor("test-node-notplugin")).toBeUndefined();
-  });
-
-  test("parseConfig validates against the schema; configless passes through", () => {
-    const spec = { config: z.object({ n: z.number() }) };
-    const ok = parseConfig(spec, { n: 3 });
-    expect(ok.ok).toBe(true);
-    if (ok.ok) expect(ok.value.n).toBe(3);
-
-    expect(parseConfig(spec, { n: "nope" }).ok).toBe(false);
-    expect(parseConfig({}, { anything: true }).ok).toBe(true);
+    expect(getDefinition("test-definition-config")?.config?.defaultValue).toEqual({ enabled: true });
   });
 });

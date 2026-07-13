@@ -7,12 +7,13 @@
  */
 
 import { afterEach, describe, expect, test } from "bun:test";
+import { DuckDBInstance } from "@duckdb/node-api";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as zarr from "zarrita";
-import { BunFileStore } from "../bun-store.ts";
-import { commitObsColumns, registerWriteCodec, vlenEncode } from "../write-obs.ts";
+import { BunFileStore, commitObsColumns, openAnnData } from "../index.ts";
+import { registerWriteCodec, vlenEncode } from "../write-obs.ts";
 import { asMutable } from "../zarr-boundary.ts";
 
 registerWriteCodec();
@@ -24,53 +25,74 @@ afterEach(async () => {
   dir = "";
 });
 
-/** Minimal AnnData obs group (root + obs + _index) with N obs, in the given format. */
+/** Minimal AnnData store with obs/var indexes in the given Zarr format. */
 async function makeBase(format: "v2" | "v3", obsNames: string[]): Promise<string> {
   dir = await mkdtemp(join(tmpdir(), "ndea-writeobs-"));
   const store = new BunFileStore(dir);
-  const n = obsNames.length;
-  const dfAttrs = { "encoding-type": "dataframe", "encoding-version": "0.2.0", _index: "_index", "column-order": [] };
+  const rootAttrs = {
+    "encoding-type": "anndata",
+    "encoding-version": "0.1.0",
+    "u13-round-trip": "preserved",
+  };
+  const varNames = ["gene_0", "gene_1"];
+  const dataFrameAttrs = {
+    "encoding-type": "dataframe",
+    "encoding-version": "0.2.0",
+    _index: "_index",
+    "column-order": [],
+  };
 
   if (format === "v3") {
-    const g = (attrs: object) => E.encode(JSON.stringify({ zarr_format: 3, node_type: "group", attributes: attrs }));
-    await store.set("/zarr.json", g({}));
-    await store.set("/obs/zarr.json", g(dfAttrs));
-    const loc = zarr.root(asMutable(store));
-    const idx = await zarr.create(loc.resolve("/obs/_index"), {
-      shape: [n],
-      chunkShape: [n],
-      dtype: "string",
-      codecs: [{ name: "vlen-utf8", configuration: {} }],
-      fillValue: "",
-      attributes: { "encoding-type": "string-array", "encoding-version": "0.2.0" },
-    } as never);
-    await zarr.set(idx as never, null, { data: obsNames, shape: [n], stride: [1] } as never);
+    const encodeGroup = (attrs: object) =>
+      E.encode(JSON.stringify({ zarr_format: 3, node_type: "group", attributes: attrs }));
+    await store.set("/zarr.json", encodeGroup(rootAttrs));
+    const location = zarr.root(asMutable(store));
+    for (const [axis, names] of [
+      ["obs", obsNames],
+      ["var", varNames],
+    ] as const) {
+      await store.set(`/${axis}/zarr.json`, encodeGroup(dataFrameAttrs));
+      const index = await zarr.create(location.resolve(`/${axis}/_index`), {
+        shape: [names.length],
+        chunkShape: [names.length],
+        dtype: "string",
+        codecs: [{ name: "vlen-utf8", configuration: {} }],
+        fillValue: "",
+        attributes: { "encoding-type": "string-array", "encoding-version": "0.2.0" },
+      } as never);
+      await zarr.set(index as never, null, { data: names, shape: [names.length], stride: [1] } as never);
+    }
   } else {
     await store.set("/.zgroup", E.encode(JSON.stringify({ zarr_format: 2 })));
-    await store.set("/.zattrs", E.encode("{}"));
-    await store.set("/obs/.zgroup", E.encode(JSON.stringify({ zarr_format: 2 })));
-    await store.set("/obs/.zattrs", E.encode(JSON.stringify(dfAttrs)));
-    await store.set(
-      "/obs/_index/.zarray",
-      E.encode(
-        JSON.stringify({
-          shape: [n],
-          chunks: [n],
-          dtype: "|O",
-          fill_value: "",
-          filters: [{ id: "vlen-utf8" }],
-          order: "C",
-          dimension_separator: ".",
-          compressor: null,
-          zarr_format: 2,
-        }),
-      ),
-    );
-    await store.set(
-      "/obs/_index/.zattrs",
-      E.encode(JSON.stringify({ "encoding-type": "string-array", "encoding-version": "0.2.0" })),
-    );
-    await store.set("/obs/_index/0", vlenEncode(obsNames));
+    await store.set("/.zattrs", E.encode(JSON.stringify(rootAttrs)));
+    for (const [axis, names] of [
+      ["obs", obsNames],
+      ["var", varNames],
+    ] as const) {
+      await store.set(`/${axis}/.zgroup`, E.encode(JSON.stringify({ zarr_format: 2 })));
+      await store.set(`/${axis}/.zattrs`, E.encode(JSON.stringify(dataFrameAttrs)));
+      await store.set(
+        `/${axis}/_index/.zarray`,
+        E.encode(
+          JSON.stringify({
+            shape: [names.length],
+            chunks: [names.length],
+            dtype: "|O",
+            fill_value: "",
+            filters: [{ id: "vlen-utf8" }],
+            order: "C",
+            dimension_separator: ".",
+            compressor: null,
+            zarr_format: 2,
+          }),
+        ),
+      );
+      await store.set(
+        `/${axis}/_index/.zattrs`,
+        E.encode(JSON.stringify({ "encoding-type": "string-array", "encoding-version": "0.2.0" })),
+      );
+      await store.set(`/${axis}/_index/0`, vlenEncode(names));
+    }
   }
   return dir;
 }
@@ -134,6 +156,62 @@ for (const format of ["v2", "v3"] as const) {
       expect(report.columns[0].nNonNull).toBe(1);
       expect(await new BunFileStore(root).exists(`/obs/dry${format === "v3" ? "/zarr.json" : "/.zgroup"}`)).toBe(false);
       expect(await readColumnOrder(root, format)).not.toContain("dry");
+    });
+
+    test("barrel API preserves AnnData metadata, axis identities, and existing bytes", async () => {
+      const root = await makeBase(format, obsNames);
+      const store = new BunFileStore(root);
+      const rootMetadataKey = format === "v3" ? "/zarr.json" : "/.zattrs";
+      const indexMetadataKey = format === "v3" ? "/obs/_index/zarr.json" : "/obs/_index/.zattrs";
+      const indexChunkKey = format === "v3" ? "/obs/_index/c/0" : "/obs/_index/0";
+      const rootMetadataBefore = await store.get(rootMetadataKey);
+      const indexMetadataBefore = await store.get(indexMetadataKey);
+      const indexChunkBefore = await store.get(indexChunkKey);
+
+      await commitObsColumns(root, [
+        {
+          name: "cell_type",
+          kind: "categorical",
+          values: new Map([
+            ["cell_0", "T cell"],
+            ["cell_2", "B cell"],
+          ]),
+        },
+      ]);
+
+      expect(await store.get(rootMetadataKey)).toEqual(rootMetadataBefore);
+      expect(await store.get(indexMetadataKey)).toEqual(indexMetadataBefore);
+      expect(await store.get(indexChunkKey)).toEqual(indexChunkBefore);
+
+      const adata = await openAnnData(store);
+      expect(adata.kind).toBe("anndata");
+      expect(adata.obs.indexName).toBe("obs_name");
+      expect(adata.var.indexName).toBe("var_name");
+      expect(adata.obs.index).toEqual(obsNames);
+      expect(adata.var.index).toEqual(["gene_0", "gene_1"]);
+      expect(Array.from(adata.obs.getColumn("cell_type") ?? [])).toEqual(["T cell", null, "B cell", null, null, null]);
+
+      const db = await DuckDBInstance.create(":memory:");
+      const connection = await db.connect();
+      try {
+        await adata.toDuckDB(connection);
+        const obs = await connection.runAndReadAll("SELECT obs_name, cell_type FROM obs_base ORDER BY __obs_index__");
+        expect(obs.getColumnsJS()).toEqual([obsNames, ["T cell", null, "B cell", null, null, null]]);
+        const variable = await connection.runAndReadAll("SELECT var_name FROM var_base ORDER BY __var_index__");
+        expect(variable.getColumnsJS()[0]).toEqual(["gene_0", "gene_1"]);
+      } finally {
+        connection.closeSync();
+        db.closeSync();
+      }
+
+      const rootMetadata = JSON.parse(new TextDecoder().decode(await store.get(rootMetadataKey)));
+      const rootAttributes = format === "v3" ? rootMetadata.attributes : rootMetadata;
+      expect(rootAttributes).toEqual({
+        "encoding-type": "anndata",
+        "encoding-version": "0.1.0",
+        "u13-round-trip": "preserved",
+      });
+      expect(await readColumnOrder(root, format)).toEqual(["cell_type"]);
     });
   });
 }

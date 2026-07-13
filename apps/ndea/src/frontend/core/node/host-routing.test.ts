@@ -28,7 +28,7 @@ import {
 } from "@/nodes/scatter/routing";
 import { focusRow, publishOrdering } from "@/nodes/table/routing";
 import { listWsNodes } from "@/core/workspace/node-kit";
-import { registerBuiltins } from "@/core/workspace/descriptors";
+import { registerBuiltins } from "@/core/workspace/definitions";
 import { createSpyHost } from "./spy-host";
 
 // Register both halves of the registry, exactly as the app does at boot.

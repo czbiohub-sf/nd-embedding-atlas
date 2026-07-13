@@ -26,6 +26,30 @@
 
 import { z } from "zod";
 
+export {
+  PLUGIN_MANIFEST_SCHEMA_VERSION,
+  PluginHostCompatibilitySchema,
+  PluginIdSchema,
+  PluginManifestSchema,
+  PluginManifestSchemaVersionSchema,
+  PluginPackageVersionSchema,
+  PluginPermissionDisclosureSchema,
+  PluginPermissionSchema,
+  PluginPlatformSchema,
+  SDKVersionRangeSchema,
+} from "./plugin";
+export type {
+  PluginHostCompatibility,
+  PluginId,
+  PluginManifest,
+  PluginManifestSchemaVersion,
+  PluginPackageVersion,
+  PluginPermission,
+  PluginPermissionDisclosure,
+  PluginPlatform,
+  SDKVersionRange,
+} from "./plugin";
+
 // ─── Shared primitives ──────────────────────────────────────────────────────
 
 /** Non-negative 32-bit integer, safe to interpolate into SQL after validation. */
@@ -144,10 +168,77 @@ export type CategorizeResponse = z.infer<typeof CategorizeResponseSchema>;
 
 /** Embedding status response. */
 export const EmbeddingStatusSchema = z.object({
-  status: z.enum(["loading", "ready", "error"]),
+  status: z.enum(["not_started", "loading", "ready", "error"]),
   error: z.string().optional(),
+  n_dims: NonNegativeInt.optional(),
 });
 export type EmbeddingStatus = z.infer<typeof EmbeddingStatusSchema>;
+
+/** Common JSON error envelope returned by HTTP routes. */
+export const ErrorResponseSchema = z.looseObject({
+  error: z.string(),
+});
+export type ErrorResponse = z.infer<typeof ErrorResponseSchema>;
+
+/** GET /api/export-dir response. */
+export const ExportDirectoryResponseSchema = z.object({
+  default_dir: z.string(),
+  writable: z.boolean(),
+});
+export type ExportDirectoryResponse = z.infer<typeof ExportDirectoryResponseSchema>;
+
+/** Successful POST /api/collections/:id/export response. */
+export const CollectionExportResponseSchema = z.object({
+  output_path: z.string(),
+  n_obs: NonNegativeInt,
+  size_bytes: NonNegativeInt,
+  format: z.enum(["csv", "parquet"]),
+});
+export type CollectionExportResponse = z.infer<typeof CollectionExportResponseSchema>;
+
+/** File-exists POST /api/collections/:id/export response. */
+export const CollectionExportConflictResponseSchema = z.object({
+  error: z.literal("File exists"),
+  existing_path: z.string(),
+  existing_size_bytes: NonNegativeInt,
+});
+export type CollectionExportConflictResponse = z.infer<typeof CollectionExportConflictResponseSchema>;
+
+/** GET /api/var/names response. */
+export const VarNamesResponseSchema = z.object({
+  names: z.array(z.string()),
+});
+export type VarNamesResponse = z.infer<typeof VarNamesResponseSchema>;
+
+/** GET /api/var/layers response. */
+export const VarLayersResponseSchema = z.object({
+  layers: z.array(z.string()),
+});
+export type VarLayersResponse = z.infer<typeof VarLayersResponseSchema>;
+
+/** POST /api/var-column response. */
+export const VarColumnResponseSchema = z.object({
+  task_id: z.string(),
+  status: z.enum(["loading", "ready"]),
+  column: z.string(),
+});
+export type VarColumnResponse = z.infer<typeof VarColumnResponseSchema>;
+
+/** GET /api/var-column/:task_id/status and var-column/status WebSocket response. */
+export const VarColumnStatusResponseSchema = z.object({
+  status: z.enum(["loading", "ready", "error"]),
+  column: z.string(),
+  error: z.string().optional(),
+});
+export type VarColumnStatusResponse = z.infer<typeof VarColumnStatusResponseSchema>;
+
+/** POST /api/selection/:instance_id response. */
+export const SelectionPublishResponseSchema = z.object({
+  ok: z.literal(true),
+  table: z.string(),
+  count: NonNegativeInt,
+});
+export type SelectionPublishResponse = z.infer<typeof SelectionPublishResponseSchema>;
 
 /** Obs spatial-column response (bbox sub-shape). */
 export const ObsBboxSchema = z.object({
@@ -177,6 +268,7 @@ export const ObsmEntrySchema = z.object({
   /** Modality name for MuData keys (e.g. "rna" for "rna:X_umap"). */
   modality: z.string().optional(),
 });
+export type ObsmEntry = z.infer<typeof ObsmEntrySchema>;
 export const SpatialMetaSchema = z.object({
   fov_col: z.string().nullable().optional(),
   t_col: z.string().nullable().optional(),
@@ -184,16 +276,19 @@ export const SpatialMetaSchema = z.object({
   x_col: z.string().nullable().optional(),
   y_col: z.string().nullable().optional(),
 });
+export type SpatialMeta = z.infer<typeof SpatialMetaSchema>;
 export const PlateChannelSchema = z.object({
   label: z.string(),
   color: z.string(),
   window: z.object({ start: z.number(), end: z.number(), min: z.number(), max: z.number() }),
 });
+export type PlateChannel = z.infer<typeof PlateChannelSchema>;
 export const PlateStoreSchema = z.object({
   mount: z.string(),
   name: z.string(),
   ome_version: z.enum(["0.4", "0.5"]),
 });
+export type PlateStore = z.infer<typeof PlateStoreSchema>;
 
 /**
  * Data-capability vocabulary (CAPABILITY-CONTRACT.md §3). One flat enum, the
@@ -264,13 +359,44 @@ export const MetadataSchema = z.looseObject({
 export type Metadata = z.infer<typeof MetadataSchema>;
 
 /** Viewer config response. */
-export interface ConfigRes {
-  datasets: Record<string, unknown>;
-  spatial: Record<string, unknown> | null;
-  obsColumns: string[];
-  availableObsmKeys: string[];
-  [key: string]: unknown;
-}
+export const ConfigDatasetSchema = z.object({
+  path: z.string(),
+  platePath: z.string().nullable(),
+});
+export const ConfigSpatialSchema = z.object({
+  fov: z.string().nullable(),
+  t: z.string().nullable(),
+  bbox: z.string().nullable(),
+  x: z.string().nullable(),
+  y: z.string().nullable(),
+  z: z.string().nullable(),
+});
+export const ConfigResponseSchema = z.object({
+  datasets: z.record(z.string(), ConfigDatasetSchema),
+  spatial: ConfigSpatialSchema.nullable(),
+  obsColumns: z.array(z.string()),
+  availableObsmKeys: z.array(z.string()),
+  loadedEmbeddings: z.array(z.string()),
+  nObs: NonNegativeInt,
+  port: NonNegativeInt,
+});
+export type ConfigResponse = z.infer<typeof ConfigResponseSchema>;
+
+/** GET /api/trajectory response row. Serialized keys intentionally mix casing. */
+export const TrajectoryFrameSchema = z.object({
+  rowIndex: NonNegativeInt,
+  t: z.number(),
+  emb_x: z.number(),
+  emb_y: z.number(),
+  spatial_x: z.number(),
+  spatial_y: z.number(),
+  datasetKey: z.string().nullable(),
+  category: z.number().optional(),
+  z: z.number().optional(),
+});
+export type TrajectoryFrame = z.infer<typeof TrajectoryFrameSchema>;
+export const TrajectoryResponseSchema = z.array(TrajectoryFrameSchema);
+export type TrajectoryResponse = z.infer<typeof TrajectoryResponseSchema>;
 
 // ─── Collections ─────────────────────────────────────────────────────────────
 //
@@ -452,6 +578,8 @@ export const CollectionSchema = z.object({
   version: z.number().int().nonnegative(),
 });
 export type Collection = z.infer<typeof CollectionSchema>;
+export const CollectionListResponseSchema = z.array(CollectionSchema);
+export type CollectionListResponse = z.infer<typeof CollectionListResponseSchema>;
 
 /**
  * Envelope returned by POST /api/collections and POST /api/collections/:id/members.
@@ -504,41 +632,10 @@ export const ContinuousValuesHeaderSchema = z.object({
 });
 export type ContinuousValuesHeader = z.infer<typeof ContinuousValuesHeaderSchema>;
 
-// ─── WebSocket protocol map (future migration) ──────────────────────────────
+// ─── WebSocket protocol map ─────────────────────────────────────────────────
 
-/** Mosaic query request — mirrors MosaicQueryBodySchema as a plain interface. */
-export interface MosaicQueryReq {
-  type: "arrow" | "json" | "exec";
-  sql: string;
-}
-
-/**
- * Typed WebSocket-style method map. Keys are method names, values declare
- * request/response shapes. `stream: true` indicates chunked binary responses.
- */
-export interface ProtocolMap {
-  [method: string]: {
-    req: unknown;
-    res: unknown;
-    stream?: boolean;
-  };
-}
-
-/** ndea WebSocket method map — typed req/res shapes keyed by method name. */
-export interface NdeaProtocol extends ProtocolMap {
-  "mosaic/query": {
-    req: MosaicQueryReq;
-    res: Record<string, unknown>[] | void;
-    stream: true;
-  };
-  meta: {
-    req: Record<string, never>;
-    res: Metadata;
-  };
-  config: {
-    req: Record<string, never>;
-    res: ConfigRes;
-  };
+/** Implemented ndea WebSocket methods, typed by exact request/response DTOs. */
+export interface NdeaProtocol {
   "embeddings/load": {
     req: { key: string };
     res: { status: string };
@@ -547,68 +644,16 @@ export interface NdeaProtocol extends ProtocolMap {
     req: { key: string };
     res: EmbeddingStatus;
   };
-  "scatter/positions": {
-    req: { embedding: string; x_col: string; y_col: string };
-    res: void;
-    stream: true;
-  };
-  "scatter/categories": {
-    req: { cat_col: string; original_col?: string };
-    res: void;
-    stream: true;
-  };
-  "scatter/continuous-colors": {
-    req: { color_col: string; colormap: string; vmin?: number; vmax?: number };
-    res: void;
-    stream: true;
-  };
-  "obs/info": {
-    req: { row_index: number };
-    res: ObsInfo;
-  };
-  "obs/detail": {
-    req: { row_index: number };
-    res: Record<string, string | null>;
-  };
-  "obs/batch": {
-    req: { ids: number[] };
-    res: Record<string, { x: number; y: number }>;
-  };
-  "var/names": {
-    req: { q?: string; limit?: number };
-    res: { names: string[] };
-  };
-  "var/layers": {
-    req: Record<string, never>;
-    res: { layers: string[] };
-  };
   "var-column/load": {
-    req: { name: string; layer: string };
-    res: { task_id: string; status: string; column: string };
+    req: VarColumnBody;
+    res: VarColumnResponse;
   };
   "var-column/status": {
     req: { task_id: string };
-    res: { status: string; column?: string; error?: string };
-  };
-  "collections/list": {
-    req: Record<string, never>;
-    res: Collection[];
-  };
-  "collections/create": {
-    req: CreateCollectionBody;
-    res: Collection;
-  };
-  "collections/delete": {
-    req: { collection_id: string };
-    res: { deleted: string };
+    res: VarColumnStatusResponse;
   };
   "export/start": {
-    req: {
-      predicate: string;
-      filename: string;
-      selection_type?: string;
-      embedding_key?: string;
-    };
+    req: ExportBody;
     res: { task_id: string; status: string };
   };
   "export/status": {
@@ -639,6 +684,26 @@ const COLUMN_NAME_RE = /^[A-Za-z0-9_][A-Za-z0-9 _.-]*$/;
  */
 export const AnnotationDtypeSchema = z.enum(["categorical", "string", "integer", "float"]);
 export type AnnotationDtype = z.infer<typeof AnnotationDtypeSchema>;
+
+/** One entry returned by GET /api/annotations/columns. */
+export const AnnotationColumnSchema = z.object({
+  name: z.string(),
+  dtype: AnnotationDtypeSchema,
+});
+export type AnnotationColumn = z.infer<typeof AnnotationColumnSchema>;
+
+/** GET /api/annotations/columns response. */
+export const AnnotationColumnsResponseSchema = z.object({
+  columns: z.array(AnnotationColumnSchema),
+});
+export type AnnotationColumnsResponse = z.infer<typeof AnnotationColumnsResponseSchema>;
+
+/** Predicate branch of POST /api/annotations/values. */
+export const AnnotationPredicateWriteResponseSchema = z.object({
+  ok: z.literal(true),
+  n: NonNegativeInt,
+});
+export type AnnotationPredicateWriteResponse = z.infer<typeof AnnotationPredicateWriteResponseSchema>;
 
 /** POST /api/annotations/columns — create a new annotation column. */
 export const AnnotationColumnBodySchema = z.object({

@@ -5,42 +5,42 @@
 
 import { useCallback } from "react";
 import type { MosaicClient, Selection } from "@uwdata/mosaic-core";
+import {
+  AnnotationColumnsResponseSchema,
+  AnnotationPredicateWriteResponseSchema,
+  CommitAnnotationsResponseSchema,
+  ErrorResponseSchema,
+  SelectionPublishResponseSchema,
+} from "@ndea/protocol";
 import { useDashboard } from "@/hooks/useDashboard";
-import { broadcastBus, highlightBus, renderBus, selectionBus, viewSyncBus } from "@/core/buses";
+import { broadcastBus, highlightBus, selectionBus, viewSyncBus } from "@/core/buses";
 import { deviceBroker, type DeviceLease } from "@/core/gpu/device-broker";
 import type {
-  DataApi,
-  HighlightApi,
-  MountReason,
-  NodeMeta,
-  PanelContext,
-  NodeHost,
+  NodeDataAPI,
+  FocusCoordinationAPI,
+  NodeDefinition,
   NodeInstanceId,
-  RenderApi,
-  UiApi,
-  ViewSyncApi,
+  NodeNotificationAPI,
+  ViewCoordinationAPI,
 } from "@ndea/sdk";
 import type { SelectionFacet } from "@/core/buses";
-import type { CommitAnnotationsResponse } from "@/types";
+import type { AppNodeHost } from "@/core/node/app-node-host";
 
-export interface HostInit<Config, Options> {
+export interface HostInit<Config> {
   instanceId: NodeInstanceId;
-  meta: NodeMeta;
-  reason: MountReason;
+  definition: NodeDefinition;
   config: Config;
-  options: Options;
-  /** Container handle (Dockview panel api, float window, …) — §4.3. */
-  panel: PanelContext;
+  bodyHeaderElement?: HTMLElement;
   /**
    * Per-instance input Selection override (§6.1). Dockview/float mounts omit it
    * and share the dashboard `brushSelection`; a graph node passes its OWN
    * Selection so an edge predicate filters only that node, not the whole app.
    */
-  inputSelection?: Selection;
+  inputPredicate?: Selection;
 }
 
-export interface HostHandle<Config, Options> {
-  host: NodeHost<Config, Options>;
+export interface HostHandle<Config> {
+  host: AppNodeHost<Config>;
   /** Owned by `<PluginMount>`. Idempotent full teardown. */
   dispose(): void;
 }
@@ -51,6 +51,11 @@ const notify = (msg: string, level: "info" | "warn" | "error" = "info"): void =>
   else console.info(msg);
 };
 
+async function responseError(res: Response, fallback: string): Promise<Error> {
+  const parsed = ErrorResponseSchema.safeParse(await res.json().catch(() => null));
+  return new Error(parsed.success ? parsed.data.error : fallback);
+}
+
 /** Build a live `NodeHost` factory bound to the current dashboard context. */
 export function useDashboardHostShim() {
   const { state, meta, actions } = useDashboard();
@@ -59,9 +64,10 @@ export function useDashboardHostShim() {
   const { refreshMetadata } = actions;
 
   return useCallback(
-    <Config, Options>(init: HostInit<Config, Options>): HostHandle<Config, Options> => {
-      const { instanceId, meta: pluginMeta, reason, options, panel } = init;
-      const inputSelection = init.inputSelection ?? brushSelection;
+    <Config>(init: HostInit<Config>): HostHandle<Config> => {
+      const { instanceId, definition, bodyHeaderElement } = init;
+      const inputPredicate = init.inputPredicate ?? brushSelection;
+      const capabilities = new Set(definition.capabilities);
       const controller = new AbortController();
       const disposers: (() => void)[] = [];
       let config = init.config;
@@ -70,7 +76,7 @@ export function useDashboardHostShim() {
       let deviceLeasePromise: Promise<DeviceLease> | null = null;
       let disposed = false;
 
-      const viewSync: ViewSyncApi = {
+      const viewCoordination: ViewCoordinationAPI = {
         get panX() {
           return viewSyncBus.snapshot().panX;
         },
@@ -94,7 +100,7 @@ export function useDashboardHostShim() {
         },
       };
 
-      const highlight: HighlightApi = {
+      const focus: FocusCoordinationAPI = {
         get() {
           return highlightBus.get();
         },
@@ -107,55 +113,44 @@ export function useDashboardHostShim() {
         },
       };
 
-      const render: RenderApi = {
-        get pointRadius() {
-          return renderBus.pointRadius();
-        },
-        setPointRadius(r) {
-          renderBus.setPointRadius(r);
-        },
-      };
+      const notifications: NodeNotificationAPI = { notify };
 
-      const ui: UiApi = {
-        container: panel,
-        notify,
-      };
-
-      // "read" is universal; the selection-out methods are capability-gated —
+      // Data reads are universal here; row-set publication is capability-gated —
       // ungranted → absent from the object → `undefined` at runtime (the
       // §6.5/§4.3 guardrail). The `/api/*` literal lives HERE in core, never in
-      // plugins/** — a plugin only ever calls `host.api.publishSelection`.
-      const canSelectionOut = pluginMeta.capabilities.has("selection-out");
-      const api: DataApi = {
+      // nodes/** — a node only ever calls `host.dataAPI.publishRowSet`.
+      const canPublishRowSet = capabilities.has("row-set-publish");
+      const dataAPI = {
         query<T = unknown>(sql: string) {
           return coordinator.query(sql) as unknown as Promise<T>;
         },
-        ...(canSelectionOut
+        ...(canPublishRowSet
           ? {
-              async publishSelection(rowIds: number[]) {
+              async publishRowSet(rowIds: number[]) {
                 // Per-instance temp table sel_<instanceId> (§6.5).
                 const res = await fetch(`/api/selection/${encodeURIComponent(instanceId)}`, {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({ row_indices: rowIds }),
                 });
-                const { table: selTable, count } = (await res.json()) as { table: string; count: number };
+                if (!res.ok) throw await responseError(res, `selection failed (${res.status})`);
+                const { table: selTable, count } = SelectionPublishResponseSchema.parse(await res.json());
                 // The bus owns the tok=N cache-buster — plugins never invent it.
                 return selectionBus.makeToken(selTable, count);
               },
-              disposeSelection() {
+              disposePublishedRowSet() {
                 void fetch(`/api/selection/${encodeURIComponent(instanceId)}`, { method: "DELETE" }).catch(() => {});
               },
             }
           : {}),
         // "annotate" — create/list user annotation columns + stamp a label onto a
         // predicate's rows (the node-graph Annotate node). `/api/*` lives in core.
-        ...(pluginMeta.capabilities.has("annotate")
+        ...(capabilities.has("annotation-write")
           ? {
               async listAnnotationColumns() {
                 const res = await fetch("/api/annotations/columns");
-                const body = (await res.json()) as { columns?: { name: string; dtype: string }[] };
-                return body.columns ?? [];
+                if (!res.ok) throw await responseError(res, `list failed (${res.status})`);
+                return AnnotationColumnsResponseSchema.parse(await res.json()).columns;
               },
               async createAnnotationColumn(
                 name: string,
@@ -166,8 +161,7 @@ export function useDashboardHostShim() {
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({ name, dtype }),
                 });
-                if (!res.ok)
-                  throw new Error(((await res.json()) as { error?: string }).error ?? `create failed (${res.status})`);
+                if (!res.ok) throw await responseError(res, `create failed (${res.status})`);
                 // Surface the new column in the Table + pickers (obs_columns refetch).
                 await refreshMetadata();
               },
@@ -177,9 +171,8 @@ export function useDashboardHostShim() {
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({ column, label, predicate }),
                 });
-                if (!res.ok)
-                  throw new Error(((await res.json()) as { error?: string }).error ?? `write failed (${res.status})`);
-                const out = (await res.json()) as { n: number };
+                if (!res.ok) throw await responseError(res, `write failed (${res.status})`);
+                const out = AnnotationPredicateWriteResponseSchema.parse(await res.json());
                 await refreshMetadata();
                 return out;
               },
@@ -189,21 +182,20 @@ export function useDashboardHostShim() {
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify(opts.columns ? { columns: opts.columns } : {}),
                 });
-                if (!res.ok)
-                  throw new Error(((await res.json()) as { error?: string }).error ?? `commit failed (${res.status})`);
+                if (!res.ok) throw await responseError(res, `commit failed (${res.status})`);
                 // No refreshMetadata: a commit writes on-disk `.obs`, not the DuckDB
                 // `dataset` VIEW, so the client schema is unchanged.
-                return (await res.json()) as CommitAnnotationsResponse;
+                return CommitAnnotationsResponseSchema.parse(await res.json());
               },
             }
           : {}),
-      };
+      } as NodeDataAPI;
 
-      const host: NodeHost<Config, Options> = {
+      const host = {
         instanceId,
-        meta: pluginMeta,
-        reason,
-        capabilities: pluginMeta.capabilities,
+        definitionRef: definition.ref,
+        capabilities,
+        ...(bodyHeaderElement ? { bodyHeaderElement } : {}),
 
         data: { coordinator, table, metadata },
         registerClient(client: MosaicClient) {
@@ -213,20 +205,20 @@ export function useDashboardHostShim() {
           return unregister;
         },
 
-        inputSelection,
+        inputPredicate,
         externalRowSet() {
           return broadcastBus.externalRowSet(instanceId);
         },
-        onExternalRowSet(cb) {
+        onExternalRowSet(cb: (rowIds: readonly number[] | null) => void) {
           const off = broadcastBus.subscribeExternal(instanceId, cb);
           disposers.push(off);
           return off;
         },
 
-        publishPredicate(facet, sql) {
+        publishPredicate(facet: string, sql: string | null) {
           selectionBus.publishPredicate(instanceId, facet as SelectionFacet, sql);
         },
-        publishRowSet(ids) {
+        publishRowSet(ids: number[]) {
           broadcastBus.publishRowSet(instanceId, ids);
         },
         clearRowSet() {
@@ -234,10 +226,9 @@ export function useDashboardHostShim() {
           broadcastBus.clear(instanceId);
         },
 
-        viewSync,
-        highlight,
-        render,
-        ui,
+        viewCoordination,
+        focus,
+        notifications,
 
         acquireDeviceLease() {
           // One promise prevents StrictMode or multiple consumers from acquiring twice.
@@ -247,24 +238,22 @@ export function useDashboardHostShim() {
           });
           return deviceLeasePromise;
         },
-        api,
+        dataAPI,
 
         get config() {
           return config;
         },
-        patchConfig(patch) {
+        patchConfig(patch: Partial<Config>) {
           config = { ...config, ...patch };
         },
-        options,
-
-        onDispose(fn) {
+        onDispose(fn: () => void) {
           disposers.push(fn);
         },
-        track(unsubscribe) {
+        track(unsubscribe: () => void) {
           disposers.push(unsubscribe);
         },
         signal: controller.signal,
-      };
+      } as unknown as AppNodeHost<Config>;
 
       function dispose() {
         if (disposed) return;
@@ -279,7 +268,7 @@ export function useDashboardHostShim() {
         // filtering everyone else (§6.3).
         selectionBus.disposeInstance(instanceId);
         // Drop this instance's server-side sel_<id> temp table (§6.5/§6.9).
-        api.disposeSelection?.();
+        dataAPI.disposePublishedRowSet();
       }
 
       return { host, dispose };

@@ -16,7 +16,7 @@ import {
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { ND_PORT_KINDS, type NdPortKind } from "@/components/nd/nd-port";
 import { humanizedCapabilities } from "@/core/node/capability-docs";
-import { getDescriptor, listDescriptors } from "@/core/node/registry";
+import { getDefinition, listDefinitions } from "@/core/node/registry";
 import type { NodePort } from "@ndea/sdk";
 import { useTheme } from "@/ThemeProvider";
 import { DocsContext } from "./docs-context";
@@ -26,7 +26,7 @@ import { DocsContext } from "./docs-context";
  * root, and exposes imperative openers via `useDocs()`:
  *   · ⌘K / Ctrl+K → the docs search palette (`CommandDialog`)
  *   · openDocs(type) → the node's full reference (`Sheet`)
- * Content is sourced from the descriptor's `NodeDoc` + ports + capabilities —
+ * Content is sourced from the definition's documentation, ports, and capabilities —
  * no MDX pipeline yet (tiers 2–3 rich prose land with it). See the plan doc.
  */
 export function DocsProvider({ children }: { children: ReactNode }) {
@@ -97,12 +97,12 @@ function DocsCommand({
   onPick: (nodeType: string) => void;
 }) {
   const { theme, toggle } = useTheme();
-  // Recompute when opened so newly-registered descriptors are included.
+  // Recompute when opened so newly registered definitions are included.
   const entries = useMemo(
     () =>
       open
-        ? listDescriptors()
-            .filter((d) => d.doc)
+        ? listDefinitions()
+            .filter((definition) => definition.documentation)
             .toSorted((a, b) => a.title.localeCompare(b.title))
         : [],
     [open],
@@ -118,14 +118,14 @@ function DocsCommand({
             const kind = (d.outputs[0]?.kind ?? d.inputs[0]?.kind ?? "pred") as NdPortKind;
             return (
               <CommandItem
-                key={d.id}
-                value={`${d.title} ${d.doc?.summary ?? ""}`}
-                onSelect={() => onPick(d.id)}
+                key={d.ref.nodeTypeId}
+                value={`${d.title} ${d.documentation?.summary ?? ""}`}
+                onSelect={() => onPick(d.ref.nodeTypeId)}
                 className="gap-2.5"
               >
                 <NodeGlyph kind={kind} />
                 <span className="font-medium">{d.title}</span>
-                <span className="truncate text-muted-foreground">{d.doc?.summary}</span>
+                <span className="truncate text-muted-foreground">{d.documentation?.summary}</span>
               </CommandItem>
             );
           })}
@@ -170,7 +170,7 @@ function DocsCommand({
   );
 }
 
-/* ── full-docs sheet — one node's reference, from structured descriptor data ── */
+/* ── full-docs sheet — one node's reference, from structured definition data ── */
 
 function PortRow({ port, out }: { port: NodePort; out: boolean }) {
   const spec = ND_PORT_KINDS[port.kind as NdPortKind];
@@ -191,17 +191,17 @@ function PortRow({ port, out }: { port: NodePort; out: boolean }) {
         <span className="ml-1.5 text-text-muted">
           {out ? "out" : "in"} · {spec.label}
         </span>
-        {port.doc && <p className="mt-0.5 text-muted-foreground leading-snug">{port.doc}</p>}
+        {port.documentation && <p className="mt-0.5 text-muted-foreground leading-snug">{port.documentation}</p>}
       </div>
     </div>
   );
 }
 
 function NodeDocsSheet({ nodeType, onClose }: { nodeType: string | null; onClose: () => void }) {
-  const descriptor = nodeType ? getDescriptor(nodeType) : undefined;
-  const doc = descriptor?.doc;
-  const open = Boolean(descriptor && doc);
-  const caps = descriptor ? humanizedCapabilities(descriptor.capabilities) : [];
+  const definition = nodeType ? getDefinition(nodeType) : undefined;
+  const doc = definition?.documentation;
+  const open = Boolean(definition && doc);
+  const caps = definition ? humanizedCapabilities(definition.capabilities) : [];
 
   return (
     <Sheet
@@ -211,14 +211,14 @@ function NodeDocsSheet({ nodeType, onClose }: { nodeType: string | null; onClose
       }}
     >
       <SheetContent side="right" className="w-[400px]">
-        {descriptor && doc ? (
+        {definition && doc ? (
           <>
             <SheetHeader>
               <div className="flex items-center gap-2">
                 <span className="rounded-full border border-primary/30 bg-primary/15 px-1.5 py-0.5 font-semibold text-[8px] text-primary uppercase tracking-wide">
-                  {descriptor.kind}
+                  {definition.role}
                 </span>
-                <SheetTitle className="text-[15px]">{descriptor.title}</SheetTitle>
+                <SheetTitle className="text-[15px]">{definition.title}</SheetTitle>
               </div>
               <SheetDescription>{doc.summary}</SheetDescription>
             </SheetHeader>
@@ -234,14 +234,14 @@ function NodeDocsSheet({ nodeType, onClose }: { nodeType: string | null; onClose
                 )}
               </section>
 
-              {(descriptor.inputs.length > 0 || descriptor.outputs.length > 0) && (
+              {(definition.inputs.length > 0 || definition.outputs.length > 0) && (
                 <section>
                   <h4 className="mb-2 font-semibold text-[9px] text-text-muted uppercase tracking-wide">Connections</h4>
                   <div className="flex flex-col gap-2.5">
-                    {descriptor.inputs.map((p) => (
+                    {definition.inputs.map((p) => (
                       <PortRow key={p.id} port={p} out={false} />
                     ))}
-                    {descriptor.outputs.map((p) => (
+                    {definition.outputs.map((p) => (
                       <PortRow key={p.id} port={p} out />
                     ))}
                   </div>

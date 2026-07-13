@@ -15,7 +15,7 @@ import { useCallback, useSyncExternalStore } from "react";
 import { focusObs } from "@/nodes/gallery/routing";
 import { GalleryPane } from "@/nodes/gallery/GalleryPane";
 import { predicateToSql } from "@/lib/mosaic-helpers";
-import type { NodeViewProps } from "@ndea/sdk";
+import type { NodeBodyProps } from "@/core/node/app-node-host";
 
 export interface GalleryConfig {
   /** Reserved: per-instance gallery layout (Phase 3). */
@@ -24,12 +24,12 @@ export interface GalleryConfig {
 
 export type GalleryOptions = Record<string, never>;
 
-export function GalleryPluginView({ host }: NodeViewProps<GalleryConfig, GalleryOptions>) {
+export function GalleryPluginView({ host }: NodeBodyProps<GalleryConfig>) {
   // host.inputSelection is a Mosaic Selection that MUTATES IN PLACE on re-cook
   // and notifies Mosaic clients via "value" events — NOT React. Bridge it so the
   // unwired gate AND GalleryPane's query key recompute when the wired input
   // changes; without this the crops go stale after the upstream re-cooks.
-  const selection = host.inputSelection;
+  const selection = host.inputPredicate;
   const subscribe = useCallback(
     (onChange: () => void) => {
       selection.addEventListener("value", onChange);
@@ -44,10 +44,10 @@ export function GalleryPluginView({ host }: NodeViewProps<GalleryConfig, Gallery
   // host.highlight.set so a shared sync group ("A") fans it out to Scatter +
   // Idetik; the read reflects the group's effective focus so the card lights up.
   const subscribeHighlight = useCallback(
-    (onChange: () => void) => host.highlight.subscribe?.(onChange) ?? (() => {}),
+    (onChange: () => void) => host.focus.subscribe?.(onChange) ?? (() => {}),
     [host],
   );
-  const highlightId = useSyncExternalStore(subscribeHighlight, () => host.highlight.get());
+  const highlightId = useSyncExternalStore(subscribeHighlight, () => host.focus.get());
   const onSelect = useCallback((id: string | null) => focusObs(host, id), [host]);
 
   if (predicate == null) {

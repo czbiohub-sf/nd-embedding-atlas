@@ -4,8 +4,8 @@ import type { ComponentType } from "react";
 import type { ZodType } from "zod";
 import type { NdPortKind } from "@/components/nd/nd-port";
 import { andPreds, type CookFn, type GraphEngine, type Predicate } from "@/core/graph/engine";
-import { getNode, listNodes } from "@/core/node/registry";
-import { defineNode, type JsonValue, type NodeSpec } from "@ndea/sdk";
+import { getNode, listNodes, type AppGraphNodeSpec } from "@/core/node/registry";
+import type { JsonValue } from "@ndea/sdk";
 import type { Metadata } from "@/types";
 import type { WH, WsNode, WsNodeKind, WsNodeType, WsValue } from "./types";
 
@@ -79,8 +79,9 @@ export interface EngineRegisterCtx {
   readonly engine: GraphEngine<WsValue>;
 }
 
-export interface WsNodeSpec<C = unknown> extends NodeSpec {
+export interface WsNodeSpec<C = unknown> extends AppGraphNodeSpec {
   config?: ZodType<C>;
+  configVersion?: number;
   type: WsNodeType;
   kind: WsNodeKind;
   pluginId?: string | null;
@@ -95,18 +96,18 @@ export interface WsNodeSpec<C = unknown> extends NodeSpec {
   checkpoint?: boolean;
 }
 
-export function inKindsOf(spec: NodeSpec): NdPortKind[] {
+export function inKindsOf(spec: AppGraphNodeSpec): NdPortKind[] {
   return spec.inputs.map((p) => p.kind as NdPortKind);
 }
-export function outKindOf(spec: NodeSpec): NdPortKind {
+export function outKindOf(spec: AppGraphNodeSpec): NdPortKind {
   return (spec.outputs[0]?.kind as NdPortKind) ?? "pred";
 }
 
 export function defineWsNode<C>(spec: WsNodeSpec<C>): WsNodeSpec<C> {
-  return defineNode(spec);
+  return spec;
 }
 
-export function isWsNodeSpec(s: NodeSpec | undefined): s is WsNodeSpec {
+export function isWsNodeSpec(s: AppGraphNodeSpec | undefined): s is WsNodeSpec {
   return !!s && typeof (s as WsNodeSpec).cook === "function";
 }
 

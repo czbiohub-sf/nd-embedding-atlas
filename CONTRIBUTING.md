@@ -16,6 +16,10 @@ bun install
 The root install resolves `apps/*` and `packages/*`. Documentation has its
 own dependency graph and lockfile under `docs/`.
 
+Read [`VOCABULARY.md`](./VOCABULARY.md) before naming or moving a public
+concept. It defines package ownership, identity domains, durable-boundary
+posture, and the canonical Node Workspace language.
+
 ## Workspace layout
 
 ```text
@@ -50,7 +54,9 @@ vp run gen
 ./dist/ndea doctor
 ```
 
-See [`AGENTS.md`](./AGENTS.md) for the full command catalogue, project layout, key abstractions, and gotchas. That file is the source of truth.
+See [`AGENTS.md`](./AGENTS.md) for the full command catalogue, project layout,
+key abstractions, and gotchas. `AGENTS.md` owns workflow guidance;
+[`VOCABULARY.md`](./VOCABULARY.md) owns terminology.
 
 ## Code style
 
@@ -58,7 +64,7 @@ Enforced by `vp check`:
 
 - **TypeScript 6 strict** — no implicit any, `import type` for type-only imports
 - **Oxlint** + **Oxfmt** — config lives in `vite.config.ts`
-- 4-space indent, double quotes, trailing commas, semicolons
+- 2-space indent, double quotes, trailing commas, semicolons
 - `@/` path alias → `apps/ndea/src/frontend/`
 - Shared packages import only exported `@ndea/*` entrypoints; `bun run check:boundaries`
   rejects package-to-app imports and relative

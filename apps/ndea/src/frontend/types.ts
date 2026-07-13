@@ -1,3 +1,5 @@
+import type { TrajectoryFrame } from "@ndea/protocol";
+
 export type {
   CommitAnnotationsResponse,
   CommitDatasetReport,
@@ -6,6 +8,7 @@ export type {
   ObsInfo,
   ObsBbox,
 } from "@ndea/protocol";
+export type { TrajectoryFrame };
 
 /** Pan/zoom state for a scatter view. */
 export interface ViewState {
@@ -18,21 +21,6 @@ export interface AxisState {
   obsmKey: string;
   xDim: number;
   yDim: number;
-}
-
-// ── Trajectory ────────────────────────────────────────────────────────────
-
-export interface TrajectoryFrame {
-  t: number;
-  emb_x: number;
-  emb_y: number;
-  spatial_x: number;
-  spatial_y: number;
-  category?: number;
-  rowIndex?: number;
-  datasetKey?: string;
-  /** Per-obs Z plane, when the dataset provides one. Crops render at this Z. */
-  z?: number;
 }
 
 export interface TrajectoryData {

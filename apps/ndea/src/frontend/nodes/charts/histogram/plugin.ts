@@ -1,31 +1,29 @@
 /** histogram plugin descriptor — eager metadata; the body is behind the lazy load(). */
 
-import { defineDescriptor, type NodeCapability } from "@ndea/sdk";
-import type { HistogramConfig, HistogramOptions } from "./view";
+import { z } from "zod";
+import { defineNode, exactNodeTypeRef, nodeConfigVersion } from "@ndea/sdk";
+import { mountReactNodeBody } from "@/core/node/react-node-body";
+import type { HistogramConfig } from "./view";
 
-declare module "@/core/node/registry-types" {
-  interface NodeTypeMap {
-    histogram: { config: HistogramConfig; options: HistogramOptions };
-  }
-}
+const CAPABILITIES = ["data-read", "predicate-publish", "row-set-subscribe"] as const;
 
-const CAPABILITIES = new Set<NodeCapability>(["read", "selection-out", "selection-in"]);
-
-export const histogramDescriptor = defineDescriptor<HistogramConfig, HistogramOptions>({
-  id: "histogram",
+export const histogramDefinition = defineNode({
+  ref: exactNodeTypeRef("histogram", "1.0.0"),
   title: "Histogram",
-  kind: "view",
-  inputs: [{ id: "filter-in", kind: "pred", label: "Filter" }],
-  outputs: [{ id: "selection-out", kind: "pred", label: "Selection" }],
+  role: "view",
+  inputs: [{ id: "in", kind: "pred", label: "In" }],
+  outputs: [{ id: "out", kind: "sel", label: "Selection" }],
   capabilities: CAPABILITIES,
-  placement: { container: "docked" },
-  instancePolicy: "multi",
-  icon: "bar-chart",
+  config: {
+    schema: z.object({ field: z.string().nullable(), bins: z.number() }),
+    version: nodeConfigVersion(1),
+    defaultValue: { field: null, bins: 20 } satisfies HistogramConfig,
+  },
+  presentation: { icon: "bar-chart" },
   load: async () => {
     const { HistogramView } = await import("./view");
     return {
-      Component: HistogramView,
-      defaultConfig: { field: null, bins: 20 },
+      mountBody: (host) => mountReactNodeBody(HistogramView, host, "Histogram"),
     };
   },
 });

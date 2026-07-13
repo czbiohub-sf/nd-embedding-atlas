@@ -17,7 +17,7 @@ import { Glob } from "bun";
 import { resolve } from "node:path";
 
 import { listWsNodes } from "@/core/workspace/node-kit";
-import { registerBuiltins } from "@/core/workspace/descriptors";
+import { registerBuiltins } from "@/core/workspace/definitions";
 
 registerBuiltins();
 

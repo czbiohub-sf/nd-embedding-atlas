@@ -36,15 +36,19 @@ import { defineCoordinationType, defineGroupChannel } from "./define-type";
  * this file (which the Workspace does) populates the registry. */
 
 /** `focus` — a shared obs id among the scope's members (group channel). */
-export const FOCUS_TYPE = defineGroupChannel({ type: "focus", capability: "read", hostFacet: "highlight" });
+export const FOCUS_TYPE = defineGroupChannel({
+  type: "focus",
+  capability: "focus-coordination",
+  hostFacet: "focus",
+});
 
 /** `viewSync` — shared pan/zoom; `src` is the broadcaster (self-skip). */
 export const VIEW_SYNC_TYPE = defineCoordinationType({
   type: "viewSync",
   schema: z.object({ panX: z.number(), panY: z.number(), zoom: z.number(), src: z.string().optional() }),
   defaultValue: { panX: 0, panY: 0, zoom: 1 },
-  capability: "gpu",
-  hostFacet: "viewSync",
+  capability: "view-coordination",
+  hostFacet: "viewCoordination",
 });
 
 /** `ordering` — shared sort column + direction (table). The third type. */
@@ -52,7 +56,7 @@ export const ORDERING_TYPE = defineCoordinationType({
   type: "ordering",
   schema: z.object({ col: z.string(), dir: z.enum(["asc", "desc"]) }).nullable(),
   defaultValue: null,
-  capability: "ordering",
+  capability: "ordering-coordination",
   hostFacet: "ordering",
 });
 

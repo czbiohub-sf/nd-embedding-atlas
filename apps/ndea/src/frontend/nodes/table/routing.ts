@@ -11,7 +11,7 @@ import type { NodeHost } from "@ndea/sdk";
 
 /** Focus the obs of a clicked row. Routes through the group-aware host seam. */
 export function focusRow(host: NodeHost, rowId: string | null): void {
-  host.highlight.set(rowId);
+  host.focus.set(rowId);
 }
 
 /** Publish this table's sort onto its `ordering` coordination scope. A no-op

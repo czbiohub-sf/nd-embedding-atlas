@@ -1,85 +1,123 @@
-/** Unified registry for built-in node specs and lazy plugin descriptors. */
+/** App-local graph registry plus canonical SDK definition registrations. */
 
 import type { ZodType } from "zod";
-import { SDK_VERSION, sdkMajor, type DescriptorKind, type NodeDescriptor, type NodeSpec } from "@ndea/sdk";
+import type { NodeCapability, NodeDefinition, NodePort, NodeRole } from "@ndea/sdk";
 
-const REGISTRY = new Map<string, NodeSpec>();
-
-function isPluginDescriptor(s: NodeSpec): s is NodeDescriptor {
-  return "load" in s && typeof s.load === "function";
+export interface AppGraphNodeSpec {
+  readonly id: string;
+  readonly title: string;
+  readonly inputs: readonly NodePort[];
+  readonly outputs: readonly NodePort[];
+  readonly config?: ZodType;
 }
 
-function hasCook(s: NodeSpec): boolean {
-  return "cook" in s && typeof s.cook === "function";
+const GRAPH_NODES = new Map<string, AppGraphNodeSpec>();
+const DEFINITIONS = new Map<string, NodeDefinition>();
+
+function normalizedMetadata(value: unknown): unknown {
+  if (value instanceof Set) {
+    return [...value]
+      .map(normalizedMetadata)
+      .toSorted((left, right) =>
+        (JSON.stringify(left) ?? "undefined").localeCompare(JSON.stringify(right) ?? "undefined"),
+      );
+  }
+  if (Array.isArray(value)) return value.map(normalizedMetadata);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([, child]) => child !== undefined)
+        .toSorted(([left], [right]) => left.localeCompare(right))
+        .map(([key, child]) => [key, normalizedMetadata(child)]),
+    );
+  }
+  return value;
 }
 
-/** Plugin-backed views combine one graph spec with one lazy descriptor. */
-function isComplement(existing: NodeSpec, incoming: NodeSpec): boolean {
-  return (hasCook(existing) && isPluginDescriptor(incoming)) || (isPluginDescriptor(existing) && hasCook(incoming));
+function metadataConflict(id: string, field: string, definition: unknown, graph: unknown): Error {
+  return new Error(
+    `node "${id}" metadata conflict at "${field}": definition=${JSON.stringify(normalizedMetadata(definition))}, graph=${JSON.stringify(normalizedMetadata(graph))}`,
+  );
 }
 
-/** Graph identity and ports override descriptor metadata on conflicts. */
-function mergeHalves(existing: NodeSpec, incoming: NodeSpec): NodeSpec {
-  const descriptor = hasCook(existing) ? incoming : existing;
-  const spec = hasCook(existing) ? existing : incoming;
-  return { ...descriptor, ...spec };
+function assertMatchingMetadata(definition: NodeDefinition, graph: AppGraphNodeSpec): void {
+  const id = definition.ref.nodeTypeId as string;
+  if (graph.id !== id) throw metadataConflict(id, "id", id, graph.id);
+
+  for (const field of ["title", "inputs", "outputs"] as const) {
+    if (JSON.stringify(normalizedMetadata(definition[field])) !== JSON.stringify(normalizedMetadata(graph[field]))) {
+      throw metadataConflict(id, field, definition[field], graph[field]);
+    }
+  }
+
+  const graphRole = (graph as AppGraphNodeSpec & { kind?: unknown }).kind;
+  if ((graphRole === "view" || graphRole === "transform") && graphRole !== definition.role) {
+    throw metadataConflict(id, "role", definition.role, graphRole);
+  }
+}
+
+function assertMatchingCounterpart(id: string): void {
+  const graph = GRAPH_NODES.get(id);
+  const definition = DEFINITIONS.get(id);
+  if (graph && definition) assertMatchingMetadata(definition, graph);
 }
 
 export type RegistrationResult = { ok: true } | { ok: false; error: string };
 
-function versionError(d: NodeDescriptor): string | null {
-  if (d.sdkVersion && sdkMajor(d.sdkVersion) !== sdkMajor(SDK_VERSION)) {
-    return `plugin "${d.id}" targets sdkVersion ${d.sdkVersion}, incompatible with host ${SDK_VERSION}`;
+export function registerDefinition<Config, Capabilities extends readonly NodeCapability[]>(
+  definition: NodeDefinition<Config, Capabilities>,
+): void {
+  const id = definition.ref.nodeTypeId as string;
+  if (DEFINITIONS.has(id)) throw new Error(`duplicate node definition: ${id}`);
+  DEFINITIONS.set(id, definition as NodeDefinition);
+  try {
+    assertMatchingCounterpart(id);
+  } catch (error) {
+    DEFINITIONS.delete(id);
+    throw error;
   }
-  return null;
 }
 
-/** Registers an in-tree descriptor and throws on authoring errors. */
-export function registerDescriptor<Config, Options>(d: NodeDescriptor<Config, Options>): void {
-  const verr = versionError(d as unknown as NodeDescriptor);
-  if (verr) throw new Error(verr);
-  const existing = REGISTRY.get(d.id);
-  // Component parameter variance requires erasing descriptor generics at the map boundary.
-  const incoming = d as unknown as NodeDescriptor;
-  if (existing) {
-    if (!isComplement(existing, incoming)) throw new Error(`duplicate plugin id: ${d.id}`);
-    REGISTRY.set(d.id, mergeHalves(existing, incoming));
-    return;
+export function tryRegisterExternalDefinition(definition: NodeDefinition): RegistrationResult {
+  const id = definition.ref.nodeTypeId as string;
+  if (DEFINITIONS.has(id)) {
+    return {
+      ok: false,
+      error: `node definition "${id}" conflicts with a built-in or already-loaded plugin`,
+    };
   }
-  REGISTRY.set(d.id, incoming);
-}
-
-/** Runtime registration reports conflicts instead of throwing. */
-export function tryRegisterExternalDescriptor(d: NodeDescriptor): RegistrationResult {
-  const verr = versionError(d);
-  if (verr) return { ok: false, error: verr };
-  if (REGISTRY.has(d.id)) {
-    return { ok: false, error: `plugin id "${d.id}" conflicts with a built-in or already-loaded plugin` };
+  try {
+    registerDefinition(definition);
+    return { ok: true };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
   }
-  REGISTRY.set(d.id, d);
-  return { ok: true };
 }
 
-export function registerNode(spec: NodeSpec): void {
-  const existing = REGISTRY.get(spec.id);
-  if (existing) {
-    if (!isComplement(existing, spec)) throw new Error(`duplicate node id: ${spec.id}`);
-    REGISTRY.set(spec.id, mergeHalves(existing, spec));
-    return;
+export function registerNode(spec: AppGraphNodeSpec): void {
+  if (GRAPH_NODES.has(spec.id)) throw new Error(`duplicate graph node: ${spec.id}`);
+  GRAPH_NODES.set(spec.id, spec);
+  try {
+    assertMatchingCounterpart(spec.id);
+  } catch (error) {
+    GRAPH_NODES.delete(spec.id);
+    throw error;
   }
-  REGISTRY.set(spec.id, spec);
 }
 
-export function getNode(id: string): NodeSpec | undefined {
-  return REGISTRY.get(id);
+export function getNode(id: string): AppGraphNodeSpec | undefined {
+  return GRAPH_NODES.get(id);
 }
 
-export function listNodes(): NodeSpec[] {
-  return [...REGISTRY.values()];
+export function listNodes(): AppGraphNodeSpec[] {
+  return [...GRAPH_NODES.values()];
 }
 
 export function allNodeIds(): string[] {
-  return [...REGISTRY.keys()];
+  return [...GRAPH_NODES.keys()];
 }
 
 /** Validates persisted configuration before it enters runtime state. */
@@ -88,19 +126,18 @@ export function parseConfig<C>(
   raw: unknown,
 ): { ok: true; value: C } | { ok: false; error: string } {
   if (!spec.config) return { ok: true, value: raw as C };
-  const res = spec.config.safeParse(raw);
-  return res.success ? { ok: true, value: res.data } : { ok: false, error: res.error.message };
+  const result = spec.config.safeParse(raw);
+  return result.success ? { ok: true, value: result.data } : { ok: false, error: result.error.message };
 }
 
-export function getDescriptor(id: string): NodeDescriptor | undefined {
-  const s = REGISTRY.get(id);
-  return s && isPluginDescriptor(s) ? s : undefined;
+export function getDefinition(id: string): NodeDefinition | undefined {
+  return DEFINITIONS.get(id);
 }
 
-export function listDescriptors(): NodeDescriptor[] {
-  return [...REGISTRY.values()].filter(isPluginDescriptor);
+export function listDefinitions(): NodeDefinition[] {
+  return [...DEFINITIONS.values()];
 }
 
-export function listByKind(k: DescriptorKind): NodeDescriptor[] {
-  return listDescriptors().filter((p) => p.kind === k);
+export function listByRole(role: NodeRole): NodeDefinition[] {
+  return listDefinitions().filter((definition) => definition.role === role);
 }

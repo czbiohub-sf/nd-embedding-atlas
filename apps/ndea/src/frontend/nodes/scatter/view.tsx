@@ -11,7 +11,7 @@
 import { ScatterContent } from "@/nodes/scatter/ScatterContent";
 import { HostProvider } from "@/core/host/host-context";
 import { panelId } from "@/nodes/scatter/gpu/types";
-import type { NodeViewProps } from "@ndea/sdk";
+import type { NodeBodyProps } from "@/core/node/app-node-host";
 
 export interface ScatterConfig {
   obsmKey: string | null;
@@ -24,7 +24,7 @@ export interface ScatterOptions {
   pointOpacity: number;
 }
 
-export function ScatterPluginView({ host }: NodeViewProps<ScatterConfig, ScatterOptions>) {
+export function ScatterPluginView({ host }: NodeBodyProps<ScatterConfig>) {
   // Put the host on context so the scatter subtree (incl. the GPU host's device
   // lease) can read host.* without prop-drilling. The Phase-2b conversion of
   // ScatterContent's internals to host.* consumes this same provider.
@@ -36,7 +36,7 @@ export function ScatterPluginView({ host }: NodeViewProps<ScatterConfig, Scatter
         initialColorByColumn={host.config.colorByColumn}
         // workspace containers expose a header slot — the toolbar rides the
         // node/tile header there; containers without one get the docked row
-        toolbarTarget={host.ui.container.headerEl}
+        toolbarTarget={host.bodyHeaderElement}
       />
     </HostProvider>
   );

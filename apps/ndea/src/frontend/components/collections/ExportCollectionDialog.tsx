@@ -26,7 +26,14 @@ import {
 } from "@/components/ui/dialog";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import type { Collection } from "@ndea/protocol";
+import {
+  type Collection,
+  CollectionExportConflictResponseSchema,
+  type CollectionExportConflictResponse,
+  CollectionExportResponseSchema,
+  ErrorResponseSchema,
+  ExportDirectoryResponseSchema,
+} from "@ndea/protocol";
 
 const RECENT_DIRS_KEY = "ndea:collections:export-recent-dirs";
 const MAX_RECENT_DIRS = 5;
@@ -70,17 +77,6 @@ interface Props {
   onOpenChange: (open: boolean) => void;
 }
 
-interface ExportSuccess {
-  output_path: string;
-  n_obs: number;
-  size_bytes: number;
-}
-
-interface ConflictState {
-  existing_path: string;
-  existing_size_bytes: number;
-}
-
 export function ExportCollectionDialog({ collection, open, onOpenChange }: Props) {
   const [format, setFormat] = useState<"csv" | "parquet">("parquet");
   const [outputDir, setOutputDir] = useState("");
@@ -88,7 +84,7 @@ export function ExportCollectionDialog({ collection, open, onOpenChange }: Props
   const [defaultDir, setDefaultDir] = useState("");
   const [recentDirs, setRecentDirs] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
-  const [conflict, setConflict] = useState<ConflictState | null>(null);
+  const [conflict, setConflict] = useState<CollectionExportConflictResponse | null>(null);
   const [genericError, setGenericError] = useState<string | null>(null);
 
   // Reset state every time the dialog opens.
@@ -106,13 +102,14 @@ export function ExportCollectionDialog({ collection, open, onOpenChange }: Props
       try {
         const res = await fetch("/api/export-dir");
         if (!res.ok) throw new Error(`${res.status}`);
-        const data = (await res.json()) as { default_dir: string };
+        const data = ExportDirectoryResponseSchema.parse(await res.json());
         if (cancelled) return;
         setDefaultDir(data.default_dir);
         setOutputDir(data.default_dir);
       } catch {
         if (cancelled) return;
         setOutputDir("");
+        setGenericError("Unable to load the default export directory. Enter a directory manually.");
       }
     })();
     return () => {
@@ -147,7 +144,7 @@ export function ExportCollectionDialog({ collection, open, onOpenChange }: Props
       });
 
       if (res.status === 409) {
-        const data = (await res.json()) as ConflictState;
+        const data = CollectionExportConflictResponseSchema.parse(await res.json());
         setConflict(data);
         toast.dismiss(toastId);
         setSubmitting(false);
@@ -155,11 +152,11 @@ export function ExportCollectionDialog({ collection, open, onOpenChange }: Props
       }
 
       if (!res.ok) {
-        const errBody = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(errBody.error ?? `${res.status} ${res.statusText}`);
+        const errBody = ErrorResponseSchema.safeParse(await res.json().catch(() => null));
+        throw new Error(errBody.success ? errBody.data.error : `${res.status} ${res.statusText}`);
       }
 
-      const data = (await res.json()) as ExportSuccess;
+      const data = CollectionExportResponseSchema.parse(await res.json());
       const sizeKb = Math.max(1, Math.round(data.size_bytes / 1024));
       toast.success(`Exported ${data.n_obs.toLocaleString()} obs · ${sizeKb.toLocaleString()} KB`, {
         id: toastId,

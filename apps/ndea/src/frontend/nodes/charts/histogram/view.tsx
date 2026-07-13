@@ -14,7 +14,7 @@ import type { Coordinator, Selection } from "@uwdata/mosaic-core";
 import { type FilterExpr, cast, column } from "@uwdata/mosaic-sql";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import type { NodeViewProps } from "@ndea/sdk";
+import type { NodeBodyProps } from "@/core/node/app-node-host";
 import { useContainerSize } from "@/hooks/useContainerSize";
 import { useMosaicClient } from "@/hooks/useMosaicClient";
 import { filterExprToExpr, toRows } from "@/lib/mosaic-helpers";
@@ -39,7 +39,7 @@ const CHART_HEIGHT = 64;
 const AXIS_HEIGHT = 18;
 const TOTAL_HEIGHT = CHART_HEIGHT + AXIS_HEIGHT;
 
-export function HistogramView({ host }: NodeViewProps<HistogramConfig, HistogramOptions>) {
+export function HistogramView({ host }: NodeBodyProps<HistogramConfig>) {
   const { coordinator, table, inputSelection, field, setField } = useChartLeaf(host);
   const bins = host.config.bins ?? 20;
   const onFilter = useCallback((sql: string | null) => publishChartFilter(host, sql), [host]);

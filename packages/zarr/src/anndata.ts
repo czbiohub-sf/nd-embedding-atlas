@@ -39,11 +39,11 @@ export function detectAnnData(rootAttrs: Record<string, unknown>): boolean {
 export async function parseAnnData(group: ZarrGroup, storePath?: string): Promise<ParsedAnnData> {
   const attrs = (group.attrs ?? {}) as Record<string, unknown>;
   const obs = await readAxisFrame(group, "obs", storePath, /*required*/ true);
-  const varDf = await readAxisFrame(group, "var", storePath, /*required*/ false);
+  const varFrame = await readAxisFrame(group, "var", storePath, /*required*/ false);
   return {
     kind: "anndata",
     obs,
-    var: varDf,
+    var: varFrame,
     attrs,
     group,
     storePath,
@@ -84,8 +84,8 @@ async function readAxisFrame(
 
 // ─── Accessor (internal) ────────────────────────────────────────────────────
 
-// TypedArray union for dense matrix results
-type TypedArray =
+// Typed-array representations returned for dense AnnData matrices.
+type DenseMatrixData =
   | Float32Array
   | Float64Array
   | Int8Array
@@ -97,15 +97,15 @@ type TypedArray =
 
 /** Result type for dense arrays. */
 export interface DenseResult {
-  data: TypedArray;
+  data: DenseMatrixData;
   shape: number[];
 }
 
 /** Result type for getX / getLayer — sparse or dense. */
 export type MatrixResult = SparseArray | DenseResult;
 
-/** Internal view over the relevant slice of `ParsedAnnData` / `ParsedMuData`. */
-interface AxisSource {
+/** Internal AnnData axis view over a parsed store. */
+interface AnnDataAxisSource {
   obs?: AnnDataFrame;
   var?: AnnDataFrame;
   group?: ZarrGroup;
@@ -114,43 +114,24 @@ interface AxisSource {
 
 /**
  * Accessor for AnnData stores with lazy X/layer loading and sel/isel selection.
- *
- * @example
- * ```ts
- * import { open, AnnDataAccessor } from "axial";
- *
- * const tree = await open("./data.zarr");
- * const adata = AnnDataAccessor.from(tree);
- *
- * // Lazy load X
- * const X = await adata.getX();
- *
- * // Select T-cells and load their expression
- * const tcells = adata.sel({ cell_type: "T-cell" });
- * const tcellX = await tcells.getX();
- *
- * // Integer indexing
- * const subset = adata.isel({ obs: [0, 1, 2], var: [10, 20, 30] });
- * const subsetX = await subset.getX();
- * ```
  */
 export class AnnDataAccessor {
-  private readonly _source: AxisSource;
+  private readonly _axisSource: AnnDataAxisSource;
   private readonly _group: ZarrGroup | undefined;
   private readonly _storePath: string | undefined;
   private readonly _obsIndices: number[] | null;
   private readonly _varIndices: number[] | null;
 
   constructor(
-    source: AxisSource,
+    axisSource: AnnDataAxisSource,
     group?: ZarrGroup,
     storePath?: string,
     obsIndices?: number[] | null,
     varIndices?: number[] | null,
   ) {
-    this._source = source;
-    this._group = group ?? source.group;
-    this._storePath = storePath ?? source.storePath;
+    this._axisSource = axisSource;
+    this._group = group ?? axisSource.group;
+    this._storePath = storePath ?? axisSource.storePath;
     this._obsIndices = obsIndices ?? null;
     this._varIndices = varIndices ?? null;
   }
@@ -167,14 +148,14 @@ export class AnnDataAccessor {
 
   /** The obs DataFrame (already loaded). */
   get obs(): AnnDataFrame {
-    const o = this._source.obs;
+    const o = this._axisSource.obs;
     if (!o) throw new Error("No obs DataFrame available");
     return o;
   }
 
   /** The var DataFrame (already loaded). */
   get var(): AnnDataFrame {
-    const v = this._source.var;
+    const v = this._axisSource.var;
     if (!v) throw new Error("No var DataFrame available");
     return v;
   }
@@ -192,14 +173,14 @@ export class AnnDataAccessor {
   /** Number of selected observations. */
   get nObs(): number {
     if (this._obsIndices) return this._obsIndices.length;
-    const idx = this._source.obs?.index;
+    const idx = this._axisSource.obs?.index;
     return idx ? idx.length : 0;
   }
 
   /** Number of selected variables. */
   get nVar(): number {
     if (this._varIndices) return this._varIndices.length;
-    const idx = this._source.var?.index;
+    const idx = this._axisSource.var?.index;
     return idx ? idx.length : 0;
   }
 
@@ -332,7 +313,7 @@ export class AnnDataAccessor {
     const location = this._group.resolve(path);
 
     // obsm can be a plain array or a group with encoding-type: array
-    let data: TypedArray;
+    let data: DenseMatrixData;
     let shape: number[];
 
     try {
@@ -343,7 +324,7 @@ export class AnnDataAccessor {
         // It's still just a zarr array at the same path — re-open as array
         const arr = await zarr.open(location, { kind: "array" });
         const result = await zarr.get(arr);
-        data = result.data as TypedArray;
+        data = result.data as DenseMatrixData;
         shape = [...arr.shape];
       } else {
         throw new Error("Not a plain array group");
@@ -352,7 +333,7 @@ export class AnnDataAccessor {
       // Open as array directly
       const arr = await zarr.open(location, { kind: "array" });
       const result = await zarr.get(arr);
-      data = result.data as TypedArray;
+      data = result.data as DenseMatrixData;
       shape = [...arr.shape];
     }
 
@@ -420,7 +401,7 @@ export class AnnDataAccessor {
 
     if (signal?.aborted) throw signal.reason ?? new Error("Aborted");
 
-    const data = result.data as TypedArray;
+    const data = result.data as DenseMatrixData;
     const col = data instanceof Float32Array ? data : Float32Array.from(data as unknown as ArrayLike<number>);
 
     if (col.length !== nRows) {
@@ -480,7 +461,7 @@ export class AnnDataAccessor {
       });
     }
 
-    return new AnnDataAccessor(this._source, this._group, this._storePath, candidates, this._varIndices);
+    return new AnnDataAccessor(this._axisSource, this._group, this._storePath, candidates, this._varIndices);
   }
 
   /**
@@ -527,7 +508,7 @@ export class AnnDataAccessor {
       }
     }
 
-    return new AnnDataAccessor(this._source, this._group, this._storePath, newObs, newVar);
+    return new AnnDataAccessor(this._axisSource, this._group, this._storePath, newObs, newVar);
   }
 
   // ---------------------------------------------------------------------------
@@ -559,7 +540,7 @@ export class AnnDataAccessor {
     // Dense array
     const arr = await zarr.open(location, { kind: "array" });
     const result = await zarr.get(arr);
-    const data = result.data as TypedArray;
+    const data = result.data as DenseMatrixData;
     const shape = [...arr.shape];
 
     return this._applyDenseSelection(data, shape);
@@ -663,7 +644,7 @@ export class AnnDataAccessor {
    * Apply obs/var selection to a dense 2D array.
    * shape is [nObs, nVar] (or [nObs, nComponents] for obsm).
    */
-  private _applyDenseSelection(data: TypedArray, shape: number[]): DenseResult {
+  private _applyDenseSelection(data: DenseMatrixData, shape: number[]): DenseResult {
     if (!this._obsIndices && !this._varIndices) {
       return { data, shape };
     }
@@ -675,7 +656,7 @@ export class AnnDataAccessor {
     const outRows = obsIdx ? obsIdx.length : nRows;
     const outCols = varIdx ? varIdx.length : nCols;
 
-    const Ctor = data.constructor as new (len: number) => TypedArray;
+    const Ctor = data.constructor as new (len: number) => DenseMatrixData;
     const out = new Ctor(outRows * outCols);
 
     const rowIter = obsIdx ?? Array.from({ length: nRows }, (_, i) => i);

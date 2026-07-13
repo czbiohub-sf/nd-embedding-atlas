@@ -18,7 +18,7 @@ import { FOCUS_TYPE, ORDERING_TYPE, VIEW_SYNC_TYPE } from "./coordination";
 
 // The cross-view facet names that exist on NodeHost (host.ts). A type whose
 // hostFacet isn't one of these can't be reached through the seam.
-const KNOWN_HOST_FACETS = new Set(["highlight", "viewSync", "ordering"]);
+const KNOWN_HOST_FACETS = new Set(["focus", "viewCoordination", "ordering"]);
 
 describe("registered coordination types are well-formed", () => {
   test("focus, viewSync, and ordering are all registered", () => {
@@ -54,7 +54,7 @@ describe("define-time gate rejects malformed types (KD3/R5)", () => {
         schema: z.string().nullable(),
         defaultValue: null,
         capability: "" as never,
-        hostFacet: "highlight",
+        hostFacet: "focus",
       }),
     ).toThrow(/capability/);
   });
@@ -65,7 +65,7 @@ describe("define-time gate rejects malformed types (KD3/R5)", () => {
         type: "__bad_facet",
         schema: z.string().nullable(),
         defaultValue: null,
-        capability: "read",
+        capability: "data-read",
         hostFacet: "",
       }),
     ).toThrow(/hostFacet/);
@@ -77,8 +77,8 @@ describe("define-time gate rejects malformed types (KD3/R5)", () => {
         type: "__bad_value",
         schema: z.any(),
         defaultValue: (() => 0) as never, // a function — not JsonValue
-        capability: "read",
-        hostFacet: "highlight",
+        capability: "data-read",
+        hostFacet: "focus",
       }),
     ).toThrow(/serializ/i);
   });
@@ -89,8 +89,8 @@ describe("define-time gate rejects malformed types (KD3/R5)", () => {
         type: "__bad_schema",
         schema: z.number(),
         defaultValue: "not a number" as never,
-        capability: "read",
-        hostFacet: "highlight",
+        capability: "data-read",
+        hostFacet: "focus",
       }),
     ).toThrow(/schema/);
   });
@@ -98,7 +98,7 @@ describe("define-time gate rejects malformed types (KD3/R5)", () => {
 
 describe("defineGroupChannel sugar", () => {
   test("registers a nullable-string group channel reachable via the registry", () => {
-    defineGroupChannel({ type: "__test_group", capability: "read", hostFacet: "highlight" });
+    defineGroupChannel({ type: "__test_group", capability: "data-read", hostFacet: "focus" });
     const spec = listCoordinationTypes().find((s) => s.type === "__test_group");
     expect(spec).toBeDefined();
     expect(spec!.defaultValue).toBeNull();

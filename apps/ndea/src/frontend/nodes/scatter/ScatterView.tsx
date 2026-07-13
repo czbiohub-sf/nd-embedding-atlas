@@ -109,11 +109,11 @@ export function ScatterView({
   // host.highlight.set (NOT the global dashboard state), so read the focused obs
   // from there; fall back to the global highlightId prop on the host-less path.
   // (Mirrors CropViewer — candidate for a shared useScopedHighlight hook.)
-  const scopedHighlight = Boolean(host?.highlight.subscribe);
-  const [scopedHighlightId, setScopedHighlightId] = useState<string | null>(() => host?.highlight.get() ?? null);
+  const scopedHighlight = Boolean(host?.focus.subscribe);
+  const [scopedHighlightId, setScopedHighlightId] = useState<string | null>(() => host.focus.get());
   useEffect(() => {
-    if (!host?.highlight.subscribe) return;
-    return host.highlight.subscribe(setScopedHighlightId);
+    if (!host.focus.subscribe) return;
+    return host.focus.subscribe(setScopedHighlightId);
   }, [host]);
   const effectiveHighlightId = scopedHighlight ? scopedHighlightId : highlightId;
 
@@ -472,7 +472,7 @@ export function ScatterView({
   useEffect(() => {
     // incoming (non-self) pan/zoom on this node's view-sync scope, via the host
     // seam (coordination-backed in the workspace; global-bus on the dashboard).
-    return host.viewSync.subscribe?.((s) => {
+    return host.viewCoordination.subscribe?.((s) => {
       hostRef.current?.setViewState({ panX: s.panX, panY: s.panY, zoom: s.zoom });
     });
   }, [host]);

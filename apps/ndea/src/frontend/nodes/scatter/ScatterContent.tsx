@@ -57,8 +57,8 @@ export function ScatterContent({
   const { metadata } = state;
   // Focus read: scoped to this instance's host (sync group / focus wire), so the
   // point-info pane follows group focus — not the global dashboard highlight.
-  const [highlightId, setHighlightId] = useState<string | null>(() => host.highlight.get());
-  useEffect(() => host.highlight.subscribe?.(setHighlightId), [host]);
+  const [highlightId, setHighlightId] = useState<string | null>(() => host.focus.get());
+  useEffect(() => host.focus.subscribe?.(setHighlightId), [host]);
   const trajectory = selectAnyTrajectory(state.trajectories);
   const activeTrajectories = Object.values(state.trajectories).filter((t): t is NonNullable<typeof t> => t != null);
   const { coordinator, brushSelection, table } = meta;

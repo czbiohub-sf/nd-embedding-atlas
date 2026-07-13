@@ -111,8 +111,8 @@ export type ColumnData =
 /**
  * Column-oriented DataFrame shape — the natural output of `readDataFrame`.
  *
- * Not exported as the public API — consumers see `DataFrame` from
- * `./data-frame.ts` which wraps this with a stable indexed-access surface.
+ * `LazyDataFrame` from `./data-frame.ts` wraps this with a stable
+ * indexed-access surface for most consumers.
  */
 export interface AnnDataFrame extends Iterable<Record<string, Scalar | null>> {
   readonly index: string[] | Int32Array;

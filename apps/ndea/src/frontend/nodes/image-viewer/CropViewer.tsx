@@ -24,8 +24,8 @@ interface CropViewerProps {
  */
 function ViewerObsReadout() {
   const host = useHost();
-  const [highlightId, setHighlightId] = useState<string | null>(() => host.highlight.get());
-  useEffect(() => host.highlight.subscribe?.(setHighlightId), [host]);
+  const [highlightId, setHighlightId] = useState<string | null>(() => host.focus.get());
+  useEffect(() => host.focus.subscribe?.(setHighlightId), [host]);
   const { data } = useQuery({
     queryKey: ["obs", highlightId],
     queryFn: async () => {
@@ -50,8 +50,8 @@ function ViewerObsReadout() {
 export function CropViewer({ channelInstance = "docked", datasetKey }: CropViewerProps) {
   // Focus read: scoped to this instance's host (sync group / focus wire).
   const host = useHost();
-  const [highlightId, setHighlightId] = useState<string | null>(() => host.highlight.get());
-  useEffect(() => host.highlight.subscribe?.(setHighlightId), [host]);
+  const [highlightId, setHighlightId] = useState<string | null>(() => host.focus.get());
+  useEffect(() => host.focus.subscribe?.(setHighlightId), [host]);
 
   const hasEverSelected = useRef(false);
   const [cropSize, setCropSize] = useState(100);

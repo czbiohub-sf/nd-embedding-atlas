@@ -1,44 +1,108 @@
 import { describe, expect, test } from "bun:test";
 import { z } from "zod";
-import { defineDescriptor, defineNode, SDK_VERSION, type NodeDescriptor } from "./index.ts";
+import {
+  defineNode,
+  exactNodeTypeRef,
+  nodeConfigVersion,
+  PluginManifestSchema,
+  SDK_VERSION,
+  type NodeDefinition,
+  type NodeModule,
+  type PluginAPI,
+  type PluginFactory,
+} from "@ndea/sdk";
 
-interface TestConfig {
-  label: string;
-}
-
-const descriptor: NodeDescriptor<TestConfig, Record<string, never>> = {
-  id: "test-view",
-  title: "Test view",
-  kind: "view",
-  inputs: [],
-  outputs: [],
-  config: z.object({ label: z.string() }),
-  capabilities: new Set(["read"]),
-  placement: { container: "docked" },
-  instancePolicy: "multi",
-  load() {
-    return Promise.resolve({
-      Component: () => null,
-      defaultConfig: { label: "test" },
-    });
+const transformDefinition = defineNode({
+  ref: exactNodeTypeRef("example/transform", "1.0.0"),
+  title: "Example transform",
+  role: "transform",
+  inputs: [{ id: "in", kind: "pred", label: "In" }],
+  outputs: [{ id: "out", kind: "pred", label: "Out" }],
+  capabilities: ["data-read", "predicate-publish", "compute"] as const,
+  config: {
+    schema: z.object({ threshold: z.number() }),
+    version: nodeConfigVersion(1),
+    defaultValue: { threshold: 0 },
   },
-};
+  load: () =>
+    Promise.resolve<NodeModule<unknown, "data-read" | "predicate-publish" | "compute">>({
+      createRuntime(host) {
+        return {
+          recompute() {
+            host.publishPredicate("transform", null);
+          },
+          dispose() {},
+        };
+      },
+    }),
+});
 
-describe("plugin SDK", () => {
-  test("stamps descriptors with the package compatibility version", () => {
-    const defined = defineDescriptor(descriptor);
-    expect(defined.sdkVersion).toBe(SDK_VERSION);
-    expect(SDK_VERSION).toBe("0.1.0");
+const mountedViewDefinition = defineNode({
+  ref: exactNodeTypeRef("example/view", "1.0.0"),
+  title: "Example view",
+  role: "view",
+  inputs: [{ id: "in", kind: "sel", label: "Rows" }],
+  outputs: [{ id: "focus", kind: "focus", label: "Focus" }],
+  capabilities: ["focus-coordination"] as const,
+  load: () =>
+    Promise.resolve<NodeModule<unknown, "focus-coordination">>({
+      mountBody(host) {
+        const element = document.createElement("div");
+        element.dataset.instanceId = host.instanceId;
+        let disposed = false;
+        return {
+          element,
+          dispose() {
+            if (disposed) return;
+            disposed = true;
+            element.remove();
+          },
+        };
+      },
+    }),
+});
+
+describe("canonical plugin SDK barrel", () => {
+  test("registers transform and framework-neutral mounted view definitions", async () => {
+    const registered: NodeDefinition[] = [];
+    const api: PluginAPI = {
+      registerNode(definition) {
+        registered.push(definition as NodeDefinition);
+      },
+    };
+    const factory: PluginFactory = (pluginAPI) => {
+      pluginAPI.registerNode(transformDefinition);
+      pluginAPI.registerNode(mountedViewDefinition);
+      return () => {};
+    };
+
+    const dispose = await factory(api);
+    expect(registered.map((definition) => definition.ref.nodeTypeId as string)).toEqual([
+      "example/transform",
+      "example/view",
+    ]);
+    expect(registered[1]?.load).toBeFunction();
+    expect(dispose).toBeFunction();
+    expect(SDK_VERSION as string).toBe("0.1.0");
   });
 
-  test("preserves built-in node specializations", () => {
-    const node = defineNode({
-      id: "test-node",
-      title: "Test node",
-      inputs: [],
-      outputs: [],
-      custom: true,
+  test("re-exports the protocol-owned plugin manifest parser", () => {
+    const manifest = PluginManifestSchema.parse({
+      manifestSchemaVersion: 1,
+      pluginId: "example.plugin",
+      pluginPackageVersion: "1.2.3",
+      sdkVersionRange: "^0.1.0",
+      displayName: "Example plugin",
+      clientEntry: "dist/client.js",
+      staticAssets: ["dist/client.css"],
+      hostCompatibility: {
+        hostVersionRange: ">=0.1.0",
+        platforms: ["darwin", "linux"],
+      },
+      license: "MIT",
+      permissions: [{ permission: "gpu", reason: "Renders a large point cloud" }],
     });
-    expect(node.custom).toBe(true);
+
+    expect(manifest.permissions[0]?.permission).toBe("gpu");
   });
 });

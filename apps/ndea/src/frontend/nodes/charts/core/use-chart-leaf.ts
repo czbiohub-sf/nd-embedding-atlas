@@ -26,7 +26,7 @@ export function useChartLeaf<C extends ChartLeafConfig>(host: NodeHost<C>): Char
   return {
     coordinator: host.data.coordinator,
     table: host.data.table,
-    inputSelection: host.inputSelection,
+    inputSelection: host.inputPredicate,
     field: host.config.field,
     setField,
   };

@@ -1,8 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-
-interface VarLayersResponse {
-  layers: string[];
-}
+import { VarLayersResponseSchema, type VarLayersResponse } from "@ndea/protocol";
+import { ZodError } from "zod";
 
 /**
  * Fetches available expression layer names once per session.
@@ -15,9 +13,10 @@ export function useLayerNames(): string[] {
     queryFn: async () => {
       const res = await fetch("/api/var/layers");
       if (!res.ok) throw new Error(`var/layers fetch failed: ${res.status}`);
-      return res.json() as Promise<VarLayersResponse>;
+      return VarLayersResponseSchema.parse(await res.json());
     },
     staleTime: Infinity,
+    throwOnError: (error) => error instanceof ZodError,
   });
 
   return data?.layers ?? ["X"];

@@ -12,11 +12,11 @@
 
 import type { Coordinator } from "@uwdata/mosaic-core";
 import { andPreds, type Predicate } from "@/core/graph/engine";
-import { asInstanceId } from "@ndea/sdk";
+import { nodeInstanceId } from "@ndea/sdk";
 import { makeTransformHost } from "@/core/graph/graph-host";
-import { transformFilterDescriptor } from "@/nodes/transform-filter/plugin";
-import { createThresholdFilterInstance } from "@/nodes/transform-filter/instance";
-import type { ThresholdFilterConfig, ThresholdFilterOptions } from "@/nodes/transform-filter/view";
+import { transformFilterDefinition } from "@/nodes/transform-filter/plugin";
+import { createThresholdFilterRuntime } from "@/nodes/transform-filter/instance";
+import type { ThresholdFilterConfig } from "@/nodes/transform-filter/view";
 import { ThresholdFilterView } from "@/nodes/transform-filter/view";
 import { defineWsNode, predSqls } from "@/core/workspace/node-kit";
 import { useWorkspace } from "@/core/workspace/workspace-context";
@@ -51,9 +51,9 @@ export const thresholdNode = defineWsNode<ThresholdFilterConfig>({
     // Driven by the real plugin instance through a transform-scoped host:
     // recompute publishes via host.publishPredicate → captured → cook result.
     let captured: Predicate = null;
-    const host = makeTransformHost<ThresholdFilterConfig, ThresholdFilterOptions>({
-      instanceId: asInstanceId(ctx.id),
-      meta: transformFilterDescriptor,
+    const host = makeTransformHost<ThresholdFilterConfig>({
+      instanceId: nodeInstanceId(ctx.id),
+      definitionRef: transformFilterDefinition.ref,
       config: { column: null, threshold: 0 },
       coordinator: ctx.coordinator as Coordinator,
       table: ctx.table,
@@ -63,13 +63,12 @@ export const thresholdNode = defineWsNode<ThresholdFilterConfig>({
       },
       onConfigPatch: () => ctx.markDirty(),
     });
-    const instance = createThresholdFilterInstance(host);
-    ctx.onDispose(() => instance.dispose());
+    const runtime = createThresholdFilterRuntime(host);
+    ctx.onDispose(() => runtime.dispose());
     ctx.setTransformHost(host);
     ctx.addNode("transform", (inputs, pluginCtx) => {
       captured = null;
-      // NodeInstance contract is unchanged: one composed predicate per port
-      instance.recompute?.(new Map([["in", andPreds(predSqls(inputs))]]), pluginCtx);
+      void runtime.recompute?.(new Map([["in", [andPreds(predSqls(inputs))]]]), pluginCtx);
       return { kind: "pred", sql: captured };
     });
   },

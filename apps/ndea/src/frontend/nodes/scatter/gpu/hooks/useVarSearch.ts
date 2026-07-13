@@ -1,11 +1,9 @@
 import { useDebouncer } from "@tanstack/react-pacer";
 import { useQuery } from "@tanstack/react-query";
+import { VarNamesResponseSchema, type VarNamesResponse } from "@ndea/protocol";
 import { useEffect, useState } from "react";
+import { ZodError } from "zod";
 import { varKeys } from "@/lib/query-keys";
-
-interface VarNamesResponse {
-  names: string[];
-}
 
 export interface VarSearchResult {
   names: string[];
@@ -37,9 +35,10 @@ export function useVarSearch(query: string, modality?: string): VarSearchResult 
       if (modality) params.set("modality", modality);
       const res = await fetch(`/api/var/names?${params}`);
       if (!res.ok) throw new Error(`var/names fetch failed: ${res.status}`);
-      return res.json() as Promise<VarNamesResponse>;
+      return VarNamesResponseSchema.parse(await res.json());
     },
     staleTime: 60_000,
+    throwOnError: (error) => error instanceof ZodError,
   });
 
   return {

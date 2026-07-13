@@ -1,8 +1,8 @@
-/** Host services available to one plugin instance. */
+/** Capability-gated services scoped to one live node occurrence. */
 
 import type { Coordinator, MosaicClient, Selection } from "@uwdata/mosaic-core";
 import type { CommitAnnotationsResponse, Metadata } from "@ndea/protocol";
-import type { MountReason, NodeCapability, NodeMeta } from "./types";
+import type { ExactNodeTypeRef, NodeCapability, NodeInstanceId } from "./node";
 
 export interface DeviceInfo {
   readonly device: GPUDevice;
@@ -16,134 +16,143 @@ export interface DeviceLease {
   release(): void;
 }
 
-export type NodeInstanceId = string & { readonly __brand: "NodeInstanceId" };
-
-export function asInstanceId(s: string): NodeInstanceId {
-  return s as NodeInstanceId;
-}
-
 export interface DataContext {
   readonly coordinator: Coordinator;
   readonly table: string;
   readonly metadata: Metadata;
 }
 
-/** Selection predicate backed by an instance-scoped temporary table. */
-export interface SelectionToken {
+/** Predicate backed by an instance-scoped temporary row-set table. */
+export interface RowSetPublication {
   readonly predicate: string;
   readonly token: number;
   readonly count: number;
   readonly table: string;
 }
 
-/** Optional methods appear only when the node declares the matching capability. */
-export interface DataApi {
+export interface DataQueryAPI {
   query<T = unknown>(sql: string, signal?: AbortSignal): Promise<T>;
-  publishSelection?(rowIds: number[]): Promise<SelectionToken>;
-  disposeSelection?(): void;
-  categorize?(col: string, max?: number): Promise<unknown>;
+  categorize?(column: string, max?: number): Promise<unknown>;
   loadVarColumn?(name: string, layer?: string): Promise<unknown>;
   fetchCrop?(params: unknown): Promise<Blob>;
-  listAnnotationColumns?(): Promise<{ name: string; dtype: string }[]>;
-  createAnnotationColumn?(name: string, dtype?: "categorical" | "string" | "integer" | "float"): Promise<void>;
-  writeAnnotationByPredicate?(column: string, label: string, predicate: string): Promise<{ n: number }>;
+}
+
+export interface RowSetPublishAPI {
+  publishRowSet(rowIds: number[]): Promise<RowSetPublication>;
+  disposePublishedRowSet(): void;
+}
+
+export interface AnnotationWriteAPI {
+  listAnnotationColumns(): Promise<{ name: string; dtype: string }[]>;
+  createAnnotationColumn(name: string, dtype?: "categorical" | "string" | "integer" | "float"): Promise<void>;
+  writeAnnotationByPredicate(column: string, label: string, predicate: string): Promise<{ n: number }>;
   /**
    * Commits full columns to AnnData `.obs`; unannotated rows become NA.
    * The write is irreversible.
    */
-  commitAnnotations?(opts: { dryRun: boolean; columns?: string[] }): Promise<CommitAnnotationsResponse>;
+  commitAnnotations(options: { dryRun: boolean; columns?: string[] }): Promise<CommitAnnotationsResponse>;
 }
 
-export interface ViewSyncApi {
+type CapabilityService<
+  Capabilities extends NodeCapability,
+  Required extends NodeCapability,
+  Service,
+> = Required extends Capabilities ? Service : object;
+
+export type NodeDataAPI<Capabilities extends NodeCapability = NodeCapability> = DataQueryAPI &
+  CapabilityService<Capabilities, "row-set-publish", RowSetPublishAPI> &
+  CapabilityService<Capabilities, "annotation-write", AnnotationWriteAPI>;
+
+export interface ViewCoordinationAPI {
   readonly panX: number;
   readonly panY: number;
   readonly zoom: number;
   readonly linked: boolean;
   broadcast(state: { panX: number; panY: number; zoom: number }): void;
   toggleLock(): void;
-  subscribe?(cb: (state: { panX: number; panY: number; zoom: number }) => void): () => void;
+  subscribe?(callback: (state: { panX: number; panY: number; zoom: number }) => void): () => void;
 }
 
-export interface OrderingApi {
+export interface OrderingCoordinationAPI {
   get(): { col: string; dir: "asc" | "desc" } | null;
   set(value: { col: string; dir: "asc" | "desc" } | null): void;
-  subscribe?(cb: (value: { col: string; dir: "asc" | "desc" } | null) => void): () => void;
+  subscribe?(callback: (value: { col: string; dir: "asc" | "desc" } | null) => void): () => void;
 }
 
-export interface HighlightApi {
+export interface FocusCoordinationAPI {
   get(): string | null;
   set(id: string | null): void;
-  subscribe?(cb: (id: string | null) => void): () => void;
+  subscribe?(callback: (id: string | null) => void): () => void;
 }
 
-export interface RenderApi {
-  readonly pointRadius: number;
-  setPointRadius(r: number): void;
+export interface NodeNotificationAPI {
+  notify(message: string, level?: "info" | "warn" | "error"): void;
 }
 
-/**
- * Container-independent UI surface. Plugins cast `panelApi` to the native
- * container type when needed.
- */
-export interface PanelContext {
-  readonly id: string;
-  readonly title?: string;
-  readonly panelApi?: unknown;
-  /** Optional portal target for a toolbar no taller than 26px. */
-  readonly headerEl?: HTMLElement;
-  close?(): void;
-}
-
-export interface UiApi {
-  readonly container: PanelContext;
-  notify(msg: string, level?: "info" | "warn" | "error"): void;
-}
-
-export interface OptionsBuilder<Options> {
-  defaults(o: Options): void;
-}
-
-export type NodeSessionEvent = "start" | "switch" | "shutdown";
-
-/** State scoped to one plugin invocation rather than the instance lifetime. */
-export interface NodeContext {
-  readonly signal: AbortSignal;
-  readonly epoch: number;
-}
-
-export interface NodeHost<Config = unknown, Options = unknown> {
+interface NodeHostBase<Config, Capabilities extends NodeCapability> {
   readonly instanceId: NodeInstanceId;
-  readonly meta: NodeMeta;
-  readonly reason: MountReason;
-  readonly capabilities: ReadonlySet<NodeCapability>;
-
-  readonly data: DataContext;
-  registerClient(client: MosaicClient): () => void;
-
-  readonly inputSelection: Selection;
-  externalRowSet(): readonly number[] | null;
-  onExternalRowSet(cb: (rowIds: readonly number[] | null) => void): () => void;
-
-  publishPredicate(facet: string, sql: string | null): void;
-  publishRowSet(ids: number[]): void;
-  /** Clears the broadcast; unlike `publishRowSet([])`, downstream sees no active set. */
-  clearRowSet(): void;
-
-  readonly viewSync: ViewSyncApi;
-  readonly highlight: HighlightApi;
-  readonly render: RenderApi;
-  readonly ordering?: OrderingApi;
-
-  readonly ui: UiApi;
-
-  acquireDeviceLease(): Promise<DeviceLease>;
-  readonly api: DataApi;
-
+  readonly definitionRef: ExactNodeTypeRef;
+  readonly capabilities: ReadonlySet<Capabilities>;
   readonly config: Config;
   patchConfig(patch: Partial<Config>): void;
-  readonly options: Options;
-
-  onDispose(fn: () => void): void;
+  readonly notifications: NodeNotificationAPI;
+  onDispose(disposer: () => void): void;
   track(unsubscribe: () => void): void;
   readonly signal: AbortSignal;
 }
+
+interface DataReadHost<Capabilities extends NodeCapability> {
+  readonly data: DataContext;
+  registerClient(client: MosaicClient): () => void;
+  readonly inputPredicate: Selection;
+  readonly dataAPI: NodeDataAPI<Capabilities>;
+}
+
+interface RowSetSubscribeHost {
+  externalRowSet(): readonly number[] | null;
+  onExternalRowSet(callback: (rowIds: readonly number[] | null) => void): () => void;
+}
+
+interface PredicatePublishHost {
+  publishPredicate(facet: string, sql: string | null): void;
+}
+
+interface RowSetPublishHost {
+  publishRowSet(ids: number[]): void;
+  /** Clears the broadcast; publishing `[]` instead keeps an active empty set. */
+  clearRowSet(): void;
+}
+
+interface FocusHost {
+  readonly focus: FocusCoordinationAPI;
+}
+
+interface ViewCoordinationHost {
+  readonly viewCoordination: ViewCoordinationAPI;
+}
+
+interface OrderingCoordinationHost {
+  readonly ordering: OrderingCoordinationAPI;
+}
+
+interface GPUHost {
+  acquireDeviceLease(): Promise<DeviceLease>;
+}
+
+/**
+ * Optional host services exist in the type only when the definition declares
+ * their capability. Using the default capability union exposes the full host to
+ * app adapters; author definitions should preserve their inferred narrow union.
+ */
+export type NodeHost<Config = unknown, Capabilities extends NodeCapability = NodeCapability> = NodeHostBase<
+  Config,
+  Capabilities
+> &
+  CapabilityService<Capabilities, "data-read", DataReadHost<Capabilities>> &
+  CapabilityService<Capabilities, "row-set-subscribe", RowSetSubscribeHost> &
+  CapabilityService<Capabilities, "predicate-publish", PredicatePublishHost> &
+  CapabilityService<Capabilities, "row-set-publish", RowSetPublishHost> &
+  CapabilityService<Capabilities, "focus-coordination", FocusHost> &
+  CapabilityService<Capabilities, "view-coordination", ViewCoordinationHost> &
+  CapabilityService<Capabilities, "ordering-coordination", OrderingCoordinationHost> &
+  CapabilityService<Capabilities, "gpu-device", GPUHost>;

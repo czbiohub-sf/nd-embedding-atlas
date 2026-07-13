@@ -15,7 +15,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useColumnTypes } from "@/hooks/useColumnTypes";
-import type { NodeViewProps } from "@ndea/sdk";
+import type { NodeBodyProps } from "@/core/node/app-node-host";
+import type { TransformCapabilities } from "@/core/graph/graph-host";
 
 export interface ThresholdFilterConfig {
   /** Numeric obs column to threshold on; null until the schema resolves. */
@@ -25,7 +26,7 @@ export interface ThresholdFilterConfig {
 
 export type ThresholdFilterOptions = Record<never, never>;
 
-export function ThresholdFilterView({ host }: NodeViewProps<ThresholdFilterConfig, ThresholdFilterOptions>) {
+export function ThresholdFilterView({ host }: NodeBodyProps<ThresholdFilterConfig, TransformCapabilities>) {
   const columnTypes = useColumnTypes(host.data.coordinator);
   const numericColumns = useMemo(
     () => (columnTypes ? [...columnTypes].filter(([, t]) => t === "number").map(([c]) => c) : []),

@@ -1,8 +1,6 @@
 /**
- * zarr — labeled N-D array reader for OME-Zarr, AnnData, MuData, xarray stores.
- *
- * Originally a standalone library called "axial"; now vendored into
- * nd-embedding-atlas and trimmed to the surface actually consumed.
+ * @ndea/zarr — labeled N-D array reader for OME-Zarr, AnnData, MuData,
+ * and xarray stores.
  */
 
 // Public types consumed by server routes and startup.

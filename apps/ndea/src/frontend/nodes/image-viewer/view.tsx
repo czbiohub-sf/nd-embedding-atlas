@@ -12,7 +12,7 @@
 
 import { CropViewer } from "@/nodes/image-viewer/CropViewer";
 import { HostProvider } from "@/core/host/host-context";
-import type { NodeViewProps } from "@ndea/sdk";
+import type { NodeBodyProps } from "@/core/node/app-node-host";
 import { capabilitiesOf } from "@ndea/sdk";
 
 export interface ViewerConfig {
@@ -21,7 +21,7 @@ export interface ViewerConfig {
 
 export type ViewerOptions = Record<string, never>;
 
-export function ImageViewerPluginView({ host }: NodeViewProps<ViewerConfig, ViewerOptions>) {
+export function ImageViewerPluginView({ host }: NodeBodyProps<ViewerConfig>) {
   const datasetKey = host.config.datasetKey ?? undefined;
 
   // Plate presence is session-fixed (the descriptor's `requires: ["plate-image"]`

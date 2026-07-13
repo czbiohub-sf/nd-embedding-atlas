@@ -1,7 +1,14 @@
 # nd-embedding-atlas
 
-Interactive browser-based dashboard linking AI embeddings to source 5D (TCZYX)
-image data. Early-stage — APIs are in flux.
+Interactive browser-based Node Workspace linking AI embeddings to source 5D
+(TCZYX) image data. Early-stage — APIs are in flux.
+
+## Vocabulary
+
+[`VOCABULARY.md`](./VOCABULARY.md) defines canonical product, graph, node,
+interaction, identity, protocol, scientific, storage, and repository terms.
+Follow its package ownership and boundary-posture rules before introducing or
+renaming a public concept.
 
 ## Stack
 
@@ -27,7 +34,7 @@ apps/
     src/
       cli/                 # view, update, rollback, gc, doctor, completions
       server/              # Bun.serve routes, DuckDB, Mosaic, workers
-      frontend/            # React, Mosaic, TypeGPU/WebGPU dashboard
+      frontend/            # React, Mosaic, TypeGPU/WebGPU Node Workspace
 packages/
   protocol/src/            # Shared request/response Zod schemas
   sdk/src/                 # Node authoring and host contracts

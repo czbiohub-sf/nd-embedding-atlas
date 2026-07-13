@@ -1,12 +1,12 @@
 /**
  * NodeDocButton — Tier 1 · Peek. An info button for a node's header that opens
  * the node's contextual documentation in a click popover, sourced from the
- * descriptor's `doc` field. Click (not hover) so it's discoverable and never
+ * definition's documentation. Click (not hover) so it's discoverable and never
  * fights the node body. The single renderer for the doc tier; the reference
  * drawer (tier 2) reuses the same `NodeDoc` record. See
  * `.design/docs-integration-plan.md`.
  *
- * Renders nothing when the node type has no descriptor or no authored `doc` —
+ * Renders nothing when the node type has no definition or authored documentation —
  * only documented nodes get the button.
  */
 
@@ -17,7 +17,7 @@ import { ndIconButtonVariants } from "@/components/nd/nd-icon-button";
 import { NdIcon } from "@/components/nd/nd-icons";
 import { ND_PORT_KINDS, type NdPortKind } from "@/components/nd/nd-port";
 import { humanizedCapabilities } from "@/core/node/capability-docs";
-import { getDescriptor } from "@/core/node/registry";
+import { getDefinition } from "@/core/node/registry";
 import type { NodePort } from "@ndea/sdk";
 import { cn } from "@/lib/utils";
 
@@ -42,23 +42,23 @@ function PortToken({ port, out }: { port: NodePort; out: boolean }) {
 }
 
 export function NodeDocButton({ nodeType, compact = false }: { nodeType: string; compact?: boolean }) {
-  const descriptor = getDescriptor(nodeType);
-  const doc = descriptor?.doc;
+  const definition = getDefinition(nodeType);
+  const doc = definition?.documentation;
   const docs = useDocs();
   const [open, setOpen] = useState(false);
   // No authored docs → no button.
-  if (!descriptor || !doc) return null;
+  if (!definition || !doc) return null;
 
-  const caps = humanizedCapabilities(descriptor.capabilities);
-  const { inputs, outputs } = descriptor;
+  const caps = humanizedCapabilities(definition.capabilities);
+  const { inputs, outputs } = definition;
   const hasSig = inputs.length > 0 || outputs.length > 0;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
         data-nodrag="1"
-        title={`About ${descriptor.title}`}
-        aria-label={`About ${descriptor.title}`}
+        title={`About ${definition.title}`}
+        aria-label={`About ${definition.title}`}
         onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => e.stopPropagation()}
         className={cn(ndIconButtonVariants({ compact }), "px-[3px]")}
@@ -69,9 +69,9 @@ export function NodeDocButton({ nodeType, compact = false }: { nodeType: string;
         {/* header: kind badge + title */}
         <div className="flex items-center gap-2 px-3 pt-2.5 pb-2">
           <span className="rounded-full border border-primary/30 bg-primary/15 px-1.5 py-0.5 font-semibold text-[8px] text-primary uppercase tracking-wide">
-            {descriptor.kind}
+            {definition.role}
           </span>
-          <span className="font-semibold text-[13px] leading-none tracking-tight">{descriptor.title}</span>
+          <span className="font-semibold text-[13px] leading-none tracking-tight">{definition.title}</span>
         </div>
 
         {/* io signature: inputs → outputs */}

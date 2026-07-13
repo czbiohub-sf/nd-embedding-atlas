@@ -34,7 +34,7 @@
  * value union (pred/sel/focus) and kind-aware cooks.
  */
 
-import type { NodeContext } from "@ndea/sdk";
+import type { NodeComputeContext } from "@ndea/sdk";
 
 /** The classic edge payload: a SQL predicate, or `null` = "everything". */
 export type Predicate = string | null;
@@ -43,7 +43,7 @@ export type Predicate = string | null;
  * A node's cook function: given the RAW per-input-port value arrays (fan-in
  * order = edge insertion order), produce this node's derived output.
  */
-export type CookFn<V> = (inputs: ReadonlyMap<string, readonly V[]>, ctx: NodeContext) => V;
+export type CookFn<V> = (inputs: ReadonlyMap<string, readonly V[]>, ctx: NodeComputeContext) => V;
 
 export interface GraphNodeSpec<V> {
   id: string;
@@ -335,7 +335,7 @@ export class GraphEngine<V = Predicate> {
     this.emitTelemetry({ node: "*", type: "flush", epoch: this.epochCounter });
   }
 
-  private currentContext(): NodeContext {
+  private currentContext(): NodeComputeContext {
     return { signal: this.epochController.signal, epoch: this.epochCounter };
   }
 
@@ -343,11 +343,11 @@ export class GraphEngine<V = Predicate> {
    * Pull a node's output value. Public entry uses a private per-call visited
    * set; the cache-boundary rule means repeated pulls within one epoch are O(1).
    */
-  pull(id: string, ctx: NodeContext = this.currentContext()): V {
+  pull(id: string, ctx: NodeComputeContext = this.currentContext()): V {
     return this.pullInternal(id, ctx, new Set<string>());
   }
 
-  private pullInternal(id: string, ctx: NodeContext, visited: Set<string>): V {
+  private pullInternal(id: string, ctx: NodeComputeContext, visited: Set<string>): V {
     const node = this.nodes.get(id);
     if (!node) return undefined as V;
 

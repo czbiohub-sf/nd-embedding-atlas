@@ -25,14 +25,14 @@ import type { Location, Mutable } from "zarrita";
 import { BunFileStore } from "./bun-store.ts";
 import { asMutable } from "./zarr-boundary.ts";
 
-const enc = new TextEncoder();
-const dec = new TextDecoder();
+const TEXT_ENCODER = new TextEncoder();
+const TEXT_DECODER = new TextDecoder();
 
 // ── Custom vlen-utf8 codec (encode is unimplemented upstream) ─────────────────
 
-let _codecRegistered = false;
+let writeCodecRegistered = false;
 export function registerWriteCodec(): void {
-  if (_codecRegistered) return;
+  if (writeCodecRegistered) return;
   const reg = (zarr as unknown as { registry: Map<string, () => Promise<unknown>> }).registry;
   const getStrides = (zarr as unknown as { _zarrita_internal_getStrides: (s: number[], o: "C") => number[] })
     ._zarrita_internal_getStrides;
@@ -54,12 +54,12 @@ export function registerWriteCodec(): void {
     }
   }
   reg.set("vlen-utf8", () => Promise.resolve(WritableVLenUTF8));
-  _codecRegistered = true;
+  writeCodecRegistered = true;
 }
 
 /** numcodecs VLenUTF8 wire format: [uint32 LE count][ per item: uint32 LE byteLen | utf8 ]. */
 export function vlenEncode(strings: ArrayLike<string>): Uint8Array {
-  const parts = Array.from({ length: strings.length }, (_, i) => enc.encode(strings[i] ?? ""));
+  const parts = Array.from({ length: strings.length }, (_, i) => TEXT_ENCODER.encode(strings[i] ?? ""));
   const buf = new Uint8Array(4 + parts.reduce((n, p) => n + 4 + p.byteLength, 0));
   const dv = new DataView(buf.buffer);
   let o = 0;
@@ -81,7 +81,7 @@ function vlenDecode(bytes: Uint8Array): string[] {
   for (let i = 0; i < data.length; i++) {
     const len = view.getUint32(pos, true);
     pos += 4;
-    data[i] = dec.decode(bytes.subarray(pos, pos + len));
+    data[i] = TEXT_DECODER.decode(bytes.subarray(pos, pos + len));
     pos += len;
   }
   return data;
@@ -181,9 +181,9 @@ function alignStrings(obsNames: string[], values: Map<string, string | null>) {
 
 const V3_BYTES = [{ name: "bytes", configuration: { endian: "little" } }];
 const V3_VLEN = [{ name: "vlen-utf8", configuration: {} }];
-type Loc = Location<Mutable>;
+type WritableZarrLocation = Location<Mutable>;
 
-async function v3Numeric(loc: Loc, key: string, dtype: string, data: unknown, n: number) {
+async function v3Numeric(loc: WritableZarrLocation, key: string, dtype: string, data: unknown, n: number) {
   const arr = await zarr.create(loc.resolve(key), {
     shape: [n],
     chunkShape: [n],
@@ -195,7 +195,7 @@ async function v3Numeric(loc: Loc, key: string, dtype: string, data: unknown, n:
   await zarr.set(arr as never, null, { data, shape: [n], stride: [1] } as never);
 }
 
-async function v3StringArray(loc: Loc, key: string, strings: string[], n: number) {
+async function v3StringArray(loc: WritableZarrLocation, key: string, strings: string[], n: number) {
   const arr = await zarr.create(loc.resolve(key), {
     shape: [n],
     chunkShape: [n],
@@ -234,7 +234,8 @@ async function writeColumnV3(store: BunFileStore, col: ObsColumnInput, obsNames:
 // ── v2 writer (hand-written files) ────────────────────────────────────────────
 
 const V2_BASE = { order: "C", dimension_separator: ".", compressor: null, zarr_format: 2 };
-const writeJSON = (store: BunFileStore, key: string, obj: unknown) => store.set(key, enc.encode(JSON.stringify(obj)));
+const writeJSON = (store: BunFileStore, key: string, obj: unknown) =>
+  store.set(key, TEXT_ENCODER.encode(JSON.stringify(obj)));
 
 async function v2Numeric(store: BunFileStore, key: string, dtype: string, fill: unknown, chunk: Uint8Array, n: number) {
   await writeJSON(store, `${key}/.zarray`, {
@@ -338,18 +339,18 @@ export async function commitObsColumns(
 
   // 2. Publish: append to obs column-order LAST, atomically.
   const obsMetaKey = format === "v3" ? "/obs/zarr.json" : "/obs/.zattrs";
-  const obsMeta = JSON.parse(dec.decode(await store.get(obsMetaKey)));
+  const obsMeta = JSON.parse(TEXT_DECODER.decode(await store.get(obsMetaKey)));
   const attrs = format === "v3" ? obsMeta.attributes : obsMeta;
   const order: string[] = attrs["column-order"];
   for (const c of columns) if (!order.includes(c.name)) order.push(c.name);
-  await atomicWrite(rootPath, obsMetaKey, enc.encode(JSON.stringify(obsMeta)));
+  await atomicWrite(rootPath, obsMetaKey, TEXT_ENCODER.encode(JSON.stringify(obsMeta)));
 
   // 3. Drop stale consolidated metadata so readers re-scan the live tree.
   if (format === "v3") {
-    const rootMeta = JSON.parse(dec.decode(await store.get("/zarr.json")));
+    const rootMeta = JSON.parse(TEXT_DECODER.decode(await store.get("/zarr.json")));
     if ("consolidated_metadata" in rootMeta) {
       delete rootMeta.consolidated_metadata;
-      await atomicWrite(rootPath, "/zarr.json", enc.encode(JSON.stringify(rootMeta)));
+      await atomicWrite(rootPath, "/zarr.json", TEXT_ENCODER.encode(JSON.stringify(rootMeta)));
     }
   } else {
     await store.delete("/.zmetadata");

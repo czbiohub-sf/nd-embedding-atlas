@@ -27,9 +27,9 @@ import { createPortal } from "react-dom";
 import { PanelErrorBoundary } from "@/components/layout/PanelErrorBoundary";
 import { useDashboardHostShim } from "@/core/host/use-dashboard-host-shim";
 import { loadNodeModule } from "@/core/node/load-module";
-import type { OrderingApi, ViewSyncApi } from "@ndea/sdk";
-import { getDescriptor } from "@/core/node/registry";
-import { asInstanceId } from "@ndea/sdk";
+import type { OrderingCoordinationAPI, ViewCoordinationAPI } from "@ndea/sdk";
+import { getDefinition } from "@/core/node/registry";
+import { nodeInstanceId } from "@ndea/sdk";
 import { stringPredicate } from "@/lib/mosaic-helpers";
 import { NODE_DEFS } from "./node-defs";
 import { resolveNodeForm } from "./canvas/port-positions";
@@ -46,6 +46,7 @@ type OrderingCell = { col: string; dir: "asc" | "desc" } | null;
 function BodyOwnerInner({ nodeId, pluginId }: { nodeId: string; pluginId: string }) {
   const ws = useWorkspace();
   const module = use(loadNodeModule(pluginId));
+  const definition = getDefinition(pluginId)!;
   const makeHost = useDashboardHostShim();
 
   // Built EXACTLY ONCE per node lifetime — keyed by node identity, not
@@ -53,18 +54,16 @@ function BodyOwnerInner({ nodeId, pluginId }: { nodeId: string; pluginId: string
   // the focus store mirrors pushed focus values for host.highlight.subscribe.
   const [{ handle, input, focus }] = useState(() => {
     const sel = Selection.single();
-    const built = makeHost<unknown, unknown>({
-      instanceId: asInstanceId(nodeId),
-      meta: getDescriptor(pluginId)!,
-      reason: "graph-node",
-      config: { ...(module.defaultConfig as Record<string, unknown>) },
-      options: {},
-      panel: { id: nodeId, headerEl: ws.headerEl(nodeId) },
-      inputSelection: sel,
+    const built = makeHost<unknown>({
+      instanceId: nodeInstanceId(nodeId),
+      definition,
+      config: { ...(definition.config?.defaultValue as Record<string, unknown> | undefined) },
+      bodyHeaderElement: ws.headerEl(nodeId),
+      inputPredicate: sel,
     });
     return { handle: built, input: sel, focus: new Store<string | null>(null) };
   });
-  useEffect(() => () => handle.dispose(), [handle]);
+  const [mountError, setMountError] = useState<Error | null>(null);
 
   const off = useWsSelector((st) => st.flags[nodeId]?.off ?? false);
 
@@ -110,7 +109,7 @@ function BodyOwnerInner({ nodeId, pluginId }: { nodeId: string; pluginId: string
             t.publishPredicate(facet, sql);
           };
         }
-        if (prop === "viewSync") {
+        if (prop === "viewCoordination") {
           // Coordination-backed view-sync: a node SCOPED on the `viewSync` type
           // shares pan/zoom through coordinationSpace.viewSync[scope] with its
           // peers; an unscoped node is independent. Replaces the process-wide
@@ -123,7 +122,7 @@ function BodyOwnerInner({ nodeId, pluginId }: { nodeId: string; pluginId: string
             const scope = ws.coordination.scopeOf(nodeId, TYPE);
             return scope === undefined ? undefined : (ws.coordination.readCoordination(TYPE, scope) as ViewSyncCell);
           };
-          const api: ViewSyncApi = {
+          const api: ViewCoordinationAPI = {
             get panX() {
               return cell()?.panX ?? 0;
             },
@@ -163,7 +162,7 @@ function BodyOwnerInner({ nodeId, pluginId }: { nodeId: string; pluginId: string
           // facet; others fall through to the underlying host (undefined). A pure
           // group channel — shared sort, no per-node wire fallback. Unscoped → the
           // node keeps its own local sort (set is a no-op, get is null).
-          if (!t.capabilities.has("ordering")) return Reflect.get(t, prop, recv);
+          if (!t.capabilities.has("ordering-coordination")) return Reflect.get(t, prop, recv);
           const TYPE = "ordering";
           const read = (): OrderingCell => {
             const scope = ws.coordination.scopeOf(nodeId, TYPE);
@@ -171,7 +170,7 @@ function BodyOwnerInner({ nodeId, pluginId }: { nodeId: string; pluginId: string
               ? null
               : ((ws.coordination.readCoordination(TYPE, scope) as OrderingCell) ?? null);
           };
-          const api: OrderingApi = {
+          const api: OrderingCoordinationAPI = {
             get: read,
             set: (v) => {
               const scope = ws.coordination.scopeOf(nodeId, TYPE);
@@ -182,7 +181,7 @@ function BodyOwnerInner({ nodeId, pluginId }: { nodeId: string; pluginId: string
           };
           return api;
         }
-        if (prop === "highlight") {
+        if (prop === "focus") {
           // Coordination-aware: a node SCOPED on the `focus` type reads+writes the
           // shared cell (coordinationSpace.focus[scope]) so every node on that scope
           // highlights the same obs. An unscoped node keeps the per-node /
@@ -232,12 +231,12 @@ function BodyOwnerInner({ nodeId, pluginId }: { nodeId: string; pluginId: string
             },
           };
         }
-        if (prop === "api") {
+        if (prop === "dataAPI") {
           const api = Reflect.get(t, prop, recv) as unknown as Record<string, unknown>;
           return new Proxy(api, {
             get(at, ap, arecv) {
               const v = Reflect.get(at, ap, arecv);
-              if (ap === "publishSelection" && typeof v === "function") {
+              if (ap === "publishRowSet" && typeof v === "function") {
                 return async (ids: number[]) => {
                   // the server-side token table is still wanted (the predicate
                   // references it) — only the global publish is bypassed
@@ -258,8 +257,31 @@ function BodyOwnerInner({ nodeId, pluginId }: { nodeId: string; pluginId: string
     });
   }, [handle, ws, nodeId, focus]);
 
-  const Component = module.Component;
-  return <Component host={edgeBoundHost} />;
+  useEffect(() => {
+    if (!module.mountBody) return;
+    let active = true;
+    let mounted: Awaited<ReturnType<NonNullable<typeof module.mountBody>>> | undefined;
+    void Promise.resolve(module.mountBody(edgeBoundHost))
+      .then((body) => {
+        if (!active) {
+          body.dispose();
+          return;
+        }
+        mounted = body;
+        ws.dockEl(nodeId).appendChild(body.element);
+      })
+      .catch((error: unknown) => {
+        if (active) setMountError(error instanceof Error ? error : new Error(String(error)));
+      });
+    return () => {
+      active = false;
+      mounted?.dispose();
+    };
+  }, [module, edgeBoundHost, ws, nodeId]);
+  useEffect(() => () => handle.dispose(), [handle]);
+
+  if (mountError) throw mountError;
+  return null;
 }
 
 function BodyOwner({ nodeId, pluginId, label }: { nodeId: string; pluginId: string; label: string }) {

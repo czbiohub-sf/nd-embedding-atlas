@@ -12,44 +12,25 @@
  */
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { z } from "zod";
 import {
   type AppendMembersBody,
+  CollectionListResponseSchema,
   CollectionMutationResultSchema,
   type CollectionMutationResult,
   CollectionSchema,
   type Collection,
+  type CreateCollectionBody,
+  ErrorResponseSchema,
+  type PatchCollectionBody,
 } from "@ndea/protocol";
 import type { CollectionId } from "../../lib/branded-types";
 
-const CollectionListSchema = z.array(CollectionSchema);
+export type { AppendMembersBody, CreateCollectionBody, PatchCollectionBody };
 
-interface CreateCollectionBase {
-  name: string;
-  color?: string | null;
-  notes?: string | null;
-  tags?: string[];
-  provenance?: unknown;
+function errorMessage(data: unknown, fallback: string): string {
+  const parsed = ErrorResponseSchema.safeParse(data);
+  return parsed.success ? parsed.data.error : fallback;
 }
-
-export type CreateCollectionBody =
-  | (CreateCollectionBase & {
-      members: { dataset_key: string; obs_name: string }[];
-      row_indices?: never;
-      from_scatter_selection?: never;
-    })
-  | (CreateCollectionBase & { row_indices: number[]; members?: never; from_scatter_selection?: never })
-  | (CreateCollectionBase & { from_scatter_selection: true; members?: never; row_indices?: never });
-
-export interface PatchCollectionBody {
-  name?: string;
-  color?: string | null;
-  notes?: string | null;
-  tags?: string[];
-  version: number;
-}
-
-export type { AppendMembersBody };
 
 export function useCollections() {
   return useQuery({
@@ -58,13 +39,9 @@ export function useCollections() {
       const r = await fetch("/api/collections");
       const data: unknown = await r.json().catch(() => null);
       if (!r.ok) {
-        const msg =
-          data && typeof data === "object" && "error" in data && typeof (data as { error: unknown }).error === "string"
-            ? (data as { error: string }).error
-            : `HTTP ${r.status}`;
-        throw new Error(msg);
+        throw new Error(errorMessage(data, `HTTP ${r.status}`));
       }
-      return CollectionListSchema.parse(data);
+      return CollectionListResponseSchema.parse(data);
     },
     staleTime: 30_000,
   });
@@ -84,8 +61,8 @@ export function useCreateCollection() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      const data = await r.json();
-      if (!r.ok) throw new Error(data?.error ?? `HTTP ${r.status}`);
+      const data: unknown = await r.json();
+      if (!r.ok) throw new Error(errorMessage(data, `HTTP ${r.status}`));
       return CollectionMutationResultSchema.parse(data);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["collections"] }),
@@ -101,8 +78,8 @@ export function usePatchCollection() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(args.body),
       });
-      const data = await r.json();
-      if (!r.ok) throw new Error(data?.error ?? `HTTP ${r.status}`);
+      const data: unknown = await r.json();
+      if (!r.ok) throw new Error(errorMessage(data, `HTTP ${r.status}`));
       return CollectionSchema.parse(data);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["collections"] }),
@@ -115,12 +92,8 @@ export function useDeleteCollection() {
     mutationFn: async (id: CollectionId): Promise<void> => {
       const r = await fetch(`/api/collections/${id}`, { method: "DELETE" });
       if (!r.ok) {
-        const data = await r.json().catch(() => null);
-        const msg =
-          data && typeof data === "object" && "error" in data && typeof (data as { error: unknown }).error === "string"
-            ? (data as { error: string }).error
-            : `HTTP ${r.status}`;
-        throw new Error(msg);
+        const data: unknown = await r.json().catch(() => null);
+        throw new Error(errorMessage(data, `HTTP ${r.status}`));
       }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["collections"] }),
@@ -143,15 +116,10 @@ export function useAddMembers() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(args.body),
       });
-      const data = await r.json();
-      if (!r.ok) throw new Error(data?.error ?? `HTTP ${r.status}`);
+      const data: unknown = await r.json();
+      if (!r.ok) throw new Error(errorMessage(data, `HTTP ${r.status}`));
       return CollectionMutationResultSchema.parse(data);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["collections"] }),
   });
 }
-
-// Activate is no longer a per-call mutation — it's driven by the
-// activeCollectionStore subscriber in DashboardProvider, which calls
-// POST /api/active-selection directly. Components flip activation by
-// calling setActiveCollection(id) from ActiveCollectionStore.

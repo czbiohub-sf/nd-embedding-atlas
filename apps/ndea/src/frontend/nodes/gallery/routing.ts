@@ -11,5 +11,5 @@ import type { NodeHost } from "@ndea/sdk";
 
 /** Focus the obs under a clicked crop. Routes through the group-aware host seam. */
 export function focusObs(host: NodeHost, rowId: string | null): void {
-  host.highlight.set(rowId);
+  host.focus.set(rowId);
 }

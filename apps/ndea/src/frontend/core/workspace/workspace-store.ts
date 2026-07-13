@@ -14,9 +14,10 @@ import { Store } from "@tanstack/store";
 import type { Coordinator } from "@uwdata/mosaic-core";
 
 import type { NodeHost } from "@ndea/sdk";
+import type { TransformCapabilities } from "@/core/graph/graph-host";
 import { Coordination } from "@/core/coordination/coordination";
 import { andPreds, GraphEngine, type Predicate } from "@/core/graph/engine";
-import type { ThresholdFilterConfig, ThresholdFilterOptions } from "@/nodes/transform-filter/view";
+import type { ThresholdFilterConfig } from "@/nodes/transform-filter/view";
 import type { Metadata } from "@/types";
 import type { NdForm } from "@/components/nd/nd-resolve-form";
 import { toRows } from "@/lib/mosaic-helpers";
@@ -687,7 +688,7 @@ export class Workspace {
       markDirty: () => this.engine.markDirty(id),
       onDispose: (fn) => this.disposers.set(id, fn),
       setTransformHost: (host) =>
-        this.transformHosts.set(id, host as NodeHost<ThresholdFilterConfig, ThresholdFilterOptions>),
+        this.transformHosts.set(id, host as NodeHost<ThresholdFilterConfig, TransformCapabilities>),
     };
   }
 
@@ -998,7 +999,7 @@ export class Workspace {
   requestFit: ((durationMs?: number) => void) | null = null;
 
   /** transform-node hosts (the node body renders the plugin Component against this) */
-  readonly transformHosts = new Map<string, NodeHost<ThresholdFilterConfig, ThresholdFilterOptions>>();
+  readonly transformHosts = new Map<string, NodeHost<ThresholdFilterConfig, TransformCapabilities>>();
   /** cache-node pinned predicates — presence == "cached"; absence == "live"
    *  (the cook passes its input through). The pin layer over live propagation. */
   readonly frozenPredicates = new Map<string, Predicate>();

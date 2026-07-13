@@ -4,7 +4,7 @@
  * `<PluginMount>`, float, graph node body).
  */
 
-import { getDescriptor } from "./registry";
+import { getDefinition } from "./registry";
 import type { NodeModule } from "@ndea/sdk";
 
 const moduleCache = new Map<string, Promise<NodeModule>>();
@@ -12,9 +12,9 @@ const moduleCache = new Map<string, Promise<NodeModule>>();
 export function loadNodeModule(id: string): Promise<NodeModule> {
   let p = moduleCache.get(id);
   if (!p) {
-    const descriptor = getDescriptor(id);
-    if (!descriptor) return Promise.reject(new Error(`unknown plugin: ${id}`));
-    p = descriptor.load();
+    const definition = getDefinition(id);
+    if (!definition?.load) return Promise.reject(new Error(`node definition has no module: ${id}`));
+    p = definition.load();
     moduleCache.set(id, p);
   }
   return p;

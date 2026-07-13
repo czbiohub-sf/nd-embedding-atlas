@@ -6,6 +6,7 @@
  */
 
 import { deriveDataCapabilities } from "../capabilities.ts";
+import { MetadataSchema, type ObsmEntry } from "../protocol.ts";
 import type { ViewerState, DatasetMeta } from "../state.ts";
 import { obsmColumnPrefix } from "../store.ts";
 import { exportDir } from "./export.ts";
@@ -26,13 +27,6 @@ function firstVarCount(state: ViewerState): number {
     return total;
   }
   return handle.var.length;
-}
-
-interface ObsmEntry {
-  prefix: string;
-  n_dims: number | null;
-  loaded: boolean;
-  modality?: string;
 }
 
 /** Build obsm metadata including loaded status + modality tag for MuData keys. */
@@ -138,5 +132,6 @@ export function handleMetadata(state: ViewerState, config: DatasetMeta): Respons
     isMultimodal: Array.isArray(modalities) && modalities.length > 0,
   });
 
+  MetadataSchema.parse(result);
   return Response.json(result);
 }

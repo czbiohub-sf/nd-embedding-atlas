@@ -1,3 +1,4 @@
+import { type VarColumnBody, VarColumnResponseSchema, VarColumnStatusResponseSchema } from "@ndea/protocol";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { WsReconnectError, wsClient } from "@/lib/ws-client";
 
@@ -14,16 +15,6 @@ export interface VarColumnResult {
   status: VarColumnStatus;
   column: string | null;
   error: string | null;
-}
-
-interface StatusMsg {
-  status: string;
-  column?: string;
-  error?: string;
-}
-
-interface PostVarColumnResponse {
-  task_id: string;
 }
 
 /**
@@ -86,7 +77,7 @@ export function useVarColumn(options?: UseVarColumnOptions): VarColumnResult {
             handleError(`Poll failed: ${res.status}`);
             return;
           }
-          const data = (await res.json()) as StatusMsg;
+          const data = VarColumnStatusResponseSchema.parse(await res.json());
           if (data.status === "ready") {
             clearInterval(handle);
             handleReady(data.column ?? null);
@@ -113,7 +104,14 @@ export function useVarColumn(options?: UseVarColumnOptions): VarColumnResult {
       const sub = wsClient.subscribe(
         "var-column/status",
         { task_id: taskId },
-        (msg: StatusMsg) => {
+        (raw) => {
+          const parsed = VarColumnStatusResponseSchema.safeParse(raw);
+          if (!parsed.success) {
+            sub.unsubscribe();
+            handleError("Invalid var-column status response");
+            return;
+          }
+          const msg = parsed.data;
           if (msg.status === "ready") {
             sub.unsubscribe();
             handleReady(msg.column ?? null);
@@ -146,8 +144,11 @@ export function useVarColumn(options?: UseVarColumnOptions): VarColumnResult {
       const run = async () => {
         let taskId: string;
         try {
-          const body: Record<string, string> = { name, layer };
-          if (modality) body.modality = modality;
+          const body = {
+            name,
+            layer,
+            ...(modality ? { modality } : {}),
+          } satisfies VarColumnBody;
           const res = await fetch("/api/var-column", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -158,7 +159,7 @@ export function useVarColumn(options?: UseVarColumnOptions): VarColumnResult {
             handleError(text);
             return;
           }
-          const data = (await res.json()) as PostVarColumnResponse;
+          const data = VarColumnResponseSchema.parse(await res.json());
           taskId = data.task_id;
         } catch (err) {
           handleError(String(err));

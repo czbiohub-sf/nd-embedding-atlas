@@ -124,11 +124,11 @@ export function useScatterBrushSync({
         return;
       }
       // Large (≥5000): stage server-side, then reference the temp table.
-      if (h.api.publishSelection) {
+      if (h.dataAPI.publishRowSet) {
         // Per-instance sel_<id> (§6.5). Bail if the instance is being torn down so
         // a flush-after-dispose can't strand an orphaned sel_<id> table.
         if (h.signal.aborted) return;
-        const token = await h.api.publishSelection(rowIds);
+        const token = await h.dataAPI.publishRowSet(rowIds);
         if (h.signal.aborted) return;
         publishLasso(h, token.predicate); // references sel_<id> + /* tok=N */
         return;

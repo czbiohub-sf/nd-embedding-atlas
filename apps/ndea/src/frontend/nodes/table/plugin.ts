@@ -1,35 +1,33 @@
 /** Table plugin descriptor (PLUGIN-ARCHITECTURE §8, §10.4). */
 
-import { defineDescriptor, type NodeCapability } from "@ndea/sdk";
-import type { TableConfig, TableOptions } from "./view";
+import { z } from "zod";
+import { defineNode, exactNodeTypeRef, nodeConfigVersion } from "@ndea/sdk";
+import { mountReactNodeBody } from "@/core/node/react-node-body";
+import type { TableConfig } from "./view";
 
-declare module "@/core/node/registry-types" {
-  interface NodeTypeMap {
-    table: { config: TableConfig; options: TableOptions };
-  }
-}
+const CAPABILITIES = ["data-read", "row-set-subscribe", "ordering-coordination", "focus-coordination"] as const;
 
-const CAPABILITIES = new Set<NodeCapability>(["read", "selection-in", "ordering"]);
-
-export const tableDescriptor = defineDescriptor<TableConfig, TableOptions>({
-  id: "table",
+export const tableDefinition = defineNode({
+  ref: exactNodeTypeRef("table", "1.0.0"),
   title: "Table",
-  kind: "view",
-  inputs: [{ id: "filter-in", kind: "pred", label: "Filter" }],
-  outputs: [],
+  role: "view",
+  inputs: [{ id: "in", kind: "pred", label: "In" }],
+  outputs: [{ id: "out", kind: "focus", label: "Focus" }],
   capabilities: CAPABILITIES,
-  placement: { container: "docked", side: "bottom" },
-  instancePolicy: "unique-per-container",
-  icon: "table",
-  doc: {
+  config: {
+    schema: z.object({ columns: z.array(z.string()).nullable() }),
+    version: nodeConfigVersion(1),
+    defaultValue: { columns: null } satisfies TableConfig,
+  },
+  presentation: { icon: "table" },
+  documentation: {
     summary: "Shows your cells as rows, one column per measurement.",
     use: "Use it to read exact values, sort, and scan the cells you selected.",
   },
   load: async () => {
     const { TablePluginView } = await import("./view");
     return {
-      Component: TablePluginView,
-      defaultConfig: { columns: null },
+      mountBody: (host) => mountReactNodeBody(TablePluginView, host, "Table"),
     };
   },
 });

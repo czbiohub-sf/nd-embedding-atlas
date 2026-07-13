@@ -10,32 +10,34 @@
  * transform-plugin bodies don't render yet. Chain continues by branching upstream.
  */
 
-import { defineDescriptor, type NodeCapability } from "@ndea/sdk";
-import type { AnnotateConfig, AnnotateOptions } from "./view";
+import { z } from "zod";
+import { defineNode, exactNodeTypeRef, nodeConfigVersion } from "@ndea/sdk";
+import { mountReactNodeBody } from "@/core/node/react-node-body";
+import type { AnnotateConfig } from "./view";
 
-declare module "@/core/node/registry-types" {
-  interface NodeTypeMap {
-    annotate: { config: AnnotateConfig; options: AnnotateOptions };
-  }
-}
+const CAPABILITIES = ["data-read", "annotation-write", "focus-coordination"] as const;
 
-const CAPABILITIES = new Set<NodeCapability>(["read", "annotate"]);
-
-export const annotateDescriptor = defineDescriptor<AnnotateConfig, AnnotateOptions>({
-  id: "annotate",
+export const annotateDefinition = defineNode({
+  ref: exactNodeTypeRef("annotate", "1.0.0"),
   title: "Annotate",
-  kind: "view",
-  inputs: [{ id: "filter-in", kind: "pred", label: "In" }],
-  outputs: [],
+  role: "view",
+  inputs: [{ id: "in", kind: "pred", label: "In" }],
+  outputs: [{ id: "out", kind: "focus", label: "Focus" }],
   capabilities: CAPABILITIES,
-  placement: { container: "docked" },
-  instancePolicy: "multi",
-  icon: "tag",
+  config: {
+    schema: z.object({
+      column: z.string().nullable(),
+      labels: z.array(z.string()),
+      mode: z.enum(["label", "range"]).optional(),
+    }),
+    version: nodeConfigVersion(1),
+    defaultValue: { column: null, labels: [] } satisfies AnnotateConfig,
+  },
+  presentation: { icon: "tag" },
   load: async () => {
     const { AnnotateView } = await import("./view");
     return {
-      Component: AnnotateView,
-      defaultConfig: { column: null, labels: [] },
+      mountBody: (host) => mountReactNodeBody(AnnotateView, host, "Annotate"),
     };
   },
 });

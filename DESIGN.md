@@ -1,9 +1,11 @@
 # DESIGN.md — nd-embedding-atlas · Node Workspace
 
 > Impeccable/Stitch-format visual system summary. The authoritative sources
-> are `src/frontend/app.css` (repo tokens) and `prototype/tokens.css`
+> are `apps/ndea/src/frontend/app.css` (repo tokens) and
+> `prototype/tokens.css`
 > (prototype bridge) — refresh this file via `/impeccable document` once the
 > real implementation exists.
+> Product and architecture terms follow [`VOCABULARY.md`](./VOCABULARY.md).
 
 ## Colors
 
