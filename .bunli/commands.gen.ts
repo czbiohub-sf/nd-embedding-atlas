@@ -6,17 +6,19 @@ import { createGeneratedHelpers, registerGeneratedStore } from '@bunli/core'
 
 import Doctor from '../apps/ndea/src/cli/commands/doctor.js'
 import Gc from '../apps/ndea/src/cli/commands/gc.js'
+import Plugin from '../apps/ndea/src/cli/commands/plugin/index.js'
 import Rollback from '../apps/ndea/src/cli/commands/rollback.js'
 import Update from '../apps/ndea/src/cli/commands/update.js'
 import View from '../apps/ndea/src/cli/commands/view.js'
 
 // Narrow list of command names to avoid typeof-cycles in types
-const names = ['doctor', 'gc', 'rollback', 'update', 'view'] as const
+const names = ['doctor', 'gc', 'plugin', 'rollback', 'update', 'view'] as const
 type GeneratedNames = typeof names[number]
 
 const modules: Record<GeneratedNames, Command<any>> = {
   'doctor': Doctor,
   'gc': Gc,
+  'plugin': Plugin,
   'rollback': Rollback,
   'update': Update,
   'view': View
@@ -40,6 +42,33 @@ const metadata: Record<GeneratedNames, GeneratedCommandMeta> = {
         'all': { type: 'z.coerce.boolean.default', required: true, hasDefault: true, default: false, description: 'Keep only the active version (overrides --keep)', schema: {"type":"zod","method":"default","args":[{"type":"unknown","raw":{"type":"BooleanLiteral","start":1138,"end":1143,"loc":{"start":{"line":28,"column":43,"index":1138},"end":{"line":28,"column":48,"index":1143}},"value":false}}]}, validator: '(val) => true' }
       },
       path: './apps/ndea/src/cli/commands/gc'
+    },
+  'plugin': {
+      name: 'plugin',
+      description: 'Validate and configure trusted custom-node plugins',
+      commands: [
+        {
+          name: 'plugin/validate',
+          description: 'Validate a plugin package without executing its client code',
+          path: './apps/ndea/src/cli/commands/plugin/validate'
+        },
+        {
+          name: 'plugin/list',
+          description: 'List configured user plugin roots in discovery order',
+          path: './apps/ndea/src/cli/commands/plugin/list'
+        },
+        {
+          name: 'plugin/enable',
+          description: 'Enable a user plugin package for the next session',
+          path: './apps/ndea/src/cli/commands/plugin/enable'
+        },
+        {
+          name: 'plugin/disable',
+          description: 'Disable a user plugin package for the next session',
+          path: './apps/ndea/src/cli/commands/plugin/disable'
+        }
+      ],
+      path: './apps/ndea/src/cli/commands/plugin/index'
     },
   'rollback': {
       name: 'rollback',

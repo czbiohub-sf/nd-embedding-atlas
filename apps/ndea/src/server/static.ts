@@ -18,7 +18,7 @@
  * SPA fallback: non-file requests (no extension) serve index.html.
  */
 
-import { resolve, extname, join } from "node:path";
+import { resolve, extname, isAbsolute, join, relative, sep } from "node:path";
 import { existsSync } from "node:fs";
 import { isCompiled } from "./embedded-assets.ts";
 import { EMBEDDED_ASSETS } from "./__generated-embedded-assets.ts";
@@ -92,13 +92,16 @@ export function resolveFrontendDir(frontendDir?: string): string | null {
 /** Resolve a URL pathname to the file path that actually backs it. */
 function resolveAssetPath(pathname: string, frontendDir: string): string | null {
   const rel = pathname === "/" ? "index.html" : pathname.replace(/^\/+/, "");
+  if (rel.includes("\\")) return null;
 
   if (frontendDir === "__embedded__") {
     // Compiled binary: consult the generated manifest for a $bunfs path.
     return EMBEDDED_ASSETS[rel] ?? null;
   }
 
-  const abs = join(frontendDir, rel);
+  const abs = resolve(frontendDir, rel);
+  const contained = relative(frontendDir, abs);
+  if (contained === ".." || contained.startsWith(`..${sep}`) || isAbsolute(contained)) return null;
   return existsSync(abs) ? abs : null;
 }
 

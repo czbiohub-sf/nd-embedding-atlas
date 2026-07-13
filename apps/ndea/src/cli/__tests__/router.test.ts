@@ -51,6 +51,7 @@ describe("router / help + version", () => {
     expect(combined).toContain("install");
     expect(combined).toContain("update");
     expect(combined).toContain("rollback");
+    expect(combined).toContain("plugin");
   });
 
   test("`ndea --version` prints the version number", async () => {
@@ -81,6 +82,17 @@ describe("router / help + version", () => {
     expect(r.code).toBe(0);
     const combined = (r.stdout + r.stderr).replace(ANSI_PATTERN, "");
     expect(combined).toContain("previous");
+  });
+
+  test("`ndea plugin --help` lists nested actions without falling through to view", async () => {
+    const r = await run(["plugin", "--help"]);
+    expect(r.code).toBe(0);
+    const combined = (r.stdout + r.stderr).replace(ANSI_PATTERN, "");
+    expect(combined).toContain("validate");
+    expect(combined).toContain("list");
+    expect(combined).toContain("enable");
+    expect(combined).toContain("disable");
+    expect(combined).not.toContain("at least one path is required");
   });
 });
 

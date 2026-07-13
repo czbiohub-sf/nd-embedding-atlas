@@ -368,6 +368,14 @@ export async function startup(config: LaunchConfig): Promise<void> {
   // ── 5. Start server ─────────────────────────────────────────────────────
 
   const { createApp } = await import("../server/app.ts");
+  const { buildPluginBootstrap } = await import("../server/plugins/bootstrap.ts");
+  const pluginSnapshot = await buildPluginBootstrap({
+    projectPluginPaths: config.pluginPaths,
+    projectPluginContainmentRoot: config.pluginPathRoot,
+  });
+  for (const diagnostic of pluginSnapshot.catalog.diagnostics) {
+    console.warn(`    ${YELLOW}⚠${RESET}  plugin ${diagnostic.sourceId}: ${diagnostic.message}`);
+  }
   const { plateMeta, datasetChannels } = buildPlateMetadata(plateMounts, platesByDataset, isMultiDataset);
 
   const datasetMeta: DatasetSessionMetadata = {
@@ -393,6 +401,7 @@ export async function startup(config: LaunchConfig): Promise<void> {
       config: datasetMeta,
       frontendDir: staticDir,
       noStatic: config.noStatic,
+      pluginSnapshot,
     });
   } catch (err) {
     // Likely cause: another ndea process already holds this port. With

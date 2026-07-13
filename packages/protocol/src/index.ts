@@ -27,7 +27,14 @@
 import { z } from "zod";
 
 export {
+  PLUGIN_BOOTSTRAP_SCHEMA_VERSION,
   PLUGIN_MANIFEST_SCHEMA_VERSION,
+  PluginBootstrapCatalogSchema,
+  PluginBootstrapEntrySchema,
+  PluginBootstrapSchemaVersionSchema,
+  PluginDiagnosticSchema,
+  PluginDiagnosticSeveritySchema,
+  PluginDiagnosticStageSchema,
   PluginHostCompatibilitySchema,
   PluginIdSchema,
   PluginManifestSchema,
@@ -39,6 +46,12 @@ export {
   SDKVersionRangeSchema,
 } from "./plugin";
 export type {
+  PluginBootstrapCatalog,
+  PluginBootstrapEntry,
+  PluginBootstrapSchemaVersion,
+  PluginDiagnostic,
+  PluginDiagnosticSeverity,
+  PluginDiagnosticStage,
   PluginHostCompatibility,
   PluginId,
   PluginManifest,

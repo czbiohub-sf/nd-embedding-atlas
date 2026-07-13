@@ -1,0 +1,19 @@
+{
+  "manifestSchemaVersion": 1,
+  "pluginId": "fixture.valid",
+  "pluginPackageVersion": "1.0.0",
+  "sdkVersionRange": "*",
+  "displayName": "Valid fixture plugin",
+  "clientEntry": "client.js",
+  "staticAssets": ["styles.css"],
+  "hostCompatibility": {
+    "hostVersionRange": "*"
+  },
+  "license": "MIT",
+  "permissions": [
+    {
+      "permission": "gpu",
+      "reason": "Renders custom node graphics"
+    }
+  ]
+}

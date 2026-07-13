@@ -87,7 +87,16 @@ export type {
 
 export type { JsonValue } from "./json";
 
-export { nodeAssetVersion, sdkMajor, SDK_VERSION, sdkVersion, workspaceDocumentVersion } from "./version";
+export {
+  compareSemanticVersions,
+  isSemanticVersion,
+  isVersionCompatible,
+  nodeAssetVersion,
+  sdkMajor,
+  SDK_VERSION,
+  sdkVersion,
+  workspaceDocumentVersion,
+} from "./version";
 export type { NodeAssetVersion, SDKVersion, WorkspaceDocumentVersion } from "./version";
 
 export type DataCapabilitySet = ReadonlySet<DataCapability>;

@@ -31,6 +31,8 @@ export interface ParsedProjectConfig {
   preset?: string;
   /** Absolute plugin paths resolved from top-level YAML `plugin_paths:`. */
   pluginPaths?: string[];
+  /** Absolute YAML directory used as the plugin-path containment boundary. */
+  pluginPathRoot?: string;
 }
 
 /** Fully resolved config with CLI overrides applied. */
@@ -43,6 +45,7 @@ export interface LaunchConfig {
   noStatic: boolean;
   preset?: string;
   pluginPaths?: string[];
+  pluginPathRoot?: string;
 }
 
 export interface LaunchOverrides {
@@ -88,8 +91,9 @@ export async function loadProjectConfig(yamlPath: string): Promise<ParsedProject
   const settings = parseSettings(raw.settings);
   const preset = typeof raw.preset === "string" ? raw.preset : undefined;
   const pluginPaths = parsePluginPaths(raw.plugin_paths, baseDir);
+  const pluginPathRoot = raw.plugin_paths === undefined ? undefined : baseDir;
 
-  return { datasets, obsColumns, settings, preset, pluginPaths };
+  return { datasets, obsColumns, settings, preset, pluginPaths, pluginPathRoot };
 }
 
 // ─── Path-based config ──────────────────────────────────────────────────────
@@ -121,6 +125,7 @@ export function resolveLaunchConfig(project: ParsedProjectConfig, overrides: Lau
     noStatic: overrides.noStatic,
     preset: overrides.preset ?? project.preset,
     pluginPaths: project.pluginPaths,
+    pluginPathRoot: project.pluginPathRoot,
   };
 }
 

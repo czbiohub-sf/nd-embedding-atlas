@@ -2,6 +2,9 @@ import { DataCapabilitySchema } from "@ndea/protocol";
 import {
   PluginManifestSchema,
   SDK_VERSION,
+  compareSemanticVersions,
+  isSemanticVersion,
+  isVersionCompatible,
   type ExactNodeTypeRef,
   type NodeCapability,
   type NodeRole,
@@ -20,7 +23,6 @@ import {
 
 const NODE_TYPE_ID_RE = /^[a-z0-9]+(?:[.-][a-z0-9]+)*(?:\/[a-z0-9]+(?:-[a-z0-9]+)*)*$/;
 const PORT_ID_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const SEMVER_RE = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/;
 
 const NODE_CAPABILITIES: Record<NodeCapability, true> = {
   "data-read": true,
@@ -120,7 +122,7 @@ export class NodeCatalogBuilder {
       const existing = current.get(id);
       if (
         !existing ||
-        compareVersions(existing.definition.ref.nodeTypeVersion, entry.definition.ref.nodeTypeVersion) < 0
+        compareSemanticVersions(existing.definition.ref.nodeTypeVersion, entry.definition.ref.nodeTypeVersion) < 0
       ) {
         current.set(id, entry);
       }
@@ -225,7 +227,7 @@ function validateDefinition(definition: CatalogNodeDefinition, source: NodeContr
   const id = definition.ref?.nodeTypeId;
   const version = definition.ref?.nodeTypeVersion;
   if (typeof id !== "string" || !NODE_TYPE_ID_RE.test(id)) fail(label, `invalid node type ID "${String(id)}"`);
-  if (typeof version !== "string" || !parseVersion(version))
+  if (typeof version !== "string" || !isSemanticVersion(version))
     fail(label, `invalid node type version "${String(version)}"`);
   validateOwnership(id, source);
   if (typeof definition.title !== "string" || !definition.title.trim()) fail(label, `node "${id}" requires a title`);
@@ -395,100 +397,6 @@ function exactKey(ref: ExactNodeTypeRef): string {
 
 function fail(source: string, detail: string): never {
   throw new NodeCatalogValidationError(`invalid node definition from source "${source}": ${detail}`);
-}
-
-type ParsedVersion = readonly [number, number, number, readonly (number | string)[]];
-
-function parseVersion(value: string): ParsedVersion | undefined {
-  const match = SEMVER_RE.exec(value);
-  if (!match) return undefined;
-  const prerelease = (match[4] ?? "")
-    .split(".")
-    .filter(Boolean)
-    .map((part) => (/^\d+$/.test(part) ? Number(part) : part));
-  return [Number(match[1]), Number(match[2]), Number(match[3]), prerelease];
-}
-
-function compareVersions(left: string, right: string): number {
-  const a = parseVersion(left);
-  const b = parseVersion(right);
-  if (!a || !b) return left.localeCompare(right);
-  for (let index = 0; index < 3; index += 1) {
-    const difference = (a[index] as number) - (b[index] as number);
-    if (difference) return difference;
-  }
-  const aPre = a[3];
-  const bPre = b[3];
-  if (aPre.length === 0 || bPre.length === 0) return aPre.length === bPre.length ? 0 : aPre.length === 0 ? 1 : -1;
-  for (let index = 0; index < Math.max(aPre.length, bPre.length); index += 1) {
-    const av = aPre[index];
-    const bv = bPre[index];
-    if (av === undefined || bv === undefined) return av === bv ? 0 : av === undefined ? -1 : 1;
-    if (av === bv) continue;
-    if (typeof av === "number" && typeof bv === "number") return av - bv;
-    if (typeof av === "number") return -1;
-    if (typeof bv === "number") return 1;
-    return av.localeCompare(bv);
-  }
-  return 0;
-}
-
-function isVersionCompatible(version: string, range: string): boolean {
-  return range.split("||").some((alternative) => {
-    const trimmed = alternative.trim();
-    if (trimmed === "" || trimmed === "*" || trimmed.toLowerCase() === "latest") return true;
-    const hyphen = /^(\S+)\s+-\s+(\S+)$/.exec(trimmed);
-    if (hyphen) return testComparator(version, `>=${hyphen[1]}`) && testComparator(version, `<=${hyphen[2]}`);
-    return trimmed.split(/\s+/).every((comparator) => testComparator(version, comparator));
-  });
-}
-
-function testComparator(version: string, comparator: string): boolean {
-  const match = /^(\^|~|>=|<=|>|<|=)?[v=]?(.+)$/.exec(comparator);
-  if (!match) return false;
-  const operator = match[1] ?? "=";
-  const target = match[2];
-  if (/[*xX]/.test(target)) {
-    const actual = parseVersion(version);
-    if (!actual) return false;
-    const wanted = target.split(".");
-    return wanted.every((part, index) => index > 2 || /[*xX]/.test(part) || Number(part) === actual[index]);
-  }
-  const parsedTarget = parseVersion(normalizePartialVersion(target));
-  const parsedVersion = parseVersion(version);
-  if (!parsedTarget || !parsedVersion) return false;
-  const normalizedTarget = formatVersion(parsedTarget);
-  const difference = compareVersions(version, normalizedTarget);
-  if (operator === "^") {
-    const upper: ParsedVersion =
-      parsedTarget[0] > 0
-        ? [parsedTarget[0] + 1, 0, 0, []]
-        : parsedTarget[1] > 0
-          ? [0, parsedTarget[1] + 1, 0, []]
-          : [0, 0, parsedTarget[2] + 1, []];
-    return difference >= 0 && compareVersions(version, formatVersion(upper)) < 0;
-  }
-  if (operator === "~") {
-    const upper: ParsedVersion = [parsedTarget[0], parsedTarget[1] + 1, 0, []];
-    return difference >= 0 && compareVersions(version, formatVersion(upper)) < 0;
-  }
-  if (operator === ">=") return difference >= 0;
-  if (operator === "<=") return difference <= 0;
-  if (operator === ">") return difference > 0;
-  if (operator === "<") return difference < 0;
-  return difference === 0;
-}
-
-function normalizePartialVersion(value: string): string {
-  const [core, suffix] = value.split(/(?=-|\+)/, 2);
-  const parts = core.split(".");
-  while (parts.length < 3) parts.push("0");
-  return `${parts.join(".")}${suffix ?? ""}`;
-}
-
-function formatVersion(version: ParsedVersion): string {
-  const prerelease = version[3].length > 0 ? `-${version[3].join(".")}` : "";
-  return `${version[0]}.${version[1]}.${version[2]}${prerelease}`;
 }
 
 function freezeDefinition(definition: CatalogNodeDefinition): void {

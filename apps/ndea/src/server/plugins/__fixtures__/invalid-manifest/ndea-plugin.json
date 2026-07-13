@@ -1,0 +1,5 @@
+{
+  "manifestSchemaVersion": 999,
+  "pluginId": "fixture.invalid",
+  "clientEntry": "client.js"
+}

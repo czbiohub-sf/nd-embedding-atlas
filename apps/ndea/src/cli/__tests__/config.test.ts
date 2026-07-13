@@ -21,6 +21,10 @@ async function loadYaml(yaml: string): Promise<ParsedProjectConfig> {
   return loadProjectConfig(configPath);
 }
 
+const DATASET_ALIAS_CASES = (["anndata", "path"] as const).flatMap((dataKey) =>
+  (["hcs_plate", "ome-zarr", "ome_zarr", "plate_path"] as const).map((plateKey) => [dataKey, plateKey] as const),
+);
+
 describe("project config datasets", () => {
   test("preserves the array form and project options while resolving relative paths", async () => {
     const config = await loadYaml(`
@@ -55,29 +59,26 @@ preset: explore
       settings: { port: 6060, host: "0.0.0.0" },
       preset: "explore",
       pluginPaths: undefined,
+      pluginPathRoot: undefined,
     });
   });
 
-  for (const dataKey of ["anndata", "path"] as const) {
-    for (const plateKey of ["hcs_plate", "ome-zarr", "ome_zarr", "plate_path"] as const) {
-      test(`accepts dictionary aliases ${dataKey} + ${plateKey}`, async () => {
-        const config = await loadYaml(`
+  test.each(DATASET_ALIAS_CASES)("accepts dictionary aliases %s + %s", async (dataKey, plateKey) => {
+    const config = await loadYaml(`
 datasets:
   cells:
     ${dataKey}: data/cells.zarr
     ${plateKey}: images/plate.zarr
 `);
 
-        expect(config.datasets).toEqual([
-          {
-            name: "cells",
-            path: join(projectDir, "data", "cells.zarr"),
-            platePath: join(projectDir, "images", "plate.zarr"),
-          },
-        ]);
-      });
-    }
-  }
+    expect(config.datasets).toEqual([
+      {
+        name: "cells",
+        path: join(projectDir, "data", "cells.zarr"),
+        platePath: join(projectDir, "images", "plate.zarr"),
+      },
+    ]);
+  });
 
   test("converges equal dictionary aliases", async () => {
     const config = await loadYaml(`
@@ -141,9 +142,10 @@ plugin_paths:
       join(projectDir, "plugins", "second"),
       projectDir,
     ]);
+    expect(config.pluginPathRoot).toBe(projectDir);
   });
 
-  const invalidCases: Array<[string, string, RegExp]> = [
+  const invalidCases: [string, string, RegExp][] = [
     ["a mapping", "plugin_paths: { plugin: ./plugins/a }", /plugin_paths.*array/],
     ["null", "plugin_paths: null", /plugin_paths.*array/],
     ["a non-string entry", "plugin_paths: [42]", /entry 0.*string/],
@@ -175,6 +177,7 @@ describe("launch config", () => {
     settings: { port: 6060, host: "yaml-host" },
     preset: "yaml-preset",
     pluginPaths: ["/project/plugins/first", "/project/plugins/second"],
+    pluginPathRoot: "/project",
   };
 
   test("uses YAML values when CLI overrides are absent", () => {
@@ -192,6 +195,7 @@ describe("launch config", () => {
       noStatic: true,
       preset: "yaml-preset",
       pluginPaths: project.pluginPaths,
+      pluginPathRoot: "/project",
     });
   });
 
@@ -214,6 +218,7 @@ describe("launch config", () => {
       noStatic: false,
       preset: "cli-preset",
       pluginPaths: project.pluginPaths,
+      pluginPathRoot: "/project",
     });
   });
 
@@ -233,6 +238,7 @@ describe("launch config", () => {
       noStatic: false,
       preset: undefined,
       pluginPaths: undefined,
+      pluginPathRoot: undefined,
     });
   });
 });

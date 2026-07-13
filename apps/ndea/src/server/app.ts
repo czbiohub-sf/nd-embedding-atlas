@@ -57,6 +57,8 @@ import { servePlateFile } from "./plate.ts";
 import { serveStatic, resolveFrontendDir } from "./static.ts";
 import { handleWsMessage, handleWsOpen, handleWsClose, type ServerSocketContext } from "./ws.ts";
 import { handleMosaicWsMessage } from "./mosaic-ws.ts";
+import { emptyPluginRuntimeSnapshot, servePluginAsset, type PluginRuntimeSnapshot } from "./plugins/assets.ts";
+import { pluginBootstrapResponse } from "./plugins/bootstrap.ts";
 
 // Re-exports for public API
 export { DatasetQuerySession, obsmColumnPrefix, DEFAULT_OBSM_PRIORITY } from "./store.ts";
@@ -122,6 +124,8 @@ export interface CreateAppOptions {
   frontendDir?: string;
   /** Disable static file serving (API-only mode). */
   noStatic?: boolean;
+  /** Immutable plugin catalog and approved asset map built once during startup. */
+  pluginSnapshot?: PluginRuntimeSnapshot;
 }
 
 // ─── Server factory ─────────────────────────────────────────────────────────
@@ -135,6 +139,7 @@ export interface CreateAppOptions {
 export function createApp(options: CreateAppOptions) {
   const { store, state, config } = options;
   const frontendDir = options.noStatic ? null : resolveFrontendDir(options.frontendDir);
+  const pluginSnapshot = options.pluginSnapshot ?? emptyPluginRuntimeSnapshot();
 
   // Spin up the Bun Worker pool for crop rendering when a plate is
   // available. Pool persists for the lifetime of the server; workers keep
@@ -179,7 +184,17 @@ export function createApp(options: CreateAppOptions) {
 
       // ── Route dispatch ──────────────────────────────────────────
       try {
-        const response = await routeRequest(req, url, pathname, store, state, config, frontendDir, options);
+        const response = await routeRequest(
+          req,
+          url,
+          pathname,
+          store,
+          state,
+          config,
+          frontendDir,
+          pluginSnapshot,
+          options,
+        );
         return withCors(response);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -218,6 +233,7 @@ async function routeRequest(
   state: ServerSession,
   config: DatasetSessionMetadata,
   frontendDir: string | null,
+  pluginSnapshot: PluginRuntimeSnapshot,
   options: CreateAppOptions,
 ): Promise<Response> {
   // ── Mosaic query protocol (POST/GET /data/query) ────────────────
@@ -236,7 +252,12 @@ async function routeRequest(
 
   // ── API routes (/api/*) ─────────────────────────────────────────
   if (pathname.startsWith("/api/")) {
-    return routeApi(req, url, pathname, store, state);
+    return routeApi(req, url, pathname, store, state, pluginSnapshot);
+  }
+
+  // ── Trusted plugin assets (startup-approved exact URLs only) ───
+  if (pathname === "/plugins" || pathname.startsWith("/plugins/")) {
+    return servePluginAsset(pathname, pluginSnapshot) ?? new Response("Not Found", { status: 404 });
   }
 
   // ── Plate static (/plate/**) for OME-Zarr HCS stores ────────────
@@ -270,6 +291,7 @@ function routeApi(
   pathname: string,
   store: DatasetQuerySession,
   state: ServerSession,
+  pluginSnapshot: PluginRuntimeSnapshot,
 ): Promise<Response> | Response {
   const method = req.method;
 
@@ -281,6 +303,11 @@ function routeApi(
   // ── Config ──────────────────────────────────────────────────────
   if (pathname === "/api/config" && method === "GET") {
     return handleConfig(state);
+  }
+
+  // ── Trusted custom-node plugin bootstrap ───────────────────────
+  if (pathname === "/api/plugins/bootstrap" && method === "GET") {
+    return pluginBootstrapResponse(pluginSnapshot);
   }
 
   // ── Scatter positions ───────────────────────────────────────────
