@@ -1,17 +1,28 @@
 import { createRoot } from "react-dom/client";
 import { roaringLibraryInitialize } from "roaring-wasm";
 import App from "./App";
+import { bootFrontend, loadFrontendPluginSession } from "./core/plugin/runtime";
 // eslint-disable-next-line import/no-unassigned-import
 import "./app.css";
 
-// roaring-wasm WASM init — must complete before any broadcast path runs.
-// top-level await is safe: build.target is already 'esnext' in vite.config.ts
-await roaringLibraryInitialize();
+const boot = await bootFrontend({
+  loadSession: loadFrontendPluginSession,
+  initializeRoaring: roaringLibraryInitialize,
+  mount(session) {
+    const element = document.getElementById("root");
+    if (!element) return;
 
-// StrictMode omitted — idetik-core's WebGL context cannot survive
-// the double-mount/unmount cycle (canvas.getContext returns the same
-// context, but Idetik's stop() may invalidate internal state).
-const root = document.getElementById("root");
-if (root) {
-  createRoot(root).render(<App />);
-}
+    // StrictMode omitted — idetik-core's WebGL context cannot survive the
+    // double-mount/unmount cycle.
+    const root = createRoot(element);
+    root.render(<App nodeLibrary={session.nodeLibrary} />);
+    return () => root.unmount();
+  },
+});
+
+const teardown = () => {
+  window.removeEventListener("pagehide", teardown);
+  boot.dispose();
+};
+window.addEventListener("pagehide", teardown, { once: true });
+if (import.meta.hot) import.meta.hot.dispose(teardown);

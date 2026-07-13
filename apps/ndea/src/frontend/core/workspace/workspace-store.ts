@@ -560,7 +560,7 @@ export class Workspace {
 
   /** Scatter *freeze* affordance → a ◆ Cache node wired to the lasso, pinned at
    *  the current rows. Reuses an existing cache node already fed by this scatter
-   *  (re-pin == Recache). Supersedes the retired Selection-node flow. */
+   *  (re-pin == Recache). */
   freezeSelection(scatterId: string): string | null {
     const live = this.getLasso(scatterId);
     if (!live?.sql) return null;
@@ -594,7 +594,11 @@ export class Workspace {
     const spec = this.deps.nodeLibrary.getSpec(def.type);
     if (!spec) throw new Error(`no registered node spec for type "${def.type}"`);
     const host = this.makeCookHost(id);
-    this.evaluator.addNode({ id, kind: spec.evaluationRole, cook: (inputs) => spec.cook(inputs, host) });
+    this.evaluator.addNode({
+      id,
+      kind: spec.evaluationRole,
+      cook: (inputs, context) => spec.cook(inputs, host, context),
+    });
   }
 
   /** global render band + FLIP ghost + resize. Forms default LOCKED to the
@@ -956,11 +960,11 @@ export function seedWorkspace(ws: Workspace): void {
   const count = ws.addNode("count", { x: 720, y: 60 });
   const table = ws.addNode("table", { x: 720, y: 220 });
   const scatter = ws.addNode("scatter", { x: 720, y: 620 });
-  const fov = ws.addNode("fov", { x: 1300, y: 220 });
+  const imageViewer = ws.addNode("image-viewer", { x: 1300, y: 220 });
   ws.connect(obs, wr);
   ws.connect(wr, count);
   ws.connect(wr, table);
   ws.connect(wr, scatter);
-  ws.connect(table, fov); // focus push wire — routes outside the engine
+  ws.connect(table, imageViewer); // focus push wire — routes outside the engine
   ws.selectNode(scatter);
 }

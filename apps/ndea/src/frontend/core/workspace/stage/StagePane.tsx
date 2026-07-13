@@ -391,7 +391,7 @@ export function StagePane({ vertical }: { vertical: boolean }) {
 
   // reconcile layout memory with the live staged set; persist on divergence
   const stagedIds = ws.stagedIds().toSorted((a, b) => {
-    const P: Record<string, number> = { scatter: 0, fov: 1, table: 2, gallery: 3 };
+    const P: Record<string, number> = { scatter: 0, "image-viewer": 1, table: 2, gallery: 3 };
     const ta = ws.store.state.nodes[a]?.type ?? "";
     const tb = ws.store.state.nodes[b]?.type ?? "";
     return (P[ta] ?? 4) - (P[tb] ?? 4);

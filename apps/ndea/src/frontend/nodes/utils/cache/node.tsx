@@ -27,12 +27,6 @@ const cacheDefinition = defineNode({
   },
 });
 
-const selectionDefinition = defineNode({
-  ...cacheDefinition,
-  ref: exactNodeTypeRef("selection", "1.0.0"),
-  title: "Selection",
-});
-
 const cacheCook: NativeNodeContribution["graph"]["cook"] = (inputs, host) => {
   const frozen = host.frozenPredicate();
   return frozen !== undefined
@@ -51,24 +45,6 @@ export const cacheNode = defineNativeNodeContribution({
     geometry: { chipW: 148, card: { w: 236, h: 168 }, full: { w: 236, h: 168 }, canFull: false },
     stage: "canvas-only",
     inPalette: true,
-    accent: "#f59e0b",
-    checkpoint: true,
-    body: "card-and-full",
-  },
-});
-
-/** Persisted v2 compatibility definition; intentionally omitted from the palette. */
-export const selectionNode = defineNativeNodeContribution({
-  definition: selectionDefinition,
-  graph: {
-    role: "selection",
-    evaluationRole: "transform",
-    cook: cacheCook,
-  },
-  presentation: {
-    geometry: { chipW: 148, card: { w: 232, h: 164 }, full: { w: 232, h: 164 }, canFull: false },
-    stage: "canvas-only",
-    inPalette: false,
     accent: "#f59e0b",
     checkpoint: true,
     body: "card-and-full",

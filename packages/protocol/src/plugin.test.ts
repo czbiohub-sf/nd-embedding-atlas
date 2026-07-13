@@ -114,4 +114,18 @@ describe("PluginBootstrapCatalogSchema", () => {
       }).success,
     ).toBe(false);
   });
+
+  test("accepts frontend import and registration diagnostics", () => {
+    for (const stage of ["import", "registration"] as const) {
+      expect(
+        PluginDiagnosticSchema.safeParse({
+          sourceId: "project:0",
+          severity: "error",
+          stage,
+          code: `${stage}-failed`,
+          message: `${stage} failed`,
+        }).success,
+      ).toBe(true);
+    }
+  });
 });

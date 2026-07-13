@@ -198,8 +198,8 @@ function StateMatrix() {
 }
 
 /* ── ports reference ─────────────────────────────────────────────── */
-function PortsDemo() {
-  const row = (kind: NdPortKind, dir: "in" | "out", state: NdPortState, note: string) => (
+function portRow(kind: NdPortKind, dir: "in" | "out", state: NdPortState, note: string) {
+  return (
     <div
       key={kind + dir + state}
       className="grid grid-cols-[120px_60px_1fr] items-center gap-4 border-b border-border py-2"
@@ -214,15 +214,18 @@ function PortsDemo() {
       <span className="text-xs text-muted-foreground">{note}</span>
     </div>
   );
+}
+
+function PortsDemo() {
   return (
     <div className="py-3.5">
-      {row("pred", "out", "idle", "filled circle — emits a predicate (pull wire, periwinkle)")}
-      {row("pred", "in", "idle", "hollow circle — accepts predicates; owns the fan-in operator chip")}
-      {row("sel", "out", "idle", "diamond — user-driven selection (push wire, amber); lasso source")}
-      {row("focus", "out", "idle", "square — single-record focus (push wire, sky); table → FOV")}
-      {row("pred", "in", "legal", "legal drop target during a wire drag — green glow")}
-      {row("pred", "in", "illegal", "kind mismatch / cycle / duplicate — dimmed to 30%")}
-      {row("sel", "out", "source", "origin of the live wire drag — kind-colored ring")}
+      {portRow("pred", "out", "idle", "filled circle — emits a predicate (pull wire, periwinkle)")}
+      {portRow("pred", "in", "idle", "hollow circle — accepts predicates; owns the fan-in operator chip")}
+      {portRow("sel", "out", "idle", "diamond — user-driven selection (push wire, amber); lasso source")}
+      {portRow("focus", "out", "idle", "square — single-record focus (push wire, sky); table → Image Viewer")}
+      {portRow("pred", "in", "legal", "legal drop target during a wire drag — green glow")}
+      {portRow("pred", "in", "illegal", "kind mismatch / cycle / duplicate — dimmed to 30%")}
+      {portRow("sel", "out", "source", "origin of the live wire drag — kind-colored ring")}
     </div>
   );
 }

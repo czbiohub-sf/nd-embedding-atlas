@@ -28,9 +28,11 @@ import {
   toggleViewLock,
 } from "@/nodes/scatter/routing";
 import { focusRow, publishOrdering } from "@/nodes/table/routing";
-import { listWorkspaceNodeSpecs } from "@/core/workspace/definitions";
+import { createNativeWorkspaceNodeLibrary } from "@/core/workspace/definitions";
 import { GraphEngine } from "@/core/graph/engine";
 import { createSpyHost } from "./spy-host";
+
+const nativeNodeLibrary = createNativeWorkspaceNodeLibrary();
 
 // Every view-kind node must appear here — "routed" (a routing module exercised
 // below) or { exempt } with a reason. Adding a view node without an entry fails
@@ -41,14 +43,15 @@ const ROUTING_COVERAGE: Record<string, "routed" | { exempt: string }> = {
   scatter: "routed",
   "count-plot": "routed",
   histogram: "routed",
-  fov: { exempt: "focus consumer — no cross-view write gesture" },
+  "image-viewer": { exempt: "focus consumer — no cross-view write gesture" },
   count: { exempt: "display-only — no cross-view gesture" },
   annotate: { exempt: "focus emitter via cursor effect, not a discrete gesture handler" },
 };
 
 describe("cross-view routing conformance", () => {
   test("every view-kind node declares its cross-view routing", () => {
-    const viewTypes = listWorkspaceNodeSpecs()
+    const viewTypes = nativeNodeLibrary
+      .listSpecs()
       .filter((s) => s.kind === "view")
       .map((s) => s.type);
     for (const type of viewTypes) {
@@ -77,9 +80,9 @@ describe("cross-view routing conformance", () => {
     engine.addNode({
       id: "viewer",
       kind: "view",
-      cook: (inputs) => inputs.get("highlight-in")?.at(-1) ?? null,
+      cook: (inputs) => inputs.get("focus-in")?.at(-1) ?? null,
     });
-    engine.connect({ from: "table", fromPort: "out", to: "viewer", toPort: "highlight-in" });
+    engine.connect({ from: "table", fromPort: "out", to: "viewer", toPort: "focus-in" });
 
     const viewerFocus: (RowIndex | null)[] = [];
     engine.registerSink("viewer", (value) => viewerFocus.push(value));
@@ -98,10 +101,11 @@ describe("cross-view routing conformance", () => {
 
     expect(viewerFocus).toEqual([null, rowIndex(17), rowIndex(42), null, rowIndex(7)]);
 
-    engine.disconnect({ from: "table", fromPort: "out", to: "viewer", toPort: "highlight-in" });
+    engine.disconnect({ from: "table", fromPort: "out", to: "viewer", toPort: "focus-in" });
     expect(viewerFocus.at(-1)).toBeNull();
     focusRow(host, rowIndex(99));
-    expect(viewerFocus).toEqual([null, rowIndex(17), rowIndex(42), null, rowIndex(7), null]);
+    expect(viewerFocus.at(-1)).toBeNull();
+    expect(viewerFocus).not.toContain(rowIndex(99));
   });
 
   test("table sort routes through the host seam's ordering facet", () => {

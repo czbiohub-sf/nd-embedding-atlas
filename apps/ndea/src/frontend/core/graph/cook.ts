@@ -2,6 +2,7 @@ import type {
   NodeCompute,
   NodeComputeInputs,
   NodeComputeOutputs,
+  NodeComputeContext,
   NodeRuntime,
   NodePortValue,
   PortKind,
@@ -69,7 +70,11 @@ export interface GraphNodeCookHost {
   frozenPredicate(): PredicatePortValue | undefined;
 }
 
-export type GraphNodeCookFunction = (inputs: GraphPortValueInputs, host: GraphNodeCookHost) => GraphPortValue;
+export type GraphNodeCookFunction = (
+  inputs: GraphPortValueInputs,
+  host: GraphNodeCookHost,
+  context?: NodeComputeContext,
+) => GraphPortValue;
 
 export function toNodePortValue(value: GraphPortValue): NodePortValue {
   switch (value.kind) {

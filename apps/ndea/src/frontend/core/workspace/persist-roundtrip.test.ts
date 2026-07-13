@@ -16,9 +16,11 @@ import { rowIndex } from "@ndea/sdk";
 
 import { fromPersistedDoc, loadFromStorage, saveToStorage, storageKey, toPersistedDoc, validateDoc } from "./persist";
 import { predicateSql } from "@/core/graph/cook";
-import { nativeWorkspaceNodeLibrary } from "./definitions";
+import { createNativeWorkspaceNodeLibrary } from "./definitions";
 import { seedWorkspace, Workspace } from "./workspace-store";
 import type { Metadata } from "@ndea/protocol";
+
+const nativeWorkspaceNodeLibrary = createNativeWorkspaceNodeLibrary();
 
 // rAF doesn't exist under bun:test — the Workspace ctor references it for the
 // flush scheduler. We pull synchronously, so a no-op stub is enough.

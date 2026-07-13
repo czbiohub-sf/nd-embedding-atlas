@@ -4,8 +4,8 @@
  * (Workspace transactions mirror every mutation into it).
  *
  * Vocabulary per VOCABULARY.md: node roles source · transform · view · cache
- * (selection is migration-only; subnet/proxy carry hierarchy); port kinds
- * pred · sel · focus; placement embedded · staged.
+ * (subnet/proxy carry hierarchy); port kinds pred · sel · focus; placement
+ * embedded · staged.
  */
 
 import type { NdForm } from "@/components/nd/nd-resolve-form";

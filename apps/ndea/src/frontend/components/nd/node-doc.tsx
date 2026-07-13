@@ -17,7 +17,7 @@ import { ndIconButtonVariants } from "@/components/nd/nd-icon-button";
 import { NdIcon } from "@/components/nd/nd-icons";
 import { ND_PORT_KINDS, type NdPortKind } from "@/components/nd/nd-port";
 import { humanizedCapabilities } from "@/core/node/capability-docs";
-import { nativeNodeCatalog } from "@/core/workspace/definitions";
+import { useWorkspace } from "@/core/workspace/workspace-context";
 import type { NodePort } from "@ndea/sdk";
 import { cn } from "@/lib/utils";
 
@@ -42,7 +42,8 @@ function PortToken({ port, out }: { port: NodePort; out: boolean }) {
 }
 
 export function NodeDocButton({ nodeType, compact = false }: { nodeType: string; compact?: boolean }) {
-  const definition = nativeNodeCatalog.resolveCurrent(nodeType);
+  const workspace = useWorkspace();
+  const definition = workspace.deps.nodeLibrary.catalog.resolveCurrent(nodeType);
   const doc = definition?.documentation;
   const docs = useDocs();
   const [open, setOpen] = useState(false);

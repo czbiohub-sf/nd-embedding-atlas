@@ -45,8 +45,6 @@ import { ndZoomBand, type NdForm } from "@/components/nd/nd-resolve-form";
 import { ND_PORT_KINDS } from "@/components/nd/nd-port";
 import { ND_CANVAS, ND_TIMING, ND_ZOOM } from "../constants";
 import { FeedbackChannelsContext, useFeedbackChannels } from "../feedback";
-import { getWorkspaceNodeSpec } from "../definitions";
-import { getWorkspaceNodeDescriptor } from "../node-defs";
 import { useWorkspace, useWorkspaceSelector } from "../workspace-context";
 import { AddNodeMenu, type AddMenuState } from "./AddNodeMenu";
 import { K1Cursor } from "./K1Cursor";
@@ -62,8 +60,9 @@ const edgeTypes = { ndwire: NdWireEdge };
 
 /** ghost wire in the dragged port's kind color */
 function NdConnectionLine({ fromX, fromY, toX, toY, fromNode }: ConnectionLineComponentProps) {
+  const ws = useWorkspace();
   const node = useWorkspaceSelector((s) => (fromNode ? s.nodes[fromNode.id] : undefined));
-  const kind = node ? getWorkspaceNodeDescriptor(node.type).outKind : "pred";
+  const kind = node ? (ws.def(node.id)?.outKind ?? "pred") : "pred";
   return (
     <path
       d={wirePath(fromX, fromY, toX, toY)}
@@ -296,7 +295,8 @@ function WorkspaceCanvasInner() {
       let portNode: string | null = null;
       let best = 22 / zoom;
       for (const n of Object.values(ws.store.state.nodes)) {
-        const def = getWorkspaceNodeDescriptor(n.type);
+        const def = ws.def(n.id);
+        if (!def) continue;
         for (const which of ["in", "out"] as const) {
           if ((which === "in" && !def.hasIn) || (which === "out" && !def.hasOut)) continue;
           const p = portPos(ws, n.id, which);
@@ -427,7 +427,7 @@ function WorkspaceCanvasInner() {
               const node = ws.store.state.nodes[n.id];
               if (!node) return "oklch(0.62 0 0 / 60%)";
               if (n.id === ws.store.state.selectedNodeId) return "oklch(0.554 0.236 281)";
-              return getWorkspaceNodeSpec(node.type)?.accent ?? "oklch(0.62 0 0 / 60%)";
+              return ws.deps.nodeLibrary.getSpec(node.type)?.accent ?? "oklch(0.62 0 0 / 60%)";
             }}
             nodeStrokeWidth={0}
           />

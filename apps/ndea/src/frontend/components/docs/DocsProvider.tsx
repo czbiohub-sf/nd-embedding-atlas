@@ -16,7 +16,7 @@ import {
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { ND_PORT_KINDS, type NdPortKind } from "@/components/nd/nd-port";
 import { humanizedCapabilities } from "@/core/node/capability-docs";
-import { nativeNodeCatalog } from "@/core/workspace/definitions";
+import type { NodeCatalog } from "@/core/plugin/catalog";
 import type { NodePort } from "@ndea/sdk";
 import { useTheme } from "@/ThemeProvider";
 import { DocsContext } from "./docs-context";
@@ -29,7 +29,7 @@ import { DocsContext } from "./docs-context";
  * Content is sourced from the definition's documentation, ports, and capabilities —
  * no MDX pipeline yet (tiers 2–3 rich prose land with it). See the plan doc.
  */
-export function DocsProvider({ children }: { children: ReactNode }) {
+export function DocsProvider({ children, catalog }: { children: ReactNode; catalog: NodeCatalog }) {
   const [commandOpen, setCommandOpen] = useState(false);
   const [docsType, setDocsType] = useState<string | null>(null);
 
@@ -56,8 +56,8 @@ export function DocsProvider({ children }: { children: ReactNode }) {
   return (
     <DocsContext.Provider value={value}>
       {children}
-      <DocsCommand open={commandOpen} onOpenChange={setCommandOpen} onPick={openDocs} />
-      <NodeDocsSheet nodeType={docsType} onClose={() => setDocsType(null)} />
+      <DocsCommand catalog={catalog} open={commandOpen} onOpenChange={setCommandOpen} onPick={openDocs} />
+      <NodeDocsSheet catalog={catalog} nodeType={docsType} onClose={() => setDocsType(null)} />
     </DocsContext.Provider>
   );
 }
@@ -88,10 +88,12 @@ function Kbd({ children }: { children: ReactNode }) {
 }
 
 function DocsCommand({
+  catalog,
   open,
   onOpenChange,
   onPick,
 }: {
+  catalog: NodeCatalog;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onPick: (nodeType: string) => void;
@@ -101,12 +103,12 @@ function DocsCommand({
   const entries = useMemo(
     () =>
       open
-        ? nativeNodeCatalog
+        ? catalog
             .listDefinitions()
             .filter((definition) => definition.documentation)
             .toSorted((a, b) => a.title.localeCompare(b.title))
         : [],
-    [open],
+    [catalog, open],
   );
 
   return (
@@ -198,8 +200,16 @@ function PortRow({ port, out }: { port: NodePort; out: boolean }) {
   );
 }
 
-function NodeDocsSheet({ nodeType, onClose }: { nodeType: string | null; onClose: () => void }) {
-  const definition = nodeType ? nativeNodeCatalog.resolveCurrent(nodeType) : undefined;
+function NodeDocsSheet({
+  catalog,
+  nodeType,
+  onClose,
+}: {
+  catalog: NodeCatalog;
+  nodeType: string | null;
+  onClose: () => void;
+}) {
+  const definition = nodeType ? catalog.resolveCurrent(nodeType) : undefined;
   const doc = definition?.documentation;
   const open = Boolean(definition && doc);
   const caps = definition ? humanizedCapabilities(definition.capabilities) : [];

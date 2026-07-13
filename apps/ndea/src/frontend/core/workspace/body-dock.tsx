@@ -438,7 +438,7 @@ export function BodySocket({
 }: {
   nodeId: string;
   className?: string;
-  /** embedded interactive bodies (scatter/FOV on the canvas) claim the
+  /** embedded interactive bodies (Scatter/Image Viewer on the canvas) claim the
    *  pointer on click; stage tiles never claim — they own their rectangle */
   claimable?: boolean;
 }) {

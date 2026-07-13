@@ -3,24 +3,40 @@ import { Glob } from "bun";
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
-import {
-  getWorkspaceNodeSpec,
-  listWorkspaceNodeSpecs,
-  nativeNodeCatalog,
-  nativePluginFactory,
-} from "@/core/workspace/definitions";
-import { getWorkspaceNodeDescriptor, workspacePaletteNodeDescriptors } from "@/core/workspace/node-defs";
+import { createNativeWorkspaceNodeLibrary, nativePluginFactory } from "@/core/workspace/definitions";
 import { parseWorkspaceNodeConfig, workspaceNodeSpecOf } from "@/core/workspace/node-projection";
 import { NATIVE_NODE_CONTRIBUTIONS, NATIVE_NODE_CURRENT_REFS, NATIVE_NODE_DEFINITIONS } from "./native-nodes";
 import { collectPluginContribution, NATIVE_NODE_SOURCE } from "@/core/plugin/registration";
 import { loadNodeModule } from "./load-module";
+import { exactNodeTypeRef } from "@ndea/sdk";
 
 const APP_ROOT = resolve(import.meta.dir, "../../../..");
+const nativeNodeLibrary = createNativeWorkspaceNodeLibrary();
+const nativeNodeCatalog = nativeNodeLibrary.catalog;
 
 describe("native node catalog fitness functions", () => {
   test("the native factory registers every tuple definition exactly once", async () => {
     const batch = await collectPluginContribution(NATIVE_NODE_SOURCE, nativePluginFactory);
     expect(batch.definitions).toEqual(NATIVE_NODE_DEFINITIONS);
+    expect(batch.definitions.map(({ ref }) => String(ref.nodeTypeId))).toEqual([
+      "obs",
+      "dataset",
+      "transform-filter",
+      "wrangle",
+      "annotate",
+      "count",
+      "table",
+      "scatter",
+      "count-plot",
+      "histogram",
+      "gallery",
+      "image-viewer",
+      "collection",
+      "export",
+      "cache",
+      "subnet",
+      "proxy",
+    ]);
     expect(batch.definitions).toHaveLength(NATIVE_NODE_CONTRIBUTIONS.length);
     expect(new Set(batch.definitions.map(({ ref }) => `${ref.nodeTypeId}@${ref.nodeTypeVersion}`)).size).toBe(
       batch.definitions.length,
@@ -38,18 +54,29 @@ describe("native node catalog fitness functions", () => {
     }
   });
 
-  test("persisted compatibility identities are explicit tuple policy", () => {
-    expect(String(getWorkspaceNodeSpec("fov")?.definition.ref.nodeTypeId)).toBe("image-viewer");
-    expect(getWorkspaceNodeDescriptor("fov").label).toBe("Image Viewer");
-    expect(String(getWorkspaceNodeSpec("threshold")?.definition.ref.nodeTypeId)).toBe("transform-filter");
-    expect(String(getWorkspaceNodeSpec("selection")?.definition.ref.nodeTypeId)).toBe("selection");
-    expect(getWorkspaceNodeDescriptor("selection").inPalette).toBe(false);
+  test("current identities resolve exactly without retired aliases", () => {
+    const cache = nativeNodeLibrary.getSpec("cache");
+    const imageViewer = nativeNodeLibrary.getSpec("image-viewer");
+    expect(cache?.definition.ref).toEqual(exactNodeTypeRef("cache", "1.0.0"));
+    expect(imageViewer?.definition.ref).toEqual(exactNodeTypeRef("image-viewer", "1.0.0"));
+    expect(nativeNodeLibrary.getDescriptor("image-viewer")?.label).toBe("Image Viewer");
+    expect(imageViewer?.definition.inputs).toEqual([{ id: "focus-in", kind: "focus", label: "Focus" }]);
+    expect(nativeNodeCatalog.resolveCurrent("selection")).toBeUndefined();
+    expect(nativeNodeCatalog.resolveCurrent("fov")).toBeUndefined();
+    expect(nativeNodeLibrary.getSpec("selection")).toBeUndefined();
+    expect(nativeNodeLibrary.getSpec("fov")).toBeUndefined();
+    const paletteTypes = nativeNodeLibrary.paletteDescriptors().map(({ type }) => type);
+    expect(paletteTypes).toContain("cache");
+    expect(paletteTypes).toContain("image-viewer");
+    expect(paletteTypes).not.toContain("selection");
+    expect(paletteTypes).not.toContain("fov");
+    expect(String(nativeNodeLibrary.getSpec("threshold")?.definition.ref.nodeTypeId)).toBe("transform-filter");
   });
 
   test("Workspace order and palette are tuple-derived without a second list", () => {
     const tupleSpecs = NATIVE_NODE_CONTRIBUTIONS.map(workspaceNodeSpecOf);
-    expect(listWorkspaceNodeSpecs().map(({ type }) => type)).toEqual(tupleSpecs.map(({ type }) => type));
-    expect(workspacePaletteNodeDescriptors().map(({ type }) => type)).toEqual(
+    expect(nativeNodeLibrary.listSpecs().map(({ type }) => type)).toEqual(tupleSpecs.map(({ type }) => type));
+    expect(nativeNodeLibrary.paletteDescriptors().map(({ type }) => type)).toEqual(
       tupleSpecs.filter(({ inPalette }) => inPalette).map(({ type }) => type),
     );
   });
@@ -68,9 +95,9 @@ describe("native node catalog fitness functions", () => {
   });
 
   test("definition metadata is authoritative while graph runtime and layout stay app-local", () => {
-    for (const spec of listWorkspaceNodeSpecs()) {
+    for (const spec of nativeNodeLibrary.listSpecs()) {
       expect(nativeNodeCatalog.resolveExact(spec.definition.ref)).toBe(spec.definition);
-      expect(getWorkspaceNodeDescriptor(spec.type).label).toBe(spec.definition.title);
+      expect(nativeNodeLibrary.getDescriptor(spec.type)?.label).toBe(spec.definition.title);
       expect(spec.cook).toBeFunction();
       expect(spec.geometry.card.w).toBeGreaterThan(0);
       expect(spec.pluginId).toBe(spec.definition.load ? spec.definition.ref.nodeTypeId : null);
@@ -113,7 +140,7 @@ describe("native node catalog fitness functions", () => {
       },
       "image-viewer": {
         role: "view",
-        inputs: [["highlight-in", "focus"]],
+        inputs: [["focus-in", "focus"]],
         outputs: [],
         icon: "image",
       },
@@ -162,14 +189,16 @@ describe("native node catalog fitness functions", () => {
     }
   });
 
-  test("every config contract accepts its tuple-defined default and fresh persisted config", () => {
-    for (const spec of listWorkspaceNodeSpecs()) {
+  test("every config contract accepts its tuple-defined default", () => {
+    for (const spec of nativeNodeLibrary.listSpecs()) {
       const config = spec.definition.config;
       if (!config) continue;
       expect(config.schema.safeParse(config.defaultValue).success, `${spec.type} rejects its default config`).toBe(
         true,
       );
-      expect(parseWorkspaceNodeConfig(spec, {}).ok, `${spec.type} rejects a fresh {} config`).toBe(true);
+      expect(parseWorkspaceNodeConfig(spec, config.defaultValue).ok, `${spec.type} rejects its default config`).toBe(
+        true,
+      );
     }
   });
 

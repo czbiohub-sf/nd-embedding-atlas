@@ -51,7 +51,7 @@ export function FlagButton({ node, compact = false }: { node: GraphDocumentNode;
   const definition = workspace.def(node.id);
   if (!definition) return null;
 
-  if ((definition.kind === "transform" || definition.kind === "subnet") && node.type !== "selection") {
+  if (definition.kind === "transform" || definition.kind === "subnet") {
     return (
       <NdIconButton
         icon="bypass"

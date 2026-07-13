@@ -8,7 +8,7 @@ import { imageViewerNode } from "@/nodes/image-viewer/node";
 import { scatterNode } from "@/nodes/scatter/node";
 import { tableNode } from "@/nodes/table/node";
 import { thresholdNode } from "@/nodes/transform-filter/node";
-import { cacheNode, selectionNode } from "@/nodes/utils/cache/node";
+import { cacheNode } from "@/nodes/utils/cache/node";
 import { countNode } from "@/nodes/utils/count/node";
 import { datasetNode } from "@/nodes/utils/dataset/node";
 import { exportNode } from "@/nodes/utils/export/node";
@@ -40,7 +40,6 @@ export const NATIVE_NODE_CONTRIBUTIONS = Object.freeze([
   cacheNode,
   subnetNode,
   proxyNode,
-  selectionNode,
 ] as const satisfies readonly AnyNativeNodeContribution[]);
 
 // Heterogeneous immutable inventory: each definition retains its precise author

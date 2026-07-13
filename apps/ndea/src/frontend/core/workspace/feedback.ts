@@ -4,9 +4,7 @@
  */
 
 import { createContext, useContext, useMemo } from "react";
-import { nativeNodeCatalog } from "./definitions";
-import { getWorkspaceNodeDescriptor } from "./node-defs";
-import { useWorkspaceSelector } from "./workspace-context";
+import { useWorkspace, useWorkspaceSelector } from "./workspace-context";
 import type { GraphDocumentEdge, GraphDocumentNode } from "@/core/graph/records";
 
 export interface FeedbackChannel {
@@ -67,16 +65,6 @@ export function deriveFeedbackChannels(
   return channels;
 }
 
-function isDataWriter(n: GraphDocumentNode): boolean {
-  if (!n.pluginId) return false;
-  const caps = nativeNodeCatalog.resolveCurrent(n.pluginId)?.capabilities;
-  return caps != null && DATA_WRITE_CAPS.some((capability) => caps.includes(capability));
-}
-
-function isSourceNode(n: GraphDocumentNode): boolean {
-  return getWorkspaceNodeDescriptor(n.type)?.kind === "source";
-}
-
 /**
  * Live feedback channels for the current graph; recomputed only when the node or
  * edge map changes (drags touch `s.positions`, not `s.nodes`, so this is stable
@@ -85,9 +73,23 @@ function isSourceNode(n: GraphDocumentNode): boolean {
  * change). NdGraphNode reads its channels through `useNodeFeedbackContext`.
  */
 export function useFeedbackChannels(): FeedbackChannel[] {
+  const ws = useWorkspace();
   const nodes = useWorkspaceSelector((s) => s.nodes);
   const edges = useWorkspaceSelector((s) => s.edges);
-  return useMemo(() => deriveFeedbackChannels(nodes, edges, isDataWriter, isSourceNode), [nodes, edges]);
+  return useMemo(
+    () =>
+      deriveFeedbackChannels(
+        nodes,
+        edges,
+        (node) => {
+          if (!node.pluginId) return false;
+          const capabilities = ws.deps.nodeLibrary.catalog.resolveCurrent(node.pluginId)?.capabilities;
+          return capabilities != null && DATA_WRITE_CAPS.some((capability) => capabilities.includes(capability));
+        },
+        (node) => ws.deps.nodeLibrary.getDescriptor(node.type)?.kind === "source",
+      ),
+    [edges, nodes, ws],
+  );
 }
 
 /** Canvas-level context: the single derived channel set, read by each node. */

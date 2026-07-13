@@ -157,11 +157,16 @@ export class NodeCatalogRegistration {
   #frozen = false;
   #disposed = false;
 
-  async register(source: NodeContributionSource, factory: PluginFactory): Promise<void> {
+  async register(
+    source: NodeContributionSource,
+    factory: PluginFactory,
+    validateBatch?: (batch: PluginContributionBatch) => void,
+  ): Promise<void> {
     if (this.#frozen) throw new Error("node catalog registration is frozen");
     if (this.#disposed) throw new Error("node catalog registration is disposed");
     const batch = await collectPluginContribution(source, factory);
     try {
+      validateBatch?.(batch);
       this.#builder.commit(batch);
     } catch (error) {
       try {

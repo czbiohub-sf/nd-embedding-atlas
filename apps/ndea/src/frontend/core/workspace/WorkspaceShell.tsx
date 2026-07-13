@@ -20,7 +20,6 @@ import { useDashboard } from "@/hooks/useDashboard";
 import { BodySocket, HeaderSocket, WorkspaceBodies } from "./body-dock";
 import { WorkspaceCanvas } from "./canvas/WorkspaceCanvas";
 import { ND_TIMING } from "./constants";
-import { nativeWorkspaceNodeLibrary } from "./definitions";
 import type { WorkspaceNodeLibrary } from "./node-projection";
 import { StagePane, stageHasContent } from "./stage/StagePane";
 import { useTelemetrySelector, useWorkspace, useWorkspaceSelector, WorkspaceProvider } from "./workspace-context";
@@ -385,7 +384,7 @@ function WorkspaceFrame() {
   );
 }
 
-export function WorkspaceShell({ nodeLibrary = nativeWorkspaceNodeLibrary }: { nodeLibrary?: WorkspaceNodeLibrary }) {
+export function WorkspaceShell({ nodeLibrary }: { nodeLibrary: WorkspaceNodeLibrary }) {
   return (
     <WorkspaceProvider nodeLibrary={nodeLibrary}>
       <WorkspaceFrame />

@@ -25,7 +25,7 @@ import {
   ContextMenuSubTrigger,
 } from "@/components/ui/context-menu";
 import { NdHud } from "@/components/nd/nd-primitives";
-import { type WorkspaceNodeDescriptor, workspacePaletteNodeDescriptors } from "../node-defs";
+import type { WorkspaceNodeDescriptor } from "../node-defs";
 import { useWorkspace } from "../workspace-context";
 import type { WorkspaceNodePosition } from "../types";
 import type { GraphNodeType } from "@/core/graph/records";
@@ -52,7 +52,7 @@ const CATEGORY: Partial<Record<GraphNodeType, Group>> = {
   scatter: "Views",
   table: "Views",
   gallery: "Views",
-  fov: "Views",
+  "image-viewer": "Views",
   cache: "Output",
   export: "Output",
 };
@@ -103,7 +103,7 @@ export function AddNodeMenu({ menu, onClose }: { menu: AddMenuState | null; onCl
           <NdHud size={9}>add node</NdHud>
           <span className="font-mono text-[8.5px] text-text-muted">tab · right-click</span>
         </div>
-        {bucketed(workspacePaletteNodeDescriptors()).map(({ group, defs }) => (
+        {bucketed(ws.deps.nodeLibrary.paletteDescriptors()).map(({ group, defs }) => (
           <Fragment key={group}>
             <ContextMenuSeparator />
             {SUBMENU.has(group) ? (

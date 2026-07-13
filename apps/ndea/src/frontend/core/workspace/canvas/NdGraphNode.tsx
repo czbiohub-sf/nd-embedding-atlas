@@ -121,7 +121,7 @@ function NdGraphNodeInner({ id, selected }: NodeProps<NdGraphNodeType>) {
         </div>
       );
     if (form === "full" || spec?.body === "card-and-full") {
-      return <BodySocket nodeId={id} claimable={node.type === "scatter" || node.type === "fov"} />;
+      return <BodySocket nodeId={id} claimable={node.type === "scatter" || node.type === "image-viewer"} />;
     }
     // Compact card for definitions whose Body is deliberately full-only.
     return (

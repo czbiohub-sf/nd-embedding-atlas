@@ -11,9 +11,11 @@ import {
   validateDoc,
 } from "./persist";
 import { scopeColor } from "@/core/coordination/coordination";
-import { nativeWorkspaceNodeLibrary } from "./definitions";
+import { createNativeWorkspaceNodeLibrary } from "./definitions";
 import type { WorkspaceDocumentState } from "./types";
 import type { GraphDocumentNode } from "@/core/graph/records";
+
+const nativeWorkspaceNodeLibrary = createNativeWorkspaceNodeLibrary();
 
 function emptyState(): WorkspaceDocumentState {
   return {

@@ -1,8 +1,3 @@
-export {
-  getWorkspaceNodeDescriptor,
-  listWorkspaceNodeDescriptors,
-  workspacePaletteNodeDescriptors,
-} from "./definitions";
 export type { WorkspaceNodeDescriptor } from "./node-projection";
 
 import type { WorkspaceNodeDescriptor } from "./node-projection";

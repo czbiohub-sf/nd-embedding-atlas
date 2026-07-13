@@ -1,31 +1,13 @@
 import type { JsonValue, PortKind } from "@ndea/sdk";
 
-/**
- * App-local graph roles. `cache` is the active checkpoint role; `selection`
- * remains only so versioned Workspace documents can still be migrated.
- */
-export type GraphNodeRole = "source" | "transform" | "view" | "cache" | "selection" | "subnet" | "proxy";
+/** App-local graph roles. Cache is the sole checkpoint role. */
+export type GraphNodeRole = "source" | "transform" | "view" | "cache" | "subnet" | "proxy";
 
-/** App-local node type identities. Exact version refs remain SDK-owned. */
-export type GraphNodeType =
-  | "obs"
-  | "dataset"
-  | "threshold"
-  | "wrangle"
-  | "annotate"
-  | "count"
-  | "table"
-  | "scatter"
-  | "count-plot"
-  | "histogram"
-  | "gallery"
-  | "fov"
-  | "collection"
-  | "export"
-  | "cache"
-  | "selection"
-  | "subnet"
-  | "proxy";
+/**
+ * Persisted node type identity. Resolution is catalog-owned, so this remains
+ * open to validated external definitions rather than duplicating built-in IDs.
+ */
+export type GraphNodeType = string;
 
 /** One persisted node record inside a Workspace graph document. */
 export interface GraphDocumentNode {

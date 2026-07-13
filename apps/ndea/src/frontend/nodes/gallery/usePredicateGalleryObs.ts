@@ -13,7 +13,7 @@
  *
  * Reactivity: the obs query is keyed on the predicate SQL TEXT. When the
  * upstream node re-cooks and `host.inputPredicate` emits a different predicate,
- * the key changes and the query refetches. A frozen Selection node emits a
+ * the key changes and the query refetches. A pinned Cache node emits a
  * STABLE predicate (no mutable temp-table reference), so no per-revision
  * cache-buster is needed — the predicate text fully identifies the result.
  */

@@ -1,9 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
 import { resolvePreset } from "./presets";
-import { nativeWorkspaceNodeLibrary } from "./definitions";
+import { createNativeWorkspaceNodeLibrary } from "./definitions";
 import { Workspace } from "./workspace-store";
 import type { Metadata } from "@ndea/protocol";
+
+const nativeWorkspaceNodeLibrary = createNativeWorkspaceNodeLibrary();
 
 // rAF doesn't exist under bun:test — the Workspace ctor references it for the
 // flush scheduler. We only inspect the store synchronously, so a stub is enough.
@@ -35,9 +37,11 @@ describe("seedAnnotate", () => {
 
     const nodes = Object.values(ws.store.state.nodes);
     const types = new Set<string>(nodes.map((n) => n.type));
-    for (const t of ["obs", "wrangle", "count", "table", "scatter", "cache", "annotate", "fov", "gallery"]) {
+    for (const t of ["obs", "wrangle", "count", "table", "scatter", "cache", "annotate", "image-viewer", "gallery"]) {
       expect(types.has(t)).toBe(true);
     }
+    expect(types.has("selection")).toBe(false);
+    expect(types.has("fov")).toBe(false);
     // Dataset-agnostic: no baked config (the scatter uses the dataset's default
     // embedding, the wrangle is identity) — nothing pins a specific dataset.
     for (const n of nodes) expect(n.config).toBeUndefined();
@@ -56,7 +60,7 @@ describe("seedAnnotate", () => {
     expect(wired("scatter", "cache")).toBe(true);
     expect(wired("cache", "annotate")).toBe(true);
     expect(wired("cache", "gallery")).toBe(true);
-    expect(wired("table", "fov")).toBe(true);
+    expect(wired("table", "image-viewer")).toBe(true);
   });
 
   test("opens to the tiled dashboard, not the canvas (R10)", () => {
@@ -65,7 +69,7 @@ describe("seedAnnotate", () => {
     expect(ws.store.state.disposition).toBe("hidden");
     // The five stageable views tile; obs/wrangle/count/cache stay off-stage.
     const staged = new Set<string>(ws.stagedIds().map((id) => ws.store.state.nodes[id].type));
-    for (const t of ["scatter", "table", "annotate", "fov", "gallery"]) expect(staged.has(t)).toBe(true);
+    for (const t of ["scatter", "table", "annotate", "image-viewer", "gallery"]) expect(staged.has(t)).toBe(true);
     for (const t of ["obs", "wrangle", "count", "cache"]) expect(staged.has(t)).toBe(false);
   });
 });

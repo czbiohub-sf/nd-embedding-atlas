@@ -12,7 +12,6 @@ import { useEffect, useRef } from "react";
 
 import { ND_PORT_KINDS, type NdPortKind } from "@/components/nd/nd-port";
 import { ND_Z } from "../constants";
-import { getWorkspaceNodeDescriptor } from "../node-defs";
 import { useWorkspace, useWorkspaceSelector } from "../workspace-context";
 import { portPos } from "./port-positions";
 
@@ -47,7 +46,8 @@ export function K1Cursor({ paneRef }: { paneRef: React.RefObject<HTMLDivElement 
       const dragKind = connRef.current.inProgress
         ? (() => {
             const n = connRef.current.fromNode ? ws.store.state.nodes[connRef.current.fromNode.id] : null;
-            return n ? ND_PORT_KINDS[getWorkspaceNodeDescriptor(n.type).outKind] : null;
+            const descriptor = n ? ws.def(n.id) : null;
+            return descriptor ? ND_PORT_KINDS[descriptor.outKind] : null;
           })()
         : null;
       const color = spec?.color ?? dragKind?.color ?? "var(--foreground)";
@@ -100,7 +100,8 @@ export function K1Cursor({ paneRef }: { paneRef: React.RefObject<HTMLDivElement 
       const s = ws.store.state;
       for (const n of Object.values(s.nodes)) {
         if ((n.parent ?? null) !== (s.graphPath ?? null)) continue;
-        const def = getWorkspaceNodeDescriptor(n.type);
+        const def = ws.def(n.id);
+        if (!def) continue;
         for (const which of ["in", "out"] as const) {
           if ((which === "in" && !def.hasIn) || (which === "out" && !def.hasOut)) continue;
           const p = portPos(ws, n.id, which);

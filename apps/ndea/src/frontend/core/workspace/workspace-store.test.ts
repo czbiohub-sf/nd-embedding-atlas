@@ -2,9 +2,11 @@ import { beforeEach, describe, expect, test } from "bun:test";
 import type { Metadata } from "@ndea/protocol";
 import { rowIndex } from "@ndea/sdk";
 import { predicateSql } from "@/core/graph/cook";
-import { nativeWorkspaceNodeLibrary } from "./definitions";
+import { createNativeWorkspaceNodeLibrary } from "./definitions";
 import type { WorkspaceNodeLibrary } from "./node-projection";
 import { Workspace } from "./workspace-store";
+
+const nativeWorkspaceNodeLibrary = createNativeWorkspaceNodeLibrary();
 
 function createWorkspace(nodeLibrary: WorkspaceNodeLibrary = nativeWorkspaceNodeLibrary): Workspace {
   return new Workspace({
@@ -29,6 +31,9 @@ describe("Workspace graph transactions", () => {
       catalog: nativeWorkspaceNodeLibrary.catalog,
       getSpec: (): undefined => {},
       getDescriptor: (): undefined => {},
+      listSpecs: () => [],
+      listDescriptors: () => [],
+      paletteDescriptors: () => [],
     });
     const workspace = createWorkspace(emptyLibrary);
     expect(() => workspace.addNode("obs", { x: 0, y: 0 })).toThrow('no registered node descriptor for type "obs"');

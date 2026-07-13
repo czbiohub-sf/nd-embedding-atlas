@@ -12,7 +12,7 @@ export function seedAnnotate(ws: Workspace): void {
   const scatter = ws.addNode("scatter", { x: 660, y: 460 });
   const cache = ws.addNode("cache", { x: 1040, y: 460 });
   const annotate = ws.addNode("annotate", { x: 1400, y: 460 });
-  const fov = ws.addNode("fov", { x: 1040, y: 200 });
+  const imageViewer = ws.addNode("image-viewer", { x: 1040, y: 200 });
   const gallery = ws.addNode("gallery", { x: 1400, y: 200 });
   ws.connect(obs, wr);
   ws.connect(wr, count);
@@ -21,7 +21,7 @@ export function seedAnnotate(ws: Workspace): void {
   ws.connect(scatter, cache); // lasso → the cached working set
   ws.connect(cache, annotate); // annotate the cached scope
   ws.connect(cache, gallery); // gallery crops for the cached scope
-  ws.connect(table, fov); // idetik shows the table-focused row's crop
+  ws.connect(table, imageViewer); // Image Viewer shows the table-focused row's crop
   ws.setDisposition("hidden"); // opens to the tiled dashboard, not the canvas (R10)
   ws.selectNode(scatter);
 }

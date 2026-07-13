@@ -85,6 +85,8 @@ export const PluginDiagnosticStageSchema = z.enum([
   "client-entry",
   "asset",
   "bootstrap",
+  "import",
+  "registration",
 ]);
 export type PluginDiagnosticStage = z.infer<typeof PluginDiagnosticStageSchema>;
 

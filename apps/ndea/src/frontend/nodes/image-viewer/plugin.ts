@@ -1,4 +1,4 @@
-/** Image-viewer plugin descriptor (PLUGIN-ARCHITECTURE §8, §10.2). */
+/** Image Viewer plugin descriptor (PLUGIN-ARCHITECTURE §8, §10.2). */
 
 import { z } from "zod";
 import { defineNode, exactNodeTypeRef, nodeConfigVersion } from "@ndea/sdk";
@@ -12,8 +12,7 @@ export const imageViewerDefinition = defineNode({
   ref: exactNodeTypeRef("image-viewer", "1.0.0"),
   title: "Image Viewer",
   role: "view",
-  // Preserve the persisted port id while exposing its canonical focus meaning.
-  inputs: [{ id: "highlight-in", kind: "focus", label: "Focus" }],
+  inputs: [{ id: "focus-in", kind: "focus", label: "Focus" }],
   outputs: [],
   capabilities: CAPABILITIES,
   dataRequirements: ["plate-image"],

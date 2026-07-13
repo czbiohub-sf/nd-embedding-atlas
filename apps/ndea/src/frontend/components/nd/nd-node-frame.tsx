@@ -33,7 +33,7 @@ export interface NdNodeFrameProps {
   led?: NdLedState | null;
   /** bracketed row count (host decides visibility per the count policy) */
   count?: string | null;
-  /** optional header chip (e.g. ◇ for selection nodes) */
+  /** optional header chip (e.g. ◆ for checkpoint nodes) */
   badge?: React.ReactNode;
   selected?: boolean;
   claimed?: boolean;

@@ -6,7 +6,7 @@
  *   - Cache pins the current rows by value; downstream is fixed (R3, R6)
  *   - the live input moving past the pin is detectable as stale (R5)
  *   - Recache re-pins (R4); go-live drops the pin
- *   - the scatter freeze affordance mints a Cache node, not a Selection node (R7)
+ *   - the scatter freeze affordance mints and reuses one Cache node (R7)
  *
  * Reads are synchronous via engine.pull — no flush/rAF needed.
  */
@@ -15,9 +15,11 @@ import { describe, expect, test } from "bun:test";
 import { rowIndex } from "@ndea/sdk";
 
 import { predicateSql } from "@/core/graph/cook";
-import { nativeWorkspaceNodeLibrary } from "./definitions";
+import { createNativeWorkspaceNodeLibrary } from "./definitions";
 import { Workspace } from "./workspace-store";
 import type { Metadata } from "@ndea/protocol";
+
+const nativeWorkspaceNodeLibrary = createNativeWorkspaceNodeLibrary();
 
 // rAF doesn't exist under bun:test — the Workspace ctor references it for the
 // flush scheduler. We only pull synchronously, so a no-op stub is enough.
@@ -135,7 +137,7 @@ describe("Cache node", () => {
 
     const cacheId = ws.freezeSelection(sc);
     expect(cacheId).not.toBeNull();
-    expect(ws.store.state.nodes[cacheId!].type).toBe("cache"); // NOT "selection"
+    expect(ws.store.state.nodes[cacheId!].type).toBe("cache");
     expect(ws.isCached(cacheId!)).toBe(true);
     expect(cookSql(ws, cacheId!)).toBe("__row_index__ IN (4, 5)");
 
