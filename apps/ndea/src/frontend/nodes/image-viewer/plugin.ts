@@ -6,6 +6,7 @@ import { mountReactNodeBody } from "@/core/node/react-node-body";
 import type { ViewerConfig } from "./view";
 
 const CAPABILITIES = ["data-read", "spatial-data", "focus-coordination"] as const;
+export type ImageViewerCapabilities = (typeof CAPABILITIES)[number];
 
 export const imageViewerDefinition = defineNode({
   ref: exactNodeTypeRef("image-viewer", "1.0.0"),

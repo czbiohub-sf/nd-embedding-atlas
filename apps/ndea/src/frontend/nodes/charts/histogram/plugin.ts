@@ -6,6 +6,7 @@ import { mountReactNodeBody } from "@/core/node/react-node-body";
 import type { HistogramConfig } from "./view";
 
 const CAPABILITIES = ["data-read", "predicate-publish", "row-set-subscribe"] as const;
+export type HistogramCapabilities = (typeof CAPABILITIES)[number];
 
 export const histogramDefinition = defineNode({
   ref: exactNodeTypeRef("histogram", "1.0.0"),

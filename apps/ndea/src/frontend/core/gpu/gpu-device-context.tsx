@@ -14,7 +14,7 @@ const UNMANAGED: DeviceLeaseState = { managed: false };
 const GpuDeviceContext = createContext<DeviceLeaseState>(UNMANAGED);
 
 export function GpuDeviceProvider({ children }: { children: ReactNode }) {
-  const host = useOptionalHost();
+  const host = useOptionalHost<unknown, "gpu-device">();
   const [lease, setLease] = useState<DeviceLease | null>(null);
   const [error, setError] = useState<Error | null>(null);
 

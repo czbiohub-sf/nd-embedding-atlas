@@ -8,7 +8,7 @@
 import { useReactFlow, useStore as useXyStore, ViewportPortal } from "@xyflow/react";
 import { useEffect, useRef, useState } from "react";
 
-import { useWorkspace, useWsSelector } from "../workspace-context";
+import { useWorkspace, useWorkspaceSelector } from "../workspace-context";
 import { portPos } from "./port-positions";
 import { knifeCrossings, wirePath, type Pt } from "./wire-geometry";
 
@@ -43,9 +43,9 @@ export function KnifeLayer({ active }: { active: boolean }) {
   const ws = useWorkspace();
   const { screenToFlowPosition } = useReactFlow();
   const zoom = useXyStore((s) => s.transform[2]);
-  const graphPath = useWsSelector((s) => s.graphPath);
-  const allNodes = useWsSelector((s) => s.nodes);
-  const allEdges = useWsSelector((s) => s.edges);
+  const graphPath = useWorkspaceSelector((s) => s.graphPath);
+  const allNodes = useWorkspaceSelector((s) => s.nodes);
+  const allEdges = useWorkspaceSelector((s) => s.edges);
   // the knife only sees the current level's wires
   const edges = Object.fromEntries(
     Object.entries(allEdges).filter(

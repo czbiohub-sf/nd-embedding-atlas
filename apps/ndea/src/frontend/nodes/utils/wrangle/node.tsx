@@ -6,18 +6,19 @@
 
 import { z } from "zod";
 import { WranglePane } from "@/core/workspace/canvas/WranglePane";
-import { andWith, defineWsNode } from "@/core/workspace/node-kit";
-import type { WsNode } from "@/core/workspace/types";
+import { defineWorkspaceNodeSpec } from "@/core/workspace/node-kit";
+import { andGraphPredicate } from "@/core/graph/cook";
+import type { GraphDocumentNode } from "@/core/graph/records";
 
 export interface WrangleConfig {
   prql?: string;
 }
 
-function WrangleBody({ node }: { node: WsNode }) {
+function WrangleBody({ node }: { node: GraphDocumentNode }) {
   return <WranglePane id={node.id} />;
 }
 
-export const wrangleNode = defineWsNode({
+export const wrangleNode = defineWorkspaceNodeSpec({
   id: "wrangle",
   type: "wrangle",
   title: "Wrangle",
@@ -26,10 +27,10 @@ export const wrangleNode = defineWsNode({
   outputs: [{ id: "out", kind: "pred", label: "Out" }],
   config: z.object({ prql: z.string().optional() }),
   configVersion: 1,
-  engineKind: "transform",
+  evaluationRole: "transform",
   // cook reads the COMPILED predicate (wranglePreds), not the PRQL source; the
   // config holds the source `prql` that WranglePane reads + recompiles.
-  cook: (inputs, host) => andWith(inputs, host.wranglePred()),
+  cook: (inputs, host) => andGraphPredicate(inputs, host.wranglePredicate()),
   Body: WrangleBody,
   geometry: { chipW: 148, card: { w: 280, h: 168 }, full: { w: 320, h: 280 }, canFull: true },
   stage: "pin-only",

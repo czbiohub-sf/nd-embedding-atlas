@@ -25,15 +25,16 @@ import {
   ContextMenuSubTrigger,
 } from "@/components/ui/context-menu";
 import { NdHud } from "@/components/nd/nd-primitives";
-import { type NodeDef, paletteDefs } from "../node-defs";
+import { type WorkspaceNodeDescriptor, workspacePaletteNodeDescriptors } from "../node-defs";
 import { useWorkspace } from "../workspace-context";
-import type { WsNodeType, XY } from "../types";
+import type { WorkspaceNodePosition } from "../types";
+import type { GraphNodeType } from "@/core/graph/records";
 
 /** menu invocation — pointer (for the anchor) + spawn point in world coords */
 export interface AddMenuState {
   clientX: number;
   clientY: number;
-  world: XY;
+  world: WorkspaceNodePosition;
 }
 
 // ── Node organization ────────────────────────────────────────────────
@@ -42,7 +43,7 @@ export interface AddMenuState {
 const GROUP_ORDER = ["Data", "Transform", "Views", "Output", "Other"] as const;
 type Group = (typeof GROUP_ORDER)[number];
 const SUBMENU = new Set<Group>(["Views"]);
-const CATEGORY: Partial<Record<WsNodeType, Group>> = {
+const CATEGORY: Partial<Record<GraphNodeType, Group>> = {
   dataset: "Data",
   collection: "Data",
   wrangle: "Transform",
@@ -56,8 +57,8 @@ const CATEGORY: Partial<Record<WsNodeType, Group>> = {
   export: "Output",
 };
 
-function bucketed(defs: NodeDef[]): { group: Group; defs: NodeDef[] }[] {
-  const byGroup = new Map<Group, NodeDef[]>();
+function bucketed(defs: WorkspaceNodeDescriptor[]): { group: Group; defs: WorkspaceNodeDescriptor[] }[] {
+  const byGroup = new Map<Group, WorkspaceNodeDescriptor[]>();
   for (const d of defs) {
     const g = CATEGORY[d.type] ?? "Other";
     const list = byGroup.get(g) ?? [];
@@ -77,12 +78,12 @@ export function AddNodeMenu({ menu, onClose }: { menu: AddMenuState | null; onCl
     [menu],
   );
 
-  const spawn = (type: WsNodeType) => {
+  const spawn = (type: GraphNodeType) => {
     if (menu) ws.addNode(type, menu.world);
     onClose();
   };
 
-  const row = (d: NodeDef) => (
+  const row = (d: WorkspaceNodeDescriptor) => (
     <ContextMenuItem key={d.type} className="justify-between gap-6" onClick={() => spawn(d.type)}>
       <span>{d.label}</span>
       <ContextMenuShortcut>{d.stage}</ContextMenuShortcut>
@@ -102,7 +103,7 @@ export function AddNodeMenu({ menu, onClose }: { menu: AddMenuState | null; onCl
           <NdHud size={9}>add node</NdHud>
           <span className="font-mono text-[8.5px] text-text-muted">tab · right-click</span>
         </div>
-        {bucketed(paletteDefs()).map(({ group, defs }) => (
+        {bucketed(workspacePaletteNodeDescriptors()).map(({ group, defs }) => (
           <Fragment key={group}>
             <ContextMenuSeparator />
             {SUBMENU.has(group) ? (

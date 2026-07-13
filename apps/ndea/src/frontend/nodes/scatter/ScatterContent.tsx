@@ -28,6 +28,7 @@ import { LegendProvider } from "./LegendContext";
 import { ScatterToolbar } from "./ScatterToolbar";
 import { useScatterUIState } from "./ScatterUIStateProvider";
 import { ScatterView } from "./ScatterView";
+import type { ScatterCapabilities } from "./plugin";
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
@@ -53,7 +54,7 @@ export function ScatterContent({
 }: ScatterContentProps) {
   const { state, actions, meta } = useDashboard();
   // The host owns this instance's WASM bitmap lifecycle (§6.6).
-  const host = useHost();
+  const host = useHost<unknown, ScatterCapabilities>();
   const { metadata } = state;
   // Focus read: scoped to this instance's host (sync group / focus wire), so the
   // point-info pane follows group focus — not the global dashboard highlight.

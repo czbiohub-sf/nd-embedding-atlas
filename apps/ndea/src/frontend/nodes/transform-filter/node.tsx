@@ -3,11 +3,11 @@
  * out of the palette, kept so older documents still load + cook). It is the ONE
  * instance-driven node: the GraphEngine cook drives the REAL plugin contract
  * (`createThresholdFilterInstance` + `makeTransformHost`), so it owns engine
- * registration via the `registerEngine` escape hatch (KTD3 — the single
+ * registration via the `registerEvaluation` escape hatch (KTD3 — the single
  * documented residue of plugin-cook convergence) rather than a plain `cook`.
  *
  * The body renders the plugin's `ThresholdFilterView` against the per-node host
- * the workspace stashed during `registerEngine`.
+ * the workspace stashed during `registerEvaluation`.
  */
 
 import type { Coordinator } from "@uwdata/mosaic-core";
@@ -18,14 +18,15 @@ import { transformFilterDefinition } from "@/nodes/transform-filter/plugin";
 import { createThresholdFilterRuntime } from "@/nodes/transform-filter/instance";
 import type { ThresholdFilterConfig } from "@/nodes/transform-filter/view";
 import { ThresholdFilterView } from "@/nodes/transform-filter/view";
-import { defineWsNode, predSqls } from "@/core/workspace/node-kit";
+import { defineWorkspaceNodeSpec } from "@/core/workspace/node-kit";
+import { assertSynchronousNodeRuntime, predicateSqls } from "@/core/graph/cook";
 import { useWorkspace } from "@/core/workspace/workspace-context";
-import type { WsNode } from "@/core/workspace/types";
+import type { GraphDocumentNode } from "@/core/graph/records";
 
 // The one instance-driven node pairs an inline Body with its spec (intentional
 // mixed export); fast-refresh can't split it.
 // eslint-disable-next-line react/only-export-components
-function ThresholdBody({ node }: { node: WsNode }) {
+function ThresholdBody({ node }: { node: GraphDocumentNode }) {
   const ws = useWorkspace();
   const host = ws.transformHosts.get(node.id);
   return host ? (
@@ -35,7 +36,7 @@ function ThresholdBody({ node }: { node: WsNode }) {
   ) : null;
 }
 
-export const thresholdNode = defineWsNode<ThresholdFilterConfig>({
+export const thresholdNode = defineWorkspaceNodeSpec<ThresholdFilterConfig>({
   id: "threshold",
   type: "threshold",
   title: "Threshold Filter",
@@ -43,18 +44,20 @@ export const thresholdNode = defineWsNode<ThresholdFilterConfig>({
   pluginId: "transform-filter",
   inputs: [{ id: "in", kind: "pred", label: "In" }],
   outputs: [{ id: "out", kind: "pred", label: "Out" }],
-  engineKind: "transform",
-  // never registered via the plain cook path (registerEngine owns it); this is
-  // an inert placeholder so the spec satisfies the `cook` contract / `isWsNodeSpec`.
-  cook: (inputs) => ({ kind: "pred", sql: andPreds(predSqls(inputs)) }),
-  registerEngine(ctx) {
+  evaluationRole: "transform",
+  // never registered via the plain cook path (registerEvaluation owns it); this is
+  // an inert placeholder so the spec satisfies the `cook` contract / `isWorkspaceNodeSpec`.
+  cook: (inputs) => ({ kind: "pred", sql: andPreds(predicateSqls(inputs)) }),
+  registerEvaluation(ctx) {
     // Driven by the real plugin instance through a transform-scoped host:
     // recompute publishes via host.publishPredicate → captured → cook result.
     let captured: Predicate = null;
-    const host = makeTransformHost<ThresholdFilterConfig>({
+    const configContract = transformFilterDefinition.config;
+    if (!configContract) throw new Error("transform-filter definition requires a config contract");
+    const hostHandle = makeTransformHost<ThresholdFilterConfig>({
       instanceId: nodeInstanceId(ctx.id),
       definitionRef: transformFilterDefinition.ref,
-      config: { column: null, threshold: 0 },
+      config: { ...configContract.defaultValue },
       coordinator: ctx.coordinator as Coordinator,
       table: ctx.table,
       metadata: ctx.metadata,
@@ -63,12 +66,18 @@ export const thresholdNode = defineWsNode<ThresholdFilterConfig>({
       },
       onConfigPatch: () => ctx.markDirty(),
     });
+    const { host } = hostHandle;
     const runtime = createThresholdFilterRuntime(host);
-    ctx.onDispose(() => runtime.dispose());
+    ctx.onDispose(() => {
+      runtime.dispose();
+      hostHandle.dispose();
+    });
     ctx.setTransformHost(host);
     ctx.addNode("transform", (inputs, pluginCtx) => {
       captured = null;
-      void runtime.recompute?.(new Map([["in", [andPreds(predSqls(inputs))]]]), pluginCtx);
+      if (!runtime.recompute) throw new Error("transform-filter runtime must define synchronous recompute");
+      const result = runtime.recompute(new Map([["filter-in", [andPreds(predicateSqls(inputs))]]]), pluginCtx);
+      assertSynchronousNodeRuntime(result);
       return { kind: "pred", sql: captured };
     });
   },

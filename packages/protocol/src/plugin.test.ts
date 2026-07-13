@@ -15,7 +15,7 @@ const validManifest = {
   },
   license: "MIT",
   permissions: [{ permission: "gpu", reason: "Renders a point cloud" }],
-} as const;
+};
 
 describe("PluginManifestSchema", () => {
   test("parses every independently versioned manifest field through the protocol barrel", () => {

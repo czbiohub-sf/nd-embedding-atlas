@@ -14,12 +14,16 @@ export interface AppGraphNodeSpec {
 const GRAPH_NODES = new Map<string, AppGraphNodeSpec>();
 const DEFINITIONS = new Map<string, NodeDefinition>();
 
+function serializeMetadata(value: unknown): string | undefined {
+  return JSON.stringify(normalizedMetadata(value));
+}
+
 function normalizedMetadata(value: unknown): unknown {
   if (value instanceof Set) {
     return [...value]
       .map(normalizedMetadata)
       .toSorted((left, right) =>
-        (JSON.stringify(left) ?? "undefined").localeCompare(JSON.stringify(right) ?? "undefined"),
+        (serializeMetadata(left) ?? "undefined").localeCompare(serializeMetadata(right) ?? "undefined"),
       );
   }
   if (Array.isArray(value)) return value.map(normalizedMetadata);
@@ -36,18 +40,19 @@ function normalizedMetadata(value: unknown): unknown {
 
 function metadataConflict(id: string, field: string, definition: unknown, graph: unknown): Error {
   return new Error(
-    `node "${id}" metadata conflict at "${field}": definition=${JSON.stringify(normalizedMetadata(definition))}, graph=${JSON.stringify(normalizedMetadata(graph))}`,
+    `node "${id}" metadata conflict at "${field}": definition=${serializeMetadata(definition)}, graph=${serializeMetadata(graph)}`,
   );
 }
 
 function assertMatchingMetadata(definition: NodeDefinition, graph: AppGraphNodeSpec): void {
-  const id = definition.ref.nodeTypeId as string;
+  const id = definition.ref.nodeTypeId;
   if (graph.id !== id) throw metadataConflict(id, "id", id, graph.id);
 
   for (const field of ["title", "inputs", "outputs"] as const) {
-    if (JSON.stringify(normalizedMetadata(definition[field])) !== JSON.stringify(normalizedMetadata(graph[field]))) {
-      throw metadataConflict(id, field, definition[field], graph[field]);
-    }
+    const definitionValue = definition[field];
+    const graphValue = graph[field];
+    if (serializeMetadata(definitionValue) !== serializeMetadata(graphValue))
+      throw metadataConflict(id, field, definitionValue, graphValue);
   }
 
   const graphRole = (graph as AppGraphNodeSpec & { kind?: unknown }).kind;
@@ -67,7 +72,7 @@ export type RegistrationResult = { ok: true } | { ok: false; error: string };
 export function registerDefinition<Config, Capabilities extends readonly NodeCapability[]>(
   definition: NodeDefinition<Config, Capabilities>,
 ): void {
-  const id = definition.ref.nodeTypeId as string;
+  const id = definition.ref.nodeTypeId;
   if (DEFINITIONS.has(id)) throw new Error(`duplicate node definition: ${id}`);
   DEFINITIONS.set(id, definition as NodeDefinition);
   try {
@@ -79,7 +84,7 @@ export function registerDefinition<Config, Capabilities extends readonly NodeCap
 }
 
 export function tryRegisterExternalDefinition(definition: NodeDefinition): RegistrationResult {
-  const id = definition.ref.nodeTypeId as string;
+  const id = definition.ref.nodeTypeId;
   if (DEFINITIONS.has(id)) {
     return {
       ok: false,

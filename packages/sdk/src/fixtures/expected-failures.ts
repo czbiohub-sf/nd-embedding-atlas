@@ -68,7 +68,7 @@ defineNode({
   role: "view",
   inputs: [],
   outputs: [],
-  capabilities: ["data-read"] as const,
+  capabilities: ["data-read"],
   load: () =>
     Promise.resolve<NodeModule<unknown, "data-read">>({
       createRuntime(host) {

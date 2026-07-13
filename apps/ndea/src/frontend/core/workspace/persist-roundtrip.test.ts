@@ -15,7 +15,8 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { registerBuiltinNodes } from "./nodes";
 import { loadFromStorage, saveToStorage, storageKey, toPersistedDoc, validateDoc } from "./persist";
-import { seedWorkspace, sqlOf, Workspace } from "./workspace-store";
+import { predicateSql } from "@/core/graph/cook";
+import { seedWorkspace, Workspace } from "./workspace-store";
 import type { Metadata } from "@ndea/protocol";
 
 // rAF doesn't exist under bun:test — the Workspace ctor references it for the
@@ -32,7 +33,7 @@ function makeWs() {
   });
 }
 
-const cookSql = (ws: Workspace, id: string) => sqlOf(ws.engine.pull(id));
+const cookSql = (ws: Workspace, id: string) => predicateSql(ws.pullGraphNode(id));
 
 // In-memory localStorage shim for the storage-key path (bun:test has none).
 function installStorageShim() {
@@ -194,13 +195,12 @@ describe("storage backend + invalid-doc fallback", () => {
   test("a malformed node config is rejected by parse-on-load", () => {
     const ws = makeWs();
     const ds = ws.addNode("dataset", { x: 0, y: 0 });
-    // poke an invalid config straight into the document (datasetKey must be string|null)
-    ws.store.setState((s) => ({
-      ...s,
-      nodes: { ...s.nodes, [ds]: { ...s.nodes[ds], config: { datasetKey: 42 } } },
-    }));
+    const malformed = {
+      ...ws.store.state,
+      nodes: { ...ws.store.state.nodes, [ds]: { ...ws.store.state.nodes[ds], config: { datasetKey: 42 } } },
+    };
     const key = storageKey("dsC:atlas");
-    saveToStorage(key, ws.store.state);
+    saveToStorage(key, malformed);
 
     const res = loadFromStorage(key);
     expect(res.kind).toBe("invalid");

@@ -13,10 +13,12 @@
 
 import type { NodeHost } from "@ndea/sdk";
 
+type PredicatePublishingHost = Pick<NodeHost<unknown, "predicate-publish">, "publishPredicate">;
+
 /** body-dock's edge-bound selection-out push port (see file header). */
 const SELECTION_FACET = "lasso";
 
 /** Publish this chart's filter on its selection-out push port; null clears it. */
-export function publishChartFilter(host: NodeHost, sql: string | null): void {
+export function publishChartFilter(host: PredicatePublishingHost, sql: string | null): void {
   host.publishPredicate(SELECTION_FACET, sql);
 }

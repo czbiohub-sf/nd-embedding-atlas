@@ -17,9 +17,9 @@ import { NdBracketed, NdCaption, NdHud, NdLed, type NdLedState } from "@/compone
 import { ThresholdFilterView } from "@/nodes/transform-filter/view";
 import { BodySocket, HeaderSocket } from "../body-dock";
 import { ND_STAGE, ND_TIMING } from "../constants";
-import { NODE_DEFS } from "../node-defs";
+import { WORKSPACE_NODE_DESCRIPTORS } from "../node-defs";
 import { useNodeCount } from "../use-node-count";
-import { useTelemetrySelector, useWorkspace, useWsSelector } from "../workspace-context";
+import { useTelemetrySelector, useWorkspace, useWorkspaceSelector } from "../workspace-context";
 import { FlagButton, ScatterLassoActions } from "../canvas/node-extras";
 import { WranglePane } from "../canvas/WranglePane";
 import { isSlot, reconcileStageTree, treeLeaves, type TreeNode } from "./split-tree";
@@ -43,16 +43,16 @@ function StageTile({
   beginTileDrag: (id: string) => void;
 }) {
   const ws = useWorkspace();
-  const node = useWsSelector((s) => s.nodes[id]);
-  const selected = useWsSelector((s) => s.selection === id);
+  const node = useWorkspaceSelector((s) => s.nodes[id]);
+  const selected = useWorkspaceSelector((s) => s.selection === id);
   const telemetryOn = useTelemetrySelector((t) => t.enabled);
   const cooking = useTelemetrySelector((t) => t.cooking[id] ?? false);
   const dirty = useTelemetrySelector((t) => t.dirty[id] ?? false);
   const flipHidden = useSelector(ws.ui, (u) => u.flipHide === `stage:${id}`);
-  const flagsOff = useWsSelector((s) => s.flags[id]?.off ?? false);
+  const flagsOff = useWorkspaceSelector((s) => s.flags[id]?.off ?? false);
   const fullscreen = useSelector(ws.ui, (u) => u.fullscreen === id);
 
-  const def = node ? NODE_DEFS[node.type] : null;
+  const def = node ? WORKSPACE_NODE_DESCRIPTORS[node.type] : null;
   // count policy: a tile's body is visible and says its own scale — only
   // staged transforms keep a header count
   const countActive = Boolean(def && def.kind !== "view");
@@ -276,8 +276,8 @@ function StageSash({
 
 function StageEmptySlot({ slotId }: { slotId: string }) {
   const ws = useWorkspace();
-  const nodes = useWsSelector((s) => s.nodes);
-  useWsSelector((s) => s.explicit);
+  const nodes = useWorkspaceSelector((s) => s.nodes);
+  useWorkspaceSelector((s) => s.explicit);
   const candidates = ws.stageCandidates();
   return (
     <div
@@ -396,10 +396,10 @@ function StageTreeView({
 
 export function StagePane({ vertical }: { vertical: boolean }) {
   const ws = useWorkspace();
-  const stageTree = useWsSelector((s) => s.stageTree);
-  useWsSelector((s) => s.explicit);
-  useWsSelector((s) => s.disposition);
-  useWsSelector((s) => s.nodes);
+  const stageTree = useWorkspaceSelector((s) => s.stageTree);
+  useWorkspaceSelector((s) => s.explicit);
+  useWorkspaceSelector((s) => s.disposition);
+  useWorkspaceSelector((s) => s.nodes);
   const [tileDrag, setTileDrag] = useState<TileDragState | null>(null);
   const tileDragRef = useRef<TileDragState | null>(null);
 

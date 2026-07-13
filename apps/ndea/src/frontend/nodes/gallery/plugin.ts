@@ -6,6 +6,7 @@ import { mountReactNodeBody } from "@/core/node/react-node-body";
 import type { GalleryConfig } from "./view";
 
 const CAPABILITIES = ["data-read", "spatial-data", "collection-read", "wasm-bitmap", "focus-coordination"] as const;
+export type GalleryCapabilities = (typeof CAPABILITIES)[number];
 
 export const galleryDefinition = defineNode({
   ref: exactNodeTypeRef("gallery", "1.0.0"),

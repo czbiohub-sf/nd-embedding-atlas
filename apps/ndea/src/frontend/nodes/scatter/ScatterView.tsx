@@ -38,6 +38,7 @@ import { useScatterUIDispatch } from "./ScatterUIStateProvider";
 import type { TrajectoryOverlaySvgHandle } from "./TrajectoryOverlaySvg";
 import { TrajectoryOverlaySvg } from "./TrajectoryOverlaySvg";
 import { HighlightFocusOverlay, type HighlightFocusOverlayHandle } from "./HighlightFocusOverlay";
+import type { ScatterCapabilities } from "./plugin";
 
 export interface ScatterViewProps {
   selectionTool: "pan" | "marquee" | "lasso";
@@ -103,7 +104,7 @@ export function ScatterView({
   const categoryColors = useEffectiveCategoryColors();
   const { setFps, setZoom, setSelection, setEmbedding, setNumPoints } = useScatterUIDispatch();
   // Plugin host on the docked path (null on the floating/host-less path).
-  const host = useHost();
+  const host = useHost<unknown, ScatterCapabilities>();
 
   // Scoped focus: on the node/host path a point-click routes through
   // host.highlight.set (NOT the global dashboard state), so read the focused obs

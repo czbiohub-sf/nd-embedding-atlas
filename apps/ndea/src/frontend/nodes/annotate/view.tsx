@@ -34,6 +34,7 @@ import { RangeBracket } from "@/nodes/annotate/RangeBracket";
 import { fmtVal } from "@/nodes/annotate/range-scale";
 import { useGalleryChannels } from "@/nodes/table/useGalleryChannels";
 import type { NodeBodyProps } from "@/core/node/app-node-host";
+import type { AnnotateCapabilities } from "./plugin";
 
 export interface AnnotateConfig {
   column: string | null;
@@ -59,7 +60,7 @@ function hotkeysFor(labels: string[]): string[] {
   });
 }
 
-export function AnnotateView({ host }: NodeBodyProps<AnnotateConfig>) {
+export function AnnotateView({ host }: NodeBodyProps<AnnotateConfig, AnnotateCapabilities>) {
   const { coordinator, table, metadata } = host.data;
 
   const [columns, setColumns] = useState<string[]>([]);

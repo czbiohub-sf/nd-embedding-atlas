@@ -12,10 +12,14 @@ const CAPABILITIES = [
   "data-read",
   "row-set-publish",
   "row-set-subscribe",
+  "focus-coordination",
+  "view-coordination",
+  "predicate-publish",
   "schema-mutation",
   "gpu-device",
   "wasm-bitmap",
 ] as const;
+export type ScatterCapabilities = (typeof CAPABILITIES)[number];
 
 export const scatterDefinition = defineNode({
   ref: exactNodeTypeRef("scatter", "1.0.0"),

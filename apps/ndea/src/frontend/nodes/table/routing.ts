@@ -9,13 +9,15 @@
 
 import type { NodeHost } from "@ndea/sdk";
 
+type TableFocusHost = Pick<NodeHost<unknown, "focus-coordination">, "focus">;
+type TableOrderingHost = Pick<NodeHost<unknown, "ordering-coordination">, "ordering">;
 /** Focus the obs of a clicked row. Routes through the group-aware host seam. */
-export function focusRow(host: NodeHost, rowId: string | null): void {
+export function focusRow(host: TableFocusHost, rowId: string | null): void {
   host.focus.set(rowId);
 }
 
 /** Publish this table's sort onto its `ordering` coordination scope. A no-op
  *  when the table isn't ordering-scoped (the local sort stays local). */
-export function publishOrdering(host: NodeHost, sort: { col: string; dir: "asc" | "desc" } | null): void {
-  host.ordering?.set(sort);
+export function publishOrdering(host: TableOrderingHost, sort: { col: string; dir: "asc" | "desc" } | null): void {
+  host.ordering.set(sort);
 }

@@ -5,7 +5,7 @@
  * (ws.dockEl(id), created once). `BodyOwner` — mounted under the
  * workspace-root `WorkspaceBodies`, NOT inside any container — owns the
  * NodeHost (built once, disposed only when the node is removed) and
- * renders the plugin Component into the dock element via createPortal.
+ * mounts the plugin body into the dock element.
  * Canvas nodes and stage tiles render a `BodySocket`, which ADOPTS the
  * dock element with appendChild. Moving a DOM node preserves canvas /
  * WebGPU state, so cameras and device leases survive pin ⇡ / pull ⇣ by
@@ -31,9 +31,9 @@ import type { OrderingCoordinationAPI, ViewCoordinationAPI } from "@ndea/sdk";
 import { getDefinition } from "@/core/node/registry";
 import { nodeInstanceId } from "@ndea/sdk";
 import { stringPredicate } from "@/lib/mosaic-helpers";
-import { NODE_DEFS } from "./node-defs";
+import { WORKSPACE_NODE_DESCRIPTORS } from "./node-defs";
 import { resolveNodeForm } from "./canvas/port-positions";
-import { useWorkspace, useWsSelector } from "./workspace-context";
+import { useWorkspace, useWorkspaceSelector } from "./workspace-context";
 // (lasso capture + push wires need the workspace store inside the owner)
 
 /** The `viewSync` coordination cell — pan/zoom plus the broadcaster's node id
@@ -43,6 +43,10 @@ type ViewSyncCell = { panX?: number; panY?: number; zoom?: number; src?: string 
 /** The `ordering` coordination cell — shared sort column + direction. */
 type OrderingCell = { col: string; dir: "asc" | "desc" } | null;
 
+function bindMethod(value: unknown, target: object): unknown {
+  return typeof value === "function" ? value.bind(target) : value;
+}
+
 function BodyOwnerInner({ nodeId, pluginId }: { nodeId: string; pluginId: string }) {
   const ws = useWorkspace();
   const module = use(loadNodeModule(pluginId));
@@ -51,7 +55,7 @@ function BodyOwnerInner({ nodeId, pluginId }: { nodeId: string; pluginId: string
 
   // Built EXACTLY ONCE per node lifetime — keyed by node identity, not
   // mount location. The per-node input Selection is the engine sink target;
-  // the focus store mirrors pushed focus values for host.highlight.subscribe.
+  // the focus store mirrors pushed focus values for host.focus.subscribe.
   const [{ handle, input, focus }] = useState(() => {
     const sel = Selection.single();
     const built = makeHost<unknown>({
@@ -65,7 +69,7 @@ function BodyOwnerInner({ nodeId, pluginId }: { nodeId: string; pluginId: string
   });
   const [mountError, setMountError] = useState<Error | null>(null);
 
-  const off = useWsSelector((st) => st.flags[nodeId]?.off ?? false);
+  const off = useWorkspaceSelector((st) => st.flags[nodeId]?.off ?? false);
 
   // Display-active sink: while this body lives (and its display flag is up),
   // every flush delivers the node's cooked value — pred/sel land in the input
@@ -73,7 +77,7 @@ function BodyOwnerInner({ nodeId, pluginId }: { nodeId: string; pluginId: string
   useEffect(() => {
     if (off) return;
     const source = { __ndeaGraphNode: nodeId };
-    return ws.engine.registerSink(nodeId, (v) => {
+    return ws.registerGraphSink(nodeId, (v) => {
       if (v === undefined) return;
       if (v.kind === "focus") {
         focus.setState(() => v.obsId);
@@ -93,7 +97,7 @@ function BodyOwnerInner({ nodeId, pluginId }: { nodeId: string; pluginId: string
   // outputs flow down its wires, not onto the global buses. The lasso becomes
   // an engine emission on the node's push port (the global SelectionBus
   // publish is suppressed — the dashboard keeps its global semantics); a row
-  // focus likewise; and host.highlight reads back the node's focus INPUT so
+  // focus likewise; and host.focus reads back the node's focus INPUT so
   // consumers (the image viewer) make the focus wire load-bearing.
   const edgeBoundHost = useMemo(() => {
     const host = handle.host;
@@ -247,21 +251,22 @@ function BodyOwnerInner({ nodeId, pluginId }: { nodeId: string; pluginId: string
                   return token;
                 };
               }
-              return typeof v === "function" ? (v as (...a: unknown[]) => unknown).bind(at) : v;
+              return bindMethod(v, at);
             },
           });
         }
         const v = Reflect.get(t, prop, recv);
-        return typeof v === "function" ? (v as (...a: unknown[]) => unknown).bind(t) : v;
+        return bindMethod(v, t);
       },
     });
   }, [handle, ws, nodeId, focus]);
 
   useEffect(() => {
-    if (!module.mountBody) return;
+    const mountBody = module.mountBody;
+    if (!mountBody) return;
     let active = true;
-    let mounted: Awaited<ReturnType<NonNullable<typeof module.mountBody>>> | undefined;
-    void Promise.resolve(module.mountBody(edgeBoundHost))
+    let mounted: Awaited<ReturnType<typeof mountBody>> | undefined;
+    void Promise.resolve(mountBody(edgeBoundHost))
       .then((body) => {
         if (!active) {
           body.dispose();
@@ -307,17 +312,17 @@ function BodyOwner({ nodeId, pluginId, label }: { nodeId: string; pluginId: stri
  */
 export function WorkspaceBodies() {
   const ws = useWorkspace();
-  const nodes = useWsSelector((s) => s.nodes);
+  const nodes = useWorkspaceSelector((s) => s.nodes);
   // placement + form + fullscreen are the activation inputs
-  useWsSelector((s) => s.explicit);
-  useWsSelector((s) => s.disposition);
-  useWsSelector((s) => s.formOverride);
+  useWorkspaceSelector((s) => s.explicit);
+  useWorkspaceSelector((s) => s.disposition);
+  useWorkspaceSelector((s) => s.formOverride);
   const fullscreen = useSelector(ws.ui, (u) => u.fullscreen);
   const activated = useRef(new Set<string>());
 
   const live: { id: string; pluginId: string; label: string }[] = [];
   for (const n of Object.values(nodes)) {
-    const def = NODE_DEFS[n.type];
+    const def = WORKSPACE_NODE_DESCRIPTORS[n.type];
     if (def.kind !== "view" || !n.pluginId) continue;
     const needs = ws.placementOf(n.id) === "staged" || resolveNodeForm(ws, n.id) === "full" || fullscreen === n.id;
     if (needs) activated.current.add(n.id);
@@ -339,7 +344,7 @@ export function WorkspaceBodies() {
  * HeaderSocket — same adoption contract as BodySocket, for the node/tile
  * header's middle gap. Whichever header currently shows the body adopts the
  * node's header slot element; plugins portal a compact toolbar into it via
- * host.ui.container.headerEl. `nodrag` keeps toolbar interactions from
+ * host.bodyHeaderElement. `nodrag` keeps toolbar interactions from
  * starting an xyflow node drag.
  */
 export function HeaderSocket({ nodeId }: { nodeId: string }) {
@@ -372,7 +377,7 @@ export function BodySocket({
   claimable?: boolean;
 }) {
   const ws = useWorkspace();
-  const claimed = useWsSelector((s) => s.claimed === nodeId);
+  const claimed = useWorkspaceSelector((s) => s.claimed === nodeId);
   return (
     <div
       className={`relative ${className ?? "nowheel nodrag flex min-h-0 flex-1 flex-col overflow-hidden"}`}

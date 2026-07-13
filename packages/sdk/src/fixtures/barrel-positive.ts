@@ -18,7 +18,7 @@ const factory: PluginFactory = (api) => {
       role: "transform",
       inputs: [{ id: "in", kind: "pred", label: "In" }],
       outputs: [{ id: "out", kind: "pred", label: "Out" }],
-      capabilities: ["data-read", "predicate-publish"] as const,
+      capabilities: ["data-read", "predicate-publish"],
       config: {
         schema: z.object({ enabled: z.boolean() }),
         version: nodeConfigVersion(2),

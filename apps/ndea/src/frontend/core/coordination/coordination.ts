@@ -10,7 +10,7 @@
  *     reference the same (type, scope) see the same value, reactively, with no
  *     edge and no message passing.
  *
- * Storage lives in two `WsState` fields:
+ * Storage lives in two `WorkspaceDocumentState` fields:
  *   - `coordinationScopes[nodeId][type] = scope` — which cell a node references.
  *   - `coordinationSpace[type][scope] = value` — the live cell value.
  *
@@ -26,7 +26,7 @@ import { z } from "zod";
 import type { Store } from "@tanstack/store";
 
 import type { JsonValue } from "@ndea/sdk";
-import type { WsState } from "@/core/workspace/types";
+import type { WorkspaceDocumentState } from "@/core/workspace/types";
 import { defineCoordinationType, defineGroupChannel } from "./define-type";
 
 /* ── registered coordination types ───────────────────────────────────────
@@ -72,16 +72,16 @@ export function scopeColor(scope: string): string {
 }
 
 /**
- * The resolve/notify backbone over a `Store<WsState>`. Mutations go through
+ * The resolve/notify backbone over a `Store<WorkspaceDocumentState>`. Mutations go through
  * `store.setState`; reads are live off `store.state`. Held once on the
  * Workspace as `ws.coordination` and reached from nodes only via the `host`
  * seam (the body-dock Proxy), never imported into `nodes/**`.
  */
 export class Coordination {
   private seq = 0;
-  private readonly store: Store<WsState>;
+  private readonly store: Store<WorkspaceDocumentState>;
 
-  constructor(store: Store<WsState>) {
+  constructor(store: Store<WorkspaceDocumentState>) {
     this.store = store;
   }
 

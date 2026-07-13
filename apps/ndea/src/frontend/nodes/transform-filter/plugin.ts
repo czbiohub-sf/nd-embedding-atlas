@@ -9,6 +9,7 @@ import { defineNode, exactNodeTypeRef, nodeConfigVersion } from "@ndea/sdk";
 import type { ThresholdFilterConfig } from "./view";
 
 const CAPABILITIES = ["data-read", "predicate-publish", "compute"] as const;
+export type TransformFilterCapabilities = (typeof CAPABILITIES)[number];
 
 export const transformFilterDefinition = defineNode({
   ref: exactNodeTypeRef("transform-filter", "1.0.0"),

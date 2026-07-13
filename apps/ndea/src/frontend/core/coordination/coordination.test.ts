@@ -3,7 +3,7 @@
  *
  * The backbone is the symmetric cross-view plane: N nodes referencing the same
  * (type, scope) share one latest-wins cell. These exercise it directly over a
- * bare `Store<WsState>` (no Workspace) — the body-dock seam is covered by the
+ * bare `Store<WorkspaceDocumentState>` (no Workspace) — the body-dock seam is covered by the
  * host-routing conformance + manual verification.
  */
 
@@ -11,10 +11,10 @@ import { Store } from "@tanstack/store";
 import { describe, expect, test } from "bun:test";
 
 import { Coordination, scopeColor } from "./coordination";
-import type { WsState } from "@/core/workspace/types";
+import type { WorkspaceDocumentState } from "@/core/workspace/types";
 
-function fresh(): { co: Coordination; store: Store<WsState> } {
-  const store = new Store<WsState>({
+function fresh(): { co: Coordination; store: Store<WorkspaceDocumentState> } {
+  const store = new Store<WorkspaceDocumentState>({
     nodes: {},
     edges: {},
     positions: {},

@@ -12,6 +12,7 @@ import { ScatterContent } from "@/nodes/scatter/ScatterContent";
 import { HostProvider } from "@/core/host/host-context";
 import { panelId } from "@/nodes/scatter/gpu/types";
 import type { NodeBodyProps } from "@/core/node/app-node-host";
+import type { ScatterCapabilities } from "./plugin";
 
 export interface ScatterConfig {
   obsmKey: string | null;
@@ -24,7 +25,7 @@ export interface ScatterOptions {
   pointOpacity: number;
 }
 
-export function ScatterPluginView({ host }: NodeBodyProps<ScatterConfig>) {
+export function ScatterPluginView({ host }: NodeBodyProps<ScatterConfig, ScatterCapabilities>) {
   // Put the host on context so the scatter subtree (incl. the GPU host's device
   // lease) can read host.* without prop-drilling. The Phase-2b conversion of
   // ScatterContent's internals to host.* consumes this same provider.

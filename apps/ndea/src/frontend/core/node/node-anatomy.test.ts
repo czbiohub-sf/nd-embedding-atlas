@@ -16,7 +16,7 @@ import { describe, expect, test } from "bun:test";
 import { Glob } from "bun";
 import { resolve } from "node:path";
 
-import { listWsNodes } from "@/core/workspace/node-kit";
+import { listWorkspaceNodeSpecs } from "@/core/workspace/node-kit";
 import { registerBuiltins } from "@/core/workspace/definitions";
 
 registerBuiltins();
@@ -32,7 +32,7 @@ const INLINE_ALIASES = new Set(["selection"]);
 describe("node anatomy (internal-plugin contract)", () => {
   test("every real node spec lives at nodes/**/node.tsx — fs ↔ registry agree", () => {
     const specFiles = glob("src/frontend/nodes/**/node.tsx");
-    const realNodes = listWsNodes().filter((s) => !INLINE_ALIASES.has(s.type));
+    const realNodes = listWorkspaceNodeSpecs().filter((s) => !INLINE_ALIASES.has(s.type));
     expect(specFiles.length, `node.tsx files: ${specFiles.join(", ")}`).toBe(realNodes.length);
   });
 

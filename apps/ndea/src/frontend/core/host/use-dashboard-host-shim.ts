@@ -17,6 +17,7 @@ import { broadcastBus, highlightBus, selectionBus, viewSyncBus } from "@/core/bu
 import { deviceBroker, type DeviceLease } from "@/core/gpu/device-broker";
 import type {
   NodeDataAPI,
+  NodeCapability,
   FocusCoordinationAPI,
   NodeDefinition,
   NodeInstanceId,
@@ -40,16 +41,16 @@ export interface HostInit<Config> {
 }
 
 export interface HostHandle<Config> {
-  host: AppNodeHost<Config>;
-  /** Owned by `<PluginMount>`. Idempotent full teardown. */
+  host: AppNodeHost<Config, NodeCapability>;
+  /** Owned by the node body mount. Idempotent full teardown. */
   dispose(): void;
 }
 
-const notify = (msg: string, level: "info" | "warn" | "error" = "info"): void => {
+function notify(msg: string, level: "info" | "warn" | "error" = "info"): void {
   if (level === "error") console.error(msg);
   else if (level === "warn") console.warn(msg);
   else console.info(msg);
-};
+}
 
 async function responseError(res: Response, fallback: string): Promise<Error> {
   const parsed = ErrorResponseSchema.safeParse(await res.json().catch(() => null));
@@ -253,9 +254,9 @@ export function useDashboardHostShim() {
           disposers.push(unsubscribe);
         },
         signal: controller.signal,
-      } as unknown as AppNodeHost<Config>;
+      } as unknown as AppNodeHost<Config, NodeCapability>;
 
-      function dispose() {
+      function dispose(): void {
         if (disposed) return;
         disposed = true;
         controller.abort();
@@ -268,7 +269,7 @@ export function useDashboardHostShim() {
         // filtering everyone else (§6.3).
         selectionBus.disposeInstance(instanceId);
         // Drop this instance's server-side sel_<id> temp table (§6.5/§6.9).
-        dataAPI.disposePublishedRowSet();
+        if (canPublishRowSet) dataAPI.disposePublishedRowSet();
       }
 
       return { host, dispose };

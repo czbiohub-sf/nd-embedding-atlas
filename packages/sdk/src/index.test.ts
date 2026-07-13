@@ -18,7 +18,7 @@ const transformDefinition = defineNode({
   role: "transform",
   inputs: [{ id: "in", kind: "pred", label: "In" }],
   outputs: [{ id: "out", kind: "pred", label: "Out" }],
-  capabilities: ["data-read", "predicate-publish", "compute"] as const,
+  capabilities: ["data-read", "predicate-publish", "compute"],
   config: {
     schema: z.object({ threshold: z.number() }),
     version: nodeConfigVersion(1),
@@ -43,7 +43,7 @@ const mountedViewDefinition = defineNode({
   role: "view",
   inputs: [{ id: "in", kind: "sel", label: "Rows" }],
   outputs: [{ id: "focus", kind: "focus", label: "Focus" }],
-  capabilities: ["focus-coordination"] as const,
+  capabilities: ["focus-coordination"],
   load: () =>
     Promise.resolve<NodeModule<unknown, "focus-coordination">>({
       mountBody(host) {

@@ -11,6 +11,7 @@ import {
 } from "@/nodes/image-viewer/viewer";
 import { SingleCropViewer } from "./SingleCropViewer";
 import { ViewerPauseGate } from "./ViewerPauseGate";
+import type { ImageViewerCapabilities } from "./plugin";
 
 interface CropViewerProps {
   channelInstance?: string;
@@ -23,7 +24,7 @@ interface CropViewerProps {
  * Shares the ["obs", highlightId] query with SingleCropViewer (no extra fetch).
  */
 function ViewerObsReadout() {
-  const host = useHost();
+  const host = useHost<unknown, ImageViewerCapabilities>();
   const [highlightId, setHighlightId] = useState<string | null>(() => host.focus.get());
   useEffect(() => host.focus.subscribe?.(setHighlightId), [host]);
   const { data } = useQuery({
@@ -49,7 +50,7 @@ function ViewerObsReadout() {
 
 export function CropViewer({ channelInstance = "docked", datasetKey }: CropViewerProps) {
   // Focus read: scoped to this instance's host (sync group / focus wire).
-  const host = useHost();
+  const host = useHost<unknown, ImageViewerCapabilities>();
   const [highlightId, setHighlightId] = useState<string | null>(() => host.focus.get());
   useEffect(() => host.focus.subscribe?.(setHighlightId), [host]);
 

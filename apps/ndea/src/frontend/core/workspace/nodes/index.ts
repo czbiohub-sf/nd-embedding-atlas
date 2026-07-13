@@ -1,7 +1,7 @@
 /** Idempotent registration of every built-in workspace node. */
 
 import { getNode, registerNode } from "@/core/node/registry";
-import { defineWsNode } from "../node-kit";
+import { defineWorkspaceNodeSpec } from "../node-kit";
 import { annotateNode } from "@/nodes/annotate/node";
 import { cacheNode } from "@/nodes/utils/cache/node";
 import { collectionNode } from "@/nodes/collection/node";
@@ -27,7 +27,7 @@ export function registerBuiltinNodes(): void {
     registered = true;
     return;
   }
-  // Registration order = the legacy NODE_DEFS literal order, so the derived
+  // Registration order = the legacy WORKSPACE_NODE_DESCRIPTORS literal order, so the derived
   // PALETTE (filtered to inPalette, in registry order) is byte-for-byte stable.
   for (const spec of [
     obsNode,
@@ -52,7 +52,7 @@ export function registerBuiltinNodes(): void {
   }
   // Keep persisted "selection" nodes readable without offering them in the palette.
   registerNode(
-    defineWsNode({
+    defineWorkspaceNodeSpec({
       ...cacheNode,
       id: "selection",
       type: "selection",

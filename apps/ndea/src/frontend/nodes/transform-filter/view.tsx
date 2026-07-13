@@ -16,7 +16,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useColumnTypes } from "@/hooks/useColumnTypes";
 import type { NodeBodyProps } from "@/core/node/app-node-host";
-import type { TransformCapabilities } from "@/core/graph/graph-host";
+import type { TransformFilterCapabilities } from "./plugin";
 
 export interface ThresholdFilterConfig {
   /** Numeric obs column to threshold on; null until the schema resolves. */
@@ -26,7 +26,7 @@ export interface ThresholdFilterConfig {
 
 export type ThresholdFilterOptions = Record<never, never>;
 
-export function ThresholdFilterView({ host }: NodeBodyProps<ThresholdFilterConfig, TransformCapabilities>) {
+export function ThresholdFilterView({ host }: NodeBodyProps<ThresholdFilterConfig, TransformFilterCapabilities>) {
   const columnTypes = useColumnTypes(host.data.coordinator);
   const numericColumns = useMemo(
     () => (columnTypes ? [...columnTypes].filter(([, t]) => t === "number").map(([c]) => c) : []),

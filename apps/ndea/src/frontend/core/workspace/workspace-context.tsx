@@ -7,11 +7,12 @@ import { useSelector } from "@tanstack/react-store";
 import { createContext, useContext, useEffect, useState } from "react";
 
 import { useDashboard } from "@/hooks/useDashboard";
+import type { GraphEvaluationState } from "@/core/graph/evaluator";
 import type { Metadata } from "@/types";
 import { loadFromStorage, saveToStorage, storageKey } from "./persist";
 import { resolvePreset, seedAnnotate } from "./presets";
-import { seedWorkspace, Workspace, type TelemetryState } from "./workspace-store";
-import type { WsState } from "./types";
+import { seedWorkspace, Workspace } from "./workspace-store";
+import type { WorkspaceDocumentState } from "./types";
 
 const WorkspaceContext = createContext<Workspace | null>(null);
 
@@ -53,7 +54,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         }
         seedWorkspace(w);
       }
-      (window as unknown as { __ndeaWs?: Workspace }).__ndeaWs = w;
+      (window as unknown as { __ndeaWorkspace?: Workspace }).__ndeaWorkspace = w;
     } else {
       // Shipped build: the named preset (default annotate) seeds a fresh graph +
       // layout against the mounted dataset — dataset-agnostic, authoritative on
@@ -94,12 +95,12 @@ export function useWorkspace(): Workspace {
   return ws;
 }
 
-export function useWsSelector<T>(selector: (s: WsState) => T): T {
+export function useWorkspaceSelector<T>(selector: (s: WorkspaceDocumentState) => T): T {
   const ws = useWorkspace();
   return useSelector(ws.store, selector);
 }
 
-export function useTelemetrySelector<T>(selector: (t: TelemetryState) => T): T {
+export function useTelemetrySelector<T>(selector: (t: GraphEvaluationState) => T): T {
   const ws = useWorkspace();
   return useSelector(ws.telemetry, selector);
 }

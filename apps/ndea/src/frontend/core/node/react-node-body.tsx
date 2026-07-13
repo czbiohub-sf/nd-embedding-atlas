@@ -5,7 +5,7 @@ import { PanelErrorBoundary } from "@/components/layout/PanelErrorBoundary";
 import type { AppNodeHost, NodeBodyProps } from "./app-node-host";
 
 export function mountReactNodeBody<Config, Capabilities extends NodeCapability>(
-  Component: ComponentType<NodeBodyProps<Config>>,
+  Component: ComponentType<NodeBodyProps<Config, Capabilities>>,
   host: NodeHost<Config, Capabilities>,
   title: string,
 ): MountedNodeBody {
@@ -13,7 +13,7 @@ export function mountReactNodeBody<Config, Capabilities extends NodeCapability>(
   element.className = "h-full min-h-0 w-full";
   const root = createRoot(element);
   const body = createElement(Component, {
-    host: host as unknown as AppNodeHost<Config>,
+    host: host as AppNodeHost<Config, Capabilities>,
   });
   root.render(<PanelErrorBoundary panelName={title}>{body}</PanelErrorBoundary>);
 

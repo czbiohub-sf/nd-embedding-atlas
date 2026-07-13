@@ -19,7 +19,7 @@ import { useEffect, useRef, useState } from "react";
 import { PrqlEditor } from "@/components/nd/PrqlEditor";
 import { NdHud } from "@/components/nd/nd-primitives";
 import { compilePrql, type PrqlError } from "../prql";
-import { useWorkspace, useWsSelector } from "../workspace-context";
+import { useWorkspace, useWorkspaceSelector } from "../workspace-context";
 
 const DEBOUNCE_MS = 280;
 
@@ -27,7 +27,7 @@ type WrangleStatus = "clean" | "compiling" | "error" | "empty" | "reshaping";
 
 export function WranglePane({ id }: { id: string }) {
   const ws = useWorkspace();
-  const prql = useWsSelector((s) => (s.nodes[id]?.config as { prql?: string } | undefined)?.prql ?? "");
+  const prql = useWorkspaceSelector((s) => (s.nodes[id]?.config as { prql?: string } | undefined)?.prql ?? "");
   const table = ws.deps.table;
   const [error, setError] = useState<PrqlError | null>(null);
   const [status, setStatus] = useState<WrangleStatus>(prql.trim() ? "clean" : "empty");
@@ -51,7 +51,7 @@ export function WranglePane({ id }: { id: string }) {
     // bad column refs). Three outcomes:
     //   · filter    — output carries __obs_index__ → usable as a row mask
     //   · reshaping — valid SQL but no __obs_index__ (aggregate / narrow select);
-    //                 NOT a row filter — passthrough, don't correlate-and-lie
+    //                 NOT a row filter — pass through, don't correlate-and-lie
     //   · error     — binder rejected it (typo'd column, bad ref) → show it
     const validate = async (sql: string): Promise<"filter" | "reshaping" | { error: string }> => {
       try {
@@ -92,7 +92,7 @@ export function WranglePane({ id }: { id: string }) {
         if (v === "reshaping") {
           setError(null);
           setStatus("reshaping");
-          ws.setWranglePred(id, null); // not a filter — passthrough, don't lie
+          ws.setWranglePred(id, null); // not a filter — pass through, don't lie
           return;
         }
         setError(null);
@@ -118,13 +118,13 @@ export function WranglePane({ id }: { id: string }) {
         ) : status === "compiling" ? (
           <span className="text-text-muted">compiling…</span>
         ) : status === "empty" ? (
-          <NdHud size={8}>prql · passthrough</NdHud>
+          <NdHud size={8}>prql · pass-through</NdHud>
         ) : status === "reshaping" ? (
           <span
             className="truncate text-wire-sel"
             title="this pipeline reshapes the relation (drops per-row identity) — it isn't a row filter. Relation outputs land in the rel-wire phase; as a filter it passes through."
           >
-            ⬡ reshaping — not a row filter (passthrough)
+            ⬡ reshaping — not a row filter (pass-through)
           </span>
         ) : (
           <span className="text-success">✓ compiled</span>

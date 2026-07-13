@@ -1,8 +1,15 @@
 import { describe, expect, test } from "bun:test";
-import { andPreds, GraphEngine, orPreds, type CookFn, type CookTelemetryEvent, type Predicate } from "./engine";
+import {
+  andPreds,
+  GraphEngine,
+  orPreds,
+  type GraphCookFunction,
+  type GraphEvaluationTelemetryEvent,
+  type Predicate,
+} from "./engine";
 
 /** A cook that records how many times it ran (cache-boundary / dedup probes). */
-function counted(fn: CookFn<Predicate>): { cook: CookFn<Predicate>; calls: () => number } {
+function counted(fn: GraphCookFunction<Predicate>): { cook: GraphCookFunction<Predicate>; calls: () => number } {
   let n = 0;
   return {
     cook: (inputs, ctx) => {
@@ -14,7 +21,7 @@ function counted(fn: CookFn<Predicate>): { cook: CookFn<Predicate>; calls: () =>
 }
 
 /** A view sink cooks as AND of its single input port "in" (the common case). */
-const passThrough: CookFn<Predicate> = (inputs) => andPreds(inputs.get("in") ?? []);
+const passThrough: GraphCookFunction<Predicate> = (inputs) => andPreds(inputs.get("in") ?? []);
 
 describe("GraphEngine", () => {
   test("source → transform → sink: null source means 'everything', transform AND-composes", () => {
@@ -205,7 +212,7 @@ describe("GraphEngine", () => {
 
   test("telemetry: markDirty cascade emits 'dirty' once for the node + each clean→dirty downstream", () => {
     const engine = cleanChain();
-    const events: CookTelemetryEvent[] = [];
+    const events: GraphEvaluationTelemetryEvent[] = [];
     engine.onTelemetry((e) => events.push(e));
 
     engine.markDirty("filter"); // dirties filter + sink; src stays clean
@@ -233,7 +240,7 @@ describe("GraphEngine", () => {
 
   test("telemetry: cook-start/cook-end bracket real cooks with ms >= 0; cache hits emit nothing", () => {
     const engine = cleanChain();
-    const events: CookTelemetryEvent[] = [];
+    const events: GraphEvaluationTelemetryEvent[] = [];
     engine.onTelemetry((e) => events.push(e));
 
     // Fully clean graph → pull is a pure cache hit → zero cook events.
@@ -262,7 +269,7 @@ describe("GraphEngine", () => {
 
   test("telemetry: a completed flush announces 'flush' last, at the settled epoch", () => {
     const engine = cleanChain();
-    const events: CookTelemetryEvent[] = [];
+    const events: GraphEvaluationTelemetryEvent[] = [];
     engine.onTelemetry((e) => events.push(e));
 
     engine.registerSink("sink", () => {}); // direct pull — no flush scheduled
@@ -277,8 +284,8 @@ describe("GraphEngine", () => {
 
   test("telemetry: unsubscribe stops events and is idempotent; other listeners keep firing", () => {
     const engine = cleanChain();
-    const a: CookTelemetryEvent[] = [];
-    const b: CookTelemetryEvent[] = [];
+    const a: GraphEvaluationTelemetryEvent[] = [];
+    const b: GraphEvaluationTelemetryEvent[] = [];
     const offA = engine.onTelemetry((e) => a.push(e));
     engine.onTelemetry((e) => b.push(e));
 
@@ -296,7 +303,7 @@ describe("GraphEngine", () => {
 
   test("telemetry: a throwing listener breaks neither the cook nor later listeners", () => {
     const engine = cleanChain();
-    const survived: CookTelemetryEvent[] = [];
+    const survived: GraphEvaluationTelemetryEvent[] = [];
     engine.onTelemetry(() => {
       throw new Error("boom");
     });
@@ -330,7 +337,7 @@ describe("authored emissions (push unified into pull)", () => {
 
   test("an emission delivers along its port's edges; derived edges are untouched", () => {
     const { engine } = pushRig();
-    expect(engine.pull("table")).toBe("base"); // derived passthrough
+    expect(engine.pull("table")).toBe("base"); // derived pass-through
     // no lasso yet — nothing on the push port → the edge falls back to pulling
     // the source's derived output (sensible pre-emission default)
     expect(engine.pull("gallery")).toBe("base");
@@ -359,7 +366,7 @@ describe("authored emissions (push unified into pull)", () => {
 
   test("emit bumps the epoch and announces an 'emit' telemetry event", () => {
     const { engine } = pushRig();
-    const events: CookTelemetryEvent[] = [];
+    const events: GraphEvaluationTelemetryEvent[] = [];
     engine.onTelemetry((e) => events.push(e));
     const e0 = engine.epoch;
 
@@ -412,7 +419,7 @@ describe("bypass flag", () => {
     expect(engine.pull("view")).toBe("base AND filtered");
   });
 
-  test("a custom passthrough drives non-predicate value types through bypass", () => {
+  test("a custom pass-through drives non-predicate value types through bypass", () => {
     type V = { n: number };
     const engine = new GraphEngine<V>({
       passthrough: (inputs) => ({ n: [...inputs.values()].flat().reduce((s, v) => s + v.n, 0) }),

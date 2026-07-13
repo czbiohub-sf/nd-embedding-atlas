@@ -9,7 +9,9 @@
 
 import type { NodeHost } from "@ndea/sdk";
 
+type FocusHost = Pick<NodeHost<unknown, "focus-coordination">, "focus">;
+
 /** Focus the obs under a clicked crop. Routes through the group-aware host seam. */
-export function focusObs(host: NodeHost, rowId: string | null): void {
+export function focusObs(host: FocusHost, rowId: string | null): void {
   host.focus.set(rowId);
 }

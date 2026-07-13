@@ -15,12 +15,12 @@ import { NdIconButton } from "@/components/nd/nd-icon-button";
 import { NdBracketed, NdCaption, NdChip, NdHud } from "@/components/nd/nd-primitives";
 import { useCollections } from "@/components/collections/useCollections";
 import { ScopePicker } from "./scope-picker";
-import { NODE_DEFS } from "../node-defs";
+import { WORKSPACE_NODE_DESCRIPTORS } from "../node-defs";
 import type { FeedbackChannel } from "../feedback";
-import { nodeConfig, patchConfig } from "../node-kit";
+import { nodeConfig } from "@/core/graph/cook";
 import { useNodeCount } from "../use-node-count";
-import { useTelemetrySelector, useWorkspace, useWsSelector } from "../workspace-context";
-import type { WsNode } from "../types";
+import { useTelemetrySelector, useWorkspace, useWorkspaceSelector } from "../workspace-context";
+import type { GraphDocumentNode } from "@/core/graph/records";
 
 /* ── feedback channel badges (wireless ↻ pair, no backward wire) ──────── */
 
@@ -71,10 +71,10 @@ const fmt = (n: number) => n.toLocaleString("en-US");
 
 /* ── flag button (header) ────────────────────────────────────────── */
 
-export function FlagButton({ node, compact = false }: { node: WsNode; compact?: boolean }) {
+export function FlagButton({ node, compact = false }: { node: GraphDocumentNode; compact?: boolean }) {
   const ws = useWorkspace();
-  const flags = useWsSelector((s) => s.flags[node.id] ?? {});
-  const def = NODE_DEFS[node.type];
+  const flags = useWorkspaceSelector((s) => s.flags[node.id] ?? {});
+  const def = WORKSPACE_NODE_DESCRIPTORS[node.type];
   if ((def.kind === "transform" || def.kind === "subnet") && node.type !== "selection") {
     return (
       <NdIconButton
@@ -142,7 +142,7 @@ export function DisplayOffBadge() {
 }
 
 /* ── dataset source body — pick which `_dataset` this stream carries ── */
-export function DatasetSourceBody({ node }: { node: WsNode }) {
+export function DatasetSourceBody({ node }: { node: GraphDocumentNode }) {
   const ws = useWorkspace();
   const keys = ws.deps.metadata.dataset_keys ?? [];
   const datasetKey = nodeConfig<{ datasetKey?: string | null }>(node).datasetKey ?? "";
@@ -171,7 +171,7 @@ export function DatasetSourceBody({ node }: { node: WsNode }) {
 
 /* ── ◆ Cache node body — source-agnostic, live-until-cached checkpoint ─ */
 
-export function CacheNodeBody({ node }: { node: WsNode }) {
+export function CacheNodeBody({ node }: { node: GraphDocumentNode }) {
   const ws = useWorkspace();
   // emissions / cooks bump the epoch → re-read live input + recompute stale.
   const epoch = useTelemetrySelector((t) => t.epoch);
@@ -252,7 +252,7 @@ export function CacheNodeBody({ node }: { node: WsNode }) {
 /** Save the wired input's rows as a server collection. Decoupled from Cache:
  *  reads the live input directly (no pinning). Only a row-bearing input (a
  *  lasso/cache snapshot) is saveable — a pred-only input has no row ids. */
-export function ExportNodeBody({ node }: { node: WsNode }) {
+export function ExportNodeBody({ node }: { node: GraphDocumentNode }) {
   const ws = useWorkspace();
   useTelemetrySelector((t) => t.epoch); // emissions bump the epoch → re-read input
   const [name, setName] = useState("");
@@ -319,7 +319,7 @@ export function ExportNodeBody({ node }: { node: WsNode }) {
 
 /* ── Collection source node body (C12) ───────────────────────────── */
 
-export function CollectionNodeBody({ node }: { node: WsNode }) {
+export function CollectionNodeBody({ node }: { node: GraphDocumentNode }) {
   const ws = useWorkspace();
   const { data: collections, isLoading } = useCollections();
 
@@ -335,18 +335,7 @@ export function CollectionNodeBody({ node }: { node: WsNode }) {
           type="button"
           onClick={(e) => {
             e.stopPropagation();
-            ws.store.setState((s) => ({
-              ...s,
-              nodes: {
-                ...s.nodes,
-                [node.id]: {
-                  ...s.nodes[node.id],
-                  config: patchConfig(s.nodes[node.id], { collectionId: null, collectionName: null }),
-                },
-              },
-            }));
-            ws.collectionBindings.delete(node.id);
-            ws.engine.markDirty(node.id);
+            ws.unbindCollection(node.id);
           }}
           className="self-start cursor-pointer rounded border border-border bg-muted px-1.5 py-[3px] font-mono text-[9px] text-text-muted"
         >
@@ -392,7 +381,7 @@ export function CollectionNodeBody({ node }: { node: WsNode }) {
  *  collide with the feedback corner badges. */
 export function SyncBadge({ nodeId }: { nodeId: string }) {
   const ws = useWorkspace();
-  const scopes = useWsSelector((s) => s.coordinationScopes[nodeId] ?? null);
+  const scopes = useWorkspaceSelector((s) => s.coordinationScopes[nodeId] ?? null);
   const entries = scopes ? Object.entries(scopes) : [];
   if (entries.length === 0) return null;
   return (
@@ -448,9 +437,9 @@ export function ScatterLassoActions({ nodeId, compactLabel = false }: { nodeId: 
 /* ── subnet + count bodies (built-in node specs) ──────────────────── */
 
 /** subnet card: inner-node count + enter affordance (double-click also enters) */
-export function SubnetBody({ node }: { node: WsNode }) {
+export function SubnetBody({ node }: { node: GraphDocumentNode }) {
   const ws = useWorkspace();
-  const inner = useWsSelector(
+  const inner = useWorkspaceSelector(
     (s) => Object.values(s.nodes).filter((n) => n.parent === node.id && n.type !== "proxy").length,
   );
   return (
@@ -469,7 +458,7 @@ export function SubnetBody({ node }: { node: WsNode }) {
 }
 
 /** big-number body for the Count node */
-export function CountBody({ node }: { node: WsNode }) {
+export function CountBody({ node }: { node: GraphDocumentNode }) {
   const { count, cooking, error } = useNodeCount(node.id, true);
   return (
     <span

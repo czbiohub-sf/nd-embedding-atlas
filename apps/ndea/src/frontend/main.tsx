@@ -11,7 +11,7 @@ await roaringLibraryInitialize();
 
 // Register plugin metadata once at boot, before React renders — shell-agnostic
 // so the node workspace stands on its own. Engine code stays lazy (each
-// descriptor's Component is behind `load() => import()`). Idempotent.
+// definition's executable module is behind `load() => import()`). Idempotent.
 registerBuiltins();
 
 // StrictMode omitted — idetik-core's WebGL context cannot survive

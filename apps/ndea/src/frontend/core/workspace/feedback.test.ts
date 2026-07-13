@@ -1,17 +1,17 @@
 import { describe, expect, test } from "bun:test";
 import { deriveFeedbackChannels } from "./feedback";
-import type { WsEdge, WsNode } from "./types";
+import type { GraphDocumentEdge, GraphDocumentNode } from "@/core/graph/records";
 
 // Minimal fixtures — the derivation reads id/type/pluginId/label + edge from/to.
 // (label is unset here, so fromLabel/toLabel fall back to the node id.)
-const node = (id: string, type: string, pluginId: string | null = null): WsNode =>
-  ({ id, type, pluginId }) as unknown as WsNode;
-const edge = (from: string, to: string): WsEdge => ({ from, to }) as unknown as WsEdge;
-const byId = <T extends { id?: string } | WsEdge>(arr: T[], key: (t: T, i: number) => string) =>
+const node = (id: string, type: string, pluginId: string | null = null): GraphDocumentNode =>
+  ({ id, type, pluginId }) as unknown as GraphDocumentNode;
+const edge = (from: string, to: string): GraphDocumentEdge => ({ from, to }) as unknown as GraphDocumentEdge;
+const byId = <T extends { id?: string } | GraphDocumentEdge>(arr: T[], key: (t: T, i: number) => string) =>
   Object.fromEntries(arr.map((t, i) => [key(t, i), t]));
 
-const isWriter = (n: WsNode) => n.type === "annotate";
-const isSource = (n: WsNode) => n.type === "obs" || n.type === "dataset";
+const isWriter = (n: GraphDocumentNode) => n.type === "annotate";
+const isSource = (n: GraphDocumentNode) => n.type === "obs" || n.type === "dataset";
 
 describe("deriveFeedbackChannels", () => {
   test("a wired annotate node loops back to its source ancestor", () => {

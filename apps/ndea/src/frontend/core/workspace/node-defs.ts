@@ -1,11 +1,11 @@
 /**
- * NODE_DEFS — a DERIVED VIEW over the node registry (single source of truth is
- * now the `WsNodeSpec` in `./nodes/*.node.tsx`). It is no longer a hand-edited
- * literal: each `NodeDef` is projected from the registered spec — identity/kind/
+ * WORKSPACE_NODE_DESCRIPTORS — a DERIVED VIEW over the node registry (single source of truth is
+ * now the `WorkspaceNodeSpec` in `./nodes/*.node.tsx`). It is no longer a hand-edited
+ * literal: each `WorkspaceNodeDescriptor` is projected from the registered spec — identity/kind/
  * ports from the SDK base + cook spec, geometry/stage/palette from the spec's
  * canvas fields. Kept as a thin compatibility view so the ~16 existing consumers
  * (`WorkspaceCanvas`, `NdGraphNode`, `AddNodeMenu`, `port-positions`, `K1Cursor`,
- * `feedback.ts`, …) keep reading the same `NodeDef` shape with no churn.
+ * `feedback.ts`, …) keep reading the same `WorkspaceNodeDescriptor` shape with no churn.
  *
  * Port typing: out-kind / in-kinds drive wire legality (the canvas checks
  * kind-compatibility; the engine checks cycles). `inKinds` is the full accept
@@ -15,19 +15,26 @@
  */
 
 import type { NdPortKind } from "@/components/nd/nd-port";
-import { getWsNode, inKindsOf, listWsNodes, outKindOf, type WsNodeSpec } from "./node-kit";
-import type { WH, WsNodeKind, WsNodeType } from "./types";
+import {
+  getWorkspaceNodeSpec,
+  inputPortKindsOf,
+  listWorkspaceNodeSpecs,
+  outputPortKindOf,
+  type WorkspaceNodeSpec,
+} from "./node-kit";
+import type { WorkspaceNodeSize } from "./types";
+import type { GraphNodeRole, GraphNodeType } from "@/core/graph/records";
 
-export interface NodeDef {
-  type: WsNodeType;
-  kind: WsNodeKind;
+export interface WorkspaceNodeDescriptor {
+  type: GraphNodeType;
+  kind: GraphNodeRole;
   label: string;
   /** registry plugin id backing the body (null = built-in body) */
   pluginId: string | null;
   /** chip width; card/full boxes */
   chipW: number;
-  card: WH;
-  full: WH;
+  card: WorkspaceNodeSize;
+  full: WorkspaceNodeSize;
   /** full form allowed (embedded views + the threshold filter) */
   canFull: boolean;
   hasIn: boolean;
@@ -40,8 +47,8 @@ export interface NodeDef {
   inPalette: boolean;
 }
 
-/** Project a registered spec down to the legacy `NodeDef` shape consumers read. */
-function toNodeDef(spec: WsNodeSpec): NodeDef {
+/** Project a registered spec down to the legacy `WorkspaceNodeDescriptor` shape consumers read. */
+function toWorkspaceNodeDescriptor(spec: WorkspaceNodeSpec): WorkspaceNodeDescriptor {
   return {
     type: spec.type,
     kind: spec.kind,
@@ -53,42 +60,42 @@ function toNodeDef(spec: WsNodeSpec): NodeDef {
     canFull: spec.geometry.canFull,
     hasIn: spec.inputs.length > 0,
     hasOut: spec.outputs.length > 0,
-    outKind: outKindOf(spec),
-    inKinds: inKindsOf(spec),
+    outKind: outputPortKindOf(spec),
+    inKinds: inputPortKindsOf(spec),
     stage: spec.stage,
     inPalette: spec.inPalette,
   };
 }
 
-// Per-type `NodeDef` cache — specs are registered once at boot and never
-// mutated, so a `NodeDef` projection is stable. Memoizing keeps the Proxy `get`
+// Per-type `WorkspaceNodeDescriptor` cache — specs are registered once at boot and never
+// mutated, so a `WorkspaceNodeDescriptor` projection is stable. Memoizing keeps the Proxy `get`
 // allocation-free in the canvas hot paths (K1Cursor pointer-move, minimap).
-const DEF_CACHE = new Map<string, NodeDef>();
-function defFor(type: string): NodeDef | undefined {
-  const cached = DEF_CACHE.get(type);
+const WORKSPACE_NODE_DESCRIPTOR_CACHE = new Map<string, WorkspaceNodeDescriptor>();
+function workspaceNodeDescriptorFor(type: string): WorkspaceNodeDescriptor | undefined {
+  const cached = WORKSPACE_NODE_DESCRIPTOR_CACHE.get(type);
   if (cached) return cached;
-  const spec = getWsNode(type);
+  const spec = getWorkspaceNodeSpec(type);
   if (!spec) return undefined;
-  const def = toNodeDef(spec);
-  DEF_CACHE.set(type, def);
+  const def = toWorkspaceNodeDescriptor(spec);
+  WORKSPACE_NODE_DESCRIPTOR_CACHE.set(type, def);
   return def;
 }
 
 /**
- * `NODE_DEFS[type]` — registry-backed lookup keeping the `Record` access shape.
+ * `WORKSPACE_NODE_DESCRIPTORS[type]` — registry-backed lookup keeping the `Record` access shape.
  * Reads are lazy (resolved on first access, post-boot once specs are
- * registered) and memoized, so static `import { NODE_DEFS }` consumers see the
+ * registered) and memoized, so static `import { WORKSPACE_NODE_DESCRIPTORS }` consumers see the
  * live spec set without per-access allocation.
  */
-export const NODE_DEFS = new Proxy({} as Record<WsNodeType, NodeDef>, {
+export const WORKSPACE_NODE_DESCRIPTORS = new Proxy({} as Record<GraphNodeType, WorkspaceNodeDescriptor>, {
   get(_t, prop: string) {
-    return defFor(prop);
+    return workspaceNodeDescriptorFor(prop);
   },
   has(_t, prop: string) {
-    return getWsNode(prop) !== undefined;
+    return getWorkspaceNodeSpec(prop) !== undefined;
   },
   ownKeys() {
-    return listWsNodes().map((s) => s.type);
+    return listWorkspaceNodeSpecs().map((s) => s.type);
   },
   getOwnPropertyDescriptor() {
     return { enumerable: true, configurable: true };
@@ -96,13 +103,13 @@ export const NODE_DEFS = new Proxy({} as Record<WsNodeType, NodeDef>, {
 });
 
 /** Palette membership — the spec set filtered to `inPalette`, projected. */
-export function paletteDefs(): NodeDef[] {
-  return listWsNodes()
+export function workspacePaletteNodeDescriptors(): WorkspaceNodeDescriptor[] {
+  return listWorkspaceNodeSpecs()
     .filter((s) => s.inPalette)
-    .map((s) => defFor(s.type)!);
+    .map((s) => workspaceNodeDescriptorFor(s.type)!);
 }
 
-export function nodeSize(def: NodeDef, form: "chip" | "card" | "full"): WH {
+export function workspaceNodeSize(def: WorkspaceNodeDescriptor, form: "chip" | "card" | "full"): WorkspaceNodeSize {
   if (form === "chip") return { w: def.chipW, h: 26 };
   return form === "full" ? def.full : def.card;
 }

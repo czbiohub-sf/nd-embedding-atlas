@@ -16,6 +16,7 @@ import { focusObs } from "@/nodes/gallery/routing";
 import { GalleryPane } from "@/nodes/gallery/GalleryPane";
 import { predicateToSql } from "@/lib/mosaic-helpers";
 import type { NodeBodyProps } from "@/core/node/app-node-host";
+import type { GalleryCapabilities } from "./plugin";
 
 export interface GalleryConfig {
   /** Reserved: per-instance gallery layout (Phase 3). */
@@ -24,7 +25,7 @@ export interface GalleryConfig {
 
 export type GalleryOptions = Record<string, never>;
 
-export function GalleryPluginView({ host }: NodeBodyProps<GalleryConfig>) {
+export function GalleryPluginView({ host }: NodeBodyProps<GalleryConfig, GalleryCapabilities>) {
   // host.inputSelection is a Mosaic Selection that MUTATES IN PLACE on re-cook
   // and notifies Mosaic clients via "value" events — NOT React. Bridge it so the
   // unwired gate AND GalleryPane's query key recompute when the wired input

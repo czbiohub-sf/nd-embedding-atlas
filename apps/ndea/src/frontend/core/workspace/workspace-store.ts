@@ -13,16 +13,20 @@
 import { Store } from "@tanstack/store";
 import type { Coordinator } from "@uwdata/mosaic-core";
 
-import type { NodeHost } from "@ndea/sdk";
-import type { TransformCapabilities } from "@/core/graph/graph-host";
 import { Coordination } from "@/core/coordination/coordination";
-import { andPreds, GraphEngine, type Predicate } from "@/core/graph/engine";
+import { patchNodeConfig, predicateSql, predicateSqls, type GraphNodeCookHost } from "@/core/graph/cook";
+import { GraphEvaluator, type GraphEvaluationStore, type GraphNodeRegistrationContext } from "@/core/graph/evaluator";
+import { andPreds, type Predicate } from "@/core/graph/engine";
+import type { GraphDocumentEdge, GraphDocumentNode, GraphNodeType } from "@/core/graph/records";
+import { AUTHORED_GRAPH_OUTPUT_PORT, DERIVED_GRAPH_OUTPUT_PORT, type GraphPortValue } from "@/core/graph/values";
+import type { TransformCapabilities } from "@/core/graph/graph-host";
+import type { NodeHost } from "@ndea/sdk";
 import type { ThresholdFilterConfig } from "@/nodes/transform-filter/view";
 import type { Metadata } from "@/types";
 import type { NdForm } from "@/components/nd/nd-resolve-form";
 import { toRows } from "@/lib/mosaic-helpers";
-import { type EngineRegisterCtx, getWsNode, type NodeCookHost, patchConfig, predSqls, sqlOf } from "./node-kit";
-import { NODE_DEFS, type NodeDef } from "./node-defs";
+import { getWorkspaceNodeSpec } from "./node-kit";
+import { WORKSPACE_NODE_DESCRIPTORS, type WorkspaceNodeDescriptor } from "./node-defs";
 import { NodeCounts } from "./node-counts";
 import {
   treeMapLeaves,
@@ -33,15 +37,13 @@ import {
   type SplitWord,
   type TreeNode,
 } from "./stage/split-tree";
-import type { WH, WsDisposition, WsEdge, WsNode, WsNodeType, WsPlacement, WsState, WsValue, XY } from "./types";
-
-/** Engine source port carrying authored emissions (sel/focus); "out" = derived. */
-export const PUSH_PORT = "push";
-
-// Cook helpers + the `sqlOf` projection live in `./node-kit` so built-in node
-// spec files and this store share one vocabulary without a circular import.
-// Re-exported here for back-compat (e.g. cache-node.test imports it from here).
-export { sqlOf };
+import type {
+  WorkspaceCanvasDisposition,
+  WorkspaceDocumentState,
+  WorkspaceNodePosition,
+  WorkspaceNodeSize,
+  WorkspacePlacement,
+} from "./types";
 
 export interface WorkspaceDeps {
   coordinator: Coordinator;
@@ -49,19 +51,9 @@ export interface WorkspaceDeps {
   metadata: Metadata;
 }
 
-export interface TelemetryState {
-  epoch: number;
-  /** nodes currently inside a cook bracket */
-  cooking: Record<string, boolean>;
-  /** dirty (awaiting pull) */
-  dirty: Record<string, boolean>;
-  /** last cook duration per node */
-  cookMs: Record<string, number>;
-  /** master toggle — quiets LEDs, dashes, epoch readouts */
-  enabled: boolean;
-}
+export type WorkspaceDocumentStore = Pick<Store<WorkspaceDocumentState>, "state" | "get" | "subscribe">;
 
-const EMPTY: WsState = {
+const EMPTY: WorkspaceDocumentState = {
   nodes: {},
   edges: {},
   positions: {},
@@ -90,81 +82,67 @@ export interface GhostState {
 }
 
 export class Workspace {
-  readonly engine: GraphEngine<WsValue>;
-  readonly store: Store<WsState>;
-  readonly telemetry: Store<TelemetryState>;
+  private readonly documentStore: Store<WorkspaceDocumentState>;
+  readonly store: WorkspaceDocumentStore;
+  readonly telemetry: GraphEvaluationStore;
   readonly counts: NodeCounts;
   readonly deps: WorkspaceDeps;
   readonly coordination: Coordination;
 
+  private readonly evaluator: GraphEvaluator;
   private nodeSeq = 0;
   private edgeSeq = 0;
   private disposers = new Map<string, () => void>();
-  private unsubTelemetry: () => void;
+  private evaluationNodeOverrides = new Map<string, GraphDocumentNode>();
 
   constructor(deps: WorkspaceDeps) {
     this.deps = deps;
-    this.engine = new GraphEngine<WsValue>({
+    this.evaluator = new GraphEvaluator({
       schedule: (flush) => requestAnimationFrame(flush),
       // bypass: pred inputs pass through uncooked (counts ripple as if absent)
-      passthrough: (inputs) => ({ kind: "pred", sql: andPreds(predSqls(inputs)) }),
+      passthrough: (inputs) => ({ kind: "pred", sql: andPreds(predicateSqls(inputs)) }),
+      onFlush: () => this.counts.refresh(),
     });
-    this.store = new Store<WsState>(EMPTY);
+    this.documentStore = new Store<WorkspaceDocumentState>(EMPTY);
+    this.store = this.documentStore;
     // restore the persisted disposition (a loaded document overrides this via
     // loadDocument's {...EMPTY, ...state}; the seed path keeps it)
     const savedDisp = typeof localStorage !== "undefined" ? localStorage.getItem("ndea.disposition") : null;
     if (savedDisp === "strip" || savedDisp === "full" || savedDisp === "hidden") {
-      this.store.setState((s) => ({ ...s, disposition: savedDisp }));
+      this.documentStore.setState((s) => ({ ...s, disposition: savedDisp }));
     }
-    this.coordination = new Coordination(this.store);
-    this.telemetry = new Store<TelemetryState>({ epoch: 0, cooking: {}, dirty: {}, cookMs: {}, enabled: true });
+    this.coordination = new Coordination(this.documentStore);
+    this.telemetry = this.evaluator.telemetry;
     this.counts = new NodeCounts({
       // post-flush, cache-aware: the flush just cooked every registered node
-      predicateOf: (id) => sqlOf(this.engine.pull(id)),
+      predicateOf: (id) => predicateSql(this.pullGraphNode(id)),
       query: (sql) => this.deps.coordinator.query(sql) as unknown as Promise<unknown>,
       toRows,
       table: deps.table,
-    });
-
-    this.unsubTelemetry = this.engine.onTelemetry((e) => {
-      if (e.type === "flush") {
-        // the settled-graph signal — refresh the batched counts (one query)
-        this.counts.refresh();
-        return;
-      }
-      this.telemetry.setState((t) => {
-        switch (e.type) {
-          case "emit":
-            return { ...t, epoch: e.epoch };
-          case "dirty":
-            return { ...t, epoch: e.epoch, dirty: { ...t.dirty, [e.node]: true } };
-          case "cook-start":
-            return { ...t, epoch: e.epoch, cooking: { ...t.cooking, [e.node]: true } };
-          case "cook-end": {
-            const cooking = { ...t.cooking };
-            delete cooking[e.node];
-            const dirty = { ...t.dirty };
-            delete dirty[e.node];
-            return {
-              ...t,
-              epoch: e.epoch,
-              cooking,
-              dirty,
-              cookMs: e.ms === undefined ? t.cookMs : { ...t.cookMs, [e.node]: e.ms },
-            };
-          }
-          default:
-            return t; // "flush" — handled above, narrowing doesn't cross the closure
-        }
-      });
     });
   }
 
   /* ── document queries ─────────────────────────────────────────────── */
 
-  def(id: string): NodeDef | null {
+  get graphEpoch(): number {
+    return this.evaluator.epoch;
+  }
+
+  pullGraphNode(id: string): GraphPortValue {
+    return this.evaluator.pull(id);
+  }
+
+  registerGraphSink(id: string, listener: (value: GraphPortValue) => void): () => void {
+    return this.evaluator.registerSink(id, listener);
+  }
+
+  markGraphNodeDirty(id: string): void {
+    this.evaluator.markDirty(id);
+  }
+
+  def(id: string): WorkspaceNodeDescriptor | null {
     const n = this.store.state.nodes[id];
-    return n ? NODE_DEFS[n.type] : null;
+    return n ? WORKSPACE_NODE_DESCRIPTORS[n.type] : null;
   }
 
   /** kind-compatibility + no-duplicate + DAG — the full wire-legality rule */
@@ -178,19 +156,19 @@ export class Workspace {
     if ((nodes[fromId]?.parent ?? null) !== (nodes[toId]?.parent ?? null)) return false; // wires live within one level
     const dup = Object.values(this.store.state.edges).some((e) => e.from === fromId && e.to === toId);
     if (dup) return false;
-    const ep = this.engineEndpoints(fromId, toId);
-    return this.engine.canConnect({ from: ep.from, to: ep.to });
+    const ep = this.graphEvaluationEndpoints(fromId, toId);
+    return this.evaluator.canConnect({ from: ep.from, to: ep.to });
   }
 
   /* ── topology actions ─────────────────────────────────────────────── */
 
-  addNode(type: WsNodeType, pos: XY, idOverride?: string): string {
-    const def = NODE_DEFS[type];
+  addNode(type: GraphNodeType, pos: WorkspaceNodePosition, idOverride?: string): string {
+    const def = WORKSPACE_NODE_DESCRIPTORS[type];
     const id = idOverride ?? `${type}-${++this.nodeSeq}`;
     const parent = this.store.state.graphPath;
-    const node: WsNode = { id, type, kind: def.kind, label: def.label, pluginId: def.pluginId, parent };
-    this.registerEngineNode(id, def);
-    this.store.setState((s) => ({
+    const node: GraphDocumentNode = { id, type, kind: def.kind, label: def.label, pluginId: def.pluginId, parent };
+    this.registerGraphNode(id, def);
+    this.documentStore.setState((s) => ({
       ...s,
       nodes: { ...s.nodes, [id]: node },
       positions: { ...s.positions, [id]: pos },
@@ -208,16 +186,16 @@ export class Workspace {
       ["-out", "⊲ out", 760],
     ] as const) {
       const pid = `${subId}${suffix}`;
-      const pdef = NODE_DEFS.proxy;
-      const pnode: WsNode = { id: pid, type: "proxy", kind: "proxy", label, pluginId: null, parent: subId };
-      this.registerEngineNode(pid, pdef);
-      this.store.setState((s) => ({
+      const pdef = WORKSPACE_NODE_DESCRIPTORS.proxy;
+      const pnode: GraphDocumentNode = { id: pid, type: "proxy", kind: "proxy", label, pluginId: null, parent: subId };
+      this.registerGraphNode(pid, pdef);
+      this.documentStore.setState((s) => ({
         ...s,
         nodes: { ...s.nodes, [pid]: pnode },
         positions: { ...s.positions, [pid]: { x, y: 160 } },
       }));
     }
-    this.engine.connect({ from: `${subId}-out`, to: subId, toPort: "in" });
+    this.evaluator.connect({ from: `${subId}-out`, to: subId, toPort: "in" });
   }
 
   removeNode(id: string): void {
@@ -225,12 +203,16 @@ export class Workspace {
     if (!def || def.type === "obs") return; // the source is permanent
     this.disposers.get(id)?.();
     this.disposers.delete(id);
-    this.engine.removeNode(id);
+    this.evaluator.removeNode(id);
     this.dropDockEl(id);
     this.dropHeaderEl(id);
+    this.frozenPredicates.delete(id);
+    this.frozenRows.delete(id);
+    this.collectionBindings.delete(id);
+    this.transformHosts.delete(id);
     this.wranglePreds.delete(id);
     if (this.ui.state.fullscreen === id) this.setFullscreen(null);
-    this.store.setState((s) => {
+    this.documentStore.setState((s) => {
       const nodes = { ...s.nodes };
       delete nodes[id];
       const positions = { ...s.positions };
@@ -261,7 +243,7 @@ export class Workspace {
 
   /** the engine endpoints for a presentation edge — a subnet target routes
    *  to its ⊳ in proxy (the engine stays flat; C9) */
-  private engineEndpoints(fromId: string, toId: string): { from: string; to: string } {
+  private graphEvaluationEndpoints(fromId: string, toId: string): { from: string; to: string } {
     const to = this.store.state.nodes[toId]?.type === "subnet" ? `${toId}-in` : toId;
     return { from: fromId, to };
   }
@@ -272,12 +254,12 @@ export class Workspace {
     // every wire is an engine edge: pred reads the source's DERIVED output
     // ("out"); sel/focus read its AUTHORED emission port (push unified into
     // pull — engine.emit + ordinary delivery).
-    const ep = this.engineEndpoints(fromId, toId);
-    const fromPort = kind === "pred" ? "out" : PUSH_PORT;
-    if (!this.engine.connect({ from: ep.from, fromPort, to: ep.to, toPort: "in" })) return false;
+    const ep = this.graphEvaluationEndpoints(fromId, toId);
+    const fromPort = kind === "pred" ? DERIVED_GRAPH_OUTPUT_PORT : AUTHORED_GRAPH_OUTPUT_PORT;
+    if (!this.evaluator.connect({ from: ep.from, fromPort, to: ep.to, toPort: "in" })) return false;
     const id = `e${++this.edgeSeq}`;
-    const edge: WsEdge = { id, from: fromId, to: toId, toPort: "in", kind };
-    this.store.setState((s) => ({ ...s, edges: { ...s.edges, [id]: edge } }));
+    const edge: GraphDocumentEdge = { id, from: fromId, to: toId, toPort: "in", kind };
+    this.documentStore.setState((s) => ({ ...s, edges: { ...s.edges, [id]: edge } }));
     return true;
   }
 
@@ -285,11 +267,11 @@ export class Workspace {
     const edge = this.store.state.edges[edgeId];
     if (!edge) return;
     {
-      const ep = this.engineEndpoints(edge.from, edge.to);
-      const fromPort = edge.kind === "pred" ? "out" : PUSH_PORT;
-      this.engine.disconnect({ from: ep.from, fromPort, to: ep.to, toPort: edge.toPort });
+      const ep = this.graphEvaluationEndpoints(edge.from, edge.to);
+      const fromPort = edge.kind === "pred" ? DERIVED_GRAPH_OUTPUT_PORT : AUTHORED_GRAPH_OUTPUT_PORT;
+      this.evaluator.disconnect({ from: ep.from, fromPort, to: ep.to, toPort: edge.toPort });
     }
-    this.store.setState((s) => {
+    this.documentStore.setState((s) => {
       const edges = { ...s.edges };
       delete edges[edgeId];
       return { ...s, edges, selectedEdge: s.selectedEdge === edgeId ? null : s.selectedEdge };
@@ -303,16 +285,16 @@ export class Workspace {
   /* ── persistence: hydrate a saved document ────────────────────────── */
 
   /**
-   * Rehydrate a saved {@link WsState} into this (fresh) Workspace — the load
+   * Rehydrate a saved {@link WorkspaceDocumentState} into this (fresh) Workspace — the load
    * half of the persistence seam. The TanStack store is only one of two
    * authorities: a node that merely lands in `store.state` is INERT (the engine
    * never cooks it, so counts/predicates stay empty). So this mirrors the engine
    * registration that `addNode`/`connect` do — register every node's cook
-   * (`registerEngineNode`), recreate the hidden subnet seam edge, then reconnect
+   * (`registerGraphNode`), recreate the hidden subnet seam edge, then reconnect
    * every presentation edge through the same port mapping `connect` uses — before
    * committing the document to the store in one write.
    *
-   * Engine-only runtime state that `WsState` doesn't carry is re-derived where it
+   * Engine-only runtime state that `WorkspaceDocumentState` doesn't carry is re-derived where it
    * can be (`bypass` from `flags`) and otherwise left to re-establish at the body
    * layer: a wrangle recompiles its `prql` → predicate on mount, a collection node
    * rebinds from its `config`. A cache node's pin (`frozenPredicates`) is NOT
@@ -322,15 +304,15 @@ export class Workspace {
    * Call once on a brand-new Workspace (the load-or-seed seam), in place of
    * `seedWorkspace`. Assumes the doc already passed {@link validateDoc}.
    */
-  loadDocument(state: WsState): void {
+  loadDocument(state: WorkspaceDocumentState): void {
     // register each node's cook in the engine (the `addNode` engine half).
     // Proxies are persisted store nodes (a subnet's ⊳in/⊲out seam markers), so
     // they are registered here like any other node — only their hidden seam edge
     // (added by `birthSubnetSeam`, never persisted) is recreated per subnet.
     for (const node of Object.values(state.nodes)) {
-      const def = NODE_DEFS[node.type];
+      const def = WORKSPACE_NODE_DESCRIPTORS[node.type];
       if (!def) continue; // unknown type (older/newer doc) — skip rather than throw
-      this.registerEngineNode(node.id, def);
+      this.registerGraphNode(node.id, def);
     }
     for (const node of Object.values(state.nodes)) {
       if (node.type === "subnet") this.recreateSubnetSeam(node.id);
@@ -343,16 +325,16 @@ export class Workspace {
     for (const edge of Object.values(state.edges)) {
       if (!state.nodes[edge.from] || !state.nodes[edge.to]) continue;
       const to = state.nodes[edge.to]?.type === "subnet" ? `${edge.to}-in` : edge.to;
-      const fromPort = edge.kind === "pred" ? "out" : PUSH_PORT;
-      this.engine.connect({ from: edge.from, fromPort, to, toPort: edge.toPort });
+      const fromPort = edge.kind === "pred" ? DERIVED_GRAPH_OUTPUT_PORT : AUTHORED_GRAPH_OUTPUT_PORT;
+      this.evaluator.connect({ from: edge.from, fromPort, to, toPort: edge.toPort });
     }
 
     // re-derive engine flags that live outside the document: a bypassed node (and
-    // a bypassed subnet's ⊲out seam) re-arms its passthrough.
+    // a bypassed subnet's ⊲out seam) re-arms its pass-through.
     for (const [id, f] of Object.entries(state.flags)) {
       if (f?.bypass && state.nodes[id]) {
-        this.engine.setBypass(id, true);
-        if (state.nodes[id]?.type === "subnet") this.engine.setBypass(`${id}-out`, true);
+        this.evaluator.setBypass(id, true);
+        if (state.nodes[id]?.type === "subnet") this.evaluator.setBypass(`${id}-out`, true);
       }
     }
 
@@ -372,23 +354,23 @@ export class Workspace {
 
     // commit the document in one write — the store is the topology/presentation
     // authority; the engine (above) is the cook authority.
-    this.store.setState(() => ({ ...EMPTY, ...state }));
+    this.documentStore.setState(() => ({ ...EMPTY, ...state }));
   }
 
   /** Recreate a subnet's hidden ⊲out→subnet engine edge on load (the seam edge
    *  `birthSubnetSeam` adds — it is engine-only, never a persisted store edge). */
   private recreateSubnetSeam(subId: string): void {
-    this.engine.connect({ from: `${subId}-out`, to: subId, toPort: "in" });
+    this.evaluator.connect({ from: `${subId}-out`, to: subId, toPort: "in" });
   }
 
   /* ── presentation actions ─────────────────────────────────────────── */
 
-  setPosition(id: string, pos: XY): void {
-    this.store.setState((s) => ({ ...s, positions: { ...s.positions, [id]: pos } }));
+  setPosition(id: string, pos: WorkspaceNodePosition): void {
+    this.documentStore.setState((s) => ({ ...s, positions: { ...s.positions, [id]: pos } }));
   }
 
-  setPositions(patch: Record<string, XY>): void {
-    this.store.setState((s) => ({ ...s, positions: { ...s.positions, ...patch } }));
+  setPositions(patch: Record<string, WorkspaceNodePosition>): void {
+    this.documentStore.setState((s) => ({ ...s, positions: { ...s.positions, ...patch } }));
   }
 
   /** morph suppression during a body resize drag */
@@ -397,15 +379,28 @@ export class Workspace {
   }
 
   select(id: string | null): void {
-    this.store.setState((s) => ({ ...s, selection: id, selectedEdge: null }));
+    this.documentStore.setState((s) => ({ ...s, selection: id, selectedEdge: null }));
   }
 
   setSelSet(ids: string[]): void {
-    this.store.setState((s) => ({ ...s, selSet: ids }));
+    this.documentStore.setState((s) => ({ ...s, selSet: ids }));
   }
 
   selectEdge(id: string | null): void {
-    this.store.setState((s) => ({ ...s, selectedEdge: id }));
+    this.documentStore.setState((s) => ({ ...s, selectedEdge: id }));
+  }
+
+  setGraphSelection(nodeIds: readonly string[], edgeIds: readonly string[]): void {
+    this.documentStore.setState((state) => ({
+      ...state,
+      selection: nodeIds.length === 1 ? nodeIds[0] : null,
+      selSet: nodeIds.length > 1 ? [...nodeIds] : [],
+      selectedEdge: edgeIds.length === 1 ? edgeIds[0] : null,
+    }));
+  }
+
+  releaseClaim(): void {
+    this.documentStore.setState((state) => ({ ...state, claimed: null }));
   }
 
   /** cycle chip → card (→ full when capable) */
@@ -414,11 +409,11 @@ export class Workspace {
     if (!def) return;
     const forms: NdForm[] = def.canFull ? ["chip", "card", "full"] : ["chip", "card"];
     const next = forms[(forms.indexOf(current) + 1) % forms.length];
-    this.store.setState((s) => ({ ...s, formOverride: { ...s.formOverride, [id]: next } }));
+    this.documentStore.setState((s) => ({ ...s, formOverride: { ...s.formOverride, [id]: next } }));
   }
 
   toggleFormLock(id: string, current: NdForm): void {
-    this.store.setState((s) => {
+    this.documentStore.setState((s) => {
       const on = !s.formLocked[id];
       const formOverride = { ...s.formOverride };
       if (on) formOverride[id] = formOverride[id] ?? current;
@@ -429,22 +424,22 @@ export class Workspace {
 
   /** unlocked overrides clear when the zoom-driven base next changes band */
   clearFreshOverrides(): void {
-    this.store.setState((s) => {
+    this.documentStore.setState((s) => {
       const kept: Record<string, NdForm> = {};
       for (const k in s.formOverride) if (s.formLocked[k]) kept[k] = s.formOverride[k];
       return { ...s, formOverride: kept };
     });
   }
 
-  setSizeOverride(id: string, form: "card" | "full", size: WH): void {
-    this.store.setState((s) => ({
+  setSizeOverride(id: string, form: "card" | "full", size: WorkspaceNodeSize): void {
+    this.documentStore.setState((s) => ({
       ...s,
       sizeOverrides: { ...s.sizeOverrides, [id]: { ...s.sizeOverrides[id], [form]: size } },
     }));
   }
 
   setTelemetryEnabled(on: boolean): void {
-    this.telemetry.setState((t) => ({ ...t, enabled: on }));
+    this.evaluator.setTelemetryEnabled(on);
   }
 
   /* ── node flags (Houdini b / d) ───────────────────────────────────── */
@@ -459,19 +454,19 @@ export class Workspace {
     if (flag === "bypass" && !(def.kind === "transform" || def.kind === "subnet")) return;
     if (flag === "off" && !(def.kind === "view" && def.pluginId)) return;
     const next = !(this.store.state.flags[id]?.[flag] ?? false);
-    this.store.setState((s) => ({
-      ...s,
-      flags: { ...s.flags, [id]: { ...s.flags[id], [flag]: next } },
-    }));
     if (flag === "bypass") {
       // a bypassed subnet bypasses its seam: route through the ⊲out proxy too
-      this.engine.setBypass(id, next);
-      if (this.store.state.nodes[id]?.type === "subnet") this.engine.setBypass(`${id}-out`, next);
+      this.evaluator.setBypass(id, next);
+      if (this.store.state.nodes[id]?.type === "subnet") this.evaluator.setBypass(`${id}-out`, next);
     } else {
       // display-off: the BodyOwner unregisters its sink (branch never cooks);
       // dirty downstream so LEDs reflect the parked branch
-      this.engine.markDirty(id);
+      this.evaluator.markDirty(id);
     }
+    this.documentStore.setState((s) => ({
+      ...s,
+      flags: { ...s.flags, [id]: { ...s.flags[id], [flag]: next } },
+    }));
   }
 
   /* ── authored emissions · freeze · spawn (the ◇ Selection flow) ───── */
@@ -490,17 +485,17 @@ export class Workspace {
           .map((x) => Number(x.trim()))
           .filter((n) => Number.isFinite(n));
     }
-    this.engine.emit(nodeId, PUSH_PORT, { kind: "sel", sql, rowIds: ids });
+    this.evaluator.emit(nodeId, AUTHORED_GRAPH_OUTPUT_PORT, { kind: "sel", sql, rowIds: ids });
   }
 
-  getLasso(nodeId: string): Extract<WsValue, { kind: "sel" }> | undefined {
-    const v = this.engine.getEmission(nodeId, PUSH_PORT);
+  getLasso(nodeId: string): Extract<GraphPortValue, { kind: "sel" }> | undefined {
+    const v = this.evaluator.getEmission(nodeId, AUTHORED_GRAPH_OUTPUT_PORT);
     return v?.kind === "sel" ? v : undefined;
   }
 
   /** A table row focus lands on its push port (focus wires deliver it). */
   emitFocus(nodeId: string, obsId: string | null): void {
-    this.engine.emit(nodeId, PUSH_PORT, { kind: "focus", obsId });
+    this.evaluator.emit(nodeId, AUTHORED_GRAPH_OUTPUT_PORT, { kind: "focus", obsId });
   }
 
   /** pinned row-set snapshots per cache node (resolved ids at pin time; null =
@@ -514,19 +509,19 @@ export class Workspace {
 
   /** Read this cache node's live input value (the same value its cook sees when
    *  uncached). Drives the body's "live count" + the pin action. */
-  liveCacheInput(id: string): Extract<WsValue, { kind: "sel" }> | { kind: "pred"; sql: string | null } | null {
+  liveCacheInput(id: string): Extract<GraphPortValue, { kind: "sel" }> | { kind: "pred"; sql: string | null } | null {
     // a sel edge (scatter lasso / table selection) delivers via the source's
     // push port; a pred edge pulls the source's cooked output.
-    let sel: Extract<WsValue, { kind: "sel" }> | undefined;
+    let sel: Extract<GraphPortValue, { kind: "sel" }> | undefined;
     const predSqlsIn: Predicate[] = [];
     for (const e of Object.values(this.store.state.edges)) {
       if (e.to !== id) continue;
       if (e.kind === "sel") {
-        const v = this.engine.getEmission(e.from, PUSH_PORT);
+        const v = this.evaluator.getEmission(e.from, AUTHORED_GRAPH_OUTPUT_PORT);
         if (v?.kind === "sel") sel = v;
       } else {
-        const v = this.engine.pull(e.from);
-        predSqlsIn.push(sqlOf(v));
+        const v = this.evaluator.pull(e.from);
+        predSqlsIn.push(predicateSql(v));
       }
     }
     if (sel) return sel;
@@ -551,9 +546,9 @@ export class Workspace {
     if (!frozen) return false;
     this.frozenPredicates.set(cacheId, frozen);
     this.frozenRows.set(cacheId, rowIds);
-    this.engine.markDirty(cacheId);
-    const stamp = this.engine.epoch;
-    this.store.setState((s) => ({
+    this.evaluator.markDirty(cacheId);
+    const stamp = this.evaluator.epoch;
+    this.documentStore.setState((s) => ({
       ...s,
       nodes: { ...s.nodes, [cacheId]: { ...s.nodes[cacheId], stamp } },
       selection: cacheId,
@@ -565,8 +560,11 @@ export class Workspace {
   uncache(cacheId: string): void {
     if (!this.frozenPredicates.delete(cacheId)) return;
     this.frozenRows.delete(cacheId);
-    this.store.setState((s) => ({ ...s, nodes: { ...s.nodes, [cacheId]: { ...s.nodes[cacheId], stamp: undefined } } }));
-    this.engine.markDirty(cacheId);
+    this.evaluator.markDirty(cacheId);
+    this.documentStore.setState((s) => ({
+      ...s,
+      nodes: { ...s.nodes, [cacheId]: { ...s.nodes[cacheId], stamp: undefined } },
+    }));
   }
 
   /** Scatter *freeze* affordance → a ◆ Cache node wired to the lasso, pinned at
@@ -594,17 +592,32 @@ export class Workspace {
 
   bindCollection(nodeId: string, c: { id: string; name: string; version: number }): void {
     this.collectionBindings.set(nodeId, { id: c.id, version: c.version });
-    this.store.setState((s) => ({
+    this.evaluator.markDirty(nodeId);
+    this.documentStore.setState((s) => ({
       ...s,
       nodes: {
         ...s.nodes,
         [nodeId]: {
           ...s.nodes[nodeId],
-          config: patchConfig(s.nodes[nodeId], { collectionId: c.id, collectionName: c.name }),
+          config: patchNodeConfig(s.nodes[nodeId], { collectionId: c.id, collectionName: c.name }),
         },
       },
     }));
-    this.engine.markDirty(nodeId);
+  }
+
+  unbindCollection(nodeId: string): void {
+    this.collectionBindings.delete(nodeId);
+    this.evaluator.markDirty(nodeId);
+    this.documentStore.setState((state) => ({
+      ...state,
+      nodes: {
+        ...state.nodes,
+        [nodeId]: {
+          ...state.nodes[nodeId],
+          config: patchNodeConfig(state.nodes[nodeId], { collectionId: null, collectionName: null }),
+        },
+      },
+    }));
   }
 
   /** Export node → saved collection (create API, row_indices mode). Reads the
@@ -632,13 +645,13 @@ export class Workspace {
     }
     const cid = (data as { result?: { collection_id?: string } }).result?.collection_id;
     if (cid) {
-      this.store.setState((s) => ({
+      this.documentStore.setState((s) => ({
         ...s,
         nodes: {
           ...s.nodes,
           [nodeId]: {
             ...s.nodes[nodeId],
-            config: patchConfig(s.nodes[nodeId], { collectionId: cid, collectionName: name }),
+            config: patchNodeConfig(s.nodes[nodeId], { collectionId: cid, collectionName: name }),
           },
         },
       }));
@@ -650,42 +663,41 @@ export class Workspace {
 
   /** Build the lightweight cook host for a built-in node spec. Closes over the
    *  workspace's per-node runtime maps; reads are live (called each cook). */
-  private makeCookHost(id: string): NodeCookHost {
+  private makeCookHost(id: string): GraphNodeCookHost {
     return {
       id,
-      node: () => this.store.state.nodes[id],
+      node: () => this.evaluationNodeOverrides.get(id) ?? this.store.state.nodes[id],
       frozenPredicate: () => (this.frozenPredicates.has(id) ? (this.frozenPredicates.get(id) ?? null) : undefined),
-      wranglePred: () => this.wranglePreds.get(id) ?? null,
+      wranglePredicate: () => this.wranglePreds.get(id) ?? null,
       collectionBinding: () => this.collectionBindings.get(id),
     };
   }
 
-  private registerEngineNode(id: string, def: NodeDef): void {
+  private registerGraphNode(id: string, def: WorkspaceNodeDescriptor): void {
     // Unified path: every node type resolves to a registered spec that owns its
-    // engine cook + kind (no switch). An instance-driven node (the threshold
-    // transform) supplies `registerEngine` and owns `engine.addNode` itself.
-    const spec = getWsNode(def.type);
+    // evaluator cook + kind (no switch). An instance-driven node (the threshold
+    // transform) supplies `registerEvaluation` and owns its evaluator registration.
+    const spec = getWorkspaceNodeSpec(def.type);
     if (!spec) throw new Error(`no registered node spec for type "${def.type}"`);
-    if (spec.registerEngine) {
-      spec.registerEngine(this.makeEngineRegisterCtx(id));
+    if (spec.registerEvaluation) {
+      spec.registerEvaluation(this.makeGraphNodeRegistrationContext(id));
       return;
     }
     const host = this.makeCookHost(id);
-    this.engine.addNode({ id, kind: spec.engineKind, cook: (inputs) => spec.cook(inputs, host) });
+    this.evaluator.addNode({ id, kind: spec.evaluationRole, cook: (inputs) => spec.cook(inputs, host) });
   }
 
-  /** Workspace context handed to a spec's `registerEngine` escape hatch — the
+  /** Workspace context handed to a spec's `registerEvaluation` escape hatch — the
    *  minimal engine/runtime plumbing an instance-driven node (threshold) needs,
    *  closed over this workspace's maps. */
-  private makeEngineRegisterCtx(id: string): EngineRegisterCtx {
+  private makeGraphNodeRegistrationContext(id: string): GraphNodeRegistrationContext {
     return {
       id,
       coordinator: this.deps.coordinator,
       table: this.deps.table,
       metadata: this.deps.metadata,
-      engine: this.engine,
-      addNode: (kind, cook) => this.engine.addNode({ id, kind, cook }),
-      markDirty: () => this.engine.markDirty(id),
+      addNode: (kind, cook) => this.evaluator.addNode({ id, kind, cook }),
+      markDirty: () => this.evaluator.markDirty(id),
       onDispose: (fn) => this.disposers.set(id, fn),
       setTransformHost: (host) =>
         this.transformHosts.set(id, host as NodeHost<ThresholdFilterConfig, TransformCapabilities>),
@@ -765,7 +777,7 @@ export class Workspace {
 
   /** stable per-node HEADER slot element — same reparenting contract as the
    *  body dock, but for the frame/tile header's middle gap. Plugins portal a
-   *  compact toolbar into it (host.ui.container.headerEl); the canvas node
+   *  compact toolbar into it (host.bodyHeaderElement); the canvas node
    *  header (full form) or the stage tile header adopts it via HeaderSocket. */
   private headerEls = new Map<string, HTMLDivElement>();
   headerEl(id: string): HTMLDivElement {
@@ -791,7 +803,7 @@ export class Workspace {
   }
 
   /** placement resolution: descriptor flag → explicit pin → by-disposition default */
-  placementOf(id: string): WsPlacement {
+  placementOf(id: string): WorkspacePlacement {
     const def = this.def(id);
     if (!def || def.stage === "canvas-only") return "embedded";
     const explicit = this.store.state.explicit[id];
@@ -806,11 +818,11 @@ export class Workspace {
   /** pin ⇡ / pull ⇣ — explicit, persists; animates via the FLIP ghost */
   togglePlacement(id: string, transMs: number): void {
     const cur = this.placementOf(id);
-    const next: WsPlacement = cur === "staged" ? "embedded" : "staged";
+    const next: WorkspacePlacement = cur === "staged" ? "embedded" : "staged";
     const fromEl = this.els.get(cur === "staged" ? `stage:${id}` : `canvas:${id}`);
     const fromRect = fromEl?.getBoundingClientRect() ?? null;
     const label = this.store.state.nodes[id]?.label ?? id;
-    this.store.setState((s) => ({ ...s, explicit: { ...s.explicit, [id]: next }, claimed: null }));
+    this.documentStore.setState((s) => ({ ...s, explicit: { ...s.explicit, [id]: next }, claimed: null }));
     if (!fromRect) return;
     const toKey = next === "staged" ? `stage:${id}` : `canvas:${id}`;
     // measure the destination after the placement commit paints
@@ -833,7 +845,7 @@ export class Workspace {
   private slotSeq = 0;
 
   setStageTree(tree: TreeNode | null): void {
-    this.store.setState((s) => ({ ...s, stageTree: tree }));
+    this.documentStore.setState((s) => ({ ...s, stageTree: tree }));
   }
 
   splitTile(id: string, dir: SplitWord): void {
@@ -842,7 +854,7 @@ export class Workspace {
   }
 
   fillSlot(slotId: string, nodeId: string): void {
-    this.store.setState((s) => ({
+    this.documentStore.setState((s) => ({
       ...s,
       stageTree: treeMapLeaves(s.stageTree, (l) => (l === slotId ? nodeId : l)),
       explicit: { ...s.explicit, [nodeId]: "staged" },
@@ -864,18 +876,20 @@ export class Workspace {
   /** un-staged stageable nodes — candidates for an empty slot */
   stageCandidates(): string[] {
     return Object.values(this.store.state.nodes)
-      .filter((n) => NODE_DEFS[n.type].stage !== "canvas-only" && this.placementOf(n.id) === "embedded")
+      .filter(
+        (n) => WORKSPACE_NODE_DESCRIPTORS[n.type].stage !== "canvas-only" && this.placementOf(n.id) === "embedded",
+      )
       .map((n) => n.id);
   }
 
   /* ── pointer claiming (embedded bodies only) ──────────────────────── */
 
   claim(id: string): void {
-    this.store.setState((s) => ({ ...s, claimed: id }));
+    this.documentStore.setState((s) => ({ ...s, claimed: id }));
   }
 
   release(): void {
-    this.store.setState((s) => (s.claimed === null ? s : { ...s, claimed: null }));
+    this.documentStore.setState((s) => (s.claimed === null ? s : { ...s, claimed: null }));
   }
 
   /* ── hierarchy (subnets) ──────────────────────────────────────────── */
@@ -885,11 +899,11 @@ export class Workspace {
   }
 
   enterSubnet(id: string): void {
-    this.store.setState((s) => ({ ...s, graphPath: id, selection: id, claimed: null }));
+    this.documentStore.setState((s) => ({ ...s, graphPath: id, selection: id, claimed: null }));
   }
 
   exitSubnet(): void {
-    this.store.setState((s) => ({
+    this.documentStore.setState((s) => ({
       ...s,
       graphPath: s.graphPath ? (s.nodes[s.graphPath]?.parent ?? null) : null,
       claimed: null,
@@ -897,7 +911,7 @@ export class Workspace {
   }
 
   jumpLevel(id: string | null): void {
-    this.store.setState((s) => ({ ...s, graphPath: id, claimed: null }));
+    this.documentStore.setState((s) => ({ ...s, graphPath: id, claimed: null }));
   }
 
   /** breadcrumb chain for the current level: atlas › … › current */
@@ -930,7 +944,7 @@ export class Workspace {
     let maxY = -1e9;
     for (const id of sel) {
       const p = s.positions[id] ?? { x: 0, y: 0 };
-      const def = NODE_DEFS[s.nodes[id].type];
+      const def = WORKSPACE_NODE_DESCRIPTORS[s.nodes[id].type];
       minX = Math.min(minX, p.x);
       minY = Math.min(minY, p.y);
       maxX = Math.max(maxX, p.x + def.card.w);
@@ -947,7 +961,7 @@ export class Workspace {
     // positions keep their shape, normalized toward origin; proxies bracket
     const dx = 320 - minX;
     const dy = 90 - minY;
-    this.store.setState((st) => {
+    this.documentStore.setState((st) => {
       const nodes = { ...st.nodes };
       const positions = { ...st.positions };
       for (const id of sel) {
@@ -982,8 +996,8 @@ export class Workspace {
 
   /* ── disposition (strip ↔ full) ───────────────────────────────────── */
 
-  setDisposition(d: WsDisposition): void {
-    this.store.setState((s) => ({ ...s, disposition: d, claimed: null }));
+  setDisposition(d: WorkspaceCanvasDisposition): void {
+    this.documentStore.setState((s) => ({ ...s, disposition: d, claimed: null }));
     try {
       localStorage.setItem("ndea.disposition", d);
     } catch {
@@ -992,7 +1006,7 @@ export class Workspace {
   }
 
   setStripH(h: number): void {
-    this.store.setState((s) => ({ ...s, stripH: h }));
+    this.documentStore.setState((s) => ({ ...s, stripH: h }));
   }
 
   /** camera-fit hook — registered by the canvas (fitView with duration) */
@@ -1008,22 +1022,34 @@ export class Workspace {
 
   /** wrangle editor → document text (persist-ready); compile is the body's job */
   setWranglePrql(id: string, prql: string): void {
-    this.store.setState((s) => ({
+    this.documentStore.setState((s) => ({
       ...s,
-      nodes: { ...s.nodes, [id]: { ...s.nodes[id], config: patchConfig(s.nodes[id], { prql }) } },
+      nodes: { ...s.nodes, [id]: { ...s.nodes[id], config: patchNodeConfig(s.nodes[id], { prql }) } },
     }));
   }
 
   /** dataset source → selected `_dataset` key (undefined = all); re-cooks downstream */
   setDatasetKey(id: string, datasetKey: string | undefined): void {
-    this.store.setState((s) => ({
-      ...s,
-      nodes: {
-        ...s.nodes,
-        [id]: { ...s.nodes[id], config: patchConfig(s.nodes[id], { datasetKey: datasetKey ?? null }) },
-      },
+    const current = this.store.state.nodes[id];
+    if (!current) return;
+    const next: GraphDocumentNode = {
+      ...current,
+      config: patchNodeConfig(current, { datasetKey: datasetKey ?? null }),
+    };
+
+    // A synchronous evaluator scheduler must cook against the pending config
+    // before document subscribers can observe it. With the normal rAF scheduler,
+    // the committed document becomes the live cook source before the flush.
+    this.evaluationNodeOverrides.set(id, next);
+    try {
+      this.evaluator.markDirty(id);
+    } finally {
+      this.evaluationNodeOverrides.delete(id);
+    }
+    this.documentStore.setState((state) => ({
+      ...state,
+      nodes: { ...state.nodes, [id]: next },
     }));
-    this.engine.markDirty(id);
   }
 
   /** wrangle body → compiled predicate; dirties the node so the graph re-cooks */
@@ -1031,14 +1057,20 @@ export class Workspace {
     const prev = this.wranglePreds.get(id) ?? null;
     if (prev === sql) return;
     this.wranglePreds.set(id, sql);
-    this.engine.markDirty(id);
+    this.evaluator.markDirty(id);
   }
 
   dispose(): void {
-    this.unsubTelemetry();
+    this.evaluator.dispose();
     this.counts.dispose();
     for (const d of this.disposers.values()) d();
     this.disposers.clear();
+    this.evaluationNodeOverrides.clear();
+    this.frozenPredicates.clear();
+    this.frozenRows.clear();
+    this.collectionBindings.clear();
+    this.transformHosts.clear();
+    this.wranglePreds.clear();
   }
 }
 

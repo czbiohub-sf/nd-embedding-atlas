@@ -3,6 +3,7 @@ import { useCallback, useRef } from "react";
 import { useHost } from "@/core/host/host-context";
 import type { CategoryMapping } from "@/lib/color/category-column";
 import type { IsolationCapability } from "@/nodes/scatter/gpu/handle-capabilities";
+import type { ScatterCapabilities } from "@/nodes/scatter/plugin";
 
 interface UseIsolationBridgeOptions {
   coloredCategoryMapping: CategoryMapping | null;
@@ -33,7 +34,7 @@ export function useIsolationBridge(opts: UseIsolationBridgeOptions): UseIsolatio
   colByColRef.current = colorByColumn;
   // Isolation predicate composes into this scatter instance's crossfilter clause
   // via the host "isolation" facet (§6.3).
-  const host = useHost();
+  const host = useHost<unknown, ScatterCapabilities>();
   const hostRef = useRef(host);
   hostRef.current = host;
 

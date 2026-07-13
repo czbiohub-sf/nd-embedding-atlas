@@ -8,7 +8,6 @@
 
 import type { Coordinator, Selection } from "@uwdata/mosaic-core";
 import { useCallback } from "react";
-import type { NodeHost } from "@ndea/sdk";
 import type { ChartLeafConfig } from "./types";
 
 export interface ChartLeaf {
@@ -21,7 +20,14 @@ export interface ChartLeaf {
   setField: (field: string) => void;
 }
 
-export function useChartLeaf<C extends ChartLeafConfig>(host: NodeHost<C>): ChartLeaf {
+interface ChartLeafHost<C extends ChartLeafConfig> {
+  readonly config: C;
+  readonly data: { coordinator: Coordinator; table: string };
+  readonly inputPredicate: Selection;
+  patchConfig(patch: Partial<C>): void;
+}
+
+export function useChartLeaf<C extends ChartLeafConfig>(host: ChartLeafHost<C>): ChartLeaf {
   const setField = useCallback((field: string) => host.patchConfig({ field } as Partial<C>), [host]);
   return {
     coordinator: host.data.coordinator,

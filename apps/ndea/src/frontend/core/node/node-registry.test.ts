@@ -3,8 +3,8 @@ import { Glob } from "bun";
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
-import { getWsNode, listWsNodes } from "@/core/workspace/node-kit";
-import type { WsNodeType } from "@/core/workspace/types";
+import { getWorkspaceNodeSpec, listWorkspaceNodeSpecs } from "@/core/workspace/node-kit";
+import type { GraphNodeType } from "@/core/graph/records";
 import { registerBuiltins } from "@/core/workspace/definitions";
 import { getDefinition, getNode, listNodes, parseConfig } from "./registry";
 import { loadNodeModule } from "./load-module";
@@ -13,7 +13,7 @@ registerBuiltins();
 const APP_ROOT = resolve(import.meta.dir, "../../../..");
 
 // Keep the compile-time union and runtime registry in lockstep.
-const ALL_TYPES: WsNodeType[] = [
+const ALL_TYPES: GraphNodeType[] = [
   "obs",
   "dataset",
   "threshold",
@@ -34,7 +34,7 @@ const ALL_TYPES: WsNodeType[] = [
   "proxy",
 ];
 
-const REGISTRATION_ORDER: WsNodeType[] = [
+const REGISTRATION_ORDER: GraphNodeType[] = [
   "obs",
   "dataset",
   "threshold",
@@ -60,13 +60,13 @@ const DEFINITION_IDS = ["scatter", "table", "count-plot", "histogram", "gallery"
 describe("node registry fitness functions", () => {
   test("every node type resolves to a registered node spec", () => {
     for (const type of ALL_TYPES) {
-      expect(getWsNode(type), `node type "${type}" has no registered WsNodeSpec`).toBeDefined();
+      expect(getWorkspaceNodeSpec(type), `node type "${type}" has no registered WorkspaceNodeSpec`).toBeDefined();
     }
   });
 
   test("built-in bootstrap is idempotent and preserves registry order", () => {
     registerBuiltins();
-    expect(listWsNodes().map((spec) => spec.type)).toEqual(REGISTRATION_ORDER);
+    expect(listWorkspaceNodeSpecs().map((spec) => spec.type)).toEqual(REGISTRATION_ORDER);
   });
 
   test("each same-id built-in keeps graph runtime app-local and definition metadata authoritative", () => {
@@ -97,9 +97,23 @@ describe("node registry fitness functions", () => {
     expect("Component" in module).toBe(false);
   });
 
+  test("Scatter declares every optional host service used by its Body and routing", () => {
+    const capabilities = new Set(getDefinition("scatter")?.capabilities);
+    for (const capability of [
+      "focus-coordination",
+      "view-coordination",
+      "predicate-publish",
+      "row-set-publish",
+      "row-set-subscribe",
+      "gpu-device",
+    ] as const) {
+      expect(capabilities.has(capability), `Scatter is missing ${capability}`).toBe(true);
+    }
+  });
+
   test("every spec's config schema accepts a fresh (empty) config", () => {
     for (const type of ALL_TYPES) {
-      const spec = getWsNode(type);
+      const spec = getWorkspaceNodeSpec(type);
       if (spec?.config) {
         expect(parseConfig(spec, {}).ok, `spec "${type}" config schema rejects a fresh {} config`).toBe(true);
       }
@@ -117,8 +131,8 @@ describe("node registry fitness functions", () => {
         hits.push(`${file} (${matches.length})`);
       }
     }
-    // Baseline 0: cook + body both dispatch through `getWsNode(type)`; threshold
-    // (the one instance-driven node) converges via `registerEngine`, not a switch.
+    // Baseline 0: cook + body both dispatch through `getWorkspaceNodeSpec(type)`; threshold
+    // (the one instance-driven node) converges via `registerEvaluation`, not a switch.
     expect(count, `unexpected node-type switch(es): ${hits.join(", ")}`).toBe(0);
   });
 });

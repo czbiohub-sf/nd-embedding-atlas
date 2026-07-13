@@ -23,7 +23,7 @@ export function workspaceDocumentVersion(value: number): WorkspaceDocumentVersio
   return value as WorkspaceDocumentVersion;
 }
 
-export const SDK_VERSION: SDKVersion = sdkVersion(packageJson.version);
+export const SDK_VERSION = sdkVersion(packageJson.version);
 
 export function sdkMajor(version: SDKVersion): string {
   return version.split(".")[0] ?? "";

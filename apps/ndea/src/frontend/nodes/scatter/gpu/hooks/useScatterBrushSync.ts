@@ -3,6 +3,7 @@ import type { RefObject } from "react";
 import { useRef } from "react";
 import { useHost } from "@/core/host/host-context";
 import { clearLasso, publishLasso, publishLassoRowSet } from "@/nodes/scatter/routing";
+import type { ScatterCapabilities } from "@/nodes/scatter/plugin";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -83,7 +84,7 @@ export function useScatterBrushSync({
 }: UseScatterBrushSyncOptions): UseScatterBrushSyncResult {
   // Selection-out routes through host.* (the bus is the sole crossfilter writer,
   // §6.3/§6.7). Read via a ref so the throttler/debouncer closures see the host.
-  const host = useHost();
+  const host = useHost<unknown, ScatterCapabilities>();
   const hostRef = useRef(host);
   hostRef.current = host;
 

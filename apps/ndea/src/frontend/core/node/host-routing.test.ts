@@ -27,7 +27,7 @@ import {
   toggleViewLock,
 } from "@/nodes/scatter/routing";
 import { focusRow, publishOrdering } from "@/nodes/table/routing";
-import { listWsNodes } from "@/core/workspace/node-kit";
+import { listWorkspaceNodeSpecs } from "@/core/workspace/node-kit";
 import { registerBuiltins } from "@/core/workspace/definitions";
 import { createSpyHost } from "./spy-host";
 
@@ -50,7 +50,7 @@ const ROUTING_COVERAGE: Record<string, "routed" | { exempt: string }> = {
 
 describe("cross-view routing conformance", () => {
   test("every view-kind node declares its cross-view routing", () => {
-    const viewTypes = listWsNodes()
+    const viewTypes = listWorkspaceNodeSpecs()
       .filter((s) => s.kind === "view")
       .map((s) => s.type);
     for (const type of viewTypes) {

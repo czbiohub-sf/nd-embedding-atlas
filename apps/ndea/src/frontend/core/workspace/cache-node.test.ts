@@ -14,7 +14,8 @@
 import { describe, expect, test } from "bun:test";
 
 import { registerBuiltinNodes } from "./nodes";
-import { sqlOf, Workspace } from "./workspace-store";
+import { predicateSql } from "@/core/graph/cook";
+import { Workspace } from "./workspace-store";
 import type { Metadata } from "@ndea/protocol";
 
 // rAF doesn't exist under bun:test — the Workspace ctor references it for the
@@ -33,7 +34,7 @@ function makeWs() {
   });
 }
 
-const cookSql = (ws: Workspace, id: string) => sqlOf(ws.engine.pull(id));
+const cookSql = (ws: Workspace, id: string) => predicateSql(ws.pullGraphNode(id));
 
 describe("Cache node", () => {
   test("live (uncached) passes a pred input through; pin fixes it (R2, R3, R6)", () => {
@@ -79,7 +80,7 @@ describe("Cache node", () => {
 
     // upstream re-cooks → epoch advances past the pin → recache available
     ws.setWranglePred(wr, "x > 2");
-    expect(ws.engine.epoch).toBeGreaterThan(stamp);
+    expect(ws.graphEpoch).toBeGreaterThan(stamp);
 
     // Recache re-pins to the new live input (R4) and refreshes the stamp
     expect(ws.pinCache(cache)).toBe(true);

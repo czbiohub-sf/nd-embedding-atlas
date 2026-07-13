@@ -17,7 +17,12 @@ export interface TransformHostInit<Config> {
   onConfigPatch: () => void;
 }
 
-export function makeTransformHost<Config>(init: TransformHostInit<Config>): NodeHost<Config, TransformCapabilities> {
+export interface TransformHostHandle<Config> {
+  readonly host: NodeHost<Config, TransformCapabilities>;
+  dispose(): void;
+}
+
+export function makeTransformHost<Config>(init: TransformHostInit<Config>): TransformHostHandle<Config> {
   const { instanceId, definitionRef, coordinator, table, metadata, onPublish, onConfigPatch } = init;
   let config = init.config;
   const controller = new AbortController();
@@ -29,7 +34,7 @@ export function makeTransformHost<Config>(init: TransformHostInit<Config>): Node
     },
   };
 
-  return {
+  const host: NodeHost<Config, TransformCapabilities> = {
     instanceId,
     definitionRef,
     capabilities: new Set<TransformCapabilities>(["data-read", "predicate-publish", "compute"]),
@@ -63,5 +68,19 @@ export function makeTransformHost<Config>(init: TransformHostInit<Config>): Node
       disposers.push(unsubscribe);
     },
     signal: controller.signal,
+  };
+
+  let disposed = false;
+  return {
+    host,
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      controller.abort();
+      for (let index = disposers.length - 1; index >= 0; index -= 1) {
+        disposers[index]();
+      }
+      disposers.length = 0;
+    },
   };
 }

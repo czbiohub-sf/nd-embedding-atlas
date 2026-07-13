@@ -6,7 +6,8 @@
 
 import { z } from "zod";
 import { CollectionNodeBody } from "@/core/workspace/canvas/node-extras";
-import { defineWsNode, PRED_NULL } from "@/core/workspace/node-kit";
+import { defineWorkspaceNodeSpec } from "@/core/workspace/node-kit";
+import { NULL_PREDICATE_PORT_VALUE } from "@/core/graph/cook";
 
 /** Shared by collection (bound source) and export (saved-collection sink). */
 export interface CollectionConfig {
@@ -19,7 +20,7 @@ export const collectionConfigSchema = z.object({
   collectionName: z.string().nullable().optional(),
 });
 
-export const collectionNode = defineWsNode({
+export const collectionNode = defineWorkspaceNodeSpec({
   id: "collection",
   type: "collection",
   title: "Collection",
@@ -28,10 +29,10 @@ export const collectionNode = defineWsNode({
   outputs: [{ id: "out", kind: "pred", label: "Out" }],
   config: collectionConfigSchema,
   configVersion: 1,
-  engineKind: "source",
+  evaluationRole: "source",
   cook: (_inputs, host) => {
     const b = host.collectionBinding();
-    if (!b) return PRED_NULL;
+    if (!b) return NULL_PREDICATE_PORT_VALUE;
     return {
       kind: "pred",
       sql: `"__obs_index__" IN (SELECT obs_index FROM collection_members WHERE collection_id = '${b.id}') /* v=${b.version} */`,

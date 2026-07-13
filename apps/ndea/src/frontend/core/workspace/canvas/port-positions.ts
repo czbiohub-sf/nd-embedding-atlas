@@ -5,9 +5,9 @@
  */
 
 import { ndResolveForm, type NdForm } from "@/components/nd/nd-resolve-form";
-import { NODE_DEFS, nodeSize } from "../node-defs";
+import { WORKSPACE_NODE_DESCRIPTORS, workspaceNodeSize } from "../node-defs";
 import type { Workspace } from "../workspace-store";
-import type { WH, XY } from "../types";
+import type { WorkspaceNodeSize, WorkspaceNodePosition } from "../types";
 
 /** y offset of the port center from the node top (rides the 26px header) */
 export const PORT_Y = 13;
@@ -16,7 +16,7 @@ export function resolveNodeForm(ws: Workspace, id: string): NdForm {
   const node = ws.store.state.nodes[id];
   if (!node) return "card";
   if (node.type === "proxy") return "chip"; // seam markers never grow
-  const def = NODE_DEFS[node.type];
+  const def = WORKSPACE_NODE_DESCRIPTORS[node.type];
   const override = ws.store.state.formOverride[id] ?? null;
   return ndResolveForm({
     base: ws.ui.state.baseForm,
@@ -27,7 +27,7 @@ export function resolveNodeForm(ws: Workspace, id: string): NdForm {
   });
 }
 
-export function resolveNodeSize(ws: Workspace, id: string): WH {
+export function resolveNodeSize(ws: Workspace, id: string): WorkspaceNodeSize {
   const node = ws.store.state.nodes[id];
   if (!node) return { w: 0, h: 0 };
   const form = resolveNodeForm(ws, id);
@@ -35,10 +35,10 @@ export function resolveNodeSize(ws: Workspace, id: string): WH {
     const o = ws.store.state.sizeOverrides[id]?.[form];
     if (o) return o;
   }
-  return nodeSize(NODE_DEFS[node.type], form);
+  return workspaceNodeSize(WORKSPACE_NODE_DESCRIPTORS[node.type], form);
 }
 
-export function portPos(ws: Workspace, id: string, which: "in" | "out"): XY {
+export function portPos(ws: Workspace, id: string, which: "in" | "out"): WorkspaceNodePosition {
   const pos = ws.store.state.positions[id] ?? { x: 0, y: 0 };
   if (which === "in") return { x: pos.x, y: pos.y + PORT_Y };
   const { w } = resolveNodeSize(ws, id);

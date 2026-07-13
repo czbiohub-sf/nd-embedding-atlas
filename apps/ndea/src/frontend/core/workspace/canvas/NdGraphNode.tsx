@@ -20,10 +20,10 @@ import { NdHud, type NdLedState } from "@/components/nd/nd-primitives";
 import type { NdResizeCorner } from "@/components/nd/nd-resize-grips";
 import { BodySocket, HeaderSocket } from "../body-dock";
 import { ND_NODE, ND_TIMING } from "../constants";
-import { NODE_DEFS, nodeSize } from "../node-defs";
+import { WORKSPACE_NODE_DESCRIPTORS, workspaceNodeSize } from "../node-defs";
 import { useNodeFeedbackContext } from "../feedback";
 import { useNodeCount } from "../use-node-count";
-import { useTelemetrySelector, useWorkspace, useWsSelector } from "../workspace-context";
+import { useTelemetrySelector, useWorkspace, useWorkspaceSelector } from "../workspace-context";
 import { resolveNodeForm, resolveNodeSize } from "./port-positions";
 import { NdHandle } from "./NdHandle";
 import {
@@ -35,7 +35,7 @@ import {
   SyncBadge,
   SyncGroupButton,
 } from "./node-extras";
-import { getWsNode } from "../node-kit";
+import { getWorkspaceNodeSpec } from "../node-kit";
 
 export interface NdGraphNodeData {
   wsId: string;
@@ -50,21 +50,23 @@ const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
 function NdGraphNodeInner({ id, selected }: NodeProps<NdGraphNodeType>) {
   const ws = useWorkspace();
   const rf = useReactFlow();
-  const node = useWsSelector((s) => s.nodes[id]);
-  const locked = useWsSelector((s) => s.formLocked[id] ?? false);
+  const node = useWorkspaceSelector((s) => s.nodes[id]);
+  const locked = useWorkspaceSelector((s) => s.formLocked[id] ?? false);
   // form/size react to override + zoom-band + size/placement changes
-  useWsSelector((s) => s.formOverride[id]);
-  useWsSelector((s) => s.sizeOverrides[id]);
-  useWsSelector((s) => s.explicit[id]);
-  useWsSelector((s) => s.disposition);
+  useWorkspaceSelector((s) => s.formOverride[id]);
+  useWorkspaceSelector((s) => s.sizeOverrides[id]);
+  useWorkspaceSelector((s) => s.explicit[id]);
+  useWorkspaceSelector((s) => s.disposition);
   useSelector(ws.ui, (u) => u.baseForm);
   const flipHidden = useSelector(ws.ui, (u) => u.flipHide === `canvas:${id}`);
   const resizing = useSelector(ws.ui, (u) => u.resizing === id);
   const fullscreen = useSelector(ws.ui, (u) => u.fullscreen === id);
-  const inMarquee = useWsSelector((s) => s.selSet.includes(id));
-  const flagsState = useWsSelector((s) => s.flags[id]);
-  const claimed = useWsSelector((s) => s.claimed === id);
-  const fanIn = useWsSelector((s) => Object.values(s.edges).filter((e) => e.to === id && e.kind === "pred").length);
+  const inMarquee = useWorkspaceSelector((s) => s.selSet.includes(id));
+  const flagsState = useWorkspaceSelector((s) => s.flags[id]);
+  const claimed = useWorkspaceSelector((s) => s.claimed === id);
+  const fanIn = useWorkspaceSelector(
+    (s) => Object.values(s.edges).filter((e) => e.to === id && e.kind === "pred").length,
+  );
   const feedback = useNodeFeedbackContext();
 
   const telemetryOn = useTelemetrySelector((t) => t.enabled);
@@ -75,7 +77,7 @@ function NdGraphNodeInner({ id, selected }: NodeProps<NdGraphNodeType>) {
 
   const updateInternals = useUpdateNodeInternals();
 
-  const def = node ? NODE_DEFS[node.type] : null;
+  const def = node ? WORKSPACE_NODE_DESCRIPTORS[node.type] : null;
   const form = resolveNodeForm(ws, id);
   const size = resolveNodeSize(ws, id);
 
@@ -114,14 +116,14 @@ function NdGraphNodeInner({ id, selected }: NodeProps<NdGraphNodeType>) {
   // placeholder doesn't communicate scale)
   const showCount = countActive || (def.kind === "view" && staged);
   const countText = showCount ? (countError ? "✗" : countCooking ? "…" : count === null ? null : fmt(count)) : null;
-  const isSel = getWsNode(node.type)?.checkpoint ?? false;
+  const isSel = getWorkspaceNodeSpec(node.type)?.checkpoint ?? false;
 
   const body = (() => {
     if (form === "chip" || staged) return null; // staged → frame renders "body on stage ◆"
     // Unified path: the spec owns its body (built-in bodies + the threshold
-    // config editor). A plugin-backed view spec has no `Body` — its body is the
-    // lazy plugin Component, mounted via BodySocket below (no switch).
-    const SpecBody = getWsNode(node.type)?.Body;
+    // config editor). A plugin-backed view spec has no `Body` — its lazy module
+    // mounts the body adopted by BodySocket below (no switch).
+    const SpecBody = getWorkspaceNodeSpec(node.type)?.Body;
     if (SpecBody) return <SpecBody node={node} />;
     if (!node.pluginId) return null;
     if (fullscreen)
@@ -162,7 +164,7 @@ function NdGraphNodeInner({ id, selected }: NodeProps<NdGraphNodeType>) {
   const beginResize = (corner: NdResizeCorner, e: React.PointerEvent) => {
     if (form === "chip") return;
     const rsForm = form;
-    const cur = ws.store.state.sizeOverrides[id]?.[rsForm] ?? nodeSize(def, rsForm);
+    const cur = ws.store.state.sizeOverrides[id]?.[rsForm] ?? workspaceNodeSize(def, rsForm);
     const p0 = ws.store.state.positions[id] ?? { x: 0, y: 0 };
     const start = { x: e.clientX, y: e.clientY, w: cur.w, h: cur.h, px: p0.x, py: p0.y };
     const min = ND_NODE.resizeMin[rsForm];

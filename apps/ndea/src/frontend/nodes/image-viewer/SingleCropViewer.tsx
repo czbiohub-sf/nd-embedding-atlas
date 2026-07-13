@@ -10,6 +10,7 @@ import type { OrbitControls } from "@/nodes/image-viewer/viewer/OrbitControls";
 import { useBboxLayer } from "@/nodes/image-viewer/viewer/useBboxLayer";
 import { useFovLoader } from "@/nodes/image-viewer/viewer/useFovLoader";
 import { useViewer } from "@/nodes/image-viewer/viewer/useViewer";
+import type { ImageViewerCapabilities } from "./plugin";
 
 /** Fixed camera view radius in pixels (independent of crop slider). */
 const CAMERA_VIEW_HALF = 150;
@@ -29,7 +30,7 @@ export function SingleCropViewer({ cropSize, showBbox, datasetKey }: Props) {
 
   // Focus source: scoped to this instance's host (its focus WIRE is the input),
   // so deleting the wire genuinely disconnects the viewer (C6).
-  const host = useHost();
+  const host = useHost<unknown, ImageViewerCapabilities>();
   const [highlightId, setHighlightId] = useState<string | null>(() => host.focus.get());
   useEffect(() => host.focus.subscribe?.(setHighlightId), [host]);
 

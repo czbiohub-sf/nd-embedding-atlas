@@ -16,6 +16,7 @@ import { type FilterExpr, asc, cast, column, count, desc, isNotNull, Query, sum 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { NodeBodyProps } from "@/core/node/app-node-host";
+import type { CountPlotCapabilities } from "./plugin";
 import { useMosaicClient } from "@/hooks/useMosaicClient";
 import { filterExprToExpr, toRows } from "@/lib/mosaic-helpers";
 import { FieldPicker } from "@/nodes/charts/core/field-picker";
@@ -35,7 +36,7 @@ interface CountPlotRow {
   countSelected: number;
 }
 
-export function CountPlotView({ host }: NodeBodyProps<CountPlotConfig>) {
+export function CountPlotView({ host }: NodeBodyProps<CountPlotConfig, CountPlotCapabilities>) {
   const { coordinator, table, inputSelection, field, setField } = useChartLeaf(host);
   const limit = host.config.limit ?? 11;
   const onFilter = useCallback((sql: string | null) => publishChartFilter(host, sql), [host]);

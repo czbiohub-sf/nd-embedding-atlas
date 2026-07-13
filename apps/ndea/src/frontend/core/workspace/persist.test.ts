@@ -3,11 +3,12 @@ import { describe, expect, test } from "bun:test";
 import { registerBuiltinNodes } from "./nodes";
 import { DOC_VERSION, dropUnknownNodes, migrate, type PersistedDoc, toPersistedDoc, validateDoc } from "./persist";
 import { scopeColor } from "@/core/coordination/coordination";
-import type { WsNode, WsState } from "./types";
+import type { WorkspaceDocumentState } from "./types";
+import type { GraphDocumentNode } from "@/core/graph/records";
 
 registerBuiltinNodes();
 
-function emptyState(): WsState {
+function emptyState(): WorkspaceDocumentState {
   return {
     nodes: {},
     edges: {},
@@ -30,13 +31,13 @@ function emptyState(): WsState {
   };
 }
 
-function docWith(node: WsNode): PersistedDoc {
+function docWith(node: GraphDocumentNode): PersistedDoc {
   const state = emptyState();
   state.nodes[node.id] = node;
   return toPersistedDoc(state);
 }
 
-const datasetNode = (config: WsNode["config"]): WsNode => ({
+const datasetNode = (config: GraphDocumentNode["config"]): GraphDocumentNode => ({
   id: "d1",
   type: "dataset",
   kind: "source",
@@ -69,14 +70,14 @@ describe("persisted doc validation (U7 foundation)", () => {
 
 describe("v1 → v2 migration (focus coordination plane; R6 — load-bearing)", () => {
   // A v1 doc carried `syncGroups`/`groupFocus`; v2 carries the coordination plane.
-  // Build one by hand (the v1 fields no longer exist on WsState).
+  // Build one by hand (the v1 fields no longer exist on WorkspaceDocumentState).
   function v1Doc(syncGroups: Record<string, string>, groupFocus: Record<string, string | null>): PersistedDoc {
-    const state = emptyState() as WsState & { syncGroups?: unknown; groupFocus?: unknown };
+    const state = emptyState() as WorkspaceDocumentState & { syncGroups?: unknown; groupFocus?: unknown };
     delete (state as { coordinationScopes?: unknown }).coordinationScopes;
     delete (state as { coordinationSpace?: unknown }).coordinationSpace;
     state.syncGroups = syncGroups;
     state.groupFocus = groupFocus;
-    return { version: 1, state: state as WsState };
+    return { version: 1, state: state as WorkspaceDocumentState };
   }
 
   test("maps syncGroups/groupFocus → coordinationScopes/coordinationSpace and bumps version", () => {
@@ -117,7 +118,7 @@ describe("dropUnknownNodes (self-heal on a removed node type)", () => {
     state.nodes.d1 = datasetNode({ datasetKey: "plateA" });
     state.nodes.x1 = {
       id: "x1",
-      type: "write-back" as unknown as WsNode["type"],
+      type: "write-back" as unknown as GraphDocumentNode["type"],
       kind: "view",
       label: "gone",
       pluginId: "write-back",

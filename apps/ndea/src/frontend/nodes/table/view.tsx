@@ -14,6 +14,7 @@ import { focusRow, publishOrdering } from "@/nodes/table/routing";
 import { DataTable } from "@/nodes/table/DataTable";
 import { useHighlight } from "@/hooks/useHighlight";
 import type { NodeBodyProps } from "@/core/node/app-node-host";
+import type { TableCapabilities } from "./plugin";
 
 /** The `ordering` coordination cell ⇄ TanStack `SortingState` bridge. */
 type OrderingCell = { col: string; dir: "asc" | "desc" } | null;
@@ -30,7 +31,7 @@ export type TableOptions = Record<string, never>;
 
 const FALLBACK_TABLE_COLUMNS = ["_dataset"];
 
-export function TablePluginView({ host }: NodeBodyProps<TableConfig>) {
+export function TablePluginView({ host }: NodeBodyProps<TableConfig, TableCapabilities>) {
   const { coordinator, table, metadata } = host.data;
   // Reactive highlight read — re-renders the table on highlight change so the
   // current row scrolls into view. Sourced from the HighlightBus; the write

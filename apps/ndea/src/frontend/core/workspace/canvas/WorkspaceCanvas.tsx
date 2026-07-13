@@ -45,9 +45,9 @@ import { ndZoomBand, type NdForm } from "@/components/nd/nd-resolve-form";
 import { ND_PORT_KINDS } from "@/components/nd/nd-port";
 import { ND_CANVAS, ND_TIMING, ND_ZOOM } from "../constants";
 import { FeedbackChannelsContext, useFeedbackChannels } from "../feedback";
-import { NODE_DEFS } from "../node-defs";
-import { getWsNode } from "../node-kit";
-import { useWorkspace, useWsSelector } from "../workspace-context";
+import { WORKSPACE_NODE_DESCRIPTORS } from "../node-defs";
+import { getWorkspaceNodeSpec } from "../node-kit";
+import { useWorkspace, useWorkspaceSelector } from "../workspace-context";
 import { AddNodeMenu, type AddMenuState } from "./AddNodeMenu";
 import { K1Cursor } from "./K1Cursor";
 import { KnifeLayer, useYHeld } from "./KnifeLayer";
@@ -62,8 +62,8 @@ const edgeTypes = { ndwire: NdWireEdge };
 
 /** ghost wire in the dragged port's kind color */
 function NdConnectionLine({ fromX, fromY, toX, toY, fromNode }: ConnectionLineComponentProps) {
-  const node = useWsSelector((s) => (fromNode ? s.nodes[fromNode.id] : undefined));
-  const kind = node ? NODE_DEFS[node.type].outKind : "pred";
+  const node = useWorkspaceSelector((s) => (fromNode ? s.nodes[fromNode.id] : undefined));
+  const kind = node ? WORKSPACE_NODE_DESCRIPTORS[node.type].outKind : "pred";
   return (
     <path
       d={wirePath(fromX, fromY, toX, toY)}
@@ -104,12 +104,12 @@ function WorkspaceCanvasInner() {
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
   const lastMouse = useRef<{ x: number; y: number } | null>(null);
 
-  const wsNodes = useWsSelector((s) => s.nodes);
-  const wsEdges = useWsSelector((s) => s.edges);
-  const positions = useWsSelector((s) => s.positions);
-  const graphPath = useWsSelector((s) => s.graphPath);
-  const selSet = useWsSelector((s) => s.selSet);
-  const claimed = useWsSelector((s) => s.claimed);
+  const wsNodes = useWorkspaceSelector((s) => s.nodes);
+  const wsEdges = useWorkspaceSelector((s) => s.edges);
+  const positions = useWorkspaceSelector((s) => s.positions);
+  const graphPath = useWorkspaceSelector((s) => s.graphPath);
+  const selSet = useWorkspaceSelector((s) => s.selSet);
+  const claimed = useWorkspaceSelector((s) => s.claimed);
   const baseForm = useSelector(ws.ui, (u) => u.baseForm);
   // Derived ONCE here (the DFS), then shared with every node via context — a
   // per-node call would re-run it N times. Recomputes only on topology change.
@@ -233,12 +233,10 @@ function WorkspaceCanvasInner() {
 
   const onSelectionChange = useCallback(
     ({ nodes: sel, edges: selEdges }: OnSelectionChangeParams) => {
-      ws.store.setState((s) => ({
-        ...s,
-        selection: sel.length === 1 ? sel[0].id : null,
-        selSet: sel.length > 1 ? sel.map((n) => n.id) : [],
-        selectedEdge: selEdges.length === 1 ? selEdges[0].id : null,
-      }));
+      ws.setGraphSelection(
+        sel.map((node) => node.id),
+        selEdges.map((edge) => edge.id),
+      );
     },
     [ws],
   );
@@ -299,7 +297,7 @@ function WorkspaceCanvasInner() {
       let portNode: string | null = null;
       let best = 22 / zoom;
       for (const n of Object.values(ws.store.state.nodes)) {
-        const def = NODE_DEFS[n.type];
+        const def = WORKSPACE_NODE_DESCRIPTORS[n.type];
         for (const which of ["in", "out"] as const) {
           if ((which === "in" && !def.hasIn) || (which === "out" && !def.hasOut)) continue;
           const p = portPos(ws, n.id, which);
@@ -367,7 +365,7 @@ function WorkspaceCanvasInner() {
         if (addMenu) setAddMenu(null);
         else if (s.selectedEdge) ws.selectEdge(null);
         else if (s.selection || s.selSet.length) clearSelection();
-        else if (s.claimed) ws.store.setState((st) => ({ ...st, claimed: null }));
+        else if (s.claimed) ws.releaseClaim();
       }
     };
     window.addEventListener("keydown", onKey);
@@ -430,7 +428,7 @@ function WorkspaceCanvasInner() {
               const node = ws.store.state.nodes[n.id];
               if (!node) return "oklch(0.62 0 0 / 60%)";
               if (n.id === ws.store.state.selection) return "oklch(0.554 0.236 281)";
-              return getWsNode(node.type)?.accent ?? "oklch(0.62 0 0 / 60%)";
+              return getWorkspaceNodeSpec(node.type)?.accent ?? "oklch(0.62 0 0 / 60%)";
             }}
             nodeStrokeWidth={0}
           />

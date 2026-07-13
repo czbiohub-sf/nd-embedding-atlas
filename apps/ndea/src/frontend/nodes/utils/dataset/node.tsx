@@ -6,13 +6,14 @@
 
 import { z } from "zod";
 import { DatasetSourceBody } from "@/core/workspace/canvas/node-extras";
-import { defineWsNode, nodeConfig } from "@/core/workspace/node-kit";
+import { defineWorkspaceNodeSpec } from "@/core/workspace/node-kit";
+import { nodeConfig } from "@/core/graph/cook";
 
 export interface DatasetConfig {
   datasetKey?: string | null;
 }
 
-export const datasetNode = defineWsNode({
+export const datasetNode = defineWorkspaceNodeSpec({
   id: "dataset",
   type: "dataset",
   title: "Dataset",
@@ -21,7 +22,7 @@ export const datasetNode = defineWsNode({
   outputs: [{ id: "out", kind: "pred", label: "Out" }],
   config: z.object({ datasetKey: z.string().nullable().optional() }),
   configVersion: 1,
-  engineKind: "source",
+  evaluationRole: "source",
   cook: (_inputs, host) => {
     const key = nodeConfig<DatasetConfig>(host.node()).datasetKey;
     return { kind: "pred", sql: key ? `_dataset = '${key.replace(/'/g, "''")}'` : null };

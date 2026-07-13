@@ -5,9 +5,9 @@
 
 import { createContext, useContext, useMemo } from "react";
 import { getDefinition } from "@/core/node/registry";
-import { NODE_DEFS } from "./node-defs";
-import { useWsSelector } from "./workspace-context";
-import type { WsEdge, WsNode } from "./types";
+import { WORKSPACE_NODE_DESCRIPTORS } from "./node-defs";
+import { useWorkspaceSelector } from "./workspace-context";
+import type { GraphDocumentEdge, GraphDocumentNode } from "@/core/graph/records";
 
 export interface FeedbackChannel {
   id: string;
@@ -25,13 +25,13 @@ const DATA_WRITE_CAPS = ["annotation-write"] as const;
  * node(s) it descends from and emit a `writer → source` channel. An unwired
  * writer reaches no source → no channel (so feedback only shows once it's
  * actually plumbed into the data). `isWriter` / `isSource` are injected so this
- * stays free of the registry + NODE_DEFS for testing.
+ * stays free of the registry + WORKSPACE_NODE_DESCRIPTORS for testing.
  */
 export function deriveFeedbackChannels(
-  nodes: Record<string, WsNode>,
-  edges: Record<string, WsEdge>,
-  isWriter: (n: WsNode) => boolean,
-  isSource: (n: WsNode) => boolean,
+  nodes: Record<string, GraphDocumentNode>,
+  edges: Record<string, GraphDocumentEdge>,
+  isWriter: (n: GraphDocumentNode) => boolean,
+  isSource: (n: GraphDocumentNode) => boolean,
 ): FeedbackChannel[] {
   const upstream = new Map<string, string[]>();
   for (const e of Object.values(edges)) {
@@ -67,14 +67,14 @@ export function deriveFeedbackChannels(
   return channels;
 }
 
-function isDataWriter(n: WsNode): boolean {
+function isDataWriter(n: GraphDocumentNode): boolean {
   if (!n.pluginId) return false;
   const caps = getDefinition(n.pluginId)?.capabilities;
   return caps != null && DATA_WRITE_CAPS.some((capability) => caps.includes(capability));
 }
 
-function isSourceNode(n: WsNode): boolean {
-  return NODE_DEFS[n.type]?.kind === "source";
+function isSourceNode(n: GraphDocumentNode): boolean {
+  return WORKSPACE_NODE_DESCRIPTORS[n.type]?.kind === "source";
 }
 
 /**
@@ -85,8 +85,8 @@ function isSourceNode(n: WsNode): boolean {
  * change). NdGraphNode reads its channels through `useNodeFeedbackContext`.
  */
 export function useFeedbackChannels(): FeedbackChannel[] {
-  const nodes = useWsSelector((s) => s.nodes);
-  const edges = useWsSelector((s) => s.edges);
+  const nodes = useWorkspaceSelector((s) => s.nodes);
+  const edges = useWorkspaceSelector((s) => s.edges);
   return useMemo(() => deriveFeedbackChannels(nodes, edges, isDataWriter, isSourceNode), [nodes, edges]);
 }
 

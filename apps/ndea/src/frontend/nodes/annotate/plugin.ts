@@ -16,6 +16,7 @@ import { mountReactNodeBody } from "@/core/node/react-node-body";
 import type { AnnotateConfig } from "./view";
 
 const CAPABILITIES = ["data-read", "annotation-write", "focus-coordination"] as const;
+export type AnnotateCapabilities = (typeof CAPABILITIES)[number];
 
 export const annotateDefinition = defineNode({
   ref: exactNodeTypeRef("annotate", "1.0.0"),

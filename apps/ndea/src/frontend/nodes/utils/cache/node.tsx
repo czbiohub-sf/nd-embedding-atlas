@@ -4,14 +4,15 @@
  * CACHED: return the pinned predicate verbatim (the push→pull conversion).
  *
  * The pin state lives in the workspace (`frozenPredicates`), read here via the
- * cook host. `stamp` is still a flat `WsNode` field in U3; it migrates into the
+ * cook host. `stamp` is still a flat `GraphDocumentNode` field in U3; it migrates into the
  * config blob with the other nodes in U4.
  */
 
 import { CacheNodeBody } from "@/core/workspace/canvas/node-extras";
-import { defineWsNode, lastOfKind, passthrough } from "@/core/workspace/node-kit";
+import { defineWorkspaceNodeSpec } from "@/core/workspace/node-kit";
+import { lastPortValueOfKind, passthroughGraphPredicate } from "@/core/graph/cook";
 
-export const cacheNode = defineWsNode({
+export const cacheNode = defineWorkspaceNodeSpec({
   id: "cache",
   type: "cache",
   title: "Cache",
@@ -24,12 +25,14 @@ export const cacheNode = defineWsNode({
     { id: "in-sel", kind: "sel", label: "In" },
   ],
   outputs: [{ id: "out", kind: "pred", label: "Out" }],
-  engineKind: "transform",
+  evaluationRole: "transform",
   accent: "#f59e0b", // amber — the checkpoint accent on the minimap
   checkpoint: true, // renders the ◆ badge
   cook: (inputs, host) => {
     const frozen = host.frozenPredicate();
-    return frozen !== undefined ? { kind: "pred", sql: frozen } : (lastOfKind(inputs, "sel") ?? passthrough(inputs));
+    return frozen !== undefined
+      ? { kind: "pred", sql: frozen }
+      : (lastPortValueOfKind(inputs, "sel") ?? passthroughGraphPredicate(inputs));
   },
   Body: CacheNodeBody,
   geometry: { chipW: 148, card: { w: 236, h: 168 }, full: { w: 236, h: 168 }, canFull: false },

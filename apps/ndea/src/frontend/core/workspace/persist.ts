@@ -1,17 +1,18 @@
 import type { JsonValue } from "@ndea/sdk";
 import { parseConfig } from "@/core/node/registry";
-import { getWsNode } from "./node-kit";
-import type { WsEdge, WsNode, WsState } from "./types";
+import { getWorkspaceNodeSpec } from "./node-kit";
+import type { WorkspaceDocumentState } from "./types";
+import type { GraphDocumentEdge, GraphDocumentNode } from "@/core/graph/records";
 
 /** v2 replaces `syncGroups` and `groupFocus` with the coordination plane. */
 export const DOC_VERSION = 2;
 
 export interface PersistedDoc {
   version: number;
-  state: WsState;
+  state: WorkspaceDocumentState;
 }
 
-export function toPersistedDoc(state: WsState): PersistedDoc {
+export function toPersistedDoc(state: WorkspaceDocumentState): PersistedDoc {
   return { version: DOC_VERSION, state };
 }
 
@@ -23,7 +24,7 @@ interface V1Fields {
 /** Migrates older documents before validation. */
 export function migrate(doc: PersistedDoc): PersistedDoc {
   if (doc.version >= DOC_VERSION) return doc;
-  const state = doc.state as WsState & V1Fields;
+  const state = doc.state as WorkspaceDocumentState & V1Fields;
   if (doc.version === 1) {
     const coordinationScopes: Record<string, Record<string, string>> = {};
     for (const [nodeId, gid] of Object.entries(state.syncGroups ?? {})) {
@@ -48,7 +49,7 @@ export function validateDoc(doc: PersistedDoc): { ok: boolean; errors: string[] 
     errors.push(`document version ${doc.version} != current ${DOC_VERSION} (migration needed)`);
   }
   for (const node of Object.values(doc.state.nodes)) {
-    const spec = getWsNode(node.type);
+    const spec = getWorkspaceNodeSpec(node.type);
     if (spec?.config && node.config !== undefined) {
       const res = parseConfig(spec, node.config);
       if (!res.ok) errors.push(`node "${node.id}" (${node.type}): ${res.error}`);
@@ -61,20 +62,20 @@ export function validateDoc(doc: PersistedDoc): { ok: boolean; errors: string[] 
  * Drop nodes whose type is no longer registered (a node type removed since the
  * doc was saved) and any edges touching them, so removing a node type self-heals
  * a persisted graph instead of crashing at render on the dangling
- * `NODE_DEFS[type]` lookup. Also clears selection state pointing at a dropped
+ * `WORKSPACE_NODE_DESCRIPTORS[type]` lookup. Also clears selection state pointing at a dropped
  * node/edge. Returns the doc unchanged when every node type resolves.
  */
 export function dropUnknownNodes(doc: PersistedDoc): PersistedDoc {
   const s = doc.state;
-  const dropped = Object.values(s.nodes).filter((n) => getWsNode(n.type) === undefined);
+  const dropped = Object.values(s.nodes).filter((n) => getWorkspaceNodeSpec(n.type) === undefined);
   if (dropped.length === 0) return doc;
   const ids = new Set(dropped.map((n) => n.id));
   console.warn(
     `[workspace] dropping ${ids.size} node(s) of unregistered type(s): ${[...new Set(dropped.map((n) => n.type))].join(", ")}`,
   );
-  const nodes: Record<string, WsNode> = {};
+  const nodes: Record<string, GraphDocumentNode> = {};
   for (const [id, n] of Object.entries(s.nodes)) if (!ids.has(id)) nodes[id] = n;
-  const edges: Record<string, WsEdge> = {};
+  const edges: Record<string, GraphDocumentEdge> = {};
   for (const [id, e] of Object.entries(s.edges)) if (!ids.has(e.from) && !ids.has(e.to)) edges[id] = e;
   return {
     ...doc,
@@ -97,7 +98,7 @@ export function storageKey(sessionKey: string | null): string {
 
 /** Serialize + write a document to localStorage. Swallows quota/denied errors
  *  (headless, private mode) — autosave is best-effort, never a hard failure. */
-export function saveToStorage(key: string, state: WsState): void {
+export function saveToStorage(key: string, state: WorkspaceDocumentState): void {
   try {
     if (typeof localStorage === "undefined") return;
     localStorage.setItem(key, JSON.stringify(toPersistedDoc(state)));
@@ -107,7 +108,7 @@ export function saveToStorage(key: string, state: WsState): void {
 }
 
 export type LoadResult =
-  | { kind: "ok"; state: WsState }
+  | { kind: "ok"; state: WorkspaceDocumentState }
   | { kind: "miss" } // nothing stored
   | { kind: "invalid"; errors: string[] }; // present but corrupt / wrong version
 

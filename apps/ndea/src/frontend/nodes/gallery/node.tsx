@@ -4,9 +4,10 @@
  * inputs. Sink (no out port); accepts a pred or sel input.
  */
 
-import { defineWsNode, lastOfKind, passthrough } from "@/core/workspace/node-kit";
+import { defineWorkspaceNodeSpec } from "@/core/workspace/node-kit";
+import { lastPortValueOfKind, passthroughGraphPredicate } from "@/core/graph/cook";
 
-export const galleryNode = defineWsNode({
+export const galleryNode = defineWorkspaceNodeSpec({
   id: "gallery",
   type: "gallery",
   title: "Gallery",
@@ -17,8 +18,8 @@ export const galleryNode = defineWsNode({
     { id: "in-sel", kind: "sel", label: "In" },
   ],
   outputs: [],
-  engineKind: "view",
-  cook: (inputs) => lastOfKind(inputs, "sel") ?? passthrough(inputs),
+  evaluationRole: "view",
+  cook: (inputs) => lastPortValueOfKind(inputs, "sel") ?? passthroughGraphPredicate(inputs),
   geometry: { chipW: 132, card: { w: 220, h: 140 }, full: { w: 420, h: 360 }, canFull: true },
   stage: "stageable",
   inPalette: true,

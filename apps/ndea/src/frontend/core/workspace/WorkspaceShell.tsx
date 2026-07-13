@@ -21,7 +21,7 @@ import { BodySocket, HeaderSocket, WorkspaceBodies } from "./body-dock";
 import { WorkspaceCanvas } from "./canvas/WorkspaceCanvas";
 import { ND_TIMING } from "./constants";
 import { StagePane, stageHasContent } from "./stage/StagePane";
-import { useTelemetrySelector, useWorkspace, useWsSelector, WorkspaceProvider } from "./workspace-context";
+import { useTelemetrySelector, useWorkspace, useWorkspaceSelector, WorkspaceProvider } from "./workspace-context";
 import type { GhostState } from "./workspace-store";
 
 const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
@@ -74,7 +74,7 @@ function FlipGhost({ ghost }: { ghost: GhostState }) {
 function FullscreenOverlay() {
   const ws = useWorkspace();
   const fsId = useSelector(ws.ui, (u) => u.fullscreen);
-  const node = useWsSelector((s) => (fsId ? s.nodes[fsId] : undefined));
+  const node = useWorkspaceSelector((s) => (fsId ? s.nodes[fsId] : undefined));
 
   useEffect(() => {
     if (!fsId) return;
@@ -112,7 +112,7 @@ function StatusBar() {
   const epoch = useTelemetrySelector((t) => t.epoch);
   const cookingAny = useTelemetrySelector((t) => Object.keys(t.cooking).length > 0);
   const telemetryOn = useTelemetrySelector((t) => t.enabled);
-  const disposition = useWsSelector((s) => s.disposition);
+  const disposition = useWorkspaceSelector((s) => s.disposition);
   const zoomForms = useSelector(ws.ui, (u) => u.zoomForms);
 
   return (
@@ -195,14 +195,14 @@ function StatusBar() {
 /* ── frame ───────────────────────────────────────────────────────── */
 function WorkspaceFrame() {
   const ws = useWorkspace();
-  const disposition = useWsSelector((s) => s.disposition);
-  const stripH = useWsSelector((s) => s.stripH);
-  const stageTree = useWsSelector((s) => s.stageTree);
-  const graphPath = useWsSelector((s) => s.graphPath);
-  useWsSelector((s) => s.explicit);
-  useWsSelector((s) => s.nodes);
-  const nodeCount = useWsSelector((s) => Object.keys(s.nodes).length);
-  const edgeCount = useWsSelector((s) => Object.keys(s.edges).length);
+  const disposition = useWorkspaceSelector((s) => s.disposition);
+  const stripH = useWorkspaceSelector((s) => s.stripH);
+  const stageTree = useWorkspaceSelector((s) => s.stageTree);
+  const graphPath = useWorkspaceSelector((s) => s.graphPath);
+  useWorkspaceSelector((s) => s.explicit);
+  useWorkspaceSelector((s) => s.nodes);
+  const nodeCount = useWorkspaceSelector((s) => Object.keys(s.nodes).length);
+  const edgeCount = useWorkspaceSelector((s) => Object.keys(s.edges).length);
   const cookingAny = useTelemetrySelector((t) => Object.keys(t.cooking).length > 0);
   const telemetryOn = useTelemetrySelector((t) => t.enabled);
   const ghost = useSelector(ws.ui, (u) => u.ghost);

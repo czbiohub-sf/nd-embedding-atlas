@@ -12,8 +12,8 @@ import { useEffect, useRef } from "react";
 
 import { ND_PORT_KINDS, type NdPortKind } from "@/components/nd/nd-port";
 import { ND_Z } from "../constants";
-import { NODE_DEFS } from "../node-defs";
-import { useWorkspace, useWsSelector } from "../workspace-context";
+import { WORKSPACE_NODE_DESCRIPTORS } from "../node-defs";
+import { useWorkspace, useWorkspaceSelector } from "../workspace-context";
 import { portPos } from "./port-positions";
 
 const LERP = 0.55; // per-frame catch-up — snappy but smooth
@@ -22,10 +22,10 @@ export function K1Cursor({ paneRef }: { paneRef: React.RefObject<HTMLDivElement 
   const ws = useWorkspace();
   const rf = useReactFlow();
   const conn = useConnection();
-  const claimed = useWsSelector((s) => s.claimed);
-  const graphPath = useWsSelector((s) => s.graphPath);
-  useWsSelector((s) => s.nodes);
-  useWsSelector((s) => s.positions);
+  const claimed = useWorkspaceSelector((s) => s.claimed);
+  const graphPath = useWorkspaceSelector((s) => s.graphPath);
+  useWorkspaceSelector((s) => s.nodes);
+  useWorkspaceSelector((s) => s.positions);
 
   const el = useRef<HTMLSpanElement>(null);
   const target = useRef({ x: -100, y: -100 });
@@ -47,7 +47,7 @@ export function K1Cursor({ paneRef }: { paneRef: React.RefObject<HTMLDivElement 
       const dragKind = connRef.current.inProgress
         ? (() => {
             const n = connRef.current.fromNode ? ws.store.state.nodes[connRef.current.fromNode.id] : null;
-            return n ? ND_PORT_KINDS[NODE_DEFS[n.type].outKind] : null;
+            return n ? ND_PORT_KINDS[WORKSPACE_NODE_DESCRIPTORS[n.type].outKind] : null;
           })()
         : null;
       const color = spec?.color ?? dragKind?.color ?? "var(--foreground)";
@@ -100,7 +100,7 @@ export function K1Cursor({ paneRef }: { paneRef: React.RefObject<HTMLDivElement 
       const s = ws.store.state;
       for (const n of Object.values(s.nodes)) {
         if ((n.parent ?? null) !== (s.graphPath ?? null)) continue;
-        const def = NODE_DEFS[n.type];
+        const def = WORKSPACE_NODE_DESCRIPTORS[n.type];
         for (const which of ["in", "out"] as const) {
           if ((which === "in" && !def.hasIn) || (which === "out" && !def.hasOut)) continue;
           const p = portPos(ws, n.id, which);

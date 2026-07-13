@@ -5,10 +5,11 @@
  */
 
 import { ExportNodeBody } from "@/core/workspace/canvas/node-extras";
-import { defineWsNode, passthrough } from "@/core/workspace/node-kit";
+import { defineWorkspaceNodeSpec } from "@/core/workspace/node-kit";
+import { passthroughGraphPredicate } from "@/core/graph/cook";
 import { collectionConfigSchema } from "@/nodes/collection/node";
 
-export const exportNode = defineWsNode({
+export const exportNode = defineWorkspaceNodeSpec({
   id: "export",
   type: "export",
   title: "Export",
@@ -24,8 +25,8 @@ export const exportNode = defineWsNode({
   // collectionId/Name (same shape as a collection node) for its body.
   config: collectionConfigSchema,
   configVersion: 1,
-  engineKind: "view",
-  cook: (inputs) => passthrough(inputs),
+  evaluationRole: "view",
+  cook: (inputs) => passthroughGraphPredicate(inputs),
   Body: ExportNodeBody,
   geometry: { chipW: 148, card: { w: 232, h: 132 }, full: { w: 232, h: 132 }, canFull: false },
   stage: "canvas-only",

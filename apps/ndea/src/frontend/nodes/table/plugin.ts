@@ -6,6 +6,7 @@ import { mountReactNodeBody } from "@/core/node/react-node-body";
 import type { TableConfig } from "./view";
 
 const CAPABILITIES = ["data-read", "row-set-subscribe", "ordering-coordination", "focus-coordination"] as const;
+export type TableCapabilities = (typeof CAPABILITIES)[number];
 
 export const tableDefinition = defineNode({
   ref: exactNodeTypeRef("table", "1.0.0"),

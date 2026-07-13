@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { commitStatusMessage, commitSummary, datasetRows } from "@/nodes/annotate/commit-report";
 import type { CommitAnnotationsResponse } from "@/types";
 import type { NodeHost } from "@ndea/sdk";
+import type { AnnotateCapabilities } from "./plugin";
 
 type Phase = "idle" | "checking" | "confirming" | "writing" | "done";
 
@@ -23,7 +24,7 @@ export function CommitPanel({
   host,
   onClose,
 }: {
-  host: Pick<NodeHost, "dataAPI" | "inputPredicate" | "notifications">;
+  host: Pick<NodeHost<unknown, AnnotateCapabilities>, "dataAPI" | "inputPredicate" | "notifications">;
   onClose: () => void;
 }) {
   const [columns, setColumns] = useState<{ name: string; dtype: string }[]>([]);

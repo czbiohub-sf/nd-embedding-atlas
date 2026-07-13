@@ -5,17 +5,18 @@
  */
 
 import { SubnetBody } from "@/core/workspace/canvas/node-extras";
-import { defineWsNode, passthrough } from "@/core/workspace/node-kit";
+import { defineWorkspaceNodeSpec } from "@/core/workspace/node-kit";
+import { passthroughGraphPredicate } from "@/core/graph/cook";
 
-export const subnetNode = defineWsNode({
+export const subnetNode = defineWorkspaceNodeSpec({
   id: "subnet",
   type: "subnet",
   title: "Subnet",
   kind: "subnet",
   inputs: [{ id: "in", kind: "pred", label: "In" }],
   outputs: [{ id: "out", kind: "pred", label: "Out" }],
-  engineKind: "view",
-  cook: (inputs) => passthrough(inputs),
+  evaluationRole: "view",
+  cook: (inputs) => passthroughGraphPredicate(inputs),
   Body: SubnetBody,
   geometry: { chipW: 150, card: { w: 220, h: 96 }, full: { w: 220, h: 96 }, canFull: false },
   stage: "canvas-only",

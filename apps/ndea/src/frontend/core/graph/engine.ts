@@ -43,16 +43,16 @@ export type Predicate = string | null;
  * A node's cook function: given the RAW per-input-port value arrays (fan-in
  * order = edge insertion order), produce this node's derived output.
  */
-export type CookFn<V> = (inputs: ReadonlyMap<string, readonly V[]>, ctx: NodeComputeContext) => V;
+export type GraphCookFunction<V> = (inputs: ReadonlyMap<string, readonly V[]>, ctx: NodeComputeContext) => V;
 
-export interface GraphNodeSpec<V> {
+export interface GraphNodeEvaluationSpec<V> {
   id: string;
   /** Display/debug only; the engine evaluates every node uniformly via `cook`. */
   kind: "source" | "transform" | "view";
-  cook: CookFn<V>;
+  cook: GraphCookFunction<V>;
 }
 
-export interface GraphEdge {
+export interface GraphEvaluationEdge {
   from: string;
   /** Source port id. An edge reads the emission on `(from, fromPort)` when one
    *  exists, else the source's derived (cooked) output. Default: "out". */
@@ -63,7 +63,7 @@ export interface GraphEdge {
 }
 
 /** A sink (display-active view) gets its pulled output value pushed here. */
-export type SinkListener<V> = (value: V) => void;
+export type GraphSinkListener<V> = (value: V) => void;
 
 /**
  * Cook-telemetry event — feeds node LEDs (clean/dirty/cooking), cooking-dash
@@ -81,7 +81,7 @@ export type SinkListener<V> = (value: V) => void;
  *                    cooked graph is settled at `epoch`. node is "*" (whole
  *                    graph). The post-flush read signal (e.g. batched counts).
  */
-export interface CookTelemetryEvent {
+export interface GraphEvaluationTelemetryEvent {
   node: string;
   type: "dirty" | "cook-start" | "cook-end" | "emit" | "flush";
   /** cook-end only — `performance.now()` delta of the cook fn. */
@@ -92,10 +92,10 @@ export interface CookTelemetryEvent {
   epoch: number;
 }
 
-export type TelemetryListener = (e: CookTelemetryEvent) => void;
+export type GraphEvaluationTelemetryListener = (event: GraphEvaluationTelemetryEvent) => void;
 
 interface GraphNode<V> {
-  spec: GraphNodeSpec<V>;
+  spec: GraphNodeEvaluationSpec<V>;
   dirty: boolean;
   /** Epoch at which `cached` was computed; `-1` = never cooked. */
   cachedEpoch: number;
@@ -137,9 +137,9 @@ export interface GraphEngineOptions<V> {
 
 export class GraphEngine<V = Predicate> {
   private readonly nodes = new Map<string, GraphNode<V>>();
-  private edges: GraphEdge[] = [];
-  private readonly sinks = new Map<string, SinkListener<V>>();
-  private readonly telemetryListeners = new Set<TelemetryListener>();
+  private edges: GraphEvaluationEdge[] = [];
+  private readonly sinks = new Map<string, GraphSinkListener<V>>();
+  private readonly telemetryListeners = new Set<GraphEvaluationTelemetryListener>();
   /** authored outputs, keyed `${id}:${port}` */
   private readonly emissions = new Map<string, V>();
 
@@ -166,7 +166,7 @@ export class GraphEngine<V = Predicate> {
 
   // ── Topology ────────────────────────────────────────────────────────────────
 
-  addNode(spec: GraphNodeSpec<V>): void {
+  addNode(spec: GraphNodeEvaluationSpec<V>): void {
     if (this.nodes.has(spec.id)) throw new Error(`graph: duplicate node id '${spec.id}'`);
     this.nodes.set(spec.id, { spec, dirty: true, cachedEpoch: -1, cached: undefined });
   }
@@ -176,7 +176,7 @@ export class GraphEngine<V = Predicate> {
     this.sinks.delete(id);
     for (const key of this.emissions.keys()) if (key.startsWith(`${id}:`)) this.emissions.delete(key);
     // Drop incident edges; dirty the far endpoint of any inbound-to-others edge.
-    const survivors: GraphEdge[] = [];
+    const survivors: GraphEvaluationEdge[] = [];
     for (const e of this.edges) {
       if (e.from === id || e.to === id) {
         if (e.from === id && this.nodes.has(e.to)) this.markDirty(e.to);
@@ -191,7 +191,7 @@ export class GraphEngine<V = Predicate> {
    * Non-mutating connect check — `connect` would succeed. Exposed so the canvas
    * can gate `isValidConnection` (live drag feedback) on the same DAG rule.
    */
-  canConnect(edge: Pick<GraphEdge, "from" | "to">): boolean {
+  canConnect(edge: Pick<GraphEvaluationEdge, "from" | "to">): boolean {
     if (!this.nodes.has(edge.from) || !this.nodes.has(edge.to)) return false;
     if (edge.from === edge.to) return false;
     // A new edge from→to closes a cycle iff `from` is already reachable from `to`.
@@ -203,14 +203,14 @@ export class GraphEngine<V = Predicate> {
    * unknown or if the edge would close a cycle — DAG-only. On success the
    * target is dirtied.
    */
-  connect(edge: GraphEdge): boolean {
+  connect(edge: GraphEvaluationEdge): boolean {
     if (!this.canConnect(edge)) return false;
     this.edges.push(edge);
     this.markDirty(edge.to);
     return true;
   }
 
-  disconnect(edge: GraphEdge): void {
+  disconnect(edge: GraphEvaluationEdge): void {
     const before = this.edges.length;
     this.edges = this.edges.filter(
       (e) =>
@@ -433,7 +433,7 @@ export class GraphEngine<V = Predicate> {
   // ── Sinks ─────────────────────────────────────────────────────────────────────
 
   /** Register a display-active sink. Pulled on every flush until unregistered. */
-  registerSink(id: string, listener: SinkListener<V>): () => void {
+  registerSink(id: string, listener: GraphSinkListener<V>): () => void {
     this.sinks.set(id, listener);
     // Cook it immediately so a freshly-mounted view gets its current value.
     listener(this.pull(id));
@@ -451,17 +451,17 @@ export class GraphEngine<V = Predicate> {
    * Listener exceptions are swallowed so a faulty observer can never break
    * cooking; with zero listeners the cook path pays nothing.
    */
-  onTelemetry(listener: TelemetryListener): () => void {
+  onTelemetry(listener: GraphEvaluationTelemetryListener): () => void {
     this.telemetryListeners.add(listener);
     return () => {
       this.telemetryListeners.delete(listener);
     };
   }
 
-  private emitTelemetry(e: CookTelemetryEvent): void {
+  private emitTelemetry(event: GraphEvaluationTelemetryEvent): void {
     for (const listener of this.telemetryListeners) {
       try {
-        listener(e);
+        listener(event);
       } catch {
         // a faulty observer must never break cooking
       }

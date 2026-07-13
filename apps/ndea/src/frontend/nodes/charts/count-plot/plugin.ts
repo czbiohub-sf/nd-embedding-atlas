@@ -6,6 +6,7 @@ import { mountReactNodeBody } from "@/core/node/react-node-body";
 import type { CountPlotConfig } from "./view";
 
 const CAPABILITIES = ["data-read", "predicate-publish", "row-set-subscribe"] as const;
+export type CountPlotCapabilities = (typeof CAPABILITIES)[number];
 
 export const countPlotDefinition = defineNode({
   ref: exactNodeTypeRef("count-plot", "1.0.0"),
