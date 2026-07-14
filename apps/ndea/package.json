@@ -2,7 +2,7 @@
   "name": "@ndea/app",
   "version": "0.1.0-beta.2",
   "private": true,
-  "description": "Interactive browser-based dashboard linking AI embeddings to source 5D (TCZYX) image data.",
+  "description": "Interactive browser-based Node Workspace linking AI embeddings to source 5D (TCZYX) image data.",
   "license": "MIT",
   "author": "Sricharan Varra <sricharan.varra@czbiohub.org>",
   "bin": {

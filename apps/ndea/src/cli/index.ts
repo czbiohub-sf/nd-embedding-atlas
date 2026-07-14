@@ -9,7 +9,7 @@
  * the full feature set.
  *
  * Subcommands:
- *   view       Open zarr stores in the dashboard (default)
+ *   view       Open Zarr stores in the Node Workspace (default)
  *   update     Download a new release and switch the active symlink
  *   rollback   Switch to the previous installed version
  *   gc         Prune old installed versions
@@ -43,7 +43,7 @@ import { generatedCommandsPath } from "./lib/generated-commands-path.ts";
 import { VERSION } from "./version.ts";
 
 const DESCRIPTION =
-  "Interactive browser-based dashboard linking AI embeddings to source 5D (TCZYX) image data.\n\n" +
+  "Interactive browser-based Node Workspace linking AI embeddings to source 5D (TCZYX) image data.\n\n" +
   "Default (no subcommand) runs 'view' — e.g. 'ndea ./data.zarr'.";
 
 /**
@@ -60,7 +60,7 @@ const KNOWN_SUBCOMMANDS = new Set(["view", "update", "rollback", "gc", "doctor",
  *
  * Bunli dispatches on the first positional token: if it's a known
  * subcommand we leave it alone; otherwise we prepend `view` so the
- * dashboard opens with the original arguments intact. `--help` /
+ * Workspace opens with the original arguments intact. `--help` /
  * `--version` without a subcommand stay at the root so bunli's built-in
  * usage/version output runs.
  *

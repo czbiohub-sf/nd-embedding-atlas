@@ -139,7 +139,7 @@ describe("ndea plugin validate", () => {
         valid: false,
         manifest: null,
         compatibility: { status: "not-checked" },
-        diagnostics: [{ severity: "error", stage: "manifest", code: "manifest-invalid" }],
+        diagnostics: [{ severity: "error", stage: "manifest", code: "manifest-schema-invalid" }],
       },
     });
   });

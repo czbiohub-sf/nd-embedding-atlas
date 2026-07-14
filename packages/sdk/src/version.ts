@@ -102,6 +102,17 @@ function testComparator(version: string, comparator: string): boolean {
       (part, index) => index > 2 || /^(?:\*|x)$/i.test(part) || (/^\d+$/.test(part) && Number(part) === actual[index]),
     );
   }
+  const targetCore = target.split(/[+-]/, 1)[0];
+  const targetParts = targetCore.split(".");
+  if (
+    operator === "=" &&
+    target === targetCore &&
+    targetParts.length < 3 &&
+    targetParts.every((part) => /^\d+$/.test(part))
+  ) {
+    const actual = parseVersion(version);
+    return actual !== undefined && targetParts.every((part, index) => Number(part) === actual[index]);
+  }
   const parsedTarget = parseVersion(normalizePartialVersion(target));
   if (!parsedTarget) return false;
   const normalizedTarget = formatVersion(parsedTarget);

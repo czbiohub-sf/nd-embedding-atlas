@@ -1,0 +1,21 @@
+{
+  "name": "@ndea/example-custom-node",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "bun run build.ts",
+    "check": "vp check",
+    "test": "bun test",
+    "validate": "bun run validate.ts"
+  },
+  "dependencies": {
+    "@ndea/sdk": "workspace:*",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/bun": "catalog:",
+    "typescript": "catalog:",
+    "vite-plus": "catalog:"
+  }
+}

@@ -1,5 +1,5 @@
 /**
- * `ndea view` — open zarr stores and serve the dashboard.
+ * `ndea view` — open Zarr stores and serve the Node Workspace.
  *
  * This is the default command: `ndea ./data.zarr` routes here via the root
  * argv normalizer in index.ts so pre-subcommand invocations keep working.
@@ -14,7 +14,7 @@ import { startup } from "../startup.ts";
 
 export default defineCommand({
   name: "view" as const,
-  description: "Open one or more zarr stores (or a YAML project config) in the dashboard",
+  description: "Open one or more Zarr stores (or a YAML project config) in the Node Workspace",
   options: {
     port: option(z.coerce.number().int().min(1).max(65535).optional(), {
       description: "Server port (default: 5055)",

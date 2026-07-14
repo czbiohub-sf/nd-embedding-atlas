@@ -16,6 +16,10 @@ ndea update [options]
 ndea rollback
 ndea gc [options]
 ndea doctor [--check-network] [--strict]
+ndea plugin validate <path> [--format json]
+ndea plugin list [--format json]
+ndea plugin enable <path> [--format json]
+ndea plugin disable <path> [--format json]
 ndea completions <bash|zsh|fish>
 ndea complete -- <args...>                       # internal — called by completion scripts
 ndea --help | --version
@@ -34,7 +38,7 @@ With no positional and `NDEA_DATASET` set, `view` reads that path. `vp run dev` 
 
 ## `ndea view`
 
-Open one or more zarr stores (or a YAML project config) in the dashboard.
+Open one or more Zarr stores, or a YAML project config, in the Node Workspace.
 
 ### Arguments
 
@@ -55,6 +59,39 @@ A single `.yaml` / `.yml` path is parsed as a multi-dataset project config (see 
 | `--obs-columns <list>` | string  | all columns | Comma-separated subset of obs columns to load                          |
 
 `--port` accepts integers in `[1, 65535]`.
+
+## `ndea plugin`
+
+Validate and configure trusted custom-node plugins. Plugin client code runs with
+normal browser privileges; validation does not sandbox it.
+
+### `ndea plugin validate <path>`
+
+Validate one explicit package without executing its client. Checks the strict
+manifest, SDK and host compatibility, contained allowlisted files, client
+syntax, and the self-contained-client rule. Returns a non-zero exit for any
+diagnostic.
+
+### `ndea plugin list`
+
+List user plugin paths in discovery order with their enabled state. A missing
+config is an empty list and does not create state.
+
+### `ndea plugin enable <path>`
+
+Enable a package below `~/.ndea/plugins/packages/`. The path must be relative to
+that directory and must already exist. Re-enabling a package is an idempotent
+no-op.
+
+### `ndea plugin disable <path>`
+
+Disable a configured package without removing its files or changing entry
+order. Disabling an unknown or already-disabled package is an idempotent no-op.
+
+Enable and disable changes take effect in the next session. All four plugin
+commands accept `--format json` for stable machine output. See
+[Build a custom-node plugin](/custom-node-plugins) for the complete authoring
+workflow.
 
 ## `ndea update`
 

@@ -413,8 +413,7 @@ export type TrajectoryResponse = z.infer<typeof TrajectoryResponseSchema>;
 
 // ─── Collections ─────────────────────────────────────────────────────────────
 //
-// Replaces the rough `ObsSet` feature. Schema is intentionally close so that
-// the frontend swap in PR 4 is mechanical, but adds tags (many-to-many),
+// Replaces the earlier row-group prototype. The schema adds tags (many-to-many),
 // notes, optional provenance JSON (only set for derived collections),
 // soft-delete + version (optimistic concurrency), and per-dataset drift
 // breakdown in the list response.

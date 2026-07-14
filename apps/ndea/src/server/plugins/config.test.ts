@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, mkdir, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, readdir, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import {
@@ -93,7 +93,7 @@ describe("plugin user config", () => {
     await Promise.all([mkdir(inside, { recursive: true }), mkdir(outside, { recursive: true })]);
     await symlink(outside, join(packages, "escaped"));
 
-    expect(await resolveUserPluginPath("inside", root)).toBe(inside);
+    expect(await resolveUserPluginPath("inside", root)).toBe(await realpath(inside));
     await expect(resolveUserPluginPath("escaped", root)).rejects.toThrow(/outside/);
 
     const redirectedState = await temporaryRoot();
