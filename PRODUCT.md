@@ -51,4 +51,4 @@ counts (`[2,418,309]`), epoch counters, LED states. It never exclaims.
 - Telemetry is a feature, not noise — but it all sits behind one toggle
 - `prefers-reduced-motion` collapses all motion (cursor morph, wire dashes,
   FLIP ghosts) to static states
-- The graph document is the source of truth; every panel is a projection
+- The graph document is the source of truth; Canvas, Stage, and each Body derive from it

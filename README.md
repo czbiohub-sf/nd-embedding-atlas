@@ -2,7 +2,7 @@
 
 [![CI][badge-ci]][link-ci] [![Canary][badge-canary]][link-canary] [![Release][badge-release]][link-release] [![Bun][badge-bun]][link-bun] [![License][badge-license]][link-license]
 
-An interactive browser-based dashboard that links high-dimensional AI embeddings to source 5D (TCZYX) image data for rapid exploration and annotation.
+An interactive browser-based Node Workspace that links high-dimensional AI embeddings to source 5D (TCZYX) image data for rapid exploration and annotation.
 
 ## Install
 
@@ -104,7 +104,7 @@ Updates download the new binary into a fresh `~/.ndea/versions/<tag>/` directory
 ```bash
 ndea path/to/data.zarr            # single AnnData store
 ndea a.zarr b.zarr c.zarr         # multiple AnnData stores
-ndea path/to/config.yaml          # multi-dataset config (pairs an HCS plate with each AnnData store for the image viewer)
+ndea path/to/config.yaml          # multi-dataset config (pairs an HCS plate with each AnnData store for Image Viewer)
 ```
 
 Then open **Chrome or Edge** at `http://localhost:5055`.

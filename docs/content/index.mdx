@@ -1,12 +1,12 @@
 ---
 title: Getting started
-description: Interactive dashboard linking AI embeddings to source 5D image data.
+description: Interactive Node Workspace linking AI embeddings to source 5D image data.
 ---
 
-nd-embedding-atlas is an interactive dashboard linking high-dimensional AI embeddings to source 5D (TCZYX) image data.
+nd-embedding-atlas is an interactive Node Workspace linking high-dimensional AI embeddings to source 5D (TCZYX) image data.
 
 <Callout type="warn" title="AnnData schema is unstable">
-  The viewer's expected `obs` / `obsm` / `layers` shape will change. Expect to adjust your AnnData as the schema firms
+  The app's expected `obs` / `obsm` / `layers` shape will change. Expect to adjust your AnnData as the schema firms
   up.
 </Callout>
 
@@ -65,10 +65,10 @@ For developer setup, see the [contributing guide](/contributing).
 
 <Callout type="info" title="On the Bruno HPC">
   Test datasets are pre-staged at `/hpc/websites/public.czbiohub.org/comp.micro/nd-embedding-atlas-test-data` — symlink
-  or point the viewer at that path directly.
+  or point the Workspace at that path directly.
 </Callout>
 
-## Launch the viewer
+## Launch the Workspace
 
 ```bash
 # Single AnnData zarr store
@@ -98,11 +98,17 @@ datasets:
     plate_path: path/to/plate.zarr # optional — enables hover crops
 ```
 
-The viewer ships three panels:
+The Workspace opens on one graph Canvas. Add and wire node definitions from the
+palette, then stage any full Body that needs more space. Core definitions include:
 
-- **Embedding plot** — WebGPU scatter of the embedding space
-- **Data table** — sortable, cross-filtered with the scatter
-- **OME-Zarr viewer** — image crops on hover (when `plate_path` is set)
+- **Scatter** — WebGPU embedding plot with lasso, focus, and linked view controls
+- **Table** — sortable rows cross-filtered through the graph
+- **Image Viewer** — OME-Zarr image crops when `plate_path` is set
+- **Charts, Gallery, Wrangle, Annotate, Cache, and Collections** — focused
+  transforms and views that compose through typed ports
+
+Canvas, Stage, and fullscreen sockets adopt one mounted Body; moving it never
+creates a second node instance.
 
 ## What's next?
 
