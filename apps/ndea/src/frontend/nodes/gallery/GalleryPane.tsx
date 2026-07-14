@@ -15,7 +15,7 @@ import { SquareDashedMousePointer } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import type { RowIndex } from "@ndea/sdk";
-import { useDashboard } from "@/hooks/useDashboard";
+import { useDatasetSession } from "@/hooks/useDatasetSession";
 import { capabilitiesOf } from "@ndea/sdk";
 import { useGalleryChannels } from "@/nodes/table/useGalleryChannels";
 import { LassoGalleryCard } from "./LassoGalleryCard";
@@ -40,9 +40,9 @@ interface GalleryPaneProps {
 }
 
 export function GalleryPane({ coordinator, predicate, focusedRowIndex, onSelect, datasetKey }: GalleryPaneProps) {
-  // Dashboard is read ONLY for metadata (channels / plate). Focus routes
+  // Dataset session is read only for metadata (channels / plate). Focus routes
   // through the host seam via props so it stays on the workspace sync group.
-  const { state } = useDashboard();
+  const { state } = useDatasetSession();
   const hasPlate = capabilitiesOf(state.metadata).has("plate-image");
 
   // Scoped to THIS node's wired input predicate (not the global selection bus).

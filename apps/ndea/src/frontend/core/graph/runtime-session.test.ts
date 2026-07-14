@@ -178,7 +178,7 @@ describe("GraphRuntimeSession", () => {
     edges.second = edge("second", "source", "sink");
 
     expect(() => runtime.load({ nodes, edges, flags: {} })).toThrow(
-      'graph topology duplicates resolved wire "source" -> "sink"',
+      'graph topology duplicates resolved wire "source:out" -> "sink:in"',
     );
     expect(runtime.isRegistered("source")).toBe(false);
     expect(runtime.isRegistered("sink")).toBe(false);

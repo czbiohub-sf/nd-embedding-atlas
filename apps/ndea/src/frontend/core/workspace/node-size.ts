@@ -1,5 +1,3 @@
-export type { AppNodeDescriptor } from "@/core/node/library";
-
 import type { AppNodeDescriptor } from "@/core/node/library";
 import type { WorkspaceNodeSize } from "./types";
 

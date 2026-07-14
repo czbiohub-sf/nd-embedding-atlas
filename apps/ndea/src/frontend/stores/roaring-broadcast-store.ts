@@ -1,6 +1,6 @@
 import { RoaringBitmap32 } from "roaring-wasm";
 import type { RowIndex } from "@ndea/sdk";
-import { type RowSetSource, sourceKey } from "./RowSetSource";
+import { type RowSetSource, sourceKey } from "./row-set-source";
 
 /**
  * Singleton Roaring bitmaps per source — reused across readbacks to avoid

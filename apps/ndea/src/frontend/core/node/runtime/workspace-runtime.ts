@@ -46,6 +46,7 @@ export const APP_NODE_HOST_CAPABILITIES: readonly NodeCapability[] = Object.free
   "row-set-subscribe",
   "focus-coordination",
   "view-coordination",
+  "schema-mutation",
   "spatial-data",
   "collection-read",
   "gpu-device",

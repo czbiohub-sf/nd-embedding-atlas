@@ -10,7 +10,7 @@
  *
  * This module also reads HCS plate metadata (omero.channels,
  * coordinateTransformations, version) from the first discoverable image
- * so the dashboard can render channel controls without a second round-trip.
+ * so Image Viewer can render channel controls without a second round-trip.
  *
  * Supports both OME-Zarr v0.4 (zarr v2: `.zattrs`) and v0.5 (zarr v3:
  * `zarr.json` with attributes nested under `attributes.ome`).

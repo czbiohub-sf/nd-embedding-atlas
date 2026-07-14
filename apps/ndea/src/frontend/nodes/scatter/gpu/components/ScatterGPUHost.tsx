@@ -16,7 +16,7 @@ import type { RowIndex } from "@ndea/sdk";
 import type { PanelId } from "@/lib/branded-types";
 import { useDeviceLease } from "@/core/gpu/gpu-device-context";
 import { onDeviceLost } from "@/core/gpu/device-manager";
-import { clearPanelLayerState, initPanelLayerState, selectionLayerStore } from "@/stores/SelectionLayerStore";
+import { clearPanelLayerState, initPanelLayerState, selectionLayerStore } from "@/stores/selection-layer-store";
 import { createScatterplot } from "@/nodes/scatter/gpu/gpu/orchestrator";
 import type { ScatterGPUHostHandle } from "@/nodes/scatter/gpu/handle-capabilities";
 import type { ScatterData, ScatterplotConfig, ScatterplotHandle } from "@/nodes/scatter/gpu/types";

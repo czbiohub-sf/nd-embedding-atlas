@@ -1,7 +1,7 @@
 /**
  * Cross-view routing conformance (host-seam plan, U1/U2) — the behavioral
  * backstop that keeps every node's focus/selection/view-sync gestures flowing
- * through the per-instance `host` seam, never the global dashboard/bus channel.
+ * through the per-instance `host` seam, never a global bus channel.
  *
  * Two guards:
  *   1. Coverage gate — every view-kind node must DECLARE how it routes cross-view
@@ -160,8 +160,8 @@ describe("cross-view routing conformance", () => {
     const { host, calls } = createSpyHost();
     publishChartFilter(host, "col = 'A'"); // bar click / brush
     publishChartFilter(host, null); // clear
-    // count-plot + histogram both emit via this one routing module; body-dock
-    // edge-binds the "lasso" facet to the node's sel out wire.
+    // count-plot + histogram both emit via this one routing module; Workspace
+    // runtime maps the "lasso" facet to the node's sel output wire.
     expect(calls.publishPredicate).toEqual([
       { facet: "lasso", sql: "col = 'A'" },
       { facet: "lasso", sql: null },

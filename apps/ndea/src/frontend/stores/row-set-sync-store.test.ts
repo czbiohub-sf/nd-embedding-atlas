@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { rowIndex } from "@ndea/sdk";
 import { panelId } from "@/lib/branded-types";
-import { disposeBitmap, getBitmapRowIndices } from "./RoaringBroadcastStore";
-import { externalSource, panelSource, sourceKey, sourcesEqual } from "./RowSetSource";
-import { broadcastRowSet, clearRowSetSync, rowSetSyncStore } from "./RowSetSyncStore";
+import { disposeBitmap, getBitmapRowIndices } from "./roaring-broadcast-store";
+import { externalSource, panelSource, sourceKey, sourcesEqual } from "./row-set-source";
+import { broadcastRowSet, clearRowSetSync, rowSetSyncStore } from "./row-set-sync-store";
 
 const PANEL_SOURCE = panelSource(panelId("panel-a"));
 const EXTERNAL_SOURCE = externalSource("collection-a");

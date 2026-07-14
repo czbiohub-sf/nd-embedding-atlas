@@ -2,7 +2,7 @@ import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-quer
 import { useSelector } from "@tanstack/react-store";
 import { type RowIndex, rowIndex } from "@ndea/sdk";
 import type { ChannelHash } from "@/lib/branded-types";
-import { viewerZStore } from "@/stores/ViewerZStore";
+import { viewerZStore } from "@/stores/viewer-z-store";
 import type { TrajectoryFrame } from "@/types";
 import type { ChannelDef } from "@/nodes/image-viewer/viewer/ViewerContext";
 

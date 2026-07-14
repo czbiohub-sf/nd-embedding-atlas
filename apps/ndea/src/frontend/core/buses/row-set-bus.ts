@@ -1,8 +1,8 @@
 /** Cross-panel row selections backed by per-source Roaring bitmaps. */
 
-import { broadcastRowSet, clearRowSetSync, rowSetSyncStore } from "@/stores/RowSetSyncStore";
-import { disposeBitmap, getBitmapRowIndices } from "@/stores/RoaringBroadcastStore";
-import { panelSource, type RowSetSource, sourcesEqual } from "@/stores/RowSetSource";
+import { broadcastRowSet, clearRowSetSync, rowSetSyncStore } from "@/stores/row-set-sync-store";
+import { disposeBitmap, getBitmapRowIndices } from "@/stores/roaring-broadcast-store";
+import { panelSource, type RowSetSource, sourcesEqual } from "@/stores/row-set-source";
 import { panelId } from "@/lib/branded-types";
 import type { NodeInstanceId, RowIndex } from "@ndea/sdk";
 

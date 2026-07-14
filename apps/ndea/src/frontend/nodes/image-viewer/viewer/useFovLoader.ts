@@ -11,7 +11,7 @@ import { ChannelStatsResponseSchema } from "@ndea/protocol";
 import type { ChannelStat } from "@ndea/protocol";
 import { resolveContrastRange, resolveContrastWindow, safeContrastLimits } from "@/lib/contrast-window";
 import type { Metadata } from "@/types";
-import { MultiChannelLayers } from "./MultiChannelLayers";
+import { MultiChannelLayers } from "./multi-channel-layers";
 import { useViewer } from "./useViewer";
 import type { ChannelDef, ViewMode } from "./ViewerContext";
 

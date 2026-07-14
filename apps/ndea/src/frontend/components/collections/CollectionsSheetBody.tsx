@@ -1,6 +1,6 @@
 import { Kbd, KbdGroup, KbdMod } from "@/components/ui/kbd";
 import { CollectionsList } from "./CollectionsList";
-import { useCollectionsSheet } from "./collectionsSheetContext";
+import { useCollectionsSheet } from "./collections-sheet-store";
 import { SaveCollectionSection } from "./SaveCollectionSection";
 
 export function CollectionsSheetBody() {

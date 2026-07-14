@@ -455,6 +455,7 @@ export class GraphRuntimeSession {
     this.pendingNodes.set(node.id, node);
     try {
       this.evaluator.markDirty(node.id);
+      this.runtimeNodes.set(node.id, node);
     } finally {
       this.pendingNodes.delete(node.id);
     }

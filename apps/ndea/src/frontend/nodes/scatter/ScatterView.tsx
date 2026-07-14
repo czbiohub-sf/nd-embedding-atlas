@@ -11,7 +11,7 @@ import { useSelector } from "@tanstack/react-store";
 import { type RowIndex, rowIndex } from "@ndea/sdk";
 import type { Coordinator } from "@uwdata/mosaic-core";
 import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { DashboardActions } from "@/dashboard/DashboardContext";
+import type { DatasetSessionActions } from "@/core/session/dataset-session";
 import type { CategoryMapping } from "@/lib/color/category-column";
 import { colorSourceFromString, colorSourceLegendLabel } from "@/lib/color/color-source";
 import { toRows } from "@/lib/mosaic-helpers";
@@ -19,7 +19,7 @@ import {
   ScatterGPUHost,
   type ScatterGPUHostHandle,
   type ScatterPointStyle,
-} from "@/nodes/scatter/gpu/components/ScatterGPUHost";
+} from "@/nodes/scatter/gpu/components/ScatterGpuHost";
 import { GpuDeviceProvider } from "@/core/gpu/gpu-device-context";
 import { useHost } from "@/core/host/host-context";
 import { broadcastView, focusPoint, publishRangeFilter } from "./routing";
@@ -29,14 +29,14 @@ import type { ScatterplotConfig } from "@/nodes/scatter/gpu/types";
 import { type GpuPointIndex, gpuPointIndex } from "@/lib/branded-types";
 import { hexToRgbPalette } from "@/nodes/scatter/gpu/utils/colors";
 import { buildColormapLut } from "@/lib/color/ochre-lut";
-import { pointRadiusStore } from "@/stores/PointRadiusStore";
-import { renderSettingsStore } from "@/stores/RenderSettingsStore";
-import { activeCollectionStore, setActiveCollection } from "@/stores/ActiveCollectionStore";
+import { pointRadiusStore } from "@/stores/point-radius-store";
+import { renderSettingsStore } from "@/stores/render-settings-store";
+import { activeCollectionStore, setActiveCollection } from "@/stores/active-collection-store";
 import type { AxisState, Metadata, TrajectoryData } from "@/types";
 import { CategoricalLegend } from "./CategoricalLegend";
 import { ContinuousLegend } from "./ContinuousLegend";
 import { useEffectiveCategoryColors, useLegend } from "./LegendContext";
-import { useScatterUIDispatch } from "./ScatterUIStateProvider";
+import { useScatterUIDispatch } from "./scatter-ui-store";
 import type { TrajectoryOverlaySvgHandle } from "./TrajectoryOverlaySvg";
 import { TrajectoryOverlaySvg } from "./TrajectoryOverlaySvg";
 import { HighlightFocusOverlay, type HighlightFocusOverlayHandle } from "./HighlightFocusOverlay";
@@ -72,7 +72,7 @@ export interface ScatterViewProps {
   trajectory: TrajectoryData | null;
   activeTrajectories: TrajectoryData[];
   metadata: Metadata;
-  actions: DashboardActions;
+  actions: DatasetSessionActions;
   focusedRowIndex: RowIndex | null;
 }
 
@@ -462,7 +462,7 @@ export function ScatterView({
 
   useEffect(() => {
     // incoming (non-self) pan/zoom on this node's view-sync scope, via the host
-    // seam (coordination-backed in the workspace; global-bus on the dashboard).
+    // seam and its current coordination scope.
     return host.viewCoordination.subscribe?.((s) => {
       hostRef.current?.setViewState({ panX: s.panX, panY: s.panY, zoom: s.zoom });
     });

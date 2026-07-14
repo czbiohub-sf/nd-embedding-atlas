@@ -1,44 +1,20 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { CollectionsSheetProvider } from "./components/collections/CollectionsSheetProvider";
+import { CollectionsSheet } from "./components/collections/CollectionsSheet";
 import { DocsProvider } from "./components/docs/DocsProvider";
 import { NdSpecPage } from "./components/nd/NdSpecPage";
-import { ScatterUIStateProvider } from "./nodes/scatter/ScatterUIStateProvider";
 import { Toaster } from "./components/ui/sonner";
 import { TooltipProvider } from "./components/ui/tooltip";
 import { WorkspaceShell } from "./core/workspace/WorkspaceShell";
 import type { AppNodeLibrary } from "./core/node/library";
-import { DashboardProvider } from "./dashboard";
+import { DatasetSessionProvider } from "./core/session/DatasetSessionProvider";
 import { ThemeProvider } from "./ThemeProvider";
-
-// No client-side persistence. The previous PersistQueryClientProvider
-// setup cached scatter/var-column/gallery-crop results into IndexedDB so
-// page reloads could skip the network — but a stale or empty result
-// landing in IDB (e.g. from the embedding-registration race fixed in
-// #97) would survive the reload and cement itself as the cached truth.
-// The reload-perf win wasn't worth the bug class; queries refetch on
-// mount now.
-const DAY_MS = 1000 * 60 * 60 * 24;
-
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      retry: 1,
-      refetchOnWindowFocus: false,
-      // Embedding coords + raw values are immutable for a given
-      // dataset; never refetch in the background. Routes that need
-      // freshness override per-query.
-      staleTime: Infinity,
-      gcTime: DAY_MS,
-      networkMode: "offlineFirst",
-    },
-  },
-});
+import { appQueryClient } from "./query-client";
 
 /**
  * Routes:
- *  · `/` (and `#/graph`, a legacy alias) — the node workspace, the only
- *    dashboard. `#/graph` renders the same shell with the URL left untouched
+ *  · `/` (and `#/graph`, a legacy alias) — the Node Workspace.
+ *    `#/graph` renders the same shell with the URL left untouched
  *    (no redirect), so existing links keep working.
  *  · `#/nd-spec` — living spec for the nd component layer (no data deps).
  */
@@ -63,19 +39,16 @@ export default function App({ nodeLibrary }: { nodeLibrary: AppNodeLibrary }) {
     );
   }
   return (
-    <QueryClientProvider client={queryClient}>
+    <QueryClientProvider client={appQueryClient}>
       <ThemeProvider>
         <TooltipProvider delay={400}>
-          <ScatterUIStateProvider>
-            <DashboardProvider>
-              <CollectionsSheetProvider>
-                <DocsProvider catalog={nodeLibrary.catalog}>
-                  <WorkspaceShell nodeLibrary={nodeLibrary} />
-                </DocsProvider>
-              </CollectionsSheetProvider>
-              <Toaster position="bottom-right" />
-            </DashboardProvider>
-          </ScatterUIStateProvider>
+          <DatasetSessionProvider>
+            <DocsProvider catalog={nodeLibrary.catalog}>
+              <WorkspaceShell nodeLibrary={nodeLibrary} />
+            </DocsProvider>
+            <CollectionsSheet />
+            <Toaster position="bottom-right" />
+          </DatasetSessionProvider>
         </TooltipProvider>
       </ThemeProvider>
     </QueryClientProvider>

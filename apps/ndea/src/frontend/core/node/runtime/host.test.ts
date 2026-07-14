@@ -64,6 +64,15 @@ const facetDefinition = defineNode({
   },
 });
 
+const rowSetDefinition = defineNode({
+  ref: exactNodeTypeRef("row-set-fixture", "1.0.0"),
+  title: "Row-set fixture",
+  role: "view",
+  inputs: [],
+  outputs: [],
+  capabilities: ["data-read", "row-set-publish"] as const,
+});
+
 describe("createAppNodeHost", () => {
   test("throws instead of mutating local config when no persistence patch handler exists", () => {
     const definition = defineNode({
@@ -228,5 +237,84 @@ describe("createAppNodeHost", () => {
 
     await expect(acquiring).rejects.toMatchObject({ name: "AbortError" });
     expect(events).toEqual(["release-pending", "late-device"]);
+  });
+
+  test("does not delete a row-set publication that was never created", () => {
+    const methods: string[] = [];
+    const handle = createAppNodeHost(
+      hostDependencies({
+        availableCapabilities: new Set(["data-read", "row-set-publish"]),
+        fetch: ((_input, init) => {
+          methods.push(init?.method ?? "GET");
+          return Promise.resolve(new Response(null, { status: 204 }));
+        }) as typeof globalThis.fetch,
+      }),
+      {
+        instanceId: nodeInstanceId("unpublished-row-set"),
+        definition: rowSetDefinition,
+        config: {},
+      },
+    );
+
+    handle.dispose();
+
+    expect(methods).toEqual([]);
+  });
+
+  test("calls fetch with the global receiver and deletes a published row set once", async () => {
+    const receivers: unknown[] = [];
+    const methods: string[] = [];
+    const fetcher = function (this: unknown, _input: string | URL | Request, init?: RequestInit): Promise<Response> {
+      receivers.push(this);
+      const method = init?.method ?? "GET";
+      methods.push(method);
+      return Promise.resolve(
+        method === "POST"
+          ? Response.json({ ok: true, table: "sel_row_set_fixture", count: 2 })
+          : new Response(null, { status: 204 }),
+      );
+    } as typeof globalThis.fetch;
+    const handle = createAppNodeHost(
+      hostDependencies({
+        availableCapabilities: new Set(["data-read", "row-set-publish"]),
+        fetch: fetcher,
+      }),
+      {
+        instanceId: nodeInstanceId("published-row-set"),
+        definition: rowSetDefinition,
+        config: {},
+      },
+    );
+
+    await handle.host.dataAPI.publishRowSet([rowIndex(2), rowIndex(5)]);
+    handle.dispose();
+    handle.dispose();
+
+    expect(receivers).toEqual([globalThis, globalThis]);
+    expect(methods).toEqual(["POST", "DELETE"]);
+  });
+
+  test("grants supported schema mutation without exposing a service facet", () => {
+    const definition = defineNode({
+      ref: exactNodeTypeRef("schema-mutation-fixture", "1.0.0"),
+      title: "Schema mutation fixture",
+      role: "view",
+      inputs: [],
+      outputs: [],
+      capabilities: ["schema-mutation"] as const,
+    });
+    const handle = createAppNodeHost(
+      hostDependencies({
+        availableCapabilities: new Set(["schema-mutation"]),
+      }),
+      {
+        instanceId: nodeInstanceId("schema-mutation-1"),
+        definition,
+        config: {},
+      },
+    );
+
+    expect([...handle.host.capabilities]).toEqual(["schema-mutation"]);
+    handle.dispose();
   });
 });

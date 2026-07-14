@@ -5,7 +5,7 @@ import type { ChannelHash } from "@/lib/branded-types";
 import { EMPTY_CHANNEL_HASH, hashChannels } from "@/lib/channel-hash";
 import { resolveContrastWindow, safeContrastLimits } from "@/lib/contrast-window";
 import type { Metadata } from "@/types";
-import { viewerChannelsStore } from "@/stores/ViewerChannelsStore";
+import { viewerChannelsStore } from "@/stores/viewer-channels-store";
 import type { ChannelDef } from "@/nodes/image-viewer/viewer/ViewerContext";
 
 export interface GalleryChannels {

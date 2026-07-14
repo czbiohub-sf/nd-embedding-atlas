@@ -8,7 +8,7 @@ describe("chart selection-out routing", () => {
     const { host, calls } = createSpyHost();
     publishChartFilter(host, "col = 'A'");
     publishChartFilter(host, null);
-    // body-dock edge-binds the "lasso" facet to the node's sel out wire.
+    // Workspace runtime maps the "lasso" facet to the node's sel output wire.
     expect(calls.publishPredicate).toEqual([
       { facet: "lasso", sql: "col = 'A'" },
       { facet: "lasso", sql: null },

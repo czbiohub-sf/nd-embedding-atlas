@@ -49,7 +49,7 @@ function buildObsmMetadata(availableKeys: string[], state: ServerSession): Recor
 /**
  * Handle GET /data/metadata.json
  *
- * Returns the full dataset metadata used to initialize the dashboard.
+ * Returns the full dataset metadata used to initialize a dataset session.
  */
 export function handleMetadata(state: ServerSession, config: DatasetSessionMetadata): Response {
   const result: Record<string, unknown> = {

@@ -12,7 +12,7 @@
 import { ChevronDownIcon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { useScatterUIDispatch } from "@/nodes/scatter/ScatterUIStateProvider";
+import { useScatterUIDispatch } from "@/nodes/scatter/scatter-ui-store";
 import { Badge } from "@/components/ui/badge";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";

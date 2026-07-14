@@ -1,16 +1,16 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSelector } from "@tanstack/react-store";
 import { Coordinator, Selection, socketConnector } from "@uwdata/mosaic-core";
-import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { MetadataSchema } from "@ndea/protocol";
-import { wsClient } from "../lib/ws-client";
-import { scatterKeys } from "../lib/query-keys";
-import { focusBus, predicateBus } from "../core/buses";
+import { wsClient } from "@/lib/ws-client";
+import { scatterKeys } from "@/lib/query-keys";
+import { focusBus, predicateBus } from "@/core/buses";
 import { nodeInstanceId, rowIndex } from "@ndea/sdk";
-import { activeCollectionStore } from "../stores/ActiveCollectionStore";
-import { broadcastRowSet, clearRowSetSync, externalSource } from "../stores/RowSetSyncStore";
-import type { Metadata, TrajectoryData } from "../types";
-import { DashboardContext, type DashboardState } from "./DashboardContext";
+import { activeCollectionStore } from "@/stores/active-collection-store";
+import { broadcastRowSet, clearRowSetSync, externalSource } from "@/stores/row-set-sync-store";
+import type { Metadata, TrajectoryData } from "@/types";
+import { clearDatasetSession, publishDatasetSession, type DatasetSessionState } from "./dataset-session";
 
 // ── Provider ───────────────────────────────────────────────────────────────
 
@@ -20,7 +20,7 @@ interface Props {
 
 const TABLE = "dataset";
 
-export function DashboardProvider({ children }: Props) {
+export function DatasetSessionProvider({ children }: Props) {
   // Infrastructure — created once.
   // socketConnector: one long-lived WS to /mosaic, no per-query HTTP handshake.
   // Fallback `/data/query` REST endpoint remains for tests and curl.
@@ -37,7 +37,7 @@ export function DashboardProvider({ children }: Props) {
 
   // ── WebSocket connection ──────────────────────────────────────────────
   // Opens one persistent /ws connection for the tab. Stays connected for
-  // the lifetime of the dashboard; reconnects automatically on drop.
+  // lifetime of the dataset session; reconnects automatically on drop.
   useEffect(() => {
     wsClient.connect();
     return () => wsClient.close();
@@ -155,7 +155,7 @@ export function DashboardProvider({ children }: Props) {
   });
   const metadata = metadataQuery.data ?? null;
 
-  // Process-wide focus. Host-scoped consumers use `host.focus`; dashboard
+  // Process-wide focus. Host-scoped consumers use `host.focus`; session
   // consumers use this mirror without conflating focus with render emphasis.
   const focusedRowIndex = useSelector(focusBus.store, (s) => s);
 
@@ -201,15 +201,23 @@ export function DashboardProvider({ children }: Props) {
     [refreshMetadata, setTrajectory, setTrajectoryTIndex, clearTrajectory],
   );
 
-  const meta = useMemo(() => ({ coordinator, brushSelection, table: TABLE }), [coordinator, brushSelection]);
+  const runtime = useMemo(() => ({ coordinator, brushSelection, table: TABLE }), [coordinator, brushSelection]);
 
   // Memoize state to prevent unnecessary consumer re-renders
-  const state = useMemo<DashboardState | null>(
+  const state = useMemo<DatasetSessionState | null>(
     () => (metadata ? { metadata, focusedRowIndex, trajectories } : null),
     [metadata, focusedRowIndex, trajectories],
   );
 
-  const contextValue = useMemo(() => (state ? { state, actions, meta } : null), [state, actions, meta]);
+  const sessionValue = useMemo(() => (state ? { state, actions, runtime } : null), [state, actions, runtime]);
+  const [published, setPublished] = useState(false);
+
+  useLayoutEffect(() => {
+    if (!sessionValue) return;
+    publishDatasetSession(sessionValue);
+    setPublished(true);
+    return () => clearDatasetSession(sessionValue);
+  }, [sessionValue]);
 
   if (metadataQuery.isError) {
     return (
@@ -234,7 +242,7 @@ export function DashboardProvider({ children }: Props) {
     return <div className="flex h-full items-center justify-center text-sm text-muted-foreground">Loading...</div>;
   }
 
-  if (!contextValue) return null;
+  if (!sessionValue || !published) return null;
 
-  return <DashboardContext value={contextValue}>{children}</DashboardContext>;
+  return children;
 }

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import type { Selection } from "@uwdata/mosaic-core";
 import { nodeInstanceId, rowIndex, type RowIndex } from "@ndea/sdk";
-import { clearRowSetSync } from "@/stores/RowSetSyncStore";
+import { clearRowSetSync } from "@/stores/row-set-sync-store";
 import { createFocusBus } from "./focus-bus";
 import { createPredicateBus } from "./predicate-bus";
 import { createRowSetBus } from "./row-set-bus";

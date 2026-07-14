@@ -10,10 +10,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { RowIndex } from "@ndea/sdk";
-import { selectAnyTrajectory } from "@/dashboard/DashboardContext";
-import { useDashboard } from "@/hooks/useDashboard";
+import { selectAnyTrajectory } from "@/core/session/dataset-session";
+import { useDatasetSession } from "@/hooks/useDatasetSession";
 import { capabilitiesOf } from "@ndea/sdk";
-import { colorSourceToString } from "@/lib/color/color-source";
 import type { IsolationCapability } from "@/nodes/scatter/gpu/handle-capabilities";
 import { useEmbeddingLoader } from "@/nodes/scatter/gpu/hooks/useEmbeddingLoader";
 import { useDisabledBridge } from "@/nodes/scatter/gpu/hooks/useDisabledBridge";
@@ -21,25 +20,20 @@ import { useIsolationBridge } from "@/nodes/scatter/gpu/hooks/useIsolationBridge
 import { useScatterColorState } from "@/nodes/scatter/gpu/hooks/useScatterColorState";
 import { useTrajectoryLoader } from "@/nodes/scatter/gpu/hooks/useTrajectoryLoader";
 import { useFocusedPointMeta } from "@/hooks/useFocusedPointMeta";
-import type { PanelId } from "@/nodes/scatter/gpu/types";
 import { useHost } from "@/core/host/host-context";
 import { useNodeFocus } from "@/core/node/use-node-focus";
-import { broadcastPanelState, clearPanelState } from "@/stores/PanelStateStore";
 import type { AxisState } from "@/types";
 import { LegendProvider } from "./LegendContext";
 import { ScatterToolbar } from "./ScatterToolbar";
-import { useScatterUIState } from "./ScatterUIStateProvider";
+import { useScatterUIState } from "./scatter-ui-store";
 import { ScatterView } from "./ScatterView";
 import type { ScatterCapabilities } from "./plugin";
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
 export interface ScatterContentProps {
-  panelId: PanelId;
   initialObsmKey?: string | null;
   initialColorByColumn?: string | null;
-  /** When set, axes are controlled externally (panel sync) */
-  syncedAxes?: AxisState | null;
   /** container header slot — when present the toolbar portals there
    *  (compact, 26px-friendly) instead of docking above the canvas */
   toolbarTarget?: HTMLElement;
@@ -49,14 +43,12 @@ export interface ScatterContentProps {
 // ── ScatterContent ────────────────────────────────────────────────────────────
 
 export function ScatterContent({
-  panelId: myPanelId,
   initialObsmKey,
   initialColorByColumn: _initialColorByColumn,
-  syncedAxes,
   toolbarTarget,
   onCreateCheckpoint,
 }: ScatterContentProps) {
-  const { state, actions, meta } = useDashboard();
+  const { state, actions, runtime } = useDatasetSession();
   // The host owns this instance's WASM bitmap lifecycle (§6.6).
   const host = useHost<unknown, ScatterCapabilities>();
   const { metadata } = state;
@@ -65,14 +57,13 @@ export function ScatterContent({
   const focusedRowIndex = useNodeFocus(host);
   const trajectory = selectAnyTrajectory(state.trajectories);
   const activeTrajectories = Object.values(state.trajectories).filter((t): t is NonNullable<typeof t> => t != null);
-  const { coordinator, brushSelection, table } = meta;
+  const { coordinator, brushSelection, table } = runtime;
 
   // ── Embedding state ────────────────────────────────────────────────────────
   const [axes, setAxes] = useState<AxisState | null>(null);
   const { loadEmbedding, loadingKey } = useEmbeddingLoader(metadata, actions.refreshMetadata);
 
-  // Use synced axes when provided (cross-panel link mode)
-  const effectiveAxes = syncedAxes !== undefined ? syncedAxes : axes;
+  const effectiveAxes = axes;
 
   useEffect(() => {
     if (axes || !metadata) return;
@@ -184,22 +175,6 @@ export function ScatterContent({
           );
         }
       : undefined;
-
-  // ── Broadcast panel state for cross-panel sync ─────────────────────────────
-  useEffect(() => {
-    broadcastPanelState(String(myPanelId), {
-      axes: effectiveAxes,
-      colorByColumn: colorSourceToString(colorSource),
-    });
-  }, [myPanelId, effectiveAxes, colorSource]);
-
-  useEffect(() => {
-    return () => {
-      clearPanelState(String(myPanelId));
-      // The host owns the row-set bitmap lifecycle
-      // .disposeFor(instanceId), §6.6 — keyed by instanceId == this panelId).
-    };
-  }, [myPanelId]);
 
   // Shared ScatterView props
   const scatterViewProps = {

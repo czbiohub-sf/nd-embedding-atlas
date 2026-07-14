@@ -1,7 +1,7 @@
 import { Store } from "@tanstack/store";
 import type { RowIndex } from "@ndea/sdk";
-import { type RowSetSource, panelSource, externalSource, sourceKey, sourcesEqual } from "./RowSetSource";
-import { updateBroadcastBitmap } from "./RoaringBroadcastStore";
+import { type RowSetSource, panelSource, externalSource, sourceKey, sourcesEqual } from "./row-set-source";
+import { updateBroadcastBitmap } from "./roaring-broadcast-store";
 
 // Re-export source helpers from the store's public row-set surface.
 export { type RowSetSource, panelSource, externalSource, sourceKey, sourcesEqual };

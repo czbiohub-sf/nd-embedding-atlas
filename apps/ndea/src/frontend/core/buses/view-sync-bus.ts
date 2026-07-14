@@ -1,6 +1,6 @@
 /** Process-wide linked pan and zoom state. */
 
-import { broadcastViewState, toggleViewLock, viewSyncStore, type ViewSyncState } from "@/stores/ViewSyncStore";
+import { broadcastViewState, toggleViewLock, viewSyncStore, type ViewSyncState } from "@/stores/view-sync-store";
 import { panelId } from "@/lib/branded-types";
 import type { ViewState } from "@/types";
 import type { NodeInstanceId } from "@ndea/sdk";

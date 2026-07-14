@@ -20,7 +20,7 @@
  */
 
 import type { NdeaProtocol } from "@ndea/protocol";
-import { setWsConnected, setWsError, setWsLatency } from "../stores/WsConnectionStore";
+import { setWsConnected, setWsError, setWsLatency } from "../stores/ws-connection-store";
 
 type ReqOf<M extends keyof NdeaProtocol> = NdeaProtocol[M]["req"];
 type ResOf<M extends keyof NdeaProtocol> = NdeaProtocol[M]["res"];

@@ -20,7 +20,7 @@ import { NdHud, type NdLedState } from "@/components/nd/nd-primitives";
 import type { NdResizeCorner } from "@/components/nd/nd-resize-grips";
 import { BodySocket, HeaderSocket } from "../body-dock";
 import { ND_NODE, ND_TIMING } from "../constants";
-import { workspaceNodeSize } from "../node-defs";
+import { workspaceNodeSize } from "../node-size";
 import { useNodeFeedbackContext } from "../feedback";
 import { useNodeCount } from "../use-node-count";
 import { useTelemetrySelector, useWorkspace, useWorkspaceSelector } from "../workspace-context";

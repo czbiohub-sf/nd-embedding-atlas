@@ -25,7 +25,7 @@ import {
   ContextMenuSubTrigger,
 } from "@/components/ui/context-menu";
 import { NdHud } from "@/components/nd/nd-primitives";
-import type { AppNodeDescriptor } from "../node-defs";
+import type { AppNodeDescriptor } from "@/core/node/library";
 import { useWorkspace } from "../workspace-context";
 import type { WorkspaceNodePosition } from "../types";
 

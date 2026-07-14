@@ -1,8 +1,8 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { TrajectoryResponseSchema } from "@ndea/protocol";
 import { useMemo } from "react";
-import { selectAnyTrajectory } from "@/dashboard/DashboardContext";
-import { useDashboard } from "@/hooks/useDashboard";
+import { selectAnyTrajectory } from "@/core/session/dataset-session";
+import { useDatasetSession } from "@/hooks/useDatasetSession";
 import type { TrajectoryFrame } from "@/types";
 import { trajectoryKeys } from "@/lib/query-keys";
 
@@ -24,7 +24,7 @@ interface UseTrajectoryLoaderResult {
  *
  * Fetches `/api/trajectory` (server-side join of DuckDB metadata + obsm
  * positions) for a given (trackId, fovName) pair, stores the result in
- * DashboardContext, and derives the activeIndex from the current tIndex.
+ * the dataset session, and derives the activeIndex from the current tIndex.
  *
  * Previously built Mosaic SQL on the client and paid a Binder Error
  * whenever the embedding's obsm columns weren't materialized into the
@@ -33,7 +33,7 @@ interface UseTrajectoryLoaderResult {
  */
 export function useTrajectoryLoader(opts: UseTrajectoryLoaderOptions): UseTrajectoryLoaderResult {
   const { embedding, xCol, yCol, categoryCol } = opts;
-  const { state, actions } = useDashboard();
+  const { state, actions } = useDatasetSession();
   const queryClient = useQueryClient();
 
   const mutation = useMutation({

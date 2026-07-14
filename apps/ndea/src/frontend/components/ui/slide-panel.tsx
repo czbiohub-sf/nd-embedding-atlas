@@ -5,7 +5,7 @@ import { XIcon } from "lucide-react";
 import { createContext, useContext } from "react";
 import type * as React from "react";
 import { cn } from "@/lib/utils";
-import { type PanelSide, usePanel } from "@/stores/panelRegistry";
+import { type PanelSide, usePanel } from "@/stores/panel-registry";
 import { BracketIcon } from "./bracket-icon";
 import { Button } from "./button";
 import { SheetClose, SheetContent, SheetTitle, Sheet as SheetRoot } from "./sheet";

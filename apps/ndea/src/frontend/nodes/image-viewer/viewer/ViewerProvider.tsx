@@ -8,10 +8,10 @@ import {
   PerspectiveCamera,
 } from "@idetik/core";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { clearViewerChannels, publishViewerChannels } from "@/stores/ViewerChannelsStore";
-import { clearViewerZ, publishViewerZ } from "@/stores/ViewerZStore";
-import type { MultiChannelLayers } from "./MultiChannelLayers";
-import { OrbitControls } from "./OrbitControls";
+import { clearViewerChannels, publishViewerChannels } from "@/stores/viewer-channels-store";
+import { clearViewerZ, publishViewerZ } from "@/stores/viewer-z-store";
+import type { MultiChannelLayers } from "./multi-channel-layers";
+import { OrbitControls } from "./orbit-controls";
 import {
   type ChannelDef,
   type DimensionBounds,

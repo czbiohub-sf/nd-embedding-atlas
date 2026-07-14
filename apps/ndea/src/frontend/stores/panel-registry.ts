@@ -1,5 +1,5 @@
 /**
- * panelRegistry — one in-memory store for all floating SlidePanels (Collections,
+ * Panel registry — one in-memory store for all floating SlidePanels (Collections,
  * Table, Devtools). Generalizes the open/size logic that used to be duplicated
  * across TerminalTableProvider + CollectionsSheetProvider + DevtoolsDrawer.
  *

@@ -3,11 +3,11 @@ import { vec3 } from "gl-matrix";
 import { useCallback, useEffect } from "react";
 import { useHost } from "@/core/host/host-context";
 import { useNodeFocus } from "@/core/node/use-node-focus";
-import { selectTrajectory } from "@/dashboard/DashboardContext";
-import { useDashboard } from "@/hooks/useDashboard";
+import { selectTrajectory } from "@/core/session/dataset-session";
+import { useDatasetSession } from "@/hooks/useDatasetSession";
 import { capabilitiesOf } from "@ndea/sdk";
 import { ObsInfoSchema } from "@ndea/protocol";
-import type { OrbitControls } from "@/nodes/image-viewer/viewer/OrbitControls";
+import type { OrbitControls } from "@/nodes/image-viewer/viewer/orbit-controls";
 import { useBboxLayer } from "@/nodes/image-viewer/viewer/useBboxLayer";
 import { useFovLoader } from "@/nodes/image-viewer/viewer/useFovLoader";
 import { useViewer } from "@/nodes/image-viewer/viewer/useViewer";
@@ -26,9 +26,9 @@ interface Props {
 }
 
 export function SingleCropViewer({ cropSize, showBbox, datasetKey }: Props) {
-  const { state: dashState } = useDashboard();
+  const { state: sessionState } = useDatasetSession();
   const { state: viewerState, actions, meta } = useViewer();
-  const { metadata } = dashState;
+  const { metadata } = sessionState;
 
   // Focus source: scoped to this instance's host (its focus WIRE is the input),
   // so deleting the wire genuinely disconnects the viewer (C6).
@@ -193,7 +193,7 @@ export function SingleCropViewer({ cropSize, showBbox, datasetKey }: Props) {
   }, [isForThisDataset, obsInfo, actions]);
 
   // ── Effect: Follow observation during trajectory playback ────────
-  const { trajectories } = dashState;
+  const { trajectories } = sessionState;
   const trajectory = selectTrajectory(trajectories, datasetKey);
   useEffect(() => {
     if (!isForThisDataset || !trajectory || !obsInfo) return;

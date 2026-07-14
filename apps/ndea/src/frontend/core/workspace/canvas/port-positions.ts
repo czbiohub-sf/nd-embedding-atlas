@@ -5,7 +5,7 @@
  */
 
 import { ndResolveForm, type NdForm } from "@/components/nd/nd-resolve-form";
-import { workspaceNodeSize } from "../node-defs";
+import { workspaceNodeSize } from "../node-size";
 import type { Workspace } from "../workspace-store";
 import type { WorkspaceNodeSize, WorkspaceNodePosition } from "../types";
 

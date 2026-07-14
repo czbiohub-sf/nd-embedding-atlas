@@ -4,7 +4,7 @@ import type { ChannelStat } from "@ndea/protocol";
 
 // idetik 0.27 doesn't export `Viewport`; recover the exact type from Idetik.addViewport.
 type Viewport = ReturnType<Idetik["addViewport"]>;
-import type { MultiChannelLayers } from "./MultiChannelLayers";
+import type { MultiChannelLayers } from "./multi-channel-layers";
 
 // ── Tracked layer ────────────────────────────────────────────────────────────
 

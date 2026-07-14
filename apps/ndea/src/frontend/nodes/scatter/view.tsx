@@ -10,7 +10,6 @@
 
 import { ScatterContent } from "@/nodes/scatter/ScatterContent";
 import { HostProvider } from "@/core/host/host-context";
-import { panelId } from "@/nodes/scatter/gpu/types";
 import type { CheckpointCreationNodeHost, NodeBodyProps } from "@/core/node/app-node-host";
 import type { ScatterCapabilities } from "./plugin";
 
@@ -34,7 +33,6 @@ export function ScatterPluginView({
   return (
     <HostProvider host={host}>
       <ScatterContent
-        panelId={panelId(host.instanceId)}
         initialObsmKey={host.config.obsmKey}
         initialColorByColumn={host.config.colorByColumn}
         onCreateCheckpoint={() => host.checkpointCreation.create()}

@@ -111,8 +111,12 @@ export function createAppNodeHost<Config, Facets extends object = object>(
   let config = init.config;
   let deviceLease: DeviceLease | null = null;
   let deviceLeasePromise: Promise<DeviceLease> | null = null;
-  let publishedRowSetDisposed = false;
+  let publishedRowSetDisposed = true;
   let disposed = false;
+  const request = (
+    input: Parameters<typeof globalThis.fetch>[0],
+    requestInit?: Parameters<typeof globalThis.fetch>[1],
+  ) => dependencies.fetch.call(globalThis, input, requestInit);
   const trackDisposer = (disposer: () => void): (() => void) => {
     const once = createTrackedDisposer(disposers, disposer);
     if (disposed) once();
@@ -175,7 +179,7 @@ export function createAppNodeHost<Config, Facets extends object = object>(
         ? {
             async publishRowSet(rowIds: RowIndex[]) {
               assertActive();
-              const response = await dependencies.fetch(`/api/selection/${encodeURIComponent(instanceId)}`, {
+              const response = await request(`/api/selection/${encodeURIComponent(instanceId)}`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ row_indices: rowIds }),
@@ -191,14 +195,13 @@ export function createAppNodeHost<Config, Facets extends object = object>(
             disposePublishedRowSet() {
               if (publishedRowSetDisposed) return;
               publishedRowSetDisposed = true;
-              void dependencies
-                .fetch(`/api/selection/${encodeURIComponent(instanceId)}`, { method: "DELETE" })
-                .catch((error: unknown) =>
+              void request(`/api/selection/${encodeURIComponent(instanceId)}`, { method: "DELETE" }).catch(
+                (error: unknown) =>
                   (dependencies.notify ?? defaultNotify)(
                     `failed to dispose published row set for ${instanceId}: ${toError(error).message}`,
                     "error",
                   ),
-                );
+              );
             },
           }
         : {}),
@@ -206,7 +209,7 @@ export function createAppNodeHost<Config, Facets extends object = object>(
         ? {
             async listAnnotationColumns() {
               assertActive();
-              const response = await dependencies.fetch("/api/annotations/columns", { signal: controller.signal });
+              const response = await request("/api/annotations/columns", { signal: controller.signal });
               if (!response.ok) throw await responseError(response, `list failed (${response.status})`);
               return AnnotationColumnsResponseSchema.parse(await response.json()).columns;
             },
@@ -215,7 +218,7 @@ export function createAppNodeHost<Config, Facets extends object = object>(
               dtype: "categorical" | "string" | "integer" | "float" = "categorical",
             ) {
               assertActive();
-              const response = await dependencies.fetch("/api/annotations/columns", {
+              const response = await request("/api/annotations/columns", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ name, dtype }),
@@ -226,7 +229,7 @@ export function createAppNodeHost<Config, Facets extends object = object>(
             },
             async writeAnnotationByPredicate(column: string, label: string, predicate: string) {
               assertActive();
-              const response = await dependencies.fetch("/api/annotations/values", {
+              const response = await request("/api/annotations/values", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ column, label, predicate }),
@@ -239,7 +242,7 @@ export function createAppNodeHost<Config, Facets extends object = object>(
             },
             async commitAnnotations(options: { dryRun: boolean; columns?: string[] }) {
               assertActive();
-              const response = await dependencies.fetch(`/api/annotations/commit${options.dryRun ? "?dryRun=1" : ""}`, {
+              const response = await request(`/api/annotations/commit${options.dryRun ? "?dryRun=1" : ""}`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(options.columns ? { columns: options.columns } : {}),
@@ -386,7 +389,8 @@ export function createAppNodeHost<Config, Facets extends object = object>(
   for (const capability of requested) {
     if (
       dependencies.availableCapabilities.has(capability) &&
-      (capability === "spatial-data" ||
+      (capability === "schema-mutation" ||
+        capability === "spatial-data" ||
         capability === "collection-read" ||
         capability === "wasm-bitmap" ||
         capability === "compute")

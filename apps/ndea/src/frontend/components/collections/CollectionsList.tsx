@@ -22,7 +22,7 @@ import { Input } from "@/components/ui/input";
 import type { Collection } from "@ndea/protocol";
 import { collectionId, type CollectionId } from "../../lib/branded-types";
 import { filterCollections } from "../../lib/collections-helpers";
-import { activeCollectionStore, setActiveCollection } from "../../stores/ActiveCollectionStore";
+import { activeCollectionStore, setActiveCollection } from "../../stores/active-collection-store";
 import { CollectionRow } from "./CollectionRow";
 import { useCollections, usePatchCollection } from "./useCollections";
 

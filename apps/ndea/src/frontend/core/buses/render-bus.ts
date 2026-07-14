@@ -1,6 +1,6 @@
 /** Process-wide scatter point radius. */
 
-import { pointRadiusStore, setPointRadius } from "@/stores/PointRadiusStore";
+import { pointRadiusStore, setPointRadius } from "@/stores/point-radius-store";
 
 export interface RenderBus {
   pointRadius(): number;

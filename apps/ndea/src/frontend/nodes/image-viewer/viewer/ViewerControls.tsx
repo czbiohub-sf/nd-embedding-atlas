@@ -1,7 +1,7 @@
 import { Frame } from "lucide-react";
 import { useMemo } from "react";
-import { selectTrajectory } from "@/dashboard/DashboardContext";
-import { useDashboard } from "@/hooks/useDashboard";
+import { selectTrajectory } from "@/core/session/dataset-session";
+import { useDatasetSession } from "@/hooks/useDatasetSession";
 import { capabilitiesOf } from "@ndea/sdk";
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
@@ -21,10 +21,10 @@ interface Props {
 }
 
 export function ViewerControls({ cropSize, setCropSize, showBbox, setShowBbox, datasetKey }: Props) {
-  const { state: dashState, actions: dashActions } = useDashboard();
+  const { state: sessionState, actions: sessionActions } = useDatasetSession();
   const { state, actions } = useViewer();
   const { bounds, zIndex, tIndex, viewMode } = state;
-  const { trajectories, metadata } = dashState;
+  const { trajectories, metadata } = sessionState;
   const trajectory = selectTrajectory(trajectories, datasetKey);
   const hasCellCoords = capabilitiesOf(metadata).has("spatial");
 
@@ -46,7 +46,7 @@ export function ViewerControls({ cropSize, setCropSize, showBbox, setShowBbox, d
     if (isTrajectoryMode && trajTimepoints) {
       const t = trajTimepoints[val] ?? trajTimepoints[0];
       actions.setTIndex(t);
-      dashActions.setTrajectoryTIndex(datasetKey ?? "", t);
+      sessionActions.setTrajectoryTIndex(datasetKey ?? "", t);
     } else {
       actions.setTIndex(val);
     }
