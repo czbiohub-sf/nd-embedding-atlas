@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
  * HoverCard — a hover-triggered card, wrapping Base UI's `preview-card`. Unlike
  * `Tooltip`/`HoverTip` it can hold interactive content (links, buttons) because
  * the pointer can bridge from the trigger into the popup. Used for the Tier 1
- * documentation peek. See `.design/docs-integration-plan.md`.
+ * documentation peek.
  */
 function HoverCard({ ...props }: PreviewCardPrimitive.Root.Props) {
   return <PreviewCardPrimitive.Root data-slot="hover-card" {...props} />;

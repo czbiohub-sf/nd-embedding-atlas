@@ -140,11 +140,10 @@ This site is built with [Fumapress](https://press.fumadocs.dev/) (Fumadocs + Wak
 ```bash
 # From the repository root
 vp run docs:build
+vp run docs:serve  # http://localhost:8080/nd-embedding-atlas/
 
-# Local preview from the isolated docs package
-cd docs
-bun install --frozen-lockfile
-bun run dev      # local preview with hot reload
+# Local development with hot reload
+vp run docs:dev
 ```
 
 Because pages are MDX, they can embed React. `vp run docs:build` writes

@@ -3,8 +3,7 @@
  * the node's contextual documentation in a click popover, sourced from the
  * definition's documentation. Click (not hover) so it's discoverable and never
  * fights the node body. The single renderer for the doc tier; the reference
- * drawer (tier 2) reuses the same `NodeDoc` record. See
- * `.design/docs-integration-plan.md`.
+ * drawer (tier 2) reuses the same `NodeDoc` record.
  *
  * Renders nothing when the node type has no definition or authored documentation —
  * only documented nodes get the button.

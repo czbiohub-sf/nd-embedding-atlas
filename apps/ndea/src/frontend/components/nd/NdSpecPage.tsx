@@ -256,7 +256,7 @@ export function NdSpecPage() {
       <h1 className="mb-1 text-xl font-semibold">NdNode</h1>
       <p className="mb-1.5 text-text-muted">
         The standard node container — one component, three forms. Consumed by the canvas, stage tiles, and any future
-        surface. Companion: <span className="font-mono text-2xs">.design/VOCABULARY.md</span>.
+        surface.
       </p>
 
       <h2 className="mt-8 mb-3 text-sm font-semibold">Anatomy &amp; live behavior</h2>

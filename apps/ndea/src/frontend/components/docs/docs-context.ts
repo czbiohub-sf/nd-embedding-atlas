@@ -5,7 +5,6 @@ import type { ExactNodeTypeRef } from "@ndea/sdk";
  * Imperative controls for the in-app docs surfaces — the ⌘K search palette and
  * the full-docs sheet. Provided by `<DocsProvider>`; consumed by the node info
  * button ("see full docs") and anything else that wants to open docs.
- * See `.design/docs-integration-plan.md`.
  */
 export interface DocsContextValue {
   /** Open the ⌘K docs search palette. */

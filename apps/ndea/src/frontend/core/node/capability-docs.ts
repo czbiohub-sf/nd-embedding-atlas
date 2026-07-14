@@ -6,7 +6,7 @@
  * Capabilities NOT in this map are intentionally hidden from the user tier —
  * they're either internal (`data-read`, `wasm-bitmap`) or already implied by
  * the node's row-set and predicate ports.
- * A dev mode can still surface the raw ids. See `.design/docs-integration-plan.md`.
+ * A dev mode can still surface the raw ids.
  */
 
 import type { NodeCapability } from "@ndea/sdk";
@@ -42,10 +42,6 @@ export const CAPABILITY_DOCS: Partial<Record<NodeCapability, CapabilityDoc>> = {
   "ordering-coordination": {
     label: "shares sort",
     doc: "Shares its sort column and direction with linked views.",
-  },
-  "collection-read": {
-    label: "uses collections",
-    doc: "Reads and writes saved cell collections.",
   },
 };
 

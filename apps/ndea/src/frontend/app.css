@@ -225,12 +225,7 @@ html.dark {
   --sidebar-ring: oklch(0.556 0 0);
 }
 
-/* ════════════════════════════════════════════════════════════════════
- * NODE WORKSPACE (nd) — typed-wire kinds, cook-state LEDs, morph motion
- * ────────────────────────────────────────────────────────────────────
- * Vocabulary: .design/VOCABULARY.md (binding). Wire/port kinds are
- * theme-invariant (periwinkle-on-dark family from the design handoff).
- * ════════════════════════════════════════════════════════════════════ */
+/* Node workspace wire kinds, cook-state LEDs, and motion. */
 @theme {
   /* Typed wire/port kinds — pred (pull predicate) · sel (push row set) · focus (push single record) */
   --color-wire-pred: #8b7bf7;

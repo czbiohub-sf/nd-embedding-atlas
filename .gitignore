@@ -22,7 +22,7 @@ frontend/dist/
 /docs/_build/
 /site/                  # zensical build output
 
-# Claude / notes
+# Local agent and planning artifacts
 .claude/
 notes/
 .playwright-cli/
@@ -34,12 +34,8 @@ notes/
 # Bun
 *.lockb
 
-# Planning files (local only)
-.planning/
-
 # bun --compile leaves these temp artifacts on failure
 .*-00000000.bun-build
-.design-audit/
 
 # dex task state (ephemeral)
 .dex/
@@ -47,8 +43,3 @@ notes/
 # I/O-scalability bench harness — dev-only measurement scaffolding, not shipped
 bench/
 
-# impeccable critique snapshots (ignore.md is tracked — it's run input)
-.impeccable/*
-!.impeccable/critique/
-.impeccable/critique/*
-!.impeccable/critique/ignore.md

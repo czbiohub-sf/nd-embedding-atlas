@@ -16,10 +16,6 @@ bun install
 The root install resolves `apps/*` and `packages/*`. Documentation has its
 own dependency graph and lockfile under `docs/`.
 
-Read [`VOCABULARY.md`](./VOCABULARY.md) before naming or moving a public
-concept. It defines package ownership, identity domains, durable-boundary
-posture, and the canonical Node Workspace language.
-
 ## Workspace layout
 
 ```text
@@ -61,8 +57,7 @@ Set `VITE_NDEA_NODE_EDITOR=true` at build time only when testing an
 editor-enabled production bundle.
 
 See [`AGENTS.md`](./AGENTS.md) for the full command catalogue, project layout,
-key abstractions, and gotchas. `AGENTS.md` owns workflow guidance;
-[`VOCABULARY.md`](./VOCABULARY.md) owns terminology.
+key abstractions, and gotchas.
 
 ## Code style
 
@@ -88,10 +83,12 @@ User-facing docs live under `docs/` as an independent
 # Production build from the repository root
 vp run docs:build
 
-# Local development inside the isolated docs package
-cd docs
-bun install --frozen-lockfile
-bun run dev
+# Serve the production build
+vp run docs:serve
+# Open http://localhost:8080/nd-embedding-atlas/
+
+# Local development with hot reload
+vp run docs:dev
 ```
 
 ## Pull requests
@@ -100,4 +97,5 @@ bun run dev
 CLI metadata, Bun tests, and native binaries on push and PR. `docs.yml` builds
 the isolated docs app. `zizmor.yml` audits workflow security.
 
-For releases, see [`AGENTS.md`](./AGENTS.md#commands) — release tags trigger `release.yml`, push to main triggers `canary.yml` (rolling pre-release).
+For releases, see [`AGENTS.md`](./AGENTS.md#commands). Release tags trigger
+`release.yml`; pushes to `main` trigger the rolling `canary.yml` pre-release.

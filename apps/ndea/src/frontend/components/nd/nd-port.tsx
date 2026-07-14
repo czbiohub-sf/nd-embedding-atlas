@@ -8,7 +8,7 @@
 
 import type * as React from "react";
 
-/** Typed wire/port kinds — binding vocabulary (.design/VOCABULARY.md). */
+/** Typed wire and port kinds. */
 export type NdPortKind = "pred" | "sel" | "focus";
 
 export interface NdPortKindSpec {

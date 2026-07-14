@@ -2,10 +2,6 @@
  * Workspace graph-document types. The document is the topology +
  * presentation authority; the graph evaluator stays the cook authority
  * (Workspace transactions mirror every mutation into it).
- *
- * Vocabulary per VOCABULARY.md: node roles source · transform · view · cache
- * (subnet/proxy carry hierarchy); port kinds pred · sel · focus; placement
- * embedded · staged.
  */
 
 import type { NdForm } from "@/components/nd/nd-resolve-form";

@@ -9,9 +9,9 @@
   "type": "module",
   "scripts": {
     "build": "bun run scripts/run-workspace-task.ts @ndea/app build",
-    "design:presentation": "bun run scripts/build-design-presentation.ts",
-    "design:presentation:check": "bun run scripts/build-design-presentation.ts --check",
     "docs:build": "bun run --cwd docs build",
+    "docs:dev": "bun run --cwd docs dev",
+    "docs:serve": "bun run --cwd docs start",
     "dev": "bun run apps/ndea/scripts/dev.ts",
     "sync-version": "bun run apps/ndea/scripts/sync-version.ts",
     "check:boundaries": "bun run scripts/check-workspace-boundaries.ts",

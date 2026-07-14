@@ -1,10 +1,4 @@
-/**
- * Node workspace constants — the prototype's Tweaks, shipped as constants.
- *
- * Values come from the design handoff (README "Current systems (v3)" +
- * prototype PROTO_TWEAK_DEFAULTS); .design/VOCABULARY.md is the naming
- * authority. Visual tokens (wire colors, LED states) live in app.css.
- */
+/** Node workspace layout and motion constants. */
 
 /** Zoom-semantic render bands: chip < chipMax ≤ card < fullMin ≤ full. */
 export const ND_ZOOM = {
