@@ -229,8 +229,7 @@ export async function startup(config: LaunchConfig): Promise<void> {
     // axis + includeNameColumn make `obs_name VARCHAR` come from each DF's
     // index (AnnData.obs.index in Pandas → obs/_index in Zarr). Without this,
     // `_ensureIdentityColumns` in store.ts synthesizes obs_name from the row
-    // index and stamps `provenance.synthetic_identity` on every collection —
-    // which breaks durability across re-ingest.
+    // index when the dataset has no explicit observation identity.
     const ingest = ingestMode === "eager" ? ingestDataFrames : ingestDataFramesStreaming;
     initStore = async (conn) => {
       await ingest(

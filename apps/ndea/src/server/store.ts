@@ -179,15 +179,7 @@ export class DatasetQuerySession {
   nVars: number = 0;
   /** True once var_base exists. Mosaic queries can target `var_base` or the `var` VIEW. */
   hasVarTable: boolean = false;
-  /**
-   * Origin of `obs_name` values:
-   *   "explicit"  — provided by the dataset (durable identity)
-   *   "synthetic" — generated from `__row_index__` as a fallback
-   *
-   * Collections endpoints refuse to save against synthetic-name datasets
-   * (409) because saved obs_names would re-resolve to whatever row 42 happens
-   * to be on the next load — meaningless drift behavior.
-   */
+  /** Whether `obs_name` came from the dataset or the row-index fallback. */
   obsNameOrigin: "explicit" | "synthetic" = "explicit";
   /** Registered embeddings and their metadata. */
   private _loaded: Map<string, RegisteredEmbedding> = new Map();
@@ -389,18 +381,16 @@ export class DatasetQuerySession {
     if (!colNames.has("obs_name")) {
       await this.conn.run("ALTER TABLE obs_base ADD COLUMN obs_name VARCHAR");
       await this.conn.run("UPDATE obs_base SET obs_name = CAST(__row_index__ AS VARCHAR)");
-      // Synthetic — values are stringified row indices. Collections endpoints
-      // refuse this case so users don't save sets that drift on every reload.
+      // Synthetic — values are stringified row indices.
       this.obsNameOrigin = "synthetic";
     }
   }
 
-  /** Shared init: indexes, collection tables, VIEW, row count, nanoarrow. */
+  /** Shared init: indexes, VIEW, row count, nanoarrow. */
   private async _finishInit(): Promise<void> {
     await this.conn.run("CREATE INDEX IF NOT EXISTS obs_base_row_index ON obs_base(__row_index__)");
     await this.conn.run("CREATE INDEX IF NOT EXISTS obs_base_obs_index ON obs_base(__obs_index__)");
     await this.conn.run("CREATE INDEX IF NOT EXISTS obs_base_obs_name ON obs_base(obs_name)");
-    await this._initCollectionTables();
     await this._rebuildView();
 
     const reader = await this.conn.runAndReadAll("SELECT COUNT(*) AS cnt FROM obs_base");
@@ -590,8 +580,7 @@ export class DatasetQuerySession {
   /**
    * Stamp `value` onto every obs in the staged `__scatter_selection` temp
    * table. Resolves durable identity (dataset_key, obs_name) server-side by
-   * JOINing against obs_base — the client only has row indices. Mirrors the
-   * collections create-from-selection path.
+   * JOINing against obs_base because the client only has row indices.
    */
   async writeAnnotationFromScatterSelection(colName: string, value: string | null): Promise<void> {
     const entry = this._annotationCols.get(colName);
@@ -803,55 +792,6 @@ export class DatasetQuerySession {
     const rows = reader.getRowObjectsJson();
     this.nVars = Number(rows[0].cnt);
     this.hasVarTable = true;
-  }
-
-  /**
-   * Initialize collection tables.
-   *
-   * `obs_name` is the canonical identity column. `obs_index` is a per-load
-   * cache that gets recomputed from `obs_name JOIN obs_base USING (_dataset, obs_name)`
-   * after every attach (PR 3). Drift is computed at read time by joining
-   * stored `obs_name` against current `obs_base` — the stored row count
-   * (`created_count`) is immutable post-creation; the resolved count is the
-   * live one and may shrink if obs disappear.
-   */
-  private async _initCollectionTables(): Promise<void> {
-    await this.conn.run(`
-            CREATE TABLE IF NOT EXISTS collections (
-                collection_id   TEXT PRIMARY KEY,
-                name            TEXT NOT NULL,
-                color           TEXT,
-                notes           TEXT,
-                provenance      JSON,
-                created_at      TIMESTAMP NOT NULL,
-                updated_at      TIMESTAMP NOT NULL,
-                created_count   INTEGER NOT NULL,
-                deleted_at      TIMESTAMP,
-                version         INTEGER NOT NULL DEFAULT 1
-            )
-        `);
-    await this.conn.run(`
-            CREATE TABLE IF NOT EXISTS collection_tags (
-                collection_id   TEXT NOT NULL,
-                tag             TEXT NOT NULL,
-                PRIMARY KEY (collection_id, tag)
-            )
-        `);
-    await this.conn.run(`
-            CREATE TABLE IF NOT EXISTS collection_members (
-                collection_id   TEXT NOT NULL,
-                dataset_key     TEXT NOT NULL,
-                obs_index       INTEGER NOT NULL,
-                obs_name        TEXT NOT NULL,
-                PRIMARY KEY (collection_id, dataset_key, obs_index)
-            )
-        `);
-    await this.conn.run("CREATE INDEX IF NOT EXISTS idx_collection_members_id ON collection_members(collection_id)");
-    await this.conn.run(
-      "CREATE INDEX IF NOT EXISTS idx_collection_members_dataset ON collection_members(dataset_key, obs_index)",
-    );
-    await this.conn.run("CREATE INDEX IF NOT EXISTS idx_collection_tags_id ON collection_tags(collection_id)");
-    await this.conn.run("CREATE INDEX IF NOT EXISTS idx_collection_tags_tag ON collection_tags(tag)");
   }
 
   /**

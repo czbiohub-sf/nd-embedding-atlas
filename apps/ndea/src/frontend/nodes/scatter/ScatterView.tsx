@@ -31,7 +31,6 @@ import { hexToRgbPalette } from "@/nodes/scatter/gpu/utils/colors";
 import { buildColormapLut } from "@/lib/color/ochre-lut";
 import { pointRadiusStore } from "@/stores/point-radius-store";
 import { renderSettingsStore } from "@/stores/render-settings-store";
-import { activeCollectionStore, setActiveCollection } from "@/stores/active-collection-store";
 import type { AxisState, Metadata, TrajectoryData } from "@/types";
 import { CategoricalLegend } from "./CategoricalLegend";
 import { ContinuousLegend } from "./ContinuousLegend";
@@ -54,8 +53,6 @@ export interface ScatterViewProps {
   rowIndicesRef?: RefObject<RowIndex[]>;
   /** Called when GPU readback updates the row index list */
   onRowIndicesChange?: (indices: RowIndex[]) => void;
-  /** Out-ref populated with the *lasso* row IDs (subset of rowIndicesRef). */
-  lassoRowIdsRef?: RefObject<RowIndex[]>;
   axes: AxisState | null;
   isLoading: boolean;
   loadingKey: string | null;
@@ -101,7 +98,6 @@ export function ScatterView({
   fitViewRef,
   rowIndicesRef: externalRowIndicesRef,
   onRowIndicesChange,
-  lassoRowIdsRef,
 }: ScatterViewProps) {
   const categoryColors = useEffectiveCategoryColors();
   const { setFps, setZoom, setSelection, setEmbedding, setNumPoints } = useScatterUIDispatch();
@@ -328,7 +324,6 @@ export function ScatterView({
   const { onSelectionChange } = useScatterBrushSync({
     rowIndicesRef,
     setSelection,
-    lassoRowIdsRef,
   });
 
   const callbacksRef = useRef({
@@ -476,12 +471,8 @@ export function ScatterView({
   // activeTrajectories. When focus clears the trajectory is cleared, which
   // empties highlightRowIds → the host clears the glow. No separate effect.)
 
-  // Escape cascade: focus → trajectory → lasso → active collection
-  //                                              → (category handled by CategoricalLegend)
-  // Active collection sits between lasso and category because:
-  //   - lasso-in-progress is the most recent transient state
-  //   - active collection is the persistent scope; the user wants Esc to
-  //     drop the scope only after they've already cleared a lasso within it
+  // Escape cascade: focus → trajectory → lasso
+  //                                → (category handled by CategoricalLegend)
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
@@ -493,8 +484,6 @@ export function ScatterView({
         hostRef.current?.clearSelection();
         setSelection(null);
         hasLassoRef.current = false;
-      } else if (activeCollectionStore.state.activeId !== null) {
-        setActiveCollection(null);
       } else {
         return; // let event propagate to CategoricalLegend's Escape handler
       }
@@ -503,20 +492,6 @@ export function ScatterView({
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [focusedRowIndex, host, trajectory, actions, setSelection]);
-
-  // Listen for global "clear lasso" requests (e.g. fired by the
-  // collections bridge when a collection is activated — collection becomes
-  // the new working scope and any prior lasso is reset).
-  useEffect(() => {
-    const handler = () => {
-      if (!hasLassoRef.current) return;
-      hostRef.current?.clearSelection();
-      setSelection(null);
-      hasLassoRef.current = false;
-    };
-    window.addEventListener("ndea:clear-lasso", handler);
-    return () => window.removeEventListener("ndea:clear-lasso", handler);
-  }, [setSelection]);
 
   const axesKeyRef = useRef<string | null>(null);
   useEffect(() => {

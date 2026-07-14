@@ -401,8 +401,6 @@ describe("createApp", () => {
     expect(body.status).toBe("loading");
   });
 
-  // Collections CRUD coverage lives in collections-routes.test.ts.
-
   test("CORS headers are set on responses", async () => {
     const store = await createMockStore(5);
     activeStore = store;

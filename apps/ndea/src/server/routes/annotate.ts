@@ -10,7 +10,7 @@
  *   GET    /api/annotations/columns          — list annotation column names
  *   POST   /api/annotations/columns          — create a column
  *   DELETE /api/annotations/columns/:name    — drop a column
- *   POST   /api/annotations/values           — write values (rows or collection)
+ *   POST   /api/annotations/values           — write values
  *   POST   /api/annotations/save             — explicit sidecar checkpoint
  *   GET    /api/annotations/export           — download combined parquet/csv
  */
@@ -138,9 +138,8 @@ export async function handleDeleteAnnotationColumn(colName: string, state: Serve
 /**
  * POST /api/annotations/values
  *
- * Four write paths (see WriteAnnotationValuesBodySchema):
+ * Three write paths (see WriteAnnotationValuesBodySchema):
  *   rows                 — explicit { rowIndex, datasetKey, obsName, value }[]
- *   collectionId         — promote a saved collection (label = collection name)
  *   fromScatterSelection — stamp `label` onto the staged __scatter_selection
  *   predicate            — stamp `label` onto every obs matching a SQL WHERE
  *                          (the node-graph batch door); returns the matched count
@@ -162,13 +161,8 @@ export async function handleWriteAnnotationValues(req: Request, state: ServerSes
       applied = await state.store.writeAnnotationFromPredicate(body.column, body.label ?? null, body.predicate);
     } else if (body.rows != null && body.rows.length > 0) {
       await state.store.writeAnnotationValues(body.column, body.rows);
-    } else if (body.collectionId != null) {
-      await _writeFromCollection(body.column, body.collectionId, body.label, state);
     } else {
-      return Response.json(
-        { error: "Provide one of 'rows', 'collectionId', 'predicate', or 'fromScatterSelection'" },
-        { status: 400 },
-      );
+      return Response.json({ error: "Provide one of 'rows', 'predicate', or 'fromScatterSelection'" }, { status: 400 });
     }
 
     scheduleSave(state);
@@ -201,7 +195,7 @@ export async function handleSaveAnnotations(state: ServerSession): Promise<Respo
  * POST /api/annotations/export — "Save file".
  *
  * Writes a wide table — `obs_name` (+ `_dataset` when multi-dataset) + the chosen
- * annotation columns — for the row scope (all · active filter · a collection) to
+ * annotation columns — for the row scope (all · active filter) to
  * the server export-dir as parquet/csv.
  */
 export async function handleExportAnnotations(req: Request, state: ServerSession): Promise<Response> {
@@ -217,8 +211,6 @@ export async function handleExportAnnotations(req: Request, state: ServerSession
   // trust model as /api/export — single-user local tool).
   let where = "";
   if (scope.kind === "filter") where = `WHERE ${scope.predicate}`;
-  else if (scope.kind === "collection")
-    where = `WHERE __obs_index__ IN (SELECT obs_index FROM collection_members WHERE collection_id = '${scope.collectionId.replace(/'/g, "''")}')`;
 
   const idCols = (await state.store.hasDatasetColumn()) ? "obs_name, _dataset" : "obs_name";
   const valCols = columns.map((c) => `CAST(${quoteIdent(c)} AS TEXT) AS ${quoteIdent(c)}`).join(", ");
@@ -304,37 +296,4 @@ export async function handleCommitAnnotations(req: Request, state: ServerSession
     }
   }
   return Response.json({ dryRun, datasets: reports });
-}
-
-// ─── Internal helpers ────────────────────────────────────────────────────────
-
-async function _writeFromCollection(
-  colName: string,
-  collectionId: string,
-  labelOverride: string | undefined,
-  state: ServerSession,
-): Promise<void> {
-  const entry = state.store.annotationColumns.get(colName);
-  if (!entry) throw new Error(`Unknown annotation column: ${colName}`);
-
-  let label = labelOverride;
-  if (!label) {
-    const rows = await state.store.queryJson(
-      `SELECT name FROM collections WHERE collection_id = '${collectionId.replace(/'/g, "''")}'`,
-    );
-    if (rows.length === 0) throw new Error(`Collection not found: ${collectionId}`);
-    label = String(rows[0].name);
-  }
-
-  const escapedCol = colName.replace(/'/g, "''");
-  const escapedLabel = label.replace(/'/g, "''");
-  const escapedId = collectionId.replace(/'/g, "''");
-
-  // obs_index in collection_members aligns directly to __row_index__ in obs_base.
-  await state.store.execute(
-    `INSERT OR REPLACE INTO ${entry.table} (__row_index__, dataset_key, obs_name, "${escapedCol}") ` +
-      `SELECT cm.obs_index, cm.dataset_key, cm.obs_name, '${escapedLabel}' ` +
-      `FROM collection_members cm ` +
-      `WHERE cm.collection_id = '${escapedId}'`,
-  );
 }

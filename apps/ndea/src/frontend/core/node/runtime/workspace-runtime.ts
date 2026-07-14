@@ -48,7 +48,6 @@ export const APP_NODE_HOST_CAPABILITIES: readonly NodeCapability[] = Object.free
   "view-coordination",
   "schema-mutation",
   "spatial-data",
-  "collection-read",
   "gpu-device",
   "wasm-bitmap",
   "compute",

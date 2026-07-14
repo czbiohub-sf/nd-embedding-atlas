@@ -5,7 +5,7 @@ import { type RowSetSource, sourceKey } from "./row-set-source";
 /**
  * Singleton Roaring bitmaps per source — reused across readbacks to avoid
  * WASM heap churn. RoaringBitmap32 instances are NOT GC'd automatically;
- * call disposeBitmap() on panel destroy / collection deactivate to release
+ * call disposeBitmap() when a source deactivates to release
  * WASM memory.
  *
  * Stores ROW INDICES (DuckDB __row_index__ values), not GPU buffer point indices.

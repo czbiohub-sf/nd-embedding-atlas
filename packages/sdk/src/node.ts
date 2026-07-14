@@ -211,7 +211,6 @@ export type NodeCapability =
   | "view-coordination"
   | "schema-mutation"
   | "spatial-data"
-  | "collection-read"
   | "gpu-device"
   | "wasm-bitmap"
   | "compute"

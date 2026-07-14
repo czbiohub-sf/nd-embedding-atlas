@@ -1,6 +1,5 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { CollectionsSheet } from "./components/collections/CollectionsSheet";
 import { DocsProvider } from "./components/docs/DocsProvider";
 import { NdSpecPage } from "./components/nd/NdSpecPage";
 import { Toaster } from "./components/ui/sonner";
@@ -46,7 +45,6 @@ export default function App({ nodeLibrary }: { nodeLibrary: AppNodeLibrary }) {
             <DocsProvider catalog={nodeLibrary.catalog}>
               <WorkspaceShell nodeLibrary={nodeLibrary} />
             </DocsProvider>
-            <CollectionsSheet />
             <Toaster position="bottom-right" />
           </DatasetSessionProvider>
         </TooltipProvider>

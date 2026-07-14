@@ -7,7 +7,7 @@
  *  - Any future container
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { RowIndex } from "@ndea/sdk";
 import { selectAnyTrajectory } from "@/core/session/dataset-session";
@@ -118,13 +118,8 @@ export function ScatterContent({
   const fitViewRef = useRef<(() => void) | null>(null);
 
   // ── Selection state (hoisted so overlayControls can read row indices) ──────
-  // `rowIndicesRef` is the panel-level mapping (every row in the panel,
-  // populated once on GPU init). `lassoRowIdsRef` is the *user lasso*
-  // subset — populated by useScatterBrushSync on each lasso readback.
-  // Save dialog reads the lasso subset, not the panel-level mapping.
+  // `rowIndicesRef` is the panel-level mapping populated once on GPU init.
   const rowIndicesRef = useRef<RowIndex[]>([]);
-  const lassoRowIdsRef = useRef<RowIndex[]>([]);
-  const getRowIndices = useCallback((): readonly RowIndex[] => lassoRowIdsRef.current, []);
   // `selectedCount` from useScatterUIState is null when no lasso, count otherwise.
   const { selectedCount } = useScatterUIState();
   const selectionCount = selectedCount ?? 0;
@@ -201,15 +196,11 @@ export function ScatterContent({
     categoryIndicesRef,
     fitViewRef,
     rowIndicesRef,
-    lassoRowIdsRef,
     onRowIndicesChange: (indices: RowIndex[]) => {
       rowIndicesRef.current = indices;
     },
   };
 
-  // selectionPath gates the inline-vs-temp-table strategy in the save flow.
-  // It now sizes against the lasso subset, not the panel-level total.
-  const selectionPath = selectionCount >= 5000 ? "temp_table" : "inline";
   const hasSelection = selectionCount > 0;
 
   const toolbar = effectiveAxes ? (
@@ -241,8 +232,6 @@ export function ScatterContent({
       onToggleTrajectory={onToggleTrajectory}
       hasSelection={hasSelection}
       selectionCount={selectionCount}
-      getRowIndices={getRowIndices}
-      selectionPath={selectionPath}
       onCreateCheckpoint={onCreateCheckpoint}
     />
   ) : null;

@@ -27,17 +27,6 @@ import {
 } from "./routes/scatter.ts";
 import { handleTrajectory } from "./routes/trajectory.ts";
 import { handleObsBatch, handleObsInfo, handleObsDetail, handleHealth } from "./routes/obs.ts";
-import {
-  handleListCollections,
-  handleCreateCollection,
-  handlePatchCollection,
-  handleDeleteCollection,
-  handleAddMembers,
-  handleExportCollection,
-  handleSetActiveSelection,
-  handleGetActiveSelectionRowIndices,
-  handleClearActiveSelection,
-} from "./routes/collections.ts";
 import { handleVarNames, handleVarLayers, handleVarColumn, handleVarColumnStatus } from "./routes/var.ts";
 import { handleCategorize } from "./routes/categorize.ts";
 import {
@@ -147,14 +136,6 @@ export function createApp(options: CreateAppOptions) {
   if (state.plateMounts.length > 0 && !state.cropPool) {
     state.cropPool = new CropPool(state.plateMounts);
   }
-
-  // Boot banner — lets the dev terminal show *exactly* which routes the
-  // running process has registered. If a `bun --hot` reload missed the new
-  // file, the missing route name in this list makes that obvious.
-  console.log(
-    `[ndea] createApp registered: /api/collections, /api/active-selection ` +
-      `(POST|GET row-indices|DELETE), /api/scatter-selection, ...other`,
-  );
 
   return Bun.serve<ServerSocketContext>({
     port: options.port,
@@ -370,39 +351,6 @@ function routeApi(
   const embLoadMatch = pathname.match(/^\/api\/embeddings\/(.+)$/);
   if (embLoadMatch && method === "POST") {
     return handleLoadEmbedding(decodeURIComponent(embLoadMatch[1]), state);
-  }
-
-  // ── Collections ─────────────────────────────────────────────────
-  if (pathname === "/api/collections") {
-    if (method === "GET") return handleListCollections(store);
-    if (method === "POST") return handleCreateCollection(req, store);
-  }
-
-  // Sub-resources need to match before the bare /api/collections/:id route.
-  const collectionMembersMatch = pathname.match(/^\/api\/collections\/([^/]+)\/members$/);
-  if (collectionMembersMatch && method === "POST") {
-    return handleAddMembers(decodeURIComponent(collectionMembersMatch[1]), req, store);
-  }
-
-  const collectionExportMatch = pathname.match(/^\/api\/collections\/([^/]+)\/export$/);
-  if (collectionExportMatch && method === "POST") {
-    return handleExportCollection(decodeURIComponent(collectionExportMatch[1]), req, store);
-  }
-
-  const collectionByIdMatch = pathname.match(/^\/api\/collections\/([^/]+)$/);
-  if (collectionByIdMatch) {
-    const id = decodeURIComponent(collectionByIdMatch[1]);
-    if (method === "PATCH") return handlePatchCollection(id, req, store);
-    if (method === "DELETE") return handleDeleteCollection(id, store);
-  }
-
-  // ── Active selection (token-scoped, generic for PR3 set algebra) ─
-  if (pathname === "/api/active-selection/row-indices" && method === "GET") {
-    return handleGetActiveSelectionRowIndices(store);
-  }
-  if (pathname === "/api/active-selection") {
-    if (method === "POST") return handleSetActiveSelection(req, store);
-    if (method === "DELETE") return handleClearActiveSelection(store);
   }
 
   // ── Var / Var column ────────────────────────────────────────────

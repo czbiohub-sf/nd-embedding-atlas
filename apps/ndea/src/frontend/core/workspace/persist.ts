@@ -19,7 +19,7 @@ import {
 import type { TreeNode } from "./stage/split-tree";
 import type { WorkspaceDocumentState } from "./types";
 
-export const DOC_VERSION = 5;
+export const DOC_VERSION = 6;
 
 const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
   z.union([
@@ -144,7 +144,7 @@ const persistedStateSchema = z
 const persistedDocSchema = z.object({ version: z.literal(DOC_VERSION), state: persistedStateSchema }).strict();
 
 export interface PersistedDoc {
-  version: 5;
+  version: 6;
   state: WorkspaceDocumentState;
 }
 
@@ -212,8 +212,6 @@ const LEGACY_NODE_REFS: Readonly<Record<string, ExactNodeTypeRef>> = Object.free
   histogram: exactNodeTypeRef("histogram", "1.0.0"),
   gallery: exactNodeTypeRef("gallery", "1.0.0"),
   "image-viewer": exactNodeTypeRef("image-viewer", "1.0.0"),
-  collection: exactNodeTypeRef("collection", "1.0.0"),
-  export: exactNodeTypeRef("export", "1.0.0"),
   cache: exactNodeTypeRef("cache", "1.0.0"),
   subnet: exactNodeTypeRef("subnet", "1.0.0"),
   proxy: exactNodeTypeRef("proxy", "1.0.0"),
@@ -232,8 +230,6 @@ const LEGACY_CONFIG_ADAPTERS: Record<string, LegacyConfigAdapter> = {
     ...(defaults as Record<string, JsonValue>),
     datasetKey: value.datasetKey ?? value.dataset ?? null,
   }),
-  "collection@1.0.0": mergeLegacyConfig,
-  "export@1.0.0": mergeLegacyConfig,
   "gallery@1.0.0": mergeLegacyConfig,
   "image-viewer@1.0.0": (value, defaults) => ({
     ...(defaults as Record<string, JsonValue>),
@@ -256,6 +252,7 @@ export function migrate(doc: unknown, nodeLibrary: AppNodeLibrary): PersistedDoc
   if (step.version === 2) step = migrateV2ToV3(step, nodeLibrary);
   if (step.version === 3) step = migrateV3ToV4(step, nodeLibrary);
   if (step.version === 4) step = migrateV4ToV5(step);
+  if (step.version === 5) step = migrateV5ToV6(step);
   return persistedDocSchema.parse(step) as unknown as PersistedDoc;
 }
 
@@ -354,6 +351,14 @@ function migrateV3ToV4(doc: LegacyDocument, nodeLibrary: AppNodeLibrary): Legacy
 }
 
 function migrateV4ToV5(doc: LegacyDocument): LegacyDocument {
+  return migrateRetiredInputPorts(doc, 5);
+}
+
+function migrateV5ToV6(doc: LegacyDocument): LegacyDocument {
+  return migrateRetiredInputPorts(doc, 6);
+}
+
+function migrateRetiredInputPorts(doc: LegacyDocument, version: number): LegacyDocument {
   const state = structuredClone(doc.state);
   const nodes = objectRecord(state.nodes);
   const edges = objectRecord(state.edges);
@@ -370,7 +375,7 @@ function migrateV4ToV5(doc: LegacyDocument): LegacyDocument {
       return [key, edge];
     }),
   );
-  return { version: 5, state };
+  return { version, state };
 }
 
 function normalizeLegacyConfig(ref: ExactNodeTypeRef, raw: unknown, nodeLibrary: AppNodeLibrary): NodeConfigSnapshot {

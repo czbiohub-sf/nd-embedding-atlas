@@ -6,7 +6,7 @@ import { externalSource, panelSource, sourceKey, sourcesEqual } from "./row-set-
 import { broadcastRowSet, clearRowSetSync, rowSetSyncStore } from "./row-set-sync-store";
 
 const PANEL_SOURCE = panelSource(panelId("panel-a"));
-const EXTERNAL_SOURCE = externalSource("collection-a");
+const EXTERNAL_SOURCE = externalSource("external-a");
 
 beforeEach(() => clearRowSetSync());
 afterEach(() => {
@@ -32,7 +32,7 @@ describe("row-set synchronization store", () => {
 
   test("keeps panel and external source identities distinct", () => {
     expect(sourceKey(PANEL_SOURCE)).toBe("p:panel-a");
-    expect(sourceKey(EXTERNAL_SOURCE)).toBe("e:collection-a");
+    expect(sourceKey(EXTERNAL_SOURCE)).toBe("e:external-a");
     expect(sourcesEqual(PANEL_SOURCE, panelSource(panelId("panel-a")))).toBeTrue();
     expect(sourcesEqual(PANEL_SOURCE, EXTERNAL_SOURCE)).toBeFalse();
   });

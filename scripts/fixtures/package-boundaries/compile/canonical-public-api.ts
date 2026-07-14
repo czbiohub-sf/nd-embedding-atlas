@@ -1,5 +1,5 @@
 import {
-  CollectionSchema,
+  AnnotationColumnBodySchema,
   EmbeddingStatusSchema,
   PluginManifestSchema,
   type CommitAnnotationsResponse,
@@ -32,7 +32,7 @@ import {
 } from "@ndea/zarr";
 
 export const canonicalRuntimeSurface = [
-  CollectionSchema,
+  AnnotationColumnBodySchema,
   EmbeddingStatusSchema,
   PluginManifestSchema,
   SDK_VERSION,

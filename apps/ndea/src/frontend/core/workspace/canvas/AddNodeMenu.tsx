@@ -44,7 +44,6 @@ type Group = (typeof GROUP_ORDER)[number];
 const SUBMENU: Partial<Record<Group, true>> = { Views: true };
 const CATEGORY: Partial<Record<string, Group>> = {
   dataset: "Data",
-  collection: "Data",
   wrangle: "Transform",
   count: "Transform",
   annotate: "Transform",

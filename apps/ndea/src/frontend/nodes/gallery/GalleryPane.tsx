@@ -2,8 +2,7 @@
  * GalleryPane — predicate-driven crop gallery for the ⌘J terminal drawer.
  *
  * Renders OME-Zarr crops for whatever observations the scatter is currently
- * filtered to (lasso ∩ active collection). Toggling a collection populates
- * the gallery the same way it filters the scatter today.
+ * filtered to by a wired row set.
  *
  * Reuses TrackGallery's lanes virtualization + blob-URL lifecycle pattern
  * (see TrackGallery.tsx:97-103, 51-74).
@@ -134,7 +133,7 @@ export function GalleryPane({ coordinator, predicate, focusedRowIndex, onSelect,
             {headerCount}
           </Badge>
         )}
-        {/* node-scoped: one wired input edge — not the global lasso/collection origin */}
+        {/* node-scoped: one wired input edge */}
         {sourceKind != null && <span className="text-3xs text-muted-foreground">· wired</span>}
         {truncated && (
           <span className="ml-auto font-mono text-3xs text-warning-hue/80">showing top {MAX_GALLERY_OBS}</span>
@@ -198,7 +197,7 @@ function EmptyState() {
       <SquareDashedMousePointer className="size-5 text-muted-foreground/40" />
       <div className="font-medium text-foreground/70 text-xs">No selection</div>
       <div className="max-w-[260px] text-muted-foreground/60 text-2xs leading-relaxed">
-        Lasso a region in the scatter or toggle a collection to populate the gallery.
+        Wire a row selection to populate the gallery.
       </div>
     </div>
   );

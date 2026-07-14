@@ -2,7 +2,6 @@ import type { ExactNodeTypeRef, NodeDefinition } from "@ndea/sdk";
 import { annotateNode } from "@/nodes/annotate/node";
 import { countPlotNode } from "@/nodes/charts/count-plot/node";
 import { histogramNode } from "@/nodes/charts/histogram/node";
-import { collectionNode } from "@/nodes/collection/node";
 import { galleryNode } from "@/nodes/gallery/node";
 import { imageViewerNode } from "@/nodes/image-viewer/node";
 import { scatterNode } from "@/nodes/scatter/node";
@@ -11,7 +10,6 @@ import { thresholdNode } from "@/nodes/transform-filter/node";
 import { cacheNode } from "@/nodes/utils/cache/node";
 import { countNode } from "@/nodes/utils/count/node";
 import { datasetNode } from "@/nodes/utils/dataset/node";
-import { exportNode } from "@/nodes/utils/export/node";
 import { obsNode } from "@/nodes/utils/obs/node";
 import { proxyNode } from "@/nodes/utils/proxy/node";
 import { subnetNode } from "@/nodes/utils/subnet/node";
@@ -35,8 +33,6 @@ export const NATIVE_NODE_CONTRIBUTIONS = Object.freeze([
   histogramNode,
   galleryNode,
   imageViewerNode,
-  collectionNode,
-  exportNode,
   cacheNode,
   subnetNode,
   proxyNode,

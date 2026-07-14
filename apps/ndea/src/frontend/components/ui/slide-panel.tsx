@@ -12,12 +12,11 @@ import { SheetClose, SheetContent, SheetTitle, Sheet as SheetRoot } from "./shee
 
 /**
  * SlidePanel — one floating-card panel primitive on the Base-UI Sheet, driven by
- * the panel registry (open/size/side, per-session). Collections (side=right) and
- * Table/Devtools (side=bottom) all render through it.
+ * panel registry (open/size/side, per-session).
  *
- *   <SlidePanel id="collections">
+ *   <SlidePanel id="table">
  *     <SlidePanel.Content>
- *       <SlidePanel.Header icon={Bookmark} title="Collections" />
+ *       <SlidePanel.Header title="Table" />
  *       <SlidePanel.Body>{…}</SlidePanel.Body>
  *     </SlidePanel.Content>
  *   </SlidePanel>

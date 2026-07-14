@@ -9,13 +9,12 @@
  *
  * Two zones in one row (docked wraps when narrow; header clips):
  *  left  → [⋰] bracket icon + embedding chip + X/Y dim + COL pickers
- *  right → selection tools + Collections + track/fit
+ *  right → selection tools + checkpoint + track/fit
  */
 
-import { Bookmark, BoxSelect, ChartScatter, LassoSelect, Snowflake, Waypoints } from "lucide-react";
+import { BoxSelect, ChartScatter, LassoSelect, Snowflake, Waypoints } from "lucide-react";
 import { useMemo } from "react";
 import { BracketIcon } from "@/components/ui/bracket-icon";
-import { useCollectionsSheet } from "@/components/collections/collections-sheet-store";
 
 /** Scan + Dot combined — "fit embedding to view" */
 function ScanDotIcon({ size = 12 }: { size?: number }) {
@@ -44,7 +43,6 @@ function ScanDotIcon({ size = 12 }: { size?: number }) {
 
 import type { ColorSource } from "@/lib/color/color-source";
 import { cn } from "@/lib/utils";
-import type { RowIndex } from "@ndea/sdk";
 import type { ColorMode } from "@/nodes/scatter/gpu/hooks/useMosaicScatterData";
 import type { AxisState } from "@/types";
 import { EmbeddingPicker } from "@/nodes/scatter/mudata/EmbeddingPicker";
@@ -88,12 +86,8 @@ interface Props {
   trajectoryActive?: boolean;
   onToggleTrajectory?: () => void;
 
-  // Collection save
   hasSelection: boolean;
   selectionCount: number;
-  /** Reads rowIndicesRef.current at call time — never stale */
-  getRowIndices: () => readonly RowIndex[];
-  selectionPath: "inline" | "temp_table";
   onCreateCheckpoint?: () => void;
 
   /** docked (default) = full-width row above the canvas;
@@ -146,12 +140,9 @@ export function ScatterToolbar({
   onToggleTrajectory,
   hasSelection,
   selectionCount,
-  getRowIndices,
-  selectionPath: _selectionPath,
   onCreateCheckpoint,
   variant = "docked",
 }: Props) {
-  const { openSheet } = useCollectionsSheet();
   const disabled = loadingKey !== null;
 
   // header variant: fit inside the 26px node/tile header — shorter controls,
@@ -328,28 +319,6 @@ export function ScatterToolbar({
             <LassoSelect className={icon} />
           </HoverTip>
         </ToggleGroup>
-
-        <HoverTip
-          label="Collections"
-          description={
-            hasSelection
-              ? `Open Collections — save ${selectionCount.toLocaleString()} obs or browse saved sets`
-              : "Open Collections — browse saved sets (lasso a region to save a new one)"
-          }
-          side="bottom"
-          render={
-            <button
-              type="button"
-              onClick={() =>
-                openSheet(hasSelection ? { selectionCount, getRowIndices } : null, { expandSave: hasSelection })
-              }
-              aria-label="Collections"
-              className={util}
-            />
-          }
-        >
-          <Bookmark className={icon} />
-        </HoverTip>
 
         {hasSelection && onCreateCheckpoint ? (
           <>

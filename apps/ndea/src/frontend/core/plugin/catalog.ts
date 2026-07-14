@@ -33,7 +33,6 @@ const NODE_CAPABILITIES: Record<NodeCapability, true> = {
   "view-coordination": true,
   "schema-mutation": true,
   "spatial-data": true,
-  "collection-read": true,
   "gpu-device": true,
   "wasm-bitmap": true,
   compute: true,

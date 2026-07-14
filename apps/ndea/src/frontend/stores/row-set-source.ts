@@ -5,8 +5,7 @@ import type { PanelId } from "../lib/branded-types";
  *
  *   { kind: "panel"; panelId }    — a real scatter panel originated this
  *                                   selection (lasso, marquee, etc.)
- *   { kind: "external"; id }      — a non-panel source (active collection,
- *                                   future programmatic sources)
+ *   { kind: "external"; id }      — a non-panel programmatic source
  *
  * Lives in its own file (not co-located with RowSetSyncStore) to avoid a
  * cycle: RoaringBroadcastStore needs the type to key its bitmap map, and

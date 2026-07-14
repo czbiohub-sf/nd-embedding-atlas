@@ -186,13 +186,9 @@ describe("Workspace graph transactions", () => {
 
   test("publishes a connection only after its evaluator projection is live", () => {
     const workspace = createWorkspace();
-    const collection = workspace.addNode("collection", { x: 0, y: 0 });
+    const dataset = workspace.addNode("dataset", { x: 0, y: 0 });
     const count = workspace.addNode("count", { x: 100, y: 0 });
-    workspace.updateNodeConfig(collection, {
-      collectionId: "keepers",
-      collectionName: "Keepers",
-      collectionVersion: 3,
-    });
+    workspace.updateNodeConfig(dataset, { datasetKey: "plate-a" });
 
     let predicateSeenByDocumentSubscriber: string | null | undefined;
     const subscription = workspace.store.subscribe(() => {
@@ -201,22 +197,18 @@ describe("Workspace graph transactions", () => {
       }
     });
 
-    expect(workspace.connect(collection, count)).toBe(true);
-    expect(predicateSeenByDocumentSubscriber).toContain("collection_id = 'keepers'");
+    expect(workspace.connect(dataset, count)).toBe(true);
+    expect(predicateSeenByDocumentSubscriber).toBe("_dataset = 'plate-a'");
     subscription.unsubscribe();
     workspace.dispose();
   });
 
   test("publishes an edge deletion only after evaluator disconnection", () => {
     const workspace = createWorkspace();
-    const collection = workspace.addNode("collection", { x: 0, y: 0 });
+    const dataset = workspace.addNode("dataset", { x: 0, y: 0 });
     const count = workspace.addNode("count", { x: 100, y: 0 });
-    workspace.updateNodeConfig(collection, {
-      collectionId: "keepers",
-      collectionName: "Keepers",
-      collectionVersion: 1,
-    });
-    expect(workspace.connect(collection, count)).toBe(true);
+    workspace.updateNodeConfig(dataset, { datasetKey: "plate-a" });
+    expect(workspace.connect(dataset, count)).toBe(true);
     const edgeId = Object.keys(workspace.store.state.edges)[0];
 
     let predicateSeenByDocumentSubscriber: string | null | undefined = "not-observed";
@@ -334,14 +326,10 @@ describe("Workspace graph transactions", () => {
 
   test("hydrates document topology once, after the evaluator projection is complete", () => {
     const source = createWorkspace();
-    const collection = source.addNode("collection", { x: 0, y: 0 });
+    const dataset = source.addNode("dataset", { x: 0, y: 0 });
     const count = source.addNode("count", { x: 100, y: 0 });
-    source.updateNodeConfig(collection, {
-      collectionId: "keepers",
-      collectionName: "Keepers",
-      collectionVersion: 2,
-    });
-    expect(source.connect(collection, count)).toBe(true);
+    source.updateNodeConfig(dataset, { datasetKey: "plate-a" });
+    expect(source.connect(dataset, count)).toBe(true);
 
     const destination = createWorkspace();
     let notifications = 0;
@@ -353,7 +341,7 @@ describe("Workspace graph transactions", () => {
 
     destination.loadDocument(source.store.state);
     expect(notifications).toBe(1);
-    expect(hydratedPredicate).toContain("collection_id = 'keepers'");
+    expect(hydratedPredicate).toBe("_dataset = 'plate-a'");
     subscription.unsubscribe();
     source.dispose();
     destination.dispose();

@@ -391,7 +391,6 @@ export function createAppNodeHost<Config, Facets extends object = object>(
       dependencies.availableCapabilities.has(capability) &&
       (capability === "schema-mutation" ||
         capability === "spatial-data" ||
-        capability === "collection-read" ||
         capability === "wasm-bitmap" ||
         capability === "compute")
     ) {

@@ -5,13 +5,6 @@ import {
   type AnnotationColumnsResponse,
   AnnotationPredicateWriteResponseSchema,
   type AnnotationPredicateWriteResponse,
-  CollectionExportConflictResponseSchema,
-  type CollectionExportConflictResponse,
-  CollectionExportResponseSchema,
-  type CollectionExportResponse,
-  CollectionListResponseSchema,
-  CollectionMutationResultSchema,
-  type CollectionMutationResult,
   CommitAnnotationsResponseSchema,
   CommitDatasetReportSchema,
   ConfigResponseSchema,
@@ -57,28 +50,6 @@ describe("shared route contracts", () => {
       embedding_key: null,
     } satisfies NdeaProtocol["export/start"]["req"];
     expect(ExportBodySchema.parse(request)).toEqual(request);
-  });
-
-  test("parses the collection-create method-map response", () => {
-    const response = {
-      result: {
-        collection_id: "f8b659e2-0d15-4edb-bec2-4d3caf78fcbe",
-        name: "T cells",
-        color: null,
-        notes: null,
-        tags: [],
-        provenance: null,
-        created_at: "2026-07-12T00:00:00.000Z",
-        updated_at: "2026-07-12T00:00:00.000Z",
-        created_count: 2,
-        current_count: 2,
-        drift: [{ dataset_key: "atlas", stored: 2, resolved: 2 }],
-        version: 1,
-      },
-      stats: { added: 2, already_member: 0, total: 2 },
-    } satisfies CollectionMutationResult;
-
-    expect(CollectionMutationResultSchema.parse(response)).toEqual(response);
   });
 });
 
@@ -139,21 +110,7 @@ describe("shared HTTP response DTOs", () => {
     expect("category" in TrajectoryResponseSchema.parse(raw)[0]).toBe(false);
   });
 
-  test("preserves collection, annotation, and export raw shapes", () => {
-    const collection = {
-      collection_id: "f8b659e2-0d15-4edb-bec2-4d3caf78fcbe",
-      name: "T cells",
-      color: null,
-      notes: null,
-      tags: ["reviewed"],
-      provenance: null,
-      created_at: "2026-07-12T00:00:00.000Z",
-      updated_at: "2026-07-12T00:00:00.000Z",
-      created_count: 2,
-      current_count: 2,
-      drift: [{ dataset_key: "atlas", stored: 2, resolved: 2 }],
-      version: 1,
-    };
+  test("preserves annotation and export raw shapes", () => {
     const annotationColumns = {
       columns: [
         { name: "cell_type", dtype: "categorical" },
@@ -162,24 +119,9 @@ describe("shared HTTP response DTOs", () => {
     } satisfies AnnotationColumnsResponse;
     const annotationWrite = { ok: true, n: 12 } satisfies AnnotationPredicateWriteResponse;
     const exportDir = { default_dir: "/tmp/exports", writable: true };
-    const exported = {
-      output_path: "/tmp/exports/t_cells.parquet",
-      n_obs: 2,
-      size_bytes: 4096,
-      format: "parquet",
-    } satisfies CollectionExportResponse;
-    const conflict = {
-      error: "File exists",
-      existing_path: "/tmp/exports/t_cells.parquet",
-      existing_size_bytes: 4096,
-    } satisfies CollectionExportConflictResponse;
-
-    expect(CollectionListResponseSchema.parse([collection])).toEqual([collection]);
     expect(AnnotationColumnsResponseSchema.parse(annotationColumns)).toEqual(annotationColumns);
     expect(AnnotationPredicateWriteResponseSchema.parse(annotationWrite)).toEqual(annotationWrite);
     expect(ExportDirectoryResponseSchema.parse(exportDir)).toEqual(exportDir);
-    expect(CollectionExportResponseSchema.parse(exported)).toEqual(exported);
-    expect(CollectionExportConflictResponseSchema.parse(conflict)).toEqual(conflict);
   });
 
   test("preserves var and selection responses", () => {
@@ -210,11 +152,9 @@ describe("shared HTTP response DTOs", () => {
       MetadataSchema.safeParse({ database: { type: "rest" }, obsm: {} }),
       ConfigResponseSchema.safeParse({ datasets: {}, obsColumns: "cell_type" }),
       TrajectoryResponseSchema.safeParse([{ t: 0, emb_x: "1", emb_y: 2, spatial_x: 3, spatial_y: 4 }]),
-      CollectionListResponseSchema.safeParse([{ collection_id: "missing-fields" }]),
       AnnotationColumnsResponseSchema.safeParse({ columns: [{ name: "score", dtype: "number" }] }),
       AnnotationPredicateWriteResponseSchema.safeParse({ ok: true }),
       ExportDirectoryResponseSchema.safeParse({ default_dir: "/tmp" }),
-      CollectionExportResponseSchema.safeParse({ output_path: "/tmp/x", n_obs: 1, size_bytes: -1, format: "csv" }),
       VarNamesResponseSchema.safeParse({ names: [42] }),
       VarLayersResponseSchema.safeParse({ layers: "X" }),
       VarColumnResponseSchema.safeParse({ task_id: "x" }),

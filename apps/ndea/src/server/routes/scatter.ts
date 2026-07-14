@@ -319,8 +319,8 @@ export async function handleScatterSelectionDelete(store: DatasetQuerySession): 
 // ─── Per-instance scatter selection (PLUGIN-ARCHITECTURE §6.5) ─────────────────
 // Each plugin instance gets its own `sel_<instanceId>` temp table so two
 // selection-out plugins on the one shared DuckDB connection cannot clobber each
-// other. The legacy fixed `__scatter_selection` (above) stays for the host-less
-// floating scatter and the collections "save from selection" two-step.
+// other. The fixed `__scatter_selection` (above) stays for host-less floating
+// scatter and annotation workflows.
 
 /**
  * Validate a per-instance selection id and map it to a safe SQL table identifier.

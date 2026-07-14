@@ -482,8 +482,8 @@ export class Workspace {
    *
    * Engine-only runtime state that `WorkspaceDocumentState` doesn't carry is re-derived where it
    * can be (`bypass` from `flags`) and otherwise left to re-establish at the body
-   * layer: a wrangle recompiles its `prql` → predicate on mount, a collection node
-   * rebinds from its `config`. A cache node's checkpoint pin is NOT persisted,
+   * layer: a wrangle recompiles its `prql` → predicate on mount. A cache node's
+   * checkpoint pin is NOT persisted,
    * so a loaded cache restarts live (passing its input through) even if
    * it was pinned when saved — a graceful degradation, never a corrupt-state load.
    *

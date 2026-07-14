@@ -1,7 +1,5 @@
 /**
- * Panel registry — one in-memory store for all floating SlidePanels (Collections,
- * Table, Devtools). Generalizes the open/size logic that used to be duplicated
- * across TerminalTableProvider + CollectionsSheetProvider + DevtoolsDrawer.
+ * Panel registry — one in-memory store for all floating SlidePanels.
  *
  * Per-session only (no localStorage) — panel open/size reset on reload, by design.
  *
@@ -27,7 +25,6 @@ type RegistryState = Record<string, PanelState>;
 
 /** Pre-registered panels. Add new floating panels here. */
 export const panelStore = new Store<RegistryState>({
-  collections: { open: false, size: 360, side: "right", minSize: 300, maxSize: 560 },
   table: { open: false, size: 300, side: "bottom", minSize: 140, maxSize: 900 },
   devtools: { open: false, size: 380, side: "bottom", minSize: 200, maxSize: 900 },
 });

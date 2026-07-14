@@ -22,13 +22,6 @@ function buildInlineSelectionPredicate(rowIds: readonly RowIndex[]): string | nu
 export interface UseScatterBrushSyncOptions {
   rowIndicesRef: RefObject<RowIndex[]>;
   setSelection: (n: number | null) => void;
-  /**
-   * Optional out-ref that receives the *lasso* row IDs (mapped from GPU
-   * buffer indices to app-level row indices). Used by the save-collection
-   * sheet — `rowIndicesRef` is the panel-level mapping (all rows), this is
-   * the actual user selection.
-   */
-  lassoRowIdsRef?: RefObject<RowIndex[]>;
 }
 
 export interface UseScatterBrushSyncResult {
@@ -39,7 +32,6 @@ export interface UseScatterBrushSyncResult {
 export function useScatterBrushSync({
   rowIndicesRef,
   setSelection,
-  lassoRowIdsRef,
 }: UseScatterBrushSyncOptions): UseScatterBrushSyncResult {
   // Selection-out routes through host.* (the bus is the sole crossfilter writer,
   // §6.3/§6.7). Read via a ref so the throttler/debouncer closures see the host.
@@ -101,7 +93,6 @@ export function useScatterBrushSync({
       .map((pointIndex) => rowIndicesRef.current[pointIndex])
       .filter((value): value is RowIndex => value != null);
     setSelection(rowIds.length > 0 ? rowIds.length : null); // status bar — immediate
-    if (lassoRowIdsRef) lassoRowIdsRef.current = rowIds;
 
     if (rowIds.length === 0) {
       // Clear is time-sensitive — cancel both and update right away

@@ -7,21 +7,6 @@
  *   - Binary-blob header schemas (scatter endpoints)
  *   - WebSocket method map (future migration)
  *
- * # Threat model (v1)
- *
- * ndea today is a single-user local tool — collection authors are trusted,
- * the only client is the same process tree that owns the data. The
- * `CollectionNameSchema` / `TagSchema` regex below excludes control chars,
- * the HTML metas `<>&`, and Unicode bidi overrides `‪-‮` as
- * defense-in-depth. JSX escapes them at render today, but disallowing
- * them here means a future markdown / dangerouslySetInnerHTML pass cannot
- * silently turn these strings into a script vector without also widening
- * this schema.
- *
- * **Re-run security review** when any of these change:
- *   1. collections become shareable between users / sessions
- *   2. a sync/import path accepts collections from disk or network
- *   3. notes/provenance render as anything other than escaped text
  */
 
 import { z } from "zod";
@@ -199,23 +184,6 @@ export const ExportDirectoryResponseSchema = z.object({
   writable: z.boolean(),
 });
 export type ExportDirectoryResponse = z.infer<typeof ExportDirectoryResponseSchema>;
-
-/** Successful POST /api/collections/:id/export response. */
-export const CollectionExportResponseSchema = z.object({
-  output_path: z.string(),
-  n_obs: NonNegativeInt,
-  size_bytes: NonNegativeInt,
-  format: z.enum(["csv", "parquet"]),
-});
-export type CollectionExportResponse = z.infer<typeof CollectionExportResponseSchema>;
-
-/** File-exists POST /api/collections/:id/export response. */
-export const CollectionExportConflictResponseSchema = z.object({
-  error: z.literal("File exists"),
-  existing_path: z.string(),
-  existing_size_bytes: NonNegativeInt,
-});
-export type CollectionExportConflictResponse = z.infer<typeof CollectionExportConflictResponseSchema>;
 
 /** GET /api/var/names response. */
 export const VarNamesResponseSchema = z.object({
@@ -411,202 +379,6 @@ export type TrajectoryFrame = z.infer<typeof TrajectoryFrameSchema>;
 export const TrajectoryResponseSchema = z.array(TrajectoryFrameSchema);
 export type TrajectoryResponse = z.infer<typeof TrajectoryResponseSchema>;
 
-// ─── Collections ─────────────────────────────────────────────────────────────
-//
-// Replaces the earlier row-group prototype. The schema adds tags (many-to-many),
-// notes, optional provenance JSON (only set for derived collections),
-// soft-delete + version (optimistic concurrency), and per-dataset drift
-// breakdown in the list response.
-
-/**
- * Trust-safe string regex: rejects control chars (\x00–\x1F, \x7F),
- * HTML metas (`<>&`), and Unicode bidi overrides (\u202A–\u202E).
- *
- * See the file header for the threat model + re-review triggers.
- */
-// oxlint-disable-next-line no-control-regex -- intentional: this regex's job is to reject control chars + HTML metas + bidi overrides as render-safety defense.
-const TRUST_SAFE_RE = /^[^\u0000-\u001f\u007f<>&\u202a-\u202e]+$/;
-
-/**
- * CollectionNameSchema — shared primitive used by the wire body schemas
- * AND by frontend Field validation (re-export).
- *
- * 1..200 chars, trust-safe regex. Add stricter client-only rules in the
- * frontend by composing on top, not by widening this base.
- */
-export const CollectionNameSchema = z.string().min(1).max(200).regex(TRUST_SAFE_RE, "Invalid character in name");
-
-/** Tag — short, trust-safe regex, capped to keep sidecar small. */
-const TagSchema = z.string().min(1).max(64).regex(TRUST_SAFE_RE, "Invalid character in tag");
-
-/** Member identity: durable obs_name within a dataset_key. */
-export const CollectionMemberSchema = z.object({
-  dataset_key: z.string().min(1).max(256),
-  obs_name: z.string().min(1).max(512),
-});
-export type CollectionMember = z.infer<typeof CollectionMemberSchema>;
-
-/**
- * Members source — one of these three discriminators, shared by
- * CreateCollectionBodySchema (Create) and AppendMembersBodySchema (Append).
- *
- * Refined separately on each consuming schema since the .refine error
- * doesn't compose cleanly when split across .merge / .extend.
- */
-const MembersSourceFields = {
-  members: z.array(CollectionMemberSchema).max(2_000_000).optional(),
-  row_indices: z.array(NonNegativeInt).max(2_000_000).optional(),
-  /**
-   * Read members from the existing `__scatter_selection` temp table —
-   * tiny request body, server already has the indices in memory. Frontend
-   * should POST `/api/scatter-selection` first to populate it.
-   */
-  from_scatter_selection: z.boolean().optional(),
-} as const;
-
-const MEMBERS_SOURCE_REFINE = "One of `members`, `row_indices`, or `from_scatter_selection: true` is required";
-const hasMembersSource = (b: {
-  members?: unknown[] | undefined;
-  row_indices?: unknown[] | undefined;
-  from_scatter_selection?: boolean | undefined;
-}) =>
-  (b.members != null && b.members.length > 0) ||
-  (b.row_indices != null && b.row_indices.length > 0) ||
-  b.from_scatter_selection === true;
-
-/** POST /api/collections — create a new collection. */
-export const CreateCollectionBodySchema = z
-  .object({
-    name: CollectionNameSchema,
-    color: z.string().nullable().optional(),
-    notes: z.string().max(4096).nullable().optional(),
-    tags: z.array(TagSchema).max(32).default([]),
-    ...MembersSourceFields,
-    /** Optional structured recipe; only meaningful for derived sets. */
-    provenance: z.unknown().optional(),
-  })
-  .refine(hasMembersSource, MEMBERS_SOURCE_REFINE);
-export type CreateCollectionBody = z.infer<typeof CreateCollectionBodySchema>;
-
-/**
- * POST /api/collections/:id/members — append members to an existing collection.
- *
- * Distinct from CreateCollectionBodySchema: no `name` (the collection
- * already exists), no `color`/`notes`/`tags` (those go through PATCH).
- * The append handler previously reused the create schema, which is why
- * older `useAddMembers` call sites had to pass `{name: "ignored"}` —
- * fixed by this split.
- */
-export const AppendMembersBodySchema = z
-  .object({
-    ...MembersSourceFields,
-  })
-  .refine(hasMembersSource, MEMBERS_SOURCE_REFINE);
-export type AppendMembersBody = z.infer<typeof AppendMembersBodySchema>;
-
-/**
- * CollectionMutationResult — envelope returned by Create + Append.
- *
- * Contains the resulting collection plus dedupe accounting:
- *   - added:          new rows actually inserted
- *   - already_member: input rows that collided with existing PK
- *   - total:          sum (== input row count)
- *
- * Frontend uses these for the save toast: "Saved · 1,240 added, 87 already
- * in collection". PR3 set algebra returns a different envelope shape
- * (multiple collections, different stats) — name this one `Member*` so
- * `Set*` is free for that.
- */
-export const MemberMutationStatsSchema = z.object({
-  added: z.number().int().nonnegative(),
-  already_member: z.number().int().nonnegative(),
-  total: z.number().int().nonnegative(),
-});
-export type MemberMutationStats = z.infer<typeof MemberMutationStatsSchema>;
-
-/** PATCH /api/collections/:id — partial update with optimistic concurrency. */
-export const PatchCollectionBodySchema = z.object({
-  name: CollectionNameSchema.optional(),
-  color: z.string().nullable().optional(),
-  notes: z.string().max(4096).nullable().optional(),
-  tags: z.array(TagSchema).max(32).optional(),
-  /** Required — server rejects with 409 on mismatch. */
-  version: z.number().int().nonnegative(),
-});
-export type PatchCollectionBody = z.infer<typeof PatchCollectionBodySchema>;
-
-/**
- * POST /api/active-selection — set the active set composition.
- *
- * Today: `{collection_ids: [id]}` with one element. PR3 generalises to
- * `{ops: [{op:"union"|"intersect"|"subtract", id:"..."}, ...]}` for set
- * algebra without changing the route or response shape.
- *
- * The empty `collection_ids: []` body clears the active selection (same as
- * DELETE /api/active-selection).
- */
-export const SetActiveSelectionBodySchema = z.object({
-  collection_ids: z.array(z.uuid()).max(32),
-});
-export type SetActiveSelectionBody = z.infer<typeof SetActiveSelectionBodySchema>;
-
-/**
- * Response from POST /api/active-selection.
- *
- * Contract is intentionally generic so PR3 multi-active set algebra fits
- * without a schema break. `token` rides in the predicate as an inline SQL
- * comment so Mosaic's SQL-text query cache busts on each set change
- * without needing a per-activation temp-table name.
- */
-export const ActiveSelectionResponseSchema = z.object({
-  token: z.string(),
-  predicate: z.string(),
-  resolved_count: z.number().int().nonnegative(),
-  version: z.number().int().nonnegative(),
-});
-export type ActiveSelectionResponse = z.infer<typeof ActiveSelectionResponseSchema>;
-
-/** Per-dataset drift breakdown surfaced in list responses. */
-export const CollectionDriftSchema = z.object({
-  dataset_key: z.string(),
-  stored: z.number().int().nonnegative(),
-  resolved: z.number().int().nonnegative(),
-});
-export type CollectionDrift = z.infer<typeof CollectionDriftSchema>;
-
-/** GET /api/collections — list response row. */
-export const CollectionSchema = z.object({
-  collection_id: z.string(),
-  name: z.string(),
-  color: z.string().nullable(),
-  notes: z.string().nullable(),
-  tags: z.array(z.string()),
-  provenance: z.unknown().nullable(),
-  created_at: z.string(),
-  updated_at: z.string(),
-  created_count: z.number().int().nonnegative(),
-  current_count: z.number().int().nonnegative(),
-  drift: z.array(CollectionDriftSchema),
-  version: z.number().int().nonnegative(),
-});
-export type Collection = z.infer<typeof CollectionSchema>;
-export const CollectionListResponseSchema = z.array(CollectionSchema);
-export type CollectionListResponse = z.infer<typeof CollectionListResponseSchema>;
-
-/**
- * Envelope returned by POST /api/collections and POST /api/collections/:id/members.
- *
- * `result` carries the full Collection (post-mutation), `stats` carries
- * dedupe accounting. PR3 will introduce a sibling envelope for set-algebra
- * mutations (compose/derive) with a different `result` shape; this type
- * name reserves "Member*" for the member-mutation case.
- */
-export const CollectionMutationResultSchema = z.object({
-  result: CollectionSchema,
-  stats: MemberMutationStatsSchema,
-});
-export type CollectionMutationResult = z.infer<typeof CollectionMutationResultSchema>;
-
 // ─── Binary-blob header schemas (scatter endpoints) ─────────────────────────
 
 /**
@@ -737,7 +509,6 @@ export type AnnotationValueRow = z.infer<typeof AnnotationValueRowSchema>;
  * POST /api/annotations/values — write values into an annotation column.
  * Exactly one source:
  *   - `rows`               explicit row-index list (per-cell edits)
- *   - `collectionId`       promote a saved collection (label = collection name)
  *   - `fromScatterSelection` stamp the staged `__scatter_selection` (lasso) —
  *                          the client POSTs row indices to /api/scatter-selection
  *                          first, then the server resolves obs identity by JOIN.
@@ -747,7 +518,6 @@ export type AnnotationValueRow = z.infer<typeof AnnotationValueRowSchema>;
 export const WriteAnnotationValuesBodySchema = z.object({
   column: z.string().min(1).max(200).regex(COLUMN_NAME_RE, "Invalid character in column name"),
   rows: z.array(AnnotationValueRowSchema).max(2_000_000).optional(),
-  collectionId: z.string().optional(),
   fromScatterSelection: z.boolean().optional(),
   /**
    * Stamp `label` onto every obs matching this SQL predicate. Trust model =
@@ -755,16 +525,15 @@ export const WriteAnnotationValuesBodySchema = z.object({
    * WHERE-fragment is interpolated server-side against the `dataset` VIEW.
    */
   predicate: z.string().min(1).optional(),
-  /** Label applied to a collectionId promotion (defaults to collection name) or a selection/predicate stamp. */
+  /** Label applied to a selection or predicate stamp. */
   label: z.string().min(1).max(200).optional(),
 });
 export type WriteAnnotationValuesBody = z.infer<typeof WriteAnnotationValuesBodySchema>;
 
-/** Row scope for the annotation export: all obs, the active filter, or a collection. */
+/** Row scope for the annotation export: all obs or the active filter. */
 export const ExportScopeSchema = z.union([
   z.object({ kind: z.literal("all") }),
   z.object({ kind: z.literal("filter"), predicate: z.string().min(1) }),
-  z.object({ kind: z.literal("collection"), collectionId: z.string().min(1) }),
 ]);
 export type ExportScope = z.infer<typeof ExportScopeSchema>;
 

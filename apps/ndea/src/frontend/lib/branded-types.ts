@@ -20,7 +20,3 @@ export const observationName = (value: string): ObservationName => value as Obse
 /** Stable hash of viewer channel state for React Query cache keys. */
 export type ChannelHash = string & { readonly __brand: "ChannelHash" };
 export const channelHash = (s: string): ChannelHash => s as ChannelHash;
-
-/** Collection identifier — branded to prevent accidental mixing with other string IDs. */
-export type CollectionId = string & { readonly __brand: "CollectionId" };
-export const collectionId = (s: string): CollectionId => s as CollectionId;

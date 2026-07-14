@@ -1,6 +1,6 @@
 /**
  * Shared export helpers — one home for the export directory + filename
- * sanitiser that the export / collections / annotations paths all need.
+ * sanitiser shared by export and annotation paths.
  */
 
 import { homedir } from "node:os";

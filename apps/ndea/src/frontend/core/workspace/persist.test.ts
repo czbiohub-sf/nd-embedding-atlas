@@ -59,7 +59,7 @@ function legacyV2(type: string, config?: unknown) {
 }
 
 describe("workspace v5 document schema", () => {
-  test("serializes the canonical v5 runtime boundary", () => {
+  test("serializes the canonical v6 runtime boundary", () => {
     const state = emptyState();
     state.nodes.n1 = {
       id: "n1",
@@ -75,11 +75,11 @@ describe("workspace v5 document schema", () => {
   });
 
   test("strict validation rejects copied provenance and legacy editor fields", () => {
-    const document = toPersistedDoc(emptyState()) as unknown as { version: 5; state: Record<string, unknown> };
+    const document = toPersistedDoc(emptyState()) as unknown as { version: 6; state: Record<string, unknown> };
     document.state.selection = null;
     expect(validateDoc(document, library).ok).toBe(false);
 
-    const withNode = toPersistedDoc(emptyState()) as unknown as { version: 5; state: Record<string, unknown> };
+    const withNode = toPersistedDoc(emptyState()) as unknown as { version: 6; state: Record<string, unknown> };
     withNode.state.nodes = {
       n1: {
         id: "n1",
@@ -92,7 +92,7 @@ describe("workspace v5 document schema", () => {
   });
 
   test("rejects malformed numeric focus indices", () => {
-    const document = toPersistedDoc(emptyState()) as unknown as { version: 5; state: Record<string, unknown> };
+    const document = toPersistedDoc(emptyState()) as unknown as { version: 6; state: Record<string, unknown> };
     document.state.coordinationSpace = { focus: { A: "8" } };
     expect(validateDoc(document, library).ok).toBe(false);
   });
@@ -146,8 +146,6 @@ describe("pure step migrations", () => {
     ["histogram", exactNodeTypeRef("histogram", "1.0.0")],
     ["gallery", exactNodeTypeRef("gallery", "1.0.0")],
     ["image-viewer", exactNodeTypeRef("image-viewer", "1.0.0")],
-    ["collection", exactNodeTypeRef("collection", "1.0.0")],
-    ["export", exactNodeTypeRef("export", "1.0.0")],
     ["cache", exactNodeTypeRef("cache", "1.0.0")],
     ["subnet", exactNodeTypeRef("subnet", "1.0.0")],
     ["proxy", exactNodeTypeRef("proxy", "1.0.0")],
@@ -193,7 +191,6 @@ describe("pure step migrations", () => {
 
   test.each([
     ["dataset", {}, { datasetKey: null }],
-    ["collection", { collectionId: "saved" }, { collectionId: "saved", collectionName: null, collectionVersion: null }],
     ["image-viewer", {}, { datasetKey: null }],
   ])("normalizes legacy %s config against complete defaults", (nodeTypeId, config, expected) => {
     const migrated = migrate(legacyV2(nodeTypeId, config), library);
