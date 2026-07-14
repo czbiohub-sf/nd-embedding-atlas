@@ -19,7 +19,7 @@ import {
 import type { TreeNode } from "./stage/split-tree";
 import type { WorkspaceDocumentState } from "./types";
 
-export const DOC_VERSION = 4;
+export const DOC_VERSION = 5;
 
 const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
   z.union([
@@ -144,7 +144,7 @@ const persistedStateSchema = z
 const persistedDocSchema = z.object({ version: z.literal(DOC_VERSION), state: persistedStateSchema }).strict();
 
 export interface PersistedDoc {
-  version: 4;
+  version: 5;
   state: WorkspaceDocumentState;
 }
 
@@ -219,6 +219,7 @@ const LEGACY_NODE_REFS: Readonly<Record<string, ExactNodeTypeRef>> = Object.free
   proxy: exactNodeTypeRef("proxy", "1.0.0"),
 });
 const RETIRED_INPUT_PORTS: Record<string, string> = {
+  "image-viewer@1.0.0:in": "focus-in",
   "image-viewer@1.0.0:highlight-in": "focus-in",
 };
 
@@ -254,6 +255,7 @@ export function migrate(doc: unknown, nodeLibrary: AppNodeLibrary): PersistedDoc
   if (step.version === 1) step = migrateV1ToV2(step);
   if (step.version === 2) step = migrateV2ToV3(step, nodeLibrary);
   if (step.version === 3) step = migrateV3ToV4(step, nodeLibrary);
+  if (step.version === 4) step = migrateV4ToV5(step);
   return persistedDocSchema.parse(step) as unknown as PersistedDoc;
 }
 
@@ -349,6 +351,26 @@ function migrateV3ToV4(doc: LegacyDocument, nodeLibrary: AppNodeLibrary): Legacy
   );
   state.nodeAssets = [];
   return { version: 4, state };
+}
+
+function migrateV4ToV5(doc: LegacyDocument): LegacyDocument {
+  const state = structuredClone(doc.state);
+  const nodes = objectRecord(state.nodes);
+  const edges = objectRecord(state.edges);
+  state.edges = Object.fromEntries(
+    Object.entries(edges).map(([key, rawEdge]) => {
+      const edge = { ...objectRecord(rawEdge) };
+      if (typeof edge.to !== "string" || typeof edge.toPort !== "string") return [key, edge];
+      const target = nodes[edge.to];
+      if (!isPlainObject(target)) return [key, edge];
+      const parsedRef = exactRefSchema.safeParse(target.definitionRef);
+      if (!parsedRef.success) return [key, edge];
+      const ref = exactNodeTypeRef(parsedRef.data.nodeTypeId, parsedRef.data.nodeTypeVersion);
+      edge.toPort = RETIRED_INPUT_PORTS[`${refKey(ref)}:${edge.toPort}`] ?? edge.toPort;
+      return [key, edge];
+    }),
+  );
+  return { version: 5, state };
 }
 
 function normalizeLegacyConfig(ref: ExactNodeTypeRef, raw: unknown, nodeLibrary: AppNodeLibrary): NodeConfigSnapshot {

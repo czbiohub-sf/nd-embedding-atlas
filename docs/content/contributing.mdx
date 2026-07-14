@@ -29,6 +29,15 @@ vp run dev path/to/data.zarr
 ```
 
 The command starts `apps/ndea/src/cli/index.ts` and the app's Vite server.
+Development enables the node editor and persists each dataset's graph in
+browser storage. Production builds compile the editor out, ignore stored
+graphs, and open the fixed `--preset` layout (`annotate` by default).
+
+To test an editor-enabled production bundle explicitly:
+
+```bash
+VITE_NDEA_NODE_EDITOR=true vp run build
+```
 
 Frontend-only when the backend already runs separately:
 
@@ -77,6 +86,10 @@ Enforced by `vp check`:
 - **[Oxlint](https://oxc.rs/docs/guide/usage/linter.html)** + **[Oxfmt](https://oxc.rs/docs/guide/usage/formatter.html)** — config in `vite.config.ts` `lint` / `fmt` blocks
 - 4-space indent, double quotes, trailing commas, semicolons
 - `@/` path alias → `apps/ndea/src/frontend/`
+- Kebab-case ordinary modules, PascalCase React component modules, and `useX` hook modules. Oxlint enforces these
+  filename shapes; review enforces each file's semantic role.
+- Shared packages use canonical `@ndea/*` barrels. `bun run check:boundaries` compiles positive and expected-failure
+  fixtures and rejects deep imports, package-to-app imports, reverse Workspace dependencies, and React in the SDK.
 
 ## Project structure
 
@@ -85,6 +98,7 @@ apps/ndea/         # CLI, server, frontend, and binary builder
 packages/protocol/ # Shared Zod request and response schemas
 packages/sdk/      # Node authoring and host contracts
 packages/zarr/     # Bun-backed AnnData, MuData, and OME-Zarr I/O
+examples/plugins/  # Public-SDK custom-node author examples
 docs/              # Independent Waku app and lockfile
 ```
 

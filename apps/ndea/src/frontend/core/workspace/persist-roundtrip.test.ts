@@ -81,6 +81,44 @@ function legacyV2() {
 }
 
 describe("WorkspaceStorage recovery contract", () => {
+  test("migrates the retired Image Viewer input port before topology validation", () => {
+    const state = emptyState();
+    state.nodes.table = {
+      id: "table",
+      definitionRef: exactNodeTypeRef("table", "1.0.0"),
+      label: "Table",
+    };
+    state.nodes.viewer = {
+      id: "viewer",
+      definitionRef: exactNodeTypeRef("image-viewer", "1.0.0"),
+      label: "Image Viewer",
+    };
+    state.edges.e5 = {
+      id: "e5",
+      from: "table",
+      fromPort: "out",
+      to: "viewer",
+      toPort: "in",
+      kind: "focus",
+    };
+    const legacy = structuredClone(toPersistedDoc(state)) as unknown as {
+      version: number;
+      state: WorkspaceDocumentState;
+    };
+    legacy.version = 4;
+    const raw = JSON.stringify(legacy);
+    const storage = new MemoryStorage({ active: raw });
+
+    const loaded = loadFromStorage(storage, "active", library);
+
+    expect(loaded).toMatchObject({
+      kind: "ok",
+      state: { edges: { e5: { toPort: "focus-in" } } },
+    });
+    expect(storage.bytes["active.backup.v4"]).toBe(raw);
+    expect(JSON.parse(storage.bytes.active).version).toBe(5);
+  });
+
   test("migrates v3 edges to explicit exact output ports and preserves the verified backup", () => {
     const state = emptyState();
     state.nodes.dataset = {
@@ -119,7 +157,7 @@ describe("WorkspaceStorage recovery contract", () => {
     if (!datasetOutput) throw new Error("dataset output unavailable");
     expect(loaded.state.edges.e1?.fromPort).toBe(datasetOutput);
     expect(storage.bytes["active.backup.v3"]).toBe(raw);
-    expect(JSON.parse(storage.bytes.active).version).toBe(4);
+    expect(JSON.parse(storage.bytes.active).version).toBe(5);
   });
 
   test("multiple session keys never cross-read or cross-write", () => {
@@ -184,7 +222,7 @@ describe("WorkspaceStorage recovery contract", () => {
     expect(storage.writes).toEqual(["active.backup.v2", "active"]);
     expect(storage.bytes["active.backup.v2"]).toBe(raw);
     expect(JSON.parse(storage.bytes.active)).toMatchObject({
-      version: 4,
+      version: 5,
       state: {
         selectedNodeId: "dataset",
         selectedNodeIds: ["dataset"],

@@ -62,8 +62,8 @@ describe("workspace recovery policy", () => {
     });
   });
 
-  test("recovery exposes no disposition, config, or topology mutation surface", () => {
-    expect(workspaceSurfacePolicy("recovery")).toEqual({
+  test("surface policy separates recovery, authoring, and fixed-preset builds", () => {
+    expect(workspaceSurfacePolicy("recovery", true)).toEqual({
       recoveryOnly: true,
       mountStage: false,
       mountCanvas: false,
@@ -71,13 +71,21 @@ describe("workspace recovery policy", () => {
       mountBodies: false,
       installAuthoringListeners: false,
     });
-    expect(workspaceSurfacePolicy("writable")).toEqual({
+    expect(workspaceSurfacePolicy("writable", true)).toEqual({
       recoveryOnly: false,
       mountStage: true,
       mountCanvas: true,
       mountStatusBar: true,
       mountBodies: true,
       installAuthoringListeners: true,
+    });
+    expect(workspaceSurfacePolicy("writable", false)).toEqual({
+      recoveryOnly: false,
+      mountStage: true,
+      mountCanvas: false,
+      mountStatusBar: true,
+      mountBodies: true,
+      installAuthoringListeners: false,
     });
   });
 

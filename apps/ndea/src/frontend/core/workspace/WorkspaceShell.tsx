@@ -16,7 +16,8 @@ import { NdIconButton } from "@/components/nd/nd-icon-button";
 import { PanelBottom, PanelBottomClose, Workflow } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
-import { useDashboard } from "@/hooks/useDashboard";
+import { NODE_EDITOR_ENABLED } from "@/feature-flags";
+import { useDatasetSession } from "@/hooks/useDatasetSession";
 import { BodySocket, HeaderSocket, WorkspaceBodies } from "./body-dock";
 import { WorkspaceCanvas } from "./canvas/WorkspaceCanvas";
 import { ND_TIMING } from "./constants";
@@ -115,7 +116,7 @@ function FullscreenOverlay() {
 /* ── status bar ──────────────────────────────────────────────────── */
 function StatusBar() {
   const ws = useWorkspace();
-  const { meta } = useDashboard();
+  const { runtime } = useDatasetSession();
   const epoch = useTelemetrySelector((t) => t.epoch);
   const cookingAny = useTelemetrySelector((t) => Object.keys(t.cooking).length > 0);
   const telemetryOn = useTelemetrySelector((t) => t.enabled);
@@ -136,7 +137,7 @@ function StatusBar() {
             nD
           </NdHud>
         </span>
-        <span className="rounded border border-border px-1.5 py-px">{meta.table}</span>
+        <span className="rounded border border-border px-1.5 py-px">{runtime.table}</span>
         <span style={{ color: cookingAny ? "var(--color-wire-pred)" : undefined }}>
           {cookingAny ? "engine cooking" : "engine idle"}
         </span>
@@ -158,9 +159,9 @@ function StatusBar() {
           onClick={() => ws.setZoomForms(!zoomForms)}
         />
       </div>
-      {/* disposition control — reveals the wiring canvas, so dev-only (R4). A
-          build stays on the preset's saved disposition with no way to switch. */}
-      {import.meta.env.DEV ? (
+      {/* The disposition control belongs to the editor. A fixed-preset build
+          stays on the preset's saved disposition with no way to switch. */}
+      {NODE_EDITOR_ENABLED ? (
         <ButtonGroup className="shrink-0">
           {(
             [
@@ -190,7 +191,7 @@ function StatusBar() {
         <span />
       )}
       <div className="flex min-w-0 items-center justify-end gap-3.5">
-        {import.meta.env.DEV ? <span>drag select · tab add · y knife · ⇧F wiring · esc</span> : null}
+        {NODE_EDITOR_ENABLED ? <span>drag select · tab add · y knife · ⇧F wiring · esc</span> : null}
         <span className="inline-flex items-center gap-[5px]">
           ws <NdLed state="clean" size={5} />
         </span>
@@ -209,15 +210,18 @@ export interface WorkspaceSurfacePolicy {
   readonly installAuthoringListeners: boolean;
 }
 
-export function workspaceSurfacePolicy(mode: "writable" | "recovery"): WorkspaceSurfacePolicy {
+export function workspaceSurfacePolicy(
+  mode: "writable" | "recovery",
+  nodeEditorEnabled: boolean,
+): WorkspaceSurfacePolicy {
   const writable = mode === "writable";
   return Object.freeze({
     recoveryOnly: !writable,
     mountStage: writable,
-    mountCanvas: writable,
+    mountCanvas: writable && nodeEditorEnabled,
     mountStatusBar: writable,
     mountBodies: writable,
-    installAuthoringListeners: writable,
+    installAuthoringListeners: writable && nodeEditorEnabled,
   });
 }
 
@@ -263,10 +267,10 @@ function WritableWorkspaceFrame({ policy }: { policy: WorkspaceSurfacePolicy }) 
   const stagedCount = ws.stagedIds().length;
   const stageOccupied = stageHasContent(stageTree, stagedCount);
 
-  // ⇧F cycles the emphasis axis: full → strip → hidden → full. Dev-only — a
-  // build has no canvas to reveal, so disposition switching is compiled out (R4/R5).
+  // ⇧F cycles the emphasis axis: full → strip → hidden → full. Editor-only —
+  // a fixed-preset build has no canvas to reveal.
   useEffect(() => {
-    if (!import.meta.env.DEV || !policy.installAuthoringListeners) return;
+    if (!policy.installAuthoringListeners) return;
     const onKey = (e: KeyboardEvent) => {
       const el = document.activeElement;
       if (el && ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName)) return;
@@ -357,9 +361,9 @@ function WritableWorkspaceFrame({ policy }: { policy: WorkspaceSurfacePolicy }) 
           </div>
         ) : null}
 
-        {/* wiring tile chrome (strip mode): the canvas wears tile anatomy. Dev-only —
-            a build never enters strip (no disposition control) and mounts no canvas. */}
-        {policy.mountCanvas && import.meta.env.DEV && disposition === "strip" ? (
+        {/* Wiring tile chrome (strip mode): the canvas wears tile anatomy.
+            A fixed-preset build never enters strip or mounts the canvas. */}
+        {policy.mountCanvas && disposition === "strip" ? (
           <div
             className="absolute box-border flex flex-col overflow-hidden rounded-[7px] border border-border bg-card"
             style={{
@@ -406,12 +410,11 @@ function WritableWorkspaceFrame({ policy }: { policy: WorkspaceSurfacePolicy }) 
           </div>
         ) : null}
 
-        {/* the ONE canvas — re-disposed, never remounted. Dev-only: the wiring
+        {/* the ONE canvas — re-disposed, never remounted. Editor-only: the wiring
             canvas is the sole home of the Tab palette, right-click add-menu, knife,
-            connect, and node-delete listeners, so a build simply does not mount it —
-            authoring is absent, and the stage (its bodies live in the body-dock)
-            is unaffected (R4/R5). */}
-        {policy.mountCanvas && import.meta.env.DEV ? (
+            connect, and node-delete listeners. A fixed-preset build does not mount
+            it, so authoring is absent while Stage bodies remain unaffected. */}
+        {policy.mountCanvas ? (
           <div
             className="absolute overflow-hidden"
             style={{
@@ -436,7 +439,7 @@ function WritableWorkspaceFrame({ policy }: { policy: WorkspaceSurfacePolicy }) 
 
 function WorkspaceFrame() {
   const persistence = useWorkspacePersistence();
-  const policy = workspaceSurfacePolicy(persistence.mode);
+  const policy = workspaceSurfacePolicy(persistence.mode, NODE_EDITOR_ENABLED);
   if (policy.recoveryOnly) return <RecoveryWorkspaceSurface persistence={persistence} />;
   return <WritableWorkspaceFrame policy={policy} />;
 }

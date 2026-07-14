@@ -65,7 +65,7 @@ describe("seedAnnotate", () => {
     expect(wired("table", "image-viewer")).toBe(true);
   });
 
-  test("opens to the tiled dashboard, not the canvas (R10)", () => {
+  test("opens to Stage with the Canvas hidden (R10)", () => {
     const ws = makeWs();
     resolvePreset("annotate")!(ws);
     expect(ws.store.state.disposition).toBe("hidden");

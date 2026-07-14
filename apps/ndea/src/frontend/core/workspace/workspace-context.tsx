@@ -6,7 +6,8 @@
 import { useSelector } from "@tanstack/react-store";
 import { createContext, useContext, useEffect, useState } from "react";
 
-import { useDashboard } from "@/hooks/useDashboard";
+import { useDatasetSession } from "@/hooks/useDatasetSession";
+import { NODE_EDITOR_ENABLED } from "@/feature-flags";
 import { predicateBus, rowSetBus } from "@/core/buses";
 import type { GraphEvaluationState } from "@/core/graph/evaluator";
 import { deviceBroker } from "@/core/gpu/device-broker";
@@ -110,8 +111,8 @@ export function WorkspaceProvider({
   nodeAssets?: NodeAssetLibrary;
   nodeAssetStorage?: NodeAssetJsonStorage;
 }) {
-  const { state, meta, actions } = useDashboard();
-  const { coordinator, brushSelection, table } = meta;
+  const { state, runtime, actions } = useDatasetSession();
+  const { coordinator, brushSelection, table } = runtime;
   const { metadata } = state;
 
   const [{ workspace: ws, nodeRuntimes, persistence: initialPersistence, workspaceStorage, workspaceKey }] = useState(
@@ -133,7 +134,7 @@ export function WorkspaceProvider({
       const resolvedStorage = storage ?? browserWorkspaceStorage();
       const resolvedKey = storageKey(sessionKeyOf(metadata, table));
       let persistence: WorkspacePersistenceState = { mode: "writable", errors: [] };
-      if (import.meta.env.DEV) {
+      if (NODE_EDITOR_ENABLED) {
         // Seed only after a confirmed miss. Any read, migration, backup, or
         // rewrite failure keeps a validated document read-only when possible.
         const loaded = loadFromStorage(resolvedStorage, resolvedKey, w.nodeLibrary);
@@ -141,10 +142,8 @@ export function WorkspaceProvider({
         persistence = applyNodeAssetRecovery(persistence, loadedUserAssets);
         (window as unknown as { __ndeaWorkspace?: Workspace }).__ndeaWorkspace = w;
       } else {
-        // Shipped build: the named preset (default annotate) seeds a fresh graph +
-        // layout against the mounted dataset — dataset-agnostic, authoritative on
-        // every launch (R7, read-only). A typo'd/unknown --preset falls back to the
-        // annotate default.
+        // Editor-disabled mode: the named preset seeds a fresh, dataset-agnostic
+        // graph and layout on every launch. An unknown --preset falls back to annotate.
         const seed = resolvePreset(metadata.preset ?? "annotate") ?? seedAnnotate;
         seed(w);
         persistence = applyNodeAssetRecovery(persistence, loadedUserAssets);
@@ -199,8 +198,8 @@ export function WorkspaceProvider({
   // the topology/presentation authority — engine-only runtime (lassoes, cache
   // pins) is intentionally not persisted; the doc round-trips and re-cooks.
   useEffect(() => {
-    // Builds persist nothing — the bundled preset is authoritative every launch (R7).
-    if (!import.meta.env.DEV) return;
+    // Editor-disabled sessions persist nothing; the preset is authoritative.
+    if (!NODE_EDITOR_ENABLED) return;
     if (persistence.mode === "recovery") return;
     let timer: ReturnType<typeof setTimeout> | null = null;
     const autosave = new WorkspaceAutosave(workspaceStorage, workspaceKey, (error) => {

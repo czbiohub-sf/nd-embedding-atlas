@@ -76,27 +76,37 @@ frontend     ──→  @uwdata/mosaic-core socketConnector (ws /mosaic)
 - WebSocket upgrade routes by pathname: `/mosaic` → Mosaic framing,
   any other path → framed `{_id,_type}` ndea protocol in `ws.ts`.
 - REST endpoints: `/api/embeddings/*`, `/api/obs/*`, `/api/scatter-*`,
-  `/api/var/*`, `/api/categorize`, `/api/obssets/*`, `/api/export`, `/api/crop/*`.
+  `/api/var/*`, `/api/categorize`, `/api/collections/*`, `/api/annotations/*`,
+  `/api/export`, `/api/crop/*`, and `/api/plugins/bootstrap`.
 - `EmbeddingStore` — single DuckDB connection; `obs_base` + `var_base` tables
   - `dataset` VIEW joining registered obsm tables. Temp tables
     (`__scatter_selection`, `mosaic.preagg_*`) live on the same connection.
 
-### SDK (`packages/sdk/src/`)
+### SDK and plugins (`packages/sdk/src/`, `apps/ndea/src/*/plugins/`)
 
-- `defineNode()` and `defineDescriptor()` form the author-facing node API.
-- `NodeHost` carries host services; the SDK never imports app registries,
-  built-in nodes, or frontend stores.
-- `SDK_VERSION` versions the extension contract independently from the app.
+- `PluginFactory` registers complete `NodeDefinition` objects through the
+  `@ndea/sdk` barrel; definitions own exact identity, ports, config,
+  capabilities, availability, evaluation, lazy modules, and presentation hints.
+- `NodeModule` creates per-instance runtimes and framework-neutral mounted
+  Bodies. `NodeHost` exposes only declared, capability-gated services.
+- `SDK_VERSION` versions the author contract independently from the app,
+  plugin package, manifest schema, node type, config, node asset, and Workspace
+  document versions.
+- Startup validates project and enabled user-plugin manifests before serving
+  allowlisted assets. The browser imports only bootstrap-approved client URLs,
+  isolates each registration batch, and freezes one session catalog before
+  Workspace restoration and React mount.
 
 ### Frontend (`apps/ndea/src/frontend/`)
 
 - WebGPU scatter via TypeGPU v0.11 — instanced quads, GPU-side lasso/marquee
   with compute readback.
 - Mosaic cross-filter: scatter + table + charts all driven by server DuckDB.
-- TanStack Store singletons bridge React ↔ Mosaic:
-  - `ActiveFilterStore` — current SQL predicate (lasso or obsset).
-  - `SelectionSyncStore` — cross-panel selection mirror.
-  - `ViewSyncStore` — pan/zoom lock across panels.
+- `DatasetSessionProvider` owns metadata, trajectories, query infrastructure,
+  and the session-local node runtime manager.
+- Workspace owns graph transactions, persistence, Canvas, Stage, and Body
+  placement. Predicate, row-set, focus, and view coordination stay separate and
+  reach node code through `NodeHost` facets.
 - `Coordinator` created once per session with `logger: PROD ? null : console`
   and a `socketConnector({uri: ws(s)://host/mosaic})`.
 
@@ -105,6 +115,8 @@ frontend     ──→  @uwdata/mosaic-core socketConnector (ws /mosaic)
 ```zsh
 # Dev stack (backend + frontend concurrently)
 vp run dev /path/to/data.zarr        # primary — backend :5055 + Vite :5173 with HMR
+# Node editor defaults on in dev. Production builds default it off and seed --preset.
+# Explicit production editor test: VITE_NDEA_NODE_EDITOR=true vp run build
 
 # Or separately when iterating on one half
 bun run apps/ndea/src/cli/index.ts view /path/to/data.zarr
@@ -146,6 +158,9 @@ Oxlint + Oxfmt via `vp check` (config in `vite.config.ts`).
 - **4-space indent** (Oxfmt default)
 - **Double quotes**, trailing commas, semicolons
 - **`@/` path alias** → `apps/ndea/src/frontend/`
+- **File roles** — kebab-case ordinary modules, PascalCase React component
+  modules, and `useX` hook modules. Oxlint enforces the allowed shapes; review
+  enforces the role assigned to each shape.
 
 ## Gotchas
 

@@ -54,6 +54,12 @@ vp run gen
 ./dist/ndea doctor
 ```
 
+`vp run dev` enables the node editor and persists each dataset's graph in
+browser storage. Production builds compile the editor out by default, ignore
+stored graphs, and open the fixed `--preset` layout (`annotate` by default).
+Set `VITE_NDEA_NODE_EDITOR=true` at build time only when testing an
+editor-enabled production bundle.
+
 See [`AGENTS.md`](./AGENTS.md) for the full command catalogue, project layout,
 key abstractions, and gotchas. `AGENTS.md` owns workflow guidance;
 [`VOCABULARY.md`](./VOCABULARY.md) owns terminology.
@@ -64,11 +70,14 @@ Enforced by `vp check`:
 
 - **TypeScript 6 strict** — no implicit any, `import type` for type-only imports
 - **Oxlint** + **Oxfmt** — config lives in `vite.config.ts`
-- 2-space indent, double quotes, trailing commas, semicolons
+- 4-space indent, double quotes, trailing commas, semicolons
 - `@/` path alias → `apps/ndea/src/frontend/`
+- Kebab-case ordinary modules, PascalCase React component modules, and `useX`
+  hook modules. `unicorn/filename-case` enforces these shapes; review enforces
+  each file's semantic role.
 - Shared packages import only exported `@ndea/*` entrypoints; `bun run check:boundaries`
-  rejects package-to-app imports and relative
-  cross-workspace imports.
+  compiles canonical and expected-failure fixtures and rejects package-to-app,
+  deep, reverse-Workspace, React-in-SDK, and relative cross-workspace imports.
 
 ## Documentation
 

@@ -58,8 +58,8 @@ function legacyV2(type: string, config?: unknown) {
   return { version: 2, state };
 }
 
-describe("workspace v4 document schema", () => {
-  test("serializes the canonical v4 runtime boundary", () => {
+describe("workspace v5 document schema", () => {
+  test("serializes the canonical v5 runtime boundary", () => {
     const state = emptyState();
     state.nodes.n1 = {
       id: "n1",
@@ -75,11 +75,11 @@ describe("workspace v4 document schema", () => {
   });
 
   test("strict validation rejects copied provenance and legacy editor fields", () => {
-    const document = toPersistedDoc(emptyState()) as unknown as { version: 4; state: Record<string, unknown> };
+    const document = toPersistedDoc(emptyState()) as unknown as { version: 5; state: Record<string, unknown> };
     document.state.selection = null;
     expect(validateDoc(document, library).ok).toBe(false);
 
-    const withNode = toPersistedDoc(emptyState()) as unknown as { version: 4; state: Record<string, unknown> };
+    const withNode = toPersistedDoc(emptyState()) as unknown as { version: 5; state: Record<string, unknown> };
     withNode.state.nodes = {
       n1: {
         id: "n1",
@@ -92,7 +92,7 @@ describe("workspace v4 document schema", () => {
   });
 
   test("rejects malformed numeric focus indices", () => {
-    const document = toPersistedDoc(emptyState()) as unknown as { version: 4; state: Record<string, unknown> };
+    const document = toPersistedDoc(emptyState()) as unknown as { version: 5; state: Record<string, unknown> };
     document.state.coordinationSpace = { focus: { A: "8" } };
     expect(validateDoc(document, library).ok).toBe(false);
   });
@@ -105,14 +105,12 @@ describe("workspace v4 document schema", () => {
       definitionRef: exactNodeTypeRef("dataset", "1.0.0"),
       label: "Collision",
     };
-    const result = fromPersistedDoc(toPersistedDoc(state), library);
-    expect(result.ok).toBe(false);
-    expect(result.ok ? [] : result.errors).toEqual([expect.stringMatching(/reserved runtime namespace/)]);
+    expect(() => toPersistedDoc(state)).toThrow(/reserved runtime namespace/);
   });
 });
 
 describe("pure step migrations", () => {
-  test("v1 first migrates coordination and then exact v4 identity", () => {
+  test("v1 first migrates coordination and then exact v5 identity", () => {
     const v2 = legacyV2("dataset", { dataset: "plate-a" });
     const v1 = structuredClone(v2);
     v1.version = 1;

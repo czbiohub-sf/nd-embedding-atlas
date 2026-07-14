@@ -22,7 +22,7 @@ export function seedAnnotate(ws: Workspace): void {
   ws.connect(cache, annotate); // annotate the cached scope
   ws.connect(cache, gallery); // gallery crops for the cached scope
   ws.connect(table, imageViewer); // Image Viewer shows the table-focused row's crop
-  ws.setDisposition("hidden"); // opens to the tiled dashboard, not the canvas (R10)
+  ws.setDisposition("hidden"); // opens on Stage with the Canvas hidden (R10)
   ws.selectNode(scatter);
 }
 

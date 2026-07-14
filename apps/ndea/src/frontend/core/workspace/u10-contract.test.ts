@@ -92,7 +92,7 @@ function versionedDefinition(nodeTypeVersion: string, sql: string) {
 }
 
 describe("U10 exact-reference persistence contract", () => {
-  test("1. v4 writes exact refs, versioned configs, canonical editor names, and numeric focus only", () => {
+  test("1. v5 writes exact refs, versioned configs, canonical editor names, and numeric focus only", () => {
     const state = emptyState();
     state.nodes.d1 = {
       id: "d1",
@@ -106,7 +106,7 @@ describe("U10 exact-reference persistence contract", () => {
 
     const raw = JSON.stringify(toPersistedDoc(state));
     expect(JSON.parse(raw)).toEqual({
-      version: 4,
+      version: 5,
       state: expect.objectContaining({
         nodes: {
           d1: {
@@ -125,7 +125,7 @@ describe("U10 exact-reference persistence contract", () => {
     for (const retired of ['"type"', '"kind"', '"pluginId"', '"selection"', '"selSet"', '"selectedEdge"']) {
       expect(raw).not.toContain(retired);
     }
-    expect(DOC_VERSION).toBe(4);
+    expect(DOC_VERSION).toBe(5);
   });
 
   test("2. two exact versions coexist, execute exactly, and current placement chooses current", () => {
@@ -204,7 +204,7 @@ describe("U10 exact-reference persistence contract", () => {
       kind: "focus",
     };
     const out = migrate(legacy, library);
-    expect(out.version).toBe(4);
+    expect(out.version).toBe(5);
     expect(out.state.nodes.d1).toEqual({
       id: "d1",
       definitionRef: exactNodeTypeRef("transform-filter", "1.0.0"),
@@ -282,7 +282,7 @@ describe("U10 exact-reference persistence contract", () => {
     };
     expect(loadFromStorage(storage, "active", library).kind).toBe("ok");
     expect(storage.bytes["active.backup.v2"]).toBe(raw);
-    expect(JSON.parse(storage.bytes.active).version).toBe(4);
+    expect(JSON.parse(storage.bytes.active).version).toBe(5);
     expect(writes).toEqual(["active.backup.v2", "active"]);
   });
 

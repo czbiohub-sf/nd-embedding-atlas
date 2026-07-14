@@ -14,6 +14,7 @@ import { createPortal } from "react-dom";
 import { NodeDocButton } from "@/components/nd/node-doc";
 import { NdIconButton } from "@/components/nd/nd-icon-button";
 import { NdBracketed, NdCaption, NdHud, NdLed, type NdLedState } from "@/components/nd/nd-primitives";
+import { NODE_EDITOR_ENABLED } from "@/feature-flags";
 import { BodySocket, HeaderSocket } from "../body-dock";
 import { ND_STAGE, ND_TIMING } from "../constants";
 import { useNodeCount } from "../use-node-count";
@@ -89,8 +90,8 @@ function StageTile({
       {/* header — grip · LED · title · count · ◆ id · pull. leading-none is
           inherited row-wide so mixed fonts sit on one visual line */}
       <div className="flex h-[26px] shrink-0 items-center gap-1.5 overflow-hidden border-b border-border px-[9px] leading-none whitespace-nowrap">
-        {/* drag-to-rearrange grip — authoring (re-tile), dev-only (R4) */}
-        {import.meta.env.DEV ? (
+        {/* drag-to-rearrange grip — editor-only stage authoring */}
+        {NODE_EDITOR_ENABLED ? (
           <span
             title="drag to rearrange"
             onPointerDown={(e) => {
@@ -116,14 +117,14 @@ function StageTile({
           ◆ {id}
         </span>
         <NodeDocButton definitionRef={node.definitionRef} />
-        {/* bypass / display-off mutates persisted graph state — authoring, dev-only (R4) */}
-        {import.meta.env.DEV ? <FlagButton node={node} /> : null}
+        {/* bypass / display-off mutates persisted graph state — editor-only */}
+        {NODE_EDITOR_ENABLED ? <FlagButton node={node} /> : null}
         {hasBody ? (
           <NdIconButton icon="fullscreen" title="fullscreen body" onClick={() => ws.setFullscreen(id)} />
         ) : null}
-        {/* split (re-tile) + pull-to-canvas (re-placement) — authoring, dev-only (R4) */}
-        {import.meta.env.DEV ? <SplitButton id={id} /> : null}
-        {import.meta.env.DEV ? (
+        {/* split (re-tile) + pull-to-canvas (re-placement) — editor-only */}
+        {NODE_EDITOR_ENABLED ? <SplitButton id={id} /> : null}
+        {NODE_EDITOR_ENABLED ? (
           <NdIconButton
             icon="pin-down"
             title="pull body to canvas"
@@ -233,17 +234,17 @@ function StageSash({
   const [hot, setHot] = useState(false);
   return (
     <div
-      // resizing a seam re-tiles the stage — authoring, dev-only (R4). In a build
-      // the sash stays as a passive separator with no drag / hover / cursor.
-      onPointerDown={import.meta.env.DEV ? onPointerDown : undefined}
-      onPointerEnter={import.meta.env.DEV ? () => setHot(true) : undefined}
-      onPointerLeave={import.meta.env.DEV ? () => setHot(false) : undefined}
-      title={import.meta.env.DEV ? "drag to resize" : undefined}
+      // Resizing re-tiles the stage. With the editor off, the sash stays a
+      // passive separator with no drag, hover, or resize cursor.
+      onPointerDown={NODE_EDITOR_ENABLED ? onPointerDown : undefined}
+      onPointerEnter={NODE_EDITOR_ENABLED ? () => setHot(true) : undefined}
+      onPointerLeave={NODE_EDITOR_ENABLED ? () => setHot(false) : undefined}
+      title={NODE_EDITOR_ENABLED ? "drag to resize" : undefined}
       className="z-[5] grid shrink-0 place-items-center touch-none"
       style={{
         width: horizontal ? "auto" : ND_STAGE.sashHitPx,
         height: horizontal ? ND_STAGE.sashHitPx : "auto",
-        cursor: import.meta.env.DEV ? (horizontal ? "row-resize" : "col-resize") : "default",
+        cursor: NODE_EDITOR_ENABLED ? (horizontal ? "row-resize" : "col-resize") : "default",
       }}
     >
       <div
@@ -270,10 +271,9 @@ function StageEmptySlot({ slotId }: { slotId: string }) {
       data-stage-tile={slotId}
       className="relative box-border flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center gap-2 overflow-hidden rounded-[7px] border-[1.5px] border-dashed border-border-active p-3"
     >
-      {/* dismiss + fill are layout authoring — dev-only (R4). A build can't create
-          slots (split is gated), so this path is normally unreachable; the gate is
-          defense-in-depth against a preset doc that ships a bare slot. */}
-      {import.meta.env.DEV ? (
+      {/* Dismiss + fill are editor-only layout actions. A fixed preset cannot create
+          slots; this gate also handles a malformed preset containing a bare slot. */}
+      {NODE_EDITOR_ENABLED ? (
         <button
           type="button"
           title="dismiss slot"
@@ -284,7 +284,7 @@ function StageEmptySlot({ slotId }: { slotId: string }) {
         </button>
       ) : null}
       <NdHud size={9.5}>empty slot</NdHud>
-      {import.meta.env.DEV && candidates.length ? (
+      {NODE_EDITOR_ENABLED && candidates.length ? (
         <div className="flex max-w-[260px] flex-wrap justify-center gap-[5px]">
           {candidates.map((id) => (
             <button
