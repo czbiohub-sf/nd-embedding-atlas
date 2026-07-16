@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { resolvePreset } from "./presets";
+import { resolvePreset, resolvePresetOrDefault } from "./presets";
 import { createNativeAppNodeLibrary } from "@/core/node/library";
 import { Workspace } from "./workspace-store";
 import type { Metadata } from "@ndea/protocol";
@@ -28,6 +28,11 @@ describe("resolvePreset", () => {
   test("returns null for an unknown preset name (no throw)", () => {
     expect(resolvePreset("does-not-exist")).toBeNull();
   });
+
+  test("defaults and falls back to the annotate preset", () => {
+    expect(resolvePresetOrDefault()).toBe(resolvePresetOrDefault("annotate"));
+    expect(resolvePresetOrDefault("does-not-exist")).toBe(resolvePresetOrDefault("annotate"));
+  });
 });
 
 describe("seedAnnotate", () => {
@@ -47,7 +52,7 @@ describe("seedAnnotate", () => {
     for (const n of nodes) expect(n.config).toBeUndefined();
   });
 
-  test("wires the lasso → cache → annotate / gallery chain (edges cook)", () => {
+  test("wires data channels and coordinates every interactive view on one focus", () => {
     const ws = makeWs();
     resolvePreset("annotate")!(ws);
 
@@ -55,14 +60,40 @@ describe("seedAnnotate", () => {
       Object.values(ws.store.state.nodes).map((n) => [n.definitionRef.nodeTypeId, n.id]),
     );
     const edges = Object.values(ws.store.state.edges);
-    const wired = (from: string, to: string) => edges.some((e) => e.from === byType[from] && e.to === byType[to]);
+    const edge = (from: string, to: string) =>
+      edges.find((candidate) => candidate.from === byType[from] && candidate.to === byType[to]);
 
-    expect(wired("obs", "wrangle")).toBe(true);
-    expect(wired("wrangle", "scatter")).toBe(true);
-    expect(wired("scatter", "cache")).toBe(true);
-    expect(wired("cache", "annotate")).toBe(true);
-    expect(wired("cache", "gallery")).toBe(true);
-    expect(wired("table", "image-viewer")).toBe(true);
+    expect(edge("obs", "wrangle")).toMatchObject({ fromPort: "out", toPort: "in", kind: "pred" });
+    expect(edge("wrangle", "scatter")).toMatchObject({ fromPort: "out", toPort: "in", kind: "pred" });
+    expect(edge("scatter", "cache")).toMatchObject({ fromPort: "out", toPort: "in-sel", kind: "sel" });
+    expect(edge("cache", "annotate")).toMatchObject({ fromPort: "out", toPort: "in", kind: "pred" });
+    expect(edge("cache", "gallery")).toMatchObject({ fromPort: "out", toPort: "in", kind: "pred" });
+    expect(edges).toHaveLength(7);
+
+    for (const type of ["table", "scatter", "annotate", "image-viewer", "gallery"]) {
+      expect(ws.store.state.coordinationScopes[byType[type]]).toEqual({ focus: "A" });
+    }
+  });
+
+  test("matches the authoring layout and selects the table focus source", () => {
+    const ws = makeWs();
+    resolvePreset("annotate")!(ws);
+    const byType = Object.fromEntries(
+      Object.values(ws.store.state.nodes).map((node) => [node.definitionRef.nodeTypeId, node.id]),
+    );
+
+    expect(ws.store.state.positions).toMatchObject({
+      [byType.obs]: { x: 30, y: 320 },
+      [byType.wrangle]: { x: 520, y: 260 },
+      [byType.count]: { x: 1100, y: 0 },
+      [byType.table]: { x: 1100, y: 220 },
+      [byType.scatter]: { x: 1100, y: 650 },
+      [byType["image-viewer"]]: { x: 1650, y: 100 },
+      [byType.cache]: { x: 1650, y: 700 },
+      [byType.gallery]: { x: 2200, y: 0 },
+      [byType.annotate]: { x: 2150, y: 620 },
+    });
+    expect(ws.store.state.selectedNodeId).toBe(byType.table);
   });
 
   test("opens to Stage with the Canvas hidden (R10)", () => {

@@ -487,8 +487,8 @@ export class Workspace {
    * so a loaded cache restarts live (passing its input through) even if
    * it was pinned when saved — a graceful degradation, never a corrupt-state load.
    *
-   * Call once on a brand-new Workspace (the load-or-seed seam), in place of
-   * `seedWorkspace`. Assumes the doc already passed {@link validateDoc}.
+   * Call once on a brand-new Workspace at the load-or-seed seam. Assumes the
+   * document already passed {@link validateDoc}.
    */
   loadDocument(state: WorkspaceDocumentState): void {
     const previousSnapshot = this.nodeLibrary.assetSnapshot();
@@ -1039,20 +1039,4 @@ function maxSeq(ids: readonly string[]): number {
     if (m) max = Math.max(max, Number(m[1]));
   }
   return max;
-}
-
-/** Seed: the prototype's default document, bound to real plugins. */
-export function seedWorkspace(ws: Workspace): void {
-  const obs = ws.addNode("obs", { x: 30, y: 340 }, "obs");
-  const wr = ws.addNode("wrangle", { x: 290, y: 220 });
-  const count = ws.addNode("count", { x: 720, y: 60 });
-  const table = ws.addNode("table", { x: 720, y: 220 });
-  const scatter = ws.addNode("scatter", { x: 720, y: 620 });
-  const imageViewer = ws.addNode("image-viewer", { x: 1300, y: 220 });
-  ws.connect(obs, wr);
-  ws.connect(wr, count);
-  ws.connect(wr, table);
-  ws.connect(wr, scatter);
-  ws.connect(table, imageViewer); // focus push wire — routes outside the engine
-  ws.selectNode(scatter);
 }

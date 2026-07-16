@@ -32,8 +32,8 @@ import {
   type NodeAssetLibrary,
   type UserNodeAssetLoadResult,
 } from "@/core/node-asset/library";
-import { resolvePreset, seedAnnotate } from "./presets";
-import { seedWorkspace, Workspace } from "./workspace-store";
+import { resolvePresetOrDefault } from "./presets";
+import { Workspace } from "./workspace-store";
 import type { WorkspaceDocumentState } from "./types";
 
 const WorkspaceContext = createContext<Workspace | null>(null);
@@ -138,14 +138,16 @@ export function WorkspaceProvider({
         // Seed only after a confirmed miss. Any read, migration, backup, or
         // rewrite failure keeps a validated document read-only when possible.
         const loaded = loadFromStorage(resolvedStorage, resolvedKey, w.nodeLibrary);
-        persistence = initializeWorkspaceDocument(w, loaded, () => seedWorkspace(w));
+        persistence = initializeWorkspaceDocument(w, loaded, () => {
+          resolvePresetOrDefault(metadata.preset)(w);
+          w.setDisposition("full");
+        });
         persistence = applyNodeAssetRecovery(persistence, loadedUserAssets);
         (window as unknown as { __ndeaWorkspace?: Workspace }).__ndeaWorkspace = w;
       } else {
         // Editor-disabled mode: the named preset seeds a fresh, dataset-agnostic
         // graph and layout on every launch. An unknown --preset falls back to annotate.
-        const seed = resolvePreset(metadata.preset ?? "annotate") ?? seedAnnotate;
-        seed(w);
+        resolvePresetOrDefault(metadata.preset)(w);
         persistence = applyNodeAssetRecovery(persistence, loadedUserAssets);
       }
       const appHost = Object.freeze({
