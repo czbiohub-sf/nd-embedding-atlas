@@ -146,6 +146,21 @@ function ndeaWsRequest<T>(port: number | undefined, frame: Record<string, unknow
 let activeServer: NdeaServer | null = null;
 let activeStore: DatasetQuerySession | null = null;
 
+async function startTestServer(n = 5): Promise<NdeaServer> {
+  const store = await createMockStore(n);
+  activeStore = store;
+  const server = createApp({
+    port: 0,
+    host: "localhost",
+    store,
+    state: createMockState(store),
+    config: createMockConfig(),
+    noStatic: true,
+  });
+  activeServer = server;
+  return server;
+}
+
 afterEach(() => {
   if (activeServer) {
     activeServer.stop(true);
@@ -445,24 +460,64 @@ describe("createApp", () => {
     expect(res.headers.get("Access-Control-Allow-Origin")).toBe("*");
   });
 
-  test("unknown API route returns 404", async () => {
-    const store = await createMockStore(5);
-    activeStore = store;
-    const state = createMockState(store);
-    const config = createMockConfig();
+  test("ordered API families preserve specific route precedence", async () => {
+    const server = await startTestServer();
+    const baseUrl = `http://localhost:${server.port}`;
 
-    const server = createApp({
-      port: 0,
-      host: "localhost",
-      store,
-      state,
-      config,
-      noStatic: true,
+    const batch = await fetch(`${baseUrl}/api/obs/batch`, { method: "POST" });
+    expect(batch.status).toBe(200);
+    expect(await batch.json()).toEqual({});
+
+    const detail = await fetch(`${baseUrl}/api/obs/2/detail`);
+    expect(detail.status).toBe(200);
+    expect(await detail.json()).toMatchObject({
+      __row_index__: "2",
+      obs_name: "obs_2",
+      category: "C",
     });
-    activeServer = server;
+
+    const embeddingStatus = await fetch(`${baseUrl}/api/embeddings/X_umap/status`);
+    expect(embeddingStatus.status).toBe(200);
+    expect(await embeddingStatus.json()).toEqual({ status: "not_started" });
+
+    const annotationColumns = await fetch(`${baseUrl}/api/annotations/columns`);
+    expect(annotationColumns.status).toBe(200);
+    expect(await annotationColumns.json()).toEqual({ columns: [] });
+
+    const exportStatus = await fetch(`${baseUrl}/api/export/missing/status`);
+    expect(exportStatus.status).toBe(404);
+    expect(await exportStatus.json()).toEqual({ error: "Export task not found" });
+  });
+
+  test("unsupported API methods return the router 404", async () => {
+    const server = await startTestServer();
+    const baseUrl = `http://localhost:${server.port}`;
+    const requests = [
+      ["POST", "/api/health"],
+      ["GET", "/api/obs/batch"],
+      ["POST", "/api/obs/2/detail"],
+      ["GET", "/api/embeddings/X_umap"],
+      ["PUT", "/api/annotations/columns"],
+      ["POST", "/api/export/missing/status"],
+    ] as const;
+
+    for (const [method, pathname] of requests) {
+      const response = await fetch(`${baseUrl}${pathname}`, { method });
+      expect(response.status).toBe(404);
+      expect(await response.json()).toEqual({
+        error: `Unknown API endpoint: ${method} ${pathname}`,
+      });
+    }
+  });
+
+  test("unknown API route returns 404", async () => {
+    const server = await startTestServer();
 
     const res = await fetch(`http://localhost:${server.port}/api/nonexistent`);
     expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({
+      error: "Unknown API endpoint: GET /api/nonexistent",
+    });
   });
 
   test("noStatic returns 404 for root path", async () => {

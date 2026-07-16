@@ -14,40 +14,13 @@ import type { ServerSession, DatasetSessionMetadata } from "./state.ts";
 // Route handlers
 import { handleMosaicRoute } from "./routes/mosaic.ts";
 import { handleMetadata } from "./routes/meta.ts";
-import { handleConfig } from "./routes/config.ts";
-import { handleLoadEmbedding, handleEmbeddingStatus } from "./routes/embeddings.ts";
-import {
-  handleScatterPositions,
-  handleScatterCategories,
-  handleScatterContinuousValues,
-  handleScatterSelectionPost,
-  handleScatterSelectionDelete,
-  handleSelectionPost,
-  handleSelectionDelete,
-} from "./routes/scatter.ts";
-import { handleTrajectory } from "./routes/trajectory.ts";
-import { handleObsBatch, handleObsInfo, handleObsDetail, handleHealth } from "./routes/obs.ts";
-import { handleVarNames, handleVarLayers, handleVarColumn, handleVarColumnStatus } from "./routes/var.ts";
-import { handleCategorize } from "./routes/categorize.ts";
-import {
-  handleListAnnotationColumns,
-  handleCreateAnnotationColumn,
-  handleDeleteAnnotationColumn,
-  handleWriteAnnotationValues,
-  handleSaveAnnotations,
-  handleExportAnnotations,
-  handleCommitAnnotations,
-} from "./routes/annotate.ts";
-import { handleExport, handleExportStatus, handleGetExportDir } from "./routes/export.ts";
-import { handleCrop } from "./routes/crops.ts";
-import { handleChannelStats } from "./routes/channel-stats.ts";
+import { routeApi } from "./api-router.ts";
 import { CropPool } from "./crop-pool.ts";
 import { servePlateFile } from "./plate.ts";
 import { serveStatic, resolveFrontendDir } from "./static.ts";
 import { handleWsMessage, handleWsOpen, handleWsClose, type ServerSocketContext } from "./ws.ts";
 import { handleMosaicWsMessage } from "./mosaic-ws.ts";
 import { emptyPluginRuntimeSnapshot, servePluginAsset, type PluginRuntimeSnapshot } from "./plugins/assets.ts";
-import { pluginBootstrapResponse } from "./plugins/bootstrap.ts";
 
 // Re-exports for public API
 export { DatasetQuerySession, obsmColumnPrefix, DEFAULT_OBSM_PRIORITY } from "./store.ts";
@@ -84,16 +57,6 @@ function withCors(response: Response): Response {
     response.headers.set(key, value);
   }
   return response;
-}
-
-// ─── URL path routing helpers ───────────────────────────────────────────────
-
-/** Extract a path parameter from a URL pattern like /api/obs/{id}. */
-function extractPathParam(pathname: string, prefix: string): string | null {
-  if (!pathname.startsWith(prefix)) return null;
-  const rest = pathname.slice(prefix.length);
-  // Strip trailing slash
-  return rest.endsWith("/") ? rest.slice(0, -1) : rest;
 }
 
 // ─── App options ────────────────────────────────────────────────────────────
@@ -262,173 +225,4 @@ async function routeRequest(
     );
   }
   return new Response("Not Found", { status: 404 });
-}
-
-// ─── API sub-router ─────────────────────────────────────────────────────────
-
-function routeApi(
-  req: Request,
-  url: URL,
-  pathname: string,
-  store: DatasetQuerySession,
-  state: ServerSession,
-  pluginSnapshot: PluginRuntimeSnapshot,
-): Promise<Response> | Response {
-  const method = req.method;
-
-  // ── Health ───────────────────────────────────────────────────────
-  if (pathname === "/api/health" && method === "GET") {
-    return handleHealth(state);
-  }
-
-  // ── Config ──────────────────────────────────────────────────────
-  if (pathname === "/api/config" && method === "GET") {
-    return handleConfig(state);
-  }
-
-  // ── Trusted custom-node plugin bootstrap ───────────────────────
-  if (pathname === "/api/plugins/bootstrap" && method === "GET") {
-    return pluginBootstrapResponse(pluginSnapshot);
-  }
-
-  // ── Scatter positions ───────────────────────────────────────────
-  if (pathname === "/api/scatter-positions" && method === "GET") {
-    return handleScatterPositions(url, state, req.signal);
-  }
-
-  // ── Scatter categories ──────────────────────────────────────────
-  if (pathname === "/api/scatter-categories" && method === "GET") {
-    return handleScatterCategories(url, store);
-  }
-
-  // ── Scatter continuous values (Phase 7: GPU-side colormap) ──────
-  if (pathname === "/api/scatter-continuous-values" && method === "GET") {
-    return handleScatterContinuousValues(url, store);
-  }
-
-  // ── Scatter selection ───────────────────────────────────────────
-  if (pathname === "/api/scatter-selection") {
-    if (method === "POST") return handleScatterSelectionPost(req, store);
-    if (method === "DELETE") return handleScatterSelectionDelete(store);
-  }
-
-  // ── Per-instance scatter selection (§6.5 — sel_<instanceId>) ─────
-  if (pathname.startsWith("/api/selection/")) {
-    const instanceId = decodeURIComponent(pathname.slice("/api/selection/".length));
-    if (!instanceId) return new Response("Not Found", { status: 404 });
-    if (method === "POST") return handleSelectionPost(req, store, instanceId);
-    if (method === "DELETE") return handleSelectionDelete(store, instanceId);
-  }
-
-  // ── Trajectory (server-side join of metadata + obsm positions) ──
-  if (pathname === "/api/trajectory" && method === "GET") {
-    return handleTrajectory(url, state, req.signal);
-  }
-
-  // ── Obs batch (must match before /api/obs/{row_index}) ──────────
-  if (pathname === "/api/obs/batch" && method === "POST") {
-    return handleObsBatch(req, state);
-  }
-
-  // ── Obs detail (must match before /api/obs/{row_index}) ─────────
-  const detailMatch = pathname.match(/^\/api\/obs\/(\d+)\/detail$/);
-  if (detailMatch && method === "GET") {
-    return handleObsDetail(Number(detailMatch[1]), state);
-  }
-
-  // ── Obs info ────────────────────────────────────────────────────
-  const obsMatch = pathname.match(/^\/api\/obs\/(\d+)$/);
-  if (obsMatch && method === "GET") {
-    return handleObsInfo(Number(obsMatch[1]), state);
-  }
-
-  // ── Embeddings ──────────────────────────────────────────────────
-  const embStatusMatch = pathname.match(/^\/api\/embeddings\/(.+)\/status$/);
-  if (embStatusMatch && method === "GET") {
-    return handleEmbeddingStatus(decodeURIComponent(embStatusMatch[1]), state);
-  }
-
-  const embLoadMatch = pathname.match(/^\/api\/embeddings\/(.+)$/);
-  if (embLoadMatch && method === "POST") {
-    return handleLoadEmbedding(decodeURIComponent(embLoadMatch[1]), state);
-  }
-
-  // ── Var / Var column ────────────────────────────────────────────
-  if (pathname === "/api/var/names" && method === "GET") {
-    return handleVarNames(url, state);
-  }
-
-  if (pathname === "/api/var/layers" && method === "GET") {
-    return handleVarLayers(state);
-  }
-
-  if (pathname === "/api/var-column" && method === "POST") {
-    return handleVarColumn(req, state);
-  }
-
-  const varColStatusMatch = pathname.match(/^\/api\/var-column\/(.+)\/status$/);
-  if (varColStatusMatch && method === "GET") {
-    return handleVarColumnStatus(decodeURIComponent(varColStatusMatch[1]));
-  }
-
-  // ── Categorical index materialization ────────────────────────────
-  if (pathname === "/api/categorize" && method === "POST") {
-    return handleCategorize(req, state);
-  }
-
-  // ── Annotations ──────────────────────────────────────────────────
-  if (pathname === "/api/annotations/columns") {
-    if (method === "GET") return handleListAnnotationColumns(state);
-    if (method === "POST") return handleCreateAnnotationColumn(req, state);
-  }
-
-  const annotationColMatch = pathname.match(/^\/api\/annotations\/columns\/(.+)$/);
-  if (annotationColMatch && method === "DELETE") {
-    return handleDeleteAnnotationColumn(decodeURIComponent(annotationColMatch[1]), state);
-  }
-
-  if (pathname === "/api/annotations/values" && method === "POST") {
-    return handleWriteAnnotationValues(req, state);
-  }
-
-  if (pathname === "/api/annotations/save" && method === "POST") {
-    return handleSaveAnnotations(state);
-  }
-
-  if (pathname === "/api/annotations/export" && method === "POST") {
-    return handleExportAnnotations(req, state);
-  }
-
-  if (pathname === "/api/annotations/commit" && method === "POST") {
-    return handleCommitAnnotations(req, state, url.searchParams.get("dryRun") === "1");
-  }
-
-  // ── Export ───────────────────────────────────────────────────────
-  if (pathname === "/api/export-dir" && method === "GET") {
-    return handleGetExportDir();
-  }
-
-  if (pathname === "/api/export" && method === "POST") {
-    return handleExport(req, store);
-  }
-
-  const exportStatusMatch = pathname.match(/^\/api\/export\/(.+)\/status$/);
-  if (exportStatusMatch && method === "GET") {
-    return handleExportStatus(decodeURIComponent(exportStatusMatch[1]));
-  }
-
-  // ── Image crop ──────────────────────────────────────────────────
-  const cropParam = extractPathParam(pathname, "/api/crop/");
-  if (cropParam != null) {
-    return handleCrop(cropParam, req, state);
-  }
-
-  // ── Per-channel pixel stats (autocontrast) ──────────────────────
-  const statsParam = extractPathParam(pathname, "/api/channel-stats/");
-  if (statsParam != null) {
-    return handleChannelStats(statsParam, req, state);
-  }
-
-  // ── 404 ─────────────────────────────────────────────────────────
-  return Response.json({ error: `Unknown API endpoint: ${method} ${pathname}` }, { status: 404 });
 }
