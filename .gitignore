@@ -25,6 +25,8 @@ frontend/dist/
 
 # Local agent and planning artifacts
 .claude/
+.design/
+.design-audit/
 notes/
 .playwright-cli/
 
