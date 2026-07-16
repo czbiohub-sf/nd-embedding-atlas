@@ -25,9 +25,13 @@ jobs:
       - uses: voidzero-dev/setup-vp@v1
       - name: Install dependencies
         run: bun install --frozen-lockfile
-      - name: vp check
-        run: vp check
-      # Verify .bunli/commands.gen.ts is in sync with src/cli/commands/.
+      - name: Check root tooling
+        run: vp check vite.config.ts bunli.config.ts scripts
+      - name: Check workspaces
+        run: vp run -r check
+      - name: Enforce workspace boundaries
+        run: bun run check:boundaries
+      # Verify .bunli/commands.gen.ts is in sync with apps/ndea/src/cli/commands/.
       # The standard verify-no-drift / gen-check pattern (Buf, sqlc,
       # Prisma, GraphQL Codegen all do this).
       - name: Verify bunli gen output is in sync
@@ -46,10 +50,11 @@ jobs:
         with:
           persist-credentials: false
       - uses: oven-sh/setup-bun@v2
+      - uses: voidzero-dev/setup-vp@v1
       - name: Install dependencies
         run: bun install --frozen-lockfile
-      - name: bun test
-        run: bun test
+      - name: Test workspaces
+        run: vp run -r test
 
   # ── Full build + launch verify (frontend + binary, catches release-time
   # regressions at PR time rather than at canary-on-merge time) ──────────
@@ -78,11 +83,12 @@ jobs:
       # → embed-asset manifest generation → bun build --compile (single
       # self-contained binary with embedded libduckdb). PRs that break any
       # of these surface here instead of in canary.
-      - name: bun run build
-        run: bun run build
-      # In-tree launch check.
-      - name: Verify binary launches
-        run: ./dist/ndea --version
+      - name: vp run build
+        run: vp run build
+      - name: Verify binary version
+        env:
+          ARTIFACT: ndea
+        run: bash .github/scripts/verify-binary-version.sh
       # Isolated-dir launch check: copy binary to a fresh dir with no
       # siblings. Catches any regression that reintroduces sibling-file
       # lookups (rpath / LD_LIBRARY_PATH).

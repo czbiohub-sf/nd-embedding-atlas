@@ -1,16 +1,29 @@
 {
   "$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json",
   "entry": [
-    "src/cli/index.ts",
-    "src/frontend/main.tsx",
-    "src/index.ts",
+    "apps/ndea/src/cli/index.ts",
+    "apps/ndea/src/frontend/main.tsx",
+
     "vite.config.ts",
     "bunli.config.ts",
-    "scripts/build.ts",
-    "scripts/build-all.ts",
-    "scripts/sync-version.ts",
-    "scripts/dev.ts",
-    "src/**/__tests__/**/*.test.ts"
+    "apps/ndea/scripts/build.ts",
+    "apps/ndea/scripts/sync-version.ts",
+    "apps/ndea/scripts/dev.ts",
+    "scripts/check-workspace-boundaries.ts",
+    "scripts/run-workspace-task.ts",
+    "apps/ndea/src/**/__tests__/**/*.test.ts"
   ],
-  "ignorePatterns": ["site/**", "dist/**", ".fallow/**", ".bunli/**", ".source/**"]
+  "ignorePatterns": [
+    "docs/**",
+    "site/**",
+    "dist/**",
+    ".fallow/**",
+    ".bunli/**",
+    ".source/**",
+    "apps/ndea/src/frontend/ochre/**"
+  ],
+  "ignoreExportsUsedInFile": true,
+  "rules": {
+    "unused-class-members": "off"
+  }
 }

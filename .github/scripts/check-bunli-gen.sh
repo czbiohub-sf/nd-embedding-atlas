@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Verify that .bunli/commands.gen.ts is in sync with the source command
-# files under src/cli/commands/. The metadata file feeds shell-completion
+# files under apps/ndea/src/cli/commands/. The metadata file feeds shell-completion
 # generation; if it drifts, `ndea completions <shell>` ships stale flag
 # names and missing commands.
 #

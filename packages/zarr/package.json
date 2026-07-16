@@ -1,0 +1,24 @@
+{
+  "name": "@ndea/zarr",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./build": "./src/column-worker-path.ts"
+  },
+  "scripts": {
+    "check": "vp check",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@duckdb/node-api": "catalog:",
+    "@uwdata/flechette": "catalog:",
+    "@zarrita/storage": "catalog:",
+    "zarrita": "catalog:"
+  },
+  "devDependencies": {
+    "@types/bun": "catalog:",
+    "typescript": "catalog:",
+    "vite-plus": "catalog:"
+  }
+}

@@ -29,6 +29,7 @@
 
 ### 🚜 Refactor
 
+- Convert the product to a Bun/Vite+ monorepo with app, protocol, SDK, and Zarr workspaces
 - [**breaking**] Replace Python backend with Bun + TypeScript scaffold
 - _(scatter)_ Remove dead PiP branch — detach via FloatingScatterRoot only
 - _(server)_ Collapse prepare.ts into state.ts

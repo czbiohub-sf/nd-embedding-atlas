@@ -1,0 +1,172 @@
+---
+title: Build a custom-node plugin
+description: Build, validate, and load a trusted plugin through the public NDEA SDK.
+---
+
+This guide builds the repository's transform and mounted-view example. Plugin
+code imports NDEA contracts only from `@ndea/sdk`.
+
+## Build and validate the example
+
+From the repository root:
+
+```bash
+vp run plugin-example:build
+vp run plugin-example:validate
+```
+
+The build emits one self-contained browser module at
+`examples/plugins/custom-node/dist/client.js`. Validation reads the manifest,
+checks host and SDK compatibility, scans the client for runtime imports, and
+checks every allowlisted asset. It never executes the client.
+
+The example contains:
+
+```text
+examples/plugins/custom-node/
+├── ndea-plugin.json       # package identity, compatibility, assets, disclosures
+├── src/client.ts          # default PluginFactory export
+├── assets/styles.css      # allowlisted static asset
+└── dist/client.js         # generated self-contained ESM client
+```
+
+## Define nodes through the SDK barrel
+
+Import NDEA author contracts from the package barrel. Never import app modules,
+frontend aliases, or `@ndea/sdk/*` subpaths.
+
+```ts
+import { z } from "zod";
+import { defineNode, exactNodeTypeRef, nodeConfigVersion, type PluginFactory } from "@ndea/sdk";
+
+const plugin: PluginFactory = ({ registerNode }) => {
+  registerNode(
+    defineNode({
+      ref: exactNodeTypeRef("org.example.plugin/greeting", "1.0.0"),
+      title: "Greeting",
+      role: "view",
+      inputs: [],
+      outputs: [{ id: "out", kind: "sel", label: "Selection" }],
+      capabilities: [],
+      evaluate: () => new Map([["out", null]]),
+      config: {
+        schema: z.strictObject({ message: z.string() }),
+        version: nodeConfigVersion(1),
+        defaultValue: { message: "Hello" },
+      },
+    }),
+  );
+};
+
+export default plugin;
+```
+
+External node type IDs must begin with the manifest's `pluginId` followed by
+`/`. The `ndea/` namespace belongs to built-in nodes.
+
+Every registered definition must provide `evaluate` and exactly one output.
+NDEA adapts that output into its graph runtime. A mounted view may publish
+`null` when it has no current selection, as the example above does.
+
+A `PluginFactory` may register several definitions. Registration is atomic:
+NDEA rejects the whole batch when one definition conflicts or fails validation.
+The catalog freezes before Workspace restoration, so factories cannot mutate
+it later.
+
+## Add config migrations and availability reasons
+
+Every config snapshot carries its own integer config version. Add a contiguous
+migration for each older version that the current definition accepts. NDEA
+migrates and validates config before it creates a runtime or mounts a Body.
+
+Use `availability` to return either `{ available: true }` or a concrete failure
+with `reason` and `detail`. The example reports `disabled` after its plugin
+lifecycle ends.
+
+## Mount a Body and dispose it
+
+A view's lazy `load()` function returns a `NodeModule`. `mountBody(host)` may
+create plain DOM, React, Web Components, Canvas, or another browser UI. Return
+the root `element` and an idempotent `dispose()` function.
+
+Use only capability-gated services exposed by the inferred `NodeHost` type.
+Register subscriptions with `host.track(...)` and other instance resources with
+`host.onDispose(...)`. Respect `host.signal` for asynchronous work. The plugin
+factory may also return a disposer for plugin-session resources.
+
+## Declare the package
+
+`ndea-plugin.json` is strict data. The host reads it before any executable file.
+
+```json
+{
+  "manifestSchemaVersion": 1,
+  "pluginId": "org.example.plugin",
+  "pluginPackageVersion": "1.0.0",
+  "sdkVersionRange": "^0.1.0",
+  "displayName": "Example plugin",
+  "clientEntry": "dist/client.js",
+  "staticAssets": ["assets/styles.css"],
+  "hostCompatibility": {
+    "hostVersionRange": ">=0.1.0-beta.0 <0.2.0"
+  },
+  "license": "MIT",
+  "permissions": []
+}
+```
+
+`clientEntry` must be one self-contained `.js` or `.mjs` file. Every static file
+must appear in `staticAssets`; NDEA serves nothing else. Paths must remain inside
+the package after symbolic links resolve.
+
+Permissions are human-readable disclosures, not a sandbox. Declare each
+high-risk behaviour with a reason. For example:
+
+```json
+{
+  "permission": "network",
+  "reason": "Fetches the laboratory's approved reference annotations"
+}
+```
+
+## Load a project plugin
+
+Project plugins live beside a YAML project file. Every `plugin_paths` entry is
+relative to that file and must remain within its directory.
+
+```yaml
+datasets:
+  - name: experiment
+    path: ./data/experiment.zarr
+
+plugin_paths:
+  - ./plugins/org.example.plugin
+```
+
+Start the project:
+
+```bash
+ndea view project.yaml
+```
+
+NDEA validates project plugins in declaration order and isolates failures. A
+rejected plugin becomes a startup diagnostic; other valid plugins still load.
+
+## Install a user plugin
+
+Place the built package below the user package root, then enable its relative
+path:
+
+```bash
+mkdir -p ~/.ndea/plugins/packages/org.example.plugin
+cp ndea-plugin.json ~/.ndea/plugins/packages/org.example.plugin/
+cp -R dist assets ~/.ndea/plugins/packages/org.example.plugin/
+ndea plugin validate ~/.ndea/plugins/packages/org.example.plugin
+ndea plugin enable org.example.plugin
+```
+
+Enable and disable changes take effect in the next session. Inspect ordered
+state with `ndea plugin list`; use `--format json` for machine-readable output.
+
+See [Extension model](/extension-model) for trust, version axes, and the
+difference between plugins and declarative node assets.

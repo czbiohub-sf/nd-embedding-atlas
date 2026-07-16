@@ -1,16 +1,15 @@
 name: Docs
 
-# Builds the zensical-rendered docs site under docs/ and deploys to
-# GitHub Pages on every push to main. Pull requests run the build only
-# (no deploy) so PR authors see breakage before merge.
+# Builds the Fumapress docs site under docs/ and deploys to GitHub Pages
+# on every push to main. Pull requests run the build only (no deploy) so
+# PR authors see breakage before merge.
 #
-# Renders via uvx — zensical is a Python tool, kept out of the project's
-# permanent dependency graph. uvx fetches and caches it on first run.
+# The docs app (docs/) is a standalone Fumadocs + Waku app with its own
+# package.json / node_modules, isolated from the main project's deps. Waku
+# emits static HTML to docs/dist/public.
 #
 # One-time setup: in repo Settings → Pages, set "Build and deployment →
-# Source" to "GitHub Actions". The previous flow served from a gh-pages
-# branch via mike; this workflow uploads to the artifact-based Pages
-# pipeline instead.
+# Source" to "GitHub Actions".
 
 on:
   push:
@@ -36,17 +35,21 @@ jobs:
         with:
           persist-credentials: false
 
-      # uv ships uvx; we use it to fetch zensical on demand.
-      - uses: astral-sh/setup-uv@v8.1.0
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        working-directory: docs
+        run: bun install --frozen-lockfile
 
       - name: Build site
-        run: uvx --from zensical zensical build
+        working-directory: docs
+        run: bun run build
 
       # Pages artifact action expects the path to the built site root.
       # `actions/upload-pages-artifact` tars + uploads in one step.
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: site
+          path: docs/dist/public
 
   # ── Deploy to GitHub Pages (push to main only) ──────────────────────────
   deploy:

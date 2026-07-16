@@ -1,0 +1,11 @@
+{
+  "pages": [
+    "index",
+    "cli",
+    "preparing-your-data",
+    "custom-node-plugins",
+    "extension-model",
+    "webgpu-hpc-setup",
+    "contributing"
+  ]
+}

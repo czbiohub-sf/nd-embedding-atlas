@@ -1,0 +1,13 @@
+{
+  "manifestSchemaVersion": 1,
+  "pluginId": "fixture.importing",
+  "pluginPackageVersion": "1.0.0",
+  "sdkVersionRange": "*",
+  "displayName": "Runtime import fixture",
+  "clientEntry": "client.js",
+  "hostCompatibility": {
+    "hostVersionRange": "*"
+  },
+  "license": "MIT",
+  "permissions": []
+}

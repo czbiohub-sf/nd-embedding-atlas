@@ -1,13 +1,8 @@
 name: Release
 
-# Cut a release by publishing one from the GitHub Releases UI: enter the tag,
-# tick pre-release (or not), Publish. `published` is the only activity type
-# that fires for both stable and pre-releases (incl. those published from a
-# draft). It fires for a human in the UI but NOT for a release created by the
-# Actions GITHUB_TOKEN — so no PAT is needed and there's no self-trigger loop.
 on:
-  release:
-    types: [published]
+  push:
+    tags: ["v*"]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -42,12 +37,12 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          # Build the exact commit the release tag points to (the UI lets the
-          # author target any commit), not whatever branch HEAD is.
-          ref: ${{ github.event.release.tag_name }}
           persist-credentials: false
 
-      # `no-cache: true` — release builds run on release publish and must not load
+      - name: Verify tag matches package.json version
+        run: bash .github/scripts/verify-tag-version.sh
+
+      # `no-cache: true` — release builds run on tag push and must not load
       # a `~/.bun/install/cache` populated by an earlier PR. Mitigates the
       # zizmor `cache-poisoning` audit; release infra is infrequent so the
       # extra ~10s per platform is acceptable.
@@ -58,26 +53,21 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      # The git tag is the single source of truth for the version: stamp it
-      # into src/cli/version.ts before compiling. sync-version's semver check
-      # fails the build on a mistyped tag (replaces the old tag==package.json
-      # guard). No package.json bump, no commit-back.
-      # Pass the tag through env (not inline ${{ }} in run) — git tag names can
-      # contain shell metacharacters; this avoids a template-injection surface
-      # and matches the env-var pattern used elsewhere in this workflow.
-      - name: Stamp version from release tag
-        env:
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
-        run: bun run scripts/sync-version.ts "$RELEASE_TAG"
-
       - name: Compile single-file binary (libduckdb embedded)
         env:
           TARGET: ${{ matrix.target }}
           ARTIFACT: ${{ matrix.artifact }}
         run: bash .github/scripts/build-binary.sh
 
-      - name: Verify binary launches
-        run: ./dist/${{ matrix.artifact }} --version
+      - name: Verify binary version
+        env:
+          ARTIFACT: ${{ matrix.artifact }}
+        run: bash .github/scripts/verify-binary-version.sh
+
+      - name: Verify isolated dir (no siblings)
+        env:
+          ARTIFACT: ${{ matrix.artifact }}
+        run: bash .github/scripts/verify-isolated.sh
 
       - name: Report binary size
         shell: bash
@@ -124,27 +114,25 @@ jobs:
       - name: Bundle install.sh as a release asset
         run: cp scripts/install.sh dist/install.sh
 
-      # The release already exists (published from the UI). action-gh-release
-      # updates that existing release, attaching the binaries + SHA256SUMS +
-      # install.sh. Channel + "Latest" badge mirror the author's pre-release
-      # checkbox (github.event.release.prerelease) — CI echoes the UI choice,
-      # never overrides it. append_body keeps whatever notes the author typed
-      # in the UI (or generate_release_notes produced) and appends the install
-      # instructions below, rather than replacing them.
-      - name: Attach binaries to the release
+      # Tag-pattern auto-classification: semver pre-release identifiers are
+      # always preceded by a `-` (e.g. v0.1.0-rc.1, v0.1.0-beta.2,
+      # v0.1.0-alpha.5). Stable tags never contain `-`. So a single contains()
+      # check correctly routes `prerelease` and `make_latest`:
+      #   v0.1.0       → release, marked latest
+      #   v0.1.0-rc.1  → pre-release, NOT marked latest
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
           files: dist/*
           generate_release_notes: true
-          append_body: true
           fail_on_unmatched_files: true
-          prerelease: ${{ github.event.release.prerelease }}
-          make_latest: ${{ !github.event.release.prerelease }}
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          make_latest: ${{ !contains(github.ref_name, '-') }}
           body: |
             ## Install
 
             ```bash
-            curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/${{ github.event.release.tag_name }}/scripts/install.sh | sh
+            curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/scripts/install.sh | sh
             ```
 
             Or download a binary directly from the asset list below and verify
@@ -157,19 +145,20 @@ jobs:
             > macOS users: unsigned binaries may be blocked by Gatekeeper. Run
             > `xattr -dr com.apple.quarantine ./ndea` after download.
 
-  # ── Bump manifest.json["pre-release"] on a pre-release ───────────────────
-  # When the author ticks "pre-release" in the UI, move the pre-release
-  # channel pointer; stable cuts leave it alone. Automating the pointer bump
-  # avoids the "I forgot to update the manifest" footgun.
+  # ── Bump manifest.json["pre-release"] on any pre-release tag ─────────────
+  # Pre-release tags (any tag containing `-`, e.g. v0.1.0-alpha.1,
+  # v0.1.0-beta.2, v0.1.0-rc.1) move the pointer; stable cuts leave it
+  # alone. Automating the pointer bump avoids the "I forgot to update
+  # the manifest" footgun during the stabilisation cycle.
   #
-  # Opens a PR rather than pushing directly so a human reviews + merges — a
-  # deliberate one-click gate: publishing the release makes binaries available,
-  # but merging this is what flips `ndea update --channel pre-release` to the
-  # new tag. Auditable in PR history; a bad pre-release can be vetoed first.
+  # Opens a PR rather than pushing directly so a human reviews + merges.
+  # Keeps `main` honest: every change to the canonical manifest is
+  # auditable in PR history, and a bad pre-release can be vetoed before
+  # users see `ndea update --channel pre-release` resolve to it.
   bump-prerelease-manifest:
     name: Open manifest.pre-release bump PR
     needs: publish
-    if: ${{ github.event.release.prerelease }}
+    if: contains(github.ref_name, '-')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -192,7 +181,7 @@ jobs:
       - name: Update manifest.json["pre-release"]
         id: bump
         env:
-          NEW_TAG: ${{ github.event.release.tag_name }}
+          NEW_TAG: ${{ github.ref_name }}
         run: |
           if [ ! -f manifest.json ]; then
             echo "::warning::manifest.json not on main yet — skipping pre-release pointer bump"
@@ -215,11 +204,11 @@ jobs:
           branch: chore/manifest-prerelease-bump
           base: main
           delete-branch: true
-          commit-message: "chore(manifest): bump pre-release → ${{ github.event.release.tag_name }}"
-          title: "chore(manifest): bump pre-release → ${{ github.event.release.tag_name }}"
+          commit-message: "chore(manifest): bump pre-release → ${{ github.ref_name }}"
+          title: "chore(manifest): bump pre-release → ${{ github.ref_name }}"
           body: |
             Automated by `release.yml` after publishing
-            [`${{ github.event.release.tag_name }}`](https://github.com/${{ github.repository }}/releases/tag/${{ github.event.release.tag_name }}).
+            [`${{ github.ref_name }}`](https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}).
 
             Once merged, `ndea update --channel pre-release` will resolve
             to this tag.

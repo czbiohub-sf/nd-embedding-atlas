@@ -2,7 +2,7 @@
 
 [![CI][badge-ci]][link-ci] [![Canary][badge-canary]][link-canary] [![Release][badge-release]][link-release] [![Bun][badge-bun]][link-bun] [![License][badge-license]][link-license]
 
-An interactive browser-based dashboard that links high-dimensional AI embeddings to source 5D (TCZYX) image data for rapid exploration and annotation.
+An interactive browser-based Node Workspace that links high-dimensional AI embeddings to source 5D (TCZYX) image data for rapid exploration and annotation.
 
 ## Install
 
@@ -104,7 +104,7 @@ Updates download the new binary into a fresh `~/.ndea/versions/<tag>/` directory
 ```bash
 ndea path/to/data.zarr            # single AnnData store
 ndea a.zarr b.zarr c.zarr         # multiple AnnData stores
-ndea path/to/config.yaml          # multi-dataset config (pairs an HCS plate with each AnnData store for the image viewer)
+ndea path/to/config.yaml          # multi-dataset config (pairs an HCS plate with each AnnData store for Image Viewer)
 ```
 
 Then open **Chrome or Edge** at `http://localhost:5055`.
@@ -121,6 +121,24 @@ Then open **Chrome or Edge** at `http://localhost:5055`.
 - [Preparing your data][docs-data] — OME-Zarr layout, sharding, pyramids
 - [WebGPU on HPC][webgpu-hpc] — Chrome flags for HPC systems
 - [Contributing][docs-contrib] — dev setup and contribution guide
+
+## Development
+
+This repository is a Bun and Vite+ monorepo. `apps/ndea` owns the shipped
+product; `packages/protocol`, `packages/sdk`, and `packages/zarr` expose its
+internal package boundaries. `docs` remains an independent Waku app.
+
+```bash
+bun install
+vp run dev path/to/data.zarr
+vp run -r check
+vp run -r test
+bun run check:boundaries
+vp run build
+```
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for focused package commands and
+documentation setup.
 
 ## What does the UI look like?
 

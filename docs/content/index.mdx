@@ -1,0 +1,117 @@
+---
+title: Getting started
+description: Interactive Node Workspace linking AI embeddings to source 5D image data.
+---
+
+nd-embedding-atlas is an interactive Node Workspace linking high-dimensional AI embeddings to source 5D (TCZYX) image data.
+
+<Callout type="warn" title="AnnData schema is unstable">
+  The app's expected `obs` / `obsm` / `layers` shape will change. Expect to adjust your AnnData as the schema firms up.
+</Callout>
+
+<Callout type="info" title="Browser requirement">
+  **Chrome or Edge required.** The scatter renderer uses WebGPU; Firefox lacks WebGPU support by default. On HPC, see
+  the [WebGPU setup guide](/webgpu-hpc-setup).
+</Callout>
+
+## Installation
+
+<Callout type="info" title="Repo is private">
+  Release assets and the install script are gated behind the czbiohub-sf GitHub org. Every install / update command
+  needs a GitHub token with repo read scope. The simplest path uses [`gh`](https://cli.github.com), which most internal
+  users already have for code review.
+</Callout>
+
+```bash
+gh auth login   # one-time, if you haven't already
+
+gh api repos/czbiohub-sf/nd-embedding-atlas/contents/scripts/install.sh --jq '.content' \
+  | base64 -d \
+  | NDEA_GITHUB_TOKEN="$(gh auth token)" sh
+```
+
+Downloads a checksum-verified ~185 MB single binary into `$HOME/.local/bin`. The binary embeds libduckdb and extracts a runtime copy to `~/.cache/ndea/<tag>/` on first launch.
+
+Pin a tag with `NDEA_VERSION` or pick a channel with `NDEA_CHANNEL`:
+
+```bash
+gh api repos/czbiohub-sf/nd-embedding-atlas/contents/scripts/install.sh --jq '.content' \
+  | base64 -d \
+  | NDEA_VERSION=v0.1.0-beta.0 NDEA_GITHUB_TOKEN="$(gh auth token)" sh
+
+# pre-release (alpha / beta / rc) — most common for internal testers
+... | NDEA_CHANNEL=pre-release NDEA_GITHUB_TOKEN="$(gh auth token)" sh
+```
+
+To self-update, export the token in your shell rc once so `ndea update` doesn't need it inline:
+
+```bash
+# ~/.zshrc / ~/.bashrc
+export NDEA_GITHUB_TOKEN="$(gh auth token)"
+```
+
+```bash
+ndea update                       # latest stable
+ndea update --channel pre-release # latest alpha / beta / rc (when active)
+ndea update --channel canary      # rolling, rebuilt on every push to main
+```
+
+The canonical `curl … raw.githubusercontent.com … | sh` form will work once the repo flips public; until then use the `gh` flow above.
+
+For developer setup, see the [contributing guide](/contributing).
+
+## Test data
+
+<Callout type="info" title="On the Bruno HPC">
+  Test datasets are pre-staged at `/hpc/websites/public.czbiohub.org/comp.micro/nd-embedding-atlas-test-data` — symlink
+  or point the Workspace at that path directly.
+</Callout>
+
+## Launch the Workspace
+
+```bash
+# Single AnnData zarr store
+ndea view path/to/data.zarr
+
+# Multiple stores side-by-side
+ndea view path/to/dataset_a.zarr path/to/dataset_b.zarr
+
+# Project config — the only form that pairs an AnnData store with an OME-Zarr
+# plate for hover crops, sets channels, configures per-dataset options.
+ndea view path/to/config.yaml
+```
+
+Open Chrome or Edge at `http://localhost:5055`.
+
+<Callout type="info" title="Shorthand">
+  `view` is the default subcommand. `ndea path/to/data.zarr` works the same as `ndea view path/to/data.zarr`. Examples
+  use the explicit form to match `update`, `rollback`, `completions`.
+</Callout>
+
+A minimal multi-dataset YAML:
+
+```yaml
+datasets:
+  - name: my-experiment
+    path: path/to/annotations.zarr
+    plate_path: path/to/plate.zarr # optional — enables hover crops
+```
+
+The Workspace opens on one graph Canvas. Add and wire node definitions from the
+palette, then stage any full Body that needs more space. Core definitions include:
+
+- **Scatter** — WebGPU embedding plot with lasso, focus, and linked view controls
+- **Table** — sortable rows cross-filtered through the graph
+- **Image Viewer** — OME-Zarr image crops when `plate_path` is set
+- **Charts, Gallery, Wrangle, Annotate, and Cache** — focused
+  transforms and views that compose through typed ports
+
+Canvas, Stage, and fullscreen sockets adopt one mounted Body; moving it never
+creates a second node instance.
+
+## What's next?
+
+- [CLI reference](/cli) — every subcommand, flag, env var, and channel
+- [Preparing your data](/preparing-your-data) — OME-Zarr layout, sharding, pyramids
+- [Contributing](/contributing) — dev setup, architecture, release flow
+- [WebGPU on HPC](/webgpu-hpc-setup) — Chrome flags for HPC environments
