@@ -20,16 +20,16 @@
 
 import type { RowIndex } from "@ndea/sdk";
 import type { FilterExpr } from "@uwdata/mosaic-sql";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Bracketed } from "@/components/ui/bracketed";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Kbd } from "@/components/ui/kbd";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { filterExprToExpr } from "@/lib/mosaic-helpers";
 import { cn } from "@/lib/utils";
 import { AnnotateTable, type CropFields, type FocusedCrop } from "@/nodes/annotate/AnnotateTable";
-import { CropThumb } from "@/nodes/annotate/CropThumb";
 import { CommitPanel } from "@/nodes/annotate/CommitPanel";
 import { RangeBracket } from "@/nodes/annotate/RangeBracket";
 import { fmtVal } from "@/nodes/annotate/range-scale";
@@ -46,7 +46,6 @@ export interface AnnotateConfig {
 }
 export type AnnotateOptions = Record<never, never>;
 
-const RAIL_MIN_WIDTH = 520;
 const MAX_CONTEXT_COLS = 2;
 
 /** One-key hotkey per label: first unused letter, else its 1-based digit. */
@@ -140,17 +139,6 @@ export function AnnotateView({ host }: NodeBodyProps<AnnotateConfig, AnnotateCap
   const channelSlot = selection.focusedCrop?.datasetKey ?? "docked";
   const { channels, hash } = useGalleryChannels(channelSlot, 300, metadata.plate_channels);
 
-  // responsive: show the focus rail only when the body is wide enough
-  const bodyRef = useRef<HTMLDivElement>(null);
-  const [wide, setWide] = useState(false);
-  useEffect(() => {
-    const el = bodyRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver(([e]) => setWide(e.contentRect.width >= RAIL_MIN_WIDTH));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-
   // existing annotation columns
   useEffect(() => {
     let alive = true;
@@ -163,15 +151,11 @@ export function AnnotateView({ host }: NodeBodyProps<AnnotateConfig, AnnotateCap
     };
   }, [host]);
 
-  // drive the focus wire
-  useEffect(() => {
-    if (selection.focusedRowIndex != null) host.focus.set(selection.focusedRowIndex);
-  }, [selection.focusedRowIndex, host]);
-
   // Follow an external focus (Gallery/Scatter/Idetik crop click) — read the
   // group-aware host.focus reactively so the table can jump to that obs,
   // mirroring how those views already follow ours.
   const externalFocusedRowIndex = useNodeFocus(host);
+  const publishUserFocus = useCallback((focusedRowIndex: RowIndex) => host.focus.set(focusedRowIndex), [host]);
 
   const persistLabels = useCallback(() => host.patchConfig({ labels }), [host, labels]);
 
@@ -301,7 +285,7 @@ export function AnnotateView({ host }: NodeBodyProps<AnnotateConfig, AnnotateCap
   const tableLabels = mode === "range" ? [] : labels;
   const tableHotkeys = mode === "range" ? [] : hotkeys;
 
-  // the range instrument + its commit controls (shared by both rail layouts)
+  // Range instrument lives in a toolbar popover so the table keeps the full body.
   const rangeControls = (
     <div className="flex flex-col gap-2.5">
       <RangeBracket
@@ -338,121 +322,8 @@ export function AnnotateView({ host }: NodeBodyProps<AnnotateConfig, AnnotateCap
     </div>
   );
 
-  // ── focus rail — vertical beside (wide) / compact strip below (narrow) ──
-  const railWide = (
-    <aside className="flex w-[232px] min-h-0 shrink-0 flex-col gap-3 overflow-y-auto border-border-subtle border-l bg-surface-tertiary/20 p-3">
-      <div className="flex items-baseline justify-between">
-        <span className="font-medium text-foreground">obs {selection.focusedRowIndex ?? "—"}</span>
-        <span className="text-2xs text-text-muted">
-          {selection.selectedRowIndices.size > 1 ? `${selection.selectedRowIndices.size} selected` : "1"}
-        </span>
-      </div>
-      {cropFields && selection.focusedCrop?.fovName && channels.length > 0 ? (
-        <CropThumb
-          fovName={selection.focusedCrop.fovName}
-          t={selection.focusedCrop.t}
-          rowIndex={selection.focusedCrop.rowIndex}
-          datasetKey={selection.focusedCrop.datasetKey}
-          channels={channels}
-          hash={hash}
-          className="aspect-square w-full border border-border"
-        />
-      ) : null}
-      {channels.length > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {channels
-            .filter((c) => c.visible)
-            .map((c) => (
-              <span
-                key={c.label}
-                className="inline-flex items-center gap-1 rounded bg-surface-tertiary px-1.5 py-px text-3xs text-muted-foreground"
-              >
-                <span className="size-1.5 rounded-full" style={{ background: `#${c.color}` }} />
-                {c.label}
-              </span>
-            ))}
-        </div>
-      )}
-      {mode === "range" ? (
-        rangeBase ? (
-          rangeControls
-        ) : (
-          <p className="text-2xs text-text-muted">Name a metric above to start bracketing.</p>
-        )
-      ) : labels.length === 0 ? (
-        <p className="text-2xs text-text-muted">Add labels above to start.</p>
-      ) : (
-        <div className="flex flex-col gap-1.5">
-          {labels.map((l, i) => (
-            <Button
-              key={l}
-              variant="secondary"
-              size="sm"
-              className="h-8 justify-between px-3"
-              disabled={busy || selection.focusedRowIndex == null}
-              onClick={() => void onStamp(l)}
-            >
-              {l} <Kbd>{hotkeys[i]}</Kbd>
-            </Button>
-          ))}
-        </div>
-      )}
-      <p className="mt-auto text-3xs text-text-muted">
-        click a row to focus · ↑↓ moves · {mode === "range" ? "↵ writes the bracket" : "keys stamp the selection"} ·
-        viewers follow
-      </p>
-    </aside>
-  );
-
-  const railNarrow = (
-    <aside className="flex max-h-[46%] shrink-0 items-start gap-3 overflow-y-auto border-border-subtle border-t bg-surface-tertiary/20 p-2.5">
-      {cropFields && selection.focusedCrop?.fovName && channels.length > 0 ? (
-        <CropThumb
-          fovName={selection.focusedCrop.fovName}
-          t={selection.focusedCrop.t}
-          rowIndex={selection.focusedCrop.rowIndex}
-          datasetKey={selection.focusedCrop.datasetKey}
-          channels={channels}
-          hash={hash}
-          className="size-24 shrink-0 rounded border border-border"
-        />
-      ) : null}
-      <div className="flex min-w-0 flex-1 flex-col gap-2">
-        <span className="font-medium text-foreground">
-          obs {selection.focusedRowIndex ?? "—"}
-          {selection.selectedRowIndices.size > 1 ? ` · ${selection.selectedRowIndices.size} selected` : ""}
-        </span>
-        {mode === "range" ? (
-          rangeBase ? (
-            rangeControls
-          ) : (
-            <p className="text-2xs text-text-muted">Name a metric above to start bracketing.</p>
-          )
-        ) : labels.length === 0 ? (
-          <p className="text-2xs text-text-muted">Add labels above to start.</p>
-        ) : (
-          <div className="flex flex-wrap gap-1.5">
-            {labels.map((l, i) => (
-              <Button
-                key={l}
-                variant="secondary"
-                size="sm"
-                className="h-7 gap-1 px-2.5"
-                disabled={busy || selection.focusedRowIndex == null}
-                onClick={() => void onStamp(l)}
-              >
-                {l} <Kbd>{hotkeys[i]}</Kbd>
-              </Button>
-            ))}
-          </div>
-        )}
-      </div>
-    </aside>
-  );
-  const rail = wide ? railWide : railNarrow;
-
   return (
-    <div ref={bodyRef} className="relative flex h-full min-h-0 w-full flex-col overflow-hidden text-xs">
+    <div className="relative flex h-full min-h-0 w-full flex-col overflow-hidden text-xs">
       {/* palette / target bar */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-border-subtle border-b p-2.5">
         <div className="flex items-center gap-1.5">
@@ -553,20 +424,31 @@ export function AnnotateView({ host }: NodeBodyProps<AnnotateConfig, AnnotateCap
         </div>
 
         {mode === "range" ? (
-          <span className="text-2xs text-text-muted">
-            {rangeBase ? (
-              <>
-                writes <span className="text-primary">{`${rangeBase}_min · ${rangeBase}_max`}</span>
-              </>
-            ) : (
-              "float · float"
-            )}
-          </span>
+          <div className="flex min-w-0 flex-1 items-center justify-between gap-2">
+            <span className="truncate text-2xs text-text-muted">
+              {rangeBase ? (
+                <>
+                  writes <span className="text-primary">{`${rangeBase}_min · ${rangeBase}_max`}</span>
+                </>
+              ) : (
+                "name a metric to begin"
+              )}
+            </span>
+            <Popover>
+              <PopoverTrigger
+                disabled={!rangeBase}
+                aria-label="Set annotation range"
+                className="inline-flex h-7 shrink-0 items-center rounded-md border border-input px-2 text-2xs text-foreground outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/30 disabled:pointer-events-none disabled:opacity-50"
+              >
+                range [{fmtVal(rangeLo) || "—"}, {fmtVal(rangeHi) || "—"}]
+              </PopoverTrigger>
+              <PopoverContent side="bottom" align="end" className="w-72 p-3">
+                {rangeControls}
+              </PopoverContent>
+            </Popover>
+          </div>
         ) : (
           <div className="flex min-w-0 flex-1 items-center gap-1.5">
-            {/* vocabulary editor only — quick-stamp buttons live in the focus rail,
-                so the header input keeps a stable width instead of shrinking as
-                chips parse in beside it */}
             <span className="text-2xs text-text-muted">labels</span>
             <Input
               aria-label="label vocabulary, comma separated"
@@ -576,6 +458,32 @@ export function AnnotateView({ host }: NodeBodyProps<AnnotateConfig, AnnotateCap
               onChange={(e) => setLabelsText(e.target.value)}
               onBlur={persistLabels}
             />
+            {labels.length > 0 && (
+              <Popover>
+                <PopoverTrigger
+                  aria-label="Stamp annotation"
+                  className="inline-flex h-7 shrink-0 items-center rounded-md border border-input px-2 text-2xs text-foreground outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/30"
+                >
+                  stamp
+                </PopoverTrigger>
+                <PopoverContent side="bottom" align="end" className="w-52 gap-1 p-1.5">
+                  <div className="max-h-64 overflow-y-auto">
+                    {labels.map((label, index) => (
+                      <Button
+                        key={label}
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-full justify-between px-2"
+                        disabled={busy || selection.focusedRowIndex == null}
+                        onClick={() => void onStamp(label)}
+                      >
+                        {label} <Kbd>{hotkeys[index]}</Kbd>
+                      </Button>
+                    ))}
+                  </div>
+                </PopoverContent>
+              </Popover>
+            )}
           </div>
         )}
       </div>
@@ -588,8 +496,8 @@ export function AnnotateView({ host }: NodeBodyProps<AnnotateConfig, AnnotateCap
         </div>
       )}
 
-      {/* table + focus rail (beside when wide, stacked below when narrow) */}
-      <div className={cn("flex min-h-0 flex-1", wide ? "flex-row" : "flex-col")}>
+      {/* annotation table */}
+      <div className="flex min-h-0 flex-1">
         <AnnotateTable
           coordinator={coordinator}
           table={table}
@@ -604,12 +512,12 @@ export function AnnotateView({ host }: NodeBodyProps<AnnotateConfig, AnnotateCap
           channels={channels}
           hash={hash}
           onChange={setSelection}
+          onUserFocus={publishUserFocus}
           onStamp={mode === "range" ? () => {} : (v) => void onStamp(v)}
           onSkip={onSkip}
           onTotalCount={setTotal}
           externalFocusedRowIndex={externalFocusedRowIndex}
         />
-        {rail}
       </div>
 
       {/* footer */}

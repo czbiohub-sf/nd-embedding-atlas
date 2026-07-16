@@ -390,9 +390,10 @@ export function createPickingSystem(
       if (bestId < 0) return null;
       return { pointIndex: gpuPointIndex(bestId), brightness: bestWeight };
     })();
-    inflight = job.finally(() => {
-      if (inflight === job) inflight = null;
+    const tracked = job.finally(() => {
+      if (inflight === tracked) inflight = null;
     });
+    inflight = tracked;
     return job;
   }
 

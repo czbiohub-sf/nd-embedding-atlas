@@ -18,7 +18,7 @@ export default defineConfig({
         cache: false,
       },
       "dev:frontend": {
-        command: "vp dev",
+        command: "bun run scripts/dev-frontend.ts",
         cache: false,
       },
     },

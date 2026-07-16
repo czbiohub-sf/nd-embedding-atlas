@@ -326,6 +326,15 @@ export function ScatterView({
     setSelection,
   });
 
+  const hasLassoRef = useRef(false);
+  const clearLassoSelection = useCallback(() => {
+    if (!hasLassoRef.current) return false;
+    hostRef.current?.clearSelection();
+    setSelection(null);
+    hasLassoRef.current = false;
+    return true;
+  }, [setSelection]);
+
   const callbacksRef = useRef({
     onSelectionChange: (_count: number | null, _indices?: GpuPointIndex[]) => {},
     onExternalClear: () => {},
@@ -335,7 +344,6 @@ export function ScatterView({
     onFps: (_fps: number) => {},
   });
 
-  const hasLassoRef = useRef(false);
   callbacksRef.current.onSelectionChange = (...args) => {
     hasLassoRef.current = args[0] != null && args[0] > 0;
     onSelectionChange(...args);
@@ -344,6 +352,7 @@ export function ScatterView({
   const setFocus = (nextFocus: RowIndex | null) => focusPoint(host, nextFocus);
   callbacksRef.current.onBackgroundClick = () => {
     setFocus(null);
+    clearLassoSelection();
   };
   callbacksRef.current.onPointClick = (pointIndex) => {
     const clickedRowIndex = rowIndicesRef.current[pointIndex];
@@ -471,27 +480,28 @@ export function ScatterView({
   // activeTrajectories. When focus clears the trajectory is cleared, which
   // empties highlightRowIds → the host clears the glow. No separate effect.)
 
-  // Escape cascade: focus → trajectory → lasso
-  //                                → (category handled by CategoricalLegend)
+  // Escape clears point and brush selections together. Category isolation
+  // handles Escape only when none of these states is active.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
+
+      let handled = clearLassoSelection();
       if (focusedRowIndex != null) {
         focusPoint(host, null);
-      } else if (trajectory) {
-        actions.clearTrajectory(trajectory.datasetKey ?? "");
-      } else if (hasLassoRef.current) {
-        hostRef.current?.clearSelection();
-        setSelection(null);
-        hasLassoRef.current = false;
-      } else {
-        return; // let event propagate to CategoricalLegend's Escape handler
+        handled = true;
       }
+      if (trajectory) {
+        actions.clearTrajectory(trajectory.datasetKey ?? "");
+        handled = true;
+      }
+
+      if (!handled) return; // let event propagate to CategoricalLegend's Escape handler
       e.stopPropagation();
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [focusedRowIndex, host, trajectory, actions, setSelection]);
+  }, [focusedRowIndex, host, trajectory, actions, clearLassoSelection]);
 
   const axesKeyRef = useRef<string | null>(null);
   useEffect(() => {

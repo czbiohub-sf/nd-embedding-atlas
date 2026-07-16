@@ -6,7 +6,7 @@ import {
   OmeZarrImageSource,
   VolumeLayer,
 } from "@idetik/core";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChannelStatsResponseSchema } from "@ndea/protocol";
 import type { ChannelStat } from "@ndea/protocol";
 import { resolveContrastRange, resolveContrastWindow, safeContrastLimits } from "@/lib/contrast-window";
@@ -60,9 +60,11 @@ interface UseFovLoaderOptions {
  * In 3D mode, creates a single VolumeLayer with all channels and z: undefined
  * (loads the full Z stack for ray marching).
  */
-export function useFovLoader({ sourceUrl, plateChannels, omeVersion, statsUrl }: UseFovLoaderOptions): void {
+export function useFovLoader({ sourceUrl, plateChannels, omeVersion, statsUrl }: UseFovLoaderOptions): boolean {
   const { state: viewerState, actions } = useViewer();
   const { viewMode } = viewerState;
+  const requestedSignature = sourceUrl == null ? null : `${sourceUrl}\0${viewMode}\0${viewerState.generation}`;
+  const [loadedSignature, setLoadedSignature] = useState<string | null>(null);
   // ── Refs for reactive sliceCoords getters ─────────────────────────
   const zRef = useRef(0);
   const tRef = useRef(0);
@@ -121,6 +123,7 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion, statsUrl }:
       generation: viewerState.generation,
     });
 
+    setLoadedSignature(null);
     let cancelled = false;
 
     const loadLayers = async () => {
@@ -300,6 +303,7 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion, statsUrl }:
       multiChannelRef.current = multiChannel;
 
       actionsRef.current.setLayers(layerEntries);
+      setLoadedSignature(requestedSignature);
 
       // Fetch per-channel pixel stats (autocontrast). Happens after setLayers so
       // it never delays the image; the result rides along on each ChannelDef.
@@ -379,7 +383,7 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion, statsUrl }:
       console.log("[useFovLoader] cleanup — cancelling", sourceUrl);
       cancelled = true;
     };
-  }, [sourceUrl, viewerState.initialized, viewMode, viewerState.generation, viewerState.channels]);
+  }, [sourceUrl, viewerState.initialized, viewMode, viewerState.generation, viewerState.channels, requestedSignature]);
 
   // ── Cleanup on unmount ─────────────────────────────────────────────
   useEffect(() => {
@@ -392,4 +396,6 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion, statsUrl }:
       sourceRef.current = null;
     };
   }, []);
+
+  return requestedSignature != null && loadedSignature === requestedSignature;
 }

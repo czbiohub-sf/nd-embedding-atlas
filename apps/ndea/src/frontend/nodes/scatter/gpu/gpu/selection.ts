@@ -15,7 +15,7 @@ export function createSelectionEngine(
   device: GPUDevice,
   buffers: ScatterBuffers,
   numPoints: number,
-  onSelectionChange: (count: number | null, indices?: GpuPointIndex[]) => void,
+  onBrushSelectionChange: (count: number | null, indices?: GpuPointIndex[]) => void,
   _wgSize: 64 | 256 = 64,
   compositor: CompositorEngine,
 ) {
@@ -142,7 +142,7 @@ export function createSelectionEngine(
         stagingBuffer.unmap();
         isReadingBack = false;
         console.log(`[${frame}] ${count.toLocaleString()} selected (${(performance.now() - t0).toFixed(1)}ms)`);
-        onSelectionChange(count, indices);
+        onBrushSelectionChange(count, indices);
       })
       .catch(() => {
         isReadingBack = false;
@@ -224,7 +224,6 @@ export function createSelectionEngine(
   function selectPoint(pointIndex: GpuPointIndex) {
     clickedPointIndex = pointIndex;
     recomposeHighlight();
-    onSelectionChange(1, [pointIndex]);
   }
 
   function setHighlightPoints(pointIndices: GpuPointIndex[]) {
@@ -255,7 +254,7 @@ export function createSelectionEngine(
     externalSelectionMask.fill(0);
     compositor.externalBuffer.write(externalSelectionMask);
     compositor.markDirty(LAYER_EXTERNAL, false);
-    // Do not call onSelectionChange here: republishing the external clear would
+    // Do not call onBrushSelectionChange here: republishing the external clear would
     // notify peers, which would clear and republish in a loop.
     // Status bar is updated via the separate onExternalClear callback in orchestrator.
   }
@@ -433,7 +432,7 @@ export function createSelectionEngine(
       encoder.clearBuffer(root.unwrap(compositor.lassoBuffer));
       device.queue.submit([encoder.finish()]);
       compositor.markDirty(LAYER_LASSO, false);
-      onSelectionChange(null);
+      onBrushSelectionChange(null);
     },
     clearHighlight,
     setHighlightPoints,

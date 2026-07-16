@@ -85,6 +85,8 @@ export interface AnnotateTableProps {
     focusedRowIndex: RowIndex | null;
     focusedCrop: FocusedCrop | null;
   }) => void;
+  /** Publish focus caused by this table's mouse or keyboard interactions. */
+  onUserFocus: (focusedRowIndex: RowIndex) => void;
   onStamp: (value: string) => void;
   onSkip: () => void;
   onTotalCount: (n: number) => void;
@@ -106,6 +108,7 @@ export function AnnotateTable({
   channels,
   hash,
   onChange,
+  onUserFocus,
   onStamp,
   onSkip,
   onTotalCount,
@@ -186,6 +189,7 @@ export function AnnotateTable({
   );
 
   const focusedRowIndex = rowIndexAt(focusIndex);
+  const pendingUserFocusIndexRef = useRef<number | null>(null);
 
   const focusedCrop = useMemo<FocusedCrop | null>(() => {
     if (!cropFields) return null;
@@ -207,6 +211,12 @@ export function AnnotateTable({
     onChange({ selectedRowIndices, focusedRowIndex, focusedCrop });
   }, [selectedRowIndices, focusedRowIndex, focusedCrop, onChange]);
 
+  useEffect(() => {
+    if (pendingUserFocusIndexRef.current !== focusIndex || focusedRowIndex == null) return;
+    pendingUserFocusIndexRef.current = null;
+    onUserFocus(focusedRowIndex);
+  }, [focusIndex, focusedRowIndex, onUserFocus]);
+
   // ids in an inclusive virtual-index range (loaded rows only)
   const idsInRange = useCallback(
     (a: number, b: number) => {
@@ -223,16 +233,26 @@ export function AnnotateTable({
   );
 
   const focusTo = useCallback(
-    (index: number) => {
+    (index: number, publishFocus = true) => {
       const i = Math.max(0, Math.min(index, totalCount - 1));
       setFocusIndex(i);
       anchorRef.current = i;
       const id = rowIndexAt(i);
       setSelectedRowIndices(id != null ? new Set([id]) : new Set());
+      if (publishFocus) {
+        if (id != null) {
+          pendingUserFocusIndexRef.current = null;
+          onUserFocus(id);
+        } else {
+          pendingUserFocusIndexRef.current = i;
+        }
+      } else {
+        pendingUserFocusIndexRef.current = null;
+      }
       rowVirtualizer.scrollToIndex(i, { align: "auto" });
       ensureRange(Math.max(0, i - 25), i + 25);
     },
-    [totalCount, rowIndexAt, rowVirtualizer, ensureRange],
+    [totalCount, rowIndexAt, onUserFocus, rowVirtualizer, ensureRange],
   );
 
   // Follow an external focus from Gallery, Scatter, or Idetik:
@@ -242,7 +262,7 @@ export function AnnotateTable({
     if (externalFocusedRowIndex == null || externalFocusedRowIndex === focusedRowIndex) return;
     let alive = true;
     void findRowPosition(externalFocusedRowIndex).then((pos) => {
-      if (alive && pos != null && pos >= 0) focusTo(pos);
+      if (alive && pos != null && pos >= 0) focusTo(pos, false);
     });
     return () => {
       alive = false;
@@ -270,8 +290,10 @@ export function AnnotateTable({
         setFocusIndex(index);
         anchorRef.current = index;
       }
+      pendingUserFocusIndexRef.current = null;
+      onUserFocus(id);
     },
-    [rowIndexAt, idsInRange],
+    [rowIndexAt, idsInRange, onUserFocus],
   );
 
   // keyboard: nav + range-extend + label keys + skip + clear
@@ -285,6 +307,13 @@ export function AnnotateTable({
         if (e.shiftKey) {
           setFocusIndex(i);
           setSelectedRowIndices(idsInRange(anchorRef.current, i));
+          const id = rowIndexAt(i);
+          if (id != null) {
+            pendingUserFocusIndexRef.current = null;
+            onUserFocus(id);
+          } else {
+            pendingUserFocusIndexRef.current = i;
+          }
           rowVirtualizer.scrollToIndex(i, { align: "auto" });
           ensureRange(Math.max(0, i - 25), i + 25);
         } else {
@@ -329,6 +358,7 @@ export function AnnotateTable({
       rowIndexAt,
       onStamp,
       onSkip,
+      onUserFocus,
       rowVirtualizer,
       ensureRange,
     ],

@@ -294,6 +294,7 @@ export async function createScatterplot(
   let currentZoom = 1;
   let viewVersion = 0;
 
+  let pointPickRevision = 0;
   const interaction = createInteractionController(
     canvas,
     overlay,
@@ -330,6 +331,7 @@ export async function createScatterplot(
         config?.callbacks?.onFps?.(fps);
       },
       onPointClick: (worldX: number, worldY: number, pixelX: number, pixelY: number) => {
+        const revision = ++pointPickRevision;
         // Two paths:
         //   1. GPU pick (default, opt-out via `localStorage.ndea.useGpuPicking = '0'`):
         //      render to a cached pick buffer, sample 5×5 around the cursor,
@@ -359,9 +361,11 @@ export async function createScatterplot(
           // dirty rebuild. Latency is below human click perception.
           picking.pick(pixelX, pixelY).then(
             (result) => {
+              if (revision !== pointPickRevision) return;
               if (result === null || !finishHit(result.pointIndex)) finishMiss();
             },
             (err: unknown) => {
+              if (revision !== pointPickRevision) return;
               // GPU pick failed (rare). Fall through to the CPU grid path.
               console.warn("GPU pick failed, falling back to CPU grid:", err);
               cpuGridPick(worldX, worldY, finishHit, finishMiss);

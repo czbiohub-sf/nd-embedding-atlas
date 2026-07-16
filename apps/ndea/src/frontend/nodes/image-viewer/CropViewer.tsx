@@ -62,11 +62,7 @@ export function CropViewer({ channelInstance = "docked", datasetKey }: CropViewe
   // Don't mount the viewer until the user first clicks an observation.
   // Once mounted, keep it alive to avoid WebGL teardown/recreation.
   if (!hasEverSelected.current) {
-    return (
-      <div className="flex h-full w-full items-center justify-center text-muted-foreground text-xs">
-        Click an observation to view
-      </div>
-    );
+    return <div className="h-full w-full" />;
   }
 
   return (
@@ -91,11 +87,6 @@ export function CropViewer({ channelInstance = "docked", datasetKey }: CropViewe
               datasetKey={datasetKey}
             />
           </div>
-          {focusedRowIndex == null && (
-            <div className="absolute inset-0 flex items-center justify-center text-muted-foreground text-xs">
-              Click an observation to view
-            </div>
-          )}
         </div>
       </Viewer.Provider>
     </ViewerErrorBoundary>

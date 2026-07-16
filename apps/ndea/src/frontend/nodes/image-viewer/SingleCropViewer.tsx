@@ -1,6 +1,6 @@
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { vec3 } from "gl-matrix";
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useLayoutEffect, useState } from "react";
 import { useHost } from "@/core/host/host-context";
 import { useNodeFocus } from "@/core/node/use-node-focus";
 import { selectTrajectory } from "@/core/session/dataset-session";
@@ -12,7 +12,7 @@ import { useBboxLayer } from "@/nodes/image-viewer/viewer/useBboxLayer";
 import { useFovLoader } from "@/nodes/image-viewer/viewer/useFovLoader";
 import { useViewer } from "@/nodes/image-viewer/viewer/useViewer";
 import type { ImageViewerCapabilities } from "./plugin";
-import { focusedObservationPath } from "./focus-behavior";
+import { focusedObservationPath, shouldRevealViewer } from "./focus-behavior";
 
 /** Fixed camera view radius in pixels (independent of crop slider). */
 const CAMERA_VIEW_HALF = 150;
@@ -23,6 +23,30 @@ interface Props {
   showBbox: boolean;
   /** If set, this viewer only responds to cells from this dataset key. */
   datasetKey?: string;
+}
+
+function ViewerPresentationCover({ ready, presentationKey }: { ready: boolean; presentationKey: string }) {
+  const [revealedKey, setRevealedKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!ready) return;
+    let thirdFrame = 0;
+    let secondFrame = 0;
+    const firstFrame = requestAnimationFrame(() => {
+      secondFrame = requestAnimationFrame(() => {
+        thirdFrame = requestAnimationFrame(() => setRevealedKey(presentationKey));
+      });
+    });
+    return () => {
+      cancelAnimationFrame(firstFrame);
+      cancelAnimationFrame(secondFrame);
+      cancelAnimationFrame(thirdFrame);
+    };
+  }, [ready, presentationKey]);
+
+  return ready && revealedKey === presentationKey ? null : (
+    <div className="pointer-events-none absolute inset-0 z-10 bg-card" />
+  );
 }
 
 export function SingleCropViewer({ cropSize, showBbox, datasetKey }: Props) {
@@ -43,7 +67,6 @@ export function SingleCropViewer({ cropSize, showBbox, datasetKey }: Props) {
       return ObsInfoSchema.parse(await r.json());
     },
     enabled: focusedRowIndex != null,
-    placeholderData: keepPreviousData,
     staleTime: 10_000,
   });
 
@@ -80,7 +103,7 @@ export function SingleCropViewer({ cropSize, showBbox, datasetKey }: Props) {
   const resolvedChannels =
     (activeStoreName ? metadata.dataset_channels?.[activeStoreName] : undefined) ?? metadata.plate_channels;
 
-  useFovLoader({
+  const sourceReady = useFovLoader({
     sourceUrl,
     plateChannels: resolvedChannels,
     omeVersion,
@@ -123,7 +146,7 @@ export function SingleCropViewer({ cropSize, showBbox, datasetKey }: Props) {
   // Camera only. Deliberately does NOT depend on showBbox/cropSize-for-2d so
   // that toggling or resizing the bounding box never moves the camera — the
   // box draw lives in its own effect below.
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!isForThisDataset || !obsInfo || !viewerState.initialized) return;
 
     if (viewerState.viewMode === "2d") {
@@ -229,6 +252,16 @@ export function SingleCropViewer({ cropSize, showBbox, datasetKey }: Props) {
     );
   }
 
-  if (focusedRowIndex == null || !obsInfo) return null;
-  return null;
+  if (focusedRowIndex == null) return null;
+  const ready = shouldRevealViewer({
+    observationReady: obsInfo != null,
+    sourceReady,
+    aggregateState: viewerState.aggregateState,
+  });
+  return (
+    <ViewerPresentationCover
+      ready={ready}
+      presentationKey={`${focusedRowIndex}:${sourceUrl ?? ""}:${viewerState.generation}`}
+    />
+  );
 }

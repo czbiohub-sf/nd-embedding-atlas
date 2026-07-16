@@ -294,16 +294,6 @@ export function createInteractionController(
     }
   }
 
-  function onDblClick() {
-    const t0 = performance.now();
-    lastSelectionDispatch = 0;
-    lastSelectionCompute = 0;
-    selection.clearSelection();
-    needsRender = true;
-    scheduleLoop();
-    console.log(`Deselection: ${(performance.now() - t0).toFixed(1)}ms`);
-  }
-
   function onWheel(e: WheelEvent) {
     if (!enableZoom) return;
     e.preventDefault();
@@ -342,7 +332,6 @@ export function createInteractionController(
   overlay.addEventListener("pointerdown", onPointerDown);
   overlay.addEventListener("pointermove", onPointerMove);
   overlay.addEventListener("pointerup", onPointerUp);
-  overlay.addEventListener("dblclick", onDblClick);
   overlay.addEventListener("wheel", onWheel, { passive: false });
 
   // Frame time tracking
@@ -458,7 +447,6 @@ export function createInteractionController(
       overlay.removeEventListener("pointerdown", onPointerDown);
       overlay.removeEventListener("pointermove", onPointerMove);
       overlay.removeEventListener("pointerup", onPointerUp);
-      overlay.removeEventListener("dblclick", onDblClick);
       overlay.removeEventListener("wheel", onWheel);
     },
   };

@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { rowIndex } from "@ndea/sdk";
-import { focusedObservationPath, formatViewerObsReadout, syncViewerActivity } from "./focus-behavior";
+import {
+  focusedObservationPath,
+  formatViewerObsReadout,
+  shouldRevealViewer,
+  syncViewerActivity,
+} from "./focus-behavior";
 
 describe("image viewer focus behavior", () => {
   test("pauses with no focus and resumes for row zero or any later row", () => {
@@ -27,5 +32,15 @@ describe("image viewer focus behavior", () => {
   test("keeps the observation request path numerically identical", () => {
     expect(focusedObservationPath(rowIndex(0))).toBe("/api/obs/0");
     expect(focusedObservationPath(rowIndex(4821))).toBe("/api/obs/4821");
+  });
+
+  test("reveals pixels only after the focused observation and its layers are ready", () => {
+    expect(shouldRevealViewer({ observationReady: false, sourceReady: false, aggregateState: null })).toBe(false);
+    expect(shouldRevealViewer({ observationReady: true, sourceReady: false, aggregateState: "ready" })).toBe(false);
+    expect(shouldRevealViewer({ observationReady: true, sourceReady: true, aggregateState: "initialized" })).toBe(
+      false,
+    );
+    expect(shouldRevealViewer({ observationReady: true, sourceReady: true, aggregateState: "loading" })).toBe(false);
+    expect(shouldRevealViewer({ observationReady: true, sourceReady: true, aggregateState: "ready" })).toBe(true);
   });
 });

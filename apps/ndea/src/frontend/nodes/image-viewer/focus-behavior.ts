@@ -15,6 +15,18 @@ export function syncViewerActivity(actions: { pause(): void; resume(): void }, f
   else actions.resume();
 }
 
+export function shouldRevealViewer({
+  observationReady,
+  sourceReady,
+  aggregateState,
+}: {
+  observationReady: boolean;
+  sourceReady: boolean;
+  aggregateState: "initialized" | "loading" | "ready" | null;
+}): boolean {
+  return observationReady && sourceReady && aggregateState === "ready";
+}
+
 export function formatViewerObsReadout(data: ViewerObsSummary | undefined): string | null {
   if (!data?.fov_name) return null;
   const track = data.track_id != null ? ` · #${data.track_id}` : "";
