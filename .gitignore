@@ -43,3 +43,4 @@ notes/
 # I/O-scalability bench harness — dev-only measurement scaffolding, not shipped
 bench/
 
+examples/
