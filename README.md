@@ -184,7 +184,7 @@ See the [changelog][].
 
 [issue-tracker]: https://github.com/czbiohub-sf/nd-embedding-atlas/issues
 [discussions-link]: https://github.com/czbiohub-sf/nd-embedding-atlas/discussions
-[code-of-conduct]: https://github.com/chanzuckerberg/.github/blob/main/CODE_OF_CONDUCT.md
+[code-of-conduct]: ./CODE_OF_CONDUCT.md
 [docs-link]: https://super-adventure-yv3eleq.pages.github.io/
 [docs-index]: https://super-adventure-yv3eleq.pages.github.io/
 [docs-cli]: https://super-adventure-yv3eleq.pages.github.io/cli/
