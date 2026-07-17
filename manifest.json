@@ -4,7 +4,6 @@
   "channels": {
     "stable": "v0.1.0",
     "latest": "v0.1.0",
-    "pre-release": "v0.1.0-beta.2",
-    "canary": "canary"
+    "pre-release": "v0.1.0-beta.2"
   }
 }

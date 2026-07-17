@@ -99,11 +99,11 @@ Download the latest release for a channel, verify its SHA-256, write the single 
 
 ### Options
 
-| Option                | Type                                              | Default  | Description                                            |
-| --------------------- | ------------------------------------------------- | -------- | ------------------------------------------------------ |
-| `--channel <channel>` | `stable` \| `latest` \| `pre-release` \| `canary` | `stable` | Release channel to resolve                             |
-| `--force`             | boolean                                           | `false`  | Re-install even when already on the target             |
-| `--no-gc`             | boolean                                           | `false`  | Skip the post-update auto-gc that prunes to 2 versions |
+| Option                | Type                                  | Default  | Description                                            |
+| --------------------- | ------------------------------------- | -------- | ------------------------------------------------------ |
+| `--channel <channel>` | `stable` \| `latest` \| `pre-release` | `stable` | Release channel to resolve                             |
+| `--force`             | boolean                               | `false`  | Re-install even when already on the target             |
+| `--no-gc`             | boolean                               | `false`  | Skip the post-update auto-gc that prunes to 2 versions |
 
 Refuses to run uncompiled (i.e. via `bun run`).
 
@@ -183,7 +183,6 @@ ndea completions fish > ~/.config/fish/completions/ndea.fish
 | `stable`      | latest semver-tagged release (e.g. `v0.1.0`) | Manual; cut from `main` when ready                       |
 | `latest`      | alias for `stable`                           | Same as `stable`                                         |
 | `pre-release` | latest active alpha / beta / rc tag          | Manual; absent between cuts (manifest pointer is `null`) |
-| `canary`      | rolling `canary` tag                         | Automatic on every push to `main`                        |
 
 [`manifest.json`](https://github.com/czbiohub-sf/nd-embedding-atlas/blob/main/manifest.json) maps each channel to a git tag. `ndea update` fetches it from `raw.githubusercontent.com` at update time. Ops can hand-edit the manifest to roll a channel back without re-cutting a release.
 

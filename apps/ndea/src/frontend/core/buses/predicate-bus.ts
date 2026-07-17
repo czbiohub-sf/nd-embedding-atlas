@@ -70,6 +70,7 @@ export function createPredicateBus(): PredicateBus {
     destination.update({
       source: clause.source,
       clients: new Set(),
+      fields: [],
       value: pred ? [pred] : [],
       predicate: pred ? stringPredicate(pred) : null,
     });
@@ -84,7 +85,7 @@ export function createPredicateBus(): PredicateBus {
     }
     dirty.clear();
     for (const source of pendingEmpty) {
-      destination.update({ source, clients: new Set(), value: [], predicate: null });
+      destination.update({ source, clients: new Set(), fields: [], value: [], predicate: null });
     }
     pendingEmpty.clear();
   };

@@ -101,7 +101,11 @@ describe("WorkspaceStorage recovery contract", () => {
       toPort: "in",
       kind: "focus",
     };
-    const stale = toPersistedDoc(state);
+    const stale = structuredClone(toPersistedDoc(state)) as unknown as {
+      version: number;
+      state: WorkspaceDocumentState;
+    };
+    stale.version = 5;
     const raw = JSON.stringify(stale);
     const storage = new MemoryStorage({ active: raw });
 

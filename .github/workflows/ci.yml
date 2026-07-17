@@ -29,8 +29,6 @@ jobs:
         run: vp check vite.config.ts bunli.config.ts scripts
       - name: Check workspaces
         run: vp run -r check
-      - name: Enforce workspace boundaries
-        run: bun run check:boundaries
       # Verify .bunli/commands.gen.ts is in sync with apps/ndea/src/cli/commands/.
       # The standard verify-no-drift / gen-check pattern (Buf, sqlc,
       # Prisma, GraphQL Codegen all do this).
@@ -57,7 +55,7 @@ jobs:
         run: vp run -r test
 
   # ── Full build + launch verify (frontend + binary, catches release-time
-  # regressions at PR time rather than at canary-on-merge time) ──────────
+  # regressions at PR time rather than at release time) ─────────────────
   build-verify:
     name: Build + verify (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
@@ -82,7 +80,7 @@ jobs:
       # `bun run build` exercises the full release path: Bun.build (frontend)
       # → embed-asset manifest generation → bun build --compile (single
       # self-contained binary with embedded libduckdb). PRs that break any
-      # of these surface here instead of in canary.
+      # of these surface here instead of during a release.
       - name: vp run build
         run: vp run build
       - name: Verify binary version

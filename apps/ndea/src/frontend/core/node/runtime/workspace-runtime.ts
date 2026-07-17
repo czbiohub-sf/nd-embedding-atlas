@@ -244,6 +244,7 @@ function createRuntimeHost(
       inputPredicate.update({
         source,
         clients: new Set(),
+        fields: [],
         value: sql ? [sql] : [],
         predicate: sql ? stringPredicate(sql) : null,
       });

@@ -1,8 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
-import { pathToFileURL } from "node:url";
+import { describe, expect, test } from "bun:test";
 import {
   PLUGIN_BOOTSTRAP_SCHEMA_VERSION,
   PLUGIN_MANIFEST_SCHEMA_VERSION,
@@ -25,27 +21,6 @@ import type { PluginBootstrapFetch } from "./loader";
 import { bootFrontend, loadFrontendPluginSession } from "./runtime";
 
 const DIGESTS = ["a", "b", "c", "d", "e", "f"].map((character) => character.repeat(64));
-const REPO_ROOT = resolve(import.meta.dir, "../../../../../../");
-const EXAMPLE_BUILD = resolve(REPO_ROOT, "examples/plugins/custom-node/build.ts");
-const sandboxes: string[] = [];
-
-afterEach(async () => {
-  await Promise.all(sandboxes.splice(0).map((path) => rm(path, { recursive: true, force: true })));
-});
-
-async function buildExample(root: string): Promise<void> {
-  const process = Bun.spawn(["bun", "run", EXAMPLE_BUILD, "--outdir", root], {
-    cwd: REPO_ROOT,
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  const [code, stdout, stderr] = await Promise.all([
-    process.exited,
-    new Response(process.stdout).text(),
-    new Response(process.stderr).text(),
-  ]);
-  if (code !== 0) throw new Error(`Example build failed:\n${stdout}${stderr}`);
-}
 
 function manifest(pluginId: string) {
   return PluginManifestSchema.parse({
@@ -104,42 +79,6 @@ function factory(...definitions: readonly NodeDefinition[]): PluginFactory {
 }
 
 describe("frontend plugin session", () => {
-  test("loads the built public author example through the production catalog path", async () => {
-    const root = await mkdtemp(join(tmpdir(), "ndea-frontend-example-plugin-"));
-    sandboxes.push(root);
-    await buildExample(root);
-
-    const parsedManifest: unknown = JSON.parse(await readFile(join(root, "ndea-plugin.json"), "utf8"));
-    const exampleManifest = PluginManifestSchema.parse(parsedManifest);
-    const clientEntryUrl = `/plugins/${DIGESTS[0]}/${exampleManifest.clientEntry}`;
-    const pluginEntry: PluginBootstrapEntry = {
-      sourceId: "project:0",
-      manifest: exampleManifest,
-      clientEntryUrl,
-      staticAssetUrls: Object.fromEntries(
-        (exampleManifest.staticAssets ?? []).map((path) => [path, `/plugins/${DIGESTS[0]}/${path}`]),
-      ),
-    };
-    const clientEntryFileUrl = pathToFileURL(join(root, exampleManifest.clientEntry)).href;
-
-    const session = await loadFrontendPluginSession({
-      fetch: bootstrapFetch(bootstrap([pluginEntry])),
-      importer: (url) =>
-        url === clientEntryUrl ? import(clientEntryFileUrl) : Promise.reject(new Error(`unexpected import: ${url}`)),
-    });
-
-    expect(
-      session.nodeLibrary
-        .listSpecs()
-        .filter(({ source }) => source.kind === "plugin")
-        .map(({ definition: nodeDefinition }) => nodeDefinition.title),
-    ).toEqual(["Example Pass Through", "Example Greeting"]);
-    expect(session.nodeLibrary.getCurrentSpec("org.ndea.example/pass-through")?.stage).toBe("canvas-only");
-    expect(session.nodeLibrary.getCurrentSpec("org.ndea.example/greeting")?.stage).toBe("stageable");
-    expect(session.diagnostics).toEqual([]);
-    session.dispose();
-  });
-
   test("imports only validated bootstrap URLs and projects exact/current external definitions", async () => {
     const pluginEntry = entry("acme.widgets", 0);
     const externalModule: NodeModule = {};

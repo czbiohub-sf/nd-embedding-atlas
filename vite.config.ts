@@ -24,8 +24,6 @@ export default defineConfig({
     ignorePatterns: [
       "**/dist/**",
       "**/ochre/colormap/data/**",
-      // These fixtures must violate repository boundaries.
-      "scripts/fixtures/package-boundaries/**",
       // Generated Bunli metadata contains raw AST nodes.
       ".bunli/**",
     ],

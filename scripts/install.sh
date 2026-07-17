@@ -20,10 +20,9 @@
 #   NDEA_VERSION         release tag to install (default: latest)
 #   NDEA_BIN_DIR         PATH directory holding the symlink (default: $HOME/.local/bin)
 #   NDEA_HOME            state root for versions/ + locks/ (default: $HOME/.ndea)
-#   NDEA_CHANNEL         release channel: stable | pre-release | canary (default: stable)
+#   NDEA_CHANNEL         release channel: stable | latest | pre-release (default: stable)
 #                        - stable: most recent semver-tagged release
 #                        - pre-release: latest active alpha / beta / rc (resolved via manifest.json)
-#                        - canary: rolling pre-release built from `main` on every push
 #   NDEA_GITHUB_TOKEN    GitHub token for private/internal repos. Falls back to
 #                        GITHUB_TOKEN if unset. When present, downloads go via
 #                        the GitHub Releases API (Accept: application/octet-stream)
@@ -41,9 +40,9 @@ DEST="${NDEA_BIN_DIR:-$HOME/.local/bin}"
 NDEA_HOME_DIR="${NDEA_HOME:-$HOME/.ndea}"
 
 case "$CHANNEL" in
-    stable | latest | pre-release | canary) ;;
+    stable | latest | pre-release) ;;
     *)
-        printf '  \033[31mERR\033[0m unknown NDEA_CHANNEL=%s (expected: stable|pre-release|canary)\n' "$CHANNEL" >&2
+        printf '  \033[31mERR\033[0m unknown NDEA_CHANNEL=%s (expected: stable|latest|pre-release)\n' "$CHANNEL" >&2
         exit 1
         ;;
 esac
@@ -151,14 +150,11 @@ artifact="ndea-${os}-${arch}"
 
 # --- Release tag resolution ---------------------------------------------
 # Resolve channel + version into the concrete tag we want assets from.
-# canary → rolling 'canary' tag.
 # pre-release → resolved via manifest.json's `channels.pre-release` pointer.
 # latest → resolved via the `releases/latest` redirect (or API when authed).
 manifest_url="https://raw.githubusercontent.com/${REPO}/main/manifest.json"
 
-if [ "$CHANNEL" = "canary" ]; then
-    release_tag="canary"
-elif [ "$CHANNEL" = "pre-release" ]; then
+if [ "$CHANNEL" = "pre-release" ]; then
     log "Resolving pre-release channel via manifest.json"
     release_tag=$(gh_curl "$manifest_url" |
         sed -n 's/.*"pre-release"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' |
@@ -187,11 +183,7 @@ tmp=$(mktemp -d 2>/dev/null || mktemp -d -t ndea)
 trap 'rm -rf "$tmp"' EXIT INT TERM HUP
 
 # --- Download + verify ----------------------------------------------------
-if [ "$CHANNEL" = "canary" ]; then
-    log "Downloading $artifact (canary — rolling pre-release)"
-else
-    log "Downloading $artifact ($VERSION)"
-fi
+log "Downloading $artifact ($VERSION)"
 download_asset "$release_tag" "$artifact" "$tmp/$artifact"
 download_asset "$release_tag" "$artifact.sha256" "$tmp/$artifact.sha256"
 
@@ -201,8 +193,8 @@ log "Verifying $artifact checksum"
 ok "$artifact checksum OK"
 
 # --- Install --------------------------------------------------------------
-# release_tag was resolved above (canary → "canary", latest → real tag,
-# pre-release → manifest pointer, otherwise the user-supplied tag). Use
+# release_tag was resolved above (latest → real tag, pre-release → manifest
+# pointer, otherwise the user-supplied tag). Use
 # it directly as the versions/ subdir name.
 versions_dir="$NDEA_HOME_DIR/versions/$release_tag"
 target_bin="$versions_dir/ndea"

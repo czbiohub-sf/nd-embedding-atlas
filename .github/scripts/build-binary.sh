@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Compile the platform-specific ndea binary with embedded frontend assets.
 #
-# Shared by release.yml + canary.yml. Delegates to the app builder, which
+# Shared release build helper. Delegates to the app builder, which
 # (unlike the prior inline approach) embeds dist/frontend/** via a generated
 # `import … with { type: "file" }` manifest. Passing binary assets like
 # .woff2 to `bun build --compile` directly crashes Bun with
