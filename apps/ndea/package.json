@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "description": "Interactive browser-based Node Workspace linking AI embeddings to source 5D (TCZYX) image data.",
-  "license": "MIT",
-  "author": "Sricharan Varra <sricharan.varra@czbiohub.org>",
+  "license": "BSD-3-Clause",
+  "author": "Sricharan Varra <sricharan.varra@biohub.org>",
   "bin": {
     "ndea": "./src/cli/index.ts"
   },

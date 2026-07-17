@@ -4,6 +4,8 @@
 
 An interactive browser-based Node Workspace that links high-dimensional AI embeddings to source 5D (TCZYX) image data for rapid exploration and annotation.
 
+> **Project status:** This project is under active development and is not yet stable. APIs, file formats, and behavior may change without notice.
+
 ## Install
 
 > **Repo is private** — release assets and the install script are gated behind the
@@ -149,6 +151,14 @@ documentation setup.
 For questions and help requests, reach out in the [discussions][discussions-link].
 For bugs or feature requests, use the [issue tracker][issue-tracker].
 
+## Code of Conduct
+
+This project follows the [Contributor Covenant Code of Conduct][code-of-conduct]. By participating, you are expected to uphold it. Report unacceptable behavior to [opensource@chanzuckerberg.com](mailto:opensource@chanzuckerberg.com).
+
+## Reporting Security Issues
+
+If you believe you have found a security vulnerability, please follow our [security policy](./SECURITY.md) and responsibly disclose it to [security@chanzuckerberg.com](mailto:security@chanzuckerberg.com).
+
 ## Citation
 
 > t.b.a.
@@ -174,6 +184,7 @@ See the [changelog][].
 
 [issue-tracker]: https://github.com/czbiohub-sf/nd-embedding-atlas/issues
 [discussions-link]: https://github.com/czbiohub-sf/nd-embedding-atlas/discussions
+[code-of-conduct]: ./CODE_OF_CONDUCT.md
 [docs-link]: https://super-adventure-yv3eleq.pages.github.io/
 [docs-index]: https://super-adventure-yv3eleq.pages.github.io/
 [docs-cli]: https://super-adventure-yv3eleq.pages.github.io/cli/

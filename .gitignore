@@ -3,7 +3,7 @@
 *~
 
 # Dependencies
-node_modules/
+**/node_modules/
 
 # Build output
 /dist/
@@ -18,12 +18,15 @@ frontend/dist/
 /.coverage*
 
 # Docs
+/docs/.waku/
 /docs/generated/
 /docs/_build/
 /site/                  # zensical build output
 
 # Local agent and planning artifacts
 .claude/
+.design/
+.design-audit/
 notes/
 .playwright-cli/
 

@@ -1,11 +1,37 @@
 name: Feature request
 description: Propose a new feature for nd-embedding-atlas
-type: Enhancement
+type: Feature
 body:
-  - type: textarea
-    id: description
+  - type: markdown
     attributes:
-      label: Description of feature
-      description: Please describe your suggestion for a new feature. It might help to describe a problem or use case, plus any alternatives that you have considered.
+      value: |
+        Thanks for suggesting an improvement. Share whatever context you have.
+
+        Do not include credentials, personal data, confidential data, or restricted datasets.
+        Report security vulnerabilities privately according to our [security policy](https://github.com/czbiohub-sf/nd-embedding-atlas/security/policy).
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What are you trying to accomplish, and what prevents you from doing it today?
     validations:
       required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed improvement
+      description: If you have a solution in mind, describe the behavior or workflow you would like.
+
+  - type: textarea
+    id: visual-examples
+    attributes:
+      label: Visual examples
+      description: Add sketches, screenshots, or short recordings if they help communicate the idea.
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional context
+      description: Add alternatives, workarounds, or any other relevant details.
