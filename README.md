@@ -91,7 +91,7 @@ The installer verifies the release checksum and stores versioned binaries under 
 This repository uses Bun and Vite+. The monorepo contains the application and shared packages; `docs/` is an independent Fumapress/Waku application.
 
 ```bash
-bun install
+vp install
 vp run dev path/to/data.zarr
 vp run -r check
 vp run -r test

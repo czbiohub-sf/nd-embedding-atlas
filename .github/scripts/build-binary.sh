@@ -20,7 +20,7 @@ mkdir -p dist
 
 # Builds the frontend (Bun.build, in-process ~300ms) and compiles in one
 # shot; no separate frontend step needed.
-bun run apps/ndea/scripts/build.ts "--target=${TARGET}"
+vp run build "--target=${TARGET}"
 
 # The app builder keeps the public output at dist/ndea; rename for the matrix.
 mv "dist/ndea" "dist/${ARTIFACT}"

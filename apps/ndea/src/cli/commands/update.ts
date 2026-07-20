@@ -55,7 +55,7 @@ export default defineCommand({
   },
   async handler({ flags }) {
     if (!isCompiledBinary()) {
-      console.error("Error: `ndea update` only works from a compiled binary (not `bun run`).");
+      console.error("Error: `ndea update` only works from a compiled binary, not a source checkout.");
       process.exit(1);
     }
 

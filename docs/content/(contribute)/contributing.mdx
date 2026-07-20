@@ -7,21 +7,47 @@ description: Dev setup, quality gates, project structure, and release flow.
 
 ### Prerequisites
 
-- **[Vite+](https://viteplus.dev/)** (`vp`): project command interface for checks, the frontend dev server, and workspace task orchestration.
-- **[Bun](https://bun.com)**: runtime and package manager used by the tasks that `vp` dispatches. CI uses the version pinned in `package.json`.
+- **[Vite+](https://viteplus.dev/)** (`vp`): the sole developer command interface for dependencies, tasks, checks, builds, and development servers.
+- **[Bun](https://bun.com)**: runtime, package manager, test runner, and compiler used underneath Vite+. CI uses the version pinned in `package.json`.
 
-Use `vp` for routine development commands. Use Bun directly for dependency installation or when intentionally running a Bun entrypoint. `vp run` dispatches package scripts, which use Bun for tests, scripts, and single-binary compilation.
+Use `vp` for every command you run directly. `vp run` dispatches package scripts, which may use Bun for tests, scripts, and single-binary compilation.
 
 ### Clone and install
 
 ```bash
 git clone https://github.com/czbiohub-sf/nd-embedding-atlas.git
 cd nd-embedding-atlas
-bun install
+vp install
+cd docs && vp install && cd ..
 ```
 
 The root install resolves the application and shared packages. The docs app keeps its own
 lockfile and install under `docs/`.
+
+## Dependency management
+
+```bash
+# Audit root tooling and every workspace
+vp outdated
+vp outdated -r
+# Update workspace resolutions within declared ranges
+vp update -r
+
+# Add or remove a dependency in the selected workspace
+vp add --filter @ndea/app <package>
+vp remove --filter @ndea/app <package>
+
+# Update the independent docs application
+cd docs
+vp outdated
+vp update
+```
+
+Shared `catalog` constraints live in the root `package.json`; update each constraint there
+once, then run `vp install`. Update root-only tooling packages reported by `vp outdated`
+explicitly with `vp update <package...>`; a blanket root update would replace unrelated
+`catalog:` references with package-local ranges. Review `overrides` separately because they
+are deliberately pinned.
 
 ## Development workflow
 

@@ -46,12 +46,13 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           no-cache: true
+      - uses: voidzero-dev/setup-vp@v1
 
       - name: Verify tag matches package.json version
         run: bash .github/scripts/verify-tag-version.sh
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: vp install --frozen-lockfile
 
       - name: Compile single-file binary (libduckdb embedded)
         env:

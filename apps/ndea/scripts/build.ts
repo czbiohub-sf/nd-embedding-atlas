@@ -13,8 +13,8 @@
  * so this script shells out to `bun build`.
  *
  * Usage:
- *   bun run scripts/build.ts                          # current platform
- *   bun run scripts/build.ts bun-linux-x64            # specific target
+ *   vp run build                                      # current platform
+ *   vp run build bun-linux-x64                        # specific target
  *
  * Output: dist/ndea: single self-contained binary. Embeds libduckdb;
  * the preloader extracts it to ~/.cache/ndea/<version>/ at first run and
@@ -212,7 +212,7 @@ try {
     `libduckdb.${duckdbTarget.dylibExt}`,
   );
   if (!existsSync(dylibAbsPath)) {
-    throw new Error(`${dylibAbsPath} not found. Run \`bun install\` first.`);
+    throw new Error(`${dylibAbsPath} not found. Run \`vp install\` first.`);
   }
   const dylibRelPath = relative(dirname(LIBDUCKDB_STUB_PATH), dylibAbsPath);
   await Bun.write(

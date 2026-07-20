@@ -59,7 +59,7 @@ export default defineCommand({
     if (isCompiledBinary()) {
       ok(`compiled binary`);
     } else {
-      warn(`running uncompiled (\`bun run\`): install/update/rollback/gc disabled`);
+      warn("running from source: install/update/rollback/gc disabled");
     }
 
     // ── Path resolution ────────────────────────────────────────────────────
