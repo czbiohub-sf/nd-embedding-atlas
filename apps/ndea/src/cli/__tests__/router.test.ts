@@ -2,7 +2,7 @@
  * End-to-end smoke tests for the bunli-backed subcommand router.
  *
  * We spawn `bun run src/cli/index.ts …` subprocesses so the test exercises
- * the real argv → command dispatch pipeline — no mocks. Each subprocess is
+ * the real argv → command dispatch pipeline: no mocks. Each subprocess is
  * quick (no DuckDB / zarr boot) because the commands we hit short-circuit
  * before opening any store.
  */
@@ -45,7 +45,7 @@ describe("router / help + version", () => {
   test("`ndea --help` lists subcommands", async () => {
     const r = await run(["--help"]);
     expect(r.code).toBe(0);
-    // Citty prints to stdout (with dim ANSI) — strip colors before matching.
+    // Citty prints to stdout (with dim ANSI): strip colors before matching.
     const combined = (r.stdout + r.stderr).replace(ANSI_PATTERN, "");
     expect(combined).toContain("view");
     expect(combined).toContain("install");
@@ -98,7 +98,7 @@ describe("router / help + version", () => {
 
 describe("router / default routing", () => {
   test("`ndea` with no args shows usage and exits 0", async () => {
-    // bunli defaults to printing help on bare invocation — same convention
+    // bunli defaults to printing help on bare invocation: same convention
     // as git/gh/uv. Previous citty behaviour was to exit 1 because it
     // routed to `view` which then errored on missing positional. The
     // bunli default is friendlier; just verify usage shows up.

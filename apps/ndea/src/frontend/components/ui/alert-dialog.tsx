@@ -1,8 +1,8 @@
 /**
- * AlertDialog — destructive-action confirmation dialog.
+ * AlertDialog: destructive-action confirmation dialog.
  *
  * Built on @base-ui/react/alert-dialog (role="alertdialog", focus trap,
- * Esc closes, no overlay-click dismissal — caller must explicitly Cancel
+ * Esc closes, no overlay-click dismissal: caller must explicitly Cancel
  * or Confirm). Use for binary destructive decisions (Delete, Discard).
  * For multi-action or recoverable flows, use Dialog instead.
  */

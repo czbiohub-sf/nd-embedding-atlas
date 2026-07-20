@@ -89,9 +89,9 @@ export function WrangleBody({ host }: NodeBodyProps<WrangleConfig, WrangleCapabi
         ) : status === "reshaping" ? (
           <span
             className="truncate text-wire-sel"
-            title="this pipeline reshapes the relation (drops per-row identity) — it isn't a row filter. Relation outputs land in the rel-wire phase; as a filter it passes through."
+            title="this pipeline reshapes the relation (drops per-row identity): it isn't a row filter. Relation outputs land in the rel-wire phase; as a filter it passes through."
           >
-            ⬡ reshaping — not a row filter (pass-through)
+            ⬡ reshaping: not a row filter (pass-through)
           </span>
         ) : (
           <span className="text-success">✓ compiled</span>

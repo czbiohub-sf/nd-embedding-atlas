@@ -1,10 +1,10 @@
 /**
  * Node-anatomy fitness functions (nodes-as-internal-plugins). They keep the
  * canonical node layout from eroding:
- *   1. fs ↔ registry agree — every registered node spec is exactly one
+ *   1. fs ↔ registry agree: every registered node spec is exactly one
  *      `nodes/**​/node.tsx`, and vice-versa. Add a node without a `node.tsx`
  *      (or a `node.tsx` that doesn't register) and this fails.
- *   2. ratchet: the legacy `<x>.node.tsx` spec naming is gone — the spec is
+ *   2. ratchet: the legacy `<x>.node.tsx` spec naming is gone: the spec is
  *      always `node.tsx`.
  *   3. ratchet: node views are `view.tsx`, never `<X>PluginView.tsx`.
  *
@@ -24,7 +24,7 @@ const APP_ROOT = resolve(import.meta.dir, "../../../..");
 const glob = (pattern: string) => [...new Glob(pattern).scanSync(APP_ROOT)];
 
 describe("node anatomy (internal-plugin contract)", () => {
-  test("every real node spec lives at nodes/**/node.tsx — fs ↔ registry agree", () => {
+  test("every real node spec lives at nodes/**/node.tsx: fs ↔ registry agree", () => {
     const specFiles = glob("src/frontend/nodes/**/node.tsx");
     expect(specFiles.length, `node.tsx files: ${specFiles.join(", ")}`).toBe(nativeNodeLibrary.listSpecs().length);
   });

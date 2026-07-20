@@ -30,7 +30,7 @@ export function CategoricalLegend() {
   const { legend, coordinator, selection, table, categoryCol, onStaleColumn } = meta;
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Reactive filtered counts — updates when cross-filter changes
+  // Reactive filtered counts: updates when cross-filter changes
   const counts = useLegendCounts({ coordinator, selection, table, categoryCol, onStaleColumn });
 
   // ESC handler: clear isolation
@@ -109,7 +109,7 @@ export function CategoricalLegend() {
                   if (e.shiftKey) actions.toggleIsolation(item.index, true);
                 }}
               >
-                {/* Color dot — left-click toggles disabled, right-click opens color picker */}
+                {/* Color dot: left-click toggles disabled, right-click opens color picker */}
                 <ContextMenu>
                   <ContextMenuTrigger>
                     <button

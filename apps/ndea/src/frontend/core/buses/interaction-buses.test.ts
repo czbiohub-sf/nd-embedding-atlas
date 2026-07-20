@@ -63,10 +63,10 @@ describe("interaction buses", () => {
   test("predicate facet composition and clearing do not mutate focus or row sets", () => {
     const scheduled: FrameRequestCallback[] = [];
     const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
-    globalThis.requestAnimationFrame = ((callback: FrameRequestCallback) => {
+    globalThis.requestAnimationFrame = (callback: FrameRequestCallback) => {
       scheduled.push(callback);
       return scheduled.length;
-    }) as typeof requestAnimationFrame;
+    };
 
     try {
       const focus = createFocusBus();

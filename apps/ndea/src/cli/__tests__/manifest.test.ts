@@ -95,9 +95,9 @@ describe("manifest / fetchManifest", () => {
 describe("manifest / detectTarget", () => {
   test("returns a valid target triple for this host", () => {
     const t = detectTarget();
-    expect(["darwin", "linux", "windows"]).toContain(t.os);
+    expect(["darwin", "linux"]).toContain(t.os);
     expect(["x64", "arm64"]).toContain(t.arch);
-    expect(t.assetName).toMatch(/^ndea-(darwin|linux|windows)-(x64|arm64)(\.exe)?$/);
+    expect(t.assetName).toMatch(/^ndea-(darwin|linux)-(x64|arm64)$/);
   });
 });
 

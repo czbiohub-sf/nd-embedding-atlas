@@ -1,7 +1,7 @@
 import type { Plugin } from "vite-plus";
 
 /**
- * devConsoleEcho — dev-only Vite plugin that echoes browser console output
+ * devConsoleEcho: dev-only Vite plugin that echoes browser console output
  * (and uncaught errors / unhandled promise rejections) into the terminal
  * stdout where the dev server is running.
  *
@@ -19,11 +19,11 @@ import type { Plugin } from "vite-plus";
  *   3. The middleware writes one ANSI-colored line per entry to stdout,
  *      prefixed with `[browser:<level>]`.
  *
- * Filters: messages starting with `[vite`/`[hmr` are dropped — Vite's own
+ * Filters: messages starting with `[vite`/`[hmr` are dropped: Vite's own
  * HMR client chatter already lands in stdout via the proxy logger, no need
  * to double-print it.
  *
- * Apply: serve only — production builds inline nothing.
+ * Apply: serve only: production builds inline nothing.
  */
 
 interface ConsoleEntry {
@@ -104,7 +104,7 @@ const CLIENT_SHIM = `
     } catch (_) {
       return;
     }
-    // Skip Vite's own HMR chatter — already shows up via the dev-server logger.
+    // Skip Vite's own HMR chatter: already shows up via the dev-server logger.
     if (message.startsWith("[vite") || message.startsWith("[hmr")) return;
     queue.push({ level: level, message: message, ts: Date.now() });
     if (queue.length > MAX_QUEUE) queue.splice(0, queue.length - MAX_QUEUE);

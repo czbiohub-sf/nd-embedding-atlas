@@ -1,5 +1,5 @@
 /**
- * dataset — a per-dataset source: emits `_dataset = '<key>'`, or null (all
+ * dataset: a per-dataset source: emits `_dataset = '<key>'`, or null (all
  * datasets) when no key is selected. The key lives in the node's config blob,
  * read live at cook time.
  */

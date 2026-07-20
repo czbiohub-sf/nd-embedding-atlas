@@ -1,5 +1,5 @@
 /**
- * `ndea view` — open Zarr stores and serve the Node Workspace.
+ * `ndea view`: open Zarr stores and serve the Node Workspace.
  *
  * This is the default command: `ndea ./data.zarr` routes here via the root
  * argv normalizer in index.ts so pre-subcommand invocations keep working.
@@ -52,7 +52,7 @@ export default defineCommand({
     const port = flags.port;
     const host = flags.host && flags.host.length > 0 ? flags.host : undefined;
     const noOpen = flags["no-open"];
-    // Mirror the env-var escape hatch — scripts/dev.ts sets NDEA_NO_STATIC=1.
+    // Mirror the env-var escape hatch: scripts/dev.ts sets NDEA_NO_STATIC=1.
     const noStatic = flags["no-static"] || process.env.NDEA_NO_STATIC === "1";
     const obsColumns = parseObsColumns(flags["obs-columns"]);
     const preset = flags.preset && flags.preset.length > 0 ? flags.preset : undefined;

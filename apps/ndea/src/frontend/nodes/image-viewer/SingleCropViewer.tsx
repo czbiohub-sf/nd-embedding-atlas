@@ -86,7 +86,7 @@ export function SingleCropViewer({ cropSize, showBbox, datasetKey }: Props) {
   const mountPrefix = activeStore ? activeStore.mount : "/plate";
   const omeVersion = activeStore?.ome_version ?? metadata.plate_ome_version;
 
-  // Gate sourceUrl — null prevents useFovLoader from loading the wrong plate.
+  // Gate sourceUrl: null prevents useFovLoader from loading the wrong plate.
   const sourceUrl = isForThisDataset && obsInfo ? `${window.location.origin}${mountPrefix}/${obsInfo.fov_name}` : null;
 
   // Autocontrast stats endpoint for this FOV (dataset_key picks the plate mount
@@ -119,7 +119,7 @@ export function SingleCropViewer({ cropSize, showBbox, datasetKey }: Props) {
   });
 
   // Whether this dataset resolved obs centroids (x/y). Combined with the
-  // per-obs `bbox`, this decides if there is anything to draw at all — a
+  // per-obs `bbox`, this decides if there is anything to draw at all: a
   // dataset with neither (no crops) draws no box, and rows that lack both
   // never show a stale fallback rectangle at the origin.
   const hasCentroid = capabilitiesOf(metadata).has("spatial");
@@ -144,7 +144,7 @@ export function SingleCropViewer({ cropSize, showBbox, datasetKey }: Props) {
 
   // ── Effect: Observation framing (mode-aware) ──────────────────────
   // Camera only. Deliberately does NOT depend on showBbox/cropSize-for-2d so
-  // that toggling or resizing the bounding box never moves the camera — the
+  // that toggling or resizing the bounding box never moves the camera: the
   // box draw lives in its own effect below.
   useLayoutEffect(() => {
     if (!isForThisDataset || !obsInfo || !viewerState.initialized) return;
@@ -159,7 +159,7 @@ export function SingleCropViewer({ cropSize, showBbox, datasetKey }: Props) {
       }
     } else {
       // 3D: position orbit camera to look at observation center.
-      // Same translation correction as the 2D path — see frameRegion above.
+      // Same translation correction as the 2D path: see frameRegion above.
       const cx = obsInfo.x * scale.x + tx;
       const cy = obsInfo.y * scale.y + ty;
       const controls = meta.viewport?.cameraControls;

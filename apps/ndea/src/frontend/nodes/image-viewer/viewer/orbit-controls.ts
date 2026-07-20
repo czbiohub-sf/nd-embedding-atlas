@@ -34,7 +34,7 @@ interface CameraControls {
 }
 /** Spherical coords (radius, azimuth `phi`, elevation `theta`) → cartesian, y-up. */
 class Spherical {
-  // explicit fields (no parameter properties — `erasableSyntaxOnly` forbids them)
+  // explicit fields (no parameter properties: `erasableSyntaxOnly` forbids them)
   radius: number;
   phi: number;
   theta: number;

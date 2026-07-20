@@ -1,7 +1,7 @@
 /**
  * Pure helpers for the annotate commit panel. Kept separate from the panel so the
- * union-discrimination and all-remote logic — the parts that would otherwise
- * dereference `columns`/`format` on an error member and crash — are unit-testable
+ * union-discrimination and all-remote logic: the parts that would otherwise
+ * dereference `columns`/`format` on an error member and crash: are unit-testable
  * without a React DOM harness (this repo has none).
  */
 
@@ -43,7 +43,7 @@ export interface CommitSummary {
   writableCount: number;
   failedCount: number;
   columnsWritten: number;
-  /** True when the report has datasets but none are writable (all remote/error) — Confirm is disabled. */
+  /** True when the report has datasets but none are writable (all remote/error): Confirm is disabled. */
   allBlocked: boolean;
 }
 

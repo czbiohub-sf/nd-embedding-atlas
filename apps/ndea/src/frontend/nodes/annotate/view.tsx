@@ -1,13 +1,13 @@
 /**
- * Annotate node body — a TABLE-first labeling surface (one door, one node).
+ * Annotate node body: a TABLE-first labeling surface (one door, one node).
  *
  * Rows = the scoped obs (the wired predicate, delivered as `host.inputPredicate`
- * and consumed straight by `AnnotateTable`/`useTableQuery` — the same plumbing
+ * and consumed straight by `AnnotateTable`/`useTableQuery`: the same plumbing
  * the Table node uses, so it scopes off a Filter/Wrangle edge correctly).
  *
  * Two modes share the surface:
- *  - `label` — a vocabulary palette + hotkeys stamp the focused row / selection.
- *  - `range` — a min/max bracket instrument (`RangeBracket`) authors a numeric
+ *  - `label`: a vocabulary palette + hotkeys stamp the focused row / selection.
+ *  - `range`: a min/max bracket instrument (`RangeBracket`) authors a numeric
  *    interval per obs, committed as two float columns `{metric}_min`/`_max`.
  *
  * Selection is SPREADSHEET-style (click / shift / ⌘). The focused (last-clicked)
@@ -100,7 +100,7 @@ export function AnnotateView({ host }: NodeBodyProps<AnnotateConfig, AnnotateCap
 
   // range mode derives two float columns from the metric base name. `rangeReady`
   // gates on the ANNOTATION-COLUMNS list (created + server-registered into the
-  // `dataset` VIEW), NOT `metadata.obs_columns` — the latter lags creation, so
+  // `dataset` VIEW), NOT `metadata.obs_columns`: the latter lags creation, so
   // the table never surfaced the pair until a manual re-scope.
   const rangeBase = (targetColumn ?? "").trim();
   const minCol = rangeBase ? `${rangeBase}_min` : null;
@@ -120,7 +120,7 @@ export function AnnotateView({ host }: NodeBodyProps<AnnotateConfig, AnnotateCap
 
   // gallery link: crop-locator columns + channels. Channels come from the shared
   // viewerChannelsStore (the "docked" slot), so thumbnails are contrasted/colored
-  // identically to the Gallery node and the live viewer — change channels in one,
+  // identically to the Gallery node and the live viewer: change channels in one,
   // they change here too.
   const cropFields = useMemo<CropFields | null>(() => {
     const cols = metadata.obs_columns ?? [];
@@ -133,7 +133,7 @@ export function AnnotateView({ host }: NodeBodyProps<AnnotateConfig, AnnotateCap
       y: cols.includes("y") ? "y" : undefined,
     };
   }, [metadata.obs_columns]);
-  // Channels follow the focused obs's dataset slot — shared with the viewer/Gallery
+  // Channels follow the focused obs's dataset slot: shared with the viewer/Gallery
   // via viewerChannelsStore, so live channel edits flow into the crops. Falls back
   // to "docked" (single-dataset stores) until a dataset is resolved.
   const channelSlot = selection.focusedCrop?.datasetKey ?? "docked";
@@ -151,7 +151,7 @@ export function AnnotateView({ host }: NodeBodyProps<AnnotateConfig, AnnotateCap
     };
   }, [host]);
 
-  // Follow an external focus (Gallery/Scatter/Idetik crop click) — read the
+  // Follow an external focus (Gallery/Scatter/Idetik crop click): read the
   // group-aware host.focus reactively so the table can jump to that obs,
   // mirroring how those views already follow ours.
   const externalFocusedRowIndex = useNodeFocus(host);
@@ -306,7 +306,7 @@ export function AnnotateView({ host }: NodeBodyProps<AnnotateConfig, AnnotateCap
           disabled={busy || !rangeComplete || selection.focusedRowIndex == null}
           onClick={() => void onStampRange()}
         >
-          set {selection.focusedRowIndex ?? "—"} <Kbd>↵</Kbd>
+          set {selection.focusedRowIndex ?? ":"} <Kbd>↵</Kbd>
         </Button>
         <Button
           variant="outline"
@@ -375,11 +375,11 @@ export function AnnotateView({ host }: NodeBodyProps<AnnotateConfig, AnnotateCap
                 }}
               >
                 <SelectTrigger aria-label="annotation column" className="h-7 w-40">
-                  <SelectValue placeholder="— select —" />
+                  <SelectValue placeholder=": select :" />
                 </SelectTrigger>
                 <SelectContent>
                   {columns.length === 0 ? (
-                    <div className="px-2 py-1.5 text-2xs text-text-muted">no columns yet — create one →</div>
+                    <div className="px-2 py-1.5 text-2xs text-text-muted">no columns yet: create one →</div>
                   ) : (
                     columns.map((c) => (
                       <SelectItem key={c} value={c}>
@@ -440,7 +440,7 @@ export function AnnotateView({ host }: NodeBodyProps<AnnotateConfig, AnnotateCap
                 aria-label="Set annotation range"
                 className="inline-flex h-7 shrink-0 items-center rounded-md border border-input px-2 text-2xs text-foreground outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/30 disabled:pointer-events-none disabled:opacity-50"
               >
-                range [{fmtVal(rangeLo) || "—"}, {fmtVal(rangeHi) || "—"}]
+                range [{fmtVal(rangeLo) || ":"}, {fmtVal(rangeHi) || ":"}]
               </PopoverTrigger>
               <PopoverContent side="bottom" align="end" className="w-72 p-3">
                 {rangeControls}
@@ -492,7 +492,7 @@ export function AnnotateView({ host }: NodeBodyProps<AnnotateConfig, AnnotateCap
       {!hasScope && (
         <div className="flex items-start gap-1.5 border-warning/30 border-b bg-warning/10 px-2.5 py-1.5 text-2xs text-warning">
           <span aria-hidden>⚠</span>
-          <span>No scope wired — labeling the whole dataset. Connect a Filter or Selection upstream to scope it.</span>
+          <span>No scope wired: labeling the whole dataset. Connect a Filter or Selection upstream to scope it.</span>
         </div>
       )}
 

@@ -58,7 +58,7 @@ function SliderRow({ label, value, min, max, step, gradient, onChange }: SliderR
 export function OklchColorPicker({ label, color, defaultColor, onChange, onReset }: OklchColorPickerProps) {
   const { l, c, h } = color;
 
-  // Live gradient computation — inline style is the only legitimate approach here
+  // Live gradient computation: inline style is the only legitimate approach here
   // since values are computed from L/C/H state and cannot be expressed as static Tailwind utilities.
   const lGrad = `linear-gradient(to right, oklch(0 ${c} ${h}deg), oklch(0.5 ${c} ${h}deg), oklch(1 ${c} ${h}deg))`;
   const cGrad = `linear-gradient(to right, oklch(${l} 0 ${h}deg), oklch(${l} 0.2 ${h}deg), oklch(${l} 0.35 ${h}deg))`;

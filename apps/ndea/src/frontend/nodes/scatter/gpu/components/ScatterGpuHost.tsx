@@ -1,5 +1,5 @@
 /**
- * ScatterGPUHost — always-mounted WebGPU canvas host.
+ * ScatterGPUHost: always-mounted WebGPU canvas host.
  *
  * This component owns the two canvas elements and the GPU handle lifecycle.
  * It NEVER conditionally unmounts based on loading state. Loading/error
@@ -8,7 +8,7 @@
  * GPU initialization fires when BOTH:
  *   1. canvas is mounted (via callback ref), AND
  *   2. positions are available (positionKey changes)
- * whichever arrives last — eliminating the race condition where loading state
+ * whichever arrives last: eliminating the race condition where loading state
  * caused the canvas to unmount exactly when positions arrived.
  */
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from "react";
@@ -25,7 +25,7 @@ export type { ScatterGPUHostHandle } from "@/nodes/scatter/gpu/handle-capabiliti
 
 /**
  * Declarative point-style contract. Applied on change AND re-applied on GPU
- * reinit — replaces the imperative setPointRadius/Opacity/BlendMode/HdrSettings
+ * reinit: replaces the imperative setPointRadius/Opacity/BlendMode/HdrSettings
  * pokes + store subscriptions that ScatterView used to maintain. First slice of
  * the prop-driven `<ScatterCanvas>` contract (these are human-cadence, not the
  * 60fps camera path, so a declarative prop is safe here).
@@ -48,13 +48,13 @@ interface ScatterGPUHostProps {
    */
   positionKey: string | null;
   /**
-   * Stable ScatterplotConfig — must be created with useRef in the parent
+   * Stable ScatterplotConfig: must be created with useRef in the parent
    * and never recreated, otherwise GPU re-inits on every render.
    */
   config: ScatterplotConfig;
   onGpuError(msg: string): void;
   onRowIndicesChange(indices: RowIndex[]): void;
-  /** Declarative point style — applied on change, re-applied on GPU reinit. */
+  /** Declarative point style: applied on change, re-applied on GPU reinit. */
   pointStyle?: ScatterPointStyle;
   /** Declarative full-bright highlight set (e.g. trajectory points). null/empty = none. */
   highlightRowIds?: readonly RowIndex[] | null;
@@ -90,7 +90,7 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
   // Aborts an in-flight createScatterplot on re-init / unmount (§7.2).
   const initAbortRef = useRef<AbortController | null>(null);
 
-  // Refs to latest props — lets maybeInitGpu be stable (empty deps)
+  // Refs to latest props: lets maybeInitGpu be stable (empty deps)
   // while always reading current values.
   const dataRef = useRef<ScatterData | null>(null);
   dataRef.current = data;
@@ -117,7 +117,7 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
   /**
    * Attempt GPU initialization. Called from both the canvas callback ref
    * (fires on mount) and the positionKey effect (fires when data arrives).
-   * Safe to call multiple times — skips if already initialized for the
+   * Safe to call multiple times: skips if already initialized for the
    * current key or if prerequisites aren't met.
    */
   const maybeInitGpu = useCallback(() => {
@@ -135,7 +135,7 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
       onGpuErrorRef.current(currentLease.error.message);
       return;
     }
-    if (!currentLease.lease) return; // lease in flight — re-runs when it resolves
+    if (!currentLease.lease) return; // lease in flight: re-runs when it resolves
 
     if (initKeyRef.current === currentKey) return; // already initialized
     initKeyRef.current = currentKey;
@@ -146,7 +146,7 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
     }
 
     // Abort any in-flight init and destroy the previous instance before
-    // re-initializing (PLUGIN-ARCHITECTURE §7.2 — no stranded device on churn).
+    // re-initializing (PLUGIN-ARCHITECTURE §7.2: no stranded device on churn).
     initAbortRef.current?.abort();
     gpuRef.current?.destroy();
     gpuRef.current = null;
@@ -170,7 +170,7 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
       lease: currentLease.lease,
     })
       .then((gpu) => {
-        // Superseded by a newer init or unmounted while initializing — discard.
+        // Superseded by a newer init or unmounted while initializing: discard.
         if (abort.signal.aborted) {
           gpu.destroy();
           return;
@@ -185,9 +185,9 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
         if (err instanceof DOMException && err.name === "AbortError") return;
         onGpuErrorRef.current(err instanceof Error ? err.message : String(err));
       });
-  }, []); // stable — all reads through refs
+  }, []); // stable: all reads through refs
 
-  // Canvas callback refs — fire when the canvas element mounts/unmounts.
+  // Canvas callback refs: fire when the canvas element mounts/unmounts.
   // GPU init fires as soon as both canvases are in the DOM.
   const canvasCallbackRef = useCallback(
     (el: HTMLCanvasElement | null) => {
@@ -205,7 +205,7 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
     [maybeInitGpu],
   );
 
-  // positionKey effect — fires when positions arrive or change.
+  // positionKey effect: fires when positions arrive or change.
   // Uses a string dep (safe) instead of Float32Array reference equality.
   useEffect(() => {
     if (!positionKey) {
@@ -226,7 +226,7 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
     maybeInitGpu();
   }, [leaseState, maybeInitGpu]);
 
-  // ResizeObserver — keeps canvas pixel dimensions in sync with CSS size
+  // ResizeObserver: keeps canvas pixel dimensions in sync with CSS size
   useEffect(() => {
     const canvas = canvasElRef.current;
     if (!canvas) return () => {};

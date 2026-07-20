@@ -1,5 +1,5 @@
 /**
- * Named categorical palette picker — parallel to ColormapGrid (continuous).
+ * Named categorical palette picker: parallel to ColormapGrid (continuous).
  * Each swatch shows the first N colors of the palette as a sample strip.
  */
 import { cn } from "@/lib/utils";

@@ -22,11 +22,11 @@ import { useTheme } from "@/ThemeProvider";
 import { DocsContext } from "./docs-context";
 
 /**
- * DocsProvider — mounts the in-app documentation surfaces once, near the app
+ * DocsProvider: mounts the in-app documentation surfaces once, near the app
  * root, and exposes imperative openers via `useDocs()`:
  *   · ⌘K / Ctrl+K → the docs search palette (`CommandDialog`)
  *   · openDocs(exactRef) → the node definition's full reference (`Sheet`)
- * Content is sourced from the definition's documentation, ports, and capabilities —
+ * Content is sourced from the definition's documentation, ports, and capabilities :
  * no MDX pipeline yet (tiers 2–3 rich prose land with it). See the plan doc.
  */
 export function DocsProvider({ children, catalog }: { children: ReactNode; catalog: NodeCatalog }) {
@@ -67,7 +67,7 @@ export function DocsProvider({ children, catalog }: { children: ReactNode; catal
  * and a footer with kbd hints + a light/dark toggle. A "Pages" group (searching
  * the MDX doc pages) lands with the in-app MDX pipeline. */
 
-/** A node's typed glyph — colored dot by its primary port kind (like the sketch). */
+/** A node's typed glyph: colored dot by its primary port kind (like the sketch). */
 function NodeGlyph({ kind }: { kind: NdPortKind }) {
   const spec = ND_PORT_KINDS[kind];
   const shape =
@@ -118,7 +118,7 @@ function DocsCommand({
         <CommandEmpty>No documentation found.</CommandEmpty>
         <CommandGroup heading="Nodes">
           {entries.map((d) => {
-            const kind = (d.outputs[0]?.kind ?? d.inputs[0]?.kind ?? "pred") as NdPortKind;
+            const kind = d.outputs[0]?.kind ?? d.inputs[0]?.kind ?? "pred";
             return (
               <CommandItem
                 key={`${d.ref.nodeTypeId}@${d.ref.nodeTypeVersion}`}
@@ -173,10 +173,10 @@ function DocsCommand({
   );
 }
 
-/* ── full-docs sheet — one node's reference, from structured definition data ── */
+/* ── full-docs sheet: one node's reference, from structured definition data ── */
 
 function PortRow({ port, out }: { port: NodePort; out: boolean }) {
-  const spec = ND_PORT_KINDS[port.kind as NdPortKind];
+  const spec = ND_PORT_KINDS[port.kind];
   const shape =
     spec.shape === "diamond"
       ? { borderRadius: 2, transform: "rotate(45deg)" }

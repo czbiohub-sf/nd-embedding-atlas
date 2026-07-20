@@ -2,11 +2,11 @@
 # Generate a per-artifact `<file>.sha256` file for the ndea-* binary in dist/.
 #
 # Linux runners ship `sha256sum`; macOS runners only have `shasum -a 256`.
-# Output format is the same: `<hex>  <filename>` — compatible with
+# Output format is the same: `<hex>  <filename>`, compatible with
 # `shasum -a 256 -c <file>` for verification.
 #
 # Required env:
-#   ARTIFACT — bare filename inside dist/ to hash (e.g. ndea-linux-x64).
+#   ARTIFACT: bare filename inside dist/ to hash (e.g. ndea-linux-x64).
 set -euo pipefail
 
 : "${ARTIFACT:?ARTIFACT env var is required}"

@@ -1,0 +1,32 @@
+---
+title: Supported formats
+description: Implemented AnnData, MuData, OME-Zarr, and project YAML contracts.
+---
+
+nd-embedding-atlas implements the subsets below. A file can be valid according to an upstream specification and still use an encoding or layout that ndea does not read.
+
+| Input        | Detection                               | Implemented subset                                                                                       | Important limits                                                                                        |
+| ------------ | --------------------------------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| AnnData Zarr | root `encoding-type: anndata`           | Zarr v2 and v3 stores; `obs`, optional `var`, dense `obsm`, layers, categorical and string columns       | `obs` is required; sparse embeddings are not supported                                                  |
+| MuData Zarr  | root `encoding-type: MuData`            | MuData 0.1.0-style stores with `axis: 0`; AnnData modalities under `mod/`                                | only `axis=0`; modality observations must map one-to-one to the shared observations                     |
+| OME-Zarr HCS | plate metadata plus image `multiscales` | OME-NGFF 0.4 on Zarr v2 and OME-NGFF 0.5 on Zarr v3                                                      | mounted plates only; numeric pyramid dataset paths and standard plate/well/image hierarchy are expected |
+| Project YAML | `.yaml` or `.yml` launch path           | array or mapping dataset syntax, relative paths, plate mounts, channel display settings, server settings | exactly one YAML file per launch; malformed or conflicting aliases stop startup                         |
+
+## AnnData element encodings
+
+The reader handles dataframe columns represented as plain arrays, nullable arrays, string arrays, and categoricals. It reads dense arrays and CSR/CSC matrices where the relevant code path supports matrix data. Embeddings in `obsm` must resolve to dense two-dimensional arrays.
+
+The implementation recognises AnnData root encoding `0.1.0` and dataframe/array-family encodings used by current AnnData Zarr writers, including dataframe and string-array `0.2.0` metadata.
+
+## Storage locations
+
+Local filesystem paths are the supported launch interface. The lower-level Zarr reader can open HTTP(S) stores, but the application CLI, project validation, and mounted imaging pipeline are designed and tested around local paths.
+
+## Before converting data
+
+1. Open the store with `ndea view` and read the first diagnostic.
+2. Confirm the root `encoding-type` and Zarr generation.
+3. Check the focused format page for required groups and column names.
+4. Convert only the unsupported element rather than rewriting the entire store.
+
+See [AnnData](/anndata), [MuData](/mudata), [Image linkage](/image-linkage), and [Optimise OME-Zarr imaging](/preparing-your-data) for preparation details.

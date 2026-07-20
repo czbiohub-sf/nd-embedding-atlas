@@ -137,7 +137,7 @@ export function ViewerProvider({ children, channelInstance = "docked" }: Props) 
   // it after one stop()/start() cycle (PixelSizeObserver.disconnect never
   // clears the handle, so the next connect() bails as "already connected").
   // The pause gate stops the loop whenever no observation is selected, so
-  // the first resume leaves the runtime blind to container resizes — and
+  // the first resume leaves the runtime blind to container resizes: and
   // the workspace reparents this canvas between very differently-sized
   // sockets (stage tile ↔ canvas node), rendering the stale buffer as a
   // drastically warped band. Until the upstream fix ships (idetik
@@ -148,7 +148,7 @@ export function ViewerProvider({ children, channelInstance = "docked" }: Props) 
     const runtime = runtimeRef.current;
     const canvas = canvasElRef.current;
     if (!runtime || !canvas || canvas.clientWidth <= 0 || canvas.clientHeight <= 0) return;
-    // renderer_ is TS-private only — reach in until idetik exposes a public resync
+    // renderer_ is TS-private only: reach in until idetik exposes a public resync
     const renderer = (runtime as unknown as { renderer_?: { updateSize?: () => void } }).renderer_;
     renderer?.updateSize?.();
     for (const viewport of runtime.viewports) viewport.updateSize();
@@ -182,7 +182,7 @@ export function ViewerProvider({ children, channelInstance = "docked" }: Props) 
         setError(null);
       }
     },
-    // viewMode intentionally excluded — the effect handles mode switches
+    // viewMode intentionally excluded: the effect handles mode switches
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [applyRuntime, teardownRuntime, observeCanvasSize, viewMode],
   );
@@ -353,7 +353,7 @@ export function ViewerProvider({ children, channelInstance = "docked" }: Props) 
     [setLayers, clearLayers, setFrame, setChannels, setChannelProp, pause, resume],
   );
 
-  // Meta uses refs — recompute when initialized flips so consumers see the real viewport
+  // Meta uses refs: recompute when initialized flips so consumers see the real viewport
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally re-read refs when initialized/viewMode changes
   const meta = useMemo(
     () => ({

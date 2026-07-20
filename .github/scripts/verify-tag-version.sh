@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Fail loudly if the pushed git tag does not match the app package version.
-# Guards against tagging without running the app sync-version task — the
+# Guards against tagging without running the app sync-version task; the
 # binary baked into the release would otherwise report a stale version.
 #
 # Invoked from .github/workflows/release.yml; expects to run inside a

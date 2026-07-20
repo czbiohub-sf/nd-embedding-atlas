@@ -56,7 +56,7 @@ export function ingestDataFrame(
  *   - Column schema is the UNION of `dfs[*].columns` (first-seen order).
  *   - Per-column type resolution: first DF to carry a column wins the type;
  *     later DFs missing it append NULL.
- *   - `__${axis}_index__` is GLOBAL (0..totalRows-1), not per-DF — matches
+ *   - `__${axis}_index__` is GLOBAL (0..totalRows-1), not per-DF: matches
  *     how MuData obsmap eventually wants to address rows.
  *   - `_dataset` column only exists when `datasetNames.length > 1`.
  */
@@ -199,8 +199,8 @@ function stringifyPrimitive(val: unknown): string {
  * `{axis}_name` identity column).
  *
  * The index may be a plain `string[]`/`Int32Array` (raw `[r]` works) OR a
- * wrapper class — `SimpleNullable` (from a `nullable-string-array` index) or
- * `SimpleCategorical` — whose values are ONLY reachable via `.at(r)`; raw `[r]`
+ * wrapper class: `SimpleNullable` (from a `nullable-string-array` index) or
+ * `SimpleCategorical`: whose values are ONLY reachable via `.at(r)`; raw `[r]`
  * on the wrapper is `undefined`. That mismatch silently wrote `""` for every
  * `obs_name`, which then made `commitObsColumns` (alignment by obs_name vs the
  * on-disk `_index`) match nothing → an all-NA written-back column.
@@ -263,7 +263,7 @@ export function appendArrowValue(appender: AppenderLike, val: unknown, type: unk
 // ─── Streaming ingest: append straight from source columns (no Arrow table) ──
 //
 // `ingestDataFrames` builds a full flechette Arrow Table (`df.toArrow()`) AND
-// decodes categoricals to full string arrays before the Appender drains them —
+// decodes categoricals to full string arrays before the Appender drains them :
 // multiple coexisting full copies that drive peak RSS (bench Cycle 0-2). This
 // variant reads each `AnnDataFrame` source column directly and appends per row,
 // keeping categoricals code-encoded (the category string is looked up per row
@@ -311,7 +311,7 @@ function colSpec(col: ColumnData): { type: string; append: CellAppender } {
   if (isNullableCol(col)) {
     const { values, mask } = col;
     const vals = values as ArrayLike<unknown>;
-    // String-or-plain-array first, then bool (Uint8), then numeric — matches
+    // String-or-plain-array first, then bool (Uint8), then numeric: matches
     // the order in `convertNullable` so types/values agree with the Arrow path.
     if (typeof vals[0] === "string" || Array.isArray(values)) {
       return { type: "VARCHAR", append: (a, r) => (mask[r] ? a.appendNull() : a.appendVarchar(String(vals[r]))) };
@@ -385,7 +385,7 @@ function unionSourceColumns(dfs: readonly LazyDataFrame[]): string[] {
 }
 
 /**
- * Drop-in streaming alternative to `ingestDataFrames` — identical schema/union
+ * Drop-in streaming alternative to `ingestDataFrames`: identical schema/union
  * semantics (incl. the prepended `_index` column), but never materializes an
  * Arrow Table. Peak JS allocation is the source columns (already decoded) plus
  * one row's worth of appended values. Verified result-identical by bench/verify.ts.
@@ -450,7 +450,7 @@ export async function ingestDataFramesStreaming(
 }
 
 /**
- * Chunked streaming ingest — reads the zarr DataFrame in row-windows
+ * Chunked streaming ingest: reads the zarr DataFrame in row-windows
  * (`readDataFrameBatches`) and appends each batch, so peak JS allocation is
  * O(batch) not O(whole obs). Single-DF / AnnData layout only (no `_dataset`
  * union). Same `_index`-prepended schema + null semantics as the other paths;
@@ -473,7 +473,7 @@ export async function ingestDataFrameChunked(
 
   for await (const batch of readDataFrameBatches(store, groupPath, batchSize)) {
     const names = appender === null ? ["_index", ...batch.columns.keys()] : columnOrder;
-    // colSpec closures bind to THIS batch's freshly-sliced arrays — rebuilt per batch.
+    // colSpec closures bind to THIS batch's freshly-sliced arrays: rebuilt per batch.
     const specs = names.map((n) => colSpec(n === "_index" ? batch.index : (batch.columns.get(n) as ColumnData)));
 
     if (appender === null) {

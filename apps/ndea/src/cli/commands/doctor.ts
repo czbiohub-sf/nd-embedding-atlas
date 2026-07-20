@@ -1,5 +1,5 @@
 /**
- * `ndea doctor` — read-only diagnostics. Prints binary path, symlink
+ * `ndea doctor`: read-only diagnostics. Prints binary path, symlink
  * integrity, active version, installed versions, and (with
  * `--check-network`) manifest reachability.
  *
@@ -59,7 +59,7 @@ export default defineCommand({
     if (isCompiledBinary()) {
       ok(`compiled binary`);
     } else {
-      warn(`running uncompiled (\`bun run\`) — install/update/rollback/gc disabled`);
+      warn("running from source: install/update/rollback/gc disabled");
     }
 
     // ── Path resolution ────────────────────────────────────────────────────
@@ -72,13 +72,13 @@ export default defineCommand({
     // ── Symlink integrity ──────────────────────────────────────────────────
     // `activeLauncher()` walks $PATH for an `ndea` entry whose realpath
     // matches `process.execPath`. Missing means the binary was invoked
-    // directly (not via the installed symlink) — supported for
+    // directly (not via the installed symlink): supported for
     // diagnostics, just can't audit the symlink layout.
     const launcher = activeLauncher();
     if (isCompiledBinary()) {
       console.log(`\n${BOLD}Symlink${RESET}`);
       if (!launcher) {
-        warn("no `ndea` symlink on $PATH resolves to this binary — symlink not auditable");
+        warn("no `ndea` symlink on $PATH resolves to this binary: symlink not auditable");
       } else {
         const linkTarget = await readlink(launcher).catch(() => null);
         if (linkTarget) {
@@ -87,7 +87,7 @@ export default defineCommand({
             err(`symlink target does not exist`);
           }
         } else {
-          err(`${launcher} is not a symlink — install layout broken`);
+          err(`${launcher} is not a symlink: install layout broken`);
         }
       }
     }
@@ -107,7 +107,7 @@ export default defineCommand({
         const sizeMb = info ? (info.size / (1024 * 1024)).toFixed(1) : "?";
         ok(`${dylibPath} (${sizeMb} MB)`);
       } else {
-        warn(`${dylibPath} not yet extracted — will populate on next DuckDB-using command`);
+        warn(`${dylibPath} not yet extracted: will populate on next DuckDB-using command`);
       }
     }
 
@@ -129,7 +129,7 @@ export default defineCommand({
     console.log(`\n${BOLD}Installed versions${RESET}`);
     const versions = await listVersions(versionsDir());
     if (versions.length === 0) {
-      warn(`no versions in ${versionsDir()} — \`ndea update\` will populate it`);
+      warn(`no versions in ${versionsDir()}: \`ndea update\` will populate it`);
     } else {
       let totalBytes = 0;
       const linkTarget = launcher && isCompiledBinary() ? await readlink(launcher).catch(() => null) : null;
@@ -140,7 +140,7 @@ export default defineCommand({
         console.log(`  ${marker} ${v.tag.padEnd(24)} ${sizeMb} MB`);
         if (info) totalBytes += info.size;
       }
-      console.log(`  ${DIM}(${(totalBytes / (1024 * 1024)).toFixed(1)} MB total — \`ndea gc\` to prune)${RESET}`);
+      console.log(`  ${DIM}(${(totalBytes / (1024 * 1024)).toFixed(1)} MB total: \`ndea gc\` to prune)${RESET}`);
     }
 
     // ── Network (optional) ─────────────────────────────────────────────────
@@ -171,7 +171,7 @@ export default defineCommand({
       console.log(`${YELLOW}${warnings} warning(s)${RESET} (--strict)`);
       process.exit(1);
     } else if (warnings > 0) {
-      console.log(`${YELLOW}${warnings} warning(s)${RESET} — ${DIM}use --strict to fail on warnings${RESET}`);
+      console.log(`${YELLOW}${warnings} warning(s)${RESET}: ${DIM}use --strict to fail on warnings${RESET}`);
     } else {
       console.log(`${GREEN}healthy${RESET}`);
     }

@@ -1,11 +1,12 @@
 /**
- * `listVersions` and the gc/rollback selection logic — pure helpers,
+ * `listVersions` and the gc/rollback selection logic: pure helpers,
  * tested with a temp NDEA_HOME and synthesized versions/ tree.
  */
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { stateDir, versionsDir } from "../lib/paths.ts";
 import { listVersions } from "../lib/versions.ts";
 
 const TMP_HOME = resolve(import.meta.dir, "../../../.fallow/test-versions");
@@ -33,6 +34,11 @@ async function makeVersion(tag: string, mtime?: Date): Promise<void> {
 }
 
 describe("listVersions", () => {
+  test("treats NDEA_HOME as the state root", () => {
+    expect(stateDir()).toBe(TMP_HOME);
+    expect(versionsDir()).toBe(resolve(TMP_HOME, "versions"));
+  });
+
   test("returns empty for missing dir", async () => {
     const root = resolve(TMP_HOME, "versions");
     expect(await listVersions(root)).toEqual([]);

@@ -1,5 +1,5 @@
 /**
- * Stage — the tiled area that grants node bodies working real estate.
+ * Stage: the tiled area that grants node bodies working real estate.
  * A tile is a PROJECTION of a node (header carries ◆ nodeId), not a panel:
  * it disappears when the body is pulled back to the canvas. Layout is the
  * split-tree (split-tree.ts); sashes adjust one seam's ratio; the ⠿ grip
@@ -52,7 +52,7 @@ function StageTile({
 
   const def = node ? ws.nodeLibrary.getDescriptorExact(node.definitionRef) : null;
   const hasBody = node ? ws.nodeLibrary.getSpecExact(node.definitionRef)?.definition.load !== undefined : false;
-  // count policy: a tile's body is visible and says its own scale — only
+  // count policy: a tile's body is visible and says its own scale: only
   // staged transforms keep a header count
   const countActive = Boolean(def && def.role !== "view");
   const { count } = useNodeCount(id, countActive);
@@ -87,10 +87,10 @@ function StageTile({
         opacity: flipHidden ? 0 : dragging ? 0.45 : 1,
       }}
     >
-      {/* header — grip · LED · title · count · ◆ id · pull. leading-none is
+      {/* header: grip · LED · title · count · ◆ id · pull. leading-none is
           inherited row-wide so mixed fonts sit on one visual line */}
       <div className="flex h-[26px] shrink-0 items-center gap-1.5 overflow-hidden border-b border-border px-[9px] leading-none whitespace-nowrap">
-        {/* drag-to-rearrange grip — editor-only stage authoring */}
+        {/* drag-to-rearrange grip: editor-only stage authoring */}
         {NODE_EDITOR_ENABLED ? (
           <span
             title="drag to rearrange"
@@ -106,7 +106,7 @@ function StageTile({
         ) : null}
         {led ? <NdLed state={led} /> : null}
         <span className="text-[11.5px] leading-none font-medium whitespace-nowrap">{node.label}</span>
-        {/* plugin's compact toolbar follows the body — staged ⇒ tile header */}
+        {/* plugin's compact toolbar follows the body: staged ⇒ tile header */}
         {hasBody && !fullscreen ? <HeaderSocket nodeId={id} /> : <span className="flex-1" />}
         {countActive && count !== null ? (
           <span className="font-mono text-[9.5px] tabular-nums text-text-muted">
@@ -117,12 +117,12 @@ function StageTile({
           ◆ {id}
         </span>
         <NodeDocButton definitionRef={node.definitionRef} />
-        {/* bypass / display-off mutates persisted graph state — editor-only */}
+        {/* bypass / display-off mutates persisted graph state: editor-only */}
         {NODE_EDITOR_ENABLED ? <FlagButton node={node} /> : null}
         {hasBody ? (
           <NdIconButton icon="fullscreen" title="fullscreen body" onClick={() => ws.setFullscreen(id)} />
         ) : null}
-        {/* split (re-tile) + pull-to-canvas (re-placement) — editor-only */}
+        {/* split (re-tile) + pull-to-canvas (re-placement): editor-only */}
         {NODE_EDITOR_ENABLED ? <SplitButton id={id} /> : null}
         {NODE_EDITOR_ENABLED ? (
           <NdIconButton
@@ -132,7 +132,7 @@ function StageTile({
           />
         ) : null}
       </div>
-      {/* body — the ONE live body, adopted from the dock */}
+      {/* body: the ONE live body, adopted from the dock */}
       <div
         className="min-h-0 flex-1 overflow-hidden p-2"
         style={
@@ -187,12 +187,7 @@ function SplitButton({ id }: { id: string }) {
 
   return (
     <span ref={anchorRef} data-split-pop={id} className="relative inline-flex">
-      <NdIconButton
-        icon="split"
-        title="split this tile — pick a side for the new slot"
-        active={open}
-        onClick={toggle}
-      />
+      <NdIconButton icon="split" title="split this tile: pick a side for the new slot" active={open} onClick={toggle} />
       {open && pos
         ? createPortal(
             <span
@@ -299,7 +294,7 @@ function StageEmptySlot({ slotId }: { slotId: string }) {
         </div>
       ) : (
         <NdCaption className="text-center text-[9.5px]">
-          every stageable node is already on the stage — add one to the canvas first (tab)
+          every stageable node is already on the stage: add one to the canvas first (tab)
         </NdCaption>
       )}
     </div>
@@ -399,7 +394,7 @@ export function StagePane({ vertical }: { vertical: boolean }) {
   const view = reconcileStageTree(stageTree, stagedIds);
   useEffect(() => {
     // full-mode (vertical) stage is a sidebar projection: implicit nodes default
-    // to embedded there, so stagedIds shrinks — persisting that would prune the
+    // to embedded there, so stagedIds shrinks: persisting that would prune the
     // split layout. Render the projection, but never rewrite the memory from it.
     if (vertical) return;
     if (JSON.stringify(view) !== JSON.stringify(stageTree)) ws.setStageTree(view);

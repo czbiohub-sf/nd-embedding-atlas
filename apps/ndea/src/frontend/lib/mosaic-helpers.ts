@@ -54,7 +54,7 @@ export function predicateToSql(selection: Selection): string | null {
 
 /**
  * Wraps a raw SQL string as a Mosaic-compatible ExprNode.
- * Mosaic calls .toString() on predicates when building SQL — this satisfies
+ * Mosaic calls .toString() on predicates when building SQL: this satisfies
  * that contract without requiring full AST construction.
  *
  * The cast is intentional: ExprNode is a nominal class, but Mosaic only needs
@@ -64,6 +64,6 @@ export function predicateToSql(selection: Selection): string | null {
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function stringPredicate(sql: string): ExprNode {
-  // biome-ignore lint/suspicious/noExplicitAny: intentional bridge — see JSDoc
+  // biome-ignore lint/suspicious/noExplicitAny: intentional bridge: see JSDoc
   return { toString: () => sql } as unknown as ExprNode;
 }

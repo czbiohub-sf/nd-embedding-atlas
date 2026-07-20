@@ -47,7 +47,7 @@ interface UseFovLoaderOptions {
   /**
    * `/api/channel-stats/{fov}` URL for this FOV (or null). Fetched once when the
    * FOV loads to attach per-channel pixel stats (autocontrast). Tracks the same
-   * FOV identity as `sourceUrl`, so it's read from a ref — it never re-triggers
+   * FOV identity as `sourceUrl`, so it's read from a ref: it never re-triggers
    * the load effect on its own.
    */
   statsUrl?: string | null;
@@ -135,7 +135,7 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion, statsUrl }:
       }
       sourceRef.current = null;
 
-      // Use cached source if available — avoids re-fetching zarr metadata
+      // Use cached source if available: avoids re-fetching zarr metadata
       const hit = SOURCE_CACHE.get(sourceUrl);
       let cached: CachedSource;
       if (hit) {
@@ -156,7 +156,7 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion, statsUrl }:
         }
         cached = { source, loader: source.loader, omeroChannels };
         SOURCE_CACHE.set(sourceUrl, cached);
-        console.log("[useFovLoader] source cache miss — fetched metadata", sourceUrl);
+        console.log("[useFovLoader] source cache miss: fetched metadata", sourceUrl);
       }
       const { source, loader, omeroChannels } = cached;
 
@@ -164,7 +164,7 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion, statsUrl }:
 
       // Set Z/T bounds + world-space translation from source dimensions.
       // Translation lets the camera target the image origin instead of (0,0)
-      // — HCS plates embed each FOV's plate position in the OME-Zarr
+      //: HCS plates embed each FOV's plate position in the OME-Zarr
       // coordinateTransformations.translation, so without this the camera
       // looks at empty space.
       try {
@@ -216,7 +216,7 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion, statsUrl }:
           lod: { min: 0, bias: 0.5 },
           // t:2 keeps neighboring timepoints warm (idetik marks them via
           // `prefetchTime`) so scrubbing swaps to an already-loaded frame instead
-          // of tearing down the current one and loading cold — kills the blink
+          // of tearing down the current one and loading cold: kills the blink
           // that idetik ≥0.28 exposes when the prefetch window is 0.
           prefetch: { x: 0, y: 0, z: 0, t: 2 },
           priorityOrder: ["visibleCurrent", "fallbackVisible", "prefetchTime", "prefetchSpace", "fallbackBackground"],
@@ -246,7 +246,7 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion, statsUrl }:
         const policy = createPlaybackPolicy({
           // t:2 keeps neighboring timepoints warm (idetik marks them via
           // `prefetchTime`) so scrubbing swaps to an already-loaded frame instead
-          // of tearing down the current one and loading cold — kills the blink
+          // of tearing down the current one and loading cold: kills the blink
           // that idetik ≥0.28 exposes when the prefetch window is 0.
           prefetch: { x: 0, y: 0, z: 0, t: 2 },
           lod: { min: 0, bias: 0.5 },
@@ -277,7 +277,7 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion, statsUrl }:
             sliceCoords,
             // The base channel renders with "normal" rather than the default
             // "none": "none" disables GPU blending, which makes the fragment's
-            // alpha (and therefore layer opacity) a no-op — so visibility
+            // alpha (and therefore layer opacity) a no-op: so visibility
             // toggling via opacity would silently fail for channel 0. "normal"
             // is pixel-identical over the cleared (black) framebuffer at full
             // opacity, and lets opacity=0 hide the layer. Matches the channel's
@@ -352,7 +352,7 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion, statsUrl }:
       const channelState = canReuse
         ? existing.map((ch, i) => ({
             ...ch,
-            // Range + stats are per-FOV — refresh them even when reusing the
+            // Range + stats are per-FOV: refresh them even when reusing the
             // user's visibility/contrast/blend across obs clicks in one plate.
             contrastRange: defaultChannelState[i].contrastRange,
             stats: defaultChannelState[i].stats ?? ch.stats,
@@ -380,7 +380,7 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion, statsUrl }:
     });
 
     return () => {
-      console.log("[useFovLoader] cleanup — cancelling", sourceUrl);
+      console.log("[useFovLoader] cleanup: cancelling", sourceUrl);
       cancelled = true;
     };
   }, [sourceUrl, viewerState.initialized, viewMode, viewerState.generation, viewerState.channels, requestedSignature]);

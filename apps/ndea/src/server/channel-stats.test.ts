@@ -18,7 +18,7 @@ test("statOf: extent + percentile saturation on a ramp", () => {
 
 test("statOf: background spike does not drag the low limit to zero's neighbourhood only", () => {
   // 990 background pixels at 5, 10 signal pixels at 1000. Percentile low must
-  // sit at background; high must reach toward the bright tail — not the mean.
+  // sit at background; high must reach toward the bright tail: not the mean.
   const data = new Uint16Array(1000);
   data.fill(5);
   for (let i = 0; i < 10; i++) data[i] = 1000;

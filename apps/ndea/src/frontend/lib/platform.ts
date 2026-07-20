@@ -1,7 +1,7 @@
 /**
  * Detected once at module load. Used to pick platform-appropriate keyboard
  * shortcuts (⌘ on macOS, Ctrl on Windows/Linux). The Bun-served app
- * is a SPA — `navigator` is always defined at component-evaluation time.
+ * is a SPA: `navigator` is always defined at component-evaluation time.
  */
 const IS_MAC =
   typeof navigator !== "undefined" &&

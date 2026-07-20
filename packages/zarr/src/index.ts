@@ -1,5 +1,5 @@
 /**
- * @ndea/zarr — labeled N-D array reader for OME-Zarr, AnnData, MuData,
+ * @ndea/zarr: labeled N-D array reader for OME-Zarr, AnnData, MuData,
  * and xarray stores.
  */
 
@@ -39,7 +39,7 @@ export {
 } from "./duckdb-ingest.ts";
 
 /**
- * One-call AnnData opener — resolves the store, detects the convention,
+ * One-call AnnData opener: resolves the store, detects the convention,
  * narrows the result. Replaces the static `AnnData.open()` facade that
  * created a circular import (anndata.ts → open.ts → anndata.ts).
  */

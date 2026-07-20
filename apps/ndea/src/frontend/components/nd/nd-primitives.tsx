@@ -1,5 +1,5 @@
 /**
- * nd telemetry atoms — NdLed, NdHud, NdKv, NdCaption (+ NdChip alias).
+ * nd telemetry atoms: NdLed, NdHud, NdKv, NdCaption (+ NdChip alias).
  *
  * The workspace talks like lab-equipment telemetry: lowercase mono labels,
  * bracketed counts, LED cook states. Counts reuse the existing `Bracketed`;
@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
 export { Bracketed as NdBracketed } from "@/components/ui/bracketed";
 export { DimensionBadge as NdChip } from "@/components/ui/dimension-badge";
 
-/* ── Status LED — the cook lifecycle ─────────────────────────────── */
+/* ── Status LED: the cook lifecycle ─────────────────────────────── */
 
 const ndLedVariants = cva("inline-block shrink-0 rounded-full", {
   variants: {
@@ -43,7 +43,7 @@ export function NdLed({
   return <span className={cn(ndLedVariants({ state }), className)} style={{ width: size, height: size }} />;
 }
 
-/* ── HUD label — Geist Pixel signage, uppercase ──────────────────── */
+/* ── HUD label: Geist Pixel signage, uppercase ──────────────────── */
 
 export function NdHud({
   children,
@@ -77,7 +77,7 @@ export function NdKv({ k, v, className }: { k: string; v: React.ReactNode; class
   );
 }
 
-/* ── Muted caption — in-surface commentary ───────────────────────── */
+/* ── Muted caption: in-surface commentary ───────────────────────── */
 
 export function NdCaption({ children, className }: { children: React.ReactNode; className?: string }) {
   return <div className={cn("font-sans text-[10.5px] leading-normal text-text-muted", className)}>{children}</div>;

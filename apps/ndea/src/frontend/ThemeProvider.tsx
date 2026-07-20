@@ -1,5 +1,5 @@
 /**
- * ThemeProvider — manages dark/light mode with localStorage persistence.
+ * ThemeProvider: manages dark/light mode with localStorage persistence.
  * Applies `.dark` to `document.documentElement` and exposes a toggle.
  * Defaults to dark mode; respects OS preference only on first visit.
  */

@@ -5,7 +5,7 @@
 
 export { rowIndex, type RowIndex } from "@ndea/sdk";
 
-/** Stable panel identifier — branded string to prevent accidental mixing. */
+/** Stable panel identifier: branded string to prevent accidental mixing. */
 export type PanelId = string & { readonly __brand: "PanelId" };
 export const panelId = (id: string): PanelId => id as PanelId;
 

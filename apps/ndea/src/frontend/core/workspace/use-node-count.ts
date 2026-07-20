@@ -1,11 +1,11 @@
 /**
- * useNodeCount — live row count under a node's cooked predicate.
+ * useNodeCount: live row count under a node's cooked predicate.
  *
  * Count policy (spec): sources / transforms / selections always show their
  * count (their bodies are controls, not data); views only at chip form or
  * on the staged placeholder. The caller decides WHEN to ask; this hook just
  * registers the node with the workspace's NodeCounts controller, which runs
- * ONE batched `count(*) FILTER (WHERE …)` query per engine flush — the
+ * ONE batched `count(*) FILTER (WHERE …)` query per engine flush: the
  * `flush` telemetry event is the read signal, so there is no per-node query,
  * no debounce here, and no timing race against the rAF flush.
  */

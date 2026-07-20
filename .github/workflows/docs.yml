@@ -30,20 +30,29 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      pages: read
     steps:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
 
       - uses: oven-sh/setup-bun@v2
+      - uses: voidzero-dev/setup-vp@v1
+
+      - id: pages
+        name: Configure Pages
+        uses: actions/configure-pages@v5
 
       - name: Install dependencies
         working-directory: docs
-        run: bun install --frozen-lockfile
+        run: vp install --frozen-lockfile
 
-      - name: Build site
-        working-directory: docs
-        run: bun run build
+      - name: Build docs
+        # docs/ is intentionally outside the root workspace. Run its named
+        # root task because `vp run build` from docs/ resolves the root build.
+        env:
+          DOCS_BASE_URL: ${{ steps.pages.outputs.base_url }}
+        run: vp run docs:build
 
       # Pages artifact action expects the path to the built site root.
       # `actions/upload-pages-artifact` tars + uploads in one step.

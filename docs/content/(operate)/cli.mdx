@@ -1,0 +1,171 @@
+---
+title: CLI reference
+description: Supported ndea commands, flags, environment variables, and release channels.
+---
+
+This page lists the supported `ndea` commands, flags, environment variables, and release channels.
+
+Walkthroughs live in [Getting started](/). Dev-side commands (`vp run dev`, `vp run gen`, …) live in [Contributing](/contributing).
+
+## Synopsis
+
+```
+ndea [paths...]                                  # default; equivalent to `ndea view`
+ndea view [paths...] [options]
+ndea update [options]
+ndea rollback
+ndea gc [options]
+ndea doctor [--check-network] [--strict]
+ndea completions <bash|zsh|fish>
+ndea complete -- <args...>                       # internal; called by completion scripts
+ndea --help | --version
+```
+
+## Shorthand
+
+`ndea path/to/data.zarr` is equivalent to `ndea view path/to/data.zarr`.
+
+## `ndea view`
+
+Open one or more Zarr stores, or a YAML project config, in ndea.
+
+### Arguments
+
+| Name     | Type              | Description                                 |
+| -------- | ----------------- | ------------------------------------------- |
+| `paths…` | one or more paths | Zarr stores or a single YAML project config |
+
+A single `.yaml` / `.yml` path is parsed as a multi-dataset project config (see [Project YAML](/project-config)).
+
+### Options
+
+| Option                 | Type    | Default     | Description                                                    |
+| ---------------------- | ------- | ----------- | -------------------------------------------------------------- |
+| `--port <port>`        | integer | `5055`      | TCP port for the local server                                  |
+| `--host <host>`        | string  | `127.0.0.1` | Hostname to bind                                               |
+| `--no-open`            | boolean | `false`     | Do not auto-open the browser                                   |
+| `--no-static`          | boolean | `false`     | Do not serve the bundled frontend (Vite serves it in dev mode) |
+| `--obs-columns <list>` | string  | all columns | Comma-separated subset of obs columns to load                  |
+| `--preset <name>`      | string  | `annotate`  | Shipped preset; currently only `annotate`                      |
+
+`--port` accepts integers in `[1, 65535]`.
+
+## `ndea update`
+
+Download and activate the latest release for a channel. ndea verifies the SHA-256 checksum before switching versions.
+
+### Options
+
+| Option                | Type                                  | Default  | Description                                            |
+| --------------------- | ------------------------------------- | -------- | ------------------------------------------------------ |
+| `--channel <channel>` | `stable` \| `latest` \| `pre-release` | `stable` | Release channel to resolve                             |
+| `--force`             | boolean                               | `false`  | Re-install even when already on the target             |
+| `--no-gc`             | boolean                               | `false`  | Skip the post-update auto-gc that prunes to 2 versions |
+
+By default, a successful update keeps the active version and one rollback target. Pass `--no-gc` to retain older versions, then prune them later with `ndea gc`.
+
+A running `ndea view` session continues using the version it started with.
+
+## `ndea rollback`
+
+Activate the most recently installed version other than the current version. Run the command again to step further back. This command has no options.
+
+## `ndea gc`
+
+Prune old installed versions. ndea always preserves the active version.
+
+### Options
+
+| Option       | Type    | Default | Description                                       |
+| ------------ | ------- | ------- | ------------------------------------------------- |
+| `--keep <N>` | integer | `2`     | Number of versions to keep (active counts; min 1) |
+| `--all`      | boolean | `false` | Keep only the active version                      |
+
+## `ndea doctor`
+
+Diagnose the install. Prints binary path, symlink integrity, active version, installed versions with disk usage. Exit code 0 if healthy, 1 on hard anomalies (broken symlink, missing active binary).
+
+### Options
+
+| Option            | Type    | Default | Description                                                       |
+| ----------------- | ------- | ------- | ----------------------------------------------------------------- |
+| `--check-network` | boolean | `false` | Probe `manifest.json` reachability over the network (3 s timeout) |
+| `--strict`        | boolean | `false` | Treat warnings as errors (non-zero exit)                          |
+
+## `ndea completions`
+
+Emit shell completion scripts.
+
+### Arguments
+
+| Name  | Type                      | Description       |
+| ----- | ------------------------- | ----------------- |
+| shell | `bash` \| `zsh` \| `fish` | Shell to emit for |
+
+### Usage
+
+```bash
+# bash / zsh: load on demand
+source <(ndea completions bash)
+source <(ndea completions zsh)
+
+# fish: drop into the completions dir
+ndea completions fish > ~/.config/fish/completions/ndea.fish
+```
+
+`view`'s positional completion filters to `*.zarr` directories and `*.yaml` / `*.yml` files.
+
+## Environment variables
+
+| Variable               | Consumer               | Default        | Description                                                |
+| ---------------------- | ---------------------- | -------------- | ---------------------------------------------------------- |
+| `NDEA_DATASET`         | `view`                 | unset          | Path forwarded as a positional when none is given          |
+| `NDEA_NO_OPEN`         | `view`                 | unset          | When `1`, equivalent to passing `--no-open`                |
+| `NDEA_NO_STATIC`       | `view`                 | unset          | When `1`, equivalent to passing `--no-static`              |
+| `NDEA_GITHUB_TOKEN`    | `install.sh`           | unset          | Optional GitHub token for authenticated API requests       |
+| `NDEA_CHANNEL`         | `update`, `install.sh` | `stable`       | Default release channel                                    |
+| `NDEA_VERSION`         | `install.sh`           | `latest`       | Pin first install to a specific tag (e.g. `v0.1.0-beta.0`) |
+| `NDEA_BIN_DIR`         | `install.sh`           | `~/.local/bin` | Directory holding the symlink that's on PATH               |
+| `NDEA_HOME`            | all                    | `~/.ndea`      | State root (versions tree, locks, current-version)         |
+| `NDEA_DISABLE_UPDATES` | `update`, `rollback`   | unset          | When `1`, blocks both update and rollback (sysadmin lock)  |
+
+## Release channels
+
+| Channel       | Resolves to                                  | Cadence                                                  |
+| ------------- | -------------------------------------------- | -------------------------------------------------------- |
+| `stable`      | latest semver-tagged release (e.g. `v0.1.0`) | Manual; cut from `main` when ready                       |
+| `latest`      | alias for `stable`                           | Same as `stable`                                         |
+| `pre-release` | latest active alpha / beta / rc tag          | Manual; absent between cuts (manifest pointer is `null`) |
+
+[`manifest.json`](https://github.com/czbiohub-sf/nd-embedding-atlas/blob/main/manifest.json) maps each channel to a git tag. `ndea update` fetches it at update time.
+
+## State directory layout
+
+`~/.ndea/` (override with `NDEA_HOME`):
+
+```
+~/.ndea/
+  current-version              # Plain text: "<tag>\n<sha256>\n"
+  versions/
+    v0.1.0/
+      ndea                     # bun-compiled binary (~185 MB, embeds libduckdb)
+    v0.1.1/
+      …
+  locks/
+    install.lock               # PID file backing the install/update mutex
+~/.cache/ndea/
+  v0.1.0/
+    libduckdb.{dylib,so}       # Extracted from the binary on first launch
+```
+
+A compiled version takes about 185 MB. `ndea gc` prunes the version directory but does not prune `~/.cache/ndea/`; clear old cache entries manually if disk space is limited.
+
+`$NDEA_BIN_DIR/ndea` points to the active binary under `~/.ndea/versions/<tag>/ndea`.
+
+## Exit codes
+
+| Code  | Meaning                                                             |
+| ----- | ------------------------------------------------------------------- |
+| `0`   | Success                                                             |
+| `1`   | General error (missing argument, fatal startup, lock contention, …) |
+| `130` | Interrupted (`Ctrl-C` during a long-running command)                |

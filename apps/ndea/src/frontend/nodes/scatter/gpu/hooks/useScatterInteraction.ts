@@ -47,7 +47,7 @@ export function createInteractionController(
   const enableLasso = interactionConfig?.lasso ?? true;
   const enableMarquee = interactionConfig?.marquee ?? true;
 
-  // Forced selection mode — set by toolbar buttons; bypasses keyboard modifiers.
+  // Forced selection mode: set by toolbar buttons; bypasses keyboard modifiers.
   // 'pan' = default drag-to-pan; 'marquee'/'lasso' = drag-to-select without Shift.
   let forcedSelectionMode: "pan" | "marquee" | "lasso" = "pan";
   // NOTE: The overlay canvas must be DPR-scaled before passing to this controller.
@@ -56,12 +56,12 @@ export function createInteractionController(
   // This ensures lasso/marquee drawing is crisp on retina displays.
   const overlayCtx = overlay.getContext("2d")!;
 
-  // Current (rendered) values — what the GPU sees
+  // Current (rendered) values: what the GPU sees
   let panX = 0;
   let panY = 0;
   let zoom = 1;
 
-  // Target values — what we're easing toward
+  // Target values: what we're easing toward
   let targetPanX = 0;
   let targetPanY = 0;
   let targetZoom = 1;
@@ -69,7 +69,7 @@ export function createInteractionController(
   // Suppress the next onViewChange broadcast (used by setViewState to avoid feedback loops)
   let skipNextViewChange = false;
 
-  // Timed animation state — used by animateToViewState (easeInOutQuint, fixed duration)
+  // Timed animation state: used by animateToViewState (easeInOutQuint, fixed duration)
   let isTimedAnimating = false;
   let timedAnimStart = 0;
   let timedAnimDuration = 0;
@@ -138,7 +138,7 @@ export function createInteractionController(
     const aspect = overlay.clientWidth / overlay.clientHeight || 1;
     const ndcX = ((wx + panX) * zoom) / aspect;
     const ndcY = (wy + panY) * zoom;
-    // Use clientWidth/clientHeight (CSS pixels) — the 2D context has ctx.scale(dpr,dpr)
+    // Use clientWidth/clientHeight (CSS pixels): the 2D context has ctx.scale(dpr,dpr)
     // so drawing ops expect CSS-pixel coordinates, not device pixels.
     return [((ndcX + 1) / 2) * overlay.clientWidth, ((-ndcY + 1) / 2) * overlay.clientHeight];
   }
@@ -339,7 +339,7 @@ export function createInteractionController(
   let frameIdx = 0;
   let lastFpsReport = 0;
 
-  // Render loop — only runs when there's work (animation or pending render)
+  // Render loop: only runs when there's work (animation or pending render)
   let animId = 0;
   let loopRunning = false;
 

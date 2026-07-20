@@ -32,7 +32,7 @@ interface GalleryCropQueryParams {
  * x/y are FOV-local pixel coordinates straight from obs (the obsCoordKey cache,
  * else /api/obs/{rowIndex}); z is resolved per-obs with a viewer-Z fallback.
  * Returns a data URL (not a blob URL) so the crop lifecycle is the cache entry's
- * lifecycle — no URL.revokeObjectURL to race against a mounted <img>.
+ * lifecycle: no URL.revokeObjectURL to race against a mounted <img>.
  */
 export function useGalleryCropQuery({ fovName, datasetKey, frame, channels, hash, enabled }: GalleryCropQueryParams) {
   const queryClient = useQueryClient();
@@ -44,7 +44,7 @@ export function useGalleryCropQuery({ fovName, datasetKey, frame, channels, hash
   const z = Math.round(frame.z ?? viewerZ ?? 0);
 
   return useQuery<CropResult>({
-    // rowIndex is essential: many cells share (fov, t) — a lasso selection
+    // rowIndex is essential: many cells share (fov, t): a lasso selection
     // routinely has multiple obs in the same FOV at the same timepoint. Without
     // the per-obs id they collide on one cache entry and the gallery paints the
     // first-fetched cell's crop for all of them (it diverges from the viewer).
@@ -113,14 +113,14 @@ export function useGalleryCropQuery({ fovName, datasetKey, frame, channels, hash
         throw new Error(`crop fetch failed: ${res.status}`);
       }
 
-      // Rendered dims from the server (aspect-preserving) — lets masonry size
+      // Rendered dims from the server (aspect-preserving): lets masonry size
       // each tile before the image decodes. 0 if the header is missing.
       const w = Number(res.headers.get("X-Crop-Width")) || 0;
       const h = Number(res.headers.get("X-Crop-Height")) || 0;
 
       // Data URL, NOT a blob URL: the crop string lives and dies with the
       // React Query cache entry, so there is no URL.revokeObjectURL lifecycle to
-      // get wrong. Blob URLs broke here — a revoke fired (gallery unmount, or a
+      // get wrong. Blob URLs broke here: a revoke fired (gallery unmount, or a
       // gcTime eviction while `keepPreviousData` was still painting the old URL)
       // on a string a mounted <img> was still showing, leaving a broken image.
       // Crops are small (~5–15 KB webp) and the gallery is virtualized (only the

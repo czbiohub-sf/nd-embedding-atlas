@@ -18,13 +18,13 @@ import { createSelectionEngine } from "./selection";
 import { createFragmentShader, createVertexShader } from "./shaders";
 
 export interface CreateScatterplotOpts {
-  /** Aborted on host teardown — threaded into device acquire so a fast
+  /** Aborted on host teardown: threaded into device acquire so a fast
    *  add/delete cannot strand a device mid-init (PLUGIN-ARCHITECTURE §7.2). */
   signal?: AbortSignal;
   /**
    * Pre-acquired device lease from `host.acquireDeviceLease()` (PLUGIN-ARCHITECTURE
    * §7.1). When supplied, this instance uses the lease's already-leased device and
-   * does NOT acquire/release the shared refcount itself — the lease owner
+   * does NOT acquire/release the shared refcount itself: the lease owner
    * (`host.dispose`) controls the device lifetime, so the device survives data
    * swaps (positionKey re-init) instead of churning. Typed structurally to avoid a
    * `scatter-gpu → core` import cycle; the broker's `DeviceLease` is compatible.
@@ -41,7 +41,7 @@ export async function createScatterplot(
 ): Promise<ScatterplotHandle> {
   const t0 = performance.now();
 
-  // Leased device (host-managed) is authoritative — skip the self-acquire so the
+  // Leased device (host-managed) is authoritative: skip the self-acquire so the
   // broker refcount is incremented exactly once per instance, by the lease owner.
   const ownsDevice = !opts?.lease;
   const deviceInfo = opts?.lease ? opts.lease.info : await acquireDevice(opts?.signal);
@@ -64,7 +64,7 @@ export async function createScatterplot(
 
   const uniforms = createUniforms(root, canvas.width / canvas.height, config?.render);
   uniforms.paramsUniform.write(d.vec4f(pointRadius, canvas.width / canvas.height, selectionDimFactor, adaptiveScale));
-  // Initial pixel floor — recomputed on every resize.
+  // Initial pixel floor: recomputed on every resize.
   {
     const dpr = window.devicePixelRatio || 1;
     const gpuH = Math.max(1, Math.floor(canvas.height * dpr));
@@ -79,20 +79,20 @@ export async function createScatterplot(
 
   const compositor = createCompositor(root, device, buffers, uniforms, data.numCells, preferredWorkgroupSize);
 
-  // GPU pick buffer — replaces the CPU spatial-grid hit test when the user
+  // GPU pick buffer: replaces the CPU spatial-grid hit test when the user
   // opts in via `localStorage.ndea.useGpuPicking`. Renders to an offscreen
   // rgba32f target with brightness-as-depth so overlapping points pick by
   // visual frontmost (brightest), not geometric nearest. Same vertex
-  // attributes as the main render — stays in lockstep automatically.
+  // attributes as the main render: stays in lockstep automatically.
   const picking = createPickingSystem(root, canvas, buffers, uniforms, culling, data.numCells);
   picking.updateBoundingBox(data.positions);
 
-  // Default to transparent — let the CSS background-color of the container
+  // Default to transparent: let the CSS background-color of the container
   // show through. This makes the scatter canvas respond to dark/light theme
   // without requiring GPU re-initialization.
   const backgroundColor = config?.render?.backgroundColor ?? ([0, 0, 0, 0] as [number, number, number, number]);
 
-  // HDR pipeline — scatter draws into an rgba16float target instead of the
+  // HDR pipeline: scatter draws into an rgba16float target instead of the
   // canvas swap chain. The HDR pass then tone-maps to the canvas. Lets dense
   // overlapping points accumulate above 1.0 before the curve clips.
   const hdr = createHdrPipeline(device, format, canvas.width || 1, canvas.height || 1);
@@ -230,7 +230,7 @@ export async function createScatterplot(
     colorMutable.$[idx] = continuousLutReadonly.$[lutIdx];
   });
 
-  // CPU mirror of the continuous config — lets partial setters (range only,
+  // CPU mirror of the continuous config: lets partial setters (range only,
   // reversed only, lut only) re-emit the full uniform without reading GPU state.
   let currentContinuousVmin = 0;
   let currentContinuousVmax = 1;
@@ -303,7 +303,7 @@ export async function createScatterplot(
     () => {
       // Guard against 0-size canvas (hidden/collapsed Dockview panel)
       if (canvas.width === 0 || canvas.height === 0) return;
-      // Single encoder, single submit — cull → compositor → scatter (HDR) →
+      // Single encoder, single submit: cull → compositor → scatter (HDR) →
       // tonemap (canvas) in one batch.
       const encoder = device.createCommandEncoder();
       culling.dispatchCulling(viewVersion, encoder);
@@ -357,7 +357,7 @@ export async function createScatterplot(
         };
 
         if (useGpuPicking) {
-          // Async — readback is one frame on a clean buffer, ~1–2 frames on a
+          // Async: readback is one frame on a clean buffer, ~1–2 frames on a
           // dirty rebuild. Latency is below human click perception.
           picking.pick(pixelX, pixelY).then(
             (result) => {
@@ -381,7 +381,7 @@ export async function createScatterplot(
   );
 
   /**
-   * Legacy CPU spatial-grid hit test — kept as fallback. Picks the
+   * Legacy CPU spatial-grid hit test: kept as fallback. Picks the
    * geometrically nearest visible point within a screen-space radius.
    * Loses to overlapping points (the GPU path handles that).
    */
@@ -457,7 +457,7 @@ export async function createScatterplot(
   return {
     resize(width: number, height: number) {
       resizeAll(width, height);
-      // Re-render at the new size + aspect — otherwise the browser stretches the
+      // Re-render at the new size + aspect: otherwise the browser stretches the
       // stale old-size frame (warped/squished) until the next interaction.
       interaction.requestRender();
     },
@@ -566,7 +566,7 @@ export async function createScatterplot(
       interaction.requestRender();
     },
     setCategoryDisabled(disabledSet: Set<number>, categoryIndices: Uint8Array) {
-      // No render dispatch needed — disabled categories already render
+      // No render dispatch needed: disabled categories already render
       // alpha=0 via legend's color-override. This only updates the click
       // filter so disabled points aren't pickable.
       selection.setCategoryDisabled(disabledSet, categoryIndices);
@@ -641,7 +641,7 @@ export async function createScatterplot(
       try {
         context.unconfigure();
       } catch {
-        // Some browsers throw if the context was never configured — ignore.
+        // Some browsers throw if the context was never configured: ignore.
       }
       root.destroy();
 
@@ -652,7 +652,7 @@ export async function createScatterplot(
             if (err) console.error("[scatter dispose] GPU validation error:", err.message);
           })
           .catch(() => {
-            // Device may already be released by the last lease holder — ignore.
+            // Device may already be released by the last lease holder: ignore.
           });
       }
       // Only the self-acquire path releases here. A host-leased device is

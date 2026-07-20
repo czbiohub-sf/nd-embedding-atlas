@@ -1,7 +1,7 @@
 /**
- * NdPort — the 11px typed port glyph. The dot IS the type:
+ * NdPort: the 11px typed port glyph. The dot IS the type:
  * pred ● circle · sel ◆ diamond (45° square) · focus ▪ rounded square.
- * Fill encodes direction: filled = out, hollow = in. Frame furniture —
+ * Fill encodes direction: filled = out, hollow = in. Frame furniture :
  * absolutely positioned at the edge (−6px), outside the morphing body,
  * so wires stay attached through morphs and resizes.
  */
@@ -12,7 +12,7 @@ import type * as React from "react";
 export type NdPortKind = "pred" | "sel" | "focus";
 
 export interface NdPortKindSpec {
-  /** CSS color — token-backed (app.css --color-wire-*) */
+  /** CSS color: token-backed (app.css --color-wire-*) */
   color: string;
   shape: "circle" | "diamond" | "square";
   label: string;

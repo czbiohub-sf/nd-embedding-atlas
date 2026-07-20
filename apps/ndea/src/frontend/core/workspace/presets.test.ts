@@ -7,7 +7,7 @@ import type { Metadata } from "@ndea/protocol";
 
 const nativeWorkspaceNodeLibrary = createNativeAppNodeLibrary();
 
-// rAF doesn't exist under bun:test — the Workspace ctor references it for the
+// rAF doesn't exist under bun:test: the Workspace ctor references it for the
 // flush scheduler. We only inspect the store synchronously, so a stub is enough.
 (globalThis as { requestAnimationFrame?: unknown }).requestAnimationFrame ??= (() => 0) as unknown;
 
@@ -36,7 +36,7 @@ describe("resolvePreset", () => {
 });
 
 describe("seedAnnotate", () => {
-  test("builds the annotate graph — all R9 node types present, dataset-agnostic", () => {
+  test("builds the annotate graph: all R9 node types present, dataset-agnostic", () => {
     const ws = makeWs();
     resolvePreset("annotate")!(ws);
 
@@ -48,7 +48,7 @@ describe("seedAnnotate", () => {
     expect(types.has("selection")).toBe(false);
     expect(types.has("fov")).toBe(false);
     // Dataset-agnostic: no baked config (the scatter uses the dataset's default
-    // embedding, the wrangle is identity) — nothing pins a specific dataset.
+    // embedding, the wrangle is identity): nothing pins a specific dataset.
     for (const n of nodes) expect(n.config).toBeUndefined();
   });
 

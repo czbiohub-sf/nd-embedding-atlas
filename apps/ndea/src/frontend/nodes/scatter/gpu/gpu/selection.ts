@@ -28,7 +28,7 @@ export function createSelectionEngine(
   let isReadingBack = false;
 
   const polygonBuffer = root.createBuffer(d.arrayOf(d.vec2f, MAX_POLYGON_VERTS)).$usage("storage");
-  // i32 (not u32) — `std.range(N)` yields i32 indices in the pip kernel, and
+  // i32 (not u32): `std.range(N)` yields i32 indices in the pip kernel, and
   // WGSL is strict about mixed i32/u32 comparisons. Value is always small
   // (≤ MAX_POLYGON_VERTS = 512) so signedness has no semantic effect.
   const polygonCountUniform = root.createUniform(d.i32, 0);
@@ -38,9 +38,9 @@ export function createSelectionEngine(
   const polygonReadonly = polygonBuffer.as("readonly");
   // Category buffer reused by lasso/marquee shaders to skip points whose
   // category is in the disabled bitmask. (Same buffer the isolation kernel
-  // reads further down — declaring the view once keeps both consumers in sync.)
+  // reads further down: declaring the view once keeps both consumers in sync.)
   const lassoCategoryReadonly = buffers.categoryBuffer.as("readonly");
-  // Bitmask of disabled categories — bit i set if category i is hidden via
+  // Bitmask of disabled categories: bit i set if category i is hidden via
   // the legend. Lasso/marquee kernels skip points whose category bit is set.
   const lassoDisabledMaskUniform = root.createUniform(d.u32, 0);
 
@@ -196,7 +196,7 @@ export function createSelectionEngine(
 
   // ── Composable highlight ────────────────────────────────────────────────
   // Two independent sources merged into highlightBuffer: clicked point + trajectory points.
-  // Same pattern as recomposeIsolation — each source owns its state, recomposeHighlight merges.
+  // Same pattern as recomposeIsolation: each source owns its state, recomposeHighlight merges.
   const highlightMask = new Uint32Array(numPoints); // pre-allocated scratch
   let clickedPointIndex: GpuPointIndex | null = null;
   let trajectoryHighlightIndices: GpuPointIndex[] = [];
@@ -237,7 +237,7 @@ export function createSelectionEngine(
     recomposeHighlight();
   }
 
-  // Pre-allocated mask — reused on every external selection update to avoid
+  // Pre-allocated mask: reused on every external selection update to avoid
   // O(n) heap allocation per sync event (critical for 455K+ point datasets).
   const externalSelectionMask = new Uint32Array(numPoints);
 
@@ -297,7 +297,7 @@ export function createSelectionEngine(
     isolationMutable.$[idx] = traj | (cat & cont);
   });
 
-  // CPU mirror state — lets isPointVisible answer O(1) without GPU readback.
+  // CPU mirror state: lets isPointVisible answer O(1) without GPU readback.
   const trajectoryMaskCpu = new Uint32Array(numPoints);
   const continuousMaskCpu = new Uint32Array(numPoints);
   let catBitmask = 0;
@@ -305,7 +305,7 @@ export function createSelectionEngine(
   let categoryActive = false;
   let trajectoryActive = false;
   let continuousActive = false;
-  // Disabled-category bitmask — CPU-only (GPU renders alpha=0 via color override,
+  // Disabled-category bitmask: CPU-only (GPU renders alpha=0 via color override,
   // so no shader plumbing needed). Used to gate the click handler so points in a
   // disabled category aren't selectable.
   let disabledCatBitmask = 0;
@@ -353,7 +353,7 @@ export function createSelectionEngine(
   }
 
   /**
-   * Mark categories as disabled — points in any disabled category are skipped
+   * Mark categories as disabled: points in any disabled category are skipped
    * by:
    *   - `isPointVisible` (CPU) → no point-click selection.
    *   - the lasso/marquee compute kernels (via `lassoDisabledMaskUniform`)

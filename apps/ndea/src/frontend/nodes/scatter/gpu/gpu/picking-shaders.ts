@@ -1,5 +1,5 @@
 /**
- * Picking shaders — vertex + fragment WGSL for the pick render pass.
+ * Picking shaders: vertex + fragment WGSL for the pick render pass.
  *
  * Mirrors the layout of the main scatter shaders (instanced quads, same
  * per-point attributes), but writes one channel per point identity field
@@ -9,7 +9,7 @@
  *
  * Output layout per fragment:
  *   R = pointIndex + 1.0   (0 means "no hit"; we encode +1 to reserve 0)
- *   G = nodeId             (always 0.0 for ndea — single scatter node;
+ *   G = nodeId             (always 0.0 for ndea: single scatter node;
  *                           reserved for multi-panel future use)
  *   B = brightness         (peak-normalized falloff for the 5x5 vote)
  *   A = 1.0
@@ -25,12 +25,12 @@
 
 /**
  * Bind group 0 layout for the picking pipeline:
- *   binding 0: paramsUniform (vec4f)            — radius, aspect, dimFactor, adaptiveScale
- *   binding 1: viewUniform (vec4f)              — panX, panY, zoom, aspect
+ *   binding 0: paramsUniform (vec4f)           : radius, aspect, dimFactor, adaptiveScale
+ *   binding 1: viewUniform (vec4f)             : panX, panY, zoom, aspect
  *   binding 2: selectionModeUniform (f32)
  *   binding 3: filterHideUniform (u32)
  *   binding 4: sharpnessUniform (f32)
- *   binding 5: pixelFloorUniform (f32)          — min NDC quad half-extent
+ *   binding 5: pixelFloorUniform (f32)         : min NDC quad half-extent
  */
 export const PICK_VERTEX_WGSL = /* wgsl */ `
 struct Params { v: vec4<f32> };

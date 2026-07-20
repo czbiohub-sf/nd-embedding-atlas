@@ -6,7 +6,7 @@
  *
  * The legacy process-wide lasso hook that once lived here was superseded by
  * `usePredicateGalleryObs`, which scopes the gallery to the node's wired
- * `host.inputPredicate` — no process-wide predicate read. Only shared types remain.
+ * `host.inputPredicate`: no process-wide predicate read. Only shared types remain.
  */
 import type { RowIndex } from "@ndea/sdk";
 

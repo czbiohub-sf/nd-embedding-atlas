@@ -39,19 +39,20 @@ jobs:
         with:
           persist-credentials: false
 
-      # `no-cache: true` — release builds run on tag push and must not load
+      # `no-cache: true`: release builds run on tag push and must not load
       # a `~/.bun/install/cache` populated by an earlier PR. Mitigates the
       # zizmor `cache-poisoning` audit; release infra is infrequent so the
       # extra ~10s per platform is acceptable.
       - uses: oven-sh/setup-bun@v2
         with:
           no-cache: true
+      - uses: voidzero-dev/setup-vp@v1
 
       - name: Verify tag matches package.json version
         run: bash .github/scripts/verify-tag-version.sh
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: vp install --frozen-lockfile
 
       - name: Compile single-file binary (libduckdb embedded)
         env:
@@ -108,7 +109,7 @@ jobs:
         run: bash .github/scripts/sha256sums-combined.sh
 
       # Bundle install.sh as a release asset so users can pin the
-      # installer URL to a specific tag — `curl …/v0.X.Y/install.sh | sh`
+      # installer URL to a specific tag; `curl …/v0.X.Y/install.sh | sh`
       # gets the install script frozen at this release. The canonical
       # `…/main/install.sh` always reflects the latest code on main.
       - name: Bundle install.sh as a release asset
@@ -132,7 +133,8 @@ jobs:
             ## Install
 
             ```bash
-            curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/scripts/install.sh | sh
+            curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/scripts/install.sh \
+              | NDEA_VERSION=${{ github.ref_name }} sh
             ```
 
             Or download a binary directly from the asset list below and verify
@@ -145,20 +147,18 @@ jobs:
             > macOS users: unsigned binaries may be blocked by Gatekeeper. Run
             > `xattr -dr com.apple.quarantine ./ndea` after download.
 
-  # ── Bump manifest.json["pre-release"] on any pre-release tag ─────────────
-  # Pre-release tags (any tag containing `-`, e.g. v0.1.0-alpha.1,
-  # v0.1.0-beta.2, v0.1.0-rc.1) move the pointer; stable cuts leave it
-  # alone. Automating the pointer bump avoids the "I forgot to update
-  # the manifest" footgun during the stabilisation cycle.
+  # ── Bump manifest.json channel pointers after publishing ─────────────────
+  # Pre-release tags move `pre-release`. Stable tags move both `stable` and
+  # its `latest` alias. This keeps install.sh and `ndea update` on the same
+  # release for every channel.
   #
   # Opens a PR rather than pushing directly so a human reviews + merges.
   # Keeps `main` honest: every change to the canonical manifest is
-  # auditable in PR history, and a bad pre-release can be vetoed before
-  # users see `ndea update --channel pre-release` resolve to it.
-  bump-prerelease-manifest:
-    name: Open manifest.pre-release bump PR
+  # auditable in PR history, and a bad release can be vetoed before users
+  # resolve to it through the installer or updater.
+  bump-release-manifest:
+    name: Open release manifest bump PR
     needs: publish
-    if: contains(github.ref_name, '-')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -174,22 +174,27 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
-      # Inlined jq update — script lives on the rewrite branch but the
+      # Inlined jq update: script lives on the rewrite branch, but the
       # checkout above pulls main, where the file doesn't exist yet.
       # Skip gracefully if manifest.json isn't on main yet (pre-rewrite-merge
       # state); once the rewrite lands on main, this runs normally.
-      - name: Update manifest.json["pre-release"]
+      - name: Update manifest.json channel pointers
         id: bump
         env:
           NEW_TAG: ${{ github.ref_name }}
+          IS_PRERELEASE: ${{ contains(github.ref_name, '-') }}
         run: |
           if [ ! -f manifest.json ]; then
-            echo "::warning::manifest.json not on main yet — skipping pre-release pointer bump"
+            echo "::warning::manifest.json not on main yet; skipping release pointer bump"
             echo "skipped=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           tmp=$(mktemp)
-          jq --arg tag "${NEW_TAG}" '.channels."pre-release" = $tag' manifest.json > "${tmp}"
+          if [ "${IS_PRERELEASE}" = "true" ]; then
+            jq --arg tag "${NEW_TAG}" '.channels."pre-release" = $tag' manifest.json > "${tmp}"
+          else
+            jq --arg tag "${NEW_TAG}" '.channels.stable = $tag | .channels.latest = $tag' manifest.json > "${tmp}"
+          fi
           mv "${tmp}" manifest.json
           echo "Updated manifest.json:"
           cat manifest.json
@@ -201,22 +206,20 @@ jobs:
         if: steps.bump.outputs.skipped != 'true'
         uses: peter-evans/create-pull-request@v8
         with:
-          branch: chore/manifest-prerelease-bump
+          branch: chore/manifest-release-bump
           base: main
           delete-branch: true
-          commit-message: "chore(manifest): bump pre-release → ${{ github.ref_name }}"
-          title: "chore(manifest): bump pre-release → ${{ github.ref_name }}"
+          commit-message: "chore(manifest): point release channel to ${{ github.ref_name }}"
+          title: "chore(manifest): point release channel to ${{ github.ref_name }}"
           body: |
             Automated by `release.yml` after publishing
             [`${{ github.ref_name }}`](https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}).
 
-            Once merged, `ndea update --channel pre-release` will resolve
-            to this tag.
+            Once merged, `install.sh` and `ndea update` will resolve the
+            corresponding release channel to this tag.
 
-            Reviewers: confirm this is the intended `pre-release` channel
-            pointer before merging. To skip activating it (e.g. because
-            it superseded an earlier pre-release and you want users on
-            the older one), close this PR without merging.
+            Reviewers: confirm this is the intended channel pointer before
+            merging. To skip activating it, close this PR without merging.
           labels: |
             release
             automated

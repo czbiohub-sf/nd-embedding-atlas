@@ -3,7 +3,7 @@
  * Shared by `rollback`, `gc`, and `doctor`.
  *
  * Each version dir contains a single file:
- *   - `ndea` — bun-compiled binary
+ *   - `ndea`: bun-compiled binary
  *
  * The symlink at `$NDEA_BIN_DIR/ndea` points directly at this binary;
  * `readlink` returns the binary path.
@@ -15,7 +15,7 @@ import { resolve } from "node:path";
 
 export interface VersionEntry {
   tag: string;
-  /** `<versionDir>/ndea` — the bun-compiled binary the symlink points at. */
+  /** `<versionDir>/ndea`: the bun-compiled binary the symlink points at. */
   binaryPath: string;
   mtimeMs: number;
 }

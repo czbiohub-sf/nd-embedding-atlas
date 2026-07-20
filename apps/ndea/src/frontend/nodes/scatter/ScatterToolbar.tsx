@@ -1,8 +1,8 @@
 /**
- * ScatterToolbar — the scatter's controls, two ways:
- *  · variant="header" — compact run portaled into the node/tile header's
+ * ScatterToolbar: the scatter's controls, two ways:
+ *  · variant="header": compact run portaled into the node/tile header's
  *    middle gap (host.ui.container.headerEl; the workspace surfaces)
- *  · variant="docked" — full-width row above a Stage or fullscreen surface
+ *  · variant="docked": full-width row above a Stage or fullscreen surface
  *    whose container has no header slot
  * Either way the points stay unobstructed. The active embedding is the
  * primary-filled bracketed chip [embedding]; everything else sits ghosted.
@@ -16,7 +16,7 @@ import { BoxSelect, ChartScatter, LassoSelect, Snowflake, Waypoints } from "luci
 import { useMemo } from "react";
 import { BracketIcon } from "@/components/ui/bracket-icon";
 
-/** Scan + Dot combined — "fit embedding to view" */
+/** Scan + Dot combined: "fit embedding to view" */
 function ScanDotIcon({ size = 12 }: { size?: number }) {
   return (
     <svg
@@ -30,12 +30,12 @@ function ScanDotIcon({ size = 12 }: { size?: number }) {
       strokeLinejoin="round"
       aria-hidden="true"
     >
-      {/* Scan — corner brackets */}
+      {/* Scan: corner brackets */}
       <path d="M3 7V5a2 2 0 0 1 2-2h2" />
       <path d="M17 3h2a2 2 0 0 1 2 2v2" />
       <path d="M21 17v2a2 2 0 0 1-2 2h-2" />
       <path d="M7 21H5a2 2 0 0 1-2-2v-2" />
-      {/* Dot — center point */}
+      {/* Dot: center point */}
       <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" />
     </svg>
   );
@@ -67,16 +67,16 @@ interface Props {
   obsColumns: string[];
   colorMode: ColorMode;
   colorModeCanToggle: boolean;
-  /** Whether the dataset has a var/expression matrix — hides Var tab when false */
+  /** Whether the dataset has a var/expression matrix: hides Var tab when false */
   hasVar: boolean;
   onSetColorSource: (src: ColorSource) => void;
   onToggleColorMode: () => void;
 
-  // MuData modality support (all optional — absent for single AnnData)
+  // MuData modality support (all optional: absent for single AnnData)
   modalities?: string[];
   modalityObsColumns?: Record<string, string[]>;
   varCount?: number | Record<string, number>;
-  /** Full obsm metadata — used by modality-grouped EmbeddingPicker */
+  /** Full obsm metadata: used by modality-grouped EmbeddingPicker */
   obsm?: Record<string, { prefix: string; n_dims?: number | null; loaded: boolean; modality?: string }>;
 
   // Selection tool
@@ -97,7 +97,7 @@ interface Props {
 
 // The toolbar row carries the background, so the dim/COL triggers are ghost
 // (transparent → shows the row, no box-in-box). The active embedding is the
-// one filled accent. NB: dark:bg-transparent is required — the Combobox/
+// one filled accent. NB: dark:bg-transparent is required: the Combobox/
 // ColorSourcePicker base sets dark:bg-input/30, which (a dark-variant rule)
 // outranks a bare bg.
 const ghostTrigger =
@@ -105,11 +105,11 @@ const ghostTrigger =
 const chipActive =
   "h-7 max-w-44 gap-0 rounded-md border border-transparent bg-primary dark:bg-primary px-2.5 font-mono text-2xs leading-none text-primary-foreground hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring/40 before:mr-px before:text-primary-foreground/60 before:content-['['] after:ml-px after:text-primary-foreground/60 after:content-[']']";
 
-/** X / Y / COLOR caption labels — mono, uppercase, dim. leading-none keeps
+/** X / Y / COLOR caption labels: mono, uppercase, dim. leading-none keeps
  *  the caption's line box flat so it centers on the same line as the values. */
 const captionCls = "font-mono text-3xs uppercase leading-none tracking-[0.12em] text-muted-foreground";
 
-/** Borderless square icon button for the top-right utility cluster — derives
+/** Borderless square icon button for the top-right utility cluster: derives
  *  from the shadcn icon-button variant so toolbar buttons share one source
  *  with ui/icon-button (the toolbar keeps its own HoverTip wrap + ToggleGroup
  *  structure, which the bundled IconButton component can't model). */
@@ -145,7 +145,7 @@ export function ScatterToolbar({
 }: Props) {
   const disabled = loadingKey !== null;
 
-  // header variant: fit inside the 26px node/tile header — shorter controls,
+  // header variant: fit inside the 26px node/tile header: shorter controls,
   // tighter caps, no wrap (overflow clips; popovers escape via portal)
   const compact = variant === "header";
   const trigger = cn(ghostTrigger, compact && "h-5 max-w-28 px-1.5");
@@ -153,7 +153,7 @@ export function ScatterToolbar({
   const btn = cn(iconBtn, compact && "size-5");
   const icon = compact ? "size-3" : "size-3.5";
   // header slot: utility buttons (everything past the selection tools) drop
-  // out together when the slot is tight — the marquee/lasso pair survives
+  // out together when the slot is tight: the marquee/lasso pair survives
   const util = cn(btn, compact && "hidden @[22rem]:flex");
 
   // Memoize option arrays to avoid churn on every render
@@ -177,10 +177,10 @@ export function ScatterToolbar({
       {/* ── Left zone: embedding + dims + color. Rhythm: tight inside a
           caption·value pair, medium between pairs, generous between groups ── */}
       <div className={cn("flex min-w-0 items-center", compact ? "gap-2" : "gap-2.5")}>
-        {/* the node header already carries LED + title — skip the glyph there */}
+        {/* the node header already carries LED + title: skip the glyph there */}
         {compact ? null : <BracketIcon icon={ChartScatter} className="size-6 text-foreground/75" />}
 
-        {/* Embedding — primary-filled bracketed chip. Modality picker for MuData, combobox otherwise. */}
+        {/* Embedding: primary-filled bracketed chip. Modality picker for MuData, combobox otherwise. */}
         {modalities && obsm ? (
           <EmbeddingPicker
             obsm={obsm}
@@ -203,10 +203,10 @@ export function ScatterToolbar({
           />
         )}
 
-        {/* X / Y dims — two caption·value pairs. In the header slot this
+        {/* X / Y dims: two caption·value pairs. In the header slot this
             segment drops out below 26rem (priority: chip > color > dims) */}
         <div className={cn("items-center gap-1.5", compact ? "hidden @[26rem]:flex" : "flex")}>
-          <span className="flex items-center gap-0.5" title="X axis — embedding dimension">
+          <span className="flex items-center gap-0.5" title="X axis: embedding dimension">
             <span className={captionCls}>X</span>
             <Combobox
               value={String(axes.xDim)}
@@ -220,7 +220,7 @@ export function ScatterToolbar({
               hideChevron
             />
           </span>
-          <span className="flex items-center gap-0.5" title="Y axis — embedding dimension">
+          <span className="flex items-center gap-0.5" title="Y axis: embedding dimension">
             <span className={captionCls}>Y</span>
             <Combobox
               value={String(axes.yDim)}
@@ -236,7 +236,7 @@ export function ScatterToolbar({
           </span>
         </div>
 
-        {/* Color-by column — gated at 17rem of slot width in the header */}
+        {/* Color-by column: gated at 17rem of slot width in the header */}
         <div
           className={cn("min-w-0 items-center gap-0.5", compact ? "hidden @[17rem]:flex" : "flex")}
           title="color points by column"

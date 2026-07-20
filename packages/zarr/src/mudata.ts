@@ -1,5 +1,5 @@
 /**
- * MuData — convention detector, parser, and public class.
+ * MuData: convention detector, parser, and public class.
  *
  * MuData is a root object above AnnData that holds a map of per-modality
  * AnnData objects (`mdata.mod["rna"]`, etc.) plus shared annotations at
@@ -7,10 +7,10 @@
  *
  * Detects: root `.zattrs` has `"encoding-type": "MuData"`.
  * Structure:
- *   mod/<name>/   — each is a full AnnData
- *   obs/, var/    — root-level annotations (axis=0: obs shared)
- *   obsm/<name>/  — NOT an embedding — obs→modality binary mapping
- *   obsmap/<name> — integer map from shared obs-axis to per-modality rows
+ *   mod/<name>/  : each is a full AnnData
+ *   obs/, var/   : root-level annotations (axis=0: obs shared)
+ *   obsm/<name>/ : NOT an embedding: obs→modality binary mapping
+ *   obsmap/<name>: integer map from shared obs-axis to per-modality rows
  *
  * This reader supports axis=0 stores with 1-to-1 obs_names across modalities.
  * Other axes and sparse modality coverage come later.
@@ -162,9 +162,9 @@ export class MuData implements DatasetHandle {
   readonly kind = "mudata" as const;
   /**
    * MuData axis attribute from the store's root `.zattrs`:
-   *   0  — observations shared across modalities (default)
-   *   1  — variables shared, observations concatenated
-   *   -1 — both shared
+   *   0 : observations shared across modalities (default)
+   *   1 : variables shared, observations concatenated
+   *   -1: both shared
    * Only axis=0 is supported in this release.
    */
   readonly axis: 0 | 1 | -1;
@@ -224,7 +224,7 @@ export class MuData implements DatasetHandle {
    *
    * Separator is `:` per the MuData Python convention (mdata.mod["rna"]
    * obsm exposed as "rna:X_umap"). Root-level obsm is intentionally not
-   * enumerated — those keys are the MuData obs-to-modality binary mapping,
+   * enumerated: those keys are the MuData obs-to-modality binary mapping,
    * not embeddings.
    */
   async listObsmKeys(): Promise<string[] | null> {
@@ -333,7 +333,7 @@ export class MuData implements DatasetHandle {
    * is kept.
    *
    * Assumes axis=0 and 1-to-1 obs_names across modalities (the supported
-   * subset — see module docstring).
+   * subset: see module docstring).
    */
   private _buildMergedObs(): AnnDataFrame {
     const rootSource = this.obs.source;

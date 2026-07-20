@@ -1,7 +1,7 @@
 /**
  * Gallery plugin view (PLUGIN-ARCHITECTURE §10.5).
  *
- * Node contract: a gallery node shows NOTHING until it is wired — so it gates on
+ * Node contract: a gallery node shows NOTHING until it is wired: so it gates on
  * its cooked input predicate (`host.inputPredicate`). Unwired (null predicate) →
  * a "connect an input" hint; wired → the crop gallery.
  *
@@ -28,7 +28,7 @@ export type GalleryOptions = Record<string, never>;
 
 export function GalleryPluginView({ host }: NodeBodyProps<GalleryConfig, GalleryCapabilities>) {
   // host.inputPredicate is a Mosaic Selection that mutates in place on re-cook
-  // and notifies Mosaic clients via "value" events — NOT React. Bridge it so the
+  // and notifies Mosaic clients via "value" events: NOT React. Bridge it so the
   // unwired gate AND GalleryPane's query key recompute when the wired input
   // changes; without this the crops go stale after the upstream re-cooks.
   const selection = host.inputPredicate;
@@ -42,7 +42,7 @@ export function GalleryPluginView({ host }: NodeBodyProps<GalleryConfig, Gallery
   const predicate = useSyncExternalStore(subscribe, () => predicateToSql(selection));
 
   // Focus rides the scoped host seam (group-aware), not the process-wide bus.
-  // state — same as ScatterView/Table. A crop click writes through
+  // state: same as ScatterView/Table. A crop click writes through
   // host.focus.set so a shared sync group ("A") fans it out to Scatter +
   // Idetik; the read reflects the group's effective focus so the card lights up.
   const focusedRowIndex = useNodeFocus(host);

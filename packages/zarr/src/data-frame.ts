@@ -1,5 +1,5 @@
 /**
- * DataFrame — obs/var surface for the AnnData class.
+ * DataFrame: obs/var surface for the AnnData class.
  *
  * Wraps the existing `AnnDataFrame` (column-major map) and exposes a stable
  * tabular surface. `toArrow()` is the hot path; downstream consumers always
@@ -64,7 +64,7 @@ export class LazyDataFrame {
     return this._arrow;
   }
 
-  /** Underlying AnnDataFrame — escape hatch for consumers that still need it. */
+  /** Underlying AnnDataFrame: escape hatch for consumers that still need it. */
   get source(): AnnDataFrame {
     return this._source;
   }
@@ -100,7 +100,7 @@ type FlechetteArray =
  * const parsedStore = await open("./pbmc.zarr");
  * if (parsedStore.kind !== "anndata" || !parsedStore.obs) throw new Error("AnnData obs is unavailable");
  * const obsTable = toArrowTable(parsedStore.obs);
- * // obsTable is now a flechette Table — Arrow IPC compatible
+ * // obsTable is now a flechette Table: Arrow IPC compatible
  * ```
  */
 export function toArrowTable(df: AnnDataFrame) {
@@ -137,7 +137,7 @@ function convertColumn(data: ColumnData | string[] | Int32Array): ArrowColumnCon
   }
 
   // Plain array → Utf8. flechette's utf8 builder empties NON-string values (a
-  // boolean obs column like `is_primary_data` became "" — silent data loss), so
+  // boolean obs column like `is_primary_data` became "": silent data loss), so
   // stringify first. Strings pass through unchanged; null stays null.
   if (Array.isArray(data)) {
     const arr = data as unknown as (string | number | boolean | bigint | null)[];
@@ -182,7 +182,7 @@ function convertColumn(data: ColumnData | string[] | Int32Array): ArrowColumnCon
  * Arrow: Dictionary(index_type, Utf8) with validity bitmap for nulls
  */
 function convertCategorical(cat: CategoricalArray): ArrowColumnConversion {
-  // Decode to plain string array — flechette will handle encoding.
+  // Decode to plain string array: flechette will handle encoding.
   // Passing dictionary() type with a decoded string[] is incoherent,
   // so we use utf8() and let flechette build its own dictionary if needed.
   const categories = cat.categories.map(String);

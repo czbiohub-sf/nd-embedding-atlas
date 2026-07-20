@@ -6,7 +6,7 @@ const ROOT = resolve(import.meta.dir, "..");
 const [packageName, task, ...taskArgs] = Bun.argv.slice(2);
 
 if (!packageName || !task) {
-  console.error("Usage: bun run scripts/run-workspace-task.ts <package-name> <task> [args...]");
+  console.error("run-workspace-task requires <package-name> <task> [args...]");
   process.exit(2);
 }
 

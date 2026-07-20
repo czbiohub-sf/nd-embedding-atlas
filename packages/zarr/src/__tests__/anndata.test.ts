@@ -1,7 +1,7 @@
 /**
  * AnnData class + dual-axis DuckDB ingestion (zarr rework Phase A+B).
  *
- * Fixture: ../ome-atlas-test-data/annotations.zarr — small dense AnnData
+ * Fixture: ../ome-atlas-test-data/annotations.zarr: small dense AnnData
  * (~8.3k obs × 768 var). Test is skipped if the fixture is absent so CI
  * environments without the test-data checkout still pass.
  */
@@ -194,7 +194,7 @@ describe("Zarr convention vocabulary through the package barrel", () => {
   });
 });
 
-describe("AnnData class — symmetric obs/var + toDuckDB", () => {
+describe("AnnData class: symmetric obs/var + toDuckDB", () => {
   test("opens fixture, exposes obs/var DataFrames with correct shape", async () => {
     if (!HAS_FIXTURE) return;
     const adata = await openAnnData(FIXTURE);
@@ -273,7 +273,7 @@ describe("AnnData class — symmetric obs/var + toDuckDB", () => {
 
   test("ingestDataFrames reads obs_name from a nullable-string-array index (not empty)", async () => {
     // Regression: a `nullable-string-array` index arrives as a SimpleNullable
-    // wrapper whose values are reachable only via `.at()` — raw `idx[r]` is
+    // wrapper whose values are reachable only via `.at()`: raw `idx[r]` is
     // undefined. The name-column emission used `idx[r]`, so obs_name became ""
     // for every row, and annotation write-back (aligns by obs_name) then wrote
     // an all-NA column.

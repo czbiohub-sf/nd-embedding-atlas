@@ -55,7 +55,7 @@ const MIME: Record<string, string> = {
  * @returns Absolute path to the frontend dist directory, or null if not found.
  */
 export function resolveFrontendDir(frontendDir?: string): string | null {
-  // 1. Explicit override always wins — this is the documented escape
+  // 1. Explicit override always wins: this is the documented escape
   //    hatch for "I have a custom frontend at /tmp/whatever, use it".
   if (frontendDir) {
     const resolved = resolve(frontendDir);

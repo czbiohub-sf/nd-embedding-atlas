@@ -2,19 +2,47 @@
 
 ## Prerequisites
 
-- **[Bun](https://bun.com)** — runtime + package manager. The version pinned in `package.json`'s `packageManager` field will be used by CI; locally any matching major works.
-- **[Vite+](https://viteplus.dev/)** (`vp`) — unified toolchain for lint, fmt, test, and the dev server. Install once globally per their setup; `vp` drives every dev workflow in this repo. (The app _build_ runs on Bun — see `vp run build` below.)
+- **[Vite+](https://viteplus.dev/)** (`vp`): the sole developer command interface for dependencies, tasks, checks, builds, and development servers.
+- **[Bun](https://bun.com)**: runtime, package manager, test runner, and compiler used underneath Vite+. CI uses the version pinned in `package.json`.
+
+Use `vp` for every command you run directly. `vp run` dispatches package scripts, which may use Bun for tests, scripts, and single-binary compilation.
 
 ## Setup
 
 ```bash
 git clone https://github.com/czbiohub-sf/nd-embedding-atlas.git
 cd nd-embedding-atlas
-bun install
+vp install
+cd docs && vp install && cd ..
 ```
 
 The root install resolves `apps/*` and `packages/*`. Documentation has its
 own dependency graph and lockfile under `docs/`.
+
+## Dependency management
+
+```bash
+# Audit root tooling and every workspace
+vp outdated
+vp outdated -r
+# Update workspace resolutions within declared ranges
+vp update -r
+
+# Add or remove a dependency in the selected workspace
+vp add --filter @ndea/app <package>
+vp remove --filter @ndea/app <package>
+
+# Update the independent docs application
+cd docs
+vp outdated
+vp update
+```
+
+Shared `catalog` constraints live in the root `package.json`; update each
+constraint there once, then run `vp install`. Update root-only tooling packages
+reported by `vp outdated` explicitly with `vp update <package...>`; a blanket
+root update would replace unrelated `catalog:` references with package-local
+ranges. Review `overrides` separately because they are deliberately pinned.
 
 ## Workspace layout
 
@@ -36,11 +64,11 @@ vp run dev path/to/data.zarr
 vp check vite.config.ts bunli.config.ts scripts
 vp run -r check
 
-# Bun-native tests in every workspace
+# Run each workspace's test task
 vp run -r test
 
-# Production build — all-Bun (Bun.build frontend → single-file binary)
-vp run build    # or `bun run build`
+# Build the frontend and single-file binary
+vp run build
 
 # Regenerate CLI completion metadata (after editing apps/ndea/src/cli/commands/**)
 vp run gen
@@ -62,8 +90,8 @@ key abstractions, and gotchas.
 
 Enforced by `vp check`:
 
-- **TypeScript 6 strict** — no implicit any, `import type` for type-only imports
-- **Oxlint** + **Oxfmt** — config lives in `vite.config.ts`
+- **TypeScript 6 strict**: no implicit any, `import type` for type-only imports
+- **Oxlint** + **Oxfmt**: config lives in `vite.config.ts`
 - 4-space indent, double quotes, trailing commas, semicolons
 - `@/` path alias → `apps/ndea/src/frontend/`
 - Kebab-case ordinary modules, PascalCase React component modules, and `useX`

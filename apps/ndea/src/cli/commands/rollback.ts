@@ -1,5 +1,5 @@
 /**
- * `ndea rollback` — repoint the active symlink to the previous installed
+ * `ndea rollback`: repoint the active symlink to the previous installed
  * version.
  *
  * The versions tree (`~/.ndea/versions/<tag>/ndea`) keeps every binary that
@@ -7,7 +7,7 @@
  * tree, finds the most-recently-modified version that is *not* the
  * currently-active one, and atomically swaps the symlink to point there.
  *
- * Each rollback consumes one entry — running it again rolls back further.
+ * Each rollback consumes one entry: running it again rolls back further.
  * `ndea update` wipes nothing, so all history stays available until the
  * user prunes `~/.ndea/versions/` manually.
  */
@@ -42,7 +42,7 @@ export default defineCommand({
 
     const root = versionsDir();
     if (!existsSync(root)) {
-      console.error("Error: no versions directory found — nothing to roll back.");
+      console.error("Error: no versions directory found: nothing to roll back.");
       console.error(`  Expected: ${root}`);
       process.exit(1);
     }
@@ -63,7 +63,7 @@ export default defineCommand({
     // `readlink` returns.
     const candidate = entries.find((e) => e.binaryPath !== activeTarget);
     if (!candidate) {
-      console.error("Error: only one version installed — nothing to roll back to.");
+      console.error("Error: only one version installed: nothing to roll back to.");
       process.exit(1);
     }
 

@@ -2,7 +2,7 @@ import { createContext, useContext } from "react";
 import type { ExactNodeTypeRef } from "@ndea/sdk";
 
 /**
- * Imperative controls for the in-app docs surfaces — the ⌘K search palette and
+ * Imperative controls for the in-app docs surfaces: the ⌘K search palette and
  * the full-docs sheet. Provided by `<DocsProvider>`; consumed by the node info
  * button ("see full docs") and anything else that wants to open docs.
  */

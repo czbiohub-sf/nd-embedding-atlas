@@ -8,22 +8,22 @@
 # ── post-create ──────────────────────────────────────────────────────────────
 # Install dependencies when a worktree is created. Worktrees are separate
 # working dirs, so each needs its own node_modules; Bun's global cache keeps
-# this fast. Blocking by design — the worktree isn't usable until deps land
+# this fast. Blocking by design: the worktree isn't usable until deps land
 # (the native @duckdb/node-api binding is pulled in here too).
-post-create = "bun install"
+post-create = "vp install"
 
 # ── pre-merge ────────────────────────────────────────────────────────────────
 # Mirror the CI gates (.github/workflows/ci.yml) so a branch fails locally
 # before it's merged back to trunk rather than in CI:
 #   - check     → `vp check`  (typecheck + Oxlint + Oxfmt)
-#   - test      → `bun test`  (Bun-native suites — what CI runs, not `vp test`)
+#   - test      → `vp run -r test` (Bun-native suites behind Vite+ tasks)
 #   - gen-drift → fail if .bunli/commands.gen.ts is stale vs src/cli/commands/**
 #                 (regenerate with `vp run gen` if this trips)
 #
-# Array-of-tables ([[pre-merge]]) is the current form — steps run serially in
+# Array-of-tables ([[pre-merge]]) is the current form: steps run serially in
 # declaration order. (The single-table [pre-merge] form is deprecated and will
 # be repurposed to run in parallel.)
 [[pre-merge]]
 check = "vp check"
-test = "bun test"
+test = "vp run -r test"
 gen-drift = "bash .github/scripts/check-bunli-gen.sh"

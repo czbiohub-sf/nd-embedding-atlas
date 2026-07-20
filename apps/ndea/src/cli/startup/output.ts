@@ -112,7 +112,7 @@ function printDevUrls(config: LaunchConfig, host: string): void {
     `\n  ${ANSI.bold}App:${ANSI.reset}  ${ANSI.green}http://${host}:5173${ANSI.reset}  ${ANSI.dim}← open this (Vite + HMR)${ANSI.reset}`,
   );
   console.log(
-    `  ${ANSI.bold}API:${ANSI.reset}  ${ANSI.dim}http://${host}:${config.port}  (backend — for /api/* and debugging)${ANSI.reset}`,
+    `  ${ANSI.bold}API:${ANSI.reset}  ${ANSI.dim}http://${host}:${config.port}  (backend: for /api/* and debugging)${ANSI.reset}`,
   );
 }
 

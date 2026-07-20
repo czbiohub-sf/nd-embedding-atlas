@@ -11,7 +11,7 @@ export type Domain = [min: number, max: number];
 
 export const clamp01 = (t: number): number => Math.min(1, Math.max(0, t));
 
-/** Round x toward -∞ / +∞ at one significant figure — for tidy axis bounds. */
+/** Round x toward -∞ / +∞ at one significant figure: for tidy axis bounds. */
 function niceRound(x: number, dir: "floor" | "ceil"): number {
   if (x === 0) return 0;
   const mag = 10 ** Math.floor(Math.log10(Math.abs(x)));
@@ -46,7 +46,7 @@ export function domainTicks([d0, d1]: Domain, n = 5): number[] {
   return Array.from({ length: n }, (_, i) => d0 + ((d1 - d0) * i) / (n - 1));
 }
 
-/** Compact, generic number formatting — scientific only at the extremes. */
+/** Compact, generic number formatting: scientific only at the extremes. */
 export function fmtVal(v: number | null | undefined): string {
   if (v == null || !Number.isFinite(v)) return "";
   if (v === 0) return "0";

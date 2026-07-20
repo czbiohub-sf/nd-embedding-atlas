@@ -1,8 +1,8 @@
 /**
- * Scope picker (U4) — the per-type scope-assignment popover that replaces the
+ * Scope picker (U4): the per-type scope-assignment popover that replaces the
  * hardcoded "link into group A" button. For each coordination TYPE the node
  * supports (capability-gated), it offers the EXISTING scopes plus "New scope"
- * (mint) and "Unlink" — never free-text, so a node can't reference a dangling
+ * (mint) and "Unlink": never free-text, so a node can't reference a dangling
  * scope (KD9). A freshly spawned node participates in nothing until linked here.
  */
 
@@ -37,7 +37,7 @@ export function ScopePicker({ nodeId }: { nodeId: string }) {
         data-nodrag="1"
         title={
           activeScopes.length > 0
-            ? `linked on ${activeScopes.length} channel(s) — click to edit`
+            ? `linked on ${activeScopes.length} channel(s): click to edit`
             : "link this node onto a shared channel"
         }
         onClick={(e) => e.stopPropagation()}
@@ -65,7 +65,7 @@ export function ScopePicker({ nodeId }: { nodeId: string }) {
                     <button
                       key={scope}
                       type="button"
-                      title={current === scope ? `on ${scope} — click to unlink` : `link onto ${scope}`}
+                      title={current === scope ? `on ${scope}: click to unlink` : `link onto ${scope}`}
                       onClick={() =>
                         current === scope
                           ? ws.coordination.clearScope(nodeId, t.type)

@@ -1,10 +1,10 @@
 import { cn } from "@/lib/utils";
 
 /**
- * Bracketed — wraps content in the brand's brackets: [content].
+ * Bracketed: wraps content in the brand's brackets: [content].
  *
  * Brand rule: brackets mark rigorous technical substance (IDs, counts, dates,
- * tool names) — not ordinary words. Same weight as the text, no inner space;
+ * tool names): not ordinary words. Same weight as the text, no inner space;
  * the brackets sit at reduced opacity so the value stays dominant.
  *
  *   <Bracketed>70,121</Bracketed>   → [70,121]

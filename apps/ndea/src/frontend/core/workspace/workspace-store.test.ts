@@ -26,10 +26,10 @@ function createWorkspace(nodeLibrary: AppNodeLibrary = nativeWorkspaceNodeLibrar
 }
 
 beforeEach(() => {
-  globalThis.requestAnimationFrame = ((callback: FrameRequestCallback) => {
+  globalThis.requestAnimationFrame = (callback: FrameRequestCallback) => {
     callback(0);
     return 0;
-  }) as typeof requestAnimationFrame;
+  };
 });
 
 describe("Workspace graph transactions", () => {

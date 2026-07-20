@@ -1,0 +1,62 @@
+---
+title: Link observations to images
+description: Map AnnData observation rows to OME-Zarr fields of view and crops.
+---
+
+Image views need two inputs: a mounted OME-Zarr HCS plate and observation columns that identify an image and crop location.
+
+## Mount the matching plate
+
+Associate each dataset with an HCS store in [Project YAML](/project-config):
+
+```yaml
+datasets:
+  experiment_a:
+    anndata: ./analysis/anndata.zarr
+    hcs_plate: ./images/experiment-a.zarr
+```
+
+The value in each observation's field-of-view column is appended below that plate root. It must therefore match the image path inside the plate, for example `A/1/000000`.
+
+## Auto-detected columns
+
+| Purpose       | Accepted names, in priority order | Required for crops                          |
+| ------------- | --------------------------------- | ------------------------------------------- |
+| field of view | `fov_name`, then `well`           | yes                                         |
+| time point    | `t`                               | no; defaults according to the image request |
+| bounding box  | `bbox`, then `cp_bbox`            | use this or X/Y                             |
+| X coordinate  | `x`, `x_cp1`, `x_global_pheno`    | use with matching Y                         |
+| Y coordinate  | `y`, `y_cp1`, `y_global_pheno`    | use with matching X                         |
+| Z plane       | `z`, `z_slice`, `plane`           | no                                          |
+
+X and Y names are selected as pairs; do not mix candidates from different rows of the table.
+
+A bounding box is a string in source-image pixel coordinates:
+
+```text
+[y_min x_min y_max x_max]
+```
+
+Malformed boxes are ignored. When a box is absent, the viewer centres a crop on X/Y. Keep coordinates in the full-resolution image's pixel coordinate system.
+
+## Row-to-image example
+
+| `fov_name`   | `t` | `z` | `x` | `y` | `bbox`             |
+| ------------ | --: | --: | --: | --: | ------------------ |
+| `A/1/000000` |  25 |   0 | 623 |  84 | `[52 591 116 655]` |
+
+The focused table row publishes this information to the Image Viewer and Gallery. A selection or filter can publish many rows for crop loading.
+
+## OME-Zarr metadata
+
+The mounted plate should expose a standard plate → well → image hierarchy. Image groups need `multiscales`; `omero.channels` supplies channel labels, colours, and display windows. Coordinate transformation scales provide physical X/Y spacing. Project YAML channel settings can override the initial colour, contrast, and visibility.
+
+## Diagnose linkage
+
+1. Confirm that the plate path exists and appears in the startup output.
+2. Inspect one `fov_name` and verify that the same relative image path exists below the plate root.
+3. Confirm that X/Y or the bounding box lies inside the level-0 image.
+4. Check that time and Z indices are within the image dimensions.
+5. Open the browser network panel and inspect requests below `/plate` or `/plate/<dataset>`.
+
+A working scatter does not prove image linkage: tabular data and image chunks travel through separate paths.

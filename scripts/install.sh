@@ -1,10 +1,10 @@
 #!/usr/bin/env sh
-# ndea installer — downloads a released binary, verifies its SHA-256
+# ndea installer: downloads a released binary, verifies its SHA-256
 # checksum, places it in the versions tree, and creates a symlink on PATH.
 #
 # Layout:
-#   $NDEA_HOME/versions/<tag>/ndea               — bun-compiled binary
-#   $NDEA_BIN_DIR/ndea                           — symlink → versions/<tag>/ndea
+#   $NDEA_HOME/versions/<tag>/ndea              : bun-compiled binary
+#   $NDEA_BIN_DIR/ndea                          : symlink → versions/<tag>/ndea
 #
 # The binary embeds libduckdb; on first launch it extracts a copy to
 # ~/.cache/ndea/<tag>/libduckdb.<ext> and dlopens it before any DuckDB
@@ -17,19 +17,19 @@
 #   curl -fsSL https://raw.githubusercontent.com/czbiohub-sf/nd-embedding-atlas/main/scripts/install.sh | sh
 #
 # Environment variables:
-#   NDEA_VERSION         release tag to install (default: latest)
+#   NDEA_VERSION         release tag to install (default: selected channel)
 #   NDEA_BIN_DIR         PATH directory holding the symlink (default: $HOME/.local/bin)
 #   NDEA_HOME            state root for versions/ + locks/ (default: $HOME/.ndea)
 #   NDEA_CHANNEL         release channel: stable | latest | pre-release (default: stable)
-#                        - stable: most recent semver-tagged release
-#                        - pre-release: latest active alpha / beta / rc (resolved via manifest.json)
+#                        - stable/latest: active stable release
+#                        - pre-release: active alpha / beta / rc
 #   NDEA_GITHUB_TOKEN    GitHub token for private/internal repos. Falls back to
 #                        GITHUB_TOKEN if unset. When present, downloads go via
 #                        the GitHub Releases API (Accept: application/octet-stream)
 #                        so private-repo asset URLs resolve. Get a token via
 #                        \`gh auth token\` if you have the gh CLI.
 #
-# POSIX sh — no bashisms. Tested with dash, bash 3.2, bash 5.x, zsh.
+# POSIX sh: no bashisms. Tested with dash, bash 3.2, bash 5.x, zsh.
 
 set -euf
 
@@ -75,7 +75,7 @@ gh_curl() {
     fi
 }
 
-# Look up an asset's numeric ID by name within a release. POSIX-ish — uses
+# Look up an asset's numeric ID by name within a release. POSIX-ish: uses
 # only awk + curl. Works on BusyBox awk (Alpine) and gawk (Debian/Ubuntu).
 # Args: $1 = release tag (e.g. v0.1.0), $2 = asset name (e.g. ndea-linux-x64)
 resolve_asset_id() {
@@ -136,43 +136,34 @@ fi
 os=$(uname -s | tr '[:upper:]' '[:lower:]')
 case "$os" in
     darwin | linux) ;;
-    *) die "unsupported OS: $os (install manually: https://github.com/${REPO}/releases)" ;;
+    *) die "unsupported OS: $os (supported: macOS and Linux)" ;;
 esac
 
 arch=$(uname -m)
 case "$arch" in
     x86_64 | amd64) arch=x64 ;;
     arm64 | aarch64) arch=arm64 ;;
-    *) die "unsupported arch: $arch (install manually: https://github.com/${REPO}/releases)" ;;
+    *) die "unsupported arch: $arch (supported: x64 and arm64)" ;;
 esac
+
+if [ "$os" = "darwin" ] && [ "$arch" != "arm64" ]; then
+    die "unsupported platform: darwin/$arch (supported: darwin/arm64, linux/x64, linux/arm64)"
+fi
 
 artifact="ndea-${os}-${arch}"
 
 # --- Release tag resolution ---------------------------------------------
 # Resolve channel + version into the concrete tag we want assets from.
-# pre-release → resolved via manifest.json's `channels.pre-release` pointer.
-# latest → resolved via the `releases/latest` redirect (or API when authed).
+# Explicit versions install directly. Otherwise every channel resolves through
+# manifest.json so install.sh and `ndea update` always select the same release.
 manifest_url="https://raw.githubusercontent.com/${REPO}/main/manifest.json"
 
-if [ "$CHANNEL" = "pre-release" ]; then
-    log "Resolving pre-release channel via manifest.json"
+if [ "$VERSION" = "latest" ]; then
+    log "Resolving $CHANNEL channel via manifest.json"
     release_tag=$(gh_curl "$manifest_url" |
-        sed -n 's/.*"pre-release"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' |
+        sed -n "s/.*\"${CHANNEL}\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p" |
         head -n 1)
-    [ -n "$release_tag" ] || die "no active pre-release in manifest (channels.pre-release is null)"
-elif [ "$VERSION" = "latest" ]; then
-    if [ -n "$TOKEN" ]; then
-        release_tag=$(gh_curl "https://api.github.com/repos/${REPO}/releases/latest" |
-            sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' |
-            head -n 1)
-        [ -n "$release_tag" ] || die "could not resolve latest release tag via API"
-    else
-        # Anonymous: follow the redirect on the public latest URL.
-        release_tag=$(curl -fsSLo /dev/null -w '%{url_effective}' --proto '=https' --tlsv1.2 \
-            "https://github.com/${REPO}/releases/latest" 2>/dev/null |
-            sed -n 's|.*/releases/tag/\([^/?#]*\).*|\1|p')
-        [ -n "$release_tag" ] || die "could not resolve latest release tag"
-    fi
+    [ -n "$release_tag" ] || die "no active $CHANNEL release in manifest.json"
 else
     release_tag="$VERSION"
 fi

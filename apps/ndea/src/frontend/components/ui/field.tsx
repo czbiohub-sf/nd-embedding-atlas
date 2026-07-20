@@ -1,15 +1,15 @@
 /**
- * Field — form-field primitive with auto label↔control wiring.
+ * Field: form-field primitive with auto label↔control wiring.
  *
  * Built on @base-ui/react/field. Each <Field.Root> auto-generates an `id` +
  * wires `<Field.Label htmlFor>` + `aria-describedby` (description + error)
  * on the controlled `<Field.Control>`. Replaces hand-wired label/input
  * pairs and ad-hoc error spans.
  *
- * Error precedence (PR2 contract — see `<FieldError>` below):
- *   1. clientError (zod safeParse on each onChange)  — wins when set
- *   2. serverError (mutation onError)                — clears on next keystroke
- *   3. neither                                       — no error rendered
+ * Error precedence (PR2 contract: see `<FieldError>` below):
+ *   1. clientError (zod safeParse on each onChange) : wins when set
+ *   2. serverError (mutation onError)               : clears on next keystroke
+ *   3. neither                                      : no error rendered
  *
  * Per-field scoped: typing in one Field's Control does NOT clear another
  * Field's serverError. Server errors that span multiple fields must be

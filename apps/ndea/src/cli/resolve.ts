@@ -57,7 +57,7 @@ export function getNetworkAddress(): string | undefined {
       }
     }
   } catch {
-    // networkInterfaces unavailable — skip
+    // networkInterfaces unavailable: skip
   }
   return undefined;
 }

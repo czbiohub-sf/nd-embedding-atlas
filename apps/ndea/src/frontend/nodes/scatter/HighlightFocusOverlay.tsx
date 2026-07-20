@@ -2,11 +2,11 @@ import type { RefObject } from "react";
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
-// Matches --color-wire-focus — the "single-record focus" channel color.
+// Matches --color-wire-focus: the "single-record focus" channel color.
 const FOCUS_COLOR = "#38bdf8";
 
 export interface HighlightFocusOverlayHandle {
-  /** Redraw without a React re-render — called from GPU onViewChange. */
+  /** Redraw without a React re-render: called from GPU onViewChange. */
   update(): void;
 }
 
@@ -27,7 +27,7 @@ interface Props {
  * point with a bright dot + ring. A spatial cutout would reveal every neighbor
  * that fell inside it (wrong in a dense region); a single marker isolates exactly
  * one point. The focus signal lives in this SVG overlay (not the GPU highlight
- * buffer, which stays for trajectories) — a lone GPU-bright point is invisible
+ * buffer, which stays for trajectories): a lone GPU-bright point is invisible
  * under additive blending.
  * Mirrors TrajectoryOverlaySvg: direct DOM mutation, redrawn on pan/zoom via the
  * imperative `update()` so camera moves don't trigger React re-renders.
@@ -70,7 +70,7 @@ export const HighlightFocusOverlay = forwardRef<HighlightFocusOverlayHandle, Pro
     const dim = getComputedStyle(document.documentElement).getPropertyValue("--color-base").trim() || "#08080c";
     const g = document.createElementNS(SVG_NS, "g");
 
-    // Dim the WHOLE scatter — neighbors of the clicked point included — then mark
+    // Dim the WHOLE scatter: neighbors of the clicked point included: then mark
     // ONLY the clicked point. A circular cutout would reveal every neighbor that
     // fell inside it (wrong in a dense region); one marker isolates exactly one.
     const scrim = document.createElementNS(SVG_NS, "rect");
@@ -93,7 +93,7 @@ export const HighlightFocusOverlay = forwardRef<HighlightFocusOverlayHandle, Pro
     ring.setAttribute("stroke-opacity", "0.95");
     g.appendChild(ring);
 
-    // The marker IS the spotlighted point — a single bright dot at the click, so
+    // The marker IS the spotlighted point: a single bright dot at the click, so
     // exactly one point reads as selected no matter how dense the region.
     const dot = document.createElementNS(SVG_NS, "circle");
     dot.setAttribute("cx", String(x));
@@ -106,7 +106,7 @@ export const HighlightFocusOverlay = forwardRef<HighlightFocusOverlayHandle, Pro
     svg.appendChild(g);
   }
 
-  // Expose update() for GPU onViewChange — closure captures latest props via draw().
+  // Expose update() for GPU onViewChange: closure captures latest props via draw().
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useImperativeHandle(ref, () => ({ update: draw }), [draw]);
 

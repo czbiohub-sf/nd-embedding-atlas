@@ -1,4 +1,4 @@
-/** wrangle — a PRQL-authored predicate transform. */
+/** wrangle: a PRQL-authored predicate transform. */
 
 import { defineNode, exactNodeTypeRef, nodeConfigVersion } from "@ndea/sdk";
 import { z } from "zod";

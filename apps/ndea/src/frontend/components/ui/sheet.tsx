@@ -16,7 +16,7 @@ const SheetBoundaryContext = createContext<React.RefObject<HTMLDivElement | null
 
 /**
  * Read the nearest enclosing SheetContent's element ref. Returns null when
- * not inside a Sheet — components use that to fall back to viewport-bounded
+ * not inside a Sheet: components use that to fall back to viewport-bounded
  * positioning.
  */
 export function useSheetBoundary(): HTMLElement | null {

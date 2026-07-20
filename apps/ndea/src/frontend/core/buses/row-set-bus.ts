@@ -16,7 +16,7 @@ export interface RowSetBus {
   subscribeExternal(instanceId: NodeInstanceId, callback: (rowIndices: readonly RowIndex[] | null) => void): () => void;
 }
 
-const sourceFor = (instanceId: NodeInstanceId): RowSetSource => panelSource(panelId(instanceId as string));
+const sourceFor = (instanceId: NodeInstanceId): RowSetSource => panelSource(panelId(instanceId));
 
 export function createRowSetBus(): RowSetBus {
   return {
@@ -55,5 +55,5 @@ export function createRowSetBus(): RowSetBus {
   };
 }
 
-/** Process-wide row-set bus — one app-level row-set mirror. */
+/** Process-wide row-set bus: one app-level row-set mirror. */
 export const rowSetBus: RowSetBus = createRowSetBus();

@@ -1,13 +1,13 @@
 /**
- * RangeBracket — the min/max instrument that replaces the label palette in the
+ * RangeBracket: the min/max instrument that replaces the label palette in the
  * Annotate node's range mode. Two number fields (authoritative) over a
  * dual-handle bracket on a generic linear axis whose domain auto-fits the
- * current values. Metric-agnostic — no log/regularization assumptions.
+ * current values. Metric-agnostic: no log/regularization assumptions.
  *
  * Controlled: the parent owns `lo`/`hi` (numbers or null) and gets both back on
  * every edit via `onChange`. `onCommit` fires on Enter in a field. An UNSET end
  * parks its handle at the matching domain edge (min→left, max→right) so the two
- * handles never stack — you can always grab and drag either one apart.
+ * handles never stack: you can always grab and drag either one apart.
  */
 
 import { useEffect, useRef, useState } from "react";
@@ -196,7 +196,7 @@ export function RangeBracket({ lo, hi, onChange, onCommit, disabled, metric = "v
       <div className="flex items-center gap-1.5 text-2xs">
         <span className="text-text-muted">range</span>
         <span className={cn("font-medium tabular-nums", invalid ? "text-destructive" : "text-primary")}>
-          [{fmtVal(lo) || "—"}, {fmtVal(hi) || "—"}]
+          [{fmtVal(lo) || ":"}, {fmtVal(hi) || ":"}]
         </span>
         <span className="ml-auto text-3xs text-text-muted">
           {invalid ? "min > max" : span != null ? `span ${fmtVal(span)}` : "set both ends"}

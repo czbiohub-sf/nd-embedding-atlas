@@ -1,5 +1,5 @@
 /**
- * Charts cross-view routing (Humble Object) — the testable seam the conformance
+ * Charts cross-view routing (Humble Object): the testable seam the conformance
  * suite (`core/node/host-routing.test.ts`) exercises. A chart's bar-click /
  * brush emits its filter on the node's selection-out push port.
  *

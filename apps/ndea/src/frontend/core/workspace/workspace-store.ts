@@ -1,8 +1,8 @@
 /**
- * Workspace — ONE graph document, projected. The TanStack store is the
+ * Workspace: ONE graph document, projected. The TanStack store is the
  * topology + presentation authority; the GraphEngine is the cook
  * authority. Every topology mutation goes through the actions here, which
- * mirror it into the engine (pred edges only — sel/focus are push wires
+ * mirror it into the engine (pred edges only: sel/focus are push wires
  * and route through the push-router, never pulled).
  *
  * Telemetry: engine cook events land in a separate store (LEDs, wire
@@ -140,7 +140,7 @@ export class Workspace {
     this.counts = new NodeCounts({
       // post-flush, cache-aware: the flush just cooked every registered node
       predicateOf: (id) => predicateSql(this.pullGraphNode(id)),
-      query: (sql) => this.deps.coordinator.query(sql) as unknown as Promise<unknown>,
+      query: (sql) => this.deps.coordinator.query(sql),
       toRows,
       table: deps.table,
     });
@@ -200,7 +200,7 @@ export class Workspace {
     return descriptor;
   }
 
-  /** kind-compatibility + no-duplicate + DAG — the full wire-legality rule */
+  /** kind-compatibility + no-duplicate + DAG: the full wire-legality rule */
   canConnectWire(fromId: string, toId: string, fromPortId?: string | null, toPortId?: string | null): boolean {
     if (fromId === toId) return false;
     const from = this.def(fromId);
@@ -409,7 +409,7 @@ export class Workspace {
       const flags = { ...s.flags };
       delete flags[id];
       // drop the node's scope assignments; cell values outlive their members
-      // (scopes are named cells, not node-owned — same as the old groupFocus).
+      // (scopes are named cells, not node-owned: same as the old groupFocus).
       const coordinationScopes = { ...s.coordinationScopes };
       delete coordinationScopes[id];
       const edges = Object.fromEntries(Object.entries(s.edges).filter(([, e]) => e.from !== id && e.to !== id));
@@ -471,13 +471,13 @@ export class Workspace {
   /* ── persistence: hydrate a saved document ────────────────────────── */
 
   /**
-   * Rehydrate a saved {@link WorkspaceDocumentState} into this (fresh) Workspace — the load
+   * Rehydrate a saved {@link WorkspaceDocumentState} into this (fresh) Workspace: the load
    * half of the persistence seam. The TanStack store is only one of two
    * authorities: a node that merely lands in `store.state` is INERT (the engine
    * never cooks it, so counts/predicates stay empty). So this mirrors the engine
-   * registration that `addNode`/`connect` do — register every node's cook
+   * registration that `addNode`/`connect` do: register every node's cook
    * (`registerGraphNode`), recreate the hidden subnet seam edge, then reconnect
-   * every presentation edge through the same port mapping `connect` uses — before
+   * every presentation edge through the same port mapping `connect` uses: before
    * committing the document to the store in one write.
    *
    * Engine-only runtime state that `WorkspaceDocumentState` doesn't carry is re-derived where it
@@ -485,7 +485,7 @@ export class Workspace {
    * layer: a wrangle recompiles its `prql` → predicate on mount. A cache node's
    * checkpoint pin is NOT persisted,
    * so a loaded cache restarts live (passing its input through) even if
-   * it was pinned when saved — a graceful degradation, never a corrupt-state load.
+   * it was pinned when saved: a graceful degradation, never a corrupt-state load.
    *
    * Call once on a brand-new Workspace at the load-or-seed seam. Assumes the
    * document already passed {@link validateDoc}.
@@ -507,7 +507,7 @@ export class Workspace {
       this.graphRuntime.load(canonicalState);
       runtimeLoaded = true;
 
-      // commit the document in one write — the store is the topology/presentation
+      // commit the document in one write: the store is the topology/presentation
       // authority; the engine (above) is the cook authority.
       this.documentStore.setState(() => ({ ...EMPTY, ...canonicalState }));
 
@@ -699,7 +699,7 @@ export class Workspace {
     return true;
   }
 
-  /** Drop the pin — return the cache node to live pass-through. */
+  /** Drop the pin: return the cache node to live pass-through. */
   uncache(cacheId: string): void {
     if (!this.graphRuntime.unpinCheckpoint(cacheId)) return;
     this.documentStore.setState((s) => ({
@@ -728,7 +728,7 @@ export class Workspace {
   }
 
   /** global render band + FLIP ghost + resize. Forms default LOCKED to the
-   *  largest view (baseForm "full"; capability/placement still cap) — the
+   *  largest view (baseForm "full"; capability/placement still cap): the
    *  graph shouldn't reshape itself while you navigate. zoomForms opts into
    *  zoom-semantic bands (chip/card/full with hysteresis); persisted. */
   readonly ui = new Store<{
@@ -799,7 +799,7 @@ export class Workspace {
 
   /* ── placement (embedded ↔ staged) ────────────────────────────────── */
 
-  /** element registry for FLIP measurement — keys "canvas:<id>" / "stage:<id>" */
+  /** element registry for FLIP measurement: keys "canvas:<id>" / "stage:<id>" */
   readonly els = new Map<string, HTMLElement>();
   registerEl(key: string, el: HTMLElement | null): void {
     if (el) this.els.set(key, el);
@@ -819,7 +819,7 @@ export class Workspace {
     return Object.keys(this.store.state.nodes).filter((id) => this.placementOf(id) === "staged");
   }
 
-  /** pin ⇡ / pull ⇣ — explicit, persists; animates via the FLIP ghost */
+  /** pin ⇡ / pull ⇣: explicit, persists; animates via the FLIP ghost */
   togglePlacement(id: string, transMs: number): void {
     const cur = this.placementOf(id);
     const next: WorkspacePlacement = cur === "staged" ? "embedded" : "staged";
@@ -877,7 +877,7 @@ export class Workspace {
     this.setStageTree(treeSetRatio(this.store.state.stageTree, path, ratio));
   }
 
-  /** un-staged stageable nodes — candidates for an empty slot */
+  /** un-staged stageable nodes: candidates for an empty slot */
   stageCandidates(): string[] {
     return Object.values(this.store.state.nodes)
       .filter((node) => {
@@ -942,7 +942,7 @@ export class Workspace {
     if (sel.length < 2) return null;
     const inSel = new Set(sel);
 
-    // bbox of the selection (card geometry — the wiring diagram is canonical)
+    // bbox of the selection (card geometry: the wiring diagram is canonical)
     let minX = 1e9;
     let minY = 1e9;
     let maxX = -1e9;
@@ -1009,7 +1009,7 @@ export class Workspace {
     this.documentStore.setState((s) => ({ ...s, stripH: h }));
   }
 
-  /** camera-fit hook — registered by the canvas (fitView with duration) */
+  /** camera-fit hook: registered by the canvas (fitView with duration) */
   requestFit: ((durationMs?: number) => void) | null = null;
 
   /** SDK host config writes enter the document and invalidate graph evaluation here. */
@@ -1030,7 +1030,7 @@ export class Workspace {
   }
 }
 
-/** Highest trailing-integer suffix across ids like `scatter-3` / `e7` (0 if none) —
+/** Highest trailing-integer suffix across ids like `scatter-3` / `e7` (0 if none) :
  *  used on load to keep the node/edge id sequences ahead of every restored id. */
 function maxSeq(ids: readonly string[]): number {
   let max = 0;

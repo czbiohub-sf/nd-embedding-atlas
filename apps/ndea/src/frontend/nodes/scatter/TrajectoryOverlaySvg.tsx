@@ -7,7 +7,7 @@ const DEFAULT_COLOR = "#22d3ee";
 const DEFAULT_ACTIVE_COLOR = "#ffffff";
 
 export interface TrajectoryOverlaySvgHandle {
-  /** Called by GPU onViewChange — redraws without React re-render */
+  /** Called by GPU onViewChange: redraws without React re-render */
   update(): void;
 }
 
@@ -58,7 +58,7 @@ export const TrajectoryOverlaySvg = forwardRef<TrajectoryOverlaySvgHandle, Props
     return DEFAULT_COLOR;
   }
 
-  // Direct SVG DOM mutation — intentionally non-reactive for GPU pan/zoom performance
+  // Direct SVG DOM mutation: intentionally non-reactive for GPU pan/zoom performance
   function draw() {
     const svg = svgRef.current;
     const gpu = gpuRef.current;
@@ -71,7 +71,7 @@ export const TrajectoryOverlaySvg = forwardRef<TrajectoryOverlaySvgHandle, Props
     const s = positionScale > 0 ? positionScale : 1;
     const screenPts = points.map((p) => gpu.worldToScreen(p.emb_x / s, p.emb_y / s, w, h));
 
-    // Arrowhead marker — one per distinct color, keyed by color string
+    // Arrowhead marker: one per distinct color, keyed by color string
     const defs = document.createElementNS(SVG_NS, "defs");
     const markerColors = new Set(points.map((p) => pointColor(p)));
     for (const color of markerColors) {
@@ -117,7 +117,7 @@ export const TrajectoryOverlaySvg = forwardRef<TrajectoryOverlaySvgHandle, Props
       g.appendChild(line);
     }
 
-    // Circles at each time point — all fully opaque, active gets a pulse ring
+    // Circles at each time point: all fully opaque, active gets a pulse ring
     for (let i = 0; i < points.length; i++) {
       const pt = screenPts[i];
       const isActive = activeIndex != null && i === activeIndex;
@@ -191,7 +191,7 @@ export const TrajectoryOverlaySvg = forwardRef<TrajectoryOverlaySvgHandle, Props
     svg.appendChild(g);
   }
 
-  // Expose update() for GPU onViewChange — closure captures latest props via draw()
+  // Expose update() for GPU onViewChange: closure captures latest props via draw()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useImperativeHandle(ref, () => ({ update: draw }), [draw]);
 

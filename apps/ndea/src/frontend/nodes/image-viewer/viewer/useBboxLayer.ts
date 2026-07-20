@@ -4,12 +4,12 @@ import { useCallback, useEffect, useRef } from "react";
 import type { ObsBbox } from "@/types";
 
 interface UseBboxLayerOptions {
-  /** The Idetik runtime — pulled from useViewer().meta.runtime. */
+  /** The Idetik runtime: pulled from useViewer().meta.runtime. */
   idetik: Idetik | null;
   scale: { x: number; y: number };
   /**
    * World-space offset of the FOV image origin. Mirrors the camera-frame
-   * adjustment in SingleCropViewer — without it the bbox is drawn at
+   * adjustment in SingleCropViewer: without it the bbox is drawn at
    * `(obs * scale)` while idetik renders the underlying image at
    * `(obs * scale + translation)`, leaving the box stranded near (0,0).
    */
@@ -23,7 +23,7 @@ interface UseBboxLayerReturn {
 }
 
 // Themed via the destructive token (red across light/dark) instead of a
-// hard-coded rgb — tracks the palette like every other chrome color.
+// hard-coded rgb: tracks the palette like every other chrome color.
 const BBOX_COLOR = "var(--destructive)";
 const BBOX_BORDER_PX = 2;
 
@@ -110,7 +110,7 @@ export function useBboxLayer({ idetik, scale, translation }: UseBboxLayerOptions
           // (`Ei = mat4.fromScaling([1,-1,1])` → `Projection = Ei · projectionMatrix`)
           // so image rows render top-down. We project through the bare
           // `projectionMatrix`, so we must apply the same flip here or the box
-          // mirrors the image about the viewport center — invisible when the
+          // mirrors the image about the viewport center: invisible when the
           // feature is centered, drifting ∝ off-center distance under pan/zoom.
           const ndcY = -clipVec[1] / clipVec[3];
           const cx = (ndcX + 1) * 0.5 * w;

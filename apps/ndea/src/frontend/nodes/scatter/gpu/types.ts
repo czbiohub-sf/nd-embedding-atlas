@@ -43,7 +43,7 @@ export interface ScatterData {
     reversed: boolean;
   };
 
-  /** relative size per point — enables encoding by expression */
+  /** relative size per point: enables encoding by expression */
   sizeValues?: Float32Array;
   /** LOD tile viewport */
   viewport?: readonly [xMin: number, xMax: number, yMin: number, yMax: number];
@@ -86,7 +86,7 @@ export interface InteractionConfig {
 }
 
 /**
- * Low-level GPU scatterplot handle — returned by createScatterplot().
+ * Low-level GPU scatterplot handle: returned by createScatterplot().
  * For the React-layer imperative handle exposed via forwardRef, see:
  * scatter-gpu/handle-capabilities.ts → ScatterGPUHostHandle
  */
@@ -96,7 +96,7 @@ export interface ScatterplotHandle {
   /** Update color buffer from palette without GPU re-initialization (categorical coloring). */
   updateColors(palette: readonly (readonly [number, number, number, number?])[], categoryIndices?: Uint8Array): void;
   /**
-   * Configure continuous coloring (Phase 7 — GPU LUT lookup).
+   * Configure continuous coloring (Phase 7: GPU LUT lookup).
    * Uploads raw values + 256-entry packed-u32 LUT + config, then dispatches the
    * continuous color-pack kernel. Subsequent slider drags or reverse toggles
    * should go through {@link setContinuousRange} / {@link setContinuousReversed}
@@ -134,7 +134,7 @@ export interface ScatterplotHandle {
   setCategoryIsolation(isolatedSet: Set<number>, categoryIndices: Uint8Array): void;
   /** Remove category isolation dimming. */
   clearCategoryIsolation(): void;
-  /** Mark categories as disabled — points are not clickable. Render alpha=0 is handled by legend. */
+  /** Mark categories as disabled: points are not clickable. Render alpha=0 is handled by legend. */
   setCategoryDisabled(disabledSet: Set<number>, categoryIndices: Uint8Array): void;
   /** Clear all disabled-category click filtering. */
   clearCategoryDisabled(): void;
@@ -150,7 +150,7 @@ export interface ScatterplotHandle {
   rehydrateIsolation(): void;
   /** Clear the single-point highlight. */
   clearHighlight(): void;
-  /** Highlight multiple points (e.g. trajectory points — always full bright). */
+  /** Highlight multiple points (e.g. trajectory points: always full bright). */
   setHighlightPoints(rowIndices: RowIndex[]): void;
   /** Programmatically set the view state (for view lock sync). Suppresses the onViewChange broadcast for this write. */
   setViewState(state: ViewState): void;
@@ -160,7 +160,7 @@ export interface ScatterplotHandle {
   setPointRadius(radius: number): void;
   /**
    * Update the per-point alpha multiplier. Default 0.7. Drives how
-   * aggressively overlapping points sum under additive blending — at
+   * aggressively overlapping points sum under additive blending: at
    * 1.0 a single point dominates, at 0.3 you need ~3 to saturate.
    */
   setPointOpacity(opacity: number): void;

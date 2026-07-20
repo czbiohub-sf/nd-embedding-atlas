@@ -38,7 +38,7 @@ export interface ComboboxProps<O extends ComboboxOption = ComboboxOption> {
   /**
    * Optional trailing slot per option (e.g. a count or badge). Renders
    * after the label, right-aligned via `ml-auto` inside dropdown rows.
-   * Not rendered in the trigger by default — pass `triggerTrailing` if
+   * Not rendered in the trigger by default: pass `triggerTrailing` if
    * you also want it visible when collapsed.
    */
   trailing?: (opt: O) => ReactNode;
@@ -53,12 +53,12 @@ export interface ComboboxProps<O extends ComboboxOption = ComboboxOption> {
 }
 
 /**
- * Combobox — searchable dropdown built from Popover + Command.
+ * Combobox: searchable dropdown built from Popover + Command.
  *
  * Use when the options list may be large (10+) or needs filtering.
  *
  * Slot model: `leading` and `trailing` are optional render props per
- * option — they keep the row layout consistent (free a11y + truncation
+ * option: they keep the row layout consistent (free a11y + truncation
  * via `flex-1` on the label) while letting consumers add visual prefixes
  * (color swatches, icons) and trailing meta (counts, badges). Don't pass
  * a custom `renderOption`; the constrained slot shape is intentional.

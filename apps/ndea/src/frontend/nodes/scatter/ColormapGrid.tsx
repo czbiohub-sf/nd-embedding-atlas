@@ -22,7 +22,7 @@ function ColormapSwatch({ name, active, onSelect }: ColormapSwatchProps) {
         active ? "border-border-active bg-accent" : "border-transparent hover:bg-muted",
       )}
     >
-      {/* gradient is computed — inline style is required */}
+      {/* gradient is computed: inline style is required */}
       <div className="h-2 rounded-sm" style={{ background: gradient }} />
       <span className="truncate text-center text-3xs text-muted-foreground leading-none">{name}</span>
     </button>

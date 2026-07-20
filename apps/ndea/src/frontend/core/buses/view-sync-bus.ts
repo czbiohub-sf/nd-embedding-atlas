@@ -18,13 +18,13 @@ export function createViewSyncBus(): ViewSyncBus {
       return viewSyncStore.state;
     },
     broadcast(instanceId, state) {
-      broadcastViewState(panelId(instanceId as string), state);
+      broadcastViewState(panelId(instanceId), state);
     },
     toggleLock() {
       toggleViewLock();
     },
     subscribe(instanceId, cb) {
-      const self = panelId(instanceId as string);
+      const self = panelId(instanceId);
       const sub = viewSyncStore.subscribe(() => {
         const s = viewSyncStore.state;
         if (s.lockMode !== "linked" || s.sourcePanelId === self) return;

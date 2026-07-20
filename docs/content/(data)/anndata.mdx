@@ -1,0 +1,64 @@
+---
+title: Prepare AnnData
+description: Required AnnData axes, observation tables, embeddings, variables, and layers.
+---
+
+An AnnData Zarr store is the primary tabular and embedding input. The root attributes must identify it as AnnData:
+
+```json
+{
+  "encoding-type": "anndata",
+  "encoding-version": "0.1.0"
+}
+```
+
+## Required and optional groups
+
+| Path      | Required | Contract                                                                                         |
+| --------- | -------- | ------------------------------------------------------------------------------------------------ |
+| `obs/`    | yes      | dataframe with one row per observation and a readable index                                      |
+| `var/`    | no       | dataframe with one row per variable; needed for variable colouring and layer-backed values       |
+| `obsm/`   | no       | named dense matrices; each usable embedding has one row per observation and at least two columns |
+| `layers/` | no       | named matrices whose shape matches observations by variables                                     |
+| `X`       | no       | accepted as matrix data but not required for embedding exploration                               |
+
+A store without `var` can still power observation tables and embeddings. Missing `obs` is fatal.
+
+## Observation columns
+
+Use scalar numeric, boolean, string, nullable, or categorical columns. The observation index becomes `obs_name`; it must contain one value per row. Keep column names stable because filters, colour settings, and presets refer to them by name.
+
+For image crops, add the columns described in [Link observations to images](/image-linkage).
+
+## Embeddings
+
+Generate embeddings before launching ndea. ndea reads them for exploration and annotation; it does not train the model that produces them.
+
+Store embeddings under `obsm`, conventionally with names such as `X_umap`, `X_phate`, or `X_pca`. The interface removes the leading `X_` in labels but uses the full key internally.
+
+Each embedding must be a dense rank-2 array:
+
+```text
+shape = [n_obs, n_dimensions]
+```
+
+Two columns are sufficient for a scatter. Higher-dimensional embeddings are supported; users can select which dimensions map to X and Y. Sparse CSR/CSC matrices are not accepted for `obsm` embeddings.
+
+## Variables and layers
+
+Variable colouring requires `var` metadata and a readable matrix in `X` or `layers/<name>`. Dense and supported sparse matrix encodings are loaded lazily. Keep every layer shape aligned with `n_obs × n_vars`.
+
+## Validation checklist
+
+- root `encoding-type` is exactly `anndata`;
+- `obs` opens as a dataframe and its index length equals `n_obs`;
+- each `obsm` matrix has `n_obs` rows and at least two columns;
+- `var`, when present, has one row per matrix column;
+- categorical codes refer to existing category entries;
+- spatial columns use numeric values and consistent pixel coordinates.
+
+Launch with a reduced column set first when diagnosing a wide observation table:
+
+```bash
+ndea view data.zarr --obs-columns treatment,cell_type,fov_name,t,x,y
+```

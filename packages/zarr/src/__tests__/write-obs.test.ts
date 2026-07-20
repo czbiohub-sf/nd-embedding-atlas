@@ -1,5 +1,5 @@
 /**
- * Tests for commitObsColumns — appends obs columns to a zarr store and reads
+ * Tests for commitObsColumns: appends obs columns to a zarr store and reads
  * them back via zarrita, for both v2 and v3, asserting alignment + NA handling.
  *
  * anndata-read compatibility is proven separately by the end-to-end spike

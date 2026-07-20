@@ -1,5 +1,5 @@
 /**
- * usePredicateGalleryObs — wired-input predicate → obs metadata.
+ * usePredicateGalleryObs: wired-input predicate → obs metadata.
  *
  * The node-scoped counterpart to `useLassoSelectionObs`: instead of reading the
  * GLOBAL selection bitmap, it resolves the gallery node's OWN cooked input
@@ -15,7 +15,7 @@
  * upstream node re-cooks and `host.inputPredicate` emits a different predicate,
  * the key changes and the query refetches. A pinned Cache node emits a
  * STABLE predicate (no mutable temp-table reference), so no per-revision
- * cache-buster is needed — the predicate text fully identifies the result.
+ * cache-buster is needed: the predicate text fully identifies the result.
  */
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -38,7 +38,7 @@ export function usePredicateGalleryObs(coordinator: Coordinator, predicate: stri
     // Keyed on the predicate TEXT so the query refetches when the wired
     // input re-cooks to a different predicate, and reuses across renders of
     // the same predicate. Mosaic's QueryManager likewise caches the inner
-    // coordinator query by raw SQL text — a stable predicate is safe.
+    // coordinator query by raw SQL text: a stable predicate is safe.
     queryKey: ["predicate-gallery-obs", predicate],
     queryFn: async ({ signal }) => {
       if (predicate == null) return { obs: [], total: 0 };
@@ -46,7 +46,7 @@ export function usePredicateGalleryObs(coordinator: Coordinator, predicate: stri
       // 1. Resolve the wired predicate → row ids (capped). Mirrors
       //    ScatterView's continuous-range isolation query.
       const rowResult = await coordinator.query(
-        // ORDER BY for deterministic truncation — "showing top N" is the first
+        // ORDER BY for deterministic truncation: "showing top N" is the first
         // N by row index, not an arbitrary scan-order subset.
         `SELECT __row_index__ FROM dataset WHERE ${predicate} ORDER BY __row_index__ LIMIT ${MAX_GALLERY_OBS}`,
         { type: "json" },
@@ -61,7 +61,7 @@ export function usePredicateGalleryObs(coordinator: Coordinator, predicate: stri
 
       if (rowIds.length === 0) return { obs: [], total };
 
-      // 2. Batch-fetch spatial metadata. POST not GET — selections at
+      // 2. Batch-fetch spatial metadata. POST not GET: selections at
       //    MAX_GALLERY_OBS would overflow the server header size limit.
       const r = await fetch(`/api/obs/batch`, {
         method: "POST",
@@ -76,7 +76,7 @@ export function usePredicateGalleryObs(coordinator: Coordinator, predicate: stri
       >;
 
       // 3. Pre-populate the per-obs coord cache that useGalleryCropQuery
-      //    falls back to — saves N redundant /api/obs/{rowIndex}
+      //    falls back to: saves N redundant /api/obs/{rowIndex}
       //    round-trips when the cards mount.
       for (const [idStr, entry] of Object.entries(data)) {
         queryClient.setQueryData(obsCoordKey(rowIndex(Number(idStr))), { x: entry.x, y: entry.y });

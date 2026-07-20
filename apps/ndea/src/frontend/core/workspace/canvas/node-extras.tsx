@@ -59,8 +59,8 @@ export function FlagButton({ node, compact = false }: { node: GraphDocumentNode;
         compact={compact}
         title={
           flags.bypass
-            ? "bypassed — input passes through uncooked · click to restore (b)"
-            : "bypass — pass input through uncooked (b)"
+            ? "bypassed: input passes through uncooked · click to restore (b)"
+            : "bypass: pass input through uncooked (b)"
         }
         onClick={() => workspace.toggleFlag(node.id, "bypass")}
       />
@@ -73,7 +73,7 @@ export function FlagButton({ node, compact = false }: { node: GraphDocumentNode;
         icon="power"
         tone={flags.off ? "amber" : "default"}
         compact={compact}
-        title={flags.off ? "display off — branch never cooks · click to wake (d)" : "display off — park this view (d)"}
+        title={flags.off ? "display off: branch never cooks · click to wake (d)" : "display off: park this view (d)"}
         onClick={() => workspace.toggleFlag(node.id, "off")}
       />
     );
@@ -131,7 +131,7 @@ export function SyncBadge({ nodeId }: { nodeId: string }) {
       {entries.map(([type, scope]) => (
         <span
           key={type}
-          title={`${type} scope ${scope} — peers share ${type}`}
+          title={`${type} scope ${scope}: peers share ${type}`}
           className="inline-flex items-center gap-[2px] rounded-full px-[5px] py-[2px] text-[8px] font-bold"
           style={{ background: workspace.coordination.scopeColor(scope), color: "#0c0c12" }}
         >

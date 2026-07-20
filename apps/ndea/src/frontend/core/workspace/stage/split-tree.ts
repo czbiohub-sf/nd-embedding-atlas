@@ -1,10 +1,10 @@
 /**
- * Stage split-tree — tmux/Dockview model, hand-rolled (C3 spike resolution).
+ * Stage split-tree: tmux/Dockview model, hand-rolled (C3 spike resolution).
  * A tree node is either a leaf (node id, or "__slot-N" for an empty slot)
  * or { dir, ratio, a, b }. Splitting a tile replaces its leaf with a split
  * whose other half is an empty slot; removing a leaf collapses its split
  * (the sibling absorbs the space). Sashes live at every split seam and
- * adjust that split's ratio only — the rest of the stage holds its ratios.
+ * adjust that split's ratio only: the rest of the stage holds its ratios.
  *
  * Pure functions; ported 1:1 from the design prototype (proto-stage.jsx).
  */
@@ -87,7 +87,7 @@ export function buildDefaultTree(ids: string[]): TreeNode | null {
 }
 
 /** reconcile layout memory with the live staged set: departed tiles drop
- *  (slots persist), arrivals join — into the default disposition when the
+ *  (slots persist), arrivals join: into the default disposition when the
  *  stage was empty, else as a right-hand split */
 export function reconcileStageTree(t: TreeNode | null, stagedIds: string[]): TreeNode | null {
   let out = t;

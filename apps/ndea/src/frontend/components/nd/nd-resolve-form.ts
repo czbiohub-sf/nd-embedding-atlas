@@ -1,12 +1,12 @@
 /**
- * ndResolveForm — the standard form-resolution function. The same function
+ * ndResolveForm: the standard form-resolution function. The same function
  * runs everywhere a node renders, so a node's form is always explainable.
  *
  *   form = f(zoom-driven base, override, lock, placement, capability)
  *
  * · base comes from the host's zoom bands (with hysteresis, ND_ZOOM)
  * · an override (form-cycle button) wins until zoom next crosses a band,
- *   unless locked — locked overrides always win
+ *   unless locked: locked overrides always win
  * · placement caps: staged bodies live elsewhere → card max
  * · capability caps: nodes that can't go full → card max
  */

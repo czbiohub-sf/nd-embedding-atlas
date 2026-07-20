@@ -18,12 +18,12 @@ interface UseIsolationBridgeResult {
 
 /**
  * Bridges legend isolation state to:
- *  1. The PredicateBus "isolation" facet — composes into the scatter instance's
+ *  1. The PredicateBus "isolation" facet: composes into the scatter instance's
  *     crossfilter clause, so isolation filters the table + charts (§6.3).
- *  2. ScatterGPUHost.setCategoryIsolation — drives GPU alpha-dimming.
+ *  2. ScatterGPUHost.setCategoryIsolation: drives GPU alpha-dimming.
  *
  * Each feature owns its own isolation mask in the GPU selection engine,
- * so this hook writes unconditionally — no trajectory/continuous guards needed.
+ * so this hook writes unconditionally: no trajectory/continuous guards needed.
  */
 export function useIsolationBridge(opts: UseIsolationBridgeOptions): UseIsolationBridgeResult {
   const { coloredCategoryMapping, colorByColumn, scatterRef, categoryIndicesRef } = opts;

@@ -23,7 +23,7 @@ export function createCompositor(
 ) {
   void device; // kept for API symmetry / future use
 
-  // 5 layer buffers — all u32[numPoints], storage usage
+  // 5 layer buffers: all u32[numPoints], storage usage
   const lassoBuffer = root.createBuffer(d.arrayOf(d.u32, numPoints)).$usage("storage");
   const externalBuffer = root.createBuffer(d.arrayOf(d.u32, numPoints)).$usage("storage");
   const isolationBuffer = root.createBuffer(d.arrayOf(d.u32, numPoints)).$usage("storage");
@@ -47,9 +47,9 @@ export function createCompositor(
   const layerBitsUniform = root.createUniform(d.u32, 0);
 
   // ── Compositor compute kernel ──────────────────────────────────────────────
-  // Three-tier composition (materialized view — selectedBuffer is never written directly):
+  // Three-tier composition (materialized view: selectedBuffer is never written directly):
   //
-  //   highlight tier : highlightBuffer (point click — always wins)
+  //   highlight tier : highlightBuffer (point click: always wins)
   //   isolation tier : isolationBuffer (category + trajectory + continuous masks)
   //   selection tier : lasso | external (lasso/marquee OR cross-panel sync)
   //

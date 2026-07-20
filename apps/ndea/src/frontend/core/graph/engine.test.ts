@@ -57,7 +57,7 @@ describe("GraphEngine", () => {
     expect(src.calls()).toBe(1);
     expect(filter.calls()).toBe(1);
 
-    // Dirty ONLY the transform — source stays clean.
+    // Dirty ONLY the transform: source stays clean.
     engine.markDirty("filter");
     engine.pull("sink");
 
@@ -84,11 +84,11 @@ describe("GraphEngine", () => {
     expect(out).toBe("((base) AND (a)) AND ((base) AND (b))");
   });
 
-  test("fan-in: cooks receive RAW arrays in edge-insertion order — composition is theirs", () => {
+  test("fan-in: cooks receive RAW arrays in edge-insertion order: composition is theirs", () => {
     const engine = new GraphEngine();
     engine.addNode({ id: "p", kind: "source", cook: () => "a > 1" });
     engine.addNode({ id: "q", kind: "source", cook: () => "b < 2" });
-    // One sink ANDs, another ORs the SAME fan-in — engine stays policy-free.
+    // One sink ANDs, another ORs the SAME fan-in: engine stays policy-free.
     engine.addNode({ id: "andSink", kind: "view", cook: (i) => andPreds(i.get("in") ?? []) });
     engine.addNode({ id: "orSink", kind: "view", cook: (i) => orPreds(i.get("in") ?? []) });
     engine.addNode({ id: "rawSink", kind: "view", cook: (i) => JSON.stringify(i.get("in") ?? []) });
@@ -182,7 +182,7 @@ describe("GraphEngine", () => {
     const beforeClosed = filter.calls();
     threshold = 9;
     engine.markDirty("filter");
-    expect(filter.calls()).toBe(beforeClosed); // not recooked — no display-active sink
+    expect(filter.calls()).toBe(beforeClosed); // not recooked: no display-active sink
     expect(cooked.at(-1)).toBe("x > 7"); // listener never fired again
   });
 
@@ -223,7 +223,7 @@ describe("GraphEngine", () => {
 
     // Re-dirtying an already-dirty subtree re-emits nothing (no sink registered,
     // so the synchronous flush cooked nothing and the nodes are still dirty).
-    // (flush markers fire per flush regardless — filter them out here.)
+    // (flush markers fire per flush regardless: filter them out here.)
     const nonFlush = () => events.filter((e) => e.type !== "flush");
     const before = nonFlush().length;
     engine.markDirty("filter");
@@ -256,7 +256,7 @@ describe("GraphEngine", () => {
       "cook-end:filter",
       "cook-start:sink",
       "cook-end:sink",
-    ]); // src is a clean cache boundary — never bracketed
+    ]); // src is a clean cache boundary: never bracketed
     for (const e of cooks) {
       if (e.type === "cook-end") {
         expect(e.ms).toBeGreaterThanOrEqual(0);
@@ -272,7 +272,7 @@ describe("GraphEngine", () => {
     const events: GraphEvaluationTelemetryEvent[] = [];
     engine.onTelemetry((e) => events.push(e));
 
-    engine.registerSink("sink", () => {}); // direct pull — no flush scheduled
+    engine.registerSink("sink", () => {}); // direct pull: no flush scheduled
     engine.markDirty("filter"); // sync scheduler → cooks then the flush marker
 
     const last = events[events.length - 1];
@@ -294,7 +294,7 @@ describe("GraphEngine", () => {
     expect(b.length).toEqual(a.length);
 
     offA();
-    offA(); // idempotent — second call is a no-op
+    offA(); // idempotent: second call is a no-op
     const aFrozen = a.length;
     engine.pull("sink"); // recook the dirty chain → cook events for b only
     expect(a.length).toBe(aFrozen);
@@ -338,7 +338,7 @@ describe("authored emissions (push unified into pull)", () => {
   test("an emission delivers along its port's edges; derived edges are untouched", () => {
     const { engine } = pushRig();
     expect(engine.pull("table")).toBe("base"); // derived pass-through
-    // no lasso yet — nothing on the push port → the edge falls back to pulling
+    // no lasso yet: nothing on the push port → the edge falls back to pulling
     // the source's derived output (sensible pre-emission default)
     expect(engine.pull("gallery")).toBe("base");
 
@@ -350,7 +350,7 @@ describe("authored emissions (push unified into pull)", () => {
     expect(engine.pull("gallery")).toBe("id IN (4)"); // replaced per lasso
   });
 
-  test("emit dirties ONLY downstream of the port — the source stays clean", () => {
+  test("emit dirties ONLY downstream of the port: the source stays clean", () => {
     const { engine, scatterCook } = pushRig();
     engine.pull("table");
     engine.pull("gallery");
@@ -450,7 +450,7 @@ describe("bypass flag", () => {
     expect(engine.dirtyNodes().toSorted()).toEqual(["thr", "view"]);
   });
 
-  test("bypass is idempotent — same state never dirties", () => {
+  test("bypass is idempotent: same state never dirties", () => {
     const engine = new GraphEngine();
     engine.addNode({ id: "thr", kind: "transform", cook: () => "f" });
     engine.pull("thr");

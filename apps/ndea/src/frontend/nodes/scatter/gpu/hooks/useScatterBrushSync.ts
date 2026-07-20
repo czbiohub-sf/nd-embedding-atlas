@@ -45,7 +45,7 @@ export function useScatterBrushSync({
   // Two-tier strategy matched to selection size:
   //  • Small (<5000 rows): throttle at ~50ms = same rate as GPU readback.
   //    Table updates live while drawing. Uses fast IN-list predicate.
-  //  • Large (≥5000 rows): debounce 200ms. Creates a temp DuckDB table —
+  //  • Large (≥5000 rows): debounce 200ms. Creates a temp DuckDB table :
   //    too expensive to fire every 50ms. Wait for the user to pause.
   //
   // The debouncer also fires a trailing accurate update for small selections
@@ -92,10 +92,10 @@ export function useScatterBrushSync({
     const rowIds = (indices ?? [])
       .map((pointIndex) => rowIndicesRef.current[pointIndex])
       .filter((value): value is RowIndex => value != null);
-    setSelection(rowIds.length > 0 ? rowIds.length : null); // status bar — immediate
+    setSelection(rowIds.length > 0 ? rowIds.length : null); // status bar: immediate
 
     if (rowIds.length === 0) {
-      // Clear is time-sensitive — cancel both and update right away
+      // Clear is time-sensitive: cancel both and update right away
       brushThrottler.cancel();
       brushDebouncer.cancel();
       clearLasso(host); // drop facet + true-clear row-set + drop sel_<id> (§6.5)

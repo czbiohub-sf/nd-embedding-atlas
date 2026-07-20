@@ -1,7 +1,7 @@
 /**
- * Panel registry — one in-memory store for all floating SlidePanels.
+ * Panel registry: one in-memory store for all floating SlidePanels.
  *
- * Per-session only (no localStorage) — panel open/size reset on reload, by design.
+ * Per-session only (no localStorage): panel open/size reset on reload, by design.
  *
  * Exclusive-by-side: opening a panel closes any other panel on the same side, so
  * the two bottom panels (table, devtools) never stack.
@@ -14,7 +14,7 @@ export type PanelSide = "right" | "bottom";
 
 export interface PanelState {
   open: boolean;
-  /** px — width when side=right, height when side=bottom */
+  /** px: width when side=right, height when side=bottom */
   size: number;
   side: PanelSide;
   minSize: number;
@@ -75,7 +75,7 @@ export function usePanel(id: string): UsePanelResult {
   const state = useSelector(panelStore, (s) => s[id]);
   return useMemo(
     () => ({
-      ...(state ?? { open: false, size: 0, side: "right" as PanelSide, minSize: 0, maxSize: 0 }),
+      ...(state ?? { open: false, size: 0, side: "right", minSize: 0, maxSize: 0 }),
       toggle: () => togglePanel(id),
       setOpen: (open: boolean) => setPanelOpen(id, open),
       setSize: (px: number) => setPanelSize(id, px),

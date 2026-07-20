@@ -56,7 +56,7 @@ const ZARR_MIME: Record<string, string> = {
 // ─── Static serving ─────────────────────────────────────────────────────────
 
 /**
- * Serve a file under a plate mount. Returns null if no mount matches — the
+ * Serve a file under a plate mount. Returns null if no mount matches: the
  * caller should then fall through to 404.
  *
  * Path traversal (e.g. "../../etc/passwd") is rejected by resolving against
@@ -111,7 +111,7 @@ export function buildPlateMounts(
       datasetKey: isMultiDataset ? name : null,
     });
   }
-  // Longest mount first — important for the dispatch order.
+  // Longest mount first: important for the dispatch order.
   mounts.sort((a, b) => b.mount.length - a.mount.length);
   return mounts;
 }
@@ -124,7 +124,7 @@ export function buildPlateMounts(
  * Layout (v0.4): plate/.zattrs → plate.wells[0].path → well/ → image dir →
  *                image/.zattrs → omero.channels + multiscales.
  *
- * Returns null on any I/O failure — plate rendering still works via the
+ * Returns null on any I/O failure: plate rendering still works via the
  * frontend's per-image fallback, just without pre-populated channel controls.
  */
 export async function readPlateMeta(platePath: string): Promise<PlateMetaInfo | null> {

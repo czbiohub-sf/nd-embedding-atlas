@@ -1,5 +1,5 @@
 /**
- * deriveDataCapabilities — the §3.1 metadata-facts → flat capability vocabulary
+ * deriveDataCapabilities: the §3.1 metadata-facts → flat capability vocabulary
  * mapping (CAPABILITY-CONTRACT.md). Pure function, no fixture needed.
  */
 
@@ -52,7 +52,7 @@ describe("deriveDataCapabilities", () => {
     expect(deriveDataCapabilities({ ...EMPTY, isMultimodal: true })).toContain("multimodal");
   });
 
-  test("obsp / temporal are reserved — never emitted today", () => {
+  test("obsp / temporal are reserved: never emitted today", () => {
     const all = deriveDataCapabilities({
       hasObs: true,
       varCount: 100,

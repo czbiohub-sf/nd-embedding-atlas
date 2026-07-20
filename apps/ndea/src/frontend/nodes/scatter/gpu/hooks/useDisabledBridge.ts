@@ -16,12 +16,12 @@ interface UseDisabledBridgeResult {
  * to the GPU click-filter so disabled-category points become unclickable.
  *
  * Render-side alpha=0 is already applied through the effectiveCategoryColors
- * map in LegendContext — this hook only needs to propagate the disabled set
+ * map in LegendContext: this hook only needs to propagate the disabled set
  * to `setCategoryDisabled` on the scatter handle so `isPointVisible` returns
  * false for those points.
  *
  * Distinct from useIsolationBridge: that one ALSO writes a Mosaic predicate
- * to drive cross-filter. Disabled is purely visual + click semantics — it
+ * to drive cross-filter. Disabled is purely visual + click semantics: it
  * doesn't (yet) participate in Mosaic. Add a predicate write here if/when
  * the product wants disabled categories filtered from tables/charts too.
  */

@@ -3,7 +3,7 @@
  *
  * Sources coordinator/table/metadata from `host.data`, the filter from
  * `host.inputPredicate`, routes row-click through `host.focus.set`, and
- * reads focus reactively from the same host scope —
+ * reads focus reactively from the same host scope :
  * no `useDashboard` reach-in. `DataTable` is already fully prop-driven, so the
  * conversion is localized to this wrapper.
  */
@@ -58,7 +58,7 @@ export function TablePluginView({ host }: NodeBodyProps<TableConfig, TableCapabi
     });
   }, [host]);
 
-  // Stable `columns` identity — metadata refresh (annotation writes) mints a
+  // Stable `columns` identity: metadata refresh (annotation writes) mints a
   // fresh `obs_columns` array; memoize so DataTable doesn't rebuild + re-fetch.
   const columns = useMemo(() => metadata.obs_columns ?? FALLBACK_TABLE_COLUMNS, [metadata.obs_columns]);
 

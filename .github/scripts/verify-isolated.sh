@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Verify that a freshly-built ndea binary launches from a directory that
-# contains ONLY the binary — no sibling libduckdb file, no wrapper.
+# contains ONLY the binary: no sibling libduckdb file and no wrapper.
 #
 # This is the post-bundle invariant: the binary embeds libduckdb and
 # extracts a copy to ~/.cache/ndea/<version>/ on first launch. If that
@@ -8,7 +8,7 @@
 # lookups), this step catches it.
 #
 # Required env:
-#   ARTIFACT — bare filename inside dist/, e.g. ndea-linux-x64
+#   ARTIFACT: bare filename inside dist/, e.g. ndea-linux-x64
 set -euo pipefail
 
 : "${ARTIFACT:?ARTIFACT env var is required}"

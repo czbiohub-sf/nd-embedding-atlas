@@ -1,14 +1,14 @@
 /**
  * Var (feature) name search, layer listing, and var-column endpoints.
  *
- * "var" is AnnData's variable dimension — genes for transcriptomics,
+ * "var" is AnnData's variable dimension: genes for transcriptomics,
  * proteins for proteomics, features for image embeddings, etc. This
  * module is data-type agnostic.
  *
- * GET  /api/var/names                   — Search var names
- * GET  /api/var/layers                  — List expression layers
- * POST /api/var-column                  — Start var column materialization
- * GET  /api/var-column/{task_id}/status — Poll materialization status
+ * GET  /api/var/names                  : Search var names
+ * GET  /api/var/layers                 : List expression layers
+ * POST /api/var-column                 : Start var column materialization
+ * GET  /api/var-column/{task_id}/status: Poll materialization status
  */
 
 import type { AnnData, DatasetHandle, SparseArray } from "@ndea/zarr";
@@ -72,7 +72,7 @@ function firstAdata(state: ServerSession): DatasetHandle | null {
 /**
  * Materialise var.index as a plain string array.
  *
- * For MuData, var.index is the shared root var — typically empty on
+ * For MuData, var.index is the shared root var: typically empty on
  * axis=0 stores where each modality owns its own var. A follow-up will
  * pull names from the union of per-modality var. For this PR we return
  * the root-level index as-is.
@@ -162,7 +162,7 @@ export async function handleVarLayers(state: ServerSession): Promise<Response> {
  * Probe the zarr store for `layers/` children. Returns [] if not accessible.
  * Uses the accessor's internal zarr group reference if available.
  *
- * AnnData only — MuData's layers are per-modality; a cross-modality layer
+ * AnnData only: MuData's layers are per-modality; a cross-modality layer
  * listing is a follow-up. For MuData, return [] so callers fall back to
  * the default "X".
  */
@@ -178,7 +178,7 @@ async function discoverLayers(adata: DatasetHandle): Promise<string[]> {
   try {
     // Defer to zarrita dynamically to avoid a hard dep at module init.
     const zarr = await import("zarrita");
-    // @ts-expect-error — accessor._group is a zarrita Location.
+    // @ts-expect-error: accessor._group is a zarrita Location.
     const loc = group.resolve("layers");
     const grp = await zarr.open(loc, { kind: "group" });
     const attrs = (grp.attrs ?? {}) as Record<string, unknown>;
@@ -274,7 +274,7 @@ async function materialiseVarColumn(
     let adata: AnnData | null = null;
     if (handle.kind === "mudata") {
       if (!modality) {
-        // No modality specified on a MuData dataset — can't disambiguate.
+        // No modality specified on a MuData dataset: can't disambiguate.
         cursor += dsN;
         continue;
       }
@@ -313,7 +313,7 @@ function findVarIndex(adata: AnnData | DatasetHandle, name: string): number {
   if (Array.isArray(idx)) {
     return idx.indexOf(name);
   }
-  // Numeric var index — try parsing name as integer
+  // Numeric var index: try parsing name as integer
   const n = Number(name);
   if (!Number.isInteger(n)) return -1;
   for (let i = 0; i < idx.length; i++) {

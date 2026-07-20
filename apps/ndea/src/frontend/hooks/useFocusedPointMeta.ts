@@ -6,7 +6,7 @@ import { jsonFetcher } from "../lib/fetcher";
  * Fields needed to start a trajectory trace for a focused point.
  *
  * Populated only when the current dataset has `track_id` and `fov_name`
- * columns — otherwise `trackable` is false and the toolbar toggle stays
+ * columns: otherwise `trackable` is false and the toolbar toggle stays
  * disabled.
  */
 export interface FocusedPointMeta {
@@ -40,7 +40,7 @@ export function useFocusedPointMeta(focusedRowIndex: RowIndex | null): FocusedPo
 
   const trackIdRaw = data.track_id;
   const fovName = data.fov_name;
-  if (!trackIdRaw || trackIdRaw === "—" || !fovName || fovName === "—") return EMPTY;
+  if (!trackIdRaw || trackIdRaw === ":" || !fovName || fovName === ":") return EMPTY;
 
   const trackId = Number(trackIdRaw);
   if (!Number.isFinite(trackId)) return EMPTY;

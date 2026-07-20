@@ -96,7 +96,7 @@ export function createVertexShader(uniforms: ScatterUniforms) {
       pointOpacity: pointOpacity,
     };
   });
-  // NB: no `.$uses({ unpackColor })` — unplugin-typegpu auto-collects closure
+  // NB: no `.$uses({ unpackColor })`: unplugin-typegpu auto-collects closure
   // externals for `'use gpu'` kernels, and typegpu ≥0.11.9 throws if you also
   // call `.$uses()` on a plugin-provided fn ("metadata was provided by
   // unplugin-typegpu"). Raw-WGSL `tgpu.fn(...)(wgsl)` fns still need `.$uses`.
@@ -109,9 +109,9 @@ export function createFragmentShader() {
   })((input) => {
     "use gpu";
     // Compute screen-space derivatives at the TOP of main, in uniform control
-    // flow — `fwidth()` is undefined when called inside a divergent branch.
+    // flow: `fwidth()` is undefined when called inside a divergent branch.
     // Signed distance to the unit disk in quad-local uv space. Inlined
-    // `length(p) - r` (was @typegpu/sdf `sdDisk`) — that lib ships fns with
+    // `length(p) - r` (was @typegpu/sdf `sdDisk`): that lib ships fns with
     // unplugin-baked metadata that typegpu ≥0.11.9 rejects during resolution.
     const dist = std.length(input.uv) - 1.0;
     const fw = std.max(std.fwidth(dist), 0.001);

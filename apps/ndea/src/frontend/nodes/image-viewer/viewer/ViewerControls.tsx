@@ -94,7 +94,7 @@ export function ViewerControls({ cropSize, setCropSize, showBbox, setShowBbox, d
         </div>
       )}
 
-      {/* Bounding box — one compact row at the slider density: a small show/hide
+      {/* Bounding box: one compact row at the slider density: a small show/hide
           toggle + the size slider (disabled, not removed, when hidden so the
           panel never reflows) + a px readout. Split from the T/Z/mode group
           above by the separator. Only shown when the dataset resolved centroids. */}

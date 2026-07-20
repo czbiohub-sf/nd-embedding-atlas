@@ -1,10 +1,10 @@
 /**
- * PRQL syntax highlighting for CodeMirror 6 — there is no published CM6 PRQL
+ * PRQL syntax highlighting for CodeMirror 6: there is no published CM6 PRQL
  * language package, so this is a hand-rolled StreamParser plus a HighlightStyle
  * mapped onto the workspace's instrument-panel tokens (wire colors + success
  * green + Geist Mono). Keyword set tracks PRQL 0.12 (prql-js pinned version).
  *
- * Tokens are deliberately coarse — enough to read a wrangle pipeline at a
+ * Tokens are deliberately coarse: enough to read a wrangle pipeline at a
  * glance (transforms periwinkle, functions sky, strings amber, numbers green),
  * not a full grammar. The compiler (prql.ts) is the source of truth for
  * correctness; this is just color.
@@ -14,7 +14,7 @@ import { HighlightStyle, StreamLanguage, syntaxHighlighting } from "@codemirror/
 import { tags as t } from "@lezer/highlight";
 import type { Extension } from "@codemirror/state";
 
-/** pipeline transforms — the verbs that start a stage */
+/** pipeline transforms: the verbs that start a stage */
 const TRANSFORMS = new Set([
   "from",
   "filter",
@@ -77,7 +77,7 @@ const prqlParser = StreamLanguage.define({
       return "comment";
     }
 
-    // strings — double, single, and f-strings / s-strings (f"…" s"…")
+    // strings: double, single, and f-strings / s-strings (f"…" s"…")
     if (stream.match(/^[fsr]?"(?:[^"\\]|\\.)*"?/) || stream.match(/^[fsr]?'(?:[^'\\]|\\.)*'?/)) {
       return "string";
     }
@@ -117,7 +117,7 @@ const prqlParser = StreamLanguage.define({
 
 /** map StreamParser token names → highlight tags → workspace token colors */
 const prqlHighlight = HighlightStyle.define([
-  { tag: t.keyword, color: "var(--color-wire-pred)", fontWeight: "600" }, // transforms — periwinkle
+  { tag: t.keyword, color: "var(--color-wire-pred)", fontWeight: "600" }, // transforms: periwinkle
   { tag: t.function(t.variableName), color: "var(--color-wire-focus)" },
   { tag: t.string, color: "var(--color-wire-sel)" }, // amber
   { tag: t.number, color: "var(--color-success)" }, // green

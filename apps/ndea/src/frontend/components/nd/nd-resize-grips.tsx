@@ -1,5 +1,5 @@
 /**
- * NdResizeGrips — four corner hotspots for card/full frames (chips are
+ * NdResizeGrips: four corner hotspots for card/full frames (chips are
  * canonical and never resized). Only the SE corner carries a visible ◢
  * glyph; all four are 14px hit areas with directional cursors. The host
  * owns the drag (per-form bodySize overrides, opposite-corner anchoring).
@@ -28,7 +28,7 @@ export function NdResizeGrips({ onResize }: { onResize: (corner: NdResizeCorner,
             e.stopPropagation();
             onResize(corner, e);
           }}
-          // `nodrag` is xyflow's noDragClassName — its d3 drag listens
+          // `nodrag` is xyflow's noDragClassName: its d3 drag listens
           // natively on the node wrapper, so React stopPropagation alone
           // can't keep a grip drag from also dragging the node
           className="nodrag absolute z-[9] grid size-[14px] place-items-center"

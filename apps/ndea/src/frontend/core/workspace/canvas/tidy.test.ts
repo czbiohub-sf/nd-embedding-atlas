@@ -88,7 +88,7 @@ describe("tidyLayout", () => {
     };
     const out = tidyLayout(nodes, edges, positions, { scope: new Set(["a", "b"]) });
 
-    // Only scoped nodes appear in the result — c is untouched.
+    // Only scoped nodes appear in the result: c is untouched.
     expect(Object.keys(out).toSorted()).toEqual(["a", "b"]);
 
     // Origin = scoped min x/y = (10, 50); b→c is ignored (c unscoped).

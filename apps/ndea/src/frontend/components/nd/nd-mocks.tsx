@@ -1,5 +1,5 @@
 /**
- * nd-mocks — seeded design-reference mocks (point cloud, microscopy crop,
+ * nd-mocks: seeded design-reference mocks (point cloud, microscopy crop,
  * table rows, histogram). Used by the #/nd-spec dev route ONLY; production
  * surfaces render real engine state. Ported from the design handoff's
  * prototype/helpers.jsx.
@@ -7,7 +7,7 @@
 
 import { useMemo } from "react";
 
-/** Deterministic PRNG — mulberry32. */
+/** Deterministic PRNG: mulberry32. */
 export function ndMulberry(seed: number): () => number {
   let a = seed >>> 0;
   return () => {

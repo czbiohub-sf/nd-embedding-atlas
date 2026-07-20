@@ -2,7 +2,7 @@ import { Store } from "@tanstack/store";
 import type { PanelId } from "../lib/branded-types";
 
 /**
- * SelectionLayerStore — per-panel compositor layer metadata.
+ * SelectionLayerStore: per-panel compositor layer metadata.
  *
  * Keyed by PanelId (same pattern as PanelStateStore).
  *
@@ -12,7 +12,7 @@ import type { PanelId } from "../lib/branded-types";
  * can react to layer changes without polling.
  *
  * Cross-panel rule: when panel A broadcasts, panel B writes its own
- * `external` slot — never panel A's slot.
+ * `external` slot: never panel A's slot.
  */
 
 export interface LayerSlot {

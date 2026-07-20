@@ -4,7 +4,7 @@
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/geist-mono";
 
-/* Geist Pixel — HUD signage face. Vendored from Vercel Geist (SIL OFL 1.1); the `geist` npm package only
+/* Geist Pixel: HUD signage face. Vendored from Vercel Geist (SIL OFL 1.1); the `geist` npm package only
  * ships Pixel as a next/font module, unusable in this Vite+Bun app. See src/frontend/fonts/README.md.
  * Size at pixel-grid multiples to stay crisp. */
 @font-face {
@@ -15,15 +15,15 @@
 }
 
 /*
- * nd-embedding-atlas — design token system
+ * nd-embedding-atlas: design token system
  *
- * Architecture (Tailwind v4) — ONE token vocabulary (shadcn-canonical):
+ * Architecture (Tailwind v4): ONE token vocabulary (shadcn-canonical):
  *   :root / html.dark → canonical tokens (--background/--card/--primary/--foreground/…)
  *   @theme inline      → maps them to utilities (bg-background, text-foreground, border-border)
  *   @theme (Tier-3)    → app-only extensions shadcn lacks (text-muted, surface-tertiary,
  *                        border-active, status-bar, wires/LEDs, emphasis, glass, z-scale)
  *   .dark switches every CSS var → utilities flip automatically (no dark: prefix needed)
- *   Components use Tailwind utilities only — no rival --color-* surface/text vocab.
+ *   Components use Tailwind utilities only: no rival --color-* surface/text vocab.
  *
  * Design: Scientific instrument panel. Geist Mono everywhere (UI + data/IDs) + Geist Pixel (HUD signage).
  */
@@ -32,17 +32,17 @@
 @custom-variant dark (&:is(.dark *));
 
 /* ════════════════════════════════════════════════════════════════════
- * TIER 1 — PRIMITIVES
+ * TIER 1: PRIMITIVES
  * ────────────────────────────────────────────────────────────────────
  * Raw source values. Never used directly by components.
  * The --*-hue anchors are consumed by the --*-emphasis family below
  * via relative-color syntax.
  * ════════════════════════════════════════════════════════════════════ */
 :root {
-  /* Master hue knob — Biohub periwinkle #6E4FF9 (hue ≈ 281) */
+  /* Master hue knob: Biohub periwinkle #6E4FF9 (hue ≈ 281) */
   --base-hue: 281;
 
-  /* Hue anchors — source colors for --emphasis family */
+  /* Hue anchors: source colors for --emphasis family */
   --accent-hue: oklch(0.554 0.236 var(--base-hue));
   --danger-hue: oklch(0.577 0.245 27.325);
   --warning-hue: oklch(0.741 0.181 60);
@@ -50,7 +50,7 @@
 }
 
 /* ════════════════════════════════════════════════════════════════════
- * TIER 2 — CANONICAL TOKENS (shadcn vocab) · LIGHT
+ * TIER 2: CANONICAL TOKENS (shadcn vocab) · LIGHT
  * ────────────────────────────────────────────────────────────────────
  * The ONE surface/text/border vocabulary. Dark values live in html.dark
  * below; both are mapped to Tailwind utilities (bg-background, text-
@@ -92,25 +92,25 @@
 }
 
 /* ════════════════════════════════════════════════════════════════════
- * TIER 3 — APP EXTENSIONS (no shadcn equivalent)
+ * TIER 3: APP EXTENSIONS (no shadcn equivalent)
  * ────────────────────────────────────────────────────────────────────
  * @theme generates Tailwind utilities. Light values here; dark in html.dark.
  * ════════════════════════════════════════════════════════════════════ */
 @theme {
-  /* Fonts — ONE text face: Geist Mono carries everything (instrument-panel
+  /* Fonts: ONE text face: Geist Mono carries everything (instrument-panel
    * voice; no separate prose face). --font-sans stays as the alias every
    * `font-sans` utility and third-party var resolves through. */
   --font-sans: "Geist Mono Variable", ui-monospace, monospace;
   --font-mono: "Geist Mono Variable", ui-monospace, monospace;
   --font-hud: "Geist Pixel", "Geist Mono Variable", ui-monospace, monospace;
 
-  /* ── Tier-3 surface/border/text EXTENSIONS — levels shadcn has no token for ──
+  /* ── Tier-3 surface/border/text EXTENSIONS: levels shadcn has no token for ──
    * Canonical tokens cover the rest: page → bg-background, panel → bg-card,
    * inset → bg-muted, border → border-border, ink → text-foreground,
    * secondary → text-muted-foreground. Only these three have no canonical twin. */
-  --color-surface-tertiary: #e8e8e8; /* oklch(0.93) — hover-LIGHTEN, one step above muted */
-  --color-border-active: #b8b8b8; /* oklch(0.72) — stronger border on hover/active        */
-  --color-text-muted: #6e6e6e; /* oklch(0.50) — 3rd/dimmest text, below muted-foreground   */
+  --color-surface-tertiary: #e8e8e8; /* oklch(0.93): hover-LIGHTEN, one step above muted */
+  --color-border-active: #b8b8b8; /* oklch(0.72): stronger border on hover/active        */
+  --color-text-muted: #6e6e6e; /* oklch(0.50): 3rd/dimmest text, below muted-foreground   */
 
   /* ── Data visualization accents (interactive accents use --primary periwinkle) ── */
   --color-accent-amber: #f59e0b;
@@ -120,7 +120,7 @@
   --color-chart-mark: oklch(0.554 0.236 var(--base-hue));
   --color-chart-mark-fade: oklch(from var(--color-chart-mark) l c h / 0.125);
 
-  /* ── Status bar (was orphan — now defined) ── */
+  /* ── Status bar (was orphan: now defined) ── */
   --color-status-bar: #f7f7f7; /* matches --color-surface */
   --color-status-bar-border: #e8e8e8; /* matches --color-border-subtle */
 
@@ -140,8 +140,8 @@
    * Tailwind v4 ships --text-xs (0.75rem / 12px) and larger. These add tighter
    * named rungs below that floor for dense instrument labels (the canonical
    * targets for what used to be arbitrary 10px/11px values). */
-  --text-2xs: 0.6875rem; /* 11px — tight label */
-  --text-3xs: 0.625rem; /* 10px — dense legend */
+  --text-2xs: 0.6875rem; /* 11px: tight label */
+  --text-3xs: 0.625rem; /* 10px: dense legend */
 
   /* ── Density ──
    * Compact controls select named text rungs (--text-2xs / --text-3xs) plus
@@ -151,7 +151,7 @@
   --blur-glass: 12px;
 }
 
-/* ── Tier 2 — Emphasis family + glass tokens (light) ──
+/* ── Tier 2: Emphasis family + glass tokens (light) ──
  * Not in @theme because they're derived via relative color from
  * Tier 1 anchors. Exposed to Tailwind via @theme inline at bottom. */
 :root {
@@ -165,10 +165,10 @@
 }
 
 /* ════════════════════════════════════════════════════════════════════
- * TIER 2 — CANONICAL TOKENS · DARK   (+ Tier-3 extension dark values)
+ * TIER 2: CANONICAL TOKENS · DARK   (+ Tier-3 extension dark values)
  * ────────────────────────────────────────────────────────────────────
  *  Overrides the same CSS vars as the light :root above; Tailwind utilities
- *  (bg-background, text-foreground, …) flip automatically — no dark: prefix.
+ *  (bg-background, text-foreground, …) flip automatically: no dark: prefix.
  *  html.dark (specificity 0,1,1) intentionally beats any plain :root block.
  * ════════════════════════════════════════════════════════════════════ */
 html.dark {
@@ -177,21 +177,21 @@ html.dark {
   --color-border-active: oklch(1 0 0 / 22%); /* stronger border on hover/active       */
   --color-text-muted: oklch(0.62 0 0); /* 3rd/dimmest text, below muted-foreground    */
 
-  /* Status bar — dark overrides for the orphan tokens fixed above */
+  /* Status bar: dark overrides for the orphan tokens fixed above */
   --color-status-bar: var(--card); /* = oklch(0.205 0 0) */
   --color-status-bar-border: var(--border); /* = oklch(1 0 0 / 16%) */
 
-  /* Emphasis family — bumped alpha for dark surfaces (hues carry less on dark) */
+  /* Emphasis family: bumped alpha for dark surfaces (hues carry less on dark) */
   --emphasis: oklch(from var(--accent-hue) l c h / 10%);
   --danger-emphasis: oklch(from var(--danger-hue) l c h / 15%);
   --warning-emphasis: oklch(from var(--warning-hue) l c h / 12%);
   --success-emphasis: oklch(from var(--success-hue) l c h / 15%);
 
-  /* Glass surface — dark panels need a darker tint, paler border */
+  /* Glass surface: dark panels need a darker tint, paler border */
   --glass-bg: oklch(0 0 0 / 60%);
   --glass-border: oklch(1 0 0 / 7%);
 
-  /* Canonical dark values — mirror the light :root above (--background/--card/--primary/…). */
+  /* Canonical dark values: mirror the light :root above (--background/--card/--primary/…). */
   --background: oklch(0.13 0.004 281); /* lifted near-black, faint periwinkle-cool tint (was pure #000) */
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);
@@ -227,18 +227,18 @@ html.dark {
 
 /* Node workspace wire kinds, cook-state LEDs, and motion. */
 @theme {
-  /* Typed wire/port kinds — pred (pull predicate) · sel (push row set) · focus (push single record) */
+  /* Typed wire/port kinds: pred (pull predicate) · sel (push row set) · focus (push single record) */
   --color-wire-pred: #8b7bf7;
   --color-wire-sel: #f59e0b;
   --color-wire-focus: #38bdf8;
-  /* feedback channel — a writer's output re-entering its source (wireless ↻ pair) */
+  /* feedback channel: a writer's output re-entering its source (wireless ↻ pair) */
   --color-wire-feedback: #2dd4bf;
 
   /* Cook-state hues as color tokens (anchors live in Tier 1) */
   --color-success: var(--success-hue);
   --color-warning: var(--warning-hue);
 
-  /* LED pulse — cooking state */
+  /* LED pulse: cooking state */
   --animate-nd-led-pulse: nd-led-pulse 0.9s ease-in-out infinite;
   @keyframes nd-led-pulse {
     0%,
@@ -250,7 +250,7 @@ html.dark {
     }
   }
 
-  /* Wire flow — cooking pull wires (pair with stroke-dasharray 7 7) */
+  /* Wire flow: cooking pull wires (pair with stroke-dasharray 7 7) */
   --animate-nd-wire-flow: nd-wire-flow 0.6s linear infinite;
   @keyframes nd-wire-flow {
     to {
@@ -258,7 +258,7 @@ html.dark {
     }
   }
 
-  /* Wire push — sel/focus emission (pair with stroke-dasharray 2 10, round caps) */
+  /* Wire push: sel/focus emission (pair with stroke-dasharray 2 10, round caps) */
   --animate-nd-wire-push: nd-wire-push 0.45s linear infinite;
   @keyframes nd-wire-push {
     to {
@@ -266,7 +266,7 @@ html.dark {
     }
   }
 
-  /* Render-state morph — node content eases in on chip↔card↔full swaps.
+  /* Render-state morph: node content eases in on chip↔card↔full swaps.
    * Keep the from-frame usable (≥0.55 opacity): a suspended animation
    * timeline must never strand invisible UI. */
   --animate-nd-rs-morph: nd-rs-morph 200ms cubic-bezier(0.25, 0.8, 0.3, 1);
@@ -317,7 +317,7 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--color-border-active);
 }
-/* Corner where the h+v scrollbars meet — UA default is an opaque light square.
+/* Corner where the h+v scrollbars meet: UA default is an opaque light square.
  * Transparent so it disappears against any surface (the bottom-right "white box"). */
 ::-webkit-scrollbar-corner {
   background: transparent;
@@ -396,7 +396,7 @@ select:disabled {
   user-select: none;
 }
 
-/* ── Dockview — dark theme ────────────────────────────────────────── */
+/* ── Dockview: dark theme ────────────────────────────────────────── */
 /* Override Dockview's hardcoded abyss-light blue tint */
 .dockview-theme-abyss,
 .dockview-theme-dark {
@@ -439,23 +439,23 @@ select:disabled {
   }
 }
 
-/* Thin focus ring — buttons, inputs */
+/* Thin focus ring: buttons, inputs */
 @utility focus-ring {
   @apply focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50;
 }
 
-/* Thick focus ring — badges, chips */
+/* Thick focus ring: badges, chips */
 @utility focus-ring-thick {
   @apply focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50;
 }
 
-/* Validation error ring — destructive border + ring, dark-mode adjusted */
+/* Validation error ring: destructive border + ring, dark-mode adjusted */
 @utility invalid-ring {
   @apply aria-invalid:border-destructive aria-invalid:ring-1 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40;
 }
 
-/* ── Glass — THE one frosted-surface recipe ───────────────────────────
- *  Floating chrome OVER live content (canvas / imagery / data-viz) only —
+/* ── Glass: THE one frosted-surface recipe ───────────────────────────
+ *  Floating chrome OVER live content (canvas / imagery / data-viz) only :
  *  docked panels and overlays on solid backgrounds use `Panel` solid instead.
  *  Sourced from the --glass-* tokens so the Tweakpane viewer theme shares the
  *  exact recipe. Pair with `border rounded-* shadow-*` for shape.
@@ -507,7 +507,7 @@ select:disabled {
   color: var(--muted-foreground);
 }
 
-/* ── Hide Dockview tab strip — navigation handled by BottomDock ── */
+/* ── Hide Dockview tab strip: navigation handled by BottomDock ── */
 .dv-tabs-and-actions-container {
   display: none !important;
 }
@@ -515,7 +515,7 @@ select:disabled {
 /* ── Resize sash between tiled panels (side-by-side embeddings) ─────────
  *  dockview-react renders `.dockview-theme-abyss` regardless of the
  *  dark/light className we pass, so target it directly (one rule, both
- *  themes — the tint is theme-neutral periwinkle at 30% alpha). The sash
+ *  themes: the tint is theme-neutral periwinkle at 30% alpha). The sash
  *  is invisible at rest (the 1px --dv-separator-border draws the seam) and
  *  picks up the brand tint on hover/drag, matching SlidePanel.ResizeHandle.
  *  Kill Dockview's 0.5s reveal delay so the grab affordance shows at once. */
@@ -584,7 +584,7 @@ select:disabled {
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
 
-  /* ── Emphasis family — tinted-background utilities ──
+  /* ── Emphasis family: tinted-background utilities ──
    * Usage: bg-emphasis, bg-danger-emphasis, bg-warning-emphasis, bg-success-emphasis.
    * These reference :root / html.dark vars so theme swap propagates. */
   --color-emphasis: var(--emphasis);
@@ -611,7 +611,7 @@ select:disabled {
 
 /* ── Reduced motion ───────────────────────────────────────────────────
  *  Honor prefers-reduced-motion. Durations collapse to ~0 (0.01ms, not 0)
- *  so transitionend/animationend still fire — Base UI / Radix popovers
+ *  so transitionend/animationend still fire: Base UI / Radix popovers
  *  depend on those events to unmount. */
 @media (prefers-reduced-motion: reduce) {
   *,

@@ -1,7 +1,7 @@
 /**
  * Shared OME-Zarr contrast-window resolution.
  *
- * Default OME-Zarr writers often emit `window: {start: 0, end: dtypeMax}` —
+ * Default OME-Zarr writers often emit `window: {start: 0, end: dtypeMax}` :
  * the full dtype range, not a useful display range. Real fluorescence data
  * fills <10% of the range, so it renders black at full contrast. When we
  * detect that pattern (start==min && end==max with a >1000 span), shrink
@@ -36,7 +36,7 @@ export function resolveContrastWindow(window: ContrastWindow | undefined): [numb
  * Resolve an OME window to the slider's [min, max] EXTENT (not the default
  * display limits). Mirrors `resolveContrastWindow`'s "uninformative full-dtype
  * default" detection so the track spans the meaningful range instead of dead
- * dtype space — otherwise the useful limits (e.g. 0–4096 of a 0–65535 uint16
+ * dtype space: otherwise the useful limits (e.g. 0–4096 of a 0–65535 uint16
  * range) cram into the far-left 6% of the track and the thumbs visually
  * collide. Negatives are preserved: phase images carry a genuine negative
  * `min`, which becomes the low end as-is (never clamped to 0).
@@ -53,7 +53,7 @@ export function resolveContrastRange(window: ContrastWindow | undefined): [numbe
   return [min, hi];
 }
 
-/** Ensure contrast limits are strictly increasing — idetik throws if lo >= hi. */
+/** Ensure contrast limits are strictly increasing: idetik throws if lo >= hi. */
 export function safeContrastLimits(limits: [number, number]): [number, number] {
   return limits[0] < limits[1] ? limits : [limits[0], limits[0] + 1];
 }
@@ -62,9 +62,9 @@ export function safeContrastLimits(limits: [number, number]): [number, number] {
 
 /**
  * How autocontrast derives display limits from a channel's pixel stats:
- *   - "percentile" — Fiji-style saturation limits (robust to hot pixels /
+ *   - "percentile": Fiji-style saturation limits (robust to hot pixels /
  *     background spikes; the right default for fluorescence).
- *   - "minmax"     — raw data extent (napari-style; can be blown out by a
+ *   - "minmax"    : raw data extent (napari-style; can be blown out by a
  *     single bright pixel, but faithful for range inspection).
  * Both derive from the SAME stats payload, so switching never re-fetches.
  */

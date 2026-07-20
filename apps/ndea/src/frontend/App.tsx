@@ -12,10 +12,10 @@ import { appQueryClient } from "./query-client";
 
 /**
  * Routes:
- *  · `/` (and `#/graph`, a legacy alias) — the Node Workspace.
+ *  · `/` (and `#/graph`, a legacy alias): the Node Workspace.
  *    `#/graph` renders the same shell with the URL left untouched
  *    (no redirect), so existing links keep working.
- *  · `#/nd-spec` — living spec for the nd component layer (no data deps).
+ *  · `#/nd-spec`: living spec for the nd component layer (no data deps).
  */
 function useHashRoute(): string {
   const [hash, setHash] = useState(() => window.location.hash);
@@ -30,7 +30,7 @@ function useHashRoute(): string {
 export default function App({ nodeLibrary }: { nodeLibrary: AppNodeLibrary }) {
   const hash = useHashRoute();
   if (hash === "#/nd-spec") {
-    // Living spec for the nd component layer — no data deps, no providers.
+    // Living spec for the nd component layer: no data deps, no providers.
     return (
       <ThemeProvider>
         <NdSpecPage />

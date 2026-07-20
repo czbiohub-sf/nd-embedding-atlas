@@ -1,5 +1,5 @@
 /**
- * ObsmSliceLoader — lazy, column-wise reader for obsm embeddings.
+ * ObsmSliceLoader: lazy, column-wise reader for obsm embeddings.
  *
  * Wraps one or more `DatasetHandle`s (AnnData or MuData modality) and
  * exposes `loadColumn(colIndex)` returning a Float32Array of length nObs
@@ -8,7 +8,7 @@
  * pre-slice-cache path in `routes/embeddings.ts`).
  *
  * Abort semantics are cooperative: `signal.aborted` is checked around
- * each zarr read. A partial read is never cached — the full column is
+ * each zarr read. A partial read is never cached: the full column is
  * built into an intermediate buffer and only written to the cache on
  * success.
  */
@@ -43,7 +43,7 @@ export class ObsmSliceLoader implements SliceLoader {
 
   /**
    * Discover the width (nDims) of an obsm key via zarr metadata only.
-   * No data read — reads `.zarray` / `zarr.json` shape from the first
+   * No data read: reads `.zarray` / `zarr.json` shape from the first
    * accessor that carries the key.
    */
   static async detectWidth(obsmKey: string, accessors: Iterable<readonly [string, DatasetHandle]>): Promise<number> {

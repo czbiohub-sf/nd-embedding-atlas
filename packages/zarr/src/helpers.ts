@@ -13,7 +13,7 @@ import type { CategoricalArray, Dtype, NullableArray, Scalar, SparseArray } from
 /**
  * CSR/CSC sparse matrix.
  *
- * Implements rows() iterator — supports iterator helpers:
+ * Implements rows() iterator: supports iterator helpers:
  *   sparse.rows().filter(r => r.values.length > 0).take(100)
  */
 export class CsrCscArray implements SparseArray {
@@ -109,7 +109,7 @@ export class CsrCscArray implements SparseArray {
 
 /**
  * Categorical array from AnnData's codes + categories pattern.
- * Iterable — supports iterator helpers: cat.filter(v => v !== null).take(10)
+ * Iterable: supports iterator helpers: cat.filter(v => v !== null).take(10)
  */
 export class SimpleCategorical implements CategoricalArray {
   readonly categories: readonly Scalar[];
@@ -145,7 +145,7 @@ export class SimpleCategorical implements CategoricalArray {
 
 /**
  * Nullable array from AnnData's values + mask pattern.
- * Iterable — supports iterator helpers: nullable.filter(v => v !== null)
+ * Iterable: supports iterator helpers: nullable.filter(v => v !== null)
  */
 export class SimpleNullable implements NullableArray {
   readonly values: ArrayLike<Scalar>;

@@ -1,5 +1,5 @@
 /**
- * GalleryPane — predicate-driven crop gallery for the ⌘J terminal drawer.
+ * GalleryPane: predicate-driven crop gallery for the ⌘J terminal drawer.
  *
  * Renders OME-Zarr crops for whatever observations the scatter is currently
  * filtered to by a wired row set.
@@ -21,7 +21,7 @@ import { LassoGalleryCard } from "./LassoGalleryCard";
 import { usePredicateGalleryObs } from "./usePredicateGalleryObs";
 import { MAX_GALLERY_OBS } from "./useLassoSelectionObs";
 
-const FOOTER_HEIGHT = 50; // px — two-line footer (fov + dataset row)
+const FOOTER_HEIGHT = 50; // px: two-line footer (fov + dataset row)
 const COL_GAP = 8;
 const ROW_GAP = 18;
 const MIN_COL_WIDTH = 220;
@@ -56,7 +56,7 @@ export function GalleryPane({ coordinator, predicate, focusedRowIndex, onSelect,
     isPending: channelsPending,
   } = useGalleryChannels(datasetKey ?? "docked", 300, resolvedPlateChannels);
 
-  // Crops are data URLs (see useGalleryCropQuery) — no blob-URL revocation to
+  // Crops are data URLs (see useGalleryCropQuery): no blob-URL revocation to
   // manage. The old findAll(["crop"]) revoke-all-on-unmount nuked every crop
   // URL globally (breaking other consumers + this pane on remount), and the
   // per-removal revoke raced keepPreviousData. Both are gone with data URLs.
@@ -105,7 +105,7 @@ export function GalleryPane({ coordinator, predicate, focusedRowIndex, onSelect,
   // writes the shared cell, the gallery reads it via host.focus (props), and
   // the matching crop scrolls in.
   // ponytail: obs is the windowed list (≤MAX_GALLERY_OBS); a focus outside the
-  // window finds no index and doesn't scroll — fine until windowed fetch lands.
+  // window finds no index and doesn't scroll: fine until windowed fetch lands.
   useEffect(() => {
     if (focusedRowIndex == null || count === 0) return;
     const idx = obs.findIndex((o) => o.rowIndex === focusedRowIndex);
@@ -140,7 +140,7 @@ export function GalleryPane({ coordinator, predicate, focusedRowIndex, onSelect,
         )}
       </div>
 
-      {/* Body — always the same div so ResizeObserver stays attached to a
+      {/* Body: always the same div so ResizeObserver stays attached to a
           stable element. Swapping refs across renders caused the observer
           to fire with width=0 once the prior div detached, ping-ponging
           containerWidth back to 0 and stranding the gallery in its

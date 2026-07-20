@@ -86,7 +86,7 @@ interface LegendProviderProps {
   categoryCol: string | null;
   /** Current categorical palette name (owned by useScatterColorState). */
   categoricalColormap: string;
-  /** Setter for the categorical palette — fires user-explicit flag. */
+  /** Setter for the categorical palette: fires user-explicit flag. */
   setCategoricalColormap: (name: string) => void;
   /** Called whenever the set of isolated category indices changes. */
   onIsolationChange?: (isolatedIndices: Set<number>) => void;

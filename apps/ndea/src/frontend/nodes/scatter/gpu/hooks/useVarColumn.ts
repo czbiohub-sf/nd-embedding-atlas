@@ -22,14 +22,14 @@ export interface VarColumnResult {
  *
  * Flow:
  *   POST /api/var-column { name, layer }
- *   → if WS connected: subscribe("var-column/status") — server pushes
+ *   → if WS connected: subscribe("var-column/status"): server pushes
  *     loading → ready/error transitions.
  *   → else: fall back to HTTP polling every 800 ms.
  *   → on status="ready": set column
  *   → on status="error": set error
  */
 interface UseVarColumnOptions {
-  /** Called with a status message when loading starts/ends — use to update the bottom bar. */
+  /** Called with a status message when loading starts/ends: use to update the bottom bar. */
   onStatus?: (msg: string | null) => void;
 }
 
@@ -123,7 +123,7 @@ export function useVarColumn(options?: UseVarColumnOptions): VarColumnResult {
         },
         (err) => {
           if (err instanceof WsReconnectError) {
-            // WS dropped mid-stream — switch to HTTP polling for the same task.
+            // WS dropped mid-stream: switch to HTTP polling for the same task.
             startHttpPoll(taskId);
           } else {
             handleError(err.message);

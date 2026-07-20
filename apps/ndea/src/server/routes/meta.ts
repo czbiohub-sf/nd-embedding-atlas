@@ -1,5 +1,5 @@
 /**
- * Metadata endpoint — GET /data/metadata.json
+ * Metadata endpoint: GET /data/metadata.json
  *
  * Returns table schema, column info, embedding status, and spatial metadata.
  * The frontend loads this once on startup via TanStack Query.
@@ -19,7 +19,7 @@ function firstVarCount(state: ServerSession): number {
   // For MuData: root var.length + sum of per-modality var lengths (axis=0).
   const handle = iter.value;
   if (handle.kind === "mudata") {
-    // Narrowing via kind — MuData type lives in mudata.ts. To avoid a
+    // Narrowing via kind: MuData type lives in mudata.ts. To avoid a
     // cross-import cycle here, inspect the shape duck-typed.
     const mu = handle as unknown as { var: { length: number }; mod: ReadonlyMap<string, { var: { length: number } }> };
     let total = mu.var.length;
@@ -64,18 +64,18 @@ export function handleMetadata(state: ServerSession, config: DatasetSessionMetad
     database: { type: "rest" },
     obsm: buildObsmMetadata(state.availableObsmKeys, state),
     // Serve only user-facing obs columns. `__`-prefixed columns are internal
-    // machinery — categorical encodings (`__ev_<col>_id`, added post-startup by
+    // machinery: categorical encodings (`__ev_<col>_id`, added post-startup by
     // /api/categorize), var-expression columns (`__var_N_X__`), and identity
     // (`__obs_index__` / `__row_index__`). They stay in `state.obsColumns` so
     // category_col validation still sees them; clients (table grid, obs color
     // picker) only ever want the real columns. Single-`_` names like `_dataset`
-    // are kept — ExportDialog depends on `_dataset`.
+    // are kept: ExportDialog depends on `_dataset`.
     obs_columns: config.obsColumnNames.filter((c) => !c.startsWith("__")),
     plate: config.hasPlate,
     export_dir: exportDir(),
     var_count: firstVarCount(state),
     layers: ["X"],
-    // Active preset name — a shipped build resolves this to a bundled graph; a
+    // Active preset name: a shipped build resolves this to a bundled graph; a
     // build launched with no --preset falls back to annotate (the default).
     preset: config.preset ?? "annotate",
     spatial: state.spatial
@@ -118,7 +118,7 @@ export function handleMetadata(state: ServerSession, config: DatasetSessionMetad
     result.dataset_channels = config.datasetChannels;
   }
 
-  // Provided data-capability set (CAPABILITY-CONTRACT.md §3) — derived from the
+  // Provided data-capability set (CAPABILITY-CONTRACT.md §3): derived from the
   // metadata facts assembled above; the wire single-source-of-truth the
   // frontend reads through `capabilitiesOf()`.
   const spatialMeta = result.spatial as { x_col?: string | null } | undefined;

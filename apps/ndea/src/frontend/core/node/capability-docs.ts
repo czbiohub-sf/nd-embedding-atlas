@@ -3,7 +3,7 @@
  * card. The raw `NodeCapability` id is a developer token (`schema-mutation`,
  * `wasm-bitmap`); the user-facing hover shows the `label` here instead.
  *
- * Capabilities NOT in this map are intentionally hidden from the user tier —
+ * Capabilities NOT in this map are intentionally hidden from the user tier :
  * they're either internal (`data-read`, `wasm-bitmap`) or already implied by
  * the node's row-set and predicate ports.
  * A dev mode can still surface the raw ids.

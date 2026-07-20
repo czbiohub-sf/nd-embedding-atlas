@@ -1,5 +1,5 @@
 /**
- * ColorSource — discriminated union replacing colorByColumn: string | null.
+ * ColorSource: discriminated union replacing colorByColumn: string | null.
  *
  * Three semantic variants:
  *  - "none"  → no coloring
@@ -7,7 +7,7 @@
  *  - "var"   → a materialized var/expression column (__var_{name}_{layer}__)
  *
  * The "column" field on obs and var variants is always the DuckDB column
- * name — safe to pass directly to SQL without encoding/decoding.
+ * name: safe to pass directly to SQL without encoding/decoding.
  */
 
 export type ColorSource =
@@ -66,7 +66,7 @@ export function colorSourceLabel(src: ColorSource): string {
   return src.column;
 }
 
-/** For the continuous legend — shows layer name for var, column name for obs. */
+/** For the continuous legend: shows layer name for var, column name for obs. */
 export function colorSourceLegendLabel(src: ColorSource): string {
   if (src.kind === "none") return "";
   if (src.kind === "var") return src.layer;

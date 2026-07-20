@@ -1,4 +1,4 @@
-/** histogram plugin descriptor — eager metadata; the body is behind the lazy load(). */
+/** histogram plugin descriptor: eager metadata; the body is behind the lazy load(). */
 
 import { z } from "zod";
 import { defineNode, exactNodeTypeRef, nodeConfigVersion } from "@ndea/sdk";

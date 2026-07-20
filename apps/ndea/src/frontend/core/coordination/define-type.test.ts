@@ -1,5 +1,5 @@
 /**
- * defineCoordinationType fitness test (U3) — the registration gate.
+ * defineCoordinationType fitness test (U3): the registration gate.
  *
  * Every coordination type must declare a capability, bind to a real NodeHost
  * facet, and carry a JsonValue-serializable schema (KD3/KD4/R5). Importing
@@ -76,7 +76,7 @@ describe("define-time gate rejects malformed types (KD3/R5)", () => {
       defineCoordinationType({
         type: "__bad_value",
         schema: z.any(),
-        defaultValue: (() => 0) as never, // a function — not JsonValue
+        defaultValue: (() => 0) as never, // a function: not JsonValue
         capability: "data-read",
         hostFacet: "focus",
       }),
@@ -88,7 +88,7 @@ describe("define-time gate rejects malformed types (KD3/R5)", () => {
       defineCoordinationType({
         type: "__bad_schema",
         schema: z.number(),
-        defaultValue: "not a number" as never,
+        defaultValue: "not a number",
         capability: "data-read",
         hostFacet: "focus",
       }),

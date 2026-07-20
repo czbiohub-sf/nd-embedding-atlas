@@ -4,7 +4,7 @@
  * Each task carries multiple obs requests that share the same FOV. The
  * worker opens the zarr Array once per task (LRU-cached across tasks),
  * reads slabs, composites + WebP-encodes each crop, and streams individual
- * results back via postMessage as they're encoded — first crop in a
+ * results back via postMessage as they're encoded: first crop in a
  * 30-obs group flushes immediately rather than waiting for the whole group.
  *
  * Message protocol (mirrors src/zarr/column-worker.ts shape):
@@ -68,7 +68,7 @@ function storeFor(mountPath: string): FileSystemStore {
 }
 
 // Opened zarr Array per (mount, fov). Holds metadata only (shape, dtype,
-// chunk index) — actual chunk bytes are not retained, zarrita reads them
+// chunk index): actual chunk bytes are not retained, zarrita reads them
 // per `zarr.get`. Bounded LRU at 128 entries to keep memory predictable.
 const ARRAY_CACHE_LIMIT = 128;
 const arrayCache = new Map<string, zarr.Array<zarr.DataType>>();
@@ -137,7 +137,7 @@ async function renderOne(
   // frame/plane instead of throwing "index out of bounds".
   //
   // 2D image (nZ=1): obs `z` is not a plane index here (e.g. a physical/global
-  // z) — collapse to the single plane silently. Only treat obs `z` as a plane
+  // z): collapse to the single plane silently. Only treat obs `z` as a plane
   // index for genuine 3D stacks, and only then is an out-of-range z an anomaly
   // worth flagging. `t` is always a frame index, so an out-of-range t is.
   const t = req.t < 0 ? 0 : req.t >= nT ? nT - 1 : req.t;
@@ -149,7 +149,7 @@ async function renderOne(
     const parts: string[] = [];
     if (tClamped) parts.push(`t=${req.t}→${t} (nT=${nT})`);
     if (zClamped) parts.push(`z=${req.z}→${z} (nZ=${nZ})`);
-    console.warn(`[crop] obs index out of range for fov=${fovPath}: ${parts.join(", ")} — clamped to nearest valid.`);
+    console.warn(`[crop] obs index out of range for fov=${fovPath}: ${parts.join(", ")}: clamped to nearest valid.`);
   }
 
   const y0 = Math.max(0, req.y - half);
@@ -211,7 +211,7 @@ async function handleTask(task: CropTaskMessage): Promise<void> {
   // higher hit rate against zarrita's internal chunk cache.
   const sorted = [...requests].toSorted((a, b) => a.t - b.t || a.y - b.y || a.x - b.x);
 
-  // Stream results — postMessage incrementally, one per crop. The next crop
+  // Stream results: postMessage incrementally, one per crop. The next crop
   // benefits from cached chunks but the user sees the first one as soon as
   // it's encoded.
   for (const req of sorted) {
@@ -243,7 +243,7 @@ async function handleTask(task: CropTaskMessage): Promise<void> {
   self.postMessage({ taskId, done: true, errors });
 }
 
-// Sync listener that delegates to the async handler — keeps `no-misused-promises`
+// Sync listener that delegates to the async handler: keeps `no-misused-promises`
 // happy and matches the Web Worker spec (handlers should not return promises).
 self.addEventListener("message", (event: MessageEvent<CropTaskMessage>) => {
   void handleTask(event.data);

@@ -1,5 +1,5 @@
 /**
- * Manifest fetcher — resolves release channel → GitHub release asset URLs.
+ * Manifest fetcher: resolves release channel → GitHub release asset URLs.
  *
  * The manifest lives at a stable URL (repo root on `main`) so install.sh and
  * `ndea update` can share the same "what should I install?" answer. Shape:
@@ -13,7 +13,7 @@
 
 export const REPO = "czbiohub-sf/nd-embedding-atlas";
 
-/** Canonical manifest location — served via GitHub's raw CDN. */
+/** Canonical manifest location: served via GitHub's raw CDN. */
 export const MANIFEST_URL = `https://raw.githubusercontent.com/${REPO}/main/manifest.json`;
 
 /** Supported release channels. */
@@ -38,7 +38,7 @@ export interface ResolvedAsset {
 // ─── Platform detection ─────────────────────────────────────────────────────
 
 export interface Target {
-  os: "darwin" | "linux" | "windows";
+  os: "darwin" | "linux";
   arch: "x64" | "arm64";
   /** Final asset filename matching `release.yml`'s upload step. */
   assetName: string;
@@ -52,13 +52,12 @@ export function detectTarget(): Target {
   const platform = process.platform;
   // node's Architecture type on 2026 LTS doesn't include "amd64"/"aarch64"
   // (they come through as "x64"/"arm64") but some older environments surface
-  // the alternate names — cast to `string` so we can still accept them.
+  // the alternate names: cast to `string` so we can still accept them.
   const arch = process.arch as string;
 
   let os: Target["os"];
   if (platform === "darwin") os = "darwin";
   else if (platform === "linux") os = "linux";
-  else if (platform === "win32") os = "windows";
   else throw new Error(`Unsupported OS: ${platform}`);
 
   let normArch: Target["arch"];
@@ -66,7 +65,11 @@ export function detectTarget(): Target {
   else if (arch === "arm64" || arch === "aarch64") normArch = "arm64";
   else throw new Error(`Unsupported arch: ${arch}`);
 
-  const assetName = `ndea-${os}-${normArch}${os === "windows" ? ".exe" : ""}`;
+  if (os === "darwin" && normArch !== "arm64") {
+    throw new Error(`Unsupported release target: ${os}/${normArch}`);
+  }
+
+  const assetName = `ndea-${os}-${normArch}`;
   return { os, arch: normArch, assetName };
 }
 
@@ -97,7 +100,7 @@ export async function fetchManifestRaw(options: FetchManifestOptions = {}): Prom
 /**
  * Resolve the target asset for a given release channel.
  *
- * Returns `tag`, a direct binary URL, and a matching `.sha256` URL — the
+ * Returns `tag`, a direct binary URL, and a matching `.sha256` URL: the
  * three things both install.sh and `ndea update` need.
  */
 export async function fetchManifest(channel: Channel, options: FetchManifestOptions = {}): Promise<ResolvedAsset> {
@@ -157,7 +160,7 @@ export function sha256Hex(buffer: ArrayBuffer | Uint8Array): string {
 
 /**
  * Parse a `.sha256` file body. GitHub releases + `shasum -a 256` format as
- * `<hex>  <filename>` — we accept either that or a bare hex string.
+ * `<hex>  <filename>`: we accept either that or a bare hex string.
  */
 export function parseShaFile(body: string): string {
   const trimmed = body.trim();

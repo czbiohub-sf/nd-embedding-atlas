@@ -18,7 +18,7 @@ export interface ScatterConfig {
   colorByColumn: string | null;
 }
 
-/** Typed render options (editor deferred — decision #3); collapses PointRadius + RenderSettings. */
+/** Typed render options (editor deferred: decision #3); collapses PointRadius + RenderSettings. */
 export interface ScatterOptions {
   pointRadius: number;
   pointOpacity: number;
@@ -36,7 +36,7 @@ export function ScatterPluginView({
         initialObsmKey={host.config.obsmKey}
         initialColorByColumn={host.config.colorByColumn}
         onCreateCheckpoint={() => host.checkpointCreation.create()}
-        // workspace containers expose a header slot — the toolbar rides the
+        // workspace containers expose a header slot: the toolbar rides the
         // node/tile header there; containers without one get the docked row
         toolbarTarget={host.bodyHeaderElement}
       />

@@ -1,12 +1,12 @@
 /**
- * Scatter cross-view routing (Humble Object) — the testable seam the conformance
+ * Scatter cross-view routing (Humble Object): the testable seam the conformance
  * suite (`core/node/host-routing.test.ts`) exercises. Each scatter gesture's
  * *host-side* write lives here as a plain function, so "which host channel does
  * this gesture drive" is centralized + verifiable without a live WebGPU canvas.
  *
  * The throttle/debounce orchestration and the (legacy) global-bus `else` arms
  * stay at the call sites for now; the dual-path collapse removes those arms in a
- * later unit. These functions are the host path only — a body can't route a
+ * later unit. These functions are the host path only: a body can't route a
  * cross-view write to the global bus *through* them.
  */
 
@@ -42,7 +42,7 @@ export function publishLassoRowSet(host: ScatterRowSetHost, rowIndices: RowIndex
 /** Clear the lasso: drop the facet, TRUE-clear the row-set, drop the staged sel table. */
 export function clearLasso(host: ScatterPredicateHost & ScatterRowSetHost): void {
   host.publishPredicate("lasso", null);
-  host.clearRowSet(); // true clear — NOT publishRowSet([])
+  host.clearRowSet(); // true clear: NOT publishRowSet([])
   host.dataAPI.disposePublishedRowSet();
 }
 

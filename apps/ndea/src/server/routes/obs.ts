@@ -1,10 +1,10 @@
 /**
  * Observation lookup endpoints.
  *
- * POST /api/obs/batch           — Batch spatial metadata for many observations
- * GET  /api/obs/{row_index}     — Spatial info for a single observation
- * GET  /api/obs/{row_index}/detail — All obs columns for a single observation
- * GET  /api/health              — Health check
+ * POST /api/obs/batch          : Batch spatial metadata for many observations
+ * GET  /api/obs/{row_index}    : Spatial info for a single observation
+ * GET  /api/obs/{row_index}/detail: All obs columns for a single observation
+ * GET  /api/health             : Health check
  */
 
 import { parseBbox, type ServerSession } from "../state.ts";

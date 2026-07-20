@@ -1,4 +1,4 @@
-// Thin facade over @typegpu/color — re-exports the GPU color-space utilities
+// Thin facade over @typegpu/color: re-exports the GPU color-space utilities
 // we care about, under ochre's naming.
 //
 // @typegpu/color provides proper gamut clipping for OkLab→sRGB (via

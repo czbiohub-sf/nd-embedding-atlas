@@ -12,7 +12,7 @@ let _refCount = 0;
 const lossListeners = new Set<(info: GPUDeviceLostInfo) => void>();
 
 /**
- * Subscribe to genuine GPU device loss (driver TDR, GPU reset) — NOT our own
+ * Subscribe to genuine GPU device loss (driver TDR, GPU reset): NOT our own
  * `device.destroy()` on the last release. Returns an unsubscribe. Hosts use this
  * to surface a "reload to restore" overlay instead of a silently dead canvas.
  */
@@ -39,7 +39,7 @@ export async function acquireDevice(signal?: AbortSignal): Promise<DeviceInfo> {
     if (!navigator.gpu) {
       throw new Error(
         "WebGPU is not supported in this browser. " +
-          "If you are on HPC, enable Vulkan flags in chrome://flags — see docs/webgpu-hpc-setup.md for details.",
+          "If you are on HPC, enable Vulkan flags in chrome://flags: see docs/webgpu-hpc-setup.md for details.",
       );
     }
     const adapter = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });

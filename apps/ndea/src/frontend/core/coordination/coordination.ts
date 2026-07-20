@@ -1,18 +1,18 @@
 /**
- * Coordination backbone — the symmetric cross-view plane (Boukhelifa
+ * Coordination backbone: the symmetric cross-view plane (Boukhelifa
  * identity-of-reference / Vitessce CMV), rolled own over the workspace
  * TanStack store (KD1; no foreign provider).
  *
  * Two axes:
- *   - coordination TYPE — the parameter being shared (`focus`, later
+ *   - coordination TYPE: the parameter being shared (`focus`, later
  *     `viewSync`/`ordering`).
- *   - named SCOPE — a named cell of a type (e.g. `focus.A`). N nodes that
+ *   - named SCOPE: a named cell of a type (e.g. `focus.A`). N nodes that
  *     reference the same (type, scope) see the same value, reactively, with no
  *     edge and no message passing.
  *
  * Storage lives in two fields supplied by the document adapter:
- *   - `coordinationScopes[nodeId][type] = scope` — which cell a node references.
- *   - `coordinationSpace[type][scope] = value` — the live cell value.
+ *   - `coordinationScopes[nodeId][type] = scope`: which cell a node references.
+ *   - `coordinationSpace[type][scope] = value`: the live cell value.
  *
  * Conflict policy is latest-wins per writer: a cell holds one JsonValue, the
  * most recent `set` replaces it, no merge. Scope values are `JsonValue`-only
@@ -81,10 +81,10 @@ export function coordinationDocumentPort<S extends CoordinationDocumentState>(
 /* ── registered coordination types ───────────────────────────────────────
  * focus (U1) + viewSync (U2) re-expressed through the extracted primitive,
  * plus `ordering` (U3) registered through the SAME API to prove a third type
- * needs no backbone changes. Registration is a module side effect — importing
+ * needs no backbone changes. Registration is a module side effect: importing
  * this file (which the Workspace does) populates the registry. */
 
-/** `focus` — a shared row index among the scope's members (group channel). */
+/** `focus`: a shared row index among the scope's members (group channel). */
 export const FOCUS_TYPE = defineGroupChannel({
   type: "focus",
   value: z.number().int().nonnegative().nullable(),
@@ -92,7 +92,7 @@ export const FOCUS_TYPE = defineGroupChannel({
   hostFacet: "focus",
 });
 
-/** `viewSync` — shared pan/zoom; `src` is the broadcaster (self-skip). */
+/** `viewSync`: shared pan/zoom; `src` is the broadcaster (self-skip). */
 export const VIEW_SYNC_TYPE = defineCoordinationType({
   type: "viewSync",
   schema: z.object({ panX: z.number(), panY: z.number(), zoom: z.number(), src: z.string().optional() }),
@@ -101,7 +101,7 @@ export const VIEW_SYNC_TYPE = defineCoordinationType({
   hostFacet: "viewCoordination",
 });
 
-/** `ordering` — shared sort column + direction (table). The third type. */
+/** `ordering`: shared sort column + direction (table). The third type. */
 export const ORDERING_TYPE = defineCoordinationType({
   type: "ordering",
   schema: z.object({ col: z.string(), dir: z.enum(["asc", "desc"]) }).nullable(),
@@ -181,7 +181,7 @@ class Coordination implements CoordinationScopeCellPort {
 
   /* ── cell values (the shared, latest-wins parameter) ──────────────── */
 
-  /** Write a cell value (latest-wins — replaces, never merges). */
+  /** Write a cell value (latest-wins: replaces, never merges). */
   setCoordinationValue<T extends string>(type: T, scope: string, value: CoordinationValue<T>): void {
     const spec = getCoordinationType(type);
     if (spec && !spec.schema.safeParse(value).success) {
@@ -191,7 +191,7 @@ class Coordination implements CoordinationScopeCellPort {
       ...s,
       coordinationSpace: {
         ...s.coordinationSpace,
-        [type]: { ...s.coordinationSpace[type], [scope]: value as JsonValue },
+        [type]: { ...s.coordinationSpace[type], [scope]: value },
       },
     }));
   }
@@ -201,7 +201,7 @@ class Coordination implements CoordinationScopeCellPort {
     return this.document.snapshot().coordinationSpace[type]?.[scope] as CoordinationValue<T> | undefined;
   }
 
-  /** The scope names that currently EXIST for a type — every scope referenced by
+  /** The scope names that currently EXIST for a type: every scope referenced by
    *  some node, unioned with any cell already in the space. The picker offers
    *  these (plus mint-new) so a node can never reference a dangling scope (KD9). */
   existingScopes(type: string): string[] {
@@ -214,7 +214,7 @@ class Coordination implements CoordinationScopeCellPort {
   }
 
   /** Reverse index: the node ids referencing (type, scope). Computed on demand
-   *  from `coordinationScopes` — O(nodes), only walked on a set/subscribe. */
+   *  from `coordinationScopes`: O(nodes), only walked on a set/subscribe. */
   nodesInScope(type: string, scope: string): string[] {
     const out: string[] = [];
     for (const [nodeId, byType] of Object.entries(this.document.snapshot().coordinationScopes)) {
@@ -232,7 +232,7 @@ class Coordination implements CoordinationScopeCellPort {
 
   /**
    * Subscribe to a node's RESOLVED cell for one type. `cb` fires only when the
-   * effective value changes — the node's scope flipping (assign/clear) or its
+   * effective value changes: the node's scope flipping (assign/clear) or its
    * cell value moving. A whole-store listener gated by an effective-value diff,
    * so a write to an unrelated scope/type never wakes this subscriber (the CMV
    * render-storm guard). Returns an unsubscribe fn.

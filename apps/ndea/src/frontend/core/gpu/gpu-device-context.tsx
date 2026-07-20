@@ -27,7 +27,7 @@ export function GpuDeviceProvider({ children }: { children: ReactNode }) {
         if (!cancelled) setLease(l);
       })
       .catch((err: unknown) => {
-        // Teardown aborts are expected — only surface real failures.
+        // Teardown aborts are expected: only surface real failures.
         if (err instanceof DOMException && err.name === "AbortError") return;
         if (!cancelled) setError(err instanceof Error ? err : new Error(String(err)));
       });

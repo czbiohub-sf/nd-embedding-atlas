@@ -1,5 +1,5 @@
 /**
- * cache — source-agnostic live-until-cached checkpoint. UNCACHED: pass the
+ * cache: source-agnostic live-until-cached checkpoint. UNCACHED: pass the
  * input through (a pushed sel takes over, else the AND of pred inputs).
  * CACHED: return the pinned predicate verbatim (the push→pull conversion).
  */

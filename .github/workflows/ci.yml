@@ -13,7 +13,7 @@ permissions:
   contents: read
 
 jobs:
-  # ── Typecheck + lint + fmt (Linux only — deterministic, fast) ───────────
+  # Typecheck + lint + fmt (Linux only: deterministic, fast)
   check:
     name: Typecheck + lint + fmt
     runs-on: ubuntu-latest
@@ -24,7 +24,7 @@ jobs:
       - uses: oven-sh/setup-bun@v2
       - uses: voidzero-dev/setup-vp@v1
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: vp install --frozen-lockfile
       - name: Check root tooling
         run: vp check vite.config.ts bunli.config.ts scripts
       - name: Check workspaces
@@ -50,7 +50,7 @@ jobs:
       - uses: oven-sh/setup-bun@v2
       - uses: voidzero-dev/setup-vp@v1
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: vp install --frozen-lockfile
       - name: Test workspaces
         run: vp run -r test
 
@@ -76,8 +76,8 @@ jobs:
       - uses: oven-sh/setup-bun@v2
       - uses: voidzero-dev/setup-vp@v1
       - name: Install dependencies
-        run: bun install --frozen-lockfile
-      # `bun run build` exercises the full release path: Bun.build (frontend)
+        run: vp install --frozen-lockfile
+      # `vp run build` exercises the full release path: Bun.build (frontend)
       # → embed-asset manifest generation → bun build --compile (single
       # self-contained binary with embedded libduckdb). PRs that break any
       # of these surface here instead of during a release.

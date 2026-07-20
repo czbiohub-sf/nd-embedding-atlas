@@ -143,7 +143,7 @@ export function ColorSourcePicker({
       </PopoverTrigger>
 
       <PopoverContent className={cn("w-64 gap-0 p-0", contentClassName)} side="bottom" align="start" sideOffset={4}>
-        {/* Tab switcher — Var tab only shown when dataset has expression data */}
+        {/* Tab switcher: Var tab only shown when dataset has expression data */}
         <div className="flex gap-1 border-border border-b p-1">
           <TabButton active={tab === "obs"} onClick={() => setTab("obs")}>
             Obs
@@ -169,7 +169,7 @@ export function ColorSourcePicker({
                     setOpen(false);
                   }}
                 >
-                  <span className="text-muted-foreground">none — single color</span>
+                  <span className="text-muted-foreground">none: single color</span>
                 </CommandItem>
                 {obsColumns.map((col) => (
                   <CommandItem
@@ -191,7 +191,7 @@ export function ColorSourcePicker({
         {/* ── Var tab ── */}
         {tab === "var" && (
           <>
-            {/* Server-side search — disable cmdk's own filtering */}
+            {/* Server-side search: disable cmdk's own filtering */}
             <Command shouldFilter={false}>
               <CommandInput value={varQuery} onValueChange={setVarQuery} placeholder="Search var…" />
               <CommandList>
@@ -214,7 +214,7 @@ export function ColorSourcePicker({
               </CommandList>
             </Command>
 
-            {/* Layer chips — always shown; clicking re-materializes if a var is active */}
+            {/* Layer chips: always shown; clicking re-materializes if a var is active */}
             <div className="flex flex-wrap gap-1 border-border border-t p-2">
               {layers.map((layer) => (
                 <button

@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { HoverTip } from "./hover-tip";
 
 /**
- * IconButton — standalone icon-only chrome control with a required tooltip.
+ * IconButton: standalone icon-only chrome control with a required tooltip.
  *
  * Use for general chrome (panels, headers, future toolbars) needing a single
  * tooltipped icon button. NOT for:
@@ -17,7 +17,7 @@ import { HoverTip } from "./hover-tip";
  *    directly, keeping HoverTip + ToggleGroupItem composition caller-side).
  *
  * Shares `iconButtonVariants` with those callers so the icon-button look has
- * one source. Enforces the tooltip via required `label` + `description` —
+ * one source. Enforces the tooltip via required `label` + `description` :
  * icon-only controls without an accessible name fail a11y. `pressed` mirrors
  * aria-pressed for toggle semantics.
  */
@@ -45,7 +45,7 @@ const iconButtonVariants = cva(
 
 type IconButtonProps = Omit<React.ComponentPropsWithoutRef<"button">, "children"> &
   VariantProps<typeof iconButtonVariants> & {
-    /** Icon element — single svg or similar. */
+    /** Icon element: single svg or similar. */
     children: React.ReactNode;
     /** Bold label shown in the tooltip. */
     label: string;

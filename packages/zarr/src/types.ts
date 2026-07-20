@@ -109,7 +109,7 @@ export type ColumnData =
   | NullableArray;
 
 /**
- * Column-oriented DataFrame shape — the natural output of `readDataFrame`.
+ * Column-oriented DataFrame shape: the natural output of `readDataFrame`.
  *
  * `LazyDataFrame` from `./data-frame.ts` wraps this with a stable
  * indexed-access surface for most consumers.
@@ -122,7 +122,7 @@ export interface AnnDataFrame extends Iterable<Record<string, Scalar | null>> {
   [Symbol.iterator](): Iterator<Record<string, Scalar | null>>;
 }
 
-// ─── ParsedStore — discriminated result of open() ───────────────────────────
+// ─── ParsedStore: discriminated result of open() ───────────────────────────
 
 /** Opaque zarrita Group handle. Parsers hold it; public classes don't expose it. */
 export type ZarrGroupHandle = unknown;

@@ -1,9 +1,9 @@
 /**
- * NdWireEdge — the typed wire. Geometry from wire-geometry (horizontal
+ * NdWireEdge: the typed wire. Geometry from wire-geometry (horizontal
  * tangents, ctrl offset max(|dx|·0.45, 24)); styling by port kind:
- *   pred  — solid periwinkle; cooking = dash 7 7 flowing; dirty source = amber 50%
- *   sel   — amber dash 2 10, round caps, pushing
- *   focus — sky dash 1 6, pushing
+ *   pred : solid periwinkle; cooking = dash 7 7 flowing; dirty source = amber 50%
+ *   sel  : amber dash 2 10, round caps, pushing
+ *   focus: sky dash 1 6, pushing
  * Click selects (11px invisible hit path via interactionWidth); a ✕ chip at
  * the midpoint disconnects.
  */

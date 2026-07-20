@@ -3,7 +3,7 @@
  *
  * Real POSIX `flock(2)` would be nicer but isn't available from userland JS
  * on every platform. Instead we use the portable "exclusive O_CREAT lockfile"
- * pattern: write a PID file with `wx` flags — the open fails if the file
+ * pattern: write a PID file with `wx` flags: the open fails if the file
  * already exists. Stale-PID detection covers the `SIGKILL` crash path.
  */
 
@@ -23,7 +23,7 @@ export interface Lock {
 export async function acquireLock(path: string): Promise<Lock> {
   mkdirSync(dirname(path), { recursive: true });
 
-  // Stale-lock detection — if a PID file is present but its owner is dead,
+  // Stale-lock detection: if a PID file is present but its owner is dead,
   // reclaim it. We use `kill -0` semantics (signal 0) to check liveness.
   if (existsSync(path)) {
     try {
@@ -31,11 +31,11 @@ export async function acquireLock(path: string): Promise<Lock> {
       if (Number.isFinite(existingPid) && existingPid > 0 && isProcessAlive(existingPid)) {
         throw new Error(`install/update lock held by PID ${existingPid} (${path})`);
       }
-      // Stale — remove and proceed.
+      // Stale: remove and proceed.
       await rm(path, { force: true });
     } catch (err) {
       if (err instanceof Error && /lock held/.test(err.message)) throw err;
-      // Unreadable PID file — try to reclaim.
+      // Unreadable PID file: try to reclaim.
       await rm(path, { force: true }).catch(() => {});
     }
   }
@@ -44,7 +44,7 @@ export async function acquireLock(path: string): Promise<Lock> {
   try {
     await writeFile(path, `${process.pid}\n`, { flag: "wx" });
   } catch (err) {
-    // Race with another acquirer — treat as held.
+    // Race with another acquirer: treat as held.
     throw new Error(`install/update lock acquisition failed at ${path}: ${errMsg(err)}`, { cause: err });
   }
 

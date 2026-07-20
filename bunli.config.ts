@@ -1,10 +1,10 @@
 /**
- * bunli.config.ts — configuration for the bunli toolchain.
+ * bunli.config.ts: configuration for the bunli toolchain.
  *
  * We do NOT use `bunli build` for releases (our pipeline goes through
  * apps/ndea/scripts/build.ts + GitHub Actions to handle frontend asset embedding
  * + per-platform native compile). This config exists for `bunli generate`,
- * which produces `.bunli/commands.gen.ts` — the command-tree metadata
+ * which produces `.bunli/commands.gen.ts`: the command-tree metadata
  * consumed by `@bunli/plugin-completions` to render shell completions.
  *
  * Run after every command-surface change:
@@ -17,7 +17,7 @@
 
 import { defineConfig, type BunliConfigInput } from "@bunli/core";
 
-// `version` deliberately omitted — bunli reads it for `bunli release` /
+// `version` deliberately omitted: bunli reads it for `bunli release` /
 // `bunli build`, neither of which we use (release is GitHub Actions +
 // the app builder). The user-visible `ndea --version` reads from
 // `apps/ndea/src/cli/version.ts`, which the app's sync-version task keeps in

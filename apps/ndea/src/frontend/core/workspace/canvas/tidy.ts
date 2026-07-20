@@ -1,7 +1,7 @@
 /**
  * Sugiyama-lite auto-layout for the node-workspace canvas.
  *
- * Ported from the design prototype (`proto-app.jsx` — `tidy()`). Pure module:
+ * Ported from the design prototype (`proto-app.jsx`: `tidy()`). Pure module:
  * no React, no DOM.
  *
  * Algorithm:
@@ -106,7 +106,7 @@ export function tidyLayout(
     const layer = layers.get(d) ?? [];
     // Barycenter of incoming nodes' (new, else current) y; roots fall
     // back to their current y. Longest-path layering admits no same-layer
-    // edges, so every parent is already placed — precomputing is safe.
+    // edges, so every parent is already placed: precomputing is safe.
     const bary = new Map<string, number>();
     for (const id of layer) {
       const ins = incoming.get(id);

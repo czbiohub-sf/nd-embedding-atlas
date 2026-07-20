@@ -1,4 +1,4 @@
-/** obs — the root source node (the whole atlas.obs table; no predicate). */
+/** obs: the root source node (the whole atlas.obs table; no predicate). */
 
 import { defineNode, exactNodeTypeRef } from "@ndea/sdk";
 

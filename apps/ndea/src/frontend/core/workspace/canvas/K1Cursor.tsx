@@ -1,10 +1,10 @@
 /**
- * K1 — the morphing-dot cursor (canvas-only). A 4px dot in travel; on or
- * within 16px of a port the dot itself becomes the port's kind glyph —
+ * K1: the morphing-dot cursor (canvas-only). A 4px dot in travel; on or
+ * within 16px of a port the dot itself becomes the port's kind glyph :
  * color leads (70ms), shape follows (60ms delay) so it never expands
  * gray. During a wire drag it rides as a 9px kind-colored ring with an
  * emerald legality glow over legal in-ports. Hidden over UI and claimed
- * bodies. Positioning is rAF-lerped (no gsap — C11).
+ * bodies. Positioning is rAF-lerped (no gsap: C11).
  */
 
 import { useConnection, useReactFlow } from "@xyflow/react";
@@ -15,7 +15,7 @@ import { ND_Z } from "../constants";
 import { useWorkspace, useWorkspaceSelector } from "../workspace-context";
 import { portPos } from "./port-positions";
 
-const LERP = 0.55; // per-frame catch-up — snappy but smooth
+const LERP = 0.55; // per-frame catch-up: snappy but smooth
 
 export function K1Cursor({ paneRef }: { paneRef: React.RefObject<HTMLDivElement | null> }) {
   const ws = useWorkspace();
@@ -139,7 +139,7 @@ export function K1Cursor({ paneRef }: { paneRef: React.RefObject<HTMLDivElement 
     };
   }, [paneRef, rf, ws]);
 
-  // claimed bodies own the pointer — the dot yields (hidden via onMove; the
+  // claimed bodies own the pointer: the dot yields (hidden via onMove; the
   // span must STAY mounted or the effect's element reference detaches)
   void claimed;
   void graphPath; // level changes re-evaluate the port index closure

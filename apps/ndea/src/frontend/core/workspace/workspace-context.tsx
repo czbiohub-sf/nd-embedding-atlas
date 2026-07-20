@@ -1,5 +1,5 @@
 /**
- * WorkspaceProvider — owns ONE Workspace (graph document + engine) per
+ * WorkspaceProvider: owns ONE Workspace (graph document + engine) per
  * dataset session. Created once; disposed on unmount.
  */
 
@@ -49,7 +49,7 @@ const WorkspacePersistenceContext = createContext<WorkspacePersistenceState>({
   errors: [],
 });
 
-/** Debounce window for autosave — collapses a drag/edit burst into one write. */
+/** Debounce window for autosave: collapses a drag/edit burst into one write. */
 const AUTOSAVE_MS = 500;
 
 export function initializeWorkspaceDocument(
@@ -197,7 +197,7 @@ export function WorkspaceProvider({
   );
 
   // Autosave: persist the document on any store change, debounced. The store is
-  // the topology/presentation authority — engine-only runtime (lassoes, cache
+  // the topology/presentation authority: engine-only runtime (lassoes, cache
   // pins) is intentionally not persisted; the doc round-trips and re-cooks.
   useEffect(() => {
     // Editor-disabled sessions persist nothing; the preset is authoritative.

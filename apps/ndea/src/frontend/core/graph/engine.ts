@@ -1,5 +1,5 @@
 /**
- * GraphEngine — the node-graph evaluation core.
+ * GraphEngine: the node-graph evaluation core.
  *
  * Implements the **hybrid push-dirty / pull-cook** model that Houdini, Blender
  * geometry-nodes, and TouchDesigner all converge on:
@@ -8,20 +8,20 @@
  *           transitively-downstream node dirty, and aborts the prior epoch's
  *           signal (so a superseded async cook can cancel).
  *   - PULL  `pull(id, ctx)` walks UPSTREAM and cooks on demand. A *clean* node
- *           (`!dirty` with a valid cache) HALTS the walk and returns its cache —
+ *           (`!dirty` with a valid cache) HALTS the walk and returns its cache :
  *           the Houdini "clean node is a cache boundary" rule.
  *   - EMIT  `emit(id, port, value)` records an **authored** output on a source
- *           port — the push half of push/pull unified into one value model. A
+ *           port: the push half of push/pull unified into one value model. A
  *           derived output exists because a cook computed it; an emission
  *           exists because the user acted (a lasso, a row focus). Edges whose
  *           `(from, fromPort)` carries an emission read it directly; everything
- *           downstream is dirtied (the source itself is NOT — its derived
+ *           downstream is dirtied (the source itself is NOT: its derived
  *           output didn't change) and ordinary pull delivery does the rest.
  *   - DEDUP a per-sweep `visited` set (Houdini's `markVisitPass`) cooks a shared
  *           upstream node once per flush even in a diamond, and guards against
  *           re-entry if a cook is ever made async.
  *   - FAN-IN a port with >1 incoming edge hands its cook the RAW value array in
- *           edge-insertion order — composition (AND/OR/diff/latest-wins) is the
+ *           edge-insertion order: composition (AND/OR/diff/latest-wins) is the
  *           cook's decision, not the engine's. `andPreds` is the exported
  *           helper for the common predicate case.
  *   - LAZY  only *registered* sinks (mounted, display-active views) are pulled
@@ -29,7 +29,7 @@
  *           never cooked.
  *
  * The engine is value-generic (`GraphEngine<V>`) and framework-agnostic: no
- * React, no Mosaic, no xyflow, and no knowledge of port *kinds* — typing is a
+ * React, no Mosaic, no xyflow, and no knowledge of port *kinds*: typing is a
  * descriptor/canvas concern. The workspace instantiates it with a tagged
  * value union (pred/sel/focus) and kind-aware cooks.
  */
@@ -58,7 +58,7 @@ export interface GraphEvaluationEdge {
    *  exists, else the source's derived (cooked) output. Default: "out". */
   fromPort?: string;
   to: string;
-  /** Target input-port id — edges sharing a `toPort` fan in together. */
+  /** Target input-port id: edges sharing a `toPort` fan in together. */
   toPort: string;
 }
 
@@ -66,27 +66,27 @@ export interface GraphEvaluationEdge {
 export type GraphSinkListener<V> = (value: V) => void;
 
 /**
- * Cook-telemetry event — feeds node LEDs (clean/dirty/cooking), cooking-dash
+ * Cook-telemetry event: feeds node LEDs (clean/dirty/cooking), cooking-dash
  * animation, per-node cook milliseconds, and the status bar.
  *
- *   - `dirty`      — the node flipped clean → dirty in a `markDirty` cascade
+ *   - `dirty`     : the node flipped clean → dirty in a `markDirty` cascade
  *                    (emitted once per node per cascade).
- *   - `cook-start` — the node's `cook` fn is about to run (cache hits emit
+ *   - `cook-start`: the node's `cook` fn is about to run (cache hits emit
  *                    nothing).
- *   - `cook-end`   — the node's `cook` fn returned; `ms` is the duration of
+ *   - `cook-end`  : the node's `cook` fn returned; `ms` is the duration of
  *                    THIS node's cook fn only, not its upstream recursion.
- *   - `emit`       — an authored value landed on `(node, port)`; downstream
+ *   - `emit`      : an authored value landed on `(node, port)`; downstream
  *                    was dirtied, the node itself stays clean.
- *   - `flush`      — a flush completed: every registered sink delivered, the
+ *   - `flush`     : a flush completed: every registered sink delivered, the
  *                    cooked graph is settled at `epoch`. node is "*" (whole
  *                    graph). The post-flush read signal (e.g. batched counts).
  */
 export interface GraphEvaluationTelemetryEvent {
   node: string;
   type: "dirty" | "cook-start" | "cook-end" | "emit" | "flush";
-  /** cook-end only — `performance.now()` delta of the cook fn. */
+  /** cook-end only: `performance.now()` delta of the cook fn. */
   ms?: number;
-  /** emit only — the source port carrying the authored value. */
+  /** emit only: the source port carrying the authored value. */
   port?: string;
   /** Engine epoch at emission. */
   epoch: number;
@@ -159,7 +159,7 @@ export class GraphEngine<V = Predicate> {
       });
   }
 
-  /** Monotonic graph epoch — exposed for staleness checks / debugging. */
+  /** Monotonic graph epoch: exposed for staleness checks / debugging. */
   get epoch(): number {
     return this.epochCounter;
   }
@@ -188,7 +188,7 @@ export class GraphEngine<V = Predicate> {
   }
 
   /**
-   * Non-mutating connect check — `connect` would succeed. Exposed so the canvas
+   * Non-mutating connect check: `connect` would succeed. Exposed so the canvas
    * can gate `isValidConnection` (live drag feedback) on the same DAG rule.
    */
   canConnect(edge: Pick<GraphEvaluationEdge, "from" | "to">): boolean {
@@ -200,7 +200,7 @@ export class GraphEngine<V = Predicate> {
 
   /**
    * Add an edge. Rejects (returns `false`, no mutation) if either endpoint is
-   * unknown or if the edge would close a cycle — DAG-only. On success the
+   * unknown or if the edge would close a cycle: DAG-only. On success the
    * target is dirtied.
    */
   connect(edge: GraphEvaluationEdge): boolean {
@@ -279,7 +279,7 @@ export class GraphEngine<V = Predicate> {
   // ── Push: authored emissions ────────────────────────────────────────────────
 
   /**
-   * Record an authored value on a source port (a lasso, a row focus — values
+   * Record an authored value on a source port (a lasso, a row focus: values
    * that exist because the user acted, not because a cook derived them).
    * Edges from `(id, port)` deliver this value; the node itself stays clean
    * (its derived output didn't change), but everything downstream of those
@@ -331,7 +331,7 @@ export class GraphEngine<V = Predicate> {
     for (const [id, listener] of this.sinks) {
       listener(this.pullInternal(id, ctx, visited));
     }
-    // the graph is settled — post-flush readers (batched counts) key off this
+    // the graph is settled: post-flush readers (batched counts) key off this
     this.emitTelemetry({ node: "*", type: "flush", epoch: this.epochCounter });
   }
 
@@ -363,7 +363,7 @@ export class GraphEngine<V = Predicate> {
 
     visited.add(id);
 
-    // Resolve inputs grouped by target port — RAW arrays, edge-insertion order.
+    // Resolve inputs grouped by target port: RAW arrays, edge-insertion order.
     // An edge whose (from, fromPort) carries an emission reads the authored
     // value; otherwise it pulls the source's derived output.
     const inputs = new Map<string, V[]>();

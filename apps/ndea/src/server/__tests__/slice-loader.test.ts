@@ -1,5 +1,5 @@
 /**
- * ObsmSliceLoader — lazy column-wise obsm reader.
+ * ObsmSliceLoader: lazy column-wise obsm reader.
  *
  * Tests use the shared `annotations.zarr` fixture (if present) and a
  * hand-built mock handle covering the multi-dataset concat path.
@@ -15,7 +15,32 @@ import { ObsmSliceLoader } from "../slice-loader.ts";
 const FIXTURE = path.resolve(import.meta.dir, "../../../../../../ome-atlas-test-data/annotations.zarr");
 const HAS_FIXTURE = existsSync(FIXTURE);
 
-describe("ObsmSliceLoader — zarr fixture", () => {
+/** Minimal DatasetHandle stub that returns synthetic columns. */
+function makeStub(nObs: number, width: number, baseValue: number): DatasetHandle {
+  return {
+    kind: "anndata",
+    nObs,
+    obs: { length: nObs } as never,
+    var: { length: 0 } as never,
+    listObsmKeys: () => Promise.resolve(["X_mock"]),
+    getObsm: () => {
+      const data = new Float32Array(nObs * width);
+      for (let i = 0; i < nObs; i++) {
+        for (let c = 0; c < width; c++) data[i * width + c] = baseValue + c * 100 + i;
+      }
+      return Promise.resolve({ data, shape: [nObs, width] });
+    },
+    getObsmShape: () => Promise.resolve([nObs, width] as const),
+    getObsmColumn: (_key: string, colIndex: number) => {
+      const col = new Float32Array(nObs);
+      for (let i = 0; i < nObs; i++) col[i] = baseValue + colIndex * 100 + i;
+      return Promise.resolve(col);
+    },
+    toDuckDB: () => Promise.reject(new Error("not used")),
+  } as unknown as DatasetHandle;
+}
+
+describe("ObsmSliceLoader: zarr fixture", () => {
   test("detectWidth reads zarr metadata only (no data fetch)", async () => {
     if (!HAS_FIXTURE) return;
     const adata = await openAnnData(FIXTURE);
@@ -41,7 +66,7 @@ describe("ObsmSliceLoader — zarr fixture", () => {
     for (let i = 0; i < nRows; i++) expected[i] = (full.data as Float32Array | Float64Array)[i * nCols];
 
     // Tolerant equality: the getObsm path returns the native dtype (often
-    // f64), loadColumn returns f32 — compare with small epsilon.
+    // f64), loadColumn returns f32: compare with small epsilon.
     for (let i = 0; i < nRows; i++) {
       expect(Math.abs(col0[i] - expected[i])).toBeLessThan(1e-4);
     }
@@ -57,7 +82,7 @@ describe("ObsmSliceLoader — zarr fixture", () => {
     );
     const first = await loader.loadColumn(0);
     const second = await loader.loadColumn(0);
-    expect(second).toBe(first); // referential equality — no re-read
+    expect(second).toBe(first); // referential equality: no re-read
   });
 
   test("loadColumn rejects out-of-range colIndex", async () => {
@@ -96,35 +121,10 @@ describe("ObsmSliceLoader — zarr fixture", () => {
   });
 });
 
-describe("ObsmSliceLoader — multi-dataset concat", () => {
-  /** Minimal DatasetHandle stub that returns synthetic columns. */
-  function makeStub(_name: string, nObs: number, width: number, baseValue: number): DatasetHandle {
-    return {
-      kind: "anndata",
-      nObs,
-      obs: { length: nObs } as never,
-      var: { length: 0 } as never,
-      listObsmKeys: () => Promise.resolve(["X_mock"]),
-      getObsm: () => {
-        const data = new Float32Array(nObs * width);
-        for (let i = 0; i < nObs; i++) {
-          for (let c = 0; c < width; c++) data[i * width + c] = baseValue + c * 100 + i;
-        }
-        return Promise.resolve({ data, shape: [nObs, width] });
-      },
-      getObsmShape: () => Promise.resolve([nObs, width] as const),
-      getObsmColumn: (_key: string, colIndex: number) => {
-        const col = new Float32Array(nObs);
-        for (let i = 0; i < nObs; i++) col[i] = baseValue + colIndex * 100 + i;
-        return Promise.resolve(col);
-      },
-      toDuckDB: () => Promise.reject(new Error("not used")),
-    } as unknown as DatasetHandle;
-  }
-
+describe("ObsmSliceLoader: multi-dataset concat", () => {
   test("concatenates columns across two stub accessors in insertion order", async () => {
-    const a = makeStub("A", 3, 4, 1000);
-    const b = makeStub("B", 2, 4, 2000);
+    const a = makeStub(3, 4, 1000);
+    const b = makeStub(2, 4, 2000);
 
     const accessors: (readonly [string, DatasetHandle])[] = [
       ["A", a],

@@ -5,10 +5,13 @@ Interactive browser-based Node Workspace linking AI embeddings to source 5D
 
 ## Runtime and tooling
 
-- Use Bun for the runtime, package manager, tests, scripts, and compiled binary.
-  Do not use Node.js, npm, pnpm, Yarn, or Python.
-- Use Vite+ (`vp`) for formatting, linting, type checking, workspace tasks, and
-  the frontend dev server.
+- Use Vite+ (`vp`) as the only developer-facing command interface: dependency
+  management, package scripts, workspace tasks, checks, tests, builds, and the
+  frontend dev server all start with `vp`.
+- Bun remains the runtime, package manager, test runner, script host, and binary
+  compiler underneath Vite+. Package scripts and low-level tooling may invoke
+  Bun; developers should not invoke it directly. Do not use Node.js, npm, pnpm,
+  Yarn, or Python.
 - Import Vite and test APIs from `vite-plus` and `vite-plus/test`. Do not install
   Vite, Vitest, Oxlint, Oxfmt, or tsdown separately.
 - Run package scripts with `vp run <script>`. Bare commands such as `vp build`
@@ -87,13 +90,19 @@ entrypoints across workspaces.
 
 ```bash
 # Install
-bun install
+vp install
+
+# Audit root tooling and every workspace
+vp outdated
+vp outdated -r
+# Update workspace resolutions within declared ranges
+vp update -r
 
 # Full development stack: backend :5055, frontend :5173
 vp run dev /path/to/data.zarr
 
 # Run either half
-bun run apps/ndea/src/cli/index.ts view /path/to/data.zarr
+vp run backend /path/to/data.zarr
 vp dev apps/ndea
 
 # Root and workspace checks
@@ -113,9 +122,16 @@ vp run docs:dev
 vp run docs:serve
 ```
 
+Shared `catalog` constraints live in the root `package.json`; update each
+constraint there once, then run `vp install`. Update root-only tooling packages
+reported by `vp outdated` explicitly with `vp update <package...>` so Bun does
+not replace unrelated `catalog:` references with package-local ranges. Use
+`vp add --filter <workspace> <package>` and
+`vp remove --filter <workspace> <package>` for targeted workspace changes.
+
 `vp run build` delegates to the app's Bun build. Do not use bare `vp build`;
 that invokes Rolldown instead of the single-binary pipeline. Direct
-`bun build --compile` also fails on embedded font assets; use the project task.
+compiler invocation also fails on embedded font assets; use the project task.
 
 The node editor runs in development. Production builds compile it out and load
 the selected preset. Set `VITE_NDEA_NODE_EDITOR=true` only when testing an

@@ -22,6 +22,7 @@
 - Wire CLI startup to createApp, fix DuckDB ingestion
 - Metadata props.data schema, dev script, frontend scripts cleanup
 - _(frontend)_ Fall back to first available obsm key when none loaded
+- _(frontend)_ Format non-scalar table values without implicit object stringification
 - _(server)_ Return DuckDB BIGINTs as JS numbers when safe
 - _(frontend)_ Clear ExportDialog setInterval on unmount
 - _(frontend)_ Clear useVarColumn poll interval on unmount
@@ -29,9 +30,10 @@
 
 ### 🚜 Refactor
 
+- Route dependency management, tasks, checks, builds, and development through Vite+
 - Convert the product to a Bun/Vite+ monorepo with app, protocol, SDK, and Zarr workspaces
 - [**breaking**] Replace Python backend with Bun + TypeScript scaffold
-- _(scatter)_ Remove dead PiP branch — detach via FloatingScatterRoot only
+- _(scatter)_ Remove dead PiP branch; detach via FloatingScatterRoot only
 - _(server)_ Collapse prepare.ts into state.ts
 - _(scatter)_ UseQuery for category-column mapping
 - _(axial)_ Drop ~820 lines of dead WebSocket/worker-pool/streams scaffolding
@@ -44,7 +46,7 @@
 
 - _(frontend)_ Switch to bun, document API contract for server port
 - Drop unused deps + merge duplicate resolveFrontendDir
-- _(server)_ Review cleanup — try/catch dedup, colormap wire-up, Bun concat
+- _(server)_ Review cleanup: try/catch dedup, colormap wire-up, Bun concat
 
 ## [0.0.3] - 2026-04-09
 
@@ -74,7 +76,7 @@
 - Getting started
 - Learn to read: h5ad edition (#15)
 - Added exporting to anndata (#20)
-- Ndimg — FOV table, idetik viewer, channel controls (#17)
+- Ndimg: FOV table, idetik viewer, channel controls (#17)
 - Added colormaps (#38)
 
 ### 🐛 Bug Fixes

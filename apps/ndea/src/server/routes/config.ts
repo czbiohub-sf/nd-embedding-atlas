@@ -1,5 +1,5 @@
 /**
- * Config endpoint — GET /api/config
+ * Config endpoint: GET /api/config
  *
  * Returns viewer configuration (datasets, spatial columns, obs columns, embeddings).
  * The frontend may read all config from /data/metadata.json instead;

@@ -2,13 +2,13 @@
  * Ingest mode + file-backed ingest cache (I/O-scalability loop `perf/io-scalability`).
  *
  * The startup ingest path runs in one of three modes (env `NDEA_INGEST`):
- *   - `chunked` (default) — single-AnnData obs/var stream from the zarr source
+ *   - `chunked` (default): single-AnnData obs/var stream from the zarr source
  *     in row-windows (`ingestDataFrameChunked`); peak JS allocation is one
  *     batch, scale-invariant to 5-10M obs. Multi-dataset unions fall back to
  *     `stream` (chunked can't emit the `_dataset` discriminator column).
- *   - `stream` — `ingestDataFramesStreaming` (no intermediate Arrow table) for
+ *   - `stream`: `ingestDataFramesStreaming` (no intermediate Arrow table) for
  *     every dataset.
- *   - `eager` — the original `ingestDataFrames` (flechette Arrow Table) path,
+ *   - `eager`: the original `ingestDataFrames` (flechette Arrow Table) path,
  *     `:memory:`, no cache. The instant-revert escape hatch.
  *
  * Non-`eager` local ingests are file-backed and cached: base tables page to a
@@ -65,7 +65,7 @@ function sha256Hex(input: string): string {
  * Cheap staleness fingerprint of a zarr store: size+mtime of the schema-
  * defining metadata files, plus a content hash of the root group metadata so
  * an in-place schema rewrite that preserves size+mtime still misses. NOT a
- * full per-chunk content hash (that would defeat the skip-re-ingest goal — the
+ * full per-chunk content hash (that would defeat the skip-re-ingest goal: the
  * ingest pipeline is the documented wall). Stale-but-same-stat chunk edits are
  * the known gap; `NDEA_NO_INGEST_CACHE=1` is the escape hatch.
  */

@@ -18,7 +18,7 @@ interface Props {
 const TABLE = "dataset";
 
 export function DatasetSessionProvider({ children }: Props) {
-  // Infrastructure — created once.
+  // Infrastructure: created once.
   // socketConnector: one long-lived WS to /mosaic, no per-query HTTP handshake.
   // Fallback `/data/query` REST endpoint remains for tests and curl.
   const coordinator = useMemo(() => {
@@ -64,7 +64,7 @@ export function DatasetSessionProvider({ children }: Props) {
   // consumers use this mirror without conflating focus with render emphasis.
   const focusedRowIndex = useSelector(focusBus.store, (s) => s);
 
-  // Trajectory state — per-dataset, keyed by datasetKey (empty string for single-dataset mode)
+  // Trajectory state: per-dataset, keyed by datasetKey (empty string for single-dataset mode)
   const [trajectories, setTrajectoriesState] = useState<Record<string, TrajectoryData | null>>({});
 
   // Actions

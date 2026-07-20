@@ -1,5 +1,5 @@
 /**
- * Shared export helpers — one home for the export directory + filename
+ * Shared export helpers: one home for the export directory + filename
  * sanitiser shared by export and annotation paths.
  */
 
@@ -8,7 +8,7 @@ import { join, resolve } from "node:path";
 
 /**
  * Directory new exports are written to: `$NDEA_EXPORT_DIR`, else
- * `~/ndea-exports/`. Resolved (not created) — callers `mkdir -p` as needed.
+ * `~/ndea-exports/`. Resolved (not created): callers `mkdir -p` as needed.
  */
 export function exportDir(): string {
   const env = Bun.env["NDEA_EXPORT_DIR"];

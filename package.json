@@ -8,6 +8,7 @@
   "type": "module",
   "scripts": {
     "build": "bun run scripts/run-workspace-task.ts @ndea/app build",
+    "backend": "bun run apps/ndea/src/cli/index.ts view",
     "docs:build": "bun run --cwd docs build",
     "docs:dev": "bun run --cwd docs dev",
     "docs:serve": "bun run --cwd docs start",

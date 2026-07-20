@@ -1,8 +1,8 @@
 /**
- * Export endpoints — subset and write data.
+ * Export endpoints: subset and write data.
  *
- * POST /api/export                — Start async export
- * GET  /api/export/{task_id}/status — Poll export status
+ * POST /api/export               : Start async export
+ * GET  /api/export/{task_id}/status: Poll export status
  *
  * Writes the selection to a Parquet file via DuckDB's COPY TO.
  * Default output directory is $NDEA_EXPORT_DIR, else ~/ndea-exports/.
@@ -77,7 +77,7 @@ export function exportDir(): string {
  *
  * Returns the server's resolved default export directory plus a writable
  * probe. Frontend uses this to prefill the export dialog before any user
- * input — avoids hardcoding a path on the client.
+ * input: avoids hardcoding a path on the client.
  */
 export async function handleGetExportDir(): Promise<Response> {
   const path = exportDir();
@@ -124,7 +124,7 @@ export async function handleExport(req: Request, store: DatasetQuerySession): Pr
       return Response.json({ error: "No observations match the predicate" }, { status: 400 });
     }
 
-    // Resolve the output path — caller can override via output_path.
+    // Resolve the output path: caller can override via output_path.
     const baseDir = exportDir();
     let outputPath: string;
     if (body.output_path && body.output_path.trim().length > 0) {

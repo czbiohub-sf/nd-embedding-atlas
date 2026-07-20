@@ -21,7 +21,7 @@ interface CropViewerProps {
 }
 
 /**
- * Small readout of what the viewer is actually showing — fov · track · T —
+ * Small readout of what the viewer is actually showing: fov · track · T :
  * mirrors the gallery card label so the two can be compared at a glance.
  * Shares the ["obs", focusedRowIndex] query with SingleCropViewer.
  */

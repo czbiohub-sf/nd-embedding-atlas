@@ -1,0 +1,57 @@
+---
+title: Prepare MuData
+description: The supported axis-zero MuData layout and modality rules.
+---
+
+nd-embedding-atlas supports a constrained MuData layout for modalities that share the same observations.
+
+## Root contract
+
+The root attributes must include:
+
+```json
+{
+  "encoding-type": "MuData",
+  "encoding-version": "0.1.0",
+  "axis": 0
+}
+```
+
+Only `axis: 0` is supported. Other axis modes stop loading with an explicit compatibility error.
+
+The reader expects:
+
+```text
+store.zarr/
+├── obs/                 # shared observation dataframe
+├── var/                 # root variable dataframe, when present
+├── mod/
+│   ├── rna/             # complete AnnData group
+│   └── protein/         # complete AnnData group
+├── obsmap/<modality>    # observation mapping arrays
+└── varmap/<modality>    # variable mapping arrays, when present
+```
+
+Each group under `mod/` must identify itself with `encoding-type: anndata`. Entries that do not are ignored.
+
+## Observation alignment
+
+The supported model is one-to-one observation alignment. Every modality must refer to the same logical observations as the root `obs` table. Do not rely on missing, duplicated, or many-to-one observation mappings.
+
+The root `obs` table drives shared filtering and row identity. Modality-specific `obs` columns remain available under their modality. Embeddings are grouped by modality in the Scatter controls.
+
+## Variables and layers
+
+Each modality can provide its own `var`, `X`, `layers`, and `obsm` data through its nested AnnData group. Variable searches and values are modality-specific. Keep the modality matrix dimensions aligned with that modality's observation and variable frames.
+
+## Preparation checklist
+
+- root `encoding-type` is exactly `MuData`;
+- root `axis` is `0`;
+- root `obs` exists and has a stable index;
+- every used `mod/<name>` is a valid AnnData group;
+- modality observations map one-to-one to root observations;
+- each modality embedding is dense, rank 2, and row-aligned;
+- spatial linkage columns are available in the shared observations when an OME-Zarr plate is mounted.
+
+If the modalities do not share observations one-to-one, export the modality you need as standalone AnnData or construct a new axis-zero MuData store with an explicit shared observation index.

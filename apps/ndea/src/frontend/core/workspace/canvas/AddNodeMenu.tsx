@@ -1,5 +1,5 @@
 /**
- * AddNodeMenu — the Tab / right-click node palette, built on the shadcn
+ * AddNodeMenu: the Tab / right-click node palette, built on the shadcn
  * (Base UI) ContextMenu. Driven CONTROLLED: the canvas owns open state via
  * ReactFlow's pane-gated `onPaneContextMenu` + the Tab key, and anchors the
  * menu to a virtual element at the cursor. Click (or Enter) spawns the node at
@@ -29,7 +29,7 @@ import type { AppNodeDescriptor } from "@/core/node/library";
 import { useWorkspace } from "../workspace-context";
 import type { WorkspaceNodePosition } from "../types";
 
-/** menu invocation — pointer (for the anchor) + spawn point in world coords */
+/** menu invocation: pointer (for the anchor) + spawn point in world coords */
 export interface AddMenuState {
   clientX: number;
   clientY: number;
@@ -100,7 +100,7 @@ export function AddNodeMenu({ menu, onClose }: { menu: AddMenuState | null; onCl
       }}
     >
       <ContextMenuContent anchor={anchor} align="start" side="right" className="w-56">
-        {/* header — plain row, NOT a ContextMenuLabel (GroupLabel must live inside a Group) */}
+        {/* header: plain row, NOT a ContextMenuLabel (GroupLabel must live inside a Group) */}
         <div className="flex items-center justify-between px-2 py-1.5">
           <NdHud size={9}>add node</NdHud>
           <span className="font-mono text-[8.5px] text-text-muted">tab · right-click</span>

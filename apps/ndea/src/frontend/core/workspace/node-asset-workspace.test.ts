@@ -28,10 +28,10 @@ function workspace(nodeAssets?: NodeAssetLibrary, nodeAssetStorage?: NodeAssetJs
 }
 
 beforeEach(() => {
-  globalThis.requestAnimationFrame = ((callback: FrameRequestCallback) => {
+  globalThis.requestAnimationFrame = (callback: FrameRequestCallback) => {
     callback(0);
     return 0;
-  }) as typeof requestAnimationFrame;
+  };
 });
 
 describe("Workspace node asset authoring", () => {

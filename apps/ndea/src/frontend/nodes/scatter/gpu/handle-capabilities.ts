@@ -1,5 +1,5 @@
 /**
- * GPU handle capability interfaces — composable named surfaces.
+ * GPU handle capability interfaces: composable named surfaces.
  *
  * Adding a new GPU method:
  * 1. Add it to the appropriate capability interface here

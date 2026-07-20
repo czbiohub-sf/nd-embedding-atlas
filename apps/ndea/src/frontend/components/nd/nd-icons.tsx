@@ -1,9 +1,9 @@
 /**
- * ND_ICONS — the shared icon registry for node-workspace header buttons.
+ * ND_ICONS: the shared icon registry for node-workspace header buttons.
  *
  * Every icon is drawn on a 10×10 grid. Font glyphs (⛶ ◎ ⚙ ⊞ …) carry
  * asymmetric ink in their em box and never center optically; geometric SVG
- * centers by construction. Add new icons HERE — never inline a glyph in a
+ * centers by construction. Add new icons HERE: never inline a glyph in a
  * button (spec: component-spec/Node Component Spec.html).
  */
 

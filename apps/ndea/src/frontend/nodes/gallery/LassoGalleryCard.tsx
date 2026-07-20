@@ -1,5 +1,5 @@
 /**
- * LassoGalleryCard — single crop card for the lasso gallery.
+ * LassoGalleryCard: single crop card for the lasso gallery.
  *
  * Mirrors TrackGalleryCard's visual language and per-crop fetch pattern,
  * but takes a flat LassoObs (rowIndex/fov/t/x/y) instead of a
@@ -22,12 +22,12 @@ export interface LassoGalleryCardProps {
 }
 
 export function LassoGalleryCard({ obs, channels, hash, enabled, isHighlighted, onClick }: LassoGalleryCardProps) {
-  // Crops route to the plate that owns this observation — `obs.datasetKey`
+  // Crops route to the plate that owns this observation: `obs.datasetKey`
   // comes from the `_dataset` column in obs_base (multi-dataset stores) and
   // is undefined for single-dataset stores (server falls back to mounts[0]).
   const datasetKey = obs.datasetKey;
 
-  // useGalleryCropQuery expects a TrajectoryFrame-shaped object — we pass
+  // useGalleryCropQuery expects a TrajectoryFrame-shaped object: we pass
   // through the fields it actually reads (t, rowIndex). spatial_x/y are
   // unused by the query (it reads cached obs coords) but typed as required.
   const frame = {

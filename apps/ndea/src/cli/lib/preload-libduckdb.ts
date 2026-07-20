@@ -10,7 +10,7 @@
 // going to disk.
 //
 // In dev (`bun run src/cli/index.ts`) the generated stub exports `null`
-// and this module is a no-op — the binding loads its sibling libduckdb
+// and this module is a no-op: the binding loads its sibling libduckdb
 // from node_modules/@duckdb/node-bindings-<plat>/ normally.
 
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
@@ -22,7 +22,7 @@ import { VERSION } from "../version.ts";
 
 if (LIBDUCKDB_EMBEDDED_PATH !== null) {
   const ext = process.platform === "darwin" ? "dylib" : process.platform === "linux" ? "so" : "dll";
-  // ~/.cache/ndea/<version>/libduckdb.<ext> — version-scoped so old
+  // ~/.cache/ndea/<version>/libduckdb.<ext>: version-scoped so old
   // copies don't leak across upgrades, persistent across OS tmp cleans.
   // Honours XDG_CACHE_HOME if set; falls back to ~/.cache.
   const cacheRoot = process.env.XDG_CACHE_HOME ?? resolve(homedir(), ".cache");
@@ -36,7 +36,7 @@ if (LIBDUCKDB_EMBEDDED_PATH !== null) {
     writeFileSync(dylibPath, await Bun.file(LIBDUCKDB_EMBEDDED_PATH).bytes());
   }
 
-  // Use bun:ffi's dlopen rather than process.dlopen — the latter walks
+  // Use bun:ffi's dlopen rather than process.dlopen: the latter walks
   // the loaded image for `napi_register_module_v1` and throws when the
   // dylib isn't a Node addon (which libduckdb isn't). bun:ffi's dlopen
   // calls the OS dlopen() directly and keeps the Library alive for the
@@ -46,10 +46,10 @@ if (LIBDUCKDB_EMBEDDED_PATH !== null) {
   // image by its install_name / SONAME. When duckdb.node is required
   // shortly after, its dependency on `@rpath/libduckdb.dylib` (macOS)
   // or `libduckdb.so` (Linux) resolves against the already-loaded
-  // image — rpath search never runs.
+  // image: rpath search never runs.
   //
   // bun:ffi requires at least one declared symbol; we pick a stable C
-  // symbol from the DuckDB C API. We never call it — declaring it is
+  // symbol from the DuckDB C API. We never call it: declaring it is
   // sufficient to keep the Library alive and the underlying image
   // loaded.
   dlopen(dylibPath, {
