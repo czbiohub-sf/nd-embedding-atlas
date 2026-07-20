@@ -22,6 +22,7 @@
 - Wire CLI startup to createApp, fix DuckDB ingestion
 - Metadata props.data schema, dev script, frontend scripts cleanup
 - _(frontend)_ Fall back to first available obsm key when none loaded
+- _(frontend)_ Format non-scalar table values without implicit object stringification
 - _(server)_ Return DuckDB BIGINTs as JS numbers when safe
 - _(frontend)_ Clear ExportDialog setInterval on unmount
 - _(frontend)_ Clear useVarColumn poll interval on unmount

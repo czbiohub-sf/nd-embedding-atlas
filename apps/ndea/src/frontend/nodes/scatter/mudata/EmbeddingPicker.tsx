@@ -25,9 +25,9 @@ export interface EmbeddingPickerProps {
   hideChevron?: boolean;
 }
 
-// ── Modality colors (shared with ModalityColorPicker) ────────────────────────
+// ── Modality colors ──────────────────────────────────────────────────────────
 
-export const MODALITY_COLORS: Record<string, string> = {
+const MODALITY_COLORS: Record<string, string> = {
   rna: "border-emerald-500/30 bg-emerald-500/15 text-emerald-400",
   dinov2: "border-violet-500/30 bg-violet-500/15 text-violet-400",
   protein: "border-amber-500/30 bg-amber-500/15 text-amber-400",

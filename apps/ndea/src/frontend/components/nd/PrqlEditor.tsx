@@ -13,7 +13,7 @@
 
 import { useEffect, useRef } from "react";
 // type-only: erased at build, so CodeMirror itself stays lazy (effect import)
-import type { Diagnostic } from "@codemirror/lint";
+import type { Diagnostic, setDiagnostics } from "@codemirror/lint";
 import type { EditorView } from "@codemirror/view";
 
 import type { PrqlError } from "@/nodes/utils/wrangle/prql";
@@ -34,7 +34,7 @@ export function PrqlEditor({ value, onChange, error, placeholder }: Props) {
   // imperative handles the effect fills in after the async CM import lands
   const api = useRef<{
     view: EditorView;
-    setDiagnostics: typeof import("@codemirror/lint").setDiagnostics;
+    setDiagnostics: typeof setDiagnostics;
   } | null>(null);
 
   // build the editor once

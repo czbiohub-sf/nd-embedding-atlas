@@ -14,7 +14,7 @@ import { useDocs } from "@/components/docs/docs-context";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ndIconButtonVariants } from "@/components/nd/nd-icon-button";
 import { NdIcon } from "@/components/nd/nd-icons";
-import { ND_PORT_KINDS, type NdPortKind } from "@/components/nd/nd-port";
+import { ND_PORT_KINDS } from "@/components/nd/nd-port";
 import { humanizedCapabilities } from "@/core/node/capability-docs";
 import { useWorkspace } from "@/core/workspace/workspace-context";
 import type { ExactNodeTypeRef, NodePort } from "@ndea/sdk";
