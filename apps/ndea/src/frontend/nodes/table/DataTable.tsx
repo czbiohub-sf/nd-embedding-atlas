@@ -42,7 +42,11 @@ function formatCellValue(value: unknown): string {
   }
   if (typeof value === "string") return value;
   if (typeof value === "boolean" || typeof value === "bigint") return String(value);
-  return JSON.stringify(value) ?? "";
+  try {
+    return JSON.stringify(value) ?? "";
+  } catch {
+    return String(value);
+  }
 }
 
 /** Estimate column width in px by sampling row content lengths. */
