@@ -8,7 +8,7 @@ nd-embedding-atlas runs locally with linked scatter plots, tables, filters, char
 
 > **Project status:** Active development. APIs, file-format support, and behaviour may change between releases.
 
-<img width="1466" height="1083" alt="nd-embedding-atlas showing linked data and image views" src="https://github.com/user-attachments/assets/9f70cbee-1853-445e-bb86-c9e5fdd143c1" />
+<img width="1466" alt="NDEA workspace with linked scatter, image, annotation, table, and gallery views" src="./assets/ndea-screenshot.png" />
 
 ## Quick start
 
