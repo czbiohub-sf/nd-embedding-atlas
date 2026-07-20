@@ -1,5 +1,5 @@
 /**
- * WorkspaceCanvas — the wiring canvas on xyflow. One node type
+ * WorkspaceCanvas: the wiring canvas on xyflow. One node type
  * (NdGraphNode), one edge type (NdWireEdge), the typed connection line,
  * dot-grid substrate (22px), Tab/right-click palette, Y-knife, minimap.
  *
@@ -112,7 +112,7 @@ function WorkspaceCanvasInner() {
   const claimed = useWorkspaceSelector((s) => s.claimed);
   const baseForm = useSelector(ws.ui, (u) => u.baseForm);
   const assetAuthoring = useSelector(ws.ui, (u) => u.assetAuthoring);
-  // Derived ONCE here (the DFS), then shared with every node via context — a
+  // Derived ONCE here (the DFS), then shared with every node via context: a
   // per-node call would re-run it N times. Recomputes only on topology change.
   const feedbackChannels = useFeedbackChannels();
 
@@ -169,7 +169,7 @@ function WorkspaceCanvasInner() {
     return () => clearTimeout(t);
   }, [graphPath, ws]);
 
-  // zoom → global render band (hysteresis) — only when zoom-semantic forms
+  // zoom → global render band (hysteresis): only when zoom-semantic forms
   // are opted in; by default every node holds its largest view and zoom is
   // pure navigation. Fresh form overrides clear on band change.
   const zoomForms = useSelector(ws.ui, (u) => u.zoomForms);
@@ -262,7 +262,7 @@ function WorkspaceCanvasInner() {
     [screenToFlowPosition],
   );
 
-  /* ── tidy (L) — Sugiyama-lite over the level, or just the marquee set ── */
+  /* ── tidy (L): Sugiyama-lite over the level, or just the marquee set ── */
   const tidy = useCallback(() => {
     const s = ws.store.state;
     const level = Object.values(s.nodes).filter((n) => (n.parent ?? null) === s.graphPath);
@@ -298,7 +298,7 @@ function WorkspaceCanvasInner() {
       const target = e.target as HTMLElement;
       if (target.closest("button, input, select, [data-nodrag]")) return;
       const w = screenToFlowPosition({ x: e.clientX, y: e.clientY });
-      // port proximity first — frame its node
+      // port proximity first: frame its node
       const zoom = rf.getZoom();
       let portNode: string | null = null;
       let best = 22 / zoom;
@@ -440,7 +440,7 @@ function WorkspaceCanvasInner() {
             nodeStrokeWidth={0}
           />
         </ReactFlow>
-        {/* canvas HUD — level breadcrumb (full canvas shows it; strip header carries its own) */}
+        {/* canvas HUD: level breadcrumb (full canvas shows it; strip header carries its own) */}
         {graphPath ? (
           <div className="absolute top-2 left-3 z-10 flex items-center gap-2">
             <NdHud size={9.5}>wiring</NdHud>
@@ -465,7 +465,7 @@ function WorkspaceCanvasInner() {
             </span>
           </div>
         ) : null}
-        {/* marquee action bar — tidy · collapse into subnet */}
+        {/* marquee action bar: tidy · collapse into subnet */}
         {selectedNodeIds.length > 1 ? (
           <div className="absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2 rounded-md border glass px-2.5 py-1.25 whitespace-nowrap">
             <span className="font-mono text-[9.5px] text-foreground">{selectedNodeIds.length} selected</span>

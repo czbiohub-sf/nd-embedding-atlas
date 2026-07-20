@@ -1,0 +1,57 @@
+---
+title: Launch ndea
+description: Open one dataset or a multi-dataset project and verify the first session.
+---
+
+## Open one dataset
+
+Pass an AnnData or supported MuData Zarr store to `view`:
+
+```bash
+ndea view path/to/data.zarr
+```
+
+The `view` subcommand is optional, so this is equivalent:
+
+```bash
+ndea path/to/data.zarr
+```
+
+ndea starts the local server on `http://localhost:5055` and asks the operating system to open its default browser. The interface requires Chrome or Edge. If another browser opens, copy the printed URL into Chrome or Edge. Use `--no-open` to open the URL yourself.
+
+## Open several datasets
+
+Pass several Zarr paths when they do not need image linkage or per-dataset channel settings:
+
+```bash
+ndea view experiment-a.zarr experiment-b.zarr
+```
+
+Use a YAML project when you need stable dataset names, mounted OME-Zarr plates, channel display settings, or a shared observation-column selection:
+
+```bash
+ndea view project.yaml
+```
+
+See [Project YAML](/project-config) for both accepted dataset syntaxes.
+
+## Limit loaded observation columns
+
+Large `obs` tables take longer to ingest. Keep only columns needed for filtering, colouring, annotation, and image linkage:
+
+```bash
+ndea view data.zarr --obs-columns cell_type,treatment,fov_name,t,x,y
+```
+
+Spatial columns required for image linkage are added automatically when detected.
+
+## Confirm the session
+
+A successful launch prints the number of loaded observations, variables, and embeddings, then the application URL. In the browser:
+
+1. confirm that the Scatter view lists the expected embedding;
+2. colour the scatter by an observation column;
+3. select points and confirm that linked table counts change;
+4. if a plate is mounted, focus a row and confirm that the Image Viewer loads its field of view.
+
+If a dataset opens but a particular view is empty, check [Supported formats](/supported-formats) and [Troubleshooting](/troubleshooting) before changing the source data.

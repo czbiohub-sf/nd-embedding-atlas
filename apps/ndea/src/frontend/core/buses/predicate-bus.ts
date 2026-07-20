@@ -78,7 +78,7 @@ export function createPredicateBus(): PredicateBus {
 
   const flush = (): void => {
     rafHandle = null;
-    if (!destination) return; // not yet attached — entries stay queued for attach
+    if (!destination) return; // not yet attached: entries stay queued for attach
     for (const id of dirty) {
       const clause = registry.get(id);
       if (clause) emit(clause);
@@ -126,7 +126,7 @@ export function createPredicateBus(): PredicateBus {
           // Defensive: the shim casts an arbitrary string to PredicateFacet, so
           // a runtime-invalid facet can reach here even though it is `never` to TS.
           const unknownFacet: string = facet;
-          console.warn(`[predicateBus] unknown facet '${unknownFacet}' — ignored`);
+          console.warn(`[predicateBus] unknown facet '${unknownFacet}': ignored`);
         }
       }
     },
@@ -174,5 +174,5 @@ export function createPredicateBus(): PredicateBus {
   };
 }
 
-/** Process-wide predicate bus — one composed crossfilter across the app. */
+/** Process-wide predicate bus: one composed crossfilter across the app. */
 export const predicateBus: PredicateBus = createPredicateBus();

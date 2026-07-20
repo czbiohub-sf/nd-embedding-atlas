@@ -8,7 +8,7 @@ interface ButtonGroupProps {
 }
 
 /**
- * ButtonGroup — segments related buttons into a single visual control.
+ * ButtonGroup: segments related buttons into a single visual control.
  *
  * Direct children lose their individual border-radius and duplicate borders
  * are collapsed, giving a segmented-control appearance. Works with <button>,

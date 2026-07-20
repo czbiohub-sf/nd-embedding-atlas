@@ -2,11 +2,11 @@
  * Frontend source of truth for colormap names + palette generation.
  *
  * Phase 8: replaces `/data/colormaps` + `/data/categorical-palette` backend
- * endpoints. Everything is synchronous — ochre's catalog is bundled, and
+ * endpoints. Everything is synchronous: ochre's catalog is bundled, and
  * palette generation is tens of µs even at n=256.
  *
  * Continuous colormaps: every linear colormap in ochre's catalog (all
- * sources — bids, colorbrewer, cmocean, cmasher, colorcet, crameri,
+ * sources: bids, colorbrewer, cmocean, cmasher, colorcet, crameri,
  * matplotlib, paraview, seaborn, etc.). ~300 names. Categorical is kept
  * curated since the picker UX shows all entries at once.
  */
@@ -47,8 +47,8 @@ import type { ColorMap, DiscreteColormap, LinearColormap } from "@/ochre/colorma
 
 // ─── Vendored d3 Tableau10 (refreshed tableau palette) ──────────────────────
 // Ochre's `tab10` maps to matplotlib-classic Category10 (`#1f77b4...`), but
-// d3-scale-chromatic's `schemeTableau10` — which our backend has been serving
-// for the name "tab10" — uses Tableau's refreshed palette (`#4e79a7...`).
+// d3-scale-chromatic's `schemeTableau10`: which our backend has been serving
+// for the name "tab10": uses Tableau's refreshed palette (`#4e79a7...`).
 // To preserve the exact colors users see today, we vendor the d3 hex array
 // under the name "tab10" and alias "Category10" to ochre's matplotlib-classic.
 const TABLEAU10_HEX: readonly string[] = [
@@ -110,7 +110,7 @@ export function pickDefaultCategoricalPalette(n: number): string {
 // sources are prefixed with the source name (e.g. `matplotlib:twilight`).
 
 const CONTINUOUS_SOURCES: (readonly [string, Record<string, unknown>])[] = [
-  // Ordered by preference — earlier sources win on name collision.
+  // Ordered by preference: earlier sources win on name collision.
   ["bids", bids],
   ["colorbrewer", colorbrewer],
   ["cmocean", cmocean],

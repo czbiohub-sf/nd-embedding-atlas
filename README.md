@@ -2,128 +2,93 @@
 
 [![CI][badge-ci]][link-ci] [![Release][badge-release]][link-release] [![Bun][badge-bun]][link-bun] [![License][badge-license]][link-license]
 
-An interactive browser-based Node Workspace that links high-dimensional AI embeddings to source 5D (TCZYX) image data for rapid exploration and annotation.
+Explore and annotate n-dimensional (`TCZYX`) microscopy images with precomputed embeddings. nd-embedding-atlas links embedding space to source images so researchers can review, select, and annotate examples for downstream model training. It does not train models or include model-training code.
 
-> **Project status:** This project is under active development and is not yet stable. APIs, file formats, and behavior may change without notice.
+nd-embedding-atlas runs locally with linked scatter plots, tables, filters, charts, image viewers, and annotation tools. Your data remains on your machine.
 
-## Install
+> **Project status:** Active development. APIs, file-format support, and behaviour may change between releases.
 
-> **Repo is private** — release assets and the install script are gated behind the
-> czbiohub-sf GitHub org. Every install / update command needs a token that can
-> read the repo. The simplest path uses [`gh`](https://cli.github.com) (the GitHub CLI)
-> which most internal users already have for code review.
-
-### 1. Install (recommended, internal)
-
-Authenticate `gh` once, then pipe the script + token in:
-
-```bash
-gh auth login   # one-time, if you haven't already
-
-gh api repos/czbiohub-sf/nd-embedding-atlas/contents/scripts/install.sh --jq '.content' \
-  | base64 -d \
-  | NDEA_GITHUB_TOKEN="$(gh auth token)" sh
-```
-
-Downloads a checksum-verified single binary (~185 MB) and drops an `ndea`
-symlink into `$HOME/.local/bin`. The binary embeds libduckdb; on first
-launch it extracts a copy to `~/.cache/ndea/<tag>/` and dlopens it before
-the DuckDB engine boots. One file per version under `~/.ndea/versions/<tag>/`.
-
-Pin a specific release with `NDEA_VERSION`:
-
-```bash
-gh api repos/czbiohub-sf/nd-embedding-atlas/contents/scripts/install.sh --jq '.content' \
-  | base64 -d \
-  | NDEA_VERSION=v0.1.0-beta.2 NDEA_GITHUB_TOKEN="$(gh auth token)" sh
-```
-
-Switch channel with `NDEA_CHANNEL`:
-
-```bash
-# pre-release (alpha / beta / rc) — most common for internal testers right now
-... | NDEA_CHANNEL=pre-release NDEA_GITHUB_TOKEN="$(gh auth token)" sh
-```
-
-Environment variables:
-
-| Variable            | Default            | Notes                                                                            |
-| ------------------- | ------------------ | -------------------------------------------------------------------------------- |
-| `NDEA_GITHUB_TOKEN` | _(required)_       | GitHub token with repo read scope. Use `$(gh auth token)` if `gh` is configured. |
-| `NDEA_VERSION`      | `latest`           | Release tag (e.g. `v0.1.0-beta.2`).                                              |
-| `NDEA_CHANNEL`      | `stable`           | `stable` or `pre-release` — see Channels below.                                  |
-| `NDEA_BIN_DIR`      | `$HOME/.local/bin` | Install destination.                                                             |
-
-**Channels:**
-
-- **`stable`** (default) — the latest tagged release (`v0.1.0`, `v0.2.0`, …). Hand-cut.
-- **`pre-release`** — latest active alpha / beta / release candidate (`v0.1.0-alpha.1`, `v0.1.0-beta.0`, `v0.1.0-rc.1`, …). Cut manually ahead of a stable release; what most internal testers track.
-
-### 2. Public install (for once the repo is public)
-
-```bash
-# These commands won't work today — kept here as the future canonical path.
-curl -fsSL https://raw.githubusercontent.com/czbiohub-sf/nd-embedding-atlas/main/scripts/install.sh | sh
-curl -fsSL .../install.sh | NDEA_VERSION=v0.1.0-beta.2 sh
-```
-
-### Update
-
-`ndea update` re-runs the same auth flow. Export the token in your shell rc so
-self-update + rollback don't need it on the command line:
-
-```bash
-# ~/.zshrc / ~/.bashrc
-export NDEA_GITHUB_TOKEN="$(gh auth token)"
-```
-
-```bash
-ndea update                       # latest stable
-ndea update --channel pre-release # latest alpha / beta / rc (when active)
-ndea rollback                     # restore the previous binary
-```
-
-### Shell completions
-
-```bash
-# bash / zsh — load on demand
-source <(ndea completions bash)
-source <(ndea completions zsh)
-
-# fish — drop into the completions dir
-ndea completions fish > ~/.config/fish/completions/ndea.fish
-```
-
-Updates download the new binary into a fresh `~/.ndea/versions/<tag>/` directory and atomically retarget the symlink via `rename(2)`. Long-running `ndea view` sessions keep their open file handle to the old binary — no mid-run replacement. Re-running the install command also works.
+<img width="1466" height="1083" alt="nd-embedding-atlas showing linked data and image views" src="https://github.com/user-attachments/assets/9f70cbee-1853-445e-bb86-c9e5fdd143c1" />
 
 ## Quick start
 
+Install the latest release on macOS with Apple silicon, or on Linux with `x64` or `arm64`:
+
 ```bash
-ndea path/to/data.zarr            # single AnnData store
-ndea a.zarr b.zarr c.zarr         # multiple AnnData stores
-ndea path/to/config.yaml          # multi-dataset config (pairs an HCS plate with each AnnData store for Image Viewer)
+curl -fsSL https://raw.githubusercontent.com/czbiohub-sf/nd-embedding-atlas/main/scripts/install.sh | sh
 ```
 
-Then open **Chrome or Edge** at `http://localhost:5055`.
+Launch an AnnData Zarr store:
 
-> **WebGPU required** — Chrome or Edge on a machine with a GPU. Firefox is not supported.
-> On HPC systems, see the [WebGPU setup guide][webgpu-hpc].
+```bash
+ndea view path/to/data.zarr
+```
+
+Open `http://localhost:5055` in Chrome or Edge. The scatter renderer requires WebGPU.
+
+For multiple datasets or linked OME-Zarr images, launch a project file:
+
+```bash
+ndea view project.yaml
+```
+
+```yaml
+settings:
+  port: 5055
+
+datasets:
+  - name: experiment-a
+    path: ./experiment-a.zarr
+    plate_path: ./experiment-a-images.zarr
+```
+
+See [Install][docs-install], [Launch ndea][docs-launch], and [Prepare data][docs-formats] for the complete workflow.
+
+## What it does
+
+- Links points in precomputed embedding space to their source images.
+- Supports image review, selection, and annotation for downstream model-training workflows.
+- Streams local AnnData, a supported MuData subset, and mounted OME-Zarr HCS images.
+- Uses DuckDB and Mosaic for server-side queries and cross-filtering.
+- Renders large scatter plots and selections with WebGPU.
+- Opens the fixed `annotate` preset with linked views for exploration and annotation.
+
+## Data compatibility
+
+nd-embedding-atlas implements specific parts of the upstream formats rather than every valid variant.
+
+| Input        | Current support                                                               |
+| ------------ | ----------------------------------------------------------------------------- |
+| AnnData Zarr | Primary tabular and embedding input; `obs` is required and `var` is optional  |
+| MuData Zarr  | `axis=0` stores with one-to-one observations across modalities                |
+| OME-Zarr     | Mounted HCS plates using OME-NGFF 0.4/Zarr v2 or 0.5/Zarr v3                  |
+| Project YAML | Multiple dataset mounts, image linkage, channel metadata, and launch settings |
+
+Read the [supported formats reference][docs-formats] before preparing production data.
+
+## Update and recover
+
+```bash
+ndea update                       # latest stable release
+ndea update --channel pre-release # latest active pre-release
+ndea rollback                     # return to the previous installed version
+ndea doctor                       # inspect installation health
+```
+
+The installer verifies the release checksum and stores versioned binaries under `~/.ndea/versions/`. See the [CLI reference][docs-cli] for channels, environment variables, completions, garbage collection, and exit codes.
 
 ## Documentation
 
-[Full documentation][docs-link]:
-
-- [Getting started][docs-index] — installation and first run
-- [CLI reference][docs-cli] — every subcommand and flag
-- [Preparing your data][docs-data] — OME-Zarr layout, sharding, pyramids
-- [WebGPU on HPC][webgpu-hpc] — Chrome flags for HPC systems
-- [Contributing][docs-contrib] — dev setup and contribution guide
+- [Install][docs-install]
+- [Launch ndea][docs-launch]
+- [Supported formats][docs-formats]
+- [CLI reference][docs-cli]
+- [WebGPU on HPC][webgpu-hpc]
+- [Contributing][docs-contrib]
 
 ## Development
 
-This repository is a Bun and Vite+ monorepo. `apps/ndea` owns the shipped
-product; `packages/protocol`, `packages/sdk`, and `packages/zarr` expose its
-internal package boundaries. `docs` remains an independent Waku app.
+This repository uses Bun and Vite+. The monorepo contains the application and shared packages; `docs/` is an independent Fumapress/Waku application.
 
 ```bash
 bun install
@@ -133,33 +98,21 @@ vp run -r test
 vp run build
 ```
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for focused package commands and
-documentation setup.
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for package-level commands and repository conventions.
 
-## What does the UI look like?
+## Community and security
 
-<img width="1466" height="1083" alt="image" src="https://github.com/user-attachments/assets/9f70cbee-1853-445e-bb86-c9e5fdd143c1" />
+Ask questions in [GitHub Discussions][discussions-link]. Report bugs and request features in the [issue tracker][issue-tracker]. Follow the [Code of Conduct](./CODE_OF_CONDUCT.md) when participating.
 
-## Contact
-
-For questions and help requests, reach out in the [discussions][discussions-link].
-For bugs or feature requests, use the [issue tracker][issue-tracker].
-
-## Code of Conduct
-
-This project follows the [Contributor Covenant Code of Conduct][code-of-conduct]. By participating, you are expected to uphold it. Report unacceptable behavior to [opensource@chanzuckerberg.com](mailto:opensource@chanzuckerberg.com).
-
-## Reporting Security Issues
-
-If you believe you have found a security vulnerability, please follow our [security policy](./SECURITY.md) and responsibly disclose it to [security@chanzuckerberg.com](mailto:security@chanzuckerberg.com).
+Report vulnerabilities privately according to [SECURITY.md](./SECURITY.md); do not open a public issue.
 
 ## Citation
 
-> t.b.a.
+Citation guidance will be published with the first stable research release.
 
-## Release notes
+## Licence
 
-See the [changelog][].
+nd-embedding-atlas is available under the [BSD 3-Clause licence][link-license]. See [LICENSE.md](./LICENSE.md).
 
 <!-- badges -->
 
@@ -172,15 +125,13 @@ See the [changelog][].
 [link-bun]: https://bun.com
 [link-license]: https://opensource.org/licenses/BSD-3-Clause
 
-<!-- links -->
+<!-- project links -->
 
 [issue-tracker]: https://github.com/czbiohub-sf/nd-embedding-atlas/issues
 [discussions-link]: https://github.com/czbiohub-sf/nd-embedding-atlas/discussions
-[code-of-conduct]: ./CODE_OF_CONDUCT.md
-[docs-link]: https://super-adventure-yv3eleq.pages.github.io/
-[docs-index]: https://super-adventure-yv3eleq.pages.github.io/
-[docs-cli]: https://super-adventure-yv3eleq.pages.github.io/cli/
-[docs-data]: https://super-adventure-yv3eleq.pages.github.io/preparing-your-data/
-[webgpu-hpc]: https://super-adventure-yv3eleq.pages.github.io/webgpu-hpc-setup/
-[docs-contrib]: https://super-adventure-yv3eleq.pages.github.io/contributing/
-[changelog]: CHANGELOG.md
+[docs-install]: https://czbiohub-sf.github.io/nd-embedding-atlas/install/
+[docs-launch]: https://czbiohub-sf.github.io/nd-embedding-atlas/launch/
+[docs-formats]: https://czbiohub-sf.github.io/nd-embedding-atlas/supported-formats/
+[docs-cli]: https://czbiohub-sf.github.io/nd-embedding-atlas/cli/
+[webgpu-hpc]: https://czbiohub-sf.github.io/nd-embedding-atlas/webgpu-hpc-setup/
+[docs-contrib]: https://czbiohub-sf.github.io/nd-embedding-atlas/contributing/

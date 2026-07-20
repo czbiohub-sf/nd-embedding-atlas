@@ -2,7 +2,7 @@
  * The host-sourced surface every chart variant shares (replaces the old
  * `useDashboard().meta` + `selectionBus` reads). Data comes from `host.data`;
  * the chart's query is scoped to `host.inputSelection` (passed straight to
- * `useMosaicClient`, which reacts to its in-place mutation via Mosaic — no React
+ * `useMosaicClient`, which reacts to its in-place mutation via Mosaic: no React
  * bridge needed). The plotted column lives in `host.config.field`.
  */
 

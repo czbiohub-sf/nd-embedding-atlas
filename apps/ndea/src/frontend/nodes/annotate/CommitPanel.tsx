@@ -1,12 +1,12 @@
 /**
- * CommitPanel — the "Write to .obs on disk" surface, folded into the Annotate node
+ * CommitPanel: the "Write to .obs on disk" surface, folded into the Annotate node
  * (rendered as an overlay over the body). Lists the dataset's staged annotation
  * columns, previews the write with a server dry-run, and commits only after an
  * explicit confirm. The write is full-column (NA for un-annotated obs) and
  * irreversible.
  *
  * "Which columns to commit" is server-side state grouped by dataset, not an edge
- * payload — so selection lives here. Union/all-remote logic is in `./commit-report`
+ * payload: so selection lives here. Union/all-remote logic is in `./commit-report`
  * so it stays unit-testable without a React DOM harness.
  */
 
@@ -163,7 +163,7 @@ export function CommitPanel({
                   key={r.datasetKey}
                   className="rounded border border-warning/30 bg-warning/10 p-1.5 text-2xs text-warning"
                 >
-                  <span className="font-medium">{r.path ?? r.datasetKey}</span> — {r.error}
+                  <span className="font-medium">{r.path ?? r.datasetKey}</span>: {r.error}
                 </div>
               ) : (
                 <div key={r.datasetKey} className="rounded border border-border-subtle p-1.5 text-2xs">
@@ -219,7 +219,7 @@ export function CommitPanel({
                 ? "writing…"
                 : summary.allBlocked
                   ? "nothing to write (all remote)"
-                  : `Confirm — write ${summary.columnsWritten} column${summary.columnsWritten === 1 ? "" : "s"}`}
+                  : `Confirm: write ${summary.columnsWritten} column${summary.columnsWritten === 1 ? "" : "s"}`}
             </Button>
             {phase !== "done" && (
               <Button

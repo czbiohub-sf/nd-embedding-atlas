@@ -1,8 +1,8 @@
 /**
- * `ndea gc` — prune old installed versions from `~/.ndea/versions/`.
+ * `ndea gc`: prune old installed versions from `~/.ndea/versions/`.
  *
  * The active version (whatever `$NDEA_BIN_DIR/ndea` symlinks at) is ALWAYS
- * preserved — gc resolves the symlink before pruning so the user can never
+ * preserved: gc resolves the symlink before pruning so the user can never
  * accidentally remove their working install.
  *
  * Default keeps `current + 1 previous` (enough for one rollback).
@@ -37,7 +37,7 @@ export default defineCommand({
 
     const root = versionsDir();
     if (!existsSync(root)) {
-      console.log("Nothing to prune — no versions installed yet.");
+      console.log("Nothing to prune: no versions installed yet.");
       return;
     }
 
@@ -57,7 +57,7 @@ export default defineCommand({
     try {
       const result = await pruneVersions({ root, activeAbs, keep: flags.all ? 1 : flags.keep });
       if (result.pruned.length === 0) {
-        console.log(`Nothing to prune — ${result.kept.length} version(s) currently installed, all kept.`);
+        console.log(`Nothing to prune: ${result.kept.length} version(s) currently installed, all kept.`);
         return;
       }
       for (const entry of result.pruned) {

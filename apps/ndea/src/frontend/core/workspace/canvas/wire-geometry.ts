@@ -1,8 +1,8 @@
 /**
  * Pure wire geometry for the node-workspace canvas.
  *
- * Ported from the design prototype (`proto-canvas.jsx` — `segInt`,
- * `sampleEdge`, `knifeCrossed`; `helpers.jsx` — `ndWire`). No React, no DOM.
+ * Ported from the design prototype (`proto-canvas.jsx`: `segInt`,
+ * `sampleEdge`, `knifeCrossed`; `helpers.jsx`: `ndWire`). No React, no DOM.
  *
  * A "wire" is a cubic bezier with horizontal tangents at both ends:
  *   P0 = (x1, y1)

@@ -1,5 +1,5 @@
 /**
- * table — plugin-backed view (the `table` descriptor renders the body). Cooks
+ * table: plugin-backed view (the `table` descriptor renders the body). Cooks
  * as a predicate pass-through; its row focus rides the push port (focus), delivered
  * downstream outside the cook. Out port is `focus` (table row → image viewer).
  */

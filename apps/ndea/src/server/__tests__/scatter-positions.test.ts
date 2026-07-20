@@ -1,5 +1,5 @@
 /**
- * /api/scatter-positions — Phase 0 regression: positions are served from
+ * /api/scatter-positions: Phase 0 regression: positions are served from
  * the ObsmSliceLoader, NOT from a DuckDB-registered embedding table.
  *
  * Uses the `annotations.zarr` fixture if present; skipped otherwise.
@@ -23,7 +23,7 @@ async function buildState(): Promise<{ state: ServerSession; server: Server; por
   const nObs = adata.nObs;
 
   // Minimal obs_base: row index + obs_name only. The positions route
-  // doesn't read from obs_base in Phase 0 — it goes straight to the loader.
+  // doesn't read from obs_base in Phase 0: it goes straight to the loader.
   const store = await DatasetQuerySession.fromInit(async (conn) => {
     const rows: string[] = [];
     for (let i = 0; i < nObs; i++) rows.push(`(${i}, 'obs_${i}')`);
@@ -68,7 +68,7 @@ async function buildState(): Promise<{ state: ServerSession; server: Server; por
   return { state, server, port };
 }
 
-describe("scatter-positions — Phase 0 bypass", () => {
+describe("scatter-positions: Phase 0 bypass", () => {
   let pending: Server | null = null;
 
   afterEach(() => {

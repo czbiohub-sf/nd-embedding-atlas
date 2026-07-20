@@ -1,5 +1,5 @@
 /**
- * GET /api/trajectory — server-side join of trajectory metadata + obsm
+ * GET /api/trajectory: server-side join of trajectory metadata + obsm
  * positions for a single (track_id, fov_name) pair.
  *
  * Why this exists (replaces client-side Mosaic SQL path):
@@ -15,7 +15,7 @@
  * Design:
  *   1. Small SQL query against the `dataset` VIEW for trajectory metadata
  *      (row index, t, spatial x/y, dataset, optional category).
- *   2. Two obsm column reads via `ObsmSliceLoader` — the same path
+ *   2. Two obsm column reads via `ObsmSliceLoader`: the same path
  *      `/api/scatter-positions` uses for the main scatter.
  *   3. Merge in JS by __row_index__ and emit JSON.
  *
@@ -32,12 +32,12 @@ import type { ServerSession } from "../state.ts";
  * Handle GET /api/trajectory
  *
  * Query params:
- *   track_id     — required int
- *   fov_name     — required string
- *   embedding    — required obsm key (e.g. X_phate)
- *   x_col, y_col — required obsm dim columns ending in _<dim>
- *   dataset      — optional dataset key (multi-dataset filter)
- *   category_col — optional numeric obs column to include as `category`
+ *   track_id    : required int
+ *   fov_name    : required string
+ *   embedding   : required obsm key (e.g. X_phate)
+ *   x_col, y_col: required obsm dim columns ending in _<dim>
+ *   dataset     : optional dataset key (multi-dataset filter)
+ *   category_col: optional numeric obs column to include as `category`
  */
 export async function handleTrajectory(url: URL, state: ServerSession, signal: AbortSignal): Promise<Response> {
   // ── Parse params ──────────────────────────────────────────────────────
@@ -77,7 +77,7 @@ export async function handleTrajectory(url: URL, state: ServerSession, signal: A
     );
   }
 
-  // Category column must be in the known obs column set — prevents arbitrary
+  // Category column must be in the known obs column set: prevents arbitrary
   // identifier injection into the SELECT clause below.
   if (categoryCol != null && !state.obsColumns.includes(categoryCol)) {
     return Response.json({ error: `Unknown category_col "${categoryCol}". Must be in obs columns.` }, { status: 400 });
@@ -107,7 +107,7 @@ export async function handleTrajectory(url: URL, state: ServerSession, signal: A
       return Response.json([]);
     }
 
-    // ── Obsm positions (via ObsmSliceLoader — shared with scatter-positions)
+    // ── Obsm positions (via ObsmSliceLoader: shared with scatter-positions)
     const loader = await getOrCreateObsmLoader(state, embedding);
     const [xs, ys] = await Promise.all([loader.loadColumn(xDim, signal), loader.loadColumn(yDim, signal)]);
 

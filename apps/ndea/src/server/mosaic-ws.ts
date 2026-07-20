@@ -8,7 +8,7 @@
  *   - `json`  → `JSON.stringify(rows)`
  *   - error   → `JSON.stringify({error: "..."})` text frame
  *
- * The connector has no request id and no multiplexing — strictly serial
+ * The connector has no request id and no multiplexing: strictly serial
  * request/response per socket. That matches Bun.serve WS cleanly.
  */
 

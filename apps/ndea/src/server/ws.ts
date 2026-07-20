@@ -15,7 +15,7 @@
  * task completes or the client sends an unsubscribe frame:
  *   { _id: <new>, _type: "unsubscribe", target_id: <sub_id> }
  *
- * All 6 migrated methods have 1:1 HTTP fallbacks — this layer is strictly
+ * All 6 migrated methods have 1:1 HTTP fallbacks: this layer is strictly
  * additive.
  */
 

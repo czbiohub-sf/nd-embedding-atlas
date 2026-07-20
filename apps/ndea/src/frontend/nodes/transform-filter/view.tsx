@@ -2,14 +2,14 @@
  * Threshold-filter transform plugin (node-graph tracer bullet).
  *
  * The first `kind: "transform"` plugin: a numeric threshold filter. It proves the
- * transform half of the plugin contract drives the GraphEngine — the engine cooks
+ * transform half of the plugin contract drives the GraphEngine: the engine cooks
  * this node by calling `recompute(inputs, ctx)`, which reads its column + threshold
  * from `host.config` and emits `upstream AND "col" > threshold` via
  * `host.publishPredicate`. The graph's transform-scoped host captures that publish
  * synchronously as the node's output predicate.
  *
- * `Component` is the param editor (the node body). It is xyflow-agnostic — the
- * canvas node wrapper supplies the Handles — so the same Component would mount
+ * `Component` is the param editor (the node body). It is xyflow-agnostic: the
+ * canvas node wrapper supplies the Handles: so the same Component would mount
  * docked / float / PiP, the contract's "one Component, four surfaces" promise.
  */
 
@@ -58,7 +58,7 @@ export function ThresholdFilterView({ host }: NodeBodyProps<ThresholdFilterConfi
             host.patchConfig({ column: next });
           }}
         >
-          <option value="">— select —</option>
+          <option value="">: select :</option>
           {numericColumns.map((c) => (
             <option key={c} value={c}>
               {c}

@@ -1,5 +1,5 @@
 /**
- * NdFormControls — form cycle + lock buttons (every node header carries them).
+ * NdFormControls: form cycle + lock buttons (every node header carries them).
  * Cycle sets a per-node form override; lock pins it against zoom changes.
  */
 
@@ -35,7 +35,7 @@ export function NdFormControls({
           icon={locked ? "lock" : "lock-open"}
           active={locked}
           compact={compact}
-          title={locked ? "form locked — click to follow zoom again" : "lock form against zoom"}
+          title={locked ? "form locked: click to follow zoom again" : "lock form against zoom"}
           onClick={onToggleLock}
         />
       ) : null}

@@ -5,8 +5,8 @@
  * monotonic `_id`s and the `NdeaProtocol` method map in `src/protocol/`.
  *
  * Features:
- *   - `call(method, req)` — single-shot request/response, Promise-based.
- *   - `subscribe(method, req, onData)` — long-lived push stream. Each data
+ *   - `call(method, req)`: single-shot request/response, Promise-based.
+ *   - `subscribe(method, req, onData)`: long-lived push stream. Each data
  *     frame fires `onData`; the terminal frame also fires `onData` then
  *     unsubscribes automatically.
  *   - Exponential backoff reconnect (200 ms → 5 s) with jitter.
@@ -16,7 +16,7 @@
  *   - Pending `call()` promises reject with `WsReconnectError`.
  *   - Active subscriptions receive an error via `onError` and are dropped.
  *     Callers are expected to re-establish subscriptions themselves on
- *     reconnect — keeps the client simple and leak-proof.
+ *     reconnect: keeps the client simple and leak-proof.
  */
 
 import type { NdeaProtocol } from "@ndea/protocol";
@@ -97,11 +97,11 @@ export class NdeaWsClient {
     const id = this.nextId++;
     return new Promise<ResOf<M>>((resolve, reject) => {
       this.pending.set(id, {
-        resolve: resolve as (v: unknown) => void,
+        resolve: resolve,
         reject,
         sentAt: performance.now(),
       });
-      this.sendFrame({ _id: id, _type: method as string, ...(req as Record<string, unknown>) });
+      this.sendFrame({ _id: id, _type: method, ...(req as Record<string, unknown>) });
     });
   }
 
@@ -118,12 +118,12 @@ export class NdeaWsClient {
   ): { unsubscribe: () => void } {
     const id = this.nextId++;
     this.subs.set(id, {
-      onData: onData as (v: unknown) => void,
+      onData: onData,
       onError,
     });
     this.sendFrame({
       _id: id,
-      _type: method as string,
+      _type: method,
       subscribe: true,
       ...(req as Record<string, unknown>),
     });

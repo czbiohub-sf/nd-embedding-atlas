@@ -1,5 +1,5 @@
 /**
- * DatasetQuerySession — in-process DuckDB for serving Mosaic queries.
+ * DatasetQuerySession: in-process DuckDB for serving Mosaic queries.
  *
  * Ports the Python `server/_store.py` analytical session to TypeScript
  * using the @duckdb/node-api bindings (same as @uwdata/mosaic-duckdb).
@@ -51,7 +51,7 @@ export const DEFAULT_OBSM_PRIORITY = ["X_umap", "X_tsne", "X_phate", "X_pca"];
 /**
  * Quote a value as a SQL identifier: wrap in double quotes, double any embedded
  * double-quote. The ONLY safe way to interpolate a user-influenced column name
- * into SQL — a bare `"${name}"` lets a name containing `"` break out of the
+ * into SQL: a bare `"${name}"` lets a name containing `"` break out of the
  * identifier and inject arbitrary statements (conn.run executes multiple).
  */
 export function quoteIdent(id: string): string {
@@ -145,7 +145,7 @@ function coerceValue(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(coerceValue);
   if (typeof value === "object") {
     const nested: RowData = {};
-    for (const k of Object.keys(value as Record<string, unknown>)) {
+    for (const k of Object.keys(value)) {
       nested[k] = coerceValue((value as Record<string, unknown>)[k]);
     }
     return nested;
@@ -158,7 +158,7 @@ function coerceValue(value: unknown): unknown {
 /**
  * DuckDB open options (I/O scalability loop, Cycle 1). Defaults preserve the
  * historical `:memory:` behavior; passing `dbPath` makes the store file-backed
- * (out-of-core — base tables page to disk under `memoryLimit`).
+ * (out-of-core: base tables page to disk under `memoryLimit`).
  */
 export interface DatasetQuerySessionOptions {
   hidden?: Set<string>;
@@ -171,7 +171,7 @@ export interface DatasetQuerySessionOptions {
 export class DatasetQuerySession {
   /** The underlying DuckDB instance. */
   readonly db: DuckDBInstance;
-  /** Shared connection — Mosaic temp tables persist on the same connection. */
+  /** Shared connection: Mosaic temp tables persist on the same connection. */
   readonly conn: DuckDBConnection;
   /** Number of observations in obs_base. */
   nObs: number = 0;
@@ -260,7 +260,7 @@ export class DatasetQuerySession {
 
   /**
    * Reopen a file-backed DuckDB that already holds `obs_base` (+ optional
-   * `var_base`) from a prior ingest — the skip-re-ingest cache-hit path.
+   * `var_base`) from a prior ingest: the skip-re-ingest cache-hit path.
    *
    * Recovers in-memory state WITHOUT re-creating base tables or their indexes
    * (`fromInit`/`fromParquet` unconditionally CREATE and would collide). Throws
@@ -301,13 +301,13 @@ export class DatasetQuerySession {
       if (origin === "synthetic" || origin === "explicit") store.obsNameOrigin = origin;
     }
 
-    // var axis — `_finishVarInit` rebuilds indexes (IF NOT EXISTS) + the `var`
+    // var axis: `_finishVarInit` rebuilds indexes (IF NOT EXISTS) + the `var`
     // VIEW (CREATE OR REPLACE) and sets nVars/hasVarTable. Idempotent on reopen.
     if (tables.has("var_base")) await store._finishVarInit();
 
     // Re-register persisted var columns (var_* tables, NOT var_base) so
     // hasVarColumn()/registerVarColumn() see them and the dataset VIEW joins
-    // them. Embeddings (emb_*) are intentionally NOT re-registered here —
+    // them. Embeddings (emb_*) are intentionally NOT re-registered here :
     // startup's obsm pre-warm re-creates each via registerEmbedding (DROP+CREATE).
     for (const t of tables) {
       if (!t.startsWith("var_") || t === "var_base") continue;
@@ -320,7 +320,7 @@ export class DatasetQuerySession {
 
     // Re-register persisted annotation columns (ann_* tables). The dtype lives
     // in __ann_meta__ (persists in the cached .db); fall back to inferring from
-    // the physical column type — INTEGER → integer, else categorical.
+    // the physical column type: INTEGER → integer, else categorical.
     const annDtypes = new Map<string, AnnotationDtype>();
     if (tables.has("__ann_meta__")) {
       const [names, dtypes] = (await conn.runAndReadAll(`SELECT col_name, dtype FROM __ann_meta__`)).getColumnsJS() as [
@@ -357,9 +357,9 @@ export class DatasetQuerySession {
 
   /**
    * Ensure obs identity columns exist:
-   *   `__row_index__` — legacy name referenced by scatter/table/frontend code
-   *   `__obs_index__` — symmetric counterpart to `__var_index__` on var_base
-   *   `obs_name`      — string identity (axis name)
+   *   `__row_index__`: legacy name referenced by scatter/table/frontend code
+   *   `__obs_index__`: symmetric counterpart to `__var_index__` on var_base
+   *   `obs_name`     : string identity (axis name)
    *
    * Keeping both index columns (same value) lets new code query obs/var
    * uniformly without touching 17 files of frontend SQL.
@@ -381,7 +381,7 @@ export class DatasetQuerySession {
     if (!colNames.has("obs_name")) {
       await this.conn.run("ALTER TABLE obs_base ADD COLUMN obs_name VARCHAR");
       await this.conn.run("UPDATE obs_base SET obs_name = CAST(__row_index__ AS VARCHAR)");
-      // Synthetic — values are stringified row indices.
+      // Synthetic: values are stringified row indices.
       this.obsNameOrigin = "synthetic";
     }
   }
@@ -402,7 +402,7 @@ export class DatasetQuerySession {
       await this.conn.run("INSTALL nanoarrow FROM community; LOAD nanoarrow;");
       this._nanoarrowLoaded = true;
     } catch {
-      // nanoarrow may already be loaded or unavailable — Arrow queries will fall back to JSON
+      // nanoarrow may already be loaded or unavailable: Arrow queries will fall back to JSON
       this._nanoarrowLoaded = false;
     }
   }
@@ -438,7 +438,7 @@ export class DatasetQuerySession {
     await this.conn.run(`CREATE TABLE ${tableName} (${colDefs.join(", ")})`);
 
     // Insert in batches to avoid overly long SQL. Non-finite floats
-    // (NaN / ±Infinity) are emitted as NULL — DuckDB parses the bare
+    // (NaN / ±Infinity) are emitted as NULL: DuckDB parses the bare
     // token `NaN` as an identifier, not a float literal.
     const batchSize = 1000;
     for (let start = 0; start < nRows; start += batchSize) {
@@ -596,7 +596,7 @@ export class DatasetQuerySession {
 
   /**
    * Stamp `value` onto every obs matching `predicate` (a client Mosaic WHERE
-   * fragment) — the node-graph Annotate node's batch door. Resolves identity
+   * fragment): the node-graph Annotate node's batch door. Resolves identity
    * from the `dataset` VIEW so the predicate may reference embeddings / var /
    * other annotation columns, not just obs_base. Trust model =
    * `/api/annotations/export`: single-user local tool. Returns the matched count.
@@ -635,12 +635,12 @@ export class DatasetQuerySession {
    * Write all annotation columns to a combined parquet sidecar.
    *
    * `USE_TMP_FILE true` makes the write atomic (DuckDB writes `path.tmp` then
-   * renames), so a crash mid-write can't corrupt the prior sidecar — no manual
+   * renames), so a crash mid-write can't corrupt the prior sidecar: no manual
    * backup rotation needed. When the last column is dropped, the sidecar is
    * removed so the deletion persists (else a stale file resurrects it on load).
    *
    * ponytail: no point-in-time backups. If ever wanted, write base.N copies
-   * AND make loadAnnotationsSidecar fall back to them — backups nothing reads
+   * AND make loadAnnotationsSidecar fall back to them: backups nothing reads
    * are pure debt.
    */
   async saveAnnotationsSidecar(sidecarPath: string): Promise<void> {
@@ -661,7 +661,7 @@ export class DatasetQuerySession {
    * Silently returns if the file does not exist.
    *
    * Re-keys the JOIN on the stored `__row_index__`. This is correct only while
-   * the in-memory ingest is order-deterministic across runs (it is — the MuData
+   * the in-memory ingest is order-deterministic across runs (it is: the MuData
    * merge is deterministic). The durable identity (dataset_key, obs_name) is
    * preserved in the table; if ingest order ever becomes non-deterministic,
    * re-resolve __row_index__ by joining obs_name against obs_base here.
@@ -670,7 +670,7 @@ export class DatasetQuerySession {
     let cols: { column_name: string; dtype: string | null }[];
     const escaped = sidecarPath.replace(/'/g, "''");
     try {
-      // `dtype` was added later — COALESCE a missing/legacy column to categorical.
+      // `dtype` was added later: COALESCE a missing/legacy column to categorical.
       const hasDtype = (
         await this.conn.runAndReadAll(
           `SELECT COUNT(*) FROM (DESCRIBE SELECT * FROM read_parquet('${escaped}')) WHERE column_name = 'dtype'`,
@@ -758,12 +758,12 @@ export class DatasetQuerySession {
    *
    * `ingestDataFrames(..., { axis: "var", includeNameColumn: true })` already
    * emits `__var_index__` + `var_name`. This method indexes them and creates
-   * a standalone `var` VIEW. var_base is NOT joined to the dataset VIEW —
+   * a standalone `var` VIEW. var_base is NOT joined to the dataset VIEW :
    * cardinality is n_vars, not n_obs.
    *
    * Collision semantics (multi-dataset):
    *   When the `_dataset` column is present, `var_name` is only unique
-   *   WITHIN a dataset — different AnnCollection members can legitimately
+   *   WITHIN a dataset: different AnnCollection members can legitimately
    *   share a var_name (same feature) OR collide (same string, different
    *   features). A composite index on (_dataset, var_name) + generated
    *   `var_uid` (= `_dataset || '::' || var_name`) gives callers a single
@@ -782,7 +782,7 @@ export class DatasetQuerySession {
       await this.conn.run("CREATE INDEX IF NOT EXISTS var_base_dataset_var ON var_base(_dataset, var_name)");
     }
 
-    // `var_uid` lives on the `var` VIEW — DuckDB doesn't support ALTER TABLE
+    // `var_uid` lives on the `var` VIEW: DuckDB doesn't support ALTER TABLE
     // ADD COLUMN with GENERATED expressions. Safe single-column join key even
     // when `var_name` collides across datasets.
     const uidExpr = isMulti ? "_dataset || '::' || var_name" : "var_name";
@@ -802,7 +802,7 @@ export class DatasetQuerySession {
    */
   async queryArrow(sql: string): Promise<Uint8Array> {
     if (!this._nanoarrowLoaded) {
-      throw new Error("nanoarrow extension not loaded — cannot produce Arrow IPC output");
+      throw new Error("nanoarrow extension not loaded: cannot produce Arrow IPC output");
     }
     const reader = await this.conn.runAndReadAll(`SELECT * FROM to_arrow_ipc((${sql}))`);
     const chunks = reader.getColumnsJS()[0] as (Buffer | Uint8Array)[];
@@ -830,7 +830,7 @@ export class DatasetQuerySession {
 
   /**
    * True iff `obs_base` carries the `_dataset` column (multi-dataset stores).
-   * Cached because it never changes after init — `_rebuildView()` operates on
+   * Cached because it never changes after init: `_rebuildView()` operates on
    * `dataset` (the VIEW), not `obs_base`. Tests that mutate `obs_base` schema
    * should call `invalidateSchemaCache()`.
    */
@@ -858,7 +858,7 @@ export class DatasetQuerySession {
   /**
    * Persist ingest provenance into the file-backed db so a later reopen
    * (`fromCachedDb`) can validate the cache and recover `obsNameOrigin`.
-   * Written last, after a successful ingest — a crashed mid-ingest file has no
+   * Written last, after a successful ingest: a crashed mid-ingest file has no
    * matching row and so fails the cache-hit key check.
    */
   async writeIngestMeta(key: string): Promise<void> {

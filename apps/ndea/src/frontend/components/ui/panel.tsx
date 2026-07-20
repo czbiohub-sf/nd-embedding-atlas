@@ -4,14 +4,14 @@ import type * as React from "react";
 import { cn } from "@/lib/utils";
 
 /**
- * Panel — surface container for docked cards and floating HUDs.
+ * Panel: surface container for docked cards and floating HUDs.
  *
  * Variants collapse the current ad-hoc patterns:
- *   solid  — `bg-card` sidebar/docked surfaces.
- *   glass  — frosted overlay using --glass-bg / --glass-border / --blur-glass.
+ *   solid : `bg-card` sidebar/docked surfaces.
+ *   glass : frosted overlay using --glass-bg / --glass-border / --blur-glass.
  *            Replaces `rounded-lg border border-white/[0.07] bg-card/80
  *            backdrop-blur-md` scattered across ~10 files.
- *   ghost  — transparent; for caller-provided backgrounds (mixed layouts).
+ *   ghost : transparent; for caller-provided backgrounds (mixed layouts).
  *
  * depth controls shadow intensity (0..3). Use 0 for docked panels flush
  * against other panels, 1–2 for floating HUDs, 3 for modal-like overlays.

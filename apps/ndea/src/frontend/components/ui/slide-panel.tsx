@@ -11,7 +11,7 @@ import { Button } from "./button";
 import { SheetClose, SheetContent, SheetTitle, Sheet as SheetRoot } from "./sheet";
 
 /**
- * SlidePanel — one floating-card panel primitive on the Base-UI Sheet, driven by
+ * SlidePanel: one floating-card panel primitive on the Base-UI Sheet, driven by
  * panel registry (open/size/side, per-session).
  *
  *   <SlidePanel id="table">
@@ -41,7 +41,7 @@ function SlidePanelRoot({ id, children }: { id: string; children: React.ReactNod
   const { open, setOpen, side, size, setSize } = usePanel(id);
   // These are persistent workspace panels, not transient sheets: clicking the
   // scatter canvas (or another dock control) must NOT dismiss them. Honor only
-  // explicit closes — Esc, the close button, the toggle — and ignore Base-UI's
+  // explicit closes: Esc, the close button, the toggle: and ignore Base-UI's
   // outside-press / focus-out dismissals.
   const onOpenChange = (next: boolean, details: { reason?: string }) => {
     if (!next && (details.reason === "outside-press" || details.reason === "focus-out")) return;
@@ -56,7 +56,7 @@ function SlidePanelRoot({ id, children }: { id: string; children: React.ReactNod
 
 function Content({ className, children }: { className?: string; children: React.ReactNode }) {
   const { side, size } = useSlidePanel();
-  // Inline style wins over the Sheet's utility classes — clean override for the
+  // Inline style wins over the Sheet's utility classes: clean override for the
   // resizable size + placement. NB: Tailwind v4 centering (`-translate-x-1/2`)
   // uses the `translate` property, not `transform`, so we must zero `translate`
   // (not `transform`) to defeat it.

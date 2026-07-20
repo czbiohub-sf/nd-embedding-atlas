@@ -10,7 +10,7 @@ set -euo pipefail
 cd dist
 ls -lh
 # Use `find` (not bash globs) so a missing class doesn't blow up `set -e`
-# via shasum's "no such file". `mapfile` requires bash 4+ — macOS ships
+# via shasum's "no such file". `mapfile` requires bash 4+, but macOS ships
 # 3.2; while-read keeps the script runnable locally for debugging.
 files=()
 while IFS= read -r f; do files+=("$f"); done < <(

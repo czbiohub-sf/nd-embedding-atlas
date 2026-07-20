@@ -1,11 +1,11 @@
 /**
- * NodeDocButton — Tier 1 · Peek. An info button for a node's header that opens
+ * NodeDocButton: Tier 1 · Peek. An info button for a node's header that opens
  * the node's contextual documentation in a click popover, sourced from the
  * definition's documentation. Click (not hover) so it's discoverable and never
  * fights the node body. The single renderer for the doc tier; the reference
  * drawer (tier 2) reuses the same `NodeDoc` record.
  *
- * Renders nothing when the node type has no definition or authored documentation —
+ * Renders nothing when the node type has no definition or authored documentation :
  * only documented nodes get the button.
  */
 
@@ -22,7 +22,7 @@ import { cn } from "@/lib/utils";
 
 /** A single typed-port token: kind glyph + label (filled = out, hollow = in). */
 function PortToken({ port, out }: { port: NodePort; out: boolean }) {
-  const spec = ND_PORT_KINDS[port.kind as NdPortKind];
+  const spec = ND_PORT_KINDS[port.kind];
   const shape =
     spec.shape === "diamond"
       ? { borderRadius: 2, transform: "rotate(45deg)" }

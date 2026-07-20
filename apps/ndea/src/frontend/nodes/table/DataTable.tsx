@@ -47,12 +47,7 @@ function estimateColumnWidth(name: string, rows: Row[]): number {
   for (const row of rows) {
     const val = row[name];
     if (val == null) continue;
-    const str =
-      typeof val === "number"
-        ? Number.isInteger(val)
-          ? val.toLocaleString()
-          : val.toFixed(3)
-        : String(val as string | number | boolean | null);
+    const str = typeof val === "number" ? (Number.isInteger(val) ? val.toLocaleString() : val.toFixed(3)) : String(val);
     maxLen = Math.max(maxLen, str.length);
   }
   return Math.min(MAX, Math.max(MIN, Math.ceil(maxLen * CHAR_WIDTH + PADDING)));
@@ -70,7 +65,7 @@ export interface DataTableProps {
    *  owns its sort internally (uncontrolled, today's behavior). */
   sorting?: SortingState;
   onSortingChange?: (next: SortingState) => void;
-  /** Workspace node/tile header slot — the column controls portal here (like the
+  /** Workspace node/tile header slot: the column controls portal here (like the
    *  scatter toolbar). Absent → a docked control row renders inline instead. */
   headerEl?: HTMLElement | null;
 }
@@ -133,15 +128,15 @@ export function DataTable({
         maxSize: 600,
         cell: (info) => {
           const val = info.getValue();
-          if (val == null) return <span className="text-muted-foreground">—</span>;
+          if (val == null) return <span className="text-muted-foreground">:</span>;
           if (typeof val === "number") {
             return (
               <span className="tabular-nums">{Number.isInteger(val) ? val.toLocaleString() : val.toFixed(3)}</span>
             );
           }
           return (
-            <span className="truncate" title={String(val as string | number | boolean | null)}>
-              {String(val as string | number | boolean | null)}
+            <span className="truncate" title={String(val)}>
+              {String(val)}
             </span>
           );
         },
@@ -150,7 +145,7 @@ export function DataTable({
   );
 
   // ── Build visible data array from page cache ────────────────────
-  // Only includes rows that are actually loaded — NOT the full dataset.
+  // Only includes rows that are actually loaded: NOT the full dataset.
   // TanStack Table sees this small array; Virtual handles the full count.
   const visibleData = useMemo(() => getCachedRows(), [getCachedRows]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -253,11 +248,11 @@ export function DataTable({
   const totalWidth = tableInstance.getTotalSize();
 
   // "Best width when opened": size the Columns popover to the longest column name
-  // (mono ~7px/char + chrome), clamped 224–384px — so names show without truncating
+  // (mono ~7px/char + chrome), clamped 224–384px: so names show without truncating
   // or forcing a horizontal scrollbar; anything past the cap truncates (title shows full).
   const popoverWidth = Math.min(384, Math.max(224, columnNames.reduce((m, n) => Math.max(m, n.length), 8) * 7 + 56));
 
-  // Header controls — count + column view-options. Portaled into the node/tile
+  // Header controls: count + column view-options. Portaled into the node/tile
   // header slot (like the scatter toolbar); a docked row is the no-header fallback.
   const controls = (
     <div className="flex items-center gap-1.5 text-2xs" data-nodrag="1">
@@ -418,14 +413,14 @@ export function DataTable({
                           }}
                         >
                           {val == null ? (
-                            <span className="text-muted-foreground">—</span>
+                            <span className="text-muted-foreground">:</span>
                           ) : typeof val === "number" ? (
                             <span className="tabular-nums">
                               {Number.isInteger(val) ? val.toLocaleString() : val.toFixed(3)}
                             </span>
                           ) : (
-                            <span className="truncate" title={String(val as string | number | boolean | null)}>
-                              {String(val as string | number | boolean | null)}
+                            <span className="truncate" title={String(val)}>
+                              {String(val)}
                             </span>
                           )}
                         </div>

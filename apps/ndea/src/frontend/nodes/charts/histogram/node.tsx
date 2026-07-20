@@ -1,5 +1,5 @@
 /**
- * histogram — plugin-backed view node. Binned distribution of a numeric column;
+ * histogram: plugin-backed view node. Binned distribution of a numeric column;
  * pred in, sel out. Cooks as a predicate pass-through; its brush selection rides the
  * push port (sel), delivered downstream outside the cook (mirrors scatter).
  */

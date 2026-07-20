@@ -34,14 +34,14 @@ export interface HdrSettings {
 
 export const DEFAULT_HDR_SETTINGS: HdrSettings = {
   // Khronos Neutral preserves color identity below ~0.76 luminance and only
-  // rolls off extreme HDR overdraw — the right default for categorical
+  // rolls off extreme HDR overdraw: the right default for categorical
   // scatter where bright clusters should glow without bleaching the palette.
   toneMapping: "neutral",
   exposure: 0.0,
 };
 
 export interface HdrPipeline {
-  /** HDR color attachment view — bind in the scatter render pass. */
+  /** HDR color attachment view: bind in the scatter render pass. */
   hdrView(): GPUTextureView;
   /** Format the scatter pipeline must declare for its color target. */
   readonly hdrFormat: GPUTextureFormat;
@@ -52,7 +52,7 @@ export interface HdrPipeline {
   composite(swapView: GPUTextureView, encoder: GPUCommandEncoder): void;
   /** Recreate the HDR target at new physical-pixel dimensions. */
   resize(width: number, height: number): void;
-  /** Update settings — uniform write only, no allocations. */
+  /** Update settings: uniform write only, no allocations. */
   setSettings(settings: Partial<HdrSettings>): void;
   getSettings(): HdrSettings;
   destroy(): void;
@@ -161,7 +161,7 @@ export function createHdrPipeline(
 
   rebuildTargets(initialWidth, initialHeight);
 
-  // ── Composite — invoked once per frame after the scatter pass ────────
+  // ── Composite: invoked once per frame after the scatter pass ────────
   function composite(swapView: GPUTextureView, encoder: GPUCommandEncoder): void {
     if (!targets || !tonemapBg) return;
 

@@ -185,7 +185,7 @@ export function ChannelControls() {
           aria-label="Minimize channel controls"
           className="flex size-4 items-center justify-center rounded text-muted-foreground/40 transition-colors hover:text-muted-foreground"
         >
-          <span className="text-2xs leading-none">—</span>
+          <span className="text-2xs leading-none">:</span>
         </button>
       </div>
 

@@ -16,7 +16,7 @@ import type { DatasetQuerySession } from "./store.ts";
 
 /**
  * Mutations the frontend legitimately needs.
- * Checked first — if any matches, the statement is allowed.
+ * Checked first: if any matches, the statement is allowed.
  */
 /**
  * Mosaic coordinator + preaggregator emit CREATE SCHEMA / CREATE TABLE /
@@ -25,13 +25,13 @@ import type { DatasetQuerySession } from "./store.ts";
  *
  * Frontend-driven schema changes (categorical index columns, var materialization)
  * now go through dedicated REST endpoints (`/api/categorize`, `/api/var-column`)
- * that use `store.execute()` directly — they don't hit this path.
+ * that use `store.execute()` directly: they don't hit this path.
  */
 const ALLOWED_MUTATIONS: readonly string[] = ["CREATE SCHEMA", "CREATE TABLE", "DROP TABLE IF EXISTS", "DROP SCHEMA"];
 
 /**
  * Everything else that mutates state is blocked.
- * Checked second — if any matches AND no allowed mutation matched, the query is rejected.
+ * Checked second: if any matches AND no allowed mutation matched, the query is rejected.
  */
 const BLOCKED_PREFIXES: readonly string[] = [
   "DROP",
@@ -94,7 +94,7 @@ export async function handleMosaicQuery(body: MosaicQuery, store: DatasetQuerySe
   }
 
   try {
-    // No VIEW-rebuild hook needed — ALTER TABLE obs_base ADD COLUMN now flows
+    // No VIEW-rebuild hook needed: ALTER TABLE obs_base ADD COLUMN now flows
     // through /api/categorize and /api/var-column, both of which rebuild the
     // VIEW explicitly.
     if (command === "exec") {

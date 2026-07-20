@@ -57,7 +57,7 @@ export async function handleCategorize(req: Request, state: ServerSession): Prom
     await store.execute(`ALTER TABLE obs_base ADD COLUMN IF NOT EXISTS "${indexColumn}" INTEGER DEFAULT 0`);
     await store._rebuildView();
 
-    // 3. Populate via a JOIN back to `dataset` — d."${column}" resolves whether
+    // 3. Populate via a JOIN back to `dataset`: d."${column}" resolves whether
     // the source is an obs_base column or an annotation/var join. CASE maps the
     // top-N values to indices; everything else falls to (other)/(null).
     const whenClauses = values.map(({ value }, i) => `WHEN '${value.replace(/'/g, "''")}' THEN ${i}`).join(" ");
@@ -69,7 +69,7 @@ export async function handleCategorize(req: Request, state: ServerSession): Prom
              FROM dataset d WHERE d.__row_index__ = obs_base.__row_index__`,
     );
 
-    // Keep state.obsColumns in sync — endpoints that validate `category_col`
+    // Keep state.obsColumns in sync: endpoints that validate `category_col`
     // (e.g. /api/trajectory) read this list and would otherwise reject the
     // freshly created column with 400 "Unknown category_col".
     if (!state.obsColumns.includes(indexColumn)) {

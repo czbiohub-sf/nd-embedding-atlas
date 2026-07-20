@@ -4,7 +4,7 @@ import type * as React from "react";
 import { cn } from "@/lib/utils";
 
 /**
- * DimensionBadge — small technical label for layers, categories, dimensions.
+ * DimensionBadge: small technical label for layers, categories, dimensions.
  *
  * Replaces inline badges in ColorSourcePicker (obs/var badges) and similar
  * dimension labelers that repeat a `shrink-0 rounded-sm border … text-3xs`

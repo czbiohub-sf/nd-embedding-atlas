@@ -1,0 +1,64 @@
+---
+title: WebGPU on remote Linux and HPC
+description: Use a secure browser origin and hardware WebGPU on remote Linux systems.
+---
+
+The scatter renderer requires WebGPU. This procedure uses Chrome. Firefox ESR builds commonly installed on clusters do not provide the required WebGPU support.
+
+## Use a secure browser origin
+
+Chrome exposes WebGPU only in a [secure context](https://developer.mozilla.org/en-US/docs/Web/Security/Secure_Contexts). `http://localhost` is trusted, but a direct URL such as `http://compute-host:5055` is not.
+
+Choose one access pattern:
+
+- **Local browser through SSH:** forward the server port, then open `http://localhost:5055` locally.
+
+  ```bash
+  ssh -L 5055:127.0.0.1:5055 user@compute-host
+  ```
+
+- **Browser on a remote desktop:** run Chrome on the remote system and open `http://localhost:5055`.
+- **Direct remote URL:** put ndea behind an HTTPS reverse proxy.
+
+Start ndea with `--no-open` when the browser runs elsewhere:
+
+```bash
+ndea view data.zarr --no-open
+```
+
+<Callout type="info" title="Which GPU renders the scatter?">
+  WebGPU uses the GPU attached to the browser. An SSH tunnel to a local browser uses the local GPU, not the compute
+  host's GPU.
+</Callout>
+
+## Enable WebGPU on Linux
+
+First open `chrome://settings/system` and enable graphics acceleration. Then inspect `chrome://gpu`; WebGPU should report **Hardware accelerated**.
+
+Chrome may still treat WebGPU on Linux as experimental. If `chrome://gpu` reports that WebGPU is unavailable:
+
+1. enable `chrome://flags/#enable-vulkan`;
+2. enable `chrome://flags/#enable-unsafe-webgpu`;
+3. relaunch Chrome; and
+4. inspect `chrome://gpu` again.
+
+Chrome flags change between releases. Follow [Chrome's WebGPU troubleshooting guide](https://developer.chrome.com/docs/web-platform/webgpu/troubleshooting-tips) if either flag is absent.
+
+## Verify the adapter
+
+Open the browser console and run:
+
+```js
+if (!navigator.gpu) {
+  console.error("WebGPU is unavailable. Check the browser version and page origin.");
+} else {
+  const adapter = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
+  console.log(adapter ? adapter.info : "No compatible GPU adapter");
+}
+```
+
+Interpret the result:
+
+- **`navigator.gpu` is undefined:** update the browser or open ndea through localhost or HTTPS.
+- **The adapter is `null`:** check graphics acceleration, Vulkan access, Chrome's GPU blocklist, and `chrome://gpu`.
+- **WebGPU is software-only:** update the GPU driver or correct device access before loading a large scatter.

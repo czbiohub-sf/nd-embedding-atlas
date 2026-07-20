@@ -1,5 +1,5 @@
 /**
- * NdBreadcrumb — graph-level path (atlas › qc › …). shadcn anatomy
+ * NdBreadcrumb: graph-level path (atlas › qc › …). shadcn anatomy
  * (nav > ol > li, chevron separators): muted links, current page in
  * primary text, mono 9.5px. Used in the wiring header and the canvas HUD.
  */

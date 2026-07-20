@@ -3,9 +3,11 @@ import tailwindcss from "@tailwindcss/vite";
 import press from "fumapress/vite";
 import mdx from "fumadocs-mdx/vite";
 
+const siteBaseUrl = new URL(process.env.DOCS_BASE_URL ?? "https://czbiohub-sf.github.io/nd-embedding-atlas/");
+if (!siteBaseUrl.pathname.endsWith("/")) siteBaseUrl.pathname += "/";
+
 export default defineConfig({
-  // GitHub Pages serves this project site under /nd-embedding-atlas/.
-  basePath: "/nd-embedding-atlas/",
+  basePath: siteBaseUrl.pathname,
   vite: {
     plugins: [press(), mdx(), tailwindcss()],
   },

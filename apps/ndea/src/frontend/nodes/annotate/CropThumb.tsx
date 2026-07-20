@@ -1,11 +1,11 @@
 /**
- * CropThumb — one gallery crop for a single obs, reusing the Gallery node's
+ * CropThumb: one gallery crop for a single obs, reusing the Gallery node's
  * crop query (`useGalleryCropQuery` → POST /api/crop). Channels/hash are passed
  * in from `useGalleryChannels`, so a thumbnail is contrasted/colored identically
  * to the Gallery and the live viewer (they share `viewerChannelsStore`).
  *
  * Used both as the row thumbnail in AnnotateTable and the large focused crop in
- * the annotate rail — same component, different `size`.
+ * the annotate rail: same component, different `size`.
  */
 
 import type { ChannelHash } from "@/lib/branded-types";

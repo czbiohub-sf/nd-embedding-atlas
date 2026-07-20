@@ -1,5 +1,5 @@
 /**
- * Image Viewer — plugin-backed, focus-consuming view. Its cook takes the latest
+ * Image Viewer: plugin-backed, focus-consuming view. Its cook takes the latest
  * pushed focused row. It is a sink with no output port.
  */
 

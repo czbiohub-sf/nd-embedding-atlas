@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * Dev entry point — tiny wrapper that converts a positional dataset arg
+ * Dev entry point: tiny wrapper that converts a positional dataset arg
  * into the NDEA_DATASET env var and delegates to `vp run --parallel dev:all`.
  *
  * Needed because vp's task runner forwards ADDITIONAL_ARGS to every task in

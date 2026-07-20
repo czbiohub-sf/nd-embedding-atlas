@@ -19,7 +19,7 @@ type ChannelLayer = ChannelsEnabled & Layer;
  * - **Multi-layer** (2D): N ImageLayers, each rendering one channel
  *   (selected via `sliceCoords.c: [i]`). Per @idetik/core@0.23+, every
  *   ImageLayer's `channelProps` array must have length === source channel
- *   count, so every layer holds the full per-channel styling array — but
+ *   count, so every layer holds the full per-channel styling array: but
  *   only the entry at `[i]` (matching the layer's slice index) is actually
  *   drawn for layer `i`.
  * - **Single-layer** (3D): 1 VolumeLayer with N channels.
@@ -83,10 +83,10 @@ export class MultiChannelLayers implements ChannelsEnabled {
 
   setChannelProps(channelProps: ChannelProps[]): void {
     if (this.singleLayerMultiChannel_) {
-      // Single layer owns all channels — pass the full array
+      // Single layer owns all channels: pass the full array
       this.layers_[0].setChannelProps(channelProps);
     } else {
-      // Multi-layer — every layer's channelProps must equal source channel
+      // Multi-layer: every layer's channelProps must equal source channel
       // count. Push the same full array to all layers; each layer's `c: [i]`
       // ensures only slot `i` actually renders.
       for (const layer of this.layers_) {
@@ -104,7 +104,7 @@ export class MultiChannelLayers implements ChannelsEnabled {
    * has no rendered effect on ImageLayers. Each ImageLayer renders exactly one
    * channel (slice `c: [i]`), so layer `i` ↔ channel `i`; drive its visibility
    * through opacity instead. Opacity fully hides under the default `normal`
-   * (base) and `additive` blend modes — both fold src-alpha into the result.
+   * (base) and `additive` blend modes: both fold src-alpha into the result.
    *
    * The single-layer VolumeLayer (3D) is left untouched: its opacity is
    * volume-wide, and it already honors per-channel `visible` directly.

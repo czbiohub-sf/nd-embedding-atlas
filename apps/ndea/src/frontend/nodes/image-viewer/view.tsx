@@ -4,7 +4,7 @@
  * Sources the plate gate from `host.data` and wraps the viewer subtree in
  * `HostProvider` so the body can later read `host.*` without prop-drilling. The
  * reactive focus read that drives the crop stays inside `SingleCropViewer`, and
- * obs/crop fetches stay direct for now — routing them through host.dataAPI.fetchCrop/
+ * obs/crop fetches stay direct for now: routing them through host.dataAPI.fetchCrop/
  * fetchObsInfo + per-instance SOURCE_CACHE/Idetik teardown is deferred until a
  * second concurrent viewer instance is actually exercised (premature today).
  */

@@ -1,5 +1,5 @@
 /**
- * ViewerZStore — shares the viewer's live Z-plane index to components outside
+ * ViewerZStore: shares the viewer's live Z-plane index to components outside
  * the viewer tree (the galleries), mirroring ViewerChannelsStore.
  *
  * Crops default their Z to the per-obs `z` column when the dataset has one;

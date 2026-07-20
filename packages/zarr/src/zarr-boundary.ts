@@ -1,7 +1,7 @@
 /**
  * Zarrita boundary adapters.
  *
- * Our public types and zarrita's internal types don't quite line up — zarrita
+ * Our public types and zarrita's internal types don't quite line up: zarrita
  * returns `Group<Readable>` with a private `.store` field; our own stores
  * implement the `AsyncReadable` shape but not the full `Readable` interface.
  * These helpers funnel every `as unknown as X` cast into one named spot so

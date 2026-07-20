@@ -66,11 +66,11 @@ self.addEventListener("message", async (event: MessageEvent<ReadColumnRequest>) 
       ) {
         result = await readNullableWorker(colGroup);
       } else {
-        // Unknown group — try as array
+        // Unknown group: try as array
         result = await readArrayWorker(location);
       }
     } catch {
-      // Not a group — read as array
+      // Not a group: read as array
       result = await readArrayWorker(location);
     }
 
@@ -97,7 +97,7 @@ async function readArrayWorker(location: ZarrLocation): Promise<ColumnResult> {
     return { encoding: "string-array", array: data };
   }
 
-  // TypedArray — transfer the buffer
+  // TypedArray: transfer the buffer
   const view = data as ArrayBufferView;
   const buf = view.buffer as ArrayBuffer;
   const buffer = buf.slice(view.byteOffset, view.byteOffset + view.byteLength);

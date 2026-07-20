@@ -37,7 +37,7 @@ describe("pruneVersions", () => {
     await makeVersion("v0.2.0", new Date("2026-02-01"));
     await makeVersion("v0.3.0", new Date("2026-03-01"));
 
-    // Active = oldest. keep=1 means "active only" — prune the two newer ones.
+    // Active = oldest. keep=1 means "active only": prune the two newer ones.
     const result = await pruneVersions({ root, activeAbs: old.bin, keep: 1 });
     expect(result.pruned.map((e) => e.tag).toSorted()).toEqual(["v0.2.0", "v0.3.0"]);
     expect(result.active?.tag).toBe("v0.1.0");

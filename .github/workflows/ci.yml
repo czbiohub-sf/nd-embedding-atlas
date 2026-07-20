@@ -13,7 +13,7 @@ permissions:
   contents: read
 
 jobs:
-  # ── Typecheck + lint + fmt (Linux only — deterministic, fast) ───────────
+  # Typecheck + lint + fmt (Linux only: deterministic, fast)
   check:
     name: Typecheck + lint + fmt
     runs-on: ubuntu-latest

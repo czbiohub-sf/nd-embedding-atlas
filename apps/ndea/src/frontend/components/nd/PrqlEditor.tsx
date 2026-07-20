@@ -1,8 +1,8 @@
 /**
- * PrqlEditor — a CodeMirror 6 editor for PRQL, themed to the workspace's
+ * PrqlEditor: a CodeMirror 6 editor for PRQL, themed to the workspace's
  * instrument panel (Geist Mono, dark inset, periwinkle caret). CodeMirror
  * (~150KB) is dynamically imported inside the effect so it stays off the main
- * bundle — the Tweakpane pattern. The PRQL grammar + highlight come from
+ * bundle: the Tweakpane pattern. The PRQL grammar + highlight come from
  * prql-lang.ts; diagnostics (red underline + message) are pushed in via the
  * `error` prop, mapped from prqlc's char offsets.
  *
@@ -12,7 +12,7 @@
  */
 
 import { useEffect, useRef } from "react";
-// type-only — erased at build, so CodeMirror itself stays lazy (effect import)
+// type-only: erased at build, so CodeMirror itself stays lazy (effect import)
 import type { Diagnostic } from "@codemirror/lint";
 import type { EditorView } from "@codemirror/view";
 
@@ -21,7 +21,7 @@ import type { PrqlError } from "@/nodes/utils/wrangle/prql";
 interface Props {
   value: string;
   onChange: (next: string) => void;
-  /** compiler error for the CURRENT value — drawn as an inline diagnostic */
+  /** compiler error for the CURRENT value: drawn as an inline diagnostic */
   error?: PrqlError | null;
   placeholder?: string;
 }
@@ -126,7 +126,7 @@ export function PrqlEditor({ value, onChange, error, placeholder }: Props) {
       view?.destroy();
       api.current = null;
     };
-    // build once — value/error are synced via the effects below
+    // build once: value/error are synced via the effects below
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

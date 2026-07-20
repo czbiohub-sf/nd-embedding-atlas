@@ -9,7 +9,7 @@ function ScrollArea({
   children,
   ...props
 }: ScrollAreaPrimitive.Root.Props & {
-  /** Applied to the scroll Viewport — put a `max-h-*`/`h-*` bound HERE (the
+  /** Applied to the scroll Viewport: put a `max-h-*`/`h-*` bound HERE (the
    *  actual scroll element), not on the Root: the Viewport is height:100%, so a
    *  bound on a max-height-only Root never bites. */
   viewportClassName?: string;

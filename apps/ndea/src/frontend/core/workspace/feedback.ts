@@ -68,7 +68,7 @@ export function deriveFeedbackChannels(
 /**
  * Live feedback channels for the current graph; recomputed only when the node or
  * edge map changes (drags touch `s.positions`, not `s.nodes`, so this is stable
- * during pan/drag). Call ONCE at the canvas level and share via context — a
+ * during pan/drag). Call ONCE at the canvas level and share via context: a
  * per-node call would re-run this whole-graph DFS N times (O(N·E) per topology
  * change). NdGraphNode reads its channels through `useNodeFeedbackContext`.
  */

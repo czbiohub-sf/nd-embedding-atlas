@@ -4,7 +4,7 @@
  * POST /api/crop/{fov_path}
  *   body: { t, z, x, y, half, size?, quality?, dataset_key?, channels: [...] }
  *
- * Always returns WebP. Quality defaults to 78 (gallery thumb sweet spot —
+ * Always returns WebP. Quality defaults to 78 (gallery thumb sweet spot :
  * the WebP encoder's "fast encode" zone (q<80) gives ≈10–15% smaller bytes
  * than q=90 with no visible difference at 200px). Single-obs viewer can
  * override with `quality: 90` for full-fidelity inspection.

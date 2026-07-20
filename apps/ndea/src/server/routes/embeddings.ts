@@ -1,8 +1,8 @@
 /**
  * Embedding loading and status endpoints.
  *
- * POST /api/embeddings/{key}       — Trigger async embedding load
- * GET  /api/embeddings/{key}/status — Poll load status
+ * POST /api/embeddings/{key}      : Trigger async embedding load
+ * GET  /api/embeddings/{key}/status: Poll load status
  */
 
 import { ObsmSliceLoader } from "../slice-loader.ts";
@@ -61,7 +61,7 @@ export function subscribeEmbeddingStatus(
 /**
  * Handle POST /api/embeddings/{key}
  *
- * Phase 0: "loading" is now a metadata-only probe — we detect the
+ * Phase 0: "loading" is now a metadata-only probe: we detect the
  * embedding's width (nDims) via a zarr shape read, then register a
  * lazy `ObsmSliceLoader` in `state.obsmLoaders`. Actual column data is
  * fetched on demand by `/api/scatter-positions`.
@@ -95,11 +95,11 @@ export function handleLoadEmbedding(key: string, state: ServerSession): Response
  * "Load" an obsm embedding: detect its width via metadata, register a
  * column-wise loader. No data bytes are read at this step.
  *
- * Idempotent — a second call for an already-registered key is a no-op.
+ * Idempotent: a second call for an already-registered key is a no-op.
  * Safe to call from both the startup pre-warm path (silent, all keys
  * await'd in parallel) and the lazy `POST /api/embeddings/{key}` path.
  *
- * Doesn't log on success — startup prints the consolidated "Embeddings:"
+ * Doesn't log on success: startup prints the consolidated "Embeddings:"
  * line, and the lazy path serves status via `subscribeEmbeddingStatus`,
  * so per-key console output would just be noise.
  */

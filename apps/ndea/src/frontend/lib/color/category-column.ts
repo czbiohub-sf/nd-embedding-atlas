@@ -36,7 +36,7 @@ export async function makeCategoryColumn(
   column: string,
   maxCategories: number = DEFAULT_MAX_CATEGORIES,
 ): Promise<CategoryMapping> {
-  // `coordinator` retained in the signature for API stability — the server
+  // `coordinator` retained in the signature for API stability: the server
   // owns DuckDB state now, but existing call sites pass it through.
   void coordinator;
 

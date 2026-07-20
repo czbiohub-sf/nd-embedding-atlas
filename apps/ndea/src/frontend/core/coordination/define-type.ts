@@ -1,5 +1,5 @@
 /**
- * defineCoordinationType — the extract-after-two primitive (U3).
+ * defineCoordinationType: the extract-after-two primitive (U3).
  *
  * U1 inlined `focus` and U2 inlined `viewSync` directly against the coordination
  * backbone. With two concrete instances proven, the shared shape is extracted
@@ -8,7 +8,7 @@
  * `use-coordination`'s `coordinationTypes` map, adapted to our host seam.
  *
  * The gate is enforced at DEFINE time (KD3/R5): a type whose value isn't
- * `JsonValue`-serializable — a Mosaic Selection, a GPU handle, a function — is
+ * `JsonValue`-serializable: a Mosaic Selection, a GPU handle, a function: is
  * rejected here, not at save time, so share/undo/persist always hold.
  */
 
@@ -19,7 +19,7 @@ import type { JsonValue, NodeCapability } from "@ndea/sdk";
 export interface CoordinationTypeSpec {
   /** the coordination type key (e.g. "focus", "viewSync", "ordering"). */
   type: string;
-  /** schema for ONE cell's value — must validate a `JsonValue`. */
+  /** schema for ONE cell's value: must validate a `JsonValue`. */
   schema: ZodType;
   /** the value a freshly minted cell holds. */
   defaultValue: JsonValue;
@@ -34,7 +34,7 @@ const registry = new Map<string, CoordinationTypeSpec>();
 /**
  * Register a coordination type. Rejects (throws) at define time on a
  * non-`JsonValue` default, a default its own schema rejects, or a missing
- * type/capability/facet — the serializability + completeness gate (KD3/R5).
+ * type/capability/facet: the serializability + completeness gate (KD3/R5).
  */
 export function defineCoordinationType(spec: CoordinationTypeSpec): CoordinationTypeSpec {
   if (!spec.type) throw new Error("coordination type: `type` is required");

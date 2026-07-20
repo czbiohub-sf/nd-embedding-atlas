@@ -1,5 +1,5 @@
 /**
- * count-plot — plugin-backed view node. Categorical bar chart; pred in, sel out.
+ * count-plot: plugin-backed view node. Categorical bar chart; pred in, sel out.
  * Cooks as a predicate pass-through; its bar selection rides the push port (sel),
  * delivered downstream outside the cook (mirrors scatter).
  */

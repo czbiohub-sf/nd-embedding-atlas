@@ -1,4 +1,4 @@
-/** count — a terminal predicate view showing the live number of matching rows. */
+/** count: a terminal predicate view showing the live number of matching rows. */
 
 import { defineNode, exactNodeTypeRef } from "@ndea/sdk";
 

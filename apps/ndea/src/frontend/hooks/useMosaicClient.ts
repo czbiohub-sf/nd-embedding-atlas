@@ -35,7 +35,7 @@ export function useMosaicClient<T>(opts: UseMosaicClientOptions<T>): UseMosaicCl
   const transformRef = useRef(transform);
   transformRef.current = transform;
 
-  // Create the mosaic client — recreate only when coordinator, selection,
+  // Create the mosaic client: recreate only when coordinator, selection,
   // query function, or enabled flag changes.
   useEffect(() => {
     if (!enabled) {

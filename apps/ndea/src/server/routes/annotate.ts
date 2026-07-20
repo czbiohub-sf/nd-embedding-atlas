@@ -1,5 +1,5 @@
 /**
- * User annotation endpoints — write new obs columns with user-defined values.
+ * User annotation endpoints: write new obs columns with user-defined values.
  *
  * Annotation columns live in `ann_{safe_name}` tables aligned to obs_base by
  * __row_index__. They join into the `dataset` VIEW via the same LEFT JOIN
@@ -7,12 +7,12 @@
  * across server restarts (auto-written 2s after any mutation).
  *
  * Routes:
- *   GET    /api/annotations/columns          — list annotation column names
- *   POST   /api/annotations/columns          — create a column
- *   DELETE /api/annotations/columns/:name    — drop a column
- *   POST   /api/annotations/values           — write values
- *   POST   /api/annotations/save             — explicit sidecar checkpoint
- *   GET    /api/annotations/export           — download combined parquet/csv
+ *   GET    /api/annotations/columns         : list annotation column names
+ *   POST   /api/annotations/columns         : create a column
+ *   DELETE /api/annotations/columns/:name   : drop a column
+ *   POST   /api/annotations/values          : write values
+ *   POST   /api/annotations/save            : explicit sidecar checkpoint
+ *   GET    /api/annotations/export          : download combined parquet/csv
  */
 
 import { mkdir } from "node:fs/promises";
@@ -32,7 +32,7 @@ import { commitObsColumns, type ObsColumnInput } from "@ndea/zarr";
 
 // ─── Debounced auto-save ─────────────────────────────────────────────────────
 //
-// ponytail: module-global timer — fine for the single-process, single-session
+// ponytail: module-global timer: fine for the single-process, single-session
 // server (verified: the multi-session concern was refuted in review). If
 // the server ever hosts concurrent sessions, key this by session id.
 
@@ -55,7 +55,7 @@ function scheduleSave(state: ServerSession): void {
 
 /**
  * Flush any pending debounced save synchronously. Call from the shutdown
- * handler — for in-memory sessions the sidecar is the ONLY persistence, so a
+ * handler: for in-memory sessions the sidecar is the ONLY persistence, so a
  * pending save dropped on SIGINT loses up to 2s of edits.
  */
 export async function flushAnnotationSaves(state: ServerSession): Promise<void> {
@@ -72,13 +72,13 @@ export async function flushAnnotationSaves(state: ServerSession): Promise<void> 
   }
 }
 
-// In-flight column creations — closes a TOCTOU window where two concurrent
+// In-flight column creations: closes a TOCTOU window where two concurrent
 // POSTs for the same not-yet-existing name both pass the existence check.
 const _creating = new Set<string>();
 
 // ─── Handlers ────────────────────────────────────────────────────────────────
 
-/** GET /api/annotations/columns — `[{ name, dtype }]`. */
+/** GET /api/annotations/columns: `[{ name, dtype }]`. */
 export function handleListAnnotationColumns(state: ServerSession): Response {
   const columns = [...state.store.annotationColumns.values()].map((e) => ({ name: e.colName, dtype: e.dtype }));
   return Response.json({ columns });
@@ -139,9 +139,9 @@ export async function handleDeleteAnnotationColumn(colName: string, state: Serve
  * POST /api/annotations/values
  *
  * Three write paths (see WriteAnnotationValuesBodySchema):
- *   rows                 — explicit { rowIndex, datasetKey, obsName, value }[]
- *   fromScatterSelection — stamp `label` onto the staged __scatter_selection
- *   predicate            — stamp `label` onto every obs matching a SQL WHERE
+ *   rows                : explicit { rowIndex, datasetKey, obsName, value }[]
+ *   fromScatterSelection: stamp `label` onto the staged __scatter_selection
+ *   predicate           : stamp `label` onto every obs matching a SQL WHERE
  *                          (the node-graph batch door); returns the matched count
  */
 export async function handleWriteAnnotationValues(req: Request, state: ServerSession): Promise<Response> {
@@ -150,7 +150,7 @@ export async function handleWriteAnnotationValues(req: Request, state: ServerSes
   const body = parsed.data;
 
   if (!state.store.hasAnnotationColumn(body.column)) {
-    return Response.json({ error: "Column not found — create it first" }, { status: 404 });
+    return Response.json({ error: "Column not found: create it first" }, { status: 404 });
   }
 
   try {
@@ -173,7 +173,7 @@ export async function handleWriteAnnotationValues(req: Request, state: ServerSes
   }
 }
 
-/** POST /api/annotations/save — explicit sidecar checkpoint. */
+/** POST /api/annotations/save: explicit sidecar checkpoint. */
 export async function handleSaveAnnotations(state: ServerSession): Promise<Response> {
   if (!state.annotationsSidecarPath) {
     return Response.json({ error: "No writable sidecar path configured" }, { status: 503 });
@@ -192,10 +192,10 @@ export async function handleSaveAnnotations(state: ServerSession): Promise<Respo
 }
 
 /**
- * POST /api/annotations/export — "Save file".
+ * POST /api/annotations/export: "Save file".
  *
- * Writes a wide table — `obs_name` (+ `_dataset` when multi-dataset) + the chosen
- * annotation columns — for the row scope (all · active filter) to
+ * Writes a wide table: `obs_name` (+ `_dataset` when multi-dataset) + the chosen
+ * annotation columns: for the row scope (all · active filter) to
  * the server export-dir as parquet/csv.
  */
 export async function handleExportAnnotations(req: Request, state: ServerSession): Promise<Response> {
@@ -208,7 +208,7 @@ export async function handleExportAnnotations(req: Request, state: ServerSession
   }
 
   // Row scope → WHERE. `filter` interpolates the client's Mosaic predicate (same
-  // trust model as /api/export — single-user local tool).
+  // trust model as /api/export: single-user local tool).
   let where = "";
   if (scope.kind === "filter") where = `WHERE ${scope.predicate}`;
 
@@ -232,7 +232,7 @@ export async function handleExportAnnotations(req: Request, state: ServerSession
 }
 
 /**
- * POST /api/annotations/commit[?dryRun=1] — "Commit to .obs".
+ * POST /api/annotations/commit[?dryRun=1]: "Commit to .obs".
  *
  * Writes annotation columns into each source AnnData `.obs` on disk, grouped by
  * `dataset_key` and aligned by `obs_name`. `dryRun` returns the report without

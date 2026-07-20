@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 import { Slider } from "./slider";
 
 /**
- * SliderRow — compact horizontal row: [label] [slider] [value].
+ * SliderRow: compact horizontal row: [label] [slider] [value].
  *
  * Lifts the ad-hoc pattern from ViewerControls/VolumeControls/ChannelControls
  * into a shared primitive. Handles single-thumb sliders; for dual-thumb

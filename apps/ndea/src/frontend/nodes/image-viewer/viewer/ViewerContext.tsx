@@ -58,7 +58,7 @@ export interface DimensionBounds {
    * Pixel-to-physical scale (µm/px) for THIS FOV, from the OME-Zarr
    * `coordinateTransformations` `scale` entry. We can't reuse
    * `metadata.plate_pixel_scale` because it's plate-wide and snapshotted from
-   * the first FOV at startup — datasets with mixed magnifications/objectives
+   * the first FOV at startup: datasets with mixed magnifications/objectives
    * have per-FOV scales that disagree with the plate-level value. Using the
    * wrong scale leaves the bbox at e.g. 2.5× the correct world offset, off
    * the image entirely. `null` when no scale transform is present.
@@ -130,7 +130,7 @@ export interface ViewerContextValue {
   meta: ViewerMeta;
 }
 
-/** @internal Canvas ref callback — only consumed by ViewerCanvas. */
+/** @internal Canvas ref callback: only consumed by ViewerCanvas. */
 export interface ViewerInternalContext extends ViewerContextValue {
   _canvasRef: (canvas: HTMLCanvasElement | null) => void;
 }

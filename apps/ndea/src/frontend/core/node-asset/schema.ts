@@ -247,7 +247,7 @@ const nodeAssetDefinitionSchema = z
     assetId: nodeAssetId(definition.assetId),
     assetVersion: nodeAssetVersion(definition.assetVersion),
   }))
-  .superRefine((definition, context) => validateDefinitionShape(definition as NodeAssetDefinition, context));
+  .superRefine((definition, context) => validateDefinitionShape(definition, context));
 
 const linkedRecordSchema = z
   .object({

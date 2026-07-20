@@ -1,5 +1,5 @@
 /**
- * Cache node — live-until-cached checkpoint semantics.
+ * Cache node: live-until-cached checkpoint semantics.
  *
  * Exercises the source-agnostic Cache node directly against a Workspace:
  *   - live (uncached) passes its input through (R2)
@@ -8,7 +8,7 @@
  *   - Recache re-pins (R4); go-live drops the pin
  *   - the scatter freeze affordance mints and reuses one Cache node (R7)
  *
- * Reads are synchronous via engine.pull — no flush/rAF needed.
+ * Reads are synchronous via engine.pull: no flush/rAF needed.
  */
 
 import { describe, expect, test } from "bun:test";
@@ -21,7 +21,7 @@ import type { Metadata } from "@ndea/protocol";
 
 const nativeWorkspaceNodeLibrary = createNativeAppNodeLibrary();
 
-// rAF doesn't exist under bun:test — the Workspace ctor references it for the
+// rAF doesn't exist under bun:test: the Workspace ctor references it for the
 // flush scheduler. We only pull synchronously, so a no-op stub is enough.
 (globalThis as { requestAnimationFrame?: unknown }).requestAnimationFrame ??= (() => 0) as unknown;
 
@@ -56,11 +56,11 @@ describe("Cache node", () => {
     expect(ws.isCached(cache)).toBe(true);
     expect(cookSql(ws, cache)).toBe("x > 1");
 
-    // upstream moves — cached output stays fixed (R3)
+    // upstream moves: cached output stays fixed (R3)
     ws.updateNodeConfig(wr, { predicateSql: "x > 999" });
     expect(cookSql(ws, cache)).toBe("x > 1");
 
-    // go live again — follows the (new) input
+    // go live again: follows the (new) input
     ws.uncache(cache);
     expect(ws.isCached(cache)).toBe(false);
     expect(cookSql(ws, cache)).toBe("x > 999");
@@ -102,7 +102,7 @@ describe("Cache node", () => {
     expect(cookSql(ws, cache)).toBe("__row_index__ IN (1, 2, 3)");
 
     ws.pinCache(cache);
-    // upstream lasso changes — cached output unaffected
+    // upstream lasso changes: cached output unaffected
     ws.emitLasso(sc, "__row_index__ IN (9)", [rowIndex(9)]);
     expect(cookSql(ws, cache)).toBe("__row_index__ IN (1, 2, 3)");
   });

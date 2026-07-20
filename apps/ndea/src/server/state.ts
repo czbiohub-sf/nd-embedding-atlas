@@ -125,7 +125,7 @@ export interface ServerSession {
   availableObsmKeys: string[];
   loadingTasks: Map<string, Promise<void>>;
   loadErrors: Map<string, string>;
-  /** Dataset handles by name — AnnData or MuData. For loading obsm / getX on demand. */
+  /** Dataset handles by name: AnnData or MuData. For loading obsm / getX on demand. */
   accessors: Map<string, DatasetHandle>;
   /** URL-mount → disk-path descriptors for OME-Zarr HCS stores. */
   plateMounts: PlateMount[];

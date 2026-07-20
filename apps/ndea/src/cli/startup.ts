@@ -1,4 +1,4 @@
-/** Startup orchestration — open stores, prepare data, and launch the server. */
+/** Startup orchestration: open stores, prepare data, and launch the server. */
 
 import type { LaunchConfig } from "./config.ts";
 import { openDatasets, prepareDatasets } from "./startup/datasets.ts";

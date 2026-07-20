@@ -1,5 +1,5 @@
 /**
- * NdHandle — an xyflow Handle wearing the NdPort glyph. The dot IS the
+ * NdHandle: an xyflow Handle wearing the NdPort glyph. The dot IS the
  * type: pred ● / sel ◆ / focus ▪; filled = out, hollow = in. Legality glow
  * during a live wire drag comes from useConnection + the workspace rule
  * (kind-compat + no-dup + DAG).

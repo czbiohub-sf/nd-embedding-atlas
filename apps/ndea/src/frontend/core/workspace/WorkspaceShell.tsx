@@ -1,8 +1,8 @@
 /**
- * WorkspaceShell — the workspace frame: Stage pane + wiring Canvas on the
+ * WorkspaceShell: the workspace frame: Stage pane + wiring Canvas on the
  * two state axes. Canvas disposition (full ↔ split ↔ hidden) is a
  * camera/geometry animation (dispoMs, panes + camera together), never a
- * mount change — ONE ReactFlow stays mounted throughout. Body placement
+ * mount change: ONE ReactFlow stays mounted throughout. Body placement
  * (embedded ↔ staged) reparents through the body-dock. Status bar is the
  * only chrome bar: identity · engine · disposition control · hints · ws LED.
  */
@@ -34,7 +34,7 @@ import type { GhostState } from "./workspace-store";
 
 const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
 
-const WELL = 8; // strip gutter — aligned to stage padding
+const WELL = 8; // strip gutter: aligned to stage padding
 const WIRE_HDR = 26; // wiring tile header height (strip mode)
 const STATUS_H = 22;
 
@@ -74,11 +74,11 @@ function FlipGhost({ ghost }: { ghost: GhostState }) {
   );
 }
 
-/* ── fullscreen — a node body fills the workspace ─────────────────── */
+/* ── fullscreen: a node body fills the workspace ─────────────────── */
 /** Third dock adopter (after canvas node + stage tile): the body and its
  *  header toolbar reparent in, WebGPU state survives by construction, and
  *  exiting hands both back to whichever socket owns them. esc exits
- *  (capture phase — the canvas esc-chain never sees it). */
+ *  (capture phase: the canvas esc-chain never sees it). */
 function FullscreenOverlay() {
   const ws = useWorkspace();
   const fsId = useSelector(ws.ui, (u) => u.fullscreen);
@@ -124,7 +124,7 @@ function StatusBar() {
   const zoomForms = useSelector(ws.ui, (u) => u.zoomForms);
 
   return (
-    // 1fr·auto·1fr grid — the side columns are forced EQUAL, so the
+    // 1fr·auto·1fr grid: the side columns are forced EQUAL, so the
     // STAGE|CANVAS switch sits at the true center and stays put while the
     // flanking text changes width (engine idle/cooking, ⇧F expand/collapse)
     <div
@@ -145,7 +145,7 @@ function StatusBar() {
         <NdIconButton
           icon="power"
           active={telemetryOn}
-          title={telemetryOn ? "cook telemetry on — click to quiet LEDs, dashes, epochs" : "cook telemetry off"}
+          title={telemetryOn ? "cook telemetry on: click to quiet LEDs, dashes, epochs" : "cook telemetry off"}
           onClick={() => ws.setTelemetryEnabled(!telemetryOn)}
         />
         <NdIconButton
@@ -153,8 +153,8 @@ function StatusBar() {
           active={zoomForms}
           title={
             zoomForms
-              ? "zoom forms on — zooming out shrinks nodes to cards/chips"
-              : "zoom forms off — nodes hold their largest view; click to let zoom drive forms"
+              ? "zoom forms on: zooming out shrinks nodes to cards/chips"
+              : "zoom forms off: nodes hold their largest view; click to let zoom drive forms"
           }
           onClick={() => ws.setZoomForms(!zoomForms)}
         />
@@ -166,7 +166,7 @@ function StatusBar() {
           {(
             [
               { disp: "full", Icon: Workflow, title: "wiring fills the workspace" },
-              { disp: "strip", Icon: PanelBottom, title: "split — stage above, wiring docked" },
+              { disp: "strip", Icon: PanelBottom, title: "split: stage above, wiring docked" },
               { disp: "hidden", Icon: PanelBottomClose, title: "stage fills, wiring collapsed" },
             ] as const
           ).map(({ disp, Icon, title }) => {
@@ -267,7 +267,7 @@ function WritableWorkspaceFrame({ policy }: { policy: WorkspaceSurfacePolicy }) 
   const stagedCount = ws.stagedIds().length;
   const stageOccupied = stageHasContent(stageTree, stagedCount);
 
-  // ⇧F cycles the emphasis axis: full → strip → hidden → full. Editor-only —
+  // ⇧F cycles the emphasis axis: full → strip → hidden → full. Editor-only :
   // a fixed-preset build has no canvas to reveal.
   useEffect(() => {
     if (!policy.installAuthoringListeners) return;
@@ -276,7 +276,7 @@ function WritableWorkspaceFrame({ policy }: { policy: WorkspaceSurfacePolicy }) 
       if (el && ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName)) return;
       if (e.key === "F" && e.shiftKey) {
         const cur = ws.store.state.disposition;
-        const i = DISPOSITIONS.indexOf(cur as (typeof DISPOSITIONS)[number]);
+        const i = DISPOSITIONS.indexOf(cur);
         ws.setDisposition(DISPOSITIONS[(i + 1) % DISPOSITIONS.length]);
       }
     };
@@ -284,7 +284,7 @@ function WritableWorkspaceFrame({ policy }: { policy: WorkspaceSurfacePolicy }) 
     return () => window.removeEventListener("keydown", onKey);
   }, [ws, policy.installAuthoringListeners]);
 
-  // refit the camera with the pane animation — but not while hidden (fitView on
+  // refit the camera with the pane animation: but not while hidden (fitView on
   // a 0-height pane yields a garbage viewport that would persist on show).
   // Matches the pane timing so camera + geometry settle together.
   useEffect(() => {
@@ -293,7 +293,7 @@ function WritableWorkspaceFrame({ policy }: { policy: WorkspaceSurfacePolicy }) 
     return () => clearTimeout(t);
   }, [ws, disposition]);
 
-  // disposition geometry rides dispoMs (snappy) — not the camera-fly-to seamMs
+  // disposition geometry rides dispoMs (snappy): not the camera-fly-to seamMs
   const paneTransition = `left ${ND_TIMING.dispoMs}ms ${ND_TIMING.dispoEase}, top ${ND_TIMING.dispoMs}ms ${ND_TIMING.dispoEase}, width ${ND_TIMING.dispoMs}ms ${ND_TIMING.dispoEase}, height ${ND_TIMING.dispoMs}ms ${ND_TIMING.dispoEase}`;
 
   // pane rects (percent/px hybrid via absolute insets). When hidden, the stage
@@ -350,7 +350,7 @@ function WritableWorkspaceFrame({ policy }: { policy: WorkspaceSurfacePolicy }) 
   return (
     <div className="fixed inset-0 flex flex-col overflow-hidden bg-background select-none">
       <div className="relative min-h-0 flex-1">
-        {/* stage — main area (strip) or right column (full canvas, only when occupied) */}
+        {/* stage: main area (strip) or right column (full canvas, only when occupied) */}
         {policy.mountStage && !full ? (
           <div className="absolute overflow-hidden" style={{ ...stageStyle, transition: paneTransition }}>
             <StagePane vertical={false} />
@@ -410,7 +410,7 @@ function WritableWorkspaceFrame({ policy }: { policy: WorkspaceSurfacePolicy }) 
           </div>
         ) : null}
 
-        {/* the ONE canvas — re-disposed, never remounted. Editor-only: the wiring
+        {/* the ONE canvas: re-disposed, never remounted. Editor-only: the wiring
             canvas is the sole home of the Tab palette, right-click add-menu, knife,
             connect, and node-delete listeners. A fixed-preset build does not mount
             it, so authoring is absent while Stage bodies remain unaffected. */}
@@ -426,7 +426,7 @@ function WritableWorkspaceFrame({ policy }: { policy: WorkspaceSurfacePolicy }) 
           </div>
         ) : null}
 
-        {/* fullscreen body — covers the panes, leaves the status bar */}
+        {/* fullscreen body: covers the panes, leaves the status bar */}
         {policy.mountBodies ? <FullscreenOverlay /> : null}
       </div>
 

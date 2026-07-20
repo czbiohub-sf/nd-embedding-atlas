@@ -3,7 +3,7 @@
  * value round-trip through the dataset VIEW, drop, and sidecar persistence.
  *
  * The injection + collision cases guard the findings from the adversarial
- * review — they fail loudly if the quoteIdent / annTableName fixes regress.
+ * review: they fail loudly if the quoteIdent / annTableName fixes regress.
  */
 
 import { afterEach, describe, expect, test } from "bun:test";
@@ -34,7 +34,7 @@ afterEach(async () => {
   for (const f of tmpFiles.splice(0)) await rm(f, { force: true });
 });
 
-describe("annotations — injection defense", () => {
+describe("annotations: injection defense", () => {
   test("malicious column name cannot break out of the quoted identifier", async () => {
     const store = await createMockStore(10);
     activeStore = store;
@@ -44,7 +44,7 @@ describe("annotations — injection defense", () => {
     const evil = 'x" TEXT); DROP TABLE obs_base;--';
     await store.registerAnnotationColumn(evil);
 
-    // obs_base must still exist — injection neutralized.
+    // obs_base must still exist: injection neutralized.
     const rows = await store.queryJson("SELECT COUNT(*) AS cnt FROM obs_base");
     expect(Number(rows[0].cnt)).toBe(10);
 
@@ -55,12 +55,12 @@ describe("annotations — injection defense", () => {
   });
 });
 
-describe("annotations — table-name collisions", () => {
+describe("annotations: table-name collisions", () => {
   test("distinct names that sanitize to the same stem keep separate data", async () => {
     const store = await createMockStore(10);
     activeStore = store;
 
-    // 'col 1' and 'col-1' both sanitize to stem 'col_1' — the hash suffix must
+    // 'col 1' and 'col-1' both sanitize to stem 'col_1': the hash suffix must
     // keep them in distinct tables so the second create can't wipe the first.
     await store.registerAnnotationColumn("col 1");
     await store.writeAnnotationValues("col 1", [{ rowIndex: 0, datasetKey: "ds", obsName: "obs_0", value: "first" }]);
@@ -73,7 +73,7 @@ describe("annotations — table-name collisions", () => {
   });
 });
 
-describe("annotations — lifecycle", () => {
+describe("annotations: lifecycle", () => {
   test("value round-trips through the dataset VIEW; NULL for unannotated rows", async () => {
     const store = await createMockStore(5);
     activeStore = store;
@@ -105,7 +105,7 @@ describe("annotations — lifecycle", () => {
   });
 });
 
-describe("annotations — from scatter selection", () => {
+describe("annotations: from scatter selection", () => {
   test("stamps a label onto the staged __scatter_selection, resolving identity by JOIN", async () => {
     const store = await createMockStore(10);
     activeStore = store;
@@ -144,7 +144,7 @@ describe("annotations — from scatter selection", () => {
   });
 });
 
-describe("annotations — from predicate (node-graph batch door)", () => {
+describe("annotations: from predicate (node-graph batch door)", () => {
   test("stamps a label onto every obs matching the predicate and returns the count", async () => {
     const store = await createMockStore(10);
     activeStore = store;
@@ -172,7 +172,7 @@ describe("annotations — from predicate (node-graph batch door)", () => {
   });
 });
 
-describe("annotations — sidecar", () => {
+describe("annotations: sidecar", () => {
   test("save → load round-trips columns and values", async () => {
     const path = join(tmpdir(), `ndea-test-sidecar-${process.pid}-${Date.now()}.parquet`);
     tmpFiles.push(path);
@@ -207,7 +207,7 @@ describe("annotations — sidecar", () => {
   });
 });
 
-describe("annotations — dtype", () => {
+describe("annotations: dtype", () => {
   test("integer column stores numbers and rejects non-integers", async () => {
     const store = await createMockStore(10);
     activeStore = store;

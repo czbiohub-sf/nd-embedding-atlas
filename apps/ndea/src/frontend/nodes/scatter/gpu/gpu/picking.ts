@@ -7,7 +7,7 @@
  *
  * Why: when points overlap heavily the user clicks the visually frontmost
  * (brightest) point but the CPU grid picks whichever neighbor is nearest
- * in world space — wrong target. The pick buffer + brightness-as-depth
+ * in world space: wrong target. The pick buffer + brightness-as-depth
  * ensures the brightest fragment at each pixel wins.
  *
  * Pipeline:
@@ -24,7 +24,7 @@
  * degrades by ~1px which is fine for hover/click).
  *
  * The pick buffer shares the existing scatter vertex buffers
- * (positions, colors, selection, visibility) — that's why we use raw
+ * (positions, colors, selection, visibility): that's why we use raw
  * WebGPU for the pipeline instead of TypeGPU's render-pipeline shape:
  * we need to bind the same `quadBuffer`, `posBuffer`, `colorBuffer`,
  * `selectedBuffer`, and `visibilityBuffer` slots in the same order
@@ -51,9 +51,9 @@ export interface PickResult {
 }
 
 export interface PickingSystem {
-  /** Mark the pick buffer stale — next pick re-renders before sampling. */
+  /** Mark the pick buffer stale: next pick re-renders before sampling. */
   markDirty(): void;
-  /** Resize hook — invalidates the cached buffer and reallocates targets. */
+  /** Resize hook: invalidates the cached buffer and reallocates targets. */
   resize(): void;
   /**
    * Pick at canvas-CSS-pixel coordinates `(cssX, cssY)`. Resolves to the
@@ -61,7 +61,7 @@ export interface PickingSystem {
    * buffer if dirty; otherwise samples the cache.
    */
   pick(cssX: number, cssY: number): Promise<PickResult | null>;
-  /** Update the AABB of pickable points — used by the empty-space cull. */
+  /** Update the AABB of pickable points: used by the empty-space cull. */
   updateBoundingBox(positions: Float32Array): void;
   /** Tear down GPU resources. */
   destroy(): void;
@@ -92,7 +92,7 @@ export function createPickingSystem(
   const vertexModule = device.createShaderModule({ code: PICK_VERTEX_WGSL, label: "pick-vertex" });
   const fragmentModule = device.createShaderModule({ code: PICK_FRAGMENT_WGSL, label: "pick-fragment" });
 
-  // Bind group layout — must match PICK_VERTEX_WGSL group(0) bindings.
+  // Bind group layout: must match PICK_VERTEX_WGSL group(0) bindings.
   const bindGroupLayout = device.createBindGroupLayout({
     label: "pick-bgl",
     entries: [
@@ -106,7 +106,7 @@ export function createPickingSystem(
   });
 
   // TgpuUniform → underlying GPUBuffer via `.buffer`. We avoid `root.unwrap`
-  // here because its overload set rejects scalar (f32/u32) uniforms — the
+  // here because its overload set rejects scalar (f32/u32) uniforms: the
   // shorthand `.buffer` accessor works for every shape.
   const bindGroup = device.createBindGroup({
     label: "pick-bg",
@@ -128,7 +128,7 @@ export function createPickingSystem(
       module: vertexModule,
       entryPoint: "main",
       buffers: [
-        // Vertex layout — must match the main render's vertex buffer
+        // Vertex layout: must match the main render's vertex buffer
         // bindings (slots 0..4 in the order the main pipeline assigns
         // them). The bundle in pipeline.ts uses:
         //   slot 0 = quadLayout (vec2f, "vertex")
@@ -184,7 +184,7 @@ export function createPickingSystem(
 
   function ensureTargets(): PickingTargets {
     const dpr = window.devicePixelRatio || 1;
-    // Half resolution — luxar uses the same trick. Pick precision degrades
+    // Half resolution: luxar uses the same trick. Pick precision degrades
     // by ~1 px which is far inside the 5×5 readback window.
     const fullW = Math.max(1, Math.floor(canvas.clientWidth * dpr));
     const fullH = Math.max(1, Math.floor(canvas.clientHeight * dpr));
@@ -222,7 +222,7 @@ export function createPickingSystem(
 
   // ── Cache + readback staging ──────────────────────────────────────────
   let dirty = true;
-  // Reused readback buffer — rgba32f, sized for the largest plausible 5×5
+  // Reused readback buffer: rgba32f, sized for the largest plausible 5×5
   // readback (5 * 5 * 16 bytes = 400 B, but we copy the whole row range so
   // we round up to 256-aligned bytesPerRow).
   let readbackBuffer: GPUBuffer | null = null;
@@ -275,7 +275,7 @@ export function createPickingSystem(
       colorAttachments: [
         {
           view: t.colorView,
-          // Clear to 0 — fragments with R=0 mean "no hit" (we encoded
+          // Clear to 0: fragments with R=0 mean "no hit" (we encoded
           // pointId as i+1 in the vertex shader so the first point is 1).
           clearValue: { r: 0, g: 0, b: 0, a: 0 },
           loadOp: "clear",
@@ -284,7 +284,7 @@ export function createPickingSystem(
       ],
       depthStencilAttachment: {
         view: t.depthView,
-        // 1.0 = "behind everything" — first fragment is closer (smaller
+        // 1.0 = "behind everything": first fragment is closer (smaller
         // 1-brightness).
         depthClearValue: 1.0,
         depthLoadOp: "clear",
@@ -309,7 +309,7 @@ export function createPickingSystem(
   let inflight: Promise<unknown> | null = null;
 
   async function pick(cssX: number, cssY: number): Promise<PickResult | null> {
-    // Serialize picks — overlapping mapAsync calls would interleave.
+    // Serialize picks: overlapping mapAsync calls would interleave.
     if (inflight) await inflight;
     const job = (async (): Promise<PickResult | null> => {
       const t = ensureTargets();
@@ -320,7 +320,7 @@ export function createPickingSystem(
       if (aabb) {
         const w = canvas.clientWidth;
         const h = canvas.clientHeight;
-        // Use latest view uniform via the host-side mirror — but we
+        // Use latest view uniform via the host-side mirror: but we
         // don't have access here. Instead, rebuild ndc → world by
         // reading the four uniforms directly. Cheap because the
         // uniform mirror is a 16-byte read.
@@ -336,7 +336,7 @@ export function createPickingSystem(
         dirty = false;
       }
 
-      // Cursor in pick-buffer pixels — pick buffer is at half DPR.
+      // Cursor in pick-buffer pixels: pick buffer is at half DPR.
       // CSS pixels → DPR pixels → half-res.
       const dpr = window.devicePixelRatio || 1;
       const halfDpr = dpr / 2;

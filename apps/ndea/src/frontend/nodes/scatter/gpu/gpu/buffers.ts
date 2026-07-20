@@ -11,7 +11,7 @@ const DEFAULTS = {
   pointRadius: 0.002,
   selectionDimFactor: 0.08,
   /**
-   * Default per-point alpha multiplier — pinned to 1.0 for solid markers.
+   * Default per-point alpha multiplier: pinned to 1.0 for solid markers.
    * Lower values are useful when overdraw should fade in via additive
    * blending; users opt in via the dev-tools slider when needed.
    */
@@ -33,10 +33,10 @@ export function createUniforms(root: TgpuRoot, aspectRatio: number, renderConfig
   // `sharpnessUniform` because the picking-shaders.ts WGSL strings reference
   // it by that name at @binding(4); renaming would force a binding-layout
   // refactor in the picking pipeline. The fragment shader uses it as an
-  // alpha multiplier, picking uses it as a falloff exponent — both work in
+  // alpha multiplier, picking uses it as a falloff exponent: both work in
   // the [0.05, 1.0] opacity range without tuning.
   const sharpnessUniform = root.createUniform(d.f32, renderConfig?.pointOpacity ?? DEFAULTS.pointOpacity);
-  // Minimum NDC quad half-extent — keeps point markers above ~1.5 device
+  // Minimum NDC quad half-extent: keeps point markers above ~1.5 device
   // pixels at any zoom so the fragment-shader fwidth AA stays valid.
   // Initialised to 0; orchestrator writes a real value on first resize.
   const pixelFloorUniform = root.createUniform(d.f32, 0);
@@ -55,7 +55,7 @@ export function createBuffers(root: TgpuRoot, numPoints: number, _numCategories:
 
   const posBuffer = root.createBuffer(d.arrayOf(d.vec2f, numPoints)).$usage("vertex", "storage");
 
-  // Packed RGBA as u32 (4 bytes/point vs 16 bytes for vec4f) — 4× bandwidth reduction.
+  // Packed RGBA as u32 (4 bytes/point vs 16 bytes for vec4f): 4× bandwidth reduction.
   // Byte layout (little-endian): [R, G, B, A] packed as R | (G<<8) | (B<<16) | (A<<24).
   // The vertex shader unpacks via the unpackColor WGSL fn in shaders.ts.
   // "storage" allows the GPU color-pack compute shader to write packed RGBA directly
@@ -63,7 +63,7 @@ export function createBuffers(root: TgpuRoot, numPoints: number, _numCategories:
 
   const selectedBuffer = root.createBuffer(d.arrayOf(d.u32, numPoints)).$usage("vertex", "storage");
 
-  // Category indices (u32 per point) — used by density engine and GPU color-pack shader
+  // Category indices (u32 per point): used by density engine and GPU color-pack shader
   const categoryBuffer = root.createBuffer(d.arrayOf(d.u32, numPoints)).$usage("storage");
 
   // Palette buffer: MAX_PALETTE_SIZE packed u32 RGBA entries, written by updateColors.

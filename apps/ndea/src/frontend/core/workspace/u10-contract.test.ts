@@ -150,10 +150,10 @@ describe("U10 exact-reference persistence contract", () => {
     expect(versionedLibrary.getSpecExact(v1.ref)?.definition).toBe(v1);
     expect(versionedLibrary.getSpecExact(v2.ref)?.definition).toBe(v2);
 
-    globalThis.requestAnimationFrame = ((callback: FrameRequestCallback) => {
+    globalThis.requestAnimationFrame = (callback: FrameRequestCallback) => {
       callback(0);
       return 0;
-    }) as typeof requestAnimationFrame;
+    };
     const workspace = new Workspace({
       coordinator: { query: () => Promise.resolve([]) } as never,
       table: "atlas",

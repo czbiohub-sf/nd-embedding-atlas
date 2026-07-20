@@ -16,12 +16,12 @@ interface Props {
   colormap: string;
   vmin: number;
   vmax: number;
-  /** Full data range — defines slider bounds. Defaults to [vmin, vmax] if not provided. */
+  /** Full data range: defines slider bounds. Defaults to [vmin, vmax] if not provided. */
   absoluteVmin?: number;
   absoluteVmax?: number;
   /** Whether the colormap gradient is reversed (display-only until backend ships). */
   reversed?: boolean;
-  /** Current scale mode — wired to UI but not in query key until backend ships. */
+  /** Current scale mode: wired to UI but not in query key until backend ships. */
   scale?: "linear" | "log" | "sqrt";
   /** Called on every move with the current range (real-time). */
   onRangeChange?: (vmin: number, vmax: number) => void;
@@ -31,7 +31,7 @@ interface Props {
   onReversedChange?: (reversed: boolean) => void;
   /** Called when the user selects a scale mode. */
   onScaleChange?: (scale: "linear" | "log" | "sqrt") => void;
-  /** Called when the user clicks "Reset range" — should restore absolute min/max. */
+  /** Called when the user clicks "Reset range": should restore absolute min/max. */
   onResetRange?: () => void;
 }
 
@@ -167,7 +167,7 @@ export function ContinuousLegend({
           </ContextMenuContent>
         </ContextMenu>
 
-        {/* shadcn Slider — same component as ChannelControls contrast slider,
+        {/* shadcn Slider: same component as ChannelControls contrast slider,
             no wrapping elements that could swallow pointer events. */}
         {hasRange && (
           <Slider

@@ -1,9 +1,9 @@
 /**
- * Coordination backbone (U1 spike) — store-shape + resolve/notify unit tests.
+ * Coordination backbone (U1 spike): store-shape + resolve/notify unit tests.
  *
  * The backbone is the symmetric cross-view plane: N nodes referencing the same
  * (type, scope) share one latest-wins cell. These exercise it directly over a
- * bare coordination document port — the body-dock seam is covered by the
+ * bare coordination document port: the body-dock seam is covered by the
  * host-routing conformance + manual verification.
  */
 
@@ -27,7 +27,7 @@ function fresh(): { co: CoordinationScopeCellPort; store: Store<CoordinationDocu
   return { co: createCoordination(coordinationDocumentPort(store)), store };
 }
 
-describe("Coordination — assignment + shared reads", () => {
+describe("Coordination: assignment + shared reads", () => {
   test("two nodes on focus.A share one cell; a write through one is read by both", () => {
     const { co } = fresh();
     co.assignScope("n1", "focus", "A");
@@ -103,7 +103,7 @@ describe("Coordination — assignment + shared reads", () => {
   });
 });
 
-describe("Coordination — selector-scoped subscribe (KD5)", () => {
+describe("Coordination: selector-scoped subscribe (KD5)", () => {
   test("fires on the resolved cell changing", () => {
     const { co } = fresh();
     co.assignScope("n1", "focus", "A");
@@ -138,7 +138,7 @@ describe("Coordination — selector-scoped subscribe (KD5)", () => {
   });
 });
 
-describe("Coordination — object cells (viewSync) + type isolation", () => {
+describe("Coordination: object cells (viewSync) + type isolation", () => {
   test("an object cell (pan/zoom) is shared across nodes on the scope", () => {
     const { co } = fresh();
     co.assignScope("a", "viewSync", "lock1");

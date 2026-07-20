@@ -1,5 +1,5 @@
 /**
- * NdGraphNode — the single xyflow node type for the workspace. Its hooks keep
+ * NdGraphNode: the single xyflow node type for the workspace. Its hooks keep
  * graph and telemetry subscriptions unconditional; render-only units project
  * the resulting model into unresolved, proxy, and standard node forms.
  */

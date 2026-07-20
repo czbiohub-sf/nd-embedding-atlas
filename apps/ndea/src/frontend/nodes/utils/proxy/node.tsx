@@ -1,5 +1,5 @@
 /**
- * proxy — a subnet seam marker (⊳ in / ⊲ out). Chip-only, no body; passes its
+ * proxy: a subnet seam marker (⊳ in / ⊲ out). Chip-only, no body; passes its
  * input through so the seam relays predicates across the hierarchy boundary.
  */
 

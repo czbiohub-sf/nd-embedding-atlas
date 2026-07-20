@@ -1,11 +1,11 @@
 import type { PanelId } from "../lib/branded-types";
 
 /**
- * RowSetSource — fully-tagged identity for a row-set broadcast.
+ * RowSetSource: fully-tagged identity for a row-set broadcast.
  *
- *   { kind: "panel"; panelId }    — a real scatter panel originated this
+ *   { kind: "panel"; panelId }   : a real scatter panel originated this
  *                                   selection (lasso, marquee, etc.)
- *   { kind: "external"; id }      — a non-panel programmatic source
+ *   { kind: "external"; id }     : a non-panel programmatic source
  *
  * Lives in its own file (not co-located with RowSetSyncStore) to avoid a
  * cycle: RoaringBroadcastStore needs the type to key its bitmap map, and

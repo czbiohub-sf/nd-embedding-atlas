@@ -7,8 +7,10 @@ description: Dev setup, quality gates, project structure, and release flow.
 
 ### Prerequisites
 
-- **[Bun](https://bun.com)** — runtime + package manager. CI uses the version pinned in `package.json`'s `packageManager` field; locally any matching major works.
-- **[Vite+](https://viteplus.dev/)** (`vp`) — toolchain for lint, fmt, test, and the dev server. Install once globally; `vp` drives every dev workflow. (The app build runs on Bun — `vp run build`.)
+- **[Vite+](https://viteplus.dev/)** (`vp`): project command interface for checks, the frontend dev server, and workspace task orchestration.
+- **[Bun](https://bun.com)**: runtime and package manager used by the tasks that `vp` dispatches. CI uses the version pinned in `package.json`.
+
+Use `vp` for routine development commands. Use Bun directly for dependency installation or when intentionally running a Bun entrypoint. `vp run` dispatches package scripts, which use Bun for tests, scripts, and single-binary compilation.
 
 ### Clone and install
 
@@ -18,7 +20,7 @@ cd nd-embedding-atlas
 bun install
 ```
 
-The root install resolves product workspaces only. The docs app keeps its own
+The root install resolves the application and shared packages. The docs app keeps its own
 lockfile and install under `docs/`.
 
 ## Development workflow
@@ -29,15 +31,7 @@ vp run dev path/to/data.zarr
 ```
 
 The command starts `apps/ndea/src/cli/index.ts` and the app's Vite server.
-Development enables the node editor and persists each dataset's graph in
-browser storage. Production builds compile the editor out, ignore stored
-graphs, and open the fixed `--preset` layout (`annotate` by default).
-
-To test an editor-enabled production bundle explicitly:
-
-```bash
-VITE_NDEA_NODE_EDITOR=true vp run build
-```
+Production builds open a shipped `--preset` layout (`annotate` by default).
 
 Frontend-only when the backend already runs separately:
 
@@ -50,40 +44,30 @@ vp dev apps/ndea
 ```bash
 vp check vite.config.ts bunli.config.ts scripts
 vp run -r check          # package checks in dependency order
-vp run -r test           # Bun-native suites per workspace
+vp run -r test           # package tests in dependency order
 vp run build             # frontend + single-file binary
 ```
 
 CI runs the same checks and tests, verifies generated CLI metadata, and builds
 the native binary matrix.
 
-## Fallow (optional code-health audit)
+## Optional code-health audit
 
-[Fallow](https://docs.fallow.tools/) flags dead code, duplication, complexity hotspots, and circular dependencies in TypeScript / JavaScript projects. Not a CI gate; run it on demand.
+[Fallow](https://docs.fallow.tools/) checks for dead code, duplication, complexity, and dependency problems. Run it through the root Vite+ task when reviewing a branch:
 
 ```bash
-bunx fallow audit --changed-since main   # scoped to your branch's diff
-bunx fallow dead-code                    # unused files, exports, deps
-bunx fallow dupes                        # repeated code blocks
-bunx fallow health                       # cyclomatic / cognitive complexity
-bunx fallow fix --dry-run                # preview auto-fixes
+vp run audit --changed-since main
 ```
 
-When to reach for it:
-
-- **Before a non-trivial PR** — `bunx fallow audit --changed-since main` returns a verdict on the files you touched.
-- **After merging a large feature** — catches dead code, orphaned exports, and duplication the review missed.
-- **Picking up unfamiliar code** — `dead-code` and `health` show which files are load-bearing vs. detritus.
-
-The static layer is MIT-licensed. The runtime-coverage feature (tracks what executed in production) is paid, lives behind `fallow coverage`, and isn't used here.
+This audit is optional and does not run in CI.
 
 ## Code style
 
 Enforced by `vp check`:
 
-- **TypeScript 6 strict** — no implicit any, `import type` for type-only imports
-- **[Oxlint](https://oxc.rs/docs/guide/usage/linter.html)** + **[Oxfmt](https://oxc.rs/docs/guide/usage/formatter.html)** — config in `vite.config.ts` `lint` / `fmt` blocks
-- 4-space indent, double quotes, trailing commas, semicolons
+- **TypeScript 6 strict**: no implicit any, `import type` for type-only imports
+- **[Oxlint](https://oxc.rs/docs/guide/usage/linter.html)** + **[Oxfmt](https://oxc.rs/docs/guide/usage/formatter.html)**: config in `vite.config.ts` `lint` / `fmt` blocks
+- 2-space indent, double quotes, trailing commas, semicolons
 - `@/` path alias → `apps/ndea/src/frontend/`
 - Kebab-case ordinary modules, PascalCase React component modules, and `useX` hook modules. Oxlint enforces these
   filename shapes; review enforces each file's semantic role.
@@ -94,7 +78,7 @@ Enforced by `vp check`:
 ```text
 apps/ndea/         # CLI, server, frontend, and binary builder
 packages/protocol/ # Shared Zod request and response schemas
-packages/sdk/      # Public node/plugin authoring and host contracts
+packages/sdk/      # Host contracts and shared application types
 packages/zarr/     # Bun-backed AnnData, MuData, and OME-Zarr I/O
 docs/              # Independent Waku app and lockfile
 ```
@@ -103,10 +87,10 @@ See [`AGENTS.md`](https://github.com/czbiohub-sf/nd-embedding-atlas/blob/main/AG
 
 ## Releases
 
-| Channel       | How it ships                                                     |
-| ------------- | ---------------------------------------------------------------- |
-| `stable`      | Manual: tag `vX.Y.Z` and push — `release.yml` builds + publishes |
-| `pre-release` | Manual: tag `vX.Y.Z-alpha.N` / `-beta.N` / `-rc.N` and push      |
+| Channel       | How it ships                                                    |
+| ------------- | --------------------------------------------------------------- |
+| `stable`      | Manual: tag `vX.Y.Z` and push; `release.yml` builds + publishes |
+| `pre-release` | Manual: tag `vX.Y.Z-alpha.N` / `-beta.N` / `-rc.N` and push     |
 
 A `pre-release` cut opens an auto-generated PR that bumps `manifest.json`'s `pre-release` pointer. Merge to activate.
 
@@ -123,7 +107,7 @@ Updates `.bunli/commands.gen.ts`, which feeds shell-completion script generation
 ## Verifying a build
 
 ```bash
-bun run build
+vp run build
 ./dist/ndea doctor
 ```
 

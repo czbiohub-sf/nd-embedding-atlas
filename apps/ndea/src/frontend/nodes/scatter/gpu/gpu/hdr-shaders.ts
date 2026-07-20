@@ -7,14 +7,14 @@
  *   - ToneMap config uniform: { exposure, mode }
  *
  * One fullscreen pass:
- *   tonemap — sample HDR, exposure adjust, AgX/ACES/Reinhard conversion,
+ *   tonemap: sample HDR, exposure adjust, AgX/ACES/Reinhard conversion,
  *             write to swap chain.
  *
  * AgX implementation derived from the public-domain Filament / Three.js
  * port (Troy Sobotka). Constants embedded as `mat3x3<f32>` in the shader.
  */
 
-/** Tone mapping mode IDs — keep in sync with hdr.ts. */
+/** Tone mapping mode IDs: keep in sync with hdr.ts. */
 export const TONEMAP_NONE = 0;
 export const TONEMAP_REINHARD = 1;
 export const TONEMAP_ACES = 2;
@@ -64,13 +64,13 @@ const MODE_ACES: u32 = 2u;
 const MODE_AGX: u32 = 3u;
 const MODE_NEUTRAL: u32 = 4u;
 
-// AgX input transform — REC.709 → AgX working space
+// AgX input transform: REC.709 → AgX working space
 const AGX_IN = mat3x3<f32>(
   0.842479062253094,  0.0423282422610123, 0.0423756549057051,
   0.0784335999999992, 0.878468636469772,  0.0784336,
   0.0792237451477643, 0.0791661274605434, 0.879142973793104
 );
-// AgX output transform — AgX → REC.709 (sRGB primaries)
+// AgX output transform: AgX → REC.709 (sRGB primaries)
 const AGX_OUT = mat3x3<f32>(
    1.19687900512017,  -0.0980208811401368, -0.0990297440797205,
   -0.0528968517574562, 1.15190312990417,   -0.0989611768448433,
@@ -105,7 +105,7 @@ fn tonemap_agx(c: vec3<f32>) -> vec3<f32> {
   return clamp(outRgb, vec3<f32>(0.0), vec3<f32>(1.0));
 }
 
-// Approximate ACES — the popular Krzysztof Narkowicz fit used in UE4.
+// Approximate ACES: the popular Krzysztof Narkowicz fit used in UE4.
 fn tonemap_aces(c: vec3<f32>) -> vec3<f32> {
   let a = 2.51;
   let b = 0.03;
@@ -120,7 +120,7 @@ fn tonemap_reinhard(c: vec3<f32>) -> vec3<f32> {
 }
 
 // Khronos PBR Neutral tone mapper (glTF spec / three.js NeutralToneMapping).
-// Identity below ~0.76 luminance — preserves color identity exactly through
+// Identity below ~0.76 luminance: preserves color identity exactly through
 // the entire low-/mid-tone range. Above the start-compression knee, peak
 // luminance is rolled off and a small chroma desaturation is applied so
 // extreme HDR clusters glow toward white instead of clipping. The right
@@ -174,7 +174,7 @@ fn main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
 
   // Encode for sRGB display. Canvas is 'rgba8unorm' (no implicit gamma).
   // Pass HDR alpha through (capped) so the swap chain respects untouched
-  // pixels — otherwise the CSS background can't show through under
+  // pixels: otherwise the CSS background can't show through under
   // alphaMode: 'premultiplied' (light theme).
   let srgb = linear_to_srgb(mapped);
   let alpha = clamp(sceneRgba.a, 0.0, 1.0);

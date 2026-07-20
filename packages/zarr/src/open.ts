@@ -23,7 +23,7 @@ type ZarrGroup = zarr.Group<Readable>;
 // ─── OME-Zarr (inline) ──────────────────────────────────────────────────────
 // In production the OME-Zarr pipeline runs through `server/plate.ts`
 // (iohub-style mount + channel metadata). The detector + parser here exist so
-// callers who hand us a plate root don't hit an "unknown convention" error —
+// callers who hand us a plate root don't hit an "unknown convention" error :
 // result exposes multiscales metadata and the group handle; callers reach into
 // those directly if they need the resolution hierarchy.
 

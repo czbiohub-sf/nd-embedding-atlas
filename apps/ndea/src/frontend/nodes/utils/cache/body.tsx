@@ -32,7 +32,7 @@ export function CacheBody({ host }: NodeBodyProps<unknown, never, CheckpointNode
 
       {stale ? (
         <div className="flex items-center gap-1.5 rounded border border-wire-sel/40 bg-wire-sel/10 px-1.5 py-[3px]">
-          <span className="font-mono text-[9px] text-wire-sel">⚠ stale — input @ {String(epoch).padStart(4, "0")}</span>
+          <span className="font-mono text-[9px] text-wire-sel">⚠ stale: input @ {String(epoch).padStart(4, "0")}</span>
           <NdIconButton
             icon="freeze"
             label="recache"
@@ -70,8 +70,8 @@ export function CacheBody({ host }: NodeBodyProps<unknown, never, CheckpointNode
 
       <NdCaption className="text-[9px]">
         {pinned
-          ? "pinned row-set — output is a stable predicate (push → pull converts here)"
-          : "live — output follows the input until you cache it"}
+          ? "pinned row-set: output is a stable predicate (push → pull converts here)"
+          : "live: output follows the input until you cache it"}
       </NdCaption>
     </div>
   );

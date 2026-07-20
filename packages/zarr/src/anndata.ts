@@ -1,12 +1,12 @@
 /**
- * AnnData — convention parser, accessor, and public class.
+ * AnnData: convention parser, accessor, and public class.
  *
  * Three historically-separate concerns now in one file:
- *   1. Convention detector + parser (`detectAnnData`, `parseAnnData`) —
+ *   1. Convention detector + parser (`detectAnnData`, `parseAnnData`) :
  *      consumed by `open.ts`.
- *   2. `AnnDataAccessor` — internal class doing lazy X / obsm / layer
+ *   2. `AnnDataAccessor`: internal class doing lazy X / obsm / layer
  *      reads and `sel`/`isel` selection.
- *   3. `AnnData` — public class, thin wrapper over the accessor. Exposes
+ *   3. `AnnData`: public class, thin wrapper over the accessor. Exposes
  *      obs/var as `LazyDataFrame`s and adds `toDuckDB()` ingest.
  */
 
@@ -53,7 +53,7 @@ export async function parseAnnData(group: ZarrGroup, storePath?: string): Promis
 /**
  * Read an axis DataFrame (obs or var). Parallel reader if we have a local
  * filesystem path (42x faster on large stores), else fall back to sequential.
- * `required=false` swallows missing-group errors — var can legitimately be
+ * `required=false` swallows missing-group errors: var can legitimately be
  * empty on embedding-only stores.
  */
 async function readAxisFrame(
@@ -101,7 +101,7 @@ export interface DenseResult {
   shape: number[];
 }
 
-/** Result type for getX / getLayer — sparse or dense. */
+/** Result type for getX / getLayer: sparse or dense. */
 export type MatrixResult = SparseArray | DenseResult;
 
 /** Internal AnnData axis view over a parsed store. */
@@ -208,7 +208,7 @@ export class AnnDataAccessor {
    * List the embedding keys present under `obsm/`.
    *
    * Strategy (most-portable first):
-   *   1. Wrap the backing store with `withConsolidatedMetadata` — reads
+   *   1. Wrap the backing store with `withConsolidatedMetadata`: reads
    *      `.zmetadata` (v2) or `consolidated_metadata` in `zarr.json` (v3).
    *      AnnData-Python writes consolidated metadata by default, so this
    *      covers most on-disk and HTTP-hosted AnnData stores in one request.
@@ -217,10 +217,10 @@ export class AnnDataAccessor {
    *      generic store listing exists in the Zarr spec).
    *
    * Entries that don't look like zarr arrays/groups are filtered out.
-   * Each surviving candidate is validated as a real 2-D numeric array —
+   * Each surviving candidate is validated as a real 2-D numeric array :
    * 1-D arrays, bool columns, and scalar entries are dropped. This
    * matches the actual embedding shape, and (on MuData stores) skips
-   * `obsm/<modName>` — that's the obs-to-modality binary mapping, not
+   * `obsm/<modName>`: that's the obs-to-modality binary mapping, not
    * an embedding.
    */
   async listObsmKeys(): Promise<string[] | null> {
@@ -264,14 +264,14 @@ export class AnnDataAccessor {
         if (!entry.path.startsWith(obsmPrefix)) continue;
         const rest = entry.path.slice(obsmPrefix.length);
         if (!rest) continue;
-        // Take the first path segment — arrays show as "obsm/X_umap", groups
+        // Take the first path segment: arrays show as "obsm/X_umap", groups
         // show as "obsm/X_umap" (then children at deeper paths).
         const first = rest.split("/")[0];
         if (first) keys.add(first);
       }
       return [...keys].toSorted();
     } catch {
-      // No consolidated metadata available — let caller try the next strategy.
+      // No consolidated metadata available: let caller try the next strategy.
       return null;
     }
   }
@@ -309,7 +309,7 @@ export class AnnDataAccessor {
    */
   async getObsm(name: string): Promise<DenseResult> {
     const path = `obsm/${name}`;
-    if (!this._group) throw new Error("No zarr group available — cannot lazy load obsm");
+    if (!this._group) throw new Error("No zarr group available: cannot lazy load obsm");
     const location = this._group.resolve(path);
 
     // obsm can be a plain array or a group with encoding-type: array
@@ -321,7 +321,7 @@ export class AnnDataAccessor {
       const grp = await zarr.open(location, { kind: "group" });
       const attrs = (grp.attrs ?? {}) as Record<string, unknown>;
       if (attrs["encoding-type"] === "array") {
-        // It's still just a zarr array at the same path — re-open as array
+        // It's still just a zarr array at the same path: re-open as array
         const arr = await zarr.open(location, { kind: "array" });
         const result = await zarr.get(arr);
         data = result.data as DenseMatrixData;
@@ -345,7 +345,7 @@ export class AnnDataAccessor {
    * AnnData-"array" group encoding (same two-step dance as `getObsm`).
    */
   private async _openObsmArray(name: string) {
-    if (!this._group) throw new Error("No zarr group available — cannot access obsm");
+    if (!this._group) throw new Error("No zarr group available: cannot access obsm");
     const location = this._group.resolve(`obsm/${name}`);
     try {
       const grp = await zarr.open(location, { kind: "group" });
@@ -376,7 +376,7 @@ export class AnnDataAccessor {
    * Load a single column of an obsm embedding as a Float32Array of length nObs.
    *
    * Uses zarrita's fancy indexing (`[null, colIndex]`) to pull one stride
-   * instead of the full matrix — for 1024-dim embeddings this drops the
+   * instead of the full matrix: for 1024-dim embeddings this drops the
    * read from ~115 MB to ~224 KB.
    *
    * Obs selection is applied after the slice read. Cancellation is
@@ -520,7 +520,7 @@ export class AnnDataAccessor {
    * Handles both sparse (CSR/CSC) and dense arrays.
    */
   private async _loadMatrix(path: string): Promise<MatrixResult> {
-    if (!this._group) throw new Error("No zarr group available — cannot lazy load matrix");
+    if (!this._group) throw new Error("No zarr group available: cannot lazy load matrix");
     const location = this._group.resolve(path);
 
     // Try as sparse group first
@@ -534,7 +534,7 @@ export class AnnDataAccessor {
         return this._applySparseSelection(sparse);
       }
     } catch {
-      // Not a group — try as dense array
+      // Not a group: try as dense array
     }
 
     // Dense array
@@ -761,7 +761,7 @@ export class AnnData implements DatasetHandle {
     return this._accessor.nVar;
   }
 
-  // ── Lazy matrix / embedding reads — delegate to accessor ────────────────
+  // ── Lazy matrix / embedding reads: delegate to accessor ────────────────
 
   getX(): Promise<MatrixResult> {
     return this._accessor.getX();
@@ -802,7 +802,7 @@ export class AnnData implements DatasetHandle {
    *
    * Both tables carry a `__{axis}_index__ INTEGER` identity column and a
    * `{axis}_name VARCHAR` from the DataFrame's index. Cross-axis join is
-   * left to the caller — the tables are independent by construction
+   * left to the caller: the tables are independent by construction
    * (obs_base has nObs rows; var_base has nVars rows).
    */
   async toDuckDB(conn: DuckDBConnection, options: ToDuckDBOptions = {}): Promise<void> {
@@ -822,7 +822,7 @@ export class AnnData implements DatasetHandle {
     }
   }
 
-  /** Escape hatch — underlying accessor. Prefer AnnData's own methods. */
+  /** Escape hatch: underlying accessor. Prefer AnnData's own methods. */
   get accessor(): AnnDataAccessor {
     return this._accessor;
   }

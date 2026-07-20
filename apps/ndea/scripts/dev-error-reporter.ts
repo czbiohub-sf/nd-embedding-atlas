@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import type { Plugin } from "vite-plus";
 
 /**
- * devErrorReporter — dev-only Vite plugin that bridges backend errors into
+ * devErrorReporter: dev-only Vite plugin that bridges backend errors into
  * Vite's HMR client error overlay.
  *
  * Two mechanisms:
@@ -53,7 +53,7 @@ export function devErrorReporter(): Plugin {
           mkdirSync(dirname(outPath), { recursive: true });
           writeFileSync(outPath, JSON.stringify({ url, port, pid: process.pid }, null, 2), "utf8");
         } catch (err) {
-          // Non-fatal — backend error overlay just won't work without this.
+          // Non-fatal: backend error overlay just won't work without this.
           server.config.logger.warn(`[dev-error-reporter] failed to write .vite/dev-server.json: ${String(err)}`);
         }
       });

@@ -89,5 +89,5 @@ export function resolveDisabledNodeStyle(
 
 export function formatCookStatus(cooking: boolean, cookMs?: number): string {
   if (cooking) return "cooking…";
-  return cookMs === undefined ? "cook —" : `cook ${cookMs.toFixed(1)}ms`;
+  return cookMs === undefined ? "cook :" : `cook ${cookMs.toFixed(1)}ms`;
 }

@@ -1,9 +1,9 @@
 /**
- * Annotate view descriptor (annotation spike — the node-graph batch "door").
+ * Annotate view descriptor (annotation spike: the node-graph batch "door").
  *
- * A TERMINAL `view` node (not a transform): it consumes the upstream predicate —
+ * A TERMINAL `view` node (not a transform): it consumes the upstream predicate :
  * the engine sink delivers it into `host.inputPredicate`, exactly as Table/Gallery
- * receive their filter — as the iteration domain for labeling, and emits a `focus`
+ * receive their filter: as the iteration domain for labeling, and emits a `focus`
  * (cursor) out the push port so viewers follow. Two doors: batch (stamp the scope)
  * and cursor (label obs-by-obs). View, not transform, because the workspace only
  * renders a plugin Component as a node body for `kind: "view"` (body-dock.tsx);

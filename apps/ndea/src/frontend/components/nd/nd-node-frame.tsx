@@ -1,5 +1,5 @@
 /**
- * NdNodeFrame — THE standard node container for the nd workspace.
+ * NdNodeFrame: THE standard node container for the nd workspace.
  * One component, three forms (chip · card · full), zero app dependencies.
  * Hosts (canvas, stage tile, future surfaces) and plugin authors both build
  * against this contract; the spec lives in
@@ -7,7 +7,7 @@
  *
  * ── The contract in one sentence ─────────────────────────────────────
  * The HOST owns form, size, placement, and all interaction state; the
- * PLUGIN owns only the body render and its config — the frame is sacred.
+ * PLUGIN owns only the body render and its config: the frame is sacred.
  */
 
 import type * as React from "react";
@@ -21,7 +21,7 @@ import { NdResizeGrips, type NdResizeCorner } from "./nd-resize-grips";
 import type { NdForm } from "./nd-resolve-form";
 
 export interface NdNodeFrameProps {
-  /** 'chip' | 'card' | 'full' — host-resolved (ndResolveForm) */
+  /** 'chip' | 'card' | 'full': host-resolved (ndResolveForm) */
   form: NdForm;
   /** resolved size (canonical or per-form override); h ignored at chip */
   w: number;
@@ -29,7 +29,7 @@ export interface NdNodeFrameProps {
   label: string;
   /** mono sub-label next to the title (e.g. "umap · stage") */
   sub?: React.ReactNode;
-  /** cook state — null hides the LED (telemetry off) */
+  /** cook state: null hides the LED (telemetry off) */
   led?: NdLedState | null;
   /** bracketed row count (host decides visibility per the count policy) */
   count?: string | null;
@@ -43,16 +43,16 @@ export interface NdNodeFrameProps {
   locked?: boolean;
   onCycleForm?: (() => void) | null;
   onToggleLock?: (() => void) | null;
-  /** node-specific header controls (gear, pin/pull, flags) — host-rendered NdIconButtons */
+  /** node-specific header controls (gear, pin/pull, flags): host-rendered NdIconButtons */
   actions?: React.ReactNode;
   /** fills the header's middle gap (e.g. a plugin's compact toolbar socket);
-   *  must carry flex-1 itself — when absent a plain spacer keeps the layout */
+   *  must carry flex-1 itself: when absent a plain spacer keeps the layout */
   headerSlot?: React.ReactNode;
-  /** telemetry row — rendered at full form only */
+  /** telemetry row: rendered at full form only */
   footer?: React.ReactNode;
   /** frame-edge ports; outside the morphing content so wires track the edge */
   ports?: NdPortProps[];
-  /** custom port elements (e.g. xyflow Handles wearing the port glyph) —
+  /** custom port elements (e.g. xyflow Handles wearing the port glyph) :
    * rendered alongside `ports`, same frame-edge placement contract */
   portsSlot?: React.ReactNode;
   /** resize grips shown when present (card + full; chips are canonical) */
@@ -64,7 +64,7 @@ export interface NdNodeFrameProps {
   nodeId?: string | null;
   className?: string;
   style?: React.CSSProperties;
-  /** body content (card thumb / full body) — never rendered at chip */
+  /** body content (card thumb / full body): never rendered at chip */
   children?: React.ReactNode;
 }
 
@@ -103,7 +103,7 @@ export function NdNodeFrame({
       ? "var(--primary)"
       : stale
         ? "color-mix(in oklab, var(--color-wire-sel) 45%, transparent)"
-        : "var(--color-border-active)"; // resting node outline (22% white on dark) — visible but restrained
+        : "var(--color-border-active)"; // resting node outline (22% white on dark): visible but restrained
   const shadow = claimed
     ? "0 0 0 1.5px var(--primary), 0 0 28px oklch(0.554 0.236 281 / 35%)"
     : selected
@@ -112,7 +112,7 @@ export function NdNodeFrame({
         ? "none"
         : "0 1px 3px rgba(0, 0, 0, 0.35)";
 
-  // ONE root element across all three forms — the form morph is a geometry
+  // ONE root element across all three forms: the form morph is a geometry
   // transition (width / height / border-radius) on this persistent node, so
   // chip ↔ card animates the same way card ↔ full always has. Content swaps
   // with a keyed crossfade while the frame morphs around it; ports, handles,
@@ -148,10 +148,10 @@ export function NdNodeFrame({
         ...style,
       }}
     >
-      {/* clip layer — keeps content inside the morphing frame */}
+      {/* clip layer: keeps content inside the morphing frame */}
       <div className="flex h-full w-full flex-col overflow-hidden" style={{ borderRadius: "inherit" }}>
         {chip ? (
-          // chip row — top-anchored at header height, so the morph reads as
+          // chip row: top-anchored at header height, so the morph reads as
           // the body collapsing into (or growing out of) the header
           <div
             key="chip"
@@ -177,7 +177,7 @@ export function NdNodeFrame({
           </div>
         ) : (
           <div key="frame" className="animate-nd-rs-morph flex min-h-0 flex-1 flex-col">
-            {/* header — status · identity · controls (fixed 26px, never wraps).
+            {/* header: status · identity · controls (fixed 26px, never wraps).
                 leading-none is inherited row-wide: one flat line box per text
                 child keeps mixed sizes (title, mono counts) aligned */}
             <div
@@ -200,7 +200,7 @@ export function NdNodeFrame({
               ) : null}
             </div>
 
-            {/* body — plugin territory (or the staged placeholder) */}
+            {/* body: plugin territory (or the staged placeholder) */}
             <div
               className="animate-nd-rs-morph flex min-h-0 flex-1 flex-col gap-[7px] overflow-hidden p-2.5"
               key={`body-${form}`}
@@ -214,7 +214,7 @@ export function NdNodeFrame({
               )}
             </div>
 
-            {/* footer — telemetry (full form only) */}
+            {/* footer: telemetry (full form only) */}
             {form === "full" && footer ? (
               <div className="flex shrink-0 items-center gap-2.5 border-t border-border px-[9px] py-[3px] font-mono text-[9px] tabular-nums whitespace-nowrap text-text-muted">
                 {footer}

@@ -1,5 +1,5 @@
 /**
- * scatter — plugin-backed view (the `scatter` descriptor renders the body via
+ * scatter: plugin-backed view (the `scatter` descriptor renders the body via
  * BodySocket). Cooks as a predicate pass-through; its lasso emission rides the push
  * port (sel), delivered downstream outside the cook. Out port is `sel`.
  */

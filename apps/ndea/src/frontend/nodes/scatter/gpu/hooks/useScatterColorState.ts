@@ -15,7 +15,7 @@ export interface ScatterColorState {
   // Column selection
   colorByColumn: string | null;
   setColorByColumn: (col: string | null) => void;
-  // ColorSource API (new — preferred over raw string)
+  // ColorSource API (new: preferred over raw string)
   colorSource: ColorSource;
   setColorSource: (src: ColorSource) => void;
   obsColumns: string[];
@@ -78,7 +78,7 @@ export function useScatterColorState(coordinator: Coordinator, metadata: Metadat
   const [continuousColormap, setContinuousColormap] = useState("viridis");
   const [maxCategories, setMaxCategories] = useState(64);
 
-  // Colormap lists + palette — cached via TanStack Query (no repeated fetches)
+  // Colormap lists + palette: cached via TanStack Query (no repeated fetches)
   const colormapListQuery = useColormapList();
   const categoricalColormaps = colormapListQuery.data?.categorical ?? [];
   const continuousColormaps = colormapListQuery.data?.continuous ?? [];
@@ -115,7 +115,7 @@ export function useScatterColorState(coordinator: Coordinator, metadata: Metadat
     if (categoryQuery.data?.n != null) setMaxCategories(categoryQuery.data.n);
   }, [categoryQuery.data?.n]);
 
-  // Reset "user explicit" when the column changes — the next count-derived
+  // Reset "user explicit" when the column changes: the next count-derived
   // auto-pick should take over for a fresh column.
   useEffect(() => {
     userExplicitPaletteRef.current = false;
@@ -131,7 +131,7 @@ export function useScatterColorState(coordinator: Coordinator, metadata: Metadat
   }, [categoryQuery.data?.n]);
 
   // Re-apply palette to existing mapping without touching DuckDB.
-  // Return null (not categoryMapping) when palette isn't loaded yet — empty
+  // Return null (not categoryMapping) when palette isn't loaded yet: empty
   // color strings would propagate to the GPU and never trigger a re-color.
   const coloredCategoryMapping = useMemo(() => {
     if (!categoryMapping || palette.length === 0) return null;

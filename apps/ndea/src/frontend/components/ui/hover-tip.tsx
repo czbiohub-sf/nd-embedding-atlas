@@ -1,5 +1,5 @@
 /**
- * HoverTip — a delayed, two-line tooltip.
+ * HoverTip: a delayed, two-line tooltip.
  *
  * Appears after `delay` ms with a bold label and a short description.
  * Drop-in for Tooltip in icon-only controls.
@@ -11,7 +11,7 @@ interface HoverTipProps {
   label: string;
   /** One phrase describing the action. */
   description: string;
-  /** Trigger element — rendered as the tooltip anchor. */
+  /** Trigger element: rendered as the tooltip anchor. */
   render?: React.ReactElement;
   children?: React.ReactNode;
   side?: "top" | "bottom" | "left" | "right";

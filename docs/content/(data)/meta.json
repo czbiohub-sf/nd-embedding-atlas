@@ -1,0 +1,4 @@
+{
+  "title": "Prepare data",
+  "pages": ["supported-formats", "anndata", "mudata", "image-linkage", "project-config", "preparing-your-data"]
+}

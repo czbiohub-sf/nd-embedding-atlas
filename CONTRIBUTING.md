@@ -2,8 +2,10 @@
 
 ## Prerequisites
 
-- **[Bun](https://bun.com)** — runtime + package manager. The version pinned in `package.json`'s `packageManager` field will be used by CI; locally any matching major works.
-- **[Vite+](https://viteplus.dev/)** (`vp`) — unified toolchain for lint, fmt, test, and the dev server. Install once globally per their setup; `vp` drives every dev workflow in this repo. (The app _build_ runs on Bun — see `vp run build` below.)
+- **[Vite+](https://viteplus.dev/)** (`vp`): project command interface for checks, the frontend dev server, and workspace task orchestration.
+- **[Bun](https://bun.com)**: runtime and package manager used by the tasks that `vp` dispatches. CI uses the version pinned in `package.json`.
+
+Use `vp` for routine development commands. Use Bun directly for dependency installation or when intentionally running a Bun entrypoint. `vp run` dispatches package scripts, which use Bun for tests, scripts, and single-binary compilation.
 
 ## Setup
 
@@ -36,11 +38,11 @@ vp run dev path/to/data.zarr
 vp check vite.config.ts bunli.config.ts scripts
 vp run -r check
 
-# Bun-native tests in every workspace
+# Run each workspace's test task
 vp run -r test
 
-# Production build — all-Bun (Bun.build frontend → single-file binary)
-vp run build    # or `bun run build`
+# Build the frontend and single-file binary
+vp run build
 
 # Regenerate CLI completion metadata (after editing apps/ndea/src/cli/commands/**)
 vp run gen
@@ -62,8 +64,8 @@ key abstractions, and gotchas.
 
 Enforced by `vp check`:
 
-- **TypeScript 6 strict** — no implicit any, `import type` for type-only imports
-- **Oxlint** + **Oxfmt** — config lives in `vite.config.ts`
+- **TypeScript 6 strict**: no implicit any, `import type` for type-only imports
+- **Oxlint** + **Oxfmt**: config lives in `vite.config.ts`
 - 4-space indent, double quotes, trailing commas, semicolons
 - `@/` path alias → `apps/ndea/src/frontend/`
 - Kebab-case ordinary modules, PascalCase React component modules, and `useX`

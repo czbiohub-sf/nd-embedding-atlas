@@ -1,5 +1,5 @@
 /**
- * KnifeLayer — hold `Y` + drag severs every wire the stroke crosses.
+ * KnifeLayer: hold `Y` + drag severs every wire the stroke crosses.
  * The stroke samples each wire's bezier (20 segments, wire-geometry) and
  * live-marks crossed wires red; release cuts. World-space rendering via
  * xyflow's ViewportPortal so the stroke tracks pan/zoom.
@@ -151,7 +151,7 @@ export function KnifeLayer({ active }: { active: boolean }) {
           </ViewportPortal>
           <div className="absolute bottom-3 left-1/2 z-40 -translate-x-1/2 rounded-md border glass px-3 py-1.25 whitespace-nowrap">
             <span className="font-mono text-[9.5px] text-destructive">
-              ✂ knife — {knife.crossed.length} wire{knife.crossed.length === 1 ? "" : "s"} marked · release to cut
+              ✂ knife: {knife.crossed.length} wire{knife.crossed.length === 1 ? "" : "s"} marked · release to cut
             </span>
           </div>
         </>

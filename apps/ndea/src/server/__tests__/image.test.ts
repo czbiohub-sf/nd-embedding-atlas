@@ -1,5 +1,5 @@
 /**
- * Tests for compositeChannels — the crop compositor.
+ * Tests for compositeChannels: the crop compositor.
  *
  * Each blend mode must match idetik's 2D path: per-channel fragment
  * `vec4(value × Color, 1)` composited via glBlendFunc over a black framebuffer,

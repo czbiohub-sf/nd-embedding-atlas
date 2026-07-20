@@ -12,7 +12,7 @@ const boot = await bootFrontend({
     const element = document.getElementById("root");
     if (!element) return;
 
-    // StrictMode omitted — idetik-core's WebGL context cannot survive the
+    // StrictMode omitted: idetik-core's WebGL context cannot survive the
     // double-mount/unmount cycle.
     const root = createRoot(element);
     root.render(<App nodeLibrary={session.nodeLibrary} />);

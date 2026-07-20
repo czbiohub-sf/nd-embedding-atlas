@@ -1,5 +1,5 @@
 /**
- * DropdownMenu — click-triggered menu (overflow / kebab actions).
+ * DropdownMenu: click-triggered menu (overflow / kebab actions).
  *
  * Built on @base-ui/react/menu (same primitive that powers context-menu).
  * Mirrors context-menu.tsx's structure so the two read identically. Trigger

@@ -126,11 +126,11 @@ export function externalNodeSpecOf(definition: CatalogNodeDefinition, source: No
 }
 
 export function inputPortKindsOf(spec: AppNodeSpec): NdPortKind[] {
-  return spec.definition.inputs.map((port) => port.kind as NdPortKind);
+  return spec.definition.inputs.map((port) => port.kind);
 }
 
 export function outputPortKindOf(spec: AppNodeSpec): NdPortKind {
-  return (spec.definition.outputs[0]?.kind as NdPortKind) ?? "pred";
+  return spec.definition.outputs[0]?.kind ?? "pred";
 }
 
 export function nodeDescriptorOf(spec: AppNodeSpec): AppNodeDescriptor {
@@ -146,13 +146,9 @@ export function nodeDescriptorOf(spec: AppNodeSpec): AppNodeDescriptor {
     hasOut: spec.definition.outputs.length > 0,
     outKind: outputPortKindOf(spec),
     outPortId: spec.definition.outputs[0]?.id ?? "out",
-    outputPorts: Object.freeze(
-      spec.definition.outputs.map((port) => Object.freeze({ id: port.id, kind: port.kind as NdPortKind })),
-    ),
+    outputPorts: Object.freeze(spec.definition.outputs.map((port) => Object.freeze({ id: port.id, kind: port.kind }))),
     inKinds: Object.freeze(inputPortKindsOf(spec)),
-    inputPorts: Object.freeze(
-      spec.definition.inputs.map((port) => Object.freeze({ id: port.id, kind: port.kind as NdPortKind })),
-    ),
+    inputPorts: Object.freeze(spec.definition.inputs.map((port) => Object.freeze({ id: port.id, kind: port.kind }))),
     stage: spec.stage,
     inPalette: spec.inPalette,
   });

@@ -2,10 +2,10 @@
  * Crop request / response types.
  *
  * The actual rendering pipeline (zarr read → composite → WebP encode)
- * lives in the Bun Worker pool — see crop-pool.ts and crop-worker.ts. The
+ * lives in the Bun Worker pool: see crop-pool.ts and crop-worker.ts. The
  * route handler dispatches into the pool via `state.cropPool.renderOne(...)`.
  *
- * Crops are always WebP — PNG was dropped once the worker pool landed.
+ * Crops are always WebP: PNG was dropped once the worker pool landed.
  */
 
 export interface CropRequest {

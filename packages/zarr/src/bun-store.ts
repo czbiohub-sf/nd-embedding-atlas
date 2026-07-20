@@ -1,11 +1,11 @@
 /**
- * BunFileStore — zarrita `AsyncReadable` backed by `Bun.file`.
+ * BunFileStore: zarrita `AsyncReadable` backed by `Bun.file`.
  *
  * Replaces `@zarrita/storage/fs` which wraps `node:fs/promises`. Bun.file is
  * zero-copy on darwin/linux for typical chunk sizes and exposes `.slice()` for
  * eventual v3 sharded-store partial reads without allocating the whole shard.
  *
- * Shape matches zarrita's `AsyncReadable` — keys are absolute (`/obs/.zarray`)
+ * Shape matches zarrita's `AsyncReadable`: keys are absolute (`/obs/.zarray`)
  * and resolve under the constructor `root`.
  */
 
@@ -15,8 +15,8 @@ import path from "node:path";
 /**
  * Byte-range query. Matches zarrita's `@zarrita/storage` contract:
  *
- * - `{offset, length}` — classic range request.
- * - `{suffixLength}` — last N bytes. Used by v3 sharded codec to read the
+ * - `{offset, length}`: classic range request.
+ * - `{suffixLength}`: last N bytes. Used by v3 sharded codec to read the
  *   shard index from the tail of the shard file before any chunk fetch.
  */
 export type RangeQuery = { offset: number; length: number } | { suffixLength: number };
@@ -27,7 +27,7 @@ export interface AsyncReadable {
 }
 
 /**
- * zarrita's `Writeable` shape — the write half of a `Mutable` store. Only `set`
+ * zarrita's `Writeable` shape: the write half of a `Mutable` store. Only `set`
  * is required by zarrita's `create`/`set`; `delete` supports cleanup (e.g.
  * dropping stale consolidated metadata) but is never called by zarrita itself.
  */
@@ -52,7 +52,7 @@ export class BunFileStore implements AsyncReadable, AsyncWritable {
   }
 
   /**
-   * Byte-range read. Used by v3 sharded arrays — the sharding codec issues
+   * Byte-range read. Used by v3 sharded arrays: the sharding codec issues
    * `{suffixLength}` to grab the shard index from the file tail, then
    * `{offset, length}` for individual chunk slices within the shard.
    */
@@ -71,7 +71,7 @@ export class BunFileStore implements AsyncReadable, AsyncWritable {
     return new Uint8Array(buf);
   }
 
-  /** Stream a file — reserved for future large-array reads. */
+  /** Stream a file: reserved for future large-array reads. */
   async stream(key: string): Promise<ReadableStream<Uint8Array> | undefined> {
     const file = Bun.file(this._resolve(key));
     if (!(await file.exists())) return undefined;

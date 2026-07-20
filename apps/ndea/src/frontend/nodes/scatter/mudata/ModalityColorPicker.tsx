@@ -1,5 +1,5 @@
 /**
- * ModalityColorPicker — color source picker with cross-modality support.
+ * ModalityColorPicker: color source picker with cross-modality support.
  *
  * Key concept: the color source is INDEPENDENT of the active embedding.
  * You can view rna:X_umap while coloring by dinov2:feat_42 because all
@@ -40,16 +40,16 @@ export interface ModalityColorPickerProps {
   /** All obs columns (merged across modalities). */
   obsColumns: string[];
 
-  /** Per-modality obs columns — e.g. { rna: ["phase", ...], dinov2: ["object_id", ...] }. */
+  /** Per-modality obs columns: e.g. { rna: ["phase", ...], dinov2: ["object_id", ...] }. */
   modalityObsColumns?: Record<string, string[]>;
 
-  /** Modality names — e.g. ["rna", "dinov2"]. Absent for single-AnnData. */
+  /** Modality names: e.g. ["rna", "dinov2"]. Absent for single-AnnData. */
   modalities?: string[];
 
-  /** Per-modality var counts — e.g. { rna: 18144, dinov2: 768 }. */
+  /** Per-modality var counts: e.g. { rna: 18144, dinov2: 768 }. */
   varCount?: number | Record<string, number>;
 
-  /** Active embedding key — used to show cross-modality indicator. */
+  /** Active embedding key: used to show cross-modality indicator. */
   activeEmbeddingKey?: string;
 
   triggerClassName?: string;
@@ -270,7 +270,7 @@ export function ModalityColorPicker({
                         setOpen(false);
                       }}
                     >
-                      <span className="text-muted-foreground">none — single color</span>
+                      <span className="text-muted-foreground">none: single color</span>
                     </CommandItem>
                   </CommandGroup>
                   {/* When "all" + MuData: group by modality with headings */}

@@ -1,14 +1,14 @@
 /**
- * NodeCounts — ONE batched count query per engine flush.
+ * NodeCounts: ONE batched count query per engine flush.
  *
  * useNodeCount hooks register their node while count-active (a refcount, so
  * the canvas card and a stage tile can both ask); after every engine flush
- * the controller pulls each registered node's predicate (cache-aware — the
+ * the controller pulls each registered node's predicate (cache-aware: the
  * flush just cooked them) and issues a single
  *
  *   SELECT count(*) FILTER (WHERE p₀) AS c0, … FROM <table>
  *
- * — N predicates share one table scan instead of N round-trips, and the
+ *: N predicates share one table scan instead of N round-trips, and the
  * post-flush `flush` telemetry event replaces the old setTimeout(30) race
  * (hope-the-rAF-flush-landed) in the per-node hooks.
  *
@@ -56,7 +56,7 @@ export class NodeCounts {
     };
   }
 
-  /** debounced (trailing) — rapid flushes during a drag collapse to one query */
+  /** debounced (trailing): rapid flushes during a drag collapse to one query */
   refresh(): void {
     if (this.disposed) return;
     if (this.timer) clearTimeout(this.timer);
@@ -90,7 +90,7 @@ export class NodeCounts {
     try {
       row = this.deps.toRows<Record<string, number | bigint>>(await this.deps.query(sql))[0];
     } catch (e) {
-      // Don't freeze stale numbers silently — flag the failed nodes so the UI can
+      // Don't freeze stale numbers silently: flag the failed nodes so the UI can
       // show ✗ instead of a confidently-wrong count. (Superseded epochs are
       // filtered by the generation check below, so they don't reach here.)
       if (gen !== this.generation || this.disposed) return;

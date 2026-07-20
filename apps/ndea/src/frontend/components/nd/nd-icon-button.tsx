@@ -1,10 +1,10 @@
 /**
- * NdIconButton — THE standard header button for node frames and tiles.
+ * NdIconButton: THE standard header button for node frames and tiles.
  *
  * Icon from the ND_ICONS registry · optional mono label · tones:
  * default | active (periwinkle) | amber. 15px box (14 compact),
  * grid-centered, stops propagation, data-nodrag. Plugins declare actions as
- * { icon, title, onClick } and the host renders them with this — never
+ * { icon, title, onClick } and the host renders them with this: never
  * hand-style a header button.
  */
 

@@ -1,0 +1,70 @@
+---
+title: Troubleshooting
+description: Diagnose installation, launch, data, imaging, WebGPU, and update failures.
+---
+
+Start with the first failing boundary. A successful server launch does not prove that an embedding, image plate, or browser GPU path is valid.
+
+## Installation and updates
+
+Run:
+
+```bash
+ndea doctor --check-network
+```
+
+If `ndea` is not found, confirm that the installer symlink directory is on `PATH`. Installed versions live under `~/.ndea/versions/`; the active `ndea` command is a symlink managed by update and rollback.
+
+A `401` or `404` while installing from a restricted repository usually means the GitHub token is missing, expired, or lacks repository read access. Authenticate `gh`, then run the installer again.
+
+If an update fails before the symlink swap, the current installation remains active. Use `ndea rollback` only when a previous version exists.
+
+## The server does not start
+
+- **Address already in use:** choose another port with `--port`, or stop the existing ndea process.
+- **Dataset path not found:** resolve relative paths from the project YAML location, not from the shell's current directory.
+- **Unknown Zarr convention:** inspect root attributes. They must identify AnnData, MuData, or an OME-Zarr multiscale image.
+- **YAML validation error:** compare the failing field with [Project YAML](/project-config). Conflicting aliases are rejected.
+
+Use `--no-open` to separate server startup from browser launching:
+
+```bash
+ndea view data.zarr --no-open
+```
+
+## The scatter is empty
+
+1. Confirm that startup reports at least one embedding.
+2. Check that the chosen `obsm` key is a dense rank-2 array with one row per observation.
+3. Choose dimensions that exist in that array.
+4. Fit the view from the Scatter toolbar.
+5. Confirm that filters or selections have not hidden all rows.
+6. Use current Chrome or Edge with WebGPU enabled.
+
+## Tables or colours are missing columns
+
+`--obs-columns` and YAML `obs_columns` intentionally limit ingestion. Add the missing column and restart. For MuData, confirm whether the column belongs to root observations or a modality.
+
+## Images or crops do not load
+
+- Confirm that the dataset has a mounted `hcs_plate` or plate alias.
+- Match `fov_name` or `well` values to image paths below the plate root.
+- Check X/Y, bounding-box, time, and Z values against the source image.
+- Confirm standard OME-Zarr plate/well/image and `multiscales` metadata.
+- Inspect failed browser requests below `/plate` or `/plate/<dataset>`.
+
+See [Image linkage](/image-linkage) and [Optimise OME-Zarr imaging](/preparing-your-data).
+
+## WebGPU is unavailable
+
+Use a current Chrome or Edge release. On Linux or a remote GPU host, verify Vulkan device access and follow [WebGPU on HPC](/webgpu-hpc-setup). Software rendering can make a page open without providing the WebGPU limits required by the scatter.
+
+## Report a reproducible failure
+
+Include:
+
+- `ndea --version` and operating system architecture;
+- the complete first error and launch command with private paths redacted;
+- the input format, Zarr generation, root attributes, and relevant array shapes;
+- whether the failure reproduces with a minimal dataset;
+- browser version and WebGPU status for rendering failures.

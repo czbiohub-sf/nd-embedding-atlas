@@ -1,4 +1,4 @@
-# Zizmor — GitHub Actions security audit
+# Zizmor: GitHub Actions security audit
 # https://docs.zizmor.sh
 
 rules:
@@ -14,7 +14,7 @@ rules:
   # portability matrix: we pin to named tags (`rockylinux:8.10`,
   # `debian:12-slim`) rather than digests so CI tracks upstream security
   # patches automatically. The matrix's purpose is to catch glibc / shell
-  # portability regressions — using a moving tag is by design.
+  # portability regressions; using a moving tag is by design.
   unpinned-images:
     disable: true
 

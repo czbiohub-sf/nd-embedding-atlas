@@ -55,18 +55,18 @@ const NonNegativeInt = z.number().int().nonnegative();
 
 // ─── POST body schemas ──────────────────────────────────────────────────────
 
-/** POST /data/query — Mosaic SQL passthrough. Discriminated on `type`. */
+/** POST /data/query: Mosaic SQL passthrough. Discriminated on `type`. */
 export const MosaicQueryBodySchema = z.object({
   type: z.enum(["arrow", "json", "exec"]),
   sql: z.string().min(1),
 });
 export type MosaicQueryBody = z.infer<typeof MosaicQueryBodySchema>;
 
-/** POST /api/crop/{fovPath} — image crop request. */
+/** POST /api/crop/{fovPath}: image crop request. */
 export const CropChannelSchema = z.object({
   /**
    * Zero-based zarr C-axis index this channel draws from. Optional for
-   * backward compat — when omitted, the server falls back to the channel's
+   * backward compat: when omitted, the server falls back to the channel's
    * position in the array. Send explicitly so a future channel-reorder UI
    * doesn't silently swap clims/colors when the array order diverges from
    * the underlying C dimension.
@@ -93,11 +93,11 @@ export const CropBodySchema = z.object({
 export type CropBody = z.infer<typeof CropBodySchema>;
 
 /**
- * GET /api/channel-stats/{fov} — per-channel pixel statistics for autocontrast.
+ * GET /api/channel-stats/{fov}: per-channel pixel statistics for autocontrast.
  * Computed once per FOV from the coarsest pyramid level, server-cached.
  * `lo`/`hi` are the saturation-percentile limits (Fiji-style); `dataMin`/`dataMax`
  * are the raw extent (napari-style min–max). The frontend derives display limits
- * from whichever method is selected — both ship in one response, so toggling the
+ * from whichever method is selected: both ship in one response, so toggling the
  * method never re-fetches. `bins` is a 256-bin histogram for the levels display.
  */
 export const ChannelStatSchema = z.object({
@@ -112,7 +112,7 @@ export const ChannelStatsResponseSchema = z.object({
   channels: z.array(ChannelStatSchema),
 });
 
-/** POST /api/export — start async export. Frontend may send embedding_key: null. */
+/** POST /api/export: start async export. Frontend may send embedding_key: null. */
 export const ExportBodySchema = z.object({
   predicate: z.string().min(1),
   filename: z.string().optional(),
@@ -123,7 +123,7 @@ export const ExportBodySchema = z.object({
 export type ExportBody = z.infer<typeof ExportBodySchema>;
 
 /**
- * POST /api/scatter-selection — upload selected row indices.
+ * POST /api/scatter-selection: upload selected row indices.
  *
  * SECURITY: row_indices are interpolated into SQL (`VALUES (${i})`).
  * Each element must be a non-negative integer; total array capped at 1M.
@@ -133,7 +133,7 @@ export const ScatterSelectionBodySchema = z.object({
 });
 export type ScatterSelectionBody = z.infer<typeof ScatterSelectionBodySchema>;
 
-/** POST /api/var-column — start materialization of a var (feature) column. */
+/** POST /api/var-column: start materialization of a var (feature) column. */
 export const VarColumnBodySchema = z.object({
   name: z.string().min(1),
   layer: z.string().optional(),
@@ -230,7 +230,7 @@ export const ObsBboxSchema = z.object({
 });
 export type ObsBbox = z.infer<typeof ObsBboxSchema>;
 
-/** Observation info response — matches /api/obs/{row_index}. */
+/** Observation info response: matches /api/obs/{row_index}. */
 export const ObsInfoSchema = z.looseObject({
   fov_name: z.string(),
   t: z.number(),
@@ -241,7 +241,7 @@ export const ObsInfoSchema = z.looseObject({
 });
 export type ObsInfo = z.infer<typeof ObsInfoSchema>;
 
-/** Metadata response — matches /data/metadata.json. */
+/** Metadata response: matches /data/metadata.json. */
 export const ObsmEntrySchema = z.object({
   prefix: z.string(),
   n_dims: z.number().nullable().optional(),
@@ -280,11 +280,11 @@ export type PlateStore = z.infer<typeof PlateStoreSchema>;
  * speaks one vocabulary instead of ad-hoc `metadata.plate` / `obsm` checks. The
  * SAME set is the future xyflow node port-type (`requires ⊆ provides`).
  *
- * Flat first (set-membership, not parameterized) — `obsm:X_phate`-grained
+ * Flat first (set-membership, not parameterized): `obsm:X_phate`-grained
  * discrimination is a structural-subtype extension deferred until a view needs
  * to target a specific embedding/channel. `obsp`/`temporal` are reserved here
  * but only emitted once their server-side detection (neighbor graph / tracks)
- * formalizes — see the §3.1 derivation table.
+ * formalizes: see the §3.1 derivation table.
  */
 export const DataCapabilitySchema = z.enum([
   "obs", // observation dataframe (effectively always present)
@@ -331,9 +331,9 @@ export const MetadataSchema = z.looseObject({
   /**
    * Provided data capabilities (CAPABILITY-CONTRACT.md §3). Server-derived;
    * `.default([])` so an older payload parses to the empty set rather than
-   * throwing — the single compiled binary version-locks this in practice.
+   * throwing: the single compiled binary version-locks this in practice.
    */
-  /** Active preset name — a build resolves it to a bundled graph; default "annotate". */
+  /** Active preset name: a build resolves it to a bundled graph; default "annotate". */
   preset: z.string().optional(),
   capabilities: z.array(DataCapabilitySchema).default([]),
 });
@@ -382,7 +382,7 @@ export type TrajectoryResponse = z.infer<typeof TrajectoryResponseSchema>;
 // ─── Binary-blob header schemas (scatter endpoints) ─────────────────────────
 
 /**
- * GET /api/scatter-positions — binary format:
+ * GET /api/scatter-positions: binary format:
  *   byte 0       version (uint8) = 1
  *   bytes 1..4   header_len (uint32 LE)
  *   bytes 5..    JSON header (this shape) + padding + Float32Array[positions]
@@ -396,16 +396,16 @@ export const PositionHeaderSchema = z.object({
 });
 export type PositionHeader = z.infer<typeof PositionHeaderSchema>;
 
-/** GET /api/scatter-categories — header preceding Uint8Array[categoryIndex]. */
+/** GET /api/scatter-categories: header preceding Uint8Array[categoryIndex]. */
 export const CategoryHeaderSchema = z.object({
   categoryNames: z.array(z.string()),
 });
 export type CategoryHeader = z.infer<typeof CategoryHeaderSchema>;
 
 /**
- * GET /api/scatter-continuous-values — header preceding Float32Array[values].
+ * GET /api/scatter-continuous-values: header preceding Float32Array[values].
  *
- * Values are raw (un-normalized) — the GPU normalizes with (vmin, vmax) so that
+ * Values are raw (un-normalized): the GPU normalizes with (vmin, vmax) so that
  * a slider drag is a uniform write + re-dispatch, not a re-fetch. NaNs are
  * preserved; the GPU kernel maps them to mid-gradient.
  */
@@ -451,7 +451,7 @@ export interface NdeaProtocol {
 /**
  * Annotation/var column names flow into SQL as quoted identifiers. Unlike
  * TRUST_SAFE_RE (render-safety), this MUST exclude characters that are
- * dangerous inside a SQL identifier — above all the double-quote, which could
+ * dangerous inside a SQL identifier: above all the double-quote, which could
  * break out of `"…"` quoting. Allow letters, digits, space, underscore, dot,
  * hyphen; require a leading letter/digit/underscore. The SQL sink also escapes
  * via quoteIdent() (defense in depth), but rejecting at the door keeps weird
@@ -489,7 +489,7 @@ export const AnnotationPredicateWriteResponseSchema = z.object({
 });
 export type AnnotationPredicateWriteResponse = z.infer<typeof AnnotationPredicateWriteResponseSchema>;
 
-/** POST /api/annotations/columns — create a new annotation column. */
+/** POST /api/annotations/columns: create a new annotation column. */
 export const AnnotationColumnBodySchema = z.object({
   name: z.string().min(1).max(200).regex(COLUMN_NAME_RE, "Invalid character in column name"),
   dtype: AnnotationDtypeSchema.default("categorical"),
@@ -506,10 +506,10 @@ export const AnnotationValueRowSchema = z.object({
 export type AnnotationValueRow = z.infer<typeof AnnotationValueRowSchema>;
 
 /**
- * POST /api/annotations/values — write values into an annotation column.
+ * POST /api/annotations/values: write values into an annotation column.
  * Exactly one source:
  *   - `rows`               explicit row-index list (per-cell edits)
- *   - `fromScatterSelection` stamp the staged `__scatter_selection` (lasso) —
+ *   - `fromScatterSelection` stamp the staged `__scatter_selection` (lasso) :
  *                          the client POSTs row indices to /api/scatter-selection
  *                          first, then the server resolves obs identity by JOIN.
  *   - `predicate`          stamp `label` onto every obs matching a SQL WHERE
@@ -540,7 +540,7 @@ export type ExportScope = z.infer<typeof ExportScopeSchema>;
 const AnnotationColumnNames = z.array(z.string().min(1).max(200).regex(COLUMN_NAME_RE, "Invalid column name"));
 
 /**
- * POST /api/annotations/export — write a wide table (obs_name + chosen annotation
+ * POST /api/annotations/export: write a wide table (obs_name + chosen annotation
  * columns) for the row scope to the server export-dir.
  */
 export const AnnotationExportBodySchema = z.object({
@@ -552,7 +552,7 @@ export const AnnotationExportBodySchema = z.object({
 export type AnnotationExportBody = z.infer<typeof AnnotationExportBodySchema>;
 
 /**
- * POST /api/annotations/commit[?dryRun=1] — write annotation columns into each
+ * POST /api/annotations/commit[?dryRun=1]: write annotation columns into each
  * source AnnData `.obs` on disk. Omitting `columns` commits all of them.
  */
 export const CommitAnnotationsBodySchema = z.object({
@@ -561,7 +561,7 @@ export const CommitAnnotationsBodySchema = z.object({
 export type CommitAnnotationsBody = z.infer<typeof CommitAnnotationsBodySchema>;
 
 /**
- * One dataset's entry in the commit response — a discriminated union. A success
+ * One dataset's entry in the commit response: a discriminated union. A success
  * item spreads the zarr `CommitReport` (`format`/`nObs`/`columns`/`written`); an
  * error/skip item (remote store, missing source, or a thrown write) carries only
  * `error` and NO `format`/`columns`. Consumers MUST discriminate on `error`

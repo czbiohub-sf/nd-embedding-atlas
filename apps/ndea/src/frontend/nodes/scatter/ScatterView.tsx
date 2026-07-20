@@ -1,5 +1,5 @@
 /**
- * ScatterView — inner GPU rendering layer for a single scatter panel.
+ * ScatterView: inner GPU rendering layer for a single scatter panel.
  *
  * Owns all WebGPU state: positions, colors, selection sync, view sync,
  * trajectory overlay, continuous range filter, and legend binding.
@@ -49,7 +49,7 @@ export interface ScatterViewProps {
   } | null>;
   categoryIndicesRef?: RefObject<Uint8Array | null>;
   fitViewRef?: RefObject<(() => void) | null>;
-  /** Hoisted ref — populated by ScatterView but owned by ScatterContent */
+  /** Hoisted ref: populated by ScatterView but owned by ScatterContent */
   rowIndicesRef?: RefObject<RowIndex[]>;
   /** Called when GPU readback updates the row index list */
   onRowIndicesChange?: (indices: RowIndex[]) => void;
@@ -105,7 +105,7 @@ export function ScatterView({
   const host = useHost<unknown, ScatterCapabilities>();
 
   // Point style as a declarative prop (slice 1 of the <ScatterCanvas> contract).
-  // Human-cadence (sliders/settings) so re-rendering on change is fine — unlike
+  // Human-cadence (sliders/settings) so re-rendering on change is fine: unlike
   // the 60fps camera path, which deliberately stays on the imperative bus.
   const pointRadius = useSelector(pointRadiusStore, (s) => s.radius);
   const renderSettings = useSelector(renderSettingsStore, (s) => s);
@@ -161,7 +161,7 @@ export function ScatterView({
   const rowIndicesRef = externalRowIndicesRef ?? _localRowIndicesRef;
   const [gpuError, setGpuError] = useState<string | null>(null);
 
-  // ── Continuous range filter handles (dim-only — colormap is NOT remapped) ──
+  // ── Continuous range filter handles (dim-only: colormap is NOT remapped) ──
   const [userVmin, setUserVmin] = useState<number | undefined>();
   const [userVmax, setUserVmax] = useState<number | undefined>();
   // Route the continuous-range predicate through the node host.
@@ -191,13 +191,13 @@ export function ScatterView({
     continuousColormap: effectiveColormap,
     continuousReversed: effectiveReversed,
     embeddingLoaded: currentEntryLoaded,
-    // vmin/vmax intentionally NOT passed — colormap stays fixed at full data range;
+    // vmin/vmax intentionally NOT passed: colormap stays fixed at full data range;
     // the slider only controls which points are dimmed via GPU isolation mask.
   });
 
   // Trajectory points render full-bright via the GPU highlight buffer (slice (a)
   // of the packed-flags contract). Single-point focus is handled by
-  // HighlightFocusOverlay instead — a lone bright point is invisible under
+  // HighlightFocusOverlay instead: a lone bright point is invisible under
   // additive blending.
   const highlightRowIds = useMemo<RowIndex[] | null>(
     () =>
@@ -229,7 +229,7 @@ export function ScatterView({
     return [data.positions[2 * pi], data.positions[2 * pi + 1]];
   }, [focusedRowIndex, activeTrajectories, data, rowToPoint]);
 
-  // Trajectory isolation mask — each feature owns its own mask; no mutual
+  // Trajectory isolation mask: each feature owns its own mask; no mutual
   // exclusion needed. (Highlight moved to the prop above.)
   useEffect(() => {
     if (activeTrajectories.length === 0) {
@@ -250,7 +250,7 @@ export function ScatterView({
     };
   }, [activeTrajectories]);
 
-  // Continuous range isolation — independent mask; no trajectory guards needed.
+  // Continuous range isolation: independent mask; no trajectory guards needed.
   useEffect(() => {
     if (colorMode !== "continuous" || !colorByColumn || userVmin === undefined || userVmax === undefined) {
       hostRef.current?.clearContinuousIsolation();
@@ -405,13 +405,13 @@ export function ScatterView({
       });
     }
     // Point style (radius/opacity/blend/HDR) is now a declarative `pointStyle`
-    // prop on ScatterGPUHost — applied there, and re-applied on GPU reinit.
+    // prop on ScatterGPUHost: applied there, and re-applied on GPU reinit.
     // Selection tool
     hostRef.current?.setForcedSelectionMode(selectionTool);
     // Re-upload all isolation masks from CPU state after GPU reinit
     hostRef.current?.rehydrateIsolation();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [positionKey]); // intentionally only positionKey — this runs once per GPU init
+  }, [positionKey]); // intentionally only positionKey: this runs once per GPU init
 
   useEffect(() => {
     if (colorMode !== "categorical") return;
@@ -473,7 +473,7 @@ export function ScatterView({
   }, [host]);
 
   // (point radius / opacity / blend / HDR now flow declaratively via the
-  // `pointStyle` prop above — the two store-subscription effects they replaced
+  // `pointStyle` prop above: the two store-subscription effects they replaced
   // are gone.)
 
   // (GPU highlight now flows via the `highlightRowIds` prop, derived from
@@ -518,7 +518,7 @@ export function ScatterView({
 
   const showLoading = isLoading || dataLoading;
 
-  // Inline JSX below — a nested component would get a fresh function
+  // Inline JSX below: a nested component would get a fresh function
   // identity on every render, unmounting the slider mid-drag and dropping
   // pointer capture (track clicks still worked; thumb drags didn't).
   const continuousLegend =

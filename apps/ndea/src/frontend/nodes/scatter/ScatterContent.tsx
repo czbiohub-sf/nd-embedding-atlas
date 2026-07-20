@@ -1,5 +1,5 @@
 /**
- * ScatterContent — generic scatter panel content, decoupled from any container.
+ * ScatterContent: generic scatter panel content, decoupled from any container.
  *
  * Works identically in:
  *  - A Dockview tiled panel (ScatterPanel wraps it)
@@ -34,7 +34,7 @@ import type { ScatterCapabilities } from "./plugin";
 export interface ScatterContentProps {
   initialObsmKey?: string | null;
   initialColorByColumn?: string | null;
-  /** container header slot — when present the toolbar portals there
+  /** container header slot: when present the toolbar portals there
    *  (compact, 26px-friendly) instead of docking above the canvas */
   toolbarTarget?: HTMLElement;
   onCreateCheckpoint?: () => void;
@@ -145,7 +145,7 @@ export function ScatterContent({
   const isLoading = !!loadingKey || categoryLoading;
 
   // ── Trajectory toggle (wired against the currently focused point) ──────
-  // The ScatterToolbar button is the only entry point now — PointInfoPane
+  // The ScatterToolbar button is the only entry point now: PointInfoPane
   // was removed. If a trajectory is active, the toggle clears it. Otherwise,
   // if the focused point is trackable, the toggle starts one. No
   // focus + no active trajectory → onToggleTrajectory is undefined and

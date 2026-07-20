@@ -1,0 +1,79 @@
+---
+title: Project YAML
+description: Configure named datasets, OME-Zarr plates, channels, and server settings.
+---
+
+Use one `.yaml` or `.yml` file when a session needs stable dataset names, mounted image plates, or shared launch settings. Relative paths resolve from the YAML file's directory.
+
+## Mapping syntax
+
+The mapping form is concise and supports established dataset files:
+
+```yaml
+datasets:
+  experiment_a:
+    anndata: ./analysis/experiment-a.zarr
+    hcs_plate: ./images/experiment-a.zarr
+    channels:
+      DAPI:
+        color: 3B82F6
+        contrast: [100, 4000]
+        visible: true
+      GFP:
+        color: 22C55E
+        visible: false
+
+obs_columns:
+  - treatment
+  - cell_type
+  - fov_name
+  - t
+  - x
+  - y
+
+settings:
+  host: 127.0.0.1
+  port: 5055
+```
+
+`path` is accepted as an alias of `anndata`. The plate path accepts `hcs_plate`, `ome-zarr`, `ome_zarr`, or `plate_path`. Do not specify conflicting values through several aliases.
+
+## Array syntax
+
+The equivalent array form uses explicit `name` and `path` fields:
+
+```yaml
+datasets:
+  - name: experiment_a
+    path: ./analysis/experiment-a.zarr
+    plate_path: ./images/experiment-a.zarr
+  - name: experiment_b
+    path: ./analysis/experiment-b.zarr
+```
+
+Every entry requires a non-empty name and data path. A project must contain at least one dataset.
+
+## Field reference
+
+| Field                     | Type             | Required    | Meaning                                  |
+| ------------------------- | ---------------- | ----------- | ---------------------------------------- |
+| `datasets`                | mapping or array | yes         | named AnnData or supported MuData mounts |
+| `anndata` / `path`        | string           | per dataset | local Zarr path                          |
+| `hcs_plate` / plate alias | string           | no          | matching OME-Zarr HCS plate              |
+| `channels`                | mapping          | no          | initial image channel display settings   |
+| `obs_columns`             | string array     | no          | observation columns to ingest            |
+| `settings.host`           | string           | no          | bind host; default `127.0.0.1`           |
+| `settings.port`           | integer          | no          | bind port; default `5055`                |
+| `preset`                  | string           | no          | shipped preset; currently `annotate`     |
+
+Each channel entry requires a hexadecimal `color` string without `#`. `contrast`, when supplied, is a two-number `[min, max]` pair. `visible` is optional and converted to a boolean.
+
+CLI values override YAML values for host, port, preset, and observation columns.
+
+## Launch and validate
+
+```bash
+ndea view project.yaml
+```
+
+Configuration errors are reported before the server starts. Common failures are a missing `datasets` object, a missing dataset path, a non-string path, an invalid channel object, or a non-integer port.

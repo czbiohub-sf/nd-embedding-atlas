@@ -51,8 +51,8 @@ export type {
  * Parse and validate a JSON request body against a Zod schema.
  *
  * Returns a discriminated result:
- *   - `{ ok: true, data }`     — payload parsed successfully
- *   - `{ ok: false, response }` — 400 Response with `{ error, issues }`
+ *   - `{ ok: true, data }`    : payload parsed successfully
+ *   - `{ ok: false, response }`: 400 Response with `{ error, issues }`
  *
  * Usage:
  *   const parsed = await parseJsonBody(req, CropBodySchema);

@@ -49,7 +49,7 @@ function definition(
     outputs: [],
     capabilities,
     load,
-  }) as unknown as CatalogNodeDefinition;
+  });
 }
 
 function catalogWith(value: CatalogNodeDefinition): NodeCatalog {

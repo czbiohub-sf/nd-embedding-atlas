@@ -1,16 +1,16 @@
 /**
- * AnnotateTable — a virtualized labeling table over the scoped obs.
+ * AnnotateTable: a virtualized labeling table over the scoped obs.
  *
  * Reuses the Table node's server-side paged query (`useTableQuery`), so it
  * inherits scope (the wired predicate via the Mosaic `Selection`), paging, and
- * LRU page cache for free — and scopes correctly off a Filter/Wrangle edge,
+ * LRU page cache for free: and scopes correctly off a Filter/Wrangle edge,
  * unlike the old `predicateToSql` gate.
  *
  * Owns the SPREADSHEET selection model + keyboard, and reports up:
- *  - onChange({ selectedRowIndices, focusedRowIndex }) — selection mirror
- *  - onStamp(value)                     — a label key was pressed; stamp the
+ *  - onChange({ selectedRowIndices, focusedRowIndex }): selection mirror
+ *  - onStamp(value)                    : a label key was pressed; stamp the
  *                                         current selection (view does the write)
- *  - onSkip()                           — advance without writing
+ *  - onSkip()                          : advance without writing
  *
  * Stamped values are reflected through `localLabels` (an overlay the view owns)
  * so a write shows instantly without invalidating the page cache.
@@ -39,7 +39,7 @@ export interface CropFields {
   fov: string;
   t: string;
   dataset?: string;
-  /** Coordinate columns — when present, coords seed the crop cache (no /api/obs). */
+  /** Coordinate columns: when present, coords seed the crop cache (no /api/obs). */
   x?: string;
   y?: string;
 }
@@ -52,7 +52,7 @@ export interface FocusedCrop {
 
 /** Render a DuckDB cell value as text (scalars direct; objects as JSON). */
 function cellText(v: unknown): string {
-  if (v == null) return "—";
+  if (v == null) return ":";
   if (typeof v === "string") return v;
   if (typeof v === "number" || typeof v === "boolean" || typeof v === "bigint") return String(v);
   return JSON.stringify(v);
@@ -61,20 +61,20 @@ function cellText(v: unknown): string {
 export interface AnnotateTableProps {
   coordinator: Coordinator;
   table: string;
-  /** Scope — the wired predicate. Rows + count narrow to this. */
+  /** Scope: the wired predicate. Rows + count narrow to this. */
   selection?: Selection;
   /** Context columns shown left of the label (e.g. the column being judged). */
   contextColumns: string[];
   /** The annotation column whose value each row shows (or null if none yet). */
   labelColumn: string | null;
-  /** Locally-stamped values, keyed by obs id → column → value — overlays the queried cell.
+  /** Locally-stamped values, keyed by obs id → column → value: overlays the queried cell.
    *  Per-column so range mode can reflect BOTH `{m}_min` and `{m}_max` at once. */
   localLabels: Map<RowIndex, Map<string, string>>;
   /** Label hotkeys (index-aligned with `labels`). */
   labels: string[];
   hotkeys: string[];
   /** Render the label column as a plain numeric (range mode) rather than a
-   *  categorical pill — so a float `{m}_max` matches its `{m}_min` sibling. */
+   *  categorical pill: so a float `{m}_max` matches its `{m}_min` sibling. */
   numericLabel?: boolean;
   /** Gallery crops: a leading thumbnail per row when set + channels present. */
   cropFields: CropFields | null;
@@ -382,7 +382,7 @@ export function AnnotateTable({
       tabIndex={0}
       onKeyDown={onKeyDown}
       role="grid"
-      aria-label="annotation rows — click to select, shift/⌘ to extend, label key to stamp"
+      aria-label="annotation rows: click to select, shift/⌘ to extend, label key to stamp"
       aria-rowcount={totalCount}
       className="min-h-0 flex-1 overflow-auto outline-none focus-visible:ring-1 focus-visible:ring-ring/40"
     >
@@ -465,7 +465,7 @@ export function AnnotateTable({
               })}
               <span role="gridcell">
                 {val == null ? (
-                  <span className="text-text-muted">—</span>
+                  <span className="text-text-muted">:</span>
                 ) : numericLabel ? (
                   <span className="truncate text-muted-foreground tabular-nums">{val}</span>
                 ) : (

@@ -1,12 +1,12 @@
 /**
- * Spy host — a `NodeHost` test double for the cross-view routing conformance
+ * Spy host: a `NodeHost` test double for the cross-view routing conformance
  * suite (`host-routing.test.ts`). Records every cross-view call so a test can
  * assert a body's routing module drives the host seam (and only the host seam).
  *
  * It implements just the cross-view surface a routing module touches
  * (`focus`, `publishPredicate`, `publishRowSet`, `clearRowSet`,
  * `externalRowSet`/`onExternalRowSet`, `viewCoordination`, `ordering`); the rest of
- * `NodeHost` is left unimplemented and the whole is cast — routing modules
+ * `NodeHost` is left unimplemented and the whole is cast: routing modules
  * never reach for it. Bus *un*reachability is enforced statically by the
  * boundary lint (plan U6), not here: a spy can't intercept a module import, so
  * the static rule and this behavioral check are complementary, not redundant.

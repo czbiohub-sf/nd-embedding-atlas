@@ -3,7 +3,7 @@
  * scatter-continuous-colors endpoints.
  *
  * Binary layout (all endpoints):
- *   Byte 0:        version (uint8) — must be 1
+ *   Byte 0:        version (uint8): must be 1
  *   Bytes 1–4:     header_len (uint32 little-endian)
  *   Bytes 5–(5+header_len-1): JSON header (UTF-8)
  *   Padding:       align to 4 bytes from byte 0
@@ -54,7 +54,7 @@ function parseFrame(buf: ArrayBuffer, label: string, expectedVersion = 1): { hea
 
 /**
  * Parse the binary position blob returned by /api/scatter-positions.
- * Validates the JSON header with Zod — throws a descriptive ZodError if
+ * Validates the JSON header with Zod: throws a descriptive ZodError if
  * the Python endpoint changes field names or types.
  */
 export function parsePositionBlob(buf: ArrayBuffer): PositionBlob {

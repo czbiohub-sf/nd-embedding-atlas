@@ -30,6 +30,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      pages: read
     steps:
       - uses: actions/checkout@v6
         with:
@@ -37,12 +38,18 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
 
+      - id: pages
+        name: Configure Pages
+        uses: actions/configure-pages@v5
+
       - name: Install dependencies
         working-directory: docs
         run: bun install --frozen-lockfile
 
       - name: Build site
         working-directory: docs
+        env:
+          DOCS_BASE_URL: ${{ steps.pages.outputs.base_url }}
         run: bun run build
 
       # Pages artifact action expects the path to the built site root.

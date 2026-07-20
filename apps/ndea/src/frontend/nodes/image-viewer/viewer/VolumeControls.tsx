@@ -19,7 +19,7 @@ export function VolumeControls() {
   const layersRef = useRef(state.layers);
   layersRef.current = state.layers;
 
-  // Refs hold current slider values — volume params are imperative (mutate layer directly).
+  // Refs hold current slider values: volume params are imperative (mutate layer directly).
   // defaultValue is used on the sliders so they stay uncontrolled and don't reset on re-render.
   const opacityRef = useRef(DEFAULTS.opacity);
   const stepRef = useRef(DEFAULTS.step);

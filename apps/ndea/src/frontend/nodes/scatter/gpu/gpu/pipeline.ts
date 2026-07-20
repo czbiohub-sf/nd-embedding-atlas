@@ -6,13 +6,13 @@ import type { createFragmentShader, createVertexShader } from "./shaders";
 /**
  * Blend modes supported by the scatter pipeline.
  *
- * - `additive` — order-independent. Each premultiplied fragment sums
+ * - `additive`: order-independent. Each premultiplied fragment sums
  *   into the framebuffer; dense regions roll off via the HDR + tone-map
  *   stage. Recommended default.
- * - `premultiplied` — order-dependent classic alpha-over. Preserves
+ * - `premultiplied`: order-dependent classic alpha-over. Preserves
  *   category color identity in dense overlap, but flickers as the GPU
  *   reorders coincident points.
- * - `max` — brightest-fragment-wins via `blendOperation: "max"`. Useful
+ * - `max`: brightest-fragment-wins via `blendOperation: "max"`. Useful
  *   for max-projection style readouts; never sums color so the result
  *   is bounded to the brightest single point.
  */
@@ -70,7 +70,7 @@ export function createRenderPipeline(
 
   // Record vertex-buffer bindings + draw once via a raw WebGPU bundle encoder.
   // Uniform buffer CONTENTS can change (viewUniform writes) without invalidating
-  // the bundle — only buffer OBJECTS need to stay stable, which they do for the
+  // the bundle: only buffer OBJECTS need to stay stable, which they do for the
   // lifetime of a scatter instance.
   const bundleEncoder = root.device.createRenderBundleEncoder({
     colorFormats: [format],

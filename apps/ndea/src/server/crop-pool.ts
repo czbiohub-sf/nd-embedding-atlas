@@ -1,5 +1,5 @@
 /**
- * CropPool — persistent Bun Worker pool for OME-Zarr crop rendering.
+ * CropPool: persistent Bun Worker pool for OME-Zarr crop rendering.
  *
  * Mirrors the column-worker pool pattern in src/zarr/readers.ts:241+.
  * One pool per server, lifetime = server lifetime. Workers persist their
@@ -83,7 +83,7 @@ export class CropPool {
     const url = cropWorkerUrl();
     for (let i = 0; i < POOL_SIZE; i++) {
       const idx = i;
-      const worker = new Worker(url, { smol: true } as WorkerOptions);
+      const worker = new Worker(url, { smol: true });
       worker.addEventListener("message", (event: MessageEvent<InboundMessage>) => {
         this.handleMessage(idx, event.data);
       });
@@ -115,7 +115,7 @@ export class CropPool {
   }
 
   /**
-   * Render a single crop via a 1-request group — used by the REST endpoint.
+   * Render a single crop via a 1-request group: used by the REST endpoint.
    * Resolves with the WebP bytes once that crop is done.
    */
   renderOne(

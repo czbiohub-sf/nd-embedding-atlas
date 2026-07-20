@@ -1,12 +1,12 @@
 /**
  * Binary scatter data endpoints for the WebGPU scatter renderer.
  *
- * GET /api/scatter-positions          — v1, Float32 interleaved x/y positions
- * GET /api/scatter-categories         — v1, Uint8 category indices
- * GET /api/scatter-continuous-values  — v2, Float32 raw values + vmin/vmax header
+ * GET /api/scatter-positions         : v1, Float32 interleaved x/y positions
+ * GET /api/scatter-categories        : v1, Uint8 category indices
+ * GET /api/scatter-continuous-values : v2, Float32 raw values + vmin/vmax header
  *                                        (frontend applies colormap via ochre LUT on GPU)
- * POST /api/scatter-selection         — Upload selection to temp table
- * DELETE /api/scatter-selection       — Clear selection temp table
+ * POST /api/scatter-selection        : Upload selection to temp table
+ * DELETE /api/scatter-selection      : Clear selection temp table
  */
 
 import { parseJsonBody, ScatterSelectionBodySchema } from "../protocol.ts";
@@ -60,7 +60,7 @@ export function parseDimIndex(col: string): number | null {
 /**
  * Lazily construct the `ObsmSliceLoader` for an embedding key and cache it
  * on `state.obsmLoaders`. Width is discovered via a metadata-only shape
- * read against the first accessor that carries the key — no data load.
+ * read against the first accessor that carries the key: no data load.
  */
 export async function getOrCreateObsmLoader(state: ServerSession, embedding: string): Promise<ObsmSliceLoader> {
   const existing = state.obsmLoaders.get(embedding);
@@ -109,7 +109,7 @@ export async function handleScatterPositions(url: URL, state: ServerSession, sig
 
   try {
     const loader = await getOrCreateObsmLoader(state, embedding);
-    // Fetch both dims in parallel — they share the loader's dedup map, so
+    // Fetch both dims in parallel: they share the loader's dedup map, so
     // repeat calls with the same colIndex don't double-read.
     const [xs, ys] = await Promise.all([loader.loadColumn(xDim, signal), loader.loadColumn(yDim, signal)]);
 
@@ -183,7 +183,7 @@ export async function handleScatterCategories(url: URL, store: DatasetQuerySessi
   }
 
   try {
-    // Read through the `dataset` VIEW (logical obs table), not obs_base — so
+    // Read through the `dataset` VIEW (logical obs table), not obs_base: so
     // var + annotation columns colour identically to native obs columns.
     const idxRows = await store.queryJson(`SELECT "${catCol}" FROM dataset ORDER BY __row_index__ ASC`);
 
@@ -220,7 +220,7 @@ export async function handleScatterCategories(url: URL, store: DatasetQuerySessi
  *
  * Returns raw Float32 values per observation plus autocomputed vmin/vmax
  * (from finite values). The frontend GPU kernel normalizes via a uniform
- * and looks up an ochre-generated LUT — so colormap swaps and slider
+ * and looks up an ochre-generated LUT: so colormap swaps and slider
  * drags happen without re-fetching. NaN values are preserved in the
  * payload; the kernel maps them to mid-gradient.
  *
@@ -327,7 +327,7 @@ export async function handleScatterSelectionDelete(store: DatasetQuerySession): 
  *
  * SECURITY: the id is interpolated into a TABLE NAME, which DuckDB cannot
  * parameter-bind, so it MUST be validated here (server-side, on the decoded path
- * segment) BEFORE any SQL is built. Returns null for an invalid id — the caller
+ * segment) BEFORE any SQL is built. Returns null for an invalid id: the caller
  * responds 400 and builds no SQL. Never coerce an arbitrary string.
  */
 function toSelectionTable(instanceId: string): string | null {
@@ -337,7 +337,7 @@ function toSelectionTable(instanceId: string): string | null {
   return `sel_${instanceId.replace(/[^A-Za-z0-9_]/g, "_")}`;
 }
 
-/** Handle POST /api/selection/:instanceId — populate this instance's `sel_<id>` table. */
+/** Handle POST /api/selection/:instanceId: populate this instance's `sel_<id>` table. */
 export async function handleSelectionPost(
   req: Request,
   store: DatasetQuerySession,
@@ -373,7 +373,7 @@ export async function handleSelectionPost(
   }
 }
 
-/** Handle DELETE /api/selection/:instanceId — drop this instance's `sel_<id>` table. */
+/** Handle DELETE /api/selection/:instanceId: drop this instance's `sel_<id>` table. */
 export async function handleSelectionDelete(store: DatasetQuerySession, instanceId: string): Promise<Response> {
   const table = toSelectionTable(instanceId);
   if (!table) return Response.json({ error: "invalid selection id" }, { status: 400 });

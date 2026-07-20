@@ -1,16 +1,16 @@
 /**
- * Cross-view routing conformance (host-seam plan, U1/U2) — the behavioral
+ * Cross-view routing conformance (host-seam plan, U1/U2): the behavioral
  * backstop that keeps every node's focus/selection/view-sync gestures flowing
  * through the per-instance `host` seam, never a global bus channel.
  *
  * Two guards:
- *   1. Coverage gate — every view-kind node must DECLARE how it routes cross-view
+ *   1. Coverage gate: every view-kind node must DECLARE how it routes cross-view
  *      gestures: a routing-module entry (exercised below) or an explicit
  *      exemption with a reason. A new view node with no entry fails here, forcing
  *      a conscious host-vs-bus decision at add time (scales to new nodes).
- *   2. Routing checks — each routing module, invoked with a spy host, drives the
+ *   2. Routing checks: each routing module, invoked with a spy host, drives the
  *      expected host method. Bus *un*reachability is the boundary lint's job
- *      (plan U6) — a spy can't intercept imports; the two guards are complementary.
+ *      (plan U6): a spy can't intercept imports; the two guards are complementary.
  */
 
 import { describe, expect, test } from "bun:test";
@@ -34,7 +34,7 @@ import { createSpyHost } from "./spy-host";
 
 const nativeNodeLibrary = createNativeAppNodeLibrary();
 
-// Every view-kind node must appear here — "routed" (a routing module exercised
+// Every view-kind node must appear here: "routed" (a routing module exercised
 // below) or { exempt } with a reason. Adding a view node without an entry fails
 // the coverage gate, forcing the host-vs-bus decision when the node is born.
 const ROUTING_COVERAGE: Record<string, "routed" | { exempt: string }> = {
@@ -43,8 +43,8 @@ const ROUTING_COVERAGE: Record<string, "routed" | { exempt: string }> = {
   scatter: "routed",
   "count-plot": "routed",
   histogram: "routed",
-  "image-viewer": { exempt: "focus consumer — no cross-view write gesture" },
-  count: { exempt: "display-only — no cross-view gesture" },
+  "image-viewer": { exempt: "focus consumer: no cross-view write gesture" },
+  count: { exempt: "display-only: no cross-view gesture" },
   annotate: { exempt: "focus emitter via cursor effect, not a discrete gesture handler" },
 };
 
@@ -57,7 +57,7 @@ describe("cross-view routing conformance", () => {
     for (const type of viewTypes) {
       expect(
         ROUTING_COVERAGE[type],
-        `view node "${type}" has no cross-view routing declaration — add a routing module entry or an explicit exemption in ROUTING_COVERAGE`,
+        `view node "${type}" has no cross-view routing declaration: add a routing module entry or an explicit exemption in ROUTING_COVERAGE`,
       ).toBeDefined();
     }
   });

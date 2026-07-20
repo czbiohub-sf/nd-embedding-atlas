@@ -1,7 +1,7 @@
 /**
  * Server-side data-capability derivation (CAPABILITY-CONTRACT.md §3.1).
  *
- * The single point where a dataset's *provided* capability set is computed —
+ * The single point where a dataset's *provided* capability set is computed :
  * at metadata build time, from fields the server already has. The result is
  * baked into `Metadata.capabilities` (the wire single-source-of-truth); the
  * frontend never re-derives, it just reads that array (see `capabilitiesOf`).
@@ -17,7 +17,7 @@ import { type DataCapability, DataCapabilitySchema } from "@ndea/protocol";
 export interface CapabilityInputs {
   /** obs dataframe present (obs_columns non-empty). Effectively always true. */
   hasObs: boolean;
-  /** var count — number (AnnData) or per-modality record (MuData). */
+  /** var count: number (AnnData) or per-modality record (MuData). */
   varCount: number | Record<string, number> | undefined;
   /** Registered obsm embedding keys. */
   obsmKeys: readonly string[];
@@ -39,9 +39,9 @@ function hasAnyVar(varCount: number | Record<string, number> | undefined): boole
 /**
  * The §3.1 derivation table, encoded as data. `Record<DataCapability, …>` makes
  * it provably TOTAL: adding a member to `DataCapabilitySchema` is a compile
- * error here until a predicate is supplied (CAPABILITY-CONTRACT.md §3, R9 —
+ * error here until a predicate is supplied (CAPABILITY-CONTRACT.md §3, R9 :
  * the enum is the single source of truth, no silent drift). `obsp` / `temporal`
- * are reserved with an explicit `() => false` — "named, not yet detectable" —
+ * are reserved with an explicit `() => false`: "named, not yet detectable" :
  * rather than a silent omission; they flip on once their server-side detection
  * (neighbor graph / tracks) formalizes.
  */

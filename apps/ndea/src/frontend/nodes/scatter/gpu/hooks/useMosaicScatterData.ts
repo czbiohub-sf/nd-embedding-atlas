@@ -24,7 +24,7 @@ interface UseMosaicScatterDataOptions {
   /** Colormap name for continuous coloring (default: "viridis") */
   continuousColormap?: string;
   /** Whether to reverse the colormap. Included in query key for cache differentiation.
-   *  Server ignores unknown params — safe to wire before backend ships. */
+   *  Server ignores unknown params: safe to wire before backend ships. */
   continuousReversed?: boolean;
   vmin?: number;
   vmax?: number;
@@ -51,11 +51,11 @@ interface UseMosaicScatterDataResult {
  * endpoints and assembles a `ScatterData` object for the GPU scatter plot.
  *
  * Three parallel useQuery calls:
- *  1. Positions — fires when `axes`, `xCol`, or `yCol` changes. Heavy (~4 MB).
- *  2. Categories — fires in parallel with positions when categoryCol is set.
- *  3. Continuous colors — fires in parallel with positions when continuousColCol is set.
+ *  1. Positions: fires when `axes`, `xCol`, or `yCol` changes. Heavy (~4 MB).
+ *  2. Categories: fires in parallel with positions when categoryCol is set.
+ *  3. Continuous colors: fires in parallel with positions when continuousColCol is set.
  *
- * CRITICAL: colors are NOT gated on positions — they run in parallel.
+ * CRITICAL: colors are NOT gated on positions: they run in parallel.
  * Only the useMemo assembly blocks on positions.
  *
  * When multiple panels show the same embedding, TanStack Query deduplicates
@@ -98,14 +98,14 @@ export function useMosaicScatterData({
       };
     },
     enabled: !!axes && embeddingLoaded,
-    // Embedding coords are immutable for a dataset — hold forever.
+    // Embedding coords are immutable for a dataset: hold forever.
     staleTime: Infinity,
     // Keep the prior dim's positions rendering while the new slice
     // resolves; avoids a flash-of-nothing when the user switches axes.
     placeholderData: keepPreviousData,
   });
 
-  // 2. Categories — NOT blocked by positions (parallel)
+  // 2. Categories: NOT blocked by positions (parallel)
   const categoryQuery = useQuery({
     queryKey: scatterKeys.categories(categoryCol!, originalCol),
     queryFn: async ({ signal }) => {
@@ -117,16 +117,16 @@ export function useMosaicScatterData({
       const { header, categoryIndices } = parseCategoryBlob(buf);
       return { categoryIndices, categoryNames: header.categoryNames };
     },
-    enabled: colorMode === "categorical" && !!categoryCol, // no !!positionQuery.data — parallel
+    enabled: colorMode === "categorical" && !!categoryCol, // no !!positionQuery.data: parallel
     staleTime: 30_000,
   });
 
-  // 3. Continuous values — NOT blocked by positions (parallel).
+  // 3. Continuous values: NOT blocked by positions (parallel).
   //    Phase 7: fetch raw f32 values only. vmin/vmax come back from the
   //    backend's autocompute; user-driven slider range is applied via the
   //    handle uniform without re-fetching. Colormap and reversed also stay
   //    frontend-only (LUT generated via ochre), so they're NOT in the query
-  //    key — only column change triggers a re-fetch.
+  //    key: only column change triggers a re-fetch.
   const continuousQuery = useQuery({
     queryKey: scatterKeys.continuousColors(continuousColCol!, "values"),
     queryFn: async ({ signal }) => {
@@ -141,7 +141,7 @@ export function useMosaicScatterData({
     staleTime: 30_000,
   });
 
-  // Assembly blocks on positions only — colors show when ready
+  // Assembly blocks on positions only: colors show when ready
   const data = useMemo((): ScatterData | null => {
     if (!positionQuery.data) return null;
 
@@ -181,7 +181,7 @@ export function useMosaicScatterData({
 
   // Derive positionKey from the *data snapshot*, not from the hook's
   // props. With `placeholderData: keepPreviousData`, `positionQuery.data`
-  // lags behind xCol/yCol during the fetch — keying off props here would
+  // lags behind xCol/yCol during the fetch: keying off props here would
   // advance the key before the fetch resolved, causing the GPU to re-init
   // with stale positions. `dataUpdatedAt` only ticks when fresh data
   // actually lands in the cache (fetch resolution OR cache-hit on an

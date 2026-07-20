@@ -120,7 +120,7 @@ export function useTableQuery(opts: UseTableQueryOptions): UseTableQueryResult {
       if (pendingRef.current.has(pageIndex)) return;
       pendingRef.current.add(pageIndex);
 
-      // Snapshot the key at fetch time — discard result if it changes.
+      // Snapshot the key at fetch time: discard result if it changes.
       const fetchedFor = activeCacheKeyRef.current;
 
       try {
@@ -137,7 +137,7 @@ export function useTableQuery(opts: UseTableQueryOptions): UseTableQueryResult {
 
         const rows = toRows(result);
 
-        // LRU eviction — prefer evicting stale pages first.
+        // LRU eviction: prefer evicting stale pages first.
         const pages = pagesRef.current;
         if (pages.size >= MAX_CACHED_PAGES) {
           let evictKey = -1;
@@ -173,7 +173,7 @@ export function useTableQuery(opts: UseTableQueryOptions): UseTableQueryResult {
 
   // ── Public: ensure a range is loaded (call from scroll handler) ─
   // filterVersion is included so ensureRange gets a new reference whenever
-  // the filter/sort settles — this causes the scroll useEffect in DataTable
+  // the filter/sort settles: this causes the scroll useEffect in DataTable
   // to re-run and re-fetch the visible range without any extra dep wiring.
   const ensureRange = useCallback(
     (startIndex: number, endIndex: number) => {

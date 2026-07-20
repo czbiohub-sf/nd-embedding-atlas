@@ -1,5 +1,5 @@
 /**
- * subnet — a hierarchy container. Its cook passes input through; the inner
+ * subnet: a hierarchy container. Its cook passes input through; the inner
  * result reaches downstream through the hidden subnet seam.
  */
 

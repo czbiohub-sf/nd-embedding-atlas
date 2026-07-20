@@ -225,7 +225,7 @@ describe("CommitAnnotationsResponseSchema", () => {
     expect(r.success).toBe(true);
   });
 
-  test("error member discriminates — no columns/format to dereference", () => {
+  test("error member discriminates: no columns/format to dereference", () => {
     const skip = CommitDatasetReportSchema.parse({ datasetKey: "d", error: "no source dataset for this key" });
     expect("error" in skip).toBe(true);
     expect("columns" in skip).toBe(false);

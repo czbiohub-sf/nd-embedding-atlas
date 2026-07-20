@@ -1,8 +1,8 @@
 /**
- * BiohubMark — the official Biohub symbol: the bracketed "[o]" (a cell viewed
+ * BiohubMark: the official Biohub symbol: the bracketed "[o]" (a cell viewed
  * through a microscope). Source: czbiohub-sf/biohub-chatbot public/biohub-icon.svg.
  *
- * Monochrome by brand rule ("don't use two colors in the symbol") — fill is
+ * Monochrome by brand rule ("don't use two colors in the symbol"): fill is
  * currentColor, so color it via text-* (e.g. text-primary for the periwinkle
  * highlight, an approved small-graphic/logo use of the accent).
  *

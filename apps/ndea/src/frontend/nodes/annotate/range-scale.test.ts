@@ -33,7 +33,7 @@ describe("range-scale", () => {
     expect(domainTicks([0, 8], 5)).toEqual([0, 2, 4, 6, 8]);
   });
 
-  test("fmtVal is generic — scientific only at the extremes", () => {
+  test("fmtVal is generic: scientific only at the extremes", () => {
     expect(fmtVal(0)).toBe("0");
     expect(fmtVal(0.013)).toBe("0.013");
     expect(fmtVal(42.5)).toBe("42.5");

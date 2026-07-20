@@ -1,5 +1,5 @@
 /**
- * gallery — plugin-backed view (the `gallery` descriptor renders the body).
+ * gallery: plugin-backed view (the `gallery` descriptor renders the body).
  * Set-consuming cook: a pushed sel (lasso) takes over; else the AND of pred
  * inputs. Sink (no out port); accepts a pred or sel input.
  */

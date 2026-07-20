@@ -1,10 +1,10 @@
 /**
- * Shared prune logic — used by `ndea gc` (explicit) and `ndea update`
+ * Shared prune logic: used by `ndea gc` (explicit) and `ndea update`
  * (auto-gc after a successful update).
  *
  * Each version dir is ~185 MB on disk. Without pruning, aggressive update
  * cadences fill `~/.ndea/` quickly. The auto-gc path runs with `keep=2`
- * by default — current + one rollback target.
+ * by default: current + one rollback target.
  */
 
 import { rm, stat } from "node:fs/promises";
@@ -14,7 +14,7 @@ import { listVersions, type VersionEntry } from "./versions.ts";
 interface PruneOptions {
   /** Versions tree root (`versionsDir()`). */
   root: string;
-  /** Path the symlink points at — the binary for the active version. */
+  /** Path the symlink points at: the binary for the active version. */
   activeAbs: string | null;
   /** Total entries to keep, *including* the active one. `Infinity` = keep all. */
   keep: number;
@@ -50,7 +50,7 @@ export async function pruneVersions(opts: PruneOptions): Promise<PruneResult> {
   let freedBytes = 0;
   for (const entry of prune) {
     // Resolve relative to the supplied root (not the global versionDir
-    // helper) so callers with a sandboxed NDEA_HOME — and tests — operate
+    // helper) so callers with a sandboxed NDEA_HOME: and tests: operate
     // on the tree they passed in.
     const dir = resolve(opts.root, entry.tag);
     const size = await directorySize(dir).catch(() => 0);

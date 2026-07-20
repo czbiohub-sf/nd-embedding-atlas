@@ -1,4 +1,4 @@
-// Note: Coordinator is intentionally excluded from all query keys — it contains
+// Note: Coordinator is intentionally excluded from all query keys: it contains
 // circular references that break TanStack Query's JSON.stringify-based key hashing.
 // There is one coordinator per app session so keys are still unique without it.
 

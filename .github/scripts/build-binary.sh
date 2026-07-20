@@ -9,8 +9,8 @@
 # documented escape hatch.
 #
 # Required env:
-#   TARGET   — bun --target value, e.g. bun-darwin-arm64, bun-linux-x64
-#   ARTIFACT — output filename, e.g. ndea-darwin-arm64
+#   TARGET: bun --target value, e.g. bun-darwin-arm64, bun-linux-x64
+#   ARTIFACT: output filename, e.g. ndea-darwin-arm64
 set -euo pipefail
 
 : "${TARGET:?TARGET env var is required (bun --target)}"
@@ -19,7 +19,7 @@ set -euo pipefail
 mkdir -p dist
 
 # Builds the frontend (Bun.build, in-process ~300ms) and compiles in one
-# shot — no separate frontend step needed.
+# shot; no separate frontend step needed.
 bun run apps/ndea/scripts/build.ts "--target=${TARGET}"
 
 # The app builder keeps the public output at dist/ndea; rename for the matrix.

@@ -1,5 +1,5 @@
 /**
- * AnnData column readers — sequential + parallel.
+ * AnnData column readers: sequential + parallel.
  *
  * Two entry points:
  *  - `readDataFrame(group)`: sequential, reads every column on the main
@@ -13,7 +13,7 @@
  * decoders producing a serializable `ColumnResult` shape; `reassembleColumn`
  * below converts those back into `ColumnData`. Sharing the decoder bodies
  * between main + worker would require producing `ColumnResult` on the main
- * thread and re-wrapping — net LoC neutral, deferred as follow-up.
+ * thread and re-wrapping: net LoC neutral, deferred as follow-up.
  *
  * Encoding types handled by the sequential path:
  *   array, categorical, nullable-string-array, nullable-integer,
@@ -35,7 +35,7 @@ import type {
 import { columnWorkerUrl } from "./column-worker-path.ts";
 import { CsrCscArray, SimpleCategorical, SimpleNullable } from "./helpers.ts";
 
-// zarrita group/array types are complex — use structural typing
+// zarrita group/array types are complex: use structural typing
 type ZarrGroup = Awaited<ReturnType<typeof zarr.open<Readable>>> & {
   resolve: (path: string) => zarr.Location<Readable>;
   attrs: Record<string, unknown>;
@@ -75,11 +75,11 @@ export async function readCategorical(group: ZarrGroup): Promise<CategoricalArra
     const { data: catData } = await readArray(group.resolve("categories"));
     categories = (Array.isArray(catData) ? catData : Array.from(catData as Iterable<unknown>)) as Scalar[];
   } catch {
-    // It's a group (nullable-string-array) — read values/ sub-array
+    // It's a group (nullable-string-array): read values/ sub-array
     const catGroup = await zarr.open(group.resolve("categories"), { kind: "group" });
     const { data: values } = await readArray(catGroup.resolve("values"));
     categories = (Array.isArray(values) ? values : Array.from(values as Iterable<unknown>)) as Scalar[];
-    // mask indicates null categories — rare but handle it
+    // mask indicates null categories: rare but handle it
   }
 
   return new SimpleCategorical(categories, codes as Int8Array | Int16Array | Int32Array, ordered);
@@ -131,7 +131,7 @@ export async function readSparse(group: ZarrGroup): Promise<SparseArray> {
 export async function readDataFrame(group: ZarrGroup): Promise<AnnDataFrame> {
   const indexName = group.attrs._index as string | undefined;
   if (!indexName) {
-    throw new Error('DataFrame group is missing "_index" attr — cannot determine index column name');
+    throw new Error('DataFrame group is missing "_index" attr: cannot determine index column name');
   }
   const columnOrder = (group.attrs["column-order"] as string[]) ?? [];
 
@@ -192,7 +192,7 @@ export async function readElement(parentGroup: ZarrGroup, name: string): Promise
       case "csc_matrix":
         return (await readSparse(group as unknown as ZarrGroup)) as unknown as ColumnData;
       default:
-        // Unknown group encoding — try reading as plain array
+        // Unknown group encoding: try reading as plain array
         break;
     }
   } catch (err) {
@@ -215,7 +215,7 @@ function extractValues(col: ColumnData): string[] | Int32Array | (Scalar | null)
   if (col instanceof Int32Array) return col;
   if (Array.isArray(col)) return col;
   if ("values" in col && "mask" in col) {
-    // NullableArray — extract values, replacing masked with empty string
+    // NullableArray: extract values, replacing masked with empty string
     const na = col;
     const result: string[] = [];
     for (let i = 0; i < na.length; i++) {
@@ -227,7 +227,7 @@ function extractValues(col: ColumnData): string[] | Int32Array | (Scalar | null)
   if ("codes" in col && "categories" in col) {
     return col.toArray();
   }
-  // TypedArray — convert to regular array
+  // TypedArray: convert to regular array
   return Array.from(col as Iterable<Scalar>);
 }
 
@@ -242,7 +242,7 @@ function getValueAt(col: ColumnData, i: number): Scalar | null {
 // ─── Windowed (streaming) reader ────────────────────────────────────────────
 //
 // `readDataFrame*` above materialize EVERY column in full before anything
-// downstream runs — at 10M obs that one copy alone is multi-GB. `readDataFrameBatches`
+// downstream runs: at 10M obs that one copy alone is multi-GB. `readDataFrameBatches`
 // instead yields row-windows: it resolves each column's structure once (opening
 // arrays, reading the small shared categorical dictionaries), then slices the
 // per-row arrays per batch via `zarr.get(arr, [zarr.slice(r0, r1)])`. Peak JS is
@@ -314,9 +314,9 @@ async function resolveWindowReader(group: ZarrGroup, name: string): Promise<Wind
         },
       };
     }
-    // Unknown group encoding — fall through to a plain-array read.
+    // Unknown group encoding: fall through to a plain-array read.
   } catch {
-    // Not a group — read as a plain array below.
+    // Not a group: read as a plain array below.
   }
   const arr = await zarr.open(location, { kind: "array" });
   return {
@@ -430,7 +430,7 @@ export async function readDataFrameParallel(
   let nextId = 0;
 
   for (let i = 0; i < nWorkers; i++) {
-    const workerIdx = i; // capture index in closure — not workers.indexOf()
+    const workerIdx = i; // capture index in closure: not workers.indexOf()
     const worker = new Worker(workerUrl, { smol: true } as WorkerOptions);
     worker.addEventListener("message", (event: MessageEvent) => {
       const { id, result, error } = event.data;

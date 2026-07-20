@@ -117,7 +117,7 @@ export function createApp(options: CreateAppOptions) {
         if (!upgraded) {
           return withCors(new Response("WebSocket upgrade failed", { status: 400 }));
         }
-        // After a successful upgrade, Bun takes over — return a 101 sentinel.
+        // After a successful upgrade, Bun takes over: return a 101 sentinel.
         return new Response(null, { status: 101 });
       }
 
@@ -190,7 +190,7 @@ async function routeRequest(
     return handleMetadata(state, config);
   }
 
-  // Colormap surface moved to the frontend in Phase 8 — see
+  // Colormap surface moved to the frontend in Phase 8: see
   // src/frontend/lib/ochre-palette.ts. Backend no longer serves
   // /data/colormaps or /data/categorical-palette.
 
@@ -217,10 +217,10 @@ async function routeRequest(
 
   // `--no-static` mode: backend is API-only and the Vite dev server owns
   // the HTML bundle on :5173. Anyone landing here in a browser probably
-  // guessed the backend port — point them at the dev URL.
+  // guessed the backend port: point them at the dev URL.
   if (req.headers.get("accept")?.includes("text/html")) {
     return new Response(
-      `<!doctype html><html><body style="font-family:system-ui;padding:2rem;line-height:1.5"><h2>Backend (no static)</h2><p>The API backend is running on this port (${options.port}). The dev frontend is served by Vite — open <a href="http://${options.host}:5173">http://${options.host}:5173</a>.</p></body></html>`,
+      `<!doctype html><html><body style="font-family:system-ui;padding:2rem;line-height:1.5"><h2>Backend (no static)</h2><p>The API backend is running on this port (${options.port}). The dev frontend is served by Vite: open <a href="http://${options.host}:5173">http://${options.host}:5173</a>.</p></body></html>`,
       { status: 404, headers: { "Content-Type": "text/html; charset=utf-8" } },
     );
   }

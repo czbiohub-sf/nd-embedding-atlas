@@ -1,5 +1,5 @@
 /**
- * Threshold-filter transform descriptor (node-graph tracer bullet) — the first
+ * Threshold-filter transform descriptor (node-graph tracer bullet): the first
  * `role: "transform"` node. Metadata is eager; the per-instance runtime loads
  * lazily through the canonical SDK definition.
  */

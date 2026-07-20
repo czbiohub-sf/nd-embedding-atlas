@@ -1,0 +1,68 @@
+---
+title: Install
+description: Install, update, and remove ndea on macOS with Apple silicon or on Linux.
+---
+
+## Install the latest stable release
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/czbiohub-sf/nd-embedding-atlas/main/scripts/install.sh | sh
+```
+
+The installer:
+
+1. supports macOS on Apple silicon and Linux on `x64` or `arm64`;
+2. downloads the matching release binary and SHA-256 file;
+3. verifies the checksum;
+4. stores the binary under `~/.ndea/versions/<tag>/ndea`; and
+5. points `~/.local/bin/ndea` at that version.
+
+Ensure `~/.local/bin` is on `PATH`, then check the installation:
+
+```bash
+ndea --version
+ndea doctor
+```
+
+## Select a version or channel
+
+Install a specific tag:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/czbiohub-sf/nd-embedding-atlas/main/scripts/install.sh \
+  | NDEA_VERSION=v0.1.0 sh
+```
+
+Follow the active alpha, beta, or release candidate:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/czbiohub-sf/nd-embedding-atlas/main/scripts/install.sh \
+  | NDEA_CHANNEL=pre-release sh
+```
+
+`NDEA_BIN_DIR` changes the symlink directory. `NDEA_HOME` changes the state root containing installed versions, locks, and the active-version record.
+
+## Update or roll back
+
+```bash
+ndea update
+ndea update --channel pre-release
+ndea rollback
+```
+
+Updates download a fresh version, verify its checksum, and atomically replace the active symlink. A running `ndea view` process continues using the binary it already opened.
+
+By default, update keeps the active version and one rollback target. Use `ndea gc` to manage retained versions explicitly.
+
+## Remove ndea
+
+Remove the active symlink, installed versions, and extracted native-library cache:
+
+```bash
+rm -f "${NDEA_BIN_DIR:-$HOME/.local/bin}/ndea"
+rm -rf "${NDEA_HOME:-$HOME/.ndea}" "${XDG_CACHE_HOME:-$HOME/.cache}/ndea"
+```
+
+This does not remove source datasets.
+
+See the [CLI reference](/cli) for every installer variable and maintenance command.

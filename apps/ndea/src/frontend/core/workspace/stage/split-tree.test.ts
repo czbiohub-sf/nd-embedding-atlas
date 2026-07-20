@@ -32,7 +32,7 @@ describe("split-tree", () => {
     expect(treeSplitLeaf("a", "a", "down", "__slot-1")).toEqual({ dir: "col", ratio: 0.5, a: "a", b: "__slot-1" });
   });
 
-  test("treeRemove collapses the split — sibling absorbs the space", () => {
+  test("treeRemove collapses the split: sibling absorbs the space", () => {
     const t: TreeNode = { dir: "row", ratio: 0.42, a: "a", b: { dir: "col", ratio: 0.5, a: "b", b: "c" } };
     expect(treeRemove(t, "b")).toEqual({ dir: "row", ratio: 0.42, a: "a", b: "c" });
     expect(treeRemove("a", "a")).toBeNull();

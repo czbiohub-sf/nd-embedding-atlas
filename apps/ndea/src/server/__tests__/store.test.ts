@@ -148,7 +148,7 @@ describe("DatasetQuerySession", () => {
 
   test("close does not throw", async () => {
     const store = await createMockStore(5);
-    // Don't assign to activeStore — we close it manually here
+    // Don't assign to activeStore: we close it manually here
     expect(() => store.close()).not.toThrow();
   });
 });
@@ -173,15 +173,15 @@ describe("isAllowedSql", () => {
     expect(isAllowedSql("DROP TABLE IF EXISTS mosaic.preagg_scatter")).toBe(true);
   });
 
-  test("blocks ALTER TABLE via /data/query — goes through /api/categorize instead", () => {
+  test("blocks ALTER TABLE via /data/query: goes through /api/categorize instead", () => {
     expect(isAllowedSql('ALTER TABLE obs_base ADD COLUMN "__ev__umap_id" INTEGER')).toBe(false);
   });
 
-  test("blocks UPDATE via /data/query — goes through /api/categorize instead", () => {
+  test("blocks UPDATE via /data/query: goes through /api/categorize instead", () => {
     expect(isAllowedSql('UPDATE obs_base SET "__ev__umap_id" = 42')).toBe(false);
   });
 
-  test("blocks CREATE OR REPLACE VIEW via /data/query — server owns VIEW rebuilds", () => {
+  test("blocks CREATE OR REPLACE VIEW via /data/query: server owns VIEW rebuilds", () => {
     expect(isAllowedSql("CREATE OR REPLACE VIEW dataset AS SELECT * FROM obs_base")).toBe(false);
   });
 

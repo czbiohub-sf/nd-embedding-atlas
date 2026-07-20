@@ -2,12 +2,12 @@
  * Per-channel pixel statistics for autocontrast.
  *
  * Reads the COARSEST OME-Zarr pyramid level for a FOV (not level 0 like the
- * crop path — the pyramid IS the decimation, so a thumbnail-sized level gives a
+ * crop path: the pyramid IS the decimation, so a thumbnail-sized level gives a
  * representative histogram for ~free) and computes, per channel: a 256-bin
  * histogram, saturation-percentile limits (Fiji-style), and the raw min/max
  * (napari-style). The frontend picks which method to apply.
  *
- * ponytail: computed on the main thread, not the CropPool worker — it runs once
+ * ponytail: computed on the main thread, not the CropPool worker: it runs once
  * per FOV over a tiny coarse level and the result is cached forever (pixels are
  * immutable). Move to the worker only if it ever shows up in latency.
  */
@@ -21,7 +21,7 @@ const BIN_COUNT = 256;
 // well on fluorescence (heavy background spike at 0, long bright tail).
 const LOW_PCT = 0.01;
 const HIGH_PCT = 0.998;
-// Smallest acceptable coarse level — below this a histogram is too sparse to
+// Smallest acceptable coarse level: below this a histogram is too sparse to
 // trust, so we step toward finer levels until a plane has enough pixels.
 const MIN_EDGE = 64;
 const MAX_LEVELS = 16;
@@ -61,7 +61,7 @@ function pickLevel(levels: zarr.Array<zarr.DataType>[]): zarr.Array<zarr.DataTyp
     const nX = shape[shape.length - 1];
     if (nY >= MIN_EDGE && nX >= MIN_EDGE) return levels[i];
   }
-  return levels[0]; // image smaller than MIN_EDGE everywhere — use finest
+  return levels[0]; // image smaller than MIN_EDGE everywhere: use finest
 }
 
 /** Histogram + percentile + extent for one channel plane. Exported for tests. */

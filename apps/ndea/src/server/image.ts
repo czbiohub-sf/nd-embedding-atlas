@@ -107,7 +107,7 @@ export interface ChannelRequest {
   /** Hex color without '#', e.g. "FF0000". Applied multiplicatively. */
   color: string;
   /**
-   * Compositing mode — "normal" | "additive" | "multiply" | "subtractive"
+   * Compositing mode: "normal" | "additive" | "multiply" | "subtractive"
    * (mirrors the viewer's ChannelDef.blendMode). Defaults to "additive".
    */
   blend?: string;
@@ -151,7 +151,7 @@ export function compositeChannels(
     const span = ch.hi - ch.lo;
     // Degenerate window (hi == lo): idetik computes ValueScale = 1/(hi-lo) = ±∞,
     // so every pixel ≠ lo saturates that channel. Replicate that (1/0 → ∞)
-    // rather than zeroing it — otherwise an unset/zero-width channel renders
+    // rather than zeroing it: otherwise an unset/zero-width channel renders
     // black in the crop but fully-on in the viewer (the green-vs-magenta bug).
     // The per-channel clamp below maps the resulting ∞/NaN the way a UNORM
     // store does.

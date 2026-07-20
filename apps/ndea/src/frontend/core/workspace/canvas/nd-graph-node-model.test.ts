@@ -71,7 +71,7 @@ describe("graph node presentation decisions", () => {
 
   test("formats footer cooking state before duration", () => {
     expect(formatCookStatus(true, 12.34)).toBe("cooking…");
-    expect(formatCookStatus(false)).toBe("cook —");
+    expect(formatCookStatus(false)).toBe("cook :");
     expect(formatCookStatus(false, 12.34)).toBe("cook 12.3ms");
   });
 

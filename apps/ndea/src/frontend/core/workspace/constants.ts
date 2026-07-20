@@ -6,7 +6,7 @@ export const ND_ZOOM = {
   chipMax: 0.55,
   /** card → full-body threshold */
   fullMin: 1.08,
-  /** ± band around both thresholds — prevents boundary flapping */
+  /** ± band around both thresholds: prevents boundary flapping */
   hysteresis: 0.04,
   /** canvas zoom clamp */
   min: 0.1,
@@ -18,7 +18,7 @@ export const ND_TIMING = {
   /** strip ↔ full canvas seam: pane rects + camera together */
   seamMs: 420,
   seamEase: "cubic-bezier(0.3, 0.8, 0.3, 1)",
-  /** disposition pane geometry (full↔split↔hidden) — snappier than a camera
+  /** disposition pane geometry (full↔split↔hidden): snappier than a camera
    *  fly-to; ease-out-expo front-loads the motion so it reads as done early */
   dispoMs: 200,
   dispoEase: "cubic-bezier(0.16, 1, 0.3, 1)",
@@ -34,7 +34,7 @@ export const ND_NODE = {
   chipH: 26,
   headerH: 26,
   radius: 7,
-  /** resize clamps — per form; chips are canonical (never resized) */
+  /** resize clamps: per form; chips are canonical (never resized) */
   resizeMin: { card: { w: 150, h: 90 }, full: { w: 200, h: 140 } },
   resizeMax: { w: 780, h: 720 },
 } as const;

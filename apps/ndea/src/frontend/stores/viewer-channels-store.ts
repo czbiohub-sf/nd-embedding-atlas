@@ -1,5 +1,5 @@
 /**
- * ViewerChannelsStore — shares live channel state from ViewerProvider
+ * ViewerChannelsStore: shares live channel state from ViewerProvider
  * to components outside the viewer tree (e.g. TrackGallery).
  *
  * ViewerProvider writes via publishViewerChannels in a useEffect.

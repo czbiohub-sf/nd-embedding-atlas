@@ -1,5 +1,5 @@
 /**
- * Port anchor positions in world coordinates — shared by the knife layer
+ * Port anchor positions in world coordinates: shared by the knife layer
  * (wire intersection sampling) and anything else that reasons about wire
  * geometry outside xyflow's own edge rendering.
  */

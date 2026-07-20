@@ -2,10 +2,10 @@
  * Minimal column picker for a chart node. Revive-as-node needs a per-instance
  * field source (the old `generateDefaultPanels` supplied one panel per column;
  * that path is gone). Sources eligible columns from `useColumnTypes` over the
- * node's own coordinator — no `useDashboard`.
+ * node's own coordinator: no `useDashboard`.
  *
  * ponytail: native <select>, skip only `__row_index__`. Embedding/coord-column
- * noise filtering is YAGNI for a manual pick — the user chooses. Add a skip
+ * noise filtering is YAGNI for a manual pick: the user chooses. Add a skip
  * heuristic only if the list proves noisy.
  */
 

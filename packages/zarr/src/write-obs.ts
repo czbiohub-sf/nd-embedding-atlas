@@ -1,5 +1,5 @@
 /**
- * write-obs — append columns to an AnnData `.obs` group on disk (zarr v2 + v3).
+ * write-obs: append columns to an AnnData `.obs` group on disk (zarr v2 + v3).
  *
  * This is the "commit" half of the annotation flow: DuckDB `ann_*` tables are
  * the live staging layer; this writes selected columns back into the source

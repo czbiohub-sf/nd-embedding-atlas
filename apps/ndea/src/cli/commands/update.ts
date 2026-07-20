@@ -1,10 +1,10 @@
 /**
- * `ndea update` — fetch the manifest, download the matching binary into
+ * `ndea update`: fetch the manifest, download the matching binary into
  * the versions tree, and atomically repoint the active symlink.
  *
  * Layout written by this command (mirrors install.sh):
- *   ~/.ndea/versions/<tag>/ndea               — bun-compiled binary
- *   $bin_dir/ndea                             — symlink → versions/<tag>/ndea
+ *   ~/.ndea/versions/<tag>/ndea              : bun-compiled binary
+ *   $bin_dir/ndea                            : symlink → versions/<tag>/ndea
  *
  * The binary embeds libduckdb and extracts it to ~/.cache/ndea/<tag>/
  * on first run, so no sidecar download is needed.
@@ -65,7 +65,7 @@ export default defineCommand({
     }
 
     const channel = resolveChannel(flags.channel);
-    detectTarget(); // validate platform early — throws if unsupported
+    detectTarget(); // validate platform early: throws if unsupported
 
     console.log(`  Checking for updates on channel "${channel}"…`);
     const asset = await fetchManifest(channel);
@@ -102,7 +102,7 @@ export default defineCommand({
       await Bun.write(targetBin, bytes);
       await chmod(targetBin, 0o755);
 
-      // Atomic symlink swap — write `<link>.tmp` then rename(2) over the
+      // Atomic symlink swap: write `<link>.tmp` then rename(2) over the
       // live link. POSIX rename is atomic for both files and symlinks; the
       // running binary keeps its open file handle to the old version, so
       // long-lived `ndea view` sessions are unaffected.
@@ -148,6 +148,6 @@ function resolveChannel(raw: Channel | undefined): Channel {
   console.error(`Error: unknown channel "${candidate}" (expected: ${CHANNELS.join(", ")})`);
   process.exit(1);
   // `process.exit` is `: never`, but the lint rule's control-flow analysis
-  // doesn't pick that up — throw explicitly so consistent-return is happy.
+  // doesn't pick that up: throw explicitly so consistent-return is happy.
   throw new Error("unreachable");
 }

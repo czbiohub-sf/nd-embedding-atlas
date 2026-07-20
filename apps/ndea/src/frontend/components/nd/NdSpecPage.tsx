@@ -1,7 +1,7 @@
 /**
- * NdSpecPage — dev-only living spec for the nd component layer, at #/nd-spec.
+ * NdSpecPage: dev-only living spec for the nd component layer, at #/nd-spec.
  * Mirrors design_handoff_node_workspace/component-spec/ (the contract source).
- * No data dependencies — renders without a backend.
+ * No data dependencies: renders without a backend.
  */
 
 import { useState } from "react";
@@ -89,7 +89,7 @@ function HeroDemo() {
         </DemoRow>
       </NdNodeFrame>
       <div className="max-w-[280px]">
-        <SpecLabel>live — cycle the form, lock it against zoom</SpecLabel>
+        <SpecLabel>live: cycle the form, lock it against zoom</SpecLabel>
         <p className="mt-2 text-xs text-muted-foreground">
           One component, one DOM element, three forms. The host resolves the form from zoom + placement + override; the
           frame morphs width/height (220 ms) and the body content cross-fades (200 ms). Ports ride the morphing edge.
@@ -104,7 +104,7 @@ function FormsDemo() {
   return (
     <div className="flex flex-wrap items-end gap-[30px]">
       <div className="w-[148px] shrink-0">
-        <SpecLabel>chip — 26px · canonical width</SpecLabel>
+        <SpecLabel>chip: 26px · canonical width</SpecLabel>
         <div className="mt-2">
           <NdNodeFrame
             nodeId="f1"
@@ -118,7 +118,7 @@ function FormsDemo() {
         </div>
       </div>
       <div className="w-[236px] shrink-0">
-        <SpecLabel>card — config / thumbnail · resizable</SpecLabel>
+        <SpecLabel>card: config / thumbnail · resizable</SpecLabel>
         <div className="mt-2">
           <NdNodeFrame
             nodeId="f2"
@@ -141,7 +141,7 @@ function FormsDemo() {
         </div>
       </div>
       <div className="w-[258px] shrink-0">
-        <SpecLabel>full — live body + footer · resizable</SpecLabel>
+        <SpecLabel>full: live body + footer · resizable</SpecLabel>
         <div className="mt-2">
           <NdNodeFrame
             nodeId="f3"
@@ -187,10 +187,10 @@ function StateMatrix() {
       {mk("default · clean", { led: "clean", count: "412,809" })}
       {mk("selected", { led: "clean", selected: true })}
       {mk("claimed (pointer)", { led: "clean", claimed: true })}
-      {mk("dirty — awaiting pull", { led: "dirty" })}
+      {mk("dirty: awaiting pull", { led: "dirty" })}
       {mk("cooking", { led: "cooking" })}
       {mk("error", { led: "error" })}
-      {mk("staged — body elsewhere", { led: "clean", staged: true })}
+      {mk("staged: body elsewhere", { led: "clean", staged: true })}
       {mk("stale (selection)", { led: "clean", stale: true, badge: <NdChip tone="amber">◇</NdChip> })}
       {mk("telemetry off", { led: null, count: "412,809" })}
     </div>
@@ -219,13 +219,13 @@ function portRow(kind: NdPortKind, dir: "in" | "out", state: NdPortState, note: 
 function PortsDemo() {
   return (
     <div className="py-3.5">
-      {portRow("pred", "out", "idle", "filled circle — emits a predicate (pull wire, periwinkle)")}
-      {portRow("pred", "in", "idle", "hollow circle — accepts predicates; owns the fan-in operator chip")}
-      {portRow("sel", "out", "idle", "diamond — user-driven selection (push wire, amber); lasso source")}
-      {portRow("focus", "out", "idle", "square — single-record focus (push wire, sky); table → Image Viewer")}
-      {portRow("pred", "in", "legal", "legal drop target during a wire drag — green glow")}
-      {portRow("pred", "in", "illegal", "kind mismatch / cycle / duplicate — dimmed to 30%")}
-      {portRow("sel", "out", "source", "origin of the live wire drag — kind-colored ring")}
+      {portRow("pred", "out", "idle", "filled circle: emits a predicate (pull wire, periwinkle)")}
+      {portRow("pred", "in", "idle", "hollow circle: accepts predicates; owns the fan-in operator chip")}
+      {portRow("sel", "out", "idle", "diamond: user-driven selection (push wire, amber); lasso source")}
+      {portRow("focus", "out", "idle", "square: single-record focus (push wire, sky); table → Image Viewer")}
+      {portRow("pred", "in", "legal", "legal drop target during a wire drag: green glow")}
+      {portRow("pred", "in", "illegal", "kind mismatch / cycle / duplicate: dimmed to 30%")}
+      {portRow("sel", "out", "source", "origin of the live wire drag: kind-colored ring")}
     </div>
   );
 }
@@ -255,7 +255,7 @@ export function NdSpecPage() {
     <main className="mx-auto max-w-[860px] overflow-y-auto px-8 py-10 pb-24">
       <h1 className="mb-1 text-xl font-semibold">NdNode</h1>
       <p className="mb-1.5 text-text-muted">
-        The standard node container — one component, three forms. Consumed by the canvas, stage tiles, and any future
+        The standard node container: one component, three forms. Consumed by the canvas, stage tiles, and any future
         surface.
       </p>
 
@@ -264,17 +264,17 @@ export function NdSpecPage() {
       <p className="mt-3 max-w-[70ch] text-xs text-muted-foreground">
         Header (26px, never wraps): <b className="text-foreground">LED · label · badge · sub</b> on the left,
         <b className="text-foreground"> form controls · actions · count</b> on the right. Body is plugin territory (10px
-        padding). Footer (full form only) is host telemetry. Ports are absolutely positioned on the frame edge — outside
+        padding). Footer (full form only) is host telemetry. Ports are absolutely positioned on the frame edge: outside
         the body, so they track the morph.
       </p>
 
       <h2 className="mt-8 mb-3 text-sm font-semibold">The three forms</h2>
       <FormsDemo />
       <p className="mt-3 max-w-[70ch] text-xs text-muted-foreground">
-        Chips are <b className="text-foreground">canonical</b> — fixed height (26px), per-type width, never
-        user-resized: the wiring diagram must stay tidy. Cards and full bodies are resizable (4 corner hotspots, SE
-        glyph; min 150×90 / 200×140, max 780×720), with sizes stored <b className="text-foreground">per form</b> so card
-        and full never contaminate each other.
+        Chips are <b className="text-foreground">canonical</b>: fixed height (26px), per-type width, never user-resized:
+        the wiring diagram must stay tidy. Cards and full bodies are resizable (4 corner hotspots, SE glyph; min 150×90
+        / 200×140, max 780×720), with sizes stored <b className="text-foreground">per form</b> so card and full never
+        contaminate each other.
       </p>
 
       <h2 className="mt-8 mb-3 text-sm font-semibold">States</h2>
@@ -283,10 +283,10 @@ export function NdSpecPage() {
       <h2 className="mt-8 mb-3 text-sm font-semibold">Ports</h2>
       <PortsDemo />
       <p className="mt-3 max-w-[70ch] text-xs text-muted-foreground">
-        <b className="text-foreground">Outputs are already typed — the dot is the type.</b> Shape + color encode the
-        kind (predicate ● circle · selection ◆ diamond · focus ▪ square); fill encodes direction (filled = out, hollow =
-        in). A node that emits something new claims a <em>reserved</em> shape rather than redesigning the system. One
-        kind per out-port; a node needing two output kinds gets two out-ports.
+        <b className="text-foreground">Outputs are already typed: the dot is the type.</b> Shape + color encode the kind
+        (predicate ● circle · selection ◆ diamond · focus ▪ square); fill encodes direction (filled = out, hollow = in).
+        A node that emits something new claims a <em>reserved</em> shape rather than redesigning the system. One kind
+        per out-port; a node needing two output kinds gets two out-ports.
       </p>
 
       <h2 className="mt-8 mb-3 text-sm font-semibold">Icon buttons</h2>
@@ -307,7 +307,7 @@ export function NdSpecPage() {
         </div>
       </div>
       <p className="mt-3 max-w-[70ch] text-xs text-muted-foreground">
-        <b className="text-foreground">Every header button is an NdIconButton</b> — a 15px (14px compact) grid-centered
+        <b className="text-foreground">Every header button is an NdIconButton</b>: a 15px (14px compact) grid-centered
         box with an icon from the shared <code className="font-mono">ND_ICONS</code> registry (
         {Object.keys(ND_ICONS).length} icons, 10×10 grid). Font glyphs are banned from buttons; new icons go in the
         registry. Plugins declare actions as data and the host renders them; nobody hand-styles a header button.

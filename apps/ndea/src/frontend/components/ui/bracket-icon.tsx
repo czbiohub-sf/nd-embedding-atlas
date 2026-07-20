@@ -2,7 +2,7 @@ import { Brackets, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
- * BracketIcon — composes a lucide icon inside the brand's brackets: [icon].
+ * BracketIcon: composes a lucide icon inside the brand's brackets: [icon].
  *
  * The brackets ARE the Biohub identity (the logo's `[o]`), so this is the
  * canonical way to mark a technical thing (an embedding, a data source, a tool).
@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
  *   <BracketIcon icon={ChartScatter} />   → [⋰]   (embedding)
  *   <BracketIcon icon={Database} />        → [▦]   (data / table)
  *
- * Monochrome via currentColor — color it with text-* (e.g. text-primary).
+ * Monochrome via currentColor: color it with text-* (e.g. text-primary).
  */
 export function BracketIcon({ icon: Icon, className }: { icon: LucideIcon; className?: string }) {
   return (
