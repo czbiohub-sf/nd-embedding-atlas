@@ -50,7 +50,6 @@ vp dev apps/ndea
 ```bash
 vp check vite.config.ts bunli.config.ts scripts
 vp run -r check          # package checks in dependency order
-bun run check:boundaries # package direction and export contracts
 vp run -r test           # Bun-native suites per workspace
 vp run build             # frontend + single-file binary
 ```
@@ -88,17 +87,15 @@ Enforced by `vp check`:
 - `@/` path alias → `apps/ndea/src/frontend/`
 - Kebab-case ordinary modules, PascalCase React component modules, and `useX` hook modules. Oxlint enforces these
   filename shapes; review enforces each file's semantic role.
-- Shared packages use canonical `@ndea/*` barrels. `bun run check:boundaries` compiles positive and expected-failure
-  fixtures and rejects deep imports, package-to-app imports, reverse Workspace dependencies, and React in the SDK.
+- Shared packages use canonical `@ndea/*` barrels.
 
 ## Project structure
 
 ```text
 apps/ndea/         # CLI, server, frontend, and binary builder
 packages/protocol/ # Shared Zod request and response schemas
-packages/sdk/      # Node authoring and host contracts
+packages/sdk/      # Public node/plugin authoring and host contracts
 packages/zarr/     # Bun-backed AnnData, MuData, and OME-Zarr I/O
-examples/plugins/  # Public-SDK custom-node author examples
 docs/              # Independent Waku app and lockfile
 ```
 
@@ -106,11 +103,10 @@ See [`AGENTS.md`](https://github.com/czbiohub-sf/nd-embedding-atlas/blob/main/AG
 
 ## Releases
 
-| Channel       | How it ships                                                      |
-| ------------- | ----------------------------------------------------------------- |
-| `stable`      | Manual: tag `vX.Y.Z` and push — `release.yml` builds + publishes  |
-| `pre-release` | Manual: tag `vX.Y.Z-alpha.N` / `-beta.N` / `-rc.N` and push       |
-| `canary`      | Automatic: every push to `main` rebuilds the rolling `canary` tag |
+| Channel       | How it ships                                                     |
+| ------------- | ---------------------------------------------------------------- |
+| `stable`      | Manual: tag `vX.Y.Z` and push — `release.yml` builds + publishes |
+| `pre-release` | Manual: tag `vX.Y.Z-alpha.N` / `-beta.N` / `-rc.N` and push      |
 
 A `pre-release` cut opens an auto-generated PR that bumps `manifest.json`'s `pre-release` pointer. Merge to activate.
 

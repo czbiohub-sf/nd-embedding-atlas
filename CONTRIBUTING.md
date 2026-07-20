@@ -35,7 +35,6 @@ vp run dev path/to/data.zarr
 # Shared root tooling, then every workspace in dependency order
 vp check vite.config.ts bunli.config.ts scripts
 vp run -r check
-bun run check:boundaries
 
 # Bun-native tests in every workspace
 vp run -r test
@@ -70,9 +69,7 @@ Enforced by `vp check`:
 - Kebab-case ordinary modules, PascalCase React component modules, and `useX`
   hook modules. `unicorn/filename-case` enforces these shapes; review enforces
   each file's semantic role.
-- Shared packages import only exported `@ndea/*` entrypoints; `bun run check:boundaries`
-  compiles canonical and expected-failure fixtures and rejects package-to-app,
-  deep, reverse-Workspace, React-in-SDK, and relative cross-workspace imports.
+- Shared packages import only exported `@ndea/*` entrypoints.
 
 ## Documentation
 
@@ -98,4 +95,4 @@ CLI metadata, Bun tests, and native binaries on push and PR. `docs.yml` builds
 the isolated docs app. `zizmor.yml` audits workflow security.
 
 For releases, see [`AGENTS.md`](./AGENTS.md#commands). Release tags trigger
-`release.yml`; pushes to `main` trigger the rolling `canary.yml` pre-release.
+`release.yml`.

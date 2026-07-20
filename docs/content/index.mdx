@@ -53,7 +53,6 @@ export NDEA_GITHUB_TOKEN="$(gh auth token)"
 ```bash
 ndea update                       # latest stable
 ndea update --channel pre-release # latest alpha / beta / rc (when active)
-ndea update --channel canary      # rolling, rebuilt on every push to main
 ```
 
 The canonical `curl … raw.githubusercontent.com … | sh` form will work once the repo flips public; until then use the `gh` flow above.

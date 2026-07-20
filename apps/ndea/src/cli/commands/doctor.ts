@@ -147,7 +147,7 @@ export default defineCommand({
     if (flags["check-network"]) {
       console.log(`\n${BOLD}Network${RESET}`);
       try {
-        const channel = (process.env.NDEA_CHANNEL ?? "stable") as "stable" | "latest" | "pre-release" | "canary";
+        const channel = (process.env.NDEA_CHANNEL ?? "stable") as "stable" | "latest" | "pre-release";
         const asset = await Promise.race([
           fetchManifest(channel),
           new Promise<never>((_, rej) => {

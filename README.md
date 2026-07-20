@@ -1,6 +1,6 @@
 # nd-embedding-atlas
 
-[![CI][badge-ci]][link-ci] [![Canary][badge-canary]][link-canary] [![Release][badge-release]][link-release] [![Bun][badge-bun]][link-bun] [![License][badge-license]][link-license]
+[![CI][badge-ci]][link-ci] [![Release][badge-release]][link-release] [![Bun][badge-bun]][link-bun] [![License][badge-license]][link-license]
 
 An interactive browser-based Node Workspace that links high-dimensional AI embeddings to source 5D (TCZYX) image data for rapid exploration and annotation.
 
@@ -43,9 +43,6 @@ Switch channel with `NDEA_CHANNEL`:
 ```bash
 # pre-release (alpha / beta / rc) — most common for internal testers right now
 ... | NDEA_CHANNEL=pre-release NDEA_GITHUB_TOKEN="$(gh auth token)" sh
-
-# canary (rolling, rebuilt on every push to main)
-... | NDEA_CHANNEL=canary NDEA_GITHUB_TOKEN="$(gh auth token)" sh
 ```
 
 Environment variables:
@@ -54,14 +51,13 @@ Environment variables:
 | ------------------- | ------------------ | -------------------------------------------------------------------------------- |
 | `NDEA_GITHUB_TOKEN` | _(required)_       | GitHub token with repo read scope. Use `$(gh auth token)` if `gh` is configured. |
 | `NDEA_VERSION`      | `latest`           | Release tag (e.g. `v0.1.0-beta.2`).                                              |
-| `NDEA_CHANNEL`      | `stable`           | `stable`, `pre-release`, or `canary` — see Channels below.                       |
+| `NDEA_CHANNEL`      | `stable`           | `stable` or `pre-release` — see Channels below.                                  |
 | `NDEA_BIN_DIR`      | `$HOME/.local/bin` | Install destination.                                                             |
 
 **Channels:**
 
 - **`stable`** (default) — the latest tagged release (`v0.1.0`, `v0.2.0`, …). Hand-cut.
 - **`pre-release`** — latest active alpha / beta / release candidate (`v0.1.0-alpha.1`, `v0.1.0-beta.0`, `v0.1.0-rc.1`, …). Cut manually ahead of a stable release; what most internal testers track.
-- **`canary`** — rolling pre-release rebuilt on every push to `main`. Tracks the head of development.
 
 ### 2. Public install (for once the repo is public)
 
@@ -84,7 +80,6 @@ export NDEA_GITHUB_TOKEN="$(gh auth token)"
 ```bash
 ndea update                       # latest stable
 ndea update --channel pre-release # latest alpha / beta / rc (when active)
-ndea update --channel canary      # rolling, rebuilt on every push to main
 ndea rollback                     # restore the previous binary
 ```
 
@@ -135,7 +130,6 @@ bun install
 vp run dev path/to/data.zarr
 vp run -r check
 vp run -r test
-bun run check:boundaries
 vp run build
 ```
 
@@ -170,12 +164,10 @@ See the [changelog][].
 <!-- badges -->
 
 [badge-ci]: https://github.com/czbiohub-sf/nd-embedding-atlas/actions/workflows/ci.yml/badge.svg?branch=main
-[badge-canary]: https://github.com/czbiohub-sf/nd-embedding-atlas/actions/workflows/canary.yml/badge.svg?branch=main
 [badge-release]: https://img.shields.io/github/v/release/czbiohub-sf/nd-embedding-atlas?label=release&color=blue
 [badge-bun]: https://img.shields.io/badge/Bun-1.x-000?logo=bun&logoColor=fbf0df
 [badge-license]: https://img.shields.io/badge/License-BSD--3--Clause-blue.svg
 [link-ci]: https://github.com/czbiohub-sf/nd-embedding-atlas/actions/workflows/ci.yml
-[link-canary]: https://github.com/czbiohub-sf/nd-embedding-atlas/releases/tag/canary
 [link-release]: https://github.com/czbiohub-sf/nd-embedding-atlas/releases/latest
 [link-bun]: https://bun.com
 [link-license]: https://opensource.org/licenses/BSD-3-Clause

@@ -23,8 +23,7 @@ packages/protocol/  Shared request and response Zod schemas
 packages/sdk/       Node authoring and host contracts
 packages/zarr/      Bun-backed AnnData, MuData, and OME-Zarr I/O
 docs/               Independent Waku app with its own lockfile
-examples/plugins/   Custom-node examples built against the public SDK
-scripts/             Workspace and dependency-boundary tooling
+scripts/             Workspace tooling
 ```
 
 Workspace dependencies flow in one direction:
@@ -100,7 +99,6 @@ vp dev apps/ndea
 # Root and workspace checks
 vp check vite.config.ts bunli.config.ts scripts
 vp run -r check
-bun run check:boundaries
 vp run -r test
 
 # Production binary: dist/ndea

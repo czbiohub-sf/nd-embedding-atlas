@@ -3,27 +3,12 @@ title: Build a custom-node plugin
 description: Build, validate, and load a trusted plugin through the public NDEA SDK.
 ---
 
-This guide builds the repository's transform and mounted-view example. Plugin
-code imports NDEA contracts only from `@ndea/sdk`.
+Plugin code imports NDEA contracts only from `@ndea/sdk`.
 
-## Build and validate the example
-
-From the repository root:
-
-```bash
-vp run plugin-example:build
-vp run plugin-example:validate
-```
-
-The build emits one self-contained browser module at
-`examples/plugins/custom-node/dist/client.js`. Validation reads the manifest,
-checks host and SDK compatibility, scans the client for runtime imports, and
-checks every allowlisted asset. It never executes the client.
-
-The example contains:
+## Package layout
 
 ```text
-examples/plugins/custom-node/
+my-plugin/
 ├── ndea-plugin.json       # package identity, compatibility, assets, disclosures
 ├── src/client.ts          # default PluginFactory export
 ├── assets/styles.css      # allowlisted static asset
