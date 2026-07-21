@@ -134,6 +134,12 @@ async function createOmeZarrFixture() {
 }
 
 describe("BunFileStore", () => {
+  test("normalizes only trailing path separators", () => {
+    expect(new BunFileStore("/tmp/data///").root).toBe("/tmp/data");
+    expect(new BunFileStore("/tmp////data").root).toBe("/tmp////data");
+    expect(new BunFileStore("/").root).toBe("");
+  });
+
   test("resolves keys under root and returns undefined for missing files", async () => {
     if (!HAS_FIXTURE) return;
     const store = new BunFileStore(FIXTURE);

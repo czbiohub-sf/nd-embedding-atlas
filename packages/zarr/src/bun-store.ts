@@ -41,7 +41,9 @@ export class BunFileStore implements AsyncReadable, AsyncWritable {
 
   constructor(root: string) {
     // Normalize so "/a/b/" and "/a/b" resolve the same child paths.
-    this.root = root.replace(/\/+$/, "");
+    let end = root.length;
+    while (end > 0 && root.charCodeAt(end - 1) === 47) end -= 1;
+    this.root = root.slice(0, end);
   }
 
   async get(key: string): Promise<Uint8Array | undefined> {
