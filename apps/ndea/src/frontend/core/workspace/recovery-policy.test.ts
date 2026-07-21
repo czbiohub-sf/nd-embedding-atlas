@@ -69,6 +69,7 @@ describe("workspace recovery policy", () => {
       mountCanvas: false,
       mountStatusBar: false,
       mountBodies: false,
+      editStageLayout: false,
       installAuthoringListeners: false,
     });
     expect(workspaceSurfacePolicy("writable", true)).toEqual({
@@ -77,6 +78,7 @@ describe("workspace recovery policy", () => {
       mountCanvas: true,
       mountStatusBar: true,
       mountBodies: true,
+      editStageLayout: true,
       installAuthoringListeners: true,
     });
     expect(workspaceSurfacePolicy("writable", false)).toEqual({
@@ -85,6 +87,7 @@ describe("workspace recovery policy", () => {
       mountCanvas: false,
       mountStatusBar: true,
       mountBodies: true,
+      editStageLayout: true,
       installAuthoringListeners: false,
     });
   });
