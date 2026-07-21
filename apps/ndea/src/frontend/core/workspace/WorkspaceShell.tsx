@@ -207,6 +207,8 @@ export interface WorkspaceSurfacePolicy {
   readonly mountCanvas: boolean;
   readonly mountStatusBar: boolean;
   readonly mountBodies: boolean;
+  /** Session-local stage layout remains adjustable without graph authoring. */
+  readonly editStageLayout: boolean;
   readonly installAuthoringListeners: boolean;
 }
 
@@ -221,6 +223,7 @@ export function workspaceSurfacePolicy(
     mountCanvas: writable && nodeEditorEnabled,
     mountStatusBar: writable,
     mountBodies: writable,
+    editStageLayout: writable,
     installAuthoringListeners: writable && nodeEditorEnabled,
   });
 }
@@ -353,11 +356,11 @@ function WritableWorkspaceFrame({ policy }: { policy: WorkspaceSurfacePolicy }) 
         {/* stage: main area (strip) or right column (full canvas, only when occupied) */}
         {policy.mountStage && !full ? (
           <div className="absolute overflow-hidden" style={{ ...stageStyle, transition: paneTransition }}>
-            <StagePane vertical={false} />
+            <StagePane vertical={false} editable={policy.editStageLayout} />
           </div>
         ) : policy.mountStage && stageOccupied ? (
           <div className="absolute overflow-hidden" style={{ ...sideStageStyle, transition: paneTransition }}>
-            <StagePane vertical />
+            <StagePane vertical editable={policy.editStageLayout} />
           </div>
         ) : null}
 
