@@ -29,14 +29,20 @@ interface TileDragState {
   over: string | null;
 }
 
+interface SashCleanupRef {
+  current: (() => void) | null;
+}
+
 /* ── tile ────────────────────────────────────────────────────────── */
 
 function StageTile({
   id,
+  editable,
   tileDrag,
   beginTileDrag,
 }: {
   id: string;
+  editable: boolean;
   tileDrag: TileDragState | null;
   beginTileDrag: (id: string) => void;
 }) {
@@ -90,7 +96,7 @@ function StageTile({
       {/* header: grip · LED · title · count · ◆ id · pull. leading-none is
           inherited row-wide so mixed fonts sit on one visual line */}
       <div className="flex h-[26px] shrink-0 items-center gap-1.5 overflow-hidden border-b border-border px-[9px] leading-none whitespace-nowrap">
-        {/* drag-to-rearrange grip: editor-only stage authoring */}
+        {/* Drag-to-rearrange is broader stage authoring and remains editor-only. */}
         {NODE_EDITOR_ENABLED ? (
           <span
             title="drag to rearrange"
@@ -122,12 +128,13 @@ function StageTile({
         {hasBody ? (
           <NdIconButton icon="fullscreen" title="fullscreen body" onClick={() => ws.setFullscreen(id)} />
         ) : null}
-        {/* split (re-tile) + pull-to-canvas (re-placement): editor-only */}
-        {NODE_EDITOR_ENABLED ? <SplitButton id={id} /> : null}
-        {NODE_EDITOR_ENABLED ? (
+        {editable ? <SplitButton id={id} /> : null}
+        {/* Fixed-preset sessions can remove a panel and add it again through an
+            empty slot; the editor additionally exposes its canvas placement. */}
+        {editable ? (
           <NdIconButton
             icon="pin-down"
-            title="pull body to canvas"
+            title={NODE_EDITOR_ENABLED ? "pull body to canvas" : "remove panel from stage"}
             onClick={() => ws.togglePlacement(id, ND_TIMING.seamMs)}
           />
         ) : null}
@@ -220,26 +227,26 @@ function SplitButton({ id }: { id: string }) {
 /* ── sash ────────────────────────────────────────────────────────── */
 
 function StageSash({
+  editable,
   horizontal,
   onPointerDown,
 }: {
+  editable: boolean;
   horizontal: boolean;
   onPointerDown: (e: React.PointerEvent) => void;
 }) {
   const [hot, setHot] = useState(false);
   return (
     <div
-      // Resizing re-tiles the stage. With the editor off, the sash stays a
-      // passive separator with no drag, hover, or resize cursor.
-      onPointerDown={NODE_EDITOR_ENABLED ? onPointerDown : undefined}
-      onPointerEnter={NODE_EDITOR_ENABLED ? () => setHot(true) : undefined}
-      onPointerLeave={NODE_EDITOR_ENABLED ? () => setHot(false) : undefined}
-      title={NODE_EDITOR_ENABLED ? "drag to resize" : undefined}
+      onPointerDown={editable ? onPointerDown : undefined}
+      onPointerEnter={editable ? () => setHot(true) : undefined}
+      onPointerLeave={editable ? () => setHot(false) : undefined}
+      title={editable ? "drag to resize" : undefined}
       className="z-[5] grid shrink-0 place-items-center touch-none"
       style={{
         width: horizontal ? "auto" : ND_STAGE.sashHitPx,
         height: horizontal ? ND_STAGE.sashHitPx : "auto",
-        cursor: NODE_EDITOR_ENABLED ? (horizontal ? "row-resize" : "col-resize") : "default",
+        cursor: editable ? (horizontal ? "row-resize" : "col-resize") : "default",
       }}
     >
       <div
@@ -256,7 +263,7 @@ function StageSash({
 
 /* ── empty slot ──────────────────────────────────────────────────── */
 
-function StageEmptySlot({ slotId }: { slotId: string }) {
+function StageEmptySlot({ slotId, editable }: { slotId: string; editable: boolean }) {
   const ws = useWorkspace();
   const nodes = useWorkspaceSelector((s) => s.nodes);
   useWorkspaceSelector((s) => s.explicit);
@@ -266,9 +273,7 @@ function StageEmptySlot({ slotId }: { slotId: string }) {
       data-stage-tile={slotId}
       className="relative box-border flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center gap-2 overflow-hidden rounded-[7px] border-[1.5px] border-dashed border-border-active p-3"
     >
-      {/* Dismiss + fill are editor-only layout actions. A fixed preset cannot create
-          slots; this gate also handles a malformed preset containing a bare slot. */}
-      {NODE_EDITOR_ENABLED ? (
+      {editable ? (
         <button
           type="button"
           title="dismiss slot"
@@ -279,7 +284,7 @@ function StageEmptySlot({ slotId }: { slotId: string }) {
         </button>
       ) : null}
       <NdHud size={9.5}>empty slot</NdHud>
-      {NODE_EDITOR_ENABLED && candidates.length ? (
+      {editable && candidates.length ? (
         <div className="flex max-w-[260px] flex-wrap justify-center gap-[5px]">
           {candidates.map((id) => (
             <button
@@ -307,21 +312,25 @@ function StageTreeView({
   node,
   path,
   vertical,
+  editable,
+  sashCleanupRef,
   tileDrag,
   beginTileDrag,
 }: {
   node: TreeNode;
   path: string;
   vertical: boolean;
+  editable: boolean;
+  sashCleanupRef: SashCleanupRef;
   tileDrag: TileDragState | null;
   beginTileDrag: (id: string) => void;
 }) {
   const ws = useWorkspace();
   if (typeof node === "string") {
     return isSlot(node) ? (
-      <StageEmptySlot slotId={node} />
+      <StageEmptySlot key={node} slotId={node} editable={editable} />
     ) : (
-      <StageTile id={node} tileDrag={tileDrag} beginTileDrag={beginTileDrag} />
+      <StageTile key={node} id={node} editable={editable} tileDrag={tileDrag} beginTileDrag={beginTileDrag} />
     );
   }
   const dir = vertical ? "col" : node.dir; // the narrow side stage stacks everything
@@ -331,16 +340,21 @@ function StageTreeView({
     e.stopPropagation();
     const cont = (e.currentTarget as HTMLElement).parentElement?.getBoundingClientRect();
     if (!cont) return;
+    sashCleanupRef.current?.();
     const mv = (ev: PointerEvent) => {
       const r = horizontal ? (ev.clientY - cont.top) / cont.height : (ev.clientX - cont.left) / cont.width;
       ws.setTreeRatio(path, clamp(r, ND_STAGE.ratioMin, ND_STAGE.ratioMax));
     };
-    const up = () => {
+    const cleanup = () => {
       window.removeEventListener("pointermove", mv);
-      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointerup", cleanup);
+      window.removeEventListener("pointercancel", cleanup);
+      if (sashCleanupRef.current === cleanup) sashCleanupRef.current = null;
     };
+    sashCleanupRef.current = cleanup;
     window.addEventListener("pointermove", mv);
-    window.addEventListener("pointerup", up);
+    window.addEventListener("pointerup", cleanup);
+    window.addEventListener("pointercancel", cleanup);
   };
   return (
     <div className={`flex min-h-0 min-w-0 flex-1 ${dir === "col" ? "flex-col" : "flex-row"}`}>
@@ -352,11 +366,13 @@ function StageTreeView({
           node={node.a}
           path={`${path}a`}
           vertical={vertical}
+          editable={editable}
+          sashCleanupRef={sashCleanupRef}
           tileDrag={tileDrag}
           beginTileDrag={beginTileDrag}
         />
       </div>
-      <StageSash horizontal={horizontal} onPointerDown={beginSash} />
+      <StageSash editable={editable} horizontal={horizontal} onPointerDown={beginSash} />
       <div
         className="flex"
         style={{ flex: `${1 - node.ratio} 1 0%`, minWidth: ND_STAGE.minTilePx, minHeight: ND_STAGE.minTilePx }}
@@ -365,6 +381,8 @@ function StageTreeView({
           node={node.b}
           path={`${path}b`}
           vertical={vertical}
+          editable={editable}
+          sashCleanupRef={sashCleanupRef}
           tileDrag={tileDrag}
           beginTileDrag={beginTileDrag}
         />
@@ -375,7 +393,7 @@ function StageTreeView({
 
 /* ── pane ────────────────────────────────────────────────────────── */
 
-export function StagePane({ vertical }: { vertical: boolean }) {
+export function StagePane({ vertical, editable }: { vertical: boolean; editable: boolean }) {
   const ws = useWorkspace();
   const stageTree = useWorkspaceSelector((s) => s.stageTree);
   useWorkspaceSelector((s) => s.explicit);
@@ -383,6 +401,9 @@ export function StagePane({ vertical }: { vertical: boolean }) {
   useWorkspaceSelector((s) => s.nodes);
   const [tileDrag, setTileDrag] = useState<TileDragState | null>(null);
   const tileDragRef = useRef<TileDragState | null>(null);
+  const sashCleanupRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => () => sashCleanupRef.current?.(), []);
 
   // reconcile layout memory with the live staged set; persist on divergence
   const stagedIds = ws.stagedIds().toSorted((a, b) => {
@@ -442,7 +463,15 @@ export function StagePane({ vertical }: { vertical: boolean }) {
   }
   return (
     <div className="box-border flex h-full p-2">
-      <StageTreeView node={view} path="" vertical={vertical} tileDrag={tileDrag} beginTileDrag={beginTileDrag} />
+      <StageTreeView
+        node={view}
+        path=""
+        vertical={vertical}
+        editable={editable}
+        sashCleanupRef={sashCleanupRef}
+        tileDrag={tileDrag}
+        beginTileDrag={beginTileDrag}
+      />
     </div>
   );
 }

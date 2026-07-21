@@ -16,6 +16,7 @@
 - _(server)_ Add WebP crop encoding via @jsquash/webp
 - _(server)_ Zod schemas at every req.json() boundary
 - _(build)_ Get `bun build --compile` working end-to-end
+- _(frontend)_ Let fixed presets split, resize, remove, and restore stage panels
 
 ### 🐛 Bug Fixes
 
