@@ -112,18 +112,18 @@ Citation guidance will be published with the first stable research release.
 
 ## Licence
 
-nd-embedding-atlas is available under the [BSD 3-Clause licence][link-license]. See [LICENSE.md](./LICENSE.md).
+nd-embedding-atlas is available under the [MIT License][link-license]. See [LICENSE.md](./LICENSE.md).
 
 <!-- badges -->
 
 [badge-ci]: https://github.com/czbiohub-sf/nd-embedding-atlas/actions/workflows/ci.yml/badge.svg?branch=main
 [badge-release]: https://img.shields.io/github/v/release/czbiohub-sf/nd-embedding-atlas?label=release&color=blue
 [badge-bun]: https://img.shields.io/badge/Bun-1.x-000?logo=bun&logoColor=fbf0df
-[badge-license]: https://img.shields.io/badge/License-BSD--3--Clause-blue.svg
+[badge-license]: https://img.shields.io/badge/License-MIT-blue.svg
 [link-ci]: https://github.com/czbiohub-sf/nd-embedding-atlas/actions/workflows/ci.yml
 [link-release]: https://github.com/czbiohub-sf/nd-embedding-atlas/releases/latest
 [link-bun]: https://bun.com
-[link-license]: https://opensource.org/licenses/BSD-3-Clause
+[link-license]: https://opensource.org/licenses/MIT
 
 <!-- project links -->
 
