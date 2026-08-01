@@ -13,11 +13,11 @@ Run:
 ndea doctor --check-network
 ```
 
-If `ndea` is not found, confirm that the installer symlink directory is on `PATH`. Installed versions live under `~/.ndea/versions/`; the active `ndea` command is a symlink managed by update and rollback.
+If `ndea` is not found, confirm that the installer symlink directory is on `PATH`. Installed versions live under `~/.ndea/versions/`; the installer and `ndea update` manage the active `ndea` symlink.
 
-A `401` or `404` while installing from a restricted repository usually means the GitHub token is missing, expired, or lacks repository read access. Authenticate `gh`, then run the installer again.
+A `403` during release resolution can mean GitHub API rate limiting. A `404` usually means the requested tag or release asset does not exist. Check GitHub status and retry; public releases require no token.
 
-If an update fails before the symlink swap, the current installation remains active. Use `ndea rollback` only when a previous version exists.
+If an update fails before the symlink swap, the current installation remains active. Diagnose the failure, then retry the update.
 
 ## The server does not start
 

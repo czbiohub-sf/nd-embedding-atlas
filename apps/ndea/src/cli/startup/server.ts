@@ -26,7 +26,7 @@ function isPortCollision(error: unknown): boolean {
 }
 
 export function installDevErrorBridge(config: LaunchConfig): void {
-  if (!config.noStatic && process.env.NDEA_NO_STATIC !== "1") return;
+  if (!config.noStatic) return;
   process.on("uncaughtException", (error) => void reportBackendError(error));
   process.on("unhandledRejection", (reason) => void reportBackendError(reason));
 }
@@ -112,7 +112,7 @@ export async function prewarmEmbeddings(state: ServerSession): Promise<void> {
 }
 
 export function openBrowser(config: LaunchConfig): void {
-  if (config.noOpen || process.env.NDEA_NO_OPEN === "1") return;
+  if (config.noOpen) return;
   const url = `http://${displayHost(config.host)}:${config.port}`;
   try {
     if (process.platform === "darwin") Bun.spawn(["open", url]);

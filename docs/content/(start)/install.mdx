@@ -6,7 +6,7 @@ description: Install, update, and remove ndea on macOS with Apple silicon or on 
 ## Install the latest stable release
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/czbiohub-sf/nd-embedding-atlas/main/scripts/install.sh | sh
+curl -fsSL https://czbiohub-sf.github.io/nd-embedding-atlas/install.sh | sh
 ```
 
 The installer:
@@ -26,43 +26,64 @@ ndea doctor
 
 ## Select a version or channel
 
-Install a specific tag:
+Pass a release tag or a channel name as an argument:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/czbiohub-sf/nd-embedding-atlas/main/scripts/install.sh \
-  | NDEA_VERSION=v0.1.0 sh
+# A specific tag
+curl -fsSL https://czbiohub-sf.github.io/nd-embedding-atlas/install.sh | sh -s -- v0.1.0
+
+# The active alpha, beta, or release candidate
+curl -fsSL https://czbiohub-sf.github.io/nd-embedding-atlas/install.sh | sh -s -- pre-release
 ```
 
-Follow the active alpha, beta, or release candidate:
+The accepted values are `stable` (the default), `latest`, `pre-release`, and any release tag.
+
+## Install with mise
+
+[mise](https://mise.jdx.dev/) can manage ndea alongside your other tools:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/czbiohub-sf/nd-embedding-atlas/main/scripts/install.sh \
-  | NDEA_CHANNEL=pre-release sh
+mise use -g github:czbiohub-sf/nd-embedding-atlas
 ```
 
-`NDEA_BIN_DIR` changes the symlink directory. `NDEA_HOME` changes the state root containing installed versions, locks, and the active-version record.
+mise downloads the same release binary and verifies its checksum. Versions are given without the leading `v`, as in `@0.1.0`.
 
-## Update or roll back
+`ndea update` detects a mise-managed binary and updates the active mise config through mise. It does not create a competing `~/.ndea/versions` installation. Channels work the same way, including `ndea update --channel pre-release`.
+
+Select a known mise version explicitly when needed:
+
+```bash
+mise use -g --pin github:czbiohub-sf/nd-embedding-atlas@0.1.0
+```
+
+## Update or change versions
 
 ```bash
 ndea update
 ndea update --channel pre-release
-ndea rollback
 ```
 
-Updates download a fresh version, verify its checksum, and atomically replace the active symlink. A running `ndea view` process continues using the binary it already opened.
+For standalone installs, updates verify the checksum, atomically replace the active symlink, and keep only the active version by default. `ndea gc` manages any inactive versions retained with `ndea update --no-gc`.
 
-By default, update keeps the active version and one rollback target. Use `ndea gc` to manage retained versions explicitly.
+To install a specific older standalone release, remove the current standalone installation before running the installer with an explicit tag:
+
+```bash
+rm -f "$HOME/.local/bin/ndea"
+rm -rf "$HOME/.ndea"
+curl -fsSL https://czbiohub-sf.github.io/nd-embedding-atlas/install.sh | sh -s -- v0.1.0
+```
+
+For mise installs, `ndea update` updates the active mise config through mise. Select a specific version with `mise use -g --pin github:czbiohub-sf/nd-embedding-atlas@0.1.0`. A running `ndea view` process continues using the version it started with in either layout.
 
 ## Remove ndea
 
 Remove the active symlink, installed versions, and extracted native-library cache:
 
 ```bash
-rm -f "${NDEA_BIN_DIR:-$HOME/.local/bin}/ndea"
-rm -rf "${NDEA_HOME:-$HOME/.ndea}" "${XDG_CACHE_HOME:-$HOME/.cache}/ndea"
+rm -f "$HOME/.local/bin/ndea"
+rm -rf "$HOME/.ndea" "${XDG_CACHE_HOME:-$HOME/.cache}/ndea"
 ```
 
 This does not remove source datasets.
 
-See the [CLI reference](/cli) for every installer variable and maintenance command.
+See the [CLI reference](/cli) for every maintenance command.

@@ -1,43 +1,40 @@
 /**
- * `ndea update`: fetch the manifest, download the matching binary into
+ * `ndea update`: resolve a GitHub release, download the matching binary into
  * the versions tree, and atomically repoint the active symlink.
  *
  * Layout written by this command (mirrors install.sh):
  *   ~/.ndea/versions/<tag>/ndea              : bun-compiled binary
- *   $bin_dir/ndea                            : symlink → versions/<tag>/ndea
+ *   ~/.local/bin/ndea                        : symlink → versions/<tag>/ndea
  *
- * The binary embeds libduckdb and extracts it to ~/.cache/ndea/<tag>/
+ * The binary embeds libduckdb and extracts it to ~/.cache/ndea/<version>/
  * on first run, so no sidecar download is needed.
  *
  * The "atomic symlink swap" trick (write to a sibling temp name, then
- * `rename(2)` over the live link) gives crash-safety. Old versions stay
- * on disk for `ndea rollback`.
+ * `rename(2)` over the live link) gives crash-safety.
  */
 
 import { defineCommand, option } from "@bunli/core";
 import { chmod, mkdir, rename, symlink, unlink } from "node:fs/promises";
 import { z } from "zod";
+import { detectInstallManager, MISE_TOOL_ID, pathContains, runMiseUse } from "../lib/install-manager.ts";
 import { acquireLock } from "../lib/lock.ts";
-import type { Channel } from "../lib/manifest.ts";
-import { CHANNELS, detectTarget, fetchManifest, parseShaFile, sha256Hex } from "../lib/manifest.ts";
 import {
   currentVersionPath,
   installLockPath,
   isCompiledBinary,
   requireActiveLauncher,
+  resolveLauncherTarget,
   versionDir,
   versionedBinaryPath,
   versionsDir,
 } from "../lib/paths.ts";
-import { pruneVersions } from "../lib/prune.ts";
+import { pruneVersionCaches, pruneVersions } from "../lib/prune.ts";
+import type { Channel } from "../lib/releases.ts";
+import { CHANNELS, detectTarget, fetchRelease, parseShaFile, sha256Hex } from "../lib/releases.ts";
 import { VERSION } from "../version.ts";
 
-/**
- * Default versions retained after auto-gc on a successful update.
- * Active + one rollback target = 2. Each version is ~185 MB on disk,
- * so the steady-state ceiling is ~370 MB.
- */
-const AUTO_GC_KEEP = 2;
+/** Versions retained after a successful update; each one costs ~185 MB on disk. */
+const AUTO_GC_KEEP = 1;
 
 export default defineCommand({
   name: "update" as const,
@@ -45,12 +42,14 @@ export default defineCommand({
   options: {
     force: option(z.coerce.boolean().default(false), {
       description: "Update even when already on the target version",
+      argumentKind: "flag",
     }),
     channel: option(z.enum(CHANNELS).optional(), {
       description: `Release channel: ${CHANNELS.join(" | ")}`,
     }),
     "no-gc": option(z.coerce.boolean().default(false), {
-      description: `Skip the post-update gc that prunes to ${AUTO_GC_KEEP} versions`,
+      description: "Skip the post-update gc that removes inactive versions",
+      argumentKind: "flag",
     }),
   },
   async handler({ flags }) {
@@ -59,21 +58,54 @@ export default defineCommand({
       process.exit(1);
     }
 
-    if (process.env.NDEA_DISABLE_UPDATES === "1") {
-      console.error("ndea: updates disabled by NDEA_DISABLE_UPDATES");
-      process.exit(1);
-    }
-
     const channel = resolveChannel(flags.channel);
     detectTarget(); // validate platform early: throws if unsupported
 
     console.log(`  Checking for updates on channel "${channel}"…`);
-    const asset = await fetchManifest(channel);
+    const asset = await fetchRelease(channel);
     const targetVersion = asset.tag.replace(/^v/, "");
+    const manager = await detectInstallManager();
+
+    if (manager.kind === "mise") {
+      if (!manager.sourceConfig) {
+        console.error("Error: this binary belongs to mise, but no mise source config could be identified.");
+        console.error(`  Activate it with \`mise use -g ${MISE_TOOL_ID}\`, then retry.`);
+        process.exit(1);
+        throw new Error("unreachable");
+      }
+      // Compare against what mise activates, not what this process compiled
+      // in: a stale binary invoked directly must still move the pin forward.
+      const installedVersion = manager.activeVersion ?? VERSION;
+      if (targetVersion === installedVersion && !flags.force) {
+        console.log(`  Already on v${installedVersion}. Use --force to re-install.`);
+        return;
+      }
+      const exitCode = await runMiseUse(
+        manager.sourceConfig,
+        asset.tag,
+        channel,
+        manager.requestedVersion,
+        flags.force,
+      );
+      if (exitCode !== 0) {
+        process.exit(exitCode);
+        throw new Error("unreachable");
+      }
+      return;
+    }
 
     if (targetVersion === VERSION && !flags.force) {
       console.log(`  Already on v${VERSION}. Use --force to re-install.`);
       return;
+    }
+
+    const link = requireActiveLauncher();
+    const activeTarget = await resolveLauncherTarget(link);
+    if (!activeTarget || !pathContains(versionsDir(), activeTarget)) {
+      console.error(`Error: active launcher ${link} is not a symlink into ${versionsDir()}.`);
+      console.error("  Refusing to modify an install not owned by the standalone ndea installer.");
+      process.exit(1);
+      throw new Error("unreachable");
     }
 
     const lock = await acquireLock(installLockPath()).catch((err: unknown) => {
@@ -99,14 +131,20 @@ export default defineCommand({
       }
       console.log(`  Checksum OK (${expected.slice(0, 12)}…)`);
 
-      await Bun.write(targetBin, bytes);
-      await chmod(targetBin, 0o755);
+      const tmpBin = `${targetBin}.tmp-${process.pid}`;
+      try {
+        await unlink(tmpBin).catch(() => {});
+        await Bun.write(tmpBin, bytes);
+        await chmod(tmpBin, 0o755);
+        await rename(tmpBin, targetBin);
+      } finally {
+        await unlink(tmpBin).catch(() => {});
+      }
 
       // Atomic symlink swap: write `<link>.tmp` then rename(2) over the
       // live link. POSIX rename is atomic for both files and symlinks; the
       // running binary keeps its open file handle to the old version, so
       // long-lived `ndea view` sessions are unaffected.
-      const link = requireActiveLauncher();
       const tmpLink = `${link}.tmp`;
       await unlink(tmpLink).catch(() => {});
       await symlink(targetBin, tmpLink);
@@ -116,15 +154,14 @@ export default defineCommand({
 
       console.log(`  Installed ${asset.tag} → ${link}`);
 
-      // Auto-prune: each version takes ~185 MB. Default keeps current + 1
-      // rollback target. `--no-gc` opts out for users who want history
-      // (debugging, bisecting, multi-channel).
+      // `--no-gc` opts out for debugging or bisecting across versions.
       if (!flags["no-gc"]) {
         const result = await pruneVersions({
           root: versionsDir(),
           activeAbs: targetBin,
           keep: AUTO_GC_KEEP,
         });
+        result.freedBytes += await pruneVersionCaches(result.pruned.map((entry) => entry.tag));
         if (result.pruned.length > 0) {
           const mb = (result.freedBytes / (1024 * 1024)).toFixed(1);
           const tags = result.pruned.map((e) => e.tag).join(", ");
@@ -142,8 +179,7 @@ export default defineCommand({
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function resolveChannel(raw: Channel | undefined): Channel {
-  const fromEnv = process.env.NDEA_CHANNEL;
-  const candidate: string = raw ?? fromEnv ?? "stable";
+  const candidate: string = raw ?? "stable";
   if ((CHANNELS as readonly string[]).includes(candidate)) return candidate as Channel;
   console.error(`Error: unknown channel "${candidate}" (expected: ${CHANNELS.join(", ")})`);
   process.exit(1);

@@ -26,7 +26,7 @@ The server process must be able to read every AnnData, MuData, and OME-Zarr path
 Plan for additional working storage under `~/.ndea/`:
 
 - installed versions live under `~/.ndea/versions/`;
-- updates retain the active version and one rollback target by default;
+- updates retain only the active version by default;
 - native DuckDB extraction and local caches use `~/.cache/ndea/`.
 
 The application reads local Zarr stores directly. Large imaging datasets should remain on low-latency local or shared storage; storage latency and chunk layout directly affect crop loading.

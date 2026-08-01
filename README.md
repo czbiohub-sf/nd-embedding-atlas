@@ -15,7 +15,7 @@ nd-embedding-atlas runs locally with linked scatter plots, tables, filters, char
 Install the latest release on macOS with Apple silicon, or on Linux with `x64` or `arm64`:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/czbiohub-sf/nd-embedding-atlas/main/scripts/install.sh | sh
+curl -fsSL https://czbiohub-sf.github.io/nd-embedding-atlas/install.sh | sh
 ```
 
 Launch an AnnData Zarr store:
@@ -66,12 +66,12 @@ nd-embedding-atlas implements specific parts of the upstream formats rather than
 
 Read the [supported formats reference][docs-formats] before preparing production data.
 
-## Update and recover
+## Update and maintain
 
 ```bash
 ndea update                       # latest stable release
 ndea update --channel pre-release # latest active pre-release
-ndea rollback                     # return to the previous installed version
+ndea gc                           # remove inactive installed versions
 ndea doctor                       # inspect installation health
 ```
 

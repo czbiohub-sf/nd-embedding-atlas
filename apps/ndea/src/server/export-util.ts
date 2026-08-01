@@ -6,13 +6,8 @@
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 
-/**
- * Directory new exports are written to: `$NDEA_EXPORT_DIR`, else
- * `~/ndea-exports/`. Resolved (not created): callers `mkdir -p` as needed.
- */
+/** `~/ndea-exports/`. Resolved (not created): callers `mkdir -p` as needed. */
 export function exportDir(): string {
-  const env = Bun.env["NDEA_EXPORT_DIR"];
-  if (env && env.trim().length > 0) return resolve(env);
   return resolve(join(homedir(), "ndea-exports"));
 }
 

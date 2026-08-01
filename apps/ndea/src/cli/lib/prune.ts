@@ -3,11 +3,12 @@
  * (auto-gc after a successful update).
  *
  * Each version dir is ~185 MB on disk. Without pruning, aggressive update
- * cadences fill `~/.ndea/` quickly. The auto-gc path runs with `keep=2`
- * by default: current + one rollback target.
+ * cadences fill `~/.ndea/` quickly. The auto-gc path runs with `keep=1`
+ * by default, preserving only the active version.
  */
 
-import { rm, stat } from "node:fs/promises";
+import { readdir, rm, stat } from "node:fs/promises";
+import { homedir } from "node:os";
 import { resolve } from "node:path";
 import { listVersions, type VersionEntry } from "./versions.ts";
 
@@ -50,8 +51,7 @@ export async function pruneVersions(opts: PruneOptions): Promise<PruneResult> {
   let freedBytes = 0;
   for (const entry of prune) {
     // Resolve relative to the supplied root (not the global versionDir
-    // helper) so callers with a sandboxed NDEA_HOME: and tests: operate
-    // on the tree they passed in.
+    // helper) so callers and tests operate on the tree they passed in.
     const dir = resolve(opts.root, entry.tag);
     const size = await directorySize(dir).catch(() => 0);
     await rm(dir, { recursive: true, force: true });
@@ -66,8 +66,22 @@ export async function pruneVersions(opts: PruneOptions): Promise<PruneResult> {
   };
 }
 
+/** Remove native-library caches corresponding to pruned version tags. */
+export async function pruneVersionCaches(
+  tags: readonly string[],
+  root = resolve(process.env.XDG_CACHE_HOME ?? resolve(homedir(), ".cache"), "ndea"),
+): Promise<number> {
+  let freedBytes = 0;
+  for (const tag of tags) {
+    const dir = resolve(root, tag.replace(/^v/, ""));
+    const size = await directorySize(dir).catch(() => 0);
+    await rm(dir, { recursive: true, force: true });
+    freedBytes += size;
+  }
+  return freedBytes;
+}
+
 async function directorySize(path: string): Promise<number> {
-  const { readdir } = await import("node:fs/promises");
   let total = 0;
   const entries = await readdir(path, { withFileTypes: true });
   for (const entry of entries) {

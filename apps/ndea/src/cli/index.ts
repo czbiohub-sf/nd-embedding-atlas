@@ -11,7 +11,6 @@
  * Subcommands:
  *   view       Open Zarr stores in the Node Workspace (default)
  *   update     Download a new release and switch the active symlink
- *   rollback   Switch to the previous installed version
  *   gc         Prune old installed versions
  *   doctor     Diagnose the install (paths, symlink, versions)
  *   plugin     Validate and configure trusted custom-node plugins
@@ -35,7 +34,6 @@ import { completionsPlugin } from "@bunli/plugin-completions";
 import doctorCommand from "./commands/doctor.ts";
 import gcCommand from "./commands/gc.ts";
 import pluginCommand from "./commands/plugin/index.ts";
-import rollbackCommand from "./commands/rollback.ts";
 import updateCommand from "./commands/update.ts";
 import viewCommand from "./commands/view.ts";
 import { viewCompletionPlugin } from "./lib/view-completion-plugin.ts";
@@ -53,7 +51,7 @@ const DESCRIPTION =
  * `@bunli/plugin-completions`. Without these entries `ndea completions
  * zsh` would be reinterpreted as `ndea view completions zsh`.
  */
-const KNOWN_SUBCOMMANDS = new Set(["view", "update", "rollback", "gc", "doctor", "plugin", "completions", "complete"]);
+const KNOWN_SUBCOMMANDS = new Set(["view", "update", "gc", "doctor", "plugin", "completions", "complete"]);
 
 /**
  * Normalize rawArgs so `ndea ./data.zarr` routes to `view ./data.zarr`.
@@ -64,16 +62,10 @@ const KNOWN_SUBCOMMANDS = new Set(["view", "update", "rollback", "gc", "doctor",
  * `--version` without a subcommand stay at the root so bunli's built-in
  * usage/version output runs.
  *
- * Additional fallback: if no positional is given but NDEA_DATASET is set
- * (the dev-orchestration path via `vp run --parallel dev:all`), route to
- * `view` so the env-var gets picked up inside view.ts.
  */
 function normalizeArgs(rawArgs: string[]): string[] {
   const firstPositional = rawArgs.find((a) => !a.startsWith("-"));
   if (firstPositional && !KNOWN_SUBCOMMANDS.has(firstPositional)) {
-    return ["view", ...rawArgs];
-  }
-  if (!firstPositional && typeof process.env.NDEA_DATASET === "string" && process.env.NDEA_DATASET.length > 0) {
     return ["view", ...rawArgs];
   }
   return rawArgs;
@@ -107,7 +99,6 @@ async function main(): Promise<void> {
 
   cli.command(viewCommand);
   cli.command(updateCommand);
-  cli.command(rollbackCommand);
   cli.command(gcCommand);
   cli.command(doctorCommand);
   cli.command(pluginCommand);

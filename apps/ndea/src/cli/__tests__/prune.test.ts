@@ -6,19 +6,17 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdir, rm, utimes, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { pruneVersions } from "../lib/prune.ts";
+import { pruneVersionCaches, pruneVersions } from "../lib/prune.ts";
 
 const TMP_HOME = resolve(import.meta.dir, "../../../.fallow/test-prune");
 
 beforeEach(async () => {
   await rm(TMP_HOME, { recursive: true, force: true });
   await mkdir(TMP_HOME, { recursive: true });
-  process.env.NDEA_HOME = TMP_HOME;
 });
 
 afterEach(async () => {
   await rm(TMP_HOME, { recursive: true, force: true });
-  delete process.env.NDEA_HOME;
 });
 
 async function makeVersion(tag: string, mtime: Date): Promise<{ bin: string }> {
@@ -83,5 +81,21 @@ describe("pruneVersions", () => {
     await mkdir(root, { recursive: true });
     const result = await pruneVersions({ root, activeAbs: null, keep: 2 });
     expect(result).toEqual({ pruned: [], kept: [], active: undefined, freedBytes: 0 });
+  });
+});
+
+describe("pruneVersionCaches", () => {
+  test("removes cache directories matching v-prefixed release tags", async () => {
+    const root = resolve(TMP_HOME, "cache");
+    const stale = resolve(root, "0.1.0");
+    const active = resolve(root, "0.2.0");
+    await mkdir(stale, { recursive: true });
+    await mkdir(active, { recursive: true });
+    await writeFile(resolve(stale, "libduckdb.so"), "cached library");
+
+    const freedBytes = await pruneVersionCaches(["v0.1.0"], root);
+    expect(freedBytes).toBeGreaterThan(0);
+    expect(existsSync(stale)).toBe(false);
+    expect(existsSync(active)).toBe(true);
   });
 });

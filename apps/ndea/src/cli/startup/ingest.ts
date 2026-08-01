@@ -1,10 +1,4 @@
-import {
-  ingestDataFrameChunked,
-  ingestDataFrames,
-  ingestDataFramesStreaming,
-  openBunStore,
-  type MuData,
-} from "@ndea/zarr";
+import { ingestDataFrameChunked, ingestDataFramesStreaming, openBunStore, type MuData } from "@ndea/zarr";
 import type { DuckDBConnection } from "@duckdb/node-api";
 import { existsSync, mkdirSync, rmSync } from "node:fs";
 import {
@@ -12,8 +6,7 @@ import {
   ingestPragmas,
   isLocalPath,
   resolveIngestCachePath,
-  resolveIngestMode,
-  type IngestMode,
+  type IngestStrategy,
 } from "../../server/ingest-cache.ts";
 import { DatasetQuerySession } from "../../server/store.ts";
 import { VERSION } from "../version.ts";
@@ -21,8 +14,6 @@ import type { PreparedDatasets } from "./datasets.ts";
 import { printCachedIngest, printIngestOpenError, printIngestSummary } from "./output.ts";
 
 type StoreInitializer = (connection: DuckDBConnection) => Promise<void>;
-
-type IngestStrategy = "mudata" | "chunked" | "eager" | "streaming";
 
 interface Initializers {
   initStore: StoreInitializer;
@@ -34,19 +25,18 @@ export interface PreparedQuerySession {
   cacheEnabled: boolean;
 }
 
-export function selectIngestStrategy(hasMuData: boolean, isMultiDataset: boolean, mode: IngestMode): IngestStrategy {
+/** Chunked cannot emit the `_dataset` discriminator, so unions must stream. */
+export function selectIngestStrategy(hasMuData: boolean, isMultiDataset: boolean): IngestStrategy {
   if (hasMuData) return "mudata";
-  if (mode === "chunked" && !isMultiDataset) return "chunked";
-  return mode === "eager" ? "eager" : "streaming";
+  return isMultiDataset ? "streaming" : "chunked";
 }
 
-export function shouldUseIngestCache(
-  mode: IngestMode,
-  allLocal: boolean,
-  hasMuData: boolean,
-  cacheDisabled: boolean,
-): boolean {
-  return mode !== "eager" && allLocal && !hasMuData && !cacheDisabled;
+/**
+ * Remote stores have no cheap staleness fingerprint, and MuData ingests go
+ * through a handle that the cached-db path cannot reconstruct.
+ */
+export function shouldUseIngestCache(allLocal: boolean, hasMuData: boolean): boolean {
+  return allLocal && !hasMuData;
 }
 
 function createMuDataInitializers(prepared: PreparedDatasets): Initializers {
@@ -83,11 +73,10 @@ async function createChunkedInitializers(prepared: PreparedDatasets): Promise<In
   };
 }
 
-function createDataFrameInitializers(prepared: PreparedDatasets, strategy: "eager" | "streaming"): Initializers {
-  const ingest = strategy === "eager" ? ingestDataFrames : ingestDataFramesStreaming;
+function createStreamingInitializers(prepared: PreparedDatasets): Initializers {
   return {
     initStore: async (connection) => {
-      await ingest(
+      await ingestDataFramesStreaming(
         connection,
         "obs_base",
         prepared.loaded.map(({ adata }) => adata.obs),
@@ -95,7 +84,7 @@ function createDataFrameInitializers(prepared: PreparedDatasets, strategy: "eage
       );
     },
     initVar: async (connection) => {
-      await ingest(
+      await ingestDataFramesStreaming(
         connection,
         "var_base",
         prepared.loaded.map(({ adata }) => adata.var),
@@ -108,18 +97,18 @@ function createDataFrameInitializers(prepared: PreparedDatasets, strategy: "eage
 async function createInitializers(prepared: PreparedDatasets, strategy: IngestStrategy): Promise<Initializers> {
   if (strategy === "mudata") return createMuDataInitializers(prepared);
   if (strategy === "chunked") return createChunkedInitializers(prepared);
-  return createDataFrameInitializers(prepared, strategy);
+  return createStreamingInitializers(prepared);
 }
 
 async function openCachedSession(
   prepared: PreparedDatasets,
-  mode: IngestMode,
+  strategy: IngestStrategy,
   initializers: Initializers,
 ): Promise<DatasetQuerySession> {
   const key = ingestCacheKey(
     VERSION,
     prepared.loaded.map(({ entry }) => ({ name: entry.name, path: entry.path })),
-    mode,
+    strategy,
     prepared.hidden,
   );
   const { cacheDir, dbPath } = resolveIngestCachePath(key);
@@ -153,18 +142,12 @@ async function openCachedSession(
 }
 
 export async function createQuerySession(prepared: PreparedDatasets): Promise<PreparedQuerySession> {
-  const mode = resolveIngestMode();
-  const strategy = selectIngestStrategy(prepared.hasMuData, prepared.isMultiDataset, mode);
+  const strategy = selectIngestStrategy(prepared.hasMuData, prepared.isMultiDataset);
   const initializers = await createInitializers(prepared, strategy);
   const allLocal = prepared.loaded.every(({ entry }) => isLocalPath(entry.path));
-  const cacheEnabled = shouldUseIngestCache(
-    mode,
-    allLocal,
-    prepared.hasMuData,
-    process.env.NDEA_NO_INGEST_CACHE === "1",
-  );
+  const cacheEnabled = shouldUseIngestCache(allLocal, prepared.hasMuData);
   const store = cacheEnabled
-    ? await openCachedSession(prepared, mode, initializers)
+    ? await openCachedSession(prepared, strategy, initializers)
     : await DatasetQuerySession.fromInit(initializers.initStore, {
         hidden: prepared.hidden,
         initVar: initializers.initVar,

@@ -59,7 +59,7 @@ async function run(home: string, args: string[]): Promise<Result> {
     cwd: APP_ROOT,
     stdout: "pipe",
     stderr: "pipe",
-    env: { ...process.env, NDEA_HOME: home, NDEA_DISABLE_AUTOUPDATER: "1" },
+    env: { ...process.env, HOME: home },
   });
   const [code, stdout, stderr] = await Promise.all([
     proc.exited,

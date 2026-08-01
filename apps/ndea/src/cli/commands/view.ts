@@ -24,9 +24,11 @@ export default defineCommand({
     }),
     "no-open": option(z.coerce.boolean().default(false), {
       description: "Do not auto-open the browser",
+      argumentKind: "flag",
     }),
     "no-static": option(z.coerce.boolean().default(false), {
       description: "Do not serve the frontend bundle (dev mode)",
+      argumentKind: "flag",
     }),
     "obs-columns": option(z.string().optional(), {
       description: "Comma-separated obs columns to include",
@@ -36,24 +38,17 @@ export default defineCommand({
     }),
   },
   async handler({ flags, positional }) {
-    // Positional args first; fall back to NDEA_DATASET env var. The env
-    // var is how `vp run --parallel dev:all` forwards the dataset path
-    // to this task (vp's dependsOn chain can't forward positional args).
-    let paths = positional.filter((p) => p.length > 0);
-    if (paths.length === 0 && typeof process.env.NDEA_DATASET === "string" && process.env.NDEA_DATASET.length > 0) {
-      paths = [process.env.NDEA_DATASET];
-    }
+    const paths = positional.filter((p) => p.length > 0);
     if (paths.length === 0) {
       console.error("Error: at least one path is required.\n");
-      console.error("Run 'ndea view --help' for usage, or set NDEA_DATASET.");
+      console.error("Run 'ndea view --help' for usage.");
       process.exit(1);
     }
 
     const port = flags.port;
     const host = flags.host && flags.host.length > 0 ? flags.host : undefined;
     const noOpen = flags["no-open"];
-    // Mirror the env-var escape hatch: scripts/dev.ts sets NDEA_NO_STATIC=1.
-    const noStatic = flags["no-static"] || process.env.NDEA_NO_STATIC === "1";
+    const noStatic = flags["no-static"];
     const obsColumns = parseObsColumns(flags["obs-columns"]);
     const preset = flags.preset && flags.preset.length > 0 ? flags.preset : undefined;
 

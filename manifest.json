@@ -1,9 +1,0 @@
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "_comment": "Release-channel pointer consumed by `ndea update` and install.sh. Each channel maps to a git tag; release.yml proposes pointer updates after publishing; ops can hand-edit to roll back 'stable' without re-tagging.",
-  "channels": {
-    "stable": "v0.1.0",
-    "latest": "v0.1.0",
-    "pre-release": "v0.1.0-beta.2"
-  }
-}
