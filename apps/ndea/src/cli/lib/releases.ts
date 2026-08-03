@@ -152,24 +152,8 @@ function assertReleaseTag(tag: string): void {
   }
 }
 
-/**
- * Canary builds ship continuously off `main`; the `pre-release` channel tracks
- * the active alpha / beta / rc line and must skip them.
- *
- * The marker counts only inside the SemVer pre-release segment. Build metadata
- * carries no precedence under SemVer, so `v1.0.0-rc.1+canary` is an ordinary
- * rc. `is_canary_tag` in `scripts/install.sh` implements the same rule; change
- * the two together.
- */
-export function isCanaryTag(tag: string): boolean {
-  const withoutBuild = tag.split("+", 1)[0];
-  const separator = withoutBuild.indexOf("-");
-  return separator !== -1 && /canary/i.test(withoutBuild.slice(separator + 1));
-}
-
 function isPrereleaseTag(tag: string): boolean {
-  const withoutBuild = tag.split("+", 1)[0];
-  return isReleaseTag(tag) && withoutBuild.includes("-") && !isCanaryTag(tag);
+  return isReleaseTag(tag) && tag.split("+", 1)[0].includes("-");
 }
 
 function isReleaseTag(tag: string): boolean {

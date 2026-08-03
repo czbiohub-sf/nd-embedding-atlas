@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { detectTarget, fetchRelease, isCanaryTag, parseShaFile, sha256Hex, type Target } from "../lib/releases.ts";
+import { detectTarget, fetchRelease, parseShaFile, sha256Hex, type Target } from "../lib/releases.ts";
 
 const target: Target = {
   os: "linux",
@@ -75,7 +75,7 @@ describe("fetchRelease", () => {
     });
   });
 
-  test("selects newest published semver pre-release and ignores drafts, stable releases, and canary", async () => {
+  test("selects newest published semver pre-release and ignores drafts and stable releases", async () => {
     const assetUrl = "https://objects.example.test/prerelease-binary";
     const shaUrl = "https://objects.example.test/prerelease-checksum";
     const resolved = await fetchRelease("pre-release", {
@@ -85,8 +85,6 @@ describe("fetchRelease", () => {
           "https://api.github.com/repos/czbiohub-sf/nd-embedding-atlas/releases?per_page=100",
         );
         return jsonResponse([
-          release("v0.9.0-canary.1", { prerelease: true, publishedAt: "2026-06-01T00:00:00Z" }),
-          release("canary", { prerelease: true, publishedAt: "2026-05-01T00:00:00Z" }),
           release("v0.8.0-rc.1", {
             draft: true,
             prerelease: true,
@@ -220,7 +218,7 @@ describe("fetchRelease", () => {
         target,
         fetchImpl: stubFetch(() =>
           jsonResponse([
-            release("canary", { prerelease: true }),
+            release("v1.0.0", {}),
             release("v1.0.0-rc.1", { prerelease: true, publishedAt: null }),
           ]),
         ),
@@ -257,23 +255,3 @@ describe("checksum helpers", () => {
   });
 });
 
-describe("canary tag rule", () => {
-  test("matches the marker anywhere in the pre-release segment", () => {
-    expect(isCanaryTag("v1.0.0-canary")).toBe(true);
-    expect(isCanaryTag("v1.0.0-canary.4")).toBe(true);
-    expect(isCanaryTag("v1.0.0-rc.1.canary.2")).toBe(true);
-    expect(isCanaryTag("v1.0.0-CANARY.1")).toBe(true);
-  });
-
-  test("ignores the marker in build metadata, which carries no SemVer precedence", () => {
-    expect(isCanaryTag("v1.0.0-rc.1+canary")).toBe(false);
-    expect(isCanaryTag("v1.0.0+canary")).toBe(false);
-    expect(isCanaryTag("v1.0.0+build-canary")).toBe(false);
-  });
-
-  test("leaves ordinary releases and pre-releases alone", () => {
-    expect(isCanaryTag("v1.0.0")).toBe(false);
-    expect(isCanaryTag("v1.0.0-rc.1")).toBe(false);
-    expect(isCanaryTag("v1.0.0-beta.2+abc123")).toBe(false);
-  });
-});

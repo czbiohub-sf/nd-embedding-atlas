@@ -234,34 +234,19 @@ describe("install.sh pre-release selection", () => {
   );
 
   test(
-    "skips canary builds, which ship continuously off main",
+    "treats a tag with build metadata as an ordinary pre-release",
     withSandbox(async (sandbox) => {
+      // Build metadata carries no SemVer precedence, so a `+meta` tag is an
+      // ordinary pre-release and wins on recency.
       serveReleaseList(sandbox, [
-        releaseJson("v0.9.0-canary.1", { prerelease: true }),
+        releaseJson("v0.9.0-rc.1+build.5", { prerelease: true }),
         releaseJson("v0.8.0-beta.1", { prerelease: true }),
       ]);
-      serveAsset(sandbox, "v0.8.0-beta.1", "beta");
+      serveAsset(sandbox, "v0.9.0-rc.1+build.5", "rc");
 
       const result = await runInstaller(sandbox, ["pre-release"]);
       expect(result.exitCode).toBe(0);
-      expect(readlinkSync(launcher(sandbox))).toBe(installedBinary(sandbox, "v0.8.0-beta.1"));
-    }),
-  );
-
-  test(
-    "treats a canary marker in build metadata as an ordinary pre-release",
-    withSandbox(async (sandbox) => {
-      // Build metadata carries no SemVer precedence, so it is not a channel
-      // marker. `isCanaryTag` in apps/ndea/src/cli/lib/releases.ts agrees.
-      serveReleaseList(sandbox, [
-        releaseJson("v0.9.0-rc.1+canary", { prerelease: true }),
-        releaseJson("v0.8.0-beta.1", { prerelease: true }),
-      ]);
-      serveAsset(sandbox, "v0.9.0-rc.1+canary", "rc");
-
-      const result = await runInstaller(sandbox, ["pre-release"]);
-      expect(result.exitCode).toBe(0);
-      expect(readlinkSync(launcher(sandbox))).toBe(installedBinary(sandbox, "v0.9.0-rc.1+canary"));
+      expect(readlinkSync(launcher(sandbox))).toBe(installedBinary(sandbox, "v0.9.0-rc.1+build.5"));
     }),
   );
 });

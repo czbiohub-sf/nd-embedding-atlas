@@ -58,22 +58,6 @@ is_release_tag() (
     esac
 )
 
-# A canary tag names `canary` in its SemVer pre-release segment. Build
-# metadata carries no precedence under SemVer, so `v1.0.0-rc.1+canary` is an
-# ordinary rc. Mirrors `isCanaryTag` in apps/ndea/src/cli/lib/releases.ts;
-# change the two together.
-is_canary_tag() (
-    tag=${1%%+*}
-    case "$tag" in
-        *-*) ;;
-        *) return 1 ;;
-    esac
-    case "${tag#*-}" in
-        *[Cc][Aa][Nn][Aa][Rr][Yy]*) return 0 ;;
-        *) return 1 ;;
-    esac
-)
-
 usage() {
     cat >&2 <<'EOF'
 Install ndea.
@@ -220,9 +204,6 @@ if [ -z "$release_tag" ]; then
                     }
                 ')
             for candidate in $release_candidates; do
-                if is_canary_tag "$candidate"; then
-                    continue
-                fi
                 if is_release_tag "$candidate"; then
                     release_tag=$candidate
                     break
