@@ -20,30 +20,20 @@ function plateInfo(omeVersion: "0.4" | "0.5", scale: number): PlateMetaInfo {
 }
 
 describe("startup ingest strategy", () => {
-  test("keeps MuData on its merge-aware initializer in every mode", () => {
-    expect(selectIngestStrategy(true, false, "chunked")).toBe("mudata");
-    expect(selectIngestStrategy(true, false, "stream")).toBe("mudata");
-    expect(selectIngestStrategy(true, false, "eager")).toBe("mudata");
+  test("keeps MuData on its merge-aware initializer regardless of dataset count", () => {
+    expect(selectIngestStrategy(true, false)).toBe("mudata");
+    expect(selectIngestStrategy(true, true)).toBe("mudata");
   });
 
   test("uses chunked ingest only for a single AnnData dataset", () => {
-    expect(selectIngestStrategy(false, false, "chunked")).toBe("chunked");
-    expect(selectIngestStrategy(false, true, "chunked")).toBe("streaming");
+    expect(selectIngestStrategy(false, false)).toBe("chunked");
+    expect(selectIngestStrategy(false, true)).toBe("streaming");
   });
 
-  test("preserves explicit eager and streaming selection", () => {
-    expect(selectIngestStrategy(false, false, "eager")).toBe("eager");
-    expect(selectIngestStrategy(false, true, "eager")).toBe("eager");
-    expect(selectIngestStrategy(false, false, "stream")).toBe("streaming");
-  });
-
-  test("enables cache only for non-eager local AnnData ingest", () => {
-    expect(shouldUseIngestCache("chunked", true, false, false)).toBe(true);
-    expect(shouldUseIngestCache("stream", true, false, false)).toBe(true);
-    expect(shouldUseIngestCache("eager", true, false, false)).toBe(false);
-    expect(shouldUseIngestCache("chunked", false, false, false)).toBe(false);
-    expect(shouldUseIngestCache("chunked", true, true, false)).toBe(false);
-    expect(shouldUseIngestCache("chunked", true, false, true)).toBe(false);
+  test("enables cache only for local AnnData ingest", () => {
+    expect(shouldUseIngestCache(true, false)).toBe(true);
+    expect(shouldUseIngestCache(false, false)).toBe(false);
+    expect(shouldUseIngestCache(true, true)).toBe(false);
   });
 });
 

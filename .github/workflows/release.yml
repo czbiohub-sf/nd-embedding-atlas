@@ -111,7 +111,7 @@ jobs:
       # Bundle install.sh as a release asset so users can pin the
       # installer URL to a specific tag; `curl …/v0.X.Y/install.sh | sh`
       # gets the install script frozen at this release. The canonical
-      # `…/main/install.sh` always reflects the latest code on main.
+      # copy on the docs site always reflects the latest code on main.
       - name: Bundle install.sh as a release asset
         run: cp scripts/install.sh dist/install.sh
 
@@ -133,8 +133,8 @@ jobs:
             ## Install
 
             ```bash
-            curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/scripts/install.sh \
-              | NDEA_VERSION=${{ github.ref_name }} sh
+            curl -fsSL https://czbiohub-sf.github.io/nd-embedding-atlas/install.sh \
+              | sh -s -- ${{ github.ref_name }}
             ```
 
             Or download a binary directly from the asset list below and verify
@@ -146,80 +146,3 @@ jobs:
 
             > macOS users: unsigned binaries may be blocked by Gatekeeper. Run
             > `xattr -dr com.apple.quarantine ./ndea` after download.
-
-  # ── Bump manifest.json channel pointers after publishing ─────────────────
-  # Pre-release tags move `pre-release`. Stable tags move both `stable` and
-  # its `latest` alias. This keeps install.sh and `ndea update` on the same
-  # release for every channel.
-  #
-  # Opens a PR rather than pushing directly so a human reviews + merges.
-  # Keeps `main` honest: every change to the canonical manifest is
-  # auditable in PR history, and a bad release can be vetoed before users
-  # resolve to it through the installer or updater.
-  bump-release-manifest:
-    name: Open release manifest bump PR
-    needs: publish
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pull-requests: write
-
-    steps:
-      # Fetch main (not the tag) to base the PR on. peter-evans receives
-      # the token via its `token` input (defaults to `${{ github.token }}`)
-      # rather than via .git/config, so we drop persist-credentials.
-      - uses: actions/checkout@v6
-        with:
-          ref: main
-          fetch-depth: 1
-          persist-credentials: false
-
-      # Inlined jq update: script lives on the rewrite branch, but the
-      # checkout above pulls main, where the file doesn't exist yet.
-      # Skip gracefully if manifest.json isn't on main yet (pre-rewrite-merge
-      # state); once the rewrite lands on main, this runs normally.
-      - name: Update manifest.json channel pointers
-        id: bump
-        env:
-          NEW_TAG: ${{ github.ref_name }}
-          IS_PRERELEASE: ${{ contains(github.ref_name, '-') }}
-        run: |
-          if [ ! -f manifest.json ]; then
-            echo "::warning::manifest.json not on main yet; skipping release pointer bump"
-            echo "skipped=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          tmp=$(mktemp)
-          if [ "${IS_PRERELEASE}" = "true" ]; then
-            jq --arg tag "${NEW_TAG}" '.channels."pre-release" = $tag' manifest.json > "${tmp}"
-          else
-            jq --arg tag "${NEW_TAG}" '.channels.stable = $tag | .channels.latest = $tag' manifest.json > "${tmp}"
-          fi
-          mv "${tmp}" manifest.json
-          echo "Updated manifest.json:"
-          cat manifest.json
-          echo "skipped=false" >> "$GITHUB_OUTPUT"
-
-      # Opens (or updates) a PR against main with the manifest change.
-      # Idempotent: re-running on an already-bumped manifest is a no-op.
-      - name: Open / update bump PR
-        if: steps.bump.outputs.skipped != 'true'
-        uses: peter-evans/create-pull-request@v8
-        with:
-          branch: chore/manifest-release-bump
-          base: main
-          delete-branch: true
-          commit-message: "chore(manifest): point release channel to ${{ github.ref_name }}"
-          title: "chore(manifest): point release channel to ${{ github.ref_name }}"
-          body: |
-            Automated by `release.yml` after publishing
-            [`${{ github.ref_name }}`](https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}).
-
-            Once merged, `install.sh` and `ndea update` will resolve the
-            corresponding release channel to this tag.
-
-            Reviewers: confirm this is the intended channel pointer before
-            merging. To skip activating it, close this PR without merging.
-          labels: |
-            release
-            automated

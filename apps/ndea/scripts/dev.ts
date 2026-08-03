@@ -1,14 +1,7 @@
 #!/usr/bin/env bun
 /**
- * Dev entry point: tiny wrapper that converts a positional dataset arg
- * into the NDEA_DATASET env var and delegates to `vp run --parallel dev:all`.
- *
- * Needed because vp's task runner forwards ADDITIONAL_ARGS to every task in
- * a `dependsOn` chain, and Vite interprets a positional path as a project
- * root. Routing the path through env avoids that cross-task contamination.
- *
- *   vp run dev ../data.zarr               → NDEA_DATASET=../data.zarr vp run ...
- *   NDEA_DATASET=... vp run dev           → env var passes through unchanged
+ * Dev entry point: starts the backend and Vite frontend together for one
+ * positional dataset.
  *
  * Pre-flight: kill anything still bound to the backend port. vp's task
  * runner doesn't always propagate SIGINT cleanly to `bun --hot run` children,
@@ -21,9 +14,11 @@ import { spawn } from "bun";
 import { resolve } from "node:path";
 
 const BACKEND_PORT = 5055;
+const BACKEND_HEALTH_URL = `http://127.0.0.1:${BACKEND_PORT}/api/health`;
+const RETRY_DELAY_MS = 50;
 
 async function killPortHolder(port: number): Promise<void> {
-  const lsof = spawn(["lsof", "-ti", `:${port}`], { stdout: "pipe", stderr: "pipe" });
+  const lsof = spawn(["lsof", `-tiTCP:${port}`, "-sTCP:LISTEN"], { stdout: "pipe", stderr: "pipe" });
   const out = await new Response(lsof.stdout).text();
   await lsof.exited;
   const pids = out
@@ -37,20 +32,55 @@ async function killPortHolder(port: number): Promise<void> {
 
 await killPortHolder(BACKEND_PORT);
 
-const [positional] = Bun.argv.slice(2);
-const env: Record<string, string> = {
-  ...process.env,
-  NDEA_NO_STATIC: "1",
-  NDEA_NO_OPEN: "1",
-};
-if (positional) env.NDEA_DATASET = resolve(positional);
+const args = Bun.argv.slice(2);
+if (args.length !== 1) {
+  console.error("Usage: vp run dev <dataset>");
+  process.exit(1);
+}
 
-const proc = spawn(["vp", "run", "--parallel", "@ndea/app#dev:all"], {
-  env,
+const appRoot = resolve(import.meta.dir, "..");
+const backend = spawn(
+  ["bun", "--hot", "run", "src/cli/index.ts", "view", resolve(args[0]), "--no-static", "--no-open"],
+  {
+    cwd: appRoot,
+    stdout: "inherit",
+    stderr: "inherit",
+    stdin: "inherit",
+  },
+);
+const startup = await Promise.race([
+  waitForBackend().then(() => ({ ready: true as const, code: 0 })),
+  backend.exited.then((code) => ({ ready: false as const, code })),
+]);
+if (!startup.ready) process.exit(startup.code);
+
+const frontend = spawn(["vp", "dev", "."], {
+  cwd: appRoot,
   stdout: "inherit",
   stderr: "inherit",
   stdin: "inherit",
 });
 
-const code = await proc.exited;
+const children = [backend, frontend];
+for (const signal of ["SIGINT", "SIGTERM"] as const) {
+  process.on(signal, () => {
+    for (const child of children) child.kill(signal);
+  });
+}
+
+const code = await Promise.race(children.map((child) => child.exited));
+for (const child of children) child.kill();
+await Promise.all(children.map((child) => child.exited));
 process.exit(code);
+
+async function waitForBackend(): Promise<void> {
+  while (true) {
+    try {
+      const response = await fetch(BACKEND_HEALTH_URL);
+      if (response.ok) return;
+    } catch {
+      // Backend still loading dataset.
+    }
+    await Bun.sleep(RETRY_DELAY_MS);
+  }
+}

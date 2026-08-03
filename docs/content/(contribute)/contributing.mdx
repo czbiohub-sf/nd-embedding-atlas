@@ -118,9 +118,9 @@ See [`AGENTS.md`](https://github.com/czbiohub-sf/nd-embedding-atlas/blob/main/AG
 | `stable`      | Manual: tag `vX.Y.Z` and push; `release.yml` builds + publishes |
 | `pre-release` | Manual: tag `vX.Y.Z-alpha.N` / `-beta.N` / `-rc.N` and push     |
 
-A `pre-release` cut opens an auto-generated PR that bumps `manifest.json`'s `pre-release` pointer. Merge to activate.
+GitHub marks hyphenated semver tags as pre-releases. Stable/latest resolve through GitHub's latest release endpoint; pre-release resolves to the newest published, non-draft semver pre-release.
 
-The release workflow uploads `scripts/install.sh` as a per-tag asset, so users can pin the installer URL: `curl …/releases/download/v0.X.Y/install.sh | sh`. The canonical `…/main/install.sh` always reflects the latest installer.
+The release workflow uploads `scripts/install.sh` as a per-tag asset, so users can pin the installer URL: `curl …/releases/download/v0.X.Y/install.sh | sh`. The docs workflow copies the same file to `https://czbiohub-sf.github.io/nd-embedding-atlas/install.sh`, which always reflects the latest installer on `main`.
 
 After editing `apps/ndea/src/cli/commands/**`, regenerate the completion metadata:
 
@@ -137,7 +137,7 @@ vp run build
 ./dist/ndea doctor
 ```
 
-`ndea doctor` prints binary path, symlink integrity, active version, and the installed-versions tree. Exit code 1 on hard anomalies (broken symlink, missing active binary). Add `--check-network` to probe `manifest.json` reachability with a 3-second timeout.
+`ndea doctor` prints binary path, symlink integrity, active version, and the installed-versions tree. Exit code 1 on hard anomalies (broken symlink, missing active binary). Add `--check-network` to probe GitHub Releases API reachability with a 3-second timeout.
 
 ## Editing this docs site
 

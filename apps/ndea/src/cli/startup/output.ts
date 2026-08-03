@@ -128,7 +128,7 @@ export function printReady(
   }
 
   const host = displayHost(config.host);
-  if (process.env.NDEA_NO_STATIC === "1") printDevUrls(config, host);
+  if (config.noStatic) printDevUrls(config, host);
   else printServerUrls(config, host);
 
   const elapsed = ((performance.now() - startTime) / 1000).toFixed(1);

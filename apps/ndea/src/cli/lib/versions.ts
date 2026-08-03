@@ -1,11 +1,11 @@
 /**
  * Helpers for the `~/.ndea/versions/<tag>/` tree.
- * Shared by `rollback`, `gc`, and `doctor`.
+ * Shared by `gc` and `doctor`.
  *
  * Each version dir contains a single file:
  *   - `ndea`: bun-compiled binary
  *
- * The symlink at `$NDEA_BIN_DIR/ndea` points directly at this binary;
+ * The symlink at `~/.local/bin/ndea` points directly at this binary;
  * `readlink` returns the binary path.
  */
 
@@ -25,8 +25,7 @@ export interface VersionEntry {
  * Skips entries whose `ndea` is missing (partial install / manual edit).
  *
  * Resolves paths relative to the supplied `root` so callers can pass a
- * versions/ tree at a non-default location (e.g. tests with a sandboxed
- * NDEA_HOME).
+ * versions tree at a supplied location (for example, tests with a sandbox).
  */
 export async function listVersions(root: string): Promise<VersionEntry[]> {
   if (!existsSync(root)) return [];

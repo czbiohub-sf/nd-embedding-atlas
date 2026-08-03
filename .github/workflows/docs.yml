@@ -54,6 +54,15 @@ jobs:
           DOCS_BASE_URL: ${{ steps.pages.outputs.base_url }}
         run: vp run docs:build
 
+      # Serve the installer from the docs site, giving the one-liner a short
+      # URL: https://czbiohub-sf.github.io/nd-embedding-atlas/install.sh
+      #
+      # Copied into the built output rather than kept in a framework `public/`
+      # directory so that hosting does not depend on how Waku's asset pipeline
+      # treats static files. scripts/install.sh stays the single source.
+      - name: Publish install.sh alongside the docs
+        run: cp scripts/install.sh docs/dist/public/install.sh
+
       # Pages artifact action expects the path to the built site root.
       # `actions/upload-pages-artifact` tars + uploads in one step.
       - uses: actions/upload-pages-artifact@v3

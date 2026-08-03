@@ -9,7 +9,7 @@ import { deriveDataCapabilities } from "../capabilities.ts";
 import { MetadataSchema, type ObsmEntry } from "../protocol.ts";
 import type { ServerSession, DatasetSessionMetadata } from "../state.ts";
 import { obsmColumnPrefix } from "../store.ts";
-import { exportDir } from "./export.ts";
+import { exportDir } from "../export-util.ts";
 
 /** Return var count of the first accessor (or 0 if none registered). */
 function firstVarCount(state: ServerSession): number {

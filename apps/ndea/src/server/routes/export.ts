@@ -5,13 +5,13 @@
  * GET  /api/export/{task_id}/status: Poll export status
  *
  * Writes the selection to a Parquet file via DuckDB's COPY TO.
- * Default output directory is $NDEA_EXPORT_DIR, else ~/ndea-exports/.
+ * Default output directory is ~/ndea-exports/.
  */
 
 import { access, mkdir } from "node:fs/promises";
 import { constants } from "node:fs";
-import { homedir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
+import { exportDir, sanitiseFilename } from "../export-util.ts";
 import { ExportBodySchema, parseJsonBody } from "../protocol.ts";
 import type { DatasetQuerySession } from "../store.ts";
 
@@ -63,16 +63,6 @@ export function getExportTask(taskId: string): ExportTask | null {
 }
 
 /**
- * Returns the directory that new exports should be written to. Creates it
- * on-demand so the frontend can surface the path eagerly in `/data/metadata`.
- */
-export function exportDir(): string {
-  const env = Bun.env["NDEA_EXPORT_DIR"];
-  if (env && env.trim().length > 0) return resolve(env);
-  return resolve(join(homedir(), "ndea-exports"));
-}
-
-/**
  * GET /api/export-dir
  *
  * Returns the server's resolved default export directory plus a writable
@@ -90,13 +80,6 @@ export async function handleGetExportDir(): Promise<Response> {
     writable = false;
   }
   return Response.json({ default_dir: path, writable });
-}
-
-/** Sanitise a user-supplied filename into a safe Parquet basename. */
-function sanitiseFilename(name: string): string {
-  const trimmed = name.trim().replace(/\.parquet$/i, "");
-  const safe = trimmed.replace(/[^\w.-]+/g, "_").slice(0, 128);
-  return `${safe.length > 0 ? safe : "export"}.parquet`;
 }
 
 /** POST /api/export */
@@ -131,7 +114,7 @@ export async function handleExport(req: Request, store: DatasetQuerySession): Pr
       const raw = body.output_path.trim();
       outputPath = isAbsolute(raw) ? raw : resolve(join(baseDir, raw));
     } else {
-      outputPath = join(baseDir, sanitiseFilename(body.filename ?? "export"));
+      outputPath = join(baseDir, sanitiseFilename(body.filename ?? "export", "parquet"));
     }
 
     await mkdir(baseDir, { recursive: true });

@@ -80,8 +80,6 @@ vp run gen
 `vp run dev` enables the node editor and persists each dataset's graph in
 browser storage. Production builds compile the editor out by default, ignore
 stored graphs, and open the fixed `--preset` layout (`annotate` by default).
-Set `VITE_NDEA_NODE_EDITOR=true` at build time only when testing an
-editor-enabled production bundle.
 
 See [`AGENTS.md`](./AGENTS.md) for the full command catalogue, project layout,
 key abstractions, and gotchas.

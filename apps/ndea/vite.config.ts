@@ -6,23 +6,6 @@ import { devConsoleEcho } from "./scripts/dev-console-echo.ts";
 import { devErrorReporter } from "./scripts/dev-error-reporter.ts";
 
 export default defineConfig({
-  run: {
-    tasks: {
-      "dev:all": {
-        dependsOn: ["dev:backend", "dev:frontend"],
-        command: "true",
-        cache: false,
-      },
-      "dev:backend": {
-        command: "bun --hot run src/cli/index.ts",
-        cache: false,
-      },
-      "dev:frontend": {
-        command: "bun run scripts/dev-frontend.ts",
-        cache: false,
-      },
-    },
-  },
   plugins: [react(), tailwindcss(), typegpuPlugin({}), devErrorReporter(), devConsoleEcho()],
   resolve: {
     alias: { "@": new URL("./src/frontend", import.meta.url).pathname },

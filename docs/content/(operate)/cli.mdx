@@ -1,9 +1,9 @@
 ---
 title: CLI reference
-description: Supported ndea commands, flags, environment variables, and release channels.
+description: Supported ndea commands, flags, and release channels.
 ---
 
-This page lists the supported `ndea` commands, flags, environment variables, and release channels.
+This page lists the supported `ndea` commands, flags, and release channels.
 
 Walkthroughs live in [Getting started](/). Dev-side commands (`vp run dev`, `vp run gen`, …) live in [Contributing](/contributing).
 
@@ -13,7 +13,6 @@ Walkthroughs live in [Getting started](/). Dev-side commands (`vp run dev`, `vp 
 ndea [paths...]                                  # default; equivalent to `ndea view`
 ndea view [paths...] [options]
 ndea update [options]
-ndea rollback
 ndea gc [options]
 ndea doctor [--check-network] [--strict]
 ndea completions <bash|zsh|fish>
@@ -56,19 +55,31 @@ Download and activate the latest release for a channel. ndea verifies the SHA-25
 
 ### Options
 
-| Option                | Type                                  | Default  | Description                                            |
-| --------------------- | ------------------------------------- | -------- | ------------------------------------------------------ |
-| `--channel <channel>` | `stable` \| `latest` \| `pre-release` | `stable` | Release channel to resolve                             |
-| `--force`             | boolean                               | `false`  | Re-install even when already on the target             |
-| `--no-gc`             | boolean                               | `false`  | Skip the post-update auto-gc that prunes to 2 versions |
+| Option                | Type                                  | Default  | Description                                                 |
+| --------------------- | ------------------------------------- | -------- | ----------------------------------------------------------- |
+| `--channel <channel>` | `stable` \| `latest` \| `pre-release` | `stable` | Release channel to resolve                                  |
+| `--force`             | boolean                               | `false`  | Re-install even when already on the target                  |
+| `--no-gc`             | boolean                               | `false`  | Skip the post-update auto-gc that removes inactive versions |
 
-By default, a successful update keeps the active version and one rollback target. Pass `--no-gc` to retain older versions, then prune them later with `ndea gc`.
+For standalone installs, a successful update keeps only the active version by default. Pass `--no-gc` to retain inactive versions, then prune them later with `ndea gc`.
+
+For mise-managed installs, `ndea update` updates the active mise config through mise and does not write to `~/.ndea/versions`. `--no-gc` has no effect because mise owns version retention.
 
 A running `ndea view` session continues using the version it started with.
 
-## `ndea rollback`
+To install a specific older standalone release, uninstall the current standalone installation, then pass its tag to the installer:
 
-Activate the most recently installed version other than the current version. Run the command again to step further back. This command has no options.
+```bash
+rm -f "$HOME/.local/bin/ndea"
+rm -rf "$HOME/.ndea"
+curl -fsSL https://czbiohub-sf.github.io/nd-embedding-atlas/install.sh | sh -s -- v0.1.0
+```
+
+For mise-managed installs, select a version explicitly:
+
+```bash
+mise use -g --pin github:czbiohub-sf/nd-embedding-atlas@0.1.0
+```
 
 ## `ndea gc`
 
@@ -78,8 +89,7 @@ Prune old installed versions. ndea always preserves the active version.
 
 | Option       | Type    | Default | Description                                       |
 | ------------ | ------- | ------- | ------------------------------------------------- |
-| `--keep <N>` | integer | `2`     | Number of versions to keep (active counts; min 1) |
-| `--all`      | boolean | `false` | Keep only the active version                      |
+| `--keep <N>` | integer | `1`     | Number of versions to keep (active counts; min 1) |
 
 ## `ndea doctor`
 
@@ -87,10 +97,10 @@ Diagnose the install. Prints binary path, symlink integrity, active version, ins
 
 ### Options
 
-| Option            | Type    | Default | Description                                                       |
-| ----------------- | ------- | ------- | ----------------------------------------------------------------- |
-| `--check-network` | boolean | `false` | Probe `manifest.json` reachability over the network (3 s timeout) |
-| `--strict`        | boolean | `false` | Treat warnings as errors (non-zero exit)                          |
+| Option            | Type    | Default | Description                                                           |
+| ----------------- | ------- | ------- | --------------------------------------------------------------------- |
+| `--check-network` | boolean | `false` | Probe GitHub Releases API reachability over the network (3 s timeout) |
+| `--strict`        | boolean | `false` | Treat warnings as errors (non-zero exit)                              |
 
 ## `ndea completions`
 
@@ -115,33 +125,19 @@ ndea completions fish > ~/.config/fish/completions/ndea.fish
 
 `view`'s positional completion filters to `*.zarr` directories and `*.yaml` / `*.yml` files.
 
-## Environment variables
-
-| Variable               | Consumer               | Default        | Description                                                |
-| ---------------------- | ---------------------- | -------------- | ---------------------------------------------------------- |
-| `NDEA_DATASET`         | `view`                 | unset          | Path forwarded as a positional when none is given          |
-| `NDEA_NO_OPEN`         | `view`                 | unset          | When `1`, equivalent to passing `--no-open`                |
-| `NDEA_NO_STATIC`       | `view`                 | unset          | When `1`, equivalent to passing `--no-static`              |
-| `NDEA_GITHUB_TOKEN`    | `install.sh`           | unset          | Optional GitHub token for authenticated API requests       |
-| `NDEA_CHANNEL`         | `update`, `install.sh` | `stable`       | Default release channel                                    |
-| `NDEA_VERSION`         | `install.sh`           | `latest`       | Pin first install to a specific tag (e.g. `v0.1.0-beta.0`) |
-| `NDEA_BIN_DIR`         | `install.sh`           | `~/.local/bin` | Directory holding the symlink that's on PATH               |
-| `NDEA_HOME`            | all                    | `~/.ndea`      | State root (versions tree, locks, current-version)         |
-| `NDEA_DISABLE_UPDATES` | `update`, `rollback`   | unset          | When `1`, blocks both update and rollback (sysadmin lock)  |
-
 ## Release channels
 
-| Channel       | Resolves to                                  | Cadence                                                  |
-| ------------- | -------------------------------------------- | -------------------------------------------------------- |
-| `stable`      | latest semver-tagged release (e.g. `v0.1.0`) | Manual; cut from `main` when ready                       |
-| `latest`      | alias for `stable`                           | Same as `stable`                                         |
-| `pre-release` | latest active alpha / beta / rc tag          | Manual; absent between cuts (manifest pointer is `null`) |
+| Channel       | Resolves to                                  | Cadence                                                    |
+| ------------- | -------------------------------------------- | ---------------------------------------------------------- |
+| `stable`      | latest semver-tagged release (e.g. `v0.1.0`) | Manual; cut from `main` when ready                         |
+| `latest`      | alias for `stable`                           | Same as `stable`                                           |
+| `pre-release` | newest published alpha / beta / rc release   | Manual; unavailable until a pre-release has been published |
 
-[`manifest.json`](https://github.com/czbiohub-sf/nd-embedding-atlas/blob/main/manifest.json) maps each channel to a git tag. `ndea update` fetches it at update time.
+`stable` and `latest` use GitHub's latest release. `pre-release` selects the newest published, non-draft semver pre-release. `ndea update` resolves the channel through the public GitHub Releases API at update time.
 
 ## State directory layout
 
-`~/.ndea/` (override with `NDEA_HOME`):
+`~/.ndea/`:
 
 ```
 ~/.ndea/
@@ -154,13 +150,13 @@ ndea completions fish > ~/.config/fish/completions/ndea.fish
   locks/
     install.lock               # PID file backing the install/update mutex
 ~/.cache/ndea/
-  v0.1.0/
+  0.1.0/
     libduckdb.{dylib,so}       # Extracted from the binary on first launch
 ```
 
-A compiled version takes about 185 MB. `ndea gc` prunes the version directory but does not prune `~/.cache/ndea/`; clear old cache entries manually if disk space is limited.
+A compiled version takes about 185 MB. `ndea gc` also removes version-scoped native-library caches corresponding to pruned releases.
 
-`$NDEA_BIN_DIR/ndea` points to the active binary under `~/.ndea/versions/<tag>/ndea`.
+`~/.local/bin/ndea` points to the active binary under `~/.ndea/versions/<tag>/ndea`.
 
 ## Exit codes
 

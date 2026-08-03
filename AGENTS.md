@@ -134,8 +134,7 @@ that invokes Rolldown instead of the single-binary pipeline. Direct
 compiler invocation also fails on embedded font assets; use the project task.
 
 The node editor runs in development. Production builds compile it out and load
-the selected preset. Set `VITE_NDEA_NODE_EDITOR=true` only when testing an
-editor-enabled production build.
+the selected preset.
 
 ## Code rules
 
@@ -163,5 +162,7 @@ editor-enabled production build.
   `$bunfs/`. Both paths use `Bun.file()`.
 - **Native addon:** `duckdb.node` embeds in the binary and prevents
   cross-compilation. Build on each target platform.
-- **Updates:** Installed versions live under `~/.ndea/versions/<tag>/ndea`.
-  Update and rollback atomically repoint the `$NDEA_BIN_DIR/ndea` symlink.
+- **Updates:** Standalone installs live under `~/.ndea/versions/<tag>/ndea`;
+  update atomically repoints `~/.local/bin/ndea` and keeps only the active
+  version by default. Mise-managed updates must go through mise and must never
+  mutate the standalone tree.

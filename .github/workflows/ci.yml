@@ -53,6 +53,9 @@ jobs:
         run: vp install --frozen-lockfile
       - name: Test workspaces
         run: vp run -r test
+      # `scripts/` is not a workspace, so `vp run -r test` does not reach it.
+      - name: Test the installer
+        run: bun test scripts
 
   # ── Full build + launch verify (frontend + binary, catches release-time
   # regressions at PR time rather than at release time) ─────────────────

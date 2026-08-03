@@ -1,34 +1,24 @@
 /**
- * Ingest mode + file-backed ingest cache (I/O-scalability loop `perf/io-scalability`).
+ * Ingest strategy + file-backed ingest cache (I/O-scalability loop
+ * `perf/io-scalability`).
  *
- * The startup ingest path runs in one of three modes (env `NDEA_INGEST`):
- *   - `chunked` (default): single-AnnData obs/var stream from the zarr source
- *     in row-windows (`ingestDataFrameChunked`); peak JS allocation is one
- *     batch, scale-invariant to 5-10M obs. Multi-dataset unions fall back to
- *     `stream` (chunked can't emit the `_dataset` discriminator column).
- *   - `stream`: `ingestDataFramesStreaming` (no intermediate Arrow table) for
- *     every dataset.
- *   - `eager`: the original `ingestDataFrames` (flechette Arrow Table) path,
- *     `:memory:`, no cache. The instant-revert escape hatch.
+ * A single AnnData streams obs/var from the zarr source in row-windows
+ * (`ingestDataFrameChunked`), so peak JS allocation is one batch and stays
+ * scale-invariant to 5-10M obs. Multi-dataset unions fall back to `streaming`,
+ * which can emit the `_dataset` discriminator column that chunked cannot.
  *
- * Non-`eager` local ingests are file-backed and cached: base tables page to a
+ * Local AnnData ingests are file-backed and cached: base tables page to a
  * content-keyed `.duckdb` under `~/.cache/ndea/ingest/`, so reopening the same
- * dataset skips re-ingest. `NDEA_NO_INGEST_CACHE=1` forces a fresh `:memory:`
- * build. The cache root reuses the version-scoped libduckdb cache expression.
+ * dataset skips re-ingest. The cache root reuses the version-scoped libduckdb
+ * cache expression.
  */
 
 import { existsSync, readFileSync, statSync } from "node:fs";
-import { cpus, homedir, tmpdir } from "node:os";
+import { cpus, homedir } from "node:os";
 import { resolve } from "node:path";
 
-export type IngestMode = "eager" | "stream" | "chunked";
-
-/** Resolve the ingest mode from `NDEA_INGEST` (default `chunked`). */
-export function resolveIngestMode(): IngestMode {
-  const v = process.env.NDEA_INGEST?.toLowerCase();
-  if (v === "eager" || v === "stream" || v === "chunked") return v;
-  return "chunked";
-}
+/** How obs_base/var_base were produced. Derived, not user-selectable. */
+export type IngestStrategy = "mudata" | "chunked" | "streaming";
 
 /** A dataset path is local (cacheable) unless it's an http(s) zarr store. */
 export function isLocalPath(path: string): boolean {
@@ -36,16 +26,12 @@ export function isLocalPath(path: string): boolean {
 }
 
 /**
- * DuckDB PRAGMAs for the file-backed ingest store. `threads` = cpu//2.
- * `NDEA_MEMORY_LIMIT` (e.g. `4GB`) caps the buffer pool to force out-of-core
- * paging of the file-backed base tables; unset = DuckDB default (~80% RAM),
- * which keeps query latency unconstrained but yields less resident-memory
- * relief. Tuned via the bench loop.
+ * DuckDB PRAGMAs for the file-backed ingest store. `threads` = cpu//2; memory
+ * uses DuckDB's default.
  */
-export function ingestPragmas(): { memoryLimit?: string; tempDirectory?: string; threads?: number } {
+export function ingestPragmas(): { threads: number } {
   const threads = Math.max(1, Math.floor(cpus().length / 2));
-  const memoryLimit = process.env.NDEA_MEMORY_LIMIT?.length ? process.env.NDEA_MEMORY_LIMIT : undefined;
-  return memoryLimit ? { memoryLimit, tempDirectory: tmpdir(), threads } : { threads };
+  return { threads };
 }
 
 /** `~/.cache/ndea/ingest/<key>.duckdb` (honours `XDG_CACHE_HOME`). */
@@ -67,7 +53,7 @@ function sha256Hex(input: string): string {
  * an in-place schema rewrite that preserves size+mtime still misses. NOT a
  * full per-chunk content hash (that would defeat the skip-re-ingest goal: the
  * ingest pipeline is the documented wall). Stale-but-same-stat chunk edits are
- * the known gap; `NDEA_NO_INGEST_CACHE=1` is the escape hatch.
+ * the known gap.
  */
 function fingerprintZarr(absPath: string): string {
   const parts: string[] = [];
@@ -96,7 +82,7 @@ function fingerprintZarr(absPath: string): string {
 
 /**
  * Content key for the ingest cache. Folds in: ndea VERSION (a schema change in
- * a new build invalidates old caches), the ingest mode (different obs_base
+ * a new build invalidates old caches), the ingest strategy (different obs_base
  * provenance), the hidden-column set (changes the dataset VIEW), and every
  * member dataset's name + path + zarr fingerprint (ANY member change → miss,
  * and multi-dataset unions key differently from single because of `_dataset`).
@@ -104,12 +90,12 @@ function fingerprintZarr(absPath: string): string {
 export function ingestCacheKey(
   version: string,
   members: readonly { name: string; path: string }[],
-  mode: IngestMode,
+  strategy: IngestStrategy,
   hidden: ReadonlySet<string>,
 ): string {
   const seed = JSON.stringify({
     v: version,
-    mode,
+    strategy,
     hidden: [...hidden].toSorted(),
     members: members.map((m) => ({ name: m.name, path: m.path, fp: fingerprintZarr(m.path) })),
   });

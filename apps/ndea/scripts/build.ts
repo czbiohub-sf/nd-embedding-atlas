@@ -36,11 +36,6 @@ const targetArg = args.find((a) => !a.startsWith("--") || a.startsWith("--target
 const target =
   (targetArg?.startsWith("--target=") ? targetArg.slice("--target=".length) : targetArg) ??
   `bun-${process.platform}-${process.arch}`;
-const nodeEditorFlag = process.env.VITE_NDEA_NODE_EDITOR ?? "false";
-if (nodeEditorFlag !== "true" && nodeEditorFlag !== "false") {
-  console.error('VITE_NDEA_NODE_EDITOR must be "true" or "false"');
-  process.exit(1);
-}
 
 const APP_ROOT = resolve(import.meta.dir, "..");
 const REPO_ROOT = resolve(APP_ROOT, "../..");
@@ -139,7 +134,6 @@ async function buildFrontendWithBun(): Promise<void> {
     define: {
       "import.meta.env.PROD": "true",
       "import.meta.env.DEV": "false",
-      "import.meta.env.VITE_NDEA_NODE_EDITOR": JSON.stringify(nodeEditorFlag),
     },
     plugins: [tailwind, typegpu({}), urlAssetSuffix],
   });

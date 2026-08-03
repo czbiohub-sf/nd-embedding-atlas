@@ -157,15 +157,15 @@ function coerceValue(value: unknown): unknown {
 
 /**
  * DuckDB open options (I/O scalability loop, Cycle 1). Defaults preserve the
- * historical `:memory:` behavior; passing `dbPath` makes the store file-backed
- * (out-of-core: base tables page to disk under `memoryLimit`).
+ * historical `:memory:` behavior; passing `dbPath` makes the store file-backed,
+ * so base tables page to disk instead of staying resident.
  */
 export interface DatasetQuerySessionOptions {
   hidden?: Set<string>;
   /** DuckDB database path. Default `:memory:`. A file path = out-of-core. */
   dbPath?: string;
   /** DuckDB PRAGMAs applied right after connect. */
-  pragmas?: { memoryLimit?: string; tempDirectory?: string; threads?: number };
+  pragmas?: { threads?: number };
 }
 
 export class DatasetQuerySession {
@@ -207,8 +207,6 @@ export class DatasetQuerySession {
     const db = await DuckDBInstance.create(options?.dbPath ?? ":memory:");
     const conn = await db.connect();
     const p = options?.pragmas;
-    if (p?.memoryLimit) await conn.run(`SET memory_limit='${p.memoryLimit}'`);
-    if (p?.tempDirectory) await conn.run(`SET temp_directory='${p.tempDirectory}'`);
     if (p?.threads != null) await conn.run(`SET threads=${p.threads}`);
     return { db, conn };
   }

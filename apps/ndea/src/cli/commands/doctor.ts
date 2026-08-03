@@ -1,7 +1,7 @@
 /**
  * `ndea doctor`: read-only diagnostics. Prints binary path, symlink
  * integrity, active version, installed versions, and (with
- * `--check-network`) manifest reachability.
+ * `--check-network`) GitHub Releases API reachability.
  *
  * Exit code 0 if healthy; 1 if a hard anomaly is detected (broken symlink,
  * unreadable state, missing active binary). Soft warnings (mismatched
@@ -15,8 +15,9 @@ import { readFile, readlink, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
 import { z } from "zod";
-import { fetchManifest } from "../lib/manifest.ts";
+import { detectInstallManager } from "../lib/install-manager.ts";
 import { activeLauncher, currentVersionPath, isCompiledBinary, stateDir, versionsDir } from "../lib/paths.ts";
+import { fetchRelease } from "../lib/releases.ts";
 import { listVersions } from "../lib/versions.ts";
 import { VERSION } from "../version.ts";
 
@@ -29,13 +30,15 @@ const RESET = "\x1b[0m";
 
 export default defineCommand({
   name: "doctor" as const,
-  description: "Diagnose the ndea install (paths, symlink, versions, manifest)",
+  description: "Diagnose the ndea install (paths, manager, versions, releases)",
   options: {
     "check-network": option(z.coerce.boolean().default(false), {
-      description: "Also probe manifest.json reachability over the network",
+      description: "Also probe GitHub Releases API reachability over the network",
+      argumentKind: "flag",
     }),
     strict: option(z.coerce.boolean().default(false), {
       description: "Treat soft warnings as errors (non-zero exit)",
+      argumentKind: "flag",
     }),
   },
   async handler({ flags }) {
@@ -56,26 +59,40 @@ export default defineCommand({
 
     // ── Binary mode ────────────────────────────────────────────────────────
     console.log(`${BOLD}Mode${RESET}`);
-    if (isCompiledBinary()) {
+    const compiled = isCompiledBinary();
+    const manager = compiled ? await detectInstallManager() : { kind: "installer" as const };
+    if (compiled) {
       ok(`compiled binary`);
+      ok(`managed by ${manager.kind}`);
     } else {
-      warn("running from source: install/update/rollback/gc disabled");
+      warn("running from source: install/update/gc disabled");
     }
 
     // ── Path resolution ────────────────────────────────────────────────────
     const self = process.execPath;
     console.log(`\n${BOLD}Paths${RESET}`);
     console.log(`  binary       ${self}`);
-    console.log(`  state dir    ${stateDir()}`);
-    console.log(`  versions dir ${versionsDir()}`);
+    if (manager.kind === "mise") {
+      console.log(`  mise install ${manager.installPath}`);
+      if (manager.sourceConfig) {
+        console.log(`  mise config  ${manager.sourceConfig}`);
+      } else {
+        warn(
+          "mise install has no active source config; activate it with `mise use -g github:czbiohub-sf/nd-embedding-atlas`",
+        );
+      }
+    } else {
+      console.log(`  state dir    ${stateDir()}`);
+      console.log(`  versions dir ${versionsDir()}`);
+    }
 
     // ── Symlink integrity ──────────────────────────────────────────────────
-    // `activeLauncher()` walks $PATH for an `ndea` entry whose realpath
-    // matches `process.execPath`. Missing means the binary was invoked
+    // `activeLauncher()` checks whether ~/.local/bin/ndea resolves to
+    // `process.execPath`. Missing means the binary was invoked
     // directly (not via the installed symlink): supported for
     // diagnostics, just can't audit the symlink layout.
-    const launcher = activeLauncher();
-    if (isCompiledBinary()) {
+    const launcher = manager.kind === "installer" ? activeLauncher() : null;
+    if (compiled && manager.kind === "installer") {
       console.log(`\n${BOLD}Symlink${RESET}`);
       if (!launcher) {
         warn("no `ndea` symlink on $PATH resolves to this binary: symlink not auditable");
@@ -97,7 +114,7 @@ export default defineCommand({
     // it to ~/.cache/ndea/<version>/. A missing cache file is fine (gets
     // re-extracted on next launch); we just report presence here so users
     // know where the 100+ MB went.
-    if (isCompiledBinary()) {
+    if (compiled) {
       console.log(`\n${BOLD}libduckdb cache${RESET}`);
       const cacheRoot = process.env.XDG_CACHE_HOME ?? resolve(homedir(), ".cache");
       const dylibExt = process.platform === "darwin" ? "dylib" : "so";
@@ -114,7 +131,15 @@ export default defineCommand({
     // ── Active version ─────────────────────────────────────────────────────
     console.log(`\n${BOLD}Version${RESET}`);
     console.log(`  compiled-in  v${VERSION}`);
-    if (existsSync(currentVersionPath())) {
+    if (manager.kind === "mise") {
+      console.log(`  mise         ${manager.activeVersion ?? "(unknown)"}`);
+      if (!manager.active) {
+        warn(
+          `this binary is ${manager.version ?? "an inactive version"}, but mise activates ` +
+            `${manager.activeVersion ?? "another version"}; open a new shell or run \`hash -r\``,
+        );
+      }
+    } else if (existsSync(currentVersionPath())) {
       const recorded = (await readFile(currentVersionPath(), "utf8").catch(() => "")).split("\n")[0]?.trim() ?? "";
       console.log(`  recorded     ${recorded || "(unreadable)"}`);
       const recordedVersion = recorded.replace(/^v/, "");
@@ -126,39 +151,41 @@ export default defineCommand({
     }
 
     // ── Installed versions ─────────────────────────────────────────────────
-    console.log(`\n${BOLD}Installed versions${RESET}`);
-    const versions = await listVersions(versionsDir());
-    if (versions.length === 0) {
-      warn(`no versions in ${versionsDir()}: \`ndea update\` will populate it`);
-    } else {
-      let totalBytes = 0;
-      const linkTarget = launcher && isCompiledBinary() ? await readlink(launcher).catch(() => null) : null;
-      for (const v of versions) {
-        const info = await stat(v.binaryPath).catch(() => null);
-        const sizeMb = info ? (info.size / (1024 * 1024)).toFixed(1) : "?";
-        const marker = linkTarget === v.binaryPath ? `${GREEN}*${RESET}` : " ";
-        console.log(`  ${marker} ${v.tag.padEnd(24)} ${sizeMb} MB`);
-        if (info) totalBytes += info.size;
+    if (manager.kind === "installer") {
+      console.log(`\n${BOLD}Installed versions${RESET}`);
+      const versions = await listVersions(versionsDir());
+      if (versions.length === 0) {
+        warn(`no versions in ${versionsDir()}: \`ndea update\` will populate it`);
+      } else {
+        let totalBytes = 0;
+        const linkTarget = launcher && compiled ? await readlink(launcher).catch(() => null) : null;
+        for (const v of versions) {
+          const info = await stat(v.binaryPath).catch(() => null);
+          const sizeMb = info ? (info.size / (1024 * 1024)).toFixed(1) : "?";
+          const marker = linkTarget === v.binaryPath ? `${GREEN}*${RESET}` : " ";
+          console.log(`  ${marker} ${v.tag.padEnd(24)} ${sizeMb} MB`);
+          if (info) totalBytes += info.size;
+        }
+        console.log(`  ${DIM}(${(totalBytes / (1024 * 1024)).toFixed(1)} MB total: \`ndea gc\` to prune)${RESET}`);
       }
-      console.log(`  ${DIM}(${(totalBytes / (1024 * 1024)).toFixed(1)} MB total: \`ndea gc\` to prune)${RESET}`);
     }
 
     // ── Network (optional) ─────────────────────────────────────────────────
     if (flags["check-network"]) {
       console.log(`\n${BOLD}Network${RESET}`);
       try {
-        const channel = (process.env.NDEA_CHANNEL ?? "stable") as "stable" | "latest" | "pre-release";
+        const channel = "stable";
         const asset = await Promise.race([
-          fetchManifest(channel),
+          fetchRelease(channel),
           new Promise<never>((_, rej) => {
             setTimeout(() => {
               rej(new Error("timeout"));
             }, 3000);
           }),
         ]);
-        ok(`manifest "${channel}" → ${asset.tag}`);
+        ok(`release "${channel}" → ${asset.tag}`);
       } catch (e) {
-        warn(`manifest unreachable: ${e instanceof Error ? e.message : String(e)}`);
+        warn(`release API unreachable: ${e instanceof Error ? e.message : String(e)}`);
       }
     }
 

@@ -26,12 +26,12 @@ interface Result {
   stderr: string;
 }
 
-async function run(args: string[], env: Record<string, string> = {}): Promise<Result> {
+async function run(args: string[]): Promise<Result> {
   const proc = Bun.spawn(["bun", "run", "src/cli/index.ts", ...args], {
     cwd: ROOT,
     stdout: "pipe",
     stderr: "pipe",
-    env: { ...process.env, ...env, NDEA_DISABLE_AUTOUPDATER: "1" },
+    env: process.env,
   });
   const [code, stdout, stderr] = await Promise.all([
     proc.exited,
@@ -50,8 +50,8 @@ describe("router / help + version", () => {
     expect(combined).toContain("view");
     expect(combined).toContain("install");
     expect(combined).toContain("update");
-    expect(combined).toContain("rollback");
     expect(combined).toContain("plugin");
+    expect(combined).not.toContain("rollback");
   });
 
   test("`ndea --version` prints the version number", async () => {
@@ -75,13 +75,6 @@ describe("router / help + version", () => {
     expect(combined).toContain("--port");
     expect(combined).toContain("--no-open");
     expect(combined).toContain("--host");
-  });
-
-  test("`ndea rollback --help` renders", async () => {
-    const r = await run(["rollback", "--help"]);
-    expect(r.code).toBe(0);
-    const combined = (r.stdout + r.stderr).replace(ANSI_PATTERN, "");
-    expect(combined).toContain("previous");
   });
 
   test("`ndea plugin --help` lists nested actions without falling through to view", async () => {
@@ -141,13 +134,6 @@ describe("router / default routing", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
-  });
-
-  test("`ndea rollback` without a compiled binary errors cleanly", async () => {
-    const r = await run(["rollback"]);
-    // Should not hit the view handler, should not crash, should fail fast.
-    expect(r.code).toBe(1);
-    expect(r.stderr).toMatch(/compiled binary/);
   });
 
   test("`ndea update` without a compiled binary errors cleanly", async () => {
