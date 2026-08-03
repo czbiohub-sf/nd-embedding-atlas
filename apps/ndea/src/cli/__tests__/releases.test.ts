@@ -217,10 +217,7 @@ describe("fetchRelease", () => {
       fetchRelease("pre-release", {
         target,
         fetchImpl: stubFetch(() =>
-          jsonResponse([
-            release("v1.0.0", {}),
-            release("v1.0.0-rc.1", { prerelease: true, publishedAt: null }),
-          ]),
+          jsonResponse([release("v1.0.0", {}), release("v1.0.0-rc.1", { prerelease: true, publishedAt: null })]),
         ),
       }),
     ).rejects.toThrow(/no published pre-release/);
@@ -254,4 +251,3 @@ describe("checksum helpers", () => {
     expect(() => parseShaFile("not a digest")).toThrow(/unrecognised checksum/);
   });
 });
-
