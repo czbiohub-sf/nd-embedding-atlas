@@ -141,7 +141,7 @@ function indexNodeConfigMigrations(
   const targetVersion = contract.version;
   const migrationsBySource = new Map<NodeConfigVersion, NodeConfigMigration>();
 
-  if (!Number.isSafeInteger(targetVersion as number) || (targetVersion as number) < 0) {
+  if (!Number.isSafeInteger(targetVersion) || (targetVersion as number) < 0) {
     throw new NodeConfigMigrationError("invalid-migration-graph", sourceVersion, targetVersion);
   }
 

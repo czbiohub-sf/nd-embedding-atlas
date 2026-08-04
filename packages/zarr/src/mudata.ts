@@ -86,7 +86,7 @@ export async function parseMuData(group: ZarrGroup, storePath?: string): Promise
 async function readMuDataSharedAxis(group: ZarrGroup, axis: "obs" | "var"): Promise<AnnDataFrame | undefined> {
   try {
     const sharedAxisGroup = await zarr.open(group.resolve(axis), { kind: "group" });
-    return await readDataFrame(sharedAxisGroup as unknown as Parameters<typeof readDataFrame>[0]);
+    return await readDataFrame(sharedAxisGroup);
   } catch {
     return undefined;
   }

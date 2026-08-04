@@ -182,15 +182,15 @@ export async function readElement(parentGroup: ZarrGroup, name: string): Promise
 
     switch (encoding) {
       case "categorical":
-        return (await readCategorical(group as unknown as ZarrGroup)) as unknown as ColumnData;
+        return await readCategorical(group as unknown as ZarrGroup);
       case "nullable-integer":
       case "nullable-boolean":
       case "nullable-string":
       case "nullable-string-array":
-        return (await readNullable(group as unknown as ZarrGroup)) as unknown as ColumnData;
+        return await readNullable(group as unknown as ZarrGroup);
       case "csr_matrix":
       case "csc_matrix":
-        return (await readSparse(group as unknown as ZarrGroup)) as unknown as ColumnData;
+        return (await readSparse(group)) as unknown as ColumnData;
       default:
         // Unknown group encoding: try reading as plain array
         break;
@@ -290,7 +290,7 @@ async function resolveWindowReader(group: ZarrGroup, name: string): Promise<Wind
             categories,
             codes as Int8Array | Int16Array | Int32Array,
             ordered,
-          ) as unknown as ColumnData;
+          );
         },
       };
     }
@@ -310,7 +310,7 @@ async function resolveWindowReader(group: ZarrGroup, name: string): Promise<Wind
             maskRaw instanceof Uint8Array
               ? maskRaw
               : Uint8Array.from(maskRaw as Iterable<number | boolean>, (v) => (v ? 1 : 0));
-          return new SimpleNullable(values as ArrayLike<Scalar>, mask) as unknown as ColumnData;
+          return new SimpleNullable(values as ArrayLike<Scalar>, mask);
         },
       };
     }
@@ -431,7 +431,7 @@ export async function readDataFrameParallel(
 
   for (let i = 0; i < nWorkers; i++) {
     const workerIdx = i; // capture index in closure: not workers.indexOf()
-    const worker = new Worker(workerUrl, { smol: true } as WorkerOptions);
+    const worker = new Worker(workerUrl, { smol: true });
     worker.addEventListener("message", (event: MessageEvent) => {
       const { id, result, error } = event.data;
       const task = pending.get(id);
@@ -565,7 +565,7 @@ function reassembleColumn(r: ColumnResult): ColumnData {
   switch (r.encoding) {
     case "typed": {
       const Ctor = dtypeToTypedArray(r.dtype!);
-      return new Ctor(r.data!, 0, r.length) as ColumnData;
+      return new Ctor(r.data!, 0, r.length);
     }
     case "categorical": {
       const Ctor = dtypeToTypedArray(r.codesDtype!);
