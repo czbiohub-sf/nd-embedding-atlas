@@ -182,12 +182,12 @@ export async function readElement(parentGroup: ZarrGroup, name: string): Promise
 
     switch (encoding) {
       case "categorical":
-        return await readCategorical(group as unknown as ZarrGroup);
+        return await readCategorical(group);
       case "nullable-integer":
       case "nullable-boolean":
       case "nullable-string":
       case "nullable-string-array":
-        return await readNullable(group as unknown as ZarrGroup);
+        return await readNullable(group);
       case "csr_matrix":
       case "csc_matrix":
         return (await readSparse(group)) as unknown as ColumnData;
@@ -286,11 +286,7 @@ async function resolveWindowReader(group: ZarrGroup, name: string): Promise<Wind
       return {
         async read(r0, r1) {
           const codes = (await zarr.get(codesArr, [zarr.slice(r0, r1)])).data;
-          return new SimpleCategorical(
-            categories,
-            codes as Int8Array | Int16Array | Int32Array,
-            ordered,
-          );
+          return new SimpleCategorical(categories, codes as Int8Array | Int16Array | Int32Array, ordered);
         },
       };
     }

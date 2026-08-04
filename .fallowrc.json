@@ -9,7 +9,6 @@
     "apps/ndea/scripts/build.ts",
     "apps/ndea/scripts/sync-version.ts",
     "apps/ndea/scripts/dev.ts",
-    "scripts/run-workspace-task.ts",
     "apps/ndea/src/**/__tests__/**/*.test.ts"
   ],
   "ignorePatterns": [
