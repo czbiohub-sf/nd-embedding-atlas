@@ -129,7 +129,7 @@ async function readObsIndex(store: BunFileStore): Promise<string[]> {
   const node = await zarr.open(root.resolve(`/obs/${indexName}`));
   const arr =
     node instanceof zarr.Group ? await zarr.open(root.resolve(`/obs/${indexName}/values`), { kind: "array" }) : node;
-  const chunk = await zarr.get(arr as never, null);
+  const chunk = await zarr.get(arr, null);
   return Array.from(chunk.data as ArrayLike<string>);
 }
 
@@ -192,7 +192,7 @@ async function v3Numeric(loc: WritableZarrLocation, key: string, dtype: string, 
     fillValue: 0,
     attributes: ARRAY_ATTRS,
   } as never);
-  await zarr.set(arr as never, null, { data, shape: [n], stride: [1] } as never);
+  await zarr.set(arr as never, null, { data, shape: [n], stride: [1] });
 }
 
 async function v3StringArray(loc: WritableZarrLocation, key: string, strings: string[], n: number) {
@@ -204,7 +204,7 @@ async function v3StringArray(loc: WritableZarrLocation, key: string, strings: st
     fillValue: "",
     attributes: STRARR_ATTRS,
   } as never);
-  await zarr.set(arr as never, null, { data: strings, shape: [n], stride: [1] } as never);
+  await zarr.set(arr as never, null, { data: strings, shape: [n], stride: [1] });
 }
 
 async function writeColumnV3(store: BunFileStore, col: ObsColumnInput, obsNames: string[]): Promise<number> {

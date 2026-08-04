@@ -60,7 +60,7 @@ export class LazyDataFrame {
   }
 
   toArrow(): ArrowTable {
-    this._arrow ??= toArrowTable(this._source) as unknown as ArrowTable;
+    this._arrow ??= toArrowTable(this._source);
     return this._arrow;
   }
 

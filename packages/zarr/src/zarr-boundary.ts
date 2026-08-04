@@ -16,7 +16,7 @@ import type { AsyncReadable, Mutable, Readable } from "zarrita";
  * implement the `.get(key)` method zarrita actually calls.
  */
 export function asReadable(store: AsyncReadable): Readable {
-  return store as unknown as Readable;
+  return store;
 }
 
 /**

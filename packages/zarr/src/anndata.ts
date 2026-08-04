@@ -70,7 +70,7 @@ async function readAxisFrame(
       const indexName = (axisAttrs._index as string) ?? "_index";
       return await readDataFrameParallel(storePath, axis, columnOrder, indexName);
     }
-    return await readDataFrame(axisGroup as unknown as Parameters<typeof readDataFrame>[0]);
+    return await readDataFrame(axisGroup);
   } catch (e) {
     if (required) {
       throw new Error(`Failed to read ${axis} DataFrame: ${e instanceof Error ? e.message : String(e)}`, {
@@ -530,7 +530,7 @@ export class AnnDataAccessor {
       const encoding = attrs["encoding-type"] as string | undefined;
 
       if (encoding === "csr_matrix" || encoding === "csc_matrix") {
-        const sparse = await readSparse(grp as unknown as Parameters<typeof readSparse>[0]);
+        const sparse = await readSparse(grp);
         return this._applySparseSelection(sparse);
       }
     } catch {

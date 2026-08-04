@@ -67,7 +67,7 @@ describe("canonical plugin SDK barrel", () => {
     const registered: NodeDefinition[] = [];
     const api: PluginAPI = {
       registerNode(definition) {
-        registered.push(definition as NodeDefinition);
+        registered.push(definition);
       },
     };
     const factory: PluginFactory = (pluginAPI) => {

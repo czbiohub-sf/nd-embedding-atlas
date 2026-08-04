@@ -60,7 +60,7 @@ async function makeBase(format: "v2" | "v3", obsNames: string[]): Promise<string
         fillValue: "",
         attributes: { "encoding-type": "string-array", "encoding-version": "0.2.0" },
       } as never);
-      await zarr.set(index as never, null, { data: names, shape: [names.length], stride: [1] } as never);
+      await zarr.set(index as never, null, { data: names, shape: [names.length], stride: [1] });
     }
   } else {
     await store.set("/.zgroup", E.encode(JSON.stringify({ zarr_format: 2 })));

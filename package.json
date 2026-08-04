@@ -7,7 +7,7 @@
   ],
   "type": "module",
   "scripts": {
-    "build": "bun run scripts/run-workspace-task.ts @ndea/app build",
+    "build": "vp run --filter @ndea/app build",
     "backend": "bun run apps/ndea/src/cli/index.ts view",
     "docs:build": "bun run --cwd docs build",
     "docs:dev": "bun run --cwd docs dev",
@@ -25,13 +25,13 @@
     "eslint-plugin-typegpu": "^0.11.1",
     "fallow": "^3.6.0",
     "typescript": "catalog:",
-    "vite": "npm:@voidzero-dev/vite-plus-core@0.2.5",
+    "vite": "npm:@voidzero-dev/vite-plus-core@0.2.7",
     "vite-plus": "catalog:"
   },
   "overrides": {
     "@codemirror/state": "6.7.1",
     "@codemirror/view": "6.43.6",
-    "vite": "npm:@voidzero-dev/vite-plus-core@0.2.5"
+    "vite": "npm:@voidzero-dev/vite-plus-core@0.2.7"
   },
   "packageManager": "bun@1.3.14",
   "catalog": {
@@ -44,7 +44,7 @@
     "@zarrita/storage": "^0.2.0",
     "react": "^19.2.7",
     "typescript": "^6.0.3",
-    "vite-plus": "^0.2.5",
+    "vite-plus": "0.2.7",
     "zarrita": "^0.7.3",
     "zod": "^4.4.3"
   }
