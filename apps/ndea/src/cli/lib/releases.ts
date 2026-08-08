@@ -17,7 +17,7 @@ export interface ResolvedAsset {
 }
 
 export interface Target {
-  os: "darwin" | "linux";
+  os: "darwin" | "linux" | "windows";
   arch: "x64" | "arm64";
   /** Asset filename produced by the release workflow. */
   assetName: string;
@@ -30,6 +30,7 @@ export function detectTarget(): Target {
   let os: Target["os"];
   if (platform === "darwin") os = "darwin";
   else if (platform === "linux") os = "linux";
+  else if (platform === "win32") os = "windows";
   else throw new Error(`Unsupported OS: ${platform}`);
 
   let normalizedArch: Target["arch"];
@@ -40,11 +41,15 @@ export function detectTarget(): Target {
   if (os === "darwin" && normalizedArch !== "arm64") {
     throw new Error(`Unsupported release target: ${os}/${normalizedArch}`);
   }
+  // Windows publishes x64 only; ARM64 Windows runs it under emulation.
+  if (os === "windows" && normalizedArch !== "x64") {
+    throw new Error(`Unsupported release target: ${os}/${normalizedArch}`);
+  }
 
   return {
     os,
     arch: normalizedArch,
-    assetName: `ndea-${os}-${normalizedArch}`,
+    assetName: `ndea-${os}-${normalizedArch}${os === "windows" ? ".exe" : ""}`,
   };
 }
 

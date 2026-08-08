@@ -58,15 +58,20 @@ const [frontendManifestStub, libduckdbStub] = await Promise.all([
 interface DuckDBTarget {
   /** Subdir under node_modules/@duckdb/. */
   bindingsDir: string;
-  /** Native shared-library extension on the target platform. */
-  dylibExt: "dylib" | "so";
+  /**
+   * Shared-library filename as shipped inside the bindings package. Windows
+   * ships `duckdb.dll`, not `libduckdb.dll`: the name is what duckdb.node
+   * imports, so the preloader must materialize it under this exact basename.
+   */
+  libFile: string;
 }
 
 const TARGET_TO_DUCKDB: Record<string, DuckDBTarget> = {
-  "bun-darwin-arm64": { bindingsDir: "node-bindings-darwin-arm64", dylibExt: "dylib" },
-  "bun-darwin-x64": { bindingsDir: "node-bindings-darwin-x64", dylibExt: "dylib" },
-  "bun-linux-arm64": { bindingsDir: "node-bindings-linux-arm64", dylibExt: "so" },
-  "bun-linux-x64": { bindingsDir: "node-bindings-linux-x64", dylibExt: "so" },
+  "bun-darwin-arm64": { bindingsDir: "node-bindings-darwin-arm64", libFile: "libduckdb.dylib" },
+  "bun-darwin-x64": { bindingsDir: "node-bindings-darwin-x64", libFile: "libduckdb.dylib" },
+  "bun-linux-arm64": { bindingsDir: "node-bindings-linux-arm64", libFile: "libduckdb.so" },
+  "bun-linux-x64": { bindingsDir: "node-bindings-linux-x64", libFile: "libduckdb.so" },
+  "bun-windows-x64": { bindingsDir: "node-bindings-win32-x64", libFile: "duckdb.dll" },
 };
 
 const duckdbTarget = TARGET_TO_DUCKDB[target];
@@ -190,7 +195,7 @@ for (let i = 0; i < assetPaths.length; i++) {
 frontendManifestLines.push("};");
 frontendManifestLines.push("");
 
-const outfile = resolve(OUT_DIR, "ndea");
+const outfile = resolve(OUT_DIR, target.startsWith("bun-windows-") ? "ndea.exe" : "ndea");
 let compileExit = 1;
 try {
   await Bun.write(FRONTEND_MANIFEST_PATH, frontendManifestLines.join("\n"));
@@ -199,12 +204,7 @@ try {
   // libduckdb embed manifest: overwrites the committed dev stub
   // (LIBDUCKDB_EMBEDDED_PATH = null) with a real `with { type: "file" }`
   // import for the build target's libduckdb. Restored in the finally block.
-  const dylibAbsPath = resolve(
-    APP_ROOT,
-    "node_modules/@duckdb",
-    duckdbTarget.bindingsDir,
-    `libduckdb.${duckdbTarget.dylibExt}`,
-  );
+  const dylibAbsPath = resolve(APP_ROOT, "node_modules/@duckdb", duckdbTarget.bindingsDir, duckdbTarget.libFile);
   if (!existsSync(dylibAbsPath)) {
     throw new Error(`${dylibAbsPath} not found. Run \`vp install\` first.`);
   }

@@ -58,6 +58,15 @@ export default defineCommand({
       process.exit(1);
     }
 
+    // Windows ships the binary but not the versions-tree + symlink layout
+    // this command swaps, so there is nothing here to update in place.
+    if (process.platform === "win32") {
+      console.error("Error: `ndea update` is not supported on Windows.");
+      console.error("  Re-run the installer to move to a new release:");
+      console.error("    irm https://czbiohub-sf.github.io/nd-embedding-atlas/install.ps1 | iex");
+      process.exit(1);
+    }
+
     const channel = resolveChannel(flags.channel);
     detectTarget(); // validate platform early: throws if unsupported
 

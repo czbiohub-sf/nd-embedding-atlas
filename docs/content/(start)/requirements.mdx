@@ -10,14 +10,15 @@ nd-embedding-atlas runs as a local server and opens its interface in a browser. 
 - macOS on Apple silicon (`arm64`)
 - Linux on `x86_64`
 - Linux on `arm64`
+- Windows on `x86_64`
 
-Native releases target macOS and Linux. Windows users must build from source on a supported Bun platform.
+Windows on `arm64` runs the `x86_64` binary under emulation; there is no native `arm64` build. Windows installs are managed by re-running the installer, because `ndea update` is available only on macOS and Linux.
 
 ## Browser and graphics
 
 Use a current Chrome or Edge release with WebGPU enabled. The scatter renderer requires WebGPU; Firefox is not supported because it does not provide the required WebGPU implementation by default.
 
-Run `ndea doctor` to check the installed binary, active symlink, and installed versions. On a remote Linux workstation or HPC system, follow [WebGPU on HPC](/webgpu-hpc-setup) to establish a secure browser origin and enable the Vulkan backend.
+Run `ndea doctor` to check the installed binary, active symlink, and installed versions. On Windows there is no symlink to report: the installer writes a single `ndea.exe`. On a remote Linux workstation or HPC system, follow [WebGPU on HPC](/webgpu-hpc-setup) to establish a secure browser origin and enable the Vulkan backend.
 
 ## Data access
 
@@ -28,5 +29,7 @@ Plan for additional working storage under `~/.ndea/`:
 - installed versions live under `~/.ndea/versions/`;
 - updates retain only the active version by default;
 - native DuckDB extraction and local caches use `~/.cache/ndea/`.
+
+On Windows the equivalent paths are `%LOCALAPPDATA%\ndea\bin\ndea.exe` for the binary and `%LOCALAPPDATA%\ndea\<version>\` for the DuckDB cache.
 
 The application reads local Zarr stores directly. Large imaging datasets should remain on low-latency local or shared storage; storage latency and chunk layout directly affect crop loading.

@@ -29,6 +29,21 @@ jobs:
         run: vp check vite.config.ts bunli.config.ts scripts
       - name: Check workspaces
         run: vp run -r check
+      # install.ps1 is piped straight into `iex` by users, so a syntax error
+      # is a total install failure with no partial-success mode. Parse it with
+      # the real PowerShell parser (pwsh is preinstalled on ubuntu runners).
+      - name: Parse-check install.ps1
+        shell: pwsh
+        run: |
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path scripts/install.ps1), [ref]$null, [ref]$errors) | Out-Null
+          if ($errors) {
+            $errors | ForEach-Object { Write-Host "::error::$($_.Extent.StartLineNumber): $($_.Message)" }
+            exit 1
+          }
+          Write-Host "install.ps1 parses cleanly"
+
       # Verify .bunli/commands.gen.ts is in sync with apps/ndea/src/cli/commands/.
       # The standard verify-no-drift / gen-check pattern (Buf, sqlc,
       # Prisma, GraphQL Codegen all do this).
@@ -42,6 +57,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Windows is absent deliberately: the unit suite still assumes POSIX
+        # symlinks, /tmp, and chmod in ~11 files. The Windows binary is
+        # covered end-to-end by build-verify below.
         os: [ubuntu-latest, macos-14]
     steps:
       - uses: actions/checkout@v6
@@ -67,11 +85,13 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            artifact: ndea-linux-x64
+            artifact: ndea
           - os: macos-14
-            artifact: ndea-darwin-arm64
+            artifact: ndea
           - os: ubuntu-24.04-arm
-            artifact: ndea-linux-arm64
+            artifact: ndea
+          - os: windows-latest
+            artifact: ndea.exe
     steps:
       - uses: actions/checkout@v6
         with:
@@ -88,14 +108,14 @@ jobs:
         run: vp run build
       - name: Verify binary version
         env:
-          ARTIFACT: ndea
+          ARTIFACT: ${{ matrix.artifact }}
         run: bash .github/scripts/verify-binary-version.sh
       # Isolated-dir launch check: copy binary to a fresh dir with no
       # siblings. Catches any regression that reintroduces sibling-file
       # lookups (rpath / LD_LIBRARY_PATH).
       - name: Verify isolated dir (single-file binary)
         env:
-          ARTIFACT: ndea
+          ARTIFACT: ${{ matrix.artifact }}
         run: bash .github/scripts/verify-isolated.sh
 
   # ── Single required status check for branch protection ────────────────

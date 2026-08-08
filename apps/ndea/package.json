@@ -88,6 +88,7 @@
     "@duckdb/node-bindings-darwin-arm64": "1.5.4-r.1",
     "@duckdb/node-bindings-darwin-x64": "1.5.4-r.1",
     "@duckdb/node-bindings-linux-arm64": "1.5.4-r.1",
-    "@duckdb/node-bindings-linux-x64": "1.5.4-r.1"
+    "@duckdb/node-bindings-linux-x64": "1.5.4-r.1",
+    "@duckdb/node-bindings-win32-x64": "1.5.4-r.1"
   }
 }

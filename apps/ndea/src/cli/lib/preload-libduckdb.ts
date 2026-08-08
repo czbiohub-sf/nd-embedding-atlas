@@ -14,23 +14,16 @@
 // from node_modules/@duckdb/node-bindings-<plat>/ normally.
 
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { resolve } from "node:path";
+import { dirname } from "node:path";
 import { dlopen, FFIType } from "bun:ffi";
 import { LIBDUCKDB_EMBEDDED_PATH } from "./__generated-libduckdb.ts";
-import { VERSION } from "../version.ts";
+import { libduckdbCachePath } from "./libduckdb-cache.ts";
 
 if (LIBDUCKDB_EMBEDDED_PATH !== null) {
-  const ext = process.platform === "darwin" ? "dylib" : process.platform === "linux" ? "so" : "dll";
-  // ~/.cache/ndea/<version>/libduckdb.<ext>: version-scoped so old
-  // copies don't leak across upgrades, persistent across OS tmp cleans.
-  // Honours XDG_CACHE_HOME if set; falls back to ~/.cache.
-  const cacheRoot = process.env.XDG_CACHE_HOME ?? resolve(homedir(), ".cache");
-  const cacheDir = resolve(cacheRoot, "ndea", VERSION);
-  const dylibPath = resolve(cacheDir, `libduckdb.${ext}`);
+  const dylibPath = libduckdbCachePath();
 
   if (!existsSync(dylibPath)) {
-    mkdirSync(cacheDir, { recursive: true });
+    mkdirSync(dirname(dylibPath), { recursive: true });
     // Top-level await blocks module evaluation until the dylib is on
     // disk. Bun supports TLA in entry modules.
     writeFileSync(dylibPath, await Bun.file(LIBDUCKDB_EMBEDDED_PATH).bytes());
@@ -46,7 +39,10 @@ if (LIBDUCKDB_EMBEDDED_PATH !== null) {
   // image by its install_name / SONAME. When duckdb.node is required
   // shortly after, its dependency on `@rpath/libduckdb.dylib` (macOS)
   // or `libduckdb.so` (Linux) resolves against the already-loaded
-  // image: rpath search never runs.
+  // image: rpath search never runs. Windows behaves the same way for a
+  // different reason: LoadLibrary short-circuits to an already-loaded
+  // module with a matching basename before searching any directory,
+  // which is why the cached copy keeps DuckDB's `duckdb.dll` name.
   //
   // bun:ffi requires at least one declared symbol; we pick a stable C
   // symbol from the DuckDB C API. We never call it: declaring it is

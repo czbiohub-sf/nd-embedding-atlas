@@ -12,10 +12,9 @@
 import { defineCommand, option } from "@bunli/core";
 import { existsSync } from "node:fs";
 import { readFile, readlink, stat } from "node:fs/promises";
-import { homedir } from "node:os";
-import { resolve } from "node:path";
 import { z } from "zod";
 import { detectInstallManager } from "../lib/install-manager.ts";
+import { libduckdbCachePath } from "../lib/libduckdb-cache.ts";
 import { activeLauncher, currentVersionPath, isCompiledBinary, stateDir, versionsDir } from "../lib/paths.ts";
 import { fetchRelease } from "../lib/releases.ts";
 import { listVersions } from "../lib/versions.ts";
@@ -116,9 +115,7 @@ export default defineCommand({
     // know where the 100+ MB went.
     if (compiled) {
       console.log(`\n${BOLD}libduckdb cache${RESET}`);
-      const cacheRoot = process.env.XDG_CACHE_HOME ?? resolve(homedir(), ".cache");
-      const dylibExt = process.platform === "darwin" ? "dylib" : "so";
-      const dylibPath = resolve(cacheRoot, "ndea", VERSION, `libduckdb.${dylibExt}`);
+      const dylibPath = libduckdbCachePath();
       if (existsSync(dylibPath)) {
         const info = await stat(dylibPath).catch(() => null);
         const sizeMb = info ? (info.size / (1024 * 1024)).toFixed(1) : "?";

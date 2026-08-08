@@ -1,9 +1,11 @@
 ---
 title: Install
-description: Install, update, and remove ndea on macOS with Apple silicon or on Linux.
+description: Install, update, and remove ndea on macOS with Apple silicon, on Linux, or on Windows.
 ---
 
 ## Install the latest stable release
+
+On macOS or Linux:
 
 ```bash
 curl -fsSL https://czbiohub-sf.github.io/nd-embedding-atlas/install.sh | sh
@@ -23,6 +25,24 @@ Ensure `~/.local/bin` is on `PATH`, then check the installation:
 ndea --version
 ndea doctor
 ```
+
+## Install on Windows
+
+In PowerShell:
+
+```powershell
+irm https://czbiohub-sf.github.io/nd-embedding-atlas/install.ps1 | iex
+```
+
+The installer downloads `ndea-windows-x64.exe`, verifies its SHA-256 checksum, writes it to `%LOCALAPPDATA%\ndea\bin\ndea.exe`, and adds that directory to your user `PATH`. Restart the terminal, then run `ndea --version`.
+
+Set `NDEA_INSTALL_DIR` to install elsewhere. Because `irm | iex` cannot forward arguments, selecting a channel or tag needs the longer form:
+
+```powershell
+& ([scriptblock]::Create((irm https://czbiohub-sf.github.io/nd-embedding-atlas/install.ps1))) -Version v0.1.0
+```
+
+`ndea update` is not available on Windows. Re-run the installer to move to a newer release; it replaces the existing `ndea.exe` in place.
 
 ## Select a version or channel
 

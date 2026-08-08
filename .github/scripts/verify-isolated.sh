@@ -17,11 +17,17 @@ iso="${RUNNER_TEMP:-/tmp}/ndea-iso"
 rm -rf "$iso"
 mkdir -p "$iso"
 
-cp "dist/$ARTIFACT" "$iso/ndea"
-chmod +x "$iso/ndea"
+# Windows needs the .exe suffix preserved to execute the copy at all.
+name="ndea"
+case "$ARTIFACT" in
+    *.exe) name="ndea.exe" ;;
+esac
+
+cp "dist/$ARTIFACT" "$iso/$name"
+chmod +x "$iso/$name"
 
 echo "::group::Isolated layout"
 ls -lh "$iso"
 echo "::endgroup::"
 
-"$iso/ndea" --version
+"$iso/$name" --version

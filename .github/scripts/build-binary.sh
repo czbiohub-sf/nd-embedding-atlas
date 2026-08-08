@@ -22,5 +22,11 @@ mkdir -p dist
 # shot; no separate frontend step needed.
 vp run build "--target=${TARGET}"
 
-# The app builder keeps the public output at dist/ndea; rename for the matrix.
-mv "dist/ndea" "dist/${ARTIFACT}"
+# The app builder keeps the public output at dist/ndea, or dist/ndea.exe when
+# targeting Windows (bun appends the suffix). Rename for the matrix.
+built="dist/ndea"
+case "$TARGET" in
+    bun-windows-*) built="dist/ndea.exe" ;;
+esac
+
+mv "$built" "dist/${ARTIFACT}"
