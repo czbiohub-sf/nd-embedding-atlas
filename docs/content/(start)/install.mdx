@@ -3,9 +3,13 @@ title: Install
 description: Install, update, and remove ndea on macOS with Apple silicon, on Linux, or on Windows.
 ---
 
+import { Tab, Tabs } from "fumadocs-ui/components/tabs";
+
 ## Install the latest stable release
 
-On macOS or Linux:
+<Tabs items={["macOS / Linux", "Windows"]}>
+
+<Tab value="macOS / Linux">
 
 ```bash
 curl -fsSL https://czbiohub-sf.github.io/nd-embedding-atlas/install.sh | sh
@@ -26,17 +30,54 @@ ndea --version
 ndea doctor
 ```
 
-## Install on Windows
+</Tab>
 
-In PowerShell:
+<Tab value="Windows">
 
 ```powershell
 irm https://czbiohub-sf.github.io/nd-embedding-atlas/install.ps1 | iex
 ```
 
-The installer downloads `ndea-windows-x64.exe`, verifies its SHA-256 checksum, writes it to `%LOCALAPPDATA%\ndea\bin\ndea.exe`, and adds that directory to your user `PATH`. Restart the terminal, then run `ndea --version`.
+The installer:
 
-Set `NDEA_INSTALL_DIR` to install elsewhere.
+1. supports Windows on `x86_64`;
+2. downloads `ndea-windows-x64.exe` and its SHA-256 file;
+3. verifies the checksum;
+4. writes the binary to `%LOCALAPPDATA%\ndea\bin\ndea.exe`; and
+5. adds that directory to your user `PATH`.
+
+Set `NDEA_INSTALL_DIR` to install elsewhere. The new `PATH` entry does not reach terminals that are already open, so start a new one, then check the installation:
+
+```powershell
+ndea --version
+ndea doctor
+```
+
+`ndea update` is not available on Windows, because the layout has no versions tree and no symlink to swap. Re-run the installer to move to a newer release; it replaces `ndea.exe` in place.
+
+</Tab>
+
+</Tabs>
+
+## Select a version or channel
+
+<Tabs items={["macOS / Linux", "Windows"]}>
+
+<Tab value="macOS / Linux">
+
+Pass a release tag or a channel name as an argument:
+
+```bash
+# A specific tag
+curl -fsSL https://czbiohub-sf.github.io/nd-embedding-atlas/install.sh | sh -s -- v0.1.0
+
+# The active alpha, beta, or release candidate
+curl -fsSL https://czbiohub-sf.github.io/nd-embedding-atlas/install.sh | sh -s -- pre-release
+```
+
+</Tab>
+
+<Tab value="Windows">
 
 A bare `irm | iex` pipeline binds no parameters, because `iex` evaluates the downloaded text with no arguments. Set `NDEA_VERSION` to select a channel or tag while keeping the short form:
 
@@ -52,21 +93,9 @@ Passing `-Version` explicitly also works and takes precedence over the environme
 iex "& { $(irm https://czbiohub-sf.github.io/nd-embedding-atlas/install.ps1) } -Version pre-release"
 ```
 
-The accepted values match the POSIX installer: `stable` (the default), `latest`, `pre-release`, and any release tag.
+</Tab>
 
-`ndea update` is not available on Windows. Re-run the installer to move to a newer release; it replaces the existing `ndea.exe` in place.
-
-## Select a version or channel
-
-Pass a release tag or a channel name as an argument:
-
-```bash
-# A specific tag
-curl -fsSL https://czbiohub-sf.github.io/nd-embedding-atlas/install.sh | sh -s -- v0.1.0
-
-# The active alpha, beta, or release candidate
-curl -fsSL https://czbiohub-sf.github.io/nd-embedding-atlas/install.sh | sh -s -- pre-release
-```
+</Tabs>
 
 The accepted values are `stable` (the default), `latest`, `pre-release`, and any release tag.
 
@@ -107,7 +136,13 @@ curl -fsSL https://czbiohub-sf.github.io/nd-embedding-atlas/install.sh | sh -s -
 
 For mise installs, `ndea update` updates the active mise config through mise. Select a specific version with `mise use -g --pin github:czbiohub-sf/nd-embedding-atlas@0.1.0`. A running `ndea view` process continues using the version it started with in either layout.
 
+On Windows, re-run the installer with the tag you want; no removal step is needed.
+
 ## Remove ndea
+
+<Tabs items={["macOS / Linux", "Windows"]}>
+
+<Tab value="macOS / Linux">
 
 Remove the active symlink, installed versions, and extracted native-library cache:
 
@@ -116,7 +151,11 @@ rm -f "$HOME/.local/bin/ndea"
 rm -rf "$HOME/.ndea" "${XDG_CACHE_HOME:-$HOME/.cache}/ndea"
 ```
 
-On Windows, remove the install directory, the state directory, and the `PATH` entry the installer added:
+</Tab>
+
+<Tab value="Windows">
+
+Remove the install directory, the state directory, and the `PATH` entry the installer added:
 
 ```powershell
 Remove-Item -Recurse -Force "$env:LOCALAPPDATA\ndea", "$env:USERPROFILE\.ndea"
@@ -126,6 +165,10 @@ $kept = ($p.Split(';') | Where-Object { $_ -and $_ -ne "$env:LOCALAPPDATA\ndea\b
 ```
 
 Removing `%LOCALAPPDATA%\ndea` clears both the binary and the extracted `duckdb.dll` cache, since both live under it.
+
+</Tab>
+
+</Tabs>
 
 This does not remove source datasets.
 
