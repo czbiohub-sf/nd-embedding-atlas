@@ -72,10 +72,12 @@ describe("release tag grammar", () => {
     expect(proc.stdout.toString().trim().split(/\s+/)).toEqual(EXPECTED.map((ok) => (ok ? "1" : "0")));
   });
 
-  test.skipIf(!Bun.which("pwsh"))("install.ps1 matches install.sh exactly", () => {
-    // Pull Test-ReleaseTag out through the PowerShell parser and define just
-    // that function, so the installer's top-level statements never execute.
-    const script = `
+  test.skipIf(!Bun.which("pwsh"))(
+    "install.ps1 matches install.sh exactly",
+    () => {
+      // Pull Test-ReleaseTag out through the PowerShell parser and define just
+      // that function, so the installer's top-level statements never execute.
+      const script = `
       $ast = [System.Management.Automation.Language.Parser]::ParseFile(
         '${PS_INSTALLER}', [ref]$null, [ref]$null)
       $fn = $ast.Find({ param($n)
@@ -86,8 +88,12 @@ describe("release tag grammar", () => {
       foreach ($tag in @(${TAGS.map((t) => `'${t.replaceAll("'", "''")}'`).join(",")})) {
         if (Test-ReleaseTag $tag) { '1' } else { '0' }
       }`;
-    const proc = Bun.spawnSync(["pwsh", "-NoProfile", "-Command", script]);
+      const proc = Bun.spawnSync(["pwsh", "-NoProfile", "-Command", script]);
 
-    expect(proc.stdout.toString().trim().split(/\s+/)).toEqual(EXPECTED.map((ok) => (ok ? "1" : "0")));
-  });
+      expect(proc.stdout.toString().trim().split(/\s+/)).toEqual(EXPECTED.map((ok) => (ok ? "1" : "0")));
+      // A cold pwsh loads the .NET runtime before running a line of script; on a
+      // CI runner that alone exceeds bun's 5s default.
+    },
+    30_000,
+  );
 });

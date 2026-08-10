@@ -33,9 +33,10 @@ import { CROP_WORKER_ENTRYPOINT } from "../src/server/crop-worker-path.ts";
 
 const args = Bun.argv.slice(2);
 const targetArg = args.find((a) => !a.startsWith("--") || a.startsWith("--target="));
+const hostTargetOs = process.platform === "win32" ? "windows" : process.platform;
 const target =
   (targetArg?.startsWith("--target=") ? targetArg.slice("--target=".length) : targetArg) ??
-  `bun-${process.platform}-${process.arch}`;
+  `bun-${hostTargetOs}-${process.arch}`;
 
 const APP_ROOT = resolve(import.meta.dir, "..");
 const REPO_ROOT = resolve(APP_ROOT, "../..");
