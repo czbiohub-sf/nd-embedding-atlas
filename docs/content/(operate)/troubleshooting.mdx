@@ -15,9 +15,13 @@ ndea doctor --check-network
 
 If `ndea` is not found, confirm that the installer symlink directory is on `PATH`. Installed versions live under `~/.ndea/versions/`; the installer and `ndea update` manage the active `ndea` symlink.
 
+On Windows, `install.ps1` adds `%LOCALAPPDATA%\ndea\bin` to the user `PATH`, which existing terminals do not pick up: open a new terminal before concluding the install failed. `ndea doctor` omits the symlink and installed-versions sections there, because that layout has neither.
+
 A `403` during release resolution can mean GitHub API rate limiting. A `404` usually means the requested tag or release asset does not exist. Check GitHub status and retry; public releases require no token.
 
 If an update fails before the symlink swap, the current installation remains active. Diagnose the failure, then retry the update.
+
+`ndea update` is unavailable on Windows; re-run `install.ps1` instead. If it reports that it cannot replace `ndea.exe`, a running `ndea` still holds the file open: stop that process and retry.
 
 ## The server does not start
 

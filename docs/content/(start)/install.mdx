@@ -36,11 +36,23 @@ irm https://czbiohub-sf.github.io/nd-embedding-atlas/install.ps1 | iex
 
 The installer downloads `ndea-windows-x64.exe`, verifies its SHA-256 checksum, writes it to `%LOCALAPPDATA%\ndea\bin\ndea.exe`, and adds that directory to your user `PATH`. Restart the terminal, then run `ndea --version`.
 
-Set `NDEA_INSTALL_DIR` to install elsewhere. Because `irm | iex` cannot forward arguments, selecting a channel or tag needs the longer form:
+Set `NDEA_INSTALL_DIR` to install elsewhere.
+
+A bare `irm | iex` pipeline binds no parameters, because `iex` evaluates the downloaded text with no arguments. Set `NDEA_VERSION` to select a channel or tag while keeping the short form:
+
+```powershell
+$env:NDEA_VERSION = "v0.1.0"
+irm https://czbiohub-sf.github.io/nd-embedding-atlas/install.ps1 | iex
+```
+
+Passing `-Version` explicitly also works and takes precedence over the environment variable. Either form is fine:
 
 ```powershell
 & ([scriptblock]::Create((irm https://czbiohub-sf.github.io/nd-embedding-atlas/install.ps1))) -Version v0.1.0
+iex "& { $(irm https://czbiohub-sf.github.io/nd-embedding-atlas/install.ps1) } -Version pre-release"
 ```
+
+The accepted values match the POSIX installer: `stable` (the default), `latest`, `pre-release`, and any release tag.
 
 `ndea update` is not available on Windows. Re-run the installer to move to a newer release; it replaces the existing `ndea.exe` in place.
 
@@ -103,6 +115,17 @@ Remove the active symlink, installed versions, and extracted native-library cach
 rm -f "$HOME/.local/bin/ndea"
 rm -rf "$HOME/.ndea" "${XDG_CACHE_HOME:-$HOME/.cache}/ndea"
 ```
+
+On Windows, remove the install directory, the state directory, and the `PATH` entry the installer added:
+
+```powershell
+Remove-Item -Recurse -Force "$env:LOCALAPPDATA\ndea", "$env:USERPROFILE\.ndea"
+$p = [Environment]::GetEnvironmentVariable("Path", "User")
+$kept = ($p.Split(';') | Where-Object { $_ -and $_ -ne "$env:LOCALAPPDATA\ndea\bin" }) -join ';'
+[Environment]::SetEnvironmentVariable("Path", $kept, "User")
+```
+
+Removing `%LOCALAPPDATA%\ndea` clears both the binary and the extracted `duckdb.dll` cache, since both live under it.
 
 This does not remove source datasets.
 

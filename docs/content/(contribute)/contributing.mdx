@@ -120,7 +120,18 @@ See [`AGENTS.md`](https://github.com/czbiohub-sf/nd-embedding-atlas/blob/main/AG
 
 GitHub marks hyphenated semver tags as pre-releases. Stable/latest resolve through GitHub's latest release endpoint; pre-release resolves to the newest published, non-draft semver pre-release.
 
-The release workflow uploads `scripts/install.sh` as a per-tag asset, so users can pin the installer URL: `curl …/releases/download/v0.X.Y/install.sh | sh`. The docs workflow copies the same file to `https://czbiohub-sf.github.io/nd-embedding-atlas/install.sh`, which always reflects the latest installer on `main`.
+The release workflow uploads `scripts/install.sh` and `scripts/install.ps1` as per-tag assets, so users can pin the installer URL: `curl …/releases/download/v0.X.Y/install.sh | sh`. The docs workflow copies both to `https://czbiohub-sf.github.io/nd-embedding-atlas/install.sh` and `…/install.ps1`, which always reflect the latest installers on `main`.
+
+Each platform builds on its own runner. `duckdb.node` is a native N-API addon, so a cross-compiled binary would embed the host's addon rather than the target's:
+
+| Runner             | `bun --target`     | Release asset            |
+| ------------------ | ------------------ | ------------------------ |
+| `macos-14`         | `bun-darwin-arm64` | `ndea-darwin-arm64`      |
+| `ubuntu-latest`    | `bun-linux-x64`    | `ndea-linux-x64`         |
+| `ubuntu-24.04-arm` | `bun-linux-arm64`  | `ndea-linux-arm64`       |
+| `windows-latest`   | `bun-windows-x64`  | `ndea-windows-x64.exe`   |
+
+Note that `process.platform` reports `win32` while Bun's target triple spells the OS `windows`, and the DuckDB bindings directory is `node-bindings-win32-x64`. `apps/ndea/scripts/build.ts` owns the mapping between the three.
 
 After editing `apps/ndea/src/cli/commands/**`, regenerate the completion metadata:
 
@@ -137,7 +148,9 @@ vp run build
 ./dist/ndea doctor
 ```
 
-`ndea doctor` prints binary path, symlink integrity, active version, and the installed-versions tree. Exit code 1 on hard anomalies (broken symlink, missing active binary). Add `--check-network` to probe GitHub Releases API reachability with a 3-second timeout.
+`ndea doctor` prints binary path, symlink integrity, active version, and the installed-versions tree. Exit code 1 on hard anomalies (broken symlink, missing active binary). Add `--check-network` to probe GitHub Releases API reachability with a 3-second timeout. On Windows the symlink and installed-versions sections are omitted, because that layout has neither.
+
+CI also runs `.github/scripts/verify-isolated.sh`, which copies the fresh binary into an otherwise empty directory before launching it. That guards the single-file invariant: the binary embeds libduckdb and extracts it to a cache directory, so a sibling library file must never be required. The check matters most on Windows, where the loader searches the executable's own directory early enough that a stray `duckdb.dll` would mask a broken embed.
 
 ## Editing this docs site
 
