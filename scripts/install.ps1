@@ -17,14 +17,21 @@
 # Usage:
 #   irm https://czbiohub-sf.github.io/nd-embedding-atlas/install.ps1 | iex
 #
-# `irm | iex` cannot forward arguments. To pick a channel or pin a tag:
-#   & ([scriptblock]::Create((irm https://czbiohub-sf.github.io/nd-embedding-atlas/install.ps1))) -Version pre-release
-#   & ([scriptblock]::Create((irm https://czbiohub-sf.github.io/nd-embedding-atlas/install.ps1))) -Version v0.1.0
+# A bare `irm | iex` pipeline binds no parameters, because iex evaluates the
+# downloaded text with no arguments. Set $env:NDEA_VERSION to pick a channel or
+# pin a tag while keeping the short form:
+#   $env:NDEA_VERSION = "v0.1.0"; irm .../install.ps1 | iex
+#
+# Or pass -Version explicitly, which takes precedence over the environment:
+#   & ([scriptblock]::Create((irm .../install.ps1))) -Version pre-release
+#   iex "& { $(irm .../install.ps1) } -Version v0.1.0"
 #
 # Requires PowerShell 5.1+ (ships with Windows 10/11).
 
 param(
-    [string]$Version = "stable"
+    # Falls back to $env:NDEA_VERSION so the `irm | iex` one-liner can still
+    # select a channel or tag; an explicit -Version overrides it.
+    [string]$Version = $(if ($env:NDEA_VERSION) { $env:NDEA_VERSION } else { "stable" })
 )
 
 Set-StrictMode -Version Latest
