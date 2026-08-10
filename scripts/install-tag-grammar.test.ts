@@ -52,6 +52,19 @@ const CASES: readonly (readonly [tag: string, accepted: boolean])[] = [
 const TAGS = CASES.map(([tag]) => tag);
 const EXPECTED = CASES.map(([, accepted]) => accepted);
 
+/**
+ * Run a command and return its stdout as whitespace-separated tokens.
+ *
+ * Deliberately async rather than `Bun.spawnSync`: a cold `pwsh` can block for
+ * tens of seconds, and blocking the event loop that long starves the process
+ * timeouts in `install.test.ts` running alongside it.
+ */
+async function runCapturingStdout(command: string[]): Promise<string[]> {
+  const proc = Bun.spawn(command, { stdout: "pipe", stderr: "pipe" });
+  const [out] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+  return out.trim().split(/\s+/);
+}
+
 describe("release tag grammar", () => {
   test("install.sh accepts and rejects the documented tags", async () => {
     const text = await Bun.file(SH_INSTALLER).text();
@@ -67,14 +80,12 @@ describe("release tag grammar", () => {
 
     const args = TAGS.map((tag) => `'${tag.replaceAll("'", "'\\''")}'`).join(" ");
     const script = `${fn}\nfor t in ${args}; do if is_release_tag "$t"; then echo 1; else echo 0; fi; done\n`;
-    const proc = Bun.spawnSync(["sh", "-c", script]);
-
-    expect(proc.stdout.toString().trim().split(/\s+/)).toEqual(EXPECTED.map((ok) => (ok ? "1" : "0")));
+    expect(await runCapturingStdout(["sh", "-c", script])).toEqual(EXPECTED.map((ok) => (ok ? "1" : "0")));
   });
 
   test.skipIf(!Bun.which("pwsh"))(
     "install.ps1 matches install.sh exactly",
-    () => {
+    async () => {
       // Pull Test-ReleaseTag out through the PowerShell parser and define just
       // that function, so the installer's top-level statements never execute.
       const script = `
@@ -88,12 +99,12 @@ describe("release tag grammar", () => {
       foreach ($tag in @(${TAGS.map((t) => `'${t.replaceAll("'", "''")}'`).join(",")})) {
         if (Test-ReleaseTag $tag) { '1' } else { '0' }
       }`;
-      const proc = Bun.spawnSync(["pwsh", "-NoProfile", "-Command", script]);
-
-      expect(proc.stdout.toString().trim().split(/\s+/)).toEqual(EXPECTED.map((ok) => (ok ? "1" : "0")));
-      // A cold pwsh loads the .NET runtime before running a line of script; on a
-      // CI runner that alone exceeds bun's 5s default.
+      expect(await runCapturingStdout(["pwsh", "-NoProfile", "-Command", script])).toEqual(
+        EXPECTED.map((ok) => (ok ? "1" : "0")),
+      );
+      // A cold pwsh pays .NET runtime startup before running a line of script,
+      // which on a first invocation can take tens of seconds.
     },
-    30_000,
+    120_000,
   );
 });
