@@ -67,6 +67,10 @@ export default defineCommand({
       warn("running from source: install/update/gc disabled");
     }
 
+    // Windows installs are a single ndea.exe on PATH: no versions tree and no
+    // symlink, so the layout audits below have nothing to inspect there.
+    const isWindows = process.platform === "win32";
+
     // ── Path resolution ────────────────────────────────────────────────────
     const self = process.execPath;
     console.log(`\n${BOLD}Paths${RESET}`);
@@ -80,6 +84,9 @@ export default defineCommand({
           "mise install has no active source config; activate it with `mise use -g github:czbiohub-sf/nd-embedding-atlas`",
         );
       }
+    } else if (isWindows) {
+      console.log(`  state dir    ${stateDir()}`);
+      console.log(`  ${DIM}(no versions tree on Windows: re-run install.ps1 to upgrade)${RESET}`);
     } else {
       console.log(`  state dir    ${stateDir()}`);
       console.log(`  versions dir ${versionsDir()}`);
@@ -90,8 +97,12 @@ export default defineCommand({
     // `process.execPath`. Missing means the binary was invoked
     // directly (not via the installed symlink): supported for
     // diagnostics, just can't audit the symlink layout.
-    const launcher = manager.kind === "installer" ? activeLauncher() : null;
-    if (compiled && manager.kind === "installer") {
+    //
+    // Skipped entirely on Windows: install.ps1 drops a single ndea.exe on
+    // PATH, so there is no link to resolve and warning about one would
+    // report a healthy install as broken (and fail `--strict`).
+    const launcher = manager.kind === "installer" && !isWindows ? activeLauncher() : null;
+    if (compiled && manager.kind === "installer" && !isWindows) {
       console.log(`\n${BOLD}Symlink${RESET}`);
       if (!launcher) {
         warn("no `ndea` symlink on $PATH resolves to this binary: symlink not auditable");
@@ -148,7 +159,7 @@ export default defineCommand({
     }
 
     // ── Installed versions ─────────────────────────────────────────────────
-    if (manager.kind === "installer") {
+    if (manager.kind === "installer" && !isWindows) {
       console.log(`\n${BOLD}Installed versions${RESET}`);
       const versions = await listVersions(versionsDir());
       if (versions.length === 0) {
