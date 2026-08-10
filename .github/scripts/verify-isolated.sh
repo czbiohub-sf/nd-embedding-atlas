@@ -13,7 +13,8 @@ set -euo pipefail
 
 : "${ARTIFACT:?ARTIFACT env var is required}"
 
-iso="${RUNNER_TEMP:-/tmp}/ndea-iso"
+tmp_root="${RUNNER_TEMP:-/tmp}"
+iso="${tmp_root//\\//}/ndea-iso"
 rm -rf "$iso"
 mkdir -p "$iso"
 

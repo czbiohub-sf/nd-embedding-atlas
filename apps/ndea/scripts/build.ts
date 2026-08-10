@@ -172,7 +172,10 @@ console.log(`\n  ${BOLD}Step 2:${RESET} Generating embedded-asset manifests...`)
 const glob = new Bun.Glob("**/*");
 const assetPaths: string[] = [];
 for await (const path of glob.scan({ cwd: FRONTEND_DIST, onlyFiles: true })) {
-  assetPaths.push(path);
+  // Keys are looked up by URL pathname in server/static.ts, which rejects any
+  // key containing a backslash as path traversal. Windows glob output would
+  // otherwise make every nested asset unreachable.
+  assetPaths.push(path.replaceAll("\\", "/"));
 }
 
 const frontendManifestLines: string[] = [
@@ -209,7 +212,7 @@ try {
   if (!existsSync(dylibAbsPath)) {
     throw new Error(`${dylibAbsPath} not found. Run \`vp install\` first.`);
   }
-  const dylibRelPath = relative(dirname(LIBDUCKDB_STUB_PATH), dylibAbsPath);
+  const dylibRelPath = relative(dirname(LIBDUCKDB_STUB_PATH), dylibAbsPath).replaceAll("\\", "/");
   await Bun.write(
     LIBDUCKDB_STUB_PATH,
     [
