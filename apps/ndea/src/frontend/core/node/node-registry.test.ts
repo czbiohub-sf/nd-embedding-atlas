@@ -33,6 +33,7 @@ describe("native node catalog fitness functions", () => {
       "scatter",
       "count-plot",
       "histogram",
+      "vgplot",
       "gallery",
       "image-viewer",
       "cache",
@@ -142,6 +143,12 @@ describe("native node catalog fitness functions", () => {
         icon: "bar-chart",
       },
       histogram: {
+        role: "view",
+        inputs: [["in", "pred"]],
+        outputs: [["out", "sel"]],
+        icon: "bar-chart",
+      },
+      vgplot: {
         role: "view",
         inputs: [["in", "pred"]],
         outputs: [["out", "sel"]],

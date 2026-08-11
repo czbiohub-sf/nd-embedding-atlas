@@ -2,6 +2,7 @@ import type { ExactNodeTypeRef, NodeDefinition } from "@ndea/sdk";
 import { annotateNode } from "@/nodes/annotate/node";
 import { countPlotNode } from "@/nodes/charts/count-plot/node";
 import { histogramNode } from "@/nodes/charts/histogram/node";
+import { vgplotNode } from "@/nodes/charts/vgplot/node";
 import { galleryNode } from "@/nodes/gallery/node";
 import { imageViewerNode } from "@/nodes/image-viewer/node";
 import { scatterNode } from "@/nodes/scatter/node";
@@ -31,6 +32,7 @@ export const NATIVE_NODE_CONTRIBUTIONS = Object.freeze([
   scatterNode,
   countPlotNode,
   histogramNode,
+  vgplotNode,
   galleryNode,
   imageViewerNode,
   cacheNode,

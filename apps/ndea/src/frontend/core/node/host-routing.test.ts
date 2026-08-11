@@ -43,6 +43,7 @@ const ROUTING_COVERAGE: Record<string, "routed" | { exempt: string }> = {
   scatter: "routed",
   "count-plot": "routed",
   histogram: "routed",
+  vgplot: "routed",
   "image-viewer": { exempt: "focus consumer: no cross-view write gesture" },
   count: { exempt: "display-only: no cross-view gesture" },
   annotate: { exempt: "focus emitter via cursor effect, not a discrete gesture handler" },
@@ -160,8 +161,8 @@ describe("cross-view routing conformance", () => {
     const { host, calls } = createSpyHost();
     publishChartFilter(host, "col = 'A'"); // bar click / brush
     publishChartFilter(host, null); // clear
-    // count-plot + histogram both emit via this one routing module; Workspace
-    // runtime maps the "lasso" facet to the node's sel output wire.
+    // count-plot, histogram, and vgplot all emit via this one routing module;
+    // Workspace runtime maps the "lasso" facet to the node's sel output wire.
     expect(calls.publishPredicate).toEqual([
       { facet: "lasso", sql: "col = 'A'" },
       { facet: "lasso", sql: null },
