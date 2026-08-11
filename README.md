@@ -18,6 +18,12 @@ Install the latest release on macOS with Apple silicon, or on Linux with `x64` o
 curl -fsSL https://czbiohub-sf.github.io/nd-embedding-atlas/install.sh | sh
 ```
 
+On Windows with `x64`, in PowerShell:
+
+```powershell
+irm https://czbiohub-sf.github.io/nd-embedding-atlas/install.ps1 | iex
+```
+
 Launch an AnnData Zarr store:
 
 ```bash

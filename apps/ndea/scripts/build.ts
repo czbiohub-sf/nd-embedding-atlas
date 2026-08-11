@@ -33,9 +33,10 @@ import { CROP_WORKER_ENTRYPOINT } from "../src/server/crop-worker-path.ts";
 
 const args = Bun.argv.slice(2);
 const targetArg = args.find((a) => !a.startsWith("--") || a.startsWith("--target="));
+const hostTargetOs = process.platform === "win32" ? "windows" : process.platform;
 const target =
   (targetArg?.startsWith("--target=") ? targetArg.slice("--target=".length) : targetArg) ??
-  `bun-${process.platform}-${process.arch}`;
+  `bun-${hostTargetOs}-${process.arch}`;
 
 const APP_ROOT = resolve(import.meta.dir, "..");
 const REPO_ROOT = resolve(APP_ROOT, "../..");
@@ -58,15 +59,20 @@ const [frontendManifestStub, libduckdbStub] = await Promise.all([
 interface DuckDBTarget {
   /** Subdir under node_modules/@duckdb/. */
   bindingsDir: string;
-  /** Native shared-library extension on the target platform. */
-  dylibExt: "dylib" | "so";
+  /**
+   * Shared-library filename as shipped inside the bindings package. Windows
+   * ships `duckdb.dll`, not `libduckdb.dll`: the name is what duckdb.node
+   * imports, so the preloader must materialize it under this exact basename.
+   */
+  libFile: string;
 }
 
 const TARGET_TO_DUCKDB: Record<string, DuckDBTarget> = {
-  "bun-darwin-arm64": { bindingsDir: "node-bindings-darwin-arm64", dylibExt: "dylib" },
-  "bun-darwin-x64": { bindingsDir: "node-bindings-darwin-x64", dylibExt: "dylib" },
-  "bun-linux-arm64": { bindingsDir: "node-bindings-linux-arm64", dylibExt: "so" },
-  "bun-linux-x64": { bindingsDir: "node-bindings-linux-x64", dylibExt: "so" },
+  "bun-darwin-arm64": { bindingsDir: "node-bindings-darwin-arm64", libFile: "libduckdb.dylib" },
+  "bun-darwin-x64": { bindingsDir: "node-bindings-darwin-x64", libFile: "libduckdb.dylib" },
+  "bun-linux-arm64": { bindingsDir: "node-bindings-linux-arm64", libFile: "libduckdb.so" },
+  "bun-linux-x64": { bindingsDir: "node-bindings-linux-x64", libFile: "libduckdb.so" },
+  "bun-windows-x64": { bindingsDir: "node-bindings-win32-x64", libFile: "duckdb.dll" },
 };
 
 const duckdbTarget = TARGET_TO_DUCKDB[target];
@@ -166,7 +172,10 @@ console.log(`\n  ${BOLD}Step 2:${RESET} Generating embedded-asset manifests...`)
 const glob = new Bun.Glob("**/*");
 const assetPaths: string[] = [];
 for await (const path of glob.scan({ cwd: FRONTEND_DIST, onlyFiles: true })) {
-  assetPaths.push(path);
+  // Keys are looked up by URL pathname in server/static.ts, which rejects any
+  // key containing a backslash as path traversal. Windows glob output would
+  // otherwise make every nested asset unreachable.
+  assetPaths.push(path.replaceAll("\\", "/"));
 }
 
 const frontendManifestLines: string[] = [
@@ -190,7 +199,7 @@ for (let i = 0; i < assetPaths.length; i++) {
 frontendManifestLines.push("};");
 frontendManifestLines.push("");
 
-const outfile = resolve(OUT_DIR, "ndea");
+const outfile = resolve(OUT_DIR, target.startsWith("bun-windows-") ? "ndea.exe" : "ndea");
 let compileExit = 1;
 try {
   await Bun.write(FRONTEND_MANIFEST_PATH, frontendManifestLines.join("\n"));
@@ -199,16 +208,11 @@ try {
   // libduckdb embed manifest: overwrites the committed dev stub
   // (LIBDUCKDB_EMBEDDED_PATH = null) with a real `with { type: "file" }`
   // import for the build target's libduckdb. Restored in the finally block.
-  const dylibAbsPath = resolve(
-    APP_ROOT,
-    "node_modules/@duckdb",
-    duckdbTarget.bindingsDir,
-    `libduckdb.${duckdbTarget.dylibExt}`,
-  );
+  const dylibAbsPath = resolve(APP_ROOT, "node_modules/@duckdb", duckdbTarget.bindingsDir, duckdbTarget.libFile);
   if (!existsSync(dylibAbsPath)) {
     throw new Error(`${dylibAbsPath} not found. Run \`vp install\` first.`);
   }
-  const dylibRelPath = relative(dirname(LIBDUCKDB_STUB_PATH), dylibAbsPath);
+  const dylibRelPath = relative(dirname(LIBDUCKDB_STUB_PATH), dylibAbsPath).replaceAll("\\", "/");
   await Bun.write(
     LIBDUCKDB_STUB_PATH,
     [

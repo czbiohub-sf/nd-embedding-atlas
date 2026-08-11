@@ -27,8 +27,8 @@ const metadata: Record<GeneratedNames, GeneratedCommandMeta> = {
       name: 'doctor',
       description: 'Diagnose the ndea install (paths, manager, versions, releases)',
       options: {
-        'check-network': { type: 'z.coerce.boolean.default', required: true, hasDefault: true, default: false, description: 'Also probe GitHub Releases API reachability over the network', schema: {"type":"zod","method":"default","args":[{"type":"unknown","raw":{"type":"BooleanLiteral","start":1355,"end":1360,"loc":{"start":{"line":35,"column":55,"index":1355},"end":{"line":35,"column":60,"index":1360}},"value":false}}]}, validator: '(val) => true' },
-        'strict': { type: 'z.coerce.boolean.default', required: true, hasDefault: true, default: false, description: 'Treat soft warnings as errors (non-zero exit)', schema: {"type":"zod","method":"default","args":[{"type":"unknown","raw":{"type":"BooleanLiteral","start":1530,"end":1535,"loc":{"start":{"line":39,"column":46,"index":1530},"end":{"line":39,"column":51,"index":1535}},"value":false}}]}, validator: '(val) => true' }
+        'check-network': { type: 'z.coerce.boolean.default', required: true, hasDefault: true, default: false, description: 'Also probe GitHub Releases API reachability over the network', schema: {"type":"zod","method":"default","args":[{"type":"unknown","raw":{"type":"BooleanLiteral","start":1347,"end":1352,"loc":{"start":{"line":34,"column":55,"index":1347},"end":{"line":34,"column":60,"index":1352}},"value":false}}]}, validator: '(val) => true' },
+        'strict': { type: 'z.coerce.boolean.default', required: true, hasDefault: true, default: false, description: 'Treat soft warnings as errors (non-zero exit)', schema: {"type":"zod","method":"default","args":[{"type":"unknown","raw":{"type":"BooleanLiteral","start":1522,"end":1527,"loc":{"start":{"line":38,"column":46,"index":1522},"end":{"line":38,"column":51,"index":1527}},"value":false}}]}, validator: '(val) => true' }
       },
       path: './apps/ndea/src/cli/commands/doctor'
     },

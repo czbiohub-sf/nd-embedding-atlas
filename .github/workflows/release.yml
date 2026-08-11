@@ -31,6 +31,9 @@ jobs:
           - os: ubuntu-24.04-arm # Linux ARM64 (native, no QEMU)
             target: bun-linux-arm64
             artifact: ndea-linux-arm64
+          - os: windows-latest # Windows x64 (ARM64 runs this under emulation)
+            target: bun-windows-x64
+            artifact: ndea-windows-x64.exe
 
     runs-on: ${{ matrix.os }}
 
@@ -112,8 +115,10 @@ jobs:
       # installer URL to a specific tag; `curl …/v0.X.Y/install.sh | sh`
       # gets the install script frozen at this release. The canonical
       # copy on the docs site always reflects the latest code on main.
-      - name: Bundle install.sh as a release asset
-        run: cp scripts/install.sh dist/install.sh
+      - name: Bundle installers as release assets
+        run: |
+          cp scripts/install.sh dist/install.sh
+          cp scripts/install.ps1 dist/install.ps1
 
       # Tag-pattern auto-classification: semver pre-release identifiers are
       # always preceded by a `-` (e.g. v0.1.0-rc.1, v0.1.0-beta.2,
@@ -132,9 +137,17 @@ jobs:
           body: |
             ## Install
 
+            macOS / Linux:
+
             ```bash
             curl -fsSL https://czbiohub-sf.github.io/nd-embedding-atlas/install.sh \
               | sh -s -- ${{ github.ref_name }}
+            ```
+
+            Windows (PowerShell):
+
+            ```powershell
+            & ([scriptblock]::Create((irm https://czbiohub-sf.github.io/nd-embedding-atlas/install.ps1))) -Version ${{ github.ref_name }}
             ```
 
             Or download a binary directly from the asset list below and verify

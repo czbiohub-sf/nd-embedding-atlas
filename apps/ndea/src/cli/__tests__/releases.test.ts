@@ -227,9 +227,11 @@ describe("fetchRelease", () => {
 describe("detectTarget", () => {
   test("returns supported host target and matching asset name", () => {
     const detected = detectTarget();
-    expect(["darwin", "linux"]).toContain(detected.os);
+    expect(["darwin", "linux", "windows"]).toContain(detected.os);
     expect(["x64", "arm64"]).toContain(detected.arch);
-    expect(detected.assetName).toBe(`ndea-${detected.os}-${detected.arch}`);
+    // Windows assets carry the .exe the OS needs to treat them as executable.
+    const suffix = detected.os === "windows" ? ".exe" : "";
+    expect(detected.assetName).toBe(`ndea-${detected.os}-${detected.arch}${suffix}`);
   });
 });
 

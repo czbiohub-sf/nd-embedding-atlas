@@ -117,6 +117,7 @@ export function openBrowser(config: LaunchConfig): void {
   try {
     if (process.platform === "darwin") Bun.spawn(["open", url]);
     else if (process.platform === "linux") Bun.spawn(["xdg-open", url]);
+    else if (process.platform === "win32") Bun.spawn(["cmd", "/c", "start", "", url]);
   } catch {
     // Browser opening is non-critical; the URL was already printed.
   }

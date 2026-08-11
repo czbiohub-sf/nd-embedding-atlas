@@ -53,6 +53,8 @@ A single `.yaml` / `.yml` path is parsed as a multi-dataset project config (see 
 
 Download and activate the latest release for a channel. ndea verifies the SHA-256 checksum before switching versions.
 
+Not available on Windows. Windows installs are a single `ndea.exe` with no versions tree and no symlink to swap, so the command exits with an error; re-run `install.ps1` to move to a newer release.
+
 ### Options
 
 | Option                | Type                                  | Default  | Description                                                 |
@@ -75,6 +77,12 @@ rm -rf "$HOME/.ndea"
 curl -fsSL https://czbiohub-sf.github.io/nd-embedding-atlas/install.sh | sh -s -- v0.1.0
 ```
 
+On Windows, pass the tag to the installer; it replaces `ndea.exe` in place, so no removal step is needed:
+
+```powershell
+& ([scriptblock]::Create((irm https://czbiohub-sf.github.io/nd-embedding-atlas/install.ps1))) -Version v0.1.0
+```
+
 For mise-managed installs, select a version explicitly:
 
 ```bash
@@ -94,6 +102,8 @@ Prune old installed versions. ndea always preserves the active version.
 ## `ndea doctor`
 
 Diagnose the install. Prints binary path, symlink integrity, active version, installed versions with disk usage. Exit code 0 if healthy, 1 on hard anomalies (broken symlink, missing active binary).
+
+On Windows the symlink and installed-versions sections are omitted, because that layout has neither. Everything else, including the extracted-library cache check, reports normally.
 
 ### Options
 
@@ -157,6 +167,20 @@ ndea completions fish > ~/.config/fish/completions/ndea.fish
 A compiled version takes about 185 MB. `ndea gc` also removes version-scoped native-library caches corresponding to pruned releases.
 
 `~/.local/bin/ndea` points to the active binary under `~/.ndea/versions/<tag>/ndea`.
+
+On Windows the layout is flat, with no versions tree and no symlink:
+
+```
+%LOCALAPPDATA%\ndea\
+  bin\
+    ndea.exe                   # On PATH via a user environment entry
+  0.1.0\
+    duckdb.dll                 # Extracted from the binary on first launch
+%USERPROFILE%\.ndea\
+  current-version              # Plain text: "<tag>\n<sha256>"
+```
+
+DuckDB ships the Windows library as `duckdb.dll` rather than `libduckdb.dll`. Because only one version is ever installed, `ndea gc` has nothing to prune.
 
 ## Exit codes
 
