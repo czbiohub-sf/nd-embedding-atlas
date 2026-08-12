@@ -6,6 +6,7 @@ import {
   type PortKind,
   type RowIndex,
 } from "@ndea/sdk";
+import { Store } from "@tanstack/store";
 import {
   instantiateNodeAssetExpansion,
   type InstantiatedNodeAssetExpansion,
@@ -146,6 +147,11 @@ export type CheckpointInput =
   | Extract<GraphPortValue, { kind: "sel" }>
   | { readonly kind: "pred"; readonly sql: string | null };
 
+export interface CheckpointRuntimeStatus {
+  readonly pending: boolean;
+  readonly error: string | null;
+}
+
 export interface GraphRuntimeSessionOptions {
   readonly resolver: GraphRuntimeNodeResolver;
   readonly document: GraphRuntimeDocumentPort;
@@ -170,12 +176,14 @@ export class GraphRuntimeSession {
   private readonly registeredNodes = new Set<string>();
   private readonly frozenPredicates = new Map<string, Predicate>();
   private readonly frozenRows = new Map<string, RowIndex[] | null>();
+  private readonly liveCheckpointPredicates = new Map<string, Predicate>();
   private readonly pendingNodes = new Map<string, GraphDocumentNode>();
   private readonly runtimeNodes = new Map<string, GraphDocumentNode>();
   private readonly assetExpansions = new Map<string, InstantiatedNodeAssetExpansion>();
   private readonly assetSinks = new Map<string, AssetSinkRegistration>();
 
   readonly telemetry: GraphEvaluationStore;
+  readonly checkpoints = new Store<Readonly<Record<string, CheckpointRuntimeStatus>>>({});
 
   constructor({ resolver, document, schedule, onFlush }: GraphRuntimeSessionOptions) {
     this.resolver = resolver;
@@ -231,7 +239,11 @@ export class GraphRuntimeSession {
       id: node.id,
       node: () => this.pendingNodes.get(node.id) ?? this.runtimeNodes.get(node.id) ?? this.document.node(node.id),
       frozenPredicate: () =>
-        this.frozenPredicates.has(node.id) ? (this.frozenPredicates.get(node.id) ?? null) : undefined,
+        this.frozenPredicates.has(node.id)
+          ? (this.frozenPredicates.get(node.id) ?? null)
+          : this.liveCheckpointPredicates.has(node.id)
+            ? (this.liveCheckpointPredicates.get(node.id) ?? null)
+            : undefined,
     };
     this.evaluator.addNode({
       id: node.id,
@@ -263,6 +275,13 @@ export class GraphRuntimeSession {
     this.runtimeNodes.delete(id);
     this.frozenPredicates.delete(id);
     this.frozenRows.delete(id);
+    this.liveCheckpointPredicates.delete(id);
+    this.checkpoints.setState((state) => {
+      if (!(id in state)) return state;
+      const next = { ...state };
+      delete next[id];
+      return next;
+    });
   }
 
   private registerAssetExpansion(
@@ -501,6 +520,13 @@ export class GraphRuntimeSession {
   }
 
   liveCheckpointInput(id: string): CheckpointInput | null {
+    if (this.liveCheckpointPredicates.has(id)) {
+      return { kind: "pred", sql: this.liveCheckpointPredicates.get(id) ?? null };
+    }
+    return this.cacheGraphInput(id);
+  }
+
+  cacheGraphInput(id: string): CheckpointInput | null {
     let selection: Extract<GraphPortValue, { kind: "sel" }> | undefined;
     const predicateInputs: Predicate[] = [];
     for (const edge of this.document.edges()) {
@@ -518,13 +544,15 @@ export class GraphRuntimeSession {
     return sql !== null || predicateInputs.length > 0 ? { kind: "pred", sql } : null;
   }
 
-  pinCheckpoint(id: string): number | null {
-    const live = this.liveCheckpointInput(id);
-    if (!live) return null;
-    const rows = live.kind === "sel" && live.rowIds ? [...live.rowIds] : null;
-    const frozen = rows && rows.length > 0 ? `__row_index__ IN (${rows.join(", ")})` : live.sql;
-    if (!frozen) return null;
-    this.frozenPredicates.set(id, frozen);
+  setLiveCheckpointPredicate(id: string, predicate: Predicate): void {
+    if (predicate === null) this.liveCheckpointPredicates.delete(id);
+    else this.liveCheckpointPredicates.set(id, predicate);
+    if (!this.frozenPredicates.has(id)) this.evaluator.markDirty(id);
+  }
+
+  pinCheckpointRows(id: string, rowIds: readonly RowIndex[]): number {
+    const rows = [...rowIds];
+    this.frozenPredicates.set(id, rows.length > 0 ? `__row_index__ IN (${rows.join(", ")})` : "FALSE");
     this.frozenRows.set(id, rows);
     this.evaluator.markDirty(id);
     return this.evaluator.epoch;
@@ -543,6 +571,10 @@ export class GraphRuntimeSession {
 
   checkpointRows(id: string): readonly RowIndex[] | null | undefined {
     return this.frozenRows.get(id);
+  }
+
+  setCheckpointStatus(id: string, status: CheckpointRuntimeStatus): void {
+    this.checkpoints.setState((state) => ({ ...state, [id]: status }));
   }
 
   patchNodeConfig(node: GraphDocumentNode, patch: Record<string, unknown>): GraphDocumentNode {
@@ -575,7 +607,9 @@ export class GraphRuntimeSession {
     this.assetExpansions.clear();
     this.frozenPredicates.clear();
     this.frozenRows.clear();
+    this.liveCheckpointPredicates.clear();
     this.pendingNodes.clear();
+    this.checkpoints.setState(() => ({}));
   }
 
   private edgeIsResolved(

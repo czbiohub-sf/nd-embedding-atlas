@@ -1,21 +1,14 @@
-/**
- * Charts cross-view routing (Humble Object): the testable seam the conformance
- * suite (`core/node/host-routing.test.ts`) exercises. A chart's bar-click /
- * brush emits its filter on the node's selection-out push port.
- *
- * The Workspace runtime maps the `"lasso"` facet to the node's `sel` output
- * wire. Here that historical facet name means “selection output,” not a lasso
- * gesture. Other facets stay in the session predicate bus.
- */
+/** Chart filter publication through the node-local coordination scope. */
 
-import type { NodeHost } from "@ndea/sdk";
+import type { FilterCoordinationAPI } from "@ndea/sdk";
 
-type PredicatePublishingHost = Pick<NodeHost<unknown, "predicate-publish">, "publishPredicate">;
+type FilterPublishingHost = {
+  readonly filter: Pick<FilterCoordinationAPI, "publish" | "clear">;
+};
 
-/** Workspace runtime's edge-bound selection-output facet (see file header). */
-const SELECTION_FACET = "lasso";
+const CHART_FACET = "chart";
 
-/** Publish this chart's filter on its selection-out push port; null clears it. */
-export function publishChartFilter(host: PredicatePublishingHost, sql: string | null): void {
-  host.publishPredicate(SELECTION_FACET, sql);
+export function publishChartFilter(host: FilterPublishingHost, sql: string | null): void {
+  if (sql == null) host.filter.clear(CHART_FACET);
+  else host.filter.publish(CHART_FACET, sql);
 }

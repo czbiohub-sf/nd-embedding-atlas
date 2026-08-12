@@ -3,13 +3,13 @@
  *
  * U1 inlined `focus` and U2 inlined `viewSync` directly against the coordination
  * backbone. With two concrete instances proven, the shared shape is extracted
- * here: a registry of coordination TYPES, each declaring a validated cell schema,
- * a capability gate, and the `NodeHost` facet it binds to. Mirrors
+ * here: a registry of coordination TYPES, each declaring either a validated
+ * document cell or membership-only runtime backing, plus a capability gate and
+ * the `NodeHost` facet it binds to. Mirrors
  * `use-coordination`'s `coordinationTypes` map, adapted to our host seam.
  *
- * The gate is enforced at DEFINE time (KD3/R5): a type whose value isn't
- * `JsonValue`-serializable: a Mosaic Selection, a GPU handle, a function: is
- * rejected here, not at save time, so share/undo/persist always hold.
+ * Persisted-cell gates are enforced at DEFINE time. Runtime-backed types own no
+ * cell value: only their scope membership is serializable.
  */
 
 import { z, type ZodType } from "zod";
@@ -19,10 +19,12 @@ import type { JsonValue, NodeCapability } from "@ndea/sdk";
 export interface CoordinationTypeSpec {
   /** the coordination type key (e.g. "focus", "viewSync", "ordering"). */
   type: string;
-  /** schema for ONE cell's value: must validate a `JsonValue`. */
-  schema: ZodType;
-  /** the value a freshly minted cell holds. */
-  defaultValue: JsonValue;
+  /** Runtime-backed types persist membership only and have no document cell. */
+  runtimeBacked?: boolean;
+  /** schema for ONE persisted cell's value. */
+  schema?: ZodType;
+  /** the value a freshly minted persisted cell holds. */
+  defaultValue?: JsonValue;
   /** a node only gets {@link hostFacet} when `host.capabilities` has this. */
   capability: NodeCapability;
   /** the `NodeHost` facet this type is reached through (the host-seam binding). */
@@ -40,6 +42,14 @@ export function defineCoordinationType(spec: CoordinationTypeSpec): Coordination
   if (!spec.type) throw new Error("coordination type: `type` is required");
   if (!spec.capability) throw new Error(`coordination type "${spec.type}": a \`capability\` is required (KD4)`);
   if (!spec.hostFacet) throw new Error(`coordination type "${spec.type}": a \`hostFacet\` is required (KD4)`);
+  if (spec.runtimeBacked) {
+    if (spec.schema || spec.defaultValue !== undefined) {
+      throw new Error(`coordination type "${spec.type}": runtime-backed types cannot define a document cell`);
+    }
+    registry.set(spec.type, spec);
+    return spec;
+  }
+  if (!spec.schema) throw new Error(`coordination type "${spec.type}": a \`schema\` is required`);
   // JsonValue gate: the default (and thus the cell) must survive JSON round-trip.
   if (JSON.stringify(spec.defaultValue) === undefined) {
     throw new Error(`coordination type "${spec.type}": defaultValue is not JSON-serializable (KD3)`);
@@ -49,6 +59,12 @@ export function defineCoordinationType(spec: CoordinationTypeSpec): Coordination
   }
   registry.set(spec.type, spec);
   return spec;
+}
+
+export function defineRuntimeCoordinationType(
+  spec: Pick<CoordinationTypeSpec, "type" | "capability" | "hostFacet">,
+): CoordinationTypeSpec {
+  return defineCoordinationType({ ...spec, runtimeBacked: true });
 }
 
 /**
@@ -85,5 +101,5 @@ export function listCoordinationTypes(): CoordinationTypeSpec[] {
 /** The per-type cell validator: `type → { scope → value? }` (buildSpecSchema-style). */
 export function coordinationCellSchema(type: string): ZodType | undefined {
   const spec = registry.get(type);
-  return spec ? z.record(z.string(), spec.schema.optional()) : undefined;
+  return spec?.schema ? z.record(z.string(), spec.schema.optional()) : undefined;
 }

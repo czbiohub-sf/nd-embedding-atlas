@@ -80,13 +80,17 @@ export type {
   DataQueryAPI,
   DeviceInfo,
   DeviceLease,
+  FilterCoordinationAPI,
+  FilterFacet,
   FocusCoordinationAPI,
+  MaterializedFilterRows,
   NodeDataAPI,
   NodeHost,
   NodeNotificationAPI,
   OrderingCoordinationAPI,
   RowSetPublication,
   RowSetPublishAPI,
+  ResolvedFilter,
   ViewCoordinationAPI,
 } from "./host";
 

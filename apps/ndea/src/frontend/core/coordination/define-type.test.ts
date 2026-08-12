@@ -11,18 +11,28 @@
 import { z } from "zod";
 import { describe, expect, test } from "bun:test";
 
-import { defineCoordinationType, defineGroupChannel, listCoordinationTypes } from "./define-type";
+import {
+  coordinationCellSchema,
+  defineCoordinationType,
+  defineGroupChannel,
+  listCoordinationTypes,
+} from "./define-type";
 // importing the type constants loads coordination.ts, registering focus,
 // viewSync, and ordering through the API as a side effect.
-import { FOCUS_TYPE, ORDERING_TYPE, VIEW_SYNC_TYPE } from "./coordination";
+import { FILTER_TYPE, FOCUS_TYPE, ORDERING_TYPE, VIEW_SYNC_TYPE } from "./coordination";
 
 // The cross-view facet names that exist on NodeHost (host.ts). A type whose
 // hostFacet isn't one of these can't be reached through the seam.
-const KNOWN_HOST_FACETS = new Set(["focus", "viewCoordination", "ordering"]);
+const KNOWN_HOST_FACETS = new Set(["focus", "viewCoordination", "ordering", "filter"]);
 
 describe("registered coordination types are well-formed", () => {
   test("focus, viewSync, and ordering are all registered", () => {
-    expect([FOCUS_TYPE.type, VIEW_SYNC_TYPE.type, ORDERING_TYPE.type]).toEqual(["focus", "viewSync", "ordering"]);
+    expect([FOCUS_TYPE.type, VIEW_SYNC_TYPE.type, ORDERING_TYPE.type, FILTER_TYPE.type]).toEqual([
+      "focus",
+      "viewSync",
+      "ordering",
+      "filter",
+    ]);
     const types = listCoordinationTypes().map((s) => s.type);
     expect(types).toContain("focus");
     expect(types).toContain("viewSync");
@@ -40,9 +50,20 @@ describe("registered coordination types are well-formed", () => {
 
   test("every registration's default is JsonValue-serializable and passes its schema", () => {
     for (const spec of listCoordinationTypes()) {
+      if (spec.runtimeBacked) continue;
       expect(JSON.stringify(spec.defaultValue), `${spec.type}: default not serializable`).not.toBeUndefined();
-      expect(spec.schema.safeParse(spec.defaultValue).success, `${spec.type}: default fails schema`).toBe(true);
+      expect(spec.schema!.safeParse(spec.defaultValue).success, `${spec.type}: default fails schema`).toBe(true);
     }
+  });
+
+  test("filter is picker-visible membership without a serialized cell", () => {
+    expect(FILTER_TYPE).toMatchObject({
+      type: "filter",
+      capability: "filter-coordination",
+      hostFacet: "filter",
+      runtimeBacked: true,
+    });
+    expect(coordinationCellSchema("filter")).toBeUndefined();
   });
 });
 
@@ -102,7 +123,7 @@ describe("defineGroupChannel sugar", () => {
     const spec = listCoordinationTypes().find((s) => s.type === "__test_group");
     expect(spec).toBeDefined();
     expect(spec!.defaultValue).toBeNull();
-    expect(spec!.schema.safeParse("obs_1").success).toBe(true);
-    expect(spec!.schema.safeParse(null).success).toBe(true);
+    expect(spec!.schema!.safeParse("obs_1").success).toBe(true);
+    expect(spec!.schema!.safeParse(null).success).toBe(true);
   });
 });

@@ -17,8 +17,8 @@ import {
   type VisibilityState,
 } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import type { Coordinator, Selection } from "@uwdata/mosaic-core";
-import { type RowIndex, rowIndex } from "@ndea/sdk";
+import type { Coordinator } from "@uwdata/mosaic-core";
+import { type FilterCoordinationAPI, type RowIndex, rowIndex } from "@ndea/sdk";
 import { CheckIcon, Columns3Icon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -69,7 +69,7 @@ export interface DataTableProps {
   coordinator: Coordinator;
   table: string;
   columns: string[];
-  selection?: Selection;
+  filter: FilterCoordinationAPI;
   focusedRowIndex?: RowIndex | null;
   onRowClick?: (rowIndex: RowIndex | null) => void;
   onTotalCountChange?: (n: number) => void;
@@ -86,7 +86,7 @@ export function DataTable({
   coordinator,
   table,
   columns: columnNames,
-  selection,
+  filter,
   focusedRowIndex,
   onRowClick,
   onTotalCountChange,
@@ -124,7 +124,7 @@ export function DataTable({
     coordinator,
     table,
     columns: columnNames,
-    selection,
+    filter,
     sort,
   });
 

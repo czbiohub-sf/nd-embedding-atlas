@@ -12,6 +12,7 @@
   "scripts": {
     "build": "bun run scripts/build.ts",
     "dev": "bun run scripts/dev.ts",
+    "dev:fixture": "bun run scripts/dev-fixture.ts",
     "sync-version": "bun run scripts/sync-version.ts",
     "check": "vp check",
     "test": "bun test"
@@ -45,7 +46,10 @@
     "@typegpu/color": "^0.11.0",
     "@uwdata/flechette": "catalog:",
     "@uwdata/mosaic-core": "catalog:",
-    "@uwdata/mosaic-sql": "^0.29.0",
+    "@uwdata/mosaic-plot": "^0.30.0",
+    "@uwdata/mosaic-spec": "^0.30.0",
+    "@uwdata/mosaic-sql": "^0.30.0",
+    "@uwdata/vgplot": "^0.30.0",
     "@xyflow/react": "^12.11.2",
     "@zarrita/storage": "catalog:",
     "class-variance-authority": "^0.7.1",

@@ -11,10 +11,9 @@ import type { ScatterConfig } from "./view";
 const CAPABILITIES = [
   "data-read",
   "row-set-publish",
-  "row-set-subscribe",
   "focus-coordination",
   "view-coordination",
-  "predicate-publish",
+  "filter-coordination",
   "schema-mutation",
   "gpu-device",
   "wasm-bitmap",
@@ -26,7 +25,7 @@ export const scatterDefinition = defineNode({
   title: "Scatter",
   role: "view",
   inputs: [{ id: "in", kind: "pred", label: "In" }],
-  outputs: [{ id: "out", kind: "sel", label: "Selection" }],
+  outputs: [],
   capabilities: CAPABILITIES,
   config: {
     schema: z.object({ obsmKey: z.string().nullable(), colorByColumn: z.string().nullable() }),

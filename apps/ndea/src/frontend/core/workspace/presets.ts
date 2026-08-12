@@ -18,9 +18,11 @@ export function seedAnnotate(ws: Workspace): void {
   ws.connect(wr, count);
   ws.connect(wr, table);
   ws.connect(wr, scatter);
-  ws.connect(scatter, cache, "out", "in-sel"); // lasso → the cached working set
   ws.connect(cache, annotate, "out", "in"); // annotate the cached scope
   ws.connect(cache, gallery, "out", "in"); // gallery crops for the cached scope
+  for (const nodeId of [table, scatter, cache]) {
+    ws.coordination.assignScope(nodeId, "filter", "A");
+  }
   for (const nodeId of [table, scatter, annotate, imageViewer, gallery]) {
     ws.coordination.assignScope(nodeId, "focus", "A");
   }

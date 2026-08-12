@@ -116,7 +116,7 @@ describe("WorkspaceStorage recovery contract", () => {
       state: { edges: { e5: { toPort: "focus-in" } } },
     });
     expect(storage.bytes["active.backup.v5"]).toBe(raw);
-    expect(JSON.parse(storage.bytes.active).version).toBe(6);
+    expect(JSON.parse(storage.bytes.active).version).toBe(7);
   });
 
   test("migrates the retired Image Viewer input port before topology validation", () => {
@@ -154,7 +154,7 @@ describe("WorkspaceStorage recovery contract", () => {
       state: { edges: { e5: { toPort: "focus-in" } } },
     });
     expect(storage.bytes["active.backup.v4"]).toBe(raw);
-    expect(JSON.parse(storage.bytes.active).version).toBe(6);
+    expect(JSON.parse(storage.bytes.active).version).toBe(7);
   });
 
   test("migrates v3 edges to explicit exact output ports and preserves the verified backup", () => {
@@ -195,7 +195,7 @@ describe("WorkspaceStorage recovery contract", () => {
     if (!datasetOutput) throw new Error("dataset output unavailable");
     expect(loaded.state.edges.e1?.fromPort).toBe(datasetOutput);
     expect(storage.bytes["active.backup.v3"]).toBe(raw);
-    expect(JSON.parse(storage.bytes.active).version).toBe(6);
+    expect(JSON.parse(storage.bytes.active).version).toBe(7);
   });
 
   test("multiple session keys never cross-read or cross-write", () => {
@@ -260,7 +260,7 @@ describe("WorkspaceStorage recovery contract", () => {
     expect(storage.writes).toEqual(["active.backup.v2", "active"]);
     expect(storage.bytes["active.backup.v2"]).toBe(raw);
     expect(JSON.parse(storage.bytes.active)).toMatchObject({
-      version: 6,
+      version: 7,
       state: {
         selectedNodeId: "dataset",
         selectedNodeIds: ["dataset"],

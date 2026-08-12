@@ -19,6 +19,11 @@ export interface SelectionCapability {
   setForcedSelectionMode(mode: "pan" | "marquee" | "lasso"): void;
 }
 
+export interface FilterCapability {
+  setPredicateFilter(rowIndices: RowIndex[]): void;
+  clearPredicateFilter(): void;
+}
+
 export interface IsolationCapability {
   setCategoryIsolation(isolatedSet: Set<number>, categoryIndices: Uint8Array): void;
   clearCategoryIsolation(): void;
@@ -75,6 +80,7 @@ export interface ColorCapability {
  */
 export type ScatterGPUHostHandle = ColorCapability &
   SelectionCapability &
+  FilterCapability &
   IsolationCapability &
   ViewCapability &
   RenderCapability;

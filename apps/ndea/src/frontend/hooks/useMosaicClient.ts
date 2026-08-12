@@ -1,10 +1,14 @@
 import { type Coordinator, makeClient, type Selection } from "@uwdata/mosaic-core";
 import type { FilterExpr, Query } from "@uwdata/mosaic-sql";
 import { useEffect, useRef, useState } from "react";
+import type { FilterCoordinationAPI } from "@ndea/sdk";
 
 export interface UseMosaicClientOptions<T> {
   coordinator: Coordinator;
   selection?: Selection;
+  filter?: Pick<FilterCoordinationAPI, "selection" | "associateClient" | "disassociateClient">;
+  /** Whether filtering preserves the query's group-by domain. Default true. */
+  filterStable?: boolean;
   /** Must be memoized (useCallback). Returns a SQL query for the given filter predicate. */
   query: (predicate: FilterExpr) => ReturnType<typeof Query.from> | string | null;
   /** Must be memoized (useCallback). Transforms raw query result into typed data. */
@@ -22,7 +26,8 @@ interface UseMosaicClientResult<T> {
 }
 
 export function useMosaicClient<T>(opts: UseMosaicClientOptions<T>): UseMosaicClientResult<T> {
-  const { coordinator, selection, query, transform, enabled = true, onError } = opts;
+  const { coordinator, selection, filter, filterStable = true, query, transform, enabled = true, onError } = opts;
+  const filterSelection = filter?.selection ?? selection;
   const onErrorRef = useRef(onError);
   onErrorRef.current = onError;
 
@@ -48,8 +53,8 @@ export function useMosaicClient<T>(opts: UseMosaicClientOptions<T>): UseMosaicCl
 
     const client = makeClient({
       coordinator,
-      selection,
-      filterStable: true,
+      selection: filterSelection,
+      filterStable,
       query,
       queryPending: () => {
         setLoading(true);
@@ -69,11 +74,17 @@ export function useMosaicClient<T>(opts: UseMosaicClientOptions<T>): UseMosaicCl
         onErrorRef.current?.(err);
       },
     });
+    const clientFilter = filter;
+    clientFilter?.associateClient(client);
+    let released = false;
 
     return () => {
+      if (released) return;
+      released = true;
+      clientFilter?.disassociateClient(client);
       client.destroy();
     };
-  }, [coordinator, selection, query, enabled]);
+  }, [coordinator, filterSelection, filter, filterStable, query, enabled]);
 
   return { data, loading, error };
 }

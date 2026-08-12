@@ -33,6 +33,7 @@ describe("native node catalog fitness functions", () => {
       "scatter",
       "count-plot",
       "histogram",
+      "vgplot",
       "gallery",
       "image-viewer",
       "cache",
@@ -132,19 +133,25 @@ describe("native node catalog fitness functions", () => {
       scatter: {
         role: "view",
         inputs: [["in", "pred"]],
-        outputs: [["out", "sel"]],
+        outputs: [],
         icon: "scatter-chart",
       },
       "count-plot": {
         role: "view",
         inputs: [["in", "pred"]],
-        outputs: [["out", "sel"]],
+        outputs: [],
         icon: "bar-chart",
       },
       histogram: {
         role: "view",
         inputs: [["in", "pred"]],
-        outputs: [["out", "sel"]],
+        outputs: [],
+        icon: "bar-chart",
+      },
+      vgplot: {
+        role: "view",
+        inputs: [["in", "pred"]],
+        outputs: [],
         icon: "bar-chart",
       },
       table: {
@@ -201,9 +208,8 @@ describe("native node catalog fitness functions", () => {
     for (const capability of [
       "focus-coordination",
       "view-coordination",
-      "predicate-publish",
       "row-set-publish",
-      "row-set-subscribe",
+      "filter-coordination",
       "gpu-device",
     ] as const) {
       expect(capabilities.has(capability), `Scatter is missing ${capability}`).toBe(true);

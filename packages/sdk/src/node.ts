@@ -215,7 +215,8 @@ export type NodeCapability =
   | "wasm-bitmap"
   | "compute"
   | "annotation-write"
-  | "ordering-coordination";
+  | "ordering-coordination"
+  | "filter-coordination";
 
 export interface NodeAvailabilityContext {
   readonly hostCapabilities: ReadonlySet<NodeCapability>;

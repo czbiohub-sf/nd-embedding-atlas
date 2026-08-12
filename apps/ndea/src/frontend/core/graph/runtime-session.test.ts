@@ -225,24 +225,50 @@ describe("GraphRuntimeSession", () => {
     runtime.dispose();
   });
 
-  test("owns authored row sets and frozen checkpoint state by value", () => {
-    const { runtime, nodes, edges } = fixture();
-    nodes.source = node("source", "source");
-    nodes.cache = node("cache", "transform");
-    runtime.registerNode(nodes.source);
+  test("owns frozen checkpoint rows by value and preserves active-empty", () => {
+    const cacheSpec: GraphRuntimeNodeSpec = {
+      ...transformSpec,
+      definition: {
+        ...transformSpec.definition,
+        ref: exactNodeTypeRef("cache", "1.0.0"),
+      },
+      cook: (inputs, host) => {
+        const frozen = host.frozenPredicate();
+        return frozen === undefined
+          ? (inputs.get("in")?.[0] ?? { kind: "pred", sql: null })
+          : { kind: "pred", sql: frozen };
+      },
+    };
+    const { runtime, nodes } = fixture([sourceSpec, transformSpec, cacheSpec]);
+    nodes.cache = node("cache", "cache");
     runtime.registerNode(nodes.cache);
-    edges.selection = { ...edge("selection", "source", "cache"), kind: "sel" };
-    expect(runtime.connect(edges.selection)).toBe(true);
 
     const rows = [rowIndex(3), rowIndex(8)];
-    runtime.emitSelection("source", "selection_temp", rows);
-    expect(runtime.pinCheckpoint("cache")).not.toBeNull();
+    runtime.pinCheckpointRows("cache", rows);
     rows[0] = rowIndex(99);
 
     expect(runtime.isCheckpointPinned("cache")).toBe(true);
     expect(runtime.checkpointRows("cache")).toEqual([rowIndex(3), rowIndex(8)]);
     runtime.unpinCheckpoint("cache");
     expect(runtime.checkpointRows("cache")).toBeUndefined();
+    runtime.pinCheckpointRows("cache", []);
+    expect(runtime.pull("cache")).toEqual({ kind: "pred", sql: "FALSE" });
     runtime.dispose();
+  });
+
+  test("owns transient checkpoint status and clears it with node/session disposal", () => {
+    const { runtime, nodes } = fixture();
+    nodes.source = node("source", "source");
+    nodes.cache = node("cache", "transform");
+    runtime.registerNode(nodes.source);
+    runtime.registerNode(nodes.cache);
+    runtime.setCheckpointStatus("cache", { pending: true, error: null });
+    expect(runtime.checkpoints.state.cache).toEqual({ pending: true, error: null });
+
+    runtime.removeNode("cache");
+    expect(runtime.checkpoints.state.cache).toBeUndefined();
+    runtime.setCheckpointStatus("other", { pending: false, error: "failed" });
+    runtime.dispose();
+    expect(runtime.checkpoints.state).toEqual({});
   });
 });

@@ -170,11 +170,8 @@ describe("Workspace graph transactions", () => {
 
   test("removing a checkpoint clears its runtime projection before ID reuse", () => {
     const workspace = createWorkspace();
-    const scatter = workspace.addNode("scatter", { x: 0, y: 0 });
     const cache = workspace.addNode("cache", { x: 0, y: 0 }, "reused-cache");
-    expect(workspace.connect(scatter, cache)).toBe(true);
-    workspace.emitLasso(scatter, "__row_index__ IN (11, 12)", [rowIndex(11), rowIndex(12)]);
-    expect(workspace.pinCache(cache)).toBe(true);
+    expect(workspace.pinCache(cache, [rowIndex(11), rowIndex(12)])).toBe(true);
     expect(workspace.isCached(cache)).toBe(true);
 
     workspace.removeNode(cache);

@@ -5,7 +5,7 @@ import { defineNode, exactNodeTypeRef, nodeConfigVersion } from "@ndea/sdk";
 import { mountReactNodeBody } from "@/core/node/react-node-body";
 import type { HistogramConfig } from "./view";
 
-const CAPABILITIES = ["data-read", "predicate-publish", "row-set-subscribe"] as const;
+const CAPABILITIES = ["data-read", "filter-coordination"] as const;
 export type HistogramCapabilities = (typeof CAPABILITIES)[number];
 
 export const histogramDefinition = defineNode({
@@ -13,7 +13,7 @@ export const histogramDefinition = defineNode({
   title: "Histogram",
   role: "view",
   inputs: [{ id: "in", kind: "pred", label: "In" }],
-  outputs: [{ id: "out", kind: "sel", label: "Selection" }],
+  outputs: [],
   capabilities: CAPABILITIES,
   config: {
     schema: z.object({ field: z.string().nullable(), bins: z.number() }),

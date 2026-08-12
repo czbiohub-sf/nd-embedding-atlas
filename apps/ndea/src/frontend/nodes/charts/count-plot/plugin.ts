@@ -5,7 +5,7 @@ import { defineNode, exactNodeTypeRef, nodeConfigVersion } from "@ndea/sdk";
 import { mountReactNodeBody } from "@/core/node/react-node-body";
 import type { CountPlotConfig } from "./view";
 
-const CAPABILITIES = ["data-read", "predicate-publish", "row-set-subscribe"] as const;
+const CAPABILITIES = ["data-read", "filter-coordination"] as const;
 export type CountPlotCapabilities = (typeof CAPABILITIES)[number];
 
 export const countPlotDefinition = defineNode({
@@ -13,7 +13,7 @@ export const countPlotDefinition = defineNode({
   title: "Count Plot",
   role: "view",
   inputs: [{ id: "in", kind: "pred", label: "In" }],
-  outputs: [{ id: "out", kind: "sel", label: "Selection" }],
+  outputs: [],
   capabilities: CAPABILITIES,
   config: {
     schema: z.object({ field: z.string().nullable(), limit: z.number() }),

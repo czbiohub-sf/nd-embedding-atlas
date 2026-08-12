@@ -1,25 +1,14 @@
-/**
- * count-plot body (PLUGIN-ARCHITECTURE §10.3). Ported from the legacy
- * `components/charts/CountPlot`, re-sourced through the host seam: data from
- * `host.data`, query scoped to `host.inputSelection`, the bar-selection emitted
- * on the node's selection-out push port via `publishChartFilter` (no
- * `selectionBus`, no `useDashboard`).
- *
- * The body gates on a picked column: unset → just the field picker; set → the
- * picker plus the chart. The inner `CountPlotBody` mounts only with a field, so
- * its query hooks never see a null column, and remounts (keyed on field) reset
- * the bar selection and clear the published filter.
- */
-
-import type { Coordinator, Selection } from "@uwdata/mosaic-core";
-import { type FilterExpr, asc, cast, column, count, desc, isNotNull, Query, sum } from "@uwdata/mosaic-sql";
+import type { FilterCoordinationAPI } from "@ndea/sdk";
+import type { Coordinator } from "@uwdata/mosaic-core";
+import { type FilterExpr, cast, column } from "@uwdata/mosaic-sql";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { NodeBodyProps } from "@/core/node/app-node-host";
 import type { CountPlotCapabilities } from "./plugin";
 import { useMosaicClient } from "@/hooks/useMosaicClient";
-import { filterExprToExpr, toRows } from "@/lib/mosaic-helpers";
+import { toRows } from "@/lib/mosaic-helpers";
 import { FieldPicker } from "@/nodes/charts/core/field-picker";
+import { buildCountPlotQuery } from "@/nodes/charts/core/filter-queries";
 import { publishChartFilter } from "@/nodes/charts/core/routing";
 import type { ChartLeafConfig } from "@/nodes/charts/core/types";
 import { useChartLeaf } from "@/nodes/charts/core/use-chart-leaf";
@@ -37,7 +26,7 @@ interface CountPlotRow {
 }
 
 export function CountPlotView({ host }: NodeBodyProps<CountPlotConfig, CountPlotCapabilities>) {
-  const { coordinator, table, inputSelection, field, setField } = useChartLeaf(host);
+  const { coordinator, table, filter, field, setField } = useChartLeaf(host);
   const limit = host.config.limit ?? 11;
   const onFilter = useCallback((sql: string | null) => publishChartFilter(host, sql), [host]);
 
@@ -51,7 +40,7 @@ export function CountPlotView({ host }: NodeBodyProps<CountPlotConfig, CountPlot
           key={field}
           coordinator={coordinator}
           table={table}
-          inputSelection={inputSelection}
+          filter={filter}
           field={field}
           limit={limit}
           onFilter={onFilter}
@@ -64,13 +53,13 @@ export function CountPlotView({ host }: NodeBodyProps<CountPlotConfig, CountPlot
 interface BodyProps {
   coordinator: Coordinator;
   table: string;
-  inputSelection: Selection;
+  filter: FilterCoordinationAPI;
   field: string;
   limit: number;
   onFilter: (sql: string | null) => void;
 }
 
-function CountPlotBody({ coordinator, table, inputSelection, field, limit, onFilter }: BodyProps) {
+function CountPlotBody({ coordinator, table, filter, field, limit, onFilter }: BodyProps) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   // Clear the published filter when the field changes (this body remounts).
@@ -79,18 +68,7 @@ function CountPlotBody({ coordinator, table, inputSelection, field, limit, onFil
   const textExpr = useMemo(() => cast(column(field), "TEXT"), [field]);
 
   const query = useCallback(
-    (predicate: FilterExpr) => {
-      const pred = filterExprToExpr(predicate);
-      return Query.from(table)
-        .select({
-          value: textExpr,
-          count: count(),
-          countSelected: sum(cast(pred, "INT")),
-        })
-        .groupby(textExpr)
-        .orderby(isNotNull(textExpr), desc(count()), asc("value"))
-        .limit(limit);
-    },
+    (predicate: FilterExpr) => buildCountPlotQuery(table, textExpr, limit, predicate),
     [table, limit, textExpr],
   );
 
@@ -103,7 +81,7 @@ function CountPlotBody({ coordinator, table, inputSelection, field, limit, onFil
     }));
   }, []);
 
-  const { data, loading } = useMosaicClient({ coordinator, selection: inputSelection, query, transform });
+  const { data, loading } = useMosaicClient({ coordinator, filter, query, transform });
 
   const handleClick = (value: string | null) => {
     const key = value ?? NULL_VALUE;

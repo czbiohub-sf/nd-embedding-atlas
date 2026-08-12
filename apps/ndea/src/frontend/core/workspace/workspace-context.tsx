@@ -8,7 +8,6 @@ import { createContext, useContext, useEffect, useState } from "react";
 
 import { useDatasetSession } from "@/hooks/useDatasetSession";
 import { NODE_EDITOR_ENABLED } from "@/feature-flags";
-import { predicateBus, rowSetBus } from "@/core/buses";
 import type { GraphEvaluationState } from "@/core/graph/evaluator";
 import { deviceBroker } from "@/core/gpu/device-broker";
 import { WorkspaceNodeRuntimeProvider } from "@/core/node/runtime/runtime-context";
@@ -112,7 +111,7 @@ export function WorkspaceProvider({
   nodeAssetStorage?: NodeAssetJsonStorage;
 }) {
   const { state, runtime, actions } = useDatasetSession();
-  const { coordinator, brushSelection, table } = runtime;
+  const { coordinator, brushSelection, filterScopes, dataPublication, table } = runtime;
   const { metadata } = state;
 
   const [{ workspace: ws, nodeRuntimes, persistence: initialPersistence, workspaceStorage, workspaceKey }] = useState(
@@ -157,8 +156,8 @@ export function WorkspaceProvider({
         metadata,
         refreshMetadata: actions.refreshMetadata,
         availableCapabilities: new Set(APP_NODE_HOST_CAPABILITIES),
-        predicateBus,
-        rowSetBus,
+        filterScopes,
+        dataPublication,
         deviceBroker,
         fetch: globalThis.fetch,
       });

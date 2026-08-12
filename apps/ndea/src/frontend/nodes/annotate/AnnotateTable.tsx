@@ -62,7 +62,7 @@ export interface AnnotateTableProps {
   coordinator: Coordinator;
   table: string;
   /** Scope: the wired predicate. Rows + count narrow to this. */
-  selection?: Selection;
+  selection: Selection;
   /** Context columns shown left of the label (e.g. the column being judged). */
   contextColumns: string[];
   /** The annotation column whose value each row shows (or null if none yet). */

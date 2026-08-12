@@ -4,20 +4,15 @@
  * *host-side* write lives here as a plain function, so "which host channel does
  * this gesture drive" is centralized + verifiable without a live WebGPU canvas.
  *
- * The throttle/debounce orchestration and the (legacy) global-bus `else` arms
- * stay at the call sites for now; the dual-path collapse removes those arms in a
- * later unit. These functions are the host path only: a body can't route a
- * cross-view write to the global bus *through* them.
+ * Throttle/debounce orchestration stays at call sites; cross-view writes use
+ * only capability-gated host services.
  */
 
 import type { NodeHost, RowIndex } from "@ndea/sdk";
 
 type ScatterFocusHost = Pick<NodeHost<unknown, "focus-coordination">, "focus">;
-type ScatterPredicateHost = Pick<NodeHost<unknown, "predicate-publish">, "publishPredicate">;
-type ScatterRowSetHost = Pick<
-  NodeHost<unknown, "data-read" | "row-set-publish">,
-  "publishRowSet" | "clearRowSet" | "dataAPI"
->;
+type ScatterFilterHost = Pick<NodeHost<unknown, "filter-coordination">, "filter">;
+type ScatterRowSetStagingHost = Pick<NodeHost<unknown, "data-read" | "row-set-publish">, "dataAPI">;
 type ScatterViewHost = Pick<NodeHost<unknown, "view-coordination">, "viewCoordination">;
 /** Point/background click → focus the obs (or clear). Sync-group-aware host seam. */
 export function focusPoint(host: ScatterFocusHost, focusedRowIndex: RowIndex | null): void {
@@ -25,25 +20,37 @@ export function focusPoint(host: ScatterFocusHost, focusedRowIndex: RowIndex | n
 }
 
 /** Continuous-range filter → the instance's "range" predicate facet. */
-export function publishRangeFilter(host: ScatterPredicateHost, sql: string | null): void {
-  host.publishPredicate("range", sql);
+export function publishRangeFilter(host: ScatterFilterHost, sql: string | null): void {
+  if (sql === null) host.filter.clear("range");
+  else host.filter.publish("range", sql);
 }
 
 /** Lasso → the instance's "lasso" predicate facet. */
-export function publishLasso(host: ScatterPredicateHost, predicate: string | null): void {
-  host.publishPredicate("lasso", predicate);
+export function publishLasso(host: ScatterFilterHost, predicate: string | null, rowIds?: readonly RowIndex[]): void {
+  if (predicate === null) host.filter.clear("lasso");
+  else host.filter.publish("lasso", predicate, rowIds);
 }
 
-/** Lasso row-set → GPU dim-mask broadcast. */
-export function publishLassoRowSet(host: ScatterRowSetHost, rowIndices: RowIndex[]): void {
-  host.publishRowSet(rowIndices);
+/** Legend isolation → the instance's "isolation" predicate facet. */
+export function publishIsolationFilter(host: ScatterFilterHost, sql: string | null): void {
+  if (sql === null) host.filter.clear("isolation");
+  else host.filter.publish("isolation", sql);
 }
 
-/** Clear the lasso: drop the facet, TRUE-clear the row-set, drop the staged sel table. */
-export function clearLasso(host: ScatterPredicateHost & ScatterRowSetHost): void {
-  host.publishPredicate("lasso", null);
-  host.clearRowSet(); // true clear: NOT publishRowSet([])
-  host.dataAPI.disposePublishedRowSet();
+/** Stage a large lasso without broadcasting it on the obsolete row-set bus. */
+export async function stageLassoRowSet(host: ScatterRowSetStagingHost, rowIds: readonly RowIndex[]): Promise<string> {
+  return (await host.dataAPI.publishRowSet([...rowIds])).predicate;
+}
+
+/** Dispose only the temporary staging table, preserving the active facet. */
+export function disposeStagedLasso(host: ScatterRowSetStagingHost): Promise<void> {
+  return host.dataAPI.disposePublishedRowSet();
+}
+
+/** Clear the lasso facet and any temporary table used to stage a large selection. */
+export function clearLasso(host: ScatterFilterHost & ScatterRowSetStagingHost): Promise<void> {
+  host.filter.clear("lasso");
+  return disposeStagedLasso(host);
 }
 
 /** Pan/zoom → broadcast on the instance's view-sync scope (no-op when unlinked).

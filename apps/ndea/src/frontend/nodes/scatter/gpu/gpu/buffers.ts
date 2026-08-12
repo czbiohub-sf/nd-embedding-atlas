@@ -26,6 +26,7 @@ export function createUniforms(root: TgpuRoot, aspectRatio: number, renderConfig
   );
   const viewUniform = root.createUniform(d.vec4f, d.vec4f(0, 0, 1, aspectRatio));
   const selectionModeUniform = root.createUniform(d.f32, 0);
+  const predicateFilterActiveUniform = root.createUniform(d.u32, 0);
   // 1 = tier-0 points (failed isolation) render at zero radius; 0 = dim per tierAlpha.
   // Raised by the continuous range slider so out-of-range points are hidden, not dimmed.
   const filterHideUniform = root.createUniform(d.u32, 0);
@@ -40,7 +41,15 @@ export function createUniforms(root: TgpuRoot, aspectRatio: number, renderConfig
   // pixels at any zoom so the fragment-shader fwidth AA stays valid.
   // Initialised to 0; orchestrator writes a real value on first resize.
   const pixelFloorUniform = root.createUniform(d.f32, 0);
-  return { paramsUniform, viewUniform, selectionModeUniform, filterHideUniform, sharpnessUniform, pixelFloorUniform };
+  return {
+    paramsUniform,
+    viewUniform,
+    selectionModeUniform,
+    predicateFilterActiveUniform,
+    filterHideUniform,
+    sharpnessUniform,
+    pixelFloorUniform,
+  };
 }
 
 export type ScatterUniforms = ReturnType<typeof createUniforms>;
@@ -62,6 +71,7 @@ export function createBuffers(root: TgpuRoot, numPoints: number, _numCategories:
   const colorBuffer = root.createBuffer(d.arrayOf(d.u32, numPoints)).$usage("vertex", "storage");
 
   const selectedBuffer = root.createBuffer(d.arrayOf(d.u32, numPoints)).$usage("vertex", "storage");
+  const predicateFilterBuffer = root.createBuffer(d.arrayOf(d.u32, numPoints)).$usage("storage");
 
   // Category indices (u32 per point): used by density engine and GPU color-pack shader
   const categoryBuffer = root.createBuffer(d.arrayOf(d.u32, numPoints)).$usage("storage");
@@ -84,6 +94,7 @@ export function createBuffers(root: TgpuRoot, numPoints: number, _numCategories:
     posBuffer,
     colorBuffer,
     selectedBuffer,
+    predicateFilterBuffer,
     categoryBuffer,
     paletteBuffer,
     paletteLenUniform,

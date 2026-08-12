@@ -4,9 +4,7 @@
  * The first `kind: "transform"` plugin: a numeric threshold filter. It proves the
  * transform half of the plugin contract drives the GraphEngine: the engine cooks
  * this node by calling `recompute(inputs, ctx)`, which reads its column + threshold
- * from `host.config` and emits `upstream AND "col" > threshold` via
- * `host.publishPredicate`. The graph's transform-scoped host captures that publish
- * synchronously as the node's output predicate.
+ * from persisted config; graph cooking emits the resulting predicate.
  *
  * `Component` is the param editor (the node body). It is xyflow-agnostic: the
  * canvas node wrapper supplies the Handles: so the same Component would mount

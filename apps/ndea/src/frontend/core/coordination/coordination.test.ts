@@ -104,6 +104,19 @@ describe("Coordination: assignment + shared reads", () => {
 });
 
 describe("Coordination: selector-scoped subscribe (KD5)", () => {
+  test("runtime-backed types notify scope-name changes without a document cell", () => {
+    const { co, store } = fresh();
+    const seen: (string | undefined)[] = [];
+    const off = co.subscribeScope("n1", "filter", (scope) => seen.push(scope));
+    co.assignScope("n1", "filter", "A");
+    co.assignScope("n1", "filter", "B");
+    co.clearScope("n1", "filter");
+    off();
+    expect(seen).toEqual(["A", "B", undefined]);
+    expect(store.state.coordinationSpace.filter).toBeUndefined();
+    expect(() => co.setCoordinationValue("filter", "A", null)).toThrow("no document cell");
+  });
+
   test("fires on the resolved cell changing", () => {
     const { co } = fresh();
     co.assignScope("n1", "focus", "A");
