@@ -1,6 +1,6 @@
 import type { FilterCoordinationAPI, RowIndex } from "@ndea/sdk";
 import type { Coordinator } from "@uwdata/mosaic-core";
-import { column, type FilterExpr, Query } from "@uwdata/mosaic-sql";
+import { column, type FilterExpr, literal, Query } from "@uwdata/mosaic-sql";
 import { useCallback, useState } from "react";
 import { useMosaicClient } from "@/hooks/useMosaicClient";
 import { filterExprToExpr, toRows } from "@/lib/mosaic-helpers";
@@ -14,10 +14,9 @@ export function hasFilterPredicate(predicate: FilterExpr | null | undefined): bo
 }
 
 export function predicateRowIndexQuery(table: string, predicate: FilterExpr) {
-  if (!hasFilterPredicate(predicate)) return null;
   return Query.from(table)
     .select({ rowIndex: column("__row_index__") })
-    .where(filterExprToExpr(predicate));
+    .where(hasFilterPredicate(predicate) ? filterExprToExpr(predicate) : literal(false));
 }
 
 export function predicateMaskRows(active: boolean, rows: RowIndex[] | null): RowIndex[] | null {

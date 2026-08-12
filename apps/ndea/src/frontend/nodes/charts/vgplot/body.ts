@@ -36,6 +36,8 @@ const PRESET_LABELS: Record<MarkPreset, string> = {
 
 const SELECT_CLASS =
   "w-full rounded-sm border border-border bg-card px-1.5 py-1 font-mono text-2xs text-muted-foreground";
+const CLEAR_CLASS =
+  "shrink-0 rounded-sm border border-border bg-card px-2 py-1 font-mono text-2xs text-muted-foreground hover:bg-muted/50 disabled:pointer-events-none disabled:opacity-40";
 const NOTE_CLASS = "px-1 py-2 text-2xs text-muted-foreground/60";
 const ERROR_CLASS = "px-1 py-2 text-2xs text-destructive";
 
@@ -66,7 +68,13 @@ export async function mountVgplotBody(host: Host): Promise<MountedNodeBody> {
   fieldSelect.className = SELECT_CLASS;
   const presetSelect = document.createElement("select");
   presetSelect.className = SELECT_CLASS;
-  controls.append(fieldSelect, presetSelect);
+  const clearButton = document.createElement("button");
+  clearButton.type = "button";
+  clearButton.className = CLEAR_CLASS;
+  clearButton.textContent = "Clear";
+  clearButton.title = "Clear selection";
+  clearButton.disabled = true;
+  controls.append(fieldSelect, presetSelect, clearButton);
 
   const plotHost = document.createElement("div");
   plotHost.className = "min-h-0 flex-1 overflow-hidden";
@@ -162,6 +170,7 @@ export async function mountVgplotBody(host: Host): Promise<MountedNodeBody> {
         height,
         onSelection: (sql) => {
           if (disposed || seq !== renderSeq) return;
+          clearButton.disabled = sql === null;
           publishChartFilter(host, sql);
         },
       });
@@ -207,6 +216,12 @@ export async function mountVgplotBody(host: Host): Promise<MountedNodeBody> {
     const keep = kind !== undefined && PRESET_COLUMN_KINDS[next].includes(kind);
     applySelection(next, keep ? field : null);
   });
+
+  function clearSelection(): void {
+    activePlot?.clearSelection();
+  }
+
+  clearButton.addEventListener("click", clearSelection);
 
   const observer = new ResizeObserver((entries) => {
     const entry = entries[entries.length - 1];

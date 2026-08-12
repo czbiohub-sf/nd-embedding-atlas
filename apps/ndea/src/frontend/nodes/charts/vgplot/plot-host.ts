@@ -58,6 +58,7 @@ export interface MountPlotOptions {
 export interface MountedPlot {
   /** Detached: the caller owns parenting. */
   readonly element: HTMLElement;
+  clearSelection(): void;
   dispose(): void;
 }
 
@@ -163,6 +164,9 @@ export async function mountPlot(options: MountPlotOptions): Promise<MountedPlot>
   let disposed = false;
   return {
     element,
+    clearSelection(): void {
+      if (isSelection(brush)) brush.reset();
+    },
     dispose(): void {
       if (disposed) return;
       disposed = true;

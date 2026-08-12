@@ -4,14 +4,14 @@ import { stringPredicate } from "@/lib/mosaic-helpers";
 import { hasFilterPredicate, predicateMaskRows, predicateRowIndexQuery } from "./usePredicateRowIndices";
 
 describe("predicate row-index query", () => {
-  test("skips cleared predicates", () => {
+  test("uses an empty valid query for cleared predicates", () => {
     expect(hasFilterPredicate(null)).toBe(false);
     expect(hasFilterPredicate([])).toBe(false);
     expect(hasFilterPredicate("   ")).toBe(false);
     expect(hasFilterPredicate(true)).toBe(false);
     expect(hasFilterPredicate(stringPredicate("null"))).toBe(false);
     expect(hasFilterPredicate(stringPredicate("true"))).toBe(false);
-    expect(predicateRowIndexQuery("dataset", [])).toBeNull();
+    expect(predicateRowIndexQuery("dataset", []).toString()).toContain("WHERE FALSE");
   });
 
   test("queries row IDs for active and zero-match predicates", () => {

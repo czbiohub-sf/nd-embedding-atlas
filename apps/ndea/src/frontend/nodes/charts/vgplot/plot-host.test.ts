@@ -91,6 +91,7 @@ interface Mounted {
   disassociated: MosaicClient[];
   scope: Selection;
   element: FakeElement;
+  clearSelection: () => void;
   dispose: () => void;
   selections: (string | null)[];
 }
@@ -133,6 +134,7 @@ async function mount(entries: PlotEntry[]): Promise<Mounted> {
     disassociated,
     scope,
     element: created[0],
+    clearSelection: () => mounted.clearSelection(),
     dispose: () => mounted.dispose(),
     selections,
   };
@@ -187,7 +189,7 @@ describe("mountPlot", () => {
   });
 
   test("a brush Selection declared by an interactor drives onSelection", async () => {
-    const { coordinator, selections } = await mount([
+    const { coordinator, selections, clearSelection } = await mount([
       histogramMark(),
       { select: "intervalX", as: "$brush", field: "value" },
     ]);
@@ -204,7 +206,7 @@ describe("mountPlot", () => {
     // first broadcast, so a second update in the same tick is ENQUEUED rather
     // than dispatched, landing only once that pending promise settles. Await
     // the dispatcher's own signal; this is queueing, not a dropped event.
-    brush.reset();
+    clearSelection();
     await brush.pending("value");
     expect(selections).toHaveLength(2);
     expect(selections[1]).toBeNull();
