@@ -12,6 +12,7 @@
   "scripts": {
     "build": "bun run scripts/build.ts",
     "dev": "bun run scripts/dev.ts",
+    "dev:fixture": "bun run scripts/dev-fixture.ts",
     "sync-version": "bun run scripts/sync-version.ts",
     "check": "vp check",
     "test": "bun test"

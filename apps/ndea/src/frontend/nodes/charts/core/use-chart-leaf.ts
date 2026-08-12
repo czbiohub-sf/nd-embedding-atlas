@@ -1,20 +1,12 @@
-/**
- * The host-sourced surface every chart variant shares (replaces the old
- * `useDashboard().meta` + `selectionBus` reads). Data comes from `host.data`;
- * the chart's query is scoped to `host.inputSelection` (passed straight to
- * `useMosaicClient`, which reacts to its in-place mutation via Mosaic: no React
- * bridge needed). The plotted column lives in `host.config.field`.
- */
-
-import type { Coordinator, Selection } from "@uwdata/mosaic-core";
+import type { FilterCoordinationAPI } from "@ndea/sdk";
+import type { Coordinator } from "@uwdata/mosaic-core";
 import { useCallback } from "react";
 import type { ChartLeafConfig } from "./types";
 
 export interface ChartLeaf {
   coordinator: Coordinator;
   table: string;
-  /** Mosaic Selection scoping the chart's query (the cooked input edge). */
-  inputSelection: Selection;
+  filter: FilterCoordinationAPI;
   /** The plotted column, or null until picked. */
   field: string | null;
   setField: (field: string) => void;
@@ -23,7 +15,7 @@ export interface ChartLeaf {
 interface ChartLeafHost<C extends ChartLeafConfig> {
   readonly config: C;
   readonly data: { coordinator: Coordinator; table: string };
-  readonly inputPredicate: Selection;
+  readonly filter: FilterCoordinationAPI;
   patchConfig(patch: Partial<C>): void;
 }
 
@@ -32,7 +24,7 @@ export function useChartLeaf<C extends ChartLeafConfig>(host: ChartLeafHost<C>):
   return {
     coordinator: host.data.coordinator,
     table: host.data.table,
-    inputSelection: host.inputPredicate,
+    filter: host.filter,
     field: host.config.field,
     setField,
   };

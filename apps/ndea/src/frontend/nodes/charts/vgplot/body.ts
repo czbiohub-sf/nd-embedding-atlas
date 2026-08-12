@@ -1,6 +1,6 @@
 /**
  * vgplot body: imperative, non-React (see `core/node/non-react-body.fixture.ts`).
- * A React body would need a bridge for `host.inputPredicate` (a Selection that
+ * A React body would need a bridge for `host.filter.selection` (a Selection that
  * mutates in place) and for vgplot's own DOM ownership; both are cheaper done
  * by hand. The registry conformance test rejects a `Component` export, so this
  * module must stay framework-free.
@@ -154,9 +154,10 @@ export async function mountVgplotBody(host: Host): Promise<MountedNodeBody> {
       const mounted = await mountPlot({
         coordinator: host.data.coordinator,
         table: host.data.table,
-        entries: host.config.entries,
+        entries: buildEntries(preset, field),
         attributes: host.config.attributes,
-        scope: host.inputPredicate,
+        scope: host.filter.selection,
+        registerClient: (client) => host.registerClient(client),
         width,
         height,
         onSelection: (sql) => {

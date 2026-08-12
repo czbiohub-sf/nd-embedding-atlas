@@ -4,12 +4,12 @@
  *
  * Two things this does that vgplot's own top-level API cannot:
  *
- * 1. **Retains the `Plot`.** vgplot's `plot()` directive returns only
- *    `p.element` and drops the `Plot` instance, so nothing can ever call
- *    `coordinator.disconnect()` on its marks — every remount leaks clients into
- *    the coordinator. We install a replacement `plot` directive through
- *    `createAPIContext({ extensions })` (extensions override vgplot's own
- *    exports) that keeps each `Plot` so `dispose()` can unwind it.
+ * 1. **Owns mark registration.** vgplot's `plot()` directive registers marks
+ *    directly with its coordinator and exposes no matching release callbacks,
+ *    so every remount otherwise leaks clients. We install a replacement `plot`
+ *    directive through `createAPIContext({ extensions })` (extensions override
+ *    vgplot's own exports), register each mark through the host seam, and retain
+ *    its release callback for `dispose()`.
  * 2. **Injects pre-existing params.** `astToDOM` skips any param the spec
  *    declares whose name is already in the passed `params` map, which is the
  *    sanctioned way to hand the node's own input `Selection` to a spec. Three
@@ -25,7 +25,7 @@
  */
 
 import { isSelection, Param } from "@uwdata/mosaic-core";
-import type { Coordinator, Selection } from "@uwdata/mosaic-core";
+import type { Coordinator, MosaicClient, Selection } from "@uwdata/mosaic-core";
 import { Plot } from "@uwdata/mosaic-plot";
 import { astToDOM, parseSpec } from "@uwdata/mosaic-spec";
 import type { Plot as PlotSpec, Spec } from "@uwdata/mosaic-spec";
@@ -44,6 +44,7 @@ export const BRUSH_PARAM = "brush";
 
 export interface MountPlotOptions {
   coordinator: Coordinator;
+  registerClient(client: MosaicClient): () => void;
   table: string;
   entries: readonly PlotEntry[];
   attributes: Readonly<Record<string, JsonValue>>;
@@ -70,15 +71,20 @@ type PlotFactory = (...directives: (PlotDirective | PlotDirective[])[]) => HTMLE
 type SpecParams = Map<string, Param<string> | Selection>;
 
 /**
- * vgplot's `plot()`, but retaining each constructed `Plot` in `retained` so its
- * marks can be disconnected later. Mirrors `@uwdata/vgplot/src/plot/plot.js`.
+ * vgplot's `plot()`, retaining each constructed `Plot` to recover its root
+ * element and each host registration callback to release its marks later.
+ * Mirrors `@uwdata/vgplot/src/plot/plot.js`.
  */
-function retainingPlot(coordinator: Coordinator, retained: Plot[]): PlotFactory {
+function retainingPlot(
+  registerClient: MountPlotOptions["registerClient"],
+  retained: Plot[],
+  releases: (() => void)[],
+): PlotFactory {
   return function plot(...directives): HTMLElement {
     const p = new Plot();
     retained.push(p);
     directives.flat().forEach((directive) => directive(p));
-    for (const mark of p.marks) coordinator.connect(mark);
+    for (const mark of p.marks) releases.push(registerClient(mark));
     // Schedules the first render, needed when the plot has no marks. The
     // returned promise resolves on render, so it is deliberately not awaited;
     // the argument is the mark to mark ready, and there is none here.
@@ -87,14 +93,12 @@ function retainingPlot(coordinator: Coordinator, retained: Plot[]): PlotFactory 
   };
 }
 
-function disconnectAll(coordinator: Coordinator, retained: readonly Plot[]): void {
-  for (const plot of retained) {
-    for (const mark of plot.marks) coordinator.disconnect(mark);
-  }
+function releaseAll(releases: (() => void)[]): void {
+  for (const release of releases.splice(0)) release();
 }
 
 export async function mountPlot(options: MountPlotOptions): Promise<MountedPlot> {
-  const { coordinator, table, entries, attributes, scope, width, height, onSelection } = options;
+  const { coordinator, registerClient, table, entries, attributes, scope, width, height, onSelection } = options;
 
   // mosaic-spec types plot entries as a closed union of literal-tagged mark
   // interfaces; ours are schema-validated JSON that is one of those shapes at
@@ -107,7 +111,11 @@ export async function mountPlot(options: MountPlotOptions): Promise<MountedPlot>
   const spec: Spec = { plot: plotEntries, ...attributes, width, height };
 
   const retained: Plot[] = [];
-  const api = createAPIContext({ coordinator, extensions: { plot: retainingPlot(coordinator, retained) } });
+  const releases: (() => void)[] = [];
+  const api = createAPIContext({
+    coordinator,
+    extensions: { plot: retainingPlot(registerClient, retained, releases) },
+  });
   // Built by assignment, not from an entries array: a tuple-array constructor
   // infers its value type from the first entry (`Param<string>`), which then
   // rejects the `Selection`. The annotation drives the type instead.
@@ -127,7 +135,7 @@ export async function mountPlot(options: MountPlotOptions): Promise<MountedPlot>
     await astToDOM(parseSpec(spec), { api, params: params as unknown as Map<string, Param<any>> });
   } catch (cause) {
     // A half-instantiated spec may already have connected marks.
-    disconnectAll(coordinator, retained);
+    releaseAll(releases);
     throw new Error(`vgplot spec failed to mount: ${JSON.stringify(spec)}`, { cause });
   }
 
@@ -135,7 +143,7 @@ export async function mountPlot(options: MountPlotOptions): Promise<MountedPlot>
   // always the plot directive's own <div>, so read it off the retained Plot.
   const rootPlot = retained[0];
   if (!rootPlot) {
-    disconnectAll(coordinator, retained);
+    releaseAll(releases);
     throw new Error(`vgplot spec produced no plot: ${JSON.stringify(spec)}`);
   }
   const element = rootPlot.element;
@@ -160,7 +168,7 @@ export async function mountPlot(options: MountPlotOptions): Promise<MountedPlot>
       disposed = true;
       unsubscribeBrush?.();
       unsubscribeBrush = null;
-      disconnectAll(coordinator, retained);
+      releaseAll(releases);
       element.remove();
     },
   };

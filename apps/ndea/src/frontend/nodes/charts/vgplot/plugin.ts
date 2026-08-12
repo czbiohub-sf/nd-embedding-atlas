@@ -3,7 +3,7 @@
 import { defineNode, exactNodeTypeRef, nodeConfigVersion } from "@ndea/sdk";
 import { VGPLOT_DEFAULT_CONFIG, vgplotConfigSchema } from "./spec-schema";
 
-const CAPABILITIES = ["data-read", "predicate-publish"] as const;
+const CAPABILITIES = ["data-read", "filter-coordination"] as const;
 export type VgplotCapabilities = (typeof CAPABILITIES)[number];
 
 export const vgplotDefinition = defineNode({
@@ -11,7 +11,7 @@ export const vgplotDefinition = defineNode({
   title: "Plot",
   role: "view",
   inputs: [{ id: "in", kind: "pred", label: "In" }],
-  outputs: [{ id: "out", kind: "sel", label: "Selection" }],
+  outputs: [],
   capabilities: CAPABILITIES,
   config: {
     schema: vgplotConfigSchema,

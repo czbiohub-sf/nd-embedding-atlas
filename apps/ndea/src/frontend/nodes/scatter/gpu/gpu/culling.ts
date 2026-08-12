@@ -22,8 +22,9 @@ export function createCullingEngine(
   const visibilityLayout = tgpu.vertexLayout((n: number) => d.arrayOf(d.u32, n), "instance");
 
   const posReadonly = buffers.posBuffer.as("readonly");
+  const predicateFilterReadonly = buffers.predicateFilterBuffer.as("readonly");
   const visMutable = visibilityBuffer.as("mutable");
-  const { viewUniform } = uniforms;
+  const { viewUniform, predicateFilterActiveUniform } = uniforms;
 
   const margin = 0.05;
 
@@ -35,7 +36,8 @@ export function createCullingEngine(
     const xb = (1.0 + margin) * view.w;
     const sx = (pos.x + view.x) * view.z;
     const sy = (pos.y + view.y) * view.z;
-    if (sx >= -xb && sx <= xb && sy >= -(1.0 + margin) && sy <= 1.0 + margin) {
+    const passesPredicate = predicateFilterActiveUniform.$ === 0 || predicateFilterReadonly.$[idx] === 1;
+    if (passesPredicate && sx >= -xb && sx <= xb && sy >= -(1.0 + margin) && sy <= 1.0 + margin) {
       visMutable.$[idx] = 1;
     } else {
       visMutable.$[idx] = 0;
@@ -55,6 +57,9 @@ export function createCullingEngine(
     visibilityBuffer,
     visibilityLayout,
     dispatchCulling,
+    invalidate() {
+      lastViewVersion = -1;
+    },
     destroy() {
       // TypeGPU buffers are cleaned up by root.destroy()
     },

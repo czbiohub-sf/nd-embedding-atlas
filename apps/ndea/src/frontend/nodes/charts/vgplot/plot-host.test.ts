@@ -87,6 +87,8 @@ function histogramMark(): PlotEntry {
 
 interface Mounted {
   coordinator: RecordingCoordinator;
+  associated: MosaicClient[];
+  disassociated: MosaicClient[];
   scope: Selection;
   element: FakeElement;
   dispose: () => void;
@@ -95,11 +97,24 @@ interface Mounted {
 
 async function mount(entries: PlotEntry[]): Promise<Mounted> {
   const coordinator = createCoordinator();
+  const associated: MosaicClient[] = [];
+  const disassociated: MosaicClient[] = [];
   const scope = Selection.intersect();
   const selections: (string | null)[] = [];
   const before = createdElements.length;
   const mounted = await mountPlot({
     coordinator,
+    registerClient: (client) => {
+      associated.push(client);
+      coordinator.connect(client);
+      let released = false;
+      return () => {
+        if (released) return;
+        released = true;
+        disassociated.push(client);
+        coordinator.disconnect(client);
+      };
+    },
     table: "dataset",
     entries,
     attributes: { marginLeft: 30 },
@@ -114,6 +129,8 @@ async function mount(entries: PlotEntry[]): Promise<Mounted> {
   expect(created).toHaveLength(1);
   return {
     coordinator,
+    associated,
+    disassociated,
     scope,
     element: created[0],
     dispose: () => mounted.dispose(),
@@ -122,16 +139,18 @@ async function mount(entries: PlotEntry[]): Promise<Mounted> {
 }
 
 describe("mountPlot", () => {
-  test("connects each mark once and disconnects exactly those marks on dispose", async () => {
-    const { coordinator, dispose } = await mount([histogramMark()]);
+  test("registers each mark once and releases exactly those marks on dispose", async () => {
+    const { coordinator, associated, disassociated, dispose } = await mount([histogramMark()]);
 
     expect(coordinator.connected).toHaveLength(1);
+    expect(associated).toEqual(coordinator.connected);
     expect((coordinator.connected[0] as Mark).type).toBe("rectY");
     expect(coordinator.disconnected).toHaveLength(0);
 
     dispose();
 
     expect(coordinator.disconnected).toHaveLength(1);
+    expect(disassociated).toEqual(coordinator.disconnected);
     expect(coordinator.disconnected[0]).toBe(coordinator.connected[0]);
   });
 
@@ -154,6 +173,17 @@ describe("mountPlot", () => {
     // mark must filter by the very Selection instance we injected.
     expect(mark.filterBy).toBe(scope);
     expect(mark.sourceTable()).toBe("dataset");
+  });
+
+  test("stable scope updates do not recreate or re-register marks", async () => {
+    const { coordinator, associated, scope } = await mount([histogramMark()]);
+    const mark = coordinator.connected[0] as Mark;
+
+    scope.update(clausePoint(column("peer"), 7, { source: {} }));
+
+    expect(mark.filterBy).toBe(scope);
+    expect(coordinator.connected).toEqual([mark]);
+    expect(associated).toEqual([mark]);
   });
 
   test("a brush Selection declared by an interactor drives onSelection", async () => {
@@ -191,6 +221,10 @@ describe("mountPlot", () => {
 
     const promise = mountPlot({
       coordinator,
+      registerClient: (client) => {
+        coordinator.connect(client);
+        return () => coordinator.disconnect(client);
+      },
       table: "dataset",
       entries: [{ mark: "notAMarkType" }],
       attributes: {},
@@ -202,5 +236,31 @@ describe("mountPlot", () => {
 
     await expect(promise).rejects.toThrow(/vgplot spec failed to mount/);
     expect(coordinator.connected).toHaveLength(0);
+  });
+
+  test("a registration error releases every mark registered before the failure", async () => {
+    const coordinator = createCoordinator();
+    let registrations = 0;
+
+    const promise = mountPlot({
+      coordinator,
+      registerClient: (client) => {
+        registrations += 1;
+        if (registrations === 2) throw new Error("connect failed");
+        coordinator.connect(client);
+        return () => coordinator.disconnect(client);
+      },
+      table: "dataset",
+      entries: [histogramMark(), histogramMark()],
+      attributes: {},
+      scope: Selection.intersect(),
+      width: 240,
+      height: 120,
+      onSelection: () => {},
+    });
+
+    await expect(promise).rejects.toThrow(/vgplot spec failed to mount/);
+    expect(coordinator.connected).toHaveLength(1);
+    expect(coordinator.disconnected).toEqual(coordinator.connected);
   });
 });

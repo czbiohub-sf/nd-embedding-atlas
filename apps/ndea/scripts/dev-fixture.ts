@@ -10,11 +10,8 @@
  * Mosaic websocket, the `dataset` view, and the REST routes are all genuine.
  *
  * Usage:
- *   bun run apps/ndea/scripts/dev-fixture.ts   # backend, API-only, :5055
- *   vp dev apps/ndea                           # frontend, :5173 (proxies /data, /api, /mosaic)
- *
- * There is no obsm, so the scatter node has nothing to project; this fixture
- * exists for obs-column views (table, charts).
+ *   vp run --filter @ndea/app dev:fixture # backend, API-only, :5055
+ *   vp dev apps/ndea                      # frontend, :5173 (proxies /data, /api, /mosaic)
  */
 
 import type { PlateChannel } from "@ndea/protocol";
@@ -22,10 +19,12 @@ import type { DuckDBConnection } from "@duckdb/node-api";
 import { createApp } from "../src/server/app.ts";
 import { DatasetQuerySession } from "../src/server/store.ts";
 import type { DatasetSessionMetadata, ServerSession } from "../src/server/state.ts";
+import type { ObsmSliceLoader } from "../src/server/slice-loader.ts";
 
 const PORT = 5055;
 const HOST = "127.0.0.1";
 const ROWS = 2000;
+const EMBEDDING_KEY = "X_fixture";
 
 /** Column names in `obs_base`, in creation order. */
 const OBS_COLUMNS = ["__row_index__", "obs_name", "_dataset", "category", "value", "score", "umap_0", "umap_1"];
@@ -52,18 +51,31 @@ const store = await DatasetQuerySession.fromInit(async (conn: DuckDBConnection) 
   `);
 });
 
+const embeddingColumns = [
+  Float32Array.from({ length: ROWS }, (_, i) => Math.cos(i / 30) * 10),
+  Float32Array.from({ length: ROWS }, (_, i) => Math.sin(i / 30) * 10),
+];
+const embeddingLoader = {
+  width: embeddingColumns.length,
+  loadColumn(index: number) {
+    const column = embeddingColumns[index];
+    if (!column) throw new Error(`Unknown fixture embedding dimension: ${index}`);
+    return Promise.resolve(column);
+  },
+} as unknown as ObsmSliceLoader;
+
 const state: ServerSession = {
   store,
   datasets: new Map(),
   spatial: null,
   obsColumns: OBS_COLUMNS,
   port: PORT,
-  availableObsmKeys: [],
+  availableObsmKeys: [EMBEDDING_KEY],
   loadingTasks: new Map(),
   loadErrors: new Map(),
   accessors: new Map(),
   plateMounts: [],
-  obsmLoaders: new Map(),
+  obsmLoaders: new Map([[EMBEDDING_KEY, embeddingLoader]]),
   cropPool: null,
   annotationsSidecarPath: null,
 };

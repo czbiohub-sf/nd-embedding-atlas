@@ -26,7 +26,12 @@ import { z } from "zod";
 import type { Store } from "@tanstack/store";
 
 import type { JsonValue, RowIndex } from "@ndea/sdk";
-import { defineCoordinationType, defineGroupChannel, getCoordinationType } from "./define-type";
+import {
+  defineCoordinationType,
+  defineGroupChannel,
+  defineRuntimeCoordinationType,
+  getCoordinationType,
+} from "./define-type";
 
 type CoordinationValue<T extends string> = T extends "focus" ? RowIndex | null : JsonValue;
 
@@ -55,6 +60,7 @@ export interface CoordinationScopeCellPort {
   existingScopes(type: string): string[];
   nodesInScope(type: string, scope: string): string[];
   scopeColor(scope: string): string;
+  subscribeScope(nodeId: string, type: string, listener: (scope: string | undefined) => void): () => void;
   subscribe<T extends string>(
     nodeId: string,
     type: T,
@@ -108,6 +114,13 @@ export const ORDERING_TYPE = defineCoordinationType({
   defaultValue: null,
   capability: "ordering-coordination",
   hostFacet: "ordering",
+});
+
+/** `filter`: membership persists; predicates and Mosaic objects stay session-local. */
+export const FILTER_TYPE = defineRuntimeCoordinationType({
+  type: "filter",
+  capability: "filter-coordination",
+  hostFacet: "filter",
 });
 
 /** Small distinct palette (kept off the feedback teal). */
@@ -184,7 +197,8 @@ class Coordination implements CoordinationScopeCellPort {
   /** Write a cell value (latest-wins: replaces, never merges). */
   setCoordinationValue<T extends string>(type: T, scope: string, value: CoordinationValue<T>): void {
     const spec = getCoordinationType(type);
-    if (spec && !spec.schema.safeParse(value).success) {
+    if (spec?.runtimeBacked) throw new TypeError(`coordination type "${type}" has no document cell`);
+    if (spec?.schema && !spec.schema.safeParse(value).success) {
       throw new TypeError(`coordination cell "${type}.${scope}" failed validation`);
     }
     this.document.update((s) => ({
@@ -254,6 +268,16 @@ class Coordination implements CoordinationScopeCellPort {
         last = v;
         cb(v);
       }
+    });
+  }
+
+  subscribeScope(nodeId: string, type: string, cb: (scope: string | undefined) => void): () => void {
+    let last = this.scopeOf(nodeId, type);
+    return this.document.subscribe(() => {
+      const scope = this.scopeOf(nodeId, type);
+      if (scope === last) return;
+      last = scope;
+      cb(scope);
     });
   }
 }

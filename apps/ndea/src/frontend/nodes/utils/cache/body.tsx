@@ -6,7 +6,7 @@ import type { CheckpointNodeHost, NodeBodyProps } from "@/core/node/app-node-hos
 
 const formatCount = (count: number) => count.toLocaleString("en-US");
 
-export function CacheBody({ host }: NodeBodyProps<unknown, never, CheckpointNodeHost>) {
+export function CacheBody({ host }: NodeBodyProps<unknown, "filter-coordination", CheckpointNodeHost>) {
   const snapshot = useSyncExternalStore(
     host.checkpoint.subscribe,
     host.checkpoint.getSnapshot,
@@ -15,7 +15,7 @@ export function CacheBody({ host }: NodeBodyProps<unknown, never, CheckpointNode
   const { epoch, pinned, pinnedEpoch, input } = snapshot;
   const stale = pinned && pinnedEpoch !== null && epoch > pinnedEpoch;
   const rowCount = input?.kind === "row-set" ? input.rowCount : null;
-  const hasInput = input?.predicate != null || (rowCount ?? 0) > 0;
+  const hasInput = input !== null;
 
   return (
     <div className="flex flex-col gap-[7px]" data-nodrag="1">
@@ -39,7 +39,9 @@ export function CacheBody({ host }: NodeBodyProps<unknown, never, CheckpointNode
             tone="amber"
             title="re-pin to the current live input"
             className="ml-auto"
-            onClick={() => host.checkpoint.pin()}
+            onClick={() => {
+              if (!snapshot.pending) void host.checkpoint.pin();
+            }}
           />
         </div>
       ) : (
@@ -49,7 +51,9 @@ export function CacheBody({ host }: NodeBodyProps<unknown, never, CheckpointNode
             label={pinned ? "recache" : "cache"}
             tone="amber"
             title={pinned ? "re-pin to the current live input" : "pin the current rows by value"}
-            onClick={() => host.checkpoint.pin()}
+            onClick={() => {
+              if (!snapshot.pending) void host.checkpoint.pin();
+            }}
           />
           {pinned ? (
             <button
@@ -67,6 +71,8 @@ export function CacheBody({ host }: NodeBodyProps<unknown, never, CheckpointNode
           )}
         </div>
       )}
+
+      {snapshot.error ? <div className="font-mono text-[9px] text-danger">{snapshot.error}</div> : null}
 
       <NdCaption className="text-[9px]">
         {pinned

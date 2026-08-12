@@ -19,7 +19,7 @@ import {
 import type { TreeNode } from "./stage/split-tree";
 import type { WorkspaceDocumentState } from "./types";
 
-export const DOC_VERSION = 6;
+export const DOC_VERSION = 7;
 
 const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
   z.union([
@@ -144,7 +144,7 @@ const persistedStateSchema = z
 const persistedDocSchema = z.object({ version: z.literal(DOC_VERSION), state: persistedStateSchema }).strict();
 
 export interface PersistedDoc {
-  version: 6;
+  version: 7;
   state: WorkspaceDocumentState;
 }
 
@@ -255,6 +255,7 @@ export function migrate(doc: unknown, nodeLibrary: AppNodeLibrary): PersistedDoc
   if (step.version === 3) step = migrateV3ToV4(step, nodeLibrary);
   if (step.version === 4) step = migrateV4ToV5(step);
   if (step.version === 5) step = migrateV5ToV6(step);
+  if (step.version === 6) step = migrateV6ToV7(step);
   return persistedDocSchema.parse(step) as unknown as PersistedDoc;
 }
 
@@ -358,6 +359,102 @@ function migrateV4ToV5(doc: LegacyDocument): LegacyDocument {
 
 function migrateV5ToV6(doc: LegacyDocument): LegacyDocument {
   return migrateRetiredInputPorts(doc, 6);
+}
+
+const NATIVE_SELECTION_SOURCES = new Set(["count-plot", "histogram", "scatter", "vgplot"]);
+const NATIVE_SELECTION_TARGETS = new Set(["cache", "scatter", "table"]);
+
+function migrateV6ToV7(doc: LegacyDocument): LegacyDocument {
+  const state = structuredClone(doc.state);
+  const nodes = objectRecord(state.nodes);
+  const edges = objectRecord(state.edges);
+  const nativeEdges = Object.entries(edges)
+    .map(([key, value]) => [key, objectRecord(value)] as const)
+    .filter(([, edge]) => {
+      if (edge.kind !== "sel" || edge.fromPort !== "out" || edge.toPort !== "in-sel") return false;
+      const source = nodeType(nodes[typeof edge.from === "string" ? edge.from : ""]);
+      const target = nodeType(nodes[typeof edge.to === "string" ? edge.to : ""]);
+      return (
+        source !== null &&
+        target !== null &&
+        NATIVE_SELECTION_SOURCES.has(source) &&
+        NATIVE_SELECTION_TARGETS.has(target)
+      );
+    });
+  if (nativeEdges.length === 0) return { version: 7, state };
+
+  const adjacency = new Map<string, Set<string>>();
+  for (const [, edge] of nativeEdges) {
+    const from = stringField(edge, "from");
+    const to = stringField(edge, "to");
+    (adjacency.get(from) ?? adjacency.set(from, new Set()).get(from)!).add(to);
+    (adjacency.get(to) ?? adjacency.set(to, new Set()).get(to)!).add(from);
+  }
+
+  const components: string[][] = [];
+  const remaining = new Set([...adjacency.keys()].toSorted());
+  while (remaining.size > 0) {
+    const first = remaining.values().next().value!;
+    const component: string[] = [];
+    const pending = [first];
+    remaining.delete(first);
+    while (pending.length > 0) {
+      const current = pending.pop()!;
+      component.push(current);
+      for (const peer of adjacency.get(current) ?? []) {
+        if (!remaining.delete(peer)) continue;
+        pending.push(peer);
+      }
+    }
+    components.push(component.toSorted());
+  }
+
+  const coordinationScopes = objectRecord(state.coordinationScopes);
+  const usedScopes = new Set(
+    Object.values(coordinationScopes).flatMap((value) => {
+      const scopes = objectRecord(value);
+      return typeof scopes.filter === "string" ? [scopes.filter] : [];
+    }),
+  );
+  let nextScope = 1;
+  for (const component of components) {
+    if (component.some((id) => typeof objectRecord(coordinationScopes[id] ?? {}).filter === "string")) {
+      throw new Error(`v6 native selection component already has filter coordination: ${component.join(", ")}`);
+    }
+    const members = new Set(component);
+    const original = nativeEdges
+      .filter(([, edge]) => members.has(stringField(edge, "from")) && members.has(stringField(edge, "to")))
+      .map(([, edge]) => `${stringField(edge, "from")}\u0000${stringField(edge, "to")}`);
+    const induced = component.flatMap((from) => {
+      if (!NATIVE_SELECTION_SOURCES.has(nodeType(nodes[from]) ?? "")) return [];
+      return component.filter((to) => from !== to).map((to) => `${from}\u0000${to}`);
+    });
+    if (original.length !== new Set(original).size || !sameStringSet(original, induced)) {
+      throw new Error(`v6 native selection component is not exactly representable: ${component.join(", ")}`);
+    }
+    let scope: string;
+    do scope = `migrated-filter-${nextScope++}`;
+    while (usedScopes.has(scope));
+    usedScopes.add(scope);
+    for (const id of component) {
+      coordinationScopes[id] = { ...objectRecord(coordinationScopes[id] ?? {}), filter: scope };
+    }
+  }
+  state.coordinationScopes = coordinationScopes;
+  const migratedIds = new Set(nativeEdges.map(([id]) => id));
+  state.edges = Object.fromEntries(Object.entries(edges).filter(([id]) => !migratedIds.has(id)));
+  return { version: 7, state };
+}
+
+function nodeType(value: unknown): string | null {
+  if (!isPlainObject(value)) return null;
+  const parsed = exactRefSchema.safeParse(value.definitionRef);
+  return parsed.success && parsed.data.nodeTypeVersion === "1.0.0" ? parsed.data.nodeTypeId : null;
+}
+
+function sameStringSet(left: readonly string[], right: readonly string[]): boolean {
+  const values = new Set(left);
+  return values.size === right.length && right.every((value) => values.has(value));
 }
 
 function migrateRetiredInputPorts(doc: LegacyDocument, version: number): LegacyDocument {

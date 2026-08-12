@@ -21,7 +21,12 @@ import {
 import { predicateSql } from "@/core/graph/cook";
 import type { GraphEvaluationStore } from "@/core/graph/evaluator";
 import type { GraphDocumentEdge, GraphDocumentNode } from "@/core/graph/records";
-import { GraphRuntimeSession, type GraphNodeResolution, type CheckpointInput } from "@/core/graph/runtime-session";
+import {
+  GraphRuntimeSession,
+  type GraphNodeResolution,
+  type CheckpointInput,
+  type CheckpointRuntimeStatus,
+} from "@/core/graph/runtime-session";
 import type { NodeRuntimeSessionPort } from "@/core/node/runtime/session-port";
 import { compareSemanticVersions, type ExactNodeTypeRef, type RowIndex } from "@ndea/sdk";
 import type { Metadata } from "@/types";
@@ -106,6 +111,7 @@ export class Workspace {
   private readonly documentStore: Store<WorkspaceDocumentState>;
   readonly store: WorkspaceDocumentStore;
   readonly telemetry: GraphEvaluationStore;
+  readonly checkpointStatus: GraphRuntimeSession["checkpoints"];
   readonly counts: NodeCounts;
   readonly nodeLibrary: WorkspaceAppNodeLibrary;
   readonly coordination: CoordinationScopeCellPort;
@@ -137,6 +143,7 @@ export class Workspace {
     });
     this.coordination = createCoordination(coordinationDocumentPort(this.documentStore));
     this.telemetry = this.graphRuntime.telemetry;
+    this.checkpointStatus = this.graphRuntime.checkpoints;
     this.counts = new NodeCounts({
       // post-flush, cache-aware: the flush just cooked every registered node
       predicateOf: (id) => predicateSql(this.pullGraphNode(id)),
@@ -685,18 +692,27 @@ export class Workspace {
     return this.graphRuntime.liveCheckpointInput(id);
   }
 
-  /** ◆ Cache / Recache: PIN the cache node's current live input by value. The
-   *  push→pull conversion happens exactly here. Returns false if there's
-   *  nothing live to pin. */
-  pinCache(cacheId: string): boolean {
-    const stamp = this.graphRuntime.pinCheckpoint(cacheId);
-    if (stamp === null) return false;
+  cacheGraphInput(id: string): CheckpointInput | null {
+    return this.graphRuntime.cacheGraphInput(id);
+  }
+
+  setLiveCachePredicate(cacheId: string, predicate: string | null): void {
+    this.graphRuntime.setLiveCheckpointPredicate(cacheId, predicate);
+  }
+
+  /** Commit materialized row identities atomically as Cache's frozen output. */
+  pinCache(cacheId: string, rowIds: readonly RowIndex[]): boolean {
+    const stamp = this.graphRuntime.pinCheckpointRows(cacheId, rowIds);
     this.documentStore.setState((s) => ({
       ...s,
       nodes: { ...s.nodes, [cacheId]: { ...s.nodes[cacheId], stamp } },
       selectedNodeId: cacheId,
     }));
     return true;
+  }
+
+  setCheckpointStatus(cacheId: string, status: CheckpointRuntimeStatus): void {
+    this.graphRuntime.setCheckpointStatus(cacheId, status);
   }
 
   /** Drop the pin: return the cache node to live pass-through. */
@@ -723,7 +739,7 @@ export class Workspace {
       cacheId = this.addNode("cache", { x: p.x + 120, y: p.y + (this.def(scatterId)?.full.h ?? 380) + 80 });
       this.connect(scatterId, cacheId);
     }
-    this.pinCache(cacheId);
+    if (live.rowIds) this.pinCache(cacheId, live.rowIds);
     return cacheId;
   }
 

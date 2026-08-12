@@ -18,7 +18,10 @@ import type { AppNodeLibrary, AppNodeSpec } from "@/core/node/library";
 import type { GraphDocumentNode } from "@/core/graph/records";
 import type { AppNodeHostDependencies } from "./host";
 import type { NodeRuntimeSessionPort } from "./session-port";
+import { predicateToSql } from "@/lib/mosaic-helpers";
 import { WorkspaceNodeRuntimeManager } from "./workspace-runtime";
+import { FilterScopeRegistry } from "@/core/coordination/filter-scope-runtime";
+import { DatasetDataPublicationRuntime } from "@/core/session/dataset-session";
 
 class FixtureElement {
   readonly children: FixtureElement[] = [];
@@ -55,39 +58,32 @@ afterAll(() => {
   Object.defineProperty(globalThis, "document", { configurable: true, value: originalDocument });
 });
 
-function appHostDependencies(predicateCalls: { facet: string; sql: string | null }[]): AppNodeHostDependencies {
+function appHostDependencies(_predicateCalls: { facet: string; sql: string | null }[]): AppNodeHostDependencies {
+  const coordinator = {
+    connect() {},
+    disconnect() {},
+    query: () => Promise.resolve([]),
+  } as unknown as AppNodeHostDependencies["coordinator"];
+  const fetch = (() => Promise.resolve(new Response(null, { status: 204 }))) as unknown as typeof globalThis.fetch;
   return {
-    coordinator: {
-      connect() {},
-      disconnect() {},
-      query: () => Promise.resolve([]),
-    } as unknown as AppNodeHostDependencies["coordinator"],
+    coordinator,
     defaultInputPredicate: {} as AppNodeHostDependencies["defaultInputPredicate"],
     table: "dataset",
     metadata: {} as AppNodeHostDependencies["metadata"],
     refreshMetadata: () => Promise.resolve(),
     availableCapabilities: new Set<NodeCapability>([
       "data-read",
-      "predicate-publish",
-      "row-set-subscribe",
       "focus-coordination",
       "ordering-coordination",
+      "filter-coordination",
     ]),
-    predicateBus: {
-      publishPredicate: (_instanceId, facet, sql) => predicateCalls.push({ facet, sql }),
-      makeToken: (table, count) => ({ predicate: table, table, count, token: 1 }),
-      disposeInstance() {},
-    },
-    rowSetBus: {
-      publishRowSet() {},
-      clear() {},
-      disposeFor() {},
-    },
+    filterScopes: new FilterScopeRegistry({ coordinator, table: "dataset" }),
+    dataPublication: new DatasetDataPublicationRuntime(fetch),
     deviceBroker: {
       acquire: () => Promise.reject(new Error("unexpected device acquire")),
       releaseFor() {},
     },
-    fetch: (() => Promise.resolve(new Response(null, { status: 204 }))) as unknown as typeof globalThis.fetch,
+    fetch,
   };
 }
 
@@ -100,6 +96,7 @@ interface WorkspaceFixture {
   readonly emitLassoCalls: { sql: string | null; rowIds: readonly RowIndex[] | null }[];
   readonly emitFocusCalls: (RowIndex | null)[];
   deliverGraph(value: GraphPortValue): void;
+  setCacheGraphInput(value: GraphPortValue): void;
 }
 
 function workspaceFixture(): WorkspaceFixture {
@@ -123,6 +120,8 @@ function workspaceFixture(): WorkspaceFixture {
   const scopes = new Map<string, string>();
   const cells = new Map<string, unknown>();
   const coordinationListeners = new Set<(value: unknown) => void>();
+  const scopeListeners = new Set<(scope?: string) => void>();
+  let cacheGraphInput: GraphPortValue = { kind: "pred", sql: null };
   const session = {
     store: documentStore,
     coordination: {
@@ -138,9 +137,15 @@ function workspaceFixture(): WorkspaceFixture {
       },
       assignScope(nodeId: string, type: string, scope: string) {
         scopes.set(`${nodeId}:${type}`, scope);
+        for (const listener of scopeListeners) listener(scope);
       },
       clearScope(nodeId: string, type: string) {
         scopes.delete(`${nodeId}:${type}`);
+        for (const listener of scopeListeners) listener();
+      },
+      subscribeScope(_nodeId: string, _type: string, listener: (scope?: string) => void) {
+        scopeListeners.add(listener);
+        return () => scopeListeners.delete(listener);
       },
       subscribe(_nodeId: string, _type: string, listener: (value: unknown) => void) {
         const wrapped = (value: unknown) => listener(value);
@@ -154,6 +159,10 @@ function workspaceFixture(): WorkspaceFixture {
         graphListener = null;
       };
     },
+    cacheGraphInput() {
+      return cacheGraphInput;
+    },
+    setLiveCachePredicate() {},
     emitLasso(_nodeId: string, sql: string | null, rowIds: readonly RowIndex[] | null = null) {
       emitLassoCalls.push({ sql, rowIds });
     },
@@ -174,7 +183,7 @@ function workspaceFixture(): WorkspaceFixture {
             config: {
               version: nodeConfigVersion(1),
               value: {
-                ...(state.nodes[nodeId].config?.value as Record<string, JsonValue> | undefined),
+                ...(state.nodes[nodeId].config?.value as Record<string, JsonValue>),
                 ...(patch as Record<string, JsonValue>),
               },
             },
@@ -193,11 +202,14 @@ function workspaceFixture(): WorkspaceFixture {
       if (!graphListener) throw new Error("graph sink is not registered");
       graphListener(value);
     },
+    setCacheGraphInput(value) {
+      cacheGraphInput = value;
+    },
   };
 }
 
-function nodeLibrary(definition: AppNodeSpec["definition"]): AppNodeLibrary {
-  const spec = { definition, role: "view" } as unknown as AppNodeSpec;
+function nodeLibrary(definition: AppNodeSpec["definition"], overrides: Partial<AppNodeSpec> = {}): AppNodeLibrary {
+  const spec = { definition, role: "view", ...overrides } as unknown as AppNodeSpec;
   return {
     catalog: { resolveExact: () => definition } as unknown as AppNodeLibrary["catalog"],
     getSpecExact: () => spec,
@@ -205,7 +217,87 @@ function nodeLibrary(definition: AppNodeSpec["definition"]): AppNodeLibrary {
 }
 
 describe("WorkspaceNodeRuntimeManager", () => {
-  test("composes config, edge row-set, predicate, focus, and ordering facets without a Proxy", async () => {
+  test("binds stable host.filter to graph predicates and membership moves", async () => {
+    const mounted: { host?: NodeHost<unknown, "filter-coordination"> } = {};
+    const definition = defineNode({
+      ref: exactNodeTypeRef("runtime-fixture", "1.0.0"),
+      title: "Filter runtime fixture",
+      role: "view",
+      inputs: [],
+      outputs: [],
+      capabilities: ["filter-coordination"] as const,
+      load: () =>
+        Promise.resolve({
+          mountBody(host) {
+            mounted.host = host;
+            return { element: new FixtureElement() as unknown as HTMLElement, dispose() {} };
+          },
+        } satisfies NodeModule<unknown, "filter-coordination">),
+    });
+    const fixture = workspaceFixture();
+    const dependencies = appHostDependencies([]);
+    const manager = new WorkspaceNodeRuntimeManager({
+      session: fixture.session,
+      nodeLibrary: nodeLibrary(definition),
+      appHost: dependencies,
+    });
+    await manager.activate("node-1", definition.ref).start();
+    if (!mounted.host) throw new Error("Body did not receive a host");
+    const stable = mounted.host.filter.selection;
+
+    fixture.deliverGraph({ kind: "pred", sql: "quality > 0.5" });
+    expect(mounted.host.filter.getResolved().predicate).toBe("quality > 0.5");
+    fixture.documentStore.setState((state) => ({
+      ...state,
+      flags: { ...state.flags, "node-1": { off: true } },
+    }));
+    expect(mounted.host.filter.getResolved().predicate).toBeNull();
+    fixture.documentStore.setState((state) => ({ ...state, flags: {} }));
+    fixture.session.coordination.assignScope("node-1", "filter", "A");
+    expect(mounted.host.filter.selection).toBe(stable);
+    mounted.host.filter.publish("chart", "x > 1");
+    fixture.session.coordination.assignScope("node-1", "filter", "B");
+    expect(mounted.host.filter.selection).toBe(stable);
+
+    manager.dispose();
+    expect(dependencies.filterScopes.bindingCount).toBe(0);
+    expect(dependencies.filterScopes.scopeCount).toBe(0);
+  });
+
+  test("keeps a checkpoint's graph input separate from its cooked scoped output", async () => {
+    const mounted: { host?: NodeHost<unknown, "filter-coordination"> } = {};
+    const definition = defineNode({
+      ref: exactNodeTypeRef("runtime-fixture", "1.0.0"),
+      title: "Filter runtime fixture",
+      role: "view",
+      inputs: [],
+      outputs: [],
+      capabilities: ["filter-coordination"] as const,
+      load: () =>
+        Promise.resolve({
+          mountBody(host) {
+            mounted.host = host;
+            return { element: new FixtureElement() as unknown as HTMLElement, dispose() {} };
+          },
+        } satisfies NodeModule<unknown, "filter-coordination">),
+    });
+    const fixture = workspaceFixture();
+    fixture.setCacheGraphInput({ kind: "pred", sql: "upstream = TRUE" });
+    const manager = new WorkspaceNodeRuntimeManager({
+      session: fixture.session,
+      nodeLibrary: nodeLibrary(definition, { checkpoint: true }),
+      appHost: appHostDependencies([]),
+    });
+    await manager.activate("node-1", definition.ref).start();
+    if (!mounted.host) throw new Error("Body did not receive a host");
+
+    fixture.deliverGraph({ kind: "pred", sql: "(upstream = TRUE) AND (category = 'alpha')" });
+
+    expect(mounted.host.filter.getResolved().predicate).toBe("upstream = TRUE");
+    manager.dispose();
+  });
+
+  test("composes config, predicate, focus, and ordering facets without a Proxy", async () => {
     const mounted: { host?: NodeHost } = {};
     const element = new FixtureElement();
     const definition = defineNode({
@@ -214,13 +306,7 @@ describe("WorkspaceNodeRuntimeManager", () => {
       role: "view",
       inputs: [],
       outputs: [],
-      capabilities: [
-        "data-read",
-        "predicate-publish",
-        "row-set-subscribe",
-        "focus-coordination",
-        "ordering-coordination",
-      ] as const,
+      capabilities: ["data-read", "focus-coordination", "ordering-coordination"] as const,
       config: {
         schema: z.object({ page: z.number(), lanes: z.number() }),
         version: nodeConfigVersion(1),
@@ -232,10 +318,7 @@ describe("WorkspaceNodeRuntimeManager", () => {
             mounted.host = host as unknown as NodeHost;
             return { element: element as unknown as HTMLElement, dispose: () => element.remove() };
           },
-        } satisfies NodeModule<
-          unknown,
-          "data-read" | "predicate-publish" | "row-set-subscribe" | "focus-coordination" | "ordering-coordination"
-        >),
+        } satisfies NodeModule<unknown, "data-read" | "focus-coordination" | "ordering-coordination">),
     });
     const fixture = workspaceFixture();
     const predicateCalls: { facet: string; sql: string | null }[] = [];
@@ -256,15 +339,10 @@ describe("WorkspaceNodeRuntimeManager", () => {
       value: { page: 9 },
     });
 
-    fixture.deliverGraph({ kind: "sel", sql: "x > 2", rowIds: [] });
-    expect(host.externalRowSet()).toEqual([]);
     fixture.deliverGraph({ kind: "pred", sql: "x > 3" });
-    expect(host.externalRowSet()).toBeNull();
-
-    host.publishPredicate("lasso", "x < 4");
-    host.publishPredicate("range", "y > 8");
-    expect(fixture.emitLassoCalls.at(-1)).toEqual({ sql: "x < 4", rowIds: null });
-    expect(predicateCalls).toEqual([{ facet: "range", sql: "y > 8" }]);
+    expect(predicateToSql(host.inputPredicate)).toBe("x > 3");
+    fixture.deliverGraph({ kind: "pred", sql: null });
+    expect(predicateToSql(host.inputPredicate)).toBeNull();
 
     host.focus.set(rowIndex(12));
     expect(host.focus.get()).toBe(rowIndex(12));

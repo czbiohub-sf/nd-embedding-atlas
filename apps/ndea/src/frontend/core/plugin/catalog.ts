@@ -38,6 +38,7 @@ const NODE_CAPABILITIES: Record<NodeCapability, true> = {
   compute: true,
   "annotation-write": true,
   "ordering-coordination": true,
+  "filter-coordination": true,
 };
 
 const DEFINITION_FIELDS: Record<string, true> = {

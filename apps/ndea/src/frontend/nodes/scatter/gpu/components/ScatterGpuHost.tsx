@@ -58,6 +58,8 @@ interface ScatterGPUHostProps {
   pointStyle?: ScatterPointStyle;
   /** Declarative full-bright highlight set (e.g. trajectory points). null/empty = none. */
   highlightRowIds?: readonly RowIndex[] | null;
+  /** Incoming graph predicate matches. null = inactive; empty = hide every point. */
+  predicateFilterRowIds?: readonly RowIndex[] | null;
   /** Panel identity for SelectionLayerStore registration. Optional to avoid breaking call sites. */
   myPanelId?: PanelId;
 }
@@ -78,9 +80,25 @@ function applyHighlight(gpu: ScatterplotHandle | null, rowIds: readonly RowIndex
   else gpu.clearHighlight();
 }
 
+function applyPredicateFilter(gpu: ScatterplotHandle | null, rowIds: readonly RowIndex[] | null | undefined): void {
+  if (!gpu) return;
+  if (rowIds == null) gpu.clearPredicateFilter();
+  else gpu.setPredicateFilter([...rowIds]);
+}
+
 export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostProps>(function ScatterGPUHost(
   // eslint-disable-next-line @typescript-eslint/unbound-method
-  { data, positionKey, config, onGpuError, onRowIndicesChange, pointStyle, highlightRowIds, myPanelId },
+  {
+    data,
+    positionKey,
+    config,
+    onGpuError,
+    onRowIndicesChange,
+    pointStyle,
+    highlightRowIds,
+    predicateFilterRowIds,
+    myPanelId,
+  },
   ref,
 ) {
   const canvasElRef = useRef<HTMLCanvasElement | null>(null);
@@ -107,6 +125,8 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
   pointStyleRef.current = pointStyle;
   const highlightRowIdsRef = useRef(highlightRowIds);
   highlightRowIdsRef.current = highlightRowIds;
+  const predicateFilterRowIdsRef = useRef(predicateFilterRowIds);
+  predicateFilterRowIdsRef.current = predicateFilterRowIds;
 
   // Device-lease state from the node host's DeviceBroker.
   const leaseState = useDeviceLease();
@@ -178,6 +198,7 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
         gpuRef.current = gpu;
         applyPointStyle(gpu, pointStyleRef.current);
         applyHighlight(gpu, highlightRowIdsRef.current);
+        applyPredicateFilter(gpu, predicateFilterRowIdsRef.current);
         onRowIndicesChangeRef.current(currentData.rowIndices ?? []);
       })
       .catch((err: unknown) => {
@@ -290,6 +311,10 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
     applyHighlight(gpuRef.current, highlightRowIds);
   }, [highlightRowIds]);
 
+  useEffect(() => {
+    applyPredicateFilter(gpuRef.current, predicateFilterRowIds);
+  }, [predicateFilterRowIds]);
+
   // Subscribe to SelectionLayerStore for this panel's slot.
   // Must be in useEffect so subscription lifecycle matches component lifetime.
   useEffect(() => {
@@ -355,6 +380,12 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
       },
       clearSelection() {
         gpuRef.current?.clearSelection();
+      },
+      setPredicateFilter(rowIndices) {
+        gpuRef.current?.setPredicateFilter(rowIndices);
+      },
+      clearPredicateFilter() {
+        gpuRef.current?.clearPredicateFilter();
       },
       setCategoryIsolation(isolatedSet: Set<number>, categoryIndices: Uint8Array) {
         gpuRef.current?.setCategoryIsolation(isolatedSet, categoryIndices);

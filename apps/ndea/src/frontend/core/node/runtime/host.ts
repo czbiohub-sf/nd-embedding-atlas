@@ -4,10 +4,10 @@ import {
   AnnotationPredicateWriteResponseSchema,
   CommitAnnotationsResponseSchema,
   ErrorResponseSchema,
-  SelectionPublishResponseSchema,
   type Metadata,
 } from "@ndea/protocol";
 import type {
+  FilterCoordinationAPI,
   FocusCoordinationAPI,
   NodeCapability,
   NodeDataAPI,
@@ -19,9 +19,10 @@ import type {
   RowSetPublication,
   ViewCoordinationAPI,
 } from "@ndea/sdk";
-import type { PredicateBus, PredicateFacet, RowSetBus } from "@/core/buses";
 import type { DeviceBroker, DeviceLease } from "@/core/gpu/device-broker";
 import type { AppNodeHost } from "@/core/node/app-node-host";
+import type { FilterScopeRegistry } from "@/core/coordination/filter-scope-runtime";
+import type { DatasetDataPublicationRuntime } from "@/core/session/dataset-session";
 
 export interface AppNodeHostDependencies {
   readonly coordinator: Coordinator;
@@ -30,16 +31,11 @@ export interface AppNodeHostDependencies {
   readonly metadata: Metadata;
   readonly refreshMetadata: () => Promise<void>;
   readonly availableCapabilities: ReadonlySet<NodeCapability>;
-  readonly predicateBus: Pick<PredicateBus, "publishPredicate" | "makeToken" | "disposeInstance">;
-  readonly rowSetBus: Pick<RowSetBus, "publishRowSet" | "clear" | "disposeFor">;
+  readonly filterScopes: FilterScopeRegistry;
+  readonly dataPublication: DatasetDataPublicationRuntime;
   readonly deviceBroker: Pick<DeviceBroker, "acquire" | "releaseFor">;
   readonly fetch: typeof globalThis.fetch;
   readonly notify?: NodeNotificationAPI["notify"];
-}
-
-export interface HostRowSetInput {
-  externalRowSet(): readonly RowIndex[] | null;
-  onExternalRowSet(callback: (rowIndices: readonly RowIndex[] | null) => void): () => void;
 }
 
 export interface HostInit<Config, Facets extends object = object> {
@@ -48,13 +44,12 @@ export interface HostInit<Config, Facets extends object = object> {
   readonly config: Config;
   readonly bodyHeaderElement?: HTMLElement;
   readonly inputPredicate?: Selection;
-  readonly rowSetInput?: HostRowSetInput;
   readonly focus?: FocusCoordinationAPI;
   readonly viewCoordination?: ViewCoordinationAPI;
   readonly ordering?: OrderingCoordinationAPI;
+  readonly filter?: FilterCoordinationAPI;
   readonly facets?: Facets;
   readonly patchConfig?: (patch: Partial<Config>) => void;
-  readonly publishPredicate?: (facet: string, sql: string | null) => void;
   readonly onDataRowSetPublished?: (publication: RowSetPublication, rowIds: readonly RowIndex[]) => void;
 }
 
@@ -159,8 +154,17 @@ export function createAppNodeHost<Config, Facets extends object = object>(
     });
     host.registerClient = (client: MosaicClient) => {
       assertActive();
-      dependencies.coordinator.connect(client);
-      return trackDisposer(() => dependencies.coordinator.disconnect(client));
+      init.filter?.associateClient(client);
+      try {
+        dependencies.coordinator.connect(client);
+      } catch (error) {
+        init.filter?.disassociateClient(client);
+        throw error;
+      }
+      return trackDisposer(() => {
+        init.filter?.disassociateClient(client);
+        dependencies.coordinator.disconnect(client);
+      });
     };
     host.inputPredicate = init.inputPredicate ?? dependencies.defaultInputPredicate;
   }
@@ -179,29 +183,30 @@ export function createAppNodeHost<Config, Facets extends object = object>(
         ? {
             async publishRowSet(rowIds: RowIndex[]) {
               assertActive();
-              const response = await request(`/api/selection/${encodeURIComponent(instanceId)}`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ row_indices: rowIds }),
-                signal: controller.signal,
-              });
-              if (!response.ok) throw await responseError(response, `selection failed (${response.status})`);
-              const parsed = SelectionPublishResponseSchema.parse(await response.json());
-              const publication = dependencies.predicateBus.makeToken(parsed.table, parsed.count);
+              const publication = await dependencies.dataPublication.publishRowSet(
+                instanceId,
+                rowIds,
+                controller.signal,
+              );
+              if (disposed || controller.signal.aborted) {
+                await dependencies.dataPublication.disposePublishedRowSet(instanceId);
+                throw new DOMException("row-set publication aborted", "AbortError");
+              }
               publishedRowSetDisposed = false;
               init.onDataRowSetPublished?.(publication, rowIds);
               return publication;
             },
-            disposePublishedRowSet() {
+            async disposePublishedRowSet() {
               if (publishedRowSetDisposed) return;
               publishedRowSetDisposed = true;
-              void request(`/api/selection/${encodeURIComponent(instanceId)}`, { method: "DELETE" }).catch(
-                (error: unknown) =>
+              await dependencies.dataPublication
+                .disposePublishedRowSet(instanceId)
+                .catch((error: unknown) =>
                   (dependencies.notify ?? defaultNotify)(
                     `failed to dispose published row set for ${instanceId}: ${toError(error).message}`,
                     "error",
                   ),
-              );
+                );
             },
           }
         : {}),
@@ -260,36 +265,26 @@ export function createAppNodeHost<Config, Facets extends object = object>(
   if (canWriteAnnotations && granted.has("data-read")) granted.add("annotation-write");
 
   if (
-    requested.has("row-set-subscribe") &&
-    dependencies.availableCapabilities.has("row-set-subscribe") &&
-    init.rowSetInput
+    requested.has("filter-coordination") &&
+    dependencies.availableCapabilities.has("filter-coordination") &&
+    init.filter
   ) {
-    granted.add("row-set-subscribe");
-    host.externalRowSet = init.rowSetInput.externalRowSet;
-    host.onExternalRowSet = (callback: (rowIndices: readonly RowIndex[] | null) => void) =>
-      trackDisposer(init.rowSetInput!.onExternalRowSet(callback));
+    granted.add("filter-coordination");
+    const filter = init.filter;
+    host.filter = Object.freeze({
+      selection: filter.selection,
+      getResolved: filter.getResolved.bind(filter),
+      subscribeResolved: (callback: Parameters<FilterCoordinationAPI["subscribeResolved"]>[0]) =>
+        trackDisposer(filter.subscribeResolved(callback)),
+      publish: filter.publish.bind(filter),
+      clear: filter.clear.bind(filter),
+      associateClient: filter.associateClient.bind(filter),
+      disassociateClient: filter.disassociateClient.bind(filter),
+      materializeRowIds: filter.materializeRowIds.bind(filter),
+    } satisfies FilterCoordinationAPI);
   }
 
-  if (requested.has("predicate-publish") && dependencies.availableCapabilities.has("predicate-publish")) {
-    granted.add("predicate-publish");
-    host.publishPredicate = (facet: string, sql: string | null) => {
-      assertActive();
-      if (init.publishPredicate) init.publishPredicate(facet, sql);
-      else dependencies.predicateBus.publishPredicate(instanceId, facet as PredicateFacet, sql);
-    };
-  }
-
-  if (canPublishRows && granted.has("data-read")) {
-    granted.add("row-set-publish");
-    host.publishRowSet = (rowIndices: RowIndex[]) => {
-      assertActive();
-      dependencies.rowSetBus.publishRowSet(instanceId, rowIndices);
-    };
-    host.clearRowSet = () => {
-      assertActive();
-      dependencies.rowSetBus.clear(instanceId);
-    };
-  }
+  if (canPublishRows && granted.has("data-read")) granted.add("row-set-publish");
 
   if (
     requested.has("focus-coordination") &&
@@ -420,15 +415,7 @@ export function createAppNodeHost<Config, Facets extends object = object>(
     }
     if (granted.has("row-set-publish")) {
       try {
-        dependencies.rowSetBus.disposeFor(instanceId);
-        (host.dataAPI as NodeDataAPI).disposePublishedRowSet?.();
-      } catch (error) {
-        errors.push(error);
-      }
-    }
-    if (granted.has("predicate-publish")) {
-      try {
-        dependencies.predicateBus.disposeInstance(instanceId);
+        void (host.dataAPI as NodeDataAPI).disposePublishedRowSet?.();
       } catch (error) {
         errors.push(error);
       }

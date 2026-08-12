@@ -43,6 +43,10 @@ export const CAPABILITY_DOCS: Partial<Record<NodeCapability, CapabilityDoc>> = {
     label: "shares sort",
     doc: "Shares its sort column and direction with linked views.",
   },
+  "filter-coordination": {
+    label: "shares filters",
+    doc: "Publishes and consumes filters with linked views.",
+  },
 };
 
 /** Capabilities to render as chips for a node, humanized and de-noised. */

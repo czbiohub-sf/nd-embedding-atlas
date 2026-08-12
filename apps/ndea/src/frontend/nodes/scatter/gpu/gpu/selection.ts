@@ -5,7 +5,7 @@ import { MAX_POLYGON_VERTS } from "@/nodes/scatter/gpu/constants";
 import type { TgpuRoot } from "@/nodes/scatter/gpu/types";
 import { type GpuPointIndex, gpuPointIndex } from "@/lib/branded-types";
 import { simplifyPath } from "@/nodes/scatter/gpu/utils/geometry";
-import type { ScatterBuffers } from "./buffers";
+import type { ScatterBuffers, ScatterUniforms } from "./buffers";
 import { type CompositorEngine, LAYER_EXTERNAL, LAYER_HIGHLIGHT, LAYER_ISOLATION, LAYER_LASSO } from "./compositor";
 
 const DEBUG_SELECTION = typeof location !== "undefined" && new URLSearchParams(location.search).has("debug-selection");
@@ -14,6 +14,7 @@ export function createSelectionEngine(
   root: TgpuRoot,
   device: GPUDevice,
   buffers: ScatterBuffers,
+  uniforms: ScatterUniforms,
   numPoints: number,
   onBrushSelectionChange: (count: number | null, indices?: GpuPointIndex[]) => void,
   _wgSize: 64 | 256 = 64,
@@ -40,6 +41,8 @@ export function createSelectionEngine(
   // category is in the disabled bitmask. (Same buffer the isolation kernel
   // reads further down: declaring the view once keeps both consumers in sync.)
   const lassoCategoryReadonly = buffers.categoryBuffer.as("readonly");
+  const predicateFilterReadonly = buffers.predicateFilterBuffer.as("readonly");
+  const { predicateFilterActiveUniform } = uniforms;
   // Bitmask of disabled categories: bit i set if category i is hidden via
   // the legend. Lasso/marquee kernels skip points whose category bit is set.
   const lassoDisabledMaskUniform = root.createUniform(d.u32, 0);
@@ -85,7 +88,8 @@ export function createSelectionEngine(
     const pt = pointsReadonly.$[idx];
     const catIdx = lassoCategoryReadonly.$[idx];
     const isDisabled = (lassoDisabledMaskUniform.$ >> catIdx) & 1;
-    if (isDisabled === 1) {
+    const isFiltered = predicateFilterActiveUniform.$ === 1 && predicateFilterReadonly.$[idx] === 0;
+    if (isFiltered || isDisabled === 1) {
       lassoMutable.$[idx] = 0;
     } else if (pipTest(pt, numVerts)) {
       lassoMutable.$[idx] = 1;
@@ -104,7 +108,8 @@ export function createSelectionEngine(
     const pt = pointsReadonly.$[idx];
     const catIdx = lassoCategoryReadonly.$[idx];
     const isDisabled = (lassoDisabledMaskUniform.$ >> catIdx) & 1;
-    if (isDisabled === 1) {
+    const isFiltered = predicateFilterActiveUniform.$ === 1 && predicateFilterReadonly.$[idx] === 0;
+    if (isFiltered || isDisabled === 1) {
       lassoMutable.$[idx] = 0;
     } else if (pt.x >= r.x && pt.x <= r.z && pt.y >= r.y && pt.y <= r.w) {
       lassoMutable.$[idx] = 1;
@@ -305,6 +310,8 @@ export function createSelectionEngine(
   let categoryActive = false;
   let trajectoryActive = false;
   let continuousActive = false;
+  const predicateFilterMaskCpu = new Uint32Array(numPoints);
+  let predicateFilterActive = false;
   // Disabled-category bitmask: CPU-only (GPU renders alpha=0 via color override,
   // so no shader plumbing needed). Used to gate the click handler so points in a
   // disabled category aren't selectable.
@@ -375,6 +382,19 @@ export function createSelectionEngine(
     lassoDisabledMaskUniform.write(0);
   }
 
+  function setPredicateFilter(mask: Uint32Array) {
+    predicateFilterMaskCpu.set(mask);
+    buffers.predicateFilterBuffer.write(predicateFilterMaskCpu);
+    predicateFilterActive = true;
+    predicateFilterActiveUniform.write(1);
+  }
+
+  function clearPredicateFilter() {
+    predicateFilterMaskCpu.fill(0);
+    predicateFilterActive = false;
+    predicateFilterActiveUniform.write(0);
+  }
+
   function setTrajectoryIsolation(mask: Uint32Array) {
     trajectoryMaskCpu.set(mask);
     trajectoryMaskBuffer.write(trajectoryMaskCpu);
@@ -408,6 +428,7 @@ export function createSelectionEngine(
 
   /** Check if a point is visible under current isolation (for click filtering). */
   function isPointVisible(pointIndex: GpuPointIndex): boolean {
+    if (predicateFilterActive && predicateFilterMaskCpu[pointIndex] === 0) return false;
     // Disabled-category gate: a point in a disabled category is never visible,
     // regardless of isolation/trajectory/continuous state. Matches the legend's
     // semantic that disabled = hidden everywhere (render and clicks).
@@ -443,6 +464,8 @@ export function createSelectionEngine(
     clearCategoryIsolation,
     setCategoryDisabled,
     clearCategoryDisabled,
+    setPredicateFilter,
+    clearPredicateFilter,
     setTrajectoryIsolation,
     clearTrajectoryIsolation,
     setContinuousIsolation,

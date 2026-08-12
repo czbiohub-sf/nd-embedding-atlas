@@ -4,8 +4,7 @@
  * assert a body's routing module drives the host seam (and only the host seam).
  *
  * It implements just the cross-view surface a routing module touches
- * (`focus`, `publishPredicate`, `publishRowSet`, `clearRowSet`,
- * `externalRowSet`/`onExternalRowSet`, `viewCoordination`, `ordering`); the rest of
+ * (`focus`, `filter`, `viewCoordination`, `ordering`); the rest of
  * `NodeHost` is left unimplemented and the whole is cast: routing modules
  * never reach for it. Bus *un*reachability is enforced statically by the
  * boundary lint (plan U6), not here: a spy can't intercept a module import, so
@@ -16,9 +15,7 @@ import type { NodeHost, RowIndex } from "@ndea/sdk";
 
 export interface SpyHostCalls {
   focusSet: (RowIndex | null)[];
-  publishPredicate: { facet: string; sql: string | null }[];
-  publishRowSet: RowIndex[][];
-  clearRowSet: number;
+  publishFilter: { facet: string; sql: string | null }[];
   viewSyncBroadcast: { panX: number; panY: number; zoom: number }[];
   viewSyncToggleLock: number;
   orderingSet: ({ col: string; dir: "asc" | "desc" } | null)[];
@@ -33,9 +30,7 @@ export interface SpyHost {
 export function createSpyHost(): SpyHost {
   const calls: SpyHostCalls = {
     focusSet: [],
-    publishPredicate: [],
-    publishRowSet: [],
-    clearRowSet: 0,
+    publishFilter: [],
     viewSyncBroadcast: [],
     viewSyncToggleLock: 0,
     orderingSet: [],
@@ -59,20 +54,17 @@ export function createSpyHost(): SpyHost {
         return () => focusSubscribers.delete(subscriber);
       },
     },
-    publishPredicate: (facet: string, sql: string | null) => {
-      calls.publishPredicate.push({ facet, sql });
+    filter: {
+      publish: (facet: string, sql: string) => {
+        calls.publishFilter.push({ facet, sql });
+      },
+      clear: (facet: string) => {
+        calls.publishFilter.push({ facet, sql: null });
+      },
     },
-    publishRowSet: (rowIndices: RowIndex[]) => {
-      calls.publishRowSet.push(rowIndices);
-    },
-    clearRowSet: () => {
-      calls.clearRowSet += 1;
-    },
-    externalRowSet: () => null,
-    onExternalRowSet: () => () => {},
     dataAPI: {
-      // selection-out capability surface a routing module may touch on clear.
-      disposePublishedRowSet: () => {},
+      // Temporary large-selection staging cleanup.
+      disposePublishedRowSet: () => Promise.resolve(),
     },
     viewCoordination: {
       panX: 0,

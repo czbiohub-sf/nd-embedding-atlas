@@ -58,8 +58,8 @@ function legacyV2(type: string, config?: unknown) {
   return { version: 2, state };
 }
 
-describe("workspace v5 document schema", () => {
-  test("serializes the canonical v6 runtime boundary", () => {
+describe("workspace v7 document schema", () => {
+  test("serializes the canonical v7 runtime boundary", () => {
     const state = emptyState();
     state.nodes.n1 = {
       id: "n1",
@@ -75,11 +75,11 @@ describe("workspace v5 document schema", () => {
   });
 
   test("strict validation rejects copied provenance and legacy editor fields", () => {
-    const document = toPersistedDoc(emptyState()) as unknown as { version: 6; state: Record<string, unknown> };
+    const document = toPersistedDoc(emptyState()) as unknown as { version: 7; state: Record<string, unknown> };
     document.state.selection = null;
     expect(validateDoc(document, library).ok).toBe(false);
 
-    const withNode = toPersistedDoc(emptyState()) as unknown as { version: 6; state: Record<string, unknown> };
+    const withNode = toPersistedDoc(emptyState()) as unknown as { version: 7; state: Record<string, unknown> };
     withNode.state.nodes = {
       n1: {
         id: "n1",
@@ -92,7 +92,7 @@ describe("workspace v5 document schema", () => {
   });
 
   test("rejects malformed numeric focus indices", () => {
-    const document = toPersistedDoc(emptyState()) as unknown as { version: 6; state: Record<string, unknown> };
+    const document = toPersistedDoc(emptyState()) as unknown as { version: 7; state: Record<string, unknown> };
     document.state.coordinationSpace = { focus: { A: "8" } };
     expect(validateDoc(document, library).ok).toBe(false);
   });
@@ -110,6 +110,107 @@ describe("workspace v5 document schema", () => {
 });
 
 describe("pure step migrations", () => {
+  test("v6 migrates exactly representable native selection topology and preserves authored row sets", () => {
+    const state = emptyState();
+    for (const [id, type] of [
+      ["plot", "vgplot"],
+      ["table", "table"],
+      ["cache", "cache"],
+      ["external", "plugin.example/selection"],
+    ] as const) {
+      state.nodes[id] = { id, definitionRef: exactNodeTypeRef(type, "1.0.0"), label: id };
+    }
+    state.edges.table = {
+      id: "table",
+      from: "plot",
+      fromPort: "out",
+      to: "table",
+      toPort: "in-sel",
+      kind: "sel",
+    };
+    state.edges.cache = {
+      id: "cache",
+      from: "plot",
+      fromPort: "out",
+      to: "cache",
+      toPort: "in-sel",
+      kind: "sel",
+    };
+    state.edges.authored = {
+      id: "authored",
+      from: "external",
+      fromPort: "rows",
+      to: "external",
+      toPort: "selected",
+      kind: "sel",
+    };
+    const legacy = structuredClone(toPersistedDoc(state)) as unknown as {
+      version: number;
+      state: WorkspaceDocumentState;
+    };
+    legacy.version = 6;
+
+    const migrated = migrate(legacy, library);
+
+    expect(migrated.state.edges).toEqual({ authored: state.edges.authored });
+    expect(migrated.state.coordinationScopes).toEqual({
+      cache: { filter: "migrated-filter-1" },
+      plot: { filter: "migrated-filter-1" },
+      table: { filter: "migrated-filter-1" },
+    });
+  });
+
+  test("v6 rejects asymmetric native selection topology instead of broadening influence", () => {
+    const state = emptyState();
+    for (const [id, type] of [
+      ["p1", "vgplot"],
+      ["p2", "histogram"],
+      ["t1", "table"],
+      ["t2", "cache"],
+    ] as const) {
+      state.nodes[id] = { id, definitionRef: exactNodeTypeRef(type, "1.0.0"), label: id };
+    }
+    for (const [id, from, to] of [
+      ["a", "p1", "t1"],
+      ["b", "p1", "t2"],
+      ["c", "p2", "t2"],
+    ] as const) {
+      state.edges[id] = { id, from, fromPort: "out", to, toPort: "in-sel", kind: "sel" };
+    }
+    const legacy = structuredClone(toPersistedDoc(state)) as unknown as {
+      version: number;
+      state: WorkspaceDocumentState;
+    };
+    legacy.version = 6;
+
+    expect(() => migrate(legacy, library)).toThrow("not exactly representable");
+  });
+
+  test("v6 rejects complete two-source fan-out because a scope adds source-to-source influence", () => {
+    const state = emptyState();
+    for (const [id, type] of [
+      ["p1", "vgplot"],
+      ["p2", "histogram"],
+      ["t1", "table"],
+      ["t2", "cache"],
+    ] as const) {
+      state.nodes[id] = { id, definitionRef: exactNodeTypeRef(type, "1.0.0"), label: id };
+    }
+    for (const from of ["p1", "p2"]) {
+      for (const to of ["t1", "t2"]) {
+        const id = `${from}-${to}`;
+        state.edges[id] = { id, from, fromPort: "out", to, toPort: "in-sel", kind: "sel" };
+      }
+    }
+    const legacy = structuredClone(toPersistedDoc(state)) as unknown as {
+      version: number;
+      state: WorkspaceDocumentState;
+    };
+    legacy.version = 6;
+
+    expect(() => migrate(legacy, library)).toThrow("not exactly representable");
+  });
+
   test("v1 first migrates coordination and then exact v5 identity", () => {
     const v2 = legacyV2("dataset", { dataset: "plate-a" });
     const v1 = structuredClone(v2);

@@ -14,7 +14,12 @@ import { listCoordinationTypes } from "@/core/coordination/define-type";
 import { useWorkspace, useWorkspaceSelector } from "../workspace-context";
 
 /** Human label for a coordination type (the registry key is terse). */
-const TYPE_LABEL: Record<string, string> = { focus: "focus", viewSync: "view sync", ordering: "sort" };
+const TYPE_LABEL: Record<string, string> = {
+  focus: "focus",
+  viewSync: "view sync",
+  ordering: "sort",
+  filter: "filter",
+};
 
 export function ScopePicker({ nodeId }: { nodeId: string }) {
   const ws = useWorkspace();

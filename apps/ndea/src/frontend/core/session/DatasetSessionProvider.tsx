@@ -5,9 +5,15 @@ import { type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useSt
 import { MetadataSchema } from "@ndea/protocol";
 import { wsClient } from "@/lib/ws-client";
 import { scatterKeys } from "@/lib/query-keys";
-import { focusBus, predicateBus } from "@/core/buses";
+import { focusBus } from "@/core/buses";
+import { FilterScopeRegistry } from "@/core/coordination/filter-scope-runtime";
 import type { Metadata, TrajectoryData } from "@/types";
-import { clearDatasetSession, publishDatasetSession, type DatasetSessionState } from "./dataset-session";
+import {
+  clearDatasetSession,
+  DatasetDataPublicationRuntime,
+  publishDatasetSession,
+  type DatasetSessionState,
+} from "./dataset-session";
 
 // ── Provider ───────────────────────────────────────────────────────────────
 
@@ -31,6 +37,8 @@ export function DatasetSessionProvider({ children }: Props) {
   }, []);
 
   const brushSelection = useMemo(() => Selection.crossfilter(), []);
+  const filterScopes = useMemo(() => new FilterScopeRegistry({ coordinator, table: TABLE }), [coordinator]);
+  const dataPublication = useMemo(() => new DatasetDataPublicationRuntime(globalThis.fetch), []);
 
   // ── WebSocket connection ──────────────────────────────────────────────
   // Opens one persistent /ws connection for the tab. Stays connected for
@@ -39,13 +47,6 @@ export function DatasetSessionProvider({ children }: Props) {
     wsClient.connect();
     return () => wsClient.close();
   }, []);
-
-  // ── PredicateBus → brushSelection destination (§6.3 / §6.7) ───────────
-  // The PredicateBus is the SOLE writer of the crossfilter Selection: it mints
-  // one clause source per instance, AND-composes that instance's facets, and
-  // flushes `brushSelection.update()` via requestAnimationFrame (outside any
-  // active Mosaic AsyncDispatch cycle). We just hand it the destination once.
-  useEffect(() => predicateBus.attachDestination(brushSelection), [brushSelection]);
 
   // Metadata
   const queryClient = useQueryClient();
@@ -106,7 +107,18 @@ export function DatasetSessionProvider({ children }: Props) {
     [refreshMetadata, setTrajectory, setTrajectoryTIndex, clearTrajectory],
   );
 
-  const runtime = useMemo(() => ({ coordinator, brushSelection, table: TABLE }), [coordinator, brushSelection]);
+  const runtime = useMemo(
+    () => ({ coordinator, brushSelection, filterScopes, dataPublication, table: TABLE }),
+    [coordinator, brushSelection, filterScopes, dataPublication],
+  );
+
+  useEffect(
+    () => () => {
+      filterScopes.dispose();
+      void dataPublication.dispose();
+    },
+    [filterScopes, dataPublication],
+  );
 
   // Memoize state to prevent unnecessary consumer re-renders
   const state = useMemo<DatasetSessionState | null>(

@@ -9,7 +9,7 @@ import { defineNode, exactNodeTypeRef, nodeConfigVersion } from "@ndea/sdk";
 import { mountReactNodeBody } from "@/core/node/react-node-body";
 import type { ThresholdFilterConfig } from "./view";
 
-const CAPABILITIES = ["data-read", "predicate-publish", "compute"] as const;
+const CAPABILITIES = ["data-read", "compute"] as const;
 export type TransformFilterCapabilities = (typeof CAPABILITIES)[number];
 
 export const transformFilterDefinition = defineNode({

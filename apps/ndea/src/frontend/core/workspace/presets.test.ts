@@ -65,13 +65,16 @@ describe("seedAnnotate", () => {
 
     expect(edge("obs", "wrangle")).toMatchObject({ fromPort: "out", toPort: "in", kind: "pred" });
     expect(edge("wrangle", "scatter")).toMatchObject({ fromPort: "out", toPort: "in", kind: "pred" });
-    expect(edge("scatter", "cache")).toMatchObject({ fromPort: "out", toPort: "in-sel", kind: "sel" });
+    expect(edge("scatter", "cache")).toBeUndefined();
     expect(edge("cache", "annotate")).toMatchObject({ fromPort: "out", toPort: "in", kind: "pred" });
     expect(edge("cache", "gallery")).toMatchObject({ fromPort: "out", toPort: "in", kind: "pred" });
-    expect(edges).toHaveLength(7);
+    expect(edges).toHaveLength(6);
 
     for (const type of ["table", "scatter", "annotate", "image-viewer", "gallery"]) {
-      expect(ws.store.state.coordinationScopes[byType[type]]).toEqual({ focus: "A" });
+      expect(ws.store.state.coordinationScopes[byType[type]]?.focus).toBe("A");
+    }
+    for (const type of ["table", "scatter", "cache"]) {
+      expect(ws.store.state.coordinationScopes[byType[type]]?.filter).toBe("A");
     }
   });
 

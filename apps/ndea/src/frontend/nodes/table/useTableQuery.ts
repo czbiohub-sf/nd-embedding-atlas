@@ -6,7 +6,7 @@
  */
 
 import { useDebouncer } from "@tanstack/react-pacer";
-import type { RowIndex } from "@ndea/sdk";
+import type { FilterCoordinationAPI, RowIndex } from "@ndea/sdk";
 import type { Coordinator, Selection } from "@uwdata/mosaic-core";
 import { count, type FilterExpr, Query } from "@uwdata/mosaic-sql";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -23,13 +23,14 @@ export interface SortState {
   direction: SortDirection;
 }
 
-export interface UseTableQueryOptions {
+interface UseTableQueryBaseOptions {
   coordinator: Coordinator;
   table: string;
   columns: string[];
-  selection?: Selection;
   sort?: SortState | null;
 }
+export type UseTableQueryOptions = UseTableQueryBaseOptions &
+  ({ filter: FilterCoordinationAPI; selection?: never } | { filter?: never; selection: Selection });
 
 export interface UseTableQueryResult {
   /** Total row count matching the current filter. */
@@ -46,15 +47,40 @@ export interface UseTableQueryResult {
   findRowPosition: (rowIndex: RowIndex) => Promise<number | null>;
 }
 
+export function tableFilterState(selection: Pick<Selection, "predicate">) {
+  const predicate = selection.predicate(null);
+  return {
+    key: String(predicate),
+    whereClause: predicate == null ? "" : `WHERE ${String(filterExprToExpr(predicate))}`,
+  };
+}
+
+export function tableCacheKey(selection: Pick<Selection, "predicate">, revision: number, sort?: SortState | null) {
+  const sortKey = sort ? `${sort.column}:${sort.direction}` : "none";
+  return `${revision}:${String(selection.predicate(null))}|${sortKey}`;
+}
+
+function querySelection(options: UseTableQueryOptions): Selection {
+  if (options.filter) return options.filter.selection;
+  if (options.selection) return options.selection;
+  throw new Error("useTableQuery requires a filter or selection");
+}
+
 export function useTableQuery(opts: UseTableQueryOptions): UseTableQueryResult {
-  const { coordinator, table, columns, selection, sort } = opts;
+  const { coordinator, table, columns, filter, sort } = opts;
+  const selection = querySelection(opts);
 
   // ── Page cache ──────────────────────────────────────────────────
   const pagesRef = useRef(new Map());
   const pendingRef = useRef(new Set());
   const activeCacheKeyRef = useRef("");
   const [, forceUpdate] = useState(0);
-  const [_filterVersion, setFilterVersion] = useState(0);
+  const [filterVersion, setFilterVersion] = useState(0);
+  const [filterRevision, setFilterRevision] = useState(() => filter?.getResolved().revision ?? 0);
+  useEffect(() => {
+    if (!filter) return;
+    return filter.subscribeResolved(({ revision }) => setFilterRevision(revision));
+  }, [filter]);
 
   // ── Count query via Mosaic client (reactive to selection) ────────
   const countQuery = useCallback(
@@ -74,15 +100,14 @@ export function useTableQuery(opts: UseTableQueryOptions): UseTableQueryResult {
 
   const { data: totalCount, loading } = useMosaicClient<number>({
     coordinator,
+    filter,
     selection,
     query: countQuery,
     transform: countTransform,
   });
 
   // ── Invalidate all pages when filter/sort changes ───────────────
-  const filterKey = selection ? String(selection.predicate(null)) : "none";
-  const sortKey = sort ? `${sort.column}:${sort.direction}` : "none";
-  const cacheKey = `${filterKey}|${sortKey}`;
+  const cacheKey = tableCacheKey(selection, filterRevision, sort);
   const prevCacheKey = useRef(cacheKey);
   // Keep activeCacheKeyRef in sync on first render and when cacheKey changes.
   activeCacheKeyRef.current = cacheKey;
@@ -126,8 +151,7 @@ export function useTableQuery(opts: UseTableQueryOptions): UseTableQueryResult {
       try {
         const offset = pageIndex * PAGE_SIZE;
         const colList = columns.map((c) => `"${c}"`).join(", ");
-        const filterExpr = selection?.predicate(null);
-        const whereClause = filterExpr ? `WHERE ${String(filterExprToExpr(filterExpr))}` : "";
+        const { whereClause } = tableFilterState(selection);
         const sql = `SELECT "__row_index__", ${colList} FROM ${table} ${whereClause} ORDER BY ${buildOrderBy()} LIMIT ${PAGE_SIZE} OFFSET ${offset}`;
 
         const result = await coordinator.query(sql, { type: "arrow" });
@@ -191,20 +215,20 @@ export function useTableQuery(opts: UseTableQueryOptions): UseTableQueryResult {
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [fetchPage],
+    [fetchPage, filterVersion],
   );
 
   // ── Public: find row position for scroll-to-highlight ───────────
   const findRowPosition = useCallback(
     async (rowIndex: RowIndex): Promise<number | null> => {
-      const filterExpr = selection?.predicate(null);
+      const { whereClause } = tableFilterState(selection);
 
       try {
         // Count rows that come before this one in sort order
         const countSql = `
                     WITH target AS (SELECT * FROM ${table} WHERE __row_index__ = ${rowIndex})
                     SELECT COUNT(*) AS pos FROM ${table}
-                    WHERE ${filterExpr ? String(filterExprToExpr(filterExpr)) : "TRUE"}
+                    ${whereClause || "WHERE TRUE"}
                     AND (${sort ? `("${sort.column}" < (SELECT "${sort.column}" FROM target) OR ("${sort.column}" = (SELECT "${sort.column}" FROM target) AND __row_index__ <= ${rowIndex}))` : `__row_index__ <= ${rowIndex}`})
                 `;
         const result = await coordinator.query(countSql, { type: "arrow" });

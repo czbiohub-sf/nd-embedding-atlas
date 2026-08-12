@@ -23,7 +23,6 @@ import {
   clearLasso,
   focusPoint,
   publishLasso,
-  publishLassoRowSet,
   publishRangeFilter,
   toggleViewLock,
 } from "@/nodes/scatter/routing";
@@ -122,29 +121,24 @@ describe("cross-view routing conformance", () => {
     focusPoint(host, null); // background / escape clear
     publishRangeFilter(host, "x > 1"); // continuous-range filter
     publishLasso(host, "__row_index__ IN (1,2,3)"); // lasso facet
-    publishLassoRowSet(host, [rowIndex(1), rowIndex(2), rowIndex(3)]); // GPU dim-mask
-    clearLasso(host); // lasso clear
+    void clearLasso(host); // lasso clear
 
     expect(calls.focusSet).toEqual([rowIndex(5), null]);
-    expect(calls.publishPredicate).toEqual([
+    expect(calls.publishFilter).toEqual([
       { facet: "range", sql: "x > 1" },
       { facet: "lasso", sql: "__row_index__ IN (1,2,3)" },
       { facet: "lasso", sql: null }, // clearLasso drops the facet
     ]);
-    expect(calls.publishRowSet).toEqual([[rowIndex(1), rowIndex(2), rowIndex(3)]]);
-    expect(calls.clearRowSet).toBe(1); // clearLasso true-clears
   });
 
-  test("focus, row-set, and graph predicate routes remain independent", () => {
+  test("focus and filter routes remain independent", () => {
     const { host, calls } = createSpyHost();
     focusPoint(host, rowIndex(8));
-    publishLassoRowSet(host, [rowIndex(2), rowIndex(5)]);
     publishLasso(host, "__row_index__ IN (2,5)");
 
     expect(host.focus.get()).toBe(rowIndex(8));
     expect(calls.focusSet).toEqual([rowIndex(8)]);
-    expect(calls.publishRowSet).toEqual([[rowIndex(2), rowIndex(5)]]);
-    expect(calls.publishPredicate).toEqual([{ facet: "lasso", sql: "__row_index__ IN (2,5)" }]);
+    expect(calls.publishFilter).toEqual([{ facet: "lasso", sql: "__row_index__ IN (2,5)" }]);
   });
 
   test("scatter view-sync routes through the host seam (broadcast + toggleLock)", () => {
@@ -157,15 +151,14 @@ describe("cross-view routing conformance", () => {
     expect(calls.viewSyncBroadcast).toEqual([{ panX: 4, panY: 5, zoom: 6 }]);
   });
 
-  test("chart filter routes through the host seam's selection-out push port", () => {
+  test("chart filter routes through the host filter scope", () => {
     const { host, calls } = createSpyHost();
     publishChartFilter(host, "col = 'A'"); // bar click / brush
     publishChartFilter(host, null); // clear
     // count-plot, histogram, and vgplot all emit via this one routing module;
-    // Workspace runtime maps the "lasso" facet to the node's sel output wire.
-    expect(calls.publishPredicate).toEqual([
-      { facet: "lasso", sql: "col = 'A'" },
-      { facet: "lasso", sql: null },
+    expect(calls.publishFilter).toEqual([
+      { facet: "chart", sql: "col = 'A'" },
+      { facet: "chart", sql: null },
     ]);
   });
 });

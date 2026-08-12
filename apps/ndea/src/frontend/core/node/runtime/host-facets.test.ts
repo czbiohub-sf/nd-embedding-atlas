@@ -1,12 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { Store } from "@tanstack/store";
-import { exactNodeTypeRef, rowIndex } from "@ndea/sdk";
+import { exactNodeTypeRef, rowIndex, type FilterCoordinationAPI } from "@ndea/sdk";
 import {
   createCheckpointCreationNodeFacet,
   createCheckpointNodeFacet,
-  createEdgeInputRowSetBinding,
   createHierarchyNodeFacet,
-  deliverEdgeInputRowSet,
 } from "@/core/node/runtime/host-facets";
 import type { NodeRuntimeSessionPort } from "@/core/node/runtime/session-port";
 
@@ -36,6 +34,9 @@ function runtimeSessionFixture() {
     flags: {},
   });
   const telemetry = new Store({ epoch: 3 });
+  const checkpointStatus = new Store<
+    Readonly<Record<string, { readonly pending: boolean; readonly error: string | null }>>
+  >({ cache: { pending: false, error: null } });
   let pinned = false;
   let input:
     | { kind: "sel"; sql: string | null; rowIds: number[] | null }
@@ -45,8 +46,12 @@ function runtimeSessionFixture() {
   const session = {
     store,
     telemetry,
+    checkpointStatus,
     liveCacheInput: () => input,
     isCached: () => pinned,
+    setCheckpointStatus: (nodeId: string, status: { readonly pending: boolean; readonly error: string | null }) => {
+      checkpointStatus.setState((state) => ({ ...state, [nodeId]: status }));
+    },
     pinCache: () => {
       calls.pin += 1;
       pinned = true;
@@ -64,10 +69,23 @@ function runtimeSessionFixture() {
       calls.enter += 1;
     },
   } as unknown as NodeRuntimeSessionPort;
+  const selection: FilterCoordinationAPI["selection"] = {} as FilterCoordinationAPI["selection"];
+  const filter = {
+    selection,
+    getResolved: () => ({ predicate: "id IN (2, 5)", revision: 1 }),
+    subscribeResolved: () => () => {},
+    publish() {},
+    clear() {},
+    associateClient() {},
+    disassociateClient() {},
+    materializeRowIds: async () => ({ rowIds: [rowIndex(2), rowIndex(5)], revision: 1 }),
+  } satisfies FilterCoordinationAPI;
   return {
     session,
     store,
     telemetry,
+    checkpointStatus,
+    filter,
     calls,
     setInput(next: typeof input) {
       input = next;
@@ -76,31 +94,9 @@ function runtimeSessionFixture() {
 }
 
 describe("app-local node host facets", () => {
-  test("edge input row sets replace, clear, and disconnect independently", () => {
-    const binding = createEdgeInputRowSetBinding();
-    const seen: (readonly number[] | null)[] = [];
-    const unsubscribe = binding.onExternalRowSet((rowIndices) => seen.push(rowIndices));
-
-    expect(binding.externalRowSet()).toBeNull();
-    deliverEdgeInputRowSet(binding, {
-      kind: "sel",
-      sql: "__row_index__ IN (2, 5)",
-      rowIds: [rowIndex(2), rowIndex(5)],
-    });
-    deliverEdgeInputRowSet(binding, { kind: "sel", sql: "__row_index__ = 8", rowIds: [rowIndex(8)] });
-    deliverEdgeInputRowSet(binding, { kind: "sel", sql: null, rowIds: [] });
-    deliverEdgeInputRowSet(binding, { kind: "pred", sql: "quality > 0.5" });
-    expect(seen).toEqual([[rowIndex(2), rowIndex(5)], [rowIndex(8)], [], null]);
-    expect(binding.externalRowSet()).toBeNull();
-
-    unsubscribe();
-    binding.update([rowIndex(13)]);
-    expect(seen).toHaveLength(4);
-  });
-
-  test("checkpoint exposes stable input/pin snapshots and only narrow actions", () => {
+  test("checkpoint exposes stable input/pin snapshots and only narrow actions", async () => {
     const fixture = runtimeSessionFixture();
-    const checkpoint = createCheckpointNodeFacet(fixture.session, "cache");
+    const checkpoint = createCheckpointNodeFacet(fixture.session, "cache", fixture.filter);
 
     const initial = checkpoint.getSnapshot();
     expect(initial).toEqual({
@@ -108,11 +104,13 @@ describe("app-local node host facets", () => {
       pinned: false,
       pinnedEpoch: null,
       input: { kind: "row-set", predicate: "id IN (2, 5)", rowCount: 2 },
+      pending: false,
+      error: null,
     });
     expect(checkpoint.getSnapshot()).toBe(initial);
     expect(Object.keys(checkpoint).toSorted()).toEqual(["getSnapshot", "pin", "subscribe", "unpin"]);
 
-    expect(checkpoint.pin()).toBe(true);
+    expect(await checkpoint.pin()).toBe(true);
     expect(fixture.calls.pin).toBe(1);
     fixture.setInput({ kind: "pred", sql: "quality > 0.5" });
     fixture.telemetry.setState(() => ({ epoch: 4 }));
@@ -125,6 +123,8 @@ describe("app-local node host facets", () => {
       pinned: true,
       pinnedEpoch: 3,
       input: { kind: "predicate", predicate: "quality > 0.5" },
+      pending: false,
+      error: null,
     });
 
     checkpoint.unpin();
@@ -133,19 +133,59 @@ describe("app-local node host facets", () => {
 
   test("facet subscriptions disconnect from every backing state source", () => {
     const fixture = runtimeSessionFixture();
-    const checkpoint = createCheckpointNodeFacet(fixture.session, "cache");
+    const checkpoint = createCheckpointNodeFacet(fixture.session, "cache", fixture.filter);
     let changes = 0;
     const unsubscribe = checkpoint.subscribe(() => {
       changes += 1;
     });
     fixture.telemetry.setState(() => ({ epoch: 4 }));
     fixture.store.setState((state) => ({ ...state }));
-    expect(changes).toBe(2);
+    fixture.checkpointStatus.setState(() => ({ cache: { pending: true, error: null } }));
+    expect(changes).toBe(3);
 
     unsubscribe();
     fixture.telemetry.setState(() => ({ epoch: 5 }));
     fixture.store.setState((state) => ({ ...state }));
-    expect(changes).toBe(2);
+    fixture.checkpointStatus.setState(() => ({ cache: { pending: false, error: "failed" } }));
+    expect(changes).toBe(3);
+  });
+
+  test("unpin invalidates a pending materialization", async () => {
+    const fixture = runtimeSessionFixture();
+    const deferred = Promise.withResolvers<{ rowIds: ReturnType<typeof rowIndex>[]; revision: number }>();
+    const filter = {
+      ...fixture.filter,
+      materializeRowIds: () => deferred.promise,
+    } satisfies FilterCoordinationAPI;
+    const checkpoint = createCheckpointNodeFacet(fixture.session, "cache", filter);
+
+    const pending = checkpoint.pin();
+    checkpoint.unpin();
+    deferred.resolve({ rowIds: [rowIndex(9)], revision: 1 });
+
+    expect(await pending).toBe(false);
+    expect(fixture.calls.pin).toBe(0);
+    expect(fixture.calls.unpin).toBe(1);
+  });
+
+  test("abort cannot resurrect removed checkpoint status", async () => {
+    const fixture = runtimeSessionFixture();
+    const controller = new AbortController();
+    const deferred = Promise.withResolvers<{ rowIds: ReturnType<typeof rowIndex>[]; revision: number }>();
+    const filter = {
+      ...fixture.filter,
+      materializeRowIds: () => deferred.promise,
+    } satisfies FilterCoordinationAPI;
+    const checkpoint = createCheckpointNodeFacet(fixture.session, "cache", filter, controller.signal);
+
+    const pending = checkpoint.pin();
+    controller.abort();
+    fixture.checkpointStatus.setState(() => ({}));
+    deferred.resolve({ rowIds: [rowIndex(9)], revision: 1 });
+
+    expect(await pending).toBe(false);
+    expect(fixture.checkpointStatus.state.cache).toBeUndefined();
+    expect(fixture.calls.pin).toBe(0);
   });
 
   test("checkpoint creation and hierarchy expose no Workspace-shaped command bag", () => {

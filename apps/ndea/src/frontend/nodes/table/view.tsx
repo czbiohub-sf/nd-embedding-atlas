@@ -2,7 +2,7 @@
  * Table plugin view (PLUGIN-ARCHITECTURE §10.4).
  *
  * Sources coordinator/table/metadata from `host.data`, the filter from
- * `host.inputPredicate`, routes row-click through `host.focus.set`, and
+ * `host.filter.selection`, routes row-click through `host.focus.set`, and
  * reads focus reactively from the same host scope :
  * no `useDashboard` reach-in. `DataTable` is already fully prop-driven, so the
  * conversion is localized to this wrapper.
@@ -67,7 +67,7 @@ export function TablePluginView({ host }: NodeBodyProps<TableConfig, TableCapabi
       coordinator={coordinator}
       table={table}
       columns={columns}
-      selection={host.inputPredicate}
+      filter={host.filter}
       focusedRowIndex={focusedRowIndex}
       onRowClick={handleRowClick}
       sorting={sorting}

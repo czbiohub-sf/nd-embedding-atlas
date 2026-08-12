@@ -106,7 +106,7 @@ describe("U10 exact-reference persistence contract", () => {
 
     const raw = JSON.stringify(toPersistedDoc(state));
     expect(JSON.parse(raw)).toEqual({
-      version: 6,
+      version: 7,
       state: expect.objectContaining({
         nodes: {
           d1: {
@@ -125,7 +125,7 @@ describe("U10 exact-reference persistence contract", () => {
     for (const retired of ['"type"', '"kind"', '"pluginId"', '"selection"', '"selSet"', '"selectedEdge"']) {
       expect(raw).not.toContain(retired);
     }
-    expect(DOC_VERSION).toBe(6);
+    expect(DOC_VERSION).toBe(7);
   });
 
   test("2. two exact versions coexist, execute exactly, and current placement chooses current", () => {
@@ -204,7 +204,7 @@ describe("U10 exact-reference persistence contract", () => {
       kind: "focus",
     };
     const out = migrate(legacy, library);
-    expect(out.version).toBe(6);
+    expect(out.version).toBe(7);
     expect(out.state.nodes.d1).toEqual({
       id: "d1",
       definitionRef: exactNodeTypeRef("transform-filter", "1.0.0"),
@@ -282,7 +282,7 @@ describe("U10 exact-reference persistence contract", () => {
     };
     expect(loadFromStorage(storage, "active", library).kind).toBe("ok");
     expect(storage.bytes["active.backup.v2"]).toBe(raw);
-    expect(JSON.parse(storage.bytes.active).version).toBe(6);
+    expect(JSON.parse(storage.bytes.active).version).toBe(7);
     expect(writes).toEqual(["active.backup.v2", "active"]);
   });
 

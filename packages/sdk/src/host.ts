@@ -39,7 +39,7 @@ export interface DataQueryAPI {
 
 export interface RowSetPublishAPI {
   publishRowSet(rowIds: RowIndex[]): Promise<RowSetPublication>;
-  disposePublishedRowSet(): void;
+  disposePublishedRowSet(): Promise<void>;
 }
 
 export interface AnnotationWriteAPI {
@@ -83,6 +83,30 @@ export interface FocusCoordinationAPI {
   get(): RowIndex | null;
   set(rowIndex: RowIndex | null): void;
   subscribe?(callback: (rowIndex: RowIndex | null) => void): () => void;
+}
+
+export type FilterFacet = "lasso" | "chart" | "range" | "isolation";
+
+export interface ResolvedFilter {
+  readonly predicate: string | null;
+  readonly revision: number;
+}
+
+export interface MaterializedFilterRows {
+  readonly rowIds: readonly RowIndex[];
+  readonly revision: number;
+}
+
+export interface FilterCoordinationAPI {
+  /** Stable for this node occurrence, including graph and current-scope predicates. */
+  readonly selection: Selection;
+  getResolved(): ResolvedFilter;
+  subscribeResolved(callback: (filter: ResolvedFilter) => void): () => void;
+  publish(facet: FilterFacet, predicate: string, rowIds?: readonly RowIndex[]): void;
+  clear(facet: FilterFacet): void;
+  associateClient(client: MosaicClient): void;
+  disassociateClient(client: MosaicClient): void;
+  materializeRowIds(signal?: AbortSignal): Promise<MaterializedFilterRows>;
 }
 
 export interface NodeNotificationAPI {
@@ -135,6 +159,10 @@ interface OrderingCoordinationHost {
   readonly ordering: OrderingCoordinationAPI;
 }
 
+interface FilterCoordinationHost {
+  readonly filter: FilterCoordinationAPI;
+}
+
 interface GPUHost {
   acquireDeviceLease(): Promise<DeviceLease>;
 }
@@ -155,4 +183,5 @@ export type NodeHost<Config = unknown, Capabilities extends NodeCapability = Nod
   CapabilityService<Capabilities, "focus-coordination", FocusHost> &
   CapabilityService<Capabilities, "view-coordination", ViewCoordinationHost> &
   CapabilityService<Capabilities, "ordering-coordination", OrderingCoordinationHost> &
+  CapabilityService<Capabilities, "filter-coordination", FilterCoordinationHost> &
   CapabilityService<Capabilities, "gpu-device", GPUHost>;

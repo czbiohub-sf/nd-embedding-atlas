@@ -16,13 +16,15 @@ export interface CheckpointState {
   readonly pinned: boolean;
   readonly pinnedEpoch: number | null;
   readonly input: CheckpointInputState | null;
+  readonly pending: boolean;
+  readonly error: string | null;
 }
 
 export interface CheckpointNodeHost {
   readonly checkpoint: {
     getSnapshot(): CheckpointState;
     subscribe(onChange: () => void): () => void;
-    pin(): boolean;
+    pin(): Promise<boolean>;
     unpin(): void;
   };
 }

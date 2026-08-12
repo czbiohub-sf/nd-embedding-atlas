@@ -122,6 +122,7 @@ export async function createScatterplot(
     root,
     device,
     buffers,
+    uniforms,
     data.numCells,
     (count, indices) => {
       config?.callbacks?.onSelectionChange?.(count, indices);
@@ -133,6 +134,7 @@ export async function createScatterplot(
   // Pre-allocated staging masks for row→point index conversion (avoids per-call allocation)
   const trajectoryStagingMask = new Uint32Array(data.numCells);
   const continuousStagingMask = new Uint32Array(data.numCells);
+  const predicateFilterStagingMask = new Uint32Array(data.numCells);
 
   // ── GPU color-pack pipeline ────────────────────────────────────────────────
   // Instead of a O(n) CPU loop per palette change, pack colors on GPU:
@@ -543,6 +545,21 @@ export async function createScatterplot(
       selection.clearSelectionExternal();
       interaction.requestRender();
       config?.callbacks?.onExternalClear?.();
+    },
+    setPredicateFilter(rowIndices: RowIndex[]) {
+      predicateFilterStagingMask.fill(0);
+      for (const rowIndex of rowIndices) {
+        const pointIndex = rowToPoint.get(rowIndex);
+        if (pointIndex !== undefined) predicateFilterStagingMask[pointIndex] = 1;
+      }
+      selection.setPredicateFilter(predicateFilterStagingMask);
+      culling.invalidate();
+      interaction.requestRender();
+    },
+    clearPredicateFilter() {
+      selection.clearPredicateFilter();
+      culling.invalidate();
+      interaction.requestRender();
     },
     clearHighlight() {
       selection.clearHighlight();

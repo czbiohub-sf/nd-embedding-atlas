@@ -1,6 +1,4 @@
-import { Store } from "@tanstack/store";
-import type { NodeHost, RowIndex } from "@ndea/sdk";
-import type { GraphPortValue } from "@/core/graph/values";
+import type { FilterCoordinationAPI } from "@ndea/sdk";
 import type {
   CheckpointCreationNodeHost,
   CheckpointInputState,
@@ -10,32 +8,6 @@ import type {
   HierarchyState,
 } from "@/core/node/app-node-host";
 import type { NodeRuntimeSessionPort } from "./session-port";
-
-export interface EdgeInputRowSetBinding extends Pick<
-  NodeHost<unknown, "row-set-subscribe">,
-  "externalRowSet" | "onExternalRowSet"
-> {
-  update(rowIndices: readonly RowIndex[] | null): void;
-}
-
-/** Instance-local row-set input delivered by graph edges, independent of the global row-set bus. */
-export function createEdgeInputRowSetBinding(): EdgeInputRowSetBinding {
-  const rowSet = new Store<readonly RowIndex[] | null>(null);
-  return Object.freeze({
-    externalRowSet: () => rowSet.state,
-    onExternalRowSet(callback: (rowIndices: readonly RowIndex[] | null) => void) {
-      const subscription = rowSet.subscribe(() => callback(rowSet.state));
-      return () => subscription.unsubscribe();
-    },
-    update(rowIndices: readonly RowIndex[] | null) {
-      rowSet.setState(() => rowIndices);
-    },
-  });
-}
-
-export function deliverEdgeInputRowSet(binding: EdgeInputRowSetBinding, value: GraphPortValue): void {
-  binding.update(value.kind === "sel" ? (value.rowIds ?? null) : null);
-}
 
 function sameCheckpointInput(left: CheckpointInputState | null, right: CheckpointInputState | null): boolean {
   if (left === right) return true;
@@ -48,6 +20,8 @@ function sameCheckpointState(left: CheckpointState, right: CheckpointState): boo
     left.epoch === right.epoch &&
     left.pinned === right.pinned &&
     left.pinnedEpoch === right.pinnedEpoch &&
+    left.pending === right.pending &&
+    left.error === right.error &&
     sameCheckpointInput(left.input, right.input)
   );
 }
@@ -55,8 +29,18 @@ function sameCheckpointState(left: CheckpointState, right: CheckpointState): boo
 export function createCheckpointNodeFacet(
   session: NodeRuntimeSessionPort,
   nodeId: string,
+  filter: FilterCoordinationAPI,
+  signal?: AbortSignal,
 ): CheckpointNodeHost["checkpoint"] {
   let snapshot: CheckpointState | undefined;
+  let operation = 0;
+  signal?.addEventListener(
+    "abort",
+    () => {
+      operation += 1;
+    },
+    { once: true },
+  );
   const read = (): CheckpointState => {
     const live = session.liveCacheInput(nodeId);
     const input: CheckpointInputState | null =
@@ -70,6 +54,8 @@ export function createCheckpointNodeFacet(
       pinned: session.isCached(nodeId),
       pinnedEpoch: session.store.state.nodes[nodeId]?.stamp ?? null,
       input,
+      pending: session.checkpointStatus.state[nodeId]?.pending ?? false,
+      error: session.checkpointStatus.state[nodeId]?.error ?? null,
     };
     if (snapshot && sameCheckpointState(snapshot, next)) return snapshot;
     snapshot = Object.freeze(next);
@@ -81,13 +67,40 @@ export function createCheckpointNodeFacet(
     subscribe(onChange: () => void) {
       const documentSubscription = session.store.subscribe(onChange);
       const telemetrySubscription = session.telemetry.subscribe(onChange);
+      const checkpointSubscription = session.checkpointStatus.subscribe(onChange);
       return () => {
         documentSubscription.unsubscribe();
         telemetrySubscription.unsubscribe();
+        checkpointSubscription.unsubscribe();
       };
     },
-    pin: () => session.pinCache(nodeId),
-    unpin: () => session.uncache(nodeId),
+    async pin() {
+      const current = ++operation;
+      const revision = filter.getResolved().revision;
+      session.setCheckpointStatus(nodeId, { pending: true, error: null });
+      try {
+        const materialized = await filter.materializeRowIds(signal);
+        if (current !== operation || materialized.revision !== revision || filter.getResolved().revision !== revision) {
+          throw new Error("filter changed during Cache pin");
+        }
+        const pinned = session.pinCache(nodeId, materialized.rowIds);
+        if (current === operation) session.setCheckpointStatus(nodeId, { pending: false, error: null });
+        return pinned;
+      } catch (error) {
+        if (current === operation && !signal?.aborted) {
+          session.setCheckpointStatus(nodeId, {
+            pending: false,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+        return false;
+      }
+    },
+    unpin() {
+      operation += 1;
+      session.setCheckpointStatus(nodeId, { pending: false, error: null });
+      session.uncache(nodeId);
+    },
   });
 }
 

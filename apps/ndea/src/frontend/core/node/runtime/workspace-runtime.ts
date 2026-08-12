@@ -11,15 +11,8 @@ import {
 } from "@ndea/sdk";
 
 import { stringPredicate } from "@/lib/mosaic-helpers";
-import type { PredicateFacet } from "@/core/buses";
 import type { CatalogNodeDefinition } from "@/core/plugin/registration";
-import {
-  createCheckpointCreationNodeFacet,
-  createCheckpointNodeFacet,
-  createEdgeInputRowSetBinding,
-  createHierarchyNodeFacet,
-  deliverEdgeInputRowSet,
-} from "./host-facets";
+import { createCheckpointCreationNodeFacet, createCheckpointNodeFacet, createHierarchyNodeFacet } from "./host-facets";
 import type { AppNodeLibrary } from "@/core/node/library";
 import { createAppNodeHost, type AppNodeHostDependencies, type HostHandle } from "./host";
 import { NodeInstanceRuntime } from "./instance-runtime";
@@ -41,9 +34,7 @@ const ORDERING_COORDINATION_TYPE = "ordering";
 
 export const APP_NODE_HOST_CAPABILITIES: readonly NodeCapability[] = Object.freeze([
   "data-read",
-  "predicate-publish",
   "row-set-publish",
-  "row-set-subscribe",
   "focus-coordination",
   "view-coordination",
   "schema-mutation",
@@ -53,6 +44,7 @@ export const APP_NODE_HOST_CAPABILITIES: readonly NodeCapability[] = Object.free
   "compute",
   "annotation-write",
   "ordering-coordination",
+  "filter-coordination",
 ] satisfies NodeCapability[]);
 
 export interface WorkspaceNodeRuntimeManagerDependencies {
@@ -190,11 +182,18 @@ function createRuntimeHost(
   const node = session.store.state.nodes[nodeId];
   if (!node) throw new Error(`workspace node not found: ${nodeId}`);
   const spec = nodeLibrary.getSpecExact(node.definitionRef);
-  const inputPredicate = Selection.single();
-  const inputRowSet = createEdgeInputRowSetBinding();
+  const filterBinding = definition.capabilities.includes("filter-coordination")
+    ? appHost.filterScopes.bind(nodeInstanceId(nodeId))
+    : undefined;
+  filterBinding?.setScope(session.coordination.scopeOf(nodeId, "filter"));
+  const inputPredicate = filterBinding?.selection ?? Selection.single();
   const localFocus = new Store<RowIndex | null>(null);
+  const checkpointController = spec?.checkpoint ? new AbortController() : null;
+  const graphSource = { __ndeaGraphNode: nodeId };
   const facets = {
-    ...(spec?.checkpoint ? { checkpoint: createCheckpointNodeFacet(session, nodeId) } : {}),
+    ...(spec?.checkpoint && filterBinding
+      ? { checkpoint: createCheckpointNodeFacet(session, nodeId, filterBinding, checkpointController!.signal) }
+      : {}),
     ...(spec?.checkpointCreation ? { checkpointCreation: createCheckpointCreationNodeFacet(session, nodeId) } : {}),
     ...(spec?.role === "subnet" ? { hierarchy: createHierarchyNodeFacet(session, nodeId) } : {}),
   };
@@ -205,23 +204,26 @@ function createRuntimeHost(
     config: mergeNodeConfig(definition, node.config?.value),
     bodyHeaderElement: headerElement,
     inputPredicate,
-    rowSetInput: inputRowSet,
     focus: createFocusCoordination(session, nodeId, localFocus),
     viewCoordination: createViewCoordination(session, nodeId),
     ordering: createOrderingCoordination(session, nodeId),
+    filter: filterBinding,
     facets,
     patchConfig: (patch) => session.updateNodeConfig(nodeId, patch as Record<string, unknown>),
-    publishPredicate(facet, sql) {
-      if (facet === "lasso") {
-        if (session.getLasso(nodeId)?.sql !== sql) session.emitLasso(nodeId, sql);
-      } else {
-        appHost.predicateBus.publishPredicate(nodeInstanceId(nodeId), facet as PredicateFacet, sql);
-      }
-    },
     onDataRowSetPublished(publication, rowIds) {
       session.emitLasso(nodeId, publication.predicate, rowIds);
     },
   });
+
+  if (filterBinding) {
+    handle.host.track(() => filterBinding.dispose());
+    handle.host.track(
+      session.coordination.subscribeScope(nodeId, "filter", (scope) => {
+        filterBinding.setScope(scope);
+      }),
+    );
+  }
+  if (checkpointController) handle.host.track(() => checkpointController.abort());
 
   let graphSinkDisposer: (() => void) | null = null;
   const syncGraphSink = () => {
@@ -229,20 +231,32 @@ function createRuntimeHost(
     if (off || !session.store.state.nodes[nodeId]) {
       graphSinkDisposer?.();
       graphSinkDisposer = null;
+      if (filterBinding) filterBinding.setGraphPredicate(null);
+      else {
+        inputPredicate.update({
+          source: graphSource,
+          clients: new Set(),
+          fields: [],
+          value: null,
+          predicate: null,
+        });
+      }
       return;
     }
     if (graphSinkDisposer) return;
-    const source = { __ndeaGraphNode: nodeId };
     graphSinkDisposer = session.registerGraphSink(nodeId, (value) => {
       if (value === undefined) return;
-      deliverEdgeInputRowSet(inputRowSet, value);
       if (value.kind === "focus") {
         localFocus.setState(() => value.rowIndex);
         return;
       }
-      const sql = value.sql;
+      const sql = spec?.checkpoint ? (session.cacheGraphInput(nodeId)?.sql ?? null) : value.sql;
+      if (filterBinding) {
+        filterBinding.setGraphPredicate(sql);
+        return;
+      }
       inputPredicate.update({
-        source,
+        source: graphSource,
         clients: new Set(),
         fields: [],
         value: sql ? [sql] : [],
@@ -257,6 +271,15 @@ function createRuntimeHost(
     graphSinkDisposer = null;
   });
   syncGraphSink();
+  if (filterBinding && spec?.checkpoint) {
+    session.setLiveCachePredicate(nodeId, filterBinding.getResolved().predicate);
+    handle.host.track(
+      filterBinding.subscribeResolved(({ predicate }) => {
+        session.setLiveCachePredicate(nodeId, predicate);
+      }),
+    );
+    handle.host.track(() => session.setLiveCachePredicate(nodeId, null));
+  }
   return handle;
 }
 

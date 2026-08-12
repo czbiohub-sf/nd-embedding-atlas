@@ -25,6 +25,7 @@ import { useHost } from "@/core/host/host-context";
 import { broadcastView, focusPoint, publishRangeFilter } from "./routing";
 import { type ColorMode, useMosaicScatterData } from "@/nodes/scatter/gpu/hooks/useMosaicScatterData";
 import { useScatterBrushSync } from "@/nodes/scatter/gpu/hooks/useScatterBrushSync";
+import { usePredicateRowIndices } from "@/nodes/scatter/gpu/hooks/usePredicateRowIndices";
 import type { ScatterplotConfig } from "@/nodes/scatter/gpu/types";
 import { type GpuPointIndex, gpuPointIndex } from "@/lib/branded-types";
 import { hexToRgbPalette } from "@/nodes/scatter/gpu/utils/colors";
@@ -80,7 +81,7 @@ export function ScatterView({
   loadingKey,
   currentEntryLoaded,
   coordinator,
-  table: _table,
+  table,
   xCol,
   yCol,
   colorMode,
@@ -135,6 +136,11 @@ export function ScatterView({
   const effectiveReversed = colorMode === "continuous" ? legendState.colormapReversed : false;
 
   const hostRef = useRef<ScatterGPUHostHandle | null>(null);
+  const { rowIndices: predicateFilterRowIds, error: predicateFilterError } = usePredicateRowIndices({
+    coordinator,
+    filter: host.filter,
+    table,
+  });
 
   // Keep refs in sync after every render so that LegendProvider's isolation
   // callbacks reach the GPU host with the latest data.
@@ -453,17 +459,6 @@ export function ScatterView({
     hostRef.current?.setContinuousScale(legendState.scale);
   }, [legendState.scale, colorMode, data?.continuous]);
 
-  // External (cross-panel, non-self) selection → GPU dim-mask, read through the
-  // host row-set channel.
-  useEffect(() => {
-    const apply = (rowIndices: readonly RowIndex[] | null) => {
-      if (rowIndices === null) hostRef.current?.clearExternalSelection();
-      else hostRef.current?.setExternalSelection([...rowIndices]);
-    };
-    apply(host.externalRowSet()); // seed an already-active selection on mount
-    return host.onExternalRowSet(apply);
-  }, [host]);
-
   useEffect(() => {
     // incoming (non-self) pan/zoom on this node's view-sync scope, via the host
     // seam and its current coordination scope.
@@ -517,6 +512,7 @@ export function ScatterView({
   }, [focusedRowIndex, trajectory, actions]);
 
   const showLoading = isLoading || dataLoading;
+  const errorMessage = gpuError ?? predicateFilterError?.message;
 
   // Inline JSX below: a nested component would get a fresh function
   // identity on every render, unmounting the slider mid-drag and dropping
@@ -569,6 +565,7 @@ export function ScatterView({
           config={configRef.current}
           pointStyle={pointStyle}
           highlightRowIds={highlightRowIds}
+          predicateFilterRowIds={predicateFilterRowIds}
           onGpuError={setGpuError}
           onRowIndicesChange={(indices) => {
             rowIndicesRef.current = indices;
@@ -582,9 +579,9 @@ export function ScatterView({
           Loading{loadingKey ? ` ${loadingKey.replace(/^X_/, "")}...` : "..."}
         </div>
       )}
-      {gpuError && (
+      {errorMessage && (
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80 p-4 text-center text-red-400 text-sm">
-          {gpuError}
+          {errorMessage}
         </div>
       )}
       {activeTrajectories.map((traj) => {

@@ -1,12 +1,8 @@
-/**
- * cache: source-agnostic live-until-cached checkpoint. UNCACHED: pass the
- * input through (a pushed sel takes over, else the AND of pred inputs).
- * CACHED: return the pinned predicate verbatim (the push→pull conversion).
- */
+/** Cache: live filter/predicate passthrough until pinned by row identity. */
 
 import { defineNode, exactNodeTypeRef } from "@ndea/sdk";
 
-import { lastPortValueOfKind, passthroughGraphPredicate } from "@/core/graph/cook";
+import { passthroughGraphPredicate } from "@/core/graph/cook";
 import { defineNativeNodeContribution, type NativeNodeContribution } from "@/core/node/native-contribution";
 import { mountReactNodeBody } from "@/core/node/react-node-body";
 
@@ -14,12 +10,9 @@ const cacheDefinition = defineNode({
   ref: exactNodeTypeRef("cache", "1.0.0"),
   title: "Cache",
   role: "transform",
-  inputs: [
-    { id: "in", kind: "pred", label: "In" },
-    { id: "in-sel", kind: "sel", label: "In" },
-  ],
+  inputs: [{ id: "in", kind: "pred", label: "In" }],
   outputs: [{ id: "out", kind: "pred", label: "Out" }],
-  capabilities: [],
+  capabilities: ["filter-coordination"],
   load: async () => {
     // NodeDefinition.load is the intentional lazy plugin-module boundary.
     const { CacheBody } = await import("./body");
@@ -29,9 +22,7 @@ const cacheDefinition = defineNode({
 
 const cacheCook: NativeNodeContribution["graph"]["cook"] = (inputs, host) => {
   const frozen = host.frozenPredicate();
-  return frozen !== undefined
-    ? { kind: "pred", sql: frozen }
-    : (lastPortValueOfKind(inputs, "sel") ?? passthroughGraphPredicate(inputs));
+  return frozen !== undefined ? { kind: "pred", sql: frozen } : passthroughGraphPredicate(inputs);
 };
 
 export const cacheNode = defineNativeNodeContribution({

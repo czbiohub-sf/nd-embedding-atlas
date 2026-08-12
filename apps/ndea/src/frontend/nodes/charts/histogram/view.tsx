@@ -1,16 +1,5 @@
-/**
- * histogram body (PLUGIN-ARCHITECTURE §10.3). Ported from the legacy
- * `components/charts/Histogram`, re-sourced through the host seam: stats + bin
- * queries on `host.data.coordinator`/`table`, scoped to `host.inputSelection`,
- * the brush range emitted on the node's selection-out push port via
- * `publishChartFilter` (no `selectionBus`, no `useDashboard`).
- *
- * Parent gates on a picked column; the inner `HistogramBody` mounts only with a
- * field, so its query hooks never see a null column, and remounts (keyed on
- * field) reset the brush and clear the published filter.
- */
-
-import type { Coordinator, Selection } from "@uwdata/mosaic-core";
+import type { FilterCoordinationAPI } from "@ndea/sdk";
+import type { Coordinator } from "@uwdata/mosaic-core";
 import { type FilterExpr, cast, column } from "@uwdata/mosaic-sql";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -20,6 +9,7 @@ import { useContainerSize } from "@/hooks/useContainerSize";
 import { useMosaicClient } from "@/hooks/useMosaicClient";
 import { filterExprToExpr, toRows } from "@/lib/mosaic-helpers";
 import { FieldPicker } from "@/nodes/charts/core/field-picker";
+import { buildHistogramStatsQuery } from "@/nodes/charts/core/filter-queries";
 import { publishChartFilter } from "@/nodes/charts/core/routing";
 import type { ChartLeafConfig } from "@/nodes/charts/core/types";
 import { useChartLeaf } from "@/nodes/charts/core/use-chart-leaf";
@@ -41,7 +31,7 @@ const AXIS_HEIGHT = 18;
 const TOTAL_HEIGHT = CHART_HEIGHT + AXIS_HEIGHT;
 
 export function HistogramView({ host }: NodeBodyProps<HistogramConfig, HistogramCapabilities>) {
-  const { coordinator, table, inputSelection, field, setField } = useChartLeaf(host);
+  const { coordinator, table, filter, field, setField } = useChartLeaf(host);
   const bins = host.config.bins ?? 20;
   const onFilter = useCallback((sql: string | null) => publishChartFilter(host, sql), [host]);
 
@@ -55,7 +45,7 @@ export function HistogramView({ host }: NodeBodyProps<HistogramConfig, Histogram
           key={field}
           coordinator={coordinator}
           table={table}
-          inputSelection={inputSelection}
+          filter={filter}
           field={field}
           binCount={bins}
           onFilter={onFilter}
@@ -68,43 +58,40 @@ export function HistogramView({ host }: NodeBodyProps<HistogramConfig, Histogram
 interface BodyProps {
   coordinator: Coordinator;
   table: string;
-  inputSelection: Selection;
+  filter: FilterCoordinationAPI;
   field: string;
   binCount: number;
   onFilter: (sql: string | null) => void;
 }
 
-function HistogramBody({ coordinator, table, inputSelection, field, binCount, onFilter }: BodyProps) {
+function HistogramBody({ coordinator, table, filter, field, binCount, onFilter }: BodyProps) {
   // Clear the published filter when the field changes (this body remounts).
   useEffect(() => () => onFilter(null), [onFilter]);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const { width: containerWidth } = useContainerSize(containerRef);
 
-  const [stats, setStats] = useState<Stats | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    void coordinator
-      .query(
-        `SELECT MIN(CAST("${field}" AS DOUBLE)) AS min,
-                MAX(CAST("${field}" AS DOUBLE)) AS max,
-                COUNT(*) AS count
-         FROM ${table}
-         WHERE CAST("${field}" AS DOUBLE) IS NOT NULL
-           AND isfinite(CAST("${field}" AS DOUBLE))`,
-        { type: "json" },
-      )
-      .then((result: unknown) => {
-        if (cancelled) return;
-        const rows = toRows(result);
-        const r = rows[0];
-        if (r) setStats({ min: Number(r.min), max: Number(r.max), count: Number(r.count) });
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [coordinator, table, field]);
+  const statsQuery = useCallback(
+    (predicate: FilterExpr) => buildHistogramStatsQuery(table, field, predicate),
+    [field, table],
+  );
+  const statsTransform = useCallback((result: unknown): (Stats & { countFiltered: number }) | null => {
+    const row = toRows(result)[0];
+    return row
+      ? {
+          min: Number(row.min),
+          max: Number(row.max),
+          count: Number(row.count),
+          countFiltered: Number(row.countFiltered),
+        }
+      : null;
+  }, []);
+  const { data: stats, loading: statsLoading } = useMosaicClient({
+    coordinator,
+    filter,
+    query: statsQuery,
+    transform: statsTransform,
+  });
 
   const binParams = useMemo(() => computeBinParams(stats, binCount), [stats, binCount]);
 
@@ -137,7 +124,7 @@ function HistogramBody({ coordinator, table, inputSelection, field, binCount, on
 
   const { data, loading } = useMosaicClient({
     coordinator,
-    selection: inputSelection,
+    filter,
     query,
     transform,
     enabled: binParams != null,
@@ -154,7 +141,7 @@ function HistogramBody({ coordinator, table, inputSelection, field, binCount, on
         <span className="inline-block rounded bg-muted px-1.5 py-0.5 font-medium text-2xs text-foreground">
           {formatTick(stats.min)}
         </span>
-        <span className="ml-1 text-3xs text-muted-foreground">({stats.count.toLocaleString()} rows)</span>
+        <span className="ml-1 text-3xs text-muted-foreground">({stats.countFiltered.toLocaleString()} rows)</span>
       </div>
     );
   }
@@ -162,7 +149,7 @@ function HistogramBody({ coordinator, table, inputSelection, field, binCount, on
   if (!binParams || !data || data.length === 0) {
     return (
       <div ref={containerRef} className="py-2 text-2xs text-muted-foreground">
-        {loading ? "Loading..." : "No data"}
+        {loading || statsLoading ? "Loading..." : "No data"}
       </div>
     );
   }
