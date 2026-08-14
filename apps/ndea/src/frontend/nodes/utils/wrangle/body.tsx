@@ -67,7 +67,9 @@ export function WrangleBody({ host }: NodeBodyProps<WrangleConfig, WrangleCapabi
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-1">
-      <div className="min-h-0 flex-1 rounded border border-border bg-muted px-1.5">
+      {/* Code field sits on the node's own surface, not a lifted one: the editor
+          is the node's content, and the border already delineates it. */}
+      <div className="min-h-0 flex-1 rounded border border-border bg-node-surface px-1.5">
         <PrqlEditor
           value={prql}
           onChange={(next) => {

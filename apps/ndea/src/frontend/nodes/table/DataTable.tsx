@@ -320,7 +320,7 @@ export function DataTable({
   );
 
   return (
-    <div className="flex h-full w-full flex-col overflow-hidden bg-card font-mono text-foreground text-xs">
+    <div className="flex h-full w-full flex-col overflow-hidden bg-node-surface font-mono text-foreground text-xs">
       {headerEl ? (
         createPortal(controls, headerEl)
       ) : (
@@ -330,9 +330,11 @@ export function DataTable({
       )}
       {/* Scrollable container */}
       <div ref={containerRef} className="flex-1 overflow-auto">
-        {/* Sticky header via TanStack Table header groups */}
+        {/* Sticky header via TanStack Table header groups. Raised above the node
+            body so rows scroll under it, matching the other sticky headers
+            rather than borrowing the page colour. */}
         <div
-          className="sticky top-0 z-10 border-border border-b bg-background"
+          className="sticky top-0 z-10 border-border border-b bg-card"
           style={{ height: HEADER_HEIGHT, minWidth: totalWidth }}
         >
           {headerGroups.map((headerGroup) => (

@@ -19,7 +19,7 @@ export class ViewerErrorBoundary extends Component<Props, State> {
     if (this.state.error) {
       return (
         <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-card p-4">
-          <span className="font-medium text-accent-rose text-xs">Viewer error</span>
+          <span className="font-medium text-destructive text-xs">Viewer error</span>
           <span className="max-w-[80%] text-center font-mono text-3xs text-muted-foreground">
             {this.state.error.message}
           </span>

@@ -58,7 +58,7 @@ export async function mountVgplotBody(host: Host): Promise<MountedNodeBody> {
   }
 
   const element = document.createElement("div");
-  element.className = "flex h-full min-h-0 w-full flex-col gap-1.5 bg-card p-2";
+  element.className = "flex h-full min-h-0 w-full flex-col gap-1.5 bg-node-surface p-2";
 
   const controls = document.createElement("div");
   controls.className = "flex shrink-0 gap-1.5";

@@ -117,7 +117,7 @@ export function CommitPanel({
   const noColumns = columns.length === 0;
 
   return (
-    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-card text-xs">
+    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-node-surface text-xs">
       <div className="flex items-center justify-between gap-2 border-border-subtle border-b p-2.5">
         <span className="font-medium text-foreground">Write to .obs on disk</span>
         <div className="flex items-center gap-2">

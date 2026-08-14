@@ -124,7 +124,7 @@ export function GalleryPane({ coordinator, predicate, focusedRowIndex, onSelect,
   const fetchEnabled = !channelsPending && settledChannels.length > 0 && hasPlate;
 
   return (
-    <div className="flex h-full w-full flex-col bg-card">
+    <div className="flex h-full w-full flex-col bg-node-surface">
       {/* Header */}
       <div className="flex h-7 shrink-0 items-center gap-1.5 border-border/60 border-b px-2 select-none">
         <span className="font-medium text-foreground/90 text-2xs">Gallery</span>

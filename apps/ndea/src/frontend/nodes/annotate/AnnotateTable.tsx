@@ -420,7 +420,7 @@ export function AnnotateTable({
               className={cn(
                 "absolute grid cursor-pointer items-center border-border-subtle border-b px-2.5 text-xs",
                 isSel ? "bg-primary/12" : "hover:bg-foreground/4",
-                isFocus && "shadow-[inset_0_0_0_1px_oklch(0.554_0.236_281_/_28%)]",
+                isFocus && "shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--color-primary)_28%,transparent)]",
               )}
               style={{
                 gridTemplateColumns: gridCols,

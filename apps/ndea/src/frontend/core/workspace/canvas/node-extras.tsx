@@ -5,6 +5,7 @@ import { IterationCw, Link2 } from "lucide-react";
 import { NdIconButton } from "@/components/nd/nd-icon-button";
 import { NdHud } from "@/components/nd/nd-primitives";
 import type { GraphDocumentNode } from "@/core/graph/records";
+import { ON_ACCENT_INK } from "@/lib/color/brand";
 import type { FeedbackChannel } from "../feedback";
 import { useWorkspace, useWorkspaceSelector } from "../workspace-context";
 import { ScopePicker } from "./scope-picker";
@@ -26,7 +27,7 @@ export function FeedbackBadges({ nodeId, channels }: { nodeId: string; channels:
           data-nodrag="1"
           title={`feedback → re-enters ${feedbackNames(emits, (channel) => channel.toLabel)} (writes a column back into the source data)`}
           className="absolute z-[8] inline-flex items-center rounded-full px-[3px] py-[2px]"
-          style={{ right: -7, bottom: -9, background: FEEDBACK_COLOR, color: "#06201d" }}
+          style={{ right: -7, bottom: -9, background: FEEDBACK_COLOR, color: ON_ACCENT_INK }}
         >
           <IterationCw size={11} strokeWidth={2.4} />
         </span>
@@ -89,7 +90,8 @@ export function BypassOverlay({ chip }: { chip: boolean }) {
         className="pointer-events-none absolute inset-0 z-[7]"
         style={{
           borderRadius: chip ? 999 : 7,
-          background: "repeating-linear-gradient(45deg, rgba(245, 158, 11, 0.14) 0 7px, transparent 7px 15px)",
+          background:
+            "repeating-linear-gradient(45deg, color-mix(in oklab, var(--color-wire-sel) 14%, transparent) 0 7px, transparent 7px 15px)",
         }}
       />
       <div
@@ -99,7 +101,7 @@ export function BypassOverlay({ chip }: { chip: boolean }) {
           right: -6,
           top: 12,
           background: "var(--color-wire-pred)",
-          boxShadow: "0 0 7px rgba(139, 123, 247, 0.9)",
+          boxShadow: "0 0 7px oklch(from var(--color-wire-pred) l c h / 90%)",
         }}
       />
     </>
@@ -133,7 +135,7 @@ export function SyncBadge({ nodeId }: { nodeId: string }) {
           key={type}
           title={`${type} scope ${scope}: peers share ${type}`}
           className="inline-flex items-center gap-[2px] rounded-full px-[5px] py-[2px] text-[8px] font-bold"
-          style={{ background: workspace.coordination.scopeColor(scope), color: "#0c0c12" }}
+          style={{ background: workspace.coordination.scopeColor(scope), color: ON_ACCENT_INK }}
         >
           <Link2 size={9} strokeWidth={2.6} />
           {scope}

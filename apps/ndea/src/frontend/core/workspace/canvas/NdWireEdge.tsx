@@ -80,7 +80,7 @@ function NdWireEdgeInner({
           strokeWidth: selected ? 2.6 : strokeWidth,
           strokeDasharray: dash,
           strokeLinecap: kind === "sel" || kind === "focus" ? "round" : undefined,
-          filter: selected ? "drop-shadow(0 0 4px rgba(139, 123, 247, 0.8))" : undefined,
+          filter: selected ? "drop-shadow(0 0 4px oklch(from var(--color-wire-pred) l c h / 80%))" : undefined,
         }}
       />
       {selected ? (

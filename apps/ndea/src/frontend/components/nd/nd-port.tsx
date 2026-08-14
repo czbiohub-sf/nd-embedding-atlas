@@ -41,7 +41,8 @@ export interface NdPortProps {
   portIdx?: number;
 }
 
-const LEGAL_RING = "0 0 0 2.5px oklch(0.69 0.19 170 / 55%), 0 0 10px oklch(0.69 0.19 170 / 45%)";
+/** Ring on a port the in-flight wire may land on; see --shadow-legal-ring. */
+const LEGAL_RING = "var(--shadow-legal-ring)";
 
 export function NdPort({
   side,

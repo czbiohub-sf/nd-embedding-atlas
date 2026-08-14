@@ -45,7 +45,7 @@ function ViewerPresentationCover({ ready, presentationKey }: { ready: boolean; p
   }, [ready, presentationKey]);
 
   return ready && revealedKey === presentationKey ? null : (
-    <div className="pointer-events-none absolute inset-0 z-10 bg-card" />
+    <div className="pointer-events-none absolute inset-0 z-10 bg-node-surface" />
   );
 }
 
