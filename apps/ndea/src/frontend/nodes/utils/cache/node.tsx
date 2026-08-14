@@ -5,6 +5,7 @@ import { defineNode, exactNodeTypeRef } from "@ndea/sdk";
 import { passthroughGraphPredicate } from "@/core/graph/cook";
 import { defineNativeNodeContribution, type NativeNodeContribution } from "@/core/node/native-contribution";
 import { mountReactNodeBody } from "@/core/node/react-node-body";
+import { WIRE_COLOR } from "@/lib/color/brand";
 
 const cacheDefinition = defineNode({
   ref: exactNodeTypeRef("cache", "1.0.0"),
@@ -36,7 +37,7 @@ export const cacheNode = defineNativeNodeContribution({
     geometry: { chipW: 148, card: { w: 236, h: 168 }, full: { w: 236, h: 168 }, canFull: false },
     stage: "canvas-only",
     inPalette: true,
-    accent: "#f59e0b",
+    accent: WIRE_COLOR.sel,
     checkpoint: true,
     body: "card-and-full",
   },

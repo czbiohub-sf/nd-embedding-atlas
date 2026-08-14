@@ -6,6 +6,7 @@
  */
 
 import { useMemo } from "react";
+import { SCOPE_PALETTE } from "@/lib/color/brand";
 
 /** Deterministic PRNG: mulberry32. */
 export function ndMulberry(seed: number): () => number {
@@ -19,7 +20,8 @@ export function ndMulberry(seed: number): () => number {
   };
 }
 
-const CAT_PALETTE = ["#8b7bf7", "#f59e0b", "#34d399", "#f43f5e", "#38bdf8"];
+/** Mock categorical fill; reuses the scope palette so mocks track the theme. */
+const CAT_PALETTE = SCOPE_PALETTE;
 
 export function NdScatterMock({
   width = 280,

@@ -1,4 +1,146 @@
 @import "tailwindcss";
-@import "fumadocs-ui/css/neutral.css";
+/* Glass layout styles ship separately; the Fumadocs UI preset omits them. */
+@import "fumadocs-ui/css/generated/glass.css";
+@import "fumadocs-ui/css/shadcn.css";
 @import "fumadocs-ui/css/preset.css";
 @import "fumapress/css/preset.css";
+
+/* ==========================================================================
+   Biohub brand tokens
+   Source: 2025-11-04 Biohub Brand Book; values shared with
+   ../zensical-biohub-theme (src/zensical_biohub_theme/css/biohub.css).
+
+   The brand names only five colors (black, white, periwinkle, iris, indigo) —
+   too few to dress a docs site, which also needs a raised surface and a
+   hairline. Periwinkle is therefore extended into a ramp whose 500/800/950
+   stops ARE the brand's three purples, not approximations. Only this block
+   holds raw hex; everything below maps Shadcn roles onto it.
+
+   Weighting is the brand's technical ratio — 70% white, 20% black, up to 10%
+   periwinkle — so black and white carry the page and periwinkle is an accent
+   only: links, active nav, focus. Never body copy, never decoration.
+   ========================================================================== */
+:root {
+  --bh-black: #000000;
+  --bh-white: #ffffff;
+
+  /* Periwinkle ramp. 500 = Periwinkle PMS 2725 C, 800 = Iris PMS 2735 C,
+     950 = Indigo PMS 273 C. */
+  --bh-periwinkle-100: #e6dbff;
+  --bh-periwinkle-300: #b195ff;
+  --bh-periwinkle-400: #9272fd;
+  --bh-periwinkle-500: #6e4ff9;
+  --bh-periwinkle-800: #33029c;
+  --bh-periwinkle-950: #1d004d;
+
+  /* True neutrals — the brand is black and white, so greys carry no hue cast. */
+  --bh-neutral-060: #f5f5f5;
+  --bh-neutral-1000: #171717;
+
+  /* Error keeps a warm hue so it still reads as a warning. */
+  --bh-vermillion-400: #ff855e;
+  --bh-vermillion-700: #ad4529;
+}
+
+/* Light — black on white. Resting accent is brand periwinkle (5.06:1 on
+   white); ink drops to 60% alpha for muted copy (5.74:1). */
+:root {
+  --radius: 0.625rem;
+
+  --background: var(--bh-white);
+  --foreground: var(--bh-black);
+  /* Raised, matching the dark scheme's #171717 card: code blocks and content
+     cards lift off the page instead of relying on a border alone. This is the
+     surface the syntax theme's light contrast is measured against. */
+  --card: var(--bh-neutral-060);
+  --card-foreground: var(--bh-black);
+  --popover: var(--bh-white);
+  --popover-foreground: var(--bh-black);
+
+  --primary: var(--bh-periwinkle-500);
+  --primary-foreground: var(--bh-white);
+
+  /* Quiet raised surfaces; hover/selected states, not accents. */
+  --secondary: var(--bh-neutral-060);
+  --secondary-foreground: var(--bh-black);
+  --muted: var(--bh-neutral-060);
+  --muted-foreground: rgb(0 0 0 / 0.6);
+  --accent: var(--bh-neutral-060);
+  --accent-foreground: var(--bh-black);
+
+  --destructive: var(--bh-vermillion-700);
+
+  /* Hairlines derive from ink alpha rather than an invented grey stop. */
+  --border: rgb(0 0 0 / 0.07);
+  --input: rgb(0 0 0 / 0.12);
+  --ring: var(--bh-periwinkle-500);
+
+  /* Monochrome sequence — the brand reserves multi-hue palettes for
+     inspirational contexts, and docs are technical. */
+  --chart-1: var(--bh-periwinkle-500);
+  --chart-2: var(--bh-periwinkle-800);
+  --chart-3: var(--bh-periwinkle-300);
+  --chart-4: var(--bh-periwinkle-950);
+  --chart-5: var(--bh-periwinkle-400);
+
+  --sidebar: var(--bh-neutral-060);
+  --sidebar-foreground: var(--bh-black);
+  --sidebar-primary: var(--bh-periwinkle-500);
+  --sidebar-primary-foreground: var(--bh-white);
+  --sidebar-accent: rgb(0 0 0 / 0.06);
+  --sidebar-accent-foreground: var(--bh-black);
+  --sidebar-border: rgb(0 0 0 / 0.07);
+  --sidebar-ring: var(--bh-periwinkle-500);
+}
+
+/* Dark — white on pure black, surfaces raised to #171717.
+   The brand book flags periwinkle on black as AA for large text only
+   (measured 4.15:1), so body-size accents step up the ramp to 300 (8.61:1). */
+.dark {
+  --background: var(--bh-black);
+  --foreground: var(--bh-white);
+  --card: var(--bh-neutral-1000);
+  --card-foreground: var(--bh-white);
+  --popover: var(--bh-neutral-1000);
+  --popover-foreground: var(--bh-white);
+
+  --primary: var(--bh-periwinkle-300);
+  --primary-foreground: var(--bh-black);
+
+  --secondary: var(--bh-neutral-1000);
+  --secondary-foreground: var(--bh-white);
+  --muted: var(--bh-neutral-1000);
+  --muted-foreground: rgb(255 255 255 / 0.7);
+  --accent: var(--bh-neutral-1000);
+  --accent-foreground: var(--bh-white);
+
+  --destructive: var(--bh-vermillion-400);
+
+  --border: rgb(255 255 255 / 0.12);
+  --input: rgb(255 255 255 / 0.15);
+  --ring: var(--bh-periwinkle-300);
+
+  --chart-1: var(--bh-periwinkle-300);
+  --chart-2: var(--bh-periwinkle-100);
+  --chart-3: var(--bh-periwinkle-400);
+  --chart-4: var(--bh-periwinkle-500);
+  --chart-5: var(--bh-periwinkle-800);
+
+  --sidebar: var(--bh-neutral-1000);
+  --sidebar-foreground: var(--bh-white);
+  --sidebar-primary: var(--bh-periwinkle-300);
+  --sidebar-primary-foreground: var(--bh-black);
+  --sidebar-accent: rgb(255 255 255 / 0.08);
+  --sidebar-accent-foreground: var(--bh-white);
+  --sidebar-border: rgb(255 255 255 / 0.12);
+  --sidebar-ring: var(--bh-periwinkle-300);
+}
+
+/* The brand book lists URLs among the approved uses of periwinkle in technical
+   executions, so links carry the accent rather than body ink. Fumadocs tints
+   only the underline by default and sets this variable on `.prose`, so the
+   override has to match that scope to win. Contrast holds in both schemes:
+   5.06:1 on white, 8.61:1 on black. */
+.prose {
+  --tw-prose-links: var(--color-fd-primary);
+}

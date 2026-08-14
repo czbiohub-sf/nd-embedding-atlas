@@ -1,9 +1,10 @@
 import type { RefObject } from "react";
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import type { TrajectoryFrame } from "@/types";
+import { TRAJECTORY_COLOR } from "@/lib/color/brand";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
-const DEFAULT_COLOR = "#22d3ee";
+const DEFAULT_COLOR = TRAJECTORY_COLOR;
 const DEFAULT_ACTIVE_COLOR = "#ffffff";
 
 export interface TrajectoryOverlaySvgHandle {

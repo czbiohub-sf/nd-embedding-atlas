@@ -99,18 +99,14 @@ export function NdNodeFrame({
 }: NdNodeFrameProps) {
   const chip = form === "chip";
   const borderColor =
-    claimed || selected
-      ? "var(--primary)"
-      : stale
-        ? "color-mix(in oklab, var(--color-wire-sel) 45%, transparent)"
-        : "var(--color-border-active)"; // resting node outline (22% white on dark): visible but restrained
+    claimed || selected ? "var(--primary)" : stale ? "var(--color-node-border-stale)" : "var(--color-node-border)";
   const shadow = claimed
-    ? "0 0 0 1.5px var(--primary), 0 0 28px oklch(0.554 0.236 281 / 35%)"
+    ? "var(--shadow-node-claimed)"
     : selected
-      ? "0 0 0 1px var(--primary)"
+      ? "var(--shadow-node-selected)"
       : chip
         ? "none"
-        : "0 1px 3px rgba(0, 0, 0, 0.35)";
+        : "var(--shadow-node-rest)";
 
   // ONE root element across all three forms: the form morph is a geometry
   // transition (width / height / border-radius) on this persistent node, so
@@ -126,7 +122,7 @@ export function NdNodeFrame({
       onPointerDown={onPointerDown ?? undefined}
       className={cn(
         "relative box-border",
-        chip && selected ? "bg-emphasis" : "bg-card",
+        chip && selected ? "bg-emphasis" : "bg-node-surface",
         onPointerDown ? "cursor-grab" : "cursor-default",
         className,
       )}

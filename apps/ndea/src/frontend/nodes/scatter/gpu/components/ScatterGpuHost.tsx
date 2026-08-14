@@ -433,8 +433,9 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
     [],
   );
 
+  // Backdrop behind the GPU canvas: the node's surface, not the page's.
   return (
-    <div className="absolute inset-0" style={{ backgroundColor: "var(--background)" }}>
+    <div className="absolute inset-0 bg-node-surface">
       <canvas ref={canvasCallbackRef} className="absolute inset-0 h-full w-full" style={{ display: "block" }} />
       <canvas
         ref={overlayCallbackRef}

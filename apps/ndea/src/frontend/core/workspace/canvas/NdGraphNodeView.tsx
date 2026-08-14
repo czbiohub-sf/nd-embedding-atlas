@@ -81,7 +81,7 @@ export function ProxyNdGraphNode({ model, node, def }: ResolvedNodeViewProps) {
   return (
     <div
       ref={(element) => ws.registerEl(`canvas:${id}`, element)}
-      className="relative box-border flex h-[26px] items-center rounded-full border border-border bg-card px-2"
+      className="relative box-border flex h-[26px] items-center rounded-full border border-border bg-node-surface px-2"
       style={{ width: size.w }}
       data-nd-node={id}
       data-nd-form="chip"

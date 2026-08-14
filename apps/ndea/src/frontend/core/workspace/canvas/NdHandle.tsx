@@ -11,7 +11,8 @@ import type * as React from "react";
 import { ND_PORT_KINDS, type NdPortKind } from "@/components/nd/nd-port";
 import { useWorkspace } from "../workspace-context";
 
-const LEGAL_RING = "0 0 0 2.5px oklch(0.69 0.19 170 / 55%), 0 0 10px oklch(0.69 0.19 170 / 45%)";
+/** Ring on a handle the in-flight wire may land on; see --shadow-legal-ring. */
+const LEGAL_RING = "var(--shadow-legal-ring)";
 
 interface NdHandleProps {
   readonly nodeId: string;

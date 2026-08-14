@@ -39,11 +39,24 @@
  * via relative-color syntax.
  * ════════════════════════════════════════════════════════════════════ */
 :root {
-  /* Master hue knob: Biohub periwinkle #6E4FF9 (hue ≈ 281) */
-  --base-hue: 281;
+  /* ── Brand ─────────────────────────────────────────────────────────
+   * Biohub periwinkle ramp: 500 is Periwinkle (PMS 2725 C), 800 Iris
+   * (PMS 2735 C), 950 Indigo (PMS 273 C); the rest interpolate.
+   *
+   * Hue is NOT constant along the ramp (500 sits at 284°, 300 at 295°), so
+   * a single hue knob cannot express it. Squeezing the accent through one
+   * shipped #644ff6 while every comment claimed #6E4FF9 — each stop is its
+   * own authoritative value. Mirrored for JS/SVG in lib/color/brand.ts;
+   * keep the two in step. Source: 2025-11-04 Biohub Brand Book. */
+  --brand-periwinkle-100: #e6dbff;
+  --brand-periwinkle-300: #b195ff;
+  --brand-periwinkle-400: #9272fd;
+  --brand-periwinkle-500: #6e4ff9;
+  --brand-periwinkle-800: #33029c;
+  --brand-periwinkle-950: #1d004d;
 
   /* Hue anchors: source colors for --emphasis family */
-  --accent-hue: oklch(0.554 0.236 var(--base-hue));
+  --accent-hue: var(--brand-periwinkle-500);
   --danger-hue: oklch(0.577 0.245 27.325);
   --warning-hue: oklch(0.741 0.181 60);
   --success-hue: oklch(0.69 0.19 170);
@@ -59,14 +72,14 @@
 :root {
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
-  --card: oklch(0.988 0.001 281); /* faint off-white so panels separate from the white page */
+  --card: oklch(0.988 0 0); /* faint off-white so panels separate from the white page */
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.554 0.236 281); /* Biohub periwinkle #6E4FF9 */
+  --primary: var(--accent-hue); /* Biohub periwinkle #6E4FF9 */
   --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.967 0.001 286.375);
-  --secondary-foreground: oklch(0.21 0.006 285.885);
+  --secondary: oklch(0.967 0 0);
+  --secondary-foreground: oklch(0.21 0 0);
   --muted: oklch(0.97 0 0);
   --muted-foreground: oklch(0.46 0 0);
   --accent: oklch(0.97 0 0);
@@ -74,7 +87,7 @@
   --destructive: oklch(0.577 0.245 27.325);
   --border: oklch(0.87 0 0);
   --input: oklch(0.922 0 0);
-  --ring: oklch(0.554 0.236 281); /* periwinkle focus ring */
+  --ring: var(--accent-hue); /* periwinkle focus ring */
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
@@ -83,7 +96,7 @@
   --radius: 0.45rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.554 0.236 281);
+  --sidebar-primary: var(--accent-hue);
   --sidebar-primary-foreground: oklch(0.985 0 0);
   --sidebar-accent: oklch(0.97 0 0);
   --sidebar-accent-foreground: oklch(0.205 0 0);
@@ -112,17 +125,30 @@
   --color-border-active: #b8b8b8; /* oklch(0.72): stronger border on hover/active        */
   --color-text-muted: #6e6e6e; /* oklch(0.50): 3rd/dimmest text, below muted-foreground   */
 
-  /* ── Data visualization accents (interactive accents use --primary periwinkle) ── */
-  --color-accent-amber: #f59e0b;
-  --color-accent-rose: #f43f5e;
+  /* ── Node system ──
+   * Nodes read as wells cut into the canvas board, so the hairline carries the
+   * figure/ground, not the fill — the dark fill only ever reached 1.12:1 against
+   * the canvas, which is already how it worked. Light keeps the panel level.
+   *
+   * Two levels, and the split is load-bearing:
+   *   --color-node-surface  node fill: frame + every full-bleed body
+   *                         (table, chart, gallery, crop viewer, stage pane)
+   *   --card                raised *inside* a node: sticky headers, selects,
+   *                         buttons, toolbars — lighter than the body on purpose */
+  --color-node-surface: oklch(0.988 0 0);
+  --color-node-border: oklch(0.72 0 0); /* #b8b8b8 hairline */
+  --color-node-border-stale: color-mix(in oklab, var(--color-wire-sel) 45%, transparent);
 
   /* ── Charts ── */
-  --color-chart-mark: oklch(0.554 0.236 var(--base-hue));
+  --color-chart-mark: var(--accent-hue);
   --color-chart-mark-fade: oklch(from var(--color-chart-mark) l c h / 0.125);
 
-  /* ── Status bar (was orphan: now defined) ── */
-  --color-status-bar: #f7f7f7; /* matches --color-surface */
-  --color-status-bar-border: #e8e8e8; /* matches --color-border-subtle */
+  /* ── Status bar ──
+   * One step off the page so the footer reads as chrome, not content; no
+   * canonical token sits at that level. The border reuses the tertiary
+   * surface rather than restating its hex. */
+  --color-status-bar: #f7f7f7;
+  --color-status-bar-border: var(--color-surface-tertiary);
 
   /* ── Layout ── */
   --footer-height: 1.25rem;
@@ -160,6 +186,16 @@
   --warning-emphasis: oklch(from var(--warning-hue) l c h / 7%);
   --success-emphasis: oklch(from var(--success-hue) l c h / 10%);
 
+  /* Node elevation. Scheme-independent: both derive through --primary and
+   * --success-hue, which flip with the scheme on their own. */
+  --shadow-node-rest: 0 1px 3px rgba(0, 0, 0, 0.35);
+  --shadow-node-selected: 0 0 0 1px var(--primary), 0 0 28px oklch(from var(--primary) l c h / 35%);
+  --shadow-node-claimed: 0 0 0 1.5px var(--primary), 0 0 28px oklch(from var(--primary) l c h / 35%);
+
+  /* Ring drawn on a port/handle an in-flight wire may legally land on. */
+  --shadow-legal-ring:
+    0 0 0 2.5px oklch(from var(--success-hue) l c h / 55%), 0 0 10px oklch(from var(--success-hue) l c h / 45%);
+
   --glass-bg: oklch(1 0 0 / 80%);
   --glass-border: oklch(0 0 0 / 7%);
 }
@@ -177,6 +213,13 @@ html.dark {
   --color-border-active: oklch(1 0 0 / 22%); /* stronger border on hover/active       */
   --color-text-muted: oklch(0.62 0 0); /* 3rd/dimmest text, below muted-foreground    */
 
+  /* Node system (dark). Board and nodes are both pure black; the 30% white
+   * hairline carries figure/ground, not the fill. The old #171717 fill was
+   * only 1.12:1 against the canvas, so the border was already doing that job
+   * — 22% → 30% white restores the edge at 2.35:1 on black. */
+  --color-node-surface: #000000;
+  --color-node-border: oklch(1 0 0 / 30%);
+
   /* Status bar: dark overrides for the orphan tokens fixed above */
   --color-status-bar: var(--card); /* = oklch(0.205 0 0) */
   --color-status-bar-border: var(--border); /* = oklch(1 0 0 / 16%) */
@@ -192,15 +235,15 @@ html.dark {
   --glass-border: oklch(1 0 0 / 7%);
 
   /* Canonical dark values: mirror the light :root above (--background/--card/--primary/…). */
-  --background: oklch(0.13 0.004 281); /* lifted near-black, faint periwinkle-cool tint (was pure #000) */
+  --background: #000000; /* pure black board; nodes match it, hairlines separate */
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.205 0 0);
   --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.554 0.236 281); /* Biohub periwinkle #6E4FF9 */
+  --primary: var(--accent-hue); /* Biohub periwinkle #6E4FF9 */
   --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.274 0.006 286.033);
+  --secondary: oklch(0.274 0 0);
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.269 0 0);
   --muted-foreground: oklch(0.76 0 0);
@@ -209,7 +252,7 @@ html.dark {
   --destructive: oklch(0.704 0.191 22.216);
   --border: oklch(1 0 0 / 16%);
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.554 0.236 281); /* periwinkle focus ring */
+  --ring: var(--accent-hue); /* periwinkle focus ring */
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
@@ -217,7 +260,7 @@ html.dark {
   --chart-5: oklch(0.269 0 0);
   --sidebar: oklch(0.205 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.554 0.236 281);
+  --sidebar-primary: var(--accent-hue);
   --sidebar-primary-foreground: oklch(0.985 0 0);
   --sidebar-accent: oklch(0.269 0 0);
   --sidebar-accent-foreground: oklch(0.985 0 0);
@@ -228,11 +271,15 @@ html.dark {
 /* Node workspace wire kinds, cook-state LEDs, and motion. */
 @theme {
   /* Typed wire/port kinds: pred (pull predicate) · sel (push row set) · focus (push single record) */
-  --color-wire-pred: #8b7bf7;
-  --color-wire-sel: #f59e0b;
-  --color-wire-focus: #38bdf8;
+  /* pred carries the brand: the pull channel is the workspace's primary flow.
+   * The others borrow non-brand ramp stops shared with the docs syntax theme,
+   * chosen for separation: min CIEDE2000 30.9, all ≥4.7:1 on the canvas.
+   * Mirrored in lib/color/brand.ts for SVG/canvas consumers. */
+  --color-wire-pred: var(--brand-periwinkle-400);
+  --color-wire-sel: #ffbc56;
+  --color-wire-focus: #68cdf2;
   /* feedback channel: a writer's output re-entering its source (wireless ↻ pair) */
-  --color-wire-feedback: #2dd4bf;
+  --color-wire-feedback: #60d199;
 
   /* Cook-state hues as color tokens (anchors live in Tier 1) */
   --color-success: var(--success-hue);

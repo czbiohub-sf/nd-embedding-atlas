@@ -26,6 +26,7 @@ import { z } from "zod";
 import type { Store } from "@tanstack/store";
 
 import type { JsonValue, RowIndex } from "@ndea/sdk";
+import { SCOPE_PALETTE } from "@/lib/color/brand";
 import {
   defineCoordinationType,
   defineGroupChannel,
@@ -123,15 +124,12 @@ export const FILTER_TYPE = defineRuntimeCoordinationType({
   hostFacet: "filter",
 });
 
-/** Small distinct palette (kept off the feedback teal). */
-const SYNC_PALETTE = ["#c084fc", "#38bdf8", "#fb7185", "#fbbf24", "#34d399"];
-
 /** Stable scope color from the 31× string hash. Hashes the scope name ALONE so
  *  a migrated v1 group id ("A") keeps its exact color (no badge drift). */
 export function scopeColor(scope: string): string {
   let h = 0;
   for (let i = 0; i < scope.length; i++) h = (h * 31 + scope.charCodeAt(i)) >>> 0;
-  return SYNC_PALETTE[h % SYNC_PALETTE.length];
+  return SCOPE_PALETTE[h % SCOPE_PALETTE.length];
 }
 
 /**

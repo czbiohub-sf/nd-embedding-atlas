@@ -43,6 +43,8 @@ import { NdIconButton } from "@/components/nd/nd-icon-button";
 import { NdHud } from "@/components/nd/nd-primitives";
 import { ndZoomBand, type NdForm } from "@/components/nd/nd-resolve-form";
 import { ND_PORT_KINDS } from "@/components/nd/nd-port";
+import { BRAND_PERIWINKLE } from "@/lib/color/brand";
+import { useTheme } from "@/ThemeProvider";
 import { ND_CANVAS, ND_TIMING, ND_ZOOM } from "../constants";
 import { FeedbackChannelsContext, useFeedbackChannels } from "../feedback";
 import { useWorkspace, useWorkspaceSelector } from "../workspace-context";
@@ -58,6 +60,16 @@ import { wirePath } from "./wire-geometry";
 
 const nodeTypes = { nd: NdGraphNode };
 const edgeTypes = { ndwire: NdWireEdge };
+
+/** Unthemed nodes and unresolved assets in the minimap. */
+const MINIMAP_NODE_FALLBACK = "oklch(0.62 0 0 / 60%)";
+
+/** Minimap scrim over the off-view area. ReactFlow writes this into an SVG fill
+ *  attribute, which cannot resolve var(), so both schemes are literals here. */
+const MINIMAP_MASK = {
+  dark: "oklch(0.13 0 0 / 55%)",
+  light: "oklch(1 0 0 / 60%)",
+} as const;
 
 /** ghost wire in the dragged port's kind color */
 function NdConnectionLine({ fromX, fromY, toX, toY, fromNode }: ConnectionLineComponentProps) {
@@ -78,6 +90,7 @@ function NdConnectionLine({ fromX, fromY, toX, toY, fromNode }: ConnectionLineCo
 
 function WorkspaceCanvasInner() {
   const ws = useWorkspace();
+  const { theme } = useTheme();
   const rf = useReactFlow();
   const { screenToFlowPosition } = rf;
   const nodesReady = useNodesInitialized();
@@ -429,13 +442,15 @@ function WorkspaceCanvasInner() {
             zoomable
             className="overflow-hidden rounded-md border glass"
             style={{ width: ND_CANVAS.minimapW, height: 110, background: "var(--glass-bg)" }}
-            maskColor="oklch(0.13 0.004 281 / 55%)"
+            maskColor={MINIMAP_MASK[theme]}
             bgColor="transparent"
             nodeColor={(n: Node) => {
               const node = ws.store.state.nodes[n.id];
-              if (!node) return "oklch(0.62 0 0 / 60%)";
-              if (n.id === ws.store.state.selectedNodeId) return "oklch(0.554 0.236 281)";
-              return ws.nodeLibrary.getSpecExact(node.definitionRef)?.accent ?? "oklch(0.62 0 0 / 60%)";
+              // ReactFlow paints the minimap into SVG fill attributes, which do
+              // not resolve var(), so these have to be literals.
+              if (!node) return MINIMAP_NODE_FALLBACK;
+              if (n.id === ws.store.state.selectedNodeId) return BRAND_PERIWINKLE[500];
+              return ws.nodeLibrary.getSpecExact(node.definitionRef)?.accent ?? MINIMAP_NODE_FALLBACK;
             }}
             nodeStrokeWidth={0}
           />

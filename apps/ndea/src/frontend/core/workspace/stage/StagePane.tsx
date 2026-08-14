@@ -82,11 +82,11 @@ function StageTile({
       data-stage-tile={id}
       ref={(el) => ws.registerEl(`stage:${id}`, el)}
       onPointerDown={() => ws.selectNode(id)}
-      className="relative box-border flex min-h-0 min-w-0 flex-1 flex-col rounded-[7px] bg-card"
+      className="relative box-border flex min-h-0 min-w-0 flex-1 flex-col rounded-[7px] bg-node-surface"
       style={{
         border: `1px solid ${dropTarget || selected ? "var(--primary)" : "var(--border)"}`,
         boxShadow: dropTarget
-          ? "0 0 0 2px var(--primary), 0 0 18px oklch(0.554 0.236 281 / 35%)"
+          ? "0 0 0 2px var(--primary), 0 0 18px oklch(from var(--primary) l c h / 35%)"
           : selected
             ? "0 0 0 1px var(--primary)"
             : "none",

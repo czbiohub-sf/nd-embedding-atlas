@@ -1,9 +1,12 @@
 import type { RefObject } from "react";
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { WIRE_COLOR } from "@/lib/color/brand";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
-// Matches --color-wire-focus: the "single-record focus" channel color.
-const FOCUS_COLOR = "#38bdf8";
+/** Used only if the page background token cannot be read (no computed style). */
+const SCRIM_FALLBACK = "#0a0a0a";
+/** The "single-record focus" channel color; shared with --color-wire-focus. */
+const FOCUS_COLOR = WIRE_COLOR.focus;
 
 export interface HighlightFocusOverlayHandle {
   /** Redraw without a React re-render: called from GPU onViewChange. */
@@ -66,8 +69,10 @@ export const HighlightFocusOverlay = forwardRef<HighlightFocusOverlayHandle, Pro
     }
     const { x, y } = gpu.worldToScreen(worldPos[0], worldPos[1], w, h);
     // Resolve the dim to a literal: CSS var() does NOT resolve inside an SVG
-    // presentation attribute (only its computed value does), so read --color-base.
-    const dim = getComputedStyle(document.documentElement).getPropertyValue("--color-base").trim() || "#08080c";
+    // presentation attribute (only its computed value does), so read the page
+    // background. `--color-base` was read here before and never existed, so this
+    // silently always used the hardcoded fallback.
+    const dim = getComputedStyle(document.documentElement).getPropertyValue("--background").trim() || SCRIM_FALLBACK;
     const g = document.createElementNS(SVG_NS, "g");
 
     // Dim the WHOLE scatter: neighbors of the clicked point included: then mark

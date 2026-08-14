@@ -57,7 +57,7 @@ function FlipGhost({ ghost }: { ghost: GhostState }) {
           }),
         );
       }}
-      className="pointer-events-none fixed z-[90] box-border flex items-start rounded-[7px] border-[1.5px] border-primary bg-card shadow-[0_12px_40px_rgba(0,0,0,0.5),0_0_24px_oklch(0.554_0.236_281/30%)]"
+      className="pointer-events-none fixed z-[90] box-border flex items-start rounded-[7px] border-[1.5px] border-primary bg-card shadow-[0_12px_40px_rgba(0,0,0,0.5),0_0_24px_color-mix(in_oklab,var(--color-primary)_30%,transparent)]"
       style={{
         left: ghost.from.left,
         top: ghost.from.top,
@@ -368,7 +368,7 @@ function WritableWorkspaceFrame({ policy }: { policy: WorkspaceSurfacePolicy }) 
             A fixed-preset build never enters strip or mounts the canvas. */}
         {policy.mountCanvas && disposition === "strip" ? (
           <div
-            className="absolute box-border flex flex-col overflow-hidden rounded-[7px] border border-border bg-card"
+            className="absolute box-border flex flex-col overflow-hidden rounded-[7px] border border-border bg-node-surface"
             style={{
               left: WELL,
               bottom: WELL,

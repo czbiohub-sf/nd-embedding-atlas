@@ -11,6 +11,7 @@ import { Link2 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { NdCaption, NdHud } from "@/components/nd/nd-primitives";
 import { listCoordinationTypes } from "@/core/coordination/define-type";
+import { ON_ACCENT_INK } from "@/lib/color/brand";
 import { useWorkspace, useWorkspaceSelector } from "../workspace-context";
 
 /** Human label for a coordination type (the registry key is terse). */
@@ -81,7 +82,7 @@ export function ScopePicker({ nodeId }: { nodeId: string }) {
                         current === scope
                           ? {
                               background: ws.coordination.scopeColor(scope),
-                              color: "#0c0c12",
+                              color: ON_ACCENT_INK,
                               borderColor: "transparent",
                             }
                           : { borderColor: "var(--color-border)", color: "var(--color-text-muted)" }

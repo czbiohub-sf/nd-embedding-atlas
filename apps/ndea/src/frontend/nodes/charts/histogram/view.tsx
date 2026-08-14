@@ -36,7 +36,7 @@ export function HistogramView({ host }: NodeBodyProps<HistogramConfig, Histogram
   const onFilter = useCallback((sql: string | null) => publishChartFilter(host, sql), [host]);
 
   return (
-    <div className="flex h-full w-full flex-col gap-1.5 overflow-y-auto bg-card p-2">
+    <div className="flex h-full w-full flex-col gap-1.5 overflow-y-auto bg-node-surface p-2">
       <FieldPicker coordinator={coordinator} value={field} kinds={["number"]} onPick={setField} />
       {field == null ? (
         <div className="px-1 py-2 text-2xs text-muted-foreground/60">Pick a column to plot.</div>
