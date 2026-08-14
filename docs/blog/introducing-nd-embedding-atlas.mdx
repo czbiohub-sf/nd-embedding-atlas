@@ -1,0 +1,70 @@
+---
+title: Introducing nd-embedding-atlas
+description: Explore precomputed embeddings beside the microscopy images they came from, in a local browser workspace.
+date: 2026-08-12
+tags: [announcement, visualization, microscopy, embeddings]
+---
+
+A scatter of embedded cells shows that two points landed near each other. It rarely shows why. Answering that question usually means copying an identifier out of a notebook, hunting for the field of view it came from, and opening a separate viewer to crop the right region. The embedding lives in one tool and the pixels live in another, so judging an interesting cluster costs minutes per point.
+
+nd-embedding-atlas closes that gap. It links precomputed embeddings to their source n-dimensional (`TCZYX`) microscopy images, so researchers can review, select, and annotate examples for downstream model training. The command-line binary is `ndea`, it serves a local browser application, and it reads datasets from local paths, so a dataset never leaves the machine that holds it.
+
+One boundary is worth stating early: ndea does not train models and ships no model-training code. Generate embeddings first, then store them in a supported AnnData or MuData Zarr input.
+
+## From a point to its pixels
+
+Image views need two inputs: an OME-Zarr high-content-screening plate mounted alongside the dataset, and observation columns that say which image a row belongs to and where in that image to look. Mount the plate in a project YAML file:
+
+```yaml
+datasets:
+  experiment_a:
+    anndata: ./analysis/anndata.zarr
+    hcs_plate: ./images/experiment-a.zarr
+```
+
+Each row's field-of-view value is appended below that plate root, so it must match the image path inside the plate, such as `A/1/000000`. ndea detects the linkage columns by name: `fov_name` or `well` for the field of view, `t` for the time point, `bbox` or `cp_bbox` for a bounding box, `x`/`y` pairs for a crop centre, and `z`, `z_slice`, or `plane` for the Z plane. A bounding box is a string in source-image pixel coordinates, written `[y_min x_min y_max x_max]`.
+
+With those pieces in place, focusing a table row publishes its location to the Image Viewer and the Gallery, and a selection or filter publishes many rows at once for crop loading.
+
+## The Node Workspace
+
+The browser application is a Node Workspace: a scatter, an observation table, an image viewer, and a gallery that stay linked as you work. Colour the scatter by an observation column, select a region, and the linked table counts change with it; focus a row and the image views follow. The scatter renderer runs on WebGPU, so use a current Chrome or Edge release. Firefox does not provide the required WebGPU support by default.
+
+## Data it reads
+
+ndea implements a defined subset of each format rather than a whole specification, so a file can be valid upstream and still fail to open.
+
+| Input        | Implemented subset                                                       | Important limits                                                                    |
+| ------------ | ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
+| AnnData Zarr | Zarr v2 and v3 stores; `obs`, optional `var`, dense `obsm`, layers       | `obs` is required; sparse embeddings are not supported                              |
+| MuData Zarr  | MuData 0.1.0-style stores with `axis: 0`; AnnData modalities under `mod/` | only `axis=0`; modality observations must map one-to-one to the shared observations |
+| OME-Zarr HCS | OME-NGFF 0.4 on Zarr v2 and OME-NGFF 0.5 on Zarr v3                      | mounted plates only; standard plate, well, and image hierarchy expected             |
+| Project YAML | dataset syntax, plate mounts, channel display settings, server settings  | exactly one YAML file per launch                                                    |
+
+Embeddings belong under `obsm` as dense rank-2 arrays with one row per observation, conventionally named `X_umap`, `X_phate`, or `X_pca`. Two columns are enough to draw a scatter, and higher-dimensional embeddings let you choose which dimensions map to X and Y.
+
+## Install and launch
+
+On macOS with Apple silicon or on Linux:
+
+```bash
+curl -fsSL https://czbiohub-sf.github.io/nd-embedding-atlas/install.sh | sh
+```
+
+The installer verifies a SHA-256 checksum, stores the binary under `~/.ndea/versions/<tag>/ndea`, and points `~/.local/bin/ndea` at that version. A PowerShell installer covers Windows on `x86_64`. Confirm the result, then open a dataset:
+
+```bash
+ndea --version
+ndea doctor
+ndea view path/to/data.zarr
+```
+
+The application serves `http://localhost:5055`.
+
+## The API is still moving
+
+ndea is under active development. APIs, file-format support, and shipped presets may change between releases, so check the [supported formats](/supported-formats) before preparing production data, and pin a release tag when a pipeline depends on current behaviour.
+
+If you evaluate ndea against your own data, the linkage rules in [Link observations to images](/image-linkage) are the fastest way to tell whether an existing store will work unchanged.
+
+Start with the [installation guide](/install), and read the source or file issues on [GitHub](https://github.com/czbiohub-sf/nd-embedding-atlas).
