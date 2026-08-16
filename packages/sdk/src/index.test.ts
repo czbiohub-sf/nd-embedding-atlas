@@ -1,3 +1,4 @@
+/// <reference types="bun" />
 import { describe, expect, test } from "bun:test";
 import { z } from "zod";
 import {
@@ -18,18 +19,18 @@ const transformDefinition = defineNode({
   role: "transform",
   inputs: [{ id: "in", kind: "pred", label: "In" }],
   outputs: [{ id: "out", kind: "pred", label: "Out" }],
-  capabilities: ["data-read", "predicate-publish", "compute"],
+  capabilities: ["data-read", "compute"],
   config: {
     schema: z.object({ threshold: z.number() }),
     version: nodeConfigVersion(1),
     defaultValue: { threshold: 0 },
   },
   load: () =>
-    Promise.resolve<NodeModule<unknown, "data-read" | "predicate-publish" | "compute">>({
+    Promise.resolve<NodeModule<unknown, "data-read" | "compute">>({
       createRuntime(host) {
         return {
           recompute() {
-            host.publishPredicate("transform", null);
+            void host.data.table;
           },
           dispose() {},
         };
@@ -83,7 +84,7 @@ describe("canonical plugin SDK barrel", () => {
     ]);
     expect(registered[1]?.load).toBeFunction();
     expect(dispose).toBeFunction();
-    expect(SDK_VERSION as string).toBe("0.1.0");
+    expect(SDK_VERSION as string).toBe("0.2.0");
   });
 
   test("re-exports the protocol-owned plugin manifest parser", () => {
@@ -91,12 +92,12 @@ describe("canonical plugin SDK barrel", () => {
       manifestSchemaVersion: 1,
       pluginId: "example.plugin",
       pluginPackageVersion: "1.2.3",
-      sdkVersionRange: "^0.1.0",
+      sdkVersionRange: "^0.2.0",
       displayName: "Example plugin",
       clientEntry: "dist/client.js",
       staticAssets: ["dist/client.css"],
       hostCompatibility: {
-        hostVersionRange: ">=0.1.0",
+        hostVersionRange: ">=0.2.0",
         platforms: ["darwin", "linux"],
       },
       license: "MIT",

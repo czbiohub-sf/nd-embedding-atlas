@@ -4,7 +4,7 @@
  * (Workspace transactions mirror every mutation into it).
  */
 
-import type { NdForm } from "@/components/nd/nd-resolve-form";
+import type { NdForm } from "@/components/node-workspace/nd-resolve-form";
 import type { CoordinationSpace } from "@/core/coordination/coordination";
 import type { GraphDocumentEdge, GraphDocumentNode } from "@/core/graph/records";
 import type { WorkspaceNodeAssetRecord } from "@/core/node-asset/schema";

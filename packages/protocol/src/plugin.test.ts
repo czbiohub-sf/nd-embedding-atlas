@@ -1,3 +1,4 @@
+/// <reference types="bun" />
 import { describe, expect, test } from "bun:test";
 import {
   PLUGIN_BOOTSTRAP_SCHEMA_VERSION,
@@ -25,9 +26,9 @@ const validManifest = {
 describe("PluginManifestSchema", () => {
   test("parses every independently versioned manifest field through the protocol barrel", () => {
     const manifest = PluginManifestSchema.parse(validManifest);
-    expect(manifest.pluginId as string).toBe("example.plugin");
-    expect(manifest.pluginPackageVersion as string).toBe("1.2.3");
-    expect(manifest.sdkVersionRange as string).toBe("^0.1.0");
+    expect(String(manifest.pluginId)).toBe("example.plugin");
+    expect(String(manifest.pluginPackageVersion)).toBe("1.2.3");
+    expect(String(manifest.sdkVersionRange)).toBe("^0.1.0");
   });
 
   test("rejects traversal in the client entry and static-asset allowlist", () => {

@@ -38,11 +38,11 @@ import "@xyflow/react/dist/style.css";
 import { useSelector } from "@tanstack/react-store";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { NdBreadcrumb } from "@/components/nd/nd-breadcrumb";
-import { NdIconButton } from "@/components/nd/nd-icon-button";
-import { NdHud } from "@/components/nd/nd-primitives";
-import { ndZoomBand, type NdForm } from "@/components/nd/nd-resolve-form";
-import { ND_PORT_KINDS } from "@/components/nd/nd-port";
+import { NdBreadcrumb } from "@/components/node-workspace/nd-breadcrumb";
+import { NdIconButton } from "@/components/node-workspace/nd-icon-button";
+import { NdHud } from "@/components/node-workspace/nd-primitives";
+import { ndZoomBand, type NdForm } from "@/components/node-workspace/nd-resolve-form";
+import { ND_PORT_KINDS } from "@/components/node-workspace/nd-port";
 import { BRAND_PERIWINKLE } from "@/lib/color/brand";
 import { useTheme } from "@/ThemeProvider";
 import { ND_CANVAS, ND_TIMING, ND_ZOOM } from "../constants";

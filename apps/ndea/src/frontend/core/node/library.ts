@@ -1,4 +1,4 @@
-import type { NdPortKind } from "@/components/nd/nd-port";
+import type { NdPortKind } from "@/components/node-workspace/nd-port";
 import {
   adaptNodeCompute,
   type GraphNodeCookFunction,
@@ -15,6 +15,7 @@ import {
 import type { NativeNodeGeometry, AnyNativeNodeContribution } from "./native-contribution";
 import { NATIVE_NODE_CONTRIBUTIONS, NATIVE_NODE_DEFINITIONS } from "./native-nodes";
 import type { ExactNodeTypeRef, NodeComputeContext, PluginFactory } from "@ndea/sdk";
+import type { AppNodeHostFacetName } from "./app-node-host";
 
 export interface AppNodeSpec {
   readonly definition: CatalogNodeDefinition;
@@ -31,6 +32,7 @@ export interface AppNodeSpec {
   readonly accent?: string;
   readonly checkpoint?: boolean;
   readonly checkpointCreation?: boolean;
+  readonly requiredHostFacets?: readonly AppNodeHostFacetName[];
 }
 
 export interface AppNodeDescriptor {
@@ -81,6 +83,7 @@ export function nativeNodeSpecOf(
     accent: contribution.presentation.accent,
     checkpoint: contribution.presentation.checkpoint,
     checkpointCreation: contribution.presentation.checkpointCreation,
+    requiredHostFacets: contribution.presentation.requiredHostFacets,
   });
 }
 

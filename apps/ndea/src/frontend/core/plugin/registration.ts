@@ -1,12 +1,27 @@
-import type { NodeDefinition, PluginDisposer, PluginFactory, PluginManifest } from "@ndea/sdk";
+import type {
+  NodeCapability,
+  NodeDefinition,
+  PluginDisposer,
+  PluginFactory,
+  PluginManifest,
+  PluginPermission,
+} from "@ndea/sdk";
 
 /** Type-erased only at the heterogeneous catalog boundary; definitions retain their precise author type before registration. */
-// oxlint-disable-next-line no-explicit-any -- TypeScript has no existential generics; catalog validation checks every erased definition before indexing.
-export type CatalogNodeDefinition = NodeDefinition<any, any>;
+// oxlint-disable-next-line no-explicit-any -- TypeScript has no existential config/capability generics; catalog validates this erased definition before indexing.
+export type CatalogNodeDefinition = Omit<NodeDefinition<any, any>, "load"> & {
+  readonly load?: () => Promise<unknown>;
+};
 
 export interface NativeContributionSource {
   readonly kind: "native";
   readonly sourceId: string;
+}
+
+/** App-owned grant. Manifest disclosures are requests, never authority. */
+export interface PluginAuthorization {
+  readonly grantedPermissions: readonly PluginPermission[];
+  readonly grantedCapabilities: readonly NodeCapability[];
 }
 
 export interface ExternalContributionSource {

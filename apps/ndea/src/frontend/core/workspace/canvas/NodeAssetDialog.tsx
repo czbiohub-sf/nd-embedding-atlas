@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactElement } from "react";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@ndea/ui/components/button";
 import {
   Dialog,
   DialogContent,
@@ -8,10 +8,10 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { Field, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+} from "@ndea/ui/components/dialog";
+import { Field, FieldLabel } from "@ndea/ui/components/field";
+import { Input } from "@ndea/ui/components/input";
+import { Textarea } from "@ndea/ui/components/textarea";
 import type { NodeAssetParameterDraftBinding } from "@/core/node-asset/authoring";
 import { useWorkspace } from "../workspace-context";
 

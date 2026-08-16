@@ -8,7 +8,7 @@
 import { Handle, Position, useConnection } from "@xyflow/react";
 import type * as React from "react";
 
-import { ND_PORT_KINDS, type NdPortKind } from "@/components/nd/nd-port";
+import { ND_PORT_KINDS, type NdPortKind } from "@/components/node-workspace/nd-port";
 import { useWorkspace } from "../workspace-context";
 
 /** Ring on a handle the in-flight wire may land on; see --shadow-legal-ring. */

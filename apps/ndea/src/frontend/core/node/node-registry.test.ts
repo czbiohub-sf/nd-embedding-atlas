@@ -111,9 +111,22 @@ describe("native node catalog fitness functions", () => {
       expect(Object.isFrozen(contribution.presentation.geometry)).toBe(true);
       expect(Object.isFrozen(contribution.presentation.geometry.card)).toBe(true);
       expect(Object.isFrozen(contribution.presentation.geometry.full)).toBe(true);
+      if (contribution.presentation.requiredHostFacets) {
+        expect(Object.isFrozen(contribution.presentation.requiredHostFacets)).toBe(true);
+      }
       expect("Body" in contribution.graph).toBe(false);
       expect("usesDefinitionModule" in contribution.graph).toBe(false);
     }
+  });
+
+  test("native bodies declare every required app-local host facet", () => {
+    expect(nativeNodeLibrary.getCurrentSpec("cache")?.requiredHostFacets).toEqual(["checkpoint"]);
+    expect(nativeNodeLibrary.getCurrentSpec("scatter")?.requiredHostFacets).toEqual([
+      "checkpointCreation",
+      "bodyHeaderElement",
+    ]);
+    expect(nativeNodeLibrary.getCurrentSpec("subnet")?.requiredHostFacets).toEqual(["hierarchy"]);
+    expect(nativeNodeLibrary.getCurrentSpec("table")?.requiredHostFacets).toEqual(["bodyHeaderElement"]);
   });
 
   test("definition metadata is authoritative while graph runtime and layout stay app-local", () => {
@@ -214,6 +227,7 @@ describe("native node catalog fitness functions", () => {
     ] as const) {
       expect(capabilities.has(capability), `Scatter is missing ${capability}`).toBe(true);
     }
+    expect(nativeNodeLibrary.getCurrentSpec("scatter")?.checkpointCreation).toBe(true);
   });
 
   test("every config contract accepts its tuple-defined default", () => {

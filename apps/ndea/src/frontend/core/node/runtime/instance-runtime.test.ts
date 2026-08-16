@@ -38,7 +38,7 @@ function deferred<Value>(): Deferred<Value> {
 }
 
 function definition(
-  load: () => Promise<NodeModule>,
+  load: () => Promise<NodeModule<unknown, NodeCapability>>,
   capabilities: readonly NodeCapability[] = [],
 ): CatalogNodeDefinition {
   return defineNode({
@@ -56,10 +56,23 @@ function catalogWith(value: CatalogNodeDefinition): NodeCatalog {
   return { resolveExact: () => value } as unknown as NodeCatalog;
 }
 
-function hostHandle(capabilities: readonly NodeCapability[], onDispose: () => void): HostHandle<unknown> {
+function hostHandle(
+  capabilities: readonly NodeCapability[],
+  onDispose: () => void,
+  services: Record<string, unknown> = {},
+): HostHandle<unknown> {
   return {
-    host: { capabilities: new Set(capabilities) } as HostHandle<unknown>["host"],
+    host: Object.assign({ capabilities: new Set(capabilities) }, services) as unknown as HostHandle<unknown>["host"],
     dispose: onDispose,
+  };
+}
+
+function dataReadServices(): Record<string, unknown> {
+  return {
+    data: {},
+    registerClient() {},
+    inputPredicate: {},
+    dataAPI: { query: () => Promise.resolve([]) },
   };
 }
 
@@ -79,6 +92,7 @@ function mountedBody(element: FixtureElement, onDispose: () => void): MountedNod
 describe("NodeInstanceRuntime", () => {
   test("loads, creates one host/runtime/Body, and preserves the Body through adoption", async () => {
     const events: string[] = [];
+    const startupEvents: string[] = [];
     const element = new FixtureElement();
     const dock = new FixtureElement();
     const firstSocket = new FixtureElement();
@@ -88,21 +102,34 @@ describe("NodeInstanceRuntime", () => {
     let mounts = 0;
     const value = definition(() => {
       loads += 1;
+      startupEvents.push("module");
       return Promise.resolve({
-        createRuntime: () => ({ dispose: () => events.push("runtime") }),
+        createRuntime: () => {
+          startupEvents.push("runtime");
+          return { dispose: () => events.push("runtime") };
+        },
         mountBody: () => {
           mounts += 1;
+          startupEvents.push("body");
           return mountedBody(element, () => events.push("body"));
         },
       });
-    });
+    }, ["data-read"]);
     const runtime = new NodeInstanceRuntime({
       catalog: catalogWith(value),
       definitionRef: value.ref,
       dockElement: dock as unknown as HTMLElement,
       createHost: () => {
         hosts += 1;
-        return hostHandle([], () => events.push("host"));
+        startupEvents.push("host");
+        const handle = hostHandle(["data-read"], () => events.push("host"), dataReadServices());
+        const capabilities = handle.host.capabilities as Set<NodeCapability>;
+        const has = capabilities.has.bind(capabilities);
+        capabilities.has = (capability) => {
+          startupEvents.push("validation");
+          return has(capability);
+        };
+        return handle;
       },
     });
 
@@ -113,6 +140,7 @@ describe("NodeInstanceRuntime", () => {
     await firstStart;
     expect(runtime.getSnapshot()).toEqual({ status: "ready", element: element as unknown as HTMLElement });
     expect({ loads, hosts, mounts }).toEqual({ loads: 1, hosts: 1, mounts: 1 });
+    expect(startupEvents).toEqual(["module", "host", "validation", "runtime", "body"]);
     expect(dock.children).toEqual([element]);
 
     firstSocket.appendChild(dock);
@@ -235,6 +263,69 @@ describe("NodeInstanceRuntime", () => {
       error: { message: expect.stringContaining("gpu-device") },
     });
     expect({ runtimeCreates, mounts, hostDisposals }).toEqual({ runtimeCreates: 0, mounts: 0, hostDisposals: 1 });
+  });
+
+  test("rejects a malformed claimed service before creating module runtime or mounting Body", async () => {
+    let runtimeCreates = 0;
+    let mounts = 0;
+    let hostDisposals = 0;
+    const value = definition(
+      () =>
+        Promise.resolve({
+          createRuntime: () => {
+            runtimeCreates += 1;
+            return { dispose() {} };
+          },
+          mountBody: () => {
+            mounts += 1;
+            return mountedBody(new FixtureElement(), () => {});
+          },
+        }),
+      ["gpu-device"],
+    );
+    const runtime = new NodeInstanceRuntime({
+      catalog: catalogWith(value),
+      definitionRef: value.ref,
+      dockElement: new FixtureElement() as unknown as HTMLElement,
+      createHost: () =>
+        hostHandle(
+          ["gpu-device"],
+          () => {
+            hostDisposals += 1;
+          },
+          { acquireDeviceLease: "not callable" },
+        ),
+    });
+
+    await runtime.start();
+    expect(runtime.getSnapshot()).toMatchObject({
+      status: "failed",
+      stage: "capability",
+      error: { message: expect.stringContaining("gpu-device.acquireDeviceLease must be callable") },
+    });
+    expect({ runtimeCreates, mounts, hostDisposals }).toEqual({ runtimeCreates: 0, mounts: 0, hostDisposals: 1 });
+  });
+
+  test("rejects malformed loaded module data before host construction", async () => {
+    let hosts = 0;
+    const value = definition(() => Promise.resolve({ mountBody: "not callable" } as never));
+    const runtime = new NodeInstanceRuntime({
+      catalog: catalogWith(value),
+      definitionRef: value.ref,
+      dockElement: new FixtureElement() as unknown as HTMLElement,
+      createHost: () => {
+        hosts += 1;
+        return hostHandle([], () => {});
+      },
+    });
+
+    await runtime.start();
+    expect(runtime.getSnapshot()).toMatchObject({
+      status: "failed",
+      stage: "module",
+      error: { message: "node definition load did not return a valid module" },
+    });
+    expect(hosts).toBe(0);
   });
 
   test("disposes late Body completion immediately after instance disposal", async () => {

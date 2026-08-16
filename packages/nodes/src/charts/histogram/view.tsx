@@ -1,0 +1,275 @@
+import type { FilterCoordinationAPI } from "@ndea/sdk";
+import type { Coordinator } from "@uwdata/mosaic-core";
+import { type FilterExpr, cast, column } from "@uwdata/mosaic-sql";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+import type { NodeBodyProps } from "../../contracts";
+import type { ChartServices, UseChartQuery } from "../core/contracts";
+import { FieldPicker } from "../core/field-picker";
+import { buildHistogramStatsQuery } from "../core/filter-queries";
+import { filterExprToExpr, toRows } from "../core/mosaic-helpers";
+import { publishChartFilter } from "../core/routing";
+import { useChartLeaf } from "../core/use-chart-leaf";
+import { useContainerSize } from "../core/use-container-size";
+import { binParams as computeBinParams, histogramBrushPredicate, type Stats } from "./binmath";
+import type { HistogramCapabilities, HistogramConfig } from "./types";
+
+interface HistBin {
+  bin: number;
+  countTotal: number;
+  countFiltered: number;
+}
+
+const CHART_HEIGHT = 64;
+const AXIS_HEIGHT = 18;
+const TOTAL_HEIGHT = CHART_HEIGHT + AXIS_HEIGHT;
+
+export function createHistogramView({ useColumnTypes, useQuery }: ChartServices) {
+  return function HistogramView({ host }: NodeBodyProps<HistogramConfig, HistogramCapabilities>) {
+    const { coordinator, table, filter, field, setField } = useChartLeaf(host);
+    const bins = host.config.bins ?? 20;
+    const onFilter = useCallback((sql: string | null) => publishChartFilter(host, sql), [host]);
+
+    return (
+      <div className="flex h-full w-full flex-col gap-1.5 overflow-y-auto bg-node-surface p-2">
+        <FieldPicker
+          coordinator={coordinator}
+          value={field}
+          kinds={["number"]}
+          onPick={setField}
+          useColumnTypes={useColumnTypes}
+        />
+        {field == null ? (
+          <div className="px-1 py-2 text-2xs text-muted-foreground/60">Pick a column to plot.</div>
+        ) : (
+          <HistogramBody
+            key={field}
+            coordinator={coordinator}
+            table={table}
+            filter={filter}
+            field={field}
+            binCount={bins}
+            onFilter={onFilter}
+            useQuery={useQuery}
+          />
+        )}
+      </div>
+    );
+  };
+}
+
+interface BodyProps {
+  coordinator: Coordinator;
+  table: string;
+  filter: FilterCoordinationAPI;
+  field: string;
+  binCount: number;
+  onFilter: (sql: string | null) => void;
+  useQuery: UseChartQuery;
+}
+
+function HistogramBody({ coordinator, table, filter, field, binCount, onFilter, useQuery }: BodyProps) {
+  // Clear the published filter when the field changes (this body remounts).
+  useEffect(() => () => onFilter(null), [onFilter]);
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const { width: containerWidth } = useContainerSize(containerRef);
+
+  const statsQuery = useCallback(
+    (predicate: FilterExpr) => buildHistogramStatsQuery(table, field, predicate),
+    [field, table],
+  );
+  const statsTransform = useCallback((result: unknown): (Stats & { countFiltered: number }) | null => {
+    const row = toRows(result)[0];
+    return row
+      ? {
+          min: Number(row.min),
+          max: Number(row.max),
+          count: Number(row.count),
+          countFiltered: Number(row.countFiltered),
+        }
+      : null;
+  }, []);
+  const { data: stats, loading: statsLoading } = useQuery({
+    coordinator,
+    filter,
+    query: statsQuery,
+    transform: statsTransform,
+  });
+
+  const binParams = useMemo(() => computeBinParams(stats, binCount), [stats, binCount]);
+
+  const query = useCallback(
+    (predicate: FilterExpr) => {
+      if (!binParams) return null;
+      const { binStart, binSize } = binParams;
+      const fieldExpr = cast(column(field), "DOUBLE");
+      const pred = filterExprToExpr(predicate);
+      const binExpr = `FLOOR((${String(fieldExpr)} - ${String(binStart)}) / ${String(binSize)})`;
+      return `SELECT ${binExpr} AS bin,
+                     COUNT(*) AS "countTotal",
+                     SUM(CAST((${String(pred)}) AS INT)) AS "countFiltered"
+              FROM ${table}
+              WHERE ${String(fieldExpr)} IS NOT NULL AND isfinite(${String(fieldExpr)})
+              GROUP BY bin
+              ORDER BY bin`;
+    },
+    [field, table, binParams],
+  );
+
+  const transform = useCallback((result: unknown): HistBin[] => {
+    const rows = toRows(result);
+    return rows.map((r) => ({
+      bin: Number(r.bin),
+      countTotal: Number(r.countTotal),
+      countFiltered: Number(r.countFiltered),
+    }));
+  }, []);
+
+  const { data, loading } = useQuery({
+    coordinator,
+    filter,
+    query,
+    transform,
+    enabled: binParams != null,
+  });
+
+  const svgRef = useRef<SVGSVGElement>(null);
+  const [brushRange, setBrushRange] = useState<[number, number] | null>(null);
+  const brushing = useRef(false);
+
+  // Constant-value column: show the value with count instead of an empty histogram.
+  if (stats && stats.count > 0 && stats.min === stats.max) {
+    return (
+      <div ref={containerRef} className="py-2">
+        <span className="inline-block rounded bg-muted px-1.5 py-0.5 font-medium text-2xs text-foreground">
+          {formatTick(stats.min)}
+        </span>
+        <span className="ml-1 text-3xs text-muted-foreground">({stats.countFiltered.toLocaleString()} rows)</span>
+      </div>
+    );
+  }
+
+  if (!binParams || !data || data.length === 0) {
+    return (
+      <div ref={containerRef} className="py-2 text-2xs text-muted-foreground">
+        {loading || statsLoading ? "Loading..." : "No data"}
+      </div>
+    );
+  }
+
+  const { binStart, binSize } = binParams;
+  const maxCount = Math.max(...data.map((d) => d.countTotal), 1);
+
+  const minBin = Math.min(...data.map((d) => d.bin));
+  const maxBin = Math.max(...data.map((d) => d.bin));
+  const totalBins = maxBin - minBin + 1;
+
+  const w = containerWidth > 0 ? containerWidth : 200;
+  const gap = 1;
+  const barWidth = Math.max((w - gap * (totalBins - 1)) / totalBins, 2);
+
+  return (
+    <div ref={containerRef} className="w-full">
+      <svg
+        ref={svgRef}
+        width={w}
+        height={TOTAL_HEIGHT}
+        className="block"
+        aria-hidden="true"
+        onMouseDown={(e) => {
+          if (!svgRef.current) return;
+          brushing.current = true;
+          const rect = svgRef.current.getBoundingClientRect();
+          const xPx = e.clientX - rect.left;
+          const binIdx = Math.floor((xPx / w) * totalBins) + minBin;
+          const val = binStart + binIdx * binSize;
+          setBrushRange([val, val]);
+        }}
+        onMouseMove={(e) => {
+          if (!brushing.current || !svgRef.current || !brushRange) return;
+          const rect = svgRef.current.getBoundingClientRect();
+          const xPx = e.clientX - rect.left;
+          const binIdx = Math.floor((xPx / w) * totalBins) + minBin;
+          const val = binStart + (binIdx + 1) * binSize;
+          setBrushRange([brushRange[0], val]);
+        }}
+        onMouseUp={() => {
+          brushing.current = false;
+          if (brushRange) onFilter(histogramBrushPredicate(field, brushRange[0], brushRange[1]));
+        }}
+        onMouseLeave={() => {
+          brushing.current = false;
+        }}
+      >
+        {data.map((bin) => {
+          const x = (bin.bin - minBin) * (barWidth + gap);
+          const hTotal = (bin.countTotal / maxCount) * CHART_HEIGHT;
+          const hFiltered = (bin.countFiltered / maxCount) * CHART_HEIGHT;
+
+          return (
+            <g key={bin.bin}>
+              <rect x={x} y={CHART_HEIGHT - hTotal} width={barWidth} height={hTotal} className="fill-chart-mark-fade" />
+              <rect
+                x={x}
+                y={CHART_HEIGHT - hFiltered}
+                width={barWidth}
+                height={hFiltered}
+                className="fill-chart-mark"
+              />
+            </g>
+          );
+        })}
+
+        {brushRange
+          ? (() => {
+              const lo = Math.min(brushRange[0], brushRange[1]);
+              const hi = Math.max(brushRange[0], brushRange[1]);
+              const xStart = ((lo - binStart) / binSize - minBin) * (barWidth + gap);
+              const xEnd = ((hi - binStart) / binSize - minBin) * (barWidth + gap);
+              return (
+                <rect
+                  x={xStart}
+                  y={0}
+                  width={Math.max(xEnd - xStart, 1)}
+                  height={CHART_HEIGHT}
+                  fill="color-mix(in oklch, var(--color-primary) 15%, transparent)"
+                  stroke="color-mix(in oklch, var(--color-primary) 50%, transparent)"
+                  strokeWidth={1}
+                />
+              );
+            })()
+          : null}
+
+        <line x1={0} y1={CHART_HEIGHT + 0.5} x2={w} y2={CHART_HEIGHT + 0.5} className="stroke-border" strokeWidth={1} />
+
+        <text
+          x={0}
+          y={TOTAL_HEIGHT - 3}
+          className="fill-muted-foreground"
+          fontSize={10}
+          fontFamily="JetBrains Mono, monospace"
+        >
+          {stats?.min != null ? formatTick(stats.min) : ""}
+        </text>
+        <text
+          x={w}
+          y={TOTAL_HEIGHT - 3}
+          textAnchor="end"
+          className="fill-muted-foreground"
+          fontSize={10}
+          fontFamily="JetBrains Mono, monospace"
+        >
+          {stats?.max != null ? formatTick(stats.max) : ""}
+        </text>
+      </svg>
+    </div>
+  );
+}
+
+function formatTick(v: number): string {
+  if (Number.isInteger(v)) return v.toLocaleString();
+  if (Math.abs(v) >= 1000) return v.toFixed(0);
+  if (Math.abs(v) >= 1) return v.toFixed(1);
+  return v.toPrecision(3);
+}

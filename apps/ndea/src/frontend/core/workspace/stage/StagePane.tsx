@@ -11,9 +11,9 @@ import { useSelector } from "@tanstack/react-store";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
-import { NodeDocButton } from "@/components/nd/node-doc";
-import { NdIconButton } from "@/components/nd/nd-icon-button";
-import { NdBracketed, NdCaption, NdHud, NdLed, type NdLedState } from "@/components/nd/nd-primitives";
+import { NodeDocButton } from "@/components/node-workspace/node-doc";
+import { NdIconButton } from "@/components/node-workspace/nd-icon-button";
+import { NdBracketed, NdCaption, NdHud, NdLed, type NdLedState } from "@/components/node-workspace/nd-primitives";
 import { NODE_EDITOR_ENABLED } from "@/feature-flags";
 import { BodySocket, HeaderSocket } from "../body-dock";
 import { ND_STAGE, ND_TIMING } from "../constants";

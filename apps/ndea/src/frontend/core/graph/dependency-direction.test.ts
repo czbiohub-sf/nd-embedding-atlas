@@ -8,11 +8,10 @@ const BOUNDARY_PATTERNS = [
   "core/plugin/**/*.{ts,tsx}",
   "core/node/**/*.{ts,tsx}",
   "core/node-asset/**/*.{ts,tsx}",
-  "nodes/**/*.{ts,tsx}",
 ] as const;
 
 describe("core dependency direction", () => {
-  test("graph, plugin, node, node assets, and node implementations never import Workspace", async () => {
+  test("graph, plugin, node runtime, and node assets never import Workspace", async () => {
     const violations: string[] = [];
     for (const pattern of BOUNDARY_PATTERNS) {
       for await (const path of new Bun.Glob(pattern).scan({ cwd: FRONTEND_ROOT, onlyFiles: true })) {

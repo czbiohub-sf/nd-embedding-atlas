@@ -31,7 +31,7 @@ export interface RowSetPublication {
 }
 
 export interface DataQueryAPI {
-  query<T = unknown>(sql: string, signal?: AbortSignal): Promise<T>;
+  query(sql: string, signal?: AbortSignal): Promise<unknown>;
   categorize?(column: string, max?: number): Promise<unknown>;
   loadVarColumn?(name: string, layer?: string): Promise<unknown>;
   fetchCrop?(params: unknown): Promise<Blob>;
@@ -59,7 +59,7 @@ type CapabilityService<
   Service,
 > = Required extends Capabilities ? Service : object;
 
-export type NodeDataAPI<Capabilities extends NodeCapability = NodeCapability> = DataQueryAPI &
+export type NodeDataAPI<Capabilities extends NodeCapability = never> = DataQueryAPI &
   CapabilityService<Capabilities, "row-set-publish", RowSetPublishAPI> &
   CapabilityService<Capabilities, "annotation-write", AnnotationWriteAPI>;
 
@@ -132,21 +132,6 @@ interface DataReadHost<Capabilities extends NodeCapability> {
   readonly dataAPI: NodeDataAPI<Capabilities>;
 }
 
-interface RowSetSubscribeHost {
-  externalRowSet(): readonly RowIndex[] | null;
-  onExternalRowSet(callback: (rowIndices: readonly RowIndex[] | null) => void): () => void;
-}
-
-interface PredicatePublishHost {
-  publishPredicate(facet: string, sql: string | null): void;
-}
-
-interface RowSetPublishHost {
-  publishRowSet(rowIndices: RowIndex[]): void;
-  /** Clears the broadcast; publishing `[]` instead keeps an active empty set. */
-  clearRowSet(): void;
-}
-
 interface FocusHost {
   readonly focus: FocusCoordinationAPI;
 }
@@ -169,17 +154,13 @@ interface GPUHost {
 
 /**
  * Optional host services exist in the type only when the definition declares
- * their capability. Using the default capability union exposes the full host to
- * app adapters; author definitions should preserve their inferred narrow union.
+ * their capability. Capability-free and erased consumers see only core fields.
  */
-export type NodeHost<Config = unknown, Capabilities extends NodeCapability = NodeCapability> = NodeHostBase<
+export type NodeHost<Config = unknown, Capabilities extends NodeCapability = never> = NodeHostBase<
   Config,
   Capabilities
 > &
   CapabilityService<Capabilities, "data-read", DataReadHost<Capabilities>> &
-  CapabilityService<Capabilities, "row-set-subscribe", RowSetSubscribeHost> &
-  CapabilityService<Capabilities, "predicate-publish", PredicatePublishHost> &
-  CapabilityService<Capabilities, "row-set-publish", RowSetPublishHost> &
   CapabilityService<Capabilities, "focus-coordination", FocusHost> &
   CapabilityService<Capabilities, "view-coordination", ViewCoordinationHost> &
   CapabilityService<Capabilities, "ordering-coordination", OrderingCoordinationHost> &

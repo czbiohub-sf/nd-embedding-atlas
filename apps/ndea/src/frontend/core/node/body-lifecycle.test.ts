@@ -86,7 +86,7 @@ function expectOneBodyAdoption(body: MountedNodeBody): void {
 
 describe("framework-neutral Body lifecycle", () => {
   test("a built-in React Body adopts one element and disposes once", async () => {
-    const { countPlotDefinition } = await import("@/nodes/charts/count-plot/plugin");
+    const { countPlotDefinition } = await import("./native-contributions/count-plot");
     const module = await countPlotDefinition.load!();
     const body = await module.mountBody!(host as never);
     const element = body.element as unknown as FixtureElement;

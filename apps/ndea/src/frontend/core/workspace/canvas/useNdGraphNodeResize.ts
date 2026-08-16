@@ -1,7 +1,7 @@
 import { useReactFlow } from "@xyflow/react";
 import { useCallback, useEffect, useRef, type PointerEvent as ReactPointerEvent } from "react";
 
-import type { NdResizeCorner } from "@/components/nd/nd-resize-grips";
+import type { NdResizeCorner } from "@/components/node-workspace/nd-resize-grips";
 import { ND_NODE } from "../constants";
 import { workspaceNodeSize } from "../node-size";
 import type { NdGraphNodeModel } from "./useNdGraphNodeModel";

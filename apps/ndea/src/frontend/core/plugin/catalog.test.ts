@@ -7,6 +7,8 @@ import {
   exactNodeTypeRef,
   nodeConfigVersion,
   type NodeCapability,
+  type NodeDefinition,
+  type PluginPermission,
 } from "@ndea/sdk";
 import { z } from "zod";
 import { NodeCatalogBuilder, NodeCatalogRegistration, NodeCatalogValidationError, createNodeCatalog } from "./catalog";
@@ -14,14 +16,12 @@ import {
   NATIVE_NODE_SOURCE,
   type CatalogNodeDefinition,
   type NodeContributionSource,
+  type PluginAuthorization,
   type PluginContributionBatch,
 } from "./registration";
+import { CAPABILITIES_BY_CATEGORY, CAPABILITY_DOCS } from "@/core/node/capability-docs";
 
-function definition(
-  id: string,
-  version = "1.0.0",
-  overrides: Partial<CatalogNodeDefinition> = {},
-): CatalogNodeDefinition {
+function definition(id: string, version = "1.0.0", overrides: Partial<NodeDefinition<any>> = {}): NodeDefinition<any> {
   return defineNode({
     ref: exactNodeTypeRef(id, version),
     title: id,
@@ -33,7 +33,13 @@ function definition(
   });
 }
 
-function source(pluginId: string, sdkVersionRange = String(SDK_VERSION)): NodeContributionSource {
+function source(
+  pluginId: string,
+  sdkVersionRange = String(SDK_VERSION),
+  options: {
+    readonly permissions?: readonly PluginPermission[];
+  } = {},
+): NodeContributionSource {
   return {
     kind: "plugin",
     manifest: PluginManifestSchema.parse({
@@ -45,9 +51,13 @@ function source(pluginId: string, sdkVersionRange = String(SDK_VERSION)): NodeCo
       clientEntry: "index.js",
       hostCompatibility: { hostVersionRange: "*" },
       license: "MIT",
-      permissions: [],
+      permissions: (options.permissions ?? []).map((permission) => ({ permission, reason: `${permission} required` })),
     }),
   };
+}
+
+function authorizations(pluginId: string, authorization: PluginAuthorization) {
+  return new Map([[pluginId, authorization]] as const);
 }
 
 function batch(sourceValue: NodeContributionSource, ...definitions: CatalogNodeDefinition[]): PluginContributionBatch {
@@ -55,6 +65,12 @@ function batch(sourceValue: NodeContributionSource, ...definitions: CatalogNodeD
 }
 
 describe("immutable node catalog", () => {
+  test("documents every capability in exactly one semantic category", () => {
+    const categorized: string[] = Object.values(CAPABILITIES_BY_CATEGORY).flat();
+    expect(new Set(categorized).size).toBe(categorized.length);
+    expect(categorized.toSorted()).toEqual(Object.keys(CAPABILITY_DOCS).toSorted());
+  });
+
   test("resolves exact versions and the greatest current version without changing contribution order", () => {
     const old = definition("multi", "1.9.0");
     const latest = definition("multi", "2.0.0");
@@ -148,6 +164,12 @@ describe("immutable node catalog", () => {
     expect(() => createNodeCatalog([batch(NATIVE_NODE_SOURCE, unknown)])).toThrow(
       /unknown capability "future-service"/,
     );
+    const inheritedName = definition("inherited-capability", "1.0.0", {
+      capabilities: ["toString"] as unknown as readonly NodeCapability[],
+    });
+    expect(() => createNodeCatalog([batch(NATIVE_NODE_SOURCE, inheritedName)])).toThrow(
+      /unknown capability "toString"/,
+    );
 
     const missingDataRead = definition("missing-data-read", "1.0.0", {
       capabilities: [],
@@ -156,6 +178,50 @@ describe("immutable node catalog", () => {
     expect(() => createNodeCatalog([batch(NATIVE_NODE_SOURCE, missingDataRead)])).toThrow(
       /data requirements require capability "data-read"/,
     );
+
+    for (const capability of ["annotation-write", "row-set-publish"] as const) {
+      const missingImplication = definition(`missing-${capability}`, "1.0.0", {
+        capabilities: [capability],
+      });
+      expect(() => createNodeCatalog([batch(NATIVE_NODE_SOURCE, missingImplication)])).toThrow(
+        new RegExp(`capability "${capability}" requires capability "data-read"`),
+      );
+    }
+  });
+
+  test("keeps manifest requests separate from app authorization", () => {
+    const gpuDefinition = definition("authorized.gpu/widget", "1.0.0", {
+      capabilities: ["gpu-device"],
+    });
+
+    expect(() => createNodeCatalog([batch(source("authorized.gpu"), gpuDefinition)])).toThrow(
+      /capability "gpu-device" requires manifest permission "gpu"/,
+    );
+    expect(() =>
+      createNodeCatalog([
+        batch(source("authorized.gpu", String(SDK_VERSION), { permissions: ["gpu"] }), gpuDefinition),
+      ]),
+    ).toThrow(/requests permission "gpu" without app authorization/);
+    expect(() =>
+      createNodeCatalog(
+        [batch(source("authorized.gpu", String(SDK_VERSION), { permissions: ["gpu"] }), gpuDefinition)],
+        authorizations("authorized.gpu", {
+          grantedPermissions: ["gpu"],
+          grantedCapabilities: [],
+        }),
+      ),
+    ).toThrow(/capability "gpu-device" lacks app authorization/);
+
+    const permitted = source("authorized.gpu", String(SDK_VERSION), { permissions: ["gpu"] });
+    expect(
+      createNodeCatalog(
+        [batch(permitted, gpuDefinition)],
+        authorizations("authorized.gpu", {
+          grantedPermissions: ["gpu"],
+          grantedCapabilities: ["gpu-device"],
+        }),
+      ).resolveCurrent("authorized.gpu/widget"),
+    ).toBe(gpuDefinition);
   });
 
   test("requires deterministic declared config migrations and a valid default", () => {

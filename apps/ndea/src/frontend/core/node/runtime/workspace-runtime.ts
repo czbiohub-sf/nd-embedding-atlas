@@ -12,6 +12,7 @@ import {
 
 import { stringPredicate } from "@/lib/mosaic-helpers";
 import type { CatalogNodeDefinition } from "@/core/plugin/registration";
+import { assertRequiredAppNodeHostFacets } from "@/core/node/app-node-host";
 import { createCheckpointCreationNodeFacet, createCheckpointNodeFacet, createHierarchyNodeFacet } from "./host-facets";
 import type { AppNodeLibrary } from "@/core/node/library";
 import { createAppNodeHost, type AppNodeHostDependencies, type HostHandle } from "./host";
@@ -197,6 +198,7 @@ function createRuntimeHost(
     ...(spec?.checkpointCreation ? { checkpointCreation: createCheckpointCreationNodeFacet(session, nodeId) } : {}),
     ...(spec?.role === "subnet" ? { hierarchy: createHierarchyNodeFacet(session, nodeId) } : {}),
   };
+  assertRequiredAppNodeHostFacets({ ...facets, bodyHeaderElement: headerElement }, spec?.requiredHostFacets ?? []);
 
   const handle = createAppNodeHost(appHost, {
     instanceId: nodeInstanceId(nodeId),

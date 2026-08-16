@@ -11,6 +11,7 @@
  * the static rule and this behavioral check are complementary, not redundant.
  */
 
+import { Selection } from "@uwdata/mosaic-core";
 import type { NodeHost, RowIndex } from "@ndea/sdk";
 
 export interface SpyHostCalls {
@@ -21,8 +22,14 @@ export interface SpyHostCalls {
   orderingSet: ({ col: string; dir: "asc" | "desc" } | null)[];
 }
 
+type SpyNodeHost = Pick<NodeHost<unknown, "focus-coordination">, "focus"> &
+  Pick<NodeHost<unknown, "filter-coordination">, "filter"> &
+  Pick<NodeHost<unknown, "data-read" | "row-set-publish">, "dataAPI"> &
+  Pick<NodeHost<unknown, "view-coordination">, "viewCoordination"> &
+  Pick<NodeHost<unknown, "ordering-coordination">, "ordering">;
+
 export interface SpyHost {
-  host: NodeHost;
+  host: SpyNodeHost;
   calls: SpyHostCalls;
 }
 
@@ -55,14 +62,27 @@ export function createSpyHost(): SpyHost {
       },
     },
     filter: {
+      selection: Selection.crossfilter(),
+      getResolved: () => ({ predicate: null, revision: 0 }),
+      subscribeResolved: () => () => {},
       publish: (facet: string, sql: string) => {
         calls.publishFilter.push({ facet, sql });
       },
       clear: (facet: string) => {
         calls.publishFilter.push({ facet, sql: null });
       },
+      associateClient() {},
+      disassociateClient() {},
+      materializeRowIds: async () => ({ rowIds: [], revision: 0 }),
     },
     dataAPI: {
+      query: () => Promise.resolve([]),
+      publishRowSet: async (rowIds: RowIndex[]) => ({
+        predicate: "",
+        token: 0,
+        count: rowIds.length,
+        table: "",
+      }),
       // Temporary large-selection staging cleanup.
       disposePublishedRowSet: () => Promise.resolve(),
     },
@@ -90,7 +110,7 @@ export function createSpyHost(): SpyHost {
       },
       subscribe: () => () => {},
     },
-  } as unknown as NodeHost;
+  } satisfies SpyNodeHost;
 
   return { host, calls };
 }

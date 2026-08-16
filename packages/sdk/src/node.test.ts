@@ -1,6 +1,9 @@
+/// <reference types="bun" />
 import { describe, expect, test } from "bun:test";
 import { z } from "zod";
 import {
+  defineNode,
+  exactNodeTypeRef,
   migrateNodeConfig,
   nodeConfigVersion,
   NodeConfigMigrationError,
@@ -22,6 +25,22 @@ function expectMigrationError(migrate: () => unknown, code: NodeConfigMigrationE
   expect(migrationError.code).toBe(code);
   return migrationError;
 }
+
+describe("defineNode", () => {
+  test("preserves author-declared dataset requirements", () => {
+    const definition = defineNode({
+      ref: exactNodeTypeRef("example/required-data", "1.0.0"),
+      title: "Required data",
+      role: "view",
+      inputs: [],
+      outputs: [],
+      capabilities: ["data-read"] as const,
+      dataRequirements: ["obs", "spatial"] as const,
+    });
+
+    expect(definition.dataRequirements).toEqual(["obs", "spatial"]);
+  });
+});
 
 describe("migrateNodeConfig", () => {
   test("validates and freezes same-version config", () => {

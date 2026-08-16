@@ -6,6 +6,7 @@ import {
   createCheckpointNodeFacet,
   createHierarchyNodeFacet,
 } from "@/core/node/runtime/host-facets";
+import { requireAppNodeHostFacet } from "@/core/node/app-node-host";
 import type { NodeRuntimeSessionPort } from "@/core/node/runtime/session-port";
 
 function runtimeSessionFixture() {
@@ -94,6 +95,30 @@ function runtimeSessionFixture() {
 }
 
 describe("app-local node host facets", () => {
+  test("required facet resolver proves each closed app-only structure", () => {
+    const host = {
+      checkpoint: {
+        getSnapshot() {},
+        subscribe() {},
+        async pin() {
+          return true;
+        },
+        unpin() {},
+      },
+      checkpointCreation: { create() {} },
+      hierarchy: { getSnapshot() {}, subscribe() {}, enter() {} },
+      bodyHeaderElement: { appendChild() {} },
+    };
+
+    expect(Object.is(requireAppNodeHostFacet(host, "checkpoint"), host.checkpoint)).toBe(true);
+    expect(Object.is(requireAppNodeHostFacet(host, "checkpointCreation"), host.checkpointCreation)).toBe(true);
+    expect(Object.is(requireAppNodeHostFacet(host, "hierarchy"), host.hierarchy)).toBe(true);
+    expect(Object.is(requireAppNodeHostFacet(host, "bodyHeaderElement"), host.bodyHeaderElement)).toBe(true);
+    for (const facet of ["checkpoint", "checkpointCreation", "hierarchy", "bodyHeaderElement"] as const) {
+      expect(() => requireAppNodeHostFacet({}, facet)).toThrow(`app node host requires facet "${facet}"`);
+    }
+  });
+
   test("checkpoint exposes stable input/pin snapshots and only narrow actions", async () => {
     const fixture = runtimeSessionFixture();
     const checkpoint = createCheckpointNodeFacet(fixture.session, "cache", fixture.filter);

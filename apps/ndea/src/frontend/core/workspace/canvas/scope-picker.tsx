@@ -8,8 +8,8 @@
 
 import { Link2 } from "lucide-react";
 
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { NdCaption, NdHud } from "@/components/nd/nd-primitives";
+import { Popover, PopoverContent, PopoverTrigger } from "@ndea/ui/components/popover";
+import { NdCaption, NdHud } from "@/components/node-workspace/nd-primitives";
 import { listCoordinationTypes } from "@/core/coordination/define-type";
 import { ON_ACCENT_INK } from "@/lib/color/brand";
 import { useWorkspace, useWorkspaceSelector } from "../workspace-context";

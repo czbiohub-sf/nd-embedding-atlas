@@ -9,9 +9,16 @@ import type {
   PredicatePortValue,
   JsonValue,
 } from "@ndea/sdk";
-import { andPreds, type GraphCookFunction, type Predicate } from "./engine";
+import {
+  andPreds,
+  type GraphCookFunction,
+  type GraphFocusPortValue,
+  type GraphPortValue,
+  type GraphPredicatePortValue,
+  type GraphRowSetPortValue,
+  type Predicate,
+} from "@ndea/graph";
 import type { GraphDocumentNode } from "./records";
-import type { GraphFocusPortValue, GraphPortValue, GraphPredicatePortValue, GraphRowSetPortValue } from "./values";
 
 export type GraphPortValueInputs = ReadonlyMap<string, readonly GraphPortValue[]>;
 

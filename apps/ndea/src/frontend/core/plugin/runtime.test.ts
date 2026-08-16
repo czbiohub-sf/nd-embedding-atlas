@@ -20,6 +20,8 @@ import { NodeCatalogRegistration } from "./catalog";
 import type { PluginBootstrapFetch } from "./loader";
 import { bootFrontend, loadFrontendPluginSession } from "./runtime";
 
+type RuntimeTestDefinition = NodeDefinition<unknown, readonly ["compute"]>;
+
 const DIGESTS = ["a", "b", "c", "d", "e", "f"].map((character) => character.repeat(64));
 
 function manifest(pluginId: string) {
@@ -58,7 +60,11 @@ function bootstrapFetch(value: unknown): PluginBootstrapFetch {
     Promise.resolve(new Response(JSON.stringify(value), { headers: { "content-type": "application/json" } }));
 }
 
-function definition(pluginId: string, name = "widget", overrides: Partial<NodeDefinition> = {}): NodeDefinition {
+function definition(
+  pluginId: string,
+  name = "widget",
+  overrides: Partial<RuntimeTestDefinition> = {},
+): RuntimeTestDefinition {
   return defineNode({
     ref: exactNodeTypeRef(`${pluginId}/${name}`, "1.0.0"),
     title: `${pluginId} ${name}`,
@@ -72,7 +78,7 @@ function definition(pluginId: string, name = "widget", overrides: Partial<NodeDe
   });
 }
 
-function factory(...definitions: readonly NodeDefinition[]): PluginFactory {
+function factory(...definitions: readonly RuntimeTestDefinition[]): PluginFactory {
   return ({ registerNode }) => {
     for (const value of definitions) registerNode(value);
   };
@@ -81,7 +87,7 @@ function factory(...definitions: readonly NodeDefinition[]): PluginFactory {
 describe("frontend plugin session", () => {
   test("imports only validated bootstrap URLs and projects exact/current external definitions", async () => {
     const pluginEntry = entry("acme.widgets", 0);
-    const externalModule: NodeModule = {};
+    const externalModule: NodeModule<unknown, "compute"> = {};
     const prior = defineNode({
       ...definition("acme.widgets", "chart"),
       ref: exactNodeTypeRef("acme.widgets/chart", "0.9.0"),
@@ -256,7 +262,7 @@ describe("frontend plugin session", () => {
       return () => calls.push("native");
     };
     const pluginFactory =
-      (name: string, value: NodeDefinition): PluginFactory =>
+      (name: string, value: RuntimeTestDefinition): PluginFactory =>
       ({ registerNode }) => {
         registerNode(value);
         return () => calls.push(name);

@@ -321,6 +321,38 @@ describe("Workspace graph transactions", () => {
     workspace.dispose();
   });
 
+  test("rejects cross-parent edges in loaded topology", () => {
+    const source = createWorkspace();
+    const dataset = source.addNode("dataset", { x: 0, y: 0 });
+    const rootCount = source.addNode("count", { x: 100, y: 0 });
+    const subnet = source.addNode("subnet", { x: 200, y: 0 });
+    source.enterSubnet(subnet);
+    const nestedCount = source.addNode("count", { x: 100, y: 100 });
+    expect(source.canConnectWire(dataset, rootCount, "out", "in")).toBe(true);
+    expect(source.canConnectWire(dataset, nestedCount, "out", "in")).toBe(false);
+
+    const crossParentEdge = {
+      id: "cross-parent",
+      from: dataset,
+      fromPort: "out",
+      to: nestedCount,
+      toPort: "in",
+      kind: "pred" as const,
+    };
+    const state = {
+      ...source.store.state,
+      edges: { ...source.store.state.edges, [crossParentEdge.id]: crossParentEdge },
+    };
+    const destination = createWorkspace();
+
+    expect(() => destination.loadDocument(state)).toThrow(
+      'edge "cross-parent" crosses parent scope "<root>" -> "subnet-3"',
+    );
+    expect(destination.store.state.edges[crossParentEdge.id]).toBeUndefined();
+    source.dispose();
+    destination.dispose();
+  });
+
   test("hydrates document topology once, after the evaluator projection is complete", () => {
     const source = createWorkspace();
     const dataset = source.addNode("dataset", { x: 0, y: 0 });

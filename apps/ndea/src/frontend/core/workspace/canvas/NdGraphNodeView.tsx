@@ -1,10 +1,10 @@
 import type { PointerEvent as ReactPointerEvent } from "react";
 
-import { NodeDocButton } from "@/components/nd/node-doc";
-import { NdIconButton } from "@/components/nd/nd-icon-button";
-import { NdNodeFrame } from "@/components/nd/nd-node-frame";
-import { NdHud } from "@/components/nd/nd-primitives";
-import type { NdResizeCorner } from "@/components/nd/nd-resize-grips";
+import { NodeDocButton } from "@/components/node-workspace/node-doc";
+import { NdIconButton } from "@/components/node-workspace/nd-icon-button";
+import { NdNodeFrame } from "@/components/node-workspace/nd-node-frame";
+import { NdHud } from "@/components/node-workspace/nd-primitives";
+import type { NdResizeCorner } from "@/components/node-workspace/nd-resize-grips";
 import type { GraphDocumentNode } from "@/core/graph/records";
 import type { AppNodeDescriptor } from "@/core/node/library";
 import { BodySocket, HeaderSocket } from "../body-dock";

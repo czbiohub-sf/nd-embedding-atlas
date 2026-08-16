@@ -13,7 +13,7 @@ import {
 } from "@ndea/sdk";
 import { z } from "zod";
 
-import type { GraphPortValue } from "@/core/graph/values";
+import type { GraphPortValue } from "@ndea/graph";
 import type { AppNodeLibrary, AppNodeSpec } from "@/core/node/library";
 import type { GraphDocumentNode } from "@/core/graph/records";
 import type { AppNodeHostDependencies } from "./host";
@@ -217,6 +217,72 @@ function nodeLibrary(definition: AppNodeSpec["definition"], overrides: Partial<A
 }
 
 describe("WorkspaceNodeRuntimeManager", () => {
+  test.each([
+    ["cache", ["checkpoint"]],
+    ["scatter", ["checkpointCreation"]],
+    ["subnet", ["hierarchy"]],
+  ] as const)("%s fails required app-facet proof before Body mount", async (_name, requiredHostFacets) => {
+    let mounts = 0;
+    const definition = defineNode({
+      ref: exactNodeTypeRef("runtime-fixture", "1.0.0"),
+      title: "Missing app facet",
+      role: "view",
+      inputs: [],
+      outputs: [],
+      capabilities: [] as const,
+      load: () =>
+        Promise.resolve({
+          mountBody() {
+            mounts += 1;
+            return { element: new FixtureElement() as unknown as HTMLElement, dispose() {} };
+          },
+        } satisfies NodeModule),
+    });
+    const fixture = workspaceFixture();
+    const manager = new WorkspaceNodeRuntimeManager({
+      session: fixture.session,
+      nodeLibrary: nodeLibrary(definition, { requiredHostFacets }),
+      appHost: appHostDependencies([]),
+    });
+
+    const runtime = manager.activate("node-1", definition.ref);
+    await runtime.start();
+
+    expect(runtime.getSnapshot()).toMatchObject({ status: "failed", stage: "capability" });
+    expect(mounts).toBe(0);
+    manager.dispose();
+  });
+
+  test("resolves required body header before Body mount", async () => {
+    let mounted = false;
+    const definition = defineNode({
+      ref: exactNodeTypeRef("runtime-fixture", "1.0.0"),
+      title: "Body header",
+      role: "view",
+      inputs: [],
+      outputs: [],
+      capabilities: [] as const,
+      load: () =>
+        Promise.resolve({
+          mountBody() {
+            mounted = true;
+            return { element: new FixtureElement() as unknown as HTMLElement, dispose() {} };
+          },
+        } satisfies NodeModule),
+    });
+    const fixture = workspaceFixture();
+    const manager = new WorkspaceNodeRuntimeManager({
+      session: fixture.session,
+      nodeLibrary: nodeLibrary(definition, { requiredHostFacets: ["bodyHeaderElement"] }),
+      appHost: appHostDependencies([]),
+    });
+
+    await manager.activate("node-1", definition.ref).start();
+
+    expect(mounted).toBe(true);
+    manager.dispose();
+  });
+
   test("binds stable host.filter to graph predicates and membership moves", async () => {
     const mounted: { host?: NodeHost<unknown, "filter-coordination"> } = {};
     const definition = defineNode({
@@ -298,7 +364,9 @@ describe("WorkspaceNodeRuntimeManager", () => {
   });
 
   test("composes config, predicate, focus, and ordering facets without a Proxy", async () => {
-    const mounted: { host?: NodeHost } = {};
+    const mounted: {
+      host?: NodeHost<unknown, "data-read" | "focus-coordination" | "ordering-coordination">;
+    } = {};
     const element = new FixtureElement();
     const definition = defineNode({
       ref: exactNodeTypeRef("runtime-fixture", "1.0.0"),
@@ -315,7 +383,7 @@ describe("WorkspaceNodeRuntimeManager", () => {
       load: () =>
         Promise.resolve({
           mountBody(host) {
-            mounted.host = host as unknown as NodeHost;
+            mounted.host = host;
             return { element: element as unknown as HTMLElement, dispose: () => element.remove() };
           },
         } satisfies NodeModule<unknown, "data-read" | "focus-coordination" | "ordering-coordination">),
@@ -381,7 +449,7 @@ describe("WorkspaceNodeRuntimeManager", () => {
               events.push("body");
             },
           }),
-        } satisfies NodeModule<unknown, never>),
+        } satisfies NodeModule),
     });
     const fixture = workspaceFixture();
     const dependencies = appHostDependencies([]);

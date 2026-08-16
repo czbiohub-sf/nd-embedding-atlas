@@ -1,6 +1,7 @@
 import { DataCapabilitySchema } from "@ndea/protocol";
 import {
   PluginManifestSchema,
+  PluginPermissionSchema,
   SDK_VERSION,
   compareSemanticVersions,
   isSemanticVersion,
@@ -10,6 +11,7 @@ import {
   type NodeRole,
   type NodeTypeId,
   type PluginFactory,
+  type PluginPermission,
 } from "@ndea/sdk";
 import {
   collectPluginContribution,
@@ -18,6 +20,7 @@ import {
   freezeContributionSource,
   type CatalogNodeDefinition,
   type NodeContributionSource,
+  type PluginAuthorization,
   type PluginContributionBatch,
 } from "./registration";
 
@@ -26,9 +29,7 @@ const PORT_ID_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 const NODE_CAPABILITIES: Record<NodeCapability, true> = {
   "data-read": true,
-  "predicate-publish": true,
   "row-set-publish": true,
-  "row-set-subscribe": true,
   "focus-coordination": true,
   "view-coordination": true,
   "schema-mutation": true,
@@ -41,6 +42,12 @@ const NODE_CAPABILITIES: Record<NodeCapability, true> = {
   "filter-coordination": true,
 };
 
+const AUTHORITY_CAPABILITY_PERMISSIONS: Partial<Record<NodeCapability, PluginPermission>> = {
+  "gpu-device": "gpu",
+  "schema-mutation": "schema-mutation",
+  "annotation-write": "irreversible-data-write",
+};
+
 const DEFINITION_FIELDS: Record<string, true> = {
   ref: true,
   title: true,
@@ -50,7 +57,6 @@ const DEFINITION_FIELDS: Record<string, true> = {
   capabilities: true,
   dataRequirements: true,
   config: true,
-  availability: true,
   evaluate: true,
   load: true,
   documentation: true,
@@ -84,16 +90,34 @@ export class NodeCatalogValidationError extends Error {
 export class NodeCatalogBuilder {
   readonly #entries: NodeCatalogEntry[] = [];
   readonly #exact = new Map<string, NodeCatalogEntry>();
+  readonly #authorizations: ReadonlyMap<string, PluginAuthorization>;
   #catalog: NodeCatalog | undefined;
+
+  constructor(authorizations: ReadonlyMap<string, PluginAuthorization> = new Map()) {
+    this.#authorizations = new Map(
+      [...authorizations].map(
+        ([pluginId, authorization]) =>
+          [
+            pluginId,
+            Object.freeze({
+              grantedPermissions: Object.freeze([...authorization.grantedPermissions]),
+              grantedCapabilities: Object.freeze([...authorization.grantedCapabilities]),
+            }),
+          ] as const,
+      ),
+    );
+  }
 
   commit(batch: PluginContributionBatch): void {
     if (this.#catalog) throw new Error("node catalog is frozen");
-    validateSource(batch.source);
+    const authorization =
+      batch.source.kind === "plugin" ? this.#authorizations.get(String(batch.source.manifest.pluginId)) : undefined;
+    validateSource(batch.source, authorization);
     const source = freezeContributionSource(batch.source);
 
     const pending = new Map<string, NodeCatalogEntry>();
     for (const definition of batch.definitions) {
-      validateDefinition(definition, source);
+      validateDefinition(definition, source, authorization);
       const key = exactKey(definition.ref);
       const conflict = pending.get(key) ?? this.#exact.get(key);
       if (conflict) throw exactRefConflict(definition.ref, conflict.source, source);
@@ -152,10 +176,14 @@ export class NodeCatalogBuilder {
  * factory batch is disposed without changing previously committed batches.
  */
 export class NodeCatalogRegistration {
-  readonly #builder = new NodeCatalogBuilder();
+  readonly #builder: NodeCatalogBuilder;
   readonly #batches: PluginContributionBatch[] = [];
   #frozen = false;
   #disposed = false;
+
+  constructor(authorizations: ReadonlyMap<string, PluginAuthorization> = new Map()) {
+    this.#builder = new NodeCatalogBuilder(authorizations);
+  }
 
   async register(
     source: NodeContributionSource,
@@ -195,13 +223,16 @@ export class NodeCatalogRegistration {
   }
 }
 
-export function createNodeCatalog(batches: readonly PluginContributionBatch[]): NodeCatalog {
-  const builder = new NodeCatalogBuilder();
+export function createNodeCatalog(
+  batches: readonly PluginContributionBatch[],
+  authorizations: ReadonlyMap<string, PluginAuthorization> = new Map(),
+): NodeCatalog {
+  const builder = new NodeCatalogBuilder(authorizations);
   for (const batch of batches) builder.commit(batch);
   return builder.freeze();
 }
 
-function validateSource(source: NodeContributionSource): void {
+function validateSource(source: NodeContributionSource, authorization?: PluginAuthorization): void {
   if (source.kind === "native") {
     if (typeof source.sourceId !== "string" || !source.sourceId.trim())
       throw new NodeCatalogValidationError("native contribution source requires a sourceId");
@@ -220,13 +251,70 @@ function validateSource(source: NodeContributionSource): void {
       `plugin source "${formatContributionSource(source)}" requires SDK "${manifest.sdkVersionRange}"; host SDK is "${SDK_VERSION}"`,
     );
   }
+
+  const grantedPermissions = validateUniqueValues(
+    authorization?.grantedPermissions ?? [],
+    "app-granted permission",
+    source,
+    (value) => PluginPermissionSchema.safeParse(value).success,
+  );
+  validateUniqueValues(authorization?.grantedCapabilities ?? [], "app-granted capability", source, (value) =>
+    Object.hasOwn(NODE_CAPABILITIES, value),
+  );
+  const requestedPermissions = new Set<PluginPermission>();
+  for (const { permission } of manifest.permissions) {
+    if (requestedPermissions.has(permission)) {
+      throw new NodeCatalogValidationError(
+        `invalid plugin contribution source "${formatContributionSource(source)}": duplicate requested permission "${permission}"`,
+      );
+    }
+    requestedPermissions.add(permission);
+    if (!grantedPermissions.has(permission)) {
+      throw new NodeCatalogValidationError(
+        `plugin source "${formatContributionSource(source)}" requests permission "${permission}" without app authorization`,
+      );
+    }
+  }
 }
 
-function validateDefinition(definition: CatalogNodeDefinition, source: NodeContributionSource): void {
+function validateUniqueValues(
+  values: readonly string[],
+  label: string,
+  source: NodeContributionSource,
+  isValid: (value: string) => boolean,
+): ReadonlySet<string> {
+  if (!Array.isArray(values)) {
+    throw new NodeCatalogValidationError(
+      `invalid plugin contribution source "${formatContributionSource(source)}": ${label}s must be an array`,
+    );
+  }
+  const seen = new Set<string>();
+  for (const value of values) {
+    if (typeof value !== "string" || !isValid(value)) {
+      throw new NodeCatalogValidationError(
+        `invalid plugin contribution source "${formatContributionSource(source)}": unknown ${label} "${String(value)}"`,
+      );
+    }
+    if (seen.has(value)) {
+      throw new NodeCatalogValidationError(
+        `invalid plugin contribution source "${formatContributionSource(source)}": duplicate ${label} "${value}"`,
+      );
+    }
+    seen.add(value);
+  }
+  return seen;
+}
+
+function validateDefinition(
+  definition: CatalogNodeDefinition,
+  source: NodeContributionSource,
+  authorization?: PluginAuthorization,
+): void {
   const label = formatContributionSource(source);
   if (!definition || typeof definition !== "object") fail(label, "definition must be an object");
   for (const field of Object.keys(definition)) {
-    if (!DEFINITION_FIELDS[field]) fail(label, `definition contains app-only or unknown field "${field}"`);
+    if (!Object.hasOwn(DEFINITION_FIELDS, field))
+      fail(label, `definition contains app-only or unknown field "${field}"`);
   }
 
   const id = definition.ref?.nodeTypeId;
@@ -240,15 +328,13 @@ function validateDefinition(definition: CatalogNodeDefinition, source: NodeContr
 
   validatePorts(definition.inputs, "input", id, label);
   validatePorts(definition.outputs, "output", id, label);
-  validateCapabilities(definition, label);
+  validateCapabilities(definition, source, authorization, label);
   validateConfig(definition, label);
 
   if (definition.evaluate !== undefined && typeof definition.evaluate !== "function")
     fail(label, `node "${id}" evaluate must be a function`);
   if (definition.load !== undefined && typeof definition.load !== "function")
     fail(label, `node "${id}" load must be a function`);
-  if (definition.availability !== undefined && typeof definition.availability !== "function")
-    fail(label, `node "${id}" availability must be a function`);
   validateDocumentation(definition, label);
   validatePresentation(definition, label);
 }
@@ -291,15 +377,40 @@ function validatePorts(ports: CatalogNodeDefinition["inputs"], direction: string
   }
 }
 
-function validateCapabilities(definition: CatalogNodeDefinition, label: string): void {
+function validateCapabilities(
+  definition: CatalogNodeDefinition,
+  source: NodeContributionSource,
+  authorization: PluginAuthorization | undefined,
+  label: string,
+): void {
   const id = definition.ref.nodeTypeId;
   if (!Array.isArray(definition.capabilities)) fail(label, `node "${id}" capabilities must be an array`);
   const seen = new Set<string>();
   for (const capability of definition.capabilities) {
-    if (typeof capability !== "string" || !(capability in NODE_CAPABILITIES))
+    if (typeof capability !== "string" || !Object.hasOwn(NODE_CAPABILITIES, capability))
       fail(label, `node "${id}" declares unknown capability "${String(capability)}"`);
     if (seen.has(capability)) fail(label, `node "${id}" duplicates capability "${capability}"`);
     seen.add(capability);
+  }
+
+  if (source.kind === "plugin") {
+    const requestedPermissions = new Set(source.manifest.permissions.map(({ permission }) => permission));
+    const grantedCapabilities = new Set(authorization?.grantedCapabilities ?? []);
+    for (const capability of seen) {
+      const permission = AUTHORITY_CAPABILITY_PERMISSIONS[capability as NodeCapability];
+      if (!permission) continue;
+      if (!requestedPermissions.has(permission)) {
+        fail(label, `node "${id}" capability "${capability}" requires manifest permission "${permission}"`);
+      }
+      if (!grantedCapabilities.has(capability as NodeCapability)) {
+        fail(label, `node "${id}" capability "${capability}" lacks app authorization`);
+      }
+    }
+  }
+
+  for (const capability of ["annotation-write", "row-set-publish"] as const) {
+    if (seen.has(capability) && !seen.has("data-read"))
+      fail(label, `node "${id}" capability "${capability}" requires capability "data-read"`);
   }
 
   const requirements = definition.dataRequirements ?? [];

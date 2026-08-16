@@ -28,11 +28,17 @@
 - _(frontend)_ Clear ExportDialog setInterval on unmount
 - _(frontend)_ Clear useVarColumn poll interval on unmount
 - _(frontend)_ Abort in-flight embedding load on unmount
+- _(build)_ Keep embedded frontend and DuckDB source manifests as stable development stubs
 
 ### 🚜 Refactor
 
 - Route dependency management, tasks, checks, builds, and development through Vite+
 - Convert the product to a Bun/Vite+ monorepo with app, protocol, SDK, and Zarr workspaces
+- Extract Ochre, UI, built-in nodes, and graph evaluation into package-owned workspaces
+- Harden plugin capabilities, NodeHost services, topology validation, and graph semantics
+- Adopt TypeScript 7 and update app, package, build, and documentation dependencies
+- Align shared controls and node toolbar states with scheme-aware theme tokens
+- Remove accidental root dependencies and tune Fallow for package-owned ambient checks
 - [**breaking**] Replace Python backend with Bun + TypeScript scaffold
 - _(scatter)_ Remove dead PiP branch; detach via FloatingScatterRoot only
 - _(server)_ Collapse prepare.ts into state.ts

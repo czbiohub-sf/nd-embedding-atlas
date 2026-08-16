@@ -1,9 +1,9 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { DocsProvider } from "./components/docs/DocsProvider";
-import { NdSpecPage } from "./components/nd/NdSpecPage";
+import { NdSpecPage } from "./components/node-workspace/NdSpecPage";
 import { Toaster } from "./components/ui/sonner";
-import { TooltipProvider } from "./components/ui/tooltip";
+import { TooltipProvider } from "@ndea/ui/components/tooltip";
 import { WorkspaceShell } from "./core/workspace/WorkspaceShell";
 import type { AppNodeLibrary } from "./core/node/library";
 import { DatasetSessionProvider } from "./core/session/DatasetSessionProvider";

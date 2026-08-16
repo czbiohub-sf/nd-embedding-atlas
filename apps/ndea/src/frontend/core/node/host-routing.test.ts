@@ -16,8 +16,8 @@
 import { describe, expect, test } from "bun:test";
 import { rowIndex, type NodeHost, type RowIndex } from "@ndea/sdk";
 
-import { publishChartFilter } from "@/nodes/charts/core/routing";
-import { focusObs } from "@/nodes/gallery/routing";
+import { publishChartFilter } from "@ndea/nodes/charts";
+import { focusObs } from "@ndea/nodes/gallery";
 import {
   broadcastView,
   clearLasso,
@@ -25,10 +25,10 @@ import {
   publishLasso,
   publishRangeFilter,
   toggleViewLock,
-} from "@/nodes/scatter/routing";
-import { focusRow, publishOrdering } from "@/nodes/table/routing";
+} from "@ndea/nodes/scatter";
+import { focusRow, publishOrdering } from "@ndea/nodes/table";
 import { createNativeAppNodeLibrary } from "./library";
-import { GraphEngine } from "@/core/graph/engine";
+import { GraphEngine } from "@ndea/graph";
 import { createSpyHost } from "./spy-host";
 
 const nativeNodeLibrary = createNativeAppNodeLibrary();

@@ -12,9 +12,9 @@ import {
   CommandItem,
   CommandList,
   CommandSeparator,
-} from "@/components/ui/command";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { ND_PORT_KINDS, type NdPortKind } from "@/components/nd/nd-port";
+} from "@ndea/ui/components/command";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@ndea/ui/components/sheet";
+import { ND_PORT_KINDS, type NdPortKind } from "@/components/node-workspace/nd-port";
 import { humanizedCapabilities } from "@/core/node/capability-docs";
 import type { NodeCatalog } from "@/core/plugin/catalog";
 import type { ExactNodeTypeRef, NodePort } from "@ndea/sdk";

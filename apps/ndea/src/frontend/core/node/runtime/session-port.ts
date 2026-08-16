@@ -1,9 +1,8 @@
 import type { RowIndex } from "@ndea/sdk";
 import type { CoordinationScopeCellPort } from "@/core/coordination/coordination";
-import type { GraphEvaluationState } from "@/core/graph/evaluator";
+import type { GraphEvaluationState, GraphPortValue } from "@ndea/graph";
 import type { CheckpointInput, CheckpointRuntimeStatus } from "@/core/graph/runtime-session";
 import type { GraphDocumentNode } from "@/core/graph/records";
-import type { GraphPortValue } from "@/core/graph/values";
 
 export interface NodeRuntimeDocumentState {
   readonly nodes: Readonly<Record<string, GraphDocumentNode>>;

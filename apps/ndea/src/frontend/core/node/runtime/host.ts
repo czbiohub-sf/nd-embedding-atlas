@@ -10,7 +10,6 @@ import type {
   FilterCoordinationAPI,
   FocusCoordinationAPI,
   NodeCapability,
-  NodeDataAPI,
   NodeDefinition,
   NodeInstanceId,
   NodeNotificationAPI,
@@ -20,7 +19,7 @@ import type {
   ViewCoordinationAPI,
 } from "@ndea/sdk";
 import type { DeviceBroker, DeviceLease } from "@/core/gpu/device-broker";
-import type { AppNodeHost } from "@/core/node/app-node-host";
+import type { ErasedAppNodeHost } from "@/core/node/app-node-host";
 import type { FilterScopeRegistry } from "@/core/coordination/filter-scope-runtime";
 import type { DatasetDataPublicationRuntime } from "@/core/session/dataset-session";
 
@@ -53,8 +52,8 @@ export interface HostInit<Config, Facets extends object = object> {
   readonly onDataRowSetPublished?: (publication: RowSetPublication, rowIds: readonly RowIndex[]) => void;
 }
 
-export interface HostHandle<Config, Facets extends object = object> {
-  readonly host: AppNodeHost<Config, NodeCapability, Facets>;
+export interface HostHandle<Config> {
+  readonly host: ErasedAppNodeHost<Config>;
   dispose(): void;
 }
 
@@ -89,6 +88,34 @@ function throwDisposalErrors(message: string, errors: unknown[]): void {
   if (errors.length > 1) throw new AggregateError(errors, message);
 }
 
+const RESERVED_HOST_KEYS = new Set<PropertyKey>([
+  "instanceId",
+  "definitionRef",
+  "capabilities",
+  "config",
+  "patchConfig",
+  "notifications",
+  "onDispose",
+  "track",
+  "signal",
+  "bodyHeaderElement",
+  "data",
+  "registerClient",
+  "inputPredicate",
+  "dataAPI",
+  "focus",
+  "viewCoordination",
+  "ordering",
+  "filter",
+  "acquireDeviceLease",
+]);
+
+function assertFacetKeysAvailable(facets: object | undefined): void {
+  if (!facets) return;
+  const collision = Reflect.ownKeys(facets).find((key) => RESERVED_HOST_KEYS.has(key));
+  if (collision !== undefined) throw new Error(`app node host facet "${String(collision)}" is reserved`);
+}
+
 /**
  * Builds one capability-gated host from immutable app dependencies. This is a
  * plain factory: React chooses the dependency values once at composition time,
@@ -97,7 +124,8 @@ function throwDisposalErrors(message: string, errors: unknown[]): void {
 export function createAppNodeHost<Config, Facets extends object = object>(
   dependencies: Readonly<AppNodeHostDependencies>,
   init: HostInit<Config, Facets>,
-): HostHandle<Config, Facets> {
+): HostHandle<Config> {
+  assertFacetKeysAvailable(init.facets);
   const { definition, instanceId } = init;
   const requested = new Set<NodeCapability>(definition.capabilities);
   const granted = new Set<NodeCapability>();
@@ -121,10 +149,13 @@ export function createAppNodeHost<Config, Facets extends object = object>(
     if (disposed) throw new Error(`node host ${instanceId} is disposed`);
   };
 
-  const host: Record<PropertyKey, unknown> = {
+  const host: ErasedAppNodeHost<Config> = {
     instanceId,
     definitionRef: definition.ref,
     capabilities: granted,
+    get config() {
+      return config;
+    },
     notifications: Object.freeze({ notify: dependencies.notify ?? defaultNotify }),
     signal: controller.signal,
     onDispose(disposer: () => void) {
@@ -140,19 +171,17 @@ export function createAppNodeHost<Config, Facets extends object = object>(
       init.patchConfig(patch);
       config = next;
     },
+    ...(init.bodyHeaderElement ? { bodyHeaderElement: init.bodyHeaderElement } : {}),
   };
-  Object.defineProperty(host, "config", { enumerable: true, get: () => config });
-
-  if (init.bodyHeaderElement) host.bodyHeaderElement = init.bodyHeaderElement;
+  const serviceFacets: Record<PropertyKey, unknown> = {};
 
   if (requested.has("data-read") && dependencies.availableCapabilities.has("data-read")) {
-    granted.add("data-read");
-    host.data = Object.freeze({
+    serviceFacets.data = Object.freeze({
       coordinator: dependencies.coordinator,
       table: dependencies.table,
       metadata: dependencies.metadata,
     });
-    host.registerClient = (client: MosaicClient) => {
+    serviceFacets.registerClient = (client: MosaicClient) => {
       assertActive();
       init.filter?.associateClient(client);
       try {
@@ -166,18 +195,33 @@ export function createAppNodeHost<Config, Facets extends object = object>(
         dependencies.coordinator.disconnect(client);
       });
     };
-    host.inputPredicate = init.inputPredicate ?? dependencies.defaultInputPredicate;
+    serviceFacets.inputPredicate = init.inputPredicate ?? dependencies.defaultInputPredicate;
+    granted.add("data-read");
   }
 
   const canPublishRows = requested.has("row-set-publish") && dependencies.availableCapabilities.has("row-set-publish");
   const canWriteAnnotations =
     requested.has("annotation-write") && dependencies.availableCapabilities.has("annotation-write");
+  const disposePublishedRowSet = canPublishRows
+    ? async (): Promise<void> => {
+        if (publishedRowSetDisposed) return;
+        publishedRowSetDisposed = true;
+        await dependencies.dataPublication
+          .disposePublishedRowSet(instanceId)
+          .catch((error: unknown) =>
+            (dependencies.notify ?? defaultNotify)(
+              `failed to dispose published row set for ${instanceId}: ${toError(error).message}`,
+              "error",
+            ),
+          );
+      }
+    : undefined;
 
   if (granted.has("data-read")) {
     const dataAPI = {
-      query<T = unknown>(sql: string) {
+      query(sql: string): Promise<unknown> {
         assertActive();
-        return dependencies.coordinator.query(sql) as unknown as Promise<T>;
+        return dependencies.coordinator.query(sql);
       },
       ...(canPublishRows
         ? {
@@ -196,18 +240,7 @@ export function createAppNodeHost<Config, Facets extends object = object>(
               init.onDataRowSetPublished?.(publication, rowIds);
               return publication;
             },
-            async disposePublishedRowSet() {
-              if (publishedRowSetDisposed) return;
-              publishedRowSetDisposed = true;
-              await dependencies.dataPublication
-                .disposePublishedRowSet(instanceId)
-                .catch((error: unknown) =>
-                  (dependencies.notify ?? defaultNotify)(
-                    `failed to dispose published row set for ${instanceId}: ${toError(error).message}`,
-                    "error",
-                  ),
-                );
-            },
+            disposePublishedRowSet,
           }
         : {}),
       ...(canWriteAnnotations
@@ -258,8 +291,8 @@ export function createAppNodeHost<Config, Facets extends object = object>(
             },
           }
         : {}),
-    } as NodeDataAPI;
-    host.dataAPI = dataAPI;
+    };
+    serviceFacets.dataAPI = dataAPI;
   }
 
   if (canWriteAnnotations && granted.has("data-read")) granted.add("annotation-write");
@@ -269,9 +302,8 @@ export function createAppNodeHost<Config, Facets extends object = object>(
     dependencies.availableCapabilities.has("filter-coordination") &&
     init.filter
   ) {
-    granted.add("filter-coordination");
     const filter = init.filter;
-    host.filter = Object.freeze({
+    serviceFacets.filter = Object.freeze({
       selection: filter.selection,
       getResolved: filter.getResolved.bind(filter),
       subscribeResolved: (callback: Parameters<FilterCoordinationAPI["subscribeResolved"]>[0]) =>
@@ -282,6 +314,7 @@ export function createAppNodeHost<Config, Facets extends object = object>(
       disassociateClient: filter.disassociateClient.bind(filter),
       materializeRowIds: filter.materializeRowIds.bind(filter),
     } satisfies FilterCoordinationAPI);
+    granted.add("filter-coordination");
   }
 
   if (canPublishRows && granted.has("data-read")) granted.add("row-set-publish");
@@ -291,8 +324,7 @@ export function createAppNodeHost<Config, Facets extends object = object>(
     dependencies.availableCapabilities.has("focus-coordination") &&
     init.focus
   ) {
-    granted.add("focus-coordination");
-    host.focus = Object.freeze({
+    serviceFacets.focus = Object.freeze({
       get: init.focus.get,
       set(rowIndex: RowIndex | null) {
         assertActive();
@@ -305,6 +337,7 @@ export function createAppNodeHost<Config, Facets extends object = object>(
           }
         : {}),
     });
+    granted.add("focus-coordination");
   }
 
   if (
@@ -312,9 +345,8 @@ export function createAppNodeHost<Config, Facets extends object = object>(
     dependencies.availableCapabilities.has("view-coordination") &&
     init.viewCoordination
   ) {
-    granted.add("view-coordination");
     const source = init.viewCoordination;
-    host.viewCoordination = Object.freeze({
+    serviceFacets.viewCoordination = Object.freeze({
       get panX() {
         return source.panX;
       },
@@ -342,6 +374,7 @@ export function createAppNodeHost<Config, Facets extends object = object>(
           }
         : {}),
     });
+    granted.add("view-coordination");
   }
 
   if (
@@ -349,8 +382,7 @@ export function createAppNodeHost<Config, Facets extends object = object>(
     dependencies.availableCapabilities.has("ordering-coordination") &&
     init.ordering
   ) {
-    granted.add("ordering-coordination");
-    host.ordering = Object.freeze({
+    serviceFacets.ordering = Object.freeze({
       get: init.ordering.get,
       set(value: { col: string; dir: "asc" | "desc" } | null) {
         assertActive();
@@ -363,11 +395,11 @@ export function createAppNodeHost<Config, Facets extends object = object>(
           }
         : {}),
     });
+    granted.add("ordering-coordination");
   }
 
   if (requested.has("gpu-device") && dependencies.availableCapabilities.has("gpu-device")) {
-    granted.add("gpu-device");
-    host.acquireDeviceLease = () => {
+    serviceFacets.acquireDeviceLease = () => {
       assertActive();
       deviceLeasePromise ??= dependencies.deviceBroker.acquire(instanceId, controller.signal).then((lease) => {
         if (disposed) {
@@ -379,6 +411,7 @@ export function createAppNodeHost<Config, Facets extends object = object>(
       });
       return deviceLeasePromise;
     };
+    granted.add("gpu-device");
   }
 
   for (const capability of requested) {
@@ -393,7 +426,7 @@ export function createAppNodeHost<Config, Facets extends object = object>(
     }
   }
 
-  Object.assign(host, init.facets);
+  Object.assign(host, serviceFacets, init.facets);
 
   function dispose(): void {
     if (disposed) return;
@@ -413,15 +446,13 @@ export function createAppNodeHost<Config, Facets extends object = object>(
     } catch (error) {
       errors.push(error);
     }
-    if (granted.has("row-set-publish")) {
-      try {
-        void (host.dataAPI as NodeDataAPI).disposePublishedRowSet?.();
-      } catch (error) {
-        errors.push(error);
-      }
+    try {
+      void disposePublishedRowSet?.();
+    } catch (error) {
+      errors.push(error);
     }
     throwDisposalErrors(`node host ${instanceId} disposal failed`, errors);
   }
 
-  return { host: host as AppNodeHost<Config, NodeCapability, Facets>, dispose };
+  return { host, dispose };
 }

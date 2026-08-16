@@ -1,0 +1,28 @@
+{
+  "name": "@ndea/ochre",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Color conversion, colormap, catalog, and TypeGPU helpers for NDEA.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./catalog": "./src/catalog.ts",
+    "./catalog/*": "./src/colormap/catalog/*.ts",
+    "./color": "./src/color/index.ts",
+    "./colormap": "./src/colormap/index.ts",
+    "./gpu": "./src/gpu/index.ts"
+  },
+  "scripts": {
+    "check": "vp check",
+    "test": "vp test"
+  },
+  "dependencies": {
+    "@typegpu/color": "^0.12.0",
+    "typegpu": "catalog:"
+  },
+  "devDependencies": {
+    "@types/bun": "catalog:",
+    "typescript": "catalog:",
+    "vite-plus": "catalog:"
+  }
+}

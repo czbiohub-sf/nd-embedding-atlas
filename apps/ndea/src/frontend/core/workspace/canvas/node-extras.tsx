@@ -2,8 +2,8 @@
 
 import { IterationCw, Link2 } from "lucide-react";
 
-import { NdIconButton } from "@/components/nd/nd-icon-button";
-import { NdHud } from "@/components/nd/nd-primitives";
+import { NdIconButton } from "@/components/node-workspace/nd-icon-button";
+import { NdHud } from "@/components/node-workspace/nd-primitives";
 import type { GraphDocumentNode } from "@/core/graph/records";
 import { ON_ACCENT_INK } from "@/lib/color/brand";
 import type { FeedbackChannel } from "../feedback";

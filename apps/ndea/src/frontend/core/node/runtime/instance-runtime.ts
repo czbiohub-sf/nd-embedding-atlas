@@ -1,7 +1,8 @@
-import type { ExactNodeTypeRef, MountedNodeBody, NodeModule, NodeRuntime } from "@ndea/sdk";
+import type { ExactNodeTypeRef, MountedNodeBody, NodeCapability, NodeModule, NodeRuntime } from "@ndea/sdk";
 
 import type { NodeCatalog } from "@/core/plugin/catalog";
 import type { CatalogNodeDefinition } from "@/core/plugin/registration";
+import type { AppNodeHost } from "@/core/node/app-node-host";
 import { assertNodeHostCapabilities } from "@/core/node/host-capabilities";
 import type { HostHandle } from "./host";
 
@@ -23,7 +24,7 @@ export interface NodeInstanceRuntimeDependencies {
 }
 
 interface LiveAttempt {
-  module: NodeModule | null;
+  module: NodeModule<unknown, NodeCapability> | null;
   hostHandle: HostHandle<unknown> | null;
   moduleRuntime: NodeRuntime | null;
   body: MountedNodeBody | null;
@@ -40,6 +41,16 @@ function errorOf(value: unknown): Error {
 function aggregateFailure(primary: Error, teardownErrors: unknown[]): Error {
   if (teardownErrors.length === 0) return primary;
   return new AggregateError([primary, ...teardownErrors.map(errorOf)], `${primary.message}; attempt teardown failed`);
+}
+
+function isNodeModule(value: unknown): value is NodeModule<unknown, NodeCapability> {
+  if (value === null || typeof value !== "object") return false;
+  const createRuntime = Reflect.get(value, "createRuntime");
+  const mountBody = Reflect.get(value, "mountBody");
+  return (
+    (createRuntime === undefined || typeof createRuntime === "function") &&
+    (mountBody === undefined || typeof mountBody === "function")
+  );
 }
 
 /**
@@ -118,23 +129,28 @@ export class NodeInstanceRuntime {
       return;
     }
 
-    let module: NodeModule;
+    let loaded: unknown;
     try {
-      module = (await definition.load()) as NodeModule;
+      loaded = await definition.load();
     } catch (error) {
       this.fail(generation, "module", errorOf(error));
       return;
     }
-    if (!module || typeof module !== "object") {
-      this.fail(generation, "module", new TypeError("node definition load did not return a module"));
+    if (!isNodeModule(loaded)) {
+      this.fail(generation, "module", new TypeError("node definition load did not return a valid module"));
       return;
     }
+    const module = loaded;
     if (!this.isCurrent(generation)) return;
     this.attempt.module = module;
 
+    let host: AppNodeHost<unknown, NodeCapability>;
     try {
-      this.attempt.hostHandle = this.dependencies.createHost(definition);
-      assertNodeHostCapabilities(definition, this.attempt.hostHandle.host);
+      const hostHandle = this.dependencies.createHost(definition);
+      this.attempt.hostHandle = hostHandle;
+      const candidate = hostHandle.host;
+      assertNodeHostCapabilities(definition, candidate);
+      host = candidate;
     } catch (error) {
       this.failAttempt(generation, "capability", errorOf(error));
       return;
@@ -146,7 +162,7 @@ export class NodeInstanceRuntime {
 
     if (module.createRuntime) {
       try {
-        this.attempt.moduleRuntime = module.createRuntime(this.attempt.hostHandle.host);
+        this.attempt.moduleRuntime = module.createRuntime(host);
       } catch (error) {
         this.failAttempt(generation, "runtime", errorOf(error));
         return;
@@ -164,7 +180,7 @@ export class NodeInstanceRuntime {
 
     let body: MountedNodeBody;
     try {
-      body = await module.mountBody(this.attempt.hostHandle.host);
+      body = await module.mountBody(host);
     } catch (error) {
       this.failAttempt(generation, "body", errorOf(error));
       return;

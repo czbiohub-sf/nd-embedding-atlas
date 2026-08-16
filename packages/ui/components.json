@@ -1,0 +1,21 @@
+{
+  "style": "base-mira",
+  "rsc": false,
+  "tsx": true,
+  "tailwind": {
+    "css": "src/styles.css",
+    "baseColor": "neutral",
+    "cssVariables": true
+  },
+  "iconLibrary": "lucide",
+  "rtl": false,
+  "aliases": {
+    "components": "@ndea/ui/components",
+    "ui": "@ndea/ui/components",
+    "utils": "@ndea/ui/lib/utils",
+    "lib": "@ndea/ui/lib"
+  },
+  "menuColor": "default-translucent",
+  "menuAccent": "subtle",
+  "registries": {}
+}
