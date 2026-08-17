@@ -16,6 +16,7 @@ import {
   MetadataSchema,
   type Metadata,
   type NdeaProtocol,
+  ObsInfoSchema,
   SelectionPublishResponseSchema,
   TrajectoryResponseSchema,
   VarColumnBodySchema,
@@ -24,6 +25,10 @@ import {
   VarLayersResponseSchema,
   VarNamesResponseSchema,
 } from "./index.ts";
+
+test("observation info permits rows without a crop-addressable FOV", () => {
+  expect(ObsInfoSchema.parse({ t: 0, x: 12, y: 34 })).toEqual({ t: 0, x: 12, y: 34 });
+});
 
 describe("shared route contracts", () => {
   test("preserves every embedding status payload", () => {
@@ -65,7 +70,15 @@ describe("shared HTTP response DTOs", () => {
       var_count: 42,
       layers: ["X"],
       export_dir: "/tmp/exports",
-      spatial: { fov_col: null, t_col: "t", bbox_col: null, x_col: "x", y_col: "y" },
+      spatial: {
+        fov_col: null,
+        crop_fov_col: null,
+        t_col: "t",
+        bbox_col: null,
+        x_col: "x",
+        y_col: "y",
+        z_col: "z_slice",
+      },
       plate: false,
       preset: "annotate",
       capabilities: ["obs", "var", "obsm"],

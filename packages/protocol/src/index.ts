@@ -232,7 +232,7 @@ export type ObsBbox = z.infer<typeof ObsBboxSchema>;
 
 /** Observation info response: matches /api/obs/{row_index}. */
 export const ObsInfoSchema = z.looseObject({
-  fov_name: z.string(),
+  fov_name: z.string().optional(),
   t: z.number(),
   x: z.number(),
   y: z.number(),
@@ -252,10 +252,12 @@ export const ObsmEntrySchema = z.object({
 export type ObsmEntry = z.infer<typeof ObsmEntrySchema>;
 export const SpatialMetaSchema = z.object({
   fov_col: z.string().nullable().optional(),
+  crop_fov_col: z.string().nullable().optional(),
   t_col: z.string().nullable().optional(),
   bbox_col: z.string().nullable().optional(),
   x_col: z.string().nullable().optional(),
   y_col: z.string().nullable().optional(),
+  z_col: z.string().nullable().optional(),
 });
 export type SpatialMeta = z.infer<typeof SpatialMetaSchema>;
 export const PlateChannelSchema = z.object({

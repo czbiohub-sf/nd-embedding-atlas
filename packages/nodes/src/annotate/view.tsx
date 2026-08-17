@@ -31,6 +31,7 @@ import { filterExprToExpr } from "../charts/core/mosaic-helpers";
 import { cn } from "@ndea/ui/lib/utils";
 import { AnnotateTable, type CropFields, type FocusedCrop } from "./AnnotateTable";
 import { CommitPanel } from "./CommitPanel";
+import { resolveAnnotateCropFields } from "./crop-fields";
 import { RangeBracket } from "./RangeBracket";
 import { fmtVal } from "./range-scale";
 import { useGalleryChannels } from "../gallery/useGalleryChannels";
@@ -118,22 +119,12 @@ export function AnnotateView({
   // viewerChannelsStore (the "docked" slot), so thumbnails are contrasted/colored
   // identically to the Gallery node and the live viewer: change channels in one,
   // they change here too.
-  const cropFields = useMemo<CropFields | null>(() => {
-    const cols = metadata.obs_columns ?? [];
-    if (!cols.includes("fov_name") || !cols.includes("t")) return null;
-    return {
-      fov: "fov_name",
-      t: "t",
-      dataset: cols.includes("_dataset") ? "_dataset" : undefined,
-      x: cols.includes("x") ? "x" : undefined,
-      y: cols.includes("y") ? "y" : undefined,
-    };
-  }, [metadata.obs_columns]);
+  const cropFields = useMemo<CropFields | null>(() => resolveAnnotateCropFields(metadata), [metadata]);
   // Channels follow the focused obs's dataset slot: shared with the viewer/Gallery
   // via viewerChannelsStore, so live channel edits flow into the crops. Falls back
   // to "docked" (single-dataset stores) until a dataset is resolved.
   const channelSlot = selection.focusedCrop?.datasetKey ?? "docked";
-  const { channels, hash } = useGalleryChannels(channelSlot, 300, metadata.plate_channels, services);
+  const { channels, hash, viewerZ } = useGalleryChannels(channelSlot, 300, metadata.plate_channels, services);
 
   // existing annotation columns
   useEffect(() => {
@@ -505,6 +496,7 @@ export function AnnotateView({
           hotkeys={tableHotkeys}
           numericLabel={mode === "range"}
           cropFields={cropFields}
+          viewerZ={viewerZ}
           channels={channels}
           hash={hash}
           onChange={setSelection}

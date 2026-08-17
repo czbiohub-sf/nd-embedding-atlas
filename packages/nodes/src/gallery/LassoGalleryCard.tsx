@@ -16,12 +16,21 @@ export interface LassoGalleryCardProps {
   obs: LassoObs;
   channels: readonly ChannelDef[];
   hash: ChannelHash;
+  viewerZ: number;
   enabled: boolean;
   isHighlighted: boolean;
   onClick: () => void;
 }
 
-export function LassoGalleryCard({ obs, channels, hash, enabled, isHighlighted, onClick }: LassoGalleryCardProps) {
+export function LassoGalleryCard({
+  obs,
+  channels,
+  hash,
+  viewerZ,
+  enabled,
+  isHighlighted,
+  onClick,
+}: LassoGalleryCardProps) {
   // Crops route to the plate that owns this observation: `obs.datasetKey`
   // comes from the `_dataset` column in obs_base (multi-dataset stores) and
   // is undefined for single-dataset stores (server falls back to mounts[0]).
@@ -46,6 +55,7 @@ export function LassoGalleryCard({ obs, channels, hash, enabled, isHighlighted, 
     frame,
     channels,
     hash,
+    viewerZ,
     datasetKey,
     enabled: enabled && !!obs.fov && channels.length > 0,
   });

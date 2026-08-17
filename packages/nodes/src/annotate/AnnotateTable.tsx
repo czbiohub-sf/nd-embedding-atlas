@@ -38,6 +38,7 @@ export interface CropFields {
   fov: string;
   t: string;
   dataset?: string;
+  z?: string;
   /** Coordinate columns: when present, coords seed the crop cache (no /api/obs). */
   x?: string;
   y?: string;
@@ -45,6 +46,7 @@ export interface CropFields {
 export interface FocusedCrop {
   fovName: string;
   t: number | null;
+  z: number | null;
   rowIndex: RowIndex;
   datasetKey?: string;
 }
@@ -55,6 +57,19 @@ function cellText(v: unknown): string {
   if (typeof v === "string") return v;
   if (typeof v === "number" || typeof v === "boolean" || typeof v === "bigint") return String(v);
   return JSON.stringify(v);
+}
+
+/** Crop locators are untyped DuckDB cells: normalize numeric DuckDB scalar widths. */
+function numberAt(row: Row, column: string | undefined): number | null {
+  const value = column ? row[column] : undefined;
+  if (typeof value === "bigint") return Number(value);
+  return typeof value === "number" ? value : null;
+}
+
+/** As `numberAt`, for the string locators (fov name, dataset key). */
+function stringAt(row: Row, column: string | undefined): string | undefined {
+  const value = column ? row[column] : undefined;
+  return typeof value === "string" ? value : undefined;
 }
 
 export interface AnnotateTableProps {
@@ -77,6 +92,7 @@ export interface AnnotateTableProps {
   numericLabel?: boolean;
   /** Gallery crops: a leading thumbnail per row when set + channels present. */
   cropFields: CropFields | null;
+  viewerZ: number;
   channels: readonly ChannelDef[];
   hash: ChannelHash;
   onChange: (selection: {
@@ -104,6 +120,7 @@ export function AnnotateTable({
   hotkeys,
   numericLabel,
   cropFields,
+  viewerZ,
   channels,
   hash,
   onChange,
@@ -125,6 +142,7 @@ export function AnnotateTable({
     if (cropFields) {
       c.push(cropFields.fov, cropFields.t);
       if (cropFields.dataset) c.push(cropFields.dataset);
+      if (cropFields.z) c.push(cropFields.z);
       if (cropFields.x) c.push(cropFields.x);
       if (cropFields.y) c.push(cropFields.y);
     }
@@ -195,13 +213,12 @@ export function AnnotateTable({
     const r = getRow(focusIndex);
     const ri = r?.__row_index__;
     if (!r || ri == null) return null;
-    const t = r[cropFields.t];
     return {
-      fovName: typeof r[cropFields.fov] === "string" ? (r[cropFields.fov] as string) : "",
-      t: typeof t === "number" ? t : null,
+      fovName: stringAt(r, cropFields.fov) ?? "",
+      t: numberAt(r, cropFields.t),
+      z: numberAt(r, cropFields.z),
       rowIndex: rowIndex(Number(ri)),
-      datasetKey:
-        cropFields.dataset && typeof r[cropFields.dataset] === "string" ? (r[cropFields.dataset] as string) : undefined,
+      datasetKey: stringAt(r, cropFields.dataset),
     };
   }, [cropFields, getRow, focusIndex]);
 
@@ -408,6 +425,7 @@ export function AnnotateTable({
           const isSel = id != null && selectedRowIndices.has(id);
           const isFocus = v.index === focusIndex;
           const val = labelValue(row, id);
+          const cropFovName = row && cropFields ? stringAt(row, cropFields.fov) : undefined;
           return (
             <div
               key={v.key}
@@ -430,16 +448,14 @@ export function AnnotateTable({
             >
               {thumbs && (
                 <span role="gridcell" className="flex items-center">
-                  {row && cropFields && typeof row[cropFields.fov] === "string" ? (
+                  {row && cropFields && cropFovName !== undefined ? (
                     <CropThumb
-                      fovName={row[cropFields.fov] as string}
-                      t={typeof row[cropFields.t] === "number" ? (row[cropFields.t] as number) : null}
+                      fovName={cropFovName}
+                      t={numberAt(row, cropFields.t)}
+                      z={numberAt(row, cropFields.z)}
+                      viewerZ={viewerZ}
                       rowIndex={Number(row.__row_index__)}
-                      datasetKey={
-                        cropFields.dataset && typeof row[cropFields.dataset] === "string"
-                          ? (row[cropFields.dataset] as string)
-                          : undefined
-                      }
+                      datasetKey={stringAt(row, cropFields.dataset)}
                       channels={channels}
                       hash={hash}
                       className="size-[30px]"

@@ -11,13 +11,16 @@ import { lastPortValueOfKind, passthroughGraphPredicate } from "@/core/graph/coo
 import { mountNodeBody } from "@/core/node/react-node-body";
 import { useDatasetSession } from "@/hooks/useDatasetSession";
 import { viewerChannelsStore } from "@/stores/viewer-channels-store";
+import { viewerZStore } from "@/stores/viewer-z-store";
 
 function useGalleryServices() {
   const { state } = useDatasetSession();
   const channels = useSelector(viewerChannelsStore, (store) => store.slots);
+  const viewerZ = useSelector(viewerZStore, (store) => store.slots);
   return {
     dataset: {
       metadata: state.metadata,
+      viewerZ: (instanceId: string) => viewerZ[instanceId] ?? 0,
       channels: (instanceId: string) => ({
         channels: channels[instanceId] ?? [],
         hash: JSON.stringify(channels[instanceId] ?? []) as ChannelHash,

@@ -17,13 +17,14 @@ export interface CropThumbProps {
   t: number | null;
   rowIndex: number;
   z?: number | null;
+  viewerZ: number;
   datasetKey?: string;
   channels: readonly ChannelDef[];
   hash: ChannelHash;
   className?: string;
 }
 
-export function CropThumb({ fovName, t, rowIndex, z, datasetKey, channels, hash, className }: CropThumbProps) {
+export function CropThumb({ fovName, t, rowIndex, z, viewerZ, datasetKey, channels, hash, className }: CropThumbProps) {
   const { data, isLoading } = useGalleryCropQuery({
     fovName,
     datasetKey,
@@ -34,6 +35,7 @@ export function CropThumb({ fovName, t, rowIndex, z, datasetKey, channels, hash,
     },
     channels,
     hash,
+    viewerZ,
     enabled: !!fovName && t != null && channels.length > 0,
   });
   const url = data?.url;

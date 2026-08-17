@@ -4,7 +4,7 @@ import type { ChannelDef, ChannelHash } from "./contracts";
 
 interface TrajectoryFrame {
   t: number;
-  z?: number;
+  z?: number | null;
   rowIndex?: number;
 }
 
@@ -26,7 +26,16 @@ export interface GalleryCropQueryParams {
   channels: readonly ChannelDef[];
   hash: ChannelHash;
   enabled: boolean;
-  viewerZ?: number;
+  viewerZ: number;
+}
+
+/**
+ * Z plane for a crop: the per-obs `z` from the dataframe wins; otherwise the
+ * viewer's live Z plane (what was set in idetik), then 0. Rounded because the
+ * crop endpoint indexes the zarr Z axis (integer slab).
+ */
+export function resolveCropZ(rowZ: number | null | undefined, viewerZ: number | null | undefined): number {
+  return Math.round(rowZ ?? viewerZ ?? 0);
 }
 
 /**
@@ -48,10 +57,7 @@ export function useGalleryCropQuery({
 }: GalleryCropQueryParams) {
   const queryClient = useQueryClient();
 
-  // Z plane: per-obs `z` from the dataframe wins; otherwise fall back to the
-  // viewer's live Z plane (what was set in idetik), then 0. Rounded because the
-  // crop endpoint indexes the zarr Z axis (integer slab).
-  const z = Math.round(frame.z ?? viewerZ ?? 0);
+  const z = resolveCropZ(frame.z, viewerZ);
 
   return useQuery<CropResult>({
     // rowIndex is essential: many cells share (fov, t): a lasso selection

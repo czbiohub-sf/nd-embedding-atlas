@@ -21,6 +21,12 @@ export interface SpatialColumns {
   z: string | null;
 }
 
+/** Column whose values address image groups; `well` is grouping metadata, not an image path. */
+export function cropFovColumn(spatial: SpatialColumns | null): string | null {
+  if (!spatial?.fov || spatial.fov === "well") return null;
+  return spatial.fov;
+}
+
 /** Returns the set of columns that should be hidden from the Mosaic VIEW. */
 export function spatialHiddenColumns(spatial: SpatialColumns | null): Set<string> {
   if (!spatial?.bbox) return new Set();

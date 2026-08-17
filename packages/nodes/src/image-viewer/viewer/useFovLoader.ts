@@ -7,9 +7,9 @@ import {
   VolumeLayer,
 } from "@idetik/core";
 import { useEffect, useRef, useState } from "react";
-import type { ChannelStat } from "@ndea/protocol";
 import { resolveContrastRange, resolveContrastWindow, safeContrastLimits } from "../contrast-window";
 import type { Metadata } from "@ndea/protocol";
+import { type ChannelStatsLoader, loadOptionalChannelStats } from "./channel-stats-loader";
 import { MultiChannelLayers } from "./multi-channel-layers";
 import { useViewer } from "./useViewer";
 import type { ChannelDef, ViewMode } from "./ViewerContext";
@@ -41,19 +41,16 @@ const SOURCE_CACHE_MAX = 5;
 
 interface UseFovLoaderOptions {
   sourceUrl: string | null;
+  fovName: string | null;
+  datasetKey?: string;
   plateChannels: Metadata["plate_channels"];
   omeVersion?: "0.4" | "0.5";
   /**
-   * `/api/channel-stats/{fov}` URL for this FOV (or null). Fetched once when the
-   * FOV loads to attach per-channel pixel stats (autocontrast). Tracks the same
-   * FOV identity as `sourceUrl`, so it's read from a ref: it never re-triggers
-   * the load effect on its own.
+   * Per-channel pixel stats for `fovName` (autocontrast). Called once per FOV
+   * load; read from a ref, so it never re-triggers the load effect on its own.
+   * Optional: a missing loader (or a failing one) just leaves stats null.
    */
-  loadChannelStats?: (
-    fovName: string,
-    datasetKey?: string,
-    signal?: AbortSignal,
-  ) => Promise<readonly ChannelStat[] | null>;
+  loadChannelStats?: ChannelStatsLoader;
 }
 
 /**
@@ -63,10 +60,20 @@ interface UseFovLoaderOptions {
  * In 3D mode, creates a single VolumeLayer with all channels and z: undefined
  * (loads the full Z stack for ray marching).
  */
-export function useFovLoader({ sourceUrl, plateChannels, omeVersion, loadChannelStats }: UseFovLoaderOptions): boolean {
+export function useFovLoader({
+  sourceUrl,
+  fovName,
+  datasetKey,
+  plateChannels,
+  omeVersion,
+  loadChannelStats,
+}: UseFovLoaderOptions): boolean {
   const { state: viewerState, actions } = useViewer();
   const { viewMode } = viewerState;
-  const requestedSignature = sourceUrl == null ? null : `${sourceUrl}\0${viewMode}\0${viewerState.generation}`;
+  const requestedSignature =
+    sourceUrl == null || fovName == null
+      ? null
+      : `${sourceUrl}\0${fovName}\0${datasetKey ?? ""}\0${viewMode}\0${viewerState.generation}`;
   const [loadedSignature, setLoadedSignature] = useState<string | null>(null);
   // ── Refs for reactive sliceCoords getters ─────────────────────────
   const zRef = useRef(0);
@@ -108,7 +115,7 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion, loadChannel
       currentGen: currentGenRef.current,
     });
 
-    if (!sourceUrl || !viewerState.initialized) return () => {};
+    if (!sourceUrl || !fovName || !viewerState.initialized) return () => {};
 
     // Skip if same FOV + same mode + same generation (runtime hasn't been recreated)
     if (
@@ -128,6 +135,7 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion, loadChannel
 
     setLoadedSignature(null);
     let cancelled = false;
+    const statsAbortController = new AbortController();
 
     const loadLayers = async () => {
       console.log("[useFovLoader] loadLayers started", sourceUrl);
@@ -310,11 +318,12 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion, loadChannel
 
       // Fetch per-channel pixel stats (autocontrast). Happens after setLayers so
       // it never delays the image; the result rides along on each ChannelDef.
-      // Resilient: a failed/missing fetch just leaves stats null (button hidden).
-      let stats: ChannelStat[] | null = null;
-      if (loadChannelStatsRef.current) {
-        stats = (await loadChannelStatsRef.current(sourceUrl.split("/").pop() ?? "")) as ChannelStat[] | null;
-      }
+      const stats = await loadOptionalChannelStats({
+        fovName,
+        datasetKey,
+        signal: statsAbortController.signal,
+        load: loadChannelStatsRef.current,
+      });
 
       if (cancelled) return;
 
@@ -354,7 +363,7 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion, loadChannel
             // Range + stats are per-FOV: refresh them even when reusing the
             // user's visibility/contrast/blend across obs clicks in one plate.
             contrastRange: defaultChannelState[i].contrastRange,
-            stats: defaultChannelState[i].stats ?? ch.stats,
+            stats: defaultChannelState[i].stats,
           }))
         : defaultChannelState;
 
@@ -381,8 +390,18 @@ export function useFovLoader({ sourceUrl, plateChannels, omeVersion, loadChannel
     return () => {
       console.log("[useFovLoader] cleanup: cancelling", sourceUrl);
       cancelled = true;
+      statsAbortController.abort();
     };
-  }, [sourceUrl, viewerState.initialized, viewMode, viewerState.generation, viewerState.channels, requestedSignature]);
+  }, [
+    sourceUrl,
+    fovName,
+    datasetKey,
+    viewerState.initialized,
+    viewMode,
+    viewerState.generation,
+    viewerState.channels,
+    requestedSignature,
+  ]);
 
   // ── Cleanup on unmount ─────────────────────────────────────────────
   useEffect(() => {

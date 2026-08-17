@@ -179,6 +179,7 @@ describe("createApp", () => {
     const store = await createMockStore(50);
     activeStore = store;
     const state = createMockState(store);
+    state.spatial = { fov: "fov_name", t: "t", bbox: null, x: "x", y: "y", z: "z_slice" };
     const config = createMockConfig();
 
     const options = {
@@ -204,6 +205,8 @@ describe("createApp", () => {
     expect(body).toHaveProperty("obs_columns");
     expect(body.obs_columns).toContain("category");
     expect(body.database).toEqual({ type: "rest" });
+    expect(body.spatial?.crop_fov_col).toBe("fov_name");
+    expect(body.spatial?.z_col).toBe("z_slice");
     // No --preset / preset: set on the mock config → the annotate default (R2/R3).
     expect(body.preset).toBe("annotate");
   });

@@ -20,6 +20,10 @@ export interface GalleryChannels {
   isPending: boolean;
 }
 
+export interface SettledGalleryChannels extends GalleryChannels {
+  viewerZ: number;
+}
+
 /**
  * Convert metadata plate_channels to ChannelDef[] as fallback when viewer is closed.
  *
@@ -63,21 +67,28 @@ export function useGalleryChannels(
   plateChannels: Metadata["plate_channels"] | undefined,
   services: {
     channels: (instanceId: string, wait: number, plateChannels?: Metadata["plate_channels"]) => GalleryChannels;
+    viewerZ: (instanceId: string) => number;
   },
-): GalleryChannels {
+): SettledGalleryChannels {
   const storeChannels = services.channels(instanceId, wait, plateChannels).channels;
+  const liveViewerZ = services.viewerZ(instanceId);
   const defaults = useMemo(() => plateChannelsToDefaults(plateChannels), [plateChannels]);
   const liveChannels = storeChannels.length > 0 ? storeChannels : defaults;
 
-  const [settled, setSettled] = useState<{ channels: readonly ChannelDef[]; hash: ChannelHash }>(() => ({
+  const [settled, setSettled] = useState<{
+    channels: readonly ChannelDef[];
+    hash: ChannelHash;
+    viewerZ: number;
+  }>(() => ({
     channels: liveChannels,
     hash: liveChannels.length > 0 ? hashChannels(liveChannels) : (JSON.stringify([]) as ChannelHash),
+    viewerZ: liveViewerZ,
   }));
 
   const debouncer = useDebouncer(
-    (next: readonly ChannelDef[]) => {
-      const hash = next.length > 0 ? hashChannels(next) : (JSON.stringify([]) as ChannelHash);
-      setSettled({ channels: next, hash });
+    ({ channels, viewerZ }: { channels: readonly ChannelDef[]; viewerZ: number }) => {
+      const hash = channels.length > 0 ? hashChannels(channels) : (JSON.stringify([]) as ChannelHash);
+      setSettled({ channels, hash, viewerZ });
     },
     { wait, leading: false, trailing: true },
   );
@@ -85,13 +96,13 @@ export function useGalleryChannels(
   // useEffect fires only when liveChannels reference changes (store update).
   // Using useEffect instead of render body avoids concurrent-mode tearing.
   useEffect(() => {
-    debouncer.maybeExecute(liveChannels);
+    debouncer.maybeExecute({ channels: liveChannels, viewerZ: liveViewerZ });
     // debouncer is stable (callback uses stable setState setter)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [liveChannels, debouncer.maybeExecute]);
+  }, [liveChannels, liveViewerZ, debouncer.maybeExecute]);
 
   const liveHash = liveChannels.length > 0 ? hashChannels(liveChannels) : (JSON.stringify([]) as ChannelHash);
-  const isPending = liveHash !== settled.hash;
+  const isPending = liveHash !== settled.hash || liveViewerZ !== settled.viewerZ;
 
-  return { channels: settled.channels, hash: settled.hash, isPending };
+  return { channels: settled.channels, hash: settled.hash, isPending, viewerZ: settled.viewerZ };
 }

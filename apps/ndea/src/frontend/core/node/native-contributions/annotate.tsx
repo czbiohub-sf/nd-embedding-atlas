@@ -15,10 +15,13 @@ import { defineNativeNodeContribution } from "@/core/node/native-contribution";
 import { passthroughGraphPredicate } from "@/core/graph/cook";
 import { mountNodeBody } from "@/core/node/react-node-body";
 import { viewerChannelsStore } from "@/stores/viewer-channels-store";
+import { viewerZStore } from "@/stores/viewer-z-store";
 
 function useAnnotateServices() {
   const channels = useSelector(viewerChannelsStore, (store) => store.slots);
+  const viewerZ = useSelector(viewerZStore, (store) => store.slots);
   return {
+    viewerZ: (instanceId: string) => viewerZ[instanceId] ?? 0,
     channels: (instanceId: string) => ({
       channels: channels[instanceId] ?? [],
       hash: JSON.stringify(channels[instanceId] ?? []) as ChannelHash,

@@ -18,6 +18,7 @@ export interface ChannelDef {
 }
 export interface GalleryDatasetServices {
   readonly metadata: Metadata;
+  readonly viewerZ: (instanceId: string) => number;
   readonly channels: (
     instanceId: string,
     wait: number,

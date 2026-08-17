@@ -5,7 +5,7 @@
 import { describe, expect, test, afterEach } from "bun:test";
 import { DatasetQuerySession } from "../store.ts";
 import { handleMosaicQuery, isAllowedSql } from "../mosaic.ts";
-import { detectSpatialColumns, parseBbox } from "../state.ts";
+import { cropFovColumn, detectSpatialColumns, parseBbox } from "../state.ts";
 import type { DuckDBConnection } from "@duckdb/node-api";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -326,6 +326,7 @@ describe("detectSpatialColumns", () => {
     const cols = new Set(["fov_name", "bbox", "x", "y", "category"]);
     const result = detectSpatialColumns(cols);
     expect(result.fov).toBe("fov_name");
+    expect(cropFovColumn(result)).toBe("fov_name");
     expect(result.bbox).toBe("bbox");
     expect(result.x).toBe("x");
     expect(result.y).toBe("y");
@@ -335,6 +336,7 @@ describe("detectSpatialColumns", () => {
     const cols = new Set(["well", "value"]);
     const result = detectSpatialColumns(cols);
     expect(result.fov).toBe("well");
+    expect(cropFovColumn(result)).toBeNull();
   });
 
   test("detects cp_bbox as bbox fallback", () => {

@@ -72,7 +72,7 @@ export function usePredicateGalleryObs(coordinator: Coordinator, predicate: stri
       if (!r.ok) throw new Error(`obs/batch failed: ${r.status}`);
       const data = (await r.json()) as Record<
         string,
-        { x: number; y: number; fov?: string; t?: number; dataset?: string }
+        { x: number; y: number; fov?: string; t?: number; z?: number; track_id?: number; dataset?: string }
       >;
 
       // 3. Pre-populate the per-obs coord cache that useGalleryCropQuery
@@ -82,20 +82,21 @@ export function usePredicateGalleryObs(coordinator: Coordinator, predicate: stri
         queryClient.setQueryData(obsCoordKey(rowIndex(Number(idStr))), { x: entry.x, y: entry.y });
       }
 
-      const obs = rowIds
-        .map((id) => {
-          const entry = data[String(id)];
-          if (!entry) return null;
-          return {
-            rowIndex: id,
-            fov: entry.fov ?? null,
-            t: entry.t ?? 0,
-            x: entry.x,
-            y: entry.y,
-            datasetKey: entry.dataset,
-          };
-        })
-        .filter((o): o is LassoObs => o !== null);
+      const obs: LassoObs[] = [];
+      for (const id of rowIds) {
+        const entry = data[String(id)];
+        if (!entry) continue;
+        obs.push({
+          rowIndex: id,
+          fov: entry.fov ?? null,
+          t: entry.t ?? 0,
+          x: entry.x,
+          y: entry.y,
+          z: entry.z,
+          trackId: entry.track_id,
+          datasetKey: entry.dataset,
+        });
+      }
 
       return { obs, total };
     },

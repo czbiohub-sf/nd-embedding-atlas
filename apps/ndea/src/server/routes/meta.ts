@@ -7,7 +7,7 @@
 
 import { deriveDataCapabilities } from "../capabilities.ts";
 import { MetadataSchema, type ObsmEntry } from "../protocol.ts";
-import type { ServerSession, DatasetSessionMetadata } from "../state.ts";
+import { cropFovColumn, type ServerSession, type DatasetSessionMetadata } from "../state.ts";
 import { obsmColumnPrefix } from "../store.ts";
 import { exportDir } from "../export-util.ts";
 
@@ -81,12 +81,22 @@ export function handleMetadata(state: ServerSession, config: DatasetSessionMetad
     spatial: state.spatial
       ? {
           fov_col: state.spatial.fov,
+          crop_fov_col: cropFovColumn(state.spatial),
           t_col: state.spatial.t,
           bbox_col: state.spatial.bbox,
           x_col: state.spatial.x,
           y_col: state.spatial.y,
+          z_col: state.spatial.z,
         }
-      : { fov_col: null, t_col: null, bbox_col: null, x_col: null, y_col: null },
+      : {
+          fov_col: null,
+          crop_fov_col: null,
+          t_col: null,
+          bbox_col: null,
+          x_col: null,
+          y_col: null,
+          z_col: null,
+        },
   };
 
   // MuData-specific fields (only when the first handle is a MuData)

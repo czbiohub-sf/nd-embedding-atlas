@@ -58,11 +58,13 @@ export function GalleryPane({
   // Resolve channel state from the docked viewer instance, mirroring TrackGallery.
   const resolvedPlateChannels =
     (datasetKey ? metadata?.dataset_channels?.[datasetKey] : undefined) ?? metadata?.plate_channels;
+  const viewerInstance = datasetKey ?? "docked";
   const {
     channels: settledChannels,
     hash: settledHash,
     isPending: channelsPending,
-  } = useGalleryChannels(datasetKey ?? "docked", 300, resolvedPlateChannels, services);
+    viewerZ,
+  } = useGalleryChannels(viewerInstance, 300, resolvedPlateChannels, services);
 
   // Crops are data URLs (see useGalleryCropQuery): no blob-URL revocation to
   // manage. The old findAll(["crop"]) revoke-all-on-unmount nuked every crop
@@ -185,6 +187,7 @@ export function GalleryPane({
                     obs={o}
                     channels={settledChannels}
                     hash={settledHash}
+                    viewerZ={viewerZ}
                     enabled={fetchEnabled}
                     isHighlighted={focusedRowIndex === o.rowIndex}
                     onClick={() => onSelect(o.rowIndex)}

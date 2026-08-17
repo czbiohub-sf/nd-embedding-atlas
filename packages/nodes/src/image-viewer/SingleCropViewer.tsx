@@ -84,20 +84,23 @@ export function SingleCropViewer({ cropSize, showBbox, datasetKey }: Props) {
   const omeVersion = activeStore?.ome_version ?? metadata.plate_ome_version;
 
   // Gate sourceUrl: null prevents useFovLoader from loading the wrong plate.
-  const sourceUrl = isForThisDataset && obsInfo ? `${window.location.origin}${mountPrefix}/${obsInfo.fov_name}` : null;
+  const fovName = isForThisDataset && obsInfo ? (obsInfo.fov_name ?? null) : null;
+  const sourceUrl = fovName ? `${window.location.origin}${mountPrefix}/${fovName}` : null;
 
-  // Autocontrast stats endpoint for this FOV (dataset_key picks the plate mount
-  // server-side, mirroring the crop path). Same FOV identity as sourceUrl.
   // ── Hooks for imperative plumbing ─────────────────────────────────
   // Resolve per-dataset channels when available, falling back to global plate_channels
   const resolvedChannels =
     (activeStoreName ? metadata.dataset_channels?.[activeStoreName] : undefined) ?? metadata.plate_channels;
 
+  // The loader takes the canonical FOV name and the store name: `dataset_key`
+  // picks the plate mount server-side, mirroring the crop path.
   const sourceReady = useFovLoader({
     sourceUrl,
+    fovName,
+    datasetKey: activeStoreName,
     plateChannels: resolvedChannels,
     omeVersion,
-    loadChannelStats: (fovName, _datasetKey, signal) => services.loadChannelStats(fovName, activeStoreName, signal),
+    loadChannelStats: services.loadChannelStats,
   });
 
   const scale = viewerState.bounds.scale ?? plateScale;
