@@ -2,15 +2,13 @@
  * NodeDocButton: Tier 1 · Peek. An info button for a node's header that opens
  * the node's contextual documentation in a click popover, sourced from the
  * definition's documentation. Click (not hover) so it's discoverable and never
- * fights the node body. The single renderer for the doc tier; the reference
- * drawer (tier 2) reuses the same `NodeDoc` record.
+ * fights the node body.
  *
  * Renders nothing when the node type has no definition or authored documentation :
  * only documented nodes get the button.
  */
 
 import { useState } from "react";
-import { useDocs } from "@/components/docs/docs-context";
 import { Popover, PopoverContent, PopoverTrigger } from "@ndea/ui/components/popover";
 import { ndIconButtonVariants } from "@/components/node-workspace/nd-icon-button";
 import { NdIcon } from "@/components/node-workspace/nd-icons";
@@ -50,7 +48,6 @@ export function NodeDocButton({
   const workspace = useWorkspace();
   const definition = workspace.nodeLibrary.catalog.resolveExact(definitionRef);
   const doc = definition?.documentation;
-  const docs = useDocs();
   const [open, setOpen] = useState(false);
   // No authored docs → no button.
   if (!definition || !doc) return null;
@@ -122,23 +119,6 @@ export function NodeDocButton({
             </p>
           )}
         </div>
-
-        {/* footer: escalate to the full-docs sheet (tier 2) */}
-        {docs && (
-          <div className="border-border/60 border-t px-3 py-2">
-            <button
-              type="button"
-              onClick={() => {
-                setOpen(false);
-                docs.openDocs(definitionRef);
-              }}
-              className="inline-flex items-center gap-1 font-semibold text-[10px] text-primary hover:underline"
-            >
-              see full docs
-              <span aria-hidden>→</span>
-            </button>
-          </div>
-        )}
       </PopoverContent>
     </Popover>
   );
