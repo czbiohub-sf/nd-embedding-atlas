@@ -1,20 +1,20 @@
 import type { ExactNodeTypeRef, NodeDefinition } from "@ndea/sdk";
-import { annotateNode } from "@/nodes/annotate/node";
-import { countPlotNode } from "@/nodes/charts/count-plot/node";
-import { histogramNode } from "@/nodes/charts/histogram/node";
-import { vgplotNode } from "@/nodes/charts/vgplot/node";
-import { galleryNode } from "@/nodes/gallery/node";
-import { imageViewerNode } from "@/nodes/image-viewer/node";
-import { scatterNode } from "@/nodes/scatter/node";
-import { tableNode } from "@/nodes/table/node";
-import { thresholdNode } from "@/nodes/transform-filter/node";
-import { cacheNode } from "@/nodes/utils/cache/node";
-import { countNode } from "@/nodes/utils/count/node";
-import { datasetNode } from "@/nodes/utils/dataset/node";
-import { obsNode } from "@/nodes/utils/obs/node";
-import { proxyNode } from "@/nodes/utils/proxy/node";
-import { subnetNode } from "@/nodes/utils/subnet/node";
-import { wrangleNode } from "@/nodes/utils/wrangle/node";
+import { annotateNode } from "./native-contributions/annotate";
+import { cacheNode } from "./native-contributions/cache";
+import { countPlotNode } from "./native-contributions/count-plot";
+import { countNode } from "./native-contributions/count";
+import { datasetNode } from "./native-contributions/dataset";
+import { galleryNode } from "./native-contributions/gallery";
+import { histogramNode } from "./native-contributions/histogram";
+import { imageViewerNode } from "./native-contributions/image-viewer";
+import { obsNode } from "./native-contributions/obs";
+import { proxyNode } from "./native-contributions/proxy";
+import { scatterNode } from "./native-contributions/scatter";
+import { subnetNode } from "./native-contributions/subnet";
+import { tableNode } from "./native-contributions/table";
+import { thresholdNode } from "./native-contributions/transform-filter";
+import { vgplotNode } from "./native-contributions/vgplot";
+import { wrangleNode } from "./native-contributions/wrangle";
 import type { AnyNativeNodeContribution } from "./native-contribution";
 
 /**

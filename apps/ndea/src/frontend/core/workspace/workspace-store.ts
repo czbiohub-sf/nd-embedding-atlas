@@ -19,7 +19,7 @@ import {
   type CoordinationScopeCellPort,
 } from "@/core/coordination/coordination";
 import { predicateSql } from "@/core/graph/cook";
-import type { GraphEvaluationStore } from "@/core/graph/evaluator";
+import type { GraphEvaluationStore } from "@ndea/graph";
 import type { GraphDocumentEdge, GraphDocumentNode } from "@/core/graph/records";
 import {
   GraphRuntimeSession,
@@ -30,7 +30,7 @@ import {
 import type { NodeRuntimeSessionPort } from "@/core/node/runtime/session-port";
 import { compareSemanticVersions, type ExactNodeTypeRef, type RowIndex } from "@ndea/sdk";
 import type { Metadata } from "@/types";
-import type { NdForm } from "@/components/nd/nd-resolve-form";
+import type { NdForm } from "@/components/node-workspace/nd-resolve-form";
 import { toRows } from "@/lib/mosaic-helpers";
 import type { AppNodeDescriptor, AppNodeLibrary } from "@/core/node/library";
 import {

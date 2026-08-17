@@ -5,7 +5,7 @@ import { z } from "zod";
 import { nodeConfig, predicateSqls } from "../graph/cook";
 import type { GraphDocumentEdge, GraphDocumentNode } from "../graph/records";
 import { GraphRuntimeSession, type GraphRuntimeNodeSpec } from "../graph/runtime-session";
-import { andPreds } from "../graph/engine";
+import { andPreds } from "@ndea/graph";
 import { compileNodeAsset } from "./compiler";
 import { parseNodeAssetDefinition } from "./schema";
 

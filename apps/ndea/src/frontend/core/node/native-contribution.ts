@@ -3,6 +3,7 @@
 import type { NodeCapability, NodeDefinition } from "@ndea/sdk";
 import type { GraphNodeCookFunction } from "@/core/graph/cook";
 import type { GraphNodeRole } from "@/core/graph/records";
+import type { AppNodeHostFacetName } from "./app-node-host";
 
 export interface NativeNodeSize {
   readonly w: number;
@@ -25,6 +26,7 @@ export interface NativeNodePresentation {
   readonly accent?: string;
   readonly checkpoint?: boolean;
   readonly checkpointCreation?: boolean;
+  readonly requiredHostFacets?: readonly AppNodeHostFacetName[];
 }
 
 export interface NativeNodeContribution<
@@ -64,6 +66,9 @@ export function defineNativeNodeContribution<Config, Capabilities extends readon
     presentation: Object.freeze({
       ...contribution.presentation,
       geometry: freezeGeometry(contribution.presentation.geometry),
+      ...(contribution.presentation.requiredHostFacets
+        ? { requiredHostFacets: Object.freeze([...contribution.presentation.requiredHostFacets]) }
+        : {}),
     }),
   });
 }

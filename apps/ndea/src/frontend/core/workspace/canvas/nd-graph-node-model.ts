@@ -1,5 +1,5 @@
-import type { NdForm } from "@/components/nd/nd-resolve-form";
-import type { NdLedState } from "@/components/nd/nd-primitives";
+import type { NdForm } from "@/components/node-workspace/nd-resolve-form";
+import type { NdLedState } from "@/components/node-workspace/nd-primitives";
 import type { AppNodeDescriptor } from "@/core/node/library";
 
 export type NdGraphNodeBodyMode = "hidden" | "fullscreen-placeholder" | "socket" | "compact-placeholder";

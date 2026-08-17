@@ -23,7 +23,7 @@ export default defineConfig({
 
     ignorePatterns: [
       "**/dist/**",
-      "**/ochre/colormap/data/**",
+      "packages/ochre/src/colormap/data/**",
       // Generated Bunli metadata contains raw AST nodes.
       ".bunli/**",
     ],
@@ -125,8 +125,9 @@ export default defineConfig({
       {
         // These modules co-locate components with constants or helpers.
         files: [
-          "**/src/frontend/components/nd/**/*.tsx",
+          "**/src/frontend/components/node-workspace/**/*.tsx",
           "**/src/frontend/components/ui/**/*.tsx",
+          "packages/ui/src/components/**/*.tsx",
           "**/src/frontend/core/workspace/**/*.tsx",
           "docs/press.config.tsx",
         ],
@@ -136,21 +137,21 @@ export default defineConfig({
       },
       {
         // shadcn components preserve upstream fallback expressions.
-        files: ["**/src/frontend/components/ui/**/*.tsx"],
+        files: ["**/src/frontend/components/ui/**/*.tsx", "packages/ui/src/components/**/*.tsx"],
         rules: {
           "typescript/prefer-nullish-coalescing": "off",
         },
       },
       {
         // TanStack Table cell callbacks render values; they are not nested components.
-        files: ["**/src/frontend/nodes/table/DataTable.tsx"],
+        files: ["packages/nodes/src/table/DataTable.tsx"],
         rules: {
           "react/no-unstable-nested-components": "off",
         },
       },
       {
         // TypeGPU exposes opaque APIs and nullable GPU handles.
-        files: ["**/src/frontend/nodes/scatter/gpu/**/*.{ts,tsx}"],
+        files: ["packages/nodes/src/scatter/gpu/**/*.{ts,tsx}"],
         rules: {
           "typescript/no-non-null-assertion": "off",
           "typescript/no-explicit-any": "off",
@@ -188,28 +189,15 @@ export default defineConfig({
         },
       },
       {
-        // Node cross-view coordination must use the injected host.
-        files: ["**/src/frontend/nodes/**/*.{ts,tsx}"],
+        files: ["packages/**/*.{ts,tsx}"],
         rules: {
           "no-restricted-imports": [
             "error",
             {
               patterns: [
                 {
-                  group: [
-                    "@/core/buses",
-                    "**/core/buses",
-                    "@/core/coordination",
-                    "**/core/coordination",
-                    "**/core/coordination/**",
-                    "@/stores/row-set-sync-store",
-                    "**/row-set-sync-store",
-                    "@/stores/roaring-broadcast-store",
-                    "**/roaring-broadcast-store",
-                    "@/stores/view-sync-store",
-                    "**/view-sync-store",
-                  ],
-                  message: "Use the injected host for cross-view coordination.",
+                  group: ["@/**", "**/apps/ndea/**"],
+                  message: "Workspace packages cannot import app implementation paths.",
                 },
               ],
             },
@@ -218,7 +206,7 @@ export default defineConfig({
       },
       {
         // Node specs co-locate definitions and components.
-        files: ["**/src/frontend/nodes/**/node.tsx"],
+        files: ["apps/ndea/src/frontend/core/node/native-contributions/**/*.tsx", "packages/nodes/src/**/*.tsx"],
         rules: { "react/only-export-components": "off" },
       },
     ],
@@ -237,7 +225,7 @@ export default defineConfig({
     endOfLine: "lf",
     sortPackageJson: true,
     // Generated metadata and packed colormap tables must retain source layout.
-    ignorePatterns: [".bunli/**", "**/dist/**", "apps/ndea/src/frontend/ochre/colormap/data/**"],
+    ignorePatterns: [".bunli/**", "**/dist/**", "packages/ochre/src/colormap/data/**"],
   },
 
   staged: {

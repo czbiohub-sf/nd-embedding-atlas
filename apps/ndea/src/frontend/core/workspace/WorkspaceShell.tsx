@@ -10,12 +10,12 @@
 import { useSelector } from "@tanstack/react-store";
 import { useEffect } from "react";
 
-import { NdHud, NdLed } from "@/components/nd/nd-primitives";
-import { NdBreadcrumb } from "@/components/nd/nd-breadcrumb";
-import { NdIconButton } from "@/components/nd/nd-icon-button";
+import { NdHud, NdLed } from "@/components/node-workspace/nd-primitives";
+import { NdBreadcrumb } from "@/components/node-workspace/nd-breadcrumb";
+import { NdIconButton } from "@/components/node-workspace/nd-icon-button";
 import { PanelBottom, PanelBottomClose, Workflow } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { ButtonGroup } from "@/components/ui/button-group";
+import { Button } from "@ndea/ui/components/button";
+import { ButtonGroup } from "@ndea/ui/components/button-group";
 import { NODE_EDITOR_ENABLED } from "@/feature-flags";
 import { useDatasetSession } from "@/hooks/useDatasetSession";
 import { BodySocket, HeaderSocket, WorkspaceBodies } from "./body-dock";
@@ -128,12 +128,12 @@ function StatusBar() {
     // STAGE|CANVAS switch sits at the true center and stays put while the
     // flanking text changes width (engine idle/cooking, ⇧F expand/collapse)
     <div
-      className="grid shrink-0 grid-cols-[1fr_auto_1fr] items-center overflow-hidden border-t border-border bg-card px-2.5 font-mono text-3xs whitespace-nowrap text-text-muted select-none"
+      className="grid shrink-0 grid-cols-[1fr_auto_1fr] items-center overflow-hidden border-t border-border bg-background px-2.5 font-mono text-3xs whitespace-nowrap text-text-muted select-none"
       style={{ height: STATUS_H }}
     >
       <div className="flex min-w-0 items-center gap-3.5">
         <span className="grid size-4 shrink-0 place-items-center rounded bg-primary">
-          <NdHud size={7} className="text-white normal-case">
+          <NdHud size={7} className="text-primary-foreground normal-case">
             nD
           </NdHud>
         </span>
@@ -175,7 +175,7 @@ function StatusBar() {
               <Button
                 key={disp}
                 type="button"
-                variant={active ? "secondary" : "ghost"}
+                variant={active ? "default" : "ghost"}
                 size="icon-xs"
                 aria-pressed={active}
                 title={title}

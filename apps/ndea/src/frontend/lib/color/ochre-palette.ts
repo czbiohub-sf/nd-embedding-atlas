@@ -11,39 +11,39 @@
  * curated since the picker UX shows all entries at once.
  */
 
-import * as bids from "@/ochre/colormap/catalog/bids";
-import * as chrisluts from "@/ochre/colormap/catalog/chrisluts";
-import * as cividis from "@/ochre/colormap/catalog/cividis";
-import * as cmasher from "@/ochre/colormap/catalog/cmasher";
-import * as cmocean from "@/ochre/colormap/catalog/cmocean";
-import * as colorbrewer from "@/ochre/colormap/catalog/colorbrewer";
-import * as colorcet from "@/ochre/colormap/catalog/colorcet";
-import * as contrib from "@/ochre/colormap/catalog/contrib";
-import * as crameri from "@/ochre/colormap/catalog/crameri";
-import * as google from "@/ochre/colormap/catalog/google";
-import * as ibm from "@/ochre/colormap/catalog/ibm";
-import * as imagej from "@/ochre/colormap/catalog/imagej";
-import * as matlab from "@/ochre/colormap/catalog/matlab";
-import * as matplotlib from "@/ochre/colormap/catalog/matplotlib";
-import * as napari from "@/ochre/colormap/catalog/napari";
-import * as observable from "@/ochre/colormap/catalog/observable";
-import * as paraview from "@/ochre/colormap/catalog/paraview";
-import * as seaborn from "@/ochre/colormap/catalog/seaborn";
+import type { ColorMap, DiscreteColormap, LinearColormap } from "@ndea/ochre";
+import { srgbToHex } from "@ndea/ochre";
+import * as bids from "@ndea/ochre/catalog/bids";
+import * as chrisluts from "@ndea/ochre/catalog/chrisluts";
+import * as cividis from "@ndea/ochre/catalog/cividis";
+import * as cmasher from "@ndea/ochre/catalog/cmasher";
+import * as cmocean from "@ndea/ochre/catalog/cmocean";
+import * as colorbrewer from "@ndea/ochre/catalog/colorbrewer";
+import { Accent, Dark2, Paired, Pastel1, Pastel2, Set1, Set2, Set3 } from "@ndea/ochre/catalog/colorbrewer";
+import * as colorcet from "@ndea/ochre/catalog/colorcet";
+import * as contrib from "@ndea/ochre/catalog/contrib";
+import * as crameri from "@ndea/ochre/catalog/crameri";
+import { glasbey as OchreGlasbey } from "@ndea/ochre/catalog/glasbey";
+import * as google from "@ndea/ochre/catalog/google";
+import * as ibm from "@ndea/ochre/catalog/ibm";
+import * as imagej from "@ndea/ochre/catalog/imagej";
+import * as matlab from "@ndea/ochre/catalog/matlab";
+import * as matplotlib from "@ndea/ochre/catalog/matplotlib";
+import * as napari from "@ndea/ochre/catalog/napari";
+import * as observable from "@ndea/ochre/catalog/observable";
+import { okabeito } from "@ndea/ochre/catalog/okabeito";
+import * as paraview from "@ndea/ochre/catalog/paraview";
+import { petroff10, petroff6, petroff8 } from "@ndea/ochre/catalog/petroff";
+import * as seaborn from "@ndea/ochre/catalog/seaborn";
 import {
   tab10 as OchreTab10,
   tab20 as OchreTab20,
   tab20b as OchreTab20b,
   tab20c as OchreTab20c,
-} from "@/ochre/colormap/catalog/tableau";
-import { glasbey as OchreGlasbey } from "@/ochre/colormap/catalog/glasbey";
-import { okabeito } from "@/ochre/colormap/catalog/okabeito";
-import { petroff10, petroff6, petroff8 } from "@/ochre/colormap/catalog/petroff";
-import * as tol from "@/ochre/colormap/catalog/tol";
-import * as vispy from "@/ochre/colormap/catalog/vispy";
-import * as yorick from "@/ochre/colormap/catalog/yorick";
-import { Accent, Dark2, Paired, Pastel1, Pastel2, Set1, Set2, Set3 } from "@/ochre/colormap/catalog/colorbrewer";
-import { srgbToHex } from "@/ochre/color/srgb";
-import type { ColorMap, DiscreteColormap, LinearColormap } from "@/ochre/colormap/types";
+} from "@ndea/ochre/catalog/tableau";
+import * as tol from "@ndea/ochre/catalog/tol";
+import * as vispy from "@ndea/ochre/catalog/vispy";
+import * as yorick from "@ndea/ochre/catalog/yorick";
 
 // ─── Vendored d3 Tableau10 (refreshed tableau palette) ──────────────────────
 // Ochre's `tab10` maps to matplotlib-classic Category10 (`#1f77b4...`), but

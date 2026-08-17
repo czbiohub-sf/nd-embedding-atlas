@@ -342,7 +342,11 @@ describe("WorkspaceStorage recovery contract", () => {
 
     const storage = new MemoryStorage();
     saveToStorage(storage, "active", state);
+    const raw = storage.bytes.active;
+    const writes = [...storage.writes];
     expect(loadFromStorage(storage, "active", library)).toEqual({ kind: "ok", state });
+    expect(storage.bytes.active).toBe(raw);
+    expect(storage.writes).toEqual(writes);
   });
 
   test("invalid known config enters config recovery and does not rewrite", () => {
@@ -457,6 +461,57 @@ describe("WorkspaceStorage recovery contract", () => {
     const storage = new MemoryStorage({ active: raw });
 
     expect(loadFromStorage(storage, "active", library)).toEqual({ kind: "ok", state });
+    expect(storage.bytes.active).toBe(raw);
+    expect(storage.writes).toEqual([]);
+  });
+
+  test("resolved legacy cross-parent edges enter inert recovery without rewriting source bytes", () => {
+    const state = emptyState();
+    state.nodes.dataset = {
+      id: "dataset",
+      definitionRef: exactNodeTypeRef("dataset", "1.0.0"),
+      label: "Dataset",
+    };
+    state.nodes.subnet = {
+      id: "subnet",
+      definitionRef: exactNodeTypeRef("subnet", "1.0.0"),
+      label: "Subnet",
+    };
+    state.nodes["subnet-in"] = {
+      id: "subnet-in",
+      definitionRef: exactNodeTypeRef("proxy", "1.0.0"),
+      label: "Subnet input",
+      parent: "subnet",
+    };
+    state.nodes["subnet-out"] = {
+      id: "subnet-out",
+      definitionRef: exactNodeTypeRef("proxy", "1.0.0"),
+      label: "Subnet output",
+      parent: "subnet",
+    };
+    state.nodes.count = {
+      id: "count",
+      definitionRef: exactNodeTypeRef("count", "1.0.0"),
+      label: "Count",
+      parent: "subnet",
+    };
+    state.edges.crossParent = {
+      id: "crossParent",
+      from: "dataset",
+      fromPort: "out",
+      to: "count",
+      toPort: "in",
+      kind: "pred",
+    };
+    const raw = JSON.stringify(toPersistedDoc(state), null, 2);
+    const storage = new MemoryStorage({ active: raw });
+
+    expect(loadFromStorage(storage, "active", library)).toMatchObject({
+      kind: "recovery",
+      stage: "topology",
+      errors: ['edge "crossParent" crosses parent scope "<root>" -> "subnet"'],
+      state: { edges: { crossParent: state.edges.crossParent } },
+    });
     expect(storage.bytes.active).toBe(raw);
     expect(storage.writes).toEqual([]);
   });

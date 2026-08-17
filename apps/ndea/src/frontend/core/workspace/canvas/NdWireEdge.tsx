@@ -11,7 +11,7 @@
 import { BaseEdge, EdgeLabelRenderer, type Edge, type EdgeProps } from "@xyflow/react";
 import { memo } from "react";
 
-import { ND_PORT_KINDS, type NdPortKind } from "@/components/nd/nd-port";
+import { ND_PORT_KINDS, type NdPortKind } from "@/components/node-workspace/nd-port";
 import { wirePath } from "./wire-geometry";
 import { useTelemetrySelector, useWorkspace } from "../workspace-context";
 

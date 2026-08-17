@@ -1,4 +1,14 @@
 import {
+  AUTHORED_GRAPH_OUTPUT_PORT,
+  DERIVED_GRAPH_OUTPUT_PORT,
+  GraphEvaluator,
+  andPreds,
+  type GraphEvaluationEdge,
+  type GraphEvaluationStore,
+  type GraphPortValue,
+  type Predicate,
+} from "@ndea/graph";
+import {
   nodeConfigVersion,
   rowIndex,
   type ExactNodeTypeRef,
@@ -20,10 +30,7 @@ import {
   type GraphNodeCookFunction,
   type GraphNodeCookHost,
 } from "./cook";
-import { GraphEvaluator, type GraphEvaluationStore } from "./evaluator";
-import { andPreds, type GraphEvaluationEdge, type Predicate } from "./engine";
 import type { GraphDocumentEdge, GraphDocumentNode } from "./records";
-import { AUTHORED_GRAPH_OUTPUT_PORT, DERIVED_GRAPH_OUTPUT_PORT, type GraphPortValue } from "./values";
 
 export interface GraphRuntimeNodeSpec {
   readonly definition: {
@@ -107,6 +114,14 @@ export function validateGraphRuntimeTopology(topology: GraphRuntimeTopology, res
     const source = specs.get(edge.from);
     const target = specs.get(edge.to);
     if (!source || !target) continue;
+
+    const sourceParent = topology.nodes[edge.from]?.parent ?? null;
+    const targetParent = topology.nodes[edge.to]?.parent ?? null;
+    if (sourceParent !== targetParent) {
+      throw new Error(
+        `edge "${edge.id}" crosses parent scope "${sourceParent ?? "<root>"}" -> "${targetParent ?? "<root>"}"`,
+      );
+    }
 
     const output = source.definition.outputs.find((port) => port.id === edge.fromPort);
     if (!output) throw new Error(`edge "${edge.id}" references undeclared output port "${edge.fromPort}"`);

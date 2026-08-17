@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { exactNodeTypeRef, rowIndex } from "@ndea/sdk";
 
+import { assetInnerNodeId, assetOutputBoundaryNodeId, compileNodeAsset } from "@/core/node-asset/compiler";
+import { parseNodeAssetDefinition } from "@/core/node-asset/schema";
 import type { GraphDocumentEdge, GraphDocumentNode } from "./records";
 import { GraphRuntimeSession, validateGraphRuntimeTopology, type GraphRuntimeNodeSpec } from "./runtime-session";
 
@@ -170,6 +172,37 @@ describe("GraphRuntimeSession", () => {
     runtime.dispose();
   });
 
+  test("enforces same-parent scope only for resolved edges before evaluator registration", () => {
+    const { runtime, nodes, edges } = fixture();
+    nodes.source = node("source", "source");
+    nodes.sink = { ...node("sink", "transform"), parent: "subnet" };
+    edges.crossParent = edge("cross-parent", "source", "sink");
+
+    expect(() => runtime.load({ nodes, edges, flags: {} })).toThrow(
+      'edge "cross-parent" crosses parent scope "<root>" -> "subnet"',
+    );
+    expect(runtime.isRegistered("source")).toBe(false);
+    expect(runtime.isRegistered("sink")).toBe(false);
+
+    nodes.source.parent = "subnet";
+    expect(() => runtime.load({ nodes, edges, flags: {} })).not.toThrow();
+    expect(runtime.pull("sink")).toEqual({ kind: "pred", sql: "quality > 0.5" });
+    runtime.dispose();
+
+    const unresolved = fixture();
+    unresolved.nodes.source = node("source", "source");
+    unresolved.nodes.missing = { ...node("missing", "external-missing"), parent: "subnet" };
+    unresolved.edges.opaque = edge("opaque", "source", "missing");
+
+    expect(() =>
+      unresolved.runtime.load({ nodes: unresolved.nodes, edges: unresolved.edges, flags: {} }),
+    ).not.toThrow();
+    expect(unresolved.runtime.isRegistered("source")).toBe(true);
+    expect(unresolved.runtime.isRegistered("missing")).toBe(false);
+    expect(unresolved.edges.opaque).toEqual(edge("opaque", "source", "missing"));
+    unresolved.runtime.dispose();
+  });
+
   test("rejects duplicate resolved wires before loading evaluator state", () => {
     const { runtime, nodes, edges } = fixture();
     nodes.source = node("source", "source");
@@ -208,6 +241,75 @@ describe("GraphRuntimeSession", () => {
     expect(() => runtime.load({ nodes, edges, flags: {} })).toThrow('graph runtime rejected edge "loop"');
     expect(runtime.isRegistered("subnet")).toBe(false);
     expect(runtime.isRegistered("subnet-out")).toBe(false);
+    runtime.dispose();
+  });
+
+  test("removes expansion nodes and their dependent runtime state deterministically", () => {
+    const definition = parseNodeAssetDefinition({
+      schemaVersion: 1,
+      assetId: "org.example/teardown",
+      assetVersion: "1.0.0",
+      nodeTypeRef: exactNodeTypeRef("asset/org.example/teardown", "1.0.0"),
+      title: "Teardown",
+      dependencies: [{ kind: "node", definitionRef: transformSpec.definition.ref }],
+      nodes: [
+        { id: "first", definitionRef: transformSpec.definition.ref },
+        { id: "second", definitionRef: transformSpec.definition.ref },
+      ],
+      edges: [
+        {
+          id: "chain",
+          from: "first",
+          fromPort: "out",
+          to: "second",
+          toPort: "in",
+          kind: "pred",
+        },
+      ],
+      inputs: [],
+      outputs: [{ id: "out", label: "Out", kind: "pred", source: { nodeId: "second", portId: "out" } }],
+      parameters: [],
+      documentation: { summary: "Teardown" },
+      presentation: {},
+      visibility: "public",
+    });
+    const compiled = compileNodeAsset(
+      definition,
+      {
+        getSpecExact: (ref) => (ref.nodeTypeId === transformSpec.definition.ref.nodeTypeId ? transformSpec : undefined),
+      },
+      { sourceId: "test", kind: "user" },
+    );
+    const nodes = {
+      asset: { id: "asset", definitionRef: compiled.spec.definition.ref, label: "Asset" },
+    };
+    const runtime = new GraphRuntimeSession({
+      resolver: {
+        getSpecExact: (ref) =>
+          ref.nodeTypeId === compiled.spec.definition.ref.nodeTypeId ? compiled.spec : transformSpec,
+        getAssetExpansionExact: (ref) =>
+          ref.nodeTypeId === compiled.spec.definition.ref.nodeTypeId ? compiled.expansion : undefined,
+      },
+      document: { node: (id) => nodes[id as keyof typeof nodes], edges: () => [] },
+      schedule: (flush) => flush(),
+    });
+    runtime.load({ nodes, edges: {}, flags: {} });
+    const expandedIds = [
+      assetInnerNodeId("asset", "first"),
+      assetInnerNodeId("asset", "second"),
+      assetOutputBoundaryNodeId("asset", "out"),
+    ];
+    for (const id of expandedIds) {
+      expect(runtime.isRegistered(id)).toBe(true);
+      runtime.setCheckpointStatus(id, { pending: true, error: null });
+    }
+
+    runtime.removeNode("asset");
+
+    expect(runtime.isRegistered("asset")).toBe(false);
+    expect(expandedIds.map((id) => runtime.isRegistered(id))).toEqual([false, false, false]);
+    expect(runtime.checkpoints.state).toEqual({});
+    expect(() => runtime.removeNode("asset")).not.toThrow();
     runtime.dispose();
   });
 

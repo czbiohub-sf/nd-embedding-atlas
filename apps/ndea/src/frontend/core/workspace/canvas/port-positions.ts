@@ -4,7 +4,7 @@
  * geometry outside xyflow's own edge rendering.
  */
 
-import { ndResolveForm, type NdForm } from "@/components/nd/nd-resolve-form";
+import { ndResolveForm, type NdForm } from "@/components/node-workspace/nd-resolve-form";
 import { workspaceNodeSize } from "../node-size";
 import type { Workspace } from "../workspace-store";
 import type { WorkspaceNodeSize, WorkspaceNodePosition } from "../types";

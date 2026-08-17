@@ -10,7 +10,7 @@
 import { useConnection, useReactFlow } from "@xyflow/react";
 import { useEffect, useRef } from "react";
 
-import { ND_PORT_KINDS, type NdPortKind } from "@/components/nd/nd-port";
+import { ND_PORT_KINDS, type NdPortKind } from "@/components/node-workspace/nd-port";
 import { ND_Z } from "../constants";
 import { useWorkspace, useWorkspaceSelector } from "../workspace-context";
 import { portPos } from "./port-positions";

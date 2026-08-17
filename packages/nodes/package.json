@@ -1,0 +1,63 @@
+{
+  "name": "@ndea/nodes",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Portable built-in NDEA node definitions and React bodies.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./annotate": "./src/annotate/index.ts",
+    "./cache": "./src/cache/index.ts",
+    "./catalog": "./src/catalog.ts",
+    "./charts": "./src/charts/index.ts",
+    "./count": "./src/count/index.ts",
+    "./dataset": "./src/dataset/index.ts",
+    "./gallery": "./src/gallery/index.ts",
+    "./image-viewer": "./src/image-viewer/index.ts",
+    "./query": "./src/query/index.ts",
+    "./scatter": "./src/scatter/index.ts",
+    "./subnet": "./src/subnet/index.ts",
+    "./table": "./src/table/index.ts",
+    "./wrangle": "./src/wrangle/index.ts"
+  },
+  "scripts": {
+    "check": "vp check",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@idetik/core": "^0.36.2",
+    "@ndea/ochre": "workspace:*",
+    "@ndea/protocol": "workspace:*",
+    "@ndea/sdk": "workspace:*",
+    "@ndea/ui": "workspace:*",
+    "@tanstack/react-pacer": "^0.23.0",
+    "@tanstack/react-query": "catalog:",
+    "@tanstack/react-store": "catalog:",
+    "@tanstack/react-table": "^9.1.2",
+    "@tanstack/react-virtual": "^3.14.9",
+    "@tanstack/store": "catalog:",
+    "@uwdata/mosaic-core": "catalog:",
+    "@uwdata/mosaic-plot": "^0.30.0",
+    "@uwdata/mosaic-spec": "^0.30.0",
+    "@uwdata/mosaic-sql": "catalog:",
+    "@uwdata/vgplot": "^0.30.0",
+    "gl-matrix": "^3.4.4",
+    "lucide-react": "catalog:",
+    "prql-js": "^0.12.1",
+    "react-dom": "catalog:",
+    "typegpu": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/bun": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "@webgpu/types": "catalog:",
+    "react": "catalog:",
+    "typescript": "catalog:",
+    "vite-plus": "catalog:"
+  },
+  "peerDependencies": {
+    "react": "catalog:"
+  }
+}

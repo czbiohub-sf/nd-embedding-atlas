@@ -1,0 +1,23 @@
+{
+  "name": "@ndea/graph",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Framework-neutral NDEA graph evaluation engine and value contracts.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "check": "vp check",
+    "test": "vp test"
+  },
+  "dependencies": {
+    "@ndea/sdk": "workspace:*",
+    "@tanstack/store": "catalog:"
+  },
+  "devDependencies": {
+    "@types/bun": "catalog:",
+    "typescript": "catalog:",
+    "vite-plus": "catalog:"
+  }
+}

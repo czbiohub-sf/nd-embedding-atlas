@@ -7,7 +7,7 @@
  * GET  /api/health             : Health check
  */
 
-import { parseBbox, type ServerSession } from "../state.ts";
+import { cropFovColumn, parseBbox, type ServerSession } from "../state.ts";
 
 /** Stringify a DuckDB scalar without risking [object Object]. */
 function scalarToString(value: unknown): string {
@@ -60,8 +60,9 @@ export async function handleObsBatch(req: Request, state: ServerSession): Promis
     const placeholders = rowIndices.join(", ");
     const isMulti = state.datasets.size > 1;
     const hasTrack = state.obsColumns.includes("track_id");
+    const cropFov = cropFovColumn(sp);
     const selectCols = [`"${sp.x}"`, `"${sp.y}"`];
-    if (sp.fov) selectCols.push(`"${sp.fov}"`);
+    if (cropFov) selectCols.push(`"${cropFov}"`);
     if (sp.t) selectCols.push(`"${sp.t}"`);
     if (sp.z) selectCols.push(`"${sp.z}"`);
     if (hasTrack) selectCols.push(`"track_id"`);
@@ -81,7 +82,7 @@ export async function handleObsBatch(req: Request, state: ServerSession): Promis
           x: Number(row[sp.x]),
           y: Number(row[sp.y]),
         };
-      if (sp.fov && row[sp.fov] != null) entry.fov = scalarToString(row[sp.fov]);
+      if (cropFov && row[cropFov] != null) entry.fov = scalarToString(row[cropFov]);
       if (sp.t && row[sp.t] != null) entry.t = Number(row[sp.t]);
       if (sp.z && row[sp.z] != null) entry.z = Number(row[sp.z]);
       if (hasTrack && row.track_id != null) entry.track_id = Number(row.track_id);
@@ -102,13 +103,14 @@ export async function handleObsBatch(req: Request, state: ServerSession): Promis
  */
 export async function handleObsInfo(rowIndex: number, state: ServerSession): Promise<Response> {
   const sp = state.spatial;
+  const cropFov = cropFovColumn(sp);
   const selectCols: string[] = [];
 
   if (state.datasets.size > 1) {
     selectCols.push("_dataset");
   }
   const hasTrack = state.obsColumns.includes("track_id");
-  if (sp?.fov) selectCols.push(sp.fov);
+  if (cropFov) selectCols.push(cropFov);
   if (sp?.t) selectCols.push(sp.t);
   if (sp?.bbox) selectCols.push(sp.bbox);
   if (sp?.x) selectCols.push(sp.x);
@@ -131,8 +133,8 @@ export async function handleObsInfo(rowIndex: number, state: ServerSession): Pro
     const row = rows[0];
     const response: Record<string, unknown> = {};
 
-    if (sp?.fov) {
-      response.fov_name = String(row[sp.fov]);
+    if (cropFov) {
+      response.fov_name = String(row[cropFov]);
     }
 
     response.t = sp?.t && row[sp.t] != null ? Number(row[sp.t]) : 0;

@@ -11,7 +11,7 @@
  */
 
 import { Store } from "@tanstack/store";
-import type { ChannelDef } from "@/nodes/image-viewer/viewer/ViewerContext";
+import type { ChannelDef } from "@ndea/nodes/image-viewer";
 
 export interface ViewerChannelsState {
   slots: Record<string, ChannelDef[]>;

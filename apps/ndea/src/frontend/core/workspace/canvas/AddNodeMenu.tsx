@@ -23,8 +23,8 @@ import {
   ContextMenuSub,
   ContextMenuSubContent,
   ContextMenuSubTrigger,
-} from "@/components/ui/context-menu";
-import { NdHud } from "@/components/nd/nd-primitives";
+} from "@ndea/ui/components/context-menu";
+import { NdHud } from "@/components/node-workspace/nd-primitives";
 import type { AppNodeDescriptor } from "@/core/node/library";
 import { useWorkspace } from "../workspace-context";
 import type { WorkspaceNodePosition } from "../types";

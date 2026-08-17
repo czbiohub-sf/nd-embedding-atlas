@@ -8,7 +8,7 @@ import { createContext, useContext, useEffect, useState } from "react";
 
 import { useDatasetSession } from "@/hooks/useDatasetSession";
 import { NODE_EDITOR_ENABLED } from "@/feature-flags";
-import type { GraphEvaluationState } from "@/core/graph/evaluator";
+import type { GraphEvaluationState } from "@ndea/graph";
 import { deviceBroker } from "@/core/gpu/device-broker";
 import { WorkspaceNodeRuntimeProvider } from "@/core/node/runtime/runtime-context";
 import { APP_NODE_HOST_CAPABILITIES, WorkspaceNodeRuntimeManager } from "@/core/node/runtime/workspace-runtime";

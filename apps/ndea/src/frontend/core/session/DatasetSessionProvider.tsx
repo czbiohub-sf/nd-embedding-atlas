@@ -5,7 +5,7 @@ import { type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useSt
 import { MetadataSchema } from "@ndea/protocol";
 import { wsClient } from "@/lib/ws-client";
 import { scatterKeys } from "@/lib/query-keys";
-import { focusBus } from "@/core/buses";
+import { focusBus } from "@/core/buses/focus-bus";
 import { FilterScopeRegistry } from "@/core/coordination/filter-scope-runtime";
 import type { Metadata, TrajectoryData } from "@/types";
 import {

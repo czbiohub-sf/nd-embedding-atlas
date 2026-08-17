@@ -13,6 +13,7 @@ import { MosaicClient, Selection } from "@uwdata/mosaic-core";
 
 import type { AppNodeHostDependencies } from "./host";
 import { createAppNodeHost } from "./host";
+import { assertNodeHostCapabilities } from "@/core/node/host-capabilities";
 import { FilterScopeRegistry } from "@/core/coordination/filter-scope-runtime";
 import { DatasetDataPublicationRuntime } from "@/core/session/dataset-session";
 
@@ -110,13 +111,19 @@ describe("createAppNodeHost", () => {
       },
     );
     const host = handle.host;
+    assertNodeHostCapabilities(
+      {
+        ref: facetDefinition.ref,
+        capabilities: ["data-read", "focus-coordination"] as const,
+      },
+      host,
+    );
 
     expect([...host.capabilities]).toEqual(["data-read", "focus-coordination"]);
     expect("data" in host).toBe(true);
     expect("focus" in host).toBe(true);
     expect("ordering" in host).toBe(false);
     expect("acquireDeviceLease" in host).toBe(false);
-    expect("publishPredicate" in host).toBe(false);
     const focusOff = host.focus.subscribe!(() => {});
     host.focus.set(rowIndex(7));
     host.patchConfig({ page: 3 });
@@ -128,6 +135,26 @@ describe("createAppNodeHost", () => {
     handle.dispose();
     handle.dispose();
     expect(disposalEvents).toEqual(["focus-off"]);
+  });
+
+  test("rejects app facets that collide with reserved host fields", () => {
+    const replacementCapabilities = new Set(["data-read" as const]);
+    expect(() =>
+      createAppNodeHost(hostDependencies(), {
+        instanceId: nodeInstanceId("facet-overwrite"),
+        definition: facetDefinition,
+        config: { page: 1 },
+        facets: { capabilities: replacementCapabilities },
+      }),
+    ).toThrow('app node host facet "capabilities" is reserved');
+    expect(() =>
+      createAppNodeHost(hostDependencies(), {
+        instanceId: nodeInstanceId("facet-service-overwrite"),
+        definition: facetDefinition,
+        config: { page: 1 },
+        facets: { focus: {} },
+      }),
+    ).toThrow('app node host facet "focus" is reserved');
   });
 
   test("unwinds tracked resources in reverse and releases one acquired device lease once", async () => {
@@ -164,13 +191,39 @@ describe("createAppNodeHost", () => {
         config: {},
       },
     );
-    handle.host.onDispose(() => events.push("first"));
-    handle.host.onDispose(() => events.push("second"));
-    expect(await handle.host.acquireDeviceLease()).toBe(lease);
+    const host = handle.host;
+    assertNodeHostCapabilities(definition, host);
+    host.onDispose(() => events.push("first"));
+    host.onDispose(() => events.push("second"));
+    expect(await host.acquireDeviceLease()).toBe(lease);
 
     handle.dispose();
     handle.dispose();
     expect(events).toEqual(["second", "first", "device"]);
+  });
+
+  test("runs every disposer, surfaces failures, and remains idempotent", () => {
+    const events: string[] = [];
+    const handle = createAppNodeHost(hostDependencies(), {
+      instanceId: nodeInstanceId("failing-disposal"),
+      definition: {
+        ref: exactNodeTypeRef("failing-disposal", "1.0.0"),
+        capabilities: [],
+      },
+      config: {},
+    });
+    handle.host.onDispose(() => {
+      events.push("first");
+      throw new Error("first failed");
+    });
+    handle.host.onDispose(() => {
+      events.push("second");
+      throw new Error("second failed");
+    });
+
+    expect(() => handle.dispose()).toThrow("node host failing-disposal disposal failed");
+    expect(events).toEqual(["second", "first"]);
+    expect(() => handle.dispose()).not.toThrow();
   });
 
   test("releases a device lease that completes after host disposal", async () => {
@@ -198,7 +251,9 @@ describe("createAppNodeHost", () => {
         config: {},
       },
     );
-    const acquiring = handle.host.acquireDeviceLease();
+    const host = handle.host;
+    assertNodeHostCapabilities(definition, host);
+    const acquiring = host.acquireDeviceLease();
     handle.dispose();
     resolveLease({
       id: "late-lease",
@@ -257,7 +312,10 @@ describe("createAppNodeHost", () => {
       },
     );
 
-    await handle.host.dataAPI.publishRowSet([rowIndex(2), rowIndex(5)]);
+    const host = handle.host;
+    assertNodeHostCapabilities(rowSetDefinition, host);
+    expect("publishRowSet" in host).toBe(false);
+    await host.dataAPI.publishRowSet([rowIndex(2), rowIndex(5)]);
     handle.dispose();
     handle.dispose();
     while (methods.length < 2) await Promise.resolve();
@@ -289,7 +347,9 @@ describe("createAppNodeHost", () => {
       },
     );
 
-    const publication = handle.host.dataAPI.publishRowSet([rowIndex(2)]);
+    const host = handle.host;
+    assertNodeHostCapabilities(rowSetDefinition, host);
+    const publication = host.dataAPI.publishRowSet([rowIndex(2)]);
     handle.dispose();
     pending.resolve(Response.json({ ok: true, table: "sel_late_row_set", count: 1 }));
 
@@ -350,10 +410,12 @@ describe("createAppNodeHost", () => {
       filter,
     });
     const client = new MosaicClient(selection);
+    const host = handle.host;
+    assertNodeHostCapabilities(definition, host);
 
-    expect(handle.host.filter.selection).toBe(selection);
-    handle.host.filter.associateClient(client);
-    handle.host.filter.disassociateClient(client);
+    expect(host.filter.selection).toBe(selection);
+    host.filter.associateClient(client);
+    host.filter.disassociateClient(client);
     handle.dispose();
     expect(associated).toEqual(["associate", "disassociate"]);
   });
@@ -411,8 +473,10 @@ describe("createAppNodeHost", () => {
       }),
       { instanceId: nodeInstanceId("filter-connect-failure"), definition, config: {}, filter },
     );
+    const host = handle.host;
+    assertNodeHostCapabilities(definition, host);
 
-    expect(() => handle.host.registerClient(new MosaicClient(selection))).toThrow("connect failed");
+    expect(() => host.registerClient(new MosaicClient(selection))).toThrow("connect failed");
     expect(events).toEqual(["associate", "disassociate"]);
     handle.dispose();
   });
