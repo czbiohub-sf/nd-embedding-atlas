@@ -18,6 +18,7 @@ import { rowIndex, type NodeHost, type RowIndex } from "@ndea/sdk";
 
 import { publishChartFilter } from "@ndea/nodes/charts";
 import { focusObs } from "@ndea/nodes/gallery";
+import { focusVariant } from "@ndea/nodes/carousel";
 import {
   broadcastView,
   clearLasso,
@@ -39,6 +40,7 @@ const nativeNodeLibrary = createNativeAppNodeLibrary();
 const ROUTING_COVERAGE: Record<string, "routed" | { exempt: string }> = {
   table: "routed",
   gallery: "routed",
+  carousel: "routed",
   scatter: "routed",
   "count-plot": "routed",
   histogram: "routed",
@@ -66,6 +68,13 @@ describe("cross-view routing conformance", () => {
     const { host, calls } = createSpyHost();
     focusObs(host, rowIndex(4821));
     expect(calls.focusSet).toEqual([rowIndex(4821)]);
+  });
+
+  test("carousel slide-select routes focus through the host seam", () => {
+    const { host, calls } = createSpyHost();
+    focusVariant(host, rowIndex(93)); // slide click / carousel settle
+    focusVariant(host, null); // group cleared
+    expect(calls.focusSet).toEqual([rowIndex(93), null]);
   });
 
   test("table row-click routes focus through the host seam", () => {

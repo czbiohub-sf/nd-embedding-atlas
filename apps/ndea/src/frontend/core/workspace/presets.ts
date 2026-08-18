@@ -30,9 +30,52 @@ export function seedAnnotate(ws: Workspace): void {
   ws.selectNode(table);
 }
 
+/**
+ * Regularizer sweep review: judge each reconstruction of an FOV good or bad.
+ *
+ * Unlike {@link seedAnnotate} this preset names columns (`row_idx`, `reg_power`),
+ * because "which column groups a sweep" is not inferable. They are seeded as
+ * Carousel CONFIG, not assumed by the node: on a dataset without them the
+ * carousel simply opens on its column pickers rather than breaking.
+ *
+ * Wiring: Wrangle scopes which FOVs are in play, Scatter and Table select one,
+ * and the shared `focus` group fans that obs out to the Carousel (which expands
+ * it into its 25 regularizer peers) and to the Image Viewer (which shows the
+ * selected peer live, at full interactivity).
+ */
+export function seedRegularizer(ws: Workspace): void {
+  const obs = ws.addNode("obs", { x: 30, y: 320 }, "obs");
+  const wr = ws.addNode("wrangle", { x: 520, y: 260 });
+  const table = ws.addNode("table", { x: 1100, y: 40 });
+  const scatter = ws.addNode("scatter", { x: 1100, y: 520 });
+  const carousel = ws.addNode("carousel", { x: 1700, y: 240 });
+  const imageViewer = ws.addNode("image-viewer", { x: 2320, y: 60 });
+  ws.connect(obs, wr);
+  ws.connect(wr, table);
+  ws.connect(wr, scatter);
+  ws.connect(wr, carousel); // the scope the carousel steps groups through
+  ws.updateNodeConfig(carousel, {
+    groupBy: "row_idx",
+    variantBy: "reg_power",
+    column: "reg_verdict",
+    labels: ["good", "bad"],
+    // Three reconstructions side by side, each a live camera-synced viewport.
+    slidesPerView: 3,
+  });
+  for (const nodeId of [table, scatter]) {
+    ws.coordination.assignScope(nodeId, "filter", "A");
+  }
+  for (const nodeId of [table, scatter, carousel, imageViewer]) {
+    ws.coordination.assignScope(nodeId, "focus", "A");
+  }
+  ws.setDisposition("hidden");
+  ws.selectNode(carousel);
+}
+
 /** Known presets by name. `annotate` is the default a no-`--preset` build opens. */
 const PRESETS: Record<string, PresetSeeder> = {
   annotate: seedAnnotate,
+  regularizer: seedRegularizer,
 };
 
 /**

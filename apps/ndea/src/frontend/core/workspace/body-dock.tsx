@@ -111,7 +111,21 @@ export function WorkspaceBodies() {
   );
 }
 
-/** Adopts the runtime-owned header slot without changing instance lifetime. */
+/**
+ * Adopts the runtime-owned header slot without changing instance lifetime.
+ *
+ * The `adopt` guard is load-bearing, not a micro-optimization: these refs are
+ * inline closures, so React re-invokes them on EVERY render, and `appendChild`
+ * of an already-correct child still detaches and re-inserts it. Re-insertion
+ * resets `scrollTop`/`scrollLeft` on the whole subtree WITHOUT firing a scroll
+ * event, which strands anything tracking scroll offset in JS: TanStack Virtual
+ * reads offset only from scroll events, so a scrolled table kept rendering rows
+ * at its pre-reset offset and painted an empty band.
+ */
+function adopt(element: HTMLElement | null, dock: HTMLElement): void {
+  if (element && dock.parentElement !== element) element.appendChild(dock);
+}
+
 export function HeaderSocket({ nodeId }: { readonly nodeId: string }) {
   const runtimes = useWorkspaceNodeRuntimes();
   return (
@@ -119,7 +133,7 @@ export function HeaderSocket({ nodeId }: { readonly nodeId: string }) {
       data-nodrag="1"
       className="nodrag flex h-full min-w-0 flex-1 items-center overflow-hidden"
       ref={(element) => {
-        if (element) element.appendChild(runtimes.headerDock(nodeId));
+        adopt(element, runtimes.headerDock(nodeId));
       }}
     />
   );
@@ -142,7 +156,7 @@ export function BodySocket({
     <div
       className={`relative ${className ?? "nowheel nodrag flex min-h-0 flex-1 flex-col overflow-hidden"}`}
       ref={(element) => {
-        if (element) element.appendChild(runtimes.bodyDock(nodeId));
+        adopt(element, runtimes.bodyDock(nodeId));
       }}
     >
       {claimable && !claimed ? (
