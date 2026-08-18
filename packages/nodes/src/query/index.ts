@@ -3,3 +3,4 @@ export type { ColumnType } from "./useColumnTypes";
 export { useMosaicClient } from "./useMosaicClient";
 export type { UseMosaicClientOptions } from "./useMosaicClient";
 export { useNodeFocus } from "./useNodeFocus";
+export { useInputPredicateSql } from "./use-input-predicate";

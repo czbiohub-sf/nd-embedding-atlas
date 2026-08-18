@@ -109,3 +109,59 @@ describe("seedAnnotate", () => {
     for (const t of ["obs", "wrangle", "count", "cache"]) expect(staged.has(t)).toBe(false);
   });
 });
+
+describe("seedRegularizer", () => {
+  test("scopes every view off wrangle and coordinates them on one focus", () => {
+    const ws = makeWs();
+    resolvePreset("regularizer")!(ws);
+
+    const byType = Object.fromEntries(
+      Object.values(ws.store.state.nodes).map((n) => [n.definitionRef.nodeTypeId, n.id]),
+    );
+    const edges = Object.values(ws.store.state.edges);
+    const edge = (from: string, to: string) =>
+      edges.find((candidate) => candidate.from === byType[from] && candidate.to === byType[to]);
+
+    expect(edge("obs", "wrangle")).toMatchObject({ fromPort: "out", toPort: "in", kind: "pred" });
+    expect(edge("wrangle", "carousel")).toMatchObject({ fromPort: "out", toPort: "in", kind: "pred" });
+    expect(edge("wrangle", "table")).toMatchObject({ fromPort: "out", toPort: "in", kind: "pred" });
+    expect(edge("wrangle", "scatter")).toMatchObject({ fromPort: "out", toPort: "in", kind: "pred" });
+
+    // The Image Viewer takes no edge: it follows the shared focus group, which
+    // is what escalates the selected slide to a live idetik canvas.
+    expect(edge("wrangle", "image-viewer")).toBeUndefined();
+    for (const type of ["table", "scatter", "carousel", "image-viewer"]) {
+      expect(ws.store.state.coordinationScopes[byType[type]]?.focus).toBe("A");
+    }
+  });
+
+  test("seeds the sweep columns as carousel config, not as node assumptions", () => {
+    const ws = makeWs();
+    resolvePreset("regularizer")!(ws);
+    const carousel = Object.values(ws.store.state.nodes).find((n) => n.definitionRef.nodeTypeId === "carousel");
+
+    expect(carousel?.config?.value).toMatchObject({
+      groupBy: "row_idx",
+      variantBy: "reg_power",
+      column: "reg_verdict",
+      labels: ["good", "bad"],
+      // Several variants on screen at once is the node's reason to exist; a
+      // preset that seeds 1 would defeat it.
+      slidesPerView: 3,
+    });
+  });
+
+  test("opens to Stage with the carousel selected", () => {
+    const ws = makeWs();
+    resolvePreset("regularizer")!(ws);
+    const byType = Object.fromEntries(
+      Object.values(ws.store.state.nodes).map((n) => [n.definitionRef.nodeTypeId, n.id]),
+    );
+
+    expect(ws.store.state.disposition).toBe("hidden");
+    expect(ws.store.state.selectedNodeId).toBe(byType.carousel);
+    const staged = new Set<string>(ws.stagedIds().map((id) => ws.store.state.nodes[id].definitionRef.nodeTypeId));
+    for (const t of ["carousel", "scatter", "table", "image-viewer"]) expect(staged.has(t)).toBe(true);
+    for (const t of ["obs", "wrangle"]) expect(staged.has(t)).toBe(false);
+  });
+});

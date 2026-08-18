@@ -1,5 +1,6 @@
 import type { ExactNodeTypeRef, NodeDefinition } from "@ndea/sdk";
 import { annotateNode } from "./native-contributions/annotate";
+import { carouselNode } from "./native-contributions/carousel";
 import { cacheNode } from "./native-contributions/cache";
 import { countPlotNode } from "./native-contributions/count-plot";
 import { countNode } from "./native-contributions/count";
@@ -34,6 +35,7 @@ export const NATIVE_NODE_CONTRIBUTIONS = Object.freeze([
   histogramNode,
   vgplotNode,
   galleryNode,
+  carouselNode,
   imageViewerNode,
   cacheNode,
   subnetNode,

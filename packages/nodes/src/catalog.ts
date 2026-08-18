@@ -12,6 +12,8 @@ import type { CountPredicateToSql } from "./count/contracts";
 import { createBuiltinNodeDefinitions } from "./core-catalog";
 import { createDatasetDefinition } from "./dataset/definition";
 import { createGalleryDefinition } from "./gallery/definition";
+import { createCarouselDefinition } from "./carousel/definition";
+import type { CarouselServices } from "./carousel/contracts";
 import type { GalleryServices } from "./gallery/contracts";
 import { createImageViewerDefinition } from "./image-viewer/definition";
 import type { ImageViewerServices } from "./image-viewer/contracts";
@@ -40,6 +42,7 @@ export interface NodeCatalogServices {
   readonly subnet: { getHierarchy: SubnetHierarchyResolver; IconButton: SubnetIconButton };
   readonly table: { useServices: () => TableServices };
   readonly transformFilter: { getColumnTypes: TransformFilterColumnTypesService };
+  readonly carousel: { useServices: () => CarouselServices };
   readonly wrangle: { Editor: WrangleEditor };
 }
 
@@ -64,6 +67,7 @@ export function createNodeCatalog({
     histogram: createHistogramDefinition({ mountBody, services: services.charts }),
     vgplot: createVgplotDefinition(),
     gallery: createGalleryDefinition({ mountBody, ...services.gallery }),
+    carousel: createCarouselDefinition({ mountBody, ...services.carousel }),
     imageViewer: createImageViewerDefinition({ mountBody, services: services.imageViewer }),
     cache: createCacheDefinition({ mountBody, ...services.cache }),
     subnet: createSubnetDefinition({ mountBody, ...services.subnet }),
