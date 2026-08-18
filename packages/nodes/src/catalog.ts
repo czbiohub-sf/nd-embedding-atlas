@@ -38,7 +38,7 @@ export interface NodeCatalogServices {
   readonly imageViewer: ImageViewerServices;
   readonly scatter: ScatterServices;
   readonly subnet: { getHierarchy: SubnetHierarchyResolver; IconButton: SubnetIconButton };
-  readonly table: TableServices;
+  readonly table: { useServices: () => TableServices };
   readonly transformFilter: { getColumnTypes: TransformFilterColumnTypesService };
   readonly wrangle: { Editor: WrangleEditor };
 }
@@ -58,7 +58,7 @@ export function createNodeCatalog({
     wrangle: createWrangleDefinition({ mountBody, ...services.wrangle }),
     annotate: createAnnotateDefinition({ mountBody, ...services.annotate }),
     count: createCountDefinition({ mountBody, ...services.count }),
-    table: createTableDefinition({ mountBody, services: services.table }),
+    table: createTableDefinition({ mountBody, useServices: services.table.useServices }),
     scatter: createScatterDefinition({ mountBody, services: services.scatter }),
     countPlot: createCountPlotDefinition({ mountBody, services: services.charts }),
     histogram: createHistogramDefinition({ mountBody, services: services.charts }),
