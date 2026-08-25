@@ -43,6 +43,15 @@ interface SliderRowProps extends VariantProps<typeof sliderRowVariants> {
   max: number;
   step?: number;
   onValueChange: (value: number) => void;
+  /**
+   * Fires once when the drag ends, not on every frame.
+   *
+   * For consumers whose `onValueChange` is cheap (a local render) this is unnecessary. It
+   * matters when a change has a real cost — persisting to a document, a query, a network
+   * write — because a drag emits one per pointer move. Drive the live value from
+   * `onValueChange` and do the expensive part here.
+   */
+  onValueCommitted?: (value: number) => void;
   /** Format the trailing readout. Defaults to String(value). */
   formatValue?: (value: number) => string;
   /** Override label column width class (e.g. "w-12" for long labels). */
@@ -61,6 +70,7 @@ function SliderRow({
   step = 1,
   density = "sm",
   onValueChange,
+  onValueCommitted,
   formatValue,
   labelClassName,
   valueClassName,
@@ -83,6 +93,7 @@ function SliderRow({
         onValueChange={(v) => {
           onValueChange(Array.isArray(v) ? v[0] : v);
         }}
+        onValueCommitted={onValueCommitted ? (v) => onValueCommitted(Array.isArray(v) ? v[0] : v) : undefined}
       />
       <span className={cn("text-right text-muted-foreground tabular-nums", valueWidth[rung], valueClassName)}>
         {display}

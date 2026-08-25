@@ -27,9 +27,15 @@ export function createGalleryDefinition({
     capabilities: CAPABILITIES,
     dataRequirements: ["plate-image"],
     config: {
-      schema: z.object({ lanes: z.number().nullable() }),
+      // half/size default to null so documents persisted before they existed
+      // still parse; null means "server default" (150 / 320).
+      schema: z.object({
+        lanes: z.number().nullable(),
+        half: z.number().nullable().default(null),
+        size: z.number().nullable().default(null),
+      }),
       version: nodeConfigVersion(1),
-      defaultValue: { lanes: null } satisfies GalleryConfig,
+      defaultValue: { lanes: null, half: null, size: null } satisfies GalleryConfig,
     },
     presentation: { icon: "gallery" },
     load: async () => {

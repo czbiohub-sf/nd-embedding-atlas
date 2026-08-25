@@ -35,6 +35,8 @@ describe("native node catalog fitness functions", () => {
       "histogram",
       "vgplot",
       "gallery",
+      "fov-label",
+      "fov-score",
       "image-viewer",
       "cache",
       "subnet",

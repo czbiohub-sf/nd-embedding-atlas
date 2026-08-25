@@ -12,6 +12,8 @@
     "./charts": "./src/charts/index.ts",
     "./count": "./src/count/index.ts",
     "./dataset": "./src/dataset/index.ts",
+    "./fov-label": "./src/fov-label/index.ts",
+    "./fov-score": "./src/fov-score/index.ts",
     "./gallery": "./src/gallery/index.ts",
     "./image-viewer": "./src/image-viewer/index.ts",
     "./query": "./src/query/index.ts",

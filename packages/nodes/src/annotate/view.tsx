@@ -36,6 +36,7 @@ import { RangeBracket } from "./RangeBracket";
 import { fmtVal } from "./range-scale";
 import { useGalleryChannels } from "../gallery/useGalleryChannels";
 import type { NodeBodyProps } from "../contracts";
+import { announceAnnotationWrite } from "../query/annotations";
 import { useNodeFocus } from "../query/useNodeFocus";
 import type { AnnotateCapabilities, AnnotateConfig } from "./contracts";
 import type { AnnotateServices } from "./services";
@@ -180,6 +181,9 @@ export function AnnotateView({
       try {
         await ensureColumn(targetColumn);
         await host.dataAPI.writeAnnotationByPredicate?.(targetColumn, value, `__row_index__ IN (${ids.join(", ")})`);
+        // Tell every other node that reads annotations. Without this, a label written here is
+        // invisible in the plate grid and the score node until a reload.
+        announceAnnotationWrite();
         setLocalLabels((m) => {
           const next = new Map(m);
           for (const id of ids) next.set(id, new Map([[targetColumn, value]]));
@@ -217,6 +221,7 @@ export function AnnotateView({
         await ensureRangeColumns(rangeBase);
         await host.dataAPI.writeAnnotationByPredicate?.(`${rangeBase}_min`, String(rangeLo), where);
         const res = await host.dataAPI.writeAnnotationByPredicate?.(`${rangeBase}_max`, String(rangeHi), where);
+        announceAnnotationWrite();
         return res?.n ?? 0;
       } catch (err) {
         setStatus(`✗ ${err instanceof Error ? err.message : String(err)}`);

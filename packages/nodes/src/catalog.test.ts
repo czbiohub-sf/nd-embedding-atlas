@@ -39,7 +39,7 @@ describe("built-in node definitions", () => {
 
     const catalog = createNodeCatalog({ mountBody, services });
 
-    expect(Object.keys(catalog)).toHaveLength(16);
+    expect(Object.keys(catalog)).toHaveLength(18);
     expect(String(catalog.scatter.ref.nodeTypeId)).toBe("scatter");
     expect(String(catalog.imageViewer.ref.nodeTypeId)).toBe("image-viewer");
   });
