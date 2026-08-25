@@ -11,6 +11,9 @@ import { createCountDefinition } from "./count/definition";
 import type { CountPredicateToSql } from "./count/contracts";
 import { createBuiltinNodeDefinitions } from "./core-catalog";
 import { createDatasetDefinition } from "./dataset/definition";
+import { createFovLabelDefinition } from "./fov-label/definition";
+import { createFovScoreDefinition } from "./fov-score/definition";
+import type { FovLabelServices } from "./fov-label/contracts";
 import { createGalleryDefinition } from "./gallery/definition";
 import type { GalleryServices } from "./gallery/contracts";
 import { createImageViewerDefinition } from "./image-viewer/definition";
@@ -34,6 +37,7 @@ export interface NodeCatalogServices {
   readonly cache: { getCheckpoint: CacheCheckpointResolver; IconButton: CacheIconButton };
   readonly charts: ChartServices;
   readonly count: { predicateToSql: CountPredicateToSql };
+  readonly fovLabel: { useServices: () => FovLabelServices };
   readonly gallery: { useServices: () => GalleryServices };
   readonly imageViewer: ImageViewerServices;
   readonly scatter: ScatterServices;
@@ -64,6 +68,9 @@ export function createNodeCatalog({
     histogram: createHistogramDefinition({ mountBody, services: services.charts }),
     vgplot: createVgplotDefinition(),
     gallery: createGalleryDefinition({ mountBody, ...services.gallery }),
+    fovLabel: createFovLabelDefinition({ mountBody, ...services.fovLabel }),
+    // No app-owned services: the host already carries metadata, the coordinator and config.
+    fovScore: createFovScoreDefinition({ mountBody }),
     imageViewer: createImageViewerDefinition({ mountBody, services: services.imageViewer }),
     cache: createCacheDefinition({ mountBody, ...services.cache }),
     subnet: createSubnetDefinition({ mountBody, ...services.subnet }),

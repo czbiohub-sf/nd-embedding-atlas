@@ -4,6 +4,8 @@ import { cacheNode } from "./native-contributions/cache";
 import { countPlotNode } from "./native-contributions/count-plot";
 import { countNode } from "./native-contributions/count";
 import { datasetNode } from "./native-contributions/dataset";
+import { fovLabelNode } from "./native-contributions/fov-label";
+import { fovScoreNode } from "./native-contributions/fov-score";
 import { galleryNode } from "./native-contributions/gallery";
 import { histogramNode } from "./native-contributions/histogram";
 import { imageViewerNode } from "./native-contributions/image-viewer";
@@ -34,6 +36,8 @@ export const NATIVE_NODE_CONTRIBUTIONS = Object.freeze([
   histogramNode,
   vgplotNode,
   galleryNode,
+  fovLabelNode,
+  fovScoreNode,
   imageViewerNode,
   cacheNode,
   subnetNode,

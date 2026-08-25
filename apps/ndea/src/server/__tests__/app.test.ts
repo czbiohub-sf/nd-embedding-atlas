@@ -207,8 +207,11 @@ describe("createApp", () => {
     expect(body.database).toEqual({ type: "rest" });
     expect(body.spatial?.crop_fov_col).toBe("fov_name");
     expect(body.spatial?.z_col).toBe("z_slice");
-    // No --preset / preset: set on the mock config → the annotate default (R2/R3).
-    expect(body.preset).toBe("annotate");
+    // No --preset / preset: set on the mock config → the field is omitted rather
+    // than defaulted here, so the client can distinguish "no preset asked for"
+    // (open the editor on the canvas) from an explicitly named one (which owns
+    // its own disposition). resolvePresetOrDefault still lands on annotate.
+    expect(body.preset).toBeUndefined();
   });
 
   test("Mosaic JSON query works", async () => {
