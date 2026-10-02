@@ -237,7 +237,7 @@ export const ObsInfoSchema = z.looseObject({
   x: z.number(),
   y: z.number(),
   bbox: ObsBboxSchema.optional(),
-  store_index: z.number().optional(),
+  dataset: z.string().optional(),
 });
 export type ObsInfo = z.infer<typeof ObsInfoSchema>;
 

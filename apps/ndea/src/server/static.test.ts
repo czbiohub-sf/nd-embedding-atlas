@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { resolveFrontendDir, serveStatic } from "./static.ts";
+import { readPlateMeta } from "./plate.ts";
 
 const temporaryRoots: string[] = [];
 
@@ -46,4 +47,74 @@ describe("disk static serving", () => {
     expect(response.status).toBe(404);
     expect(await response.text()).toBe("Not Found");
   });
+});
+
+describe("plate OME-Zarr metadata", () => {
+  async function plateFixture(
+    format: 2 | 3,
+    versionLocation: "image" | "plate" | "multiscales" | "legacy-plate",
+  ): Promise<string> {
+    const root = await mkdtemp(join(tmpdir(), "ndea-plate-"));
+    temporaryRoots.push(root);
+    const image = join(root, "A", "1", "0");
+    await mkdir(image, { recursive: true });
+    const version = format === 3 ? "0.5" : "0.4";
+    const plateAttrs = {
+      ...(versionLocation === "plate" ? { version } : {}),
+      plate: {
+        ...(versionLocation === "legacy-plate" ? { version } : {}),
+        wells: [{ path: "A/1" }],
+      },
+    };
+    const imageAttrs = {
+      ...(versionLocation === "image" ? { version } : {}),
+      multiscales: [
+        {
+          ...(versionLocation === "multiscales" ? { version } : {}),
+          axes: [{ name: "t" }, { name: "c" }, { name: "z" }, { name: "y" }, { name: "x" }],
+          datasets: [{ path: "0", coordinateTransformations: [{ type: "scale", scale: [1, 1, 2, 0.25, 0.5] }] }],
+        },
+      ],
+      omero: {
+        channels: [{ label: "GFP", color: "00FF00", window: { start: 10, end: 100, min: 0, max: 200 } }],
+      },
+    };
+    for (const [directory, attributes] of [
+      [root, plateAttrs],
+      [image, imageAttrs],
+    ] as const) {
+      if (format === 3) {
+        await writeFile(
+          join(directory, "zarr.json"),
+          JSON.stringify({ zarr_format: 3, node_type: "group", attributes: { ome: attributes } }),
+        );
+      } else {
+        await writeFile(join(directory, ".zgroup"), JSON.stringify({ zarr_format: 2 }));
+        await writeFile(join(directory, ".zattrs"), JSON.stringify(attributes));
+      }
+    }
+    return root;
+  }
+
+  for (const versionLocation of ["image", "plate"] as const) {
+    test(`recognizes OME 0.5 declared only on the ${versionLocation} OME wrapper`, async () => {
+      const root = await plateFixture(3, versionLocation);
+      expect(await readPlateMeta(root)).toEqual({
+        omeVersion: "0.5",
+        pixelScale: { x: 0.5, y: 0.25 },
+        channels: [{ label: "GFP", color: "00FF00", window: { start: 10, end: 100, min: 0, max: 200 } }],
+      });
+    });
+  }
+
+  for (const versionLocation of ["multiscales", "legacy-plate"] as const) {
+    test(`retains OME 0.4 ${versionLocation} metadata`, async () => {
+      const root = await plateFixture(2, versionLocation);
+      expect(await readPlateMeta(root)).toEqual({
+        omeVersion: "0.4",
+        pixelScale: { x: 0.5, y: 0.25 },
+        channels: [{ label: "GFP", color: "00FF00", window: { start: 10, end: 100, min: 0, max: 200 } }],
+      });
+    });
+  }
 });

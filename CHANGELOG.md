@@ -20,6 +20,8 @@
 
 ### 🐛 Bug Fixes
 
+- _(frontend)_ Resolve linked image mounts and channels by dataset identity, including sessions with unmounted datasets (#152)
+- _(server)_ Recognize OME-Zarr 0.5 versions declared on image or plate OME metadata wrappers (#152)
 - Wire CLI startup to createApp, fix DuckDB ingestion
 - Metadata props.data schema, dev script, frontend scripts cleanup
 - _(frontend)_ Fall back to first available obsm key when none loaded

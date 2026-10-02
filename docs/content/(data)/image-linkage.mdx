@@ -18,6 +18,8 @@ datasets:
 
 The value in each observation's field-of-view column is appended below that plate root. It must therefore match the image path inside the plate, for example `A/1/000000`.
 
+In a multi-dataset session, the Image Viewer resolves the plate and channel metadata by the observation's dataset name, not by dataset or mount order. An observation from a dataset without `hcs_plate` does not load another dataset's images.
+
 ## Auto-detected columns
 
 | Purpose       | Accepted names, in priority order | Required for crops                          |
@@ -50,6 +52,8 @@ The focused table row publishes this information to the Image Viewer and Gallery
 ## OME-Zarr metadata
 
 The mounted plate should expose a standard plate → well → image hierarchy. Image groups need `multiscales`; `omero.channels` supplies channel labels, colours, and display windows. Coordinate transformation scales provide physical X/Y spacing. Project YAML channel settings can override the initial colour, contrast, and visibility.
+
+OME-Zarr 0.5 stores use Zarr v3 `zarr.json` metadata with the format version at `attributes.ome.version`. OME-Zarr 0.4 stores use Zarr v2 metadata files such as `.zattrs` and `.zgroup`.
 
 ## Diagnose linkage
 

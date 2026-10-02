@@ -154,7 +154,12 @@ export async function readPlateMeta(platePath: string): Promise<PlateMetaInfo | 
       }[];
     };
 
-    const msVersion = first.version ?? plate.version ?? "0.4";
+    const msVersion =
+      (imageAttrs["version"] as string | undefined) ??
+      first.version ??
+      (plateAttrs["version"] as string | undefined) ??
+      plate.version ??
+      "0.4";
     const omeVersion: "0.4" | "0.5" = msVersion.startsWith("0.5") ? "0.5" : "0.4";
 
     const pixelScale = extractPixelScale(first);

@@ -10,6 +10,7 @@ import { useBboxLayer } from "./viewer/useBboxLayer";
 import { useFovLoader } from "./viewer/useFovLoader";
 import { useViewer } from "./viewer/useViewer";
 import { shouldRevealViewer } from "./focus-behavior";
+import { resolveObservationImage } from "./observation-image";
 
 /** Fixed camera view radius in pixels (independent of crop slider). */
 const CAMERA_VIEW_HALF = 150;
@@ -67,11 +68,9 @@ export function SingleCropViewer({ cropSize, showBbox, datasetKey }: Props) {
     staleTime: 10_000,
   });
 
-  // ── Dataset filtering ─────────────────────────────────────────────
-  // When datasetKey is set, this viewer only drives itself for cells
-  // from the matching dataset. Derive from store_index → plate_stores[].name.
-  const activeStoreName = metadata.plate_stores?.[obsInfo?.store_index ?? 0]?.name;
-  const isForThisDataset = !datasetKey || activeStoreName === datasetKey;
+  const image = resolveObservationImage(metadata, obsInfo, datasetKey);
+  const isForThisDataset = image != null;
+  const activeStoreName = image?.store.name;
 
   // ── Derive source URL and OME version ────────────────────────────
   // Prefer the FOV's own scale (idetik reads it from this FOV's
@@ -79,18 +78,10 @@ export function SingleCropViewer({ cropSize, showBbox, datasetKey }: Props) {
   // is a snapshot of the *first* FOV at startup and disagrees with later FOVs
   // when the dataset mixes magnifications / objectives.
   const plateScale = metadata.plate_pixel_scale ?? { x: 1, y: 1 };
-  const activeStore = metadata.plate_stores?.[obsInfo?.store_index ?? 0];
-  const mountPrefix = activeStore ? activeStore.mount : "/plate";
-  const omeVersion = activeStore?.ome_version ?? metadata.plate_ome_version;
-
-  // Gate sourceUrl: null prevents useFovLoader from loading the wrong plate.
-  const fovName = isForThisDataset && obsInfo ? (obsInfo.fov_name ?? null) : null;
-  const sourceUrl = fovName ? `${window.location.origin}${mountPrefix}/${fovName}` : null;
-
-  // ── Hooks for imperative plumbing ─────────────────────────────────
-  // Resolve per-dataset channels when available, falling back to global plate_channels
-  const resolvedChannels =
-    (activeStoreName ? metadata.dataset_channels?.[activeStoreName] : undefined) ?? metadata.plate_channels;
+  const omeVersion = image?.store.ome_version;
+  const fovName = image?.fovName ?? null;
+  const sourceUrl = image ? `${window.location.origin}${image.store.mount}/${image.fovName}` : null;
+  const resolvedChannels = image?.channels;
 
   // The loader takes the canonical FOV name and the store name: `dataset_key`
   // picks the plate mount server-side, mirroring the crop path.
