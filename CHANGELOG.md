@@ -20,8 +20,6 @@
 
 ### 🐛 Bug Fixes
 
-- _(frontend)_ Resolve linked image mounts and channels by dataset identity, including sessions with unmounted datasets (#152)
-- _(server)_ Recognize OME-Zarr 0.5 versions declared on image or plate OME metadata wrappers (#152)
 - Wire CLI startup to createApp, fix DuckDB ingestion
 - Metadata props.data schema, dev script, frontend scripts cleanup
 - _(frontend)_ Fall back to first available obsm key when none loaded
@@ -56,6 +54,13 @@
 - _(frontend)_ Switch to bun, document API contract for server port
 - Drop unused deps + merge duplicate resolveFrontendDir
 - _(server)_ Review cleanup: try/catch dedup, colormap wire-up, Bun concat
+
+## [0.1.2] - 2026-10-02
+
+### Bug fixes
+
+- _(frontend)_ Resolve linked image mounts and channels by dataset identity, including sessions with unmounted datasets (#152)
+- _(server)_ Recognize OME-Zarr 0.5 versions declared on image or plate OME metadata wrappers (#152)
 
 ## [0.0.3] - 2026-04-09
 
