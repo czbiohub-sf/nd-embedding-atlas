@@ -12,6 +12,7 @@ import {
   ConfigResponseSchema,
   EmbeddingStatusSchema,
   MetadataSchema,
+  ObsInfoSchema,
   PluginBootstrapCatalogSchema,
   VarColumnResponseSchema,
 } from "@ndea/protocol";
@@ -667,5 +668,59 @@ describe("createApp", () => {
 
     const health = await fetch(`http://localhost:${server.port}/api/health`);
     expect(health.status).toBe(200);
+  });
+});
+
+describe("observation dataset identity", () => {
+  async function startSpatialServer(datasetNames: string[]): Promise<NdeaServer> {
+    const store = await DatasetQuerySession.fromInit(async (conn: DuckDBConnection) => {
+      await conn.run(`
+        CREATE TABLE obs_base AS SELECT * FROM (VALUES
+          (0, 'april-0', 'april', 'A/2/0000', 2, 770, 156),
+          (1, 'july-0', 'july-long-name', 'A/3/000000', 9, 313, 129),
+          (2, 'unlinked-0', 'without-images', 'A/2/0000', 0, 10, 20)
+        ) AS t(__row_index__, obs_name, _dataset, fov_name, t, x, y)
+      `);
+    });
+    activeStore = store;
+    const state = createMockState(store);
+    state.datasets = new Map(datasetNames.map((name) => [name, { path: `/tmp/${name}.zarr` }]));
+    state.spatial = { fov: "fov_name", t: "t", bbox: null, x: "x", y: "y", z: null };
+    const server = createApp({
+      port: 0,
+      host: "localhost",
+      store,
+      state,
+      config: { ...createMockConfig(), datasetKeys: datasetNames.length > 1 ? datasetNames : null },
+      noStatic: true,
+    });
+    activeServer = server;
+    return server;
+  }
+
+  for (const names of [
+    ["april", "july-long-name", "without-images"],
+    ["without-images", "july-long-name", "april"],
+  ]) {
+    test(`returns dataset identity with dataset order ${names.join(", ")}`, async () => {
+      const server = await startSpatialServer(names);
+      const expected = [
+        { dataset: "april", fov_name: "A/2/0000", t: 2, x: 770, y: 156 },
+        { dataset: "july-long-name", fov_name: "A/3/000000", t: 9, x: 313, y: 129 },
+        { dataset: "without-images", fov_name: "A/2/0000", t: 0, x: 10, y: 20 },
+      ];
+      for (const [rowIndex, observation] of expected.entries()) {
+        const response = await fetch(`http://localhost:${server.port}/api/obs/${rowIndex}`);
+        expect(response.status).toBe(200);
+        expect(ObsInfoSchema.parse(await response.json())).toEqual(observation);
+      }
+    });
+  }
+
+  test("preserves the single-dataset spatial response", async () => {
+    const server = await startSpatialServer(["april"]);
+    const response = await fetch(`http://localhost:${server.port}/api/obs/0`);
+    expect(response.status).toBe(200);
+    expect(ObsInfoSchema.parse(await response.json())).toEqual({ fov_name: "A/2/0000", t: 2, x: 770, y: 156 });
   });
 });

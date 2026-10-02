@@ -166,13 +166,8 @@ export async function handleObsInfo(rowIndex: number, state: ServerSession): Pro
       response.y = Number(row[sp.y!]);
     }
 
-    // Multi-dataset: include store_index
     if (state.datasets.size > 1 && row._dataset != null) {
-      const datasetKeys = Array.from(state.datasets.keys());
-      const idx = datasetKeys.indexOf(scalarToString(row._dataset));
-      if (idx >= 0) {
-        response.store_index = idx;
-      }
+      response.dataset = scalarToString(row._dataset);
     }
 
     return Response.json(response);
