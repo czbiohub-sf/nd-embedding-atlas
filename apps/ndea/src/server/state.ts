@@ -4,13 +4,15 @@
  * Ports the Python `server/_state.py` dataclasses to TypeScript interfaces.
  */
 
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { DatasetHandle } from "@ndea/zarr";
 import type { CropPool } from "./crop-pool.ts";
 import type { PlateChannel, PlateMount } from "./plate.ts";
 import type { ObsmSliceLoader } from "./slice-loader.ts";
 import type { DatasetQuerySession } from "./store.ts";
-import type { WorkspaceDocumentStore } from "./workspace.ts";
-import type { ObservationSets } from "./observation-sets.ts";
+import { WorkspaceDocumentStore } from "./workspace.ts";
+import { ObservationSets } from "./observation-sets.ts";
 
 /** Resolved spatial column names (from config or auto-detection). */
 export interface SpatialColumns {
@@ -155,4 +157,32 @@ export interface ServerSession {
   /** The session's one authoritative workspace document. */
   workspace: WorkspaceDocumentStore;
   observationSets: ObservationSets;
+}
+
+/** Defaults share one store connection, including the observation-set temp table. */
+export function createServerSession({
+  store,
+  observationSetsDirectory,
+  ...overrides
+}: Pick<ServerSession, "store"> &
+  Partial<Omit<ServerSession, "store" | "observationSets">> & { observationSetsDirectory?: string }): ServerSession {
+  return {
+    store,
+    datasets: new Map(),
+    spatial: null,
+    obsColumns: [],
+    port: 0,
+    availableObsmKeys: [],
+    loadingTasks: new Map(),
+    loadErrors: new Map(),
+    accessors: new Map(),
+    plateMounts: [],
+    obsmLoaders: new Map(),
+    cropPool: null,
+    annotationsSidecarPath: null,
+    ...overrides,
+    workspace:
+      overrides.workspace ?? WorkspaceDocumentStore.empty(join(tmpdir(), `ndea-workspace-${crypto.randomUUID()}.json`)),
+    observationSets: new ObservationSets(store, observationSetsDirectory),
+  };
 }

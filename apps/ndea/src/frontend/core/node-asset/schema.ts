@@ -173,7 +173,7 @@ const edgeSchema = z
     fromPort: z.string().regex(portIdPattern),
     to: z.string().regex(localIdPattern),
     toPort: z.string().regex(portIdPattern),
-    kind: z.enum(["pred", "sel"]),
+    kind: z.literal("pred"),
   })
   .strict();
 
@@ -181,7 +181,7 @@ const inputSchema = z
   .object({
     id: z.string().regex(portIdPattern),
     label: z.string().min(1),
-    kind: z.enum(["pred", "sel"]),
+    kind: z.literal("pred"),
     target: z.object({ nodeId: z.string().regex(localIdPattern), portId: z.string().regex(portIdPattern) }).strict(),
   })
   .strict();
@@ -190,7 +190,7 @@ const outputSchema = z
   .object({
     id: z.string().regex(portIdPattern),
     label: z.string().min(1),
-    kind: z.enum(["pred", "sel"]),
+    kind: z.literal("pred"),
     source: z.object({ nodeId: z.string().regex(localIdPattern), portId: z.string().regex(portIdPattern) }).strict(),
   })
   .strict();

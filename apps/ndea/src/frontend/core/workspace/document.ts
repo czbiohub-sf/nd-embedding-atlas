@@ -1,11 +1,8 @@
 /**
- * The workspace document: the server-owned, file-persisted projection of
- * `WorkspaceDocumentState`. Pure (Zod + SDK only) so the server and the
- * browser validate with the same schema.
- *
- * Session fields (selection, claim, subnet path) stay in the browser store
- * and never reach the document. Only the exact format version loads; there
- * are no migrations.
+ * The workspace document: server-owned and file-persisted. Pure (Zod + SDK
+ * only) so the server and the browser validate with the same schema. Editor
+ * session state lives in `Workspace.session` and never reaches it. Only the
+ * exact format version loads; there are no migrations.
  */
 
 import {
@@ -27,24 +24,10 @@ import {
 } from "../coordination/types";
 import { parseWorkspaceNodeAssetRecords } from "../node-asset/schema";
 import { stageIssues, stageSchema } from "./stage/stage-spec";
-import type { WorkspaceDocumentState } from "./types";
+import type { WorkspaceDocument } from "./types";
 
 export const WORKSPACE_FORMAT = "ndea.workspace";
 export const WORKSPACE_FORMAT_VERSION = 1;
-
-/** Editor-session state: selection, claim, subnet path, and canvas camera disposition. */
-const SESSION_FIELDS = [
-  "selectedNodeId",
-  "selectedNodeIds",
-  "selectedEdgeId",
-  "claimed",
-  "graphPath",
-  "disposition",
-] as const;
-type SessionField = (typeof SESSION_FIELDS)[number];
-
-export type WorkspaceDocument = Omit<WorkspaceDocumentState, SessionField>;
-export type WorkspaceSession = Pick<WorkspaceDocumentState, SessionField>;
 
 const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
   z.union([
@@ -77,7 +60,6 @@ const nodeSchema = z
     definitionRef: exactRefSchema,
     label: z.string(),
     parent: z.string().nullable().optional(),
-    stamp: z.number().optional(),
     config: configSnapshotSchema.optional(),
   })
   .strict();
@@ -88,7 +70,7 @@ const edgeSchema = z
     fromPort: z.string().min(1),
     to: z.string().min(1),
     toPort: z.string().min(1),
-    kind: z.enum(["pred", "sel"]),
+    kind: z.literal("pred"),
   })
   .strict();
 const sizeSchema = z.object({ w: z.number(), h: z.number() }).strict();
@@ -182,12 +164,6 @@ export function parseWorkspaceFile(value: unknown): WorkspaceParse<{ revision: n
   return { ok: false, issues: toIssues(parsed.error.issues) };
 }
 
-export function toWorkspaceDocument(state: WorkspaceDocumentState): WorkspaceDocument {
-  const document: Record<string, unknown> = { ...state };
-  for (const field of SESSION_FIELDS) delete document[field];
-  return document as WorkspaceDocument;
-}
-
 /** A document with no nodes: the base an agent builds a workspace from. */
 export function emptyWorkspaceDocument(): WorkspaceDocument {
   return {
@@ -204,15 +180,6 @@ export function emptyWorkspaceDocument(): WorkspaceDocument {
     state: {},
     bindings: {},
   };
-}
-
-export function withWorkspaceSession(document: WorkspaceDocument, session: WorkspaceSession): WorkspaceDocumentState {
-  return { ...document, ...session };
-}
-
-export function workspaceSessionOf(state: WorkspaceDocumentState): WorkspaceSession {
-  const { selectedNodeId, selectedNodeIds, selectedEdgeId, claimed, graphPath, disposition } = state;
-  return { selectedNodeId, selectedNodeIds, selectedEdgeId, claimed, graphPath, disposition };
 }
 
 /**

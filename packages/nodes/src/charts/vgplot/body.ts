@@ -13,7 +13,6 @@
 
 import type { MountedNodeBody, NodeHost } from "@ndea/sdk";
 import type { ColumnType } from "../core/contracts";
-import { publishChartFilter } from "../core/routing";
 import { mountPlot, type MountedPlot } from "./plot-host";
 import type { VgplotCapabilities } from "./types";
 import {
@@ -170,7 +169,8 @@ export async function mountVgplotBody(host: Host): Promise<MountedNodeBody> {
         onSelection: (clause) => {
           if (disposed || seq !== renderSeq) return;
           clearButton.disabled = clause === null;
-          publishChartFilter(host, clause);
+          if (clause === null) host.filter.clear("chart");
+          else host.filter.publish("chart", clause);
         },
         onUnsupportedBrush: () => {
           if (!disposed && seq === renderSeq)
@@ -199,7 +199,7 @@ export async function mountVgplotBody(host: Host): Promise<MountedNodeBody> {
     field = nextField;
     // This body remounts the plot below, so drop the stale published filter
     // (matches HistogramBody's clear-on-field-change).
-    publishChartFilter(host, null);
+    host.filter.clear("chart");
     host.patchConfig({ entries: field == null ? [] : buildEntries(preset, field) });
     renderControls();
     void render();

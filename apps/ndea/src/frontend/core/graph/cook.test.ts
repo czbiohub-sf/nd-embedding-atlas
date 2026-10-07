@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { rowIndex, type NodeCompute, type NodeComputeContext } from "@ndea/sdk";
-import { adaptNodeCompute, assertSynchronousNodeRuntime, toNodeComputeInputs } from "./cook";
-import type { GraphPortValueInputs } from "./cook";
+import type { NodeCompute, NodeComputeContext } from "@ndea/sdk";
+import { adaptNodeCompute, assertSynchronousNodeRuntime } from "./cook";
 
 const context: NodeComputeContext = {
   signal: new AbortController().signal,
@@ -14,20 +13,6 @@ describe("SDK compute graph adapter", () => {
       "asynchronous node runtime requires an asynchronous evaluator",
     );
     expect(assertSynchronousNodeRuntime()).toBeUndefined();
-  });
-
-  test("passes public SDK port payloads to author compute without Workspace contracts", () => {
-    const inputs: GraphPortValueInputs = new Map([
-      ["predicate", [{ kind: "pred", sql: "x > 2" }]],
-      ["rows", [{ kind: "sel", sql: "__row_index__ IN (2, 5)", rowIds: [rowIndex(2), rowIndex(5)] }]],
-    ]);
-
-    expect(toNodeComputeInputs(inputs)).toEqual(
-      new Map([
-        ["predicate", ["x > 2"]],
-        ["rows", [[rowIndex(2), rowIndex(5)]]],
-      ]),
-    );
   });
 
   test("adapts a synchronous SDK compute output back to the tagged evaluator value", () => {

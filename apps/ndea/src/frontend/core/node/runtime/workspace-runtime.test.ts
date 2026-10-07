@@ -95,7 +95,6 @@ interface WorkspaceFixture {
   }>;
   readonly coordinationStore: Store<CoordinationDocumentState>;
   deliverGraph(value: GraphPortValue): void;
-  setCacheGraphInput(value: GraphPortValue): void;
 }
 
 function workspaceFixture(): WorkspaceFixture {
@@ -115,7 +114,6 @@ function workspaceFixture(): WorkspaceFixture {
   });
   const coordinationStore = new Store<CoordinationDocumentState>({ state: {}, bindings: {} });
   let graphListener: ((value: GraphPortValue) => void) | null = null;
-  let cacheGraphInput: GraphPortValue = { kind: "pred", sql: null };
   const session = {
     store: documentStore,
     coordination: createCoordination(coordinationDocumentPort(coordinationStore)),
@@ -125,10 +123,6 @@ function workspaceFixture(): WorkspaceFixture {
         graphListener = null;
       };
     },
-    cacheGraphInput() {
-      return cacheGraphInput;
-    },
-    setLiveCachePredicate() {},
     updateNodeConfig(nodeId: string, patch: Record<string, unknown>) {
       documentStore.setState((state) => ({
         ...state,
@@ -156,9 +150,6 @@ function workspaceFixture(): WorkspaceFixture {
     deliverGraph(value) {
       if (!graphListener) throw new Error("graph sink is not registered");
       graphListener(value);
-    },
-    setCacheGraphInput(value) {
-      cacheGraphInput = value;
     },
   };
 }
@@ -194,10 +185,7 @@ function bodyDefinition<C extends NodeCapability>(
 }
 
 describe("WorkspaceNodeRuntimeManager", () => {
-  test.each([
-    ["cache", ["checkpoint"]],
-    ["subnet", ["hierarchy"]],
-  ] as const)("%s fails required app-facet proof before Body mount", async (_name, requiredHostFacets) => {
+  test("a missing required app facet fails before Body mount", async () => {
     let mounts = 0;
     const definition = defineNode({
       ref: exactNodeTypeRef("runtime-fixture", "1.0.0"),
@@ -217,7 +205,7 @@ describe("WorkspaceNodeRuntimeManager", () => {
     const fixture = workspaceFixture();
     const manager = new WorkspaceNodeRuntimeManager({
       session: fixture.session,
-      nodeLibrary: nodeLibrary(definition, { requiredHostFacets }),
+      nodeLibrary: nodeLibrary(definition, { requiredHostFacets: ["hierarchy"] }),
       appHost: appHostDependencies(),
     });
 
@@ -275,25 +263,6 @@ describe("WorkspaceNodeRuntimeManager", () => {
     expect(mounted.host.filter.selection).toBe(stable);
     expect(fixture.coordinationStore.state.state.filter?.A).toEqual({});
 
-    manager.dispose();
-  });
-
-  test("keeps a checkpoint's graph input separate from its cooked scoped output", async () => {
-    const mounted: { host?: NodeHost<unknown, "filter-coordination"> } = {};
-    const definition = bodyDefinition(["filter-coordination"] as const, mounted);
-    const fixture = workspaceFixture();
-    fixture.setCacheGraphInput({ kind: "pred", sql: "upstream = TRUE" });
-    const manager = new WorkspaceNodeRuntimeManager({
-      session: fixture.session,
-      nodeLibrary: nodeLibrary(definition, { checkpoint: true }),
-      appHost: appHostDependencies(),
-    });
-    await manager.activate("node-1", definition.ref).start();
-    if (!mounted.host) throw new Error("Body did not receive a host");
-
-    fixture.deliverGraph({ kind: "pred", sql: "(upstream = TRUE) AND (category = 'alpha')" });
-
-    expect(mounted.host.filter.getResolved().predicate).toBe("upstream = TRUE");
     manager.dispose();
   });
 

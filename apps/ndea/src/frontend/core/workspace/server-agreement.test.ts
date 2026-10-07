@@ -15,7 +15,6 @@ import { NATIVE_NODE_GRAPH } from "@/core/graph/native-graph";
 import { WorkspaceEvaluator, createServerNodeResolver } from "../../../server/graph";
 import { loadPreset } from "../../../server/presets";
 import { WorkspaceDocumentStore } from "../../../server/workspace";
-import { toWorkspaceDocument } from "./document";
 import { decodeWorkspaceDocument } from "./sync";
 import { Workspace } from "./workspace-store";
 
@@ -53,9 +52,10 @@ describe("browser and server graph evaluation", () => {
     }
   });
 
-  test("the annotate preset plus filter and dataset nodes evaluate identically on both sides", async () => {
+  test("the annotate preset plus filter, dataset, and scope edits evaluate identically everywhere", async () => {
+    const preset = await loadPreset("annotate");
     const workspace = browserWorkspace();
-    const decoded = decodeWorkspaceDocument(await loadPreset("annotate"), workspace.nodeLibrary);
+    const decoded = decodeWorkspaceDocument(preset, workspace.nodeLibrary);
     if (!decoded.ok) throw new Error(decoded.errors.join("; "));
     workspace.loadDocument(decoded.state);
     const obs = Object.values(workspace.store.state.nodes).find((n) => n.definitionRef.nodeTypeId === "obs")!.id;
@@ -75,9 +75,13 @@ describe("browser and server graph evaluation", () => {
     const table = Object.values(workspace.store.state.nodes).find((n) => n.definitionRef.nodeTypeId === "table")!.id;
     workspace.connect(filter, table);
     workspace.connect(dataset, table);
+    workspace.coordination.assignScope(table, "filter", "agent");
+    workspace.coordination.setCoordinationValue("filter", "agent", {
+      agent: { where: { op: "eq", column: "infected", value: true } },
+    });
 
     const store = WorkspaceDocumentStore.empty(join(dir, "workspace.json"));
-    await store.apply(0, [{ op: "add", path: "", value: toWorkspaceDocument(workspace.store.state) }]);
+    await store.apply(0, [{ op: "add", path: "", value: workspace.store.state }]);
     const server = new WorkspaceEvaluator(store);
 
     const ids = Object.keys(workspace.store.state.nodes);
@@ -91,8 +95,19 @@ describe("browser and server graph evaluation", () => {
     }
     expect(workspace.pullGraphNode(table)).toEqual({
       kind: "pred",
-      sql: `((("t" > 3) AND ("c" IN ('a', 'b')))) AND (_dataset = 'plate''a')`,
+      sql: `((("t" > 3) AND ("c" IN ('a', 'b')))) AND (_dataset = 'plate''a') AND ((("infected" = TRUE)))`,
     });
+
+    // Projection: the same document applied to a fresh preset Workspace cooks the same outputs.
+    const projected = browserWorkspace();
+    const base = decodeWorkspaceDocument(preset, projected.nodeLibrary);
+    const next = decodeWorkspaceDocument(workspace.store.state, projected.nodeLibrary);
+    if (!base.ok || !next.ok) throw new Error("decode failed");
+    projected.loadDocument(base.state);
+    projected.applyDocument(next.state);
+    for (const id of ids)
+      expect({ id, value: projected.pullGraphNode(id) }).toEqual({ id, value: workspace.pullGraphNode(id) });
     workspace.dispose();
+    projected.dispose();
   });
 });

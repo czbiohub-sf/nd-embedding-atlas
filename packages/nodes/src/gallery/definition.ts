@@ -19,10 +19,7 @@ export function createGalleryDefinition({
     ref: exactNodeTypeRef("gallery", "1.0.0"),
     title: "Gallery",
     role: "view",
-    inputs: [
-      { id: "in", kind: "pred", label: "In" },
-      { id: "in-sel", kind: "sel", label: "In" },
-    ],
+    inputs: [{ id: "in", kind: "pred", label: "In" }],
     outputs: [],
     capabilities: CAPABILITIES,
     dataRequirements: ["plate-image"],

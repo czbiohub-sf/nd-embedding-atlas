@@ -61,7 +61,7 @@ export function NodeAssetDialog({ mode, nodeId, open, onOpenChange }: NodeAssetD
               title: title.trim(),
               parameters: parseParameterBindings(parameterText),
             });
-      const selected = workspace.store.state.selectedNodeIds;
+      const selected = workspace.session.state.selectedNodeIds;
       const positions = selected
         .map((id) => workspace.store.state.positions[id])
         .filter((position): position is { x: number; y: number } => Boolean(position));

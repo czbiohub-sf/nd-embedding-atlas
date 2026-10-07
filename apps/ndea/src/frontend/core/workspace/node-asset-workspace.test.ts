@@ -11,7 +11,6 @@ import {
   type NodeAssetLibrary,
 } from "@/core/node-asset/library";
 import { parseNodeAssetDefinition } from "@/core/node-asset/schema";
-import { toWorkspaceDocument } from "./document";
 import { decodeWorkspaceDocument } from "./sync";
 import { Workspace } from "./workspace-store";
 
@@ -41,9 +40,9 @@ describe("Workspace node asset authoring", () => {
     const selected = authoring.addNode("dataset", { x: 0, y: 0 });
     authoring.selectNode(selected);
     authoring.openNodeAssetAuthoring();
-    expect(authoring.ui.state.assetAuthoring).toEqual({ mode: "create" });
+    expect(authoring.session.state.assetAuthoring).toEqual({ mode: "create" });
     authoring.closeNodeAssetAuthoring();
-    expect(authoring.ui.state.assetAuthoring).toBeNull();
+    expect(authoring.session.state.assetAuthoring).toBeNull();
     authoring.dispose();
 
     const unresolved = workspace();
@@ -137,7 +136,7 @@ describe("Workspace node asset authoring", () => {
     expect(first.store.state.nodes[instanceV2]?.definitionRef).toEqual(v2.nodeTypeRef);
     expect(first.nodeLibrary.getCurrentSpec(v1.nodeTypeRef.nodeTypeId)?.definition.ref).toEqual(v2.nodeTypeRef);
 
-    const persisted = toWorkspaceDocument(first.store.state);
+    const persisted = first.store.state;
     const canonical = JSON.stringify(persisted);
     expect(canonical).not.toContain("::asset::");
     expect(Object.values(persisted.nodes).every((node) => !node.id.includes("::asset::"))).toBe(true);
@@ -275,7 +274,7 @@ describe("Workspace node asset authoring", () => {
       disposition: "embedded",
       position: { x: 200, y: 0 },
     });
-    const persisted = toWorkspaceDocument(author.store.state);
+    const persisted = author.store.state;
     const invalid = {
       ...persisted,
       nodes: {
@@ -304,13 +303,13 @@ describe("Workspace node asset authoring", () => {
       disposition: "embedded",
       position: { x: 200, y: 0 },
     });
-    const persisted = toWorkspaceDocument({
+    const persisted = {
       ...author.store.state,
       edges: {
         ...author.store.state.edges,
         bad: { id: "bad", from: instance, fromPort: "missing", to: instance, toPort: "missing", kind: "pred" },
       },
-    });
+    };
     const topologyTarget = workspace();
     const topologySnapshot = topologyTarget.nodeLibrary.assetSnapshot();
     expect(decodeWorkspaceDocument(persisted, topologyTarget.nodeLibrary).ok).toBe(false);

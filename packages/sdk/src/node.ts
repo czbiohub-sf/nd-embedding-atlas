@@ -23,7 +23,6 @@ export type {
   NodePortValue,
   PredicatePortValue,
   RowIndex,
-  RowSetPortValue,
 } from "./graph";
 
 export function nodeTypeId(value: string): NodeTypeId {
@@ -54,7 +53,7 @@ export function exactNodeTypeRef(nodeType: string, version: string): ExactNodeTy
   };
 }
 
-export type PortKind = "pred" | "sel";
+export type PortKind = "pred";
 export type FanInOperation = "and" | "or" | "diff";
 
 export interface NodePort {

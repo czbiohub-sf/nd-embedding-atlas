@@ -1,34 +1,5 @@
 import type { NodeCapability, NodeHost } from "@ndea/sdk";
 
-export type CheckpointInputState =
-  | {
-      readonly kind: "predicate";
-      readonly predicate: string | null;
-    }
-  | {
-      readonly kind: "row-set";
-      readonly predicate: string | null;
-      readonly rowCount: number | null;
-    };
-
-export interface CheckpointState {
-  readonly epoch: number;
-  readonly pinned: boolean;
-  readonly pinnedEpoch: number | null;
-  readonly input: CheckpointInputState | null;
-  readonly pending: boolean;
-  readonly error: string | null;
-}
-
-export interface CheckpointNodeHost {
-  readonly checkpoint: {
-    getSnapshot(): CheckpointState;
-    subscribe(onChange: () => void): () => void;
-    pin(): Promise<boolean>;
-    unpin(): void;
-  };
-}
-
 export interface HierarchyState {
   readonly childCount: number;
 }
@@ -42,7 +13,6 @@ export interface HierarchyNodeHost {
 }
 
 export interface AppNodeHostFacetMap {
-  readonly checkpoint: CheckpointNodeHost["checkpoint"];
   readonly hierarchy: HierarchyNodeHost["hierarchy"];
   readonly bodyHeaderElement: HTMLElement;
 }
@@ -67,8 +37,6 @@ export function requireAppNodeHostFacet<Facet extends AppNodeHostFacetName>(
   if (host === null || typeof host !== "object") throw new Error(`app node host requires facet "${facet}"`);
   const value = Reflect.get(host, facet);
   switch (facet) {
-    case "checkpoint":
-      return requireMethods(value, facet, ["getSnapshot", "subscribe", "pin", "unpin"]) as AppNodeHostFacetMap[Facet];
     case "hierarchy":
       return requireMethods(value, facet, ["getSnapshot", "subscribe", "enter"]) as AppNodeHostFacetMap[Facet];
     case "bodyHeaderElement":

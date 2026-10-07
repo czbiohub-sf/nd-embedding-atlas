@@ -14,9 +14,9 @@ import {
   emptyWorkspaceDocument,
   parseWorkspaceDocument,
   parseWorkspaceFile,
-  type WorkspaceDocument,
   type WorkspaceIssue,
 } from "../frontend/core/workspace/document.ts";
+import type { WorkspaceDocument } from "../frontend/core/workspace/types.ts";
 
 export type WorkspaceApplyResult =
   | { kind: "accepted"; revision: number }

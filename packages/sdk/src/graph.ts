@@ -8,11 +8,7 @@ export function rowIndex(value: number): RowIndex {
 
 /** A pull-time SQL predicate. `null` means all rows. */
 export type PredicatePortValue = string | null;
-
-/** An authored row set. `null` means absent; `[]` is an active empty set. */
-export type RowSetPortValue = readonly RowIndex[] | null;
-
-export type NodePortValue = PredicatePortValue | RowSetPortValue;
+export type NodePortValue = PredicatePortValue;
 
 export interface NodeComputeContext {
   readonly signal: AbortSignal;

@@ -20,7 +20,7 @@ export function resolveNodeForm(ws: Workspace, id: string): NdForm {
   if (!def) return "card";
   const override = ws.store.state.formOverride[id] ?? null;
   return ndResolveForm({
-    base: ws.ui.state.baseForm,
+    base: ws.session.state.baseForm,
     override: override ? { form: override, fresh: true } : null,
     locked: ws.store.state.formLocked[id] ?? false,
     staged: ws.placementOf(id) === "staged", // staged bodies live elsewhere → card max

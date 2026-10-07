@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { FocusCoordinationAPI, RowSetPortValue } from "@ndea/sdk";
+import type { FocusCoordinationAPI } from "@ndea/sdk";
 import {
   gpuPointIndex,
   observationName,
@@ -30,8 +30,6 @@ function assertNominalIdentitySeparation(): void {
   acceptsRowIndex(name);
   // @ts-expect-error Focus coordination cannot accept durable observation names.
   (({ set: acceptsRowIndex }) satisfies Pick<FocusCoordinationAPI, "set">).set(name);
-  // @ts-expect-error Row sets cannot contain GPU point indices.
-  [point] satisfies NonNullable<RowSetPortValue>;
 }
 void assertNominalIdentitySeparation;
 

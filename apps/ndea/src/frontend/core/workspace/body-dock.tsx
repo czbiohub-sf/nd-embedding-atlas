@@ -4,7 +4,6 @@
  * state plus exposes the explicit retry transition.
  */
 
-import { useSelector } from "@tanstack/react-store";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import type { ExactNodeTypeRef } from "@ndea/sdk";
@@ -13,7 +12,7 @@ import { PanelErrorBoundary } from "@/components/layout/PanelErrorBoundary";
 import type { NodeInstanceRuntime } from "@/core/node/runtime/instance-runtime";
 import { useWorkspaceNodeRuntimes } from "@/core/node/runtime/runtime-context-value";
 import { resolveNodeForm } from "./canvas/port-positions";
-import { useWorkspace, useWorkspaceSelector } from "./workspace-context";
+import { useWorkspace, useWorkspaceSelector, useWorkspaceSession } from "./workspace-context";
 
 function ActiveBodyRuntime({ label, runtime }: { readonly label: string; readonly runtime: NodeInstanceRuntime }) {
   const state = useSyncExternalStore(runtime.subscribe, runtime.getSnapshot, runtime.getSnapshot);
@@ -78,9 +77,9 @@ export function WorkspaceBodies() {
   const ws = useWorkspace();
   const nodes = useWorkspaceSelector((state) => state.nodes);
   useWorkspaceSelector((state) => state.stage);
-  useWorkspaceSelector((state) => state.disposition);
+  useWorkspaceSession((state) => state.disposition);
   useWorkspaceSelector((state) => state.formOverride);
-  const fullscreen = useSelector(ws.ui, (state) => state.fullscreen);
+  const fullscreen = useWorkspaceSession((state) => state.fullscreen);
   const activated = useRef(new Set<string>());
 
   const live: { id: string; definitionRef: ExactNodeTypeRef; label: string }[] = [];
@@ -137,7 +136,7 @@ export function BodySocket({
 }) {
   const ws = useWorkspace();
   const runtimes = useWorkspaceNodeRuntimes();
-  const claimed = useWorkspaceSelector((state) => state.claimed === nodeId);
+  const claimed = useWorkspaceSession((state) => state.claimed === nodeId);
   return (
     <div
       className={`relative ${className ?? "nowheel nodrag flex min-h-0 flex-1 flex-col overflow-hidden"}`}

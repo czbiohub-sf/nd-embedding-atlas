@@ -3,7 +3,7 @@ import type { ExactNodeTypeRef, MountedNodeBody, NodeCapability, NodeModule, Nod
 import type { NodeCatalog } from "@/core/plugin/catalog";
 import type { CatalogNodeDefinition } from "@/core/plugin/registration";
 import type { AppNodeHost } from "@/core/node/app-node-host";
-import { assertNodeHostCapabilities } from "@/core/node/host-capabilities";
+import { assertNodeHostCapabilities } from "@/core/node/capabilities";
 import type { HostHandle } from "./host";
 
 export type NodeInstanceRuntimeStatus = "unloaded" | "loading" | "ready" | "failed" | "disposed";

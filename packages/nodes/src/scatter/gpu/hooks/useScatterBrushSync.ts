@@ -3,7 +3,6 @@ import type { RowIndex } from "@ndea/sdk";
 import type { RefObject } from "react";
 import { useEffect, useRef } from "react";
 import { useScatterHost } from "../../context";
-import { clearLasso, publishLasso } from "../../routing";
 import type { GpuPointIndex } from "../../contracts";
 
 export interface UseScatterBrushSyncOptions {
@@ -31,7 +30,7 @@ export function useScatterBrushSync({
         if (h.signal.aborted || revision !== revisionRef.current) return;
         try {
           const { set } = await h.dataAPI.createObservationSet(rowIds);
-          if (!h.signal.aborted && revision === revisionRef.current) publishLasso(h, { op: "inSet", set });
+          if (!h.signal.aborted && revision === revisionRef.current) h.filter.publish("lasso", { op: "inSet", set });
         } catch (error) {
           if (!h.signal.aborted && revision === revisionRef.current) {
             h.notifications.notify(error instanceof Error ? error.message : String(error), "error");
@@ -47,7 +46,7 @@ export function useScatterBrushSync({
     () => () => {
       revisionRef.current += 1;
       debouncerRef.current.cancel();
-      clearLasso(hostRef.current);
+      hostRef.current.filter.clear("lasso");
     },
     [],
   );
@@ -60,7 +59,7 @@ export function useScatterBrushSync({
     setSelection(rowIds.length > 0 ? rowIds.length : null);
     if (rowIds.length === 0) {
       brushDebouncer.cancel();
-      clearLasso(host);
+      host.filter.clear("lasso");
     } else {
       brushDebouncer.maybeExecute({ rowIds, revision });
     }

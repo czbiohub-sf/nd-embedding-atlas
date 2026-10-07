@@ -8,7 +8,6 @@
  */
 
 import type { WorkspaceSnapshot } from "@ndea/protocol";
-import { useSelector } from "@tanstack/react-store";
 import { useEffect, useState } from "react";
 
 import { NdHud, NdLed } from "@/components/node-workspace/nd-primitives";
@@ -30,10 +29,11 @@ import {
   useWorkspace,
   useWorkspacePersistence,
   useWorkspaceSelector,
+  useWorkspaceSession,
   WorkspaceProvider,
   type WorkspacePersistenceState,
 } from "./workspace-context";
-import type { GhostState } from "./workspace-store";
+import type { GhostState } from "./types";
 
 const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
 
@@ -84,7 +84,7 @@ function FlipGhost({ ghost }: { ghost: GhostState }) {
  *  (capture phase: the canvas esc-chain never sees it). */
 function FullscreenOverlay() {
   const ws = useWorkspace();
-  const fsId = useSelector(ws.ui, (u) => u.fullscreen);
+  const fsId = useWorkspaceSession((u) => u.fullscreen);
   const node = useWorkspaceSelector((s) => (fsId ? s.nodes[fsId] : undefined));
 
   useEffect(() => {
@@ -123,8 +123,8 @@ function StatusBar() {
   const epoch = useTelemetrySelector((t) => t.epoch);
   const cookingAny = useTelemetrySelector((t) => Object.keys(t.cooking).length > 0);
   const telemetryOn = useTelemetrySelector((t) => t.enabled);
-  const disposition = useWorkspaceSelector((s) => s.disposition);
-  const zoomForms = useSelector(ws.ui, (u) => u.zoomForms);
+  const disposition = useWorkspaceSession((s) => s.disposition);
+  const zoomForms = useWorkspaceSession((u) => u.zoomForms);
 
   return (
     // 1fr·auto·1fr grid: the side columns are forced EQUAL, so the
@@ -254,16 +254,16 @@ function RecoveryWorkspaceSurface({ persistence }: { persistence: WorkspacePersi
 
 function WritableWorkspaceFrame({ policy }: { policy: WorkspaceSurfacePolicy }) {
   const ws = useWorkspace();
-  const disposition = useWorkspaceSelector((s) => s.disposition);
+  const disposition = useWorkspaceSession((s) => s.disposition);
   const stripH = useWorkspaceSelector((s) => s.stripH);
   const stageOccupied = useWorkspaceSelector((s) => s.stage !== null);
-  const graphPath = useWorkspaceSelector((s) => s.graphPath);
+  const graphPath = useWorkspaceSession((s) => s.graphPath);
   useWorkspaceSelector((s) => s.nodes);
   const nodeCount = useWorkspaceSelector((s) => Object.keys(s.nodes).length);
   const edgeCount = useWorkspaceSelector((s) => Object.keys(s.edges).length);
   const cookingAny = useTelemetrySelector((t) => Object.keys(t.cooking).length > 0);
   const telemetryOn = useTelemetrySelector((t) => t.enabled);
-  const ghost = useSelector(ws.ui, (u) => u.ghost);
+  const ghost = useWorkspaceSession((u) => u.ghost);
 
   const full = disposition === "full";
   const hidden = disposition === "hidden";
@@ -276,7 +276,7 @@ function WritableWorkspaceFrame({ policy }: { policy: WorkspaceSurfacePolicy }) 
       const el = document.activeElement;
       if (el && ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName)) return;
       if (e.key === "F" && e.shiftKey) {
-        const cur = ws.store.state.disposition;
+        const cur = ws.session.state.disposition;
         const i = DISPOSITIONS.indexOf(cur);
         ws.setDisposition(DISPOSITIONS[(i + 1) % DISPOSITIONS.length]);
       }

@@ -5,11 +5,11 @@ import {
   OBSERVATION_SET_TABLE,
   ObservationSetCreateBodySchema,
   ObservationSetIdSchema,
-  type FilterClause,
   type ObservationSet,
 } from "@ndea/protocol";
 import { stateDir } from "../cli/lib/paths.ts";
-import type { WorkspaceDocument, WorkspaceIssue } from "../frontend/core/workspace/document.ts";
+import type { WorkspaceIssue } from "../frontend/core/workspace/document.ts";
+import type { WorkspaceDocument } from "../frontend/core/workspace/types.ts";
 import type { DatasetQuerySession } from "./store.ts";
 
 const SetFileSchema = z
@@ -128,25 +128,22 @@ export class ObservationSets {
   }
 }
 
-/** Only clause structure is walked; strings in column names and values are not references. */
+/** Find structural set clauses anywhere in the document, including node configs. */
 export async function observationSetIssues(
   document: WorkspaceDocument,
   sets: ObservationSets,
 ): Promise<WorkspaceIssue[]> {
   const references: { set: string; pointer: string }[] = [];
-  function visit(clause: FilterClause, pointer: string): void {
-    if (clause.op === "inSet") references.push({ set: clause.set, pointer });
-    else if (clause.op === "and" || clause.op === "or") {
-      clause.clauses.forEach((child, index) => visit(child, `${pointer}/clauses/${index}`));
-    } else if (clause.op === "not") visit(clause.clause, `${pointer}/clause`);
-  }
-  for (const [scope, sources] of Object.entries(document.state.filter ?? {})) {
-    for (const [source, facets] of Object.entries(sources)) {
-      for (const [facet, clause] of Object.entries(facets)) {
-        visit(clause, `/state/filter/${escapePointer(scope)}/${escapePointer(source)}/${escapePointer(facet)}`);
-      }
+  function visit(value: unknown, pointer: string): void {
+    if (value === null || typeof value !== "object") return;
+    if ("op" in value && value.op === "inSet" && "set" in value && typeof value.set === "string") {
+      references.push({ set: value.set, pointer });
+    }
+    for (const [key, child] of Object.entries(value)) {
+      visit(child, `${pointer}/${escapePointer(key)}`);
     }
   }
+  visit(document, "");
   const missing = new Set(await sets.ensure(references.map(({ set }) => set)));
   return references
     .filter(({ set }) => missing.has(set))

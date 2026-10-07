@@ -123,7 +123,7 @@ describe("frontend plugin session", () => {
     expect(
       spec?.cook(
         new Map([["in", [{ kind: "pred", sql: "value > 0" }]]]),
-        { id: "chart-1", node: () => {}, frozenPredicate: () => {} },
+        { id: "chart-1", node: () => {}, scopeFilter: () => null },
         { signal: new AbortController().signal, epoch: 7 },
       ),
     ).toEqual({ kind: "pred", sql: null });

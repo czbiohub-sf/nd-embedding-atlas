@@ -1,7 +1,4 @@
-import type { PredicatePortValue, RowSetPortValue } from "@ndea/sdk/graph";
-
-export const AUTHORED_GRAPH_OUTPUT_PORT = "push";
-export const DERIVED_GRAPH_OUTPUT_PORT = "out";
+import type { PredicatePortValue } from "@ndea/sdk/graph";
 
 /**
  * Tagged graph-runtime values retain the port kind needed by the evaluator while
@@ -12,10 +9,4 @@ export interface GraphPredicatePortValue {
   readonly sql: PredicatePortValue;
 }
 
-export interface GraphRowSetPortValue {
-  readonly kind: "sel";
-  readonly sql: PredicatePortValue;
-  readonly rowIds: RowSetPortValue;
-}
-
-export type GraphPortValue = GraphPredicatePortValue | GraphRowSetPortValue;
+export type GraphPortValue = GraphPredicatePortValue;

@@ -24,7 +24,6 @@ export interface NativeNodePresentation {
   readonly stage: "stageable" | "canvas-only";
   readonly inPalette: boolean;
   readonly accent?: string;
-  readonly checkpoint?: boolean;
   readonly requiredHostFacets?: readonly AppNodeHostFacetName[];
 }
 

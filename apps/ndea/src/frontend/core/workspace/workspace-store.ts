@@ -19,17 +19,13 @@ import {
   withoutNodeCoordination,
   type CoordinationScopeCellPort,
 } from "@/core/coordination/coordination";
+import { filterScopeSql } from "@/core/coordination/types";
 import { predicateSql } from "@/core/graph/cook";
 import type { GraphEvaluationStore } from "@ndea/graph";
 import type { GraphDocumentEdge, GraphDocumentNode } from "@/core/graph/records";
-import {
-  GraphRuntimeSession,
-  type GraphNodeResolution,
-  type CheckpointInput,
-  type CheckpointRuntimeStatus,
-} from "@/core/graph/runtime-session";
+import { GraphRuntimeSession, type GraphNodeResolution } from "@/core/graph/runtime-session";
 import type { NodeRuntimeSessionPort } from "@/core/node/runtime/session-port";
-import { compareSemanticVersions, type ExactNodeTypeRef, type RowIndex } from "@ndea/sdk";
+import { compareSemanticVersions, type ExactNodeTypeRef } from "@ndea/sdk";
 import type { Metadata } from "@/types";
 import type { NdForm } from "@/components/node-workspace/nd-resolve-form";
 import { toRows } from "@/lib/mosaic-helpers";
@@ -65,11 +61,13 @@ import {
 } from "./stage/stage-spec";
 import type {
   WorkspaceCanvasDisposition,
-  WorkspaceDocumentState,
+  WorkspaceDocument,
   WorkspaceNodePosition,
   WorkspaceNodeSize,
   WorkspacePlacement,
+  WorkspaceSession,
 } from "./types";
+import { emptyWorkspaceDocument } from "./document";
 
 export interface WorkspaceDeps {
   coordinator: Coordinator;
@@ -80,41 +78,14 @@ export interface WorkspaceDeps {
   nodeAssetStorage?: NodeAssetJsonStorage;
 }
 
-export type WorkspaceDocumentStore = Pick<Store<WorkspaceDocumentState>, "state" | "get" | "subscribe">;
+export type WorkspaceDocumentStore = Pick<Store<WorkspaceDocument>, "state" | "get" | "subscribe">;
 
-const EMPTY: WorkspaceDocumentState = {
-  nodeAssets: [],
-  nodes: {},
-  edges: {},
-  positions: {},
-  sizeOverrides: {},
-  formOverride: {},
-  formLocked: {},
-  selectedNodeId: null,
-  selectedNodeIds: [],
-  selectedEdgeId: null,
-  stage: null,
-  disposition: "strip",
-  stripH: 280,
-  claimed: null,
-  graphPath: null,
-  flags: {},
-  state: {},
-  bindings: {},
-};
-
-/** FLIP relocation ghost (pin/pull) */
-export interface GhostState {
-  from: DOMRect;
-  to: DOMRect;
-  label: string;
-}
+const EMPTY: WorkspaceDocument = emptyWorkspaceDocument();
 
 export class Workspace {
-  private readonly documentStore: Store<WorkspaceDocumentState>;
+  private readonly documentStore: Store<WorkspaceDocument>;
   readonly store: WorkspaceDocumentStore;
   readonly telemetry: GraphEvaluationStore;
-  readonly checkpointStatus: GraphRuntimeSession["checkpoints"];
   readonly counts: NodeCounts;
   readonly nodeLibrary: WorkspaceAppNodeLibrary;
   readonly coordination: CoordinationScopeCellPort;
@@ -123,6 +94,8 @@ export class Workspace {
   private readonly deps: WorkspaceDeps;
   private nodeSeq = 0;
   private edgeSeq = 0;
+  /** The document being projected; the runtime reads it before subscribers see it. */
+  private pending: WorkspaceDocument | null = null;
 
   constructor(deps: WorkspaceDeps) {
     this.deps = deps;
@@ -133,20 +106,23 @@ export class Workspace {
         deps.nodeAssets ?? createNodeAssetLibrary([{ sourceId: "user", kind: "user", assets: [], current: {} }]),
       ),
     );
-    this.documentStore = new Store<WorkspaceDocumentState>(EMPTY);
+    this.documentStore = new Store<WorkspaceDocument>(EMPTY);
     this.store = this.documentStore;
     this.graphRuntime = new GraphRuntimeSession({
       resolver: this.nodeLibrary,
       document: {
-        node: (id) => this.documentStore.state.nodes[id],
-        edges: () => Object.values(this.documentStore.state.edges),
+        node: (id) => this.document.nodes[id],
+        edges: () => Object.values(this.document.edges),
+        scopeFilter: (id) => filterScopeSql(this.document, id),
       },
       schedule: (flush) => requestAnimationFrame(flush),
       onFlush: () => this.counts.refresh(),
     });
-    this.coordination = createCoordination(coordinationDocumentPort(this.documentStore));
+    this.coordination = createCoordination({
+      ...coordinationDocumentPort(this.documentStore),
+      update: (mutator) => this.commit((state) => mutator(state) as WorkspaceDocument),
+    });
     this.telemetry = this.graphRuntime.telemetry;
-    this.checkpointStatus = this.graphRuntime.checkpoints;
     this.counts = new NodeCounts({
       // post-flush, cache-aware: the flush just cooked every registered node
       predicateOf: (id) => predicateSql(this.pullGraphNode(id)),
@@ -154,6 +130,90 @@ export class Workspace {
       toRows,
       table: deps.table,
     });
+  }
+
+  private get document(): WorkspaceDocument {
+    return this.pending ?? this.documentStore.state;
+  }
+
+  /**
+   * The one document write path. The graph runtime is reconciled to the next
+   * document first, so store subscribers (React, sync, runtime sinks) only
+   * ever observe a document the runtime already reflects. A failed projection
+   * rolls the runtime back and leaves the store untouched.
+   */
+  private commit(update: (state: WorkspaceDocument) => WorkspaceDocument): void {
+    const prev = this.documentStore.state;
+    const next = update(prev);
+    if (next === prev) return;
+    this.pending = next;
+    try {
+      this.reconcile(prev, next);
+    } catch (error) {
+      this.pending = prev;
+      this.reconcile(next, prev);
+      throw error;
+    } finally {
+      this.pending = null;
+    }
+    this.documentStore.setState(() => next);
+  }
+
+  /** Bring the graph runtime from `prev` to `next`; unchanged nodes and edges keep their cooks. */
+  private reconcile(prev: WorkspaceDocument, next: WorkspaceDocument): void {
+    if (
+      prev.nodes === next.nodes &&
+      prev.edges === next.edges &&
+      prev.flags === next.flags &&
+      prev.state === next.state &&
+      prev.bindings === next.bindings
+    ) {
+      return;
+    }
+    const retyped = (id: string) => {
+      const before = prev.nodes[id];
+      const after = next.nodes[id];
+      return (
+        !before || !after || !sameJson(before.definitionRef, after.definitionRef) || before.parent !== after.parent
+      );
+    };
+    const reregistered = new Set(Object.keys({ ...prev.nodes, ...next.nodes }).filter(retyped));
+
+    for (const [id, edge] of Object.entries(prev.edges)) {
+      if (!sameJson(edge, next.edges[id])) this.graphRuntime.disconnect(edge, prev.nodes);
+    }
+    for (const id of Object.keys(prev.nodes)) if (reregistered.has(id)) this.graphRuntime.removeNode(id);
+    for (const [id, node] of Object.entries(next.nodes)) {
+      if (reregistered.has(id)) this.graphRuntime.registerNode(node);
+      else if (!sameJson(prev.nodes[id], node)) this.graphRuntime.recookNode(node, prev.nodes[id]);
+    }
+    for (const id of reregistered) {
+      if (next.nodes[id]?.definitionRef.nodeTypeId === "subnet") this.graphRuntime.connectSubnetSeam(id);
+    }
+    for (const [id, edge] of Object.entries(next.edges)) {
+      const touched = reregistered.has(edge.from) || reregistered.has(edge.to);
+      if (touched || !sameJson(edge, prev.edges[id])) this.graphRuntime.connect(edge, next.nodes);
+    }
+    for (const id of Object.keys(next.nodes)) {
+      const before = reregistered.has(id) ? {} : (prev.flags[id] ?? {});
+      const after = next.flags[id] ?? {};
+      if (Boolean(before.bypass) !== Boolean(after.bypass)) {
+        this.graphRuntime.setBypass(id, Boolean(after.bypass));
+        // a bypassed subnet bypasses its seam: route through the ⊲out proxy too
+        if (next.nodes[id].definitionRef.nodeTypeId === "subnet") {
+          this.graphRuntime.setBypass(`${id}-out`, Boolean(after.bypass));
+        }
+      }
+      // display-off: the instance runtime unregisters its sink; dirty so LEDs reflect the parked branch
+      if (Boolean(before.off) !== Boolean(after.off)) this.graphRuntime.markDirty(id);
+    }
+    // Filter scopes feed cooks (views, a live Cache): dirty every node whose scope SQL moved.
+    if (prev.state !== next.state || prev.bindings !== next.bindings) {
+      for (const id of new Set([...Object.keys(prev.bindings), ...Object.keys(next.bindings)])) {
+        if (reregistered.has(id) || !this.graphRuntime.isRegistered(id)) continue;
+        if (filterScopeSql(prev, id) !== filterScopeSql(next, id)) this.graphRuntime.markDirty(id);
+      }
+    }
   }
 
   /* ── document queries ─────────────────────────────────────────────── */
@@ -245,7 +305,7 @@ export class Workspace {
   private addNodeFromDescriptor(def: AppNodeDescriptor, pos: WorkspaceNodePosition, idOverride?: string): string {
     const nodeTypeId = def.definitionRef.nodeTypeId;
     const id = idOverride ?? `${nodeTypeId}-${++this.nodeSeq}`;
-    const parent = this.store.state.graphPath;
+    const parent = this.session.state.graphPath;
     const node: GraphDocumentNode = { id, definitionRef: def.definitionRef, label: def.label, parent };
     const assetEntry = this.nodeLibrary.assetSnapshot().assets.getExact(def.definitionRef);
     let assetRecord: WorkspaceNodeAssetRecord | undefined;
@@ -274,43 +334,27 @@ export class Workspace {
       positions[`${id}-in`] = { x: 60, y: 160 };
       positions[`${id}-out`] = { x: 760, y: 160 };
     }
-    const registered: string[] = [];
-    try {
-      for (const added of nodes) {
-        if (!this.graphRuntime.registerNode(added)) {
-          throw new Error(
-            `no graph evaluator registered for "${added.definitionRef.nodeTypeId}@${added.definitionRef.nodeTypeVersion}"`,
-          );
-        }
-        registered.push(added.id);
-      }
-      if (nodeTypeId === "subnet" && !this.graphRuntime.connectSubnetSeam(id)) {
-        throw new Error(`graph runtime rejected subnet seam for "${id}"`);
-      }
-      this.documentStore.setState((state) => {
-        let nodeAssets = state.nodeAssets;
-        if (assetRecord) {
-          const assetRef = assetRecord.kind === "linked" ? assetRecord.nodeTypeRef : assetRecord.definition.nodeTypeRef;
-          const alreadyRecorded = state.nodeAssets.some((record) => {
-            const ref = record.kind === "linked" ? record.nodeTypeRef : record.definition.nodeTypeRef;
-            return ref.nodeTypeId === assetRef.nodeTypeId && ref.nodeTypeVersion === assetRef.nodeTypeVersion;
-          });
-          if (!alreadyRecorded) nodeAssets = [...nodeAssets, assetRecord];
-        }
-        return {
-          ...state,
-          nodeAssets,
-          nodes: { ...state.nodes, ...Object.fromEntries(nodes.map((added) => [added.id, added])) },
-          positions: { ...state.positions, ...positions },
-          selectedNodeId: id,
-        };
-      });
-    } catch (error) {
-      for (let index = registered.length - 1; index >= 0; index -= 1) {
-        this.graphRuntime.removeNode(registered[index]);
-      }
-      throw error;
+    if (!this.nodeLibrary.getSpecExact(def.definitionRef)) {
+      throw new Error(`no graph evaluator registered for "${nodeTypeId}@${def.definitionRef.nodeTypeVersion}"`);
     }
+    this.commit((state) => {
+      let nodeAssets = state.nodeAssets;
+      if (assetRecord) {
+        const assetRef = assetRecord.kind === "linked" ? assetRecord.nodeTypeRef : assetRecord.definition.nodeTypeRef;
+        const alreadyRecorded = state.nodeAssets.some((record) => {
+          const ref = record.kind === "linked" ? record.nodeTypeRef : record.definition.nodeTypeRef;
+          return ref.nodeTypeId === assetRef.nodeTypeId && ref.nodeTypeVersion === assetRef.nodeTypeVersion;
+        });
+        if (!alreadyRecorded) nodeAssets = [...nodeAssets, assetRecord];
+      }
+      return {
+        ...state,
+        nodeAssets,
+        nodes: { ...state.nodes, ...Object.fromEntries(nodes.map((added) => [added.id, added])) },
+        positions: { ...state.positions, ...positions },
+      };
+    });
+    this.selectNode(id);
     return id;
   }
 
@@ -321,14 +365,13 @@ export class Workspace {
     parameters?: readonly NodeAssetParameterDraftBinding[];
     visibility?: NodeAssetDefinition["visibility"];
   }): NodeAssetDefinition {
-    const state = this.store.state;
-    let selectedNodeIds = state.selectedNodeIds;
-    if (selectedNodeIds.length === 0 && state.selectedNodeId) selectedNodeIds = [state.selectedNodeId];
+    const { selectedNodeId, selectedNodeIds } = this.session.state;
+    const { nodes, edges } = this.store.state;
     return createNodeAssetDraftFromSubgraph({
       ...options,
-      selectedNodeIds,
-      nodes: state.nodes,
-      edges: state.edges,
+      selectedNodeIds: selectedNodeIds.length === 0 && selectedNodeId ? [selectedNodeId] : selectedNodeIds,
+      nodes,
+      edges,
       resolveDefinition: (ref) => this.nodeLibrary.getSpecExact(ref)?.definition,
       parameters: options.parameters ?? [],
     });
@@ -392,12 +435,11 @@ export class Workspace {
     try {
       this.nodeLibrary.replaceAssetSnapshot(resolved.snapshot);
       id = this.addNodeExact(draft.nodeTypeRef, options.position);
-      this.documentStore.setState((state) => ({ ...state, nodeAssets: resolved.records }));
+      this.commit((state) => ({ ...state, nodeAssets: resolved.records }));
       if (storedBytes !== null) this.deps.nodeAssetStorage!.replaceAtomically(storedBytes);
       return id;
     } catch (error) {
-      if (id) this.graphRuntime.removeNode(id);
-      this.documentStore.setState(() => previousDocument);
+      this.commit(() => previousDocument);
       this.nodeLibrary.replaceAssetSnapshot(previousSnapshot);
       this.nodeSeq = previousNodeSeq;
       throw error;
@@ -407,30 +449,23 @@ export class Workspace {
   removeNode(id: string): void {
     const node = this.store.state.nodes[id];
     if (!node || node.definitionRef.nodeTypeId === "obs") return; // the source is permanent
-    if (this.ui.state.fullscreen === id) this.setFullscreen(null);
-    this.graphRuntime.removeNode(id);
-    this.documentStore.setState((s) => {
+    const session = this.session.state;
+    const remaining = Object.values(this.store.state.edges).filter((e) => e.from !== id && e.to !== id);
+    this.patchSession({
+      fullscreen: session.fullscreen === id ? null : session.fullscreen,
+      selectedNodeId: session.selectedNodeId === id ? null : session.selectedNodeId,
+      selectedNodeIds: session.selectedNodeIds.filter((x) => x !== id),
+      selectedEdgeId: remaining.some((e) => e.id === session.selectedEdgeId) ? session.selectedEdgeId : null,
+    });
+    this.commit((s) => {
       const nodes = { ...s.nodes };
       delete nodes[id];
       const positions = { ...s.positions };
       delete positions[id];
       const flags = { ...s.flags };
       delete flags[id];
-      const edges = Object.fromEntries(Object.entries(s.edges).filter(([, e]) => e.from !== id && e.to !== id));
-      return withoutNodeCoordination(
-        {
-          ...s,
-          nodes,
-          positions,
-          edges,
-          flags,
-          stage: removeNodeView(s.stage, id),
-          selectedNodeId: s.selectedNodeId === id ? null : s.selectedNodeId,
-          selectedNodeIds: s.selectedNodeIds.filter((x) => x !== id),
-          selectedEdgeId: s.selectedEdgeId && !edges[s.selectedEdgeId] ? null : s.selectedEdgeId,
-        },
-        id,
-      );
+      const edges = Object.fromEntries(remaining.map((e) => [e.id, e]));
+      return withoutNodeCoordination({ ...s, nodes, positions, edges, flags, stage: removeNodeView(s.stage, id) }, id);
     });
   }
 
@@ -448,24 +483,18 @@ export class Workspace {
     const toPort = input.id;
     const id = `e${++this.edgeSeq}`;
     const edge: GraphDocumentEdge = { id, from: fromId, fromPort, to: toId, toPort, kind };
-    if (!this.graphRuntime.connect(edge)) return false;
-    try {
-      this.documentStore.setState((s) => ({ ...s, edges: { ...s.edges, [id]: edge } }));
-    } catch (error) {
-      this.graphRuntime.disconnect(edge);
-      throw error;
-    }
+    this.commit((s) => ({ ...s, edges: { ...s.edges, [id]: edge } }));
     return true;
   }
 
   deleteEdge(edgeId: string): void {
     const edge = this.store.state.edges[edgeId];
     if (!edge) return;
-    this.graphRuntime.disconnect(edge);
-    this.documentStore.setState((s) => {
+    if (this.session.state.selectedEdgeId === edgeId) this.patchSession({ selectedEdgeId: null });
+    this.commit((s) => {
       const edges = { ...s.edges };
       delete edges[edgeId];
-      return { ...s, edges, selectedEdgeId: s.selectedEdgeId === edgeId ? null : s.selectedEdgeId };
+      return { ...s, edges };
     });
   }
 
@@ -476,26 +505,12 @@ export class Workspace {
   /* ── persistence: hydrate a saved document ────────────────────────── */
 
   /**
-   * Rehydrate a saved {@link WorkspaceDocumentState} into this (fresh) Workspace: the load
-   * half of the persistence seam. The TanStack store is only one of two
-   * authorities: a node that merely lands in `store.state` is INERT (the engine
-   * never cooks it, so counts/predicates stay empty). So this mirrors the engine
-   * registration that `addNode`/`connect` do: register every node's cook
-   * (`registerGraphNode`), recreate the hidden subnet seam edge, then reconnect
-   * every presentation edge through the same port mapping `connect` uses: before
-   * committing the document to the store in one write.
-   *
-   * Engine-only runtime state that `WorkspaceDocumentState` doesn't carry is re-derived where it
-   * can be (`bypass` from `flags`) and otherwise left to re-establish at the body
-   * layer: a wrangle recompiles its `prql` → predicate on mount. A cache node's
-   * checkpoint pin is NOT persisted,
-   * so a loaded cache restarts live (passing its input through) even if
-   * it was pinned when saved: a graceful degradation, never a corrupt-state load.
-   *
-   * Call once on a brand-new Workspace at the load-or-seed seam. Assumes the
-   * document already passed {@link validateDoc}.
+   * Rehydrate a saved {@link WorkspaceDocument} into this fresh Workspace:
+   * validate and register the whole graph runtime, then commit the document in
+   * one write. Call once at the load seam; later revisions go through
+   * {@link applyDocument}. Assumes the document passed `decodeWorkspaceDocument`.
    */
-  loadDocument(state: WorkspaceDocumentState): void {
+  loadDocument(state: WorkspaceDocument): void {
     const previousSnapshot = this.nodeLibrary.assetSnapshot();
     const previousDocument = this.store.state;
     const previousNodeSeq = this.nodeSeq;
@@ -554,58 +569,20 @@ export class Workspace {
   }
 
   /**
-   * Reconcile this live Workspace to `next`, a remote or rebased revision, with
-   * the same runtime primitives the local mutators use. Nodes and edges whose
-   * records are unchanged stay registered, so runtime-only state (lassos,
-   * cache pins, emitted focus) survives edits that do not touch them.
-   * Assumes `next` passed `decodeWorkspaceDocument`.
+   * Move this live Workspace to `next`, a remote or rebased revision. Asset
+   * records change node resolution wholesale, so they reload from scratch;
+   * every other change goes through the same commit-and-reconcile path as a
+   * local edit. Assumes `next` passed `decodeWorkspaceDocument`.
    */
-  applyDocument(next: WorkspaceDocumentState): void {
+  applyDocument(next: WorkspaceDocument): void {
     const prev = this.store.state;
     if (!sameJson(prev.nodeAssets, next.nodeAssets)) {
-      // Asset records change node resolution wholesale; re-resolve from scratch.
       for (const id of Object.keys(prev.nodes).toReversed()) this.graphRuntime.removeNode(id);
       this.documentStore.setState(() => EMPTY);
       this.loadDocument(next);
       return;
     }
-    const retyped = (id: string) => {
-      const before = prev.nodes[id];
-      const after = next.nodes[id];
-      return (
-        !before || !after || !sameJson(before.definitionRef, after.definitionRef) || before.parent !== after.parent
-      );
-    };
-    const reregistered = new Set(Object.keys({ ...prev.nodes, ...next.nodes }).filter(retyped));
-
-    for (const [id, edge] of Object.entries(prev.edges)) {
-      if (!sameJson(edge, next.edges[id])) this.graphRuntime.disconnect(edge, prev.nodes);
-    }
-    for (const id of Object.keys(prev.nodes)) if (reregistered.has(id)) this.graphRuntime.removeNode(id);
-    for (const [id, node] of Object.entries(next.nodes)) {
-      if (reregistered.has(id)) this.graphRuntime.registerNode(node);
-      else if (!sameJson(prev.nodes[id], node)) this.graphRuntime.recookNode(node);
-    }
-    for (const id of reregistered) {
-      if (next.nodes[id]?.definitionRef.nodeTypeId === "subnet") this.graphRuntime.connectSubnetSeam(id);
-    }
-    for (const [id, edge] of Object.entries(next.edges)) {
-      const touched = reregistered.has(edge.from) || reregistered.has(edge.to);
-      if (touched || !sameJson(edge, prev.edges[id])) this.graphRuntime.connect(edge, next.nodes);
-    }
-    for (const id of Object.keys(next.nodes)) {
-      const before = reregistered.has(id) ? {} : (prev.flags[id] ?? {});
-      const after = next.flags[id] ?? {};
-      if (Boolean(before.bypass) !== Boolean(after.bypass)) {
-        this.graphRuntime.setBypass(id, Boolean(after.bypass));
-        if (next.nodes[id].definitionRef.nodeTypeId === "subnet") {
-          this.graphRuntime.setBypass(`${id}-out`, Boolean(after.bypass));
-        }
-      }
-      if (Boolean(before.off) !== Boolean(after.off)) this.graphRuntime.markDirty(id);
-    }
-
-    this.documentStore.setState(() => next);
+    this.commit(() => next);
     this.nodeSeq = Math.max(this.nodeSeq, maxSeq(Object.keys(next.nodes)));
     this.edgeSeq = Math.max(this.edgeSeq, maxSeq(Object.keys(next.edges)));
   }
@@ -613,42 +590,36 @@ export class Workspace {
   /* ── presentation actions ─────────────────────────────────────────── */
 
   setPosition(id: string, pos: WorkspaceNodePosition): void {
-    this.documentStore.setState((s) => ({ ...s, positions: { ...s.positions, [id]: pos } }));
+    this.commit((s) => ({ ...s, positions: { ...s.positions, [id]: pos } }));
   }
 
   setPositions(patch: Record<string, WorkspaceNodePosition>): void {
-    this.documentStore.setState((s) => ({ ...s, positions: { ...s.positions, ...patch } }));
+    this.commit((s) => ({ ...s, positions: { ...s.positions, ...patch } }));
   }
 
   /** morph suppression during a body resize drag */
   setResizing(id: string | null): void {
-    this.ui.setState((u) => ({ ...u, resizing: id }));
+    this.patchSession({ resizing: id });
   }
 
   selectNode(id: string | null): void {
-    this.documentStore.setState((s) => ({
-      ...s,
-      selectedNodeId: id,
-      selectedNodeIds: [],
-      selectedEdgeId: null,
-    }));
+    this.patchSession({ selectedNodeId: id, selectedNodeIds: [], selectedEdgeId: null });
   }
 
   selectEdge(id: string | null): void {
-    this.documentStore.setState((s) => ({ ...s, selectedEdgeId: id }));
+    this.patchSession({ selectedEdgeId: id });
   }
 
   setGraphSelection(nodeIds: readonly string[], edgeIds: readonly string[]): void {
-    this.documentStore.setState((state) => ({
-      ...state,
+    this.patchSession({
       selectedNodeId: nodeIds.length === 1 ? nodeIds[0] : null,
       selectedNodeIds: nodeIds.length > 1 ? [...nodeIds] : [],
       selectedEdgeId: edgeIds.length === 1 ? edgeIds[0] : null,
-    }));
+    });
   }
 
   releaseClaim(): void {
-    this.documentStore.setState((state) => ({ ...state, claimed: null }));
+    this.patchSession({ claimed: null });
   }
 
   /** cycle chip → card (→ full when capable) */
@@ -657,11 +628,11 @@ export class Workspace {
     if (!def) return;
     const forms: NdForm[] = def.canFull ? ["chip", "card", "full"] : ["chip", "card"];
     const next = forms[(forms.indexOf(current) + 1) % forms.length];
-    this.documentStore.setState((s) => ({ ...s, formOverride: { ...s.formOverride, [id]: next } }));
+    this.commit((s) => ({ ...s, formOverride: { ...s.formOverride, [id]: next } }));
   }
 
   toggleFormLock(id: string, current: NdForm): void {
-    this.documentStore.setState((s) => {
+    this.commit((s) => {
       const on = !s.formLocked[id];
       const formOverride = { ...s.formOverride };
       if (on) formOverride[id] = formOverride[id] ?? current;
@@ -672,7 +643,7 @@ export class Workspace {
 
   /** unlocked overrides clear when the zoom-driven base next changes band */
   clearFreshOverrides(): void {
-    this.documentStore.setState((s) => {
+    this.commit((s) => {
       const kept: Record<string, NdForm> = {};
       for (const k in s.formOverride) if (s.formLocked[k]) kept[k] = s.formOverride[k];
       return { ...s, formOverride: kept };
@@ -680,7 +651,7 @@ export class Workspace {
   }
 
   setSizeOverride(id: string, form: "card" | "full", size: WorkspaceNodeSize): void {
-    this.documentStore.setState((s) => ({
+    this.commit((s) => ({
       ...s,
       sizeOverrides: { ...s.sizeOverrides, [id]: { ...s.sizeOverrides[id], [form]: size } },
     }));
@@ -702,81 +673,20 @@ export class Workspace {
     if (flag === "bypass" && !(def.role === "transform" || def.role === "subnet")) return;
     if (flag === "off" && !(def.role === "view" && def.canFull)) return;
     const next = !(this.store.state.flags[id]?.[flag] ?? false);
-    if (flag === "bypass") {
-      // a bypassed subnet bypasses its seam: route through the ⊲out proxy too
-      this.graphRuntime.setBypass(id, next);
-      if (this.store.state.nodes[id]?.definitionRef.nodeTypeId === "subnet")
-        this.graphRuntime.setBypass(`${id}-out`, next);
-    } else {
-      // display-off: the instance runtime unregisters its sink (branch never cooks);
-      // dirty downstream so LEDs reflect the parked branch
-      this.graphRuntime.markDirty(id);
-    }
-    this.documentStore.setState((s) => ({
+    this.commit((s) => ({
       ...s,
       flags: { ...s.flags, [id]: { ...s.flags[id], [flag]: next } },
     }));
   }
 
-  /* ── cache checkpoints ─────────────────────────────────────────────── */
-
-  /** Is this cache node currently holding a pinned snapshot (cached), or live? */
-  isCached(id: string): boolean {
-    return this.graphRuntime.isCheckpointPinned(id);
-  }
-
-  /** Read this cache node's live input value (the same value its cook sees when
-   *  uncached). Drives the body's "live count" + the pin action. */
-  liveCacheInput(id: string): CheckpointInput | null {
-    return this.graphRuntime.liveCheckpointInput(id);
-  }
-
-  cacheGraphInput(id: string): CheckpointInput | null {
-    return this.graphRuntime.cacheGraphInput(id);
-  }
-
-  setLiveCachePredicate(cacheId: string, predicate: string | null): void {
-    this.graphRuntime.setLiveCheckpointPredicate(cacheId, predicate);
-  }
-
-  /** Commit materialized row identities atomically as Cache's frozen output. */
-  pinCache(cacheId: string, rowIds: readonly RowIndex[]): boolean {
-    const stamp = this.graphRuntime.pinCheckpointRows(cacheId, rowIds);
-    this.documentStore.setState((s) => ({
-      ...s,
-      nodes: { ...s.nodes, [cacheId]: { ...s.nodes[cacheId], stamp } },
-      selectedNodeId: cacheId,
-    }));
-    return true;
-  }
-
-  setCheckpointStatus(cacheId: string, status: CheckpointRuntimeStatus): void {
-    this.graphRuntime.setCheckpointStatus(cacheId, status);
-  }
-
-  /** Drop the pin: return the cache node to live pass-through. */
-  uncache(cacheId: string): void {
-    if (!this.graphRuntime.unpinCheckpoint(cacheId)) return;
-    this.documentStore.setState((s) => ({
-      ...s,
-      nodes: { ...s.nodes, [cacheId]: { ...s.nodes[cacheId], stamp: undefined } },
-    }));
-  }
-
-  /** global render band + FLIP ghost + resize. Forms default LOCKED to the
-   *  largest view (baseForm "full"; capability/placement still cap): the
-   *  graph shouldn't reshape itself while you navigate. zoomForms opts into
-   *  zoom-semantic bands (chip/card/full with hysteresis); persisted. */
-  readonly ui = new Store<{
-    baseForm: NdForm;
-    zoomForms: boolean;
-    ghost: GhostState | null;
-    flipHide: string | null;
-    resizing: string | null;
-    /** node whose body fills the workspace (third dock adopter); esc exits */
-    fullscreen: string | null;
-    assetAuthoring: { mode: "create" } | { mode: "edit"; nodeId: string } | null;
-  }>({
+  /** This tab's editor state: selection, claim, subnet path, disposition, render band, FLIP ghost. */
+  readonly session = new Store<WorkspaceSession>({
+    selectedNodeId: null,
+    selectedNodeIds: [],
+    selectedEdgeId: null,
+    claimed: null,
+    graphPath: null,
+    disposition: "strip",
     baseForm: "full",
     zoomForms: false,
     ghost: null,
@@ -786,12 +696,16 @@ export class Workspace {
     assetAuthoring: null,
   });
 
+  private patchSession(patch: Partial<WorkspaceSession>): void {
+    this.session.setState((state) => ({ ...state, ...patch }));
+  }
+
   setFullscreen(id: string | null): void {
-    this.ui.setState((u) => ({ ...u, fullscreen: id }));
+    this.patchSession({ fullscreen: id });
   }
 
   openNodeAssetAuthoring(): void {
-    this.ui.setState((state) => ({ ...state, assetAuthoring: { mode: "create" } }));
+    this.patchSession({ assetAuthoring: { mode: "create" } });
   }
 
   openSubnetAssetAuthoring(subnetId: string): void {
@@ -799,12 +713,7 @@ export class Workspace {
       .filter((node) => node.parent === subnetId && node.definitionRef.nodeTypeId !== "proxy")
       .map((node) => node.id);
     if (childIds.length === 0) throw new Error(`subnet "${subnetId}" has no authorable inner nodes`);
-    this.documentStore.setState((state) => ({
-      ...state,
-      selectedNodeId: childIds.length === 1 ? childIds[0] : null,
-      selectedNodeIds: childIds.length > 1 ? childIds : [],
-      selectedEdgeId: null,
-    }));
+    this.setGraphSelection(childIds, []);
     this.openNodeAssetAuthoring();
   }
 
@@ -813,23 +722,23 @@ export class Workspace {
     if (!node || !this.nodeLibrary.assetSnapshot().assets.getExact(node.definitionRef)) {
       throw new Error(`node "${nodeId}" is not a resolved node asset instance`);
     }
-    this.ui.setState((state) => ({ ...state, assetAuthoring: { mode: "edit", nodeId } }));
+    this.patchSession({ assetAuthoring: { mode: "edit", nodeId } });
   }
 
   closeNodeAssetAuthoring(): void {
-    this.ui.setState((state) => ({ ...state, assetAuthoring: null }));
+    this.patchSession({ assetAuthoring: null });
   }
 
   /** called by the canvas on zoom (zoomForms only); clears fresh (unlocked) form overrides on band change */
   setBaseForm(form: NdForm): void {
-    if (this.ui.state.baseForm === form) return;
-    this.ui.setState((u) => ({ ...u, baseForm: form }));
+    if (this.session.state.baseForm === form) return;
+    this.patchSession({ baseForm: form });
     this.clearFreshOverrides();
   }
 
   /** toggle zoom-semantic forms; off re-pins every unlocked node to largest */
   setZoomForms(on: boolean): void {
-    this.ui.setState((u) => ({ ...u, zoomForms: on }));
+    this.patchSession({ zoomForms: on });
     if (!on) this.setBaseForm("full");
   }
 
@@ -861,11 +770,8 @@ export class Workspace {
     const fromEl = this.els.get(cur === "staged" ? `stage:${id}` : `canvas:${id}`);
     const fromRect = fromEl?.getBoundingClientRect() ?? null;
     const label = this.store.state.nodes[id]?.label ?? id;
-    this.documentStore.setState((s) => ({
-      ...s,
-      stage: next === "staged" ? addView(s.stage, id) : removeNodeView(s.stage, id),
-      claimed: null,
-    }));
+    this.patchSession({ claimed: null });
+    this.setStage((stage) => (next === "staged" ? addView(stage, id) : removeNodeView(stage, id)));
     if (!fromRect) return;
     const toKey = next === "staged" ? `stage:${id}` : `canvas:${id}`;
     // measure the destination after the placement commit paints
@@ -873,12 +779,8 @@ export class Workspace {
       requestAnimationFrame(() => {
         const toEl = this.els.get(toKey);
         if (!toEl) return;
-        this.ui.setState((u) => ({
-          ...u,
-          ghost: { from: fromRect, to: toEl.getBoundingClientRect(), label },
-          flipHide: toKey,
-        }));
-        setTimeout(() => this.ui.setState((u) => ({ ...u, ghost: null, flipHide: null })), transMs + 80);
+        this.patchSession({ ghost: { from: fromRect, to: toEl.getBoundingClientRect(), label }, flipHide: toKey });
+        setTimeout(() => this.patchSession({ ghost: null, flipHide: null }), transMs + 80);
       });
     });
   }
@@ -886,7 +788,7 @@ export class Workspace {
   /* ── stage spec (element ids, not node ids) ───────────────────────── */
 
   private setStage(update: (stage: Stage) => Stage): void {
-    this.documentStore.setState((s) => ({ ...s, stage: update(s.stage) }));
+    this.commit((s) => ({ ...s, stage: update(s.stage) }));
   }
 
   splitTile(elementId: string, side: SplitSide): void {
@@ -922,11 +824,11 @@ export class Workspace {
   /* ── pointer claiming (embedded bodies only) ──────────────────────── */
 
   claim(id: string): void {
-    this.documentStore.setState((s) => ({ ...s, claimed: id }));
+    this.patchSession({ claimed: id });
   }
 
   release(): void {
-    this.documentStore.setState((s) => (s.claimed === null ? s : { ...s, claimed: null }));
+    if (this.session.state.claimed !== null) this.patchSession({ claimed: null });
   }
 
   /* ── hierarchy (subnets) ──────────────────────────────────────────── */
@@ -936,25 +838,22 @@ export class Workspace {
   }
 
   enterSubnet(id: string): void {
-    this.documentStore.setState((s) => ({ ...s, graphPath: id, selectedNodeId: id, claimed: null }));
+    this.patchSession({ graphPath: id, selectedNodeId: id, claimed: null });
   }
 
   exitSubnet(): void {
-    this.documentStore.setState((s) => ({
-      ...s,
-      graphPath: s.graphPath ? (s.nodes[s.graphPath]?.parent ?? null) : null,
-      claimed: null,
-    }));
+    const path = this.session.state.graphPath;
+    this.patchSession({ graphPath: path ? this.parentOf(path) : null, claimed: null });
   }
 
   jumpLevel(id: string | null): void {
-    this.documentStore.setState((s) => ({ ...s, graphPath: id, claimed: null }));
+    this.patchSession({ graphPath: id, claimed: null });
   }
 
   /** breadcrumb chain for the current level: atlas › … › current */
   crumbs(): { id: string | null; label: string }[] {
     const chain: { id: string | null; label: string }[] = [];
-    let p = this.store.state.graphPath;
+    let p = this.session.state.graphPath;
     while (p) {
       chain.unshift({ id: p, label: p });
       p = this.parentOf(p);
@@ -967,7 +866,7 @@ export class Workspace {
    *  their nodes; members reparent (positions normalized toward origin) */
   collapseSelection(): string | null {
     const s = this.store.state;
-    const sel = s.selectedNodeIds.filter((id) => {
+    const sel = this.session.state.selectedNodeIds.filter((id) => {
       const n = s.nodes[id];
       return n && n.definitionRef.nodeTypeId !== "obs" && n.definitionRef.nodeTypeId !== "proxy";
     });
@@ -998,7 +897,7 @@ export class Workspace {
     // positions keep their shape, normalized toward origin; proxies bracket
     const dx = 320 - minX;
     const dy = 90 - minY;
-    this.documentStore.setState((st) => {
+    this.commit((st) => {
       const nodes = { ...st.nodes };
       const positions = { ...st.positions };
       for (const id of sel) {
@@ -1008,7 +907,7 @@ export class Workspace {
       }
       positions[`${subId}-in`] = { x: 70, y: 90 + (maxY - minY) / 2 };
       positions[`${subId}-out`] = { x: 320 + (maxX - minX) + 90, y: 90 + (maxY - minY) / 2 };
-      return { ...st, nodes, positions, selectedNodeIds: [], selectedNodeId: subId };
+      return { ...st, nodes, positions };
     });
 
     // rewire through the proxy seam (dedupe by from>to)
@@ -1034,26 +933,22 @@ export class Workspace {
   /* ── disposition (strip ↔ full) ───────────────────────────────────── */
 
   setDisposition(d: WorkspaceCanvasDisposition): void {
-    this.documentStore.setState((s) => ({ ...s, disposition: d, claimed: null }));
+    this.patchSession({ disposition: d, claimed: null });
   }
 
   setStripH(h: number): void {
-    this.documentStore.setState((s) => ({ ...s, stripH: h }));
+    this.commit((s) => ({ ...s, stripH: h }));
   }
 
   /** camera-fit hook: registered by the canvas (fitView with duration) */
   requestFit: ((durationMs?: number) => void) | null = null;
 
-  /** SDK host config writes enter the document and invalidate graph evaluation here. */
+  /** SDK host config writes enter the document; the contract validates before commit. */
   updateNodeConfig(id: string, patch: Record<string, unknown>): void {
     const current = this.store.state.nodes[id];
     if (!current) return;
     const next = this.graphRuntime.patchNodeConfig(current, patch);
-    this.graphRuntime.recookNode(next);
-    this.documentStore.setState((state) => ({
-      ...state,
-      nodes: { ...state.nodes, [id]: next },
-    }));
+    this.commit((state) => ({ ...state, nodes: { ...state.nodes, [id]: next } }));
   }
 
   dispose(): void {

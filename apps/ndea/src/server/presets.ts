@@ -3,7 +3,8 @@
  * built-in preset by name, or from any `.json` workspace document path.
  */
 
-import { parseWorkspaceDocument, type WorkspaceDocument } from "../frontend/core/workspace/document.ts";
+import { parseWorkspaceDocument } from "../frontend/core/workspace/document.ts";
+import type { WorkspaceDocument } from "../frontend/core/workspace/types.ts";
 import annotate from "../presets/annotate.json";
 import { WorkspaceFileError } from "./workspace.ts";
 

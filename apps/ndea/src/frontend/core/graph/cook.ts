@@ -14,7 +14,6 @@ import {
   type GraphCookFunction,
   type GraphPortValue,
   type GraphPredicatePortValue,
-  type GraphRowSetPortValue,
   type Predicate,
 } from "@ndea/graph";
 import type { GraphDocumentNode } from "./records";
@@ -35,25 +34,8 @@ export function predicateSqls(inputs: GraphPortValueInputs): Predicate[] {
   return predicates;
 }
 
-export function lastPortValueOfKind<K extends GraphPortValue["kind"]>(
-  inputs: GraphPortValueInputs,
-  kind: K,
-): Extract<GraphPortValue, { kind: K }> | undefined {
-  let latest: Extract<GraphPortValue, { kind: K }> | undefined;
-  for (const values of inputs.values()) {
-    for (const value of values) {
-      if (value.kind === kind) latest = value as Extract<GraphPortValue, { kind: K }>;
-    }
-  }
-  return latest;
-}
-
 export function passthroughGraphPredicate(inputs: GraphPortValueInputs): GraphPredicatePortValue {
   return { kind: "pred", sql: andPreds(predicateSqls(inputs)) };
-}
-
-export function consumeGraphRowSet(inputs: GraphPortValueInputs): GraphPortValue {
-  return lastPortValueOfKind(inputs, "sel") ?? passthroughGraphPredicate(inputs);
 }
 
 export function andGraphPredicate(inputs: GraphPortValueInputs, extra: PredicatePortValue): GraphPredicatePortValue {
@@ -73,7 +55,7 @@ export function patchNodeConfig(node: GraphDocumentNode | undefined, patch: Reco
 export interface GraphNodeCookHost {
   readonly id: string;
   node(): GraphDocumentNode | undefined;
-  frozenPredicate(): PredicatePortValue | undefined;
+  scopeFilter(): PredicatePortValue;
 }
 
 export type GraphNodeCookFunction = (
@@ -83,12 +65,7 @@ export type GraphNodeCookFunction = (
 ) => GraphPortValue;
 
 export function toNodePortValue(value: GraphPortValue): NodePortValue {
-  switch (value.kind) {
-    case "pred":
-      return value.sql;
-    case "sel":
-      return value.rowIds;
-  }
+  return value.sql;
 }
 
 export function toNodeComputeInputs(inputs: GraphPortValueInputs): NodeComputeInputs {
@@ -102,16 +79,8 @@ export function toNodeComputeInputs(inputs: GraphPortValueInputs): NodeComputeIn
   return computeInputs;
 }
 
-export function fromNodePortValue(kind: "pred", value: NodePortValue): GraphPredicatePortValue;
-export function fromNodePortValue(kind: "sel", value: NodePortValue): GraphRowSetPortValue;
-export function fromNodePortValue(kind: PortKind, value: NodePortValue): GraphPortValue;
 export function fromNodePortValue(kind: PortKind, value: NodePortValue): GraphPortValue {
-  switch (kind) {
-    case "pred":
-      return { kind, sql: value as PredicatePortValue };
-    case "sel":
-      return { kind, sql: null, rowIds: value as GraphRowSetPortValue["rowIds"] };
-  }
+  return { kind, sql: value };
 }
 
 /**

@@ -9,7 +9,6 @@ import type { ChartServices, UseChartQuery } from "../core/contracts";
 import { FieldPicker } from "../core/field-picker";
 import { buildHistogramStatsQuery } from "../core/filter-queries";
 import { filterExprToExpr, toRows } from "../core/mosaic-helpers";
-import { publishChartFilter } from "../core/routing";
 import { useChartLeaf } from "../core/use-chart-leaf";
 import { useContainerSize } from "../core/use-container-size";
 import { binParams as computeBinParams, histogramBrushPredicate, type Stats } from "./binmath";
@@ -29,7 +28,13 @@ export function createHistogramView({ useColumnTypes, useQuery }: ChartServices)
   return function HistogramView({ host }: NodeBodyProps<HistogramConfig, HistogramCapabilities>) {
     const { coordinator, table, filter, field, setField } = useChartLeaf(host);
     const bins = host.config.bins ?? 20;
-    const onFilter = useCallback((clause: FilterClause | null) => publishChartFilter(host, clause), [host]);
+    const onFilter = useCallback(
+      (clause: FilterClause | null) => {
+        if (clause === null) host.filter.clear("chart");
+        else host.filter.publish("chart", clause);
+      },
+      [host],
+    );
 
     return (
       <div className="flex h-full w-full flex-col gap-1.5 overflow-y-auto bg-node-surface p-2">

@@ -5,11 +5,8 @@
  * GET /api/scatter-categories        : v1, Uint8 category indices
  * GET /api/scatter-continuous-values : v2, Float32 raw values + vmin/vmax header
  *                                        (frontend applies colormap via ochre LUT on GPU)
- * POST /api/scatter-selection        : Upload selection to temp table
- * DELETE /api/scatter-selection      : Clear selection temp table
  */
 
-import { parseJsonBody, ScatterSelectionBodySchema } from "../protocol.ts";
 import { ObsmSliceLoader } from "../slice-loader.ts";
 import type { ServerSession } from "../state.ts";
 import type { DatasetQuerySession } from "../store.ts";
@@ -260,58 +257,5 @@ export async function handleScatterContinuousValues(url: URL, store: DatasetQuer
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return Response.json({ error: message }, { status: 400 });
-  }
-}
-
-// ─── Scatter selection ──────────────────────────────────────────────────────
-
-/**
- * Handle POST /api/scatter-selection
- *
- * Writes selected row indices into a DuckDB temp table for efficient
- * hash-join filtering in Mosaic table queries.
- */
-export async function handleScatterSelectionPost(req: Request, store: DatasetQuerySession): Promise<Response> {
-  const parsed = await parseJsonBody(req, ScatterSelectionBodySchema);
-  if (!parsed.ok) return parsed.response;
-  // SECURITY: Zod guarantees every element is a finite non-negative integer
-  // (see ScatterSelectionBodySchema). Interpolating `${i}` into SQL is safe.
-  const rowIndices = parsed.data.row_indices;
-
-  try {
-    await store.execute("DROP TABLE IF EXISTS __scatter_selection");
-    if (rowIndices.length > 0) {
-      // Build in batches to avoid overly long SQL
-      const batchSize = 1000;
-      await store.execute("CREATE TEMP TABLE __scatter_selection (row_index UINTEGER)");
-      for (let start = 0; start < rowIndices.length; start += batchSize) {
-        const end = Math.min(start + batchSize, rowIndices.length);
-        const values = rowIndices
-          .slice(start, end)
-          .map((i) => `(${i})`)
-          .join(", ");
-        await store.execute(`INSERT INTO __scatter_selection VALUES ${values}`);
-      }
-    }
-
-    return Response.json({ ok: true, count: rowIndices.length });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return Response.json({ error: message }, { status: 500 });
-  }
-}
-
-/**
- * Handle DELETE /api/scatter-selection
- *
- * Drops the __scatter_selection temp table.
- */
-export async function handleScatterSelectionDelete(store: DatasetQuerySession): Promise<Response> {
-  try {
-    await store.execute("DROP TABLE IF EXISTS __scatter_selection");
-    return Response.json({ ok: true });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return Response.json({ error: message }, { status: 500 });
   }
 }

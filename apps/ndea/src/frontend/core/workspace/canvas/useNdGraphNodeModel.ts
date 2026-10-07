@@ -1,11 +1,10 @@
-import { useSelector } from "@tanstack/react-store";
 import { useEffect } from "react";
 import { useUpdateNodeInternals } from "@xyflow/react";
 
 import type { GraphDocumentNode } from "@/core/graph/records";
 import { useNodeFeedbackContext } from "../feedback";
 import { useNodeCount } from "../use-node-count";
-import { useTelemetrySelector, useWorkspace, useWorkspaceSelector } from "../workspace-context";
+import { useTelemetrySelector, useWorkspace, useWorkspaceSelector, useWorkspaceSession } from "../workspace-context";
 import type { Workspace } from "../workspace-store";
 import { resolveNodeForm, resolveNodeSize } from "./port-positions";
 import {
@@ -16,7 +15,7 @@ import {
   shouldShowNodeCount,
 } from "./nd-graph-node-model";
 
-function useNdGraphNodeLayoutState(ws: Workspace, id: string) {
+function useNdGraphNodeLayoutState(id: string) {
   const node = useWorkspaceSelector((state) => state.nodes[id]);
   const locked = useWorkspaceSelector((state) => state.formLocked[id] ?? false);
 
@@ -24,20 +23,20 @@ function useNdGraphNodeLayoutState(ws: Workspace, id: string) {
   useWorkspaceSelector((state) => state.formOverride[id]);
   useWorkspaceSelector((state) => state.sizeOverrides[id]);
   useWorkspaceSelector((state) => state.stage);
-  useWorkspaceSelector((state) => state.disposition);
-  useSelector(ws.ui, (ui) => ui.baseForm);
+  useWorkspaceSession((state) => state.disposition);
+  useWorkspaceSession((session) => session.baseForm);
 
-  const flipHidden = useSelector(ws.ui, (ui) => ui.flipHide === `canvas:${id}`);
-  const resizing = useSelector(ws.ui, (ui) => ui.resizing === id);
-  const fullscreen = useSelector(ws.ui, (ui) => ui.fullscreen === id);
+  const flipHidden = useWorkspaceSession((session) => session.flipHide === `canvas:${id}`);
+  const resizing = useWorkspaceSession((session) => session.resizing === id);
+  const fullscreen = useWorkspaceSession((session) => session.fullscreen === id);
 
   return { node, locked, flipHidden, resizing, fullscreen };
 }
 
 function useNdGraphNodeGraphState(id: string) {
-  const inMarquee = useWorkspaceSelector((state) => state.selectedNodeIds.includes(id));
+  const inMarquee = useWorkspaceSession((state) => state.selectedNodeIds.includes(id));
   const flagsState = useWorkspaceSelector((state) => state.flags[id]);
-  const claimed = useWorkspaceSelector((state) => state.claimed === id);
+  const claimed = useWorkspaceSession((state) => state.claimed === id);
   const fanIn = useWorkspaceSelector(
     (state) => Object.values(state.edges).filter((edge) => edge.to === id && edge.kind === "pred").length,
   );
@@ -77,7 +76,7 @@ function resolveNodeFlags(flagsState: { bypass?: boolean; off?: boolean } | unde
 
 export function useNdGraphNodeModel(id: string) {
   const ws = useWorkspace();
-  const layout = useNdGraphNodeLayoutState(ws, id);
+  const layout = useNdGraphNodeLayoutState(id);
   const graph = useNdGraphNodeGraphState(id);
   const telemetry = useNdGraphNodeTelemetryState(id);
   const updateInternals = useUpdateNodeInternals();

@@ -12,7 +12,7 @@
  */
 
 import { useCallback, useSyncExternalStore } from "react";
-import { focusObs } from "./routing";
+import type { RowIndex } from "@ndea/sdk";
 import { GalleryPane } from "./GalleryPane";
 import { predicateToSql } from "../query/mosaic";
 import type { NodeBodyProps } from "../contracts";
@@ -42,7 +42,7 @@ export function GalleryPluginView({
   // host.focus.set so a shared sync group ("A") fans it out to Scatter +
   // Idetik; the read reflects the group's effective focus so the card lights up.
   const focusedRowIndex = useNodeFocus(host);
-  const onSelect = useCallback((rowIndex: Parameters<typeof focusObs>[1]) => focusObs(host, rowIndex), [host]);
+  const onSelect = useCallback((rowIndex: RowIndex | null) => host.focus.set(rowIndex), [host]);
 
   if (predicate == null) {
     return (

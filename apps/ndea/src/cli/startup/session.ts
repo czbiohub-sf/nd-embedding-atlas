@@ -4,12 +4,13 @@ import { resolve } from "node:path";
 import { buildPlateMounts, readPlateMeta } from "../../server/plate.ts";
 import type { PlateChannel, PlateMetaInfo, PlateMount } from "../../server/plate.ts";
 import type { DatasetSessionMetadata, ServerSession } from "../../server/state.ts";
+import { createServerSession } from "../../server/state.ts";
 import type { LaunchConfig } from "../config.ts";
 import type { PreparedDatasets } from "./datasets.ts";
 import type { PreparedQuerySession } from "./ingest.ts";
 import type { WorkspaceDocumentStore } from "../../server/workspace.ts";
-import { ObservationSets, observationSetIssues } from "../../server/observation-sets.ts";
-import type { WorkspaceDocument } from "../../frontend/core/workspace/document.ts";
+import { observationSetIssues } from "../../server/observation-sets.ts";
+import type { WorkspaceDocument } from "../../frontend/core/workspace/types.ts";
 import { printAnnotationsRestored, printAnnotationsWarning } from "./output.ts";
 
 type PlateMetadataByMount = Map<string, PlateMetaInfo | null>;
@@ -60,23 +61,18 @@ export async function prepareServerSession(
 ): Promise<PreparedServerSession> {
   const plateMounts = buildPlateMounts(datasets.datasetConfigs, datasets.isMultiDataset);
   const platesByMount = await readPlateMetadata(plateMounts);
-  const state: ServerSession = {
+  const state = createServerSession({
     store: query.store,
     datasets: datasets.datasetConfigs,
     spatial: datasets.spatial,
     obsColumns: config.obsColumns ?? datasets.detectedObsColumns,
     port: config.port,
     availableObsmKeys: datasets.availableObsmKeys,
-    loadingTasks: new Map(),
-    loadErrors: new Map(),
     accessors: new Map(datasets.loaded.map(({ entry, adata }) => [entry.name, adata])),
     plateMounts,
-    obsmLoaders: new Map(),
-    cropPool: null,
     annotationsSidecarPath: query.cacheEnabled ? null : resolveAnnotationsSidecarPath(config.datasets[0].path),
     workspace,
-    observationSets: new ObservationSets(query.store),
-  };
+  });
   await restoreAnnotations(state);
   const document = workspace.snapshot().document as WorkspaceDocument | null;
   if (document) {

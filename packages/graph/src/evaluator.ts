@@ -10,15 +10,7 @@ import type { GraphPortValue } from "./values";
 
 /** Structural equality of tagged values: what early cutoff compares. */
 export function sameGraphPortValue(a: GraphPortValue, b: GraphPortValue): boolean {
-  if (a.kind !== b.kind) return false;
-  if (a.sql !== b.sql) return false;
-  if (a.kind === "pred") return true;
-  const left = a.rowIds;
-  const right = (b as typeof a).rowIds;
-  if (left === right) return true;
-  if (!left || !right || left.length !== right.length) return false;
-  for (let index = 0; index < left.length; index += 1) if (left[index] !== right[index]) return false;
-  return true;
+  return a.kind === b.kind && a.sql === b.sql;
 }
 
 export interface GraphEvaluationState {
@@ -57,8 +49,6 @@ export class GraphEvaluator {
       }
       this.telemetryStore.setState((state) => {
         switch (event.type) {
-          case "emit":
-            return { ...state, epoch: event.epoch };
           case "dirty":
             return { ...state, epoch: event.epoch, dirty: { ...state.dirty, [event.node]: true } };
           case "cook-start":
@@ -110,14 +100,6 @@ export class GraphEvaluator {
 
   markDirty(id: string): void {
     this.engine.markDirty(id);
-  }
-
-  emit(id: string, port: string, value: GraphPortValue): void {
-    this.engine.emit(id, port, value);
-  }
-
-  getEmission(id: string, port: string): GraphPortValue | undefined {
-    return this.engine.getEmission(id, port);
   }
 
   pull(id: string): GraphPortValue {

@@ -28,6 +28,7 @@ import {
 import { exportDir, sanitiseFilename } from "../export-util.ts";
 import { quoteIdent } from "../store.ts";
 import type { ServerSession } from "../state.ts";
+import { annotateObservations, countObservations, exportObservations } from "../observations.ts";
 import { commitObsColumns, type ObsColumnInput } from "@ndea/zarr";
 
 // ─── Debounced auto-save ─────────────────────────────────────────────────────
@@ -138,11 +139,9 @@ export async function handleDeleteAnnotationColumn(colName: string, state: Serve
 /**
  * POST /api/annotations/values
  *
- * Three write paths (see WriteAnnotationValuesBodySchema):
- *   rows                : explicit { rowIndex, datasetKey, obsName, value }[]
- *   fromScatterSelection: stamp `label` onto the staged __scatter_selection
- *   predicate           : stamp `label` onto every obs matching a SQL WHERE
- *                          (the node-graph batch door); returns the matched count
+ * Two write paths (see WriteAnnotationValuesBodySchema):
+ *   rows      : explicit { rowIndex, datasetKey, obsName, value }[]
+ *   predicate : stamp `label` onto every matching obs; returns the matched count
  */
 export async function handleWriteAnnotationValues(req: Request, state: ServerSession): Promise<Response> {
   const parsed = await parseJsonBody(req, WriteAnnotationValuesBodySchema);
@@ -155,14 +154,12 @@ export async function handleWriteAnnotationValues(req: Request, state: ServerSes
 
   try {
     let applied: number | null = null;
-    if (body.fromScatterSelection) {
-      await state.store.writeAnnotationFromScatterSelection(body.column, body.label ?? null);
-    } else if (body.predicate != null) {
-      applied = await state.store.writeAnnotationFromPredicate(body.column, body.label ?? null, body.predicate);
+    if (body.predicate != null) {
+      applied = await annotateObservations(state.store, body.column, body.label ?? null, body.predicate);
     } else if (body.rows != null && body.rows.length > 0) {
       await state.store.writeAnnotationValues(body.column, body.rows);
     } else {
-      return Response.json({ error: "Provide one of 'rows', 'predicate', or 'fromScatterSelection'" }, { status: 400 });
+      return Response.json({ error: "Provide one of 'rows' or 'predicate'" }, { status: 400 });
     }
 
     scheduleSave(state);
@@ -207,24 +204,15 @@ export async function handleExportAnnotations(req: Request, state: ServerSession
     if (!state.store.hasAnnotationColumn(c)) return Response.json({ error: `Unknown column: ${c}` }, { status: 404 });
   }
 
-  // Row scope → WHERE. `filter` interpolates the client's Mosaic predicate (same
-  // trust model as /api/export: single-user local tool).
-  let where = "";
-  if (scope.kind === "filter") where = `WHERE ${scope.predicate}`;
-
-  const idCols = (await state.store.hasDatasetColumn()) ? "obs_name, _dataset" : "obs_name";
-  const valCols = columns.map((c) => `CAST(${quoteIdent(c)} AS TEXT) AS ${quoteIdent(c)}`).join(", ");
+  const predicate = scope.kind === "filter" ? scope.predicate : null;
   const dir = exportDir();
   const file = join(dir, sanitiseFilename(filename ?? "annotations", format));
-  const escaped = file.replace(/'/g, "''");
 
   try {
     await mkdir(dir, { recursive: true });
-    await state.store.execute(
-      `COPY (SELECT ${idCols}, ${valCols} FROM dataset ${where}) TO '${escaped}' (FORMAT ${format})`,
-    );
-    const cnt = await state.store.queryJson(`SELECT COUNT(*) AS n FROM dataset ${where}`);
-    return Response.json({ output_path: file, n_obs: Number(cnt[0].n), format });
+    const count = await countObservations(state.store, predicate);
+    await exportObservations(state.store, predicate, file, format, columns);
+    return Response.json({ output_path: file, n_obs: count, format });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return Response.json({ error: message }, { status: 500 });

@@ -27,30 +27,12 @@ import {
   type WorkspaceAppNodeLibrary,
 } from "@/core/node-asset/resolver";
 import { parseWorkspaceNodeAssetRecords } from "@/core/node-asset/schema";
-import {
-  applyWorkspaceOps,
-  decodeNodeConfigs,
-  parseWorkspaceDocument,
-  toWorkspaceDocument,
-  withWorkspaceSession,
-  workspaceSessionOf,
-  type WorkspaceDocument,
-  type WorkspaceSession,
-} from "./document";
-import type { WorkspaceDocumentState } from "./types";
+import { applyWorkspaceOps, decodeNodeConfigs, parseWorkspaceDocument } from "./document";
+import type { WorkspaceDocument } from "./types";
 import type { Workspace } from "./workspace-store";
 
 /** Collapses a drag or typing burst into one revision. */
 const SYNC_DEBOUNCE_MS = 500;
-
-export const EMPTY_WORKSPACE_SESSION: WorkspaceSession = {
-  selectedNodeId: null,
-  selectedNodeIds: [],
-  selectedEdgeId: null,
-  claimed: null,
-  graphPath: null,
-  disposition: "strip",
-};
 
 export interface WorkspaceTransport {
   patch(baseRevision: number, ops: JsonPatchOp[], clientId: string): Promise<PatchOutcome>;
@@ -70,8 +52,7 @@ export type PatchOutcome =
 export function decodeWorkspaceDocument(
   value: unknown,
   nodeLibrary: AppNodeLibrary,
-  session: WorkspaceSession = EMPTY_WORKSPACE_SESSION,
-): { ok: true; state: WorkspaceDocumentState } | { ok: false; errors: string[] } {
+): { ok: true; state: WorkspaceDocument } | { ok: false; errors: string[] } {
   const parsed = parseWorkspaceDocument(value);
   if (!parsed.ok) return { ok: false, errors: parsed.issues.map((issue) => `${issue.pointer}: ${issue.detail}`) };
   try {
@@ -83,10 +64,7 @@ export function decodeWorkspaceDocument(
       library = createWorkspaceAppNodeLibrary(base, resolution.snapshot);
       records = resolution.records;
     }
-    const state = withWorkspaceSession(
-      { ...parsed.value, nodeAssets: records, nodes: decodeNodeConfigs(parsed.value.nodes, library) },
-      session,
-    );
+    const state = { ...parsed.value, nodeAssets: records, nodes: decodeNodeConfigs(parsed.value.nodes, library) };
     validateGraphRuntimeTopology(state, library);
     return { ok: true, state };
   } catch (error) {
@@ -153,7 +131,7 @@ export class WorkspaceSync {
   }
 
   private local(): WorkspaceDocument {
-    return toWorkspaceDocument(this.workspace.store.state);
+    return this.workspace.store.state;
   }
 
   private pendingOps(): JsonPatchOp[] {
@@ -201,13 +179,12 @@ export class WorkspaceSync {
    * dropped in favour of the server document.
    */
   private rebaseOnto(revision: number, document: unknown, pending: JsonPatchOp[]): void {
-    const session = workspaceSessionOf(this.workspace.store.state);
-    const server = decodeWorkspaceDocument(document, this.workspace.nodeLibrary, session);
+    const server = decodeWorkspaceDocument(document, this.workspace.nodeLibrary);
     if (!server.ok) return this.fail(server.errors);
-    this.acked = { revision, document: toWorkspaceDocument(server.state) };
+    this.acked = { revision, document: server.state };
 
     const replayed = pending.length > 0 ? applyWorkspaceOps(this.acked.document, pending) : null;
-    const rebased = replayed?.ok ? decodeWorkspaceDocument(replayed.value, this.workspace.nodeLibrary, session) : null;
+    const rebased = replayed?.ok ? decodeWorkspaceDocument(replayed.value, this.workspace.nodeLibrary) : null;
     if (replayed && !rebased?.ok) {
       console.warn("[workspace] local edits conflicted with a newer revision and were discarded");
     }

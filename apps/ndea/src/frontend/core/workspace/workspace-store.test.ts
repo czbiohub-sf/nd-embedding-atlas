@@ -11,7 +11,6 @@ import {
 import { predicateSql } from "@/core/graph/cook";
 import { createAppNodeLibrary, createNativeAppNodeLibrary, type AppNodeLibrary } from "@/core/node/library";
 import { createNodeCatalog } from "@/core/plugin/catalog";
-import { toWorkspaceDocument, workspaceSessionOf } from "./document";
 import { decodeWorkspaceDocument } from "./sync";
 import { Workspace } from "./workspace-store";
 
@@ -34,6 +33,29 @@ beforeEach(() => {
 });
 
 describe("Workspace graph transactions", () => {
+  test("a view's output ANDs every other filter source in its scope, never its own, and follows edits", () => {
+    const workspace = createWorkspace();
+    const table = workspace.addNode("table", { x: 0, y: 0 });
+    const scatter = workspace.addNode("scatter", { x: 100, y: 0 });
+    const co = workspace.coordination;
+    co.assignScope(table, "filter", "A");
+    co.assignScope(scatter, "filter", "A");
+    co.setCoordinationValue("filter", "A", {
+      [scatter]: { range: { op: "between", column: "area", range: [1, 5] } },
+      agent: { where: { op: "eq", column: "infected", value: true } },
+    });
+
+    const tableSql = predicateSql(workspace.pullGraphNode(table)) ?? "";
+    expect(tableSql).toContain(`"area" BETWEEN 1 AND 5`);
+    expect(tableSql).toContain(`"infected" = TRUE`);
+    expect(predicateSql(workspace.pullGraphNode(scatter))).toContain(`"infected" = TRUE`);
+    expect(predicateSql(workspace.pullGraphNode(scatter))).not.toContain("area");
+
+    co.setCoordinationValue("filter", "A", { agent: { where: { op: "eq", column: "infected", value: true } } });
+    expect(predicateSql(workspace.pullGraphNode(table))).not.toContain("area");
+    workspace.dispose();
+  });
+
   test("a node is staged exactly when the Stage shows it, in every disposition", () => {
     const workspace = createWorkspace();
     const scatter = workspace.addNode("scatter", { x: 0, y: 0 });
@@ -129,8 +151,7 @@ describe("Workspace graph transactions", () => {
     );
     expect(workspace.store.state).toEqual(before);
     expect(storeChanges).toBe(0);
-    const state = workspace.store.state;
-    expect(decodeWorkspaceDocument(toWorkspaceDocument(state), nodeLibrary, workspaceSessionOf(state))).toEqual({
+    expect(decodeWorkspaceDocument(workspace.store.state, nodeLibrary)).toEqual({
       ok: true,
       state: workspace.store.state,
     });
@@ -164,19 +185,6 @@ describe("Workspace graph transactions", () => {
     expect(subscriberPredicate).toBe("_dataset = 'donor-a'");
     subscription.unsubscribe();
     unregister();
-    workspace.dispose();
-  });
-
-  test("removing a checkpoint clears its runtime projection before ID reuse", () => {
-    const workspace = createWorkspace();
-    const cache = workspace.addNode("cache", { x: 0, y: 0 }, "reused-cache");
-    expect(workspace.pinCache(cache, [rowIndex(11), rowIndex(12)])).toBe(true);
-    expect(workspace.isCached(cache)).toBe(true);
-
-    workspace.removeNode(cache);
-    workspace.addNode("cache", { x: 0, y: 0 }, cache);
-
-    expect(workspace.isCached(cache)).toBe(false);
     workspace.dispose();
   });
 
@@ -229,16 +237,16 @@ describe("Workspace graph transactions", () => {
 
     workspace.setGraphSelection([source, sink], [edgeId]);
     workspace.deleteEdge(edgeId);
-    expect(workspace.store.state.selectedNodeIds).toEqual([source, sink]);
-    expect(workspace.store.state.selectedEdgeId).toBeNull();
+    expect(workspace.session.state.selectedNodeIds).toEqual([source, sink]);
+    expect(workspace.session.state.selectedEdgeId).toBeNull();
 
     expect(workspace.connect(source, sink)).toBe(true);
     const replacementEdgeId = Object.keys(workspace.store.state.edges)[0];
     workspace.setGraphSelection([source, sink], [replacementEdgeId]);
     workspace.removeNode(sink);
-    expect(workspace.store.state.selectedNodeId).toBeNull();
-    expect(workspace.store.state.selectedNodeIds).toEqual([source]);
-    expect(workspace.store.state.selectedEdgeId).toBeNull();
+    expect(workspace.session.state.selectedNodeId).toBeNull();
+    expect(workspace.session.state.selectedNodeIds).toEqual([source]);
+    expect(workspace.session.state.selectedEdgeId).toBeNull();
     workspace.dispose();
   });
 
@@ -253,21 +261,21 @@ describe("Workspace graph transactions", () => {
     workspace.claim(second);
 
     workspace.selectNode(first);
-    expect(workspace.store.state.selectedNodeId).toBe(first);
-    expect(workspace.store.state.selectedNodeIds).toEqual([]);
+    expect(workspace.session.state.selectedNodeId).toBe(first);
+    expect(workspace.session.state.selectedNodeIds).toEqual([]);
 
     workspace.setGraphSelection([first, second], []);
-    expect(workspace.store.state.selectedNodeId).toBeNull();
-    expect(workspace.store.state.selectedNodeIds).toEqual([first, second]);
+    expect(workspace.session.state.selectedNodeId).toBeNull();
+    expect(workspace.session.state.selectedNodeIds).toEqual([first, second]);
 
     workspace.selectEdge(edgeId);
     workspace.selectEdge(null); // first Escape step: edge only
-    expect(workspace.store.state.selectedNodeIds).toEqual([first, second]);
+    expect(workspace.session.state.selectedNodeIds).toEqual([first, second]);
     workspace.setGraphSelection([], []); // next Escape step: node selection only
-    expect(workspace.store.state.selectedNodeId).toBeNull();
-    expect(workspace.store.state.selectedNodeIds).toEqual([]);
-    expect(workspace.store.state.selectedEdgeId).toBeNull();
-    expect(workspace.store.state.claimed).toBe(second);
+    expect(workspace.session.state.selectedNodeId).toBeNull();
+    expect(workspace.session.state.selectedNodeIds).toEqual([]);
+    expect(workspace.session.state.selectedEdgeId).toBeNull();
+    expect(workspace.session.state.claimed).toBe(second);
     expect(workspace.coordination.readCoordination("focus", "A")).toBe(rowIndex(7));
     workspace.dispose();
   });
@@ -290,13 +298,13 @@ describe("Workspace graph transactions", () => {
 
     expect(predicateSql(workspace.pullGraphNode(count))).toBe("_dataset = 'plate-a'");
     expect(workspace.coordination.readCoordination("focus", "A")).toBe(rowIndex(7));
-    expect(workspace.store.state.selectedNodeIds).toEqual([scatter, table]);
+    expect(workspace.session.state.selectedNodeIds).toEqual([scatter, table]);
     expect(workspace.placementOf(imageViewer)).toBe("staged");
     expect(workspace.store.state.stage?.elements[workspace.store.state.stage.root]).toMatchObject({
       type: "View",
       props: { node: imageViewer },
     });
-    expect(workspace.store.state.disposition).toBe("hidden");
+    expect(workspace.session.state.disposition).toBe("hidden");
     workspace.dispose();
   });
 
@@ -394,7 +402,6 @@ describe("Workspace graph transactions", () => {
           kind: "pred" as const,
         },
       },
-      selectedNodeId: unknownId,
     };
     const destination = createWorkspace();
 
@@ -402,7 +409,6 @@ describe("Workspace graph transactions", () => {
 
     expect(destination.store.state.nodes[unknownId]).toEqual(state.nodes[unknownId]);
     expect(destination.store.state.edges[unknownEdgeId]).toEqual(state.edges[unknownEdgeId]);
-    expect(destination.store.state.selectedNodeId).toBe(unknownId);
     expect(destination.nodeResolution(unknownId)?.status).toBe("unresolved");
     expect(destination.unresolvedNodes().map(({ id }) => id)).toEqual([unknownId]);
 

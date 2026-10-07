@@ -12,7 +12,6 @@ export type {
 } from "./core/contracts";
 export type { ChartLeafConfig } from "./core/types";
 export type { ChartLeaf } from "./core/use-chart-leaf";
-export { publishChartFilter } from "./core/routing";
 export { createHistogramDefinition } from "./histogram/definition";
 export { binParams, histogramBrushPredicate } from "./histogram/binmath";
 export type { BinParams, Stats } from "./histogram/binmath";

@@ -12,7 +12,7 @@ import { useEffect, useRef } from "react";
 
 import { ND_PORT_KINDS, type NdPortKind } from "@/components/node-workspace/nd-port";
 import { ND_Z } from "../constants";
-import { useWorkspace, useWorkspaceSelector } from "../workspace-context";
+import { useWorkspace, useWorkspaceSelector, useWorkspaceSession } from "../workspace-context";
 import { portPos } from "./port-positions";
 
 const LERP = 0.55; // per-frame catch-up: snappy but smooth
@@ -21,8 +21,8 @@ export function K1Cursor({ paneRef }: { paneRef: React.RefObject<HTMLDivElement 
   const ws = useWorkspace();
   const rf = useReactFlow();
   const conn = useConnection();
-  const claimed = useWorkspaceSelector((s) => s.claimed);
-  const graphPath = useWorkspaceSelector((s) => s.graphPath);
+  const claimed = useWorkspaceSession((s) => s.claimed);
+  const graphPath = useWorkspaceSession((s) => s.graphPath);
   useWorkspaceSelector((s) => s.nodes);
   useWorkspaceSelector((s) => s.positions);
 
@@ -64,8 +64,8 @@ export function K1Cursor({ paneRef }: { paneRef: React.RefObject<HTMLDivElement 
           ? "transparent"
           : color;
       cursor.style.borderColor = over || dragging ? color : "transparent";
-      cursor.style.borderRadius = spec?.shape === "diamond" ? "4px" : "99px";
-      cursor.style.transform = spec?.shape === "diamond" ? "rotate(45deg)" : "none";
+      cursor.style.borderRadius = "99px";
+      cursor.style.transform = "none";
       cursor.style.boxShadow =
         legal === true
           ? "0 0 0 2.5px oklch(0.69 0.19 170 / 45%), 0 0 12px oklch(0.69 0.19 170 / 50%)"
@@ -99,7 +99,7 @@ export function K1Cursor({ paneRef }: { paneRef: React.RefObject<HTMLDivElement 
       let best = 16 / zoom;
       const s = ws.store.state;
       for (const n of Object.values(s.nodes)) {
-        if ((n.parent ?? null) !== (s.graphPath ?? null)) continue;
+        if ((n.parent ?? null) !== (ws.session.state.graphPath ?? null)) continue;
         const def = ws.def(n.id);
         if (!def) continue;
         for (const which of ["in", "out"] as const) {

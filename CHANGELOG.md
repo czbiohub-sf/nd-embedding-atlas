@@ -36,6 +36,13 @@
 - Convert the product to a Bun/Vite+ monorepo with app, protocol, SDK, and Zarr workspaces
 - Extract Ochre, UI, built-in nodes, and graph evaluation into package-owned workspaces
 - Harden plugin capabilities, NodeHost services, topology validation, and graph semantics
+- Centralize capability categories, documentation, plugin permissions, host grants, and service requirements in `apps/ndea/src/frontend/core/node/capabilities.ts`; new capabilities require that registry and the SDK union in `packages/sdk/src/node.ts`.
+- Inline built-in view host calls, remove forwarding-only routing exports and tests, and drop Gallery's unused selection input.
+- [**breaking**] Store a pinned Cache as an observation set in its node config, so pins survive reload and agents read the same rows; delete the runtime checkpoint machinery.
+- [**breaking**] Delete the `sel` port kind and graph emissions; `pred` is the only port kind.
+- Make the browser graph runtime a projection of the workspace document: every write commits through one reconcile, and views and live Caches cook their own filter scope, identically on the server.
+- Move editor session state (selection, claim, subnet path, disposition, render band) into `Workspace.session`; the document store holds exactly the persisted document.
+- Run every document-derived observation query through prepared statements in `server/observations.ts` and delete `/api/scatter-selection`.
 - Adopt TypeScript 7 and update app, package, build, and documentation dependencies
 - Align shared controls and node toolbar states with scheme-aware theme tokens
 - Remove accidental root dependencies and tune Fallow for package-owned ambient checks

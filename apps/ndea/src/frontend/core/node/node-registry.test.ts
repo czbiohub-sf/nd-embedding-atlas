@@ -118,13 +118,6 @@ describe("native node catalog fitness functions", () => {
     }
   });
 
-  test("native bodies declare every required app-local host facet", () => {
-    expect(nativeNodeLibrary.getCurrentSpec("cache")?.requiredHostFacets).toEqual(["checkpoint"]);
-    expect(nativeNodeLibrary.getCurrentSpec("scatter")?.requiredHostFacets).toEqual(["bodyHeaderElement"]);
-    expect(nativeNodeLibrary.getCurrentSpec("subnet")?.requiredHostFacets).toEqual(["hierarchy"]);
-    expect(nativeNodeLibrary.getCurrentSpec("table")?.requiredHostFacets).toEqual(["bodyHeaderElement"]);
-  });
-
   test("definition metadata is authoritative while graph runtime and layout stay app-local", () => {
     for (const spec of nativeNodeLibrary.listSpecs()) {
       expect(nativeNodeCatalog.resolveExact(spec.definition.ref)).toBe(spec.definition);

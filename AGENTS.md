@@ -76,14 +76,17 @@ entrypoints across workspaces.
 - `WorkspaceEvaluator` (`server/graph.ts`) evaluates that document with the
   browser's node definitions and the shared cook table
   (`frontend/core/graph/native-graph.ts`); `GET /api/workspace/nodes/:id`
-  serves one node's output with its filter scope applied. Cooks must stay
-  browser-free, and SQL built from document values runs through
-  `DatasetQuerySession.querySingleJson`.
+  serves one node's output. Every view and live Cache cook ANDs its own filter
+  scope (`host.scopeFilter()`), so both sides compose crossfilters identically.
+  Cooks must stay browser-free. SQL built from document values runs through
+  `server/observations.ts`, which prepares every statement
+  (`DatasetQuerySession.querySingleJson` / `executeSingle`).
 - `ObservationSets` (`server/observation-sets.ts`) stores lassos as
   content-addressed sets keyed by dataset and obs name: `POST /api/sets`
   persists `~/.ndea/sets/<id>.json` and loads rows into the `ndea_obs_sets`
-  temp table that `{ op: "inSet" }` clauses query. `PATCH /api/workspace`
-  rejects references to unknown sets.
+  temp table that `{ op: "inSet" }` clauses query. A pinned Cache stores its
+  rows as one such set in its node config. `PATCH /api/workspace` rejects
+  references to unknown sets anywhere in the document.
 - `EmbeddingStore` owns one DuckDB connection. Base tables, the `dataset` view,
   temporary selections, and Mosaic preaggregations share that connection.
 
@@ -93,7 +96,11 @@ entrypoints across workspaces.
   `@ndea/sdk`.
 - `NodeModule` creates per-instance runtimes and framework-neutral mounted
   bodies.
-- `NodeHost` exposes declared, capability-gated services.
+- `NodeHost` exposes declared, capability-gated services. A new capability is
+  one `NodeCapability` union member in `@ndea/sdk` plus one `nodeCapabilities`
+  entry in `frontend/core/node/capabilities.ts`.
+- Graph ports carry one kind, `pred` (a SQL predicate). Row selections travel
+  as observation sets referenced by `{ op: "inSet" }` clauses.
 - Startup validates plugin manifests, serves allowlisted assets, imports only
   approved client URLs, and freezes the session catalog before restoration.
 - `SDK_VERSION` versions the author contract independently from app, manifest,
@@ -108,11 +115,13 @@ entrypoints across workspaces.
   views.
 - `DatasetSessionProvider` owns metadata, trajectories, query infrastructure,
   and the session-local runtime manager.
-- Workspace owns graph transactions, Canvas, Stage, and Body placement in the
-  browser. `WorkspaceSync` diffs its committed state against the server's
-  acknowledged revision and PATCHes the difference; remote revisions reconcile
-  through `Workspace.applyDocument`. Node code reaches cross-view coordination
-  through `NodeHost`.
+- Workspace owns Canvas, Stage, and Body placement in the browser. Every
+  document write goes through `Workspace.commit`, which reconciles the graph
+  runtime to the next document before publishing it; local edits, coordination
+  writes, and remote revisions (`Workspace.applyDocument`) share that path.
+  `WorkspaceSync` diffs the document store against the server's acknowledged
+  revision and PATCHes the difference. Node code reaches cross-view
+  coordination through `NodeHost`.
 - Coordination is document data, not wires. `state[type][scope]` holds shared
   values and `bindings[nodeId][type] = { $bindState: "/<type>/<scope>" }`
   joins a node to a scope; `frontend/core/coordination/types.ts` registers each
@@ -199,8 +208,8 @@ the document's Stage.
   view schema. Rebuild it through `EmbeddingStore._rebuildView()`.
 - **Workspace authority:** The server document is the only persisted workspace.
   Never write workspace state to `localStorage`. Session state (selection,
-  claim, subnet path, canvas disposition) stays out of the document; add new
-  editor-only fields to `SESSION_FIELDS` in `workspace/document.ts`. The file
+  claim, subnet path, canvas disposition) lives in `Workspace.session`; add new
+  editor-only fields to `WorkspaceSession` in `workspace/types.ts`. The file
   format accepts only its exact version; there are no migrations.
 - **Workers:** `new URL("./worker.ts", import.meta.url)` must work in development
   and compiled binaries. Bun embeds workers automatically.

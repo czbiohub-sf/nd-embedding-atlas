@@ -8,7 +8,7 @@ import {
 } from "@ndea/sdk";
 import { z } from "zod";
 
-import type { GraphPortValueInputs } from "@/core/graph/cook";
+import { NULL_PREDICATE_PORT_VALUE, type GraphPortValueInputs } from "@/core/graph/cook";
 import type { GraphDocumentEdge, GraphDocumentNode } from "@/core/graph/records";
 import type { GraphRuntimeNodeResolver, GraphRuntimeNodeSpec } from "@/core/graph/runtime-session";
 import type { AppNodeSpec } from "@/core/node/library";
@@ -81,9 +81,6 @@ export function compileNodeAsset(
     if (!sourcePort) throw new Error(`edge "${edge.id}" references missing source port "${edge.fromPort}"`);
     const targetPort = targetSpec.definition.inputs.find((port) => port.id === edge.toPort);
     if (!targetPort) throw new Error(`edge "${edge.id}" references missing target port "${edge.toPort}"`);
-    if (sourcePort.kind !== edge.kind || targetPort.kind !== edge.kind) {
-      throw new Error(`edge "${edge.id}" kind "${edge.kind}" is incompatible with its exact ports`);
-    }
   }
 
   for (const input of definition.inputs) {
@@ -145,7 +142,7 @@ export function compileNodeAsset(
     definition: graphDefinition,
     role: "transform",
     evaluationRole: "transform",
-    cook: (inputs: GraphPortValueInputs) => firstInputOrDefault(inputs, definition.outputs[0]?.kind ?? "pred"),
+    cook: firstInputOrDefault,
     source: Object.freeze({ kind: "asset", sourceId: source.sourceId, sourceKind: source.kind }),
     geometry: Object.freeze({
       chipW: 160,
@@ -330,11 +327,8 @@ function nodeAssetParameterDefaults(parameters: readonly NodeAssetParameter[]): 
   return Object.fromEntries(parameters.map((parameter) => [parameter.id, structuredClone(parameter.defaultValue)]));
 }
 
-function firstInputOrDefault(inputs: GraphPortValueInputs, kind: PortKind) {
-  const value = inputs.values().next().value?.[0];
-  if (value) return value;
-  if (kind === "sel") return { kind: "sel" as const, sql: null, rowIds: null };
-  return { kind: "pred" as const, sql: null };
+function firstInputOrDefault(inputs: GraphPortValueInputs) {
+  return inputs.values().next().value?.[0] ?? NULL_PREDICATE_PORT_VALUE;
 }
 
 function boundaryRef(direction: "input" | "output", kind: PortKind) {
@@ -352,7 +346,7 @@ function boundarySpec(direction: "input" | "output", kind: PortKind): GraphRunti
       outputs: Object.freeze([{ id: "out", kind }]),
     }),
     evaluationRole: "transform" as const,
-    cook: (inputs: GraphPortValueInputs) => firstInputOrDefault(inputs, kind),
+    cook: firstInputOrDefault,
   });
   boundarySpecs.set(key, spec);
   return spec;

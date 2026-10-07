@@ -7,14 +7,12 @@
 
 import { afterEach, describe, expect, test } from "bun:test";
 import path from "node:path";
-import { tmpdir } from "node:os";
 import { existsSync } from "node:fs";
 import { openAnnData } from "@ndea/zarr";
 import { createApp } from "../app.ts";
-import { WorkspaceDocumentStore } from "../workspace.ts";
-import { ObservationSets } from "../observation-sets.ts";
 import { DatasetQuerySession } from "../store.ts";
 import type { DatasetSessionMetadata, ServerSession } from "../state.ts";
+import { createServerSession } from "../state.ts";
 
 const FIXTURE = path.resolve(import.meta.dir, "../../../../../../ome-atlas-test-data/annotations.zarr");
 const HAS_FIXTURE = existsSync(FIXTURE);
@@ -38,23 +36,13 @@ async function buildState(): Promise<{ state: ServerSession; server: Server; por
     }
   });
 
-  const state: ServerSession = {
+  const state = createServerSession({
     store,
     datasets: new Map([["fixture", { path: FIXTURE }]]),
-    spatial: { fov: null, t: null, bbox: null, x: null, y: null, z: null },
     obsColumns: ["obs_name"],
-    port: 0,
     availableObsmKeys: ["X_pca"],
-    loadingTasks: new Map(),
-    loadErrors: new Map(),
     accessors: new Map([["fixture", adata]]),
-    plateMounts: [],
-    obsmLoaders: new Map(),
-    cropPool: null,
-    annotationsSidecarPath: null,
-    workspace: WorkspaceDocumentStore.empty(path.join(tmpdir(), `ndea-test-workspace-${crypto.randomUUID()}.json`)),
-    observationSets: new ObservationSets(store),
-  };
+  });
 
   const meta: DatasetSessionMetadata = {
     obsColumnNames: ["obs_name"],

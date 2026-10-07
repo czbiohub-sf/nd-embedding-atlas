@@ -17,7 +17,6 @@ import { ScatterDeviceLeaseProvider, useScatterHost, useScatterServices } from "
 import type { AxisState, CategoryMapping, GpuPointIndex, Metadata, ScatterSession, TrajectoryData } from "./contracts";
 import { gpuPointIndex } from "./contracts";
 import { colorSourceFromString, colorSourceLegendLabel, toRows } from "./helpers";
-import { broadcastView, focusPoint, publishRangeFilter } from "./routing";
 import { type ColorMode, useMosaicScatterData } from "./gpu/hooks/useMosaicScatterData";
 import { useScatterBrushSync } from "./gpu/hooks/useScatterBrushSync";
 import { usePredicateRowIndices } from "./gpu/hooks/usePredicateRowIndices";
@@ -161,7 +160,13 @@ export function ScatterView({
   const [userVmin, setUserVmin] = useState<number | undefined>();
   const [userVmax, setUserVmax] = useState<number | undefined>();
   // Route the continuous-range predicate through the node host.
-  const publishRange = useCallback((clause: FilterClause | null) => publishRangeFilter(host, clause), [host]);
+  const publishRange = useCallback(
+    (clause: FilterClause | null) => {
+      if (clause === null) host.filter.clear("range");
+      else host.filter.publish("range", clause);
+    },
+    [host],
+  );
 
   // Reset filter when column changes
   useEffect(() => {
@@ -312,7 +317,7 @@ export function ScatterView({
 
   const viewBroadcaster = useThrottler(
     (vs: { panX: number; panY: number; zoom: number }) => {
-      broadcastView(host, vs); // host seam; no-op unless this node is view-sync linked
+      if (host.viewCoordination.linked) host.viewCoordination.broadcast(vs);
     },
     { wait: 16 },
   );
@@ -345,7 +350,7 @@ export function ScatterView({
     onSelectionChange(...args);
   };
   callbacksRef.current.onExternalClear = () => setSelection(null);
-  const setFocus = (nextFocus: RowIndex | null) => focusPoint(host, nextFocus);
+  const setFocus = (nextFocus: RowIndex | null) => host.focus.set(nextFocus);
   callbacksRef.current.onBackgroundClick = () => {
     setFocus(null);
     clearLassoSelection();
@@ -473,7 +478,7 @@ export function ScatterView({
 
       let handled = clearLassoSelection();
       if (focusedRowIndex != null) {
-        focusPoint(host, null);
+        host.focus.set(null);
         handled = true;
       }
       if (trajectory) {

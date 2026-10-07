@@ -170,6 +170,10 @@ ndea workspace result count-2 --limit 5
 - `status` is `unresolved` for plugin and node-asset nodes the server cannot evaluate, and `error` with a message when the node's SQL fails.
 - The result reflects the saved document. Lassos, chart brushes, focus, and color-by are saved as coordination state, so the server sees them once the tab's edit lands (within about half a second).
 
+The server executes observation predicates as prepared single SQL statements for lookups, annotation writes, and exports. Stacked statements are rejected before execution. Lassos use durable observation sets through `POST /api/sets`; each set shares the dataset's DuckDB connection so its filter also applies to annotations and exports.
+
+Workspace patches reject unknown set references anywhere in the document, including node configs and saved Cache pins. Startup checks the same references when restoring a workspace.
+
 ### Linking views
 
 Views link through the document's coordination sections, so an agent links and drives them with plain patches. `bindings/<node>/<type>` joins a node to a scope; `state/<type>/<scope>` holds the shared value. Types are `focus` (a row index or `null`), `filter`, `colorBy` (a column name or `null`), `viewSync`, and `ordering`.

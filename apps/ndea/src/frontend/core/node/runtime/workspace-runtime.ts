@@ -5,7 +5,6 @@ import {
   type ColorCoordinationAPI,
   type ExactNodeTypeRef,
   type FocusCoordinationAPI,
-  type NodeCapability,
   type OrderingCoordinationAPI,
   type RowIndex,
   type ViewCoordinationAPI,
@@ -16,29 +15,13 @@ import { createFilterBinding } from "@/core/coordination/filter-binding";
 import type { CoordinationTypeId, CoordinationValue } from "@/core/coordination/types";
 import type { CatalogNodeDefinition } from "@/core/plugin/registration";
 import { assertRequiredAppNodeHostFacets } from "@/core/node/app-node-host";
-import { createCheckpointNodeFacet, createHierarchyNodeFacet } from "./host-facets";
+import { createHierarchyNodeFacet } from "./host-facets";
 import type { AppNodeLibrary } from "@/core/node/library";
 import { createAppNodeHost, type AppNodeHostDependencies, type HostHandle } from "./host";
 import { NodeInstanceRuntime } from "./instance-runtime";
 import type { NodeRuntimeSessionPort } from "./session-port";
 
 const VIEW_COORDINATION_LOCK = "lock1";
-
-export const APP_NODE_HOST_CAPABILITIES: readonly NodeCapability[] = Object.freeze([
-  "data-read",
-  "row-set-publish",
-  "focus-coordination",
-  "view-coordination",
-  "schema-mutation",
-  "spatial-data",
-  "gpu-device",
-  "wasm-bitmap",
-  "compute",
-  "annotation-write",
-  "ordering-coordination",
-  "filter-coordination",
-  "color-coordination",
-] satisfies NodeCapability[]);
 
 export interface WorkspaceNodeRuntimeManagerDependencies {
   readonly session: NodeRuntimeSessionPort;
@@ -179,14 +162,8 @@ function createRuntimeHost(
       })
     : undefined;
   const inputPredicate = filterBinding?.selection ?? Selection.single();
-  const checkpointController = spec?.checkpoint ? new AbortController() : null;
   const graphSource = { __ndeaGraphNode: nodeId };
-  const facets = {
-    ...(spec?.checkpoint && filterBinding
-      ? { checkpoint: createCheckpointNodeFacet(session, nodeId, filterBinding, checkpointController!.signal) }
-      : {}),
-    ...(spec?.role === "subnet" ? { hierarchy: createHierarchyNodeFacet(session, nodeId) } : {}),
-  };
+  const facets = spec?.role === "subnet" ? { hierarchy: createHierarchyNodeFacet(session, nodeId) } : {};
   assertRequiredAppNodeHostFacets({ ...facets, bodyHeaderElement: headerElement }, spec?.requiredHostFacets ?? []);
 
   const handle = createAppNodeHost(appHost, {
@@ -205,7 +182,6 @@ function createRuntimeHost(
   });
 
   if (filterBinding) handle.host.track(() => filterBinding.dispose());
-  if (checkpointController) handle.host.track(() => checkpointController.abort());
 
   let graphSinkDisposer: (() => void) | null = null;
   const setGraphPredicate = (sql: string | null) => {
@@ -230,10 +206,7 @@ function createRuntimeHost(
       return;
     }
     if (graphSinkDisposer) return;
-    graphSinkDisposer = session.registerGraphSink(nodeId, (value) => {
-      if (value === undefined) return;
-      setGraphPredicate(spec?.checkpoint ? (session.cacheGraphInput(nodeId)?.sql ?? null) : value.sql);
-    });
+    graphSinkDisposer = session.registerGraphSink(nodeId, (value) => setGraphPredicate(value.sql));
   };
   const documentSubscription = session.store.subscribe(syncGraphSink);
   handle.host.track(() => documentSubscription.unsubscribe());
@@ -242,15 +215,6 @@ function createRuntimeHost(
     graphSinkDisposer = null;
   });
   syncGraphSink();
-  if (filterBinding && spec?.checkpoint) {
-    session.setLiveCachePredicate(nodeId, filterBinding.getResolved().predicate);
-    handle.host.track(
-      filterBinding.subscribeResolved(({ predicate }) => {
-        session.setLiveCachePredicate(nodeId, predicate);
-      }),
-    );
-    handle.host.track(() => session.setLiveCachePredicate(nodeId, null));
-  }
   return handle;
 }
 

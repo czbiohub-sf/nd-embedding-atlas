@@ -11,7 +11,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { SortingState } from "@tanstack/react-table";
 import type { RowIndex } from "@ndea/sdk";
-import { focusRow, publishOrdering, useNodeFocus } from "./routing";
+import { useNodeFocus } from "../query/useNodeFocus";
 import { DataTable } from "./DataTable";
 import type { NodeBodyProps, TableCapabilities, TableConfig, TableServices } from "./contracts";
 
@@ -29,7 +29,7 @@ export function createTablePluginView(services: TableServices) {
     const focusedRowIndex = useNodeFocus(host);
 
     const handleRowClick = useCallback(
-      (nextFocusedRowIndex: RowIndex | null) => focusRow(host, nextFocusedRowIndex),
+      (nextFocusedRowIndex: RowIndex | null) => host.focus.set(nextFocusedRowIndex),
       [host],
     );
 
@@ -40,7 +40,7 @@ export function createTablePluginView(services: TableServices) {
     const handleSortingChange = useCallback(
       (next: SortingState) => {
         setSorting(next);
-        publishOrdering(host, cellOf(next));
+        host.ordering.set(cellOf(next));
       },
       [host],
     );

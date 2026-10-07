@@ -117,7 +117,7 @@ describe("node asset graph runtime", () => {
     };
     const runtime = new GraphRuntimeSession({
       resolver,
-      document: { node: (id) => nodes[id], edges: () => Object.values(edges) },
+      document: { node: (id) => nodes[id], edges: () => Object.values(edges), scopeFilter: () => null },
       schedule: (flush) => flush(),
     });
 
@@ -142,7 +142,11 @@ describe("node asset graph runtime", () => {
     };
     const runtime = new GraphRuntimeSession({
       resolver,
-      document: { node: (id) => nodes[id as keyof typeof nodes], edges: () => Object.values(edges) },
+      document: {
+        node: (id) => nodes[id as keyof typeof nodes],
+        edges: () => Object.values(edges),
+        scopeFilter: () => null,
+      },
     });
     expect(() => runtime.load({ nodes, edges, flags: {} })).toThrow(/output port/);
     expect(runtime.isRegistered("source")).toBe(false);
@@ -181,7 +185,7 @@ describe("node asset graph runtime", () => {
     };
     const connectionRuntime = new GraphRuntimeSession({
       resolver: renamedResolver,
-      document: { node: (id) => renamedNodes[id], edges: () => [] },
+      document: { node: (id) => renamedNodes[id], edges: () => [], scopeFilter: () => null },
       schedule: (flush) => flush(),
     });
     expect(connectionRuntime.registerNode(renamedNodes.source)).toBe(true);
@@ -255,11 +259,11 @@ describe("node asset graph runtime", () => {
     };
     const checkpointRuntime = new GraphRuntimeSession({
       resolver: multiResolver,
-      document: { node: (id) => multiNodes[id], edges: () => Object.values(multiEdges) },
+      document: { node: (id) => multiNodes[id], edges: () => Object.values(multiEdges), scopeFilter: () => null },
       schedule: (flush) => flush(),
     });
     checkpointRuntime.load({ nodes: multiNodes, edges: multiEdges, flags: {} });
-    expect(checkpointRuntime.liveCheckpointInput("checkpoint")).toEqual({ kind: "pred", sql: "second = true" });
+    expect(checkpointRuntime.pull("checkpoint")).toEqual({ kind: "pred", sql: "second = true" });
     checkpointRuntime.dispose();
   });
 
@@ -296,7 +300,7 @@ describe("node asset graph runtime", () => {
     };
     const runtime = new GraphRuntimeSession({
       resolver,
-      document: { node: (id) => nodes[id], edges: () => Object.values(edges) },
+      document: { node: (id) => nodes[id], edges: () => Object.values(edges), scopeFilter: () => null },
       schedule: (flush) => flush(),
     });
     const topology = { nodes, edges, flags: {} };
@@ -361,15 +365,15 @@ describe("node asset graph runtime", () => {
     };
     const runtime = new GraphRuntimeSession({
       resolver,
-      document: { node: (id) => nodes[id], edges: () => Object.values(edges) },
+      document: { node: (id) => nodes[id], edges: () => Object.values(edges), scopeFilter: () => null },
       schedule: (flush) => flush(),
     });
     runtime.load({ nodes, edges, flags: {} });
     expect(() =>
-      runtime.recookNode({
-        ...nodes.asset,
-        config: { version: nodeConfigVersion(1), value: { threshold: 0.9 } },
-      }),
+      runtime.recookNode(
+        { ...nodes.asset, config: { version: nodeConfigVersion(1), value: { threshold: 0.9 } } },
+        nodes.asset,
+      ),
     ).not.toThrow();
     expect(runtime.pull("asset")).toEqual({ kind: "pred", sql: "score > 0.9" });
     runtime.dispose();
@@ -450,7 +454,7 @@ describe("node asset graph runtime", () => {
     const topology = { nodes, edges: {}, flags: {} };
     const runtime = new GraphRuntimeSession({
       resolver,
-      document: { node: (id) => nodes[id as keyof typeof nodes], edges: () => [] },
+      document: { node: (id) => nodes[id as keyof typeof nodes], edges: () => [], scopeFilter: () => null },
       schedule: (flush) => flush(),
     });
     runtime.load(topology);
@@ -549,7 +553,7 @@ describe("node asset graph runtime", () => {
     };
     const runtime = new GraphRuntimeSession({
       resolver,
-      document: { node: (id) => nodes[id], edges: () => Object.values(edges) },
+      document: { node: (id) => nodes[id], edges: () => Object.values(edges), scopeFilter: () => null },
       schedule: (flush) => flush(),
     });
     runtime.load({ nodes, edges, flags: {} });

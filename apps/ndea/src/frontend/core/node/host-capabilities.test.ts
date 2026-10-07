@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { defineNode, exactNodeTypeRef, nodeConfigVersion } from "@ndea/sdk";
 import { z } from "zod";
 import type { ErasedAppNodeHost } from "./app-node-host";
-import { assertNodeHostCapabilities } from "./host-capabilities";
+import { assertNodeHostCapabilities } from "@/core/node/capabilities";
 
 const definition = defineNode({
   ref: exactNodeTypeRef("capability-fixture", "1.0.0"),

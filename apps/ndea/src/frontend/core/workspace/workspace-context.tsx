@@ -13,7 +13,8 @@ import { NODE_EDITOR_ENABLED } from "@/feature-flags";
 import type { GraphEvaluationState } from "@ndea/graph";
 import { deviceBroker } from "@/core/gpu/device-broker";
 import { WorkspaceNodeRuntimeProvider } from "@/core/node/runtime/runtime-context";
-import { APP_NODE_HOST_CAPABILITIES, WorkspaceNodeRuntimeManager } from "@/core/node/runtime/workspace-runtime";
+import { WorkspaceNodeRuntimeManager } from "@/core/node/runtime/workspace-runtime";
+import { availableNodeCapabilities } from "@/core/node/capabilities";
 import type { AppNodeLibrary } from "@/core/node/library";
 import {
   browserNodeAssetJsonStorage,
@@ -27,7 +28,7 @@ import { wsClient } from "@/lib/ws-client";
 import { parseWorkspaceDocument } from "./document";
 import { createHttpWorkspaceTransport, decodeWorkspaceDocument, WorkspaceSync, type WorkspaceTransport } from "./sync";
 import { Workspace } from "./workspace-store";
-import type { WorkspaceDocumentState } from "./types";
+import type { WorkspaceDocument, WorkspaceSession } from "./types";
 
 const WorkspaceContext = createContext<Workspace | null>(null);
 export interface WorkspacePersistenceState {
@@ -103,7 +104,7 @@ export function WorkspaceProvider({
       table,
       metadata,
       refreshMetadata: actions.refreshMetadata,
-      availableCapabilities: new Set(APP_NODE_HOST_CAPABILITIES),
+      availableCapabilities: new Set(availableNodeCapabilities),
       deviceBroker,
       fetch: globalThis.fetch,
     });
@@ -169,9 +170,14 @@ export function useWorkspacePersistence(): WorkspacePersistenceState {
   return useContext(WorkspacePersistenceContext);
 }
 
-export function useWorkspaceSelector<T>(selector: (s: WorkspaceDocumentState) => T): T {
+export function useWorkspaceSelector<T>(selector: (s: WorkspaceDocument) => T): T {
   const ws = useWorkspace();
   return useSelector(ws.store, selector);
+}
+
+export function useWorkspaceSession<T>(selector: (s: WorkspaceSession) => T): T {
+  const ws = useWorkspace();
+  return useSelector(ws.session, selector);
 }
 
 export function useTelemetrySelector<T>(selector: (t: GraphEvaluationState) => T): T {

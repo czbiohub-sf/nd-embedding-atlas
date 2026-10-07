@@ -22,7 +22,6 @@ export {
   TrajectoryResponseSchema,
   VarColumnBodySchema,
   MosaicQueryBodySchema,
-  ScatterSelectionBodySchema,
   WriteAnnotationValuesBodySchema,
 } from "@ndea/protocol";
 export type {
@@ -41,7 +40,6 @@ export type {
   NdeaProtocol,
   ObsmEntry,
   ObsInfo,
-  ScatterSelectionBody,
   VarColumnBody,
   TrajectoryFrame,
   WriteAnnotationValuesBody,

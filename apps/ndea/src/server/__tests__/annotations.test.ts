@@ -12,6 +12,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DuckDBConnection } from "@duckdb/node-api";
 import { DatasetQuerySession } from "../store.ts";
+import { annotateObservations } from "../observations.ts";
+import { createServerSession } from "../state.ts";
+import { handleWriteAnnotationValues } from "../routes/annotate.ts";
 
 function createMockStore(n = 20): Promise<DatasetQuerySession> {
   return DatasetQuerySession.fromInit(async (conn: DuckDBConnection) => {
@@ -52,6 +55,24 @@ describe("annotations: injection defense", () => {
     await store.writeAnnotationValues(evil, [{ rowIndex: 0, datasetKey: "ds", obsName: "obs_0", value: "ok" }]);
     const got = await store.queryJson(`SELECT "${evil.replace(/"/g, '""')}" AS v FROM dataset WHERE __row_index__ = 0`);
     expect(got[0].v).toBe("ok");
+  });
+
+  test("stacked annotate predicate is refused and creates nothing", async () => {
+    const store = await createMockStore(10);
+    activeStore = store;
+    await store.registerAnnotationColumn("label");
+    const response = await handleWriteAnnotationValues(
+      new Request("http://x/api/annotations/values", {
+        method: "POST",
+        body: JSON.stringify({ column: "label", label: "bad", predicate: "1=1); CREATE TABLE pwned (x INT); --" }),
+      }),
+      createServerSession({ store }),
+    );
+    expect(response.status).toBe(500);
+    expect(
+      await store.queryJson("SELECT table_name FROM information_schema.tables WHERE table_name = 'pwned'"),
+    ).toEqual([]);
+    expect(await store.queryJson("SELECT count(*) AS n FROM dataset WHERE label IS NOT NULL")).toEqual([{ n: 0 }]);
   });
 });
 
@@ -105,52 +126,13 @@ describe("annotations: lifecycle", () => {
   });
 });
 
-describe("annotations: from scatter selection", () => {
-  test("stamps a label onto the staged __scatter_selection, resolving identity by JOIN", async () => {
-    const store = await createMockStore(10);
-    activeStore = store;
-
-    await store.registerAnnotationColumn("phase");
-    // Stage a selection the way /api/scatter-selection does.
-    await store.execute("CREATE TEMP TABLE __scatter_selection (row_index UINTEGER)");
-    await store.execute("INSERT INTO __scatter_selection VALUES (2), (4), (6)");
-
-    await store.writeAnnotationFromScatterSelection("phase", "mitotic");
-
-    const rows = await store.queryJson(`SELECT __row_index__ AS i, "phase" AS v FROM dataset ORDER BY i`);
-    const labeled = rows.filter((r) => r.v === "mitotic").map((r) => Number(r.i));
-    expect(labeled).toEqual([2, 4, 6]);
-  });
-
-  test("durable identity (obs_name) is resolved server-side and survives a sidecar round-trip", async () => {
-    const path = join(tmpdir(), `ndea-test-sel-${process.pid}-${Date.now()}.parquet`);
-    tmpFiles.push(path);
-
-    const a = await createMockStore(10);
-    await a.registerAnnotationColumn("phase");
-    await a.execute("CREATE TEMP TABLE __scatter_selection (row_index UINTEGER)");
-    await a.execute("INSERT INTO __scatter_selection VALUES (3)");
-    await a.writeAnnotationFromScatterSelection("phase", "G1");
-    await a.saveAnnotationsSidecar(path); // sidecar SELECT includes obs_name
-    a.close();
-
-    // The sidecar carries obs_name for row 3 (resolved server-side, not client-supplied).
-    const probe = await createMockStore(1);
-    activeStore = probe;
-    const sidecar = await probe.queryJson(
-      `SELECT obs_name, value FROM read_parquet('${path.replace(/'/g, "''")}') WHERE column_name = 'phase'`,
-    );
-    expect(sidecar).toEqual([{ obs_name: "obs_3", value: "G1" }]);
-  });
-});
-
 describe("annotations: from predicate (node-graph batch door)", () => {
   test("stamps a label onto every obs matching the predicate and returns the count", async () => {
     const store = await createMockStore(10);
     activeStore = store;
 
     await store.registerAnnotationColumn("infection_corrected");
-    const n = await store.writeAnnotationFromPredicate("infection_corrected", "uninfected", "__row_index__ < 4");
+    const n = await annotateObservations(store, "infection_corrected", "uninfected", "__row_index__ < 4");
 
     expect(n).toBe(4);
     const rows = await store.queryJson(`SELECT __row_index__ AS i, "infection_corrected" AS v FROM dataset ORDER BY i`);
@@ -164,8 +146,8 @@ describe("annotations: from predicate (node-graph batch door)", () => {
     activeStore = store;
 
     await store.registerAnnotationColumn("label");
-    await store.writeAnnotationFromPredicate("label", "a", "__row_index__ < 6");
-    await store.writeAnnotationFromPredicate("label", "b", "__row_index__ < 3");
+    await annotateObservations(store, "label", "a", "__row_index__ < 6");
+    await annotateObservations(store, "label", "b", "__row_index__ < 3");
 
     const rows = await store.queryJson(`SELECT __row_index__ AS i, "label" AS v FROM dataset ORDER BY i`);
     expect(rows.map((r) => r.v).slice(0, 6)).toEqual(["b", "b", "b", "a", "a", "a"]);

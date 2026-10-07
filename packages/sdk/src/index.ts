@@ -63,7 +63,6 @@ export type {
   MigratedNodeConfig,
   PortKind,
   PredicatePortValue,
-  RowSetPortValue,
   RowIndex,
 } from "./node";
 

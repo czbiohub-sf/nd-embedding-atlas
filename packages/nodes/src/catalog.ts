@@ -2,7 +2,7 @@ import type { NodeBodyMounter } from "./contracts";
 import { createAnnotateDefinition } from "./annotate/definition";
 import type { AnnotateServices } from "./annotate/services";
 import { createCacheDefinition } from "./cache/definition";
-import type { CacheCheckpointResolver, CacheIconButton } from "./cache/contracts";
+import type { CacheIconButton } from "./cache/contracts";
 import { createCountPlotDefinition } from "./charts/count-plot/definition";
 import { createHistogramDefinition } from "./charts/histogram/definition";
 import { createVgplotDefinition } from "./charts/vgplot/definition";
@@ -30,7 +30,7 @@ export { createBuiltinNodeDefinitions } from "./core-catalog";
 /** App-owned integrations required to construct complete portable node catalog. */
 export interface NodeCatalogServices {
   readonly annotate: { useServices: () => AnnotateServices };
-  readonly cache: { getCheckpoint: CacheCheckpointResolver; IconButton: CacheIconButton };
+  readonly cache: { IconButton: CacheIconButton };
   readonly charts: ChartServices;
   readonly count: { predicateToSql: CountPredicateToSql };
   readonly gallery: { useServices: () => GalleryServices };

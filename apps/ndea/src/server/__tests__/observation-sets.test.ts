@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ObservationSetSchema, WorkspaceProblemSchema } from "@ndea/protocol";
-import { ObservationSets } from "../observation-sets.ts";
+import { createServerSession } from "../state.ts";
 import { handleSetsPost } from "../routes/sets.ts";
 import { handleFilter } from "../routes/filter.ts";
 import { handleWorkspacePatch } from "../routes/workspace.ts";
@@ -27,15 +27,15 @@ async function session(multi = true, reversed = false) {
     ) AS t(__row_index__, obs_name${multi ? ", _dataset" : ""})`);
   });
   stores.push(store);
-  return {
+  return createServerSession({
     store,
-    observationSets: new ObservationSets(store, join(dir, "sets")),
+    observationSetsDirectory: join(dir, "sets"),
     datasets: new Map([
       ["first", { path: "/first.zarr" }],
       ["second", { path: "/second.zarr" }],
     ]),
     workspace: WorkspaceDocumentStore.empty(join(dir, "workspace.json")),
-  };
+  });
 }
 
 function request(body: unknown) {
@@ -149,4 +149,50 @@ test("PATCH rejects unknown nested set references with a clause pointer and pres
       )
     ).status,
   ).toBe(200);
+});
+
+test("PATCH rejects an unknown set referenced only from a node config", async () => {
+  dir = await mkdtemp(join(tmpdir(), "ndea-sets-"));
+  const state = await session();
+  const response = await handleWorkspacePatch(
+    request({
+      baseRevision: 0,
+      ops: [
+        {
+          op: "add",
+          path: "",
+          value: {
+            nodeAssets: [],
+            nodes: {
+              cache: {
+                id: "cache",
+                definitionRef: { nodeTypeId: "acme/cache", nodeTypeVersion: "1.0.0" },
+                label: "Cache",
+                config: { version: 1, value: { pin: { clause: { op: "inSet", set: "0000000000000000" } } } },
+              },
+            },
+            edges: {},
+            positions: {},
+            sizeOverrides: {},
+            formOverride: {},
+            formLocked: {},
+            stage: null,
+            stripH: 280,
+            flags: {},
+            state: {},
+            bindings: {},
+          },
+        },
+      ],
+    }),
+    state,
+  );
+  expect(response.status).toBe(400);
+  expect(WorkspaceProblemSchema.parse(await response.json()).errors).toEqual([
+    {
+      pointer: "/nodes/cache/config/value/pin/clause",
+      detail: 'unknown observation set "0000000000000000"',
+    },
+  ]);
+  expect(state.workspace.snapshot().revision).toBe(0);
 });

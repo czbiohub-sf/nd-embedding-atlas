@@ -10,13 +10,6 @@
  *   - PULL  `pull(id, ctx)` walks UPSTREAM and cooks on demand. A *clean* node
  *           (`!dirty` with a valid cache) HALTS the walk and returns its cache :
  *           the Houdini "clean node is a cache boundary" rule.
- *   - EMIT  `emit(id, port, value)` records an **authored** output on a source
- *           port: the push half of push/pull unified into one value model. A
- *           derived output exists because a cook computed it; an emission
- *           exists because the user acted (a lasso, a row focus). Edges whose
- *           `(from, fromPort)` carries an emission read it directly; everything
- *           downstream is dirtied (the source itself is NOT: its derived
- *           output didn't change) and ordinary pull delivery does the rest.
  *   - DEDUP a per-sweep `visited` set (Houdini's `markVisitPass`) cooks a shared
  *           upstream node once per flush even in a diamond, and guards against
  *           re-entry if a cook is ever made async.
@@ -35,7 +28,7 @@
  * The engine is value-generic (`GraphEngine<V>`) and framework-agnostic: no
  * React, no Mosaic, no xyflow, and no knowledge of port *kinds*: typing is a
  * descriptor/canvas concern. This package also supplies the tagged NDEA value
- * union (pred/sel/focus) and evaluator used by the app runtime.
+ * and evaluator used by the app runtime.
  */
 
 import type { NodeComputeContext, PredicatePortValue } from "@ndea/sdk/graph";
@@ -58,9 +51,6 @@ export interface GraphNodeEvaluationSpec<V> {
 
 export interface GraphEvaluationEdge {
   from: string;
-  /** Source port id. An edge reads the emission on `(from, fromPort)` when one
-   *  exists, else the source's derived (cooked) output. Default: "out". */
-  fromPort?: string;
   to: string;
   /** Target input-port id: edges sharing a `toPort` fan in together. */
   toPort: string;
@@ -81,19 +71,15 @@ export type GraphSinkListener<V> = (value: V) => void;
  *                    THIS node's cook fn only, not its upstream recursion.
  *   - `reuse`     : early cutoff: the node was dirty but its inputs were
  *                    unchanged, so its cache was kept without cooking.
- *   - `emit`      : an authored value landed on `(node, port)`; downstream
- *                    was dirtied, the node itself stays clean.
  *   - `flush`     : a flush completed: every registered sink delivered, the
  *                    cooked graph is settled at `epoch`. node is "*" (whole
  *                    graph). The post-flush read signal (e.g. batched counts).
  */
 export interface GraphEvaluationTelemetryEvent {
   node: string;
-  type: "dirty" | "cook-start" | "cook-end" | "reuse" | "emit" | "flush";
+  type: "dirty" | "cook-start" | "cook-end" | "reuse" | "flush";
   /** cook-end only: `performance.now()` delta of the cook fn. */
   ms?: number;
-  /** emit only: the source port carrying the authored value. */
-  port?: string;
   /** Engine epoch at emission. */
   epoch: number;
 }
@@ -155,8 +141,6 @@ export class GraphEngine<V = Predicate> {
   private edges: GraphEvaluationEdge[] = [];
   private readonly sinks = new Map<string, { readonly listener: GraphSinkListener<V> }>();
   private readonly telemetryListeners = new Set<GraphEvaluationTelemetryListener>();
-  /** authored outputs, keyed `${id}:${port}` */
-  private readonly emissions = new Map<string, V>();
 
   private epochCounter = 0;
   private epochController = new AbortController();
@@ -198,7 +182,6 @@ export class GraphEngine<V = Predicate> {
   removeNode(id: string): void {
     this.nodes.delete(id);
     this.sinks.delete(id);
-    for (const key of this.emissions.keys()) if (key.startsWith(`${id}:`)) this.emissions.delete(key);
     // Drop incident edges; dirty the far endpoint of any inbound-to-others edge.
     const survivors: GraphEvaluationEdge[] = [];
     for (const e of this.edges) {
@@ -236,15 +219,7 @@ export class GraphEngine<V = Predicate> {
 
   disconnect(edge: GraphEvaluationEdge): void {
     const before = this.edges.length;
-    this.edges = this.edges.filter(
-      (e) =>
-        !(
-          e.from === edge.from &&
-          e.to === edge.to &&
-          e.toPort === edge.toPort &&
-          (e.fromPort ?? "out") === (edge.fromPort ?? "out")
-        ),
-    );
+    this.edges = this.edges.filter((e) => !(e.from === edge.from && e.to === edge.to && e.toPort === edge.toPort));
     if (this.edges.length !== before && this.nodes.has(edge.to)) this.markDirty(edge.to);
   }
 
@@ -299,38 +274,6 @@ export class GraphEngine<V = Predicate> {
       }
       for (const e of this.edges) if (e.from === cur) stack.push(e.to);
     }
-  }
-
-  // ── Push: authored emissions ────────────────────────────────────────────────
-
-  /**
-   * Record an authored value on a source port (a lasso, a row focus: values
-   * that exist because the user acted, not because a cook derived them).
-   * Edges from `(id, port)` deliver this value; the node itself stays clean
-   * (its derived output didn't change), but everything downstream of those
-   * edges is dirtied and a flush is scheduled.
-   */
-  emit(id: string, port: string, value: V): void {
-    if (!this.nodes.has(id)) return;
-    this.emissions.set(`${id}:${port}`, value);
-    this.bumpEpoch();
-    this.emitTelemetry({ node: id, type: "emit", port, epoch: this.epochCounter });
-    const targets = this.edges.filter((e) => e.from === id && (e.fromPort ?? "out") === port).map((e) => e.to);
-    this.dirtyCascade(targets);
-    this.scheduleFlush();
-  }
-
-  /** The current authored value on `(id, port)`, if any. */
-  getEmission(id: string, port: string): V | undefined {
-    return this.emissions.get(`${id}:${port}`);
-  }
-
-  clearEmission(id: string, port: string): void {
-    if (!this.emissions.delete(`${id}:${port}`)) return;
-    this.bumpEpoch();
-    const targets = this.edges.filter((e) => e.from === id && (e.fromPort ?? "out") === port).map((e) => e.to);
-    this.dirtyCascade(targets);
-    this.scheduleFlush();
   }
 
   private scheduleFlush(): void {
@@ -389,17 +332,10 @@ export class GraphEngine<V = Predicate> {
     visited.add(id);
 
     // Resolve inputs grouped by target port: RAW arrays, edge-insertion order.
-    // An edge whose (from, fromPort) carries an emission reads the authored
-    // value; otherwise it pulls the source's derived output.
     const inputs = new Map<string, V[]>();
     for (const e of this.edges) {
       if (e.to !== id) continue;
-      const emissionKey = `${e.from}:${e.fromPort ?? "out"}`;
-      // has() not ??: an authored null (e.g. a cleared lasso) must DELIVER null,
-      // not fall back to the derived output.
-      const upstream = this.emissions.has(emissionKey)
-        ? (this.emissions.get(emissionKey) as V)
-        : this.pullInternal(e.from, ctx, visited);
+      const upstream = this.pullInternal(e.from, ctx, visited);
       const bucket = inputs.get(e.toPort);
       if (bucket) bucket.push(upstream);
       else inputs.set(e.toPort, [upstream]);

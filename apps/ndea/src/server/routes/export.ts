@@ -14,6 +14,7 @@ import { isAbsolute, join, resolve } from "node:path";
 import { exportDir, sanitiseFilename } from "../export-util.ts";
 import { ExportBodySchema, parseJsonBody } from "../protocol.ts";
 import type { DatasetQuerySession } from "../store.ts";
+import { countObservations, exportObservations } from "../observations.ts";
 
 /** In-flight export task state. */
 export interface ExportTask {
@@ -96,8 +97,7 @@ export async function handleExport(req: Request, store: DatasetQuerySession): Pr
     // Validate the predicate up-front by counting matches.
     let matchCount: number;
     try {
-      const rows = await store.queryJson(`SELECT COUNT(*) AS cnt FROM dataset WHERE ${body.predicate}`);
-      matchCount = Number(rows[0].cnt);
+      matchCount = await countObservations(store, body.predicate);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return Response.json({ error: `Invalid predicate: ${message}` }, { status: 400 });
@@ -163,10 +163,7 @@ async function runExport(
   matchCount: number,
 ): Promise<void> {
   try {
-    // DuckDB writes Parquet natively via COPY TO.
-    // Escape single quotes in the path for safety.
-    const escaped = outputPath.replaceAll("'", "''");
-    await store.execute(`COPY (SELECT * FROM dataset WHERE ${predicate}) TO '${escaped}' (FORMAT PARQUET)`);
+    await exportObservations(store, predicate, outputPath);
     task.status = "done";
     task.outputPath = outputPath;
     task.nObs = matchCount;

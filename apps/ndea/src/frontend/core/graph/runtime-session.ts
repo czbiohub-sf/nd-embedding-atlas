@@ -1,6 +1,4 @@
 import {
-  AUTHORED_GRAPH_OUTPUT_PORT,
-  DERIVED_GRAPH_OUTPUT_PORT,
   GraphEvaluator,
   andPreds,
   type GraphEvaluationEdge,
@@ -8,21 +6,14 @@ import {
   type GraphPortValue,
   type Predicate,
 } from "@ndea/graph";
-import { nodeConfigVersion, type ExactNodeTypeRef, type JsonValue, type PortKind, type RowIndex } from "@ndea/sdk";
-import { Store } from "@tanstack/store";
+import { nodeConfigVersion, type ExactNodeTypeRef, type JsonValue, type PortKind } from "@ndea/sdk";
 import {
   instantiateNodeAssetExpansion,
   type InstantiatedNodeAssetExpansion,
   type NodeAssetExpansionDescriptor,
 } from "@/core/node-asset/compiler";
 import { nodeTypeRefForAsset } from "@/core/node-asset/library";
-import {
-  patchNodeConfig,
-  predicateSql,
-  predicateSqls,
-  type GraphNodeCookFunction,
-  type GraphNodeCookHost,
-} from "./cook";
+import { patchNodeConfig, predicateSqls, type GraphNodeCookFunction, type GraphNodeCookHost } from "./cook";
 import type { GraphDocumentEdge, GraphDocumentNode } from "./records";
 
 export interface GraphRuntimeNodeSpec {
@@ -48,6 +39,8 @@ export interface GraphRuntimeNodeResolver {
 export interface GraphRuntimeDocumentPort {
   node(id: string): GraphDocumentNode | undefined;
   edges(): readonly GraphDocumentEdge[];
+  /** The SQL a node's filter scope applies to it (see `filterScopeSql`). */
+  scopeFilter(id: string): Predicate;
 }
 
 export interface GraphRuntimeTopology {
@@ -118,18 +111,8 @@ export function validateGraphRuntimeTopology(topology: GraphRuntimeTopology, res
 
     const output = source.definition.outputs.find((port) => port.id === edge.fromPort);
     if (!output) throw new Error(`edge "${edge.id}" references undeclared output port "${edge.fromPort}"`);
-    if (output.kind !== edge.kind) {
-      throw new Error(
-        `edge "${edge.id}" kind "${edge.kind}" is incompatible with output port "${edge.fromPort}" kind "${output.kind}"`,
-      );
-    }
     const input = target.definition.inputs.find((port) => port.id === edge.toPort);
     if (!input) throw new Error(`edge "${edge.id}" targets undeclared input port "${edge.toPort}"`);
-    if (input.kind !== edge.kind) {
-      throw new Error(
-        `edge "${edge.id}" kind "${edge.kind}" is incompatible with input port "${edge.toPort}" kind "${input.kind}"`,
-      );
-    }
 
     const wireKey = `${edge.from}\u0000${edge.fromPort}\u0000${edge.to}\u0000${edge.toPort}`;
     if (resolvedWires.has(wireKey)) {
@@ -151,15 +134,6 @@ export type GraphNodeResolution =
   | { readonly status: "resolved"; readonly node: GraphDocumentNode }
   | { readonly status: "unresolved"; readonly node: GraphDocumentNode };
 
-export type CheckpointInput =
-  | Extract<GraphPortValue, { kind: "sel" }>
-  | { readonly kind: "pred"; readonly sql: string | null };
-
-export interface CheckpointRuntimeStatus {
-  readonly pending: boolean;
-  readonly error: string | null;
-}
-
 export interface GraphRuntimeSessionOptions {
   readonly resolver: GraphRuntimeNodeResolver;
   readonly document: GraphRuntimeDocumentPort;
@@ -173,25 +147,20 @@ interface AssetSinkRegistration {
 }
 
 /**
- * Owns the live evaluator, authored values, sinks, and checkpoint snapshots for
- * one graph document. The document owner remains responsible for committing
- * topology and presentation state through its transaction facade.
+ * Owns the live evaluator, sinks, and asset expansions for one graph
+ * document. The document owner remains responsible for committing topology
+ * and presentation state through its transaction facade.
  */
 export class GraphRuntimeSession {
   private readonly resolver: GraphRuntimeNodeResolver;
   private readonly document: GraphRuntimeDocumentPort;
   private readonly evaluator: GraphEvaluator;
   private readonly registeredNodes = new Set<string>();
-  private readonly frozenPredicates = new Map<string, Predicate>();
-  private readonly frozenRows = new Map<string, RowIndex[] | null>();
-  private readonly liveCheckpointPredicates = new Map<string, Predicate>();
-  private readonly pendingNodes = new Map<string, GraphDocumentNode>();
   private readonly runtimeNodes = new Map<string, GraphDocumentNode>();
   private readonly assetExpansions = new Map<string, InstantiatedNodeAssetExpansion>();
   private readonly assetSinks = new Map<string, AssetSinkRegistration>();
 
   readonly telemetry: GraphEvaluationStore;
-  readonly checkpoints = new Store<Readonly<Record<string, CheckpointRuntimeStatus>>>({});
 
   constructor({ resolver, document, schedule, onFlush }: GraphRuntimeSessionOptions) {
     this.resolver = resolver;
@@ -245,13 +214,8 @@ export class GraphRuntimeSession {
   private registerRuntimeNode(node: GraphDocumentNode, spec: GraphRuntimeNodeSpec): void {
     const host: GraphNodeCookHost = {
       id: node.id,
-      node: () => this.pendingNodes.get(node.id) ?? this.runtimeNodes.get(node.id) ?? this.document.node(node.id),
-      frozenPredicate: () =>
-        this.frozenPredicates.has(node.id)
-          ? (this.frozenPredicates.get(node.id) ?? null)
-          : this.liveCheckpointPredicates.has(node.id)
-            ? (this.liveCheckpointPredicates.get(node.id) ?? null)
-            : undefined,
+      node: () => this.runtimeNodes.get(node.id) ?? this.document.node(node.id),
+      scopeFilter: () => this.document.scopeFilter(node.id),
     };
     this.evaluator.addNode({
       id: node.id,
@@ -281,15 +245,6 @@ export class GraphRuntimeSession {
     this.evaluator.removeNode(id);
     this.registeredNodes.delete(id);
     this.runtimeNodes.delete(id);
-    this.frozenPredicates.delete(id);
-    this.frozenRows.delete(id);
-    this.liveCheckpointPredicates.delete(id);
-    this.checkpoints.setState((state) => {
-      if (!(id in state)) return state;
-      const next = { ...state };
-      delete next[id];
-      return next;
-    });
   }
 
   private registerAssetExpansion(
@@ -455,10 +410,9 @@ export class GraphRuntimeSession {
     for (const node of expansion.nodes) this.markDirty(node.id);
   }
 
-  recookNode(node: GraphDocumentNode): void {
+  /** Re-evaluate `node` after a config change; `previous` restores an asset expansion if rebuilding fails. */
+  recookNode(node: GraphDocumentNode, previous: GraphDocumentNode): void {
     if (this.assetExpansions.has(node.id)) {
-      const previous = this.document.node(node.id);
-      if (!previous) throw new Error(`node "${node.id}" is unavailable`);
       const incident = this.document.edges().filter((edge) => edge.from === node.id || edge.to === node.id);
       this.removeNode(node.id, true);
       try {
@@ -479,13 +433,8 @@ export class GraphRuntimeSession {
       }
       return;
     }
-    this.pendingNodes.set(node.id, node);
-    try {
-      this.evaluator.markDirty(node.id);
-      this.runtimeNodes.set(node.id, node);
-    } finally {
-      this.pendingNodes.delete(node.id);
-    }
+    this.runtimeNodes.set(node.id, node);
+    this.evaluator.markDirty(node.id);
   }
 
   setBypass(id: string, enabled: boolean): void {
@@ -502,64 +451,6 @@ export class GraphRuntimeSession {
 
   setTelemetryEnabled(enabled: boolean): void {
     this.evaluator.setTelemetryEnabled(enabled);
-  }
-
-  liveCheckpointInput(id: string): CheckpointInput | null {
-    if (this.liveCheckpointPredicates.has(id)) {
-      return { kind: "pred", sql: this.liveCheckpointPredicates.get(id) ?? null };
-    }
-    return this.cacheGraphInput(id);
-  }
-
-  cacheGraphInput(id: string): CheckpointInput | null {
-    let selection: Extract<GraphPortValue, { kind: "sel" }> | undefined;
-    const predicateInputs: Predicate[] = [];
-    for (const edge of this.document.edges()) {
-      if (edge.to !== id || !this.registeredNodes.has(edge.from)) continue;
-      const sourceId = this.outputNodeId(edge.from, edge.fromPort);
-      if (edge.kind === "sel") {
-        const value = this.evaluator.getEmission(sourceId, AUTHORED_GRAPH_OUTPUT_PORT) ?? this.evaluator.pull(sourceId);
-        if (value?.kind === "sel") selection = value;
-      } else {
-        predicateInputs.push(predicateSql(this.evaluator.pull(sourceId)));
-      }
-    }
-    if (selection) return selection;
-    const sql = andPreds(predicateInputs);
-    return sql !== null || predicateInputs.length > 0 ? { kind: "pred", sql } : null;
-  }
-
-  setLiveCheckpointPredicate(id: string, predicate: Predicate): void {
-    if (predicate === null) this.liveCheckpointPredicates.delete(id);
-    else this.liveCheckpointPredicates.set(id, predicate);
-    if (!this.frozenPredicates.has(id)) this.evaluator.markDirty(id);
-  }
-
-  pinCheckpointRows(id: string, rowIds: readonly RowIndex[]): number {
-    const rows = [...rowIds];
-    this.frozenPredicates.set(id, rows.length > 0 ? `__row_index__ IN (${rows.join(", ")})` : "FALSE");
-    this.frozenRows.set(id, rows);
-    this.evaluator.markDirty(id);
-    return this.evaluator.epoch;
-  }
-
-  unpinCheckpoint(id: string): boolean {
-    if (!this.frozenPredicates.delete(id)) return false;
-    this.frozenRows.delete(id);
-    this.evaluator.markDirty(id);
-    return true;
-  }
-
-  isCheckpointPinned(id: string): boolean {
-    return this.frozenPredicates.has(id);
-  }
-
-  checkpointRows(id: string): readonly RowIndex[] | null | undefined {
-    return this.frozenRows.get(id);
-  }
-
-  setCheckpointStatus(id: string, status: CheckpointRuntimeStatus): void {
-    this.checkpoints.setState((state) => ({ ...state, [id]: status }));
   }
 
   patchNodeConfig(node: GraphDocumentNode, patch: Record<string, unknown>): GraphDocumentNode {
@@ -590,11 +481,6 @@ export class GraphRuntimeSession {
     this.registeredNodes.clear();
     this.runtimeNodes.clear();
     this.assetExpansions.clear();
-    this.frozenPredicates.clear();
-    this.frozenRows.clear();
-    this.liveCheckpointPredicates.clear();
-    this.pendingNodes.clear();
-    this.checkpoints.setState(() => ({}));
   }
 
   private edgeIsResolved(
@@ -629,11 +515,9 @@ export class GraphRuntimeSession {
     edge: GraphDocumentEdge,
     nodes?: Readonly<Record<string, GraphDocumentNode>>,
   ): GraphEvaluationEdge {
-    const sourceIsAsset = this.assetExpansions.has(edge.from);
     const endpoint = this.evaluationEndpoints(edge.from, edge.to, nodes, edge.fromPort, edge.toPort);
     return {
       ...endpoint,
-      fromPort: sourceIsAsset || edge.kind === "pred" ? DERIVED_GRAPH_OUTPUT_PORT : AUTHORED_GRAPH_OUTPUT_PORT,
       toPort: this.assetExpansions.has(edge.to) ? "in" : edge.toPort,
     };
   }

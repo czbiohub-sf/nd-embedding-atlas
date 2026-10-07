@@ -9,7 +9,6 @@ import type { ChartServices, UseChartQuery } from "../core/contracts";
 import { FieldPicker } from "../core/field-picker";
 import { buildCountPlotQuery } from "../core/filter-queries";
 import { toRows } from "../core/mosaic-helpers";
-import { publishChartFilter } from "../core/routing";
 import { useChartLeaf } from "../core/use-chart-leaf";
 import { countPlotPredicate, NULL_VALUE } from "./predicate";
 import type { CountPlotCapabilities, CountPlotConfig } from "./types";
@@ -24,7 +23,13 @@ export function createCountPlotView({ useColumnTypes, useQuery }: ChartServices)
   return function CountPlotView({ host }: NodeBodyProps<CountPlotConfig, CountPlotCapabilities>) {
     const { coordinator, table, filter, field, setField } = useChartLeaf(host);
     const limit = host.config.limit ?? 11;
-    const onFilter = useCallback((clause: FilterClause | null) => publishChartFilter(host, clause), [host]);
+    const onFilter = useCallback(
+      (clause: FilterClause | null) => {
+        if (clause === null) host.filter.clear("chart");
+        else host.filter.publish("chart", clause);
+      },
+      [host],
+    );
 
     return (
       <div className="flex h-full w-full flex-col gap-1.5 overflow-y-auto bg-node-surface p-2">

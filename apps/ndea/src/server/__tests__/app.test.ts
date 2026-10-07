@@ -8,7 +8,6 @@
 import { describe, expect, test, afterEach } from "bun:test";
 import type { DuckDBConnection } from "@duckdb/node-api";
 import { join } from "node:path";
-import { tmpdir } from "node:os";
 import {
   ConfigResponseSchema,
   EmbeddingStatusSchema,
@@ -19,9 +18,8 @@ import {
 import { DatasetQuerySession } from "../store.ts";
 import { createApp, type CreateAppOptions } from "../app.ts";
 import type { ServerSession, DatasetSessionMetadata } from "../state.ts";
+import { createServerSession } from "../state.ts";
 import type { ServerSocketContext } from "../ws.ts";
-import { WorkspaceDocumentStore } from "../workspace.ts";
-import { ObservationSets } from "../observation-sets.ts";
 import { buildPluginBootstrap } from "../plugins/bootstrap.ts";
 
 type NdeaServer = ReturnType<typeof createApp>;
@@ -45,23 +43,12 @@ function createMockStore(n = 100): Promise<DatasetQuerySession> {
 
 /** Create a minimal server session for testing. */
 function createMockState(store: DatasetQuerySession): ServerSession {
-  return {
+  return createServerSession({
     store,
     datasets: new Map([["test_dataset", { path: "/tmp/test.zarr" }]]),
-    spatial: { fov: null, t: null, bbox: null, x: null, y: null, z: null },
     obsColumns: ["obs_name", "_dataset", "category", "value"],
-    port: 0,
     availableObsmKeys: ["X_umap", "X_tsne"],
-    loadingTasks: new Map(),
-    loadErrors: new Map(),
-    accessors: new Map(),
-    plateMounts: [],
-    obsmLoaders: new Map(),
-    cropPool: null,
-    annotationsSidecarPath: null,
-    workspace: WorkspaceDocumentStore.empty(join(tmpdir(), `ndea-test-workspace-${crypto.randomUUID()}.json`)),
-    observationSets: new ObservationSets(store),
-  };
+  });
 }
 
 /** Create minimal dataset session metadata for testing. */

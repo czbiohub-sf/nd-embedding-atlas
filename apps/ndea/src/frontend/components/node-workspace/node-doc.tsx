@@ -13,7 +13,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@ndea/ui/components/pop
 import { ndIconButtonVariants } from "@/components/node-workspace/nd-icon-button";
 import { NdIcon } from "@/components/node-workspace/nd-icons";
 import { ND_PORT_KINDS } from "@/components/node-workspace/nd-port";
-import { humanizedCapabilities } from "@/core/node/capability-docs";
+import { humanizedCapabilities } from "@/core/node/capabilities";
 import { useWorkspace } from "@/core/workspace/workspace-context";
 import type { ExactNodeTypeRef, NodePort } from "@ndea/sdk";
 import { cn } from "@ndea/ui/lib/utils";
@@ -21,7 +21,7 @@ import { cn } from "@ndea/ui/lib/utils";
 /** A single typed-port token: kind glyph + label (filled = out, hollow = in). */
 function PortToken({ port, out }: { port: NodePort; out: boolean }) {
   const spec = ND_PORT_KINDS[port.kind];
-  const shape = spec.shape === "diamond" ? { borderRadius: 2, transform: "rotate(45deg)" } : { borderRadius: 999 };
+  const shape = { borderRadius: 999 };
   return (
     <span className="inline-flex items-center gap-1.5">
       <span

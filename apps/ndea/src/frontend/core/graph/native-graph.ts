@@ -4,12 +4,12 @@
  * both compute identical results. Contributions add React bodies on top.
  */
 
+import type { CacheConfig } from "@ndea/nodes/cache";
 import type { DatasetConfig } from "@ndea/nodes/dataset";
 import { filterClauseSql, type FilterConfig } from "@ndea/nodes/filter";
 import type { WrangleConfig } from "@ndea/nodes/wrangle";
 import {
   andGraphPredicate,
-  lastPortValueOfKind,
   nodeConfig,
   NULL_PREDICATE_PORT_VALUE,
   passthroughGraphPredicate,
@@ -23,7 +23,12 @@ export interface NativeNodeGraph {
   readonly cook: GraphNodeCookFunction;
 }
 
-const view: NativeNodeGraph = { role: "view", evaluationRole: "view", cook: passthroughGraphPredicate };
+/** A view shows its inputs narrowed by every other source in its filter scope. */
+const view: NativeNodeGraph = {
+  role: "view",
+  evaluationRole: "view",
+  cook: (inputs, host) => andGraphPredicate(inputs, host.scopeFilter()),
+};
 
 export const NATIVE_NODE_GRAPH = {
   obs: { role: "source", evaluationRole: "source", cook: () => NULL_PREDICATE_PORT_VALUE },
@@ -48,13 +53,13 @@ export const NATIVE_NODE_GRAPH = {
     evaluationRole: "transform",
     cook: (inputs, host) => andGraphPredicate(inputs, nodeConfig<WrangleConfig>(host.node()).predicateSql ?? null),
   },
-  /** Live passthrough until pinned; a pin is per-tab runtime state, so the server always sees it live. */
+  /** Pinned: its observation set. Live: its input AND its filter scope. */
   cache: {
     role: "cache",
     evaluationRole: "transform",
     cook: (inputs, host) => {
-      const frozen = host.frozenPredicate();
-      return frozen !== undefined ? { kind: "pred", sql: frozen } : passthroughGraphPredicate(inputs);
+      const pin = nodeConfig<CacheConfig>(host.node()).pin;
+      return pin ? { kind: "pred", sql: filterClauseSql(pin.clause) } : andGraphPredicate(inputs, host.scopeFilter());
     },
   },
   proxy: { role: "proxy", evaluationRole: "transform", cook: passthroughGraphPredicate },
@@ -66,12 +71,7 @@ export const NATIVE_NODE_GRAPH = {
   vgplot: view,
   scatter: view,
   table: view,
-  /** A pushed selection (lasso) takes over; else the AND of incoming predicates. */
-  gallery: {
-    role: "view",
-    evaluationRole: "view",
-    cook: (inputs) => lastPortValueOfKind(inputs, "sel") ?? passthroughGraphPredicate(inputs),
-  },
+  gallery: view,
   "image-viewer": {
     role: "view",
     evaluationRole: "view",

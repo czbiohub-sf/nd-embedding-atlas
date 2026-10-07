@@ -19,7 +19,6 @@ import {
   type PluginAuthorization,
   type PluginContributionBatch,
 } from "./registration";
-import { CAPABILITIES_BY_CATEGORY, CAPABILITY_DOCS } from "@/core/node/capability-docs";
 
 function definition(id: string, version = "1.0.0", overrides: Partial<NodeDefinition<any>> = {}): NodeDefinition<any> {
   return defineNode({
@@ -65,12 +64,6 @@ function batch(sourceValue: NodeContributionSource, ...definitions: CatalogNodeD
 }
 
 describe("immutable node catalog", () => {
-  test("documents every capability in exactly one semantic category", () => {
-    const categorized: string[] = Object.values(CAPABILITIES_BY_CATEGORY).flat();
-    expect(new Set(categorized).size).toBe(categorized.length);
-    expect(categorized.toSorted()).toEqual(Object.keys(CAPABILITY_DOCS).toSorted());
-  });
-
   test("resolves exact versions and the greatest current version without changing contribution order", () => {
     const old = definition("multi", "1.9.0");
     const latest = definition("multi", "2.0.0");

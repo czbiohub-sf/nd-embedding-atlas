@@ -13,7 +13,7 @@ import { Selection } from "@uwdata/mosaic-core";
 
 import type { AppNodeHostDependencies } from "./host";
 import { createAppNodeHost } from "./host";
-import { assertNodeHostCapabilities } from "@/core/node/host-capabilities";
+import { assertNodeHostCapabilities } from "@/core/node/capabilities";
 
 function hostDependencies(overrides: Partial<AppNodeHostDependencies> = {}): AppNodeHostDependencies {
   const coordinator = (overrides.coordinator ?? {

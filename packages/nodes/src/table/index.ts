@@ -1,6 +1,5 @@
 export { createTableDefinition } from "./definition";
 export { DataTable } from "./DataTable";
-export { focusRow, publishOrdering, useNodeFocus } from "./routing";
 export { createTablePluginView } from "./view";
 export type { TableServices } from "./contracts";
 export { tableCacheKey, tableFilterState, useTableQuery } from "./useTableQuery";

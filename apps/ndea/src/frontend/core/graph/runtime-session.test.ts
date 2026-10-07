@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { exactNodeTypeRef, rowIndex } from "@ndea/sdk";
+import { exactNodeTypeRef } from "@ndea/sdk";
 
 import { assetInnerNodeId, assetOutputBoundaryNodeId, compileNodeAsset } from "@/core/node-asset/compiler";
 import { parseNodeAssetDefinition } from "@/core/node-asset/schema";
@@ -45,7 +45,7 @@ function fixture(resolved: readonly GraphRuntimeNodeSpec[] = [sourceSpec, transf
   };
   const runtime = new GraphRuntimeSession({
     resolver,
-    document: { node: (id) => nodes[id], edges: () => Object.values(edges) },
+    document: { node: (id) => nodes[id], edges: () => Object.values(edges), scopeFilter: () => null },
     schedule: (flush) => flush(),
   });
   return { runtime, resolver, nodes, edges };
@@ -146,19 +146,13 @@ describe("GraphRuntimeSession", () => {
     );
 
     delete edges.badPort;
-    edges.badKind = { ...edge("badKind", "source", "sink"), kind: "sel" };
-    expect(() => validateGraphRuntimeTopology({ nodes, edges, flags: {} }, resolver)).toThrow(
-      'edge "badKind" kind "sel"',
-    );
-
-    delete edges.badKind;
     edges.unresolved = {
       id: "unresolved",
       from: "missing",
       fromPort: "future-output",
       to: "missing",
       toPort: "future-port",
-      kind: "sel",
+      kind: "pred",
     };
     expect(() => validateGraphRuntimeTopology({ nodes, edges, flags: {} }, resolver)).not.toThrow();
     expect(edges.unresolved).toEqual({
@@ -167,7 +161,7 @@ describe("GraphRuntimeSession", () => {
       fromPort: "future-output",
       to: "missing",
       toPort: "future-port",
-      kind: "sel",
+      kind: "pred",
     });
     runtime.dispose();
   });
@@ -290,7 +284,7 @@ describe("GraphRuntimeSession", () => {
         getAssetExpansionExact: (ref) =>
           ref.nodeTypeId === compiled.spec.definition.ref.nodeTypeId ? compiled.expansion : undefined,
       },
-      document: { node: (id) => nodes[id as keyof typeof nodes], edges: () => [] },
+      document: { node: (id) => nodes[id as keyof typeof nodes], edges: () => [], scopeFilter: () => null },
       schedule: (flush) => flush(),
     });
     runtime.load({ nodes, edges: {}, flags: {} });
@@ -299,16 +293,12 @@ describe("GraphRuntimeSession", () => {
       assetInnerNodeId("asset", "second"),
       assetOutputBoundaryNodeId("asset", "out"),
     ];
-    for (const id of expandedIds) {
-      expect(runtime.isRegistered(id)).toBe(true);
-      runtime.setCheckpointStatus(id, { pending: true, error: null });
-    }
+    for (const id of expandedIds) expect(runtime.isRegistered(id)).toBe(true);
 
     runtime.removeNode("asset");
 
     expect(runtime.isRegistered("asset")).toBe(false);
     expect(expandedIds.map((id) => runtime.isRegistered(id))).toEqual([false, false, false]);
-    expect(runtime.checkpoints.state).toEqual({});
     expect(() => runtime.removeNode("asset")).not.toThrow();
     runtime.dispose();
   });
@@ -325,52 +315,5 @@ describe("GraphRuntimeSession", () => {
     expect(nodes.source).toBe(original);
     expect(nodes.source.config).toBeUndefined();
     runtime.dispose();
-  });
-
-  test("owns frozen checkpoint rows by value and preserves active-empty", () => {
-    const cacheSpec: GraphRuntimeNodeSpec = {
-      ...transformSpec,
-      definition: {
-        ...transformSpec.definition,
-        ref: exactNodeTypeRef("cache", "1.0.0"),
-      },
-      cook: (inputs, host) => {
-        const frozen = host.frozenPredicate();
-        return frozen === undefined
-          ? (inputs.get("in")?.[0] ?? { kind: "pred", sql: null })
-          : { kind: "pred", sql: frozen };
-      },
-    };
-    const { runtime, nodes } = fixture([sourceSpec, transformSpec, cacheSpec]);
-    nodes.cache = node("cache", "cache");
-    runtime.registerNode(nodes.cache);
-
-    const rows = [rowIndex(3), rowIndex(8)];
-    runtime.pinCheckpointRows("cache", rows);
-    rows[0] = rowIndex(99);
-
-    expect(runtime.isCheckpointPinned("cache")).toBe(true);
-    expect(runtime.checkpointRows("cache")).toEqual([rowIndex(3), rowIndex(8)]);
-    runtime.unpinCheckpoint("cache");
-    expect(runtime.checkpointRows("cache")).toBeUndefined();
-    runtime.pinCheckpointRows("cache", []);
-    expect(runtime.pull("cache")).toEqual({ kind: "pred", sql: "FALSE" });
-    runtime.dispose();
-  });
-
-  test("owns transient checkpoint status and clears it with node/session disposal", () => {
-    const { runtime, nodes } = fixture();
-    nodes.source = node("source", "source");
-    nodes.cache = node("cache", "transform");
-    runtime.registerNode(nodes.source);
-    runtime.registerNode(nodes.cache);
-    runtime.setCheckpointStatus("cache", { pending: true, error: null });
-    expect(runtime.checkpoints.state.cache).toEqual({ pending: true, error: null });
-
-    runtime.removeNode("cache");
-    expect(runtime.checkpoints.state.cache).toBeUndefined();
-    runtime.setCheckpointStatus("other", { pending: false, error: "failed" });
-    runtime.dispose();
-    expect(runtime.checkpoints.state).toEqual({});
   });
 });

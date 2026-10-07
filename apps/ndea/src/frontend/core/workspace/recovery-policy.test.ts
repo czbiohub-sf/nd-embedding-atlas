@@ -1,38 +1,14 @@
 import { describe, expect, test } from "bun:test";
 
 import { createNativeAppNodeLibrary } from "@/core/node/library";
-import { toWorkspaceDocument } from "./document";
+import { emptyWorkspaceDocument } from "./document";
 import { workspaceSurfacePolicy } from "./WorkspaceShell";
 import { applyNodeAssetRecovery, initializeWorkspaceDocument } from "./workspace-context";
-import type { WorkspaceDocumentState } from "./types";
-
-function emptyState(): WorkspaceDocumentState {
-  return {
-    nodeAssets: [],
-    nodes: {},
-    edges: {},
-    positions: {},
-    sizeOverrides: {},
-    formOverride: {},
-    formLocked: {},
-    selectedNodeId: null,
-    selectedNodeIds: [],
-    selectedEdgeId: null,
-    stage: null,
-    disposition: "strip",
-    stripH: 280,
-    claimed: null,
-    graphPath: null,
-    flags: {},
-    state: {},
-    bindings: {},
-  };
-}
 
 describe("workspace recovery policy", () => {
   test("an invalid server document opens read-only: never loaded", () => {
     const invalid = {
-      ...toWorkspaceDocument(emptyState()),
+      ...emptyWorkspaceDocument(),
       edges: { e1: { id: "e1", from: "ghost", fromPort: "out", to: "ghost", toPort: "in", kind: "pred" } },
     };
     let loads = 0;

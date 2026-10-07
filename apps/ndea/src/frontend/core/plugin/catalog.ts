@@ -13,6 +13,7 @@ import {
   type PluginFactory,
   type PluginPermission,
 } from "@ndea/sdk";
+import { nodeCapabilities } from "@/core/node/capabilities";
 import {
   collectPluginContribution,
   disposePluginContributions,
@@ -26,28 +27,6 @@ import {
 
 const NODE_TYPE_ID_RE = /^[a-z0-9]+(?:[.-][a-z0-9]+)*(?:\/[a-z0-9]+(?:-[a-z0-9]+)*)*$/;
 const PORT_ID_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-
-const NODE_CAPABILITIES: Record<NodeCapability, true> = {
-  "data-read": true,
-  "row-set-publish": true,
-  "focus-coordination": true,
-  "view-coordination": true,
-  "schema-mutation": true,
-  "spatial-data": true,
-  "gpu-device": true,
-  "wasm-bitmap": true,
-  compute: true,
-  "annotation-write": true,
-  "ordering-coordination": true,
-  "filter-coordination": true,
-  "color-coordination": true,
-};
-
-const AUTHORITY_CAPABILITY_PERMISSIONS: Partial<Record<NodeCapability, PluginPermission>> = {
-  "gpu-device": "gpu",
-  "schema-mutation": "schema-mutation",
-  "annotation-write": "irreversible-data-write",
-};
 
 const DEFINITION_FIELDS: Record<string, true> = {
   ref: true,
@@ -260,7 +239,7 @@ function validateSource(source: NodeContributionSource, authorization?: PluginAu
     (value) => PluginPermissionSchema.safeParse(value).success,
   );
   validateUniqueValues(authorization?.grantedCapabilities ?? [], "app-granted capability", source, (value) =>
-    Object.hasOwn(NODE_CAPABILITIES, value),
+    Object.hasOwn(nodeCapabilities, value),
   );
   const requestedPermissions = new Set<PluginPermission>();
   for (const { permission } of manifest.permissions) {
@@ -363,8 +342,7 @@ function validatePorts(ports: CatalogNodeDefinition["inputs"], direction: string
     if (!PORT_ID_RE.test(port.id)) fail(label, `node "${id}" has invalid ${direction} port ID "${port.id}"`);
     if (ids.has(port.id)) fail(label, `node "${id}" duplicates ${direction} port "${port.id}"`);
     ids.add(port.id);
-    if (port.kind !== "pred" && port.kind !== "sel")
-      fail(label, `node "${id}" ${direction} port "${port.id}" has invalid kind`);
+    if (port.kind !== "pred") fail(label, `node "${id}" ${direction} port "${port.id}" has invalid kind`);
     if (typeof port.label !== "string" || !port.label.trim())
       fail(label, `node "${id}" ${direction} port "${port.id}" requires a label`);
     if (port.fanIn !== undefined && port.fanIn !== "and" && port.fanIn !== "or" && port.fanIn !== "diff")
@@ -388,7 +366,7 @@ function validateCapabilities(
   if (!Array.isArray(definition.capabilities)) fail(label, `node "${id}" capabilities must be an array`);
   const seen = new Set<string>();
   for (const capability of definition.capabilities) {
-    if (typeof capability !== "string" || !Object.hasOwn(NODE_CAPABILITIES, capability))
+    if (typeof capability !== "string" || !Object.hasOwn(nodeCapabilities, capability))
       fail(label, `node "${id}" declares unknown capability "${String(capability)}"`);
     if (seen.has(capability)) fail(label, `node "${id}" duplicates capability "${capability}"`);
     seen.add(capability);
@@ -398,7 +376,7 @@ function validateCapabilities(
     const requestedPermissions = new Set(source.manifest.permissions.map(({ permission }) => permission));
     const grantedCapabilities = new Set(authorization?.grantedCapabilities ?? []);
     for (const capability of seen) {
-      const permission = AUTHORITY_CAPABILITY_PERMISSIONS[capability as NodeCapability];
+      const permission = nodeCapabilities[capability as NodeCapability].permission;
       if (!permission) continue;
       if (!requestedPermissions.has(permission)) {
         fail(label, `node "${id}" capability "${capability}" requires manifest permission "${permission}"`);

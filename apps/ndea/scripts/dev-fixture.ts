@@ -16,14 +16,10 @@
 
 import type { PlateChannel } from "@ndea/protocol";
 import type { DuckDBConnection } from "@duckdb/node-api";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { createApp } from "../src/server/app.ts";
 import { DatasetQuerySession } from "../src/server/store.ts";
-import type { DatasetSessionMetadata, ServerSession } from "../src/server/state.ts";
+import { createServerSession, type DatasetSessionMetadata } from "../src/server/state.ts";
 import type { ObsmSliceLoader } from "../src/server/slice-loader.ts";
-import { WorkspaceDocumentStore } from "../src/server/workspace.ts";
-import { ObservationSets } from "../src/server/observation-sets.ts";
 
 const PORT = 5055;
 const HOST = "127.0.0.1";
@@ -68,24 +64,13 @@ const embeddingLoader = {
   },
 } as unknown as ObsmSliceLoader;
 
-const state: ServerSession = {
+const state = createServerSession({
   store,
-  datasets: new Map(),
-  spatial: null,
   obsColumns: OBS_COLUMNS,
   port: PORT,
   availableObsmKeys: [EMBEDDING_KEY],
-  loadingTasks: new Map(),
-  loadErrors: new Map(),
-  accessors: new Map(),
-  plateMounts: [],
   obsmLoaders: new Map([[EMBEDDING_KEY, embeddingLoader]]),
-  cropPool: null,
-  annotationsSidecarPath: null,
-  // A fresh document per run; the fixture data is synthetic, so nothing is worth keeping.
-  workspace: WorkspaceDocumentStore.empty(join(tmpdir(), `ndea-dev-fixture-${process.pid}.json`)),
-  observationSets: new ObservationSets(store),
-};
+});
 
 const config: DatasetSessionMetadata = {
   obsColumnNames: OBS_COLUMNS,

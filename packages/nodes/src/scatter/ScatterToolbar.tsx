@@ -9,7 +9,7 @@
  *
  * Two zones in one row (docked wraps when narrow; header clips):
  *  left  → [⋰] bracket icon + embedding chip + X/Y dim + COL pickers
- *  right → selection tools + checkpoint + track/fit
+ *  right → selection tools + track/fit
  */
 
 import { BoxSelect, ChartScatter, LassoSelect, Waypoints } from "lucide-react";

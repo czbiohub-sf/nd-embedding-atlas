@@ -85,11 +85,10 @@ describe("coordination cells", () => {
 const coordinator = (rows: number[]) => ({ query: async () => rows.map((__row_index__) => ({ __row_index__ })) });
 
 describe("filter binding (crossfilter)", () => {
-  test("a member sees every other source's clauses ANDed with its graph input, never its own", () => {
+  test("publish and clear edit only the member's own facet in the scope cell", () => {
     const { co } = fresh();
-    co.assignScope("table", "filter", "A");
     co.assignScope("scatter", "filter", "A");
-    const table = createFilterBinding({ nodeId: "table", coordination: co, coordinator: coordinator([]), table: "t" });
+    co.setCoordinationValue("filter", "A", { agent: { where: { op: "eq", column: "infected", value: true } } });
     const scatter = createFilterBinding({
       nodeId: "scatter",
       coordination: co,
@@ -98,25 +97,14 @@ describe("filter binding (crossfilter)", () => {
     });
 
     scatter.publish("range", { op: "between", column: "area", range: [1, 5] });
-    co.setCoordinationValue("filter", "A", {
-      ...co.readCoordination("filter", "A"),
+    expect(co.readCoordination("filter", "A")).toEqual({
       agent: { where: { op: "eq", column: "infected", value: true } },
+      scatter: { range: { op: "between", column: "area", range: [1, 5] } },
     });
-    table.setGraphPredicate(`"t" < 3`);
-
-    const tableSql = table.getResolved().predicate ?? "";
-    expect(tableSql).toContain(`"t" < 3`);
-    expect(tableSql).toContain(`"area" BETWEEN 1 AND 5`);
-    expect(tableSql).toContain(`"infected" = TRUE`);
-    expect(scatter.getResolved().predicate).toContain(`"infected" = TRUE`);
-    expect(scatter.getResolved().predicate).not.toContain("area");
-    expect(String(table.selection.predicate(null))).toContain(`"area" BETWEEN 1 AND 5`);
-
     scatter.clear("range");
     expect(co.readCoordination("filter", "A")).toEqual({
       agent: { where: { op: "eq", column: "infected", value: true } },
     });
-    expect(table.getResolved().predicate).not.toContain("area");
   });
 
   test("an unbound node publishes nothing; materialization rejects a filter that moved", async () => {

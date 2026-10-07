@@ -30,7 +30,6 @@ export interface AppNodeSpec {
   readonly stage: "stageable" | "canvas-only";
   readonly inPalette: boolean;
   readonly accent?: string;
-  readonly checkpoint?: boolean;
   readonly requiredHostFacets?: readonly AppNodeHostFacetName[];
 }
 
@@ -80,7 +79,6 @@ export function nativeNodeSpecOf(
     stage: contribution.presentation.stage,
     inPalette: contribution.presentation.inPalette,
     accent: contribution.presentation.accent,
-    checkpoint: contribution.presentation.checkpoint,
     requiredHostFacets: contribution.presentation.requiredHostFacets,
   });
 }

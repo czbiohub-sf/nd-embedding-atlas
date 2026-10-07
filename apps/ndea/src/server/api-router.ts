@@ -19,13 +19,7 @@ import { handleFilter } from "./routes/filter.ts";
 import { handleSetsPost } from "./routes/sets.ts";
 import { handleWorkspaceGet, handleWorkspaceNode, handleWorkspacePatch } from "./routes/workspace.ts";
 import { handleHealth, handleObsBatch, handleObsDetail, handleObsInfo } from "./routes/obs.ts";
-import {
-  handleScatterCategories,
-  handleScatterContinuousValues,
-  handleScatterPositions,
-  handleScatterSelectionDelete,
-  handleScatterSelectionPost,
-} from "./routes/scatter.ts";
+import { handleScatterCategories, handleScatterContinuousValues, handleScatterPositions } from "./routes/scatter.ts";
 import { handleTrajectory } from "./routes/trajectory.ts";
 import { handleVarColumn, handleVarColumnStatus, handleVarLayers, handleVarNames } from "./routes/var.ts";
 import type { ServerSession } from "./state.ts";
@@ -69,16 +63,6 @@ function routeScatterValues({ req, url, pathname, method, store, state }: ApiRou
   }
   if (pathname === "/api/scatter-continuous-values" && method === "GET") {
     return handleScatterContinuousValues(url, store);
-  }
-  return null;
-}
-
-function routeScatterSelection({ req, pathname, method, store }: ApiRouteContext): ApiRouteResult {
-  if (pathname === "/api/scatter-selection" && method === "POST") {
-    return handleScatterSelectionPost(req, store);
-  }
-  if (pathname === "/api/scatter-selection" && method === "DELETE") {
-    return handleScatterSelectionDelete(store);
   }
   return null;
 }
@@ -208,7 +192,6 @@ function routeImages({ req, pathname, state }: ApiRouteContext): ApiRouteResult 
 const API_ROUTE_DISPATCHERS: readonly ApiRouteDispatcher[] = [
   routeCore,
   routeScatterValues,
-  routeScatterSelection,
   routeSets,
   routeTrajectory,
   routeObs,

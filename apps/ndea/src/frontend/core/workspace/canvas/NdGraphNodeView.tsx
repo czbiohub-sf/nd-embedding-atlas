@@ -150,7 +150,7 @@ export function ResolvedNdGraphNode({
         label={label}
         led={led}
         count={countText}
-        badge={spec?.checkpoint ? <NdHud size={9}>◆</NdHud> : undefined}
+        badge={spec?.role === "cache" ? <NdHud size={9}>◆</NdHud> : undefined}
         selected={selected || inMarquee}
         claimed={claimed}
         staged={staged}

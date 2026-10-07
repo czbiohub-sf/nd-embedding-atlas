@@ -1,11 +1,11 @@
 /**
- * Bounded observation lookup for a predicate: exact count plus the first
- * `limit` identities, ordered by row index. Shared by every route that
- * answers "which observations does this predicate select?".
+ * Observation predicates execute only as prepared single statements.
+ * Owns bounded lookup, counts, annotation stamps, and file exports.
  */
 
 import type { FilterRow } from "@ndea/protocol";
 import type { ServerSession } from "./state.ts";
+import { annValueLiteral, quoteIdent, type DatasetQuerySession } from "./store.ts";
 
 export interface ObservationPage {
   count: number;
@@ -26,14 +26,13 @@ export async function queryObservations(
   const multi = await state.store.hasDatasetColumn();
   const singleKey = state.datasets.keys().next().value ?? "";
   // Single prepared statements: `sql` may come from a workspace document.
-  const [countRows, rows] = await Promise.all([
-    state.store.querySingleJson(`SELECT count(*)::INT AS n FROM dataset${where}`),
+  const [count, rows] = await Promise.all([
+    countObservations(state.store, sql),
     state.store.querySingleJson(
       `SELECT __row_index__, obs_name${multi ? ", _dataset" : ""} FROM dataset${where} ` +
         `ORDER BY __row_index__ LIMIT ${limit}`,
     ),
   ]);
-  const count = Number(countRows[0]?.n ?? 0);
   return {
     count,
     rows: rows.map((row) => ({
@@ -43,4 +42,48 @@ export async function queryObservations(
     })),
     truncated: count > rows.length,
   };
+}
+
+/** Exact population count. Invalid or stacked predicates never execute. */
+export async function countObservations(store: DatasetQuerySession, predicate: string | null): Promise<number> {
+  const where = predicate ? ` WHERE (${predicate})` : "";
+  const rows = await store.querySingleJson(`SELECT count(*) AS n FROM dataset${where}`);
+  return Number(rows[0]?.n ?? 0);
+}
+
+/** Stamp matching identities and return the population count before the write. */
+export async function annotateObservations(
+  store: DatasetQuerySession,
+  column: string,
+  value: string | null,
+  predicate: string,
+): Promise<number> {
+  const entry = store.annotationColumns.get(column);
+  if (!entry) throw new Error(`Unknown annotation column: ${column}`);
+  const datasetKey = (await store.hasDatasetColumn()) ? "ds._dataset" : "''";
+  const literal = annValueLiteral(value, entry.dtype);
+  const count = await countObservations(store, predicate);
+  await store.executeSingle(
+    `INSERT OR REPLACE INTO ${entry.table} (__row_index__, dataset_key, obs_name, ${quoteIdent(column)}) ` +
+      `SELECT ds.__row_index__, ${datasetKey}, ds.obs_name, ${literal} FROM dataset ds WHERE (${predicate})`,
+  );
+  return count;
+}
+
+/** Export matching observations, optionally projecting annotation columns, as one prepared COPY. */
+export async function exportObservations(
+  store: DatasetQuerySession,
+  predicate: string | null,
+  outputPath: string,
+  format: "parquet" | "csv" = "parquet",
+  columns?: string[],
+): Promise<void> {
+  const where = predicate ? ` WHERE (${predicate})` : "";
+  let projection = "*";
+  if (columns) {
+    const identities = (await store.hasDatasetColumn()) ? "obs_name, _dataset" : "obs_name";
+    projection = `${identities}, ${columns.map((column) => `CAST(${quoteIdent(column)} AS TEXT) AS ${quoteIdent(column)}`).join(", ")}`;
+  }
+  const escaped = outputPath.replaceAll("'", "''");
+  await store.executeSingle(`COPY (SELECT ${projection} FROM dataset${where}) TO '${escaped}' (FORMAT ${format})`);
 }

@@ -1,12 +1,17 @@
 import { describe, expect, test } from "bun:test";
-import { rowIndex } from "@ndea/sdk";
+import type { Metadata } from "@ndea/protocol";
 import { predicateSql } from "@/core/graph/cook";
 import { createNativeAppNodeLibrary } from "@/core/node/library";
+import { WorkspaceEvaluator } from "../../../server/graph";
+import { WorkspaceDocumentStore } from "../../../server/workspace";
+import { decodeWorkspaceDocument } from "./sync";
 import { Workspace } from "./workspace-store";
-import type { Metadata } from "@ndea/protocol";
 
 const library = createNativeAppNodeLibrary();
-(globalThis as { requestAnimationFrame?: unknown }).requestAnimationFrame ??= (() => 0) as unknown;
+(globalThis as { requestAnimationFrame?: unknown }).requestAnimationFrame = (callback: FrameRequestCallback) => {
+  callback(0);
+  return 0;
+};
 
 function makeWs() {
   return new Workspace({
@@ -17,8 +22,11 @@ function makeWs() {
   });
 }
 
+const SET = "0123456789abcdef";
+const PINNED = `"__row_index__" IN (SELECT __row_index__ FROM ndea_obs_sets WHERE set_id = '${SET}')`;
+
 describe("Cache node", () => {
-  test("combines live graph predicate and freezes row identities", () => {
+  test("live output is its input AND its filter scope; a pin replaces both", () => {
     const ws = makeWs();
     const obs = ws.addNode("obs", { x: 0, y: 0 }, "obs");
     const wrangle = ws.addNode("wrangle", { x: 100, y: 0 });
@@ -26,21 +34,34 @@ describe("Cache node", () => {
     ws.connect(obs, wrangle);
     ws.connect(wrangle, cache);
     ws.updateNodeConfig(wrangle, { predicateSql: "x > 1" });
-    ws.setLiveCachePredicate(cache, "(x > 1) AND (y < 9)");
+    ws.coordination.assignScope(cache, "filter", "A");
+    ws.coordination.setCoordinationValue("filter", "A", { agent: { where: { op: "lt", column: "y", value: 9 } } });
+    expect(predicateSql(ws.pullGraphNode(cache))).toBe(`(x > 1) AND ((("y" < 9)))`);
 
-    expect(predicateSql(ws.pullGraphNode(cache))).toBe("(x > 1) AND (y < 9)");
-    expect(ws.pinCache(cache, [rowIndex(3), rowIndex(8)])).toBe(true);
-    ws.setLiveCachePredicate(cache, "x > 999");
-    expect(predicateSql(ws.pullGraphNode(cache))).toBe("__row_index__ IN (3, 8)");
+    ws.updateNodeConfig(cache, { pin: { clause: { op: "inSet", set: SET }, count: 2 } });
+    ws.coordination.setCoordinationValue("filter", "A", { agent: { where: { op: "gt", column: "y", value: 0 } } });
+    expect(predicateSql(ws.pullGraphNode(cache))).toBe(PINNED);
 
-    ws.uncache(cache);
-    expect(predicateSql(ws.pullGraphNode(cache))).toBe("x > 999");
+    ws.updateNodeConfig(cache, { pin: null });
+    expect(predicateSql(ws.pullGraphNode(cache))).toBe(`(x > 1) AND ((("y" > 0)))`);
+    ws.dispose();
   });
 
-  test("active-empty pin remains an empty predicate", () => {
+  test("a pin survives the document round trip and the server reads the same rows", () => {
     const ws = makeWs();
     const cache = ws.addNode("cache", { x: 0, y: 0 });
-    ws.pinCache(cache, []);
-    expect(predicateSql(ws.pullGraphNode(cache))).toBe("FALSE");
+    ws.updateNodeConfig(cache, { pin: { clause: { op: "inSet", set: SET }, count: 2 } });
+    const document = ws.store.state;
+
+    const reopened = makeWs();
+    const decoded = decodeWorkspaceDocument(document, reopened.nodeLibrary);
+    if (!decoded.ok) throw new Error(decoded.errors.join("; "));
+    reopened.loadDocument(decoded.state);
+    expect(predicateSql(reopened.pullGraphNode(cache))).toBe(PINNED);
+
+    const server = new WorkspaceEvaluator(WorkspaceDocumentStore.empty("/tmp/unused.json", document)).evaluate(cache);
+    expect(server.status === "resolved" ? server.value.sql : server.status).toBe(PINNED);
+    ws.dispose();
+    reopened.dispose();
   });
 });

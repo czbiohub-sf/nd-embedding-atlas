@@ -3,7 +3,6 @@ import { useCallback, useRef } from "react";
 import { useScatterHost } from "../../context";
 import type { CategoryMapping } from "../../contracts";
 import type { IsolationCapability } from "../../gpu/handle-capabilities";
-import { publishIsolationFilter } from "../../routing";
 
 interface UseIsolationBridgeOptions {
   coloredCategoryMapping: CategoryMapping | null;
@@ -47,18 +46,18 @@ export function useIsolationBridge(opts: UseIsolationBridgeOptions): UseIsolatio
       const currentHost = hostRef.current;
 
       if (isolatedIndices.size === 0 || !catMap || !col) {
-        publishIsolationFilter(currentHost, null);
+        currentHost.filter.clear("isolation");
         scatter?.clearCategoryIsolation();
         return;
       }
 
       const labels = catMap.legend.filter((item) => isolatedIndices.has(item.index)).map((item) => item.label);
       if (labels.length === 0) {
-        publishIsolationFilter(currentHost, null);
+        currentHost.filter.clear("isolation");
         scatter?.clearCategoryIsolation();
         return;
       }
-      publishIsolationFilter(currentHost, { op: "in", column: col, values: labels });
+      currentHost.filter.publish("isolation", { op: "in", column: col, values: labels });
 
       if (scatter && catIndices) {
         scatter.setCategoryIsolation(isolatedIndices, catIndices);

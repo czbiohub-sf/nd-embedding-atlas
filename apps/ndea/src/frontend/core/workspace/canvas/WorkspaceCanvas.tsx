@@ -35,7 +35,6 @@ import {
 } from "@xyflow/react";
 // eslint-disable-next-line import/no-unassigned-import
 import "@xyflow/react/dist/style.css";
-import { useSelector } from "@tanstack/react-store";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { NdBreadcrumb } from "@/components/node-workspace/nd-breadcrumb";
@@ -47,7 +46,7 @@ import { BRAND_PERIWINKLE } from "@/lib/color/brand";
 import { useTheme } from "@/ThemeProvider";
 import { ND_CANVAS, ND_TIMING, ND_ZOOM } from "../constants";
 import { FeedbackChannelsContext, useFeedbackChannels } from "../feedback";
-import { useWorkspace, useWorkspaceSelector } from "../workspace-context";
+import { useWorkspace, useWorkspaceSelector, useWorkspaceSession } from "../workspace-context";
 import { AddNodeMenu, type AddMenuState } from "./AddNodeMenu";
 import { K1Cursor } from "./K1Cursor";
 import { KnifeLayer, useYHeld } from "./KnifeLayer";
@@ -120,11 +119,11 @@ function WorkspaceCanvasInner() {
   const wsNodes = useWorkspaceSelector((s) => s.nodes);
   const wsEdges = useWorkspaceSelector((s) => s.edges);
   const positions = useWorkspaceSelector((s) => s.positions);
-  const graphPath = useWorkspaceSelector((s) => s.graphPath);
-  const selectedNodeIds = useWorkspaceSelector((s) => s.selectedNodeIds);
-  const claimed = useWorkspaceSelector((s) => s.claimed);
-  const baseForm = useSelector(ws.ui, (u) => u.baseForm);
-  const assetAuthoring = useSelector(ws.ui, (u) => u.assetAuthoring);
+  const graphPath = useWorkspaceSession((s) => s.graphPath);
+  const selectedNodeIds = useWorkspaceSession((s) => s.selectedNodeIds);
+  const claimed = useWorkspaceSession((s) => s.claimed);
+  const baseForm = useWorkspaceSession((u) => u.baseForm);
+  const assetAuthoring = useWorkspaceSession((u) => u.assetAuthoring);
   // Derived ONCE here (the DFS), then shared with every node via context: a
   // per-node call would re-run it N times. Recomputes only on topology change.
   const feedbackChannels = useFeedbackChannels();
@@ -168,7 +167,7 @@ function WorkspaceCanvasInner() {
         sourceHandle: e.fromPort,
         target: e.to,
         targetHandle: e.toPort,
-        data: { kind: e.kind },
+        data: {},
         style: claimed ? { opacity: 0.25, transition: "opacity 200ms" } : undefined,
       }));
   }, [wsEdges, levelNodes, claimed]);
@@ -185,11 +184,11 @@ function WorkspaceCanvasInner() {
   // zoom → global render band (hysteresis): only when zoom-semantic forms
   // are opted in; by default every node holds its largest view and zoom is
   // pure navigation. Fresh form overrides clear on band change.
-  const zoomForms = useSelector(ws.ui, (u) => u.zoomForms);
+  const zoomForms = useWorkspaceSession((u) => u.zoomForms);
   const bandRef = useRef<NdForm>(baseForm);
   const onMove = useCallback(
     (_: unknown, viewport: { zoom: number }) => {
-      if (!ws.ui.state.zoomForms) return;
+      if (!ws.session.state.zoomForms) return;
       const next = ndZoomBand(viewport.zoom, bandRef.current, ND_ZOOM);
       if (next !== bandRef.current) {
         bandRef.current = next;
@@ -278,8 +277,9 @@ function WorkspaceCanvasInner() {
   /* ── tidy (L): Sugiyama-lite over the level, or just the marquee set ── */
   const tidy = useCallback(() => {
     const s = ws.store.state;
-    const level = Object.values(s.nodes).filter((n) => (n.parent ?? null) === s.graphPath);
-    const scope = s.selectedNodeIds.length > 1 ? new Set(s.selectedNodeIds) : new Set(level.map((n) => n.id));
+    const sess = ws.session.state;
+    const level = Object.values(s.nodes).filter((n) => (n.parent ?? null) === sess.graphPath);
+    const scope = sess.selectedNodeIds.length > 1 ? new Set(sess.selectedNodeIds) : new Set(level.map((n) => n.id));
     const tidyNodes = level.map((n) => {
       const size = resolveNodeSize(ws, n.id);
       return { id: n.id, w: size.w, h: size.h };
@@ -374,14 +374,14 @@ function WorkspaceCanvasInner() {
         openAddMenuAt(m?.x ?? (rect ? rect.left + rect.width / 2 : 0), m?.y ?? (rect ? rect.top + rect.height / 2 : 0));
       }
       if ((e.key === "l" || e.key === "L") && !e.metaKey && !e.ctrlKey && !e.shiftKey) tidy();
-      if (e.key === "u" && !e.metaKey && !e.ctrlKey && ws.store.state.graphPath) ws.exitSubnet();
+      if (e.key === "u" && !e.metaKey && !e.ctrlKey && ws.session.state.graphPath) ws.exitSubnet();
       // node flags on the selected node (Houdini b / d)
       if ((e.key === "b" || e.key === "d") && !e.metaKey && !e.ctrlKey) {
-        const sel = ws.store.state.selectedNodeId;
+        const sel = ws.session.state.selectedNodeId;
         if (sel) ws.toggleFlag(sel, e.key === "b" ? "bypass" : "off");
       }
       if (e.key === "Escape") {
-        const s = ws.store.state;
+        const s = ws.session.state;
         if (addMenu) setAddMenu(null);
         else if (s.selectedEdgeId) ws.selectEdge(null);
         else if (s.selectedNodeId || s.selectedNodeIds.length) clearSelection();
@@ -449,7 +449,7 @@ function WorkspaceCanvasInner() {
               // ReactFlow paints the minimap into SVG fill attributes, which do
               // not resolve var(), so these have to be literals.
               if (!node) return MINIMAP_NODE_FALLBACK;
-              if (n.id === ws.store.state.selectedNodeId) return BRAND_PERIWINKLE[500];
+              if (n.id === ws.session.state.selectedNodeId) return BRAND_PERIWINKLE[500];
               return ws.nodeLibrary.getSpecExact(node.definitionRef)?.accent ?? MINIMAP_NODE_FALLBACK;
             }}
             nodeStrokeWidth={0}

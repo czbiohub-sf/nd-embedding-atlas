@@ -6,8 +6,7 @@
  *   2. ratchet: legacy app-local node implementation directories stay gone.
  *   3. ratchet: package node views are `view.tsx`, never `<X>PluginView.tsx`.
  *
- * Naming is the contract here; behavior is covered by node-registry.test.ts
- * (every type resolves a spec) and host-routing.test.ts (cross-view routing).
+ * Naming is the contract here; behavior is covered by node-registry.test.ts.
  */
 
 import { describe, expect, test } from "bun:test";

@@ -9,7 +9,6 @@
 
 import { getByPath, type StateStore } from "@json-render/core";
 import { defineRegistry, JSONUIProvider, Renderer } from "@json-render/react";
-import { useSelector } from "@tanstack/react-store";
 import { Children, createContext, use, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
@@ -21,7 +20,7 @@ import { NODE_EDITOR_ENABLED } from "@/feature-flags";
 import { BodySocket, HeaderSocket } from "../body-dock";
 import { ND_STAGE, ND_TIMING } from "../constants";
 import { useNodeCount } from "../use-node-count";
-import { useTelemetrySelector, useWorkspace, useWorkspaceSelector } from "../workspace-context";
+import { useTelemetrySelector, useWorkspace, useWorkspaceSelector, useWorkspaceSession } from "../workspace-context";
 import type { Workspace } from "../workspace-store";
 import { FlagButton } from "../canvas/node-extras";
 import { stageCatalog, type SplitSide, type Stage } from "./stage-spec";
@@ -58,13 +57,13 @@ function StageTile({ elementId, nodeId, title }: { elementId: string; nodeId: st
   const ws = useWorkspace();
   const { editable, tileDrag, beginTileDrag } = useStage();
   const node = useWorkspaceSelector((s) => s.nodes[nodeId]);
-  const selected = useWorkspaceSelector((s) => s.selectedNodeId === nodeId);
+  const selected = useWorkspaceSession((s) => s.selectedNodeId === nodeId);
   const telemetryOn = useTelemetrySelector((t) => t.enabled);
   const cooking = useTelemetrySelector((t) => t.cooking[nodeId] ?? false);
   const dirty = useTelemetrySelector((t) => t.dirty[nodeId] ?? false);
-  const flipHidden = useSelector(ws.ui, (u) => u.flipHide === `stage:${nodeId}`);
+  const flipHidden = useWorkspaceSession((u) => u.flipHide === `stage:${nodeId}`);
   const flagsOff = useWorkspaceSelector((s) => s.flags[nodeId]?.off ?? false);
-  const fullscreen = useSelector(ws.ui, (u) => u.fullscreen === nodeId);
+  const fullscreen = useWorkspaceSession((u) => u.fullscreen === nodeId);
 
   const def = node ? ws.nodeLibrary.getDescriptorExact(node.definitionRef) : null;
   const hasBody = node ? ws.nodeLibrary.getSpecExact(node.definitionRef)?.definition.load !== undefined : false;

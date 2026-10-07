@@ -1,36 +1,11 @@
 import type { ComponentType, MouseEvent } from "react";
-import type { NodeHost } from "@ndea/sdk";
 
-export type CacheCapabilities = "filter-coordination";
+export type CacheCapabilities = "data-read" | "filter-coordination" | "row-set-publish";
 
-export type CacheCheckpointInput =
-  | {
-      readonly kind: "predicate";
-      readonly predicate: string | null;
-    }
-  | {
-      readonly kind: "row-set";
-      readonly predicate: string | null;
-      readonly rowCount: number | null;
-    };
-
-export interface CacheCheckpointSnapshot {
-  readonly epoch: number;
-  readonly pinned: boolean;
-  readonly pinnedEpoch: number | null;
-  readonly input: CacheCheckpointInput | null;
-  readonly pending: boolean;
-  readonly error: string | null;
+/** A pinned Cache holds its rows as a named observation set; `null` passes the live input through. */
+export interface CacheConfig {
+  readonly pin: { readonly clause: { readonly op: "inSet"; readonly set: string }; readonly count: number } | null;
 }
-
-export interface CacheCheckpointService {
-  getSnapshot(): CacheCheckpointSnapshot;
-  subscribe(onChange: () => void): () => void;
-  pin(): Promise<boolean>;
-  unpin(): void;
-}
-
-export type CacheCheckpointResolver = (host: NodeHost<unknown, CacheCapabilities>) => CacheCheckpointService;
 
 export type CacheIconButton = ComponentType<{
   icon: "freeze";

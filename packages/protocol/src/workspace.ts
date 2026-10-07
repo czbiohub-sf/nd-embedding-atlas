@@ -80,20 +80,12 @@ export const WorkspaceNodeResultSchema = z.object({
   status: z.enum(["resolved", "unresolved", "error"]),
   error: z.string().optional(),
   output: z
-    .discriminatedUnion("kind", [
-      z.object({
-        kind: z.literal("pred"),
-        sql: z.string().nullable(),
-        scopeFilter: z.string().nullable(),
-        ...ObservationPageSchema,
-      }),
-      z.object({
-        kind: z.literal("sel"),
-        sql: z.string().nullable(),
-        scopeFilter: z.string().nullable(),
-        ...ObservationPageSchema,
-      }),
-    ])
+    .object({
+      kind: z.literal("pred"),
+      sql: z.string().nullable(),
+      scopeFilter: z.string().nullable(),
+      ...ObservationPageSchema,
+    })
     .optional(),
 });
 export type WorkspaceNodeResult = z.infer<typeof WorkspaceNodeResultSchema>;

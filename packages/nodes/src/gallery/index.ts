@@ -2,7 +2,6 @@ export { createGalleryDefinition } from "./definition";
 export { GalleryPane } from "./GalleryPane";
 export { GalleryPluginView } from "./view";
 export { LassoGalleryCard } from "./LassoGalleryCard";
-export { focusObs } from "./routing";
 export { usePredicateGalleryObs } from "./usePredicateGalleryObs";
 export { useGalleryCropQuery, obsCoordKey } from "./useGalleryCropQuery";
 export type { GalleryConfig, GalleryCapabilities, GalleryServices, ChannelDef, ChannelHash } from "./contracts";

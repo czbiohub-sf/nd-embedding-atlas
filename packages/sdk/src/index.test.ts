@@ -42,7 +42,7 @@ const mountedViewDefinition = defineNode({
   ref: exactNodeTypeRef("example/view", "1.0.0"),
   title: "Example view",
   role: "view",
-  inputs: [{ id: "in", kind: "sel", label: "Rows" }],
+  inputs: [{ id: "in", kind: "pred", label: "Rows" }],
   outputs: [],
   capabilities: ["focus-coordination"],
   load: () =>

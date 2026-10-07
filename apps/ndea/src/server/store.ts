@@ -90,7 +90,7 @@ function annSqlType(dtype: AnnotationDtype): string {
  * columns take a bare numeric literal (and reject non-integers at the door);
  * text columns take a single-quote-escaped string. NULL passes through.
  */
-function annValueLiteral(value: string | null, dtype: AnnotationDtype): string {
+export function annValueLiteral(value: string | null, dtype: AnnotationDtype): string {
   if (value == null) return "NULL";
   if (dtype === "integer") {
     const n = Number(value);
@@ -575,47 +575,6 @@ export class DatasetQuerySession {
     }
   }
 
-  /**
-   * Stamp `value` onto every obs in the staged `__scatter_selection` temp
-   * table. Resolves durable identity (dataset_key, obs_name) server-side by
-   * JOINing against obs_base because the client only has row indices.
-   */
-  async writeAnnotationFromScatterSelection(colName: string, value: string | null): Promise<void> {
-    const entry = this._annotationCols.get(colName);
-    if (!entry) throw new Error(`Unknown annotation column: ${colName}`);
-    const datasetKeyExpr = (await this.hasDatasetColumn()) ? "ob._dataset" : "''";
-    const v = annValueLiteral(value, entry.dtype);
-    await this.conn.run(
-      `INSERT OR REPLACE INTO ${entry.table} (__row_index__, dataset_key, obs_name, ${quoteIdent(colName)}) ` +
-        `SELECT ob.__row_index__, ${datasetKeyExpr}, ob.obs_name, ${v} ` +
-        `FROM __scatter_selection ss JOIN obs_base ob ON ob.__row_index__ = ss.row_index`,
-    );
-  }
-
-  /**
-   * Stamp `value` onto every obs matching `predicate` (a client Mosaic WHERE
-   * fragment): the node-graph Annotate node's batch door. Resolves identity
-   * from the `dataset` VIEW so the predicate may reference embeddings / var /
-   * other annotation columns, not just obs_base. Trust model =
-   * `/api/annotations/export`: single-user local tool. Returns the matched count.
-   *
-   * ponytail: two passes (INSERT…SELECT then COUNT). Fine at v1 scale; collapse
-   * to one if the count cost ever shows up.
-   */
-  async writeAnnotationFromPredicate(colName: string, value: string | null, predicate: string): Promise<number> {
-    const entry = this._annotationCols.get(colName);
-    if (!entry) throw new Error(`Unknown annotation column: ${colName}`);
-    const datasetKeyExpr = (await this.hasDatasetColumn()) ? "ds._dataset" : "''";
-    const v = annValueLiteral(value, entry.dtype);
-    await this.conn.run(
-      `INSERT OR REPLACE INTO ${entry.table} (__row_index__, dataset_key, obs_name, ${quoteIdent(colName)}) ` +
-        `SELECT ds.__row_index__, ${datasetKeyExpr}, ds.obs_name, ${v} ` +
-        `FROM dataset ds WHERE ${predicate}`,
-    );
-    const rows = await this.queryJson(`SELECT count(*)::INT AS n FROM dataset WHERE ${predicate}`);
-    return Number(rows[0]?.n ?? 0);
-  }
-
   /** Drop an annotation column and remove it from the VIEW. */
   async dropAnnotationColumn(colName: string): Promise<void> {
     const entry = this._annotationCols.get(colName);
@@ -830,6 +789,12 @@ export class DatasetQuerySession {
     const statement = await this.conn.prepare(sql);
     const reader = await statement.runAndReadAll();
     return (reader.getRowObjectsJS() as RowData[]).map(coerceRow);
+  }
+
+  /** Execute exactly one SQL statement, rejecting stacked statements before execution. */
+  async executeSingle(sql: string): Promise<void> {
+    const statement = await this.conn.prepare(sql);
+    await statement.run();
   }
 
   /** Execute SQL with no return value (DDL / DML). */

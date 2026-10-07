@@ -221,10 +221,9 @@ function PortsDemo() {
     <div className="py-3.5">
       {portRow("pred", "out", "idle", "filled circle: emits a predicate (pull wire, periwinkle)")}
       {portRow("pred", "in", "idle", "hollow circle: accepts predicates; owns the fan-in operator chip")}
-      {portRow("sel", "out", "idle", "diamond: user-driven selection (push wire, amber); lasso source")}
       {portRow("pred", "in", "legal", "legal drop target during a wire drag: green glow")}
       {portRow("pred", "in", "illegal", "kind mismatch / cycle / duplicate: dimmed to 30%")}
-      {portRow("sel", "out", "source", "origin of the live wire drag: kind-colored ring")}
+      {portRow("pred", "out", "source", "origin of the live wire drag: kind-colored ring")}
     </div>
   );
 }

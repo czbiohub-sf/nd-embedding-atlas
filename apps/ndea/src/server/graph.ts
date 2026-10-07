@@ -13,7 +13,8 @@ import {
   type GraphRuntimeNodeResolver,
   type GraphRuntimeNodeSpec,
 } from "../frontend/core/graph/runtime-session.ts";
-import { decodeNodeConfigs, type WorkspaceDocument } from "../frontend/core/workspace/document.ts";
+import { decodeNodeConfigs } from "../frontend/core/workspace/document.ts";
+import type { WorkspaceDocument } from "../frontend/core/workspace/types.ts";
 import type { WorkspaceDocumentStore } from "./workspace.ts";
 import { filterScopeSql } from "../frontend/core/coordination/types.ts";
 
@@ -83,9 +84,7 @@ export class WorkspaceEvaluator {
     if (!session) return { revision, status: "error", error };
     try {
       const value = session.pull(nodeId);
-      const scopeFilter = filterScopeSql(doc, nodeId);
-      const sql = scopeFilter ? (value.sql ? `(${value.sql}) AND (${scopeFilter})` : scopeFilter) : value.sql;
-      return { revision, status: "resolved", value: { ...value, sql }, scopeFilter };
+      return { revision, status: "resolved", value, scopeFilter: filterScopeSql(doc, nodeId) };
     } catch (pullError) {
       return { revision, status: "error", error: errorMessage(pullError) };
     }
@@ -99,7 +98,11 @@ export class WorkspaceEvaluator {
       const nodes = decodeNodeConfigs(document.nodes, this.resolver);
       const session = new GraphRuntimeSession({
         resolver: this.resolver,
-        document: { node: (id) => nodes[id], edges: () => Object.values(document.edges) },
+        document: {
+          node: (id) => nodes[id],
+          edges: () => Object.values(document.edges),
+          scopeFilter: (id) => filterScopeSql(document, id),
+        },
       });
       session.load({ nodes, edges: document.edges, flags: document.flags });
       this.current = { revision, session, error: "" };

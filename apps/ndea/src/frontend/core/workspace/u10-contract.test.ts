@@ -13,35 +13,11 @@ import type { GraphDocumentNode } from "@/core/graph/records";
 import { createAppNodeLibrary, createNativeAppNodeLibrary } from "@/core/node/library";
 import { createNodeCatalog } from "@/core/plugin/catalog";
 import { Workspace } from "./workspace-store";
-import type { WorkspaceDocumentState } from "./types";
-import { toWorkspaceDocument, workspaceSessionOf } from "./document";
+import { emptyWorkspaceDocument as emptyState } from "./document";
 import { decodeWorkspaceDocument } from "./sync";
 
 const library = createNativeAppNodeLibrary();
 const datasetRef = exactNodeTypeRef("dataset", "1.0.0");
-
-function emptyState(): WorkspaceDocumentState {
-  return {
-    nodeAssets: [],
-    nodes: {},
-    edges: {},
-    positions: {},
-    sizeOverrides: {},
-    formOverride: {},
-    formLocked: {},
-    selectedNodeId: null,
-    selectedNodeIds: [],
-    selectedEdgeId: null,
-    stage: null,
-    disposition: "strip",
-    stripH: 280,
-    claimed: null,
-    graphPath: null,
-    flags: {},
-    state: {},
-    bindings: {},
-  };
-}
 
 function versionedDefinition(nodeTypeVersion: string, sql: string) {
   return defineNode({
@@ -122,7 +98,7 @@ describe("U10 exact-reference persistence contract", () => {
       label: "Dataset",
       config: { version: nodeConfigVersion(0), value: {} },
     };
-    const decoded = decodeWorkspaceDocument(toWorkspaceDocument(state), library);
+    const decoded = decodeWorkspaceDocument(state, library);
     expect(decoded.ok && decoded.state.nodes.d1.config).toEqual({
       version: nodeConfigVersion(1),
       value: { datasetKey: null },
@@ -137,7 +113,7 @@ describe("U10 exact-reference persistence contract", () => {
       label: "Dataset",
       config: { version: nodeConfigVersion(99), value: {} },
     };
-    expect(decodeWorkspaceDocument(toWorkspaceDocument(state), library).ok).toBe(false);
+    expect(decodeWorkspaceDocument(state, library).ok).toBe(false);
 
     state.nodes.d1 = {
       id: "d1",
@@ -145,10 +121,10 @@ describe("U10 exact-reference persistence contract", () => {
       label: "Annotate",
       config: { version: nodeConfigVersion(0), value: {} },
     };
-    expect(decodeWorkspaceDocument(toWorkspaceDocument(state), library).ok).toBe(false);
+    expect(decodeWorkspaceDocument(state, library).ok).toBe(false);
   });
 
-  test("10. unresolved exact definitions preserve records, configs, edges, and session", () => {
+  test("10. unresolved exact definitions preserve records, configs, and edges", () => {
     const state = emptyState();
     const unavailable: GraphDocumentNode = {
       id: "x1",
@@ -159,8 +135,7 @@ describe("U10 exact-reference persistence contract", () => {
     state.nodes.x1 = unavailable;
     state.edges.e1 = { id: "e1", from: "x1", fromPort: "out", to: "x1", toPort: "in", kind: "pred" };
     state.positions.x1 = { x: 10, y: 20 };
-    state.selectedNodeId = "x1";
-    expect(decodeWorkspaceDocument(toWorkspaceDocument(state), library, workspaceSessionOf(state))).toEqual({
+    expect(decodeWorkspaceDocument(state, library)).toEqual({
       ok: true,
       state,
     });

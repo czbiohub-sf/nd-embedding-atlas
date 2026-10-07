@@ -162,17 +162,6 @@ export const ExportBodySchema = z.object({
 });
 export type ExportBody = z.infer<typeof ExportBodySchema>;
 
-/**
- * POST /api/scatter-selection: upload selected row indices.
- *
- * SECURITY: row_indices are interpolated into SQL (`VALUES (${i})`).
- * Each element must be a non-negative integer; total array capped at 1M.
- */
-export const ScatterSelectionBodySchema = z.object({
-  row_indices: z.array(NonNegativeInt).max(1_000_000),
-});
-export type ScatterSelectionBody = z.infer<typeof ScatterSelectionBodySchema>;
-
 /** POST /api/var-column: start materialization of a var (feature) column. */
 export const VarColumnBodySchema = z.object({
   name: z.string().min(1),
@@ -545,20 +534,15 @@ export type AnnotationValueRow = z.infer<typeof AnnotationValueRowSchema>;
  * POST /api/annotations/values: write values into an annotation column.
  * Exactly one source:
  *   - `rows`               explicit row-index list (per-cell edits)
- *   - `fromScatterSelection` stamp the staged `__scatter_selection` (lasso) :
- *                          the client POSTs row indices to /api/scatter-selection
- *                          first, then the server resolves obs identity by JOIN.
  *   - `predicate`          stamp `label` onto every obs matching a SQL WHERE
  *                          fragment (the node-graph Annotate node's batch door).
  */
 export const WriteAnnotationValuesBodySchema = z.object({
   column: z.string().min(1).max(200).regex(COLUMN_NAME_RE, "Invalid character in column name"),
   rows: z.array(AnnotationValueRowSchema).max(2_000_000).optional(),
-  fromScatterSelection: z.boolean().optional(),
   /**
-   * Stamp `label` onto every obs matching this SQL predicate. Trust model =
-   * `/api/annotations/export`: a single-user local tool, so the client's Mosaic
-   * WHERE-fragment is interpolated server-side against the `dataset` VIEW.
+   * Stamp `label` onto every obs matching this SQL predicate.
+   * The server executes it as a prepared single statement against `dataset`.
    */
   predicate: z.string().min(1).optional(),
   /** Label applied to a selection or predicate stamp. */
