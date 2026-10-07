@@ -17,6 +17,7 @@
 - _(server)_ Zod schemas at every req.json() boundary
 - _(build)_ Get `bun build --compile` working end-to-end
 - _(frontend)_ Let fixed presets split, resize, remove, and restore stage panels
+- _(frontend)_ Draw coordination on the wiring canvas: a hub per scope and a link per binding; delete a link to unbind, drag a hub onto a node to bind. Canvas selection now lives in the editor session, so the wire delete chip shows on selection.
 
 ### 🐛 Bug Fixes
 

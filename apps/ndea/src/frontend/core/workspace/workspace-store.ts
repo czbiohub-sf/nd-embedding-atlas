@@ -19,7 +19,7 @@ import {
   withoutNodeCoordination,
   type CoordinationScopeCellPort,
 } from "@/core/coordination/coordination";
-import { filterScopeSql } from "@/core/coordination/types";
+import { COORDINATION_TYPES, filterScopeSql, type CoordinationTypeId } from "@/core/coordination/types";
 import { predicateSql } from "@/core/graph/cook";
 import type { GraphEvaluationStore } from "@ndea/graph";
 import type { GraphDocumentEdge, GraphDocumentNode } from "@/core/graph/records";
@@ -268,6 +268,18 @@ export class Workspace {
     const descriptor = this.nodeLibrary.getDescriptorExact(ref);
     if (!descriptor) throw new Error(`no registered node descriptor for "${ref.nodeTypeId}@${ref.nodeTypeVersion}"`);
     return descriptor;
+  }
+
+  /** A node can join a scope of `type` exactly when its definition declares that type's capability. */
+  canBindScope(nodeId: string, type: CoordinationTypeId): boolean {
+    const node = this.store.state.nodes[nodeId];
+    const capabilities = node ? this.nodeLibrary.getSpecExact(node.definitionRef)?.definition.capabilities : undefined;
+    return capabilities?.includes(COORDINATION_TYPES[type].capability) ?? false;
+  }
+
+  /** A scope hub may link a node that can join `type` and is not already in `scope`. */
+  canLinkScope(nodeId: string, type: CoordinationTypeId, scope: string): boolean {
+    return this.canBindScope(nodeId, type) && this.coordination.scopeOf(nodeId, type) !== scope;
   }
 
   /** kind-compatibility + no-duplicate + DAG: the full wire-legality rule */

@@ -10,6 +10,7 @@ import type { AppNodeDescriptor } from "@/core/node/library";
 import { BodySocket, HeaderSocket } from "../body-dock";
 import { ND_TIMING } from "../constants";
 import { NdHandle } from "./NdHandle";
+import { ScopeTargetHandle } from "./ScopeLinks";
 import { BypassOverlay, DisplayOffBadge, FeedbackBadges, FlagButton, SyncBadge, SyncGroupButton } from "./node-extras";
 import { formatCookStatus, resolveDisabledNodeStyle, shouldShowNodeHeader } from "./nd-graph-node-model";
 import type { NdGraphNodeModel } from "./useNdGraphNodeModel";
@@ -61,6 +62,7 @@ function UnresolvedNodePorts({ model }: { model: NdGraphNodeModel }) {
   const { id, unresolvedPorts } = model;
   return (
     <>
+      <ScopeTargetHandle nodeId={id} />
       {unresolvedPorts.incoming ? (
         <NdHandle
           nodeId={id}
@@ -86,6 +88,7 @@ export function ProxyNdGraphNode({ model, node, def }: ResolvedNodeViewProps) {
       data-nd-node={id}
       data-nd-form="chip"
     >
+      <ScopeTargetHandle nodeId={id} />
       <span className="truncate font-mono text-[9.5px] text-text-muted">{node.label}</span>
       {def.inputPorts.map((port, index) => (
         <NdHandle
@@ -269,6 +272,7 @@ function ResolvedNodePorts({ model, def }: { model: NdGraphNodeModel; def: AppNo
   const { id, fanIn } = model;
   return (
     <>
+      <ScopeTargetHandle nodeId={id} />
       {def.inputPorts.map((port, index) => (
         <NdHandle
           key={`in:${port.id}`}

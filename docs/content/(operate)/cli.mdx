@@ -193,6 +193,8 @@ ndea workspace patch --revision 6 --ops '[{"op":"replace","path":"/state/focus/A
 
 A filter scope maps each source to named clauses, using the same clause shape as `ndea filter --where`. Each member sees every other source's clauses, never its own, so a scatter lasso filters the table but not the scatter. Lassos appear as `{"op":"inSet","set":"<id>"}`, which refers to an observation set saved under `~/.ndea/sets/`. A patch that refers to an unknown set is rejected.
 
+In the development editor, the wiring canvas draws each scope as a hub labelled with its type and name, and each binding as a dashed link from that hub to the node. Patches appear there live. Deleting a link removes that binding, and dragging from a hub onto a node adds one.
+
 ### Arranging the Stage
 
 `/stage` is a [json-render](https://json-render.dev) flat spec: `{ "root", "elements" }`, where every element has a `type`, `props`, and `children` (element ids). Three components exist:

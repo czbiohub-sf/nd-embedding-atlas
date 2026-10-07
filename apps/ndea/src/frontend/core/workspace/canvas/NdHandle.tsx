@@ -1,8 +1,8 @@
 /**
- * NdHandle: an xyflow Handle wearing the NdPort glyph. The dot IS the
- * type: pred ● / sel ◆ / focus ▪; filled = out, hollow = in. Legality glow
- * during a live wire drag comes from useConnection + the workspace rule
- * (kind-compat + no-dup + DAG).
+ * NdHandle: an xyflow Handle wearing the NdPort glyph (● predicate; filled =
+ * out, hollow = in). Legality glow during a live wire drag comes from
+ * useConnection + the workspace rule (kind-compat + no-dup + DAG); scope-hub
+ * drags leave ports alone.
  */
 
 import { Handle, Position, useConnection } from "@xyflow/react";
@@ -10,6 +10,7 @@ import type * as React from "react";
 
 import { ND_PORT_KINDS, type NdPortKind } from "@/components/node-workspace/nd-port";
 import { useWorkspace } from "../workspace-context";
+import { parseScopeHubId } from "./scope-links";
 
 /** Ring on a handle the in-flight wire may land on; see --shadow-legal-ring. */
 const LEGAL_RING = "var(--shadow-legal-ring)";
@@ -29,7 +30,7 @@ export function NdHandle({ nodeId, portId, kind, out, top = 13 }: NdHandleProps)
 
   let ring = "none";
   let opacity = 1;
-  if (conn.inProgress && conn.fromNode) {
+  if (conn.inProgress && conn.fromNode && !parseScopeHubId(conn.fromNode.id)) {
     if (!out) {
       if (ws.canConnectWire(conn.fromNode.id, nodeId, conn.fromHandle?.id, portId)) ring = LEGAL_RING;
       else opacity = 0.3;

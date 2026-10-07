@@ -1,7 +1,8 @@
 /**
- * WorkspaceCanvas: the wiring canvas on xyflow. One node type
- * (NdGraphNode), one edge type (NdWireEdge), the typed connection line,
- * dot-grid substrate (22px), Tab/right-click palette, Y-knife, minimap.
+ * WorkspaceCanvas: the wiring canvas on xyflow. Graph nodes (NdGraphNode)
+ * and predicate wires (NdWireEdge), plus coordination drawn as scope hubs
+ * and links (ScopeLinks), the typed connection line, dot-grid substrate
+ * (22px), Tab/right-click palette, Y-knife, minimap.
  *
  * Input grammar (figma-style): bare left-drag = marquee (partial-touch) ·
  * space / middle = pan · right-click / Tab = add-node palette · Y+drag =
@@ -9,8 +10,10 @@
  * (port/node → frame it; empty → dive; zoomed-in → fit) · esc chain
  * (menu → edge → selection → claim). Group drag moves the marquee set.
  *
- * The graph document (workspace-store) is the source of truth; xyflow's
- * node/edge arrays are projections (positions + selection sync back).
+ * The canvas is a projection: nodes, wires, scope links, and selection are
+ * rebuilt from the document and the session every render, and every xyflow
+ * change is written back through a Workspace action (positions, selection,
+ * wires, bindings). Only measured sizes are canvas-local.
  * Forms default locked to the largest view; the zoomForms toggle opts into
  * zoom driving the render band (chip < .55 ≤ card < 1.08 ≤ full, hysteresis
  * ±.04). Per-node overrides resolve in NdGraphNode.
@@ -31,7 +34,6 @@ import {
   type IsValidConnection,
   type Node,
   type NodeChange,
-  type OnSelectionChangeParams,
 } from "@xyflow/react";
 // eslint-disable-next-line import/no-unassigned-import
 import "@xyflow/react/dist/style.css";
@@ -54,11 +56,16 @@ import { NdGraphNode, type NdGraphNodeType } from "./NdGraphNode";
 import { NodeAssetDialog } from "./NodeAssetDialog";
 import { NdWireEdge, type NdWireEdgeType } from "./NdWireEdge";
 import { portPos, resolveNodeSize } from "./port-positions";
+import { parseScopeHubId, parseScopeLinkId, projectScopeLinks, SCOPE_HANDLE } from "./scope-links";
+import { ScopeHubNode, ScopeLinkEdge, type ScopeHubNodeType, type ScopeLinkEdgeType } from "./ScopeLinks";
 import { tidyLayout } from "./tidy";
 import { wirePath } from "./wire-geometry";
 
-const nodeTypes = { nd: NdGraphNode };
-const edgeTypes = { ndwire: NdWireEdge };
+type CanvasNode = NdGraphNodeType | ScopeHubNodeType;
+type CanvasEdge = NdWireEdgeType | ScopeLinkEdgeType;
+
+const nodeTypes = { nd: NdGraphNode, scopehub: ScopeHubNode };
+const edgeTypes = { ndwire: NdWireEdge, scopelink: ScopeLinkEdge };
 
 /** Unthemed nodes and unresolved assets in the minimap. */
 const MINIMAP_NODE_FALLBACK = "oklch(0.62 0 0 / 60%)";
@@ -70,16 +77,17 @@ const MINIMAP_MASK = {
   light: "oklch(1 0 0 / 60%)",
 } as const;
 
-/** ghost wire in the dragged port's kind color */
+/** ghost wire in the dragged port's kind color, or the scope's color from a hub */
 function NdConnectionLine({ fromX, fromY, toX, toY, fromNode }: ConnectionLineComponentProps) {
   const ws = useWorkspace();
   const node = useWorkspaceSelector((s) => (fromNode ? s.nodes[fromNode.id] : undefined));
+  const hub = fromNode ? parseScopeHubId(fromNode.id) : null;
   const kind = node ? (ws.def(node.id)?.outKind ?? "pred") : "pred";
   return (
     <path
       d={wirePath(fromX, fromY, toX, toY)}
       fill="none"
-      stroke={ND_PORT_KINDS[kind].color}
+      stroke={hub ? ws.coordination.scopeColor(hub.scope) : ND_PORT_KINDS[kind].color}
       strokeWidth={1.7}
       strokeDasharray="5 4"
       opacity={0.85}
@@ -113,14 +121,16 @@ function WorkspaceCanvasInner() {
   }, [nodesReady, rf]);
   const paneRef = useRef<HTMLDivElement>(null);
   const [addMenu, setAddMenu] = useState<AddMenuState | null>(null);
-  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
   const lastMouse = useRef<{ x: number; y: number } | null>(null);
 
   const wsNodes = useWorkspaceSelector((s) => s.nodes);
   const wsEdges = useWorkspaceSelector((s) => s.edges);
   const positions = useWorkspaceSelector((s) => s.positions);
+  const bindings = useWorkspaceSelector((s) => s.bindings);
   const graphPath = useWorkspaceSession((s) => s.graphPath);
+  const selectedNodeId = useWorkspaceSession((s) => s.selectedNodeId);
   const selectedNodeIds = useWorkspaceSession((s) => s.selectedNodeIds);
+  const selectedEdgeId = useWorkspaceSession((s) => s.selectedEdgeId);
   const claimed = useWorkspaceSession((s) => s.claimed);
   const baseForm = useWorkspaceSession((u) => u.baseForm);
   const assetAuthoring = useWorkspaceSession((u) => u.assetAuthoring);
@@ -129,38 +139,54 @@ function WorkspaceCanvasInner() {
   const feedbackChannels = useFeedbackChannels();
 
   // the canvas shows ONE level at a time (hierarchy is document data; the
-  // surface re-points). Projections merge selection back in so controlled
-  // nodes keep xyflow's selected styling + group drag.
+  // surface re-points). Selection comes from the session, so xyflow keeps
+  // its selected styling + group drag without owning the selection.
   const levelNodes = useMemo(
     () => Object.values(wsNodes).filter((n) => (n.parent ?? null) === graphPath),
     [wsNodes, graphPath],
+  );
+  const scopes = useMemo(
+    () => projectScopeLinks({ bindings, positions }, new Set(levelNodes.map((n) => n.id))),
+    [bindings, positions, levelNodes],
   );
   // xyflow measures nodes through its internals, but the MiniMap reads
   // dimensions off the USER node objects. Our projection rebuilds those from
   // the graph document every render (we deliberately don't applyNodeChanges),
   // so measured sizes must be merged back in or every minimap rect bails.
   const [measured, setMeasured] = useState<Record<string, { width: number; height: number }>>({});
-  const nodes = useMemo<NdGraphNodeType[]>(
-    () =>
-      levelNodes.map((n) => ({
-        id: n.id,
-        type: "nd" as const,
-        position: positions[n.id] ?? { x: 0, y: 0 },
-        data: { wsId: n.id },
-        measured: measured[n.id],
-        deletable: n.definitionRef.nodeTypeId !== "obs" && n.definitionRef.nodeTypeId !== "proxy",
-        selected: selectedIds.has(n.id),
-        // claiming: the claimed body rises; everything else recedes
-        zIndex: claimed === n.id ? 6 : undefined,
-        style: claimed && claimed !== n.id ? { opacity: 0.25, transition: "opacity 200ms" } : undefined,
-      })),
-    [levelNodes, positions, selectedIds, claimed, measured],
-  );
-  const edges = useMemo<NdWireEdgeType[]>(() => {
+  const nodes = useMemo<CanvasNode[]>(() => {
+    const selected = new Set(selectedNodeIds.length > 0 ? selectedNodeIds : selectedNodeId ? [selectedNodeId] : []);
+    const graphNodes = levelNodes.map((n): NdGraphNodeType => ({
+      id: n.id,
+      type: "nd" as const,
+      position: positions[n.id] ?? { x: 0, y: 0 },
+      data: { wsId: n.id },
+      measured: measured[n.id],
+      deletable: n.definitionRef.nodeTypeId !== "obs" && n.definitionRef.nodeTypeId !== "proxy",
+      selected: selected.has(n.id),
+      // claiming: the claimed body rises; everything else recedes
+      zIndex: claimed === n.id ? 6 : undefined,
+      style: claimed && claimed !== n.id ? { opacity: 0.25, transition: "opacity 200ms" } : undefined,
+    }));
+    const hubs = scopes.hubs.map((hub): ScopeHubNodeType => ({
+      id: hub.id,
+      type: "scopehub" as const,
+      position: hub.position,
+      data: { type: hub.type, scope: hub.scope },
+      measured: measured[hub.id],
+      draggable: false,
+      deletable: false,
+      selectable: false,
+      style: claimed ? { opacity: 0.25, transition: "opacity 200ms" } : undefined,
+    }));
+    return [...graphNodes, ...hubs];
+  }, [levelNodes, positions, selectedNodeId, selectedNodeIds, claimed, measured, scopes]);
+  const edges = useMemo<CanvasEdge[]>(() => {
     const level = new Set(levelNodes.map((n) => n.id));
-    return Object.values(wsEdges)
+    const recede = claimed ? { opacity: 0.25, transition: "opacity 200ms" } : undefined;
+    const wires = Object.values(wsEdges)
       .filter((e) => level.has(e.from) && level.has(e.to))
-      .map((e) => ({
+      .map((e): NdWireEdgeType => ({
         id: e.id,
         type: "ndwire",
         source: e.from,
@@ -168,9 +194,22 @@ function WorkspaceCanvasInner() {
         target: e.to,
         targetHandle: e.toPort,
         data: {},
-        style: claimed ? { opacity: 0.25, transition: "opacity 200ms" } : undefined,
+        selected: e.id === selectedEdgeId,
+        style: recede,
       }));
-  }, [wsEdges, levelNodes, claimed]);
+    const links = scopes.links.map((link): ScopeLinkEdgeType => ({
+      id: link.id,
+      type: "scopelink",
+      source: link.hub,
+      sourceHandle: SCOPE_HANDLE,
+      target: link.node,
+      targetHandle: SCOPE_HANDLE,
+      data: { scope: link.scope },
+      selected: link.id === selectedEdgeId,
+      style: recede,
+    }));
+    return [...wires, ...links];
+  }, [wsEdges, levelNodes, claimed, selectedEdgeId, scopes]);
 
   // entering / leaving a level refits the camera (one surface, re-pointed)
   const lastPath = useRef(graphPath);
@@ -210,60 +249,73 @@ function WorkspaceCanvasInner() {
   }, [zoomForms, rf, ws]);
 
   const onNodesChange = useCallback(
-    (changes: NodeChange<NdGraphNodeType>[]) => {
+    (changes: NodeChange<CanvasNode>[]) => {
       const dims: Record<string, { width: number; height: number }> = {};
+      const session = ws.session.state;
+      const selection = new Set(
+        session.selectedNodeIds.length > 0
+          ? session.selectedNodeIds
+          : session.selectedNodeId
+            ? [session.selectedNodeId]
+            : [],
+      );
+      let selectionChanged = false;
       for (const c of changes) {
+        if (c.type === "add" || c.type === "replace") continue;
+        if (c.type === "dimensions" && c.dimensions) dims[c.id] = c.dimensions;
+        // hubs are derived from bindings: nothing to move, delete, or select
+        if (parseScopeHubId(c.id)) continue;
         if (c.type === "position" && c.position) ws.setPosition(c.id, c.position);
         else if (c.type === "remove") ws.removeNode(c.id);
-        else if (c.type === "dimensions" && c.dimensions) dims[c.id] = c.dimensions;
-        else if (c.type === "select") {
-          setSelectedIds((prev) => {
-            const next = new Set(prev);
-            if (c.selected) next.add(c.id);
-            else next.delete(c.id);
-            return next;
-          });
+        else if (c.type === "select" && selection.has(c.id) !== c.selected) {
+          if (c.selected) selection.add(c.id);
+          else selection.delete(c.id);
+          selectionChanged = true;
         }
       }
+      if (selectionChanged)
+        ws.setGraphSelection([...selection], session.selectedEdgeId ? [session.selectedEdgeId] : []);
       if (Object.keys(dims).length) setMeasured((m) => ({ ...m, ...dims }));
     },
     [ws],
   );
   const onEdgesChange = useCallback(
-    (changes: EdgeChange<NdWireEdgeType>[]) => {
+    (changes: EdgeChange<CanvasEdge>[]) => {
       for (const c of changes) {
-        if (c.type === "remove") ws.deleteEdge(c.id);
+        if (c.type === "remove") {
+          const link = parseScopeLinkId(c.id);
+          if (link) ws.coordination.clearScope(link.node, link.type);
+          else ws.deleteEdge(c.id);
+        } else if (c.type === "select") {
+          if (c.selected) ws.selectEdge(c.id);
+          else if (ws.session.state.selectedEdgeId === c.id) ws.selectEdge(null);
+        }
       }
     },
     [ws],
   );
 
+  /** A hub links to a node that can join its type; anything else is a predicate wire. */
   const isValidConnection: IsValidConnection = useCallback(
-    (conn) =>
-      Boolean(
-        conn.source && conn.target && ws.canConnectWire(conn.source, conn.target, conn.sourceHandle, conn.targetHandle),
-      ),
+    (conn) => {
+      if (!conn.source || !conn.target) return false;
+      const hub = parseScopeHubId(conn.source);
+      if (hub) return conn.targetHandle === SCOPE_HANDLE && ws.canLinkScope(conn.target, hub.type, hub.scope);
+      if (conn.targetHandle === SCOPE_HANDLE) return false;
+      return ws.canConnectWire(conn.source, conn.target, conn.sourceHandle, conn.targetHandle);
+    },
     [ws],
   );
   const onConnect = useCallback(
-    (conn: Connection) => ws.connect(conn.source, conn.target, conn.sourceHandle, conn.targetHandle),
-    [ws],
-  );
-
-  const onSelectionChange = useCallback(
-    ({ nodes: sel, edges: selEdges }: OnSelectionChangeParams) => {
-      ws.setGraphSelection(
-        sel.map((node) => node.id),
-        selEdges.map((edge) => edge.id),
-      );
+    (conn: Connection) => {
+      const hub = parseScopeHubId(conn.source);
+      if (hub) ws.coordination.assignScope(conn.target, hub.type, hub.scope);
+      else ws.connect(conn.source, conn.target, conn.sourceHandle, conn.targetHandle);
     },
     [ws],
   );
 
-  const clearSelection = useCallback(() => {
-    setSelectedIds(new Set());
-    ws.setGraphSelection([], []);
-  }, [ws]);
+  const clearSelection = useCallback(() => ws.setGraphSelection([], []), [ws]);
 
   const openAddMenuAt = useCallback(
     (clientX: number, clientY: number) => {
@@ -411,7 +463,6 @@ function WorkspaceCanvasInner() {
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
-          onSelectionChange={onSelectionChange}
           isValidConnection={isValidConnection}
           connectionLineComponent={NdConnectionLine}
           onMove={onMove}

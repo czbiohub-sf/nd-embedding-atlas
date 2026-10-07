@@ -15,14 +15,14 @@ import { useWorkspace, useWorkspaceSelector } from "../workspace-context";
 
 export function ScopePicker({ nodeId }: { nodeId: string }) {
   const ws = useWorkspace();
-  const definitionRef = useWorkspaceSelector((s) => s.nodes[nodeId]?.definitionRef ?? null);
+  // re-render when the node is retyped: its capabilities decide the offered types
+  useWorkspaceSelector((s) => s.nodes[nodeId]?.definitionRef);
   // subscribe to every binding so existing-scope lists and this node's own
   // bindings stay live as peers link/unlink.
   const bindings = useWorkspaceSelector((s) => s.bindings);
   const assigned = bindings[nodeId] ?? {};
 
-  const caps = definitionRef ? ws.nodeLibrary.getSpecExact(definitionRef)?.definition.capabilities : undefined;
-  const types = COORDINATION_TYPE_IDS.filter((type) => caps?.includes(COORDINATION_TYPES[type].capability));
+  const types = COORDINATION_TYPE_IDS.filter((type) => ws.canBindScope(nodeId, type));
   if (types.length === 0) return null;
 
   const activeScopes = types.flatMap((type) => bindingScope(type, assigned[type]) ?? []);

@@ -129,6 +129,12 @@ entrypoints across workspaces.
   scope is a crossfilter `source → facet → FilterClause`: each member sees every
   other source's clauses, never its own, and agents write under their own
   source key. Publishers emit typed clauses, never SQL.
+- The xyflow canvas is a projection of the document and `Workspace.session`;
+  only measured node sizes are canvas-local. Each scope with a member on the
+  current level draws as a derived hub, and each binding as one link
+  (`workspace/canvas/scope-links.ts`): deleting a link clears that binding and
+  dragging a hub onto a node assigns it. Keep the projection total: every
+  document binding must render as a link, even one the node cannot use.
 - json-render renders the Stage from the document's `stage`, a flat spec of
   `Split`, `View`, and `Slot` elements (`workspace/stage/stage-spec.ts` holds
   the schema, structural rules, operations, and catalog). A node is staged
