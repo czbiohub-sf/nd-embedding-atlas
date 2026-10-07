@@ -12,7 +12,6 @@ import type {
 import {
   andPreds,
   type GraphCookFunction,
-  type GraphFocusPortValue,
   type GraphPortValue,
   type GraphPredicatePortValue,
   type GraphRowSetPortValue,
@@ -25,7 +24,7 @@ export type GraphPortValueInputs = ReadonlyMap<string, readonly GraphPortValue[]
 export const NULL_PREDICATE_PORT_VALUE: GraphPredicatePortValue = { kind: "pred", sql: null };
 
 export function predicateSql(value: GraphPortValue | undefined): PredicatePortValue {
-  return !value || value.kind === "focus" ? null : value.sql;
+  return value?.sql ?? null;
 }
 
 export function predicateSqls(inputs: GraphPortValueInputs): Predicate[] {
@@ -89,8 +88,6 @@ export function toNodePortValue(value: GraphPortValue): NodePortValue {
       return value.sql;
     case "sel":
       return value.rowIds;
-    case "focus":
-      return value.rowIndex;
   }
 }
 
@@ -107,7 +104,6 @@ export function toNodeComputeInputs(inputs: GraphPortValueInputs): NodeComputeIn
 
 export function fromNodePortValue(kind: "pred", value: NodePortValue): GraphPredicatePortValue;
 export function fromNodePortValue(kind: "sel", value: NodePortValue): GraphRowSetPortValue;
-export function fromNodePortValue(kind: "focus", value: NodePortValue): GraphFocusPortValue;
 export function fromNodePortValue(kind: PortKind, value: NodePortValue): GraphPortValue;
 export function fromNodePortValue(kind: PortKind, value: NodePortValue): GraphPortValue {
   switch (kind) {
@@ -115,8 +111,6 @@ export function fromNodePortValue(kind: PortKind, value: NodePortValue): GraphPo
       return { kind, sql: value as PredicatePortValue };
     case "sel":
       return { kind, sql: null, rowIds: value as GraphRowSetPortValue["rowIds"] };
-    case "focus":
-      return { kind, rowIndex: value as GraphFocusPortValue["rowIndex"] };
   }
 }
 

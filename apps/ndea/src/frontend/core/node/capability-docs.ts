@@ -13,7 +13,13 @@ export interface CapabilityDoc {
 
 export const CAPABILITIES_BY_CATEGORY = {
   operations: ["data-read", "row-set-publish", "annotation-write"],
-  coordination: ["focus-coordination", "view-coordination", "ordering-coordination", "filter-coordination"],
+  coordination: [
+    "focus-coordination",
+    "view-coordination",
+    "ordering-coordination",
+    "filter-coordination",
+    "color-coordination",
+  ],
   authorityResources: ["schema-mutation", "gpu-device"],
   environmentMarkers: ["spatial-data", "wasm-bitmap", "compute"],
 } as const satisfies Record<string, readonly NodeCapability[]>;
@@ -25,8 +31,8 @@ export const CAPABILITY_DOCS = {
     visible: false,
   },
   "row-set-publish": {
-    label: "publishes rows",
-    doc: "Publishes an instance-scoped temporary row set through the data service.",
+    label: "saves row sets",
+    doc: "Saves selected rows as a named observation set on the server.",
     visible: false,
   },
   "focus-coordination": {
@@ -77,6 +83,11 @@ export const CAPABILITY_DOCS = {
   "filter-coordination": {
     label: "shares filters",
     doc: "Publishes and consumes filters with linked views.",
+    visible: true,
+  },
+  "color-coordination": {
+    label: "shares color",
+    doc: "Shares its color-by column with linked views.",
     visible: true,
   },
 } satisfies Record<NodeCapability, CapabilityDoc>;

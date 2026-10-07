@@ -8,6 +8,8 @@ import type { LaunchConfig } from "../config.ts";
 import type { PreparedDatasets } from "./datasets.ts";
 import type { PreparedQuerySession } from "./ingest.ts";
 import type { WorkspaceDocumentStore } from "../../server/workspace.ts";
+import { ObservationSets, observationSetIssues } from "../../server/observation-sets.ts";
+import type { WorkspaceDocument } from "../../frontend/core/workspace/document.ts";
 import { printAnnotationsRestored, printAnnotationsWarning } from "./output.ts";
 
 type PlateMetadataByMount = Map<string, PlateMetaInfo | null>;
@@ -73,8 +75,15 @@ export async function prepareServerSession(
     cropPool: null,
     annotationsSidecarPath: query.cacheEnabled ? null : resolveAnnotationsSidecarPath(config.datasets[0].path),
     workspace,
+    observationSets: new ObservationSets(query.store),
   };
   await restoreAnnotations(state);
+  const document = workspace.snapshot().document as WorkspaceDocument | null;
+  if (document) {
+    for (const issue of await observationSetIssues(document, state.observationSets)) {
+      console.warn(`${issue.pointer}: ${issue.detail}`);
+    }
+  }
   return { state, platesByMount };
 }
 

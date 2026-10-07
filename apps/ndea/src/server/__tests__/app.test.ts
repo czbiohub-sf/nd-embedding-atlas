@@ -21,6 +21,7 @@ import { createApp, type CreateAppOptions } from "../app.ts";
 import type { ServerSession, DatasetSessionMetadata } from "../state.ts";
 import type { ServerSocketContext } from "../ws.ts";
 import { WorkspaceDocumentStore } from "../workspace.ts";
+import { ObservationSets } from "../observation-sets.ts";
 import { buildPluginBootstrap } from "../plugins/bootstrap.ts";
 
 type NdeaServer = ReturnType<typeof createApp>;
@@ -59,6 +60,7 @@ function createMockState(store: DatasetQuerySession): ServerSession {
     cropPool: null,
     annotationsSidecarPath: null,
     workspace: WorkspaceDocumentStore.empty(join(tmpdir(), `ndea-test-workspace-${crypto.randomUUID()}.json`)),
+    observationSets: new ObservationSets(store),
   };
 }
 

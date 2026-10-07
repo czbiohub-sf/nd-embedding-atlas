@@ -8,6 +8,7 @@
 
 import { useThrottler } from "@tanstack/react-pacer";
 import { useSelector } from "@tanstack/react-store";
+import type { FilterClause } from "@ndea/protocol";
 import { type RowIndex, rowIndex } from "@ndea/sdk";
 import type { Coordinator } from "@uwdata/mosaic-core";
 import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -160,7 +161,7 @@ export function ScatterView({
   const [userVmin, setUserVmin] = useState<number | undefined>();
   const [userVmax, setUserVmax] = useState<number | undefined>();
   // Route the continuous-range predicate through the node host.
-  const publishRange = useCallback((sql: string | null) => publishRangeFilter(host, sql), [host]);
+  const publishRange = useCallback((clause: FilterClause | null) => publishRangeFilter(host, clause), [host]);
 
   // Reset filter when column changes
   useEffect(() => {
@@ -255,7 +256,7 @@ export function ScatterView({
     const col = colorByColumn;
     const vmin = userVmin;
     const vmax = userVmax;
-    publishRange(`"${col}" >= ${vmin} AND "${col}" <= ${vmax}`);
+    publishRange({ op: "between", column: col, range: [vmin, vmax] });
     let cancelled = false;
     const tid = setTimeout(() => {
       coordinator

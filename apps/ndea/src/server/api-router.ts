@@ -16,6 +16,7 @@ import { handleCrop } from "./routes/crops.ts";
 import { handleEmbeddingStatus, handleLoadEmbedding } from "./routes/embeddings.ts";
 import { handleExport, handleExportStatus, handleGetExportDir } from "./routes/export.ts";
 import { handleFilter } from "./routes/filter.ts";
+import { handleSetsPost } from "./routes/sets.ts";
 import { handleWorkspaceGet, handleWorkspaceNode, handleWorkspacePatch } from "./routes/workspace.ts";
 import { handleHealth, handleObsBatch, handleObsDetail, handleObsInfo } from "./routes/obs.ts";
 import {
@@ -24,8 +25,6 @@ import {
   handleScatterPositions,
   handleScatterSelectionDelete,
   handleScatterSelectionPost,
-  handleSelectionDelete,
-  handleSelectionPost,
 } from "./routes/scatter.ts";
 import { handleTrajectory } from "./routes/trajectory.ts";
 import { handleVarColumn, handleVarColumnStatus, handleVarLayers, handleVarNames } from "./routes/var.ts";
@@ -84,12 +83,8 @@ function routeScatterSelection({ req, pathname, method, store }: ApiRouteContext
   return null;
 }
 
-function routeSelection({ req, pathname, method, store }: ApiRouteContext): ApiRouteResult {
-  if (!pathname.startsWith("/api/selection/")) return null;
-  const instanceId = decodeURIComponent(pathname.slice("/api/selection/".length));
-  if (!instanceId) return new Response("Not Found", { status: 404 });
-  if (method === "POST") return handleSelectionPost(req, store, instanceId);
-  if (method === "DELETE") return handleSelectionDelete(store, instanceId);
+function routeSets({ req, pathname, method, state }: ApiRouteContext): ApiRouteResult {
+  if (pathname === "/api/sets" && method === "POST") return handleSetsPost(req, state);
   return null;
 }
 
@@ -214,7 +209,7 @@ const API_ROUTE_DISPATCHERS: readonly ApiRouteDispatcher[] = [
   routeCore,
   routeScatterValues,
   routeScatterSelection,
-  routeSelection,
+  routeSets,
   routeTrajectory,
   routeObs,
   routeEmbeddings,

@@ -17,7 +17,7 @@ export function createImageViewerDefinition({
     ref: exactNodeTypeRef("image-viewer", "1.0.0"),
     title: "Image Viewer",
     role: "view",
-    inputs: [{ id: "focus-in", kind: "focus", label: "Focus" }],
+    inputs: [],
     outputs: [],
     capabilities: CAPABILITIES,
     dataRequirements: ["plate-image"],

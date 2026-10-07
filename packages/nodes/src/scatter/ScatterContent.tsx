@@ -29,21 +29,14 @@ import { ScatterView } from "./ScatterView";
 
 export interface ScatterContentProps {
   initialObsmKey?: string | null;
-  initialColorByColumn?: string | null;
   /** container header slot: when present the toolbar portals there
    *  (compact, 26px-friendly) instead of docking above the canvas */
   toolbarTarget?: HTMLElement;
-  onCreateCheckpoint?: () => void;
 }
 
 // ── ScatterContent ────────────────────────────────────────────────────────────
 
-export function ScatterContent({
-  initialObsmKey,
-  initialColorByColumn: _initialColorByColumn,
-  toolbarTarget,
-  onCreateCheckpoint,
-}: ScatterContentProps) {
+export function ScatterContent({ initialObsmKey, toolbarTarget }: ScatterContentProps) {
   const services = useScatterServices();
   const { state, actions, runtime } = services.useSession();
   // The host owns this instance's WASM bitmap lifecycle (§6.6).
@@ -229,7 +222,6 @@ export function ScatterContent({
       onToggleTrajectory={onToggleTrajectory}
       hasSelection={hasSelection}
       selectionCount={selectionCount}
-      onCreateCheckpoint={onCreateCheckpoint}
     />
   ) : null;
 

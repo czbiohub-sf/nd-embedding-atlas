@@ -23,6 +23,7 @@ import { DatasetQuerySession } from "../src/server/store.ts";
 import type { DatasetSessionMetadata, ServerSession } from "../src/server/state.ts";
 import type { ObsmSliceLoader } from "../src/server/slice-loader.ts";
 import { WorkspaceDocumentStore } from "../src/server/workspace.ts";
+import { ObservationSets } from "../src/server/observation-sets.ts";
 
 const PORT = 5055;
 const HOST = "127.0.0.1";
@@ -83,6 +84,7 @@ const state: ServerSession = {
   annotationsSidecarPath: null,
   // A fresh document per run; the fixture data is synthetic, so nothing is worth keeping.
   workspace: WorkspaceDocumentStore.empty(join(tmpdir(), `ndea-dev-fixture-${process.pid}.json`)),
+  observationSets: new ObservationSets(store),
 };
 
 const config: DatasetSessionMetadata = {

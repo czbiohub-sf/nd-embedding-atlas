@@ -12,10 +12,7 @@ export type PredicatePortValue = string | null;
 /** An authored row set. `null` means absent; `[]` is an active empty set. */
 export type RowSetPortValue = readonly RowIndex[] | null;
 
-/** One focused dataset row. */
-export type FocusPortValue = RowIndex | null;
-
-export type NodePortValue = PredicatePortValue | RowSetPortValue | FocusPortValue;
+export type NodePortValue = PredicatePortValue | RowSetPortValue;
 
 export interface NodeComputeContext {
   readonly signal: AbortSignal;

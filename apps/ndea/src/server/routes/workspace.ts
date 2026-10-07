@@ -16,6 +16,7 @@ import { WorkspaceEvaluator } from "../graph.ts";
 import { queryObservations } from "../observations.ts";
 import type { ServerSession } from "../state.ts";
 import type { WorkspaceDocumentStore } from "../workspace.ts";
+import { observationSetIssues } from "../observation-sets.ts";
 
 const evaluators = new WeakMap<WorkspaceDocumentStore, WorkspaceEvaluator>();
 
@@ -29,7 +30,10 @@ export function handleWorkspaceGet(state: Pick<ServerSession, "workspace">): Res
   return Response.json(state.workspace.snapshot());
 }
 
-export async function handleWorkspacePatch(req: Request, state: Pick<ServerSession, "workspace">): Promise<Response> {
+export async function handleWorkspacePatch(
+  req: Request,
+  state: Pick<ServerSession, "workspace" | "observationSets">,
+): Promise<Response> {
   let raw: unknown;
   try {
     raw = await req.json();
@@ -44,7 +48,9 @@ export async function handleWorkspacePatch(req: Request, state: Pick<ServerSessi
     );
   }
 
-  const result = await state.workspace.apply(body.data.baseRevision, body.data.ops, body.data.clientId);
+  const result = await state.workspace.apply(body.data.baseRevision, body.data.ops, body.data.clientId, (document) =>
+    observationSetIssues(document, state.observationSets),
+  );
   if (result.kind === "conflict") {
     const conflict: WorkspaceConflict = { error: "stale revision", ...result.snapshot };
     return Response.json(conflict, { status: 409 });
@@ -73,15 +79,12 @@ export async function handleWorkspaceNode(
   if (evaluation.status !== "resolved") return Response.json({ ...base, ...evaluation } satisfies WorkspaceNodeResult);
 
   const { value } = evaluation;
-  if (value.kind === "focus") {
-    return Response.json({ ...base, status: "resolved", output: value } satisfies WorkspaceNodeResult);
-  }
   try {
     const page = await queryObservations(state, value.sql, limit);
     const result: WorkspaceNodeResult = {
       ...base,
       status: "resolved",
-      output: { kind: value.kind, sql: value.sql, ...page },
+      output: { kind: value.kind, sql: value.sql, scopeFilter: evaluation.scopeFilter, ...page },
     };
     return Response.json(result);
   } catch (error) {

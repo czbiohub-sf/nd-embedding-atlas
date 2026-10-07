@@ -12,7 +12,7 @@
  *  right → selection tools + checkpoint + track/fit
  */
 
-import { BoxSelect, ChartScatter, LassoSelect, Snowflake, Waypoints } from "lucide-react";
+import { BoxSelect, ChartScatter, LassoSelect, Waypoints } from "lucide-react";
 import { useMemo } from "react";
 import { BracketIcon } from "@ndea/ui/components/bracket-icon";
 
@@ -88,7 +88,6 @@ interface Props {
 
   hasSelection: boolean;
   selectionCount: number;
-  onCreateCheckpoint?: () => void;
 
   /** docked (default) = full-width row above the canvas;
    *  header = compact 26px-friendly run for a node/tile header slot */
@@ -140,7 +139,6 @@ export function ScatterToolbar({
   onToggleTrajectory,
   hasSelection,
   selectionCount,
-  onCreateCheckpoint,
   variant = "docked",
 }: Props) {
   const disabled = loadingKey !== null;
@@ -320,20 +318,10 @@ export function ScatterToolbar({
           </HoverTip>
         </ToggleGroup>
 
-        {hasSelection && onCreateCheckpoint ? (
-          <>
-            <span className={cn("font-mono text-3xs text-wire-sel", compact && "hidden @[18rem]:inline")}>
-              lasso [{selectionCount.toLocaleString()}]
-            </span>
-            <HoverTip
-              label="Cache"
-              description="Create a Cache node pinned to the current lasso rows"
-              side="bottom"
-              render={<button type="button" onClick={onCreateCheckpoint} aria-label="Cache lasso" className={btn} />}
-            >
-              <Snowflake className={icon} />
-            </HoverTip>
-          </>
+        {hasSelection ? (
+          <span className={cn("font-mono text-3xs text-wire-sel", compact && "hidden @[18rem]:inline")}>
+            lasso [{selectionCount.toLocaleString()}]
+          </span>
         ) : null}
 
         {onToggleTrajectory && (

@@ -1,11 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { Store } from "@tanstack/store";
 import { exactNodeTypeRef, rowIndex, type FilterCoordinationAPI } from "@ndea/sdk";
-import {
-  createCheckpointCreationNodeFacet,
-  createCheckpointNodeFacet,
-  createHierarchyNodeFacet,
-} from "@/core/node/runtime/host-facets";
+import { createCheckpointNodeFacet, createHierarchyNodeFacet } from "@/core/node/runtime/host-facets";
 import { requireAppNodeHostFacet } from "@/core/node/app-node-host";
 import type { NodeRuntimeSessionPort } from "@/core/node/runtime/session-port";
 
@@ -43,7 +39,7 @@ function runtimeSessionFixture() {
     | { kind: "sel"; sql: string | null; rowIds: number[] | null }
     | { kind: "pred"; sql: string | null }
     | null = { kind: "sel", sql: "id IN (2, 5)", rowIds: [2, 5] };
-  const calls = { pin: 0, unpin: 0, create: 0, enter: 0 };
+  const calls = { pin: 0, unpin: 0, enter: 0 };
   const session = {
     store,
     telemetry,
@@ -62,10 +58,6 @@ function runtimeSessionFixture() {
       calls.unpin += 1;
       pinned = false;
     },
-    freezeSelection: () => {
-      calls.create += 1;
-      return "created-cache";
-    },
     enterSubnet: () => {
       calls.enter += 1;
     },
@@ -77,8 +69,6 @@ function runtimeSessionFixture() {
     subscribeResolved: () => () => {},
     publish() {},
     clear() {},
-    associateClient() {},
-    disassociateClient() {},
     materializeRowIds: async () => ({ rowIds: [rowIndex(2), rowIndex(5)], revision: 1 }),
   } satisfies FilterCoordinationAPI;
   return {
@@ -105,16 +95,14 @@ describe("app-local node host facets", () => {
         },
         unpin() {},
       },
-      checkpointCreation: { create() {} },
       hierarchy: { getSnapshot() {}, subscribe() {}, enter() {} },
       bodyHeaderElement: { appendChild() {} },
     };
 
     expect(Object.is(requireAppNodeHostFacet(host, "checkpoint"), host.checkpoint)).toBe(true);
-    expect(Object.is(requireAppNodeHostFacet(host, "checkpointCreation"), host.checkpointCreation)).toBe(true);
     expect(Object.is(requireAppNodeHostFacet(host, "hierarchy"), host.hierarchy)).toBe(true);
     expect(Object.is(requireAppNodeHostFacet(host, "bodyHeaderElement"), host.bodyHeaderElement)).toBe(true);
-    for (const facet of ["checkpoint", "checkpointCreation", "hierarchy", "bodyHeaderElement"] as const) {
+    for (const facet of ["checkpoint", "hierarchy", "bodyHeaderElement"] as const) {
       expect(() => requireAppNodeHostFacet({}, facet)).toThrow(`app node host requires facet "${facet}"`);
     }
   });
@@ -213,14 +201,9 @@ describe("app-local node host facets", () => {
     expect(fixture.calls.pin).toBe(0);
   });
 
-  test("checkpoint creation and hierarchy expose no Workspace-shaped command bag", () => {
+  test("hierarchy exposes no Workspace-shaped command bag", () => {
     const fixture = runtimeSessionFixture();
-    const creation = createCheckpointCreationNodeFacet(fixture.session, "scatter");
     const hierarchy = createHierarchyNodeFacet(fixture.session, "subnet");
-
-    expect(Object.keys(creation)).toEqual(["create"]);
-    expect(creation.create()).toBe("created-cache");
-    expect(fixture.calls.create).toBe(1);
 
     const initial = hierarchy.getSnapshot();
     expect(initial).toEqual({ childCount: 1 });

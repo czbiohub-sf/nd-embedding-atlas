@@ -52,15 +52,13 @@ export function useIsolationBridge(opts: UseIsolationBridgeOptions): UseIsolatio
         return;
       }
 
-      const labels = catMap.legend
-        .filter((item) => isolatedIndices.has(item.index))
-        .map((item) => `'${item.label.replace(/'/g, "''")}'`);
+      const labels = catMap.legend.filter((item) => isolatedIndices.has(item.index)).map((item) => item.label);
       if (labels.length === 0) {
         publishIsolationFilter(currentHost, null);
         scatter?.clearCategoryIsolation();
         return;
       }
-      publishIsolationFilter(currentHost, `${col} IN (${labels.join(", ")})`);
+      publishIsolationFilter(currentHost, { op: "in", column: col, values: labels });
 
       if (scatter && catIndices) {
         scatter.setCategoryIsolation(isolatedIndices, catIndices);

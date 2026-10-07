@@ -63,7 +63,6 @@ describe("native node catalog fitness functions", () => {
     expect(cache?.definition.ref).toEqual(exactNodeTypeRef("cache", "1.0.0"));
     expect(imageViewer?.definition.ref).toEqual(exactNodeTypeRef("image-viewer", "1.0.0"));
     expect(nativeNodeLibrary.getCurrentDescriptor("image-viewer")?.label).toBe("Image Viewer");
-    expect(imageViewer?.definition.inputs).toEqual([{ id: "focus-in", kind: "focus", label: "Focus" }]);
     expect(nativeNodeCatalog.resolveCurrent("selection")).toBeUndefined();
     expect(nativeNodeCatalog.resolveCurrent("fov")).toBeUndefined();
     expect(nativeNodeLibrary.getCurrentSpec("selection")).toBeUndefined();
@@ -121,10 +120,7 @@ describe("native node catalog fitness functions", () => {
 
   test("native bodies declare every required app-local host facet", () => {
     expect(nativeNodeLibrary.getCurrentSpec("cache")?.requiredHostFacets).toEqual(["checkpoint"]);
-    expect(nativeNodeLibrary.getCurrentSpec("scatter")?.requiredHostFacets).toEqual([
-      "checkpointCreation",
-      "bodyHeaderElement",
-    ]);
+    expect(nativeNodeLibrary.getCurrentSpec("scatter")?.requiredHostFacets).toEqual(["bodyHeaderElement"]);
     expect(nativeNodeLibrary.getCurrentSpec("subnet")?.requiredHostFacets).toEqual(["hierarchy"]);
     expect(nativeNodeLibrary.getCurrentSpec("table")?.requiredHostFacets).toEqual(["bodyHeaderElement"]);
   });
@@ -170,18 +166,18 @@ describe("native node catalog fitness functions", () => {
       table: {
         role: "view",
         inputs: [["in", "pred"]],
-        outputs: [["out", "focus"]],
+        outputs: [],
         icon: "table",
       },
       annotate: {
         role: "view",
         inputs: [["in", "pred"]],
-        outputs: [["out", "focus"]],
+        outputs: [],
         icon: "tag",
       },
       "image-viewer": {
         role: "view",
-        inputs: [["focus-in", "focus"]],
+        inputs: [],
         outputs: [],
         icon: "image",
       },
@@ -194,9 +190,7 @@ describe("native node catalog fitness functions", () => {
       expect(definition?.inputs.map(({ id, kind }) => [id, kind])).toEqual(
         expected.inputs.map(([portId, kind]) => [portId, kind]),
       );
-      expect(definition?.outputs.map(({ id, kind }) => [id, kind])).toEqual(
-        expected.outputs.map(([portId, kind]) => [portId, kind]),
-      );
+      expect(definition?.outputs.map(({ id, kind }) => [id, kind])).toEqual([...expected.outputs]);
       expect(definition?.presentation?.icon).toBe(expected.icon);
     }
     expect(nativeNodeCatalog.resolveCurrent("scatter")?.documentation?.summary).toContain("embedding");
@@ -223,11 +217,11 @@ describe("native node catalog fitness functions", () => {
       "view-coordination",
       "row-set-publish",
       "filter-coordination",
+      "color-coordination",
       "gpu-device",
     ] as const) {
       expect(capabilities.has(capability), `Scatter is missing ${capability}`).toBe(true);
     }
-    expect(nativeNodeLibrary.getCurrentSpec("scatter")?.checkpointCreation).toBe(true);
   });
 
   test("every config contract accepts its tuple-defined default", () => {

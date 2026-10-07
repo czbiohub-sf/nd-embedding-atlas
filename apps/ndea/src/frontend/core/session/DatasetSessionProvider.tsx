@@ -1,19 +1,11 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useSelector } from "@tanstack/react-store";
 import { Coordinator, Selection, socketConnector } from "@uwdata/mosaic-core";
 import { type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { MetadataSchema } from "@ndea/protocol";
 import { wsClient } from "@/lib/ws-client";
 import { scatterKeys } from "@/lib/query-keys";
-import { focusBus } from "@/core/buses/focus-bus";
-import { FilterScopeRegistry } from "@/core/coordination/filter-scope-runtime";
 import type { Metadata, TrajectoryData } from "@/types";
-import {
-  clearDatasetSession,
-  DatasetDataPublicationRuntime,
-  publishDatasetSession,
-  type DatasetSessionState,
-} from "./dataset-session";
+import { clearDatasetSession, publishDatasetSession, type DatasetSessionState } from "./dataset-session";
 
 // ── Provider ───────────────────────────────────────────────────────────────
 
@@ -37,8 +29,6 @@ export function DatasetSessionProvider({ children }: Props) {
   }, []);
 
   const brushSelection = useMemo(() => Selection.crossfilter(), []);
-  const filterScopes = useMemo(() => new FilterScopeRegistry({ coordinator, table: TABLE }), [coordinator]);
-  const dataPublication = useMemo(() => new DatasetDataPublicationRuntime(globalThis.fetch), []);
 
   // ── WebSocket connection ──────────────────────────────────────────────
   // Opens one persistent /ws connection for the tab. Stays connected for
@@ -60,10 +50,6 @@ export function DatasetSessionProvider({ children }: Props) {
     gcTime: Infinity,
   });
   const metadata = metadataQuery.data ?? null;
-
-  // Process-wide focus. Host-scoped consumers use `host.focus`; session
-  // consumers use this mirror without conflating focus with render emphasis.
-  const focusedRowIndex = useSelector(focusBus.store, (s) => s);
 
   // Trajectory state: per-dataset, keyed by datasetKey (empty string for single-dataset mode)
   const [trajectories, setTrajectoriesState] = useState<Record<string, TrajectoryData | null>>({});
@@ -98,7 +84,6 @@ export function DatasetSessionProvider({ children }: Props) {
   // Memoize stable objects (must be before early return to satisfy rules of hooks)
   const actions = useMemo(
     () => ({
-      setFocus: focusBus.set,
       refreshMetadata,
       setTrajectory,
       setTrajectoryTIndex,
@@ -107,23 +92,12 @@ export function DatasetSessionProvider({ children }: Props) {
     [refreshMetadata, setTrajectory, setTrajectoryTIndex, clearTrajectory],
   );
 
-  const runtime = useMemo(
-    () => ({ coordinator, brushSelection, filterScopes, dataPublication, table: TABLE }),
-    [coordinator, brushSelection, filterScopes, dataPublication],
-  );
-
-  useEffect(
-    () => () => {
-      filterScopes.dispose();
-      void dataPublication.dispose();
-    },
-    [filterScopes, dataPublication],
-  );
+  const runtime = useMemo(() => ({ coordinator, brushSelection, table: TABLE }), [coordinator, brushSelection]);
 
   // Memoize state to prevent unnecessary consumer re-renders
   const state = useMemo<DatasetSessionState | null>(
-    () => (metadata ? { metadata, focusedRowIndex, trajectories } : null),
-    [metadata, focusedRowIndex, trajectories],
+    () => (metadata ? { metadata, trajectories } : null),
+    [metadata, trajectories],
   );
 
   const sessionValue = useMemo(() => (state ? { state, actions, runtime } : null), [state, actions, runtime]);

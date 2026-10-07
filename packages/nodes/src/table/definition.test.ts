@@ -13,7 +13,7 @@ describe("filter-coordinated view definitions", () => {
       services: { bodyHeaderElement: () => ({}) as HTMLElement },
     });
     expect(tableDefinition.inputs).toEqual([{ id: "in", kind: "pred", label: "In" }]);
-    expect(tableDefinition.outputs).toEqual([{ id: "out", kind: "focus", label: "Focus" }]);
+    expect(tableDefinition.outputs).toEqual([]);
     expect(tableDefinition.capabilities).toEqual([
       "data-read",
       "filter-coordination",

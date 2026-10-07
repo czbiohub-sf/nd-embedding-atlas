@@ -1,6 +1,5 @@
 import type { FilterCoordinationAPI } from "@ndea/sdk";
 import type {
-  CheckpointCreationNodeHost,
   CheckpointInputState,
   CheckpointNodeHost,
   CheckpointState,
@@ -102,13 +101,6 @@ export function createCheckpointNodeFacet(
       session.uncache(nodeId);
     },
   });
-}
-
-export function createCheckpointCreationNodeFacet(
-  session: NodeRuntimeSessionPort,
-  nodeId: string,
-): CheckpointCreationNodeHost["checkpointCreation"] {
-  return Object.freeze({ create: () => session.freezeSelection(nodeId) });
 }
 
 export function createHierarchyNodeFacet(

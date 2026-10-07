@@ -43,7 +43,7 @@ const mountedViewDefinition = defineNode({
   title: "Example view",
   role: "view",
   inputs: [{ id: "in", kind: "sel", label: "Rows" }],
-  outputs: [{ id: "focus", kind: "focus", label: "Focus" }],
+  outputs: [],
   capabilities: ["focus-coordination"],
   load: () =>
     Promise.resolve<NodeModule<unknown, "focus-coordination">>({

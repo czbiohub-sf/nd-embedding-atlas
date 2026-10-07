@@ -13,6 +13,7 @@ import type { MosaicClient } from "@uwdata/mosaic-core";
 import type { Mark } from "@uwdata/mosaic-plot";
 import { column } from "@uwdata/mosaic-sql";
 
+import type { FilterClause } from "@ndea/protocol";
 import { mountPlot } from "./plot-host";
 import type { PlotEntry } from "./spec-schema";
 
@@ -94,7 +95,7 @@ interface Mounted {
   element: FakeElement;
   clearSelection: () => void;
   dispose: () => void;
-  selections: (string | null)[];
+  selections: (FilterClause | null)[];
 }
 
 async function mount(entries: PlotEntry[]): Promise<Mounted> {
@@ -102,7 +103,7 @@ async function mount(entries: PlotEntry[]): Promise<Mounted> {
   const associated: MosaicClient[] = [];
   const disassociated: MosaicClient[] = [];
   const scope = Selection.intersect();
-  const selections: (string | null)[] = [];
+  const selections: (FilterClause | null)[] = [];
   const before = createdElements.length;
   const mounted = await mountPlot({
     coordinator,
@@ -201,7 +202,7 @@ describe("mountPlot", () => {
 
     brush.update(clausePoint(column("value"), 3, { source: {} }));
     expect(selections).toHaveLength(1);
-    expect(selections[0]).toContain("value");
+    expect(selections[0]).toEqual({ op: "and", clauses: [{ op: "in", column: "value", values: [3] }] });
 
     // `AsyncDispatch.emit` marks the channel pending for the duration of the
     // first broadcast, so a second update in the same tick is ENQUEUED rather

@@ -1,7 +1,7 @@
 /**
  * scatter: plugin-backed view (the `scatter` descriptor renders the body via
- * BodySocket). Cooks as a predicate pass-through; its lasso emission rides the push
- * port (sel), delivered downstream outside the cook. Out port is `sel`.
+ * BodySocket). Cooks as a predicate pass-through; its lasso publishes into its
+ * filter scope as a named observation set.
  */
 
 import { createScatterDefinition } from "@ndea/nodes";
@@ -37,7 +37,6 @@ const services: ScatterServices = {
   wsClient,
   isReconnectError: (error) => error instanceof WsReconnectError,
   onDeviceLost,
-  createCheckpoint: (host) => requireAppNodeHostFacet(host, "checkpointCreation").create(),
   bodyHeaderElement: (host) => requireAppNodeHostFacet(host, "bodyHeaderElement"),
 };
 
@@ -54,7 +53,6 @@ export const scatterNode = defineNativeNodeContribution({
     stage: "stageable",
     inPalette: true,
     body: "full-only",
-    checkpointCreation: true,
-    requiredHostFacets: ["checkpointCreation", "bodyHeaderElement"],
+    requiredHostFacets: ["bodyHeaderElement"],
   },
 });

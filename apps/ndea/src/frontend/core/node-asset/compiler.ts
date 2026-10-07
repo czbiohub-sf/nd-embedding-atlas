@@ -334,7 +334,6 @@ function firstInputOrDefault(inputs: GraphPortValueInputs, kind: PortKind) {
   const value = inputs.values().next().value?.[0];
   if (value) return value;
   if (kind === "sel") return { kind: "sel" as const, sql: null, rowIds: null };
-  if (kind === "focus") return { kind: "focus" as const, rowIndex: null };
   return { kind: "pred" as const, sql: null };
 }
 

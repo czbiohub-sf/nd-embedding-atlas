@@ -8,6 +8,7 @@
  *   ~/.ndea/locks/install.lock               : install/update mutex
  *   ~/.local/bin/ndea                        : symlink → versions/<tag>/ndea
  *   ~/.ndea/workspaces/<key>.json            : default workspace document per dataset set
+ *   ~/.ndea/sets/<id>.json                  : content-addressed observation identities
  *
  * The compiled binary embeds libduckdb; the preloader extracts it to
  * ~/.cache/ndea/<version>/ on first run. No sidecar file, no wrapper.

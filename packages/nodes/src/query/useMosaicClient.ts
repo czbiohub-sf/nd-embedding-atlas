@@ -6,7 +6,7 @@ import type { FilterCoordinationAPI } from "@ndea/sdk";
 export interface UseMosaicClientOptions<T> {
   coordinator: Coordinator;
   selection?: Selection;
-  filter?: Pick<FilterCoordinationAPI, "selection" | "associateClient" | "disassociateClient">;
+  filter?: Pick<FilterCoordinationAPI, "selection">;
   /** Whether filtering preserves the query's group-by domain. Default true. */
   filterStable?: boolean;
   /** Must be memoized (useCallback). Returns a SQL query for the given filter predicate. */
@@ -74,14 +74,11 @@ export function useMosaicClient<T>(opts: UseMosaicClientOptions<T>): UseMosaicCl
         onErrorRef.current?.(err);
       },
     });
-    const clientFilter = filter;
-    clientFilter?.associateClient(client);
     let released = false;
 
     return () => {
       if (released) return;
       released = true;
-      clientFilter?.disassociateClient(client);
       client.destroy();
     };
   }, [coordinator, filterSelection, filter, filterStable, query, enabled]);

@@ -2,6 +2,7 @@ import { Store } from "@tanstack/store";
 import { Selection } from "@uwdata/mosaic-core";
 import {
   nodeInstanceId,
+  type ColorCoordinationAPI,
   type ExactNodeTypeRef,
   type FocusCoordinationAPI,
   type NodeCapability,
@@ -11,27 +12,17 @@ import {
 } from "@ndea/sdk";
 
 import { stringPredicate } from "@/lib/mosaic-helpers";
+import { createFilterBinding } from "@/core/coordination/filter-binding";
+import type { CoordinationTypeId, CoordinationValue } from "@/core/coordination/types";
 import type { CatalogNodeDefinition } from "@/core/plugin/registration";
 import { assertRequiredAppNodeHostFacets } from "@/core/node/app-node-host";
-import { createCheckpointCreationNodeFacet, createCheckpointNodeFacet, createHierarchyNodeFacet } from "./host-facets";
+import { createCheckpointNodeFacet, createHierarchyNodeFacet } from "./host-facets";
 import type { AppNodeLibrary } from "@/core/node/library";
 import { createAppNodeHost, type AppNodeHostDependencies, type HostHandle } from "./host";
 import { NodeInstanceRuntime } from "./instance-runtime";
 import type { NodeRuntimeSessionPort } from "./session-port";
 
-interface ViewSyncCell {
-  readonly panX?: number;
-  readonly panY?: number;
-  readonly zoom?: number;
-  readonly src?: string;
-}
-
-type OrderingCell = { col: string; dir: "asc" | "desc" } | null;
-
-const VIEW_COORDINATION_TYPE = "viewSync";
 const VIEW_COORDINATION_LOCK = "lock1";
-const FOCUS_COORDINATION_TYPE = "focus";
-const ORDERING_COORDINATION_TYPE = "ordering";
 
 export const APP_NODE_HOST_CAPABILITIES: readonly NodeCapability[] = Object.freeze([
   "data-read",
@@ -46,6 +37,7 @@ export const APP_NODE_HOST_CAPABILITIES: readonly NodeCapability[] = Object.free
   "annotation-write",
   "ordering-coordination",
   "filter-coordination",
+  "color-coordination",
 ] satisfies NodeCapability[]);
 
 export interface WorkspaceNodeRuntimeManagerDependencies {
@@ -69,91 +61,86 @@ function mergeNodeConfig(definition: CatalogNodeDefinition, nodeConfig: unknown)
   return nodeConfig ?? defaultConfig;
 }
 
-function createViewCoordination(session: NodeRuntimeSessionPort, nodeId: string): ViewCoordinationAPI {
-  const read = (): ViewSyncCell | undefined => {
-    const scope = session.coordination.scopeOf(nodeId, VIEW_COORDINATION_TYPE);
-    return scope === undefined
-      ? undefined
-      : (session.coordination.readCoordination(VIEW_COORDINATION_TYPE, scope) as ViewSyncCell);
+/** The node's bound cell of one coordination type; reads `undefined` and drops writes when unbound. */
+function boundCell<T extends CoordinationTypeId>(session: NodeRuntimeSessionPort, nodeId: string, type: T) {
+  const scope = () => session.coordination.scopeOf(nodeId, type);
+  return {
+    scope,
+    read(): CoordinationValue<T> | undefined {
+      const current = scope();
+      return current === undefined ? undefined : session.coordination.readCoordination(type, current);
+    },
+    write(value: CoordinationValue<T>): void {
+      const current = scope();
+      if (current !== undefined) session.coordination.setCoordinationValue(type, current, value);
+    },
+    subscribe: (callback: (value: CoordinationValue<T> | undefined) => void) =>
+      session.coordination.subscribe(nodeId, type, callback),
   };
+}
+
+function createViewCoordination(session: NodeRuntimeSessionPort, nodeId: string): ViewCoordinationAPI {
+  const cell = boundCell(session, nodeId, "viewSync");
   return {
     get panX() {
-      return read()?.panX ?? 0;
+      return cell.read()?.panX ?? 0;
     },
     get panY() {
-      return read()?.panY ?? 0;
+      return cell.read()?.panY ?? 0;
     },
     get zoom() {
-      return read()?.zoom ?? 1;
+      return cell.read()?.zoom ?? 1;
     },
     get linked() {
-      return session.coordination.scopeOf(nodeId, VIEW_COORDINATION_TYPE) !== undefined;
+      return cell.scope() !== undefined;
     },
     broadcast(state) {
-      const scope = session.coordination.scopeOf(nodeId, VIEW_COORDINATION_TYPE);
-      if (scope === undefined) return;
-      session.coordination.setCoordinationValue(VIEW_COORDINATION_TYPE, scope, { ...state, src: nodeId });
+      cell.write({ ...state, src: nodeId });
     },
     toggleLock() {
-      if (session.coordination.scopeOf(nodeId, VIEW_COORDINATION_TYPE) !== undefined) {
-        session.coordination.clearScope(nodeId, VIEW_COORDINATION_TYPE);
-      } else {
-        session.coordination.assignScope(nodeId, VIEW_COORDINATION_TYPE, VIEW_COORDINATION_LOCK);
-      }
+      if (cell.scope() !== undefined) session.coordination.clearScope(nodeId, "viewSync");
+      else session.coordination.assignScope(nodeId, "viewSync", VIEW_COORDINATION_LOCK);
     },
     subscribe(callback) {
-      return session.coordination.subscribe(nodeId, VIEW_COORDINATION_TYPE, (value) => {
-        const cell = value as ViewSyncCell | undefined;
-        if (cell && cell.src !== nodeId) {
-          callback({ panX: cell.panX ?? 0, panY: cell.panY ?? 0, zoom: cell.zoom ?? 1 });
-        }
+      return cell.subscribe((value) => {
+        if (value && value.src !== nodeId) callback({ panX: value.panX, panY: value.panY, zoom: value.zoom });
       });
     },
   };
 }
 
 function createOrderingCoordination(session: NodeRuntimeSessionPort, nodeId: string): OrderingCoordinationAPI {
-  const read = (): OrderingCell => {
-    const scope = session.coordination.scopeOf(nodeId, ORDERING_COORDINATION_TYPE);
-    return scope === undefined
-      ? null
-      : ((session.coordination.readCoordination(ORDERING_COORDINATION_TYPE, scope) as OrderingCell) ?? null);
-  };
+  const cell = boundCell(session, nodeId, "ordering");
   return {
-    get: read,
-    set(value) {
-      const scope = session.coordination.scopeOf(nodeId, ORDERING_COORDINATION_TYPE);
-      if (scope !== undefined) session.coordination.setCoordinationValue(ORDERING_COORDINATION_TYPE, scope, value);
-    },
-    subscribe(callback) {
-      return session.coordination.subscribe(nodeId, ORDERING_COORDINATION_TYPE, (value) =>
-        callback((value as OrderingCell) ?? null),
-      );
-    },
+    get: () => cell.read() ?? null,
+    set: cell.write,
+    subscribe: (callback) => cell.subscribe((value) => callback(value ?? null)),
   };
 }
 
-function createFocusCoordination(
-  session: NodeRuntimeSessionPort,
-  nodeId: string,
-  localFocus: Store<RowIndex | null>,
-): FocusCoordinationAPI {
-  const read = (): RowIndex | null => {
-    const scope = session.coordination.scopeOf(nodeId, FOCUS_COORDINATION_TYPE);
-    return scope === undefined
-      ? localFocus.state
-      : (session.coordination.readCoordination(FOCUS_COORDINATION_TYPE, scope) ?? null);
+function createColorCoordination(session: NodeRuntimeSessionPort, nodeId: string): ColorCoordinationAPI {
+  const cell = boundCell(session, nodeId, "colorBy");
+  return {
+    get linked() {
+      return cell.scope() !== undefined;
+    },
+    get: () => cell.read() ?? null,
+    set: cell.write,
+    subscribe: (callback) => cell.subscribe((value) => callback(value ?? null)),
   };
+}
+
+/** Bound: the scope's shared row. Unbound: this occurrence's own focus. */
+function createFocusCoordination(session: NodeRuntimeSessionPort, nodeId: string): FocusCoordinationAPI {
+  const cell = boundCell(session, nodeId, "focus");
+  const local = new Store<RowIndex | null>(null);
+  const read = (): RowIndex | null =>
+    cell.scope() === undefined ? local.state : ((cell.read() ?? null) as RowIndex | null);
   return {
     get: read,
     set(rowIndex) {
-      const scope = session.coordination.scopeOf(nodeId, FOCUS_COORDINATION_TYPE);
-      if (scope !== undefined) {
-        session.coordination.setCoordinationValue(FOCUS_COORDINATION_TYPE, scope, rowIndex);
-      } else {
-        localFocus.setState(() => rowIndex);
-        session.emitFocus(nodeId, rowIndex);
-      }
+      if (cell.scope() === undefined) local.setState(() => rowIndex);
+      else cell.write(rowIndex);
     },
     subscribe(callback) {
       let previous = read();
@@ -163,11 +150,11 @@ function createFocusCoordination(
         previous = value;
         callback(value);
       };
-      const localSubscription = localFocus.subscribe(emitChange);
-      const coordinationSubscription = session.coordination.subscribe(nodeId, FOCUS_COORDINATION_TYPE, emitChange);
+      const localSubscription = local.subscribe(emitChange);
+      const cellSubscription = cell.subscribe(emitChange);
       return () => {
         localSubscription.unsubscribe();
-        coordinationSubscription();
+        cellSubscription();
       };
     },
   };
@@ -184,18 +171,20 @@ function createRuntimeHost(
   if (!node) throw new Error(`workspace node not found: ${nodeId}`);
   const spec = nodeLibrary.getSpecExact(node.definitionRef);
   const filterBinding = definition.capabilities.includes("filter-coordination")
-    ? appHost.filterScopes.bind(nodeInstanceId(nodeId))
+    ? createFilterBinding({
+        nodeId,
+        coordination: session.coordination,
+        coordinator: appHost.coordinator,
+        table: appHost.table,
+      })
     : undefined;
-  filterBinding?.setScope(session.coordination.scopeOf(nodeId, "filter"));
   const inputPredicate = filterBinding?.selection ?? Selection.single();
-  const localFocus = new Store<RowIndex | null>(null);
   const checkpointController = spec?.checkpoint ? new AbortController() : null;
   const graphSource = { __ndeaGraphNode: nodeId };
   const facets = {
     ...(spec?.checkpoint && filterBinding
       ? { checkpoint: createCheckpointNodeFacet(session, nodeId, filterBinding, checkpointController!.signal) }
       : {}),
-    ...(spec?.checkpointCreation ? { checkpointCreation: createCheckpointCreationNodeFacet(session, nodeId) } : {}),
     ...(spec?.role === "subnet" ? { hierarchy: createHierarchyNodeFacet(session, nodeId) } : {}),
   };
   assertRequiredAppNodeHostFacets({ ...facets, bodyHeaderElement: headerElement }, spec?.requiredHostFacets ?? []);
@@ -206,64 +195,44 @@ function createRuntimeHost(
     config: mergeNodeConfig(definition, node.config?.value),
     bodyHeaderElement: headerElement,
     inputPredicate,
-    focus: createFocusCoordination(session, nodeId, localFocus),
+    focus: createFocusCoordination(session, nodeId),
     viewCoordination: createViewCoordination(session, nodeId),
     ordering: createOrderingCoordination(session, nodeId),
+    colorBy: createColorCoordination(session, nodeId),
     filter: filterBinding,
     facets,
     patchConfig: (patch) => session.updateNodeConfig(nodeId, patch as Record<string, unknown>),
-    onDataRowSetPublished(publication, rowIds) {
-      session.emitLasso(nodeId, publication.predicate, rowIds);
-    },
   });
 
-  if (filterBinding) {
-    handle.host.track(() => filterBinding.dispose());
-    handle.host.track(
-      session.coordination.subscribeScope(nodeId, "filter", (scope) => {
-        filterBinding.setScope(scope);
-      }),
-    );
-  }
+  if (filterBinding) handle.host.track(() => filterBinding.dispose());
   if (checkpointController) handle.host.track(() => checkpointController.abort());
 
   let graphSinkDisposer: (() => void) | null = null;
+  const setGraphPredicate = (sql: string | null) => {
+    if (filterBinding) {
+      filterBinding.setGraphPredicate(sql);
+      return;
+    }
+    inputPredicate.update({
+      source: graphSource,
+      clients: new Set(),
+      fields: [],
+      value: sql ? [sql] : null,
+      predicate: sql ? stringPredicate(sql) : null,
+    });
+  };
   const syncGraphSink = () => {
     const off = session.store.state.flags[nodeId]?.off ?? false;
     if (off || !session.store.state.nodes[nodeId]) {
       graphSinkDisposer?.();
       graphSinkDisposer = null;
-      if (filterBinding) filterBinding.setGraphPredicate(null);
-      else {
-        inputPredicate.update({
-          source: graphSource,
-          clients: new Set(),
-          fields: [],
-          value: null,
-          predicate: null,
-        });
-      }
+      setGraphPredicate(null);
       return;
     }
     if (graphSinkDisposer) return;
     graphSinkDisposer = session.registerGraphSink(nodeId, (value) => {
       if (value === undefined) return;
-      if (value.kind === "focus") {
-        localFocus.setState(() => value.rowIndex);
-        return;
-      }
-      const sql = spec?.checkpoint ? (session.cacheGraphInput(nodeId)?.sql ?? null) : value.sql;
-      if (filterBinding) {
-        filterBinding.setGraphPredicate(sql);
-        return;
-      }
-      inputPredicate.update({
-        source: graphSource,
-        clients: new Set(),
-        fields: [],
-        value: sql ? [sql] : [],
-        predicate: sql ? stringPredicate(sql) : null,
-      });
+      setGraphPredicate(spec?.checkpoint ? (session.cacheGraphInput(nodeId)?.sql ?? null) : value.sql);
     });
   };
   const documentSubscription = session.store.subscribe(syncGraphSink);

@@ -74,8 +74,14 @@ entrypoints across workspaces.
 - `WorkspaceEvaluator` (`server/graph.ts`) evaluates that document with the
   browser's node definitions and the shared cook table
   (`frontend/core/graph/native-graph.ts`); `GET /api/workspace/nodes/:id`
-  serves one node's output. Cooks must stay browser-free, and SQL built from
-  document values runs through `DatasetQuerySession.querySingleJson`.
+  serves one node's output with its filter scope applied. Cooks must stay
+  browser-free, and SQL built from document values runs through
+  `DatasetQuerySession.querySingleJson`.
+- `ObservationSets` (`server/observation-sets.ts`) stores lassos as
+  content-addressed sets keyed by dataset and obs name: `POST /api/sets`
+  persists `~/.ndea/sets/<id>.json` and loads rows into the `ndea_obs_sets`
+  temp table that `{ op: "inSet" }` clauses query. `PATCH /api/workspace`
+  rejects references to unknown sets.
 - `EmbeddingStore` owns one DuckDB connection. Base tables, the `dataset` view,
   temporary selections, and Mosaic preaggregations share that connection.
 
@@ -105,6 +111,13 @@ entrypoints across workspaces.
   acknowledged revision and PATCHes the difference; remote revisions reconcile
   through `Workspace.applyDocument`. Node code reaches cross-view coordination
   through `NodeHost`.
+- Coordination is document data, not wires. `state[type][scope]` holds shared
+  values and `bindings[nodeId][type] = { $bindState: "/<type>/<scope>" }`
+  joins a node to a scope; `frontend/core/coordination/types.ts` registers each
+  type's Zod schema (focus, filter, colorBy, viewSync, ordering). A `filter`
+  scope is a crossfilter `source → facet → FilterClause`: each member sees every
+  other source's clauses, never its own, and agents write under their own
+  source key. Publishers emit typed clauses, never SQL.
 
 ## Commands
 

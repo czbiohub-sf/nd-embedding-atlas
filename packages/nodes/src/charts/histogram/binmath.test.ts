@@ -20,14 +20,11 @@ describe("binParams", () => {
 
 describe("histogramBrushPredicate", () => {
   test("lo < hi → isBetween filter", () => {
-    const sql = histogramBrushPredicate("x", 1, 5);
-    expect(sql).toContain("BETWEEN");
-    expect(sql).toContain("1");
-    expect(sql).toContain("5");
+    expect(histogramBrushPredicate("x", 1, 5)).toEqual({ op: "between", column: "x", range: [1, 5] });
   });
 
   test("reversed endpoints are sorted", () => {
-    expect(histogramBrushPredicate("x", 5, 1)).toBe(histogramBrushPredicate("x", 1, 5));
+    expect(histogramBrushPredicate("x", 5, 1)).toEqual(histogramBrushPredicate("x", 1, 5));
   });
 
   test("zero-width brush → null", () => {

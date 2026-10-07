@@ -1,3 +1,4 @@
+import type { FilterClause } from "@ndea/protocol";
 import type { FilterCoordinationAPI } from "@ndea/sdk";
 import type { Coordinator } from "@uwdata/mosaic-core";
 import { type FilterExpr, cast, column } from "@uwdata/mosaic-sql";
@@ -23,7 +24,7 @@ export function createCountPlotView({ useColumnTypes, useQuery }: ChartServices)
   return function CountPlotView({ host }: NodeBodyProps<CountPlotConfig, CountPlotCapabilities>) {
     const { coordinator, table, filter, field, setField } = useChartLeaf(host);
     const limit = host.config.limit ?? 11;
-    const onFilter = useCallback((sql: string | null) => publishChartFilter(host, sql), [host]);
+    const onFilter = useCallback((clause: FilterClause | null) => publishChartFilter(host, clause), [host]);
 
     return (
       <div className="flex h-full w-full flex-col gap-1.5 overflow-y-auto bg-node-surface p-2">
@@ -59,7 +60,7 @@ interface BodyProps {
   filter: FilterCoordinationAPI;
   field: string;
   limit: number;
-  onFilter: (sql: string | null) => void;
+  onFilter: (clause: FilterClause | null) => void;
   useQuery: UseChartQuery;
 }
 
@@ -96,7 +97,7 @@ function CountPlotBody({ coordinator, table, filter, field, limit, onFilter, use
       next.add(key);
     }
     setSelected(next);
-    onFilter(countPlotPredicate(textExpr, next));
+    onFilter(countPlotPredicate(field, next));
   };
 
   if (!data || data.length === 0) {

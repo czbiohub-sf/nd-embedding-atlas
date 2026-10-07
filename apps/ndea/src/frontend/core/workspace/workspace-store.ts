@@ -2,8 +2,8 @@
  * Workspace: ONE graph document, projected. The TanStack store is the
  * topology + presentation authority; the GraphEngine is the cook
  * authority. Every topology mutation goes through the actions here, which
- * mirror it into the engine (pred edges only: sel/focus are push wires
- * and route through the push-router, never pulled).
+ * mirror it into the engine. Cross-view linking lives in the coordination
+ * `state`/`bindings` sections, never on wires.
  *
  * Telemetry: engine cook events land in a separate store (LEDs, wire
  * dashes, cook ms, epoch) so node headers re-render without touching the
@@ -16,6 +16,7 @@ import type { Coordinator } from "@uwdata/mosaic-core";
 import {
   coordinationDocumentPort,
   createCoordination,
+  withoutNodeCoordination,
   type CoordinationScopeCellPort,
 } from "@/core/coordination/coordination";
 import { predicateSql } from "@/core/graph/cook";
@@ -96,8 +97,8 @@ const EMPTY: WorkspaceDocumentState = {
   claimed: null,
   graphPath: null,
   flags: {},
-  coordinationScopes: {},
-  coordinationSpace: {},
+  state: {},
+  bindings: {},
 };
 
 /** FLIP relocation ghost (pin/pull) */
@@ -415,24 +416,22 @@ export class Workspace {
       delete explicit[id];
       const flags = { ...s.flags };
       delete flags[id];
-      // drop the node's scope assignments; cell values outlive their members
-      // (scopes are named cells, not node-owned: same as the old groupFocus).
-      const coordinationScopes = { ...s.coordinationScopes };
-      delete coordinationScopes[id];
       const edges = Object.fromEntries(Object.entries(s.edges).filter(([, e]) => e.from !== id && e.to !== id));
-      return {
-        ...s,
-        nodes,
-        positions,
-        edges,
-        explicit,
-        flags,
-        coordinationScopes,
-        stageTree: treeRemove(s.stageTree, id),
-        selectedNodeId: s.selectedNodeId === id ? null : s.selectedNodeId,
-        selectedNodeIds: s.selectedNodeIds.filter((x) => x !== id),
-        selectedEdgeId: s.selectedEdgeId && !edges[s.selectedEdgeId] ? null : s.selectedEdgeId,
-      };
+      return withoutNodeCoordination(
+        {
+          ...s,
+          nodes,
+          positions,
+          edges,
+          explicit,
+          flags,
+          stageTree: treeRemove(s.stageTree, id),
+          selectedNodeId: s.selectedNodeId === id ? null : s.selectedNodeId,
+          selectedNodeIds: s.selectedNodeIds.filter((x) => x !== id),
+          selectedEdgeId: s.selectedEdgeId && !edges[s.selectedEdgeId] ? null : s.selectedEdgeId,
+        },
+        id,
+      );
     });
   }
 
@@ -720,23 +719,7 @@ export class Workspace {
     }));
   }
 
-  /* ── authored emissions · freeze · spawn (the ◇ Selection flow) ───── */
-
-  /** A scatter's live lasso lands on its push port as an authored engine
-   *  emission; edges deliver it, downstream dirties, and the UI reads it back
-   *  via getLasso (reactive through the telemetry epoch). */
-  emitLasso(nodeId: string, sql: string | null, rowIds: readonly RowIndex[] | null = null): void {
-    this.graphRuntime.emitSelection(nodeId, sql, rowIds);
-  }
-
-  getLasso(nodeId: string) {
-    return this.graphRuntime.selection(nodeId);
-  }
-
-  /** A table row focus lands on its push port (focus wires deliver it). */
-  emitFocus(nodeId: string, focusedRowIndex: RowIndex | null): void {
-    this.graphRuntime.emitFocus(nodeId, focusedRowIndex);
-  }
+  /* ── cache checkpoints ─────────────────────────────────────────────── */
 
   /** Is this cache node currently holding a pinned snapshot (cached), or live? */
   isCached(id: string): boolean {
@@ -779,25 +762,6 @@ export class Workspace {
       ...s,
       nodes: { ...s.nodes, [cacheId]: { ...s.nodes[cacheId], stamp: undefined } },
     }));
-  }
-
-  /** Scatter *freeze* affordance → a ◆ Cache node wired to the lasso, pinned at
-   *  the current rows. Reuses an existing cache node already fed by this scatter
-   *  (re-pin == Recache). */
-  freezeSelection(scatterId: string): string | null {
-    const live = this.getLasso(scatterId);
-    if (!live?.sql) return null;
-    let cacheId = Object.values(this.store.state.edges).find(
-      (e) =>
-        e.from === scatterId && e.kind === "sel" && this.store.state.nodes[e.to]?.definitionRef.nodeTypeId === "cache",
-    )?.to;
-    if (!cacheId) {
-      const p = this.store.state.positions[scatterId] ?? { x: 0, y: 0 };
-      cacheId = this.addNode("cache", { x: p.x + 120, y: p.y + (this.def(scatterId)?.full.h ?? 380) + 80 });
-      this.connect(scatterId, cacheId);
-    }
-    if (live.rowIds) this.pinCache(cacheId, live.rowIds);
-    return cacheId;
   }
 
   /** global render band + FLIP ghost + resize. Forms default LOCKED to the

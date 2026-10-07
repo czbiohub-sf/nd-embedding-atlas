@@ -167,10 +167,14 @@ export async function mountVgplotBody(host: Host): Promise<MountedNodeBody> {
         registerClient: (client) => host.registerClient(client),
         width,
         height,
-        onSelection: (sql) => {
+        onSelection: (clause) => {
           if (disposed || seq !== renderSeq) return;
-          clearButton.disabled = sql === null;
-          publishChartFilter(host, sql);
+          clearButton.disabled = clause === null;
+          publishChartFilter(host, clause);
+        },
+        onUnsupportedBrush: () => {
+          if (!disposed && seq === renderSeq)
+            host.notifications.notify("brush shape not supported as a typed filter", "error");
         },
       });
       if (disposed || seq !== renderSeq) {

@@ -64,7 +64,7 @@ export function K1Cursor({ paneRef }: { paneRef: React.RefObject<HTMLDivElement 
           ? "transparent"
           : color;
       cursor.style.borderColor = over || dragging ? color : "transparent";
-      cursor.style.borderRadius = spec?.shape === "diamond" ? "4px" : spec?.shape === "square" ? "5px" : "99px";
+      cursor.style.borderRadius = spec?.shape === "diamond" ? "4px" : "99px";
       cursor.style.transform = spec?.shape === "diamond" ? "rotate(45deg)" : "none";
       cursor.style.boxShadow =
         legal === true

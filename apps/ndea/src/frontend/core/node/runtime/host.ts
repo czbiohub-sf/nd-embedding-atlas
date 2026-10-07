@@ -4,9 +4,11 @@ import {
   AnnotationPredicateWriteResponseSchema,
   CommitAnnotationsResponseSchema,
   ErrorResponseSchema,
+  ObservationSetSchema,
   type Metadata,
 } from "@ndea/protocol";
 import type {
+  ColorCoordinationAPI,
   FilterCoordinationAPI,
   FocusCoordinationAPI,
   NodeCapability,
@@ -15,13 +17,10 @@ import type {
   NodeNotificationAPI,
   OrderingCoordinationAPI,
   RowIndex,
-  RowSetPublication,
   ViewCoordinationAPI,
 } from "@ndea/sdk";
 import type { DeviceBroker, DeviceLease } from "@/core/gpu/device-broker";
 import type { ErasedAppNodeHost } from "@/core/node/app-node-host";
-import type { FilterScopeRegistry } from "@/core/coordination/filter-scope-runtime";
-import type { DatasetDataPublicationRuntime } from "@/core/session/dataset-session";
 
 export interface AppNodeHostDependencies {
   readonly coordinator: Coordinator;
@@ -30,8 +29,6 @@ export interface AppNodeHostDependencies {
   readonly metadata: Metadata;
   readonly refreshMetadata: () => Promise<void>;
   readonly availableCapabilities: ReadonlySet<NodeCapability>;
-  readonly filterScopes: FilterScopeRegistry;
-  readonly dataPublication: DatasetDataPublicationRuntime;
   readonly deviceBroker: Pick<DeviceBroker, "acquire" | "releaseFor">;
   readonly fetch: typeof globalThis.fetch;
   readonly notify?: NodeNotificationAPI["notify"];
@@ -46,10 +43,10 @@ export interface HostInit<Config, Facets extends object = object> {
   readonly focus?: FocusCoordinationAPI;
   readonly viewCoordination?: ViewCoordinationAPI;
   readonly ordering?: OrderingCoordinationAPI;
+  readonly colorBy?: ColorCoordinationAPI;
   readonly filter?: FilterCoordinationAPI;
   readonly facets?: Facets;
   readonly patchConfig?: (patch: Partial<Config>) => void;
-  readonly onDataRowSetPublished?: (publication: RowSetPublication, rowIds: readonly RowIndex[]) => void;
 }
 
 export interface HostHandle<Config> {
@@ -106,6 +103,7 @@ const RESERVED_HOST_KEYS = new Set<PropertyKey>([
   "focus",
   "viewCoordination",
   "ordering",
+  "colorBy",
   "filter",
   "acquireDeviceLease",
 ]);
@@ -134,7 +132,6 @@ export function createAppNodeHost<Config, Facets extends object = object>(
   let config = init.config;
   let deviceLease: DeviceLease | null = null;
   let deviceLeasePromise: Promise<DeviceLease> | null = null;
-  let publishedRowSetDisposed = true;
   let disposed = false;
   const request = (
     input: Parameters<typeof globalThis.fetch>[0],
@@ -183,17 +180,8 @@ export function createAppNodeHost<Config, Facets extends object = object>(
     });
     serviceFacets.registerClient = (client: MosaicClient) => {
       assertActive();
-      init.filter?.associateClient(client);
-      try {
-        dependencies.coordinator.connect(client);
-      } catch (error) {
-        init.filter?.disassociateClient(client);
-        throw error;
-      }
-      return trackDisposer(() => {
-        init.filter?.disassociateClient(client);
-        dependencies.coordinator.disconnect(client);
-      });
+      dependencies.coordinator.connect(client);
+      return trackDisposer(() => dependencies.coordinator.disconnect(client));
     };
     serviceFacets.inputPredicate = init.inputPredicate ?? dependencies.defaultInputPredicate;
     granted.add("data-read");
@@ -202,20 +190,6 @@ export function createAppNodeHost<Config, Facets extends object = object>(
   const canPublishRows = requested.has("row-set-publish") && dependencies.availableCapabilities.has("row-set-publish");
   const canWriteAnnotations =
     requested.has("annotation-write") && dependencies.availableCapabilities.has("annotation-write");
-  const disposePublishedRowSet = canPublishRows
-    ? async (): Promise<void> => {
-        if (publishedRowSetDisposed) return;
-        publishedRowSetDisposed = true;
-        await dependencies.dataPublication
-          .disposePublishedRowSet(instanceId)
-          .catch((error: unknown) =>
-            (dependencies.notify ?? defaultNotify)(
-              `failed to dispose published row set for ${instanceId}: ${toError(error).message}`,
-              "error",
-            ),
-          );
-      }
-    : undefined;
 
   if (granted.has("data-read")) {
     const dataAPI = {
@@ -225,22 +199,17 @@ export function createAppNodeHost<Config, Facets extends object = object>(
       },
       ...(canPublishRows
         ? {
-            async publishRowSet(rowIds: RowIndex[]) {
+            async createObservationSet(rowIds: readonly RowIndex[]) {
               assertActive();
-              const publication = await dependencies.dataPublication.publishRowSet(
-                instanceId,
-                rowIds,
-                controller.signal,
-              );
-              if (disposed || controller.signal.aborted) {
-                await dependencies.dataPublication.disposePublishedRowSet(instanceId);
-                throw new DOMException("row-set publication aborted", "AbortError");
-              }
-              publishedRowSetDisposed = false;
-              init.onDataRowSetPublished?.(publication, rowIds);
-              return publication;
+              const response = await request("/api/sets", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ rowIndices: rowIds }),
+                signal: controller.signal,
+              });
+              if (!response.ok) throw await responseError(response, `set creation failed (${response.status})`);
+              return ObservationSetSchema.parse(await response.json());
             },
-            disposePublishedRowSet,
           }
         : {}),
       ...(canWriteAnnotations
@@ -310,11 +279,29 @@ export function createAppNodeHost<Config, Facets extends object = object>(
         trackDisposer(filter.subscribeResolved(callback)),
       publish: filter.publish.bind(filter),
       clear: filter.clear.bind(filter),
-      associateClient: filter.associateClient.bind(filter),
-      disassociateClient: filter.disassociateClient.bind(filter),
       materializeRowIds: filter.materializeRowIds.bind(filter),
     } satisfies FilterCoordinationAPI);
     granted.add("filter-coordination");
+  }
+
+  if (
+    requested.has("color-coordination") &&
+    dependencies.availableCapabilities.has("color-coordination") &&
+    init.colorBy
+  ) {
+    const colorBy = init.colorBy;
+    serviceFacets.colorBy = Object.freeze({
+      get linked() {
+        return colorBy.linked;
+      },
+      get: colorBy.get,
+      set(column: string | null) {
+        assertActive();
+        colorBy.set(column);
+      },
+      subscribe: (callback: (column: string | null) => void) => trackDisposer(colorBy.subscribe(callback)),
+    } satisfies ColorCoordinationAPI);
+    granted.add("color-coordination");
   }
 
   if (canPublishRows && granted.has("data-read")) granted.add("row-set-publish");
@@ -443,11 +430,6 @@ export function createAppNodeHost<Config, Facets extends object = object>(
     try {
       if (deviceLease) deviceLease.release();
       else dependencies.deviceBroker.releaseFor(instanceId);
-    } catch (error) {
-      errors.push(error);
-    }
-    try {
-      void disposePublishedRowSet?.();
     } catch (error) {
       errors.push(error);
     }

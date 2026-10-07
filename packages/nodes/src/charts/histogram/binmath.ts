@@ -1,6 +1,6 @@
 /** Pure bin-math + brush predicate for the histogram (testable without a coordinator). */
 
-import { cast, column, isBetween, literal } from "@uwdata/mosaic-sql";
+import type { FilterClause } from "@ndea/protocol";
 
 export interface Stats {
   min: number;
@@ -24,10 +24,9 @@ export function binParams(stats: Stats | null, binCount: number): BinParams | nu
 }
 
 /** Brush endpoints → an isBetween filter on the field; null if degenerate (no width). */
-export function histogramBrushPredicate(field: string, a: number, b: number): string | null {
+export function histogramBrushPredicate(field: string, a: number, b: number): FilterClause | null {
   const lo = Math.min(a, b);
   const hi = Math.max(a, b);
   if (!(lo < hi)) return null;
-  const fieldExpr = cast(column(field), "DOUBLE");
-  return String(isBetween(fieldExpr, [literal(lo), literal(hi)]));
+  return { op: "between", column: field, range: [lo, hi] };
 }

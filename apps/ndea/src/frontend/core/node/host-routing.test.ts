@@ -14,7 +14,8 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { rowIndex, type NodeHost, type RowIndex } from "@ndea/sdk";
+import type { FilterClause } from "@ndea/protocol";
+import { rowIndex } from "@ndea/sdk";
 
 import { publishChartFilter } from "@ndea/nodes/charts";
 import { focusObs } from "@ndea/nodes/gallery";
@@ -28,8 +29,11 @@ import {
 } from "@ndea/nodes/scatter";
 import { focusRow, publishOrdering } from "@ndea/nodes/table";
 import { createNativeAppNodeLibrary } from "./library";
-import { GraphEngine } from "@ndea/graph";
 import { createSpyHost } from "./spy-host";
+
+const RANGE: FilterClause = { op: "between", column: "x", range: [1, 2] };
+const LASSO: FilterClause = { op: "inSet", set: "0123456789abcdef" };
+const BAR: FilterClause = { op: "in", column: "col", values: ["A"] };
 
 const nativeNodeLibrary = createNativeAppNodeLibrary();
 
@@ -74,40 +78,6 @@ describe("cross-view routing conformance", () => {
     expect(calls.focusSet).toEqual([rowIndex(17)]);
   });
 
-  test("table focus reaches a viewer for first, replacement, and clear until its focus wire is deleted", () => {
-    const engine = new GraphEngine<RowIndex | null>({ schedule: (flush) => flush() });
-    engine.addNode({ id: "table", kind: "view", cook: () => null });
-    engine.addNode({
-      id: "viewer",
-      kind: "view",
-      cook: (inputs) => inputs.get("focus-in")?.at(-1) ?? null,
-    });
-    engine.connect({ from: "table", fromPort: "out", to: "viewer", toPort: "focus-in" });
-
-    const viewerFocus: (RowIndex | null)[] = [];
-    engine.registerSink("viewer", (value) => viewerFocus.push(value));
-    const host = {
-      focus: {
-        get: () => null,
-        set: (value: RowIndex | null) => engine.emit("table", "out", value),
-      },
-    } as NodeHost<unknown, "focus-coordination">;
-
-    expect(viewerFocus).toEqual([null]);
-    focusRow(host, rowIndex(17));
-    focusRow(host, rowIndex(42));
-    focusRow(host, null);
-    focusRow(host, rowIndex(7));
-
-    expect(viewerFocus).toEqual([null, rowIndex(17), rowIndex(42), null, rowIndex(7)]);
-
-    engine.disconnect({ from: "table", fromPort: "out", to: "viewer", toPort: "focus-in" });
-    expect(viewerFocus.at(-1)).toBeNull();
-    focusRow(host, rowIndex(99));
-    expect(viewerFocus.at(-1)).toBeNull();
-    expect(viewerFocus).not.toContain(rowIndex(99));
-  });
-
   test("table sort routes through the host seam's ordering facet", () => {
     const { host, calls } = createSpyHost();
     publishOrdering(host, { col: "area", dir: "desc" });
@@ -119,26 +89,26 @@ describe("cross-view routing conformance", () => {
     const { host, calls } = createSpyHost();
     focusPoint(host, rowIndex(5)); // point click
     focusPoint(host, null); // background / escape clear
-    publishRangeFilter(host, "x > 1"); // continuous-range filter
-    publishLasso(host, "__row_index__ IN (1,2,3)"); // lasso facet
-    void clearLasso(host); // lasso clear
+    publishRangeFilter(host, RANGE); // continuous-range filter
+    publishLasso(host, LASSO); // lasso facet
+    clearLasso(host); // lasso clear
 
     expect(calls.focusSet).toEqual([rowIndex(5), null]);
     expect(calls.publishFilter).toEqual([
-      { facet: "range", sql: "x > 1" },
-      { facet: "lasso", sql: "__row_index__ IN (1,2,3)" },
-      { facet: "lasso", sql: null }, // clearLasso drops the facet
+      { facet: "range", clause: RANGE },
+      { facet: "lasso", clause: LASSO },
+      { facet: "lasso", clause: null }, // clearLasso drops the facet
     ]);
   });
 
   test("focus and filter routes remain independent", () => {
     const { host, calls } = createSpyHost();
     focusPoint(host, rowIndex(8));
-    publishLasso(host, "__row_index__ IN (2,5)");
+    publishLasso(host, LASSO);
 
     expect(host.focus.get()).toBe(rowIndex(8));
     expect(calls.focusSet).toEqual([rowIndex(8)]);
-    expect(calls.publishFilter).toEqual([{ facet: "lasso", sql: "__row_index__ IN (2,5)" }]);
+    expect(calls.publishFilter).toEqual([{ facet: "lasso", clause: LASSO }]);
   });
 
   test("scatter view-sync routes through the host seam (broadcast + toggleLock)", () => {
@@ -153,12 +123,12 @@ describe("cross-view routing conformance", () => {
 
   test("chart filter routes through the host filter scope", () => {
     const { host, calls } = createSpyHost();
-    publishChartFilter(host, "col = 'A'"); // bar click / brush
+    publishChartFilter(host, BAR); // bar click / brush
     publishChartFilter(host, null); // clear
     // count-plot, histogram, and vgplot all emit via this one routing module;
     expect(calls.publishFilter).toEqual([
-      { facet: "chart", sql: "col = 'A'" },
-      { facet: "chart", sql: null },
+      { facet: "chart", clause: BAR },
+      { facet: "chart", clause: null },
     ]);
   });
 });

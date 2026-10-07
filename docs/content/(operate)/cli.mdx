@@ -166,10 +166,28 @@ ndea workspace patch --revision 3 --ops '[{"op":"replace","path":"/stripH","valu
 ndea workspace result count-2 --limit 5
 ```
 
-- For filters, sources, and views, `output` holds the predicate `sql` the node passes on or displays, the exact `count` of matching observations, and up to `--limit` (default `100`) `rows` of `{ rowIndex, datasetKey, obsName }`.
-- For focus nodes, `output` is `{ "kind": "focus", "rowIndex" }`.
+- For filters, sources, and views, `output` holds the predicate `sql` the node passes on or displays (including its filter scope), the scope part alone as `scopeFilter`, the exact `count` of matching observations, and up to `--limit` (default `100`) `rows` of `{ rowIndex, datasetKey, obsName }`.
 - `status` is `unresolved` for plugin and node-asset nodes the server cannot evaluate, and `error` with a message when the node's SQL fails.
-- The result reflects the saved document only. Interaction in an open tab, such as a scatter lasso, a focused row, a cached selection, or chart brushing, is not visible to it.
+- The result reflects the saved document. Lassos, chart brushes, focus, and color-by are saved as coordination state, so the server sees them once the tab's edit lands (within about half a second).
+
+### Linking views
+
+Views link through the document's coordination sections, so an agent links and drives them with plain patches. `bindings/<node>/<type>` joins a node to a scope; `state/<type>/<scope>` holds the shared value. Types are `focus` (a row index or `null`), `filter`, `colorBy` (a column name or `null`), `viewSync`, and `ordering`.
+
+```bash
+# Link the table to filter scope A (the scope must exist in state first).
+ndea workspace patch --revision 4 --ops '[
+  {"op":"add","path":"/bindings/table-4","value":{"filter":{"$bindState":"/filter/A"}}}
+]'
+# Filter every member of scope A to infected cells, as the source "agent".
+ndea workspace patch --revision 5 --ops '[
+  {"op":"add","path":"/state/filter/A/agent","value":{"where":{"op":"eq","column":"infected","value":true}}}
+]'
+# Focus row 812 in every view on focus scope A.
+ndea workspace patch --revision 6 --ops '[{"op":"replace","path":"/state/focus/A","value":812}]'
+```
+
+A filter scope maps each source to named clauses, using the same clause shape as `ndea filter --where`. Each member sees every other source's clauses, never its own, so a scatter lasso filters the table but not the scatter. Lassos appear as `{"op":"inSet","set":"<id>"}`, which refers to an observation set saved under `~/.ndea/sets/`. A patch that refers to an unknown set is rejected.
 
 An unknown node id exits 1.
 

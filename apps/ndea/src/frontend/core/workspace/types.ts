@@ -5,7 +5,7 @@
  */
 
 import type { NdForm } from "@/components/node-workspace/nd-resolve-form";
-import type { CoordinationSpace } from "@/core/coordination/coordination";
+import type { CoordinationBindings, CoordinationState } from "@/core/coordination/types";
 import type { GraphDocumentEdge, GraphDocumentNode } from "@/core/graph/records";
 import type { WorkspaceNodeAssetRecord } from "@/core/node-asset/schema";
 import type { TreeNode } from "./stage/split-tree";
@@ -58,11 +58,10 @@ export interface WorkspaceDocumentState {
   graphPath: string | null;
   /** Houdini node flags: bypass (transforms/subnets) · off = display flag down (views) */
   flags: Record<string, { bypass?: boolean; off?: boolean }>;
-  /** coordination plane: per-node, per-type scope assignment: which named cell
-   *  this node references for each coordination type (e.g. `focus → "A"`). The
-   *  N-node identity-of-reference channel, reached only via the host seam. */
-  coordinationScopes: Record<string, Record<string, string>>;
-  /** coordination plane: the live cells: `type → scope → shared value`.
-   *  Focus cells are branded row indices; other types remain `JsonValue`. */
-  coordinationSpace: CoordinationSpace;
+  /** coordination plane: json-render-style shared state, `type → scope → value`
+   *  (see `coordination/types.ts`). Agents patch `/state/<type>/<scope>`. */
+  state: CoordinationState;
+  /** coordination plane: `node → type → { $bindState: "/<type>/<scope>" }`.
+   *  The only way a node joins a scope; reached through the host seam. */
+  bindings: CoordinationBindings;
 }

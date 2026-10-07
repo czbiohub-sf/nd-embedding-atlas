@@ -8,14 +8,7 @@ import {
   type GraphPortValue,
   type Predicate,
 } from "@ndea/graph";
-import {
-  nodeConfigVersion,
-  rowIndex,
-  type ExactNodeTypeRef,
-  type JsonValue,
-  type PortKind,
-  type RowIndex,
-} from "@ndea/sdk";
+import { nodeConfigVersion, type ExactNodeTypeRef, type JsonValue, type PortKind, type RowIndex } from "@ndea/sdk";
 import { Store } from "@tanstack/store";
 import {
   instantiateNodeAssetExpansion,
@@ -509,29 +502,6 @@ export class GraphRuntimeSession {
 
   setTelemetryEnabled(enabled: boolean): void {
     this.evaluator.setTelemetryEnabled(enabled);
-  }
-
-  emitSelection(nodeId: string, sql: string | null, rowIds: readonly RowIndex[] | null = null): void {
-    let ids = rowIds;
-    if (!ids && sql) {
-      const match = sql.match(/__row_index__\s+IN\s*\(([^)]+)\)/i);
-      if (match) {
-        ids = match[1]
-          .split(",")
-          .map((value) => rowIndex(Number(value.trim())))
-          .filter((value) => Number.isFinite(value));
-      }
-    }
-    this.evaluator.emit(nodeId, AUTHORED_GRAPH_OUTPUT_PORT, { kind: "sel", sql, rowIds: ids });
-  }
-
-  selection(nodeId: string): Extract<GraphPortValue, { kind: "sel" }> | undefined {
-    const value = this.evaluator.getEmission(nodeId, AUTHORED_GRAPH_OUTPUT_PORT);
-    return value?.kind === "sel" ? value : undefined;
-  }
-
-  emitFocus(nodeId: string, focusedRowIndex: RowIndex | null): void {
-    this.evaluator.emit(nodeId, AUTHORED_GRAPH_OUTPUT_PORT, { kind: "focus", rowIndex: focusedRowIndex });
   }
 
   liveCheckpointInput(id: string): CheckpointInput | null {

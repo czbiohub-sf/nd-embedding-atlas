@@ -9,21 +9,20 @@
 import type * as React from "react";
 
 /** Typed wire and port kinds. */
-export type NdPortKind = "pred" | "sel" | "focus";
+export type NdPortKind = "pred" | "sel";
 
 export interface NdPortKindSpec {
   /** CSS color: token-backed (app.css --color-wire-*) */
   color: string;
-  shape: "circle" | "diamond" | "square";
+  shape: "circle" | "diamond";
   label: string;
-  /** dataflow model: pred is pulled on demand; sel/focus push on user action */
+  /** dataflow model: pred is pulled on demand; sel pushes on user action */
   flow: "pull" | "push";
 }
 
 export const ND_PORT_KINDS: Record<NdPortKind, NdPortKindSpec> = {
   pred: { color: "var(--color-wire-pred)", shape: "circle", label: "predicate", flow: "pull" },
   sel: { color: "var(--color-wire-sel)", shape: "diamond", label: "selection", flow: "push" },
-  focus: { color: "var(--color-wire-focus)", shape: "square", label: "focus", flow: "push" },
 };
 
 export type NdPortState = "idle" | "legal" | "illegal" | "source";
@@ -56,11 +55,7 @@ export function NdPort({
 }: NdPortProps) {
   const spec = ND_PORT_KINDS[kind];
   const shape: React.CSSProperties =
-    spec.shape === "diamond"
-      ? { borderRadius: 2, transform: "rotate(45deg)" }
-      : spec.shape === "square"
-        ? { borderRadius: 2.5 }
-        : { borderRadius: 999 };
+    spec.shape === "diamond" ? { borderRadius: 2, transform: "rotate(45deg)" } : { borderRadius: 999 };
   const ring =
     state === "legal"
       ? LEGAL_RING

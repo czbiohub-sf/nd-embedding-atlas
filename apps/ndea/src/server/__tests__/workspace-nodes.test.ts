@@ -41,8 +41,8 @@ function document(wranglePredicate: string) {
     stageTree: null,
     stripH: 280,
     flags: {},
-    coordinationScopes: {},
-    coordinationSpace: {},
+    state: {},
+    bindings: {},
   };
 }
 
@@ -90,9 +90,33 @@ describe("GET /api/workspace/nodes/:id", () => {
       output: {
         kind: "pred",
         sql: `("condition" = 'infected')`,
+        scopeFilter: null,
         count: 2,
         rows: [{ rowIndex: 0, datasetKey: "plate_a", obsName: "0" }],
         truncated: true,
+      },
+    });
+  });
+
+  test("an agent clause in a bound filter scope restricts the node population", async () => {
+    const state = await session();
+    expect(
+      await state.workspace.apply(1, [
+        {
+          op: "add",
+          path: "/state/filter",
+          value: { A: { agent: { area: { op: "gt", column: "area", value: 20 } } } },
+        },
+        { op: "add", path: "/bindings/count", value: { filter: { $bindState: "/filter/A" } } },
+      ]),
+    ).toEqual({ kind: "accepted", revision: 2 });
+    const { body } = await result(state, "count");
+    expect(WorkspaceNodeResultSchema.parse(body)).toMatchObject({
+      revision: 2,
+      output: {
+        scopeFilter: '(("area" > 20))',
+        count: 1,
+        rows: [{ rowIndex: 2, datasetKey: "plate_b", obsName: "0" }],
       },
     });
   });

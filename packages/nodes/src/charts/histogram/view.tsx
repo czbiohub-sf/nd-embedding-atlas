@@ -1,3 +1,4 @@
+import type { FilterClause } from "@ndea/protocol";
 import type { FilterCoordinationAPI } from "@ndea/sdk";
 import type { Coordinator } from "@uwdata/mosaic-core";
 import { type FilterExpr, cast, column } from "@uwdata/mosaic-sql";
@@ -28,7 +29,7 @@ export function createHistogramView({ useColumnTypes, useQuery }: ChartServices)
   return function HistogramView({ host }: NodeBodyProps<HistogramConfig, HistogramCapabilities>) {
     const { coordinator, table, filter, field, setField } = useChartLeaf(host);
     const bins = host.config.bins ?? 20;
-    const onFilter = useCallback((sql: string | null) => publishChartFilter(host, sql), [host]);
+    const onFilter = useCallback((clause: FilterClause | null) => publishChartFilter(host, clause), [host]);
 
     return (
       <div className="flex h-full w-full flex-col gap-1.5 overflow-y-auto bg-node-surface p-2">
@@ -64,7 +65,7 @@ interface BodyProps {
   filter: FilterCoordinationAPI;
   field: string;
   binCount: number;
-  onFilter: (sql: string | null) => void;
+  onFilter: (clause: FilterClause | null) => void;
   useQuery: UseChartQuery;
 }
 

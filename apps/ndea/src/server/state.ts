@@ -10,6 +10,7 @@ import type { PlateChannel, PlateMount } from "./plate.ts";
 import type { ObsmSliceLoader } from "./slice-loader.ts";
 import type { DatasetQuerySession } from "./store.ts";
 import type { WorkspaceDocumentStore } from "./workspace.ts";
+import type { ObservationSets } from "./observation-sets.ts";
 
 /** Resolved spatial column names (from config or auto-detection). */
 export interface SpatialColumns {
@@ -155,4 +156,5 @@ export interface ServerSession {
   annotationsSidecarPath: string | null;
   /** The session's one authoritative workspace document. */
   workspace: WorkspaceDocumentStore;
+  observationSets: ObservationSets;
 }

@@ -71,10 +71,10 @@ describe("seedAnnotate", () => {
     expect(edges).toHaveLength(6);
 
     for (const type of ["table", "scatter", "annotate", "image-viewer", "gallery"]) {
-      expect(ws.store.state.coordinationScopes[byType[type]]?.focus).toBe("A");
+      expect(ws.store.state.bindings[byType[type]]?.focus).toEqual({ $bindState: "/focus/A" });
     }
     for (const type of ["table", "scatter", "cache"]) {
-      expect(ws.store.state.coordinationScopes[byType[type]]?.filter).toBe("A");
+      expect(ws.store.state.bindings[byType[type]]?.filter).toEqual({ $bindState: "/filter/A" });
     }
   });
 

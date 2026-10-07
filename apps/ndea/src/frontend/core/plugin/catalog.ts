@@ -40,6 +40,7 @@ const NODE_CAPABILITIES: Record<NodeCapability, true> = {
   "annotation-write": true,
   "ordering-coordination": true,
   "filter-coordination": true,
+  "color-coordination": true,
 };
 
 const AUTHORITY_CAPABILITY_PERMISSIONS: Partial<Record<NodeCapability, PluginPermission>> = {
@@ -362,7 +363,7 @@ function validatePorts(ports: CatalogNodeDefinition["inputs"], direction: string
     if (!PORT_ID_RE.test(port.id)) fail(label, `node "${id}" has invalid ${direction} port ID "${port.id}"`);
     if (ids.has(port.id)) fail(label, `node "${id}" duplicates ${direction} port "${port.id}"`);
     ids.add(port.id);
-    if (port.kind !== "pred" && port.kind !== "sel" && port.kind !== "focus")
+    if (port.kind !== "pred" && port.kind !== "sel")
       fail(label, `node "${id}" ${direction} port "${port.id}" has invalid kind`);
     if (typeof port.label !== "string" || !port.label.trim())
       fail(label, `node "${id}" ${direction} port "${port.id}" requires a label`);

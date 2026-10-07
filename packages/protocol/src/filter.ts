@@ -15,10 +15,17 @@ export type FilterClause =
   | { op: "in"; column: string; values: FilterValue[] }
   | { op: "isNull" | "isNotNull"; column: string }
   | { op: "and" | "or"; clauses: FilterClause[] }
-  | { op: "not"; clause: FilterClause };
+  | { op: "not"; clause: FilterClause }
+  | { op: "inSet"; set: string };
 
 const FilterValueSchema = z.union([z.string(), z.number(), z.boolean()]);
 const ColumnSchema = z.string().min(1);
+
+/** Content address of a named observation set (see POST /api/sets). */
+export const ObservationSetIdSchema = z.string().regex(/^[0-9a-f]{16}$/, "Expected a 16-hex observation set id");
+
+/** Server table holding `(set_id, __row_index__)` for every loaded observation set. */
+export const OBSERVATION_SET_TABLE = "ndea_obs_sets";
 
 export const FilterClauseSchema: z.ZodType<FilterClause> = z.lazy(() =>
   z.discriminatedUnion("op", [
@@ -36,6 +43,7 @@ export const FilterClauseSchema: z.ZodType<FilterClause> = z.lazy(() =>
     z.object({ op: z.enum(["isNull", "isNotNull"]), column: ColumnSchema }),
     z.object({ op: z.enum(["and", "or"]), clauses: z.array(FilterClauseSchema).min(1) }),
     z.object({ op: z.literal("not"), clause: FilterClauseSchema }),
+    z.object({ op: z.literal("inSet"), set: ObservationSetIdSchema }),
   ]),
 );
 
@@ -66,3 +74,17 @@ export const FilterResponseSchema = z.object({
   truncated: z.boolean(),
 });
 export type FilterResponse = z.infer<typeof FilterResponseSchema>;
+
+/**
+ * POST /api/sets: persist the observations behind a selection as a named,
+ * content-addressed set. Identity is (dataset, obs name), so a set survives
+ * re-ingest; `rowIndices` is only how the client names them.
+ */
+export const ObservationSetCreateBodySchema = z.object({
+  rowIndices: z.array(z.number().int().nonnegative()).min(1).max(5_000_000),
+});
+export type ObservationSetCreateBody = z.infer<typeof ObservationSetCreateBodySchema>;
+
+/** POST /api/sets response; reference the set as `{ op: "inSet", set }`. */
+export const ObservationSetSchema = z.object({ set: ObservationSetIdSchema, count: z.number().int().nonnegative() });
+export type ObservationSet = z.infer<typeof ObservationSetSchema>;

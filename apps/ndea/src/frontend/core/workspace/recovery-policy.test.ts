@@ -25,8 +25,8 @@ function emptyState(): WorkspaceDocumentState {
     claimed: null,
     graphPath: null,
     flags: {},
-    coordinationScopes: {},
-    coordinationSpace: {},
+    state: {},
+    bindings: {},
   };
 }
 

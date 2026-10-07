@@ -15,12 +15,13 @@ import {
 } from "../frontend/core/graph/runtime-session.ts";
 import { decodeNodeConfigs, type WorkspaceDocument } from "../frontend/core/workspace/document.ts";
 import type { WorkspaceDocumentStore } from "./workspace.ts";
+import { filterScopeSql } from "../frontend/core/coordination/types.ts";
 
 export type NodeEvaluation =
   | { revision: number; status: "missing" }
   | { revision: number; status: "unresolved" }
   | { revision: number; status: "error"; error: string }
-  | { revision: number; status: "resolved"; value: GraphPortValue };
+  | { revision: number; status: "resolved"; value: GraphPortValue; scopeFilter: string | null };
 
 /** A runtime spec that also keeps the SDK config contract, for config migration. */
 type ServerNodeSpec = GraphRuntimeNodeSpec & {
@@ -81,7 +82,10 @@ export class WorkspaceEvaluator {
     const { session, error } = this.at(revision, doc);
     if (!session) return { revision, status: "error", error };
     try {
-      return { revision, status: "resolved", value: session.pull(nodeId) };
+      const value = session.pull(nodeId);
+      const scopeFilter = filterScopeSql(doc, nodeId);
+      const sql = scopeFilter ? (value.sql ? `(${value.sql}) AND (${scopeFilter})` : scopeFilter) : value.sql;
+      return { revision, status: "resolved", value: { ...value, sql }, scopeFilter };
     } catch (pullError) {
       return { revision, status: "error", error: errorMessage(pullError) };
     }

@@ -41,7 +41,6 @@ export {
 export type {
   ExactNodeTypeRef,
   FanInOperation,
-  FocusPortValue,
   NodeCapability,
   NodeCompute,
   NodeComputeContext,
@@ -73,6 +72,7 @@ export type { PluginAPI, PluginDisposer, PluginFactory } from "./plugin";
 
 export type {
   AnnotationWriteAPI,
+  ColorCoordinationAPI,
   DataContext,
   DataQueryAPI,
   DeviceInfo,
@@ -85,7 +85,6 @@ export type {
   NodeHost,
   NodeNotificationAPI,
   OrderingCoordinationAPI,
-  RowSetPublication,
   RowSetPublishAPI,
   ResolvedFilter,
   ViewCoordinationAPI,

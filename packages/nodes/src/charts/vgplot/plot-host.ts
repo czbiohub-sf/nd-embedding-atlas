@@ -30,9 +30,10 @@ import { Plot } from "@uwdata/mosaic-plot";
 import { astToDOM, parseSpec } from "@uwdata/mosaic-spec";
 import type { Plot as PlotSpec, Spec } from "@uwdata/mosaic-spec";
 import { createAPIContext } from "@uwdata/vgplot";
+import type { FilterClause } from "@ndea/protocol";
 import type { JsonValue } from "@ndea/sdk";
 
-import { predicateToSql } from "../core/mosaic-helpers";
+import { brushFilterClause } from "./brush-filter";
 import type { PlotEntry } from "./spec-schema";
 
 /** Param name carrying the source table; mark entries reference it as `$table`. */
@@ -52,7 +53,8 @@ export interface MountPlotOptions {
   scope: Selection;
   width: number;
   height: number;
-  onSelection: (sql: string | null) => void;
+  onSelection: (clause: FilterClause | null) => void;
+  onUnsupportedBrush?: () => void;
 }
 
 export interface MountedPlot {
@@ -151,9 +153,21 @@ export async function mountPlot(options: MountPlotOptions): Promise<MountedPlot>
 
   const brush = params.get(BRUSH_PARAM);
   let unsubscribeBrush: (() => void) | null = null;
+  let notifiedUnsupported = false;
   if (isSelection(brush)) {
     const onBrush = (): void => {
-      onSelection(predicateToSql(brush));
+      const predicate = brush.predicate(null);
+      const clause = brushFilterClause(predicate);
+      onSelection(clause);
+      if (
+        predicate != null &&
+        (!Array.isArray(predicate) || predicate.length > 0) &&
+        clause === null &&
+        !notifiedUnsupported
+      ) {
+        notifiedUnsupported = true;
+        options.onUnsupportedBrush?.();
+      }
     };
     brush.addEventListener("value", onBrush);
     unsubscribeBrush = () => {

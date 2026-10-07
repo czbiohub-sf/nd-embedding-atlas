@@ -1,31 +1,27 @@
-/// <reference types="bun" />
-import { describe, expect, test } from "bun:test";
-import { cast, column } from "@uwdata/mosaic-sql";
-
+import { describe, expect, test } from "vite-plus/test";
 import { countPlotPredicate, NULL_VALUE } from "./predicate";
 
-const textExpr = cast(column("species"), "TEXT");
-
 describe("countPlotPredicate", () => {
-  test("empty selection → null (clear)", () => {
-    expect(countPlotPredicate(textExpr, new Set())).toBeNull();
+  test("empty selection clears", () => {
+    expect(countPlotPredicate("species", new Set())).toBeNull();
   });
-
-  test("single value → equality predicate", () => {
-    const sql = countPlotPredicate(textExpr, new Set(["setosa"]));
-    expect(sql).toContain("'setosa'");
-    expect(sql).toContain("NOT DISTINCT FROM");
+  test("categories remain strings", () => {
+    expect(countPlotPredicate("species", new Set(["1", "true"]))).toEqual({
+      op: "in",
+      column: "species",
+      values: ["1", "true"],
+    });
   });
-
-  test("multiple values → OR of equalities", () => {
-    const sql = countPlotPredicate(textExpr, new Set(["a", "b"]));
-    expect(sql).toContain("'a'");
-    expect(sql).toContain("'b'");
-    expect(sql).toContain(" OR ");
+  test("null bucket", () => {
+    expect(countPlotPredicate("species", new Set([NULL_VALUE]))).toEqual({ op: "isNull", column: "species" });
   });
-
-  test("null sentinel → IS NULL bucket", () => {
-    const sql = countPlotPredicate(textExpr, new Set([NULL_VALUE]));
-    expect(sql).toContain("IS NULL");
+  test("null bucket and categories", () => {
+    expect(countPlotPredicate("species", new Set(["a", NULL_VALUE]))).toEqual({
+      op: "or",
+      clauses: [
+        { op: "in", column: "species", values: ["a"] },
+        { op: "isNull", column: "species" },
+      ],
+    });
   });
 });

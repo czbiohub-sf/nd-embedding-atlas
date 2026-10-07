@@ -18,9 +18,9 @@ const capabilityFreeModule: NodeModule = {
 };
 
 function rowSetTypeContract(host: NodeHost<unknown, "data-read" | "row-set-publish">): void {
-  void host.dataAPI.publishRowSet;
-  // @ts-expect-error row publication exists only under dataAPI
-  void host.publishRowSet;
+  void host.dataAPI.createObservationSet;
+  // @ts-expect-error set creation exists only under dataAPI
+  void host.createObservationSet;
 }
 
 describe("truthful host types", () => {

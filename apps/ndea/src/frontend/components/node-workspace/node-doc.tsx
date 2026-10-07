@@ -21,12 +21,7 @@ import { cn } from "@ndea/ui/lib/utils";
 /** A single typed-port token: kind glyph + label (filled = out, hollow = in). */
 function PortToken({ port, out }: { port: NodePort; out: boolean }) {
   const spec = ND_PORT_KINDS[port.kind];
-  const shape =
-    spec.shape === "diamond"
-      ? { borderRadius: 2, transform: "rotate(45deg)" }
-      : spec.shape === "square"
-        ? { borderRadius: 2 }
-        : { borderRadius: 999 };
+  const shape = spec.shape === "diamond" ? { borderRadius: 2, transform: "rotate(45deg)" } : { borderRadius: 999 };
   return (
     <span className="inline-flex items-center gap-1.5">
       <span

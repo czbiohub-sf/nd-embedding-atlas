@@ -1,11 +1,7 @@
 /**
  * Scatter plugin view (PLUGIN-ARCHITECTURE §10.1).
  *
- * Phase 1: a thin, behavior-preserving wrapper over the already
- * container-agnostic `ScatterContent`. It reads only `host.instanceId`
- * (= panelId) and the serializable `config` ({ obsmKey, colorByColumn }).
- * The full host.* rewrite of ScatterContent's internals (device lease,
- * filter facets, row-set publication) lands in Phase 2.
+ * Mounts ScatterContent with the capability-gated host and session services.
  */
 
 import { ScatterContent } from "./ScatterContent";
@@ -17,12 +13,7 @@ export function createScatterView(services: ScatterServices) {
   return function ScatterPluginView({ host }: NodeBodyProps<ScatterConfig, ScatterCapabilities>) {
     return (
       <ScatterProvider host={host} services={services}>
-        <ScatterContent
-          initialObsmKey={host.config.obsmKey}
-          initialColorByColumn={host.config.colorByColumn}
-          onCreateCheckpoint={() => services.createCheckpoint(host)}
-          toolbarTarget={services.bodyHeaderElement(host)}
-        />
+        <ScatterContent initialObsmKey={host.config.obsmKey} toolbarTarget={services.bodyHeaderElement(host)} />
       </ScatterProvider>
     );
   };

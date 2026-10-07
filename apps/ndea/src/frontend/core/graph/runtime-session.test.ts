@@ -158,7 +158,7 @@ describe("GraphRuntimeSession", () => {
       fromPort: "future-output",
       to: "missing",
       toPort: "future-port",
-      kind: "focus",
+      kind: "sel",
     };
     expect(() => validateGraphRuntimeTopology({ nodes, edges, flags: {} }, resolver)).not.toThrow();
     expect(edges.unresolved).toEqual({
@@ -167,7 +167,7 @@ describe("GraphRuntimeSession", () => {
       fromPort: "future-output",
       to: "missing",
       toPort: "future-port",
-      kind: "focus",
+      kind: "sel",
     });
     runtime.dispose();
   });

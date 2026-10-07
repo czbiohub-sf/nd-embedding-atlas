@@ -1,4 +1,4 @@
-import type { FocusPortValue, PredicatePortValue, RowSetPortValue } from "@ndea/sdk/graph";
+import type { PredicatePortValue, RowSetPortValue } from "@ndea/sdk/graph";
 
 export const AUTHORED_GRAPH_OUTPUT_PORT = "push";
 export const DERIVED_GRAPH_OUTPUT_PORT = "out";
@@ -18,9 +18,4 @@ export interface GraphRowSetPortValue {
   readonly rowIds: RowSetPortValue;
 }
 
-export interface GraphFocusPortValue {
-  readonly kind: "focus";
-  readonly rowIndex: FocusPortValue;
-}
-
-export type GraphPortValue = GraphPredicatePortValue | GraphRowSetPortValue | GraphFocusPortValue;
+export type GraphPortValue = GraphPredicatePortValue | GraphRowSetPortValue;

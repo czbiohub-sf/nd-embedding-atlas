@@ -25,7 +25,6 @@ export interface NativeNodePresentation {
   readonly inPalette: boolean;
   readonly accent?: string;
   readonly checkpoint?: boolean;
-  readonly checkpointCreation?: boolean;
   readonly requiredHostFacets?: readonly AppNodeHostFacetName[];
 }
 

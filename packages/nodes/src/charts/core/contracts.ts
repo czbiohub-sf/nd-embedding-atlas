@@ -7,7 +7,7 @@ export type ColumnTypes = ReadonlyMap<string, ColumnType>;
 
 export interface ChartQueryOptions<T> {
   coordinator: Coordinator;
-  filter: Pick<FilterCoordinationAPI, "selection" | "associateClient" | "disassociateClient">;
+  filter: Pick<FilterCoordinationAPI, "selection">;
   query: (predicate: FilterExpr) => ReturnType<typeof Query.from> | string | null;
   transform: (result: unknown) => T;
   enabled?: boolean;

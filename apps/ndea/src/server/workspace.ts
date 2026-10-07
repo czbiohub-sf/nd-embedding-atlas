@@ -75,8 +75,13 @@ export class WorkspaceDocumentStore {
    * Validate and apply `ops` against `baseRevision`. Resolves after the file
    * is written; a failed write rejects and leaves the document unchanged.
    */
-  apply(baseRevision: number, ops: readonly JsonPatchOp[], clientId?: string): Promise<WorkspaceApplyResult> {
-    const run = this.queue.then(() => this.applyNow(baseRevision, ops, clientId));
+  apply(
+    baseRevision: number,
+    ops: readonly JsonPatchOp[],
+    clientId?: string,
+    validate?: (document: WorkspaceDocument) => Promise<WorkspaceIssue[]>,
+  ): Promise<WorkspaceApplyResult> {
+    const run = this.queue.then(() => this.applyNow(baseRevision, ops, clientId, validate));
     this.queue = run.catch(() => {});
     return run;
   }
@@ -85,12 +90,15 @@ export class WorkspaceDocumentStore {
     baseRevision: number,
     ops: readonly JsonPatchOp[],
     clientId: string | undefined,
+    validate: ((document: WorkspaceDocument) => Promise<WorkspaceIssue[]>) | undefined,
   ): Promise<WorkspaceApplyResult> {
     if (baseRevision !== this.revision) return { kind: "conflict", snapshot: this.snapshot() };
     const applied = applyWorkspaceOps(this.document, ops);
     if (!applied.ok) return { kind: "invalid", issues: applied.issues };
     const parsed = parseWorkspaceDocument(applied.value);
     if (!parsed.ok) return { kind: "invalid", issues: parsed.issues };
+    const issues = validate ? await validate(parsed.value) : [];
+    if (issues.length) return { kind: "invalid", issues };
 
     const revision = this.revision + 1;
     await this.write(

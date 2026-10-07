@@ -12,11 +12,12 @@
  */
 
 import { Selection } from "@uwdata/mosaic-core";
+import type { FilterClause } from "@ndea/protocol";
 import type { NodeHost, RowIndex } from "@ndea/sdk";
 
 export interface SpyHostCalls {
   focusSet: (RowIndex | null)[];
-  publishFilter: { facet: string; sql: string | null }[];
+  publishFilter: { facet: string; clause: FilterClause | null }[];
   viewSyncBroadcast: { panX: number; panY: number; zoom: number }[];
   viewSyncToggleLock: number;
   orderingSet: ({ col: string; dir: "asc" | "desc" } | null)[];
@@ -65,26 +66,17 @@ export function createSpyHost(): SpyHost {
       selection: Selection.crossfilter(),
       getResolved: () => ({ predicate: null, revision: 0 }),
       subscribeResolved: () => () => {},
-      publish: (facet: string, sql: string) => {
-        calls.publishFilter.push({ facet, sql });
+      publish: (facet: string, clause: FilterClause) => {
+        calls.publishFilter.push({ facet, clause });
       },
       clear: (facet: string) => {
-        calls.publishFilter.push({ facet, sql: null });
+        calls.publishFilter.push({ facet, clause: null });
       },
-      associateClient() {},
-      disassociateClient() {},
       materializeRowIds: async () => ({ rowIds: [], revision: 0 }),
     },
     dataAPI: {
       query: () => Promise.resolve([]),
-      publishRowSet: async (rowIds: RowIndex[]) => ({
-        predicate: "",
-        token: 0,
-        count: rowIds.length,
-        table: "",
-      }),
-      // Temporary large-selection staging cleanup.
-      disposePublishedRowSet: () => Promise.resolve(),
+      createObservationSet: async (rowIds: readonly RowIndex[]) => ({ set: "0000000000000000", count: rowIds.length }),
     },
     viewCoordination: {
       panX: 0,

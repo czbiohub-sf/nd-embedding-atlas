@@ -31,7 +31,6 @@ export interface AppNodeSpec {
   readonly inPalette: boolean;
   readonly accent?: string;
   readonly checkpoint?: boolean;
-  readonly checkpointCreation?: boolean;
   readonly requiredHostFacets?: readonly AppNodeHostFacetName[];
 }
 
@@ -82,7 +81,6 @@ export function nativeNodeSpecOf(
     inPalette: contribution.presentation.inPalette,
     accent: contribution.presentation.accent,
     checkpoint: contribution.presentation.checkpoint,
-    checkpointCreation: contribution.presentation.checkpointCreation,
     requiredHostFacets: contribution.presentation.requiredHostFacets,
   });
 }

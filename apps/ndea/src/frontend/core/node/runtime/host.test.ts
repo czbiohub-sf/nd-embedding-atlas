@@ -9,13 +9,11 @@ import {
   type RowIndex,
 } from "@ndea/sdk";
 import { z } from "zod";
-import { MosaicClient, Selection } from "@uwdata/mosaic-core";
+import { Selection } from "@uwdata/mosaic-core";
 
 import type { AppNodeHostDependencies } from "./host";
 import { createAppNodeHost } from "./host";
 import { assertNodeHostCapabilities } from "@/core/node/host-capabilities";
-import { FilterScopeRegistry } from "@/core/coordination/filter-scope-runtime";
-import { DatasetDataPublicationRuntime } from "@/core/session/dataset-session";
 
 function hostDependencies(overrides: Partial<AppNodeHostDependencies> = {}): AppNodeHostDependencies {
   const coordinator = (overrides.coordinator ?? {
@@ -33,8 +31,6 @@ function hostDependencies(overrides: Partial<AppNodeHostDependencies> = {}): App
     metadata: {} as AppNodeHostDependencies["metadata"],
     refreshMetadata: () => Promise.resolve(),
     availableCapabilities: new Set(),
-    filterScopes: new FilterScopeRegistry({ coordinator, table: "dataset" }),
-    dataPublication: new DatasetDataPublicationRuntime(fetch),
     deviceBroker: {
       acquire: () => Promise.reject(new Error("unexpected device acquire")),
       releaseFor() {},
@@ -265,97 +261,25 @@ describe("createAppNodeHost", () => {
     expect(events).toEqual(["release-pending", "late-device"]);
   });
 
-  test("does not delete a row-set publication that was never created", () => {
-    const methods: string[] = [];
+  test("creates an observation set through POST /api/sets with the global fetch receiver", async () => {
+    const requests: { receiver: unknown; url: string; body: unknown }[] = [];
+    const fetcher = function (this: unknown, input: string, init?: { body?: string }): Promise<Response> {
+      requests.push({ receiver: this, url: input, body: JSON.parse(init?.body ?? "null") });
+      return Promise.resolve(Response.json({ set: "0123456789abcdef", count: 2 }));
+    } as unknown as typeof globalThis.fetch;
     const handle = createAppNodeHost(
-      hostDependencies({
-        availableCapabilities: new Set(["data-read", "row-set-publish"]),
-        fetch: ((_input, init) => {
-          methods.push(init?.method ?? "GET");
-          return Promise.resolve(new Response(null, { status: 204 }));
-        }) as typeof globalThis.fetch,
-      }),
-      {
-        instanceId: nodeInstanceId("unpublished-row-set"),
-        definition: rowSetDefinition,
-        config: {},
-      },
+      hostDependencies({ availableCapabilities: new Set(["data-read", "row-set-publish"]), fetch: fetcher }),
+      { instanceId: nodeInstanceId("row-set"), definition: rowSetDefinition, config: {} },
     );
-
-    handle.dispose();
-
-    expect(methods).toEqual([]);
-  });
-
-  test("calls fetch with the global receiver and deletes a published row set once", async () => {
-    const receivers: unknown[] = [];
-    const methods: string[] = [];
-    const fetcher = function (this: unknown, _input: string | URL | Request, init?: RequestInit): Promise<Response> {
-      receivers.push(this);
-      const method = init?.method ?? "GET";
-      methods.push(method);
-      return Promise.resolve(
-        method === "POST"
-          ? Response.json({ ok: true, table: "sel_row_set_fixture", count: 2 })
-          : new Response(null, { status: 204 }),
-      );
-    } as typeof globalThis.fetch;
-    const handle = createAppNodeHost(
-      hostDependencies({
-        availableCapabilities: new Set(["data-read", "row-set-publish"]),
-        fetch: fetcher,
-      }),
-      {
-        instanceId: nodeInstanceId("published-row-set"),
-        definition: rowSetDefinition,
-        config: {},
-      },
-    );
-
     const host = handle.host;
     assertNodeHostCapabilities(rowSetDefinition, host);
-    expect("publishRowSet" in host).toBe(false);
-    await host.dataAPI.publishRowSet([rowIndex(2), rowIndex(5)]);
+
+    expect(await host.dataAPI.createObservationSet([rowIndex(2), rowIndex(5)])).toEqual({
+      set: "0123456789abcdef",
+      count: 2,
+    });
+    expect(requests).toEqual([{ receiver: globalThis, url: "/api/sets", body: { rowIndices: [2, 5] } }]);
     handle.dispose();
-    handle.dispose();
-    while (methods.length < 2) await Promise.resolve();
-
-    expect(receivers).toEqual([globalThis, globalThis]);
-    expect(methods).toEqual(["POST", "DELETE"]);
-  });
-
-  test("cleans a row-set publication that completes after host disposal", async () => {
-    const pending = Promise.withResolvers<Response>();
-    const methods: string[] = [];
-    const callbacks: string[] = [];
-    const fetcher = ((_input: string | URL | Request, init?: RequestInit) => {
-      const method = init?.method ?? "GET";
-      methods.push(method);
-      return method === "POST" ? pending.promise : Promise.resolve(new Response(null, { status: 204 }));
-    }) as typeof globalThis.fetch;
-    const handle = createAppNodeHost(
-      hostDependencies({
-        availableCapabilities: new Set(["data-read", "row-set-publish"]),
-        fetch: fetcher,
-        dataPublication: new DatasetDataPublicationRuntime(fetcher),
-      }),
-      {
-        instanceId: nodeInstanceId("late-row-set"),
-        definition: rowSetDefinition,
-        config: {},
-        onDataRowSetPublished: () => callbacks.push("published"),
-      },
-    );
-
-    const host = handle.host;
-    assertNodeHostCapabilities(rowSetDefinition, host);
-    const publication = host.dataAPI.publishRowSet([rowIndex(2)]);
-    handle.dispose();
-    pending.resolve(Response.json({ ok: true, table: "sel_late_row_set", count: 1 }));
-
-    await expect(publication).rejects.toHaveProperty("name", "AbortError");
-    expect(methods).toEqual(["POST", "DELETE"]);
-    expect(callbacks).toEqual([]);
   });
 
   test("grants supported schema mutation without exposing a service facet", () => {
@@ -382,7 +306,7 @@ describe("createAppNodeHost", () => {
     handle.dispose();
   });
 
-  test("gates exact filter API and delegates client association", () => {
+  test("gates the filter API on the capability", () => {
     const definition = defineNode({
       ref: exactNodeTypeRef("filter-fixture", "1.0.0"),
       title: "Filter fixture",
@@ -391,16 +315,13 @@ describe("createAppNodeHost", () => {
       outputs: [],
       capabilities: ["filter-coordination"] as const,
     });
-    const selection = Selection.crossfilter();
-    const associated: string[] = [];
+    const selection = Selection.intersect();
     const filter = {
       selection,
       getResolved: () => ({ predicate: null, revision: 0 }),
       subscribeResolved: () => () => {},
       publish() {},
       clear() {},
-      associateClient: () => associated.push("associate"),
-      disassociateClient: () => associated.push("disassociate"),
       materializeRowIds: async () => ({ rowIds: [], revision: 0 }),
     };
     const handle = createAppNodeHost(hostDependencies({ availableCapabilities: new Set(["filter-coordination"]) }), {
@@ -409,15 +330,10 @@ describe("createAppNodeHost", () => {
       config: {},
       filter,
     });
-    const client = new MosaicClient(selection);
     const host = handle.host;
     assertNodeHostCapabilities(definition, host);
-
     expect(host.filter.selection).toBe(selection);
-    host.filter.associateClient(client);
-    host.filter.disassociateClient(client);
     handle.dispose();
-    expect(associated).toEqual(["associate", "disassociate"]);
   });
 
   test("does not expose host.filter when capability is unavailable", () => {
@@ -436,48 +352,6 @@ describe("createAppNodeHost", () => {
     });
     expect("filter" in handle.host).toBe(false);
     expect(handle.host.capabilities.has("filter-coordination")).toBe(false);
-    handle.dispose();
-  });
-
-  test("rolls back filter association when client connection fails", () => {
-    const definition = defineNode({
-      ref: exactNodeTypeRef("filter-connect-failure", "1.0.0"),
-      title: "Filter connect failure",
-      role: "view",
-      inputs: [],
-      outputs: [],
-      capabilities: ["data-read", "filter-coordination"] as const,
-    });
-    const selection = Selection.crossfilter();
-    const events: string[] = [];
-    const filter = {
-      selection,
-      getResolved: () => ({ predicate: null, revision: 0 }),
-      subscribeResolved: () => () => {},
-      publish() {},
-      clear() {},
-      associateClient: () => events.push("associate"),
-      disassociateClient: () => events.push("disassociate"),
-      materializeRowIds: async () => ({ rowIds: [], revision: 0 }),
-    };
-    const handle = createAppNodeHost(
-      hostDependencies({
-        availableCapabilities: new Set(["data-read", "filter-coordination"]),
-        coordinator: {
-          connect() {
-            throw new Error("connect failed");
-          },
-          disconnect() {},
-          query: () => Promise.resolve([]),
-        } as unknown as AppNodeHostDependencies["coordinator"],
-      }),
-      { instanceId: nodeInstanceId("filter-connect-failure"), definition, config: {}, filter },
-    );
-    const host = handle.host;
-    assertNodeHostCapabilities(definition, host);
-
-    expect(() => host.registerClient(new MosaicClient(selection))).toThrow("connect failed");
-    expect(events).toEqual(["associate", "disassociate"]);
     handle.dispose();
   });
 });

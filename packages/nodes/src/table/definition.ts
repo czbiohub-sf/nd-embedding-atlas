@@ -19,7 +19,7 @@ export function createTableDefinition({
     title: "Table",
     role: "view",
     inputs: [{ id: "in", kind: "pred", label: "In" }],
-    outputs: [{ id: "out", kind: "focus", label: "Focus" }],
+    outputs: [],
     capabilities: CAPABILITIES,
     config: {
       schema: z.object({ columns: z.array(z.string()).nullable() }),

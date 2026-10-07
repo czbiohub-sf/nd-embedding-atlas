@@ -1,4 +1,4 @@
-import type { FilterClause } from "@ndea/protocol";
+import { OBSERVATION_SET_TABLE, type FilterClause } from "@ndea/protocol";
 import {
   and,
   column,
@@ -16,6 +16,7 @@ import {
   neq,
   not,
   or,
+  sql,
 } from "@uwdata/mosaic-sql";
 
 const COMPARE = { eq, neq, lt, lte, gt, gte } as const;
@@ -44,6 +45,8 @@ export function filterClauseExpr(clause: FilterClause): ExprNode {
       return or(clause.clauses.map(filterClauseExpr));
     case "not":
       return not(filterClauseExpr(clause.clause));
+    case "inSet":
+      return sql`${column("__row_index__")} IN (SELECT __row_index__ FROM ${OBSERVATION_SET_TABLE} WHERE set_id = ${literal(clause.set)})`;
   }
 }
 

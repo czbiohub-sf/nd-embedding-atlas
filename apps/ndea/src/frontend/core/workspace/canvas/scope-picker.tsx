@@ -1,40 +1,31 @@
 /**
- * Scope picker (U4): the per-type scope-assignment popover that replaces the
- * hardcoded "link into group A" button. For each coordination TYPE the node
+ * Scope picker: per-type scope binding. For each coordination TYPE the node
  * supports (capability-gated), it offers the EXISTING scopes plus "New scope"
- * (mint) and "Unlink": never free-text, so a node can't reference a dangling
- * scope (KD9). A freshly spawned node participates in nothing until linked here.
+ * (mint) and "Unlink": never free-text, so a node can't bind a dangling
+ * scope. A freshly spawned node participates in nothing until linked here.
  */
 
 import { Link2 } from "lucide-react";
 
 import { Popover, PopoverContent, PopoverTrigger } from "@ndea/ui/components/popover";
 import { NdCaption, NdHud } from "@/components/node-workspace/nd-primitives";
-import { listCoordinationTypes } from "@/core/coordination/define-type";
+import { bindingScope, COORDINATION_TYPE_IDS, COORDINATION_TYPES } from "@/core/coordination/types";
 import { ON_ACCENT_INK } from "@/lib/color/brand";
 import { useWorkspace, useWorkspaceSelector } from "../workspace-context";
-
-/** Human label for a coordination type (the registry key is terse). */
-const TYPE_LABEL: Record<string, string> = {
-  focus: "focus",
-  viewSync: "view sync",
-  ordering: "sort",
-  filter: "filter",
-};
 
 export function ScopePicker({ nodeId }: { nodeId: string }) {
   const ws = useWorkspace();
   const definitionRef = useWorkspaceSelector((s) => s.nodes[nodeId]?.definitionRef ?? null);
-  // subscribe to the whole scope map so existing-scope lists + the node's own
-  // assignments stay live as peers link/unlink.
-  const allScopes = useWorkspaceSelector((s) => s.coordinationScopes);
-  const assigned = allScopes[nodeId] ?? {};
+  // subscribe to every binding so existing-scope lists and this node's own
+  // bindings stay live as peers link/unlink.
+  const bindings = useWorkspaceSelector((s) => s.bindings);
+  const assigned = bindings[nodeId] ?? {};
 
   const caps = definitionRef ? ws.nodeLibrary.getSpecExact(definitionRef)?.definition.capabilities : undefined;
-  const types = listCoordinationTypes().filter((type) => caps?.includes(type.capability));
+  const types = COORDINATION_TYPE_IDS.filter((type) => caps?.includes(COORDINATION_TYPES[type].capability));
   if (types.length === 0) return null;
 
-  const activeScopes = types.map((t) => assigned[t.type]).filter(Boolean);
+  const activeScopes = types.flatMap((type) => bindingScope(type, assigned[type]) ?? []);
   const triggerColor = activeScopes.length > 0 ? ws.coordination.scopeColor(activeScopes[0]) : undefined;
 
   return (
@@ -60,12 +51,12 @@ export function ScopePicker({ nodeId }: { nodeId: string }) {
         data-nodrag="1"
       >
         <div className="flex flex-col gap-2">
-          {types.map((t) => {
-            const current = assigned[t.type] ?? null;
-            const existing = ws.coordination.existingScopes(t.type);
+          {types.map((type) => {
+            const current = bindingScope(type, assigned[type]) ?? null;
+            const existing = ws.coordination.existingScopes(type);
             return (
-              <div key={t.type} className="flex flex-col gap-1">
-                <NdHud size={8.5}>{TYPE_LABEL[t.type] ?? t.type}</NdHud>
+              <div key={type} className="flex flex-col gap-1">
+                <NdHud size={8.5}>{COORDINATION_TYPES[type].label}</NdHud>
                 <div className="flex flex-wrap gap-1">
                   {existing.map((scope) => (
                     <button
@@ -74,8 +65,8 @@ export function ScopePicker({ nodeId }: { nodeId: string }) {
                       title={current === scope ? `on ${scope}: click to unlink` : `link onto ${scope}`}
                       onClick={() =>
                         current === scope
-                          ? ws.coordination.clearScope(nodeId, t.type)
-                          : ws.coordination.assignScope(nodeId, t.type, scope)
+                          ? ws.coordination.clearScope(nodeId, type)
+                          : ws.coordination.assignScope(nodeId, type, scope)
                       }
                       className="inline-flex items-center gap-[3px] rounded-full border px-[6px] py-[2px] font-mono text-[9px]"
                       style={
@@ -98,7 +89,7 @@ export function ScopePicker({ nodeId }: { nodeId: string }) {
                   <button
                     type="button"
                     title="mint a new scope and link onto it"
-                    onClick={() => ws.coordination.assignScope(nodeId, t.type, ws.coordination.mintScope(t.type))}
+                    onClick={() => ws.coordination.assignScope(nodeId, type, ws.coordination.mintScope(type))}
                     className="rounded-full border border-dashed border-border px-[6px] py-[2px] font-mono text-[9px] text-text-muted hover:bg-muted"
                   >
                     + new
@@ -107,7 +98,7 @@ export function ScopePicker({ nodeId }: { nodeId: string }) {
                     <button
                       type="button"
                       title="unlink from this channel"
-                      onClick={() => ws.coordination.clearScope(nodeId, t.type)}
+                      onClick={() => ws.coordination.clearScope(nodeId, type)}
                       className="rounded-full px-[6px] py-[2px] font-mono text-[9px] text-text-muted hover:bg-muted"
                     >
                       unlink

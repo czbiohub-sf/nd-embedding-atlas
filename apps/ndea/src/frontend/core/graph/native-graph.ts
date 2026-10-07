@@ -75,6 +75,6 @@ export const NATIVE_NODE_GRAPH = {
   "image-viewer": {
     role: "view",
     evaluationRole: "view",
-    cook: (inputs) => ({ kind: "focus", rowIndex: lastPortValueOfKind(inputs, "focus")?.rowIndex ?? null }),
+    cook: () => NULL_PREDICATE_PORT_VALUE,
   },
 } as const satisfies Record<string, NativeNodeGraph>;

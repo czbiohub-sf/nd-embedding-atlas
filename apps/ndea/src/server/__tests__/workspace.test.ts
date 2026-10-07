@@ -17,8 +17,8 @@ const DOCUMENT = {
   stageTree: null,
   stripH: 280,
   flags: {},
-  coordinationScopes: {},
-  coordinationSpace: {},
+  state: {},
+  bindings: {},
 };
 
 let dir: string;

@@ -1,18 +1,13 @@
-/** Pure predicate builder for a count-plot's bar selection (testable without a coordinator). */
+/** Typed filter for count-plot categories, which are grouped as text. */
+import type { FilterClause } from "@ndea/protocol";
 
-import { type ExprNode, isNotDistinct, isNull, literal, or } from "@uwdata/mosaic-sql";
-
-/** Sentinel for the SQL-NULL bucket in the selected set (a category value can't be the JS null). */
 export const NULL_VALUE = "__null__";
 
-/**
- * The OR-of-equality filter for a set of picked category values; `null` = no filter (clear).
- * Mirrors the legacy CountPlot click handler exactly.
- */
-export function countPlotPredicate(textExpr: ExprNode, selected: ReadonlySet<string>): string | null {
+export function countPlotPredicate(column: string, selected: ReadonlySet<string>): FilterClause | null {
   if (selected.size === 0) return null;
-  const predicates = [...selected].map((v) =>
-    v === NULL_VALUE ? (isNull(textExpr) as ExprNode) : (isNotDistinct(textExpr, literal(v)) as ExprNode),
-  );
-  return String(or(...predicates));
+  const values = [...selected].filter((value) => value !== NULL_VALUE);
+  const clauses: FilterClause[] = [];
+  if (values.length) clauses.push({ op: "in", column, values });
+  if (selected.has(NULL_VALUE)) clauses.push({ op: "isNull", column });
+  return clauses.length === 1 ? clauses[0] : { op: "or", clauses };
 }

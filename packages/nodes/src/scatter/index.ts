@@ -2,12 +2,10 @@ export { createScatterDefinition } from "./definition";
 export {
   broadcastView,
   clearLasso,
-  disposeStagedLasso,
   focusPoint,
   publishIsolationFilter,
   publishLasso,
   publishRangeFilter,
-  stageLassoRowSet,
   toggleViewLock,
 } from "./routing";
 export type {

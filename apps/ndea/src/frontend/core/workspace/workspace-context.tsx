@@ -84,7 +84,7 @@ export function WorkspaceProvider({
   nodeAssetStorage?: NodeAssetJsonStorage;
 }) {
   const { state, runtime, actions } = useDatasetSession();
-  const { coordinator, brushSelection, filterScopes, dataPublication, table } = runtime;
+  const { coordinator, brushSelection, table } = runtime;
   const { metadata } = state;
 
   const [{ workspace: ws, nodeRuntimes, persistence: initialPersistence }] = useState(() => {
@@ -116,8 +116,6 @@ export function WorkspaceProvider({
       metadata,
       refreshMetadata: actions.refreshMetadata,
       availableCapabilities: new Set(APP_NODE_HOST_CAPABILITIES),
-      filterScopes,
-      dataPublication,
       deviceBroker,
       fetch: globalThis.fetch,
     });

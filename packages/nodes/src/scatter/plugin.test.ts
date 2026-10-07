@@ -19,6 +19,7 @@ describe("Scatter definition", () => {
       "focus-coordination",
       "view-coordination",
       "filter-coordination",
+      "color-coordination",
       "schema-mutation",
       "gpu-device",
       "wasm-bitmap",

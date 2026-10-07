@@ -11,8 +11,7 @@ import type { GraphPortValue } from "./values";
 /** Structural equality of tagged values: what early cutoff compares. */
 export function sameGraphPortValue(a: GraphPortValue, b: GraphPortValue): boolean {
   if (a.kind !== b.kind) return false;
-  if (a.kind === "focus") return a.rowIndex === (b as typeof a).rowIndex;
-  if (a.sql !== (b as typeof a).sql) return false;
+  if (a.sql !== b.sql) return false;
   if (a.kind === "pred") return true;
   const left = a.rowIds;
   const right = (b as typeof a).rowIds;

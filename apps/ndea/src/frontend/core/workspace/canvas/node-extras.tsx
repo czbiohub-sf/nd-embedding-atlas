@@ -4,6 +4,7 @@ import { IterationCw, Link2 } from "lucide-react";
 
 import { NdIconButton } from "@/components/node-workspace/nd-icon-button";
 import { NdHud } from "@/components/node-workspace/nd-primitives";
+import { bindingScope, COORDINATION_TYPE_IDS } from "@/core/coordination/types";
 import type { GraphDocumentNode } from "@/core/graph/records";
 import { ON_ACCENT_INK } from "@/lib/color/brand";
 import type { FeedbackChannel } from "../feedback";
@@ -120,8 +121,11 @@ export function DisplayOffBadge() {
 
 export function SyncBadge({ nodeId }: { nodeId: string }) {
   const workspace = useWorkspace();
-  const scopes = useWorkspaceSelector((state) => state.coordinationScopes[nodeId] ?? null);
-  const entries = scopes ? Object.entries(scopes) : [];
+  const bound = useWorkspaceSelector((state) => state.bindings[nodeId] ?? null);
+  const entries = COORDINATION_TYPE_IDS.flatMap((type) => {
+    const scope = bindingScope(type, bound?.[type]);
+    return scope === undefined ? [] : [[type, scope] as const];
+  });
   if (entries.length === 0) return null;
 
   return (

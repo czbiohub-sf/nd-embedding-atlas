@@ -48,8 +48,25 @@ export type {
   PluginPlatform,
   SDKVersionRange,
 } from "./plugin";
-export { FilterClauseSchema, FilterRequestSchema, FilterResponseSchema, FilterRowSchema } from "./filter";
-export type { FilterClause, FilterRequest, FilterResponse, FilterRow, FilterValue } from "./filter";
+export {
+  OBSERVATION_SET_TABLE,
+  FilterClauseSchema,
+  FilterRequestSchema,
+  FilterResponseSchema,
+  FilterRowSchema,
+  ObservationSetCreateBodySchema,
+  ObservationSetIdSchema,
+  ObservationSetSchema,
+} from "./filter";
+export type {
+  FilterClause,
+  FilterRequest,
+  FilterResponse,
+  FilterRow,
+  FilterValue,
+  ObservationSet,
+  ObservationSetCreateBody,
+} from "./filter";
 export {
   JsonPatchOpSchema,
   WorkspaceChangeSchema,
@@ -235,14 +252,6 @@ export const VarColumnStatusResponseSchema = z.object({
   error: z.string().optional(),
 });
 export type VarColumnStatusResponse = z.infer<typeof VarColumnStatusResponseSchema>;
-
-/** POST /api/selection/:instance_id response. */
-export const SelectionPublishResponseSchema = z.object({
-  ok: z.literal(true),
-  table: z.string(),
-  count: NonNegativeInt,
-});
-export type SelectionPublishResponse = z.infer<typeof SelectionPublishResponseSchema>;
 
 /** Obs spatial-column response (bbox sub-shape). */
 export const ObsBboxSchema = z.object({

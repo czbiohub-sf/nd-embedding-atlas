@@ -9,6 +9,7 @@ const CAPABILITIES = [
   "focus-coordination",
   "view-coordination",
   "filter-coordination",
+  "color-coordination",
   "schema-mutation",
   "gpu-device",
   "wasm-bitmap",
@@ -37,7 +38,7 @@ export function createScatterDefinition({
     documentation: {
       summary: "Plots your cells in embedding space, like a UMAP.",
       use: "Use it to spot structure, then lasso a region to select those cells.",
-      note: "Pick which embedding to show in the node's options.",
+      note: "Pick an embedding in the node's options. Lassos publish named observation sets; linked color-by scopes share the color column.",
     },
     load: async () => {
       const { createScatterView } = await import("./view");

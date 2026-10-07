@@ -39,11 +39,7 @@ export function NdHandle({ nodeId, portId, kind, out, top = 13 }: NdHandleProps)
   }
 
   const shape: React.CSSProperties =
-    spec.shape === "diamond"
-      ? { borderRadius: 2, transform: "translateY(-50%) rotate(45deg)" }
-      : spec.shape === "square"
-        ? { borderRadius: 2.5 }
-        : { borderRadius: 999 };
+    spec.shape === "diamond" ? { borderRadius: 2, transform: "translateY(-50%) rotate(45deg)" } : { borderRadius: 999 };
 
   return (
     <Handle

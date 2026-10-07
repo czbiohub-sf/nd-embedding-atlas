@@ -19,6 +19,12 @@ import {
 import { applyPatch, type Operation } from "rfc6902";
 import { z } from "zod";
 
+import {
+  bindingScope,
+  coordinationBindingsSchema,
+  coordinationStateSchema,
+  isCoordinationType,
+} from "../coordination/types";
 import { parseWorkspaceNodeAssetRecords } from "../node-asset/schema";
 import type { TreeNode } from "./stage/split-tree";
 import type { WorkspaceDocumentState } from "./types";
@@ -82,7 +88,7 @@ const edgeSchema = z
     fromPort: z.string().min(1),
     to: z.string().min(1),
     toPort: z.string().min(1),
-    kind: z.enum(["pred", "sel", "focus"]),
+    kind: z.enum(["pred", "sel"]),
   })
   .strict();
 const sizeSchema = z.object({ w: z.number(), h: z.number() }).strict();
@@ -109,8 +115,8 @@ export const workspaceDocumentSchema = z
     stageTree: treeSchema.nullable(),
     stripH: z.number(),
     flags: z.record(z.string(), z.object({ bypass: z.boolean().optional(), off: z.boolean().optional() }).strict()),
-    coordinationScopes: z.record(z.string(), z.record(z.string(), z.string())),
-    coordinationSpace: z.record(z.string(), z.record(z.string(), jsonValueSchema)),
+    state: coordinationStateSchema,
+    bindings: coordinationBindingsSchema,
   })
   .strict()
   .superRefine((doc, context) => {
@@ -130,13 +136,18 @@ export const workspaceDocumentSchema = z
         }
       }
     }
-    for (const [scope, value] of Object.entries(doc.coordinationSpace.focus ?? {})) {
-      if (value === null || (typeof value === "number" && Number.isSafeInteger(value) && value >= 0)) continue;
-      context.addIssue({
-        code: "custom",
-        path: ["coordinationSpace", "focus", scope],
-        message: "focus must be a non-negative integer row index or null",
-      });
+    for (const [nodeId, byType] of Object.entries(doc.bindings)) {
+      if (!doc.nodes[nodeId]) {
+        context.addIssue({ code: "custom", path: ["bindings", nodeId], message: `unknown node "${nodeId}"` });
+      }
+      for (const [type, binding] of Object.entries(byType)) {
+        if (!isCoordinationType(type) || bindingScope(type, binding) !== undefined) continue;
+        context.addIssue({
+          code: "custom",
+          path: ["bindings", nodeId, type, "$bindState"],
+          message: `must be "/${type}/<scope>"`,
+        });
+      }
     }
   });
 

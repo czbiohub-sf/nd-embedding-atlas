@@ -16,7 +16,6 @@ export type NodeInstanceId = string & { readonly [NODE_INSTANCE_ID]: true };
 
 export { rowIndex } from "./graph";
 export type {
-  FocusPortValue,
   NodeCompute,
   NodeComputeContext,
   NodeComputeInputs,
@@ -55,7 +54,7 @@ export function exactNodeTypeRef(nodeType: string, version: string): ExactNodeTy
   };
 }
 
-export type PortKind = "pred" | "sel" | "focus";
+export type PortKind = "pred" | "sel";
 export type FanInOperation = "and" | "or" | "diff";
 
 export interface NodePort {
@@ -199,7 +198,8 @@ export type NodeCapability =
   | "compute"
   | "annotation-write"
   | "ordering-coordination"
-  | "filter-coordination";
+  | "filter-coordination"
+  | "color-coordination";
 
 export type NodeRole = "view" | "transform";
 

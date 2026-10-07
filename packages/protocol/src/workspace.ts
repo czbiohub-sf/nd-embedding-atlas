@@ -72,8 +72,8 @@ const ObservationPageSchema = {
 
 /**
  * GET /api/workspace/nodes/:id. The node's cooked output at `revision`,
- * evaluated from the document alone: per-tab state (lassos, focus, cache
- * pins) is not visible here. Predicates come with a bounded observation page.
+ * including its shared filter scope. `sql` is the final applied predicate;
+ * `scopeFilter` is the scope's contribution. Results include a bounded observation page.
  */
 export const WorkspaceNodeResultSchema = z.object({
   revision: z.number().int().nonnegative(),
@@ -82,9 +82,18 @@ export const WorkspaceNodeResultSchema = z.object({
   error: z.string().optional(),
   output: z
     .discriminatedUnion("kind", [
-      z.object({ kind: z.literal("pred"), sql: z.string().nullable(), ...ObservationPageSchema }),
-      z.object({ kind: z.literal("sel"), sql: z.string().nullable(), ...ObservationPageSchema }),
-      z.object({ kind: z.literal("focus"), rowIndex: z.number().int().nonnegative().nullable() }),
+      z.object({
+        kind: z.literal("pred"),
+        sql: z.string().nullable(),
+        scopeFilter: z.string().nullable(),
+        ...ObservationPageSchema,
+      }),
+      z.object({
+        kind: z.literal("sel"),
+        sql: z.string().nullable(),
+        scopeFilter: z.string().nullable(),
+        ...ObservationPageSchema,
+      }),
     ])
     .optional(),
 });

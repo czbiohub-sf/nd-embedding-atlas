@@ -1,48 +1,33 @@
 /**
- * Coordination backbone: the symmetric cross-view plane (Boukhelifa
- * identity-of-reference / Vitessce CMV), rolled own over the workspace
- * TanStack store (KD1; no foreign provider).
+ * Coordination backbone: the symmetric cross-view plane (Use-Coordination /
+ * Vitessce CMV), rolled own over the workspace document's json-render-style
+ * `state` and `bindings` sections (see `./types`).
  *
- * Two axes:
- *   - coordination TYPE: the parameter being shared (`focus`, later
- *     `viewSync`/`ordering`).
- *   - named SCOPE: a named cell of a type (e.g. `focus.A`). N nodes that
- *     reference the same (type, scope) see the same value, reactively, with no
- *     edge and no message passing.
+ *   - coordination TYPE: the parameter being shared (`focus`, `filter`, …).
+ *   - named SCOPE: one cell of a type, `state[type][scope]`, addressed by the
+ *     JSON Pointer `/<type>/<scope>`. Every node bound to the same pointer sees
+ *     the same value, reactively, with no edge and no message passing.
  *
- * Storage lives in two fields supplied by the document adapter:
- *   - `coordinationScopes[nodeId][type] = scope`: which cell a node references.
- *   - `coordinationSpace[type][scope] = value`: the live cell value.
- *
- * Conflict policy is latest-wins per writer: a cell holds one JsonValue, the
- * most recent `set` replaces it, no merge. Scope values are `JsonValue`-only
- * (KD3) so share/undo/persist hold.
- *
- * For the U1 spike the only registered type is `focus`; the
- * `defineCoordinationType` registry is extracted in U3.
+ * Writes validate against the type's Zod schema and replace the cell
+ * (latest-wins). Agents reach the same cells through JSON Patch.
  */
 
-import { z } from "zod";
 import type { Store } from "@tanstack/store";
 
-import type { JsonValue, RowIndex } from "@ndea/sdk";
 import { SCOPE_PALETTE } from "@/lib/color/brand";
 import {
-  defineCoordinationType,
-  defineGroupChannel,
-  defineRuntimeCoordinationType,
-  getCoordinationType,
-} from "./define-type";
-
-type CoordinationValue<T extends string> = T extends "focus" ? RowIndex | null : JsonValue;
-
-export type CoordinationSpace = Record<string, Record<string, JsonValue> | undefined> & {
-  focus?: Record<string, RowIndex | null>;
-};
+  bindingPointer,
+  bindingScope,
+  COORDINATION_TYPES,
+  type CoordinationBindings,
+  type CoordinationState,
+  type CoordinationTypeId,
+  type CoordinationValue,
+} from "./types";
 
 export interface CoordinationDocumentState {
-  readonly coordinationScopes: Record<string, Record<string, string>>;
-  readonly coordinationSpace: CoordinationSpace;
+  readonly state: CoordinationState;
+  readonly bindings: CoordinationBindings;
 }
 
 export interface CoordinationDocumentPort {
@@ -52,17 +37,16 @@ export interface CoordinationDocumentPort {
 }
 
 export interface CoordinationScopeCellPort {
-  assignScope(nodeId: string, type: string, scope: string): void;
-  clearScope(nodeId: string, type: string): void;
-  scopeOf(nodeId: string, type: string): string | undefined;
-  mintScope(type: string): string;
-  setCoordinationValue<T extends string>(type: T, scope: string, value: CoordinationValue<T>): void;
-  readCoordination<T extends string>(type: T, scope: string): CoordinationValue<T> | undefined;
-  existingScopes(type: string): string[];
-  nodesInScope(type: string, scope: string): string[];
+  assignScope(nodeId: string, type: CoordinationTypeId, scope: string): void;
+  clearScope(nodeId: string, type: CoordinationTypeId): void;
+  scopeOf(nodeId: string, type: CoordinationTypeId): string | undefined;
+  mintScope(type: CoordinationTypeId): string;
+  setCoordinationValue<T extends CoordinationTypeId>(type: T, scope: string, value: CoordinationValue<T>): void;
+  readCoordination<T extends CoordinationTypeId>(type: T, scope: string): CoordinationValue<T> | undefined;
+  existingScopes(type: CoordinationTypeId): string[];
   scopeColor(scope: string): string;
-  subscribeScope(nodeId: string, type: string, listener: (scope: string | undefined) => void): () => void;
-  subscribe<T extends string>(
+  subscribeScope(nodeId: string, type: CoordinationTypeId, listener: (scope: string | undefined) => void): () => void;
+  subscribe<T extends CoordinationTypeId>(
     nodeId: string,
     type: T,
     listener: (value: CoordinationValue<T> | undefined) => void,
@@ -85,57 +69,40 @@ export function coordinationDocumentPort<S extends CoordinationDocumentState>(
   };
 }
 
-/* ── registered coordination types ───────────────────────────────────────
- * focus (U1) + viewSync (U2) re-expressed through the extracted primitive,
- * plus `ordering` (U3) registered through the SAME API to prove a third type
- * needs no backbone changes. Registration is a module side effect: importing
- * this file (which the Workspace does) populates the registry. */
-
-/** `focus`: a shared row index among the scope's members (group channel). */
-export const FOCUS_TYPE = defineGroupChannel({
-  type: "focus",
-  value: z.number().int().nonnegative().nullable(),
-  capability: "focus-coordination",
-  hostFacet: "focus",
-});
-
-/** `viewSync`: shared pan/zoom; `src` is the broadcaster (self-skip). */
-export const VIEW_SYNC_TYPE = defineCoordinationType({
-  type: "viewSync",
-  schema: z.object({ panX: z.number(), panY: z.number(), zoom: z.number(), src: z.string().optional() }),
-  defaultValue: { panX: 0, panY: 0, zoom: 1 },
-  capability: "view-coordination",
-  hostFacet: "viewCoordination",
-});
-
-/** `ordering`: shared sort column + direction (table). The third type. */
-export const ORDERING_TYPE = defineCoordinationType({
-  type: "ordering",
-  schema: z.object({ col: z.string(), dir: z.enum(["asc", "desc"]) }).nullable(),
-  defaultValue: null,
-  capability: "ordering-coordination",
-  hostFacet: "ordering",
-});
-
-/** `filter`: membership persists; predicates and Mosaic objects stay session-local. */
-export const FILTER_TYPE = defineRuntimeCoordinationType({
-  type: "filter",
-  capability: "filter-coordination",
-  hostFacet: "filter",
-});
-
-/** Stable scope color from the 31× string hash. Hashes the scope name ALONE so
- *  a migrated v1 group id ("A") keeps its exact color (no badge drift). */
+/** Stable scope color from the 31× string hash of the scope name. */
 export function scopeColor(scope: string): string {
   let h = 0;
   for (let i = 0; i < scope.length; i++) h = (h * 31 + scope.charCodeAt(i)) >>> 0;
   return SCOPE_PALETTE[h % SCOPE_PALETTE.length];
 }
 
-/**
- * The resolve/notify backbone over a narrow document port. Workspace adapts
- * its sole document store; node runtimes receive only the scope/cell port.
- */
+function withCell(
+  state: CoordinationState,
+  type: CoordinationTypeId,
+  scope: string,
+  value: unknown,
+): CoordinationState {
+  return { ...state, [type]: { ...state[type], [scope]: value } };
+}
+
+/** Drop a node's crossfilter contribution from a filter scope; peers stop seeing it. */
+function withoutFilterContribution(state: CoordinationState, scope: string | undefined, nodeId: string) {
+  const cell = scope === undefined ? undefined : state.filter?.[scope];
+  if (!cell || !(nodeId in cell)) return state;
+  const { [nodeId]: _dropped, ...rest } = cell;
+  return withCell(state, "filter", scope!, rest);
+}
+
+/** Remove a deleted node's bindings and filter contributions. */
+export function withoutNodeCoordination<S extends CoordinationDocumentState>(document: S, nodeId: string): S {
+  const { [nodeId]: byType, ...bindings } = document.bindings;
+  return {
+    ...document,
+    bindings,
+    state: withoutFilterContribution(document.state, bindingScope("filter", byType?.filter), nodeId),
+  };
+}
+
 class Coordination implements CoordinationScopeCellPort {
   private seq = 0;
   private readonly document: CoordinationDocumentPort;
@@ -144,113 +111,88 @@ class Coordination implements CoordinationScopeCellPort {
     this.document = document;
   }
 
-  /* ── scope assignment (which cell a node references) ──────────────── */
-
-  /** Assign a node to a named scope of a coordination type. */
-  assignScope(nodeId: string, type: string, scope: string): void {
-    this.document.update((s) => ({
-      ...s,
-      coordinationScopes: {
-        ...s.coordinationScopes,
-        [nodeId]: { ...s.coordinationScopes[nodeId], [type]: scope },
-      },
-    }));
-  }
-
-  /** Drop a node's scope for one type (it stops participating in that type). */
-  clearScope(nodeId: string, type: string): void {
+  /** Bind a node to a scope, seeding the cell with the type's default when it does not exist yet. */
+  assignScope(nodeId: string, type: CoordinationTypeId, scope: string): void {
     this.document.update((s) => {
-      const cur = s.coordinationScopes[nodeId];
-      if (!cur || !(type in cur)) return s;
-      const next = { ...cur };
-      delete next[type];
-      const coordinationScopes = { ...s.coordinationScopes };
-      if (Object.keys(next).length > 0) coordinationScopes[nodeId] = next;
-      else delete coordinationScopes[nodeId];
-      return { ...s, coordinationScopes };
+      const previous = bindingScope(type, s.bindings[nodeId]?.[type]);
+      if (previous === scope) return s;
+      let state = type === "filter" ? withoutFilterContribution(s.state, previous, nodeId) : s.state;
+      if (state[type]?.[scope] === undefined)
+        state = withCell(state, type, scope, COORDINATION_TYPES[type].defaultValue);
+      return {
+        ...s,
+        state,
+        bindings: {
+          ...s.bindings,
+          [nodeId]: { ...s.bindings[nodeId], [type]: { $bindState: bindingPointer(type, scope) } },
+        },
+      };
     });
   }
 
-  /** The scope a node references for a type, or undefined if unassigned. */
-  scopeOf(nodeId: string, type: string): string | undefined {
-    return this.document.snapshot().coordinationScopes[nodeId]?.[type];
+  /** Unbind a node from one type (it stops participating in that type). */
+  clearScope(nodeId: string, type: CoordinationTypeId): void {
+    this.document.update((s) => {
+      const current = s.bindings[nodeId];
+      if (!current?.[type]) return s;
+      const { [type]: _dropped, ...rest } = current;
+      const bindings = { ...s.bindings };
+      if (Object.keys(rest).length > 0) bindings[nodeId] = rest;
+      else delete bindings[nodeId];
+      const state =
+        type === "filter" ? withoutFilterContribution(s.state, bindingScope(type, current.filter), nodeId) : s.state;
+      return { ...s, state, bindings };
+    });
   }
 
-  /** Mint a fresh, unused scope name for a type. Picker (U4) uses this for
-   *  "New scope"; the U1 UI still hardcodes "A". */
-  mintScope(type: string): string {
-    const used = new Set<string>();
-    for (const byType of Object.values(this.document.snapshot().coordinationScopes)) {
-      if (byType[type]) used.add(byType[type]);
-    }
+  scopeOf(nodeId: string, type: CoordinationTypeId): string | undefined {
+    return bindingScope(type, this.document.snapshot().bindings[nodeId]?.[type]);
+  }
+
+  /** Mint a fresh, unused scope name (A..Z, then s1, s2, …). */
+  mintScope(type: CoordinationTypeId): string {
+    const used = new Set(this.existingScopes(type));
     for (let i = 0; i < 26; i++) {
-      const name = String.fromCharCode(65 + i); // A..Z
+      const name = String.fromCharCode(65 + i);
       if (!used.has(name)) return name;
     }
-    return `s${++this.seq}`;
+    while (used.has(`s${++this.seq}`));
+    return `s${this.seq}`;
   }
 
-  /* ── cell values (the shared, latest-wins parameter) ──────────────── */
-
-  /** Write a cell value (latest-wins: replaces, never merges). */
-  setCoordinationValue<T extends string>(type: T, scope: string, value: CoordinationValue<T>): void {
-    const spec = getCoordinationType(type);
-    if (spec?.runtimeBacked) throw new TypeError(`coordination type "${type}" has no document cell`);
-    if (spec?.schema && !spec.schema.safeParse(value).success) {
-      throw new TypeError(`coordination cell "${type}.${scope}" failed validation`);
+  setCoordinationValue<T extends CoordinationTypeId>(type: T, scope: string, value: CoordinationValue<T>): void {
+    if (!COORDINATION_TYPES[type].value.safeParse(value).success) {
+      throw new TypeError(`coordination cell "/${type}/${scope}" failed validation`);
     }
-    this.document.update((s) => ({
-      ...s,
-      coordinationSpace: {
-        ...s.coordinationSpace,
-        [type]: { ...s.coordinationSpace[type], [scope]: value },
-      },
-    }));
+    this.document.update((s) => ({ ...s, state: withCell(s.state, type, scope, value) }));
   }
 
-  /** Read a cell value, or undefined if no value has been written yet. */
-  readCoordination<T extends string>(type: T, scope: string): CoordinationValue<T> | undefined {
-    return this.document.snapshot().coordinationSpace[type]?.[scope] as CoordinationValue<T> | undefined;
+  readCoordination<T extends CoordinationTypeId>(type: T, scope: string): CoordinationValue<T> | undefined {
+    return this.document.snapshot().state[type]?.[scope];
   }
 
-  /** The scope names that currently EXIST for a type: every scope referenced by
-   *  some node, unioned with any cell already in the space. The picker offers
-   *  these (plus mint-new) so a node can never reference a dangling scope (KD9). */
-  existingScopes(type: string): string[] {
-    const out = new Set<string>();
-    for (const byType of Object.values(this.document.snapshot().coordinationScopes)) {
-      if (byType[type]) out.add(byType[type]);
+  /** Scopes that exist for a type: every bound scope plus every cell in state. */
+  existingScopes(type: CoordinationTypeId): string[] {
+    const { state, bindings } = this.document.snapshot();
+    const out = new Set(Object.keys(state[type] ?? {}));
+    for (const byType of Object.values(bindings)) {
+      const scope = bindingScope(type, byType[type]);
+      if (scope !== undefined) out.add(scope);
     }
-    for (const scope of Object.keys(this.document.snapshot().coordinationSpace[type] ?? {})) out.add(scope);
     return [...out].toSorted();
   }
 
-  /** Reverse index: the node ids referencing (type, scope). Computed on demand
-   *  from `coordinationScopes`: O(nodes), only walked on a set/subscribe. */
-  nodesInScope(type: string, scope: string): string[] {
-    const out: string[] = [];
-    for (const [nodeId, byType] of Object.entries(this.document.snapshot().coordinationScopes)) {
-      if (byType[type] === scope) out.push(nodeId);
-    }
-    return out;
-  }
-
-  /** Stable color for a scope (see {@link scopeColor}). */
   scopeColor(scope: string): string {
     return scopeColor(scope);
   }
 
-  /* ── reactivity (selector-scoped per (node, type); KD5) ───────────── */
-
   /**
-   * Subscribe to a node's RESOLVED cell for one type. `cb` fires only when the
-   * effective value changes: the node's scope flipping (assign/clear) or its
-   * cell value moving. A whole-store listener gated by an effective-value diff,
-   * so a write to an unrelated scope/type never wakes this subscriber (the CMV
-   * render-storm guard). Returns an unsubscribe fn.
-   * Emits `undefined` for unassigned nodes; the body-dock seam applies fallback.
+   * Subscribe to a node's resolved cell for one type. Fires only when the
+   * effective value's reference changes (rebinding or a cell write), so writes
+   * to unrelated scopes never wake this subscriber. Emits `undefined` when
+   * the node is unbound.
    */
-  subscribe<T extends string>(
+  subscribe<T extends CoordinationTypeId>(
     nodeId: string,
     type: T,
     cb: (value: CoordinationValue<T> | undefined) => void,
@@ -269,7 +211,7 @@ class Coordination implements CoordinationScopeCellPort {
     });
   }
 
-  subscribeScope(nodeId: string, type: string, cb: (scope: string | undefined) => void): () => void {
+  subscribeScope(nodeId: string, type: CoordinationTypeId, cb: (scope: string | undefined) => void): () => void {
     let last = this.scopeOf(nodeId, type);
     return this.document.subscribe(() => {
       const scope = this.scopeOf(nodeId, type);

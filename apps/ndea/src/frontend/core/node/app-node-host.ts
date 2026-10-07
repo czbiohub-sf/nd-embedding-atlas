@@ -29,12 +29,6 @@ export interface CheckpointNodeHost {
   };
 }
 
-export interface CheckpointCreationNodeHost {
-  readonly checkpointCreation: {
-    create(): string | null;
-  };
-}
-
 export interface HierarchyState {
   readonly childCount: number;
 }
@@ -49,7 +43,6 @@ export interface HierarchyNodeHost {
 
 export interface AppNodeHostFacetMap {
   readonly checkpoint: CheckpointNodeHost["checkpoint"];
-  readonly checkpointCreation: CheckpointCreationNodeHost["checkpointCreation"];
   readonly hierarchy: HierarchyNodeHost["hierarchy"];
   readonly bodyHeaderElement: HTMLElement;
 }
@@ -76,8 +69,6 @@ export function requireAppNodeHostFacet<Facet extends AppNodeHostFacetName>(
   switch (facet) {
     case "checkpoint":
       return requireMethods(value, facet, ["getSnapshot", "subscribe", "pin", "unpin"]) as AppNodeHostFacetMap[Facet];
-    case "checkpointCreation":
-      return requireMethods(value, facet, ["create"]) as AppNodeHostFacetMap[Facet];
     case "hierarchy":
       return requireMethods(value, facet, ["getSnapshot", "subscribe", "enter"]) as AppNodeHostFacetMap[Facet];
     case "bodyHeaderElement":

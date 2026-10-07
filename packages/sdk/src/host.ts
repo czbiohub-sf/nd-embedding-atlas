@@ -1,7 +1,7 @@
 /** Capability-gated services scoped to one live node occurrence. */
 
 import type { Coordinator, MosaicClient, Selection } from "@uwdata/mosaic-core";
-import type { CommitAnnotationsResponse, Metadata } from "@ndea/protocol";
+import type { CommitAnnotationsResponse, FilterClause, Metadata, ObservationSet } from "@ndea/protocol";
 import type { ExactNodeTypeRef, NodeCapability, NodeInstanceId, RowIndex } from "./node";
 
 export interface DeviceInfo {
@@ -22,12 +22,9 @@ export interface DataContext {
   readonly metadata: Metadata;
 }
 
-/** Predicate backed by an instance-scoped temporary row-set table. */
-export interface RowSetPublication {
-  readonly predicate: string;
-  readonly token: number;
-  readonly count: number;
-  readonly table: string;
+/** Persists observations as a content-addressed set; reference it as `{ op: "inSet", set }`. */
+export interface RowSetPublishAPI {
+  createObservationSet(rowIds: readonly RowIndex[]): Promise<ObservationSet>;
 }
 
 export interface DataQueryAPI {
@@ -35,11 +32,6 @@ export interface DataQueryAPI {
   categorize?(column: string, max?: number): Promise<unknown>;
   loadVarColumn?(name: string, layer?: string): Promise<unknown>;
   fetchCrop?(params: unknown): Promise<Blob>;
-}
-
-export interface RowSetPublishAPI {
-  publishRowSet(rowIds: RowIndex[]): Promise<RowSetPublication>;
-  disposePublishedRowSet(): Promise<void>;
 }
 
 export interface AnnotationWriteAPI {
@@ -85,6 +77,14 @@ export interface FocusCoordinationAPI {
   subscribe?(callback: (rowIndex: RowIndex | null) => void): () => void;
 }
 
+/** The color-by column shared by a `colorBy` scope; `linked` is false when unbound. */
+export interface ColorCoordinationAPI {
+  readonly linked: boolean;
+  get(): string | null;
+  set(column: string | null): void;
+  subscribe(callback: (column: string | null) => void): () => void;
+}
+
 export type FilterFacet = "lasso" | "chart" | "range" | "isolation";
 
 export interface ResolvedFilter {
@@ -97,15 +97,18 @@ export interface MaterializedFilterRows {
   readonly revision: number;
 }
 
+/**
+ * Crossfilter scope membership. A published clause lands in the workspace
+ * document under this node; the node's `selection` carries the graph input plus
+ * every other source's clauses, never its own.
+ */
 export interface FilterCoordinationAPI {
   /** Stable for this node occurrence, including graph and current-scope predicates. */
   readonly selection: Selection;
   getResolved(): ResolvedFilter;
   subscribeResolved(callback: (filter: ResolvedFilter) => void): () => void;
-  publish(facet: FilterFacet, predicate: string, rowIds?: readonly RowIndex[]): void;
+  publish(facet: FilterFacet, clause: FilterClause): void;
   clear(facet: FilterFacet): void;
-  associateClient(client: MosaicClient): void;
-  disassociateClient(client: MosaicClient): void;
   materializeRowIds(signal?: AbortSignal): Promise<MaterializedFilterRows>;
 }
 
@@ -144,6 +147,10 @@ interface OrderingCoordinationHost {
   readonly ordering: OrderingCoordinationAPI;
 }
 
+interface ColorCoordinationHost {
+  readonly colorBy: ColorCoordinationAPI;
+}
+
 interface FilterCoordinationHost {
   readonly filter: FilterCoordinationAPI;
 }
@@ -164,5 +171,6 @@ export type NodeHost<Config = unknown, Capabilities extends NodeCapability = nev
   CapabilityService<Capabilities, "focus-coordination", FocusHost> &
   CapabilityService<Capabilities, "view-coordination", ViewCoordinationHost> &
   CapabilityService<Capabilities, "ordering-coordination", OrderingCoordinationHost> &
+  CapabilityService<Capabilities, "color-coordination", ColorCoordinationHost> &
   CapabilityService<Capabilities, "filter-coordination", FilterCoordinationHost> &
   CapabilityService<Capabilities, "gpu-device", GPUHost>;

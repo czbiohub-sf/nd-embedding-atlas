@@ -13,8 +13,7 @@ const CAPABILITY_SERVICE_REQUIREMENTS = {
   ],
   "row-set-publish": [
     [["dataAPI"], "object"],
-    [["dataAPI", "publishRowSet"], "callable"],
-    [["dataAPI", "disposePublishedRowSet"], "callable"],
+    [["dataAPI", "createObservationSet"], "callable"],
   ],
   "focus-coordination": [
     [["focus"], "object"],
@@ -50,9 +49,13 @@ const CAPABILITY_SERVICE_REQUIREMENTS = {
     [["filter", "subscribeResolved"], "callable"],
     [["filter", "publish"], "callable"],
     [["filter", "clear"], "callable"],
-    [["filter", "associateClient"], "callable"],
-    [["filter", "disassociateClient"], "callable"],
     [["filter", "materializeRowIds"], "callable"],
+  ],
+  "color-coordination": [
+    [["colorBy"], "object"],
+    [["colorBy", "get"], "callable"],
+    [["colorBy", "set"], "callable"],
+    [["colorBy", "subscribe"], "callable"],
   ],
 } satisfies Record<NodeCapability, readonly ServiceRequirement[]>;
 

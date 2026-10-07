@@ -29,9 +29,6 @@ export interface NodeRuntimeSessionPort {
   };
   readonly coordination: CoordinationScopeCellPort;
   updateNodeConfig(nodeId: string, patch: Record<string, unknown>): void;
-  getLasso(nodeId: string): Extract<GraphPortValue, { kind: "sel" }> | undefined;
-  emitLasso(nodeId: string, sql: string | null, rowIds?: readonly RowIndex[] | null): void;
-  emitFocus(nodeId: string, focusedRowIndex: RowIndex | null): void;
   registerGraphSink(nodeId: string, listener: (value: GraphPortValue) => void): () => void;
   cacheGraphInput(nodeId: string): CheckpointInput | null;
   liveCacheInput(nodeId: string): CheckpointInput | null;
@@ -40,6 +37,5 @@ export interface NodeRuntimeSessionPort {
   pinCache(nodeId: string, rowIds: readonly RowIndex[]): boolean;
   setCheckpointStatus(nodeId: string, status: CheckpointRuntimeStatus): void;
   uncache(nodeId: string): void;
-  freezeSelection(nodeId: string): string | null;
   enterSubnet(nodeId: string): void;
 }

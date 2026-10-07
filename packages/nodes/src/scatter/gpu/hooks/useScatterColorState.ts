@@ -1,7 +1,7 @@
 import type { Coordinator } from "@uwdata/mosaic-core";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useScatterServices } from "../../context";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useScatterHost, useScatterServices } from "../../context";
 import type { CategoryMapping, ColorMode, Metadata } from "../../contracts";
 import { colorSourceFromString, colorSourceToString, resolveColorMode, toRows } from "../../helpers";
 import type { ColorSource } from "../../helpers";
@@ -43,7 +43,22 @@ export interface ScatterColorState {
 export function useScatterColorState(coordinator: Coordinator, metadata: Metadata): ScatterColorState {
   const services = useScatterServices();
   // ── Column selection ────────────────────────────────────────────────────────
-  const [colorByColumn, setColorByColumn] = useState<string | null>(null);
+  const host = useScatterHost();
+  const [localColumn, setLocalColumn] = useState<string | null>(host.config.colorByColumn);
+  const subscribeColor = useCallback((cb: () => void) => host.colorBy.subscribe(cb), [host]);
+  const getColor = useCallback(() => host.colorBy.get(), [host]);
+  const linkedColumn = useSyncExternalStore(subscribeColor, getColor);
+  const colorByColumn = host.colorBy.linked ? linkedColumn : localColumn;
+  const setColorByColumn = useCallback(
+    (column: string | null) => {
+      if (host.colorBy.linked) host.colorBy.set(column);
+      else {
+        setLocalColumn(column);
+        host.patchConfig({ colorByColumn: column });
+      }
+    },
+    [host],
+  );
   const obsColumns = useMemo(() => metadata.obs_columns ?? [], [metadata.obs_columns]);
 
   // ── Color mode (categorical vs continuous) ──────────────────────────────────
@@ -143,7 +158,10 @@ export function useScatterColorState(coordinator: Coordinator, metadata: Metadat
   const categoryCol = coloredCategoryMapping?.indexColumn ?? null;
 
   const colorSource = useMemo(() => colorSourceFromString(colorByColumn), [colorByColumn]);
-  const setColorSource = useMemo(() => (src: ColorSource) => setColorByColumn(colorSourceToString(src)), []);
+  const setColorSource = useCallback(
+    (src: ColorSource) => setColorByColumn(colorSourceToString(src)),
+    [setColorByColumn],
+  );
 
   return {
     colorByColumn,

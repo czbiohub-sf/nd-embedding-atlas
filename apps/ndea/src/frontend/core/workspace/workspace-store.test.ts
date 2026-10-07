@@ -275,23 +275,16 @@ describe("Workspace graph transactions", () => {
     workspace.dispose();
   });
 
-  test("keeps predicate, row-set, focus, editor, coordination, placement, and disposition state independent", () => {
+  test("keeps predicate, editor, coordination, placement, and disposition state independent", () => {
     const workspace = createWorkspace();
     const dataset = workspace.addNode("dataset", { x: 0, y: 0 });
     const count = workspace.addNode("count", { x: 100, y: 0 });
     const scatter = workspace.addNode("scatter", { x: 200, y: 0 });
     const table = workspace.addNode("table", { x: 300, y: 0 });
-    const imageViewer = workspace.addNode("image-viewer", { x: 400, y: 0 });
     expect(workspace.connect(dataset, count)).toBe(true);
-    expect(workspace.connect(table, imageViewer)).toBe(true);
+    const imageViewer = workspace.addNode("image-viewer", { x: 400, y: 0 });
     workspace.updateNodeConfig(dataset, { datasetKey: "plate-a" });
 
-    let focused: ReturnType<typeof rowIndex> | null = null;
-    const unregister = workspace.registerGraphSink(imageViewer, (value) => {
-      if (value.kind === "focus") focused = value.rowIndex;
-    });
-    workspace.emitLasso(scatter, "__row_index__ IN (2, 5)", [rowIndex(2), rowIndex(5)]);
-    workspace.emitFocus(table, rowIndex(9));
     workspace.coordination.assignScope(scatter, "focus", "A");
     workspace.coordination.setCoordinationValue("focus", "A", rowIndex(7));
     workspace.setGraphSelection([scatter, table], []);
@@ -300,14 +293,11 @@ describe("Workspace graph transactions", () => {
     workspace.setDisposition("hidden");
 
     expect(predicateSql(workspace.pullGraphNode(count))).toBe("_dataset = 'plate-a'");
-    expect(workspace.getLasso(scatter)?.rowIds).toEqual([rowIndex(2), rowIndex(5)]);
-    expect(Number(focused)).toBe(9);
     expect(workspace.coordination.readCoordination("focus", "A")).toBe(rowIndex(7));
     expect(workspace.store.state.selectedNodeIds).toEqual([scatter, table]);
     expect(workspace.store.state.explicit[imageViewer]).toBe("staged");
     expect(workspace.store.state.stageTree).toBe(imageViewer);
     expect(workspace.store.state.disposition).toBe("hidden");
-    unregister();
     workspace.dispose();
   });
 

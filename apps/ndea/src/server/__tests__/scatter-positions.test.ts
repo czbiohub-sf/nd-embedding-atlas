@@ -12,6 +12,7 @@ import { existsSync } from "node:fs";
 import { openAnnData } from "@ndea/zarr";
 import { createApp } from "../app.ts";
 import { WorkspaceDocumentStore } from "../workspace.ts";
+import { ObservationSets } from "../observation-sets.ts";
 import { DatasetQuerySession } from "../store.ts";
 import type { DatasetSessionMetadata, ServerSession } from "../state.ts";
 
@@ -52,6 +53,7 @@ async function buildState(): Promise<{ state: ServerSession; server: Server; por
     cropPool: null,
     annotationsSidecarPath: null,
     workspace: WorkspaceDocumentStore.empty(path.join(tmpdir(), `ndea-test-workspace-${crypto.randomUUID()}.json`)),
+    observationSets: new ObservationSets(store),
   };
 
   const meta: DatasetSessionMetadata = {

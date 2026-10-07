@@ -19,6 +19,7 @@ export type ScatterCapabilities =
   | "focus-coordination"
   | "view-coordination"
   | "filter-coordination"
+  | "color-coordination"
   | "schema-mutation"
   | "gpu-device"
   | "wasm-bitmap";
@@ -82,11 +83,9 @@ export interface FocusedPointMeta {
 export interface ScatterSession {
   readonly state: {
     readonly metadata: Metadata;
-    readonly focusedRowIndex: RowIndex | null;
     readonly trajectories: Readonly<Record<string, TrajectoryData | null>>;
   };
   readonly actions: {
-    setFocus(rowIndex: RowIndex | null): void;
     refreshMetadata(): Promise<void>;
     setTrajectory(data: TrajectoryData | null): void;
     setTrajectoryTIndex(key: string, t: number): void;
@@ -129,6 +128,5 @@ export interface ScatterServices {
   };
   isReconnectError(error: Error): boolean;
   onDeviceLost(listener: (info: GPUDeviceLostInfo) => void): () => void;
-  createCheckpoint(host: unknown): string | null;
   bodyHeaderElement(host: unknown): HTMLElement;
 }

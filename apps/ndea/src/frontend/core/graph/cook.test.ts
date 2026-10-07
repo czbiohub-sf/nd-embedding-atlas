@@ -20,14 +20,12 @@ describe("SDK compute graph adapter", () => {
     const inputs: GraphPortValueInputs = new Map([
       ["predicate", [{ kind: "pred", sql: "x > 2" }]],
       ["rows", [{ kind: "sel", sql: "__row_index__ IN (2, 5)", rowIds: [rowIndex(2), rowIndex(5)] }]],
-      ["focus", [{ kind: "focus", rowIndex: rowIndex(5) }]],
     ]);
 
     expect(toNodeComputeInputs(inputs)).toEqual(
       new Map([
         ["predicate", ["x > 2"]],
         ["rows", [[rowIndex(2), rowIndex(5)]]],
-        ["focus", [rowIndex(5)]],
       ]),
     );
   });

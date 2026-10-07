@@ -1,19 +1,28 @@
 /// <reference types="bun" />
 import { describe, expect, test } from "bun:test";
 
+import type { FilterClause } from "@ndea/protocol";
 import { publishChartFilter } from "./routing";
 
 describe("chart filter routing", () => {
   test("publishChartFilter publishes and clears the chart facet", () => {
-    const calls: string[] = [];
+    const calls: unknown[] = [];
     const host = {
       filter: {
-        publish: (facet: string, sql: string) => calls.push(`publish:${facet}:${sql}`),
-        clear: (facet: string) => calls.push(`clear:${facet}`),
+        publish: (facet: string, clause: FilterClause) => {
+          calls.push(["publish", facet, clause]);
+        },
+        clear: (facet: string) => {
+          calls.push(["clear", facet]);
+        },
       },
     };
-    publishChartFilter(host, "col = 'A'");
+    const clause: FilterClause = { op: "eq", column: "col", value: "A" };
+    publishChartFilter(host, clause);
     publishChartFilter(host, null);
-    expect(calls).toEqual(["publish:chart:col = 'A'", "clear:chart"]);
+    expect(calls).toEqual([
+      ["publish", "chart", clause],
+      ["clear", "chart"],
+    ]);
   });
 });

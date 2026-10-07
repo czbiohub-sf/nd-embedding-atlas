@@ -17,7 +17,6 @@ import {
   type Metadata,
   type NdeaProtocol,
   ObsInfoSchema,
-  SelectionPublishResponseSchema,
   TrajectoryResponseSchema,
   VarColumnBodySchema,
   VarColumnResponseSchema,
@@ -138,7 +137,7 @@ describe("shared HTTP response DTOs", () => {
     expect(ExportDirectoryResponseSchema.parse(exportDir)).toEqual(exportDir);
   });
 
-  test("preserves var and selection responses", () => {
+  test("preserves var responses", () => {
     expect(VarNamesResponseSchema.parse({ names: ["CD3D", "CD3E"] })).toEqual({ names: ["CD3D", "CD3E"] });
     expect(VarLayersResponseSchema.parse({ layers: ["X", "counts"] })).toEqual({ layers: ["X", "counts"] });
     expect(
@@ -154,11 +153,6 @@ describe("shared HTTP response DTOs", () => {
         column: "__var_CD3D_X__",
       }),
     ).toEqual({ status: "ready", column: "__var_CD3D_X__" });
-    expect(SelectionPublishResponseSchema.parse({ ok: true, table: "sel_node_1", count: 3 })).toEqual({
-      ok: true,
-      table: "sel_node_1",
-      count: 3,
-    });
   });
 
   test("rejects malformed payloads used by production fetch paths", () => {
@@ -173,7 +167,6 @@ describe("shared HTTP response DTOs", () => {
       VarLayersResponseSchema.safeParse({ layers: "X" }),
       VarColumnResponseSchema.safeParse({ task_id: "x" }),
       VarColumnStatusResponseSchema.safeParse({ status: "done", column: "x" }),
-      SelectionPublishResponseSchema.safeParse({ ok: true, table: "sel", count: -1 }),
     ];
 
     for (const result of malformed) {
