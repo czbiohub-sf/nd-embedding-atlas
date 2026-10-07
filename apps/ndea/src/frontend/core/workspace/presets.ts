@@ -26,7 +26,6 @@ export function seedAnnotate(ws: Workspace): void {
   for (const nodeId of [table, scatter, annotate, imageViewer, gallery]) {
     ws.coordination.assignScope(nodeId, "focus", "A");
   }
-  ws.setDisposition("hidden"); // opens on Stage with the Canvas hidden (R10)
   ws.selectNode(table);
 }
 

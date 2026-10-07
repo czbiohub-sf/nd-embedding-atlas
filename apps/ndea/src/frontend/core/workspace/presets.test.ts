@@ -99,10 +99,10 @@ describe("seedAnnotate", () => {
     expect(ws.store.state.selectedNodeId).toBe(byType.table);
   });
 
-  test("opens to Stage with the Canvas hidden (R10)", () => {
+  test("a fixed-preset build opens the annotate preset on the Stage (R10)", () => {
     const ws = makeWs();
     resolvePreset("annotate")!(ws);
-    expect(ws.store.state.disposition).toBe("hidden");
+    ws.setDisposition("hidden"); // what WorkspaceProvider sets when the editor is compiled out
     // The five stageable views tile; obs/wrangle/count/cache stay off-stage.
     const staged = new Set<string>(ws.stagedIds().map((id) => ws.store.state.nodes[id].definitionRef.nodeTypeId));
     for (const t of ["scatter", "table", "annotate", "image-viewer", "gallery"]) expect(staged.has(t)).toBe(true);

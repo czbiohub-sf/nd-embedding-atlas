@@ -7,8 +7,9 @@
  * only chrome bar: identity · engine · disposition control · hints · ws LED.
  */
 
+import type { WorkspaceSnapshot } from "@ndea/protocol";
 import { useSelector } from "@tanstack/react-store";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 import { NdHud, NdLed } from "@/components/node-workspace/nd-primitives";
 import { NdBreadcrumb } from "@/components/node-workspace/nd-breadcrumb";
@@ -23,12 +24,14 @@ import { WorkspaceCanvas } from "./canvas/WorkspaceCanvas";
 import { ND_TIMING } from "./constants";
 import type { AppNodeLibrary } from "@/core/node/library";
 import { StagePane, stageHasContent } from "./stage/StagePane";
+import { fetchWorkspaceSnapshot } from "./sync";
 import {
   useTelemetrySelector,
   useWorkspace,
   useWorkspacePersistence,
   useWorkspaceSelector,
   WorkspaceProvider,
+  type WorkspacePersistenceState,
 } from "./workspace-context";
 import type { GhostState } from "./workspace-store";
 
@@ -228,23 +231,21 @@ export function workspaceSurfacePolicy(
   });
 }
 
-function RecoveryWorkspaceSurface({ persistence }: { persistence: ReturnType<typeof useWorkspacePersistence> }) {
+function RecoveryWorkspaceSurface({ persistence }: { persistence: WorkspacePersistenceState }) {
   return (
     <div className="fixed inset-0 grid place-items-center overflow-hidden bg-background p-8 select-none">
       <div
         role="alert"
         className="max-w-xl rounded-md border border-warning/60 bg-card p-4 font-mono text-xs shadow-xl"
       >
-        <div className="mb-2 font-semibold text-warning">Workspace opened read-only for recovery</div>
-        <div>stage: {persistence.stage ?? "unknown"}</div>
-        {persistence.backupKey ? <div>backup: {persistence.backupKey}</div> : null}
+        <div className="mb-2 font-semibold text-warning">Workspace opened read-only</div>
         {persistence.errors.map((error) => (
           <div key={error} className="mt-2 break-words text-text-muted">
             {error}
           </div>
         ))}
         <div className="mt-3 text-text-muted">
-          Authoring controls, node bodies, autosave, and migration rewrites are disabled.
+          Edits are disabled and nothing is saved. Fix or remove the workspace file, then restart ndea view.
         </div>
       </div>
     </div>
@@ -447,9 +448,28 @@ function WorkspaceFrame() {
   return <WritableWorkspaceFrame policy={policy} />;
 }
 
+/** One read: the Workspace is built once from this snapshot; `WorkspaceSync` tracks it afterwards. */
+function useInitialWorkspaceSnapshot(): { snapshot: WorkspaceSnapshot } | { error: string } | null {
+  const [loaded, setLoaded] = useState<{ snapshot: WorkspaceSnapshot } | { error: string } | null>(null);
+  useEffect(() => {
+    let live = true;
+    fetchWorkspaceSnapshot().then(
+      (snapshot) => live && setLoaded({ snapshot }),
+      (error: unknown) => live && setLoaded({ error: error instanceof Error ? error.message : String(error) }),
+    );
+    return () => {
+      live = false;
+    };
+  }, []);
+  return loaded;
+}
+
 export function WorkspaceShell({ nodeLibrary }: { nodeLibrary: AppNodeLibrary }) {
+  const loaded = useInitialWorkspaceSnapshot();
+  if (!loaded) return null;
+  if ("error" in loaded) return <RecoveryWorkspaceSurface persistence={{ mode: "recovery", errors: [loaded.error] }} />;
   return (
-    <WorkspaceProvider nodeLibrary={nodeLibrary}>
+    <WorkspaceProvider nodeLibrary={nodeLibrary} snapshot={loaded.snapshot}>
       <WorkspaceFrame />
     </WorkspaceProvider>
   );

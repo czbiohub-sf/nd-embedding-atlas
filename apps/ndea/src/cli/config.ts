@@ -10,6 +10,7 @@ import { existsSync } from "node:fs";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { parse as parseYaml } from "yaml";
 import type { DatasetChannelConfig } from "../server/state.ts";
+import { defaultWorkspacePath } from "./lib/paths.ts";
 
 // ─── Public types ───────────────────────────────────────────────────────────
 
@@ -46,6 +47,8 @@ export interface LaunchConfig {
   preset?: string;
   pluginPaths?: string[];
   pluginPathRoot?: string;
+  /** Absolute path of the workspace document file. */
+  workspace: string;
 }
 
 export interface LaunchOverrides {
@@ -55,6 +58,8 @@ export interface LaunchOverrides {
   noStatic: boolean;
   obsColumns?: string[];
   preset?: string;
+  /** Workspace file; defaults to `defaultWorkspacePath(datasets)`. */
+  workspace?: string;
 }
 
 // ─── Detection ──────────────────────────────────────────────────────────────
@@ -126,6 +131,9 @@ export function resolveLaunchConfig(project: ParsedProjectConfig, overrides: Lau
     preset: overrides.preset ?? project.preset,
     pluginPaths: project.pluginPaths,
     pluginPathRoot: project.pluginPathRoot,
+    workspace: overrides.workspace
+      ? resolve(overrides.workspace)
+      : defaultWorkspacePath(project.datasets.map((dataset) => dataset.path)),
   };
 }
 

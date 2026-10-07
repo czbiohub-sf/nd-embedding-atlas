@@ -151,6 +151,7 @@ const HANDLERS: Record<string, Handler> = {
   "var-column/status": handleVarColumnStatusWs,
   "export/start": handleExportStartWs,
   "export/status": handleExportStatusWs,
+  "workspace/watch": handleWorkspaceWatchWs,
 };
 
 // ─── Helpers: synthetic Request for reusing HTTP handlers ───────────────────
@@ -213,6 +214,14 @@ function handleEmbeddingsStatusWs(ws: WS, id: number, frame: Frame): void {
       sendData(ws, id, embeddingPayload(ev));
     }
   });
+  socketSubs.get(ws)?.set(id, dispose);
+}
+
+// ─── workspace/watch ────────────────────────────────────────────────────────
+
+/** Push every accepted workspace revision with its ops until unsubscribed. */
+function handleWorkspaceWatchWs(ws: WS, id: number): void {
+  const dispose = ws.data.state.workspace.watch((change) => sendData(ws, id, { ...change }));
   socketSubs.get(ws)?.set(id, dispose);
 }
 

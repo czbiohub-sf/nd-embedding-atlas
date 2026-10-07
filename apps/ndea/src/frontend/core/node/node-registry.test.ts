@@ -25,7 +25,7 @@ describe("native node catalog fitness functions", () => {
     expect(batch.definitions.map(({ ref }) => String(ref.nodeTypeId))).toEqual([
       "obs",
       "dataset",
-      "transform-filter",
+      "filter",
       "wrangle",
       "annotate",
       "count",
@@ -76,7 +76,7 @@ describe("native node catalog fitness functions", () => {
     expect(paletteTypes).not.toContain("selection");
     expect(paletteTypes).not.toContain("fov");
     expect(nativeNodeLibrary.getCurrentSpec("threshold")).toBeUndefined();
-    expect(nativeNodeLibrary.getCurrentSpec("transform-filter")?.inPalette).toBe(false);
+    expect(nativeNodeLibrary.getCurrentSpec("transform-filter")).toBeUndefined();
   });
 
   test("Workspace order and palette are tuple-derived without a second list", () => {

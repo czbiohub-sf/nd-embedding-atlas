@@ -1,0 +1,289 @@
+/**
+ * Browser half of the server-owned workspace document.
+ *
+ * Local edits apply to the `Workspace` store immediately. After a quiet
+ * period the sync diffs the committed document against the last
+ * server-acknowledged one and PATCHes the difference. A stale revision (409)
+ * rebases: pending ops replay on the server document and resend. Remote
+ * revisions from `workspace/watch` rebase pending local ops the same way.
+ */
+
+import { migrateNodeConfig, type NodeConfigSnapshot } from "@ndea/sdk";
+import {
+  WorkspaceConflictSchema,
+  WorkspacePatchAcceptedSchema,
+  WorkspaceProblemSchema,
+  WorkspaceSnapshotSchema,
+  type JsonPatchOp,
+  type WorkspaceChange,
+  type WorkspaceSnapshot,
+} from "@ndea/protocol";
+import { createPatch } from "rfc6902";
+
+import { validateGraphRuntimeTopology } from "@/core/graph/runtime-session";
+import type { AppNodeLibrary } from "@/core/node/library";
+import {
+  createWorkspaceAppNodeLibrary,
+  resolveWorkspaceNodeAssets,
+  type WorkspaceAppNodeLibrary,
+} from "@/core/node-asset/resolver";
+import { parseWorkspaceNodeAssetRecords } from "@/core/node-asset/schema";
+import {
+  applyWorkspaceOps,
+  parseWorkspaceDocument,
+  toWorkspaceDocument,
+  withWorkspaceSession,
+  workspaceSessionOf,
+  type WorkspaceDocument,
+  type WorkspaceSession,
+} from "./document";
+import type { WorkspaceDocumentState } from "./types";
+import type { Workspace } from "./workspace-store";
+
+/** Collapses a drag or typing burst into one revision. */
+const SYNC_DEBOUNCE_MS = 500;
+
+export const EMPTY_WORKSPACE_SESSION: WorkspaceSession = {
+  selectedNodeId: null,
+  selectedNodeIds: [],
+  selectedEdgeId: null,
+  claimed: null,
+  graphPath: null,
+  disposition: "strip",
+};
+
+export interface WorkspaceTransport {
+  patch(baseRevision: number, ops: JsonPatchOp[], clientId: string): Promise<PatchOutcome>;
+  watch(onChange: (change: WorkspaceChange) => void, onLost: () => void): () => void;
+  snapshot(): Promise<WorkspaceSnapshot>;
+}
+
+export type PatchOutcome =
+  | { kind: "accepted"; revision: number }
+  | { kind: "conflict"; snapshot: WorkspaceSnapshot }
+  | { kind: "invalid"; errors: string[] };
+
+/**
+ * Validate a server document against this session's node catalog: config
+ * migrations and runtime topology. Server-side checks are structural only.
+ */
+export function decodeWorkspaceDocument(
+  value: unknown,
+  nodeLibrary: AppNodeLibrary,
+  session: WorkspaceSession = EMPTY_WORKSPACE_SESSION,
+): { ok: true; state: WorkspaceDocumentState } | { ok: false; errors: string[] } {
+  const parsed = parseWorkspaceDocument(value);
+  if (!parsed.ok) return { ok: false, errors: parsed.issues.map((issue) => `${issue.pointer}: ${issue.detail}`) };
+  try {
+    let records = parseWorkspaceNodeAssetRecords(parsed.value.nodeAssets);
+    let library = nodeLibrary;
+    if (isWorkspaceAppNodeLibrary(nodeLibrary)) {
+      const base = nodeLibrary.baseLibrary();
+      const resolution = resolveWorkspaceNodeAssets(base, nodeLibrary.assetSnapshot().assets, records);
+      library = createWorkspaceAppNodeLibrary(base, resolution.snapshot);
+      records = resolution.records;
+    }
+    const state = withWorkspaceSession(
+      { ...parsed.value, nodeAssets: records, nodes: decodeConfigs(parsed.value, library) },
+      session,
+    );
+    validateGraphRuntimeTopology(state, library);
+    return { ok: true, state };
+  } catch (error) {
+    return { ok: false, errors: [error instanceof Error ? error.message : String(error)] };
+  }
+}
+
+export class WorkspaceSync {
+  private readonly workspace: Workspace;
+  private readonly transport: WorkspaceTransport;
+  private readonly onFailure: (errors: string[]) => void;
+  private readonly clientId = crypto.randomUUID();
+  private acked: { revision: number; document: WorkspaceDocument | null };
+  private timer: ReturnType<typeof setTimeout> | undefined;
+  private inflight: Promise<void> | null = null;
+  private stopped = false;
+  private disposers: (() => void)[] = [];
+
+  constructor(
+    workspace: Workspace,
+    initial: { revision: number; document: WorkspaceDocument | null },
+    transport: WorkspaceTransport,
+    onFailure: (errors: string[]) => void,
+  ) {
+    this.workspace = workspace;
+    this.acked = initial;
+    this.transport = transport;
+    this.onFailure = onFailure;
+  }
+
+  start(): void {
+    const sub = this.workspace.store.subscribe(() => this.schedule());
+    this.disposers.push(() => sub.unsubscribe());
+    this.disposers.push(
+      this.transport.watch(
+        (change) => void this.onRemote(change),
+        () => void this.resync(),
+      ),
+    );
+    // A seeded preset (revision 0) or edits made before start still need a first push.
+    this.schedule();
+  }
+
+  dispose(): void {
+    this.stopped = true;
+    clearTimeout(this.timer);
+    for (const dispose of this.disposers.splice(0)) dispose();
+  }
+
+  /** Send pending edits now; resolves when the server has acknowledged them. */
+  async flush(): Promise<void> {
+    clearTimeout(this.timer);
+    while (this.inflight) await this.inflight;
+    const ops = this.pendingOps();
+    if (ops.length === 0 || this.stopped) return;
+    this.inflight = this.send(ops).finally(() => (this.inflight = null));
+    await this.inflight;
+  }
+
+  private schedule(): void {
+    if (this.stopped) return;
+    clearTimeout(this.timer);
+    this.timer = setTimeout(() => void this.flush(), SYNC_DEBOUNCE_MS);
+  }
+
+  private local(): WorkspaceDocument {
+    return toWorkspaceDocument(this.workspace.store.state);
+  }
+
+  private pendingOps(): JsonPatchOp[] {
+    const local = this.local();
+    if (this.acked.document === null) return [{ op: "add", path: "", value: local }];
+    return createPatch(this.acked.document, local);
+  }
+
+  private async send(ops: JsonPatchOp[]): Promise<void> {
+    const sent = this.local();
+    const outcome = await this.transport.patch(this.acked.revision, ops, this.clientId);
+    if (outcome.kind === "accepted") {
+      this.acked = { revision: outcome.revision, document: sent };
+      return;
+    }
+    if (outcome.kind === "conflict") {
+      this.rebaseOnto(outcome.snapshot.revision, outcome.snapshot.document, ops);
+      this.schedule();
+      return;
+    }
+    this.fail(outcome.errors);
+  }
+
+  private async onRemote(change: WorkspaceChange): Promise<void> {
+    if (this.stopped || change.clientId === this.clientId) return;
+    while (this.inflight) await this.inflight;
+    if (change.revision <= this.acked.revision) return;
+    if (change.revision !== this.acked.revision + 1) return this.resync();
+    const server = applyWorkspaceOps(this.acked.document, change.ops);
+    if (!server.ok) return this.resync();
+    this.rebaseOnto(change.revision, server.value, this.pendingOps());
+  }
+
+  /** Re-read the authoritative snapshot after a gap or a lost connection. */
+  private async resync(): Promise<void> {
+    if (this.stopped) return;
+    while (this.inflight) await this.inflight;
+    const snapshot = await this.transport.snapshot();
+    if (snapshot.revision === this.acked.revision) return;
+    this.rebaseOnto(snapshot.revision, snapshot.document, this.pendingOps());
+  }
+
+  /**
+   * Adopt `document` at `revision` as acknowledged, replay `pending` on top,
+   * and load the result. If the replay no longer validates, local edits are
+   * dropped in favour of the server document.
+   */
+  private rebaseOnto(revision: number, document: unknown, pending: JsonPatchOp[]): void {
+    const session = workspaceSessionOf(this.workspace.store.state);
+    const server = decodeWorkspaceDocument(document, this.workspace.nodeLibrary, session);
+    if (!server.ok) return this.fail(server.errors);
+    this.acked = { revision, document: toWorkspaceDocument(server.state) };
+
+    const replayed = pending.length > 0 ? applyWorkspaceOps(this.acked.document, pending) : null;
+    const rebased = replayed?.ok ? decodeWorkspaceDocument(replayed.value, this.workspace.nodeLibrary, session) : null;
+    if (replayed && !rebased?.ok) {
+      console.warn("[workspace] local edits conflicted with a newer revision and were discarded");
+    }
+    this.workspace.applyDocument(rebased?.ok ? rebased.state : server.state);
+  }
+
+  private fail(errors: string[]): void {
+    this.dispose();
+    this.onFailure(errors);
+  }
+}
+
+/** HTTP + WebSocket transport against the running ndea server. */
+export function createHttpWorkspaceTransport(ws: {
+  subscribe(
+    method: "workspace/watch",
+    req: Record<string, never>,
+    onData: (change: WorkspaceChange) => void,
+    onError?: (error: Error) => void,
+  ): { unsubscribe(): void };
+}): WorkspaceTransport {
+  return {
+    async patch(baseRevision, ops, clientId) {
+      const res = await fetch("/api/workspace", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ baseRevision, ops, clientId }),
+      });
+      const body: unknown = await res.json();
+      if (res.ok) return { kind: "accepted", revision: WorkspacePatchAcceptedSchema.parse(body).revision };
+      if (res.status === 409) return { kind: "conflict", snapshot: WorkspaceConflictSchema.parse(body) };
+      const problem = WorkspaceProblemSchema.safeParse(body);
+      return {
+        kind: "invalid",
+        errors: problem.success
+          ? problem.data.errors.map((issue) => `${issue.pointer}: ${issue.detail}`)
+          : [`workspace save failed: HTTP ${res.status}`],
+      };
+    },
+    watch(onChange, onLost) {
+      let sub: { unsubscribe(): void };
+      // The socket reconnects on its own; re-subscribe and re-read whatever was missed.
+      const open = () => {
+        sub = ws.subscribe("workspace/watch", {}, onChange, () => {
+          open();
+          onLost();
+        });
+      };
+      open();
+      return () => sub.unsubscribe();
+    },
+    snapshot: fetchWorkspaceSnapshot,
+  };
+}
+
+export async function fetchWorkspaceSnapshot(): Promise<WorkspaceSnapshot> {
+  const res = await fetch("/api/workspace");
+  if (!res.ok) throw new Error(`workspace load failed: HTTP ${res.status}`);
+  return WorkspaceSnapshotSchema.parse(await res.json());
+}
+
+function decodeConfigs(document: WorkspaceDocument, nodeLibrary: AppNodeLibrary): WorkspaceDocument["nodes"] {
+  const nodes: WorkspaceDocument["nodes"] = {};
+  for (const [key, node] of Object.entries(document.nodes)) {
+    const contract = nodeLibrary.getSpecExact(node.definitionRef)?.definition.config;
+    if (node.config === undefined || !nodeLibrary.getSpecExact(node.definitionRef)) {
+      nodes[key] = node;
+      continue;
+    }
+    if (!contract) throw new Error(`node "${node.id}" does not accept configuration`);
+    nodes[key] = { ...node, config: migrateNodeConfig(contract, node.config) as NodeConfigSnapshot };
+  }
+  return nodes;
+}
+
+function isWorkspaceAppNodeLibrary(nodeLibrary: AppNodeLibrary): nodeLibrary is WorkspaceAppNodeLibrary {
+  return "assetSnapshot" in nodeLibrary && "baseLibrary" in nodeLibrary && "replaceAssetSnapshot" in nodeLibrary;
+}

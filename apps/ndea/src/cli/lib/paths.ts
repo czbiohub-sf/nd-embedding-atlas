@@ -7,6 +7,7 @@
  *   ~/.ndea/current-version                  : plain-text pointer (tag + sha256)
  *   ~/.ndea/locks/install.lock               : install/update mutex
  *   ~/.local/bin/ndea                        : symlink → versions/<tag>/ndea
+ *   ~/.ndea/workspaces/<key>.json            : default workspace document per dataset set
  *
  * The compiled binary embeds libduckdb; the preloader extracts it to
  * ~/.cache/ndea/<version>/ on first run. No sidecar file, no wrapper.
@@ -52,6 +53,16 @@ export function locksDir(): string {
 /** `~/.ndea/logs`: log directory for future telemetry / install traces. */
 export function logsDir(): string {
   return resolve(stateDir(), "logs");
+}
+
+/**
+ * `~/.ndea/workspaces/<key>.json`: default workspace file for a set of
+ * dataset paths. The key is order-independent, so the same datasets reopen
+ * the same workspace.
+ */
+export function defaultWorkspacePath(datasetPaths: readonly string[]): string {
+  const key = new Bun.CryptoHasher("sha256").update(datasetPaths.toSorted().join("\n")).digest("hex").slice(0, 16);
+  return resolve(stateDir(), "workspaces", `${key}.json`);
 }
 
 /** `~/.ndea/locks/install.lock`: file backing the install/update flock. */

@@ -12,13 +12,13 @@ const valid: NodeAssetDefinition = {
   title: "High quality",
   dependencies: [
     { kind: "node", definitionRef: exactNodeTypeRef("dataset", "1.0.0") },
-    { kind: "node", definitionRef: exactNodeTypeRef("transform-filter", "1.0.0") },
+    { kind: "node", definitionRef: exactNodeTypeRef("example/threshold", "1.0.0") },
   ],
   nodes: [
     { id: "source", definitionRef: exactNodeTypeRef("dataset", "1.0.0") },
     {
       id: "filter",
-      definitionRef: exactNodeTypeRef("transform-filter", "1.0.0"),
+      definitionRef: exactNodeTypeRef("example/threshold", "1.0.0"),
       config: { version: nodeConfigVersion(1), value: { threshold: 0.5 } },
     },
   ],

@@ -15,6 +15,8 @@ import { handleConfig } from "./routes/config.ts";
 import { handleCrop } from "./routes/crops.ts";
 import { handleEmbeddingStatus, handleLoadEmbedding } from "./routes/embeddings.ts";
 import { handleExport, handleExportStatus, handleGetExportDir } from "./routes/export.ts";
+import { handleFilter } from "./routes/filter.ts";
+import { handleWorkspaceGet, handleWorkspacePatch } from "./routes/workspace.ts";
 import { handleHealth, handleObsBatch, handleObsDetail, handleObsInfo } from "./routes/obs.ts";
 import {
   handleScatterCategories,
@@ -141,6 +143,18 @@ function routeCategorize({ req, pathname, method, state }: ApiRouteContext): Api
   return null;
 }
 
+function routeFilter({ req, pathname, method, state }: ApiRouteContext): ApiRouteResult {
+  if (pathname === "/api/filter" && method === "POST") return handleFilter(req, state);
+  return null;
+}
+
+function routeWorkspace({ req, pathname, method, state }: ApiRouteContext): ApiRouteResult {
+  if (pathname !== "/api/workspace") return null;
+  if (method === "GET") return handleWorkspaceGet(state);
+  if (method === "PATCH") return handleWorkspacePatch(req, state);
+  return null;
+}
+
 function routeAnnotationColumns({ req, pathname, method, state }: ApiRouteContext): ApiRouteResult {
   if (pathname === "/api/annotations/columns" && method === "GET") {
     return handleListAnnotationColumns(state);
@@ -205,6 +219,8 @@ const API_ROUTE_DISPATCHERS: readonly ApiRouteDispatcher[] = [
   routeVarMetadata,
   routeVarColumn,
   routeCategorize,
+  routeFilter,
+  routeWorkspace,
   routeAnnotationColumns,
   routeAnnotationValues,
   routeAnnotationPersistence,

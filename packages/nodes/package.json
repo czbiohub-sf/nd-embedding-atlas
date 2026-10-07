@@ -12,6 +12,7 @@
     "./charts": "./src/charts/index.ts",
     "./count": "./src/count/index.ts",
     "./dataset": "./src/dataset/index.ts",
+    "./filter": "./src/filter/index.ts",
     "./gallery": "./src/gallery/index.ts",
     "./image-viewer": "./src/image-viewer/index.ts",
     "./query": "./src/query/index.ts",

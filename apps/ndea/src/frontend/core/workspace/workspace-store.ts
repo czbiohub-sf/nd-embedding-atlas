@@ -555,6 +555,63 @@ export class Workspace {
     }
   }
 
+  /**
+   * Reconcile this live Workspace to `next`, a remote or rebased revision, with
+   * the same runtime primitives the local mutators use. Nodes and edges whose
+   * records are unchanged stay registered, so runtime-only state (lassos,
+   * cache pins, emitted focus) survives edits that do not touch them.
+   * Assumes `next` passed `decodeWorkspaceDocument`.
+   */
+  applyDocument(next: WorkspaceDocumentState): void {
+    const prev = this.store.state;
+    if (!sameJson(prev.nodeAssets, next.nodeAssets)) {
+      // Asset records change node resolution wholesale; re-resolve from scratch.
+      for (const id of Object.keys(prev.nodes).toReversed()) this.graphRuntime.removeNode(id);
+      this.documentStore.setState(() => EMPTY);
+      this.loadDocument(next);
+      return;
+    }
+    const retyped = (id: string) => {
+      const before = prev.nodes[id];
+      const after = next.nodes[id];
+      return (
+        !before || !after || !sameJson(before.definitionRef, after.definitionRef) || before.parent !== after.parent
+      );
+    };
+    const reregistered = new Set(Object.keys({ ...prev.nodes, ...next.nodes }).filter(retyped));
+
+    for (const [id, edge] of Object.entries(prev.edges)) {
+      if (!sameJson(edge, next.edges[id])) this.graphRuntime.disconnect(edge, prev.nodes);
+    }
+    for (const id of Object.keys(prev.nodes)) if (reregistered.has(id)) this.graphRuntime.removeNode(id);
+    for (const [id, node] of Object.entries(next.nodes)) {
+      if (reregistered.has(id)) this.graphRuntime.registerNode(node);
+      else if (!sameJson(prev.nodes[id], node)) this.graphRuntime.recookNode(node);
+    }
+    for (const id of reregistered) {
+      if (next.nodes[id]?.definitionRef.nodeTypeId === "subnet") this.graphRuntime.connectSubnetSeam(id);
+    }
+    for (const [id, edge] of Object.entries(next.edges)) {
+      const touched = reregistered.has(edge.from) || reregistered.has(edge.to);
+      if (touched || !sameJson(edge, prev.edges[id])) this.graphRuntime.connect(edge, next.nodes);
+    }
+    for (const id of Object.keys(next.nodes)) {
+      const before = reregistered.has(id) ? {} : (prev.flags[id] ?? {});
+      const after = next.flags[id] ?? {};
+      if (Boolean(before.bypass) !== Boolean(after.bypass)) {
+        this.graphRuntime.setBypass(id, Boolean(after.bypass));
+        if (next.nodes[id].definitionRef.nodeTypeId === "subnet") {
+          this.graphRuntime.setBypass(`${id}-out`, Boolean(after.bypass));
+        }
+      }
+      if (Boolean(before.off) !== Boolean(after.off)) this.graphRuntime.markDirty(id);
+    }
+
+    this.documentStore.setState(() => next);
+    this.nodeSeq = Math.max(this.nodeSeq, maxSeq(Object.keys(next.nodes)));
+    this.edgeSeq = Math.max(this.edgeSeq, maxSeq(Object.keys(next.edges)));
+  }
+
   /* ── presentation actions ─────────────────────────────────────────── */
 
   setPosition(id: string, pos: WorkspaceNodePosition): void {
@@ -1055,4 +1112,8 @@ function maxSeq(ids: readonly string[]): number {
     if (m) max = Math.max(max, Number(m[1]));
   }
   return max;
+}
+
+function sameJson(a: unknown, b: unknown): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
 }

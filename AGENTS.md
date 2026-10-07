@@ -22,6 +22,10 @@ Interactive browser-based Node Workspace linking AI embeddings to source 5D
 
 ```text
 apps/ndea/          CLI, server, frontend, and single-binary build
+packages/graph/     Framework-neutral graph evaluation engine
+packages/nodes/     Built-in node definitions and React bodies
+packages/ochre/     Color, colormap, and TypeGPU helpers
+packages/ui/        Shared shadcn/Base UI controls
 packages/protocol/  Shared request and response Zod schemas
 packages/sdk/       Node authoring and host contracts
 packages/zarr/      Bun-backed AnnData, MuData, and OME-Zarr I/O
@@ -32,8 +36,11 @@ scripts/             Workspace tooling
 Workspace dependencies flow in one direction:
 
 ```text
-apps/ndea  ──→  @ndea/sdk, @ndea/protocol, @ndea/zarr
-@ndea/sdk  ──→  @ndea/protocol
+apps/ndea    ──→  every @ndea/* package
+@ndea/nodes  ──→  @ndea/sdk, @ndea/protocol, @ndea/ochre, @ndea/ui
+@ndea/graph  ──→  @ndea/sdk
+@ndea/sdk    ──→  @ndea/protocol
+@ndea/ui     ──→  @ndea/ochre
 ```
 
 Shared packages must not import app code. Import only public `@ndea/*`
@@ -58,7 +65,12 @@ entrypoints across workspaces.
   `/data/query` remains the REST test and curl fallback.
 - Other WebSocket paths use the framed `{ _id, _type }` ndea protocol.
 - REST routes cover embeddings, observations, scatter data, variables,
-  categorization, annotations, exports, crops, and plugin bootstrap.
+  categorization, annotations, exports, crops, filtering, the workspace
+  document, and plugin bootstrap.
+- `WorkspaceDocumentStore` (`server/workspace.ts`) owns the session's one
+  revisioned workspace document and its file. `PATCH /api/workspace` applies
+  RFC 6902 ops against a base revision; `workspace/watch` pushes accepted
+  revisions.
 - `EmbeddingStore` owns one DuckDB connection. Base tables, the `dataset` view,
   temporary selections, and Mosaic preaggregations share that connection.
 
@@ -83,8 +95,11 @@ entrypoints across workspaces.
   views.
 - `DatasetSessionProvider` owns metadata, trajectories, query infrastructure,
   and the session-local runtime manager.
-- Workspace owns graph transactions, persistence, Canvas, Stage, and Body
-  placement. Node code reaches cross-view coordination through `NodeHost`.
+- Workspace owns graph transactions, Canvas, Stage, and Body placement in the
+  browser. `WorkspaceSync` diffs its committed state against the server's
+  acknowledged revision and PATCHes the difference; remote revisions reconcile
+  through `Workspace.applyDocument`. Node code reaches cross-view coordination
+  through `NodeHost`.
 
 ## Commands
 
@@ -156,6 +171,11 @@ the selected preset.
   `CREATE TABLE`, `DROP TABLE IF EXISTS`, and `DROP SCHEMA` statements.
 - **DuckDB views:** `ALTER TABLE obs_base ADD COLUMN` invalidates the `dataset`
   view schema. Rebuild it through `EmbeddingStore._rebuildView()`.
+- **Workspace authority:** The server document is the only persisted workspace.
+  Never write workspace state to `localStorage`. Session state (selection,
+  claim, subnet path, canvas disposition) stays out of the document; add new
+  editor-only fields to `SESSION_FIELDS` in `workspace/document.ts`. The file
+  format accepts only its exact version; there are no migrations.
 - **Workers:** `new URL("./worker.ts", import.meta.url)` must work in development
   and compiled binaries. Bun embeds workers automatically.
 - **Static files:** Development reads `dist/frontend/`; compiled binaries read

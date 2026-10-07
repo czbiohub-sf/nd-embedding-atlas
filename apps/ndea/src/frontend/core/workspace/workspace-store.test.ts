@@ -11,7 +11,8 @@ import {
 import { predicateSql } from "@/core/graph/cook";
 import { createAppNodeLibrary, createNativeAppNodeLibrary, type AppNodeLibrary } from "@/core/node/library";
 import { createNodeCatalog } from "@/core/plugin/catalog";
-import { fromPersistedDoc, toPersistedDoc } from "./persist";
+import { toWorkspaceDocument, workspaceSessionOf } from "./document";
+import { decodeWorkspaceDocument } from "./sync";
 import { Workspace } from "./workspace-store";
 
 const nativeWorkspaceNodeLibrary = createNativeAppNodeLibrary();
@@ -36,7 +37,7 @@ describe("Workspace graph transactions", () => {
   test("resolves every disposition and explicit placement against exact definition policy", () => {
     const workspace = createWorkspace();
     const stageable = workspace.addNode("scatter", { x: 0, y: 0 });
-    const pinOnly = workspace.addNode("transform-filter", { x: 100, y: 0 });
+    const pinOnly = workspace.addNode("filter", { x: 100, y: 0 });
     const canvasOnly = workspace.addNode("dataset", { x: 200, y: 0 });
 
     expect(workspace.placementOf(stageable)).toBe("staged");
@@ -131,7 +132,8 @@ describe("Workspace graph transactions", () => {
     );
     expect(workspace.store.state).toEqual(before);
     expect(storeChanges).toBe(0);
-    expect(fromPersistedDoc(toPersistedDoc(workspace.store.state), nodeLibrary)).toEqual({
+    const state = workspace.store.state;
+    expect(decodeWorkspaceDocument(toWorkspaceDocument(state), nodeLibrary, workspaceSessionOf(state))).toEqual({
       ok: true,
       state: workspace.store.state,
     });

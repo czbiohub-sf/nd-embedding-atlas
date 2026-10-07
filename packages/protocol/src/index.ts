@@ -10,6 +10,7 @@
  */
 
 import { z } from "zod";
+import type { WorkspaceChange } from "./workspace";
 
 export {
   PLUGIN_BOOTSTRAP_SCHEMA_VERSION,
@@ -47,6 +48,26 @@ export type {
   PluginPlatform,
   SDKVersionRange,
 } from "./plugin";
+export { FilterClauseSchema, FilterRequestSchema, FilterResponseSchema, FilterRowSchema } from "./filter";
+export type { FilterClause, FilterRequest, FilterResponse, FilterRow, FilterValue } from "./filter";
+export {
+  JsonPatchOpSchema,
+  WorkspaceChangeSchema,
+  WorkspaceConflictSchema,
+  WorkspacePatchAcceptedSchema,
+  WorkspacePatchBodySchema,
+  WorkspaceProblemSchema,
+  WorkspaceSnapshotSchema,
+} from "./workspace";
+export type {
+  JsonPatchOp,
+  WorkspaceChange,
+  WorkspaceConflict,
+  WorkspacePatchAccepted,
+  WorkspacePatchBody,
+  WorkspaceProblem,
+  WorkspaceSnapshot,
+} from "./workspace";
 
 // ─── Shared primitives ──────────────────────────────────────────────────────
 
@@ -445,6 +466,10 @@ export interface NdeaProtocol {
   "export/status": {
     req: { task_id: string };
     res: { status: string; output_path?: string; n_obs?: number; error?: string };
+  };
+  "workspace/watch": {
+    req: Record<string, never>;
+    res: WorkspaceChange;
   };
 }
 

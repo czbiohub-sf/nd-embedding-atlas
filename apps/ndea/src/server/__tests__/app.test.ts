@@ -8,6 +8,7 @@
 import { describe, expect, test, afterEach } from "bun:test";
 import type { DuckDBConnection } from "@duckdb/node-api";
 import { join } from "node:path";
+import { tmpdir } from "node:os";
 import {
   ConfigResponseSchema,
   EmbeddingStatusSchema,
@@ -19,6 +20,7 @@ import { DatasetQuerySession } from "../store.ts";
 import { createApp, type CreateAppOptions } from "../app.ts";
 import type { ServerSession, DatasetSessionMetadata } from "../state.ts";
 import type { ServerSocketContext } from "../ws.ts";
+import { WorkspaceDocumentStore } from "../workspace.ts";
 import { buildPluginBootstrap } from "../plugins/bootstrap.ts";
 
 type NdeaServer = ReturnType<typeof createApp>;
@@ -56,6 +58,7 @@ function createMockState(store: DatasetQuerySession): ServerSession {
     obsmLoaders: new Map(),
     cropPool: null,
     annotationsSidecarPath: null,
+    workspace: WorkspaceDocumentStore.empty(join(tmpdir(), `ndea-test-workspace-${crypto.randomUUID()}.json`)),
   };
 }
 

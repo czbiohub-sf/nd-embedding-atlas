@@ -7,6 +7,7 @@ import type { DatasetSessionMetadata, ServerSession } from "../../server/state.t
 import type { LaunchConfig } from "../config.ts";
 import type { PreparedDatasets } from "./datasets.ts";
 import type { PreparedQuerySession } from "./ingest.ts";
+import type { WorkspaceDocumentStore } from "../../server/workspace.ts";
 import { printAnnotationsRestored, printAnnotationsWarning } from "./output.ts";
 
 type PlateMetadataByMount = Map<string, PlateMetaInfo | null>;
@@ -53,6 +54,7 @@ export async function prepareServerSession(
   config: LaunchConfig,
   datasets: PreparedDatasets,
   query: PreparedQuerySession,
+  workspace: WorkspaceDocumentStore,
 ): Promise<PreparedServerSession> {
   const plateMounts = buildPlateMounts(datasets.datasetConfigs, datasets.isMultiDataset);
   const platesByMount = await readPlateMetadata(plateMounts);
@@ -70,6 +72,7 @@ export async function prepareServerSession(
     obsmLoaders: new Map(),
     cropPool: null,
     annotationsSidecarPath: query.cacheEnabled ? null : resolveAnnotationsSidecarPath(config.datasets[0].path),
+    workspace,
   };
   await restoreAnnotations(state);
   return { state, platesByMount };

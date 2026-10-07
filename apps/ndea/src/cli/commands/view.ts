@@ -36,6 +36,9 @@ export default defineCommand({
     preset: option(z.string().optional(), {
       description: "Named preset a shipped build opens (default: annotate)",
     }),
+    workspace: option(z.string().optional(), {
+      description: "Workspace document file (default: ~/.ndea/workspaces/<datasets>.json)",
+    }),
   },
   async handler({ flags, positional }) {
     const paths = positional.filter((p) => p.length > 0);
@@ -51,8 +54,9 @@ export default defineCommand({
     const noStatic = flags["no-static"];
     const obsColumns = parseObsColumns(flags["obs-columns"]);
     const preset = flags.preset && flags.preset.length > 0 ? flags.preset : undefined;
+    const workspace = flags.workspace && flags.workspace.length > 0 ? flags.workspace : undefined;
 
-    const config = await resolveConfig({ paths, port, host, noOpen, noStatic, obsColumns, preset });
+    const config = await resolveConfig({ paths, port, host, noOpen, noStatic, obsColumns, preset, workspace });
 
     try {
       await startup(config);
@@ -77,6 +81,7 @@ interface RawArgs {
   noStatic: boolean;
   obsColumns?: string[];
   preset?: string;
+  workspace?: string;
 }
 
 function parseObsColumns(raw: string | undefined): string[] | undefined {
@@ -89,7 +94,7 @@ function parseObsColumns(raw: string | undefined): string[] | undefined {
 }
 
 async function resolveConfig(raw: RawArgs): Promise<LaunchConfig> {
-  const { paths, port, host, noOpen, noStatic, obsColumns, preset } = raw;
+  const { paths, port, host, noOpen, noStatic, obsColumns, preset, workspace } = raw;
 
   if (paths.length === 1 && isYamlConfig(paths[0])) {
     try {
@@ -102,6 +107,7 @@ async function resolveConfig(raw: RawArgs): Promise<LaunchConfig> {
         noOpen,
         noStatic,
         preset,
+        workspace,
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -126,5 +132,6 @@ async function resolveConfig(raw: RawArgs): Promise<LaunchConfig> {
     noOpen,
     noStatic,
     preset,
+    workspace,
   });
 }

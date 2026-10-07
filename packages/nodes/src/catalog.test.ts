@@ -33,7 +33,6 @@ describe("built-in node definitions", () => {
       scatter: empty,
       subnet: empty,
       table: empty,
-      transformFilter: empty,
       wrangle: empty,
     } as NodeCatalogServices;
 

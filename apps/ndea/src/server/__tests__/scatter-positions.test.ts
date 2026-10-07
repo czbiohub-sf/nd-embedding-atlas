@@ -7,9 +7,11 @@
 
 import { afterEach, describe, expect, test } from "bun:test";
 import path from "node:path";
+import { tmpdir } from "node:os";
 import { existsSync } from "node:fs";
 import { openAnnData } from "@ndea/zarr";
 import { createApp } from "../app.ts";
+import { WorkspaceDocumentStore } from "../workspace.ts";
 import { DatasetQuerySession } from "../store.ts";
 import type { DatasetSessionMetadata, ServerSession } from "../state.ts";
 
@@ -49,6 +51,7 @@ async function buildState(): Promise<{ state: ServerSession; server: Server; por
     obsmLoaders: new Map(),
     cropPool: null,
     annotationsSidecarPath: null,
+    workspace: WorkspaceDocumentStore.empty(path.join(tmpdir(), `ndea-test-workspace-${crypto.randomUUID()}.json`)),
   };
 
   const meta: DatasetSessionMetadata = {

@@ -9,6 +9,7 @@ import type { CropPool } from "./crop-pool.ts";
 import type { PlateChannel, PlateMount } from "./plate.ts";
 import type { ObsmSliceLoader } from "./slice-loader.ts";
 import type { DatasetQuerySession } from "./store.ts";
+import type { WorkspaceDocumentStore } from "./workspace.ts";
 
 /** Resolved spatial column names (from config or auto-detection). */
 export interface SpatialColumns {
@@ -152,4 +153,6 @@ export interface ServerSession {
    * ~/.ndea fallback configured). Derived once at startup.
    */
   annotationsSidecarPath: string | null;
+  /** The session's one authoritative workspace document. */
+  workspace: WorkspaceDocumentStore;
 }

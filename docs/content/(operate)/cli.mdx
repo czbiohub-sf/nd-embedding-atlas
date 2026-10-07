@@ -15,6 +15,9 @@ ndea view [paths...] [options]
 ndea update [options]
 ndea gc [options]
 ndea doctor [--check-network] [--strict]
+ndea filter [--where <json>] [--limit <n>] [--host <host>] [--port <port>]
+ndea workspace get [--host <host>] [--port <port>]
+ndea workspace patch --revision <n> --ops <json> [--host <host>] [--port <port>]
 ndea completions <bash|zsh|fish>
 ndea complete -- <args...>                       # internal; called by completion scripts
 ndea --help | --version
@@ -46,6 +49,11 @@ A single `.yaml` / `.yml` path is parsed as a multi-dataset project config (see 
 | `--no-static`          | boolean | `false`     | Do not serve the bundled frontend (Vite serves it in dev mode) |
 | `--obs-columns <list>` | string  | all columns | Comma-separated subset of obs columns to load                  |
 | `--preset <name>`      | string  | `annotate`  | Shipped preset; currently only `annotate`                      |
+| `--workspace <file>`   | path    | see below   | Workspace document to open and save                            |
+
+### Workspace file
+
+The running server owns one workspace document: the nodes, wiring, configuration, and Stage layout. Every edit, from the browser or from `ndea workspace patch`, is saved to the workspace file as a new revision. Without `--workspace`, ndea uses `~/.ndea/workspaces/<key>.json`, where the key is derived from the dataset paths, so opening the same datasets reopens the same workspace. A missing file starts from the preset. A file that fails validation stops `ndea view` before any data loads and lists each problem by JSON Pointer; ndea never rewrites or migrates it.
 
 `--port` accepts integers in `[1, 65535]`.
 
@@ -112,6 +120,47 @@ On Windows the symlink and installed-versions sections are omitted, because that
 | `--check-network` | boolean | `false` | Probe GitHub Releases API reachability over the network (3 s timeout) |
 | `--strict`        | boolean | `false` | Treat warnings as errors (non-zero exit)                              |
 
+## `ndea filter`
+
+Filter observations on a running `ndea view` server and print the matches as JSON. The server compiles the clause with the same compiler as the Workspace **Filter** node, so both select the same observations.
+
+```bash
+ndea filter --where '{"op":"and","clauses":[{"op":"eq","column":"predicted_infection_state","value":"infected"},{"op":"between","column":"t","range":[0,5]}]}'
+```
+
+A clause is one of `eq`, `neq`, `lt`, `lte`, `gt`, `gte` (`column`, `value`), `between` (`column`, `range`), `in` (`column`, `values`), `isNull`/`isNotNull` (`column`), `and`/`or` (`clauses`), or `not` (`clause`). Raw SQL is not accepted.
+
+The output has `sql` (the compiled WHERE fragment), `count` (exact), `rows` ordered by row index, and `truncated`. Each row carries `datasetKey` and `obsName`, the durable identity, plus `rowIndex`, the handle the other `/api` routes accept. Observation names can repeat across datasets, so use `datasetKey` and `obsName` together.
+
+### Options
+
+| Option            | Type    | Default     | Description                                        |
+| ----------------- | ------- | ----------- | -------------------------------------------------- |
+| `--where <json>`  | string  | all rows    | Filter clause as JSON                              |
+| `--limit <n>`     | integer | `1000`      | Maximum rows to return; `count` is always exact    |
+| `--host <host>`   | string  | `127.0.0.1` | Host of the running server                         |
+| `--port <port>`   | integer | `5055`      | Port of the running server                         |
+
+Exits 1 when the clause is invalid JSON, fails validation, references an unknown column, or no server is reachable. The error body goes to stderr.
+
+## `ndea workspace`
+
+Read and edit the workspace document of a running `ndea view` server. Edits go through the same validated path as the browser, and open browser tabs update live.
+
+```bash
+ndea workspace get
+ndea workspace patch --revision 3 --ops '[{"op":"replace","path":"/stripH","value":320}]'
+```
+
+`get` prints `{ "revision", "document" }`. `patch` applies [RFC 6902](https://www.rfc-editor.org/rfc/rfc6902) operations to the document at `--revision` and prints the new `{ "revision" }`. Read the revision with `get` first.
+
+`patch` exits 1 with the response body on stderr when:
+
+- `--revision` is stale: the body carries the current `revision` and `document` to rebase onto.
+- The result is invalid: the body is an [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) problem whose `errors[].pointer` locates each issue, and nothing is saved.
+
+Both subcommands accept `--host` (default `127.0.0.1`) and `--port` (default `5055`).
+
 ## `ndea completions`
 
 Emit shell completion scripts.
@@ -159,6 +208,8 @@ ndea completions fish > ~/.config/fish/completions/ndea.fish
       …
   locks/
     install.lock               # PID file backing the install/update mutex
+  workspaces/
+    <key>.json                 # Default workspace document per set of datasets
 ~/.cache/ndea/
   0.1.0/
     libduckdb.{dylib,so}       # Extracted from the binary on first launch

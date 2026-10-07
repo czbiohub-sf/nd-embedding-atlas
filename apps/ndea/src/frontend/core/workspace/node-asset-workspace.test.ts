@@ -11,7 +11,8 @@ import {
   type NodeAssetLibrary,
 } from "@/core/node-asset/library";
 import { parseNodeAssetDefinition } from "@/core/node-asset/schema";
-import { fromPersistedDoc, loadFromStorage, toPersistedDoc } from "./persist";
+import { toWorkspaceDocument } from "./document";
+import { decodeWorkspaceDocument } from "./sync";
 import { Workspace } from "./workspace-store";
 
 const native = createNativeAppNodeLibrary();
@@ -136,15 +137,15 @@ describe("Workspace node asset authoring", () => {
     expect(first.store.state.nodes[instanceV2]?.definitionRef).toEqual(v2.nodeTypeRef);
     expect(first.nodeLibrary.getCurrentSpec(v1.nodeTypeRef.nodeTypeId)?.definition.ref).toEqual(v2.nodeTypeRef);
 
-    const persisted = toPersistedDoc(first.store.state);
+    const persisted = toWorkspaceDocument(first.store.state);
     const canonical = JSON.stringify(persisted);
     expect(canonical).not.toContain("::asset::");
-    expect(Object.values(persisted.state.nodes).every((node) => !node.id.includes("::asset::"))).toBe(true);
+    expect(Object.values(persisted.nodes).every((node) => !node.id.includes("::asset::"))).toBe(true);
 
     const loadedUser = loadUserNodeAssetSource(storage);
     expect(loadedUser.kind).toBe("ok");
     const reopened = workspace(createNodeAssetLibrary([loadedUser.source]), storage);
-    const decoded = fromPersistedDoc(persisted, reopened.nodeLibrary);
+    const decoded = decodeWorkspaceDocument(persisted, reopened.nodeLibrary);
     expect(decoded.ok).toBe(true);
     if (!decoded.ok) throw new Error(decoded.errors.join("; "));
     expect(Object.isFrozen(decoded.state.nodeAssets)).toBe(true);
@@ -274,23 +275,17 @@ describe("Workspace node asset authoring", () => {
       disposition: "embedded",
       position: { x: 200, y: 0 },
     });
-    const persisted = toPersistedDoc(author.store.state);
+    const persisted = toWorkspaceDocument(author.store.state);
     const invalid = {
       ...persisted,
-      state: {
-        ...persisted.state,
-        nodes: {
-          ...persisted.state.nodes,
-          [instance]: {
-            ...persisted.state.nodes[instance],
-            config: { version: 1, value: { undeclared: true } },
-          },
-        },
+      nodes: {
+        ...persisted.nodes,
+        [instance]: { ...persisted.nodes[instance], config: { version: 1, value: { undeclared: true } } },
       },
     };
     const reopened = workspace();
     const previousSnapshot = reopened.nodeLibrary.assetSnapshot();
-    expect(fromPersistedDoc(invalid, reopened.nodeLibrary).ok).toBe(false);
+    expect(decodeWorkspaceDocument(invalid, reopened.nodeLibrary).ok).toBe(false);
     expect(reopened.nodeLibrary.assetSnapshot()).toBe(previousSnapshot);
     author.dispose();
     reopened.dispose();
@@ -309,34 +304,16 @@ describe("Workspace node asset authoring", () => {
       disposition: "embedded",
       position: { x: 200, y: 0 },
     });
-    const persisted = toPersistedDoc({
+    const persisted = toWorkspaceDocument({
       ...author.store.state,
       edges: {
         ...author.store.state.edges,
-        bad: {
-          id: "bad",
-          from: instance,
-          fromPort: "missing",
-          to: instance,
-          toPort: "missing",
-          kind: "pred",
-        },
+        bad: { id: "bad", from: instance, fromPort: "missing", to: instance, toPort: "missing", kind: "pred" },
       },
     });
     const topologyTarget = workspace();
     const topologySnapshot = topologyTarget.nodeLibrary.assetSnapshot();
-    const loaded = loadFromStorage(
-      {
-        read: () => JSON.stringify(persisted),
-        write: () => {
-          throw new Error("topology rejection must precede writes");
-        },
-      },
-      "workspace",
-      topologyTarget.nodeLibrary,
-    );
-    expect(loaded.kind).toBe("recovery");
-    expect(loaded.kind === "recovery" && loaded.stage).toBe("topology");
+    expect(decodeWorkspaceDocument(persisted, topologyTarget.nodeLibrary).ok).toBe(false);
     expect(topologyTarget.nodeLibrary.assetSnapshot()).toBe(topologySnapshot);
 
     const activationTarget = workspace();

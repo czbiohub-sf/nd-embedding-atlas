@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { loadProjectConfig, pathsToConfig, resolveLaunchConfig, type ParsedProjectConfig } from "../config.ts";
+import { defaultWorkspacePath } from "../lib/paths.ts";
 
 let projectDir: string;
 let configPath: string;
@@ -196,6 +197,7 @@ describe("launch config", () => {
       preset: "yaml-preset",
       pluginPaths: project.pluginPaths,
       pluginPathRoot: "/project",
+      workspace: defaultWorkspacePath(["/project/cells.zarr"]),
     });
   });
 
@@ -208,6 +210,7 @@ describe("launch config", () => {
         noStatic: false,
         obsColumns: ["from_cli"],
         preset: "cli-preset",
+        workspace: "relative/workspace.json",
       }),
     ).toEqual({
       datasets: project.datasets,
@@ -219,6 +222,7 @@ describe("launch config", () => {
       preset: "cli-preset",
       pluginPaths: project.pluginPaths,
       pluginPathRoot: "/project",
+      workspace: resolve("relative/workspace.json"),
     });
   });
 
@@ -239,6 +243,7 @@ describe("launch config", () => {
       preset: undefined,
       pluginPaths: undefined,
       pluginPathRoot: undefined,
+      workspace: defaultWorkspacePath([resolve("relative/example.zarr")]),
     });
   });
 });

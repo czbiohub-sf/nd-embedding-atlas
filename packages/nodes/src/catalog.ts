@@ -11,6 +11,7 @@ import { createCountDefinition } from "./count/definition";
 import type { CountPredicateToSql } from "./count/contracts";
 import { createBuiltinNodeDefinitions } from "./core-catalog";
 import { createDatasetDefinition } from "./dataset/definition";
+import { createFilterDefinition } from "./filter/definition";
 import { createGalleryDefinition } from "./gallery/definition";
 import type { GalleryServices } from "./gallery/contracts";
 import { createImageViewerDefinition } from "./image-viewer/definition";
@@ -21,8 +22,6 @@ import { createSubnetDefinition } from "./subnet/definition";
 import type { SubnetHierarchyResolver, SubnetIconButton } from "./subnet/contracts";
 import { createTableDefinition } from "./table/definition";
 import type { TableServices } from "./table/contracts";
-import { createTransformFilterDefinition } from "./transform-filter/definition";
-import type { TransformFilterColumnTypesService } from "./transform-filter/contracts";
 import { createWrangleDefinition } from "./wrangle/definition";
 import type { WrangleEditor } from "./wrangle/contracts";
 
@@ -39,7 +38,6 @@ export interface NodeCatalogServices {
   readonly scatter: ScatterServices;
   readonly subnet: { getHierarchy: SubnetHierarchyResolver; IconButton: SubnetIconButton };
   readonly table: TableServices;
-  readonly transformFilter: { getColumnTypes: TransformFilterColumnTypesService };
   readonly wrangle: { Editor: WrangleEditor };
 }
 
@@ -54,7 +52,7 @@ export function createNodeCatalog({
   return {
     ...createBuiltinNodeDefinitions({ mountBody }),
     dataset: createDatasetDefinition({ mountBody }),
-    transformFilter: createTransformFilterDefinition({ mountBody, ...services.transformFilter }),
+    filter: createFilterDefinition({ mountBody }),
     wrangle: createWrangleDefinition({ mountBody, ...services.wrangle }),
     annotate: createAnnotateDefinition({ mountBody, ...services.annotate }),
     count: createCountDefinition({ mountBody, ...services.count }),

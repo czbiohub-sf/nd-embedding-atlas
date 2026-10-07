@@ -14,6 +14,8 @@
  *   gc         Prune old installed versions
  *   doctor     Diagnose the install (paths, symlink, versions)
  *   plugin     Validate and configure trusted custom-node plugins
+ *   filter     Filter observations on a running server; prints JSON
+ *   workspace  Read and patch a running server's workspace document
  *
  * For backwards compatibility, invocations without a subcommand default
  * to `view`:
@@ -32,9 +34,11 @@ import "./lib/preload-libduckdb.ts";
 import { createCLI } from "@bunli/core";
 import { completionsPlugin } from "@bunli/plugin-completions";
 import doctorCommand from "./commands/doctor.ts";
+import filterCommand from "./commands/filter.ts";
 import gcCommand from "./commands/gc.ts";
 import pluginCommand from "./commands/plugin/index.ts";
 import updateCommand from "./commands/update.ts";
+import workspaceCommand from "./commands/workspace.ts";
 import viewCommand from "./commands/view.ts";
 import { viewCompletionPlugin } from "./lib/view-completion-plugin.ts";
 import { generatedCommandsPath } from "./lib/generated-commands-path.ts";
@@ -51,7 +55,17 @@ const DESCRIPTION =
  * `@bunli/plugin-completions`. Without these entries `ndea completions
  * zsh` would be reinterpreted as `ndea view completions zsh`.
  */
-const KNOWN_SUBCOMMANDS = new Set(["view", "update", "gc", "doctor", "plugin", "completions", "complete"]);
+const KNOWN_SUBCOMMANDS = new Set([
+  "view",
+  "update",
+  "gc",
+  "doctor",
+  "plugin",
+  "filter",
+  "workspace",
+  "completions",
+  "complete",
+]);
 
 /**
  * Normalize rawArgs so `ndea ./data.zarr` routes to `view ./data.zarr`.
@@ -102,6 +116,8 @@ async function main(): Promise<void> {
   cli.command(gcCommand);
   cli.command(doctorCommand);
   cli.command(pluginCommand);
+  cli.command(filterCommand);
+  cli.command(workspaceCommand);
 
   await cli.run(argv);
 }

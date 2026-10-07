@@ -5,21 +5,25 @@ import type { Command, CLI, GeneratedOptionMeta, RegisteredCommands, CommandOpti
 import { createGeneratedHelpers, registerGeneratedStore } from '@bunli/core'
 
 import Doctor from '../apps/ndea/src/cli/commands/doctor.js'
+import Filter from '../apps/ndea/src/cli/commands/filter.js'
 import Gc from '../apps/ndea/src/cli/commands/gc.js'
 import Plugin from '../apps/ndea/src/cli/commands/plugin/index.js'
 import Update from '../apps/ndea/src/cli/commands/update.js'
 import View from '../apps/ndea/src/cli/commands/view.js'
+import Workspace from '../apps/ndea/src/cli/commands/workspace.js'
 
 // Narrow list of command names to avoid typeof-cycles in types
-const names = ['doctor', 'gc', 'plugin', 'update', 'view'] as const
+const names = ['doctor', 'filter', 'gc', 'plugin', 'update', 'view', 'workspace'] as const
 type GeneratedNames = typeof names[number]
 
 const modules: Record<GeneratedNames, Command<any>> = {
   'doctor': Doctor,
+  'filter': Filter,
   'gc': Gc,
   'plugin': Plugin,
   'update': Update,
-  'view': View
+  'view': View,
+  'workspace': Workspace
 } as const
 
 const metadata: Record<GeneratedNames, GeneratedCommandMeta> = {
@@ -31,6 +35,17 @@ const metadata: Record<GeneratedNames, GeneratedCommandMeta> = {
         'strict': { type: 'z.coerce.boolean.default', required: true, hasDefault: true, default: false, description: 'Treat soft warnings as errors (non-zero exit)', schema: {"type":"zod","method":"default","args":[{"type":"unknown","raw":{"type":"BooleanLiteral","start":1522,"end":1527,"loc":{"start":{"line":38,"column":46,"index":1522},"end":{"line":38,"column":51,"index":1527}},"value":false}}]}, validator: '(val) => true' }
       },
       path: './apps/ndea/src/cli/commands/doctor'
+    },
+  'filter': {
+      name: 'filter',
+      description: 'Filter observations on a running ndea server; prints JSON',
+      options: {
+        'where': { type: 'z.string.optional', required: false, hasDefault: false, description: 'Filter clause JSON, e.g. \'{"op":"gt","column":"area","value":100}\' (default: all rows)', schema: {"type":"zod","method":"optional","args":[]}, validator: '(val) => true' },
+        'limit': { type: 'z.coerce.number.int.min.max.default', required: true, hasDefault: true, default: 1000, description: 'Maximum rows to return (count is always exact)', min: 0, max: 1000000, minLength: 0, maxLength: 1000000, schema: {"type":"zod","method":"default","args":[{"type":"unknown","raw":{"type":"NumericLiteral","start":836,"end":840,"loc":{"start":{"line":20,"column":72,"index":836},"end":{"line":20,"column":76,"index":840}},"extra":{"rawValue":1000,"raw":"1000"},"value":1000}}]}, validator: '(val) => true' },
+        'port': { type: 'z.coerce.number.int.min.max.default', required: true, hasDefault: true, default: 5055, description: 'Port of the running ndea server', min: 1, max: 65535, minLength: 1, maxLength: 65535, schema: {"type":"zod","method":"default","args":[{"type":"unknown","raw":{"type":"NumericLiteral","start":380,"end":384,"loc":{"start":{"line":11,"column":65,"index":380},"end":{"line":11,"column":69,"index":384}},"extra":{"rawValue":5055,"raw":"5055"},"value":5055}}]}, validator: '(val) => true' },
+        'host': { type: 'z.string.default', required: true, hasDefault: true, default: "127.0.0.1", description: 'Host of the running ndea server', schema: {"type":"zod","method":"default","args":[{"type":"literal","value":"127.0.0.1"}]}, validator: '(val) => true' }
+      },
+      path: './apps/ndea/src/cli/commands/filter'
     },
   'gc': {
       name: 'gc',
@@ -86,9 +101,15 @@ const metadata: Record<GeneratedNames, GeneratedCommandMeta> = {
         'no-open': { type: 'z.coerce.boolean.default', required: true, hasDefault: true, default: false, description: 'Do not auto-open the browser', schema: {"type":"zod","method":"default","args":[{"type":"unknown","raw":{"type":"BooleanLiteral","start":996,"end":1001,"loc":{"start":{"line":25,"column":49,"index":996},"end":{"line":25,"column":54,"index":1001}},"value":false}}]}, validator: '(val) => true' },
         'no-static': { type: 'z.coerce.boolean.default', required: true, hasDefault: true, default: false, description: 'Do not serve the frontend bundle (dev mode)', schema: {"type":"zod","method":"default","args":[{"type":"unknown","raw":{"type":"BooleanLiteral","start":1144,"end":1149,"loc":{"start":{"line":29,"column":51,"index":1144},"end":{"line":29,"column":56,"index":1149}},"value":false}}]}, validator: '(val) => true' },
         'obs-columns': { type: 'z.string.optional', required: false, hasDefault: false, description: 'Comma-separated obs columns to include', schema: {"type":"zod","method":"optional","args":[]}, validator: '(val) => true' },
-        'preset': { type: 'z.string.optional', required: false, hasDefault: false, description: 'Named preset a shipped build opens (default: annotate)', schema: {"type":"zod","method":"optional","args":[]}, validator: '(val) => true' }
+        'preset': { type: 'z.string.optional', required: false, hasDefault: false, description: 'Named preset a shipped build opens (default: annotate)', schema: {"type":"zod","method":"optional","args":[]}, validator: '(val) => true' },
+        'workspace': { type: 'z.string.optional', required: false, hasDefault: false, description: 'Workspace document file (default: ~/.ndea/workspaces/<datasets>.json)', schema: {"type":"zod","method":"optional","args":[]}, validator: '(val) => true' }
       },
       path: './apps/ndea/src/cli/commands/view'
+    },
+  'workspace': {
+      name: 'workspace',
+      description: 'Read and edit the running server\'s workspace document',
+      path: './apps/ndea/src/cli/commands/workspace'
     }
 } as const
 

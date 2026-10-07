@@ -1,9 +1,11 @@
 /**
  * WorkspaceProvider: owns ONE Workspace (graph document + engine) per
- * dataset session. Created once; disposed on unmount.
+ * dataset session. Created once from the server's workspace snapshot;
+ * disposed on unmount. `WorkspaceSync` keeps it and the server in step.
  */
 
 import { useSelector } from "@tanstack/react-store";
+import type { WorkspaceSnapshot } from "@ndea/protocol";
 import { createContext, useContext, useEffect, useState } from "react";
 
 import { useDatasetSession } from "@/hooks/useDatasetSession";
@@ -12,16 +14,6 @@ import type { GraphEvaluationState } from "@ndea/graph";
 import { deviceBroker } from "@/core/gpu/device-broker";
 import { WorkspaceNodeRuntimeProvider } from "@/core/node/runtime/runtime-context";
 import { APP_NODE_HOST_CAPABILITIES, WorkspaceNodeRuntimeManager } from "@/core/node/runtime/workspace-runtime";
-import type { Metadata } from "@/types";
-import {
-  browserWorkspaceStorage,
-  loadFromStorage,
-  storageKey,
-  type LoadResult,
-  type RecoveryStage,
-  WorkspaceAutosave,
-  type WorkspaceStorage,
-} from "./persist";
 import type { AppNodeLibrary } from "@/core/node/library";
 import {
   browserNodeAssetJsonStorage,
@@ -31,46 +23,40 @@ import {
   type NodeAssetLibrary,
   type UserNodeAssetLoadResult,
 } from "@/core/node-asset/library";
+import { wsClient } from "@/lib/ws-client";
+import { parseWorkspaceDocument } from "./document";
 import { resolvePresetOrDefault } from "./presets";
+import { createHttpWorkspaceTransport, decodeWorkspaceDocument, WorkspaceSync, type WorkspaceTransport } from "./sync";
 import { Workspace } from "./workspace-store";
 import type { WorkspaceDocumentState } from "./types";
 
 const WorkspaceContext = createContext<Workspace | null>(null);
 export interface WorkspacePersistenceState {
   readonly mode: "writable" | "recovery";
-  readonly stage?: RecoveryStage;
   readonly errors: readonly string[];
-  readonly backupKey?: string;
-  readonly recoveryState?: WorkspaceDocumentState;
 }
 const WorkspacePersistenceContext = createContext<WorkspacePersistenceState>({
   mode: "writable",
   errors: [],
 });
 
-/** Debounce window for autosave: collapses a drag/edit burst into one write. */
-const AUTOSAVE_MS = 500;
-
+/**
+ * Load the server document, or seed a preset when the server has none. An
+ * invalid document opens read-only and is never overwritten by a seed.
+ */
 export function initializeWorkspaceDocument(
-  workspace: Pick<Workspace, "loadDocument">,
-  loaded: LoadResult,
+  workspace: Pick<Workspace, "loadDocument"> & { readonly nodeLibrary: AppNodeLibrary },
+  document: unknown,
   seed: () => void,
 ): WorkspacePersistenceState {
-  if (loaded.kind === "ok") {
-    workspace.loadDocument(loaded.state);
-    return { mode: "writable", errors: [] };
-  }
-  if (loaded.kind === "miss") {
+  if (document === null) {
     seed();
     return { mode: "writable", errors: [] };
   }
-  return {
-    mode: "recovery",
-    stage: loaded.stage,
-    errors: loaded.errors,
-    ...(loaded.backupKey ? { backupKey: loaded.backupKey } : {}),
-    ...(loaded.state ? { recoveryState: loaded.state } : {}),
-  };
+  const decoded = decodeWorkspaceDocument(document, workspace.nodeLibrary);
+  if (!decoded.ok) return { mode: "recovery", errors: decoded.errors };
+  workspace.loadDocument(decoded.state);
+  return { mode: "writable", errors: [] };
 }
 
 export function applyNodeAssetRecovery(
@@ -78,35 +64,22 @@ export function applyNodeAssetRecovery(
   loaded: UserNodeAssetLoadResult,
 ): WorkspacePersistenceState {
   if (loaded.kind !== "recovery") return persistence;
-  const error = `user node asset storage: ${loaded.error}`;
-  return persistence.mode === "recovery"
-    ? { ...persistence, errors: [...persistence.errors, error] }
-    : { mode: "recovery", stage: "config", errors: [error] };
-}
-
-/**
- * A stable per-dataset session key for the persisted document. Derived from the
- * dataset identity (`metadata.props.data.id`) + the DuckDB table, so the same
- * dataset reloads the same workspace and switching datasets gets a fresh doc. If
- * neither is present we return `null` and the storage layer falls back to a
- * single shared `"ndea.workspace"` key.
- */
-function sessionKeyOf(metadata: Metadata, table: string): string | null {
-  const id = metadata.props?.data?.id;
-  const parts = [id, table].filter((p): p is string => typeof p === "string" && p.length > 0);
-  return parts.length > 0 ? parts.join(":") : null;
+  return { mode: "recovery", errors: [...persistence.errors, `user node asset storage: ${loaded.error}`] };
 }
 
 export function WorkspaceProvider({
   children,
   nodeLibrary,
-  storage,
+  snapshot,
+  transport,
   nodeAssets,
   nodeAssetStorage,
 }: {
   children: React.ReactNode;
   nodeLibrary: AppNodeLibrary;
-  storage?: WorkspaceStorage;
+  /** Server document this session opens; `document: null` seeds the preset. */
+  snapshot: WorkspaceSnapshot;
+  transport?: WorkspaceTransport;
   nodeAssets?: NodeAssetLibrary;
   nodeAssetStorage?: NodeAssetJsonStorage;
 }) {
@@ -114,66 +87,46 @@ export function WorkspaceProvider({
   const { coordinator, brushSelection, filterScopes, dataPublication, table } = runtime;
   const { metadata } = state;
 
-  const [{ workspace: ws, nodeRuntimes, persistence: initialPersistence, workspaceStorage, workspaceKey }] = useState(
-    () => {
-      const resolvedAssetStorage = nodeAssetStorage ?? browserNodeAssetJsonStorage();
-      const loadedUserAssets = loadUserNodeAssetSource(resolvedAssetStorage);
-      const availableAssets = createNodeAssetLibrary([
-        ...(nodeAssets?.sources().filter((source) => source.kind !== "user") ?? []),
-        loadedUserAssets.source,
-      ]);
-      const w = new Workspace({
-        coordinator,
-        table,
-        metadata,
-        nodeLibrary,
-        nodeAssets: availableAssets,
-        ...(loadedUserAssets.kind === "recovery" ? {} : { nodeAssetStorage: resolvedAssetStorage }),
-      });
-      const resolvedStorage = storage ?? browserWorkspaceStorage();
-      const resolvedKey = storageKey(sessionKeyOf(metadata, table));
-      let persistence: WorkspacePersistenceState = { mode: "writable", errors: [] };
-      if (NODE_EDITOR_ENABLED) {
-        // Seed only after a confirmed miss. Any read, migration, backup, or
-        // rewrite failure keeps a validated document read-only when possible.
-        const loaded = loadFromStorage(resolvedStorage, resolvedKey, w.nodeLibrary);
-        persistence = initializeWorkspaceDocument(w, loaded, () => {
-          resolvePresetOrDefault(metadata.preset)(w);
-          w.setDisposition("full");
-        });
-        persistence = applyNodeAssetRecovery(persistence, loadedUserAssets);
-        (window as unknown as { __ndeaWorkspace?: Workspace }).__ndeaWorkspace = w;
-      } else {
-        // Editor-disabled mode: the named preset seeds a fresh, dataset-agnostic
-        // graph and layout on every launch. An unknown --preset falls back to annotate.
-        resolvePresetOrDefault(metadata.preset)(w);
-        persistence = applyNodeAssetRecovery(persistence, loadedUserAssets);
-      }
-      const appHost = Object.freeze({
-        coordinator,
-        defaultInputPredicate: brushSelection,
-        table,
-        metadata,
-        refreshMetadata: actions.refreshMetadata,
-        availableCapabilities: new Set(APP_NODE_HOST_CAPABILITIES),
-        filterScopes,
-        dataPublication,
-        deviceBroker,
-        fetch: globalThis.fetch,
-      });
-      return {
-        workspace: w,
-        persistence,
-        workspaceStorage: resolvedStorage,
-        workspaceKey: resolvedKey,
-        nodeRuntimes: new WorkspaceNodeRuntimeManager({
-          session: w,
-          nodeLibrary: w.nodeLibrary,
-          appHost,
-        }),
-      };
-    },
-  );
+  const [{ workspace: ws, nodeRuntimes, persistence: initialPersistence }] = useState(() => {
+    const resolvedAssetStorage = nodeAssetStorage ?? browserNodeAssetJsonStorage();
+    const loadedUserAssets = loadUserNodeAssetSource(resolvedAssetStorage);
+    const availableAssets = createNodeAssetLibrary([
+      ...(nodeAssets?.sources().filter((source) => source.kind !== "user") ?? []),
+      loadedUserAssets.source,
+    ]);
+    const w = new Workspace({
+      coordinator,
+      table,
+      metadata,
+      nodeLibrary,
+      nodeAssets: availableAssets,
+      ...(loadedUserAssets.kind === "recovery" ? {} : { nodeAssetStorage: resolvedAssetStorage }),
+    });
+    const persistence = applyNodeAssetRecovery(
+      initializeWorkspaceDocument(w, snapshot.document, () => resolvePresetOrDefault(metadata.preset)(w)),
+      loadedUserAssets,
+    );
+    // Session state: the editor opens on the canvas; a fixed-preset build has no canvas, so the Stage fills.
+    w.setDisposition(NODE_EDITOR_ENABLED ? "full" : "hidden");
+    if (NODE_EDITOR_ENABLED) (window as unknown as { __ndeaWorkspace?: Workspace }).__ndeaWorkspace = w;
+    const appHost = Object.freeze({
+      coordinator,
+      defaultInputPredicate: brushSelection,
+      table,
+      metadata,
+      refreshMetadata: actions.refreshMetadata,
+      availableCapabilities: new Set(APP_NODE_HOST_CAPABILITIES),
+      filterScopes,
+      dataPublication,
+      deviceBroker,
+      fetch: globalThis.fetch,
+    });
+    return {
+      workspace: w,
+      persistence,
+      nodeRuntimes: new WorkspaceNodeRuntimeManager({ session: w, nodeLibrary: w.nodeLibrary, appHost }),
+    };
+  });
   const [persistence, setPersistence] = useState(initialPersistence);
 
   useEffect(
@@ -195,30 +148,21 @@ export function WorkspaceProvider({
     [nodeRuntimes, ws],
   );
 
-  // Autosave: persist the document on any store change, debounced. The store is
-  // the topology/presentation authority: engine-only runtime (lassoes, cache
-  // pins) is intentionally not persisted; the doc round-trips and re-cooks.
+  // The server document is the authority; a read-only (recovery) session never writes.
   useEffect(() => {
-    // Editor-disabled sessions persist nothing; the preset is authoritative.
-    if (!NODE_EDITOR_ENABLED) return;
     if (persistence.mode === "recovery") return;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    const autosave = new WorkspaceAutosave(workspaceStorage, workspaceKey, (error) => {
-      setPersistence({
-        mode: "recovery",
-        stage: "autosave",
-        errors: [error instanceof Error ? error.message : String(error)],
-      });
-    });
-    const sub = ws.store.subscribe(() => {
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(() => autosave.save(ws.store.state), AUTOSAVE_MS);
-    });
-    return () => {
-      if (timer) clearTimeout(timer);
-      sub.unsubscribe();
-    };
-  }, [ws, persistence.mode, workspaceStorage, workspaceKey]);
+    // Already decoded at init; parsing again yields the typed, unmigrated server copy as the diff base.
+    const acked = snapshot.document === null ? null : parseWorkspaceDocument(snapshot.document);
+    if (acked && !acked.ok) return;
+    const sync = new WorkspaceSync(
+      ws,
+      { revision: snapshot.revision, document: acked?.value ?? null },
+      transport ?? createHttpWorkspaceTransport(wsClient),
+      (errors) => setPersistence({ mode: "recovery", errors }),
+    );
+    sync.start();
+    return () => sync.dispose();
+  }, [ws, persistence.mode, snapshot, transport]);
 
   return (
     <WorkspacePersistenceContext.Provider value={persistence}>

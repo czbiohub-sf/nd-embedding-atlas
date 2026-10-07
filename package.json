@@ -9,6 +9,7 @@
   "scripts": {
     "build": "vp run --filter @ndea/app build",
     "backend": "bun run apps/ndea/src/cli/index.ts view",
+    "ndea": "bun run apps/ndea/src/cli/index.ts",
     "docs:build": "bun run --cwd docs build",
     "docs:dev": "bun run --cwd docs dev",
     "docs:serve": "bun run --cwd docs start",

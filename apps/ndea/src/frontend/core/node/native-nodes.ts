@@ -4,6 +4,7 @@ import { cacheNode } from "./native-contributions/cache";
 import { countPlotNode } from "./native-contributions/count-plot";
 import { countNode } from "./native-contributions/count";
 import { datasetNode } from "./native-contributions/dataset";
+import { filterNode } from "./native-contributions/filter";
 import { galleryNode } from "./native-contributions/gallery";
 import { histogramNode } from "./native-contributions/histogram";
 import { imageViewerNode } from "./native-contributions/image-viewer";
@@ -12,7 +13,6 @@ import { proxyNode } from "./native-contributions/proxy";
 import { scatterNode } from "./native-contributions/scatter";
 import { subnetNode } from "./native-contributions/subnet";
 import { tableNode } from "./native-contributions/table";
-import { thresholdNode } from "./native-contributions/transform-filter";
 import { vgplotNode } from "./native-contributions/vgplot";
 import { wrangleNode } from "./native-contributions/wrangle";
 import type { AnyNativeNodeContribution } from "./native-contribution";
@@ -24,7 +24,7 @@ import type { AnyNativeNodeContribution } from "./native-contribution";
 export const NATIVE_NODE_CONTRIBUTIONS = Object.freeze([
   obsNode,
   datasetNode,
-  thresholdNode,
+  filterNode,
   wrangleNode,
   annotateNode,
   countNode,
