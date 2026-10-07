@@ -52,14 +52,17 @@ import { draftNextNodeAssetVersion } from "@/core/node-asset/migrations";
 import type { NodeAssetDefinition, WorkspaceNodeAssetRecord } from "@/core/node-asset/schema";
 import { NodeCounts } from "./node-counts";
 import {
-  treeMapLeaves,
-  treeRemove,
-  treeSetRatio,
-  treeSplitLeaf,
-  treeSwap,
-  type SplitWord,
-  type TreeNode,
-} from "./stage/split-tree";
+  addView,
+  fillSlot,
+  removeElement,
+  removeNodeView,
+  setSplitRatio,
+  splitElement,
+  stageViews,
+  swapElements,
+  type SplitSide,
+  type Stage,
+} from "./stage/stage-spec";
 import type {
   WorkspaceCanvasDisposition,
   WorkspaceDocumentState,
@@ -90,8 +93,7 @@ const EMPTY: WorkspaceDocumentState = {
   selectedNodeId: null,
   selectedNodeIds: [],
   selectedEdgeId: null,
-  explicit: {},
-  stageTree: null,
+  stage: null,
   disposition: "strip",
   stripH: 280,
   claimed: null,
@@ -412,8 +414,6 @@ export class Workspace {
       delete nodes[id];
       const positions = { ...s.positions };
       delete positions[id];
-      const explicit = { ...s.explicit };
-      delete explicit[id];
       const flags = { ...s.flags };
       delete flags[id];
       const edges = Object.fromEntries(Object.entries(s.edges).filter(([, e]) => e.from !== id && e.to !== id));
@@ -423,9 +423,8 @@ export class Workspace {
           nodes,
           positions,
           edges,
-          explicit,
           flags,
-          stageTree: treeRemove(s.stageTree, id),
+          stage: removeNodeView(s.stage, id),
           selectedNodeId: s.selectedNodeId === id ? null : s.selectedNodeId,
           selectedNodeIds: s.selectedNodeIds.filter((x) => x !== id),
           selectedEdgeId: s.selectedEdgeId && !edges[s.selectedEdgeId] ? null : s.selectedEdgeId,
@@ -843,27 +842,30 @@ export class Workspace {
     else this.els.delete(key);
   }
 
-  /** placement resolution: descriptor flag → explicit pin → by-disposition default */
+  /** placement: a node is staged exactly when a Stage View shows it */
   placementOf(id: string): WorkspacePlacement {
     const def = this.def(id);
     if (!def || def.stage === "canvas-only") return "embedded";
-    const explicit = this.store.state.explicit[id];
-    if (def.stage === "pin-only") return explicit ?? "embedded";
-    return explicit ?? (this.store.state.disposition === "full" ? "embedded" : "staged");
+    return stageViews(this.store.state.stage).has(id) ? "staged" : "embedded";
   }
 
   stagedIds(): string[] {
-    return Object.keys(this.store.state.nodes).filter((id) => this.placementOf(id) === "staged");
+    return [...stageViews(this.store.state.stage).keys()].filter((id) => this.placementOf(id) === "staged");
   }
 
-  /** pin ⇡ / pull ⇣: explicit, persists; animates via the FLIP ghost */
+  /** pin ⇡ / pull ⇣: adds or removes the node's Stage View; animates via the FLIP ghost */
   togglePlacement(id: string, transMs: number): void {
+    if (this.def(id)?.stage !== "stageable") return;
     const cur = this.placementOf(id);
     const next: WorkspacePlacement = cur === "staged" ? "embedded" : "staged";
     const fromEl = this.els.get(cur === "staged" ? `stage:${id}` : `canvas:${id}`);
     const fromRect = fromEl?.getBoundingClientRect() ?? null;
     const label = this.store.state.nodes[id]?.label ?? id;
-    this.documentStore.setState((s) => ({ ...s, explicit: { ...s.explicit, [id]: next }, claimed: null }));
+    this.documentStore.setState((s) => ({
+      ...s,
+      stage: next === "staged" ? addView(s.stage, id) : removeNodeView(s.stage, id),
+      claimed: null,
+    }));
     if (!fromRect) return;
     const toKey = next === "staged" ? `stage:${id}` : `canvas:${id}`;
     // measure the destination after the placement commit paints
@@ -881,37 +883,30 @@ export class Workspace {
     });
   }
 
-  /* ── stage split-tree ─────────────────────────────────────────────── */
+  /* ── stage spec (element ids, not node ids) ───────────────────────── */
 
-  private slotSeq = 0;
-
-  setStageTree(tree: TreeNode | null): void {
-    this.documentStore.setState((s) => ({ ...s, stageTree: tree }));
+  private setStage(update: (stage: Stage) => Stage): void {
+    this.documentStore.setState((s) => ({ ...s, stage: update(s.stage) }));
   }
 
-  splitTile(id: string, dir: SplitWord): void {
-    const slotId = `__slot-${++this.slotSeq}`;
-    this.setStageTree(treeSplitLeaf(this.store.state.stageTree, id, dir, slotId));
+  splitTile(elementId: string, side: SplitSide): void {
+    this.setStage((stage) => splitElement(stage, elementId, side)[0]);
   }
 
   fillSlot(slotId: string, nodeId: string): void {
-    this.documentStore.setState((s) => ({
-      ...s,
-      stageTree: treeMapLeaves(s.stageTree, (l) => (l === slotId ? nodeId : l)),
-      explicit: { ...s.explicit, [nodeId]: "staged" },
-    }));
+    this.setStage((stage) => fillSlot(stage, slotId, nodeId));
   }
 
   dismissSlot(slotId: string): void {
-    this.setStageTree(treeRemove(this.store.state.stageTree, slotId));
+    this.setStage((stage) => removeElement(stage, slotId));
   }
 
   swapTiles(a: string, b: string): void {
-    this.setStageTree(treeSwap(this.store.state.stageTree, a, b));
+    this.setStage((stage) => swapElements(stage, a, b));
   }
 
-  setTreeRatio(path: string, ratio: number): void {
-    this.setStageTree(treeSetRatio(this.store.state.stageTree, path, ratio));
+  setSplitRatio(splitId: string, ratio: number): void {
+    this.setStage((stage) => setSplitRatio(stage, splitId, ratio));
   }
 
   /** un-staged stageable nodes: candidates for an empty slot */

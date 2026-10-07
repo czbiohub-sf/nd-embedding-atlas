@@ -23,7 +23,7 @@ function useNdGraphNodeLayoutState(ws: Workspace, id: string) {
   // These focused subscriptions invalidate form/size without widening any selector.
   useWorkspaceSelector((state) => state.formOverride[id]);
   useWorkspaceSelector((state) => state.sizeOverrides[id]);
-  useWorkspaceSelector((state) => state.explicit[id]);
+  useWorkspaceSelector((state) => state.stage);
   useWorkspaceSelector((state) => state.disposition);
   useSelector(ws.ui, (ui) => ui.baseForm);
 

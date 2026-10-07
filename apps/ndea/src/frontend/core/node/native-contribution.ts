@@ -21,7 +21,7 @@ export interface NativeNodePresentation {
   readonly geometry: NativeNodeGeometry;
   /** Forms that adopt the one mounted Body; omitted for body-less definitions. */
   readonly body?: "card-and-full" | "full-only";
-  readonly stage: "stageable" | "pin-only" | "canvas-only";
+  readonly stage: "stageable" | "canvas-only";
   readonly inPalette: boolean;
   readonly accent?: string;
   readonly checkpoint?: boolean;

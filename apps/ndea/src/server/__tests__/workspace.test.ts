@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { WorkspaceChange } from "@ndea/protocol";
+import { parseWorkspaceDocument } from "../../frontend/core/workspace/document.ts";
 import { WorkspaceDocumentStore, WorkspaceFileError } from "../workspace.ts";
 
 const DOCUMENT = {
@@ -13,8 +14,7 @@ const DOCUMENT = {
   sizeOverrides: {},
   formOverride: {},
   formLocked: {},
-  explicit: {},
-  stageTree: null,
+  stage: null,
   stripH: 280,
   flags: {},
   state: {},
@@ -26,11 +26,19 @@ afterEach(async () => {
   if (dir) await rm(dir, { recursive: true, force: true });
 });
 
+const noSeed = () => Promise.reject(new Error("an existing file must not be seeded"));
+
+/** A missing file is seeded and written as revision 1. */
 async function seeded(): Promise<{ store: WorkspaceDocumentStore; path: string }> {
   dir = await mkdtemp(join(tmpdir(), "ndea-workspace-"));
   const path = join(dir, "nested", "workspace.json");
-  const store = await WorkspaceDocumentStore.open(path);
-  expect(await store.apply(0, [{ op: "add", path: "", value: DOCUMENT }])).toEqual({ kind: "accepted", revision: 1 });
+  const store = await WorkspaceDocumentStore.open(path, async () => {
+    const parsed = parseWorkspaceDocument(DOCUMENT);
+    if (!parsed.ok) throw new Error("fixture document is invalid");
+    return parsed.value;
+  });
+  expect(store.snapshot()).toEqual({ revision: 1, document: DOCUMENT });
+  expect(await Bun.file(path).json()).toMatchObject({ revision: 1, document: DOCUMENT });
   return { store, path };
 }
 
@@ -43,7 +51,7 @@ describe("WorkspaceDocumentStore", () => {
     });
     const file = await Bun.file(path).json();
     expect(file).toMatchObject({ format: "ndea.workspace", version: 1, revision: 2 });
-    expect((await WorkspaceDocumentStore.open(path)).snapshot()).toEqual(store.snapshot());
+    expect((await WorkspaceDocumentStore.open(path, noSeed)).snapshot()).toEqual(store.snapshot());
   });
 
   test("rejects a stale base revision with the current snapshot and changes nothing", async () => {
@@ -94,7 +102,7 @@ describe("WorkspaceDocumentStore", () => {
     const { path } = await seeded();
     const file = await Bun.file(path).json();
     await Bun.write(path, JSON.stringify({ ...file, version: 2 }));
-    const opened = WorkspaceDocumentStore.open(path);
+    const opened = WorkspaceDocumentStore.open(path, noSeed);
     await expect(opened).rejects.toBeInstanceOf(WorkspaceFileError);
     await expect(opened).rejects.toThrow("/version");
   });

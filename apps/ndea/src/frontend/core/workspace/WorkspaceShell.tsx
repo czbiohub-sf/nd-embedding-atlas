@@ -23,7 +23,7 @@ import { BodySocket, HeaderSocket, WorkspaceBodies } from "./body-dock";
 import { WorkspaceCanvas } from "./canvas/WorkspaceCanvas";
 import { ND_TIMING } from "./constants";
 import type { AppNodeLibrary } from "@/core/node/library";
-import { StagePane, stageHasContent } from "./stage/StagePane";
+import { StagePane } from "./stage/StagePane";
 import { fetchWorkspaceSnapshot } from "./sync";
 import {
   useTelemetrySelector,
@@ -256,9 +256,8 @@ function WritableWorkspaceFrame({ policy }: { policy: WorkspaceSurfacePolicy }) 
   const ws = useWorkspace();
   const disposition = useWorkspaceSelector((s) => s.disposition);
   const stripH = useWorkspaceSelector((s) => s.stripH);
-  const stageTree = useWorkspaceSelector((s) => s.stageTree);
+  const stageOccupied = useWorkspaceSelector((s) => s.stage !== null);
   const graphPath = useWorkspaceSelector((s) => s.graphPath);
-  useWorkspaceSelector((s) => s.explicit);
   useWorkspaceSelector((s) => s.nodes);
   const nodeCount = useWorkspaceSelector((s) => Object.keys(s.nodes).length);
   const edgeCount = useWorkspaceSelector((s) => Object.keys(s.edges).length);
@@ -268,8 +267,6 @@ function WritableWorkspaceFrame({ policy }: { policy: WorkspaceSurfacePolicy }) 
 
   const full = disposition === "full";
   const hidden = disposition === "hidden";
-  const stagedCount = ws.stagedIds().length;
-  const stageOccupied = stageHasContent(stageTree, stagedCount);
 
   // ⇧F cycles the emphasis axis: full → strip → hidden → full. Editor-only :
   // a fixed-preset build has no canvas to reveal.

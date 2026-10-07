@@ -64,7 +64,7 @@ Every entry requires a non-empty name and data path. A project must contain at l
 | `obs_columns`             | string array     | no          | observation columns to ingest            |
 | `settings.host`           | string           | no          | bind host; default `127.0.0.1`           |
 | `settings.port`           | integer          | no          | bind port; default `5055`                |
-| `preset`                  | string           | no          | shipped preset; currently `annotate`     |
+| `preset`                  | string           | no          | preset for a new workspace file: `annotate` or a `.json` workspace document |
 
 Each channel entry requires a hexadecimal `color` string without `#`. `contrast`, when supplied, is a two-number `[min, max]` pair. `visible` is optional and converted to a boolean.
 

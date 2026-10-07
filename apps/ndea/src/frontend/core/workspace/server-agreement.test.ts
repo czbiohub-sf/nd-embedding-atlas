@@ -13,9 +13,10 @@ import { createNativeAppNodeLibrary } from "@/core/node/library";
 import { NATIVE_NODE_CONTRIBUTIONS } from "@/core/node/native-nodes";
 import { NATIVE_NODE_GRAPH } from "@/core/graph/native-graph";
 import { WorkspaceEvaluator, createServerNodeResolver } from "../../../server/graph";
+import { loadPreset } from "../../../server/presets";
 import { WorkspaceDocumentStore } from "../../../server/workspace";
 import { toWorkspaceDocument } from "./document";
-import { seedAnnotate } from "./presets";
+import { decodeWorkspaceDocument } from "./sync";
 import { Workspace } from "./workspace-store";
 
 let dir: string;
@@ -54,7 +55,9 @@ describe("browser and server graph evaluation", () => {
 
   test("the annotate preset plus filter and dataset nodes evaluate identically on both sides", async () => {
     const workspace = browserWorkspace();
-    seedAnnotate(workspace);
+    const decoded = decodeWorkspaceDocument(await loadPreset("annotate"), workspace.nodeLibrary);
+    if (!decoded.ok) throw new Error(decoded.errors.join("; "));
+    workspace.loadDocument(decoded.state);
     const obs = Object.values(workspace.store.state.nodes).find((n) => n.definitionRef.nodeTypeId === "obs")!.id;
     const filter = workspace.addNode("filter", { x: 0, y: 0 });
     workspace.updateNodeConfig(filter, {

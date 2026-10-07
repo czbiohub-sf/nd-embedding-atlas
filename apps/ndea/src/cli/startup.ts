@@ -1,5 +1,6 @@
 /** Startup orchestration: open stores, prepare data, and launch the server. */
 
+import { DEFAULT_PRESET, loadPreset } from "../server/presets.ts";
 import { WorkspaceDocumentStore } from "../server/workspace.ts";
 import type { LaunchConfig } from "./config.ts";
 import { openDatasets, prepareDatasets } from "./startup/datasets.ts";
@@ -21,8 +22,10 @@ export async function startup(config: LaunchConfig): Promise<void> {
   installDevErrorBridge(config);
   printBanner();
 
-  // Before ingest, so an invalid workspace file fails in milliseconds, not minutes.
-  const workspace = await WorkspaceDocumentStore.open(config.workspace);
+  // Before ingest, so an invalid workspace file or preset fails in milliseconds, not minutes.
+  const workspace = await WorkspaceDocumentStore.open(config.workspace, () =>
+    loadPreset(config.preset ?? DEFAULT_PRESET),
+  );
   const loaded = await openDatasets(config.datasets);
   printPreparingObs();
   const datasets = prepareDatasets(loaded);
@@ -31,7 +34,7 @@ export async function startup(config: LaunchConfig): Promise<void> {
 
   const frontendDir = resolveStaticDirectory(config);
   const pluginSnapshot = await bootstrapPlugins(config);
-  const metadata = buildDatasetMetadata(config, datasets, session);
+  const metadata = buildDatasetMetadata(datasets, session);
   const server = await startServer(config, session.state, metadata, frontendDir, pluginSnapshot);
 
   await prewarmEmbeddings(session.state);

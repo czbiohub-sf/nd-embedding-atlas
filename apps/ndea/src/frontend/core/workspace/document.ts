@@ -26,7 +26,7 @@ import {
   isCoordinationType,
 } from "../coordination/types";
 import { parseWorkspaceNodeAssetRecords } from "../node-asset/schema";
-import type { TreeNode } from "./stage/split-tree";
+import { stageIssues, stageSchema } from "./stage/stage-spec";
 import type { WorkspaceDocumentState } from "./types";
 
 export const WORKSPACE_FORMAT = "ndea.workspace";
@@ -92,12 +92,6 @@ const edgeSchema = z
   })
   .strict();
 const sizeSchema = z.object({ w: z.number(), h: z.number() }).strict();
-const treeSchema: z.ZodType<TreeNode> = z.lazy(() =>
-  z.union([
-    z.string(),
-    z.object({ dir: z.enum(["row", "col"]), ratio: z.number().min(0).max(1), a: treeSchema, b: treeSchema }).strict(),
-  ]),
-);
 
 export const workspaceDocumentSchema = z
   .object({
@@ -111,8 +105,7 @@ export const workspaceDocumentSchema = z
     ),
     formOverride: z.record(z.string(), z.enum(["chip", "card", "full"])),
     formLocked: z.record(z.string(), z.boolean()),
-    explicit: z.record(z.string(), z.enum(["embedded", "staged"])),
-    stageTree: treeSchema.nullable(),
+    stage: stageSchema,
     stripH: z.number(),
     flags: z.record(z.string(), z.object({ bypass: z.boolean().optional(), off: z.boolean().optional() }).strict()),
     state: coordinationStateSchema,
@@ -120,6 +113,9 @@ export const workspaceDocumentSchema = z
   })
   .strict()
   .superRefine((doc, context) => {
+    for (const [path, message] of stageIssues(doc.stage, new Set(Object.keys(doc.nodes)))) {
+      context.addIssue({ code: "custom", path, message });
+    }
     try {
       parseWorkspaceNodeAssetRecords(doc.nodeAssets);
     } catch (error) {
@@ -190,6 +186,24 @@ export function toWorkspaceDocument(state: WorkspaceDocumentState): WorkspaceDoc
   const document: Record<string, unknown> = { ...state };
   for (const field of SESSION_FIELDS) delete document[field];
   return document as WorkspaceDocument;
+}
+
+/** A document with no nodes: the base an agent builds a workspace from. */
+export function emptyWorkspaceDocument(): WorkspaceDocument {
+  return {
+    nodeAssets: [],
+    nodes: {},
+    edges: {},
+    positions: {},
+    sizeOverrides: {},
+    formOverride: {},
+    formLocked: {},
+    stage: null,
+    stripH: 280,
+    flags: {},
+    state: {},
+    bindings: {},
+  };
 }
 
 export function withWorkspaceSession(document: WorkspaceDocument, session: WorkspaceSession): WorkspaceDocumentState {

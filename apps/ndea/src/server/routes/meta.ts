@@ -75,9 +75,6 @@ export function handleMetadata(state: ServerSession, config: DatasetSessionMetad
     export_dir: exportDir(),
     var_count: firstVarCount(state),
     layers: ["X"],
-    // Active preset name: a shipped build resolves this to a bundled graph; a
-    // build launched with no --preset falls back to annotate (the default).
-    preset: config.preset ?? "annotate",
     spatial: state.spatial
       ? {
           fov_col: state.spatial.fov,

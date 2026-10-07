@@ -18,8 +18,7 @@ function emptyState(): WorkspaceDocumentState {
     selectedNodeId: null,
     selectedNodeIds: [],
     selectedEdgeId: null,
-    explicit: {},
-    stageTree: null,
+    stage: null,
     disposition: "strip",
     stripH: 280,
     claimed: null,
@@ -31,28 +30,23 @@ function emptyState(): WorkspaceDocumentState {
 }
 
 describe("workspace recovery policy", () => {
-  test("an invalid server document opens read-only: never loaded, never overwritten by a seed", () => {
+  test("an invalid server document opens read-only: never loaded", () => {
     const invalid = {
       ...toWorkspaceDocument(emptyState()),
       edges: { e1: { id: "e1", from: "ghost", fromPort: "out", to: "ghost", toPort: "in", kind: "pred" } },
     };
     let loads = 0;
-    let seeds = 0;
     const workspace = {
       nodeLibrary: createNativeAppNodeLibrary(),
       loadDocument() {
         loads += 1;
       },
     };
-    const persistence = initializeWorkspaceDocument(workspace, invalid, () => (seeds += 1));
+    const persistence = initializeWorkspaceDocument(workspace, invalid);
 
     expect(loads).toBe(0);
-    expect(seeds).toBe(0);
     expect(persistence.mode).toBe("recovery");
     expect(persistence.errors).toEqual(['/edges/e1/from: unknown node "ghost"', '/edges/e1/to: unknown node "ghost"']);
-
-    expect(initializeWorkspaceDocument(workspace, null, () => (seeds += 1))).toEqual({ mode: "writable", errors: [] });
-    expect([loads, seeds]).toEqual([0, 1]);
   });
 
   test("surface policy separates recovery, authoring, and fixed-preset builds", () => {

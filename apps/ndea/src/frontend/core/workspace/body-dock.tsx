@@ -77,7 +77,7 @@ function BodyOwner({
 export function WorkspaceBodies() {
   const ws = useWorkspace();
   const nodes = useWorkspaceSelector((state) => state.nodes);
-  useWorkspaceSelector((state) => state.explicit);
+  useWorkspaceSelector((state) => state.stage);
   useWorkspaceSelector((state) => state.disposition);
   useWorkspaceSelector((state) => state.formOverride);
   const fullscreen = useSelector(ws.ui, (state) => state.fullscreen);

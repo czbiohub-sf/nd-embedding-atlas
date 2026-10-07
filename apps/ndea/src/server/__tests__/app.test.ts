@@ -212,8 +212,6 @@ describe("createApp", () => {
     expect(body.database).toEqual({ type: "rest" });
     expect(body.spatial?.crop_fov_col).toBe("fov_name");
     expect(body.spatial?.z_col).toBe("z_slice");
-    // No --preset / preset: set on the mock config → the annotate default (R2/R3).
-    expect(body.preset).toBe("annotate");
   });
 
   test("Mosaic JSON query works", async () => {

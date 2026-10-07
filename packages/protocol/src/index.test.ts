@@ -79,7 +79,6 @@ describe("shared HTTP response DTOs", () => {
         z_col: "z_slice",
       },
       plate: false,
-      preset: "annotate",
       capabilities: ["obs", "var", "obsm"],
     } satisfies Metadata;
     const config = {

@@ -27,7 +27,7 @@ export interface AppNodeSpec {
     | { readonly kind: "asset"; readonly sourceId: string; readonly sourceKind: "project" | "user" | "embedded" };
   readonly geometry: NativeNodeGeometry;
   readonly body?: "card-and-full" | "full-only";
-  readonly stage: "stageable" | "pin-only" | "canvas-only";
+  readonly stage: "stageable" | "canvas-only";
   readonly inPalette: boolean;
   readonly accent?: string;
   readonly checkpoint?: boolean;
@@ -49,7 +49,7 @@ export interface AppNodeDescriptor {
   readonly outputPorts: readonly { readonly id: string; readonly kind: NdPortKind }[];
   readonly inKinds: readonly NdPortKind[];
   readonly inputPorts: readonly { readonly id: string; readonly kind: NdPortKind }[];
-  readonly stage: "stageable" | "pin-only" | "canvas-only";
+  readonly stage: "stageable" | "canvas-only";
   readonly inPalette: boolean;
 }
 

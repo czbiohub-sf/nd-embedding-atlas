@@ -25,7 +25,6 @@ import {
 } from "@/core/node-asset/library";
 import { wsClient } from "@/lib/ws-client";
 import { parseWorkspaceDocument } from "./document";
-import { resolvePresetOrDefault } from "./presets";
 import { createHttpWorkspaceTransport, decodeWorkspaceDocument, WorkspaceSync, type WorkspaceTransport } from "./sync";
 import { Workspace } from "./workspace-store";
 import type { WorkspaceDocumentState } from "./types";
@@ -40,19 +39,11 @@ const WorkspacePersistenceContext = createContext<WorkspacePersistenceState>({
   errors: [],
 });
 
-/**
- * Load the server document, or seed a preset when the server has none. An
- * invalid document opens read-only and is never overwritten by a seed.
- */
+/** Load the server document. An invalid document opens read-only and is never overwritten. */
 export function initializeWorkspaceDocument(
   workspace: Pick<Workspace, "loadDocument"> & { readonly nodeLibrary: AppNodeLibrary },
   document: unknown,
-  seed: () => void,
 ): WorkspacePersistenceState {
-  if (document === null) {
-    seed();
-    return { mode: "writable", errors: [] };
-  }
   const decoded = decodeWorkspaceDocument(document, workspace.nodeLibrary);
   if (!decoded.ok) return { mode: "recovery", errors: decoded.errors };
   workspace.loadDocument(decoded.state);
@@ -77,7 +68,7 @@ export function WorkspaceProvider({
 }: {
   children: React.ReactNode;
   nodeLibrary: AppNodeLibrary;
-  /** Server document this session opens; `document: null` seeds the preset. */
+  /** Server document this session opens. */
   snapshot: WorkspaceSnapshot;
   transport?: WorkspaceTransport;
   nodeAssets?: NodeAssetLibrary;
@@ -102,10 +93,7 @@ export function WorkspaceProvider({
       nodeAssets: availableAssets,
       ...(loadedUserAssets.kind === "recovery" ? {} : { nodeAssetStorage: resolvedAssetStorage }),
     });
-    const persistence = applyNodeAssetRecovery(
-      initializeWorkspaceDocument(w, snapshot.document, () => resolvePresetOrDefault(metadata.preset)(w)),
-      loadedUserAssets,
-    );
+    const persistence = applyNodeAssetRecovery(initializeWorkspaceDocument(w, snapshot.document), loadedUserAssets);
     // Session state: the editor opens on the canvas; a fixed-preset build has no canvas, so the Stage fills.
     w.setDisposition(NODE_EDITOR_ENABLED ? "full" : "hidden");
     if (NODE_EDITOR_ENABLED) (window as unknown as { __ndeaWorkspace?: Workspace }).__ndeaWorkspace = w;
@@ -150,11 +138,11 @@ export function WorkspaceProvider({
   useEffect(() => {
     if (persistence.mode === "recovery") return;
     // Already decoded at init; parsing again yields the typed, unmigrated server copy as the diff base.
-    const acked = snapshot.document === null ? null : parseWorkspaceDocument(snapshot.document);
-    if (acked && !acked.ok) return;
+    const acked = parseWorkspaceDocument(snapshot.document);
+    if (!acked.ok) return;
     const sync = new WorkspaceSync(
       ws,
-      { revision: snapshot.revision, document: acked?.value ?? null },
+      { revision: snapshot.revision, document: acked.value },
       transport ?? createHttpWorkspaceTransport(wsClient),
       (errors) => setPersistence({ mode: "recovery", errors }),
     );

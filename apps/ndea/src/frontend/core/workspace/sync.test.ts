@@ -6,6 +6,7 @@ import type { Metadata } from "@ndea/protocol";
 
 import { createNativeAppNodeLibrary } from "@/core/node/library";
 import { WorkspaceDocumentStore } from "../../../server/workspace";
+import { emptyWorkspaceDocument } from "./document";
 import { WorkspaceSync, type WorkspaceTransport } from "./sync";
 import { Workspace } from "./workspace-store";
 
@@ -46,7 +47,8 @@ async function session(options?: { live?: boolean }) {
     nodeLibrary: library,
   });
   const obs = workspace.addNode("obs", { x: 0, y: 0 });
-  const sync = new WorkspaceSync(workspace, { revision: 0, document: null }, memoryTransport(store, options), (e) => {
+  const initial = { revision: 0, document: emptyWorkspaceDocument() };
+  const sync = new WorkspaceSync(workspace, initial, memoryTransport(store, options), (e) => {
     throw new Error(e.join("; "));
   });
   sync.start();

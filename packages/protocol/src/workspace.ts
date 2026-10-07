@@ -19,7 +19,7 @@ export const JsonPatchOpSchema = z.discriminatedUnion("op", [
 ]);
 export type JsonPatchOp = z.infer<typeof JsonPatchOpSchema>;
 
-/** GET /api/workspace. `document: null` until the first write (revision 0). */
+/** GET /api/workspace. The server seeds a missing workspace file from its preset, so `document` is always set. */
 export const WorkspaceSnapshotSchema = z.object({
   revision: z.number().int().nonnegative(),
   document: z.unknown(),
@@ -27,8 +27,7 @@ export const WorkspaceSnapshotSchema = z.object({
 export type WorkspaceSnapshot = z.infer<typeof WorkspaceSnapshotSchema>;
 
 /**
- * PATCH /api/workspace. Ops apply to the document at `baseRevision`; at
- * revision 0 the only valid patch is `[{ op: "add", path: "", value: doc }]`.
+ * PATCH /api/workspace. Ops apply to the document at `baseRevision`.
  * `clientId` lets a client ignore its own echo on `workspace/watch`.
  */
 export const WorkspacePatchBodySchema = z.object({

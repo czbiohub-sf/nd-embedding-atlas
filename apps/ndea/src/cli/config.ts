@@ -28,7 +28,7 @@ export interface ParsedProjectConfig {
     port?: number;
     host?: string;
   };
-  /** Named preset a shipped build opens (top-level YAML `preset:`). */
+  /** Preset a new workspace file starts from (top-level YAML `preset:`): a built-in name or a .json document. */
   preset?: string;
   /** Absolute plugin paths resolved from top-level YAML `plugin_paths:`. */
   pluginPaths?: string[];

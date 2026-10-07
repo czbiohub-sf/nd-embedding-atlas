@@ -119,8 +119,6 @@ export interface DatasetSessionMetadata {
   idColumn: string;
   datasetKeys: string[] | null;
   datasetChannels: Record<string, PlateChannel[]> | null;
-  /** Active preset name; the frontend resolves it to a bundled graph in a build. */
-  preset?: string;
 }
 
 /** All mutable server state for one server session. */

@@ -34,7 +34,7 @@ export default defineCommand({
       description: "Comma-separated obs columns to include",
     }),
     preset: option(z.string().optional(), {
-      description: "Named preset a shipped build opens (default: annotate)",
+      description: "Preset a new workspace file starts from: a built-in name (annotate) or a .json workspace document",
     }),
     workspace: option(z.string().optional(), {
       description: "Workspace document file (default: ~/.ndea/workspaces/<datasets>.json)",

@@ -34,27 +34,24 @@ beforeEach(() => {
 });
 
 describe("Workspace graph transactions", () => {
-  test("resolves every disposition and explicit placement against exact definition policy", () => {
+  test("a node is staged exactly when the Stage shows it, in every disposition", () => {
     const workspace = createWorkspace();
-    const stageable = workspace.addNode("scatter", { x: 0, y: 0 });
-    const pinOnly = workspace.addNode("filter", { x: 100, y: 0 });
+    const scatter = workspace.addNode("scatter", { x: 0, y: 0 });
     const canvasOnly = workspace.addNode("dataset", { x: 200, y: 0 });
-
-    expect(workspace.placementOf(stageable)).toBe("staged");
-    workspace.setDisposition("full");
-    expect(workspace.placementOf(stageable)).toBe("embedded");
-    workspace.setDisposition("hidden");
-    expect(workspace.placementOf(stageable)).toBe("staged");
-    workspace.togglePlacement(stageable, 0);
-    expect(workspace.placementOf(stageable)).toBe("embedded");
-    workspace.setDisposition("strip");
-    expect(workspace.placementOf(stageable)).toBe("embedded");
 
     for (const disposition of ["full", "strip", "hidden"] as const) {
       workspace.setDisposition(disposition);
-      expect(workspace.placementOf(pinOnly)).toBe("embedded");
+      expect(workspace.placementOf(scatter)).toBe("embedded");
+    }
+    workspace.togglePlacement(scatter, 0);
+    workspace.togglePlacement(canvasOnly, 0);
+    for (const disposition of ["full", "strip", "hidden"] as const) {
+      workspace.setDisposition(disposition);
+      expect(workspace.placementOf(scatter)).toBe("staged");
       expect(workspace.placementOf(canvasOnly)).toBe("embedded");
     }
+    workspace.removeNode(scatter);
+    expect(workspace.store.state.stage).toBeNull();
     workspace.dispose();
   });
 
@@ -288,15 +285,17 @@ describe("Workspace graph transactions", () => {
     workspace.coordination.assignScope(scatter, "focus", "A");
     workspace.coordination.setCoordinationValue("focus", "A", rowIndex(7));
     workspace.setGraphSelection([scatter, table], []);
-    workspace.setStageTree("__slot");
-    workspace.fillSlot("__slot", imageViewer);
+    workspace.togglePlacement(imageViewer, 0);
     workspace.setDisposition("hidden");
 
     expect(predicateSql(workspace.pullGraphNode(count))).toBe("_dataset = 'plate-a'");
     expect(workspace.coordination.readCoordination("focus", "A")).toBe(rowIndex(7));
     expect(workspace.store.state.selectedNodeIds).toEqual([scatter, table]);
-    expect(workspace.store.state.explicit[imageViewer]).toBe("staged");
-    expect(workspace.store.state.stageTree).toBe(imageViewer);
+    expect(workspace.placementOf(imageViewer)).toBe("staged");
+    expect(workspace.store.state.stage?.elements[workspace.store.state.stage.root]).toMatchObject({
+      type: "View",
+      props: { node: imageViewer },
+    });
     expect(workspace.store.state.disposition).toBe("hidden");
     workspace.dispose();
   });

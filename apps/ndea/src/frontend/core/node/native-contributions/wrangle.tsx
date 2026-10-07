@@ -16,7 +16,7 @@ export const wrangleNode = defineNativeNodeContribution({
   graph: NATIVE_NODE_GRAPH["wrangle"],
   presentation: {
     geometry: { chipW: 148, card: { w: 280, h: 168 }, full: { w: 320, h: 280 }, canFull: true },
-    stage: "pin-only",
+    stage: "stageable",
     inPalette: true,
     body: "card-and-full",
   },

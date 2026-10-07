@@ -99,7 +99,7 @@ export class WorkspaceSync {
   private readonly transport: WorkspaceTransport;
   private readonly onFailure: (errors: string[]) => void;
   private readonly clientId = crypto.randomUUID();
-  private acked: { revision: number; document: WorkspaceDocument | null };
+  private acked: { revision: number; document: WorkspaceDocument };
   private timer: ReturnType<typeof setTimeout> | undefined;
   private inflight: Promise<void> | null = null;
   private stopped = false;
@@ -107,7 +107,7 @@ export class WorkspaceSync {
 
   constructor(
     workspace: Workspace,
-    initial: { revision: number; document: WorkspaceDocument | null },
+    initial: { revision: number; document: WorkspaceDocument },
     transport: WorkspaceTransport,
     onFailure: (errors: string[]) => void,
   ) {
@@ -126,7 +126,7 @@ export class WorkspaceSync {
         () => void this.resync(),
       ),
     );
-    // A seeded preset (revision 0) or edits made before start still need a first push.
+    // Edits made before start still need a first push.
     this.schedule();
   }
 
@@ -158,7 +158,6 @@ export class WorkspaceSync {
 
   private pendingOps(): JsonPatchOp[] {
     const local = this.local();
-    if (this.acked.document === null) return [{ op: "add", path: "", value: local }];
     return createPatch(this.acked.document, local);
   }
 

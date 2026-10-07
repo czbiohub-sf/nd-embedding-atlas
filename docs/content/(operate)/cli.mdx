@@ -49,12 +49,12 @@ A single `.yaml` / `.yml` path is parsed as a multi-dataset project config (see 
 | `--no-open`            | boolean | `false`     | Do not auto-open the browser                                   |
 | `--no-static`          | boolean | `false`     | Do not serve the bundled frontend (Vite serves it in dev mode) |
 | `--obs-columns <list>` | string  | all columns | Comma-separated subset of obs columns to load                  |
-| `--preset <name>`      | string  | `annotate`  | Shipped preset; currently only `annotate`                      |
+| `--preset <name>`      | string  | `annotate`  | Preset a new workspace file starts from: `annotate` or a `.json` workspace document |
 | `--workspace <file>`   | path    | see below   | Workspace document to open and save                            |
 
 ### Workspace file
 
-The running server owns one workspace document: the nodes, wiring, configuration, and Stage layout. Every edit, from the browser or from `ndea workspace patch`, is saved to the workspace file as a new revision. Without `--workspace`, ndea uses `~/.ndea/workspaces/<key>.json`, where the key is derived from the dataset paths, so opening the same datasets reopens the same workspace. A missing file starts from the preset. A file that fails validation stops `ndea view` before any data loads and lists each problem by JSON Pointer; ndea never rewrites or migrates it.
+The running server owns one workspace document: the nodes, wiring, configuration, coordination state, and Stage layout. Every edit, from the browser or from `ndea workspace patch`, is saved to the workspace file as a new revision. Without `--workspace`, ndea uses `~/.ndea/workspaces/<key>.json`, where the key is derived from the dataset paths, so opening the same datasets reopens the same workspace. A missing file is written from the preset as revision 1, before any browser opens. A preset is itself a workspace document: `--preset annotate` uses the built-in one, and `--preset my-layout.json` copies any valid document, such as the `document` field printed by `ndea workspace get`. A file or preset that fails validation stops `ndea view` before any data loads and lists each problem by JSON Pointer; ndea never rewrites or migrates it.
 
 `--port` accepts integers in `[1, 65535]`.
 
@@ -188,6 +188,28 @@ ndea workspace patch --revision 6 --ops '[{"op":"replace","path":"/state/focus/A
 ```
 
 A filter scope maps each source to named clauses, using the same clause shape as `ndea filter --where`. Each member sees every other source's clauses, never its own, so a scatter lasso filters the table but not the scatter. Lassos appear as `{"op":"inSet","set":"<id>"}`, which refers to an observation set saved under `~/.ndea/sets/`. A patch that refers to an unknown set is rejected.
+
+### Arranging the Stage
+
+`/stage` is a [json-render](https://json-render.dev) flat spec: `{ "root", "elements" }`, where every element has a `type`, `props`, and `children` (element ids). Three components exist:
+
+| Type    | Props                                       | Children    |
+| ------- | ------------------------------------------- | ----------- |
+| `Split` | `direction` (`row` or `column`), `ratio` (0.05 to 0.95, the first child's share) | exactly two |
+| `View`  | `node`, optional `title`                    | none        |
+| `Slot`  | none                                        | none        |
+
+A node is on the Stage exactly when a `View` shows it, and each node appears at most once. `title` accepts a json-render expression read from coordination state, such as `{"$template": "Focused row ${/focus/A}"}`. A `null` stage shows nothing.
+
+```bash
+# Give the first column 60% of the width and retitle the table.
+ndea workspace patch --revision 7 --ops '[
+  {"op":"replace","path":"/stage/elements/root/props/ratio","value":0.6},
+  {"op":"add","path":"/stage/elements/view-table-3/props/title","value":{"$template":"Table · focus ${/focus/A}"}}
+]'
+```
+
+A patch that leaves an element unreachable, references a missing element or node, or shows a node twice is rejected with the offending pointer.
 
 An unknown node id exits 1.
 

@@ -68,7 +68,9 @@ entrypoints across workspaces.
   categorization, annotations, exports, crops, filtering, the workspace
   document, and plugin bootstrap.
 - `WorkspaceDocumentStore` (`server/workspace.ts`) owns the session's one
-  revisioned workspace document and its file. `PATCH /api/workspace` applies
+  revisioned workspace document and its file. A missing file is written from
+  the preset (`server/presets.ts`): a built-in JSON document under
+  `apps/ndea/src/presets/` or a `.json` path. `PATCH /api/workspace` applies
   RFC 6902 ops against a base revision; `workspace/watch` pushes accepted
   revisions.
 - `WorkspaceEvaluator` (`server/graph.ts`) evaluates that document with the
@@ -118,6 +120,12 @@ entrypoints across workspaces.
   scope is a crossfilter `source → facet → FilterClause`: each member sees every
   other source's clauses, never its own, and agents write under their own
   source key. Publishers emit typed clauses, never SQL.
+- json-render renders the Stage from the document's `stage`, a flat spec of
+  `Split`, `View`, and `Slot` elements (`workspace/stage/stage-spec.ts` holds
+  the schema, structural rules, operations, and catalog). A node is staged
+  exactly when a `View` shows it. Components get element ids through a
+  render-only `elementId` prop, and props resolve json-render expressions
+  against coordination `state`. Views adopt the node's stable body dock.
 
 ## Commands
 
@@ -166,8 +174,8 @@ not replace unrelated `catalog:` references with package-local ranges. Use
 that invokes Rolldown instead of the single-binary pipeline. Direct
 compiler invocation also fails on embedded font assets; use the project task.
 
-The node editor runs in development. Production builds compile it out and load
-the selected preset.
+The node editor runs in development. Production builds compile it out and open
+the document's Stage.
 
 ## Code rules
 

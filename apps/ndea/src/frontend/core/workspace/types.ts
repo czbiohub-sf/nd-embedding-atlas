@@ -8,7 +8,7 @@ import type { NdForm } from "@/components/node-workspace/nd-resolve-form";
 import type { CoordinationBindings, CoordinationState } from "@/core/coordination/types";
 import type { GraphDocumentEdge, GraphDocumentNode } from "@/core/graph/records";
 import type { WorkspaceNodeAssetRecord } from "@/core/node-asset/schema";
-import type { TreeNode } from "./stage/split-tree";
+import type { Stage } from "./stage/stage-spec";
 
 /** where a node's body materializes */
 export type WorkspacePlacement = "embedded" | "staged";
@@ -43,10 +43,8 @@ export interface WorkspaceDocumentState {
   selectedNodeIds: string[];
   /** selected edge id (delete chip) */
   selectedEdgeId: string | null;
-  /** explicit placement pins: override the by-disposition default, persist */
-  explicit: Record<string, WorkspacePlacement>;
-  /** stage split-tree layout memory (null → default disposition on demand) */
-  stageTree: TreeNode | null;
+  /** the Stage: a json-render flat spec of Split / View / Slot elements */
+  stage: Stage;
   /** canvas disposition: docked bottom strip ↔ full canvas */
   disposition: WorkspaceCanvasDisposition;
   /** strip height (px) when docked */

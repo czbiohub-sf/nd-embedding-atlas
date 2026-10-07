@@ -1,7 +1,7 @@
 /**
  * Server-owned workspace document: one revisioned document per session,
- * persisted atomically to a JSON file. Every writer (browser sync, CLI,
- * agents) goes through `apply`.
+ * persisted atomically to a JSON file. A missing file is seeded from the
+ * preset document. Every writer (browser sync, CLI, agents) goes through `apply`.
  */
 
 import { mkdir, rename } from "node:fs/promises";
@@ -11,6 +11,7 @@ import {
   WORKSPACE_FORMAT,
   WORKSPACE_FORMAT_VERSION,
   applyWorkspaceOps,
+  emptyWorkspaceDocument,
   parseWorkspaceDocument,
   parseWorkspaceFile,
   type WorkspaceDocument,
@@ -34,26 +35,30 @@ export class WorkspaceFileError extends Error {
 export class WorkspaceDocumentStore {
   readonly path: string;
   private revision: number;
-  private document: WorkspaceDocument | null;
+  private document: WorkspaceDocument;
   private readonly listeners = new Set<(change: WorkspaceChange) => void>();
   /** Applies run one at a time so two writers can never both pass the revision check. */
   private queue: Promise<unknown> = Promise.resolve();
 
-  private constructor(path: string, revision: number, document: WorkspaceDocument | null) {
+  private constructor(path: string, revision: number, document: WorkspaceDocument) {
     this.path = path;
     this.revision = revision;
     this.document = document;
   }
 
-  /** A revision-0 store that writes to `path` on first accepted patch; nothing is read. */
-  static empty(path: string): WorkspaceDocumentStore {
-    return new WorkspaceDocumentStore(path, 0, null);
+  /** A revision-0 store over `document` that writes to `path` on first accepted patch; nothing is read. */
+  static empty(path: string, document = emptyWorkspaceDocument()): WorkspaceDocumentStore {
+    return new WorkspaceDocumentStore(path, 0, document);
   }
 
-  /** Open `path`; a missing file starts at revision 0. Invalid files throw. */
-  static async open(path: string): Promise<WorkspaceDocumentStore> {
+  /** Open `path`; a missing file is written from `seed()` as revision 1. Invalid files throw. */
+  static async open(path: string, seed: () => Promise<WorkspaceDocument>): Promise<WorkspaceDocumentStore> {
     const file = Bun.file(path);
-    if (!(await file.exists())) return new WorkspaceDocumentStore(path, 0, null);
+    if (!(await file.exists())) {
+      const document = await seed();
+      await writeWorkspaceFile(path, 1, document);
+      return new WorkspaceDocumentStore(path, 1, document);
+    }
     let json: unknown;
     try {
       json = await file.json();
@@ -100,30 +105,27 @@ export class WorkspaceDocumentStore {
     const issues = validate ? await validate(parsed.value) : [];
     if (issues.length) return { kind: "invalid", issues };
 
-    const revision = this.revision + 1;
-    await this.write(
-      JSON.stringify(
-        { format: WORKSPACE_FORMAT, version: WORKSPACE_FORMAT_VERSION, revision, document: parsed.value },
-        null,
-        2,
-      ),
-    );
+    await writeWorkspaceFile(this.path, this.revision + 1, parsed.value);
     this.document = parsed.value;
-    this.revision = revision;
-    const change: WorkspaceChange = { revision, ops: [...ops], ...(clientId ? { clientId } : {}) };
+    this.revision += 1;
+    const change: WorkspaceChange = { revision: this.revision, ops: [...ops], ...(clientId ? { clientId } : {}) };
     for (const listener of this.listeners) listener(change);
-    return { kind: "accepted", revision };
+    return { kind: "accepted", revision: this.revision };
   }
 
   watch(listener: (change: WorkspaceChange) => void): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
   }
+}
 
-  private async write(body: string): Promise<void> {
-    await mkdir(dirname(this.path), { recursive: true });
-    const tmp = `${this.path}.${process.pid}.tmp`;
-    await Bun.write(tmp, body);
-    await rename(tmp, this.path);
-  }
+/** Atomic tmp-and-rename write of the versioned workspace file. */
+async function writeWorkspaceFile(path: string, revision: number, document: WorkspaceDocument): Promise<void> {
+  await mkdir(dirname(path), { recursive: true });
+  const tmp = `${path}.${process.pid}.tmp`;
+  await Bun.write(
+    tmp,
+    JSON.stringify({ format: WORKSPACE_FORMAT, version: WORKSPACE_FORMAT_VERSION, revision, document }, null, 2),
+  );
+  await rename(tmp, path);
 }
