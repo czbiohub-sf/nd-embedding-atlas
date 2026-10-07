@@ -6,11 +6,11 @@
 import { createImageViewerDefinition, type ImageViewerServices } from "@ndea/nodes/image-viewer";
 import { ChannelStatsResponseSchema, ObsInfoSchema } from "@ndea/protocol";
 import { defineNativeNodeContribution } from "@/core/node/native-contribution";
-import { lastPortValueOfKind } from "@/core/graph/cook";
 import { mountNodeBody } from "@/core/node/react-node-body";
 import { useDatasetSession } from "@/hooks/useDatasetSession";
 import { clearViewerChannels, publishViewerChannels } from "@/stores/viewer-channels-store";
 import { clearViewerZ, publishViewerZ } from "@/stores/viewer-z-store";
+import { NATIVE_NODE_GRAPH } from "@/core/graph/native-graph";
 
 const services: ImageViewerServices = {
   useSessionSnapshot: () => {
@@ -45,11 +45,7 @@ export const imageViewerDefinition = createImageViewerDefinition({
 
 export const imageViewerNode = defineNativeNodeContribution({
   definition: imageViewerDefinition,
-  graph: {
-    role: "view",
-    evaluationRole: "view",
-    cook: (inputs) => ({ kind: "focus", rowIndex: lastPortValueOfKind(inputs, "focus")?.rowIndex ?? null }),
-  },
+  graph: NATIVE_NODE_GRAPH["image-viewer"],
   presentation: {
     geometry: { chipW: 148, card: { w: 220, h: 156 }, full: { w: 440, h: 420 }, canFull: true },
     stage: "stageable",

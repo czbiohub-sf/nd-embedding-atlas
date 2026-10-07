@@ -8,6 +8,20 @@ import {
 } from "./engine";
 import type { GraphPortValue } from "./values";
 
+/** Structural equality of tagged values: what early cutoff compares. */
+export function sameGraphPortValue(a: GraphPortValue, b: GraphPortValue): boolean {
+  if (a.kind !== b.kind) return false;
+  if (a.kind === "focus") return a.rowIndex === (b as typeof a).rowIndex;
+  if (a.sql !== (b as typeof a).sql) return false;
+  if (a.kind === "pred") return true;
+  const left = a.rowIds;
+  const right = (b as typeof a).rowIds;
+  if (left === right) return true;
+  if (!left || !right || left.length !== right.length) return false;
+  for (let index = 0; index < left.length; index += 1) if (left[index] !== right[index]) return false;
+  return true;
+}
+
 export interface GraphEvaluationState {
   epoch: number;
   cooking: Record<string, boolean>;
@@ -36,7 +50,7 @@ export class GraphEvaluator {
   private readonly unsubscribeTelemetry: () => void;
 
   constructor({ onFlush, ...engineOptions }: GraphEvaluatorOptions = {}) {
-    this.engine = new GraphEngine(engineOptions);
+    this.engine = new GraphEngine({ equals: sameGraphPortValue, ...engineOptions });
     this.unsubscribeTelemetry = this.engine.onTelemetry((event) => {
       if (event.type === "flush") {
         onFlush?.();
@@ -50,7 +64,8 @@ export class GraphEvaluator {
             return { ...state, epoch: event.epoch, dirty: { ...state.dirty, [event.node]: true } };
           case "cook-start":
             return { ...state, epoch: event.epoch, cooking: { ...state.cooking, [event.node]: true } };
-          case "cook-end": {
+          case "cook-end":
+          case "reuse": {
             const cooking = { ...state.cooking };
             delete cooking[event.node];
             const dirty = { ...state.dirty };

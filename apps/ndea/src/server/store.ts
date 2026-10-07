@@ -821,6 +821,17 @@ export class DatasetQuerySession {
     return rows.map(coerceRow);
   }
 
+  /**
+   * Like `queryJson`, but runs `sql` as one prepared statement. Use for SQL
+   * assembled from document or agent input: DuckDB's plain run executes
+   * stacked statements (`…; DROP TABLE …`), a prepared statement cannot.
+   */
+  async querySingleJson(sql: string): Promise<RowData[]> {
+    const statement = await this.conn.prepare(sql);
+    const reader = await statement.runAndReadAll();
+    return (reader.getRowObjectsJS() as RowData[]).map(coerceRow);
+  }
+
   /** Execute SQL with no return value (DDL / DML). */
   async execute(sql: string): Promise<void> {
     await this.conn.run(sql);

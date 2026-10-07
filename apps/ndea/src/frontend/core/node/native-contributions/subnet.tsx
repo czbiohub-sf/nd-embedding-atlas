@@ -5,10 +5,10 @@
 
 import { defineNativeNodeContribution } from "@/core/node/native-contribution";
 import { mountNodeBody } from "@/core/node/react-node-body";
-import { passthroughGraphPredicate } from "@/core/graph/cook";
 import { requireAppNodeHostFacet } from "@/core/node/app-node-host";
 import { NdIconButton } from "@/components/node-workspace/nd-icon-button";
 import { createSubnetDefinition } from "@ndea/nodes/subnet";
+import { NATIVE_NODE_GRAPH } from "@/core/graph/native-graph";
 
 const subnetDefinition = createSubnetDefinition({
   mountBody: mountNodeBody,
@@ -18,11 +18,7 @@ const subnetDefinition = createSubnetDefinition({
 
 export const subnetNode = defineNativeNodeContribution({
   definition: subnetDefinition,
-  graph: {
-    role: "subnet",
-    evaluationRole: "view",
-    cook: (inputs) => passthroughGraphPredicate(inputs),
-  },
+  graph: NATIVE_NODE_GRAPH["subnet"],
   presentation: {
     geometry: { chipW: 150, card: { w: 220, h: 96 }, full: { w: 220, h: 96 }, canFull: false },
     stage: "canvas-only",

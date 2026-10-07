@@ -63,3 +63,29 @@ export const WorkspaceChangeSchema = z.object({
   clientId: z.string().optional(),
 });
 export type WorkspaceChange = z.infer<typeof WorkspaceChangeSchema>;
+
+const ObservationPageSchema = {
+  count: z.number().int().nonnegative(),
+  rows: z.array(z.object({ rowIndex: z.number().int().nonnegative(), datasetKey: z.string(), obsName: z.string() })),
+  truncated: z.boolean(),
+};
+
+/**
+ * GET /api/workspace/nodes/:id. The node's cooked output at `revision`,
+ * evaluated from the document alone: per-tab state (lassos, focus, cache
+ * pins) is not visible here. Predicates come with a bounded observation page.
+ */
+export const WorkspaceNodeResultSchema = z.object({
+  revision: z.number().int().nonnegative(),
+  nodeId: z.string(),
+  status: z.enum(["resolved", "unresolved", "error"]),
+  error: z.string().optional(),
+  output: z
+    .discriminatedUnion("kind", [
+      z.object({ kind: z.literal("pred"), sql: z.string().nullable(), ...ObservationPageSchema }),
+      z.object({ kind: z.literal("sel"), sql: z.string().nullable(), ...ObservationPageSchema }),
+      z.object({ kind: z.literal("focus"), rowIndex: z.number().int().nonnegative().nullable() }),
+    ])
+    .optional(),
+});
+export type WorkspaceNodeResult = z.infer<typeof WorkspaceNodeResultSchema>;

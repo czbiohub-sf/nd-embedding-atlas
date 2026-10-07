@@ -6,8 +6,8 @@
 
 import { defineNativeNodeContribution } from "@/core/node/native-contribution";
 import { mountNodeBody } from "@/core/node/react-node-body";
-import { nodeConfig } from "@/core/graph/cook";
-import { createDatasetDefinition, type DatasetConfig } from "@ndea/nodes/dataset";
+import { createDatasetDefinition } from "@ndea/nodes/dataset";
+import { NATIVE_NODE_GRAPH } from "@/core/graph/native-graph";
 
 const datasetDefinition = createDatasetDefinition({
   mountBody: mountNodeBody,
@@ -15,14 +15,7 @@ const datasetDefinition = createDatasetDefinition({
 
 export const datasetNode = defineNativeNodeContribution({
   definition: datasetDefinition,
-  graph: {
-    role: "source",
-    evaluationRole: "source",
-    cook: (_inputs, host) => {
-      const key = nodeConfig<DatasetConfig>(host.node()).datasetKey;
-      return { kind: "pred", sql: key ? `_dataset = '${key.replace(/'/g, "''")}'` : null };
-    },
-  },
+  graph: NATIVE_NODE_GRAPH["dataset"],
   presentation: {
     geometry: { chipW: 148, card: { w: 196, h: 96 }, full: { w: 196, h: 96 }, canFull: false },
     stage: "canvas-only",

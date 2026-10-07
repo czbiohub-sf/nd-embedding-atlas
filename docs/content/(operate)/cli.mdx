@@ -18,6 +18,7 @@ ndea doctor [--check-network] [--strict]
 ndea filter [--where <json>] [--limit <n>] [--host <host>] [--port <port>]
 ndea workspace get [--host <host>] [--port <port>]
 ndea workspace patch --revision <n> --ops <json> [--host <host>] [--port <port>]
+ndea workspace result <node> [--limit <n>] [--host <host>] [--port <port>]
 ndea completions <bash|zsh|fish>
 ndea complete -- <args...>                       # internal; called by completion scripts
 ndea --help | --version
@@ -159,7 +160,20 @@ ndea workspace patch --revision 3 --ops '[{"op":"replace","path":"/stripH","valu
 - `--revision` is stale: the body carries the current `revision` and `document` to rebase onto.
 - The result is invalid: the body is an [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) problem whose `errors[].pointer` locates each issue, and nothing is saved.
 
-Both subcommands accept `--host` (default `127.0.0.1`) and `--port` (default `5055`).
+`result` evaluates one node at the current revision, with the same node logic as the browser, and prints `{ "revision", "nodeId", "status", "output" }`:
+
+```bash
+ndea workspace result count-2 --limit 5
+```
+
+- For filters, sources, and views, `output` holds the predicate `sql` the node passes on or displays, the exact `count` of matching observations, and up to `--limit` (default `100`) `rows` of `{ rowIndex, datasetKey, obsName }`.
+- For focus nodes, `output` is `{ "kind": "focus", "rowIndex" }`.
+- `status` is `unresolved` for plugin and node-asset nodes the server cannot evaluate, and `error` with a message when the node's SQL fails.
+- The result reflects the saved document only. Interaction in an open tab, such as a scatter lasso, a focused row, a cached selection, or chart brushing, is not visible to it.
+
+An unknown node id exits 1.
+
+All three subcommands accept `--host` (default `127.0.0.1`) and `--port` (default `5055`).
 
 ## `ndea completions`
 

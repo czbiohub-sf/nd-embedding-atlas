@@ -45,7 +45,8 @@ describe("GraphEngine", () => {
 
   test("cache boundary: a clean upstream node is NOT recooked when only a dependent changes", () => {
     const engine = new GraphEngine();
-    const src = counted(() => "src_pred");
+    let version = 0;
+    const src = counted(() => `src_${version}`);
     const filter = counted((inputs) => `(${andPreds(inputs.get("in") ?? [])}) AND (x > 5)`);
     engine.addNode({ id: "src", kind: "source", cook: src.cook });
     engine.addNode({ id: "filter", kind: "transform", cook: filter.cook });
@@ -64,7 +65,8 @@ describe("GraphEngine", () => {
     expect(src.calls()).toBe(1); // cache boundary halted the walk at the clean source
     expect(filter.calls()).toBe(2);
 
-    // Dirtying the source invalidates every dependent cache.
+    // A changed source value invalidates every dependent cache.
+    version += 1;
     engine.markDirty("src");
     engine.pull("sink");
     expect(src.calls()).toBe(2);
@@ -274,16 +276,11 @@ describe("GraphEngine", () => {
     engine.pull("sink");
     expect(events).toEqual([]);
 
-    // Dirty the transform; flush (via registered sink) recooks filter + sink only.
+    // Dirty the transform; it recooks to an equal value, so the sink is cut off.
     engine.registerSink("sink", () => {});
     engine.markDirty("filter"); // default scheduler flushes synchronously
     const cooks = events.filter((e) => e.type !== "dirty" && e.type !== "flush");
-    expect(cooks.map((e) => `${e.type}:${e.node}`)).toEqual([
-      "cook-start:filter",
-      "cook-end:filter",
-      "cook-start:sink",
-      "cook-end:sink",
-    ]); // src is a clean cache boundary: never bracketed
+    expect(cooks.map((e) => `${e.type}:${e.node}`)).toEqual(["cook-start:filter", "cook-end:filter", "reuse:sink"]);
     for (const e of cooks) {
       if (e.type === "cook-end") {
         expect(e.ms).toBeGreaterThanOrEqual(0);
@@ -343,6 +340,54 @@ describe("GraphEngine", () => {
     expect(cooked.at(-1)).toBe("(base) AND (x > 5)"); // cook completed
     expect(survived.filter((e) => e.type === "dirty").length).toBeGreaterThan(0);
     expect(survived.filter((e) => e.type === "cook-end").length).toBeGreaterThan(0);
+  });
+});
+
+describe("early cutoff (backdating)", () => {
+  type V = { sql: string };
+
+  function chain() {
+    let sql = "a > 1";
+    const view = { calls: 0 };
+    const engine = new GraphEngine<V>({ equals: (a, b) => a.sql === b.sql });
+    engine.addNode({ id: "src", kind: "source", cook: () => ({ sql }) });
+    engine.addNode({ id: "thr", kind: "transform", cook: (inputs) => ({ sql: `(${inputs.get("in")?.[0]?.sql})` }) });
+    engine.addNode({
+      id: "view",
+      kind: "view",
+      cook: (inputs) => {
+        view.calls += 1;
+        return inputs.get("in")?.[0] ?? { sql: "" };
+      },
+    });
+    engine.connect({ from: "src", to: "thr", toPort: "in" });
+    engine.connect({ from: "thr", to: "view", toPort: "in" });
+    return { engine, view, set: (next: string) => (sql = next) };
+  }
+
+  test("an equal recook keeps the cached reference and downstream skips its cook", () => {
+    const { engine, view } = chain();
+    const first = engine.pull("view");
+    engine.markDirty("src"); // e.g. a config edit that compiles to the same SQL
+    expect(engine.pull("view")).toBe(first);
+    expect(view.calls).toBe(1);
+  });
+
+  test("a changed value still propagates to every downstream node", () => {
+    const { engine, view, set } = chain();
+    engine.pull("view");
+    set("a > 2");
+    engine.markDirty("src");
+    expect(engine.pull("view")).toEqual({ sql: "(a > 2)" });
+    expect(view.calls).toBe(2);
+  });
+
+  test("a node dirtied directly always recooks, even when its inputs are unchanged", () => {
+    const { engine, view } = chain();
+    engine.pull("view");
+    engine.markDirty("view"); // its own config or runtime state changed
+    engine.pull("view");
+    expect(view.calls).toBe(2);
   });
 });
 

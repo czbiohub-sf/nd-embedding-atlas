@@ -1,8 +1,9 @@
 /**
  * `ndea workspace`: read and edit the running server's workspace document.
  *
- *   ndea workspace get                          → { revision, document }
+ *   ndea workspace get                            → { revision, document }
  *   ndea workspace patch --revision N --ops '[…]' → { revision } (RFC 6902 ops)
+ *   ndea workspace result <node> [--limit N]      → the node's evaluated output
  *
  * `patch` goes through the same validated path as the browser: a stale
  * revision exits 1 with the current snapshot; an invalid result exits 1 with
@@ -40,8 +41,27 @@ const patchCommand = defineCommand({
   },
 });
 
+const resultCommand = defineCommand({
+  name: "result" as const,
+  description: "Print one node's evaluated output at the current revision as JSON",
+  options: {
+    limit: option(z.coerce.number().int().min(0).max(1_000_000).default(100), {
+      description: "Maximum observations to list (count is always exact)",
+    }),
+    ...serverOptions,
+  },
+  async handler({ flags, positional }) {
+    const nodeId = positional[0];
+    if (!nodeId) {
+      console.error("Error: pass a node id, e.g. `ndea workspace result count-2` (ids: `ndea workspace get`).");
+      process.exit(1);
+    }
+    await requestServer(flags, `/api/workspace/nodes/${encodeURIComponent(nodeId)}?limit=${flags.limit}`);
+  },
+});
+
 export default defineGroup({
   name: "workspace" as const,
   description: "Read and edit the running server's workspace document",
-  commands: [getCommand, patchCommand],
+  commands: [getCommand, patchCommand, resultCommand],
 });

@@ -8,7 +8,14 @@
  * are no migrations.
  */
 
-import { isSemanticVersion, type JsonValue } from "@ndea/sdk";
+import {
+  isSemanticVersion,
+  migrateNodeConfig,
+  type ExactNodeTypeRef,
+  type JsonValue,
+  type NodeConfigContract,
+  type NodeConfigSnapshot,
+} from "@ndea/sdk";
 import { applyPatch, type Operation } from "rfc6902";
 import { z } from "zod";
 
@@ -181,6 +188,30 @@ export function withWorkspaceSession(document: WorkspaceDocument, session: Works
 export function workspaceSessionOf(state: WorkspaceDocumentState): WorkspaceSession {
   const { selectedNodeId, selectedNodeIds, selectedEdgeId, claimed, graphPath, disposition } = state;
   return { selectedNodeId, selectedNodeIds, selectedEdgeId, claimed, graphPath, disposition };
+}
+
+/**
+ * Migrate every resolved node's config snapshot to its definition's current
+ * version. Unresolved nodes keep their opaque config so it survives until
+ * their definition returns. Throws on a config the definition cannot accept.
+ */
+export function decodeNodeConfigs(
+  nodes: WorkspaceDocument["nodes"],
+  resolver: {
+    getSpecExact(ref: ExactNodeTypeRef): { readonly definition: { readonly config?: NodeConfigContract } } | undefined;
+  },
+): WorkspaceDocument["nodes"] {
+  const decoded: WorkspaceDocument["nodes"] = {};
+  for (const [key, node] of Object.entries(nodes)) {
+    const spec = resolver.getSpecExact(node.definitionRef);
+    if (node.config === undefined || !spec) {
+      decoded[key] = node;
+      continue;
+    }
+    if (!spec.definition.config) throw new Error(`node "${node.id}" does not accept configuration`);
+    decoded[key] = { ...node, config: migrateNodeConfig(spec.definition.config, node.config) as NodeConfigSnapshot };
+  }
+  return decoded;
 }
 
 function toIssues(issues: readonly z.core.$ZodIssue[]): WorkspaceIssue[] {

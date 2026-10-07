@@ -12,10 +12,10 @@ import { useSelector } from "@tanstack/react-store";
 import { createAnnotateDefinition } from "@ndea/nodes/annotate";
 import type { ChannelHash } from "@ndea/nodes/gallery";
 import { defineNativeNodeContribution } from "@/core/node/native-contribution";
-import { passthroughGraphPredicate } from "@/core/graph/cook";
 import { mountNodeBody } from "@/core/node/react-node-body";
 import { viewerChannelsStore } from "@/stores/viewer-channels-store";
 import { viewerZStore } from "@/stores/viewer-z-store";
+import { NATIVE_NODE_GRAPH } from "@/core/graph/native-graph";
 
 function useAnnotateServices() {
   const channels = useSelector(viewerChannelsStore, (store) => store.slots);
@@ -37,11 +37,7 @@ export const annotateDefinition = createAnnotateDefinition({
 
 export const annotateNode = defineNativeNodeContribution({
   definition: annotateDefinition,
-  graph: {
-    role: "view",
-    evaluationRole: "view",
-    cook: (inputs) => passthroughGraphPredicate(inputs),
-  },
+  graph: NATIVE_NODE_GRAPH["annotate"],
   presentation: {
     geometry: { chipW: 148, card: { w: 256, h: 180 }, full: { w: 320, h: 360 }, canFull: true },
     stage: "stageable",

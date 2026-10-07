@@ -2,15 +2,28 @@
  * GET   /api/workspace: current revision and document.
  * PATCH /api/workspace: apply RFC 6902 ops against a base revision.
  *   200 { revision } · 409 stale revision + current snapshot · 400 RFC 9457 problem.
+ * GET   /api/workspace/nodes/:id?limit=N: one node's evaluated output at the current revision.
  */
 
 import {
   WorkspacePatchBodySchema,
   type WorkspaceConflict,
+  type WorkspaceNodeResult,
   type WorkspacePatchAccepted,
   type WorkspaceProblem,
 } from "@ndea/protocol";
+import { WorkspaceEvaluator } from "../graph.ts";
+import { queryObservations } from "../observations.ts";
 import type { ServerSession } from "../state.ts";
+import type { WorkspaceDocumentStore } from "../workspace.ts";
+
+const evaluators = new WeakMap<WorkspaceDocumentStore, WorkspaceEvaluator>();
+
+function evaluatorFor(workspace: WorkspaceDocumentStore): WorkspaceEvaluator {
+  let evaluator = evaluators.get(workspace);
+  if (!evaluator) evaluators.set(workspace, (evaluator = new WorkspaceEvaluator(workspace)));
+  return evaluator;
+}
 
 export function handleWorkspaceGet(state: Pick<ServerSession, "workspace">): Response {
   return Response.json(state.workspace.snapshot());
@@ -44,4 +57,35 @@ export async function handleWorkspacePatch(req: Request, state: Pick<ServerSessi
 function problem(detail: string, errors: WorkspaceProblem["errors"]): Response {
   const body: WorkspaceProblem = { type: "about:blank", title: "Invalid workspace patch", status: 400, detail, errors };
   return Response.json(body, { status: 400, headers: { "content-type": "application/problem+json" } });
+}
+
+export async function handleWorkspaceNode(
+  nodeId: string,
+  url: URL,
+  state: Pick<ServerSession, "workspace" | "store" | "datasets">,
+): Promise<Response> {
+  const limit = Math.min(Math.max(Number(url.searchParams.get("limit") ?? 100) || 0, 0), 1_000_000);
+  const evaluation = evaluatorFor(state.workspace).evaluate(nodeId);
+  const base = { revision: evaluation.revision, nodeId };
+  if (evaluation.status === "missing") {
+    return Response.json({ ...base, error: `no node "${nodeId}" in the workspace` }, { status: 404 });
+  }
+  if (evaluation.status !== "resolved") return Response.json({ ...base, ...evaluation } satisfies WorkspaceNodeResult);
+
+  const { value } = evaluation;
+  if (value.kind === "focus") {
+    return Response.json({ ...base, status: "resolved", output: value } satisfies WorkspaceNodeResult);
+  }
+  try {
+    const page = await queryObservations(state, value.sql, limit);
+    const result: WorkspaceNodeResult = {
+      ...base,
+      status: "resolved",
+      output: { kind: value.kind, sql: value.sql, ...page },
+    };
+    return Response.json(result);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return Response.json({ ...base, status: "error", error: message } satisfies WorkspaceNodeResult);
+  }
 }

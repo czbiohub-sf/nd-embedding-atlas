@@ -7,11 +7,11 @@
 import { useSelector } from "@tanstack/react-store";
 import { createGalleryDefinition, type ChannelHash } from "@ndea/nodes/gallery";
 import { defineNativeNodeContribution } from "@/core/node/native-contribution";
-import { lastPortValueOfKind, passthroughGraphPredicate } from "@/core/graph/cook";
 import { mountNodeBody } from "@/core/node/react-node-body";
 import { useDatasetSession } from "@/hooks/useDatasetSession";
 import { viewerChannelsStore } from "@/stores/viewer-channels-store";
 import { viewerZStore } from "@/stores/viewer-z-store";
+import { NATIVE_NODE_GRAPH } from "@/core/graph/native-graph";
 
 function useGalleryServices() {
   const { state } = useDatasetSession();
@@ -37,11 +37,7 @@ export const galleryDefinition = createGalleryDefinition({
 
 export const galleryNode = defineNativeNodeContribution({
   definition: galleryDefinition,
-  graph: {
-    role: "view",
-    evaluationRole: "view",
-    cook: (inputs) => lastPortValueOfKind(inputs, "sel") ?? passthroughGraphPredicate(inputs),
-  },
+  graph: NATIVE_NODE_GRAPH["gallery"],
   presentation: {
     geometry: { chipW: 132, card: { w: 220, h: 140 }, full: { w: 420, h: 360 }, canFull: true },
     stage: "stageable",

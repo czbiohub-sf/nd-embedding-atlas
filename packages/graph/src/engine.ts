@@ -20,6 +20,10 @@
  *   - DEDUP a per-sweep `visited` set (Houdini's `markVisitPass`) cooks a shared
  *           upstream node once per flush even in a diamond, and guards against
  *           re-entry if a cook is ever made async.
+ *   - CUTOFF a recook that `equals` its cached value keeps the cached reference
+ *           (Salsa "backdating"); a node dirtied only by an upstream cascade
+ *           whose inputs are reference-identical to its last cook reuses its
+ *           cache without cooking. A node dirtied directly always recooks.
  *   - FAN-IN a port with >1 incoming edge hands its cook the RAW value array in
  *           edge-insertion order: composition (AND/OR/diff/latest-wins) is the
  *           cook's decision, not the engine's. `andPreds` is the exported
@@ -75,6 +79,8 @@ export type GraphSinkListener<V> = (value: V) => void;
  *                    nothing).
  *   - `cook-end`  : the node's `cook` fn returned; `ms` is the duration of
  *                    THIS node's cook fn only, not its upstream recursion.
+ *   - `reuse`     : early cutoff: the node was dirty but its inputs were
+ *                    unchanged, so its cache was kept without cooking.
  *   - `emit`      : an authored value landed on `(node, port)`; downstream
  *                    was dirtied, the node itself stays clean.
  *   - `flush`     : a flush completed: every registered sink delivered, the
@@ -83,7 +89,7 @@ export type GraphSinkListener<V> = (value: V) => void;
  */
 export interface GraphEvaluationTelemetryEvent {
   node: string;
-  type: "dirty" | "cook-start" | "cook-end" | "emit" | "flush";
+  type: "dirty" | "cook-start" | "cook-end" | "reuse" | "emit" | "flush";
   /** cook-end only: `performance.now()` delta of the cook fn. */
   ms?: number;
   /** emit only: the source port carrying the authored value. */
@@ -97,9 +103,13 @@ export type GraphEvaluationTelemetryListener = (event: GraphEvaluationTelemetryE
 interface GraphNode<V> {
   spec: GraphNodeEvaluationSpec<V>;
   dirty: boolean;
+  /** Dirtied directly (own config, runtime state, or wiring), not only by an upstream cascade. */
+  selfDirty: boolean;
   /** Epoch at which `cached` was computed; `-1` = never cooked. */
   cachedEpoch: number;
   cached: V | undefined;
+  /** Inputs of the last cook; reference equality against these drives early cutoff. */
+  lastInputs: ReadonlyMap<string, readonly V[]> | undefined;
 }
 
 /** AND-compose predicate strings, dropping `null` ("everything") operands. */
@@ -133,6 +143,11 @@ export interface GraphEngineOptions<V> {
    * look like predicates (correct for `GraphEngine<Predicate>`).
    */
   passthrough?: (inputs: ReadonlyMap<string, readonly V[]>) => V;
+  /**
+   * Value equality for early cutoff. Defaults to `Object.is`, which never
+   * backdates fresh objects; pass a structural check for object values.
+   */
+  equals?: (a: V, b: V) => boolean;
 }
 
 export class GraphEngine<V = Predicate> {
@@ -148,6 +163,7 @@ export class GraphEngine<V = Predicate> {
   private flushScheduled = false;
   private readonly schedule: (flush: () => void) => void;
   private readonly passthrough: (inputs: ReadonlyMap<string, readonly V[]>) => V;
+  private readonly equals: (a: V, b: V) => boolean;
 
   constructor(opts: GraphEngineOptions<V> = {}) {
     this.schedule = opts.schedule ?? ((flush) => flush());
@@ -157,6 +173,7 @@ export class GraphEngine<V = Predicate> {
         const flat = [...inputs.values()].flat();
         return andPreds(flat as readonly Predicate[]) as V;
       });
+    this.equals = opts.equals ?? Object.is;
   }
 
   /** Monotonic graph epoch: exposed for staleness checks / debugging. */
@@ -168,7 +185,14 @@ export class GraphEngine<V = Predicate> {
 
   addNode(spec: GraphNodeEvaluationSpec<V>): void {
     if (this.nodes.has(spec.id)) throw new Error(`graph: duplicate node id '${spec.id}'`);
-    this.nodes.set(spec.id, { spec, dirty: true, cachedEpoch: -1, cached: undefined });
+    this.nodes.set(spec.id, {
+      spec,
+      dirty: true,
+      selfDirty: true,
+      cachedEpoch: -1,
+      cached: undefined,
+      lastInputs: undefined,
+    });
   }
 
   removeNode(id: string): void {
@@ -249,6 +273,7 @@ export class GraphEngine<V = Predicate> {
   markDirty(id: string): void {
     if (!this.nodes.has(id)) return;
     this.bumpEpoch();
+    this.nodes.get(id)!.selfDirty = true;
     this.dirtyCascade([id]);
     this.scheduleFlush();
   }
@@ -380,16 +405,19 @@ export class GraphEngine<V = Predicate> {
       else inputs.set(e.toPort, [upstream]);
     }
 
+    // Early cutoff: dirtied only by a cascade, and every input is the same
+    // reference as last time (upstream backdated) → the cache is still right.
+    if (!node.selfDirty && node.cachedEpoch >= 0 && sameInputs(node.lastInputs, inputs)) {
+      node.cachedEpoch = ctx.epoch;
+      node.dirty = false;
+      this.emitTelemetry({ node: id, type: "reuse", epoch: this.epochCounter });
+      return node.cached as V;
+    }
+
     // Bypass (Houdini `b` flag): the node's own cook is skipped entirely and
     // the composed input passes through uncooked. Downstream ripples as if the
     // node weren't there.
-    if (this.bypassed.has(id)) {
-      const through = this.passthrough(inputs);
-      node.cached = through;
-      node.cachedEpoch = ctx.epoch;
-      node.dirty = false;
-      return through;
-    }
+    if (this.bypassed.has(id)) return this.settle(node, inputs, this.passthrough(inputs), ctx);
 
     // Telemetry brackets the cook fn ONLY (inputs above already pulled, so the
     // ms delta excludes upstream recursion). Zero-overhead when nobody listens.
@@ -408,10 +436,18 @@ export class GraphEngine<V = Predicate> {
         epoch: this.epochCounter,
       });
     }
-    node.cached = output;
+    return this.settle(node, inputs, output, ctx);
+  }
+
+  /** Cache `output`, keeping the previous reference when it is equal (backdating). */
+  private settle(node: GraphNode<V>, inputs: ReadonlyMap<string, readonly V[]>, output: V, ctx: NodeComputeContext): V {
+    const kept = node.cachedEpoch >= 0 && this.equals(node.cached as V, output) ? (node.cached as V) : output;
+    node.cached = kept;
     node.cachedEpoch = ctx.epoch;
     node.dirty = false;
-    return output;
+    node.selfDirty = false;
+    node.lastInputs = inputs;
+    return kept;
   }
 
   // ── Flags ─────────────────────────────────────────────────────────────────────
@@ -475,4 +511,17 @@ export class GraphEngine<V = Predicate> {
   dirtyNodes(): string[] {
     return [...this.nodes.values()].filter((n) => n.dirty).map((n) => n.spec.id);
   }
+}
+
+function sameInputs<V>(
+  before: ReadonlyMap<string, readonly V[]> | undefined,
+  after: ReadonlyMap<string, readonly V[]>,
+): boolean {
+  if (!before || before.size !== after.size) return false;
+  for (const [port, values] of after) {
+    const previous = before.get(port);
+    if (!previous || previous.length !== values.length) return false;
+    for (let index = 0; index < values.length; index += 1) if (previous[index] !== values[index]) return false;
+  }
+  return true;
 }

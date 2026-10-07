@@ -7,19 +7,15 @@
  */
 
 import { createVgplotDefinition } from "@ndea/nodes";
-import { passthroughGraphPredicate } from "@/core/graph/cook";
 import { defineNativeNodeContribution } from "@/core/node/native-contribution";
 import { NODE_EDITOR_ENABLED } from "@/feature-flags";
+import { NATIVE_NODE_GRAPH } from "@/core/graph/native-graph";
 
 export const vgplotDefinition = createVgplotDefinition();
 
 export const vgplotNode = defineNativeNodeContribution({
   definition: vgplotDefinition,
-  graph: {
-    role: "view",
-    evaluationRole: "view",
-    cook: (inputs) => passthroughGraphPredicate(inputs),
-  },
+  graph: NATIVE_NODE_GRAPH["vgplot"],
   presentation: {
     geometry: { chipW: 132, card: { w: 240, h: 160 }, full: { w: 380, h: 300 }, canFull: true },
     stage: "stageable",

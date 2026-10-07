@@ -5,10 +5,10 @@
  */
 
 import { createCountPlotDefinition } from "@ndea/nodes";
-import { passthroughGraphPredicate } from "@/core/graph/cook";
 import { defineNativeNodeContribution } from "@/core/node/native-contribution";
 import { mountNodeBody } from "@/core/node/react-node-body";
 import { useColumnTypes, useMosaicClient } from "@ndea/nodes/query";
+import { NATIVE_NODE_GRAPH } from "@/core/graph/native-graph";
 
 export const countPlotDefinition = createCountPlotDefinition({
   mountBody: mountNodeBody,
@@ -20,11 +20,7 @@ export const countPlotDefinition = createCountPlotDefinition({
 
 export const countPlotNode = defineNativeNodeContribution({
   definition: countPlotDefinition,
-  graph: {
-    role: "view",
-    evaluationRole: "view",
-    cook: (inputs) => passthroughGraphPredicate(inputs),
-  },
+  graph: NATIVE_NODE_GRAPH["count-plot"],
   presentation: {
     geometry: { chipW: 132, card: { w: 220, h: 200 }, full: { w: 360, h: 340 }, canFull: true },
     stage: "stageable",

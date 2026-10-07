@@ -11,14 +11,21 @@ export function createWrangleBody(Editor: WrangleEditor) {
     const [error, setError] = useState<PrqlError | null>(null);
     const [status, setStatus] = useState<WrangleStatus>(prql.trim() ? "clean" : "empty");
     const generation = useRef(0);
+    // `predicateSql` is derived from `prql` only once the user edits it here. On
+    // mount the stored config is authoritative: an agent may have written
+    // `predicateSql` directly, and recompiling an absent `prql` would erase it.
+    const edited = useRef(false);
 
     useEffect(() => {
+      const derive = (predicateSql: string | null) => {
+        if (edited.current) host.patchConfig({ predicateSql });
+      };
       const currentGeneration = ++generation.current;
       const src = prql.trim();
       if (!src) {
         setStatus("empty");
         setError(null);
-        host.patchConfig({ predicateSql: null });
+        derive(null);
         return;
       }
 
@@ -46,13 +53,11 @@ export function createWrangleBody(Editor: WrangleEditor) {
           setError(null);
           if (kind === "reshaping") {
             setStatus("reshaping");
-            host.patchConfig({ predicateSql: null });
+            derive(null);
             return;
           }
           setStatus("clean");
-          host.patchConfig({
-            predicateSql: `"__obs_index__" IN (SELECT "__obs_index__" FROM (${compiled.sql}))`,
-          });
+          derive(`"__obs_index__" IN (SELECT "__obs_index__" FROM (${compiled.sql}))`);
         })();
       }, DEBOUNCE_MS);
       return () => {
@@ -67,6 +72,7 @@ export function createWrangleBody(Editor: WrangleEditor) {
           <Editor
             value={prql}
             onChange={(next) => {
+              edited.current = true;
               setPrql(next);
               host.patchConfig({ prql: next });
             }}

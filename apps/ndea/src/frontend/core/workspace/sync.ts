@@ -8,7 +8,6 @@
  * revisions from `workspace/watch` rebase pending local ops the same way.
  */
 
-import { migrateNodeConfig, type NodeConfigSnapshot } from "@ndea/sdk";
 import {
   WorkspaceConflictSchema,
   WorkspacePatchAcceptedSchema,
@@ -30,6 +29,7 @@ import {
 import { parseWorkspaceNodeAssetRecords } from "@/core/node-asset/schema";
 import {
   applyWorkspaceOps,
+  decodeNodeConfigs,
   parseWorkspaceDocument,
   toWorkspaceDocument,
   withWorkspaceSession,
@@ -84,7 +84,7 @@ export function decodeWorkspaceDocument(
       records = resolution.records;
     }
     const state = withWorkspaceSession(
-      { ...parsed.value, nodeAssets: records, nodes: decodeConfigs(parsed.value, library) },
+      { ...parsed.value, nodeAssets: records, nodes: decodeNodeConfigs(parsed.value.nodes, library) },
       session,
     );
     validateGraphRuntimeTopology(state, library);
@@ -268,20 +268,6 @@ export async function fetchWorkspaceSnapshot(): Promise<WorkspaceSnapshot> {
   const res = await fetch("/api/workspace");
   if (!res.ok) throw new Error(`workspace load failed: HTTP ${res.status}`);
   return WorkspaceSnapshotSchema.parse(await res.json());
-}
-
-function decodeConfigs(document: WorkspaceDocument, nodeLibrary: AppNodeLibrary): WorkspaceDocument["nodes"] {
-  const nodes: WorkspaceDocument["nodes"] = {};
-  for (const [key, node] of Object.entries(document.nodes)) {
-    const contract = nodeLibrary.getSpecExact(node.definitionRef)?.definition.config;
-    if (node.config === undefined || !nodeLibrary.getSpecExact(node.definitionRef)) {
-      nodes[key] = node;
-      continue;
-    }
-    if (!contract) throw new Error(`node "${node.id}" does not accept configuration`);
-    nodes[key] = { ...node, config: migrateNodeConfig(contract, node.config) as NodeConfigSnapshot };
-  }
-  return nodes;
 }
 
 function isWorkspaceAppNodeLibrary(nodeLibrary: AppNodeLibrary): nodeLibrary is WorkspaceAppNodeLibrary {

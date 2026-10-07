@@ -8,7 +8,6 @@ import { createScatterDefinition } from "@ndea/nodes";
 import type { ScatterServices } from "@ndea/nodes/scatter";
 import { useColumnTypes } from "@ndea/nodes/query";
 import { defineNativeNodeContribution } from "@/core/node/native-contribution";
-import { passthroughGraphPredicate } from "@/core/graph/cook";
 import { onDeviceLost } from "@/core/gpu/device-manager";
 import { requireAppNodeHostFacet } from "@/core/node/app-node-host";
 import { mountNodeBody } from "@/core/node/react-node-body";
@@ -21,6 +20,7 @@ import { getColormapList, pickDefaultCategoricalPalette } from "@/lib/color/ochr
 import { WsReconnectError, wsClient } from "@/lib/ws-client";
 import { pointRadiusStore } from "@/stores/point-radius-store";
 import { renderSettingsStore } from "@/stores/render-settings-store";
+import { NATIVE_NODE_GRAPH } from "@/core/graph/native-graph";
 
 const services: ScatterServices = {
   useSession: useDatasetSession,
@@ -48,11 +48,7 @@ export const scatterDefinition = createScatterDefinition({
 
 export const scatterNode = defineNativeNodeContribution({
   definition: scatterDefinition,
-  graph: {
-    role: "view",
-    evaluationRole: "view",
-    cook: (inputs) => passthroughGraphPredicate(inputs),
-  },
+  graph: NATIVE_NODE_GRAPH["scatter"],
   presentation: {
     geometry: { chipW: 132, card: { w: 220, h: 156 }, full: { w: 420, h: 380 }, canFull: true },
     stage: "stageable",

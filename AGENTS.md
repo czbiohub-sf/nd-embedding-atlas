@@ -71,6 +71,11 @@ entrypoints across workspaces.
   revisioned workspace document and its file. `PATCH /api/workspace` applies
   RFC 6902 ops against a base revision; `workspace/watch` pushes accepted
   revisions.
+- `WorkspaceEvaluator` (`server/graph.ts`) evaluates that document with the
+  browser's node definitions and the shared cook table
+  (`frontend/core/graph/native-graph.ts`); `GET /api/workspace/nodes/:id`
+  serves one node's output. Cooks must stay browser-free, and SQL built from
+  document values runs through `DatasetQuerySession.querySingleJson`.
 - `EmbeddingStore` owns one DuckDB connection. Base tables, the `dataset` view,
   temporary selections, and Mosaic preaggregations share that connection.
 

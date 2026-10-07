@@ -272,6 +272,12 @@ try {
     // emits top-level await that Bun's bytecode pre-compiler rejects.
     "--minify",
     ...DUCKDB_PLATFORM_EXTERNALS.flatMap((m) => ["--external", m]),
+    // PRQL compiles only in the browser wrangle body (shipped in the frontend
+    // bundle). The server imports node definitions for graph evaluation, which
+    // reaches that body module but never runs it; its Vite `?url` wasm import
+    // has no server-side resolution.
+    "--external",
+    "prql-js",
   ];
 
   // Stream Bun's compile output but drop its `minify … (estimate)` line: the
