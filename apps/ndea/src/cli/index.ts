@@ -16,6 +16,7 @@
  *   plugin     Validate and configure trusted custom-node plugins
  *   filter     Filter observations on a running server; prints JSON
  *   workspace  Read and patch a running server's workspace document
+ *   mcp        Install, check, or remove ndea's MCP server in coding agents
  *
  * For backwards compatibility, invocations without a subcommand default
  * to `view`:
@@ -36,6 +37,7 @@ import { completionsPlugin } from "@bunli/plugin-completions";
 import doctorCommand from "./commands/doctor.ts";
 import filterCommand from "./commands/filter.ts";
 import gcCommand from "./commands/gc.ts";
+import mcpCommand from "./commands/mcp.ts";
 import pluginCommand from "./commands/plugin/index.ts";
 import updateCommand from "./commands/update.ts";
 import workspaceCommand from "./commands/workspace.ts";
@@ -63,6 +65,7 @@ const KNOWN_SUBCOMMANDS = new Set([
   "plugin",
   "filter",
   "workspace",
+  "mcp",
   "completions",
   "complete",
 ]);
@@ -118,6 +121,7 @@ async function main(): Promise<void> {
   cli.command(pluginCommand);
   cli.command(filterCommand);
   cli.command(workspaceCommand);
+  cli.command(mcpCommand);
 
   await cli.run(argv);
 }

@@ -7,19 +7,21 @@ import { createGeneratedHelpers, registerGeneratedStore } from '@bunli/core'
 import Doctor from '../apps/ndea/src/cli/commands/doctor.js'
 import Filter from '../apps/ndea/src/cli/commands/filter.js'
 import Gc from '../apps/ndea/src/cli/commands/gc.js'
+import Mcp from '../apps/ndea/src/cli/commands/mcp.js'
 import Plugin from '../apps/ndea/src/cli/commands/plugin/index.js'
 import Update from '../apps/ndea/src/cli/commands/update.js'
 import View from '../apps/ndea/src/cli/commands/view.js'
 import Workspace from '../apps/ndea/src/cli/commands/workspace.js'
 
 // Narrow list of command names to avoid typeof-cycles in types
-const names = ['doctor', 'filter', 'gc', 'plugin', 'update', 'view', 'workspace'] as const
+const names = ['doctor', 'filter', 'gc', 'mcp', 'plugin', 'update', 'view', 'workspace'] as const
 type GeneratedNames = typeof names[number]
 
 const modules: Record<GeneratedNames, Command<any>> = {
   'doctor': Doctor,
   'filter': Filter,
   'gc': Gc,
+  'mcp': Mcp,
   'plugin': Plugin,
   'update': Update,
   'view': View,
@@ -54,6 +56,11 @@ const metadata: Record<GeneratedNames, GeneratedCommandMeta> = {
         'keep': { type: 'z.coerce.number.int.min.default', required: true, hasDefault: true, default: 1, description: 'Number of versions to keep (active counts; default: 1)', min: 1, minLength: 1, schema: {"type":"zod","method":"default","args":[{"type":"unknown","raw":{"type":"NumericLiteral","start":1001,"end":1002,"loc":{"start":{"line":24,"column":56,"index":1001},"end":{"line":24,"column":57,"index":1002}},"extra":{"rawValue":1,"raw":"1"},"value":1}}]}, validator: '(val) => true' }
       },
       path: './apps/ndea/src/cli/commands/gc'
+    },
+  'mcp': {
+      name: 'mcp',
+      description: 'Connect coding agents to ndea\'s MCP server',
+      path: './apps/ndea/src/cli/commands/mcp'
     },
   'plugin': {
       name: 'plugin',

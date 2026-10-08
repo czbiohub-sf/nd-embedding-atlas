@@ -225,17 +225,16 @@ All three subcommands accept `--host` (default `127.0.0.1`) and `--port` (defaul
 
 A running `ndea view` serves the [Model Context Protocol](https://modelcontextprotocol.io) over Streamable HTTP at `/mcp` on the same port, so an agent edits the workspace you have open. Every accepted edit appears in the browser without a reload.
 
-The endpoint answers only localhost `Host` and `Origin` headers and requires the bearer token in `~/.ndea/mcp-token`, created on first start with owner-only permissions. Connect a harness once; the token survives restarts.
+The endpoint answers only localhost `Host` and `Origin` headers and requires the bearer token in `~/.ndea/mcp-token`, created on first use with owner-only permissions. The token survives restarts, so you connect each agent once.
 
 ```bash
-# Claude Code
-claude mcp add --transport http ndea http://localhost:5055/mcp \
-  --header "Authorization: Bearer $(cat ~/.ndea/mcp-token)"
-
-# Codex
-export NDEA_MCP_TOKEN=$(cat ~/.ndea/mcp-token)
-codex mcp add ndea --url http://localhost:5055/mcp --bearer-token-env-var NDEA_MCP_TOKEN
+ndea mcp install                           # pick from the agents detected on this machine
+ndea mcp install --agent claude-code,codex  # no prompt; --yes installs to every detected agent
+ndea mcp check                             # server up? token accepted? which agents are current?
+ndea mcp uninstall                         # remove ndea from every agent that has it
 ```
+
+`install` writes `http://127.0.0.1:<port>/mcp` and the token into each agent's own config through [add-mcp](https://add-mcp.com), which knows the format of Claude Code, Codex, Cursor, VS Code, Zed, OpenCode, and 16 more. Restart open agent sessions afterwards. Pass `--port` to all three commands when `ndea view` runs on another port. `check` exits 1 when the server is down, rejects the token, or an agent still has an old token or port.
 
 | Tool                     | Does                                                                                                                     |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------ |

@@ -87,7 +87,7 @@ export async function startServer(
   pluginSnapshot: PluginRuntimeSnapshot,
 ): Promise<RunningServer> {
   const { createApp } = await import("../../server/app.ts");
-  const { loadMcpToken } = await import("../../server/mcp.ts");
+  const { loadMcpToken } = await import("../../server/mcp-token.ts");
   const mcpToken = await loadMcpToken();
   try {
     return createApp({

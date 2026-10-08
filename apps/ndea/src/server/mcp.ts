@@ -3,12 +3,10 @@
  * so every agent reads and edits the same workspace document the browser
  * shows, through the same validated write path (`applyWorkspacePatch`).
  *
- * Access: localhost Host and Origin only (DNS rebinding), plus a bearer token
- * kept in ~/.ndea/mcp-token so harness configs survive restarts.
+ * Access: localhost Host and Origin only (DNS rebinding), plus the bearer
+ * token from `mcp-token.ts`.
  */
 
-import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
 import { timingSafeEqual } from "node:crypto";
 import {
   createMcpHandler,
@@ -23,7 +21,6 @@ import { FilterClauseSchema, JsonPatchOpSchema, OBSERVATION_SET_TABLE, type Json
 import { createPatch } from "rfc6902";
 import { z } from "zod";
 
-import { stateDir } from "../cli/lib/paths.ts";
 import { bindingScope, COORDINATION_TYPE_IDS, COORDINATION_TYPES } from "../frontend/core/coordination/types.ts";
 import { stageViews } from "../frontend/core/workspace/stage/stage-spec.ts";
 import type { WorkspaceDocument } from "../frontend/core/workspace/types.ts";
@@ -46,21 +43,6 @@ The workspace is one document: a data-flow graph of nodes (sources, filters, vie
 Start with get_workspace and list_columns. Change the data flow with edit_graph and the views with edit_view; both apply a whole batch atomically or not at all.
 Every edit is validated like a user edit. A rejected call returns issues with JSON Pointer paths: fix the named op and retry.
 Read results with get_node_result. The open browser tab shows every accepted change live.`;
-
-/** `~/.ndea/mcp-token`, created on first use with owner-only permissions. */
-export async function loadMcpToken(path = join(stateDir(), "mcp-token")): Promise<string> {
-  try {
-    const token = (await readFile(path, "utf8")).trim();
-    if (token) return token;
-  } catch {
-    // first run: create it below
-  }
-  const token = Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("hex");
-  await mkdir(dirname(path), { recursive: true });
-  await writeFile(path, `${token}\n`, { mode: 0o600 });
-  await chmod(path, 0o600);
-  return token;
-}
 
 /** The /mcp route: localhost-only Host and Origin, a matching bearer token, then the MCP handler. */
 export function createMcpEndpoint(state: ServerSession, token: string): (request: Request) => Promise<Response> {

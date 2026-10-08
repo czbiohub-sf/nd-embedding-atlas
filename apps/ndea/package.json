@@ -47,6 +47,7 @@
     "@uwdata/mosaic-sql": "catalog:",
     "@xyflow/react": "^12.11.3",
     "@zarrita/storage": "catalog:",
+    "add-mcp": "^2.4.1",
     "class-variance-authority": "catalog:",
     "lucide-react": "catalog:",
     "react": "catalog:",
