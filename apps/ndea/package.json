@@ -32,6 +32,7 @@
     "@json-render/react": "0.21.0",
     "@jsquash/webp": "^1.5.0",
     "@lezer/highlight": "^1.2.3",
+    "@modelcontextprotocol/server": "^2.3.1",
     "@ndea/graph": "workspace:*",
     "@ndea/nodes": "workspace:*",
     "@ndea/ochre": "workspace:*",
@@ -59,6 +60,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@modelcontextprotocol/client": "^2.3.1",
     "@playwright/test": "^1.62.1",
     "@tailwindcss/vite": "^4.3.3",
     "@types/bun": "catalog:",

@@ -130,6 +130,9 @@ export function printReady(
   const host = displayHost(config.host);
   if (config.noStatic) printDevUrls(config, host);
   else printServerUrls(config, host);
+  console.log(
+    `\n  ${ANSI.bold}MCP:${ANSI.reset}  http://${host}:${config.port}/mcp  ${ANSI.dim}(Authorization: Bearer <~/.ndea/mcp-token>)${ANSI.reset}`,
+  );
 
   const elapsed = ((performance.now() - startTime) / 1000).toFixed(1);
   console.log(`\n  ${ANSI.dim}Ready in ${elapsed}s${ANSI.reset}  ${ANSI.dim}(pid ${process.pid})${ANSI.reset}`);

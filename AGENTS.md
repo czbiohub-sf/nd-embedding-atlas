@@ -70,9 +70,11 @@ entrypoints across workspaces.
 - `WorkspaceDocumentStore` (`server/workspace.ts`) owns the session's one
   revisioned workspace document and its file. A missing file is written from
   the preset (`server/presets.ts`): a built-in JSON document under
-  `apps/ndea/src/presets/` or a `.json` path. `PATCH /api/workspace` applies
-  RFC 6902 ops against a base revision; `workspace/watch` pushes accepted
-  revisions.
+  `apps/ndea/src/presets/` or a `.json` path. Every writer (browser sync,
+  `PATCH /api/workspace`, MCP) goes through `applyWorkspacePatch`
+  (`server/routes/workspace.ts`): RFC 6902 ops against a base revision,
+  checked for structure, graph semantics (`graphIssues`: configs, ports,
+  cycles), and set references. `workspace/watch` pushes accepted revisions.
 - `WorkspaceEvaluator` (`server/graph.ts`) evaluates that document with the
   browser's node definitions and the shared cook table
   (`frontend/core/graph/native-graph.ts`); `GET /api/workspace/nodes/:id`
@@ -87,6 +89,12 @@ entrypoints across workspaces.
   temp table that `{ op: "inSet" }` clauses query. A pinned Cache stores its
   rows as one such set in its node config. `PATCH /api/workspace` rejects
   references to unknown sets anywhere in the document.
+- `/mcp` (`server/mcp.ts`) serves MCP over Streamable HTTP with the SDK's
+  per-request `createMcpHandler`; tools close over the one server session.
+  Only localhost `Host`/`Origin` and the bearer token in `~/.ndea/mcp-token`
+  pass. `edit_graph` and `edit_view` compile named ops on a draft document
+  (`server/workspace-edits.ts`) and apply the diff as one patch; add new agent
+  operations there, not as new write paths.
 - `EmbeddingStore` owns one DuckDB connection. Base tables, the `dataset` view,
   temporary selections, and Mosaic preaggregations share that connection.
 

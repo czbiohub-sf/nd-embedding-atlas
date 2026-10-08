@@ -21,6 +21,7 @@ import { serveStatic, resolveFrontendDir } from "./static.ts";
 import { handleWsMessage, handleWsOpen, handleWsClose, type ServerSocketContext } from "./ws.ts";
 import { handleMosaicWsMessage } from "./mosaic-ws.ts";
 import { emptyPluginRuntimeSnapshot, servePluginAsset, type PluginRuntimeSnapshot } from "./plugins/assets.ts";
+import { createMcpEndpoint } from "./mcp.ts";
 
 // Re-exports for public API
 export { DatasetQuerySession, obsmColumnPrefix, DEFAULT_OBSM_PRIORITY } from "./store.ts";
@@ -78,6 +79,8 @@ export interface CreateAppOptions {
   noStatic?: boolean;
   /** Immutable plugin catalog and approved asset map built once during startup. */
   pluginSnapshot?: PluginRuntimeSnapshot;
+  /** Bearer token that /mcp requires; without one the MCP endpoint is off. */
+  mcpToken?: string;
 }
 
 // ─── Server factory ─────────────────────────────────────────────────────────
@@ -92,6 +95,7 @@ export function createApp(options: CreateAppOptions) {
   const { store, state, config } = options;
   const frontendDir = options.noStatic ? null : resolveFrontendDir(options.frontendDir);
   const pluginSnapshot = options.pluginSnapshot ?? emptyPluginRuntimeSnapshot();
+  const mcp = options.mcpToken ? createMcpEndpoint(state, options.mcpToken) : null;
 
   // Spin up the Bun Worker pool for crop rendering when a plate is
   // available. Pool persists for the lifetime of the server; workers keep
@@ -107,6 +111,9 @@ export function createApp(options: CreateAppOptions) {
     async fetch(req, server) {
       const url = new URL(req.url);
       const { pathname } = url;
+
+      // ── MCP (Streamable HTTP): its own Host/Origin/token guard, no CORS ──
+      if (pathname === "/mcp") return mcp ? mcp(req) : new Response("Not Found", { status: 404 });
 
       // ── WebSocket upgrade ───────────────────────────────────────
       // /mosaic → Mosaic socketConnector framing (raw {type, sql}, binary arrow)

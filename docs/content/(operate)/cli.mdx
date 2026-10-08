@@ -42,15 +42,15 @@ A single `.yaml` / `.yml` path is parsed as a multi-dataset project config (see 
 
 ### Options
 
-| Option                 | Type    | Default     | Description                                                    |
-| ---------------------- | ------- | ----------- | -------------------------------------------------------------- |
-| `--port <port>`        | integer | `5055`      | TCP port for the local server                                  |
-| `--host <host>`        | string  | `127.0.0.1` | Hostname to bind                                               |
-| `--no-open`            | boolean | `false`     | Do not auto-open the browser                                   |
-| `--no-static`          | boolean | `false`     | Do not serve the bundled frontend (Vite serves it in dev mode) |
-| `--obs-columns <list>` | string  | all columns | Comma-separated subset of obs columns to load                  |
+| Option                 | Type    | Default     | Description                                                                         |
+| ---------------------- | ------- | ----------- | ----------------------------------------------------------------------------------- |
+| `--port <port>`        | integer | `5055`      | TCP port for the local server                                                       |
+| `--host <host>`        | string  | `127.0.0.1` | Hostname to bind                                                                    |
+| `--no-open`            | boolean | `false`     | Do not auto-open the browser                                                        |
+| `--no-static`          | boolean | `false`     | Do not serve the bundled frontend (Vite serves it in dev mode)                      |
+| `--obs-columns <list>` | string  | all columns | Comma-separated subset of obs columns to load                                       |
 | `--preset <name>`      | string  | `annotate`  | Preset a new workspace file starts from: `annotate` or a `.json` workspace document |
-| `--workspace <file>`   | path    | see below   | Workspace document to open and save                            |
+| `--workspace <file>`   | path    | see below   | Workspace document to open and save                                                 |
 
 ### Workspace file
 
@@ -135,12 +135,12 @@ The output has `sql` (the compiled WHERE fragment), `count` (exact), `rows` orde
 
 ### Options
 
-| Option            | Type    | Default     | Description                                        |
-| ----------------- | ------- | ----------- | -------------------------------------------------- |
-| `--where <json>`  | string  | all rows    | Filter clause as JSON                              |
-| `--limit <n>`     | integer | `1000`      | Maximum rows to return; `count` is always exact    |
-| `--host <host>`   | string  | `127.0.0.1` | Host of the running server                         |
-| `--port <port>`   | integer | `5055`      | Port of the running server                         |
+| Option           | Type    | Default     | Description                                     |
+| ---------------- | ------- | ----------- | ----------------------------------------------- |
+| `--where <json>` | string  | all rows    | Filter clause as JSON                           |
+| `--limit <n>`    | integer | `1000`      | Maximum rows to return; `count` is always exact |
+| `--host <host>`  | string  | `127.0.0.1` | Host of the running server                      |
+| `--port <port>`  | integer | `5055`      | Port of the running server                      |
 
 Exits 1 when the clause is invalid JSON, fails validation, references an unknown column, or no server is reachable. The error body goes to stderr.
 
@@ -199,11 +199,11 @@ In the development editor, the wiring canvas draws each scope as a hub labelled 
 
 `/stage` is a [json-render](https://json-render.dev) flat spec: `{ "root", "elements" }`, where every element has a `type`, `props`, and `children` (element ids). Three components exist:
 
-| Type    | Props                                       | Children    |
-| ------- | ------------------------------------------- | ----------- |
+| Type    | Props                                                                            | Children    |
+| ------- | -------------------------------------------------------------------------------- | ----------- |
 | `Split` | `direction` (`row` or `column`), `ratio` (0.05 to 0.95, the first child's share) | exactly two |
-| `View`  | `node`, optional `title`                    | none        |
-| `Slot`  | none                                        | none        |
+| `View`  | `node`, optional `title`                                                         | none        |
+| `Slot`  | none                                                                             | none        |
 
 A node is on the Stage exactly when a `View` shows it, and each node appears at most once. `title` accepts a json-render expression read from coordination state, such as `{"$template": "Focused row ${/focus/A}"}`. A `null` stage shows nothing.
 
@@ -220,6 +220,35 @@ A patch that leaves an element unreachable, references a missing element or node
 An unknown node id exits 1.
 
 All three subcommands accept `--host` (default `127.0.0.1`) and `--port` (default `5055`).
+
+## MCP server
+
+A running `ndea view` serves the [Model Context Protocol](https://modelcontextprotocol.io) over Streamable HTTP at `/mcp` on the same port, so an agent edits the workspace you have open. Every accepted edit appears in the browser without a reload.
+
+The endpoint answers only localhost `Host` and `Origin` headers and requires the bearer token in `~/.ndea/mcp-token`, created on first start with owner-only permissions. Connect a harness once; the token survives restarts.
+
+```bash
+# Claude Code
+claude mcp add --transport http ndea http://localhost:5055/mcp \
+  --header "Authorization: Bearer $(cat ~/.ndea/mcp-token)"
+
+# Codex
+export NDEA_MCP_TOKEN=$(cat ~/.ndea/mcp-token)
+codex mcp add ndea --url http://localhost:5055/mcp --bearer-token-env-var NDEA_MCP_TOKEN
+```
+
+| Tool                     | Does                                                                                                                     |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| `get_workspace`          | Nodes with their configs and inputs, the Stage's node ids, and every coordination scope; `full` for the raw document     |
+| `list_node_types`        | Node types with roles, ports, and linkable coordination types; pass `type` for its config schema and defaults            |
+| `list_columns`           | Observation columns and types; pass `column` for distinct count, range, and its most frequent values                     |
+| `get_node_result`        | One node's SQL, filter scope, exact count, and first rows                                                                |
+| `edit_graph`             | Data flow: `add_node` (wired from `inputs`, auto-placed), `remove_node`, `connect`, `disconnect`, `set_config`, `rename` |
+| `edit_view`              | Views: `show` / `hide` on the Stage, `link` / `unlink` a scope, `set_value` (focus, color, sort), `set_filter`           |
+| `patch_workspace`        | Raw RFC 6902 ops at an exact revision, for anything the named ops do not cover                                           |
+| `create_observation_set` | Save a node's rows or a clause's rows as a set for `{"op":"inSet"}` clauses and Cache pins                               |
+
+`edit_graph` and `edit_view` apply a whole batch or nothing. Pass `revision` to apply only if the workspace has not changed since you read it. Every write, from the browser, the CLI, or an agent, is checked like a document load: configs against their schemas, ports, wire cycles, and set references. A refused edit names the op or document path to fix and changes nothing.
 
 ## `ndea completions`
 
@@ -270,6 +299,7 @@ ndea completions fish > ~/.config/fish/completions/ndea.fish
     install.lock               # PID file backing the install/update mutex
   workspaces/
     <key>.json                 # Default workspace document per set of datasets
+  mcp-token                    # Bearer token for /mcp (owner-only)
 ~/.cache/ndea/
   0.1.0/
     libduckdb.{dylib,so}       # Extracted from the binary on first launch

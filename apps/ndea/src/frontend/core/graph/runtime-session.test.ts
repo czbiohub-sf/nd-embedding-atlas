@@ -302,18 +302,4 @@ describe("GraphRuntimeSession", () => {
     expect(() => runtime.removeNode("asset")).not.toThrow();
     runtime.dispose();
   });
-
-  test("rejects configuration patches for definitions without a config contract", () => {
-    const { runtime, nodes } = fixture();
-    const original = node("source", "source");
-    nodes.source = original;
-    runtime.registerNode(original);
-
-    expect(() => runtime.patchNodeConfig(original, { fabricated: true })).toThrow(
-      'node "source" does not accept configuration',
-    );
-    expect(nodes.source).toBe(original);
-    expect(nodes.source.config).toBeUndefined();
-    runtime.dispose();
-  });
 });

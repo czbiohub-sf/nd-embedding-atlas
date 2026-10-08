@@ -6,14 +6,14 @@ import {
   type GraphPortValue,
   type Predicate,
 } from "@ndea/graph";
-import { nodeConfigVersion, type ExactNodeTypeRef, type JsonValue, type PortKind } from "@ndea/sdk";
+import type { ExactNodeTypeRef, PortKind } from "@ndea/sdk";
 import {
   instantiateNodeAssetExpansion,
   type InstantiatedNodeAssetExpansion,
   type NodeAssetExpansionDescriptor,
 } from "@/core/node-asset/compiler";
 import { nodeTypeRefForAsset } from "@/core/node-asset/library";
-import { patchNodeConfig, predicateSqls, type GraphNodeCookFunction, type GraphNodeCookHost } from "./cook";
+import { predicateSqls, type GraphNodeCookFunction, type GraphNodeCookHost } from "./cook";
 import type { GraphDocumentEdge, GraphDocumentNode } from "./records";
 
 export interface GraphRuntimeNodeSpec {
@@ -451,27 +451,6 @@ export class GraphRuntimeSession {
 
   setTelemetryEnabled(enabled: boolean): void {
     this.evaluator.setTelemetryEnabled(enabled);
-  }
-
-  patchNodeConfig(node: GraphDocumentNode, patch: Record<string, unknown>): GraphDocumentNode {
-    const contract = this.resolver.getSpecExact(node.definitionRef)?.definition.config;
-    if (!contract) throw new Error(`node "${node.id}" does not accept configuration`);
-    const patched = patchNodeConfig(node, patch as Record<string, JsonValue>);
-    const defaultValue = contract.defaultValue;
-    const candidate =
-      defaultValue !== null &&
-      typeof defaultValue === "object" &&
-      !Array.isArray(defaultValue) &&
-      patched &&
-      typeof patched === "object" &&
-      !Array.isArray(patched)
-        ? { ...defaultValue, ...patched }
-        : patched;
-    const value = contract.schema.parse(candidate) as JsonValue;
-    return {
-      ...node,
-      config: { version: nodeConfigVersion(contract.version), value },
-    };
   }
 
   dispose(): void {

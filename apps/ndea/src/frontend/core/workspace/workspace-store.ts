@@ -20,7 +20,7 @@ import {
   type CoordinationScopeCellPort,
 } from "@/core/coordination/coordination";
 import { COORDINATION_TYPES, filterScopeSql, type CoordinationTypeId } from "@/core/coordination/types";
-import { predicateSql } from "@/core/graph/cook";
+import { patchNodeConfig, predicateSql } from "@/core/graph/cook";
 import type { GraphEvaluationStore } from "@ndea/graph";
 import type { GraphDocumentEdge, GraphDocumentNode } from "@/core/graph/records";
 import { GraphRuntimeSession, type GraphNodeResolution } from "@/core/graph/runtime-session";
@@ -959,7 +959,11 @@ export class Workspace {
   updateNodeConfig(id: string, patch: Record<string, unknown>): void {
     const current = this.store.state.nodes[id];
     if (!current) return;
-    const next = this.graphRuntime.patchNodeConfig(current, patch);
+    const next = patchNodeConfig(
+      current,
+      patch,
+      this.nodeLibrary.getSpecExact(current.definitionRef)?.definition.config,
+    );
     this.commit((state) => ({ ...state, nodes: { ...state.nodes, [id]: next } }));
   }
 

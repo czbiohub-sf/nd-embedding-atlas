@@ -1,13 +1,15 @@
-import type {
-  NodeCompute,
-  NodeComputeInputs,
-  NodeComputeOutputs,
-  NodeComputeContext,
-  NodeRuntime,
-  NodePortValue,
-  PortKind,
-  PredicatePortValue,
-  JsonValue,
+import {
+  nodeConfigVersion,
+  type NodeCompute,
+  type NodeComputeInputs,
+  type NodeComputeOutputs,
+  type NodeComputeContext,
+  type NodeConfigContract,
+  type NodeRuntime,
+  type NodePortValue,
+  type PortKind,
+  type PredicatePortValue,
+  type JsonValue,
 } from "@ndea/sdk";
 import {
   andPreds,
@@ -48,8 +50,23 @@ export function nodeConfig<C extends object>(node: GraphDocumentNode | undefined
   return (node?.config?.value as Partial<C> | undefined) ?? {};
 }
 
-export function patchNodeConfig(node: GraphDocumentNode | undefined, patch: Record<string, JsonValue>): JsonValue {
-  return { ...(node?.config?.value as Record<string, JsonValue> | undefined), ...patch };
+/**
+ * Shallow-merge `patch` into a node's config over the contract's defaults and
+ * parse it with the contract schema. Throws when the node takes no config or
+ * the result is invalid, so an invalid patch never reaches the document.
+ */
+export function patchNodeConfig(
+  node: GraphDocumentNode,
+  patch: Record<string, unknown>,
+  contract: NodeConfigContract | undefined,
+): GraphDocumentNode {
+  if (!contract) throw new Error(`node "${node.id}" does not accept configuration`);
+  const merged = { ...(node.config?.value as Record<string, unknown> | undefined), ...patch };
+  const defaults = contract.defaultValue;
+  const candidate =
+    defaults !== null && typeof defaults === "object" && !Array.isArray(defaults) ? { ...defaults, ...merged } : merged;
+  const value = contract.schema.parse(candidate) as JsonValue;
+  return { ...node, config: { version: nodeConfigVersion(contract.version), value } };
 }
 
 export interface GraphNodeCookHost {

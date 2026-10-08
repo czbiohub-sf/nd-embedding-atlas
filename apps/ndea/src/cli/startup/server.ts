@@ -87,6 +87,8 @@ export async function startServer(
   pluginSnapshot: PluginRuntimeSnapshot,
 ): Promise<RunningServer> {
   const { createApp } = await import("../../server/app.ts");
+  const { loadMcpToken } = await import("../../server/mcp.ts");
+  const mcpToken = await loadMcpToken();
   try {
     return createApp({
       port: config.port,
@@ -97,6 +99,7 @@ export async function startServer(
       frontendDir,
       noStatic: config.noStatic,
       pluginSnapshot,
+      mcpToken,
     });
   } catch (error) {
     if (!isPortCollision(error)) throw error;

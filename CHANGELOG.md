@@ -18,6 +18,8 @@
 - _(build)_ Get `bun build --compile` working end-to-end
 - _(frontend)_ Let fixed presets split, resize, remove, and restore stage panels
 - _(frontend)_ Draw coordination on the wiring canvas: a hub per scope and a link per binding; delete a link to unbind, drag a hub onto a node to bind. Canvas selection now lives in the editor session, so the wire delete chip shows on selection.
+- _(server)_ MCP server at `/mcp` (Streamable HTTP, localhost-only, bearer token in `~/.ndea/mcp-token`): agents read the workspace, nodes, columns, and results, and edit the data flow (`edit_graph`) and the views (`edit_view`) through atomic named ops, with `patch_workspace` as a raw escape hatch.
+- _(server)_ Every workspace write now gets the same graph check as a document load (configs, ports, cycles), so no writer can save a document the browser would refuse to open.
 
 ### 🐛 Bug Fixes
 
