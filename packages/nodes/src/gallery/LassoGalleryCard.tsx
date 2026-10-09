@@ -20,6 +20,9 @@ export interface LassoGalleryCardProps {
   enabled: boolean;
   isHighlighted: boolean;
   onClick: () => void;
+  /** Crop framing from the gallery node's config; null → server defaults. */
+  half?: number | null;
+  size?: number | null;
 }
 
 export function LassoGalleryCard({
@@ -30,6 +33,8 @@ export function LassoGalleryCard({
   enabled,
   isHighlighted,
   onClick,
+  half,
+  size,
 }: LassoGalleryCardProps) {
   // Crops route to the plate that owns this observation: `obs.datasetKey`
   // comes from the `_dataset` column in obs_base (multi-dataset stores) and
@@ -57,6 +62,8 @@ export function LassoGalleryCard({
     hash,
     viewerZ,
     datasetKey,
+    half,
+    size,
     enabled: enabled && !!obs.fov && channels.length > 0,
   });
   const blobUrl = data?.url;

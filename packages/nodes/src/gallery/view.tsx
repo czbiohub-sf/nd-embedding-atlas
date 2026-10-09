@@ -61,6 +61,8 @@ export function GalleryPluginView({
       focusedRowIndex={focusedRowIndex}
       onSelect={onSelect}
       services={services.dataset}
+      half={host.config.half}
+      size={host.config.size}
     />
   );
 }

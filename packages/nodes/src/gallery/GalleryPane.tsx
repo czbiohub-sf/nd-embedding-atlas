@@ -37,6 +37,9 @@ interface GalleryPaneProps {
   onSelect: (rowIndex: RowIndex | null) => void;
   datasetKey?: string;
   services: GalleryDatasetServices;
+  /** Crop framing from the gallery node's config; null → server defaults. */
+  half?: number | null;
+  size?: number | null;
 }
 
 export function GalleryPane({
@@ -46,6 +49,8 @@ export function GalleryPane({
   onSelect,
   datasetKey,
   services,
+  half,
+  size,
 }: GalleryPaneProps) {
   // Dataset session is read only for metadata (channels / plate). Focus routes
   // through the host seam via props so it stays on the workspace sync group.
@@ -191,6 +196,8 @@ export function GalleryPane({
                     enabled={fetchEnabled}
                     isHighlighted={focusedRowIndex === o.rowIndex}
                     onClick={() => onSelect(o.rowIndex)}
+                    half={half}
+                    size={size}
                   />
                 </div>
               );

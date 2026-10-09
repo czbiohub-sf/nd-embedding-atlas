@@ -39,6 +39,8 @@ const nativeNodeLibrary = createNativeAppNodeLibrary();
 const ROUTING_COVERAGE: Record<string, "routed" | { exempt: string }> = {
   table: "routed",
   gallery: "routed",
+  "fov-label": "routed",
+  "fov-score": { exempt: "focus consumer: marks the focused FOV on its plots, emits no gesture" },
   scatter: "routed",
   "count-plot": "routed",
   histogram: "routed",

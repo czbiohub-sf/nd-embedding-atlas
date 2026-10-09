@@ -19,6 +19,10 @@ export interface CropResult {
   h: number;
 }
 
+/** Crop framing when the gallery node's config leaves it unset. */
+export const DEFAULT_CROP_HALF = 150;
+export const DEFAULT_CROP_SIZE = 320;
+
 export interface GalleryCropQueryParams {
   fovName: string;
   datasetKey?: string;
@@ -27,6 +31,10 @@ export interface GalleryCropQueryParams {
   hash: ChannelHash;
   enabled: boolean;
   viewerZ: number;
+  /** Crop half-size in source pixels; defaults to {@link DEFAULT_CROP_HALF}. */
+  half?: number | null;
+  /** Rendered edge in output pixels; defaults to {@link DEFAULT_CROP_SIZE}. */
+  size?: number | null;
 }
 
 /**
@@ -54,17 +62,23 @@ export function useGalleryCropQuery({
   hash,
   enabled,
   viewerZ,
+  half: halfConfig,
+  size: sizeConfig,
 }: GalleryCropQueryParams) {
   const queryClient = useQueryClient();
 
   const z = resolveCropZ(frame.z, viewerZ);
+  const half = halfConfig ?? DEFAULT_CROP_HALF;
+  const size = sizeConfig ?? DEFAULT_CROP_SIZE;
 
   return useQuery<CropResult>({
     // rowIndex is essential: many cells share (fov, t): a lasso selection
     // routinely has multiple obs in the same FOV at the same timepoint. Without
     // the per-obs id they collide on one cache entry and the gallery paints the
     // first-fetched cell's crop for all of them (it diverges from the viewer).
-    queryKey: ["crop", fovName, frame.t ?? null, z, frame.rowIndex ?? null, hash],
+    // half/size are part of the key: re-framing the crop must refetch rather
+    // than serve the previously-framed image from cache.
+    queryKey: ["crop", fovName, frame.t ?? null, z, frame.rowIndex ?? null, hash, half, size],
     queryFn: async ({ signal }) => {
       // Resolve FOV-local pixel coordinates.
       // Prefer pre-populated cache (from batch prefetch in TrackGallery);
@@ -94,13 +108,13 @@ export function useGalleryCropQuery({
         z,
         x: xPx,
         y: yPx,
-        // half stays at 150 src-pixels (same spatial framing as before so the
-        // cell-in-crop ratio doesn't change). size bumped to 320 so the WebP
-        // is roughly 1:1 with the source region instead of downsampling →
-        // sharp at retina 220–240px CSS cards. Adds maybe 5 KB per crop at
-        // q=78, well within budget.
-        half: 150,
-        size: 320,
+        // Defaults are 150/320: 150 src-pixels keeps the cell-in-crop ratio
+        // constant, and 320 makes the WebP roughly 1:1 with that region rather
+        // than downsampling → sharp at retina 220–240px CSS cards, for ~5 KB
+        // per crop at q=78. FOV-level datasets override half to cover the whole
+        // field, where `size` then downsamples instead.
+        half,
+        size,
         ...(datasetKey ? { dataset_key: datasetKey } : {}),
         // Send cIndex explicitly: today it equals array index (1:1 with the
         // zarr C-axis), but a future channel-reorder UI would let the user

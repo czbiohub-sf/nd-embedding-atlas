@@ -212,6 +212,8 @@ const LEGACY_NODE_REFS: Readonly<Record<string, ExactNodeTypeRef>> = Object.free
   histogram: exactNodeTypeRef("histogram", "1.0.0"),
   vgplot: exactNodeTypeRef("vgplot", "1.0.0"),
   gallery: exactNodeTypeRef("gallery", "1.0.0"),
+  "fov-label": exactNodeTypeRef("fov-label", "1.0.0"),
+  "fov-score": exactNodeTypeRef("fov-score", "1.0.0"),
   "image-viewer": exactNodeTypeRef("image-viewer", "1.0.0"),
   cache: exactNodeTypeRef("cache", "1.0.0"),
   subnet: exactNodeTypeRef("subnet", "1.0.0"),
@@ -232,6 +234,8 @@ const LEGACY_CONFIG_ADAPTERS: Record<string, LegacyConfigAdapter> = {
     ...(defaults as Record<string, JsonValue>),
     datasetKey: value.datasetKey ?? value.dataset ?? null,
   }),
+  "fov-label@1.0.0": mergeLegacyConfig,
+  "fov-score@1.0.0": mergeLegacyConfig,
   "gallery@1.0.0": mergeLegacyConfig,
   "image-viewer@1.0.0": (value, defaults) => ({
     ...(defaults as Record<string, JsonValue>),

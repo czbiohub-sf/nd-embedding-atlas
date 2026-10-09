@@ -85,15 +85,21 @@ export function applyNodeAssetRecovery(
 }
 
 /**
- * A stable per-dataset session key for the persisted document. Derived from the
- * dataset identity (`metadata.props.data.id`) + the DuckDB table, so the same
- * dataset reloads the same workspace and switching datasets gets a fresh doc. If
- * neither is present we return `null` and the storage layer falls back to a
- * single shared `"ndea.workspace"` key.
+ * A stable per-dataset, per-preset session key for the persisted document.
+ *
+ * Derived from the dataset identity (`metadata.props.data.id`), the DuckDB table, AND the
+ * requested preset, so the same dataset reloads the same workspace while switching datasets
+ * or presets gets a fresh doc. If none is present we return `null` and the storage layer
+ * falls back to a single shared `"ndea.workspace"` key.
+ *
+ * The preset MUST be part of the key. Without it, opening a dataset under one preset and
+ * later under another hits the stored document and silently restores the first preset's
+ * graph — the second `--preset` looks like it did nothing, and which one you get depends on
+ * whichever seeded that dataset first.
  */
-function sessionKeyOf(metadata: Metadata, table: string): string | null {
+export function sessionKeyOf(metadata: Metadata, table: string): string | null {
   const id = metadata.props?.data?.id;
-  const parts = [id, table].filter((p): p is string => typeof p === "string" && p.length > 0);
+  const parts = [id, table, metadata.preset].filter((p): p is string => typeof p === "string" && p.length > 0);
   return parts.length > 0 ? parts.join(":") : null;
 }
 
@@ -139,7 +145,10 @@ export function WorkspaceProvider({
         const loaded = loadFromStorage(resolvedStorage, resolvedKey, w.nodeLibrary);
         persistence = initializeWorkspaceDocument(w, loaded, () => {
           resolvePresetOrDefault(metadata.preset)(w);
-          w.setDisposition("full");
+          // A preset asked for by name owns its disposition -- a dashboard preset
+          // opens on Stage, and forcing the canvas here would hide the thing the
+          // user launched. With no preset named, the editor opens on the canvas.
+          if (!metadata.preset) w.setDisposition("full");
         });
         persistence = applyNodeAssetRecovery(persistence, loadedUserAssets);
         (window as unknown as { __ndeaWorkspace?: Workspace }).__ndeaWorkspace = w;

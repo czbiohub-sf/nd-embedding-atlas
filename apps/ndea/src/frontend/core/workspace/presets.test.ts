@@ -109,3 +109,69 @@ describe("seedAnnotate", () => {
     for (const t of ["obs", "wrangle", "count", "cache"]) expect(staged.has(t)).toBe(false);
   });
 });
+
+const typeIds = (ws: ReturnType<typeof makeWs>) =>
+  Object.fromEntries(Object.values(ws.store.state.nodes).map((n) => [n.definitionRef.nodeTypeId, n.id]));
+
+describe("seedSmartFovSelection", () => {
+  const seed = () => {
+    const ws = makeWs();
+    resolvePreset("smart-fov-selection")!(ws);
+    return ws;
+  };
+
+  test("is registered and dataset-agnostic", () => {
+    expect(typeof resolvePreset("smart-fov-selection")).toBe("function");
+    const types = new Set<string>(Object.values(seed().store.state.nodes).map((n) => n.definitionRef.nodeTypeId));
+    for (const t of ["obs", "wrangle", "count", "scatter", "table", "gallery", "fov-label", "fov-score"]) {
+      expect(types.has(t)).toBe(true);
+    }
+    // No cache: it emits nothing until a scope is pinned, which would leave the
+    // gallery on "No input wired" when the dashboard opens.
+    expect(types.has("cache")).toBe(false);
+  });
+
+  test("re-frames the gallery to whole-FOV crops", () => {
+    // Regression guard: at the cell-framing default (half 150) a 1193x1664 field
+    // renders a 300x300 centre window -- 4.5% of it, and unreadable as QC.
+    const ws = seed();
+    expect(ws.store.state.nodes[typeIds(ws).gallery].config).toMatchObject({
+      value: { half: 832, size: 320 },
+    });
+  });
+
+  test("wires the graph and shares one filter and focus scope", () => {
+    const ws = seed();
+    const byType = typeIds(ws);
+    const edges = Object.values(ws.store.state.edges);
+    const edge = (from: string, to: string) =>
+      edges.find((candidate) => candidate.from === byType[from] && candidate.to === byType[to]);
+
+    expect(edge("obs", "wrangle")).toMatchObject({ fromPort: "out", toPort: "in" });
+    expect(edge("wrangle", "scatter")).toMatchObject({ fromPort: "out", toPort: "in" });
+    // Straight from wrangle, so crops are on screen at open rather than waiting
+    // on a lasso-and-pin through a cache checkpoint.
+    expect(edge("wrangle", "gallery")).toMatchObject({ fromPort: "out", toPort: "in" });
+    expect(edge("wrangle", "fov-label")).toMatchObject({ fromPort: "out", toPort: "in" });
+    expect(edge("wrangle", "fov-score")).toMatchObject({ fromPort: "out", toPort: "in" });
+
+    // Deliberately NOT in the filter scope: the score node reads the whole feature matrix, so
+    // an accuracy readout that moved with someone else's lasso would be measuring the lasso.
+    expect(ws.store.state.coordinationScopes[byType["fov-score"]]?.filter).toBeUndefined();
+
+    for (const type of ["scatter", "table", "gallery", "fov-label", "fov-score"]) {
+      expect(ws.store.state.coordinationScopes[byType[type]]?.focus).toBe("A");
+    }
+    for (const type of ["scatter", "table"]) {
+      expect(ws.store.state.coordinationScopes[byType[type]]?.filter).toBe("A");
+    }
+  });
+
+  test("opens to Stage with the Canvas hidden", () => {
+    const ws = seed();
+    expect(ws.store.state.disposition).toBe("hidden");
+    const staged = new Set<string>(ws.stagedIds().map((id) => ws.store.state.nodes[id].definitionRef.nodeTypeId));
+    for (const t of ["scatter", "table", "gallery", "fov-label", "fov-score"]) expect(staged.has(t)).toBe(true);
+    for (const t of ["obs", "wrangle"]) expect(staged.has(t)).toBe(false);
+  });
+});
