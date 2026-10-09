@@ -10,7 +10,11 @@ describe("filter-coordinated view definitions", () => {
       mountBody: (() => {
         throw new Error("not mounted by definition characterization");
       }) as NodeBodyMounter,
-      services: { bodyHeaderElement: () => ({}) as HTMLElement },
+      useServices: () => ({
+        bodyHeaderElement: () => ({}) as HTMLElement,
+        viewerZ: () => 0,
+        channels: () => ({ channels: [], hash: "[]" as never, isPending: false }),
+      }),
     });
     expect(tableDefinition.inputs).toEqual([{ id: "in", kind: "pred", label: "In" }]);
     expect(tableDefinition.outputs).toEqual([{ id: "out", kind: "focus", label: "Focus" }]);

@@ -64,7 +64,10 @@ export function useGalleryCropQuery({
     // routinely has multiple obs in the same FOV at the same timepoint. Without
     // the per-obs id they collide on one cache entry and the gallery paints the
     // first-fetched cell's crop for all of them (it diverges from the viewer).
-    queryKey: ["crop", fovName, frame.t ?? null, z, frame.rowIndex ?? null, hash],
+    // datasetKey is equally load-bearing: it is part of the REQUEST body, so two
+    // plates that reuse a well name ("A/1/0") would otherwise share one entry
+    // whenever rowIndex is absent, and the second plate would paint the first's crop.
+    queryKey: ["crop", fovName, datasetKey ?? null, frame.t ?? null, z, frame.rowIndex ?? null, hash],
     queryFn: async ({ signal }) => {
       // Resolve FOV-local pixel coordinates.
       // Prefer pre-populated cache (from batch prefetch in TrackGallery);
@@ -94,11 +97,7 @@ export function useGalleryCropQuery({
         z,
         x: xPx,
         y: yPx,
-        // half stays at 150 src-pixels (same spatial framing as before so the
-        // cell-in-crop ratio doesn't change). size bumped to 320 so the WebP
-        // is roughly 1:1 with the source region instead of downsampling →
-        // sharp at retina 220–240px CSS cards. Adds maybe 5 KB per crop at
-        // q=78, well within budget.
+        // Gallery framing: 150 source-pixels at 320px keeps cards ~1:1 on retina.
         half: 150,
         size: 320,
         ...(datasetKey ? { dataset_key: datasetKey } : {}),

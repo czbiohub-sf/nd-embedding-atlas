@@ -12,6 +12,8 @@ import type { CountPredicateToSql } from "./count/contracts";
 import { createBuiltinNodeDefinitions } from "./core-catalog";
 import { createDatasetDefinition } from "./dataset/definition";
 import { createGalleryDefinition } from "./gallery/definition";
+import { createCarouselDefinition } from "./carousel/definition";
+import type { CarouselServices } from "./carousel/contracts";
 import type { GalleryServices } from "./gallery/contracts";
 import { createImageViewerDefinition } from "./image-viewer/definition";
 import type { ImageViewerServices } from "./image-viewer/contracts";
@@ -38,8 +40,9 @@ export interface NodeCatalogServices {
   readonly imageViewer: ImageViewerServices;
   readonly scatter: ScatterServices;
   readonly subnet: { getHierarchy: SubnetHierarchyResolver; IconButton: SubnetIconButton };
-  readonly table: TableServices;
+  readonly table: { useServices: () => TableServices };
   readonly transformFilter: { getColumnTypes: TransformFilterColumnTypesService };
+  readonly carousel: { useServices: () => CarouselServices };
   readonly wrangle: { Editor: WrangleEditor };
 }
 
@@ -58,12 +61,13 @@ export function createNodeCatalog({
     wrangle: createWrangleDefinition({ mountBody, ...services.wrangle }),
     annotate: createAnnotateDefinition({ mountBody, ...services.annotate }),
     count: createCountDefinition({ mountBody, ...services.count }),
-    table: createTableDefinition({ mountBody, services: services.table }),
+    table: createTableDefinition({ mountBody, useServices: services.table.useServices }),
     scatter: createScatterDefinition({ mountBody, services: services.scatter }),
     countPlot: createCountPlotDefinition({ mountBody, services: services.charts }),
     histogram: createHistogramDefinition({ mountBody, services: services.charts }),
     vgplot: createVgplotDefinition(),
     gallery: createGalleryDefinition({ mountBody, ...services.gallery }),
+    carousel: createCarouselDefinition({ mountBody, ...services.carousel }),
     imageViewer: createImageViewerDefinition({ mountBody, services: services.imageViewer }),
     cache: createCacheDefinition({ mountBody, ...services.cache }),
     subnet: createSubnetDefinition({ mountBody, ...services.subnet }),

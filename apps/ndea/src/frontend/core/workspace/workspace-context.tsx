@@ -86,14 +86,19 @@ export function applyNodeAssetRecovery(
 
 /**
  * A stable per-dataset session key for the persisted document. Derived from the
- * dataset identity (`metadata.props.data.id`) + the DuckDB table, so the same
- * dataset reloads the same workspace and switching datasets gets a fresh doc. If
- * neither is present we return `null` and the storage layer falls back to a
- * single shared `"ndea.workspace"` key.
+ * dataset identity (`metadata.props.data.id`) + the DuckDB table + the active
+ * preset, so the same dataset reloads the same workspace and switching datasets
+ * gets a fresh doc. If none are present we return `null` and the storage layer
+ * falls back to a single shared `"ndea.workspace"` key.
  */
 function sessionKeyOf(metadata: Metadata, table: string): string | null {
   const id = metadata.props?.data?.id;
-  const parts = [id, table].filter((p): p is string => typeof p === "string" && p.length > 0);
+  // The preset is part of the key because seeding only happens on a storage MISS.
+  // Without it, pointing a config at a different `preset:` would silently reload
+  // the previous preset's saved graph and the new one would appear to do nothing —
+  // indistinguishable from a broken preset. Keying on it means each preset owns
+  // its own document and switching always seeds.
+  const parts = [id, table, metadata.preset].filter((p): p is string => typeof p === "string" && p.length > 0);
   return parts.length > 0 ? parts.join(":") : null;
 }
 

@@ -8,6 +8,7 @@
     ".": "./src/index.ts",
     "./annotate": "./src/annotate/index.ts",
     "./cache": "./src/cache/index.ts",
+    "./carousel": "./src/carousel/index.ts",
     "./catalog": "./src/catalog.ts",
     "./charts": "./src/charts/index.ts",
     "./count": "./src/count/index.ts",

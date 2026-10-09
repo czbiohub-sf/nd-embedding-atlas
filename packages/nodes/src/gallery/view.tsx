@@ -11,12 +11,12 @@
  * different selections show different crops.
  */
 
-import { useCallback, useSyncExternalStore } from "react";
+import { useCallback } from "react";
 import { focusObs } from "./routing";
 import { GalleryPane } from "./GalleryPane";
-import { predicateToSql } from "../query/mosaic";
 import type { NodeBodyProps } from "../contracts";
 import { useNodeFocus } from "../query/useNodeFocus";
+import { useInputPredicateSql } from "../query/use-input-predicate";
 import type { GalleryCapabilities, GalleryConfig, GalleryServices } from "./contracts";
 
 export function GalleryPluginView({
@@ -27,15 +27,7 @@ export function GalleryPluginView({
   // and notifies Mosaic clients via "value" events: NOT React. Bridge it so the
   // unwired gate AND GalleryPane's query key recompute when the wired input
   // changes; without this the crops go stale after the upstream re-cooks.
-  const selection = host.inputPredicate;
-  const subscribe = useCallback(
-    (onChange: () => void) => {
-      selection.addEventListener("value", onChange);
-      return () => selection.removeEventListener("value", onChange);
-    },
-    [selection],
-  );
-  const predicate = useSyncExternalStore(subscribe, () => predicateToSql(selection));
+  const predicate = useInputPredicateSql(host.inputPredicate);
 
   // Focus rides the scoped host seam (group-aware), not the process-wide bus.
   // state: same as ScatterView/Table. A crop click writes through

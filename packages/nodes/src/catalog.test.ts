@@ -28,6 +28,7 @@ describe("built-in node definitions", () => {
       cache: empty,
       charts: empty,
       count: empty,
+      carousel: empty,
       gallery: empty,
       imageViewer: empty,
       scatter: empty,
@@ -39,8 +40,9 @@ describe("built-in node definitions", () => {
 
     const catalog = createNodeCatalog({ mountBody, services });
 
-    expect(Object.keys(catalog)).toHaveLength(16);
+    expect(Object.keys(catalog)).toHaveLength(17);
     expect(String(catalog.scatter.ref.nodeTypeId)).toBe("scatter");
     expect(String(catalog.imageViewer.ref.nodeTypeId)).toBe("image-viewer");
+    expect(String(catalog.carousel.ref.nodeTypeId)).toBe("carousel");
   });
 });

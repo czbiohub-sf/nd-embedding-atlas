@@ -8,3 +8,11 @@ export { CropThumb } from "./CropThumb";
 export { RangeBracket } from "./RangeBracket";
 export type { AnnotateCapabilities, AnnotateConfig, AnnotateOptions } from "./contracts";
 export type { AnnotateServices } from "./services";
+export { useAnnotationWriter } from "./use-annotation-writer";
+export type {
+  AnnotationOverlay,
+  AnnotationWrite,
+  AnnotationWriter,
+  AnnotationWriterHost,
+} from "./use-annotation-writer";
+export { hotkeysFor } from "./label-hotkeys";

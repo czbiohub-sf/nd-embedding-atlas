@@ -20,7 +20,7 @@
 
 import type { RowIndex } from "@ndea/sdk";
 import type { FilterExpr } from "@uwdata/mosaic-sql";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Bracketed } from "@ndea/ui/components/bracketed";
 import { Button } from "@ndea/ui/components/button";
 import { Input } from "@ndea/ui/components/input";
@@ -34,6 +34,8 @@ import { CommitPanel } from "./CommitPanel";
 import { resolveAnnotateCropFields } from "./crop-fields";
 import { RangeBracket } from "./RangeBracket";
 import { fmtVal } from "./range-scale";
+import { hotkeysFor } from "./label-hotkeys";
+import { useAnnotationWriter } from "./use-annotation-writer";
 import { useGalleryChannels } from "../gallery/useGalleryChannels";
 import type { NodeBodyProps } from "../contracts";
 import { useNodeFocus } from "../query/useNodeFocus";
@@ -42,41 +44,37 @@ import type { AnnotateServices } from "./services";
 
 const MAX_CONTEXT_COLS = 2;
 
-/** One-key hotkey per label: first unused letter, else its 1-based digit. */
-function hotkeysFor(labels: string[]): string[] {
-  const used = new Set<string>();
-  return labels.map((l, i) => {
-    const c = l.trim()[0]?.toLowerCase();
-    if (c && /[a-z]/.test(c) && !used.has(c)) {
-      used.add(c);
-      return c;
-    }
-    return String(i + 1);
-  });
-}
-
 export function AnnotateView({
   host,
   services,
 }: NodeBodyProps<AnnotateConfig, AnnotateCapabilities> & { services: AnnotateServices }) {
   const { coordinator, table, metadata } = host.data;
 
-  const [columns, setColumns] = useState<string[]>([]);
+  // Labeling core shared with the Compare carousel: column list, busy/status,
+  // the optimistic overlay, and every write door.
+  const {
+    columns,
+    busy,
+    status,
+    setStatus,
+    localLabels,
+    stampedCount: stamped,
+    ensureColumn: ensureAnnotationColumn,
+    writeManyByPredicate,
+    stampRows,
+    applyOverlay,
+  } = useAnnotationWriter(host);
+
   const [column, setColumn] = useState<string | null>(host.config.column);
   const [newColumn, setNewColumn] = useState("");
   const [creating, setCreating] = useState(false);
   const [labelsText, setLabelsText] = useState((host.config.labels ?? []).join(", "));
-  const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState<string | null>(null);
   const [showCommit, setShowCommit] = useState(false);
 
   const [mode, setMode] = useState<"label" | "range">(host.config.mode ?? "label");
   const [rangeLo, setRangeLo] = useState<number | null>(null);
   const [rangeHi, setRangeHi] = useState<number | null>(null);
 
-  // Per-obs, per-column overlay (id → column → value) so a write reflects
-  // instantly. Range mode stamps BOTH `{m}_min` and `{m}_max` for the row.
-  const [localLabels, setLocalLabels] = useState<Map<RowIndex, Map<string, string>>>(() => new Map());
   const [selection, setSelection] = useState<{
     selectedRowIndices: Set<RowIndex>;
     focusedRowIndex: RowIndex | null;
@@ -94,7 +92,6 @@ export function AnnotateView({
   );
   const hotkeys = useMemo(() => hotkeysFor(labels), [labels]);
   const targetColumn = newColumn.trim() || column;
-
   // range mode derives two float columns from the metric base name. `rangeReady`
   // gates on the ANNOTATION-COLUMNS list (created + server-registered into the
   // `dataset` VIEW), NOT `metadata.obs_columns`: the latter lags creation, so
@@ -126,18 +123,6 @@ export function AnnotateView({
   const channelSlot = selection.focusedCrop?.datasetKey ?? "docked";
   const { channels, hash, viewerZ } = useGalleryChannels(channelSlot, 300, metadata.plate_channels, services);
 
-  // existing annotation columns
-  useEffect(() => {
-    let alive = true;
-    void host.dataAPI
-      .listAnnotationColumns?.()
-      ?.then((cols) => alive && setColumns(cols.map((c) => c.name)))
-      .catch(() => {});
-    return () => {
-      alive = false;
-    };
-  }, [host]);
-
   // Follow an external focus (Gallery/Scatter/Idetik crop click): read the
   // group-aware host.focus reactively so the table can jump to that obs,
   // mirroring how those views already follow ours.
@@ -157,14 +142,13 @@ export function AnnotateView({
   const ensureColumn = useCallback(
     async (col: string) => {
       if (columns.includes(col)) return;
-      await host.dataAPI.createAnnotationColumn?.(col);
-      setColumns((c) => [...c, col]);
+      await ensureAnnotationColumn(col);
       setColumn(col);
       setNewColumn("");
       setCreating(false);
       host.patchConfig({ column: col });
     },
-    [columns, host],
+    [columns, ensureAnnotationColumn, host],
   );
 
   // stamp the current row selection (or focus row) with `value`
@@ -175,57 +159,38 @@ export function AnnotateView({
         : selection.focusedRowIndex != null
           ? [selection.focusedRowIndex]
           : [];
-      if (!targetColumn || !value || !ids.length || busy) return;
-      setBusy(true);
-      try {
-        await ensureColumn(targetColumn);
-        await host.dataAPI.writeAnnotationByPredicate?.(targetColumn, value, `__row_index__ IN (${ids.join(", ")})`);
-        setLocalLabels((m) => {
-          const next = new Map(m);
-          for (const id of ids) next.set(id, new Map([[targetColumn, value]]));
-          return next;
-        });
-        persistLabels();
-      } catch (err) {
-        setStatus(`✗ ${err instanceof Error ? err.message : String(err)}`);
-      } finally {
-        setBusy(false);
-      }
+      if (!targetColumn || !value || !ids.length) return;
+      await ensureColumn(targetColumn);
+      const n = await stampRows(targetColumn, value, ids);
+      if (n != null) persistLabels();
     },
-    [selection, targetColumn, busy, ensureColumn, host, persistLabels],
+    [selection, targetColumn, ensureColumn, stampRows, persistLabels],
   );
 
   // ── range mode: write {base}_min / {base}_max over a predicate ──
   const ensureRangeColumns = useCallback(
     async (base: string) => {
-      const mn = `${base}_min`;
-      const mx = `${base}_max`;
-      if (!columns.includes(mn)) await host.dataAPI.createAnnotationColumn?.(mn, "float");
-      if (!columns.includes(mx)) await host.dataAPI.createAnnotationColumn?.(mx, "float");
-      setColumns((c) => [...new Set([...c, mn, mx])]);
+      await ensureAnnotationColumn(`${base}_min`, "float");
+      await ensureAnnotationColumn(`${base}_max`, "float");
       host.patchConfig({ column: base });
     },
-    [columns, host],
+    [ensureAnnotationColumn, host],
   );
 
   const writeRange = useCallback(
     async (where: string): Promise<number | null> => {
-      if (!rangeBase || rangeLo == null || rangeHi == null || rangeLo > rangeHi || busy) return null;
-      setBusy(true);
-      setStatus(null);
-      try {
-        await ensureRangeColumns(rangeBase);
-        await host.dataAPI.writeAnnotationByPredicate?.(`${rangeBase}_min`, String(rangeLo), where);
-        const res = await host.dataAPI.writeAnnotationByPredicate?.(`${rangeBase}_max`, String(rangeHi), where);
-        return res?.n ?? 0;
-      } catch (err) {
-        setStatus(`✗ ${err instanceof Error ? err.message : String(err)}`);
-        return null;
-      } finally {
-        setBusy(false);
-      }
+      if (!rangeBase || rangeLo == null || rangeHi == null || rangeLo > rangeHi) return null;
+      await ensureRangeColumns(rangeBase);
+      // One busy guard covers both halves: a half-written bracket is invalid.
+      return writeManyByPredicate(
+        [
+          { column: `${rangeBase}_min`, value: String(rangeLo) },
+          { column: `${rangeBase}_max`, value: String(rangeHi) },
+        ],
+        where,
+      );
     },
-    [rangeBase, rangeLo, rangeHi, busy, ensureRangeColumns, host],
+    [rangeBase, rangeLo, rangeHi, ensureRangeColumns, writeManyByPredicate],
   );
 
   const onStampRange = useCallback(async () => {
@@ -239,36 +204,28 @@ export function AnnotateView({
     if (n == null) return;
     // Overlay BOTH the min and max cells for instant feedback (the table shows
     // `{m}_min` as a context column and `{m}_max` as the label column).
-    if (minCol && maxCol) {
-      setLocalLabels((m) => {
-        const next = new Map(m);
-        for (const id of ids)
-          next.set(
-            id,
-            new Map([
-              [minCol, String(rangeLo)],
-              [maxCol, String(rangeHi)],
-            ]),
-          );
-        return next;
-      });
-    }
+    if (minCol && maxCol) applyOverlay(ids, { [minCol]: String(rangeLo), [maxCol]: String(rangeHi) });
     setStatus(`✓ ${ids.length} obs → [${fmtVal(rangeLo)}, ${fmtVal(rangeHi)}]`);
-  }, [selection, writeRange, rangeLo, rangeHi, minCol, maxCol]);
+  }, [selection, writeRange, rangeLo, rangeHi, minCol, maxCol, applyOverlay, setStatus]);
 
   const stampRangeScope = useCallback(async () => {
     const where = scopeExpr ? String(filterExprToExpr(scopeExpr)) : "TRUE";
     const n = await writeRange(where);
     if (n != null)
       setStatus(`✓ ${n.toLocaleString()} obs → [${fmtVal(rangeLo)}, ${fmtVal(rangeHi)}] (re-scope to refresh cells)`);
-  }, [scopeExpr, writeRange, rangeLo, rangeHi]);
+  }, [scopeExpr, writeRange, rangeLo, rangeHi, setStatus]);
 
-  const onSkip = useCallback(() => setStatus(null), []);
-  const stamped = localLabels.size;
+  const onSkip = useCallback(() => setStatus(null), [setStatus]);
 
   // table wiring differs by mode: range shows {base}_min (context) + {base}_max (label col)
   const tableContext = mode === "range" ? (rangeReady && minCol ? [minCol] : []) : contextColumns;
-  const tableLabelCol = mode === "range" ? (rangeReady ? maxCol : null) : targetColumn;
+  // Only SELECT the label column once it exists. `targetColumn` follows the
+  // "+ new" input as the user TYPES, so passing it through unguarded makes the
+  // table query a half-typed name and fail the binder ("newcolumn" not found),
+  // taking the whole row list down mid-keystroke. The column is still created
+  // on the first stamp; this only gates the READ.
+  const labelColExists = targetColumn != null && columns.includes(targetColumn);
+  const tableLabelCol = mode === "range" ? (rangeReady ? maxCol : null) : labelColExists ? targetColumn : null;
   const tableLabels = mode === "range" ? [] : labels;
   const tableHotkeys = mode === "range" ? [] : hotkeys;
 
