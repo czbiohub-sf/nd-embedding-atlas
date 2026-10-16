@@ -1,297 +1,70 @@
 {
-  "nodeAssets": [],
-  "nodes": {
-    "obs": {
-      "id": "obs",
-      "definitionRef": {
-        "nodeTypeId": "obs",
-        "nodeTypeVersion": "1.0.0"
-      },
-      "label": "obs",
-      "parent": null
-    },
-    "wrangle-1": {
-      "id": "wrangle-1",
-      "definitionRef": {
-        "nodeTypeId": "wrangle",
-        "nodeTypeVersion": "1.0.0"
-      },
-      "label": "Wrangle",
-      "parent": null
-    },
-    "count-2": {
-      "id": "count-2",
-      "definitionRef": {
-        "nodeTypeId": "count",
-        "nodeTypeVersion": "1.0.0"
-      },
-      "label": "Count",
-      "parent": null
-    },
-    "table-3": {
-      "id": "table-3",
-      "definitionRef": {
-        "nodeTypeId": "table",
-        "nodeTypeVersion": "1.0.0"
-      },
-      "label": "Table",
-      "parent": null
-    },
-    "scatter-4": {
-      "id": "scatter-4",
-      "definitionRef": {
-        "nodeTypeId": "scatter",
-        "nodeTypeVersion": "1.0.0"
-      },
-      "label": "Scatter",
-      "parent": null
-    },
-    "cache-5": {
-      "id": "cache-5",
-      "definitionRef": {
-        "nodeTypeId": "cache",
-        "nodeTypeVersion": "1.0.0"
-      },
-      "label": "Cache",
-      "parent": null
-    },
-    "annotate-6": {
-      "id": "annotate-6",
-      "definitionRef": {
-        "nodeTypeId": "annotate",
-        "nodeTypeVersion": "1.0.0"
-      },
-      "label": "Annotate",
-      "parent": null
-    },
-    "image-viewer-7": {
-      "id": "image-viewer-7",
-      "definitionRef": {
-        "nodeTypeId": "image-viewer",
-        "nodeTypeVersion": "1.0.0"
-      },
-      "label": "Image Viewer",
-      "parent": null
-    },
-    "gallery-8": {
-      "id": "gallery-8",
-      "definitionRef": {
-        "nodeTypeId": "gallery",
-        "nodeTypeVersion": "1.0.0"
-      },
-      "label": "Gallery",
-      "parent": null
-    }
-  },
-  "edges": {
-    "e1": {
-      "id": "e1",
-      "from": "obs",
-      "fromPort": "out",
-      "to": "wrangle-1",
-      "toPort": "in",
-      "kind": "pred"
-    },
-    "e2": {
-      "id": "e2",
-      "from": "wrangle-1",
-      "fromPort": "out",
-      "to": "count-2",
-      "toPort": "in",
-      "kind": "pred"
-    },
-    "e3": {
-      "id": "e3",
-      "from": "wrangle-1",
-      "fromPort": "out",
-      "to": "table-3",
-      "toPort": "in",
-      "kind": "pred"
-    },
-    "e4": {
-      "id": "e4",
-      "from": "wrangle-1",
-      "fromPort": "out",
-      "to": "scatter-4",
-      "toPort": "in",
-      "kind": "pred"
-    },
-    "e5": {
-      "id": "e5",
-      "from": "cache-5",
-      "fromPort": "out",
-      "to": "annotate-6",
-      "toPort": "in",
-      "kind": "pred"
-    },
-    "e6": {
-      "id": "e6",
-      "from": "cache-5",
-      "fromPort": "out",
-      "to": "gallery-8",
-      "toPort": "in",
-      "kind": "pred"
-    }
-  },
-  "positions": {
-    "obs": {
-      "x": 30,
-      "y": 320
-    },
-    "wrangle-1": {
-      "x": 520,
-      "y": 260
-    },
-    "count-2": {
-      "x": 1100,
-      "y": 0
-    },
-    "table-3": {
-      "x": 1100,
-      "y": 220
-    },
-    "scatter-4": {
-      "x": 1100,
-      "y": 650
-    },
-    "cache-5": {
-      "x": 1650,
-      "y": 700
-    },
-    "annotate-6": {
-      "x": 2150,
-      "y": 620
-    },
-    "image-viewer-7": {
-      "x": 1650,
-      "y": 100
-    },
-    "gallery-8": {
-      "x": 2200,
-      "y": 0
-    }
-  },
-  "sizeOverrides": {},
-  "formOverride": {},
-  "formLocked": {},
-  "stage": {
+  "data": {},
+  "spec": {
     "root": "root",
     "elements": {
-      "view-scatter-4": {
-        "type": "View",
-        "props": {
-          "node": "scatter-4"
-        },
-        "children": []
-      },
-      "view-image-viewer-7": {
-        "type": "View",
-        "props": {
-          "node": "image-viewer-7"
-        },
-        "children": []
-      },
-      "view-table-3": {
-        "type": "View",
-        "props": {
-          "node": "table-3"
-        },
-        "children": []
-      },
-      "view-gallery-8": {
-        "type": "View",
-        "props": {
-          "node": "gallery-8"
-        },
-        "children": []
-      },
-      "view-annotate-6": {
-        "type": "View",
-        "props": {
-          "node": "annotate-6"
-        },
-        "children": []
-      },
-      "split-1": {
-        "type": "Split",
-        "props": {
-          "direction": "column",
-          "ratio": 0.5
-        },
-        "children": ["view-gallery-8", "view-annotate-6"]
-      },
-      "split-2": {
-        "type": "Split",
-        "props": {
-          "direction": "column",
-          "ratio": 0.3333333333333333
-        },
-        "children": ["view-table-3", "split-1"]
-      },
-      "split-3": {
-        "type": "Split",
-        "props": {
-          "direction": "column",
-          "ratio": 0.25
-        },
-        "children": ["view-image-viewer-7", "split-2"]
-      },
       "root": {
-        "type": "Split",
+        "type": "split",
+        "props": { "direction": "row", "ratio": 0.42 },
+        "children": ["scatter", "right"]
+      },
+      "scatter": {
+        "type": "scatter",
         "props": {
-          "direction": "row",
-          "ratio": 0.42
+          "title": "Embedding",
+          "filter": { "$bindState": "/filter/A" },
+          "focus": { "$bindState": "/focus/A" }
         },
-        "children": ["view-scatter-4", "split-3"]
+        "children": []
+      },
+      "right": {
+        "type": "split",
+        "props": { "direction": "column", "ratio": 0.25 },
+        "children": ["image", "lower"]
+      },
+      "image": {
+        "type": "image-viewer",
+        "props": { "title": "Image", "focus": { "$bindState": "/focus/A" } },
+        "children": []
+      },
+      "lower": {
+        "type": "split",
+        "props": { "direction": "column", "ratio": 0.3333333333333333 },
+        "children": ["table", "review"]
+      },
+      "table": {
+        "type": "table",
+        "props": {
+          "title": "Observations",
+          "filter": { "$bindState": "/filter/A" },
+          "focus": { "$bindState": "/focus/A" }
+        },
+        "children": []
+      },
+      "review": {
+        "type": "split",
+        "props": { "direction": "column", "ratio": 0.5 },
+        "children": ["gallery", "annotate"]
+      },
+      "gallery": {
+        "type": "gallery",
+        "props": {
+          "title": "Gallery",
+          "filter": { "$bindState": "/filter/A" },
+          "focus": { "$bindState": "/focus/A" }
+        },
+        "children": []
+      },
+      "annotate": {
+        "type": "annotate",
+        "props": {
+          "title": "Annotate",
+          "filter": { "$bindState": "/filter/A" },
+          "focus": { "$bindState": "/focus/A" }
+        },
+        "children": []
       }
     }
   },
-  "stripH": 280,
-  "flags": {},
-  "state": {
-    "filter": {
-      "A": {}
-    },
-    "focus": {
-      "A": null
-    }
-  },
-  "bindings": {
-    "table-3": {
-      "filter": {
-        "$bindState": "/filter/A"
-      },
-      "focus": {
-        "$bindState": "/focus/A"
-      }
-    },
-    "scatter-4": {
-      "filter": {
-        "$bindState": "/filter/A"
-      },
-      "focus": {
-        "$bindState": "/focus/A"
-      }
-    },
-    "cache-5": {
-      "filter": {
-        "$bindState": "/filter/A"
-      }
-    },
-    "annotate-6": {
-      "focus": {
-        "$bindState": "/focus/A"
-      }
-    },
-    "image-viewer-7": {
-      "focus": {
-        "$bindState": "/focus/A"
-      }
-    },
-    "gallery-8": {
-      "focus": {
-        "$bindState": "/focus/A"
-      }
-    }
-  }
+  "state": { "filter": { "A": {} }, "focus": { "A": null } }
 }

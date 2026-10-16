@@ -1,18 +1,14 @@
 /**
- * nd telemetry atoms: NdLed, NdHud, NdKv, NdCaption (+ NdChip alias).
+ * nd telemetry atoms: NdLed, NdHud, NdCaption.
  *
- * The workspace talks like lab-equipment telemetry: lowercase mono labels,
- * bracketed counts, LED cook states. Counts reuse the existing `Bracketed`;
- * chips reuse `DimensionBadge` (vocabulary alias: NdChip).
+ * The workspace talks like lab-equipment telemetry: lowercase mono labels and
+ * LED states.
  */
 
 import { cva, type VariantProps } from "class-variance-authority";
 import type * as React from "react";
 
 import { cn } from "@ndea/ui/lib/utils";
-
-export { Bracketed as NdBracketed } from "@ndea/ui/components/bracketed";
-export { DimensionBadge as NdChip } from "@ndea/ui/components/dimension-badge";
 
 /* ── Status LED: the cook lifecycle ─────────────────────────────── */
 
@@ -62,17 +58,6 @@ export function NdHud({
       style={{ fontSize: size, ...style }}
     >
       {children}
-    </span>
-  );
-}
-
-/* ── Telemetry key/value ─────────────────────────────────────────── */
-
-export function NdKv({ k, v, className }: { k: string; v: React.ReactNode; className?: string }) {
-  return (
-    <span className={cn("inline-flex gap-1 font-mono text-3xs tabular-nums text-text-muted", className)}>
-      <span className="opacity-70">{k}</span>
-      <span className="text-muted-foreground">{v}</span>
     </span>
   );
 }

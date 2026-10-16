@@ -1,7 +1,7 @@
 /** Gallery plugin descriptor (PLUGIN-ARCHITECTURE §8, §10.5). */
 
 import { z } from "zod";
-import { defineNode, exactNodeTypeRef, nodeConfigVersion } from "@ndea/sdk";
+import { defineNode, exactNodeTypeRef } from "@ndea/sdk";
 import { createElement } from "react";
 import type { NodeBodyMounter, NodeBodyProps } from "../contracts";
 import type { GalleryCapabilities, GalleryConfig, GalleryServices } from "./contracts";
@@ -18,17 +18,16 @@ export function createGalleryDefinition({
   return defineNode({
     ref: exactNodeTypeRef("gallery", "1.0.0"),
     title: "Gallery",
-    role: "view",
-    inputs: [{ id: "in", kind: "pred", label: "In" }],
-    outputs: [],
     capabilities: CAPABILITIES,
-    dataRequirements: ["plate-image"],
     config: {
       schema: z.object({ lanes: z.number().nullable() }),
-      version: nodeConfigVersion(1),
       defaultValue: { lanes: null } satisfies GalleryConfig,
     },
     presentation: { icon: "gallery" },
+    documentation: {
+      summary: "Shows image thumbnails for the selected rows.",
+      use: "Use it to browse cell images; click one to focus that row.",
+    },
     load: async () => {
       const { GalleryPluginView } = await import("./view");
       function ConfiguredGalleryView(props: NodeBodyProps<GalleryConfig, GalleryCapabilities>) {

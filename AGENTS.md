@@ -1,7 +1,8 @@
 # nd-embedding-atlas
 
-Interactive browser-based Node Workspace linking AI embeddings to source 5D
-(TCZYX) image data. APIs remain in flux.
+Interactive browser-based dashboard linking AI embeddings to source 5D (TCZYX)
+image data. json-render composes the whole UI from one workspace document.
+APIs remain in flux.
 
 ## Runtime and tooling
 
@@ -16,18 +17,17 @@ Interactive browser-based Node Workspace linking AI embeddings to source 5D
   Vite, Vitest, Oxlint, Oxfmt, or tsdown separately.
 - Run package scripts with `vp run <script>`. Bare commands such as `vp build`
   invoke Vite+ built-ins, not same-named package scripts.
-- TypeScript 6 runs in strict mode.
+- TypeScript 7 runs in strict mode.
 
 ## Workspace layout
 
 ```text
 apps/ndea/          CLI, server, frontend, and single-binary build
-packages/graph/     Framework-neutral graph evaluation engine
-packages/nodes/     Built-in node definitions and React bodies
+packages/nodes/     Built-in view definitions and their bodies
 packages/ochre/     Color, colormap, and TypeGPU helpers
 packages/ui/        Shared shadcn/Base UI controls
 packages/protocol/  Shared request and response Zod schemas
-packages/sdk/       Node authoring and host contracts
+packages/sdk/       View authoring and host contracts
 packages/zarr/      Bun-backed AnnData, MuData, and OME-Zarr I/O
 docs/               Independent Waku app with its own lockfile
 scripts/             Workspace tooling
@@ -38,7 +38,6 @@ Workspace dependencies flow in one direction:
 ```text
 apps/ndea    ──→  every @ndea/* package
 @ndea/nodes  ──→  @ndea/sdk, @ndea/protocol, @ndea/ochre, @ndea/ui
-@ndea/graph  ──→  @ndea/sdk
 @ndea/sdk    ──→  @ndea/protocol
 @ndea/ui     ──→  @ndea/ochre
 ```
@@ -67,88 +66,94 @@ entrypoints across workspaces.
 - REST routes cover embeddings, observations, scatter data, variables,
   categorization, annotations, exports, crops, filtering, the workspace
   document, and plugin bootstrap.
+- The workspace document has three sections: `data` (named data sources),
+  `spec` (the json-render dashboard), and `state` (coordination cells).
+  `frontend/core/workspace/document.ts` validates all of it and is pure, so the
+  server and the browser run the same rules.
 - `WorkspaceDocumentStore` (`server/workspace.ts`) owns the session's one
   revisioned workspace document and its file. A missing file is written from
   the preset (`server/presets.ts`): a built-in JSON document under
   `apps/ndea/src/presets/` or a `.json` path. Every writer (browser sync,
   `PATCH /api/workspace`, MCP) goes through `applyWorkspacePatch`
   (`server/routes/workspace.ts`): RFC 6902 ops against a base revision,
-  checked for structure, graph semantics (`graphIssues`: configs, ports,
-  cycles), and set references. `workspace/watch` pushes accepted revisions.
-- `WorkspaceEvaluator` (`server/graph.ts`) evaluates that document with the
-  browser's node definitions and the shared cook table
-  (`frontend/core/graph/native-graph.ts`); `GET /api/workspace/nodes/:id`
-  serves one node's output. Every view and live Cache cook ANDs its own filter
-  scope (`host.scopeFilter()`), so both sides compose crossfilters identically.
-  Cooks must stay browser-free. SQL built from document values runs through
+  checked by `parseWorkspaceDocument` (structure, component props, data
+  references, bindings) and for set references. `workspace/watch` pushes
+  accepted revisions.
+- `workspaceResult` (`server/routes/workspace.ts`) evaluates one element or
+  data source: `GET /api/workspace/elements/:id` and
+  `GET /api/workspace/data/:name` return `{ revision, predicate, count }`. The
+  predicate comes from `elementPredicate` / `dataSourceSql`
+  (`frontend/core/workspace/data-sources.ts`), the same functions the browser
+  runtimes use. SQL built from document values runs through
   `server/observations.ts`, which prepares every statement
   (`DatasetQuerySession.querySingleJson` / `executeSingle`).
 - `ObservationSets` (`server/observation-sets.ts`) stores lassos as
   content-addressed sets keyed by dataset and obs name: `POST /api/sets`
   persists `~/.ndea/sets/<id>.json` and loads rows into the `ndea_obs_sets`
-  temp table that `{ op: "inSet" }` clauses query. A pinned Cache stores its
-  rows as one such set in its node config. `PATCH /api/workspace` rejects
+  temp table that `{ op: "inSet" }` clauses query. A saved selection is a data
+  source `{ where: { op: "inSet", set } }`. `PATCH /api/workspace` rejects
   references to unknown sets anywhere in the document.
 - `/mcp` (`server/mcp.ts`) serves MCP over Streamable HTTP with the SDK's
   per-request `createMcpHandler`; tools close over the one server session.
   Only localhost `Host`/`Origin` and the bearer token in `~/.ndea/mcp-token`
-  pass. `edit_graph` and `edit_view` compile named ops on a draft document
-  (`server/workspace-edits.ts`) and apply the diff as one patch; add new agent
-  operations there, not as new write paths.
+  pass. `edit_dashboard` compiles named ops on a draft document
+  (`server/workspace-edits.ts`) and applies the diff as one patch; add new
+  agent operations there, not as new write paths.
 - `EmbeddingStore` owns one DuckDB connection. Base tables, the `dataset` view,
   temporary selections, and Mosaic preaggregations share that connection.
 
 ### SDK and plugins
 
-- `PluginFactory` registers complete `NodeDefinition` objects through
-  `@ndea/sdk`.
-- `NodeModule` creates per-instance runtimes and framework-neutral mounted
-  bodies.
+- A view component is an `@ndea/sdk` `NodeDefinition`: `ref`, `title`,
+  `capabilities`, `documentation`, a config contract `{ schema, defaultValue }`,
+  and a lazy `load()` returning a `NodeModule` that mounts a framework-neutral
+  body. The element's props are its config, merged over `defaultValue`.
 - `NodeHost` exposes declared, capability-gated services. A new capability is
   one `NodeCapability` union member in `@ndea/sdk` plus one `nodeCapabilities`
   entry in `frontend/core/node/capabilities.ts`.
-- Graph ports carry one kind, `pred` (a SQL predicate). Row selections travel
-  as observation sets referenced by `{ op: "inSet" }` clauses.
-- Startup validates plugin manifests, serves allowlisted assets, imports only
-  approved client URLs, and freezes the session catalog before restoration.
+- Startup validates plugin manifests and serves allowlisted assets, but the
+  dashboard does not mount plugin components yet: a component-registration
+  contract replaces the old node catalog in a later iteration.
 - `SDK_VERSION` versions the author contract independently from app, manifest,
-  node, config, asset, and Workspace document versions.
+  and Workspace document versions.
 
 ### Frontend
 
-- React 19 renders the Node Workspace.
+- React 19 renders the dashboard.
 - TypeGPU drives the WebGPU scatter plot, including GPU lasso and marquee
   selection.
 - Mosaic and server-side DuckDB drive cross-filtered scatter, table, and chart
-  views.
+  views. The `vgplot` component renders its props (`entries`, `attributes`) as
+  a Mosaic plot spec with the host-supplied `$table`, `$scope`, and `$brush`
+  params.
 - `DatasetSessionProvider` owns metadata, trajectories, query infrastructure,
   and the session-local runtime manager.
-- Workspace owns Canvas, Stage, and Body placement in the browser. Every
-  document write goes through `Workspace.commit`, which reconciles the graph
-  runtime to the next document before publishing it; local edits, coordination
-  writes, and remote revisions (`Workspace.applyDocument`) share that path.
-  `WorkspaceSync` diffs the document store against the server's acknowledged
-  revision and PATCHes the difference. Node code reaches cross-view
-  coordination through `NodeHost`.
-- Coordination is document data, not wires. `state[type][scope]` holds shared
-  values and `bindings[nodeId][type] = { $bindState: "/<type>/<scope>" }`
-  joins a node to a scope; `frontend/core/coordination/types.ts` registers each
-  type's Zod schema (focus, filter, colorBy, viewSync, ordering). A `filter`
-  scope is a crossfilter `source → facet → FilterClause`: each member sees every
-  other source's clauses, never its own, and agents write under their own
-  source key. Publishers emit typed clauses, never SQL.
-- The xyflow canvas is a projection of the document and `Workspace.session`;
-  only measured node sizes are canvas-local. Each scope with a member on the
-  current level draws as a derived hub, and each binding as one link
-  (`workspace/canvas/scope-links.ts`): deleting a link clears that binding and
-  dragging a hub onto a node assigns it. Keep the projection total: every
-  document binding must render as a link, even one the node cannot use.
-- json-render renders the Stage from the document's `stage`, a flat spec of
-  `Split`, `View`, and `Slot` elements (`workspace/stage/stage-spec.ts` holds
-  the schema, structural rules, operations, and catalog). A node is staged
-  exactly when a `View` shows it. Components get element ids through a
-  render-only `elementId` prop, and props resolve json-render expressions
-  against coordination `state`. Views adopt the node's stable body dock.
+- json-render renders the document's `spec` (`workspace/DashboardPane.tsx`).
+  `workspace/dashboard.ts` holds the component catalog (`COMPONENTS`: layout
+  `split`/`stack`, `text`, `select`, `slot`, and one component per view
+  definition, keyed by node type id), the structural and prop rules, and the
+  pure edit operations the UI and agents share. Components get element ids
+  through a render-only `elementId` prop; props resolve json-render
+  expressions against coordination `state`.
+- A data component reads `props.data` (a named source; omitted means every
+  observation). Sources chain through `from` and narrow by a typed `where`
+  clause and/or a `sql` predicate.
+- Every document write goes through `Workspace.commit`; local edits,
+  coordination writes, and remote revisions (`Workspace.applyDocument`) share
+  that path. `WorkspaceSync` diffs the document store against the server's
+  acknowledged revision and PATCHes the difference.
+- `WorkspaceNodeRuntimeManager` (`core/node/runtime/workspace-runtime.ts`) keeps
+  one live body per view element in a stable dock that tiles adopt, so moving
+  a tile never remounts it. A config change from another writer (an agent, a
+  remote revision) restarts the body; the body's own `patchConfig` does not.
+- Coordination is document data. `state[type][scope]` holds shared values and
+  an element prop `{ $bindState: "/<type>/<scope>" }` (json-render's two-way
+  binding) joins it to a scope; `frontend/core/coordination/types.ts`
+  registers each type's Zod schema (focus, filter, colorBy, viewSync,
+  ordering). A `filter` scope is a crossfilter `source → facet → FilterClause`
+  keyed by element id: each member sees every other source's clauses, never
+  its own, and agents write under their own source key. Publishers emit typed
+  clauses, never SQL.
 
 ## Commands
 
@@ -197,8 +202,9 @@ not replace unrelated `catalog:` references with package-local ranges. Use
 that invokes Rolldown instead of the single-binary pipeline. Direct
 compiler invocation also fails on embedded font assets; use the project task.
 
-The node editor runs in development. Production builds compile it out and open
-the document's Stage.
+Dashboard layout editing (split, swap, remove, fill a slot) runs in
+development. Production builds compile it out; agents and patches edit any
+build.
 
 ## Code rules
 
@@ -222,8 +228,8 @@ the document's Stage.
   view schema. Rebuild it through `EmbeddingStore._rebuildView()`.
 - **Workspace authority:** The server document is the only persisted workspace.
   Never write workspace state to `localStorage`. Session state (selection,
-  claim, subnet path, canvas disposition) lives in `Workspace.session`; add new
-  editor-only fields to `WorkspaceSession` in `workspace/types.ts`. The file
+  fullscreen) lives in `Workspace.session`; add new editor-only fields to
+  `WorkspaceSession` in `workspace/types.ts`. The file
   format accepts only its exact version; there are no migrations.
 - **Workers:** `new URL("./worker.ts", import.meta.url)` must work in development
   and compiled binaries. Bun embeds workers automatically.

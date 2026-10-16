@@ -21,6 +21,8 @@
 - _(server)_ MCP server at `/mcp` (Streamable HTTP, localhost-only, bearer token in `~/.ndea/mcp-token`): agents read the workspace, nodes, columns, and results, and edit the data flow (`edit_graph`) and the views (`edit_view`) through atomic named ops, with `patch_workspace` as a raw escape hatch.
 - _(cli)_ `ndea mcp install | check | uninstall`: detect installed coding agents (via add-mcp), write ndea's MCP endpoint and token into their configs, and report which agents are current.
 - _(server)_ Every workspace write now gets the same graph check as a document load (configs, ports, cycles), so no writer can save a document the browser would refuse to open.
+- _(frontend)_ json-render composes the whole dashboard from the document's `spec`: layout (`split`, `stack`), `text`, a `select` picker that publishes typed `in` clauses, empty `slot`s, and one component per view (`scatter`, `table`, `count`, `count-plot`, `histogram`, `vgplot`, `gallery`, `image-viewer`, `annotate`) whose props are its settings. `vgplot` renders any Mosaic plot spec in its props.
+- _(server)_ Named data sources (`/data`: `from` + typed `where` and/or `sql`) replace transform nodes; `GET /api/workspace/elements/:id` and `/api/workspace/data/:name` return the same predicate and count the browser shows. MCP tools are now `list_components`, `get_result`, and `edit_dashboard`.
 
 ### 🐛 Bug Fixes
 
@@ -45,6 +47,8 @@
 - [**breaking**] Store a pinned Cache as an observation set in its node config, so pins survive reload and agents read the same rows; delete the runtime checkpoint machinery.
 - [**breaking**] Delete the `sel` port kind and graph emissions; `pred` is the only port kind.
 - Make the browser graph runtime a projection of the workspace document: every write commits through one reconcile, and views and live Caches cook their own filter scope, identically on the server.
+- [**breaking**] Replace the node graph with json-render: the workspace document (format version 2) is `data` + `spec` + `state`. Delete the graph engine (`@ndea/graph`), cooks, edges, ports, subnets, node assets, the xyflow canvas, per-node layout and flags, the `bindings` map (bindings are `$bindState` element props), the frontend plugin catalog, and the Cache, Wrangle, Filter, Dataset, obs, and proxy nodes.
+- [**breaking**] SDK 1.0.0: `NodeDefinition` drops `role`, `inputs`, `outputs`, `evaluate`, and `dataRequirements`; config contracts are `{ schema, defaultValue }` with no versions or migrations.
 - Move editor session state (selection, claim, subnet path, disposition, render band) into `Workspace.session`; the document store holds exactly the persisted document.
 - Run every document-derived observation query through prepared statements in `server/observations.ts` and delete `/api/scatter-selection`.
 - Adopt TypeScript 7 and update app, package, build, and documentation dependencies

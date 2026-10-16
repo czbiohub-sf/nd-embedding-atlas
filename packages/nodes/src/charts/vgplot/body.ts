@@ -7,8 +7,8 @@
  *
  * Control strip mirrors `charts/core/field-picker.tsx` imperatively (same
  * classes, same per-variant column kinds; `listColumns` already applies the
- * `__row_index__` skip). The host has no config-change subscription, so every
- * `patchConfig` here re-renders from its own call site.
+ * `__row_index__` skip). Its own `patchConfig` re-renders from the call site;
+ * another writer's config change remounts the body.
  */
 
 import type { MountedNodeBody, NodeHost } from "@ndea/sdk";
@@ -22,6 +22,7 @@ import {
   describeEntries,
   listColumns,
   type MarkPreset,
+  type PlotEntry,
   type VgplotConfig,
 } from "./spec-schema";
 
@@ -78,9 +79,10 @@ export async function mountVgplotBody(host: Host): Promise<MountedNodeBody> {
   plotHost.className = "min-h-0 flex-1 overflow-hidden";
   element.appendChild(plotHost);
 
-  // `host.config` is the source of truth on mount; entries are the only place
-  // the picked field/preset survive a reload.
-  const restored = describeEntries(host.config.entries);
+  // `host.config.entries` is the plot: rendered verbatim, so a hand-written or
+  // agent-written Mosaic spec works. The pickers are an editor for presets.
+  let spec: PlotEntry[] = host.config.entries;
+  const restored = describeEntries(spec);
   let preset: MarkPreset = restored?.preset ?? "histogram";
   let field: string | null = restored?.field ?? null;
 
@@ -103,7 +105,7 @@ export async function mountVgplotBody(host: Host): Promise<MountedNodeBody> {
     const placeholder = document.createElement("option");
     placeholder.value = "";
     placeholder.disabled = true;
-    placeholder.textContent = columnsError ? "Columns unavailable" : "Pick a column…";
+    placeholder.textContent = columnsError ? "Columns unavailable" : spec.length > 0 ? "Custom spec" : "Pick a column…";
     fieldSelect.appendChild(placeholder);
     for (const name of eligibleColumns()) {
       const option = document.createElement("option");
@@ -141,7 +143,7 @@ export async function mountVgplotBody(host: Host): Promise<MountedNodeBody> {
       showNote(`Could not load columns: ${columnsError}`, ERROR_CLASS);
       return;
     }
-    if (field == null) {
+    if (spec.length === 0) {
       showNote("Pick a column to plot.", NOTE_CLASS);
       return;
     }
@@ -160,7 +162,7 @@ export async function mountVgplotBody(host: Host): Promise<MountedNodeBody> {
       const mounted = await mountPlot({
         coordinator: host.data.coordinator,
         table: host.data.table,
-        entries: buildEntries(preset, field),
+        entries: spec,
         attributes: host.config.attributes,
         scope: host.filter.selection,
         registerClient: (client) => host.registerClient(client),
@@ -197,10 +199,11 @@ export async function mountVgplotBody(host: Host): Promise<MountedNodeBody> {
   function applySelection(nextPreset: MarkPreset, nextField: string | null): void {
     preset = nextPreset;
     field = nextField;
+    spec = field == null ? [] : buildEntries(preset, field);
     // This body remounts the plot below, so drop the stale published filter
     // (matches HistogramBody's clear-on-field-change).
     host.filter.clear("chart");
-    host.patchConfig({ entries: field == null ? [] : buildEntries(preset, field) });
+    host.patchConfig({ entries: spec });
     renderControls();
     void render();
   }
@@ -260,7 +263,7 @@ export async function mountVgplotBody(host: Host): Promise<MountedNodeBody> {
   renderControls();
   // The observer's first callback drives the initial plot once the dock has
   // given us a width; render now only for the states that need no layout.
-  if (columnsError || field == null) void render();
+  if (columnsError || spec.length === 0) void render();
 
   return { element, dispose };
 }

@@ -5,20 +5,34 @@ import { rowIndex, type RowIndex } from "@ndea/sdk";
 import {
   coordinationDocumentPort,
   createCoordination,
-  withoutNodeCoordination,
+  withoutRemovedContributions,
   type CoordinationDocumentState,
   type CoordinationScopeCellPort,
 } from "./coordination";
 import { createFilterBinding } from "./filter-binding";
-import { parseWorkspaceDocument } from "../workspace/document";
+import { removeElement } from "../workspace/dashboard";
+
+const leaf = { type: "table", props: {}, children: [] };
 
 function fresh(): { co: CoordinationScopeCellPort; store: Store<CoordinationDocumentState> } {
-  const store = new Store<CoordinationDocumentState>({ state: {}, bindings: {} });
+  const store = new Store<CoordinationDocumentState>({
+    state: {},
+    spec: {
+      root: "root",
+      elements: {
+        root: { type: "stack", props: {}, children: ["n1", "n2", "n3", "scatter"] },
+        n1: leaf,
+        n2: leaf,
+        n3: leaf,
+        scatter: { ...leaf, type: "scatter" },
+      },
+    },
+  });
   return { co: createCoordination(coordinationDocumentPort(store)), store };
 }
 
 describe("coordination cells", () => {
-  test("bound nodes share one cell; scopes are independent", () => {
+  test("bound elements share one cell; scopes are independent", () => {
     const { co } = fresh();
     co.assignScope("n1", "focus", "A");
     co.assignScope("n2", "focus", "A");
@@ -28,13 +42,13 @@ describe("coordination cells", () => {
     expect(co.readCoordination("focus", co.scopeOf("n3", "focus")!)).toBeNull();
   });
 
-  test("binding is a json-render $bindState pointer, and the cell is seeded for agent patches", () => {
+  test("binding is a json-render $bindState prop, and the cell is seeded for agent patches", () => {
     const { co, store } = fresh();
     co.assignScope("n1", "filter", "A");
-    expect(store.state.bindings.n1).toEqual({ filter: { $bindState: "/filter/A" } });
+    expect(store.state.spec.elements.n1.props.filter).toEqual({ $bindState: "/filter/A" });
     expect(store.state.state.filter).toEqual({ A: {} });
     co.clearScope("n1", "filter");
-    expect(store.state.bindings.n1).toBeUndefined();
+    expect(store.state.spec.elements.n1.props).toEqual({});
   });
 
   test("writes are validated against the type schema", () => {
@@ -59,15 +73,7 @@ describe("coordination cells", () => {
     expect(seen).toEqual([rowIndex(1), rowIndex(3), undefined]);
   });
 
-  test("existingScopes and mintScope see bound scopes and agent-written cells", () => {
-    const { co } = fresh();
-    co.assignScope("n1", "focus", "A");
-    co.setCoordinationValue("focus", "B", null);
-    expect(co.existingScopes("focus")).toEqual(["A", "B"]);
-    expect(co.mintScope("focus")).toBe("C");
-  });
-
-  test("leaving a filter scope or deleting the node drops its crossfilter contribution", () => {
+  test("leaving a filter scope or removing the element drops its crossfilter contribution", () => {
     const { co, store } = fresh();
     const clause = { op: "eq", column: "t", value: 1 } as const;
     co.assignScope("n1", "filter", "A");
@@ -76,9 +82,8 @@ describe("coordination cells", () => {
     expect(store.state.state.filter?.A).toEqual({ agent: { where: clause } });
 
     co.setCoordinationValue("filter", "B", { n1: { lasso: clause } });
-    const removed = withoutNodeCoordination(store.state, "n1");
-    expect(removed.state.filter?.B).toEqual({});
-    expect(removed.bindings.n1).toBeUndefined();
+    const next = { ...store.state, spec: removeElement(store.state.spec, "n1") };
+    expect(withoutRemovedContributions(store.state, next).state.filter?.B).toEqual({});
   });
 });
 
@@ -107,8 +112,8 @@ describe("filter binding (crossfilter)", () => {
     });
   });
 
-  test("an unbound node publishes nothing; materialization rejects a filter that moved", async () => {
-    const { co } = fresh();
+  test("an unbound element publishes nothing; materialization rejects a filter that moved", async () => {
+    const { co, store } = fresh();
     const binding = createFilterBinding({
       nodeId: "n1",
       coordination: co,
@@ -116,52 +121,11 @@ describe("filter binding (crossfilter)", () => {
       table: "t",
     });
     binding.publish("lasso", { op: "inSet", set: "0123456789abcdef" });
-    expect(co.existingScopes("filter")).toEqual([]);
+    expect(store.state.state).toEqual({});
 
     expect((await binding.materializeRowIds()).rowIds).toEqual([rowIndex(4), rowIndex(7)]);
     const pending = binding.materializeRowIds();
     binding.setGraphPredicate("x > 1");
     await expect(pending).rejects.toThrow("filter changed");
-  });
-});
-
-const document = (coordination: object) => ({
-  nodeAssets: [],
-  nodes: {},
-  edges: {},
-  positions: {},
-  sizeOverrides: {},
-  formOverride: {},
-  formLocked: {},
-  stage: null,
-  stripH: 280,
-  flags: {},
-  state: {},
-  bindings: {},
-  ...coordination,
-});
-const pointers = (value: unknown) => {
-  const parsed = parseWorkspaceDocument(value);
-  return parsed.ok ? [] : parsed.issues.map((issue) => issue.pointer);
-};
-
-describe("document validation of coordination sections", () => {
-  test("agent patches are checked against each type's value schema", () => {
-    expect(pointers(document({ state: { focus: { A: 3 } } }))).toEqual([]);
-    expect(pointers(document({ state: { focus: { A: -1 } } }))).toEqual(["/state/focus/A"]);
-    expect(pointers(document({ state: { filter: { A: { agent: { where: { op: "inSet", set: "x" } } } } } }))).toEqual([
-      "/state/filter/A/agent/where/set",
-    ]);
-    expect(pointers(document({ state: { focs: {} } }))).toEqual(["/state"]);
-  });
-
-  test("bindings must name a live node and point at /<type>/<scope>", () => {
-    expect(pointers(document({ bindings: { ghost: { focus: { $bindState: "/focus/A" } } } }))).toEqual([
-      "/bindings/ghost",
-    ]);
-    const node = { id: "n1", definitionRef: { nodeTypeId: "table", nodeTypeVersion: "1.0.0" }, label: "Table" };
-    expect(
-      pointers(document({ nodes: { n1: node }, bindings: { n1: { focus: { $bindState: "/filter/A" } } } })),
-    ).toEqual(["/bindings/n1/focus/$bindState"]);
   });
 });

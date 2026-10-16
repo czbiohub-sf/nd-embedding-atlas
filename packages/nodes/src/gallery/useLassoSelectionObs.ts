@@ -29,8 +29,6 @@ export interface UseLassoSelectionObsResult {
   rowCount: number;
   isLoading: boolean;
   isError: boolean;
-  /** Source kind currently providing rows to the gallery. */
-  sourceKind: "input" | "external" | null;
 }
 
 /** Hard cap to keep first paint snappy. UI surfaces a "showing top N" hint when truncated. */

@@ -7,19 +7,15 @@
   "exports": {
     ".": "./src/index.ts",
     "./annotate": "./src/annotate/index.ts",
-    "./cache": "./src/cache/index.ts",
     "./catalog": "./src/catalog.ts",
     "./charts": "./src/charts/index.ts",
     "./count": "./src/count/index.ts",
-    "./dataset": "./src/dataset/index.ts",
     "./filter": "./src/filter/index.ts",
     "./gallery": "./src/gallery/index.ts",
     "./image-viewer": "./src/image-viewer/index.ts",
     "./query": "./src/query/index.ts",
     "./scatter": "./src/scatter/index.ts",
-    "./subnet": "./src/subnet/index.ts",
-    "./table": "./src/table/index.ts",
-    "./wrangle": "./src/wrangle/index.ts"
+    "./table": "./src/table/index.ts"
   },
   "scripts": {
     "check": "vp check",

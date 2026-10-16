@@ -19,15 +19,7 @@ import {
 } from "@ndea/protocol";
 import { createPatch } from "rfc6902";
 
-import { validateGraphRuntimeTopology } from "@/core/graph/runtime-session";
-import type { AppNodeLibrary } from "@/core/node/library";
-import {
-  createWorkspaceAppNodeLibrary,
-  resolveWorkspaceNodeAssets,
-  type WorkspaceAppNodeLibrary,
-} from "@/core/node-asset/resolver";
-import { parseWorkspaceNodeAssetRecords } from "@/core/node-asset/schema";
-import { applyWorkspaceOps, decodeNodeConfigs, parseWorkspaceDocument } from "./document";
+import { applyWorkspaceOps, parseWorkspaceDocument } from "./document";
 import type { WorkspaceDocument } from "./types";
 import type { Workspace } from "./workspace-store";
 
@@ -45,31 +37,13 @@ export type PatchOutcome =
   | { kind: "conflict"; snapshot: WorkspaceSnapshot }
   | { kind: "invalid"; errors: string[] };
 
-/**
- * Validate a server document against this session's node catalog: config
- * migrations and runtime topology. Server-side checks are structural only.
- */
+/** Validate a server document with the schema the server enforces. */
 export function decodeWorkspaceDocument(
   value: unknown,
-  nodeLibrary: AppNodeLibrary,
 ): { ok: true; state: WorkspaceDocument } | { ok: false; errors: string[] } {
   const parsed = parseWorkspaceDocument(value);
   if (!parsed.ok) return { ok: false, errors: parsed.issues.map((issue) => `${issue.pointer}: ${issue.detail}`) };
-  try {
-    let records = parseWorkspaceNodeAssetRecords(parsed.value.nodeAssets);
-    let library = nodeLibrary;
-    if (isWorkspaceAppNodeLibrary(nodeLibrary)) {
-      const base = nodeLibrary.baseLibrary();
-      const resolution = resolveWorkspaceNodeAssets(base, nodeLibrary.assetSnapshot().assets, records);
-      library = createWorkspaceAppNodeLibrary(base, resolution.snapshot);
-      records = resolution.records;
-    }
-    const state = { ...parsed.value, nodeAssets: records, nodes: decodeNodeConfigs(parsed.value.nodes, library) };
-    validateGraphRuntimeTopology(state, library);
-    return { ok: true, state };
-  } catch (error) {
-    return { ok: false, errors: [error instanceof Error ? error.message : String(error)] };
-  }
+  return { ok: true, state: parsed.value };
 }
 
 export class WorkspaceSync {
@@ -179,12 +153,12 @@ export class WorkspaceSync {
    * dropped in favour of the server document.
    */
   private rebaseOnto(revision: number, document: unknown, pending: JsonPatchOp[]): void {
-    const server = decodeWorkspaceDocument(document, this.workspace.nodeLibrary);
+    const server = decodeWorkspaceDocument(document);
     if (!server.ok) return this.fail(server.errors);
     this.acked = { revision, document: server.state };
 
     const replayed = pending.length > 0 ? applyWorkspaceOps(this.acked.document, pending) : null;
-    const rebased = replayed?.ok ? decodeWorkspaceDocument(replayed.value, this.workspace.nodeLibrary) : null;
+    const rebased = replayed?.ok ? decodeWorkspaceDocument(replayed.value) : null;
     if (replayed && !rebased?.ok) {
       console.warn("[workspace] local edits conflicted with a newer revision and were discarded");
     }
@@ -244,8 +218,4 @@ export async function fetchWorkspaceSnapshot(): Promise<WorkspaceSnapshot> {
   const res = await fetch("/api/workspace");
   if (!res.ok) throw new Error(`workspace load failed: HTTP ${res.status}`);
   return WorkspaceSnapshotSchema.parse(await res.json());
-}
-
-function isWorkspaceAppNodeLibrary(nodeLibrary: AppNodeLibrary): nodeLibrary is WorkspaceAppNodeLibrary {
-  return "assetSnapshot" in nodeLibrary && "baseLibrary" in nodeLibrary && "replaceAssetSnapshot" in nodeLibrary;
 }

@@ -17,7 +17,7 @@ import { handleEmbeddingStatus, handleLoadEmbedding } from "./routes/embeddings.
 import { handleExport, handleExportStatus, handleGetExportDir } from "./routes/export.ts";
 import { handleFilter } from "./routes/filter.ts";
 import { handleSetsPost } from "./routes/sets.ts";
-import { handleWorkspaceGet, handleWorkspaceNode, handleWorkspacePatch } from "./routes/workspace.ts";
+import { handleWorkspaceGet, handleWorkspacePatch, handleWorkspaceResult } from "./routes/workspace.ts";
 import { handleHealth, handleObsBatch, handleObsDetail, handleObsInfo } from "./routes/obs.ts";
 import { handleScatterCategories, handleScatterContinuousValues, handleScatterPositions } from "./routes/scatter.ts";
 import { handleTrajectory } from "./routes/trajectory.ts";
@@ -127,9 +127,11 @@ function routeFilter({ req, pathname, method, state }: ApiRouteContext): ApiRout
   return null;
 }
 
-function routeWorkspace({ req, url, pathname, method, state }: ApiRouteContext): ApiRouteResult {
-  const nodeId = extractPathParam(pathname, "/api/workspace/nodes/");
-  if (nodeId && method === "GET") return handleWorkspaceNode(decodeURIComponent(nodeId), url, state);
+function routeWorkspace({ req, pathname, method, state }: ApiRouteContext): ApiRouteResult {
+  const element = extractPathParam(pathname, "/api/workspace/elements/");
+  if (element && method === "GET") return handleWorkspaceResult({ element: decodeURIComponent(element) }, state);
+  const data = extractPathParam(pathname, "/api/workspace/data/");
+  if (data && method === "GET") return handleWorkspaceResult({ data: decodeURIComponent(data) }, state);
   if (pathname !== "/api/workspace") return null;
   if (method === "GET") return handleWorkspaceGet(state);
   if (method === "PATCH") return handleWorkspacePatch(req, state);

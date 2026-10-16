@@ -1,24 +1,26 @@
 /**
- * Body presentation adapters. Runtime ownership lives under core/node/runtime:
- * sockets only adopt its stable elements, and this root adapter only observes
- * state plus exposes the explicit retry transition.
+ * Body sockets: a view element's live body and header toolbar are stable DOM
+ * elements owned by the runtime manager. A socket adopts them with
+ * appendChild, so moving a tile (or going fullscreen) never remounts a body.
  */
 
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
-import type { ExactNodeTypeRef } from "@ndea/sdk";
 
-import { PanelErrorBoundary } from "@/components/layout/PanelErrorBoundary";
-import type { NodeInstanceRuntime } from "@/core/node/runtime/instance-runtime";
 import { useWorkspaceNodeRuntimes } from "@/core/node/runtime/runtime-context-value";
-import { resolveNodeForm } from "./canvas/port-positions";
-import { useWorkspace, useWorkspaceSelector, useWorkspaceSession } from "./workspace-context";
 
-function ActiveBodyRuntime({ label, runtime }: { readonly label: string; readonly runtime: NodeInstanceRuntime }) {
-  const state = useSyncExternalStore(runtime.subscribe, runtime.getSnapshot, runtime.getSnapshot);
-  if (state.status === "ready" || state.status === "disposed") return null;
-  if (state.status === "failed") {
-    return (
+/** Starts the element's body (sticky) and shows its loading or failure state inside the dock. */
+export function BodyStatus({ id, label }: { readonly id: string; readonly label: string }) {
+  const runtimes = useWorkspaceNodeRuntimes();
+  useEffect(() => void runtimes.activate(id), [runtimes, id]);
+  const runtime = useSyncExternalStore(runtimes.subscribe, () => runtimes.get(id));
+  const state = useSyncExternalStore(
+    (listener) => runtime?.subscribe(listener) ?? (() => {}),
+    () => runtime?.getSnapshot(),
+  );
+  if (!runtime || !state || state.status === "ready" || state.status === "disposed") return null;
+  return createPortal(
+    state.status === "failed" ? (
       <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
         <div className="font-medium text-sm text-foreground">{label} failed</div>
         <div className="max-w-xs break-all font-mono text-muted-foreground text-xs">{state.error.message}</div>
@@ -30,130 +32,33 @@ function ActiveBodyRuntime({ label, runtime }: { readonly label: string; readonl
           Retry
         </button>
       </div>
-    );
-  }
-  return <div className="flex h-full items-center justify-center text-xs text-muted-foreground">Loading {label}…</div>;
-}
-
-function BodyRuntimeAdapter({
-  nodeId,
-  definitionRef,
-  label,
-}: {
-  readonly nodeId: string;
-  readonly definitionRef: ExactNodeTypeRef;
-  readonly label: string;
-}) {
-  const runtimes = useWorkspaceNodeRuntimes();
-  const [runtime, setRuntime] = useState(() => runtimes.get(nodeId));
-
-  useEffect(() => {
-    setRuntime(runtimes.activate(nodeId, definitionRef));
-  }, [definitionRef, nodeId, runtimes]);
-
-  return runtime ? <ActiveBodyRuntime label={label} runtime={runtime} /> : null;
-}
-
-function BodyOwner({
-  nodeId,
-  definitionRef,
-  label,
-}: {
-  readonly nodeId: string;
-  readonly definitionRef: ExactNodeTypeRef;
-  readonly label: string;
-}) {
-  const runtimes = useWorkspaceNodeRuntimes();
-  return createPortal(
-    <PanelErrorBoundary panelName={label}>
-      <BodyRuntimeAdapter nodeId={nodeId} definitionRef={definitionRef} label={label} />
-    </PanelErrorBoundary>,
-    runtimes.bodyDock(nodeId),
+    ) : (
+      <div className="flex h-full items-center justify-center text-xs text-muted-foreground">Loading {label}…</div>
+    ),
+    runtimes.bodyDock(id),
   );
 }
 
-/** Sticky activation: presentation changes never dispose a live instance. */
-export function WorkspaceBodies() {
-  const ws = useWorkspace();
-  const nodes = useWorkspaceSelector((state) => state.nodes);
-  useWorkspaceSelector((state) => state.stage);
-  useWorkspaceSession((state) => state.disposition);
-  useWorkspaceSelector((state) => state.formOverride);
-  const fullscreen = useWorkspaceSession((state) => state.fullscreen);
-  const activated = useRef(new Set<string>());
-
-  const live: { id: string; definitionRef: ExactNodeTypeRef; label: string }[] = [];
-  for (const node of Object.values(nodes)) {
-    const spec = ws.nodeLibrary.getSpecExact(node.definitionRef);
-    if (!spec?.definition.load) continue;
-    const form = resolveNodeForm(ws, node.id);
-    const needsBody =
-      ws.placementOf(node.id) === "staged" ||
-      form === "full" ||
-      (form === "card" && spec.body === "card-and-full") ||
-      fullscreen === node.id;
-    if (needsBody) activated.current.add(node.id);
-    if (activated.current.has(node.id)) {
-      live.push({ id: node.id, definitionRef: spec.definition.ref, label: node.label });
-    }
-  }
-  for (const nodeId of activated.current) {
-    if (!nodes[nodeId]) activated.current.delete(nodeId);
-  }
-
-  return (
-    <>
-      {live.map((body) => (
-        <BodyOwner key={body.id} nodeId={body.id} definitionRef={body.definitionRef} label={body.label} />
-      ))}
-    </>
-  );
-}
-
-/** Adopts the runtime-owned header slot without changing instance lifetime. */
-export function HeaderSocket({ nodeId }: { readonly nodeId: string }) {
+export function HeaderSocket({ id }: { readonly id: string }) {
   const runtimes = useWorkspaceNodeRuntimes();
   return (
     <div
-      data-nodrag="1"
-      className="nodrag flex h-full min-w-0 flex-1 items-center overflow-hidden"
+      className="flex min-w-0 flex-1 items-center"
       ref={(element) => {
-        if (element) element.appendChild(runtimes.headerDock(nodeId));
+        if (element) element.appendChild(runtimes.headerDock(id));
       }}
     />
   );
 }
 
-/** Adopts the runtime-owned Body dock; appendChild preserves the live DOM tree. */
-export function BodySocket({
-  nodeId,
-  className,
-  claimable = false,
-}: {
-  readonly nodeId: string;
-  readonly className?: string;
-  readonly claimable?: boolean;
-}) {
-  const ws = useWorkspace();
+export function BodySocket({ id, className }: { readonly id: string; readonly className?: string }) {
   const runtimes = useWorkspaceNodeRuntimes();
-  const claimed = useWorkspaceSession((state) => state.claimed === nodeId);
   return (
     <div
-      className={`relative ${className ?? "nowheel nodrag flex min-h-0 flex-1 flex-col overflow-hidden"}`}
+      className={`relative ${className ?? "flex min-h-0 flex-1 flex-col overflow-hidden"}`}
       ref={(element) => {
-        if (element) element.appendChild(runtimes.bodyDock(nodeId));
+        if (element) element.appendChild(runtimes.bodyDock(id));
       }}
-    >
-      {claimable && !claimed ? (
-        <div
-          className="absolute inset-0 z-10 cursor-pointer"
-          title="click to take the pointer"
-          onPointerDown={(event) => {
-            event.stopPropagation();
-            ws.claim(nodeId);
-          }}
-        />
-      ) : null}
-    </div>
+    />
   );
 }

@@ -1,9 +1,9 @@
 /**
  * POST /api/filter: run a typed filter clause against the `dataset` VIEW.
  *
- * The clause compiles through `filterClauseSql`, the same compiler the
- * browser `filter` node uses, so this route and the Workspace select the
- * same observations.
+ * The clause compiles through `filterClauseSql`, the same compiler workspace
+ * data sources and filter scopes use, so this route and the dashboard select
+ * the same observations.
  */
 
 import { FilterRequestSchema, type FilterResponse } from "@ndea/protocol";

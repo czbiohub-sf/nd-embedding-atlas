@@ -3,7 +3,7 @@
  * server and print the matched observations as JSON.
  *
  * The server validates the clause and compiles it with the same compiler as
- * the Workspace `filter` node, so both select identical observations.
+ * workspace data sources and filter scopes, so both select identical observations.
  */
 
 import { defineCommand, option } from "@bunli/core";

@@ -2,45 +2,39 @@
  * GET   /api/workspace: current revision and document.
  * PATCH /api/workspace: apply RFC 6902 ops against a base revision.
  *   200 { revision } · 409 stale revision + current snapshot · 400 RFC 9457 problem.
- * GET   /api/workspace/nodes/:id?limit=N: one node's evaluated output at the current revision.
+ * GET   /api/workspace/elements/:id: what one dashboard element shows.
+ * GET   /api/workspace/data/:name: what one data source selects.
+ *   200 { revision, predicate, count } · 404 unknown id · 400 the element reads no data or its SQL fails.
  *
- * `applyWorkspacePatch` and `workspaceNodeResult` are the shared paths: MCP
- * tools call them too, so every writer meets the same validation.
+ * `applyWorkspacePatch` and `workspaceResult` are the shared paths: MCP tools
+ * call them too, so every writer meets the same validation.
  */
 
 import {
   WorkspacePatchBodySchema,
   type JsonPatchOp,
   type WorkspaceConflict,
-  type WorkspaceNodeResult,
   type WorkspacePatchAccepted,
   type WorkspaceProblem,
 } from "@ndea/protocol";
-import { graphIssues, WorkspaceEvaluator } from "../graph.ts";
-import { queryObservations } from "../observations.ts";
-import type { ServerSession } from "../state.ts";
-import type { WorkspaceApplyResult, WorkspaceDocumentStore } from "../workspace.ts";
+import { COMPONENTS, elementData, elementScope } from "../../frontend/core/workspace/dashboard.ts";
+import { dataSourceSql, elementPredicate } from "../../frontend/core/workspace/data-sources.ts";
+import type { WorkspaceDocument } from "../../frontend/core/workspace/types.ts";
 import { observationSetIssues } from "../observation-sets.ts";
+import { countObservations, PREDICATE_ERROR_RE } from "../observations.ts";
+import type { ServerSession } from "../state.ts";
+import type { WorkspaceApplyResult } from "../workspace.ts";
 
-const evaluators = new WeakMap<WorkspaceDocumentStore, WorkspaceEvaluator>();
-
-function evaluatorFor(workspace: WorkspaceDocumentStore): WorkspaceEvaluator {
-  let evaluator = evaluators.get(workspace);
-  if (!evaluator) evaluators.set(workspace, (evaluator = new WorkspaceEvaluator(workspace)));
-  return evaluator;
-}
-
-/** The one write path: structure, graph semantics, and observation-set references. */
+/** The one write path: document structure and component props, then observation-set references. */
 export function applyWorkspacePatch(
   state: Pick<ServerSession, "workspace" | "observationSets">,
   baseRevision: number,
   ops: readonly JsonPatchOp[],
   clientId?: string,
 ): Promise<WorkspaceApplyResult> {
-  return state.workspace.apply(baseRevision, ops, clientId, async (document) => [
-    ...graphIssues(document),
-    ...(await observationSetIssues(document, state.observationSets)),
-  ]);
+  return state.workspace.apply(baseRevision, ops, clientId, (document) =>
+    observationSetIssues(document, state.observationSets),
+  );
 }
 
 export function handleWorkspaceGet(state: Pick<ServerSession, "workspace">): Response {
@@ -80,42 +74,50 @@ function problem(detail: string, errors: WorkspaceProblem["errors"]): Response {
   return Response.json(body, { status: 400, headers: { "content-type": "application/problem+json" } });
 }
 
-/** One node's output at the current revision, with up to `limit` observation rows; `null` for an unknown node. */
-export async function workspaceNodeResult(
-  state: Pick<ServerSession, "workspace" | "store" | "datasets">,
-  nodeId: string,
-  limit: number,
-): Promise<WorkspaceNodeResult | null> {
-  const evaluation = evaluatorFor(state.workspace).evaluate(nodeId);
-  const base = { revision: evaluation.revision, nodeId };
-  if (evaluation.status === "missing") return null;
-  if (evaluation.status !== "resolved") return { ...base, ...evaluation };
+export type WorkspaceResult =
+  | { status: 200; body: { revision: number; predicate: string | null; count: number } }
+  | { status: 400 | 404 | 500; body: { revision: number; predicate?: string | null; error: string } };
 
-  const { value } = evaluation;
+/**
+ * What an element shows (its data source AND the other members' clauses in its
+ * filter scope) or what a data source selects, at the current revision.
+ */
+export async function workspaceResult(
+  state: Pick<ServerSession, "workspace" | "store">,
+  target: { element: string } | { data: string },
+): Promise<WorkspaceResult> {
+  const { revision, document } = state.workspace.snapshot();
+  // The store only holds documents that passed `parseWorkspaceDocument`.
+  const doc = document as WorkspaceDocument;
+  let predicate: string | null;
+  if ("element" in target) {
+    const id = target.element;
+    const element = Object.hasOwn(doc.spec.elements, id) ? doc.spec.elements[id] : undefined;
+    if (!element) return { status: 404, body: { revision, error: `no element "${id}" in the dashboard` } };
+    if (!COMPONENTS[element.type]?.reads) {
+      return { status: 400, body: { revision, error: `element "${id}" (${element.type}) reads no data` } };
+    }
+    const scope = elementScope(element, "filter");
+    const cell = scope === undefined ? undefined : doc.state.filter?.[scope];
+    predicate = elementPredicate(doc.data, elementData(element), cell, id);
+  } else {
+    if (!Object.hasOwn(doc.data, target.data)) {
+      return { status: 404, body: { revision, error: `no data source "${target.data}"` } };
+    }
+    predicate = dataSourceSql(doc.data, target.data);
+  }
   try {
-    const page = await queryObservations(state, value.sql, limit);
-    return {
-      ...base,
-      status: "resolved",
-      output: { kind: value.kind, sql: value.sql, scopeFilter: evaluation.scopeFilter, ...page },
-    };
+    return { status: 200, body: { revision, predicate, count: await countObservations(state.store, predicate) } };
   } catch (error) {
-    return { ...base, status: "error", error: error instanceof Error ? error.message : String(error) };
+    const message = error instanceof Error ? error.message : String(error);
+    return { status: PREDICATE_ERROR_RE.test(message) ? 400 : 500, body: { revision, predicate, error: message } };
   }
 }
 
-export async function handleWorkspaceNode(
-  nodeId: string,
-  url: URL,
-  state: Pick<ServerSession, "workspace" | "store" | "datasets">,
+export async function handleWorkspaceResult(
+  target: { element: string } | { data: string },
+  state: Pick<ServerSession, "workspace" | "store">,
 ): Promise<Response> {
-  const limit = Math.min(Math.max(Number(url.searchParams.get("limit") ?? 100) || 0, 0), 1_000_000);
-  const result = await workspaceNodeResult(state, nodeId, limit);
-  if (result) return Response.json(result);
-  const missing = {
-    revision: state.workspace.snapshot().revision,
-    nodeId,
-    error: `no node "${nodeId}" in the workspace`,
-  };
-  return Response.json(missing, { status: 404 });
+  const { status, body } = await workspaceResult(state, target);
+  return Response.json(body, { status });
 }

@@ -1,7 +1,7 @@
 /** Table plugin descriptor (PLUGIN-ARCHITECTURE §8, §10.4). */
 
 import { z } from "zod";
-import { defineNode, exactNodeTypeRef, nodeConfigVersion } from "@ndea/sdk";
+import { defineNode, exactNodeTypeRef } from "@ndea/sdk";
 import type { NodeBodyMounter } from "../contracts";
 import type { TableConfig, TableServices } from "./contracts";
 
@@ -17,13 +17,9 @@ export function createTableDefinition({
   return defineNode({
     ref: exactNodeTypeRef("table", "1.0.0"),
     title: "Table",
-    role: "view",
-    inputs: [{ id: "in", kind: "pred", label: "In" }],
-    outputs: [],
     capabilities: CAPABILITIES,
     config: {
       schema: z.object({ columns: z.array(z.string()).nullable() }),
-      version: nodeConfigVersion(1),
       defaultValue: { columns: null } satisfies TableConfig,
     },
     presentation: { icon: "table" },

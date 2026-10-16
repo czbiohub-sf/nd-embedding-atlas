@@ -2,23 +2,16 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Metadata } from "@ndea/protocol";
 
-import { createNativeAppNodeLibrary } from "@/core/node/library";
 import { WorkspaceDocumentStore } from "../../../server/workspace";
 import { emptyWorkspaceDocument } from "./document";
 import { WorkspaceSync, type WorkspaceTransport } from "./sync";
 import { Workspace } from "./workspace-store";
 
-const library = createNativeAppNodeLibrary();
 let dir: string;
 const cleanup: (() => void)[] = [];
 
 beforeEach(async () => {
-  globalThis.requestAnimationFrame = (callback: FrameRequestCallback) => {
-    callback(0);
-    return 0;
-  };
   dir = await mkdtemp(join(tmpdir(), "ndea-sync-"));
 });
 afterEach(async () => {
@@ -38,93 +31,75 @@ function memoryTransport(store: WorkspaceDocumentStore, { live = true } = {}): W
   };
 }
 
+/** A synced session whose dashboard is one count element, `slot-1`. */
 async function session(options?: { live?: boolean }) {
   const store = WorkspaceDocumentStore.empty(join(dir, "workspace.json"));
-  const workspace = new Workspace({
-    coordinator: { query: () => Promise.resolve([]) } as never,
-    table: "atlas",
-    metadata: { dataset_keys: [] } as unknown as Metadata,
-    nodeLibrary: library,
-  });
-  const obs = workspace.addNode("obs", { x: 0, y: 0 });
+  const workspace = new Workspace();
+  workspace.fillSlot("slot-1", "count");
   const initial = { revision: 0, document: emptyWorkspaceDocument() };
   const sync = new WorkspaceSync(workspace, initial, memoryTransport(store, options), (e) => {
     throw new Error(e.join("; "));
   });
   sync.start();
   await sync.flush();
-  cleanup.push(
-    () => sync.dispose(),
-    () => workspace.dispose(),
-  );
-  return { store, workspace, sync, obs };
+  cleanup.push(() => sync.dispose());
+  return { store, workspace, sync };
 }
 
 describe("WorkspaceSync", () => {
   test("a seeded document reaches the server, then an edit burst lands as one revision", async () => {
-    const { store, workspace, sync, obs } = await session();
-    expect(store.snapshot()).toMatchObject({ revision: 1, document: { nodes: { [obs]: { id: obs } } } });
+    const { store, workspace, sync } = await session();
+    expect(store.snapshot()).toMatchObject({
+      revision: 1,
+      document: { spec: { elements: { "slot-1": { type: "count" } } } },
+    });
 
-    workspace.setStripH(400);
-    workspace.setStripH(410);
+    workspace.setElementProps("slot-1", { title: "Cells" });
+    workspace.setElementProps("slot-1", { title: "All cells" });
     await sync.flush();
-    expect(store.snapshot()).toMatchObject({ revision: 2, document: { stripH: 410 } });
+    expect(store.snapshot()).toMatchObject({
+      revision: 2,
+      document: { spec: { elements: { "slot-1": { props: { title: "All cells" } } } } },
+    });
   });
 
   test("selection and other session state never reach the server document", async () => {
-    const { store, workspace, sync, obs } = await session();
-    workspace.selectNode(obs);
+    const { store, workspace, sync } = await session();
+    workspace.selectElement("slot-1");
+    workspace.setFullscreen("slot-1");
     await sync.flush();
     expect(store.snapshot().revision).toBe(1);
-    expect(store.snapshot().document).not.toHaveProperty("selectedNodeId");
   });
 
   test("a remote edit applies locally and rebases pending local edits instead of dropping either", async () => {
-    const { store, workspace, sync, obs } = await session();
-    workspace.setStripH(500);
-    await store.apply(1, [{ op: "add", path: `/formLocked/${obs}`, value: true }], "agent");
+    const { store, workspace, sync } = await session();
+    workspace.setElementProps("slot-1", { title: "Mine" });
+    await store.apply(1, [{ op: "add", path: "/data/infected", value: { sql: "infected" } }], "agent");
     await sync.flush();
 
-    expect(store.snapshot()).toMatchObject({ revision: 3, document: { formLocked: { [obs]: true }, stripH: 500 } });
-    expect(workspace.store.state).toMatchObject({ formLocked: { [obs]: true }, stripH: 500 });
-  });
-
-  test("nodes and edges an agent adds are live in the local graph, not inert records", async () => {
-    const { store, workspace, obs } = await session();
-    const where = { op: "eq", column: "condition", value: "infected" };
-    await store.apply(
-      1,
-      [
-        {
-          op: "add",
-          path: "/nodes/agent-filter",
-          value: {
-            id: "agent-filter",
-            definitionRef: { nodeTypeId: "filter", nodeTypeVersion: "1.0.0" },
-            label: "Filter",
-            config: { version: 1, value: { where } },
-          },
-        },
-        {
-          op: "add",
-          path: "/edges/agent-edge",
-          value: { id: "agent-edge", from: obs, fromPort: "out", to: "agent-filter", toPort: "in", kind: "pred" },
-        },
-      ],
-      "agent",
-    );
-    await Promise.resolve();
-    expect(workspace.pullGraphNode("agent-filter")).toEqual({ kind: "pred", sql: `("condition" = 'infected')` });
+    expect(store.snapshot()).toMatchObject({
+      revision: 3,
+      document: {
+        data: { infected: { sql: "infected" } },
+        spec: { elements: { "slot-1": { props: { title: "Mine" } } } },
+      },
+    });
+    expect(workspace.store.state.data).toEqual({ infected: { sql: "infected" } });
   });
 
   test("a stale revision (409) replays local ops onto the server document and resends", async () => {
-    const { store, workspace, sync, obs } = await session({ live: false });
-    await store.apply(1, [{ op: "add", path: `/formLocked/${obs}`, value: true }], "agent");
-    workspace.setStripH(600);
+    const { store, workspace, sync } = await session({ live: false });
+    await store.apply(1, [{ op: "add", path: "/data/infected", value: { sql: "infected" } }], "agent");
+    workspace.setElementProps("slot-1", { title: "Mine" });
     await sync.flush(); // 409 → rebase onto revision 2
     await sync.flush(); // resend on top of it
 
-    expect(store.snapshot()).toMatchObject({ revision: 3, document: { formLocked: { [obs]: true }, stripH: 600 } });
-    expect(workspace.store.state).toMatchObject({ formLocked: { [obs]: true }, stripH: 600 });
+    expect(store.snapshot()).toMatchObject({
+      revision: 3,
+      document: {
+        data: { infected: { sql: "infected" } },
+        spec: { elements: { "slot-1": { props: { title: "Mine" } } } },
+      },
+    });
   });
 });

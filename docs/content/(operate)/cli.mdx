@@ -18,7 +18,7 @@ ndea doctor [--check-network] [--strict]
 ndea filter [--where <json>] [--limit <n>] [--host <host>] [--port <port>]
 ndea workspace get [--host <host>] [--port <port>]
 ndea workspace patch --revision <n> --ops <json> [--host <host>] [--port <port>]
-ndea workspace result <node> [--limit <n>] [--host <host>] [--port <port>]
+ndea workspace result <element> | --data <name> [--host <host>] [--port <port>]
 ndea completions <bash|zsh|fish>
 ndea complete -- <args...>                       # internal; called by completion scripts
 ndea --help | --version
@@ -54,7 +54,7 @@ A single `.yaml` / `.yml` path is parsed as a multi-dataset project config (see 
 
 ### Workspace file
 
-The running server owns one workspace document: the nodes, wiring, configuration, coordination state, and Stage layout. Every edit, from the browser or from `ndea workspace patch`, is saved to the workspace file as a new revision. Without `--workspace`, ndea uses `~/.ndea/workspaces/<key>.json`, where the key is derived from the dataset paths, so opening the same datasets reopens the same workspace. A missing file is written from the preset as revision 1, before any browser opens. A preset is itself a workspace document: `--preset annotate` uses the built-in one, and `--preset my-layout.json` copies any valid document, such as the `document` field printed by `ndea workspace get`. A file or preset that fails validation stops `ndea view` before any data loads and lists each problem by JSON Pointer; ndea never rewrites or migrates it.
+The running server owns one workspace document: named data sources, the dashboard spec, and coordination state. Every edit, from the browser or from `ndea workspace patch`, is saved to the workspace file as a new revision. Without `--workspace`, ndea uses `~/.ndea/workspaces/<key>.json`, where the key is derived from the dataset paths, so opening the same datasets reopens the same workspace. A missing file is written from the preset as revision 1, before any browser opens. A preset is itself a workspace document: `--preset annotate` uses the built-in one, and `--preset my-layout.json` copies any valid document, such as the `document` field printed by `ndea workspace get`. A file or preset that fails validation stops `ndea view` before any data loads and lists each problem by JSON Pointer; ndea never rewrites or migrates it.
 
 `--port` accepts integers in `[1, 65535]`.
 
@@ -123,7 +123,7 @@ On Windows the symlink and installed-versions sections are omitted, because that
 
 ## `ndea filter`
 
-Filter observations on a running `ndea view` server and print the matches as JSON. The server compiles the clause with the same compiler as the Workspace **Filter** node, so both select the same observations.
+Filter observations on a running `ndea view` server and print the matches as JSON. The server compiles the clause with the same compiler as dashboard data sources and filter scopes, so both select the same observations.
 
 ```bash
 ndea filter --where '{"op":"and","clauses":[{"op":"eq","column":"predicted_infection_state","value":"infected"},{"op":"between","column":"t","range":[0,5]}]}'
@@ -150,7 +150,7 @@ Read and edit the workspace document of a running `ndea view` server. Edits go t
 
 ```bash
 ndea workspace get
-ndea workspace patch --revision 3 --ops '[{"op":"replace","path":"/stripH","value":320}]'
+ndea workspace patch --revision 3 --ops '[{"op":"replace","path":"/spec/elements/root/props/ratio","value":0.6}]'
 ```
 
 `get` prints `{ "revision", "document" }`. `patch` applies [RFC 6902](https://www.rfc-editor.org/rfc/rfc6902) operations to the document at `--revision` and prints the new `{ "revision" }`. Read the revision with `get` first.
@@ -160,64 +160,68 @@ ndea workspace patch --revision 3 --ops '[{"op":"replace","path":"/stripH","valu
 - `--revision` is stale: the body carries the current `revision` and `document` to rebase onto.
 - The result is invalid: the body is an [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) problem whose `errors[].pointer` locates each issue, and nothing is saved.
 
-`result` evaluates one node at the current revision, with the same node logic as the browser, and prints `{ "revision", "nodeId", "status", "output" }`:
+`result` evaluates one dashboard element, or one data source with `--data`, at the current revision and prints `{ "revision", "predicate", "count" }`:
 
 ```bash
-ndea workspace result count-2 --limit 5
+ndea workspace result table
+ndea workspace result --data infected
 ```
 
-- For filters, sources, and views, `output` holds the predicate `sql` the node passes on or displays (including its filter scope), the scope part alone as `scopeFilter`, the exact `count` of matching observations, and up to `--limit` (default `100`) `rows` of `{ rowIndex, datasetKey, obsName }`.
-- `status` is `unresolved` for plugin and node-asset nodes the server cannot evaluate, and `error` with a message when the node's SQL fails.
-- The result reflects the saved document. Lassos, chart brushes, focus, and color-by are saved as coordination state, so the server sees them once the tab's edit lands (within about half a second).
+- `predicate` is the SQL the element shows: its data source AND the other members' clauses in its filter scope. `count` is exact.
+- The result reflects the saved document. Lassos, chart brushes, picks, focus, and color-by are saved as coordination state, so the server sees them once the tab's edit lands (within about half a second).
+- An unknown element or data source exits 1.
 
 The server executes observation predicates as prepared single SQL statements for lookups, annotation writes, and exports. Stacked statements are rejected before execution. Lassos use durable observation sets through `POST /api/sets`; each set shares the dataset's DuckDB connection so its filter also applies to annotations and exports.
 
-Workspace patches reject unknown set references anywhere in the document, including node configs and saved Cache pins. Startup checks the same references when restoring a workspace.
+Workspace patches reject unknown set references anywhere in the document. Startup checks the same references when restoring a workspace.
+
+### The dashboard
+
+`/spec` is a [json-render](https://json-render.dev) flat spec: `{ "root", "elements" }`, where every element has a `type`, `props`, and `children` (element ids). Every element is reachable from `root` exactly once.
+
+| Type                                                                                                    | Props                                                                                             | Children    |
+| ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ----------- |
+| `split`                                                                                                 | `direction` (`row` or `column`), `ratio` (0.05 to 0.95, the first child's share)                  | exactly two |
+| `stack`                                                                                                 | `direction`, `gap` (px)                                                                           | any number  |
+| `text`                                                                                                  | `text` (a string or `{"$template": "…${/focus/A}"}`), `variant` (`heading`, `body`, `muted`)      | none        |
+| `select`                                                                                                | `column`, optional `label`; picking values publishes `{"op":"in"}` into its filter scope          | none        |
+| `slot`                                                                                                  | none: an empty tile                                                                               | none        |
+| `scatter`, `table`, `count`, `count-plot`, `histogram`, `vgplot`, `gallery`, `image-viewer`, `annotate` | the view's own settings, such as `columns` for `table` or `entries` and `attributes` for `vgplot` | none        |
+
+Every component that reads observations also accepts `data` (the name of a data source; omitted means every observation) and `title`. `count` is the metric: the live number of rows its data and filter scope select. `vgplot` props are a [Mosaic](https://idl.uw.edu/mosaic) plot spec: `entries` is the `plot` array of marks and interactors, `attributes` the rest, with `$table`, `$scope` (the element's predicate), and `$brush` (a selection the chart publishes as a typed clause) supplied by the host.
+
+`/data` maps names to sources: `{ "from"?, "where"?, "sql"? }`. A source narrows `from` (another source, or every observation) by a typed `where` clause (the `ndea filter --where` shape, including `{"op":"inSet","set":"<id>"}` for a saved selection) and/or a `sql` predicate.
+
+```bash
+# A data source, and a metric reading it beside the scatter plot's tile.
+ndea workspace patch --revision 7 --ops '[
+  {"op":"add","path":"/data/infected","value":{"where":{"op":"eq","column":"predicted_infection_state","value":"infected"}}},
+  {"op":"add","path":"/spec/elements/n-inf","value":{"type":"count","props":{"title":"Infected","data":"infected"},"children":[]}},
+  {"op":"add","path":"/spec/elements/top","value":{"type":"split","props":{"direction":"column","ratio":0.2},"children":["n-inf","scatter"]}},
+  {"op":"replace","path":"/spec/elements/root/children/0","value":"top"}
+]'
+```
+
+A patch is rejected with the offending pointer when it leaves an element unreachable, gives a split other than two children, names an unknown component or data source, or sets a prop the component's schema refuses, for example `/spec/elements/table/props/columns`.
 
 ### Linking views
 
-Views link through the document's coordination sections, so an agent links and drives them with plain patches. `bindings/<node>/<type>` joins a node to a scope; `state/<type>/<scope>` holds the shared value. Types are `focus` (a row index or `null`), `filter`, `colorBy` (a column name or `null`), `viewSync`, and `ordering`.
+Elements link through coordination state, so an agent links and drives them with plain patches. A prop `{"$bindState": "/<type>/<scope>"}` (json-render's two-way binding) joins an element to a scope; `/state/<type>/<scope>` holds the shared value. Types are `focus` (a row index or `null`), `filter`, `colorBy` (a column name or `null`), `viewSync`, and `ordering`.
 
 ```bash
-# Link the table to filter scope A (the scope must exist in state first).
-ndea workspace patch --revision 4 --ops '[
-  {"op":"add","path":"/bindings/table-4","value":{"filter":{"$bindState":"/filter/A"}}}
+# Put the metric in filter scope A (the scope must exist in state first).
+ndea workspace patch --revision 8 --ops '[
+  {"op":"add","path":"/spec/elements/n-inf/props/filter","value":{"$bindState":"/filter/A"}}
 ]'
 # Filter every member of scope A to infected cells, as the source "agent".
-ndea workspace patch --revision 5 --ops '[
+ndea workspace patch --revision 9 --ops '[
   {"op":"add","path":"/state/filter/A/agent","value":{"where":{"op":"eq","column":"infected","value":true}}}
 ]'
 # Focus row 812 in every view on focus scope A.
-ndea workspace patch --revision 6 --ops '[{"op":"replace","path":"/state/focus/A","value":812}]'
+ndea workspace patch --revision 10 --ops '[{"op":"replace","path":"/state/focus/A","value":812}]'
 ```
 
-A filter scope maps each source to named clauses, using the same clause shape as `ndea filter --where`. Each member sees every other source's clauses, never its own, so a scatter lasso filters the table but not the scatter. Lassos appear as `{"op":"inSet","set":"<id>"}`, which refers to an observation set saved under `~/.ndea/sets/`. A patch that refers to an unknown set is rejected.
-
-In the development editor, the wiring canvas draws each scope as a hub labelled with its type and name, and each binding as a dashed link from that hub to the node. Patches appear there live. Deleting a link removes that binding, and dragging from a hub onto a node adds one.
-
-### Arranging the Stage
-
-`/stage` is a [json-render](https://json-render.dev) flat spec: `{ "root", "elements" }`, where every element has a `type`, `props`, and `children` (element ids). Three components exist:
-
-| Type    | Props                                                                            | Children    |
-| ------- | -------------------------------------------------------------------------------- | ----------- |
-| `Split` | `direction` (`row` or `column`), `ratio` (0.05 to 0.95, the first child's share) | exactly two |
-| `View`  | `node`, optional `title`                                                         | none        |
-| `Slot`  | none                                                                             | none        |
-
-A node is on the Stage exactly when a `View` shows it, and each node appears at most once. `title` accepts a json-render expression read from coordination state, such as `{"$template": "Focused row ${/focus/A}"}`. A `null` stage shows nothing.
-
-```bash
-# Give the first column 60% of the width and retitle the table.
-ndea workspace patch --revision 7 --ops '[
-  {"op":"replace","path":"/stage/elements/root/props/ratio","value":0.6},
-  {"op":"add","path":"/stage/elements/view-table-3/props/title","value":{"$template":"Table · focus ${/focus/A}"}}
-]'
-```
-
-A patch that leaves an element unreachable, references a missing element or node, or shows a node twice is rejected with the offending pointer.
-
-An unknown node id exits 1.
+A filter scope maps each source (an element id, or an agent's own key) to named clauses, using the same clause shape as `ndea filter --where`. Each member sees every other source's clauses, never its own, so a scatter lasso filters the table but not the scatter. Lassos appear as `{"op":"inSet","set":"<id>"}`, which refers to an observation set saved under `~/.ndea/sets/`. A patch that refers to an unknown set is rejected.
 
 All three subcommands accept `--host` (default `127.0.0.1`) and `--port` (default `5055`).
 
@@ -236,18 +240,17 @@ ndea mcp uninstall                         # remove ndea from every agent that h
 
 `install` writes `http://127.0.0.1:<port>/mcp` and the token into each agent's own config through [add-mcp](https://add-mcp.com), which knows the format of Claude Code, Codex, Cursor, VS Code, Zed, OpenCode, and 16 more. Restart open agent sessions afterwards. Pass `--port` to all three commands when `ndea view` runs on another port. `check` exits 1 when the server is down, rejects the token, or an agent still has an old token or port.
 
-| Tool                     | Does                                                                                                                     |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
-| `get_workspace`          | Nodes with their configs and inputs, the Stage's node ids, and every coordination scope; `full` for the raw document     |
-| `list_node_types`        | Node types with roles, ports, and linkable coordination types; pass `type` for its config schema and defaults            |
-| `list_columns`           | Observation columns and types; pass `column` for distinct count, range, and its most frequent values                     |
-| `get_node_result`        | One node's SQL, filter scope, exact count, and first rows                                                                |
-| `edit_graph`             | Data flow: `add_node` (wired from `inputs`, auto-placed), `remove_node`, `connect`, `disconnect`, `set_config`, `rename` |
-| `edit_view`              | Views: `show` / `hide` on the Stage, `link` / `unlink` a scope, `set_value` (focus, color, sort), `set_filter`           |
-| `patch_workspace`        | Raw RFC 6902 ops at an exact revision, for anything the named ops do not cover                                           |
-| `create_observation_set` | Save a node's rows or a clause's rows as a set for `{"op":"inSet"}` clauses and Cache pins                               |
+| Tool                     | Does                                                                                                                                                    |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `get_workspace`          | The whole document: data sources, dashboard spec, and coordination state, with its revision                                                             |
+| `list_components`        | Every component with its description, children rule, whether it reads data, the scopes it can bind, defaults, and JSON Schema                           |
+| `list_columns`           | Observation columns and types; pass `column` for distinct count, range, and its most frequent values                                                    |
+| `get_result`             | One element's or data source's predicate and exact count                                                                                                |
+| `edit_dashboard`         | Named ops: `set_data`, `remove_data`, `add` (into a slot, a stack, or beside an element), `set_props`, `remove`, `swap`, `bind`, `unbind`, `set_filter` |
+| `patch_workspace`        | Raw RFC 6902 ops at an exact revision, for anything the named ops do not cover                                                                          |
+| `create_observation_set` | Save an element's, a data source's, or a clause's rows as a set for `{"op":"inSet"}` clauses                                                            |
 
-`edit_graph` and `edit_view` apply a whole batch or nothing. Pass `revision` to apply only if the workspace has not changed since you read it. Every write, from the browser, the CLI, or an agent, is checked like a document load: configs against their schemas, ports, wire cycles, and set references. A refused edit names the op or document path to fix and changes nothing.
+`edit_dashboard` applies a whole batch or nothing. Pass `revision` to apply only if the workspace has not changed since you read it. Every write, from the browser, the CLI, or an agent, is checked like a document load: structure, component props, data references, bindings, and set references. A refused edit names the op or document path to fix and changes nothing.
 
 ## `ndea completions`
 

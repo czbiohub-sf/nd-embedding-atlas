@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ObservationSetSchema, WorkspaceProblemSchema } from "@ndea/protocol";
+import { emptyWorkspaceDocument } from "../../frontend/core/workspace/document.ts";
 import { createServerSession } from "../state.ts";
 import { handleSetsPost } from "../routes/sets.ts";
 import { handleFilter } from "../routes/filter.ts";
@@ -81,21 +82,7 @@ test("single-dataset sets restore identities after row handles change", async ()
 test("PATCH rejects unknown nested set references with a clause pointer and preserves revision", async () => {
   dir = await mkdtemp(join(tmpdir(), "ndea-sets-"));
   const state = await session();
-  const document = {
-    nodeAssets: [],
-    nodes: {},
-    edges: {},
-    positions: {},
-    sizeOverrides: {},
-    formOverride: {},
-    formLocked: {},
-    stage: null,
-    stripH: 280,
-    flags: {},
-    state: {},
-    bindings: {},
-  };
-  expect(await state.workspace.apply(0, [{ op: "add", path: "", value: document }])).toEqual({
+  expect(await state.workspace.apply(0, [{ op: "add", path: "", value: emptyWorkspaceDocument() }])).toEqual({
     kind: "accepted",
     revision: 1,
   });
@@ -151,48 +138,19 @@ test("PATCH rejects unknown nested set references with a clause pointer and pres
   ).toBe(200);
 });
 
-test("PATCH rejects an unknown set referenced only from a node config", async () => {
+test("PATCH rejects an unknown set referenced from a data source", async () => {
   dir = await mkdtemp(join(tmpdir(), "ndea-sets-"));
   const state = await session();
   const response = await handleWorkspacePatch(
     request({
       baseRevision: 0,
-      ops: [
-        {
-          op: "add",
-          path: "",
-          value: {
-            nodeAssets: [],
-            nodes: {
-              cache: {
-                id: "cache",
-                definitionRef: { nodeTypeId: "acme/cache", nodeTypeVersion: "1.0.0" },
-                label: "Cache",
-                config: { version: 1, value: { pin: { clause: { op: "inSet", set: "0000000000000000" } } } },
-              },
-            },
-            edges: {},
-            positions: {},
-            sizeOverrides: {},
-            formOverride: {},
-            formLocked: {},
-            stage: null,
-            stripH: 280,
-            flags: {},
-            state: {},
-            bindings: {},
-          },
-        },
-      ],
+      ops: [{ op: "add", path: "/data/pinned", value: { where: { op: "inSet", set: "0000000000000000" } } }],
     }),
     state,
   );
   expect(response.status).toBe(400);
   expect(WorkspaceProblemSchema.parse(await response.json()).errors).toEqual([
-    {
-      pointer: "/nodes/cache/config/value/pin/clause",
-      detail: 'unknown observation set "0000000000000000"',
-    },
+    { pointer: "/data/pinned/where", detail: 'unknown observation set "0000000000000000"' },
   ]);
   expect(state.workspace.snapshot().revision).toBe(0);
 });

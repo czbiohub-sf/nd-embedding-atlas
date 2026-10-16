@@ -479,7 +479,7 @@ export function AnnotateView({
       {!hasScope && (
         <div className="flex items-start gap-1.5 border-warning/30 border-b bg-warning/10 px-2.5 py-1.5 text-2xs text-warning">
           <span aria-hidden>⚠</span>
-          <span>No scope wired: labeling the whole dataset. Connect a Filter or Selection upstream to scope it.</span>
+          <span>No scope: labeling the whole dataset. Give it a data source or a filter scope to narrow it.</span>
         </div>
       )}
 

@@ -13,10 +13,11 @@ export function createCountDefinition({
   return defineNode({
     ref: exactNodeTypeRef("count", "1.0.0"),
     title: "Count",
-    role: "view",
-    inputs: [{ id: "in", kind: "pred", label: "In" }],
-    outputs: [],
     capabilities: ["data-read"] satisfies readonly CountCapabilities[],
+    documentation: {
+      summary: "Shows the live number of rows its data and filter scope select.",
+      use: "Use it as a metric that updates as other views filter the data.",
+    },
     load: async () => {
       // NodeDefinition.load is the intentional lazy plugin-module boundary.
       const CountBody = createCountBody(predicateToSql);

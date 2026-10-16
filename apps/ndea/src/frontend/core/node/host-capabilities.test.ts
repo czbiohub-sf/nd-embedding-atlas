@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { defineNode, exactNodeTypeRef, nodeConfigVersion } from "@ndea/sdk";
+import { defineNode, exactNodeTypeRef } from "@ndea/sdk";
 import { z } from "zod";
 import type { ErasedAppNodeHost } from "./app-node-host";
 import { assertNodeHostCapabilities } from "@/core/node/capabilities";
@@ -7,12 +7,8 @@ import { assertNodeHostCapabilities } from "@/core/node/capabilities";
 const definition = defineNode({
   ref: exactNodeTypeRef("capability-fixture", "1.0.0"),
   title: "Capability fixture",
-  role: "view",
-  inputs: [],
-  outputs: [],
   capabilities: ["data-read", "focus-coordination"] as const,
   config: {
-    version: nodeConfigVersion(1),
     schema: z.object({}),
     defaultValue: {},
   },

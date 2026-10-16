@@ -1,29 +1,21 @@
-import type { DataCapability } from "@ndea/protocol";
 import type { ZodType } from "zod";
-import type { NodeCompute } from "./graph";
-import type { JsonValue } from "./json";
 import type { NodeModule } from "./module";
 
 declare const NODE_TYPE_ID: unique symbol;
 declare const NODE_TYPE_VERSION: unique symbol;
-declare const NODE_CONFIG_VERSION: unique symbol;
 declare const NODE_INSTANCE_ID: unique symbol;
 
 export type NodeTypeId = string & { readonly [NODE_TYPE_ID]: true };
 export type NodeTypeVersion = string & { readonly [NODE_TYPE_VERSION]: true };
-export type NodeConfigVersion = number & { readonly [NODE_CONFIG_VERSION]: true };
 export type NodeInstanceId = string & { readonly [NODE_INSTANCE_ID]: true };
 
-export { rowIndex } from "./graph";
-export type {
-  NodeCompute,
-  NodeComputeContext,
-  NodeComputeInputs,
-  NodeComputeOutputs,
-  NodePortValue,
-  PredicatePortValue,
-  RowIndex,
-} from "./graph";
+declare const ROW_INDEX: unique symbol;
+
+export type RowIndex = number & { readonly [ROW_INDEX]: true };
+
+export function rowIndex(value: number): RowIndex {
+  return value as RowIndex;
+}
 
 export function nodeTypeId(value: string): NodeTypeId {
   return value as NodeTypeId;
@@ -31,10 +23,6 @@ export function nodeTypeId(value: string): NodeTypeId {
 
 export function nodeTypeVersion(value: string): NodeTypeVersion {
   return value as NodeTypeVersion;
-}
-
-export function nodeConfigVersion(value: number): NodeConfigVersion {
-  return value as NodeConfigVersion;
 }
 
 export function nodeInstanceId(value: string): NodeInstanceId {
@@ -53,136 +41,9 @@ export function exactNodeTypeRef(nodeType: string, version: string): ExactNodeTy
   };
 }
 
-export type PortKind = "pred";
-export type FanInOperation = "and" | "or" | "diff";
-
-export interface NodePort {
-  readonly id: string;
-  readonly kind: PortKind;
-  readonly label: string;
-  readonly multiple?: boolean;
-  readonly fanIn?: FanInOperation;
-  readonly documentation?: string;
-}
-
-export interface NodeConfigMigration {
-  readonly from: NodeConfigVersion;
-  readonly to: NodeConfigVersion;
-  migrate(config: JsonValue): JsonValue;
-}
-
 export interface NodeConfigContract<Config = unknown> {
   readonly schema: ZodType<Config>;
-  readonly version: NodeConfigVersion;
   readonly defaultValue: Config;
-  readonly migrations?: readonly NodeConfigMigration[];
-}
-
-export interface NodeConfigSnapshot {
-  readonly version: NodeConfigVersion;
-  readonly value: JsonValue;
-}
-
-export interface MigratedNodeConfig<Config> {
-  readonly version: NodeConfigVersion;
-  readonly value: Config;
-}
-
-export type NodeConfigMigrationErrorCode =
-  | "future-version"
-  | "invalid-migration-graph"
-  | "missing-migrator"
-  | "migration-failed"
-  | "invalid-config";
-
-export class NodeConfigMigrationError extends Error {
-  readonly code: NodeConfigMigrationErrorCode;
-  readonly sourceVersion: NodeConfigVersion;
-  readonly targetVersion: NodeConfigVersion;
-
-  constructor(
-    code: NodeConfigMigrationErrorCode,
-    sourceVersion: NodeConfigVersion,
-    targetVersion: NodeConfigVersion,
-    options?: ErrorOptions,
-  ) {
-    super(
-      `Cannot migrate node config from version ${sourceVersion as number} to ${targetVersion as number}: ${code}.`,
-      options,
-    );
-    this.name = "NodeConfigMigrationError";
-    this.code = code;
-    this.sourceVersion = sourceVersion;
-    this.targetVersion = targetVersion;
-  }
-}
-
-function indexNodeConfigMigrations(
-  contract: NodeConfigContract,
-  sourceVersion: NodeConfigVersion,
-): ReadonlyMap<NodeConfigVersion, NodeConfigMigration> {
-  const targetVersion = contract.version;
-  const migrationsBySource = new Map<NodeConfigVersion, NodeConfigMigration>();
-
-  if (!Number.isSafeInteger(targetVersion) || (targetVersion as number) < 0) {
-    throw new NodeConfigMigrationError("invalid-migration-graph", sourceVersion, targetVersion);
-  }
-
-  for (const migration of contract.migrations ?? []) {
-    const from = migration.from as number;
-    const to = migration.to as number;
-    if (
-      !Number.isSafeInteger(from) ||
-      from < 0 ||
-      !Number.isSafeInteger(to) ||
-      to <= from ||
-      to > (targetVersion as number) ||
-      typeof migration.migrate !== "function" ||
-      migrationsBySource.has(migration.from)
-    ) {
-      throw new NodeConfigMigrationError("invalid-migration-graph", sourceVersion, targetVersion);
-    }
-    migrationsBySource.set(migration.from, migration);
-  }
-
-  return migrationsBySource;
-}
-
-export function migrateNodeConfig<Config>(
-  contract: NodeConfigContract<Config>,
-  snapshot: NodeConfigSnapshot,
-): MigratedNodeConfig<Config> {
-  const sourceVersion = snapshot.version;
-  const targetVersion = contract.version;
-  const migrationsBySource = indexNodeConfigMigrations(contract, sourceVersion);
-
-  if ((sourceVersion as number) > (targetVersion as number)) {
-    throw new NodeConfigMigrationError("future-version", sourceVersion, targetVersion);
-  }
-
-  let version = sourceVersion;
-  let value = structuredClone(snapshot.value);
-  while (version !== targetVersion) {
-    const migration = migrationsBySource.get(version);
-    if (!migration) {
-      throw new NodeConfigMigrationError("missing-migrator", sourceVersion, targetVersion);
-    }
-    try {
-      value = migration.migrate(value);
-    } catch (cause) {
-      throw new NodeConfigMigrationError("migration-failed", sourceVersion, targetVersion, { cause });
-    }
-    version = migration.to;
-  }
-
-  let parsedValue: Config;
-  try {
-    parsedValue = contract.schema.parse(value);
-  } catch (cause) {
-    throw new NodeConfigMigrationError("invalid-config", sourceVersion, targetVersion, { cause });
-  }
-
-  return Object.freeze({ version: targetVersion, value: parsedValue });
 }
 
 export type NodeCapability =
@@ -199,8 +60,6 @@ export type NodeCapability =
   | "ordering-coordination"
   | "filter-coordination"
   | "color-coordination";
-
-export type NodeRole = "view" | "transform";
 
 export interface NodeDocumentation {
   readonly summary: string;
@@ -229,13 +88,8 @@ export interface NodeDefinition<
 > {
   readonly ref: ExactNodeTypeRef;
   readonly title: string;
-  readonly role: NodeRole;
-  readonly inputs: readonly NodePort[];
-  readonly outputs: readonly NodePort[];
   readonly capabilities: Capabilities;
-  readonly dataRequirements?: readonly DataCapability[];
   readonly config?: NodeConfigContract<Config>;
-  readonly evaluate?: NodeCompute;
   readonly load?: () => Promise<NodeModule<Config, Capabilities[number]>>;
   readonly documentation?: NodeDocumentation;
   readonly presentation?: NodePresentationHints;

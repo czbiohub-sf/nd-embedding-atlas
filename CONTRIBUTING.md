@@ -48,8 +48,11 @@ ranges. Review `overrides` separately because they are deliberately pinned.
 
 ```text
 apps/ndea/         CLI, server, frontend, and binary builder
+packages/nodes/    Built-in view definitions and their bodies
+packages/ochre/    Color, colormap, and TypeGPU helpers
 packages/protocol/ Shared request and response schemas
-packages/sdk/      Node authoring and host contracts
+packages/sdk/      View authoring and host contracts
+packages/ui/       Shared UI controls
 packages/zarr/     Bun-backed AnnData, MuData, and OME-Zarr I/O
 docs/              Independent Waku documentation app
 ```
@@ -77,9 +80,9 @@ vp run gen
 ./dist/ndea doctor
 ```
 
-`vp run dev` enables the node editor and persists each dataset's graph in
-browser storage. Production builds compile the editor out by default, ignore
-stored graphs, and open the fixed `--preset` layout (`annotate` by default).
+`vp run dev` enables dashboard layout editing (split, swap, remove, fill a
+slot). Every build opens the server-owned workspace document, which starts
+from the `--preset` document (`annotate` by default).
 
 See [`AGENTS.md`](./AGENTS.md) for the full command catalogue, project layout,
 key abstractions, and gotchas.
@@ -88,7 +91,7 @@ key abstractions, and gotchas.
 
 Enforced by `vp check`:
 
-- **TypeScript 6 strict**: no implicit any, `import type` for type-only imports
+- **TypeScript 7 strict**: no implicit any, `import type` for type-only imports
 - **Oxlint** + **Oxfmt**: config lives in `vite.config.ts`
 - 4-space indent, double quotes, trailing commas, semicolons
 - `@/` path alias → `apps/ndea/src/frontend/`

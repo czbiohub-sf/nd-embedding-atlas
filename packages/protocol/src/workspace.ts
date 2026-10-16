@@ -62,30 +62,3 @@ export const WorkspaceChangeSchema = z.object({
   clientId: z.string().optional(),
 });
 export type WorkspaceChange = z.infer<typeof WorkspaceChangeSchema>;
-
-const ObservationPageSchema = {
-  count: z.number().int().nonnegative(),
-  rows: z.array(z.object({ rowIndex: z.number().int().nonnegative(), datasetKey: z.string(), obsName: z.string() })),
-  truncated: z.boolean(),
-};
-
-/**
- * GET /api/workspace/nodes/:id. The node's cooked output at `revision`,
- * including its shared filter scope. `sql` is the final applied predicate;
- * `scopeFilter` is the scope's contribution. Results include a bounded observation page.
- */
-export const WorkspaceNodeResultSchema = z.object({
-  revision: z.number().int().nonnegative(),
-  nodeId: z.string(),
-  status: z.enum(["resolved", "unresolved", "error"]),
-  error: z.string().optional(),
-  output: z
-    .object({
-      kind: z.literal("pred"),
-      sql: z.string().nullable(),
-      scopeFilter: z.string().nullable(),
-      ...ObservationPageSchema,
-    })
-    .optional(),
-});
-export type WorkspaceNodeResult = z.infer<typeof WorkspaceNodeResultSchema>;

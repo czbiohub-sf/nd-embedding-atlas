@@ -1,55 +1,12 @@
 import type { NodeCapability, NodeHost } from "@ndea/sdk";
 
-export interface HierarchyState {
-  readonly childCount: number;
-}
-
-export interface HierarchyNodeHost {
-  readonly hierarchy: {
-    getSnapshot(): HierarchyState;
-    subscribe(onChange: () => void): () => void;
-    enter(): void;
-  };
-}
-
-export interface AppNodeHostFacetMap {
-  readonly hierarchy: HierarchyNodeHost["hierarchy"];
-  readonly bodyHeaderElement: HTMLElement;
-}
-
-export type AppNodeHostFacetName = keyof AppNodeHostFacetMap;
-
-function requireMethods(value: unknown, facet: AppNodeHostFacetName, methods: readonly string[]): object {
-  if (value === null || typeof value !== "object") throw new Error(`app node host requires facet "${facet}"`);
-  for (const method of methods) {
-    if (typeof Reflect.get(value, method) !== "function") {
-      throw new TypeError(`app node host facet "${facet}.${method}" must be callable`);
-    }
+/** The body's header toolbar slot: the one product-only host facet. */
+export function requireAppNodeHostFacet(host: unknown, facet: "bodyHeaderElement"): HTMLElement {
+  const value = host !== null && typeof host === "object" ? Reflect.get(host, facet) : undefined;
+  if (value === null || typeof value !== "object" || typeof Reflect.get(value, "appendChild") !== "function") {
+    throw new Error(`app node host requires facet "${facet}"`);
   }
-  return value;
-}
-
-/** Resolve one closed app-only facet and prove its runtime structure. */
-export function requireAppNodeHostFacet<Facet extends AppNodeHostFacetName>(
-  host: unknown,
-  facet: Facet,
-): AppNodeHostFacetMap[Facet] {
-  if (host === null || typeof host !== "object") throw new Error(`app node host requires facet "${facet}"`);
-  const value = Reflect.get(host, facet);
-  switch (facet) {
-    case "hierarchy":
-      return requireMethods(value, facet, ["getSnapshot", "subscribe", "enter"]) as AppNodeHostFacetMap[Facet];
-    case "bodyHeaderElement":
-      if (value === null || typeof value !== "object" || typeof Reflect.get(value, "appendChild") !== "function") {
-        throw new Error('app node host requires facet "bodyHeaderElement"');
-      }
-      return value;
-  }
-  throw new Error(`unknown app node host facet "${facet}"`);
-}
-
-export function assertRequiredAppNodeHostFacets(host: unknown, required: readonly AppNodeHostFacetName[]): void {
-  for (const facet of required) requireAppNodeHostFacet(host, facet);
+  return value as HTMLElement;
 }
 
 /** Product-only facets layered onto the framework-neutral SDK host. */

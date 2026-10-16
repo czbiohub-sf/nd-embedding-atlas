@@ -3,7 +3,8 @@
  *
  *   ndea workspace get                            → { revision, document }
  *   ndea workspace patch --revision N --ops '[…]' → { revision } (RFC 6902 ops)
- *   ndea workspace result <node> [--limit N]      → the node's evaluated output
+ *   ndea workspace result <element>               → { revision, predicate, count } the element shows
+ *   ndea workspace result --data <name>           → { revision, predicate, count } the data source selects
  *
  * `patch` goes through the same validated path as the browser: a stale
  * revision exits 1 with the current snapshot; an invalid result exits 1 with
@@ -31,7 +32,8 @@ const patchCommand = defineCommand({
       description: "Revision the ops were written against (from `ndea workspace get`)",
     }),
     ops: option(z.string(), {
-      description: 'JSON array of RFC 6902 ops, e.g. \'[{"op":"replace","path":"/stripH","value":320}]\'',
+      description:
+        'JSON array of RFC 6902 ops, e.g. \'[{"op":"add","path":"/data/infected","value":{"sql":"area > 20"}}]\'',
     }),
     ...serverOptions,
   },
@@ -43,20 +45,24 @@ const patchCommand = defineCommand({
 
 const resultCommand = defineCommand({
   name: "result" as const,
-  description: "Print one node's evaluated output at the current revision as JSON",
+  description: "Print what one dashboard element shows, or one data source selects, as JSON",
   options: {
-    limit: option(z.coerce.number().int().min(0).max(1_000_000).default(100), {
-      description: "Maximum observations to list (count is always exact)",
-    }),
+    data: option(z.string().optional(), { description: "Evaluate this data source instead of an element" }),
     ...serverOptions,
   },
   async handler({ flags, positional }) {
-    const nodeId = positional[0];
-    if (!nodeId) {
-      console.error("Error: pass a node id, e.g. `ndea workspace result count-2` (ids: `ndea workspace get`).");
+    if (flags.data) {
+      await requestServer(flags, `/api/workspace/data/${encodeURIComponent(flags.data)}`);
+      return;
+    }
+    const element = positional[0];
+    if (!element) {
+      console.error(
+        "Error: pass an element id (`ndea workspace result count-1`) or --data <name>; see `ndea workspace get`.",
+      );
       process.exit(1);
     }
-    await requestServer(flags, `/api/workspace/nodes/${encodeURIComponent(nodeId)}?limit=${flags.limit}`);
+    await requestServer(flags, `/api/workspace/elements/${encodeURIComponent(element)}`);
   },
 });
 

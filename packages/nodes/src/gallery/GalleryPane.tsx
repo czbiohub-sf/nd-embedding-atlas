@@ -53,7 +53,7 @@ export function GalleryPane({
   const hasPlate = metadata ? capabilitiesOf(metadata).has("plate-image") : false;
 
   // Scoped to THIS node's wired input predicate (not the global selection bus).
-  const { obs, rowCount, isLoading, sourceKind } = usePredicateGalleryObs(coordinator, predicate);
+  const { obs, rowCount, isLoading } = usePredicateGalleryObs(coordinator, predicate);
 
   // Resolve channel state from the docked viewer instance, mirroring TrackGallery.
   const resolvedPlateChannels =
@@ -143,8 +143,6 @@ export function GalleryPane({
             {headerCount}
           </Badge>
         )}
-        {/* node-scoped: one wired input edge */}
-        {sourceKind != null && <span className="text-3xs text-muted-foreground">· wired</span>}
         {truncated && (
           <span className="ml-auto font-mono text-3xs text-warning-hue/80">showing top {MAX_GALLERY_OBS}</span>
         )}

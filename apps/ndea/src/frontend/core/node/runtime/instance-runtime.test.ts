@@ -1,8 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { defineNode, exactNodeTypeRef, type MountedNodeBody, type NodeCapability, type NodeModule } from "@ndea/sdk";
 
-import type { NodeCatalog } from "@/core/plugin/catalog";
-import type { CatalogNodeDefinition } from "@/core/plugin/registration";
+import type { ViewDefinition } from "@/core/node/view-definitions";
 import type { HostHandle } from "./host";
 import { NodeInstanceRuntime } from "./instance-runtime";
 
@@ -40,20 +39,13 @@ function deferred<Value>(): Deferred<Value> {
 function definition(
   load: () => Promise<NodeModule<unknown, NodeCapability>>,
   capabilities: readonly NodeCapability[] = [],
-): CatalogNodeDefinition {
+): ViewDefinition {
   return defineNode({
     ref: exactNodeTypeRef("runtime-fixture", "1.0.0"),
     title: "Runtime fixture",
-    role: "view",
-    inputs: [],
-    outputs: [],
     capabilities,
     load,
   });
-}
-
-function catalogWith(value: CatalogNodeDefinition): NodeCatalog {
-  return { resolveExact: () => value } as unknown as NodeCatalog;
 }
 
 function hostHandle(
@@ -116,8 +108,7 @@ describe("NodeInstanceRuntime", () => {
       });
     }, ["data-read"]);
     const runtime = new NodeInstanceRuntime({
-      catalog: catalogWith(value),
-      definitionRef: value.ref,
+      definition: value,
       dockElement: dock as unknown as HTMLElement,
       createHost: () => {
         hosts += 1;
@@ -168,8 +159,7 @@ describe("NodeInstanceRuntime", () => {
         : Promise.resolve({ mountBody: () => mountedBody(element, () => {}) });
     });
     const runtime = new NodeInstanceRuntime({
-      catalog: catalogWith(value),
-      definitionRef: value.ref,
+      definition: value,
       dockElement: new FixtureElement() as unknown as HTMLElement,
       createHost: () => hostHandle([], () => {}),
     });
@@ -203,8 +193,7 @@ describe("NodeInstanceRuntime", () => {
       });
     });
     const runtime = new NodeInstanceRuntime({
-      catalog: catalogWith(value),
-      definitionRef: value.ref,
+      definition: value,
       dockElement: new FixtureElement() as unknown as HTMLElement,
       createHost: () => {
         hosts += 1;
@@ -247,8 +236,7 @@ describe("NodeInstanceRuntime", () => {
       capabilities,
     );
     const runtime = new NodeInstanceRuntime({
-      catalog: catalogWith(value),
-      definitionRef: value.ref,
+      definition: value,
       dockElement: new FixtureElement() as unknown as HTMLElement,
       createHost: () =>
         hostHandle([], () => {
@@ -284,8 +272,7 @@ describe("NodeInstanceRuntime", () => {
       ["gpu-device"],
     );
     const runtime = new NodeInstanceRuntime({
-      catalog: catalogWith(value),
-      definitionRef: value.ref,
+      definition: value,
       dockElement: new FixtureElement() as unknown as HTMLElement,
       createHost: () =>
         hostHandle(
@@ -310,8 +297,7 @@ describe("NodeInstanceRuntime", () => {
     let hosts = 0;
     const value = definition(() => Promise.resolve({ mountBody: "not callable" } as never));
     const runtime = new NodeInstanceRuntime({
-      catalog: catalogWith(value),
-      definitionRef: value.ref,
+      definition: value,
       dockElement: new FixtureElement() as unknown as HTMLElement,
       createHost: () => {
         hosts += 1;
@@ -340,8 +326,7 @@ describe("NodeInstanceRuntime", () => {
       }),
     );
     const runtime = new NodeInstanceRuntime({
-      catalog: catalogWith(value),
-      definitionRef: value.ref,
+      definition: value,
       dockElement: dock as unknown as HTMLElement,
       createHost: () => hostHandle([], () => events.push("host")),
     });

@@ -4,7 +4,6 @@ import { z } from "zod";
 import {
   defineNode,
   exactNodeTypeRef,
-  nodeConfigVersion,
   PluginManifestSchema,
   SDK_VERSION,
   type NodeDefinition,
@@ -16,24 +15,16 @@ import {
 const transformDefinition = defineNode({
   ref: exactNodeTypeRef("example/transform", "1.0.0"),
   title: "Example transform",
-  role: "transform",
-  inputs: [{ id: "in", kind: "pred", label: "In" }],
-  outputs: [{ id: "out", kind: "pred", label: "Out" }],
   capabilities: ["data-read", "compute"],
   config: {
     schema: z.object({ threshold: z.number() }),
-    version: nodeConfigVersion(1),
     defaultValue: { threshold: 0 },
   },
   load: () =>
     Promise.resolve<NodeModule<unknown, "data-read" | "compute">>({
       createRuntime(host) {
-        return {
-          recompute() {
-            void host.data.table;
-          },
-          dispose() {},
-        };
+        void host.data.table;
+        return { dispose() {} };
       },
     }),
 });
@@ -41,9 +32,6 @@ const transformDefinition = defineNode({
 const mountedViewDefinition = defineNode({
   ref: exactNodeTypeRef("example/view", "1.0.0"),
   title: "Example view",
-  role: "view",
-  inputs: [{ id: "in", kind: "pred", label: "Rows" }],
-  outputs: [],
   capabilities: ["focus-coordination"],
   load: () =>
     Promise.resolve<NodeModule<unknown, "focus-coordination">>({
@@ -84,7 +72,7 @@ describe("canonical plugin SDK barrel", () => {
     ]);
     expect(registered[1]?.load).toBeFunction();
     expect(dispose).toBeFunction();
-    expect(SDK_VERSION as string).toBe("0.2.0");
+    expect(SDK_VERSION as string).toBe("1.0.0");
   });
 
   test("re-exports the protocol-owned plugin manifest parser", () => {
@@ -92,7 +80,7 @@ describe("canonical plugin SDK barrel", () => {
       manifestSchemaVersion: 1,
       pluginId: "example.plugin",
       pluginPackageVersion: "1.2.3",
-      sdkVersionRange: "^0.2.0",
+      sdkVersionRange: "^1.0.0",
       displayName: "Example plugin",
       clientEntry: "dist/client.js",
       staticAssets: ["dist/client.css"],

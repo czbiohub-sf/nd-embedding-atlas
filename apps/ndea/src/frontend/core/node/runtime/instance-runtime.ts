@@ -1,9 +1,8 @@
-import type { ExactNodeTypeRef, MountedNodeBody, NodeCapability, NodeModule, NodeRuntime } from "@ndea/sdk";
+import type { MountedNodeBody, NodeCapability, NodeModule, NodeRuntime } from "@ndea/sdk";
 
-import type { NodeCatalog } from "@/core/plugin/catalog";
-import type { CatalogNodeDefinition } from "@/core/plugin/registration";
 import type { AppNodeHost } from "@/core/node/app-node-host";
 import { assertNodeHostCapabilities } from "@/core/node/capabilities";
+import type { ViewDefinition } from "@/core/node/view-definitions";
 import type { HostHandle } from "./host";
 
 export type NodeInstanceRuntimeStatus = "unloaded" | "loading" | "ready" | "failed" | "disposed";
@@ -17,10 +16,9 @@ export type NodeInstanceRuntimeState =
   | { readonly status: "disposed" };
 
 export interface NodeInstanceRuntimeDependencies {
-  readonly catalog: NodeCatalog;
-  readonly definitionRef: ExactNodeTypeRef;
+  readonly definition: ViewDefinition;
   readonly dockElement: HTMLElement;
-  createHost(definition: CatalogNodeDefinition): HostHandle<unknown>;
+  createHost(definition: ViewDefinition): HostHandle<unknown>;
 }
 
 interface LiveAttempt {
@@ -109,17 +107,7 @@ export class NodeInstanceRuntime {
   }
 
   private async loadAttempt(generation: number): Promise<void> {
-    const definition = this.dependencies.catalog.resolveExact(this.dependencies.definitionRef);
-    if (!definition) {
-      this.fail(
-        generation,
-        "definition",
-        new Error(
-          `node definition not found: ${this.dependencies.definitionRef.nodeTypeId}@${this.dependencies.definitionRef.nodeTypeVersion}`,
-        ),
-      );
-      return;
-    }
+    const { definition } = this.dependencies;
     if (!definition.load) {
       this.fail(
         generation,

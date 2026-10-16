@@ -11,26 +11,6 @@ import { DatasetQuerySession } from "../store.ts";
 import { WorkspaceDocumentStore } from "../workspace.ts";
 
 const TOKEN = "test-token";
-const ref = (nodeTypeId: string) => ({ nodeTypeId, nodeTypeVersion: "1.0.0" });
-
-const seed = {
-  nodeAssets: [],
-  nodes: {
-    obs: { id: "obs", definitionRef: ref("obs"), label: "obs" },
-    table: { id: "table", definitionRef: ref("table"), label: "Table" },
-  },
-  edges: { e1: { id: "e1", from: "obs", fromPort: "out", to: "table", toPort: "in", kind: "pred" } },
-  positions: { obs: { x: 0, y: 0 }, table: { x: 320, y: 0 } },
-  sizeOverrides: {},
-  formOverride: {},
-  formLocked: {},
-  stage: null,
-  stripH: 280,
-  flags: {},
-  state: {},
-  bindings: {},
-};
-
 let dir: string;
 let store: DatasetQuerySession | null = null;
 let client: Client | null = null;
@@ -54,7 +34,6 @@ async function connect() {
     );
   });
   const workspace = WorkspaceDocumentStore.empty(join(dir, "workspace.json"));
-  await workspace.apply(0, [{ op: "add", path: "", value: seed }]);
   const state = createServerSession({
     store,
     workspace,
@@ -106,19 +85,23 @@ describe("ndea MCP", () => {
     expect(foreign.status).toBe(403);
   });
 
-  test("an agent builds a filtered, linked, staged view and reads the same numbers back", async () => {
+  test("an agent builds a filtered, linked dashboard and reads the same numbers back", async () => {
     const { workspace } = await connect();
     const tools = (await client!.listTools()).tools.map((tool) => tool.name).toSorted();
     expect(tools).toEqual([
       "create_observation_set",
-      "edit_graph",
-      "edit_view",
-      "get_node_result",
+      "edit_dashboard",
+      "get_result",
       "get_workspace",
       "list_columns",
-      "list_node_types",
+      "list_components",
       "patch_workspace",
     ]);
+
+    const components = (await call("list_components", {})).body.components as Record<string, any>[];
+    const vgplot = components.find((component) => component.type === "vgplot")!;
+    expect(vgplot).toMatchObject({ children: "none", reads: true, binds: ["filter"] });
+    expect(Object.keys(vgplot.props.properties).toSorted()).toEqual(["attributes", "entries"]);
 
     const column = await call("list_columns", { column: "condition" });
     expect(column.body.values).toEqual([
@@ -126,76 +109,67 @@ describe("ndea MCP", () => {
       { value: "mock", count: 1 },
     ]);
 
-    const graph = await call("edit_graph", {
+    const built = await call("edit_dashboard", {
       ops: [
+        { op: "set_data", name: "infected", source: { where: { op: "eq", column: "condition", value: "infected" } } },
+        { op: "add", type: "count", props: { data: "infected" } },
+        { op: "add", type: "table", at: { beside: "count-1" } },
+        { op: "bind", id: "count-1", type: "filter", scope: "A" },
+        { op: "bind", id: "table-1", type: "filter", scope: "A" },
         {
-          op: "add_node",
-          type: "filter",
-          id: "infected",
-          inputs: ["obs"],
-          config: { where: { op: "eq", column: "condition", value: "infected" } },
+          op: "set_filter",
+          scope: "A",
+          source: "agent",
+          facet: "area",
+          clause: { op: "gt", column: "area", value: 40 },
         },
-        { op: "add_node", type: "count", inputs: ["infected"] },
       ],
     });
-    expect(graph.isError).toBe(false);
-    expect(graph.body.addedNodes).toEqual(["infected", "count-1"]);
-    expect((await call("get_node_result", { node: "count-1" })).body.output.count).toBe(2);
+    expect(built.isError).toBe(false);
+    expect(built.body.added.toSorted()).toEqual(["count-1", "split-1", "table-1"]);
+    expect((await call("get_result", { element: "count-1" })).body).toMatchObject({ count: 1 });
+    expect((await call("get_result", { element: "table-1" })).body).toMatchObject({ count: 2 });
+    expect((await call("get_result", { data: "infected" })).body).toMatchObject({ count: 2 });
 
-    const view = await call("edit_view", {
-      revision: graph.body.revision,
-      ops: [
-        { op: "link", node: "table", type: "filter", scope: "A" },
-        { op: "set_filter", scope: "A", source: "agent", where: { op: "gt", column: "area", value: 40 } },
-        { op: "show", node: "table", title: "Large cells" },
-      ],
-    });
-    expect(view.isError).toBe(false);
-    expect((await call("get_node_result", { node: "table" })).body.output.count).toBe(2);
+    const read = (await call("get_workspace", {})).body;
+    expect(read.revision).toBe(workspace.snapshot().revision);
+    expect(read.document.state.filter.A).toEqual({ agent: { area: { op: "gt", column: "area", value: 40 } } });
 
-    const summary = (await call("get_workspace", {})).body;
-    expect(summary.stage).toEqual(["table"]);
-    expect(summary.scopes).toEqual([
-      {
-        type: "filter",
-        scope: "A",
-        members: ["table"],
-        value: { agent: { where: { op: "gt", column: "area", value: 40 } } },
-      },
-    ]);
-    expect(workspace.snapshot().revision).toBe(view.body.revision);
-
-    const set = await call("create_observation_set", { node: "infected" });
-    expect(set.body.count).toBe(2);
+    expect((await call("create_observation_set", { element: "count-1" })).body.count).toBe(1);
   });
 
   test("invalid edits are refused whole, with a pointer to fix, and change nothing", async () => {
     const { workspace } = await connect();
     const before = workspace.snapshot().revision;
 
-    const badConfig = await call("edit_graph", {
+    const missing = await call("edit_dashboard", {
       ops: [
-        { op: "add_node", type: "filter", id: "f" },
-        { op: "set_config", node: "f", config: { where: { op: "nope" } } },
+        { op: "add", type: "count" },
+        { op: "add", type: "count", at: { slot: "ghost" } },
       ],
     });
-    expect(badConfig.isError).toBe(true);
-    expect(badConfig.body.issues[0].pointer).toBe("/ops/1");
+    expect(missing.isError).toBe(true);
+    expect(missing.body.issues[0].pointer).toBe("/ops/1");
 
-    const cycle = await call("edit_graph", {
+    const badProp = await call("edit_dashboard", { ops: [{ op: "add", type: "histogram", props: { bins: "many" } }] });
+    expect(badProp.isError).toBe(true);
+    expect(badProp.body.issues[0].pointer).toBe("/spec/elements/histogram-1/props/bins");
+
+    const incapable = await call("edit_dashboard", {
       ops: [
-        { op: "add_node", type: "filter", id: "f1", inputs: ["obs"] },
-        { op: "add_node", type: "filter", id: "f2", inputs: ["f1"] },
-        { op: "connect", from: "f2", to: "f1" },
+        { op: "add", type: "text", props: { text: "hi" } },
+        { op: "bind", id: "text-1", type: "filter", scope: "A" },
       ],
     });
-    expect(cycle.isError).toBe(true);
-    expect(cycle.body.issues[0].pointer).toMatch(/^\/edges\//);
+    expect(incapable.body.issues[0].pointer).toBe("/spec/elements/text-1/props/filter");
 
-    const incapable = await call("edit_view", { ops: [{ op: "link", node: "obs", type: "filter", scope: "A" }] });
-    expect(incapable.isError).toBe(true);
+    const patch = await call("patch_workspace", {
+      revision: before,
+      ops: [{ op: "add", path: "/data/bad", value: { from: "ghost" } }],
+    });
+    expect(patch.body.issues[0].pointer).toBe("/data/bad/from");
 
-    const stale = await call("edit_view", { revision: before - 1, ops: [{ op: "show", node: "table" }] });
+    const stale = await call("edit_dashboard", { revision: before + 1, ops: [{ op: "add", type: "count" }] });
     expect(stale.body).toMatchObject({ revision: before });
 
     expect(workspace.snapshot().revision).toBe(before);

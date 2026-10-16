@@ -1,99 +1,84 @@
 /**
- * Named workspace edits for agents. Each op runs against a draft of the
- * document through the same pure helpers the browser uses (stage spec,
- * coordination, config contracts); the caller diffs the draft against the
- * base into one RFC 6902 patch, so every edit still meets the one validated
- * write path. An op that cannot apply throws `WorkspaceEditError` naming it.
+ * Named dashboard edits for agents. Each op runs against a draft of the
+ * document through the same pure dashboard operations the browser uses; the
+ * caller diffs the draft against the base into one RFC 6902 patch, so every
+ * edit still meets the one validated write path (`applyWorkspacePatch`). An op
+ * that cannot apply throws `WorkspaceEditError` naming it; everything the
+ * document schema checks (component props, data references, bind rules) is
+ * left to that write path.
  */
 
-import { FilterClauseSchema, type FilterClause } from "@ndea/protocol";
+import { FilterClauseSchema } from "@ndea/protocol";
 import { z } from "zod";
 
 import {
-  createCoordination,
-  withoutNodeCoordination,
-  type CoordinationScopeCellPort,
-} from "../frontend/core/coordination/coordination.ts";
-import {
+  bindingPointer,
   COORDINATION_TYPE_IDS,
   COORDINATION_TYPES,
-  type CoordinationTypeId,
+  type CoordinationState,
 } from "../frontend/core/coordination/types.ts";
-import { patchNodeConfig } from "../frontend/core/graph/cook.ts";
-import type { GraphDocumentEdge, GraphDocumentNode } from "../frontend/core/graph/records.ts";
-import { addView, removeNodeView, stageViews } from "../frontend/core/workspace/stage/stage-spec.ts";
-import type { WorkspaceDocument, WorkspaceNodePosition } from "../frontend/core/workspace/types.ts";
-import type { ServerNodeDefinition, ServerNodeResolver } from "./graph.ts";
+import {
+  COMPONENTS,
+  elementScope,
+  freshElementId,
+  parentOf,
+  removeElement,
+  setElementProps,
+  splitElement,
+  swapElements,
+  type Dashboard,
+  type DashboardElement,
+} from "../frontend/core/workspace/dashboard.ts";
+import { dataSourceSchema } from "../frontend/core/workspace/data-sources.ts";
+import type { WorkspaceDocument } from "../frontend/core/workspace/types.ts";
 
-const NodeIdSchema = z
-  .string()
-  .regex(/^[A-Za-z][A-Za-z0-9_-]{0,63}$/, "node ids start with a letter and use letters, digits, _ and -");
+const IdSchema = z.string().min(1);
 const ScopeSchema = z.string().regex(/^[A-Za-z0-9_-]+$/, "scope names use letters, digits, _ and -");
 const CoordinationTypeSchema = z.enum(COORDINATION_TYPE_IDS);
+const PropsSchema = z.record(z.string(), z.json());
 
-/** Node types an agent cannot place: the one data source and the subnet seam machinery. */
-export const NOT_ADDABLE: ReadonlySet<string> = new Set(["obs", "proxy", "subnet"]);
-
-export const GraphEditSchema = z.discriminatedUnion("op", [
+const AtSchema = z.union([
+  z.object({ slot: IdSchema }).strict().describe("fill this empty slot"),
   z
-    .object({
-      op: z.literal("add_node"),
-      type: z.string().describe("node type id from list_node_types, e.g. `filter`, `table`, `histogram`"),
-      id: NodeIdSchema.optional().describe("id for the new node; later ops in the same call may reference it"),
-      label: z.string().min(1).optional(),
-      config: z.record(z.string(), z.unknown()).optional().describe("config fields, merged over the type's defaults"),
-      inputs: z.array(z.string()).optional().describe("node ids to wire into the new node's input, in order"),
-      position: z.object({ x: z.number(), y: z.number() }).optional().describe("canvas position; omit to auto-place"),
-    })
-    .strict(),
-  z.object({ op: z.literal("remove_node"), node: z.string() }).strict(),
+    .object({ stack: IdSchema, index: z.number().int().nonnegative().optional() })
+    .strict()
+    .describe("insert into this stack's children at `index` (default: last)"),
   z
-    .object({
-      op: z.literal("connect"),
-      from: z.string(),
-      to: z.string(),
-      fromPort: z.string().optional(),
-      toPort: z.string().optional(),
-    })
-    .strict(),
-  z.object({ op: z.literal("disconnect"), from: z.string(), to: z.string() }).strict(),
-  z
-    .object({
-      op: z.literal("set_config"),
-      node: z.string(),
-      config: z.record(z.string(), z.unknown()).describe("fields to change; omitted fields keep their value"),
-    })
-    .strict(),
-  z.object({ op: z.literal("rename"), node: z.string(), label: z.string().min(1) }).strict(),
+    .object({ beside: IdSchema, side: z.enum(["left", "right", "up", "down"]).optional() })
+    .strict()
+    .describe("split this element in two; the new element takes `side` (default: right)"),
 ]);
-export type GraphEdit = z.infer<typeof GraphEditSchema>;
 
-export const ViewEditSchema = z.discriminatedUnion("op", [
-  z.object({ op: z.literal("link"), node: z.string(), type: CoordinationTypeSchema, scope: ScopeSchema }).strict(),
-  z.object({ op: z.literal("unlink"), node: z.string(), type: CoordinationTypeSchema }).strict(),
+export const DashboardEditSchema = z.discriminatedUnion("op", [
   z
-    .object({
-      op: z.literal("set_value"),
-      type: z.enum(["focus", "colorBy", "viewSync", "ordering"]),
-      scope: ScopeSchema,
-      value: z.unknown().describe("focus: row index or null; colorBy: column or null; ordering: {col, dir} or null"),
-    })
-    .strict(),
-  z
-    .object({
-      op: z.literal("set_filter"),
-      scope: ScopeSchema,
-      source: z
-        .string()
-        .min(1)
-        .describe("your source key in the crossfilter, e.g. `agent`; members never see their own"),
-      where: FilterClauseSchema.nullable().describe("typed clause, or null to remove this source's clause"),
-    })
-    .strict(),
-  z.object({ op: z.literal("show"), node: z.string(), title: z.string().optional() }).strict(),
-  z.object({ op: z.literal("hide"), node: z.string() }).strict(),
+    .object({ op: z.literal("set_data"), name: z.string(), source: dataSourceSchema })
+    .describe("add or replace a data source"),
+  z.object({ op: z.literal("remove_data"), name: z.string() }),
+  z.object({
+    op: z.literal("add"),
+    type: z.string().describe("component type from list_components"),
+    id: IdSchema.optional().describe("id for the new element (default <type>-<n>); later ops may reference it"),
+    props: PropsSchema.optional().describe("data, title, coordination bindings, and the component's config"),
+    at: AtSchema.optional().describe("default: fill the root if it is an empty slot, else split the root to its right"),
+  }),
+  z.object({
+    op: z.literal("set_props"),
+    id: IdSchema,
+    props: PropsSchema.describe("merged into the element's props; null removes a key"),
+  }),
+  z.object({ op: z.literal("remove"), id: IdSchema }),
+  z.object({ op: z.literal("swap"), a: IdSchema, b: IdSchema }),
+  z.object({ op: z.literal("bind"), id: IdSchema, type: CoordinationTypeSchema, scope: ScopeSchema }),
+  z.object({ op: z.literal("unbind"), id: IdSchema, type: CoordinationTypeSchema }),
+  z.object({
+    op: z.literal("set_filter"),
+    scope: ScopeSchema,
+    source: z.string().min(1).describe("your own source key, e.g. 'agent'; never another element's id"),
+    facet: z.string().min(1),
+    clause: FilterClauseSchema.nullable().describe("null removes the clause"),
+  }),
 ]);
-export type ViewEdit = z.infer<typeof ViewEditSchema>;
+export type DashboardEdit = z.infer<typeof DashboardEditSchema>;
 
 export class WorkspaceEditError extends Error {
   readonly index: number;
@@ -103,212 +88,137 @@ export class WorkspaceEditError extends Error {
   }
 }
 
-/** Highest trailing integer across ids like `filter-3` / `e7` (0 if none). */
-function maxSeq(ids: Iterable<string>): number {
-  let max = 0;
-  for (const id of ids) max = Math.max(max, Number(/(\d+)$/.exec(id)?.[1] ?? 0));
-  return max;
+function requireElement(spec: Dashboard, id: string): DashboardElement {
+  const element = Object.hasOwn(spec.elements, id) ? spec.elements[id] : undefined;
+  if (!element) throw new Error(`no element "${id}"; get_workspace lists element ids`);
+  return element;
 }
 
-function requireNode(document: WorkspaceDocument, id: string): GraphDocumentNode {
-  const node = document.nodes[id];
-  if (!node) throw new Error(`no node "${id}"; get_workspace lists node ids`);
-  return node;
-}
-
-function requireDefinition(resolver: ServerNodeResolver, node: GraphDocumentNode): ServerNodeDefinition {
-  const definition = resolver.getSpecExact(node.definitionRef)?.definition;
-  if (!definition) throw new Error(`node "${node.id}" has a type the server cannot resolve`);
-  return definition;
-}
-
-// ponytail: the server knows positions but not rendered sizes, so auto-placement assumes a full-form
-// footprint for every node; send real sizes from the browser if agent-placed nodes still overlap.
-const CARD = { w: 340, h: 340, gap: 60 };
-
-function freePosition(document: WorkspaceDocument, inputs: readonly string[]): WorkspaceNodePosition {
-  const occupied = Object.values(document.positions);
-  const anchors = inputs.map((id) => document.positions[id]).filter((p) => p !== undefined);
-  const x =
-    anchors.length > 0
-      ? Math.max(...anchors.map((p) => p.x)) + CARD.w + CARD.gap
-      : Math.max(0, ...occupied.map((p) => p.x)) + CARD.w + CARD.gap;
-  let y = anchors[0]?.y ?? 0;
-  while (occupied.some((p) => Math.abs(p.x - x) < CARD.w && Math.abs(p.y - y) < CARD.h)) y += CARD.h + CARD.gap / 2;
-  return { x, y };
-}
-
-function connect(
-  document: WorkspaceDocument,
-  resolver: ServerNodeResolver,
-  from: string,
-  to: string,
-  fromPort?: string,
-  toPort?: string,
-): WorkspaceDocument {
-  const source = requireDefinition(resolver, requireNode(document, from));
-  const target = requireDefinition(resolver, requireNode(document, to));
-  const output = fromPort ? source.outputs.find((port) => port.id === fromPort) : source.outputs[0];
-  if (!output) throw new Error(`node "${from}" has no output${fromPort ? ` "${fromPort}"` : ""}`);
-  const input = toPort
-    ? target.inputs.find((port) => port.id === toPort)
-    : target.inputs.find((port) => port.kind === output.kind);
-  if (!input) throw new Error(`node "${to}" has no input${toPort ? ` "${toPort}"` : ""} that accepts "${output.kind}"`);
-  const edges = Object.values(document.edges);
-  if (edges.some((e) => e.from === from && e.fromPort === output.id && e.to === to && e.toPort === input.id)) {
-    throw new Error(`"${from}" is already wired to "${to}"`);
+/** Put `element` under `id` where the slot `slot` was. */
+function replaceSlot(spec: Dashboard, slot: string, id: string, element: DashboardElement): Dashboard {
+  const parent = parentOf(spec, slot);
+  const { [slot]: _slot, ...elements } = spec.elements;
+  elements[id] = element;
+  if (parent !== undefined) {
+    elements[parent] = { ...elements[parent], children: elements[parent].children.map((c) => (c === slot ? id : c)) };
   }
-  const id = `e${maxSeq(Object.keys(document.edges)) + 1}`;
-  const edge: GraphDocumentEdge = { id, from, fromPort: output.id, to, toPort: input.id, kind: output.kind };
-  return { ...document, edges: { ...document.edges, [id]: edge } };
+  return { root: spec.root === slot ? id : spec.root, elements };
 }
 
-function applyGraphEdit(document: WorkspaceDocument, edit: GraphEdit, resolver: ServerNodeResolver): WorkspaceDocument {
-  switch (edit.op) {
-    case "add_node": {
-      const definition = resolver.definitions.find((candidate) => candidate.ref.nodeTypeId === edit.type);
-      if (!definition) throw new Error(`unknown node type "${edit.type}"; list_node_types lists them`);
-      if (NOT_ADDABLE.has(edit.type)) throw new Error(`node type "${edit.type}" cannot be added by agents`);
-      const id = edit.id ?? `${edit.type}-${maxSeq(Object.keys(document.nodes)) + 1}`;
-      if (document.nodes[id]) throw new Error(`node id "${id}" is taken`);
-      const inputs = edit.inputs ?? [];
-      for (const input of inputs) requireNode(document, input);
-      let node: GraphDocumentNode = {
-        id,
-        definitionRef: definition.ref,
-        label: edit.label ?? definition.title,
-        parent: inputs.length > 0 ? (document.nodes[inputs[0]].parent ?? null) : null,
-      };
-      if (edit.config) node = patchNodeConfig(node, edit.config, definition.config);
-      let next: WorkspaceDocument = {
-        ...document,
-        nodes: { ...document.nodes, [id]: node },
-        positions: { ...document.positions, [id]: edit.position ?? freePosition(document, inputs) },
-      };
-      for (const input of inputs) next = connect(next, resolver, input, id);
-      return next;
-    }
-    case "remove_node": {
-      const node = requireNode(document, edit.node);
-      if (NOT_ADDABLE.has(node.definitionRef.nodeTypeId)) {
-        throw new Error(`node "${edit.node}" (${node.definitionRef.nodeTypeId}) cannot be removed by agents`);
-      }
-      const nodes = { ...document.nodes };
-      delete nodes[edit.node];
-      const positions = { ...document.positions };
-      delete positions[edit.node];
-      const flags = { ...document.flags };
-      delete flags[edit.node];
-      const edges = Object.fromEntries(
-        Object.entries(document.edges).filter(([, e]) => e.from !== edit.node && e.to !== edit.node),
-      );
-      const stage = removeNodeView(document.stage, edit.node);
-      return withoutNodeCoordination({ ...document, nodes, positions, flags, edges, stage }, edit.node);
-    }
-    case "connect":
-      return connect(document, resolver, edit.from, edit.to, edit.fromPort, edit.toPort);
-    case "disconnect": {
-      const edges = Object.fromEntries(
-        Object.entries(document.edges).filter(([, e]) => !(e.from === edit.from && e.to === edit.to)),
-      );
-      if (Object.keys(edges).length === Object.keys(document.edges).length) {
-        throw new Error(`no wire from "${edit.from}" to "${edit.to}"`);
-      }
-      return { ...document, edges };
-    }
-    case "set_config": {
-      const node = requireNode(document, edit.node);
-      const next = patchNodeConfig(node, edit.config, requireDefinition(resolver, node).config);
-      return { ...document, nodes: { ...document.nodes, [edit.node]: next } };
-    }
-    case "rename": {
-      const node = requireNode(document, edit.node);
-      return { ...document, nodes: { ...document.nodes, [edit.node]: { ...node, label: edit.label } } };
-    }
+/** Drop one source's clauses from a filter scope: an element's own contribution. */
+function dropFilterSource(state: CoordinationState, scope: string | undefined, source: string): void {
+  if (scope !== undefined && state.filter?.[scope]) delete state.filter[scope][source];
+}
+
+function addElement(spec: Dashboard, edit: Extract<DashboardEdit, { op: "add" }>): Dashboard {
+  if (!Object.hasOwn(COMPONENTS, edit.type)) {
+    throw new Error(`unknown component "${edit.type}"; list_components lists them`);
   }
+  const element: DashboardElement = { type: edit.type, props: edit.props ?? {}, children: [] };
+  const freshId = (base: Dashboard): string => {
+    const id = edit.id ?? freshElementId(base, edit.type);
+    if (Object.hasOwn(base.elements, id)) throw new Error(`element id "${id}" is taken`);
+    return id;
+  };
+  const at: z.infer<typeof AtSchema> =
+    edit.at ?? (spec.elements[spec.root].type === "slot" ? { slot: spec.root } : { beside: spec.root });
+  if ("stack" in at) {
+    const stack = requireElement(spec, at.stack);
+    if (stack.type !== "stack") throw new Error(`element "${at.stack}" is not a stack`);
+    const id = freshId(spec);
+    const children = stack.children.toSpliced(at.index ?? stack.children.length, 0, id);
+    return { ...spec, elements: { ...spec.elements, [id]: element, [at.stack]: { ...stack, children } } };
+  }
+  if ("slot" in at) {
+    if (requireElement(spec, at.slot).type !== "slot") throw new Error(`element "${at.slot}" is not an empty slot`);
+    return replaceSlot(spec, at.slot, freshId(spec), element);
+  }
+  requireElement(spec, at.beside);
+  const [split, slot] = splitElement(spec, at.beside, at.side ?? "right");
+  return replaceSlot(split, slot!, freshId(split), element);
 }
 
-function applyViewEdit(document: WorkspaceDocument, edit: ViewEdit, resolver: ServerNodeResolver): WorkspaceDocument {
-  let draft = document;
-  const coordination = createCoordination({
-    snapshot: () => draft,
-    update: (mutator) => {
-      draft = { ...draft, ...mutator(draft) };
-    },
-    subscribe: () => () => {},
-  });
+function applyEdit(draft: WorkspaceDocument, edit: DashboardEdit): void {
   switch (edit.op) {
-    case "link": {
-      const node = requireNode(document, edit.node);
-      const { capability, label } = COORDINATION_TYPES[edit.type];
-      if (!requireDefinition(resolver, node).capabilities.includes(capability)) {
-        throw new Error(`node "${edit.node}" (${node.definitionRef.nodeTypeId}) cannot join a ${label} scope`);
-      }
-      coordination.assignScope(edit.node, edit.type, edit.scope);
-      return draft;
+    case "set_data":
+      draft.data[edit.name] = edit.source;
+      return;
+    case "remove_data":
+      if (!Object.hasOwn(draft.data, edit.name)) throw new Error(`no data source "${edit.name}"`);
+      delete draft.data[edit.name];
+      return;
+    case "add":
+      draft.spec = addElement(draft.spec, edit);
+      return;
+    case "set_props": {
+      requireElement(draft.spec, edit.id);
+      const patch = Object.fromEntries(Object.entries(edit.props).map(([key, value]) => [key, value ?? undefined]));
+      draft.spec = setElementProps(draft.spec, edit.id, patch);
+      return;
     }
-    case "unlink":
-      requireNode(document, edit.node);
-      if (coordination.scopeOf(edit.node, edit.type) === undefined) {
-        throw new Error(`node "${edit.node}" is not linked to a ${edit.type} scope`);
+    case "remove": {
+      requireElement(draft.spec, edit.id);
+      const next = removeElement(draft.spec, edit.id);
+      for (const [id, element] of Object.entries(draft.spec.elements)) {
+        if (!Object.hasOwn(next.elements, id)) dropFilterSource(draft.state, elementScope(element, "filter"), id);
       }
-      coordination.clearScope(edit.node, edit.type);
-      return draft;
-    case "set_value":
-      setCell(coordination, edit.type, edit.scope, edit.value);
-      return draft;
+      draft.spec = next;
+      return;
+    }
+    case "swap": {
+      requireElement(draft.spec, edit.a);
+      requireElement(draft.spec, edit.b);
+      const next = swapElements(draft.spec, edit.a, edit.b);
+      if (next === draft.spec)
+        throw new Error(`cannot swap "${edit.a}" with "${edit.b}": same element or one contains the other`);
+      draft.spec = next;
+      return;
+    }
+    case "bind": {
+      const element = requireElement(draft.spec, edit.id);
+      const previous = elementScope(element, "filter");
+      if (edit.type === "filter" && previous !== edit.scope) dropFilterSource(draft.state, previous, edit.id);
+      draft.spec = setElementProps(draft.spec, edit.id, {
+        [edit.type]: { $bindState: bindingPointer(edit.type, edit.scope) },
+      });
+      // Each type's cells hold that type's values; its `defaultValue` is one of them.
+      const state = draft.state as Record<string, Record<string, unknown> | undefined>;
+      const cells = (state[edit.type] ??= {});
+      if (!Object.hasOwn(cells, edit.scope))
+        cells[edit.scope] = structuredClone(COORDINATION_TYPES[edit.type].defaultValue);
+      return;
+    }
+    case "unbind": {
+      const element = requireElement(draft.spec, edit.id);
+      if (!(edit.type in element.props)) throw new Error(`element "${edit.id}" is not bound to ${edit.type}`);
+      if (edit.type === "filter") dropFilterSource(draft.state, elementScope(element, "filter"), edit.id);
+      draft.spec = setElementProps(draft.spec, edit.id, { [edit.type]: undefined });
+      return;
+    }
     case "set_filter": {
-      const cell = { ...coordination.readCoordination("filter", edit.scope) };
-      if (edit.where) cell[edit.source] = { where: edit.where satisfies FilterClause };
-      else delete cell[edit.source];
-      coordination.setCoordinationValue("filter", edit.scope, cell);
-      return draft;
+      const cell = draft.state.filter?.[edit.scope];
+      if (edit.clause === null) {
+        if (!cell?.[edit.source]) return;
+        delete cell[edit.source][edit.facet];
+        if (Object.keys(cell[edit.source]).length === 0) delete cell[edit.source];
+        return;
+      }
+      const filter = (draft.state.filter ??= {});
+      ((filter[edit.scope] ??= {})[edit.source] ??= {})[edit.facet] = edit.clause;
+      return;
     }
-    case "show": {
-      requireNode(document, edit.node);
-      const stage = addView(document.stage, edit.node);
-      const view = stageViews(stage).get(edit.node)!;
-      if (edit.title === undefined) return { ...document, stage };
-      const element = stage!.elements[view];
-      if (element.type !== "View") return { ...document, stage };
-      const titled = { ...element, props: { ...element.props, title: edit.title } };
-      return { ...document, stage: { ...stage!, elements: { ...stage!.elements, [view]: titled } } };
-    }
-    case "hide":
-      if (!stageViews(document.stage).has(edit.node)) throw new Error(`node "${edit.node}" is not on the Stage`);
-      return { ...document, stage: removeNodeView(document.stage, edit.node) };
   }
 }
 
-function setCell(
-  coordination: CoordinationScopeCellPort,
-  type: Exclude<CoordinationTypeId, "filter">,
-  scope: string,
-  value: unknown,
-): void {
-  const parsed = COORDINATION_TYPES[type].value.safeParse(value);
-  if (!parsed.success) throw new Error(`invalid ${type} value: ${parsed.error.issues[0]?.message ?? "rejected"}`);
-  coordination.setCoordinationValue(type, scope, parsed.data);
-}
-
-/** Apply `edits` in order; throws `WorkspaceEditError` at the first op that cannot apply. */
-export function applyWorkspaceEdits(
-  document: WorkspaceDocument,
-  edits: readonly (GraphEdit | ViewEdit)[],
-  resolver: ServerNodeResolver,
-): WorkspaceDocument {
-  let next = document;
+/** Apply `edits` in order to a draft; throws `WorkspaceEditError` at the first op that cannot apply. */
+export function applyDashboardEdits(document: WorkspaceDocument, edits: readonly DashboardEdit[]): WorkspaceDocument {
+  const draft = structuredClone(document);
   edits.forEach((edit, index) => {
     try {
-      next = isGraphEdit(edit) ? applyGraphEdit(next, edit, resolver) : applyViewEdit(next, edit, resolver);
+      applyEdit(draft, edit);
     } catch (error) {
       throw new WorkspaceEditError(index, error instanceof Error ? error.message : String(error));
     }
   });
-  return next;
-}
-
-const GRAPH_OPS = new Set<string>(["add_node", "remove_node", "connect", "disconnect", "set_config", "rename"]);
-function isGraphEdit(edit: GraphEdit | ViewEdit): edit is GraphEdit {
-  return GRAPH_OPS.has(edit.op);
+  return draft;
 }

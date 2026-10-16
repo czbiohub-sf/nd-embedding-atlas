@@ -1,13 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import {
-  defineNode,
-  exactNodeTypeRef,
-  nodeConfigVersion,
-  nodeInstanceId,
-  rowIndex,
-  type DeviceLease,
-  type RowIndex,
-} from "@ndea/sdk";
+import { defineNode, exactNodeTypeRef, nodeInstanceId, rowIndex, type DeviceLease, type RowIndex } from "@ndea/sdk";
 import { z } from "zod";
 import { Selection } from "@uwdata/mosaic-core";
 
@@ -43,13 +35,9 @@ function hostDependencies(overrides: Partial<AppNodeHostDependencies> = {}): App
 const facetDefinition = defineNode({
   ref: exactNodeTypeRef("host-fixture", "1.0.0"),
   title: "Host fixture",
-  role: "view",
-  inputs: [],
-  outputs: [],
   capabilities: ["data-read", "focus-coordination", "ordering-coordination", "gpu-device"] as const,
   config: {
     schema: z.object({ page: z.number() }),
-    version: nodeConfigVersion(1),
     defaultValue: { page: 1 },
   },
 });
@@ -57,9 +45,6 @@ const facetDefinition = defineNode({
 const rowSetDefinition = defineNode({
   ref: exactNodeTypeRef("row-set-fixture", "1.0.0"),
   title: "Row-set fixture",
-  role: "view",
-  inputs: [],
-  outputs: [],
   capabilities: ["data-read", "row-set-publish"] as const,
 });
 
@@ -68,9 +53,6 @@ describe("createAppNodeHost", () => {
     const definition = defineNode({
       ref: exactNodeTypeRef("configless-fixture", "1.0.0"),
       title: "Configless fixture",
-      role: "transform",
-      inputs: [],
-      outputs: [],
       capabilities: [] as const,
     });
     const handle = createAppNodeHost(hostDependencies(), {
@@ -168,9 +150,6 @@ describe("createAppNodeHost", () => {
     const definition = defineNode({
       ref: exactNodeTypeRef("gpu-fixture", "1.0.0"),
       title: "GPU fixture",
-      role: "view",
-      inputs: [],
-      outputs: [],
       capabilities: ["gpu-device"] as const,
     });
     const handle = createAppNodeHost(
@@ -228,9 +207,6 @@ describe("createAppNodeHost", () => {
     const definition = defineNode({
       ref: exactNodeTypeRef("late-gpu-fixture", "1.0.0"),
       title: "Late GPU fixture",
-      role: "view",
-      inputs: [],
-      outputs: [],
       capabilities: ["gpu-device"] as const,
     });
     const handle = createAppNodeHost(
@@ -286,9 +262,6 @@ describe("createAppNodeHost", () => {
     const definition = defineNode({
       ref: exactNodeTypeRef("schema-mutation-fixture", "1.0.0"),
       title: "Schema mutation fixture",
-      role: "view",
-      inputs: [],
-      outputs: [],
       capabilities: ["schema-mutation"] as const,
     });
     const handle = createAppNodeHost(
@@ -310,9 +283,6 @@ describe("createAppNodeHost", () => {
     const definition = defineNode({
       ref: exactNodeTypeRef("filter-fixture", "1.0.0"),
       title: "Filter fixture",
-      role: "view",
-      inputs: [],
-      outputs: [],
       capabilities: ["filter-coordination"] as const,
     });
     const selection = Selection.intersect();
@@ -340,9 +310,6 @@ describe("createAppNodeHost", () => {
     const definition = defineNode({
       ref: exactNodeTypeRef("filter-unavailable", "1.0.0"),
       title: "Unavailable filter",
-      role: "view",
-      inputs: [],
-      outputs: [],
       capabilities: ["filter-coordination"] as const,
     });
     const handle = createAppNodeHost(hostDependencies(), {

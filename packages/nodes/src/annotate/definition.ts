@@ -1,17 +1,7 @@
-/**
- * Annotate view descriptor (annotation spike: the node-graph batch "door").
- *
- * A TERMINAL `view` node (not a transform): it consumes the upstream predicate :
- * the engine sink delivers it into `host.inputPredicate`, exactly as Table/Gallery
- * receive their filter: as the iteration domain for labeling. Cursor focus uses
- * the focus coordination scope. Two doors: batch and cursor. View, not transform,
- * because the workspace only
- * renders a plugin Component as a node body for `kind: "view"` (body-dock.tsx);
- * transform-plugin bodies don't render yet. Chain continues by branching upstream.
- */
+/** Annotate view descriptor: batch labeling over the filter scope, cursor labeling via focus. */
 
 import { z } from "zod";
-import { defineNode, exactNodeTypeRef, nodeConfigVersion } from "@ndea/sdk";
+import { defineNode, exactNodeTypeRef } from "@ndea/sdk";
 import { createElement } from "react";
 import type { NodeBodyMounter, NodeBodyProps } from "../contracts";
 import type { AnnotateCapabilities, AnnotateConfig } from "./contracts";
@@ -29,9 +19,6 @@ export function createAnnotateDefinition({
   return defineNode({
     ref: exactNodeTypeRef("annotate", "1.0.0"),
     title: "Annotate",
-    role: "view",
-    inputs: [{ id: "in", kind: "pred", label: "In" }],
-    outputs: [],
     capabilities: CAPABILITIES,
     config: {
       schema: z.object({
@@ -39,10 +26,13 @@ export function createAnnotateDefinition({
         labels: z.array(z.string()),
         mode: z.enum(["label", "range"]).optional(),
       }),
-      version: nodeConfigVersion(1),
       defaultValue: { column: null, labels: [] } satisfies AnnotateConfig,
     },
     presentation: { icon: "tag" },
+    documentation: {
+      summary: "Labels rows by writing values into an annotation column.",
+      use: "Pick a column and labels, then tag rows one at a time or in batches.",
+    },
     load: async () => {
       const { AnnotateView } = await import("./view");
       function ConfiguredAnnotateView(props: NodeBodyProps<AnnotateConfig, AnnotateCapabilities>) {

@@ -1,4 +1,4 @@
-import type { NodeCapability, NodeComputeContext, NodeComputeInputs } from "./node";
+import type { NodeCapability } from "./node";
 import type { NodeHost } from "./host";
 
 export interface MountedNodeBody {
@@ -7,10 +7,8 @@ export interface MountedNodeBody {
   dispose(): void;
 }
 
-/** Per-instance compute and lifecycle state. */
+/** Per-instance lifecycle state. */
 export interface NodeRuntime {
-  recompute?(inputs: NodeComputeInputs, context: NodeComputeContext): void | Promise<void>;
-  onSession?(event: "start" | "switch" | "shutdown", context: NodeComputeContext): void;
   dispose(): void;
 }
 

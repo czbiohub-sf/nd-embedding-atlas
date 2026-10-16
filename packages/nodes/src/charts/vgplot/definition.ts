@@ -1,6 +1,6 @@
 /** vgplot plugin descriptor: eager metadata; the framework-neutral body is behind the lazy load(). */
 
-import { defineNode, exactNodeTypeRef, nodeConfigVersion } from "@ndea/sdk";
+import { defineNode, exactNodeTypeRef } from "@ndea/sdk";
 import { VGPLOT_DEFAULT_CONFIG, vgplotConfigSchema } from "./spec-schema";
 
 const CAPABILITIES = ["data-read", "filter-coordination"] as const;
@@ -9,13 +9,9 @@ export function createVgplotDefinition() {
   return defineNode({
     ref: exactNodeTypeRef("vgplot", "1.0.0"),
     title: "Plot",
-    role: "view",
-    inputs: [{ id: "in", kind: "pred", label: "In" }],
-    outputs: [],
     capabilities: CAPABILITIES,
     config: {
       schema: vgplotConfigSchema,
-      version: nodeConfigVersion(1),
       defaultValue: VGPLOT_DEFAULT_CONFIG,
     },
     presentation: { icon: "bar-chart" },

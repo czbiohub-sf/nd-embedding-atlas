@@ -4,9 +4,9 @@
  * validates and composes coordination exactly like the browser.
  *
  * Layout: `state[type][scope]` holds one shared value, addressed by the JSON
- * Pointer `/<type>/<scope>`. A node joins a scope through a json-render
- * binding, `bindings[nodeId][type] = { $bindState: "/<type>/<scope>" }`, so an
- * agent links views or drives them with plain JSON Patch.
+ * Pointer `/<type>/<scope>`. A dashboard element joins a scope through a
+ * json-render binding prop, `props[type] = { $bindState: "/<type>/<scope>" }`,
+ * so an agent links views or drives them with plain JSON Patch.
  */
 
 import { FilterClauseSchema, type FilterClause } from "@ndea/protocol";
@@ -73,7 +73,6 @@ const SCOPE_RE = /^[A-Za-z0-9_-]+$/;
 
 export type CoordinationState = { [T in CoordinationTypeId]?: Record<string, CoordinationValue<T>> };
 export type CoordinationBinding = { readonly $bindState: string };
-export type CoordinationBindings = Record<string, Partial<Record<CoordinationTypeId, CoordinationBinding>>>;
 
 export const coordinationStateSchema = z
   .object(
@@ -91,11 +90,6 @@ export const coordinationStateSchema = z
   )
   .strict() as z.ZodType<CoordinationState>;
 
-export const coordinationBindingsSchema = z.record(
-  z.string(),
-  z.partialRecord(z.enum(COORDINATION_TYPE_IDS), z.object({ $bindState: z.string() }).strict()),
-) as z.ZodType<CoordinationBindings>;
-
 export function isCoordinationType(type: string): type is CoordinationTypeId {
   return Object.hasOwn(COORDINATION_TYPES, type);
 }
@@ -107,7 +101,7 @@ export function bindingPointer(type: CoordinationTypeId, scope: string): string 
 /** The scope a binding points at, or undefined when it is not `/<type>/<scope>`. */
 export function bindingScope(type: CoordinationTypeId, binding: CoordinationBinding | undefined): string | undefined {
   const prefix = `/${type}/`;
-  if (!binding?.$bindState.startsWith(prefix)) return undefined;
+  if (typeof binding?.$bindState !== "string" || !binding.$bindState.startsWith(prefix)) return undefined;
   const scope = binding.$bindState.slice(prefix.length);
   return SCOPE_RE.test(scope) ? scope : undefined;
 }
@@ -122,14 +116,4 @@ export function filterScopeClauses(value: FilterScopeValue | undefined, nodeId: 
 export function filterClausesSql(clauses: readonly FilterClause[]): string | null {
   if (clauses.length === 0) return null;
   return clauses.map((clause) => `(${filterClauseSql(clause)})`).join(" AND ");
-}
-
-/** The SQL a node's filter scope applies to it, or null when it sees no clauses. */
-export function filterScopeSql(
-  document: { readonly state: CoordinationState; readonly bindings: CoordinationBindings },
-  nodeId: string,
-): string | null {
-  const scope = bindingScope("filter", document.bindings[nodeId]?.filter);
-  if (scope === undefined) return null;
-  return filterClausesSql(filterScopeClauses(document.state.filter?.[scope], nodeId));
 }

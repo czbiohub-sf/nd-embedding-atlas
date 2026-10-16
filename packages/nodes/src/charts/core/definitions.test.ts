@@ -23,9 +23,7 @@ const definitions = [
 ];
 
 describe("filter-coordinated chart definitions", () => {
-  test.each(definitions)("$title has only graph predicate input and no native selection output", (definition) => {
-    expect(definition.inputs).toEqual([{ id: "in", kind: "pred", label: "In" }]);
-    expect(definition.outputs).toEqual([]);
+  test.each(definitions)("$title declares filter coordination", (definition) => {
     expect(definition.capabilities).toEqual(["data-read", "filter-coordination"]);
   });
 });

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { defineNode, exactNodeTypeRef, nodeConfigVersion } from "@ndea/sdk";
+import { defineNode, exactNodeTypeRef } from "@ndea/sdk";
 import type { NodeBodyMounter } from "../contracts";
 import type { ScatterConfig, ScatterServices } from "./contracts";
 
@@ -25,13 +25,9 @@ export function createScatterDefinition({
   return defineNode({
     ref: exactNodeTypeRef("scatter", "1.0.0"),
     title: "Scatter",
-    role: "view",
-    inputs: [{ id: "in", kind: "pred", label: "In" }],
-    outputs: [],
     capabilities: CAPABILITIES,
     config: {
       schema: z.object({ obsmKey: z.string().nullable(), colorByColumn: z.string().nullable() }),
-      version: nodeConfigVersion(1),
       defaultValue: { obsmKey: null, colorByColumn: null } satisfies ScatterConfig,
     },
     presentation: { icon: "scatter-chart" },

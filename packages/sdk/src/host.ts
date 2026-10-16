@@ -85,7 +85,11 @@ export interface ColorCoordinationAPI {
   subscribe(callback: (column: string | null) => void): () => void;
 }
 
-export type FilterFacet = "lasso" | "chart" | "range" | "isolation";
+/**
+ * One named clause slot under a node's source key in a filter scope, e.g.
+ * `chart` or `lasso`. A node with several widgets uses one facet per widget.
+ */
+export type FilterFacet = string;
 
 export interface ResolvedFilter {
   readonly predicate: string | null;

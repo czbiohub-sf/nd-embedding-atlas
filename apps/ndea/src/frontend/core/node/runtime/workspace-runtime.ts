@@ -1,52 +1,50 @@
+/**
+ * Live view bodies for the dashboard: one runtime per view element, keyed by
+ * element id. A body's config is its element's component props; its input
+ * predicate is the element's data source AND the other members of its filter
+ * scope (`elementPredicate`), the same SQL the server evaluates.
+ */
+
 import { Store } from "@tanstack/store";
 import { Selection } from "@uwdata/mosaic-core";
 import {
   nodeInstanceId,
   type ColorCoordinationAPI,
-  type ExactNodeTypeRef,
   type FocusCoordinationAPI,
+  type JsonValue,
   type OrderingCoordinationAPI,
   type RowIndex,
   type ViewCoordinationAPI,
 } from "@ndea/sdk";
 
 import { stringPredicate } from "@/lib/mosaic-helpers";
+import type { CoordinationScopeCellPort } from "@/core/coordination/coordination";
 import { createFilterBinding } from "@/core/coordination/filter-binding";
 import type { CoordinationTypeId, CoordinationValue } from "@/core/coordination/types";
-import type { CatalogNodeDefinition } from "@/core/plugin/registration";
-import { assertRequiredAppNodeHostFacets } from "@/core/node/app-node-host";
-import { createHierarchyNodeFacet } from "./host-facets";
-import type { AppNodeLibrary } from "@/core/node/library";
+import { VIEW_DEFINITIONS, type ViewDefinition } from "@/core/node/view-definitions";
+import { componentProps, elementData, elementScope } from "@/core/workspace/dashboard";
+import { elementPredicate } from "@/core/workspace/data-sources";
+import type { WorkspaceDocument } from "@/core/workspace/types";
 import { createAppNodeHost, type AppNodeHostDependencies, type HostHandle } from "./host";
 import { NodeInstanceRuntime } from "./instance-runtime";
-import type { NodeRuntimeSessionPort } from "./session-port";
 
 const VIEW_COORDINATION_LOCK = "lock1";
 
-export interface WorkspaceNodeRuntimeManagerDependencies {
-  readonly session: NodeRuntimeSessionPort;
-  readonly nodeLibrary: AppNodeLibrary;
+/** The slice of `Workspace` the runtimes read and write. */
+export interface ElementRuntimeSession {
+  readonly store: { readonly state: WorkspaceDocument; subscribe(listener: () => void): { unsubscribe(): void } };
+  readonly coordination: CoordinationScopeCellPort;
+  setElementProps(id: string, patch: Record<string, JsonValue | undefined>): void;
+}
+
+export interface ElementRuntimeManagerDependencies {
+  readonly session: ElementRuntimeSession;
   readonly appHost: Readonly<AppNodeHostDependencies>;
 }
 
-function mergeNodeConfig(definition: CatalogNodeDefinition, nodeConfig: unknown): unknown {
-  const defaultConfig = definition.config?.defaultValue;
-  if (
-    defaultConfig &&
-    typeof defaultConfig === "object" &&
-    !Array.isArray(defaultConfig) &&
-    nodeConfig &&
-    typeof nodeConfig === "object" &&
-    !Array.isArray(nodeConfig)
-  ) {
-    return { ...defaultConfig, ...nodeConfig };
-  }
-  return nodeConfig ?? defaultConfig;
-}
-
-/** The node's bound cell of one coordination type; reads `undefined` and drops writes when unbound. */
-function boundCell<T extends CoordinationTypeId>(session: NodeRuntimeSessionPort, nodeId: string, type: T) {
-  const scope = () => session.coordination.scopeOf(nodeId, type);
+/** The element's bound cell of one coordination type; reads `undefined` and drops writes when unbound. */
+function boundCell<T extends CoordinationTypeId>(session: ElementRuntimeSession, id: string, type: T) {
+  const scope = () => session.coordination.scopeOf(id, type);
   return {
     scope,
     read(): CoordinationValue<T> | undefined {
@@ -58,12 +56,12 @@ function boundCell<T extends CoordinationTypeId>(session: NodeRuntimeSessionPort
       if (current !== undefined) session.coordination.setCoordinationValue(type, current, value);
     },
     subscribe: (callback: (value: CoordinationValue<T> | undefined) => void) =>
-      session.coordination.subscribe(nodeId, type, callback),
+      session.coordination.subscribe(id, type, callback),
   };
 }
 
-function createViewCoordination(session: NodeRuntimeSessionPort, nodeId: string): ViewCoordinationAPI {
-  const cell = boundCell(session, nodeId, "viewSync");
+function createViewCoordination(session: ElementRuntimeSession, id: string): ViewCoordinationAPI {
+  const cell = boundCell(session, id, "viewSync");
   return {
     get panX() {
       return cell.read()?.panX ?? 0;
@@ -78,22 +76,22 @@ function createViewCoordination(session: NodeRuntimeSessionPort, nodeId: string)
       return cell.scope() !== undefined;
     },
     broadcast(state) {
-      cell.write({ ...state, src: nodeId });
+      cell.write({ ...state, src: id });
     },
     toggleLock() {
-      if (cell.scope() !== undefined) session.coordination.clearScope(nodeId, "viewSync");
-      else session.coordination.assignScope(nodeId, "viewSync", VIEW_COORDINATION_LOCK);
+      if (cell.scope() !== undefined) session.coordination.clearScope(id, "viewSync");
+      else session.coordination.assignScope(id, "viewSync", VIEW_COORDINATION_LOCK);
     },
     subscribe(callback) {
       return cell.subscribe((value) => {
-        if (value && value.src !== nodeId) callback({ panX: value.panX, panY: value.panY, zoom: value.zoom });
+        if (value && value.src !== id) callback({ panX: value.panX, panY: value.panY, zoom: value.zoom });
       });
     },
   };
 }
 
-function createOrderingCoordination(session: NodeRuntimeSessionPort, nodeId: string): OrderingCoordinationAPI {
-  const cell = boundCell(session, nodeId, "ordering");
+function createOrderingCoordination(session: ElementRuntimeSession, id: string): OrderingCoordinationAPI {
+  const cell = boundCell(session, id, "ordering");
   return {
     get: () => cell.read() ?? null,
     set: cell.write,
@@ -101,8 +99,8 @@ function createOrderingCoordination(session: NodeRuntimeSessionPort, nodeId: str
   };
 }
 
-function createColorCoordination(session: NodeRuntimeSessionPort, nodeId: string): ColorCoordinationAPI {
-  const cell = boundCell(session, nodeId, "colorBy");
+function createColorCoordination(session: ElementRuntimeSession, id: string): ColorCoordinationAPI {
+  const cell = boundCell(session, id, "colorBy");
   return {
     get linked() {
       return cell.scope() !== undefined;
@@ -113,9 +111,9 @@ function createColorCoordination(session: NodeRuntimeSessionPort, nodeId: string
   };
 }
 
-/** Bound: the scope's shared row. Unbound: this occurrence's own focus. */
-function createFocusCoordination(session: NodeRuntimeSessionPort, nodeId: string): FocusCoordinationAPI {
-  const cell = boundCell(session, nodeId, "focus");
+/** Bound: the scope's shared row. Unbound: this element's own focus. */
+function createFocusCoordination(session: ElementRuntimeSession, id: string): FocusCoordinationAPI {
+  const cell = boundCell(session, id, "focus");
   const local = new Store<RowIndex | null>(null);
   const read = (): RowIndex | null =>
     cell.scope() === undefined ? local.state : ((cell.read() ?? null) as RowIndex | null);
@@ -143,151 +141,98 @@ function createFocusCoordination(session: NodeRuntimeSessionPort, nodeId: string
   };
 }
 
-function createRuntimeHost(
-  dependencies: WorkspaceNodeRuntimeManagerDependencies,
-  nodeId: string,
-  definition: CatalogNodeDefinition,
-  headerElement: HTMLElement,
-): HostHandle<unknown> {
-  const { session, nodeLibrary, appHost } = dependencies;
-  const node = session.store.state.nodes[nodeId];
-  if (!node) throw new Error(`workspace node not found: ${nodeId}`);
-  const spec = nodeLibrary.getSpecExact(node.definitionRef);
-  const filterBinding = definition.capabilities.includes("filter-coordination")
-    ? createFilterBinding({
-        nodeId,
-        coordination: session.coordination,
-        coordinator: appHost.coordinator,
-        table: appHost.table,
-      })
-    : undefined;
-  const inputPredicate = filterBinding?.selection ?? Selection.single();
-  const graphSource = { __ndeaGraphNode: nodeId };
-  const facets = spec?.role === "subnet" ? { hierarchy: createHierarchyNodeFacet(session, nodeId) } : {};
-  assertRequiredAppNodeHostFacets({ ...facets, bodyHeaderElement: headerElement }, spec?.requiredHostFacets ?? []);
-
-  const handle = createAppNodeHost(appHost, {
-    instanceId: nodeInstanceId(nodeId),
-    definition,
-    config: mergeNodeConfig(definition, node.config?.value),
-    bodyHeaderElement: headerElement,
-    inputPredicate,
-    focus: createFocusCoordination(session, nodeId),
-    viewCoordination: createViewCoordination(session, nodeId),
-    ordering: createOrderingCoordination(session, nodeId),
-    colorBy: createColorCoordination(session, nodeId),
-    filter: filterBinding,
-    facets,
-    patchConfig: (patch) => session.updateNodeConfig(nodeId, patch as Record<string, unknown>),
-  });
-
-  if (filterBinding) handle.host.track(() => filterBinding.dispose());
-
-  let graphSinkDisposer: (() => void) | null = null;
-  const setGraphPredicate = (sql: string | null) => {
-    if (filterBinding) {
-      filterBinding.setGraphPredicate(sql);
-      return;
-    }
-    inputPredicate.update({
-      source: graphSource,
-      clients: new Set(),
-      fields: [],
-      value: sql ? [sql] : null,
-      predicate: sql ? stringPredicate(sql) : null,
-    });
-  };
-  const syncGraphSink = () => {
-    const off = session.store.state.flags[nodeId]?.off ?? false;
-    if (off || !session.store.state.nodes[nodeId]) {
-      graphSinkDisposer?.();
-      graphSinkDisposer = null;
-      setGraphPredicate(null);
-      return;
-    }
-    if (graphSinkDisposer) return;
-    graphSinkDisposer = session.registerGraphSink(nodeId, (value) => setGraphPredicate(value.sql));
-  };
-  const documentSubscription = session.store.subscribe(syncGraphSink);
-  handle.host.track(() => documentSubscription.unsubscribe());
-  handle.host.track(() => {
-    graphSinkDisposer?.();
-    graphSinkDisposer = null;
-  });
-  syncGraphSink();
-  return handle;
+/** What the element shows, from the document alone. */
+function predicateOf(document: WorkspaceDocument, id: string): string | null {
+  const element = document.spec.elements[id];
+  if (!element) return null;
+  return elementPredicate(
+    document.data,
+    elementData(element),
+    document.state.filter?.[elementScope(element, "filter") ?? ""],
+    id,
+  );
 }
 
-/** Owns every live instance and every stable Body/header adoption element for one Workspace. */
+const configKey = (document: WorkspaceDocument, id: string): string | undefined => {
+  const element = document.spec.elements[id];
+  return element ? JSON.stringify(componentProps(element)) : undefined;
+};
+
+interface LiveElement {
+  readonly type: string;
+  runtime: NodeInstanceRuntime;
+  /** The config this body last saw: mount-time or its own `patchConfig`. */
+  config: string | undefined;
+}
+
+/** Owns every live view body and its stable body/header dock elements. */
 export class WorkspaceNodeRuntimeManager {
-  private readonly dependencies: WorkspaceNodeRuntimeManagerDependencies;
-  private readonly runtimes = new Map<string, NodeInstanceRuntime>();
-  private readonly runtimeRefs = new Map<string, ExactNodeTypeRef>();
+  private readonly dependencies: ElementRuntimeManagerDependencies;
+  private readonly live = new Map<string, LiveElement>();
   private readonly bodyDocks = new Map<string, HTMLDivElement>();
   private readonly headerDocks = new Map<string, HTMLDivElement>();
+  private readonly listeners = new Set<() => void>();
   private readonly documentSubscription: { unsubscribe(): void };
   private disposed = false;
 
-  constructor(dependencies: WorkspaceNodeRuntimeManagerDependencies) {
+  constructor(dependencies: ElementRuntimeManagerDependencies) {
     this.dependencies = dependencies;
-    this.documentSubscription = dependencies.session.store.subscribe(() => this.disposeRemovedInstances());
+    this.documentSubscription = dependencies.session.store.subscribe(() => this.reconcile());
   }
 
-  bodyDock(nodeId: string): HTMLDivElement {
+  /** Fires when a runtime is created, replaced, or removed. */
+  subscribe = (listener: () => void): (() => void) => {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  };
+
+  bodyDock(id: string): HTMLDivElement {
+    return this.dock(
+      this.bodyDocks,
+      id,
+      "nd-body-dock",
+      "display:flex;flex-direction:column;flex:1;min-height:0;min-width:0;height:100%;width:100%;",
+    );
+  }
+
+  headerDock(id: string): HTMLDivElement {
+    return this.dock(
+      this.headerDocks,
+      id,
+      "nd-header-dock",
+      "display:flex;align-items:center;flex:1;min-width:0;height:100%;overflow:hidden;container-type:inline-size;line-height:1;",
+    );
+  }
+
+  private dock(docks: Map<string, HTMLDivElement>, id: string, className: string, css: string): HTMLDivElement {
     this.assertLive();
-    let element = this.bodyDocks.get(nodeId);
+    let element = docks.get(id);
     if (!element) {
       element = document.createElement("div");
-      element.className = "nd-body-dock";
-      element.style.cssText =
-        "display:flex;flex-direction:column;flex:1;min-height:0;min-width:0;height:100%;width:100%;";
-      this.bodyDocks.set(nodeId, element);
+      element.className = className;
+      element.style.cssText = css;
+      docks.set(id, element);
     }
     return element;
   }
 
-  headerDock(nodeId: string): HTMLDivElement {
+  /** The element's runtime, started on first use. Undefined for non-view elements. */
+  activate(id: string): NodeInstanceRuntime | undefined {
     this.assertLive();
-    let element = this.headerDocks.get(nodeId);
-    if (!element) {
-      element = document.createElement("div");
-      element.className = "nd-header-dock";
-      element.style.cssText =
-        "display:flex;align-items:center;flex:1;min-width:0;height:100%;overflow:hidden;container-type:inline-size;line-height:1;";
-      this.headerDocks.set(nodeId, element);
-    }
-    return element;
+    const existing = this.live.get(id);
+    if (existing) return existing.runtime;
+    const element = this.dependencies.session.store.state.spec.elements[id];
+    const definition = element ? VIEW_DEFINITIONS[element.type] : undefined;
+    if (!element || !definition) return undefined;
+    const entry: LiveElement = { type: element.type, runtime: this.start(id, definition), config: undefined };
+    entry.config = configKey(this.dependencies.session.store.state, id);
+    this.live.set(id, entry);
+    this.emit();
+    return entry.runtime;
   }
 
-  activate(nodeId: string, definitionRef: ExactNodeTypeRef): NodeInstanceRuntime {
-    this.assertLive();
-    const existing = this.runtimes.get(nodeId);
-    if (existing) {
-      const ref = this.runtimeRefs.get(nodeId)!;
-      if (ref.nodeTypeId !== definitionRef.nodeTypeId || ref.nodeTypeVersion !== definitionRef.nodeTypeVersion) {
-        throw new Error(
-          `node instance ${nodeId} is already bound to ${ref.nodeTypeId}@${ref.nodeTypeVersion}, not ${definitionRef.nodeTypeId}@${definitionRef.nodeTypeVersion}`,
-        );
-      }
-      return existing;
-    }
-    if (!this.dependencies.session.store.state.nodes[nodeId]) {
-      throw new Error(`cannot activate removed workspace node: ${nodeId}`);
-    }
-    const runtime = new NodeInstanceRuntime({
-      catalog: this.dependencies.nodeLibrary.catalog,
-      definitionRef,
-      dockElement: this.bodyDock(nodeId),
-      createHost: (definition) => createRuntimeHost(this.dependencies, nodeId, definition, this.headerDock(nodeId)),
-    });
-    this.runtimes.set(nodeId, runtime);
-    this.runtimeRefs.set(nodeId, definitionRef);
-    void runtime.start();
-    return runtime;
-  }
-
-  get(nodeId: string): NodeInstanceRuntime | undefined {
-    return this.runtimes.get(nodeId);
+  get(id: string): NodeInstanceRuntime | undefined {
+    return this.live.get(id)?.runtime;
   }
 
   dispose(): void {
@@ -295,55 +240,130 @@ export class WorkspaceNodeRuntimeManager {
     this.disposed = true;
     this.documentSubscription.unsubscribe();
     const errors: unknown[] = [];
-    const nodeIds = [...this.runtimes.keys()];
-    for (let index = nodeIds.length - 1; index >= 0; index -= 1) {
+    for (const id of this.live.keys()) {
       try {
-        this.disposeInstance(nodeIds[index]);
+        this.stop(id);
       } catch (error) {
         errors.push(error);
       }
     }
-    for (const element of this.bodyDocks.values()) element.remove();
-    for (const element of this.headerDocks.values()) element.remove();
+    for (const element of [...this.bodyDocks.values(), ...this.headerDocks.values()]) element.remove();
     this.bodyDocks.clear();
     this.headerDocks.clear();
     if (errors.length === 1) throw errors[0];
     if (errors.length > 1) throw new AggregateError(errors, "Workspace node runtime disposal failed");
   }
 
-  private disposeRemovedInstances(): void {
-    const nodes = this.dependencies.session.store.state.nodes;
-    const errors: unknown[] = [];
-    for (const nodeId of this.runtimes.keys()) {
-      if (nodes[nodeId]) continue;
-      try {
-        this.disposeInstance(nodeId);
-      } catch (error) {
-        errors.push(error);
-      }
-    }
-    for (const [nodeId, element] of this.bodyDocks) {
-      if (!nodes[nodeId]) {
-        element.remove();
-        this.bodyDocks.delete(nodeId);
-      }
-    }
-    for (const [nodeId, element] of this.headerDocks) {
-      if (!nodes[nodeId]) {
-        element.remove();
-        this.headerDocks.delete(nodeId);
-      }
-    }
-    if (errors.length === 1) throw errors[0];
-    if (errors.length > 1) throw new AggregateError(errors, "Removed node runtime disposal failed");
+  private start(id: string, definition: ViewDefinition): NodeInstanceRuntime {
+    const runtime = new NodeInstanceRuntime({
+      definition,
+      dockElement: this.bodyDock(id),
+      createHost: (resolved) => this.createHost(id, resolved),
+    });
+    void runtime.start();
+    return runtime;
   }
 
-  private disposeInstance(nodeId: string): void {
-    const runtime = this.runtimes.get(nodeId);
-    if (!runtime) return;
-    this.runtimes.delete(nodeId);
-    this.runtimeRefs.delete(nodeId);
-    runtime.dispose();
+  private stop(id: string): void {
+    const entry = this.live.get(id);
+    if (!entry) return;
+    this.live.delete(id);
+    entry.runtime.dispose();
+  }
+
+  /**
+   * Removed or retyped elements dispose; a config another writer changed (an
+   * agent, a remote revision) restarts the body so it reads the new props.
+   */
+  private reconcile(): void {
+    const document = this.dependencies.session.store.state;
+    let changed = false;
+    // Deleting the current entry while iterating a Map is safe.
+    for (const [id, entry] of this.live) {
+      const element = document.spec.elements[id];
+      if (!element || element.type !== entry.type) {
+        this.stop(id);
+        for (const docks of [this.bodyDocks, this.headerDocks]) {
+          docks.get(id)?.remove();
+          docks.delete(id);
+        }
+        changed = true;
+        continue;
+      }
+      const config = configKey(document, id);
+      if (config === entry.config) continue;
+      entry.runtime.dispose();
+      entry.runtime = this.start(id, VIEW_DEFINITIONS[element.type]);
+      entry.config = config;
+      changed = true;
+    }
+    if (changed) this.emit();
+  }
+
+  private createHost(id: string, definition: ViewDefinition): HostHandle<unknown> {
+    const { session, appHost } = this.dependencies;
+    const document = session.store.state;
+    const element = document.spec.elements[id];
+    if (!element) throw new Error(`dashboard element not found: ${id}`);
+    const filterBinding = definition.capabilities.includes("filter-coordination")
+      ? createFilterBinding({
+          nodeId: id,
+          coordination: session.coordination,
+          coordinator: appHost.coordinator,
+          table: appHost.table,
+        })
+      : undefined;
+    const inputPredicate = filterBinding?.selection ?? Selection.single();
+    const source = { __ndeaElement: id };
+
+    const handle = createAppNodeHost(appHost, {
+      instanceId: nodeInstanceId(id),
+      definition,
+      config: componentProps(element),
+      bodyHeaderElement: this.headerDock(id),
+      inputPredicate,
+      focus: createFocusCoordination(session, id),
+      viewCoordination: createViewCoordination(session, id),
+      ordering: createOrderingCoordination(session, id),
+      colorBy: createColorCoordination(session, id),
+      filter: filterBinding,
+      patchConfig: (patch) => {
+        const entry = this.live.get(id);
+        const current = session.store.state.spec.elements[id];
+        if (!current) return;
+        // Own writes do not restart the body: record them before they land.
+        const props = patch as Record<string, JsonValue>;
+        if (entry) entry.config = JSON.stringify(componentProps({ ...current, props: { ...current.props, ...props } }));
+        session.setElementProps(id, props);
+      },
+    });
+    if (filterBinding) handle.host.track(() => filterBinding.dispose());
+
+    let predicate: string | null | undefined;
+    const sync = () => {
+      const next = predicateOf(session.store.state, id);
+      if (next === predicate) return;
+      predicate = next;
+      if (filterBinding) {
+        filterBinding.setGraphPredicate(next);
+        return;
+      }
+      inputPredicate.update({
+        source,
+        clients: new Set(),
+        fields: [],
+        value: next ? [next] : null,
+        predicate: next ? stringPredicate(next) : null,
+      });
+    };
+    const subscription = session.store.subscribe(sync);
+    handle.host.track(() => subscription.unsubscribe());
+    sync();
+    return handle;
+  }
+
+  private emit(): void {
+    for (const listener of this.listeners) listener();
   }
 
   private assertLive(): void {

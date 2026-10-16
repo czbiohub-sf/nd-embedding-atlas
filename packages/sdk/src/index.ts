@@ -27,42 +27,17 @@ export type {
 } from "@ndea/protocol";
 export type { DataCapability, Metadata };
 
-export {
-  defineNode,
-  exactNodeTypeRef,
-  migrateNodeConfig,
-  NodeConfigMigrationError,
-  nodeConfigVersion,
-  nodeInstanceId,
-  nodeTypeId,
-  nodeTypeVersion,
-  rowIndex,
-} from "./node";
+export { defineNode, exactNodeTypeRef, nodeInstanceId, nodeTypeId, nodeTypeVersion, rowIndex } from "./node";
 export type {
   ExactNodeTypeRef,
-  FanInOperation,
   NodeCapability,
-  NodeCompute,
-  NodeComputeContext,
-  NodeComputeInputs,
-  NodeComputeOutputs,
   NodeConfigContract,
-  NodeConfigMigration,
-  NodeConfigMigrationErrorCode,
-  NodeConfigSnapshot,
-  NodeConfigVersion,
   NodeDefinition,
   NodeDocumentation,
   NodeInstanceId,
-  NodePort,
-  NodePortValue,
   NodePresentationHints,
-  NodeRole,
   NodeTypeId,
   NodeTypeVersion,
-  MigratedNodeConfig,
-  PortKind,
-  PredicatePortValue,
   RowIndex,
 } from "./node";
 

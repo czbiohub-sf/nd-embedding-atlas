@@ -53,13 +53,5 @@ export const WIRE_COLOR = {
  */
 export const ON_ACCENT_INK = "#0c0c0c";
 
-/**
- * Scope badge colors. Distinct from one another (min CIEDE2000 20.4) and never
- * the feedback channel's jade, so a scope badge cannot read as a feedback wire.
- * Order is load-bearing: `scopeColor()` indexes it by a stable string hash, so
- * appending is safe but reordering re-colors existing scopes.
- */
-export const SCOPE_PALETTE = [BRAND_PERIWINKLE[300], "#68cdf2", "#ff855e", "#ffbc56", "#ea68bc"] as const;
-
 /** Trajectory overlay polyline; the active frame lifts to the page ink. */
 export const TRAJECTORY_COLOR = "#68cdf2";
