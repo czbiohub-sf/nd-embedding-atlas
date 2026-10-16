@@ -49,6 +49,7 @@
 - Make the browser graph runtime a projection of the workspace document: every write commits through one reconcile, and views and live Caches cook their own filter scope, identically on the server.
 - [**breaking**] Replace the node graph with json-render: the workspace document (format version 2) is `data` + `spec` + `state`. Delete the graph engine (`@ndea/graph`), cooks, edges, ports, subnets, node assets, the xyflow canvas, per-node layout and flags, the `bindings` map (bindings are `$bindState` element props), the frontend plugin catalog, and the Cache, Wrangle, Filter, Dataset, obs, and proxy nodes.
 - [**breaking**] SDK 1.0.0: `NodeDefinition` drops `role`, `inputs`, `outputs`, `evaluate`, and `dataRequirements`; config contracts are `{ schema, defaultValue }` with no versions or migrations.
+- [**breaking**] SDK: components with one typed host. `ComponentDefinition` is `{ type, title, documentation, config, binds, load }`; `ComponentHost` always carries every service (`elementId`, `predicate`, `viewSync`, …). Capabilities, exact type refs, versions, and `createRuntime` are gone. `@ndea/nodes` is now `@ndea/components`.
 - Move editor session state (selection, claim, subnet path, disposition, render band) into `Workspace.session`; the document store holds exactly the persisted document.
 - Run every document-derived observation query through prepared statements in `server/observations.ts` and delete `/api/scatter-selection`.
 - Adopt TypeScript 7 and update app, package, build, and documentation dependencies

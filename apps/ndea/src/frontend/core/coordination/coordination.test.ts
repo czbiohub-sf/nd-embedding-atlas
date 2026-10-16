@@ -95,7 +95,7 @@ describe("filter binding (crossfilter)", () => {
     co.assignScope("scatter", "filter", "A");
     co.setCoordinationValue("filter", "A", { agent: { where: { op: "eq", column: "infected", value: true } } });
     const scatter = createFilterBinding({
-      nodeId: "scatter",
+      elementId: "scatter",
       coordination: co,
       coordinator: coordinator([]),
       table: "t",
@@ -115,7 +115,7 @@ describe("filter binding (crossfilter)", () => {
   test("an unbound element publishes nothing; materialization rejects a filter that moved", async () => {
     const { co, store } = fresh();
     const binding = createFilterBinding({
-      nodeId: "n1",
+      elementId: "n1",
       coordination: co,
       coordinator: coordinator([4, 7]),
       table: "t",
@@ -125,7 +125,7 @@ describe("filter binding (crossfilter)", () => {
 
     expect((await binding.materializeRowIds()).rowIds).toEqual([rowIndex(4), rowIndex(7)]);
     const pending = binding.materializeRowIds();
-    binding.setGraphPredicate("x > 1");
+    binding.setPredicate("x > 1");
     await expect(pending).rejects.toThrow("filter changed");
   });
 });

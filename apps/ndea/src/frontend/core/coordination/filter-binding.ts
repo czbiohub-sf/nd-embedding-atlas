@@ -14,12 +14,12 @@ import { stringPredicate, toRows } from "@/lib/mosaic-helpers";
 import type { CoordinationScopeCellPort } from "./coordination";
 
 export interface FilterBinding extends FilterCoordinationAPI {
-  setGraphPredicate(sql: string | null): void;
+  setPredicate(sql: string | null): void;
   dispose(): void;
 }
 
 interface FilterBindingOptions {
-  readonly nodeId: string;
+  readonly elementId: string;
   readonly coordination: CoordinationScopeCellPort;
   readonly coordinator: { query(sql: string): Promise<unknown> };
   readonly table: string;
@@ -29,31 +29,36 @@ function abortError(): DOMException {
   return new DOMException("filter materialization aborted", "AbortError");
 }
 
-export function createFilterBinding({ nodeId, coordination, coordinator, table }: FilterBindingOptions): FilterBinding {
+export function createFilterBinding({
+  elementId,
+  coordination,
+  coordinator,
+  table,
+}: FilterBindingOptions): FilterBinding {
   const selection = Selection.intersect();
-  const source = { __ndeaFilterBinding: nodeId };
+  const source = { __ndeaFilterBinding: elementId };
   const listeners = new Set<(filter: ResolvedFilter) => void>();
   let resolved: string | null = null;
   let revision = 0;
   let disposed = false;
 
   const assertLive = () => {
-    if (disposed) throw new Error(`filter binding ${nodeId} is disposed`);
+    if (disposed) throw new Error(`filter binding ${elementId} is disposed`);
   };
 
   const writeFacet = (facet: FilterFacet, clause: FilterClause | null) => {
     assertLive();
-    const scope = coordination.scopeOf(nodeId, "filter");
+    const scope = coordination.scopeOf(elementId, "filter");
     if (scope === undefined) return;
     const cell = coordination.readCoordination("filter", scope) ?? {};
-    const { [facet]: previous, ...facets } = cell[nodeId] ?? {};
+    const { [facet]: previous, ...facets } = cell[elementId] ?? {};
     if (clause === null && previous === undefined) return;
-    const { [nodeId]: _own, ...others } = cell;
+    const { [elementId]: _own, ...others } = cell;
     const own = clause === null ? facets : { ...facets, [facet]: clause };
     coordination.setCoordinationValue(
       "filter",
       scope,
-      Object.keys(own).length > 0 ? { ...others, [nodeId]: own } : others,
+      Object.keys(own).length > 0 ? { ...others, [elementId]: own } : others,
     );
   };
 
@@ -78,7 +83,7 @@ export function createFilterBinding({ nodeId, coordination, coordinator, table }
       if (disposed || revision !== at) throw new Error("filter changed during row-id materialization");
       return { rowIds: toRows(result).map((row) => Number(row.__row_index__) as RowIndex), revision: at };
     },
-    setGraphPredicate(sql) {
+    setPredicate(sql) {
       assertLive();
       if (sql === resolved && revision > 0) return;
       resolved = sql;

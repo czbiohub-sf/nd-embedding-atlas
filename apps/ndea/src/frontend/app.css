@@ -2,7 +2,7 @@
 @import "@ndea/ui/styles.css";
 @import "@fontsource-variable/geist-mono";
 @source "./";
-@source "../../../../packages/nodes/src";
+@source "../../../../packages/components/src";
 
 /* Geist Pixel: HUD signage face. Vendored from Vercel Geist (SIL OFL 1.1); the `geist` npm package only
  * ships Pixel as a next/font module, unusable in this Vite+Bun app. See src/frontend/fonts/README.md.
@@ -128,11 +128,11 @@
    * carries the figure/ground, not the fill.
    *
    * Two levels, and the split is load-bearing:
-   *   --color-node-surface  element fill: frame + every full-bleed body
+   *   --color-surface       element fill: frame + every full-bleed body
    *                         (table, chart, gallery, crop viewer)
    *   --card                raised *inside* an element: sticky headers, selects,
    *                         buttons, toolbars — lighter than the body on purpose */
-  --color-node-surface: oklch(0.988 0 0);
+  --color-surface: oklch(0.988 0 0);
 
   /* ── Charts ── */
   --color-chart-mark: var(--accent-hue);
@@ -190,7 +190,7 @@ html.dark {
 
   /* Element fill (dark): board and elements are both pure black; the hairline
    * carries figure/ground, not the fill. */
-  --color-node-surface: #000000;
+  --color-surface: #000000;
 
   /* Emphasis family: bumped alpha for dark surfaces (hues carry less on dark) */
   --emphasis: oklch(from var(--accent-hue) l c h / 10%);
@@ -203,7 +203,7 @@ html.dark {
   --glass-border: oklch(1 0 0 / 7%);
 
   /* Canonical dark values: mirror the light :root above (--background/--card/--primary/…). */
-  --background: #000000; /* pure black board; nodes match it, hairlines separate */
+  --background: #000000; /* pure black board; elements match it, hairlines separate */
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);
   --card-foreground: oklch(0.985 0 0);

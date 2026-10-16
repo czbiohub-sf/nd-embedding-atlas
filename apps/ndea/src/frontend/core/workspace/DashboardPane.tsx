@@ -12,8 +12,8 @@ import type { FilterClause } from "@ndea/protocol";
 import { Children, createContext, use, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
-import { NdIconButton } from "@/components/node-workspace/nd-icon-button";
-import { NdCaption, NdHud } from "@/components/node-workspace/nd-primitives";
+import { NdIconButton } from "@/components/dashboard/icon-button";
+import { Caption, Hud } from "@/components/dashboard/primitives";
 import { isCoordinationType } from "@/core/coordination/types";
 import { useDatasetSession } from "@/hooks/useDatasetSession";
 import { toRows } from "@/lib/mosaic-helpers";
@@ -123,7 +123,7 @@ function Tile({
     <div
       data-dashboard-tile={id}
       onPointerDown={() => ws.selectElement(id)}
-      className="relative box-border flex min-h-0 min-w-0 flex-1 flex-col rounded-[7px] bg-node-surface"
+      className="relative box-border flex min-h-0 min-w-0 flex-1 flex-col rounded-[7px] bg-surface"
       style={{
         border: `1px solid ${dropTarget || selected ? "var(--primary)" : "var(--border)"}`,
         boxShadow: dropTarget ? "0 0 0 2px var(--primary)" : selected ? "0 0 0 1px var(--primary)" : "none",
@@ -184,7 +184,7 @@ function ViewTile(props: ComponentRenderProps) {
       <BodyStatus id={id} label={title} />
       {fullscreen ? (
         <div className="grid h-full place-items-center rounded border border-dashed border-border">
-          <NdHud size={8.5}>fullscreen · esc</NdHud>
+          <Hud size={8.5}>fullscreen · esc</Hud>
         </div>
       ) : (
         <BodySocket id={id} className="flex h-full min-h-0 flex-col overflow-hidden" />
@@ -360,7 +360,7 @@ function Select(props: ComponentRenderProps) {
       title={titleOf(props, typeof props.element.props.label === "string" ? props.element.props.label : column)}
     >
       {error ? (
-        <NdCaption className="text-destructive">{error}</NdCaption>
+        <Caption className="text-destructive">{error}</Caption>
       ) : (
         <div className="flex h-full flex-wrap content-start gap-1 overflow-auto">
           {(options ?? []).map(({ value, n }) => (
@@ -400,7 +400,7 @@ function Slot(props: ComponentRenderProps) {
           ✕
         </button>
       ) : null}
-      <NdHud size={9.5}>empty slot</NdHud>
+      <Hud size={9.5}>empty slot</Hud>
       {editable ? (
         <div className="flex max-w-[300px] flex-wrap justify-center gap-[5px]">
           {choices.map((type) => (

@@ -34,7 +34,7 @@ describe("disk static serving", () => {
     expect(asset.headers.get("cache-control")).toContain("immutable");
     expect(await asset.text()).toBe("export const disk = true;");
 
-    const fallback = serveStatic("/workspace/custom-node", frontend);
+    const fallback = serveStatic("/workspace/custom-view", frontend);
     expect(fallback.status).toBe(200);
     expect(fallback.headers.get("content-type")).toContain("text/html");
     expect(await fallback.text()).toContain("disk frontend");

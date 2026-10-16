@@ -16,7 +16,7 @@ import {
   McpServer,
   originValidationResponse,
 } from "@modelcontextprotocol/server";
-import { filterClauseSql } from "@ndea/nodes/filter";
+import { filterClauseSql } from "@ndea/components/filter";
 import { FilterClauseSchema, JsonPatchOpSchema, OBSERVATION_SET_TABLE, type JsonPatchOp } from "@ndea/protocol";
 import { createPatch } from "rfc6902";
 import { z } from "zod";

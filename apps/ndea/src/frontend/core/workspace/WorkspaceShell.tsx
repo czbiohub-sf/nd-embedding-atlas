@@ -6,8 +6,8 @@
 import type { WorkspaceSnapshot } from "@ndea/protocol";
 import { useEffect, useState } from "react";
 
-import { NdHud } from "@/components/node-workspace/nd-primitives";
-import { NODE_EDITOR_ENABLED } from "@/feature-flags";
+import { Hud } from "@/components/dashboard/primitives";
+import { LAYOUT_EDITING_ENABLED } from "@/feature-flags";
 import { useDatasetSession } from "@/hooks/useDatasetSession";
 import { DashboardPane } from "./DashboardPane";
 import { fetchWorkspaceSnapshot } from "./sync";
@@ -19,9 +19,9 @@ function StatusBar() {
     <div className="flex h-[22px] shrink-0 items-center justify-between overflow-hidden border-t border-border bg-background px-2.5 font-mono text-3xs whitespace-nowrap text-text-muted select-none">
       <div className="flex min-w-0 items-center gap-3.5">
         <span className="grid size-4 shrink-0 place-items-center rounded bg-primary">
-          <NdHud size={7} className="text-primary-foreground normal-case">
+          <Hud size={7} className="text-primary-foreground normal-case">
             nD
-          </NdHud>
+          </Hud>
         </span>
         <span className="rounded border border-border px-1.5 py-px">{runtime.table}</span>
       </div>
@@ -60,7 +60,7 @@ function WorkspaceFrame() {
     <div className="fixed inset-0 flex flex-col overflow-hidden bg-background select-none">
       <div className="relative min-h-0 flex-1">
         {/* Layout editing (split, swap, remove, fill) is editor-only; agents edit any build. */}
-        <DashboardPane editable={NODE_EDITOR_ENABLED} />
+        <DashboardPane editable={LAYOUT_EDITING_ENABLED} />
       </div>
       <StatusBar />
     </div>

@@ -31,7 +31,7 @@
         "@json-render/react": "0.21.0",
         "@jsquash/webp": "^1.5.0",
         "@modelcontextprotocol/server": "^2.3.1",
-        "@ndea/nodes": "workspace:*",
+        "@ndea/components": "workspace:*",
         "@ndea/ochre": "workspace:*",
         "@ndea/protocol": "workspace:*",
         "@ndea/sdk": "workspace:*",
@@ -81,8 +81,8 @@
         "@duckdb/node-bindings-win32-x64": "1.5.5-r.4",
       },
     },
-    "packages/nodes": {
-      "name": "@ndea/nodes",
+    "packages/components": {
+      "name": "@ndea/components",
       "version": "0.1.0",
       "dependencies": {
         "@idetik/core": "^0.36.2",
@@ -480,7 +480,7 @@
 
     "@ndea/app": ["@ndea/app@workspace:apps/ndea"],
 
-    "@ndea/nodes": ["@ndea/nodes@workspace:packages/nodes"],
+    "@ndea/components": ["@ndea/components@workspace:packages/components"],
 
     "@ndea/ochre": ["@ndea/ochre@workspace:packages/ochre"],
 

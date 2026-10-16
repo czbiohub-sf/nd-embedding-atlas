@@ -10,13 +10,12 @@
  */
 
 import { FilterClauseSchema, type FilterClause } from "@ndea/protocol";
-import type { NodeCapability } from "@ndea/sdk";
+import type { CoordinationType } from "@ndea/sdk";
 import { z } from "zod";
 
-import { filterClauseSql } from "@ndea/nodes/filter";
+import { filterClauseSql } from "@ndea/components/filter";
 
-interface CoordinationType {
-  readonly capability: NodeCapability;
+interface CoordinationTypeSpec {
   readonly label: string;
   readonly value: z.ZodType;
   readonly defaultValue: unknown;
@@ -29,31 +28,26 @@ interface CoordinationType {
  */
 export const COORDINATION_TYPES = {
   focus: {
-    capability: "focus-coordination",
     label: "focus",
     value: z.number().int().nonnegative().nullable(),
     defaultValue: null,
   },
   filter: {
-    capability: "filter-coordination",
     label: "filter",
     value: z.record(z.string().min(1), z.record(z.string().min(1), FilterClauseSchema)),
     defaultValue: {},
   },
   colorBy: {
-    capability: "color-coordination",
     label: "color",
     value: z.string().min(1).nullable(),
     defaultValue: null,
   },
   viewSync: {
-    capability: "view-coordination",
     label: "view sync",
     value: z.object({ panX: z.number(), panY: z.number(), zoom: z.number(), src: z.string().optional() }).strict(),
     defaultValue: { panX: 0, panY: 0, zoom: 1 },
   },
   ordering: {
-    capability: "ordering-coordination",
     label: "sort",
     value: z
       .object({ col: z.string(), dir: z.enum(["asc", "desc"]) })
@@ -61,7 +55,7 @@ export const COORDINATION_TYPES = {
       .nullable(),
     defaultValue: null,
   },
-} as const satisfies Record<string, CoordinationType>;
+} as const satisfies Record<CoordinationType, CoordinationTypeSpec>;
 
 export type CoordinationTypeId = keyof typeof COORDINATION_TYPES;
 export type CoordinationValue<T extends CoordinationTypeId> = z.infer<(typeof COORDINATION_TYPES)[T]["value"]>;
@@ -107,9 +101,9 @@ export function bindingScope(type: CoordinationTypeId, binding: CoordinationBind
 }
 
 /** Every clause a member of a filter scope sees: all sources except itself. */
-export function filterScopeClauses(value: FilterScopeValue | undefined, nodeId: string): FilterClause[] {
+export function filterScopeClauses(value: FilterScopeValue | undefined, elementId: string): FilterClause[] {
   if (!value) return [];
-  return Object.entries(value).flatMap(([source, facets]) => (source === nodeId ? [] : Object.values(facets)));
+  return Object.entries(value).flatMap(([source, facets]) => (source === elementId ? [] : Object.values(facets)));
 }
 
 /** AND of compiled clauses, or null when there are none. */

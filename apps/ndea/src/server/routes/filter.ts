@@ -7,7 +7,7 @@
  */
 
 import { FilterRequestSchema, type FilterResponse } from "@ndea/protocol";
-import { filterClauseSql } from "@ndea/nodes/filter";
+import { filterClauseSql } from "@ndea/components/filter";
 import { PREDICATE_ERROR_RE, queryObservations } from "../observations.ts";
 import { parseJsonBody } from "../protocol.ts";
 import type { ServerSession } from "../state.ts";

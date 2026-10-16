@@ -22,24 +22,24 @@ APIs remain in flux.
 ## Workspace layout
 
 ```text
-apps/ndea/          CLI, server, frontend, and single-binary build
-packages/nodes/     Built-in view definitions and their bodies
-packages/ochre/     Color, colormap, and TypeGPU helpers
-packages/ui/        Shared shadcn/Base UI controls
-packages/protocol/  Shared request and response Zod schemas
-packages/sdk/       View authoring and host contracts
-packages/zarr/      Bun-backed AnnData, MuData, and OME-Zarr I/O
-docs/               Independent Waku app with its own lockfile
-scripts/             Workspace tooling
+apps/ndea/            CLI, server, frontend, and single-binary build
+packages/components/  Built-in component definitions and their bodies
+packages/ochre/       Color, colormap, and TypeGPU helpers
+packages/ui/          Shared shadcn/Base UI controls
+packages/protocol/    Shared request and response Zod schemas
+packages/sdk/         Component authoring and host contracts
+packages/zarr/        Bun-backed AnnData, MuData, and OME-Zarr I/O
+docs/                 Independent Waku app with its own lockfile
+scripts/              Workspace tooling
 ```
 
 Workspace dependencies flow in one direction:
 
 ```text
-apps/ndea    ──→  every @ndea/* package
-@ndea/nodes  ──→  @ndea/sdk, @ndea/protocol, @ndea/ochre, @ndea/ui
-@ndea/sdk    ──→  @ndea/protocol
-@ndea/ui     ──→  @ndea/ochre
+apps/ndea         ──→  every @ndea/* package
+@ndea/components  ──→  @ndea/sdk, @ndea/protocol, @ndea/ochre, @ndea/ui
+@ndea/sdk         ──→  @ndea/protocol
+@ndea/ui          ──→  @ndea/ochre
 ```
 
 Shared packages must not import app code. Import only public `@ndea/*`
@@ -105,13 +105,16 @@ entrypoints across workspaces.
 
 ### SDK
 
-- A view component is an `@ndea/sdk` `NodeDefinition`: `ref`, `title`,
-  `capabilities`, `documentation`, a config contract `{ schema, defaultValue }`,
-  and a lazy `load()` returning a `NodeModule` that mounts a framework-neutral
-  body. The element's props are its config, merged over `defaultValue`.
-- `NodeHost` exposes declared, capability-gated services. A new capability is
-  one `NodeCapability` union member in `@ndea/sdk` plus one `nodeCapabilities`
-  entry in `frontend/core/node/capabilities.ts`.
+- A view component is an `@ndea/sdk` `ComponentDefinition`: `type` (the
+  element `type`), `title`, `documentation`, a config contract
+  `{ schema, defaultValue }`, `binds` (the coordination types it can join;
+  validation metadata, not a gate), and a lazy `load()` returning a
+  `ComponentModule` that mounts a framework-neutral body. The element's props
+  are its config, merged over `defaultValue`.
+- `ComponentHost` is one plain interface: every service (data, `predicate`,
+  `dataAPI`, focus, filter, colorBy, viewSync, ordering, GPU lease) is always
+  present. `createComponentHost` (`frontend/core/component/runtime/host.ts`)
+  builds it; `predicate` is the element's data source AND its filter scope.
 - There is no plugin system: every component is built in. Third-party
   component registration is future work.
 
@@ -129,7 +132,7 @@ entrypoints across workspaces.
 - json-render renders the document's `spec` (`workspace/DashboardPane.tsx`).
   `workspace/dashboard.ts` holds the component catalog (`COMPONENTS`: layout
   `split`/`stack`, `text`, `select`, `slot`, and one component per view
-  definition, keyed by node type id), the structural and prop rules, and the
+  definition, keyed by its type), the structural and prop rules, and the
   pure edit operations the UI and agents share. Components get element ids
   through a render-only `elementId` prop; props resolve json-render
   expressions against coordination `state`.
@@ -140,7 +143,7 @@ entrypoints across workspaces.
   coordination writes, and remote revisions (`Workspace.applyDocument`) share
   that path. `WorkspaceSync` diffs the document store against the server's
   acknowledged revision and PATCHes the difference.
-- `WorkspaceNodeRuntimeManager` (`core/node/runtime/workspace-runtime.ts`) keeps
+- `ComponentRuntimeManager` (`core/component/runtime/workspace-runtime.ts`) keeps
   one live body per view element in a stable dock that tiles adopt, so moving
   a tile never remounts it. A config change from another writer (an agent, a
   remote revision) restarts the body; the body's own `patchConfig` does not.
@@ -209,6 +212,8 @@ build.
 - Use `import type` for type-only imports.
 - Use double quotes, semicolons, trailing commas, and Oxfmt defaults.
 - Use `@/` for `apps/ndea/src/frontend/` imports.
+- Say component, not node: a dashboard view is a `defineComponent` definition
+  in `@ndea/components`, added to `createComponentCatalog` (`catalog.ts`).
 - Name ordinary modules in kebab case, React component modules in PascalCase,
   and hooks with `useX`.
 - Route frontend schema mutations through `/api/categorize` and

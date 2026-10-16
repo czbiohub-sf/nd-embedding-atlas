@@ -128,7 +128,7 @@ export class ObservationSets {
   }
 }
 
-/** Find structural set clauses anywhere in the document, including node configs. */
+/** Find structural set clauses anywhere in the document, including element props. */
 export async function observationSetIssues(
   document: WorkspaceDocument,
   sets: ObservationSets,

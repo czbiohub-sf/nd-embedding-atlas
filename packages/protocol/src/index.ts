@@ -263,7 +263,6 @@ export type PlateStore = z.infer<typeof PlateStoreSchema>;
  * Computed server-side at open()/ingest and baked into `Metadata.capabilities`
  * below; the frontend reads it through `capabilitiesOf()` so every feature gate
  * speaks one vocabulary instead of ad-hoc `metadata.plate` / `obsm` checks. The
- * SAME set is the future xyflow node port-type (`requires ⊆ provides`).
  *
  * Flat first (set-membership, not parameterized): `obsm:X_phate`-grained
  * discrimination is a structural-subtype extension deferred until a view needs
@@ -473,7 +472,7 @@ export type AnnotationValueRow = z.infer<typeof AnnotationValueRowSchema>;
  * Exactly one source:
  *   - `rows`               explicit row-index list (per-cell edits)
  *   - `predicate`          stamp `label` onto every obs matching a SQL WHERE
- *                          fragment (the node-graph Annotate node's batch door).
+ *                          fragment (the Annotate component's batch door).
  */
 export const WriteAnnotationValuesBodySchema = z.object({
   column: z.string().min(1).max(200).regex(COLUMN_NAME_RE, "Invalid character in column name"),

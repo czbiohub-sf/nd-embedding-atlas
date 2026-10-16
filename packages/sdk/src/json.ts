@@ -1,2 +1,2 @@
-/** JSON-safe node configuration. */
+/** JSON-safe component configuration. */
 export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };

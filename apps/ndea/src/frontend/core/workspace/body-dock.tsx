@@ -7,11 +7,11 @@
 import { useEffect, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 
-import { useWorkspaceNodeRuntimes } from "@/core/node/runtime/runtime-context-value";
+import { useComponentRuntimes } from "@/core/component/runtime/runtime-context-value";
 
 /** Starts the element's body (sticky) and shows its loading or failure state inside the dock. */
 export function BodyStatus({ id, label }: { readonly id: string; readonly label: string }) {
-  const runtimes = useWorkspaceNodeRuntimes();
+  const runtimes = useComponentRuntimes();
   useEffect(() => void runtimes.activate(id), [runtimes, id]);
   const runtime = useSyncExternalStore(runtimes.subscribe, () => runtimes.get(id));
   const state = useSyncExternalStore(
@@ -40,7 +40,7 @@ export function BodyStatus({ id, label }: { readonly id: string; readonly label:
 }
 
 export function HeaderSocket({ id }: { readonly id: string }) {
-  const runtimes = useWorkspaceNodeRuntimes();
+  const runtimes = useComponentRuntimes();
   return (
     <div
       className="flex min-w-0 flex-1 items-center"
@@ -52,7 +52,7 @@ export function HeaderSocket({ id }: { readonly id: string }) {
 }
 
 export function BodySocket({ id, className }: { readonly id: string; readonly className?: string }) {
-  const runtimes = useWorkspaceNodeRuntimes();
+  const runtimes = useComponentRuntimes();
   return (
     <div
       className={`relative ${className ?? "flex min-h-0 flex-1 flex-col overflow-hidden"}`}

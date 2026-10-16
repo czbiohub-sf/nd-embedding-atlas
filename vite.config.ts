@@ -125,7 +125,7 @@ export default defineConfig({
       {
         // These modules co-locate components with constants or helpers.
         files: [
-          "**/src/frontend/components/node-workspace/**/*.tsx",
+          "**/src/frontend/components/dashboard/**/*.tsx",
           "**/src/frontend/components/ui/**/*.tsx",
           "packages/ui/src/components/**/*.tsx",
           "**/src/frontend/core/workspace/**/*.tsx",
@@ -144,14 +144,14 @@ export default defineConfig({
       },
       {
         // TanStack Table cell callbacks render values; they are not nested components.
-        files: ["packages/nodes/src/table/DataTable.tsx"],
+        files: ["packages/components/src/table/DataTable.tsx"],
         rules: {
           "react/no-unstable-nested-components": "off",
         },
       },
       {
         // TypeGPU exposes opaque APIs and nullable GPU handles.
-        files: ["packages/nodes/src/scatter/gpu/**/*.{ts,tsx}"],
+        files: ["packages/components/src/scatter/gpu/**/*.{ts,tsx}"],
         rules: {
           "typescript/no-non-null-assertion": "off",
           "typescript/no-explicit-any": "off",
@@ -206,7 +206,10 @@ export default defineConfig({
       },
       {
         // Node specs co-locate definitions and components.
-        files: ["apps/ndea/src/frontend/core/node/native-contributions/**/*.tsx", "packages/nodes/src/**/*.tsx"],
+        files: [
+          "apps/ndea/src/frontend/core/component/native-contributions/**/*.tsx",
+          "packages/components/src/**/*.tsx",
+        ],
         rules: { "react/only-export-components": "off" },
       },
     ],

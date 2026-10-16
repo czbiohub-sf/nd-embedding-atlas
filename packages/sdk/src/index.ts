@@ -1,28 +1,25 @@
-/** Stable node-author API. Import author contracts only from this barrel. */
+/** Stable component-author API. Import author contracts only from this barrel. */
 
 import type { DataCapability, Metadata } from "@ndea/protocol";
 
 export type { DataCapability, Metadata };
 
-export { defineNode, exactNodeTypeRef, nodeInstanceId, nodeTypeId, nodeTypeVersion, rowIndex } from "./node";
+export { defineComponent, rowIndex } from "./component";
 export type {
-  ExactNodeTypeRef,
-  NodeCapability,
-  NodeConfigContract,
-  NodeDefinition,
-  NodeDocumentation,
-  NodeInstanceId,
-  NodePresentationHints,
-  NodeTypeId,
-  NodeTypeVersion,
+  ComponentDefinition,
+  ComponentDocumentation,
+  ComponentModule,
+  ConfigContract,
+  CoordinationType,
+  MountedBody,
   RowIndex,
-} from "./node";
-
-export type { MountedNodeBody, NodeModule, NodeRuntime } from "./module";
+} from "./component";
 
 export type {
   AnnotationWriteAPI,
   ColorCoordinationAPI,
+  ComponentHost,
+  DataAPI,
   DataContext,
   DataQueryAPI,
   DeviceInfo,
@@ -31,9 +28,7 @@ export type {
   FilterFacet,
   FocusCoordinationAPI,
   MaterializedFilterRows,
-  NodeDataAPI,
-  NodeHost,
-  NodeNotificationAPI,
+  NotificationAPI,
   OrderingCoordinationAPI,
   RowSetPublishAPI,
   ResolvedFilter,

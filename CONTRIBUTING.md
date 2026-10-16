@@ -47,14 +47,14 @@ ranges. Review `overrides` separately because they are deliberately pinned.
 ## Workspace layout
 
 ```text
-apps/ndea/         CLI, server, frontend, and binary builder
-packages/nodes/    Built-in view definitions and their bodies
-packages/ochre/    Color, colormap, and TypeGPU helpers
-packages/protocol/ Shared request and response schemas
-packages/sdk/      View authoring and host contracts
-packages/ui/       Shared UI controls
-packages/zarr/     Bun-backed AnnData, MuData, and OME-Zarr I/O
-docs/              Independent Waku documentation app
+apps/ndea/            CLI, server, frontend, and binary builder
+packages/components/  Built-in component definitions and their bodies
+packages/ochre/       Color, colormap, and TypeGPU helpers
+packages/protocol/    Shared request and response schemas
+packages/sdk/         Component authoring and host contracts
+packages/ui/          Shared UI controls
+packages/zarr/        Bun-backed AnnData, MuData, and OME-Zarr I/O
+docs/                 Independent Waku documentation app
 ```
 
 ## Development workflow

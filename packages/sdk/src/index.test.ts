@@ -1,34 +1,22 @@
 /// <reference types="bun" />
 import { describe, expect, test } from "bun:test";
 import { z } from "zod";
-import { defineNode, exactNodeTypeRef, type NodeModule } from "@ndea/sdk";
+import { defineComponent } from "@ndea/sdk";
 
-const transformDefinition = defineNode({
-  ref: exactNodeTypeRef("example/transform", "1.0.0"),
-  title: "Example transform",
-  capabilities: ["data-read", "compute"],
+const definition = defineComponent({
+  type: "example/view",
+  title: "Example view",
+  documentation: { summary: "An example.", use: "Tests." },
   config: {
     schema: z.object({ threshold: z.number() }),
     defaultValue: { threshold: 0 },
   },
+  binds: ["focus", "filter"],
   load: () =>
-    Promise.resolve<NodeModule<unknown, "data-read" | "compute">>({
-      createRuntime(host) {
-        void host.data.table;
-        return { dispose() {} };
-      },
-    }),
-});
-
-const mountedViewDefinition = defineNode({
-  ref: exactNodeTypeRef("example/view", "1.0.0"),
-  title: "Example view",
-  capabilities: ["focus-coordination"],
-  load: () =>
-    Promise.resolve<NodeModule<unknown, "focus-coordination">>({
+    Promise.resolve({
       mountBody(host) {
         const element = document.createElement("div");
-        element.dataset.instanceId = host.instanceId;
+        element.dataset.elementId = host.elementId;
         let disposed = false;
         return {
           element,
@@ -42,13 +30,10 @@ const mountedViewDefinition = defineNode({
     }),
 });
 
-describe("node SDK barrel", () => {
-  test("defines transform and framework-neutral mounted view definitions", () => {
-    const definitions = [transformDefinition, mountedViewDefinition];
-    expect(definitions.map((definition) => definition.ref.nodeTypeId as string)).toEqual([
-      "example/transform",
-      "example/view",
-    ]);
-    expect(mountedViewDefinition.load).toBeFunction();
+describe("component SDK barrel", () => {
+  test("defines a framework-neutral mounted component", () => {
+    expect(definition.type).toBe("example/view");
+    expect(definition.binds).toEqual(["focus", "filter"]);
+    expect(definition.load).toBeFunction();
   });
 });

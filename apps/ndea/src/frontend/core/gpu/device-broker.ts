@@ -1,7 +1,6 @@
-/** Process-wide, reference-counted GPU leases keyed by node instance. */
+/** Process-wide, reference-counted GPU leases keyed by dashboard element. */
 
 import { acquireDevice, type DeviceInfo, deviceRefCount, releaseDevice } from "@/core/gpu/device-manager";
-import type { NodeInstanceId } from "@ndea/sdk";
 
 export interface DeviceLease {
   readonly id: string;
@@ -10,23 +9,23 @@ export interface DeviceLease {
 }
 
 export interface DeviceBroker {
-  acquire(instanceId: NodeInstanceId, signal?: AbortSignal): Promise<DeviceLease>;
+  acquire(elementId: string, signal?: AbortSignal): Promise<DeviceLease>;
   liveLeases(): number;
-  releaseFor(instanceId: NodeInstanceId): void;
+  releaseFor(elementId: string): void;
 }
 
 export function createDeviceBroker(): DeviceBroker {
-  const leases = new Map<NodeInstanceId, DeviceLease>();
+  const leases = new Map<string, DeviceLease>();
 
-  function releaseFor(instanceId: NodeInstanceId): void {
-    const lease = leases.get(instanceId);
+  function releaseFor(elementId: string): void {
+    const lease = leases.get(elementId);
     if (!lease) return;
-    leases.delete(instanceId);
+    leases.delete(elementId);
     releaseDevice();
   }
 
   return {
-    async acquire(instanceId, signal) {
+    async acquire(elementId, signal) {
       if (signal?.aborted) throw new DOMException("device acquire aborted", "AbortError");
 
       const info = await acquireDevice(signal);
@@ -40,16 +39,16 @@ export function createDeviceBroker(): DeviceBroker {
 
       let released = false;
       const lease: DeviceLease = {
-        id: instanceId,
+        id: elementId,
         info,
         release() {
           if (released) return;
           released = true;
-          if (leases.get(instanceId) === lease) leases.delete(instanceId);
+          if (leases.get(elementId) === lease) leases.delete(elementId);
           releaseDevice();
         },
       };
-      leases.set(instanceId, lease);
+      leases.set(elementId, lease);
       signal?.addEventListener("abort", () => lease.release(), { once: true });
       return lease;
     },

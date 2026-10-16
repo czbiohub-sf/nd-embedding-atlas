@@ -9,11 +9,10 @@ import type { WorkspaceSnapshot } from "@ndea/protocol";
 import { createContext, useContext, useEffect, useState } from "react";
 
 import { useDatasetSession } from "@/hooks/useDatasetSession";
-import { NODE_EDITOR_ENABLED } from "@/feature-flags";
+import { LAYOUT_EDITING_ENABLED } from "@/feature-flags";
 import { deviceBroker } from "@/core/gpu/device-broker";
-import { WorkspaceNodeRuntimeProvider } from "@/core/node/runtime/runtime-context";
-import { WorkspaceNodeRuntimeManager } from "@/core/node/runtime/workspace-runtime";
-import { availableNodeCapabilities } from "@/core/node/capabilities";
+import { ComponentRuntimeProvider } from "@/core/component/runtime/runtime-context";
+import { ComponentRuntimeManager } from "@/core/component/runtime/workspace-runtime";
 import { wsClient } from "@/lib/ws-client";
 import { createHttpWorkspaceTransport, decodeWorkspaceDocument, WorkspaceSync, type WorkspaceTransport } from "./sync";
 import { Workspace } from "./workspace-store";
@@ -37,36 +36,34 @@ export function WorkspaceProvider({
   transport?: WorkspaceTransport;
 }) {
   const { state, runtime, actions } = useDatasetSession();
-  const { coordinator, brushSelection, table } = runtime;
+  const { coordinator, table } = runtime;
   const { metadata } = state;
 
-  const [{ workspace: ws, nodeRuntimes, initial }] = useState(() => {
+  const [{ workspace: ws, componentRuntimes, initial }] = useState(() => {
     const w = new Workspace();
     // An invalid server document opens read-only and is never overwritten.
     const decoded = decodeWorkspaceDocument(snapshot.document);
     if (decoded.ok) w.applyDocument(decoded.state);
-    if (NODE_EDITOR_ENABLED) (window as unknown as { __ndeaWorkspace?: Workspace }).__ndeaWorkspace = w;
+    if (LAYOUT_EDITING_ENABLED) (window as unknown as { __ndeaWorkspace?: Workspace }).__ndeaWorkspace = w;
     const appHost = Object.freeze({
       coordinator,
-      defaultInputPredicate: brushSelection,
       table,
       metadata,
       refreshMetadata: actions.refreshMetadata,
-      availableCapabilities: new Set(availableNodeCapabilities),
       deviceBroker,
       fetch: globalThis.fetch,
     });
     return {
       workspace: w,
       initial: decoded,
-      nodeRuntimes: new WorkspaceNodeRuntimeManager({ session: w, appHost }),
+      componentRuntimes: new ComponentRuntimeManager({ session: w, appHost }),
     };
   });
   const [persistence, setPersistence] = useState<WorkspacePersistenceState>(
     initial.ok ? { mode: "writable", errors: [] } : { mode: "recovery", errors: initial.errors },
   );
 
-  useEffect(() => () => nodeRuntimes.dispose(), [nodeRuntimes]);
+  useEffect(() => () => componentRuntimes.dispose(), [componentRuntimes]);
 
   // The server document is the authority; a read-only (recovery) session never writes.
   useEffect(() => {
@@ -84,7 +81,7 @@ export function WorkspaceProvider({
   return (
     <WorkspacePersistenceContext.Provider value={persistence}>
       <WorkspaceContext.Provider value={ws}>
-        <WorkspaceNodeRuntimeProvider value={nodeRuntimes}>{children}</WorkspaceNodeRuntimeProvider>
+        <ComponentRuntimeProvider value={componentRuntimes}>{children}</ComponentRuntimeProvider>
       </WorkspaceContext.Provider>
     </WorkspacePersistenceContext.Provider>
   );

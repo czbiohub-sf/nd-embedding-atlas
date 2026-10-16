@@ -1,8 +1,8 @@
-/** Capability-gated services scoped to one live node occurrence. */
+/** Services scoped to one live dashboard element. */
 
 import type { Coordinator, MosaicClient, Selection } from "@uwdata/mosaic-core";
 import type { CommitAnnotationsResponse, FilterClause, Metadata, ObservationSet } from "@ndea/protocol";
-import type { ExactNodeTypeRef, NodeCapability, NodeInstanceId, RowIndex } from "./node";
+import type { RowIndex } from "./component";
 
 export interface DeviceInfo {
   readonly device: GPUDevice;
@@ -29,9 +29,6 @@ export interface RowSetPublishAPI {
 
 export interface DataQueryAPI {
   query(sql: string, signal?: AbortSignal): Promise<unknown>;
-  categorize?(column: string, max?: number): Promise<unknown>;
-  loadVarColumn?(name: string, layer?: string): Promise<unknown>;
-  fetchCrop?(params: unknown): Promise<Blob>;
 }
 
 export interface AnnotationWriteAPI {
@@ -45,15 +42,7 @@ export interface AnnotationWriteAPI {
   commitAnnotations(options: { dryRun: boolean; columns?: string[] }): Promise<CommitAnnotationsResponse>;
 }
 
-type CapabilityService<
-  Capabilities extends NodeCapability,
-  Required extends NodeCapability,
-  Service,
-> = Required extends Capabilities ? Service : object;
-
-export type NodeDataAPI<Capabilities extends NodeCapability = never> = DataQueryAPI &
-  CapabilityService<Capabilities, "row-set-publish", RowSetPublishAPI> &
-  CapabilityService<Capabilities, "annotation-write", AnnotationWriteAPI>;
+export type DataAPI = DataQueryAPI & RowSetPublishAPI & AnnotationWriteAPI;
 
 export interface ViewCoordinationAPI {
   readonly panX: number;
@@ -86,8 +75,8 @@ export interface ColorCoordinationAPI {
 }
 
 /**
- * One named clause slot under a node's source key in a filter scope, e.g.
- * `chart` or `lasso`. A node with several widgets uses one facet per widget.
+ * One named clause slot under an element's source key in a filter scope, e.g.
+ * `chart` or `lasso`. An element with several widgets uses one facet per widget.
  */
 export type FilterFacet = string;
 
@@ -103,11 +92,11 @@ export interface MaterializedFilterRows {
 
 /**
  * Crossfilter scope membership. A published clause lands in the workspace
- * document under this node; the node's `selection` carries the graph input plus
- * every other source's clauses, never its own.
+ * document under this element; its `selection` carries the element's data
+ * source plus every other source's clauses, never its own.
  */
 export interface FilterCoordinationAPI {
-  /** Stable for this node occurrence, including graph and current-scope predicates. */
+  /** Stable for this element, including its data-source and current-scope predicates. */
   readonly selection: Selection;
   getResolved(): ResolvedFilter;
   subscribeResolved(callback: (filter: ResolvedFilter) => void): () => void;
@@ -116,65 +105,33 @@ export interface FilterCoordinationAPI {
   materializeRowIds(signal?: AbortSignal): Promise<MaterializedFilterRows>;
 }
 
-export interface NodeNotificationAPI {
+export interface NotificationAPI {
   notify(message: string, level?: "info" | "warn" | "error"): void;
 }
 
-interface NodeHostBase<Config, Capabilities extends NodeCapability> {
-  readonly instanceId: NodeInstanceId;
-  readonly definitionRef: ExactNodeTypeRef;
-  readonly capabilities: ReadonlySet<Capabilities>;
+/** Every service one dashboard element's body sees. */
+export interface ComponentHost<Config = unknown> {
+  /** The dashboard element id. */
+  readonly elementId: string;
+  /** The component type. */
+  readonly type: string;
   readonly config: Config;
   patchConfig(patch: Partial<Config>): void;
-  readonly notifications: NodeNotificationAPI;
+  readonly notifications: NotificationAPI;
   onDispose(disposer: () => void): void;
   track(unsubscribe: () => void): void;
   readonly signal: AbortSignal;
-}
-
-interface DataReadHost<Capabilities extends NodeCapability> {
   readonly data: DataContext;
   registerClient(client: MosaicClient): () => void;
-  readonly inputPredicate: Selection;
-  readonly dataAPI: NodeDataAPI<Capabilities>;
-}
-
-interface FocusHost {
+  /** What the element shows: its data source AND its filter scope. */
+  readonly predicate: Selection;
+  readonly dataAPI: DataAPI;
   readonly focus: FocusCoordinationAPI;
-}
-
-interface ViewCoordinationHost {
-  readonly viewCoordination: ViewCoordinationAPI;
-}
-
-interface OrderingCoordinationHost {
+  readonly viewSync: ViewCoordinationAPI;
   readonly ordering: OrderingCoordinationAPI;
-}
-
-interface ColorCoordinationHost {
   readonly colorBy: ColorCoordinationAPI;
-}
-
-interface FilterCoordinationHost {
   readonly filter: FilterCoordinationAPI;
-}
-
-interface GPUHost {
   acquireDeviceLease(): Promise<DeviceLease>;
+  /** The element header's toolbar slot. */
+  readonly bodyHeaderElement: HTMLElement;
 }
-
-/**
- * Optional host services exist in the type only when the definition declares
- * their capability. Capability-free and erased consumers see only core fields.
- */
-export type NodeHost<Config = unknown, Capabilities extends NodeCapability = never> = NodeHostBase<
-  Config,
-  Capabilities
-> &
-  CapabilityService<Capabilities, "data-read", DataReadHost<Capabilities>> &
-  CapabilityService<Capabilities, "focus-coordination", FocusHost> &
-  CapabilityService<Capabilities, "view-coordination", ViewCoordinationHost> &
-  CapabilityService<Capabilities, "ordering-coordination", OrderingCoordinationHost> &
-  CapabilityService<Capabilities, "color-coordination", ColorCoordinationHost> &
-  CapabilityService<Capabilities, "filter-coordination", FilterCoordinationHost> &
-  CapabilityService<Capabilities, "gpu-device", GPUHost>;

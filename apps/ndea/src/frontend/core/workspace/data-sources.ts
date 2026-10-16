@@ -10,7 +10,7 @@ import { FilterClauseSchema } from "@ndea/protocol";
 import { z } from "zod";
 
 import { filterClausesSql, filterScopeClauses, type FilterScopeValue } from "../coordination/types";
-import { filterClauseSql } from "@ndea/nodes/filter";
+import { filterClauseSql } from "@ndea/components/filter";
 
 export const DATA_SOURCE_NAME = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/;
 

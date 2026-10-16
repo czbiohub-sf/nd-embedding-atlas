@@ -16,13 +16,12 @@
  */
 
 import type { JsonValue } from "@ndea/sdk";
-import { createNodeCatalog, type NodeCatalogServices } from "@ndea/nodes/catalog";
+import { createComponentCatalog, type ComponentServices } from "@ndea/components/catalog";
 import { z } from "zod";
 
 import {
   bindingScope,
   COORDINATION_TYPE_IDS,
-  COORDINATION_TYPES,
   type CoordinationBinding,
   type CoordinationTypeId,
 } from "../coordination/types";
@@ -80,7 +79,7 @@ export interface ComponentInfo {
   readonly reads: boolean;
   /** Coordination types it may bind. */
   readonly binds: readonly CoordinationTypeId[];
-  /** Backed by a view body (a node definition), mounted through the runtime manager. */
+  /** Backed by a view body (a component definition), mounted through the runtime manager. */
   readonly view: boolean;
 }
 
@@ -138,26 +137,21 @@ function noBodiesHere(): never {
 }
 
 /**
- * Every view definition as a component, keyed by its node type id. Bodies and
+ * Every view definition as a component, keyed by its type. Bodies and
  * their services belong to the browser; only contracts are read here.
  */
 function viewComponents(): Record<string, ComponentInfo> {
-  const catalog = createNodeCatalog({ mountBody: noBodiesHere, services: {} as NodeCatalogServices });
+  const catalog = createComponentCatalog({ mountBody: noBodiesHere, services: {} as ComponentServices });
   const out: Record<string, ComponentInfo> = {};
   for (const definition of Object.values(catalog)) {
-    const capabilities = new Set<string>(definition.capabilities);
     const config = definition.config;
-    out[definition.ref.nodeTypeId] = {
-      description: definition.documentation?.summary ?? definition.title,
+    out[definition.type] = {
+      description: definition.documentation.summary,
       props: config?.schema ?? z.object({}).strict(),
       defaults: (config?.defaultValue ?? {}) as Record<string, JsonValue>,
       children: "none",
       reads: true,
-      // Any view may read a filter scope (it sees the other members' clauses);
-      // publishing into it needs the filter-coordination capability.
-      binds: COORDINATION_TYPE_IDS.filter(
-        (type) => type === "filter" || capabilities.has(COORDINATION_TYPES[type].capability),
-      ),
+      binds: definition.binds,
       view: true,
     };
   }
