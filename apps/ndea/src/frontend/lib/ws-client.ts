@@ -43,7 +43,7 @@ interface WsFrame {
   [k: string]: unknown;
 }
 
-export class WsReconnectError extends Error {
+class WsReconnectError extends Error {
   constructor() {
     super("WebSocket disconnected");
     this.name = "WsReconnectError";

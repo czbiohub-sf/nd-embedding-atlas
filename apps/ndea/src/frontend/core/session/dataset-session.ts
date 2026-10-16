@@ -43,21 +43,3 @@ export function publishDatasetSession(value: DatasetSessionValue): void {
 export function clearDatasetSession(value: DatasetSessionValue): void {
   datasetSessionStore.setState((current) => (current === value ? null : current));
 }
-
-// ── Trajectory selectors ───────────────────────────────────────────────────
-
-/** Dataset-scoped lookup: use only in components tied to a specific dataset. */
-export function selectTrajectory(
-  trajectories: Record<string, TrajectoryData | null>,
-  datasetKey: string | undefined,
-): TrajectoryData | null {
-  return trajectories[datasetKey ?? ""] ?? null;
-}
-
-/** Returns the first non-null trajectory: use in cross-dataset components. */
-export function selectAnyTrajectory(trajectories: Record<string, TrajectoryData | null>): TrajectoryData | null {
-  for (const v of Object.values(trajectories)) {
-    if (v != null) return v;
-  }
-  return null;
-}

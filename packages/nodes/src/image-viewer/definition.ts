@@ -32,5 +32,3 @@ export function createImageViewerDefinition({
     },
   });
 }
-
-export type { ImageViewerCapabilities, ImageViewerConfig, ImageViewerOptions, ImageViewerServices } from "./contracts";

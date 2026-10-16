@@ -9,11 +9,10 @@
  * the full feature set.
  *
  * Subcommands:
- *   view       Open Zarr stores in the Node Workspace (default)
+ *   view       Open Zarr stores in the dashboard (default)
  *   update     Download a new release and switch the active symlink
  *   gc         Prune old installed versions
  *   doctor     Diagnose the install (paths, symlink, versions)
- *   plugin     Validate and configure trusted custom-node plugins
  *   filter     Filter observations on a running server; prints JSON
  *   workspace  Read and patch a running server's workspace document
  *   mcp        Install, check, or remove ndea's MCP server in coding agents
@@ -38,7 +37,6 @@ import doctorCommand from "./commands/doctor.ts";
 import filterCommand from "./commands/filter.ts";
 import gcCommand from "./commands/gc.ts";
 import mcpCommand from "./commands/mcp.ts";
-import pluginCommand from "./commands/plugin/index.ts";
 import updateCommand from "./commands/update.ts";
 import workspaceCommand from "./commands/workspace.ts";
 import viewCommand from "./commands/view.ts";
@@ -47,7 +45,7 @@ import { generatedCommandsPath } from "./lib/generated-commands-path.ts";
 import { VERSION } from "./version.ts";
 
 const DESCRIPTION =
-  "Interactive browser-based Node Workspace linking AI embeddings to source 5D (TCZYX) image data.\n\n" +
+  "Interactive browser-based dashboard linking AI embeddings to source 5D (TCZYX) image data.\n\n" +
   "Default (no subcommand) runs 'view': e.g. 'ndea ./data.zarr'.";
 
 /**
@@ -62,7 +60,6 @@ const KNOWN_SUBCOMMANDS = new Set([
   "update",
   "gc",
   "doctor",
-  "plugin",
   "filter",
   "workspace",
   "mcp",
@@ -118,7 +115,6 @@ async function main(): Promise<void> {
   cli.command(updateCommand);
   cli.command(gcCommand);
   cli.command(doctorCommand);
-  cli.command(pluginCommand);
   cli.command(filterCommand);
   cli.command(workspaceCommand);
   cli.command(mcpCommand);

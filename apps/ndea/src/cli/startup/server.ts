@@ -1,16 +1,8 @@
-import type { PluginRuntimeSnapshot } from "../../server/plugins/assets.ts";
 import { flushAnnotationSaves } from "../../server/routes/annotate.ts";
 import type { DatasetSessionMetadata, ServerSession } from "../../server/state.ts";
 import { resolveFrontendDir } from "../../server/static.ts";
 import type { LaunchConfig } from "../config.ts";
-import {
-  displayHost,
-  printMissingFrontend,
-  printPluginDiagnostic,
-  printPortInUse,
-  printShutdownHint,
-  printShuttingDown,
-} from "./output.ts";
+import { displayHost, printMissingFrontend, printPortInUse, printShutdownHint, printShuttingDown } from "./output.ts";
 
 interface RunningServer {
   stop(closeActiveConnections?: boolean): void | Promise<void>;
@@ -67,24 +59,11 @@ export function resolveStaticDirectory(config: LaunchConfig): string | undefined
   return staticDirectory;
 }
 
-export async function bootstrapPlugins(config: LaunchConfig): Promise<PluginRuntimeSnapshot> {
-  const { buildPluginBootstrap } = await import("../../server/plugins/bootstrap.ts");
-  const snapshot = await buildPluginBootstrap({
-    projectPluginPaths: config.pluginPaths,
-    projectPluginContainmentRoot: config.pluginPathRoot,
-  });
-  for (const diagnostic of snapshot.catalog.diagnostics) {
-    printPluginDiagnostic(diagnostic.sourceId, diagnostic.message);
-  }
-  return snapshot;
-}
-
 export async function startServer(
   config: LaunchConfig,
   state: ServerSession,
   metadata: DatasetSessionMetadata,
   frontendDir: string | undefined,
-  pluginSnapshot: PluginRuntimeSnapshot,
 ): Promise<RunningServer> {
   const { createApp } = await import("../../server/app.ts");
   const { loadMcpToken } = await import("../../server/mcp-token.ts");
@@ -98,7 +77,6 @@ export async function startServer(
       config: metadata,
       frontendDir,
       noStatic: config.noStatic,
-      pluginSnapshot,
       mcpToken,
     });
   } catch (error) {

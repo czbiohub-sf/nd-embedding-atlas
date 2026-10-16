@@ -16,7 +16,6 @@ export {
   CategorizeBodySchema,
   ConfigResponseSchema,
   CropBodySchema,
-  CropChannelSchema,
   ExportBodySchema,
   MetadataSchema,
   TrajectoryResponseSchema,
@@ -25,24 +24,12 @@ export {
   WriteAnnotationValuesBodySchema,
 } from "@ndea/protocol";
 export type {
-  AnnotationColumnBody,
   AnnotationDtype,
-  AnnotationValueRow,
-  CategorizeBody,
   CategorizeResponse,
   CategoryLegendItem,
   ConfigResponse,
-  CropBody,
-  EmbeddingStatus,
-  ExportBody,
-  Metadata,
-  MosaicQueryBody,
-  NdeaProtocol,
   ObsmEntry,
-  ObsInfo,
-  VarColumnBody,
   TrajectoryFrame,
-  WriteAnnotationValuesBody,
 } from "@ndea/protocol";
 
 /**

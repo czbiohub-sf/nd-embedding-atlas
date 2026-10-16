@@ -42,8 +42,8 @@ export function ScatterContent({ initialObsmKey, toolbarTarget }: ScatterContent
   // The host owns this instance's WASM bitmap lifecycle (§6.6).
   const host = useScatterHost();
   const { metadata } = state;
-  // Focus read: scoped to this instance's host (sync group / focus wire), so the
-  // Point metadata follows the instance's group-aware host focus.
+  // Focus read: scoped to this element's host (coordination group), so the
+  // point metadata follows the element's group-aware focus.
   const focusedRowIndex = useNodeFocus(host);
   const trajectory = selectAnyTrajectory(state.trajectories);
   const activeTrajectories = Object.values(state.trajectories).filter((t): t is NonNullable<typeof t> => t != null);

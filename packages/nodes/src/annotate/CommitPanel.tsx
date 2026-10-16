@@ -5,8 +5,8 @@
  * explicit confirm. The write is full-column (NA for un-annotated obs) and
  * irreversible.
  *
- * "Which columns to commit" is server-side state grouped by dataset, not an edge
- * payload: so selection lives here. Union/all-remote logic is in `./commit-report`
+ * "Which columns to commit" is server-side state grouped by dataset, so
+ * selection lives here. Union/all-remote logic is in `./commit-report`
  * so it stays unit-testable without a React DOM harness.
  */
 

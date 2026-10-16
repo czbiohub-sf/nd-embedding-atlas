@@ -16,7 +16,7 @@ import { VarColumnBodySchema, parseJsonBody } from "../protocol.ts";
 import type { ServerSession } from "../state.ts";
 
 /** In-flight var column materialization tasks. */
-export interface VarTask {
+interface VarTask {
   taskId: string;
   status: "loading" | "ready" | "error";
   column: string;
@@ -25,41 +25,6 @@ export interface VarTask {
 
 /** Module-level state for var-column tasks. Keyed by task_id. */
 const varTasks = new Map<string, VarTask>();
-
-/** Per-task subscribers notified on status transitions. */
-const varSubscribers = new Map<string, Set<(task: VarTask) => void>>();
-
-function fireVarStatus(taskId: string): void {
-  const task = varTasks.get(taskId);
-  const subs = varSubscribers.get(taskId);
-  if (!task || !subs) return;
-  for (const cb of subs) cb(task);
-}
-
-/**
- * Subscribe to var-task status transitions. Fires immediately with the
- * current task state, then on every status change until disposed.
- * Returns a no-op disposer if the task doesn't exist.
- */
-export function subscribeVarTask(taskId: string, cb: (task: VarTask) => void): () => void {
-  const task = varTasks.get(taskId);
-  if (!task) return () => {};
-  cb(task);
-  let set = varSubscribers.get(taskId);
-  if (!set) {
-    set = new Set();
-    varSubscribers.set(taskId, set);
-  }
-  set.add(cb);
-  return () => {
-    set.delete(cb);
-    if (set.size === 0) varSubscribers.delete(taskId);
-  };
-}
-
-export function getVarTask(taskId: string): VarTask | undefined {
-  return varTasks.get(taskId);
-}
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -236,12 +201,10 @@ export async function handleVarColumn(req: Request, state: ServerSession): Promi
     void materialiseVarColumn(state, name, layer, colName, modality)
       .then(() => {
         task.status = "ready";
-        fireVarStatus(taskId);
       })
       .catch((err: unknown) => {
         task.status = "error";
         task.error = err instanceof Error ? err.message : String(err);
-        fireVarStatus(taskId);
       });
 
     return Response.json({ task_id: taskId, status: "loading", column: colName }, { status: 202 });

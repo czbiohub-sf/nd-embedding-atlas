@@ -123,33 +123,20 @@
   --color-border-active: #b8b8b8; /* oklch(0.72): stronger border on hover/active        */
   --color-text-muted: #6e6e6e; /* oklch(0.50): 3rd/dimmest text, below muted-foreground   */
 
-  /* ── Node system ──
-   * Nodes read as wells cut into the canvas board, so the hairline carries the
-   * figure/ground, not the fill — the dark fill only ever reached 1.12:1 against
-   * the canvas, which is already how it worked. Light keeps the panel level.
+  /* ── Element surfaces ──
+   * Dashboard elements read as wells cut into the board, so the hairline
+   * carries the figure/ground, not the fill.
    *
    * Two levels, and the split is load-bearing:
-   *   --color-node-surface  node fill: frame + every full-bleed body
-   *                         (table, chart, gallery, crop viewer, stage pane)
-   *   --card                raised *inside* a node: sticky headers, selects,
+   *   --color-node-surface  element fill: frame + every full-bleed body
+   *                         (table, chart, gallery, crop viewer)
+   *   --card                raised *inside* an element: sticky headers, selects,
    *                         buttons, toolbars — lighter than the body on purpose */
   --color-node-surface: oklch(0.988 0 0);
-  --color-node-border: oklch(0.72 0 0); /* #b8b8b8 hairline */
-  --color-node-border-stale: color-mix(in oklab, var(--color-wire-sel) 45%, transparent);
 
   /* ── Charts ── */
   --color-chart-mark: var(--accent-hue);
   --color-chart-mark-fade: oklch(from var(--color-chart-mark) l c h / 0.125);
-
-  /* ── Status bar ──
-   * One step off the page so the footer reads as chrome, not content; no
-   * canonical token sits at that level. The border reuses the tertiary
-   * surface rather than restating its hex. */
-  --color-status-bar: #f7f7f7;
-  --color-status-bar-border: var(--color-surface-tertiary);
-
-  /* ── Layout ── */
-  --footer-height: 1.25rem;
 
   /* ── Z-index layer system ── */
   --z-canvas: 10;
@@ -184,16 +171,6 @@
   --warning-emphasis: oklch(from var(--warning-hue) l c h / 7%);
   --success-emphasis: oklch(from var(--success-hue) l c h / 10%);
 
-  /* Node elevation. Scheme-independent: both derive through --primary and
-   * --success-hue, which flip with the scheme on their own. */
-  --shadow-node-rest: 0 1px 3px rgba(0, 0, 0, 0.35);
-  --shadow-node-selected: 0 0 0 1px var(--primary), 0 0 28px oklch(from var(--primary) l c h / 35%);
-  --shadow-node-claimed: 0 0 0 1.5px var(--primary), 0 0 28px oklch(from var(--primary) l c h / 35%);
-
-  /* Ring drawn on a port/handle an in-flight wire may legally land on. */
-  --shadow-legal-ring:
-    0 0 0 2.5px oklch(from var(--success-hue) l c h / 55%), 0 0 10px oklch(from var(--success-hue) l c h / 45%);
-
   --glass-bg: oklch(1 0 0 / 80%);
   --glass-border: oklch(0 0 0 / 7%);
 }
@@ -211,16 +188,9 @@ html.dark {
   --color-border-active: oklch(1 0 0 / 22%); /* stronger border on hover/active       */
   --color-text-muted: oklch(0.62 0 0); /* 3rd/dimmest text, below muted-foreground    */
 
-  /* Node system (dark). Board and nodes are both pure black; the 30% white
-   * hairline carries figure/ground, not the fill. The old #171717 fill was
-   * only 1.12:1 against the canvas, so the border was already doing that job
-   * — 22% → 30% white restores the edge at 2.35:1 on black. */
+  /* Element fill (dark): board and elements are both pure black; the hairline
+   * carries figure/ground, not the fill. */
   --color-node-surface: #000000;
-  --color-node-border: oklch(1 0 0 / 30%);
-
-  /* Status bar: dark overrides for the orphan tokens fixed above */
-  --color-status-bar: var(--background); /* pure black in dark mode */
-  --color-status-bar-border: var(--border); /* = oklch(1 0 0 / 16%) */
 
   /* Emphasis family: bumped alpha for dark surfaces (hues carry less on dark) */
   --emphasis: oklch(from var(--accent-hue) l c h / 10%);
@@ -266,65 +236,16 @@ html.dark {
   --sidebar-ring: oklch(0.556 0 0);
 }
 
-/* Node workspace wire kinds, cook-state LEDs, and motion. */
+/* Selection/focus highlight hues and status colors. */
 @theme {
-  /* Typed wire/port kinds: pred (pull predicate) · sel (push row set) · focus (push single record) */
-  /* pred carries the brand: the pull channel is the workspace's primary flow.
-   * The others borrow non-brand ramp stops shared with the docs syntax theme,
-   * chosen for separation: min CIEDE2000 30.9, all ≥4.7:1 on the canvas.
-   * Mirrored in lib/color/brand.ts for SVG/canvas consumers. */
-  --color-wire-pred: var(--brand-periwinkle-400);
+  /* Non-brand ramp stops shared with the docs syntax theme, chosen for
+   * separation: min CIEDE2000 30.9, all ≥4.7:1 on the board. */
   --color-wire-sel: #ffbc56;
   --color-wire-focus: #68cdf2;
-  /* feedback channel: a writer's output re-entering its source (wireless ↻ pair) */
-  --color-wire-feedback: #60d199;
 
-  /* Cook-state hues as color tokens (anchors live in Tier 1) */
+  /* Status hues as color tokens (anchors live in Tier 1) */
   --color-success: var(--success-hue);
   --color-warning: var(--warning-hue);
-
-  /* LED pulse: cooking state */
-  --animate-nd-led-pulse: nd-led-pulse 0.9s ease-in-out infinite;
-  @keyframes nd-led-pulse {
-    0%,
-    100% {
-      opacity: 1;
-    }
-    50% {
-      opacity: 0.35;
-    }
-  }
-
-  /* Wire flow: cooking pull wires (pair with stroke-dasharray 7 7) */
-  --animate-nd-wire-flow: nd-wire-flow 0.6s linear infinite;
-  @keyframes nd-wire-flow {
-    to {
-      stroke-dashoffset: -14;
-    }
-  }
-
-  /* Wire push: sel/focus emission (pair with stroke-dasharray 2 10, round caps) */
-  --animate-nd-wire-push: nd-wire-push 0.45s linear infinite;
-  @keyframes nd-wire-push {
-    to {
-      stroke-dashoffset: -24;
-    }
-  }
-
-  /* Render-state morph: node content eases in on chip↔card↔full swaps.
-   * Keep the from-frame usable (≥0.55 opacity): a suspended animation
-   * timeline must never strand invisible UI. */
-  --animate-nd-rs-morph: nd-rs-morph 200ms cubic-bezier(0.25, 0.8, 0.3, 1);
-  @keyframes nd-rs-morph {
-    from {
-      opacity: 0.55;
-      transform: scale(0.97);
-    }
-    to {
-      opacity: 1;
-      transform: scale(1);
-    }
-  }
 }
 
 /* ── Base layout ──────────────────────────────────────────────────── */
@@ -395,150 +316,12 @@ select:disabled {
   cursor: not-allowed;
 }
 
-/* ── Mosaic time slider ───────────────────────────────────────────── */
-.time-slider .input {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  font-family: var(--font-mono);
-  color: var(--muted-foreground);
-}
-.time-slider .input label {
-  white-space: nowrap;
-}
-.time-slider .input label.value {
-  min-width: 2ch;
-  text-align: right;
-  color: var(--foreground);
-  font-variant-numeric: tabular-nums;
-}
-.time-slider .input input[type="range"] {
-  width: 120px;
-  height: 4px;
-  accent-color: var(--color-primary);
-  cursor: pointer;
-}
-
 /* ── Trajectory active state ──────────────────────────────────────── */
 .trajectory-active canvas {
   opacity: 0.2;
   transition: opacity 0.2s ease;
 }
 
-/* ── Status bar ───────────────────────────────────────────────────── */
-.status-bar {
-  height: 24px;
-  background: var(--color-status-bar);
-  border-top: 1px solid var(--color-status-bar-border);
-  display: flex;
-  align-items: center;
-  padding: 0 10px;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--color-text-muted);
-  flex-shrink: 0;
-  user-select: none;
-}
-
-/* ── Dockview: dark theme ────────────────────────────────────────── */
-/* Override Dockview's hardcoded abyss-light blue tint */
-.dockview-theme-abyss,
-.dockview-theme-dark {
-  --dv-color-abyss-light: var(--muted);
-}
-
-.dockview-theme-dark {
-  --dv-background-color: var(--background);
-  --dv-group-view-background-color: var(--background);
-  --dv-paneview-header-border-color: var(--border);
-  --dv-tabs-container-background-color: var(--card);
-  --dv-activegroup-visiblepanel-tab-background-color: var(--muted);
-  --dv-activegroup-hiddenpanel-tab-background-color: var(--card);
-  --dv-inactivegroup-visiblepanel-tab-background-color: var(--card);
-  --dv-inactivegroup-hiddenpanel-tab-background-color: var(--background);
-  --dv-separator-border: var(--border);
-  --dv-tab-font-size: 12px;
-  --dv-font-family: var(--font-sans);
-  --dv-activegroup-visiblepanel-tab-color: var(--foreground);
-  --dv-activegroup-hiddenpanel-tab-color: var(--color-text-muted);
-  --dv-inactivegroup-visiblepanel-tab-color: var(--muted-foreground);
-  --dv-inactivegroup-hiddenpanel-tab-color: var(--color-text-muted);
-}
-
-/* Dockview light + abyss override (abyss hardcodes dark colors) */
-:root:not(.dark) .dockview-theme-abyss,
-.dockview-theme-light {
-  --dv-background-color: var(--background);
-  --dv-paneview-header-border-color: var(--border);
-  --dv-tabs-container-background-color: var(--card);
-  --dv-activegroup-visiblepanel-tab-background-color: var(--muted);
-  --dv-activegroup-hiddenpanel-tab-background-color: var(--card);
-  --dv-inactivegroup-visiblepanel-tab-background-color: var(--card);
-  --dv-inactivegroup-hiddenpanel-tab-background-color: var(--background);
-  --dv-separator-border: var(--border);
-  --dv-tab-font-size: 12px;
-  --dv-font-family: var(--font-sans);
-  --dv-activegroup-visiblepanel-tab-color: var(--foreground);
-  --dv-activegroup-hiddenpanel-tab-color: var(--color-text-muted);
-  --dv-inactivegroup-visiblepanel-tab-color: var(--muted-foreground);
-  --dv-inactivegroup-hiddenpanel-tab-color: var(--color-text-muted);
-}
-:root:not(.dark) .dv-grid-view.dv-dockview,
-:root:not(.dark) .dv-groupview {
-  background-color: var(--background);
-}
-:root:not(.dark) .dv-tabs-and-actions-container {
-  background-color: var(--card);
-}
-:root:not(.dark) .dv-tab {
-  color: var(--foreground);
-}
-:root:not(.dark) .dv-tab.dv-active-tab {
-  background-color: var(--muted);
-}
-:root:not(.dark) .dv-tab:not(.dv-active-tab) {
-  background-color: var(--card);
-  color: var(--muted-foreground);
-}
-:root:not(.dark) .dv-pane-header {
-  background-color: var(--card);
-  color: var(--muted-foreground);
-}
-
-/* ── Hide Dockview tab strip: navigation handled by BottomDock ── */
-.dv-tabs-and-actions-container {
-  display: none !important;
-}
-
-/* ── Resize sash between tiled panels (side-by-side embeddings) ─────────
- *  dockview-react renders `.dockview-theme-abyss` regardless of the
- *  dark/light className we pass, so target it directly (one rule, both
- *  themes: the tint is theme-neutral periwinkle at 30% alpha). The sash
- *  is invisible at rest (the 1px --dv-separator-border draws the seam) and
- *  picks up the brand tint on hover/drag, matching SlidePanel.ResizeHandle.
- *  Kill Dockview's 0.5s reveal delay so the grab affordance shows at once. */
-.dockview-theme-abyss {
-  --dv-active-sash-color: color-mix(in oklab, var(--color-primary) 30%, transparent);
-  --dv-active-sash-transition-delay: 0s;
-}
-
-.dv-header-action {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border: none;
-  background: transparent;
-  color: var(--color-text-muted);
-  cursor: pointer;
-  border-radius: 4px;
-}
-.dv-header-action:hover {
-  color: var(--foreground);
-  background: var(--muted);
-}
 /* ── Reduced motion ───────────────────────────────────────────────────
  *  Honor prefers-reduced-motion. Durations collapse to ~0 (0.01ms, not 0)
  *  so transitionend/animationend still fire: Base UI / Radix popovers

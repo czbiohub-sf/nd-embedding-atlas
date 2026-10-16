@@ -249,7 +249,7 @@ export function dashboardIssues(dashboard: Dashboard, data: DataSources): [strin
   return issues;
 }
 
-/* ── operations: pure edits the Stage and agents share ─────────────────── */
+/* ── operations: pure edits the dashboard UI and agents share ──────────── */
 
 export function freshElementId(dashboard: Dashboard, prefix: string): string {
   for (let n = 1; ; n += 1) {

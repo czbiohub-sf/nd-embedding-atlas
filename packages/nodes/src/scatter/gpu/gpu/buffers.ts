@@ -173,37 +173,3 @@ export function uploadData(
       ` (pos: ${(tPos - t0).toFixed(1)}ms, color: ${(tColor - tPos).toFixed(1)}ms)`,
   );
 }
-
-/**
- * Build a Float32Array of category colors as vec4f (RGBA 0–1) × 32 slots.
- * Used by the per-category density contour renderer.
- */
-export function buildCategoryColors(
-  numCategories: number,
-  colorMapper?: ColorMapper,
-  palette?: readonly (readonly [number, number, number, number?])[],
-): Float32Array {
-  const maxCats = 32;
-  const data = new Float32Array(maxCats * 4);
-  const colors = palette ?? PALETTE;
-  const n = Math.min(numCategories, maxCats);
-
-  for (let i = 0; i < n; i++) {
-    let r: number, g: number, b: number, a: number;
-    if (colorMapper) {
-      [r, g, b] = colorMapper(i, gpuPointIndex(0), numCategories);
-      a = 1.0;
-    } else {
-      const c = colors[i % colors.length];
-      r = c[0];
-      g = c[1];
-      b = c[2];
-      a = c[3] ?? 1.0; // disabled categories pass alpha=0 → invisible in density layer
-    }
-    data[i * 4] = r / 255;
-    data[i * 4 + 1] = g / 255;
-    data[i * 4 + 2] = b / 255;
-    data[i * 4 + 3] = a;
-  }
-  return data;
-}

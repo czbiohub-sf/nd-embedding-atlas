@@ -51,11 +51,6 @@ export function locksDir(): string {
   return resolve(stateDir(), "locks");
 }
 
-/** `~/.ndea/logs`: log directory for future telemetry / install traces. */
-export function logsDir(): string {
-  return resolve(stateDir(), "logs");
-}
-
 /**
  * `~/.ndea/workspaces/<key>.json`: default workspace file for a set of
  * dataset paths. The key is order-independent, so the same datasets reopen

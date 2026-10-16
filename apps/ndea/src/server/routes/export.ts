@@ -17,7 +17,7 @@ import type { DatasetQuerySession } from "../store.ts";
 import { countObservations, exportObservations } from "../observations.ts";
 
 /** In-flight export task state. */
-export interface ExportTask {
+interface ExportTask {
   taskId: string;
   status: "running" | "done" | "error";
   outputPath?: string;
@@ -27,41 +27,6 @@ export interface ExportTask {
 
 /** Module-level state for export tasks. Single-slot (one export at a time). */
 let currentExport: ExportTask | null = null;
-
-/** Subscribers keyed by taskId; fired on status transitions. */
-const exportSubscribers = new Map<string, Set<(task: ExportTask) => void>>();
-
-function fireExportStatus(taskId: string): void {
-  if (!currentExport || currentExport.taskId !== taskId) return;
-  const subs = exportSubscribers.get(taskId);
-  if (!subs) return;
-  for (const cb of subs) cb(currentExport);
-}
-
-/**
- * Subscribe to export-task status transitions. Fires immediately with the
- * current task state, then on every change until disposed. Returns a no-op
- * disposer if the task doesn't exist or has been replaced.
- */
-export function subscribeExportTask(taskId: string, cb: (task: ExportTask) => void): () => void {
-  if (!currentExport || currentExport.taskId !== taskId) return () => {};
-  cb(currentExport);
-  let set = exportSubscribers.get(taskId);
-  if (!set) {
-    set = new Set();
-    exportSubscribers.set(taskId, set);
-  }
-  set.add(cb);
-  return () => {
-    set.delete(cb);
-    if (set.size === 0) exportSubscribers.delete(taskId);
-  };
-}
-
-export function getExportTask(taskId: string): ExportTask | null {
-  if (!currentExport || currentExport.taskId !== taskId) return null;
-  return currentExport;
-}
 
 /**
  * GET /api/export-dir
@@ -167,10 +132,8 @@ async function runExport(
     task.status = "done";
     task.outputPath = outputPath;
     task.nObs = matchCount;
-    fireExportStatus(task.taskId);
   } catch (err) {
     task.status = "error";
     task.error = err instanceof Error ? err.message : String(err);
-    fireExportStatus(task.taskId);
   }
 }

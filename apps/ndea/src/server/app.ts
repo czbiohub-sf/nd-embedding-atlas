@@ -1,9 +1,8 @@
 /**
  * Bun.serve HTTP + WebSocket server factory.
  *
- * Replaces Python FastAPI create_app(). Supports:
- * - HTTP routes for immediate frontend compatibility (fetch-based)
- * - WebSocket data protocol for future migration (axial typed WS)
+ * - HTTP API routes (fetch-based) and the /data/query Mosaic endpoint
+ * - WebSocket: framed `workspace/watch` sync and the /mosaic query socket
  * - Static file serving for the React SPA frontend
  * - CORS headers for dev mode (Vite on :5173, backend on :5055)
  */
@@ -20,24 +19,7 @@ import { servePlateFile } from "./plate.ts";
 import { serveStatic, resolveFrontendDir } from "./static.ts";
 import { handleWsMessage, handleWsOpen, handleWsClose, type ServerSocketContext } from "./ws.ts";
 import { handleMosaicWsMessage } from "./mosaic-ws.ts";
-import { emptyPluginRuntimeSnapshot, servePluginAsset, type PluginRuntimeSnapshot } from "./plugins/assets.ts";
 import { createMcpEndpoint } from "./mcp.ts";
-
-// Re-exports for public API
-export { DatasetQuerySession, obsmColumnPrefix, DEFAULT_OBSM_PRIORITY } from "./store.ts";
-export { handleMosaicQuery, parseMosaicQuery, isAllowedSql, ARROW_IPC_CONTENT_TYPE } from "./mosaic.ts";
-export { detectSpatialColumns, parseBbox } from "./state.ts";
-export type {
-  SpatialColumns,
-  DatasetChannelConfig,
-  DatasetMountConfig,
-  DatasetSessionMetadata,
-  ServerSession,
-  BboxRect,
-} from "./state.ts";
-export type { MosaicQuery } from "./mosaic.ts";
-export type { RegisteredEmbedding } from "./store.ts";
-export type { NdeaProtocol } from "./protocol.ts";
 
 // ─── CORS ───────────────────────────────────────────────────────────────────
 
@@ -77,8 +59,6 @@ export interface CreateAppOptions {
   frontendDir?: string;
   /** Disable static file serving (API-only mode). */
   noStatic?: boolean;
-  /** Immutable plugin catalog and approved asset map built once during startup. */
-  pluginSnapshot?: PluginRuntimeSnapshot;
   /** Bearer token that /mcp requires; without one the MCP endpoint is off. */
   mcpToken?: string;
 }
@@ -94,7 +74,6 @@ export interface CreateAppOptions {
 export function createApp(options: CreateAppOptions) {
   const { store, state, config } = options;
   const frontendDir = options.noStatic ? null : resolveFrontendDir(options.frontendDir);
-  const pluginSnapshot = options.pluginSnapshot ?? emptyPluginRuntimeSnapshot();
   const mcp = options.mcpToken ? createMcpEndpoint(state, options.mcpToken) : null;
 
   // Spin up the Bun Worker pool for crop rendering when a plate is
@@ -135,17 +114,7 @@ export function createApp(options: CreateAppOptions) {
 
       // ── Route dispatch ──────────────────────────────────────────
       try {
-        const response = await routeRequest(
-          req,
-          url,
-          pathname,
-          store,
-          state,
-          config,
-          frontendDir,
-          pluginSnapshot,
-          options,
-        );
+        const response = await routeRequest(req, url, pathname, store, state, config, frontendDir, options);
         return withCors(response);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -184,7 +153,6 @@ async function routeRequest(
   state: ServerSession,
   config: DatasetSessionMetadata,
   frontendDir: string | null,
-  pluginSnapshot: PluginRuntimeSnapshot,
   options: CreateAppOptions,
 ): Promise<Response> {
   // ── Mosaic query protocol (POST/GET /data/query) ────────────────
@@ -203,12 +171,7 @@ async function routeRequest(
 
   // ── API routes (/api/*) ─────────────────────────────────────────
   if (pathname.startsWith("/api/")) {
-    return routeApi(req, url, pathname, store, state, pluginSnapshot);
-  }
-
-  // ── Trusted plugin assets (startup-approved exact URLs only) ───
-  if (pathname === "/plugins" || pathname.startsWith("/plugins/")) {
-    return servePluginAsset(pathname, pluginSnapshot) ?? new Response("Not Found", { status: 404 });
+    return routeApi(req, url, pathname, store, state);
   }
 
   // ── Plate static (/plate/**) for OME-Zarr HCS stores ────────────

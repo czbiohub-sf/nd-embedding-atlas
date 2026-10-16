@@ -1,16 +1,7 @@
 /// <reference types="bun" />
 import { describe, expect, test } from "bun:test";
 import { z } from "zod";
-import {
-  defineNode,
-  exactNodeTypeRef,
-  PluginManifestSchema,
-  SDK_VERSION,
-  type NodeDefinition,
-  type NodeModule,
-  type PluginAPI,
-  type PluginFactory,
-} from "@ndea/sdk";
+import { defineNode, exactNodeTypeRef, type NodeModule } from "@ndea/sdk";
 
 const transformDefinition = defineNode({
   ref: exactNodeTypeRef("example/transform", "1.0.0"),
@@ -51,47 +42,13 @@ const mountedViewDefinition = defineNode({
     }),
 });
 
-describe("canonical plugin SDK barrel", () => {
-  test("registers transform and framework-neutral mounted view definitions", async () => {
-    const registered: NodeDefinition[] = [];
-    const api: PluginAPI = {
-      registerNode(definition) {
-        registered.push(definition);
-      },
-    };
-    const factory: PluginFactory = (pluginAPI) => {
-      pluginAPI.registerNode(transformDefinition);
-      pluginAPI.registerNode(mountedViewDefinition);
-      return () => {};
-    };
-
-    const dispose = await factory(api);
-    expect(registered.map((definition) => definition.ref.nodeTypeId as string)).toEqual([
+describe("node SDK barrel", () => {
+  test("defines transform and framework-neutral mounted view definitions", () => {
+    const definitions = [transformDefinition, mountedViewDefinition];
+    expect(definitions.map((definition) => definition.ref.nodeTypeId as string)).toEqual([
       "example/transform",
       "example/view",
     ]);
-    expect(registered[1]?.load).toBeFunction();
-    expect(dispose).toBeFunction();
-    expect(SDK_VERSION as string).toBe("1.0.0");
-  });
-
-  test("re-exports the protocol-owned plugin manifest parser", () => {
-    const manifest = PluginManifestSchema.parse({
-      manifestSchemaVersion: 1,
-      pluginId: "example.plugin",
-      pluginPackageVersion: "1.2.3",
-      sdkVersionRange: "^1.0.0",
-      displayName: "Example plugin",
-      clientEntry: "dist/client.js",
-      staticAssets: ["dist/client.css"],
-      hostCompatibility: {
-        hostVersionRange: ">=0.2.0",
-        platforms: ["darwin", "linux"],
-      },
-      license: "MIT",
-      permissions: [{ permission: "gpu", reason: "Renders a large point cloud" }],
-    });
-
-    expect(manifest.permissions[0]?.permission).toBe("gpu");
+    expect(mountedViewDefinition.load).toBeFunction();
   });
 });

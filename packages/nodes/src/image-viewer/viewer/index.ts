@@ -7,7 +7,6 @@ export const Viewer = {
 } as const;
 
 export { ChannelControls } from "./ChannelControls";
-export type { ChannelDef, ViewerActions, ViewerContextValue, ViewerMeta } from "./ViewerContext";
 export { ViewerControls } from "./ViewerControls";
 export { ViewerErrorBoundary } from "./ViewerErrorBoundary";
 export { ViewerLoadingOverlay } from "./ViewerLoadingOverlay";

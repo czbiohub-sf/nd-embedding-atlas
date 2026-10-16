@@ -17,16 +17,3 @@ export const scatterKeys = {
   categoryCount: (col: string) => ["scatter", "category-count", col] as const,
   rangeIsolation: (col: string, vmin: number, vmax: number) => ["scatter", "range-isolation", col, vmin, vmax] as const,
 } as const;
-
-export const tableKeys = {
-  rowPosition: (table: string, rowIndex: number, filterKey: string, sortKey: string) =>
-    ["table", "row-position", table, rowIndex, filterKey, sortKey] as const,
-} as const;
-
-export const trajectoryKeys = {
-  track: (table: string, trackId: number, fovName: string) => ["trajectory", table, trackId, fovName] as const,
-} as const;
-
-export const varKeys = {
-  names: (query: string, modality?: string) => ["var", "names", query, modality ?? null] as const,
-} as const;

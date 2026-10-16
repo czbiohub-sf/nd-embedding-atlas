@@ -57,7 +57,7 @@ interface ScatterGPUHostProps {
   pointStyle?: ScatterPointStyle;
   /** Declarative full-bright highlight set (e.g. trajectory points). null/empty = none. */
   highlightRowIds?: readonly RowIndex[] | null;
-  /** Incoming graph predicate matches. null = inactive; empty = hide every point. */
+  /** Filter-scope predicate matches. null = inactive; empty = hide every point. */
   predicateFilterRowIds?: readonly RowIndex[] | null;
   /** Panel identity for SelectionLayerStore registration. Optional to avoid breaking call sites. */
   myPanelId?: PanelId;

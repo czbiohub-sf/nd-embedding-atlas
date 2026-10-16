@@ -46,7 +46,7 @@ function ViewerObsReadout() {
 }
 
 export function CropViewer({ channelInstance = "docked", datasetKey }: CropViewerProps) {
-  // Focus read: scoped to this instance's host (sync group / focus wire).
+  // Focus read: scoped to this element's host (coordination group).
   const host = useImageViewerHost();
   const focusedRowIndex = useNodeFocus(host);
 

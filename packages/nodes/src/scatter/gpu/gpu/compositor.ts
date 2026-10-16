@@ -7,7 +7,6 @@ import type { ScatterBuffers, ScatterUniforms } from "./buffers";
 export const LAYER_LASSO = 0b00001;
 export const LAYER_EXTERNAL = 0b00010;
 export const LAYER_ISOLATION = 0b00100;
-export const LAYER_ANNOTATION = 0b01000;
 export const LAYER_HIGHLIGHT = 0b10000;
 
 export function createCompositor(

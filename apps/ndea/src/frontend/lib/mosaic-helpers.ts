@@ -3,26 +3,7 @@
  */
 
 import type { Selection } from "@uwdata/mosaic-core";
-import { and, type ExprNode, type FilterExpr, literal } from "@uwdata/mosaic-sql";
-
-/**
- * Convert a Mosaic FilterExpr (array | boolean | string | ExprNode) into a
- * single ExprNode suitable for SUM(CAST(expr AS INT)) aggregation.
- *
- * If the filter is empty/null, returns literal(true) so all rows count.
- */
-export function filterExprToExpr(filter: FilterExpr | null | undefined): ExprNode {
-  if (filter == null) return literal(true);
-  if (typeof filter === "boolean") return literal(filter);
-  if (typeof filter === "string") return literal(true);
-  if (Array.isArray(filter)) {
-    const exprs = filter.filter((f): f is ExprNode => f != null && typeof f !== "boolean" && typeof f !== "string");
-    if (exprs.length === 0) return literal(true);
-    if (exprs.length === 1) return exprs[0];
-    return and(...exprs);
-  }
-  return filter;
-}
+import { and, type ExprNode, literal } from "@uwdata/mosaic-sql";
 
 /**
  * Coerce a Mosaic query result to a plain array of row objects.

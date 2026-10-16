@@ -2,11 +2,8 @@
  * Gallery obs types + sizing constant.
  *
  * Shared by the gallery body (`GalleryPane`), the card (`LassoGalleryCard`), and
- * the node-scoped selection hook (`usePredicateGalleryObs`).
- *
- * The legacy process-wide lasso hook that once lived here was superseded by
- * `usePredicateGalleryObs`, which scopes the gallery to the node's wired
- * `host.inputPredicate`: no process-wide predicate read. Only shared types remain.
+ * the element-scoped selection hook (`usePredicateGalleryObs`). Only shared
+ * types live here.
  */
 import type { RowIndex } from "@ndea/sdk";
 

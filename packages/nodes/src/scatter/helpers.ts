@@ -1,4 +1,3 @@
-import type { Selection } from "@uwdata/mosaic-core";
 import { and, type ExprNode, type FilterExpr, literal } from "@uwdata/mosaic-sql";
 import { okLchToSrgb, ParseColorError, srgbFromHex, srgbToHex, srgbToOkLch } from "@ndea/ochre";
 import type { ColorMode, ColumnType, TrajectoryData } from "./contracts";
@@ -34,11 +33,6 @@ export function colorSourceObs(column: string): ColorSource & { kind: "obs" } {
   return { kind: "obs", column };
 }
 
-export function colorSourceVar(varName: string, layer: string): ColorSource & { kind: "var" } {
-  const column = `__var_${varName.replace(/[^a-zA-Z0-9]/g, "_")}_${layer.replace(/[^a-zA-Z0-9]/g, "_")}__`;
-  return { kind: "var", varName, layer, column };
-}
-
 const VAR_RE = /^__var_(.+)_([^_]+)__$/;
 
 export function colorSourceFromString(column: string | null): ColorSource {
@@ -51,16 +45,8 @@ export function colorSourceToString(source: ColorSource): string | null {
   return source.kind === "none" ? null : source.column;
 }
 
-export function isObsSource(source: ColorSource): source is ColorSource & { kind: "obs" } {
-  return source.kind === "obs";
-}
-
 export function isVarSource(source: ColorSource): source is ColorSource & { kind: "var" } {
   return source.kind === "var";
-}
-
-export function colorSourceLabel(source: ColorSource): string {
-  return source.kind === "none" ? "none" : source.kind === "var" ? source.varName : source.column;
 }
 
 export function colorSourceLegendLabel(source: ColorSource): string {
@@ -93,20 +79,6 @@ export function filterExprToExpr(filter: FilterExpr | null | undefined): ExprNod
 
 export function toRows<T = Record<string, unknown>>(result: unknown): T[] {
   return Array.isArray(result) ? result : Array.from(result as Iterable<T>);
-}
-
-export function predicateToSql(selection: Selection): string | null {
-  const predicate = selection.predicate(null);
-  if (predicate == null) return null;
-  if (Array.isArray(predicate)) {
-    if (predicate.length === 0) return null;
-    return and(...predicate)
-      .toString()
-      .trim();
-  }
-  if (typeof predicate === "string") return predicate.trim() || null;
-  if (typeof predicate === "boolean") return literal(predicate).toString();
-  return predicate.toString().trim();
 }
 
 export function stringPredicate(sql: string): ExprNode {

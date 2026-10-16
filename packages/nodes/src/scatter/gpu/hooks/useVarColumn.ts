@@ -1,6 +1,5 @@
 import { type VarColumnBody, VarColumnResponseSchema, VarColumnStatusResponseSchema } from "@ndea/protocol";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useScatterServices } from "../../context";
 
 type VarColumnStatus = "idle" | "loading" | "ready" | "error";
 
@@ -22,9 +21,7 @@ export interface VarColumnResult {
  *
  * Flow:
  *   POST /api/var-column { name, layer }
- *   → if WS connected: subscribe("var-column/status"): server pushes
- *     loading → ready/error transitions.
- *   → else: fall back to HTTP polling every 800 ms.
+ *   → poll GET /api/var-column/:task_id/status every 800 ms
  *   → on status="ready": set column
  *   → on status="error": set error
  */
@@ -34,7 +31,6 @@ interface UseVarColumnOptions {
 }
 
 export function useVarColumn(options?: UseVarColumnOptions): VarColumnResult {
-  const { wsClient, isReconnectError } = useScatterServices();
   const onStatusRef = useRef(options?.onStatus);
   onStatusRef.current = options?.onStatus;
 
@@ -44,7 +40,7 @@ export function useVarColumn(options?: UseVarColumnOptions): VarColumnResult {
     error: null,
   });
 
-  // Disposer for whichever watcher is active (WS sub or poll interval).
+  // Disposer for the active poll interval.
   const stopRef = useRef<(() => void) | null>(null);
 
   const stopWatching = useCallback(() => {
@@ -100,42 +96,6 @@ export function useVarColumn(options?: UseVarColumnOptions): VarColumnResult {
     [handleError, handleReady],
   );
 
-  const startWsSubscribe = useCallback(
-    (taskId: string) => {
-      const sub = wsClient.subscribe(
-        "var-column/status",
-        { task_id: taskId },
-        (raw) => {
-          const parsed = VarColumnStatusResponseSchema.safeParse(raw);
-          if (!parsed.success) {
-            sub.unsubscribe();
-            handleError("Invalid var-column status response");
-            return;
-          }
-          const msg = parsed.data;
-          if (msg.status === "ready") {
-            sub.unsubscribe();
-            handleReady(msg.column ?? null);
-          } else if (msg.status === "error") {
-            sub.unsubscribe();
-            handleError(msg.error ?? "Unknown error");
-          }
-          // "loading" → keep the subscription alive
-        },
-        (err) => {
-          if (isReconnectError(err)) {
-            // WS dropped mid-stream: switch to HTTP polling for the same task.
-            startHttpPoll(taskId);
-          } else {
-            handleError(err.message);
-          }
-        },
-      );
-      stopRef.current = () => sub.unsubscribe();
-    },
-    [handleError, handleReady, isReconnectError, startHttpPoll, wsClient],
-  );
-
   const materialize = useCallback(
     (name: string, layer: string, modality?: string) => {
       stopWatching();
@@ -167,16 +127,12 @@ export function useVarColumn(options?: UseVarColumnOptions): VarColumnResult {
           return;
         }
 
-        if (wsClient.isConnected) {
-          startWsSubscribe(taskId);
-        } else {
-          startHttpPoll(taskId);
-        }
+        startHttpPoll(taskId);
       };
 
       run().catch((err: unknown) => handleError(String(err)));
     },
-    [handleError, startHttpPoll, startWsSubscribe, stopWatching, wsClient],
+    [handleError, startHttpPoll, stopWatching],
   );
 
   return {

@@ -16,5 +16,3 @@ export function initGPU(canvas: HTMLCanvasElement, deviceInfo: DeviceInfo) {
 
   return { root, device, context, format, preferredWorkgroupSize };
 }
-
-export type GPUContext = Awaited<ReturnType<typeof initGPU>>;

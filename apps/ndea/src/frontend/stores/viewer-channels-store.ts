@@ -1,13 +1,13 @@
 /**
  * ViewerChannelsStore: shares live channel state from ViewerProvider
- * to components outside the viewer tree (e.g. TrackGallery).
+ * to components outside the viewer tree (galleries, annotate crops).
  *
  * ViewerProvider writes via publishViewerChannels in a useEffect.
- * TrackGallery reads via useGalleryChannels to match gallery thumbnails
- * to the live viewer channel state (contrast, colors, visibility).
+ * useGalleryChannels reads it to match gallery thumbnails to the live
+ * viewer channel state (contrast, colors, visibility).
  *
- * Each viewer instance has its own slot keyed by instanceId, enabling
- * N floating DatasetViewerPiP instances to maintain independent channel state.
+ * Keyed by slot: the dashboard element id, "docked", or a dataset key.
+ * Viewers and galleries sharing a slot share channel state.
  */
 
 import { Store } from "@tanstack/store";
@@ -20,16 +20,16 @@ export interface ViewerChannelsState {
 const initialState: ViewerChannelsState = { slots: {} };
 export const viewerChannelsStore = new Store(initialState);
 
-export function publishViewerChannels(instanceId: string, channels: ChannelDef[]): void {
+export function publishViewerChannels(slot: string, channels: ChannelDef[]): void {
   viewerChannelsStore.setState((prev) => ({
-    slots: { ...prev.slots, [instanceId]: channels },
+    slots: { ...prev.slots, [slot]: channels },
   }));
 }
 
-export function clearViewerChannels(instanceId: string): void {
+export function clearViewerChannels(slot: string): void {
   viewerChannelsStore.setState((prev) => {
     const next = { ...prev.slots };
-    delete next[instanceId];
+    delete next[slot];
     return { slots: next };
   });
 }

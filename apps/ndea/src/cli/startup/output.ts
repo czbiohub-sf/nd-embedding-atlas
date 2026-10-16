@@ -73,10 +73,6 @@ export function printMissingFrontend(): void {
   );
 }
 
-export function printPluginDiagnostic(sourceId: string, message: string): void {
-  console.warn(`    ${ANSI.yellow}⚠${ANSI.reset}  plugin ${sourceId}: ${message}`);
-}
-
 export function printPortInUse(config: Pick<LaunchConfig, "port" | "host">): void {
   console.error(`\n  ${ANSI.red}✗${ANSI.reset} Port ${config.port} is already in use on ${config.host}.`);
   console.error(`    Find the existing process:  ${ANSI.dim}lsof -nP -iTCP:${config.port} -sTCP:LISTEN${ANSI.reset}`);

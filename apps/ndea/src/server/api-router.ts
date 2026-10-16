@@ -1,5 +1,3 @@
-import type { PluginRuntimeSnapshot } from "./plugins/assets.ts";
-import { pluginBootstrapResponse } from "./plugins/bootstrap.ts";
 import {
   handleCreateAnnotationColumn,
   handleCommitAnnotations,
@@ -32,7 +30,6 @@ interface ApiRouteContext {
   method: string;
   store: DatasetQuerySession;
   state: ServerSession;
-  pluginSnapshot: PluginRuntimeSnapshot;
 }
 
 type ApiRouteResult = Response | Promise<Response> | null;
@@ -45,12 +42,9 @@ function extractPathParam(pathname: string, prefix: string): string | null {
   return rest.endsWith("/") ? rest.slice(0, -1) : rest;
 }
 
-function routeCore({ pathname, method, state, pluginSnapshot }: ApiRouteContext): ApiRouteResult {
+function routeCore({ pathname, method, state }: ApiRouteContext): ApiRouteResult {
   if (pathname === "/api/health" && method === "GET") return handleHealth(state);
   if (pathname === "/api/config" && method === "GET") return handleConfig(state);
-  if (pathname === "/api/plugins/bootstrap" && method === "GET") {
-    return pluginBootstrapResponse(pluginSnapshot);
-  }
   return null;
 }
 
@@ -216,9 +210,8 @@ export function routeApi(
   pathname: string,
   store: DatasetQuerySession,
   state: ServerSession,
-  pluginSnapshot: PluginRuntimeSnapshot,
 ): Response | Promise<Response> {
-  const context: ApiRouteContext = { req, url, pathname, method: req.method, store, state, pluginSnapshot };
+  const context: ApiRouteContext = { req, url, pathname, method: req.method, store, state };
   for (const dispatch of API_ROUTE_DISPATCHERS) {
     const response = dispatch(context);
     if (response) return response;

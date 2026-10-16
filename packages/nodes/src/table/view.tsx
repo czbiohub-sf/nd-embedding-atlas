@@ -13,7 +13,8 @@ import type { SortingState } from "@tanstack/react-table";
 import type { RowIndex } from "@ndea/sdk";
 import { useNodeFocus } from "../query/useNodeFocus";
 import { DataTable } from "./DataTable";
-import type { NodeBodyProps, TableCapabilities, TableConfig, TableServices } from "./contracts";
+import type { NodeBodyProps } from "../contracts";
+import type { TableCapabilities, TableConfig, TableServices } from "./contracts";
 
 /** The `ordering` coordination cell ⇄ TanStack `SortingState` bridge. */
 type OrderingCell = { col: string; dir: "asc" | "desc" } | null;

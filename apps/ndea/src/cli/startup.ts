@@ -7,7 +7,6 @@ import { openDatasets, prepareDatasets } from "./startup/datasets.ts";
 import { createQuerySession } from "./startup/ingest.ts";
 import { printBanner, printPreparingObs, printReady } from "./startup/output.ts";
 import {
-  bootstrapPlugins,
   installDevErrorBridge,
   openBrowser,
   prewarmEmbeddings,
@@ -33,9 +32,8 @@ export async function startup(config: LaunchConfig): Promise<void> {
   const session = await prepareServerSession(config, datasets, query, workspace);
 
   const frontendDir = resolveStaticDirectory(config);
-  const pluginSnapshot = await bootstrapPlugins(config);
   const metadata = buildDatasetMetadata(datasets, session);
-  const server = await startServer(config, session.state, metadata, frontendDir, pluginSnapshot);
+  const server = await startServer(config, session.state, metadata, frontendDir);
 
   await prewarmEmbeddings(session.state);
   printReady(config, loaded, datasets.availableObsmKeys, startTime);

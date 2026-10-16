@@ -7,7 +7,7 @@
  */
 
 import { existsSync } from "node:fs";
-import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
+import { dirname, resolve } from "node:path";
 import { parse as parseYaml } from "yaml";
 import type { DatasetChannelConfig } from "../server/state.ts";
 import { defaultWorkspacePath } from "./lib/paths.ts";
@@ -30,10 +30,6 @@ export interface ParsedProjectConfig {
   };
   /** Preset a new workspace file starts from (top-level YAML `preset:`): a built-in name or a .json document. */
   preset?: string;
-  /** Absolute plugin paths resolved from top-level YAML `plugin_paths:`. */
-  pluginPaths?: string[];
-  /** Absolute YAML directory used as the plugin-path containment boundary. */
-  pluginPathRoot?: string;
 }
 
 /** Fully resolved config with CLI overrides applied. */
@@ -45,8 +41,6 @@ export interface LaunchConfig {
   noOpen: boolean;
   noStatic: boolean;
   preset?: string;
-  pluginPaths?: string[];
-  pluginPathRoot?: string;
   /** Absolute path of the workspace document file. */
   workspace: string;
 }
@@ -95,10 +89,8 @@ export async function loadProjectConfig(yamlPath: string): Promise<ParsedProject
   const obsColumns = parseObsColumns(raw.obs_columns);
   const settings = parseSettings(raw.settings);
   const preset = typeof raw.preset === "string" ? raw.preset : undefined;
-  const pluginPaths = parsePluginPaths(raw.plugin_paths, baseDir);
-  const pluginPathRoot = raw.plugin_paths === undefined ? undefined : baseDir;
 
-  return { datasets, obsColumns, settings, preset, pluginPaths, pluginPathRoot };
+  return { datasets, obsColumns, settings, preset };
 }
 
 // ─── Path-based config ──────────────────────────────────────────────────────
@@ -129,8 +121,6 @@ export function resolveLaunchConfig(project: ParsedProjectConfig, overrides: Lau
     noOpen: overrides.noOpen,
     noStatic: overrides.noStatic,
     preset: overrides.preset ?? project.preset,
-    pluginPaths: project.pluginPaths,
-    pluginPathRoot: project.pluginPathRoot,
     workspace: overrides.workspace
       ? resolve(overrides.workspace)
       : defaultWorkspacePath(project.datasets.map((dataset) => dataset.path)),
@@ -317,33 +307,4 @@ function parseSettings(raw: unknown): ParsedProjectConfig["settings"] | undefine
   }
 
   return result;
-}
-
-function parsePluginPaths(raw: unknown, baseDir: string): string[] | undefined {
-  if (raw === undefined) return undefined;
-  if (!Array.isArray(raw)) {
-    throw new TypeError("'plugin_paths' must be an array of relative path strings");
-  }
-
-  return raw.map((entry, index) => {
-    if (typeof entry !== "string") {
-      throw new TypeError(`plugin_paths entry ${index} must be a string`);
-    }
-    if (entry.length === 0) {
-      throw new Error(`plugin_paths entry ${index} must not be empty`);
-    }
-    if (entry.includes("\0")) {
-      throw new Error(`plugin_paths entry ${index} must not contain NUL`);
-    }
-    if (isAbsolute(entry)) {
-      throw new Error(`plugin_paths entry ${index} must be relative`);
-    }
-
-    const pluginPath = resolve(baseDir, entry);
-    const relativePath = relative(baseDir, pluginPath);
-    if (relativePath === ".." || relativePath.startsWith(`..${sep}`) || isAbsolute(relativePath)) {
-      throw new Error(`plugin_paths entry ${index} escapes the project directory`);
-    }
-    return pluginPath;
-  });
 }

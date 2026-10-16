@@ -57,7 +57,7 @@ See [Install][docs-install], [Launch ndea][docs-launch], and [Prepare data][docs
 - Streams local AnnData, a supported MuData subset, and mounted OME-Zarr HCS images.
 - Uses DuckDB and Mosaic for server-side queries and cross-filtering.
 - Renders large scatter plots and selections with WebGPU.
-- Opens the fixed `annotate` preset with linked views for exploration and annotation.
+- Opens a dashboard of linked views, starting from the built-in `annotate` preset or any `--preset` JSON document.
 
 ## Data compatibility
 

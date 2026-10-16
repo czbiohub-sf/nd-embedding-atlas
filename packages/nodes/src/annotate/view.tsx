@@ -1,9 +1,9 @@
 /**
- * Annotate node body: a TABLE-first labeling surface (one door, one node).
+ * Annotate element body: a TABLE-first labeling surface.
  *
- * Rows = the scoped obs (the wired predicate, delivered as `host.inputPredicate`
- * and consumed straight by `AnnotateTable`/`useTableQuery`: the same plumbing
- * the Table node uses, so it scopes off a Filter/Wrangle edge correctly).
+ * Rows = the scoped obs (the filter-scope predicate, delivered as
+ * `host.inputPredicate` and consumed straight by `AnnotateTable`/`useTableQuery`:
+ * the same plumbing the Table view uses, so derived data sources scope correctly).
  *
  * Two modes share the surface:
  *  - `label`: a vocabulary palette + hotkeys stamp the focused row / selection.
@@ -11,7 +11,7 @@
  *    interval per obs, committed as two float columns `{metric}_min`/`_max`.
  *
  * Selection is SPREADSHEET-style (click / shift / ⌘). The focused (last-clicked)
- * row drives `host.focus.set`, so wired viewers (Idetik, Gallery) follow it.
+ * row drives `host.focus.set`, so linked viewers (Idetik, Gallery) follow it.
  * A separate "all in scope" path writes server-side over the full predicate.
  *
  * Writes and reads go through `host.dataAPI` and the
@@ -106,7 +106,7 @@ export function AnnotateView({
   const rangeInvalid = rangeLo != null && rangeHi != null && rangeLo > rangeHi;
   const rangeComplete = rangeLo != null && rangeHi != null && !rangeInvalid;
 
-  // scope predicate (same path useTableQuery uses → works off Filter edges)
+  // scope predicate (same path useTableQuery uses → works on derived data sources)
   const scopeExpr: FilterExpr | null = host.inputPredicate?.predicate?.(null) ?? null;
   const hasScope = scopeExpr != null;
   const contextColumns = useMemo(
@@ -266,7 +266,7 @@ export function AnnotateView({
   const onSkip = useCallback(() => setStatus(null), []);
   const stamped = localLabels.size;
 
-  // table wiring differs by mode: range shows {base}_min (context) + {base}_max (label col)
+  // table columns differ by mode: range shows {base}_min (context) + {base}_max (label col)
   const tableContext = mode === "range" ? (rangeReady && minCol ? [minCol] : []) : contextColumns;
   const tableLabelCol = mode === "range" ? (rangeReady ? maxCol : null) : targetColumn;
   const tableLabels = mode === "range" ? [] : labels;

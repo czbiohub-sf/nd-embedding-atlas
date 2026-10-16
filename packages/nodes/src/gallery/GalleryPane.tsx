@@ -1,8 +1,8 @@
 /**
- * GalleryPane: predicate-driven crop gallery for the ⌘J terminal drawer.
+ * GalleryPane: predicate-driven crop gallery.
  *
- * Renders OME-Zarr crops for whatever observations the scatter is currently
- * filtered to by a wired row set.
+ * Renders OME-Zarr crops for whatever observations the element's filter scope
+ * narrows to.
  *
  * Reuses TrackGallery's lanes virtualization + blob-URL lifecycle pattern
  * (see TrackGallery.tsx:97-103, 51-74).
@@ -27,9 +27,9 @@ const ROW_GAP = 18;
 const MIN_COL_WIDTH = 220;
 
 interface GalleryPaneProps {
-  /** Mosaic coordinator from the gallery node's `host.data`. */
+  /** Mosaic coordinator from the gallery element's `host.data`. */
   coordinator: Coordinator;
-  /** Wired-input WHERE predicate from `predicateToSql(host.inputPredicate)`. */
+  /** Filter-scope WHERE predicate from `predicateToSql(host.inputPredicate)`. */
   predicate: string | null;
   /** Scoped, group-aware focused row from `host.focus`. */
   focusedRowIndex: RowIndex | null;
@@ -52,7 +52,7 @@ export function GalleryPane({
   const metadata = services.metadata;
   const hasPlate = metadata ? capabilitiesOf(metadata).has("plate-image") : false;
 
-  // Scoped to THIS node's wired input predicate (not the global selection bus).
+  // Scoped to THIS element's filter predicate (not the global selection bus).
   const { obs, rowCount, isLoading } = usePredicateGalleryObs(coordinator, predicate);
 
   // Resolve channel state from the docked viewer instance, mirroring TrackGallery.
@@ -206,7 +206,7 @@ function EmptyState() {
       <SquareDashedMousePointer className="size-5 text-muted-foreground/40" />
       <div className="font-medium text-foreground/70 text-xs">No selection</div>
       <div className="max-w-[260px] text-muted-foreground/60 text-2xs leading-relaxed">
-        Wire a row selection to populate the gallery.
+        Narrow its filter scope (a lasso, a chart brush, a select) to populate the gallery.
       </div>
     </div>
   );

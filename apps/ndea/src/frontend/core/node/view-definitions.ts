@@ -22,7 +22,6 @@ import { makeCategoryColumn } from "@/lib/color/category-column";
 import { buildColormapLut } from "@/lib/color/ochre-lut";
 import { getColormapList, pickDefaultCategoricalPalette } from "@/lib/color/ochre-palette";
 import { predicateToSql } from "@/lib/mosaic-helpers";
-import { WsReconnectError, wsClient } from "@/lib/ws-client";
 import { pointRadiusStore } from "@/stores/point-radius-store";
 import { renderSettingsStore } from "@/stores/render-settings-store";
 import { clearViewerChannels, publishViewerChannels, viewerChannelsStore } from "@/stores/viewer-channels-store";
@@ -91,8 +90,6 @@ const services: NodeCatalogServices = {
     pickDefaultCategoricalPalette,
     pointRadiusStore,
     renderSettingsStore,
-    wsClient,
-    isReconnectError: (error) => error instanceof WsReconnectError,
     onDeviceLost,
     bodyHeaderElement,
   },

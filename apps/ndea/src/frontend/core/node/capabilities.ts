@@ -1,7 +1,16 @@
-import type { NodeCapability, NodeDefinition, PluginPermission } from "@ndea/sdk";
+import type { NodeCapability, NodeDefinition } from "@ndea/sdk";
 import type { AppNodeHost, ErasedAppNodeHost } from "@/core/node/app-node-host";
 
 type ServiceRequirement = readonly [path: readonly string[], kind: "callable" | "object"];
+type Permission =
+  | "network"
+  | "filesystem-import"
+  | "filesystem-export"
+  | "clipboard-read"
+  | "clipboard-write"
+  | "gpu"
+  | "schema-mutation"
+  | "irreversible-data-write";
 type CapabilityCategory = "operations" | "coordination" | "authorityResources" | "environmentMarkers";
 
 export interface CapabilityDoc {
@@ -13,7 +22,7 @@ export interface CapabilityDoc {
 interface Capability extends CapabilityDoc {
   category: CapabilityCategory;
   services: readonly ServiceRequirement[];
-  permission: PluginPermission | null;
+  permission: Permission | null;
 }
 
 /** The app's capability policy, documentation, and host requirements live together. */

@@ -126,7 +126,7 @@ describe("annotations: lifecycle", () => {
   });
 });
 
-describe("annotations: from predicate (node-graph batch door)", () => {
+describe("annotations: from predicate (batch)", () => {
   test("stamps a label onto every obs matching the predicate and returns the count", async () => {
     const store = await createMockStore(10);
     activeStore = store;

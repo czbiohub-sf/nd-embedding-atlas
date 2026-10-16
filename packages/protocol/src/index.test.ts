@@ -15,7 +15,6 @@ import {
   ExportDirectoryResponseSchema,
   MetadataSchema,
   type Metadata,
-  type NdeaProtocol,
   ObsInfoSchema,
   TrajectoryResponseSchema,
   VarColumnBodySchema,
@@ -44,16 +43,16 @@ describe("shared route contracts", () => {
   });
 
   test("accepts optional var-column layer and modality fields", () => {
-    const request = { name: "MS4A1", modality: "rna" } satisfies NdeaProtocol["var-column/load"]["req"];
+    const request = { name: "MS4A1", modality: "rna" };
     expect(VarColumnBodySchema.parse(request)).toEqual(request);
   });
 
-  test("uses the HTTP export body for the retained WebSocket method", () => {
+  test("parses the HTTP export body", () => {
     const request = {
       predicate: "cell_type = 'T'",
       output_path: "exports/t-cells.parquet",
       embedding_key: null,
-    } satisfies NdeaProtocol["export/start"]["req"];
+    };
     expect(ExportBodySchema.parse(request)).toEqual(request);
   });
 });

@@ -33,11 +33,3 @@ function detectCompiled(): boolean {
 }
 
 export const isCompiled: boolean = detectCompiled();
-
-// ─── Path constants ────────────────────────────────────────────────────────
-
-/** Root path prefix for embedded assets in a compiled binary. */
-export const BUNFS_PREFIX = "/$bunfs";
-
-/** Embedded frontend dist path in a compiled binary. */
-export const BUNFS_FRONTEND_DIST = `${BUNFS_PREFIX}/frontend/dist`;

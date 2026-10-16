@@ -8,13 +8,12 @@ import Doctor from '../apps/ndea/src/cli/commands/doctor.js'
 import Filter from '../apps/ndea/src/cli/commands/filter.js'
 import Gc from '../apps/ndea/src/cli/commands/gc.js'
 import Mcp from '../apps/ndea/src/cli/commands/mcp.js'
-import Plugin from '../apps/ndea/src/cli/commands/plugin/index.js'
 import Update from '../apps/ndea/src/cli/commands/update.js'
 import View from '../apps/ndea/src/cli/commands/view.js'
 import Workspace from '../apps/ndea/src/cli/commands/workspace.js'
 
 // Narrow list of command names to avoid typeof-cycles in types
-const names = ['doctor', 'filter', 'gc', 'mcp', 'plugin', 'update', 'view', 'workspace'] as const
+const names = ['doctor', 'filter', 'gc', 'mcp', 'update', 'view', 'workspace'] as const
 type GeneratedNames = typeof names[number]
 
 const modules: Record<GeneratedNames, Command<any>> = {
@@ -22,7 +21,6 @@ const modules: Record<GeneratedNames, Command<any>> = {
   'filter': Filter,
   'gc': Gc,
   'mcp': Mcp,
-  'plugin': Plugin,
   'update': Update,
   'view': View,
   'workspace': Workspace
@@ -62,33 +60,6 @@ const metadata: Record<GeneratedNames, GeneratedCommandMeta> = {
       description: 'Connect coding agents to ndea\'s MCP server',
       path: './apps/ndea/src/cli/commands/mcp'
     },
-  'plugin': {
-      name: 'plugin',
-      description: 'Validate and configure trusted custom-node plugins',
-      commands: [
-        {
-          name: 'plugin/validate',
-          description: 'Validate a plugin package without executing its client code',
-          path: './apps/ndea/src/cli/commands/plugin/validate'
-        },
-        {
-          name: 'plugin/list',
-          description: 'List configured user plugin roots in discovery order',
-          path: './apps/ndea/src/cli/commands/plugin/list'
-        },
-        {
-          name: 'plugin/enable',
-          description: 'Enable a user plugin package for the next session',
-          path: './apps/ndea/src/cli/commands/plugin/enable'
-        },
-        {
-          name: 'plugin/disable',
-          description: 'Disable a user plugin package for the next session',
-          path: './apps/ndea/src/cli/commands/plugin/disable'
-        }
-      ],
-      path: './apps/ndea/src/cli/commands/plugin/index'
-    },
   'update': {
       name: 'update',
       description: 'Download the latest ndea release and switch to it',
@@ -101,12 +72,12 @@ const metadata: Record<GeneratedNames, GeneratedCommandMeta> = {
     },
   'view': {
       name: 'view',
-      description: 'Open one or more Zarr stores (or a YAML project config) in the Node Workspace',
+      description: 'Open one or more Zarr stores (or a YAML project config) in the dashboard',
       options: {
         'port': { type: 'z.coerce.number.int.min.max.optional', required: false, hasDefault: false, description: 'Server port (default: 5055)', min: 1, max: 65535, minLength: 1, maxLength: 65535, schema: {"type":"zod","method":"optional","args":[]}, validator: '(val) => true' },
         'host': { type: 'z.string.optional', required: false, hasDefault: false, description: 'Server host (default: 127.0.0.1)', schema: {"type":"zod","method":"optional","args":[]}, validator: '(val) => true' },
-        'no-open': { type: 'z.coerce.boolean.default', required: true, hasDefault: true, default: false, description: 'Do not auto-open the browser', schema: {"type":"zod","method":"default","args":[{"type":"unknown","raw":{"type":"BooleanLiteral","start":996,"end":1001,"loc":{"start":{"line":25,"column":49,"index":996},"end":{"line":25,"column":54,"index":1001}},"value":false}}]}, validator: '(val) => true' },
-        'no-static': { type: 'z.coerce.boolean.default', required: true, hasDefault: true, default: false, description: 'Do not serve the frontend bundle (dev mode)', schema: {"type":"zod","method":"default","args":[{"type":"unknown","raw":{"type":"BooleanLiteral","start":1144,"end":1149,"loc":{"start":{"line":29,"column":51,"index":1144},"end":{"line":29,"column":56,"index":1149}},"value":false}}]}, validator: '(val) => true' },
+        'no-open': { type: 'z.coerce.boolean.default', required: true, hasDefault: true, default: false, description: 'Do not auto-open the browser', schema: {"type":"zod","method":"default","args":[{"type":"unknown","raw":{"type":"BooleanLiteral","start":986,"end":991,"loc":{"start":{"line":25,"column":49,"index":986},"end":{"line":25,"column":54,"index":991}},"value":false}}]}, validator: '(val) => true' },
+        'no-static': { type: 'z.coerce.boolean.default', required: true, hasDefault: true, default: false, description: 'Do not serve the frontend bundle (dev mode)', schema: {"type":"zod","method":"default","args":[{"type":"unknown","raw":{"type":"BooleanLiteral","start":1134,"end":1139,"loc":{"start":{"line":29,"column":51,"index":1134},"end":{"line":29,"column":56,"index":1139}},"value":false}}]}, validator: '(val) => true' },
         'obs-columns': { type: 'z.string.optional', required: false, hasDefault: false, description: 'Comma-separated obs columns to include', schema: {"type":"zod","method":"optional","args":[]}, validator: '(val) => true' },
         'preset': { type: 'z.string.optional', required: false, hasDefault: false, description: 'Preset a new workspace file starts from: a built-in name (annotate) or a .json workspace document', schema: {"type":"zod","method":"optional","args":[]}, validator: '(val) => true' },
         'workspace': { type: 'z.string.optional', required: false, hasDefault: false, description: 'Workspace document file (default: ~/.ndea/workspaces/<datasets>.json)', schema: {"type":"zod","method":"optional","args":[]}, validator: '(val) => true' }

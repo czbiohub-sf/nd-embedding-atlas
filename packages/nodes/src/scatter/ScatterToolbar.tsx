@@ -1,9 +1,9 @@
 /**
  * ScatterToolbar: the scatter's controls, two ways:
- *  · variant="header": compact run portaled into the node/tile header's
- *    middle gap (host.ui.container.headerEl; the workspace surfaces)
- *  · variant="docked": full-width row above a Stage or fullscreen surface
- *    whose container has no header slot
+ *  · variant="header": compact run portaled into the element header's
+ *    middle gap (host.ui.container.headerEl)
+ *  · variant="docked": full-width row above a fullscreen surface whose
+ *    container has no header slot
  * Either way the points stay unobstructed. The active embedding is the
  * primary-filled bracketed chip [embedding]; everything else sits ghosted.
  *

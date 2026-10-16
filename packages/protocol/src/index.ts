@@ -5,49 +5,13 @@
  *   - POST body schemas (server validates with .safeParse; frontend types via z.infer)
  *   - Response schemas (frontend parses; backend returns z.infer-shaped objects)
  *   - Binary-blob header schemas (scatter endpoints)
- *   - WebSocket method map (future migration)
+ *   - WebSocket method map
  *
  */
 
 import { z } from "zod";
 import type { WorkspaceChange } from "./workspace";
 
-export {
-  PLUGIN_BOOTSTRAP_SCHEMA_VERSION,
-  PLUGIN_MANIFEST_SCHEMA_VERSION,
-  PluginBootstrapCatalogSchema,
-  PluginBootstrapEntrySchema,
-  PluginBootstrapSchemaVersionSchema,
-  PluginDiagnosticSchema,
-  PluginDiagnosticSeveritySchema,
-  PluginDiagnosticStageSchema,
-  PluginHostCompatibilitySchema,
-  PluginIdSchema,
-  PluginManifestSchema,
-  PluginManifestSchemaVersionSchema,
-  PluginPackageVersionSchema,
-  PluginPermissionDisclosureSchema,
-  PluginPermissionSchema,
-  PluginPlatformSchema,
-  SDKVersionRangeSchema,
-} from "./plugin";
-export type {
-  PluginBootstrapCatalog,
-  PluginBootstrapEntry,
-  PluginBootstrapSchemaVersion,
-  PluginDiagnostic,
-  PluginDiagnosticSeverity,
-  PluginDiagnosticStage,
-  PluginHostCompatibility,
-  PluginId,
-  PluginManifest,
-  PluginManifestSchemaVersion,
-  PluginPackageVersion,
-  PluginPermission,
-  PluginPermissionDisclosure,
-  PluginPlatform,
-  SDKVersionRange,
-} from "./plugin";
 export {
   OBSERVATION_SET_TABLE,
   FilterClauseSchema,
@@ -439,30 +403,6 @@ export type ContinuousValuesHeader = z.infer<typeof ContinuousValuesHeaderSchema
 
 /** Implemented ndea WebSocket methods, typed by exact request/response DTOs. */
 export interface NdeaProtocol {
-  "embeddings/load": {
-    req: { key: string };
-    res: { status: string };
-  };
-  "embeddings/status": {
-    req: { key: string };
-    res: EmbeddingStatus;
-  };
-  "var-column/load": {
-    req: VarColumnBody;
-    res: VarColumnResponse;
-  };
-  "var-column/status": {
-    req: { task_id: string };
-    res: VarColumnStatusResponse;
-  };
-  "export/start": {
-    req: ExportBody;
-    res: { task_id: string; status: string };
-  };
-  "export/status": {
-    req: { task_id: string };
-    res: { status: string; output_path?: string; n_obs?: number; error?: string };
-  };
   "workspace/watch": {
     req: Record<string, never>;
     res: WorkspaceChange;

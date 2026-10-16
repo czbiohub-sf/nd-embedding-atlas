@@ -62,10 +62,11 @@ entrypoints across workspaces.
   WebSocket server.
 - `/mosaic` carries the preferred long-lived Mosaic WebSocket protocol.
   `/data/query` remains the REST test and curl fallback.
-- Other WebSocket paths use the framed `{ _id, _type }` ndea protocol.
-- REST routes cover embeddings, observations, scatter data, variables,
-  categorization, annotations, exports, crops, filtering, the workspace
-  document, and plugin bootstrap.
+- `/ws` carries the framed `{ _id, _type }` ndea protocol; its one method is
+  `workspace/watch`.
+- REST routes cover health, config, embeddings, observations, scatter data,
+  variables, categorization, annotations, exports, crops, filtering, sets, and
+  the workspace document.
 - The workspace document has three sections: `data` (named data sources),
   `spec` (the json-render dashboard), and `state` (coordination cells).
   `frontend/core/workspace/document.ts` validates all of it and is pure, so the
@@ -102,7 +103,7 @@ entrypoints across workspaces.
 - `EmbeddingStore` owns one DuckDB connection. Base tables, the `dataset` view,
   temporary selections, and Mosaic preaggregations share that connection.
 
-### SDK and plugins
+### SDK
 
 - A view component is an `@ndea/sdk` `NodeDefinition`: `ref`, `title`,
   `capabilities`, `documentation`, a config contract `{ schema, defaultValue }`,
@@ -111,11 +112,8 @@ entrypoints across workspaces.
 - `NodeHost` exposes declared, capability-gated services. A new capability is
   one `NodeCapability` union member in `@ndea/sdk` plus one `nodeCapabilities`
   entry in `frontend/core/node/capabilities.ts`.
-- Startup validates plugin manifests and serves allowlisted assets, but the
-  dashboard does not mount plugin components yet: a component-registration
-  contract replaces the old node catalog in a later iteration.
-- `SDK_VERSION` versions the author contract independently from app, manifest,
-  and Workspace document versions.
+- There is no plugin system: every component is built in. Third-party
+  component registration is future work.
 
 ### Frontend
 

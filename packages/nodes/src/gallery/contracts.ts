@@ -1,12 +1,9 @@
 import type { Metadata } from "@ndea/protocol";
-import type { NodeBodyProps as SharedNodeBodyProps } from "../contracts";
 
 export type ChannelHash = string & { readonly __brand: "ChannelHash" };
-export type NodeBodyProps<Config, Capabilities extends GalleryCapabilities> = SharedNodeBodyProps<Config, Capabilities>;
 export interface GalleryConfig {
   lanes: number | null;
 }
-export type GalleryOptions = Record<string, never>;
 export type GalleryCapabilities = "data-read" | "spatial-data" | "wasm-bitmap" | "focus-coordination";
 export interface ChannelDef {
   label: string;

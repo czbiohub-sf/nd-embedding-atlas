@@ -11,14 +11,7 @@ import {
 } from "@ndea/ui/components/command";
 import { DimensionBadge } from "@ndea/ui/components/dimension-badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@ndea/ui/components/popover";
-import {
-  COLOR_NONE,
-  type ColorSource,
-  colorSourceFromString,
-  colorSourceObs,
-  colorSourceVar,
-  isVarSource,
-} from "./helpers";
+import { COLOR_NONE, type ColorSource, colorSourceFromString, colorSourceObs, isVarSource } from "./helpers";
 import { cn } from "@ndea/ui/lib/utils";
 import { useVarColumn } from "./gpu/hooks/useVarColumn";
 import { useVarSearch } from "./gpu/hooks/useVarSearch";
@@ -255,8 +248,3 @@ export function ColorSourcePicker({
     </Popover>
   );
 }
-
-// Re-export ColorSource so callers can import from this module if convenient
-export type { ColorSource };
-// eslint-disable-next-line react/only-export-components
-export { colorSourceVar };

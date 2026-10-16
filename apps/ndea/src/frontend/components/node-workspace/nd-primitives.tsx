@@ -1,43 +1,12 @@
 /**
- * nd telemetry atoms: NdLed, NdHud, NdCaption.
+ * nd telemetry atoms: NdHud, NdCaption.
  *
- * The workspace talks like lab-equipment telemetry: lowercase mono labels and
- * LED states.
+ * The workspace talks like lab-equipment telemetry: lowercase mono labels.
  */
 
-import { cva, type VariantProps } from "class-variance-authority";
 import type * as React from "react";
 
 import { cn } from "@ndea/ui/lib/utils";
-
-/* ── Status LED: the cook lifecycle ─────────────────────────────── */
-
-const ndLedVariants = cva("inline-block shrink-0 rounded-full", {
-  variants: {
-    state: {
-      clean: "bg-success shadow-[0_0_5px] shadow-success/60",
-      dirty: "bg-warning shadow-[0_0_5px] shadow-warning/60",
-      cooking: "animate-nd-led-pulse bg-primary shadow-[0_0_6px] shadow-primary/80",
-      idle: "bg-text-muted opacity-45 shadow-none",
-      error: "bg-destructive shadow-[0_0_5px] shadow-destructive/60",
-    },
-  },
-  defaultVariants: { state: "clean" },
-});
-
-export type NdLedState = NonNullable<VariantProps<typeof ndLedVariants>["state"]>;
-
-export function NdLed({
-  state = "clean",
-  size = 6,
-  className,
-}: {
-  state?: NdLedState;
-  size?: number;
-  className?: string;
-}) {
-  return <span className={cn(ndLedVariants({ state }), className)} style={{ width: size, height: size }} />;
-}
 
 /* ── HUD label: Geist Pixel signage, uppercase ──────────────────── */
 

@@ -4,8 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts",
-    "./graph": "./src/graph.ts"
+    ".": "./src/index.ts"
   },
   "scripts": {
     "check": "vp check",

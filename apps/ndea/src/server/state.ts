@@ -85,16 +85,6 @@ export function detectSpatialColumns(obsColumns: Set<string>): SpatialColumns {
   return { fov, t, bbox, x, y, z };
 }
 
-/** Returns all non-null spatial column names. */
-export function spatialAllColumns(spatial: SpatialColumns | null): Set<string> {
-  if (!spatial) return new Set();
-  const cols = new Set<string>();
-  for (const v of [spatial.fov, spatial.t, spatial.bbox, spatial.x, spatial.y, spatial.z]) {
-    if (v != null) cols.add(v);
-  }
-  return cols;
-}
-
 /** Per-channel rendering configuration for one mounted dataset. */
 export interface DatasetChannelConfig {
   /** Hex color without '#', e.g. "FF0000". */

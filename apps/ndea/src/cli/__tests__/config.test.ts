@@ -59,8 +59,6 @@ preset: explore
       obsColumns: ["cell_type", "treatment"],
       settings: { port: 6060, host: "0.0.0.0" },
       preset: "explore",
-      pluginPaths: undefined,
-      pluginPathRoot: undefined,
     });
   });
 
@@ -126,59 +124,12 @@ datasets:
   });
 });
 
-describe("project plugin paths", () => {
-  test("resolves lexical paths under the YAML directory in declared order", async () => {
-    const config = await loadYaml(`
-datasets:
-  cells:
-    anndata: data/cells.zarr
-plugin_paths:
-  - plugins/first
-  - ./plugins/nested/../second
-  - .
-`);
-
-    expect(config.pluginPaths).toEqual([
-      join(projectDir, "plugins", "first"),
-      join(projectDir, "plugins", "second"),
-      projectDir,
-    ]);
-    expect(config.pluginPathRoot).toBe(projectDir);
-  });
-
-  const invalidCases: [string, string, RegExp][] = [
-    ["a mapping", "plugin_paths: { plugin: ./plugins/a }", /plugin_paths.*array/],
-    ["null", "plugin_paths: null", /plugin_paths.*array/],
-    ["a non-string entry", "plugin_paths: [42]", /entry 0.*string/],
-    ["an empty entry", 'plugin_paths: [""]', /entry 0.*empty/],
-    ["an absolute entry", `plugin_paths: [${JSON.stringify(resolve("/tmp/outside-plugin"))}]`, /entry 0.*relative/],
-    ["a NUL entry", 'plugin_paths: ["bad\\u0000path"]', /entry 0.*NUL/],
-    ["a parent escape", "plugin_paths: [../outside-plugin]", /entry 0.*escapes/],
-    ["a normalized parent escape", "plugin_paths: [plugins/../../outside-plugin]", /entry 0.*escapes/],
-  ];
-
-  for (const [label, pluginYaml, expected] of invalidCases) {
-    test(`rejects ${label}`, async () => {
-      await expect(
-        loadYaml(`
-datasets:
-  cells:
-    anndata: data/cells.zarr
-${pluginYaml}
-`),
-      ).rejects.toThrow(expected);
-    });
-  }
-});
-
 describe("launch config", () => {
   const project: ParsedProjectConfig = {
     datasets: [{ name: "cells", path: "/project/cells.zarr" }],
     obsColumns: ["from_yaml"],
     settings: { port: 6060, host: "yaml-host" },
     preset: "yaml-preset",
-    pluginPaths: ["/project/plugins/first", "/project/plugins/second"],
-    pluginPathRoot: "/project",
   };
 
   test("uses YAML values when CLI overrides are absent", () => {
@@ -195,13 +146,11 @@ describe("launch config", () => {
       noOpen: false,
       noStatic: true,
       preset: "yaml-preset",
-      pluginPaths: project.pluginPaths,
-      pluginPathRoot: "/project",
       workspace: defaultWorkspacePath(["/project/cells.zarr"]),
     });
   });
 
-  test("applies CLI values over YAML while carrying plugin paths unchanged", () => {
+  test("applies CLI values over YAML", () => {
     expect(
       resolveLaunchConfig(project, {
         port: 7070,
@@ -220,8 +169,6 @@ describe("launch config", () => {
       noOpen: true,
       noStatic: false,
       preset: "cli-preset",
-      pluginPaths: project.pluginPaths,
-      pluginPathRoot: "/project",
       workspace: resolve("relative/workspace.json"),
     });
   });
@@ -241,8 +188,6 @@ describe("launch config", () => {
       noOpen: false,
       noStatic: false,
       preset: undefined,
-      pluginPaths: undefined,
-      pluginPathRoot: undefined,
       workspace: defaultWorkspacePath([resolve("relative/example.zarr")]),
     });
   });

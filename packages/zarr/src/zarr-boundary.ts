@@ -37,12 +37,3 @@ export function asMutable(store: AsyncReadable): Mutable {
 export function extractStore(group: unknown): AsyncReadable | undefined {
   return (group as { store?: AsyncReadable }).store;
 }
-
-/**
- * Extract the filesystem root from a zarrita store (BunFileStore or
- * FileSystemStore). Returns undefined for non-filesystem stores.
- */
-export function extractStoreRoot(group: unknown): string | undefined {
-  const store = extractStore(group);
-  return (store as { root?: string } | undefined)?.root;
-}

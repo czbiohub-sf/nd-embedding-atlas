@@ -14,13 +14,6 @@
  * port (Troy Sobotka). Constants embedded as `mat3x3<f32>` in the shader.
  */
 
-/** Tone mapping mode IDs: keep in sync with hdr.ts. */
-export const TONEMAP_NONE = 0;
-export const TONEMAP_REINHARD = 1;
-export const TONEMAP_ACES = 2;
-export const TONEMAP_AGX = 3;
-export const TONEMAP_NEUTRAL = 4;
-
 /** Fullscreen triangle vertex shader used by the HDR pass. */
 export const FULLSCREEN_VERTEX_WGSL = /* wgsl */ `
 struct VsOut {

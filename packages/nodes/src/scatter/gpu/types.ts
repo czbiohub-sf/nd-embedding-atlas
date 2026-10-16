@@ -2,9 +2,6 @@ import type { TgpuRoot } from "typegpu";
 import type { RowIndex } from "@ndea/sdk";
 import type { GpuPointIndex, ViewState } from "../contracts";
 
-export type { PanelId } from "../contracts";
-export { panelId } from "../contracts";
-
 // ---------------------------------------------------------------------------
 // Data
 // ---------------------------------------------------------------------------
@@ -46,11 +43,6 @@ export interface ScatterData {
   sizeValues?: Float32Array;
   /** LOD tile viewport */
   viewport?: readonly [xMin: number, xMax: number, yMin: number, yMax: number];
-}
-
-export interface EmbeddingInfo {
-  key: string;
-  maxNdim: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -129,9 +121,9 @@ export interface ScatterplotHandle {
   clearExternalSelection(): void;
   /** Clear lasso/marquee selection. */
   clearSelection(): void;
-  /** Show only points whose app row IDs match an incoming graph predicate. */
+  /** Show only points whose app row IDs match the element's filter-scope predicate. */
   setPredicateFilter(rowIndices: RowIndex[]): void;
-  /** Remove the incoming graph predicate visibility filter. */
+  /** Remove the filter-scope predicate visibility filter. */
   clearPredicateFilter(): void;
   /** Dim points whose category index is not in isolatedSet (legend isolation). Pass empty Set to clear. */
   setCategoryIsolation(isolatedSet: Set<number>, categoryIndices: Uint8Array): void;

@@ -8,54 +8,19 @@
 import { ObsmSliceLoader } from "../slice-loader.ts";
 import type { ServerSession } from "../state.ts";
 
-/** Status event emitted to embedding-status subscribers. */
-export interface EmbeddingStatusEvent {
+interface EmbeddingStatusEvent {
   status: "loading" | "ready" | "error" | "not_started";
   error?: string;
   nDims?: number;
 }
 
-/** Per-key subscriber set for server-pushed status transitions. */
-const embeddingSubscribers = new Map<string, Set<(ev: EmbeddingStatusEvent) => void>>();
-
-/** Compute the current status for an embedding key. */
-export function currentEmbeddingStatus(key: string, state: ServerSession): EmbeddingStatusEvent {
+function currentEmbeddingStatus(key: string, state: ServerSession): EmbeddingStatusEvent {
   const loader = state.obsmLoaders.get(key);
   if (loader) return { status: "ready", nDims: loader.width };
   const err = state.loadErrors.get(key);
   if (err) return { status: "error", error: err };
   if (state.loadingTasks.has(key)) return { status: "loading" };
   return { status: "not_started" };
-}
-
-/** Fan out the current status to all subscribers of `key`. */
-function fireEmbeddingStatus(key: string, state: ServerSession): void {
-  const subs = embeddingSubscribers.get(key);
-  if (!subs || subs.size === 0) return;
-  const ev = currentEmbeddingStatus(key, state);
-  for (const cb of subs) cb(ev);
-}
-
-/**
- * Subscribe to status transitions for `key`. Emits the current status
- * synchronously, then on every mutation until the returned disposer runs.
- */
-export function subscribeEmbeddingStatus(
-  key: string,
-  state: ServerSession,
-  cb: (ev: EmbeddingStatusEvent) => void,
-): () => void {
-  cb(currentEmbeddingStatus(key, state));
-  let set = embeddingSubscribers.get(key);
-  if (!set) {
-    set = new Set();
-    embeddingSubscribers.set(key, set);
-  }
-  set.add(cb);
-  return () => {
-    set.delete(cb);
-    if (set.size === 0) embeddingSubscribers.delete(key);
-  };
 }
 
 /**
@@ -86,7 +51,6 @@ export function handleLoadEmbedding(key: string, state: ServerSession): Response
 
   const loadPromise = loadEmbeddingAsync(key, state);
   state.loadingTasks.set(key, loadPromise);
-  fireEmbeddingStatus(key, state);
 
   return Response.json({ status: "loading" }, { status: 202 });
 }
@@ -100,8 +64,7 @@ export function handleLoadEmbedding(key: string, state: ServerSession): Response
  * await'd in parallel) and the lazy `POST /api/embeddings/{key}` path.
  *
  * Doesn't log on success: startup prints the consolidated "Embeddings:"
- * line, and the lazy path serves status via `subscribeEmbeddingStatus`,
- * so per-key console output would just be noise.
+ * line, so per-key console output would just be noise.
  */
 export async function loadEmbeddingAsync(key: string, state: ServerSession): Promise<void> {
   if (state.obsmLoaders.has(key)) return;
@@ -110,12 +73,10 @@ export async function loadEmbeddingAsync(key: string, state: ServerSession): Pro
     const width = await ObsmSliceLoader.detectWidth(key, accessors);
     const loader = new ObsmSliceLoader(key, accessors, width);
     state.obsmLoaders.set(key, loader);
-    fireEmbeddingStatus(key, state);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     state.loadErrors.set(key, msg);
     console.error(`    ✗ Failed to register ${key}: ${msg}`);
-    fireEmbeddingStatus(key, state);
   }
 }
 

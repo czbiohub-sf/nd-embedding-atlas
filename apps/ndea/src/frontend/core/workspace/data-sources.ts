@@ -27,7 +27,6 @@ export const dataSchema = z.record(
   dataSourceSchema,
 );
 
-export type DataSource = z.infer<typeof dataSourceSchema>;
 export type DataSources = z.infer<typeof dataSchema>;
 
 /** Unknown `from` references and cycles, as `[path, message]` pairs. */

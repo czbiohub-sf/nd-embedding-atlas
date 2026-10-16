@@ -1,10 +1,9 @@
 /**
  * AnnotateTable: a virtualized labeling table over the scoped obs.
  *
- * Reuses the Table node's server-side paged query (`useTableQuery`), so it
- * inherits scope (the wired predicate via the Mosaic `Selection`), paging, and
- * LRU page cache for free: and scopes correctly off a Filter/Wrangle edge,
- * unlike the old `predicateToSql` gate.
+ * Reuses the Table view's server-side paged query (`useTableQuery`), so it
+ * inherits scope (the filter predicate via the Mosaic `Selection`), paging, and
+ * LRU page cache for free.
  *
  * Owns the SPREADSHEET selection model + keyboard, and reports up:
  *  - onChange({ selectedRowIndices, focusedRowIndex }): selection mirror
@@ -75,7 +74,7 @@ function stringAt(row: Row, column: string | undefined): string | undefined {
 export interface AnnotateTableProps {
   coordinator: Coordinator;
   table: string;
-  /** Scope: the wired predicate. Rows + count narrow to this. */
+  /** Scope: the filter predicate. Rows + count narrow to this. */
   selection: Selection;
   /** Context columns shown left of the label (e.g. the column being judged). */
   contextColumns: string[];

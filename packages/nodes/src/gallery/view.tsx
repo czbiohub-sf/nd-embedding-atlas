@@ -1,14 +1,13 @@
 /**
- * Gallery plugin view (PLUGIN-ARCHITECTURE §10.5).
+ * Gallery view.
  *
- * Node contract: a gallery node shows NOTHING until it is wired: so it gates on
- * its cooked input predicate (`host.inputPredicate`). Unwired (null predicate) →
- * a "connect an input" hint; wired → the crop gallery.
+ * Shows nothing until its filter scope narrows the data source: it gates on
+ * `host.inputPredicate` (the element's filter-scope predicate). Unfiltered
+ * (null predicate) → a hint; filtered → the crop gallery.
  *
- * The gallery content is scoped to `host.inputPredicate` exactly: the cooked
- * input predicate is passed to `GalleryPane`, which resolves it to row ids via
- * `host.data.coordinator` (NOT the global selection bus). Two galleries wired to
- * different selections show different crops.
+ * The predicate is passed to `GalleryPane`, which resolves it to row ids via
+ * `host.data.coordinator` (NOT the global selection bus). Two galleries with
+ * different filter scopes show different crops.
  */
 
 import { useCallback, useSyncExternalStore } from "react";
@@ -23,10 +22,10 @@ export function GalleryPluginView({
   host,
   services,
 }: NodeBodyProps<GalleryConfig, GalleryCapabilities> & { services: GalleryServices }) {
-  // host.inputPredicate is a Mosaic Selection that mutates in place on re-cook
-  // and notifies Mosaic clients via "value" events: NOT React. Bridge it so the
-  // unwired gate AND GalleryPane's query key recompute when the wired input
-  // changes; without this the crops go stale after the upstream re-cooks.
+  // host.inputPredicate is a Mosaic Selection that mutates in place when a
+  // filter in scope changes and notifies Mosaic clients via "value" events:
+  // NOT React. Bridge it so the empty gate AND GalleryPane's query key
+  // recompute; without this the crops go stale after a filter changes.
   const selection = host.inputPredicate;
   const subscribe = useCallback(
     (onChange: () => void) => {

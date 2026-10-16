@@ -1,9 +1,9 @@
 /**
- * A node's membership in a crossfilter `filter` scope. Published clauses land
- * in the workspace document at `/state/filter/<scope>/<nodeId>/<facet>`. The
- * node's cook already ANDs in every other source's clauses (`filterScopeSql`),
- * so its Mosaic `selection` is exactly the graph output the browser and the
- * server both compute.
+ * An element's membership in a crossfilter `filter` scope. Published clauses
+ * land in the workspace document at `/state/filter/<scope>/<elementId>/<facet>`.
+ * The element's data-source query already ANDs in every other source's clauses
+ * (`filterScopeSql`), so its Mosaic `selection` is exactly the filtered rows
+ * the browser and the server both compute.
  */
 
 import type { FilterClause } from "@ndea/protocol";

@@ -6,7 +6,7 @@
 import type { WorkspaceSnapshot } from "@ndea/protocol";
 import { useEffect, useState } from "react";
 
-import { NdHud, NdLed } from "@/components/node-workspace/nd-primitives";
+import { NdHud } from "@/components/node-workspace/nd-primitives";
 import { NODE_EDITOR_ENABLED } from "@/feature-flags";
 import { useDatasetSession } from "@/hooks/useDatasetSession";
 import { DashboardPane } from "./DashboardPane";
@@ -26,7 +26,7 @@ function StatusBar() {
         <span className="rounded border border-border px-1.5 py-px">{runtime.table}</span>
       </div>
       <span className="inline-flex items-center gap-[5px]">
-        ws <NdLed state="clean" size={5} />
+        ws <span className="inline-block size-[5px] shrink-0 rounded-full bg-success" />
       </span>
     </div>
   );

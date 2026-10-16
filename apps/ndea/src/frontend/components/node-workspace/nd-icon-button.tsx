@@ -1,11 +1,10 @@
 /**
- * NdIconButton: THE standard header button for node frames and tiles.
+ * NdIconButton: THE standard header button for dashboard element frames.
  *
  * Icon from the ND_ICONS registry · optional mono label · tones:
  * default | active (periwinkle) | amber. 15px box (14 compact),
- * grid-centered, stops propagation, data-nodrag. Plugins declare actions as
- * { icon, title, onClick } and the host renders them with this: never
- * hand-style a header button.
+ * grid-centered, stops propagation, data-nodrag. Never hand-style a header
+ * button.
  */
 
 import { Button as ButtonPrimitive } from "@base-ui/react/button";
@@ -33,15 +32,6 @@ export const ndIconButtonVariants = cva(
     defaultVariants: { tone: "default", compact: false },
   },
 );
-
-export interface NdAction {
-  icon: NdIconName;
-  title: string;
-  onClick: (e: React.MouseEvent) => void;
-  active?: boolean;
-  tone?: "default" | "amber";
-  label?: string;
-}
 
 export function NdIconButton({
   icon,

@@ -6,8 +6,8 @@
  * otherwise they fall back to whatever Z plane the viewer is currently showing
  * (what was set in idetik). The gallery reads this store for that fallback.
  *
- * Keyed by the same instanceId as channels ("docked" for the single docked
- * viewer, `datasetKey` for per-dataset floating viewers).
+ * Keyed by the same slot as channels (dashboard element id, "docked", or a
+ * dataset key).
  */
 
 import { Store } from "@tanstack/store";
@@ -19,18 +19,18 @@ export interface ViewerZState {
 const initialState: ViewerZState = { slots: {} };
 export const viewerZStore = new Store(initialState);
 
-export function publishViewerZ(instanceId: string, zIndex: number): void {
+export function publishViewerZ(slot: string, zIndex: number): void {
   viewerZStore.setState((prev) => {
-    if (prev.slots[instanceId] === zIndex) return prev;
-    return { slots: { ...prev.slots, [instanceId]: zIndex } };
+    if (prev.slots[slot] === zIndex) return prev;
+    return { slots: { ...prev.slots, [slot]: zIndex } };
   });
 }
 
-export function clearViewerZ(instanceId: string): void {
+export function clearViewerZ(slot: string): void {
   viewerZStore.setState((prev) => {
-    if (!(instanceId in prev.slots)) return prev;
+    if (!(slot in prev.slots)) return prev;
     const next = { ...prev.slots };
-    delete next[instanceId];
+    delete next[slot];
     return { slots: next };
   });
 }

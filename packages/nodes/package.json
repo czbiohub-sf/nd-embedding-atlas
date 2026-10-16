@@ -40,7 +40,6 @@
     "@uwdata/vgplot": "^0.30.0",
     "gl-matrix": "^3.4.4",
     "lucide-react": "catalog:",
-    "prql-js": "^0.12.1",
     "react-dom": "catalog:",
     "typegpu": "catalog:",
     "zod": "catalog:"

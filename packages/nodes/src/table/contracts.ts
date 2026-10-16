@@ -1,7 +1,3 @@
-import type { NodeBodyProps as SharedNodeBodyProps } from "../contracts";
-
-export type NodeBodyProps<Config, Capabilities extends TableCapabilities> = SharedNodeBodyProps<Config, Capabilities>;
-
 export interface TableConfig {
   /** Reserved for per-instance column selection. */
   columns: string[] | null;

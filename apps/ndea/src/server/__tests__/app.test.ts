@@ -7,20 +7,12 @@
 
 import { describe, expect, test, afterEach } from "bun:test";
 import type { DuckDBConnection } from "@duckdb/node-api";
-import { join } from "node:path";
-import {
-  ConfigResponseSchema,
-  EmbeddingStatusSchema,
-  MetadataSchema,
-  PluginBootstrapCatalogSchema,
-  VarColumnResponseSchema,
-} from "@ndea/protocol";
+import { ConfigResponseSchema, EmbeddingStatusSchema, MetadataSchema } from "@ndea/protocol";
 import { DatasetQuerySession } from "../store.ts";
 import { createApp, type CreateAppOptions } from "../app.ts";
 import type { ServerSession, DatasetSessionMetadata } from "../state.ts";
 import { createServerSession } from "../state.ts";
 import type { ServerSocketContext } from "../ws.ts";
-import { buildPluginBootstrap } from "../plugins/bootstrap.ts";
 
 type NdeaServer = ReturnType<typeof createApp>;
 
@@ -99,31 +91,6 @@ function mosaicWsRequest<T>(
         }
       } else {
         resolve(ev.data as T);
-      }
-    });
-    ws.addEventListener("error", (err) => {
-      clearTimeout(timer);
-      reject(err instanceof Error ? err : new Error("ws error"));
-    });
-  });
-}
-
-/** Send one framed request over the ndea WebSocket and return its first reply. */
-function ndeaWsRequest<T>(port: number | undefined, frame: Record<string, unknown>): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const ws = new WebSocket(`ws://localhost:${port}/ws`);
-    const timer = setTimeout(() => {
-      ws.close();
-      reject(new Error("ws timeout"));
-    }, 5000);
-    ws.addEventListener("open", () => ws.send(JSON.stringify(frame)));
-    ws.addEventListener("message", (ev) => {
-      clearTimeout(timer);
-      ws.close();
-      try {
-        resolve(JSON.parse(String(ev.data)) as T);
-      } catch (err) {
-        reject(err);
       }
     });
     ws.addEventListener("error", (err) => {
@@ -556,40 +523,6 @@ describe("createApp", () => {
     expect(body.layers).toEqual(["X"]);
   });
 
-  test("var-column WebSocket preserves the optional modality", async () => {
-    const store = await createMockStore(5);
-    activeStore = store;
-    const state = createMockState(store);
-    const config = createMockConfig();
-
-    const server = createApp({
-      port: 0,
-      host: "localhost",
-      store,
-      state,
-      config,
-      noStatic: true,
-    });
-    activeServer = server;
-
-    const raw = await ndeaWsRequest<Record<string, unknown>>(server.port, {
-      _id: 1,
-      _type: "var-column/load",
-      name: "CD3D",
-      modality: "rna",
-    });
-    expect(raw).toMatchObject({
-      _id: 1,
-      _ch: "end",
-      status: "loading",
-      column: "__var_rna_CD3D_X__",
-    });
-    const parsed = VarColumnResponseSchema.parse(raw);
-    expect(parsed.task_id).toBeString();
-    expect(parsed.status).toBe("loading");
-    expect(parsed.column).toBe("__var_rna_CD3D_X__");
-  });
-
   test("blocked SQL returns 400 via Mosaic endpoint", async () => {
     const store = await createMockStore(5);
     activeStore = store;
@@ -617,45 +550,5 @@ describe("createApp", () => {
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.error).toContain("not allowed");
-  });
-
-  test("serves the startup plugin snapshot without disturbing existing app routes", async () => {
-    const store = await createMockStore(5);
-    activeStore = store;
-    const state = createMockState(store);
-    const config = createMockConfig();
-    const pluginSnapshot = await buildPluginBootstrap({
-      projectPluginPaths: [join(import.meta.dir, "../plugins/__fixtures__/valid-plugin")],
-      userConfig: { schemaVersion: 1, entries: [] },
-    });
-    const server = createApp({
-      port: 0,
-      host: "localhost",
-      store,
-      state,
-      config,
-      noStatic: true,
-      pluginSnapshot,
-    });
-    activeServer = server;
-
-    const bootstrapResponse = await fetch(`http://localhost:${server.port}/api/plugins/bootstrap`);
-    expect(bootstrapResponse.status).toBe(200);
-    const bootstrap = PluginBootstrapCatalogSchema.parse(await bootstrapResponse.json());
-    expect(String(bootstrap.entries[0]?.manifest.pluginId)).toBe("fixture.valid");
-    expect(JSON.stringify(bootstrap)).not.toContain(join(import.meta.dir, "../plugins"));
-
-    const clientResponse = await fetch(`http://localhost:${server.port}${bootstrap.entries[0]?.clientEntryUrl}`);
-    expect(clientResponse.status).toBe(200);
-    expect(clientResponse.headers.get("cache-control")).toContain("immutable");
-    expect(await clientResponse.text()).toContain("register");
-
-    const undeclared = await fetch(
-      `http://localhost:${server.port}${bootstrap.entries[0]?.clientEntryUrl.replace("client.js", "undeclared.js")}`,
-    );
-    expect(undeclared.status).toBe(404);
-
-    const health = await fetch(`http://localhost:${server.port}/api/health`);
-    expect(health.status).toBe(200);
   });
 });

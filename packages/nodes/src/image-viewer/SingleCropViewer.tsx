@@ -52,8 +52,8 @@ export function SingleCropViewer({ cropSize, showBbox, datasetKey }: Props) {
   const { state: viewerState, actions, meta } = useViewer();
   const { metadata } = useImageViewerHost().data;
 
-  // Focus source: scoped to this instance's host (its focus WIRE is the input),
-  // so deleting the wire genuinely disconnects the viewer (C6).
+  // Focus source: scoped to this element's host, so the viewer follows only
+  // its own coordination group.
   const host = useImageViewerHost();
   const focusedRowIndex = useNodeFocus(host);
 

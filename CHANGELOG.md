@@ -63,6 +63,8 @@
 - Collapse frontend/package.json → single root package.json
 - Collapse frontend/ into src/frontend/, one vite.config + tsconfig
 - Consolidate all wire-crossing Zod schemas into src/protocol/
+- _(server)_ Delete the plugin system: discovery, manifests, `/api/plugins/bootstrap` and `/plugins/*` assets, `ndea plugin`, YAML `plugin_paths`, and the SDK `PluginAPI`/`PluginFactory`/manifest schemas and `SDK_VERSION`
+- _(server)_ Delete the `embeddings/load|status`, `var-column/load|status`, and `export/start|status` WebSocket methods; the HTTP routes remain and `/ws` serves only `workspace/watch`
 
 ### ⚙️ Miscellaneous Tasks
 

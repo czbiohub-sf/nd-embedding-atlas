@@ -1,8 +1,8 @@
 /**
- * usePredicateGalleryObs: wired-input predicate → obs metadata.
+ * usePredicateGalleryObs: filter-scope predicate → obs metadata.
  *
- * The node-scoped counterpart to `useLassoSelectionObs`: instead of reading the
- * GLOBAL selection bitmap, it resolves the gallery node's OWN cooked input
+ * The element-scoped counterpart to `useLassoSelectionObs`: instead of reading
+ * the GLOBAL selection bitmap, it resolves the gallery element's OWN filter
  * predicate (`host.inputPredicate` → `predicateToSql`) to row ids via the
  * coordinator, then batch-fetches spatial metadata (fov, t, x, y) for those
  * rows via POST `/api/obs/batch`.
@@ -11,11 +11,10 @@
  * drop-in consumer. Row ids are capped at MAX_GALLERY_OBS; the UI surfaces a
  * "showing top N" hint when truncated.
  *
- * Reactivity: the obs query is keyed on the predicate SQL TEXT. When the
- * upstream node re-cooks and `host.inputPredicate` emits a different predicate,
- * the key changes and the query refetches. A pinned Cache node emits a
- * STABLE predicate (no mutable temp-table reference), so no per-revision
- * cache-buster is needed: the predicate text fully identifies the result.
+ * Reactivity: the obs query is keyed on the predicate SQL TEXT. When a filter
+ * in scope changes and `host.inputPredicate` emits a different predicate, the
+ * key changes and the query refetches; the predicate text fully identifies
+ * the result.
  */
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -27,23 +26,23 @@ import type { LassoObs, UseLassoSelectionObsResult } from "./useLassoSelectionOb
 import { MAX_GALLERY_OBS } from "./useLassoSelectionObs";
 
 /**
- * @param coordinator Mosaic coordinator from the node's `host.data`.
+ * @param coordinator Mosaic coordinator from the element's `host.data`.
  * @param predicate   SQL WHERE predicate from `predicateToSql(host.inputPredicate)`;
- *                    null when the node is unwired (→ empty result).
+ *                    null when nothing filters the element (→ empty result).
  */
 export function usePredicateGalleryObs(coordinator: Coordinator, predicate: string | null): UseLassoSelectionObsResult {
   const queryClient = useQueryClient();
 
   const query = useQuery<{ obs: LassoObs[]; total: number }>({
-    // Keyed on the predicate TEXT so the query refetches when the wired
-    // input re-cooks to a different predicate, and reuses across renders of
+    // Keyed on the predicate TEXT so the query refetches when the filter
+    // scope yields a different predicate, and reuses across renders of
     // the same predicate. Mosaic's QueryManager likewise caches the inner
     // coordinator query by raw SQL text: a stable predicate is safe.
     queryKey: ["predicate-gallery-obs", predicate],
     queryFn: async ({ signal }) => {
       if (predicate == null) return { obs: [], total: 0 };
 
-      // 1. Resolve the wired predicate → row ids (capped). Mirrors
+      // 1. Resolve the filter predicate → row ids (capped). Mirrors
       //    ScatterView's continuous-range isolation query.
       const rowResult = await coordinator.query(
         // ORDER BY for deterministic truncation: "showing top N" is the first

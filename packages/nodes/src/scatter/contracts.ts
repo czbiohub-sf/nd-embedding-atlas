@@ -47,7 +47,6 @@ export interface TrajectoryData {
 export type { Metadata, TrajectoryFrame };
 
 export type PanelId = string & { readonly __brand: "PanelId" };
-export const panelId = (id: string): PanelId => id as PanelId;
 
 export type GpuPointIndex = number & { readonly __brand: "GpuPointIndex" };
 export const gpuPointIndex = (value: number): GpuPointIndex => value as GpuPointIndex;
@@ -117,16 +116,6 @@ export interface ScatterServices {
   pickDefaultCategoricalPalette(count: number): string;
   readonly pointRadiusStore: Store<{ radius: number }>;
   readonly renderSettingsStore: Store<RenderSettingsState>;
-  readonly wsClient: {
-    readonly isConnected: boolean;
-    subscribe(
-      method: "var-column/status",
-      request: { task_id: string },
-      onData: (message: unknown) => void,
-      onError: (error: Error) => void,
-    ): { unsubscribe(): void };
-  };
-  isReconnectError(error: Error): boolean;
   onDeviceLost(listener: (info: GPUDeviceLostInfo) => void): () => void;
   bodyHeaderElement(host: unknown): HTMLElement;
 }

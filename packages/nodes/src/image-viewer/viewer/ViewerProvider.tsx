@@ -139,8 +139,8 @@ export function ViewerProvider({ children, channelInstance = "docked" }: Props) 
   // clears the handle, so the next connect() bails as "already connected").
   // The pause gate stops the loop whenever no observation is selected, so
   // the first resume leaves the runtime blind to container resizes: and
-  // the workspace reparents this canvas between very differently-sized
-  // sockets (stage tile ↔ canvas node), rendering the stale buffer as a
+  // the dashboard reparents this canvas between very differently-sized
+  // panes (tile ↔ fullscreen), rendering the stale buffer as a
   // drastically warped band. Until the upstream fix ships (idetik
   // fix/pixel-size-observer-reconnect), own a ResizeObserver and drive the
   // same resync path: renderer buffer + per-viewport camera aspect.

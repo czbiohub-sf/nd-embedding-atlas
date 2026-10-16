@@ -103,7 +103,6 @@
         "@uwdata/vgplot": "^0.30.0",
         "gl-matrix": "^3.4.4",
         "lucide-react": "catalog:",
-        "prql-js": "^0.12.1",
         "react-dom": "catalog:",
         "typegpu": "catalog:",
         "zod": "catalog:",
@@ -147,7 +146,7 @@
     },
     "packages/sdk": {
       "name": "@ndea/sdk",
-      "version": "0.2.0",
+      "version": "1.0.0",
       "dependencies": {
         "@ndea/protocol": "workspace:*",
       },
@@ -205,8 +204,6 @@
     },
   },
   "overrides": {
-    "@codemirror/state": "6.7.1",
-    "@codemirror/view": "6.43.8",
     "vite": "npm:@voidzero-dev/vite-plus-core@0.2.9",
   },
   "catalog": {
@@ -1620,8 +1617,6 @@
     "prompts": ["prompts@2.4.2", "", { "dependencies": { "kleur": "^3.0.3", "sisteransi": "^1.0.5" } }, "sha512-NxNv/kLguCA7p3jE8oL2aEBsrJWgAakBpgmgK6lpPWV+WuOmY6r2/zbAVnP+T8bQlA0nzHXSJSJW0Hq7ylaD2Q=="],
 
     "proxy-addr": ["proxy-addr@2.0.7", "", { "dependencies": { "forwarded": "0.2.0", "ipaddr.js": "1.9.1" } }, "sha512-llQsMLSUDUPT44jdrU/O37qlnifitDP+ZwrmmZcoSKyLKvtZxpyV0n2/bD/N4tBAAZ/gJEdZU7KMraoK1+XYAg=="],
-
-    "prql-js": ["prql-js@0.12.1", "", {}, "sha512-YfhOkqi5G2Z8LW1pn5SVrC9icUA0Wgdxap5Z2AYIr+SwBakRz4M6SURVhr5rEMMQYjDtSYjSORNXcGcghOGzNQ=="],
 
     "punycode": ["punycode@2.3.1", "", {}, "sha512-vYt7UD1U9Wg6138shLtLOvdAu+8DsC/ilFtEVHcH+wydcSpNE20AfSOduf6MkRFahL5FY7X1oU7nKVZFtfq8Fg=="],
 

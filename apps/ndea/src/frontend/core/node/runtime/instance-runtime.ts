@@ -5,8 +5,7 @@ import { assertNodeHostCapabilities } from "@/core/node/capabilities";
 import type { ViewDefinition } from "@/core/node/view-definitions";
 import type { HostHandle } from "./host";
 
-export type NodeInstanceRuntimeStatus = "unloaded" | "loading" | "ready" | "failed" | "disposed";
-export type NodeInstanceFailureStage = "definition" | "module" | "capability" | "runtime" | "body" | "teardown";
+export type NodeInstanceFailureStage = "module" | "capability" | "runtime" | "body";
 
 export type NodeInstanceRuntimeState =
   | { readonly status: "unloaded" }
