@@ -7,7 +7,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { defineCommand, defineFlag } from "@crustjs/core";
-import { RuntimeStatusSchema } from "@ndea/protocol";
+import { DatasetStructureSchema, RuntimeStatusSchema } from "@ndea/protocol";
 import type { RuntimeStatus } from "@ndea/protocol";
 import { stateDir } from "../lib/paths.ts";
 import { server } from "../lib/server.ts";
@@ -48,6 +48,14 @@ export default defineCommand(
         // Lazy: OpenTUI loads its native library on import; every other command skips it.
         const { renderStatus, runStatusTui } = await import("../tui.ts");
         if (!process.stdin.isTTY || !process.stdout.isTTY) return stdout(renderStatus(first.status));
-        await runStatusTui(async () => (await fetchStatus()).status);
+        await runStatusTui(
+          async () => (await fetchStatus()).status,
+          async (name) => {
+            const url = `${origin}/api/status/datasets/${encodeURIComponent(name)}/structure`;
+            const res = await fetch(url, { signal, headers: { authorization: `Bearer ${token}` } });
+            if (!res.ok) throw new Error(await res.text());
+            return DatasetStructureSchema.parse(await res.json());
+          },
+        );
       }),
 );

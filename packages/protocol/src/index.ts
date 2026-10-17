@@ -59,6 +59,7 @@ export type {
 } from "./workspace";
 export { RuntimeStatusSchema } from "./status";
 export type { RuntimeStatus } from "./status";
+export { DatasetStructureSchema, type DatasetStructure } from "./structure";
 
 // ─── Shared primitives ──────────────────────────────────────────────────────
 

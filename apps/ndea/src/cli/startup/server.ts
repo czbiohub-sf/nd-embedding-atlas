@@ -84,13 +84,17 @@ export async function registerGracefulShutdown(
   process.on("SIGTERM", () => void shutdown());
   if (!config.tui) return printShutdownHint();
   // Lazy: OpenTUI loads its native library on import; log mode never needs it.
-  const [{ runStatusTui }, { getRuntimeStatus, muteConsole }] = await Promise.all([
+  const [{ runStatusTui }, { getRuntimeStatus, muteConsole }, { datasetStructure }] = await Promise.all([
     import("../tui.ts"),
     import("../../server/status.ts"),
+    import("../../server/structure.ts"),
   ]);
   const url = localUrl(config);
   muteConsole(true);
-  await runStatusTui(() => getRuntimeStatus(state, url));
+  await runStatusTui(
+    () => getRuntimeStatus(state, url),
+    (name) => datasetStructure(state, name),
+  );
   muteConsole(false);
   await shutdown();
 }

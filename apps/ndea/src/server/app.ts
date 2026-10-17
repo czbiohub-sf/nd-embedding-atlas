@@ -48,6 +48,7 @@ import { handleWsMessage, handleWsOpen, handleWsClose, type ServerSocketContext 
 import { createMcpEndpoint } from "./mcp.ts";
 import { hasBearer } from "./mcp-token.ts";
 import { getRuntimeStatus } from "./status.ts";
+import { handleStructure } from "./structure.ts";
 
 // ─── CORS + method handling ─────────────────────────────────────────────────
 
@@ -160,6 +161,9 @@ export function createApp(options: CreateAppOptions) {
                   ),
                 )
               : Response.json({ error: "Unauthorized" }, { status: 401, headers: { "WWW-Authenticate": "Bearer" } }),
+        },
+        "/api/status/datasets/:name/structure": {
+          GET: (req) => handleStructure(req, state, req.params.name, options.mcpToken),
         },
         "/data/query": { GET: (req) => handleMosaicRoute(req, store), POST: (req) => handleMosaicRoute(req, store) },
         "/data/metadata.json": { GET: () => handleMetadata(state, config) },
