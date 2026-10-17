@@ -85,6 +85,8 @@ For mise-managed installs, `ndea self update` updates the active mise config thr
 
 A running `ndea view` session continues using the version it started with.
 
+Installed binaries check once a day, after a command finishes, whether a newer stable release is out, and print an "Update available" notice to stderr with the command to run. Each version is announced once. The check reads `https://czbiohub-sf.github.io/nd-embedding-atlas/registry/ndea` and keeps its state in `~/.local/state/ndea/update-notifier.json`; offline, it stays silent. Under the status screen the notice goes to the Logs tab and prints after you quit.
+
 To install a specific older standalone release, uninstall the current standalone installation, then pass its tag to the installer:
 
 ```bash

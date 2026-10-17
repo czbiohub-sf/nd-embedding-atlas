@@ -1,8 +1,8 @@
 name: Docs
 
 # Builds the Fumapress docs site under docs/ and deploys to GitHub Pages
-# on every push to main. Pull requests run the build only (no deploy) so
-# PR authors see breakage before merge.
+# on every push to main and when Release dispatches it. Pull requests run
+# the build only (no deploy) so PR authors see breakage before merge.
 #
 # The docs app (docs/) is a standalone Fumadocs + Waku app with its own
 # package.json / node_modules, isolated from the main project's deps. Waku
@@ -16,6 +16,8 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # Release dispatches this after publishing a stable release (registry/ndea).
+  workflow_dispatch:
 
 permissions: {}
 
@@ -66,17 +68,29 @@ jobs:
           cp scripts/install.sh docs/dist/public/install.sh
           cp scripts/install.ps1 docs/dist/public/install.ps1
 
+      # `ndea`'s update notifier (Crust's updateNotifier) reads an npm-style
+      # dist-tags document from <site>/registry/ndea. Latest stable release
+      # only; no release yet means no file and no notice.
+      - name: Publish the update-notifier registry entry
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          tag=$(gh api "repos/$REPO/releases/latest" --jq .tag_name) || exit 0
+          mkdir -p docs/dist/public/registry
+          printf '{"dist-tags":{"latest":"%s"}}\n' "${tag#v}" > docs/dist/public/registry/ndea
+
       # Pages artifact action expects the path to the built site root.
       # `actions/upload-pages-artifact` tars + uploads in one step.
       - uses: actions/upload-pages-artifact@v3
         with:
           path: docs/dist/public
 
-  # ── Deploy to GitHub Pages (push to main only) ──────────────────────────
+  # ── Deploy to GitHub Pages (main: pushes, and dispatches from Release) ──
   deploy:
     name: Deploy
     needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     permissions:
       pages: write # deploy to the Pages site

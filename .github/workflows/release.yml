@@ -96,6 +96,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: write # dispatch docs.yml below
 
     steps:
       # Needed for the SHA256SUMS helper script under .github/scripts/.
@@ -159,3 +160,13 @@ jobs:
 
             > macOS users: unsigned binaries may be blocked by Gatekeeper. Run
             > `xattr -dr com.apple.quarantine ./ndea` after download.
+
+      # Events from GITHUB_TOKEN never start other workflows, so redeploy the
+      # docs site explicitly: it republishes registry/ndea, which installed
+      # binaries poll for the "new version out" notice.
+      - name: Redeploy docs (update-notifier registry)
+        if: ${{ !contains(github.ref_name, '-') }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: gh workflow run docs.yml --repo "$REPO" --ref main

@@ -334,7 +334,9 @@ and free of frontend imports.
 - **Updates:** Standalone installs live under `~/.ndea/versions/<tag>/ndea`;
   update atomically repoints `~/.local/bin/ndea` and keeps only the active
   version by default. Mise-managed updates must go through mise and must never
-  mutate the standalone tree.
+  mutate the standalone tree. Compiled binaries run Crust's `updateNotifier`
+  against `registry/ndea` on the docs site (latest stable tag as npm-style
+  dist-tags, written by `docs.yml`; `release.yml` dispatches a redeploy).
 - **Windows:** Releases ship `ndea-windows-x64.exe`, installed by
   `scripts/install.ps1` to `%LOCALAPPDATA%\ndea\bin`. There is no versions
   tree and no symlink, so `ndea self update` exits early on `win32`; re-running the

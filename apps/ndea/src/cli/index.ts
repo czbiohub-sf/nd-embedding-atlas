@@ -28,7 +28,7 @@
 import "./lib/preload-libduckdb.ts";
 
 import { Crust, defineCommand } from "@crustjs/core";
-import { completion, didYouMean, help, noColor, renderHelp, version } from "@crustjs/extensions";
+import { completion, didYouMean, help, noColor, renderHelp, updateNotifier, version } from "@crustjs/extensions";
 import { renderManPageMdoc } from "@crustjs/man";
 import mcpCommand from "./commands/mcp.ts";
 import doctorCommand from "./commands/self-doctor.ts";
@@ -37,6 +37,8 @@ import statusCommand from "./commands/status.ts";
 import updateCommand from "./commands/self-update.ts";
 import viewCommand, { runView, viewArgs, viewFlags } from "./commands/view.ts";
 import workspaceCommand from "./commands/workspace.ts";
+import { looksLikeMiseInstallPath, MISE_TOOL_ID } from "./lib/install-manager.ts";
+import { isCompiledBinary } from "./lib/paths.ts";
 import { errors } from "./lib/style.ts";
 import { VERSION } from "./version.ts";
 
@@ -50,6 +52,22 @@ const manCommand = defineCommand(
   (command) => command.action(({ rootCommand, stdout }) => stdout(renderManPageMdoc({ root: rootCommand }))),
 );
 
+/**
+ * "New version out" notice after a command, at most one check a day. The docs
+ * site publishes the latest stable release as npm-style dist-tags at
+ * `registry/ndea` (docs.yml). Compiled installs only: a source checkout has no
+ * release to compare against, and tests must not touch the network.
+ */
+const updateNotice = isCompiledBinary()
+  ? [
+      updateNotifier({
+        packageName: "ndea",
+        registryUrl: "https://czbiohub-sf.github.io/nd-embedding-atlas/registry",
+        updateCommand: looksLikeMiseInstallPath(process.execPath) ? `mise upgrade ${MISE_TOOL_ID}` : "ndea self update",
+      }),
+    ]
+  : [];
+
 export const app = new Crust("ndea", {
   description:
     "Interactive browser-based dashboard linking AI embeddings to source 5D (TCZYX) image data.\n\n" +
@@ -62,6 +80,16 @@ export const app = new Crust("ndea", {
     context.args.paths.length > 0 ? runView(context) : context.stdout(renderHelp(context.rootCommand)),
   )
   .add(viewCommand, statusCommand, workspaceCommand, mcpCommand, selfCommand, manCommand)
-  .extend(noColor(), version(undefined, { format: "plain" }), help(), completion(), didYouMean(), errors);
+  .extend(
+    noColor(),
+    version(undefined, { format: "plain" }),
+    help(),
+    completion(),
+    didYouMean(),
+    errors,
+    ...updateNotice,
+  );
 
-if (import.meta.main) await app.execute();
+// stderr through console.error: under the status screen, the server's console
+// capture keeps it (Logs tab, replayed on exit) instead of drawing over the screen.
+if (import.meta.main) await app.execute({ io: { stderr: (text) => console.error(text) } });
