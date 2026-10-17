@@ -12,16 +12,20 @@ Walkthroughs live in [Getting started](/). Dev-side commands (`vp run dev`, `vp 
 ```
 ndea [paths...]                                  # default; equivalent to `ndea view`
 ndea view [paths...] [options]
-ndea update [options]
-ndea gc [options]
-ndea doctor [--check-network] [--strict]
-ndea filter [--where <json>] [--limit <n>] [--host <host>] [--port <port>]
 ndea workspace get [--host <host>] [--port <port>]
 ndea workspace patch --revision <n> --ops <json> [--host <host>] [--port <port>]
 ndea workspace result <element> | --data <name> [--host <host>] [--port <port>]
+ndea workspace query [--where <json>] [--limit <n>] [--host <host>] [--port <port>]
+ndea mcp install | check | uninstall [options]
+ndea self update [options]
+ndea self doctor [--check-network] [--strict]
+ndea self prune [--keep <n>]
 ndea completion <bash|zsh|fish>
-ndea --help | --version
+ndea man
+ndea --help | --version | --no-color
 ```
+
+Every command accepts `--no-color` (and `--color`); `NO_COLOR` and `FORCE_COLOR` work as usual. Output is plain when stdout is not a terminal, so pipes, CI logs, and agents see no escape codes or spinners.
 
 ## Shorthand
 
@@ -57,7 +61,7 @@ The running server owns one workspace document: named data sources, the dashboar
 
 `--port` accepts integers in `[1, 65535]`.
 
-## `ndea update`
+## `ndea self update`
 
 Download and activate the latest release for a channel. ndea verifies the SHA-256 checksum before switching versions.
 
@@ -65,15 +69,15 @@ Not available on Windows. Windows installs are a single `ndea.exe` with no versi
 
 ### Options
 
-| Option                | Type                                  | Default  | Description                                                 |
-| --------------------- | ------------------------------------- | -------- | ----------------------------------------------------------- |
-| `--channel <channel>` | `stable` \| `latest` \| `pre-release` | `stable` | Release channel to resolve                                  |
-| `--force`             | boolean                               | `false`  | Re-install even when already on the target                  |
-| `--no-gc`             | boolean                               | `false`  | Skip the post-update auto-gc that removes inactive versions |
+| Option                | Type                                  | Default  | Description                                                    |
+| --------------------- | ------------------------------------- | -------- | -------------------------------------------------------------- |
+| `--channel <channel>` | `stable` \| `latest` \| `pre-release` | `stable` | Release channel to resolve                                     |
+| `--force`             | boolean                               | `false`  | Re-install even when already on the target                     |
+| `--no-gc`             | boolean                               | `false`  | Skip the post-update prune that removes inactive versions      |
 
-For standalone installs, a successful update keeps only the active version by default. Pass `--no-gc` to retain inactive versions, then prune them later with `ndea gc`.
+For standalone installs, a successful update keeps only the active version by default. Pass `--no-gc` to retain inactive versions, then prune them later with `ndea self prune`.
 
-For mise-managed installs, `ndea update` updates the active mise config through mise and does not write to `~/.ndea/versions`. `--no-gc` has no effect because mise owns version retention.
+For mise-managed installs, `ndea self update` updates the active mise config through mise and does not write to `~/.ndea/versions`. `--no-gc` has no effect because mise owns version retention.
 
 A running `ndea view` session continues using the version it started with.
 
@@ -97,7 +101,7 @@ For mise-managed installs, select a version explicitly:
 mise use -g --pin github:czbiohub-sf/nd-embedding-atlas@0.1.0
 ```
 
-## `ndea gc`
+## `ndea self prune`
 
 Prune old installed versions. ndea always preserves the active version.
 
@@ -107,7 +111,7 @@ Prune old installed versions. ndea always preserves the active version.
 | ------------ | ------- | ------- | ------------------------------------------------- |
 | `--keep <N>` | integer | `1`     | Number of versions to keep (active counts; min 1) |
 
-## `ndea doctor`
+## `ndea self doctor`
 
 Diagnose the install. Prints binary path, symlink integrity, active version, installed versions with disk usage. Exit code 0 if healthy, 1 on hard anomalies (broken symlink, missing active binary).
 
@@ -120,32 +124,18 @@ On Windows the symlink and installed-versions sections are omitted, because that
 | `--check-network` | boolean | `false` | Probe GitHub Releases API reachability over the network (3 s timeout) |
 | `--strict`        | boolean | `false` | Treat warnings as errors (non-zero exit)                              |
 
-## `ndea filter`
-
-Filter observations on a running `ndea view` server and print the matches as JSON. The server compiles the clause with the same compiler as dashboard data sources and filter scopes, so both select the same observations.
-
-```bash
-ndea filter --where '{"op":"and","clauses":[{"op":"eq","column":"predicted_infection_state","value":"infected"},{"op":"between","column":"t","range":[0,5]}]}'
-```
-
-A clause is one of `eq`, `neq`, `lt`, `lte`, `gt`, `gte` (`column`, `value`), `between` (`column`, `range`), `in` (`column`, `values`), `isNull`/`isNotNull` (`column`), `and`/`or` (`clauses`), or `not` (`clause`). Raw SQL is not accepted.
-
-The output has `sql` (the compiled WHERE fragment), `count` (exact), `rows` ordered by row index, and `truncated`. Each row carries `datasetKey` and `obsName`, the durable identity, plus `rowIndex`, the handle the other `/api` routes accept. Observation names can repeat across datasets, so use `datasetKey` and `obsName` together.
-
-### Options
-
-| Option           | Type    | Default     | Description                                     |
-| ---------------- | ------- | ----------- | ----------------------------------------------- |
-| `--where <json>` | string  | all rows    | Filter clause as JSON                           |
-| `--limit <n>`    | integer | `1000`      | Maximum rows to return; `count` is always exact |
-| `--host <host>`  | string  | `127.0.0.1` | Host of the running server                      |
-| `--port <port>`  | integer | `5055`      | Port of the running server                      |
-
-Exits 1 when the clause is invalid JSON, fails validation, references an unknown column, or no server is reachable. The error body goes to stderr.
-
 ## `ndea workspace`
 
-Read and edit the workspace document of a running `ndea view` server. Edits go through the same validated path as the browser, and open browser tabs update live.
+Read, edit, and query the workspace document of a running `ndea view` server. Edits go through the same validated path as the browser, and open browser tabs update live.
+
+Every subcommand prints the server's JSON to stdout. When the server rejects a request, its response body goes to stderr verbatim and the command exits 1; an unreachable server is reported on stderr, also with exit 1.
+
+| Option          | Env         | Default     | Description                |
+| --------------- | ----------- | ----------- | -------------------------- |
+| `--host <host>` | `NDEA_HOST` | `127.0.0.1` | Host of the running server |
+| `--port <port>` | `NDEA_PORT` | `5055`      | Port of the running server |
+
+A flag beats its environment variable, which beats the default. `ndea mcp check` takes the same two; `ndea mcp install` takes `--port` / `NDEA_PORT`.
 
 ```bash
 ndea workspace get
@@ -170,6 +160,23 @@ ndea workspace result --data infected
 - The result reflects the saved document. Lassos, chart brushes, picks, focus, and color-by are saved as coordination state, so the server sees them once the tab's edit lands (within about half a second).
 - An unknown element or data source exits 1.
 
+`query` runs a typed filter clause and prints the matching observations. The server compiles the clause with the same compiler as dashboard data sources and filter scopes, so both select the same observations.
+
+```bash
+ndea workspace query --where '{"op":"and","clauses":[{"op":"eq","column":"predicted_infection_state","value":"infected"},{"op":"between","column":"t","range":[0,5]}]}'
+```
+
+A clause is one of `eq`, `neq`, `lt`, `lte`, `gt`, `gte` (`column`, `value`), `between` (`column`, `range`), `in` (`column`, `values`), `isNull`/`isNotNull` (`column`), `and`/`or` (`clauses`), or `not` (`clause`). Raw SQL is not accepted.
+
+The output has `sql` (the compiled WHERE fragment), `count` (exact), `rows` ordered by row index, and `truncated`. Each row carries `datasetKey` and `obsName`, the durable identity, plus `rowIndex`, the handle the other `/api` routes accept. Observation names can repeat across datasets, so use `datasetKey` and `obsName` together.
+
+| Option           | Type    | Default  | Description                                     |
+| ---------------- | ------- | -------- | ----------------------------------------------- |
+| `--where <json>` | JSON    | all rows | Filter clause                                   |
+| `--limit <n>`    | integer | `1000`   | Maximum rows to return; `count` is always exact |
+
+`query` exits 1 when the clause is invalid JSON, fails validation, or references an unknown column.
+
 The server executes observation predicates as prepared single SQL statements for lookups, annotation writes, and exports. Stacked statements are rejected before execution. Lassos use durable observation sets through `POST /api/sets`; each set shares the dataset's DuckDB connection so its filter also applies to annotations and exports.
 
 Workspace patches reject unknown set references anywhere in the document. Startup checks the same references when restoring a workspace.
@@ -189,7 +196,7 @@ Workspace patches reject unknown set references anywhere in the document. Startu
 
 Every component that reads observations also accepts `data` (the name of a data source; omitted means every observation) and `title`. `count` is the metric: the live number of rows its data and filter scope select. `vgplot` props are a [Mosaic](https://idl.uw.edu/mosaic) plot spec: `entries` is the `plot` array of marks and interactors, `attributes` the rest, with `$table`, `$scope` (the element's predicate), and `$brush` (a selection the chart publishes as a typed clause) supplied by the host.
 
-`/data` maps names to sources: `{ "from"?, "where"?, "sql"? }`. A source narrows `from` (another source, or every observation) by a typed `where` clause (the `ndea filter --where` shape, including `{"op":"inSet","set":"<id>"}` for a saved selection) and/or a `sql` predicate.
+`/data` maps names to sources: `{ "from"?, "where"?, "sql"? }`. A source narrows `from` (another source, or every observation) by a typed `where` clause (the `ndea workspace query --where` shape, including `{"op":"inSet","set":"<id>"}` for a saved selection) and/or a `sql` predicate.
 
 ```bash
 # A data source, and a metric reading it beside the scatter plot's tile.
@@ -220,9 +227,7 @@ ndea workspace patch --revision 9 --ops '[
 ndea workspace patch --revision 10 --ops '[{"op":"replace","path":"/state/focus/A","value":812}]'
 ```
 
-A filter scope maps each source (an element id, or an agent's own key) to named clauses, using the same clause shape as `ndea filter --where`. Each member sees every other source's clauses, never its own, so a scatter lasso filters the table but not the scatter. Lassos appear as `{"op":"inSet","set":"<id>"}`, which refers to an observation set saved under `~/.ndea/sets/`. A patch that refers to an unknown set is rejected.
-
-All three subcommands accept `--host` (default `127.0.0.1`) and `--port` (default `5055`).
+A filter scope maps each source (an element id, or an agent's own key) to named clauses, using the same clause shape as `ndea workspace query --where`. Each member sees every other source's clauses, never its own, so a scatter lasso filters the table but not the scatter. Lassos appear as `{"op":"inSet","set":"<id>"}`, which refers to an observation set saved under `~/.ndea/sets/`. A patch that refers to an unknown set is rejected.
 
 ## MCP server
 
@@ -237,7 +242,7 @@ ndea mcp check                             # server up? token accepted? which ag
 ndea mcp uninstall                         # remove ndea from every agent that has it
 ```
 
-`install` writes `http://127.0.0.1:<port>/mcp` and the token into each agent's own config through [add-mcp](https://add-mcp.com), which knows the format of Claude Code, Codex, Cursor, VS Code, Zed, OpenCode, and 16 more. Restart open agent sessions afterwards. Pass `--port` to all three commands when `ndea view` runs on another port. `check` exits 1 when the server is down, rejects the token, or an agent still has an old token or port.
+`install` writes `http://127.0.0.1:<port>/mcp` and the token into each agent's own config through [add-mcp](https://add-mcp.com), which knows the format of Claude Code, Codex, Cursor, VS Code, Zed, OpenCode, and 16 more. Restart open agent sessions afterwards. Pass `--port` (or set `NDEA_PORT`) to `install` and `check` when `ndea view` runs on another port. `check` exits 1 when the server is down, rejects the token, or an agent still has an old token or port.
 
 | Tool                     | Does                                                                                                                                                    |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -266,7 +271,16 @@ source <(ndea completion zsh)
 status --is-interactive; and ndea completion fish | source
 ```
 
-Open a new shell after `ndea update` to pick up new commands and flags.
+Open a new shell after `ndea self update` to pick up new commands and flags.
+
+## `ndea man`
+
+Print ndea's manual page as mdoc, generated from the same command definitions as `--help`:
+
+```bash
+ndea man | man -l -     # Linux
+ndea man | mandoc -a    # macOS
+```
 
 ## Release channels
 
@@ -276,7 +290,7 @@ Open a new shell after `ndea update` to pick up new commands and flags.
 | `latest`      | alias for `stable`                           | Same as `stable`                                           |
 | `pre-release` | newest published alpha / beta / rc release   | Manual; unavailable until a pre-release has been published |
 
-`stable` and `latest` use GitHub's latest release. `pre-release` selects the newest published, non-draft semver pre-release. `ndea update` resolves the channel through the public GitHub Releases API at update time.
+`stable` and `latest` use GitHub's latest release. `pre-release` selects the newest published, non-draft semver pre-release. `ndea self update` resolves the channel through the public GitHub Releases API at update time.
 
 ## State directory layout
 
@@ -300,7 +314,7 @@ Open a new shell after `ndea update` to pick up new commands and flags.
     libduckdb.{dylib,so}       # Linux and macOS x64 only: extracted on first launch
 ```
 
-On macOS arm64, DuckDB is statically linked into the binary, so nothing is extracted and the binary is about 132 MB. On Linux and macOS x64 it embeds `libduckdb` (about 200 MB) and extracts it on first launch. `ndea gc` also removes version-scoped native-library caches corresponding to pruned releases.
+On macOS arm64, DuckDB is statically linked into the binary, so nothing is extracted and the binary is about 132 MB. On Linux and macOS x64 it embeds `libduckdb` (about 200 MB) and extracts it on first launch. `ndea self prune` also removes version-scoped native-library caches corresponding to pruned releases.
 
 `~/.local/bin/ndea` points to the active binary under `~/.ndea/versions/<tag>/ndea`.
 
@@ -316,7 +330,7 @@ On Windows the layout is flat, with no versions tree and no symlink:
   current-version              # Plain text: "<tag>\n<sha256>"
 ```
 
-DuckDB ships the Windows library as `duckdb.dll` rather than `libduckdb.dll`. Because only one version is ever installed, `ndea gc` has nothing to prune.
+DuckDB ships the Windows library as `duckdb.dll` rather than `libduckdb.dll`. Because only one version is ever installed, `ndea self prune` has nothing to prune.
 
 ## Exit codes
 

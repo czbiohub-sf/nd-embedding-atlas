@@ -35,7 +35,7 @@ body:
       label: Environment
       description: |
         Include anything relevant, such as the ndea version, operating system, browser, or GPU.
-        `ndea --version` and `ndea doctor` can collect useful diagnostics.
+        `ndea --version` and `ndea self doctor` can collect useful diagnostics.
       placeholder: |
         ndea version:
         Operating system:

@@ -9,9 +9,9 @@ import {
   type IngestStrategy,
 } from "../../server/ingest-cache.ts";
 import { DatasetQuerySession } from "../../server/store.ts";
+import { label, num, task } from "../lib/style.ts";
 import { VERSION } from "../version.ts";
 import type { PreparedDatasets } from "./datasets.ts";
-import { printCachedIngest, printIngestOpenError, printIngestSummary } from "./output.ts";
 
 type StoreInitializer = (connection: DuckDBConnection) => Promise<void>;
 
@@ -53,8 +53,9 @@ async function createChunkedInitializers(prepared: PreparedDatasets): Promise<In
   try {
     ({ store: rawStore } = await openBunStore(dataset.entry.path));
   } catch (error) {
-    printIngestOpenError(dataset.entry.name, error);
-    process.exit(1);
+    throw new Error(`${dataset.entry.name}: ${error instanceof Error ? error.message : String(error)}`, {
+      cause: error,
+    });
   }
 
   return {
@@ -104,6 +105,7 @@ async function openCachedSession(
   prepared: PreparedDatasets,
   strategy: IngestStrategy,
   initializers: Initializers,
+  onCached: (key: string) => void,
 ): Promise<DatasetQuerySession> {
   const key = ingestCacheKey(
     VERSION,
@@ -121,7 +123,7 @@ async function openCachedSession(
         pragmas,
         expectKey: key,
       });
-      printCachedIngest(key);
+      onCached(key);
       return cached;
     } catch {
       // A stale, partial, or unreadable cache is rebuilt below.
@@ -141,18 +143,24 @@ async function openCachedSession(
   return store;
 }
 
-export async function createQuerySession(prepared: PreparedDatasets): Promise<PreparedQuerySession> {
-  const strategy = selectIngestStrategy(prepared.hasMuData, prepared.isMultiDataset);
-  const initializers = await createInitializers(prepared, strategy);
-  const allLocal = prepared.loaded.every(({ entry }) => isLocalPath(entry.path));
-  const cacheEnabled = shouldUseIngestCache(allLocal, prepared.hasMuData);
-  const store = cacheEnabled
-    ? await openCachedSession(prepared, strategy, initializers)
-    : await DatasetQuerySession.fromInit(initializers.initStore, {
-        hidden: prepared.hidden,
-        initVar: initializers.initVar,
-      });
+export function createQuerySession(prepared: PreparedDatasets): Promise<PreparedQuerySession> {
+  return task("Loading observations into DuckDB", async (update) => {
+    const strategy = selectIngestStrategy(prepared.hasMuData, prepared.isMultiDataset);
+    const initializers = await createInitializers(prepared, strategy);
+    const allLocal = prepared.loaded.every(({ entry }) => isLocalPath(entry.path));
+    const cacheEnabled = shouldUseIngestCache(allLocal, prepared.hasMuData);
+    let cached = "";
+    const store = cacheEnabled
+      ? await openCachedSession(prepared, strategy, initializers, (key) => {
+          cached = `  ${label(`↻ cached ingest ${key}`)}`;
+        })
+      : await DatasetQuerySession.fromInit(initializers.initStore, {
+          hidden: prepared.hidden,
+          initVar: initializers.initVar,
+        });
 
-  printIngestSummary(store.nObs, store.hasVarTable ? store.nVars : null);
-  return { store, cacheEnabled };
+    const vars = store.hasVarTable ? `, ${num(store.nVars)} variables` : "";
+    update(`${num(store.nObs)} observations${vars} in DuckDB${cached}`);
+    return { store, cacheEnabled };
+  });
 }

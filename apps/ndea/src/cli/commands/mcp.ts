@@ -22,30 +22,21 @@ import {
   type AgentType,
   type InstalledServer,
 } from "add-mcp";
-import { z } from "zod";
 
 import { loadMcpToken } from "../../server/mcp-token.ts";
+import { portFlag, server } from "../lib/server.ts";
+import { fail, label, ok, url } from "../lib/style.ts";
 
 const SERVER_NAME = "ndea";
 /** Preselected in the picker: the agents ndea is developed and smoke-tested with. */
 const PRESELECTED: readonly AgentType[] = ["claude-code", "codex"];
 
-const portFlag = defineFlag("port", {
-  type: "string",
-  schema: z.coerce.number().int().min(1).max(65535).default(5055),
-  description: "Port `ndea view` serves on",
-});
 const agentFlag = defineFlag("agent", {
   type: "string",
   description: `Comma-separated agents (${getAgentTypes().join(", ")})`,
 });
 
-/** `ndea view` binds IPv4 loopback; spelling it out avoids `localhost` resolving to ::1 first. */
-function endpoint(port: number): string {
-  return `http://127.0.0.1:${port}/mcp`;
-}
-
-const SERVER_LABEL = "ndea server".padEnd(22);
+const pad = (name: string) => name.padEnd(22);
 
 function parseAgents(value: string): AgentType[] {
   const known = new Set<string>(getAgentTypes());
@@ -54,10 +45,7 @@ function parseAgents(value: string): AgentType[] {
     .map((name) => name.trim())
     .filter(Boolean);
   const unknown = requested.filter((name) => !known.has(name));
-  if (unknown.length > 0) {
-    console.error(`Unknown agent(s): ${unknown.join(", ")}. Known: ${[...known].join(", ")}`);
-    process.exit(1);
-  }
+  if (unknown.length > 0) throw new Error(`unknown agent(s): ${unknown.join(", ")}\nknown: ${[...known].join(", ")}`);
   return requested as AgentType[];
 }
 
@@ -69,8 +57,8 @@ async function detectedHttpAgents(): Promise<AgentType[]> {
 /** The ndea entry in one agent's config: ours by name, or any entry pointing at an ndea /mcp URL. */
 function ndeaEntry(servers: readonly InstalledServer[]): InstalledServer | undefined {
   return servers.find(
-    (server) =>
-      server.serverName === SERVER_NAME || /^https?:\/\/(localhost|127\.0\.0\.1):\d+\/mcp$/.test(server.identity),
+    (entry) =>
+      entry.serverName === SERVER_NAME || /^https?:\/\/(localhost|127\.0\.0\.1):\d+\/mcp$/.test(entry.identity),
   );
 }
 
@@ -90,15 +78,14 @@ const installCommand = defineCommand(
         { name: "yes", type: "boolean", default: false, description: "Install to every detected agent without asking" },
         portFlag,
       )
-      .action(async ({ flags }) => {
+      .action(async ({ flags, stdout }) => {
         const detected = await detectedHttpAgents();
         let targets: AgentType[];
         if (flags.agent) targets = parseAgents(flags.agent);
         else if (flags.yes) targets = detected;
         else if (process.stdin.isTTY && process.stdout.isTTY && !process.env.CI) {
           if (detected.length === 0) {
-            console.error(`No coding agents detected. Name one with --agent (${getAgentTypes().join(", ")}).`);
-            process.exit(1);
+            throw new Error(`no coding agents detected; name one with --agent (${getAgentTypes().join(", ")})`);
           }
           targets = await multiselect({
             message: "Install ndea's MCP server into",
@@ -106,29 +93,36 @@ const installCommand = defineCommand(
             default: detected.filter((agent) => PRESELECTED.includes(agent)),
           });
         } else {
-          console.error(
-            "Not interactive (no terminal, or CI): pass --agent claude-code,codex, or --yes for every detected agent.",
+          throw new Error(
+            "not interactive (no terminal, or CI): pass --agent claude-code,codex, or --yes for every detected agent",
           );
-          process.exit(1);
         }
         if (targets.length === 0) {
-          console.log("Nothing selected; no config changed.");
+          stdout("Nothing selected; no config changed.");
           return;
         }
 
-        const url = endpoint(flags.port);
-        const config = { type: "http" as const, url, headers: { Authorization: `Bearer ${await loadMcpToken()}` } };
-        let failed = false;
+        // `ndea view` binds IPv4 loopback; spelling it out avoids `localhost` resolving to ::1 first.
+        const endpoint = `http://127.0.0.1:${flags.port}/mcp`;
+        const config = {
+          type: "http" as const,
+          url: endpoint,
+          headers: { Authorization: `Bearer ${await loadMcpToken()}` },
+        };
+        const failed: string[] = [];
         for (const agent of targets) {
           const result = upsertServer(agent, SERVER_NAME, config);
-          if (result.success) console.log(`  ✓ ${agents[agent].displayName.padEnd(22)} ${result.path}`);
+          const name = pad(agents[agent].displayName);
+          if (result.success) stdout(`  ${ok(`${name} ${label(result.path)}`)}`);
           else {
-            failed = true;
-            console.log(`  ✗ ${agents[agent].displayName.padEnd(22)} ${result.error ?? "not written"}`);
+            failed.push(agents[agent].displayName);
+            stdout(`  ${fail(`${name} ${result.error ?? "not written"}`)}`);
           }
         }
-        console.log(`\n${url} is in place. Restart open agent sessions to load it; verify with \`ndea mcp check\`.`);
-        if (failed) process.exit(1);
+        stdout(
+          `\n${url(endpoint)} is in place. Restart open agent sessions to load it; verify with \`ndea mcp check\`.`,
+        );
+        if (failed.length > 0) throw new Error(`could not write ${failed.join(", ")}`);
       }),
 );
 
@@ -136,13 +130,14 @@ const checkCommand = defineCommand(
   "check",
   { description: "Check the MCP server and which agents can reach it with the current token" },
   (command) =>
-    command.flags(portFlag).action(async ({ flags }) => {
-      const url = endpoint(flags.port);
+    command.provide(server()).action(async ({ ctx, stdout }) => {
+      const endpoint = `${(await ctx.server).origin}/mcp`;
       const bearer = `Bearer ${await loadMcpToken()}`;
+      const serverLabel = pad("ndea server");
       let healthy = true;
 
       try {
-        const response = await fetch(url, {
+        const response = await fetch(endpoint, {
           method: "POST",
           headers: {
             "content-type": "application/json",
@@ -154,43 +149,45 @@ const checkCommand = defineCommand(
         const body = await response.text();
         if (response.ok) {
           const tools = body.match(/"name":"/g)?.length ?? 0;
-          console.log(`  ✓ ${SERVER_LABEL} ${url} accepts the token (${tools} tools)`);
+          stdout(`  ${ok(`${serverLabel} ${url(endpoint)} accepts the token ${label(`(${tools} tools)`)}`)}`);
         } else {
           healthy = false;
           const hint =
             response.status === 401
               ? "rejects ~/.ndea/mcp-token; restart `ndea view` to reload it"
               : body.slice(0, 120);
-          console.log(`  ✗ ${SERVER_LABEL} ${url} answered ${response.status}: ${hint}`);
+          stdout(`  ${fail(`${serverLabel} ${url(endpoint)} answered ${response.status}: ${hint}`)}`);
         }
       } catch {
         healthy = false;
-        console.log(`  ✗ ${SERVER_LABEL} nothing listening at ${url}; start \`ndea view\` (or pass --port)`);
+        stdout(
+          `  ${fail(`${serverLabel} nothing listening at ${url(endpoint)}; start \`ndea view\` (or pass --port)`)}`,
+        );
       }
 
       const installed = await listInstalledServers({ global: true, agents: await detectedHttpAgents() });
       let current = 0;
       for (const { agentType, displayName, servers, error } of installed) {
-        const label = displayName.padEnd(22);
+        const name = pad(displayName);
         if (error) {
-          console.log(`  ? ${label} config unreadable: ${error}`);
+          stdout(`  ${label("?")} ${name} config unreadable: ${error}`);
           continue;
         }
         const entry = ndeaEntry(servers);
-        if (!entry) console.log(`  · ${label} not installed (ndea mcp install --agent ${agentType})`);
-        else if (entry.identity !== url) {
+        if (!entry) stdout(`  ${label(`· ${name} not installed (ndea mcp install --agent ${agentType})`)}`);
+        else if (entry.identity !== endpoint) {
           healthy = false;
-          console.log(`  ✗ ${label} points at ${entry.identity}; reinstall: ndea mcp install --agent ${agentType}`);
+          stdout(`  ${fail(`${name} points at ${entry.identity}; reinstall: ndea mcp install --agent ${agentType}`)}`);
         } else if (!mentions(entry.config, bearer)) {
           healthy = false;
-          console.log(`  ✗ ${label} has an old token; reinstall: ndea mcp install --agent ${agentType}`);
+          stdout(`  ${fail(`${name} has an old token; reinstall: ndea mcp install --agent ${agentType}`)}`);
         } else {
           current += 1;
-          console.log(`  ✓ ${label} ${entry.configPath}`);
+          stdout(`  ${ok(`${name} ${label(entry.configPath)}`)}`);
         }
       }
-      if (current === 0) console.log("\nNo agent is set up yet: run `ndea mcp install`.");
-      if (!healthy || current === 0) process.exit(1);
+      if (current === 0) throw new Error("no agent is set up yet: run `ndea mcp install`");
+      if (!healthy) throw new Error("MCP setup needs attention (see above)");
     }),
 );
 
@@ -198,7 +195,7 @@ const uninstallCommand = defineCommand(
   "uninstall",
   { description: "Remove ndea's MCP server from agent configs" },
   (command) =>
-    command.flags(agentFlag).action(async ({ flags }) => {
+    command.flags(agentFlag).action(async ({ flags, stdout }) => {
       const scope = flags.agent ? parseAgents(flags.agent) : await detectedHttpAgents();
       const installed = await listInstalledServers({ global: true, agents: scope });
       let removed = 0;
@@ -208,10 +205,10 @@ const uninstallCommand = defineCommand(
         const result = removeServer(agentType, entry.serverName);
         if (result.removed) {
           removed += 1;
-          console.log(`  ✓ ${displayName.padEnd(22)} ${result.path}`);
-        } else console.log(`  ✗ ${displayName.padEnd(22)} ${result.error ?? "not removed"}`);
+          stdout(`  ${ok(`${pad(displayName)} ${label(result.path)}`)}`);
+        } else stdout(`  ${fail(`${pad(displayName)} ${result.error ?? "not removed"}`)}`);
       }
-      if (removed === 0) console.log("ndea is not installed in any detected agent.");
+      if (removed === 0) stdout("ndea is not installed in any detected agent.");
     }),
 );
 

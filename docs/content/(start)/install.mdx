@@ -27,7 +27,7 @@ Ensure `~/.local/bin` is on `PATH`, then check the installation:
 
 ```bash
 ndea --version
-ndea doctor
+ndea self doctor
 ```
 
 </Tab>
@@ -50,10 +50,10 @@ Set `NDEA_INSTALL_DIR` to install elsewhere. The new `PATH` entry does not reach
 
 ```powershell
 ndea --version
-ndea doctor
+ndea self doctor
 ```
 
-`ndea update` is not available on Windows, because the layout has no versions tree and no symlink to swap. Re-run the installer to move to a newer release; it replaces `ndea.exe` in place.
+`ndea self update` is not available on Windows, because the layout has no versions tree and no symlink to swap. Re-run the installer to move to a newer release; it replaces `ndea.exe` in place.
 
 </Tab>
 
@@ -109,7 +109,7 @@ mise use -g github:czbiohub-sf/nd-embedding-atlas
 
 mise downloads the same release binary and verifies its checksum. Versions are given without the leading `v`, as in `@0.1.0`.
 
-`ndea update` detects a mise-managed binary and updates the active mise config through mise. It does not create a competing `~/.ndea/versions` installation. Channels work the same way, including `ndea update --channel pre-release`.
+`ndea self update` detects a mise-managed binary and updates the active mise config through mise. It does not create a competing `~/.ndea/versions` installation. Channels work the same way, including `ndea self update --channel pre-release`.
 
 Select a known mise version explicitly when needed:
 
@@ -120,11 +120,11 @@ mise use -g --pin github:czbiohub-sf/nd-embedding-atlas@0.1.0
 ## Update or change versions
 
 ```bash
-ndea update
-ndea update --channel pre-release
+ndea self update
+ndea self update --channel pre-release
 ```
 
-For standalone installs, updates verify the checksum, atomically replace the active symlink, and keep only the active version by default. `ndea gc` manages any inactive versions retained with `ndea update --no-gc`.
+For standalone installs, updates verify the checksum, atomically replace the active symlink, and keep only the active version by default. `ndea self prune` manages any inactive versions retained with `ndea self update --no-gc`.
 
 To install a specific older standalone release, remove the current standalone installation before running the installer with an explicit tag:
 
@@ -134,7 +134,7 @@ rm -rf "$HOME/.ndea"
 curl -fsSL https://czbiohub-sf.github.io/nd-embedding-atlas/install.sh | sh -s -- v0.1.0
 ```
 
-For mise installs, `ndea update` updates the active mise config through mise. Select a specific version with `mise use -g --pin github:czbiohub-sf/nd-embedding-atlas@0.1.0`. A running `ndea view` process continues using the version it started with in either layout.
+For mise installs, `ndea self update` updates the active mise config through mise. Select a specific version with `mise use -g --pin github:czbiohub-sf/nd-embedding-atlas@0.1.0`. A running `ndea view` process continues using the version it started with in either layout.
 
 On Windows, re-run the installer with the tag you want; no removal step is needed.
 

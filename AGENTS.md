@@ -216,7 +216,13 @@ build.
 - Route frontend schema mutations through `/api/categorize` and
   `/api/var-column`; Mosaic SQL blocks client-side `ALTER` and `UPDATE`.
 - The Crust CLI's root action is `view` (`cli/index.ts`): a subcommand name
-  wins over a same-named relative path, so `ndea ./doctor` still means view.
+  wins over a same-named relative path, so `ndea ./self` still means view.
+- CLI commands fail by throwing; the `errors` extension (`cli/lib/style.ts`)
+  renders every failure once and exits 1 (130 on Ctrl-C). Do not call
+  `process.exit` outside the long-running server's shutdown and startup
+  interrupt. Style terminal output only through `cli/lib/style.ts`; commands
+  that talk to a running server use the `server` Context (`cli/lib/server.ts`,
+  `--host`/`--port`, `NDEA_HOST`/`NDEA_PORT`).
 
 ## Load-bearing constraints
 
@@ -248,7 +254,7 @@ build.
   mutate the standalone tree.
 - **Windows:** Releases ship `ndea-windows-x64.exe`, installed by
   `scripts/install.ps1` to `%LOCALAPPDATA%\ndea\bin`. There is no versions
-  tree and no symlink, so `ndea update` exits early on `win32`; re-running the
+  tree and no symlink, so `ndea self update` exits early on `win32`; re-running the
   installer is the upgrade path. DuckDB ships the shared library as
   `duckdb.dll`, not `libduckdb.dll`: `libduckdb-cache.ts` owns that name for
-  both the preloader and `ndea doctor`.
+  both the preloader and `ndea self doctor`.

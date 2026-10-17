@@ -1,115 +1,34 @@
 import type { LaunchConfig } from "../config.ts";
+import { accent, heading, label, num, ok, url, warn } from "../lib/style.ts";
 import { getNetworkAddress } from "../resolve.ts";
+import { VERSION } from "../version.ts";
 import type { LoadedDataset } from "./datasets.ts";
 
-export const ANSI = {
-  bold: "\x1b[1m",
-  dim: "\x1b[2m",
-  cyan: "\x1b[36m",
-  green: "\x1b[32m",
-  yellow: "\x1b[33m",
-  red: "\x1b[31m",
-  reset: "\x1b[0m",
-} as const;
-
-export function formatNumber(value: number): string {
-  return value.toLocaleString("en-US");
-}
-
 export function printBanner(): void {
-  console.log(`\n  ${ANSI.bold}nd-embedding-atlas${ANSI.reset} ${ANSI.dim}v0.1.0${ANSI.reset}\n`);
+  console.log(`\n  ${accent("nd-embedding-atlas")} ${label(`v${VERSION}`)}\n`);
 }
 
-export function printOpeningDatasets(count: number): void {
-  console.log(`  ${ANSI.dim}Opening ${count} dataset(s)...${ANSI.reset}`);
-}
-
-export function printDatasetOpened(dataset: LoadedDataset): void {
-  console.log(
-    `    ${ANSI.green}✓${ANSI.reset} ${dataset.entry.name}  ${ANSI.dim}${formatNumber(dataset.adata.nObs)} obs × ${formatNumber(dataset.nVars)} var${ANSI.reset}`,
-  );
-}
-
-export function printDatasetOpenError(name: string, error: unknown): void {
-  const message = error instanceof Error ? error.message : String(error);
-  console.error(`    ${ANSI.red}✗${ANSI.reset} ${name}: ${message}`);
-}
-
-export function printPreparingObs(): void {
-  console.log(`\n  ${ANSI.dim}Preparing obs metadata...${ANSI.reset}`);
-}
-
-export function printUnsupportedMuDataUnion(): void {
-  console.error(`    ${ANSI.red}✗${ANSI.reset} Multi-dataset unions with MuData are not supported yet.`);
-}
-
-export function printIngestOpenError(name: string, error: unknown): void {
-  printDatasetOpenError(name, error);
-}
-
-export function printCachedIngest(key: string): void {
-  console.log(`    ${ANSI.dim}↻ reusing cached ingest ${key}${ANSI.reset}`);
-}
-
-export function printIngestSummary(nObs: number, nVars: number | null): void {
-  console.log(`    ${ANSI.green}✓${ANSI.reset} ${formatNumber(nObs)} observations loaded into DuckDB`);
-  if (nVars !== null) {
-    console.log(`    ${ANSI.green}✓${ANSI.reset} ${formatNumber(nVars)} variables loaded into DuckDB (var_base)`);
-  }
+export function describeDataset(dataset: LoadedDataset): string {
+  return `${dataset.entry.name}  ${label(`${num(dataset.adata.nObs)} obs × ${num(dataset.nVars)} var`)}`;
 }
 
 export function printAnnotationsRestored(count: number): void {
-  console.log(`    ${ANSI.green}✓${ANSI.reset} restored ${count} annotation column(s) from sidecar`);
+  console.log(`  ${ok(`restored ${count} annotation column(s) from sidecar`)}`);
 }
 
 export function printAnnotationsWarning(error: unknown): void {
   const message = error instanceof Error ? error.message : String(error);
-  console.warn(`    ${ANSI.yellow}⚠${ANSI.reset}  annotations sidecar load failed: ${message}`);
+  console.warn(`  ${warn(`annotations sidecar load failed: ${message}`)}`);
 }
 
 export function printMissingFrontend(): void {
   console.log(
-    `\n  ${ANSI.yellow}⚠${ANSI.reset}  No frontend dist found. Run ${ANSI.dim}vp build${ANSI.reset} (or ${ANSI.dim}vp run dev${ANSI.reset} for dev mode with Vite HMR).`,
+    `\n  ${warn(`No frontend dist found. Run ${label("vp run build")} (or ${label("vp run dev")} for dev mode with Vite HMR).`)}`,
   );
-}
-
-export function printPortInUse(config: Pick<LaunchConfig, "port" | "host">): void {
-  console.error(`\n  ${ANSI.red}✗${ANSI.reset} Port ${config.port} is already in use on ${config.host}.`);
-  console.error(`    Find the existing process:  ${ANSI.dim}lsof -nP -iTCP:${config.port} -sTCP:LISTEN${ANSI.reset}`);
-  console.error(`    Kill it:                    ${ANSI.dim}pkill -f "ndea view"${ANSI.reset}`);
-  console.error(`    Or pick a different port:   ${ANSI.dim}ndea view ... --port 5056${ANSI.reset}\n`);
 }
 
 export function displayHost(host: string): string {
   return host === "127.0.0.1" ? "localhost" : host;
-}
-
-function printDatasets(datasets: readonly LoadedDataset[]): void {
-  console.log(`\n  ${ANSI.bold}Datasets:${ANSI.reset}`);
-  for (const dataset of datasets) {
-    const plateTag = dataset.entry.platePath ? ` ${ANSI.dim}+ plate${ANSI.reset}` : "";
-    console.log(
-      `    ${dataset.entry.name}  ${ANSI.dim}${formatNumber(dataset.adata.nObs)} obs × ${formatNumber(dataset.nVars)} var${ANSI.reset}${plateTag}`,
-    );
-  }
-}
-
-function printServerUrls(config: LaunchConfig, host: string): void {
-  const networkAddress = getNetworkAddress();
-  console.log(`\n  ${ANSI.bold}Server:${ANSI.reset}`);
-  console.log(`    ${ANSI.cyan}Local:${ANSI.reset}   http://${host}:${config.port}`);
-  if (networkAddress && config.host !== "127.0.0.1") {
-    console.log(`    ${ANSI.cyan}Network:${ANSI.reset} http://${networkAddress}:${config.port}`);
-  }
-}
-
-function printDevUrls(config: LaunchConfig, host: string): void {
-  console.log(
-    `\n  ${ANSI.bold}App:${ANSI.reset}  ${ANSI.green}http://${host}:5173${ANSI.reset}  ${ANSI.dim}← open this (Vite + HMR)${ANSI.reset}`,
-  );
-  console.log(
-    `  ${ANSI.bold}API:${ANSI.reset}  ${ANSI.dim}http://${host}:${config.port}  (backend: for /api/* and debugging)${ANSI.reset}`,
-  );
 }
 
 export function printReady(
@@ -118,26 +37,38 @@ export function printReady(
   availableObsmKeys: readonly string[],
   startTime: number,
 ): void {
-  printDatasets(datasets);
+  console.log(`\n  ${heading("Datasets")}`);
+  for (const dataset of datasets) {
+    console.log(`    ${describeDataset(dataset)}${dataset.entry.platePath ? label(" + plate") : ""}`);
+  }
   if (availableObsmKeys.length > 0) {
-    console.log(`\n  ${ANSI.bold}Embeddings:${ANSI.reset} ${ANSI.dim}${availableObsmKeys.join(", ")}${ANSI.reset}`);
+    console.log(`\n  ${heading("Embeddings")}  ${label(availableObsmKeys.join(", "))}`);
   }
 
   const host = displayHost(config.host);
-  if (config.noStatic) printDevUrls(config, host);
-  else printServerUrls(config, host);
+  const origin = `http://${host}:${config.port}`;
+  if (config.noStatic) {
+    console.log(`\n  ${heading("App")}      ${url(`http://${host}:5173`)}  ${label("← open this (Vite + HMR)")}`);
+    console.log(`  ${heading("API")}      ${url(origin)}  ${label("(backend: for /api/* and debugging)")}`);
+  } else {
+    console.log(`\n  ${heading("Local")}    ${url(origin)}`);
+    const networkAddress = getNetworkAddress();
+    if (networkAddress && config.host !== "127.0.0.1") {
+      console.log(`  ${heading("Network")}  ${url(`http://${networkAddress}:${config.port}`)}`);
+    }
+  }
   console.log(
-    `\n  ${ANSI.bold}MCP:${ANSI.reset}  http://${host}:${config.port}/mcp  ${ANSI.dim}(Authorization: Bearer <~/.ndea/mcp-token>)${ANSI.reset}`,
+    `  ${heading("MCP")}      ${url(`${origin}/mcp`)}  ${label("(Authorization: Bearer <~/.ndea/mcp-token>)")}`,
   );
 
   const elapsed = ((performance.now() - startTime) / 1000).toFixed(1);
-  console.log(`\n  ${ANSI.dim}Ready in ${elapsed}s${ANSI.reset}  ${ANSI.dim}(pid ${process.pid})${ANSI.reset}`);
+  console.log(`\n  ${label(`Ready in ${elapsed}s  (pid ${process.pid})`)}`);
 }
 
 export function printShutdownHint(): void {
-  console.log(`\n  ${ANSI.dim}Press Ctrl+C to stop${ANSI.reset}\n`);
+  console.log(`  ${label("Press Ctrl+C to stop")}\n`);
 }
 
 export function printShuttingDown(): void {
-  console.log(`\n  ${ANSI.dim}Shutting down...${ANSI.reset}`);
+  console.log(`\n  ${label("Shutting down...")}`);
 }

@@ -75,13 +75,13 @@ Read the [supported formats reference][docs-formats] before preparing production
 ## Update and maintain
 
 ```bash
-ndea update                       # latest stable release
-ndea update --channel pre-release # latest active pre-release
-ndea gc                           # remove inactive installed versions
-ndea doctor                       # inspect installation health
+ndea self update                       # latest stable release
+ndea self update --channel pre-release # latest active pre-release
+ndea self prune                        # remove inactive installed versions
+ndea self doctor                       # inspect installation health
 ```
 
-The installer verifies the release checksum and stores versioned binaries under `~/.ndea/versions/`. See the [CLI reference][docs-cli] for channels, environment variables, completions, garbage collection, and exit codes.
+The installer verifies the release checksum and stores versioned binaries under `~/.ndea/versions/`. See the [CLI reference][docs-cli] for channels, environment variables, completions, pruning, and exit codes.
 
 ## Documentation
 

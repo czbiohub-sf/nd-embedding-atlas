@@ -23,7 +23,10 @@
         "@base-ui/react": "catalog:",
         "@crustjs/core": "^0.5.6",
         "@crustjs/extensions": "^0.5.6",
+        "@crustjs/man": "^0.5.6",
+        "@crustjs/progress": "^0.1.5",
         "@crustjs/prompts": "^0.2.6",
+        "@crustjs/style": "^0.3.6",
         "@duckdb/node-api": "catalog:",
         "@fontsource-variable/geist-mono": "^5.3.0",
         "@json-render/core": "0.21.1",
@@ -305,6 +308,10 @@
     "@crustjs/core": ["@crustjs/core@0.5.6", "", { "dependencies": { "@crustjs/utils": "^0.2.2" }, "peerDependencies": { "typescript": "^7.0.0" }, "optionalPeers": ["typescript"] }, "sha512-aO4lGVjZ+Ix25NBRs5FC81/O2tnGeQANaheN2t3AMwq+FzU082sogLvp/Yg9sAdbk3D9pKb0Ro17w/bILvmvjg=="],
 
     "@crustjs/extensions": ["@crustjs/extensions@0.5.6", "", { "dependencies": { "@crustjs/store": "^0.4.4", "@crustjs/style": "^0.3.6", "@crustjs/utils": "^0.2.2" }, "peerDependencies": { "@crustjs/core": "^0.5.6", "typescript": "^7.0.0" }, "optionalPeers": ["typescript"] }, "sha512-VIeis+AXac3D9XqFoqJCEFsdhvk2eOFa2E0X9GulP9YYPTjPrBcqCC4ub9vL7PC1nFSS2ySupett/x+3A2vPvA=="],
+
+    "@crustjs/man": ["@crustjs/man@0.5.6", "", { "peerDependencies": { "@crustjs/core": "^0.5.6", "typescript": "^7.0.0" }, "optionalPeers": ["typescript"] }, "sha512-vJT2WARrtzbG8pGtaBus90BmTp4dymGVy5N/LKOwv1rZwEeDUf2p6jtFswP7mDbNyA1CaxkbUMXXiAj+ftEdEA=="],
+
+    "@crustjs/progress": ["@crustjs/progress@0.1.5", "", { "dependencies": { "@crustjs/style": "^0.3.6", "@crustjs/utils": "^0.2.2" }, "peerDependencies": { "typescript": "^7.0.0" }, "optionalPeers": ["typescript"] }, "sha512-7MyL4wJ5d5n/wND7DevBRGJ6J+ziT1bLR850FSI0UpihS6L1r1s/FSGmsJF2ubzNztDTlQKxVB8Ie80nr/gTYg=="],
 
     "@crustjs/prompts": ["@crustjs/prompts@0.2.6", "", { "dependencies": { "@crustjs/style": "^0.3.6", "@crustjs/utils": "^0.2.2" }, "peerDependencies": { "typescript": "^7.0.0" }, "optionalPeers": ["typescript"] }, "sha512-4X6o/vatsp6ft+gSex13xFeO5D/t2ePcliZczg1C2kV3Uw1ffPBsCozoBG9sgoCLIYPJuAelWK9jckkyof2XZA=="],
 

@@ -55,15 +55,12 @@ interface ViewInput {
     preset?: string;
     workspace?: string;
   };
+  signal: AbortSignal;
 }
 
-export async function runView({ args, flags }: ViewInput): Promise<void> {
+export async function runView({ args, flags, signal }: ViewInput): Promise<void> {
   const { paths } = args;
-  if (paths.length === 0) {
-    console.error("Error: at least one path is required.\n");
-    console.error("Run 'ndea view --help' for usage.");
-    process.exit(1);
-  }
+  if (paths.length === 0) throw new Error("at least one path is required\nrun `ndea view --help` for usage");
 
   const config = await resolveConfig(paths, {
     port: flags.port,
@@ -75,16 +72,12 @@ export async function runView({ args, flags }: ViewInput): Promise<void> {
     workspace: flags.workspace,
   });
 
-  try {
-    await startup(config);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(`\nFatal error during startup: ${msg}`);
-    if (err instanceof Error && err.stack) {
-      console.error(err.stack);
-    }
-    process.exit(1);
-  }
+  // Ingest does not poll the signal, so Ctrl-C during startup exits here (130).
+  // Deferred a tick so the spinner's own SIGINT listener restores the cursor
+  // first. After startup Crust drops its SIGINT hook and the server's
+  // graceful shutdown owns Ctrl-C.
+  signal.addEventListener("abort", () => setImmediate(() => process.exit(130)), { once: true });
+  await startup(config);
 }
 
 export default defineCommand(
@@ -116,19 +109,10 @@ async function resolveConfig(paths: string[], overrides: Overrides): Promise<Lau
       for (const ds of project.datasets) validateZarrPath(ds.path);
       return resolveLaunchConfig(project, overrides);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.error(`Error loading config: ${msg}`);
-      process.exit(1);
+      throw new Error(`could not load config: ${err instanceof Error ? err.message : String(err)}`, { cause: err });
     }
   }
 
-  try {
-    for (const p of paths) validateZarrPath(p);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(`Error: ${msg}`);
-    process.exit(1);
-  }
-
+  for (const p of paths) validateZarrPath(p);
   return resolveLaunchConfig(pathsToConfig(paths), overrides);
 }

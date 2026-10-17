@@ -1,5 +1,5 @@
 /**
- * `ndea doctor`: read-only diagnostics. Prints binary path, symlink
+ * `ndea self doctor`: read-only diagnostics. Prints binary path, symlink
  * integrity, active version, installed versions, and (with
  * `--check-network`) GitHub Releases API reachability.
  *
@@ -17,15 +17,9 @@ import { LIBDUCKDB_EMBEDDED_PATH } from "../lib/__generated-libduckdb.ts";
 import { libduckdbCachePath } from "../lib/libduckdb-cache.ts";
 import { activeLauncher, currentVersionPath, isCompiledBinary, stateDir, versionsDir } from "../lib/paths.ts";
 import { fetchRelease } from "../lib/releases.ts";
+import { accent, fail, heading, label, mb, ok, warn } from "../lib/style.ts";
 import { listVersions } from "../lib/versions.ts";
 import { VERSION } from "../version.ts";
-
-const BOLD = "\x1b[1m";
-const DIM = "\x1b[2m";
-const GREEN = "\x1b[32m";
-const YELLOW = "\x1b[33m";
-const RED = "\x1b[31m";
-const RESET = "\x1b[0m";
 
 export default defineCommand(
   "doctor",
@@ -46,31 +40,33 @@ export default defineCommand(
           description: "Treat soft warnings as errors (non-zero exit)",
         },
       )
-      .action(async ({ flags }) => {
+      .action(async ({ flags, stdout }) => {
         let errors = 0;
         let warnings = 0;
 
-        const ok = (msg: string) => console.log(`  ${GREEN}✓${RESET} ${msg}`);
-        const warn = (msg: string) => {
-          console.log(`  ${YELLOW}!${RESET} ${msg}`);
+        const pass = (msg: string) => stdout(`  ${ok(msg)}`);
+        const soft = (msg: string) => {
+          stdout(`  ${warn(msg)}`);
           warnings++;
         };
-        const err = (msg: string) => {
-          console.log(`  ${RED}✗${RESET} ${msg}`);
+        const hard = (msg: string) => {
+          stdout(`  ${fail(msg)}`);
           errors++;
         };
+        const section = (title: string) => stdout(`\n${heading(title)}`);
+        const row = (name: string, value: string) => stdout(`  ${label(name.padEnd(12))} ${value}`);
 
-        console.log(`\n${BOLD}ndea doctor${RESET} ${DIM}v${VERSION}${RESET}\n`);
+        stdout(`\n${accent("ndea")} ${heading("self doctor")} ${label(`v${VERSION}`)}`);
 
         // ── Binary mode ────────────────────────────────────────────────────────
-        console.log(`${BOLD}Mode${RESET}`);
+        section("Mode");
         const compiled = isCompiledBinary();
         const manager = compiled ? await detectInstallManager() : { kind: "installer" as const };
         if (compiled) {
-          ok(`compiled binary`);
-          ok(`managed by ${manager.kind}`);
+          pass("compiled binary");
+          pass(`managed by ${manager.kind}`);
         } else {
-          warn("running from source: install/update/gc disabled");
+          soft("running from source: self update/prune disabled");
         }
 
         // Windows installs are a single ndea.exe on PATH: no versions tree and no
@@ -78,24 +74,23 @@ export default defineCommand(
         const isWindows = process.platform === "win32";
 
         // ── Path resolution ────────────────────────────────────────────────────
-        const self = process.execPath;
-        console.log(`\n${BOLD}Paths${RESET}`);
-        console.log(`  binary       ${self}`);
+        section("Paths");
+        row("binary", process.execPath);
         if (manager.kind === "mise") {
-          console.log(`  mise install ${manager.installPath}`);
+          row("mise install", manager.installPath);
           if (manager.sourceConfig) {
-            console.log(`  mise config  ${manager.sourceConfig}`);
+            row("mise config", manager.sourceConfig);
           } else {
-            warn(
+            soft(
               "mise install has no active source config; activate it with `mise use -g github:czbiohub-sf/nd-embedding-atlas`",
             );
           }
         } else if (isWindows) {
-          console.log(`  state dir    ${stateDir()}`);
-          console.log(`  ${DIM}(no versions tree on Windows: re-run install.ps1 to upgrade)${RESET}`);
+          row("state dir", stateDir());
+          stdout(`  ${label("(no versions tree on Windows: re-run install.ps1 to upgrade)")}`);
         } else {
-          console.log(`  state dir    ${stateDir()}`);
-          console.log(`  versions dir ${versionsDir()}`);
+          row("state dir", stateDir());
+          row("versions dir", versionsDir());
         }
 
         // ── Symlink integrity ──────────────────────────────────────────────────
@@ -109,18 +104,16 @@ export default defineCommand(
         // report a healthy install as broken (and fail `--strict`).
         const launcher = manager.kind === "installer" && !isWindows ? activeLauncher() : null;
         if (compiled && manager.kind === "installer" && !isWindows) {
-          console.log(`\n${BOLD}Symlink${RESET}`);
+          section("Symlink");
           if (!launcher) {
-            warn("no `ndea` symlink on $PATH resolves to this binary: symlink not auditable");
+            soft("no `ndea` symlink on $PATH resolves to this binary: symlink not auditable");
           } else {
             const linkTarget = await readlink(launcher).catch(() => null);
             if (linkTarget) {
-              ok(`${launcher} → ${linkTarget}`);
-              if (!existsSync(linkTarget)) {
-                err(`symlink target does not exist`);
-              }
+              pass(`${launcher} → ${linkTarget}`);
+              if (!existsSync(linkTarget)) hard("symlink target does not exist");
             } else {
-              err(`${launcher} is not a symlink: install layout broken`);
+              hard(`${launcher} is not a symlink: install layout broken`);
             }
           }
         }
@@ -132,62 +125,60 @@ export default defineCommand(
         // 100+ MB went. darwin-arm64 links DuckDB statically into duckdb.node
         // and embeds no libduckdb, so there is nothing to report.
         if (compiled && LIBDUCKDB_EMBEDDED_PATH !== null) {
-          console.log(`\n${BOLD}libduckdb cache${RESET}`);
+          section("libduckdb cache");
           const dylibPath = libduckdbCachePath();
           if (existsSync(dylibPath)) {
             const info = await stat(dylibPath).catch(() => null);
-            const sizeMb = info ? (info.size / (1024 * 1024)).toFixed(1) : "?";
-            ok(`${dylibPath} (${sizeMb} MB)`);
+            pass(`${dylibPath} ${label(`(${info ? mb(info.size) : "? MB"})`)}`);
           } else {
-            warn(`${dylibPath} not yet extracted: will populate on next DuckDB-using command`);
+            soft(`${dylibPath} not yet extracted: will populate on next DuckDB-using command`);
           }
         }
 
         // ── Active version ─────────────────────────────────────────────────────
-        console.log(`\n${BOLD}Version${RESET}`);
-        console.log(`  compiled-in  v${VERSION}`);
+        section("Version");
+        row("compiled-in", `v${VERSION}`);
         if (manager.kind === "mise") {
-          console.log(`  mise         ${manager.activeVersion ?? "(unknown)"}`);
+          row("mise", manager.activeVersion ?? "(unknown)");
           if (!manager.active) {
-            warn(
+            soft(
               `this binary is ${manager.version ?? "an inactive version"}, but mise activates ` +
                 `${manager.activeVersion ?? "another version"}; open a new shell or run \`hash -r\``,
             );
           }
         } else if (existsSync(currentVersionPath())) {
           const recorded = (await readFile(currentVersionPath(), "utf8").catch(() => "")).split("\n")[0]?.trim() ?? "";
-          console.log(`  recorded     ${recorded || "(unreadable)"}`);
+          row("recorded", recorded || "(unreadable)");
           const recordedVersion = recorded.replace(/^v/, "");
           if (recordedVersion && recordedVersion !== VERSION) {
-            warn(`recorded ${recorded} doesn't match compiled-in v${VERSION} (manual install? swap pending?)`);
+            soft(`recorded ${recorded} doesn't match compiled-in v${VERSION} (manual install? swap pending?)`);
           }
         } else {
-          warn(`no current-version file at ${currentVersionPath()}`);
+          soft(`no current-version file at ${currentVersionPath()}`);
         }
 
         // ── Installed versions ─────────────────────────────────────────────────
         if (manager.kind === "installer" && !isWindows) {
-          console.log(`\n${BOLD}Installed versions${RESET}`);
+          section("Installed versions");
           const versions = await listVersions(versionsDir());
           if (versions.length === 0) {
-            warn(`no versions in ${versionsDir()}: \`ndea update\` will populate it`);
+            soft(`no versions in ${versionsDir()}: \`ndea self update\` will populate it`);
           } else {
             let totalBytes = 0;
             const linkTarget = launcher && compiled ? await readlink(launcher).catch(() => null) : null;
             for (const v of versions) {
               const info = await stat(v.binaryPath).catch(() => null);
-              const sizeMb = info ? (info.size / (1024 * 1024)).toFixed(1) : "?";
-              const marker = linkTarget === v.binaryPath ? `${GREEN}*${RESET}` : " ";
-              console.log(`  ${marker} ${v.tag.padEnd(24)} ${sizeMb} MB`);
+              const marker = linkTarget === v.binaryPath ? accent("*") : " ";
+              stdout(`  ${marker} ${v.tag.padEnd(24)} ${label(info ? mb(info.size) : "? MB")}`);
               if (info) totalBytes += info.size;
             }
-            console.log(`  ${DIM}(${(totalBytes / (1024 * 1024)).toFixed(1)} MB total: \`ndea gc\` to prune)${RESET}`);
+            stdout(`  ${label(`(${mb(totalBytes)} total: \`ndea self prune\` to prune)`)}`);
           }
         }
 
         // ── Network (optional) ─────────────────────────────────────────────────
         if (flags["check-network"]) {
-          console.log(`\n${BOLD}Network${RESET}`);
+          section("Network");
           try {
             const channel = "stable";
             const asset = await Promise.race([
@@ -198,24 +189,17 @@ export default defineCommand(
                 }, 3000);
               }),
             ]);
-            ok(`release "${channel}" → ${asset.tag}`);
+            pass(`release "${channel}" → ${asset.tag}`);
           } catch (e) {
-            warn(`release API unreachable: ${e instanceof Error ? e.message : String(e)}`);
+            soft(`release API unreachable: ${e instanceof Error ? e.message : String(e)}`);
           }
         }
 
         // ── Summary ────────────────────────────────────────────────────────────
-        console.log("");
-        if (errors > 0) {
-          console.log(`${RED}${errors} error(s)${RESET}, ${warnings} warning(s)`);
-          process.exit(1);
-        } else if (warnings > 0 && flags.strict) {
-          console.log(`${YELLOW}${warnings} warning(s)${RESET} (--strict)`);
-          process.exit(1);
-        } else if (warnings > 0) {
-          console.log(`${YELLOW}${warnings} warning(s)${RESET}: ${DIM}use --strict to fail on warnings${RESET}`);
-        } else {
-          console.log(`${GREEN}healthy${RESET}`);
-        }
+        stdout("");
+        if (errors > 0) throw new Error(`${errors} error(s), ${warnings} warning(s)`);
+        if (warnings > 0 && flags.strict) throw new Error(`${warnings} warning(s) (--strict)`);
+        if (warnings > 0) stdout(`${warn(`${warnings} warning(s)`)} ${label("use --strict to fail on warnings")}`);
+        else stdout(ok("healthy"));
       }),
 );

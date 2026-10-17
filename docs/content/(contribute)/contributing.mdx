@@ -137,10 +137,10 @@ Note that `process.platform` reports `win32` while Bun's target triple spells th
 
 ```bash
 vp run build
-./dist/ndea doctor
+./dist/ndea self doctor
 ```
 
-`ndea doctor` prints binary path, symlink integrity, active version, and the installed-versions tree. Exit code 1 on hard anomalies (broken symlink, missing active binary). Add `--check-network` to probe GitHub Releases API reachability with a 3-second timeout. On Windows the symlink and installed-versions sections are omitted, because that layout has neither.
+`ndea self doctor` prints binary path, symlink integrity, active version, and the installed-versions tree. Exit code 1 on hard anomalies (broken symlink, missing active binary). Add `--check-network` to probe GitHub Releases API reachability with a 3-second timeout. On Windows the symlink and installed-versions sections are omitted, because that layout has neither.
 
 CI also runs `.github/scripts/verify-isolated.sh`, which copies the fresh binary into an otherwise empty directory before launching it. That guards the single-file invariant: the binary embeds libduckdb and extracts it to a cache directory, so a sibling library file must never be required. The check matters most on Windows, where the loader searches the executable's own directory early enough that a stray `duckdb.dll` would mask a broken embed.
 

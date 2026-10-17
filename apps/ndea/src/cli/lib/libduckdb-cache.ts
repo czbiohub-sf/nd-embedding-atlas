@@ -1,7 +1,7 @@
 /**
  * Location of the libduckdb copy a compiled binary extracts on first run.
  *
- * Shared by the preloader (writes + dlopens it) and `ndea doctor` (reports
+ * Shared by the preloader (writes + dlopens it) and `ndea self doctor` (reports
  * it) so the two can never disagree about the path.
  *
  * The basename must match what duckdb.node links against: `libduckdb.dylib`

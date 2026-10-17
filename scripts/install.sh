@@ -10,7 +10,7 @@
 # ~/.cache/ndea/<version>/libduckdb.<ext> and dlopens it before any DuckDB
 # code runs. No sidecar file, no wrapper script.
 #
-# `ndea update` uses the same layout, so installs and updates share one
+# `ndea self update` uses the same layout, so installs and updates share one
 # atomic-symlink-swap mechanism.
 #
 # Usage:
@@ -293,7 +293,7 @@ ln -s "$target_bin" "$tmp_link" || die "cannot create symlink at $tmp_link"
 mv -f "$tmp_link" "$link" || die "cannot move symlink into place at $link"
 ok "Linked $link → $target_bin"
 
-# Record the active version for `ndea --version` / diagnostics. `ndea update`
+# Record the active version for `ndea --version` / diagnostics. `ndea self update`
 # writes the same two-line "<tag>\n<sha256>\n" form.
 checksum=$(cut -d' ' -f1 <"$tmp/$artifact.sha256")
 printf '%s\n%s\n' "$release_tag" "$checksum" >"$STATE_DIR/current-version" 2>/dev/null || true

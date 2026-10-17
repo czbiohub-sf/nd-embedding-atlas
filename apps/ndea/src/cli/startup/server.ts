@@ -2,7 +2,7 @@ import { flushAnnotationSaves } from "../../server/routes/annotate.ts";
 import type { DatasetSessionMetadata, ServerSession } from "../../server/state.ts";
 import { resolveFrontendDir } from "../../server/static.ts";
 import type { LaunchConfig } from "../config.ts";
-import { displayHost, printMissingFrontend, printPortInUse, printShutdownHint, printShuttingDown } from "./output.ts";
+import { displayHost, printMissingFrontend, printShutdownHint, printShuttingDown } from "./output.ts";
 
 interface RunningServer {
   stop(closeActiveConnections?: boolean): void | Promise<void>;
@@ -81,8 +81,13 @@ export async function startServer(
     });
   } catch (error) {
     if (!isPortCollision(error)) throw error;
-    printPortInUse(config);
-    process.exit(1);
+    throw new Error(
+      `port ${config.port} is already in use on ${config.host}\n` +
+        `  find the existing process:  lsof -nP -iTCP:${config.port} -sTCP:LISTEN\n` +
+        `  stop it:                    pkill -f "ndea view"\n` +
+        `  or pick another port:       ndea view ... --port ${config.port + 1}`,
+      { cause: error },
+    );
   }
 }
 
@@ -111,6 +116,9 @@ export function registerGracefulShutdown(state: ServerSession, server: RunningSe
     await flushAnnotationSaves(state);
     void server.stop();
     state.store.close();
+    // The server outlives the `view` action (Crust's invocation ended at
+    // "Ready"), so no command boundary is left to return through: exiting is
+    // how a long-running server stops.
     process.exit(0);
   };
   process.on("SIGINT", () => void shutdown());

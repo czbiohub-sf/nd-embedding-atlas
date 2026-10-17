@@ -178,7 +178,7 @@ describe("install.sh happy path", () => {
   );
 
   test(
-    "records current-version in the two-line tag/checksum form `ndea update` writes",
+    "records current-version in the two-line tag/checksum form `ndea self update` writes",
     withSandbox(async (sandbox) => {
       serveAsset(sandbox, "v0.4.2", "binary-bytes");
 

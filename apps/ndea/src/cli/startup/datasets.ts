@@ -3,12 +3,8 @@ import { DEFAULT_OBSM_PRIORITY } from "../../server/store.ts";
 import { detectSpatialColumns, spatialHiddenColumns } from "../../server/state.ts";
 import type { DatasetMountConfig, SpatialColumns } from "../../server/state.ts";
 import type { ProjectDatasetMount } from "../config.ts";
-import {
-  printDatasetOpened,
-  printDatasetOpenError,
-  printOpeningDatasets,
-  printUnsupportedMuDataUnion,
-} from "./output.ts";
+import { task } from "../lib/style.ts";
+import { describeDataset } from "./output.ts";
 
 export interface LoadedDataset {
   entry: ProjectDatasetMount;
@@ -56,17 +52,18 @@ async function openDataset(entry: ProjectDatasetMount): Promise<LoadedDataset> {
 }
 
 export async function openDatasets(entries: readonly ProjectDatasetMount[]): Promise<LoadedDataset[]> {
-  printOpeningDatasets(entries.length);
   const loaded: LoadedDataset[] = [];
   for (const entry of entries) {
-    try {
-      const dataset = await openDataset(entry);
-      loaded.push(dataset);
-      printDatasetOpened(dataset);
-    } catch (error) {
-      printDatasetOpenError(entry.name, error);
-      process.exit(1);
-    }
+    const dataset = await task(`Opening ${entry.name}`, async (update) => {
+      try {
+        const opened = await openDataset(entry);
+        update(describeDataset(opened));
+        return opened;
+      } catch (error) {
+        throw new Error(`${entry.name}: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
+      }
+    });
+    loaded.push(dataset);
   }
   return loaded;
 }
@@ -80,10 +77,7 @@ function collectDatasetConfigs(loaded: readonly LoadedDataset[]): Map<string, Da
 export function prepareDatasets(loaded: LoadedDataset[]): PreparedDatasets {
   const isMultiDataset = loaded.length > 1;
   const hasMuData = loaded.some(({ adata }) => adata.kind === "mudata");
-  if (hasMuData && isMultiDataset) {
-    printUnsupportedMuDataUnion();
-    process.exit(1);
-  }
+  if (hasMuData && isMultiDataset) throw new Error("multi-dataset unions with MuData are not supported yet");
 
   const firstColumns = [...loaded[0].adata.obs.columns];
   const detectedSpatial = detectSpatialColumns(new Set(firstColumns));

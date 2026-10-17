@@ -74,7 +74,7 @@ vp run -r test
 vp run build
 
 # Verify a built binary's install (paths, symlink, versions, manifest)
-./dist/ndea doctor
+./dist/ndea self doctor
 ```
 
 `vp run dev` enables dashboard layout editing (split, swap, remove, fill a

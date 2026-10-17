@@ -12,13 +12,13 @@ nd-embedding-atlas runs as a local server and opens its interface in a browser. 
 - Linux on `arm64`
 - Windows on `x86_64`
 
-Windows on `arm64` runs the `x86_64` binary under emulation; there is no native `arm64` build. Windows installs are managed by re-running the installer, because `ndea update` is available only on macOS and Linux.
+Windows on `arm64` runs the `x86_64` binary under emulation; there is no native `arm64` build. Windows installs are managed by re-running the installer, because `ndea self update` is available only on macOS and Linux.
 
 ## Browser and graphics
 
 Use a current Chrome or Edge release with WebGPU enabled. The scatter renderer requires WebGPU; Firefox is not supported because it does not provide the required WebGPU implementation by default.
 
-Run `ndea doctor` to check the installed binary, active symlink, and installed versions. On Windows there is no symlink to report: the installer writes a single `ndea.exe`. On a remote Linux workstation or HPC system, follow [WebGPU on HPC](/webgpu-hpc-setup) to establish a secure browser origin and enable the Vulkan backend.
+Run `ndea self doctor` to check the installed binary, active symlink, and installed versions. On Windows there is no symlink to report: the installer writes a single `ndea.exe`. On a remote Linux workstation or HPC system, follow [WebGPU on HPC](/webgpu-hpc-setup) to establish a secure browser origin and enable the Vulkan backend.
 
 ## Data access
 

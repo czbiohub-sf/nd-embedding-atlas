@@ -11,7 +11,7 @@
 # runs. No sidecar file, no wrapper script.
 #
 # Unlike the POSIX installer there is no versions tree and no symlink, because
-# `ndea update` is not supported on Windows: re-run this script to move to a
+# `ndea self update` is not supported on Windows: re-run this script to move to a
 # new release.
 #
 # Usage:
@@ -178,7 +178,7 @@ try {
     Move-Item -Path $tmpBin -Destination $targetBin -Force
     Write-Ok "Installed binary to $targetBin"
 
-    # Record the active version for diagnostics. `ndea doctor` reads the same
+    # Record the active version for diagnostics. `ndea self doctor` reads the same
     # two-line "<tag>\n<sha256>\n" form the POSIX installer writes.
     New-Item -ItemType Directory -Force -Path $StateDir | Out-Null
     Set-Content -Path (Join-Path $StateDir "current-version") -Value "$releaseTag`n$actual".ToLower() -NoNewline

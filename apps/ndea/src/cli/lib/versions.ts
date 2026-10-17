@@ -1,6 +1,6 @@
 /**
  * Helpers for the `~/.ndea/versions/<tag>/` tree.
- * Shared by `gc` and `doctor`.
+ * Shared by `self prune` and `self doctor`.
  *
  * Each version dir contains a single file:
  *   - `ndea`: bun-compiled binary

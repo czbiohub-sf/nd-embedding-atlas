@@ -1,6 +1,6 @@
 /**
- * Shared prune logic: used by `ndea gc` (explicit) and `ndea update`
- * (auto-gc after a successful update).
+ * Shared prune logic: used by `ndea self prune` (explicit) and
+ * `ndea self update` (auto-prune after a successful update).
  *
  * Each version dir is ~185 MB on disk. Without pruning, aggressive update
  * cadences fill `~/.ndea/` quickly. The auto-gc path runs with `keep=1`

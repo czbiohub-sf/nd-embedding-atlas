@@ -5,7 +5,7 @@ import { WorkspaceDocumentStore } from "../server/workspace.ts";
 import type { LaunchConfig } from "./config.ts";
 import { openDatasets, prepareDatasets } from "./startup/datasets.ts";
 import { createQuerySession } from "./startup/ingest.ts";
-import { printBanner, printPreparingObs, printReady } from "./startup/output.ts";
+import { printBanner, printReady } from "./startup/output.ts";
 import {
   installDevErrorBridge,
   openBrowser,
@@ -26,7 +26,6 @@ export async function startup(config: LaunchConfig): Promise<void> {
     loadPreset(config.preset ?? DEFAULT_PRESET),
   );
   const loaded = await openDatasets(config.datasets);
-  printPreparingObs();
   const datasets = prepareDatasets(loaded);
   const query = await createQuerySession(datasets);
   const session = await prepareServerSession(config, datasets, query, workspace);
@@ -35,7 +34,12 @@ export async function startup(config: LaunchConfig): Promise<void> {
   const metadata = buildDatasetMetadata(datasets, session);
   const server = await startServer(config, session.state, metadata, frontendDir);
 
-  await prewarmEmbeddings(session.state);
+  // A failure past this point would otherwise leave the server holding the process open.
+  await prewarmEmbeddings(session.state).catch((error: unknown) => {
+    void server.stop();
+    session.state.store.close();
+    throw error;
+  });
   printReady(config, loaded, datasets.availableObsmKeys, startTime);
   openBrowser(config);
   registerGracefulShutdown(session.state, server);

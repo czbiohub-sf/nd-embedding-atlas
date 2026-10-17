@@ -1,5 +1,5 @@
 /**
- * Tests for the shared prune helper used by `gc` and `update --no-gc=false`.
+ * Tests for the shared prune helper used by `self prune` and `self update`.
  */
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";

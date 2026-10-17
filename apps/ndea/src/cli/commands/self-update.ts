@@ -1,6 +1,6 @@
 /**
- * `ndea update`: resolve a GitHub release, download the matching binary into
- * the versions tree, and atomically repoint the active symlink.
+ * `ndea self update`: resolve a GitHub release, download the matching binary
+ * into the versions tree, and atomically repoint the active symlink.
  *
  * Layout written by this command (mirrors install.sh):
  *   ~/.ndea/versions/<tag>/ndea              : bun-compiled binary
@@ -29,6 +29,7 @@ import {
 } from "../lib/paths.ts";
 import { pruneVersionCaches, pruneVersions } from "../lib/prune.ts";
 import { CHANNELS, detectTarget, fetchRelease, parseShaFile, sha256Hex } from "../lib/releases.ts";
+import { label, mb, ok, task, url } from "../lib/style.ts";
 import { VERSION } from "../version.ts";
 
 /** Versions retained after a successful update; each one costs ~185 MB on disk. */
@@ -60,41 +61,41 @@ export default defineCommand(
           description: "Prune inactive versions after updating",
         },
       )
-      .action(async ({ flags }) => {
+      .action(async ({ flags, stdout, signal }) => {
         if (!isCompiledBinary()) {
-          console.error("Error: `ndea update` only works from a compiled binary, not a source checkout.");
-          process.exit(1);
+          throw new Error("`ndea self update` only works from a compiled binary, not a source checkout");
         }
 
         // Windows ships the binary but not the versions-tree + symlink layout
         // this command swaps, so there is nothing here to update in place.
         if (process.platform === "win32") {
-          console.error("Error: `ndea update` is not supported on Windows.");
-          console.error("  Re-run the installer to move to a new release:");
-          console.error("    irm https://czbiohub-sf.github.io/nd-embedding-atlas/install.ps1 | iex");
-          process.exit(1);
+          throw new Error(
+            "`ndea self update` is not supported on Windows\n" +
+              "  re-run the installer to move to a new release:\n" +
+              "    irm https://czbiohub-sf.github.io/nd-embedding-atlas/install.ps1 | iex",
+          );
         }
 
         const channel = flags.channel;
         detectTarget(); // validate platform early: throws if unsupported
 
-        console.log(`  Checking for updates on channel "${channel}"…`);
+        stdout(`  ${label(`Checking for updates on channel "${channel}"…`)}`);
         const asset = await fetchRelease(channel);
         const targetVersion = asset.tag.replace(/^v/, "");
         const manager = await detectInstallManager();
 
         if (manager.kind === "mise") {
           if (!manager.sourceConfig) {
-            console.error("Error: this binary belongs to mise, but no mise source config could be identified.");
-            console.error(`  Activate it with \`mise use -g ${MISE_TOOL_ID}\`, then retry.`);
-            process.exit(1);
-            throw new Error("unreachable");
+            throw new Error(
+              "this binary belongs to mise, but no mise source config could be identified\n" +
+                `  activate it with \`mise use -g ${MISE_TOOL_ID}\`, then retry`,
+            );
           }
           // Compare against what mise activates, not what this process compiled
           // in: a stale binary invoked directly must still move the pin forward.
           const installedVersion = manager.activeVersion ?? VERSION;
           if (targetVersion === installedVersion && !flags.force) {
-            console.log(`  Already on v${installedVersion}. Use --force to re-install.`);
+            stdout(`  ${ok(`Already on v${installedVersion}.`)} ${label("Use --force to re-install.")}`);
             return;
           }
           const exitCode = await runMiseUse(
@@ -104,49 +105,57 @@ export default defineCommand(
             manager.requestedVersion,
             flags.force,
           );
-          if (exitCode !== 0) {
-            process.exit(exitCode);
-            throw new Error("unreachable");
-          }
+          if (exitCode !== 0) throw new Error(`mise use exited with code ${exitCode}`);
           return;
         }
 
         if (targetVersion === VERSION && !flags.force) {
-          console.log(`  Already on v${VERSION}. Use --force to re-install.`);
+          stdout(`  ${ok(`Already on v${VERSION}.`)} ${label("Use --force to re-install.")}`);
           return;
         }
 
         const link = requireActiveLauncher();
         const activeTarget = await resolveLauncherTarget(link);
         if (!activeTarget || !pathContains(versionsDir(), activeTarget)) {
-          console.error(`Error: active launcher ${link} is not a symlink into ${versionsDir()}.`);
-          console.error("  Refusing to modify an install not owned by the standalone ndea installer.");
-          process.exit(1);
-          throw new Error("unreachable");
+          throw new Error(
+            `active launcher ${link} is not a symlink into ${versionsDir()}\n` +
+              "  refusing to modify an install not owned by the standalone ndea installer",
+          );
         }
 
-        const lock = await acquireLock(installLockPath()).catch((err: unknown) => {
-          console.error(`  ${err instanceof Error ? err.message : String(err)}`);
-          process.exit(1);
-        });
-
+        const lock = await acquireLock(installLockPath());
         try {
           const targetDir = versionDir(asset.tag);
           const targetBin = versionedBinaryPath(asset.tag);
           await mkdir(targetDir, { recursive: true });
 
-          console.log(`  Downloading ${asset.assetUrl}`);
-          const [binRes, binShaRes] = await Promise.all([fetch(asset.assetUrl), fetch(asset.shaUrl)]);
-          if (!binRes.ok) throw new Error(`asset fetch failed: ${binRes.status} ${binRes.statusText}`);
+          stdout(`  ${label("Downloading")} ${url(asset.assetUrl)}`);
+          const [binRes, binShaRes] = await Promise.all([
+            fetch(asset.assetUrl, { signal }),
+            fetch(asset.shaUrl, { signal }),
+          ]);
+          if (!binRes.ok || !binRes.body) throw new Error(`asset fetch failed: ${binRes.status} ${binRes.statusText}`);
           if (!binShaRes.ok) throw new Error(`checksum fetch failed: ${binShaRes.status} ${binShaRes.statusText}`);
 
-          const [bytes, shaBody] = await Promise.all([binRes.arrayBuffer(), binShaRes.text()]);
-          const expected = parseShaFile(shaBody);
+          const total = Number(binRes.headers.get("content-length")) || 0;
+          const body = binRes.body;
+          const bytes = await task(`Downloading ${asset.tag}`, async (update) => {
+            const chunks: Uint8Array[] = [];
+            let received = 0;
+            for await (const chunk of body) {
+              chunks.push(chunk);
+              received += chunk.length;
+              update(`Downloading ${asset.tag}  ${mb(received)}${total ? ` / ${mb(total)}` : ""}`);
+            }
+            update(`Downloaded ${asset.tag}  ${mb(received)}`);
+            return Buffer.concat(chunks);
+          });
+          const expected = parseShaFile(await binShaRes.text());
           const actual = sha256Hex(bytes);
           if (actual !== expected) {
             throw new Error(`binary checksum mismatch: expected ${expected}, got ${actual}`);
           }
-          console.log(`  Checksum OK (${expected.slice(0, 12)}…)`);
+          stdout(`  ${ok(`Checksum OK ${label(`(${expected.slice(0, 12)}…)`)}`)}`);
 
           const tmpBin = `${targetBin}.tmp-${process.pid}`;
           try {
@@ -169,7 +178,7 @@ export default defineCommand(
 
           await Bun.write(currentVersionPath(), `${asset.tag}\n${expected}\n`);
 
-          console.log(`  Installed ${asset.tag} → ${link}`);
+          stdout(`  ${ok(`Installed ${asset.tag} → ${link}`)}`);
 
           // `--no-gc` opts out for debugging or bisecting across versions.
           if (flags.gc) {
@@ -180,13 +189,14 @@ export default defineCommand(
             });
             result.freedBytes += await pruneVersionCaches(result.pruned.map((entry) => entry.tag));
             if (result.pruned.length > 0) {
-              const mb = (result.freedBytes / (1024 * 1024)).toFixed(1);
               const tags = result.pruned.map((e) => e.tag).join(", ");
-              console.log(`  Auto-gc: pruned ${result.pruned.length} version(s) [${tags}], freed ${mb} MB`);
+              stdout(
+                `  ${ok(`Pruned ${result.pruned.length} version(s) ${label(`[${tags}]`)}, freed ${mb(result.freedBytes)}`)}`,
+              );
             }
           }
 
-          console.log(`  Run \`ndea --version\` to confirm.`);
+          stdout(`  ${label("Run `ndea --version` to confirm.")}`);
         } finally {
           await lock.release();
         }

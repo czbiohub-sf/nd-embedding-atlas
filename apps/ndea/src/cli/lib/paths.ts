@@ -102,18 +102,17 @@ export function activeLauncher(): string | undefined {
 }
 
 /**
- * Require the active launcher path and exit with a clear error if missing.
+ * Require the active launcher path; throws a clear error if missing.
  *
- * Used by commands that mutate the install (`update`): they
+ * Used by commands that mutate the install (`self update`): they
  * can't operate sensibly without knowing which symlink to swap.
  */
 export function requireActiveLauncher(): string {
   const launcher = activeLauncher();
   if (!launcher) {
-    console.error(
-      `Error: cannot locate the active \`ndea\` symlink at ${launcherPath()}. Reinstall with the ndea installer.`,
+    throw new Error(
+      `cannot locate the active \`ndea\` symlink at ${launcherPath()}; reinstall with the ndea installer`,
     );
-    process.exit(1);
   }
   return launcher;
 }
