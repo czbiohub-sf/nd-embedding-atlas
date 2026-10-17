@@ -13,6 +13,7 @@ import { defineCommand } from "@crustjs/core";
 import { existsSync } from "node:fs";
 import { readFile, readlink, stat } from "node:fs/promises";
 import { detectInstallManager } from "../lib/install-manager.ts";
+import { LIBDUCKDB_EMBEDDED_PATH } from "../lib/__generated-libduckdb.ts";
 import { libduckdbCachePath } from "../lib/libduckdb-cache.ts";
 import { activeLauncher, currentVersionPath, isCompiledBinary, stateDir, versionsDir } from "../lib/paths.ts";
 import { fetchRelease } from "../lib/releases.ts";
@@ -125,11 +126,12 @@ export default defineCommand(
         }
 
         // ── Embedded libduckdb cache ───────────────────────────────────────────
-        // The binary embeds libduckdb; on first launch the preloader extracts
-        // it to ~/.cache/ndea/<version>/. A missing cache file is fine (gets
-        // re-extracted on next launch); we just report presence here so users
-        // know where the 100+ MB went.
-        if (compiled) {
+        // Targets that embed libduckdb extract it to ~/.cache/ndea/<version>/
+        // on first launch. A missing cache file is fine (gets re-extracted on
+        // next launch); we just report presence here so users know where the
+        // 100+ MB went. darwin-arm64 links DuckDB statically into duckdb.node
+        // and embeds no libduckdb, so there is nothing to report.
+        if (compiled && LIBDUCKDB_EMBEDDED_PATH !== null) {
           console.log(`\n${BOLD}libduckdb cache${RESET}`);
           const dylibPath = libduckdbCachePath();
           if (existsSync(dylibPath)) {

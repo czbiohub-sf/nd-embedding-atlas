@@ -236,7 +236,12 @@ build.
 - **Static files:** Development reads `dist/frontend/`; compiled binaries read
   `$bunfs/`. Both paths use `Bun.file()`.
 - **Native addon:** `duckdb.node` embeds in the binary and prevents
-  cross-compilation. Build on each target platform.
+  cross-compilation. Build on each target platform. On darwin-arm64,
+  `scripts/build-duckdb-addon.ts` compiles duckdb-node-neo's bindings against
+  DuckDB's release static libs (pinned by the installed
+  `@duckdb/node-bindings` version, cached in `apps/ndea/.duckdb-addon-cache/`),
+  so that binary embeds no libduckdb and extracts nothing to `~/.cache/ndea/`.
+  Other targets still embed libduckdb for `preload-libduckdb.ts`.
 - **Updates:** Standalone installs live under `~/.ndea/versions/<tag>/ndea`;
   update atomically repoints `~/.local/bin/ndea` and keeps only the active
   version by default. Mise-managed updates must go through mise and must never
