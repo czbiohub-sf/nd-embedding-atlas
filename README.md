@@ -98,11 +98,12 @@ This repository uses Bun and Vite+. The monorepo contains the application and sh
 
 ```bash
 vp install
-vp run dev path/to/data.zarr
-vp run -r check
-vp run -r test
-vp run build
+vp run dev      # https://ndea.localhost (worktree on refactor/foo: https://foo.ndea.localhost)
+vp run verify   # check + test everything, cached
+vp run build    # dist/ndea
 ```
+
+`vp run dev` opens the sibling `../ome-atlas-test-data` infectomics dataset; `vp run dev --fixture` uses a synthetic one.
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md) for package-level commands and repository conventions.
 

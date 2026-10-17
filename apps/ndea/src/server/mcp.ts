@@ -3,19 +3,13 @@
  * so every agent reads and edits the same workspace document the browser
  * shows, through the same validated write path (`applyWorkspacePatch`).
  *
- * Access: localhost Host and Origin only (DNS rebinding), plus the bearer
- * token from `mcp-token.ts`.
+ * Access: loopback Host and Origin only (DNS rebinding): localhost,
+ * 127.0.0.1, [::1], or any `*.localhost` name (RFC 6761 loopback, the
+ * portless dev URLs), plus the bearer token from `mcp-token.ts`.
  */
 
 import { timingSafeEqual } from "node:crypto";
-import {
-  createMcpHandler,
-  hostHeaderValidationResponse,
-  localhostAllowedHostnames,
-  localhostAllowedOrigins,
-  McpServer,
-  originValidationResponse,
-} from "@modelcontextprotocol/server";
+import { createMcpHandler, McpServer } from "@modelcontextprotocol/server";
 import { filterClauseSql } from "@ndea/components/filter";
 import { FilterClauseSchema, JsonPatchOpSchema, OBSERVATION_SET_TABLE, type JsonPatchOp } from "@ndea/protocol";
 import { createPatch } from "rfc6902";
@@ -39,15 +33,29 @@ A filter scope is a crossfilter: state.filter[scope] = {source: {facet: clause}}
 Start with get_workspace, list_components, and list_columns. Change the dashboard with edit_dashboard (a batch applied atomically); patch_workspace applies raw JSON Patch. Every write is validated like a user edit: a rejected call returns issues with JSON Pointers (/ops/<i> names the op; /spec/elements/<id>/props/<key> names a bad prop): fix and retry.
 Read numbers with get_result. The open browser tab shows every accepted change live.`;
 
-/** The /mcp route: localhost-only Host and Origin, a matching bearer token, then the MCP handler. */
+/** True when `url` parses to a loopback hostname: localhost, 127.0.0.1, [::1], or `*.localhost`. */
+function isLoopbackUrl(url: string): boolean {
+  try {
+    const { hostname } = new URL(url);
+    return ["localhost", "127.0.0.1", "[::1]"].includes(hostname) || hostname.endsWith(".localhost");
+  } catch {
+    return false;
+  }
+}
+
+/** The /mcp route: loopback-only Host and Origin, a matching bearer token, then the MCP handler. */
 export function createMcpEndpoint(state: ServerSession, token: string): (request: Request) => Promise<Response> {
   const handler = createMcpHandler(() => createNdeaMcpServer(state));
   const expected = Buffer.from(`Bearer ${token}`);
   return async (request) => {
-    const forbidden =
-      hostHeaderValidationResponse(request, localhostAllowedHostnames()) ??
-      originValidationResponse(request, localhostAllowedOrigins());
-    if (forbidden) return forbidden;
+    // A missing Origin passes: only browsers send one, and that is what DNS rebinding abuses.
+    const origin = request.headers.get("origin");
+    if (!isLoopbackUrl(`http://${request.headers.get("host")}`) || (origin && !isLoopbackUrl(origin))) {
+      return Response.json(
+        { jsonrpc: "2.0", error: { code: -32000, message: "Host and Origin must be loopback" }, id: null },
+        { status: 403 },
+      );
+    }
     const presented = Buffer.from(request.headers.get("authorization") ?? "");
     if (presented.length !== expected.length || !timingSafeEqual(presented, expected)) {
       return new Response("missing or invalid bearer token (see ~/.ndea/mcp-token)", {

@@ -1,4 +1,4 @@
-import { expect, test } from "vite-plus/test";
+import { expect, test } from "bun:test";
 import { cast, column, isBetween, isIn, literal } from "@uwdata/mosaic-sql";
 import { brushFilterClause } from "./brush-filter";
 

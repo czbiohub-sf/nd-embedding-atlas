@@ -5,11 +5,12 @@
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { stateDir, versionsDir } from "../lib/paths.ts";
 import { listVersions } from "../lib/versions.ts";
 
-const TMP_HOME = resolve(import.meta.dir, "../../../.fallow/test-versions");
+const TMP_HOME = resolve(tmpdir(), "ndea-test-versions");
 const TMP_STATE = resolve(TMP_HOME, ".ndea");
 const ORIGINAL_HOME = process.env.HOME;
 

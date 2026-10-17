@@ -18,8 +18,8 @@ set -euo pipefail
 
 mkdir -p dist
 
-# Builds the frontend (Bun.build, in-process ~300ms) and compiles in one
-# shot; no separate frontend step needed.
+# Runs `build:frontend` and `build:addon` (host-native), then compiles for
+# TARGET; the flag reaches only the compile step.
 vp run build "--target=${TARGET}"
 
 # The app builder keeps the public output at dist/ndea, or dist/ndea.exe when

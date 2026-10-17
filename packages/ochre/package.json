@@ -14,7 +14,7 @@
   },
   "scripts": {
     "check": "vp check",
-    "test": "vp test"
+    "test": "bun test"
   },
   "dependencies": {
     "@typegpu/color": "^0.12.1",

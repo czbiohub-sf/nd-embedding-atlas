@@ -23,7 +23,7 @@ export function printAnnotationsWarning(error: unknown): void {
 
 export function printMissingFrontend(): void {
   console.log(
-    `\n  ${warn(`No frontend dist found. Run ${label("vp run build")} (or ${label("vp run dev")} for dev mode with Vite HMR).`)}`,
+    `\n  ${warn(`No frontend dist found. Run ${label("vp run build")} (or ${label("vp run dev")} for the HMR dev server).`)}`,
   );
 }
 
@@ -47,15 +47,10 @@ export function printReady(
 
   const host = displayHost(config.host);
   const origin = `http://${host}:${config.port}`;
-  if (config.noStatic) {
-    console.log(`\n  ${heading("App")}      ${url(`http://${host}:5173`)}  ${label("← open this (Vite + HMR)")}`);
-    console.log(`  ${heading("API")}      ${url(origin)}  ${label("(backend: for /api/* and debugging)")}`);
-  } else {
-    console.log(`\n  ${heading("Local")}    ${url(origin)}`);
-    const networkAddress = getNetworkAddress();
-    if (networkAddress && config.host !== "127.0.0.1") {
-      console.log(`  ${heading("Network")}  ${url(`http://${networkAddress}:${config.port}`)}`);
-    }
+  console.log(`\n  ${heading("Local")}    ${url(origin)}`);
+  const networkAddress = getNetworkAddress();
+  if (networkAddress && config.host !== "127.0.0.1") {
+    console.log(`  ${heading("Network")}  ${url(`http://${networkAddress}:${config.port}`)}`);
   }
   console.log(
     `  ${heading("MCP")}      ${url(`${origin}/mcp`)}  ${label("(Authorization: Bearer <~/.ndea/mcp-token>)")}`,

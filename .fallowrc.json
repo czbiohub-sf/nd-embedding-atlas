@@ -6,7 +6,7 @@
 
     "vite.config.ts",
     "apps/ndea/scripts/build.ts",
-    "apps/ndea/scripts/sync-version.ts",
+    "apps/ndea/scripts/release-version.ts",
     "apps/ndea/scripts/dev.ts",
     "apps/ndea/src/**/*.test.ts",
     "apps/ndea/src/**/*.test-d.ts",
@@ -26,7 +26,9 @@
     "@duckdb/node-bindings-darwin-x64",
     "@duckdb/node-bindings-linux-arm64",
     "@duckdb/node-bindings-linux-x64",
-    "@duckdb/node-bindings-win32-x64"
+    "@duckdb/node-bindings-win32-x64",
+    "portless",
+    "react-refresh"
   ],
   "ignoreExportsUsedInFile": true,
   "rules": {

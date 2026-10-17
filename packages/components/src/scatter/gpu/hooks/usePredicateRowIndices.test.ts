@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vite-plus/test";
+import { describe, expect, test } from "bun:test";
 import { rowIndex } from "@ndea/sdk";
 import { stringPredicate } from "../../helpers";
 import { hasFilterPredicate, predicateMaskRows, predicateRowIndexQuery } from "./usePredicateRowIndices";

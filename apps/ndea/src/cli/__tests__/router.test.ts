@@ -32,6 +32,8 @@ function closedPort(): number {
   return port;
 }
 
+// Assertions expect default colors; `vp run --cache` sets FORCE_COLOR=1 for every task.
+delete process.env.FORCE_COLOR;
 const savedEnv = { ...process.env };
 afterEach(() => {
   for (const key of ["NDEA_HOST", "NDEA_PORT", "FORCE_COLOR", "NO_COLOR"]) {
@@ -103,6 +105,13 @@ describe("router / groups and validation", () => {
 
   test("a bad --port fails validation before view runs", async () => {
     const r = await captureExecute(app, ["--port", "99999", "x.zarr"]);
+    expect(r.exitCode).toBe(1);
+    expect(r.stderr).toContain("flags.port");
+  });
+
+  test("view reads PORT (set by portless) when --port is absent", async () => {
+    process.env.PORT = "99999";
+    const r = await captureExecute(app, ["x.zarr"]);
     expect(r.exitCode).toBe(1);
     expect(r.stderr).toContain("flags.port");
   });

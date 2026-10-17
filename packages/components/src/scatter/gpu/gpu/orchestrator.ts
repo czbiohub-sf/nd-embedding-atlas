@@ -644,7 +644,7 @@ export async function createScatterplot(
       // owners free their own resources → context.unconfigure (§7.4) →
       // root.destroy (tgpu-owned) → release the device lease. A dev-only
       // validation error scope makes "no leaks" verified, not asserted.
-      const auditLeaks = import.meta.env.DEV;
+      const auditLeaks = process.env.NODE_ENV !== "production";
       if (auditLeaks) device.pushErrorScope("validation");
 
       interaction.destroy();

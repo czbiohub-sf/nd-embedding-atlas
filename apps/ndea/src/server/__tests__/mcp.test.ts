@@ -64,7 +64,7 @@ async function call(name: string, args: Record<string, unknown>) {
 }
 
 describe("ndea MCP", () => {
-  test("refuses a missing token and a foreign Origin before any MCP handling", async () => {
+  test("refuses a missing token and a non-loopback Host or Origin before any MCP handling", async () => {
     const { endpoint } = await connect();
     const body = JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" });
     const headers = {
@@ -75,14 +75,21 @@ describe("ndea MCP", () => {
 
     const anonymous = await endpoint(new Request("http://localhost:5055/mcp", { method: "POST", headers, body }));
     expect(anonymous.status).toBe(401);
-    const foreign = await endpoint(
-      new Request("http://localhost:5055/mcp", {
-        method: "POST",
-        headers: { ...headers, origin: "https://evil.example", authorization: `Bearer ${TOKEN}` },
-        body,
-      }),
-    );
-    expect(foreign.status).toBe(403);
+
+    const status = async (host: string, origin?: string) => {
+      const authorized = { ...headers, host, authorization: `Bearer ${TOKEN}`, ...(origin ? { origin } : {}) };
+      return (await endpoint(new Request("http://localhost:5055/mcp", { method: "POST", headers: authorized, body })))
+        .status;
+    };
+    // portless dev URLs (`ndea.localhost`, `<branch>.ndea.localhost`) are loopback names too.
+    expect(await status("ndea.localhost")).not.toBe(403);
+    expect(await status("fix-ui.ndea.localhost:1355", "http://fix-ui.ndea.localhost:1355")).not.toBe(403);
+    expect(await status("127.0.0.1:5055", "https://ndea.localhost")).not.toBe(403);
+    expect(await status("evil.example")).toBe(403);
+    expect(await status("localhost.evil.example")).toBe(403);
+    expect(await status("localhost:5055", "https://evil.example")).toBe(403);
+    expect(await status("localhost:5055", "https://localhost.evil.example")).toBe(403);
+    expect(await status("localhost:5055", "null")).toBe(403);
   });
 
   test("an agent builds a filtered, linked dashboard and reads the same numbers back", async () => {

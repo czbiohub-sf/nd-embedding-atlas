@@ -1,4 +1,5 @@
-import { describe, expect, test } from "vite-plus/test";
+/// <reference types="bun" />
+import { describe, expect, test } from "bun:test";
 import { Accent } from "./colormap/catalog/colorbrewer";
 import { cividis } from "./colormap/catalog/cividis";
 import {

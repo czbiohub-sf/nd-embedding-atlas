@@ -13,14 +13,12 @@
 post-create = "vp install"
 
 # ── pre-merge ────────────────────────────────────────────────────────────────
-# Mirror the CI gates (.github/workflows/ci.yml) so a branch fails locally
-# before it's merged back to trunk rather than in CI:
-#   - check     → `vp check`  (typecheck + Oxlint + Oxfmt)
-#   - test      → `vp run -r test` (Bun-native suites behind Vite+ tasks)
+# Mirror the CI gate (.github/workflows/ci.yml) so a branch fails locally
+# before it's merged back to trunk rather than in CI: `vp run verify` runs
+# every check (typecheck + Oxlint + Oxfmt) and Bun test suite, cached.
 #
 # Array-of-tables ([[pre-merge]]) is the current form: steps run serially in
 # declaration order. (The single-table [pre-merge] form is deprecated and will
 # be repurposed to run in parallel.)
 [[pre-merge]]
-check = "vp check"
-test = "vp run -r test"
+verify = "vp run verify"

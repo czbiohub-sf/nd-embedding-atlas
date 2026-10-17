@@ -13,7 +13,11 @@
  *
  * Usage:
  *   vp run build                                      # current platform
- *   vp run build bun-linux-x64                        # specific target
+ *   vp run build --target=bun-linux-x64               # specific target
+ *
+ * `vp run build` runs the cached `--frontend-only` (step 1) and
+ * `--addon-only` (static duckdb.node) tasks, then `--compile-only`
+ * (steps 2-4 against the existing dist/frontend). No flag runs everything.
  *
  * Output: dist/ndea: single self-contained binary. On darwin-arm64 nothing
  * is extracted besides Bun's own native-addon temp file. Other targets embed
@@ -26,10 +30,12 @@ import { dirname, relative, resolve } from "node:path";
 import { COLUMN_WORKER_ENTRYPOINT } from "@ndea/zarr/build";
 import { CROP_WORKER_ENTRYPOINT } from "../src/server/crop-worker-path.ts";
 import { buildStaticDuckDBAddon } from "./build-duckdb-addon.ts";
+import frontendPlugin from "./frontend-plugin.ts";
 
 // ─── Args ──────────────────────────────────────────────────────────────────
 
 const args = Bun.argv.slice(2);
+const only = args.find((a) => a === "--frontend-only" || a === "--addon-only" || a === "--compile-only");
 const targetArg = args.find((a) => !a.startsWith("--") || a.startsWith("--target="));
 const hostTargetOs = process.platform === "win32" ? "windows" : process.platform;
 const target =
@@ -89,17 +95,12 @@ const RESET = "\x1b[0m";
 
 // ─── Frontend bundle (Bun.build) ────────────────────────────────────────────
 //
-// Bundles the frontend with Bun's own bundler (replaced `vp build`/Vite) so the
-// whole build runs on Bun. Tailwind v4 (bun-plugin-tailwind) and the TypeGPU
-// `'use gpu'` transform (unplugin-typegpu/bun) run as Bun.build plugins. The
-// output (dist/frontend/**) is what Step 2 globs, so the embed-manifest +
-// --compile tail downstream is unchanged. Vite is now only used for `vp dev`.
+// Bundles the frontend with Bun's own bundler, the same one `vp run dev`
+// serves through. frontend-plugin.ts (Tailwind v4 + TypeGPU) is the one plugin
+// set for both. The output (dist/frontend/**) is what Step 2 globs.
 async function buildFrontendWithBun(): Promise<void> {
-  const tailwind = (await import("bun-plugin-tailwind")).default;
-  const typegpu = (await import("unplugin-typegpu/bun")).default;
-
-  // Bun.build writes into outdir without clearing it: wipe any stale Vite
-  // output first so the manifest globs only Bun's emitted files.
+  // Bun.build writes into outdir without clearing it: wipe any stale
+  // output first so the manifest globs only this build's files.
   rmSync(FRONTEND_DIST, { recursive: true, force: true });
 
   const result = await Bun.build({
@@ -108,7 +109,7 @@ async function buildFrontendWithBun(): Promise<void> {
     target: "browser",
     minify: true,
     // No sourcemaps: they'd be globbed into the embed manifest and bloat the
-    // compiled binary by ~15MB (Vite emits none here either).
+    // compiled binary by ~15MB.
     sourcemap: "none",
     // ponytail: splitting disabled: with `splitting: true`, Bun.build emitted an
     // index.html whose entry chunk's import closure never reached the createRoot
@@ -117,13 +118,11 @@ async function buildFrontendWithBun(): Promise<void> {
     // there's no network to amortize split chunks over. Re-enable if Bun fixes the
     // HTML-entry-under-splitting wiring.
     splitting: false,
-    // The frontend reads `import.meta.env.PROD` (DashboardProvider): Vite
-    // injects it; Bun does not, so define it for the production bundle.
-    define: {
-      "import.meta.env.PROD": "true",
-      "import.meta.env.DEV": "false",
-    },
-    plugins: [tailwind, typegpu({})],
+    // The frontend's one dev/prod switch: the Bun dev server inlines
+    // "development", Bun.build would too unless told otherwise. Also selects
+    // React's production build.
+    define: { "process.env.NODE_ENV": JSON.stringify("production") },
+    plugins: [frontendPlugin],
   });
 
   if (!result.success) {
@@ -137,9 +136,22 @@ async function buildFrontendWithBun(): Promise<void> {
 
 const startedAt = performance.now();
 
-console.log(`\n  ${BOLD}Step 1:${RESET} Building frontend (Bun.build)...\n`);
-await buildFrontendWithBun();
-console.log(`  ${GREEN}✓${RESET} Frontend built`);
+if (only === "--addon-only") {
+  // Only darwin-arm64 links DuckDB statically (Step 2); other targets have nothing to prebuild.
+  if (target === "bun-darwin-arm64") {
+    console.log(`  ${GREEN}✓${RESET} static duckdb.node: ${relative(REPO_ROOT, await buildStaticDuckDBAddon())}`);
+  }
+  process.exit(0);
+}
+
+if (only === "--compile-only") {
+  if (!existsSync(FRONTEND_DIST)) throw new Error(`${FRONTEND_DIST} not found. Run \`vp run build\`.`);
+} else {
+  console.log(`\n  ${BOLD}Step 1:${RESET} Building frontend (Bun.build)...\n`);
+  await buildFrontendWithBun();
+  console.log(`  ${GREEN}✓${RESET} Frontend built`);
+  if (only === "--frontend-only") process.exit(0);
+}
 
 // ─── Step 2: Generate embedded-asset manifests ─────────────────────────────
 //

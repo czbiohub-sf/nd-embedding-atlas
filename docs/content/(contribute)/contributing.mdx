@@ -52,30 +52,21 @@ are deliberately pinned.
 ## Development workflow
 
 ```bash
-# Full dev stack: backend on :5055 + Vite frontend on :5173 with HMR
-vp run dev path/to/data.zarr
+vp run dev            # opens ../ome-atlas-test-data/infectomics/infectomics.yaml
+vp run dev --fixture  # synthetic in-memory dataset
 ```
 
-The command starts `apps/ndea/src/cli/index.ts` and the app's Vite server.
+The command runs one Bun process: the ndea server serves the frontend (with hot reload), the API, `/ws`, and `/mcp` on one port. [portless](https://portless.sh) names it `https://ndea.localhost`; a linked git worktree gets `https://<last branch segment>.ndea.localhost` (`refactor/foo` → `https://foo.ndea.localhost`), so several checkouts run side by side. Run it from the repository root (the root `bunfig.toml` carries the frontend plugins); Ctrl+C stops it. The first run starts the portless proxy (HTTPS on :443, asks for sudo and trusts its CA once); `PORTLESS=0 vp run dev` skips it and serves `http://localhost:5055`.
 A new workspace file starts from the `--preset` document (`annotate` by default); every build renders its dashboard, and development builds add layout editing.
-
-Frontend-only when the backend already runs separately:
-
-```bash
-vp dev apps/ndea
-```
 
 ## Quality gates
 
 ```bash
-vp check vite.config.ts scripts
-vp run -r check          # package checks in dependency order
-vp run -r test           # package tests in dependency order
-vp run build             # frontend + single-file binary
+vp run verify         # check + test root tooling and every workspace (cached)
+vp run build          # frontend + single-file binary
 ```
 
-CI runs the same checks and tests, verifies generated CLI metadata, and builds
-the native binary matrix.
+CI runs `vp run verify` and builds the native binary matrix.
 
 ## Optional code-health audit
 
@@ -124,12 +115,12 @@ The release workflow uploads `scripts/install.sh` and `scripts/install.ps1` as p
 
 Each platform builds on its own runner. `duckdb.node` is a native N-API addon, so a cross-compiled binary would embed the host's addon rather than the target's:
 
-| Runner             | `bun --target`     | Release asset            |
-| ------------------ | ------------------ | ------------------------ |
-| `macos-14`         | `bun-darwin-arm64` | `ndea-darwin-arm64`      |
-| `ubuntu-latest`    | `bun-linux-x64`    | `ndea-linux-x64`         |
-| `ubuntu-24.04-arm` | `bun-linux-arm64`  | `ndea-linux-arm64`       |
-| `windows-latest`   | `bun-windows-x64`  | `ndea-windows-x64.exe`   |
+| Runner             | `bun --target`     | Release asset          |
+| ------------------ | ------------------ | ---------------------- |
+| `macos-14`         | `bun-darwin-arm64` | `ndea-darwin-arm64`    |
+| `ubuntu-latest`    | `bun-linux-x64`    | `ndea-linux-x64`       |
+| `ubuntu-24.04-arm` | `bun-linux-arm64`  | `ndea-linux-arm64`     |
+| `windows-latest`   | `bun-windows-x64`  | `ndea-windows-x64.exe` |
 
 Note that `process.platform` reports `win32` while Bun's target triple spells the OS `windows`, and the DuckDB bindings directory is `node-bindings-win32-x64`. `apps/ndea/scripts/build.ts` owns the mapping between the three.
 
@@ -154,7 +145,7 @@ vp run docs:build
 vp run docs:serve  # http://localhost:8080/nd-embedding-atlas/
 
 # Local development with hot reload
-vp run docs:dev
+vp run docs
 ```
 
 Because pages are MDX, they can embed React. `vp run docs:build` writes

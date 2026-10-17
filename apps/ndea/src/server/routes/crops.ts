@@ -73,7 +73,7 @@ export async function handleCrop(fovPath: string, req: Request, state: ServerSes
         "Cache-Control": "public, max-age=300",
         // Rendered dimensions (aspect-preserving) so the client can lay out
         // masonry tiles without waiting for image decode. Same-origin fetch
-        // (Vite proxy in dev, single server compiled) → readable without CORS.
+        // (dev and compiled builds serve app and API on one port) → readable without CORS.
         "X-Crop-Width": String(width),
         "X-Crop-Height": String(height),
       },

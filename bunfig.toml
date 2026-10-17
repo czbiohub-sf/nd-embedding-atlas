@@ -1,2 +1,6 @@
 [install]
 linker = "isolated"
+
+# Bun's dev server (`vp run dev`, `ndea view --dev`) bundles the frontend with the same plugins as build.ts.
+[serve.static]
+plugins = ["./apps/ndea/scripts/frontend-plugin.ts"]

@@ -60,15 +60,18 @@ docs/                 Independent Waku documentation app
 ## Development workflow
 
 ```bash
-# Full dev stack (backend on :5055 + Vite frontend on :5173, with HMR)
-vp run dev path/to/data.zarr
+# Dev server: one Bun process (frontend with HMR + API) at https://ndea.localhost
+# (a linked worktree: https://<last branch segment>.ndea.localhost), opening
+# ../ome-atlas-test-data/infectomics/infectomics.yaml. Run from the repo root;
+# Ctrl+C stops it. The first run starts the portless proxy (HTTPS on :443, asks
+# for sudo and trusts its CA once); `PORTLESS=0 vp run dev` skips it and serves
+# http://localhost:5055.
+vp run dev
+# Synthetic in-memory dataset instead
+vp run dev --fixture
 
-# Shared root tooling, then every workspace in dependency order
-vp check vite.config.ts scripts
-vp run -r check
-
-# Run each workspace's test task
-vp run -r test
+# Check + test root tooling and every workspace (cached; what CI runs)
+vp run verify
 
 # Build the frontend and single-file binary
 vp run build
@@ -111,14 +114,14 @@ vp run docs:serve
 # Open http://localhost:8080/nd-embedding-atlas/
 
 # Local development with hot reload
-vp run docs:dev
+vp run docs
 ```
 
 ## Pull requests
 
-`ci.yml` checks root tooling, workspace types, workspace boundaries, generated
-CLI metadata, Bun tests, and native binaries on push and PR. `docs.yml` builds
-the isolated docs app. `zizmor.yml` audits workflow security.
+`ci.yml` runs `vp run verify` (root tooling and workspace checks and Bun tests)
+and builds native binaries on push and PR. `docs.yml` builds the isolated docs
+app. `zizmor.yml` audits workflow security.
 
-For releases, see [`AGENTS.md`](./AGENTS.md#commands). Release tags trigger
-`release.yml`.
+Before tagging a release, bump `apps/ndea/package.json` and run
+`vp run release:version`. Release tags trigger `release.yml`.

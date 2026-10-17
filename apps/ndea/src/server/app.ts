@@ -3,10 +3,12 @@
  *
  * - HTTP API routes (fetch-based) and the /data/query Mosaic endpoint
  * - WebSocket: framed `workspace/watch` sync
- * - Static file serving for the React SPA frontend
- * - CORS headers for dev mode (Vite on :5173, backend on :5055)
+ * - Static file serving for the React SPA frontend, or Bun's dev server
+ *   (HTML import + HMR) when `devHtml` is set
+ * - CORS headers for cross-origin API clients
  */
 
+import type { HTMLBundle } from "bun";
 import type { DatasetQuerySession } from "./store.ts";
 import type { ServerSession, DatasetSessionMetadata } from "./state.ts";
 
@@ -58,6 +60,8 @@ export interface CreateAppOptions {
   frontendDir?: string;
   /** Disable static file serving (API-only mode). */
   noStatic?: boolean;
+  /** Dev mode: serve this `index.html` import through Bun's dev server (bundling + HMR) instead of the built bundle. */
+  devHtml?: HTMLBundle;
   /** Bearer token that /mcp requires; without one the MCP endpoint is off. */
   mcpToken?: string;
 }
@@ -72,7 +76,7 @@ export interface CreateAppOptions {
  */
 export function createApp(options: CreateAppOptions) {
   const { store, state, config } = options;
-  const frontendDir = options.noStatic ? null : resolveFrontendDir(options.frontendDir);
+  const frontendDir = options.noStatic || options.devHtml ? null : resolveFrontendDir(options.frontendDir);
   const mcp = options.mcpToken ? createMcpEndpoint(state, options.mcpToken) : null;
 
   // Spin up the Bun Worker pool for crop rendering when a plate is
@@ -85,6 +89,8 @@ export function createApp(options: CreateAppOptions) {
   return Bun.serve<ServerSocketContext>({
     port: options.port,
     hostname: options.host,
+    routes: options.devHtml ? { "/": options.devHtml } : {},
+    development: options.devHtml ? { hmr: true, console: true } : false,
 
     async fetch(req, server) {
       const url = new URL(req.url);
@@ -165,18 +171,8 @@ async function routeRequest(
   }
 
   // ── Static frontend files ───────────────────────────────────────
-  if (!options.noStatic) {
+  if (!options.noStatic && !options.devHtml) {
     return serveStatic(pathname, frontendDir);
-  }
-
-  // `--no-static` mode: backend is API-only and the Vite dev server owns
-  // the HTML bundle on :5173. Anyone landing here in a browser probably
-  // guessed the backend port: point them at the dev URL.
-  if (req.headers.get("accept")?.includes("text/html")) {
-    return new Response(
-      `<!doctype html><html><body style="font-family:system-ui;padding:2rem;line-height:1.5"><h2>Backend (no static)</h2><p>The API backend is running on this port (${options.port}). The dev frontend is served by Vite: open <a href="http://${options.host}:5173">http://${options.host}:5173</a>.</p></body></html>`,
-      { status: 404, headers: { "Content-Type": "text/html; charset=utf-8" } },
-    );
   }
   return new Response("Not Found", { status: 404 });
 }

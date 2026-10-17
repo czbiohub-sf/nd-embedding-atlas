@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Fail loudly if the pushed git tag does not match the app package version.
-# Guards against tagging without running the app sync-version task; the
+# Guards against tagging without running `vp run release:version`; the
 # binary baked into the release would otherwise report a stale version.
 #
 # Invoked from .github/workflows/release.yml; expects to run inside a
@@ -13,7 +13,7 @@ expected="v${pkg_version}"
 
 if [[ "${tag}" != "${expected}" ]]; then
     echo "::error::Tag (${tag}) does not match apps/ndea/package.json version (${expected})"
-    echo "Run 'vp run sync-version' and commit before tagging."
+    echo "Run 'vp run release:version' and commit before tagging."
     exit 1
 fi
 

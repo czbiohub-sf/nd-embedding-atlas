@@ -115,6 +115,6 @@ export function deviceRefCount(): number {
 }
 
 // Browser diagnostic for leak checks.
-if (import.meta.env.DEV && typeof window !== "undefined") {
+if (process.env.NODE_ENV !== "production" && typeof window !== "undefined") {
   (window as unknown as { __ndeaDeviceRefCount?: () => number }).__ndeaDeviceRefCount = deviceRefCount;
 }

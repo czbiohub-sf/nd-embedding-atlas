@@ -7,7 +7,6 @@ import { openDatasets, prepareDatasets } from "./startup/datasets.ts";
 import { createQuerySession } from "./startup/ingest.ts";
 import { printBanner, printReady } from "./startup/output.ts";
 import {
-  installDevErrorBridge,
   openBrowser,
   prewarmEmbeddings,
   registerGracefulShutdown,
@@ -18,7 +17,6 @@ import { buildDatasetMetadata, prepareServerSession } from "./startup/session.ts
 
 export async function startup(config: LaunchConfig): Promise<void> {
   const startTime = performance.now();
-  installDevErrorBridge(config);
   printBanner();
 
   // Before ingest, so an invalid workspace file or preset fails in milliseconds, not minutes.

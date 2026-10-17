@@ -7,21 +7,20 @@
   ],
   "type": "module",
   "scripts": {
-    "build": "vp run --filter @ndea/app build",
-    "backend": "bun run apps/ndea/src/cli/index.ts view",
-    "ndea": "bun run apps/ndea/src/cli/index.ts",
+    "audit": "fallow",
+    "dev": "bun x --bun portless run bun apps/ndea/scripts/dev.ts",
+    "docs": "bun run --cwd docs dev",
     "docs:build": "bun run --cwd docs build",
-    "docs:dev": "bun run --cwd docs dev",
     "docs:serve": "bun run --cwd docs start",
-    "dev": "bun run apps/ndea/scripts/dev.ts",
-    "sync-version": "bun run apps/ndea/scripts/sync-version.ts",
-    "dead-code": "fallow dead-code",
-    "audit": "fallow"
+    "ndea": "bun run apps/ndea/src/cli/index.ts",
+    "release:version": "bun run apps/ndea/scripts/release-version.ts"
   },
   "devDependencies": {
     "@types/bun": "catalog:",
     "eslint-plugin-typegpu": "^0.12.1",
     "fallow": "^3.33.1",
+    "portless": "^0.15.8",
+    "react-refresh": "^0.19.0",
     "typescript": "catalog:",
     "vite": "npm:@voidzero-dev/vite-plus-core@1.3.0",
     "vite-plus": "catalog:"
@@ -54,5 +53,6 @@
     "vite-plus": "1.3.0",
     "zarrita": "^0.7.5",
     "zod": "^4.6.7"
-  }
+  },
+  "portless": "ndea"
 }

@@ -1,8 +1,14 @@
+import { resolve } from "node:path";
+import type { HTMLBundle } from "bun";
+import { isCompiled } from "../../server/embedded-assets.ts";
 import { flushAnnotationSaves } from "../../server/routes/annotate.ts";
 import type { DatasetSessionMetadata, ServerSession } from "../../server/state.ts";
 import { resolveFrontendDir } from "../../server/static.ts";
 import type { LaunchConfig } from "../config.ts";
 import { displayHost, printMissingFrontend, printShutdownHint, printShuttingDown } from "./output.ts";
+
+// Held in a variable so `bun build --compile` never bundles the frontend source into the binary.
+const DEV_INDEX_HTML = resolve(import.meta.dir, "../../../index.html");
 
 interface RunningServer {
   stop(closeActiveConnections?: boolean): void | Promise<void>;
@@ -17,43 +23,8 @@ function isPortCollision(error: unknown): boolean {
   );
 }
 
-export function installDevErrorBridge(config: LaunchConfig): void {
-  if (!config.noStatic) return;
-  process.on("uncaughtException", (error) => void reportBackendError(error));
-  process.on("unhandledRejection", (reason) => void reportBackendError(reason));
-}
-
-async function readViteDevUrl(): Promise<string | null> {
-  try {
-    const { readFileSync } = await import("node:fs");
-    const raw = readFileSync(".vite/dev-server.json", "utf8");
-    const { url } = JSON.parse(raw) as { url?: string };
-    return typeof url === "string" ? url : null;
-  } catch {
-    return null;
-  }
-}
-
-async function reportBackendError(error: unknown): Promise<void> {
-  const url = await readViteDevUrl();
-  if (!url) return;
-  const payload =
-    error instanceof Error
-      ? { message: error.message, stack: error.stack ?? "" }
-      : { message: String(error), stack: "" };
-  try {
-    await fetch(`${url}/__dev_error`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-  } catch {
-    // Reporting is best-effort; the original terminal error remains primary.
-  }
-}
-
 export function resolveStaticDirectory(config: LaunchConfig): string | undefined {
-  if (config.noStatic) return undefined;
+  if (config.dev) return undefined;
   const staticDirectory = resolveFrontendDir() ?? undefined;
   if (!staticDirectory) printMissingFrontend();
   return staticDirectory;
@@ -68,6 +39,11 @@ export async function startServer(
   const { createApp } = await import("../../server/app.ts");
   const { loadMcpToken } = await import("../../server/mcp-token.ts");
   const mcpToken = await loadMcpToken();
+  let devHtml: HTMLBundle | undefined;
+  if (config.dev) {
+    if (isCompiled) throw new Error("--dev serves the frontend source: run it from a checkout (vp run dev)");
+    devHtml = (await import(DEV_INDEX_HTML)).default;
+  }
   try {
     return createApp({
       port: config.port,
@@ -76,7 +52,7 @@ export async function startServer(
       state,
       config: metadata,
       frontendDir,
-      noStatic: config.noStatic,
+      devHtml,
       mcpToken,
     });
   } catch (error) {

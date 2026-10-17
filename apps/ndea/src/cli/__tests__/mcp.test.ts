@@ -4,6 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const APP_ROOT = join(import.meta.dir, "..", "..", "..");
+// Assertions expect plain output; `vp run --cache` sets FORCE_COLOR=1 for every task.
+delete process.env.FORCE_COLOR;
 let home = "";
 afterEach(() => rm(home, { recursive: true, force: true }));
 

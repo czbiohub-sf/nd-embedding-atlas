@@ -27,7 +27,7 @@ export function DatasetSessionProvider({ children }: Props) {
     () =>
       new Coordinator(restConnector({ uri: `${location.origin}/data/query` }), {
         // keep cache / consolidate / preagg defaults
-        logger: import.meta.env.PROD ? null : console,
+        logger: process.env.NODE_ENV === "production" ? null : console,
       }),
     [],
   );

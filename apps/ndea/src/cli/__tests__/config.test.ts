@@ -136,7 +136,7 @@ describe("launch config", () => {
     expect(
       resolveLaunchConfig(project, {
         noOpen: false,
-        noStatic: true,
+        dev: true,
       }),
     ).toEqual({
       datasets: project.datasets,
@@ -144,7 +144,7 @@ describe("launch config", () => {
       port: 6060,
       host: "yaml-host",
       noOpen: false,
-      noStatic: true,
+      dev: true,
       preset: "yaml-preset",
       workspace: defaultWorkspacePath(["/project/cells.zarr"]),
     });
@@ -156,7 +156,7 @@ describe("launch config", () => {
         port: 7070,
         host: "cli-host",
         noOpen: true,
-        noStatic: false,
+        dev: false,
         obsColumns: ["from_cli"],
         preset: "cli-preset",
         workspace: "relative/workspace.json",
@@ -167,7 +167,7 @@ describe("launch config", () => {
       port: 7070,
       host: "cli-host",
       noOpen: true,
-      noStatic: false,
+      dev: false,
       preset: "cli-preset",
       workspace: resolve("relative/workspace.json"),
     });
@@ -175,7 +175,7 @@ describe("launch config", () => {
 
   test("keeps existing defaults for bare paths", () => {
     const parsed = pathsToConfig(["relative/example.zarr"]);
-    expect(resolveLaunchConfig(parsed, { noOpen: false, noStatic: false })).toEqual({
+    expect(resolveLaunchConfig(parsed, { noOpen: false, dev: false })).toEqual({
       datasets: [
         {
           name: "example",
@@ -186,7 +186,7 @@ describe("launch config", () => {
       port: 5055,
       host: "127.0.0.1",
       noOpen: false,
-      noStatic: false,
+      dev: false,
       preset: undefined,
       workspace: defaultWorkspacePath([resolve("relative/example.zarr")]),
     });

@@ -13,40 +13,9 @@ permissions:
   contents: read
 
 jobs:
-  # Typecheck + lint + fmt (Linux only: deterministic, fast)
-  check:
-    name: Typecheck + lint + fmt
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-      - uses: oven-sh/setup-bun@v2
-      - uses: voidzero-dev/setup-vp@v1
-      - name: Install dependencies
-        run: vp install --frozen-lockfile
-      - name: Check root tooling
-        run: vp check vite.config.ts scripts
-      - name: Check workspaces
-        run: vp run -r check
-      # install.ps1 is piped straight into `iex` by users, so a syntax error
-      # is a total install failure with no partial-success mode. Parse it with
-      # the real PowerShell parser (pwsh is preinstalled on ubuntu runners).
-      - name: Parse-check install.ps1
-        shell: pwsh
-        run: |
-          $errors = $null
-          [System.Management.Automation.Language.Parser]::ParseFile(
-            (Resolve-Path scripts/install.ps1), [ref]$null, [ref]$errors) | Out-Null
-          if ($errors) {
-            $errors | ForEach-Object { Write-Host "::error::$($_.Extent.StartLineNumber): $($_.Message)" }
-            exit 1
-          }
-          Write-Host "install.ps1 parses cleanly"
-
-  # ── Bun test matrix ─────────────────────────────────────────────────────
-  test:
-    name: Test (${{ matrix.os }})
+  # ── Check + test matrix (`vp run verify`) ───────────────────────────────
+  verify:
+    name: Verify (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -63,11 +32,23 @@ jobs:
       - uses: voidzero-dev/setup-vp@v1
       - name: Install dependencies
         run: vp install --frozen-lockfile
-      - name: Test workspaces
-        run: vp run -r test
-      # `scripts/` is not a workspace, so `vp run -r test` does not reach it.
-      - name: Test the installer
-        run: bun test scripts
+      - name: vp run verify
+        run: vp run verify
+      # install.ps1 is piped straight into `iex` by users, so a syntax error
+      # is a total install failure with no partial-success mode. Parse it with
+      # the real PowerShell parser (pwsh is preinstalled on ubuntu runners).
+      - name: Parse-check install.ps1
+        if: runner.os == 'Linux'
+        shell: pwsh
+        run: |
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path scripts/install.ps1), [ref]$null, [ref]$errors) | Out-Null
+          if ($errors) {
+            $errors | ForEach-Object { Write-Host "::error::$($_.Extent.StartLineNumber): $($_.Message)" }
+            exit 1
+          }
+          Write-Host "install.ps1 parses cleanly"
 
   # ── Full build + launch verify (frontend + binary, catches release-time
   # regressions at PR time rather than at release time) ─────────────────
@@ -94,9 +75,9 @@ jobs:
       - uses: voidzero-dev/setup-vp@v1
       - name: Install dependencies
         run: vp install --frozen-lockfile
-      # `vp run build` exercises the full release path: Bun.build (frontend)
-      # → embed-asset manifest generation → bun build --compile (single
-      # self-contained binary with embedded libduckdb). PRs that break any
+      # `vp run build` exercises the full release path: `build:frontend`
+      # (Bun.build) and `build:addon`, then embed-asset manifest generation →
+      # Bun.build `compile` (single self-contained binary). PRs that break any
       # of these surface here instead of during a release.
       - name: vp run build
         run: vp run build
@@ -116,7 +97,7 @@ jobs:
   all-green:
     name: All checks pass
     if: always()
-    needs: [check, test, build-verify]
+    needs: [verify, build-verify]
     runs-on: ubuntu-latest
     steps:
       - uses: re-actors/alls-green@release/v1

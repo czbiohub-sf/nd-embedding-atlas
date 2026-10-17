@@ -24,14 +24,15 @@ export const viewFlags = [
   defineFlag("port", {
     type: "string",
     schema: z.coerce.number().int().min(1).max(65535).optional(),
+    env: { name: "PORT" },
     description: "Server port (default: 5055)",
   }),
   defineFlag("host", { type: "string", description: "Server host (default: 127.0.0.1)" }),
   defineFlag("open", { type: "boolean", default: true, description: "Auto-open the browser" }),
-  defineFlag("static", {
+  defineFlag("dev", {
     type: "boolean",
-    default: true,
-    description: "Serve the frontend bundle (--no-static in dev mode)",
+    default: false,
+    description: "Serve the frontend source with Bun's dev server and HMR (source checkout only)",
   }),
   defineFlag("obs-columns", { type: "string", description: "Comma-separated obs columns to include" }),
   defineFlag("preset", {
@@ -50,7 +51,7 @@ interface ViewInput {
     port?: number;
     host?: string;
     open: boolean;
-    static: boolean;
+    dev: boolean;
     "obs-columns"?: string;
     preset?: string;
     workspace?: string;
@@ -66,7 +67,7 @@ export async function runView({ args, flags, signal }: ViewInput): Promise<void>
     port: flags.port,
     host: flags.host,
     noOpen: !flags.open,
-    noStatic: !flags.static,
+    dev: flags.dev,
     obsColumns: parseObsColumns(flags["obs-columns"]),
     preset: flags.preset,
     workspace: flags.workspace,

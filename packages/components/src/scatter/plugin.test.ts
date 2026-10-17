@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vite-plus/test";
+import { describe, expect, test } from "bun:test";
 import type { BodyMounter } from "../contracts";
 import { createScatterDefinition } from "./definition";
 import type { ScatterServices } from "./contracts";

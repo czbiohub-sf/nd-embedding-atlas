@@ -8,15 +8,18 @@ APIs remain in flux.
 
 - Use Vite+ (`vp`) as the only developer-facing command interface: dependency
   management, package scripts, workspace tasks, checks, tests, builds, and the
-  frontend dev server all start with `vp`.
-- Bun remains the runtime, package manager, test runner, script host, and binary
-  compiler underneath Vite+. Package scripts and low-level tooling may invoke
-  Bun; developers should not invoke it directly. Do not use Node.js, npm, pnpm,
-  Yarn, or Python.
-- Import Vite and test APIs from `vite-plus` and `vite-plus/test`. Do not install
-  Vite, Vitest, Oxlint, Oxfmt, or tsdown separately.
-- Run package scripts with `vp run <script>`. Bare commands such as `vp build`
-  invoke Vite+ built-ins, not same-named package scripts.
+  dev server all start with `vp`.
+- Bun remains the runtime, package manager, bundler, dev server, test runner,
+  script host, and binary compiler underneath Vite+. Package scripts and
+  low-level tooling may invoke Bun; developers should not invoke it directly.
+  Do not use Node.js, npm, pnpm, Yarn, or Python.
+- Import config APIs from `vite-plus` and test APIs from `bun:test`. Vite+
+  only checks, lints, formats, and runs tasks; it does not serve or bundle the
+  app. Do not install Vite, Vitest, Oxlint, Oxfmt, or tsdown separately.
+- Run tasks with `vp run <task>`. Bare commands such as `vp build`, `vp dev`,
+  and `vp test` invoke Vite+ built-ins, not the project's tasks.
+- Cached tasks (`check`, `test`, `verify`, `build:*`) live in the root
+  `vite.config.ts` `run.tasks`; uncached ones are root `package.json` scripts.
 - TypeScript 7 runs in strict mode.
 
 ## Workspace layout
@@ -96,10 +99,10 @@ entrypoints across workspaces.
   references to unknown sets anywhere in the document.
 - `/mcp` (`server/mcp.ts`) serves MCP over Streamable HTTP with the SDK's
   per-request `createMcpHandler`; tools close over the one server session.
-  Only localhost `Host`/`Origin` and the bearer token in `~/.ndea/mcp-token`
-  pass. `edit_dashboard` compiles named ops on a draft document
-  (`server/workspace-edits.ts`) and applies the diff as one patch; add new
-  agent operations there, not as new write paths.
+  Only loopback `Host`/`Origin` (localhost, 127.0.0.1, [::1], `*.localhost`)
+  and the bearer token in `~/.ndea/mcp-token` pass. `edit_dashboard` compiles
+  named ops on a draft document (`server/workspace-edits.ts`) and applies the
+  diff as one patch; add new agent operations there, not as new write paths.
 - `EmbeddingStore` owns one DuckDB connection. Base tables, the `dataset` view,
   temporary selections, and Mosaic preaggregations share that connection.
 
@@ -168,24 +171,37 @@ vp outdated -r
 # Update workspace resolutions within declared ranges
 vp update -r
 
-# Full development stack: backend :5055, frontend :5173
-vp run dev /path/to/data.zarr
+# Dev server: one Bun process (frontend with HMR, API, /data/query, /ws, /mcp)
+# at https://ndea.localhost via portless; a linked worktree gets
+# https://<last branch segment>.ndea.localhost. Run from the repo root
+# (bunfig.toml carries the frontend plugins); Ctrl+C stops it. Opens
+# ../ome-atlas-test-data/infectomics/infectomics.yaml. The first run starts the
+# portless proxy (HTTPS on :443, asks for sudo and trusts its CA once);
+# `PORTLESS=0 vp run dev` skips it and serves http://localhost:5055.
+vp run dev
+# Synthetic in-memory dataset instead
+vp run dev --fixture
 
-# Run either half
-vp run backend /path/to/data.zarr
-vp dev apps/ndea
+# CLI from source
+vp run ndea <args>
 
-# Root and workspace checks
-vp check vite.config.ts scripts
-vp run -r check
-vp run -r test
+# Check + test root tooling and every workspace (cached)
+vp run verify
+vp run check
+vp run test
 
-# Production binary: dist/ndea
+# Production binary: dist/ndea (cached build:frontend + build:addon, then compile)
 vp run build
 
+# Code-health audit (Fallow)
+vp run audit
+
+# Write apps/ndea/package.json's version into src/cli/version.ts before tagging
+vp run release:version
+
 # Documentation
+vp run docs
 vp run docs:build
-vp run docs:dev
 vp run docs:serve
 ```
 
@@ -196,9 +212,11 @@ not replace unrelated `catalog:` references with package-local ranges. Use
 `vp add --filter <workspace> <package>` and
 `vp remove --filter <workspace> <package>` for targeted workspace changes.
 
-`vp run build` delegates to the app's Bun build. Do not use bare `vp build`;
-that invokes Rolldown instead of the single-binary pipeline. Direct
-compiler invocation also fails on embedded font assets; use the project task.
+`vp run build` runs the app's Bun build: `build:frontend` (`dist/frontend/`)
+and `build:addon` (static `duckdb.node` on darwin-arm64) are cached; the compile
+step always runs and takes `--target=<bun target>`. Do not use bare `vp build`;
+that invokes Rolldown instead of the single-binary pipeline. Direct compiler
+invocation also fails on embedded font assets; use the project task.
 
 Dashboard layout editing (split, swap, remove, fill a slot) runs in
 development. Production builds compile it out; agents and patches edit any
@@ -239,8 +257,19 @@ build.
   format accepts only its exact version; there are no migrations.
 - **Workers:** `new URL("./worker.ts", import.meta.url)` must work in development
   and compiled binaries. Bun embeds workers automatically.
-- **Static files:** Development reads `dist/frontend/`; compiled binaries read
-  `$bunfs/`. Both paths use `Bun.file()`.
+- **Static files:** `vp run dev` (`ndea view --dev`) serves `apps/ndea/index.html`
+  through Bun's dev server (HTML import, HMR); the root `bunfig.toml`
+  `[serve.static]` plugin (`scripts/frontend-plugin.ts`, Tailwind + TypeGPU) is
+  the same one `build.ts` passes to `Bun.build`. A source run without `--dev`
+  reads `dist/frontend/`; compiled binaries read `$bunfs/`, both through
+  `Bun.file()`.
+- **Dev/prod flag:** Frontend code branches on `process.env.NODE_ENV` only (Bun's
+  dev server inlines `"development"`, `build.ts` defines `"production"`);
+  `import.meta.env` does not exist. `@ndea/components` declares just that global
+  in `src/process-env.d.ts`.
+- **React Fast Refresh:** `react-refresh` is a root devDependency only so Bun's
+  dev server turns Fast Refresh on (it resolves it from the repo root,
+  oven-sh/bun#40245); without it every frontend edit is a full reload.
 - **Native addon:** `duckdb.node` embeds in the binary and prevents
   cross-compilation. Build on each target platform. On darwin-arm64,
   `scripts/build-duckdb-addon.ts` compiles duckdb-node-neo's bindings against

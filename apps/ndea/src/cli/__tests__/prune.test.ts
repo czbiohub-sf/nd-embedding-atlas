@@ -5,10 +5,11 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdir, rm, utimes, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { pruneVersionCaches, pruneVersions } from "../lib/prune.ts";
 
-const TMP_HOME = resolve(import.meta.dir, "../../../.fallow/test-prune");
+const TMP_HOME = resolve(tmpdir(), "ndea-test-prune");
 
 beforeEach(async () => {
   await rm(TMP_HOME, { recursive: true, force: true });

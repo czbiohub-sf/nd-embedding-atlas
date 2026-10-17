@@ -108,7 +108,7 @@ function resolveAssetPath(pathname: string, frontendDir: string): string | null 
 export function serveStatic(pathname: string, frontendDir: string | null): Response {
   if (!frontendDir) {
     return new Response(
-      "Frontend bundle not found. For dev use `vp run dev <dataset>` (serves the frontend on :5173). For a standalone backend, run `vp run build` first.",
+      "Frontend bundle not found. For dev use `vp run dev` (Bun dev server with HMR). For a standalone backend, run `vp run build` first.",
       {
         status: 404,
         headers: { "Content-Type": "text/plain" },
