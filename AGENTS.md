@@ -77,18 +77,30 @@ entrypoints across workspaces.
   `spec` (the json-render dashboard), and `state` (coordination cells).
   `frontend/core/workspace/document.ts` validates all of it and is pure, so the
   server and the browser run the same rules.
-- `WorkspaceDocumentStore` (`server/workspace.ts`) owns the session's one
-  revisioned workspace document and its file. A missing file is written from
-  the preset (`server/presets.ts`): a built-in JSON document under
+- `Workspace` (`server/workspace.ts`) owns the session's one revisioned
+  workspace document, its file, and its history. A missing file is written
+  from the preset (`server/presets.ts`): a built-in JSON document under
   `apps/ndea/src/presets/` or a `.json` path. Every writer (browser sync,
-  `PATCH /api/workspace`, MCP) goes through `applyWorkspacePatch`
-  (`server/routes/workspace.ts`): RFC 6902 ops against a base revision,
-  checked by `parseWorkspaceDocument` (structure, component props, data
-  references, bindings), then by `workspaceIssues` for unknown set references
+  `PATCH /api/workspace`, CLI, MCP) goes through `workspace.patch` (or
+  `restore`): RFC 6902 ops against a base revision, serialized, checked by
+  `parseWorkspaceDocument` (structure, component props, data references,
+  bindings), then by the `validate` injected at `Workspace.open`:
+  `workspaceIssues` (`server/routes/workspace.ts`) for unknown set references
   and typed clauses (data-source `where`, `state.filter`) naming columns the
   dataset lacks. Raw `data.sql` is checked only when it runs. Startup logs the
   same issues for the workspace file instead of refusing it.
-  `workspace/watch` pushes accepted revisions.
+- Each accepted write appends a row (revision, base, actor, ops, document,
+  time, `restoredFrom`) to `<workspace>.history.sqlite` (`bun:sqlite`) in the
+  same transaction as the atomic JSON write; a failed write rolls the row
+  back, and watchers hear only committed revisions. Opening a workspace whose
+  history lacks its revision adds a `system` baseline row. The server stamps
+  the actor from the transport, never the body: `browser`, `cli` (the
+  `X-Ndea-Client: cli` header `cli/lib/server.ts` sends), or `mcp` with the
+  agent from `X-Ndea-Agent`. Actors are provenance, not authorization.
+  `GET /api/workspace/history`, `GET /api/workspace/revisions/:n`, and
+  `POST /api/workspace/restore` (revision N committed again as a new
+  revision) expose it; `workspace/watch` pushes each committed revision
+  record.
 - `workspaceResult` (`server/routes/workspace.ts`) evaluates one element or
   data source: `GET /api/workspace/elements/:id` and
   `GET /api/workspace/data/:name` return `{ revision, predicate, count }`. The
@@ -104,11 +116,12 @@ entrypoints across workspaces.
   source `{ where: { op: "inSet", set } }`. `PATCH /api/workspace` rejects
   references to unknown sets anywhere in the document.
 - `/mcp` (`server/mcp.ts`) serves MCP over Streamable HTTP with the SDK's
-  per-request `createMcpHandler`; tools close over the one server session.
-  Only loopback `Host`/`Origin` (localhost, 127.0.0.1, [::1], `*.localhost`)
-  and the bearer token in `~/.ndea/mcp-token` pass. `edit_dashboard` compiles
-  named ops on a draft document (`server/workspace-edits.ts`) and applies the
-  diff as one patch; add new agent operations there, not as new write paths.
+  per-request `createMcpHandler`; tools close over the one server session and
+  the request's actor. Only loopback `Host`/`Origin` (localhost, 127.0.0.1,
+  [::1], `*.localhost`) and the bearer token in `~/.ndea/mcp-token` pass.
+  `edit_dashboard` compiles named ops on a draft document
+  (`server/workspace-edits.ts`) and applies the diff as one patch; add new
+  agent operations there, not as new write paths.
 - `DatasetQuerySession` (`server/store.ts`) owns one DuckDB connection and the
   `dataset` VIEW: obs_base plus embedding, var, and annotation joins. Base
   tables, the VIEW, temporary selections, and Mosaic preaggregations share that
@@ -158,6 +171,14 @@ entrypoints across workspaces.
   coordination writes, and remote revisions (`Workspace.applyDocument`) share
   that path. `WorkspaceSync` diffs the document store against the server's
   acknowledged revision and PATCHes the difference.
+- `WorkspaceSync.onRevision` streams every accepted revision (this tab's
+  too; `clientId` only marks its own echoes). `WorkspaceHistory`
+  (`core/workspace/history.ts`) is the History panel's read model: the newest
+  page of `GET /api/workspace/history` plus live revisions, cached
+  `at(n)` documents, and `compareDocuments`, the element-level summary the
+  panel shows. Restore POSTs `/api/workspace/restore` at the acknowledged
+  base and never edits locally; its watch event applies the document like any
+  remote revision.
 - `ComponentRuntimeManager` (`core/component/runtime/workspace-runtime.ts`) keeps
   one live body per view element in a stable dock that tiles adopt, so moving
   a tile never remounts it. A config change from another writer (an agent, a
@@ -196,6 +217,8 @@ vp run dev --fixture
 
 # CLI from source
 vp run ndea <args>
+# Running server's status (GET /api/status, MCP bearer token): one JSON snapshot
+vp run ndea status --port 5055 --json
 
 # Check + test root tooling and every workspace (cached)
 vp run verify
@@ -238,6 +261,12 @@ load them); use the project task.
 Dashboard layout editing (split, swap, remove, fill a slot) runs in
 development. Production builds compile it out; agents and patches edit any
 build.
+
+`ndea view` in a terminal shows a live status screen (`cli/tui.ts` on
+`@crustjs/tui`/OpenTUI, fed by `server/status.ts`); `q` or Ctrl+C stops the
+server. `--no-tui` or a non-TTY stdout keeps the log lines. `ndea status`
+renders the same screen by polling `/api/status`. OpenTUI's native library
+loads on import, so keep `cli/tui.ts` lazily imported and free of frontend imports.
 
 ## Code rules
 

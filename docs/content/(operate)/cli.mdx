@@ -12,8 +12,11 @@ Walkthroughs live in [Getting started](/). Dev-side commands (`vp run dev`, `vp 
 ```
 ndea [paths...]                                  # default; equivalent to `ndea view`
 ndea view [paths...] [options]
+ndea status [--json] [--host <host>] [--port <port>]
 ndea workspace get [--host <host>] [--port <port>]
 ndea workspace patch --revision <n> --ops <json> [--host <host>] [--port <port>]
+ndea workspace history [--limit <n>] [--host <host>] [--port <port>]
+ndea workspace restore <revision> [--base <n>] [--host <host>] [--port <port>]
 ndea workspace result <element> | --data <name> [--host <host>] [--port <port>]
 ndea workspace query [--where <json>] [--limit <n>] [--host <host>] [--port <port>]
 ndea mcp install | check | uninstall [options]
@@ -45,15 +48,16 @@ A single `.yaml` / `.yml` path is parsed as a multi-dataset project config (see 
 
 ### Options
 
-| Option                 | Type    | Default     | Description                                                                         |
-| ---------------------- | ------- | ----------- | ----------------------------------------------------------------------------------- |
-| `--port <port>`        | integer | `5055`      | TCP port for the local server                                                       |
-| `--host <host>`        | string  | `127.0.0.1` | Hostname to bind                                                                    |
-| `--no-open`            | boolean | `false`     | Do not auto-open the browser                                                        |
-| `--no-static`          | boolean | `false`     | Do not serve the bundled frontend (Vite serves it in dev mode)                      |
-| `--obs-columns <list>` | string  | all columns | Comma-separated subset of obs columns to load                                       |
-| `--preset <name>`      | string  | `annotate`  | Preset a new workspace file starts from: `annotate` or a `.json` workspace document |
-| `--workspace <file>`   | path    | see below   | Workspace document to open and save                                                 |
+| Option                 | Type    | Default     | Description                                                                           |
+| ---------------------- | ------- | ----------- | ------------------------------------------------------------------------------------- |
+| `--port <port>`        | integer | `5055`      | TCP port for the local server                                                         |
+| `--host <host>`        | string  | `127.0.0.1` | Hostname to bind                                                                      |
+| `--no-open`            | boolean | `false`     | Do not auto-open the browser                                                          |
+| `--no-tui`             | boolean | `false`     | Keep log output instead of the live status screen (a non-terminal stdout always does) |
+| `--no-static`          | boolean | `false`     | Do not serve the bundled frontend (Vite serves it in dev mode)                        |
+| `--obs-columns <list>` | string  | all columns | Comma-separated subset of obs columns to load                                         |
+| `--preset <name>`      | string  | `annotate`  | Preset a new workspace file starts from: `annotate` or a `.json` workspace document   |
+| `--workspace <file>`   | path    | see below   | Workspace document to open and save                                                   |
 
 ### Workspace file
 
@@ -69,11 +73,11 @@ Not available on Windows. Windows installs are a single `ndea.exe` with no versi
 
 ### Options
 
-| Option                | Type                                  | Default  | Description                                                    |
-| --------------------- | ------------------------------------- | -------- | -------------------------------------------------------------- |
-| `--channel <channel>` | `stable` \| `latest` \| `pre-release` | `stable` | Release channel to resolve                                     |
-| `--force`             | boolean                               | `false`  | Re-install even when already on the target                     |
-| `--no-gc`             | boolean                               | `false`  | Skip the post-update prune that removes inactive versions      |
+| Option                | Type                                  | Default  | Description                                               |
+| --------------------- | ------------------------------------- | -------- | --------------------------------------------------------- |
+| `--channel <channel>` | `stable` \| `latest` \| `pre-release` | `stable` | Release channel to resolve                                |
+| `--force`             | boolean                               | `false`  | Re-install even when already on the target                |
+| `--no-gc`             | boolean                               | `false`  | Skip the post-update prune that removes inactive versions |
 
 For standalone installs, a successful update keeps only the active version by default. Pass `--no-gc` to retain inactive versions, then prune them later with `ndea self prune`.
 
@@ -124,6 +128,16 @@ On Windows the symlink and installed-versions sections are omitted, because that
 | `--check-network` | boolean | `false` | Probe GitHub Releases API reachability over the network (3 s timeout) |
 | `--strict`        | boolean | `false` | Treat warnings as errors (non-zero exit)                              |
 
+## `ndea status`
+
+Show a running server's live status: version, URL, uptime, memory, datasets, embeddings (available, loading, failed), the workspace file with its revision and last change (who and when), and clients (open browser tabs, MCP requests in flight, agents by their `X-Ndea-Agent` header). It polls `GET /api/status` every second with the token in `~/.ndea/mcp-token`; the endpoint answers 401 without it. Press `o` to open the dashboard and `q` to quit. `ndea view` shows the same screen in a terminal, where `q` or Ctrl+C stops the server.
+
+| Option          | Env         | Default     | Description                                       |
+| --------------- | ----------- | ----------- | ------------------------------------------------- |
+| `--json`        |             | `false`     | Print one `/api/status` snapshot as JSON and exit |
+| `--host <host>` | `NDEA_HOST` | `127.0.0.1` | Host of the running server                        |
+| `--port <port>` | `NDEA_PORT` | `5055`      | Port of the running server                        |
+
 ## `ndea workspace`
 
 Read, edit, and query the workspace document of a running `ndea view` server. Edits go through the same validated path as the browser, and open browser tabs update live.
@@ -148,6 +162,15 @@ ndea workspace patch --revision 3 --ops '[{"op":"replace","path":"/spec/elements
 
 - `--revision` is stale: the body carries the current `revision` and `document` to rebase onto.
 - The result is invalid: the body is an [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) problem whose `errors[].pointer` locates each issue, and nothing is saved.
+
+`history` prints `{ "revisions" }`, newest first (`--limit`, default 50, at most 500). Each revision carries `revision`, `baseRevision`, `actor` (`kind`: `system` for the seed or a baseline, `browser`, `cli`, or `mcp` with the agent's `X-Ndea-Agent` name), the `ops` that produced it, `committedAt`, and `restoredFrom` when it restored an earlier revision. History lives in `<workspace>.history.sqlite` beside the workspace file and survives restarts.
+
+`restore` commits the document at an earlier revision as a new revision; everything in between stays in history. It applies against the current revision, or against `--base` if given, and fails like `patch` when that base is stale or the restored document no longer validates (for example, it names a deleted set). `GET /api/workspace/revisions/<n>` prints one revision's `{ "revision", "document" }`.
+
+```bash
+ndea workspace history --limit 5
+ndea workspace restore 1
+```
 
 `result` evaluates one dashboard element, or one data source with `--data`, at the current revision and prints `{ "revision", "predicate", "count" }`:
 
@@ -242,7 +265,9 @@ ndea mcp check                             # server up? token accepted? which ag
 ndea mcp uninstall                         # remove ndea from every agent that has it
 ```
 
-`install` writes `http://127.0.0.1:<port>/mcp` and the token into each agent's own config through [add-mcp](https://add-mcp.com), which knows the format of Claude Code, Codex, Cursor, VS Code, Zed, OpenCode, and 16 more. Restart open agent sessions afterwards. Pass `--port` (or set `NDEA_PORT`) to `install` and `check` when `ndea view` runs on another port. `check` exits 1 when the server is down, rejects the token, or an agent still has an old token or port.
+`install` writes `http://127.0.0.1:<port>/mcp`, the token, and an `X-Ndea-Agent: <agent>` header into each agent's own config through [add-mcp](https://add-mcp.com), which knows the format of Claude Code, Codex, Cursor, VS Code, Zed, OpenCode, and 16 more. Restart open agent sessions afterwards. Pass `--port` (or set `NDEA_PORT`) to `install` and `check` when `ndea view` runs on another port. `check` exits 1 when the server is down, rejects the token, or an agent still has an old token or port.
+
+Agent writes appear in workspace history as `mcp` with the `X-Ndea-Agent` name (letters, digits, `_`, `.`, `-`; up to 64 characters; anything else is dropped). The name is a label, not a credential: the token is what grants access. To label a hand-written config, add the header next to `Authorization`, for example `"X-Ndea-Agent": "omp"`.
 
 | Tool                     | Does                                                                                                                                                    |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -252,6 +277,8 @@ ndea mcp uninstall                         # remove ndea from every agent that h
 | `get_result`             | One element's or data source's predicate and exact count                                                                                                |
 | `edit_dashboard`         | Named ops: `set_data`, `remove_data`, `add` (into a slot, a stack, or beside an element), `set_props`, `remove`, `swap`, `bind`, `unbind`, `set_filter` |
 | `patch_workspace`        | Raw RFC 6902 ops at an exact revision, for anything the named ops do not cover                                                                          |
+| `get_history`            | Recent revisions, newest first: who committed each (actor and agent), its ops, time, and `restoredFrom`                                                 |
+| `restore_revision`       | Commit an earlier revision's document as a new revision; `revision_base` applies only if the workspace is still at that revision                        |
 | `create_observation_set` | Save an element's, a data source's, or a clause's rows as a set for `{"op":"inSet"}` clauses                                                            |
 
 `edit_dashboard` applies a whole batch or nothing. Pass `revision` to apply only if the workspace has not changed since you read it. Every write, from the browser, the CLI, or an agent, is checked like a document load: structure, component props, data references, bindings, and set references. A refused edit names the op or document path to fix and changes nothing.
@@ -308,6 +335,7 @@ ndea man | mandoc -a    # macOS
     install.lock               # PID file backing the install/update mutex
   workspaces/
     <key>.json                 # Default workspace document per set of datasets
+    <key>.history.sqlite       # Its revision history (actor, ops, document per revision)
   mcp-token                    # Bearer token for /mcp (owner-only)
 ~/.cache/ndea/
   0.1.0/

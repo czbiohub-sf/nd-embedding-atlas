@@ -4,6 +4,7 @@
  * from `mcp.ts` so the CLI can read it without loading the graph engine.
  */
 
+import { timingSafeEqual } from "node:crypto";
 import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
@@ -22,4 +23,11 @@ export async function loadMcpToken(path = join(stateDir(), "mcp-token")): Promis
   await writeFile(path, `${token}\n`, { mode: 0o600 });
   await chmod(path, 0o600);
   return token;
+}
+
+/** Constant-time check of `Authorization: Bearer <token>`. */
+export function hasBearer(request: Request, token: string): boolean {
+  const presented = Buffer.from(request.headers.get("authorization") ?? "");
+  const expected = Buffer.from(`Bearer ${token}`);
+  return presented.length === expected.length && timingSafeEqual(presented, expected);
 }

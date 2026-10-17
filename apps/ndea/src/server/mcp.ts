@@ -1,24 +1,34 @@
 /**
  * MCP over Streamable HTTP at /mcp. Tools close over the one server session,
  * so every agent reads and edits the same workspace document the browser
- * shows, through the same validated write path (`applyWorkspacePatch`).
+ * shows, through the session `Workspace` (`patch`, `restore`). Writes are
+ * stamped `mcp`, with the agent named by an `X-Ndea-Agent` header that matches
+ * the actor pattern (provenance only; the bearer token is the gate).
  *
  * Access: loopback Host and Origin only (DNS rebinding): localhost,
  * 127.0.0.1, [::1], or any `*.localhost` name (RFC 6761 loopback, the
  * portless dev URLs), plus the bearer token from `mcp-token.ts`.
  */
 
-import { timingSafeEqual } from "node:crypto";
 import { createMcpHandler, McpServer } from "@modelcontextprotocol/server";
 import { filterClauseSql } from "@ndea/components/filter";
-import { FilterClauseSchema, JsonPatchOpSchema, OBSERVATION_SET_TABLE, type JsonPatchOp } from "@ndea/protocol";
+import {
+  FilterClauseSchema,
+  JsonPatchOpSchema,
+  OBSERVATION_SET_TABLE,
+  WorkspaceActorSchema,
+  type JsonPatchOp,
+  type WorkspaceActor,
+} from "@ndea/protocol";
 import { createPatch } from "rfc6902";
 import { z } from "zod";
 
 import { COMPONENTS } from "../frontend/core/workspace/dashboard.ts";
 import type { WorkspaceDocument } from "../frontend/core/workspace/types.ts";
-import { applyWorkspacePatch, workspaceResult } from "./routes/workspace.ts";
+import { hasBearer } from "./mcp-token.ts";
+import { workspaceResult } from "./routes/workspace.ts";
 import type { ServerSession } from "./state.ts";
+import { agentSeen, clients } from "./status.ts";
 import { quoteIdent } from "./store.ts";
 import { applyDashboardEdits, DashboardEditSchema, WorkspaceEditError, type DashboardEdit } from "./workspace-edits.ts";
 
@@ -31,7 +41,8 @@ A filter scope is a crossfilter: state.filter[scope] = {source: {facet: clause}}
 \`count\` is the metric component: it shows how many observations its data source and filter scope select.
 \`vgplot\` props are a Mosaic plot spec: \`entries\` is the plot's marks and interactors in order, \`attributes\` the other Plot options. Reserved params: marks read data {from:"$table", filterBy:"$scope"}, and an interactor publishes its brush into the filter scope with as:"$brush". Example histogram: entries [{mark:"rectY", data:{from:"$table", filterBy:"$scope"}, x:{bin:"area"}, y:{count:[]}}, {select:"intervalX", as:"$brush", field:"area"}].
 Start with get_workspace, list_components, and list_columns. Change the dashboard with edit_dashboard (a batch applied atomically); patch_workspace applies raw JSON Patch. Every write is validated like a user edit: a rejected call returns issues with JSON Pointers (/ops/<i> names the op; /spec/elements/<id>/props/<key> names a bad prop): fix and retry.
-Read numbers with get_result. The open browser tab shows every accepted change live.`;
+Read numbers with get_result. The open browser tab shows every accepted change live.
+get_history lists recent revisions (who wrote each, and its ops); restore_revision brings an earlier revision back as a new one.`;
 
 /** True when `url` parses to a loopback hostname: localhost, 127.0.0.1, [::1], or `*.localhost`. */
 function isLoopbackUrl(url: string): boolean {
@@ -43,10 +54,15 @@ function isLoopbackUrl(url: string): boolean {
   }
 }
 
+/** The MCP actor for a request: `X-Ndea-Agent` names the agent when it is well formed. */
+function mcpActor(headers: Headers | undefined): WorkspaceActor {
+  const actor = WorkspaceActorSchema.safeParse({ kind: "mcp", agent: headers?.get("x-ndea-agent") ?? undefined });
+  return actor.success ? actor.data : { kind: "mcp" };
+}
+
 /** The /mcp route: loopback-only Host and Origin, a matching bearer token, then the MCP handler. */
 export function createMcpEndpoint(state: ServerSession, token: string): (request: Request) => Promise<Response> {
-  const handler = createMcpHandler(() => createNdeaMcpServer(state));
-  const expected = Buffer.from(`Bearer ${token}`);
+  const handler = createMcpHandler(({ requestInfo }) => createNdeaMcpServer(state, mcpActor(requestInfo?.headers)));
   return async (request) => {
     // A missing Origin passes: only browsers send one, and that is what DNS rebinding abuses.
     const origin = request.headers.get("origin");
@@ -56,14 +72,20 @@ export function createMcpEndpoint(state: ServerSession, token: string): (request
         { status: 403 },
       );
     }
-    const presented = Buffer.from(request.headers.get("authorization") ?? "");
-    if (presented.length !== expected.length || !timingSafeEqual(presented, expected)) {
+    if (!hasBearer(request, token)) {
       return new Response("missing or invalid bearer token (see ~/.ndea/mcp-token)", {
         status: 401,
         headers: { "WWW-Authenticate": "Bearer" },
       });
     }
-    return handler.fetch(request);
+    const { agent } = mcpActor(request.headers);
+    if (agent) agentSeen(agent);
+    clients.mcpInFlight++;
+    try {
+      return await handler.fetch(request);
+    } finally {
+      clients.mcpInFlight--;
+    }
   };
 }
 
@@ -82,8 +104,8 @@ function rejected(error: string, extra: Record<string, unknown> = {}): ToolResul
 }
 
 function document(state: Pick<ServerSession, "workspace">): { revision: number; document: WorkspaceDocument } {
-  // The store only holds documents that passed `parseWorkspaceDocument`.
-  const snapshot = state.workspace.snapshot();
+  // The workspace only holds documents that passed `parseWorkspaceDocument`.
+  const snapshot = state.workspace.get();
   return { revision: snapshot.revision, document: snapshot.document as WorkspaceDocument };
 }
 
@@ -94,6 +116,7 @@ function document(state: Pick<ServerSession, "workspace">): { revision: number; 
  */
 async function runEdits(
   state: ServerSession,
+  actor: WorkspaceActor,
   edits: readonly DashboardEdit[],
   expected: number | undefined,
 ): Promise<ToolResult> {
@@ -114,7 +137,7 @@ async function runEdits(
     }
     const ops: JsonPatchOp[] = JsonPatchOpSchema.array().parse(createPatch(base, next));
     if (ops.length === 0) return ok({ revision, changed: false });
-    const result = await applyWorkspacePatch(state, revision, ops, "mcp");
+    const result = await state.workspace.patch(ops, { base: revision, actor });
     if (result.kind === "accepted") {
       const added = Object.keys(next.spec.elements).filter((id) => !Object.hasOwn(base.spec.elements, id));
       return ok({ revision: result.revision, changed: true, ...(added.length > 0 ? { added } : {}) });
@@ -128,7 +151,7 @@ async function runEdits(
     if (expected !== undefined) break;
   }
   return rejected("stale revision: the workspace changed; re-read it with get_workspace", {
-    revision: state.workspace.snapshot().revision,
+    revision: state.workspace.get().revision,
   });
 }
 
@@ -144,7 +167,7 @@ function propsSchema(schema: z.ZodType): unknown {
   }
 }
 
-export function createNdeaMcpServer(state: ServerSession): McpServer {
+export function createNdeaMcpServer(state: ServerSession, actor: WorkspaceActor): McpServer {
   const server = new McpServer({ name: "ndea", version: "0.1.0" }, { instructions: INSTRUCTIONS });
 
   server.registerTool(
@@ -251,7 +274,7 @@ export function createNdeaMcpServer(state: ServerSession): McpServer {
       }),
       annotations: WRITE,
     },
-    async ({ revision, ops }) => runEdits(state, ops, revision),
+    async ({ revision, ops }) => runEdits(state, actor, ops, revision),
   );
 
   server.registerTool(
@@ -264,7 +287,7 @@ export function createNdeaMcpServer(state: ServerSession): McpServer {
       annotations: WRITE,
     },
     async ({ revision, ops }) => {
-      const result = await applyWorkspacePatch(state, revision, ops, "mcp");
+      const result = await state.workspace.patch(ops, { base: revision, actor });
       if (result.kind === "accepted") return ok({ revision: result.revision });
       if (result.kind === "conflict") {
         return rejected("stale revision: re-read the document and rebuild the patch", {
@@ -272,6 +295,41 @@ export function createNdeaMcpServer(state: ServerSession): McpServer {
         });
       }
       return rejected("the patch would leave an invalid workspace; nothing was applied", { issues: result.issues });
+    },
+  );
+
+  server.registerTool(
+    "get_history",
+    {
+      title: "Read the revision history",
+      description:
+        "List recent workspace revisions, newest first: each one's number, base revision, who committed it (actor kind system, browser, cli, or mcp, plus the agent name), its JSON Patch ops, commit time, and `restoredFrom` when it restored an earlier revision.",
+      inputSchema: z.object({ limit: z.number().int().min(1).max(500).default(20) }),
+      annotations: READ,
+    },
+    async ({ limit }) => ok({ revisions: state.workspace.history({ limit }) }),
+  );
+
+  server.registerTool(
+    "restore_revision",
+    {
+      title: "Restore an earlier revision",
+      description:
+        "Bring the document at an earlier `revision` (see get_history) back as a new revision; history keeps everything in between. Pass `revision_base` to apply only if the workspace is still at that revision. Validated like any edit.",
+      inputSchema: z.object({ revision: z.number().int().positive(), revision_base: RevisionSchema.optional() }),
+      annotations: WRITE,
+    },
+    async ({ revision, revision_base }) => {
+      const base = revision_base ?? state.workspace.get().revision;
+      const result = await state.workspace.restore(revision, { base, actor });
+      if (result.kind === "accepted") return ok({ revision: result.revision, restoredFrom: revision });
+      if (result.kind === "not-found") return rejected(`unknown revision ${revision}; list them with get_history`);
+      if (result.kind === "conflict") {
+        return rejected("stale revision: the workspace changed; re-read it with get_workspace", {
+          revision: result.snapshot.revision,
+        });
+      }
+      return rejected("restoring would leave an invalid workspace; nothing was applied", { issues: result.issues });
     },
   );
 

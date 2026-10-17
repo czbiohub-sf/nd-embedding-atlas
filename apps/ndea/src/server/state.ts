@@ -4,14 +4,13 @@
  * Ports the Python `server/_state.py` dataclasses to TypeScript interfaces.
  */
 
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { workspaceIssues } from "./routes/workspace.ts";
 import type { DatasetHandle } from "@ndea/zarr";
 import type { CropPool } from "./crop-pool.ts";
 import type { PlateChannel, PlateMount } from "./plate.ts";
 import type { ObsmSliceLoader } from "./slice-loader.ts";
 import type { DatasetQuerySession } from "./store.ts";
-import { WorkspaceDocumentStore } from "./workspace.ts";
+import { Workspace } from "./workspace.ts";
 import { ObservationSets } from "./observation-sets.ts";
 
 /** Resolved spatial column names (from config or auto-detection). */
@@ -143,19 +142,22 @@ export interface ServerSession {
    * ~/.ndea fallback configured). Derived once at startup.
    */
   annotationsSidecarPath: string | null;
-  /** The session's one authoritative workspace document. */
-  workspace: WorkspaceDocumentStore;
+  /** The session's one authoritative workspace document and its history. */
+  workspace: Workspace;
   observationSets: ObservationSets;
 }
 
-/** Defaults share one store connection, including the observation-set temp table. */
+/**
+ * Defaults share one store connection, including the observation-set temp
+ * table; the default workspace is in memory and validates against this session.
+ */
 export function createServerSession({
   store,
   observationSetsDirectory,
   ...overrides
 }: Pick<ServerSession, "store"> &
   Partial<Omit<ServerSession, "store" | "observationSets">> & { observationSetsDirectory?: string }): ServerSession {
-  return {
+  const session: ServerSession = {
     store,
     datasets: new Map(),
     spatial: null,
@@ -168,8 +170,8 @@ export function createServerSession({
     cropPool: null,
     annotationsSidecarPath: null,
     ...overrides,
-    workspace:
-      overrides.workspace ?? WorkspaceDocumentStore.empty(join(tmpdir(), `ndea-workspace-${crypto.randomUUID()}.json`)),
+    workspace: overrides.workspace ?? Workspace.memory(undefined, { validate: (doc) => workspaceIssues(doc, session) }),
     observationSets: new ObservationSets(store, observationSetsDirectory),
   };
+  return session;
 }

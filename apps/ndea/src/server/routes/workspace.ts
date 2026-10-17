@@ -2,22 +2,30 @@
  * GET   /api/workspace: current revision and document.
  * PATCH /api/workspace: apply RFC 6902 ops against a base revision.
  *   200 { revision } · 409 stale revision + current snapshot · 400 RFC 9457 problem.
+ * GET   /api/workspace/history?before&limit: committed revisions, newest first.
+ * GET   /api/workspace/revisions/:revision: the document at one revision · 404 unknown.
+ * POST  /api/workspace/restore: commit an earlier revision's document as a new revision;
+ *   responses as PATCH, plus 404 for an unknown revision.
  * GET   /api/workspace/elements/:id: what one dashboard element shows.
  * GET   /api/workspace/data/:name: what one data source selects.
  *   200 { revision, predicate, count } · 404 unknown id · 400 the element reads no data or its SQL fails.
  *
- * `applyWorkspacePatch` and `workspaceResult` are the shared paths: MCP tools
- * call them too, so every writer meets the same validation.
+ * Writes are stamped `browser`, or `cli` when the request carries
+ * `X-Ndea-Client: cli`. `workspaceIssues` is the session `Workspace`'s
+ * injected validation; `workspaceResult` is shared with MCP.
  */
 
 import {
   WorkspacePatchBodySchema,
+  WorkspaceRestoreBodySchema,
   type FilterClause,
-  type JsonPatchOp,
+  type WorkspaceActor,
   type WorkspaceConflict,
+  type WorkspaceHistory,
   type WorkspacePatchAccepted,
   type WorkspaceProblem,
 } from "@ndea/protocol";
+import { z } from "zod";
 import { COMPONENTS, elementData, elementScope } from "../../frontend/core/workspace/dashboard.ts";
 import { dataSourceSql, elementPredicate } from "../../frontend/core/workspace/data-sources.ts";
 import type { WorkspaceIssue } from "../../frontend/core/workspace/document.ts";
@@ -25,17 +33,12 @@ import type { WorkspaceDocument } from "../../frontend/core/workspace/types.ts";
 import { escapePointer, observationSetIssues } from "../observation-sets.ts";
 import { countObservations, PREDICATE_ERROR_RE } from "../observations.ts";
 import type { ServerSession } from "../state.ts";
-import type { WorkspaceApplyResult } from "../workspace.ts";
+import type { WorkspacePatchResult } from "../workspace.ts";
 
-/** The one write path: document structure and component props, then dataset references. */
-export function applyWorkspacePatch(
-  state: Pick<ServerSession, "workspace" | "observationSets" | "store">,
-  baseRevision: number,
-  ops: readonly JsonPatchOp[],
-  clientId?: string,
-): Promise<WorkspaceApplyResult> {
-  return state.workspace.apply(baseRevision, ops, clientId, (document) => workspaceIssues(document, state));
-}
+const HistoryQuerySchema = z.object({
+  before: z.coerce.number().int().positive().optional(),
+  limit: z.coerce.number().int().min(1).max(500).default(50),
+});
 
 /**
  * What a structurally valid document references that this dataset lacks:
@@ -70,28 +73,66 @@ export async function workspaceIssues(
 }
 
 export function handleWorkspaceGet(state: Pick<ServerSession, "workspace">): Response {
-  return Response.json(state.workspace.snapshot());
+  return Response.json(state.workspace.get());
 }
 
-export async function handleWorkspacePatch(
-  req: Request,
-  state: Pick<ServerSession, "workspace" | "observationSets" | "store">,
-): Promise<Response> {
+export function handleWorkspaceHistory(req: Request, state: Pick<ServerSession, "workspace">): Response {
+  const query = HistoryQuerySchema.safeParse(Object.fromEntries(new URL(req.url).searchParams));
+  if (!query.success) return Response.json({ error: z.prettifyError(query.error) }, { status: 400 });
+  const history: WorkspaceHistory = { revisions: state.workspace.history(query.data) };
+  return Response.json(history);
+}
+
+export function handleWorkspaceRevision(revision: string, state: Pick<ServerSession, "workspace">): Response {
+  const snapshot = state.workspace.at(Number(revision));
+  return snapshot
+    ? Response.json(snapshot)
+    : Response.json({ error: `Unknown workspace revision ${revision}` }, { status: 404 });
+}
+
+export async function handleWorkspacePatch(req: Request, state: Pick<ServerSession, "workspace">): Promise<Response> {
+  const body = await parseBody(req, WorkspacePatchBodySchema);
+  if (body instanceof Response) return body;
+  return writeResponse(
+    await state.workspace.patch(body.ops, { base: body.baseRevision, actor: restActor(req), clientId: body.clientId }),
+  );
+}
+
+export async function handleWorkspaceRestore(req: Request, state: Pick<ServerSession, "workspace">): Promise<Response> {
+  const body = await parseBody(req, WorkspaceRestoreBodySchema);
+  if (body instanceof Response) return body;
+  const result = await state.workspace.restore(body.revision, {
+    base: body.baseRevision,
+    actor: restActor(req),
+    clientId: body.clientId,
+  });
+  if (result.kind === "not-found") {
+    return Response.json({ error: `Unknown workspace revision ${body.revision}` }, { status: 404 });
+  }
+  return writeResponse(result);
+}
+
+/** Provenance, not authorization: localhost is the trust boundary. */
+function restActor(req: Request): WorkspaceActor {
+  return { kind: req.headers.get("x-ndea-client") === "cli" ? "cli" : "browser" };
+}
+
+async function parseBody<T>(req: Request, schema: z.ZodType<T>): Promise<T | Response> {
   let raw: unknown;
   try {
     raw = await req.json();
   } catch {
     return problem("Invalid JSON body", []);
   }
-  const body = WorkspacePatchBodySchema.safeParse(raw);
-  if (!body.success) {
-    return problem(
-      "Request body failed validation",
-      body.error.issues.map((issue) => ({ pointer: `/${issue.path.join("/")}`, detail: issue.message })),
-    );
-  }
+  const body = schema.safeParse(raw);
+  if (body.success) return body.data;
+  return problem(
+    "Request body failed validation",
+    body.error.issues.map((issue) => ({ pointer: `/${issue.path.join("/")}`, detail: issue.message })),
+  );
+}
 
-  const result = await applyWorkspacePatch(state, body.data.baseRevision, body.data.ops, body.data.clientId);
+function writeResponse(result: WorkspacePatchResult): Response {
   if (result.kind === "conflict") {
     const conflict: WorkspaceConflict = { error: "stale revision", ...result.snapshot };
     return Response.json(conflict, { status: 409 });
@@ -118,8 +159,8 @@ export async function workspaceResult(
   state: Pick<ServerSession, "workspace" | "store">,
   target: { element: string } | { data: string },
 ): Promise<WorkspaceResult> {
-  const { revision, document } = state.workspace.snapshot();
-  // The store only holds documents that passed `parseWorkspaceDocument`.
+  const { revision, document } = state.workspace.get();
+  // The workspace only holds documents that passed `parseWorkspaceDocument`.
   const doc = document as WorkspaceDocument;
   let predicate: string | null;
   if ("element" in target) {

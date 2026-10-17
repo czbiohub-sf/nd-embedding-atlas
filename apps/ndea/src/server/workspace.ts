@@ -1,12 +1,24 @@
 /**
- * Server-owned workspace document: one revisioned document per session,
- * persisted atomically to a JSON file. A missing file is seeded from the
- * preset document. Every writer (browser sync, CLI, agents) goes through `apply`.
+ * The session's one workspace document and its revision history. Every
+ * writer (browser sync, CLI, agents) goes through `patch` or `restore`:
+ * writes run one at a time, pass the structural checks and then the injected
+ * `validate`, and commit the history row and the JSON file together before
+ * any watcher hears of them. History lives beside the JSON file in
+ * `<name>.history.sqlite`; the JSON file format is unchanged.
  */
 
-import { mkdir, rename } from "node:fs/promises";
+import { Database } from "bun:sqlite";
+import { mkdirSync, renameSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import type { JsonPatchOp, WorkspaceChange, WorkspaceSnapshot } from "@ndea/protocol";
+import {
+  JsonPatchOpSchema,
+  type JsonPatchOp,
+  type WorkspaceActor,
+  type WorkspaceChange,
+  type WorkspaceRevision,
+  type WorkspaceSnapshot,
+} from "@ndea/protocol";
+import { createPatch } from "rfc6902";
 import {
   WORKSPACE_FORMAT,
   WORKSPACE_FORMAT_VERSION,
@@ -18,10 +30,20 @@ import {
 } from "../frontend/core/workspace/document.ts";
 import type { WorkspaceDocument } from "../frontend/core/workspace/types.ts";
 
-export type WorkspaceApplyResult =
+export type WorkspacePatchResult =
   | { kind: "accepted"; revision: number }
   | { kind: "conflict"; snapshot: WorkspaceSnapshot }
   | { kind: "invalid"; issues: WorkspaceIssue[] };
+
+/** Dataset-dependent checks (set references, columns) run after the structural ones. */
+export type WorkspaceValidate = (document: WorkspaceDocument) => Promise<WorkspaceIssue[]>;
+
+export interface WorkspaceWrite {
+  base: number;
+  actor: WorkspaceActor;
+  /** The writer's echo token, passed through to watchers. */
+  clientId?: string;
+}
 
 export class WorkspaceFileError extends Error {
   readonly issues: readonly WorkspaceIssue[];
@@ -32,100 +54,235 @@ export class WorkspaceFileError extends Error {
   }
 }
 
-export class WorkspaceDocumentStore {
+interface Row {
+  revision: number;
+  base: number;
+  actor_kind: WorkspaceActor["kind"];
+  actor_agent: string | null;
+  ops: string;
+  committed_at: string;
+  restored_from: number | null;
+}
+
+// ponytail: unbounded retention; prune by count/age when files grow.
+const SCHEMA = `CREATE TABLE IF NOT EXISTS revisions (
+  revision INTEGER PRIMARY KEY,
+  base INTEGER NOT NULL,
+  actor_kind TEXT NOT NULL,
+  actor_agent TEXT,
+  ops TEXT NOT NULL,
+  document TEXT NOT NULL,
+  committed_at TEXT NOT NULL,
+  restored_from INTEGER
+)`;
+const COLUMNS = "revision, base, actor_kind, actor_agent, ops, committed_at, restored_from";
+
+export class Workspace {
   readonly path: string;
-  private revision: number;
+  private revision = 0;
   private document: WorkspaceDocument;
+  private readonly db: Database;
+  private readonly validate: WorkspaceValidate;
+  private readonly persist: (revision: number, document: WorkspaceDocument) => void;
   private readonly listeners = new Set<(change: WorkspaceChange) => void>();
-  /** Applies run one at a time so two writers can never both pass the revision check. */
+  /** Writes run one at a time so two writers can never both pass the revision check. */
   private queue: Promise<unknown> = Promise.resolve();
 
-  private constructor(path: string, revision: number, document: WorkspaceDocument) {
+  private constructor(
+    path: string,
+    document: WorkspaceDocument,
+    db: Database,
+    validate: WorkspaceValidate,
+    persist: (revision: number, document: WorkspaceDocument) => void,
+  ) {
     this.path = path;
-    this.revision = revision;
     this.document = document;
+    this.db = db;
+    this.validate = validate;
+    this.persist = persist;
+    db.run(SCHEMA);
   }
 
-  /** A revision-0 store over `document` that writes to `path` on first accepted patch; nothing is read. */
-  static empty(path: string, document = emptyWorkspaceDocument()): WorkspaceDocumentStore {
-    return new WorkspaceDocumentStore(path, 0, document);
-  }
-
-  /** Open `path`; a missing file is written from `seed()` as revision 1. Invalid files throw. */
-  static async open(path: string, seed: () => Promise<WorkspaceDocument>): Promise<WorkspaceDocumentStore> {
-    const file = Bun.file(path);
-    if (!(await file.exists())) {
-      const document = await seed();
-      await writeWorkspaceFile(path, 1, document);
-      return new WorkspaceDocumentStore(path, 1, document);
-    }
-    let json: unknown;
-    try {
-      json = await file.json();
-    } catch (error) {
-      throw new WorkspaceFileError(path, [
-        { pointer: "", detail: error instanceof Error ? error.message : String(error) },
-      ]);
-    }
-    const parsed = parseWorkspaceFile(json);
-    if (!parsed.ok) throw new WorkspaceFileError(path, parsed.issues);
-    return new WorkspaceDocumentStore(path, parsed.value.revision, parsed.value.document);
-  }
-
-  snapshot(): WorkspaceSnapshot {
-    return { revision: this.revision, document: this.document };
+  /** A revision-0 workspace with in-memory history and no file, for tests. */
+  static memory(
+    document: WorkspaceDocument = emptyWorkspaceDocument(),
+    { validate = async () => [] }: { validate?: WorkspaceValidate } = {},
+  ): Workspace {
+    return new Workspace(":memory:", document, new Database(":memory:"), validate, () => {});
   }
 
   /**
-   * Validate and apply `ops` against `baseRevision`. Resolves after the file
-   * is written; a failed write rejects and leaves the document unchanged.
+   * Open `path`; a missing file is written from `seed()` as revision 1. Invalid
+   * files throw. When the history lacks the current revision (a new history
+   * file, or the JSON was replaced), a `system` baseline row records it.
    */
-  apply(
-    baseRevision: number,
-    ops: readonly JsonPatchOp[],
-    clientId?: string,
-    validate?: (document: WorkspaceDocument) => Promise<WorkspaceIssue[]>,
-  ): Promise<WorkspaceApplyResult> {
-    const run = this.queue.then(() => this.applyNow(baseRevision, ops, clientId, validate));
-    this.queue = run.catch(() => {});
-    return run;
+  static async open(
+    path: string,
+    seed: () => Promise<WorkspaceDocument>,
+    { validate }: { validate: WorkspaceValidate },
+  ): Promise<Workspace> {
+    const file = Bun.file(path);
+    let opened: { revision: number; document: WorkspaceDocument } | undefined;
+    if (await file.exists()) {
+      let json: unknown;
+      try {
+        json = await file.json();
+      } catch (error) {
+        throw new WorkspaceFileError(path, [
+          { pointer: "", detail: error instanceof Error ? error.message : String(error) },
+        ]);
+      }
+      const parsed = parseWorkspaceFile(json);
+      if (!parsed.ok) throw new WorkspaceFileError(path, parsed.issues);
+      opened = parsed.value;
+    }
+    const document = opened?.document ?? (await seed());
+    mkdirSync(dirname(path), { recursive: true });
+    const history = new Database(`${path.replace(/\.json$/, "")}.history.sqlite`);
+    const workspace = new Workspace(path, document, history, validate, (revision, doc) =>
+      writeWorkspaceFile(path, revision, doc),
+    );
+    workspace.baseline(opened?.revision ?? 1, !opened);
+    return workspace;
   }
 
-  private async applyNow(
-    baseRevision: number,
-    ops: readonly JsonPatchOp[],
-    clientId: string | undefined,
-    validate: ((document: WorkspaceDocument) => Promise<WorkspaceIssue[]>) | undefined,
-  ): Promise<WorkspaceApplyResult> {
-    if (baseRevision !== this.revision) return { kind: "conflict", snapshot: this.snapshot() };
-    const applied = applyWorkspaceOps(this.document, ops);
-    if (!applied.ok) return { kind: "invalid", issues: applied.issues };
-    const parsed = parseWorkspaceDocument(applied.value);
-    if (!parsed.ok) return { kind: "invalid", issues: parsed.issues };
-    const issues = validate ? await validate(parsed.value) : [];
-    if (issues.length) return { kind: "invalid", issues };
+  get(): WorkspaceSnapshot {
+    return { revision: this.revision, document: this.document };
+  }
 
-    await writeWorkspaceFile(this.path, this.revision + 1, parsed.value);
-    this.document = parsed.value;
-    this.revision += 1;
-    const change: WorkspaceChange = { revision: this.revision, ops: [...ops], ...(clientId ? { clientId } : {}) };
-    for (const listener of this.listeners) listener(change);
-    return { kind: "accepted", revision: this.revision };
+  /** The document as committed at `revision`, if history has it. */
+  at(revision: number): WorkspaceSnapshot | undefined {
+    const row = this.db
+      .query<{ document: string }, [number]>("SELECT document FROM revisions WHERE revision = ?")
+      .get(revision);
+    return row ? { revision, document: JSON.parse(row.document) } : undefined;
+  }
+
+  /** Committed revisions, newest first, older than `before`. */
+  history({ before, limit = 50 }: { before?: number; limit?: number } = {}): WorkspaceRevision[] {
+    return this.db
+      .query<Row, [number, number]>(
+        `SELECT ${COLUMNS} FROM revisions WHERE revision < ? ORDER BY revision DESC LIMIT ?`,
+      )
+      .all(before ?? Number.MAX_SAFE_INTEGER, limit)
+      .map(toRevision);
+  }
+
+  /** Validate and commit `ops` against `base`. A failed file write rejects and changes nothing. */
+  patch(ops: readonly JsonPatchOp[], write: WorkspaceWrite): Promise<WorkspacePatchResult> {
+    return this.enqueue(() => this.patchNow(ops, write));
+  }
+
+  /** Commit the document at `revision` as a new revision, diffed against the current one. */
+  restore(revision: number, write: WorkspaceWrite): Promise<WorkspacePatchResult | { kind: "not-found" }> {
+    return this.enqueue<WorkspacePatchResult | { kind: "not-found" }>(() => {
+      const target = this.at(revision);
+      if (!target) return { kind: "not-found" };
+      const ops = JsonPatchOpSchema.array().parse(createPatch(this.document, target.document));
+      // Already identical: nothing to commit, but a stale base still conflicts below.
+      if (ops.length === 0 && write.base === this.revision) return { kind: "accepted", revision: this.revision };
+      return this.patchNow(ops, write, revision);
+    });
   }
 
   watch(listener: (change: WorkspaceChange) => void): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
   }
+
+  private enqueue<T>(run: () => T | Promise<T>): Promise<T> {
+    const next = this.queue.then(run);
+    this.queue = next.catch(() => {});
+    return next;
+  }
+
+  private async patchNow(
+    ops: readonly JsonPatchOp[],
+    { base, actor, clientId }: WorkspaceWrite,
+    restoredFrom?: number,
+  ): Promise<WorkspacePatchResult> {
+    if (base !== this.revision) return { kind: "conflict", snapshot: this.get() };
+    const applied = applyWorkspaceOps(this.document, ops);
+    if (!applied.ok) return { kind: "invalid", issues: applied.issues };
+    const parsed = parseWorkspaceDocument(applied.value);
+    if (!parsed.ok) return { kind: "invalid", issues: parsed.issues };
+    const issues = await this.validate(parsed.value);
+    if (issues.length) return { kind: "invalid", issues };
+
+    const record: WorkspaceRevision = {
+      revision: this.revision + 1,
+      baseRevision: this.revision,
+      actor,
+      ops: [...ops],
+      committedAt: new Date().toISOString(),
+      ...(restoredFrom ? { restoredFrom } : {}),
+    };
+    // Row, then file, then commit: a failed write throws and rolls the row back.
+    this.db.transaction(() => {
+      this.insert(record, parsed.value);
+      this.persist(record.revision, parsed.value);
+    })();
+    this.revision = record.revision;
+    this.document = parsed.value;
+    const change: WorkspaceChange = clientId ? { ...record, clientId } : record;
+    for (const listener of this.listeners) listener(change);
+    return { kind: "accepted", revision: record.revision };
+  }
+
+  /** Make history agree with the opened document at `revision`; `write` also writes the file (seeding). */
+  private baseline(revision: number, write: boolean): void {
+    this.revision = revision;
+    const json = JSON.stringify(this.document);
+    const stored = this.db
+      .query<{ document: string }, [number]>("SELECT document FROM revisions WHERE revision = ?")
+      .get(revision);
+    this.db.transaction(() => {
+      // Rows past the file's revision describe a future the file no longer has.
+      this.db.run("DELETE FROM revisions WHERE revision > ?", [revision]);
+      if (stored?.document !== json) {
+        const actor = { kind: "system" } as const;
+        this.insert(
+          { revision, baseRevision: revision - 1, actor, ops: [], committedAt: new Date().toISOString() },
+          this.document,
+        );
+      }
+      if (write) this.persist(revision, this.document);
+    })();
+  }
+
+  private insert(record: WorkspaceRevision, document: WorkspaceDocument): void {
+    this.db
+      .query(`INSERT OR REPLACE INTO revisions (${COLUMNS}, document) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+      .run(
+        record.revision,
+        record.baseRevision,
+        record.actor.kind,
+        record.actor.agent ?? null,
+        JSON.stringify(record.ops),
+        record.committedAt,
+        record.restoredFrom ?? null,
+        JSON.stringify(document),
+      );
+  }
+}
+
+function toRevision(row: Row): WorkspaceRevision {
+  return {
+    revision: row.revision,
+    baseRevision: row.base,
+    actor: { kind: row.actor_kind, ...(row.actor_agent ? { agent: row.actor_agent } : {}) },
+    ops: JSON.parse(row.ops),
+    committedAt: row.committed_at,
+    ...(row.restored_from ? { restoredFrom: row.restored_from } : {}),
+  };
 }
 
 /** Atomic tmp-and-rename write of the versioned workspace file. */
-async function writeWorkspaceFile(path: string, revision: number, document: WorkspaceDocument): Promise<void> {
-  await mkdir(dirname(path), { recursive: true });
+function writeWorkspaceFile(path: string, revision: number, document: WorkspaceDocument): void {
   const tmp = `${path}.${process.pid}.tmp`;
-  await Bun.write(
+  writeFileSync(
     tmp,
     JSON.stringify({ format: WORKSPACE_FORMAT, version: WORKSPACE_FORMAT_VERSION, revision, document }, null, 2),
   );
-  await rename(tmp, path);
+  renameSync(tmp, path);
 }

@@ -8,7 +8,7 @@ import { createServerSession } from "../../server/state.ts";
 import type { LaunchConfig } from "../config.ts";
 import type { PreparedDatasets } from "./datasets.ts";
 import type { PreparedQuerySession } from "./ingest.ts";
-import type { WorkspaceDocumentStore } from "../../server/workspace.ts";
+import type { Workspace } from "../../server/workspace.ts";
 import { workspaceIssues } from "../../server/routes/workspace.ts";
 import type { WorkspaceDocument } from "../../frontend/core/workspace/types.ts";
 import { printAnnotationsRestored, printAnnotationsWarning } from "./output.ts";
@@ -54,7 +54,7 @@ export async function prepareServerSession(
   config: LaunchConfig,
   datasets: PreparedDatasets,
   query: PreparedQuerySession,
-  workspace: WorkspaceDocumentStore,
+  workspace: Workspace,
 ): Promise<PreparedServerSession> {
   const plateMounts = buildPlateMounts(datasets.datasetConfigs, datasets.isMultiDataset);
   const platesByMount = await readPlateMetadata(plateMounts);
@@ -69,7 +69,7 @@ export async function prepareServerSession(
     workspace,
   });
   await restoreAnnotations(state);
-  const document = workspace.snapshot().document as WorkspaceDocument | null;
+  const document = workspace.get().document as WorkspaceDocument | null;
   if (document) {
     for (const issue of await workspaceIssues(document, state)) {
       console.warn(`${issue.pointer}: ${issue.detail}`);

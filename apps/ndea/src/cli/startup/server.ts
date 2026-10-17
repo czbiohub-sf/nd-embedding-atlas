@@ -2,7 +2,7 @@ import { flushAnnotationSaves } from "../../server/routes/annotate.ts";
 import type { DatasetSessionMetadata, ServerSession } from "../../server/state.ts";
 import type { LaunchConfig } from "../config.ts";
 import { isCompiledBinary } from "../lib/paths.ts";
-import { displayHost, printShutdownHint, printShuttingDown } from "./output.ts";
+import { displayHost, openUrl, printShutdownHint, printShuttingDown } from "./output.ts";
 
 interface RunningServer {
   stop(closeActiveConnections?: boolean): void | Promise<void>;
@@ -57,20 +57,19 @@ export async function prewarmEmbeddings(state: ServerSession): Promise<void> {
   await Promise.all(state.availableObsmKeys.map((key) => loadEmbeddingAsync(key, state)));
 }
 
+export const localUrl = (config: Pick<LaunchConfig, "host" | "port">): string =>
+  `http://${displayHost(config.host)}:${config.port}`;
+
 export function openBrowser(config: LaunchConfig): void {
-  if (config.noOpen) return;
-  const url = `http://${displayHost(config.host)}:${config.port}`;
-  try {
-    if (process.platform === "darwin") Bun.spawn(["open", url]);
-    else if (process.platform === "linux") Bun.spawn(["xdg-open", url]);
-    else if (process.platform === "win32") Bun.spawn(["cmd", "/c", "start", "", url]);
-  } catch {
-    // Browser opening is non-critical; the URL was already printed.
-  }
+  if (!config.noOpen) openUrl(localUrl(config));
 }
 
-export function registerGracefulShutdown(state: ServerSession, server: RunningServer): void {
-  printShutdownHint();
+/** Ctrl+C and SIGTERM, or `q` on the status screen when `config.tui` is set, stop the server gracefully. */
+export async function registerGracefulShutdown(
+  config: Pick<LaunchConfig, "host" | "port" | "tui">,
+  state: ServerSession,
+  server: RunningServer,
+): Promise<void> {
   const shutdown = async () => {
     printShuttingDown();
     await flushAnnotationSaves(state);
@@ -83,4 +82,13 @@ export function registerGracefulShutdown(state: ServerSession, server: RunningSe
   };
   process.on("SIGINT", () => void shutdown());
   process.on("SIGTERM", () => void shutdown());
+  if (!config.tui) return printShutdownHint();
+  // Lazy: OpenTUI loads its native library on import; log mode never needs it.
+  const [{ runStatusTui }, { getRuntimeStatus }] = await Promise.all([
+    import("../tui.ts"),
+    import("../../server/status.ts"),
+  ]);
+  const url = localUrl(config);
+  await runStatusTui(() => getRuntimeStatus(state, url));
+  await shutdown();
 }

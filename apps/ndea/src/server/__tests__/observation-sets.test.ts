@@ -9,7 +9,6 @@ import { handleSetsPost } from "../routes/sets.ts";
 import { handleFilter } from "../routes/filter.ts";
 import { handleWorkspacePatch } from "../routes/workspace.ts";
 import { DatasetQuerySession } from "../store.ts";
-import { WorkspaceDocumentStore } from "../workspace.ts";
 
 let dir: string;
 const stores: DatasetQuerySession[] = [];
@@ -35,7 +34,6 @@ async function session(multi = true, reversed = false) {
       ["first", { path: "/first.zarr" }],
       ["second", { path: "/second.zarr" }],
     ]),
-    workspace: WorkspaceDocumentStore.empty(join(dir, "workspace.json")),
   });
 }
 
@@ -82,11 +80,13 @@ test("single-dataset sets restore identities after row handles change", async ()
 test("PATCH rejects unknown nested set references with a clause pointer and preserves revision", async () => {
   dir = await mkdtemp(join(tmpdir(), "ndea-sets-"));
   const state = await session();
-  expect(await state.workspace.apply(0, [{ op: "add", path: "", value: emptyWorkspaceDocument() }])).toEqual({
-    kind: "accepted",
-    revision: 1,
-  });
-  const snapshot = state.workspace.snapshot();
+  expect(
+    await state.workspace.patch([{ op: "add", path: "", value: emptyWorkspaceDocument() }], {
+      base: 0,
+      actor: { kind: "browser" },
+    }),
+  ).toEqual({ kind: "accepted", revision: 1 });
+  const snapshot = state.workspace.get();
   const response = await handleWorkspacePatch(
     request({
       baseRevision: 1,
@@ -117,7 +117,7 @@ test("PATCH rejects unknown nested set references with a clause pointer and pres
       detail: 'unknown observation set "0000000000000000"',
     },
   ]);
-  expect(state.workspace.snapshot()).toEqual(snapshot);
+  expect(state.workspace.get()).toEqual(snapshot);
   const created = await state.observationSets.create([0]);
   expect(
     (
@@ -152,5 +152,5 @@ test("PATCH rejects an unknown set referenced from a data source", async () => {
   expect(WorkspaceProblemSchema.parse(await response.json()).errors).toEqual([
     { pointer: "/data/pinned/where", detail: 'unknown observation set "0000000000000000"' },
   ]);
-  expect(state.workspace.snapshot().revision).toBe(0);
+  expect(state.workspace.get().revision).toBe(0);
 });

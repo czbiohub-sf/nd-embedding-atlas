@@ -53,7 +53,8 @@ describe("router / help, version, completion", () => {
     for (const argv of [["--help"], []]) {
       const r = await captureExecute(app, argv);
       expect(r.exitCode).toBe(0);
-      for (const name of ["view", "workspace", "mcp", "self", "man", "completion"]) expect(r.stdout).toContain(name);
+      for (const name of ["view", "status", "workspace", "mcp", "self", "man", "completion"])
+        expect(r.stdout).toContain(name);
       for (const gone of ["filter", "update", "gc", "doctor"])
         expect(r.stdout).not.toMatch(new RegExp(`^  ${gone}\\b`, "m"));
     }
@@ -72,7 +73,7 @@ describe("router / help, version, completion", () => {
   test("`ndea completion zsh` covers every command", async () => {
     const r = await captureExecute(app, ["completion", "zsh"]);
     expect(r.exitCode).toBe(0);
-    for (const name of ["view", "workspace", "query", "mcp", "install", "self", "doctor", "prune"]) {
+    for (const name of ["view", "status", "workspace", "query", "mcp", "install", "self", "doctor", "prune"]) {
       expect(r.stdout).toContain(name);
     }
   });

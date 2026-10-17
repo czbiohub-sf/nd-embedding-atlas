@@ -1,55 +1,58 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { afterEach, describe, expect, test } from "bun:test";
+import type { JsonPatchOp, WorkspaceRevision } from "@ndea/protocol";
 
-import { WorkspaceDocumentStore } from "../../../server/workspace";
+import { Workspace as ServerWorkspace, type WorkspacePatchResult } from "../../../server/workspace";
 import { emptyWorkspaceDocument } from "./document";
-import { WorkspaceSync, type WorkspaceTransport } from "./sync";
+import { WorkspaceSync, type PatchOutcome, type WorkspaceTransport } from "./sync";
 import { Workspace } from "./workspace-store";
 
-let dir: string;
 const cleanup: (() => void)[] = [];
-
-beforeEach(async () => {
-  dir = await mkdtemp(join(tmpdir(), "ndea-sync-"));
-});
-afterEach(async () => {
+afterEach(() => {
   for (const dispose of cleanup.splice(0)) dispose();
-  await rm(dir, { recursive: true, force: true });
 });
 
-/** The real server store behind an in-process transport; `live: false` drops watch pushes. */
-function memoryTransport(store: WorkspaceDocumentStore, { live = true } = {}): WorkspaceTransport {
+const outcome = (result: WorkspacePatchResult | { kind: "not-found" }): PatchOutcome =>
+  result.kind === "invalid"
+    ? { kind: "invalid", errors: result.issues.map((i) => i.detail) }
+    : result.kind === "not-found"
+      ? { kind: "invalid", errors: ["not found"] }
+      : result;
+
+/** The real server workspace behind an in-process transport; `live: false` drops watch pushes. */
+function memoryTransport(server: ServerWorkspace, { live = true } = {}): WorkspaceTransport {
+  const actor = { kind: "browser" } as const;
   return {
-    async patch(baseRevision, ops, clientId) {
-      const result = await store.apply(baseRevision, ops, clientId);
-      return result.kind === "invalid" ? { kind: "invalid", errors: result.issues.map((i) => i.detail) } : result;
-    },
-    watch: (onChange) => (live ? store.watch(onChange) : () => {}),
-    snapshot: () => Promise.resolve(store.snapshot()),
+    patch: async (base, ops, clientId) => outcome(await server.patch(ops, { base, actor, clientId })),
+    restore: async (base, revision, clientId) => outcome(await server.restore(revision, { base, actor, clientId })),
+    watch: (onChange) => (live ? server.watch(onChange) : () => {}),
+    snapshot: () => Promise.resolve(server.get()),
   };
 }
 
+const agentWrite = (server: ServerWorkspace, base: number, ops: JsonPatchOp[]) =>
+  server.patch(ops, { base, actor: { kind: "mcp", agent: "omp" } });
+
 /** A synced session whose dashboard is one count element, `slot-1`. */
 async function session(options?: { live?: boolean }) {
-  const store = WorkspaceDocumentStore.empty(join(dir, "workspace.json"));
+  const server = ServerWorkspace.memory();
   const workspace = new Workspace();
   workspace.fillSlot("slot-1", "count");
   const initial = { revision: 0, document: emptyWorkspaceDocument() };
-  const sync = new WorkspaceSync(workspace, initial, memoryTransport(store, options), (e) => {
+  const sync = new WorkspaceSync(workspace, initial, memoryTransport(server, options), (e) => {
     throw new Error(e.join("; "));
   });
+  const revisions: [WorkspaceRevision, boolean][] = [];
+  sync.onRevision((revision, own) => revisions.push([revision, own]));
   sync.start();
   await sync.flush();
   cleanup.push(() => sync.dispose());
-  return { store, workspace, sync };
+  return { server, workspace, sync, revisions };
 }
 
 describe("WorkspaceSync", () => {
   test("a seeded document reaches the server, then an edit burst lands as one revision", async () => {
-    const { store, workspace, sync } = await session();
-    expect(store.snapshot()).toMatchObject({
+    const { server, workspace, sync } = await session();
+    expect(server.get()).toMatchObject({
       revision: 1,
       document: { spec: { elements: { "slot-1": { type: "count" } } } },
     });
@@ -57,27 +60,27 @@ describe("WorkspaceSync", () => {
     workspace.setElementProps("slot-1", { title: "Cells" });
     workspace.setElementProps("slot-1", { title: "All cells" });
     await sync.flush();
-    expect(store.snapshot()).toMatchObject({
+    expect(server.get()).toMatchObject({
       revision: 2,
       document: { spec: { elements: { "slot-1": { props: { title: "All cells" } } } } },
     });
   });
 
   test("selection and other session state never reach the server document", async () => {
-    const { store, workspace, sync } = await session();
+    const { server, workspace, sync } = await session();
     workspace.selectElement("slot-1");
     workspace.setFullscreen("slot-1");
     await sync.flush();
-    expect(store.snapshot().revision).toBe(1);
+    expect(server.get().revision).toBe(1);
   });
 
   test("a remote edit applies locally and rebases pending local edits instead of dropping either", async () => {
-    const { store, workspace, sync } = await session();
+    const { server, workspace, sync } = await session();
     workspace.setElementProps("slot-1", { title: "Mine" });
-    await store.apply(1, [{ op: "add", path: "/data/infected", value: { sql: "infected" } }], "agent");
+    await agentWrite(server, 1, [{ op: "add", path: "/data/infected", value: { sql: "infected" } }]);
     await sync.flush();
 
-    expect(store.snapshot()).toMatchObject({
+    expect(server.get()).toMatchObject({
       revision: 3,
       document: {
         data: { infected: { sql: "infected" } },
@@ -88,18 +91,39 @@ describe("WorkspaceSync", () => {
   });
 
   test("a stale revision (409) replays local ops onto the server document and resends", async () => {
-    const { store, workspace, sync } = await session({ live: false });
-    await store.apply(1, [{ op: "add", path: "/data/infected", value: { sql: "infected" } }], "agent");
+    const { server, workspace, sync } = await session({ live: false });
+    await agentWrite(server, 1, [{ op: "add", path: "/data/infected", value: { sql: "infected" } }]);
     workspace.setElementProps("slot-1", { title: "Mine" });
     await sync.flush(); // 409 → rebase onto revision 2
     await sync.flush(); // resend on top of it
 
-    expect(store.snapshot()).toMatchObject({
+    expect(server.get()).toMatchObject({
       revision: 3,
       document: {
         data: { infected: { sql: "infected" } },
         spec: { elements: { "slot-1": { props: { title: "Mine" } } } },
       },
     });
+  });
+
+  test("every accepted revision reaches onRevision with its actor; own marks this tab's", async () => {
+    const { server, revisions } = await session();
+    await agentWrite(server, 1, [{ op: "add", path: "/data/infected", value: { sql: "infected" } }]);
+    expect(revisions.map(([r, own]) => [r.revision, r.actor, own])).toEqual([
+      [1, { kind: "browser" }, true],
+      [2, { kind: "mcp", agent: "omp" }, false],
+    ]);
+  });
+
+  test("restore commits on the server and its watch event brings the document back", async () => {
+    const { server, workspace, sync, revisions } = await session();
+    await agentWrite(server, 1, [{ op: "add", path: "/data/infected", value: { sql: "infected" } }]);
+    workspace.setElementProps("slot-1", { title: "Mine" });
+
+    expect(await sync.restore(1)).toEqual({ kind: "accepted", revision: 4 });
+    await sync.flush();
+    expect(server.get().document).toEqual(server.at(1)!.document);
+    expect(workspace.store.state).toEqual(server.at(1)!.document as typeof workspace.store.state);
+    expect(revisions.at(-1)).toMatchObject([{ revision: 4, restoredFrom: 1 }, true]);
   });
 });

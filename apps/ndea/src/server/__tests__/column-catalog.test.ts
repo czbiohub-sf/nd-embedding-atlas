@@ -8,7 +8,6 @@ import { handleScatterCategories, handleScatterContinuousValues } from "../route
 import { handleWorkspacePatch } from "../routes/workspace.ts";
 import { createServerSession } from "../state.ts";
 import { DatasetQuerySession } from "../store.ts";
-import { WorkspaceDocumentStore } from "../workspace.ts";
 
 const EVIL = 'x" ; DROP TABLE obs_base; --';
 
@@ -30,11 +29,7 @@ async function session() {
       (2, 'c', 'infected', 90.0)
     ) AS t(__row_index__, obs_name, condition, area)`);
   });
-  return createServerSession({
-    store,
-    observationSetsDirectory: join(dir, "sets"),
-    workspace: WorkspaceDocumentStore.empty(join(dir, "workspace.json")),
-  });
+  return createServerSession({ store, observationSetsDirectory: join(dir, "sets") });
 }
 
 async function obsRows(): Promise<number> {
@@ -96,12 +91,12 @@ test("PATCH rejects typed clauses on unknown columns with pointers and accepts k
     { pointer: "/data/bad/where/clause/column", detail: 'unknown column "nope"' },
     { pointer: "/state/filter/A/agent~1x/area/column", detail: 'unknown column "missing"' },
   ]);
-  expect(state.workspace.snapshot().revision).toBe(0);
+  expect(state.workspace.get().revision).toBe(0);
 
   const accepted = await patch(0, [
     { op: "add", path: "/data/infected", value: { where: { op: "eq", column: "condition", value: "infected" } } },
     { op: "add", path: "/state/filter", value: { A: { agent: { area: { op: "gt", column: "area", value: 20 } } } } },
   ]);
   expect(accepted.status).toBe(200);
-  expect(state.workspace.snapshot().revision).toBe(1);
+  expect(state.workspace.get().revision).toBe(1);
 });

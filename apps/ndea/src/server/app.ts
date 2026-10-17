@@ -30,7 +30,14 @@ import { handleEmbeddingStatus, handleLoadEmbedding } from "./routes/embeddings.
 import { handleExport, handleExportStatus, handleGetExportDir } from "./routes/export.ts";
 import { handleFilter } from "./routes/filter.ts";
 import { handleSetsPost } from "./routes/sets.ts";
-import { handleWorkspaceGet, handleWorkspacePatch, handleWorkspaceResult } from "./routes/workspace.ts";
+import {
+  handleWorkspaceGet,
+  handleWorkspaceHistory,
+  handleWorkspacePatch,
+  handleWorkspaceRestore,
+  handleWorkspaceResult,
+  handleWorkspaceRevision,
+} from "./routes/workspace.ts";
 import { handleHealth, handleObsBatch, handleObsDetail, handleObsInfo } from "./routes/obs.ts";
 import { handleScatterCategories, handleScatterContinuousValues, handleScatterPositions } from "./routes/scatter.ts";
 import { handleTrajectory } from "./routes/trajectory.ts";
@@ -39,6 +46,8 @@ import { CropPool } from "./crop-pool.ts";
 import { servePlateFile } from "./plate.ts";
 import { handleWsMessage, handleWsOpen, handleWsClose, type ServerSocketContext } from "./ws.ts";
 import { createMcpEndpoint } from "./mcp.ts";
+import { hasBearer } from "./mcp-token.ts";
+import { getRuntimeStatus } from "./status.ts";
 
 // ─── CORS + method handling ─────────────────────────────────────────────────
 
@@ -140,6 +149,18 @@ export function createApp(options: CreateAppOptions) {
       "/api/*": (req: Request) => (req.method === "OPTIONS" ? preflight() : withCors(unknownApi(req))),
 
       ...api({
+        // Exposes filesystem paths, so it takes the MCP bearer token.
+        "/api/status": {
+          GET: (req) =>
+            options.mcpToken && hasBearer(req, options.mcpToken)
+              ? Response.json(
+                  getRuntimeStatus(
+                    state,
+                    `http://${options.host.replace(/^127\.0\.0\.1$/, "localhost")}:${options.port}`,
+                  ),
+                )
+              : Response.json({ error: "Unauthorized" }, { status: 401, headers: { "WWW-Authenticate": "Bearer" } }),
+        },
         "/data/query": { GET: (req) => handleMosaicRoute(req, store), POST: (req) => handleMosaicRoute(req, store) },
         "/data/metadata.json": { GET: () => handleMetadata(state, config) },
 
@@ -170,6 +191,9 @@ export function createApp(options: CreateAppOptions) {
         "/api/filter": { POST: (req) => handleFilter(req, state) },
 
         "/api/workspace": { GET: () => handleWorkspaceGet(state), PATCH: (req) => handleWorkspacePatch(req, state) },
+        "/api/workspace/history": { GET: (req) => handleWorkspaceHistory(req, state) },
+        "/api/workspace/revisions/:revision": { GET: (req) => handleWorkspaceRevision(req.params.revision, state) },
+        "/api/workspace/restore": { POST: (req) => handleWorkspaceRestore(req, state) },
         "/api/workspace/elements/:id": { GET: (req) => handleWorkspaceResult({ element: req.params.id }, state) },
         "/api/workspace/data/:name": { GET: (req) => handleWorkspaceResult({ data: req.params.name }, state) },
 

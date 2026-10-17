@@ -55,10 +55,46 @@ export const WorkspaceProblemSchema = z.object({
 });
 export type WorkspaceProblem = z.infer<typeof WorkspaceProblemSchema>;
 
-/** `workspace/watch` push: one accepted revision and the ops that produced it. */
-export const WorkspaceChangeSchema = z.object({
-  revision: z.number().int().positive(),
-  ops: z.array(JsonPatchOpSchema),
-  clientId: z.string().optional(),
+/**
+ * Who committed a revision, stamped by the server from the transport (never
+ * from the request body). `system` is the seed or baseline; `agent` is the
+ * MCP client's `X-Ndea-Agent` header. Provenance, not authorization.
+ */
+export const WorkspaceActorSchema = z.object({
+  kind: z.enum(["system", "browser", "cli", "mcp"]),
+  agent: z
+    .string()
+    .regex(/^[\w.-]{1,64}$/)
+    .optional(),
 });
+export type WorkspaceActor = z.infer<typeof WorkspaceActorSchema>;
+
+/** One committed revision: the ops that turned `baseRevision` into `revision`. */
+export const WorkspaceRevisionSchema = z.object({
+  revision: z.number().int().positive(),
+  baseRevision: z.number().int().nonnegative(),
+  actor: WorkspaceActorSchema,
+  ops: z.array(JsonPatchOpSchema),
+  committedAt: z.string(),
+  restoredFrom: z.number().int().positive().optional(),
+});
+export type WorkspaceRevision = z.infer<typeof WorkspaceRevisionSchema>;
+
+/** `workspace/watch` push: the committed revision plus the writer's echo token. */
+export const WorkspaceChangeSchema = WorkspaceRevisionSchema.extend({ clientId: z.string().optional() });
 export type WorkspaceChange = z.infer<typeof WorkspaceChangeSchema>;
+
+/** GET /api/workspace/history?before=<revision>&limit=<1..500, default 50>: newest first. */
+export const WorkspaceHistorySchema = z.object({ revisions: z.array(WorkspaceRevisionSchema) });
+export type WorkspaceHistory = z.infer<typeof WorkspaceHistorySchema>;
+
+/**
+ * POST /api/workspace/restore: commit the document at `revision` as a new
+ * revision against `baseRevision`. Responses match PATCH (200, 409, 400).
+ */
+export const WorkspaceRestoreBodySchema = z.object({
+  revision: z.number().int().positive(),
+  baseRevision: z.number().int().nonnegative(),
+  clientId: z.string().min(1).max(128).optional(),
+});
+export type WorkspaceRestoreBody = z.infer<typeof WorkspaceRestoreBodySchema>;

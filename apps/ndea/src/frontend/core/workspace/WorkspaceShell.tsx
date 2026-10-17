@@ -1,6 +1,6 @@
 /**
- * WorkspaceShell: the dashboard frame plus a one-line status bar. An invalid
- * server document opens a read-only notice instead.
+ * WorkspaceShell: the dashboard frame, the History panel, and a one-line
+ * status bar. An invalid server document opens a read-only notice instead.
  */
 
 import type { WorkspaceSnapshot } from "@ndea/protocol";
@@ -10,10 +10,11 @@ import { Hud } from "@/components/dashboard/primitives";
 import { LAYOUT_EDITING_ENABLED } from "@/feature-flags";
 import { useDatasetSession } from "@/hooks/useDatasetSession";
 import { DashboardPane } from "./DashboardPane";
+import { HistoryPanel, LastChange } from "./HistoryPanel";
 import { fetchWorkspaceSnapshot } from "./sync";
 import { useWorkspacePersistence, WorkspaceProvider, type WorkspacePersistenceState } from "./workspace-context";
 
-function StatusBar() {
+function StatusBar({ onToggleHistory }: { onToggleHistory: () => void }) {
   const { runtime } = useDatasetSession();
   return (
     <div className="flex h-[22px] shrink-0 items-center justify-between overflow-hidden border-t border-border bg-background px-2.5 font-mono text-3xs whitespace-nowrap text-text-muted select-none">
@@ -25,9 +26,12 @@ function StatusBar() {
         </span>
         <span className="rounded border border-border px-1.5 py-px">{runtime.table}</span>
       </div>
-      <span className="inline-flex items-center gap-[5px]">
-        ws <span className="inline-block size-[5px] shrink-0 rounded-full bg-success" />
-      </span>
+      <div className="flex items-center gap-3.5">
+        <LastChange onClick={onToggleHistory} />
+        <span className="inline-flex items-center gap-[5px]">
+          ws <span className="inline-block size-[5px] shrink-0 rounded-full bg-success" />
+        </span>
+      </div>
     </div>
   );
 }
@@ -55,14 +59,18 @@ function RecoveryWorkspaceSurface({ persistence }: { persistence: WorkspacePersi
 
 function WorkspaceFrame() {
   const persistence = useWorkspacePersistence();
+  const [historyOpen, setHistoryOpen] = useState(false);
   if (persistence.mode === "recovery") return <RecoveryWorkspaceSurface persistence={persistence} />;
   return (
     <div className="fixed inset-0 flex flex-col overflow-hidden bg-background select-none">
-      <div className="relative min-h-0 flex-1">
-        {/* Layout editing (split, swap, remove, fill) is editor-only; agents edit any build. */}
-        <DashboardPane editable={LAYOUT_EDITING_ENABLED} />
+      <div className="flex min-h-0 flex-1">
+        <div className="relative min-w-0 flex-1">
+          {/* Layout editing (split, swap, remove, fill) is editor-only; agents edit any build. */}
+          <DashboardPane editable={LAYOUT_EDITING_ENABLED} />
+        </div>
+        {historyOpen && <HistoryPanel onClose={() => setHistoryOpen(false)} />}
       </div>
-      <StatusBar />
+      <StatusBar onToggleHistory={() => setHistoryOpen((open) => !open)} />
     </div>
   );
 }

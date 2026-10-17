@@ -33,22 +33,32 @@ export type {
 } from "./filter";
 export {
   JsonPatchOpSchema,
+  WorkspaceActorSchema,
   WorkspaceChangeSchema,
   WorkspaceConflictSchema,
+  WorkspaceHistorySchema,
   WorkspacePatchAcceptedSchema,
   WorkspacePatchBodySchema,
   WorkspaceProblemSchema,
+  WorkspaceRestoreBodySchema,
+  WorkspaceRevisionSchema,
   WorkspaceSnapshotSchema,
 } from "./workspace";
 export type {
   JsonPatchOp,
+  WorkspaceActor,
   WorkspaceChange,
   WorkspaceConflict,
+  WorkspaceHistory,
   WorkspacePatchAccepted,
   WorkspacePatchBody,
   WorkspaceProblem,
+  WorkspaceRestoreBody,
+  WorkspaceRevision,
   WorkspaceSnapshot,
 } from "./workspace";
+export { RuntimeStatusSchema } from "./status";
+export type { RuntimeStatus } from "./status";
 
 // ─── Shared primitives ──────────────────────────────────────────────────────
 

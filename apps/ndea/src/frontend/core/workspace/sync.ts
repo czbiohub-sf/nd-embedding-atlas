@@ -6,6 +6,9 @@
  * server-acknowledged one and PATCHes the difference. A stale revision (409)
  * rebases: pending ops replay on the server document and resend. Remote
  * revisions from `workspace/watch` rebase pending local ops the same way.
+ * Every accepted revision, this tab's included, reaches `onRevision`;
+ * `clientId` only tells this tab's echoes apart. A restore commits on the
+ * server and its watch event updates the document like any remote revision.
  */
 
 import {
@@ -15,6 +18,7 @@ import {
   WorkspaceSnapshotSchema,
   type JsonPatchOp,
   type WorkspaceChange,
+  type WorkspaceRevision,
   type WorkspaceSnapshot,
 } from "@ndea/protocol";
 import { createPatch } from "rfc6902";
@@ -28,6 +32,7 @@ const SYNC_DEBOUNCE_MS = 500;
 
 export interface WorkspaceTransport {
   patch(baseRevision: number, ops: JsonPatchOp[], clientId: string): Promise<PatchOutcome>;
+  restore(baseRevision: number, revision: number, clientId: string): Promise<PatchOutcome>;
   watch(onChange: (change: WorkspaceChange) => void, onLost: () => void): () => void;
   snapshot(): Promise<WorkspaceSnapshot>;
 }
@@ -56,6 +61,7 @@ export class WorkspaceSync {
   private inflight: Promise<void> | null = null;
   private stopped = false;
   private disposers: (() => void)[] = [];
+  private readonly revisionListeners = new Set<(revision: WorkspaceRevision, own: boolean) => void>();
 
   constructor(
     workspace: Workspace,
@@ -74,7 +80,10 @@ export class WorkspaceSync {
     this.disposers.push(() => sub.unsubscribe());
     this.disposers.push(
       this.transport.watch(
-        (change) => void this.onRemote(change),
+        ({ clientId, ...revision }) => {
+          for (const listener of this.revisionListeners) listener(revision, clientId === this.clientId);
+          void this.onRemote(revision);
+        },
         () => void this.resync(),
       ),
     );
@@ -86,6 +95,26 @@ export class WorkspaceSync {
     this.stopped = true;
     clearTimeout(this.timer);
     for (const dispose of this.disposers.splice(0)) dispose();
+    this.revisionListeners.clear();
+  }
+
+  /** Every accepted revision in commit order; `own` marks this tab's writes. */
+  onRevision(listener: (revision: WorkspaceRevision, own: boolean) => void): () => void {
+    this.revisionListeners.add(listener);
+    return () => this.revisionListeners.delete(listener);
+  }
+
+  /**
+   * Commit the document at `revision` as a new revision, after pending edits
+   * land. A 409 or 400 is returned, never fatal: the watch catches this tab up.
+   */
+  async restore(revision: number): Promise<PatchOutcome> {
+    await this.flush();
+    while (this.inflight) await this.inflight;
+    const outcome = this.transport.restore(this.acked.revision, revision, this.clientId);
+    // Hold other writes until the server answers; its watch event then applies the restored document.
+    this.inflight = outcome.then(noop, noop).finally(() => (this.inflight = null));
+    return outcome;
   }
 
   /** Send pending edits now; resolves when the server has acknowledged them. */
@@ -128,8 +157,9 @@ export class WorkspaceSync {
     this.fail(outcome.errors);
   }
 
-  private async onRemote(change: WorkspaceChange): Promise<void> {
-    if (this.stopped || change.clientId === this.clientId) return;
+  /** Own echoes are already acknowledged (or, for a restore, applied here like any other revision). */
+  private async onRemote(change: WorkspaceRevision): Promise<void> {
+    if (this.stopped) return;
     while (this.inflight) await this.inflight;
     if (change.revision <= this.acked.revision) return;
     if (change.revision !== this.acked.revision + 1) return this.resync();
@@ -171,6 +201,27 @@ export class WorkspaceSync {
   }
 }
 
+function noop(): void {}
+
+/** PATCH and restore answer alike: 200 `{ revision }`, 409 snapshot, 400 problem. */
+async function writeWorkspace(method: "PATCH" | "POST", url: string, body: object): Promise<PatchOutcome> {
+  const res = await fetch(url, {
+    method,
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const json: unknown = await res.json();
+  if (res.ok) return { kind: "accepted", revision: WorkspacePatchAcceptedSchema.parse(json).revision };
+  if (res.status === 409) return { kind: "conflict", snapshot: WorkspaceConflictSchema.parse(json) };
+  const problem = WorkspaceProblemSchema.safeParse(json);
+  return {
+    kind: "invalid",
+    errors: problem.success
+      ? problem.data.errors.map((issue) => `${issue.pointer}: ${issue.detail}`)
+      : [`workspace write failed: HTTP ${res.status}`],
+  };
+}
+
 /** HTTP + WebSocket transport against the running ndea server. */
 export function createHttpWorkspaceTransport(ws: {
   subscribe(
@@ -181,23 +232,9 @@ export function createHttpWorkspaceTransport(ws: {
   ): { unsubscribe(): void };
 }): WorkspaceTransport {
   return {
-    async patch(baseRevision, ops, clientId) {
-      const res = await fetch("/api/workspace", {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ baseRevision, ops, clientId }),
-      });
-      const body: unknown = await res.json();
-      if (res.ok) return { kind: "accepted", revision: WorkspacePatchAcceptedSchema.parse(body).revision };
-      if (res.status === 409) return { kind: "conflict", snapshot: WorkspaceConflictSchema.parse(body) };
-      const problem = WorkspaceProblemSchema.safeParse(body);
-      return {
-        kind: "invalid",
-        errors: problem.success
-          ? problem.data.errors.map((issue) => `${issue.pointer}: ${issue.detail}`)
-          : [`workspace save failed: HTTP ${res.status}`],
-      };
-    },
+    patch: (baseRevision, ops, clientId) => writeWorkspace("PATCH", "/api/workspace", { baseRevision, ops, clientId }),
+    restore: (baseRevision, revision, clientId) =>
+      writeWorkspace("POST", "/api/workspace/restore", { baseRevision, revision, clientId }),
     watch(onChange, onLost) {
       let sub: { unsubscribe(): void };
       // The socket reconnects on its own; re-subscribe and re-read whatever was missed.

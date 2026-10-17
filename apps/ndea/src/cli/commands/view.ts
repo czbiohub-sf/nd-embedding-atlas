@@ -34,6 +34,11 @@ export const viewFlags = [
     default: false,
     description: "Serve the frontend source with Bun's dev server and HMR (source checkout only)",
   }),
+  defineFlag("tui", {
+    type: "boolean",
+    default: true,
+    description: "Show the live status screen in a terminal (--no-tui keeps log output)",
+  }),
   defineFlag("obs-columns", { type: "string", description: "Comma-separated obs columns to include" }),
   defineFlag("preset", {
     type: "string",
@@ -52,6 +57,7 @@ interface ViewInput {
     host?: string;
     open: boolean;
     dev: boolean;
+    tui: boolean;
     "obs-columns"?: string;
     preset?: string;
     workspace?: string;
@@ -68,6 +74,7 @@ export async function runView({ args, flags, signal }: ViewInput): Promise<void>
     host: flags.host,
     noOpen: !flags.open,
     dev: flags.dev,
+    tui: flags.tui && process.stdin.isTTY && process.stdout.isTTY,
     obsColumns: parseObsColumns(flags["obs-columns"]),
     preset: flags.preset,
     workspace: flags.workspace,

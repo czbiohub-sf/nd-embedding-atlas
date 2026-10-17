@@ -1,7 +1,7 @@
 /**
  * WorkspaceProvider: owns ONE Workspace per dataset session, created from the
  * server's workspace snapshot and disposed on unmount. `WorkspaceSync` keeps
- * it and the server in step.
+ * it and the server in step; `WorkspaceHistory` follows the sync's revisions.
  */
 
 import { useSelector } from "@tanstack/react-store";
@@ -16,6 +16,7 @@ import { ComponentRuntimeManager } from "@/core/component/runtime/workspace-runt
 import { wsClient } from "@/lib/ws-client";
 import { createHttpWorkspaceTransport, decodeWorkspaceDocument, WorkspaceSync, type WorkspaceTransport } from "./sync";
 import { Workspace } from "./workspace-store";
+import { WorkspaceHistory } from "./history";
 import type { WorkspaceDocument, WorkspaceSession } from "./types";
 
 const WorkspaceContext = createContext<Workspace | null>(null);
@@ -24,6 +25,7 @@ export interface WorkspacePersistenceState {
   readonly errors: readonly string[];
 }
 const WorkspacePersistenceContext = createContext<WorkspacePersistenceState>({ mode: "writable", errors: [] });
+const WorkspaceHistoryContext = createContext<WorkspaceHistory | null>(null);
 
 export function WorkspaceProvider({
   children,
@@ -39,7 +41,7 @@ export function WorkspaceProvider({
   const { coordinator, table } = runtime;
   const { metadata } = state;
 
-  const [{ workspace: ws, componentRuntimes, initial }] = useState(() => {
+  const [{ workspace: ws, componentRuntimes, initial, history }] = useState(() => {
     const w = new Workspace();
     // An invalid server document opens read-only and is never overwritten.
     const decoded = decodeWorkspaceDocument(snapshot.document);
@@ -57,6 +59,7 @@ export function WorkspaceProvider({
       workspace: w,
       initial: decoded,
       componentRuntimes: new ComponentRuntimeManager({ session: w, appHost }),
+      history: new WorkspaceHistory(),
     };
   });
   const [persistence, setPersistence] = useState<WorkspacePersistenceState>(
@@ -74,15 +77,21 @@ export function WorkspaceProvider({
       transport ?? createHttpWorkspaceTransport(wsClient),
       (errors) => setPersistence({ mode: "recovery", errors }),
     );
+    const disconnect = history.connect(sync);
     sync.start();
-    return () => sync.dispose();
-  }, [ws, initial, persistence.mode, snapshot, transport]);
+    return () => {
+      disconnect();
+      sync.dispose();
+    };
+  }, [ws, initial, history, persistence.mode, snapshot, transport]);
 
   return (
     <WorkspacePersistenceContext.Provider value={persistence}>
-      <WorkspaceContext.Provider value={ws}>
-        <ComponentRuntimeContext.Provider value={componentRuntimes}>{children}</ComponentRuntimeContext.Provider>
-      </WorkspaceContext.Provider>
+      <WorkspaceHistoryContext.Provider value={history}>
+        <WorkspaceContext.Provider value={ws}>
+          <ComponentRuntimeContext.Provider value={componentRuntimes}>{children}</ComponentRuntimeContext.Provider>
+        </WorkspaceContext.Provider>
+      </WorkspaceHistoryContext.Provider>
     </WorkspacePersistenceContext.Provider>
   );
 }
@@ -95,6 +104,12 @@ export function useWorkspace(): Workspace {
 
 export function useWorkspacePersistence(): WorkspacePersistenceState {
   return useContext(WorkspacePersistenceContext);
+}
+
+export function useWorkspaceHistory(): WorkspaceHistory {
+  const history = useContext(WorkspaceHistoryContext);
+  if (!history) throw new Error("useWorkspaceHistory outside WorkspaceProvider");
+  return history;
 }
 
 export function useWorkspaceSelector<T>(selector: (s: WorkspaceDocument) => T): T {

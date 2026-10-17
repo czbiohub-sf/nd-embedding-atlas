@@ -1,12 +1,9 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import type { DuckDBConnection } from "@duckdb/node-api";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { handleWorkspaceResult } from "../routes/workspace.ts";
 import type { ServerSession } from "../state.ts";
 import { DatasetQuerySession } from "../store.ts";
-import { WorkspaceDocumentStore } from "../workspace.ts";
+import { Workspace } from "../workspace.ts";
 
 const filterA = { $bindState: "/filter/A" };
 
@@ -30,16 +27,13 @@ function document(largeSql = "area > 20") {
   };
 }
 
-let dir: string;
 let store: DatasetQuerySession | null = null;
-afterEach(async () => {
+afterEach(() => {
   store?.close();
   store = null;
-  if (dir) await rm(dir, { recursive: true, force: true });
 });
 
 async function session(largeSql?: string) {
-  dir = await mkdtemp(join(tmpdir(), "ndea-results-"));
   store = await DatasetQuerySession.fromInit(async (conn: DuckDBConnection) => {
     await conn.run(
       `CREATE TABLE obs_base AS SELECT * FROM (VALUES
@@ -49,10 +43,10 @@ async function session(largeSql?: string) {
       ) AS t(__row_index__, obs_name, _dataset, condition, area)`,
     );
   });
-  const workspace = WorkspaceDocumentStore.empty(join(dir, "workspace.json"));
-  expect(await workspace.apply(0, [{ op: "add", path: "", value: document(largeSql) }])).toMatchObject({
-    kind: "accepted",
-  });
+  const workspace = Workspace.memory();
+  expect(
+    await workspace.patch([{ op: "add", path: "", value: document(largeSql) }], { base: 0, actor: { kind: "cli" } }),
+  ).toMatchObject({ kind: "accepted" });
   return { store, workspace };
 }
 

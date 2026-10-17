@@ -8,7 +8,7 @@
 import { describe, expect, test, afterEach } from "bun:test";
 import type { DuckDBConnection } from "@duckdb/node-api";
 import { decodeIPC, restConnector } from "@uwdata/mosaic-core";
-import { EmbeddingStatusSchema, MetadataSchema } from "@ndea/protocol";
+import { EmbeddingStatusSchema, MetadataSchema, RuntimeStatusSchema } from "@ndea/protocol";
 import { DatasetQuerySession } from "../store.ts";
 import { createApp, type CreateAppOptions } from "../app.ts";
 import type { ServerSession, DatasetSessionMetadata } from "../state.ts";
@@ -224,6 +224,35 @@ describe("createApp", () => {
     const body = await res.json();
     expect(body.status).toBe("ok");
     expect(body.n_obs).toBe(25);
+  });
+
+  test("GET /api/status needs the bearer token and counts browser sockets", async () => {
+    const store = await createMockStore(5);
+    activeStore = store;
+    const server = createApp({
+      port: 0,
+      host: "localhost",
+      store,
+      state: createMockState(store),
+      config: createMockConfig(),
+      noStatic: true,
+      mcpToken: "secret",
+    });
+    activeServer = server;
+    const url = `http://localhost:${server.port}/api/status`;
+    expect((await fetch(url)).status).toBe(401);
+    expect((await fetch(url, { headers: { authorization: "Bearer wrong" } })).status).toBe(401);
+
+    const ws = new WebSocket(`ws://localhost:${server.port}/ws`);
+    const opened = Promise.withResolvers<void>();
+    ws.addEventListener("open", () => opened.resolve());
+    await opened.promise;
+    const res = await fetch(url, { headers: { authorization: "Bearer secret" } });
+    expect(res.status).toBe(200);
+    const status = RuntimeStatusSchema.parse(await res.json());
+    expect(status.clients.browserSockets).toBe(1);
+    expect(status.workspace.revision).toBeGreaterThanOrEqual(0);
+    ws.close();
   });
 
   test("GET /api/embeddings/{key}/status returns not_started", async () => {

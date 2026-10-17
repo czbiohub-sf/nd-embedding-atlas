@@ -5,6 +5,7 @@
  *
  *   ndea [paths...]                        view (the root action)
  *   ndea view [paths...]                   open Zarr stores or a YAML project in the dashboard
+ *   ndea status [--json]                   live status screen of a running server
  *   ndea workspace get|patch|result|query  talk to a running server; prints JSON
  *   ndea mcp install|check|uninstall       connect coding agents to the server's MCP endpoint
  *   ndea self update|doctor|prune          manage this install
@@ -32,6 +33,7 @@ import { renderManPageMdoc } from "@crustjs/man";
 import mcpCommand from "./commands/mcp.ts";
 import doctorCommand from "./commands/self-doctor.ts";
 import pruneCommand from "./commands/self-prune.ts";
+import statusCommand from "./commands/status.ts";
 import updateCommand from "./commands/self-update.ts";
 import viewCommand, { runView, viewArgs, viewFlags } from "./commands/view.ts";
 import workspaceCommand from "./commands/workspace.ts";
@@ -59,7 +61,7 @@ export const app = new Crust("ndea", {
   .action((context) =>
     context.args.paths.length > 0 ? runView(context) : context.stdout(renderHelp(context.rootCommand)),
   )
-  .add(viewCommand, workspaceCommand, mcpCommand, selfCommand, manCommand)
+  .add(viewCommand, statusCommand, workspaceCommand, mcpCommand, selfCommand, manCommand)
   .extend(noColor(), version(undefined, { format: "plain" }), help(), completion(), didYouMean(), errors);
 
 if (import.meta.main) await app.execute();

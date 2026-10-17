@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { createMcpEndpoint } from "../mcp.ts";
 import { createServerSession, type DatasetMountConfig } from "../state.ts";
 import { DatasetQuerySession } from "../store.ts";
-import { WorkspaceDocumentStore } from "../workspace.ts";
+import { WorkspaceHistorySchema } from "@ndea/protocol";
 
 const TOKEN = "test-token";
 let dir: string;
@@ -22,7 +22,7 @@ afterEach(async () => {
   if (dir) await rm(dir, { recursive: true, force: true });
 });
 
-async function connect() {
+async function connect(agent?: string) {
   dir = await mkdtemp(join(tmpdir(), "ndea-mcp-"));
   store = await DatasetQuerySession.fromInit(async (conn: DuckDBConnection) => {
     await conn.run(
@@ -33,10 +33,8 @@ async function connect() {
       ) AS t(__row_index__, obs_name, _dataset, condition, area)`,
     );
   });
-  const workspace = WorkspaceDocumentStore.empty(join(dir, "workspace.json"));
   const state = createServerSession({
     store,
-    workspace,
     observationSetsDirectory: join(dir, "sets"),
     datasets: new Map<string, DatasetMountConfig>([
       ["plate_a", { path: "/a.zarr" }],
@@ -49,12 +47,13 @@ async function connect() {
       const request = new Request(url, init);
       request.headers.set("host", "localhost:5055");
       request.headers.set("authorization", `Bearer ${TOKEN}`);
+      if (agent !== undefined) request.headers.set("x-ndea-agent", agent);
       return endpoint(request);
     },
   });
   client = new Client({ name: "test", version: "1.0.0" }, { versionNegotiation: { mode: "auto" } });
   await client.connect(transport);
-  return { client, endpoint, workspace };
+  return { client, endpoint, workspace: state.workspace };
 }
 
 async function call(name: string, args: Record<string, unknown>) {
@@ -98,11 +97,13 @@ describe("ndea MCP", () => {
     expect(tools).toEqual([
       "create_observation_set",
       "edit_dashboard",
+      "get_history",
       "get_result",
       "get_workspace",
       "list_columns",
       "list_components",
       "patch_workspace",
+      "restore_revision",
     ]);
 
     const components = (await call("list_components", {})).body.components as Record<string, any>[];
@@ -139,7 +140,7 @@ describe("ndea MCP", () => {
     expect((await call("get_result", { data: "infected" })).body).toMatchObject({ count: 2 });
 
     const read = (await call("get_workspace", {})).body;
-    expect(read.revision).toBe(workspace.snapshot().revision);
+    expect(read.revision).toBe(workspace.get().revision);
     expect(read.document.state.filter.A).toEqual({ agent: { area: { op: "gt", column: "area", value: 40 } } });
 
     expect((await call("create_observation_set", { element: "count-1" })).body.count).toBe(1);
@@ -147,7 +148,7 @@ describe("ndea MCP", () => {
 
   test("invalid edits are refused whole, with a pointer to fix, and change nothing", async () => {
     const { workspace } = await connect();
-    const before = workspace.snapshot().revision;
+    const before = workspace.get().revision;
 
     const missing = await call("edit_dashboard", {
       ops: [
@@ -179,6 +180,29 @@ describe("ndea MCP", () => {
     const stale = await call("edit_dashboard", { revision: before + 1, ops: [{ op: "add", type: "count" }] });
     expect(stale.body).toMatchObject({ revision: before });
 
-    expect(workspace.snapshot().revision).toBe(before);
+    expect(workspace.get().revision).toBe(before);
+  });
+
+  test("writes are stamped mcp with the X-Ndea-Agent name; history and restore tools", async () => {
+    const { workspace } = await connect("omp");
+    await call("edit_dashboard", { ops: [{ op: "set_data", name: "a", source: { sql: "area > 20" } }] });
+    await call("patch_workspace", { revision: 1, ops: [{ op: "remove", path: "/data/a" }] });
+    const history = WorkspaceHistorySchema.parse((await call("get_history", { limit: 5 })).body).revisions;
+    expect(history.map((r) => [r.revision, r.actor])).toEqual([
+      [2, { kind: "mcp", agent: "omp" }],
+      [1, { kind: "mcp", agent: "omp" }],
+    ]);
+
+    expect((await call("restore_revision", { revision: 9 })).isError).toBe(true);
+    expect((await call("restore_revision", { revision: 1, revision_base: 0 })).body).toMatchObject({ revision: 2 });
+    expect((await call("restore_revision", { revision: 1 })).body).toEqual({ revision: 3, restoredFrom: 1 });
+    expect(workspace.get().document).toEqual(workspace.at(1)!.document);
+    expect(workspace.history({ limit: 1 })[0]).toMatchObject({ restoredFrom: 1, actor: { kind: "mcp", agent: "omp" } });
+  });
+
+  test("a malformed X-Ndea-Agent is dropped, leaving the actor mcp", async () => {
+    const { workspace } = await connect("not an agent!");
+    await call("edit_dashboard", { ops: [{ op: "set_data", name: "a", source: { sql: "area > 20" } }] });
+    expect(workspace.history()[0].actor).toEqual({ kind: "mcp" });
   });
 });

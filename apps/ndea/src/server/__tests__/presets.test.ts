@@ -7,7 +7,7 @@ import { COMPONENTS, elementScope } from "../../frontend/core/workspace/dashboar
 import { emptyWorkspaceDocument } from "../../frontend/core/workspace/document.ts";
 import type { WorkspaceDocument } from "../../frontend/core/workspace/types.ts";
 import { loadPreset } from "../presets.ts";
-import { WorkspaceDocumentStore, WorkspaceFileError } from "../workspace.ts";
+import { Workspace, WorkspaceFileError } from "../workspace.ts";
 
 let dir: string | undefined;
 afterEach(async () => {
@@ -19,10 +19,10 @@ describe("presets are workspace documents", () => {
   test("a missing workspace file is written from annotate: five views linked on scope A", async () => {
     dir = await mkdtemp(join(tmpdir(), "ndea-preset-"));
     const path = join(dir, "workspace.json");
-    const store = await WorkspaceDocumentStore.open(path, () => loadPreset("annotate"));
+    const workspace = await Workspace.open(path, () => loadPreset("annotate"), { validate: async () => [] });
     expect(await Bun.file(path).json()).toMatchObject({ format: "ndea.workspace", version: 2, revision: 1 });
 
-    const document = store.snapshot().document as WorkspaceDocument;
+    const document = workspace.get().document as WorkspaceDocument;
     const views = Object.values(document.spec.elements).filter((element) => COMPONENTS[element.type].view);
     const bound = (type: "focus" | "filter") =>
       views

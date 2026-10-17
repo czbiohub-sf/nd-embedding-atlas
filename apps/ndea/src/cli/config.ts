@@ -41,6 +41,8 @@ export interface LaunchConfig {
   noOpen: boolean;
   /** Serve the frontend source through Bun's dev server (HMR) instead of the built bundle. */
   dev: boolean;
+  /** Show the live status screen instead of log output once ready (interactive terminals only). */
+  tui?: boolean;
   preset?: string;
   /** Absolute path of the workspace document file. */
   workspace: string;
@@ -51,6 +53,7 @@ export interface LaunchOverrides {
   host?: string;
   noOpen: boolean;
   dev: boolean;
+  tui?: boolean;
   obsColumns?: string[];
   preset?: string;
   /** Workspace file; defaults to `defaultWorkspacePath(datasets)`. */
@@ -121,6 +124,7 @@ export function resolveLaunchConfig(project: ParsedProjectConfig, overrides: Lau
     host: overrides.host ?? project.settings?.host ?? "127.0.0.1",
     noOpen: overrides.noOpen,
     dev: overrides.dev,
+    tui: overrides.tui,
     preset: overrides.preset ?? project.preset,
     workspace: overrides.workspace
       ? resolve(overrides.workspace)

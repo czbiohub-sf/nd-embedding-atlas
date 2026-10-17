@@ -1,9 +1,11 @@
 /**
  * The running `ndea view` a client command talks to. `--host`/`--port` pick
  * it, falling back to `NDEA_HOST`/`NDEA_PORT`, then 127.0.0.1:5055.
- * `request` prints the JSON response to stdout; a server-side failure puts
- * the response body on stderr verbatim, and both it and an unreachable
- * server exit 1, so agents can branch on the exit code.
+ * `request` prints the JSON response to stdout; `json` returns it parsed. A
+ * server-side failure puts the response body on stderr verbatim, and both it
+ * and an unreachable server exit 1, so agents can branch on the exit code.
+ * Every request carries `X-Ndea-Client: cli`, so workspace history stamps
+ * CLI writes as `cli`.
  */
 
 import { defineContext, defineFlag } from "@crustjs/core";
@@ -30,30 +32,33 @@ export const server = defineContext("server")
   )
   .setup(({ flags, stdout, signal }) => {
     const origin = `http://${flags.host}:${flags.port}`;
+    const send = async (path: string, init?: { method: string; body: unknown }): Promise<string> => {
+      let res: Response;
+      try {
+        res = await fetch(`${origin}${path}`, {
+          signal,
+          headers: { "x-ndea-client": "cli", ...(init && { "content-type": "application/json" }) },
+          ...(init && { method: init.method, body: JSON.stringify(init.body) }),
+        });
+      } catch (err) {
+        if (signal.aborted) throw err;
+        throw new Error(
+          `no ndea server at ${origin} (${err instanceof Error ? err.message : String(err)})\n` +
+            "  start one with `ndea view <data>`, or pass --host/--port (NDEA_HOST/NDEA_PORT)",
+          { cause: err },
+        );
+      }
+      const body = await res.text();
+      if (!res.ok) throw new PlainError(body);
+      return body;
+    };
     return {
       origin,
       async request(path: string, init?: { method: string; body: unknown }): Promise<void> {
-        let res: Response;
-        try {
-          res = await fetch(`${origin}${path}`, {
-            signal,
-            ...(init && {
-              method: init.method,
-              headers: { "content-type": "application/json" },
-              body: JSON.stringify(init.body),
-            }),
-          });
-        } catch (err) {
-          if (signal.aborted) throw err;
-          throw new Error(
-            `no ndea server at ${origin} (${err instanceof Error ? err.message : String(err)})\n` +
-              "  start one with `ndea view <data>`, or pass --host/--port (NDEA_HOST/NDEA_PORT)",
-            { cause: err },
-          );
-        }
-        const body = await res.text();
-        if (!res.ok) throw new PlainError(body);
-        stdout(body);
+        stdout(await send(path, init));
+      },
+      async json<T>(path: string, schema: z.ZodType<T>): Promise<T> {
+        return schema.parse(JSON.parse(await send(path)));
       },
     };
   });

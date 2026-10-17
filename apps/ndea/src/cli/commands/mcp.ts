@@ -104,14 +104,15 @@ const installCommand = defineCommand(
 
         // `ndea view` binds IPv4 loopback; spelling it out avoids `localhost` resolving to ::1 first.
         const endpoint = `http://127.0.0.1:${flags.port}/mcp`;
-        const config = {
-          type: "http" as const,
-          url: endpoint,
-          headers: { Authorization: `Bearer ${await loadMcpToken()}` },
-        };
+        const authorization = `Bearer ${await loadMcpToken()}`;
         const failed: string[] = [];
         for (const agent of targets) {
-          const result = upsertServer(agent, SERVER_NAME, config);
+          // X-Ndea-Agent names the agent in workspace history (provenance, not access).
+          const result = upsertServer(agent, SERVER_NAME, {
+            type: "http",
+            url: endpoint,
+            headers: { Authorization: authorization, "X-Ndea-Agent": agent },
+          });
           const name = pad(agents[agent].displayName);
           if (result.success) stdout(`  ${ok(`${name} ${label(result.path)}`)}`);
           else {

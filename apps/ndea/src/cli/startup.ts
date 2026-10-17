@@ -1,7 +1,8 @@
 /** Startup orchestration: open stores, prepare data, and launch the server. */
 
 import { DEFAULT_PRESET, loadPreset } from "../server/presets.ts";
-import { WorkspaceDocumentStore } from "../server/workspace.ts";
+import { workspaceIssues } from "../server/routes/workspace.ts";
+import { Workspace } from "../server/workspace.ts";
 import type { LaunchConfig } from "./config.ts";
 import { openDatasets, prepareDatasets } from "./startup/datasets.ts";
 import { createQuerySession } from "./startup/ingest.ts";
@@ -14,9 +15,10 @@ export async function startup(config: LaunchConfig): Promise<void> {
   printBanner();
 
   // Before ingest, so an invalid workspace file or preset fails in milliseconds, not minutes.
-  const workspace = await WorkspaceDocumentStore.open(config.workspace, () =>
-    loadPreset(config.preset ?? DEFAULT_PRESET),
-  );
+  const workspace = await Workspace.open(config.workspace, () => loadPreset(config.preset ?? DEFAULT_PRESET), {
+    // Writes arrive only once the server is up, after `session` exists.
+    validate: (document) => workspaceIssues(document, session.state),
+  });
   const loaded = await openDatasets(config.datasets);
   const datasets = prepareDatasets(loaded);
   const query = await createQuerySession(datasets);
@@ -33,5 +35,6 @@ export async function startup(config: LaunchConfig): Promise<void> {
   });
   printReady(config, loaded, datasets.availableObsmKeys, startTime);
   openBrowser(config);
-  registerGracefulShutdown(session.state, server);
+  // Not awaited: the `view` action ends at "Ready" so Crust releases Ctrl-C to the server.
+  void registerGracefulShutdown(config, session.state, server);
 }

@@ -17,6 +17,7 @@
 
 import type { ServerWebSocket } from "bun";
 import type { ServerSession } from "./state.ts";
+import { clients } from "./status.ts";
 
 /** Data attached to every ServerWebSocket via server.upgrade(req, { data }). */
 export interface ServerSocketContext {
@@ -40,11 +41,13 @@ const socketSubs = new WeakMap<WS, Map<number, Disposer>>();
 
 export function handleWsOpen(ws: WS): void {
   socketSubs.set(ws, new Map());
+  clients.browserSockets++;
 }
 
 export function handleWsClose(ws: WS): void {
   const subs = socketSubs.get(ws);
   if (!subs) return;
+  clients.browserSockets--;
   for (const dispose of subs.values()) dispose();
   subs.clear();
   socketSubs.delete(ws);
@@ -129,8 +132,8 @@ const HANDLERS: Record<string, Handler> = {
 
 // ─── workspace/watch ────────────────────────────────────────────────────────
 
-/** Push every accepted workspace revision with its ops until unsubscribed. */
+/** Push every committed workspace revision (actor, ops, time, echo token) until unsubscribed. */
 function handleWorkspaceWatchWs(ws: WS, id: number): void {
-  const dispose = ws.data.state.workspace.watch((change) => sendData(ws, id, { ...change }));
+  const dispose = ws.data.state.workspace.watch((change) => sendData(ws, id, change));
   socketSubs.get(ws)?.set(id, dispose);
 }

@@ -2,6 +2,9 @@
 
 ### 🚀 Features
 
+- _(cli)_ `ndea view` in a terminal shows a live status screen (datasets, embeddings, workspace revision and last change, browser tabs, MCP agents); `o` opens the dashboard, `q` stops the server, `--no-tui` keeps log output. `ndea status [--json]` shows the same for a running server via the token-guarded `GET /api/status`.
+- _(frontend)_ History panel (status bar → "last change"): every workspace revision with its actor (`browser`, `cli`, `system`, or the agent name such as `omp`), age, op count, and "restored #N"; selecting one compares it with the current dashboard element by element (added, removed, type, props, layout, data sources, state cells), and Restore commits it as a new revision. The status bar shows the last change's actor and age and highlights when an agent or another tab writes.
+- _(server)_ Workspace history: every accepted write is recorded in `<workspace>.history.sqlite` beside the workspace file with its actor (`browser`, `cli`, `mcp` plus the `X-Ndea-Agent` name, or `system` for the seed), ops, and time, committed together with the file. `GET /api/workspace/history`, `GET /api/workspace/revisions/:n`, and `POST /api/workspace/restore` (an earlier revision committed again as a new one); `workspace/watch` now pushes the full revision record. `ndea workspace history` and `ndea workspace restore <n>`; MCP tools `get_history` and `restore_revision`. `ndea mcp install` writes an `X-Ndea-Agent` header per agent.
 - _(axial)_ Vendor axial I/O library for zarr/AnnData/MuData reading
 - _(server)_ DuckDB EmbeddingStore + Mosaic query protocol
 - _(cli)_ CLI entry point with YAML config and startup orchestration

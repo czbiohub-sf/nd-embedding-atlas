@@ -3,18 +3,22 @@
  *
  *   ndea workspace get                            → { revision, document }
  *   ndea workspace patch --revision N --ops '[…]' → { revision } (RFC 6902 ops)
+ *   ndea workspace history [--limit N]            → { revisions } newest first: actor, ops, time
+ *   ndea workspace restore <revision> [--base N]  → { revision } (the earlier document as a new revision)
  *   ndea workspace result <element>               → { revision, predicate, count } the element shows
  *   ndea workspace result --data <name>           → { revision, predicate, count } the data source selects
  *   ndea workspace query --where '{…}'            → { sql, count, rows, truncated } the clause selects
  *
- * `patch` goes through the same validated path as the browser: a stale
- * revision exits 1 with the current snapshot; an invalid result exits 1 with
- * RFC 9457 problem details whose `errors[].pointer` locate each issue.
+ * `patch` and `restore` go through the same validated path as the browser,
+ * stamped `cli` in history: a stale revision exits 1 with the current
+ * snapshot; an invalid result exits 1 with RFC 9457 problem details whose
+ * `errors[].pointer` locate each issue.
  * `query` compiles its clause with the same compiler as data sources and
  * filter scopes, so both select identical observations.
  */
 
 import { defineCommand } from "@crustjs/core";
+import { WorkspaceSnapshotSchema } from "@ndea/protocol";
 import { z } from "zod";
 import { server } from "../lib/server.ts";
 
@@ -54,6 +58,46 @@ const patchCommand = defineCommand(
         ).request("/api/workspace", {
           method: "PATCH",
           body: { baseRevision: flags.revision, ops: flags.ops },
+        });
+      }),
+);
+
+const historyCommand = defineCommand(
+  "history",
+  { description: "Print recent workspace revisions, newest first, with who wrote each" },
+  (command) =>
+    command
+      .use(server)
+      .flags({
+        name: "limit",
+        type: "string",
+        schema: z.coerce.number().int().min(1).max(500).default(50),
+        description: "Revisions to list (default: 50)",
+      })
+      .action(async ({ ctx, flags }) => {
+        await (await ctx.server).request(`/api/workspace/history?limit=${flags.limit}`);
+      }),
+);
+
+const restoreCommand = defineCommand(
+  "restore",
+  { description: "Bring an earlier revision's document back as a new revision" },
+  (command) =>
+    command
+      .use(server)
+      .args({ name: "revision", type: "number", required: true, description: "Revision to restore (see history)" })
+      .flags({
+        name: "base",
+        type: "string",
+        schema: z.coerce.number().int().nonnegative().optional(),
+        description: "Apply only if the workspace is still at this revision (default: the current one)",
+      })
+      .action(async ({ ctx, args, flags }) => {
+        const client = await ctx.server;
+        const base = flags.base ?? (await client.json("/api/workspace", WorkspaceSnapshotSchema)).revision;
+        await client.request("/api/workspace/restore", {
+          method: "POST",
+          body: { revision: args.revision, baseRevision: base },
         });
       }),
 );
@@ -111,5 +155,8 @@ const queryCommand = defineCommand(
 export default defineCommand(
   "workspace",
   { description: "Read, edit, and query the running server's workspace document" },
-  (command) => command.provide(server()).add(getCommand, patchCommand, resultCommand, queryCommand),
+  (command) =>
+    command
+      .provide(server())
+      .add(getCommand, patchCommand, historyCommand, restoreCommand, resultCommand, queryCommand),
 );

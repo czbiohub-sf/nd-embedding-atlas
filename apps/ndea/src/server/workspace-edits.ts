@@ -2,7 +2,7 @@
  * Named dashboard edits for agents. Each op runs against a draft of the
  * document through the same pure dashboard operations the browser uses; the
  * caller diffs the draft against the base into one RFC 6902 patch, so every
- * edit still meets the one validated write path (`applyWorkspacePatch`). An op
+ * edit still meets the one validated write path (`Workspace.patch`). An op
  * that cannot apply throws `WorkspaceEditError` naming it; everything the
  * document schema checks (component props, data references, bind rules) is
  * left to that write path.

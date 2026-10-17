@@ -61,3 +61,13 @@ export function printShutdownHint(): void {
 export function printShuttingDown(): void {
   console.log(`\n  ${label("Shutting down...")}`);
 }
+
+export function openUrl(href: string): void {
+  try {
+    if (process.platform === "darwin") Bun.spawn(["open", href]);
+    else if (process.platform === "linux") Bun.spawn(["xdg-open", href]);
+    else if (process.platform === "win32") Bun.spawn(["cmd", "/c", "start", "", href]);
+  } catch {
+    // Browser opening is non-critical; the URL is on screen or printed.
+  }
+}
