@@ -85,8 +85,6 @@ async function serveFixture(): Promise<void> {
 
   const state = createServerSession({
     store,
-    obsColumns,
-    port,
     availableObsmKeys: [embeddingKey],
     obsmLoaders: new Map([[embeddingKey, embeddingLoader]]),
   });

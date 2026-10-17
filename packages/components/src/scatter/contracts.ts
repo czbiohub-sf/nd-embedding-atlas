@@ -53,7 +53,6 @@ export interface CategoryMapping {
 }
 
 export type ColorMode = "categorical" | "continuous";
-export type ColumnType = "string" | "number" | "boolean" | "other";
 
 export interface ColormapList {
   categorical: string[];

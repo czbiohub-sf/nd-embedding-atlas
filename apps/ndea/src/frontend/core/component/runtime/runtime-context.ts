@@ -6,6 +6,6 @@ export const ComponentRuntimeContext = createContext<ComponentRuntimeManager | n
 
 export function useComponentRuntimes(): ComponentRuntimeManager {
   const manager = useContext(ComponentRuntimeContext);
-  if (!manager) throw new Error("useComponentRuntimes outside ComponentRuntimeProvider");
+  if (!manager) throw new Error("useComponentRuntimes outside WorkspaceProvider");
   return manager;
 }

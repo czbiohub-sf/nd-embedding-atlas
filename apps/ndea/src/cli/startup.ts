@@ -22,7 +22,7 @@ export async function startup(config: LaunchConfig): Promise<void> {
   const query = await createQuerySession(datasets);
   const session = await prepareServerSession(config, datasets, query, workspace);
 
-  const metadata = buildDatasetMetadata(datasets, session);
+  const metadata = buildDatasetMetadata(config, datasets, session);
   const server = await startServer(config, session.state, metadata);
 
   // A failure past this point would otherwise leave the server holding the process open.

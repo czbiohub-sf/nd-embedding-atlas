@@ -18,11 +18,11 @@ import { createFragmentShader, createVertexShader } from "./shaders";
 
 export interface CreateScatterplotOpts {
   /** Aborted on host teardown: threaded into device acquire so a fast
-   *  add/delete cannot strand a device mid-init (PLUGIN-ARCHITECTURE §7.2). */
+   *  add/delete cannot strand a device mid-init. */
   signal?: AbortSignal;
   /**
-   * Pre-acquired device lease from `host.acquireDeviceLease()` (PLUGIN-ARCHITECTURE
-   * §7.1). When supplied, this instance uses the lease's already-leased device and
+   * Pre-acquired device lease from `host.acquireDeviceLease()`. This instance
+   * uses the lease's already-leased device and
    * does NOT acquire/release the shared refcount itself: the lease owner
    * (`host.dispose`) controls the device lifetime, so the device survives data
    * swaps (positionKey re-init) instead of churning. Typed structurally to avoid a
@@ -640,8 +640,8 @@ export async function createScatterplot(
       interaction.animateToViewState(state, durationMs);
     },
     destroy() {
-      // Deterministic disposal order (PLUGIN-ARCHITECTURE §7.3): raw-device
-      // owners free their own resources → context.unconfigure (§7.4) →
+      // Deterministic disposal order: raw-device owners free their own
+      // resources → context.unconfigure →
       // root.destroy (tgpu-owned) → release the device lease. A dev-only
       // validation error scope makes "no leaks" verified, not asserted.
       const auditLeaks = process.env.NODE_ENV !== "production";
@@ -670,9 +670,8 @@ export async function createScatterplot(
             // Device may already be released by the last lease holder: ignore.
           });
       }
-      // Only the self-acquire path releases here. A host-leased device is
-      // released by the lease owner (host.dispose), so it persists across this
-      // instance's data swaps (PLUGIN-ARCHITECTURE §7.1).
+      // The lease owner (host.dispose) releases the device, so it persists
+      // across this instance's data swaps.
     },
   };
 }

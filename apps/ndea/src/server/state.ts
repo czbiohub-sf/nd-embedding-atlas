@@ -102,6 +102,7 @@ export interface DatasetMountConfig {
 
 /** Static per-session metadata for the /data endpoints. */
 export interface DatasetSessionMetadata {
+  /** Obs columns clients list (detected, or `--obs-columns`); metadata appends annotation columns. */
   obsColumnNames: string[];
   embeddingProps: Record<string, unknown>;
   hasPlate: boolean;
@@ -118,8 +119,6 @@ export interface ServerSession {
   store: DatasetQuerySession;
   datasets: Map<string, DatasetMountConfig>;
   spatial: SpatialColumns | null;
-  obsColumns: string[];
-  port: number;
   availableObsmKeys: string[];
   loadingTasks: Map<string, Promise<void>>;
   loadErrors: Map<string, string>;
@@ -160,8 +159,6 @@ export function createServerSession({
     store,
     datasets: new Map(),
     spatial: null,
-    obsColumns: [],
-    port: 0,
     availableObsmKeys: [],
     loadingTasks: new Map(),
     loadErrors: new Map(),

@@ -14,7 +14,6 @@ export {
   AnnotationExportBodySchema,
   CommitAnnotationsBodySchema,
   CategorizeBodySchema,
-  ConfigResponseSchema,
   CropBodySchema,
   ExportBodySchema,
   MetadataSchema,
@@ -27,7 +26,6 @@ export type {
   AnnotationDtype,
   CategorizeResponse,
   CategoryLegendItem,
-  ConfigResponse,
   ObsmEntry,
   TrajectoryFrame,
 } from "@ndea/protocol";

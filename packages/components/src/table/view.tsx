@@ -1,5 +1,5 @@
 /**
- * Table plugin view (PLUGIN-ARCHITECTURE §10.4).
+ * Table component body.
  *
  * Sources coordinator/table/metadata from `host.data`, the filter from
  * `host.filter.selection`, routes row-click through `host.focus.set`, and

@@ -35,6 +35,12 @@
 - _(frontend)_ Clear useVarColumn poll interval on unmount
 - _(frontend)_ Abort in-flight embedding load on unmount
 - _(build)_ Keep embedded frontend and DuckDB source manifests as stable development stubs
+- _(server)_ `PATCH /api/workspace` and MCP writes now reject a document whose typed clauses (a data source's `where`, a `state.filter` clause) name a column the dataset lacks, with a JSON-pointer issue per clause (e.g. `/data/bad/where/column`); raw `data.sql` is still checked only when it runs. Startup logs the same issues for the workspace file instead of refusing it.
+- _(server)_ `/data/metadata.json` `obs_columns` now lists annotation columns restored from a cached ingest, and drops configured `--obs-columns` names the dataset does not have
+
+### 🛡️ Security
+
+- _(server)_ `/api/categorize`, `/api/scatter-categories`, `/api/scatter-continuous-values`, and `/api/trajectory` resolve request column names against the dataset's column catalog (400 `Unknown column` otherwise) and quote every identifier with `quoteIdent`; a name like `x" ; DROP TABLE obs_base; --` could previously break out of the bare `"${column}"` quoting
 
 ### 🚜 Refactor
 
@@ -73,6 +79,8 @@
 - _(server)_ Delete the plugin system: discovery, manifests, `/api/plugins/bootstrap` and `/plugins/*` assets, `ndea plugin`, YAML `plugin_paths`, and the SDK `PluginAPI`/`PluginFactory`/manifest schemas and `SDK_VERSION`
 - _(server)_ Delete the `embeddings/load|status`, `var-column/load|status`, and `export/start|status` WebSocket methods; the HTTP routes remain and `/ws` serves only `workspace/watch`
 - _(server)_ Delete the `/mosaic` WebSocket adapter; Mosaic 0.33 dropped `socketConnector`, so the browser `Coordinator` uses `restConnector` against `/data/query`
+- _(server)_ `DatasetQuerySession.columns()` is the one column catalog (name → `{ sqlType, kind }`, refreshed on every `dataset` VIEW rebuild); MCP `list_columns` reads it and adds each column's `kind`. `ServerSession.obsColumns`/`port`, `datasetColumnExists`, `invalidateSchemaCache`, and external `_rebuildView` calls are gone; `/api/categorize` adds its index column through `addObsIndexColumn`
+- [**breaking**] _(server)_ Delete `GET /api/config` and the protocol `ConfigResponseSchema`; nothing called it, and `/data/metadata.json` carries the same facts
 
 ### ⚙️ Miscellaneous Tasks
 

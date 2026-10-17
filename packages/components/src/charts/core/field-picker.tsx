@@ -7,7 +7,7 @@
  * heuristic only if the list proves noisy.
  */
 
-import type { ColumnType } from "./contracts";
+import type { ColumnType } from "../../query/column-types";
 
 const SKIP = new Set(["__row_index__"]);
 

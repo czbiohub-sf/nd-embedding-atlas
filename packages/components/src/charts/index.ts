@@ -5,7 +5,6 @@ export type {
   ChartQueryOptions,
   ChartQueryResult,
   ChartServices,
-  ColumnType,
   ColumnTypes,
   UseChartColumnTypes,
   UseChartQuery,

@@ -24,6 +24,15 @@ export interface RegisteredEmbedding {
 
 type RowData = Record<string, unknown>;
 
+/** Where a `dataset` VIEW column comes from. */
+export type DatasetColumnKind = "obs" | "embedding" | "var" | "annotation";
+
+/** One column of the `dataset` VIEW, as DuckDB describes it. */
+export interface DatasetColumn {
+  sqlType: string;
+  kind: DatasetColumnKind;
+}
+
 // ─── Column prefix derivation ────────────────────────────────────────────────
 
 /**
@@ -191,8 +200,8 @@ export class DatasetQuerySession {
   private _hidden: Set<string>;
   /** Whether nanoarrow extension is loaded (for Arrow IPC output). */
   private _nanoarrowLoaded: boolean = false;
-  /** Cached: does obs_base carry the multi-dataset `_dataset` column? */
-  private _hasDatasetColumn: boolean | null = null;
+  /** The `dataset` VIEW's columns; replaced on every view rebuild. */
+  private _columns: ReadonlyMap<string, DatasetColumn> = new Map();
 
   private constructor(db: DuckDBInstance, conn: DuckDBConnection, hidden?: Set<string>) {
     this.db = db;
@@ -310,7 +319,7 @@ export class DatasetQuerySession {
     for (const t of tables) {
       if (!t.startsWith("var_") || t === "var_base") continue;
       const cols = (
-        await conn.runAndReadAll(`SELECT column_name FROM (DESCRIBE "${t}")`)
+        await conn.runAndReadAll(`SELECT column_name FROM (DESCRIBE ${quoteIdent(t)})`)
       ).getColumnsJS()[0] as string[];
       const colName = cols.find((c) => c !== "__row_index__");
       if (colName) store._varCols.set(colName, { table: t, colName });
@@ -333,7 +342,7 @@ export class DatasetQuerySession {
     for (const t of tables) {
       if (!t.startsWith("ann_")) continue;
       const [cols, types] = (
-        await conn.runAndReadAll(`SELECT column_name, column_type FROM (DESCRIBE "${t}")`)
+        await conn.runAndReadAll(`SELECT column_name, column_type FROM (DESCRIBE ${quoteIdent(t)})`)
       ).getColumnsJS() as [string[], string[]];
       const idx = cols.findIndex((c) => c !== "__row_index__" && c !== "dataset_key" && c !== "obs_name");
       if (idx === -1) continue;
@@ -426,8 +435,8 @@ export class DatasetQuerySession {
     const colDefs: string[] = ["__row_index__ INTEGER"];
     const colNames: string[] = ["__row_index__"];
     for (let d = 0; d < nDims; d++) {
-      colDefs.push(`"${prefix}_${d}" FLOAT`);
-      colNames.push(`"${prefix}_${d}"`);
+      colDefs.push(`${quoteIdent(`${prefix}_${d}`)} FLOAT`);
+      colNames.push(quoteIdent(`${prefix}_${d}`));
     }
 
     // DROP first so a failed prior load (e.g. partial insert) doesn't
@@ -477,7 +486,7 @@ export class DatasetQuerySession {
     const safe = colName.replace(/[^a-zA-Z0-9_]/g, "_");
     const tableName = `var_${safe}`;
 
-    await this.conn.run(`CREATE TABLE ${tableName} (__row_index__ INTEGER, "${colName}" DOUBLE)`);
+    await this.conn.run(`CREATE TABLE ${tableName} (__row_index__ INTEGER, ${quoteIdent(colName)} DOUBLE)`);
 
     const batchSize = 1000;
     for (let start = 0; start < values.length; start += batchSize) {
@@ -487,7 +496,7 @@ export class DatasetQuerySession {
         const v = values[i];
         rows.push(`(${i}, ${Number.isFinite(v) ? v : "NULL"})`);
       }
-      await this.conn.run(`INSERT INTO ${tableName} (__row_index__, "${colName}") VALUES ${rows.join(", ")}`);
+      await this.conn.run(`INSERT INTO ${tableName} (__row_index__, ${quoteIdent(colName)}) VALUES ${rows.join(", ")}`);
     }
 
     this._varCols.set(colName, { table: tableName, colName });
@@ -508,13 +517,22 @@ export class DatasetQuerySession {
   }
 
   /**
-   * True if `name` is already a column on the dataset VIEW (obs_base column,
-   * embedding, var column, or another annotation). Used to reject annotation
-   * names that would be silently shadowed/auto-renamed by `_rebuildView`.
+   * The `dataset` VIEW's columns (obs_base minus hidden, embeddings, var and
+   * annotation joins), in VIEW order. The one answer to "is this a column?":
+   * resolve every request- or document-supplied column name here before it
+   * reaches SQL.
    */
-  async datasetColumnExists(name: string): Promise<boolean> {
-    const reader = await this.conn.runAndReadAll("SELECT column_name FROM (DESCRIBE dataset)");
-    return (reader.getColumnsJS()[0] as string[]).includes(name);
+  columns(): ReadonlyMap<string, DatasetColumn> {
+    return this._columns;
+  }
+
+  /**
+   * Add an `INTEGER DEFAULT 0` column to obs_base (a categorical index from
+   * /api/categorize) and rebuild the VIEW so it and `columns()` include it.
+   */
+  async addObsIndexColumn(name: string): Promise<void> {
+    await this.conn.run(`ALTER TABLE obs_base ADD COLUMN IF NOT EXISTS ${quoteIdent(name)} INTEGER DEFAULT 0`);
+    await this._rebuildView();
   }
 
   /**
@@ -662,52 +680,55 @@ export class DatasetQuerySession {
   }
 
   /**
-   * Recreate the `dataset` VIEW to include all registered embeddings.
+   * Recreate the `dataset` VIEW over obs_base plus every registered embedding,
+   * var, and annotation join, then refresh `columns()` from `DESCRIBE dataset`.
    *
    * Hidden columns are excluded from the VIEW but remain in obs_base
    * for direct queries (e.g. /api/obs).
    */
-  async _rebuildView(): Promise<void> {
+  private async _rebuildView(): Promise<void> {
     let select: string;
     if (this._hidden.size > 0) {
       const reader = await this.conn.runAndReadAll("SELECT column_name FROM (DESCRIBE obs_base)");
       const allCols = reader.getColumnsJS()[0] as string[];
       const visibleCols = allCols.filter((c) => !this._hidden.has(c));
-      select = visibleCols.map((c) => `obs_base."${c}"`).join(", ");
+      select = visibleCols.map((c) => `obs_base.${quoteIdent(c)}`).join(", ");
     } else {
       select = "obs_base.*";
     }
 
     const joins: string[] = [];
     const extraCols: string[] = [];
+    const kinds = new Map<string, DatasetColumnKind>();
+    const addExtra = (table: string, column: string, kind: DatasetColumnKind) => {
+      extraCols.push(`${table}.${quoteIdent(column)}`);
+      kinds.set(column, kind);
+    };
 
     for (const meta of this._loaded.values()) {
       joins.push(`LEFT JOIN ${meta.table} USING (__row_index__)`);
-      for (let i = 0; i < meta.nDims; i++) {
-        extraCols.push(`${meta.table}."${meta.prefix}_${i}"`);
-      }
+      for (let i = 0; i < meta.nDims; i++) addExtra(meta.table, `${meta.prefix}_${i}`, "embedding");
     }
 
     for (const varCol of this._varCols.values()) {
       joins.push(`LEFT JOIN ${varCol.table} USING (__row_index__)`);
-      extraCols.push(`${varCol.table}."${varCol.colName}"`);
+      addExtra(varCol.table, varCol.colName, "var");
     }
 
     for (const annCol of this._annotationCols.values()) {
       joins.push(`LEFT JOIN ${annCol.table} USING (__row_index__)`);
-      extraCols.push(`${annCol.table}.${quoteIdent(annCol.colName)}`);
+      addExtra(annCol.table, annCol.colName, "annotation");
     }
 
-    const extraSelect = extraCols.join(", ");
-    const joinClause = joins.join(" ");
+    const extraSelect = extraCols.length > 0 ? `, ${extraCols.join(", ")}` : "";
+    await this.conn.run(
+      `CREATE OR REPLACE VIEW dataset AS SELECT ${select}${extraSelect} FROM obs_base ${joins.join(" ")}`,
+    );
 
-    if (extraSelect) {
-      await this.conn.run(
-        `CREATE OR REPLACE VIEW dataset AS SELECT ${select}, ${extraSelect} FROM obs_base ${joinClause}`,
-      );
-    } else {
-      await this.conn.run(`CREATE OR REPLACE VIEW dataset AS SELECT ${select} FROM obs_base`);
-    }
+    const [names, types] = (
+      await this.conn.runAndReadAll("SELECT column_name, column_type FROM (DESCRIBE dataset)")
+    ).getColumnsJS() as [string[], string[]];
+    this._columns = new Map(names.map((name, i) => [name, { sqlType: types[i], kind: kinds.get(name) ?? "obs" }]));
   }
 
   /**
@@ -802,23 +823,9 @@ export class DatasetQuerySession {
     await this.conn.run(sql);
   }
 
-  /**
-   * True iff `obs_base` carries the `_dataset` column (multi-dataset stores).
-   * Cached because it never changes after init: `_rebuildView()` operates on
-   * `dataset` (the VIEW), not `obs_base`. Tests that mutate `obs_base` schema
-   * should call `invalidateSchemaCache()`.
-   */
-  async hasDatasetColumn(): Promise<boolean> {
-    if (this._hasDatasetColumn != null) return this._hasDatasetColumn;
-    const reader = await this.conn.runAndReadAll("SELECT column_name FROM (DESCRIBE obs_base)");
-    const cols = reader.getColumnsJS()[0] as string[];
-    this._hasDatasetColumn = cols.includes("_dataset");
-    return this._hasDatasetColumn;
-  }
-
-  /** Reset cached schema introspection (for tests / DDL paths that alter obs_base). */
-  invalidateSchemaCache(): void {
-    this._hasDatasetColumn = null;
+  /** True iff the VIEW carries the multi-dataset `_dataset` column. */
+  hasDatasetColumn(): boolean {
+    return this._columns.has("_dataset");
   }
 
   /** Set of table names in the `main` schema (cache-reopen introspection). */

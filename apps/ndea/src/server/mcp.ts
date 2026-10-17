@@ -19,7 +19,7 @@ import { COMPONENTS } from "../frontend/core/workspace/dashboard.ts";
 import type { WorkspaceDocument } from "../frontend/core/workspace/types.ts";
 import { applyWorkspacePatch, workspaceResult } from "./routes/workspace.ts";
 import type { ServerSession } from "./state.ts";
-import { obsmColumnPrefix, quoteIdent } from "./store.ts";
+import { quoteIdent } from "./store.ts";
 import { applyDashboardEdits, DashboardEditSchema, WorkspaceEditError, type DashboardEdit } from "./workspace-edits.ts";
 
 const INSTRUCTIONS = `ndea is a dashboard over single-cell and imaging observations (one row per observation).
@@ -187,7 +187,7 @@ export function createNdeaMcpServer(state: ServerSession): McpServer {
     {
       title: "List observation columns",
       description:
-        "List the observation columns data sources, clauses, and views can use, with their SQL types. Pass `column` to profile one column: distinct count, nulls, min and max, and its most frequent values with counts (for categorical or low-cardinality columns).",
+        "List the observation columns data sources, clauses, and views can use, with their SQL types and kind (obs, var, annotation). Pass `column` to profile one column: distinct count, nulls, min and max, and its most frequent values with counts (for categorical or low-cardinality columns).",
       inputSchema: z.object({
         column: z.string().optional(),
         limit: z.number().int().min(1).max(200).default(25).describe("most frequent values to return"),
@@ -195,11 +195,9 @@ export function createNdeaMcpServer(state: ServerSession): McpServer {
       annotations: READ,
     },
     async ({ column, limit }) => {
-      const prefixes = state.availableObsmKeys.map(obsmColumnPrefix);
-      const described = await state.store.querySingleJson("SELECT column_name, column_type FROM (DESCRIBE dataset)");
-      const columns = described
-        .map((row) => ({ name: String(row.column_name), type: String(row.column_type) }))
-        .filter(({ name }) => !name.startsWith("__") && !prefixes.some((prefix) => name.startsWith(prefix)));
+      const columns = [...state.store.columns()]
+        .filter(([name, { kind }]) => kind !== "embedding" && !name.startsWith("__"))
+        .map(([name, { sqlType, kind }]) => ({ name, type: sqlType, kind }));
       if (column === undefined) return ok({ columns });
       const match = columns.find((candidate) => candidate.name === column);
       if (!match) return rejected(`unknown column "${column}"`, { columns: columns.map((c) => c.name) });

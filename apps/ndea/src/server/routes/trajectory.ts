@@ -27,6 +27,7 @@
 import { getOrCreateObsmLoader, parseDimIndex } from "./scatter.ts";
 import { TrajectoryResponseSchema, type TrajectoryFrame } from "../protocol.ts";
 import type { ServerSession } from "../state.ts";
+import { quoteIdent } from "../store.ts";
 
 /**
  * Handle GET /api/trajectory
@@ -77,29 +78,27 @@ export async function handleTrajectory(url: URL, state: ServerSession, signal: A
     );
   }
 
-  // Category column must be in the known obs column set: prevents arbitrary
-  // identifier injection into the SELECT clause below.
-  if (categoryCol != null && !state.obsColumns.includes(categoryCol)) {
-    return Response.json({ error: `Unknown category_col "${categoryCol}". Must be in obs columns.` }, { status: 400 });
+  if (categoryCol != null && !state.store.columns().has(categoryCol)) {
+    return Response.json({ error: `Unknown category_col "${categoryCol}"` }, { status: 400 });
   }
 
   // ── Trajectory metadata (via DuckDB VIEW) ─────────────────────────────
   try {
-    const spatialX = state.spatial?.x ?? "x";
-    const spatialY = state.spatial?.y ?? "y";
+    const spatialX = quoteIdent(state.spatial?.x ?? "x");
+    const spatialY = quoteIdent(state.spatial?.y ?? "y");
     const escFov = fovName.replaceAll("'", "''");
     const datasetFilter = datasetKey ? ` AND _dataset = '${datasetKey.replaceAll("'", "''")}'` : "";
-    const catSelect = categoryCol != null ? `, "${categoryCol}" AS category` : "";
+    const catSelect = categoryCol != null ? `, ${quoteIdent(categoryCol)} AS category` : "";
 
     const sql =
       `SELECT __row_index__ AS "rowIndex", t, ` +
-      `"${spatialX}" AS spatial_x, "${spatialY}" AS spatial_y, ` +
+      `${spatialX} AS spatial_x, ${spatialY} AS spatial_y, ` +
       `_dataset AS "datasetKey"${catSelect} ` +
       `FROM dataset ` +
       `WHERE track_id = ${trackId} AND fov_name = '${escFov}'${datasetFilter} ` +
       `ORDER BY t ASC`;
 
-    const metadataRows = await state.store.queryJson(sql);
+    const metadataRows = await state.store.querySingleJson(sql);
 
     if (signal.aborted) return new Response("aborted", { status: 499 });
 

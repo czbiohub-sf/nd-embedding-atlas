@@ -106,6 +106,23 @@ export function filterScopeClauses(value: FilterScopeValue | undefined, elementI
   return Object.entries(value).flatMap(([source, facets]) => (source === elementId ? [] : Object.values(facets)));
 }
 
+/**
+ * `cell` with `source`'s `facet` set to `clause`; null clears it and a source
+ * left without facets is dropped. Clearing an absent facet returns `cell` itself.
+ */
+export function setFilterFacet(
+  cell: FilterScopeValue,
+  source: string,
+  facet: string,
+  clause: FilterClause | null,
+): FilterScopeValue {
+  const { [source]: facets = {}, ...others } = cell;
+  const { [facet]: previous, ...rest } = facets;
+  if (clause === null && previous === undefined) return cell;
+  const own = clause === null ? rest : { ...rest, [facet]: clause };
+  return Object.keys(own).length > 0 ? { ...others, [source]: own } : others;
+}
+
 /** AND of compiled clauses, or null when there are none. */
 export function filterClausesSql(clauses: readonly FilterClause[]): string | null {
   if (clauses.length === 0) return null;

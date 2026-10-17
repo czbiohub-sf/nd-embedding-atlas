@@ -23,7 +23,7 @@ export async function queryObservations(
   limit: number,
 ): Promise<ObservationPage> {
   const where = sql ? ` WHERE (${sql})` : "";
-  const multi = await state.store.hasDatasetColumn();
+  const multi = state.store.hasDatasetColumn();
   const singleKey = state.datasets.keys().next().value ?? "";
   // Single prepared statements: `sql` may come from a workspace document.
   const [count, rows] = await Promise.all([
@@ -60,7 +60,7 @@ export async function annotateObservations(
 ): Promise<number> {
   const entry = store.annotationColumns.get(column);
   if (!entry) throw new Error(`Unknown annotation column: ${column}`);
-  const datasetKey = (await store.hasDatasetColumn()) ? "ds._dataset" : "''";
+  const datasetKey = store.hasDatasetColumn() ? "ds._dataset" : "''";
   const literal = annValueLiteral(value, entry.dtype);
   const count = await countObservations(store, predicate);
   await store.executeSingle(
@@ -81,7 +81,7 @@ export async function exportObservations(
   const where = predicate ? ` WHERE (${predicate})` : "";
   let projection = "*";
   if (columns) {
-    const identities = (await store.hasDatasetColumn()) ? "obs_name, _dataset" : "obs_name";
+    const identities = store.hasDatasetColumn() ? "obs_name, _dataset" : "obs_name";
     projection = `${identities}, ${columns.map((column) => `CAST(${quoteIdent(column)} AS TEXT) AS ${quoteIdent(column)}`).join(", ")}`;
   }
   const escaped = outputPath.replaceAll("'", "''");

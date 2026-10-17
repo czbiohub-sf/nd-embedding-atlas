@@ -9,7 +9,7 @@ import type { LaunchConfig } from "../config.ts";
 import type { PreparedDatasets } from "./datasets.ts";
 import type { PreparedQuerySession } from "./ingest.ts";
 import type { WorkspaceDocumentStore } from "../../server/workspace.ts";
-import { observationSetIssues } from "../../server/observation-sets.ts";
+import { workspaceIssues } from "../../server/routes/workspace.ts";
 import type { WorkspaceDocument } from "../../frontend/core/workspace/types.ts";
 import { printAnnotationsRestored, printAnnotationsWarning } from "./output.ts";
 
@@ -44,9 +44,6 @@ async function restoreAnnotations(state: ServerSession): Promise<void> {
     await state.store.loadAnnotationsSidecar(state.annotationsSidecarPath);
     const restored = state.store.annotationColumns.size;
     if (restored === 0) return;
-    for (const name of state.store.annotationColumns.keys()) {
-      if (!state.obsColumns.includes(name)) state.obsColumns.push(name);
-    }
     printAnnotationsRestored(restored);
   } catch (error) {
     printAnnotationsWarning(error);
@@ -65,8 +62,6 @@ export async function prepareServerSession(
     store: query.store,
     datasets: datasets.datasetConfigs,
     spatial: datasets.spatial,
-    obsColumns: config.obsColumns ?? datasets.detectedObsColumns,
-    port: config.port,
     availableObsmKeys: datasets.availableObsmKeys,
     accessors: new Map(datasets.loaded.map(({ entry, adata }) => [entry.name, adata])),
     plateMounts,
@@ -76,7 +71,7 @@ export async function prepareServerSession(
   await restoreAnnotations(state);
   const document = workspace.snapshot().document as WorkspaceDocument | null;
   if (document) {
-    for (const issue of await observationSetIssues(document, state.observationSets)) {
+    for (const issue of await workspaceIssues(document, state)) {
       console.warn(`${issue.pointer}: ${issue.detail}`);
     }
   }
@@ -135,6 +130,7 @@ function firstPlateMetadata(mounts: readonly PlateMount[], metadata: PlateMetada
 }
 
 export function buildDatasetMetadata(
+  config: LaunchConfig,
   datasets: PreparedDatasets,
   session: PreparedServerSession,
 ): DatasetSessionMetadata {
@@ -144,7 +140,7 @@ export function buildDatasetMetadata(
     datasets.isMultiDataset,
   );
   return {
-    obsColumnNames: session.state.obsColumns,
+    obsColumnNames: config.obsColumns ?? datasets.detectedObsColumns,
     embeddingProps: {},
     hasPlate: session.state.plateMounts.length > 0,
     plateMeta,

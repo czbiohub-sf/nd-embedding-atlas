@@ -170,7 +170,7 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
     }
 
     // Abort any in-flight init and destroy the previous instance before
-    // re-initializing (PLUGIN-ARCHITECTURE §7.2: no stranded device on churn).
+    // re-initializing: no stranded device on churn.
     initAbortRef.current?.abort();
     gpuRef.current?.destroy();
     gpuRef.current = null;

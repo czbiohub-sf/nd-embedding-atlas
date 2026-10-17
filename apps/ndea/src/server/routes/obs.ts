@@ -8,6 +8,7 @@
  */
 
 import { cropFovColumn, parseBbox, type ServerSession } from "../state.ts";
+import { quoteIdent } from "../store.ts";
 
 /** Stringify a DuckDB scalar without risking [object Object]. */
 function scalarToString(value: unknown): string {
@@ -59,17 +60,17 @@ export async function handleObsBatch(req: Request, state: ServerSession): Promis
   try {
     const placeholders = rowIndices.join(", ");
     const isMulti = state.datasets.size > 1;
-    const hasTrack = state.obsColumns.includes("track_id");
+    const hasTrack = state.store.columns().has("track_id");
     const cropFov = cropFovColumn(sp);
-    const selectCols = [`"${sp.x}"`, `"${sp.y}"`];
-    if (cropFov) selectCols.push(`"${cropFov}"`);
-    if (sp.t) selectCols.push(`"${sp.t}"`);
-    if (sp.z) selectCols.push(`"${sp.z}"`);
-    if (hasTrack) selectCols.push(`"track_id"`);
+    const selectCols = [sp.x, sp.y];
+    if (cropFov) selectCols.push(cropFov);
+    if (sp.t) selectCols.push(sp.t);
+    if (sp.z) selectCols.push(sp.z);
+    if (hasTrack) selectCols.push("track_id");
     if (isMulti) selectCols.push("_dataset");
 
-    const rows = await state.store.queryJson(
-      `SELECT __row_index__, ${selectCols.join(", ")} FROM obs_base WHERE __row_index__ IN (${placeholders})`,
+    const rows = await state.store.querySingleJson(
+      `SELECT __row_index__, ${selectCols.map(quoteIdent).join(", ")} FROM obs_base WHERE __row_index__ IN (${placeholders})`,
     );
 
     const result: Record<
@@ -109,7 +110,7 @@ export async function handleObsInfo(rowIndex: number, state: ServerSession): Pro
   if (state.datasets.size > 1) {
     selectCols.push("_dataset");
   }
-  const hasTrack = state.obsColumns.includes("track_id");
+  const hasTrack = state.store.columns().has("track_id");
   if (cropFov) selectCols.push(cropFov);
   if (sp?.t) selectCols.push(sp.t);
   if (sp?.bbox) selectCols.push(sp.bbox);
@@ -123,8 +124,8 @@ export async function handleObsInfo(rowIndex: number, state: ServerSession): Pro
   }
 
   try {
-    const quoted = selectCols.map((c) => `"${c}"`).join(", ");
-    const rows = await state.store.queryJson(`SELECT ${quoted} FROM obs_base WHERE __row_index__ = ${rowIndex}`);
+    const quoted = selectCols.map(quoteIdent).join(", ");
+    const rows = await state.store.querySingleJson(`SELECT ${quoted} FROM obs_base WHERE __row_index__ = ${rowIndex}`);
 
     if (rows.length === 0) {
       return Response.json({ error: "Observation not found" }, { status: 404 });
@@ -185,19 +186,11 @@ export async function handleObsInfo(rowIndex: number, state: ServerSession): Pro
 /**
  * Handle GET /api/obs/{row_index}/detail
  *
- * Returns all visible obs columns for a single observation.
+ * Returns every obs_base column (hidden ones included) for a single observation.
  */
 export async function handleObsDetail(rowIndex: number, state: ServerSession): Promise<Response> {
   try {
-    // Get column names from obs_base, excluding hidden columns
-    const descRows = await state.store.queryJson("SELECT column_name FROM (DESCRIBE obs_base)");
-    const allCols = descRows.map((r) => String(r.column_name));
-    // Filter out hidden columns (the server session does not track hidden columns yet,
-    // but obs_base has all columns; the VIEW filters them)
-    const cols = allCols;
-    const quoted = cols.map((c) => `"${c}"`).join(", ");
-
-    const rows = await state.store.queryJson(`SELECT ${quoted} FROM obs_base WHERE __row_index__ = ${rowIndex}`);
+    const rows = await state.store.querySingleJson(`SELECT * FROM obs_base WHERE __row_index__ = ${rowIndex}`);
 
     if (rows.length === 0) {
       return Response.json({ error: "Observation not found" }, { status: 404 });
@@ -205,9 +198,8 @@ export async function handleObsDetail(rowIndex: number, state: ServerSession): P
 
     // Stringify all values for display
     const result: Record<string, string | null> = {};
-    const row = rows[0];
-    for (const col of cols) {
-      result[col] = row[col] != null ? scalarToString(row[col]) : null;
+    for (const [col, value] of Object.entries(rows[0])) {
+      result[col] = value != null ? scalarToString(value) : null;
     }
 
     return Response.json(result);

@@ -1,5 +1,5 @@
 /**
- * Image-viewer plugin view (PLUGIN-ARCHITECTURE §10.2).
+ * Image-viewer component body.
  *
  * Sources plate gate from host.data and injects app-owned services through the
  * package-local provider. Focus and viewer state stay instance-scoped.
@@ -13,7 +13,7 @@ import { capabilitiesOf } from "@ndea/sdk";
 
 export function createImageViewerView(services: ImageViewerServices) {
   const { useSessionSnapshot } = services;
-  return function ImageViewerPluginView({ host }: BodyProps<ImageViewerConfig>) {
+  return function ImageViewerView({ host }: BodyProps<ImageViewerConfig>) {
     const session = useSessionSnapshot();
     const datasetKey = host.config.datasetKey ?? undefined;
 

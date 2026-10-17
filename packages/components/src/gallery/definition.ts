@@ -1,4 +1,4 @@
-/** Gallery plugin descriptor (PLUGIN-ARCHITECTURE §8, §10.5). */
+/** Gallery component definition: eager metadata; the body is behind the lazy load(). */
 
 import { z } from "zod";
 import { defineComponent } from "@ndea/sdk";
@@ -26,9 +26,9 @@ export function createGalleryDefinition({
     },
     binds: ["focus", "filter"],
     load: async () => {
-      const { GalleryPluginView } = await import("./view");
+      const { GalleryView } = await import("./view");
       function ConfiguredGalleryView(props: BodyProps<GalleryConfig>) {
-        return createElement(GalleryPluginView, { ...props, services: useServices() });
+        return createElement(GalleryView, { ...props, services: useServices() });
       }
       return {
         mountBody: (host) => mountBody(ConfiguredGalleryView, host, "Gallery"),

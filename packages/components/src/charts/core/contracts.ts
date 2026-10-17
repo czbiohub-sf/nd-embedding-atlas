@@ -1,8 +1,8 @@
 import type { FilterCoordinationAPI } from "@ndea/sdk";
 import type { Coordinator } from "@uwdata/mosaic-core";
 import type { FilterExpr, Query } from "@uwdata/mosaic-sql";
+import type { ColumnType } from "../../query/column-types";
 
-export type ColumnType = "string" | "number" | "boolean" | "other";
 export type ColumnTypes = ReadonlyMap<string, ColumnType>;
 
 export interface ChartQueryOptions<T> {

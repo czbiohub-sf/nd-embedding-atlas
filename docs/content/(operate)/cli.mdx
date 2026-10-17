@@ -248,7 +248,7 @@ ndea mcp uninstall                         # remove ndea from every agent that h
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `get_workspace`          | The whole document: data sources, dashboard spec, and coordination state, with its revision                                                             |
 | `list_components`        | Every component with its description, children rule, whether it reads data, the scopes it can bind, defaults, and JSON Schema                           |
-| `list_columns`           | Observation columns and types; pass `column` for distinct count, range, and its most frequent values                                                    |
+| `list_columns`           | Observation columns with their types and kind (obs, var, annotation); pass `column` for distinct count, range, and its most frequent values             |
 | `get_result`             | One element's or data source's predicate and exact count                                                                                                |
 | `edit_dashboard`         | Named ops: `set_data`, `remove_data`, `add` (into a slot, a stack, or beside an element), `set_props`, `remove`, `swap`, `bind`, `unbind`, `set_filter` |
 | `patch_workspace`        | Raw RFC 6902 ops at an exact revision, for anything the named ops do not cover                                                                          |

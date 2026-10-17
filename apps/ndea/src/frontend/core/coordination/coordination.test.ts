@@ -1,5 +1,6 @@
 import { Store } from "@tanstack/store";
 import { describe, expect, test } from "bun:test";
+import type { FilterClause } from "@ndea/protocol";
 import { rowIndex, type RowIndex } from "@ndea/sdk";
 
 import {
@@ -10,6 +11,7 @@ import {
   type CoordinationScopeCellPort,
 } from "./coordination";
 import { createFilterBinding } from "./filter-binding";
+import { setFilterFacet } from "./types";
 import { removeElement } from "../workspace/dashboard";
 
 const leaf = { type: "table", props: {}, children: [] };
@@ -127,5 +129,17 @@ describe("filter binding (crossfilter)", () => {
     const pending = binding.materializeRowIds();
     binding.setPredicate("x > 1");
     await expect(pending).rejects.toThrow("filter changed");
+  });
+
+  test("setFilterFacet sets, replaces, and clears one source facet", () => {
+    const agent: Record<string, FilterClause> = { where: { op: "eq", column: "infected", value: true } };
+    const a: FilterClause = { op: "in", column: "fov", values: ["A"] };
+    const b: FilterClause = { op: "in", column: "fov", values: ["B"] };
+    const set = setFilterFacet({ agent }, "s", "select", a);
+    expect(set).toEqual({ agent, s: { select: a } });
+    expect(setFilterFacet(set, "s", "select", b)).toEqual({ agent, s: { select: b } });
+    expect(setFilterFacet(set, "s", "select", null)).toEqual({ agent });
+    const cell = { agent };
+    expect(setFilterFacet(cell, "s", "select", null)).toBe(cell);
   });
 });

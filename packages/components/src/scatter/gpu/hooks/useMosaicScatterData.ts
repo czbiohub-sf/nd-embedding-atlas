@@ -1,12 +1,10 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import type { RowIndex } from "@ndea/sdk";
 import { useMemo } from "react";
-import type { AxisState } from "../../contracts";
+import type { AxisState, ColorMode } from "../../contracts";
 import type { ScatterData } from "../../gpu/types";
 import { parseCategoryBlob, parseContinuousValuesBlob, parsePositionBlob } from "../../gpu/utils/parsers";
 import { scatterKeys } from "../../helpers";
-
-export type ColorMode = "categorical" | "continuous";
 
 interface UseMosaicScatterDataOptions {
   axes: AxisState | null;

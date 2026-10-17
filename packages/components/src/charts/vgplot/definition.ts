@@ -1,4 +1,4 @@
-/** vgplot plugin descriptor: eager metadata; the framework-neutral body is behind the lazy load(). */
+/** vgplot component definition: eager metadata; the framework-neutral body is behind the lazy load(). */
 
 import { defineComponent } from "@ndea/sdk";
 import { VGPLOT_DEFAULT_CONFIG, vgplotConfigSchema } from "./spec-schema";

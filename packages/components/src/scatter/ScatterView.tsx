@@ -14,10 +14,18 @@ import type { Coordinator } from "@uwdata/mosaic-core";
 import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ScatterGPUHost, type ScatterGPUHostHandle, type ScatterPointStyle } from "./gpu/components/ScatterGpuHost";
 import { ScatterDeviceLeaseProvider, useScatterHost, useScatterServices } from "./context";
-import type { AxisState, CategoryMapping, GpuPointIndex, Metadata, ScatterSession, TrajectoryData } from "./contracts";
+import type {
+  AxisState,
+  CategoryMapping,
+  ColorMode,
+  GpuPointIndex,
+  Metadata,
+  ScatterSession,
+  TrajectoryData,
+} from "./contracts";
 import { gpuPointIndex } from "./contracts";
 import { colorSourceFromString, colorSourceLegendLabel, toRows } from "./helpers";
-import { type ColorMode, useMosaicScatterData } from "./gpu/hooks/useMosaicScatterData";
+import { useMosaicScatterData } from "./gpu/hooks/useMosaicScatterData";
 import { useScatterBrushSync } from "./gpu/hooks/useScatterBrushSync";
 import { usePredicateRowIndices } from "./gpu/hooks/usePredicateRowIndices";
 import type { ScatterplotConfig } from "./gpu/types";

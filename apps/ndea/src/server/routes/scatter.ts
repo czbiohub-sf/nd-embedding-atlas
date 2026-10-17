@@ -9,7 +9,7 @@
 
 import { ObsmSliceLoader } from "../slice-loader.ts";
 import type { ServerSession } from "../state.ts";
-import type { DatasetQuerySession } from "../store.ts";
+import { quoteIdent, type DatasetQuerySession } from "../store.ts";
 
 // ─── Binary format helpers ──────────────────────────────────────────────────
 // Format (version 1):
@@ -178,23 +178,20 @@ export async function handleScatterCategories(url: URL, store: DatasetQuerySessi
   if (!catCol) {
     return Response.json({ error: "Missing required param: cat_col" }, { status: 400 });
   }
+  const unknown = [catCol, originalCol].find((column) => column && !store.columns().has(column));
+  if (unknown) return Response.json({ error: `Unknown column "${unknown}"` }, { status: 400 });
 
   try {
     // Read through the `dataset` VIEW (logical obs table), not obs_base: so
     // var + annotation columns colour identically to native obs columns.
-    const idxRows = await store.queryJson(`SELECT "${catCol}" FROM dataset ORDER BY __row_index__ ASC`);
+    const cat = quoteIdent(catCol);
+    const idxRows = await store.querySingleJson(`SELECT ${cat} FROM dataset ORDER BY __row_index__ ASC`);
 
-    // Build category name list
-    let categoryNames: string[];
-    if (originalCol) {
-      const nameRows = await store.queryJson(
-        `SELECT DISTINCT "${originalCol}" FROM dataset ORDER BY "${originalCol}" ASC`,
-      );
-      categoryNames = nameRows.map((r) => String(r[originalCol]));
-    } else {
-      const distinctRows = await store.queryJson(`SELECT DISTINCT "${catCol}" FROM dataset ORDER BY "${catCol}" ASC`);
-      categoryNames = distinctRows.map((r) => String(r[catCol]));
-    }
+    // Category names come from the original column when given, else the index column.
+    const nameCol = originalCol || catCol;
+    const name = quoteIdent(nameCol);
+    const nameRows = await store.querySingleJson(`SELECT DISTINCT ${name} FROM dataset ORDER BY ${name} ASC`);
+    const categoryNames = nameRows.map((r) => String(r[nameCol]));
 
     const indices = new Uint8Array(idxRows.length);
     for (let i = 0; i < idxRows.length; i++) {
@@ -232,8 +229,10 @@ export async function handleScatterContinuousValues(url: URL, store: DatasetQuer
     return Response.json({ error: "Missing required param: color_col" }, { status: 400 });
   }
 
+  if (!store.columns().has(colorCol)) return Response.json({ error: `Unknown column "${colorCol}"` }, { status: 400 });
+
   try {
-    const rows = await store.queryJson(`SELECT "${colorCol}" FROM dataset ORDER BY __row_index__ ASC`);
+    const rows = await store.querySingleJson(`SELECT ${quoteIdent(colorCol)} FROM dataset ORDER BY __row_index__ ASC`);
 
     const n = rows.length;
     const values = new Float32Array(n);

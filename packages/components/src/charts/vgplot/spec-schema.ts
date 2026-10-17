@@ -17,7 +17,7 @@
 import type { Coordinator } from "@uwdata/mosaic-core";
 import { z } from "zod";
 import type { JsonValue } from "@ndea/sdk";
-import type { ColumnType } from "../core/contracts";
+import { type ColumnType, duckdbTypeToColumnType } from "../../query/column-types";
 import { toRows } from "../core/mosaic-helpers";
 
 /**
@@ -142,28 +142,4 @@ export async function listColumns(coordinator: Coordinator): Promise<Map<string,
     columns.set(row.column_name, duckdbTypeToColumnType(row.column_type));
   }
   return columns;
-}
-
-/** DuckDB type name to chart picker kind. */
-function duckdbTypeToColumnType(dtype: string): ColumnType {
-  const d = dtype.toUpperCase();
-  if (
-    d.includes("INT") ||
-    d.includes("FLOAT") ||
-    d.includes("DOUBLE") ||
-    d.includes("DECIMAL") ||
-    d.includes("NUMERIC") ||
-    d.includes("REAL") ||
-    d.includes("HUGEINT") ||
-    d.includes("BIGINT") ||
-    d.includes("SMALLINT") ||
-    d.includes("TINYINT")
-  ) {
-    return "number";
-  }
-  if (d.includes("BOOL")) return "boolean";
-  if (d.includes("VARCHAR") || d.includes("TEXT") || d.includes("CHAR") || d.includes("STRING") || d.includes("ENUM")) {
-    return "string";
-  }
-  return "other";
 }

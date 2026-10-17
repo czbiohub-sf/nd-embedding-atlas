@@ -24,7 +24,7 @@ const IdentityRowSchema = z.object({
 });
 const BATCH_SIZE = 10_000;
 const literal = (value: string | null) => (value === null ? "NULL" : `'${value.replace(/'/g, "''")}'`);
-const escapePointer = (key: string) => key.replace(/~/g, "~0").replace(/\//g, "~1");
+export const escapePointer = (key: string) => key.replace(/~/g, "~0").replace(/\//g, "~1");
 
 export class UnknownObservationRows extends Error {}
 
@@ -59,7 +59,7 @@ export class ObservationSets {
     return this.run(async () => {
       ObservationSetCreateBodySchema.parse({ rowIndices });
       const indices = [...new Set(rowIndices)];
-      const multi = await this.store.hasDatasetColumn();
+      const multi = this.store.hasDatasetColumn();
       const members = new Map<string, [string | null, string]>();
       for (let offset = 0; offset < indices.length; offset += BATCH_SIZE) {
         const batch = indices.slice(offset, offset + BATCH_SIZE);
@@ -110,7 +110,7 @@ export class ObservationSets {
   }
 
   private async load(set: string, members: [string | null, string][]): Promise<void> {
-    const multi = await this.store.hasDatasetColumn();
+    const multi = this.store.hasDatasetColumn();
     // Remove a partial insert left by a failed load before retrying.
     await this.store.execute(`DELETE FROM ${OBSERVATION_SET_TABLE} WHERE set_id = ${literal(set)}`);
     for (let offset = 0; offset < members.length; offset += BATCH_SIZE) {

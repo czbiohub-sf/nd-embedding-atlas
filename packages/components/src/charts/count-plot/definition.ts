@@ -1,4 +1,4 @@
-/** count-plot plugin descriptor: eager metadata; the body is behind the lazy load(). */
+/** count-plot component definition: eager metadata; the body is behind the lazy load(). */
 
 import { z } from "zod";
 import { defineComponent } from "@ndea/sdk";

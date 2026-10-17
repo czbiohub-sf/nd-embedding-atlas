@@ -24,8 +24,8 @@ import type { DatasetQuerySession } from "./store.ts";
  * Those are the ONLY legitimate mutations flowing through `/data/query`.
  *
  * Frontend-driven schema changes (categorical index columns, var materialization)
- * now go through dedicated REST endpoints (`/api/categorize`, `/api/var-column`)
- * that use `store.execute()` directly: they don't hit this path.
+ * go through `/api/categorize` and `/api/var-column`, which add columns through
+ * `DatasetQuerySession` methods: they don't hit this path.
  */
 const ALLOWED_MUTATIONS: readonly string[] = ["CREATE SCHEMA", "CREATE TABLE", "DROP TABLE IF EXISTS", "DROP SCHEMA"];
 
@@ -94,9 +94,7 @@ export async function handleMosaicQuery(body: MosaicQuery, store: DatasetQuerySe
   }
 
   try {
-    // No VIEW-rebuild hook needed: ALTER TABLE obs_base ADD COLUMN now flows
-    // through /api/categorize and /api/var-column, both of which rebuild the
-    // VIEW explicitly.
+    // No VIEW-rebuild hook needed: the allowlist admits no `ALTER TABLE`.
     if (command === "exec") {
       await store.execute(sql);
       return Response.json({});

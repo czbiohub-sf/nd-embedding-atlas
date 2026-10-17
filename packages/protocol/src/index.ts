@@ -321,30 +321,6 @@ export const MetadataSchema = z.looseObject({
 });
 export type Metadata = z.infer<typeof MetadataSchema>;
 
-/** Viewer config response. */
-export const ConfigDatasetSchema = z.object({
-  path: z.string(),
-  platePath: z.string().nullable(),
-});
-export const ConfigSpatialSchema = z.object({
-  fov: z.string().nullable(),
-  t: z.string().nullable(),
-  bbox: z.string().nullable(),
-  x: z.string().nullable(),
-  y: z.string().nullable(),
-  z: z.string().nullable(),
-});
-export const ConfigResponseSchema = z.object({
-  datasets: z.record(z.string(), ConfigDatasetSchema),
-  spatial: ConfigSpatialSchema.nullable(),
-  obsColumns: z.array(z.string()),
-  availableObsmKeys: z.array(z.string()),
-  loadedEmbeddings: z.array(z.string()),
-  nObs: NonNegativeInt,
-  port: NonNegativeInt,
-});
-export type ConfigResponse = z.infer<typeof ConfigResponseSchema>;
-
 /** GET /api/trajectory response row. Serialized keys intentionally mix casing. */
 export const TrajectoryFrameSchema = z.object({
   rowIndex: NonNegativeInt,

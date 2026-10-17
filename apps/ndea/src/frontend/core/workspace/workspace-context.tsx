@@ -11,7 +11,7 @@ import { createContext, useContext, useEffect, useState } from "react";
 import { useDatasetSession } from "@/hooks/useDatasetSession";
 import { LAYOUT_EDITING_ENABLED } from "@/feature-flags";
 import { deviceBroker } from "@/core/gpu/device-broker";
-import { ComponentRuntimeProvider } from "@/core/component/runtime/runtime-context";
+import { ComponentRuntimeContext } from "@/core/component/runtime/runtime-context";
 import { ComponentRuntimeManager } from "@/core/component/runtime/workspace-runtime";
 import { wsClient } from "@/lib/ws-client";
 import { createHttpWorkspaceTransport, decodeWorkspaceDocument, WorkspaceSync, type WorkspaceTransport } from "./sync";
@@ -81,7 +81,7 @@ export function WorkspaceProvider({
   return (
     <WorkspacePersistenceContext.Provider value={persistence}>
       <WorkspaceContext.Provider value={ws}>
-        <ComponentRuntimeProvider value={componentRuntimes}>{children}</ComponentRuntimeProvider>
+        <ComponentRuntimeContext.Provider value={componentRuntimes}>{children}</ComponentRuntimeContext.Provider>
       </WorkspaceContext.Provider>
     </WorkspacePersistenceContext.Provider>
   );

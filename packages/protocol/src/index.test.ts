@@ -8,7 +8,6 @@ import {
   type AnnotationPredicateWriteResponse,
   CommitAnnotationsResponseSchema,
   CommitDatasetReportSchema,
-  ConfigResponseSchema,
   EmbeddingStatusSchema,
   ErrorResponseSchema,
   ExportBodySchema,
@@ -58,7 +57,7 @@ describe("shared route contracts", () => {
 });
 
 describe("shared HTTP response DTOs", () => {
-  test("preserves representative metadata and config raw shapes", () => {
+  test("preserves representative metadata raw shape", () => {
     const metadata = {
       version: "0.0.0-dev",
       props: { data: { id: "obs_name", projection: { x: "umap_0", y: "umap_1" } } },
@@ -80,18 +79,7 @@ describe("shared HTTP response DTOs", () => {
       plate: false,
       capabilities: ["obs", "var", "obsm"],
     } satisfies Metadata;
-    const config = {
-      datasets: { atlas: { path: "/data/atlas.zarr", platePath: null } },
-      spatial: { fov: null, t: "t", bbox: null, x: "x", y: "y", z: null },
-      obsColumns: ["cell_type"],
-      availableObsmKeys: ["X_umap"],
-      loadedEmbeddings: ["X_umap"],
-      nObs: 120,
-      port: 5055,
-    };
-
     expect(MetadataSchema.parse(metadata)).toEqual(metadata);
-    expect(ConfigResponseSchema.parse(config)).toEqual(config);
   });
 
   test("preserves trajectory mixed-case keys and optional fields", () => {
@@ -156,7 +144,6 @@ describe("shared HTTP response DTOs", () => {
   test("rejects malformed payloads used by production fetch paths", () => {
     const malformed = [
       MetadataSchema.safeParse({ database: { type: "rest" }, obsm: {} }),
-      ConfigResponseSchema.safeParse({ datasets: {}, obsColumns: "cell_type" }),
       TrajectoryResponseSchema.safeParse([{ t: 0, emb_x: "1", emb_y: 2, spatial_x: 3, spatial_y: 4 }]),
       AnnotationColumnsResponseSchema.safeParse({ columns: [{ name: "score", dtype: "number" }] }),
       AnnotationPredicateWriteResponseSchema.safeParse({ ok: true }),

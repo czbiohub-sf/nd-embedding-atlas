@@ -11,9 +11,8 @@
  *
  * Sequential dispatch lives in this file. The worker has its own inline
  * decoders producing a serializable `ColumnResult` shape; `reassembleColumn`
- * below converts those back into `ColumnData`. Sharing the decoder bodies
- * between main + worker would require producing `ColumnResult` on the main
- * thread and re-wrapping: net LoC neutral, deferred as follow-up.
+ * below converts those back into `ColumnData`. The two decoder sets are
+ * separate because the main thread decodes straight to `ColumnData`.
  *
  * Encoding types handled by the sequential path:
  *   array, categorical, nullable-string-array, nullable-integer,

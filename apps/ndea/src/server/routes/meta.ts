@@ -63,14 +63,13 @@ export function handleMetadata(state: ServerSession, config: DatasetSessionMetad
     },
     database: { type: "rest" },
     obsm: buildObsmMetadata(state.availableObsmKeys, state),
-    // Serve only user-facing obs columns. `__`-prefixed columns are internal
-    // machinery: categorical encodings (`__ev_<col>_id`, added post-startup by
-    // /api/categorize), var-expression columns (`__var_N_X__`), and identity
-    // (`__obs_index__` / `__row_index__`). They stay in `state.obsColumns` so
-    // category_col validation still sees them; clients (table grid, obs color
-    // picker) only ever want the real columns. Single-`_` names like `_dataset`
-    // are kept: ExportDialog depends on `_dataset`.
-    obs_columns: config.obsColumnNames.filter((c) => !c.startsWith("__")),
+    // The session's obs columns plus live annotation columns, as far as the
+    // VIEW has them. `__`-prefixed columns are internal machinery
+    // (categorical encodings `__ev_<col>_id`, var-expression columns, row
+    // identity) that clients (table grid, obs color picker) never list.
+    obs_columns: [...new Set([...config.obsColumnNames, ...state.store.annotationColumns.keys()])].filter(
+      (c) => !c.startsWith("__") && state.store.columns().has(c),
+    ),
     plate: config.hasPlate,
     export_dir: exportDir(),
     var_count: firstVarCount(state),

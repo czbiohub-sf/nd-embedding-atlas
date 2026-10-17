@@ -7,7 +7,7 @@
 import { useEffect, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 
-import { useComponentRuntimes } from "@/core/component/runtime/runtime-context-value";
+import { useComponentRuntimes } from "@/core/component/runtime/runtime-context";
 
 /** Starts the element's body (sticky) and shows its loading or failure state inside the dock. */
 export function BodyStatus({ id, label }: { readonly id: string; readonly label: string }) {

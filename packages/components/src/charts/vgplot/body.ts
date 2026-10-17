@@ -12,7 +12,7 @@
  */
 
 import type { MountedBody, ComponentHost } from "@ndea/sdk";
-import type { ColumnType } from "../core/contracts";
+import type { ColumnType } from "../../query/column-types";
 import { mountPlot, type MountedPlot } from "./plot-host";
 import {
   MARK_PRESETS,

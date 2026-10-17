@@ -1,7 +1,7 @@
 /**
  * ScatterToolbar: the scatter's controls, two ways:
  *  · variant="header": compact run portaled into the element header's
- *    middle gap (host.ui.container.headerEl)
+ *    middle gap (host.bodyHeaderElement)
  *  · variant="docked": full-width row above a fullscreen surface whose
  *    container has no header slot
  * Either way the points stay unobstructed. The active embedding is the
@@ -43,8 +43,7 @@ function ScanDotIcon({ size = 12 }: { size?: number }) {
 
 import type { ColorSource } from "./helpers";
 import { cn } from "@ndea/ui/lib/utils";
-import type { ColorMode } from "./gpu/hooks/useMosaicScatterData";
-import type { AxisState } from "./contracts";
+import type { AxisState, ColorMode } from "./contracts";
 import { EmbeddingPicker } from "./mudata/EmbeddingPicker";
 import { ModalityColorPicker } from "./mudata/ModalityColorPicker";
 import { ColorSourcePicker } from "./ColorSourcePicker";

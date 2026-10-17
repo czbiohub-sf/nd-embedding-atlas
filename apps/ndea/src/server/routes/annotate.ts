@@ -96,19 +96,18 @@ export async function handleCreateAnnotationColumn(req: Request, state: ServerSe
   }
 
   // Reject names that collide with an existing dataset column (obs_base, an
-  // embedding, or a var column). _rebuildView would otherwise auto-rename the
+  // embedding, or a var column). The VIEW would otherwise auto-rename the
   // duplicate (cell_type → cell_type_1), landing the annotation under a name
   // the frontend never queries.
-  if (await state.store.datasetColumnExists(name)) {
+  if (state.store.columns().has(name)) {
     return Response.json({ error: "A column with this name already exists in the dataset" }, { status: 409 });
   }
 
   _creating.add(name);
   try {
+    // /data/metadata.json lists annotation columns from the store, so the
+    // client's refreshMetadata() picks this one up.
     await state.store.registerAnnotationColumn(name, dtype);
-    // Surface the column in /data/metadata.json (obs_columns is the same array
-    // the table + color picker read; refreshMetadata() on the client picks it up).
-    if (!state.obsColumns.includes(name)) state.obsColumns.push(name);
     scheduleSave(state);
     return Response.json({ column: name }, { status: 201 });
   } catch (err) {
@@ -126,8 +125,6 @@ export async function handleDeleteAnnotationColumn(colName: string, state: Serve
   }
   try {
     await state.store.dropAnnotationColumn(colName);
-    const i = state.obsColumns.indexOf(colName);
-    if (i !== -1) state.obsColumns.splice(i, 1);
     scheduleSave(state);
     return new Response(null, { status: 204 });
   } catch (err) {

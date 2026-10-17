@@ -1,6 +1,7 @@
 import { and, type ExprNode, type FilterExpr, literal } from "@uwdata/mosaic-sql";
 import { okLchToSrgb, ParseColorError, srgbFromHex, srgbToHex, srgbToOkLch } from "@ndea/ochre";
-import type { ColorMode, ColumnType, TrajectoryData } from "./contracts";
+import type { ColumnType } from "../query/column-types";
+import type { ColorMode, TrajectoryData } from "./contracts";
 
 export interface OklchColor {
   l: number;

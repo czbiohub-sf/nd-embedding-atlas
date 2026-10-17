@@ -37,10 +37,8 @@ function firstAdata(state: ServerSession): DatasetHandle | null {
 /**
  * Materialise var.index as a plain string array.
  *
- * For MuData, var.index is the shared root var: typically empty on
- * axis=0 stores where each modality owns its own var. A follow-up will
- * pull names from the union of per-modality var. For this PR we return
- * the root-level index as-is.
+ * For MuData this is the shared root var index, which is typically empty on
+ * axis=0 stores where each modality owns its own var.
  */
 function varNamesOf(adata: DatasetHandle): string[] {
   const idx = adata.var.index;
@@ -115,28 +113,21 @@ export async function handleVarLayers(state: ServerSession): Promise<Response> {
   const adata = firstAdata(state);
   if (!adata) return Response.json({ layers: ["X"] });
 
-  // Try to discover extra layers by probing the zarr `layers` group.
-  // The accessor doesn't currently expose this, so we fall back to ["X"]
-  // unless we can read layer keys via a private hook in the future.
+  // AnnData stores list extra layers in the zarr `layers` group; MuData and
+  // unreadable stores report only "X".
   const extra = await discoverLayers(adata);
   const all = ["X", ...extra];
   return Response.json({ layers: all });
 }
 
 /**
- * Probe the zarr store for `layers/` children. Returns [] if not accessible.
- * Uses the accessor's internal zarr group reference if available.
- *
- * AnnData only: MuData's layers are per-modality; a cross-modality layer
- * listing is a follow-up. For MuData, return [] so callers fall back to
- * the default "X".
+ * Layer names from the AnnData zarr store's `layers` group attrs, or [] when
+ * the store is MuData (layers are per-modality) or the group is unreadable.
  */
 async function discoverLayers(adata: DatasetHandle): Promise<string[]> {
   if (adata.kind !== "anndata") return [];
   const anndata = adata as AnnData;
-  // Reach through AnnData → internal accessor → private _group (zarrita
-  // Location). Hack pending Phase C's AnnDataView API; then we'll expose
-  // a proper `listLayers()` method.
+  // AnnData exposes no layer listing, so read the accessor's private zarrita `_group`.
   const group = (anndata.accessor as unknown as { _group?: unknown })._group;
   if (!group) return [];
 

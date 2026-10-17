@@ -14,7 +14,7 @@ import { createPortal } from "react-dom";
 
 import { NdIconButton } from "@/components/dashboard/icon-button";
 import { Caption, Hud } from "@/components/dashboard/primitives";
-import { isCoordinationType } from "@/core/coordination/types";
+import { isCoordinationType, setFilterFacet } from "@/core/coordination/types";
 import { useDatasetSession } from "@/hooks/useDatasetSession";
 import { toRows } from "@/lib/mosaic-helpers";
 import { BodySocket, BodyStatus, HeaderSocket } from "./body-dock";
@@ -342,16 +342,9 @@ function Select(props: ComponentRenderProps) {
     const next = new Set(chosen);
     if (next.has(value)) next.delete(value);
     else next.add(value);
-    const cell = ws.store.state.state.filter?.[scope] ?? {};
-    const { [id]: mine = {}, ...others } = cell;
-    const { select: _previous, ...facets } = mine;
     const clause: FilterClause | null = next.size > 0 ? { op: "in", column, values: [...next] } : null;
-    const facetsNext = clause ? { ...facets, select: clause } : facets;
-    ws.coordination.setCoordinationValue(
-      "filter",
-      scope,
-      Object.keys(facetsNext).length > 0 ? { ...others, [id]: facetsNext } : others,
-    );
+    const cell = ws.store.state.state.filter?.[scope] ?? {};
+    ws.coordination.setCoordinationValue("filter", scope, setFilterFacet(cell, id, "select", clause));
   };
 
   return (

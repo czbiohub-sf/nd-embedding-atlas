@@ -30,7 +30,8 @@ import { cn } from "@ndea/ui/lib/utils";
 import { Bracketed } from "@ndea/ui/components/bracketed";
 import { Popover, PopoverContent, PopoverTrigger } from "@ndea/ui/components/popover";
 import { ScrollArea } from "@ndea/ui/components/scroll-area";
-import { type ColumnType, useColumnTypes } from "../query/useColumnTypes";
+import type { ColumnType } from "../query/column-types";
+import { useColumnTypes } from "../query/useColumnTypes";
 import { type Row, type SortState, useTableQuery } from "./useTableQuery";
 
 /** Typed-column glyph for the header (# numeric · ◇ categorical/text · · other). */

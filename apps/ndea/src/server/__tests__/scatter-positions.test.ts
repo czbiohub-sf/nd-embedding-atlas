@@ -39,7 +39,6 @@ async function buildState(): Promise<{ state: ServerSession; server: Server; por
   const state = createServerSession({
     store,
     datasets: new Map([["fixture", { path: FIXTURE }]]),
-    obsColumns: ["obs_name"],
     availableObsmKeys: ["X_pca"],
     accessors: new Map([["fixture", adata]]),
   });

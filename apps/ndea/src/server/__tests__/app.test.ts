@@ -8,7 +8,7 @@
 import { describe, expect, test, afterEach } from "bun:test";
 import type { DuckDBConnection } from "@duckdb/node-api";
 import { decodeIPC, restConnector } from "@uwdata/mosaic-core";
-import { ConfigResponseSchema, EmbeddingStatusSchema, MetadataSchema } from "@ndea/protocol";
+import { EmbeddingStatusSchema, MetadataSchema } from "@ndea/protocol";
 import { DatasetQuerySession } from "../store.ts";
 import { createApp, type CreateAppOptions } from "../app.ts";
 import type { ServerSession, DatasetSessionMetadata } from "../state.ts";
@@ -39,7 +39,6 @@ function createMockState(store: DatasetQuerySession): ServerSession {
   return createServerSession({
     store,
     datasets: new Map([["test_dataset", { path: "/tmp/test.zarr" }]]),
-    obsColumns: ["obs_name", "_dataset", "category", "value"],
     availableObsmKeys: ["X_umap", "X_tsne"],
   });
 }
@@ -225,30 +224,6 @@ describe("createApp", () => {
     const body = await res.json();
     expect(body.status).toBe("ok");
     expect(body.n_obs).toBe(25);
-  });
-
-  test("GET /api/config returns viewer config", async () => {
-    const store = await createMockStore(10);
-    activeStore = store;
-    const state = createMockState(store);
-    const config = createMockConfig();
-
-    const server = createApp({
-      port: 0,
-      host: "localhost",
-      store,
-      state,
-      config,
-      noStatic: true,
-    });
-    activeServer = server;
-
-    const res = await fetch(`http://localhost:${server.port}/api/config`);
-    expect(res.status).toBe(200);
-
-    const body = ConfigResponseSchema.parse(await res.json());
-    expect(body.availableObsmKeys).toEqual(["X_umap", "X_tsne"]);
-    expect(body.nObs).toBe(10);
   });
 
   test("GET /api/embeddings/{key}/status returns not_started", async () => {

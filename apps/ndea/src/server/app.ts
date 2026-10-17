@@ -25,7 +25,6 @@ import {
 } from "./routes/annotate.ts";
 import { handleCategorize } from "./routes/categorize.ts";
 import { handleChannelStats } from "./routes/channel-stats.ts";
-import { handleConfig } from "./routes/config.ts";
 import { handleCrop } from "./routes/crops.ts";
 import { handleEmbeddingStatus, handleLoadEmbedding } from "./routes/embeddings.ts";
 import { handleExport, handleExportStatus, handleGetExportDir } from "./routes/export.ts";
@@ -145,7 +144,6 @@ export function createApp(options: CreateAppOptions) {
         "/data/metadata.json": { GET: () => handleMetadata(state, config) },
 
         "/api/health": { GET: () => handleHealth(state) },
-        "/api/config": { GET: () => handleConfig(state) },
 
         "/api/scatter-positions": { GET: (req) => handleScatterPositions(new URL(req.url), state, req.signal) },
         "/api/scatter-categories": { GET: (req) => handleScatterCategories(new URL(req.url), store) },
@@ -168,7 +166,7 @@ export function createApp(options: CreateAppOptions) {
         "/api/var/layers": { GET: () => handleVarLayers(state) },
         "/api/var-column": { POST: (req) => handleVarColumn(req, state) },
         "/api/var-column/:id/status": { GET: (req) => handleVarColumnStatus(req.params.id) },
-        "/api/categorize": { POST: (req) => handleCategorize(req, state) },
+        "/api/categorize": { POST: (req) => handleCategorize(req, store) },
         "/api/filter": { POST: (req) => handleFilter(req, state) },
 
         "/api/workspace": { GET: () => handleWorkspaceGet(state), PATCH: (req) => handleWorkspacePatch(req, state) },

@@ -303,7 +303,7 @@ async function atomicWrite(rootPath: string, key: string, bytes: Uint8Array): Pr
  * Append `columns` to the AnnData obs group at `rootPath`. Aligns each column to
  * the store's `_index` by obs_name. Set `dryRun` to compute the report without
  * writing. Caller must ensure column names don't collide with existing obs
- * columns (enforced at annotation-creation time via datasetColumnExists).
+ * columns (enforced at annotation-creation time against the dataset's columns).
  */
 export async function commitObsColumns(
   rootPath: string,

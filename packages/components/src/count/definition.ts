@@ -19,7 +19,7 @@ export function createCountDefinition({
     },
     binds: ["filter"],
     load: async () => {
-      // ComponentDefinition.load is the intentional lazy plugin-module boundary.
+      // ComponentDefinition.load is the intentional lazy component-body boundary.
       const CountBody = createCountBody(predicateToSql);
       return { mountBody: (host) => mountBody(CountBody, host, "Count") };
     },

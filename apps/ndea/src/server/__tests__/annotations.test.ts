@@ -113,16 +113,17 @@ describe("annotations: lifecycle", () => {
 
     await store.registerAnnotationColumn("temp");
     expect(store.hasAnnotationColumn("temp")).toBe(true);
+    expect(store.columns().get("temp")).toEqual({ sqlType: "VARCHAR", kind: "annotation" });
     await store.dropAnnotationColumn("temp");
     expect(store.hasAnnotationColumn("temp")).toBe(false);
-    expect(await store.datasetColumnExists("temp")).toBe(false);
+    expect(store.columns().has("temp")).toBe(false);
   });
 
-  test("datasetColumnExists detects obs_base columns", async () => {
+  test("columns() catalogs the VIEW's obs_base columns", async () => {
     const store = await createMockStore(5);
     activeStore = store;
-    expect(await store.datasetColumnExists("obs_name")).toBe(true);
-    expect(await store.datasetColumnExists("nope")).toBe(false);
+    expect(store.columns().get("obs_name")).toEqual({ sqlType: "VARCHAR", kind: "obs" });
+    expect(store.columns().has("nope")).toBe(false);
   });
 });
 

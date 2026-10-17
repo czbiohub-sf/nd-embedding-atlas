@@ -58,7 +58,7 @@ export function commitSummary(report: CommitAnnotationsResponse | null): CommitS
   };
 }
 
-/** One-line status shown after a commit (also passed to `host.ui.notify`). */
+/** One-line status shown after a commit (also passed to `host.notifications.notify`). */
 export function commitStatusMessage(s: CommitSummary): string {
   const cols = `${s.columnsWritten} column${s.columnsWritten === 1 ? "" : "s"}`;
   const ds = `${s.writableCount} dataset${s.writableCount === 1 ? "" : "s"}`;

@@ -70,7 +70,7 @@ entrypoints across workspaces.
   `arrow` returns Arrow IPC bytes, `exec` returns `{}`).
 - `/ws` carries the framed `{ _id, _type }` ndea protocol; its one method is
   `workspace/watch`.
-- REST routes cover health, config, embeddings, observations, scatter data,
+- REST routes cover health, embeddings, observations, scatter data,
   variables, categorization, annotations, exports, crops, filtering, sets, and
   the workspace document.
 - The workspace document has three sections: `data` (named data sources),
@@ -84,8 +84,11 @@ entrypoints across workspaces.
   `PATCH /api/workspace`, MCP) goes through `applyWorkspacePatch`
   (`server/routes/workspace.ts`): RFC 6902 ops against a base revision,
   checked by `parseWorkspaceDocument` (structure, component props, data
-  references, bindings) and for set references. `workspace/watch` pushes
-  accepted revisions.
+  references, bindings), then by `workspaceIssues` for unknown set references
+  and typed clauses (data-source `where`, `state.filter`) naming columns the
+  dataset lacks. Raw `data.sql` is checked only when it runs. Startup logs the
+  same issues for the workspace file instead of refusing it.
+  `workspace/watch` pushes accepted revisions.
 - `workspaceResult` (`server/routes/workspace.ts`) evaluates one element or
   data source: `GET /api/workspace/elements/:id` and
   `GET /api/workspace/data/:name` return `{ revision, predicate, count }`. The
@@ -106,8 +109,14 @@ entrypoints across workspaces.
   and the bearer token in `~/.ndea/mcp-token` pass. `edit_dashboard` compiles
   named ops on a draft document (`server/workspace-edits.ts`) and applies the
   diff as one patch; add new agent operations there, not as new write paths.
-- `EmbeddingStore` owns one DuckDB connection. Base tables, the `dataset` view,
-  temporary selections, and Mosaic preaggregations share that connection.
+- `DatasetQuerySession` (`server/store.ts`) owns one DuckDB connection and the
+  `dataset` VIEW: obs_base plus embedding, var, and annotation joins. Base
+  tables, the VIEW, temporary selections, and Mosaic preaggregations share that
+  connection. `columns()` is the VIEW's column catalog (name → `{ sqlType,
+  kind }`), refreshed on every VIEW rebuild; resolve any request- or
+  document-supplied column name against it and interpolate it with
+  `quoteIdent`, never a bare `"${name}"`. Mosaic's `/data/query` keeps its own
+  statement allowlist.
 
 ### SDK
 
@@ -257,7 +266,9 @@ build.
 - **Mosaic SQL:** The allowlist must permit Mosaic's `CREATE SCHEMA`,
   `CREATE TABLE`, `DROP TABLE IF EXISTS`, and `DROP SCHEMA` statements.
 - **DuckDB views:** `ALTER TABLE obs_base ADD COLUMN` invalidates the `dataset`
-  view schema. Rebuild it through `EmbeddingStore._rebuildView()`.
+  view schema. Add columns through `DatasetQuerySession` methods
+  (`addObsIndexColumn`, `register*Column`), which rebuild the VIEW and its
+  column catalog.
 - **Workspace authority:** The server document is the only persisted workspace.
   Never write workspace state to `localStorage`. Session state (selection,
   fullscreen) lives in `Workspace.session`; add new editor-only fields to
