@@ -35,7 +35,8 @@ export async function startup(config: LaunchConfig): Promise<void> {
     session.state.store.close();
     throw error;
   });
-  printReady(config, loaded, datasets.availableObsmKeys, startTime);
+  // The status screen shows all of this, and the summary would reappear on the normal screen when it exits.
+  if (!config.tui) printReady(config, loaded, datasets.availableObsmKeys, startTime);
   openBrowser(config);
   // Not awaited: the `view` action ends at "Ready" so Crust releases Ctrl-C to the server.
   void registerGracefulShutdown(config, session.state, server);
