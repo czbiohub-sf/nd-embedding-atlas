@@ -1,6 +1,6 @@
 import type { TgpuRoot } from "typegpu";
 import type { PanZoomView, RowIndex, TurntableView, ViewSyncState } from "@ndea/sdk";
-import type { GpuPointIndex } from "../contracts";
+import type { DensityMode, GpuPointIndex, SelectionDepth } from "../contracts";
 
 // ---------------------------------------------------------------------------
 // Data
@@ -98,6 +98,8 @@ export interface ScatterplotHandle {
   setExternalSelection(rowIndices: RowIndex[]): void;
   /** Switch the drag behaviour: 'pan' = default, 'marquee'/'lasso' = always-draw-selection. */
   setForcedSelectionMode(mode: "pan" | "marquee" | "lasso"): void;
+  /** 3D: select through (default), or only the nearest dense structure under the shape (2D ignores it). */
+  setSelectionDepth(depth: SelectionDepth): void;
   /** Clear an externally-driven selection. */
   clearExternalSelection(): void;
   /** Clear lasso/marquee selection. */
@@ -143,6 +145,8 @@ export interface ScatterplotHandle {
   setHdrSettings(settings: { toneMapping?: "none" | "reinhard" | "aces" | "agx" | "neutral"; exposure?: number }): void;
   /** Switch the 2D point blend mode; 3D always draws opaque depth-tested discs. */
   setBlendMode(mode: "additive" | "premultiplied" | "max"): void;
+  /** How the density path composites categorical colors (continuous color always averages). */
+  setDensityMode(mode: DensityMode): void;
 }
 
 export interface RenderConfig {

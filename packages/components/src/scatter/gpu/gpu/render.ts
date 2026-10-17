@@ -3,7 +3,7 @@ import { fullScreenTriangle } from "typegpu/common";
 import * as d from "typegpu/data";
 import * as std from "typegpu/std";
 import type { TgpuRoot } from "../../gpu/types";
-import type { Scene } from "./scene";
+import { BATCH, type Scene } from "./scene";
 
 /**
  * 2D only; 3D always draws opaque depth-tested discs.
@@ -37,6 +37,22 @@ const SPLAT = 48;
 const RECOMPACT = 64;
 const PICK_WINDOW = 5;
 const DEPTH_FORMAT = "depth32float";
+/** Density splat: side of a batch's workgroup tile in grid pixels (TILE² = one pixel per thread). */
+// Shader index math uses shifts and masks: TGSL `/` is float division.
+const TILE_SHIFT = 4;
+const TILE = 1 << TILE_SHIFT;
+const HALF_TILE = TILE / 2;
+/**
+ * Categorical compositing (dominant, weave): class weights per CLASS_TILE² px tile, for the
+ * first CLASSES palette colors. 4 px × 32 classes: 8 B/px of grid (9 MB at 1366×818).
+ */
+const CLASS_SHIFT = 2;
+export const CLASS_TILE = 1 << CLASS_SHIFT;
+const CLASS_BITS = 5;
+const CLASSES = 1 << CLASS_BITS;
+const TILE_CLASS_SHIFT = TILE_SHIFT - CLASS_SHIFT;
+const TILE_CLASSES = 1 << TILE_CLASS_SHIFT;
+const TILE_CLASS_CELLS = TILE_CLASSES * TILE_CLASSES;
 
 export interface RenderPasses {
   /**
@@ -48,10 +64,11 @@ export interface RenderPasses {
   /** Draw the points (quads or density, chosen on the GPU) into the HDR `target`. */
   draw(enc: TgpuCommandEncoder, target: GPUTextureView): void;
   /**
-   * Point under device pixel (x, y): the visible id nearest the center of a 5×5
-   * window (front-most in 3D), or null. Compacts first, so ids are fresh.
+   * Point under device pixel (x, y): the visible point nearest the center of a
+   * 5×5 window (front-most in 3D) as its storage index and its row, or null.
+   * Compacts first, so ids are fresh.
    */
-  pick(x: number, y: number): Promise<number | null>;
+  pick(x: number, y: number): Promise<{ id: number; row: number } | null>;
   setBlendMode(mode: BlendMode): void;
   /** Canvas size changed (device px): reallocates the density grid when density can engage. */
   resize(width: number, height: number, densityPossible: boolean): void;
@@ -59,14 +76,33 @@ export interface RenderPasses {
 }
 
 export function createRenderPasses(root: TgpuRoot, scene: Scene, hdrFormat: GPUTextureFormat): RenderPasses {
-  const { frame, project, tier, tierAlpha, visible, isoPass, pointColor } = scene;
+  const {
+    frame,
+    colors,
+    project,
+    catOf,
+    tier,
+    tierAlpha,
+    visible,
+    isoPass,
+    pointColor,
+    batchLive,
+    batchCenter,
+    wordPasses,
+    perm,
+  } = scene;
   const idsRW = scene.ids.as("mutable");
   const idsRO = scene.ids.as("readonly");
   const indirect = root
     .createBuffer(d.arrayOf(d.u32, 20), new Uint32Array([6, 0, 0, 0, 6, 0, 0, 0, 3, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 0]))
     .$usage("storage", "indirect");
   const indirectRW = indirect.as("mutable");
-  const state = root.createMutable(d.struct({ count: d.atomic(d.u32), dense: d.u32, visible: d.u32 }));
+  // `live`: batches compaction found on screen (appended to `liveBatches`); `splatBatches`: the
+  // count the splat dispatch covers.
+  const state = root.createMutable(
+    d.struct({ count: d.atomic(d.u32), dense: d.u32, visible: d.u32, live: d.atomic(d.u32), splatBatches: d.u32 }),
+  );
+  const liveBatches = root.createMutable(d.arrayOf(d.u32, Math.max(1, scene.batches)));
   // 3D: opaque discs, and the density resolve and id pick share their depth attachment.
   const depth = scene.ndim === 3;
   const depthTest = (write: boolean): GPUDepthStencilState | undefined =>
@@ -85,17 +121,31 @@ export function createRenderPasses(root: TgpuRoot, scene: Scene, hdrFormat: GPUT
     return c.w > 0 && std.abs(c.x) <= mx && std.abs(c.y) <= my && c.z >= 0 && c.z <= c.w;
   });
 
+  // A workgroup's 64 words are 8 batches: thread 8k tests batch k once for all 8 of its words and
+  // lists it for the splat when it may draw.
+  const batchShown = tgpu.workgroupVar(d.arrayOf(d.u32, 8));
   const compactPipeline = root.createComputePipeline({
-    compute: tgpu.computeFn({ workgroupSize: [64], in: { gid: d.builtin.globalInvocationId } })((input) => {
+    compute: tgpu.computeFn({
+      workgroupSize: [64],
+      in: { gid: d.builtin.globalInvocationId, l: d.builtin.localInvocationIndex },
+    })((input) => {
       "use gpu";
       const f = frame.$;
       const w = input.gid.x;
+      if ((input.l & 7) === 0) {
+        const live = w < f.words && batchLive(w >>> 3);
+        batchShown.$[input.l >>> 3] = d.u32(live);
+        if (live) liveBatches.$[std.atomicAdd(state.$.live, 1)] = w >>> 3;
+      }
+      std.workgroupBarrier();
       if (w >= f.words) return;
       // Density mode (last decision) draws no quads, so no ids: only the hysteresis count.
-      // ponytail: estimated from every 8th word (×8); a row order periodic in 256 rows would
-      // bias it. Count every word if the density switch ever flickers.
+      // ponytail: estimated from every 8th word (×8), the first 32 points of each Morton batch.
+      // Count every word if the density switch ever flickers.
       const counting = state.$.dense === 1 && f.writeIds === 0;
       if (counting && (w & 7) !== 0) return;
+      // Off-screen batch, or no predicate bit set: nothing to draw in these 32 points.
+      if (batchShown.$[input.l >>> 3] === 0 || !wordPasses(w)) return;
       let mask = d.u32(0);
       for (let k = d.u32(0); k < 32; k++) {
         const i = w * 32 + k;
@@ -131,10 +181,12 @@ export function createRenderPasses(root: TgpuRoot, scene: Scene, hdrFormat: GPUT
       indirectRW.$[1] = std.select(shown, d.u32(0), dense === 1);
       indirectRW.$[5] = shown;
       indirectRW.$[9] = dense;
-      // One thread per point: up to 32768 workgroups of 256 across x, rows of those across y.
-      const groups = (f.n + 255) >>> 8;
-      indirectRW.$[12] = std.select(d.u32(0), std.min(groups, 32768), dense === 1);
-      indirectRW.$[13] = (groups + 32767) >>> 15;
+      // The splat: one workgroup per live batch, up to 32768 across x, rows of those across y.
+      const live = std.atomicLoad(state.$.live);
+      std.atomicStore(state.$.live, 0);
+      state.$.splatBatches = live;
+      indirectRW.$[12] = std.select(d.u32(0), std.min(live, 32768), dense === 1);
+      indirectRW.$[13] = (live + 32767) >>> 15;
       // Leaving density mode: the counting pass wrote no ids, so compact again.
       indirectRW.$[16] = std.select(d.u32(0), (f.words + 63) >>> 6, was === 1 && dense === 0 && f.writeIds === 0);
     }),
@@ -146,6 +198,8 @@ export function createRenderPasses(root: TgpuRoot, scene: Scene, hdrFormat: GPUT
     compute: tgpu.computeFn({ workgroupSize: [1] })(() => {
       "use gpu";
       const count = std.atomicLoad(state.$.count);
+      // The re-compaction's live batches are not splatted (it only runs when leaving density mode).
+      std.atomicStore(state.$.live, 0);
       if (count === 0) return;
       std.atomicStore(state.$.count, 0);
       state.$.visible = count;
@@ -250,83 +304,200 @@ export function createRenderPasses(root: TgpuRoot, scene: Scene, hdrFormat: GPUT
       };
   let blendMode: BlendMode = "additive";
 
-  // ── Density LOD: per-pixel atomic weight + color sums (one thread per point), then a resolve ──
+  // ── Density LOD: per-pixel atomic weight + color sums, then a resolve ──
+  // `hist`: per class tile (CLASS_TILE² px), the weight of each of CLASSES palette colors; only
+  // filled for the categorical compositing modes (dominant, weave).
   const accLayout = tgpu.bindGroupLayout({
     acc: { storage: (len: number) => d.arrayOf(d.atomic(d.u32), len), access: "mutable" },
+    hist: { storage: (len: number) => d.arrayOf(d.atomic(d.u32), len), access: "mutable" },
   });
 
+  // One workgroup per live batch. Morton order keeps a batch on a few pixels, so its points
+  // first sum into a workgroup tile (TILE² pixels around the batch's projected center) and each
+  // touched tile pixel then costs 4 global atomics instead of 4 per point. Points outside the
+  // tile (sparse batches) add to the grid directly. Class weights reduce the same way.
+  const tileSum = tgpu.workgroupVar(d.arrayOf(d.atomic(d.u32), TILE * TILE * 4));
+  const tileClass = tgpu.workgroupVar(d.arrayOf(d.atomic(d.u32), TILE_CLASS_CELLS * CLASSES));
+  // Thread 0's verdict for the workgroup: (live, tile origin x, y); the origin is class-tile aligned.
+  const batchTile = tgpu.workgroupVar(d.vec3i);
   const splatPipeline = root.createComputePipeline({
-    compute: tgpu.computeFn({ workgroupSize: [256], in: { gid: d.builtin.globalInvocationId } })((input) => {
+    compute: tgpu.computeFn({
+      workgroupSize: [BATCH],
+      in: { wid: d.builtin.workgroupId, t: d.builtin.localInvocationIndex },
+    })((input) => {
       "use gpu";
       const f = frame.$;
-      const i = input.gid.y * (32768 * 256) + input.gid.x;
-      if (i >= f.n) return;
-      const c = project(i);
-      if (c.w <= 0 || std.abs(c.x) >= c.w || std.abs(c.y) >= c.w || c.z < 0 || c.z > c.w) return;
-      const t = tier(i);
-      if (!visible(i, t)) return;
-      const color = pointColor(i);
-      const weight = color.w * tierAlpha(t) * 255;
-      const gx = std.min(d.u32(((c.x / c.w) * 0.5 + 0.5) * d.f32(f.grid.x)), f.grid.x - 1);
-      const gy = std.min(d.u32((0.5 - (c.y / c.w) * 0.5) * d.f32(f.grid.y)), f.grid.y - 1);
-      const o = (gy * f.grid.x + gx) * 4;
-      std.atomicAdd(accLayout.$.acc[o], d.u32(weight));
-      std.atomicAdd(accLayout.$.acc[o + 1], d.u32(color.x * weight));
-      std.atomicAdd(accLayout.$.acc[o + 2], d.u32(color.y * weight));
-      std.atomicAdd(accLayout.$.acc[o + 3], d.u32(color.z * weight));
+      const slot = input.wid.y * 32768 + input.wid.x;
+      const b = liveBatches.$[slot];
+      const t = input.t;
+      if (t === 0) {
+        // Tile centered on the batch's projected center; behind the camera, no tile.
+        const center = batchCenter(b);
+        let verdict = d.vec3i(d.i32(slot < state.$.splatBatches), -0x40000000, -0x40000000);
+        if (center.w > 0) {
+          const x = d.i32(((center.x / center.w) * 0.5 + 0.5) * d.f32(f.grid.x)) - HALF_TILE;
+          const y = d.i32((0.5 - (center.y / center.w) * 0.5) * d.f32(f.grid.y)) - HALF_TILE;
+          verdict.y = x & -CLASS_TILE;
+          verdict.z = y & -CLASS_TILE;
+        }
+        batchTile.$ = d.vec3i(verdict);
+      }
+      for (let k = d.u32(0); k < 4; k++) std.atomicStore(tileSum.$[t * 4 + k], 0);
+      const classes = f.densityMode !== 0 && f.colorBy === 0;
+      if (classes) {
+        for (let k = d.u32(0); k < 2; k++) std.atomicStore(tileClass.$[t * 2 + k], 0);
+      }
+      const tile = std.workgroupUniformLoad(batchTile.$);
+      if (tile.x === 0) return;
+      const origin = tile.yz;
+      const i = b * BATCH + t;
+      if (i < f.n) {
+        const c = project(i);
+        const tt = tier(i);
+        if (c.w > 0 && std.abs(c.x) < c.w && std.abs(c.y) < c.w && c.z >= 0 && c.z <= c.w && visible(i, tt)) {
+          const color = pointColor(i);
+          const weight = color.w * tierAlpha(tt) * 255;
+          const sums = d.vec4u(
+            d.u32(weight),
+            d.u32(color.x * weight),
+            d.u32(color.y * weight),
+            d.u32(color.z * weight),
+          );
+          const gx = std.min(d.u32(((c.x / c.w) * 0.5 + 0.5) * d.f32(f.grid.x)), f.grid.x - 1);
+          const gy = std.min(d.u32((0.5 - (c.y / c.w) * 0.5) * d.f32(f.grid.y)), f.grid.y - 1);
+          const local = std.sub(d.vec2i(d.i32(gx), d.i32(gy)), origin);
+          const inTile = local.x >= 0 && local.x < TILE && local.y >= 0 && local.y < TILE;
+          if (inTile) {
+            const cell = d.u32(local.y * TILE + local.x) * 4;
+            for (let ch = d.u32(0); ch < 4; ch++) std.atomicAdd(tileSum.$[cell + ch], sums[ch]);
+          } else {
+            const o = (gy * f.grid.x + gx) * 4;
+            for (let ch = d.u32(0); ch < 4; ch++) std.atomicAdd(accLayout.$.acc[o + ch], sums[ch]);
+          }
+          if (classes) {
+            // ponytail: palette colors past CLASSES fold onto the first ones in dominant/weave.
+            const cls = (catOf(i) % f.paletteLen) & (CLASSES - 1);
+            if (inTile) {
+              const cell = d.u32((local.y >> CLASS_SHIFT) * TILE_CLASSES + (local.x >> CLASS_SHIFT));
+              std.atomicAdd(tileClass.$[cell * CLASSES + cls], sums.x);
+            } else {
+              const cell = (gy >>> CLASS_SHIFT) * f.classTiles + (gx >>> CLASS_SHIFT);
+              std.atomicAdd(accLayout.$.hist[cell * CLASSES + cls], sums.x);
+            }
+          }
+        }
+      }
+      std.workgroupBarrier();
+      // Flush: thread t owns tile pixel t and class-tile entries 2t, 2t + 1.
+      const weight = std.atomicLoad(tileSum.$[t * 4]);
+      if (weight > 0) {
+        const o = (d.u32(origin.y + d.i32(t >>> TILE_SHIFT)) * f.grid.x + d.u32(origin.x + d.i32(t & (TILE - 1)))) * 4;
+        std.atomicAdd(accLayout.$.acc[o], weight);
+        for (let ch = d.u32(1); ch < 4; ch++)
+          std.atomicAdd(accLayout.$.acc[o + ch], std.atomicLoad(tileSum.$[t * 4 + ch]));
+      }
+      if (classes) {
+        for (let k = d.u32(0); k < 2; k++) {
+          const e = t * 2 + k;
+          const v = std.atomicLoad(tileClass.$[e]);
+          if (v > 0) {
+            const cell = e >>> CLASS_BITS;
+            const cx = d.u32(origin.x >> CLASS_SHIFT) + (cell & (TILE_CLASSES - 1));
+            const cy = d.u32(origin.y >> CLASS_SHIFT) + (cell >>> TILE_CLASS_SHIFT);
+            std.atomicAdd(accLayout.$.hist[(cy * f.classTiles + cx) * CLASSES + (e & (CLASSES - 1))], v);
+          }
+        }
+      }
     }),
   });
 
-  // Average color of the cell, coverage 1 − e^(−weight·opacity): hue survives any density.
+  // Coverage 1 − e^(−weight·opacity) from the pixel's own weight; color by `densityMode` (Jo et al.
+  // 2019): mean = the average color (hue survives any density); categorical colors only:
+  // dominant = the class with the most weight in the pixel's class tile, weave = a class drawn per
+  // pixel with probability ∝ its share of the tile (a fixed dither, so it does not flicker).
   const resolvePipeline = root.createRenderPipeline({
     vertex: fullScreenTriangle,
     fragment: tgpu.fragmentFn({ in: { pos: d.builtin.position }, out: d.vec4f })((input) => {
       "use gpu";
       const f = frame.$;
-      const o = (d.u32(input.pos.y) * f.grid.x + d.u32(input.pos.x)) * 4;
+      const px = d.u32(input.pos.x);
+      const py = d.u32(input.pos.y);
+      const o = (py * f.grid.x + px) * 4;
       const w = d.f32(std.atomicLoad(accLayout.$.acc[o]));
       if (w === 0) std.discard();
       const a = 1 - std.exp((-w / 255) * f.opacity);
-      const k = a / w;
-      return d.vec4f(
-        d.f32(std.atomicLoad(accLayout.$.acc[o + 1])) * k,
-        d.f32(std.atomicLoad(accLayout.$.acc[o + 2])) * k,
-        d.f32(std.atomicLoad(accLayout.$.acc[o + 3])) * k,
-        a,
-      );
+      if (f.densityMode === 0 || f.colorBy !== 0) {
+        const k = a / w;
+        return d.vec4f(
+          d.f32(std.atomicLoad(accLayout.$.acc[o + 1])) * k,
+          d.f32(std.atomicLoad(accLayout.$.acc[o + 2])) * k,
+          d.f32(std.atomicLoad(accLayout.$.acc[o + 3])) * k,
+          a,
+        );
+      }
+      const base = ((py >>> CLASS_SHIFT) * f.classTiles + (px >>> CLASS_SHIFT)) * CLASSES;
+      const n = std.min(f.paletteLen, CLASSES);
+      let total = d.u32(0);
+      let best = d.u32(0);
+      let bestWeight = d.u32(0);
+      for (let c = d.u32(0); c < n; c++) {
+        const v = std.atomicLoad(accLayout.$.hist[base + c]);
+        total += v;
+        if (v > bestWeight) {
+          best = c;
+          bestWeight = v;
+        }
+      }
+      if (f.densityMode === 2) {
+        // Interleaved-gradient noise in [0, 1) picks a point on the tile's cumulative class weights.
+        const u = std.fract(52.9829189 * std.fract(0.06711056 * input.pos.x + 0.00583715 * input.pos.y));
+        const target = u * d.f32(total);
+        let sum = d.f32(0);
+        for (let c = d.u32(0); c < n; c++) {
+          sum += d.f32(std.atomicLoad(accLayout.$.hist[base + c]));
+          if (sum > target) {
+            best = c;
+            break;
+          }
+        }
+      }
+      const color = colors.$[best];
+      return d.vec4f(color.x * a, color.y * a, color.z * a, a);
     }),
     targets: { format: hdrFormat },
     depthStencil: depthTest(false),
   });
 
-  function makeAcc(len: number) {
-    const buffer = root.createBuffer(d.arrayOf(d.atomic(d.u32), len)).$usage("storage");
-    return { buffer, group: root.createBindGroup(accLayout, { acc: buffer }) };
+  function makeAcc(width: number, height: number) {
+    const buffer = root.createBuffer(d.arrayOf(d.atomic(d.u32), width * height * 4)).$usage("storage");
+    const tiles = Math.ceil(width / CLASS_TILE) * Math.ceil(height / CLASS_TILE);
+    const hist = root.createBuffer(d.arrayOf(d.atomic(d.u32), tiles * CLASSES)).$usage("storage");
+    return { buffer, hist, group: root.createBindGroup(accLayout, { acc: buffer, hist }) };
   }
   let acc: ReturnType<typeof makeAcc> | null = null;
 
-  // ── Pick: r32uint ids through the same vertex function, scissored to 5×5 ──
+  // ── Pick: (storage id + 1, row) through the same vertex function, scissored to 5×5 ──
   const pickPipeline = root.createRenderPipeline({
     vertex: quadVertex,
     fragment: tgpu.fragmentFn({ in: { uv: d.vec2f, id: d.interpolate("flat", d.u32) }, out: d.vec4u })((input) => {
       "use gpu";
       // Isolation-dimmed points are not clickable.
       if (std.length(input.uv) > 1 || isoPass(input.id) === 0) std.discard();
-      return d.vec4u(input.id + 1, 0, 0, 0);
+      return d.vec4u(input.id + 1, perm.$[input.id], 0, 0);
     }),
-    targets: { format: "r32uint" },
+    targets: { format: "rg32uint" },
     depthStencil: depthTest(true),
   });
-  // 5 rows at the 256-byte row pitch copyTextureToBuffer requires; 25 ids are read.
+  // 5 rows at the 256-byte row pitch copyTextureToBuffer requires; 25 (id, row) texels are read.
   const pickStaging = root.device.createBuffer({
-    size: 256 * (PICK_WINDOW - 1) + 4 * PICK_WINDOW,
+    size: 256 * (PICK_WINDOW - 1) + 8 * PICK_WINDOW,
     usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
   });
   // Allocated on the first click after each resize.
   let size: [number, number] = [1, 1];
   let idTarget: ReturnType<typeof makeIdTarget> | null = null;
   function makeIdTarget() {
-    return root.createTexture({ size, format: "r32uint" }).$usage("render");
+    return root.createTexture({ size, format: "rg32uint" }).$usage("render");
   }
   let pickChain: Promise<unknown> = Promise.resolve();
   // 3D: shared by the draw and pick passes, reallocated on resize.
@@ -353,6 +524,8 @@ export function createRenderPasses(root: TgpuRoot, scene: Scene, hdrFormat: GPUT
     draw(enc, target) {
       if (acc) {
         root.unwrap(enc).clearBuffer(root.unwrap(acc.buffer));
+        // Cleared in every mode: one ~9 MB clear is cheaper than tracking the mode here.
+        root.unwrap(enc).clearBuffer(root.unwrap(acc.hist));
         const pass = enc.beginComputePass();
         splatPipeline.with(pass).with(acc.group).dispatchWorkgroupsIndirect(indirect, SPLAT);
         pass.end();
@@ -394,14 +567,14 @@ export function createRenderPasses(root: TgpuRoot, scene: Scene, hdrFormat: GPUT
         await pickStaging.mapAsync(GPUMapMode.READ);
         const words = new Uint32Array(pickStaging.getMappedRange());
         // Nearest hit to the cursor wins (in 3D each pixel already holds its front-most point).
-        let best: number | null = null;
+        let best: { id: number; row: number } | null = null;
         let bestDist = Infinity;
         for (let row = 0; row < PICK_WINDOW; row++) {
           for (let col = 0; col < PICK_WINDOW; col++) {
-            const id = words[row * 64 + col];
+            const texel = row * 64 + col * 2;
             const dist = (x0 + col - x) ** 2 + (y0 + row - y) ** 2;
-            if (id !== 0 && dist < bestDist) {
-              best = id - 1;
+            if (words[texel] !== 0 && dist < bestDist) {
+              best = { id: words[texel] - 1, row: words[texel + 1] };
               bestDist = dist;
             }
           }
@@ -422,7 +595,8 @@ export function createRenderPasses(root: TgpuRoot, scene: Scene, hdrFormat: GPUT
       depthTarget?.destroy();
       depthTarget = depth ? makeDepth() : null;
       acc?.buffer.destroy();
-      acc = densityPossible ? makeAcc(width * height * 4) : null;
+      acc?.hist.destroy();
+      acc = densityPossible ? makeAcc(width, height) : null;
     },
     destroy() {
       idTarget?.destroy();

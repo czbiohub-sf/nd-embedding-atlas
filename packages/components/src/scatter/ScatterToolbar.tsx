@@ -43,7 +43,7 @@ function ScanDotIcon({ size = 12 }: { size?: number }) {
 
 import type { ColorSource } from "./helpers";
 import { cn } from "@ndea/ui/lib/utils";
-import type { AxisState, ColorMode } from "./contracts";
+import type { AxisState, ColorMode, DensityMode, SelectionDepth } from "./contracts";
 import { EmbeddingPicker } from "./mudata/EmbeddingPicker";
 import { ModalityColorPicker } from "./mudata/ModalityColorPicker";
 import { ColorSourcePicker } from "./ColorSourcePicker";
@@ -74,6 +74,9 @@ interface Props {
   hasVar: boolean;
   onSetColorSource: (src: ColorSource) => void;
   onToggleColorMode: () => void;
+  /** Density compositing of categorical colors; cycles mean → dominant → weave. */
+  densityMode: DensityMode;
+  onCycleDensityMode: () => void;
 
   // MuData modality support (all optional: absent for single AnnData)
   modalities?: string[];
@@ -85,6 +88,9 @@ interface Props {
   // Selection tool
   selectionTool: "pan" | "marquee" | "lasso";
   onSetSelectionTool: (t: "pan" | "marquee" | "lasso") => void;
+  selectionDepth: SelectionDepth;
+  /** 3D only (undefined in 2D): select through, or the nearest dense structure. */
+  onToggleSelectionDepth?: () => void;
   onFitView?: () => void;
   trajectoryActive?: boolean;
   onToggleTrajectory?: () => void;
@@ -134,12 +140,16 @@ export function ScatterToolbar({
   hasVar,
   onSetColorSource,
   onToggleColorMode,
+  densityMode,
+  onCycleDensityMode,
   modalities,
   modalityObsColumns,
   varCount,
   obsm,
   selectionTool,
   onSetSelectionTool,
+  selectionDepth,
+  onToggleSelectionDepth,
   onFitView,
   trajectoryActive,
   onToggleTrajectory,
@@ -316,6 +326,16 @@ export function ScatterToolbar({
             {colorMode === "continuous" ? "scale" : "palette"}
           </button>
         )}
+        {colorMode === "categorical" && (
+          <button
+            type="button"
+            onClick={onCycleDensityMode}
+            title="Dense overviews: average colors (mean), the most frequent category (dominant), or categories interleaved by share (weave)"
+            className={cn(textToggle, compact && "hidden @[30rem]:block")}
+          >
+            {densityMode}
+          </button>
+        )}
       </div>
 
       <span className="min-w-2 flex-1" />
@@ -357,6 +377,16 @@ export function ScatterToolbar({
             <LassoSelect className={icon} />
           </HoverTip>
         </ToggleGroup>
+        {onToggleSelectionDepth && (
+          <button
+            type="button"
+            onClick={onToggleSelectionDepth}
+            title="3D selection: everything inside the shape (through), or only the nearest dense structure (front)"
+            className={cn(textToggle, compact && "hidden @[20rem]:block")}
+          >
+            {selectionDepth}
+          </button>
+        )}
 
         {hasSelection ? (
           <span className={cn("font-mono text-3xs text-wire-sel", compact && "hidden @[18rem]:inline")}>

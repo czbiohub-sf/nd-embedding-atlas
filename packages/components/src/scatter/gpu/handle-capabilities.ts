@@ -10,12 +10,15 @@
  */
 
 import type { RowIndex, TurntableView, ViewSyncState } from "@ndea/sdk";
+import type { DensityMode, SelectionDepth } from "../contracts";
 
 export interface SelectionCapability {
   setExternalSelection(rowIndices: RowIndex[]): void;
   clearExternalSelection(): void;
   clearSelection(): void;
   setForcedSelectionMode(mode: "pan" | "marquee" | "lasso"): void;
+  /** 3D: select through, or only the nearest dense structure under the shape. */
+  setSelectionDepth(depth: SelectionDepth): void;
 }
 
 export interface FilterCapability {
@@ -55,6 +58,8 @@ export interface RenderCapability {
   setHdrSettings(settings: { toneMapping?: "none" | "reinhard" | "aces" | "agx" | "neutral"; exposure?: number }): void;
   /** Switch scatter blend mode (additive / premultiplied / max). */
   setBlendMode(mode: "additive" | "premultiplied" | "max"): void;
+  /** Density-path compositing of categorical colors. */
+  setDensityMode(mode: DensityMode): void;
 }
 
 export interface ColorCapability {

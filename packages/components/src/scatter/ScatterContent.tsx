@@ -18,11 +18,13 @@ import { useDisabledBridge } from "./gpu/hooks/useDisabledBridge";
 import { useIsolationBridge } from "./gpu/hooks/useIsolationBridge";
 import { useScatterColorState } from "./gpu/hooks/useScatterColorState";
 import { useTrajectoryLoader } from "./gpu/hooks/useTrajectoryLoader";
-import type { AxisState, FocusedPointMeta } from "./contracts";
+import type { AxisState, DensityMode, FocusedPointMeta, SelectionDepth } from "./contracts";
 import { LegendProvider } from "./LegendContext";
 import { ScatterToolbar } from "./ScatterToolbar";
 import { useScatterUIState } from "./scatter-ui-store";
 import { ScatterView } from "./ScatterView";
+
+const DENSITY_CYCLE: readonly DensityMode[] = ["mean", "dominant", "weave"];
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
@@ -88,8 +90,10 @@ export function ScatterContent({ initialObsmKey, toolbarTarget, focusedPointMeta
   // ── 3D projection (also synced through viewSync) ───────────────────────────
   const [projection, setProjection] = useState<"perspective" | "orthographic">("perspective");
 
-  // ── Selection tool ─────────────────────────────────────────────────────────
+  // ── Selection tool and 3D selection depth ──────────────────────────────────
   const [selectionTool, setSelectionTool] = useState<"pan" | "marquee" | "lasso">("pan");
+  const [selectionDepth, setSelectionDepth] = useState<SelectionDepth>("through");
+  const densityMode = host.config.density.mode;
 
   // ── Color state ────────────────────────────────────────────────────────────
   const {
@@ -181,6 +185,8 @@ export function ScatterContent({ initialObsmKey, toolbarTarget, focusedPointMeta
     zCol,
     projection,
     onProjectionChange: setProjection,
+    selectionDepth,
+    densityMode,
     colorMode,
     categoryCol,
     categoryMapping: coloredCategoryMapping,
@@ -229,12 +235,22 @@ export function ScatterContent({ initialObsmKey, toolbarTarget, focusedPointMeta
       onToggleProjection={() => setProjection(projection === "perspective" ? "orthographic" : "perspective")}
       onSetColorSource={setColorSource}
       onToggleColorMode={() => setColorModeOverride(colorMode === "continuous" ? "categorical" : "continuous")}
+      densityMode={densityMode}
+      onCycleDensityMode={() =>
+        host.patchConfig({ density: { mode: DENSITY_CYCLE[(DENSITY_CYCLE.indexOf(densityMode) + 1) % 3] } })
+      }
       modalities={metadata.modalities}
       modalityObsColumns={metadata.modality_obs_columns}
       varCount={metadata.var_count}
       obsm={metadata.obsm}
       selectionTool={selectionTool}
       onSetSelectionTool={setSelectionTool}
+      selectionDepth={selectionDepth}
+      onToggleSelectionDepth={
+        effectiveAxes.zDim !== null
+          ? () => setSelectionDepth(selectionDepth === "through" ? "front" : "through")
+          : undefined
+      }
       onFitView={() => fitViewRef.current?.()}
       trajectoryActive={!!trajectory}
       onToggleTrajectory={onToggleTrajectory}

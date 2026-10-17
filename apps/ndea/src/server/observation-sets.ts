@@ -1,4 +1,4 @@
-import { mkdir, rename } from "node:fs/promises";
+import { mkdir, rename, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
 import { OBSERVATION_SET_TABLE, ObservationSetIdSchema, type ObservationSet } from "@ndea/protocol";
@@ -16,6 +16,7 @@ const SetFileSchema = z
 // Scratch tables for one `run` at a time: the queue serializes every use.
 const WORDS = "ndea_set_words";
 const MEMBERS = "ndea_set_members";
+const ROWS = "ndea_set_rows";
 export const escapePointer = (key: string) => key.replace(/~/g, "~0").replace(/\//g, "~1");
 
 /** Row bitmask: bit `r & 31` of word `r >> 5` is row `r` (`__row_index__`). */
@@ -60,11 +61,15 @@ export class ObservationSets {
     return result;
   }
 
-  /** Persist the rows set in `words` (see `rowWords`); the same rows always get the same id. */
+  /**
+   * Persist the rows set in `words` (see `rowWords`); the same rows always get the same id:
+   * sha256 of the sorted `dataset \0 obs_name` keys joined by "\n". DuckDB sorts, writes the
+   * keys and the set file; only the hash runs in JS, over the key file's bytes.
+   */
   create(words: Uint32Array): Promise<ObservationSet> {
     return this.run(async () => {
       const { conn } = this.store;
-      await conn.run(`DELETE FROM ${WORDS}; DELETE FROM ${MEMBERS}`);
+      await conn.run(`DELETE FROM ${WORDS}`);
       const appender = await conn.createAppender(WORDS);
       for (let w = 0; w < words.length; w++) {
         if (words[w] === 0) continue;
@@ -73,37 +78,48 @@ export class ObservationSets {
         appender.endRow();
       }
       appender.closeSync();
-      // Expand the bitmask in DuckDB and resolve each row to its durable identity.
+      const dataset = this.store.hasDatasetColumn() ? "_dataset" : "NULL::VARCHAR";
+      const key = "coalesce(dataset, '') || chr(0) || obs_name";
+      // Resolve each selected row to its durable identity (one join per 32-row word).
       await conn.run(
-        `INSERT INTO ${MEMBERS} SELECT ${this.store.hasDatasetColumn() ? "_dataset" : "NULL"}, obs_name FROM dataset ` +
-          `WHERE __row_index__ IN (SELECT w * 32 + b FROM ${WORDS}, range(32) t(b) WHERE (bits >> b::UINTEGER) & 1 = 1)`,
+        `CREATE OR REPLACE TEMP TABLE ${ROWS} AS SELECT ${dataset} AS dataset, obs_name::VARCHAR AS obs_name ` +
+          `FROM dataset d JOIN ${WORDS} ON w = d.__row_index__ >> 5 WHERE (bits >> (d.__row_index__ & 31)::UINTEGER) & 1 = 1`,
       );
-      const [{ expected }] = await this.store.querySingleJson(
-        `SELECT coalesce(sum(bit_count(bits)), 0)::BIGINT AS expected FROM ${WORDS}`,
+      const [{ expected, found }] = await this.store.querySingleJson(
+        `SELECT (SELECT coalesce(sum(bit_count(bits)), 0) FROM ${WORDS})::BIGINT AS expected, ` +
+          `(SELECT count(*) FROM ${ROWS})::BIGINT AS found`,
       );
-      // An empty result has no column chunks at all.
-      const [datasets = [], names = []] = (
-        await conn.runAndReadAll(`SELECT dataset, obs_name FROM ${MEMBERS}`)
-      ).getColumnsJS();
-      if (names.length === 0) throw new UnknownObservationRows("empty observation set");
-      if (names.length !== expected) throw new UnknownObservationRows("unknown observation row indices");
-      const members = new Map<string, [string | null, string]>();
-      for (let i = 0; i < names.length; i++) {
-        const dataset = datasets[i] as string | null;
-        const name = names[i] as string;
-        members.set(`${dataset ?? ""}\u0000${name}`, [dataset, name]);
-      }
-      const keys = [...members.keys()].toSorted();
-      const set = new Bun.CryptoHasher("sha256").update(keys.join("\n")).digest("hex").slice(0, 16);
-      if (!this.loaded.has(set)) {
-        await mkdir(this.directory, { recursive: true });
-        const path = join(this.directory, `${set}.json`);
-        const tmp = `${path}.${process.pid}.${crypto.randomUUID()}.tmp`;
-        await Bun.write(tmp, JSON.stringify({ version: 1, members: keys.map((key) => members.get(key)!) }));
-        await rename(tmp, path);
+      if (Number(expected) === 0) throw new UnknownObservationRows("empty observation set");
+      if (Number(found) !== Number(expected)) throw new UnknownObservationRows("unknown observation row indices");
+      // Unique identities in key order; table order is insertion order, so both COPYs stream sorted.
+      await conn.run(
+        `CREATE OR REPLACE TEMP TABLE ${MEMBERS} AS SELECT DISTINCT dataset, obs_name FROM ${ROWS} ORDER BY ${key}; ` +
+          `DROP TABLE ${ROWS}`,
+      );
+      await mkdir(this.directory, { recursive: true });
+      const tmp = join(this.directory, `.${process.pid}.${crypto.randomUUID()}.tmp`);
+      // Raw lines (no quoting or escaping) into `tmp`: exactly the selected rows, one per line.
+      const into = `TO '${tmp.replaceAll("'", "''")}' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '')`;
+      try {
+        // The keys joined by "\n", plus a final "\n".
+        await conn.run(`COPY (SELECT ${key} FROM ${MEMBERS}) ${into}`);
+        const keys = await Bun.file(tmp).bytes();
+        const set = new Bun.CryptoHasher("sha256").update(keys.subarray(0, -1)).digest("hex").slice(0, 16);
+        const [row] = await this.store.querySingleJson(`SELECT count(*)::INTEGER AS count FROM ${MEMBERS}`);
+        const count = Number(row.count);
+        if (this.loaded.has(set)) return { set, count };
+        // The version-1 set file: `{"version":1,"members":[` + `[dataset,name]`, … + `]}`.
+        const member = "'[' || coalesce(to_json(dataset), 'null') || ',' || to_json(obs_name) || ']'";
+        await conn.run(
+          `COPY (SELECT CASE WHEN rowid = 0 THEN '{"version":1,"members":[' ELSE ',' END || ${member} || ` +
+            `CASE WHEN rowid = ${count - 1} THEN ']}' ELSE '' END FROM ${MEMBERS}) ${into}`,
+        );
+        await rename(tmp, join(this.directory, `${set}.json`));
         await this.load(set);
+        return { set, count };
+      } finally {
+        await rm(tmp, { force: true });
       }
-      return { set, count: keys.length };
     });
   }
 

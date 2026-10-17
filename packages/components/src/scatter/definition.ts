@@ -25,13 +25,23 @@ export function createScatterDefinition({
           .describe(
             "3D: the embedding dimension on the z axis (x and y are dims 0 and 1; the embedding needs more columns than zDim). null = 2D.",
           ),
+        density: z
+          .object({ mode: z.enum(["mean", "dominant", "weave"]) })
+          .describe(
+            "How dense overviews composite categorical colors per pixel: mean (average color), dominant (the most frequent category), or weave (categories interleaved by share). Continuous color always averages.",
+          ),
       }),
-      defaultValue: { obsmKey: null, colorByColumn: null, zDim: null } satisfies ScatterConfig,
+      defaultValue: {
+        obsmKey: null,
+        colorByColumn: null,
+        zDim: null,
+        density: { mode: "mean" },
+      } satisfies ScatterConfig,
     },
     documentation: {
       summary: "Plots your cells in embedding space, like a UMAP.",
       use: "Use it to spot structure, then lasso a region to select those cells.",
-      note: "Pick an embedding in the component's options. Set zDim (e.g. 2) for a 3D view of an embedding with 3+ columns. Lassos publish named observation sets; linked color-by scopes share the color column.",
+      note: "Pick an embedding in the component's options. Set zDim (e.g. 2) for a 3D view of an embedding with 3+ columns. Set density.mode to dominant or weave to keep categories distinct where points overlap. Lassos publish named observation sets; linked color-by scopes share the color column.",
     },
     binds: ["focus", "filter", "colorBy", "viewSync"],
     load: async () => {

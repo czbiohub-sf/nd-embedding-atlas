@@ -3,11 +3,21 @@ import type { Metadata, TrajectoryFrame } from "@ndea/protocol";
 import type { RowIndex } from "@ndea/sdk";
 import type { Store } from "@tanstack/store";
 
+/**
+ * How the density path (overviews with too many points for markers) composites categorical
+ * colors per pixel: the average color, the dominant class, or classes woven by share.
+ */
+export type DensityMode = "mean" | "dominant" | "weave";
+
+/** 3D lasso/marquee depth: everything projecting inside (`through`), or the nearest dense structure (`front`). */
+export type SelectionDepth = "through" | "front";
+
 export interface ScatterConfig {
   obsmKey: string | null;
   colorByColumn: string | null;
   /** Embedding dimension for the z axis; null = 2D. */
   zDim: number | null;
+  density: { mode: DensityMode };
 }
 
 export interface ScatterOptions {

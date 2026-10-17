@@ -400,6 +400,12 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
       setForcedSelectionMode(mode) {
         gpuRef.current?.setForcedSelectionMode(mode);
       },
+      setSelectionDepth(depth) {
+        gpuRef.current?.setSelectionDepth(depth);
+      },
+      setDensityMode(mode) {
+        gpuRef.current?.setDensityMode(mode);
+      },
     }),
     [],
   );

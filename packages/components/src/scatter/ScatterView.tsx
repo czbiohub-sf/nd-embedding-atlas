@@ -14,7 +14,16 @@ import type { Coordinator } from "@uwdata/mosaic-core";
 import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ScatterGPUHost, type ScatterGPUHostHandle, type ScatterPointStyle } from "./gpu/components/ScatterGpuHost";
 import { ScatterDeviceLeaseProvider, useScatterHost, useScatterServices } from "./context";
-import type { AxisState, CategoryMapping, ColorMode, Metadata, ScatterSession, TrajectoryData } from "./contracts";
+import type {
+  AxisState,
+  CategoryMapping,
+  ColorMode,
+  DensityMode,
+  Metadata,
+  ScatterSession,
+  SelectionDepth,
+  TrajectoryData,
+} from "./contracts";
 import { colorSourceFromString, colorSourceLegendLabel, toRows } from "./helpers";
 import { useMosaicScatterData } from "./gpu/hooks/useMosaicScatterData";
 import { useScatterBrushSync } from "./gpu/hooks/useScatterBrushSync";
@@ -49,6 +58,8 @@ export interface ScatterViewProps {
   projection: TurntableView["projection"];
   /** A synced 3D view changed the projection. */
   onProjectionChange(projection: TurntableView["projection"]): void;
+  selectionDepth: SelectionDepth;
+  densityMode: DensityMode;
   colorMode: ColorMode;
   categoryCol: string | null;
   categoryMapping: CategoryMapping | null;
@@ -74,6 +85,8 @@ export function ScatterView({
   zCol,
   projection,
   onProjectionChange,
+  selectionDepth,
+  densityMode,
   colorMode,
   categoryCol,
   categoryMapping,
@@ -144,6 +157,14 @@ export function ScatterView({
   useEffect(() => {
     hostRef.current?.setProjection(projection);
   }, [projection]);
+
+  useEffect(() => {
+    hostRef.current?.setSelectionDepth(selectionDepth);
+  }, [selectionDepth]);
+
+  useEffect(() => {
+    hostRef.current?.setDensityMode(densityMode);
+  }, [densityMode]);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const trajectoryOverlayRef = useRef<TrajectoryOverlaySvgHandle | null>(null);
@@ -361,6 +382,8 @@ export function ScatterView({
     // prop on ScatterGPUHost: applied there, and re-applied on GPU reinit.
     hostRef.current?.setForcedSelectionMode(selectionTool);
     hostRef.current?.setProjection(projection);
+    hostRef.current?.setSelectionDepth(selectionDepth);
+    hostRef.current?.setDensityMode(densityMode);
   };
 
   useEffect(() => {

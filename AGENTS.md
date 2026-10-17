@@ -112,7 +112,9 @@ entrypoints across workspaces.
 - `ObservationSets` (`server/observation-sets.ts`) stores lassos as
   content-addressed sets keyed by dataset and obs name: `POST /api/sets`
   persists `~/.ndea/sets/<id>.json` and loads rows into the `ndea_obs_sets`
-  temp table that `{ op: "inSet" }` clauses query. A saved selection is a data
+  temp table that `{ op: "inSet" }` clauses query. DuckDB builds the set
+  (sort, key file, `COPY` of the set file); JS only hashes the key bytes, so
+  the id stays sha256 of the sorted `dataset\0obs_name` keys. A saved selection is a data
   source `{ where: { op: "inSet", set } }`. `PATCH /api/workspace` rejects
   references to unknown sets anywhere in the document.
 - `/mcp` (`server/mcp.ts`) serves MCP over Streamable HTTP with the SDK's
@@ -156,7 +158,14 @@ entrypoints across workspaces.
   visible, and GPU lasso/marquee on projected positions. `camera.ts` has
   `PanZoom2D` and `Turntable3D`; 3D draws opaque depth-tested discs, and its
   `viewSync` cells carry `yaw/pitch/distance/target/projection` (2D views skip
-  them).
+  them). `scene.ts` stores points in Morton (storage) order with 256-point
+  batches and per-batch bounds for culling; that order is internal: every
+  scene setter, the lasso bitmask, and the pick result speak row order
+  (`writeLayer`/`layerToRows`/`perm` translate). The element's `density.mode`
+  prop (`mean` | `dominant` | `weave`) picks how the density splat composites
+  categorical colors; the toolbar cycles it. 3D lassos have a toolbar-only
+  selection depth: `through` (everything inside) or `front` (CloudLasso: the
+  nearest dense structure).
 - Mosaic and server-side DuckDB drive cross-filtered scatter, table, and chart
   views. The `vgplot` component renders its props (`entries`, `attributes`) as
   a Mosaic plot spec with the host-supplied `$table`, `$scope`, and `$brush`

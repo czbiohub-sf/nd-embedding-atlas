@@ -1,12 +1,12 @@
 import type { DeviceInfo, RowIndex } from "@ndea/sdk";
-import { gpuPointIndex } from "../../contracts";
+import { type DensityMode, gpuPointIndex } from "../../contracts";
 import { PALETTE } from "../../gpu/constants";
 import { createInteractionController } from "../../gpu/hooks/useScatterInteraction";
 import type { ScatterData, ScatterplotConfig, ScatterplotHandle } from "../../gpu/types";
 import { type Bounds, type Camera, PanZoom2D, transform, Turntable3D } from "./camera";
 import { createHdrPipeline, HDR_FORMAT } from "./hdr";
 import { initGPU } from "./init";
-import { createRenderPasses } from "./render";
+import { CLASS_TILE, createRenderPasses } from "./render";
 import { Bit, createScene, type FrameState, LAYERS, NONE } from "./scene";
 import { createSelectionEngine } from "./selection";
 
@@ -20,6 +20,8 @@ const DENSITY_HYSTERESIS = 0.8;
 const MAX_QUADS = 1 << 21;
 /** Storage buffers the point vertex shader binds: posX, posY, cats, values, ids, bits (+ posZ in 3D). */
 const VERTEX_STORAGE_BUFFERS = 6;
+/** `Frame.densityMode` index of each density compositing mode. */
+const DENSITY_MODES: readonly DensityMode[] = ["mean", "dominant", "weave"];
 /** Minimum marker half-size (device px): smaller, the fwidth disk AA reads as a square. */
 const MIN_POINT_PX = 1.5;
 
@@ -59,11 +61,8 @@ export async function createScatterplot(
     );
   }
 
-  const scene = createScene(root, n, Math.min(n, MAX_QUADS), ndim);
-  // SoA positions: x column, y column, then z in 3D (no posZ in 2D).
-  [scene.posX, scene.posY, scene.posZ].forEach((buffer, a) =>
-    buffer?.write(data.positions.subarray(a * n, (a + 1) * n)),
-  );
+  // Row-order SoA positions (x, y, then z in 3D); the scene stores them in its own order.
+  const scene = createScene(root, data.positions, n, Math.min(n, MAX_QUADS), ndim);
   // Fit-view box, computed on the first fit.
   let bounds: Bounds | null = null;
   function dataBounds(): Bounds {
@@ -81,7 +80,7 @@ export async function createScatterplot(
     }
     return box;
   }
-  writeCategories(data.categoryIndices);
+  scene.writeCategories(data.categoryIndices);
   const tUpload = performance.now();
   console.log(`Buffer upload: ${(tUpload - t0).toFixed(1)}ms`);
 
@@ -108,6 +107,8 @@ export async function createScatterplot(
     cap: scene.cap,
     writeIds: 0,
     grid: [1, 1],
+    densityMode: 0,
+    classTiles: 1,
   };
   setPalette(PALETTE.map(([r, g, b]) => [r / 255, g / 255, b / 255] as const));
 
@@ -119,12 +120,6 @@ export async function createScatterplot(
   );
   // Compaction reruns only when the camera, a filter, or the data changed.
   let compactDirty = true;
-
-  function writeCategories(indices: Uint8Array) {
-    const bytes = new Uint8Array(Math.max(1, Math.ceil(n / 4)) * 4);
-    bytes.set(indices.subarray(0, n));
-    scene.cats.write(new Uint32Array(bytes.buffer));
-  }
 
   function setPalette(palette: readonly (readonly [number, number, number, number?])[]) {
     const len = Math.max(1, Math.min(palette.length, 256));
@@ -159,12 +154,12 @@ export async function createScatterplot(
     invalidate();
   }
 
-  /** Bit layer from a row list (row index = point index); empty → layer off. */
+  /** Bit layer from a row list; empty → layer off. */
   function setRows(bit: number, rows: readonly number[]) {
     if (rows.length > 0) {
       const words = new Uint32Array(scene.words);
       for (const r of rows) if (r < n) words[r >>> 5] |= 1 << (r & 31);
-      device.queue.writeBuffer(root.unwrap(scene.bits), bit * scene.words * 4, words);
+      scene.writeLayer(bit, words);
     }
     setFlag(bit, rows.length > 0);
   }
@@ -205,10 +200,13 @@ export async function createScatterplot(
     f.densityHi = Math.round(DENSITY_POINTS_PER_PX * pixels);
     f.densityLo = Math.round(DENSITY_POINTS_PER_PX * DENSITY_HYSTERESIS * pixels);
     f.grid = [width, height];
+    f.classTiles = Math.ceil(width / CLASS_TILE);
     hdr.resize(width, height);
     passes.resize(width, height, n > f.densityLo || n > scene.cap);
   }
 
+  // 3D only: CloudLasso `front` selects the nearest dense structure instead of everything inside.
+  let front = false;
   let pickRevision = 0;
   const interaction = createInteractionController(
     overlay,
@@ -222,7 +220,7 @@ export async function createScatterplot(
       onFps: (fps) => config?.callbacks?.onFps?.(fps),
       onSelect: (paint, final) => {
         sync();
-        selection.run(paint, overlay.clientWidth, overlay.clientHeight, final);
+        selection.run(paint, overlay.clientWidth, overlay.clientHeight, final, front);
         setFlag(Bit.lasso, true);
       },
       onPointClick: (cssX, cssY) => {
@@ -230,17 +228,17 @@ export async function createScatterplot(
         const scale = canvas.width / Math.max(1, overlay.clientWidth);
         sync();
         passes.pick(cssX * scale, cssY * scale).then(
-          (idx) => {
+          (hit) => {
             if (revision !== pickRevision) return;
-            if (idx === null) {
+            if (hit === null) {
               f.clicked = NONE;
               setFlag(Bit.highlight, false);
               config?.callbacks?.onBackgroundClick?.();
               return;
             }
-            f.clicked = idx;
+            f.clicked = hit.id;
             invalidate();
-            config?.callbacks?.onPointClick?.(gpuPointIndex(idx));
+            config?.callbacks?.onPointClick?.(gpuPointIndex(hit.row));
           },
           (err: unknown) => console.warn("GPU pick failed:", err),
         );
@@ -250,19 +248,8 @@ export async function createScatterplot(
   );
   resizeTargets();
 
-  const pointBytes = [
-    scene.posX.buffer,
-    scene.posY.buffer,
-    scene.posZ?.buffer,
-    scene.cats.buffer,
-    scene.values.buffer,
-    scene.bits,
-    scene.ids,
-  ]
-    .map((b) => (b ? root.unwrap(b).size : 0))
-    .reduce((a, b) => a + b, 0);
   console.log(
-    `Scatterplot ready: ${n.toLocaleString()} points in ${(performance.now() - t0).toFixed(1)}ms, ${(pointBytes / Math.max(1, n)).toFixed(2)} B/pt`,
+    `Scatterplot ready: ${n.toLocaleString()} points in ${(performance.now() - t0).toFixed(1)}ms, ${(scene.bytes / Math.max(1, n)).toFixed(2)} B/pt`,
   );
 
   return {
@@ -288,15 +275,19 @@ export async function createScatterplot(
       passes.setBlendMode(mode);
       interaction.requestRender();
     },
+    setDensityMode(mode) {
+      f.densityMode = DENSITY_MODES.indexOf(mode);
+      interaction.requestRender();
+    },
     updateColors(palette, categoryIndices) {
       setPalette(palette);
       if (categoryIndices) {
-        writeCategories(categoryIndices);
+        scene.writeCategories(categoryIndices);
         invalidate();
       } else interaction.requestRender();
     },
     updateContinuousColors(args) {
-      scene.values.write(args.values.subarray(0, n));
+      scene.writeValues(args.values);
       setLut(args.lut);
       f.vmin = Math.min(args.vmin, args.vmax);
       f.vmax = Math.max(args.vmin, args.vmax);
@@ -341,9 +332,7 @@ export async function createScatterplot(
       config?.callbacks?.onExternalClear?.();
     },
     setPredicateFilter(bits) {
-      const words = new Uint32Array(scene.words);
-      words.set(bits.subarray(0, scene.words));
-      device.queue.writeBuffer(root.unwrap(scene.bits), Bit.predicate * scene.words * 4, words);
+      scene.writeLayer(Bit.predicate, bits);
       setFlag(Bit.predicate, true);
     },
     clearPredicateFilter() {
@@ -385,6 +374,9 @@ export async function createScatterplot(
     },
     setForcedSelectionMode(mode) {
       interaction.setForcedSelectionMode(mode);
+    },
+    setSelectionDepth(depth) {
+      front = depth === "front" && ndim === 3;
     },
     setViewState(state) {
       interaction.setViewState(state);
