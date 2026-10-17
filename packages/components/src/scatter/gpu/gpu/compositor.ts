@@ -11,24 +11,21 @@ export const LAYER_HIGHLIGHT = 0b10000;
 
 export function createCompositor(
   root: TgpuRoot,
-  _device: GPUDevice,
   buffers: ScatterBuffers,
   uniforms: ScatterUniforms,
   numPoints: number,
-  _wgSize: 64 | 256 = 64,
 ) {
-  // 5 layer buffers: all u32[numPoints], storage usage
-  const lassoBuffer = root.createBuffer(d.arrayOf(d.u32, numPoints)).$usage("storage");
+  // Lasso is a bit layer (bit `i & 31` of word `i >> 5`); the other layers are u32[numPoints].
+  const lassoBits = root.createBuffer(d.arrayOf(d.u32, Math.ceil(numPoints / 32))).$usage("storage");
   const externalBuffer = root.createBuffer(d.arrayOf(d.u32, numPoints)).$usage("storage");
   const isolationBuffer = root.createBuffer(d.arrayOf(d.u32, numPoints)).$usage("storage");
-  const annotationBuffer = root.createBuffer(d.arrayOf(d.u32, numPoints)).$usage("storage");
   const highlightBuffer = root.createBuffer(d.arrayOf(d.u32, numPoints)).$usage("storage");
 
   let isDirty = false;
   let layerActiveBits = 0;
 
   // Buffer views used by the compositor shader
-  const lassoReadonly = lassoBuffer.as("readonly");
+  const lassoReadonly = lassoBits.as("readonly");
   const externalReadonly = externalBuffer.as("readonly");
   const isolationReadonly = isolationBuffer.as("readonly");
   const highlightReadonly = highlightBuffer.as("readonly");
@@ -51,14 +48,13 @@ export function createCompositor(
   //   - Highlighted points are always fully bright (never dimmed by filters)
   //   - Isolation and selection tiers intersect normally
   //   - If no tiers active → pass-all (1)
-  //   - annotationBuffer is writable but not yet composed (no annotation tier)
 
   const compositorPipeline = root.createGuardedComputePipeline((x: number) => {
     "use gpu";
     const idx = x;
     const layerBits = layerBitsUniform.$;
     const iso = isolationReadonly.$[idx];
-    const lasso = lassoReadonly.$[idx];
+    const lasso = (lassoReadonly.$[idx >>> 5] >>> (idx & 31)) & 1;
     const ext = externalReadonly.$[idx];
     const hi = highlightReadonly.$[idx];
 
@@ -109,10 +105,9 @@ export function createCompositor(
       return layerActiveBits;
     },
     // Expose layer buffers so selection engine can write into them
-    lassoBuffer,
+    lassoBits,
     externalBuffer,
     isolationBuffer,
-    annotationBuffer,
     highlightBuffer,
     destroy() {
       // TypeGPU buffers are cleaned up by root.destroy()

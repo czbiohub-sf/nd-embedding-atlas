@@ -355,12 +355,12 @@ export type TrajectoryResponse = z.infer<typeof TrajectoryResponseSchema>;
  *   byte 0       version (uint8) = 1
  *   bytes 1..4   header_len (uint32 LE)
  *   bytes 5..    JSON header (this shape) + padding + Float32Array[positions]
+ * Point `i` is the observation with `__row_index__ = i` (obs_base row order).
  */
 export const PositionHeaderSchema = z.object({
   numCells: z.number().int().positive(),
   embeddingKey: z.string().min(1),
   ndim: z.literal(2),
-  rowIndices: z.array(z.number().int().nonnegative()),
   positionScale: z.number().positive().default(1),
 });
 export type PositionHeader = z.infer<typeof PositionHeaderSchema>;

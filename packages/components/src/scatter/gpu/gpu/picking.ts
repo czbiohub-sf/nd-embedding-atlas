@@ -1,14 +1,13 @@
 /**
  * Render-to-texture picking system.
  *
- * Replaces the legacy CPU spatial-grid hit test (orchestrator.ts) with a
- * GPU pick buffer. luxar reference:
+ * The scatter's only hit test. luxar reference:
  * `packages/luxar-viewer/src/rendering/picking/picking-system.ts`.
  *
  * Why: when points overlap heavily the user clicks the visually frontmost
- * (brightest) point but the CPU grid picks whichever neighbor is nearest
- * in world space: wrong target. The pick buffer + brightness-as-depth
- * ensures the brightest fragment at each pixel wins.
+ * (brightest) point, not whichever neighbor is nearest in world space. The
+ * pick buffer + brightness-as-depth ensures the brightest fragment at each
+ * pixel wins.
  *
  * Pipeline:
  *  1. Render each instance to an `rgba32float` target with `depth32float`
@@ -61,8 +60,6 @@ export interface PickingSystem {
    * buffer if dirty; otherwise samples the cache.
    */
   pick(cssX: number, cssY: number): Promise<PickResult | null>;
-  /** Update the AABB of pickable points: used by the empty-space cull. */
-  updateBoundingBox(positions: Float32Array): void;
   /** Tear down GPU resources. */
   destroy(): void;
 }
@@ -244,28 +241,6 @@ export function createPickingSystem(
     return readbackBuffer;
   }
 
-  // ── AABB cull: skip readback if cursor is outside data bounds ────────
-  let aabb: { xMin: number; yMin: number; xMax: number; yMax: number } | null = null;
-  function updateBoundingBox(positions: Float32Array): void {
-    if (positions.length < 2) {
-      aabb = null;
-      return;
-    }
-    let xMin = positions[0];
-    let xMax = xMin;
-    let yMin = positions[1];
-    let yMax = yMin;
-    for (let i = 2; i < positions.length; i += 2) {
-      const x = positions[i];
-      const y = positions[i + 1];
-      if (x < xMin) xMin = x;
-      else if (x > xMax) xMax = x;
-      if (y < yMin) yMin = y;
-      else if (y > yMax) yMax = y;
-    }
-    aabb = { xMin, yMin, xMax, yMax };
-  }
-
   // ── Render the pick buffer ────────────────────────────────────────────
   function renderPickBuffer(): void {
     const t = ensureTargets();
@@ -314,22 +289,6 @@ export function createPickingSystem(
     const job = (async (): Promise<PickResult | null> => {
       const t = ensureTargets();
       if (canvas.clientWidth === 0 || canvas.clientHeight === 0) return null;
-
-      // Empty-space cull: cursor in NDC, then world. World AABB rebuilt
-      // on data change; cull is `O(1)` per pick.
-      if (aabb) {
-        const w = canvas.clientWidth;
-        const h = canvas.clientHeight;
-        // Use latest view uniform via the host-side mirror: but we
-        // don't have access here. Instead, rebuild ndc → world by
-        // reading the four uniforms directly. Cheap because the
-        // uniform mirror is a 16-byte read.
-        // (The ScatterUniforms pattern doesn't expose the host mirror
-        // either, so skip world-space cull and rely on the GPU result.
-        // Keeping AABB metadata for future use.)
-        void w;
-        void h;
-      }
 
       if (dirty) {
         renderPickBuffer();
@@ -411,7 +370,6 @@ export function createPickingSystem(
       dirty = true;
     },
     pick,
-    updateBoundingBox,
     destroy() {
       targets?.colorTexture.destroy();
       targets?.depthTexture.destroy();

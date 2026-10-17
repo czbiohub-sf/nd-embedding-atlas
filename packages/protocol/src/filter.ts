@@ -78,7 +78,10 @@ export type FilterResponse = z.infer<typeof FilterResponseSchema>;
 /**
  * POST /api/sets: persist the observations behind a selection as a named,
  * content-addressed set. Identity is (dataset, obs name), so a set survives
- * re-ingest; `rowIndices` is only how the client names them.
+ * re-ingest; row indices are only how the client names them. The body is this
+ * JSON, or an `application/octet-stream` row bitmask with `?rows=<nObs>`:
+ * exactly ceil(nObs / 8) bytes, bit `r % 8` of byte `r >> 3` set for row `r`
+ * (no row cap). The same rows get the same set id in either format.
  */
 export const ObservationSetCreateBodySchema = z.object({
   rowIndices: z.array(z.number().int().nonnegative()).min(1).max(5_000_000),

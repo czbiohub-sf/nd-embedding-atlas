@@ -118,6 +118,9 @@ export async function handleScatterPositions(url: URL, state: ServerSession, sig
       throw new Error(`dim length mismatch: x=${xs.length}, y=${ys.length}`);
     }
     const n = xs.length;
+    // Point i is `__row_index__ = i`: the loader aligns columns to obs_base row
+    // order, and clients index row bitmasks and sets by point index.
+    if (n !== state.store.nObs) throw new Error(`embedding has ${n} rows, dataset has ${state.store.nObs}`);
 
     // Normalize to [-1, 1]. NaN values are coerced to 0 for rendering;
     // downstream consumers already treat non-finite positions as hidden.
@@ -141,16 +144,10 @@ export async function handleScatterPositions(url: URL, state: ServerSession, sig
       }
     }
 
-    // rowIndices are the trivial 0..n-1 ordering; the loader already
-    // aligns columns to obs_base row order.
-    const rowIndices = Array.from<number>({ length: n });
-    for (let i = 0; i < n; i++) rowIndices[i] = i;
-
     const header = {
       numCells: n,
       embeddingKey: embedding,
       ndim: 2,
-      rowIndices,
       positionScale: maxAbs > 0 ? maxAbs : 1.0,
     };
 

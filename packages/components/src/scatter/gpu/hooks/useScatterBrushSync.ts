@@ -1,21 +1,23 @@
-import { useDebouncer } from "@tanstack/react-pacer";
-import type { RowIndex } from "@ndea/sdk";
-import type { RefObject } from "react";
 import { useEffect, useRef } from "react";
 import { useScatterHost } from "../../context";
-import type { GpuPointIndex } from "../../contracts";
 
 export interface UseScatterBrushSyncOptions {
-  rowIndicesRef: RefObject<RowIndex[]>;
+  /** Points in the scatter = observations (point index = row index). */
+  numPoints: number;
   setSelection: (n: number | null) => void;
 }
 
 export interface UseScatterBrushSyncResult {
-  onSelectionChange: (count: number | null, indices?: GpuPointIndex[]) => void;
+  onSelectionChange: (count: number | null, bits?: Uint32Array<ArrayBuffer>) => void;
 }
 
+/**
+ * Drag readbacks (no `bits`) only update the count. The pointer-up readback
+ * carries the lasso bit layer, which is the row bitmask: it becomes a
+ * content-addressed set, published as `{ op: "inSet", set }`.
+ */
 export function useScatterBrushSync({
-  rowIndicesRef,
+  numPoints,
   setSelection,
 }: UseScatterBrushSyncOptions): UseScatterBrushSyncResult {
   const host = useScatterHost();
@@ -25,44 +27,34 @@ export function useScatterBrushSync({
   }, [host]);
   const revisionRef = useRef(0);
   const queueRef = useRef(Promise.resolve());
-  const brushDebouncer = useDebouncer(
-    ({ rowIds, revision }: { rowIds: RowIndex[]; revision: number }) => {
-      const h = hostRef.current;
-      queueRef.current = queueRef.current.then(async () => {
-        if (h.signal.aborted || revision !== revisionRef.current) return;
-        try {
-          const { set } = await h.dataAPI.createObservationSet(rowIds);
-          if (!h.signal.aborted && revision === revisionRef.current) h.filter.publish("lasso", { op: "inSet", set });
-        } catch (error) {
-          if (!h.signal.aborted && revision === revisionRef.current) {
-            h.notifications.notify(error instanceof Error ? error.message : String(error), "error");
-          }
-        }
-      });
-    },
-    { wait: 200, leading: false, trailing: true },
-  );
   useEffect(
     () => () => {
       revisionRef.current += 1;
-      brushDebouncer.cancel();
       hostRef.current.filter.clear("lasso");
     },
-    [brushDebouncer],
+    [],
   );
 
-  const onSelectionChange = (_count: number | null, indices?: GpuPointIndex[]) => {
-    const rowIds = (indices ?? [])
-      .map((pointIndex) => rowIndicesRef.current[pointIndex])
-      .filter((value): value is RowIndex => value != null);
+  const onSelectionChange = (count: number | null, bits?: Uint32Array<ArrayBuffer>) => {
+    setSelection(count === 0 ? null : count);
+    if (count !== null && bits === undefined) return;
     const revision = ++revisionRef.current;
-    setSelection(rowIds.length > 0 ? rowIds.length : null);
-    if (rowIds.length === 0) {
-      brushDebouncer.cancel();
+    if (!count || !bits) {
       host.filter.clear("lasso");
-    } else {
-      brushDebouncer.maybeExecute({ rowIds, revision });
+      return;
     }
+    queueRef.current = queueRef.current.then(async () => {
+      if (host.signal.aborted || revision !== revisionRef.current) return;
+      try {
+        const { set } = await host.dataAPI.createObservationSet(bits, numPoints);
+        if (!host.signal.aborted && revision === revisionRef.current)
+          host.filter.publish("lasso", { op: "inSet", set });
+      } catch (error) {
+        if (!host.signal.aborted && revision === revisionRef.current) {
+          host.notifications.notify(error instanceof Error ? error.message : String(error), "error");
+        }
+      }
+    });
   };
   return { onSelectionChange };
 }

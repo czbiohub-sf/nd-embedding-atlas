@@ -2,17 +2,9 @@ import { tgpu } from "typegpu";
 import type { DeviceInfo } from "@ndea/sdk";
 
 export function initGPU(canvas: HTMLCanvasElement, deviceInfo: DeviceInfo) {
-  const { device, format, preferredWorkgroupSize } = deviceInfo;
-
+  const { device, format } = deviceInfo;
   const root = tgpu.initFromDevice({ device });
   const context = canvas.getContext("webgpu")!;
   context.configure({ device, format, alphaMode: "premultiplied" });
-
-  const limits = device.limits;
-  console.log(
-    `GPU workgroupSize: ${preferredWorkgroupSize}. ` +
-      `Limits: maxSizeX=${limits.maxComputeWorkgroupSizeX}, maxInvocations=${limits.maxComputeInvocationsPerWorkgroup}`,
-  );
-
-  return { root, device, context, format, preferredWorkgroupSize };
+  return { root, device, context, format };
 }

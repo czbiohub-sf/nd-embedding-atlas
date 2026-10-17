@@ -20,7 +20,7 @@ export interface SelectionCapability {
 }
 
 export interface FilterCapability {
-  setPredicateFilter(rowIndices: RowIndex[]): void;
+  setPredicateFilter(bits: Uint32Array): void;
   clearPredicateFilter(): void;
 }
 

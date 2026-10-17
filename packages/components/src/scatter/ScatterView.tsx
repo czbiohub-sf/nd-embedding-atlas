@@ -14,20 +14,11 @@ import type { Coordinator } from "@uwdata/mosaic-core";
 import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ScatterGPUHost, type ScatterGPUHostHandle, type ScatterPointStyle } from "./gpu/components/ScatterGpuHost";
 import { ScatterDeviceLeaseProvider, useScatterHost, useScatterServices } from "./context";
-import type {
-  AxisState,
-  CategoryMapping,
-  ColorMode,
-  GpuPointIndex,
-  Metadata,
-  ScatterSession,
-  TrajectoryData,
-} from "./contracts";
-import { gpuPointIndex } from "./contracts";
+import type { AxisState, CategoryMapping, ColorMode, Metadata, ScatterSession, TrajectoryData } from "./contracts";
 import { colorSourceFromString, colorSourceLegendLabel, toRows } from "./helpers";
 import { useMosaicScatterData } from "./gpu/hooks/useMosaicScatterData";
 import { useScatterBrushSync } from "./gpu/hooks/useScatterBrushSync";
-import { usePredicateRowIndices } from "./gpu/hooks/usePredicateRowIndices";
+import { usePredicateBits } from "./gpu/hooks/usePredicateBits";
 import type { ScatterplotConfig } from "./gpu/types";
 import { hexToRgbPalette } from "./gpu/utils/colors";
 import { CategoricalLegend } from "./CategoricalLegend";
@@ -46,10 +37,6 @@ export interface ScatterViewProps {
   } | null>;
   categoryIndicesRef?: RefObject<Uint8Array | null>;
   fitViewRef?: RefObject<(() => void) | null>;
-  /** Hoisted ref: populated by ScatterView but owned by ScatterContent */
-  rowIndicesRef?: RefObject<RowIndex[]>;
-  /** Called when GPU readback updates the row index list */
-  onRowIndicesChange?: (indices: RowIndex[]) => void;
   axes: AxisState | null;
   isLoading: boolean;
   loadingKey: string | null;
@@ -93,8 +80,6 @@ export function ScatterView({
   isolationHandleRef,
   categoryIndicesRef,
   fitViewRef,
-  rowIndicesRef: externalRowIndicesRef,
-  onRowIndicesChange,
 }: ScatterViewProps) {
   const categoryColors = useEffectiveCategoryColors();
   const { setFps, setZoom, setSelection, setEmbedding, setNumPoints } = useScatterUIDispatch();
@@ -133,7 +118,7 @@ export function ScatterView({
   const effectiveReversed = colorMode === "continuous" ? legendState.colormapReversed : false;
 
   const hostRef = useRef<ScatterGPUHostHandle | null>(null);
-  const { rowIndices: predicateFilterRowIds, error: predicateFilterError } = usePredicateRowIndices({
+  const { bits: predicateBits, error: predicateFilterError } = usePredicateBits({
     coordinator,
     filter: host.filter,
     table,
@@ -160,8 +145,6 @@ export function ScatterView({
   });
 
   const viewStateRef = useRef({ panX: 0, panY: 0, zoom: 1 });
-  const _localRowIndicesRef = useRef<RowIndex[]>([]);
-  const rowIndicesRef = externalRowIndicesRef ?? _localRowIndicesRef;
   const [gpuError, setGpuError] = useState<string | null>(null);
 
   // ── Continuous range filter handles (dim-only: colormap is NOT remapped) ──
@@ -222,21 +205,14 @@ export function ScatterView({
   );
 
   // Single-point focus → screen marker. focusedRowIndex is the clicked obs's
-  // __row_index__; resolve it to a normalized world position via the
-  // rowIndex→point inverse. Suppressed while a trajectory is active (that has
-  // its own overlay).
-  const rowToPoint = useMemo(() => {
-    const m = new Map<RowIndex, GpuPointIndex>();
-    const ri = data?.rowIndices;
-    if (ri) for (let i = 0; i < ri.length; i++) m.set(ri[i], gpuPointIndex(i));
-    return m;
-  }, [data?.rowIndices]);
+  // __row_index__, which is its point index. Suppressed while a trajectory is
+  // active (that has its own overlay).
   const highlightWorldPos = useMemo<[number, number] | null>(() => {
-    if (activeTrajectories.length > 0 || focusedRowIndex == null || !data) return null;
-    const pi = rowToPoint.get(focusedRowIndex);
-    if (pi == null) return null;
-    return [data.positions[2 * pi], data.positions[2 * pi + 1]];
-  }, [focusedRowIndex, activeTrajectories, data, rowToPoint]);
+    if (activeTrajectories.length > 0 || focusedRowIndex == null || !data || focusedRowIndex >= data.numCells) {
+      return null;
+    }
+    return [data.positions[2 * focusedRowIndex], data.positions[2 * focusedRowIndex + 1]];
+  }, [focusedRowIndex, activeTrajectories, data]);
 
   // Trajectory isolation mask: each feature owns its own mask; no mutual
   // exclusion needed. (Highlight moved to the prop above.)
@@ -328,10 +304,7 @@ export function ScatterView({
     { wait: 16 },
   );
 
-  const { onSelectionChange } = useScatterBrushSync({
-    rowIndicesRef,
-    setSelection,
-  });
+  const { onSelectionChange } = useScatterBrushSync({ numPoints: data?.numCells ?? 0, setSelection });
 
   const hasLassoRef = useRef(false);
   const clearLassoSelection = useCallback(() => {
@@ -343,9 +316,9 @@ export function ScatterView({
   }, [setSelection]);
 
   const callbacksRef = useRef({
-    onSelectionChange: (_count: number | null, _indices?: GpuPointIndex[]) => {},
+    onSelectionChange: (_count: number | null, _bits?: Uint32Array<ArrayBuffer>) => {},
     onExternalClear: () => {},
-    onPointClick: (_index: GpuPointIndex, _pos: [number, number], _catIdx: number, _catName: string) => {},
+    onPointClick: (_index: number, _pos: [number, number], _catIdx: number, _catName: string) => {},
     onBackgroundClick: () => {},
     onViewChange: (_state: { panX: number; panY: number; zoom: number }) => {},
     onFps: (_fps: number) => {},
@@ -361,10 +334,7 @@ export function ScatterView({
     setFocus(null);
     clearLassoSelection();
   };
-  callbacksRef.current.onPointClick = (pointIndex) => {
-    const clickedRowIndex = rowIndicesRef.current[pointIndex];
-    if (clickedRowIndex != null) setFocus(clickedRowIndex);
-  };
+  callbacksRef.current.onPointClick = (pointIndex) => setFocus(rowIndex(pointIndex));
   callbacksRef.current.onViewChange = (state) => {
     viewStateRef.current = state;
     setZoom(state.zoom);
@@ -384,21 +354,16 @@ export function ScatterView({
     },
   });
 
-  const paletteRef = useRef<readonly (readonly [number, number, number, number?])[]>([]);
-
   // ── GPU state rehydration ─────────────────────────────────────────────────
-  // When the embedding changes, the GPU destroys and re-creates. All imperative
-  // state (colors, point size, selection mode) must be re-applied to the new
-  // GPU instance. positionKey is the stable signal for GPU re-init.
-  useEffect(() => {
-    if (!positionKey) return;
-    // Colors
+  // Every GPU (re)init starts blank: colors, selection mode, and isolation are
+  // re-applied once the new instance is ready (init is async, so a
+  // positionKey effect would run before it exists).
+  const onGpuReady = (numPoints: number) => {
+    setNumPoints(numPoints);
     if (colorMode === "categorical") {
       const colors = categoryColors ?? [];
       if (colors.length > 0 && !colors.some((c) => !c)) {
-        const palette = hexToRgbPalette(colors);
-        paletteRef.current = palette;
-        hostRef.current?.setColors(palette, data?.categoryIndices);
+        hostRef.current?.setColors(hexToRgbPalette(colors), data?.categoryIndices);
       }
     } else if (colorMode === "continuous" && data?.continuous) {
       const c = data.continuous;
@@ -411,22 +376,17 @@ export function ScatterView({
         scale: legendState.scale,
       });
     }
-    // Point style (radius/opacity/blend/HDR) is now a declarative `pointStyle`
+    // Point style (radius/opacity/blend/HDR) is a declarative `pointStyle`
     // prop on ScatterGPUHost: applied there, and re-applied on GPU reinit.
-    // Selection tool
     hostRef.current?.setForcedSelectionMode(selectionTool);
-    // Re-upload all isolation masks from CPU state after GPU reinit
     hostRef.current?.rehydrateIsolation();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [positionKey]); // intentionally only positionKey: this runs once per GPU init
+  };
 
   useEffect(() => {
     if (colorMode !== "categorical") return;
     const colors = categoryColors ?? [];
     if (colors.length === 0 || colors.some((c) => !c)) return;
-    const palette = hexToRgbPalette(colors);
-    paletteRef.current = palette;
-    hostRef.current?.setColors(palette, data?.categoryIndices);
+    hostRef.current?.setColors(hexToRgbPalette(colors), data?.categoryIndices);
   }, [categoryColors, colorMode, data?.categoryIndices]);
 
   useEffect(() => {
@@ -566,13 +526,9 @@ export function ScatterView({
           config={configRef.current}
           pointStyle={pointStyle}
           highlightRowIds={highlightRowIds}
-          predicateFilterRowIds={predicateFilterRowIds}
+          predicateBits={predicateBits}
           onGpuError={setGpuError}
-          onRowIndicesChange={(indices) => {
-            rowIndicesRef.current = indices;
-            setNumPoints(indices.length);
-            onRowIndicesChange?.(indices);
-          }}
+          onReady={onGpuReady}
         />
       </ScatterDeviceLeaseProvider>
       {showLoading && (

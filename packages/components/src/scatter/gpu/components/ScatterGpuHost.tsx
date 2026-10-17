@@ -14,8 +14,6 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef } from "react";
 import type { RowIndex } from "@ndea/sdk";
 import { useScatterDeviceLease, useScatterServices } from "../../context";
-import type { PanelId } from "../../contracts";
-import { clearPanelLayerState, initPanelLayerState, selectionLayerStore } from "../../selection-layer-store";
 import { createScatterplot } from "../../gpu/gpu/orchestrator";
 import type { ScatterGPUHostHandle } from "../../gpu/handle-capabilities";
 import type { ScatterData, ScatterplotConfig, ScatterplotHandle } from "../../gpu/types";
@@ -52,15 +50,14 @@ interface ScatterGPUHostProps {
    */
   config: ScatterplotConfig;
   onGpuError(msg: string): void;
-  onRowIndicesChange(indices: RowIndex[]): void;
+  /** A new GPU instance is live (first init or reinit): re-apply imperative state. */
+  onReady(numPoints: number): void;
   /** Declarative point style: applied on change, re-applied on GPU reinit. */
   pointStyle?: ScatterPointStyle;
   /** Declarative full-bright highlight set (e.g. trajectory points). null/empty = none. */
   highlightRowIds?: readonly RowIndex[] | null;
-  /** Filter-scope predicate matches. null = inactive; empty = hide every point. */
-  predicateFilterRowIds?: readonly RowIndex[] | null;
-  /** Panel identity for SelectionLayerStore registration. Optional to avoid breaking call sites. */
-  myPanelId?: PanelId;
+  /** Filter-scope predicate row bitmask. null = inactive; empty = hide every point. */
+  predicateBits?: Uint32Array | null;
 }
 
 /** Push a point style onto a live GPU handle (no-op if either is absent). */
@@ -79,25 +76,15 @@ function applyHighlight(gpu: ScatterplotHandle | null, rowIds: readonly RowIndex
   else gpu.clearHighlight();
 }
 
-function applyPredicateFilter(gpu: ScatterplotHandle | null, rowIds: readonly RowIndex[] | null | undefined): void {
+function applyPredicateFilter(gpu: ScatterplotHandle | null, bits: Uint32Array | null | undefined): void {
   if (!gpu) return;
-  if (rowIds == null) gpu.clearPredicateFilter();
-  else gpu.setPredicateFilter([...rowIds]);
+  if (bits == null) gpu.clearPredicateFilter();
+  else gpu.setPredicateFilter(bits);
 }
 
 export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostProps>(function ScatterGPUHost(
   // eslint-disable-next-line @typescript-eslint/unbound-method
-  {
-    data,
-    positionKey,
-    config,
-    onGpuError,
-    onRowIndicesChange,
-    pointStyle,
-    highlightRowIds,
-    predicateFilterRowIds,
-    myPanelId,
-  },
+  { data, positionKey, config, onGpuError, onReady, pointStyle, highlightRowIds, predicateBits },
   ref,
 ) {
   const canvasElRef = useRef<HTMLCanvasElement | null>(null);
@@ -114,12 +101,12 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
   const dataRef = useRef<ScatterData | null>(data);
   const positionKeyRef = useRef<string | null>(positionKey);
   const onGpuErrorRef = useRef(onGpuError);
-  const onRowIndicesChangeRef = useRef(onRowIndicesChange);
+  const onReadyRef = useRef(onReady);
   const configRef = useRef(config);
   // Latest point style, read in the (stable) init path to re-apply after reinit.
   const pointStyleRef = useRef(pointStyle);
   const highlightRowIdsRef = useRef(highlightRowIds);
-  const predicateFilterRowIdsRef = useRef(predicateFilterRowIds);
+  const predicateBitsRef = useRef(predicateBits);
 
   // Device-lease state from the component host's DeviceBroker.
   const leaseState = useScatterDeviceLease();
@@ -130,11 +117,11 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
     dataRef.current = data;
     positionKeyRef.current = positionKey;
     onGpuErrorRef.current = onGpuError;
-    onRowIndicesChangeRef.current = onRowIndicesChange;
+    onReadyRef.current = onReady;
     configRef.current = config;
     pointStyleRef.current = pointStyle;
     highlightRowIdsRef.current = highlightRowIds;
-    predicateFilterRowIdsRef.current = predicateFilterRowIds;
+    predicateBitsRef.current = predicateBits;
     leaseStateRef.current = leaseState;
   });
 
@@ -202,8 +189,8 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
         gpuRef.current = gpu;
         applyPointStyle(gpu, pointStyleRef.current);
         applyHighlight(gpu, highlightRowIdsRef.current);
-        applyPredicateFilter(gpu, predicateFilterRowIdsRef.current);
-        onRowIndicesChangeRef.current(currentData.rowIndices ?? []);
+        applyPredicateFilter(gpu, predicateBitsRef.current);
+        onReadyRef.current(currentData.numCells);
       })
       .catch((err: unknown) => {
         // Expected when teardown aborted the in-flight device acquire.
@@ -316,25 +303,8 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
   }, [highlightRowIds]);
 
   useEffect(() => {
-    applyPredicateFilter(gpuRef.current, predicateFilterRowIds);
-  }, [predicateFilterRowIds]);
-
-  // Subscribe to SelectionLayerStore for this panel's slot.
-  // Must be in useEffect so subscription lifecycle matches component lifetime.
-  useEffect(() => {
-    if (!myPanelId) return () => {};
-    initPanelLayerState(myPanelId);
-    const sub = selectionLayerStore.subscribe(() => {
-      const panelState = selectionLayerStore.state.get(myPanelId);
-      if (!panelState || !gpuRef.current) return;
-      // Phase 4 will add actual layer upload logic here.
-      // For now, this subscription is a no-op placeholder.
-    });
-    return () => {
-      sub.unsubscribe();
-      clearPanelLayerState(myPanelId);
-    };
-  }, [myPanelId]);
+    applyPredicateFilter(gpuRef.current, predicateBits);
+  }, [predicateBits]);
 
   // Expose imperative handle to parent
   useImperativeHandle(
@@ -385,8 +355,8 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
       clearSelection() {
         gpuRef.current?.clearSelection();
       },
-      setPredicateFilter(rowIndices) {
-        gpuRef.current?.setPredicateFilter(rowIndices);
+      setPredicateFilter(bits) {
+        gpuRef.current?.setPredicateFilter(bits);
       },
       clearPredicateFilter() {
         gpuRef.current?.clearPredicateFilter();

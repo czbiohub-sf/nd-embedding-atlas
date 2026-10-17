@@ -181,19 +181,20 @@ describe("createComponentHost", () => {
   });
 
   test("creates an observation set through POST /api/sets with the global fetch receiver", async () => {
-    const requests: { receiver: unknown; url: string; body: unknown }[] = [];
-    const fetcher = function (this: unknown, input: string, init?: { body?: string }): Promise<Response> {
-      requests.push({ receiver: this, url: input, body: JSON.parse(init?.body ?? "null") });
+    const requests: { receiver: unknown; url: string; body: number[] }[] = [];
+    const fetcher = function (this: unknown, input: string, init?: { body?: Uint8Array }): Promise<Response> {
+      requests.push({ receiver: this, url: input, body: [...(init?.body ?? [])] });
       return Promise.resolve(Response.json({ set: "0123456789abcdef", count: 2 }));
     } as unknown as typeof globalThis.fetch;
     const handle = createComponentHost(hostDependencies({ fetch: fetcher }), hostInit("row-set", {}));
     const host = handle.host;
 
-    expect(await host.dataAPI.createObservationSet([rowIndex(2), rowIndex(5)])).toEqual({
+    // Rows 2 and 5 of 10: one u32 word, sent as ceil(10 / 8) = 2 bytes.
+    expect(await host.dataAPI.createObservationSet(new Uint32Array([0b100100]), 10)).toEqual({
       set: "0123456789abcdef",
       count: 2,
     });
-    expect(requests).toEqual([{ receiver: globalThis, url: "/api/sets", body: { rowIndices: [2, 5] } }]);
+    expect(requests).toEqual([{ receiver: globalThis, url: "/api/sets?rows=10", body: [0b100100, 0] }]);
     handle.dispose();
   });
 });

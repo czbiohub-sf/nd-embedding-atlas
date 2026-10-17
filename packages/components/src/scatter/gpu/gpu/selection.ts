@@ -3,8 +3,9 @@ import * as d from "typegpu/data";
 import * as std from "typegpu/std";
 import { MAX_POLYGON_VERTS } from "../../gpu/constants";
 import type { TgpuRoot } from "../../gpu/types";
-import { type GpuPointIndex, gpuPointIndex } from "../../contracts";
+import type { GpuPointIndex } from "../../contracts";
 import { simplifyPath } from "../../gpu/utils/geometry";
+import { latestOnly } from "../../gpu/utils/latest-only";
 import type { ScatterBuffers, ScatterUniforms } from "./buffers";
 import { type CompositorEngine, LAYER_EXTERNAL, LAYER_HIGHLIGHT, LAYER_ISOLATION, LAYER_LASSO } from "./compositor";
 
@@ -16,23 +17,23 @@ export function createSelectionEngine(
   buffers: ScatterBuffers,
   uniforms: ScatterUniforms,
   numPoints: number,
-  onBrushSelectionChange: (count: number | null, indices?: GpuPointIndex[]) => void,
-  _wgSize: 64 | 256 = 64,
   compositor: CompositorEngine,
+  /** Count on every drag readback; the lasso bit layer too on the final (pointer-up) one. */
+  onBrushSelectionChange: (count: number | null, bits?: Uint32Array<ArrayBuffer>) => void,
 ) {
   const { posBuffer, selectedBuffer } = buffers;
-
-  const stagingBuffer = device.createBuffer({
-    size: numPoints * 4,
-    usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
-  });
-  let isReadingBack = false;
+  const numWords = Math.ceil(numPoints / 32);
 
   const polygonBuffer = root.createBuffer(d.arrayOf(d.vec2f, MAX_POLYGON_VERTS)).$usage("storage");
   // i32 (not u32): `std.range(N)` yields i32 indices in the pip kernel, and
   // WGSL is strict about mixed i32/u32 comparisons. Value is always small
   // (≤ MAX_POLYGON_VERTS = 512) so signedness has no semantic effect.
   const polygonCountUniform = root.createUniform(d.i32, 0);
+  // xMin, yMin, xMax, yMax of the marquee; `shapeUniform` 1 = marquee, 0 = lasso polygon.
+  const marqueeUniform = root.createUniform(d.vec4f, d.vec4f(0, 0, 0, 0));
+  const shapeUniform = root.createUniform(d.u32, 0);
+  // Popcount of the lasso bit layer, summed by the kernel: the only drag-time readback.
+  const countBuffer = root.createBuffer(d.atomic(d.u32)).$usage("storage");
 
   const pointsReadonly = posBuffer.as("readonly");
   const selectedMutable = selectedBuffer.as("mutable");
@@ -41,14 +42,13 @@ export function createSelectionEngine(
   // category is in the disabled bitmask. (Same buffer the isolation kernel
   // reads further down: declaring the view once keeps both consumers in sync.)
   const lassoCategoryReadonly = buffers.categoryBuffer.as("readonly");
-  const predicateFilterReadonly = buffers.predicateFilterBuffer.as("readonly");
+  const predicateReadonly = buffers.predicateBits.as("readonly");
   const { predicateFilterActiveUniform } = uniforms;
   // Bitmask of disabled categories: bit i set if category i is hidden via
   // the legend. Lasso/marquee kernels skip points whose category bit is set.
   const lassoDisabledMaskUniform = root.createUniform(d.u32, 0);
-
-  // Buffer view into the compositor's lasso layer
-  const lassoMutable = compositor.lassoBuffer.as("mutable");
+  const lassoBitsMutable = compositor.lassoBits.as("mutable");
+  const countMutable = countBuffer.as("mutable");
 
   // ── PIP kernel ─────────────────────────────────────────────────────────
 
@@ -81,80 +81,70 @@ export function createSelectionEngine(
     return c;
   });
 
-  const pipPipeline = root.createGuardedComputePipeline((x: number) => {
+  // One thread per 32-point word: writes the lasso bit layer and adds its popcount.
+  const selectPipeline = root.createGuardedComputePipeline((w: number) => {
     "use gpu";
-    const idx = x;
-    const numVerts = polygonCountUniform.$;
-    const pt = pointsReadonly.$[idx];
-    const catIdx = lassoCategoryReadonly.$[idx];
-    const isDisabled = (lassoDisabledMaskUniform.$ >> catIdx) & 1;
-    const isFiltered = predicateFilterActiveUniform.$ === 1 && predicateFilterReadonly.$[idx] === 0;
-    if (isFiltered || isDisabled === 1) {
-      lassoMutable.$[idx] = 0;
-    } else if (pipTest(pt, numVerts)) {
-      lassoMutable.$[idx] = 1;
-    } else {
-      lassoMutable.$[idx] = 0;
+    let bits = d.u32(0);
+    for (const b of std.range(32)) {
+      const idx = w * 32 + d.u32(b);
+      if (idx >= numPoints) break;
+      const pt = pointsReadonly.$[idx];
+      const isDisabled = ((lassoDisabledMaskUniform.$ >>> lassoCategoryReadonly.$[idx]) & 1) === 1;
+      const isFiltered =
+        predicateFilterActiveUniform.$ === 1 && ((predicateReadonly.$[idx >>> 5] >>> (idx & 31)) & 1) === 0;
+      let inside = false;
+      if (shapeUniform.$ === 1) {
+        const r = marqueeUniform.$;
+        inside = pt.x >= r.x && pt.x <= r.z && pt.y >= r.y && pt.y <= r.w;
+      } else {
+        inside = pipTest(pt, polygonCountUniform.$);
+      }
+      if (inside && !isFiltered && !isDisabled) bits = bits | (d.u32(1) << d.u32(b));
     }
-  });
-
-  // ── AABB kernel ────────────────────────────────────────────────────────
-  const marqueeUniform = root.createUniform(d.vec4f, d.vec4f(0, 0, 0, 0));
-
-  const aabbPipeline = root.createGuardedComputePipeline((x: number) => {
-    "use gpu";
-    const idx = x;
-    const r = marqueeUniform.$;
-    const pt = pointsReadonly.$[idx];
-    const catIdx = lassoCategoryReadonly.$[idx];
-    const isDisabled = (lassoDisabledMaskUniform.$ >> catIdx) & 1;
-    const isFiltered = predicateFilterActiveUniform.$ === 1 && predicateFilterReadonly.$[idx] === 0;
-    if (isFiltered || isDisabled === 1) {
-      lassoMutable.$[idx] = 0;
-    } else if (pt.x >= r.x && pt.x <= r.z && pt.y >= r.y && pt.y <= r.w) {
-      lassoMutable.$[idx] = 1;
-    } else {
-      lassoMutable.$[idx] = 0;
-    }
+    lassoBitsMutable.$[w] = bits;
+    std.atomicAdd(countMutable.$, std.countOneBits(bits));
   });
 
   // ── Readback ───────────────────────────────────────────────────────────
-  let readbackFrame = 0;
-  function readbackSelectionCount() {
-    if (isReadingBack) return;
-    isReadingBack = true;
-    readbackFrame++;
-    const frame = readbackFrame;
+  // Copies run on the queue after the dispatch that wrote the lasso layer, so
+  // they always see the current selection. Drags read 4 bytes (the count);
+  // pointer-up also reads the N/8-byte bit layer. A request made during a
+  // readback is coalesced (latest wins), so the pointer-up one is never dropped.
+  const countStaging = device.createBuffer({ size: 4, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
+  const bitsStaging = device.createBuffer({
+    size: numWords * 4,
+    usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
+  });
+  // Bumped by clearSelection: drops readbacks requested before the clear.
+  let generation = 0;
+  const readback = latestOnly(async ({ final, gen }: { final: boolean; gen: number }) => {
+    if (gen !== generation) return;
     const t0 = performance.now();
-
-    const rawSelectedBuffer = root.unwrap(selectedBuffer);
     const encoder = device.createCommandEncoder();
-    encoder.copyBufferToBuffer(rawSelectedBuffer, 0, stagingBuffer, 0, numPoints * 4);
+    encoder.copyBufferToBuffer(root.unwrap(countBuffer), 0, countStaging, 0, 4);
+    if (final) encoder.copyBufferToBuffer(root.unwrap(compositor.lassoBits), 0, bitsStaging, 0, numWords * 4);
     device.queue.submit([encoder.finish()]);
+    await Promise.all([countStaging.mapAsync(GPUMapMode.READ), final && bitsStaging.mapAsync(GPUMapMode.READ)]);
+    const count = new Uint32Array(countStaging.getMappedRange())[0];
+    countStaging.unmap();
+    const bits = final ? new Uint32Array(bitsStaging.getMappedRange().slice(0)) : undefined;
+    if (final) bitsStaging.unmap();
+    if (gen !== generation) return;
+    console.log(
+      `${count.toLocaleString()} selected${final ? " (final)" : ""} (${(performance.now() - t0).toFixed(1)}ms)`,
+    );
+    onBrushSelectionChange(count, bits);
+  });
 
-    stagingBuffer
-      .mapAsync(GPUMapMode.READ)
-      .then(() => {
-        const data = new Uint32Array(stagingBuffer.getMappedRange());
-        let count = 0;
-        const indices: GpuPointIndex[] = [];
-        for (let i = 0; i < data.length; i++) {
-          if (data[i]) {
-            count++;
-            indices.push(gpuPointIndex(i));
-          }
-        }
-        stagingBuffer.unmap();
-        isReadingBack = false;
-        console.log(`[${frame}] ${count.toLocaleString()} selected (${(performance.now() - t0).toFixed(1)}ms)`);
-        onBrushSelectionChange(count, indices);
-      })
-      .catch(() => {
-        isReadingBack = false;
-      });
+  function select(final: boolean) {
+    device.queue.writeBuffer(root.unwrap(countBuffer), 0, new Uint32Array(1));
+    selectPipeline.dispatchThreads(numWords);
+    compositor.markDirty(LAYER_LASSO, true);
+    debugLogSelection();
+    readback({ final, gen: generation });
   }
 
-  function runLassoSelection(polygon: [number, number][], readback = true) {
+  function runLassoSelection(polygon: [number, number][], final: boolean) {
     if (polygon.length < 3) return;
     const simplified = simplifyPath(polygon, 0.001);
     const vertCount = Math.min(simplified.length, MAX_POLYGON_VERTS);
@@ -162,18 +152,14 @@ export function createSelectionEngine(
     while (polyData.length < MAX_POLYGON_VERTS) polyData.push(d.vec2f(0, 0));
     polygonBuffer.write(polyData);
     polygonCountUniform.write(vertCount);
-    pipPipeline.dispatchThreads(numPoints);
-    compositor.markDirty(LAYER_LASSO, true);
-    debugLogSelection();
-    if (readback) readbackSelectionCount();
+    shapeUniform.write(0);
+    select(final);
   }
 
-  function runMarqueeSelection(rect: { xMin: number; yMin: number; xMax: number; yMax: number }, readback = true) {
+  function runMarqueeSelection(rect: { xMin: number; yMin: number; xMax: number; yMax: number }, final: boolean) {
     marqueeUniform.write(d.vec4f(rect.xMin, rect.yMin, rect.xMax, rect.yMax));
-    aabbPipeline.dispatchThreads(numPoints);
-    compositor.markDirty(LAYER_LASSO, true);
-    debugLogSelection();
-    if (readback) readbackSelectionCount();
+    shapeUniform.write(1);
+    select(final);
   }
 
   // ── Debug ──────────────────────────────────────────────────────────────
@@ -310,7 +296,7 @@ export function createSelectionEngine(
   let categoryActive = false;
   let trajectoryActive = false;
   let continuousActive = false;
-  const predicateFilterMaskCpu = new Uint32Array(numPoints);
+  const predicateBitsCpu = new Uint32Array(numWords);
   let predicateFilterActive = false;
   // Disabled-category bitmask: CPU-only (GPU renders alpha=0 via color override,
   // so no shader plumbing needed). Used to gate the click handler so points in a
@@ -382,15 +368,16 @@ export function createSelectionEngine(
     lassoDisabledMaskUniform.write(0);
   }
 
-  function setPredicateFilter(mask: Uint32Array) {
-    predicateFilterMaskCpu.set(mask);
-    buffers.predicateFilterBuffer.write(predicateFilterMaskCpu);
+  /** `bits` may be shorter than the layer: missing trailing words hide their points. */
+  function setPredicateFilter(bits: Uint32Array) {
+    predicateBitsCpu.fill(0);
+    predicateBitsCpu.set(bits.subarray(0, numWords));
+    buffers.predicateBits.write(predicateBitsCpu);
     predicateFilterActive = true;
     predicateFilterActiveUniform.write(1);
   }
 
   function clearPredicateFilter() {
-    predicateFilterMaskCpu.fill(0);
     predicateFilterActive = false;
     predicateFilterActiveUniform.write(0);
   }
@@ -428,7 +415,7 @@ export function createSelectionEngine(
 
   /** Check if a point is visible under current isolation (for click filtering). */
   function isPointVisible(pointIndex: GpuPointIndex): boolean {
-    if (predicateFilterActive && predicateFilterMaskCpu[pointIndex] === 0) return false;
+    if (predicateFilterActive && ((predicateBitsCpu[pointIndex >> 5] >>> (pointIndex & 31)) & 1) === 0) return false;
     // Disabled-category gate: a point in a disabled category is never visible,
     // regardless of isolation/trajectory/continuous state. Matches the legend's
     // semantic that disabled = hidden everywhere (render and clicks).
@@ -449,8 +436,9 @@ export function createSelectionEngine(
     runMarqueeSelection,
     selectPoint,
     clearSelection() {
+      generation++;
       const encoder = device.createCommandEncoder();
-      encoder.clearBuffer(root.unwrap(compositor.lassoBuffer));
+      encoder.clearBuffer(root.unwrap(compositor.lassoBits));
       device.queue.submit([encoder.finish()]);
       compositor.markDirty(LAYER_LASSO, false);
       onBrushSelectionChange(null);
@@ -473,7 +461,9 @@ export function createSelectionEngine(
     rehydrateIsolation,
     debugLogSelection,
     destroy() {
-      stagingBuffer.destroy();
+      generation++;
+      countStaging.destroy();
+      bitsStaging.destroy();
     },
   };
 }

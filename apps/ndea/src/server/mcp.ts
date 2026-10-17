@@ -26,6 +26,7 @@ import { z } from "zod";
 import { COMPONENTS } from "../frontend/core/workspace/dashboard.ts";
 import type { WorkspaceDocument } from "../frontend/core/workspace/types.ts";
 import { hasBearer } from "./mcp-token.ts";
+import { rowWords } from "./observation-sets.ts";
 import { workspaceResult } from "./routes/workspace.ts";
 import type { ServerSession } from "./state.ts";
 import { agentSeen, clients } from "./status.ts";
@@ -359,7 +360,7 @@ export function createNdeaMcpServer(state: ServerSession, actor: WorkspaceActor)
       );
       if (rows.length === 0) return rejected("no observations match; nothing was saved");
       try {
-        const set = await state.observationSets.create(rows.map((row) => Number(row.__row_index__)));
+        const set = await state.observationSets.create(rowWords(rows.map((row) => Number(row.__row_index__))));
         return ok({ ...set, clause: { op: "inSet", set: set.set } });
       } catch (error) {
         return rejected(error instanceof Error ? error.message : String(error));

@@ -5,7 +5,8 @@ import type { RowIndex } from "@ndea/sdk";
 import { type GpuPointIndex, gpuPointIndex, type ViewState } from "../../contracts";
 import { createInteractionController } from "../../gpu/hooks/useScatterInteraction";
 import type { ScatterData, ScatterplotConfig, ScatterplotHandle } from "../../gpu/types";
-import { createBuffers, createUniforms, MAX_PALETTE_SIZE, uploadData } from "./buffers";
+import { PALETTE } from "../../gpu/constants";
+import { createBuffers, createUniforms, MAX_PALETTE_SIZE } from "./buffers";
 import { createCompositor } from "./compositor";
 import { createCullingEngine } from "./culling";
 import type { DeviceInfo } from "@ndea/sdk";
@@ -45,7 +46,7 @@ export async function createScatterplot(
   // broker refcount is incremented exactly once per instance, by the lease owner.
   const deviceInfo = opts.lease.info;
   const gpu = initGPU(canvas, deviceInfo);
-  const { root, device, context, format, preferredWorkgroupSize } = gpu;
+  const { root, device, context, format } = gpu;
   const tGpu = performance.now();
   console.log(`GPU init: ${(tGpu - t0).toFixed(1)}ms`);
 
@@ -69,22 +70,21 @@ export async function createScatterplot(
     const gpuH = Math.max(1, Math.floor(canvas.height * dpr));
     uniforms.pixelFloorUniform.write((2 * MIN_POINT_PIXEL_HALF) / gpuH);
   }
-  const buffers = createBuffers(root, data.numCells, data.categoryNames.length);
-  uploadData(root, device, buffers, data, config?.colorMapper, config?.palette);
+  const buffers = createBuffers(root, data.numCells);
+  buffers.posBuffer.write(data.positions);
+  buffers.categoryBuffer.write(Uint32Array.from(data.categoryIndices));
   const tUpload = performance.now();
   console.log(`Buffer upload: ${(tUpload - tGpu).toFixed(1)}ms`);
 
-  const culling = createCullingEngine(root, device, buffers, uniforms, data.numCells, preferredWorkgroupSize);
+  const culling = createCullingEngine(root, buffers, uniforms, data.numCells);
 
-  const compositor = createCompositor(root, device, buffers, uniforms, data.numCells, preferredWorkgroupSize);
+  const compositor = createCompositor(root, buffers, uniforms, data.numCells);
 
-  // GPU pick buffer: replaces the CPU spatial-grid hit test when the user
-  // opts in via `localStorage.ndea.useGpuPicking`. Renders to an offscreen
-  // rgba32f target with brightness-as-depth so overlapping points pick by
-  // visual frontmost (brightest), not geometric nearest. Same vertex
-  // attributes as the main render: stays in lockstep automatically.
+  // GPU pick buffer: renders to an offscreen rgba32f target with
+  // brightness-as-depth so overlapping points pick by visual frontmost
+  // (brightest), not geometric nearest. Same vertex attributes as the main
+  // render: stays in lockstep automatically.
   const picking = createPickingSystem(root, canvas, buffers, uniforms, culling, data.numCells);
-  picking.updateBoundingBox(data.positions);
 
   // Default to transparent: let the CSS background-color of the container
   // show through. This makes the scatter canvas respond to dark/light theme
@@ -117,23 +117,13 @@ export async function createScatterplot(
   // eslint-disable-next-line @typescript-eslint/unbound-method
   const { render } = renderPipelines;
 
-  const selection = createSelectionEngine(
-    root,
-    device,
-    buffers,
-    uniforms,
-    data.numCells,
-    (count, indices) => {
-      config?.callbacks?.onSelectionChange?.(count, indices);
-    },
-    preferredWorkgroupSize,
-    compositor,
+  const selection = createSelectionEngine(root, device, buffers, uniforms, data.numCells, compositor, (count, bits) =>
+    config?.callbacks?.onSelectionChange?.(count, bits),
   );
 
-  // Pre-allocated staging masks for row→point index conversion (avoids per-call allocation)
+  // Pre-allocated staging masks for row-list isolation sources (avoids per-call allocation)
   const trajectoryStagingMask = new Uint32Array(data.numCells);
   const continuousStagingMask = new Uint32Array(data.numCells);
-  const predicateFilterStagingMask = new Uint32Array(data.numCells);
 
   // ── GPU color-pack pipeline ────────────────────────────────────────────────
   // Instead of a O(n) CPU loop per palette change, pack colors on GPU:
@@ -170,13 +160,11 @@ export async function createScatterplot(
     buffers.paletteBuffer.write(packed);
     buffers.paletteLenUniform.write(len);
     // If custom categoryIndices supplied (e.g. fresh from React), re-upload them first
-    if (categoryIndices) {
-      const catStaging = new Uint32Array(data.numCells);
-      for (let i = 0; i < data.numCells; i++) catStaging[i] = categoryIndices[i]!;
-      buffers.categoryBuffer.write(catStaging);
-    }
+    if (categoryIndices) buffers.categoryBuffer.write(Uint32Array.from(categoryIndices));
     colorPackPipeline.dispatchThreads(data.numCells);
   }
+  // Default colors until the view applies its own (categories are already uploaded).
+  gpuUpdateColors(PALETTE.map(([r, g, b]) => [r / 255, g / 255, b / 255] as const));
 
   // ── Continuous color-pack pipeline (Phase 7) ───────────────────────────────
   // Reads raw value buffer + 256-entry packed-u32 LUT + config uniform,
@@ -292,7 +280,6 @@ export async function createScatterplot(
   const tPipelines = performance.now();
   console.log(`Pipeline setup: ${(tPipelines - tUpload).toFixed(1)}ms`);
 
-  let currentZoom = 1;
   let viewVersion = 0;
 
   let pointPickRevision = 0;
@@ -338,7 +325,6 @@ export async function createScatterplot(
     },
     {
       onViewChange: (state: ViewState) => {
-        currentZoom = state.zoom;
         viewVersion++;
         // View change → pick buffer is stale. Cheap O(1) flag toggle.
         picking.markDirty();
@@ -347,86 +333,26 @@ export async function createScatterplot(
       onFps: (fps: number) => {
         config?.callbacks?.onFps?.(fps);
       },
-      onPointClick: (worldX: number, worldY: number, pixelX: number, pixelY: number) => {
+      onPointClick: (pixelX: number, pixelY: number) => {
         const revision = ++pointPickRevision;
-        // Two paths:
-        //   1. GPU pick (default, opt-out via `localStorage.ndea.useGpuPicking = '0'`):
-        //      render to a cached pick buffer, sample 5×5 around the cursor,
-        //      brightness-weighted vote. Picks the visually frontmost point.
-        //   2. Legacy CPU grid (fallback): geometrically-nearest visible point.
-        const useGpuPicking = localStorage?.getItem("ndea.useGpuPicking") !== "0";
-
-        if (useGpuPicking) {
-          // Async: readback is one frame on a clean buffer, ~1–2 frames on a
-          // dirty rebuild. Latency is below human click perception.
-          picking.pick(pixelX, pixelY).then(
-            (result) => {
-              if (revision !== pointPickRevision) return;
-              if (result === null || !finishHit(result.pointIndex)) finishMiss();
-            },
-            (err: unknown) => {
-              if (revision !== pointPickRevision) return;
-              // GPU pick failed (rare). Fall through to the CPU grid path.
-              console.warn("GPU pick failed, falling back to CPU grid:", err);
-              cpuGridPick(worldX, worldY, finishHit, finishMiss);
-            },
-          );
-          return;
-        }
-
-        cpuGridPick(worldX, worldY, finishHit, finishMiss);
+        // Render a cached pick buffer, sample 5×5 around the cursor,
+        // brightness-weighted vote: picks the visually frontmost point. Async:
+        // readback is one frame on a clean buffer, ~1–2 frames on a dirty rebuild.
+        picking.pick(pixelX, pixelY).then(
+          (result) => {
+            if (revision !== pointPickRevision) return;
+            if (result === null || !finishHit(result.pointIndex)) finishMiss();
+          },
+          (err: unknown) => {
+            if (revision !== pointPickRevision) return;
+            console.warn("GPU pick failed:", err);
+            finishMiss();
+          },
+        );
       },
     },
     config?.interaction,
   );
-
-  /**
-   * Legacy CPU spatial-grid hit test: kept as fallback. Picks the
-   * geometrically nearest visible point within a screen-space radius.
-   * Loses to overlapping points (the GPU path handles that).
-   */
-  function cpuGridPick(worldX: number, worldY: number, hit: (i: GpuPointIndex) => boolean, miss: () => void) {
-    const hitRadiusWorld = 20 / ((currentZoom * canvas.height) / 2);
-    const maxDist2 = hitRadiusWorld * hitRadiusWorld;
-    let bestIdx = -1;
-    let bestDist2 = maxDist2;
-    const r = Math.ceil((hitRadiusWorld / 2) * GRID) + 1;
-    const cx = Math.floor(((worldX + 1) / 2) * GRID);
-    const cy = Math.floor(((worldY + 1) / 2) * GRID);
-    for (let gx = Math.max(0, cx - r); gx <= Math.min(GRID - 1, cx + r); gx++) {
-      for (let gy = Math.max(0, cy - r); gy <= Math.min(GRID - 1, cy + r); gy++) {
-        for (const i of gridCells[gx * GRID + gy]) {
-          const px = data.positions[i * 2];
-          const py = data.positions[i * 2 + 1];
-          const dx = px - worldX;
-          const dy = py - worldY;
-          const d2 = dx * dx + dy * dy;
-          if (d2 < bestDist2 && selection.isPointVisible(i)) {
-            bestDist2 = d2;
-            bestIdx = i;
-          }
-        }
-      }
-    }
-    if (bestIdx >= 0 && hit(gpuPointIndex(bestIdx))) return;
-    miss();
-  }
-
-  // ── Row index → point index lookup (built once, used by setExternalSelection) ──
-  // Pre-building this Map avoids O(n) reconstruction on every selection sync event.
-  const rowToPoint = new Map<RowIndex, GpuPointIndex>(data.rowIndices.map((r, i) => [r, gpuPointIndex(i)]));
-
-  // ── Grid spatial index for O(1) hit testing ───────────────────────────
-  // World space is [-1,1]×[-1,1]. Divide into GRID×GRID cells; each cell
-  // stores the indices of points that fall within it. onPointClick queries
-  // only the 1–4 cells that overlap the hit radius instead of scanning all points.
-  const GRID = 128;
-  const gridCells: GpuPointIndex[][] = Array.from({ length: GRID * GRID }, () => []);
-  for (let i = 0; i < data.numCells; i++) {
-    const gx = Math.min(GRID - 1, Math.max(0, Math.floor(((data.positions[i * 2] + 1) / 2) * GRID)));
-    const gy = Math.min(GRID - 1, Math.max(0, Math.floor(((data.positions[i * 2 + 1] + 1) / 2) * GRID)));
-    gridCells[gx * GRID + gy]?.push(gpuPointIndex(i));
-  }
 
   console.log(
     `Scatterplot ready: ${data.numCells.toLocaleString()} points in ${(performance.now() - t0).toFixed(1)}ms`,
@@ -530,13 +456,9 @@ export async function createScatterplot(
       selection.clearSelection();
       interaction.requestRender();
     },
+    // Row index = point index (ScatterData), so row lists index straight into the layers.
     setExternalSelection(rowIndices: RowIndex[]) {
-      const pointIndices: GpuPointIndex[] = [];
-      for (const r of rowIndices) {
-        const i = rowToPoint.get(r);
-        if (i !== undefined) pointIndices.push(i);
-      }
-      selection.setSelectedPoints(pointIndices);
+      selection.setSelectedPoints(rowIndices.map(gpuPointIndex));
       interaction.requestRender();
     },
     clearExternalSelection() {
@@ -544,13 +466,8 @@ export async function createScatterplot(
       interaction.requestRender();
       config?.callbacks?.onExternalClear?.();
     },
-    setPredicateFilter(rowIndices: RowIndex[]) {
-      predicateFilterStagingMask.fill(0);
-      for (const rowIndex of rowIndices) {
-        const pointIndex = rowToPoint.get(rowIndex);
-        if (pointIndex !== undefined) predicateFilterStagingMask[pointIndex] = 1;
-      }
-      selection.setPredicateFilter(predicateFilterStagingMask);
+    setPredicateFilter(bits: Uint32Array) {
+      selection.setPredicateFilter(bits);
       culling.invalidate();
       interaction.requestRender();
     },
@@ -564,12 +481,7 @@ export async function createScatterplot(
       interaction.requestRender();
     },
     setHighlightPoints(rowIndices: RowIndex[]) {
-      const pointIndices: GpuPointIndex[] = [];
-      for (const r of rowIndices) {
-        const i = rowToPoint.get(r);
-        if (i !== undefined) pointIndices.push(i);
-      }
-      selection.setHighlightPoints(pointIndices);
+      selection.setHighlightPoints(rowIndices.map(gpuPointIndex));
       interaction.requestRender();
     },
     setCategoryIsolation(isolatedSet: Set<number>, categoryIndices: Uint8Array) {
@@ -594,10 +506,8 @@ export async function createScatterplot(
         selection.clearTrajectoryIsolation();
       } else {
         trajectoryStagingMask.fill(0);
-        for (const r of rowIndices) {
-          const i = rowToPoint.get(r);
-          if (i !== undefined) trajectoryStagingMask[i] = 1;
-        }
+        // Typed-array writes past the end are no-ops: out-of-range rows drop out.
+        for (const r of rowIndices) trajectoryStagingMask[r] = 1;
         selection.setTrajectoryIsolation(trajectoryStagingMask);
       }
       interaction.requestRender();
@@ -612,10 +522,7 @@ export async function createScatterplot(
         uniforms.filterHideUniform.write(0);
       } else {
         continuousStagingMask.fill(0);
-        for (const r of rowIndices) {
-          const i = rowToPoint.get(r);
-          if (i !== undefined) continuousStagingMask[i] = 1;
-        }
+        for (const r of rowIndices) continuousStagingMask[r] = 1;
         selection.setContinuousIsolation(continuousStagingMask);
         uniforms.filterHideUniform.write(1);
       }

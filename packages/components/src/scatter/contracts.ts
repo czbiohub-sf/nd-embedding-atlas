@@ -35,8 +35,6 @@ export interface TrajectoryData {
 
 export type { Metadata, TrajectoryFrame };
 
-export type PanelId = string & { readonly __brand: "PanelId" };
-
 export type GpuPointIndex = number & { readonly __brand: "GpuPointIndex" };
 export const gpuPointIndex = (value: number): GpuPointIndex => value as GpuPointIndex;
 

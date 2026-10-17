@@ -12,17 +12,15 @@ import type { ScatterBuffers, ScatterUniforms } from "./buffers";
  */
 export function createCullingEngine(
   root: TgpuRoot,
-  _device: GPUDevice,
   buffers: ScatterBuffers,
   uniforms: ScatterUniforms,
   numPoints: number,
-  _wgSize: 64 | 256 = 256,
 ) {
   const visibilityBuffer = root.createBuffer(d.arrayOf(d.u32, numPoints)).$usage("storage", "vertex");
   const visibilityLayout = tgpu.vertexLayout((n: number) => d.arrayOf(d.u32, n), "instance");
 
   const posReadonly = buffers.posBuffer.as("readonly");
-  const predicateFilterReadonly = buffers.predicateFilterBuffer.as("readonly");
+  const predicateReadonly = buffers.predicateBits.as("readonly");
   const visMutable = visibilityBuffer.as("mutable");
   const { viewUniform, predicateFilterActiveUniform } = uniforms;
 
@@ -37,7 +35,8 @@ export function createCullingEngine(
     const yb = 1.0 + margin;
     const sx = (pos.x + view.x) * view.z;
     const sy = (pos.y + view.y) * view.z;
-    const passesPredicate = predicateFilterActiveUniform.$ === 0 || predicateFilterReadonly.$[idx] === 1;
+    const passesPredicate =
+      predicateFilterActiveUniform.$ === 0 || ((predicateReadonly.$[idx >>> 5] >>> (idx & 31)) & 1) === 1;
     if (passesPredicate && sx >= -xb && sx <= xb && sy >= -yb && sy <= yb) {
       visMutable.$[idx] = 1;
     } else {

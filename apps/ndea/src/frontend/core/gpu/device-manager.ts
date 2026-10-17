@@ -1,7 +1,6 @@
 export type DeviceInfo = {
   device: GPUDevice;
   format: GPUTextureFormat;
-  preferredWorkgroupSize: 64 | 256;
 };
 
 let _shared: DeviceInfo | null = null;
@@ -49,9 +48,6 @@ export async function acquireDevice(signal?: AbortSignal): Promise<DeviceInfo> {
           "If you are on HPC, enable #enable-vulkan, #default-angle-vulkan, #vulkan-from-angle, and #enable-unsafe-webgpu in chrome://flags, then relaunch Chrome.",
       );
     }
-    const adapterInfo = (adapter as { info?: { vendor?: string } }).info;
-    const vendor = (adapterInfo?.vendor ?? "").toLowerCase();
-    const preferredWorkgroupSize: 64 | 256 = vendor.includes("apple") ? 64 : 256;
     const device = await adapter.requestDevice({
       requiredFeatures: adapter.features.has("timestamp-query") ? ["timestamp-query"] : [],
     });
@@ -66,7 +62,7 @@ export async function acquireDevice(signal?: AbortSignal): Promise<DeviceInfo> {
       console.error("[gpu] uncaptured error:", event.error);
     };
     const format = navigator.gpu.getPreferredCanvasFormat();
-    return { device, format, preferredWorkgroupSize };
+    return { device, format };
   })();
 
   let info: DeviceInfo;

@@ -9,7 +9,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import type { RowIndex } from "@ndea/sdk";
 import { capabilitiesOf } from "@ndea/sdk";
 import { useFocus, useScatterHost, useScatterSession } from "./context";
 import { selectAnyTrajectory } from "./helpers";
@@ -108,9 +107,7 @@ export function ScatterContent({ initialObsmKey, toolbarTarget, focusedPointMeta
   const categoryIndicesRef = useRef<Uint8Array | null>(null);
   const fitViewRef = useRef<(() => void) | null>(null);
 
-  // ── Selection state (hoisted so overlayControls can read row indices) ──────
-  // `rowIndicesRef` is the panel-level mapping populated once on GPU init.
-  const rowIndicesRef = useRef<RowIndex[]>([]);
+  // ── Selection state ─────────────────────────────────────────────────────────
   // `selectedCount` from useScatterUIState is null when no lasso, count otherwise.
   const { selectedCount } = useScatterUIState();
   const selectionCount = selectedCount ?? 0;
@@ -185,10 +182,6 @@ export function ScatterContent({ initialObsmKey, toolbarTarget, focusedPointMeta
     isolationHandleRef,
     categoryIndicesRef,
     fitViewRef,
-    rowIndicesRef,
-    onRowIndicesChange: (indices: RowIndex[]) => {
-      rowIndicesRef.current = indices;
-    },
   };
 
   const hasSelection = selectionCount > 0;

@@ -6,13 +6,8 @@ import type { InteractionConfig } from "../../gpu/types";
 
 interface InteractionCallbacks {
   onViewChange?: (state: ViewState) => void;
-  /**
-   * Click hit test. World coords drive the legacy CPU spatial-grid path;
-   * `pixelX`/`pixelY` (CSS pixels relative to the overlay) drive the GPU
-   * pick buffer. Both are provided so the orchestrator can A/B between
-   * them via a localStorage flag.
-   */
-  onPointClick?: (worldX: number, worldY: number, pixelX: number, pixelY: number) => void;
+  /** Click hit test at CSS pixels relative to the overlay (GPU pick buffer). */
+  onPointClick?: (pixelX: number, pixelY: number) => void;
   onFps?: (fps: number) => void;
 }
 
@@ -90,7 +85,6 @@ export function createInteractionController(
   let lassoPath: [number, number][] = [];
   let marqueeStart: [number, number] = [0, 0];
   let marqueeEnd: [number, number] = [0, 0];
-  let lastSelectionDispatch = 0; // governs readback  (~50 ms / 20 fps)
   let lastSelectionCompute = 0; // governs compute dispatch (~8 ms / 120 fps)
 
   function updateView() {
@@ -214,12 +208,9 @@ export function createInteractionController(
       drawLasso();
       if (lassoPath.length >= 3) {
         const now = performance.now();
-        const doCompute = now - lastSelectionCompute > 8; // ~120 fps cap
-        const doReadback = now - lastSelectionDispatch > 50; // ~20 fps readback
-        if (doCompute) {
+        if (now - lastSelectionCompute > 8) {
           lastSelectionCompute = now;
-          if (doReadback) lastSelectionDispatch = now;
-          selection.runLassoSelection(lassoPath, doReadback);
+          selection.runLassoSelection(lassoPath, false);
           needsRender = true;
           scheduleLoop();
         }
@@ -233,12 +224,9 @@ export function createInteractionController(
       const yMax = Math.max(marqueeStart[1], marqueeEnd[1]);
       if (xMax - xMin > 0.001 || yMax - yMin > 0.001) {
         const now = performance.now();
-        const doCompute = now - lastSelectionCompute > 8;
-        const doReadback = now - lastSelectionDispatch > 50;
-        if (doCompute) {
+        if (now - lastSelectionCompute > 8) {
           lastSelectionCompute = now;
-          if (doReadback) lastSelectionDispatch = now;
-          selection.runMarqueeSelection({ xMin, yMin, xMax, yMax }, doReadback);
+          selection.runMarqueeSelection({ xMin, yMin, xMax, yMax }, false);
           needsRender = true;
           scheduleLoop();
         }
@@ -261,7 +249,7 @@ export function createInteractionController(
       isLassoing = false;
       overlayCtx.clearRect(0, 0, overlay.clientWidth, overlay.clientHeight);
       if (lassoPath.length >= 3) {
-        selection.runLassoSelection(lassoPath);
+        selection.runLassoSelection(lassoPath, true);
         needsRender = true;
         scheduleLoop();
       }
@@ -275,7 +263,7 @@ export function createInteractionController(
       const yMin = Math.min(marqueeStart[1], marqueeEnd[1]);
       const yMax = Math.max(marqueeStart[1], marqueeEnd[1]);
       if (xMax - xMin > 0.001 || yMax - yMin > 0.001) {
-        selection.runMarqueeSelection({ xMin, yMin, xMax, yMax });
+        selection.runMarqueeSelection({ xMin, yMin, xMax, yMax }, true);
         needsRender = true;
         scheduleLoop();
       }
@@ -285,8 +273,7 @@ export function createInteractionController(
       const dx = e.offsetX - pointerDownPos.x;
       const dy = e.offsetY - pointerDownPos.y;
       if (dx * dx + dy * dy < 25 && callbacks?.onPointClick) {
-        const [wx, wy] = pixelToWorld(e.offsetX, e.offsetY);
-        callbacks.onPointClick(wx, wy, e.offsetX, e.offsetY);
+        callbacks.onPointClick(e.offsetX, e.offsetY);
         needsRender = true;
         scheduleLoop();
       }

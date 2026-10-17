@@ -146,12 +146,12 @@ export function createComponentHost<Config>(
         assertActive();
         return dependencies.coordinator.query(sql);
       },
-      async createObservationSet(rowIds: readonly RowIndex[]) {
+      async createObservationSet(bits: Uint32Array<ArrayBuffer>, rows: number) {
         assertActive();
-        const response = await request("/api/sets", {
+        const response = await request(`/api/sets?rows=${rows}`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ rowIndices: rowIds }),
+          headers: { "Content-Type": "application/octet-stream" },
+          body: new Uint8Array(bits.buffer, bits.byteOffset, Math.ceil(rows / 8)),
           signal: controller.signal,
         });
         if (!response.ok) throw await responseError(response, `set creation failed (${response.status})`);

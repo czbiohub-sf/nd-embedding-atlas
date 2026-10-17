@@ -7,7 +7,6 @@ import type { RowIndex } from "./component";
 export interface DeviceInfo {
   readonly device: GPUDevice;
   readonly format: GPUTextureFormat;
-  readonly preferredWorkgroupSize: 64 | 256;
 }
 
 export interface DeviceLease {
@@ -24,7 +23,8 @@ export interface DataContext {
 
 /** Persists observations as a content-addressed set; reference it as `{ op: "inSet", set }`. */
 export interface RowSetPublishAPI {
-  createObservationSet(rowIds: readonly RowIndex[]): Promise<ObservationSet>;
+  /** `bits`: row bitmask over all `rows` observations (bit `r & 31` of word `r >> 5` = row `r`). */
+  createObservationSet(bits: Uint32Array<ArrayBuffer>, rows: number): Promise<ObservationSet>;
 }
 
 export interface DataQueryAPI {

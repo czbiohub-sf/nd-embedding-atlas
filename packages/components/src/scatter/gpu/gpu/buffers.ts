@@ -1,8 +1,7 @@
 import { tgpu } from "typegpu";
 import * as d from "typegpu/data";
-import { PALETTE, QUAD_VERTS } from "../../gpu/constants";
-import type { ColorMapper, RenderConfig, ScatterData, TgpuRoot } from "../../gpu/types";
-import { gpuPointIndex } from "../../contracts";
+import { QUAD_VERTS } from "../../gpu/constants";
+import type { RenderConfig, TgpuRoot } from "../../gpu/types";
 
 // Maximum number of palette entries supported by the GPU color-pack shader.
 export const MAX_PALETTE_SIZE = 64;
@@ -54,7 +53,7 @@ export function createUniforms(root: TgpuRoot, aspectRatio: number, renderConfig
 
 export type ScatterUniforms = ReturnType<typeof createUniforms>;
 
-export function createBuffers(root: TgpuRoot, numPoints: number, _numCategories: number) {
+export function createBuffers(root: TgpuRoot, numPoints: number) {
   const quadBuffer = root
     .createBuffer(
       d.arrayOf(d.vec2f, 6),
@@ -71,7 +70,8 @@ export function createBuffers(root: TgpuRoot, numPoints: number, _numCategories:
   const colorBuffer = root.createBuffer(d.arrayOf(d.u32, numPoints)).$usage("vertex", "storage");
 
   const selectedBuffer = root.createBuffer(d.arrayOf(d.u32, numPoints)).$usage("vertex", "storage");
-  const predicateFilterBuffer = root.createBuffer(d.arrayOf(d.u32, numPoints)).$usage("storage");
+  // Filter-scope predicate as a bit layer: bit `i & 31` of word `i >> 5` is point i.
+  const predicateBits = root.createBuffer(d.arrayOf(d.u32, Math.ceil(numPoints / 32))).$usage("storage");
 
   // Category indices (u32 per point): used by density engine and GPU color-pack shader
   const categoryBuffer = root.createBuffer(d.arrayOf(d.u32, numPoints)).$usage("storage");
@@ -94,7 +94,7 @@ export function createBuffers(root: TgpuRoot, numPoints: number, _numCategories:
     posBuffer,
     colorBuffer,
     selectedBuffer,
-    predicateFilterBuffer,
+    predicateBits,
     categoryBuffer,
     paletteBuffer,
     paletteLenUniform,
@@ -106,70 +106,3 @@ export function createBuffers(root: TgpuRoot, numPoints: number, _numCategories:
 }
 
 export type ScatterBuffers = ReturnType<typeof createBuffers>;
-
-/**
- * Upload scatter data to GPU buffers.
- *
- * Flow:
- *   1. Direct writeBuffer for positions (zero-copy Float32Array)
- *   2. Upload category indices (for density engine)
- *   3. Pack category → RGBA colors on CPU and upload as vec4f
- *   4. clearBuffer for selection
- */
-export function uploadData(
-  root: TgpuRoot,
-  device: GPUDevice,
-  buffers: ScatterBuffers,
-  data: ScatterData,
-  colorMapper?: ColorMapper,
-  palette?: readonly (readonly [number, number, number, number?])[],
-) {
-  const t0 = performance.now();
-  const numPoints = data.numCells;
-
-  // 1. Positions: direct upload (already Float32Array, layout matches vec2f)
-  buffers.posBuffer.write(data.positions);
-  const tPos = performance.now();
-
-  // 2. Upload category indices as u32 buffer (used by density engine)
-  const catStaging = new Uint32Array(numPoints);
-  for (let i = 0; i < numPoints; i++) {
-    catStaging[i] = data.categoryIndices[i]!;
-  }
-  buffers.categoryBuffer.write(catStaging);
-
-  // 3. Pack colors on CPU: category index → palette → u32 packed RGBA (4 bytes/point).
-  // Palette values are 0–255; pack as R|(G<<8)|(B<<16)|(255<<24) for little-endian unorm8x4.
-  const colors = palette ?? PALETTE;
-  const numCats = colors.length;
-  const totalCats = data.categoryNames.length;
-  const colorData = new Uint32Array(numPoints);
-  for (let i = 0; i < numPoints; i++) {
-    const cat = data.categoryIndices[i] % numCats;
-    let r: number, g: number, b: number, alpha: number;
-    if (colorMapper) {
-      [r, g, b] = colorMapper(cat, gpuPointIndex(i), totalCats);
-      alpha = 255;
-    } else {
-      const c = colors[cat];
-      r = c[0];
-      g = c[1];
-      b = c[2];
-      alpha = c[3] !== undefined ? Math.round(c[3] * 255) : 255;
-    }
-    colorData[i] = (r | (g << 8) | (b << 16) | (alpha << 24)) >>> 0;
-  }
-  buffers.colorBuffer.write(colorData);
-  const tColor = performance.now();
-
-  // 4. Clear selection buffer
-  const rawSelectedBuffer = root.unwrap(buffers.selectedBuffer);
-  const encoder = device.createCommandEncoder();
-  encoder.clearBuffer(rawSelectedBuffer);
-  device.queue.submit([encoder.finish()]);
-
-  console.log(
-    `Data upload: ${numPoints.toLocaleString()} points in ${(performance.now() - t0).toFixed(1)}ms` +
-      ` (pos: ${(tPos - t0).toFixed(1)}ms, color: ${(tColor - tPos).toFixed(1)}ms)`,
-  );
-}

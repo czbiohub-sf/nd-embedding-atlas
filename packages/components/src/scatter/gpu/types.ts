@@ -6,6 +6,7 @@ import type { GpuPointIndex, ViewState } from "../contracts";
 // Data
 // ---------------------------------------------------------------------------
 
+/** Point `i` is the observation with `__row_index__ = i`: positions arrive in obs_base row order. */
 export interface ScatterData {
   /** Float32Array of interleaved positions: [x0,y0, ...] normalized to [-1,1] */
   positions: Float32Array;
@@ -15,8 +16,6 @@ export interface ScatterData {
   categoryNames: string[];
   /** Number of cells */
   numCells: number;
-  /** Float32Array index → __row_index__ in DuckDB */
-  rowIndices: RowIndex[];
   /** Name of the embedding used */
   embeddingKey: string;
   /** Number of dimensions (2 or 3) */
@@ -48,12 +47,6 @@ export interface ScatterData {
 // ---------------------------------------------------------------------------
 // Configuration
 // ---------------------------------------------------------------------------
-
-export type ColorMapper = (
-  categoryIndex: number,
-  pointIndex: GpuPointIndex,
-  totalCategories: number,
-) => [r: number, g: number, b: number];
 
 export interface InteractionConfig {
   /** Zoom easing speed (0–1). Default: 0.06 */
@@ -113,7 +106,7 @@ export interface ScatterplotHandle {
   getViewState(): ViewState;
   /** Convert world coordinates to screen pixel coordinates using the current view transform. */
   worldToScreen(worldX: number, worldY: number, canvasWidth: number, canvasHeight: number): { x: number; y: number };
-  /** Apply an externally-driven selection (from another panel). rowIndices = app-level row IDs; panelRowIndices = this panel's rowIndicesRef. */
+  /** Apply an externally-driven selection (from another panel). */
   setExternalSelection(rowIndices: RowIndex[]): void;
   /** Switch the drag behaviour: 'pan' = default, 'marquee'/'lasso' = always-draw-selection. */
   setForcedSelectionMode(mode: "pan" | "marquee" | "lasso"): void;
@@ -121,8 +114,8 @@ export interface ScatterplotHandle {
   clearExternalSelection(): void;
   /** Clear lasso/marquee selection. */
   clearSelection(): void;
-  /** Show only points whose app row IDs match the element's filter-scope predicate. */
-  setPredicateFilter(rowIndices: RowIndex[]): void;
+  /** Show only points whose bit is set in the filter-scope predicate bitmask (missing words = 0). */
+  setPredicateFilter(bits: Uint32Array): void;
   /** Remove the filter-scope predicate visibility filter. */
   clearPredicateFilter(): void;
   /** Dim points whose category index is not in isolatedSet (legend isolation). Pass empty Set to clear. */
@@ -199,12 +192,9 @@ export interface RenderConfig {
 export interface ScatterplotConfig {
   render?: RenderConfig;
   interaction?: InteractionConfig;
-  /** Custom color mapper. Default: palette-based categorical coloring */
-  colorMapper?: ColorMapper;
-  /** Color palette (RGB tuples). Used when no colorMapper is provided */
-  palette?: readonly (readonly [number, number, number])[];
   callbacks?: {
-    onSelectionChange?: (count: number | null, indices?: GpuPointIndex[]) => void;
+    /** Lasso/marquee count while dragging; on pointer-up also the lasso bit layer (N/32 words). */
+    onSelectionChange?: (count: number | null, bits?: Uint32Array<ArrayBuffer>) => void;
     /** Called when an external row set is cleared by another panel. Only updates
      *  status bar; it must not republish a clear and create a cascade. */
     onExternalClear?: () => void;
