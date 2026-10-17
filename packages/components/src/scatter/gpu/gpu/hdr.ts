@@ -1,208 +1,170 @@
 /**
- * HDR + tone-map pipeline.
- *
- * Pipeline:
- *
- *   scatter (additive blending) → HDR rgba16float
- *   tone map (AgX/ACES/Reinhard/None) + exposure → swap chain (rgba8unorm)
- *
- * Resize-aware. `resize(width, height)` reallocates the HDR target at the
- * new pixel size. Canvas controls dimensions; this module is given physical
- * pixel sizes (DPR-multiplied) by the orchestrator.
+ * HDR target + tone-map: points draw additively into an rgba16float target,
+ * then one full-screen pass applies exposure and a tone curve (AgX / ACES /
+ * Reinhard / Khronos Neutral / none) and encodes sRGB into the canvas.
  */
 
-import { FULLSCREEN_VERTEX_WGSL, TONEMAP_FRAGMENT_WGSL } from "./hdr-shaders";
+import { tgpu, type TgpuCommandEncoder } from "typegpu";
+import { fullScreenTriangle } from "typegpu/common";
+import * as d from "typegpu/data";
+import * as std from "typegpu/std";
+import type { TgpuRoot } from "../../gpu/types";
 
-/** Tone mapping options exposed to the UI. */
 export type ToneMappingMode = "none" | "reinhard" | "aces" | "agx" | "neutral";
 
-const MODE_TO_INT: Record<ToneMappingMode, number> = {
-  none: 0,
-  reinhard: 1,
-  aces: 2,
-  agx: 3,
-  neutral: 4,
-};
+const MODES: Record<ToneMappingMode, number> = { none: 0, reinhard: 1, aces: 2, agx: 3, neutral: 4 };
 
-/** Settings tuned via the dev-tools "Render" tab. */
 export interface HdrSettings {
-  /** Tone-map curve. Default `"none"`. */
+  /** Default `"neutral"`: identity below ~0.76 luminance, so categorical colors keep their identity. */
   toneMapping: ToneMappingMode;
-  /** Global exposure stops (log2). 0 = neutral, +1 = 2× brighter. */
+  /** Exposure stops (log2); 0 = neutral. */
   exposure: number;
 }
 
-export const DEFAULT_HDR_SETTINGS: HdrSettings = {
-  // Khronos Neutral preserves color identity below ~0.76 luminance and only
-  // rolls off extreme HDR overdraw: the right default for categorical
-  // scatter where bright clusters should glow without bleaching the palette.
-  toneMapping: "neutral",
-  exposure: 0.0,
-};
+export const HDR_FORMAT = "rgba16float";
+
+const ToneCfg = d.struct({ exposure: d.f32, mode: d.u32 });
+
+// AgX (Troy Sobotka; public-domain Filament / three.js port): Rec.709 ↔ AgX working space.
+const AGX_IN = d.mat3x3f(
+  0.842479062253094,
+  0.0423282422610123,
+  0.0423756549057051,
+  0.0784335999999992,
+  0.878468636469772,
+  0.0784336,
+  0.0792237451477643,
+  0.0791661274605434,
+  0.879142973793104,
+);
+const AGX_OUT = d.mat3x3f(
+  1.19687900512017,
+  -0.0980208811401368,
+  -0.0990297440797205,
+  -0.0528968517574562,
+  1.15190312990417,
+  -0.0989611768448433,
+  -0.0529716355144438,
+  -0.0980434501171241,
+  1.15107367264116,
+);
+
+/** AgX default contrast: 7th-order sigmoid fit over a 16.5-stop log2 encoding (-10 .. 6.5 EV). */
+const agxChannel = tgpu.fn(
+  [d.f32],
+  d.f32,
+)((c) => {
+  "use gpu";
+  const x = std.clamp((std.log2(std.max(c, 1e-10)) + 10) / 16.5, 0, 1);
+  const x2 = x * x;
+  const x4 = x2 * x2;
+  const x6 = x4 * x2;
+  return (
+    -17.86 * x6 * x + 78.01 * x6 - 126.7 * x4 * x + 92.06 * x4 - 28.72 * x2 * x + 4.361 * x2 - 0.1718 * x + 0.002857
+  );
+});
+
+const linearToSrgb = tgpu.fn(
+  [d.f32],
+  d.f32,
+)((c) => {
+  "use gpu";
+  return std.select(1.055 * std.pow(std.max(c, 0), 1 / 2.4) - 0.055, c * 12.92, c < 0.0031308);
+});
+
+/** Narkowicz ACES fit. */
+const acesChannel = tgpu.fn(
+  [d.f32],
+  d.f32,
+)((c) => {
+  "use gpu";
+  return std.clamp((c * (2.51 * c + 0.03)) / (c * (2.43 * c + 0.59) + 0.14), 0, 1);
+});
+
+/** Khronos PBR Neutral: identity below the knee, then peak roll-off with slight desaturation toward white. */
+const neutral = tgpu.fn(
+  [d.vec3f],
+  d.vec3f,
+)((c) => {
+  "use gpu";
+  const startCompression = 0.76;
+  const x = std.min(c.x, std.min(c.y, c.z));
+  const offset = std.select(0.04, x - 6.25 * x * x, x < 0.08);
+  const color = std.sub(c, d.vec3f(offset));
+  const peak = std.max(color.x, std.max(color.y, color.z));
+  if (peak < startCompression) return color;
+  const dd = 1 - startCompression;
+  const newPeak = 1 - (dd * dd) / (peak + dd - startCompression);
+  const g = 1 - 1 / (0.15 * (peak - newPeak) + 1);
+  return std.mix(std.mul(color, newPeak / peak), d.vec3f(newPeak), g);
+});
 
 export interface HdrPipeline {
-  /** HDR color attachment view: bind in the scatter render pass. */
-  hdrView(): GPUTextureView;
-  /** Format the scatter pipeline must declare for its color target. */
-  readonly hdrFormat: GPUTextureFormat;
-  /**
-   * Run tone-map; writes to the swap chain texture provided by `swapView`.
-   * Pass an external encoder to merge into the orchestrator's frame submit.
-   */
-  composite(swapView: GPUTextureView, encoder: GPUCommandEncoder): void;
-  /** Recreate the HDR target at new physical-pixel dimensions. */
+  /** View of the HDR color target the points draw into (`HDR_FORMAT`). */
+  target(): GPUTextureView;
+  /** Tone-map the HDR target into the canvas. */
+  composite(enc: TgpuCommandEncoder, context: GPUCanvasContext): void;
+  /** Reallocate the target at a new device-pixel size. */
   resize(width: number, height: number): void;
-  /** Update settings: uniform write only, no allocations. */
   setSettings(settings: Partial<HdrSettings>): void;
-  getSettings(): HdrSettings;
   destroy(): void;
 }
 
-const HDR_FORMAT: GPUTextureFormat = "rgba16float";
+export function createHdrPipeline(root: TgpuRoot, swapFormat: GPUTextureFormat): HdrPipeline {
+  const settings: HdrSettings = { toneMapping: "neutral", exposure: 0 };
+  const cfg = root.createUniform(ToneCfg, { exposure: 0, mode: MODES.neutral });
+  const layout = tgpu.bindGroupLayout({ hdr: { texture: d.texture2d(d.f32) } });
 
-interface Targets {
-  width: number;
-  height: number;
-  hdr: GPUTexture;
-  hdrView: GPUTextureView;
-}
-
-export function createHdrPipeline(
-  device: GPUDevice,
-  swapFormat: GPUTextureFormat,
-  initialWidth: number,
-  initialHeight: number,
-  initial?: Partial<HdrSettings>,
-): HdrPipeline {
-  const settings: HdrSettings = { ...DEFAULT_HDR_SETTINGS, ...initial };
-
-  // ── Shader modules ────────────────────────────────────────────────────
-  const vsModule = device.createShaderModule({ code: FULLSCREEN_VERTEX_WGSL, label: "hdr-vs" });
-  const tonemapFs = device.createShaderModule({ code: TONEMAP_FRAGMENT_WGSL, label: "hdr-tonemap" });
-
-  // ── Sampler ───────────────────────────────────────────────────────────
-  const sampler = device.createSampler({
-    label: "hdr-sampler",
-    magFilter: "linear",
-    minFilter: "linear",
-    addressModeU: "clamp-to-edge",
-    addressModeV: "clamp-to-edge",
+  const pipeline = root.createRenderPipeline({
+    vertex: fullScreenTriangle,
+    fragment: tgpu.fragmentFn({ in: { pos: d.builtin.position }, out: d.vec4f })((input) => {
+      "use gpu";
+      const scene = std.textureLoad(layout.$.hdr, d.vec2i(input.pos.xy), 0);
+      const c = std.mul(scene.xyz, std.exp2(cfg.$.exposure));
+      const mode = cfg.$.mode;
+      let mapped = std.clamp(c, d.vec3f(0), d.vec3f(1));
+      if (mode === 1) mapped = std.div(c, std.add(d.vec3f(1), c));
+      if (mode === 2) mapped = d.vec3f(acesChannel(c.x), acesChannel(c.y), acesChannel(c.z));
+      if (mode === 3) {
+        const v = std.mul(AGX_IN, std.max(c, d.vec3f(0)));
+        mapped = std.clamp(
+          std.mul(AGX_OUT, d.vec3f(agxChannel(v.x), agxChannel(v.y), agxChannel(v.z))),
+          d.vec3f(0),
+          d.vec3f(1),
+        );
+      }
+      if (mode === 4) mapped = neutral(c);
+      // Alpha passes through so the CSS background shows where nothing drew.
+      return d.vec4f(linearToSrgb(mapped.x), linearToSrgb(mapped.y), linearToSrgb(mapped.z), std.clamp(scene.w, 0, 1));
+    }),
+    targets: { format: swapFormat },
   });
 
-  // ── Tone-map config uniform (16 bytes: f32 + u32 + 8 B padding) ──────
-  const toneCfgBuffer = device.createBuffer({
-    label: "hdr-tone-cfg",
-    size: 16,
-    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-  });
-  function writeToneCfg() {
-    const data = new ArrayBuffer(16);
-    const f = new Float32Array(data);
-    const u = new Uint32Array(data);
-    f[0] = settings.exposure;
-    u[1] = MODE_TO_INT[settings.toneMapping];
-    device.queue.writeBuffer(toneCfgBuffer, 0, data);
+  function allocate(size: [number, number]) {
+    const texture = root.createTexture({ size, format: HDR_FORMAT }).$usage("render", "sampled");
+    return { texture, view: root.unwrap(texture).createView(), group: root.createBindGroup(layout, { hdr: texture }) };
   }
-  writeToneCfg();
-
-  // ── Bind group layout ────────────────────────────────────────────────
-  const tonemapBgl = device.createBindGroupLayout({
-    label: "tonemap-bgl",
-    entries: [
-      { binding: 0, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "float" } },
-      { binding: 1, visibility: GPUShaderStage.FRAGMENT, sampler: { type: "filtering" } },
-      { binding: 2, visibility: GPUShaderStage.FRAGMENT, buffer: { type: "uniform" } },
-    ],
-  });
-
-  // ── Pipeline (created once; texture views rebind per resize) ─────────
-  const tonemapPipeline = device.createRenderPipeline({
-    label: "tonemap-pipeline",
-    layout: device.createPipelineLayout({ bindGroupLayouts: [tonemapBgl] }),
-    vertex: { module: vsModule, entryPoint: "main" },
-    fragment: { module: tonemapFs, entryPoint: "main", targets: [{ format: swapFormat }] },
-    primitive: { topology: "triangle-list" },
-  });
-
-  // ── Targets + bind group (reallocated on resize) ─────────────────────
-  let targets: Targets | null = null;
-  let tonemapBg: GPUBindGroup | null = null;
-
-  function rebuildTargets(width: number, height: number) {
-    const w = Math.max(1, Math.floor(width));
-    const h = Math.max(1, Math.floor(height));
-
-    targets?.hdr.destroy();
-
-    const hdr = device.createTexture({
-      label: "hdr-color",
-      size: { width: w, height: h },
-      format: HDR_FORMAT,
-      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
-    });
-
-    targets = {
-      width: w,
-      height: h,
-      hdr,
-      hdrView: hdr.createView(),
-    };
-
-    tonemapBg = device.createBindGroup({
-      label: "tonemap-bg",
-      layout: tonemapBgl,
-      entries: [
-        { binding: 0, resource: targets.hdrView },
-        { binding: 1, resource: sampler },
-        { binding: 2, resource: { buffer: toneCfgBuffer } },
-      ],
-    });
-  }
-
-  rebuildTargets(initialWidth, initialHeight);
-
-  // ── Composite: invoked once per frame after the scatter pass ────────
-  function composite(swapView: GPUTextureView, encoder: GPUCommandEncoder): void {
-    if (!targets || !tonemapBg) return;
-
-    const pass = encoder.beginRenderPass({
-      label: "tonemap",
-      colorAttachments: [
-        {
-          view: swapView,
-          clearValue: { r: 0, g: 0, b: 0, a: 1 },
-          loadOp: "clear",
-          storeOp: "store",
-        },
-      ],
-    });
-    pass.setPipeline(tonemapPipeline);
-    pass.setBindGroup(0, tonemapBg);
-    pass.draw(3);
-    pass.end();
-  }
+  let target = allocate([1, 1]);
 
   return {
-    hdrView() {
-      if (!targets) throw new Error("HDR pipeline not initialized");
-      return targets.hdrView;
+    target: () => target.view,
+    composite(enc, context) {
+      pipeline
+        .with(target.group)
+        .withColorAttachment({ view: context, clearValue: [0, 0, 0, 1] })
+        .with(enc)
+        .draw(3);
     },
-    hdrFormat: HDR_FORMAT,
-    composite,
     resize(width, height) {
-      rebuildTargets(width, height);
+      target.texture.destroy();
+      target = allocate([Math.max(1, width), Math.max(1, height)]);
     },
     setSettings(partial) {
       Object.assign(settings, partial);
-      writeToneCfg();
-    },
-    getSettings() {
-      return { ...settings };
+      cfg.write({ exposure: settings.exposure, mode: MODES[settings.toneMapping] });
     },
     destroy() {
-      targets?.hdr.destroy();
-      targets = null;
-      toneCfgBuffer.destroy();
+      target.texture.destroy();
     },
   };
 }

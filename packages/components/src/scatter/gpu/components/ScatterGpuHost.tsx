@@ -260,7 +260,7 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
           ctx.scale(dpr, dpr);
         }
       }
-      gpuRef.current?.resize(Math.floor(r.width), Math.floor(r.height));
+      gpuRef.current?.resize();
 
       // If GPU wasn't initialized (clientWidth was 0 at mount), try now
       if (!initKeyRef.current) maybeInitGpu();
@@ -343,8 +343,8 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
       getViewState() {
         return gpuRef.current?.getViewState() ?? { panX: 0, panY: 0, zoom: 1 };
       },
-      worldToScreen(wx, wy, w, h) {
-        return gpuRef.current?.worldToScreen(wx, wy, w, h) ?? { x: 0, y: 0 };
+      project(x, y, z) {
+        return gpuRef.current?.project(x, y, z) ?? { x: 0, y: 0 };
       },
       setExternalSelection(params) {
         gpuRef.current?.setExternalSelection(params);
@@ -361,14 +361,14 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
       clearPredicateFilter() {
         gpuRef.current?.clearPredicateFilter();
       },
-      setCategoryIsolation(isolatedSet: Set<number>, categoryIndices: Uint8Array) {
-        gpuRef.current?.setCategoryIsolation(isolatedSet, categoryIndices);
+      setCategoryIsolation(isolated) {
+        gpuRef.current?.setCategoryIsolation(isolated);
       },
       clearCategoryIsolation() {
         gpuRef.current?.clearCategoryIsolation();
       },
-      setCategoryDisabled(disabledSet: Set<number>, categoryIndices: Uint8Array) {
-        gpuRef.current?.setCategoryDisabled(disabledSet, categoryIndices);
+      setCategoryDisabled(disabled) {
+        gpuRef.current?.setCategoryDisabled(disabled);
       },
       clearCategoryDisabled() {
         gpuRef.current?.clearCategoryDisabled();
@@ -384,9 +384,6 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
       },
       clearContinuousIsolation() {
         gpuRef.current?.clearContinuousIsolation();
-      },
-      rehydrateIsolation() {
-        gpuRef.current?.rehydrateIsolation();
       },
       setHighlightPoints(rowIndices: RowIndex[]) {
         gpuRef.current?.setHighlightPoints(rowIndices);

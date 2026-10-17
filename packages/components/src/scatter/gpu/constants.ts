@@ -1,5 +1,3 @@
-export const MAX_POLYGON_VERTS = 512;
-
 export const PALETTE = [
   [92, 184, 245],
   [245, 115, 115],
@@ -34,12 +32,3 @@ export const PALETTE = [
   [200, 180, 220],
   [210, 210, 210],
 ] as const;
-
-export const QUAD_VERTS: [number, number][] = [
-  [-1, -1],
-  [1, -1],
-  [-1, 1],
-  [-1, 1],
-  [1, -1],
-  [1, 1],
-];

@@ -48,8 +48,18 @@ export async function acquireDevice(signal?: AbortSignal): Promise<DeviceInfo> {
           "If you are on HPC, enable #enable-vulkan, #default-angle-vulkan, #vulkan-from-angle, and #enable-unsafe-webgpu in chrome://flags, then relaunch Chrome.",
       );
     }
+    // Raise the size limits to what the adapter allows (defaults: 256 MiB buffers, 128 MiB
+    // storage bindings), and the vertex-stage storage-buffer count the scatter's vertex pulling needs.
+    const { limits } = adapter;
     const device = await adapter.requestDevice({
       requiredFeatures: adapter.features.has("timestamp-query") ? ["timestamp-query"] : [],
+      requiredLimits: {
+        maxBufferSize: limits.maxBufferSize,
+        maxStorageBufferBindingSize: limits.maxStorageBufferBindingSize,
+        ...(limits.maxStorageBuffersInVertexStage !== undefined && {
+          maxStorageBuffersInVertexStage: limits.maxStorageBuffersInVertexStage,
+        }),
+      },
     });
     // A genuine device loss otherwise silently bricks every scatter panel.
     // `reason === "destroyed"` is our own `device.destroy()` on the last release.

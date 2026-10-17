@@ -25,15 +25,14 @@ export interface FilterCapability {
 }
 
 export interface IsolationCapability {
-  setCategoryIsolation(isolatedSet: Set<number>, categoryIndices: Uint8Array): void;
+  setCategoryIsolation(isolated: Set<number>): void;
   clearCategoryIsolation(): void;
-  setCategoryDisabled(disabledSet: Set<number>, categoryIndices: Uint8Array): void;
+  setCategoryDisabled(disabled: Set<number>): void;
   clearCategoryDisabled(): void;
   setTrajectoryIsolation(rowIndices: RowIndex[]): void;
   clearTrajectoryIsolation(): void;
   setContinuousIsolation(rowIndices: RowIndex[]): void;
   clearContinuousIsolation(): void;
-  rehydrateIsolation(): void;
   setHighlightPoints(rowIndices: RowIndex[]): void;
   clearHighlight(): void;
 }
@@ -42,7 +41,8 @@ export interface ViewCapability {
   getViewState(): ViewState;
   setViewState(state: ViewState): void;
   animateToViewState(state: ViewState, durationMs?: number): void;
-  worldToScreen(wx: number, wy: number, w: number, h: number): { x: number; y: number };
+  /** Canvas CSS-pixel position of a world point. */
+  project(x: number, y: number, z?: number): { x: number; y: number };
 }
 
 export interface RenderCapability {

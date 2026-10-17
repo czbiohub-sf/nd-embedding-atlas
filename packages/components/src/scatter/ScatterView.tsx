@@ -32,10 +32,9 @@ import { HighlightFocusOverlay, type HighlightFocusOverlayHandle } from "./Highl
 export interface ScatterViewProps {
   selectionTool: "pan" | "marquee" | "lasso";
   isolationHandleRef?: RefObject<{
-    setCategoryIsolation(s: Set<number>, c: Uint8Array): void;
+    setCategoryIsolation(isolated: Set<number>): void;
     clearCategoryIsolation(): void;
   } | null>;
-  categoryIndicesRef?: RefObject<Uint8Array | null>;
   fitViewRef?: RefObject<(() => void) | null>;
   axes: AxisState | null;
   isLoading: boolean;
@@ -78,7 +77,6 @@ export function ScatterView({
   actions,
   focusedRowIndex,
   isolationHandleRef,
-  categoryIndicesRef,
   fitViewRef,
 }: ScatterViewProps) {
   const categoryColors = useEffectiveCategoryColors();
@@ -128,7 +126,6 @@ export function ScatterView({
   // callbacks reach the GPU host with the latest data.
   useEffect(() => {
     if (isolationHandleRef) isolationHandleRef.current = hostRef.current;
-    if (categoryIndicesRef) categoryIndicesRef.current = data?.categoryIndices ?? null;
     if (fitViewRef) fitViewRef.current = handleFitView;
   });
 
@@ -140,8 +137,7 @@ export function ScatterView({
   const trajectoryOverlayRef = useRef<TrajectoryOverlaySvgHandle | null>(null);
   const highlightOverlayRef = useRef<HighlightFocusOverlayHandle | null>(null);
   const gpuAdapter = useRef({
-    worldToScreen: (wx: number, wy: number, w: number, h: number) =>
-      hostRef.current?.worldToScreen(wx, wy, w, h) ?? { x: 0, y: 0 },
+    project: (x: number, y: number) => hostRef.current?.project(x, y) ?? { x: 0, y: 0 },
   });
 
   const viewStateRef = useRef({ panX: 0, panY: 0, zoom: 1 });
@@ -379,7 +375,6 @@ export function ScatterView({
     // Point style (radius/opacity/blend/HDR) is a declarative `pointStyle`
     // prop on ScatterGPUHost: applied there, and re-applied on GPU reinit.
     hostRef.current?.setForcedSelectionMode(selectionTool);
-    hostRef.current?.rehydrateIsolation();
   };
 
   useEffect(() => {

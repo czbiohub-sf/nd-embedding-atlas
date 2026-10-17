@@ -13,8 +13,8 @@ export interface TrajectoryOverlaySvgHandle {
 }
 
 /** Minimal GPU interface needed by the trajectory overlay. */
-interface WorldToScreenProvider {
-  worldToScreen(wx: number, wy: number, w: number, h: number): { x: number; y: number };
+interface Projector {
+  project(x: number, y: number): { x: number; y: number };
 }
 
 interface Props {
@@ -22,7 +22,7 @@ interface Props {
   activeIndex: number | null;
   categoryColors: string[];
   containerRef: RefObject<HTMLDivElement | null>;
-  gpuRef: RefObject<WorldToScreenProvider | null>;
+  gpuRef: RefObject<Projector | null>;
   /** Raw → normalized coordinate divisor (from backend positionScale). Default 1. */
   positionScale?: number;
 }
@@ -63,14 +63,14 @@ export const TrajectoryOverlaySvg = forwardRef<TrajectoryOverlaySvgHandle, Props
   function draw() {
     const svg = svgRef.current;
     const gpu = gpuRef.current;
-    const { w, h } = sizeRef.current;
+    const { w } = sizeRef.current;
     if (!svg || !gpu || w === 0 || points.length === 0) {
       if (svg) svg.innerHTML = "";
       return;
     }
 
     const s = positionScale > 0 ? positionScale : 1;
-    const screenPts = points.map((p) => gpu.worldToScreen(p.emb_x / s, p.emb_y / s, w, h));
+    const screenPts = points.map((p) => gpu.project(p.emb_x / s, p.emb_y / s));
 
     // Arrowhead marker: one per distinct color, keyed by color string
     const defs = document.createElementNS(SVG_NS, "defs");

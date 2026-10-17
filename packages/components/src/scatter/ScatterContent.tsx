@@ -104,7 +104,6 @@ export function ScatterContent({ initialObsmKey, toolbarTarget, focusedPointMeta
 
   // ── Isolation → Mosaic cross-filter + GPU alpha dimming ───────────────────
   const isolationHandleRef = useRef<IsolationCapability | null>(null);
-  const categoryIndicesRef = useRef<Uint8Array | null>(null);
   const fitViewRef = useRef<(() => void) | null>(null);
 
   // ── Selection state ─────────────────────────────────────────────────────────
@@ -115,12 +114,8 @@ export function ScatterContent({ initialObsmKey, toolbarTarget, focusedPointMeta
     coloredCategoryMapping,
     colorByColumn,
     scatterRef: isolationHandleRef,
-    categoryIndicesRef,
   });
-  const { handleDisabledChange } = useDisabledBridge({
-    scatterRef: isolationHandleRef,
-    categoryIndicesRef,
-  });
+  const { handleDisabledChange } = useDisabledBridge({ scatterRef: isolationHandleRef });
 
   // ── Derived rendering state ────────────────────────────────────────────────
   const obsmKeys = effectiveAxes ? Object.keys(metadata.obsm) : [];
@@ -180,7 +175,6 @@ export function ScatterContent({ initialObsmKey, toolbarTarget, focusedPointMeta
     actions,
     focusedRowIndex,
     isolationHandleRef,
-    categoryIndicesRef,
     fitViewRef,
   };
 

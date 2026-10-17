@@ -1,4 +1,3 @@
-import type { RefObject } from "react";
 import { useCallback, useRef } from "react";
 import { useScatterHost } from "../../context";
 import type { CategoryMapping } from "../../contracts";
@@ -8,7 +7,6 @@ interface UseIsolationBridgeOptions {
   coloredCategoryMapping: CategoryMapping | null;
   colorByColumn: string | null;
   scatterRef: { readonly current: IsolationCapability | null };
-  categoryIndicesRef: RefObject<Uint8Array | null>;
 }
 
 interface UseIsolationBridgeResult {
@@ -24,7 +22,7 @@ interface UseIsolationBridgeResult {
  * so this hook writes unconditionally: no trajectory/continuous guards needed.
  */
 export function useIsolationBridge(opts: UseIsolationBridgeOptions): UseIsolationBridgeResult {
-  const { coloredCategoryMapping, colorByColumn, scatterRef, categoryIndicesRef } = opts;
+  const { coloredCategoryMapping, colorByColumn, scatterRef } = opts;
 
   const catMapRef = useRef(coloredCategoryMapping);
   catMapRef.current = coloredCategoryMapping;
@@ -41,7 +39,6 @@ export function useIsolationBridge(opts: UseIsolationBridgeOptions): UseIsolatio
     (isolatedIndices: Set<number>) => {
       const catMap = catMapRef.current;
       const col = colByColRef.current;
-      const catIndices = categoryIndicesRef.current;
       const scatter = scatterRef.current;
       const currentHost = hostRef.current;
 
@@ -59,11 +56,9 @@ export function useIsolationBridge(opts: UseIsolationBridgeOptions): UseIsolatio
       }
       currentHost.filter.publish("isolation", { op: "in", column: col, values: labels });
 
-      if (scatter && catIndices) {
-        scatter.setCategoryIsolation(isolatedIndices, catIndices);
-      }
+      scatter?.setCategoryIsolation(isolatedIndices);
     },
-    [categoryIndicesRef, scatterRef],
+    [scatterRef],
   );
 
   return { handleIsolationChange };

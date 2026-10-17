@@ -68,7 +68,7 @@
     "playwright": "^1.64.1",
     "tailwindcss": "catalog:",
     "typescript": "catalog:",
-    "unplugin-typegpu": "^0.12.6",
+    "unplugin-typegpu": "catalog:",
     "vite-plus": "catalog:"
   },
   "optionalDependencies": {
