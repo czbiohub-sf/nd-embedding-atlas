@@ -373,23 +373,25 @@ describe("createApp", () => {
     expect(await exportStatus.json()).toEqual({ error: "Export task not found" });
   });
 
-  test("unsupported API methods return the router 404", async () => {
+  test("unsupported API methods return 405 with Allow", async () => {
     const server = await startTestServer();
     const baseUrl = `http://localhost:${server.port}`;
     const requests = [
-      ["POST", "/api/health"],
-      ["GET", "/api/obs/batch"],
-      ["POST", "/api/obs/2/detail"],
-      ["GET", "/api/embeddings/X_umap"],
-      ["PUT", "/api/annotations/columns"],
-      ["POST", "/api/export/missing/status"],
+      ["POST", "/api/health", "GET"],
+      ["GET", "/api/obs/batch", "POST"],
+      ["POST", "/api/obs/2/detail", "GET"],
+      ["GET", "/api/embeddings/X_umap", "POST"],
+      ["PUT", "/api/annotations/columns", "GET, POST"],
+      ["POST", "/api/export/missing/status", "GET"],
     ] as const;
 
-    for (const [method, pathname] of requests) {
+    for (const [method, pathname, allow] of requests) {
       const response = await fetch(`${baseUrl}${pathname}`, { method });
-      expect(response.status).toBe(404);
+      expect(response.status).toBe(405);
+      expect(response.headers.get("Allow")).toBe(allow);
+      expect(response.headers.get("Access-Control-Allow-Origin")).toBe("*");
       expect(await response.json()).toEqual({
-        error: `Unknown API endpoint: ${method} ${pathname}`,
+        error: `Method not allowed: ${method} ${pathname}`,
       });
     }
   });

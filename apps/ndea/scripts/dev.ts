@@ -21,7 +21,6 @@ import { loadMcpToken } from "../src/server/mcp-token.ts";
 import type { ObsmSliceLoader } from "../src/server/slice-loader.ts";
 import { createServerSession } from "../src/server/state.ts";
 import { DatasetQuerySession } from "../src/server/store.ts";
-import index from "../index.html";
 
 const REPO_ROOT = resolve(import.meta.dir, "../../..");
 
@@ -107,7 +106,7 @@ async function serveFixture(): Promise<void> {
       datasetKeys: null,
       datasetChannels: null,
     },
-    devHtml: index,
+    dev: true,
     mcpToken: await loadMcpToken(),
   });
 

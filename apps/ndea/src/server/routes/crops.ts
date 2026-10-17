@@ -21,10 +21,6 @@ const DEFAULT_QUALITY = 78;
 const DEFAULT_HALF = 150;
 
 export async function handleCrop(fovPath: string, req: Request, state: ServerSession): Promise<Response> {
-  if (req.method !== "POST") {
-    return Response.json({ error: "Only POST is supported" }, { status: 405 });
-  }
-
   const parsed = await parseJsonBody(req, CropBodySchema);
   if (!parsed.ok) return parsed.response;
   const body = parsed.data;

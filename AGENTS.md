@@ -62,7 +62,10 @@ entrypoints across workspaces.
 ### Server
 
 - `createApp()` in `apps/ndea/src/server/app.ts` creates the Bun HTTP and
-  WebSocket server.
+  WebSocket server from one `Bun.serve` `routes` table. Add an endpoint as an
+  `api({ "/api/x/:id": { GET } })` entry: it gets CORS, a 204 preflight, and a
+  405 with `Allow` for unlisted methods; unknown `/api/*` paths return 404
+  `{ error: "Unknown API endpoint: …" }`.
 - `/data/query` serves Mosaic's `restConnector` (`POST { type, sql }`;
   `arrow` returns Arrow IPC bytes, `exec` returns `{}`).
 - `/ws` carries the framed `{ _id, _type }` ndea protocol; its one method is
@@ -190,8 +193,10 @@ vp run verify
 vp run check
 vp run test
 
-# Production binary: dist/ndea (cached build:frontend + build:addon, then compile)
+# Production binary: dist/ndea (cached build:addon, then compile)
 vp run build
+# Re-record the bytecode-order profiles from dist/ndea, then build again
+vp run bytecode-order
 
 # Code-health audit (Fallow)
 vp run audit
@@ -212,11 +217,14 @@ not replace unrelated `catalog:` references with package-local ranges. Use
 `vp add --filter <workspace> <package>` and
 `vp remove --filter <workspace> <package>` for targeted workspace changes.
 
-`vp run build` runs the app's Bun build: `build:frontend` (`dist/frontend/`)
-and `build:addon` (static `duckdb.node` on darwin-arm64) are cached; the compile
-step always runs and takes `--target=<bun target>`. Do not use bare `vp build`;
-that invokes Rolldown instead of the single-binary pipeline. Direct compiler
-invocation also fails on embedded font assets; use the project task.
+`vp run build` runs the app's Bun build: `build:addon` (static `duckdb.node` on
+darwin-arm64) is cached; the compile step always runs and takes
+`--target=<bun target>`. It compiles one full-stack executable (the frontend
+bundle, ESM bytecode laid out by `apps/ndea/scripts/bytecode-order/*.order`,
+and embedded sourcemaps, so stack traces show `src/**/*.ts:line`). Do not use
+bare `vp build`; that invokes Rolldown instead of the single-binary pipeline.
+Direct `bun build --compile` skips the frontend plugins (Bun's CLI does not
+load them); use the project task.
 
 Dashboard layout editing (split, swap, remove, fill a slot) runs in
 development. Production builds compile it out; agents and patches edit any
@@ -257,12 +265,13 @@ build.
   format accepts only its exact version; there are no migrations.
 - **Workers:** `new URL("./worker.ts", import.meta.url)` must work in development
   and compiled binaries. Bun embeds workers automatically.
-- **Static files:** `vp run dev` (`ndea view --dev`) serves `apps/ndea/index.html`
-  through Bun's dev server (HTML import, HMR); the root `bunfig.toml`
-  `[serve.static]` plugin (`scripts/frontend-plugin.ts`, Tailwind + TypeGPU) is
-  the same one `build.ts` passes to `Bun.build`. A source run without `--dev`
-  reads `dist/frontend/`; compiled binaries read `$bunfs/`, both through
-  `Bun.file()`.
+- **Static files:** The server imports `apps/ndea/index.html` and serves it
+  from `Bun.serve` `routes` (`/*`, so any non-API path gets the app). `vp run
+  dev` (`ndea view --dev`) serves it through Bun's dev server (HMR); a source
+  run without `--dev` bundles it on first request; `vp run build` embeds the
+  production bundle in the binary. The root `bunfig.toml` `[serve.static]`
+  plugin (`scripts/frontend-plugin.ts`, Tailwind + TypeGPU) is the same one
+  `build.ts` passes to `Bun.build`.
 - **Dev/prod flag:** Frontend code branches on `process.env.NODE_ENV` only (Bun's
   dev server inlines `"development"`, `build.ts` defines `"production"`);
   `import.meta.env` does not exist. `@ndea/components` declares just that global

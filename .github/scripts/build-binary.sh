@@ -1,12 +1,6 @@
 #!/usr/bin/env bash
-# Compile the platform-specific ndea binary with embedded frontend assets.
-#
-# Shared release build helper. Delegates to the app builder, which
-# (unlike the prior inline approach) embeds dist/frontend/** via a generated
-# `import … with { type: "file" }` manifest. Passing binary assets like
-# .woff2 to `bun build --compile` directly crashes Bun with
-# "Internal error: missing asset file"; the manifest pattern is the
-# documented escape hatch.
+# Compile the platform-specific ndea binary (full-stack executable: the
+# server's index.html import embeds the frontend bundle).
 #
 # Required env:
 #   TARGET: bun --target value, e.g. bun-darwin-arm64, bun-linux-x64
@@ -18,8 +12,8 @@ set -euo pipefail
 
 mkdir -p dist
 
-# Runs `build:frontend` and `build:addon` (host-native), then compiles for
-# TARGET; the flag reaches only the compile step.
+# Runs `build:addon` (host-native), then compiles for TARGET; the flag reaches
+# only the compile step.
 vp run build "--target=${TARGET}"
 
 # The app builder keeps the public output at dist/ndea, or dist/ndea.exe when

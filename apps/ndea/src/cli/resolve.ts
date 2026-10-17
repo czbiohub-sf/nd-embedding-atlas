@@ -2,7 +2,6 @@
  * Path resolution utilities for the CLI.
  *
  * Handles zarr store path validation and network address lookup.
- * Frontend dist resolution lives in `server/static.ts`.
  */
 
 import { existsSync } from "node:fs";

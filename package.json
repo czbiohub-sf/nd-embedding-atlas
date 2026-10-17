@@ -8,6 +8,7 @@
   "type": "module",
   "scripts": {
     "audit": "fallow",
+    "bytecode-order": "bun run apps/ndea/scripts/record-bytecode-order.ts",
     "dev": "bun x --bun portless run bun apps/ndea/scripts/dev.ts",
     "docs": "bun run --cwd docs dev",
     "docs:build": "bun run --cwd docs build",

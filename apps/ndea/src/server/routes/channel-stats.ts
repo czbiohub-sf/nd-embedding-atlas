@@ -22,10 +22,6 @@ function resolveMount(mounts: readonly PlateMount[], datasetKey: string | null):
 }
 
 export async function handleChannelStats(fovPath: string, req: Request, state: ServerSession): Promise<Response> {
-  if (req.method !== "GET") {
-    return Response.json({ error: "Only GET is supported" }, { status: 405 });
-  }
-
   const datasetKey = new URL(req.url).searchParams.get("dataset_key");
   const mount = resolveMount(state.plateMounts, datasetKey);
   if (!mount) {

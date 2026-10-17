@@ -1,14 +1,8 @@
-import { resolve } from "node:path";
-import type { HTMLBundle } from "bun";
-import { isCompiled } from "../../server/embedded-assets.ts";
 import { flushAnnotationSaves } from "../../server/routes/annotate.ts";
 import type { DatasetSessionMetadata, ServerSession } from "../../server/state.ts";
-import { resolveFrontendDir } from "../../server/static.ts";
 import type { LaunchConfig } from "../config.ts";
-import { displayHost, printMissingFrontend, printShutdownHint, printShuttingDown } from "./output.ts";
-
-// Held in a variable so `bun build --compile` never bundles the frontend source into the binary.
-const DEV_INDEX_HTML = resolve(import.meta.dir, "../../../index.html");
+import { isCompiledBinary } from "../lib/paths.ts";
+import { displayHost, printShutdownHint, printShuttingDown } from "./output.ts";
 
 interface RunningServer {
   stop(closeActiveConnections?: boolean): void | Promise<void>;
@@ -23,27 +17,18 @@ function isPortCollision(error: unknown): boolean {
   );
 }
 
-export function resolveStaticDirectory(config: LaunchConfig): string | undefined {
-  if (config.dev) return undefined;
-  const staticDirectory = resolveFrontendDir() ?? undefined;
-  if (!staticDirectory) printMissingFrontend();
-  return staticDirectory;
-}
-
 export async function startServer(
   config: LaunchConfig,
   state: ServerSession,
   metadata: DatasetSessionMetadata,
-  frontendDir: string | undefined,
 ): Promise<RunningServer> {
+  // A binary embeds the built frontend; only a checkout has the source for Bun's dev server.
+  if (config.dev && isCompiledBinary()) {
+    throw new Error("--dev serves the frontend source: run it from a checkout (vp run dev)");
+  }
   const { createApp } = await import("../../server/app.ts");
   const { loadMcpToken } = await import("../../server/mcp-token.ts");
   const mcpToken = await loadMcpToken();
-  let devHtml: HTMLBundle | undefined;
-  if (config.dev) {
-    if (isCompiled) throw new Error("--dev serves the frontend source: run it from a checkout (vp run dev)");
-    devHtml = (await import(DEV_INDEX_HTML)).default;
-  }
   try {
     return createApp({
       port: config.port,
@@ -51,8 +36,7 @@ export async function startServer(
       store: state.store,
       state,
       config: metadata,
-      frontendDir,
-      devHtml,
+      dev: config.dev,
       mcpToken,
     });
   } catch (error) {

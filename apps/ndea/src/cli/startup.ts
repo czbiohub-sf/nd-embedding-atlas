@@ -6,13 +6,7 @@ import type { LaunchConfig } from "./config.ts";
 import { openDatasets, prepareDatasets } from "./startup/datasets.ts";
 import { createQuerySession } from "./startup/ingest.ts";
 import { printBanner, printReady } from "./startup/output.ts";
-import {
-  openBrowser,
-  prewarmEmbeddings,
-  registerGracefulShutdown,
-  resolveStaticDirectory,
-  startServer,
-} from "./startup/server.ts";
+import { openBrowser, prewarmEmbeddings, registerGracefulShutdown, startServer } from "./startup/server.ts";
 import { buildDatasetMetadata, prepareServerSession } from "./startup/session.ts";
 
 export async function startup(config: LaunchConfig): Promise<void> {
@@ -28,9 +22,8 @@ export async function startup(config: LaunchConfig): Promise<void> {
   const query = await createQuerySession(datasets);
   const session = await prepareServerSession(config, datasets, query, workspace);
 
-  const frontendDir = resolveStaticDirectory(config);
   const metadata = buildDatasetMetadata(datasets, session);
-  const server = await startServer(config, session.state, metadata, frontendDir);
+  const server = await startServer(config, session.state, metadata);
 
   // A failure past this point would otherwise leave the server holding the process open.
   await prewarmEmbeddings(session.state).catch((error: unknown) => {

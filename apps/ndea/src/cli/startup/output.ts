@@ -21,12 +21,6 @@ export function printAnnotationsWarning(error: unknown): void {
   console.warn(`  ${warn(`annotations sidecar load failed: ${message}`)}`);
 }
 
-export function printMissingFrontend(): void {
-  console.log(
-    `\n  ${warn(`No frontend dist found. Run ${label("vp run build")} (or ${label("vp run dev")} for the HMR dev server).`)}`,
-  );
-}
-
 export function displayHost(host: string): string {
   return host === "127.0.0.1" ? "localhost" : host;
 }

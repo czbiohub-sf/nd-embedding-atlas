@@ -1,1 +1,2 @@
 .github/workflows/*.lock.yml linguist-generated=true merge=ours
+apps/ndea/scripts/bytecode-order/*.order linguist-generated=true -diff

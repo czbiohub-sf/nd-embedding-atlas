@@ -7,29 +7,14 @@ export default defineConfig({
       check: "vp check vite.config.ts scripts && vp run -r --cache check",
       test: "bun test scripts && vp run -r --cache test",
       verify: "vp run check && vp run test",
-      "build:frontend": {
-        command: "bun run apps/ndea/scripts/build.ts --frontend-only",
-        cache: {
-          input: [
-            "bun.lock",
-            "tsconfig.json",
-            "apps/ndea/{index.html,package.json,tsconfig.json}",
-            "apps/ndea/scripts/{build,frontend-plugin}.ts",
-            "apps/ndea/src/frontend/**",
-            "packages/*/{package.json,src/**}",
-            "!**/*.test.ts",
-          ],
-          output: ["dist/frontend/**"],
-        },
-      },
       // build-duckdb-addon.ts keys its own cache on the @duckdb/node-bindings version, so nothing to restore.
       "build:addon": {
         command: "bun run apps/ndea/scripts/build.ts --addon-only",
         cache: { input: ["bun.lock", "apps/ndea/scripts/build-duckdb-addon.ts"], output: [] },
       },
       build: {
-        command: "bun run apps/ndea/scripts/build.ts --compile-only",
-        dependsOn: ["build:frontend", "build:addon"],
+        command: "bun run apps/ndea/scripts/build.ts",
+        dependsOn: ["build:addon"],
         cache: false,
       },
     },

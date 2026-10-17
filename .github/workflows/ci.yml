@@ -75,10 +75,10 @@ jobs:
       - uses: voidzero-dev/setup-vp@v1
       - name: Install dependencies
         run: vp install --frozen-lockfile
-      # `vp run build` exercises the full release path: `build:frontend`
-      # (Bun.build) and `build:addon`, then embed-asset manifest generation →
-      # Bun.build `compile` (single self-contained binary). PRs that break any
-      # of these surface here instead of during a release.
+      # `vp run build` exercises the full release path: `build:addon`, then
+      # Bun.build `compile` (single full-stack binary with the frontend bundle,
+      # bytecode, and sourcemaps). PRs that break any of these surface here
+      # instead of during a release.
       - name: vp run build
         run: vp run build
       - name: Verify binary version
