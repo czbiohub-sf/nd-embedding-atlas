@@ -176,15 +176,12 @@ vp run backend /path/to/data.zarr
 vp dev apps/ndea
 
 # Root and workspace checks
-vp check vite.config.ts bunli.config.ts scripts
+vp check vite.config.ts scripts
 vp run -r check
 vp run -r test
 
 # Production binary: dist/ndea
 vp run build
-
-# CLI completion metadata
-vp run gen
 
 # Documentation
 vp run docs:build
@@ -218,8 +215,8 @@ build.
   and hooks with `useX`.
 - Route frontend schema mutations through `/api/categorize` and
   `/api/var-column`; Mosaic SQL blocks client-side `ALTER` and `UPDATE`.
-- Regenerate `.bunli/commands.gen.ts` with `vp run gen` after changing CLI
-  command definitions.
+- The Crust CLI's root action is `view` (`cli/index.ts`): a subcommand name
+  wins over a same-named relative path, so `ndea ./doctor` still means view.
 
 ## Load-bearing constraints
 

@@ -26,7 +26,7 @@ jobs:
       - name: Install dependencies
         run: vp install --frozen-lockfile
       - name: Check root tooling
-        run: vp check vite.config.ts bunli.config.ts scripts
+        run: vp check vite.config.ts scripts
       - name: Check workspaces
         run: vp run -r check
       # install.ps1 is piped straight into `iex` by users, so a syntax error
@@ -43,12 +43,6 @@ jobs:
             exit 1
           }
           Write-Host "install.ps1 parses cleanly"
-
-      # Verify .bunli/commands.gen.ts is in sync with apps/ndea/src/cli/commands/.
-      # The standard verify-no-drift / gen-check pattern (Buf, sqlc,
-      # Prisma, GraphQL Codegen all do this).
-      - name: Verify bunli gen output is in sync
-        run: bash .github/scripts/check-bunli-gen.sh
 
   # ── Bun test matrix ─────────────────────────────────────────────────────
   test:

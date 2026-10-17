@@ -19,8 +19,9 @@
   },
   "dependencies": {
     "@base-ui/react": "catalog:",
-    "@bunli/core": "^0.9.1",
-    "@bunli/plugin-completions": "^0.3.5",
+    "@crustjs/core": "^0.5.6",
+    "@crustjs/extensions": "^0.5.6",
+    "@crustjs/prompts": "^0.2.6",
     "@duckdb/node-api": "catalog:",
     "@fontsource-variable/geist-mono": "^5.3.0",
     "@json-render/core": "0.21.1",
@@ -53,6 +54,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@crustjs/testing": "^0.1.6",
     "@modelcontextprotocol/client": "^2.3.1",
     "@playwright/test": "^1.64.1",
     "@tailwindcss/vite": "^4.3.3",

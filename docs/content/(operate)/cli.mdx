@@ -5,7 +5,7 @@ description: Supported ndea commands, flags, and release channels.
 
 This page lists the supported `ndea` commands, flags, and release channels.
 
-Walkthroughs live in [Getting started](/). Dev-side commands (`vp run dev`, `vp run gen`, …) live in [Contributing](/contributing).
+Walkthroughs live in [Getting started](/). Dev-side commands (`vp run dev`, `vp run build`, …) live in [Contributing](/contributing).
 
 ## Synopsis
 
@@ -19,8 +19,7 @@ ndea filter [--where <json>] [--limit <n>] [--host <host>] [--port <port>]
 ndea workspace get [--host <host>] [--port <port>]
 ndea workspace patch --revision <n> --ops <json> [--host <host>] [--port <port>]
 ndea workspace result <element> | --data <name> [--host <host>] [--port <port>]
-ndea completions <bash|zsh|fish>
-ndea complete -- <args...>                       # internal; called by completion scripts
+ndea completion <bash|zsh|fish>
 ndea --help | --version
 ```
 
@@ -252,28 +251,22 @@ ndea mcp uninstall                         # remove ndea from every agent that h
 
 `edit_dashboard` applies a whole batch or nothing. Pass `revision` to apply only if the workspace has not changed since you read it. Every write, from the browser, the CLI, or an agent, is checked like a document load: structure, component props, data references, bindings, and set references. A refused edit names the op or document path to fix and changes nothing.
 
-## `ndea completions`
+## `ndea completion`
 
-Emit shell completion scripts.
-
-### Arguments
-
-| Name  | Type                      | Description       |
-| ----- | ------------------------- | ----------------- |
-| shell | `bash` \| `zsh` \| `fish` | Shell to emit for |
-
-### Usage
+Print a static shell completion script for `bash`, `zsh`, or `fish`. Scripts list every command, flag, and choice; `view` paths fall back to the shell's file completion. They do not call `ndea` on Tab.
 
 ```bash
-# bash / zsh: load on demand
-source <(ndea completions bash)
-source <(ndea completions zsh)
+# Bash, in ~/.bashrc
+source <(ndea completion bash)
 
-# fish: drop into the completions dir
-ndea completions fish > ~/.config/fish/completions/ndea.fish
+# Zsh, after compinit in ~/.zshrc
+source <(ndea completion zsh)
+
+# Fish, in ~/.config/fish/config.fish
+status --is-interactive; and ndea completion fish | source
 ```
 
-`view`'s positional completion filters to `*.zarr` directories and `*.yaml` / `*.yml` files.
+Open a new shell after `ndea update` to pick up new commands and flags.
 
 ## Release channels
 

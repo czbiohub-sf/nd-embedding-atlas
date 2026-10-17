@@ -21,12 +21,7 @@ export default defineConfig({
       react: { version: "19.0.0" },
     },
 
-    ignorePatterns: [
-      "**/dist/**",
-      "packages/ochre/src/colormap/data/**",
-      // Generated Bunli metadata contains raw AST nodes.
-      ".bunli/**",
-    ],
+    ignorePatterns: ["**/dist/**", "packages/ochre/src/colormap/data/**"],
 
     categories: {
       correctness: "error",
@@ -227,8 +222,8 @@ export default defineConfig({
     bracketSpacing: true,
     endOfLine: "lf",
     sortPackageJson: true,
-    // Generated metadata and packed colormap tables must retain source layout.
-    ignorePatterns: [".bunli/**", "**/dist/**", "packages/ochre/src/colormap/data/**"],
+    // Packed colormap tables must retain source layout.
+    ignorePatterns: ["**/dist/**", "packages/ochre/src/colormap/data/**"],
   },
 
   staged: {

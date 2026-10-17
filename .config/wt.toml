@@ -17,8 +17,6 @@ post-create = "vp install"
 # before it's merged back to trunk rather than in CI:
 #   - check     → `vp check`  (typecheck + Oxlint + Oxfmt)
 #   - test      → `vp run -r test` (Bun-native suites behind Vite+ tasks)
-#   - gen-drift → fail if .bunli/commands.gen.ts is stale vs src/cli/commands/**
-#                 (regenerate with `vp run gen` if this trips)
 #
 # Array-of-tables ([[pre-merge]]) is the current form: steps run serially in
 # declaration order. (The single-table [pre-merge] form is deprecated and will
@@ -26,4 +24,3 @@ post-create = "vp install"
 [[pre-merge]]
 check = "vp check"
 test = "vp run -r test"
-gen-drift = "bash .github/scripts/check-bunli-gen.sh"

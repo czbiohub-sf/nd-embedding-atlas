@@ -9,7 +9,8 @@ afterEach(() => rm(home, { recursive: true, force: true }));
 
 /** Run the CLI against a sandbox HOME (add-mcp and ~/.ndea both resolve from it); a closed port keeps the server check offline. */
 async function ndea(...args: string[]): Promise<{ code: number; out: string }> {
-  const proc = Bun.spawn(["bun", "run", "src/cli/index.ts", "mcp", ...args, "--port", "1"], {
+  const port = args[0] === "uninstall" ? [] : ["--port", "1"];
+  const proc = Bun.spawn(["bun", "run", "src/cli/index.ts", "mcp", ...args, ...port], {
     cwd: APP_ROOT,
     stdout: "pipe",
     stderr: "pipe",

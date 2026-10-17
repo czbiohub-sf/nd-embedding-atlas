@@ -15,14 +15,11 @@
     "docs:serve": "bun run --cwd docs start",
     "dev": "bun run apps/ndea/scripts/dev.ts",
     "sync-version": "bun run apps/ndea/scripts/sync-version.ts",
-    "gen": "bunx bunli generate",
     "dead-code": "fallow dead-code",
     "audit": "fallow"
   },
   "devDependencies": {
-    "@bunli/core": "^0.9.1",
     "@types/bun": "catalog:",
-    "bunli": "^0.9.1",
     "eslint-plugin-typegpu": "^0.12.1",
     "fallow": "^3.33.1",
     "typescript": "catalog:",

@@ -26,7 +26,6 @@ import type { BunPlugin } from "bun";
 import { existsSync, rmSync } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
 import { COLUMN_WORKER_ENTRYPOINT } from "@ndea/zarr/build";
-import { GENERATED_COMMANDS_ENTRYPOINT } from "../src/cli/lib/generated-commands-path.ts";
 import { CROP_WORKER_ENTRYPOINT } from "../src/server/crop-worker-path.ts";
 
 // ─── Args ──────────────────────────────────────────────────────────────────
@@ -258,7 +257,7 @@ try {
   // recursively resolves their imports. Bun emits each as `<name>.js` next
   // to the main entry inside $bunfs; parallel-reader.ts switches its URL
   // extension to match when running compiled.
-  const ADDITIONAL_ENTRYPOINTS = [COLUMN_WORKER_ENTRYPOINT, CROP_WORKER_ENTRYPOINT, GENERATED_COMMANDS_ENTRYPOINT];
+  const ADDITIONAL_ENTRYPOINTS = [COLUMN_WORKER_ENTRYPOINT, CROP_WORKER_ENTRYPOINT];
 
   const compileArgs = [
     "bun",
@@ -268,8 +267,8 @@ try {
     "--compile",
     `--target=${target}`,
     `--outfile=${outfile}`,
-    // `--bytecode` omitted: @opentui/core (transitive via @bunli/runtime)
-    // emits top-level await that Bun's bytecode pre-compiler rejects.
+    // `--bytecode` omitted: the CLI entry uses top-level await, which Bun's
+    // bytecode pre-compiler rejects.
     "--minify",
     ...DUCKDB_PLATFORM_EXTERNALS.flatMap((m) => ["--external", m]),
     // PRQL compiles only in the browser wrangle body (shipped in the frontend

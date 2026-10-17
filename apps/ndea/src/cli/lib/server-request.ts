@@ -4,17 +4,17 @@
  * stderr and exit 1, so agents can branch on the exit code.
  */
 
-import { option } from "@bunli/core";
+import { defineFlag } from "@crustjs/core";
 import { z } from "zod";
 
-export const serverOptions = {
-  port: option(z.coerce.number().int().min(1).max(65535).default(5055), {
+export const serverFlags = [
+  defineFlag("port", {
+    type: "string",
+    schema: z.coerce.number().int().min(1).max(65535).default(5055),
     description: "Port of the running ndea server",
   }),
-  host: option(z.string().default("127.0.0.1"), {
-    description: "Host of the running ndea server",
-  }),
-};
+  defineFlag("host", { type: "string", default: "127.0.0.1", description: "Host of the running ndea server" }),
+] as const;
 
 export async function requestServer(
   server: { host: string; port: number },

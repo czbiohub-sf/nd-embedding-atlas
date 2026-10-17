@@ -4,12 +4,10 @@ set -euo pipefail
 : "${ARTIFACT:?ARTIFACT env var is required}"
 
 expected=${EXPECTED_VERSION:-$(bun -p "require('./apps/ndea/package.json').version")}
-output=$("./dist/${ARTIFACT}" --version)
-actual=$(printf '%s\n' "$output" | sed -n 's/.*"version": "\([^"]*\)".*/\1/p')
+actual=$("./dist/${ARTIFACT}" --version)
 
 if [[ -z "$actual" ]]; then
-    echo "::error::Could not parse version from dist/${ARTIFACT} output"
-    printf '%s\n' "$output"
+    echo "::error::dist/${ARTIFACT} printed no version"
     exit 1
 fi
 

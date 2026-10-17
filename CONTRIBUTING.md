@@ -64,7 +64,7 @@ docs/                 Independent Waku documentation app
 vp run dev path/to/data.zarr
 
 # Shared root tooling, then every workspace in dependency order
-vp check vite.config.ts bunli.config.ts scripts
+vp check vite.config.ts scripts
 vp run -r check
 
 # Run each workspace's test task
@@ -72,9 +72,6 @@ vp run -r test
 
 # Build the frontend and single-file binary
 vp run build
-
-# Regenerate CLI completion metadata (after editing apps/ndea/src/cli/commands/**)
-vp run gen
 
 # Verify a built binary's install (paths, symlink, versions, manifest)
 ./dist/ndea doctor

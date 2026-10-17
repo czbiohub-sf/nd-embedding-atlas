@@ -1,121 +1,87 @@
 /**
- * End-to-end smoke tests for the bunli-backed subcommand router.
- *
- * We spawn `bun run src/cli/index.ts …` subprocesses so the test exercises
- * the real argv → command dispatch pipeline: no mocks. Each subprocess is
- * quick (no DuckDB / zarr boot) because the commands we hit short-circuit
- * before opening any store.
+ * Router tests. In-process `captureExecute` covers parsing, help, version,
+ * completion, and validation; subprocesses cover actions that exit the
+ * process (path errors, compiled-only commands).
  */
 
 import { describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { captureExecute } from "@crustjs/testing";
+import { app } from "../index.ts";
+import { VERSION } from "../version.ts";
 
 const ROOT = join(import.meta.dir, "..", "..", "..");
 
-// ANSI escape pattern built from a `String.fromCharCode` call to sidestep the
-// `no-control-regex` lint while still matching the ESC (0x1B) character that
-// bunli embeds for colour output.
-const ESC = String.fromCharCode(27);
-const ANSI_PATTERN = new RegExp(`${ESC}\\[[0-9;]*m`, "g");
-
-interface Result {
-  code: number;
-  stdout: string;
-  stderr: string;
+async function spawn(args: string[]): Promise<{ code: number; stderr: string }> {
+  const proc = Bun.spawn(["bun", "run", "src/cli/index.ts", ...args], { cwd: ROOT, stdout: "pipe", stderr: "pipe" });
+  const [code, stderr] = await Promise.all([proc.exited, new Response(proc.stderr).text()]);
+  return { code, stderr };
 }
 
-async function run(args: string[]): Promise<Result> {
-  const proc = Bun.spawn(["bun", "run", "src/cli/index.ts", ...args], {
-    cwd: ROOT,
-    stdout: "pipe",
-    stderr: "pipe",
-    env: process.env,
-  });
-  const [code, stdout, stderr] = await Promise.all([
-    proc.exited,
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-  ]);
-  return { code: code ?? 0, stdout, stderr };
-}
-
-describe("router / help + version", () => {
-  test("`ndea --help` lists subcommands", async () => {
-    const r = await run(["--help"]);
-    expect(r.code).toBe(0);
-    // Citty prints to stdout (with dim ANSI): strip colors before matching.
-    const combined = (r.stdout + r.stderr).replace(ANSI_PATTERN, "");
-    expect(combined).toContain("view");
-    expect(combined).toContain("install");
-    expect(combined).toContain("update");
-    expect(combined).toContain("workspace");
-    expect(combined).not.toContain("rollback");
+describe("router / help, version, completion", () => {
+  test("`ndea --version` prints the bare version", async () => {
+    const r = await captureExecute(app, ["--version"]);
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout.trim()).toBe(VERSION);
   });
 
-  test("`ndea --version` prints the version number", async () => {
-    const r = await run(["--version"]);
-    expect(r.code).toBe(0);
-    expect(r.stdout + r.stderr).toMatch(/\d+\.\d+\.\d+/);
+  test("`ndea --help` and bare `ndea` list subcommands", async () => {
+    for (const argv of [["--help"], []]) {
+      const r = await captureExecute(app, argv);
+      expect(r.exitCode).toBe(0);
+      for (const name of ["view", "update", "workspace", "mcp", "completion"]) expect(r.stdout).toContain(name);
+    }
   });
 
-  test("`ndea update --help` renders without booting zarr", async () => {
-    const r = await run(["update", "--help"]);
-    expect(r.code).toBe(0);
-    const combined = (r.stdout + r.stderr).replace(ANSI_PATTERN, "");
-    expect(combined).toContain("--force");
-    expect(combined).toContain("--channel");
+  test("subcommand help renders flags", async () => {
+    const update = await captureExecute(app, ["update", "--help"]);
+    expect(update.stdout).toContain("--channel");
+    expect(update.stdout).toContain("--no-gc");
+    const view = await captureExecute(app, ["view", "--help"]);
+    expect(view.stdout).toContain("--no-open");
+    expect(view.stdout).toContain("--port");
   });
 
-  test("`ndea view --help` renders with viewer flags", async () => {
-    const r = await run(["view", "--help"]);
-    expect(r.code).toBe(0);
-    const combined = (r.stdout + r.stderr).replace(ANSI_PATTERN, "");
-    expect(combined).toContain("--port");
-    expect(combined).toContain("--no-open");
-    expect(combined).toContain("--host");
+  test("`ndea completion zsh` covers every command", async () => {
+    const r = await captureExecute(app, ["completion", "zsh"]);
+    expect(r.exitCode).toBe(0);
+    for (const name of ["view", "workspace", "patch", "mcp", "install", "doctor"]) expect(r.stdout).toContain(name);
+  });
+});
+
+describe("router / groups and validation", () => {
+  test("`ndea workspace` routes to its subcommands", async () => {
+    const help = await captureExecute(app, ["workspace", "--help"]);
+    for (const name of ["get", "patch", "result"]) expect(help.stdout).toContain(name);
+    const typo = await captureExecute(app, ["workspace", "gte"]);
+    expect(typo.exitCode).toBe(1);
+    expect(typo.stderr).toContain('Did you mean "get"?');
+  });
+
+  test("a bad --port fails validation before view runs", async () => {
+    const r = await captureExecute(app, ["--port", "99999", "x.zarr"]);
+    expect(r.exitCode).toBe(1);
+    expect(r.stderr).toContain("flags.port");
   });
 });
 
 describe("router / default routing", () => {
-  test("`ndea` with no args shows usage and exits 0", async () => {
-    // bunli defaults to printing help on bare invocation: same convention
-    // as git/gh/uv. Previous citty behaviour was to exit 1 because it
-    // routed to `view` which then errored on missing positional. The
-    // bunli default is friendlier; just verify usage shows up.
-    const r = await run([]);
-    expect(r.code).toBe(0);
-    const combined = (r.stdout + r.stderr).replace(ANSI_PATTERN, "");
-    expect(combined).toContain("view");
-    expect(combined).toContain("install");
-  });
-
-  test("`ndea ./nonexistent.zarr` falls through to view and surfaces a path error", async () => {
-    const r = await run(["/definitely/does/not/exist/data.zarr"]);
-    expect(r.code).toBe(1);
-    expect(r.stderr).toMatch(/does not exist/);
-  });
-
-  test("`ndea view ./nonexistent.zarr` yields the same error as the default route", async () => {
-    const r = await run(["view", "/definitely/does/not/exist/data.zarr"]);
-    expect(r.code).toBe(1);
-    expect(r.stderr).toMatch(/does not exist/);
+  test("`ndea <path>` and `ndea view <path>` report the same path error", async () => {
+    for (const args of [["/definitely/does/not/exist/data.zarr"], ["view", "/definitely/does/not/exist/data.zarr"]]) {
+      const r = await spawn(args);
+      expect(r.code).toBe(1);
+      expect(r.stderr).toMatch(/does not exist/);
+    }
   });
 
   test("default YAML routing reports alias conflicts and exits 1", async () => {
     const dir = mkdtempSync(join(tmpdir(), "ndea-router-config-"));
     const path = join(dir, "project.yaml");
     try {
-      await Bun.write(
-        path,
-        `datasets:
-  cells:
-    anndata: data/a.zarr
-    path: data/b.zarr
-`,
-      );
-      const r = await run([path]);
+      await Bun.write(path, "datasets:\n  cells:\n    anndata: data/a.zarr\n    path: data/b.zarr\n");
+      const r = await spawn([path, "--port", "8080"]);
       expect(r.code).toBe(1);
       expect(r.stderr).toContain("Error loading config:");
       expect(r.stderr).toContain("'anndata'");
@@ -126,7 +92,7 @@ describe("router / default routing", () => {
   });
 
   test("`ndea update` without a compiled binary errors cleanly", async () => {
-    const r = await run(["update"]);
+    const r = await spawn(["update"]);
     expect(r.code).toBe(1);
     expect(r.stderr).toMatch(/compiled binary/);
   });

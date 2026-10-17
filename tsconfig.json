@@ -22,5 +22,5 @@
     "lib": ["ESNext", "DOM"],
     "types": ["bun"]
   },
-  "include": ["bunli.config.ts", "vite.config.ts", "scripts/**/*.ts"]
+  "include": ["vite.config.ts", "scripts/**/*.ts"]
 }

@@ -68,7 +68,7 @@ vp dev apps/ndea
 ## Quality gates
 
 ```bash
-vp check vite.config.ts bunli.config.ts scripts
+vp check vite.config.ts scripts
 vp run -r check          # package checks in dependency order
 vp run -r test           # package tests in dependency order
 vp run build             # frontend + single-file binary
@@ -132,14 +132,6 @@ Each platform builds on its own runner. `duckdb.node` is a native N-API addon, s
 | `windows-latest`   | `bun-windows-x64`  | `ndea-windows-x64.exe`   |
 
 Note that `process.platform` reports `win32` while Bun's target triple spells the OS `windows`, and the DuckDB bindings directory is `node-bindings-win32-x64`. `apps/ndea/scripts/build.ts` owns the mapping between the three.
-
-After editing `apps/ndea/src/cli/commands/**`, regenerate the completion metadata:
-
-```bash
-vp run gen
-```
-
-Updates `.bunli/commands.gen.ts`, which feeds shell-completion script generation. CI fails on drift (`.github/scripts/check-bunli-gen.sh`).
 
 ## Verifying a build
 

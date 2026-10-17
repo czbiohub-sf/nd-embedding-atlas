@@ -11,63 +11,76 @@
  * RFC 9457 problem details whose `errors[].pointer` locate each issue.
  */
 
-import { defineCommand, defineGroup, option } from "@bunli/core";
+import { defineCommand } from "@crustjs/core";
 import { z } from "zod";
-import { parseJsonFlag, requestServer, serverOptions } from "../lib/server-request.ts";
+import { parseJsonFlag, requestServer, serverFlags } from "../lib/server-request.ts";
 
-const getCommand = defineCommand({
-  name: "get" as const,
-  description: "Print the current workspace revision and document as JSON",
-  options: serverOptions,
-  async handler({ flags }) {
-    await requestServer(flags, "/api/workspace");
-  },
-});
-
-const patchCommand = defineCommand({
-  name: "patch" as const,
-  description: "Apply RFC 6902 ops to the workspace at an expected revision",
-  options: {
-    revision: option(z.coerce.number().int().nonnegative(), {
-      description: "Revision the ops were written against (from `ndea workspace get`)",
+const getCommand = defineCommand(
+  "get",
+  { description: "Print the current workspace revision and document as JSON" },
+  (command) =>
+    command.flags(...serverFlags).action(async ({ flags }) => {
+      await requestServer(flags, "/api/workspace");
     }),
-    ops: option(z.string(), {
-      description:
-        'JSON array of RFC 6902 ops, e.g. \'[{"op":"add","path":"/data/infected","value":{"sql":"area > 20"}}]\'',
-    }),
-    ...serverOptions,
-  },
-  async handler({ flags }) {
-    const ops = parseJsonFlag("ops", flags.ops);
-    await requestServer(flags, "/api/workspace", { method: "PATCH", body: { baseRevision: flags.revision, ops } });
-  },
-});
+);
 
-const resultCommand = defineCommand({
-  name: "result" as const,
-  description: "Print what one dashboard element shows, or one data source selects, as JSON",
-  options: {
-    data: option(z.string().optional(), { description: "Evaluate this data source instead of an element" }),
-    ...serverOptions,
-  },
-  async handler({ flags, positional }) {
-    if (flags.data) {
-      await requestServer(flags, `/api/workspace/data/${encodeURIComponent(flags.data)}`);
-      return;
-    }
-    const element = positional[0];
-    if (!element) {
-      console.error(
-        "Error: pass an element id (`ndea workspace result count-1`) or --data <name>; see `ndea workspace get`.",
-      );
-      process.exit(1);
-    }
-    await requestServer(flags, `/api/workspace/elements/${encodeURIComponent(element)}`);
-  },
-});
+const patchCommand = defineCommand(
+  "patch",
+  { description: "Apply RFC 6902 ops to the workspace at an expected revision" },
+  (command) =>
+    command
+      .flags(
+        {
+          name: "revision",
+          type: "string",
+          schema: z.coerce.number().int().nonnegative(),
+          description: "Revision the ops were written against (from `ndea workspace get`)",
+        },
+        {
+          name: "ops",
+          type: "string",
+          required: true,
+          description:
+            'JSON array of RFC 6902 ops, e.g. \'[{"op":"add","path":"/data/infected","value":{"sql":"area > 20"}}]\'',
+        },
+        ...serverFlags,
+      )
+      .action(async ({ flags }) => {
+        const ops = parseJsonFlag("ops", flags.ops);
+        await requestServer(flags, "/api/workspace", {
+          method: "PATCH",
+          body: { baseRevision: flags.revision, ops },
+        });
+      }),
+);
 
-export default defineGroup({
-  name: "workspace" as const,
-  description: "Read and edit the running server's workspace document",
-  commands: [getCommand, patchCommand, resultCommand],
-});
+const resultCommand = defineCommand(
+  "result",
+  { description: "Print what one dashboard element shows, or one data source selects, as JSON" },
+  (command) =>
+    command
+      .args({ name: "element", type: "string", description: "Element id (see `ndea workspace get`)" })
+      .flags(
+        { name: "data", type: "string", description: "Evaluate this data source instead of an element" },
+        ...serverFlags,
+      )
+      .action(async ({ args, flags }) => {
+        if (flags.data) {
+          await requestServer(flags, `/api/workspace/data/${encodeURIComponent(flags.data)}`);
+          return;
+        }
+        if (!args.element) {
+          console.error(
+            "Error: pass an element id (`ndea workspace result count-1`) or --data <name>; see `ndea workspace get`.",
+          );
+          process.exit(1);
+        }
+        await requestServer(flags, `/api/workspace/elements/${encodeURIComponent(args.element)}`);
+      }),
+);
+
+export default defineCommand(
+  "workspace",
+  { description: "Read and edit the running server's workspace document" },
+  (command) => command.add(getCommand, patchCommand, resultCommand),
+);
