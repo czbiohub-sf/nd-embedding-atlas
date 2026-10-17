@@ -42,6 +42,7 @@ export interface PlateMetaInfo {
   channels: PlateChannel[];
   /** [x, y] in physical units. */
   pixelScale: { x: number; y: number };
+  wells: number;
 }
 
 // ─── MIME & zarr extensions ─────────────────────────────────────────────────
@@ -161,7 +162,7 @@ export async function readPlateMeta(platePath: string): Promise<PlateMetaInfo | 
 
     const channels = extractChannels(imageAttrs);
 
-    return { omeVersion, channels, pixelScale };
+    return { omeVersion, channels, pixelScale, wells: plate.wells?.length ?? 0 };
   } catch {
     return null;
   }

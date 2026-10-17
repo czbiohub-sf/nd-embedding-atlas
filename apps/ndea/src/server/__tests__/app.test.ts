@@ -13,6 +13,7 @@ import { DatasetQuerySession } from "../store.ts";
 import { createApp, type CreateAppOptions } from "../app.ts";
 import type { ServerSession, DatasetSessionMetadata } from "../state.ts";
 import { createServerSession } from "../state.ts";
+import { captureConsole } from "../status.ts";
 import type { ServerSocketContext } from "../ws.ts";
 
 type NdeaServer = ReturnType<typeof createApp>;
@@ -226,14 +227,28 @@ describe("createApp", () => {
     expect(body.n_obs).toBe(25);
   });
 
-  test("GET /api/status needs the bearer token and counts browser sockets", async () => {
+  test("GET /api/status needs the bearer token, counts browser sockets, and reports datasets and logs", async () => {
     const store = await createMockStore(5);
     activeStore = store;
+    const state = createMockState(store);
+    const dataset = {
+      name: "test",
+      format: "anndata" as const,
+      path: "/data/t.zarr",
+      observations: 5,
+      variables: 2,
+      obsColumns: 3,
+      embeddings: ["X_umap"],
+      plate: { path: "/data/p.zarr", wells: 1, channels: [{ name: "DAPI", color: "#0000FF" }] },
+    };
+    state.status = { ingest: "fresh", datasets: [dataset] };
+    captureConsole();
+    console.warn("\u001B[33mstatus warning\u001B[39m");
     const server = createApp({
       port: 0,
       host: "localhost",
       store,
-      state: createMockState(store),
+      state,
       config: createMockConfig(),
       noStatic: true,
       mcpToken: "secret",
@@ -252,6 +267,9 @@ describe("createApp", () => {
     const status = RuntimeStatusSchema.parse(await res.json());
     expect(status.clients.browserSockets).toBe(1);
     expect(status.workspace.revision).toBeGreaterThanOrEqual(0);
+    expect(status.server.ingest).toBe("fresh");
+    expect(status.datasets).toEqual([dataset]);
+    expect(status.logs.at(-1)).toMatchObject({ level: "warn", text: "status warning" });
     ws.close();
   });
 

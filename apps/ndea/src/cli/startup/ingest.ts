@@ -23,6 +23,8 @@ interface Initializers {
 export interface PreparedQuerySession {
   store: DatasetQuerySession;
   cacheEnabled: boolean;
+  /** The DuckDB file came from the ingest cache instead of a fresh ingest. */
+  cached: boolean;
 }
 
 /** Chunked cannot emit the `_dataset` discriminator, so unions must stream. */
@@ -161,6 +163,6 @@ export function createQuerySession(prepared: PreparedDatasets): Promise<Prepared
 
     const vars = store.hasVarTable ? `, ${num(store.nVars)} variables` : "";
     update(`${num(store.nObs)} observations${vars} in DuckDB${cached}`);
-    return { store, cacheEnabled };
+    return { store, cacheEnabled, cached: cached !== "" };
   });
 }

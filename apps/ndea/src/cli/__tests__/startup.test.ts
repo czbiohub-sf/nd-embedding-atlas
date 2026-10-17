@@ -16,7 +16,7 @@ test("retains the public startup entrypoint", () => {
 });
 
 function plateInfo(omeVersion: "0.4" | "0.5", scale: number): PlateMetaInfo {
-  return { omeVersion, channels: [CHANNEL], pixelScale: { x: scale, y: scale } };
+  return { omeVersion, channels: [CHANNEL], pixelScale: { x: scale, y: scale }, wells: 1 };
 }
 
 describe("startup ingest strategy", () => {

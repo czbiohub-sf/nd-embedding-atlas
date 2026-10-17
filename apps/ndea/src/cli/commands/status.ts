@@ -15,7 +15,7 @@ import { PlainError } from "../lib/style.ts";
 
 export default defineCommand(
   "status",
-  { description: "Show the running server's status: datasets, embeddings, workspace, clients" },
+  { description: "Show the running server's status: datasets, workspace activity, logs" },
   (command) =>
     command
       .provide(server())

@@ -263,10 +263,15 @@ development. Production builds compile it out; agents and patches edit any
 build.
 
 `ndea view` in a terminal shows a live status screen (`cli/tui.ts` on
-`@crustjs/tui`/OpenTUI, fed by `server/status.ts`); `q` or Ctrl+C stops the
+`@crustjs/tui`/OpenTUI, fed by `server/status.ts`): Overview (dataset cards,
+workspace), Activity (revisions), and Logs tabs; `q` or Ctrl+C stops the
 server. `--no-tui` or a non-TTY stdout keeps the log lines. `ndea status`
-renders the same screen by polling `/api/status`. OpenTUI's native library
-loads on import, so keep `cli/tui.ts` lazily imported and free of frontend imports.
+renders the same screen by polling `/api/status`. Per-dataset facts are built
+once in `ServerSession.status` (`cli/startup/session.ts`); add new ones there,
+not per poll. `captureConsole` keeps the last 200 console lines for the Logs
+tab and mutes the terminal while the screen is up, so log through `console`.
+OpenTUI's native library loads on import, so keep `cli/tui.ts` lazily imported
+and free of frontend imports.
 
 ## Code rules
 

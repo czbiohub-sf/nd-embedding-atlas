@@ -6,6 +6,7 @@
 
 import { workspaceIssues } from "./routes/workspace.ts";
 import type { DatasetHandle } from "@ndea/zarr";
+import type { RuntimeStatus } from "@ndea/protocol";
 import type { CropPool } from "./crop-pool.ts";
 import type { PlateChannel, PlateMount } from "./plate.ts";
 import type { ObsmSliceLoader } from "./slice-loader.ts";
@@ -145,6 +146,8 @@ export interface ServerSession {
   /** The session's one authoritative workspace document and its history. */
   workspace: Workspace;
   observationSets: ObservationSets;
+  /** Startup facts `getRuntimeStatus` reports, built once with the session; `bytes` arrives later. */
+  status: Pick<RuntimeStatus["server"], "ingest"> & { datasets: RuntimeStatus["datasets"] };
 }
 
 /**
@@ -169,6 +172,7 @@ export function createServerSession({
     obsmLoaders: new Map(),
     cropPool: null,
     annotationsSidecarPath: null,
+    status: { ingest: "uncached", datasets: [] },
     ...overrides,
     workspace: overrides.workspace ?? Workspace.memory(undefined, { validate: (doc) => workspaceIssues(doc, session) }),
     observationSets: new ObservationSets(store, observationSetsDirectory),

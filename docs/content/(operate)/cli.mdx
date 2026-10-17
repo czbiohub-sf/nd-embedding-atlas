@@ -130,7 +130,13 @@ On Windows the symlink and installed-versions sections are omitted, because that
 
 ## `ndea status`
 
-Show a running server's live status: version, URL, uptime, memory, datasets, embeddings (available, loading, failed), the workspace file with its revision and last change (who and when), and clients (open browser tabs, MCP requests in flight, agents by their `X-Ndea-Agent` header). It polls `GET /api/status` every second with the token in `~/.ndea/mcp-token`; the endpoint answers 401 without it. Press `o` to open the dashboard and `q` to quit. `ndea view` shows the same screen in a terminal, where `q` or Ctrl+C stops the server.
+Show a running server's live status. The header carries the version, URL, uptime, memory, and whether DuckDB came from the ingest cache. Three tabs follow (Tab or 1-3 switches):
+
+- **Overview**: one card per dataset with its format (AnnData or MuData, with modalities), observations × variables, obs column count, its embeddings (green ready, amber loading, red failed), the plate's well count and channels in their colors, and its path and size on disk (`…` until the background measurement finishes); then the workspace file with its revision and last change (who and when).
+- **Activity**: the newest 50 workspace revisions with actor, op count or restored revision, and age.
+- **Logs**: the server's last 200 console lines; warnings and errors are highlighted.
+
+It polls `GET /api/status` every second with the token in `~/.ndea/mcp-token`; the endpoint answers 401 without it. The JSON also lists embedding load state and clients (open browser tabs, MCP requests in flight, agents by their `X-Ndea-Agent` header). Press `o` to open the dashboard, `c` to copy its URL, and `q` to quit. A non-terminal stdout prints the Overview as plain text. `ndea view` shows the same screen in a terminal, where `q` or Ctrl+C stops the server and console output goes to the Logs tab instead of over the screen.
 
 | Option          | Env         | Default     | Description                                       |
 | --------------- | ----------- | ----------- | ------------------------------------------------- |

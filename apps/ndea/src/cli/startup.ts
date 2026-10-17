@@ -3,6 +3,7 @@
 import { DEFAULT_PRESET, loadPreset } from "../server/presets.ts";
 import { workspaceIssues } from "../server/routes/workspace.ts";
 import { Workspace } from "../server/workspace.ts";
+import { captureConsole } from "../server/status.ts";
 import type { LaunchConfig } from "./config.ts";
 import { openDatasets, prepareDatasets } from "./startup/datasets.ts";
 import { createQuerySession } from "./startup/ingest.ts";
@@ -12,6 +13,7 @@ import { buildDatasetMetadata, prepareServerSession } from "./startup/session.ts
 
 export async function startup(config: LaunchConfig): Promise<void> {
   const startTime = performance.now();
+  captureConsole();
   printBanner();
 
   // Before ingest, so an invalid workspace file or preset fails in milliseconds, not minutes.

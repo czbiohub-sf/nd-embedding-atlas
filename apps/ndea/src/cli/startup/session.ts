@@ -1,10 +1,12 @@
 import { mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
+import type { MuData } from "@ndea/zarr";
 import { buildPlateMounts, readPlateMeta } from "../../server/plate.ts";
 import type { PlateChannel, PlateMetaInfo, PlateMount } from "../../server/plate.ts";
 import type { DatasetSessionMetadata, ServerSession } from "../../server/state.ts";
 import { createServerSession } from "../../server/state.ts";
+import { diskBytes } from "../../server/status.ts";
 import type { LaunchConfig } from "../config.ts";
 import type { PreparedDatasets } from "./datasets.ts";
 import type { PreparedQuerySession } from "./ingest.ts";
@@ -68,6 +70,39 @@ export async function prepareServerSession(
     annotationsSidecarPath: query.cacheEnabled ? null : resolveAnnotationsSidecarPath(config.datasets[0].path),
     workspace,
   });
+  state.status = {
+    ingest: query.cached ? "cached" : query.cacheEnabled ? "fresh" : "uncached",
+    datasets: datasets.loaded.map(({ entry, adata, obsmKeys, nVars }) => {
+      // One mount per plate: `/plate/<name>` for a union, else the single dataset's `/plate`.
+      const mount = entry.platePath && plateMounts.find((m) => (m.datasetKey ?? entry.name) === entry.name);
+      const meta = mount ? platesByMount.get(mount.mount) : null;
+      const color = (name: string, fallback: string) => (entry.channels?.[name]?.color ?? fallback).replace(/^#?/, "#");
+      return {
+        name: entry.name,
+        format: adata.kind,
+        path: entry.path,
+        observations: adata.nObs,
+        variables: nVars,
+        obsColumns: adata.obs.columns.length,
+        modalities:
+          adata.kind === "mudata"
+            ? [...(adata as MuData).mod].map(([name, mod]) => ({ name, observations: mod.nObs, variables: mod.nVars }))
+            : undefined,
+        embeddings: obsmKeys,
+        plate: entry.platePath
+          ? {
+              path: entry.platePath,
+              wells: meta?.wells ?? 0,
+              channels: meta
+                ? meta.channels.map((c) => ({ name: c.label, color: color(c.label, c.color) }))
+                : Object.entries(entry.channels ?? {}).map(([name, c]) => ({ name, color: color(name, c.color) })),
+            }
+          : undefined,
+      };
+    }),
+  };
+  // Not awaited: the status screen shows `…` until the one walk per dataset finishes.
+  for (const dataset of state.status.datasets) void diskBytes(dataset.path).then((bytes) => (dataset.bytes = bytes));
   await restoreAnnotations(state);
   const document = workspace.get().document as WorkspaceDocument | null;
   if (document) {
