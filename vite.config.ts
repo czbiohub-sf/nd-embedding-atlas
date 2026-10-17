@@ -219,11 +219,8 @@ export default defineConfig({
         },
       },
       {
-        // Node specs co-locate definitions and components.
-        files: [
-          "apps/ndea/src/frontend/core/component/native-contributions/**/*.tsx",
-          "packages/components/src/**/*.tsx",
-        ],
+        // Component definitions co-locate their contract and body components.
+        files: ["packages/components/src/**/*.tsx"],
         rules: { "react/only-export-components": "off" },
       },
     ],
