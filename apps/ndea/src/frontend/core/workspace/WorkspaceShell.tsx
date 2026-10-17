@@ -1,6 +1,7 @@
 /**
  * WorkspaceShell: the dashboard frame, the History panel, and a one-line
  * status bar. An invalid server document opens a read-only notice instead.
+ * Remote rendering's headless tab shows only its element's body.
  */
 
 import type { WorkspaceSnapshot } from "@ndea/protocol";
@@ -8,7 +9,9 @@ import { useEffect, useState } from "react";
 
 import { Hud } from "@/components/dashboard/primitives";
 import { LAYOUT_EDITING_ENABLED } from "@/feature-flags";
+import { RENDER_PAGE } from "@/core/component/definitions";
 import { useDatasetSession } from "@/hooks/useDatasetSession";
+import { BodySocket, BodyStatus } from "./body-dock";
 import { DashboardPane } from "./DashboardPane";
 import { HistoryPanel, LastChange } from "./HistoryPanel";
 import { fetchWorkspaceSnapshot } from "./sync";
@@ -91,13 +94,23 @@ function useInitialWorkspaceSnapshot(): { snapshot: WorkspaceSnapshot } | { erro
   return loaded;
 }
 
+/** The headless render page: one element's body filling the viewport, no dashboard chrome. */
+function RenderFrame({ id }: { id: string }) {
+  return (
+    <div className="fixed inset-0 overflow-hidden bg-background">
+      <BodyStatus id={id} label={id} />
+      <BodySocket id={id} className="flex h-full min-h-0 flex-col overflow-hidden" />
+    </div>
+  );
+}
+
 export function WorkspaceShell() {
   const loaded = useInitialWorkspaceSnapshot();
   if (!loaded) return null;
   if ("error" in loaded) return <RecoveryWorkspaceSurface persistence={{ mode: "recovery", errors: [loaded.error] }} />;
   return (
     <WorkspaceProvider snapshot={loaded.snapshot}>
-      <WorkspaceFrame />
+      {RENDER_PAGE ? <RenderFrame id={RENDER_PAGE.element} /> : <WorkspaceFrame />}
     </WorkspaceProvider>
   );
 }

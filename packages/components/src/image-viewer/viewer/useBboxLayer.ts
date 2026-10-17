@@ -61,6 +61,8 @@ export function useBboxLayer({ idetik, scale, translation }: UseBboxLayerOptions
     cornersRef.current = [];
 
     const div = document.createElement("div");
+    // Remote rendering draws marked overlays into the streamed frame (RenderPageBridge).
+    div.dataset.viewerOverlay = "";
     div.style.position = "absolute";
     div.style.pointerEvents = "none";
     div.style.border = `${BBOX_BORDER_PX}px solid ${BBOX_COLOR}`;

@@ -15,9 +15,6 @@ import { shouldRevealViewer } from "./focus-behavior";
 const CAMERA_VIEW_HALF = 150;
 
 interface Props {
-  cropSize: number;
-  /** Draw the bounding box overlay. Off → never draw, regardless of data. */
-  showBbox: boolean;
   /** If set, this viewer only responds to cells from this dataset key. */
   datasetKey?: string;
 }
@@ -46,10 +43,12 @@ function ViewerPresentationCover({ ready, presentationKey }: { ready: boolean; p
   );
 }
 
-export function SingleCropViewer({ cropSize, showBbox, datasetKey }: Props) {
+export function SingleCropViewer({ datasetKey }: Props) {
   const services = useImageViewerServices();
   const session = useImageViewerSession();
   const { state: viewerState, actions, meta } = useViewer();
+  // `showBbox` off → never draw the bounding box, regardless of data.
+  const { cropSize, showBbox } = viewerState;
   const { metadata } = useImageViewerHost().data;
 
   // Focus source: scoped to this element's host, so the viewer follows only

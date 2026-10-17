@@ -16,12 +16,15 @@
  */
 
 import type { ServerWebSocket } from "bun";
+import type { RenderSocketData } from "./remote-render.ts";
 import type { ServerSession } from "./state.ts";
 import { clients } from "./status.ts";
 
 /** Data attached to every ServerWebSocket via server.upgrade(req, { data }). */
 export interface ServerSocketContext {
   state: ServerSession;
+  /** Set on `/ws/render` sockets (`server/remote-render.ts`). */
+  render?: RenderSocketData;
 }
 
 type WS = ServerWebSocket<ServerSocketContext>;

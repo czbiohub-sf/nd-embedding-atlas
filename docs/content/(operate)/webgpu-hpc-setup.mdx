@@ -62,3 +62,24 @@ Interpret the result:
 - **`navigator.gpu` is undefined:** update the browser or open ndea through localhost or HTTPS.
 - **The adapter is `null`:** check graphics acceleration, Vulkan access, Chrome's GPU blocklist, and `chrome://gpu`.
 - **WebGPU is software-only:** update the GPU driver or correct device access before loading a large scatter.
+
+## Render image viewers on the compute node
+
+A tunnel leaves rendering on your laptop. To render an image viewer on the compute node's GPU instead, next to the data, set its `render` prop to `"remote"` (or ask an agent to: `edit_dashboard` with `{ op: "set_props", id: "<element>", props: { render: "remote" } }`). ndea starts one headless Chrome on the node, renders the viewer there, encodes it as H.264 with WebCodecs, and streams it to your tile over the same WebSocket port. Pan, zoom, channels, contrast, and T still work; **Render locally** in the tile's error banner switches back.
+
+1. Make Chrome or Chromium available on the compute node: load your site's Chrome/Chromium module, set `NDEA_CHROME` to its executable, or install `chromium-headless-shell` (Playwright's cache under `~/.cache/ms-playwright` is found automatically). ndea never bundles a browser.
+2. Check what Chrome gets on the node:
+
+   ```bash
+   ndea self doctor
+   ```
+
+   The **Remote render** section prints the Chrome version, the WebGL renderer, and H.264/VP9 encoder support. A `SwiftShader` or `llvmpipe` renderer means Chrome found no GPU. These findings never change the exit code.
+
+3. Keep the one tunnel from above: `ssh -L 5055:127.0.0.1:5055 user@compute-host`. No second port or relay.
+
+On Linux, ndea launches Chrome with `--use-gl=angle --use-angle=gl-egl --ignore-gpu-blocklist --enable-gpu`, so it reaches the GPU through EGL without X or `/dev/dri` (the approach idetik-remote found on Reef's L40 nodes). If Chrome cannot load EGL there, extract `libgbm1 libwayland-server0 libegl1 libgles2 libglvnd0` from their `.deb` packages into a directory such as `~/.local/lib/ndea-egl` and prepend it to `LD_LIBRARY_PATH` before `ndea view`. Pass extra flags with `NDEA_CHROME_FLAGS`; ndea adds `--no-sandbox` only when running as root.
+
+Knobs (environment, read at startup): `NDEA_RENDER_SESSIONS` (concurrent remote viewers, default 2), `NDEA_RENDER_MAX_PIXELS` (device pixels per stream, default 2560×1440; larger tiles render at a lower pixel ratio), `NDEA_RENDER_FPS` (default 60; a node with a software encoder paces lower on its own), and `NDEA_RENDER_BPP` (bitrate = pixels × fps × this, default 0.1: about 16 Mb/s for a 1080p tile at 60 fps; lower it for a slow link). A still view sends nothing.
+
+The stream shows the same images the tunnel already serves from `/plate/*`, under the same trust model: keep the server on loopback and reach it through SSH. A session ends with its socket: closing the tab closes its headless page, and stopping ndea stops Chrome.

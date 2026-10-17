@@ -28,6 +28,22 @@ import { clearViewerZ, publishViewerZ, viewerZStore } from "@/stores/viewer-z-st
 // oxlint-disable-next-line no-explicit-any -- generic erasure for the mixed-config table.
 export type AnyComponentDefinition = ComponentDefinition<any>;
 
+// Bun tests import this module without a DOM.
+const renderParams = new URLSearchParams(globalThis.location?.search);
+/**
+ * Set in the headless tab remote rendering opens (`/render/image`, see
+ * `server/remote-render.ts`): the one element it renders and its session.
+ */
+export const RENDER_PAGE =
+  globalThis.location?.pathname === "/render/image" && renderParams.get("session")
+    ? {
+        element: renderParams.get("element") ?? "",
+        session: renderParams.get("session")!,
+        fps: Number(renderParams.get("fps")) || 60,
+        bpp: Number(renderParams.get("bpp")) || 0.1,
+      }
+    : null;
+
 function useViewerSlots() {
   const channels = useSelector(viewerChannelsStore, (store) => store.slots);
   const viewerZ = useSelector(viewerZStore, (store) => store.slots);
@@ -71,6 +87,17 @@ const services: ComponentServices = {
       clearChannels: clearViewerChannels,
       publishZ: publishViewerZ,
       clearZ: clearViewerZ,
+    },
+    remote: {
+      connect: (session) => {
+        const url = new URL("/ws/render", location.href);
+        url.protocol = location.protocol === "https:" ? "wss:" : "ws:";
+        if (session) url.searchParams.set("session", session);
+        const socket = new WebSocket(url);
+        socket.binaryType = "arraybuffer";
+        return socket;
+      },
+      page: RENDER_PAGE,
     },
   },
   scatter: {

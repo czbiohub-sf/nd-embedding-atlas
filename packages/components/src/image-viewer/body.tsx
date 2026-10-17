@@ -2,9 +2,11 @@
  * Image-viewer component body.
  *
  * Sources plate gate from host.data and injects app-owned services through the
- * package-local provider. Focus and viewer state stay instance-scoped.
+ * package-local provider. Focus and viewer state stay instance-scoped. On the
+ * server's headless render page the body always renders locally and streams.
  */
 
+import { useState } from "react";
 import { CropViewer } from "./CropViewer";
 import { ImageViewerProvider } from "./context";
 import type { BodyProps } from "../contracts";
@@ -16,6 +18,8 @@ export function createImageViewerView(services: ImageViewerServices) {
   return function ImageViewerView({ host }: BodyProps<ImageViewerConfig>) {
     const session = useSessionSnapshot();
     const datasetKey = host.config.datasetKey ?? undefined;
+    // The body's own patchConfig does not restart it, so "Render locally" also flips this.
+    const [render, setRender] = useState(host.config.render);
 
     if (!capabilitiesOf(host.data.metadata).has("plate-image")) {
       return (
@@ -28,7 +32,14 @@ export function createImageViewerView(services: ImageViewerServices) {
     return (
       <ImageViewerProvider host={host} services={services} session={session}>
         <div className="h-full w-full overflow-hidden">
-          <CropViewer datasetKey={datasetKey} />
+          <CropViewer
+            datasetKey={datasetKey}
+            mode={services.remote.page ? "page" : render}
+            onRenderLocal={() => {
+              host.patchConfig({ render: "local" });
+              setRender("local");
+            }}
+          />
         </div>
       </ImageViewerProvider>
     );

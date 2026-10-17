@@ -1,3 +1,4 @@
+import { stopRemoteRender } from "../../server/remote-render.ts";
 import { flushAnnotationSaves } from "../../server/routes/annotate.ts";
 import type { DatasetSessionMetadata, ServerSession } from "../../server/state.ts";
 import type { LaunchConfig } from "../config.ts";
@@ -73,6 +74,7 @@ export async function registerGracefulShutdown(
   const shutdown = async () => {
     printShuttingDown();
     await flushAnnotationSaves(state);
+    await stopRemoteRender();
     void server.stop();
     state.store.close();
     // The server outlives the `view` action (Crust's invocation ended at

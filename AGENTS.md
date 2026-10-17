@@ -70,6 +70,20 @@ entrypoints across workspaces.
   `arrow` returns Arrow IPC bytes, `exec` returns `{}`).
 - `/ws` carries the framed `{ _id, _type }` ndea protocol; its one method is
   `workspace/watch`.
+- Remote rendering (`server/remote-render.ts`, `server/chrome.ts`): an
+  image viewer with `render: "remote"` opens `/ws/render` (one session per
+  socket; the session dies with it). The server lazily launches one headless
+  Chrome (`NDEA_CHROME`, platform paths, PATH, Playwright's
+  `chromium-headless-shell`) and drives it over `--remote-debugging-pipe`,
+  never a debugging port; each session is a tab at
+  `/render/image?element=…&session=…`, which renders only that element's
+  body (`WorkspaceShell` `RenderFrame`, `RENDER_PAGE` in
+  `core/component/definitions.ts`). In that tab `RenderPageBridge` encodes
+  the viewer canvas (plus `[data-viewer-overlay]` boxes) with WebCodecs,
+  publishes viewer state, and applies the tile's actions; the tile's
+  `RemoteViewerProvider` decodes, mirrors that state into the same viewer
+  controls, and sends pointer/wheel input, which the server replays as CDP
+  mouse events. Shutdown closes Chrome; `ndea self doctor` probes it.
 - REST routes cover health, embeddings, observations, scatter data,
   variables, categorization, annotations, exports, crops, filtering, sets, and
   the workspace document.

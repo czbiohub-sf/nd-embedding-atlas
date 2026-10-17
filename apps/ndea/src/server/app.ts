@@ -2,7 +2,8 @@
  * Bun.serve HTTP + WebSocket server factory: one declarative `routes` table.
  *
  * - `/api/*` REST routes and the /data/query Mosaic endpoint, with CORS
- * - `/ws`: framed `workspace/watch` sync; `/mcp`: MCP over Streamable HTTP
+ * - `/ws`: framed `workspace/watch` sync; `/ws/render`: remote-render sessions;
+ *   `/mcp`: MCP over Streamable HTTP
  * - `/plate/*`: OME-Zarr HCS store files
  * - `/*`: the frontend as an HTML import. Bun's dev server bundles it with HMR
  *   when `dev` is set; `bun build --compile` embeds the production bundle.
@@ -45,6 +46,13 @@ import { handleVarColumn, handleVarColumnStatus, handleVarLayers, handleVarNames
 import { CropPool } from "./crop-pool.ts";
 import { servePlateFile } from "./plate.ts";
 import { handleWsMessage, handleWsOpen, handleWsClose, type ServerSocketContext } from "./ws.ts";
+import {
+  handleRenderClose,
+  handleRenderMessage,
+  handleRenderOpen,
+  isRenderSocket,
+  renderSocketData,
+} from "./remote-render.ts";
 import { createMcpEndpoint } from "./mcp.ts";
 import { hasBearer } from "./mcp-token.ts";
 import { getRuntimeStatus } from "./status.ts";
@@ -142,6 +150,13 @@ export function createApp(options: CreateAppOptions) {
         server.upgrade(req, { data: { state } })
           ? undefined
           : withCors(new Response("WebSocket upgrade failed", { status: 400 })),
+      "/ws/render": (req: Request, server: Server<ServerSocketContext>) => {
+        const render = renderSocketData(req, server);
+        if (!render) return new Response("Unknown render session", { status: 403 });
+        return server.upgrade(req, { data: { state, render } })
+          ? undefined
+          : new Response("WebSocket upgrade failed", { status: 400 });
+      },
       "/plate/*": async (req: Request) =>
         withCors(
           (await servePlateFile(new URL(req.url).pathname, state.plateMounts)) ??
@@ -231,9 +246,9 @@ export function createApp(options: CreateAppOptions) {
     },
 
     websocket: {
-      message: handleWsMessage,
-      open: handleWsOpen,
-      close: handleWsClose,
+      message: (ws, message) => (isRenderSocket(ws) ? handleRenderMessage(ws, message) : handleWsMessage(ws, message)),
+      open: (ws) => (isRenderSocket(ws) ? handleRenderOpen(ws) : handleWsOpen(ws)),
+      close: (ws) => (isRenderSocket(ws) ? handleRenderClose(ws) : handleWsClose(ws)),
     },
   });
 }

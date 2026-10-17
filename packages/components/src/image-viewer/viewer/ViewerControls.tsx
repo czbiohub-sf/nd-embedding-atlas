@@ -11,19 +11,12 @@ import { SliderRow } from "@ndea/ui/components/slider-row";
 import { Toggle } from "@ndea/ui/components/toggle";
 import { useViewer } from "./useViewer";
 
-interface Props {
-  cropSize: number;
-  setCropSize: (size: number) => void;
-  showBbox: boolean;
-  setShowBbox: (show: boolean) => void;
-  datasetKey?: string;
-}
-
-export function ViewerControls({ cropSize, setCropSize, showBbox, setShowBbox, datasetKey }: Props) {
+export function ViewerControls({ datasetKey }: { datasetKey?: string }) {
   const session = useImageViewerSession();
   const host = useImageViewerHost();
   const { state, actions } = useViewer();
-  const { bounds, zIndex, tIndex, viewMode } = state;
+  const { bounds, zIndex, tIndex, viewMode, cropSize, showBbox } = state;
+  const { setCropSize, setShowBbox } = actions;
   const { trajectories } = session;
   const trajectory = trajectories[datasetKey ?? ""] ?? null;
   const metadata = host.data.metadata;

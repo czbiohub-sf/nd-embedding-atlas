@@ -81,6 +81,10 @@ export interface ViewerState {
   zRange: [number, number] | null;
   /** Increments on runtime recreation (mode switch). Used by hooks to detect layer invalidation. */
   generation: number;
+  /** Bounding-box overlay size in pixels. */
+  cropSize: number;
+  /** Draw the bounding-box overlay. */
+  showBbox: boolean;
 }
 
 // ── Actions ──────────────────────────────────────────────────────────────────
@@ -105,6 +109,8 @@ export interface ViewerActions {
   setViewMode: (mode: ViewMode) => void;
   setZRange: (range: [number, number]) => void;
   setError: (error: string | null) => void;
+  setCropSize: (size: number) => void;
+  setShowBbox: (show: boolean) => void;
   /** Pause the render loop (frees GPU frame budget for other WebGL canvases). */
   pause: () => void;
   /** Resume the render loop. */

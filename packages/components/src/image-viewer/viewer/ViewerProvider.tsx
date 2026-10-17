@@ -97,6 +97,8 @@ export function ViewerProvider({ children, channelInstance = "docked" }: Props) 
   const [zRange, setZRange] = useState<[number, number] | null>(null);
   const [generation, setGeneration] = useState(0);
   const multiChannelRef = useRef<MultiChannelLayers | null>(null);
+  const [cropSize, setCropSize] = useState(100);
+  const [showBbox, setShowBbox] = useState(true);
 
   const aggregateState = useMemo(() => computeAggregate(trackedLayers), [trackedLayers]);
 
@@ -321,8 +323,24 @@ export function ViewerProvider({ children, channelInstance = "docked" }: Props) 
       viewMode,
       zRange,
       generation,
+      cropSize,
+      showBbox,
     }),
-    [initialized, trackedLayers, aggregateState, zIndex, tIndex, bounds, error, channels, viewMode, zRange, generation],
+    [
+      initialized,
+      trackedLayers,
+      aggregateState,
+      zIndex,
+      tIndex,
+      bounds,
+      error,
+      channels,
+      viewMode,
+      zRange,
+      generation,
+      cropSize,
+      showBbox,
+    ],
   );
 
   const actions = useMemo(
@@ -338,6 +356,8 @@ export function ViewerProvider({ children, channelInstance = "docked" }: Props) 
       setViewMode,
       setZRange,
       setError,
+      setCropSize,
+      setShowBbox,
       pause,
       resume,
     }),

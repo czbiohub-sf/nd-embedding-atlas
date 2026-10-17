@@ -1,12 +1,13 @@
 /**
  * `ndea self doctor`: read-only diagnostics. Prints binary path, symlink
- * integrity, active version, installed versions, and (with
- * `--check-network`) GitHub Releases API reachability.
+ * integrity, active version, installed versions, remote-render
+ * prerequisites, and (with `--check-network`) GitHub Releases API
+ * reachability.
  *
  * Exit code 0 if healthy; 1 if a hard anomaly is detected (broken symlink,
  * unreadable state, missing active binary). Soft warnings (mismatched
  * current-version vs compiled-in tag) only bump the exit code under
- * `--strict`.
+ * `--strict`. Remote rendering is optional, so its findings never count.
  */
 
 import { defineCommand } from "@crustjs/core";
@@ -20,6 +21,7 @@ import { fetchRelease } from "../lib/releases.ts";
 import { accent, fail, heading, label, mb, ok, warn } from "../lib/style.ts";
 import { listVersions } from "../lib/versions.ts";
 import { VERSION } from "../version.ts";
+import { probeChrome } from "../../server/chrome.ts";
 
 export default defineCommand(
   "doctor",
@@ -174,6 +176,21 @@ export default defineCommand(
             }
             stdout(`  ${label(`(${mb(totalBytes)} total: \`ndea self prune\` to prune)`)}`);
           }
+        }
+
+        // ── Remote render (optional: never affects the exit code) ───────────────
+        // Launches headless Chrome once and asks it what a render page would get.
+        section("Remote render");
+        try {
+          const probe = await probeChrome();
+          row("chrome", `${probe.version} ${label(probe.path)}`);
+          const software = probe.webgl === null || /swiftshader|llvmpipe|software/i.test(probe.webgl);
+          stdout(`  ${(software ? warn : ok)(`webgl2 ${probe.webgl ?? "unavailable"}${software ? " (no GPU)" : ""}`)}`);
+          for (const [codec, support] of Object.entries(probe.encoders)) {
+            stdout(`  ${(support === "unsupported" ? warn : ok)(`encode ${codec} ${support}`)}`);
+          }
+        } catch (e) {
+          stdout(`  ${warn(`unavailable: ${e instanceof Error ? e.message : String(e)}`)}`);
         }
 
         // ── Network (optional) ─────────────────────────────────────────────────
