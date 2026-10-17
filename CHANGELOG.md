@@ -38,6 +38,7 @@
 
 ### 🚜 Refactor
 
+- _(build)_ On macOS arm64, link DuckDB statically into `duckdb.node` (`scripts/build-duckdb-addon.ts`: duckdb-node-neo bindings plus DuckDB's published static libraries, compiled by `clang++` and cached per DuckDB version). The binary no longer embeds or extracts `libduckdb`: 132 MB instead of 199 MB, and first launch goes from 4.5 s to 0.5 s. Other targets keep the embedded `libduckdb`, and dev mode keeps the npm addon.
 - _(cli)_ Move the CLI from Bunli to Crust. Every command, flag, and default keeps its name; `ndea <path>` still runs `view`. Output is plain text, with no `{ ok, data }` envelope for agents or CI: JSON commands (`filter`, `workspace`) print the server's JSON as-is, and `ndea --version` prints only the version. Shell completion is `ndea completion <bash|zsh|fish>`; scripts are static (no `ndea complete` callback, no `.bunli/` metadata or `vp run gen`), and `view` paths use plain file completion.
 - Update every dependency to latest: Bun 1.4.3, Vite+ 1.3.0 (and its `vite` core override), Mosaic 0.33, DuckDB 1.5.6, idetik 0.48, React 19.3, zod 4.6. Mosaic 0.33 removed its socket connector, so the browser queries `/data/query` through `restConnector` and the `/mosaic` WebSocket adapter is gone. Code now passes Vite+'s React Compiler lint rules; virtualized lists use a package-owned `useVirtualizer` over `@tanstack/virtual-core` in place of `@tanstack/react-virtual`.
 - Route dependency management, tasks, checks, builds, and development through Vite+

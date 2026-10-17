@@ -21,7 +21,6 @@
  * run and dlopens it before @duckdb/node-api evaluates.
  */
 
-import type { BunPlugin } from "bun";
 import { existsSync, rmSync } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
 import { COLUMN_WORKER_ENTRYPOINT } from "@ndea/zarr/build";
@@ -99,19 +98,6 @@ async function buildFrontendWithBun(): Promise<void> {
   const tailwind = (await import("bun-plugin-tailwind")).default;
   const typegpu = (await import("unplugin-typegpu/bun")).default;
 
-  // Vite's `?url` asset suffix (e.g. prql.ts's `prql_js_bg.wasm?url`) has no
-  // Bun.build equivalent: strip it and resolve the bare specifier, then let the
-  // `.wasm` file loader below emit it as an asset whose import returns the URL.
-  // Vite handles `?url` natively in dev; this keeps the one source working in both.
-  const urlAssetSuffix: BunPlugin = {
-    name: "url-asset-suffix",
-    setup(build) {
-      build.onResolve({ filter: /\?url$/ }, (a) => ({
-        path: Bun.resolveSync(a.path.replace(/\?url$/, ""), dirname(a.importer)),
-      }));
-    },
-  };
-
   // Bun.build writes into outdir without clearing it: wipe any stale Vite
   // output first so the manifest globs only Bun's emitted files.
   rmSync(FRONTEND_DIST, { recursive: true, force: true });
@@ -131,16 +117,13 @@ async function buildFrontendWithBun(): Promise<void> {
     // there's no network to amortize split chunks over. Re-enable if Bun fixes the
     // HTML-entry-under-splitting wiring.
     splitting: false,
-    // `?url` imports (and any other large binary asset) emit as a hashed file
-    // whose default export is the served URL: matching Vite's `?url` behavior.
-    loader: { ".wasm": "file" },
     // The frontend reads `import.meta.env.PROD` (DashboardProvider): Vite
     // injects it; Bun does not, so define it for the production bundle.
     define: {
       "import.meta.env.PROD": "true",
       "import.meta.env.DEV": "false",
     },
-    plugins: [tailwind, typegpu({}), urlAssetSuffix],
+    plugins: [tailwind, typegpu({})],
   });
 
   if (!result.success) {
@@ -275,14 +258,7 @@ try {
     // `bytecode` omitted: the CLI entry uses top-level await, which Bun's
     // bytecode pre-compiler rejects.
     minify: true,
-    external: [
-      ...DUCKDB_PLATFORM_EXTERNALS,
-      // PRQL compiles only in the browser wrangle body (shipped in the frontend
-      // bundle). The server imports node definitions for graph evaluation, which
-      // reaches that body module but never runs it; its Vite `?url` wasm import
-      // has no server-side resolution.
-      "prql-js",
-    ],
+    external: DUCKDB_PLATFORM_EXTERNALS,
     plugins: staticAddon
       ? [
           {

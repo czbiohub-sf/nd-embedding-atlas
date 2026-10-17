@@ -287,7 +287,7 @@ Open a new shell after `ndea update` to pick up new commands and flags.
   current-version              # Plain text: "<tag>\n<sha256>\n"
   versions/
     v0.1.0/
-      ndea                     # bun-compiled binary (~185 MB, embeds libduckdb)
+      ndea                     # bun-compiled binary (DuckDB linked in on macOS arm64)
     v0.1.1/
       …
   locks/
@@ -297,10 +297,10 @@ Open a new shell after `ndea update` to pick up new commands and flags.
   mcp-token                    # Bearer token for /mcp (owner-only)
 ~/.cache/ndea/
   0.1.0/
-    libduckdb.{dylib,so}       # Extracted from the binary on first launch
+    libduckdb.{dylib,so}       # Linux and macOS x64 only: extracted on first launch
 ```
 
-A compiled version takes about 185 MB. `ndea gc` also removes version-scoped native-library caches corresponding to pruned releases.
+On macOS arm64, DuckDB is statically linked into the binary, so nothing is extracted and the binary is about 132 MB. On Linux and macOS x64 it embeds `libduckdb` (about 200 MB) and extracts it on first launch. `ndea gc` also removes version-scoped native-library caches corresponding to pruned releases.
 
 `~/.local/bin/ndea` points to the active binary under `~/.ndea/versions/<tag>/ndea`.
 
