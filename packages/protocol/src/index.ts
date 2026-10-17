@@ -336,8 +336,6 @@ export type Metadata = z.infer<typeof MetadataSchema>;
 export const TrajectoryFrameSchema = z.object({
   rowIndex: NonNegativeInt,
   t: z.number(),
-  emb_x: z.number(),
-  emb_y: z.number(),
   spatial_x: z.number(),
   spatial_y: z.number(),
   datasetKey: z.string().nullable(),

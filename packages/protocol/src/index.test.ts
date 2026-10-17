@@ -87,8 +87,6 @@ describe("shared HTTP response DTOs", () => {
       {
         rowIndex: 7,
         t: 2,
-        emb_x: 1.25,
-        emb_y: -3,
         spatial_x: 100,
         spatial_y: 200,
         datasetKey: null,
@@ -96,8 +94,6 @@ describe("shared HTTP response DTOs", () => {
       {
         rowIndex: 8,
         t: 3,
-        emb_x: 2,
-        emb_y: -2,
         spatial_x: 101,
         spatial_y: 201,
         datasetKey: "atlas",
@@ -144,7 +140,7 @@ describe("shared HTTP response DTOs", () => {
   test("rejects malformed payloads used by production fetch paths", () => {
     const malformed = [
       MetadataSchema.safeParse({ database: { type: "rest" }, obsm: {} }),
-      TrajectoryResponseSchema.safeParse([{ t: 0, emb_x: "1", emb_y: 2, spatial_x: 3, spatial_y: 4 }]),
+      TrajectoryResponseSchema.safeParse([{ rowIndex: 0, t: "0", spatial_x: 3, spatial_y: 4, datasetKey: null }]),
       AnnotationColumnsResponseSchema.safeParse({ columns: [{ name: "score", dtype: "number" }] }),
       AnnotationPredicateWriteResponseSchema.safeParse({ ok: true }),
       ExportDirectoryResponseSchema.safeParse({ default_dir: "/tmp" }),
@@ -163,8 +159,6 @@ describe("shared HTTP response DTOs", () => {
     const base = {
       rowIndex: 1,
       t: 0,
-      emb_x: 1,
-      emb_y: 2,
       spatial_x: 3,
       spatial_y: 4,
       datasetKey: null,

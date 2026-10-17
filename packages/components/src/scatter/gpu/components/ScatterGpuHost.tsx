@@ -58,6 +58,8 @@ interface ScatterGPUHostProps {
   highlightRowIds?: readonly RowIndex[] | null;
   /** Filter-scope predicate row bitmask. null = inactive; empty = hide every point. */
   predicateBits?: Uint32Array | null;
+  /** Declarative trajectory path (`ScatterplotHandle.setTrajectoryPath` layout). null = none. */
+  trajectoryPath?: Float32Array | null;
 }
 
 /** Push a point style onto a live GPU handle (no-op if either is absent). */
@@ -84,7 +86,7 @@ function applyPredicateFilter(gpu: ScatterplotHandle | null, bits: Uint32Array |
 
 export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostProps>(function ScatterGPUHost(
   // eslint-disable-next-line @typescript-eslint/unbound-method
-  { data, positionKey, config, onGpuError, onReady, pointStyle, highlightRowIds, predicateBits },
+  { data, positionKey, config, onGpuError, onReady, pointStyle, highlightRowIds, predicateBits, trajectoryPath },
   ref,
 ) {
   const canvasElRef = useRef<HTMLCanvasElement | null>(null);
@@ -107,6 +109,7 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
   const pointStyleRef = useRef(pointStyle);
   const highlightRowIdsRef = useRef(highlightRowIds);
   const predicateBitsRef = useRef(predicateBits);
+  const trajectoryPathRef = useRef(trajectoryPath);
 
   // Device-lease state from the component host's DeviceBroker.
   const leaseState = useScatterDeviceLease();
@@ -122,6 +125,7 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
     pointStyleRef.current = pointStyle;
     highlightRowIdsRef.current = highlightRowIds;
     predicateBitsRef.current = predicateBits;
+    trajectoryPathRef.current = trajectoryPath;
     leaseStateRef.current = leaseState;
   });
 
@@ -190,6 +194,7 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
         applyPointStyle(gpu, pointStyleRef.current);
         applyHighlight(gpu, highlightRowIdsRef.current);
         applyPredicateFilter(gpu, predicateBitsRef.current);
+        gpu.setTrajectoryPath(trajectoryPathRef.current ?? null);
         onReadyRef.current(currentData.numCells);
       })
       .catch((err: unknown) => {
@@ -305,6 +310,10 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
   useEffect(() => {
     applyPredicateFilter(gpuRef.current, predicateBits);
   }, [predicateBits]);
+
+  useEffect(() => {
+    gpuRef.current?.setTrajectoryPath(trajectoryPath ?? null);
+  }, [trajectoryPath]);
 
   // Expose imperative handle to parent
   useImperativeHandle(

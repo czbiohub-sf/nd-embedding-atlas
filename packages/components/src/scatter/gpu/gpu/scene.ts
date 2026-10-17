@@ -61,6 +61,8 @@ export const Frame = d.struct({
   densityMode: d.u32,
   /** Class tiles per grid row (see render.ts CLASS_TILE). */
   classTiles: d.u32,
+  /** Device px per CSS px. */
+  cssPx: d.f32,
 });
 export type FrameState = d.InferInput<typeof Frame>;
 
@@ -102,7 +104,9 @@ export interface Scene {
   readonly rowBits: TgpuBuffer<d.WgslArray<d.Atomic<d.U32>>> & StorageFlag;
   readonly frame: TgpuUniform<typeof Frame>;
   readonly colors: TgpuUniform<d.WgslArray<d.Vec4f>>;
-  /** Clip-space position of point i: `viewProj · (x, y, z or 0, 1)`. */
+  /** Clip-space position of a world point: `viewProj · (p, 1)`. */
+  readonly clip: TgpuFn<(p: d.Vec3f) => d.Vec4f>;
+  /** Clip-space position of point i: `clip(x, y, z or 0)`. */
   readonly project: PointFn<d.Vec4f>;
   /** Category index of point i. */
   readonly catOf: PointFn<d.U32>;
@@ -304,12 +308,20 @@ export function createScene(root: TgpuRoot, positions: Float32Array, n: number, 
     })
     .dispatchThreads(batches);
 
+  const clip = tgpu.fn(
+    [d.vec3f],
+    d.vec4f,
+  )((p) => {
+    "use gpu";
+    return std.mul(frame.$.viewProj, d.vec4f(p, 1));
+  });
+
   const project = tgpu.fn(
     [d.u32],
     d.vec4f,
   )((i) => {
     "use gpu";
-    return std.mul(frame.$.viewProj, d.vec4f(position(i), 1));
+    return clip(position(i));
   });
 
   const catOf = tgpu.fn(
@@ -529,6 +541,7 @@ export function createScene(root: TgpuRoot, positions: Float32Array, n: number, 
     rowBits,
     frame,
     colors,
+    clip,
     project,
     catOf,
     isoPass,

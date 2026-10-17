@@ -109,6 +109,7 @@ export async function createScatterplot(
     grid: [1, 1],
     densityMode: 0,
     classTiles: 1,
+    cssPx: 1,
   };
   setPalette(PALETTE.map(([r, g, b]) => [r / 255, g / 255, b / 255] as const));
 
@@ -178,6 +179,7 @@ export async function createScatterplot(
     f.viewProj = camera.viewProj(width / height);
     f.viewport = [width, height];
     f.pointPx = Math.max((pointRadius * Math.sqrt(camera.scale) * adaptiveScale * height) / 2, MIN_POINT_PX);
+    f.cssPx = width / Math.max(1, overlay.clientWidth);
     scene.frame.write(f);
   }
 
@@ -362,6 +364,10 @@ export async function createScatterplot(
     },
     clearTrajectoryIsolation() {
       setFlag(Bit.trajectory, false);
+    },
+    setTrajectoryPath(path) {
+      passes.setTrajectory(path);
+      interaction.requestRender();
     },
     // Continuous range: out-of-range points are hidden, not dimmed.
     setContinuousIsolation(rowIndices) {

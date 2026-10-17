@@ -41,8 +41,6 @@ export function LassoGalleryCard({
   // unused by the query (it reads cached obs coords) but typed as required.
   const frame = {
     t: obs.t,
-    emb_x: 0,
-    emb_y: 0,
     spatial_x: obs.x,
     spatial_y: obs.y,
     z: obs.z,

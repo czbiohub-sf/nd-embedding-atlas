@@ -7,7 +7,7 @@
  *  - Any future container
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { capabilitiesOf } from "@ndea/sdk";
 import { useFocus, useScatterHost, useScatterSession } from "./context";
@@ -48,7 +48,11 @@ export function ScatterContent({ initialObsmKey, toolbarTarget, focusedPointMeta
   // point metadata follows the element's group-aware focus.
   const focusedRowIndex = useFocus(host);
   const trajectory = selectAnyTrajectory(state.trajectories);
-  const activeTrajectories = Object.values(state.trajectories).filter((t): t is NonNullable<typeof t> => t != null);
+  // Stable across renders: the GPU path and highlight re-upload when it changes.
+  const activeTrajectories = useMemo(
+    () => Object.values(state.trajectories).filter((t): t is NonNullable<typeof t> => t != null),
+    [state.trajectories],
+  );
   const { coordinator, brushSelection, table } = runtime;
 
   // ── Embedding state ────────────────────────────────────────────────────────
@@ -151,12 +155,7 @@ export function ScatterContent({ initialObsmKey, toolbarTarget, focusedPointMeta
   // if the focused point is trackable, the toggle starts one. No
   // focus + no active trajectory → onToggleTrajectory is undefined and
   // ScatterToolbar hides the button.
-  const { showTrajectory } = useTrajectoryLoader({
-    embedding: effectiveAxes?.obsmKey ?? "",
-    xCol,
-    yCol,
-    categoryCol,
-  });
+  const { showTrajectory } = useTrajectoryLoader({ categoryCol });
 
   const onToggleTrajectory = trajectory
     ? () => actions.clearTrajectory(trajectory.datasetKey ?? "")

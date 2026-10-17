@@ -119,6 +119,12 @@ export interface ScatterplotHandle {
   setTrajectoryIsolation(rowIndices: RowIndex[]): void;
   /** Remove trajectory isolation. */
   clearTrajectoryIsolation(): void;
+  /**
+   * Trajectory line pass, drawn in the points' render pass (depth-tested in 3D). 8 floats per
+   * frame: normalized world x, y, z (0 in 2D), kind (1 = active frame, 0 = frame, -1 = break
+   * between trajectories), then straight linear-RGB r, g, b, a. null = none.
+   */
+  setTrajectoryPath(path: Float32Array | null): void;
   /** Isolate continuous range filter points. */
   setContinuousIsolation(rowIndices: RowIndex[]): void;
   /** Remove continuous range isolation. */

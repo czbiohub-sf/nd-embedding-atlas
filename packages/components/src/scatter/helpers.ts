@@ -2,6 +2,7 @@ import { and, type ExprNode, type FilterExpr, literal } from "@uwdata/mosaic-sql
 import { okLchToSrgb, ParseColorError, srgbFromHex, srgbToHex, srgbToOkLch } from "@ndea/ochre";
 import type { ColumnType } from "../query/column-types";
 import type { ColorMode, TrajectoryData } from "./contracts";
+import type { ScatterData } from "./gpu/types";
 
 export interface OklchColor {
   l: number;
@@ -121,8 +122,16 @@ export const scatterKeys = {
 } as const;
 
 export const trajectoryKeys = {
-  track: (table: string, trackId: number, fovName: string) => ["trajectory", table, trackId, fovName] as const,
+  track: (trackId: number, fovName: string, categoryCol: string | null) =>
+    ["trajectory", trackId, fovName, categoryCol] as const,
 } as const;
+
+/** Normalized world position of point `row` exactly as the GPU draws it (z = 0 in 2D); null if not loaded. */
+export function pointWorldPos(data: ScatterData | null, row: number): [number, number, number] | null {
+  if (!data || row >= data.numCells) return null;
+  const { positions: p, numCells: n } = data;
+  return [p[row], p[n + row], data.ndim === 3 ? p[2 * n + row] : 0];
+}
 
 export const varKeys = {
   names: (query: string, modality?: string) => ["var", "names", query, modality ?? null] as const,

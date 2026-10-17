@@ -37,8 +37,6 @@ interface UseMosaicScatterDataResult {
    *  positions are re-fetched (embedding/axes switch). Use as a GPU re-init
    *  dep instead of a Float32Array reference. */
   positionKey: string | null;
-  /** The max-abs divisor used to normalise positions to [-1, 1] on the server. */
-  positionScale: number;
   categoryNames: string[];
   colorRange: [number, number] | null;
   loading: boolean;
@@ -95,7 +93,6 @@ export function useMosaicScatterData({
         numCells: header.numCells,
         embeddingKey: header.embeddingKey,
         ndim: header.ndim,
-        positionScale: header.positionScale,
       };
     },
     enabled: !!axes && embeddingLoaded,
@@ -202,7 +199,6 @@ export function useMosaicScatterData({
   return {
     data,
     positionKey,
-    positionScale: positionQuery.data?.positionScale ?? 1,
     categoryNames,
     colorRange,
     loading,

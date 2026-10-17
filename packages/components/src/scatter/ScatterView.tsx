@@ -6,6 +6,7 @@
  * Rendered inside a LegendProvider by ScatterContent.
  */
 
+import { srgbFromHex, srgbToLinearRgb } from "@ndea/ochre";
 import { useThrottler } from "@tanstack/react-pacer";
 import { useSelector } from "@tanstack/react-store";
 import type { FilterClause } from "@ndea/protocol";
@@ -24,7 +25,7 @@ import type {
   SelectionDepth,
   TrajectoryData,
 } from "./contracts";
-import { colorSourceFromString, colorSourceLegendLabel, toRows } from "./helpers";
+import { colorSourceFromString, colorSourceLegendLabel, pointWorldPos, toRows, TRAJECTORY_COLOR } from "./helpers";
 import { useMosaicScatterData } from "./gpu/hooks/useMosaicScatterData";
 import { useScatterBrushSync } from "./gpu/hooks/useScatterBrushSync";
 import { usePredicateBits } from "./gpu/hooks/usePredicateBits";
@@ -34,8 +35,6 @@ import { CategoricalLegend } from "./CategoricalLegend";
 import { ContinuousLegend } from "./ContinuousLegend";
 import { useEffectiveCategoryColors, useLegend } from "./LegendContext";
 import { useScatterUIDispatch } from "./scatter-ui-store";
-import type { TrajectoryOverlaySvgHandle } from "./TrajectoryOverlaySvg";
-import { TrajectoryOverlaySvg } from "./TrajectoryOverlaySvg";
 import { HighlightFocusOverlay, type HighlightFocusOverlayHandle } from "./HighlightFocusOverlay";
 
 export interface ScatterViewProps {
@@ -167,7 +166,6 @@ export function ScatterView({
   }, [densityMode]);
 
   const containerRef = useRef<HTMLDivElement>(null);
-  const trajectoryOverlayRef = useRef<TrajectoryOverlaySvgHandle | null>(null);
   const highlightOverlayRef = useRef<HighlightFocusOverlayHandle | null>(null);
   const gpuAdapter = useRef({
     project: (x: number, y: number, z?: number) => hostRef.current?.project(x, y, z) ?? null,
@@ -197,7 +195,6 @@ export function ScatterView({
   const {
     data,
     positionKey,
-    positionScale,
     colorRange,
     loading: dataLoading,
   } = useMosaicScatterData({
@@ -235,15 +232,36 @@ export function ScatterView({
 
   // Single-point focus → screen marker. focusedRowIndex is the clicked obs's
   // __row_index__, which is its point index. Suppressed while a trajectory is
-  // active (that has its own overlay).
-  const highlightWorldPos = useMemo<[number, number, number] | null>(() => {
-    if (activeTrajectories.length > 0 || focusedRowIndex == null || !data || focusedRowIndex >= data.numCells) {
-      return null;
+  // active (that has its own marker).
+  const highlightWorldPos = useMemo(
+    () => (activeTrajectories.length > 0 || focusedRowIndex == null ? null : pointWorldPos(data, focusedRowIndex)),
+    [focusedRowIndex, activeTrajectories, data],
+  );
+
+  // Trajectory line pass input, from the scatter's own positions by rowIndex so the path sits
+  // exactly on its points (frames whose row isn't loaded are skipped). Hue: the frame's category
+  // color (else the trajectory color), as the points; alpha ramps early → late for direction.
+  const trajectoryPath = useMemo(() => {
+    if (activeTrajectories.length === 0 || !data) return null;
+    const path: number[] = [];
+    for (const traj of activeTrajectories) {
+      if (path.length > 0) path.push(0, 0, 0, -1, 0, 0, 0, 0);
+      const frames = traj.points.flatMap((p) => {
+        const pos = pointWorldPos(data, p.rowIndex);
+        return pos ? [{ p, pos }] : [];
+      });
+      frames.forEach(({ p, pos }, k) => {
+        const category = p.category != null ? categoryColors?.[p.category] : undefined;
+        // Empty while a palette loads; srgbFromHex would throw.
+        const hex = category?.startsWith("#") ? category : TRAJECTORY_COLOR;
+        // Linear RGB: the HDR composite encodes sRGB, so the path shows the exact hex.
+        const { r, g, b } = srgbToLinearRgb(srgbFromHex(hex));
+        const alpha = frames.length > 1 ? 0.4 + (0.6 * k) / (frames.length - 1) : 1;
+        path.push(...pos, p.t === traj.tIndex ? 1 : 0, r, g, b, alpha);
+      });
     }
-    const { positions, numCells: n } = data;
-    const z = data.ndim === 3 ? positions[2 * n + focusedRowIndex] : 0;
-    return [positions[focusedRowIndex], positions[n + focusedRowIndex], z];
-  }, [focusedRowIndex, activeTrajectories, data]);
+    return new Float32Array(path);
+  }, [activeTrajectories, data, categoryColors]);
 
   // Trajectory isolation mask: each feature owns its own mask; no mutual
   // exclusion needed. (Highlight moved to the prop above.)
@@ -340,7 +358,6 @@ export function ScatterView({
   callbacksRef.current.onPointClick = (pointIndex) => setFocus(rowIndex(pointIndex));
   callbacksRef.current.onViewChange = (state) => {
     if ("zoom" in state) setZoom(state.zoom);
-    trajectoryOverlayRef.current?.update();
     highlightOverlayRef.current?.update();
     viewBroadcaster.maybeExecute(state);
   };
@@ -533,6 +550,7 @@ export function ScatterView({
           pointStyle={pointStyle}
           highlightRowIds={highlightRowIds}
           predicateBits={predicateBits}
+          trajectoryPath={trajectoryPath}
           onGpuError={setGpuError}
           onReady={onGpuReady}
         />
@@ -547,22 +565,6 @@ export function ScatterView({
           {errorMessage}
         </div>
       )}
-      {/* The trajectory overlay draws 2D (x, y) frames: hidden in 3D, where the GPU highlight still marks the points. */}
-      {(zCol === null ? activeTrajectories : []).map((traj) => {
-        const tActiveIdx = traj.points.findIndex((p) => p.t === traj.tIndex);
-        return (
-          <TrajectoryOverlaySvg
-            key={traj.datasetKey ?? "default"}
-            ref={traj === trajectory ? trajectoryOverlayRef : null}
-            points={traj.points}
-            activeIndex={tActiveIdx >= 0 ? tActiveIdx : null}
-            categoryColors={categoryColors ?? []}
-            containerRef={containerRef}
-            gpuRef={gpuAdapter}
-            positionScale={positionScale}
-          />
-        );
-      })}
       <HighlightFocusOverlay
         ref={highlightOverlayRef}
         worldPos={highlightWorldPos}

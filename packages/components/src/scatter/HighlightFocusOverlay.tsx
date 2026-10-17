@@ -32,8 +32,8 @@ interface Props {
  * one point. The focus signal lives in this SVG overlay (not the GPU highlight
  * buffer, which stays for trajectories): a lone GPU-bright point is invisible
  * under additive blending.
- * Mirrors TrajectoryOverlaySvg: direct DOM mutation, redrawn on pan/zoom via the
- * imperative `update()` so camera moves don't trigger React re-renders.
+ * Direct DOM mutation, redrawn on pan/zoom via the imperative `update()` so
+ * camera moves don't trigger React re-renders.
  */
 export const HighlightFocusOverlay = forwardRef<HighlightFocusOverlayHandle, Props>(function HighlightFocusOverlay(
   { worldPos, containerRef, gpuRef },

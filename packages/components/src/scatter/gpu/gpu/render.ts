@@ -53,6 +53,22 @@ const CLASSES = 1 << CLASS_BITS;
 const TILE_CLASS_SHIFT = TILE_SHIFT - CLASS_SHIFT;
 const TILE_CLASSES = 1 << TILE_CLASS_SHIFT;
 const TILE_CLASS_CELLS = TILE_CLASSES * TILE_CLASSES;
+/** Trajectory line half-width, frame-dot radius, and active-marker radius (CSS px). */
+const LINE_HALF = 1.25;
+const DOT_R = 3.5;
+const ACTIVE_R = 6;
+
+/** Quad corner of vertex vi, two triangles: (-1,-1) (1,-1) (-1,1) | (-1,1) (1,-1) (1,1). */
+const corner = tgpu.fn(
+  [d.u32],
+  d.vec2f,
+)((vi) => {
+  "use gpu";
+  return d.vec2f(
+    std.select(d.f32(-1), d.f32(1), vi === 1 || vi >= 4),
+    std.select(d.f32(-1), d.f32(1), vi === 2 || vi === 3 || vi === 5),
+  );
+});
 
 export interface RenderPasses {
   /**
@@ -70,6 +86,8 @@ export interface RenderPasses {
    */
   pick(x: number, y: number): Promise<{ id: number; row: number } | null>;
   setBlendMode(mode: BlendMode): void;
+  /** Trajectory path (`ScatterplotHandle.setTrajectoryPath` layout), drawn after the points; null = none. */
+  setTrajectory(path: Float32Array | null): void;
   /** Canvas size changed (device px): reallocates the density grid when density can engage. */
   resize(width: number, height: number, densityPossible: boolean): void;
   destroy(): void;
@@ -79,6 +97,7 @@ export function createRenderPasses(root: TgpuRoot, scene: Scene, hdrFormat: GPUT
   const {
     frame,
     colors,
+    clip,
     project,
     catOf,
     tier,
@@ -218,12 +237,7 @@ export function createRenderPasses(root: TgpuRoot, scene: Scene, hdrFormat: GPUT
     const f = frame.$;
     const i = idsRO.$[input.ii];
     const t = tier(i);
-    const vi = input.vi;
-    // Two triangles: (-1,-1) (1,-1) (-1,1) | (-1,1) (1,-1) (1,1).
-    const uv = d.vec2f(
-      std.select(d.f32(-1), d.f32(1), vi === 1 || vi >= 4),
-      std.select(d.f32(-1), d.f32(1), vi === 2 || vi === 3 || vi === 5),
-    );
+    const uv = corner(input.vi);
     const half = f.pointPx * std.select(d.f32(1), d.f32(1.6), t === 3);
     const c = project(i);
     const color = pointColor(i);
@@ -468,6 +482,151 @@ export function createRenderPasses(root: TgpuRoot, scene: Scene, hdrFormat: GPUT
     depthStencil: depthTest(false),
   });
 
+  // ── Trajectory: one screen-space quad per segment (round caps), then a dot per frame and the
+  // active-frame marker, all through the points' `clip`, so the path sits on its points. 3D:
+  // depth-tested against the discs (no depth write); the active marker also draws dimmed
+  // through whatever occludes it. Path layout: see `ScatterplotHandle.setTrajectoryPath`.
+  const pathLayout = tgpu.bindGroupLayout({
+    path: { storage: (len: number) => d.arrayOf(d.vec4f, len), access: "readonly" },
+  });
+  const pathTarget = { format: hdrFormat, blend: BLEND_MODES.premultiplied };
+  const pathDepth: GPUDepthStencilState | undefined = depth
+    ? { format: DEPTH_FORMAT, depthWriteEnabled: false, depthCompare: "less-equal" }
+    : undefined;
+  const offscreen = d.vec4f(0, 0, 2, 1);
+
+  const segmentVertex = tgpu.vertexFn({
+    in: { vi: d.builtin.vertexIndex, ii: d.builtin.instanceIndex },
+    out: {
+      position: d.builtin.position,
+      color: d.interpolate("linear", d.vec4f),
+      // Device px from the segment start: x along it (0 … len), y across.
+      local: d.interpolate("linear", d.vec2f),
+      len: d.interpolate("flat", d.f32),
+    },
+  })((input) => {
+    "use gpu";
+    const f = frame.$;
+    const a = pathLayout.$.path[input.ii * 2];
+    const b = pathLayout.$.path[input.ii * 2 + 2];
+    const ca = clip(a.xyz);
+    const cb = clip(b.xyz);
+    const uv = corner(input.vi);
+    const atB = uv.x > 0;
+    const c = std.select(ca, cb, atB);
+    const half = std.mul(f.viewport, 0.5);
+    const pa = std.mul(std.div(ca.xy, ca.w), half);
+    const pb = std.mul(std.div(cb.xy, cb.w), half);
+    const len = std.distance(pa, pb);
+    const dir = std.select(d.vec2f(1, 0), std.div(std.sub(pb, pa), len), len > 0.0001);
+    // +1 px for the anti-aliased edge.
+    const hw = LINE_HALF * f.cssPx + 1;
+    const offset = std.add(std.mul(dir, uv.x * hw), std.mul(d.vec2f(-dir.y, dir.x), uv.y * hw));
+    const xy = std.add(c.xy, std.mul(std.div(offset, half), c.w));
+    // A break between trajectories, or an end behind the camera: no quad.
+    const skip = a.w < 0 || b.w < 0 || ca.w <= 0 || cb.w <= 0;
+    return {
+      position: std.select(d.vec4f(xy, c.z, c.w), offscreen, skip),
+      color: pathLayout.$.path[std.select(input.ii * 2 + 1, input.ii * 2 + 3, atB)],
+      local: d.vec2f(std.select(d.f32(0), len, atB) + uv.x * hw, uv.y * hw),
+      len,
+    };
+  });
+
+  const segmentFragment = tgpu.fragmentFn({
+    in: {
+      color: d.interpolate("linear", d.vec4f),
+      local: d.interpolate("linear", d.vec2f),
+      len: d.interpolate("flat", d.f32),
+    },
+    out: d.vec4f,
+  })((input) => {
+    "use gpu";
+    // Distance to the segment: round caps, which also close the joins.
+    const along = input.local.x - std.clamp(input.local.x, 0, input.len);
+    const dist = std.length(d.vec2f(along, input.local.y));
+    const hw = LINE_HALF * frame.$.cssPx;
+    const a = input.color.w * (1 - std.smoothstep(hw - 0.5, hw + 0.5, dist));
+    if (a < 0.004) std.discard();
+    return d.vec4f(input.color.x * a, input.color.y * a, input.color.z * a, a);
+  });
+
+  const markVertex = tgpu.vertexFn({
+    in: { vi: d.builtin.vertexIndex, ii: d.builtin.instanceIndex },
+    out: {
+      position: d.builtin.position,
+      color: d.vec4f,
+      // Device px from the center.
+      uv: d.vec2f,
+      current: d.interpolate("flat", d.u32),
+    },
+  })((input) => {
+    "use gpu";
+    const f = frame.$;
+    const v = pathLayout.$.path[input.ii * 2];
+    const c = clip(v.xyz);
+    const current = v.w > 0.5;
+    const r = std.select(d.f32(DOT_R), d.f32(ACTIVE_R), current) * f.cssPx + 1;
+    const uv = std.mul(corner(input.vi), r);
+    const xy = std.add(c.xy, std.mul(std.div(std.mul(uv, 2), f.viewport), c.w));
+    // A hair in front of the point's own disc (same center depth); 2D (z = 0) must stay ≥ 0.
+    const marker = d.vec4f(xy, std.max(c.z - 0.0001 * c.w, 0), c.w);
+    return {
+      position: std.select(marker, offscreen, v.w < 0 || c.w <= 0),
+      color: pathLayout.$.path[input.ii * 2 + 1],
+      uv,
+      current: d.u32(current),
+    };
+  });
+
+  /** `see` < 1: the see-through draw of only the active marker, at that alpha. */
+  const markFragment = (see: number) =>
+    tgpu.fragmentFn({
+      in: { color: d.vec4f, uv: d.vec2f, current: d.interpolate("flat", d.u32) },
+      out: d.vec4f,
+    })((input) => {
+      "use gpu";
+      const px = frame.$.cssPx;
+      // `active` is a WGSL reserved word.
+      const current = input.current === 1;
+      if (see < 1 && !current) std.discard();
+      const dist = std.length(input.uv);
+      const r = std.select(d.f32(DOT_R), d.f32(ACTIVE_R), current) * px;
+      // Opaque, as the SVG dots were. Active: a white disc in a 2 px ring of the frame's color.
+      const white = current && dist < r - 2 * px;
+      const rgb = std.select(input.color.xyz, d.vec3f(1), white);
+      const a = see * (1 - std.smoothstep(r - 0.5, r + 0.5, dist));
+      if (a < 0.004) std.discard();
+      return d.vec4f(std.mul(rgb, a), a);
+    });
+
+  const segments = root.createRenderPipeline({
+    vertex: segmentVertex,
+    fragment: segmentFragment,
+    targets: pathTarget,
+    depthStencil: pathDepth,
+  });
+  const marks = root.createRenderPipeline({
+    vertex: markVertex,
+    fragment: markFragment(1),
+    targets: pathTarget,
+    depthStencil: pathDepth,
+  });
+  const ghosts = depth
+    ? root.createRenderPipeline({
+        vertex: markVertex,
+        fragment: markFragment(0.35),
+        targets: pathTarget,
+        depthStencil: { format: DEPTH_FORMAT, depthWriteEnabled: false, depthCompare: "always" },
+      })
+    : null;
+  function makePath(p: Float32Array) {
+    const buffer = root.createBuffer(d.arrayOf(d.vec4f, p.length / 4)).$usage("storage");
+    root.device.queue.writeBuffer(root.unwrap(buffer), 0, p.buffer, p.byteOffset, p.byteLength);
+    return { buffer, group: root.createBindGroup(pathLayout, { path: buffer }), frames: p.length / 8 };
+  }
+  let path: ReturnType<typeof makePath> | null = null;
+
   function makeAcc(width: number, height: number) {
     const buffer = root.createBuffer(d.arrayOf(d.atomic(d.u32), width * height * 4)).$usage("storage");
     const tiles = Math.ceil(width / CLASS_TILE) * Math.ceil(height / CLASS_TILE);
@@ -536,6 +695,14 @@ export function createRenderPasses(root: TgpuRoot, scene: Scene, hdrFormat: GPUT
       });
       (discs ?? quads![blendMode]).with(pass).drawIndirect(indirect, QUAD);
       if (acc) resolvePipeline.with(pass).with(acc.group).drawIndirect(indirect, RESOLVE);
+      if (path) {
+        segments
+          .with(pass)
+          .with(path.group)
+          .draw(6, path.frames - 1);
+        ghosts?.with(pass).with(path.group).draw(6, path.frames);
+        marks.with(pass).with(path.group).draw(6, path.frames);
+      }
       pass.end();
     },
     pick(x, y) {
@@ -587,6 +754,10 @@ export function createRenderPasses(root: TgpuRoot, scene: Scene, hdrFormat: GPUT
     },
     setBlendMode(mode) {
       blendMode = mode;
+    },
+    setTrajectory(p) {
+      path?.buffer.destroy();
+      path = p && p.length >= 8 ? makePath(p) : null;
     },
     resize(width, height, densityPossible) {
       size = [width, height];
