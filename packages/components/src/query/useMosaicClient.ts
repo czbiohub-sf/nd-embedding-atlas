@@ -29,27 +29,34 @@ export function useMosaicClient<T>(opts: UseMosaicClientOptions<T>): UseMosaicCl
   const { coordinator, selection, filter, filterStable = true, query, transform, enabled = true, onError } = opts;
   const filterSelection = filter?.selection ?? selection;
   const onErrorRef = useRef(onError);
-  onErrorRef.current = onError;
 
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
+  // Reset loading/error when the client is about to be recreated (adjust state during render).
+  const clientDeps = [coordinator, filterSelection, filterStable, query, enabled] as const;
+  const [prevClientDeps, setPrevClientDeps] = useState(clientDeps);
+  if (clientDeps.some((dep, i) => dep !== prevClientDeps[i])) {
+    setPrevClientDeps(clientDeps);
+    if (enabled) {
+      setLoading(true);
+      setError(null);
+    }
+  }
+
   // Keep transform in a ref so queryResult always uses latest without
   // triggering client re-creation.
   const transformRef = useRef(transform);
-  transformRef.current = transform;
+  useEffect(() => {
+    onErrorRef.current = onError;
+    transformRef.current = transform;
+  });
 
   // Create the mosaic client: recreate only when coordinator, selection,
   // query function, or enabled flag changes.
   useEffect(() => {
-    if (!enabled) {
-      setLoading(false);
-      return () => {};
-    }
-
-    setLoading(true);
-    setError(null);
+    if (!enabled) return;
 
     const client = makeClient({
       coordinator,
@@ -81,7 +88,7 @@ export function useMosaicClient<T>(opts: UseMosaicClientOptions<T>): UseMosaicCl
       released = true;
       client.destroy();
     };
-  }, [coordinator, filterSelection, filter, filterStable, query, enabled]);
+  }, [coordinator, filterSelection, filterStable, query, enabled]);
 
-  return { data, loading, error };
+  return { data, loading: enabled && loading, error };
 }

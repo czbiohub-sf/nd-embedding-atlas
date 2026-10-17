@@ -35,23 +35,13 @@ interface Props {
   onResetRange?: () => void;
 }
 
-const COLORMAP_FALLBACKS: Record<string, string[]> = {
-  viridis: ["#440154", "#414487", "#2a788e", "#22a884", "#7ad151", "#fde725"],
-  plasma: ["#0d0887", "#7e03a8", "#cb4678", "#f89441", "#f0f921"],
-  magma: ["#000004", "#3b0f70", "#8c2981", "#de4968", "#fe9f6d", "#fcfdbf"],
-  inferno: ["#000004", "#420a68", "#932667", "#dd513a", "#fca50a", "#fcffa4"],
-  coolwarm: ["#3b4cc0", "#6788ee", "#9bbcff", "#f7f7f7", "#ffaa8d", "#e26952", "#b40426"],
-};
-
 /**
  * Small circular swatch filled with the colormap gradient. Doubles as the
  * right-click target for colormap / reverse / scale / reset options.
  * Built as an inline SVG so the gradient definition stays self-contained.
  */
 function ColormapCircle({ colormap, reversed, size = 14 }: { colormap: string; reversed: boolean; size?: number }) {
-  const { useColormapPalette } = useScatterServices();
-  const paletteQuery = useColormapPalette(colormap, 16);
-  const colors = paletteQuery.data ?? COLORMAP_FALLBACKS[colormap] ?? COLORMAP_FALLBACKS.viridis;
+  const colors = useScatterServices().getCategoricalPalette(colormap, 16);
   const gradientId = useId();
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" className="shrink-0">

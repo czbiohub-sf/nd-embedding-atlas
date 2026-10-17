@@ -20,7 +20,7 @@ import {
   tableFeatures,
   useTable,
 } from "@tanstack/react-table";
-import { useVirtualizer } from "@tanstack/react-virtual";
+import { useVirtualizer } from "../query/use-virtualizer";
 import type { Coordinator } from "@uwdata/mosaic-core";
 import { type FilterCoordinationAPI, type RowIndex, rowIndex } from "@ndea/sdk";
 import { CheckIcon, Columns3Icon } from "lucide-react";
@@ -129,7 +129,7 @@ export function DataTable({
   const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({});
   const [columnVisibility, setColumnVisibility] = useState<ColumnVisibilityState>({});
   const [colFilter, setColFilter] = useState("");
-  const autoSizedRef = useRef(false);
+  const autoSizedForRef = useRef<string[] | null>(null);
 
   // Column types (# / ◇ header glyphs) via `DESCRIBE dataset`.
   const colTypes = useColumnTypes(coordinator);
@@ -182,17 +182,11 @@ export function DataTable({
     onTotalCountChange?.(totalCount);
   }, [totalCount, onTotalCountChange]);
 
-  // Reset auto-sizing when the column SET changes (annotations add columns at
-  // runtime). Keyed on columnNames and placed BEFORE the sizing effect so a new
-  // column clears the latch first, then the sizing effect re-fits it.
-  useEffect(() => {
-    autoSizedRef.current = false;
-  }, [columnNames]);
-
   // ── Auto-size columns from first loaded data ─────────────────
+  // Latched per column SET: annotations add columns at runtime, which re-fits.
   useEffect(() => {
-    if (autoSizedRef.current || visibleData.length === 0) return;
-    autoSizedRef.current = true;
+    if (autoSizedForRef.current === columnNames || visibleData.length === 0) return;
+    autoSizedForRef.current = columnNames;
     const sizing: ColumnSizingState = {};
     for (const name of columnNames) {
       sizing[name] = estimateColumnWidth(name, visibleData.slice(0, 100));
@@ -228,7 +222,7 @@ export function DataTable({
   );
 
   // ── Virtual scrolling ───────────────────────────────────────────
-  const rowVirtualizer = useVirtualizer({
+  const { virtualItems, totalSize, scrollMargin, scrollToIndex } = useVirtualizer({
     count: totalCount,
     getScrollElement: () => containerRef.current,
     estimateSize: () => ROW_HEIGHT,
@@ -238,7 +232,6 @@ export function DataTable({
   });
 
   // ── Fetch visible pages on scroll ───────────────────────────────
-  const virtualItems = rowVirtualizer.getVirtualItems();
   useEffect(() => {
     if (virtualItems.length === 0) return;
     const start = virtualItems[0].index;
@@ -251,11 +244,11 @@ export function DataTable({
     if (focusedRowIndex == null) return;
     void findRowPosition(focusedRowIndex).then((pos) => {
       if (pos != null) {
-        rowVirtualizer.scrollToIndex(pos, { align: "center" });
+        scrollToIndex(pos, { align: "center" });
         ensureRange(Math.max(0, pos - 50), pos + 50);
       }
     });
-  }, [focusedRowIndex, findRowPosition, rowVirtualizer, ensureRange]);
+  }, [focusedRowIndex, findRowPosition, scrollToIndex, ensureRange]);
 
   // ── Row click handler ───────────────────────────────────────────
   const handleRowClick = useCallback(
@@ -401,7 +394,7 @@ export function DataTable({
         {/* Virtual row container */}
         <div
           style={{
-            height: `${rowVirtualizer.getTotalSize()}px`,
+            height: `${totalSize}px`,
             minWidth: totalWidth,
             position: "relative",
           }}
@@ -422,7 +415,7 @@ export function DataTable({
                 style={{
                   height: `${ROW_HEIGHT}px`,
                   minWidth: totalWidth,
-                  transform: `translateY(${virtualRow.start - rowVirtualizer.options.scrollMargin}px)`,
+                  transform: `translateY(${virtualRow.start - scrollMargin}px)`,
                 }}
                 onClick={() => handleRowClick(virtualRow.index)}
               >

@@ -17,9 +17,7 @@ interface PaletteSwatchProps {
 const PREVIEW_COUNT = 10;
 
 function PaletteSwatch({ name, active, onSelect }: PaletteSwatchProps) {
-  const { useColormapPalette } = useScatterServices();
-  const { data: colors } = useColormapPalette(name, PREVIEW_COUNT);
-  const chips = colors ?? Array.from({ length: PREVIEW_COUNT }, () => "#666");
+  const chips = useScatterServices().getCategoricalPalette(name, PREVIEW_COUNT);
 
   return (
     <button

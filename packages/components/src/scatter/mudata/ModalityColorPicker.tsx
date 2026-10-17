@@ -10,7 +10,7 @@
  */
 
 import { ChevronDownIcon } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import { useScatterUIDispatch } from "../scatter-ui-store";
 import { Badge } from "@ndea/ui/components/badge";
@@ -104,7 +104,7 @@ export function ModalityColorPicker({
   const [topTab, setTopTab] = useState<"obs" | "var">("obs");
   const [obsModTab, setObsModTab] = useState("all");
   const [varModTab, setVarModTab] = useState(modalities?.[0] ?? "");
-  const [selectedLayer, setSelectedLayer] = useState("X");
+  const [preferredLayer, setSelectedLayer] = useState("X");
   const [varQuery, setVarQuery] = useState("");
 
   const isMuData = !!modalities && modalities.length > 0;
@@ -115,22 +115,17 @@ export function ModalityColorPicker({
   const { names: varNames, isLoading: varLoading } = useVarSearch(varQuery, isMuData ? varModTab : undefined);
   const layers = useLayerNames();
   const { setStatus } = useScatterUIDispatch();
-  const { materialize, status: varStatus, column: varColumn } = useVarColumn({ onStatus: setStatus });
-
   // When var materialization completes, propagate ColorSource and close
-  useEffect(() => {
-    if (varStatus === "ready" && varColumn) {
-      onSetColorSource(colorSourceFromString(varColumn));
+  const { materialize, status: varStatus } = useVarColumn({
+    onStatus: setStatus,
+    onReady: (column) => {
+      onSetColorSource(colorSourceFromString(column));
       setOpen(false);
-    }
-  }, [varStatus, varColumn, onSetColorSource]);
+    },
+  });
 
-  // Keep selectedLayer valid
-  useEffect(() => {
-    if (layers.length > 0 && !layers.includes(selectedLayer)) {
-      setSelectedLayer(layers[0]);
-    }
-  }, [layers, selectedLayer]);
+  // Fall back to the first layer when the chosen one isn't available.
+  const selectedLayer = layers.length > 0 && !layers.includes(preferredLayer) ? layers[0] : preferredLayer;
 
   const handleVarSelect = useCallback(
     (varName: string) => {

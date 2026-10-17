@@ -8,7 +8,7 @@
  * (see TrackGallery.tsx:97-103, 51-74).
  */
 
-import { useVirtualizer } from "@tanstack/react-virtual";
+import { useVirtualizer } from "../query/use-virtualizer";
 import type { Coordinator } from "@uwdata/mosaic-core";
 import { SquareDashedMousePointer } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -98,7 +98,12 @@ export function GalleryPane({
   // square image at colWidth); `gap` handles the inter-row spacing so the
   // measured element itself carries no padding to double-count.
   const getItemKey = useCallback((i: number) => obs[i]?.rowIndex ?? i, [obs]);
-  const virtualizer = useVirtualizer({
+  const {
+    scrollToIndex,
+    measureElement,
+    totalSize,
+    virtualItems: items,
+  } = useVirtualizer<HTMLDivElement, HTMLDivElement>({
     count,
     getScrollElement: () => parentRef.current,
     getItemKey,
@@ -119,11 +124,9 @@ export function GalleryPane({
   useEffect(() => {
     if (focusedRowIndex == null || count === 0) return;
     const idx = obs.findIndex((o) => o.rowIndex === focusedRowIndex);
-    if (idx >= 0) virtualizer.scrollToIndex(idx, { align: "auto" });
-  }, [focusedRowIndex, obs, count, virtualizer]);
+    if (idx >= 0) scrollToIndex(idx, { align: "auto" });
+  }, [focusedRowIndex, obs, count, scrollToIndex]);
 
-  const totalSize = virtualizer.getTotalSize();
-  const items = virtualizer.getVirtualItems();
   const truncated = rowCount > MAX_GALLERY_OBS;
 
   const headerCount = useMemo(() => {
@@ -172,7 +175,7 @@ export function GalleryPane({
                 <div
                   key={vItem.key}
                   data-index={vItem.index}
-                  ref={virtualizer.measureElement}
+                  ref={measureElement}
                   style={{
                     position: "absolute",
                     top: 0,

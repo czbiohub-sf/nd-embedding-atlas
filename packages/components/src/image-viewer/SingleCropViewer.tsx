@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { vec3 } from "gl-matrix";
 import { useCallback, useEffect, useLayoutEffect, useState } from "react";
 import { useFocus } from "../query/useFocus";
-import { useImageViewerHost, useImageViewerServices } from "./context";
+import { useImageViewerHost, useImageViewerServices, useImageViewerSession } from "./context";
 import { capabilitiesOf } from "@ndea/sdk";
 import { ObsInfoSchema } from "@ndea/protocol";
 import type { OrbitControls } from "./viewer/orbit-controls";
@@ -48,7 +48,7 @@ function ViewerPresentationCover({ ready, presentationKey }: { ready: boolean; p
 
 export function SingleCropViewer({ cropSize, showBbox, datasetKey }: Props) {
   const services = useImageViewerServices();
-  const session = services.useSessionSnapshot();
+  const session = useImageViewerSession();
   const { state: viewerState, actions, meta } = useViewer();
   const { metadata } = useImageViewerHost().data;
 
@@ -221,19 +221,7 @@ export function SingleCropViewer({ cropSize, showBbox, datasetKey }: Props) {
       if (showBbox) updateBbox(frame.spatial_x, frame.spatial_y, cropSize / 2);
       else clearBbox();
     }
-  }, [
-    isForThisDataset,
-    trajectory?.tIndex,
-    trajectory?.points,
-    cropSize,
-    showBbox,
-    obsInfo,
-    updateBbox,
-    clearBbox,
-    viewerState.viewMode,
-    trajectory,
-    actions,
-  ]);
+  }, [isForThisDataset, cropSize, showBbox, obsInfo, updateBbox, clearBbox, viewerState.viewMode, trajectory, actions]);
 
   // ── Placeholder when this viewer is for a different dataset ──────
   if (!isForThisDataset) {

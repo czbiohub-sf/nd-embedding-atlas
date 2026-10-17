@@ -8,7 +8,7 @@ import {
   Layers,
   WandSparklesIcon,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Button } from "@ndea/ui/components/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@ndea/ui/components/collapsible";
 import {
@@ -61,9 +61,12 @@ function ContrastInput({
   ariaLabel: string;
 }) {
   const [draft, setDraft] = useState(() => fmtContrast(value));
-  useEffect(() => {
+  // Reset the draft when the prop changes (adjust state during render, not in an effect).
+  const [prevValue, setPrevValue] = useState(value);
+  if (value !== prevValue) {
+    setPrevValue(value);
     setDraft(fmtContrast(value));
-  }, [value]);
+  }
 
   const commit = () => {
     const parsed = Number.parseFloat(draft);

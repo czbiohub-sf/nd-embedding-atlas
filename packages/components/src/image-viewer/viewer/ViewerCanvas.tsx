@@ -12,5 +12,6 @@ export function ViewerCanvas({ className }: Props) {
     throw new Error(msg);
   }
 
-  return <canvas ref={ctx._canvasRef} className={className} />;
+  const { _attachCanvas } = ctx;
+  return <canvas ref={_attachCanvas} className={className} />;
 }

@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { TrajectoryResponseSchema } from "@ndea/protocol";
 import { useMemo } from "react";
-import { useScatterServices } from "../../context";
+import { useScatterSession } from "../../context";
 import type { TrajectoryFrame } from "../../contracts";
 import { selectAnyTrajectory, trajectoryKeys } from "../../helpers";
 
@@ -32,7 +32,7 @@ interface UseTrajectoryLoaderResult {
  */
 export function useTrajectoryLoader(opts: UseTrajectoryLoaderOptions): UseTrajectoryLoaderResult {
   const { embedding, xCol, yCol, categoryCol } = opts;
-  const { state, actions } = useScatterServices().useSession();
+  const { state, actions } = useScatterSession();
   const queryClient = useQueryClient();
 
   const mutation = useMutation({

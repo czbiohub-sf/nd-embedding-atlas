@@ -8,7 +8,7 @@
 
 /// <reference types="bun" />
 import { describe, expect, test } from "bun:test";
-import { clausePoint, Coordinator, Selection, SocketConnector } from "@uwdata/mosaic-core";
+import { clausePoint, Coordinator, restConnector, Selection } from "@uwdata/mosaic-core";
 import type { MosaicClient } from "@uwdata/mosaic-core";
 import type { Mark } from "@uwdata/mosaic-plot";
 import { column } from "@uwdata/mosaic-sql";
@@ -72,9 +72,9 @@ class RecordingCoordinator extends Coordinator {
 }
 
 function createCoordinator(): RecordingCoordinator {
-  // SocketConnector's constructor only assigns fields; no socket is opened, and
-  // `connect` is overridden so no query is ever queued.
-  return new RecordingCoordinator(new SocketConnector(), { logger: null });
+  // The REST connector only fetches on query, and `connect` is overridden so
+  // no query is ever queued.
+  return new RecordingCoordinator(restConnector(), { logger: null });
 }
 
 /** The shape `buildEntries("histogram", "value")` produces. */

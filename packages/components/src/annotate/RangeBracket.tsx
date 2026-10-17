@@ -10,7 +10,7 @@
  * handles never stack: you can always grab and drag either one apart.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Kbd } from "@ndea/ui/components/kbd";
 import { cn } from "@ndea/ui/lib/utils";
 import { type Domain, clamp01, domainTicks, fmtVal, niceDomain, parseVal, posOf, valOf } from "./range-scale";
@@ -38,12 +38,15 @@ export function RangeBracket({ lo, hi, onChange, onCommit, disabled, metric = "v
   // (i.e. the value changed from the slider or parent, not this keystroke).
   const [loText, setLoText] = useState(() => fmtVal(lo));
   const [hiText, setHiText] = useState(() => fmtVal(hi));
-  useEffect(() => {
-    if (parseVal(loText) !== lo) setLoText(fmtVal(lo));
-  }, [lo, loText]);
-  useEffect(() => {
-    if (parseVal(hiText) !== hi) setHiText(fmtVal(hi));
-  }, [hi, hiText]);
+  // Adjust during render when the inputs change (same deps the sync effects had).
+  const [prev, setPrev] = useState({ lo, hi, loText, hiText });
+  if (prev.lo !== lo || prev.hi !== hi || prev.loText !== loText || prev.hiText !== hiText) {
+    const nextLo = parseVal(loText) !== lo ? fmtVal(lo) : loText;
+    const nextHi = parseVal(hiText) !== hi ? fmtVal(hi) : hiText;
+    setPrev({ lo, hi, loText: nextLo, hiText: nextHi });
+    setLoText(nextLo);
+    setHiText(nextHi);
+  }
 
   // Domain auto-fits the values, but FREEZES while dragging so the axis doesn't
   // slide under the cursor. `drag` holds the active handle + its frozen domain.

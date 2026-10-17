@@ -1,12 +1,13 @@
 import { createContext, type ReactNode, useContext, useEffect, useMemo, useState } from "react";
 import type { DeviceLease, ComponentHost } from "@ndea/sdk";
-import type { ScatterConfig, ScatterServices } from "./contracts";
+import type { ScatterConfig, ScatterServices, ScatterSession } from "./contracts";
 export { useFocus } from "../query/useFocus";
 
 export type ScatterHost = ComponentHost<ScatterConfig>;
 
 const HostContext = createContext<ScatterHost | null>(null);
 const ServicesContext = createContext<ScatterServices | null>(null);
+const SessionContext = createContext<ScatterSession | null>(null);
 const DeviceLeaseContext = createContext<{ lease: DeviceLease | null; error: Error | null }>({
   lease: null,
   error: null,
@@ -15,15 +16,19 @@ const DeviceLeaseContext = createContext<{ lease: DeviceLease | null; error: Err
 export function ScatterProvider({
   host,
   services,
+  session,
   children,
 }: {
   host: ScatterHost;
   services: ScatterServices;
+  session: ScatterSession;
   children: ReactNode;
 }) {
   return (
     <HostContext value={host}>
-      <ServicesContext value={services}>{children}</ServicesContext>
+      <ServicesContext value={services}>
+        <SessionContext value={session}>{children}</SessionContext>
+      </ServicesContext>
     </HostContext>
   );
 }
@@ -38,6 +43,13 @@ export function useScatterServices(): ScatterServices {
   const services = useContext(ServicesContext);
   if (!services) throw new Error("useScatterServices must be used within ScatterProvider");
   return services;
+}
+
+/** The app session, read once per view by the factory-bound `useSession` (see view.tsx). */
+export function useScatterSession(): ScatterSession {
+  const session = useContext(SessionContext);
+  if (!session) throw new Error("useScatterSession must be used within ScatterProvider");
+  return session;
 }
 
 export function ScatterDeviceLeaseProvider({ children }: { children: ReactNode }) {

@@ -29,7 +29,7 @@ function assertNominalIdentitySeparation(): void {
   // @ts-expect-error Durable observation names are not focused row indices.
   acceptsRowIndex(name);
   // @ts-expect-error Focus coordination cannot accept durable observation names.
-  (({ set: acceptsRowIndex }) satisfies Pick<FocusCoordinationAPI, "set">).set(name);
+  ({ set: acceptsRowIndex } satisfies Pick<FocusCoordinationAPI, "set">).set(name);
 }
 void assertNominalIdentitySeparation;
 

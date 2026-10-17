@@ -1,8 +1,8 @@
 /**
  * Orbit camera controls for PerspectiveCamera.
  *
- * Vendored from idetik. @idetik/core@0.23.1 publicly exports its own
- * `OrbitControls`, but the public class doesn't expose `lookAt(target, radius)`,
+ * Vendored from idetik. @idetik/core publicly exports its own `OrbitControls`,
+ * but the public class (as of 0.48) doesn't expose `lookAt(target, radius)`,
  * which SingleCropViewer uses to recenter the camera on the active obs. Keeping
  * the vendored copy until that extension lands upstream (or we re-implement
  * lookAt via the public surface).
@@ -13,24 +13,18 @@
  * - Wheel: zoom (dolly in/out)
  */
 
-import type { PerspectiveCamera } from "@idetik/core";
+import type { CameraControls, PerspectiveCamera } from "@idetik/core";
 import { vec3 } from "gl-matrix";
 
-// idetik 0.27 stopped exporting `CameraControls`, `EventContext`, and `Spherical`
-// from its entry. They're small and stable, so vendor the minimal shapes here
-// (this file is already a vendored copy of idetik's OrbitControls). The local
-// `CameraControls`/`EventContext` are structural supersets of idetik's internal
-// ones, so an OrbitControls instance still slots into idetik's ViewportConfig.
+// idetik doesn't export `EventContext` or `Spherical` from its entry. They're
+// small and stable, so vendor the minimal shapes here (this file is already a
+// vendored copy of idetik's OrbitControls). The local `EventContext` is a
+// structural subset of idetik's, so `onEvent` still satisfies `CameraControls`.
 type IdetikEventType = "pointerdown" | "pointermove" | "pointerup" | "pointercancel" | "wheel";
 interface EventContext {
   readonly type: IdetikEventType;
   readonly event?: Event;
   stopPropagation(): void;
-}
-interface CameraControls {
-  readonly isMoving: boolean;
-  onUpdate(dt: number): void;
-  onEvent(event: EventContext): void;
 }
 /** Spherical coords (radius, azimuth `phi`, elevation `theta`) → cartesian, y-up. */
 class Spherical {

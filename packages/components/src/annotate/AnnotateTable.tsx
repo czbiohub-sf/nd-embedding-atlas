@@ -19,7 +19,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { type RowIndex, rowIndex } from "@ndea/sdk";
 import type { Coordinator, Selection } from "@uwdata/mosaic-core";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useVirtualizer } from "@tanstack/react-virtual";
+import { useVirtualizer } from "../query/use-virtualizer";
 import { cn } from "@ndea/ui/lib/utils";
 import { CropThumb } from "./CropThumb";
 import type { ChannelDef, ChannelHash } from "../gallery/contracts";
@@ -160,14 +160,13 @@ export function AnnotateTable({
   const [focusIndex, setFocusIndex] = useState(0);
   const anchorRef = useRef(0);
 
-  const rowVirtualizer = useVirtualizer({
+  const { virtualItems, totalSize, scrollMargin, scrollToIndex } = useVirtualizer<HTMLDivElement, Element>({
     count: totalCount,
     getScrollElement: () => scrollRef.current,
     estimateSize: () => rowH,
     overscan: OVERSCAN,
     scrollMargin: HEADER_HEIGHT,
   });
-  const virtualItems = rowVirtualizer.getVirtualItems();
 
   // load visible pages on scroll
   useEffect(() => {
@@ -264,10 +263,10 @@ export function AnnotateTable({
       } else {
         pendingUserFocusIndexRef.current = null;
       }
-      rowVirtualizer.scrollToIndex(i, { align: "auto" });
+      scrollToIndex(i, { align: "auto" });
       ensureRange(Math.max(0, i - 25), i + 25);
     },
-    [totalCount, rowIndexAt, onUserFocus, rowVirtualizer, ensureRange],
+    [totalCount, rowIndexAt, onUserFocus, scrollToIndex, ensureRange],
   );
 
   // Follow an external focus from Gallery, Scatter, or Idetik:
@@ -329,7 +328,7 @@ export function AnnotateTable({
           } else {
             pendingUserFocusIndexRef.current = i;
           }
-          rowVirtualizer.scrollToIndex(i, { align: "auto" });
+          scrollToIndex(i, { align: "auto" });
           ensureRange(Math.max(0, i - 25), i + 25);
         } else {
           focusTo(i);
@@ -374,7 +373,7 @@ export function AnnotateTable({
       onStamp,
       onSkip,
       onUserFocus,
-      rowVirtualizer,
+      scrollToIndex,
       ensureRange,
     ],
   );
@@ -417,7 +416,7 @@ export function AnnotateTable({
         <span role="columnheader">{labelColumn ?? "label"}</span>
       </div>
 
-      <div style={{ height: rowVirtualizer.getTotalSize(), position: "relative" }}>
+      <div style={{ height: totalSize, position: "relative" }}>
         {virtualItems.map((v) => {
           const row = getRow(v.index);
           const id = rowIndexAt(v.index);
@@ -442,7 +441,7 @@ export function AnnotateTable({
                 gridTemplateColumns: gridCols,
                 height: rowH,
                 width: "100%",
-                transform: `translateY(${v.start - rowVirtualizer.options.scrollMargin}px)`,
+                transform: `translateY(${v.start - scrollMargin}px)`,
               }}
             >
               {thumbs && (

@@ -18,7 +18,6 @@ export default defineConfig({
       "/plugins": "http://localhost:5055",
       "/plate": "http://localhost:5055",
       "/ws": { target: "ws://localhost:5055", ws: true },
-      "/mosaic": { target: "ws://localhost:5055", ws: true },
     },
   },
   optimizeDeps: { exclude: ["roaring-wasm"] },

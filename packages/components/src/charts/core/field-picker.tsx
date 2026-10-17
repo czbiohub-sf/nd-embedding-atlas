@@ -1,28 +1,26 @@
 /**
- * Minimal column picker for a chart component. Sources eligible columns from
- * `useColumnTypes` over the element's own coordinator: no `useDashboard`.
+ * Minimal column picker for a chart component. The caller sources column
+ * types from its own coordinator: no `useDashboard`.
  *
  * ponytail: native <select>, skip only `__row_index__`. Embedding/coord-column
  * noise filtering is YAGNI for a manual pick: the user chooses. Add a skip
  * heuristic only if the list proves noisy.
  */
 
-import type { Coordinator } from "@uwdata/mosaic-core";
-import type { ColumnType, UseChartColumnTypes } from "./contracts";
+import type { ColumnType } from "./contracts";
 
 const SKIP = new Set(["__row_index__"]);
 
 interface Props {
-  coordinator: Coordinator;
+  /** Column name → type; null while loading. */
+  types: ReadonlyMap<string, ColumnType> | null;
   value: string | null;
   /** Column types this chart variant can plot (string/boolean vs number). */
   kinds: readonly ColumnType[];
   onPick: (field: string) => void;
-  useColumnTypes: UseChartColumnTypes;
 }
 
-export function FieldPicker({ coordinator, value, kinds, onPick, useColumnTypes }: Props) {
-  const types = useColumnTypes(coordinator);
+export function FieldPicker({ types, value, kinds, onPick }: Props) {
   const eligible = types
     ? [...types.entries()].filter(([name, t]) => kinds.includes(t) && !SKIP.has(name)).map(([name]) => name)
     : [];

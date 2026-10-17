@@ -20,7 +20,9 @@ export function useScatterBrushSync({
 }: UseScatterBrushSyncOptions): UseScatterBrushSyncResult {
   const host = useScatterHost();
   const hostRef = useRef(host);
-  hostRef.current = host;
+  useEffect(() => {
+    hostRef.current = host;
+  }, [host]);
   const revisionRef = useRef(0);
   const queueRef = useRef(Promise.resolve());
   const brushDebouncer = useDebouncer(
@@ -40,15 +42,13 @@ export function useScatterBrushSync({
     },
     { wait: 200, leading: false, trailing: true },
   );
-  const debouncerRef = useRef(brushDebouncer);
-  debouncerRef.current = brushDebouncer;
   useEffect(
     () => () => {
       revisionRef.current += 1;
-      debouncerRef.current.cancel();
+      brushDebouncer.cancel();
       hostRef.current.filter.clear("lasso");
     },
-    [],
+    [brushDebouncer],
   );
 
   const onSelectionChange = (_count: number | null, indices?: GpuPointIndex[]) => {

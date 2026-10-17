@@ -12,7 +12,9 @@ import type { ImageViewerConfig, ImageViewerServices } from "./contracts";
 import { capabilitiesOf } from "@ndea/sdk";
 
 export function createImageViewerView(services: ImageViewerServices) {
+  const { useSessionSnapshot } = services;
   return function ImageViewerPluginView({ host }: BodyProps<ImageViewerConfig>) {
+    const session = useSessionSnapshot();
     const datasetKey = host.config.datasetKey ?? undefined;
 
     if (!capabilitiesOf(host.data.metadata).has("plate-image")) {
@@ -24,7 +26,7 @@ export function createImageViewerView(services: ImageViewerServices) {
     }
 
     return (
-      <ImageViewerProvider host={host} services={services}>
+      <ImageViewerProvider host={host} services={services} session={session}>
         <div className="h-full w-full overflow-hidden">
           <CropViewer datasetKey={datasetKey} />
         </div>

@@ -13,12 +13,11 @@ import type { ComponentDefinition } from "@ndea/sdk";
 
 import { onDeviceLost } from "@/core/gpu/device-manager";
 import { mountReactBody } from "@/core/component/react-body";
-import { useColormapList, useColormapPalette } from "@/hooks/useColormaps";
 import { useDatasetSession } from "@/hooks/useDatasetSession";
 import { useFocusedPointMeta } from "@/hooks/useFocusedPointMeta";
 import { makeCategoryColumn } from "@/lib/color/category-column";
 import { buildColormapLut } from "@/lib/color/ochre-lut";
-import { getColormapList, pickDefaultCategoricalPalette } from "@/lib/color/ochre-palette";
+import { getCategoricalPalette, getColormapList, pickDefaultCategoricalPalette } from "@/lib/color/ochre-palette";
 import { predicateToSql } from "@/lib/mosaic-helpers";
 import { pointRadiusStore } from "@/stores/point-radius-store";
 import { renderSettingsStore } from "@/stores/render-settings-store";
@@ -77,9 +76,7 @@ const services: ComponentServices = {
   scatter: {
     useSession: useDatasetSession,
     useFocusedPointMeta,
-    useColumnTypes,
-    useColormapList,
-    useColormapPalette,
+    getCategoricalPalette,
     getColormapList,
     categorize: makeCategoryColumn,
     buildColormapLut,

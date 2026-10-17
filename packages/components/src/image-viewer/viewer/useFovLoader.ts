@@ -6,7 +6,7 @@ import {
   OmeZarrImageSource,
   VolumeLayer,
 } from "@idetik/core";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { resolveContrastRange, resolveContrastWindow, safeContrastLimits } from "../contrast-window";
 import type { Metadata } from "@ndea/protocol";
 import { type ChannelStatsLoader, loadOptionalChannelStats } from "./channel-stats-loader";
@@ -88,13 +88,16 @@ export function useFovLoader({
 
   // ── Stable refs for deps that shouldn't trigger reloads ───────────
   const actionsRef = useRef(actions);
-  actionsRef.current = actions;
   const plateChsRef = useRef(plateChannels);
-  plateChsRef.current = plateChannels;
   const omeVersionRef = useRef(omeVersion);
-  omeVersionRef.current = omeVersion;
   const loadChannelStatsRef = useRef(loadChannelStats);
-  loadChannelStatsRef.current = loadChannelStats;
+  // Layout effect runs before the passive load effect below, so it sees current values.
+  useLayoutEffect(() => {
+    actionsRef.current = actions;
+    plateChsRef.current = plateChannels;
+    omeVersionRef.current = omeVersion;
+    loadChannelStatsRef.current = loadChannelStats;
+  });
 
   // ── FOV caching refs ──────────────────────────────────────────────
   const currentFovRef = useRef<string | null>(null);

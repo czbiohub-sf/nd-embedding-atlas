@@ -35,7 +35,7 @@ interface DashboardContextValue {
   editable: boolean;
   drag: DragState | null;
   beginDrag: (id: string) => void;
-  sashCleanup: { current: (() => void) | null };
+  sashCleanupRef: { current: (() => void) | null };
 }
 
 const DashboardContext = createContext<DashboardContextValue | null>(null);
@@ -235,7 +235,7 @@ function Pane({ share, children }: { share: number; children: ReactNode }) {
 
 function Split(props: ComponentRenderProps) {
   const ws = useWorkspace();
-  const { sashCleanup } = useDashboard();
+  const { sashCleanupRef } = useDashboard();
   const id = idOf(props);
   const horizontal = props.element.props.direction === "column";
   const ratio = Number(props.element.props.ratio);
@@ -245,7 +245,7 @@ function Split(props: ComponentRenderProps) {
     e.stopPropagation();
     const box = (e.currentTarget as HTMLElement).parentElement?.getBoundingClientRect();
     if (!box) return;
-    sashCleanup.current?.();
+    sashCleanupRef.current?.();
     const move = (ev: PointerEvent) => {
       const r = horizontal ? (ev.clientY - box.top) / box.height : (ev.clientX - box.left) / box.width;
       ws.setSplitRatio(id, clamp(r, ND_STAGE.ratioMin, ND_STAGE.ratioMax));
@@ -254,9 +254,9 @@ function Split(props: ComponentRenderProps) {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", cleanup);
       window.removeEventListener("pointercancel", cleanup);
-      if (sashCleanup.current === cleanup) sashCleanup.current = null;
+      if (sashCleanupRef.current === cleanup) sashCleanupRef.current = null;
     };
-    sashCleanup.current = cleanup;
+    sashCleanupRef.current = cleanup;
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", cleanup);
     window.addEventListener("pointercancel", cleanup);
@@ -514,11 +514,11 @@ export function DashboardPane({ editable }: { editable: boolean }) {
   const spec = useWorkspaceSelector((s) => s.spec);
   const [drag, setDrag] = useState<DragState | null>(null);
   const dragRef = useRef<DragState | null>(null);
-  const sashCleanup = useRef<(() => void) | null>(null);
+  const sashCleanupRef = useRef<(() => void) | null>(null);
   const store = useMemo(() => coordinationStateStore(ws), [ws]);
   const rendered = useMemo(() => renderSpec(spec), [spec]);
 
-  useEffect(() => () => sashCleanup.current?.(), []);
+  useEffect(() => () => sashCleanupRef.current?.(), []);
 
   const beginDrag = (id: string) => {
     ws.selectElement(id);
@@ -546,7 +546,7 @@ export function DashboardPane({ editable }: { editable: boolean }) {
   };
 
   return (
-    <DashboardContext value={{ editable, drag, beginDrag, sashCleanup }}>
+    <DashboardContext value={{ editable, drag, beginDrag, sashCleanupRef }}>
       <JSONUIProvider registry={REGISTRY} store={store}>
         <div className="relative box-border flex h-full p-2">
           <Renderer spec={rendered} registry={REGISTRY} />

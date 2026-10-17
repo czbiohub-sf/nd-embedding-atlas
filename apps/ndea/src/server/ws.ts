@@ -12,23 +12,15 @@
  *
  * Methods: `workspace/watch` pushes every accepted workspace revision until
  * the client sends `{ _id: <new>, _type: "unsubscribe", target_id: <sub_id> }`.
- * Data loads use the HTTP routes; Mosaic queries use the /mosaic socket.
+ * Data loads and Mosaic queries use the HTTP routes.
  */
 
 import type { ServerWebSocket } from "bun";
 import type { ServerSession } from "./state.ts";
-import type { DatasetQuerySession } from "./store.ts";
 
 /** Data attached to every ServerWebSocket via server.upgrade(req, { data }). */
 export interface ServerSocketContext {
-  /**
-   * Socket role. `ndea` uses the framed `{_id,_type,...}` protocol handled
-   * in this file. `mosaic` uses the Mosaic socketConnector framing (raw
-   * `{type, sql}` in, Arrow IPC / JSON out) handled in mosaic-ws.ts.
-   */
-  kind: "ndea" | "mosaic";
   state: ServerSession;
-  store: DatasetQuerySession;
 }
 
 type WS = ServerWebSocket<ServerSocketContext>;

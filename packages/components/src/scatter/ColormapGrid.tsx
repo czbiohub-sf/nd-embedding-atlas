@@ -9,9 +9,8 @@ interface ColormapSwatchProps {
 }
 
 function ColormapSwatch({ name, active, onSelect }: ColormapSwatchProps) {
-  const { useColormapPalette } = useScatterServices();
-  const { data: stops } = useColormapPalette(name, 8);
-  const gradient = stops ? `linear-gradient(to right, ${stops.join(",")})` : "linear-gradient(to right, #888, #444)";
+  const stops = useScatterServices().getCategoricalPalette(name, 8);
+  const gradient = `linear-gradient(to right, ${stops.join(",")})`;
 
   return (
     <button

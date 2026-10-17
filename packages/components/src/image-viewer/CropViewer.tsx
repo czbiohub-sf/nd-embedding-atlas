@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { useFocus } from "../query/useFocus";
 import { useImageViewerHost, useImageViewerServices } from "./context";
 import {
@@ -50,17 +50,17 @@ export function CropViewer({ channelInstance = "docked", datasetKey }: CropViewe
   const host = useImageViewerHost();
   const focusedRowIndex = useFocus(host);
 
-  const hasEverSelected = useRef(false);
+  const [hasEverSelected, setHasEverSelected] = useState(false);
   const [cropSize, setCropSize] = useState(100);
   const [showBbox, setShowBbox] = useState(true);
 
-  if (focusedRowIndex != null) {
-    hasEverSelected.current = true;
+  if (focusedRowIndex != null && !hasEverSelected) {
+    setHasEverSelected(true);
   }
 
   // Don't mount the viewer until the user first clicks an observation.
   // Once mounted, keep it alive to avoid WebGL teardown/recreation.
-  if (!hasEverSelected.current) {
+  if (focusedRowIndex == null && !hasEverSelected) {
     return <div className="h-full w-full" />;
   }
 

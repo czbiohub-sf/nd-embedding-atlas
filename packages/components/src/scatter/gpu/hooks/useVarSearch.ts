@@ -25,7 +25,7 @@ export function useVarSearch(query: string, modality?: string): VarSearchResult 
   });
   useEffect(() => {
     varDebouncer.maybeExecute(query);
-  }, [query, varDebouncer.maybeExecute]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [query, varDebouncer]);
 
   const { data, isLoading } = useQuery<VarNamesResponse>({
     queryKey: varKeys.names(debouncedQuery, modality),

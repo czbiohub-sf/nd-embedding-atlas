@@ -154,7 +154,7 @@ export function useTableQuery(opts: UseTableQueryOptions): UseTableQueryResult {
         const { whereClause } = tableFilterState(selection);
         const sql = `SELECT "__row_index__", ${colList} FROM ${table} ${whereClause} ORDER BY ${buildOrderBy()} LIMIT ${PAGE_SIZE} OFFSET ${offset}`;
 
-        const result = await coordinator.query(sql, { type: "arrow" });
+        const result = await coordinator.query(sql);
 
         // Discard if the filter changed while we were waiting.
         if (fetchedFor !== activeCacheKeyRef.current) return;
@@ -231,7 +231,7 @@ export function useTableQuery(opts: UseTableQueryOptions): UseTableQueryResult {
                     ${whereClause || "WHERE TRUE"}
                     AND (${sort ? `("${sort.column}" < (SELECT "${sort.column}" FROM target) OR ("${sort.column}" = (SELECT "${sort.column}" FROM target) AND __row_index__ <= ${rowIndex}))` : `__row_index__ <= ${rowIndex}`})
                 `;
-        const result = await coordinator.query(countSql, { type: "arrow" });
+        const result = await coordinator.query(countSql);
         const rows = toRows<{ pos: number }>(result);
         const pos = rows[0]?.pos;
         return pos != null ? pos - 1 : null; // -1 because we count rows <= target

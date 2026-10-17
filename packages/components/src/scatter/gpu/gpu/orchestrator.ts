@@ -296,6 +296,22 @@ export async function createScatterplot(
   let viewVersion = 0;
 
   let pointPickRevision = 0;
+  function finishHit(idx: GpuPointIndex) {
+    if (idx >= 0 && idx < data.numCells && selection.isPointVisible(idx)) {
+      selection.selectPoint(idx);
+      const px = data.positions[idx * 2];
+      const py = data.positions[idx * 2 + 1];
+      const catIdx = data.categoryIndices[idx];
+      config?.callbacks?.onPointClick?.(idx, [px, py], catIdx, data.categoryNames[catIdx]);
+      return true;
+    }
+    return false;
+  }
+
+  function finishMiss() {
+    selection.clearHighlight();
+    config?.callbacks?.onBackgroundClick?.();
+  }
   const interaction = createInteractionController(
     canvas,
     overlay,
@@ -339,23 +355,6 @@ export async function createScatterplot(
         //      brightness-weighted vote. Picks the visually frontmost point.
         //   2. Legacy CPU grid (fallback): geometrically-nearest visible point.
         const useGpuPicking = localStorage?.getItem("ndea.useGpuPicking") !== "0";
-
-        const finishHit = (idx: GpuPointIndex) => {
-          if (idx >= 0 && idx < data.numCells && selection.isPointVisible(idx)) {
-            selection.selectPoint(idx);
-            const px = data.positions[idx * 2];
-            const py = data.positions[idx * 2 + 1];
-            const catIdx = data.categoryIndices[idx];
-            config?.callbacks?.onPointClick?.(idx, [px, py], catIdx, data.categoryNames[catIdx]);
-            return true;
-          }
-          return false;
-        };
-
-        const finishMiss = () => {
-          selection.clearHighlight();
-          config?.callbacks?.onBackgroundClick?.();
-        };
 
         if (useGpuPicking) {
           // Async: readback is one frame on a clean buffer, ~1–2 frames on a

@@ -10,7 +10,6 @@ import {
   CommandList,
 } from "@ndea/ui/components/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@ndea/ui/components/popover";
-import { useSheetBoundary } from "@ndea/ui/components/sheet";
 import { cn } from "@ndea/ui/lib/utils";
 
 export interface ComboboxOption {
@@ -89,8 +88,6 @@ export function Combobox<O extends ComboboxOption = ComboboxOption>({
 }: ComboboxProps<O>) {
   const [open, setOpen] = useState(false);
   const selected = options.find((o) => o.value === value);
-  const sheetBoundary = useSheetBoundary();
-  const effectiveBoundary = collisionBoundary ?? sheetBoundary;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -116,7 +113,7 @@ export function Combobox<O extends ComboboxOption = ComboboxOption>({
         side={side}
         align="start"
         sideOffset={4}
-        collisionBoundary={effectiveBoundary ?? undefined}
+        collisionBoundary={collisionBoundary ?? undefined}
         collisionPadding={12}
       >
         <Command>

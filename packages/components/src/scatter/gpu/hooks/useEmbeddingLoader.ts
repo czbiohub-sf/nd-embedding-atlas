@@ -34,17 +34,18 @@ export function useEmbeddingLoader(metadata: Metadata | null, refreshMetadata: (
         const controller = new AbortController();
         abortRef.current = controller;
         setLoadingKey(key);
-        try {
+        const load = async () => {
           await fetch(`/api/embeddings/${key}`, {
             method: "POST",
             signal: controller.signal,
           });
           await pollUntilReady(key, controller.signal);
           await refreshMetadata();
-        } finally {
+        };
+        await load().finally(() => {
           setLoadingKey(null);
           abortRef.current = null;
-        }
+        });
       }
     },
     [metadata, refreshMetadata],

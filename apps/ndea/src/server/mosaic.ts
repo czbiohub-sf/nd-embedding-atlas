@@ -1,10 +1,10 @@
 /**
  * Mosaic DuckDB query protocol handler.
  *
- * The Mosaic frontend sends POST/GET requests to `/data/query` with:
+ * The Mosaic `restConnector` POSTs to `/data/query` with:
  *   { type: "arrow", sql: "SELECT ..." }
  *   { type: "exec",  sql: "CREATE TABLE mosaic.preagg_..." }
- *   { type: "json",  sql: "SELECT DISTINCT ..." }
+ * `json` remains for tests and curl.
  *
  * Ports Python `server/routes/_mosaic.py`.
  */

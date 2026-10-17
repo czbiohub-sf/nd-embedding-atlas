@@ -1,6 +1,6 @@
 import { Frame } from "lucide-react";
 import { useMemo } from "react";
-import { useImageViewerHost, useImageViewerServices } from "../context";
+import { useImageViewerHost, useImageViewerSession } from "../context";
 import { capabilitiesOf } from "@ndea/sdk";
 import { Button } from "@ndea/ui/components/button";
 import { ButtonGroup } from "@ndea/ui/components/button-group";
@@ -20,8 +20,7 @@ interface Props {
 }
 
 export function ViewerControls({ cropSize, setCropSize, showBbox, setShowBbox, datasetKey }: Props) {
-  const services = useImageViewerServices();
-  const session = services.useSessionSnapshot();
+  const session = useImageViewerSession();
   const host = useImageViewerHost();
   const { state, actions } = useViewer();
   const { bounds, zIndex, tIndex, viewMode } = state;

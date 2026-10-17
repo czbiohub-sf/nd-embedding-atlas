@@ -48,14 +48,11 @@ export function usePredicateGalleryObs(coordinator: Coordinator, predicate: stri
         // ORDER BY for deterministic truncation: "showing top N" is the first
         // N by row index, not an arbitrary scan-order subset.
         `SELECT __row_index__ FROM dataset WHERE ${predicate} ORDER BY __row_index__ LIMIT ${MAX_GALLERY_OBS}`,
-        { type: "json" },
       );
       const rowIds = toRows<{ __row_index__: number }>(rowResult).map((r) => rowIndex(r.__row_index__));
 
       // True selection size (uncapped) for the header / "showing top N".
-      const countResult = await coordinator.query(`SELECT COUNT(*)::INT AS n FROM dataset WHERE ${predicate}`, {
-        type: "json",
-      });
+      const countResult = await coordinator.query(`SELECT COUNT(*)::INT AS n FROM dataset WHERE ${predicate}`);
       const total = toRows<{ n: number }>(countResult)[0]?.n ?? rowIds.length;
 
       if (rowIds.length === 0) return { obs: [], total };

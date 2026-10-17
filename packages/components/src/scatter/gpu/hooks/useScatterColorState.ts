@@ -1,6 +1,7 @@
 import type { Coordinator } from "@uwdata/mosaic-core";
 import { useQuery } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useMemo, useState, useSyncExternalStore } from "react";
+import { useColumnTypes } from "../../../query/useColumnTypes";
 import { useScatterHost, useScatterServices } from "../../context";
 import type { CategoryMapping, ColorMode, Metadata } from "../../contracts";
 import { colorSourceFromString, colorSourceToString, resolveColorMode, toRows } from "../../helpers";
@@ -62,13 +63,8 @@ export function useScatterColorState(coordinator: Coordinator, metadata: Metadat
   const obsColumns = useMemo(() => metadata.obs_columns ?? [], [metadata.obs_columns]);
 
   // ── Color mode (categorical vs continuous) ──────────────────────────────────
-  const columnTypes = services.useColumnTypes(coordinator);
+  const columnTypes = useColumnTypes(coordinator);
   const [colorModeOverride, setColorModeOverride] = useState<ColorMode | undefined>();
-
-  // Reset override when color column changes
-  useEffect(() => {
-    setColorModeOverride(undefined);
-  }, []);
 
   const colorModeInfo = useMemo(
     () => resolveColorMode(colorByColumn, columnTypes, colorModeOverride),
@@ -77,25 +73,21 @@ export function useScatterColorState(coordinator: Coordinator, metadata: Metadat
   const colorMode: ColorMode = colorModeInfo.mode;
 
   // ── Colormap state ──────────────────────────────────────────────────────────
-  // Default is auto-picked per category count on column change (see effect
-  // below). User's explicit pick via setCategoricalColormap is preserved
+  // Default is auto-picked per category count on column change (see below).
+  // User's explicit pick via setCategoricalColormap is preserved
   // within a column but reset when the column changes.
   const [categoricalColormap, setCategoricalColormapInternal] = useState("tab10");
-  const userExplicitPaletteRef = useRef(false);
+  const [userExplicitPalette, setUserExplicitPalette] = useState(false);
   const setCategoricalColormap = (c: string) => {
-    userExplicitPaletteRef.current = true;
+    setUserExplicitPalette(true);
     setCategoricalColormapInternal(c);
   };
   const [continuousColormap, setContinuousColormap] = useState("viridis");
   const [maxCategories, setMaxCategories] = useState(64);
 
-  // Colormap lists + palette: cached via TanStack Query (no repeated fetches)
-  const colormapListQuery = services.useColormapList();
-  const categoricalColormaps = colormapListQuery.data?.categorical ?? [];
-  const continuousColormaps = colormapListQuery.data?.continuous ?? [];
-
-  const paletteQuery = services.useColormapPalette(categoricalColormap, maxCategories);
-  const palette = useMemo(() => paletteQuery.data ?? [], [paletteQuery.data]);
+  // Colormap lists + palette: sync, referentially stable per (name, n).
+  const { categorical: categoricalColormaps, continuous: continuousColormaps } = services.getColormapList();
+  const palette = services.getCategoricalPalette(categoricalColormap, maxCategories);
 
   // ── Category column mapping ─────────────────────────────────────────────────
   // useQuery handles cancellation on unmount + cross-panel dedup (two panels
@@ -110,7 +102,6 @@ export function useScatterColorState(coordinator: Coordinator, metadata: Metadat
       const col = colorByColumn as string;
       const countResult = await coordinator.query(
         `SELECT COUNT(DISTINCT CAST("${col}" AS TEXT))::INT AS n FROM obs_base`,
-        { type: "json" },
       );
       const n = Math.min(toRows<{ n: number }>(countResult)[0]?.n ?? 64, 256);
       const mapping = await services.categorize(coordinator, col, n);
@@ -121,25 +112,25 @@ export function useScatterColorState(coordinator: Coordinator, metadata: Metadat
   const categoryMapping = categoryQuery.data?.mapping ?? null;
   const categoryLoading = categoryQuery.isFetching;
 
-  // Propagate the discovered category count up so the palette sizes correctly.
-  useEffect(() => {
-    if (categoryQuery.data?.n != null) setMaxCategories(categoryQuery.data.n);
-  }, [categoryQuery.data?.n]);
-
-  // Reset "user explicit" when the column changes: the next count-derived
-  // auto-pick should take over for a fresh column.
-  useEffect(() => {
-    userExplicitPaletteRef.current = false;
-  }, [colorByColumn]);
-
-  // Auto-pick the default palette based on category count unless the user
-  // has explicitly chosen one for this column.
-  useEffect(() => {
-    if (userExplicitPaletteRef.current) return;
-    const n = categoryQuery.data?.n;
-    if (n == null) return;
-    setCategoricalColormapInternal(services.pickDefaultCategoricalPalette(n));
-  }, [categoryQuery.data?.n, services]);
+  // Adjust state during render when the column or discovered category count
+  // changes: a fresh column drops the "user explicit" palette flag, and a new
+  // count sizes the palette and auto-picks its default unless the user chose one.
+  const categoryCount = categoryQuery.data?.n;
+  const [prevColumn, setPrevColumn] = useState(colorByColumn);
+  const [prevCount, setPrevCount] = useState(categoryCount);
+  let explicitPalette = userExplicitPalette;
+  if (colorByColumn !== prevColumn) {
+    setPrevColumn(colorByColumn);
+    explicitPalette = false;
+    setUserExplicitPalette(false);
+  }
+  if (categoryCount !== prevCount) {
+    setPrevCount(categoryCount);
+    if (categoryCount != null) {
+      setMaxCategories(categoryCount);
+      if (!explicitPalette) setCategoricalColormapInternal(services.pickDefaultCategoricalPalette(categoryCount));
+    }
+  }
 
   // Re-apply palette to existing mapping without touching DuckDB.
   // Return null (not categoryMapping) when palette isn't loaded yet: empty

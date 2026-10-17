@@ -1,4 +1,4 @@
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Panel } from "@ndea/ui/components/panel";
 import { Slider } from "@ndea/ui/components/slider";
 import { useViewer } from "./useViewer";
@@ -14,43 +14,37 @@ const DEFAULTS = {
   earlyStop: 0.99,
 };
 
+/** Imperatively set a volume param on every layer that has it. */
+function setLayerParam(layers: readonly { layer: object }[], key: string, value: number) {
+  for (const { layer } of layers) {
+    if (key in layer) (layer as Record<string, unknown>)[key] = value;
+  }
+}
+
 export function VolumeControls() {
   const { state } = useViewer();
-  const layersRef = useRef(state.layers);
-  layersRef.current = state.layers;
+  const layersRef = useRef<typeof state.layers>([]);
+  useEffect(() => {
+    layersRef.current = state.layers;
+  }, [state.layers]);
 
-  // Refs hold current slider values: volume params are imperative (mutate layer directly).
-  // defaultValue is used on the sliders so they stay uncontrolled and don't reset on re-render.
-  const opacityRef = useRef(DEFAULTS.opacity);
-  const stepRef = useRef(DEFAULTS.step);
-  const earlyStopRef = useRef(DEFAULTS.earlyStop);
+  // Volume params are imperative (mutate layer directly); state only remembers the
+  // last slider values so sliders (uncontrolled via defaultValue) restore on remount.
+  const [values, setValues] = useState(DEFAULTS);
 
   const handleOpacity = useCallback((vals: number[]) => {
-    opacityRef.current = vals[0];
-    const multiplier = opacityToMultiplier(vals[0]);
-    for (const { layer } of layersRef.current) {
-      if ("opacityMultiplier" in layer) {
-        (layer as Record<string, unknown>).opacityMultiplier = multiplier;
-      }
-    }
+    setValues((v) => ({ ...v, opacity: vals[0] }));
+    setLayerParam(layersRef.current, "opacityMultiplier", opacityToMultiplier(vals[0]));
   }, []);
 
   const handleStep = useCallback((vals: number[]) => {
-    stepRef.current = vals[0];
-    for (const { layer } of layersRef.current) {
-      if ("relativeStepSize" in layer) {
-        (layer as Record<string, unknown>).relativeStepSize = vals[0];
-      }
-    }
+    setValues((v) => ({ ...v, step: vals[0] }));
+    setLayerParam(layersRef.current, "relativeStepSize", vals[0]);
   }, []);
 
   const handleEarlyStop = useCallback((vals: number[]) => {
-    earlyStopRef.current = vals[0];
-    for (const { layer } of layersRef.current) {
-      if ("earlyTerminationAlpha" in layer) {
-        (layer as Record<string, unknown>).earlyTerminationAlpha = vals[0];
-      }
-    }
+    setValues((v) => ({ ...v, earlyStop: vals[0] }));
+    setLayerParam(layersRef.current, "earlyTerminationAlpha", vals[0]);
   }, []);
 
   if (state.viewMode !== "3d") return null;
@@ -60,7 +54,7 @@ export function VolumeControls() {
       <VolumeRow
         label="α"
         title="Opacity (log scale)"
-        defaultValue={opacityRef.current}
+        defaultValue={values.opacity}
         min={0}
         max={1}
         step={0.01}
@@ -69,7 +63,7 @@ export function VolumeControls() {
       <VolumeRow
         label="stp"
         title="Step size"
-        defaultValue={stepRef.current}
+        defaultValue={values.step}
         min={0.25}
         max={3}
         step={0.25}
@@ -78,7 +72,7 @@ export function VolumeControls() {
       <VolumeRow
         label="e.s."
         title="Early stop α"
-        defaultValue={earlyStopRef.current}
+        defaultValue={values.earlyStop}
         min={0.8}
         max={1.0}
         step={0.01}

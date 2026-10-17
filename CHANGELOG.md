@@ -38,6 +38,7 @@
 
 ### 🚜 Refactor
 
+- Update every dependency to latest: Bun 1.4.3, Vite+ 1.3.0 (and its `vite` core override), Mosaic 0.33, DuckDB 1.5.6, idetik 0.48, React 19.3, zod 4.6. Mosaic 0.33 removed its socket connector, so the browser queries `/data/query` through `restConnector` and the `/mosaic` WebSocket adapter is gone. Code now passes Vite+'s React Compiler lint rules; virtualized lists use a package-owned `useVirtualizer` over `@tanstack/virtual-core` in place of `@tanstack/react-virtual`.
 - Route dependency management, tasks, checks, builds, and development through Vite+
 - Convert the product to a Bun/Vite+ monorepo with app, protocol, SDK, and Zarr workspaces
 - Extract Ochre, UI, built-in nodes, and graph evaluation into package-owned workspaces
@@ -66,6 +67,7 @@
 - Consolidate all wire-crossing Zod schemas into src/protocol/
 - _(server)_ Delete the plugin system: discovery, manifests, `/api/plugins/bootstrap` and `/plugins/*` assets, `ndea plugin`, YAML `plugin_paths`, and the SDK `PluginAPI`/`PluginFactory`/manifest schemas and `SDK_VERSION`
 - _(server)_ Delete the `embeddings/load|status`, `var-column/load|status`, and `export/start|status` WebSocket methods; the HTTP routes remain and `/ws` serves only `workspace/watch`
+- _(server)_ Delete the `/mosaic` WebSocket adapter; Mosaic 0.33 dropped `socketConnector`, so the browser `Coordinator` uses `restConnector` against `/data/query`
 
 ### ⚙️ Miscellaneous Tasks
 

@@ -11,7 +11,7 @@
  * whichever arrives last: eliminating the race condition where loading state
  * caused the canvas to unmount exactly when positions arrived.
  */
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef } from "react";
 import type { RowIndex } from "@ndea/sdk";
 import { useScatterDeviceLease, useScatterServices } from "../../context";
 import type { PanelId } from "../../contracts";
@@ -108,30 +108,35 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
   const initAbortRef = useRef<AbortController | null>(null);
 
   // Refs to latest props: lets maybeInitGpu be stable (empty deps)
-  // while always reading current values.
-  const dataRef = useRef<ScatterData | null>(null);
-  dataRef.current = data;
-  const positionKeyRef = useRef<string | null>(null);
-  positionKeyRef.current = positionKey;
+  // while always reading current values. Synced in a layout effect so they
+  // are current before any passive effect (and seeded for the mount commit,
+  // where the canvas callback refs fire before effects).
+  const dataRef = useRef<ScatterData | null>(data);
+  const positionKeyRef = useRef<string | null>(positionKey);
   const onGpuErrorRef = useRef(onGpuError);
-  onGpuErrorRef.current = onGpuError;
   const onRowIndicesChangeRef = useRef(onRowIndicesChange);
-  onRowIndicesChangeRef.current = onRowIndicesChange;
   const configRef = useRef(config);
-  configRef.current = config;
   // Latest point style, read in the (stable) init path to re-apply after reinit.
   const pointStyleRef = useRef(pointStyle);
-  pointStyleRef.current = pointStyle;
   const highlightRowIdsRef = useRef(highlightRowIds);
-  highlightRowIdsRef.current = highlightRowIds;
   const predicateFilterRowIdsRef = useRef(predicateFilterRowIds);
-  predicateFilterRowIdsRef.current = predicateFilterRowIds;
 
   // Device-lease state from the component host's DeviceBroker.
   const leaseState = useScatterDeviceLease();
   const services = useScatterServices();
   const leaseStateRef = useRef(leaseState);
-  leaseStateRef.current = leaseState;
+
+  useLayoutEffect(() => {
+    dataRef.current = data;
+    positionKeyRef.current = positionKey;
+    onGpuErrorRef.current = onGpuError;
+    onRowIndicesChangeRef.current = onRowIndicesChange;
+    configRef.current = config;
+    pointStyleRef.current = pointStyle;
+    highlightRowIdsRef.current = highlightRowIds;
+    predicateFilterRowIdsRef.current = predicateFilterRowIds;
+    leaseStateRef.current = leaseState;
+  });
 
   /**
    * Attempt GPU initialization. Called from both the canvas callback ref
@@ -243,7 +248,7 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
   // path). maybeInitGpu is guarded by initKeyRef, so this is a no-op once
   // initialized; on first lease resolution it is what kicks off GPU init.
   useEffect(() => {
-    maybeInitGpu();
+    if (leaseState.lease || leaseState.error) maybeInitGpu();
   }, [leaseState, maybeInitGpu]);
 
   // ResizeObserver: keeps canvas pixel dimensions in sync with CSS size

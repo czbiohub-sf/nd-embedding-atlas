@@ -2,7 +2,7 @@
  * Bun.serve HTTP + WebSocket server factory.
  *
  * - HTTP API routes (fetch-based) and the /data/query Mosaic endpoint
- * - WebSocket: framed `workspace/watch` sync and the /mosaic query socket
+ * - WebSocket: framed `workspace/watch` sync
  * - Static file serving for the React SPA frontend
  * - CORS headers for dev mode (Vite on :5173, backend on :5055)
  */
@@ -18,7 +18,6 @@ import { CropPool } from "./crop-pool.ts";
 import { servePlateFile } from "./plate.ts";
 import { serveStatic, resolveFrontendDir } from "./static.ts";
 import { handleWsMessage, handleWsOpen, handleWsClose, type ServerSocketContext } from "./ws.ts";
-import { handleMosaicWsMessage } from "./mosaic-ws.ts";
 import { createMcpEndpoint } from "./mcp.ts";
 
 // ─── CORS ───────────────────────────────────────────────────────────────────
@@ -94,12 +93,9 @@ export function createApp(options: CreateAppOptions) {
       // ── MCP (Streamable HTTP): its own Host/Origin/token guard, no CORS ──
       if (pathname === "/mcp") return mcp ? mcp(req) : new Response("Not Found", { status: 404 });
 
-      // ── WebSocket upgrade ───────────────────────────────────────
-      // /mosaic → Mosaic socketConnector framing (raw {type, sql}, binary arrow)
-      // any other path → ndea framed protocol (_id/_type JSON)
+      // ── WebSocket upgrade (ndea framed protocol, _id/_type JSON) ─
       if (req.headers.get("upgrade") === "websocket") {
-        const kind: ServerSocketContext["kind"] = pathname === "/mosaic" ? "mosaic" : "ndea";
-        const upgraded = server.upgrade(req, { data: { kind, state, store } });
+        const upgraded = server.upgrade(req, { data: { state } });
         if (!upgraded) {
           return withCors(new Response("WebSocket upgrade failed", { status: 400 }));
         }
@@ -124,21 +120,9 @@ export function createApp(options: CreateAppOptions) {
     },
 
     websocket: {
-      message(ws, raw) {
-        if (ws.data.kind === "mosaic") {
-          void handleMosaicWsMessage(ws, raw);
-          return;
-        }
-        handleWsMessage(ws, raw);
-      },
-      open(ws) {
-        if (ws.data.kind === "mosaic") return;
-        handleWsOpen(ws);
-      },
-      close(ws) {
-        if (ws.data.kind === "mosaic") return;
-        handleWsClose(ws);
-      },
+      message: handleWsMessage,
+      open: handleWsOpen,
+      close: handleWsClose,
     },
   });
 }

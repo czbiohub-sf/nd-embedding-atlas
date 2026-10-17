@@ -1,9 +1,7 @@
-import type { Idetik, Layer, LayerState, OrthographicCamera, PerspectiveCamera } from "@idetik/core";
+import type { Idetik, Layer, LayerState, OrthographicCamera, PerspectiveCamera, Viewport } from "@idetik/core";
 import { createContext } from "react";
 import type { ChannelStat } from "@ndea/protocol";
 
-// idetik 0.27 doesn't export `Viewport`; recover the exact type from Idetik.addViewport.
-type Viewport = ReturnType<Idetik["addViewport"]>;
 import type { MultiChannelLayers } from "./multi-channel-layers";
 
 // ── Tracked layer ────────────────────────────────────────────────────────────
@@ -132,7 +130,7 @@ export interface ViewerContextValue {
 
 /** @internal Canvas ref callback: only consumed by ViewerCanvas. */
 export interface ViewerInternalContext extends ViewerContextValue {
-  _canvasRef: (canvas: HTMLCanvasElement | null) => void;
+  _attachCanvas: (canvas: HTMLCanvasElement | null) => void;
 }
 
 export const ViewerContext = createContext<ViewerInternalContext | null>(null);

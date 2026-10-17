@@ -1,11 +1,17 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Coordinator, Selection, socketConnector } from "@uwdata/mosaic-core";
+import { useSelector } from "@tanstack/react-store";
+import { Coordinator, restConnector, Selection } from "@uwdata/mosaic-core";
 import { type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { MetadataSchema } from "@ndea/protocol";
 import { wsClient } from "@/lib/ws-client";
 import { scatterKeys } from "@/lib/query-keys";
 import type { Metadata, TrajectoryData } from "@/types";
-import { clearDatasetSession, publishDatasetSession, type DatasetSessionState } from "./dataset-session";
+import {
+  clearDatasetSession,
+  datasetSessionStore,
+  publishDatasetSession,
+  type DatasetSessionState,
+} from "./dataset-session";
 
 // ── Provider ───────────────────────────────────────────────────────────────
 
@@ -16,17 +22,15 @@ interface Props {
 const TABLE = "dataset";
 
 export function DatasetSessionProvider({ children }: Props) {
-  // Infrastructure: created once.
-  // socketConnector: one long-lived WS to /mosaic, no per-query HTTP handshake.
-  // Fallback `/data/query` REST endpoint remains for tests and curl.
-  const coordinator = useMemo(() => {
-    const wsProto = location.protocol === "https:" ? "wss:" : "ws:";
-    const uri = `${wsProto}//${location.host}/mosaic`;
-    return new Coordinator(socketConnector({ uri }), {
-      // keep cache / consolidate / preagg defaults
-      logger: import.meta.env.PROD ? null : console,
-    });
-  }, []);
+  // Infrastructure: created once. Mosaic queries POST to same-origin /data/query.
+  const coordinator = useMemo(
+    () =>
+      new Coordinator(restConnector({ uri: `${location.origin}/data/query` }), {
+        // keep cache / consolidate / preagg defaults
+        logger: import.meta.env.PROD ? null : console,
+      }),
+    [],
+  );
 
   const brushSelection = useMemo(() => Selection.crossfilter(), []);
 
@@ -101,12 +105,12 @@ export function DatasetSessionProvider({ children }: Props) {
   );
 
   const sessionValue = useMemo(() => (state ? { state, actions, runtime } : null), [state, actions, runtime]);
-  const [published, setPublished] = useState(false);
+  // Children read the session from the store, so render them only once it holds a value.
+  const published = useSelector(datasetSessionStore, (value) => value !== null);
 
   useLayoutEffect(() => {
     if (!sessionValue) return;
     publishDatasetSession(sessionValue);
-    setPublished(true);
     return () => clearDatasetSession(sessionValue);
   }, [sessionValue]);
 

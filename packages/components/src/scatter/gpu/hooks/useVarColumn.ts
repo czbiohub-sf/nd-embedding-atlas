@@ -28,11 +28,19 @@ export interface VarColumnResult {
 interface UseVarColumnOptions {
   /** Called with a status message when loading starts/ends: use to update the bottom bar. */
   onStatus?: (msg: string | null) => void;
+  /** Called once the materialized column is ready (event-time, not via an effect). */
+  onReady?: (column: string) => void;
 }
 
 export function useVarColumn(options?: UseVarColumnOptions): VarColumnResult {
-  const onStatusRef = useRef(options?.onStatus);
-  onStatusRef.current = options?.onStatus;
+  const onStatus = options?.onStatus;
+  const onReady = options?.onReady;
+  const onStatusRef = useRef(onStatus);
+  const onReadyRef = useRef(onReady);
+  useEffect(() => {
+    onStatusRef.current = onStatus;
+    onReadyRef.current = onReady;
+  }, [onStatus, onReady]);
 
   const [state, setState] = useState<VarColumnState>({
     status: "idle",
@@ -56,6 +64,7 @@ export function useVarColumn(options?: UseVarColumnOptions): VarColumnResult {
     stopRef.current = null;
     setState({ status: "ready", column, error: null });
     onStatusRef.current?.(null);
+    if (column) onReadyRef.current?.(column);
   }, []);
 
   const handleError = useCallback((error: string) => {

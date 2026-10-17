@@ -96,9 +96,7 @@ export interface RenderSettingsState {
 export interface ScatterServices {
   useSession(): ScatterSession;
   useFocusedPointMeta(rowIndex: RowIndex | null): FocusedPointMeta;
-  useColumnTypes(coordinator: Coordinator): Map<string, ColumnType> | null;
-  useColormapList(): { data?: ColormapList };
-  useColormapPalette(colormap: string, count: number): { data?: string[] };
+  getCategoricalPalette(colormap: string, count: number): string[];
   getColormapList(): ColormapList;
   categorize(coordinator: Coordinator, column: string, maxCategories: number): Promise<CategoryMapping>;
   buildColormapLut(name: string): Uint32Array;

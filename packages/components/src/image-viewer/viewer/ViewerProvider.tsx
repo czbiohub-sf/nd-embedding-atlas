@@ -6,6 +6,7 @@ import {
   OrthographicCamera,
   PanZoomControls,
   PerspectiveCamera,
+  Viewport,
 } from "@idetik/core";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useImageViewerServices } from "../context";
@@ -20,9 +21,6 @@ import {
   type ViewerState,
   type ViewMode,
 } from "./ViewerContext";
-
-// Idetik doesn't export `Viewport`; recover the exact type from Idetik.addViewport.
-type Viewport = ReturnType<Idetik["addViewport"]>;
 
 interface Props {
   children: ReactNode;
@@ -49,13 +47,10 @@ function createRuntime(canvas: HTMLCanvasElement, mode: ViewMode): RuntimeResult
   if (mode === "3d") {
     const camera = new PerspectiveCamera({ fov: 45 });
     const controls = new OrbitControls(camera, { radius: 500 });
-    const runtime = new Idetik({
-      canvas,
-      viewports: [{ camera, layers: [], cameraControls: controls }],
-    });
+    const viewport = new Viewport({ domElement: canvas, camera, cameraControls: controls });
     return {
-      runtime,
-      viewport: runtime.viewports[0],
+      runtime: new Idetik({ canvas, viewports: [viewport] }),
+      viewport,
       orthoCamera: null,
       perspectiveCamera: camera,
     };
@@ -63,13 +58,10 @@ function createRuntime(canvas: HTMLCanvasElement, mode: ViewMode): RuntimeResult
 
   const camera = new OrthographicCamera({ left: 0, right: 1, bottom: 0, top: 1 });
   const controls = new PanZoomControls(camera);
-  const runtime = new Idetik({
-    canvas,
-    viewports: [{ camera, layers: [], cameraControls: controls }],
-  });
+  const viewport = new Viewport({ domElement: canvas, camera, cameraControls: controls });
   return {
-    runtime,
-    viewport: runtime.viewports[0],
+    runtime: new Idetik({ canvas, viewports: [viewport] }),
+    viewport,
     orthoCamera: camera,
     perspectiveCamera: null,
   };
@@ -134,9 +126,9 @@ export function ViewerProvider({ children, channelInstance = "docked" }: Props) 
   }, []);
 
   // ── Size resync ───────────────────────────────────────────────────────
-  // Idetik installs its own ResizeObserver, but @idetik/core ≤0.23.x loses
-  // it after one stop()/start() cycle (PixelSizeObserver.disconnect never
-  // clears the handle, so the next connect() bails as "already connected").
+  // Idetik installs its own ResizeObserver, but @idetik/core (still as of
+  // 0.48) loses it after one stop()/start() cycle (PixelSizeObserver.disconnect
+  // never clears the handle, so the next connect() bails as "already connected").
   // The pause gate stops the loop whenever no observation is selected, so
   // the first resume leaves the runtime blind to container resizes: and
   // the dashboard reparents this canvas between very differently-sized
@@ -166,7 +158,7 @@ export function ViewerProvider({ children, channelInstance = "docked" }: Props) 
 
   // ── Canvas ref callback ───────────────────────────────────────────────
   // Only handles mount/unmount. Mode changes are handled by the effect below.
-  const canvasRef = useCallback(
+  const attachCanvas = useCallback(
     (canvas: HTMLCanvasElement | null) => {
       canvasElRef.current = canvas;
       if (canvas && !runtimeRef.current) {
@@ -386,8 +378,8 @@ export function ViewerProvider({ children, channelInstance = "docked" }: Props) 
   }, [zIndex, channelInstance, sharedState]);
 
   const value = useMemo<ViewerInternalContext>(
-    () => ({ state, actions, meta, _canvasRef: canvasRef }),
-    [state, actions, meta, canvasRef],
+    () => ({ state, actions, meta, _attachCanvas: attachCanvas }),
+    [state, actions, meta, attachCanvas],
   );
 
   return <ViewerContext value={value}>{children}</ViewerContext>;

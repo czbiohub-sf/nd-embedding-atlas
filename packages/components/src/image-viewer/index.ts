@@ -1,7 +1,6 @@
 export { createImageViewerDefinition } from "./definition";
 export type {
   ImageViewerConfig,
-  ImageViewerOptions,
   ImageViewerServices,
   ImageViewerSessionSnapshot,
   ImageViewerSharedStateService,

@@ -37,31 +37,21 @@ function getInitialTheme(): Theme {
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(getInitialTheme);
 
-  const applyTheme = useCallback((t: Theme) => {
-    const root = document.documentElement;
-    if (t === "dark") {
-      root.classList.add("dark");
-    } else {
-      root.classList.remove("dark");
-    }
+  // Sync the DOM class and persisted preference with the current theme.
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", theme === "dark");
     try {
-      localStorage.setItem("ndea-theme", t);
+      localStorage.setItem("ndea-theme", theme);
     } catch {
       /* ignore */
     }
-    setThemeState(t);
-  }, []);
-
-  // Apply on mount
-  useEffect(() => {
-    applyTheme(theme);
-  }, [applyTheme, theme]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [theme]);
 
   const toggle = useCallback(() => {
-    applyTheme(theme === "dark" ? "light" : "dark");
-  }, [theme, applyTheme]);
+    setThemeState((t) => (t === "dark" ? "light" : "dark"));
+  }, []);
 
-  const setTheme = useCallback((t: Theme) => applyTheme(t), [applyTheme]);
+  const setTheme = useCallback((t: Theme) => setThemeState(t), []);
 
   return <ThemeContext value={{ theme, toggle, setTheme }}>{children}</ThemeContext>;
 }

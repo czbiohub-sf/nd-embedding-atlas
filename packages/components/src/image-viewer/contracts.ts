@@ -6,8 +6,6 @@ export interface ImageViewerConfig {
   datasetKey: string | null;
 }
 
-export type ImageViewerOptions = Record<never, never>;
-
 export interface ImageViewerTrajectory {
   readonly tIndex: number;
   readonly points: readonly TrajectoryFrame[];

@@ -265,9 +265,7 @@ export function ScatterView({
     let cancelled = false;
     const tid = setTimeout(() => {
       coordinator
-        .query(`SELECT __row_index__ FROM dataset WHERE "${col}" >= ${vmin} AND "${col}" <= ${vmax}`, {
-          type: "json",
-        })
+        .query(`SELECT __row_index__ FROM dataset WHERE "${col}" >= ${vmin} AND "${col}" <= ${vmax}`)
         .then((result: unknown) => {
           if (cancelled) return;
           const indices = toRows<{ __row_index__: number }>(result).map((r) => rowIndex(r.__row_index__));

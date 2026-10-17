@@ -11,7 +11,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { RowIndex } from "@ndea/sdk";
 import { capabilitiesOf } from "@ndea/sdk";
-import { useFocus, useScatterHost, useScatterServices } from "./context";
+import { useFocus, useScatterHost, useScatterSession } from "./context";
 import { selectAnyTrajectory } from "./helpers";
 import type { IsolationCapability } from "./gpu/handle-capabilities";
 import { useEmbeddingLoader } from "./gpu/hooks/useEmbeddingLoader";
@@ -19,7 +19,7 @@ import { useDisabledBridge } from "./gpu/hooks/useDisabledBridge";
 import { useIsolationBridge } from "./gpu/hooks/useIsolationBridge";
 import { useScatterColorState } from "./gpu/hooks/useScatterColorState";
 import { useTrajectoryLoader } from "./gpu/hooks/useTrajectoryLoader";
-import type { AxisState } from "./contracts";
+import type { AxisState, FocusedPointMeta } from "./contracts";
 import { LegendProvider } from "./LegendContext";
 import { ScatterToolbar } from "./ScatterToolbar";
 import { useScatterUIState } from "./scatter-ui-store";
@@ -32,13 +32,14 @@ export interface ScatterContentProps {
   /** container header slot: when present the toolbar portals there
    *  (compact, 26px-friendly) instead of docking above the canvas */
   toolbarTarget?: HTMLElement;
+  /** Metadata of the host's focused point (bound by the view factory). */
+  focusedPointMeta: FocusedPointMeta;
 }
 
 // ── ScatterContent ────────────────────────────────────────────────────────────
 
-export function ScatterContent({ initialObsmKey, toolbarTarget }: ScatterContentProps) {
-  const services = useScatterServices();
-  const { state, actions, runtime } = services.useSession();
+export function ScatterContent({ initialObsmKey, toolbarTarget, focusedPointMeta }: ScatterContentProps) {
+  const { state, actions, runtime } = useScatterSession();
   // The host owns this instance's WASM bitmap lifecycle (§6.6).
   const host = useScatterHost();
   const { metadata } = state;
@@ -146,7 +147,6 @@ export function ScatterContent({ initialObsmKey, toolbarTarget }: ScatterContent
     yCol,
     categoryCol,
   });
-  const focusedPointMeta = services.useFocusedPointMeta(focusedRowIndex);
 
   const onToggleTrajectory = trajectory
     ? () => actions.clearTrajectory(trajectory.datasetKey ?? "")

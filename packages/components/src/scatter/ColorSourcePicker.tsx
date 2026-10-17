@@ -1,5 +1,5 @@
 import { ChevronDownIcon } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useScatterUIDispatch } from "./scatter-ui-store";
 import {
   Command,
@@ -73,27 +73,22 @@ export function ColorSourcePicker({
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<"obs" | "var">("obs");
   const [varQuery, setVarQuery] = useState("");
-  const [selectedLayer, setSelectedLayer] = useState("X");
+  const [preferredLayer, setSelectedLayer] = useState("X");
 
   const { names, isLoading: varsLoading } = useVarSearch(varQuery);
   const layers = useLayerNames();
   const { setStatus } = useScatterUIDispatch();
-  const { materialize, status: varStatus, column: varColumn } = useVarColumn({ onStatus: setStatus });
-
   // When var materialization completes, propagate the ColorSource and close.
-  useEffect(() => {
-    if (varStatus === "ready" && varColumn) {
-      onSetColorSource(colorSourceFromString(varColumn));
+  const { materialize, status: varStatus } = useVarColumn({
+    onStatus: setStatus,
+    onReady: (column) => {
+      onSetColorSource(colorSourceFromString(column));
       setOpen(false);
-    }
-  }, [varStatus, varColumn, onSetColorSource]);
+    },
+  });
 
-  // Ensure selectedLayer stays valid when layers load.
-  useEffect(() => {
-    if (layers.length > 0 && !layers.includes(selectedLayer)) {
-      setSelectedLayer(layers[0]);
-    }
-  }, [layers, selectedLayer]);
+  // Fall back to the first layer when the chosen one isn't available.
+  const selectedLayer = layers.length > 0 && !layers.includes(preferredLayer) ? layers[0] : preferredLayer;
 
   // ── Trigger display ──────────────────────────────────────────────────────────
   let triggerContent: React.ReactNode;
@@ -122,7 +117,7 @@ export function ColorSourcePicker({
   // ── Var selection handler ────────────────────────────────────────────────────
   function handleVarSelect(varName: string) {
     materialize(varName, selectedLayer);
-    // Popover stays open while loading (useEffect closes it on "ready")
+    // Popover stays open while loading (onReady closes it)
   }
 
   // ── Render ───────────────────────────────────────────────────────────────────

@@ -60,8 +60,8 @@ entrypoints across workspaces.
 
 - `createApp()` in `apps/ndea/src/server/app.ts` creates the Bun HTTP and
   WebSocket server.
-- `/mosaic` carries the preferred long-lived Mosaic WebSocket protocol.
-  `/data/query` remains the REST test and curl fallback.
+- `/data/query` serves Mosaic's `restConnector` (`POST { type, sql }`;
+  `arrow` returns Arrow IPC bytes, `exec` returns `{}`).
 - `/ws` carries the framed `{ _id, _type }` ndea protocol; its one method is
   `workspace/watch`.
 - REST routes cover health, config, embeddings, observations, scatter data,

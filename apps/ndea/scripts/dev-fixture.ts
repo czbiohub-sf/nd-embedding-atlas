@@ -7,11 +7,11 @@
  * every UI change unverifiable on a machine with no dataset. This mirrors the
  * mock-store pattern already used by `src/server/__tests__/store.test.ts`
  * (`DatasetQuerySession.fromInit` + raw SQL) and drives the real server, so the
- * Mosaic websocket, the `dataset` view, and the REST routes are all genuine.
+ * Mosaic query route, the `dataset` view, and the REST routes are all genuine.
  *
  * Usage:
  *   vp run --filter @ndea/app dev:fixture # backend, API-only, :5055
- *   vp dev apps/ndea                      # frontend, :5173 (proxies /data, /api, /mosaic)
+ *   vp dev apps/ndea                      # frontend, :5173 (proxies /data, /api, /ws)
  */
 
 import type { PlateChannel } from "@ndea/protocol";

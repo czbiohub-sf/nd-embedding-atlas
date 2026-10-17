@@ -6,5 +6,5 @@ export { AnnotateTable } from "./AnnotateTable";
 export { CommitPanel } from "./CommitPanel";
 export { CropThumb } from "./CropThumb";
 export { RangeBracket } from "./RangeBracket";
-export type { AnnotateConfig, AnnotateOptions } from "./contracts";
+export type { AnnotateConfig } from "./contracts";
 export type { AnnotateServices } from "./services";
