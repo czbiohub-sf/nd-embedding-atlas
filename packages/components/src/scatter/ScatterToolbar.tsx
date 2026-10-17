@@ -8,7 +8,7 @@
  * primary-filled bracketed chip [embedding]; everything else sits ghosted.
  *
  * Two zones in one row (docked wraps when narrow; header clips):
- *  left  → [⋰] bracket icon + embedding chip + X/Y dim + COL pickers
+ *  left  → [⋰] bracket icon + embedding chip + X/Y(/Z) dims + 2D/3D (persp/ortho) + COL pickers
  *  right → selection tools + track/fit
  */
 
@@ -60,6 +60,10 @@ interface Props {
   loadingKey: string | null;
   currentEntryLoaded: boolean;
   onSetAxes: (axes: AxisState) => void;
+  /** Switch between 2D and 3D; undefined (disabled) when the embedding has fewer than 3 columns. */
+  onToggle3D?: () => void;
+  projection: "perspective" | "orthographic";
+  onToggleProjection: () => void;
 
   // Color
   colorSource: ColorSource;
@@ -120,6 +124,9 @@ export function ScatterToolbar({
   loadingKey,
   currentEntryLoaded,
   onSetAxes,
+  onToggle3D,
+  projection,
+  onToggleProjection,
   colorSource,
   obsColumns,
   colorMode,
@@ -152,7 +159,9 @@ export function ScatterToolbar({
   // header slot: utility buttons (everything past the selection tools) drop
   // out together when the slot is tight: the marquee/lasso pair survives
   const util = cn(btn, compact && "hidden @[22rem]:flex");
-
+  // Mono caption-sized text toggles (palette/scale, 2D/3D, persp/ortho).
+  const textToggle =
+    "px-0.5 font-mono text-3xs leading-none text-muted-foreground/70 uppercase tracking-wide transition-colors hover:text-foreground disabled:opacity-40 disabled:hover:text-muted-foreground/70";
   // Memoize option arrays to avoid churn on every render
   const embeddingOptions = useMemo<ComboboxOption[]>(
     () => obsmKeys.map((k) => ({ value: k, label: k.replace(/^X_/, "") })),
@@ -182,14 +191,14 @@ export function ScatterToolbar({
           <EmbeddingPicker
             obsm={obsm}
             activeKey={axes.obsmKey}
-            onSelect={(v) => onSetAxes({ obsmKey: v, xDim: 0, yDim: 1 })}
+            onSelect={(v) => onSetAxes({ ...axes, obsmKey: v, xDim: 0, yDim: 1 })}
             triggerClassName={chip}
             hideChevron
           />
         ) : (
           <Combobox
             value={axes.obsmKey}
-            onValueChange={(v) => v && onSetAxes({ obsmKey: v, xDim: 0, yDim: 1 })}
+            onValueChange={(v) => v && onSetAxes({ ...axes, obsmKey: v, xDim: 0, yDim: 1 })}
             options={embeddingOptions}
             placeholder="embedding"
             searchPlaceholder="Search embeddings…"
@@ -231,6 +240,41 @@ export function ScatterToolbar({
               hideChevron
             />
           </span>
+          {axes.zDim !== null ? (
+            <span className="flex items-center gap-0.5" title="Z axis: embedding dimension">
+              <span className={captionCls}>Z</span>
+              <Combobox
+                value={String(axes.zDim)}
+                onValueChange={(v) => v !== "" && onSetAxes({ ...axes, zDim: Number(v) })}
+                options={dimOptions}
+                placeholder="2"
+                searchPlaceholder="Search dims…"
+                disabled={disabled || !currentEntryLoaded}
+                triggerClassName={cn(trigger, "max-w-[3rem] justify-center")}
+                contentClassName="w-32"
+                hideChevron
+              />
+            </span>
+          ) : null}
+          <button
+            type="button"
+            onClick={onToggle3D}
+            disabled={!onToggle3D || disabled}
+            title={onToggle3D ? "Switch between 2D and 3D" : "3D needs an embedding with 3+ columns"}
+            className={textToggle}
+          >
+            {axes.zDim === null ? "3d" : "2d"}
+          </button>
+          {axes.zDim !== null ? (
+            <button
+              type="button"
+              onClick={onToggleProjection}
+              title="Perspective or orthographic projection"
+              className={textToggle}
+            >
+              {projection === "perspective" ? "persp" : "ortho"}
+            </button>
+          ) : null}
         </div>
 
         {/* Color-by column: gated at 17rem of slot width in the header */}
@@ -267,10 +311,7 @@ export function ScatterToolbar({
           <button
             type="button"
             onClick={onToggleColorMode}
-            className={cn(
-              "px-0.5 font-mono text-3xs leading-none text-muted-foreground/70 uppercase tracking-wide transition-colors hover:text-foreground",
-              compact && "hidden @[30rem]:block",
-            )}
+            className={cn(textToggle, compact && "hidden @[30rem]:block")}
           >
             {colorMode === "continuous" ? "scale" : "palette"}
           </button>

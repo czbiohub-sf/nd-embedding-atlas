@@ -13,14 +13,14 @@ export interface HighlightFocusOverlayHandle {
   update(): void;
 }
 
-/** Minimal GPU interface needed to place the marker. */
+/** Minimal GPU interface needed to place the marker; null behind a 3D camera. */
 interface Projector {
-  project(x: number, y: number): { x: number; y: number };
+  project(x: number, y: number, z: number): { x: number; y: number } | null;
 }
 
 interface Props {
-  /** Normalized [-1,1] world position of the focused point, or null when none. */
-  worldPos: readonly [number, number] | null;
+  /** Normalized [-1,1] world position of the focused point (z = 0 in 2D), or null when none. */
+  worldPos: readonly [number, number, number] | null;
   containerRef: RefObject<HTMLDivElement | null>;
   gpuRef: RefObject<Projector | null>;
 }
@@ -67,7 +67,12 @@ export const HighlightFocusOverlay = forwardRef<HighlightFocusOverlayHandle, Pro
       if (svg) svg.innerHTML = "";
       return;
     }
-    const { x, y } = gpu.project(worldPos[0], worldPos[1]);
+    const screen = gpu.project(worldPos[0], worldPos[1], worldPos[2]);
+    if (!screen) {
+      svg.innerHTML = "";
+      return;
+    }
+    const { x, y } = screen;
     // Resolve the dim to a literal: CSS var() does NOT resolve inside an SVG
     // presentation attribute (only its computed value does), so read the page
     // background. `--color-base` was read here before and never existed, so this

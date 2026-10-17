@@ -42,7 +42,7 @@ Each embedding must be a dense rank-2 array:
 shape = [n_obs, n_dimensions]
 ```
 
-Two columns are sufficient for a scatter. Higher-dimensional embeddings are supported; users can select which dimensions map to X and Y. Sparse CSR/CSC matrices are not accepted for `obsm` embeddings.
+Two columns are sufficient for a scatter. Higher-dimensional embeddings are supported; users can select which dimensions map to X and Y. With three or more columns the Scatter toolbar's `3d` toggle adds a Z dimension (drag orbits, right- or Ctrl-drag pans, the wheel dollies toward the cursor; `persp`/`ortho` switches the projection). Sparse CSR/CSC matrices are not accepted for `obsm` embeddings.
 
 ## Variables and layers
 

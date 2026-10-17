@@ -340,11 +340,8 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
       setContinuousLut(lut) {
         gpuRef.current?.setContinuousLut(lut);
       },
-      getViewState() {
-        return gpuRef.current?.getViewState() ?? { panX: 0, panY: 0, zoom: 1 };
-      },
       project(x, y, z) {
-        return gpuRef.current?.project(x, y, z) ?? { x: 0, y: 0 };
+        return gpuRef.current?.project(x, y, z) ?? null;
       },
       setExternalSelection(params) {
         gpuRef.current?.setExternalSelection(params);
@@ -394,8 +391,11 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
       setViewState(state) {
         gpuRef.current?.setViewState(state);
       },
-      animateToViewState(state, durationMs) {
-        gpuRef.current?.animateToViewState(state, durationMs);
+      fitView() {
+        gpuRef.current?.fitView();
+      },
+      setProjection(projection) {
+        gpuRef.current?.setProjection(projection);
       },
       setForcedSelectionMode(mode) {
         gpuRef.current?.setForcedSelectionMode(mode);

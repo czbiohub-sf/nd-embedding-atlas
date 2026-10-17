@@ -1,7 +1,7 @@
 /**
  * Binary scatter data endpoints for the WebGPU scatter renderer.
  *
- * GET /api/scatter-positions         : v1, Float32 interleaved x/y positions
+ * GET /api/scatter-positions         : v1, Float32 position columns (x, y, then z in 3D)
  * GET /api/scatter-categories        : v1, Uint8 category indices
  * GET /api/scatter-continuous-values : v2, Float32 raw values + vmin/vmax header
  *                                        (frontend applies colormap via ochre LUT on GPU)
@@ -71,18 +71,20 @@ export async function getOrCreateObsmLoader(state: ServerSession, embedding: str
 /**
  * Handle GET /api/scatter-positions
  *
- * Returns float32 interleaved x/y positions normalized to [-1, 1].
- * Query params: embedding, x_col, y_col
+ * Returns float32 position columns normalized to [-1, 1]: n x values, n y
+ * values, then n z values when `z_col` asks for 3D (`header.ndim`).
+ * Query params: embedding, x_col, y_col, z_col (optional)
  *
- * Phase 0: bypasses DuckDB entirely. Reads two columns directly from the
- * ObsmSliceLoader (zarr slice reads, ~one column per dim) and builds the
- * interleaved Float32 buffer in JS. Aborts propagate through `req.signal`
- * into the zarr read so abandoned fetches don't waste bandwidth.
+ * Phase 0: bypasses DuckDB entirely. Reads the columns directly from the
+ * ObsmSliceLoader (zarr slice reads, ~one column per dim). Aborts propagate
+ * through `req.signal` into the zarr read so abandoned fetches don't waste
+ * bandwidth.
  */
 export async function handleScatterPositions(url: URL, state: ServerSession, signal: AbortSignal): Promise<Response> {
   const embedding = url.searchParams.get("embedding");
   const xCol = url.searchParams.get("x_col");
   const yCol = url.searchParams.get("y_col");
+  const zCol = url.searchParams.get("z_col");
 
   if (!embedding || !xCol || !yCol) {
     return Response.json({ error: "Missing required params: embedding, x_col, y_col" }, { status: 400 });
@@ -95,63 +97,66 @@ export async function handleScatterPositions(url: URL, state: ServerSession, sig
     );
   }
 
-  const xDim = parseDimIndex(xCol);
-  const yDim = parseDimIndex(yCol);
-  if (xDim === null || yDim === null) {
+  const dims = [xCol, yCol, ...(zCol ? [zCol] : [])].map(parseDimIndex);
+  if (!dims.every((dim) => dim !== null)) {
     return Response.json(
-      { error: `x_col / y_col must end in "_<dim>" (got x_col="${xCol}", y_col="${yCol}")` },
+      { error: `x_col / y_col / z_col must end in "_<dim>" (got x_col="${xCol}", y_col="${yCol}", z_col="${zCol}")` },
       { status: 400 },
     );
   }
 
   try {
     const loader = await getOrCreateObsmLoader(state, embedding);
-    // Fetch both dims in parallel: they share the loader's dedup map, so
-    // repeat calls with the same colIndex don't double-read.
-    const [xs, ys] = await Promise.all([loader.loadColumn(xDim, signal), loader.loadColumn(yDim, signal)]);
+    const outOfRange = dims.find((dim) => dim >= loader.width);
+    if (outOfRange !== undefined) {
+      return Response.json(
+        {
+          error: `"${embedding}" has ${loader.width} columns; dim ${outOfRange} is out of range${zCol ? " (3D needs at least 3)" : ""}`,
+        },
+        { status: 400 },
+      );
+    }
+    // Fetch dims in parallel: they share the loader's dedup map, so repeat
+    // calls with the same colIndex don't double-read.
+    const columns = await Promise.all(dims.map((dim) => loader.loadColumn(dim, signal)));
 
     if (signal.aborted) {
       return new Response("aborted", { status: 499 });
     }
 
-    if (xs.length !== ys.length) {
-      throw new Error(`dim length mismatch: x=${xs.length}, y=${ys.length}`);
+    const n = columns[0].length;
+    if (columns.some((column) => column.length !== n)) {
+      throw new Error(`dim length mismatch: ${columns.map((column) => column.length).join(" / ")}`);
     }
-    const n = xs.length;
     // Point i is `__row_index__ = i`: the loader aligns columns to obs_base row
     // order, and clients index row bitmasks and sets by point index.
     if (n !== state.store.nObs) throw new Error(`embedding has ${n} rows, dataset has ${state.store.nObs}`);
 
-    // Normalize to [-1, 1]. NaN values are coerced to 0 for rendering;
-    // downstream consumers already treat non-finite positions as hidden.
+    // Normalize every axis by one max-abs (keeps the aspect). NaN values are
+    // coerced to 0 for rendering.
     let maxAbs = 0;
-    for (let i = 0; i < n; i++) {
-      const xv = xs[i];
-      const yv = ys[i];
-      const ax = Number.isFinite(xv) ? Math.abs(xv) : 0;
-      const ay = Number.isFinite(yv) ? Math.abs(yv) : 0;
-      if (ax > maxAbs) maxAbs = ax;
-      if (ay > maxAbs) maxAbs = ay;
+    for (const column of columns) {
+      for (const v of column) if (Number.isFinite(v) && Math.abs(v) > maxAbs) maxAbs = Math.abs(v);
     }
 
-    const interleaved = new Float32Array(n * 2);
+    const positions = new Float32Array(n * columns.length);
     if (maxAbs > 0) {
-      for (let i = 0; i < n; i++) {
-        const xv = xs[i];
-        const yv = ys[i];
-        interleaved[i * 2] = Number.isFinite(xv) ? xv / maxAbs : 0;
-        interleaved[i * 2 + 1] = Number.isFinite(yv) ? yv / maxAbs : 0;
-      }
+      columns.forEach((column, axis) => {
+        for (let i = 0; i < n; i++) {
+          const v = column[i];
+          positions[axis * n + i] = Number.isFinite(v) ? v / maxAbs : 0;
+        }
+      });
     }
 
     const header = {
       numCells: n,
       embeddingKey: embedding,
-      ndim: 2,
+      ndim: columns.length,
       positionScale: maxAbs > 0 ? maxAbs : 1.0,
     };
 
-    return binaryResponse(packBinary(header, new Uint8Array(interleaved.buffer)));
+    return binaryResponse(packBinary(header, new Uint8Array(positions.buffer)));
   } catch (err) {
     if (signal.aborted) return new Response("aborted", { status: 499 });
     const message = err instanceof Error ? err.message : String(err);

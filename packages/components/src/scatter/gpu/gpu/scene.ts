@@ -1,12 +1,4 @@
-import {
-  tgpu,
-  type StorageFlag,
-  type TgpuBuffer,
-  type TgpuFn,
-  type TgpuReadonly,
-  type TgpuSlot,
-  type TgpuUniform,
-} from "typegpu";
+import { tgpu, type StorageFlag, type TgpuBuffer, type TgpuFn, type TgpuReadonly, type TgpuUniform } from "typegpu";
 import * as d from "typegpu/data";
 import * as std from "typegpu/std";
 import type { TgpuRoot } from "../../gpu/types";
@@ -58,6 +50,8 @@ export const Frame = d.struct({
   densityLo: d.u32,
   /** Capacity of `ids`; more visible points than this force the density path. */
   cap: d.u32,
+  /** 1: compaction writes ids even in density mode (the pick pass draws them). */
+  writeIds: d.u32,
   /** Density splat grid: the canvas in device px (a half-res grid quadrupled atomic contention: 4.2 vs 2.5 ms at 10M). */
   grid: d.vec2u,
 });
@@ -74,21 +68,22 @@ type F32Array = d.WgslArray<d.F32>;
  */
 export interface Scene {
   readonly n: number;
+  readonly ndim: 2 | 3;
   /** Words per bit layer: ceil(n / 32). */
   readonly words: number;
   /** Capacity of `ids`. */
   readonly cap: number;
   readonly posX: TgpuReadonly<F32Array>;
   readonly posY: TgpuReadonly<F32Array>;
+  /** 3D only. */
+  readonly posZ: TgpuReadonly<F32Array> | null;
   readonly cats: TgpuReadonly<U32Array>;
   readonly values: TgpuReadonly<F32Array>;
   readonly bits: TgpuBuffer<U32Array> & StorageFlag;
   readonly ids: TgpuBuffer<U32Array> & StorageFlag;
   readonly frame: TgpuUniform<typeof Frame>;
   readonly colors: TgpuUniform<d.WgslArray<d.Vec4f>>;
-  /** World position of point i: 2D reads posX/posY with z = 0; P3 binds a 3D variant. */
-  readonly worldPos: TgpuSlot<PointFn<d.Vec4f>>;
-  /** Clip-space position of point i: `viewProj · worldPos(i)`. */
+  /** Clip-space position of point i: `viewProj · (x, y, z or 0, 1)`. */
   readonly project: PointFn<d.Vec4f>;
   /** Category index of point i. */
   readonly catOf: PointFn<d.U32>;
@@ -102,10 +97,12 @@ export interface Scene {
   readonly pointColor: PointFn<d.Vec4f>;
 }
 
-export function createScene(root: TgpuRoot, n: number, cap: number): Scene {
+export function createScene(root: TgpuRoot, n: number, cap: number, ndim: 2 | 3): Scene {
   const words = Math.ceil(n / 32);
   const posX = root.createReadonly(d.arrayOf(d.f32, Math.max(1, n)));
   const posY = root.createReadonly(d.arrayOf(d.f32, Math.max(1, n)));
+  // No z column in 2D.
+  const posZ = ndim === 3 ? root.createReadonly(d.arrayOf(d.f32, Math.max(1, n))) : null;
   // Category u8 ×4 per word; continuous values f32.
   const cats = root.createReadonly(d.arrayOf(d.u32, Math.max(1, Math.ceil(n / 4))));
   const values = root.createReadonly(d.arrayOf(d.f32, Math.max(1, n)));
@@ -117,25 +114,21 @@ export function createScene(root: TgpuRoot, n: number, cap: number): Scene {
   // Categorical palette (first `paletteLen` entries) or the 256-entry continuous LUT.
   const colors = root.createUniform(d.arrayOf(d.vec4f, 256));
 
-  /** World position of point i. P3 binds a 3D variant (reads posZ) through this slot. */
-  const worldPos = tgpu.slot(
-    tgpu.fn(
-      [d.u32],
-      d.vec4f,
-    )((i) => {
-      "use gpu";
-      return d.vec4f(posX.$[i], posY.$[i], 0, 1);
-    }),
-  );
-
-  /** Clip-space position of point i. */
-  const project = tgpu.fn(
-    [d.u32],
-    d.vec4f,
-  )((i) => {
-    "use gpu";
-    return std.mul(frame.$.viewProj, worldPos.$(i));
-  });
+  const project = posZ
+    ? tgpu.fn(
+        [d.u32],
+        d.vec4f,
+      )((i) => {
+        "use gpu";
+        return std.mul(frame.$.viewProj, d.vec4f(posX.$[i], posY.$[i], posZ.$[i], 1));
+      })
+    : tgpu.fn(
+        [d.u32],
+        d.vec4f,
+      )((i) => {
+        "use gpu";
+        return std.mul(frame.$.viewProj, d.vec4f(posX.$[i], posY.$[i], 0, 1));
+      });
 
   const catOf = tgpu.fn(
     [d.u32],
@@ -253,17 +246,18 @@ export function createScene(root: TgpuRoot, n: number, cap: number): Scene {
 
   return {
     n,
+    ndim,
     words,
     cap,
     posX,
     posY,
+    posZ,
     cats,
     values,
     bits,
     ids,
     frame,
     colors,
-    worldPos,
     project,
     catOf,
     isoPass,

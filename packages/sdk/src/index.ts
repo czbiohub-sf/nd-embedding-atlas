@@ -30,9 +30,12 @@ export type {
   MaterializedFilterRows,
   NotificationAPI,
   OrderingCoordinationAPI,
+  PanZoomView,
   RowSetPublishAPI,
   ResolvedFilter,
+  TurntableView,
   ViewCoordinationAPI,
+  ViewSyncState,
 } from "./host";
 
 export type { JsonValue } from "./json";

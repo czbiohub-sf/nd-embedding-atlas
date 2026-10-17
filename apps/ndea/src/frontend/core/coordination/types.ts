@@ -44,7 +44,20 @@ export const COORDINATION_TYPES = {
   },
   viewSync: {
     label: "view sync",
-    value: z.object({ panX: z.number(), panY: z.number(), zoom: z.number(), src: z.string().optional() }).strict(),
+    value: z
+      .object({
+        panX: z.number(),
+        panY: z.number(),
+        zoom: z.number(),
+        // Written by 3D scatters (turntable); 2D views ignore them.
+        yaw: z.number().optional(),
+        pitch: z.number().optional(),
+        distance: z.number().positive().optional(),
+        target: z.tuple([z.number(), z.number(), z.number()]).optional(),
+        projection: z.enum(["perspective", "orthographic"]).optional(),
+        src: z.string().optional(),
+      })
+      .strict(),
     defaultValue: { panX: 0, panY: 0, zoom: 1 },
   },
   ordering: {

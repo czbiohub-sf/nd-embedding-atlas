@@ -14,7 +14,7 @@ export interface TrajectoryOverlaySvgHandle {
 
 /** Minimal GPU interface needed by the trajectory overlay. */
 interface Projector {
-  project(x: number, y: number): { x: number; y: number };
+  project(x: number, y: number): { x: number; y: number } | null;
 }
 
 interface Props {
@@ -71,6 +71,8 @@ export const TrajectoryOverlaySvg = forwardRef<TrajectoryOverlaySvgHandle, Props
 
     const s = positionScale > 0 ? positionScale : 1;
     const screenPts = points.map((p) => gpu.project(p.emb_x / s, p.emb_y / s));
+    // 2D only (ScatterView hides it in 3D), where every point projects.
+    if (!screenPts.every((p) => p !== null)) return;
 
     // Arrowhead marker: one per distinct color, keyed by color string
     const defs = document.createElementNS(SVG_NS, "defs");

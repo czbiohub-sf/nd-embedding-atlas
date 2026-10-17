@@ -14,8 +14,11 @@ import type {
   FocusCoordinationAPI,
   NotificationAPI,
   OrderingCoordinationAPI,
+  PanZoomView,
   RowIndex,
+  TurntableView,
   ViewCoordinationAPI,
+  ViewSyncState,
 } from "@ndea/sdk";
 import type { DeviceBroker, DeviceLease } from "@/core/gpu/device-broker";
 
@@ -245,7 +248,7 @@ export function createComponentHost<Config>(
       get linked() {
         return viewSync.linked;
       },
-      broadcast(state: { panX: number; panY: number; zoom: number }) {
+      broadcast(state: PanZoomView | TurntableView) {
         assertActive();
         viewSync.broadcast(state);
       },
@@ -255,8 +258,7 @@ export function createComponentHost<Config>(
       },
       ...(viewSync.subscribe
         ? {
-            subscribe: (callback: (state: { panX: number; panY: number; zoom: number }) => void) =>
-              trackDisposer(viewSync.subscribe!(callback)),
+            subscribe: (callback: (state: ViewSyncState) => void) => trackDisposer(viewSync.subscribe!(callback)),
           }
         : {}),
     }),

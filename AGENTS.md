@@ -149,8 +149,14 @@ entrypoints across workspaces.
 ### Frontend
 
 - React 19 renders the dashboard.
-- TypeGPU drives the WebGPU scatter plot, including GPU lasso and marquee
-  selection.
+- TypeGPU drives the WebGPU scatter plot (`packages/components/src/scatter/gpu/gpu/`):
+  SoA position columns (`/api/scatter-positions` sends x, y, and z when the
+  element's `zDim` prop asks for 3D), one `project()` shared by every pass,
+  compaction + `drawIndirect`, a density splat when too many points are
+  visible, and GPU lasso/marquee on projected positions. `camera.ts` has
+  `PanZoom2D` and `Turntable3D`; 3D draws opaque depth-tested discs, and its
+  `viewSync` cells carry `yaw/pitch/distance/target/projection` (2D views skip
+  them).
 - Mosaic and server-side DuckDB drive cross-filtered scatter, table, and chart
   views. The `vgplot` component renders its props (`entries`, `attributes`) as
   a Mosaic plot spec with the host-supplied `$table`, `$scope`, and `$brush`

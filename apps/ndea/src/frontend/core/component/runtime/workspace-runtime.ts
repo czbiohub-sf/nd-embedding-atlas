@@ -17,7 +17,7 @@ import type {
 
 import type { CoordinationScopeCellPort } from "@/core/coordination/coordination";
 import { createFilterBinding } from "@/core/coordination/filter-binding";
-import type { CoordinationTypeId, CoordinationValue } from "@/core/coordination/types";
+import { COORDINATION_TYPES, type CoordinationTypeId, type CoordinationValue } from "@/core/coordination/types";
 import { COMPONENT_DEFINITIONS, type AnyComponentDefinition } from "@/core/component/definitions";
 import { componentProps, elementData, elementScope } from "@/core/workspace/dashboard";
 import { elementPredicate } from "@/core/workspace/data-sources";
@@ -73,7 +73,9 @@ function createViewCoordination(session: ElementRuntimeSession, id: string): Vie
       return cell.scope() !== undefined;
     },
     broadcast(state) {
-      cell.write({ ...state, src: id });
+      // A 3D (turntable) write keeps the cell's 2D view; a 2D write replaces the cell.
+      const { panX, panY, zoom } = cell.read() ?? COORDINATION_TYPES.viewSync.defaultValue;
+      cell.write({ panX, panY, zoom, ...state, src: id });
     },
     toggleLock() {
       if (cell.scope() !== undefined) session.coordination.clearScope(id, "viewSync");
@@ -81,7 +83,9 @@ function createViewCoordination(session: ElementRuntimeSession, id: string): Vie
     },
     subscribe(callback) {
       return cell.subscribe((value) => {
-        if (value && value.src !== id) callback({ panX: value.panX, panY: value.panY, zoom: value.zoom });
+        if (!value || value.src === id) return;
+        const { src: _src, ...state } = value;
+        callback(state);
       });
     },
   };

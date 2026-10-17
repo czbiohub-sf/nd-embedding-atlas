@@ -1,10 +1,10 @@
-import type { ViewState } from "../../contracts";
-import type { PanZoom2D } from "../../gpu/gpu/camera";
+import type { PanZoomView, TurntableView, ViewSyncState } from "@ndea/sdk";
+import type { Camera } from "../../gpu/gpu/camera";
 import type { PaintShape } from "../../gpu/gpu/selection";
 import type { InteractionConfig } from "../../gpu/types";
 
 interface InteractionCallbacks {
-  onViewChange?: (state: ViewState) => void;
+  onViewChange?: (state: PanZoomView | TurntableView) => void;
   /** Click hit test at CSS pixels relative to the overlay. */
   onPointClick?: (pixelX: number, pixelY: number) => void;
   onFps?: (fps: number) => void;
@@ -28,13 +28,19 @@ function tracePath(ctx: Ctx2D, path: readonly [number, number][]) {
   ctx.closePath();
 }
 
+/** Right-drag pans the 3D view, so the overlay has no context menu. */
+function noMenu(e: MouseEvent) {
+  e.preventDefault();
+}
+
 /**
  * Pointer/wheel input and the render-on-demand loop. Selection shapes stay in
  * overlay CSS pixels: the GPU tests each point's projection against them.
+ * Drag pans in 2D and orbits in 3D; in 3D a right/middle or Ctrl/Cmd drag pans.
  */
 export function createInteractionController(
   overlay: HTMLCanvasElement,
-  camera: PanZoom2D,
+  camera: Camera,
   renderFn: () => void,
   callbacks: InteractionCallbacks,
   interactionConfig?: InteractionConfig,
@@ -51,7 +57,8 @@ export function createInteractionController(
 
   // Suppress the next onViewChange broadcast (setViewState from view sync).
   let skipNextViewChange = false;
-  let isPanning = false;
+  let isDragging = false;
+  let dragPans = false;
   let isLassoing = false;
   let isMarquee = false;
   let lastMouse: [number, number] = [0, 0];
@@ -137,7 +144,8 @@ export function createInteractionController(
       isMarquee = true;
       marqueeStart = marqueeEnd = p;
     } else if (enablePan) {
-      isPanning = true;
+      isDragging = true;
+      dragPans = e.button !== 0 || e.ctrlKey || e.metaKey;
       if (camera.settle()) viewChanged();
       lastMouse = pointerDownPos = p;
     } else return;
@@ -154,8 +162,8 @@ export function createInteractionController(
       marqueeEnd = p;
       drawShape();
       select(false);
-    } else if (isPanning) {
-      camera.panBy(toNdc(...lastMouse), toNdc(...p), overlay.clientWidth / overlay.clientHeight || 1);
+    } else if (isDragging) {
+      camera.drag(toNdc(...lastMouse), toNdc(...p), overlay.clientWidth / overlay.clientHeight || 1, dragPans);
       lastMouse = p;
       viewChanged();
     }
@@ -167,11 +175,11 @@ export function createInteractionController(
       select(true);
       isLassoing = isMarquee = false;
       lassoPath = [];
-    } else if (isPanning) {
-      isPanning = false;
+    } else if (isDragging) {
+      isDragging = false;
       const dx = e.offsetX - pointerDownPos[0];
       const dy = e.offsetY - pointerDownPos[1];
-      if (dx * dx + dy * dy < 25 && callbacks.onPointClick) {
+      if (dx * dx + dy * dy < 25 && !dragPans && callbacks.onPointClick) {
         callbacks.onPointClick(e.offsetX, e.offsetY);
         needsRender = true;
         scheduleLoop();
@@ -196,6 +204,7 @@ export function createInteractionController(
   overlay.addEventListener("pointermove", onPointerMove);
   overlay.addEventListener("pointerup", onPointerUp);
   overlay.addEventListener("wheel", onWheel, { passive: false });
+  overlay.addEventListener("contextmenu", noMenu);
 
   const frameTimes = new Float64Array(120);
   let frameIdx = 0;
@@ -237,27 +246,24 @@ export function createInteractionController(
       needsRender = true;
       scheduleLoop();
     },
-    setViewState(state: ViewState) {
-      camera.set(state);
+    /** Apply a synced view; ignored (no render, no broadcast) when it is the other dimensionality's. */
+    setViewState(state: ViewSyncState) {
+      if (!camera.set(state)) return;
       skipNextViewChange = true;
       viewChanged();
-    },
-    animateToViewState(state: ViewState, durationMs = 600) {
-      camera.animateTo(state, durationMs, performance.now());
-      scheduleLoop();
     },
     setForcedSelectionMode(mode: "pan" | "marquee" | "lasso") {
       forcedSelectionMode = mode;
     },
-    resize() {
-      viewChanged();
-    },
+    /** The camera or canvas changed outside pointer input: re-render and broadcast. */
+    viewChanged,
     destroy() {
       cancelAnimationFrame(animId);
       overlay.removeEventListener("pointerdown", onPointerDown);
       overlay.removeEventListener("pointermove", onPointerMove);
       overlay.removeEventListener("pointerup", onPointerUp);
       overlay.removeEventListener("wheel", onWheel);
+      overlay.removeEventListener("contextmenu", noMenu);
     },
   };
 }

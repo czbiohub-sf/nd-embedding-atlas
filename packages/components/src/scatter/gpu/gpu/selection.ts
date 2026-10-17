@@ -51,8 +51,9 @@ export function createSelectionEngine(
       if (filtered && ((pred >>> k) & 1) === 0) continue;
       const cat = catOf(i);
       if (disabled && ((bitsRW.$[LAYERS * f.words + 8 + (cat >>> 5)] >>> (cat & 31)) & 1) === 1) continue;
+      // Select-through: every point projecting inside counts, occluded or not (not behind the camera).
       const c = project(i);
-      if (c.w <= 0 || std.abs(c.x) >= c.w || std.abs(c.y) >= c.w) continue;
+      if (c.w <= 0 || std.abs(c.x) >= c.w || std.abs(c.y) >= c.w || c.z < 0 || c.z > c.w) continue;
       const px = d.vec2i(
         d.i32(((c.x / c.w) * 0.5 + 0.5) * d.f32(dims.x)),
         d.i32((0.5 - (c.y / c.w) * 0.5) * d.f32(dims.y)),

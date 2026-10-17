@@ -11,6 +11,8 @@ interface UseMosaicScatterDataOptions {
   xCol: string;
   /** y column name in obs (e.g. "__ev_X_umap_1__") */
   yCol: string;
+  /** z column (e.g. "pca_2"), null for 2D */
+  zCol: string | null;
   colorMode: ColorMode;
   /** __ev_{col}_id integer column (categorical mode) */
   categoryCol: string | null;
@@ -62,6 +64,7 @@ export function useMosaicScatterData({
   axes,
   xCol,
   yCol,
+  zCol,
   colorMode,
   categoryCol,
   originalCol,
@@ -74,13 +77,14 @@ export function useMosaicScatterData({
 }: UseMosaicScatterDataOptions): UseMosaicScatterDataResult {
   // 1. Positions query
   const positionQuery = useQuery({
-    queryKey: axes ? scatterKeys.positions(axes.obsmKey, xCol, yCol) : ["scatter", "positions", null],
+    queryKey: axes ? scatterKeys.positions(axes.obsmKey, xCol, yCol, zCol) : ["scatter", "positions", null],
     queryFn: async ({ signal }) => {
       const params = new URLSearchParams({
         embedding: axes!.obsmKey,
         x_col: xCol,
         y_col: yCol,
       });
+      if (zCol) params.set("z_col", zCol);
       const r = await fetch(`/api/scatter-positions?${params}`, { signal });
       if (!r.ok) throw new Error(`scatter-positions failed: ${r.status}`);
       const buf = await r.arrayBuffer();
@@ -90,6 +94,7 @@ export function useMosaicScatterData({
         floats: new Float32Array(positions),
         numCells: header.numCells,
         embeddingKey: header.embeddingKey,
+        ndim: header.ndim,
         positionScale: header.positionScale,
       };
     },
@@ -145,7 +150,7 @@ export function useMosaicScatterData({
       positions: positionQuery.data.floats,
       numCells: positionQuery.data.numCells,
       embeddingKey: positionQuery.data.embeddingKey,
-      ndim: 2 as const,
+      ndim: positionQuery.data.ndim,
     };
 
     if (colorMode === "categorical") {

@@ -1,6 +1,6 @@
 import type { TgpuRoot } from "typegpu";
-import type { RowIndex } from "@ndea/sdk";
-import type { GpuPointIndex, ViewState } from "../contracts";
+import type { PanZoomView, RowIndex, TurntableView, ViewSyncState } from "@ndea/sdk";
+import type { GpuPointIndex } from "../contracts";
 
 // ---------------------------------------------------------------------------
 // Data
@@ -8,7 +8,7 @@ import type { GpuPointIndex, ViewState } from "../contracts";
 
 /** Point `i` is the observation with `__row_index__ = i`: positions arrive in obs_base row order. */
 export interface ScatterData {
-  /** Float32Array of interleaved positions: [x0,y0, ...] normalized to [-1,1] */
+  /** Columns of `numCells` f32, normalized to [-1, 1]: x, then y, then z in 3D. */
   positions: Float32Array;
   /** Category index per cell (u8) */
   categoryIndices: Uint8Array;
@@ -92,10 +92,8 @@ export interface ScatterplotHandle {
   setContinuousScale(scale: "linear" | "log" | "sqrt"): void;
   /** Upload a fresh LUT (colormap change). */
   setContinuousLut(lut: Uint32Array): void;
-  /** Current pan/zoom state of the viewport. */
-  getViewState(): ViewState;
-  /** Canvas CSS-pixel position of a world point under the current camera. */
-  project(x: number, y: number, z?: number): { x: number; y: number };
+  /** Canvas CSS-pixel position of a world point under the current camera; null behind a 3D camera. */
+  project(x: number, y: number, z?: number): { x: number; y: number } | null;
   /** Apply an externally-driven selection (from another panel). */
   setExternalSelection(rowIndices: RowIndex[]): void;
   /** Switch the drag behaviour: 'pan' = default, 'marquee'/'lasso' = always-draw-selection. */
@@ -127,10 +125,12 @@ export interface ScatterplotHandle {
   clearHighlight(): void;
   /** Highlight multiple points (e.g. trajectory points: always full bright). */
   setHighlightPoints(rowIndices: RowIndex[]): void;
-  /** Programmatically set the view state (for view lock sync). Suppresses the onViewChange broadcast for this write. */
-  setViewState(state: ViewState): void;
-  /** Animate to a view state using easeInOutQuint over durationMs (default 600ms). */
-  animateToViewState(state: ViewState, durationMs?: number): void;
+  /** Apply a view-sync state (2D cameras skip 3D cells and vice versa). Suppresses the onViewChange broadcast for this write. */
+  setViewState(state: ViewSyncState): void;
+  /** Animate to a view that frames every point. */
+  fitView(): void;
+  /** 3D only: perspective or orthographic projection. */
+  setProjection(projection: TurntableView["projection"]): void;
   /** Update point size without GPU re-initialization. */
   setPointRadius(radius: number): void;
   /**
@@ -141,7 +141,7 @@ export interface ScatterplotHandle {
   setPointOpacity(opacity: number): void;
   /** Update HDR settings (tone mapping, exposure). */
   setHdrSettings(settings: { toneMapping?: "none" | "reinhard" | "aces" | "agx" | "neutral"; exposure?: number }): void;
-  /** Switch the point blend mode; all three pipelines are built at init. */
+  /** Switch the 2D point blend mode; 3D always draws opaque depth-tested discs. */
   setBlendMode(mode: "additive" | "premultiplied" | "max"): void;
 }
 
@@ -163,13 +163,8 @@ export interface ScatterplotConfig {
     /** Called when an external row set is cleared by another panel. Only updates
      *  status bar; it must not republish a clear and create a cascade. */
     onExternalClear?: () => void;
-    onViewChange?: (state: ViewState) => void;
-    onPointClick?: (
-      pointIndex: GpuPointIndex,
-      position: [number, number],
-      categoryIndex: number,
-      categoryName: string,
-    ) => void;
+    onViewChange?: (state: PanZoomView | TurntableView) => void;
+    onPointClick?: (pointIndex: GpuPointIndex) => void;
     /** Called when the user clicks on empty space (no point hit). */
     onBackgroundClick?: () => void;
     onFps?: (fps: number) => void;

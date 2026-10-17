@@ -9,8 +9,7 @@
  * This eliminates the 3-file duplication that existed before.
  */
 
-import type { ViewState } from "../contracts";
-import type { RowIndex } from "@ndea/sdk";
+import type { RowIndex, TurntableView, ViewSyncState } from "@ndea/sdk";
 
 export interface SelectionCapability {
   setExternalSelection(rowIndices: RowIndex[]): void;
@@ -38,11 +37,11 @@ export interface IsolationCapability {
 }
 
 export interface ViewCapability {
-  getViewState(): ViewState;
-  setViewState(state: ViewState): void;
-  animateToViewState(state: ViewState, durationMs?: number): void;
-  /** Canvas CSS-pixel position of a world point. */
-  project(x: number, y: number, z?: number): { x: number; y: number };
+  setViewState(state: ViewSyncState): void;
+  fitView(): void;
+  setProjection(projection: TurntableView["projection"]): void;
+  /** Canvas CSS-pixel position of a world point; null behind a 3D camera. */
+  project(x: number, y: number, z?: number): { x: number; y: number } | null;
 }
 
 export interface RenderCapability {

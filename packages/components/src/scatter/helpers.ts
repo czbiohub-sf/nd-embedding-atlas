@@ -112,7 +112,8 @@ export function selectAnyTrajectory(
 }
 
 export const scatterKeys = {
-  positions: (obsmKey: string, xCol: string, yCol: string) => ["scatter", "positions", obsmKey, xCol, yCol] as const,
+  positions: (obsmKey: string, xCol: string, yCol: string, zCol: string | null) =>
+    ["scatter", "positions", obsmKey, xCol, yCol, zCol] as const,
   categories: (catCol: string, originalCol?: string | null) =>
     ["scatter", "categories", catCol, originalCol ?? null] as const,
   continuousColors: (colorCol: string, colormap: string, vmin?: number, vmax?: number) =>

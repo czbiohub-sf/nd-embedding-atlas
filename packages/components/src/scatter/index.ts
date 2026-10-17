@@ -12,5 +12,4 @@ export type {
   ScatterServices,
   ScatterSession,
   TrajectoryData,
-  ViewState,
 } from "./contracts";

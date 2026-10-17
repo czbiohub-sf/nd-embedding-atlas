@@ -55,16 +55,21 @@ export function ScatterContent({ initialObsmKey, toolbarTarget, focusedPointMeta
 
   const effectiveAxes = axes;
 
+  /** zDim only when the embedding has that column (the server 400s otherwise). */
+  const withZ = (key: string, zDim: number | null): number | null =>
+    zDim !== null && (metadata.obsm[key]?.n_dims ?? 0) > zDim ? zDim : null;
+
   useEffect(() => {
     if (axes || !metadata) return;
     const key =
       initialObsmKey ?? Object.entries(metadata.obsm).find(([, v]) => v.loaded)?.[0] ?? Object.keys(metadata.obsm)[0];
     if (!key) return;
     const entry = metadata.obsm[key];
+    const initial = { obsmKey: key, xDim: 0, yDim: 1, zDim: withZ(key, host.config.zDim) };
     if (entry && !entry.loaded) {
-      void loadEmbedding(key).then(() => setAxes({ obsmKey: key, xDim: 0, yDim: 1 }));
+      void loadEmbedding(key).then(() => setAxes(initial));
     } else {
-      setAxes({ obsmKey: key, xDim: 0, yDim: 1 });
+      setAxes(initial);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [metadata, axes, initialObsmKey, loadEmbedding]);
@@ -72,8 +77,16 @@ export function ScatterContent({ initialObsmKey, toolbarTarget, focusedPointMeta
   const handleSetAxes = async (newAxes: AxisState) => {
     const entry = metadata.obsm[newAxes.obsmKey];
     if (entry && !entry.loaded) await loadEmbedding(newAxes.obsmKey);
-    setAxes(newAxes);
+    const zDim = withZ(newAxes.obsmKey, newAxes.zDim);
+    // Persist the embedding with zDim: a zDim alone falls back to 2D on another embedding.
+    if (zDim !== (axes?.zDim ?? null) || newAxes.obsmKey !== axes?.obsmKey) {
+      host.patchConfig({ obsmKey: newAxes.obsmKey, zDim });
+    }
+    setAxes({ ...newAxes, zDim });
   };
+
+  // ── 3D projection (also synced through viewSync) ───────────────────────────
+  const [projection, setProjection] = useState<"perspective" | "orthographic">("perspective");
 
   // ── Selection tool ─────────────────────────────────────────────────────────
   const [selectionTool, setSelectionTool] = useState<"pan" | "marquee" | "lasso">("pan");
@@ -124,6 +137,7 @@ export function ScatterContent({ initialObsmKey, toolbarTarget, focusedPointMeta
   const prefix = currentEntry?.prefix ?? "x";
   const xCol = effectiveAxes ? `${prefix}_${effectiveAxes.xDim}` : "";
   const yCol = effectiveAxes ? `${prefix}_${effectiveAxes.yDim}` : "";
+  const zCol = effectiveAxes?.zDim != null ? `${prefix}_${effectiveAxes.zDim}` : null;
 
   const isLoading = !!loadingKey || categoryLoading;
 
@@ -164,6 +178,9 @@ export function ScatterContent({ initialObsmKey, toolbarTarget, focusedPointMeta
     table,
     xCol,
     yCol,
+    zCol,
+    projection,
+    onProjectionChange: setProjection,
     colorMode,
     categoryCol,
     categoryMapping: coloredCategoryMapping,
@@ -196,6 +213,20 @@ export function ScatterContent({ initialObsmKey, toolbarTarget, focusedPointMeta
       onSetAxes={(newAxes) => {
         void handleSetAxes(newAxes);
       }}
+      onToggle3D={
+        dims.length >= 3
+          ? () =>
+              void handleSetAxes({
+                ...effectiveAxes,
+                zDim:
+                  effectiveAxes.zDim === null
+                    ? (dims.find((d) => d !== effectiveAxes.xDim && d !== effectiveAxes.yDim) ?? null)
+                    : null,
+              })
+          : undefined
+      }
+      projection={projection}
+      onToggleProjection={() => setProjection(projection === "perspective" ? "orthographic" : "perspective")}
       onSetColorSource={setColorSource}
       onToggleColorMode={() => setColorModeOverride(colorMode === "continuous" ? "categorical" : "continuous")}
       modalities={metadata.modalities}

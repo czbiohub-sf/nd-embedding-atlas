@@ -44,14 +44,37 @@ export interface AnnotationWriteAPI {
 
 export type DataAPI = DataQueryAPI & RowSetPublishAPI & AnnotationWriteAPI;
 
+/** 2D pan/zoom view. */
+export interface PanZoomView {
+  panX: number;
+  panY: number;
+  zoom: number;
+}
+
+/** 3D turntable view: orbit angles (radians), eye distance, orbit center, projection. */
+export interface TurntableView {
+  yaw: number;
+  pitch: number;
+  distance: number;
+  target: [number, number, number];
+  projection: "perspective" | "orthographic";
+}
+
+/**
+ * A view-sync cell: the 2D view, plus the turntable when a 3D view wrote last.
+ * 2D views apply only cells without 3D fields; 3D views only cells with them.
+ */
+export type ViewSyncState = PanZoomView & Partial<TurntableView>;
+
 export interface ViewCoordinationAPI {
   readonly panX: number;
   readonly panY: number;
   readonly zoom: number;
   readonly linked: boolean;
-  broadcast(state: { panX: number; panY: number; zoom: number }): void;
+  /** A 2D write replaces the scope's cell; a 3D write keeps its 2D fields. */
+  broadcast(state: PanZoomView | TurntableView): void;
   toggleLock(): void;
-  subscribe?(callback: (state: { panX: number; panY: number; zoom: number }) => void): () => void;
+  subscribe?(callback: (state: ViewSyncState) => void): () => void;
 }
 
 export interface OrderingCoordinationAPI {

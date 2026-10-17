@@ -9,7 +9,7 @@
 import { useThrottler } from "@tanstack/react-pacer";
 import { useSelector } from "@tanstack/react-store";
 import type { FilterClause } from "@ndea/protocol";
-import { type RowIndex, rowIndex } from "@ndea/sdk";
+import { type PanZoomView, type RowIndex, rowIndex, type TurntableView } from "@ndea/sdk";
 import type { Coordinator } from "@uwdata/mosaic-core";
 import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ScatterGPUHost, type ScatterGPUHostHandle, type ScatterPointStyle } from "./gpu/components/ScatterGpuHost";
@@ -44,6 +44,11 @@ export interface ScatterViewProps {
   table: string;
   xCol: string;
   yCol: string;
+  /** null = 2D. */
+  zCol: string | null;
+  projection: TurntableView["projection"];
+  /** A synced 3D view changed the projection. */
+  onProjectionChange(projection: TurntableView["projection"]): void;
   colorMode: ColorMode;
   categoryCol: string | null;
   categoryMapping: CategoryMapping | null;
@@ -66,6 +71,9 @@ export function ScatterView({
   table,
   xCol,
   yCol,
+  zCol,
+  projection,
+  onProjectionChange,
   colorMode,
   categoryCol,
   categoryMapping,
@@ -133,14 +141,17 @@ export function ScatterView({
     hostRef.current?.setForcedSelectionMode(selectionTool);
   }, [selectionTool]);
 
+  useEffect(() => {
+    hostRef.current?.setProjection(projection);
+  }, [projection]);
+
   const containerRef = useRef<HTMLDivElement>(null);
   const trajectoryOverlayRef = useRef<TrajectoryOverlaySvgHandle | null>(null);
   const highlightOverlayRef = useRef<HighlightFocusOverlayHandle | null>(null);
   const gpuAdapter = useRef({
-    project: (x: number, y: number) => hostRef.current?.project(x, y) ?? { x: 0, y: 0 },
+    project: (x: number, y: number, z?: number) => hostRef.current?.project(x, y, z) ?? null,
   });
 
-  const viewStateRef = useRef({ panX: 0, panY: 0, zoom: 1 });
   const [gpuError, setGpuError] = useState<string | null>(null);
 
   // ── Continuous range filter handles (dim-only: colormap is NOT remapped) ──
@@ -172,6 +183,7 @@ export function ScatterView({
     axes,
     xCol,
     yCol,
+    zCol,
     colorMode,
     categoryCol,
     originalCol: colorByColumn,
@@ -203,11 +215,13 @@ export function ScatterView({
   // Single-point focus → screen marker. focusedRowIndex is the clicked obs's
   // __row_index__, which is its point index. Suppressed while a trajectory is
   // active (that has its own overlay).
-  const highlightWorldPos = useMemo<[number, number] | null>(() => {
+  const highlightWorldPos = useMemo<[number, number, number] | null>(() => {
     if (activeTrajectories.length > 0 || focusedRowIndex == null || !data || focusedRowIndex >= data.numCells) {
       return null;
     }
-    return [data.positions[2 * focusedRowIndex], data.positions[2 * focusedRowIndex + 1]];
+    const { positions, numCells: n } = data;
+    const z = data.ndim === 3 ? positions[2 * n + focusedRowIndex] : 0;
+    return [positions[focusedRowIndex], positions[n + focusedRowIndex], z];
   }, [focusedRowIndex, activeTrajectories, data]);
 
   // Trajectory isolation mask: each feature owns its own mask; no mutual
@@ -263,38 +277,10 @@ export function ScatterView({
   }, [colorMode, colorByColumn, userVmin, userVmax, coordinator, publishRange]);
 
   // ── Fit-view ──────────────────────────────────────────────────────────────
-  const handleFitView = useCallback(() => {
-    const positions = data?.positions;
-    const el = containerRef.current;
-    if (!positions || positions.length < 2 || !el) return;
-    let minX = Infinity,
-      maxX = -Infinity,
-      minY = Infinity,
-      maxY = -Infinity;
-    for (let i = 0; i < positions.length; i += 2) {
-      const x = positions[i],
-        y = positions[i + 1];
-      if (x < minX) minX = x;
-      if (x > maxX) maxX = x;
-      if (y < minY) minY = y;
-      if (y > maxY) maxY = y;
-    }
-    if (!Number.isFinite(minX) || minX === maxX || minY === maxY) return;
-    const aspect = el.clientWidth / el.clientHeight || 1;
-    const padding = 0.88;
-    const zoom = Math.min((2 * padding) / (maxY - minY), (2 * aspect * padding) / (maxX - minX));
-    hostRef.current?.animateToViewState(
-      {
-        panX: -(minX + maxX) / 2,
-        panY: -(minY + maxY) / 2,
-        zoom,
-      },
-      600,
-    );
-  }, [data?.positions]);
+  const handleFitView = useCallback(() => hostRef.current?.fitView(), []);
 
   const viewBroadcaster = useThrottler(
-    (vs: { panX: number; panY: number; zoom: number }) => {
+    (vs: PanZoomView | TurntableView) => {
       if (host.viewSync.linked) host.viewSync.broadcast(vs);
     },
     { wait: 16 },
@@ -314,9 +300,9 @@ export function ScatterView({
   const callbacksRef = useRef({
     onSelectionChange: (_count: number | null, _bits?: Uint32Array<ArrayBuffer>) => {},
     onExternalClear: () => {},
-    onPointClick: (_index: number, _pos: [number, number], _catIdx: number, _catName: string) => {},
+    onPointClick: (_index: number) => {},
     onBackgroundClick: () => {},
-    onViewChange: (_state: { panX: number; panY: number; zoom: number }) => {},
+    onViewChange: (_state: PanZoomView | TurntableView) => {},
     onFps: (_fps: number) => {},
   });
 
@@ -332,8 +318,7 @@ export function ScatterView({
   };
   callbacksRef.current.onPointClick = (pointIndex) => setFocus(rowIndex(pointIndex));
   callbacksRef.current.onViewChange = (state) => {
-    viewStateRef.current = state;
-    setZoom(state.zoom);
+    if ("zoom" in state) setZoom(state.zoom);
     trajectoryOverlayRef.current?.update();
     highlightOverlayRef.current?.update();
     viewBroadcaster.maybeExecute(state);
@@ -375,6 +360,7 @@ export function ScatterView({
     // Point style (radius/opacity/blend/HDR) is a declarative `pointStyle`
     // prop on ScatterGPUHost: applied there, and re-applied on GPU reinit.
     hostRef.current?.setForcedSelectionMode(selectionTool);
+    hostRef.current?.setProjection(projection);
   };
 
   useEffect(() => {
@@ -416,12 +402,14 @@ export function ScatterView({
   }, [legendState.scale, colorMode, data?.continuous]);
 
   useEffect(() => {
-    // incoming (non-self) pan/zoom on this element's view-sync scope, via the host
-    // seam and its current coordination scope.
+    // incoming (non-self) view on this element's view-sync scope, via the host
+    // seam and its current coordination scope. The camera skips the other
+    // dimensionality's cells; a 3D cell also carries the projection.
     return host.viewSync.subscribe?.((s) => {
-      hostRef.current?.setViewState({ panX: s.panX, panY: s.panY, zoom: s.zoom });
+      hostRef.current?.setViewState(s);
+      if (zCol !== null && s.projection) onProjectionChange(s.projection);
     });
-  }, [host]);
+  }, [host, zCol, onProjectionChange]);
 
   // (point radius / opacity / blend / HDR now flow declaratively via the
   // `pointStyle` prop above: the two store-subscription effects they replaced
@@ -456,7 +444,7 @@ export function ScatterView({
 
   const axesKeyRef = useRef<string | null>(null);
   useEffect(() => {
-    const key = axes ? `${axes.obsmKey}:${axes.xDim}:${axes.yDim}` : null;
+    const key = axes ? `${axes.obsmKey}:${axes.xDim}:${axes.yDim}:${axes.zDim}` : null;
     const changed = axesKeyRef.current != null && key !== axesKeyRef.current;
     axesKeyRef.current = key;
     if (changed) actions.clearTrajectory(trajectory?.datasetKey ?? "");
@@ -536,7 +524,8 @@ export function ScatterView({
           {errorMessage}
         </div>
       )}
-      {activeTrajectories.map((traj) => {
+      {/* The trajectory overlay draws 2D (x, y) frames: hidden in 3D, where the GPU highlight still marks the points. */}
+      {(zCol === null ? activeTrajectories : []).map((traj) => {
         const tActiveIdx = traj.points.findIndex((p) => p.t === traj.tIndex);
         return (
           <TrajectoryOverlaySvg

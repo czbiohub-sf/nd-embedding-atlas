@@ -6,6 +6,8 @@ import type { Store } from "@tanstack/store";
 export interface ScatterConfig {
   obsmKey: string | null;
   colorByColumn: string | null;
+  /** Embedding dimension for the z axis; null = 2D. */
+  zDim: number | null;
 }
 
 export interface ScatterOptions {
@@ -17,12 +19,8 @@ export interface AxisState {
   obsmKey: string;
   xDim: number;
   yDim: number;
-}
-
-export interface ViewState {
-  panX: number;
-  panY: number;
-  zoom: number;
+  /** null = 2D. */
+  zDim: number | null;
 }
 
 export interface TrajectoryData {

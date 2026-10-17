@@ -14,13 +14,24 @@ export function createScatterDefinition({
     type: "scatter",
     title: "Scatter",
     config: {
-      schema: z.object({ obsmKey: z.string().nullable(), colorByColumn: z.string().nullable() }),
-      defaultValue: { obsmKey: null, colorByColumn: null } satisfies ScatterConfig,
+      schema: z.object({
+        obsmKey: z.string().nullable(),
+        colorByColumn: z.string().nullable(),
+        zDim: z
+          .number()
+          .int()
+          .nonnegative()
+          .nullable()
+          .describe(
+            "3D: the embedding dimension on the z axis (x and y are dims 0 and 1; the embedding needs more columns than zDim). null = 2D.",
+          ),
+      }),
+      defaultValue: { obsmKey: null, colorByColumn: null, zDim: null } satisfies ScatterConfig,
     },
     documentation: {
       summary: "Plots your cells in embedding space, like a UMAP.",
       use: "Use it to spot structure, then lasso a region to select those cells.",
-      note: "Pick an embedding in the component's options. Lassos publish named observation sets; linked color-by scopes share the color column.",
+      note: "Pick an embedding in the component's options. Set zDim (e.g. 2) for a 3D view of an embedding with 3+ columns. Lassos publish named observation sets; linked color-by scopes share the color column.",
     },
     binds: ["focus", "filter", "colorBy", "viewSync"],
     load: async () => {

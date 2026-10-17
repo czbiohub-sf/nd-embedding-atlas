@@ -3,7 +3,7 @@ import { gpuPointIndex } from "../../contracts";
 import { PALETTE } from "../../gpu/constants";
 import { createInteractionController } from "../../gpu/hooks/useScatterInteraction";
 import type { ScatterData, ScatterplotConfig, ScatterplotHandle } from "../../gpu/types";
-import { PanZoom2D, transform } from "./camera";
+import { type Bounds, type Camera, PanZoom2D, transform, Turntable3D } from "./camera";
 import { createHdrPipeline, HDR_FORMAT } from "./hdr";
 import { initGPU } from "./init";
 import { createRenderPasses } from "./render";
@@ -18,7 +18,7 @@ const DENSITY_POINTS_PER_PX = 0.5;
 const DENSITY_HYSTERESIS = 0.8;
 /** Capacity of the compacted id list; more visible points than this always take the density path. */
 const MAX_QUADS = 1 << 21;
-/** Storage buffers the point vertex shader binds: posX, posY, cats, values, ids, bits. */
+/** Storage buffers the point vertex shader binds: posX, posY, cats, values, ids, bits (+ posZ in 3D). */
 const VERTEX_STORAGE_BUFFERS = 6;
 /** Minimum marker half-size (device px): smaller, the fwidth disk AA reads as a square. */
 const MIN_POINT_PX = 1.5;
@@ -45,13 +45,13 @@ export async function createScatterplot(
   if (!opts) throw new Error("createScatterplot requires a GPU device lease");
   const { root, device, context, format } = initGPU(canvas, opts.lease.info);
   const n = data.numCells;
+  const { ndim } = data;
 
   // Known limit: no vertex-buffer fallback for devices without vertex-stage storage buffers.
   const vertexStorage = device.limits.maxStorageBuffersInVertexStage ?? device.limits.maxStorageBuffersPerShaderStage;
-  if (vertexStorage < VERTEX_STORAGE_BUFFERS) {
-    throw new Error(
-      `This GPU allows ${vertexStorage} storage buffers in vertex shaders; the scatter needs ${VERTEX_STORAGE_BUFFERS}.`,
-    );
+  const needed = VERTEX_STORAGE_BUFFERS + ndim - 2;
+  if (vertexStorage < needed) {
+    throw new Error(`This GPU allows ${vertexStorage} storage buffers in vertex shaders; the scatter needs ${needed}.`);
   }
   if (n * 4 > device.limits.maxStorageBufferBindingSize) {
     throw new Error(
@@ -59,15 +59,28 @@ export async function createScatterplot(
     );
   }
 
-  const scene = createScene(root, n, Math.min(n, MAX_QUADS));
-  const xs = new Float32Array(n);
-  const ys = new Float32Array(n);
-  for (let i = 0; i < n; i++) {
-    xs[i] = data.positions[2 * i];
-    ys[i] = data.positions[2 * i + 1];
+  const scene = createScene(root, n, Math.min(n, MAX_QUADS), ndim);
+  // SoA positions: x column, y column, then z in 3D (no posZ in 2D).
+  [scene.posX, scene.posY, scene.posZ].forEach((buffer, a) =>
+    buffer?.write(data.positions.subarray(a * n, (a + 1) * n)),
+  );
+  // Fit-view box, computed on the first fit.
+  let bounds: Bounds | null = null;
+  function dataBounds(): Bounds {
+    const box: Bounds = { min: [0, 0, 0], max: [0, 0, 0] };
+    for (let a = 0; a < (n > 0 ? ndim : 0); a++) {
+      let lo = Infinity;
+      let hi = -Infinity;
+      for (let i = a * n; i < (a + 1) * n; i++) {
+        const v = data.positions[i];
+        if (v < lo) lo = v;
+        if (v > hi) hi = v;
+      }
+      box.min[a] = lo;
+      box.max[a] = hi;
+    }
+    return box;
   }
-  scene.posX.write(xs);
-  scene.posY.write(ys);
   writeCategories(data.categoryIndices);
   const tUpload = performance.now();
   console.log(`Buffer upload: ${(tUpload - t0).toFixed(1)}ms`);
@@ -93,11 +106,12 @@ export async function createScatterplot(
     densityHi: 0,
     densityLo: 0,
     cap: scene.cap,
+    writeIds: 0,
     grid: [1, 1],
   };
   setPalette(PALETTE.map(([r, g, b]) => [r / 255, g / 255, b / 255] as const));
 
-  const camera = new PanZoom2D(config?.interaction);
+  const camera: Camera = ndim === 3 ? new Turntable3D(config?.interaction) : new PanZoom2D(config?.interaction);
   const hdr = createHdrPipeline(root, format);
   const passes = createRenderPasses(root, scene, HDR_FORMAT);
   const selection = createSelectionEngine(root, scene, (count, bits) =>
@@ -168,10 +182,7 @@ export async function createScatterplot(
     const { width, height } = canvas;
     f.viewProj = camera.viewProj(width / height);
     f.viewport = [width, height];
-    f.pointPx = Math.max(
-      (pointRadius * Math.sqrt(camera.toViewState().zoom) * adaptiveScale * height) / 2,
-      MIN_POINT_PX,
-    );
+    f.pointPx = Math.max((pointRadius * Math.sqrt(camera.scale) * adaptiveScale * height) / 2, MIN_POINT_PX);
     scene.frame.write(f);
   }
 
@@ -218,7 +229,7 @@ export async function createScatterplot(
         const revision = ++pickRevision;
         const scale = canvas.width / Math.max(1, overlay.clientWidth);
         sync();
-        passes.pick(cssX * scale, cssY * scale, compactDirty).then(
+        passes.pick(cssX * scale, cssY * scale).then(
           (idx) => {
             if (revision !== pickRevision) return;
             if (idx === null) {
@@ -229,13 +240,7 @@ export async function createScatterplot(
             }
             f.clicked = idx;
             invalidate();
-            const cat = data.categoryIndices[idx];
-            config?.callbacks?.onPointClick?.(
-              gpuPointIndex(idx),
-              [data.positions[2 * idx], data.positions[2 * idx + 1]],
-              cat,
-              data.categoryNames[cat],
-            );
+            config?.callbacks?.onPointClick?.(gpuPointIndex(idx));
           },
           (err: unknown) => console.warn("GPU pick failed:", err),
         );
@@ -248,12 +253,13 @@ export async function createScatterplot(
   const pointBytes = [
     scene.posX.buffer,
     scene.posY.buffer,
+    scene.posZ?.buffer,
     scene.cats.buffer,
     scene.values.buffer,
     scene.bits,
     scene.ids,
   ]
-    .map((b) => root.unwrap(b).size)
+    .map((b) => (b ? root.unwrap(b).size : 0))
     .reduce((a, b) => a + b, 0);
   console.log(
     `Scatterplot ready: ${n.toLocaleString()} points in ${(performance.now() - t0).toFixed(1)}ms, ${(pointBytes / Math.max(1, n)).toFixed(2)} B/pt`,
@@ -264,7 +270,7 @@ export async function createScatterplot(
       resizeTargets();
       // Re-render now: otherwise the browser stretches the stale frame until the next interaction.
       invalidate();
-      interaction.resize();
+      interaction.viewChanged();
     },
     setPointRadius(r) {
       pointRadius = r;
@@ -315,11 +321,11 @@ export async function createScatterplot(
       setLut(lut);
       interaction.requestRender();
     },
-    getViewState: () => camera.toViewState(),
     project(x, y, z = 0) {
       const w = overlay.clientWidth;
       const h = overlay.clientHeight;
       const [cx, cy, , cw] = transform(camera.viewProj(w / h || 1), x, y, z);
+      if (cw <= 0) return null;
       return { x: ((cx / cw + 1) / 2) * w, y: ((1 - cy / cw) / 2) * h };
     },
     clearSelection() {
@@ -383,8 +389,15 @@ export async function createScatterplot(
     setViewState(state) {
       interaction.setViewState(state);
     },
-    animateToViewState(state, durationMs) {
-      interaction.animateToViewState(state, durationMs);
+    fitView() {
+      bounds ??= dataBounds();
+      camera.fit(bounds, overlay.clientWidth / overlay.clientHeight || 1, 600, performance.now());
+      interaction.requestRender();
+    },
+    setProjection(projection) {
+      if (!(camera instanceof Turntable3D) || camera.projection === projection) return;
+      camera.setProjection(projection);
+      interaction.viewChanged();
     },
     destroy() {
       // Dev-only validation scope: "no leaks" is checked, not assumed.

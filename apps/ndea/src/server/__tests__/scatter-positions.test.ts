@@ -119,6 +119,43 @@ describe("scatter-positions: Phase 0 bypass", () => {
     expect(res.status).toBe(400);
   });
 
+  test("serves three SoA columns for z_col", async () => {
+    if (!HAS_FIXTURE) return;
+    const { state, server, port } = await buildState();
+    pending = server;
+
+    const res = await fetch(
+      `http://localhost:${port}/api/scatter-positions?embedding=X_pca&x_col=pca_0&y_col=pca_1&z_col=pca_2`,
+    );
+    expect(res.status).toBe(200);
+    const buf = new Uint8Array(await res.arrayBuffer());
+    const view = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    const headerLen = view.getUint32(1, true);
+    const header = JSON.parse(new TextDecoder().decode(buf.subarray(5, 5 + headerLen))) as {
+      ndim: number;
+      positionScale: number;
+    };
+    expect(header.ndim).toBe(3);
+    const dataOffset = Math.ceil((5 + headerLen) / 4) * 4;
+    const positions = new Float32Array(buf.buffer, buf.byteOffset + dataOffset);
+    const n = state.accessors.get("fixture")!.nObs;
+    expect(positions.length).toBe(3 * n);
+    // The z column is the third block, normalized by the shared max-abs.
+    const zs = await state.obsmLoaders.get("X_pca")!.loadColumn(2);
+    expect(positions[2 * n + 1] * header.positionScale).toBeCloseTo(zs[1], 3);
+  });
+
+  test("rejects a z dim the embedding lacks with 400", async () => {
+    if (!HAS_FIXTURE) return;
+    const { server, port } = await buildState();
+    pending = server;
+
+    const res = await fetch(
+      `http://localhost:${port}/api/scatter-positions?embedding=X_pca&x_col=pca_0&y_col=pca_1&z_col=pca_99`,
+    );
+    expect(res.status).toBe(400);
+  });
+
   test("aborted request does not populate loader cache", async () => {
     if (!HAS_FIXTURE) return;
     const { state, server, port } = await buildState();
