@@ -241,14 +241,18 @@ export function createRenderPasses(root: TgpuRoot, scene: Scene, hdrFormat: GPUT
     const half = f.pointPx * std.select(d.f32(1), d.f32(1.6), t === 3);
     const c = project(i);
     const color = pointColor(i);
+    const a = color.w * tierAlpha(t);
+    // 3D depth layers: full-brightness tiers in [0, 0.5], dimmed ones behind them in [0.5, 1], so
+    // a full point always wins and each layer stays depth-correct. Affine in z / w, so per vertex
+    // (no frag_depth: early-z stays on). Shared by the pick pass; 2D ignores z.
     return {
       position: d.vec4f(
         c.x + ((uv.x * half * 2) / f.viewport.x) * c.w,
         c.y + ((uv.y * half * 2) / f.viewport.y) * c.w,
-        c.z,
+        std.select(0.5 * c.z, 0.5 * (c.z + c.w), a < 1),
         c.w,
       ),
-      color: d.vec4f(color.x, color.y, color.z, color.w * tierAlpha(t)),
+      color: d.vec4f(color.x, color.y, color.z, a),
       uv,
       ring: std.select(d.f32(0), d.f32(1), t === 3),
       id: i,
@@ -280,19 +284,16 @@ export function createRenderPasses(root: TgpuRoot, scene: Scene, hdrFormat: GPUT
     return d.vec4f(input.color.x * a, input.color.y * a, input.color.z * a, a);
   });
 
-  // 3D: opaque discs under the depth test. Dimmed tiers are screen-door transparent
-  // (discarded below a per-pixel threshold), which stays order-independent.
-  const discFragment = tgpu.fragmentFn({
-    in: { pos: d.builtin.position, color: d.vec4f, uv: d.vec2f, ring: d.f32 },
-    out: d.vec4f,
-  })((input) => {
+  // 3D: opaque discs under the depth test. Dimmed tiers write premultiplied color and alpha
+  // without blending (the front-most dimmed disc replaces the ones behind), so the page
+  // background shows through them as through 2D's translucent points.
+  const discFragment = tgpu.fragmentFn({ in: { color: d.vec4f, uv: d.vec2f, ring: d.f32 }, out: d.vec4f })((input) => {
     "use gpu";
     const r = std.length(input.uv);
     if (r > 1) std.discard();
     if (input.ring > 0.5 && r > 0.625) return d.vec4f(1, 1, 1, 1);
-    const noise = std.fract(52.9829189 * std.fract(0.06711056 * input.pos.x + 0.00583715 * input.pos.y));
-    if (input.color.w < noise) std.discard();
-    return d.vec4f(input.color.x, input.color.y, input.color.z, 1);
+    const a = input.color.w;
+    return d.vec4f(input.color.x * a, input.color.y * a, input.color.z * a, a);
   });
 
   const quadPipeline = (blend: GPUBlendState) =>
@@ -484,8 +485,9 @@ export function createRenderPasses(root: TgpuRoot, scene: Scene, hdrFormat: GPUT
 
   // ── Trajectory: one screen-space quad per segment (round caps), then a dot per frame and the
   // active-frame marker, all through the points' `clip`, so the path sits on its points. 3D:
-  // depth-tested against the discs (no depth write); the active marker also draws dimmed
-  // through whatever occludes it. Path layout: see `ScatterplotHandle.setTrajectoryPath`.
+  // depth-tested against the discs (no depth write) in their full-brightness layer (z / 2, see
+  // `quadVertex`); the active marker also draws dimmed through whatever occludes it. Path
+  // layout: see `ScatterplotHandle.setTrajectoryPath`.
   const pathLayout = tgpu.bindGroupLayout({
     path: { storage: (len: number) => d.arrayOf(d.vec4f, len), access: "readonly" },
   });
@@ -526,7 +528,7 @@ export function createRenderPasses(root: TgpuRoot, scene: Scene, hdrFormat: GPUT
     // A break between trajectories, or an end behind the camera: no quad.
     const skip = a.w < 0 || b.w < 0 || ca.w <= 0 || cb.w <= 0;
     return {
-      position: std.select(d.vec4f(xy, c.z, c.w), offscreen, skip),
+      position: std.select(d.vec4f(xy, 0.5 * c.z, c.w), offscreen, skip),
       color: pathLayout.$.path[std.select(input.ii * 2 + 1, input.ii * 2 + 3, atB)],
       local: d.vec2f(std.select(d.f32(0), len, atB) + uv.x * hw, uv.y * hw),
       len,
@@ -570,7 +572,7 @@ export function createRenderPasses(root: TgpuRoot, scene: Scene, hdrFormat: GPUT
     const uv = std.mul(corner(input.vi), r);
     const xy = std.add(c.xy, std.mul(std.div(std.mul(uv, 2), f.viewport), c.w));
     // A hair in front of the point's own disc (same center depth); 2D (z = 0) must stay ≥ 0.
-    const marker = d.vec4f(xy, std.max(c.z - 0.0001 * c.w, 0), c.w);
+    const marker = d.vec4f(xy, 0.5 * std.max(c.z - 0.0001 * c.w, 0), c.w);
     return {
       position: std.select(marker, offscreen, v.w < 0 || c.w <= 0),
       color: pathLayout.$.path[input.ii * 2 + 1],
