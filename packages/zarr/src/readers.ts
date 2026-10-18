@@ -316,14 +316,7 @@ async function resolveWindowReader(group: ZarrGroup, name: string): Promise<Wind
   const arr = await zarr.open(location, { kind: "array" });
   return {
     async read(r0, r1) {
-      const data = (await zarr.get(arr, [zarr.slice(r0, r1)])).data;
-      // Normalize exotic array-likes (zarrita BoolArray isn't index-accessible) →
-      // plain array, matching the eager path's convertColumn. Standard TypedArrays
-      // and string[] pass through untouched.
-      if (!Array.isArray(data) && !ArrayBuffer.isView(data)) {
-        return Array.from(data as Iterable<unknown>) as unknown as ColumnData;
-      }
-      return data as unknown as ColumnData;
+      return (await zarr.get(arr, [zarr.slice(r0, r1)])).data as unknown as ColumnData;
     },
   };
 }

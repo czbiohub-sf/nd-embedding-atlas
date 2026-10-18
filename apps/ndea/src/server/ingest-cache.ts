@@ -80,9 +80,12 @@ function fingerprintZarr(absPath: string): string {
   return parts.join(";");
 }
 
+/** Bump when ingest output changes within one ndea version (2: bool columns are BOOLEAN). */
+const INGEST_SCHEMA = 2;
+
 /**
- * Content key for the ingest cache. Folds in: ndea VERSION (a schema change in
- * a new build invalidates old caches), the ingest strategy (different obs_base
+ * Content key for the ingest cache. Folds in: ndea VERSION and INGEST_SCHEMA
+ * (a schema change invalidates old caches), the ingest strategy (different obs_base
  * provenance), the hidden-column set (changes the dataset VIEW), and every
  * member dataset's name + path + zarr fingerprint (ANY member change → miss,
  * and multi-dataset unions key differently from single because of `_dataset`).
@@ -95,6 +98,7 @@ export function ingestCacheKey(
 ): string {
   const seed = JSON.stringify({
     v: version,
+    schema: INGEST_SCHEMA,
     strategy,
     hidden: [...hidden].toSorted(),
     members: members.map((m) => ({ name: m.name, path: m.path, fp: fingerprintZarr(m.path) })),

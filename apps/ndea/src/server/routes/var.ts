@@ -278,23 +278,23 @@ function findVarIndex(adata: AnnData | DatasetHandle, name: string): number {
 
 /**
  * Load one column of X (or layer) for a dataset as a length-nObs Float64Array.
- * Works for dense or sparse (CSR/CSC) matrices.
+ * Works for dense or sparse (CSR/CSC) matrices; unstored sparse entries are 0.
  */
-async function loadVarSlice(adata: AnnData, varIdx: number, layer: string, nObs: number): Promise<Float64Array> {
+export async function loadVarSlice(adata: AnnData, varIdx: number, layer: string, nObs: number): Promise<Float64Array> {
   const sliced = adata.isel({ var: [varIdx] });
   const mat = layer === "X" ? await sliced.getX() : await sliced.getLayer(layer);
 
   const out = new Float64Array(nObs);
 
-  if ("data" in mat && "shape" in mat) {
+  // Only a sparse result has `format`; both kinds have `data` and `shape`.
+  if (!("format" in mat)) {
     // Dense: shape [nObs, 1] row-major → column 0 is just every element
     const d = mat.data as ArrayLike<number>;
     for (let i = 0; i < nObs; i++) out[i] = d[i];
     return out;
   }
 
-  // Sparse
-  const sparse = mat as SparseArray;
+  const sparse: SparseArray = mat;
   if (sparse.format === "csc") {
     const start = sparse.indptr[0];
     const end = sparse.indptr[1];

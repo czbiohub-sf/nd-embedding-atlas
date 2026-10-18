@@ -220,7 +220,7 @@ export function createNdeaMcpServer(state: ServerSession, actor: WorkspaceActor)
     },
     async ({ column, limit }) => {
       const columns = [...state.store.columns()]
-        .filter(([name, { kind }]) => kind !== "embedding" && !name.startsWith("__"))
+        .filter(([name]) => !name.startsWith("__"))
         .map(([name, { sqlType, kind }]) => ({ name, type: sqlType, kind }));
       if (column === undefined) return ok({ columns });
       const match = columns.find((candidate) => candidate.name === column);

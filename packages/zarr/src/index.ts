@@ -17,7 +17,7 @@ export type {
 } from "./types.ts";
 export type { DatasetHandle, DenseResult, MatrixResult, ToDuckDBOptions } from "./anndata.ts";
 
-// Public runtime API: open a store, read AnnData/MuData, convert to Arrow.
+// Public runtime API: open a store, read AnnData/MuData, ingest into DuckDB.
 import type { Readable } from "zarrita";
 import { open } from "./open.ts";
 import { AnnData } from "./anndata.ts";
@@ -26,16 +26,15 @@ import { MuData } from "./mudata.ts";
 export { open };
 export { AnnData };
 export { MuData };
-export { LazyDataFrame, toArrowTable } from "./data-frame.ts";
+export { LazyDataFrame } from "./data-frame.ts";
 export { BunFileStore, openBunStore } from "./bun-store.ts";
 export { commitObsColumns, type CommitReport, type ObsColumnInput } from "./write-obs.ts";
 export {
+  appendColumns,
+  type AppendColumn,
   ingestDataFrame,
   ingestDataFrames,
-  ingestDataFramesStreaming,
   ingestDataFrameChunked,
-  arrowTypeToDuckDB,
-  appendArrowValue,
 } from "./duckdb-ingest.ts";
 
 /**

@@ -55,7 +55,10 @@ entrypoints across workspaces.
 - `@ndea/zarr` opens AnnData, MuData, and OME-Zarr stores through zarrita and
   `BunFileStore`.
 - `AnnData.from(parsed)` exposes `.obs` and `.var` DataFrames.
-- `toDuckDB(conn)` registers `obs_base` and `var_base` through DuckDB appenders.
+- `toDuckDB(conn)` registers `obs_base` and `var_base`. Every DuckDB table
+  write (obs/var ingest, var columns, annotations) goes through
+  `appendColumns`: typed arrays copied into `DuckDBDataChunk`s, never per-row
+  appends or SQL `VALUES`.
 - `BunFileStore.getRange` supports `{ offset, length }` and `{ suffixLength }`.
   Zarr v3 sharding needs suffix reads for shard indexes.
 
@@ -149,7 +152,7 @@ entrypoints across workspaces.
   (`server/workspace-edits.ts`) and applies the diff as one patch; add new
   agent operations there, not as new write paths.
 - `DatasetQuerySession` (`server/store.ts`) owns one DuckDB connection and the
-  `dataset` VIEW: obs_base plus embedding, var, and annotation joins. Base
+  `dataset` VIEW: obs_base plus var and annotation joins. Base
   tables, the VIEW, temporary selections, and Mosaic preaggregations share that
   connection. `columns()` is the VIEW's column catalog (name → `{ sqlType,
   kind }`), refreshed on every VIEW rebuild; resolve any request- or
@@ -275,6 +278,11 @@ vp run bytecode-order
 
 # Code-health audit (Fallow)
 vp run audit
+
+# Ingest benchmark: synthetic AnnData (Zarr v3) under /tmp/zarr-io-bench/data,
+# then cold/warm start, peak RSS and first-use latency of any checkout's `ndea view`
+vp run bench:ingest -- generate --n-obs 70k [--union | --mudata]
+vp run bench:ingest -- run <dataset.zarr | project.yaml>... [--root <checkout>] [--json]
 
 # Write apps/ndea/package.json's version into src/cli/version.ts before tagging
 vp run release:version

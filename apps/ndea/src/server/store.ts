@@ -4,28 +4,22 @@
  * Ports the Python `server/_store.py` analytical session to TypeScript
  * using the @duckdb/node-api bindings (same as @uwdata/mosaic-duckdb).
  *
- * Data ingestion uses Parquet temp files (DuckDB reads these natively).
+ * Tables are written column-wise through `@ndea/zarr`'s `appendColumns`.
  * Arrow IPC output uses the nanoarrow extension's `to_arrow_ipc()`.
  */
 
 import { rm } from "node:fs/promises";
+import { appendColumns } from "@ndea/zarr";
 import { DuckDBInstance } from "@duckdb/node-api";
 import type { DuckDBConnection } from "@duckdb/node-api";
 import type { AnnotationDtype } from "./protocol.ts";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-/** Metadata about a registered embedding. */
-export interface RegisteredEmbedding {
-  prefix: string;
-  nDims: number;
-  table: string;
-}
-
 type RowData = Record<string, unknown>;
 
 /** Where a `dataset` VIEW column comes from. */
-export type DatasetColumnKind = "obs" | "embedding" | "var" | "annotation";
+export type DatasetColumnKind = "obs" | "var" | "annotation";
 
 /** One column of the `dataset` VIEW, as DuckDB describes it. */
 export interface DatasetColumn {
@@ -93,6 +87,9 @@ function annSqlType(dtype: AnnotationDtype): string {
   if (dtype === "float") return "DOUBLE";
   return "TEXT";
 }
+
+/** Numbers `writeAnnotationValues` staging tables, so concurrent writes never share one. */
+let annStages = 0;
 
 /**
  * SQL literal for an annotation value, typed by the column's dtype. Integer
@@ -190,8 +187,6 @@ export class DatasetQuerySession {
   hasVarTable: boolean = false;
   /** Whether `obs_name` came from the dataset or the row-index fallback. */
   obsNameOrigin: "explicit" | "synthetic" = "explicit";
-  /** Registered embeddings and their metadata. */
-  private _loaded: Map<string, RegisteredEmbedding> = new Map();
   /** Registered var columns: colName → { table, colName }. */
   private _varCols: Map<string, { table: string; colName: string }> = new Map();
   /** Registered user annotation columns: colName → { table, colName, dtype }. */
@@ -314,8 +309,7 @@ export class DatasetQuerySession {
 
     // Re-register persisted var columns (var_* tables, NOT var_base) so
     // hasVarColumn()/registerVarColumn() see them and the dataset VIEW joins
-    // them. Embeddings (emb_*) are intentionally NOT re-registered here :
-    // startup's obsm pre-warm re-creates each via registerEmbedding (DROP+CREATE).
+    // them.
     for (const t of tables) {
       if (!t.startsWith("var_") || t === "var_base") continue;
       const cols = (
@@ -414,58 +408,6 @@ export class DatasetQuerySession {
     }
   }
 
-  /** Read-only snapshot of loaded embeddings. */
-  get loadedEmbeddings(): ReadonlyMap<string, RegisteredEmbedding> {
-    return this._loaded;
-  }
-
-  /**
-   * Register a materialized embedding in DuckDB and rebuild the VIEW.
-   *
-   * @param obsmKey Key in .obsm (e.g. "X_umap").
-   * @param coords  Flat Float32Array of shape [nObs, nDims], row-major.
-   * @param nDims   Number of dimensions (columns) per observation.
-   */
-  async registerEmbedding(obsmKey: string, coords: Float32Array, nDims: number): Promise<void> {
-    const prefix = obsmColumnPrefix(obsmKey);
-    const tableName = `emb_${prefix}`;
-    const nRows = coords.length / nDims;
-
-    // Build column definitions
-    const colDefs: string[] = ["__row_index__ INTEGER"];
-    const colNames: string[] = ["__row_index__"];
-    for (let d = 0; d < nDims; d++) {
-      colDefs.push(`${quoteIdent(`${prefix}_${d}`)} FLOAT`);
-      colNames.push(quoteIdent(`${prefix}_${d}`));
-    }
-
-    // DROP first so a failed prior load (e.g. partial insert) doesn't
-    // leave a phantom table blocking the retry.
-    await this.conn.run(`DROP TABLE IF EXISTS ${tableName}`);
-    await this.conn.run(`CREATE TABLE ${tableName} (${colDefs.join(", ")})`);
-
-    // Insert in batches to avoid overly long SQL. Non-finite floats
-    // (NaN / ±Infinity) are emitted as NULL: DuckDB parses the bare
-    // token `NaN` as an identifier, not a float literal.
-    const batchSize = 1000;
-    for (let start = 0; start < nRows; start += batchSize) {
-      const end = Math.min(start + batchSize, nRows);
-      const valueRows: string[] = [];
-      for (let i = start; i < end; i++) {
-        const vals = [String(i)];
-        for (let d = 0; d < nDims; d++) {
-          const v = coords[i * nDims + d];
-          vals.push(Number.isFinite(v) ? String(v) : "NULL");
-        }
-        valueRows.push(`(${vals.join(", ")})`);
-      }
-      await this.conn.run(`INSERT INTO ${tableName} (${colNames.join(", ")}) VALUES ${valueRows.join(", ")}`);
-    }
-
-    this._loaded.set(obsmKey, { prefix, nDims, table: tableName });
-    await this._rebuildView();
-  }
-
   /** True if a var column with this name has already been materialised. */
   hasVarColumn(colName: string): boolean {
     return this._varCols.has(colName);
@@ -486,18 +428,22 @@ export class DatasetQuerySession {
     const safe = colName.replace(/[^a-zA-Z0-9_]/g, "_");
     const tableName = `var_${safe}`;
 
-    await this.conn.run(`CREATE TABLE ${tableName} (__row_index__ INTEGER, ${quoteIdent(colName)} DOUBLE)`);
-
-    const batchSize = 1000;
-    for (let start = 0; start < values.length; start += batchSize) {
-      const end = Math.min(start + batchSize, values.length);
-      const rows: string[] = [];
-      for (let i = start; i < end; i++) {
-        const v = values[i];
-        rows.push(`(${i}, ${Number.isFinite(v) ? v : "NULL"})`);
-      }
-      await this.conn.run(`INSERT INTO ${tableName} (__row_index__, ${quoteIdent(colName)}) VALUES ${rows.join(", ")}`);
+    const index = new Int32Array(values.length);
+    const nulls = new Uint8Array(values.length);
+    for (let i = 0; i < values.length; i++) {
+      index[i] = i;
+      nulls[i] = Number.isFinite(values[i]) ? 0 : 1;
     }
+    await appendColumns(
+      this.conn,
+      tableName,
+      values.length,
+      [
+        { name: "__row_index__", type: "INTEGER", values: index },
+        { name: colName, type: "DOUBLE", values, nulls },
+      ],
+      { create: true },
+    );
 
     this._varCols.set(colName, { table: tableName, colName });
     await this._rebuildView();
@@ -517,7 +463,7 @@ export class DatasetQuerySession {
   }
 
   /**
-   * The `dataset` VIEW's columns (obs_base minus hidden, embeddings, var and
+   * The `dataset` VIEW's columns (obs_base minus hidden, var and
    * annotation joins), in VIEW order. The one answer to "is this a column?":
    * resolve every request- or document-supplied column name here before it
    * reaches SQL.
@@ -576,21 +522,29 @@ export class DatasetQuerySession {
   ): Promise<void> {
     const entry = this._annotationCols.get(colName);
     if (!entry) throw new Error(`Unknown annotation column: ${colName}`);
-    const batchSize = 1000;
-    for (let start = 0; start < rows.length; start += batchSize) {
-      const batch = rows.slice(start, Math.min(start + batchSize, rows.length));
-      const vals = batch.map((r) => {
-        const v = annValueLiteral(r.value, entry.dtype);
-        const dk = `'${r.datasetKey.replace(/'/g, "''")}'`;
-        const on = `'${r.obsName.replace(/'/g, "''")}'`;
-        return `(${r.rowIndex}, ${dk}, ${on}, ${v})`;
-      });
-      await this.conn.run(
-        `INSERT OR REPLACE INTO ${entry.table} ` +
-          `(__row_index__, dataset_key, obs_name, ${quoteIdent(colName)}) ` +
-          `VALUES ${vals.join(", ")}`,
-      );
-    }
+    const numeric = entry.dtype === "integer" || entry.dtype === "float";
+    // Every value is checked before anything is written; annValueLiteral throws on a bad number.
+    const values = rows.map(({ value }) => {
+      if (value == null || !numeric) return value;
+      const n = Number(annValueLiteral(value, entry.dtype));
+      if (entry.dtype === "integer" && (n | 0) !== n) throw new Error(`Value "${value}" is out of INTEGER range`);
+      return n;
+    });
+    // Upsert: append to a per-call staging table, then INSERT OR REPLACE on the primary key.
+    const stage = `__ann_stage_${++annStages}`;
+    await appendColumns(
+      this.conn,
+      stage,
+      rows.length,
+      [
+        { name: "__row_index__", type: "UINTEGER", get: (r) => rows[r].rowIndex },
+        { name: "dataset_key", type: "TEXT", get: (r) => rows[r].datasetKey },
+        { name: "obs_name", type: "TEXT", get: (r) => rows[r].obsName },
+        { name: colName, type: annSqlType(entry.dtype), get: (r) => values[r] },
+      ],
+      { create: true },
+    );
+    await this.conn.run(`INSERT OR REPLACE INTO ${entry.table} SELECT * FROM ${stage}; DROP TABLE ${stage}`);
   }
 
   /** Drop an annotation column and remove it from the VIEW. */
@@ -680,8 +634,8 @@ export class DatasetQuerySession {
   }
 
   /**
-   * Recreate the `dataset` VIEW over obs_base plus every registered embedding,
-   * var, and annotation join, then refresh `columns()` from `DESCRIBE dataset`.
+   * Recreate the `dataset` VIEW over obs_base plus every registered var and
+   * annotation join, then refresh `columns()` from `DESCRIBE dataset`.
    *
    * Hidden columns are excluded from the VIEW but remain in obs_base
    * for direct queries (e.g. /api/obs).
@@ -704,11 +658,6 @@ export class DatasetQuerySession {
       extraCols.push(`${table}.${quoteIdent(column)}`);
       kinds.set(column, kind);
     };
-
-    for (const meta of this._loaded.values()) {
-      joins.push(`LEFT JOIN ${meta.table} USING (__row_index__)`);
-      for (let i = 0; i < meta.nDims; i++) addExtra(meta.table, `${meta.prefix}_${i}`, "embedding");
-    }
 
     for (const varCol of this._varCols.values()) {
       joins.push(`LEFT JOIN ${varCol.table} USING (__row_index__)`);

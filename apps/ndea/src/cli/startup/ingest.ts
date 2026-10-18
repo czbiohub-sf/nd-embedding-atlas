@@ -1,4 +1,4 @@
-import { ingestDataFrameChunked, ingestDataFramesStreaming, openBunStore, type MuData } from "@ndea/zarr";
+import { ingestDataFrameChunked, ingestDataFrames, openBunStore, type MuData } from "@ndea/zarr";
 import type { DuckDBConnection } from "@duckdb/node-api";
 import { existsSync, mkdirSync, rmSync } from "node:fs";
 import {
@@ -79,7 +79,7 @@ async function createChunkedInitializers(prepared: PreparedDatasets): Promise<In
 function createStreamingInitializers(prepared: PreparedDatasets): Initializers {
   return {
     initStore: async (connection) => {
-      await ingestDataFramesStreaming(
+      await ingestDataFrames(
         connection,
         "obs_base",
         prepared.loaded.map(({ adata }) => adata.obs),
@@ -87,7 +87,7 @@ function createStreamingInitializers(prepared: PreparedDatasets): Initializers {
       );
     },
     initVar: async (connection) => {
-      await ingestDataFramesStreaming(
+      await ingestDataFrames(
         connection,
         "var_base",
         prepared.loaded.map(({ adata }) => adata.var),

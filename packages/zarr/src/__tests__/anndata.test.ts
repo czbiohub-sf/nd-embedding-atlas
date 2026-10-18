@@ -12,7 +12,16 @@ import { existsSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { DuckDBInstance } from "@duckdb/node-api";
-import { BunFileStore, ingestDataFrames, LazyDataFrame, open, openAnnData, openMuData } from "../index.ts";
+import { BoolArray } from "zarrita";
+import {
+  appendColumns,
+  BunFileStore,
+  ingestDataFrames,
+  LazyDataFrame,
+  open,
+  openAnnData,
+  openMuData,
+} from "../index.ts";
 import { SimpleNullable } from "../helpers.ts";
 import type { AnnDataFrame } from "../types.ts";
 import { vlenEncode } from "../write-obs.ts";
@@ -20,6 +29,15 @@ import { vlenEncode } from "../write-obs.ts";
 const FIXTURE = path.resolve(import.meta.dir, "../../../../../ome-atlas-test-data/annotations.zarr");
 const HAS_FIXTURE = existsSync(FIXTURE);
 const TEXT_ENCODER = new TextEncoder();
+
+const frame = (columns: Map<string, unknown>) =>
+  new LazyDataFrame({
+    index: ["a", "b"],
+    columns,
+    columnOrder: [...columns.keys()],
+    column: (name: string) => columns.get(name),
+    [Symbol.iterator]: () => [][Symbol.iterator](),
+  } as unknown as AnnDataFrame);
 
 let temporaryStorePath = "";
 afterEach(async () => {
@@ -304,6 +322,72 @@ describe("AnnData class: symmetric obs/var + toDuckDB", () => {
         await conn.runAndReadAll("SELECT obs_name FROM t_nullable_idx ORDER BY __obs_index__")
       ).getColumnsJS()[0] as string[];
       expect(rows).toEqual(labels); // was ["", "", ""] before the fix
+    } finally {
+      conn.closeSync();
+      db.closeSync();
+    }
+  });
+
+  test("appendColumns writes typed arrays, NULL masks, and per-row values across chunk boundaries", async () => {
+    const n = 5000; // > 2 data chunks of 2048 rows
+    const db = await DuckDBInstance.create(":memory:");
+    const conn = await db.connect();
+    try {
+      await appendColumns(
+        conn,
+        "t",
+        n,
+        [
+          { name: "i", type: "INTEGER", values: Int32Array.from({ length: n }, (_, r) => r) },
+          {
+            name: "f",
+            type: "FLOAT",
+            values: Float32Array.from({ length: n }, (_, r) => r / 2),
+            nulls: Uint8Array.from({ length: n }, (_, r) => (r % 1000 === 3 ? 1 : 0)),
+          },
+          { name: "b", type: "BOOLEAN", values: Uint8Array.from({ length: n }, (_, r) => r % 2) },
+          { name: "big", type: "BIGINT", values: BigInt64Array.from({ length: n }, (_, r) => BigInt(r) * 10n) },
+          { name: "s", type: "VARCHAR", get: (r) => (r % 7 === 0 ? null : `v${r}`) },
+        ],
+        { create: true },
+      );
+      const rows = (
+        await conn.runAndReadAll("SELECT i, f, b, big, s FROM t WHERE i IN (0, 3, 2049, 4999) ORDER BY i")
+      ).getRows();
+      expect(rows).toEqual([
+        [0, 0, false, 0n, null],
+        [3, null, true, 30n, "v3"],
+        [2049, 1024.5, true, 20490n, "v2049"],
+        [4999, 2499.5, true, 49990n, "v4999"],
+      ]);
+    } finally {
+      conn.closeSync();
+      db.closeSync();
+    }
+  });
+
+  test("ingestDataFrames writes bool arrays as BOOLEAN and casts a later frame's differing type", async () => {
+    const first = frame(
+      new Map<string, unknown>([
+        ["flag", new BoolArray(Uint8Array.of(1, 0).buffer)],
+        ["track", Int32Array.of(1, 2)],
+      ]),
+    );
+    const second = frame(new Map<string, unknown>([["track", Float64Array.of(3, 4)]]));
+
+    const db = await DuckDBInstance.create(":memory:");
+    const conn = await db.connect();
+    try {
+      await ingestDataFrames(conn, "u", [first, second], { datasetNames: ["A", "B"], axis: "obs" });
+      const types = (await conn.runAndReadAll("SELECT column_type FROM (DESCRIBE u)")).getColumnsJS()[0];
+      expect(types).toEqual(["INTEGER", "VARCHAR", "VARCHAR", "BOOLEAN", "INTEGER"]);
+      const rows = (await conn.runAndReadAll("SELECT _dataset, flag, track FROM u ORDER BY __obs_index__")).getRows();
+      expect(rows).toEqual([
+        ["A", true, 1],
+        ["A", false, 2],
+        ["B", null, 3],
+        ["B", null, 4],
+      ]);
     } finally {
       conn.closeSync();
       db.closeSync();

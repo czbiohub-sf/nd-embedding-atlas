@@ -78,59 +78,20 @@ describe("DatasetQuerySession", () => {
     expect(result.byteLength).toBeGreaterThan(0);
   });
 
-  test("registerEmbedding creates table and rebuilds VIEW", async () => {
-    const store = await createMockStore(20);
+  test("registerVarColumn joins values by row and stores non-finite values as NULL", async () => {
+    const store = await createMockStore(3000);
     activeStore = store;
 
-    // Create mock 2D embedding coordinates
-    const nDims = 2;
-    const coords = new Float32Array(20 * nDims);
-    for (let i = 0; i < 20; i++) {
-      coords[i * nDims + 0] = i * 1.5;
-      coords[i * nDims + 1] = i * 2.5;
-    }
+    const values = Float64Array.from({ length: 3000 }, (_, i) => i * 0.5);
+    values[2049] = Number.NaN;
+    values[7] = Number.POSITIVE_INFINITY;
+    await store.registerVarColumn("__var_g_X__", values);
 
-    await store.registerEmbedding("X_umap", coords, nDims);
-
-    // Verify the embedding is registered
-    expect(store.loadedEmbeddings.size).toBe(1);
-    expect(store.loadedEmbeddings.get("X_umap")).toBeDefined();
-    expect(store.loadedEmbeddings.get("X_umap")!.prefix).toBe("umap");
-    expect(store.loadedEmbeddings.get("X_umap")!.nDims).toBe(2);
-
-    // Verify we can query embedding columns through the VIEW
-    const rows = await store.queryJson("SELECT umap_0, umap_1 FROM dataset WHERE __row_index__ = 5");
-    expect(rows).toHaveLength(1);
-    expect(Number(rows[0].umap_0)).toBeCloseTo(5 * 1.5, 0);
-    expect(Number(rows[0].umap_1)).toBeCloseTo(5 * 2.5, 0);
-  });
-
-  test("registerEmbedding with multiple embeddings", async () => {
-    const store = await createMockStore(10);
-    activeStore = store;
-
-    const coords2d = new Float32Array(10 * 2);
-    const coords3d = new Float32Array(10 * 3);
-    for (let i = 0; i < 10; i++) {
-      coords2d[i * 2] = i;
-      coords2d[i * 2 + 1] = i * 2;
-      coords3d[i * 3] = i;
-      coords3d[i * 3 + 1] = i * 2;
-      coords3d[i * 3 + 2] = i * 3;
-    }
-
-    await store.registerEmbedding("X_umap", coords2d, 2);
-    await store.registerEmbedding("X_pca", coords3d, 3);
-
-    expect(store.loadedEmbeddings.size).toBe(2);
-
-    // Both should be accessible in the VIEW
+    expect(store.columns().get("__var_g_X__")).toEqual({ sqlType: "DOUBLE", kind: "var" });
     const rows = await store.queryJson(
-      "SELECT umap_0, umap_1, pca_0, pca_1, pca_2 FROM dataset WHERE __row_index__ = 3",
+      `SELECT __row_index__ AS i, "__var_g_X__" AS v FROM dataset WHERE __row_index__ IN (6, 7, 2049, 2999) ORDER BY i`,
     );
-    expect(rows).toHaveLength(1);
-    expect(Number(rows[0].umap_0)).toBeCloseTo(3, 0);
-    expect(Number(rows[0].pca_2)).toBeCloseTo(9, 0);
+    expect(rows.map((r) => r.v)).toEqual([3, null, null, 1499.5]);
   });
 
   test("hidden columns are excluded from VIEW", async () => {

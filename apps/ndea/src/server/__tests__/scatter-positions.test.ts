@@ -92,8 +92,8 @@ describe("scatter-positions: Phase 0 bypass", () => {
     expect(header.ndim).toBe(2);
     expect(header.numCells).toBe(state.accessors.get("fixture")!.nObs);
 
-    // KEY REGRESSION: no DuckDB table was created for this embedding.
-    expect(state.store.loadedEmbeddings.has("X_pca")).toBe(false);
+    // KEY REGRESSION: the embedding never became a DuckDB column.
+    expect(state.store.columns().has("pca_0")).toBe(false);
     // Loader was registered instead.
     expect(state.obsmLoaders.has("X_pca")).toBe(true);
     expect(state.obsmLoaders.get("X_pca")!.width).toBeGreaterThan(1);

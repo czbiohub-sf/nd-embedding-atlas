@@ -1,30 +1,108 @@
 /**
- * DataFrame → DuckDB ingestion via the Appender API.
+ * Columnar DuckDB writes: `appendColumns` fills `DuckDBDataChunk`s straight
+ * from typed arrays and appends them; every table writer (obs_base, var_base,
+ * var and annotation columns) goes through it.
  *
  * Shared between obs_base and var_base paths. Single-dataset: appends every
- * row as-is. Multi-dataset union: caller prepends the `_dataset` column to the
- * schema and passes it per-dataset via `datasetName`.
+ * row as-is. Multi-dataset union: `_dataset` tags each row with its frame's
+ * name.
  */
 
-import type { DuckDBConnection } from "@duckdb/node-api";
-import type { Column } from "@uwdata/flechette";
+import { BoolArray } from "zarrita";
+import { DuckDBDataChunk, DuckDBTypeId } from "@duckdb/node-api";
+import type { DuckDBConnection, DuckDBVector } from "@duckdb/node-api";
 import type { LazyDataFrame } from "./data-frame.ts";
 import { readDataFrameBatches } from "./readers.ts";
 import type { CategoricalArray, ColumnData, NullableArray } from "./types.ts";
 
-type ArrowColumn = Column<unknown>;
+type FixedWidthArray =
+  | Float32Array
+  | Float64Array
+  | Int8Array
+  | Int16Array
+  | Int32Array
+  | BigInt64Array
+  | Uint8Array
+  | Uint16Array
+  | Uint32Array;
+
+/** One table column for `appendColumns`, in table column order. */
+export type AppendColumn = { name: string; type: string } &
+  /** Copied into DuckDB vectors as-is (BOOLEAN takes 0/1 bytes). A truthy `nulls[row]` is NULL. */
+  (
+    | { values: FixedWidthArray; nulls?: ArrayLike<unknown> }
+    /** One value per row, for VARCHAR and anything without a fixed-width layout. null is NULL. */
+    | { get: (row: number) => string | number | boolean | null }
+  );
+
+/** DuckDB's STANDARD_VECTOR_SIZE: the most rows one data chunk holds. */
+const VECTOR_SIZE = 2048;
+
+/**
+ * ponytail: node-api 1.5.6 keeps a fixed-width vector's rows in a private
+ * buffer (`items`, or `dataView` for BOOLEAN) that `flush()` copies into
+ * DuckDB. Filling it with one `TypedArray.set` is a memcpy: 1.5× faster than
+ * `setItem` per row on 1M rows. Re-check the field names on node-api upgrades.
+ */
+function vectorBuffer(vector: DuckDBVector): { set(values: ArrayLike<number | bigint>): void } {
+  const raw = vector as unknown as { items?: FixedWidthArray; dataView?: DataView };
+  if (raw.items) return raw.items;
+  if (raw.dataView && vector.type.typeId === DuckDBTypeId.BOOLEAN) {
+    return new Uint8Array(raw.dataView.buffer, raw.dataView.byteOffset, raw.dataView.byteLength);
+  }
+  throw new Error(`appendColumns: ${vector.type.toString()} has no fixed-width layout; pass \`get\``);
+}
+
+/**
+ * Append `rows` rows to `table` (created first with `create`) from `columns`,
+ * which cover every table column in order. One `DuckDBDataChunk` per 2048
+ * rows: fixed-width values are copied in, `get` columns go through `setItem`.
+ */
+export async function appendColumns(
+  conn: DuckDBConnection,
+  table: string,
+  rows: number,
+  columns: readonly AppendColumn[],
+  options: { create?: boolean } = {},
+): Promise<void> {
+  if (options.create) {
+    const defs = columns.map((c) => `"${c.name.replace(/"/g, '""')}" ${c.type}`);
+    await conn.run(`CREATE OR REPLACE TABLE ${table} (${defs.join(", ")})`);
+  }
+  const appender = await conn.createAppender(table);
+  const types = columns.map((_, i) => appender.columnType(i));
+  for (let r0 = 0; r0 < rows; r0 += VECTOR_SIZE) {
+    const n = Math.min(VECTOR_SIZE, rows - r0);
+    const chunk = DuckDBDataChunk.create(types, n);
+    for (let c = 0; c < columns.length; c++) {
+      const column = columns[c];
+      const vector = chunk.getColumnVector(c);
+      if ("get" in column) {
+        for (let i = 0; i < n; i++) vector.setItem(i, column.get(r0 + i));
+      } else {
+        vectorBuffer(vector).set(column.values.subarray(r0, r0 + n));
+        const nulls = column.nulls;
+        if (nulls) for (let i = 0; i < n; i++) if (nulls[r0 + i]) vector.setItem(i, null);
+      }
+      vector.flush();
+    }
+    appender.appendDataChunk(chunk);
+  }
+  appender.closeSync();
+}
+
+// ─── DataFrame → appendColumns ───────────────────────────────────────────────
 
 export interface IngestOptions {
   /**
-   * Per-DF dataset tags. When length > 1 (or explicitly multi), a `_dataset`
-   * VARCHAR column is prepended to the table and populated per-DF. When
-   * length ≤ 1 or omitted, the `_dataset` column is skipped.
+   * Per-DF dataset tags. When length > 1, a `_dataset` VARCHAR column is
+   * prepended to the table and populated per-DF; otherwise it is skipped.
    */
   datasetNames?: readonly string[];
   /**
-   * Explicit column order for the CREATE TABLE schema. Defaults to the union
-   * of columns across `dfs` in first-seen order. Absent columns in a given DF
-   * append NULL.
+   * Explicit column order for the CREATE TABLE schema. Defaults to `_index`
+   * plus the union of columns across `dfs` in first-seen order. Absent
+   * columns in a given DF append NULL.
    */
   columnOrder?: readonly string[];
   /** Emits `__${axis}_index__ INTEGER` (global across DFs, 0..totalRows-1). */
@@ -33,159 +111,14 @@ export interface IngestOptions {
   includeNameColumn?: boolean;
 }
 
-/**
- * Single-DF convenience. Delegates to `ingestDataFrames`.
- */
-export function ingestDataFrame(
-  conn: DuckDBConnection,
-  tableName: string,
-  df: LazyDataFrame,
-  options: Omit<IngestOptions, "datasetNames"> & { datasetName?: string } = {},
-): Promise<readonly string[]> {
-  const { datasetName, ...rest } = options;
-  return ingestDataFrames(conn, tableName, [df], {
-    ...rest,
-    datasetNames: datasetName === undefined ? undefined : [datasetName],
-  });
+/** The obs/var index, emitted as the first data column. */
+const INDEX_COL = "_index";
+
+function isCategorical(c: ColumnData): c is CategoricalArray {
+  return typeof c === "object" && c !== null && "codes" in c && "categories" in c;
 }
-
-/**
- * CREATE TABLE + append rows for one or more DataFrames as a union.
- *
- * Multi-DF semantics:
- *   - Column schema is the UNION of `dfs[*].columns` (first-seen order).
- *   - Per-column type resolution: first DF to carry a column wins the type;
- *     later DFs missing it append NULL.
- *   - `__${axis}_index__` is GLOBAL (0..totalRows-1), not per-DF: matches
- *     how MuData obsmap eventually wants to address rows.
- *   - `_dataset` column only exists when `datasetNames.length > 1`.
- */
-export async function ingestDataFrames(
-  conn: DuckDBConnection,
-  tableName: string,
-  dfs: readonly LazyDataFrame[],
-  options: IngestOptions = {},
-): Promise<readonly string[]> {
-  if (dfs.length === 0) throw new Error(`ingestDataFrames: no DataFrames for table "${tableName}"`);
-
-  const arrows = dfs.map((df) => df.toArrow());
-
-  // Union of column names preserving first-seen order across DFs.
-  const columnOrder = options.columnOrder ?? unionColumns(arrows);
-
-  // Type resolution: first DF to carry a column wins.
-  const columnTypes = new Map<string, unknown>();
-  for (const a of arrows) {
-    for (const name of a.names) {
-      if (columnTypes.has(name)) continue;
-      const col = a.getChild(name);
-      if (col) columnTypes.set(name, col.type);
-    }
-  }
-
-  const axis = options.axis;
-  const includeName = options.includeNameColumn === true && axis !== undefined;
-  const datasetNames = options.datasetNames;
-  const hasDatasetCol = datasetNames !== undefined && datasetNames.length > 1;
-
-  const colDefs: string[] = [];
-  if (axis) colDefs.push(`__${axis}_index__ INTEGER`);
-  if (includeName) colDefs.push(`${axis}_name VARCHAR`);
-  if (hasDatasetCol) colDefs.push(`"_dataset" VARCHAR`);
-  for (const name of columnOrder) {
-    colDefs.push(`"${name}" ${arrowTypeToDuckDB(columnTypes.get(name))}`);
-  }
-  await conn.run(`CREATE TABLE ${tableName} (${colDefs.join(", ")})`);
-
-  let globalIndex = 0;
-  for (let d = 0; d < dfs.length; d++) {
-    const df = dfs[d];
-    const arrow = arrows[d];
-    const datasetName = datasetNames?.[d];
-    const presentNames = new Set(arrow.names);
-    const columnRefs: (ArrowColumn | null)[] = columnOrder.map((n) =>
-      presentNames.has(n) ? (arrow.getChild(n) ?? null) : null,
-    );
-    const appender = await conn.createAppender(tableName);
-    const n = arrow.numRows;
-    const idx = df.index;
-
-    for (let r = 0; r < n; r++) {
-      if (axis) appender.appendInteger(globalIndex++);
-      if (includeName) appender.appendVarchar(indexLabel(idx, r));
-      if (hasDatasetCol) appender.appendVarchar(datasetName ?? "");
-      for (let c = 0; c < columnOrder.length; c++) {
-        const col = columnRefs[c];
-        if (col == null) {
-          appender.appendNull();
-          continue;
-        }
-        appendArrowValue(appender, col.at(r), col.type);
-      }
-      appender.endRow();
-    }
-    appender.closeSync();
-  }
-
-  return columnOrder;
-}
-
-function unionColumns(arrows: readonly { names: readonly string[] }[]): string[] {
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const a of arrows) {
-    for (const n of a.names) {
-      if (seen.has(n)) continue;
-      seen.add(n);
-      out.push(n);
-    }
-  }
-  return out;
-}
-
-// ─── Arrow → DuckDB type mapping (moved out of cli/startup.ts) ───────────────
-
-export function arrowTypeToDuckDB(type: unknown): string {
-  if (!type || typeof type !== "object") return "VARCHAR";
-  const t = type as { typeId: number; bitWidth?: number; signed?: boolean; precision?: number };
-  switch (t.typeId) {
-    case 1:
-      return "VARCHAR";
-    case 2: {
-      const width = t.bitWidth ?? 32;
-      const signed = t.signed ?? true;
-      if (width === 8) return signed ? "TINYINT" : "UTINYINT";
-      if (width === 16) return signed ? "SMALLINT" : "USMALLINT";
-      if (width === 32) return signed ? "INTEGER" : "UINTEGER";
-      return signed ? "BIGINT" : "UBIGINT";
-    }
-    case 3:
-      return t.precision === 2 ? "DOUBLE" : "FLOAT";
-    case 5:
-      return "VARCHAR";
-    case 6:
-      return "BOOLEAN";
-    case -1:
-      return "VARCHAR";
-    default:
-      return "VARCHAR";
-  }
-}
-
-interface AppenderLike {
-  appendNull(): void;
-  appendBoolean(v: boolean): void;
-  appendTinyInt(v: number): void;
-  appendSmallInt(v: number): void;
-  appendInteger(v: number): void;
-  appendBigInt(v: bigint): void;
-  appendUTinyInt(v: number): void;
-  appendUSmallInt(v: number): void;
-  appendUInteger(v: number): void;
-  appendUBigInt(v: bigint): void;
-  appendFloat(v: number): void;
-  appendDouble(v: number): void;
-  appendVarchar(v: string): void;
+function isNullable(c: ColumnData): c is NullableArray {
+  return typeof c === "object" && c !== null && "values" in c && "mask" in c && !("codes" in c);
 }
 
 function stringifyPrimitive(val: unknown): string {
@@ -207,168 +140,188 @@ function stringifyPrimitive(val: unknown): string {
  */
 function indexLabel(idx: unknown, r: number): string {
   const v =
-    idx != null && typeof (idx as { at?: unknown }).at === "function"
-      ? (idx as { at(i: number): unknown }).at(r)
+    typeof idx === "object" && idx !== null && "at" in idx && typeof idx.at === "function"
+      ? (idx.at as (i: number) => unknown).call(idx, r)
       : (idx as ArrayLike<unknown> | undefined)?.[r];
   return v == null ? "" : stringifyPrimitive(v);
 }
 
-export function appendArrowValue(appender: AppenderLike, val: unknown, type: unknown): void {
-  if (val == null) {
-    appender.appendNull();
-    return;
-  }
-  if (!type || typeof type !== "object") {
-    appender.appendVarchar(stringifyPrimitive(val));
-    return;
-  }
-  const t = type as { typeId: number; bitWidth?: number; signed?: boolean; precision?: number };
-  switch (t.typeId) {
-    case 1:
-      appender.appendNull();
-      return;
-    case 2: {
-      const width = t.bitWidth ?? 32;
-      const signed = t.signed ?? true;
-      if (width === 64) {
-        const big = typeof val === "bigint" ? val : BigInt(Math.trunc(Number(val)));
-        if (signed) appender.appendBigInt(big);
-        else appender.appendUBigInt(big);
-        return;
-      }
-      const num = typeof val === "bigint" ? Number(val) : Number(val);
-      if (width === 8) (signed ? appender.appendTinyInt : appender.appendUTinyInt).call(appender, num);
-      else if (width === 16) (signed ? appender.appendSmallInt : appender.appendUSmallInt).call(appender, num);
-      else (signed ? appender.appendInteger : appender.appendUInteger).call(appender, num);
-      return;
-    }
-    case 3: {
-      const num = Number(val);
-      if (t.precision === 2) appender.appendDouble(num);
-      else appender.appendFloat(num);
-      return;
-    }
-    case 5:
-    case -1:
-      appender.appendVarchar(stringifyPrimitive(val));
-      return;
-    case 6:
-      appender.appendBoolean(Boolean(val));
-      return;
-    default:
-      appender.appendVarchar(stringifyPrimitive(val));
-  }
-}
+const FIXED_WIDTH_TYPES: [new (n: number) => FixedWidthArray, string][] = [
+  [Float32Array, "FLOAT"],
+  [Float64Array, "DOUBLE"],
+  [Int8Array, "TINYINT"],
+  [Int16Array, "SMALLINT"],
+  [Int32Array, "INTEGER"],
+  [BigInt64Array, "BIGINT"],
+  [Uint8Array, "UTINYINT"],
+  [Uint16Array, "USMALLINT"],
+  [Uint32Array, "UINTEGER"],
+];
 
-// ─── Streaming ingest: append straight from source columns (no Arrow table) ──
-//
-// `ingestDataFrames` builds a full flechette Arrow Table (`df.toArrow()`) AND
-// decodes categoricals to full string arrays before the Appender drains them :
-// multiple coexisting full copies that drive peak RSS (bench Cycle 0-2). This
-// variant reads each `AnnDataFrame` source column directly and appends per row,
-// keeping categoricals code-encoded (the category string is looked up per row
-// and handed to DuckDB's native buffer, never materialized as a JS array).
-// Same DuckDB column types + null semantics as the Arrow path, so results are
-// identical (enforced by bench/verify.ts).
-
-type CellAppender = (a: AppenderLike, r: number) => void;
-
-function isCategoricalCol(c: ColumnData): c is CategoricalArray {
-  return typeof c === "object" && c !== null && "codes" in c && "categories" in c;
-}
-function isNullableCol(c: ColumnData): c is NullableArray {
-  return typeof c === "object" && c !== null && "values" in c && "mask" in c && !("codes" in c);
-}
-
-/** TypedArray → {DuckDB type, per-row appender}, mirroring `arrowTypeToDuckDB`. */
-function numericSpec(v: ArrayLike<unknown>): { type: string; append: CellAppender } | null {
-  if (v instanceof Float32Array) return { type: "FLOAT", append: (a, r) => a.appendFloat(v[r]) };
-  if (v instanceof Float64Array) return { type: "DOUBLE", append: (a, r) => a.appendDouble(v[r]) };
-  if (v instanceof Int8Array) return { type: "TINYINT", append: (a, r) => a.appendTinyInt(v[r]) };
-  if (v instanceof Int16Array) return { type: "SMALLINT", append: (a, r) => a.appendSmallInt(v[r]) };
-  if (v instanceof Int32Array) return { type: "INTEGER", append: (a, r) => a.appendInteger(v[r]) };
-  if (v instanceof BigInt64Array) return { type: "BIGINT", append: (a, r) => a.appendBigInt(v[r]) };
-  if (v instanceof Uint8Array) return { type: "UTINYINT", append: (a, r) => a.appendUTinyInt(v[r]) };
-  if (v instanceof Uint16Array) return { type: "USMALLINT", append: (a, r) => a.appendUSmallInt(v[r]) };
-  if (v instanceof Uint32Array) return { type: "UINTEGER", append: (a, r) => a.appendUInteger(v[r]) };
-  if (v instanceof BigUint64Array) return { type: "DOUBLE", append: (a, r) => a.appendDouble(Number(v[r])) };
-  return null;
-}
-
-/** Resolve a source column to its DuckDB type + a per-row appender closure. */
-function colSpec(col: ColumnData): { type: string; append: CellAppender } {
-  if (isCategoricalCol(col)) {
-    const { codes, categories } = col;
-    return {
-      type: "VARCHAR",
-      append: (a, r) => {
-        const c = codes[r];
-        if (c < 0) a.appendNull();
-        else a.appendVarchar(String(categories[c]));
-      },
-    };
-  }
-  if (isNullableCol(col)) {
-    const { values, mask } = col;
-    const vals = values as ArrayLike<unknown>;
-    // String-or-plain-array first, then bool (Uint8), then numeric: matches
-    // the order in `convertNullable` so types/values agree with the Arrow path.
-    if (typeof vals[0] === "string" || Array.isArray(values)) {
-      return { type: "VARCHAR", append: (a, r) => (mask[r] ? a.appendNull() : a.appendVarchar(String(vals[r]))) };
-    }
-    if (values instanceof Uint8Array) {
-      return { type: "BOOLEAN", append: (a, r) => (mask[r] ? a.appendNull() : a.appendBoolean(values[r] !== 0)) };
-    }
-    const num = numericSpec(vals);
-    if (num) return { type: num.type, append: (a, r) => (mask[r] ? a.appendNull() : num.append(a, r)) };
-    return {
-      type: "DOUBLE",
-      append: (a, r) => (mask[r] ? a.appendNull() : a.appendDouble(Number(vals[r]))),
-    };
-  }
-  // Plain array → VARCHAR, stringified (mirrors convertColumn's `utf8()` for
-  // Array.isArray, which stringifies even booleans → "true"/"false"). Typed as
-  // string[] but runtime may hold booleans, so the String() is load-bearing.
-  if (Array.isArray(col)) {
-    const arr = col as unknown as unknown[];
-    return {
-      type: "VARCHAR",
-      append: (a, r) => {
-        const v = arr[r];
-        if (v == null) a.appendNull();
-        else a.appendVarchar(stringifyPrimitive(v));
-      },
-    };
-  }
-  const num = numericSpec(col);
-  if (num) return num;
-  // Non-Array iterable (e.g. zarrita BoolArray): convertColumn detects boolean →
-  // bool(), else undefined → VARCHAR. Mirror without Array.from (stay streaming).
-  const arrLike = col as unknown as ArrayLike<unknown>;
-  if (typeof arrLike[0] === "boolean") {
-    return {
-      type: "BOOLEAN",
-      append: (a, r) => {
-        const v = arrLike[r];
-        if (v == null) a.appendNull();
-        else a.appendBoolean(Boolean(v));
-      },
-    };
-  }
-  return { type: "VARCHAR", append: (a, r) => a.appendVarchar(stringifyPrimitive(arrLike[r])) };
+/** A typed array as a fixed-width column (BigUint64 widens to DOUBLE), or null. */
+function fixedWidth(name: string, v: unknown, nulls?: Uint8Array): AppendColumn | null {
+  if (v instanceof BigUint64Array) return { name, type: "DOUBLE", values: Float64Array.from(v, Number), nulls };
+  const match = FIXED_WIDTH_TYPES.find(([ctor]) => v instanceof ctor);
+  return match ? { name, type: match[1], values: v as FixedWidthArray, nulls } : null;
 }
 
 /**
- * `_index` is the obs/var index, which `toArrowTable` prepends as the first
- * data column. The streaming path must emit it too (sourced from `df.index`)
- * or obs_base's column set diverges from the Arrow path.
+ * A decoded source column as an `appendColumns` column: categoricals and
+ * strings → VARCHAR, bool arrays → BOOLEAN, typed arrays → their DuckDB type,
+ * nullable encodings carry their mask as NULLs.
  */
-const INDEX_COL = "_index";
+function sourceColumn(name: string, col: ColumnData): AppendColumn {
+  if (isCategorical(col)) {
+    const { codes, categories } = col;
+    return { name, type: "VARCHAR", get: (r) => (codes[r] < 0 ? null : String(categories[codes[r]])) };
+  }
+  if (isNullable(col)) {
+    const { values, mask } = col;
+    if (values instanceof BoolArray) {
+      // zarrita's bool arrays wrap 0/1 bytes, the same bytes DuckDB BOOLEAN takes.
+      return {
+        name,
+        type: "BOOLEAN",
+        values: new Uint8Array(values.buffer, values.byteOffset, values.length),
+        nulls: mask,
+      };
+    }
+    if (typeof values[0] === "string" || Array.isArray(values)) {
+      return { name, type: "VARCHAR", get: (r) => (mask[r] ? null : String(values[r])) };
+    }
+    if (values instanceof Uint8Array) return { name, type: "BOOLEAN", get: (r) => (mask[r] ? null : values[r] !== 0) };
+    return (
+      fixedWidth(name, values, mask) ?? {
+        name,
+        type: "DOUBLE",
+        values: Float64Array.from({ length: mask.length }, (_, r) => Number(values[r])),
+        nulls: mask,
+      }
+    );
+  }
+  if (col instanceof BoolArray) {
+    return { name, type: "BOOLEAN", values: new Uint8Array(col.buffer, col.byteOffset, col.length) };
+  }
+  if (Array.isArray(col)) {
+    // Stringified even when the array holds numbers or booleans.
+    const arr = col as unknown[];
+    return { name, type: "VARCHAR", get: (r) => (arr[r] == null ? null : stringifyPrimitive(arr[r])) };
+  }
+  const fixed = fixedWidth(name, col);
+  if (fixed) return fixed;
+  // Other zarrita array-likes (e.g. UnicodeStringArray) are only iterable.
+  const arr = Array.from(col as Iterable<unknown>);
+  if (typeof arr[0] === "boolean") return { name, type: "BOOLEAN", get: (r) => (arr[r] == null ? null : !!arr[r]) };
+  return sourceColumn(name, arr as unknown as ColumnData);
+}
 
-/** A DF's columns including the prepended `_index`, in `toArrowTable` order. */
-function getCol(df: LazyDataFrame, name: string): ColumnData | undefined {
-  if (name === INDEX_COL) return df.index as unknown as ColumnData;
-  return df.getColumn(name);
+/** Rows of one DataFrame (or one window of it). */
+interface Frame {
+  index: unknown;
+  length: number;
+  column(name: string): ColumnData | undefined;
+}
+
+/** A frame's table columns: identity columns, then `names` (NULL where the frame lacks one). */
+function frameColumns(
+  frame: Frame,
+  names: readonly string[],
+  types: ReadonlyMap<string, string>,
+  firstRow: number,
+  options: IngestOptions,
+  datasetName?: string,
+): AppendColumn[] {
+  const columns: AppendColumn[] = [];
+  const { axis } = options;
+  if (axis) {
+    const index = new Int32Array(frame.length);
+    for (let r = 0; r < index.length; r++) index[r] = firstRow + r;
+    columns.push({ name: `__${axis}_index__`, type: "INTEGER", values: index });
+    if (options.includeNameColumn) {
+      columns.push({ name: `${axis}_name`, type: "VARCHAR", get: (r) => indexLabel(frame.index, r) });
+    }
+  }
+  if (datasetName !== undefined) columns.push({ name: "_dataset", type: "VARCHAR", get: () => datasetName });
+  for (const name of names) {
+    const col = name === INDEX_COL ? (frame.index as ColumnData) : frame.column(name);
+    columns.push(col ? sourceColumn(name, col) : { name, type: types.get(name) ?? "VARCHAR", get: () => null });
+  }
+  return columns;
+}
+
+/**
+ * Append a frame into `table`, created from the first frame's columns. A
+ * later frame whose column types differ (first frame wins) is staged in its
+ * own types and inserted, so DuckDB casts it.
+ */
+async function appendFrame(
+  conn: DuckDBConnection,
+  table: string,
+  tableTypes: readonly string[] | null,
+  rows: number,
+  columns: AppendColumn[],
+): Promise<readonly string[]> {
+  if (tableTypes === null) {
+    await appendColumns(conn, table, rows, columns, { create: true });
+    return columns.map((c) => c.type);
+  }
+  if (columns.every((c, i) => c.type === tableTypes[i])) {
+    await appendColumns(conn, table, rows, columns);
+  } else {
+    await appendColumns(conn, "__ingest_stage", rows, columns, { create: true });
+    await conn.run(`INSERT INTO ${table} SELECT * FROM __ingest_stage; DROP TABLE __ingest_stage`);
+  }
+  return tableTypes;
+}
+
+/** Single-DF convenience. Delegates to `ingestDataFrames`. */
+export function ingestDataFrame(
+  conn: DuckDBConnection,
+  tableName: string,
+  df: LazyDataFrame,
+  options: Omit<IngestOptions, "datasetNames"> = {},
+): Promise<readonly string[]> {
+  return ingestDataFrames(conn, tableName, [df], options);
+}
+
+/**
+ * CREATE TABLE + append one or more DataFrames as a union.
+ *
+ * Multi-DF semantics:
+ *   - Column schema is `_index` plus the UNION of `dfs[*].columns`
+ *     (first-seen order).
+ *   - Per-column type resolution: first DF to carry a column wins the type;
+ *     later DFs missing it append NULL.
+ *   - `__${axis}_index__` is GLOBAL (0..totalRows-1), not per-DF.
+ *   - `_dataset` column only exists when `datasetNames.length > 1`.
+ */
+export async function ingestDataFrames(
+  conn: DuckDBConnection,
+  tableName: string,
+  dfs: readonly LazyDataFrame[],
+  options: IngestOptions = {},
+): Promise<readonly string[]> {
+  if (dfs.length === 0) throw new Error(`ingestDataFrames: no DataFrames for table "${tableName}"`);
+  const names = options.columnOrder ?? unionSourceColumns(dfs);
+  const types = new Map<string, string>();
+  for (const df of dfs) {
+    for (const name of names) {
+      const col = name === INDEX_COL ? (df.index as unknown as ColumnData) : df.getColumn(name);
+      if (col && !types.has(name)) types.set(name, sourceColumn(name, col).type);
+    }
+  }
+  const tags = options.datasetNames !== undefined && options.datasetNames.length > 1 ? options.datasetNames : null;
+
+  let tableTypes: readonly string[] | null = null;
+  let firstRow = 0;
+  for (let d = 0; d < dfs.length; d++) {
+    const df = dfs[d];
+    const frame: Frame = { index: df.index, length: df.length, column: (name) => df.getColumn(name) };
+    const columns = frameColumns(frame, names, types, firstRow, options, tags?.[d]);
+    tableTypes = await appendFrame(conn, tableName, tableTypes, df.length, columns);
+    firstRow += df.length;
+  }
+  return names;
 }
 
 function unionSourceColumns(dfs: readonly LazyDataFrame[]): string[] {
@@ -385,117 +338,29 @@ function unionSourceColumns(dfs: readonly LazyDataFrame[]): string[] {
 }
 
 /**
- * Drop-in streaming alternative to `ingestDataFrames`: identical schema/union
- * semantics (incl. the prepended `_index` column), but never materializes an
- * Arrow Table. Peak JS allocation is the source columns (already decoded) plus
- * one row's worth of appended values. Verified result-identical by bench/verify.ts.
- */
-export async function ingestDataFramesStreaming(
-  conn: DuckDBConnection,
-  tableName: string,
-  dfs: readonly LazyDataFrame[],
-  options: IngestOptions = {},
-): Promise<readonly string[]> {
-  if (dfs.length === 0) throw new Error(`ingestDataFramesStreaming: no DataFrames for table "${tableName}"`);
-
-  const columnOrder = options.columnOrder ?? unionSourceColumns(dfs);
-
-  // First DF to carry a column wins its DuckDB type.
-  const colType = new Map<string, string>();
-  for (const df of dfs) {
-    for (const name of columnOrder) {
-      if (colType.has(name)) continue;
-      const col = getCol(df, name);
-      if (col) colType.set(name, colSpec(col).type);
-    }
-  }
-
-  const axis = options.axis;
-  const includeName = options.includeNameColumn === true && axis !== undefined;
-  const datasetNames = options.datasetNames;
-  const hasDatasetCol = datasetNames !== undefined && datasetNames.length > 1;
-
-  const colDefs: string[] = [];
-  if (axis) colDefs.push(`__${axis}_index__ INTEGER`);
-  if (includeName) colDefs.push(`${axis}_name VARCHAR`);
-  if (hasDatasetCol) colDefs.push(`"_dataset" VARCHAR`);
-  for (const name of columnOrder) colDefs.push(`"${name}" ${colType.get(name) ?? "VARCHAR"}`);
-  await conn.run(`CREATE TABLE ${tableName} (${colDefs.join(", ")})`);
-
-  let globalIndex = 0;
-  for (let d = 0; d < dfs.length; d++) {
-    const df = dfs[d];
-    const datasetName = datasetNames?.[d];
-    const appenders: (CellAppender | null)[] = columnOrder.map((name) => {
-      const col = getCol(df, name);
-      return col ? colSpec(col).append : null;
-    });
-    const idx = df.index;
-    const n = df.length;
-    const appender = await conn.createAppender(tableName);
-    for (let r = 0; r < n; r++) {
-      if (axis) appender.appendInteger(globalIndex++);
-      if (includeName) appender.appendVarchar(indexLabel(idx, r));
-      if (hasDatasetCol) appender.appendVarchar(datasetName ?? "");
-      for (let c = 0; c < appenders.length; c++) {
-        const ap = appenders[c];
-        if (ap === null) appender.appendNull();
-        else ap(appender, r);
-      }
-      appender.endRow();
-    }
-    appender.closeSync();
-  }
-  return columnOrder;
-}
-
-/**
- * Chunked streaming ingest: reads the zarr DataFrame in row-windows
+ * Chunked ingest: reads the zarr DataFrame in row-windows
  * (`readDataFrameBatches`) and appends each batch, so peak JS allocation is
  * O(batch) not O(whole obs). Single-DF / AnnData layout only (no `_dataset`
- * union). Same `_index`-prepended schema + null semantics as the other paths;
- * verified result-identical by bench/verify.ts.
+ * union). Same `_index`-prepended schema + null semantics as `ingestDataFrames`.
  */
 export async function ingestDataFrameChunked(
   conn: DuckDBConnection,
   tableName: string,
   store: Parameters<typeof readDataFrameBatches>[0],
   groupPath: string,
-  options: Pick<IngestOptions, "axis" | "includeNameColumn"> & { datasetName?: string } = {},
+  options: Pick<IngestOptions, "axis" | "includeNameColumn"> = {},
   batchSize = 250_000,
 ): Promise<readonly string[]> {
-  const axis = options.axis;
-  const includeName = options.includeNameColumn === true && axis !== undefined;
-
-  let appender: Awaited<ReturnType<DuckDBConnection["createAppender"]>> | null = null;
-  let columnOrder: string[] = [];
-  let globalIndex = 0;
-
+  let names: string[] = [];
+  let tableTypes: readonly string[] | null = null;
+  let firstRow = 0;
   for await (const batch of readDataFrameBatches(store, groupPath, batchSize)) {
-    const names = appender === null ? ["_index", ...batch.columns.keys()] : columnOrder;
-    // colSpec closures bind to THIS batch's freshly-sliced arrays: rebuilt per batch.
-    const specs = names.map((n) => colSpec(n === "_index" ? batch.index : (batch.columns.get(n) as ColumnData)));
-
-    if (appender === null) {
-      const colDefs: string[] = [];
-      if (axis) colDefs.push(`__${axis}_index__ INTEGER`);
-      if (includeName) colDefs.push(`${axis}_name VARCHAR`);
-      names.forEach((n, i) => colDefs.push(`"${n}" ${specs[i].type}`));
-      await conn.run(`CREATE TABLE ${tableName} (${colDefs.join(", ")})`);
-      columnOrder = names;
-      appender = await conn.createAppender(tableName);
-    }
-
-    const idx = batch.index as unknown as ArrayLike<unknown>;
-    for (let r = 0; r < batch.n; r++) {
-      if (axis) appender.appendInteger(globalIndex++);
-      if (includeName) appender.appendVarchar(indexLabel(idx, r));
-      for (let c = 0; c < specs.length; c++) specs[c].append(appender, r);
-      appender.endRow();
-    }
+    if (tableTypes === null) names = [INDEX_COL, ...batch.columns.keys()];
+    const frame: Frame = { index: batch.index, length: batch.n, column: (name) => batch.columns.get(name) };
+    const columns = frameColumns(frame, names, new Map(), firstRow, options);
+    tableTypes = await appendFrame(conn, tableName, tableTypes, batch.n, columns);
+    firstRow += batch.n;
   }
-
-  if (appender === null) throw new Error(`ingestDataFrameChunked: "${groupPath}" yielded no rows`);
-  appender.closeSync();
-  return columnOrder;
+  if (tableTypes === null) throw new Error(`ingestDataFrameChunked: "${groupPath}" yielded no rows`);
+  return names;
 }

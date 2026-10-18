@@ -12,7 +12,6 @@
   },
   "dependencies": {
     "@duckdb/node-api": "catalog:",
-    "@uwdata/flechette": "catalog:",
     "@zarrita/storage": "catalog:",
     "zarrita": "catalog:"
   },
