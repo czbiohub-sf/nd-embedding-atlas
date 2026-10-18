@@ -13,17 +13,6 @@ export function hasFilterPredicate(predicate: FilterExpr | null | undefined): bo
   return text !== "" && text !== "null" && text !== "true";
 }
 
-/** One row per non-empty 32-row word: `w` = row >> 5, `bits` = OR of 1 << (row & 31). */
-export function predicateBitsQuery(table: string, predicate: FilterExpr) {
-  return Query.from(table)
-    .select({
-      w: sql`(__row_index__ // 32)::UINTEGER`,
-      bits: sql`bit_or(1::UBIGINT << (__row_index__ % 32)::INTEGER)::UINTEGER`,
-    })
-    .where(hasFilterPredicate(predicate) ? filterExprToExpr(predicate) : literal(false))
-    .groupby("w");
-}
-
 /** Scatter `(w, bits)` rows into a bit layer; words past the last match stay absent (= 0). */
 export function scatterWords(w: ArrayLike<number>, bits: ArrayLike<number>): Uint32Array {
   let length = 0;
@@ -51,8 +40,16 @@ export function usePredicateBits(options: { coordinator: Coordinator; filter: Fi
 
   const query = useCallback(
     (predicate: FilterExpr) => {
-      setActive(hasFilterPredicate(predicate));
-      return predicateBitsQuery(table, predicate);
+      const filtered = hasFilterPredicate(predicate);
+      setActive(filtered);
+      // One row per non-empty 32-row word: `w` = row >> 5, `bits` = OR of 1 << (row & 31).
+      return Query.from(table)
+        .select({
+          w: sql`(__row_index__ // 32)::UINTEGER`,
+          bits: sql`bit_or(1::UBIGINT << (__row_index__ % 32)::INTEGER)::UINTEGER`,
+        })
+        .where(filtered ? filterExprToExpr(predicate) : literal(false))
+        .groupby("w");
     },
     [table],
   );

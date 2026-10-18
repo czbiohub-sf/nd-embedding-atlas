@@ -86,7 +86,15 @@ entrypoints across workspaces.
   mouse events. Shutdown closes Chrome; `ndea self doctor` probes it.
 - REST routes cover health, embeddings, observations, scatter data,
   variables, categorization, annotations, exports, crops, filtering, sets, and
-  the workspace document.
+  the workspace document. `GET /api/status` (the runtime snapshot) and
+  `GET /api/status/datasets/:name/structure` take the MCP bearer token because
+  they expose filesystem paths.
+- Trust model: local trust. `ndea view` binds 127.0.0.1; reach a remote
+  server through SSH forwarding. `/ws`, `/ws/render`, `/plate/*`,
+  `/data/query`, and the REST data routes are unauthenticated by design under
+  that model; `/mcp` adds loopback `Host`/`Origin` plus the bearer, and the two
+  status routes take the bearer. `--host` with a non-loopback address prints a
+  startup warning; it adds no auth.
 - The workspace document has three sections: `data` (named data sources),
   `spec` (the json-render dashboard), and `state` (coordination cells).
   `frontend/core/workspace/document.ts` validates all of it and is pure, so the
@@ -102,7 +110,9 @@ entrypoints across workspaces.
   `workspaceIssues` (`server/routes/workspace.ts`) for unknown set references
   and typed clauses (data-source `where`, `state.filter`) naming columns the
   dataset lacks. Raw `data.sql` is checked only when it runs. Startup logs the
-  same issues for the workspace file instead of refusing it.
+  same issues for the workspace file instead of refusing it. The accepted
+  document is deep-frozen (`get()` hands out that object; ops apply to a
+  `structuredClone`), so a reader can't mutate it around `patch`.
 - Each accepted write appends a row (revision, base, actor, ops, document,
   time, `restoredFrom`) to `<workspace>.history.sqlite` (`bun:sqlite`) in the
   same transaction as the atomic JSON write; a failed write rolls the row
@@ -196,10 +206,14 @@ entrypoints across workspaces.
 - A data component reads `props.data` (a named source; omitted means every
   observation). Sources chain through `from` and narrow by a typed `where`
   clause and/or a `sql` predicate.
-- Every document write goes through `Workspace.commit`; local edits,
-  coordination writes, and remote revisions (`Workspace.applyDocument`) share
-  that path. `WorkspaceSync` diffs the document store against the server's
-  acknowledged revision and PATCHes the difference.
+- Every document write goes through `WorkspaceStore.commit`; local edits,
+  coordination writes, and remote revisions (`WorkspaceStore.applyDocument`)
+  share that path. Views ask it questions (`element(id)`,
+  `elementPredicate(id)`, `coordination.filterFacet`/`setFilterFacet`/
+  `stateStore`) instead of reading document shape; only `WorkspaceSync`, the
+  History panel, and json-render's spec read `snapshot()`. `WorkspaceSync`
+  diffs `snapshot()` against the server's acknowledged revision and PATCHes
+  the difference.
 - `WorkspaceSync.onRevision` streams every accepted revision (this tab's
   too; `clientId` only marks its own echoes). `WorkspaceHistory`
   (`core/workspace/history.ts`) is the History panel's read model: the newest
@@ -334,7 +348,7 @@ and free of frontend imports.
   column catalog.
 - **Workspace authority:** The server document is the only persisted workspace.
   Never write workspace state to `localStorage`. Session state (selection,
-  fullscreen) lives in `Workspace.session`; add new editor-only fields to
+  fullscreen) lives in `WorkspaceStore.session`; add new editor-only fields to
   `WorkspaceSession` in `workspace/types.ts`. The file
   format accepts only its exact version; there are no migrations.
 - **Workers:** `new URL("./worker.ts", import.meta.url)` must work in development

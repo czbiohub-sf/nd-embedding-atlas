@@ -46,6 +46,11 @@ export function printReady(
   if (networkAddress && config.host !== "127.0.0.1") {
     console.log(`  ${heading("Network")}  ${url(`http://${networkAddress}:${config.port}`)}`);
   }
+  if (!["127.0.0.1", "localhost", "::1"].includes(config.host)) {
+    console.warn(
+      `  ${warn(`bound to ${config.host}: data, /ws and /plate routes are unauthenticated; prefer loopback + SSH forwarding`)}`,
+    );
+  }
   console.log(
     `  ${heading("MCP")}      ${url(`${origin}/mcp`)}  ${label("(Authorization: Bearer <~/.ndea/mcp-token>)")}`,
   );

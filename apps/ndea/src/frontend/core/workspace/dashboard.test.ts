@@ -74,11 +74,13 @@ describe("data sources", () => {
   });
 
   test("an element sees its source AND every other scope member's clauses, never its own", () => {
-    const cell = {
+    const filter = {
       me: { lasso: { op: "eq" as const, column: "x", value: 1 } },
       other: { chart: { op: "eq" as const, column: "y", value: 2 } },
     };
-    const sql = elementPredicate(data, "infected", cell, "me")!;
+    const me = { type: "table", props: { data: "infected", filter: { $bindState: "/filter/A" } }, children: [] };
+    const document = { data, spec: { root: "me", elements: { me } }, state: { filter: { A: filter } } };
+    const sql = elementPredicate(document, "me")!;
     expect(sql).toContain(`"state" = 'infected'`);
     expect(sql).toContain(`"y" = 2`);
     expect(sql).not.toContain(`"x"`);

@@ -12,7 +12,6 @@ import { Selection } from "@uwdata/mosaic-core";
 
 import { stringPredicate, toRows } from "@/lib/mosaic-helpers";
 import type { CoordinationScopeCellPort } from "./coordination";
-import { setFilterFacet } from "./types";
 
 export interface FilterBinding extends FilterCoordinationAPI {
   setPredicate(sql: string | null): void;
@@ -49,11 +48,7 @@ export function createFilterBinding({
 
   const writeFacet = (facet: FilterFacet, clause: FilterClause | null) => {
     assertLive();
-    const scope = coordination.scopeOf(elementId, "filter");
-    if (scope === undefined) return;
-    const cell = coordination.readCoordination("filter", scope) ?? {};
-    const next = setFilterFacet(cell, elementId, facet, clause);
-    if (next !== cell) coordination.setCoordinationValue("filter", scope, next);
+    coordination.setFilterFacet(elementId, facet, clause);
   };
 
   return {

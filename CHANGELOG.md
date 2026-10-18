@@ -49,6 +49,7 @@
 ### 🛡️ Security
 
 - _(server)_ `/api/categorize`, `/api/scatter-categories`, `/api/scatter-continuous-values`, and `/api/trajectory` resolve request column names against the dataset's column catalog (400 `Unknown column` otherwise) and quote every identifier with `quoteIdent`; a name like `x" ; DROP TABLE obs_base; --` could previously break out of the bare `"${column}"` quoting
+- _(server)_ Document the local-trust model in AGENTS.md and the CLI docs: bind loopback and reach remote servers over SSH forwarding; `/ws`, `/ws/render`, `/plate/*`, `/data/query`, and the REST data routes are unauthenticated by design, `/mcp` checks loopback `Host`/`Origin` plus the bearer, and the two `/api/status` routes take the bearer. `ndea view --host` with a non-loopback address now prints a startup warning
 
 ### 🚜 Refactor
 
@@ -89,12 +90,15 @@
 - _(server)_ Delete the `/mosaic` WebSocket adapter; Mosaic 0.33 dropped `socketConnector`, so the browser `Coordinator` uses `restConnector` against `/data/query`
 - _(server)_ `DatasetQuerySession.columns()` is the one column catalog (name → `{ sqlType, kind }`, refreshed on every `dataset` VIEW rebuild); MCP `list_columns` reads it and adds each column's `kind`. `ServerSession.obsColumns`/`port`, `datasetColumnExists`, `invalidateSchemaCache`, and external `_rebuildView` calls are gone; `/api/categorize` adds its index column through `addObsIndexColumn`
 - [**breaking**] _(server)_ Delete `GET /api/config` and the protocol `ConfigResponseSchema`; nothing called it, and `/data/metadata.json` carries the same facts
+- _(server)_ The server `Workspace` deep-freezes the accepted document at open and on every commit, so `get()` readers can't change authoritative state around `patch`; ops still apply to a `structuredClone`
+- _(frontend)_ Frontend `Workspace` → `WorkspaceStore`; its read interface is `element`/`elementPredicate`/`snapshot`/`subscribe`, and `elementPredicate(document, id)` replaces the four-argument form
 
 ### ⚙️ Miscellaneous Tasks
 
 - _(frontend)_ Switch to bun, document API contract for server port
 - Drop unused deps + merge duplicate resolveFrontendDir
 - _(server)_ Review cleanup: try/catch dedup, colormap wire-up, Bun concat
+- Drop the unused `playwright` and `@playwright/test` dev dependencies; Fallow ignores `node-addon-api` and `node-api-headers`, which `build-duckdb-addon.ts` resolves by path
 
 ## [0.0.3] - 2026-04-09
 

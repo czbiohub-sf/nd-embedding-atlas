@@ -26,7 +26,7 @@ import {
   type WorkspaceProblem,
 } from "@ndea/protocol";
 import { z } from "zod";
-import { COMPONENTS, elementData, elementScope } from "../../frontend/core/workspace/dashboard.ts";
+import { COMPONENTS } from "../../frontend/core/workspace/dashboard.ts";
 import { dataSourceSql, elementPredicate } from "../../frontend/core/workspace/data-sources.ts";
 import type { WorkspaceIssue } from "../../frontend/core/workspace/document.ts";
 import type { WorkspaceDocument } from "../../frontend/core/workspace/types.ts";
@@ -170,9 +170,7 @@ export async function workspaceResult(
     if (!COMPONENTS[element.type]?.reads) {
       return { status: 400, body: { revision, error: `element "${id}" (${element.type}) reads no data` } };
     }
-    const scope = elementScope(element, "filter");
-    const cell = scope === undefined ? undefined : doc.state.filter?.[scope];
-    predicate = elementPredicate(doc.data, elementData(element), cell, id);
+    predicate = elementPredicate(doc, id);
   } else {
     if (!Object.hasOwn(doc.data, target.data)) {
       return { status: 404, body: { revision, error: `no data source "${target.data}"` } };

@@ -84,6 +84,42 @@ function applyPredicateFilter(gpu: ScatterplotHandle | null, bits: Uint32Array |
   else gpu.setPredicateFilter(bits);
 }
 
+type Forwarded = Exclude<keyof ScatterGPUHostHandle, "project">;
+/** Host-handle methods forwarded verbatim; `satisfies` keeps the list exhaustive. */
+const FORWARDED = Object.keys({
+  setColors: 0,
+  setContinuousColors: 0,
+  setContinuousRange: 0,
+  setContinuousReversed: 0,
+  setContinuousScale: 0,
+  setContinuousLut: 0,
+  setExternalSelection: 0,
+  clearExternalSelection: 0,
+  clearSelection: 0,
+  setForcedSelectionMode: 0,
+  setSelectionDepth: 0,
+  setPredicateFilter: 0,
+  clearPredicateFilter: 0,
+  setCategoryIsolation: 0,
+  clearCategoryIsolation: 0,
+  setCategoryDisabled: 0,
+  clearCategoryDisabled: 0,
+  setTrajectoryIsolation: 0,
+  clearTrajectoryIsolation: 0,
+  setContinuousIsolation: 0,
+  clearContinuousIsolation: 0,
+  setHighlightPoints: 0,
+  clearHighlight: 0,
+  setViewState: 0,
+  fitView: 0,
+  setProjection: 0,
+  setPointRadius: 0,
+  setPointOpacity: 0,
+  setHdrSettings: 0,
+  setBlendMode: 0,
+  setDensityMode: 0,
+} satisfies Record<Forwarded, 0>) as Forwarded[];
+
 export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostProps>(function ScatterGPUHost(
   // eslint-disable-next-line @typescript-eslint/unbound-method
   { data, positionKey, config, onGpuError, onReady, pointStyle, highlightRowIds, predicateBits, trajectoryPath },
@@ -93,7 +129,7 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
   const overlayElRef = useRef<HTMLCanvasElement | null>(null);
   const gpuRef = useRef<ScatterplotHandle | null>(null);
   const initKeyRef = useRef<string | null>(null);
-  // Aborts an in-flight createScatterplot on re-init / unmount (§7.2).
+  // Aborts an in-flight createScatterplot on re-init / unmount.
   const initAbortRef = useRef<AbortController | null>(null);
 
   // Refs to latest props: lets maybeInitGpu be stable (empty deps)
@@ -315,109 +351,18 @@ export const ScatterGPUHost = forwardRef<ScatterGPUHostHandle, ScatterGPUHostPro
     gpuRef.current?.setTrajectoryPath(trajectoryPath ?? null);
   }, [trajectoryPath]);
 
-  // Expose imperative handle to parent
-  useImperativeHandle(
-    ref,
-    () => ({
-      setColors(palette, indices) {
-        gpuRef.current?.updateColors(palette, indices);
-      },
-      setPointRadius(radius) {
-        gpuRef.current?.setPointRadius(radius);
-      },
-      setPointOpacity(opacity) {
-        gpuRef.current?.setPointOpacity(opacity);
-      },
-      setBlendMode(mode) {
-        gpuRef.current?.setBlendMode(mode);
-      },
-      setHdrSettings(settings) {
-        gpuRef.current?.setHdrSettings(settings);
-      },
-      setContinuousColors(args) {
-        gpuRef.current?.updateContinuousColors(args);
-      },
-      setContinuousRange(vmin, vmax) {
-        gpuRef.current?.setContinuousRange(vmin, vmax);
-      },
-      setContinuousReversed(reversed) {
-        gpuRef.current?.setContinuousReversed(reversed);
-      },
-      setContinuousScale(scale) {
-        gpuRef.current?.setContinuousScale(scale);
-      },
-      setContinuousLut(lut) {
-        gpuRef.current?.setContinuousLut(lut);
-      },
-      project(x, y, z) {
-        return gpuRef.current?.project(x, y, z) ?? null;
-      },
-      setExternalSelection(params) {
-        gpuRef.current?.setExternalSelection(params);
-      },
-      clearExternalSelection() {
-        gpuRef.current?.clearExternalSelection();
-      },
-      clearSelection() {
-        gpuRef.current?.clearSelection();
-      },
-      setPredicateFilter(bits) {
-        gpuRef.current?.setPredicateFilter(bits);
-      },
-      clearPredicateFilter() {
-        gpuRef.current?.clearPredicateFilter();
-      },
-      setCategoryIsolation(isolated) {
-        gpuRef.current?.setCategoryIsolation(isolated);
-      },
-      clearCategoryIsolation() {
-        gpuRef.current?.clearCategoryIsolation();
-      },
-      setCategoryDisabled(disabled) {
-        gpuRef.current?.setCategoryDisabled(disabled);
-      },
-      clearCategoryDisabled() {
-        gpuRef.current?.clearCategoryDisabled();
-      },
-      setTrajectoryIsolation(rowIndices: RowIndex[]) {
-        gpuRef.current?.setTrajectoryIsolation(rowIndices);
-      },
-      clearTrajectoryIsolation() {
-        gpuRef.current?.clearTrajectoryIsolation();
-      },
-      setContinuousIsolation(rowIndices: RowIndex[]) {
-        gpuRef.current?.setContinuousIsolation(rowIndices);
-      },
-      clearContinuousIsolation() {
-        gpuRef.current?.clearContinuousIsolation();
-      },
-      setHighlightPoints(rowIndices: RowIndex[]) {
-        gpuRef.current?.setHighlightPoints(rowIndices);
-      },
-      clearHighlight() {
-        gpuRef.current?.clearHighlight();
-      },
-      setViewState(state) {
-        gpuRef.current?.setViewState(state);
-      },
-      fitView() {
-        gpuRef.current?.fitView();
-      },
-      setProjection(projection) {
-        gpuRef.current?.setProjection(projection);
-      },
-      setForcedSelectionMode(mode) {
-        gpuRef.current?.setForcedSelectionMode(mode);
-      },
-      setSelectionDepth(depth) {
-        gpuRef.current?.setSelectionDepth(depth);
-      },
-      setDensityMode(mode) {
-        gpuRef.current?.setDensityMode(mode);
-      },
-    }),
-    [],
-  );
+  // Stable ref handle: each capability method is looked up on the live GPU handle at call
+  // time, so calls before init or after teardown are dropped and reinit needs no new handle.
+  useImperativeHandle(ref, () => {
+    type Method = (...args: never[]) => void;
+    const handle: Record<string, Method> = {
+      project: (x: number, y: number, z?: number) => gpuRef.current?.project(x, y, z) ?? null,
+    };
+    for (const name of FORWARDED) {
+      handle[name] = (...args) => (gpuRef.current as Record<Forwarded, Method> | null)?.[name](...args);
+    }
+    return handle as unknown as ScatterGPUHostHandle;
+  }, []);
 
   // Backdrop behind the GPU canvas: the element's surface, not the page's.
   return (

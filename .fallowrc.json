@@ -28,7 +28,10 @@
     "@duckdb/node-bindings-linux-x64",
     "@duckdb/node-bindings-win32-x64",
     "portless",
-    "react-refresh"
+    "react-refresh",
+    // C++ headers that scripts/build-duckdb-addon.ts resolves by path (Bun.resolveSync), never imported.
+    "node-addon-api",
+    "node-api-headers"
   ],
   "ignoreExportsUsedInFile": true,
   "rules": {

@@ -29,7 +29,7 @@ export function useIsolationBridge(opts: UseIsolationBridgeOptions): UseIsolatio
   const colByColRef = useRef(colorByColumn);
   colByColRef.current = colorByColumn;
   // Isolation predicate composes into this scatter instance's crossfilter clause
-  // via the host "isolation" facet (§6.3).
+  // via the host "isolation" facet.
   const host = useScatterHost();
   const hostRef = useRef(host);
   hostRef.current = host;

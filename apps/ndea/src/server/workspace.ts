@@ -96,7 +96,7 @@ export class Workspace {
     persist: (revision: number, document: WorkspaceDocument) => void,
   ) {
     this.path = path;
-    this.document = document;
+    this.document = deepFreeze(document);
     this.db = db;
     this.validate = validate;
     this.persist = persist;
@@ -146,6 +146,7 @@ export class Workspace {
     return workspace;
   }
 
+  /** The accepted snapshot; its document is deep-frozen, so callers read it but never mutate it. */
   get(): WorkspaceSnapshot {
     return { revision: this.revision, document: this.document };
   }
@@ -223,7 +224,7 @@ export class Workspace {
       this.persist(record.revision, parsed.value);
     })();
     this.revision = record.revision;
-    this.document = parsed.value;
+    this.document = deepFreeze(parsed.value);
     const change: WorkspaceChange = clientId ? { ...record, clientId } : record;
     for (const listener of this.listeners) listener(change);
     return { kind: "accepted", revision: record.revision };
@@ -275,6 +276,15 @@ function toRevision(row: Row): WorkspaceRevision {
     committedAt: row.committed_at,
     ...(row.restored_from ? { restoredFrom: row.restored_from } : {}),
   };
+}
+
+/** Freeze a JSON value in place; ops apply to a `structuredClone` (`applyWorkspaceOps`), never to this. */
+function deepFreeze<T>(value: T): T {
+  if (value && typeof value === "object" && !Object.isFrozen(value)) {
+    for (const child of Object.values(value)) deepFreeze(child);
+    Object.freeze(value);
+  }
+  return value;
 }
 
 /** Atomic tmp-and-rename write of the versioned workspace file. */

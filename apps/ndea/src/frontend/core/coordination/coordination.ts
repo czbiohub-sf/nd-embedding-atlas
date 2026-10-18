@@ -9,26 +9,31 @@
  *     sees the same value, reactively, with no message passing.
  *
  * Writes validate against the type's Zod schema and replace the cell
- * (latest-wins). Agents reach the same cells through JSON Patch.
+ * (latest-wins). Agents reach the same cells through JSON Patch. This module
+ * owns binding semantics: views ask it (`scopeOf`, `filterFacet`, `stateStore`)
+ * instead of reading `spec` bindings and `state` cells themselves.
  */
 
-import type { Store } from "@tanstack/store";
+import { getByPath, type StateStore } from "@json-render/core";
+import type { FilterClause } from "@ndea/protocol";
 
 import { elementScope, setElementProps, type Dashboard } from "../workspace/dashboard";
 import {
   bindingPointer,
   COORDINATION_TYPES,
+  isCoordinationType,
+  setFilterFacet,
   type CoordinationState,
   type CoordinationTypeId,
   type CoordinationValue,
 } from "./types";
 
-export interface CoordinationDocumentState {
+interface CoordinationDocumentState {
   readonly state: CoordinationState;
   readonly spec: Dashboard;
 }
 
-export interface CoordinationDocumentPort {
+interface CoordinationDocumentPort {
   snapshot(): CoordinationDocumentState;
   update(mutator: (state: CoordinationDocumentState) => CoordinationDocumentState): void;
   subscribe(listener: () => void): () => void;
@@ -45,22 +50,12 @@ export interface CoordinationScopeCellPort {
     type: T,
     listener: (value: CoordinationValue<T> | undefined) => void,
   ): () => void;
-}
-
-/** Adapts a document store without exposing its concrete state to coordination. */
-export function coordinationDocumentPort<S extends CoordinationDocumentState>(
-  store: Store<S>,
-): CoordinationDocumentPort {
-  return {
-    snapshot: () => store.state,
-    update(mutator) {
-      store.setState((state) => mutator(state) as S);
-    },
-    subscribe(listener) {
-      const subscription = store.subscribe(listener);
-      return () => subscription.unsubscribe();
-    },
-  };
+  /** `elementId`'s own clause for `facet` in its filter scope; undefined when unbound or unset. */
+  filterFacet(elementId: string, facet: string): FilterClause | undefined;
+  /** Set (null clears) `elementId`'s `facet` in its filter scope; a no-op when unbound. */
+  setFilterFacet(elementId: string, facet: string, clause: FilterClause | null): void;
+  /** json-render's state: the cells at `/<type>/<scope>`, written through the type schemas. */
+  readonly stateStore: StateStore;
 }
 
 function withCell(
@@ -93,8 +88,26 @@ export function withoutRemovedContributions<S extends CoordinationDocumentState>
 class Coordination implements CoordinationScopeCellPort {
   private readonly document: CoordinationDocumentPort;
 
+  readonly stateStore: StateStore = {
+    get: (path) => getByPath(this.document.snapshot().state, path),
+    set: (path, value) => this.setPath(path, value),
+    update: (updates) => {
+      for (const [path, value] of Object.entries(updates)) this.setPath(path, value);
+    },
+    getSnapshot: () => this.document.snapshot().state,
+    subscribe: (listener) => this.document.subscribe(listener),
+  };
+
   constructor(document: CoordinationDocumentPort) {
     this.document = document;
+  }
+
+  private setPath(path: string, value: unknown): void {
+    const [, type, scope, ...rest] = path.split("/");
+    if (!isCoordinationType(type) || !scope || rest.length > 0) {
+      throw new Error(`dashboard state writes must target /<type>/<scope>, not "${path}"`);
+    }
+    this.setCoordinationValue(type, scope, value as never);
   }
 
   /** Bind an element to a scope, seeding the cell with the type's default when it does not exist yet. */
@@ -134,6 +147,19 @@ class Coordination implements CoordinationScopeCellPort {
 
   readCoordination<T extends CoordinationTypeId>(type: T, scope: string): CoordinationValue<T> | undefined {
     return this.document.snapshot().state[type]?.[scope];
+  }
+
+  filterFacet(elementId: string, facet: string): FilterClause | undefined {
+    const scope = this.scopeOf(elementId, "filter");
+    return scope === undefined ? undefined : this.readCoordination("filter", scope)?.[elementId]?.[facet];
+  }
+
+  setFilterFacet(elementId: string, facet: string, clause: FilterClause | null): void {
+    const scope = this.scopeOf(elementId, "filter");
+    if (scope === undefined) return;
+    const cell = this.readCoordination("filter", scope) ?? {};
+    const next = setFilterFacet(cell, elementId, facet, clause);
+    if (next !== cell) this.setCoordinationValue("filter", scope, next);
   }
 
   /**

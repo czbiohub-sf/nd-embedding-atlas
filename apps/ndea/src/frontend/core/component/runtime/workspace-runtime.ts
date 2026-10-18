@@ -15,24 +15,21 @@ import type {
   ViewCoordinationAPI,
 } from "@ndea/sdk";
 
-import type { CoordinationScopeCellPort } from "@/core/coordination/coordination";
 import { createFilterBinding } from "@/core/coordination/filter-binding";
 import { COORDINATION_TYPES, type CoordinationTypeId, type CoordinationValue } from "@/core/coordination/types";
 import { COMPONENT_DEFINITIONS, type AnyComponentDefinition } from "@/core/component/definitions";
-import { componentProps, elementData, elementScope } from "@/core/workspace/dashboard";
-import { elementPredicate } from "@/core/workspace/data-sources";
-import type { WorkspaceDocument } from "@/core/workspace/types";
+import { componentProps, type DashboardElement } from "@/core/workspace/dashboard";
+import type { WorkspaceStore } from "@/core/workspace/workspace-store";
 import { createComponentHost, type ComponentHostDependencies, type HostHandle } from "./host";
 import { ComponentRuntime } from "./instance-runtime";
 
 const VIEW_COORDINATION_LOCK = "lock1";
 
-/** The slice of `Workspace` the runtimes read and write. */
-export interface ElementRuntimeSession {
-  readonly store: { readonly state: WorkspaceDocument; subscribe(listener: () => void): { unsubscribe(): void } };
-  readonly coordination: CoordinationScopeCellPort;
-  setElementProps(id: string, patch: Record<string, JsonValue | undefined>): void;
-}
+/** The slice of `WorkspaceStore` the runtimes read and write. */
+export type ElementRuntimeSession = Pick<
+  WorkspaceStore,
+  "element" | "elementPredicate" | "subscribe" | "coordination" | "setElementProps"
+>;
 
 export interface ElementRuntimeManagerDependencies {
   readonly session: ElementRuntimeSession;
@@ -142,22 +139,8 @@ function createFocusCoordination(session: ElementRuntimeSession, id: string): Fo
   };
 }
 
-/** What the element shows, from the document alone. */
-function predicateOf(document: WorkspaceDocument, id: string): string | null {
-  const element = document.spec.elements[id];
-  if (!element) return null;
-  return elementPredicate(
-    document.data,
-    elementData(element),
-    document.state.filter?.[elementScope(element, "filter") ?? ""],
-    id,
-  );
-}
-
-const configKey = (document: WorkspaceDocument, id: string): string | undefined => {
-  const element = document.spec.elements[id];
-  return element ? JSON.stringify(componentProps(element)) : undefined;
-};
+const configKey = (element: DashboardElement | undefined): string | undefined =>
+  element ? JSON.stringify(componentProps(element)) : undefined;
 
 interface LiveElement {
   readonly type: string;
@@ -173,12 +156,12 @@ export class ComponentRuntimeManager {
   private readonly bodyDocks = new Map<string, HTMLDivElement>();
   private readonly headerDocks = new Map<string, HTMLDivElement>();
   private readonly listeners = new Set<() => void>();
-  private readonly documentSubscription: { unsubscribe(): void };
+  private readonly unsubscribeDocument: () => void;
   private disposed = false;
 
   constructor(dependencies: ElementRuntimeManagerDependencies) {
     this.dependencies = dependencies;
-    this.documentSubscription = dependencies.session.store.subscribe(() => this.reconcile());
+    this.unsubscribeDocument = dependencies.session.subscribe(() => this.reconcile());
   }
 
   /** Fires when a runtime is created, replaced, or removed. */
@@ -222,11 +205,11 @@ export class ComponentRuntimeManager {
     this.assertLive();
     const existing = this.live.get(id);
     if (existing) return existing.runtime;
-    const element = this.dependencies.session.store.state.spec.elements[id];
+    const element = this.dependencies.session.element(id);
     const definition = element ? COMPONENT_DEFINITIONS[element.type] : undefined;
     if (!element || !definition) return undefined;
     const entry: LiveElement = { type: element.type, runtime: this.start(id, definition), config: undefined };
-    entry.config = configKey(this.dependencies.session.store.state, id);
+    entry.config = configKey(this.dependencies.session.element(id));
     this.live.set(id, entry);
     this.emit();
     return entry.runtime;
@@ -239,7 +222,7 @@ export class ComponentRuntimeManager {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    this.documentSubscription.unsubscribe();
+    this.unsubscribeDocument();
     const errors: unknown[] = [];
     for (const id of this.live.keys()) {
       try {
@@ -277,11 +260,11 @@ export class ComponentRuntimeManager {
    * agent, a remote revision) restarts the body so it reads the new props.
    */
   private reconcile(): void {
-    const document = this.dependencies.session.store.state;
+    const { session } = this.dependencies;
     let changed = false;
     // Deleting the current entry while iterating a Map is safe.
     for (const [id, entry] of this.live) {
-      const element = document.spec.elements[id];
+      const element = session.element(id);
       if (!element || element.type !== entry.type) {
         this.stop(id);
         for (const docks of [this.bodyDocks, this.headerDocks]) {
@@ -291,7 +274,7 @@ export class ComponentRuntimeManager {
         changed = true;
         continue;
       }
-      const config = configKey(document, id);
+      const config = configKey(element);
       if (config === entry.config) continue;
       entry.runtime.dispose();
       entry.runtime = this.start(id, COMPONENT_DEFINITIONS[element.type]);
@@ -303,7 +286,7 @@ export class ComponentRuntimeManager {
 
   private createHost(id: string, definition: AnyComponentDefinition): HostHandle<unknown> {
     const { session, appHost } = this.dependencies;
-    const element = session.store.state.spec.elements[id];
+    const element = session.element(id);
     if (!element) throw new Error(`dashboard element not found: ${id}`);
     const filter = createFilterBinding({
       elementId: id,
@@ -325,11 +308,11 @@ export class ComponentRuntimeManager {
       filter,
       patchConfig: (patch) => {
         const entry = this.live.get(id);
-        const current = session.store.state.spec.elements[id];
+        const current = session.element(id);
         if (!current) return;
         // Own writes do not restart the body: record them before they land.
         const props = patch as Record<string, JsonValue>;
-        if (entry) entry.config = JSON.stringify(componentProps({ ...current, props: { ...current.props, ...props } }));
+        if (entry) entry.config = configKey({ ...current, props: { ...current.props, ...props } });
         session.setElementProps(id, props);
       },
     });
@@ -337,13 +320,12 @@ export class ComponentRuntimeManager {
 
     let predicate: string | null | undefined;
     const sync = () => {
-      const next = predicateOf(session.store.state, id);
+      const next = session.elementPredicate(id);
       if (next === predicate) return;
       predicate = next;
       filter.setPredicate(next);
     };
-    const subscription = session.store.subscribe(sync);
-    handle.host.track(() => subscription.unsubscribe());
+    handle.host.track(session.subscribe(sync));
     sync();
     return handle;
   }

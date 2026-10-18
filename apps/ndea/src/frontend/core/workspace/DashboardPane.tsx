@@ -6,7 +6,6 @@
  * their element's live body from its dock.
  */
 
-import { getByPath, type StateStore } from "@json-render/core";
 import { JSONUIProvider, Renderer, type ComponentRegistry, type ComponentRenderProps } from "@json-render/react";
 import type { FilterClause } from "@ndea/protocol";
 import { Children, createContext, use, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -14,15 +13,12 @@ import { createPortal } from "react-dom";
 
 import { NdIconButton } from "@/components/dashboard/icon-button";
 import { Caption, Hud } from "@/components/dashboard/primitives";
-import { isCoordinationType, setFilterFacet } from "@/core/coordination/types";
 import { useDatasetSession } from "@/hooks/useDatasetSession";
 import { toRows } from "@/lib/mosaic-helpers";
 import { BodySocket, BodyStatus, HeaderSocket } from "./body-dock";
 import { ND_STAGE } from "./constants";
-import { COMPONENTS, elementData, elementScope, type Dashboard as DashboardSpec, type SplitSide } from "./dashboard";
-import { elementPredicate } from "./data-sources";
+import { COMPONENTS, type Dashboard as DashboardSpec, type SplitSide } from "./dashboard";
 import { useWorkspace, useWorkspaceSelector, useWorkspaceSession } from "./workspace-context";
-import type { Workspace } from "./workspace-store";
 
 const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
 
@@ -311,12 +307,8 @@ function Select(props: ComponentRenderProps) {
   const { runtime } = useDatasetSession();
   const id = idOf(props);
   const column = String(props.element.props.column);
-  const element = useWorkspaceSelector((s) => s.spec.elements[id]);
-  const scope = elementScope(element, "filter");
-  const predicate = useWorkspaceSelector((s) =>
-    elementPredicate(s.data, elementData(element), s.state.filter?.[scope ?? ""], id),
-  );
-  const own = useWorkspaceSelector((s) => (scope === undefined ? undefined : s.state.filter?.[scope]?.[id]?.select));
+  const predicate = useWorkspaceSelector((ws) => ws.elementPredicate(id));
+  const own = useWorkspaceSelector((ws) => ws.coordination.filterFacet(id, "select"));
   const chosen = new Set(own?.op === "in" ? own.values.map(String) : []);
   const [options, setOptions] = useState<{ value: string; n: number }[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -338,13 +330,11 @@ function Select(props: ComponentRenderProps) {
   }, [runtime, column, predicate]);
 
   const toggle = (value: string) => {
-    if (scope === undefined) return;
     const next = new Set(chosen);
     if (next.has(value)) next.delete(value);
     else next.add(value);
     const clause: FilterClause | null = next.size > 0 ? { op: "in", column, values: [...next] } : null;
-    const cell = ws.store.state.state.filter?.[scope] ?? {};
-    ws.coordination.setCoordinationValue("filter", scope, setFilterFacet(cell, id, "select", clause));
+    ws.coordination.setFilterFacet(id, "select", clause);
   };
 
   return (
@@ -428,29 +418,6 @@ const REGISTRY: ComponentRegistry = {
   ),
 };
 
-/** json-render state = the document's coordination state; writes go through the type schemas. */
-function coordinationStateStore(ws: Workspace): StateStore {
-  const set = (path: string, value: unknown) => {
-    const [, type, scope, ...rest] = path.split("/");
-    if (!isCoordinationType(type) || !scope || rest.length > 0) {
-      throw new Error(`dashboard state writes must target /<type>/<scope>, not "${path}"`);
-    }
-    ws.coordination.setCoordinationValue(type, scope, value as never);
-  };
-  return {
-    get: (path) => getByPath(ws.store.state.state, path),
-    set,
-    update: (updates) => {
-      for (const [path, value] of Object.entries(updates)) set(path, value);
-    },
-    getSnapshot: () => ws.store.state.state,
-    subscribe: (listener) => {
-      const subscription = ws.store.subscribe(listener);
-      return () => subscription.unsubscribe();
-    },
-  };
-}
-
 /** The document spec plus each element's id as a render-only prop. */
 function renderSpec(spec: DashboardSpec) {
   return {
@@ -470,7 +437,7 @@ function renderSpec(spec: DashboardSpec) {
 function FullscreenOverlay() {
   const ws = useWorkspace();
   const id = useWorkspaceSession((s) => s.fullscreen);
-  const element = useWorkspaceSelector((s) => (id ? s.spec.elements[id] : undefined));
+  const element = useWorkspaceSelector((ws) => (id ? ws.element(id) : undefined));
 
   useEffect(() => {
     if (!id) return;
@@ -504,11 +471,10 @@ function FullscreenOverlay() {
 
 export function DashboardPane({ editable }: { editable: boolean }) {
   const ws = useWorkspace();
-  const spec = useWorkspaceSelector((s) => s.spec);
+  const spec = useWorkspaceSelector((ws) => ws.snapshot().spec);
   const [drag, setDrag] = useState<DragState | null>(null);
   const dragRef = useRef<DragState | null>(null);
   const sashCleanupRef = useRef<(() => void) | null>(null);
-  const store = useMemo(() => coordinationStateStore(ws), [ws]);
   const rendered = useMemo(() => renderSpec(spec), [spec]);
 
   useEffect(() => () => sashCleanupRef.current?.(), []);
@@ -540,7 +506,7 @@ export function DashboardPane({ editable }: { editable: boolean }) {
 
   return (
     <DashboardContext value={{ editable, drag, beginDrag, sashCleanupRef }}>
-      <JSONUIProvider registry={REGISTRY} store={store}>
+      <JSONUIProvider registry={REGISTRY} store={ws.coordination.stateStore}>
         <div className="relative box-border flex h-full p-2">
           <Renderer spec={rendered} registry={REGISTRY} />
           <FullscreenOverlay />

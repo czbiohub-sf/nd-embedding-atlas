@@ -25,7 +25,7 @@ import { createPatch } from "rfc6902";
 
 import { applyWorkspaceOps, parseWorkspaceDocument } from "./document";
 import type { WorkspaceDocument } from "./types";
-import type { Workspace } from "./workspace-store";
+import type { WorkspaceStore } from "./workspace-store";
 
 /** Collapses a drag or typing burst into one revision. */
 const SYNC_DEBOUNCE_MS = 500;
@@ -52,7 +52,7 @@ export function decodeWorkspaceDocument(
 }
 
 export class WorkspaceSync {
-  private readonly workspace: Workspace;
+  private readonly workspace: WorkspaceStore;
   private readonly transport: WorkspaceTransport;
   private readonly onFailure: (errors: string[]) => void;
   private readonly clientId = crypto.randomUUID();
@@ -64,7 +64,7 @@ export class WorkspaceSync {
   private readonly revisionListeners = new Set<(revision: WorkspaceRevision, own: boolean) => void>();
 
   constructor(
-    workspace: Workspace,
+    workspace: WorkspaceStore,
     initial: { revision: number; document: WorkspaceDocument },
     transport: WorkspaceTransport,
     onFailure: (errors: string[]) => void,
@@ -76,9 +76,8 @@ export class WorkspaceSync {
   }
 
   start(): void {
-    const sub = this.workspace.store.subscribe(() => this.schedule());
-    this.disposers.push(() => sub.unsubscribe());
     this.disposers.push(
+      this.workspace.subscribe(() => this.schedule()),
       this.transport.watch(
         ({ clientId, ...revision }) => {
           for (const listener of this.revisionListeners) listener(revision, clientId === this.clientId);
@@ -133,17 +132,12 @@ export class WorkspaceSync {
     this.timer = setTimeout(() => void this.flush(), SYNC_DEBOUNCE_MS);
   }
 
-  private local(): WorkspaceDocument {
-    return this.workspace.store.state;
-  }
-
   private pendingOps(): JsonPatchOp[] {
-    const local = this.local();
-    return createPatch(this.acked.document, local);
+    return createPatch(this.acked.document, this.workspace.snapshot());
   }
 
   private async send(ops: JsonPatchOp[]): Promise<void> {
-    const sent = this.local();
+    const sent = this.workspace.snapshot();
     const outcome = await this.transport.patch(this.acked.revision, ops, this.clientId);
     if (outcome.kind === "accepted") {
       this.acked = { revision: outcome.revision, document: sent };

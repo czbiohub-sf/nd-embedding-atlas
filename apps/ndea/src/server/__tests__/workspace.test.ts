@@ -92,6 +92,30 @@ describe("Workspace", () => {
     expect(await Bun.file(path).text()).toBe(before);
   });
 
+  test("the accepted document is frozen; mutating a snapshot throws and changes nothing", async () => {
+    const { workspace, path } = await seeded();
+    const history = workspace.history();
+    const document = workspace.get().document as WorkspaceDocument;
+    expect(() => {
+      document.data.large = { sql: "area > 20" };
+    }).toThrow(TypeError);
+    expect(() => {
+      document.spec.elements.hist!.props.field = "perimeter";
+    }).toThrow(TypeError);
+    expect(workspace.get()).toEqual({ revision: 1, document: DOCUMENT });
+    expect(workspace.history()).toEqual(history);
+    // Patches still apply (to a clone), and the next accepted document is frozen too.
+    expect(await workspace.patch([addData("large")], { base: 1, actor: cli })).toEqual({
+      kind: "accepted",
+      revision: 2,
+    });
+    expect(Object.isFrozen((workspace.get().document as WorkspaceDocument).data.large)).toBe(true);
+    expect(await Bun.file(path).json()).toMatchObject({
+      revision: 2,
+      document: { data: { large: { sql: "area > 20" } } },
+    });
+  });
+
   test("the injected validation rejects like a structural issue", async () => {
     const workspace = Workspace.memory(undefined, {
       validate: async (document) =>

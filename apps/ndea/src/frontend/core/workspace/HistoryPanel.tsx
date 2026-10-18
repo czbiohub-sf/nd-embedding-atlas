@@ -72,7 +72,7 @@ const CHANGE_LABEL: Record<DocumentChange["change"], string> = {
 /** What differs between revision `revision` and the current document. */
 function Compare({ revision }: { revision: number }) {
   const history = useWorkspaceHistory();
-  const current = useWorkspaceSelector((document) => document);
+  const current = useWorkspaceSelector((ws) => ws.snapshot());
   const [loaded, setLoaded] = useState<{ revision: number; document?: unknown; error?: string }>();
   useEffect(() => {
     let live = true;

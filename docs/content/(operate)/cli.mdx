@@ -65,6 +65,10 @@ The running server owns one workspace document: named data sources, the dashboar
 
 `--port` accepts integers in `[1, 65535]`.
 
+### Trust model
+
+ndea trusts everyone who can reach its port. It binds `127.0.0.1` by default; to use a server on another machine, forward the port over SSH (`ssh -L 5055:127.0.0.1:5055 <host>`). The dashboard, its data and query routes, `/ws`, `/ws/render`, and `/plate/*` have no authentication. `/mcp` accepts only loopback `Host` and `Origin` headers plus the bearer token in `~/.ndea/mcp-token`, and `GET /api/status` and the dataset structure route need that token because they show file paths. A non-loopback `--host` prints a warning at startup and adds no authentication, so bind one only on a network you trust.
+
 ## `ndea self update`
 
 Download and activate the latest release for a channel. ndea verifies the SHA-256 checksum before switching versions.

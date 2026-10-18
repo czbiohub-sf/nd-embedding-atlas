@@ -281,14 +281,14 @@ export async function createScatterplot(
       f.densityMode = DENSITY_MODES.indexOf(mode);
       interaction.requestRender();
     },
-    updateColors(palette, categoryIndices) {
+    setColors(palette, categoryIndices) {
       setPalette(palette);
       if (categoryIndices) {
         scene.writeCategories(categoryIndices);
         invalidate();
       } else interaction.requestRender();
     },
-    updateContinuousColors(args) {
+    setContinuousColors(args) {
       scene.writeValues(args.values);
       setLut(args.lut);
       f.vmin = Math.min(args.vmin, args.vmax);

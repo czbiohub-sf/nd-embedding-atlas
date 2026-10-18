@@ -1,24 +1,18 @@
-import { Store } from "@tanstack/store";
 import { describe, expect, test } from "bun:test";
 import type { FilterClause } from "@ndea/protocol";
 import { rowIndex, type RowIndex } from "@ndea/sdk";
 
-import {
-  coordinationDocumentPort,
-  createCoordination,
-  withoutRemovedContributions,
-  type CoordinationDocumentState,
-  type CoordinationScopeCellPort,
-} from "./coordination";
+import { emptyWorkspaceDocument } from "../workspace/document";
+import { WorkspaceStore } from "../workspace/workspace-store";
 import { createFilterBinding } from "./filter-binding";
 import { setFilterFacet } from "./types";
-import { removeElement } from "../workspace/dashboard";
 
 const leaf = { type: "table", props: {}, children: [] };
 
-function fresh(): { co: CoordinationScopeCellPort; store: Store<CoordinationDocumentState> } {
-  const store = new Store<CoordinationDocumentState>({
-    state: {},
+function fresh() {
+  const ws = new WorkspaceStore();
+  ws.applyDocument({
+    ...emptyWorkspaceDocument(),
     spec: {
       root: "root",
       elements: {
@@ -30,7 +24,7 @@ function fresh(): { co: CoordinationScopeCellPort; store: Store<CoordinationDocu
       },
     },
   });
-  return { co: createCoordination(coordinationDocumentPort(store)), store };
+  return { co: ws.coordination, ws };
 }
 
 describe("coordination cells", () => {
@@ -45,12 +39,12 @@ describe("coordination cells", () => {
   });
 
   test("binding is a json-render $bindState prop, and the cell is seeded for agent patches", () => {
-    const { co, store } = fresh();
+    const { co, ws } = fresh();
     co.assignScope("n1", "filter", "A");
-    expect(store.state.spec.elements.n1.props.filter).toEqual({ $bindState: "/filter/A" });
-    expect(store.state.state.filter).toEqual({ A: {} });
+    expect(ws.element("n1")?.props.filter).toEqual({ $bindState: "/filter/A" });
+    expect(co.readCoordination("filter", "A")).toEqual({});
     co.clearScope("n1", "filter");
-    expect(store.state.spec.elements.n1.props).toEqual({});
+    expect(ws.element("n1")?.props).toEqual({});
   });
 
   test("writes are validated against the type schema", () => {
@@ -59,6 +53,7 @@ describe("coordination cells", () => {
     expect(() => co.setCoordinationValue("ordering", "A", { col: "x", dir: "up" as "asc" })).toThrow(
       "failed validation",
     );
+    expect(() => co.stateStore.set("/focus", rowIndex(1))).toThrow("must target /<type>/<scope>");
   });
 
   test("subscribe fires on cell writes and rebinding, never for unrelated scopes", () => {
@@ -76,16 +71,16 @@ describe("coordination cells", () => {
   });
 
   test("leaving a filter scope or removing the element drops its crossfilter contribution", () => {
-    const { co, store } = fresh();
+    const { co, ws } = fresh();
     const clause = { op: "eq", column: "t", value: 1 } as const;
     co.assignScope("n1", "filter", "A");
     co.setCoordinationValue("filter", "A", { n1: { lasso: clause }, agent: { where: clause } });
     co.assignScope("n1", "filter", "B");
-    expect(store.state.state.filter?.A).toEqual({ agent: { where: clause } });
+    expect(co.readCoordination("filter", "A")).toEqual({ agent: { where: clause } });
 
     co.setCoordinationValue("filter", "B", { n1: { lasso: clause } });
-    const next = { ...store.state, spec: removeElement(store.state.spec, "n1") };
-    expect(withoutRemovedContributions(store.state, next).state.filter?.B).toEqual({});
+    ws.removeElement("n1");
+    expect(co.readCoordination("filter", "B")).toEqual({});
   });
 });
 
@@ -104,6 +99,7 @@ describe("filter binding (crossfilter)", () => {
     });
 
     scatter.publish("range", { op: "between", column: "area", range: [1, 5] });
+    expect(co.filterFacet("scatter", "range")).toEqual({ op: "between", column: "area", range: [1, 5] });
     expect(co.readCoordination("filter", "A")).toEqual({
       agent: { where: { op: "eq", column: "infected", value: true } },
       scatter: { range: { op: "between", column: "area", range: [1, 5] } },
@@ -115,7 +111,7 @@ describe("filter binding (crossfilter)", () => {
   });
 
   test("an unbound element publishes nothing; materialization rejects a filter that moved", async () => {
-    const { co, store } = fresh();
+    const { co, ws } = fresh();
     const binding = createFilterBinding({
       elementId: "n1",
       coordination: co,
@@ -123,7 +119,7 @@ describe("filter binding (crossfilter)", () => {
       table: "t",
     });
     binding.publish("lasso", { op: "inSet", set: "0123456789abcdef" });
-    expect(store.state.state).toEqual({});
+    expect(ws.snapshot().state).toEqual({});
 
     expect((await binding.materializeRowIds()).rowIds).toEqual([rowIndex(4), rowIndex(7)]);
     const pending = binding.materializeRowIds();

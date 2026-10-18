@@ -1,15 +1,15 @@
 /**
- * Workspace: this tab's copy of the server-owned document (`data`, `spec`,
+ * WorkspaceStore: this tab's copy of the server-owned document (`data`, `spec`,
  * `state`) plus its editor session. Every document write goes through
- * `commit`; `WorkspaceSync` diffs the store against the server's
- * acknowledged revision and PATCHes the difference.
+ * `commit`; `WorkspaceSync` diffs `snapshot()` against the server's
+ * acknowledged revision and PATCHes the difference. Views ask questions
+ * (`element`, `elementPredicate`, `coordination`) instead of reading the document.
  */
 
 import { Store } from "@tanstack/store";
 import type { JsonValue } from "@ndea/sdk";
 
 import {
-  coordinationDocumentPort,
   createCoordination,
   withoutRemovedContributions,
   type CoordinationScopeCellPort,
@@ -22,25 +22,41 @@ import {
   splitElement,
   swapElements,
   type Dashboard,
+  type DashboardElement,
   type SplitSide,
 } from "./dashboard";
+import { elementPredicate } from "./data-sources";
 import { emptyWorkspaceDocument } from "./document";
 import type { WorkspaceDocument, WorkspaceSession } from "./types";
 
-export type WorkspaceDocumentStore = Pick<Store<WorkspaceDocument>, "state" | "get" | "subscribe">;
-
-export class Workspace {
+export class WorkspaceStore {
   private readonly documentStore = new Store<WorkspaceDocument>(emptyWorkspaceDocument());
-  readonly store: WorkspaceDocumentStore = this.documentStore;
-  readonly coordination: CoordinationScopeCellPort;
+  readonly coordination: CoordinationScopeCellPort = createCoordination({
+    snapshot: () => this.documentStore.state,
+    update: (mutator) => this.commit((state) => mutator(state) as WorkspaceDocument),
+    subscribe: (listener) => this.subscribe(listener),
+  });
   /** This tab's editor state. Never persisted, never synced. */
   readonly session = new Store<WorkspaceSession>({ selectedElementId: null, fullscreen: null });
 
-  constructor() {
-    this.coordination = createCoordination({
-      ...coordinationDocumentPort(this.documentStore),
-      update: (mutator) => this.commit((state) => mutator(state) as WorkspaceDocument),
-    });
+  /** The whole document: for sync, history, and json-render's spec only. */
+  snapshot(): WorkspaceDocument {
+    return this.documentStore.state;
+  }
+
+  /** Fires after every document change. */
+  subscribe = (listener: () => void): (() => void) => {
+    const subscription = this.documentStore.subscribe(listener);
+    return () => subscription.unsubscribe();
+  };
+
+  element(id: string): DashboardElement | undefined {
+    return this.documentStore.state.spec.elements[id];
+  }
+
+  /** What the element shows (see `elementPredicate`). */
+  elementPredicate(id: string): string | null {
+    return elementPredicate(this.documentStore.state, id);
   }
 
   /**

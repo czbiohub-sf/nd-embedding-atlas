@@ -7,14 +7,13 @@
  *  - Any future container
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { capabilitiesOf } from "@ndea/sdk";
 import { useFocus, useScatterHost, useScatterSession } from "./context";
 import { selectAnyTrajectory } from "./helpers";
 import type { IsolationCapability } from "./gpu/handle-capabilities";
 import { useEmbeddingLoader } from "./gpu/hooks/useEmbeddingLoader";
-import { useDisabledBridge } from "./gpu/hooks/useDisabledBridge";
 import { useIsolationBridge } from "./gpu/hooks/useIsolationBridge";
 import { useScatterColorState } from "./gpu/hooks/useScatterColorState";
 import { useTrajectoryLoader } from "./gpu/hooks/useTrajectoryLoader";
@@ -41,7 +40,7 @@ export interface ScatterContentProps {
 
 export function ScatterContent({ initialObsmKey, toolbarTarget, focusedPointMeta }: ScatterContentProps) {
   const { state, actions, runtime } = useScatterSession();
-  // The host owns this instance's WASM bitmap lifecycle (§6.6).
+  // The host owns this instance's WASM bitmap lifecycle.
   const host = useScatterHost();
   const { metadata } = state;
   // Focus read: scoped to this element's host (coordination group), so the
@@ -136,7 +135,12 @@ export function ScatterContent({ initialObsmKey, toolbarTarget, focusedPointMeta
     colorByColumn,
     scatterRef: isolationHandleRef,
   });
-  const { handleDisabledChange } = useDisabledBridge({ scatterRef: isolationHandleRef });
+  // Legend "disabled" (click a category dot) is purely visual: the GPU drops those
+  // points from drawing, picking, and lasso; unlike isolation it writes no Mosaic predicate.
+  const handleDisabledChange = useCallback(
+    (disabled: Set<number>) => isolationHandleRef.current?.setCategoryDisabled(disabled),
+    [],
+  );
 
   // ── Derived rendering state ────────────────────────────────────────────────
   const obsmKeys = effectiveAxes ? Object.keys(metadata.obsm) : [];

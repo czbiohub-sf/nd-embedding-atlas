@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import type { JsonPatchOp, WorkspaceRevision } from "@ndea/protocol";
 
-import { Workspace as ServerWorkspace, type WorkspacePatchResult } from "../../../server/workspace";
+import { Workspace, type WorkspacePatchResult } from "../../../server/workspace";
 import { emptyWorkspaceDocument } from "./document";
 import { WorkspaceSync, type PatchOutcome, type WorkspaceTransport } from "./sync";
-import { Workspace } from "./workspace-store";
+import type { WorkspaceDocument } from "./types";
+import { WorkspaceStore } from "./workspace-store";
 
 const cleanup: (() => void)[] = [];
 afterEach(() => {
@@ -19,7 +20,7 @@ const outcome = (result: WorkspacePatchResult | { kind: "not-found" }): PatchOut
       : result;
 
 /** The real server workspace behind an in-process transport; `live: false` drops watch pushes. */
-function memoryTransport(server: ServerWorkspace, { live = true } = {}): WorkspaceTransport {
+function memoryTransport(server: Workspace, { live = true } = {}): WorkspaceTransport {
   const actor = { kind: "browser" } as const;
   return {
     patch: async (base, ops, clientId) => outcome(await server.patch(ops, { base, actor, clientId })),
@@ -29,13 +30,13 @@ function memoryTransport(server: ServerWorkspace, { live = true } = {}): Workspa
   };
 }
 
-const agentWrite = (server: ServerWorkspace, base: number, ops: JsonPatchOp[]) =>
+const agentWrite = (server: Workspace, base: number, ops: JsonPatchOp[]) =>
   server.patch(ops, { base, actor: { kind: "mcp", agent: "omp" } });
 
 /** A synced session whose dashboard is one count element, `slot-1`. */
 async function session(options?: { live?: boolean }) {
-  const server = ServerWorkspace.memory();
-  const workspace = new Workspace();
+  const server = Workspace.memory();
+  const workspace = new WorkspaceStore();
   workspace.fillSlot("slot-1", "count");
   const initial = { revision: 0, document: emptyWorkspaceDocument() };
   const sync = new WorkspaceSync(workspace, initial, memoryTransport(server, options), (e) => {
@@ -87,7 +88,7 @@ describe("WorkspaceSync", () => {
         spec: { elements: { "slot-1": { props: { title: "Mine" } } } },
       },
     });
-    expect(workspace.store.state.data).toEqual({ infected: { sql: "infected" } });
+    expect(workspace.snapshot().data).toEqual({ infected: { sql: "infected" } });
   });
 
   test("a stale revision (409) replays local ops onto the server document and resends", async () => {
@@ -123,7 +124,7 @@ describe("WorkspaceSync", () => {
     expect(await sync.restore(1)).toEqual({ kind: "accepted", revision: 4 });
     await sync.flush();
     expect(server.get().document).toEqual(server.at(1)!.document);
-    expect(workspace.store.state).toEqual(server.at(1)!.document as typeof workspace.store.state);
+    expect(workspace.snapshot()).toEqual(server.at(1)!.document as WorkspaceDocument);
     expect(revisions.at(-1)).toMatchObject([{ revision: 4, restoredFrom: 1 }, true]);
   });
 });

@@ -6,7 +6,7 @@
 
 import { useSelector } from "@tanstack/react-store";
 import type { WorkspaceSnapshot } from "@ndea/protocol";
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState, useSyncExternalStore } from "react";
 
 import { useDatasetSession } from "@/hooks/useDatasetSession";
 import { LAYOUT_EDITING_ENABLED } from "@/feature-flags";
@@ -15,11 +15,11 @@ import { ComponentRuntimeContext } from "@/core/component/runtime/runtime-contex
 import { ComponentRuntimeManager } from "@/core/component/runtime/workspace-runtime";
 import { wsClient } from "@/lib/ws-client";
 import { createHttpWorkspaceTransport, decodeWorkspaceDocument, WorkspaceSync, type WorkspaceTransport } from "./sync";
-import { Workspace } from "./workspace-store";
+import { WorkspaceStore } from "./workspace-store";
 import { WorkspaceHistory } from "./history";
-import type { WorkspaceDocument, WorkspaceSession } from "./types";
+import type { WorkspaceSession } from "./types";
 
-const WorkspaceContext = createContext<Workspace | null>(null);
+const WorkspaceContext = createContext<WorkspaceStore | null>(null);
 export interface WorkspacePersistenceState {
   readonly mode: "writable" | "recovery";
   readonly errors: readonly string[];
@@ -42,11 +42,11 @@ export function WorkspaceProvider({
   const { metadata } = state;
 
   const [{ workspace: ws, componentRuntimes, initial, history }] = useState(() => {
-    const w = new Workspace();
+    const w = new WorkspaceStore();
     // An invalid server document opens read-only and is never overwritten.
     const decoded = decodeWorkspaceDocument(snapshot.document);
     if (decoded.ok) w.applyDocument(decoded.state);
-    if (LAYOUT_EDITING_ENABLED) (window as unknown as { __ndeaWorkspace?: Workspace }).__ndeaWorkspace = w;
+    if (LAYOUT_EDITING_ENABLED) (window as unknown as { __ndeaWorkspace?: WorkspaceStore }).__ndeaWorkspace = w;
     const appHost = Object.freeze({
       coordinator,
       table,
@@ -96,7 +96,7 @@ export function WorkspaceProvider({
   );
 }
 
-export function useWorkspace(): Workspace {
+export function useWorkspace(): WorkspaceStore {
   const ws = useContext(WorkspaceContext);
   if (!ws) throw new Error("useWorkspace outside WorkspaceProvider");
   return ws;
@@ -112,8 +112,10 @@ export function useWorkspaceHistory(): WorkspaceHistory {
   return history;
 }
 
-export function useWorkspaceSelector<T>(selector: (s: WorkspaceDocument) => T): T {
-  return useSelector(useWorkspace().store, selector);
+/** Re-renders when `select(workspace)` changes; it must return a stable value (a document reference or a primitive). */
+export function useWorkspaceSelector<T>(select: (workspace: WorkspaceStore) => T): T {
+  const ws = useWorkspace();
+  return useSyncExternalStore(ws.subscribe, () => select(ws));
 }
 
 export function useWorkspaceSession<T>(selector: (s: WorkspaceSession) => T): T {

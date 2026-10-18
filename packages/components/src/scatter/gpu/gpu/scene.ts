@@ -77,9 +77,10 @@ type F32Array = d.WgslArray<d.F32>;
  *
  * Points live in **storage order** (Morton order of their positions, so 256
  * consecutive points form a compact batch with a bounding box); `perm` maps a
- * storage index to its row. Storage order never leaves this module and
- * `render.ts`: every setter takes row order, `rowBits` reports row order, and
- * the pick pass returns rows.
+ * storage index to its row. Storage order never leaves the scene/render
+ * implementation (only `render.ts` reads `perm`): callers see row order alone,
+ * since every setter takes row order, `rowBits` reports row order, and the
+ * pick pass returns rows.
  */
 export interface Scene {
   readonly n: number;
