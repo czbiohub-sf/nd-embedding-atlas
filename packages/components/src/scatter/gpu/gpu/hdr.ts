@@ -134,8 +134,12 @@ export function createHdrPipeline(root: TgpuRoot, swapFormat: GPUTextureFormat):
         );
       }
       if (mode === 4) mapped = neutral(c);
-      // Alpha passes through so the CSS background shows where nothing drew.
-      return d.vec4f(linearToSrgb(mapped.x), linearToSrgb(mapped.y), linearToSrgb(mapped.z), std.clamp(scene.w, 0, 1));
+      // The scene is premultiplied, so its alpha goes through the same sRGB curve as its color:
+      // a linear alpha under an encoded color overshoots any page background but black (dimmed
+      // points glowed on light). Over black the result is unchanged. The CSS background shows
+      // where nothing drew.
+      const a = linearToSrgb(std.clamp(scene.w, 0, 1));
+      return d.vec4f(linearToSrgb(mapped.x), linearToSrgb(mapped.y), linearToSrgb(mapped.z), a);
     }),
     targets: { format: swapFormat },
   });
