@@ -117,7 +117,7 @@ export async function discoverObsmKeys(adata: DatasetHandle): Promise<string[]> 
   const keys: string[] = [];
   for (const key of candidates) {
     try {
-      await adata.getObsm(key);
+      await adata.getObsmShape(key);
       keys.push(key);
     } catch {
       // The fallback probes a fixed candidate set; absence is expected.

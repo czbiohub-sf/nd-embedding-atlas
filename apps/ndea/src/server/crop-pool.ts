@@ -1,7 +1,6 @@
 /**
  * CropPool: persistent Bun Worker pool for OME-Zarr crop rendering.
  *
- * Mirrors the column-worker pool pattern in src/zarr/readers.ts:241+.
  * One pool per server, lifetime = server lifetime. Workers persist their
  * zarr Array LRU + WebP WASM init across tasks.
  *

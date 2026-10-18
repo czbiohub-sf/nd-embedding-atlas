@@ -195,7 +195,6 @@
     "packages/zarr": {
       "name": "@ndea/zarr",
       "dependencies": {
-        "@duckdb/node-api": "catalog:",
         "@zarrita/storage": "catalog:",
         "zarrita": "catalog:",
       },

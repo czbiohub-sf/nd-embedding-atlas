@@ -78,22 +78,6 @@ describe("DatasetQuerySession", () => {
     expect(result.byteLength).toBeGreaterThan(0);
   });
 
-  test("registerVarColumn joins values by row and stores non-finite values as NULL", async () => {
-    const store = await createMockStore(3000);
-    activeStore = store;
-
-    const values = Float64Array.from({ length: 3000 }, (_, i) => i * 0.5);
-    values[2049] = Number.NaN;
-    values[7] = Number.POSITIVE_INFINITY;
-    await store.registerVarColumn("__var_g_X__", values);
-
-    expect(store.columns().get("__var_g_X__")).toEqual({ sqlType: "DOUBLE", kind: "var" });
-    const rows = await store.queryJson(
-      `SELECT __row_index__ AS i, "__var_g_X__" AS v FROM dataset WHERE __row_index__ IN (6, 7, 2049, 2999) ORDER BY i`,
-    );
-    expect(rows.map((r) => r.v)).toEqual([3, null, null, 1499.5]);
-  });
-
   test("hidden columns are excluded from VIEW", async () => {
     const store = await createMockStore(5, { hidden: new Set(["category"]) });
     activeStore = store;

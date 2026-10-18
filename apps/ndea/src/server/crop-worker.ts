@@ -7,7 +7,7 @@
  * results back via postMessage as they're encoded: first crop in a
  * 30-obs group flushes immediately rather than waiting for the whole group.
  *
- * Message protocol (mirrors src/zarr/column-worker.ts shape):
+ * Message protocol:
  *   Main → Worker:  { taskId, mountPath, fovPath, format, quality, size,
  *                     half, channels, requests: [{rowIndex,t,z,x,y}, ...] }
  *   Worker → Main:  per crop:    { taskId, rowIndex, bytes, mime }   (transferable)

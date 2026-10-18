@@ -20,13 +20,18 @@ import { homedir } from "node:os";
 import { resolve } from "node:path";
 import { VERSION } from "../version.ts";
 
-/** Full path to the extracted libduckdb for the running version. */
-export function libduckdbCachePath(): string {
+/** `<cache root>/ndea/<version>/`: where a compiled binary extracts its embedded files. */
+export function ndeaCacheDir(): string {
   const root =
     process.env.XDG_CACHE_HOME ??
     (process.platform === "win32" ? process.env.LOCALAPPDATA : undefined) ??
     resolve(homedir(), ".cache");
+  return resolve(root, "ndea", VERSION);
+}
+
+/** Full path to the extracted libduckdb for the running version. */
+export function libduckdbCachePath(): string {
   const fileName =
     process.platform === "darwin" ? "libduckdb.dylib" : process.platform === "win32" ? "duckdb.dll" : "libduckdb.so";
-  return resolve(root, "ndea", VERSION, fileName);
+  return resolve(ndeaCacheDir(), fileName);
 }

@@ -50,6 +50,9 @@ jobs:
         with:
           no-cache: true
       - uses: voidzero-dev/setup-vp@v1
+      # Rust builds the duckdb-zarr extension from source (`build:zarr-ext`).
+      # No extension cache here, same cache-poisoning reasoning as above.
+      - uses: dtolnay/rust-toolchain@1.99.0
 
       - name: Verify tag matches package.json version
         run: bash .github/scripts/verify-tag-version.sh

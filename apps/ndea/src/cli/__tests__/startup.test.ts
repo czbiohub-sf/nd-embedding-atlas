@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test";
 import type { PlateChannel, PlateMetaInfo, PlateMount } from "../../server/plate.ts";
 import { startup } from "../startup.ts";
 import { sortObsmKeys } from "../startup/datasets.ts";
-import { selectIngestStrategy, shouldUseIngestCache } from "../startup/ingest.ts";
 import { buildPlateMetadata } from "../startup/session.ts";
 
 const CHANNEL: PlateChannel = {
@@ -18,24 +17,6 @@ test("retains the public startup entrypoint", () => {
 function plateInfo(omeVersion: "0.4" | "0.5", scale: number): PlateMetaInfo {
   return { omeVersion, channels: [CHANNEL], pixelScale: { x: scale, y: scale }, wells: 1 };
 }
-
-describe("startup ingest strategy", () => {
-  test("keeps MuData on its merge-aware initializer regardless of dataset count", () => {
-    expect(selectIngestStrategy(true, false)).toBe("mudata");
-    expect(selectIngestStrategy(true, true)).toBe("mudata");
-  });
-
-  test("uses chunked ingest only for a single AnnData dataset", () => {
-    expect(selectIngestStrategy(false, false)).toBe("chunked");
-    expect(selectIngestStrategy(false, true)).toBe("streaming");
-  });
-
-  test("enables cache only for local AnnData ingest", () => {
-    expect(shouldUseIngestCache(true, false)).toBe(true);
-    expect(shouldUseIngestCache(false, false)).toBe(false);
-    expect(shouldUseIngestCache(true, true)).toBe(false);
-  });
-});
 
 describe("startup metadata ordering", () => {
   test("orders known embeddings by UI priority and unknown names alphabetically", () => {

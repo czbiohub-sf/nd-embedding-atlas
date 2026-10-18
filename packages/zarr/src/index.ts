@@ -1,23 +1,13 @@
 /**
- * @ndea/zarr: labeled N-D array reader for OME-Zarr, AnnData, MuData,
- * and xarray stores.
+ * @ndea/zarr: AnnData, MuData, and OME-Zarr metadata, obsm and dense-column
+ * reads, and the obs write-back. obs/var values are read by DuckDB through
+ * the duckdb-zarr extension.
  */
 
 // Public types consumed by server routes and startup.
-export type {
-  AnnDataFrame,
-  ColumnData,
-  CategoricalArray,
-  NullableArray,
-  SparseArray,
-  ParsedStore,
-  ParsedAnnData,
-  ParsedMuData,
-  ParsedOmeZarr,
-} from "./types.ts";
-export type { DatasetHandle, DenseResult, MatrixResult, ToDuckDBOptions } from "./anndata.ts";
+export type { FrameMeta, ParsedStore, ParsedAnnData, ParsedMuData, ParsedOmeZarr } from "./types.ts";
+export type { DatasetHandle, MatrixFormat } from "./anndata.ts";
 
-// Public runtime API: open a store, read AnnData/MuData, ingest into DuckDB.
 import type { Readable } from "zarrita";
 import { open } from "./open.ts";
 import { AnnData } from "./anndata.ts";
@@ -26,16 +16,8 @@ import { MuData } from "./mudata.ts";
 export { open };
 export { AnnData };
 export { MuData };
-export { LazyDataFrame } from "./data-frame.ts";
 export { BunFileStore, openBunStore } from "./bun-store.ts";
 export { commitObsColumns, type CommitReport, type ObsColumnInput } from "./write-obs.ts";
-export {
-  appendColumns,
-  type AppendColumn,
-  ingestDataFrame,
-  ingestDataFrames,
-  ingestDataFrameChunked,
-} from "./duckdb-ingest.ts";
 
 /**
  * One-call AnnData opener: resolves the store, detects the convention,

@@ -52,13 +52,33 @@ entrypoints across workspaces.
 
 ### Data layer
 
+- DuckDB reads AnnData and MuData values through the duckdb-zarr extension
+  (`read_zarr`). `server/zarr-extension.ts` `openDuckDB` is the one place a
+  DuckDB instance opens: unsigned extensions allowed, then `LOAD` of the build
+  for the installed DuckDB (`.zarr-ext-cache/` from a checkout, extracted from
+  the binary otherwise). `ndea self doctor` reports it.
+- `server/zarr-ingest.ts` builds `obs_base` and `var_base` in SQL for a
+  single store, a union (`UNION ALL BY NAME` + `_dataset`), and MuData
+  (modalities through `group_path`, root obs/var decoded from raw arrays,
+  modality columns `<mod>:<col>` on collision, var tagged `_modality`).
+  Positions are `row_number() OVER ()` of the scan, asserted against each index
+  array (`array_path := '<axis>/_index'`) on every ingest. Gene columns:
+  sparse `X`/layers through `read_zarr`, dense through
+  `AnnData.readDenseColumn` (no filter pushdown upstream yet).
+- String categoricals arrive as `ENUM` and are stored as VARCHAR: nanoarrow's
+  `to_arrow_ipc` cannot encode Arrow dictionaries and fails with a FATAL error
+  that invalidates the database. Bool and nullable-int columns are BOOLEAN and
+  INTEGER on every path. `read_zarr` renames a column named after its axis
+  (`obs/obs`) and columns that differ only in case (their store paths); the
+  catalog shows those names and workspace validation flags references to the
+  old ones as unknown columns.
 - `@ndea/zarr` opens AnnData, MuData, and OME-Zarr stores through zarrita and
-  `BunFileStore`.
-- `AnnData.from(parsed)` exposes `.obs` and `.var` DataFrames.
-- `toDuckDB(conn)` registers `obs_base` and `var_base`. Every DuckDB table
-  write (obs/var ingest, var columns, annotations) goes through
-  `appendColumns`: typed arrays copied into `DuckDBDataChunk`s, never per-row
-  appends or SQL `VALUES`.
+  `BunFileStore`, metadata only: `FrameMeta` (index name, columns,
+  encodings, length), obsm shapes and columns for the scatter, dense matrix
+  columns, and `commitObsColumns` (obs write-back).
+- Rows that start in JS (annotations, dense gene columns) go through
+  `server/append-columns.ts` `appendColumns`: typed arrays copied into
+  `DuckDBDataChunk`s, never per-row appends or SQL `VALUES`.
 - `BunFileStore.getRange` supports `{ offset, length }` and `{ suffixLength }`.
   Zarr v3 sharding needs suffix reads for shard indexes.
 
@@ -271,8 +291,10 @@ vp run verify
 vp run check
 vp run test
 
-# Production binary: dist/ndea (cached build:addon, then compile)
+# Production binary: dist/ndea (cached build:addon and build:zarr-ext, then compile)
 vp run build
+# duckdb-zarr extension for the installed DuckDB (cached; needs cargo)
+vp run build:zarr-ext
 # Re-record the bytecode-order profiles from dist/ndea, then build again
 vp run bytecode-order
 
@@ -301,7 +323,8 @@ not replace unrelated `catalog:` references with package-local ranges. Use
 `vp remove --filter <workspace> <package>` for targeted workspace changes.
 
 `vp run build` runs the app's Bun build: `build:addon` (static `duckdb.node` on
-darwin-arm64) is cached; the compile step always runs and takes
+darwin-arm64) and `build:zarr-ext` (duckdb-zarr, embedded in the binary) are
+cached; the compile step always runs and takes
 `--target=<bun target>`. It compiles one full-stack executable (the frontend
 bundle, ESM bytecode laid out by `apps/ndea/scripts/bytecode-order/*.order`,
 and embedded sourcemaps, so stack traces show `src/**/*.ts:line`). Do not use
@@ -382,6 +405,15 @@ and free of frontend imports.
   `@duckdb/node-bindings` version, cached in `apps/ndea/.duckdb-addon-cache/`),
   so that binary embeds no libduckdb and extracts nothing to `~/.cache/ndea/`.
   Other targets still embed libduckdb for `preload-libduckdb.ts`.
+- **duckdb-zarr extension:** its builds are `C_STRUCT_UNSTABLE`, so DuckDB loads
+  one only if it was built for that exact DuckDB version: rebuild on every
+  DuckDB bump. `scripts/build-zarr-extension.ts` (`vp run build:zarr-ext`)
+  fetches duckdb-zarr at the commit `server/zarr-extension.ts` pins, pins its
+  duckdb-rs crate to the installed `@duckdb/node-bindings` (DuckDB 1.5.6 →
+  `1.10506.x`), runs `cargo build --release` in the source tree (its
+  `.cargo/config.toml` applies), and appends the extension metadata footer in
+  Bun (no Python). Native per platform, like `duckdb.node`; CI pins Rust
+  1.99.0. `test`, `build`, `dev`, `ndea`, and `bench:ingest` build it on demand.
 - **Updates:** Standalone installs live under `~/.ndea/versions/<tag>/ndea`;
   update atomically repoints `~/.local/bin/ndea` and keeps only the active
   version by default. Mise-managed updates must go through mise and must never

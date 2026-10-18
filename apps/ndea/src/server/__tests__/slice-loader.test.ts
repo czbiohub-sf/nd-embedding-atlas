@@ -8,6 +8,8 @@
 import { describe, expect, test } from "bun:test";
 import path from "node:path";
 import { existsSync } from "node:fs";
+import FileSystemStore from "@zarrita/storage/fs";
+import * as zarr from "zarrita";
 import { openAnnData } from "@ndea/zarr";
 import type { DatasetHandle } from "@ndea/zarr";
 import { ObsmSliceLoader } from "../slice-loader.ts";
@@ -23,20 +25,12 @@ function makeStub(nObs: number, width: number, baseValue: number): DatasetHandle
     obs: { length: nObs } as never,
     var: { length: 0 } as never,
     listObsmKeys: () => Promise.resolve(["X_mock"]),
-    getObsm: () => {
-      const data = new Float32Array(nObs * width);
-      for (let i = 0; i < nObs; i++) {
-        for (let c = 0; c < width; c++) data[i * width + c] = baseValue + c * 100 + i;
-      }
-      return Promise.resolve({ data, shape: [nObs, width] });
-    },
     getObsmShape: () => Promise.resolve([nObs, width] as const),
     getObsmColumn: (_key: string, colIndex: number) => {
       const col = new Float32Array(nObs);
       for (let i = 0; i < nObs; i++) col[i] = baseValue + colIndex * 100 + i;
       return Promise.resolve(col);
     },
-    toDuckDB: () => Promise.reject(new Error("not used")),
   } as unknown as DatasetHandle;
 }
 
@@ -54,7 +48,8 @@ describe("ObsmSliceLoader: zarr fixture", () => {
   test("loadColumn(0) matches full-matrix column 0 byte-for-byte", async () => {
     if (!HAS_FIXTURE) return;
     const adata = await openAnnData(FIXTURE);
-    const full = await adata.getObsm("X_pca");
+    const arr = await zarr.open(zarr.root(new FileSystemStore(FIXTURE)).resolve("obsm/X_pca"), { kind: "array" });
+    const full = await zarr.get(arr);
     const [nRows, nCols] = full.shape as [number, number];
 
     const loader = new ObsmSliceLoader("X_pca", new Map<string, DatasetHandle>([["fixture", adata]]).entries(), nCols);

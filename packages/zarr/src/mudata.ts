@@ -13,17 +13,17 @@
  *   obsmap/<name>: integer map from shared obs-axis to per-modality rows
  *
  * This reader supports axis=0 stores with 1-to-1 obs_names across modalities.
- * Other axes and sparse modality coverage come later.
+ * Other axes and sparse modality coverage come later. Like `AnnData`, opening
+ * reads metadata only; DuckDB reads the values.
  */
 
-import type { DuckDBConnection } from "@duckdb/node-api";
+import { existsSync, readdirSync, statSync } from "node:fs";
+import { join } from "node:path";
 import * as zarr from "zarrita";
 import type { Readable } from "zarrita";
-import type { AnnDataFrame, ColumnData, ParsedAnnData, ParsedMuData, Scalar } from "./types.ts";
-import { AnnData, parseAnnData, type DatasetHandle, type DenseResult, type ToDuckDBOptions } from "./anndata.ts";
-import { LazyDataFrame } from "./data-frame.ts";
-import { ingestDataFrames } from "./duckdb-ingest.ts";
-import { readDataFrame } from "./readers.ts";
+import type { FrameMeta, ParsedAnnData, ParsedMuData } from "./types.ts";
+import { AnnData, parseAnnData, type DatasetHandle } from "./anndata.ts";
+import { readFrameMeta } from "./frame-meta.ts";
 
 type ZarrGroup = zarr.Group<Readable>;
 
@@ -31,67 +31,43 @@ export function detectMuData(rootAttrs: Record<string, unknown>): boolean {
   return rootAttrs["encoding-type"] === "MuData";
 }
 
-export async function parseMuData(group: ZarrGroup, storePath?: string): Promise<ParsedMuData> {
-  const attrs = (group.attrs ?? {}) as Record<string, unknown>;
-
-  const sharedObs = await readMuDataSharedAxis(group, "obs");
-  const sharedVar = await readMuDataSharedAxis(group, "var");
-
+export async function parseMuData(
+  group: ZarrGroup,
+  location: { storePath?: string; source?: string } = {},
+): Promise<ParsedMuData> {
   const modalities = new Map<string, ParsedAnnData>();
-  const modNames = await discoverModalities(group, storePath);
   const modGroup = await tryOpenMuDataGroup(group, "mod");
   if (modGroup) {
-    for (const modName of modNames) {
+    for (const modName of await discoverModalities(group, location.storePath)) {
       try {
         const modZarrGroup = await zarr.open(modGroup.resolve(modName), { kind: "group" });
-        const modAttrs = (modZarrGroup.attrs ?? {}) as Record<string, unknown>;
-        if (modAttrs["encoding-type"] !== "anndata") continue;
-        const modStorePath = storePath ? `${storePath}/mod/${modName}` : undefined;
-        modalities.set(modName, await parseAnnData(modZarrGroup, modStorePath));
+        if (modZarrGroup.attrs["encoding-type"] !== "anndata") continue;
+        const modStorePath = location.storePath ? `${location.storePath}/mod/${modName}` : undefined;
+        modalities.set(
+          modName,
+          await parseAnnData(modZarrGroup, {
+            storePath: modStorePath,
+            source: location.source,
+            groupPath: `mod/${modName}`,
+          }),
+        );
       } catch (e) {
         console.warn(`MuData: failed to parse modality "${modName}":`, e);
       }
     }
   }
 
-  const obsmap = new Map<string, Int32Array | Uint32Array>();
-  const obsmapGroup = await tryOpenMuDataGroup(group, "obsmap");
-  if (obsmapGroup) {
-    for (const modName of modalities.keys()) {
-      try {
-        const arr = await zarr.open(obsmapGroup.resolve(modName), { kind: "array" });
-        const result = await zarr.get(arr);
-        const data = result.data;
-        if (data instanceof Int32Array || data instanceof Uint32Array) {
-          obsmap.set(modName, data);
-        }
-      } catch {
-        // obsmap entry may not exist for all modalities.
-      }
-    }
-  }
-
   return {
     kind: "mudata",
-    obs: sharedObs,
-    var: sharedVar,
-    attrs,
+    obs: await readFrameMeta(group, "obs"),
+    var: await readFrameMeta(group, "var"),
+    attrs: group.attrs ?? {},
     group,
-    storePath,
+    storePath: location.storePath,
+    source: location.source,
     modalities,
-    obsmap,
   };
 }
-
-async function readMuDataSharedAxis(group: ZarrGroup, axis: "obs" | "var"): Promise<AnnDataFrame | undefined> {
-  try {
-    const sharedAxisGroup = await zarr.open(group.resolve(axis), { kind: "group" });
-    return await readDataFrame(sharedAxisGroup);
-  } catch {
-    return undefined;
-  }
-}
-
 async function tryOpenMuDataGroup(parent: ZarrGroup, name: string): Promise<ZarrGroup | undefined> {
   try {
     return await zarr.open(parent.resolve(name), { kind: "group" });
@@ -129,13 +105,11 @@ async function discoverModalities(rootGroup: ZarrGroup, storePath: string | unde
 
   if (storePath) {
     try {
-      const fs = await import("node:fs");
-      const path = await import("node:path");
-      const modDir = path.join(storePath, "mod");
-      if (fs.existsSync(modDir)) {
-        return fs.readdirSync(modDir).filter((entry) => {
-          const full = path.join(modDir, entry);
-          return fs.statSync(full).isDirectory() && !entry.startsWith(".");
+      const modDir = join(storePath, "mod");
+      if (existsSync(modDir)) {
+        return readdirSync(modDir).filter((entry) => {
+          const full = join(modDir, entry);
+          return statSync(full).isDirectory() && !entry.startsWith(".");
         });
       }
     } catch {
@@ -169,17 +143,25 @@ export class MuData implements DatasetHandle {
    */
   readonly axis: 0 | 1 | -1;
   /** Root-level obs annotation. For axis=0, 1-to-1 with each modality's obs. */
-  readonly obs: LazyDataFrame;
-  /** Root-level var annotation (when present). */
-  readonly var: LazyDataFrame;
+  readonly obs: FrameMeta;
+  /** Root-level var annotation (empty when the store has none). */
+  readonly var: FrameMeta;
   /** Per-modality AnnData handles, keyed by modality name. */
   readonly mod: ReadonlyMap<string, AnnData>;
+  readonly source: string | undefined;
 
-  constructor(axis: 0 | 1 | -1, obs: LazyDataFrame, varFrame: LazyDataFrame, mod: ReadonlyMap<string, AnnData>) {
+  constructor(
+    axis: 0 | 1 | -1,
+    obs: FrameMeta,
+    varFrame: FrameMeta,
+    mod: ReadonlyMap<string, AnnData>,
+    source: string | undefined,
+  ) {
     this.axis = axis;
     this.obs = obs;
     this.var = varFrame;
     this.mod = mod;
+    this.source = source;
   }
 
   /** Build from a parsed MuData result. */
@@ -191,24 +173,15 @@ export class MuData implements DatasetHandle {
       throw new Error(`MuData axis=${axis} is not yet supported (only axis=0).`);
     }
 
-    const emptyFrame: AnnDataFrame = {
-      index: [],
-      columns: new Map(),
-      columnOrder: [],
-      column: () => {},
-      *[Symbol.iterator]() {},
-    };
-    const obs = new LazyDataFrame(parsed.obs ?? emptyFrame, "obs_name");
-    const varFrame = new LazyDataFrame(parsed.var ?? emptyFrame, "var_name");
+    const empty: FrameMeta = { indexName: "_index", columns: [], encodings: {}, length: 0 };
     const mod = new Map<string, AnnData>();
-    for (const [name, modParsed] of parsed.modalities) {
-      mod.set(name, AnnData.from(modParsed));
-    }
-    return new MuData(axis, obs, varFrame, mod);
+    for (const [name, modParsed] of parsed.modalities) mod.set(name, AnnData.from(modParsed));
+    return new MuData(axis, parsed.obs ?? empty, parsed.var ?? empty, mod, parsed.source);
   }
 
+  /** Global obs rows (axis=0: every modality has the same obs). */
   get nObs(): number {
-    return this.obs.length;
+    return this.obs.length || (this.mod.values().next().value?.nObs ?? 0);
   }
 
   /** Modality names in insertion order. */
@@ -237,14 +210,6 @@ export class MuData implements DatasetHandle {
     return out.toSorted();
   }
 
-  /**
-   * Load a namespaced embedding. The key must be `"<modality>:<obsmKey>"`.
-   */
-  getObsm(name: string): Promise<DenseResult> {
-    const { modAdata, obsmKey } = this._resolveObsmKey(name);
-    return modAdata.getObsm(obsmKey);
-  }
-
   getObsmShape(name: string): Promise<readonly [number, number]> {
     const { modAdata, obsmKey } = this._resolveObsmKey(name);
     return modAdata.getObsmShape(obsmKey);
@@ -268,127 +233,4 @@ export class MuData implements DatasetHandle {
     }
     return { modAdata, obsmKey };
   }
-
-  /**
-   * Register obs + var tables on DuckDB.
-   *
-   * - obs_base: merged columns across root obs + every modality's obs.
-   *   Root columns keep their names (shared). Per-modality columns are
-   *   renamed `<mod>:<col>` when they would collide with an already-seen
-   *   name; non-colliding names are kept as-is. Matches the scverse
-   *   convention `get_obs_mudata` uses.
-   * - var_base: union of each modality's var, with a `_modality` VARCHAR
-   *   column identifying the source modality. Shared root var (if present)
-   *   is emitted under `_modality = "__shared__"`.
-   *
-   * The `_modality` discriminator lets the frontend scope var-level picks
-   * to a modality (e.g. a gene from rna.var) while keeping a single
-   * `var_base` table the server queries uniformly.
-   */
-  async toDuckDB(conn: DuckDBConnection, options: ToDuckDBOptions = {}): Promise<void> {
-    const obsTable = options.obsTable ?? "obs_base";
-    const varTable = options.varTable ?? "var_base";
-
-    if (!options.skipObs) {
-      const mergedObs = this._buildMergedObs();
-      await ingestDataFrames(conn, obsTable, [new LazyDataFrame(mergedObs, "obs_name")], {
-        axis: "obs",
-        includeNameColumn: true,
-      });
-    }
-
-    if (!options.skipVar) {
-      // Build var_base as a union of shared root var (if any) + each
-      // modality's var, tagged with `_modality`. ingestDataFrames's
-      // datasetNames option + column-order union handle the schema merge.
-      const varFrames: LazyDataFrame[] = [];
-      const tags: string[] = [];
-      if (this.var.length > 0) {
-        varFrames.push(this.var);
-        tags.push("__shared__");
-      }
-      for (const [modName, modAdata] of this.mod) {
-        if (modAdata.var.length > 0) {
-          varFrames.push(modAdata.var);
-          tags.push(modName);
-        }
-      }
-      if (varFrames.length > 0) {
-        await ingestDataFrames(conn, varTable, varFrames, {
-          axis: "var",
-          includeNameColumn: true,
-          datasetNames: tags,
-        });
-        // `ingestDataFrames` emits `_dataset` when datasetNames is set.
-        // Rename to `_modality` for domain clarity.
-        await conn.run(`ALTER TABLE ${varTable} RENAME COLUMN _dataset TO _modality`);
-      }
-    }
-  }
-
-  /**
-   * Merge per-modality obs columns into the root obs frame. Collision-only
-   * prefix: if a column name already exists in the merged frame, the
-   * modality's column is added as `<mod>:<col>`. Otherwise the bare name
-   * is kept.
-   *
-   * Assumes axis=0 and 1-to-1 obs_names across modalities (the supported
-   * subset: see module docstring).
-   */
-  private _buildMergedObs(): AnnDataFrame {
-    const rootSource = this.obs.source;
-    const merged = new Map<string, ColumnData>();
-    const columnOrder: string[] = [];
-    const seen = new Set<string>();
-
-    // 1. Root columns first, name-preserving.
-    for (const name of rootSource.columnOrder) {
-      const col = rootSource.column(name);
-      if (!col) continue;
-      merged.set(name, col);
-      columnOrder.push(name);
-      seen.add(name);
-    }
-
-    // 2. Each modality's columns. Prefix on collision.
-    for (const [modName, modAdata] of this.mod) {
-      const modSource = modAdata.obs.source;
-      for (const name of modSource.columnOrder) {
-        const col = modSource.column(name);
-        if (!col) continue;
-        const key = seen.has(name) ? `${modName}:${name}` : name;
-        merged.set(key, col);
-        columnOrder.push(key);
-        seen.add(key);
-      }
-    }
-
-    return {
-      index: rootSource.index,
-      columns: merged,
-      columnOrder,
-      column(name: string) {
-        return merged.get(name);
-      },
-      *[Symbol.iterator]() {
-        const idx = rootSource.index;
-        const len = Array.isArray(idx) ? idx.length : idx.length;
-        for (let i = 0; i < len; i++) {
-          const row: Record<string, Scalar | null> = {};
-          for (const [colName, col] of merged) {
-            row[colName] = getColumnValue(col, i);
-          }
-          yield row;
-        }
-      },
-    };
-  }
-}
-
-/** Fetch a scalar from any ColumnData representation. */
-function getColumnValue(col: ColumnData, i: number): Scalar | null {
-  const withAt = col as { at?: (i: number) => Scalar | null };
-  if (typeof withAt.at === "function") return withAt.at(i);
-  if (Array.isArray(col)) return col[i];
-  return (col as ArrayLike<number>)[i];
 }

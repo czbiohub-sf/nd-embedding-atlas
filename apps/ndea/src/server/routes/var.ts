@@ -11,9 +11,11 @@
  * GET  /api/var-column/{task_id}/status: Poll materialization status
  */
 
-import type { AnnData, DatasetHandle, SparseArray } from "@ndea/zarr";
+import { AnnData, MuData } from "@ndea/zarr";
+import type { DatasetHandle } from "@ndea/zarr";
 import { VarColumnBodySchema, parseJsonBody } from "../protocol.ts";
 import type { ServerSession } from "../state.ts";
+import { varColumnQuery } from "../zarr-ingest.ts";
 
 /** In-flight var column materialization tasks. */
 interface VarTask {
@@ -34,129 +36,65 @@ function firstAdata(state: ServerSession): DatasetHandle | null {
   return iter.done ? null : iter.value;
 }
 
-/**
- * Materialise var.index as a plain string array.
- *
- * For MuData this is the shared root var index, which is typically empty on
- * axis=0 stores where each modality owns its own var.
- */
-function varNamesOf(adata: DatasetHandle): string[] {
-  const idx = adata.var.index;
-  if (Array.isArray(idx)) return [...idx];
-  const typed = idx as Int32Array;
-  const out: string[] = [];
-  for (let i = 0; i < typed.length; i++) out.push(String(typed[i]));
-  return out;
-}
-
 // ─── Routes ─────────────────────────────────────────────────────────────────
 
 /**
- * Handle GET /api/var/names?q={query}&limit={n}
+ * Handle GET /api/var/names?q={query}&limit={n}[&modality=]
  *
- * Case-insensitive prefix match on var.index from the first dataset's
- * AnnData accessor. Empty q returns the first `limit` names.
+ * Case-insensitive search over the first dataset's var names (a MuData's
+ * named modality, else its shared var): prefix matches first, then
+ * contains matches, each in var order. Empty q returns the first `limit`.
  */
-export function handleVarNames(url: URL, state: ServerSession): Response {
+export async function handleVarNames(url: URL, state: ServerSession): Promise<Response> {
   const q = (url.searchParams.get("q") ?? "").toLowerCase();
   const limit = Math.max(1, Math.min(500, Number(url.searchParams.get("limit") ?? "50")));
   const modality = url.searchParams.get("modality") ?? undefined;
 
   const handle = firstAdata(state);
-  if (!handle) return Response.json({ names: [] });
+  if (!handle || !state.store.hasVarTable) return Response.json({ names: [] });
 
-  // MuData: resolve to the named modality's AnnData.
-  let source: DatasetHandle = handle;
-  if (handle.kind === "mudata" && modality) {
-    const mu = handle as unknown as { mod: ReadonlyMap<string, DatasetHandle> };
-    const modHandle = mu.mod.get(modality);
-    if (!modHandle) {
+  let where = "TRUE";
+  const params: Record<string, string> = { q };
+  if (handle instanceof MuData) {
+    if (modality && !handle.mod.has(modality)) {
       return Response.json({ error: `Unknown modality "${modality}"` }, { status: 404 });
     }
-    source = modHandle;
+    where = "_modality = $tag";
+    params.tag = modality ?? "__shared__";
+  } else if (state.accessors.size > 1) {
+    where = "_dataset = $tag";
+    params.tag = [...state.accessors.keys()][0];
   }
 
-  const names = varNamesOf(source);
-
-  const matches: string[] = [];
-  if (q === "") {
-    for (let i = 0; i < names.length && matches.length < limit; i++) {
-      matches.push(names[i]);
-    }
-  } else {
-    // Prefer prefix matches, then fall back to contains.
-    const prefixHits: string[] = [];
-    const containsHits: string[] = [];
-    for (const name of names) {
-      const lower = name.toLowerCase();
-      if (lower.startsWith(q)) prefixHits.push(name);
-      else if (lower.includes(q)) containsHits.push(name);
-      if (prefixHits.length >= limit) break;
-    }
-    matches.push(...prefixHits.slice(0, limit));
-    if (matches.length < limit) {
-      matches.push(...containsHits.slice(0, limit - matches.length));
-    }
-  }
-
-  return Response.json({ names: matches });
+  const reader = await state.store.conn.runAndReadAll(
+    `SELECT var_name FROM var_base WHERE ${where} AND contains(lower(var_name), $q) ` +
+      `ORDER BY starts_with(lower(var_name), $q) DESC, __var_index__ LIMIT ${limit}`,
+    params,
+  );
+  return Response.json({ names: reader.getColumnsJS()[0] ?? [] });
 }
 
 /**
  * Handle GET /api/var/layers
  *
  * Returns available expression layer names. AnnData always has "X" (the
- * primary matrix). Additional layers are discovered from the zarr store's
- * `layers/` group on first call.
+ * primary matrix); extra layers come from the store's `layers` group. MuData
+ * layers are per-modality, so a MuData reports only "X".
  */
 export async function handleVarLayers(state: ServerSession): Promise<Response> {
   const adata = firstAdata(state);
-  if (!adata) return Response.json({ layers: ["X"] });
-
-  // AnnData stores list extra layers in the zarr `layers` group; MuData and
-  // unreadable stores report only "X".
-  const extra = await discoverLayers(adata);
-  const all = ["X", ...extra];
-  return Response.json({ layers: all });
-}
-
-/**
- * Layer names from the AnnData zarr store's `layers` group attrs, or [] when
- * the store is MuData (layers are per-modality) or the group is unreadable.
- */
-async function discoverLayers(adata: DatasetHandle): Promise<string[]> {
-  if (adata.kind !== "anndata") return [];
-  const anndata = adata as AnnData;
-  // AnnData exposes no layer listing, so read the accessor's private zarrita `_group`.
-  const group = (anndata.accessor as unknown as { _group?: unknown })._group;
-  if (!group) return [];
-
-  try {
-    // Defer to zarrita dynamically to avoid a hard dep at module init.
-    const zarr = await import("zarrita");
-    // @ts-expect-error: accessor._group is a zarrita Location.
-    const loc = group.resolve("layers");
-    const grp = await zarr.open(loc, { kind: "group" });
-    const attrs = (grp.attrs ?? {}) as Record<string, unknown>;
-    // AnnData >= 0.8 stores `{ "encoding-type": "dict" }` with children
-    // listed under the group directly; zarrita doesn't expose listing,
-    // so we rely on the "layers" attr convention when present.
-    const listed = (attrs["layers"] as string[] | undefined) ?? [];
-    return listed.filter((l) => typeof l === "string");
-  } catch {
-    return [];
-  }
+  const extra = adata instanceof AnnData ? await adata.layerNames() : [];
+  return Response.json({ layers: ["X", ...extra] });
 }
 
 /**
  * Handle POST /api/var-column  body: { name, layer? }
  *
  * Materialises a var column (one feature's values) aligned to obs_base's
- * `__row_index__`:
- *   1. For each dataset, find name's position in var.index
- *   2. isel({ var: [idx] }).getX() → length-nObs column (NaN where missing)
- *   3. Concatenate in obs_base insertion order → Float64Array of length nObs
- *   4. store.registerVarColumn(colName, values) → table + VIEW rebuild
+ * `__row_index__` (zarr-ingest.ts `varColumnQuery`): the var's position in
+ * each dataset's var_base rows, then a sparse matrix's entries through
+ * `read_zarr` (unstored = 0) or a dense matrix's column, NULL for NaN and
+ * for datasets without the var; `store.registerVarColumn` materializes it.
  *
  * Returns 202 with { task_id, status: "loading", column }. Poll
  * /api/var-column/{task_id}/status for completion.
@@ -214,102 +152,13 @@ async function materialiseVarColumn(
   colName: string,
   modality?: string,
 ): Promise<void> {
-  const nObs = state.store.nObs;
-  const values = new Float64Array(nObs);
-  values.fill(Number.NaN);
-
-  // Iterate datasets in insertion order (same order as obs_base was built).
-  let cursor = 0;
-  for (const [dsName, handle] of state.accessors) {
-    const dsN = handle.nObs;
-
-    // Resolve which AnnData holds the var: for MuData, the named modality's
-    // inner AnnData; for plain AnnData, the handle itself.
-    let adata: AnnData | null = null;
-    if (handle.kind === "mudata") {
-      if (!modality) {
-        // No modality specified on a MuData dataset: can't disambiguate.
-        cursor += dsN;
-        continue;
-      }
-      const mu = handle as unknown as { mod: ReadonlyMap<string, AnnData> };
-      adata = mu.mod.get(modality) ?? null;
-      if (!adata) {
-        cursor += dsN;
-        continue;
-      }
-    } else {
-      adata = handle as AnnData;
-    }
-
-    const varIdx = findVarIndex(adata, name);
-
-    if (varIdx >= 0) {
-      const slice = await loadVarSlice(adata, varIdx, layer, dsN);
-      values.set(slice, cursor);
-    } // else: leave NaN for this dataset
-    cursor += dsN;
-
-    // Silence unused-var warning for dsName
-    void dsName;
+  const datasets = [...state.accessors].map(([datasetName, handle]) => ({ name: datasetName, handle }));
+  const { query, scratch } = await varColumnQuery(state.store.conn, datasets, { name, layer, modality });
+  try {
+    await state.store.registerVarColumn(colName, query);
+  } finally {
+    for (const table of scratch) await state.store.conn.run(`DROP TABLE IF EXISTS ${table}`);
   }
-
-  if (cursor !== nObs) {
-    throw new Error(`Var column row alignment mismatch: obs_base.nObs=${nObs} but accessors sum to ${cursor}`);
-  }
-
-  await state.store.registerVarColumn(colName, values);
-}
-
-/** Find a var name's position in adata.var.index (or -1 if absent). */
-function findVarIndex(adata: AnnData | DatasetHandle, name: string): number {
-  const idx = adata.var.index;
-  if (Array.isArray(idx)) {
-    return idx.indexOf(name);
-  }
-  // Numeric var index: try parsing name as integer
-  const n = Number(name);
-  if (!Number.isInteger(n)) return -1;
-  for (let i = 0; i < idx.length; i++) {
-    if (idx[i] === n) return i;
-  }
-  return -1;
-}
-
-/**
- * Load one column of X (or layer) for a dataset as a length-nObs Float64Array.
- * Works for dense or sparse (CSR/CSC) matrices; unstored sparse entries are 0.
- */
-export async function loadVarSlice(adata: AnnData, varIdx: number, layer: string, nObs: number): Promise<Float64Array> {
-  const sliced = adata.isel({ var: [varIdx] });
-  const mat = layer === "X" ? await sliced.getX() : await sliced.getLayer(layer);
-
-  const out = new Float64Array(nObs);
-
-  // Only a sparse result has `format`; both kinds have `data` and `shape`.
-  if (!("format" in mat)) {
-    // Dense: shape [nObs, 1] row-major → column 0 is just every element
-    const d = mat.data as ArrayLike<number>;
-    for (let i = 0; i < nObs; i++) out[i] = d[i];
-    return out;
-  }
-
-  const sparse: SparseArray = mat;
-  if (sparse.format === "csc") {
-    const start = sparse.indptr[0];
-    const end = sparse.indptr[1];
-    for (let p = start; p < end; p++) {
-      out[sparse.indices[p]] = sparse.data[p];
-    }
-  } else {
-    // CSR: one value per row (at most), since we sliced to 1 column
-    for (let i = 0; i < nObs; i++) {
-      const rs = sparse.indptr[i];
-      const re = sparse.indptr[i + 1];
-      if (re > rs) out[i] = sparse.data[rs];
-    }
-  }
-  return out;
 }
 
 /**

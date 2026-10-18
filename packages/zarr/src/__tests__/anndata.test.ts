@@ -1,8 +1,9 @@
 /**
- * AnnData class + dual-axis DuckDB ingestion (zarr rework Phase A+B).
+ * AnnData / MuData / OME-Zarr opening: conventions and frame metadata.
+ * obs/var values are read by DuckDB (apps/ndea server tests).
  *
  * Fixture: ../ome-atlas-test-data/annotations.zarr: small dense AnnData
- * (~8.3k obs × 768 var). Test is skipped if the fixture is absent so CI
+ * (~8.3k obs × 768 var). Tests that need it are skipped if it is absent so CI
  * environments without the test-data checkout still pass.
  */
 
@@ -11,33 +12,12 @@ import path from "node:path";
 import { existsSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { DuckDBInstance } from "@duckdb/node-api";
-import { BoolArray } from "zarrita";
-import {
-  appendColumns,
-  BunFileStore,
-  ingestDataFrames,
-  LazyDataFrame,
-  open,
-  openAnnData,
-  openMuData,
-} from "../index.ts";
-import { SimpleNullable } from "../helpers.ts";
-import type { AnnDataFrame } from "../types.ts";
+import { BunFileStore, open, openAnnData, openMuData } from "../index.ts";
 import { vlenEncode } from "../write-obs.ts";
 
 const FIXTURE = path.resolve(import.meta.dir, "../../../../../ome-atlas-test-data/annotations.zarr");
 const HAS_FIXTURE = existsSync(FIXTURE);
 const TEXT_ENCODER = new TextEncoder();
-
-const frame = (columns: Map<string, unknown>) =>
-  new LazyDataFrame({
-    index: ["a", "b"],
-    columns,
-    columnOrder: [...columns.keys()],
-    column: (name: string) => columns.get(name),
-    [Symbol.iterator]: () => [][Symbol.iterator](),
-  } as unknown as AnnDataFrame);
 
 let temporaryStorePath = "";
 afterEach(async () => {
@@ -181,7 +161,7 @@ describe("BunFileStore", () => {
 });
 
 describe("Zarr convention vocabulary through the package barrel", () => {
-  test("MuData retains its discriminant, axis, modality key, and obsmap", async () => {
+  test("MuData retains its discriminant, axis, modality key, and frame metadata", async () => {
     const store = await createMuDataFixture();
     const parsed = await open(store);
 
@@ -193,16 +173,16 @@ describe("Zarr convention vocabulary through the package barrel", () => {
       axis: 0,
     });
     expect([...parsed.modalities.keys()]).toEqual(["rna"]);
-    expect(Array.from(parsed.obsmap.get("rna") ?? [])).toEqual([0, 1]);
 
     const mdata = await openMuData(store);
     expect(mdata.kind).toBe("mudata");
     expect(mdata.axis).toBe(0);
     expect(mdata.modNames).toEqual(["rna"]);
-    expect(mdata.obs.indexName).toBe("obs_name");
-    expect(mdata.var.indexName).toBe("var_name");
-    expect(mdata.mod.get("rna")?.obs.index).toEqual(["cell_0", "cell_1"]);
-    expect(mdata.mod.get("rna")?.var.index).toEqual(["gene_0", "gene_1"]);
+    expect(mdata.obs).toEqual({ indexName: "_index", columns: [], encodings: {}, length: 2 });
+    expect(mdata.var.length).toBe(1);
+    expect(mdata.mod.get("rna")?.groupPath).toBe("mod/rna");
+    expect(mdata.mod.get("rna")?.obs.length).toBe(2);
+    expect(mdata.mod.get("rna")?.var.length).toBe(2);
   });
 
   test("OME-Zarr retains its discriminant, TCZYX axes, and metadata attributes", async () => {
@@ -218,8 +198,8 @@ describe("Zarr convention vocabulary through the package barrel", () => {
   });
 });
 
-describe("AnnData class: symmetric obs/var + toDuckDB", () => {
-  test("opens fixture, exposes obs/var DataFrames with correct shape", async () => {
+describe("AnnData class: obs/var frame metadata", () => {
+  test("opens fixture, exposes obs/var metadata with correct shape", async () => {
     if (!HAS_FIXTURE) return;
     const adata = await openAnnData(FIXTURE);
     expect(adata.nObs).toBeGreaterThan(0);
@@ -227,202 +207,9 @@ describe("AnnData class: symmetric obs/var + toDuckDB", () => {
     expect(adata.obs.length).toBe(adata.nObs);
     expect(adata.var.length).toBe(adata.nVars);
     expect(adata.obs.columns.length).toBeGreaterThan(0);
+    expect(Object.keys(adata.obs.encodings).toSorted()).toEqual([...adata.obs.columns].toSorted());
     expect(adata.shape).toEqual([adata.nObs, adata.nVars]);
-  });
-
-  test("ingestDataFrames unions columns across datasets with _dataset discriminator", async () => {
-    // Synthetic two-DF union: dataset A has (gene, mean), dataset B has (gene, var).
-    const dfA = new LazyDataFrame({
-      index: ["g1", "g2"],
-      columns: new Map<string, number[] | string[]>([
-        ["gene", ["g1", "g2"]],
-        ["mean", [0.1, 0.2]],
-      ]),
-      columnOrder: ["gene", "mean"],
-      column(n: string): unknown {
-        return (this as { columns: Map<string, unknown> }).columns.get(n);
-      },
-      [Symbol.iterator]() {
-        return [][Symbol.iterator]();
-      },
-    } as unknown as AnnDataFrame);
-    const dfB = new LazyDataFrame({
-      index: ["g1", "g3"],
-      columns: new Map<string, number[] | string[]>([
-        ["gene", ["g1", "g3"]],
-        ["var", [1.5, 2.5]],
-      ]),
-      columnOrder: ["gene", "var"],
-      column(n: string): unknown {
-        return (this as { columns: Map<string, unknown> }).columns.get(n);
-      },
-      [Symbol.iterator]() {
-        return [][Symbol.iterator]();
-      },
-    } as unknown as AnnDataFrame);
-
-    const db = await DuckDBInstance.create(":memory:");
-    const conn = await db.connect();
-    try {
-      await ingestDataFrames(conn, "test_union", [dfA, dfB], {
-        datasetNames: ["A", "B"],
-        axis: "var",
-        includeNameColumn: true,
-      });
-
-      const schema = await conn.runAndReadAll("SELECT column_name FROM (DESCRIBE test_union) ORDER BY column_name");
-      const cols = schema.getColumnsJS()[0] as string[];
-      expect(cols).toContain("_dataset");
-      expect(cols).toContain("__var_index__");
-      expect(cols).toContain("var_name");
-      expect(cols).toContain("gene");
-      expect(cols).toContain("mean");
-      expect(cols).toContain("var");
-
-      const count = await conn.runAndReadAll("SELECT COUNT(*) AS n FROM test_union");
-      expect(Number((count.getRowObjectsJson()[0] as { n: bigint | number }).n)).toBe(4);
-
-      // Global axis index spans both DFs
-      const idxRange = await conn.runAndReadAll(
-        "SELECT MIN(__var_index__) AS lo, MAX(__var_index__) AS hi FROM test_union",
-      );
-      const r = idxRange.getRowObjectsJson()[0] as { lo: number | bigint; hi: number | bigint };
-      expect(Number(r.lo)).toBe(0);
-      expect(Number(r.hi)).toBe(3);
-    } finally {
-      conn.closeSync();
-      db.closeSync();
-    }
-  });
-
-  test("ingestDataFrames reads obs_name from a nullable-string-array index (not empty)", async () => {
-    // Regression: a `nullable-string-array` index arrives as a SimpleNullable
-    // wrapper whose values are reachable only via `.at()`: raw `idx[r]` is
-    // undefined. The name-column emission used `idx[r]`, so obs_name became ""
-    // for every row, and annotation write-back (aligns by obs_name) then wrote
-    // an all-NA column.
-    const labels = ["c0", "c1", "c2"];
-    const df = new LazyDataFrame({
-      index: new SimpleNullable(labels, new Uint8Array(labels.length)), // mask all 0 = all valid
-      columns: new Map<string, number[]>([["score", [0.1, 0.2, 0.3]]]),
-      columnOrder: ["score"],
-      column(n: string): unknown {
-        return (this as { columns: Map<string, unknown> }).columns.get(n);
-      },
-      [Symbol.iterator]() {
-        return [][Symbol.iterator]();
-      },
-    } as unknown as AnnDataFrame);
-
-    const db = await DuckDBInstance.create(":memory:");
-    const conn = await db.connect();
-    try {
-      await ingestDataFrames(conn, "t_nullable_idx", [df], { axis: "obs", includeNameColumn: true });
-      const rows = (
-        await conn.runAndReadAll("SELECT obs_name FROM t_nullable_idx ORDER BY __obs_index__")
-      ).getColumnsJS()[0] as string[];
-      expect(rows).toEqual(labels); // was ["", "", ""] before the fix
-    } finally {
-      conn.closeSync();
-      db.closeSync();
-    }
-  });
-
-  test("appendColumns writes typed arrays, NULL masks, and per-row values across chunk boundaries", async () => {
-    const n = 5000; // > 2 data chunks of 2048 rows
-    const db = await DuckDBInstance.create(":memory:");
-    const conn = await db.connect();
-    try {
-      await appendColumns(
-        conn,
-        "t",
-        n,
-        [
-          { name: "i", type: "INTEGER", values: Int32Array.from({ length: n }, (_, r) => r) },
-          {
-            name: "f",
-            type: "FLOAT",
-            values: Float32Array.from({ length: n }, (_, r) => r / 2),
-            nulls: Uint8Array.from({ length: n }, (_, r) => (r % 1000 === 3 ? 1 : 0)),
-          },
-          { name: "b", type: "BOOLEAN", values: Uint8Array.from({ length: n }, (_, r) => r % 2) },
-          { name: "big", type: "BIGINT", values: BigInt64Array.from({ length: n }, (_, r) => BigInt(r) * 10n) },
-          { name: "s", type: "VARCHAR", get: (r) => (r % 7 === 0 ? null : `v${r}`) },
-        ],
-        { create: true },
-      );
-      const rows = (
-        await conn.runAndReadAll("SELECT i, f, b, big, s FROM t WHERE i IN (0, 3, 2049, 4999) ORDER BY i")
-      ).getRows();
-      expect(rows).toEqual([
-        [0, 0, false, 0n, null],
-        [3, null, true, 30n, "v3"],
-        [2049, 1024.5, true, 20490n, "v2049"],
-        [4999, 2499.5, true, 49990n, "v4999"],
-      ]);
-    } finally {
-      conn.closeSync();
-      db.closeSync();
-    }
-  });
-
-  test("ingestDataFrames writes bool arrays as BOOLEAN and casts a later frame's differing type", async () => {
-    const first = frame(
-      new Map<string, unknown>([
-        ["flag", new BoolArray(Uint8Array.of(1, 0).buffer)],
-        ["track", Int32Array.of(1, 2)],
-      ]),
-    );
-    const second = frame(new Map<string, unknown>([["track", Float64Array.of(3, 4)]]));
-
-    const db = await DuckDBInstance.create(":memory:");
-    const conn = await db.connect();
-    try {
-      await ingestDataFrames(conn, "u", [first, second], { datasetNames: ["A", "B"], axis: "obs" });
-      const types = (await conn.runAndReadAll("SELECT column_type FROM (DESCRIBE u)")).getColumnsJS()[0];
-      expect(types).toEqual(["INTEGER", "VARCHAR", "VARCHAR", "BOOLEAN", "INTEGER"]);
-      const rows = (await conn.runAndReadAll("SELECT _dataset, flag, track FROM u ORDER BY __obs_index__")).getRows();
-      expect(rows).toEqual([
-        ["A", true, 1],
-        ["A", false, 2],
-        ["B", null, 3],
-        ["B", null, 4],
-      ]);
-    } finally {
-      conn.closeSync();
-      db.closeSync();
-    }
-  });
-
-  test("toDuckDB registers both obs_base and var_base queryable standalone", async () => {
-    if (!HAS_FIXTURE) return;
-    const adata = await openAnnData(FIXTURE);
-    const db = await DuckDBInstance.create(":memory:");
-    const conn = await db.connect();
-    try {
-      await adata.toDuckDB(conn);
-
-      const obsReader = await conn.runAndReadAll("SELECT COUNT(*) AS n FROM obs_base");
-      const obsCount = Number((obsReader.getRowObjectsJson()[0] as { n: number | bigint }).n);
-      expect(obsCount).toBe(adata.nObs);
-
-      const varReader = await conn.runAndReadAll("SELECT COUNT(*) AS n FROM var_base");
-      const varCount = Number((varReader.getRowObjectsJson()[0] as { n: number | bigint }).n);
-      expect(varCount).toBe(adata.nVars);
-
-      // Identity columns present and indexed
-      const obsSchema = await conn.runAndReadAll(
-        "SELECT column_name FROM (DESCRIBE obs_base) WHERE column_name IN ('__obs_index__', 'obs_name')",
-      );
-      expect(obsSchema.getRowObjectsJson().length).toBe(2);
-
-      const varSchema = await conn.runAndReadAll(
-        "SELECT column_name FROM (DESCRIBE var_base) WHERE column_name IN ('__var_index__', 'var_name')",
-      );
-      expect(varSchema.getRowObjectsJson().length).toBe(2);
-    } finally {
-      conn.closeSync();
-      db.closeSync();
-    }
+    expect(adata.source).toBe(FIXTURE);
+    expect(await adata.matrixFormat("X")).toBe("dense");
   });
 });

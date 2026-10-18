@@ -64,7 +64,10 @@ A new workspace file starts from the `--preset` document (`annotate` by default)
 ```bash
 vp run verify         # check + test root tooling and every workspace (cached)
 vp run build          # frontend + single-file binary
+vp run build:zarr-ext # the duckdb-zarr extension alone (cached; needs Rust)
 ```
+
+ndea reads AnnData and MuData through the [duckdb-zarr](https://github.com/xqlsystems/duckdb-zarr) DuckDB extension, which we build from source: `vp run build:zarr-ext` downloads the pinned release, builds it with `cargo` for the DuckDB version `@duckdb/node-api` ships, and caches it in `apps/ndea/.zarr-ext-cache/`. Install Rust first ([rustup](https://rustup.rs) or `brew install rust`). `vp run test`, `vp run build`, `vp run dev`, and `vp run ndea` build it on demand. Its builds are pinned to one exact DuckDB version, so every DuckDB bump rebuilds it (the task cache keys on `bun.lock`).
 
 CI runs `vp run verify` and builds the native binary matrix.
 
@@ -113,7 +116,7 @@ GitHub marks hyphenated semver tags as pre-releases. Stable/latest resolve throu
 
 The release workflow uploads `scripts/install.sh` and `scripts/install.ps1` as per-tag assets, so users can pin the installer URL: `curl …/releases/download/v0.X.Y/install.sh | sh`. The docs workflow copies both to `https://czbiohub-sf.github.io/nd-embedding-atlas/install.sh` and `…/install.ps1`, which always reflect the latest installers on `main`.
 
-Each platform builds on its own runner. `duckdb.node` is a native N-API addon, so a cross-compiled binary would embed the host's addon rather than the target's:
+Each platform builds on its own runner. `duckdb.node` is a native N-API addon and the duckdb-zarr extension is a native library built by `cargo`, so a cross-compiled binary would embed the host's builds rather than the target's (`build.ts` refuses a non-host target):
 
 | Runner             | `bun --target`     | Release asset          |
 | ------------------ | ------------------ | ---------------------- |

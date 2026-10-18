@@ -20,6 +20,12 @@ import { detectMuData, parseMuData } from "./mudata.ts";
 
 type ZarrGroup = zarr.Group<Readable>;
 
+/** Where a store came from: a local path (also `storePath`) or a URL. */
+interface StoreLocation {
+  storePath?: string;
+  source?: string;
+}
+
 // ─── OME-Zarr (inline) ──────────────────────────────────────────────────────
 // In production the OME-Zarr pipeline runs through `server/plate.ts`
 // (iohub-style mount + channel metadata). The detector + parser here exist so
@@ -31,7 +37,7 @@ function detectOmeZarr(rootAttrs: Record<string, unknown>): boolean {
   return "multiscales" in rootAttrs;
 }
 
-function parseOmeZarr(group: ZarrGroup, storePath?: string): Promise<ParsedOmeZarr> {
+function parseOmeZarr(group: ZarrGroup, { storePath }: StoreLocation): Promise<ParsedOmeZarr> {
   const attrs = (group.attrs ?? {}) as Record<string, unknown>;
   const multiscales = (attrs.multiscales as unknown[] | undefined) ?? [];
   return Promise.resolve({
@@ -46,7 +52,7 @@ function parseOmeZarr(group: ZarrGroup, storePath?: string): Promise<ParsedOmeZa
 /** Detector + parser pairs, probed in order. First `detect()` win parses. */
 const CONVENTIONS: readonly {
   detect: (attrs: Record<string, unknown>) => boolean;
-  parse: (group: ZarrGroup, storePath?: string) => Promise<ParsedStore>;
+  parse: (group: ZarrGroup, location: StoreLocation) => Promise<ParsedStore>;
 }[] = [
   { detect: detectOmeZarr, parse: parseOmeZarr },
   { detect: detectMuData, parse: parseMuData },
@@ -73,7 +79,9 @@ export async function open(location: string | Readable): Promise<ParsedStore> {
   const rootAttrs = (root.attrs ?? {}) as Record<string, unknown>;
 
   for (const conv of CONVENTIONS) {
-    if (conv.detect(rootAttrs)) return conv.parse(root, storePath);
+    if (conv.detect(rootAttrs)) {
+      return conv.parse(root, { storePath, source: typeof location === "string" ? location : undefined });
+    }
   }
 
   throw new Error(

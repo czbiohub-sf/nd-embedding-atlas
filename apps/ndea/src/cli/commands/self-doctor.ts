@@ -22,6 +22,7 @@ import { accent, fail, heading, label, mb, ok, warn } from "../lib/style.ts";
 import { listVersions } from "../lib/versions.ts";
 import { VERSION } from "../version.ts";
 import { probeChrome } from "../../server/chrome.ts";
+import { ZARR_EXTENSION, openDuckDB, zarrExtensionPath } from "../../server/zarr-extension.ts";
 
 export default defineCommand(
   "doctor",
@@ -135,6 +136,25 @@ export default defineCommand(
           } else {
             soft(`${dylibPath} not yet extracted: will populate on next DuckDB-using command`);
           }
+        }
+
+        // ── duckdb-zarr extension ──────────────────────────────────────────────
+        // Every dataset is read through it: a binary extracts its embedded copy,
+        // a checkout loads the `vp run build:zarr-ext` build.
+        section("duckdb-zarr");
+        try {
+          const { db, conn } = await openDuckDB();
+          const reader = await conn.runAndReadAll(
+            "SELECT extension_version FROM duckdb_extensions() WHERE extension_name = 'zarr' AND loaded",
+          );
+          const loaded = reader.getRowObjectsJS()[0]?.extension_version;
+          conn.closeSync();
+          db.closeSync();
+          if (loaded === ZARR_EXTENSION.version)
+            pass(`zarr ${loaded} loaded ${label(`(${await zarrExtensionPath()})`)}`);
+          else hard(`zarr extension reports ${JSON.stringify(loaded ?? null)}, expected ${ZARR_EXTENSION.version}`);
+        } catch (error) {
+          hard(`zarr extension does not load: ${error instanceof Error ? error.message : String(error)}`);
         }
 
         // ── Active version ─────────────────────────────────────────────────────

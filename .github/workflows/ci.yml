@@ -30,6 +30,17 @@ jobs:
           persist-credentials: false
       - uses: oven-sh/setup-bun@v2
       - uses: voidzero-dev/setup-vp@v1
+      # Rust builds the duckdb-zarr extension (`build:zarr-ext`) on a cache
+      # miss. Pinned to match local dev; bump deliberately.
+      - uses: dtolnay/rust-toolchain@1.99.0
+      # Built extension only; source and cargo target are rebuilt on a miss.
+      - uses: actions/cache@v5
+        with:
+          path: |
+            apps/ndea/.zarr-ext-cache/
+            !apps/ndea/.zarr-ext-cache/src-*
+            !apps/ndea/.zarr-ext-cache/target
+          key: zarr-ext-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('apps/ndea/scripts/build-zarr-extension.ts', 'bun.lock') }}
       - name: Install dependencies
         run: vp install --frozen-lockfile
       - name: vp run verify
@@ -73,6 +84,17 @@ jobs:
           persist-credentials: false
       - uses: oven-sh/setup-bun@v2
       - uses: voidzero-dev/setup-vp@v1
+      # Rust builds the duckdb-zarr extension (`build:zarr-ext`) on a cache
+      # miss. Pinned to match local dev; bump deliberately.
+      - uses: dtolnay/rust-toolchain@1.99.0
+      # Built extension only; source and cargo target are rebuilt on a miss.
+      - uses: actions/cache@v5
+        with:
+          path: |
+            apps/ndea/.zarr-ext-cache/
+            !apps/ndea/.zarr-ext-cache/src-*
+            !apps/ndea/.zarr-ext-cache/target
+          key: zarr-ext-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('apps/ndea/scripts/build-zarr-extension.ts', 'bun.lock') }}
       - name: Install dependencies
         run: vp install --frozen-lockfile
       # `vp run build` exercises the full release path: `build:addon`, then

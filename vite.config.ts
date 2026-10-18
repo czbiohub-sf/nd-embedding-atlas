@@ -5,16 +5,26 @@ export default defineConfig({
     tasks: {
       // `apps/ndea/scripts` is checked by @ndea/app's own `check`.
       check: "vp check vite.config.ts scripts && vp run -r --cache check",
-      test: "bun test scripts && vp run -r --cache test",
+      // Server tests open DuckDB, which always loads the duckdb-zarr extension.
+      test: { command: "bun test scripts && vp run -r --cache test", dependsOn: ["build:zarr-ext"] },
       verify: "vp run check && vp run test",
       // build-duckdb-addon.ts keys its own cache on the @duckdb/node-bindings version, so nothing to restore.
       "build:addon": {
         command: "bun run apps/ndea/scripts/build.ts --addon-only",
         cache: { input: ["bun.lock", "apps/ndea/scripts/build-duckdb-addon.ts"], output: [] },
       },
+      // Rust build of duckdb-zarr for the installed DuckDB; the script also reuses an existing output.
+      // zarr-extension.ts pins the release; bun.lock pins @duckdb/node-api.
+      "build:zarr-ext": {
+        command: "bun run apps/ndea/scripts/build-zarr-extension.ts",
+        cache: {
+          input: ["bun.lock", "apps/ndea/scripts/build-zarr-extension.ts", "apps/ndea/src/server/zarr-extension.ts"],
+          output: [],
+        },
+      },
       build: {
         command: "bun run apps/ndea/scripts/build.ts",
-        dependsOn: ["build:addon"],
+        dependsOn: ["build:addon", "build:zarr-ext"],
         cache: false,
       },
     },

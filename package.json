@@ -8,13 +8,13 @@
   "type": "module",
   "scripts": {
     "audit": "fallow",
-    "bench:ingest": "bun run apps/ndea/scripts/bench-ingest.ts",
+    "bench:ingest": "vp run build:zarr-ext && bun run apps/ndea/scripts/bench-ingest.ts",
     "bytecode-order": "bun run apps/ndea/scripts/record-bytecode-order.ts",
-    "dev": "bun x --bun portless run bun apps/ndea/scripts/dev.ts",
+    "dev": "vp run build:zarr-ext && bun x --bun portless run bun apps/ndea/scripts/dev.ts",
     "docs": "bun run --cwd docs dev",
     "docs:build": "bun run --cwd docs build",
     "docs:serve": "bun run --cwd docs start",
-    "ndea": "bun run apps/ndea/src/cli/index.ts",
+    "ndea": "vp run build:zarr-ext && bun run apps/ndea/src/cli/index.ts",
     "release:version": "bun run apps/ndea/scripts/release-version.ts"
   },
   "devDependencies": {

@@ -3,15 +3,13 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts",
-    "./build": "./src/column-worker-path.ts"
+    ".": "./src/index.ts"
   },
   "scripts": {
     "check": "vp check",
     "test": "bun test"
   },
   "dependencies": {
-    "@duckdb/node-api": "catalog:",
     "@zarrita/storage": "catalog:",
     "zarrita": "catalog:"
   },

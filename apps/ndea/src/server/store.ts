@@ -4,13 +4,15 @@
  * Ports the Python `server/_store.py` analytical session to TypeScript
  * using the @duckdb/node-api bindings (same as @uwdata/mosaic-duckdb).
  *
- * Tables are written column-wise through `@ndea/zarr`'s `appendColumns`.
+ * Base tables come from `read_zarr` (server/zarr-ingest.ts); rows that start in
+ * JS go through `appendColumns`.
  * Arrow IPC output uses the nanoarrow extension's `to_arrow_ipc()`.
  */
 
 import { rm } from "node:fs/promises";
-import { appendColumns } from "@ndea/zarr";
-import { DuckDBInstance } from "@duckdb/node-api";
+import type { DuckDBInstance } from "@duckdb/node-api";
+import { appendColumns } from "./append-columns.ts";
+import { openDuckDB } from "./zarr-extension.ts";
 import type { DuckDBConnection } from "@duckdb/node-api";
 import type { AnnotationDtype } from "./protocol.ts";
 
@@ -204,12 +206,11 @@ export class DatasetQuerySession {
     this._hidden = hidden ?? new Set();
   }
 
-  /** Create the DuckDB instance + connection and apply open PRAGMAs. */
+  /** Open DuckDB (with duckdb-zarr loaded) and apply open PRAGMAs. */
   private static async _open(
     options?: DatasetQuerySessionOptions,
   ): Promise<{ db: DuckDBInstance; conn: DuckDBConnection }> {
-    const db = await DuckDBInstance.create(options?.dbPath ?? ":memory:");
-    const conn = await db.connect();
+    const { db, conn } = await openDuckDB(options?.dbPath);
     const p = options?.pragmas;
     if (p?.threads != null) await conn.run(`SET threads=${p.threads}`);
     return { db, conn };
@@ -414,35 +415,18 @@ export class DatasetQuerySession {
   }
 
   /**
-   * Register a materialised var column in DuckDB and rebuild the VIEW.
-   *
-   * Values are aligned to obs_base by `__row_index__`, so `values.length`
-   * must equal `nObs`.
+   * Register a var column and rebuild the VIEW. `query` yields
+   * `(__row_index__, value)` for every obs_base row (zarr-ingest.ts
+   * `varColumnQuery`).
    */
-  async registerVarColumn(colName: string, values: Float64Array): Promise<void> {
-    if (values.length !== this.nObs) {
-      throw new Error(`registerVarColumn: values.length=${values.length} != nObs=${this.nObs}`);
-    }
+  async registerVarColumn(colName: string, query: string): Promise<void> {
     if (this._varCols.has(colName)) return;
 
     const safe = colName.replace(/[^a-zA-Z0-9_]/g, "_");
     const tableName = `var_${safe}`;
-
-    const index = new Int32Array(values.length);
-    const nulls = new Uint8Array(values.length);
-    for (let i = 0; i < values.length; i++) {
-      index[i] = i;
-      nulls[i] = Number.isFinite(values[i]) ? 0 : 1;
-    }
-    await appendColumns(
-      this.conn,
-      tableName,
-      values.length,
-      [
-        { name: "__row_index__", type: "INTEGER", values: index },
-        { name: colName, type: "DOUBLE", values, nulls },
-      ],
-      { create: true },
+    await this.conn.run(
+      `CREATE OR REPLACE TABLE ${tableName} AS SELECT __row_index__::INTEGER AS __row_index__, value::DOUBLE AS ${quoteIdent(colName)} ` +
+        `FROM (${query}) ORDER BY __row_index__`,
     );
 
     this._varCols.set(colName, { table: tableName, colName });
@@ -683,7 +667,7 @@ export class DatasetQuerySession {
   /**
    * Finalize var_base after the initVar callback has created it.
    *
-   * `ingestDataFrames(..., { axis: "var", includeNameColumn: true })` already
+   * `ingestVar` (zarr-ingest.ts) already
    * emits `__var_index__` + `var_name`. This method indexes them and creates
    * a standalone `var` VIEW. var_base is NOT joined to the dataset VIEW :
    * cardinality is n_vars, not n_obs.

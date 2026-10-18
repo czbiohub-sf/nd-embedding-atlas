@@ -1,24 +1,14 @@
 /**
- * Ingest strategy + file-backed ingest cache (I/O-scalability loop
- * `perf/io-scalability`).
- *
- * A single AnnData streams obs/var from the zarr source in row-windows
- * (`ingestDataFrameChunked`), so peak JS allocation is one batch and stays
- * scale-invariant to 5-10M obs. Multi-dataset unions fall back to `streaming`,
- * which can emit the `_dataset` discriminator column that chunked cannot.
- *
- * Local AnnData ingests are file-backed and cached: base tables page to a
- * content-keyed `.duckdb` under `~/.cache/ndea/ingest/`, so reopening the same
- * dataset skips re-ingest. The cache root reuses the version-scoped libduckdb
- * cache expression.
+ * File-backed ingest cache: obs_base/var_base (read by `read_zarr`,
+ * server/zarr-ingest.ts) page to a content-keyed `.duckdb` under
+ * `~/.cache/ndea/ingest/`, so reopening the same local project skips
+ * re-ingest. The cache root reuses the version-scoped libduckdb cache
+ * expression.
  */
 
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { cpus, homedir } from "node:os";
 import { resolve } from "node:path";
-
-/** How obs_base/var_base were produced. Derived, not user-selectable. */
-export type IngestStrategy = "mudata" | "chunked" | "streaming";
 
 /** A dataset path is local (cacheable) unless it's an http(s) zarr store. */
 export function isLocalPath(path: string): boolean {
@@ -61,6 +51,8 @@ function fingerprintZarr(absPath: string): string {
     "zarr.json",
     ".zattrs",
     ".zgroup",
+    // v2 consolidated metadata: covers MuData modalities (`mod/*`) too.
+    ".zmetadata",
     "obs/zarr.json",
     "obs/.zattrs",
     "obs/.zgroup",
@@ -73,33 +65,34 @@ function fingerprintZarr(absPath: string): string {
     if (!existsSync(file)) continue;
     const st = statSync(file);
     parts.push(`${rel}|${st.size}|${st.mtimeMs}`);
-    if (rel === "zarr.json" || rel === ".zattrs") {
+    if (rel === "zarr.json" || rel === ".zattrs" || rel === ".zmetadata") {
       parts.push(`${rel}#${sha256Hex(readFileSync(file, "utf8")).slice(0, 16)}`);
     }
   }
   return parts.join(";");
 }
 
-/** Bump when ingest output changes within one ndea version (2: bool columns are BOOLEAN). */
-const INGEST_SCHEMA = 2;
+/**
+ * Bump when ingest output changes within one ndea version (2: bool columns are
+ * BOOLEAN; 3: read_zarr ingest, bool/nullable-int typed on every path, MuData cached).
+ */
+const INGEST_SCHEMA = 3;
 
 /**
  * Content key for the ingest cache. Folds in: ndea VERSION and INGEST_SCHEMA
- * (a schema change invalidates old caches), the ingest strategy (different obs_base
- * provenance), the hidden-column set (changes the dataset VIEW), and every
- * member dataset's name + path + zarr fingerprint (ANY member change → miss,
- * and multi-dataset unions key differently from single because of `_dataset`).
+ * (a schema change invalidates old caches), the hidden-column set (changes the
+ * dataset VIEW), and every member dataset's name + path + zarr fingerprint (ANY
+ * member change → miss, and multi-dataset unions key differently from single
+ * because of `_dataset`).
  */
 export function ingestCacheKey(
   version: string,
   members: readonly { name: string; path: string }[],
-  strategy: IngestStrategy,
   hidden: ReadonlySet<string>,
 ): string {
   const seed = JSON.stringify({
     v: version,
     schema: INGEST_SCHEMA,
-    strategy,
     hidden: [...hidden].toSorted(),
     members: members.map((m) => ({ name: m.name, path: m.path, fp: fingerprintZarr(m.path) })),
   });

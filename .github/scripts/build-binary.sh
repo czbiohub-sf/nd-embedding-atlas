@@ -12,8 +12,9 @@ set -euo pipefail
 
 mkdir -p dist
 
-# Runs `build:addon` (host-native), then compiles for TARGET; the flag reaches
-# only the compile step.
+# Runs `build:addon` and `build:zarr-ext` (host-native: TARGET must be the
+# runner's own platform), then compiles for TARGET; the flag reaches only the
+# compile step.
 vp run build "--target=${TARGET}"
 
 # The app builder keeps the public output at dist/ndea, or dist/ndea.exe when
