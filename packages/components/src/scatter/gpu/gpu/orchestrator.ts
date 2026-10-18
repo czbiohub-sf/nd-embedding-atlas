@@ -1,3 +1,4 @@
+import { srgbChannelToLinear } from "@ndea/ochre";
 import type { DeviceInfo, RowIndex } from "@ndea/sdk";
 import { type DensityMode, gpuPointIndex } from "../../contracts";
 import { PALETTE } from "../../gpu/constants";
@@ -18,7 +19,10 @@ const DENSITY_POINTS_PER_PX = 0.5;
 const DENSITY_HYSTERESIS = 0.8;
 /** Capacity of the compacted id list; more visible points than this always take the density path. */
 const MAX_QUADS = 1 << 21;
-/** Storage buffers the point vertex shader binds: posX, posY, cats, values, ids, bits (+ posZ in 3D). */
+/**
+ * Storage buffers the point draws bind in the vertex stage: positions, cats, values, ids, bits,
+ * and perm (the pick pass's fragment reads it, but its layout is visible to both stages).
+ */
 const VERTEX_STORAGE_BUFFERS = 6;
 /** `Frame.densityMode` index of each density compositing mode. */
 const DENSITY_MODES: readonly DensityMode[] = ["mean", "dominant", "weave"];
@@ -51,13 +55,15 @@ export async function createScatterplot(
 
   // Known limit: no vertex-buffer fallback for devices without vertex-stage storage buffers.
   const vertexStorage = device.limits.maxStorageBuffersInVertexStage ?? device.limits.maxStorageBuffersPerShaderStage;
-  const needed = VERTEX_STORAGE_BUFFERS + ndim - 2;
-  if (vertexStorage < needed) {
-    throw new Error(`This GPU allows ${vertexStorage} storage buffers in vertex shaders; the scatter needs ${needed}.`);
-  }
-  if (n * 4 > device.limits.maxStorageBufferBindingSize) {
+  if (vertexStorage < VERTEX_STORAGE_BUFFERS) {
     throw new Error(
-      `${n.toLocaleString()} points exceed this GPU's storage binding limit (${device.limits.maxStorageBufferBindingSize.toLocaleString()} bytes per column).`,
+      `This GPU allows ${vertexStorage} storage buffers in vertex shaders; the scatter needs ${VERTEX_STORAGE_BUFFERS}.`,
+    );
+  }
+  // The positions buffer holds every axis, so it is the largest binding.
+  if (n * 4 * ndim > device.limits.maxStorageBufferBindingSize) {
+    throw new Error(
+      `${n.toLocaleString()} ${ndim}D points exceed this GPU's storage binding limit (${device.limits.maxStorageBufferBindingSize.toLocaleString()} bytes).`,
     );
   }
 
@@ -122,6 +128,12 @@ export async function createScatterplot(
   // Compaction reruns only when the camera, a filter, or the data changed.
   let compactDirty = true;
 
+  /** Palette and LUT colors arrive as sRGB; the GPU works in linear light and the composite encodes once. */
+  function writeColors(rgba: Float32Array) {
+    for (let i = 0; i < rgba.length; i++) if ((i & 3) !== 3) rgba[i] = srgbChannelToLinear(rgba[i]);
+    scene.colors.write(rgba);
+  }
+
   function setPalette(palette: readonly (readonly [number, number, number, number?])[]) {
     const len = Math.max(1, Math.min(palette.length, 256));
     const rgba = new Float32Array(256 * 4);
@@ -129,7 +141,7 @@ export async function createScatterplot(
       const [r, g, b, a = 1] = palette[i];
       rgba.set([r, g, b, a], i * 4);
     }
-    scene.colors.write(rgba);
+    writeColors(rgba);
     f.paletteLen = len;
     f.colorBy = 0;
   }
@@ -137,7 +149,7 @@ export async function createScatterplot(
   function setLut(lut: Uint32Array) {
     const rgba = new Float32Array(256 * 4);
     for (let i = 0; i < 256; i++) for (let c = 0; c < 4; c++) rgba[i * 4 + c] = ((lut[i] >>> (c * 8)) & 0xff) / 255;
-    scene.colors.write(rgba);
+    writeColors(rgba);
   }
 
   function setScale(scale: "linear" | "log" | "sqrt" = "linear") {

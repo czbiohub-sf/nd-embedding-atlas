@@ -320,11 +320,18 @@ export function createRenderPasses(root: TgpuRoot, scene: Scene, hdrFormat: GPUT
   let blendMode: BlendMode = "additive";
 
   // ── Density LOD: per-pixel atomic weight + color sums, then a resolve ──
-  // `hist`: per class tile (CLASS_TILE² px), the weight of each of CLASSES palette colors; only
-  // filled for the categorical compositing modes (dominant, weave).
+  // `acc`: 4 words per grid pixel, then (at `histBase`) per class tile (CLASS_TILE² px) the weight
+  // of each of CLASSES palette colors, only filled for the categorical compositing modes
+  // (dominant, weave). One binding keeps the splat within 8 storage buffers.
   const accLayout = tgpu.bindGroupLayout({
     acc: { storage: (len: number) => d.arrayOf(d.atomic(d.u32), len), access: "mutable" },
-    hist: { storage: (len: number) => d.arrayOf(d.atomic(d.u32), len), access: "mutable" },
+  });
+  const histBase = tgpu.fn(
+    [],
+    d.u32,
+  )(() => {
+    "use gpu";
+    return frame.$.grid.x * frame.$.grid.y * 4;
   });
 
   // One workgroup per live batch. Morton order keeps a batch on a few pixels, so its points
@@ -397,7 +404,7 @@ export function createRenderPasses(root: TgpuRoot, scene: Scene, hdrFormat: GPUT
               std.atomicAdd(tileClass.$[cell * CLASSES + cls], sums.x);
             } else {
               const cell = (gy >>> CLASS_SHIFT) * f.classTiles + (gx >>> CLASS_SHIFT);
-              std.atomicAdd(accLayout.$.hist[cell * CLASSES + cls], sums.x);
+              std.atomicAdd(accLayout.$.acc[histBase() + cell * CLASSES + cls], sums.x);
             }
           }
         }
@@ -419,7 +426,7 @@ export function createRenderPasses(root: TgpuRoot, scene: Scene, hdrFormat: GPUT
             const cell = e >>> CLASS_BITS;
             const cx = d.u32(origin.x >> CLASS_SHIFT) + (cell & (TILE_CLASSES - 1));
             const cy = d.u32(origin.y >> CLASS_SHIFT) + (cell >>> TILE_CLASS_SHIFT);
-            std.atomicAdd(accLayout.$.hist[(cy * f.classTiles + cx) * CLASSES + (e & (CLASSES - 1))], v);
+            std.atomicAdd(accLayout.$.acc[histBase() + (cy * f.classTiles + cx) * CLASSES + (e & (CLASSES - 1))], v);
           }
         }
       }
@@ -450,13 +457,13 @@ export function createRenderPasses(root: TgpuRoot, scene: Scene, hdrFormat: GPUT
           a,
         );
       }
-      const base = ((py >>> CLASS_SHIFT) * f.classTiles + (px >>> CLASS_SHIFT)) * CLASSES;
+      const base = histBase() + ((py >>> CLASS_SHIFT) * f.classTiles + (px >>> CLASS_SHIFT)) * CLASSES;
       const n = std.min(f.paletteLen, CLASSES);
       let total = d.u32(0);
       let best = d.u32(0);
       let bestWeight = d.u32(0);
       for (let c = d.u32(0); c < n; c++) {
-        const v = std.atomicLoad(accLayout.$.hist[base + c]);
+        const v = std.atomicLoad(accLayout.$.acc[base + c]);
         total += v;
         if (v > bestWeight) {
           best = c;
@@ -469,7 +476,7 @@ export function createRenderPasses(root: TgpuRoot, scene: Scene, hdrFormat: GPUT
         const target = u * d.f32(total);
         let sum = d.f32(0);
         for (let c = d.u32(0); c < n; c++) {
-          sum += d.f32(std.atomicLoad(accLayout.$.hist[base + c]));
+          sum += d.f32(std.atomicLoad(accLayout.$.acc[base + c]));
           if (sum > target) {
             best = c;
             break;
@@ -630,10 +637,11 @@ export function createRenderPasses(root: TgpuRoot, scene: Scene, hdrFormat: GPUT
   let path: ReturnType<typeof makePath> | null = null;
 
   function makeAcc(width: number, height: number) {
-    const buffer = root.createBuffer(d.arrayOf(d.atomic(d.u32), width * height * 4)).$usage("storage");
     const tiles = Math.ceil(width / CLASS_TILE) * Math.ceil(height / CLASS_TILE);
-    const hist = root.createBuffer(d.arrayOf(d.atomic(d.u32), tiles * CLASSES)).$usage("storage");
-    return { buffer, hist, group: root.createBindGroup(accLayout, { acc: buffer, hist }) };
+    const buffer = root
+      .createBuffer(d.arrayOf(d.atomic(d.u32), width * height * 4 + tiles * CLASSES))
+      .$usage("storage");
+    return { buffer, group: root.createBindGroup(accLayout, { acc: buffer }) };
   }
   let acc: ReturnType<typeof makeAcc> | null = null;
 
@@ -684,9 +692,8 @@ export function createRenderPasses(root: TgpuRoot, scene: Scene, hdrFormat: GPUT
     compact,
     draw(enc, target) {
       if (acc) {
+        // Cleared in every mode, histogram included: one clear is cheaper than tracking the mode.
         root.unwrap(enc).clearBuffer(root.unwrap(acc.buffer));
-        // Cleared in every mode: one ~9 MB clear is cheaper than tracking the mode here.
-        root.unwrap(enc).clearBuffer(root.unwrap(acc.hist));
         const pass = enc.beginComputePass();
         splatPipeline.with(pass).with(acc.group).dispatchWorkgroupsIndirect(indirect, SPLAT);
         pass.end();
@@ -768,7 +775,6 @@ export function createRenderPasses(root: TgpuRoot, scene: Scene, hdrFormat: GPUT
       depthTarget?.destroy();
       depthTarget = depth ? makeDepth() : null;
       acc?.buffer.destroy();
-      acc?.hist.destroy();
       acc = densityPossible ? makeAcc(width, height) : null;
     },
     destroy() {

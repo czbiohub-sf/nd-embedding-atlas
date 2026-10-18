@@ -68,7 +68,6 @@ export type FrameState = d.InferInput<typeof Frame>;
 
 type PointFn<R extends d.AnyWgslData> = TgpuFn<(i: d.U32) => R>;
 type U32Array = d.WgslArray<d.U32>;
-type F32Array = d.WgslArray<d.F32>;
 
 /**
  * The per-view GPU scene: readonly SoA point data, bit layers, the frame
@@ -93,10 +92,6 @@ export interface Scene {
   readonly cap: number;
   /** GPU bytes held per point by the point buffers (incl. `perm`, `batchBounds`, `rowBits`). */
   readonly bytes: number;
-  readonly posX: TgpuReadonly<F32Array>;
-  readonly posY: TgpuReadonly<F32Array>;
-  /** 3D only. */
-  readonly posZ: TgpuReadonly<F32Array> | null;
   /** Storage index → row index. */
   readonly perm: TgpuReadonly<U32Array>;
   readonly bits: TgpuBuffer<U32Array> & StorageFlag;
@@ -210,14 +205,12 @@ export function mortonOrder(positions: Float32Array, n: number, ndim: 2 | 3): Ui
 export function createScene(root: TgpuRoot, positions: Float32Array, n: number, cap: number, ndim: 2 | 3): Scene {
   const words = Math.ceil(n / 32);
   const batches = Math.ceil(n / BATCH);
-  const column = () => root.createBuffer(d.arrayOf(d.f32, Math.max(1, n))).$usage("storage");
-  const xBuf = column();
-  const yBuf = column();
-  // No z column in 2D.
-  const zBuf = ndim === 3 ? column() : null;
+  // Positions, one axis after another (x at 0, y at n, z at 2n): one binding for 2 or 3 axes
+  // keeps every pipeline within WebGPU's default 8 storage buffers per stage.
+  const posBuf = root.createBuffer(d.arrayOf(d.f32, Math.max(1, ndim * n))).$usage("storage");
   // Category u8 ×4 per word; continuous values f32.
   const catBuf = root.createBuffer(d.arrayOf(d.u32, Math.max(1, Math.ceil(n / 4)))).$usage("storage");
-  const valueBuf = column();
+  const valueBuf = root.createBuffer(d.arrayOf(d.f32, Math.max(1, n))).$usage("storage");
   const tSort = performance.now();
   const order = mortonOrder(positions, n, ndim);
   console.log(`Storage order (Morton sort): ${(performance.now() - tSort).toFixed(1)}ms`);
@@ -228,9 +221,7 @@ export function createScene(root: TgpuRoot, positions: Float32Array, n: number, 
   const rowBits = root.createBuffer(d.arrayOf(d.atomic(d.u32), Math.max(1, words))).$usage("storage");
   // Compacted visible point ids, written by compaction, read by the quad and pick draws.
   const ids = root.createBuffer(d.arrayOf(d.u32, Math.max(1, cap))).$usage("storage");
-  const posX = xBuf.as("readonly");
-  const posY = yBuf.as("readonly");
-  const posZ = zBuf?.as("readonly") ?? null;
+  const pos = posBuf.as("readonly");
   const cats = catBuf.as("readonly");
   const values = valueBuf.as("readonly");
   const perm = permBuf.as("readonly");
@@ -274,25 +265,25 @@ export function createScene(root: TgpuRoot, positions: Float32Array, n: number, 
   }
   // Frame.n bounds the gather and bounds kernels; the orchestrator writes the whole frame later.
   frame.patch({ n });
-  const xyz = [xBuf, yBuf, zBuf];
-  for (let a = 0; a < ndim; a++) gather(root.unwrap(xyz[a]!), positions.subarray(a * n, (a + 1) * n), 0);
+  for (let a = 0; a < ndim; a++) gather(root.unwrap(posBuf), positions.subarray(a * n, (a + 1) * n), 0, a * n);
 
   /** World position of point i (z = 0 in 2D). */
-  const position = posZ
-    ? tgpu.fn(
-        [d.u32],
-        d.vec3f,
-      )((i) => {
-        "use gpu";
-        return d.vec3f(posX.$[i], posY.$[i], posZ.$[i]);
-      })
-    : tgpu.fn(
-        [d.u32],
-        d.vec3f,
-      )((i) => {
-        "use gpu";
-        return d.vec3f(posX.$[i], posY.$[i], 0);
-      });
+  const position =
+    ndim === 3
+      ? tgpu.fn(
+          [d.u32],
+          d.vec3f,
+        )((i) => {
+          "use gpu";
+          return d.vec3f(pos.$[i], pos.$[n + i], pos.$[2 * n + i]);
+        })
+      : tgpu.fn(
+          [d.u32],
+          d.vec3f,
+        )((i) => {
+          "use gpu";
+          return d.vec3f(pos.$[i], pos.$[n + i], 0);
+        });
 
   const boundsRW = boundsBuf.as("mutable");
   root
@@ -522,8 +513,8 @@ export function createScene(root: TgpuRoot, positions: Float32Array, n: number, 
     }
   });
 
-  const bytes = [xBuf, yBuf, zBuf, catBuf, valueBuf, permBuf, boundsBuf, bits, rowBits, ids]
-    .map((b) => (b ? root.unwrap(b).size : 0))
+  const bytes = [posBuf, catBuf, valueBuf, permBuf, boundsBuf, bits, rowBits, ids]
+    .map((b) => root.unwrap(b).size)
     .reduce((a, b) => a + b, 0);
 
   return {
@@ -533,9 +524,6 @@ export function createScene(root: TgpuRoot, positions: Float32Array, n: number, 
     batches,
     cap,
     bytes,
-    posX,
-    posY,
-    posZ,
     perm,
     bits,
     ids,

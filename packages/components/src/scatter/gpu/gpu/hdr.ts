@@ -1,7 +1,7 @@
 /**
  * HDR target + tone-map: points draw additively into an rgba16float target,
  * then one full-screen pass applies exposure and a tone curve (AgX / ACES /
- * Reinhard / Khronos Neutral / none) and encodes sRGB into the canvas.
+ * Reinhard / neutral / none) and encodes sRGB into the canvas.
  */
 
 import { tgpu, type TgpuCommandEncoder } from "typegpu";
@@ -15,7 +15,7 @@ export type ToneMappingMode = "none" | "reinhard" | "aces" | "agx" | "neutral";
 const MODES: Record<ToneMappingMode, number> = { none: 0, reinhard: 1, aces: 2, agx: 3, neutral: 4 };
 
 export interface HdrSettings {
-  /** Default `"neutral"`: identity below ~0.76 luminance, so categorical colors keep their identity. */
+  /** Default `"neutral"`: identity up to `KNEE`, so palette colors render as their exact hex. */
   toneMapping: ToneMappingMode;
   /** Exposure stops (log2); 0 = neutral. */
   exposure: number;
@@ -81,22 +81,24 @@ const acesChannel = tgpu.fn(
   return std.clamp((c * (2.51 * c + 0.03)) / (c * (2.43 * c + 0.59) + 0.14), 0, 1);
 });
 
-/** Khronos PBR Neutral: identity below the knee, then peak roll-off with slight desaturation toward white. */
+// ponytail: knee of the neutral curve, the one knob. Identity below it (tab10's brightest
+// channel, 0xf2, is 0.89 linear); lower it for a softer additive roll-off, at the cost of exact
+// bright palette colors.
+const KNEE = 0.95;
+
+/**
+ * Neutral: identity up to `KNEE` (no toe), then a C1 exponential shoulder toward 1 on the peak
+ * channel. The color scales as a whole, so additive overlaps keep their hue.
+ */
 const neutral = tgpu.fn(
   [d.vec3f],
   d.vec3f,
 )((c) => {
   "use gpu";
-  const startCompression = 0.76;
-  const x = std.min(c.x, std.min(c.y, c.z));
-  const offset = std.select(0.04, x - 6.25 * x * x, x < 0.08);
-  const color = std.sub(c, d.vec3f(offset));
-  const peak = std.max(color.x, std.max(color.y, color.z));
-  if (peak < startCompression) return color;
-  const dd = 1 - startCompression;
-  const newPeak = 1 - (dd * dd) / (peak + dd - startCompression);
-  const g = 1 - 1 / (0.15 * (peak - newPeak) + 1);
-  return std.mix(std.mul(color, newPeak / peak), d.vec3f(newPeak), g);
+  const peak = std.max(c.x, std.max(c.y, c.z));
+  if (peak <= KNEE) return d.vec3f(c);
+  const shoulder = KNEE + (1 - KNEE) * (1 - std.exp((KNEE - peak) / (1 - KNEE)));
+  return std.mul(c, shoulder / peak);
 });
 
 export interface HdrPipeline {

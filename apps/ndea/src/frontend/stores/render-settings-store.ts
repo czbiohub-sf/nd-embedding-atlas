@@ -15,10 +15,9 @@ const POINT_OPACITY_DEFAULT = 1.0;
 const EXPOSURE_DEFAULT = 0;
 
 export type ToneMapping = "none" | "reinhard" | "aces" | "agx" | "neutral";
-// "neutral" by default: Khronos PBR Neutral tone-map preserves source
-// colors exactly below ~0.76 luminance and only rolls off extreme HDR
-// overdraw, so categorical palette identity is intact AND dense clusters
-// glow toward white without clipping. AgX/ACES/Reinhard/None remain opt-in.
+// "neutral" by default: identity below a 0.95 knee (palette colors render as
+// their exact hex), then a hue-preserving shoulder, so dense additive
+// overdraw rolls off instead of clipping. AgX/ACES/Reinhard/None remain opt-in.
 const TONE_MAPPING_DEFAULT: ToneMapping = "neutral";
 
 export type BlendMode = "additive" | "premultiplied" | "max";
