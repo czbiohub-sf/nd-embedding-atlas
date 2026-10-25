@@ -432,15 +432,17 @@ and free of frontend imports.
   `@duckdb/node-bindings` version, cached in `apps/ndea/.duckdb-addon-cache/`),
   so that binary embeds no libduckdb and extracts nothing to `~/.cache/ndea/`.
   Other targets still embed libduckdb for `preload-libduckdb.ts`.
-- **duckdb-zarr extension:** its builds are `C_STRUCT_UNSTABLE`, so DuckDB loads
-  one only if it was built for that exact DuckDB version: rebuild on every
-  DuckDB bump. `scripts/build-zarr-extension.ts` (`vp run build:zarr-ext`)
-  fetches duckdb-zarr at the commit `server/zarr-extension.ts` pins, pins its
-  duckdb-rs crate to the installed `@duckdb/node-bindings` (DuckDB 1.5.6 →
-  `1.10506.x`), runs `cargo build --release` in the source tree (its
-  `.cargo/config.toml` applies), and appends the extension metadata footer in
-  Bun (no Python). Native per platform, like `duckdb.node`; CI pins Rust
-  1.99.0. `test`, `build`, `dev`, `ndea`, and `bench:ingest` build it on demand.
+- **duckdb-zarr extension:** DuckDB 2 loads unstable-ABI extensions only
+  through the v2 entrypoint (`zarr_init_c_api_v2`), which duckdb-zarr lacks, so
+  the footer declares the stable C API its entrypoint asks for (`C_STRUCT`,
+  `v1.2.0`). Rebuild on every DuckDB bump anyway: the crate tracks the release.
+  `scripts/build-zarr-extension.ts` (`vp run build:zarr-ext`) fetches
+  duckdb-zarr at the commit `server/zarr-extension.ts` pins, pins its duckdb-rs
+  crate to the installed `@duckdb/node-bindings` (DuckDB 2.0.0 → `1.20000.x`),
+  runs `cargo build --release` in the source tree (its `.cargo/config.toml`
+  applies), and appends the extension metadata footer in Bun (no Python).
+  Native per platform, like `duckdb.node`; CI pins Rust 1.99.0. `test`,
+  `build`, `dev`, `ndea`, and `bench:ingest` build it on demand.
 - **Updates:** Standalone installs live under `~/.ndea/versions/<tag>/ndea`;
   update atomically repoints `~/.local/bin/ndea` and keeps only the active
   version by default. Mise-managed updates must go through mise and must never

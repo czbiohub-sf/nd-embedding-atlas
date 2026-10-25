@@ -9,8 +9,8 @@
  *
  * Inputs, all pinned by the installed `@duckdb/node-bindings` version:
  *   - duckdb-node-neo `bindings/src` at tag `v<bindings version>`
- *   - the DuckDB release that tag's fetch script downloads, as
- *     `static-libs-osx-arm64.zip`
+ *   - the DuckDB release that tag's `fetch_libduckdb.py` downloads, as
+ *     `duckdb-static-libs-osx-arm64.tar.gz`
  *   - node-addon-api + node-api-headers (devDependencies)
  *
  * Output is cached at apps/ndea/.duckdb-addon-cache/<bindings version>/duckdb.node.
@@ -57,18 +57,22 @@ export async function buildStaticDuckDBAddon(): Promise<string> {
   await download(`https://codeload.github.com/duckdb/duckdb-node-neo/tar.gz/refs/tags/${tag}`, tarball);
   await run(["tar", "-xzf", tarball, "--strip-components=2", "*/bindings/src", "*/bindings/scripts"], cacheDir);
 
-  // The bindings' own fetch script pins the DuckDB release they were built against.
-  const fetchScript = await Bun.file(resolve(cacheDir, "scripts/fetch_libduckdb_osx_universal.py")).text();
-  const duckdbVersion = fetchScript.match(/releases\/download\/(v[\d.]+)\//)?.[1];
-  if (!duckdbVersion) throw new Error("Could not find the DuckDB version in fetch_libduckdb_osx_universal.py");
+  // The bindings' shared fetch script pins the DuckDB release they were built against.
+  const fetchScript = await Bun.file(resolve(cacheDir, "scripts/fetch_libduckdb.py")).text();
+  const duckdbVersion = fetchScript.match(/releases\/download\/(v[\d.]+)/)?.[1];
+  if (!duckdbVersion) throw new Error("Could not find the DuckDB version in fetch_libduckdb.py");
 
   const libsDir = resolve(cacheDir, "libs");
-  const zip = resolve(cacheDir, "static-libs.zip");
-  await download(`https://github.com/duckdb/duckdb/releases/download/${duckdbVersion}/static-libs-osx-arm64.zip`, zip);
-  await run(["unzip", "-q", "-o", zip, "-d", libsDir]);
+  const tgz = resolve(cacheDir, "static-libs.tar.gz");
+  await download(
+    `https://github.com/duckdb/duckdb/releases/download/${duckdbVersion}/duckdb-static-libs-osx-arm64.tar.gz`,
+    tgz,
+  );
+  mkdirSync(libsDir, { recursive: true });
+  await run(["tar", "-xzf", tgz, "-C", libsDir]);
   // ld64 resolves across all archives regardless of order; unreferenced
   // members (tpch/tpcds, which the generated loader doesn't reference) drop out.
-  const archives = readdirSync(libsDir)
+  const archives = readdirSync(libsDir, { recursive: true, encoding: "utf8" })
     .filter((f) => f.endsWith(".a"))
     .map((f) => resolve(libsDir, f));
 

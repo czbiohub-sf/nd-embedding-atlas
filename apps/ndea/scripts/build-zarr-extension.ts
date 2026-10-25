@@ -4,12 +4,15 @@
  * Build the duckdb-zarr DuckDB extension from source for the installed
  * `@duckdb/node-api` (`vp run build:zarr-ext`).
  *
- * duckdb-zarr builds are `C_STRUCT_UNSTABLE`: DuckDB loads one only if it was
- * built for its exact version. So this fetches duckdb-zarr at a pinned commit,
- * pins its duckdb-rs crate to the DuckDB version `@duckdb/node-bindings` ships
- * (`1.5.6` → crate `1.10506.x`), runs `cargo build --release`, and appends the
- * extension metadata footer DuckDB checks on `LOAD` (a port of extension-ci-tools'
- * `append_extension_metadata.py`, so no Python).
+ * DuckDB 2 loads an unstable-ABI extension only through the v2 entrypoint
+ * (`zarr_init_c_api_v2`, duckdb-neo), which duckdb-zarr does not have yet. Its
+ * entrypoint asks for the stable C API v1.2.0, so the footer declares that ABI
+ * (`C_STRUCT`, `v1.2.0`) and DuckDB 2 calls `zarr_init_c_api`. This fetches
+ * duckdb-zarr at a pinned commit, pins its duckdb-rs crate to the DuckDB version
+ * `@duckdb/node-bindings` ships (`2.0.0` → crate `1.20000.x`), runs
+ * `cargo build --release`, and appends the metadata footer DuckDB checks on
+ * `LOAD` (a port of extension-ci-tools' `append_extension_metadata.py`, so no
+ * Python).
  *
  * Output: apps/ndea/.zarr-ext-cache/<extver>-<duckdbver>-<platform>/zarr.duckdb_extension.
  * An existing output is reused without cargo.
@@ -44,20 +47,19 @@ async function installedDuckDBVersion(): Promise<string> {
   return `v${match[1]}.${match[2]}.${match[3]}`;
 }
 
-/** duckdb-rs numbers its crate `1.MMmmpp` after the DuckDB release: v1.5.6 → `1.10506`. */
+/** duckdb-rs numbers its crate `1.MMmmpp` after the DuckDB release: v1.5.6 → `1.10506`, v2.0.0 → `1.20000`. */
 function duckdbRsSeries(duckdbVersion: string): string {
   const [major, minor, patch] = duckdbVersion.slice(1).split(".").map(Number);
-  if (major !== 1 || minor > 99 || patch > 99)
+  if (major < 1 || major > 9 || minor > 99 || patch > 99)
     throw new Error(`No duckdb-rs crate mapping for DuckDB ${duckdbVersion}`);
   return `1.${major}${String(minor).padStart(2, "0")}${String(patch).padStart(2, "0")}`;
 }
 
+/** The C API version duckdb-zarr's entrypoint requests (`duckdb_rs_extension_api_init(…, "v1.2.0")`). */
+const C_API_VERSION = "v1.2.0";
+
 /** extension-ci-tools' metadata footer: 8 × 32-byte fields after a signature marker, then 256 zero bytes. */
-function metadataFooter(fields: {
-  platform: string;
-  duckdbVersion: string;
-  extensionVersion: string;
-}): Uint8Array<ArrayBuffer> {
+function metadataFooter(fields: { platform: string; extensionVersion: string }): Uint8Array<ArrayBuffer> {
   const encoder = new TextEncoder();
   const field = (value: string) => {
     const bytes = new Uint8Array(32);
@@ -66,10 +68,8 @@ function metadataFooter(fields: {
   };
   const parts = [
     new Uint8Array([0, 147, 4, 16, ...encoder.encode("duckdb_signature"), 128, 4]),
-    // FIELD8..FIELD1: three unused, ABI type, extension version, DuckDB version, platform, magic "4".
-    ...["", "", "", "C_STRUCT_UNSTABLE", fields.extensionVersion, fields.duckdbVersion, fields.platform, "4"].map(
-      field,
-    ),
+    // FIELD8..FIELD1: three unused, ABI type, extension version, C API version, platform, magic "4".
+    ...["", "", "", "C_STRUCT", fields.extensionVersion, C_API_VERSION, fields.platform, "4"].map(field),
     new Uint8Array(256),
   ];
   const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
@@ -138,7 +138,7 @@ export async function buildZarrExtension(): Promise<string> {
     "release",
     process.platform === "win32" ? "zarr.dll" : process.platform === "darwin" ? "libzarr.dylib" : "libzarr.so",
   );
-  const footer = metadataFooter({ platform, duckdbVersion, extensionVersion: ZARR_EXTENSION.version });
+  const footer = metadataFooter({ platform, extensionVersion: ZARR_EXTENSION.version });
   mkdirSync(dirname(out), { recursive: true });
   await Bun.write(`${out}.tmp`, new Blob([await Bun.file(library).arrayBuffer(), footer]));
   renameSync(`${out}.tmp`, out);
