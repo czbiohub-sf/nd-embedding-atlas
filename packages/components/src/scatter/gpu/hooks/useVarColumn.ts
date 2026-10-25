@@ -26,21 +26,16 @@ export interface VarColumnResult {
  *   → on status="error": set error
  */
 interface UseVarColumnOptions {
-  /** Called with a status message when loading starts/ends: use to update the bottom bar. */
-  onStatus?: (msg: string | null) => void;
   /** Called once the materialized column is ready (event-time, not via an effect). */
   onReady?: (column: string) => void;
 }
 
 export function useVarColumn(options?: UseVarColumnOptions): VarColumnResult {
-  const onStatus = options?.onStatus;
   const onReady = options?.onReady;
-  const onStatusRef = useRef(onStatus);
   const onReadyRef = useRef(onReady);
   useEffect(() => {
-    onStatusRef.current = onStatus;
     onReadyRef.current = onReady;
-  }, [onStatus, onReady]);
+  }, [onReady]);
 
   const [state, setState] = useState<VarColumnState>({
     status: "idle",
@@ -63,14 +58,12 @@ export function useVarColumn(options?: UseVarColumnOptions): VarColumnResult {
   const handleReady = useCallback((column: string | null) => {
     stopRef.current = null;
     setState({ status: "ready", column, error: null });
-    onStatusRef.current?.(null);
     if (column) onReadyRef.current?.(column);
   }, []);
 
   const handleError = useCallback((error: string) => {
     stopRef.current = null;
     setState({ status: "error", column: null, error });
-    onStatusRef.current?.(null);
   }, []);
 
   const startHttpPoll = useCallback(
@@ -109,7 +102,6 @@ export function useVarColumn(options?: UseVarColumnOptions): VarColumnResult {
     (name: string, layer: string, modality?: string) => {
       stopWatching();
       setState({ status: "loading", column: null, error: null });
-      onStatusRef.current?.(`Materializing ${name}…`);
 
       const run = async () => {
         let taskId: string;

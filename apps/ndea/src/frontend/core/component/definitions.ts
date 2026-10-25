@@ -19,7 +19,6 @@ import { makeCategoryColumn } from "@/lib/color/category-column";
 import { buildColormapLut } from "@/lib/color/ochre-lut";
 import { getCategoricalPalette, getColormapList, pickDefaultCategoricalPalette } from "@/lib/color/ochre-palette";
 import { predicateToSql } from "@/lib/mosaic-helpers";
-import { pointRadiusStore } from "@/stores/point-radius-store";
 import { renderSettingsStore } from "@/stores/render-settings-store";
 import { clearViewerChannels, publishViewerChannels, viewerChannelsStore } from "@/stores/viewer-channels-store";
 import { clearViewerZ, publishViewerZ, viewerZStore } from "@/stores/viewer-z-store";
@@ -108,7 +107,6 @@ const services: ComponentServices = {
     categorize: makeCategoryColumn,
     buildColormapLut,
     pickDefaultCategoricalPalette,
-    pointRadiusStore,
     renderSettingsStore,
     onDeviceLost,
   },

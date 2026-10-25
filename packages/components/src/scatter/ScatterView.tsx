@@ -12,7 +12,7 @@ import { useSelector } from "@tanstack/react-store";
 import type { FilterClause } from "@ndea/protocol";
 import { type PanZoomView, type RowIndex, rowIndex, type TurntableView } from "@ndea/sdk";
 import type { Coordinator } from "@uwdata/mosaic-core";
-import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, type RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ScatterGPUHost, type ScatterGPUHostHandle, type ScatterPointStyle } from "./gpu/components/ScatterGpuHost";
 import { ScatterDeviceLeaseProvider, useScatterHost, useScatterServices } from "./context";
 import type {
@@ -23,22 +23,32 @@ import type {
   Metadata,
   ScatterSession,
   SelectionDepth,
+  SelectionTool,
   TrajectoryData,
 } from "./contracts";
 import { colorSourceFromString, colorSourceLegendLabel, pointWorldPos, toRows, TRAJECTORY_COLOR } from "./helpers";
 import { useMosaicScatterData } from "./gpu/hooks/useMosaicScatterData";
-import { useScatterBrushSync } from "./gpu/hooks/useScatterBrushSync";
+import { type ScatterSelection, useScatterSelection } from "./gpu/hooks/useScatterSelection";
 import { usePredicateBits } from "./gpu/hooks/usePredicateBits";
 import type { ScatterplotConfig } from "./gpu/types";
 import { hexToRgbPalette } from "./gpu/utils/colors";
 import { CategoricalLegend } from "./CategoricalLegend";
 import { ContinuousLegend } from "./ContinuousLegend";
 import { useEffectiveCategoryColors, useLegend } from "./LegendContext";
-import { useScatterUIDispatch } from "./scatter-ui-store";
 import { HighlightFocusOverlay, type HighlightFocusOverlayHandle } from "./HighlightFocusOverlay";
 
+/** What the view hands its floating controls: the legend body (null when there is none) and the selection. */
+export interface ScatterOverlays {
+  legend: ReactNode;
+  selection: ScatterSelection;
+}
+
 export interface ScatterViewProps {
-  selectionTool: "pan" | "marquee" | "lasso";
+  selectionTool: SelectionTool;
+  /** Point radius in normalized device units. */
+  pointSize: number;
+  /** Controls floating over the canvas. */
+  renderOverlays(overlays: ScatterOverlays): ReactNode;
   isolationHandleRef?: RefObject<{
     setCategoryIsolation(isolated: Set<number>): void;
     clearCategoryIsolation(): void;
@@ -73,6 +83,8 @@ export interface ScatterViewProps {
 
 export function ScatterView({
   selectionTool,
+  pointSize,
+  renderOverlays,
   axes,
   isLoading,
   loadingKey,
@@ -100,7 +112,6 @@ export function ScatterView({
   fitViewRef,
 }: ScatterViewProps) {
   const categoryColors = useEffectiveCategoryColors();
-  const { setFps, setZoom, setSelection, setEmbedding, setNumPoints } = useScatterUIDispatch();
   // Every scatter body is mounted with its component host.
   const host = useScatterHost();
   const services = useScatterServices();
@@ -108,18 +119,17 @@ export function ScatterView({
   // Point style as a declarative prop (slice 1 of the <ScatterCanvas> contract).
   // Human-cadence (sliders/settings) so re-rendering on change is fine: unlike
   // the 60fps camera path, which deliberately stays on the imperative bus.
-  const pointRadius = useSelector(services.pointRadiusStore, (state) => state.radius);
   const renderSettings = useSelector(services.renderSettingsStore, (state) => state);
   const pointStyle = useMemo<ScatterPointStyle>(
     () => ({
-      radius: pointRadius,
+      radius: pointSize,
       opacity: renderSettings.pointOpacity,
       blendMode: renderSettings.blendMode,
       toneMapping: renderSettings.toneMapping,
       exposure: renderSettings.exposure,
     }),
     [
-      pointRadius,
+      pointSize,
       renderSettings.pointOpacity,
       renderSettings.blendMode,
       renderSettings.toneMapping,
@@ -131,7 +141,7 @@ export function ScatterView({
   // LegendContext owns colormapName and colormapReversed for continuous mode.
   // We read them here (inside LegendProvider) and override the colormap prop
   // when in continuous mode, so the query key reacts to legend changes.
-  const { state: legendState, actions: legendActions } = useLegend();
+  const { state: legendState } = useLegend();
   const effectiveColormap = colorMode === "continuous" ? legendState.colormapName : continuousColormap;
   const effectiveReversed = colorMode === "continuous" ? legendState.colormapReversed : false;
 
@@ -325,43 +335,30 @@ export function ScatterView({
     { wait: 16 },
   );
 
-  const { onSelectionChange } = useScatterBrushSync({ numPoints: data?.numCells ?? 0, setSelection });
-
-  const hasLassoRef = useRef(false);
-  const clearLassoSelection = useCallback(() => {
-    if (!hasLassoRef.current) return false;
-    hostRef.current?.clearSelection();
-    setSelection(null);
-    hasLassoRef.current = false;
-    return true;
-  }, [setSelection]);
+  const selection = useScatterSelection({
+    numPoints: data?.numCells ?? 0,
+    gpuRef: hostRef,
+    tool: selectionTool === "box" ? "box" : "lasso",
+  });
 
   const callbacksRef = useRef({
-    onSelectionChange: (_count: number | null, _bits?: Uint32Array<ArrayBuffer>) => {},
-    onExternalClear: () => {},
+    onSelectionChange: selection.onSelectionChange,
     onPointClick: (_index: number) => {},
     onBackgroundClick: () => {},
     onViewChange: (_state: PanZoomView | TurntableView) => {},
-    onFps: (_fps: number) => {},
   });
 
-  callbacksRef.current.onSelectionChange = (...args) => {
-    hasLassoRef.current = args[0] != null && args[0] > 0;
-    onSelectionChange(...args);
-  };
-  callbacksRef.current.onExternalClear = () => setSelection(null);
+  callbacksRef.current.onSelectionChange = selection.onSelectionChange;
   const setFocus = (nextFocus: RowIndex | null) => host.focus.set(nextFocus);
   callbacksRef.current.onBackgroundClick = () => {
     setFocus(null);
-    clearLassoSelection();
+    selection.clear();
   };
   callbacksRef.current.onPointClick = (pointIndex) => setFocus(rowIndex(pointIndex));
   callbacksRef.current.onViewChange = (state) => {
-    if ("zoom" in state) setZoom(state.zoom);
     highlightOverlayRef.current?.update();
     viewBroadcaster.maybeExecute(state);
   };
-  callbacksRef.current.onFps = (fps) => setFps(fps);
 
   const configRef = useRef<ScatterplotConfig>({
     callbacks: {
@@ -369,7 +366,6 @@ export function ScatterView({
       onPointClick: (...args) => callbacksRef.current.onPointClick(...args),
       onBackgroundClick: () => callbacksRef.current.onBackgroundClick(),
       onViewChange: (...args) => callbacksRef.current.onViewChange(...args),
-      onFps: (...args) => callbacksRef.current.onFps(...args),
     },
   });
 
@@ -377,8 +373,7 @@ export function ScatterView({
   // Every GPU (re)init starts blank: colors, selection mode, and isolation are
   // re-applied once the new instance is ready (init is async, so a
   // positionKey effect would run before it exists).
-  const onGpuReady = (numPoints: number) => {
-    setNumPoints(numPoints);
+  const onGpuReady = () => {
     if (colorMode === "categorical") {
       const colors = categoryColors ?? [];
       if (colors.length > 0 && !colors.some((c) => !c)) {
@@ -401,6 +396,7 @@ export function ScatterView({
     hostRef.current?.setProjection(projection);
     hostRef.current?.setSelectionDepth(selectionDepth);
     hostRef.current?.setDensityMode(densityMode);
+    selection.restore();
   };
 
   useEffect(() => {
@@ -465,7 +461,7 @@ export function ScatterView({
     const handler = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
 
-      let handled = clearLassoSelection();
+      let handled = selection.clear();
       if (focusedRowIndex != null) {
         host.focus.set(null);
         handled = true;
@@ -480,7 +476,7 @@ export function ScatterView({
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [focusedRowIndex, host, trajectory, actions, clearLassoSelection]);
+  }, [focusedRowIndex, host, trajectory, actions, selection]);
 
   const axesKeyRef = useRef<string | null>(null);
   useEffect(() => {
@@ -488,8 +484,7 @@ export function ScatterView({
     const changed = axesKeyRef.current != null && key !== axesKeyRef.current;
     axesKeyRef.current = key;
     if (changed) actions.clearTrajectory(trajectory?.datasetKey ?? "");
-    setEmbedding(axes?.obsmKey ?? null);
-  }, [axes, actions, setEmbedding, trajectory]);
+  }, [axes, actions, trajectory]);
 
   useEffect(() => {
     if (focusedRowIndex == null && trajectory) actions.clearTrajectory(trajectory.datasetKey ?? "");
@@ -501,35 +496,34 @@ export function ScatterView({
   // Inline JSX below: a nested component would get a fresh function
   // identity on every render, unmounting the slider mid-drag and dropping
   // pointer capture (track clicks still worked; thumb drags didn't).
-  const continuousLegend =
+  const legendTitle = colorByColumn ? colorSourceLegendLabel(colorSourceFromString(colorByColumn)) : "";
+  const legend =
     colorMode === "continuous" && colorByColumn && colorRange ? (
       <ContinuousLegend
-        columnName={colorSourceLegendLabel(colorSourceFromString(colorByColumn))}
+        title={legendTitle}
         colormap={legendState.colormapName}
         reversed={legendState.colormapReversed}
-        scale={legendState.scale}
         vmin={userVmin ?? colorRange[0]}
         vmax={userVmax ?? colorRange[1]}
         absoluteVmin={colorRange[0]}
         absoluteVmax={colorRange[1]}
-        onColormapChange={legendActions.setColormap}
-        onReversedChange={legendActions.setColormapReversed}
-        onScaleChange={legendActions.setScale}
         onResetRange={() => {
-          setUserVmin(colorRange[0]);
-          setUserVmax(colorRange[1]);
+          setUserVmin(undefined);
+          setUserVmax(undefined);
         }}
         onRangeChange={(vmin, vmax) => {
           setUserVmin(vmin);
           setUserVmax(vmax);
         }}
       />
+    ) : colorMode === "categorical" && categoryMapping && !showLoading ? (
+      <CategoricalLegend title={legendTitle} />
     ) : null;
 
   if (!axes) {
     return (
       <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden text-lg text-muted-foreground">
-        No embedding loaded
+        {loadingKey ? `Loading ${loadingKey.replace(/^X_/, "")}…` : "No embedding loaded"}
       </div>
     );
   }
@@ -571,8 +565,7 @@ export function ScatterView({
         containerRef={containerRef}
         gpuRef={gpuAdapter}
       />
-      {colorMode === "categorical" && categoryMapping && !showLoading ? <CategoricalLegend /> : null}
-      {continuousLegend}
+      {renderOverlays({ legend, selection })}
     </div>
   );
 }

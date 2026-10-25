@@ -25,6 +25,7 @@ import { toRows } from "@/lib/mosaic-helpers";
 import { BodySocket, BodyStatus } from "./body-dock";
 import { ND_STAGE } from "./constants";
 import { COMPONENTS, type Dashboard as DashboardSpec, type SplitSide } from "./dashboard";
+import { EmbeddingChip } from "./EmbeddingChip";
 import { useWorkspace, useWorkspaceSelector, useWorkspaceSession } from "./workspace-context";
 
 const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
@@ -74,15 +75,17 @@ function TileTab({ title, onPointerDown }: { title: string; onPointerDown?: (e: 
   );
 }
 
-/** A leaf's frame: 30px header (tab · actions; right-click for layout edits) over a full-bleed body. */
+/** A leaf's frame: 30px header (tab · chip · actions; right-click for layout edits) over a full-bleed body. */
 function Tile({
   id,
   title,
+  chip,
   actions,
   children,
 }: {
   id: string;
   title: string;
+  chip?: ReactNode;
   actions?: ReactNode;
   children: ReactNode;
 }) {
@@ -101,6 +104,7 @@ function Tile({
       <ContextMenu>
         <ContextMenuTrigger className={TILE_HEADER}>
           <TileTab title={title} onPointerDown={(e) => beginDrag(id, e)} />
+          {chip}
           <span className="flex-1" />
           {actions}
         </ContextMenuTrigger>
@@ -138,6 +142,7 @@ function ViewTile(props: ComponentRenderProps) {
     <Tile
       id={id}
       title={title}
+      chip={props.element.type === "scatter" ? <EmbeddingChip id={id} /> : null}
       actions={
         <IconButton size="md" label="Fullscreen" onClick={() => ws.setFullscreen(id)}>
           <Maximize2 strokeWidth={1.5} />

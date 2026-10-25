@@ -7,6 +7,7 @@
 import { useSelector } from "@tanstack/react-store";
 import type { WorkspaceSnapshot } from "@ndea/protocol";
 import { createContext, useContext, useEffect, useState, useSyncExternalStore } from "react";
+import { toast } from "sonner";
 
 import { useDatasetSession } from "@/hooks/useDatasetSession";
 import { deviceBroker } from "@/core/gpu/device-broker";
@@ -52,6 +53,8 @@ export function WorkspaceProvider({
       refreshMetadata: actions.refreshMetadata,
       deviceBroker,
       fetch: globalThis.fetch,
+      notify: (message: string, level?: "info" | "warn" | "error") =>
+        level === "error" ? toast.error(message) : level === "warn" ? toast.warning(message) : toast(message),
     });
     return {
       workspace: w,

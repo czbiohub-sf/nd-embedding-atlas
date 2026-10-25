@@ -12,17 +12,25 @@ export type DensityMode = "mean" | "dominant" | "weave";
 /** 3D lasso/marquee depth: everything projecting inside (`through`), or the nearest dense structure (`front`). */
 export type SelectionDepth = "through" | "front";
 
+/** Drag tool: pointer pans and click-focuses; box and lasso draw a selection. */
+export type SelectionTool = "pointer" | "box" | "lasso";
+
+/** How a finished box/lasso meets the current selection: replace it, add to it (shift), subtract from it (⌥). */
+export type SelectionCombine = "replace" | "add" | "subtract";
+
 export interface ScatterConfig {
   obsmKey: string | null;
   colorByColumn: string | null;
+  /** Embedding dimensions (column indices into the obsm matrix) on the x and y axes. */
+  xDim: number;
+  yDim: number;
   /** Embedding dimension for the z axis; null = 2D. */
   zDim: number | null;
   density: { mode: DensityMode };
-}
-
-export interface ScatterOptions {
-  pointRadius: number;
-  pointOpacity: number;
+  /** Point radius in normalized device units. */
+  pointSize: number;
+  /** The legend opens from the control group (`popover`) or stays in the view's bottom-left (`pinned`). */
+  legend: "popover" | "pinned";
 }
 
 export interface AxisState {
@@ -106,7 +114,6 @@ export interface ScatterServices {
   categorize(coordinator: Coordinator, column: string, maxCategories: number): Promise<CategoryMapping>;
   buildColormapLut(name: string): Uint32Array;
   pickDefaultCategoricalPalette(count: number): string;
-  readonly pointRadiusStore: Store<{ radius: number }>;
   readonly renderSettingsStore: Store<RenderSettingsState>;
   onDeviceLost(listener: (info: GPUDeviceLostInfo) => void): () => void;
 }

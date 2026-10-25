@@ -65,6 +65,15 @@ export function getBareObsmKey(obsmKey: string): string {
   return separator > 0 ? obsmKey.slice(separator + 1) : obsmKey;
 }
 
+const DIM_NAMES: Record<string, string> = { umap: "UMAP", pca: "PC", tsne: "tSNE", phate: "PHATE" };
+
+/** Axis label of embedding dimension `dim` (0-based): "X_umap", 0 → "UMAP1"; "rna:X_pca", 1 → "PC2"; "X_dinov2", 0 → "dinov2 1". */
+export function dimLabel(obsmKey: string, dim: number): string {
+  const name = getBareObsmKey(obsmKey).replace(/^X_/, "");
+  const known = DIM_NAMES[name.toLowerCase()];
+  return known ? `${known}${dim + 1}` : `${name} ${dim + 1}`;
+}
+
 export function filterExprToExpr(filter: FilterExpr | null | undefined): ExprNode {
   if (filter == null) return literal(true);
   if (typeof filter === "boolean") return literal(filter);

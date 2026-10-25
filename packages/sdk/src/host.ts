@@ -25,6 +25,11 @@ export interface DataContext {
 export interface RowSetPublishAPI {
   /** `bits`: row bitmask over all `rows` observations (bit `r & 31` of word `r >> 5` = row `r`). */
   createObservationSet(bits: Uint32Array<ArrayBuffer>, rows: number): Promise<ObservationSet>;
+  /**
+   * Saves `where` as a workspace data source named `<baseName>-<n>` (first free n ≥ 1,
+   * since source names allow no spaces) and returns that name.
+   */
+  saveSource(baseName: string, where: FilterClause): string;
 }
 
 export interface DataQueryAPI {

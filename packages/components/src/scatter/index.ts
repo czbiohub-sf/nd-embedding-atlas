@@ -8,7 +8,6 @@ export type {
   FocusedPointMeta,
   RenderSettingsState,
   ScatterConfig,
-  ScatterOptions,
   ScatterServices,
   ScatterSession,
   TrajectoryData,

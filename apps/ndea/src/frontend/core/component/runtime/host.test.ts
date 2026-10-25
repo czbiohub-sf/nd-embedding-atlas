@@ -196,4 +196,20 @@ describe("createComponentHost", () => {
     expect(requests).toEqual([{ receiver: globalThis, url: "/api/sets?rows=10", body: [0b100100, 0] }]);
     handle.dispose();
   });
+
+  test("saves a data source through the init handler and refuses without one", () => {
+    const saved: [string, unknown][] = [];
+    const handle = createComponentHost(
+      hostDependencies(),
+      hostInit("saver", {}, { saveSource: (base, where) => (saved.push([base, where]), `${base}-1`) }),
+    );
+    const where = { op: "inSet", set: "0123456789abcdef" } as const;
+    expect(handle.host.dataAPI.saveSource("Selection", where)).toBe("Selection-1");
+    expect(saved).toEqual([["Selection", where]]);
+    handle.dispose();
+
+    const bare = createComponentHost(hostDependencies(), hostInit("bare", {}));
+    expect(() => bare.host.dataAPI.saveSource("Selection", where)).toThrow("cannot save data sources");
+    bare.dispose();
+  });
 });

@@ -1,6 +1,6 @@
 import type { TgpuRoot } from "typegpu";
 import type { PanZoomView, TurntableView } from "@ndea/sdk";
-import type { GpuPointIndex } from "../contracts";
+import type { GpuPointIndex, SelectionCombine } from "../contracts";
 import type { ScatterGPUHostHandle } from "./handle-capabilities";
 
 // ---------------------------------------------------------------------------
@@ -58,9 +58,9 @@ export interface InteractionConfig {
   pan?: boolean;
   /** Enable zoom. Default: true */
   zoom?: boolean;
-  /** Enable lasso selection (Shift+Cmd/Ctrl+drag). Default: true */
+  /** Enable the lasso tool. Default: true */
   lasso?: boolean;
-  /** Enable marquee rectangle selection (Shift+drag). Default: true */
+  /** Enable the box (marquee) tool. Default: true */
   marquee?: boolean;
 }
 
@@ -94,8 +94,11 @@ export interface ScatterplotConfig {
   render?: RenderConfig;
   interaction?: InteractionConfig;
   callbacks?: {
-    /** Lasso/marquee count while dragging; on pointer-up also the lasso bit layer (N/32 words). */
-    onSelectionChange?: (count: number | null, bits?: Uint32Array<ArrayBuffer>) => void;
+    /**
+     * Lasso/marquee count while dragging; on pointer-up also the drawn shape's row bitmask
+     * (N/32 words) and how it meets the current selection (shift adds, ⌥ subtracts).
+     */
+    onSelectionChange?: (count: number | null, bits?: Uint32Array<ArrayBuffer>, combine?: SelectionCombine) => void;
     /** Called when an external row set is cleared by another panel. Only updates
      *  status bar; it must not republish a clear and create a cascade. */
     onExternalClear?: () => void;

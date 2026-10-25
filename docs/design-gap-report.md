@@ -6,6 +6,11 @@ Step 0 of `design_handoff_ndea_shell/README.md`. The handoff's gap list (G1–G1
 **Approved 2026-10-24:** every recommendation under "Decisions needed" below. Item 7 follows the
 prototype: the embedding chip sits in the tile header and in Settings › Data.
 
+**Update 2026-10-25 (user):** nothing needs to be backwards compatible, and rebuilding the UI from
+scratch is fine where that is easier. So G2 drops the `ndea workspace upgrade` command: format v3
+refuses v2 files like any unsupported version (delete the file to reseed from the preset), and
+presets, configs, and component internals are rewritten rather than adapted.
+
 Status key: **exists**: already in the code; **extend**: partly there; **new**: nothing there yet.
 
 ## Summary

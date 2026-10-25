@@ -1,4 +1,5 @@
 import type { PanZoomView, TurntableView, ViewSyncState } from "@ndea/sdk";
+import type { SelectionCombine, SelectionTool } from "../../contracts";
 import type { Camera } from "../../gpu/gpu/camera";
 import type { PaintShape } from "../../gpu/gpu/selection";
 import type { InteractionConfig } from "../../gpu/types";
@@ -8,8 +9,8 @@ interface InteractionCallbacks {
   /** Click hit test at CSS pixels relative to the overlay. */
   onPointClick?: (pixelX: number, pixelY: number) => void;
   onFps?: (fps: number) => void;
-  /** Lasso/marquee: paint the shape (overlay CSS px) into the selection mask. */
-  onSelect: (paint: PaintShape, final: boolean) => void;
+  /** Lasso/marquee: paint the shape (overlay CSS px) into the selection mask; `combine` is fixed at pointer-down. */
+  onSelect: (paint: PaintShape, final: boolean, combine: SelectionCombine) => void;
 }
 
 function getOverlayColors() {
@@ -36,7 +37,8 @@ function noMenu(e: MouseEvent) {
 /**
  * Pointer/wheel input and the render-on-demand loop. Selection shapes stay in
  * overlay CSS pixels: the GPU tests each point's projection against them.
- * Drag pans in 2D and orbits in 3D; in 3D a right/middle or Ctrl/Cmd drag pans.
+ * With the pointer tool, drag pans in 2D and orbits in 3D (in 3D a right/middle
+ * or Ctrl/Cmd drag pans); the box and lasso tools draw, shift adds and ⌥ subtracts.
  */
 export function createInteractionController(
   overlay: HTMLCanvasElement,
@@ -50,8 +52,8 @@ export function createInteractionController(
   const enableLasso = interactionConfig?.lasso ?? true;
   const enableMarquee = interactionConfig?.marquee ?? true;
 
-  // Toolbar mode: 'pan' = drag pans; 'marquee'/'lasso' = drag selects without modifiers.
-  let forcedSelectionMode: "pan" | "marquee" | "lasso" = "pan";
+  let tool: SelectionTool = "pointer";
+  let combine: SelectionCombine = "replace";
   // The overlay is DPR-scaled by its owner (ctx.scale(dpr, dpr)), so drawing uses CSS px.
   const overlayCtx = overlay.getContext("2d")!;
 
@@ -127,20 +129,18 @@ export function createInteractionController(
     lastSelectionCompute = now;
     const paint = currentShape();
     if (!paint) return;
-    callbacks.onSelect(paint, final);
+    callbacks.onSelect(paint, final, combine);
     needsRender = true;
     scheduleLoop();
   }
 
   function onPointerDown(e: PointerEvent) {
-    // Lasso: Shift+Alt+drag or lasso mode. Marquee: Shift+drag or marquee mode.
-    const wantsLasso = (e.shiftKey && e.altKey) || forcedSelectionMode === "lasso";
-    const wantsMarquee = (e.shiftKey && !e.altKey) || forcedSelectionMode === "marquee";
     const p: [number, number] = [e.offsetX, e.offsetY];
-    if (wantsLasso && enableLasso) {
+    if (tool !== "pointer" && e.button === 0) combine = e.altKey ? "subtract" : e.shiftKey ? "add" : "replace";
+    if (tool === "lasso" && e.button === 0 && enableLasso) {
       isLassoing = true;
       lassoPath = [p];
-    } else if (wantsMarquee && enableMarquee) {
+    } else if (tool === "box" && e.button === 0 && enableMarquee) {
       isMarquee = true;
       marqueeStart = marqueeEnd = p;
     } else if (enablePan) {
@@ -252,8 +252,8 @@ export function createInteractionController(
       skipNextViewChange = true;
       viewChanged();
     },
-    setForcedSelectionMode(mode: "pan" | "marquee" | "lasso") {
-      forcedSelectionMode = mode;
+    setForcedSelectionMode(next: SelectionTool) {
+      tool = next;
     },
     /** The camera or canvas changed outside pointer input: re-render and broadcast. */
     viewChanged,

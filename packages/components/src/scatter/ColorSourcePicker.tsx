@@ -1,6 +1,5 @@
 import { ChevronDownIcon } from "lucide-react";
 import { useState } from "react";
-import { useScatterUIDispatch } from "./scatter-ui-store";
 import {
   Command,
   CommandEmpty,
@@ -77,10 +76,8 @@ export function ColorSourcePicker({
 
   const { names, isLoading: varsLoading } = useVarSearch(varQuery);
   const layers = useLayerNames();
-  const { setStatus } = useScatterUIDispatch();
   // When var materialization completes, propagate the ColorSource and close.
   const { materialize, status: varStatus } = useVarColumn({
-    onStatus: setStatus,
     onReady: (column) => {
       onSetColorSource(colorSourceFromString(column));
       setOpen(false);

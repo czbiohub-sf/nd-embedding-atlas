@@ -18,7 +18,7 @@ export function createScatterView(services: ScatterServices) {
     const focusedPointMeta = useFocusedPointMeta(useFocus(host));
     return (
       <ScatterProvider host={host} services={services} session={session}>
-        <ScatterContent initialObsmKey={host.config.obsmKey} focusedPointMeta={focusedPointMeta} />
+        <ScatterContent focusedPointMeta={focusedPointMeta} />
       </ScatterProvider>
     );
   };

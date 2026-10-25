@@ -1,6 +1,6 @@
 import { srgbChannelToLinear } from "@ndea/ochre";
 import type { DeviceInfo, RowIndex } from "@ndea/sdk";
-import { type DensityMode, gpuPointIndex } from "../../contracts";
+import { type DensityMode, gpuPointIndex, type SelectionCombine } from "../../contracts";
 import { PALETTE } from "../../gpu/constants";
 import { createInteractionController } from "../../gpu/hooks/useScatterInteraction";
 import type { ScatterData, ScatterplotConfig, ScatterplotHandle } from "../../gpu/types";
@@ -122,8 +122,12 @@ export async function createScatterplot(
   const camera: Camera = ndim === 3 ? new Turntable3D(config?.interaction) : new PanZoom2D(config?.interaction);
   const hdr = createHdrPipeline(root, format);
   const passes = createRenderPasses(root, scene, HDR_FORMAT);
+  // ponytail: the live drag preview shows only the drawn shape (the kernel overwrites the lasso
+  // layer); the combined selection lands on pointer-up via setSelectionBits. Keep a base layer and
+  // OR/AND-NOT it in the kernel if the preview must show the combination.
+  let combine: SelectionCombine = "replace";
   const selection = createSelectionEngine(root, scene, (count, bits) =>
-    config?.callbacks?.onSelectionChange?.(count, bits),
+    config?.callbacks?.onSelectionChange?.(count, bits, bits ? combine : undefined),
   );
   // Compaction reruns only when the camera, a filter, or the data changed.
   let compactDirty = true;
@@ -232,7 +236,8 @@ export async function createScatterplot(
         config?.callbacks?.onViewChange?.(state);
       },
       onFps: (fps) => config?.callbacks?.onFps?.(fps),
-      onSelect: (paint, final) => {
+      onSelect: (paint, final, op) => {
+        combine = op;
         sync();
         selection.run(paint, overlay.clientWidth, overlay.clientHeight, final, front);
         setFlag(Bit.lasso, true);
@@ -337,6 +342,11 @@ export async function createScatterplot(
       selection.clear();
       setFlag(Bit.lasso, false);
       config?.callbacks?.onSelectionChange?.(null);
+    },
+    setSelectionBits(bits) {
+      selection.clear();
+      scene.writeLayer(Bit.lasso, bits);
+      setFlag(Bit.lasso, true);
     },
     setExternalSelection(rowIndices: RowIndex[]) {
       setRows(Bit.external, rowIndices);

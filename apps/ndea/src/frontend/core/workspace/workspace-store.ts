@@ -25,7 +25,7 @@ import {
   type DashboardElement,
   type SplitSide,
 } from "./dashboard";
-import { elementPredicate } from "./data-sources";
+import { elementPredicate, type DataSources } from "./data-sources";
 import { emptyWorkspaceDocument } from "./document";
 import type { WorkspaceDocument, WorkspaceSession } from "./types";
 
@@ -125,6 +125,12 @@ export class WorkspaceStore {
 
   setSplitRatio(id: string, ratio: number): void {
     this.setElementProps(id, { ratio });
+  }
+
+  /* ── data sources ──────────────────────────────────────────────────── */
+
+  setDataSource(name: string, source: DataSources[string]): void {
+    this.commit((state) => ({ ...state, data: { ...state.data, [name]: source } }));
   }
 
   /* ── session ───────────────────────────────────────────────────────── */

@@ -1,64 +1,19 @@
-import { useId } from "react";
-import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuSeparator,
-  ContextMenuTrigger,
-} from "@ndea/ui/components/context-menu";
-import { Panel } from "@ndea/ui/components/panel";
 import { Slider } from "@ndea/ui/components/slider";
-import { cn } from "@ndea/ui/lib/utils";
 import { useScatterServices } from "./context";
-import { ColormapGrid } from "./ColormapGrid";
 
 interface Props {
-  columnName: string;
+  title: string;
   colormap: string;
+  reversed: boolean;
   vmin: number;
   vmax: number;
-  /** Full data range: defines slider bounds. Defaults to [vmin, vmax] if not provided. */
-  absoluteVmin?: number;
-  absoluteVmax?: number;
-  /** Whether the colormap gradient is reversed (display-only until backend ships). */
-  reversed?: boolean;
-  /** Current scale mode: wired to UI but not in query key until backend ships. */
-  scale?: "linear" | "log" | "sqrt";
+  /** Full data range: the slider bounds. */
+  absoluteVmin: number;
+  absoluteVmax: number;
   /** Called on every move with the current range (real-time). */
-  onRangeChange?: (vmin: number, vmax: number) => void;
-  /** Called when the user selects a new colormap from the grid. */
-  onColormapChange?: (name: string) => void;
-  /** Called when the user toggles the reversed flag. */
-  onReversedChange?: (reversed: boolean) => void;
-  /** Called when the user selects a scale mode. */
-  onScaleChange?: (scale: "linear" | "log" | "sqrt") => void;
-  /** Called when the user clicks "Reset range": should restore absolute min/max. */
-  onResetRange?: () => void;
-}
-
-/**
- * Small circular swatch filled with the colormap gradient. Doubles as the
- * right-click target for colormap / reverse / scale / reset options.
- * Built as an inline SVG so the gradient definition stays self-contained.
- */
-function ColormapCircle({ colormap, reversed, size = 14 }: { colormap: string; reversed: boolean; size?: number }) {
-  const colors = useScatterServices().getCategoricalPalette(colormap, 16);
-  const gradientId = useId();
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" className="shrink-0">
-      <defs>
-        <linearGradient id={gradientId} x1={reversed ? "100%" : "0%"} y1="0%" x2={reversed ? "0%" : "100%"} y2="0%">
-          {colors.map((color, i) => (
-            <stop
-              key={`${i}-${color}`}
-              offset={`${colors.length > 1 ? (i / (colors.length - 1)) * 100 : 0}%`}
-              stopColor={color}
-            />
-          ))}
-        </linearGradient>
-      </defs>
-      <circle cx="12" cy="12" r="10" fill={`url(#${gradientId})`} stroke="currentColor" strokeWidth="1" />
-    </svg>
-  );
+  onRangeChange(vmin: number, vmax: number): void;
+  /** Back to the full range (no range filter). */
+  onResetRange(): void;
 }
 
 function formatValue(v: number): string {
@@ -66,119 +21,58 @@ function formatValue(v: number): string {
   return v.toPrecision(3);
 }
 
-interface ActionButtonProps {
-  active?: boolean;
-  disabled?: boolean;
-  onClick?: () => void;
-  children: React.ReactNode;
-}
-
-function ActionButton({ active, disabled, onClick, children }: ActionButtonProps) {
-  return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={onClick}
-      className={cn(
-        "flex-1 rounded border px-1.5 py-0.5 font-mono text-2xs transition-colors",
-        active
-          ? "border-line-3 bg-accent text-foreground"
-          : "border-transparent text-muted-foreground hover:bg-muted hover:text-foreground",
-        "disabled:pointer-events-none disabled:opacity-30",
-      )}
-    >
-      {children}
-    </button>
-  );
-}
-
 /**
- * Continuous-color legend: a colormap swatch + a two-thumb range Slider
- * (shadcn / Base UI `ui/slider`) driving the color domain [vmin, vmax].
- * Right-click the swatch for colormap / reverse / scale / reset-range.
+ * Continuous legend body (design data/Legend.jsx): the colormap bar, a
+ * two-thumb range slider that filters to [vmin, vmax], and the range's ends.
+ * Colormap, reverse and scale live in the Legend popover.
  */
 export function ContinuousLegend({
-  columnName,
+  title,
   colormap,
+  reversed,
   vmin,
   vmax,
   absoluteVmin,
   absoluteVmax,
-  reversed = false,
-  scale,
   onRangeChange,
-  onColormapChange,
-  onReversedChange,
-  onScaleChange,
   onResetRange,
 }: Props) {
-  const absMin = absoluteVmin ?? vmin;
-  const absMax = absoluteVmax ?? vmax;
-  const hasRange = absMax > absMin && onRangeChange != null;
-  const span = absMax - absMin;
-  const step = span > 0 ? span / 1000 : 0.001;
-
-  void scale;
+  const colors = useScatterServices().getCategoricalPalette(colormap, 16);
+  const span = absoluteVmax - absoluteVmin;
+  const narrowed = vmin > absoluteVmin || vmax < absoluteVmax;
 
   return (
-    <Panel className="absolute top-2 left-2 z-20 w-52 px-2.5 py-2" title={columnName}>
-      {/* Single row: [colormap circle] [range slider] */}
-      <div className="flex items-center gap-2">
-        <ContextMenu>
-          <ContextMenuTrigger
-            aria-label="Colormap options"
-            className="inline-flex shrink-0 cursor-context-menu items-center rounded-sm text-muted-foreground/70 outline-none transition-colors focus-ring hover:text-foreground"
-          >
-            <ColormapCircle colormap={colormap} reversed={reversed} />
-          </ContextMenuTrigger>
-
-          <ContextMenuContent className="w-60 font-mono">
-            <ColormapGrid active={colormap} onSelect={onColormapChange ?? (() => {})} />
-
-            <ContextMenuSeparator />
-
-            <div className="flex gap-1 px-1 py-0.5">
-              <ActionButton active={reversed} onClick={() => onReversedChange?.(!reversed)}>
-                ⇄ Reverse
-              </ActionButton>
-              <ActionButton disabled={onResetRange == null} onClick={onResetRange}>
-                ↺ Reset range
-              </ActionButton>
-            </div>
-
-            {onScaleChange && (
-              <div className="flex gap-1 px-1 py-0.5">
-                {(["linear", "log", "sqrt"] as const).map((s) => (
-                  <ActionButton key={s} active={scale === s} onClick={() => onScaleChange(s)}>
-                    {s === "sqrt" ? "√" : s}
-                  </ActionButton>
-                ))}
-              </div>
-            )}
-          </ContextMenuContent>
-        </ContextMenu>
-
-        {/* shadcn Slider: same component as ChannelControls contrast slider,
-            no wrapping elements that could swallow pointer events. */}
-        {hasRange && (
+    <div className="flex min-w-40 flex-col gap-px">
+      <div className="flex items-center gap-1.5 px-1.5 pt-[3px] pb-1">
+        <span className="flex-1 truncate font-mono text-sm text-text-muted">{title}</span>
+        {narrowed ? (
+          <button type="button" className="text-sm text-primary" onClick={onResetRange}>
+            Clear
+          </button>
+        ) : null}
+      </div>
+      <div className="px-1.5 pt-0.5 pb-1.5">
+        <div
+          className="h-2 rounded-full"
+          style={{ background: `linear-gradient(to ${reversed ? "left" : "right"}, ${colors.join(", ")})` }}
+        />
+        {span > 0 ? (
           <Slider
-            className="flex-1"
-            min={absMin}
-            max={absMax}
-            step={step}
+            className="mt-1"
+            min={absoluteVmin}
+            max={absoluteVmax}
+            step={span / 1000}
             value={[vmin, vmax]}
             onValueChange={(v) => {
-              if (Array.isArray(v) && v.length === 2) onRangeChange?.(v[0], v[1]);
+              if (Array.isArray(v) && v.length === 2) onRangeChange(v[0], v[1]);
             }}
           />
-        )}
+        ) : null}
+        <div className="mt-1 flex justify-between font-mono text-xs text-text-muted tabular-nums">
+          <span>{formatValue(vmin)}</span>
+          <span>{formatValue(vmax)}</span>
+        </div>
       </div>
-
-      {/* Min / max labels */}
-      <div className="mt-1 flex justify-between px-0.5 font-mono text-2xs text-muted-foreground/70 tabular-nums">
-        <span>{formatValue(vmin)}</span>
-        <span>{formatValue(vmax)}</span>
-      </div>
-    </Panel>
+    </div>
   );
 }

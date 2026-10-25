@@ -12,7 +12,6 @@
 import { ChevronDownIcon } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 
-import { useScatterUIDispatch } from "../scatter-ui-store";
 import { Badge } from "@ndea/ui/components/badge";
 import {
   Command,
@@ -114,10 +113,8 @@ export function ModalityColorPicker({
   // ── Internal var hooks ──────────────────────────────────────────────────────
   const { names: varNames, isLoading: varLoading } = useVarSearch(varQuery, isMuData ? varModTab : undefined);
   const layers = useLayerNames();
-  const { setStatus } = useScatterUIDispatch();
   // When var materialization completes, propagate ColorSource and close
   const { materialize, status: varStatus } = useVarColumn({
-    onStatus: setStatus,
     onReady: (column) => {
       onSetColorSource(colorSourceFromString(column));
       setOpen(false);

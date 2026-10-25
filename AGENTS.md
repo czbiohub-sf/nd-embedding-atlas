@@ -208,20 +208,26 @@ entrypoints across workspaces.
   Data, Links, Harness, Settings) open over the tiles on hover and dock when
   pinned (click or ⌘B). No top bar, status bar, or revision UI: history stays
   on the server (REST, CLI, MCP, TUI).
-- TypeGPU drives the WebGPU scatter plot (`packages/components/src/scatter/gpu/gpu/`):
-  SoA position columns (`/api/scatter-positions` sends x, y, and z when the
-  element's `zDim` prop asks for 3D), one `project()` shared by every pass,
+- TypeGPU drives the WebGPU embedding view (`packages/components/src/scatter/gpu/gpu/`):
+  SoA position columns (`/api/scatter-positions` sends the element's
+  `xDim`/`yDim`/`zDim` columns of its `obsmKey`), one `project()` shared by every pass,
   compaction + `drawIndirect`, a density splat when too many points are
-  visible, and GPU lasso/marquee on projected positions. `camera.ts` has
+  visible, and GPU box/lasso on projected positions. `camera.ts` has
   `PanZoom2D` and `Turntable3D`; 3D draws opaque depth-tested discs, and its
   `viewSync` cells carry `yaw/pitch/distance/target/projection` (2D views skip
   them). `scene.ts` stores points in Morton (storage) order with 256-point
   batches and per-batch bounds for culling; that order is internal: every
-  scene setter, the lasso bitmask, and the pick result speak row order
-  (`writeLayer`/`layerToRows`/`perm` translate). The element's `density.mode`
-  prop (`mean` | `dominant` | `weave`) picks how the density splat composites
-  categorical colors; the toolbar cycles it. 3D lassos have a toolbar-only
-  selection depth: `through` (everything inside) or `front` (CloudLasso: the
+  scene setter, the selection bitmask, and the pick result speak row order
+  (`writeLayer`/`layerToRows`/`perm` translate). Controls float inside the view
+  (`ScatterControls.tsx`): a top-left group (pointer/box/lasso, V/B/L; Legend,
+  Point size, Axes popovers), the bottom-right axis picker, the pinned legend,
+  and the selection pill. Props `xDim`, `yDim`, `zDim`, `pointSize`, `legend`
+  (`popover` | `pinned`) and `density.mode` (`mean` | `dominant` | `weave`) persist
+  via `patchConfig`. A finished shape combines CPU-side with the selection
+  (`selection-bits.ts`: shift adds, ⌥ subtracts, Invert), becomes a set, and
+  publishes `{op:"inSet"}` on the `lasso` facet; Save as source writes
+  `data["Selection-<n>"]` through `host.dataAPI.saveSource`. 3D selection depth
+  is view-local: `through` (everything inside) or `front` (CloudLasso: the
   nearest dense structure).
 - Mosaic and server-side DuckDB drive cross-filtered scatter, table, and chart
   views. The `vgplot` component renders its props (`entries`, `attributes`) as

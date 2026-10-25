@@ -96,6 +96,7 @@ const FORWARDED = Object.keys({
   setExternalSelection: 0,
   clearExternalSelection: 0,
   clearSelection: 0,
+  setSelectionBits: 0,
   setForcedSelectionMode: 0,
   setSelectionDepth: 0,
   setPredicateFilter: 0,

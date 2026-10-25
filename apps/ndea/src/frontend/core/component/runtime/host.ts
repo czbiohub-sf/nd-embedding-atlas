@@ -5,6 +5,7 @@ import {
   CommitAnnotationsResponseSchema,
   ErrorResponseSchema,
   ObservationSetSchema,
+  type FilterClause,
   type Metadata,
 } from "@ndea/protocol";
 import type {
@@ -43,6 +44,8 @@ export interface HostInit<Config> {
   readonly colorBy: ColorCoordinationAPI;
   readonly filter: FilterCoordinationAPI;
   readonly patchConfig?: (patch: Partial<Config>) => void;
+  /** Persists a named workspace data source (see `RowSetPublishAPI.saveSource`). */
+  readonly saveSource?: (baseName: string, where: FilterClause) => string;
 }
 
 export interface HostHandle<Config> {
@@ -157,6 +160,11 @@ export function createComponentHost<Config>(
         });
         if (!response.ok) throw await responseError(response, `set creation failed (${response.status})`);
         return ObservationSetSchema.parse(await response.json());
+      },
+      saveSource(baseName: string, where: FilterClause) {
+        assertActive();
+        if (!init.saveSource) throw new Error(`component host ${elementId} cannot save data sources`);
+        return init.saveSource(baseName, where);
       },
       async listAnnotationColumns() {
         assertActive();

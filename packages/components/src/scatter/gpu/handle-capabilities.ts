@@ -7,7 +7,7 @@
  */
 
 import type { RowIndex, TurntableView, ViewSyncState } from "@ndea/sdk";
-import type { DensityMode, SelectionDepth } from "../contracts";
+import type { DensityMode, SelectionDepth, SelectionTool } from "../contracts";
 
 export interface SelectionCapability {
   /** Apply an externally-driven selection (from another panel). */
@@ -15,8 +15,10 @@ export interface SelectionCapability {
   clearExternalSelection(): void;
   /** Clear lasso/marquee selection. */
   clearSelection(): void;
-  /** Switch the drag behaviour: 'pan' = default, 'marquee'/'lasso' = always-draw-selection. */
-  setForcedSelectionMode(mode: "pan" | "marquee" | "lasso"): void;
+  /** Show a row-order bitmask (bit r of word r/32 = row r) as the lasso/marquee selection, e.g. a combined or inverted one. */
+  setSelectionBits(bits: Uint32Array): void;
+  /** Switch the drag behaviour: pointer pans (click focuses); box and lasso draw a selection. */
+  setForcedSelectionMode(tool: SelectionTool): void;
   /** 3D: select through (default), or only the nearest dense structure under the shape (2D ignores it). */
   setSelectionDepth(depth: SelectionDepth): void;
 }

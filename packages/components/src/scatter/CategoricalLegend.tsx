@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -7,37 +7,32 @@ import {
   ContextMenuTrigger,
 } from "@ndea/ui/components/context-menu";
 import { OklchColorPicker } from "@ndea/ui/components/oklch-color-picker";
-import { Popover, PopoverContent, PopoverTrigger } from "@ndea/ui/components/popover";
 import { hexToOklch, oklchToHex, type OklchColor } from "./helpers";
 import { cn } from "@ndea/ui/lib/utils";
-import { CategoricalPaletteGrid } from "./CategoricalPaletteGrid";
 import { useLegend } from "./LegendContext";
 import { useLegendCounts } from "./useLegendCounts";
 
 /**
- * Categorical color legend with interactive dot disable + isolation.
+ * Categorical legend body (design data/Legend.jsx); the popover or the pinned
+ * card around it supplies the frame.
  *
  * Each row: ● label ··· count
- * - Left-click ● → toggle disabled (hidden from scatter, alpha=0)
- * - Shift+Click row → additive isolation toggle (dims others)
+ * - Click a row → toggle it in the legend filter (isolation; others dim)
+ * - Click ● → toggle hidden (dropped from drawing, picking and selection)
  * - Right-click ● → OklchColorPicker context menu
- * - ESC → clear isolation
+ * - Clear / Esc → clear the legend filter
  */
-export function CategoricalLegend() {
+export function CategoricalLegend({ title }: { title: string }) {
   const { state, actions, meta } = useLegend();
   const { isolatedIndices, disabledIndices, colorOverrides } = state;
   const { legend, coordinator, selection, table, categoryCol, onStaleColumn } = meta;
-  const containerRef = useRef<HTMLDivElement>(null);
 
   // Reactive filtered counts: updates when cross-filter changes
   const counts = useLegendCounts({ coordinator, selection, table, categoryCol, onStaleColumn });
 
-  // ESC handler: clear isolation
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && isolatedIndices.size > 0) {
-        actions.clearIsolation();
-      }
+      if (e.key === "Escape" && isolatedIndices.size > 0) actions.clearIsolation();
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
@@ -48,131 +43,100 @@ export function CategoricalLegend() {
   const hasIsolation = isolatedIndices.size > 0;
 
   return (
-    <div
-      ref={containerRef}
-      className="absolute top-2 left-2 z-20 w-52 rounded-lg bg-overlay font-mono text-sm shadow-(--shadow-popover)"
-    >
-      <div className="flex items-center justify-between px-2.5 pt-2 pb-1 text-2xs text-muted-foreground uppercase tracking-wider">
-        <span>Categories · {legend.length}</span>
-        <Popover>
-          <PopoverTrigger
-            aria-label="Change palette"
-            title={`Palette · ${state.categoricalColormap}`}
-            className="rounded-sm px-1 py-0.5 font-mono text-2xs text-muted-foreground/70 normal-case outline-none transition-colors focus-ring hover:bg-muted hover:text-foreground"
+    <div className="flex min-w-40 flex-col gap-px">
+      <div className="flex items-center gap-1.5 px-1.5 pt-[3px] pb-1">
+        <span className="flex-1 truncate font-mono text-sm text-text-muted">{title}</span>
+        {hasIsolation || disabledIndices.size > 0 ? (
+          <button
+            type="button"
+            className="text-sm text-primary"
+            onClick={() => {
+              actions.clearIsolation();
+              actions.clearDisabled();
+            }}
           >
-            {state.categoricalColormap} ▾
-          </PopoverTrigger>
-          <PopoverContent align="end" className="w-60 font-mono">
-            <CategoricalPaletteGrid active={state.categoricalColormap} onSelect={actions.setCategoricalColormap} />
-          </PopoverContent>
-        </Popover>
+            Clear
+          </button>
+        ) : null}
       </div>
-      <div className="max-h-[200px] overflow-y-auto px-2.5 pb-2">
-        <div className="flex flex-col gap-0.5">
-          {legend.map((item) => {
-            const isIsolated = isolatedIndices.has(item.index);
-            const isDisabled = disabledIndices.has(item.index);
-            // Dimmed: isolation active and this item is not isolated (and not already disabled)
-            const isDimmed = hasIsolation && !isIsolated && !isDisabled;
-            const c = counts?.get(item.index);
-            const total = c?.total ?? item.count;
-            const filtered = c?.filtered ?? total;
-            const isFiltered = filtered !== total;
+      <div className="flex max-h-60 flex-col gap-px overflow-y-auto">
+        {legend.map((item) => {
+          const isIsolated = isolatedIndices.has(item.index);
+          const isDisabled = disabledIndices.has(item.index);
+          const c = counts?.get(item.index);
+          const total = c?.total ?? item.count;
+          const filtered = c?.filtered ?? total;
 
-            // Base color respects overrides; disabled items show as hollow outline
-            const baseColor = colorOverrides.get(item.index) ?? item.color;
-            const defaultOklch: OklchColor = hexToOklch(item.color) ?? {
-              l: 0.6,
-              c: 0.15,
-              h: 0,
-            };
-            const effectiveOklch: OklchColor = hexToOklch(baseColor) ?? defaultOklch;
+          const baseColor = colorOverrides.get(item.index) ?? item.color;
+          const defaultOklch: OklchColor = hexToOklch(item.color) ?? { l: 0.6, c: 0.15, h: 0 };
+          const effectiveOklch: OklchColor = hexToOklch(baseColor) ?? defaultOklch;
 
-            // Disabled dot: transparent fill with colored border
-            const dotStyle: React.CSSProperties = isDisabled
-              ? {
-                  backgroundColor: "transparent",
-                  border: `1.5px solid ${baseColor}`,
-                  opacity: 0.5,
+          return (
+            <div
+              key={item.index}
+              role="button"
+              tabIndex={0}
+              aria-pressed={isIsolated}
+              className={cn(
+                "flex cursor-pointer items-center gap-[7px] rounded-sm px-1.5 py-[3px] text-ui outline-none transition-opacity focus-visible:ring-1 focus-visible:ring-ring",
+                isIsolated && "bg-muted",
+                hasIsolation && !isIsolated && "opacity-45",
+                isDisabled && "opacity-30",
+              )}
+              onClick={() => actions.toggleIsolation(item.index, true)}
+              onKeyDown={(e) => {
+                if (e.key === " " || e.key === "Enter") {
+                  e.preventDefault();
+                  actions.toggleIsolation(item.index, true);
                 }
-              : { backgroundColor: baseColor };
-
-            return (
-              <div
-                key={item.index}
-                className={cn(
-                  "flex cursor-default items-center gap-2 rounded px-1 py-0.5 transition-opacity",
-                  isDimmed && "opacity-40",
-                  !isDimmed && !isDisabled && "opacity-80 hover:opacity-100",
-                  isDisabled && "opacity-30",
-                )}
-                onClick={(e) => {
-                  // Shift+click anywhere on the row = additive isolation
-                  if (e.shiftKey) actions.toggleIsolation(item.index, true);
-                }}
-              >
-                {/* Color dot: left-click toggles disabled, right-click opens color picker */}
-                <ContextMenu>
-                  <ContextMenuTrigger>
+              }}
+            >
+              <ContextMenu>
+                <ContextMenuTrigger
+                  render={
                     <button
                       type="button"
-                      className={cn(
-                        "inline-block h-2.5 w-2.5 shrink-0 cursor-pointer rounded-full border-0 p-0 transition-[box-shadow]",
-                        isIsolated && !isDisabled && "ring-1 ring-current ring-offset-1",
-                      )}
-                      style={dotStyle}
+                      className="size-2 shrink-0 cursor-pointer rounded-full border-0 p-0"
+                      style={
+                        isDisabled
+                          ? { backgroundColor: "transparent", boxShadow: `inset 0 0 0 1.5px ${baseColor}` }
+                          : { backgroundColor: baseColor }
+                      }
                       onClick={(e) => {
-                        // Guard: Shift+click is handled by the row div for isolation
-                        if (e.shiftKey) return;
                         e.stopPropagation();
                         actions.toggleDisabled(item.index);
                       }}
-                      onKeyDown={(e) => {
-                        if (e.key === " " || e.key === "Enter") {
-                          e.preventDefault();
-                          if (!e.shiftKey) actions.toggleDisabled(item.index);
-                        }
-                      }}
                       aria-pressed={isDisabled}
-                      aria-label={`Toggle ${item.label} visibility`}
-                      title="Click to toggle visibility · Shift+Click to isolate · Right-click for color"
+                      aria-label={`Hide ${item.label}`}
+                      title="Click to hide · Right-click for color"
                     />
-                  </ContextMenuTrigger>
-                  <ContextMenuContent className="w-52 font-mono">
-                    <OklchColorPicker
-                      label={item.label}
-                      color={effectiveOklch}
-                      defaultColor={defaultOklch}
-                      onChange={(newColor) => actions.setColorOverride(item.index, oklchToHex(newColor))}
-                      onReset={() => actions.clearColorOverride(item.index)}
-                    />
-                    <ContextMenuSeparator />
-                    <ContextMenuItem onSelect={() => actions.clearColorOverride(item.index)}>
-                      ↺ Reset color
-                    </ContextMenuItem>
-                  </ContextMenuContent>
-                </ContextMenu>
-
-                {/* Label */}
-                <span className={cn("flex-1 truncate text-muted-foreground", isDisabled && "line-through opacity-60")}>
-                  {item.label}
-                </span>
-
-                {/* Count */}
-                <span className={cn("shrink-0 text-muted-foreground", isDisabled && "opacity-40")}>
-                  {isFiltered ? (
-                    <>
-                      <span className="text-primary">{filtered.toLocaleString()}</span>
-                      {`/${total.toLocaleString()}`}
-                    </>
-                  ) : (
-                    total.toLocaleString()
-                  )}
-                </span>
-              </div>
-            );
-          })}
-        </div>
+                  }
+                />
+                <ContextMenuContent className="w-52 font-mono">
+                  <OklchColorPicker
+                    label={item.label}
+                    color={effectiveOklch}
+                    defaultColor={defaultOklch}
+                    onChange={(newColor) => actions.setColorOverride(item.index, oklchToHex(newColor))}
+                    onReset={() => actions.clearColorOverride(item.index)}
+                  />
+                  <ContextMenuSeparator />
+                  <ContextMenuItem onClick={() => actions.clearColorOverride(item.index)}>Reset color</ContextMenuItem>
+                </ContextMenuContent>
+              </ContextMenu>
+              <span className={cn("min-w-0 flex-1 truncate", isDisabled && "line-through")}>{item.label}</span>
+              <span className="pl-1.5 font-mono text-xs text-text-muted tabular-nums">
+                {filtered !== total ? (
+                  <>
+                    <span className="text-foreground">{filtered.toLocaleString()}</span>/{total.toLocaleString()}
+                  </>
+                ) : (
+                  total.toLocaleString()
+                )}
+              </span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

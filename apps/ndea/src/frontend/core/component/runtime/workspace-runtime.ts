@@ -28,7 +28,7 @@ const VIEW_COORDINATION_LOCK = "lock1";
 /** The slice of `WorkspaceStore` the runtimes read and write. */
 export type ElementRuntimeSession = Pick<
   WorkspaceStore,
-  "element" | "elementPredicate" | "subscribe" | "coordination" | "setElementProps"
+  "element" | "elementPredicate" | "subscribe" | "coordination" | "setElementProps" | "snapshot" | "setDataSource"
 >;
 
 export interface ElementRuntimeManagerDependencies {
@@ -292,6 +292,14 @@ export class ComponentRuntimeManager {
         const props = patch as Record<string, JsonValue>;
         if (entry) entry.config = configKey({ ...current, props: { ...current.props, ...props } });
         session.setElementProps(id, props);
+      },
+      saveSource: (baseName, where) => {
+        const { data } = session.snapshot();
+        let n = 1;
+        while (data[`${baseName}-${n}`]) n++;
+        const name = `${baseName}-${n}`;
+        session.setDataSource(name, { where });
+        return name;
       },
     });
     handle.host.track(() => filter.dispose());
