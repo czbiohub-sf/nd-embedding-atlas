@@ -71,10 +71,33 @@ export async function buildStaticDuckDBAddon(): Promise<string> {
   mkdirSync(libsDir, { recursive: true });
   await run(["tar", "-xzf", tgz, "-C", libsDir]);
   // ld64 resolves across all archives regardless of order; unreferenced
-  // members (tpch/tpcds, which the generated loader doesn't reference) drop out.
+  // members (tpch/tpcds/autocomplete, which nothing registers) drop out.
   const archives = readdirSync(libsDir, { recursive: true, encoding: "utf8" })
     .filter((f) => f.endsWith(".a"))
     .map((f) => resolve(libsDir, f));
+
+  // DuckDB 2 links nothing implicitly: each static extension (and capability such
+  // as `LOAD` support or HTTP) registers through its describe function before the
+  // first database opens. These are the ones the release's shared libduckdb carries.
+  const registered = ["core_functions", "parquet", "json", "icu", "httplib", "loadable_extensions"];
+  const registration = resolve(cacheDir, "static_extensions.cpp");
+  await Bun.write(
+    registration,
+    [
+      `#include "duckdb_static_extension.h"`,
+      `extern "C" {`,
+      ...registered.map((name) => `int32_t duckdb_extension_${name}_describe(duckdb_extension_descriptor *);`),
+      `}`,
+      `namespace {`,
+      `struct RegisterStaticExtensions {`,
+      `  RegisterStaticExtensions() {`,
+      ...registered.map((name) => `    duckdb_register_static_extension(duckdb_extension_${name}_describe);`),
+      `  }`,
+      `} register_static_extensions;`,
+      `}`,
+      ``,
+    ].join("\n"),
+  );
 
   const nodeAddonApi = dirname(Bun.resolveSync("node-addon-api/package.json", APP_ROOT));
   const nodeApiHeaders = dirname(Bun.resolveSync("node-api-headers/package.json", APP_ROOT));
@@ -98,6 +121,7 @@ export async function buildStaticDuckDBAddon(): Promise<string> {
     `-I${nodeAddonApi}`,
     `-I${resolve(nodeApiHeaders, "include")}`,
     resolve(cacheDir, "src/duckdb_node_bindings.cpp"),
+    registration,
     ...archives,
     "-bundle",
     "-undefined",
