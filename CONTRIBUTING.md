@@ -80,12 +80,12 @@ vp run build
 ./dist/ndea self doctor
 ```
 
-`vp run dev` enables dashboard layout editing (split, swap, remove, fill a
-slot). Every build opens the server-owned workspace document, which starts
-from the `--preset` document (`exploration` by default).
+Every build opens the server-owned workspace document, which starts from the
+`--preset` document (`exploration` by default), and lets you edit its layout
+(right-click a tile header to split or remove it).
 
-See [`AGENTS.md`](./AGENTS.md) for the full command catalogue, project layout,
-key abstractions, and gotchas.
+See [`AGENTS.md`](./AGENTS.md) for the project's rules and invariants; it points
+to the per-area agent references in `docs/agents/`.
 
 ## Code style
 
