@@ -11,7 +11,7 @@
  * - Errors: `{_ch: "error", error: string}` (also implicit terminal).
  *
  * Methods: `workspace/watch` pushes every accepted workspace revision,
- * `harness/watch` the harness presence, and `session/watch` the collection
+ * `harness/watch` the harness state (and rejected harness edits), and `session/watch` the collection
  * the server serves, until the client sends
  * `{ _id: <new>, _type: "unsubscribe", target_id: <sub_id> }`.
  * Data loads and Mosaic queries use the HTTP routes.
@@ -20,7 +20,7 @@
 import type { ServerWebSocket } from "bun";
 import type { RenderSocketData } from "./remote-render.ts";
 import type { ServerSession } from "./state.ts";
-import { clients, watchHarness } from "./status.ts";
+import { clients } from "./status.ts";
 
 /** Data attached to every ServerWebSocket via server.upgrade(req, { data }). */
 export interface ServerSocketContext {
@@ -148,12 +148,12 @@ function handleWorkspaceWatchWs(ws: WS, id: number): void {
 // ─── harness/watch ──────────────────────────────────────────────────────────
 
 /**
- * Push harness presence (agent names and last-seen times) now and after every
- * named MCP request, until unsubscribed. Unauthenticated like the rest of `/ws`
- * (loopback trust); names carry no paths or tokens.
+ * Push the harness state (agents, mode, pending proposals, tool-call feed) now
+ * and on every change, plus one `rejected` event per invalid harness edit,
+ * until unsubscribed. Unauthenticated like the rest of `/ws` (loopback trust).
  */
 function handleHarnessWatchWs(ws: WS, id: number): void {
-  const dispose = watchHarness((presence) => sendData(ws, id, presence));
+  const dispose = ws.data.state.workspace.harness.watch((event) => sendData(ws, id, event));
   socketSubs.get(ws)?.set(id, dispose);
 }
 

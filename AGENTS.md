@@ -92,9 +92,11 @@ entrypoints across workspaces.
 - `/data/query` serves Mosaic's `restConnector` (`POST { type, sql }`;
   `arrow` returns Arrow IPC bytes, `exec` returns `{}`).
 - `/ws` carries the framed `{ _id, _type }` ndea protocol: `workspace/watch`
-  (committed revisions), `harness/watch` (MCP agents and when each was
-  last seen, for the rail's harness presence), and `session/watch` (the open
-  collection; a tab reloads when it changes).
+  (committed revisions), `harness/watch` (`HarnessEvent`: the harness state,
+  i.e. agents and last seen, mode, pending proposals, the 50-entry tool-call
+  feed, on subscribe and every change, plus one `rejected` event per invalid
+  harness edit), and `session/watch` (the open collection; a tab reloads when
+  it changes).
 - Collections (`collections:` in the project YAML, `cli/config.ts`; datasets
   in none form an implicit one named after the file): a server run ingests one
   (`--collection`, default the first). `POST /api/collection { name }` clears
@@ -181,9 +183,22 @@ entrypoints across workspaces.
   per-request `createMcpHandler`; tools close over the one server session and
   the request's actor. Only loopback `Host`/`Origin` (localhost, 127.0.0.1,
   [::1], `*.localhost`) and the bearer token in `~/.ndea/mcp-token` pass.
-  `edit_dashboard` compiles named ops on a draft document and applies the diff
-  as one patch. The browser's `WorkspaceStore.apply` runs the same ops; new
-  agent operations go in `core/workspace/edits.ts`, not as new write paths.
+  Every tool registers through `register`, which appends a `ToolCall`
+  (summary of the args, the result's `outcome`) to the harness feed.
+  `edit_dashboard` goes through `Workspace.harness` (`server/harness.ts`, in
+  memory, survives collection switches, not restarts): mode `propose`
+  (default) validates the whole batch, applies its `set_filter` ops at once,
+  and holds the rest as a proposal of named `DashboardEdit`s (generated ids
+  pinned, summaries from `describeEdit`); `accept` re-runs the chosen pending
+  changes on the current revision and commits one `Workspace.patch` stamped
+  with the proposing agent, marking a change that no longer applies
+  `invalid`. `patch_workspace` and `restore_revision` are refused in propose
+  mode; `direct` applies edits immediately. REST: `routes/harness.ts`
+  (`GET /api/harness`, `PUT /api/harness/mode`,
+  `POST /api/proposals/:id/{accept,reject}`). Compile named ops on a draft
+  and diff into one patch; the browser's `WorkspaceStore.apply` runs the same
+  ops; new agent operations go in `core/workspace/edits.ts`, not as new write
+  paths.
   Element ids in tools accept a view reference `ndea://<workspace>/<id>`
   (`resolveElementId`, same module); another workspace's reference is rejected.
 - `DatasetQuerySession` (`server/store.ts`) owns one DuckDB connection and the
@@ -237,6 +252,16 @@ entrypoints across workspaces.
   Data, Links, Harness, Settings) open over the tiles on hover and dock when
   pinned (click or ⌘B). No top bar, status bar, or revision UI: history stays
   on the server (REST, CLI, MCP, TUI).
+- Proposals in the browser (`core/proposals/`): `useHarness` (`harness.ts`)
+  holds the `harness/watch` state (agents, mode, proposals, tool-call feed),
+  toasts each `rejected` push and shakes the Harness rail button; Accept /
+  Reject go to `POST /api/proposals/:id/{accept,reject}` and the document
+  follows through `workspace/watch`. `previewProposals` (`preview.ts`, pure)
+  applies only the pending `add` changes that open a tile in the active layout
+  to a copy of the document: the grid renders that copy, those tiles as ghost
+  tiles (`DashboardPane` wraps every non-layout component). Every other change
+  is listed in the proposal bar (bottom centre) and the Harness flyout, never
+  previewed in the grid. Settings › Harness edits writes the mode.
 - ⌘K (or the rail's Search) opens the command menu (`core/shell/CommandMenu.tsx`,
   on `@ndea/ui` `command`): it switches the layout (one, until named layouts)
   and the dataset (a `_dataset` `eq` clause under source `dataset` in filter

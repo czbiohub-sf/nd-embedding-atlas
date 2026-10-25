@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { emptyWorkspaceDocument, parseWorkspaceDocument } from "./document.ts";
 import {
   applyDashboardEdits,
+  describeEdit,
   elementReference,
   resolveEditReferences,
   resolveElementId,
@@ -223,4 +224,20 @@ describe("element references", () => {
     expect(() => resolveEditReferences(edits, "atlas")).toThrow(WorkspaceEditError);
     expect(resolveEditReferences(edits.slice(0, 1), "atlas")).toEqual([{ op: "swap", a: "a", b: "b" }]);
   });
+});
+
+test("describeEdit names each change in glossary words against the document it applies to", () => {
+  const built = applyDashboardEdits(emptyWorkspaceDocument(), BUILD);
+  const say = (edit: DashboardEdit) => describeEdit(edit, built);
+  expect(say({ op: "add", type: "histogram", at: { beside: "table-1" } })).toBe("Add Histogram beside Table");
+  expect(say({ op: "add", type: "histogram", at: { beside: "count-1", side: "down" } })).toBe(
+    "Add Histogram below Count",
+  );
+  expect(say({ op: "set_data", name: "infected", source: {} })).toBe('Change source "infected"');
+  expect(say({ op: "bind", id: "table-1", type: "filter", scope: "A" })).toBe("Link Table to filter link A");
+  expect(say({ op: "set_props", id: "count-1", props: { title: "Infected", data: null } })).toBe(
+    "Change Count settings: title, data",
+  );
+  expect(say({ op: "remove", id: "ghost" })).toBe('Remove "ghost"');
+  expect(say({ op: "add_layout", name: "Review", from: "main" })).toBe('Add layout "Review" copied from layout "Main"');
 });

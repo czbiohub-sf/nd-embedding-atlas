@@ -29,6 +29,7 @@ import {
   type WorkspaceIssue,
 } from "../frontend/core/workspace/document.ts";
 import type { WorkspaceDocument } from "../frontend/core/workspace/types.ts";
+import { Harness } from "./harness.ts";
 
 export type WorkspacePatchResult =
   | { kind: "accepted"; revision: number }
@@ -89,6 +90,8 @@ export class Workspace {
   private readonly listeners = new Set<(change: WorkspaceChange) => void>();
   /** Writes run one at a time so two writers can never both pass the revision check. */
   private queue: Promise<unknown> = Promise.resolve();
+  /** Agents' edit pipeline: mode, pending proposals, tool-call feed. In memory; survives collection switches. */
+  readonly harness: Harness = new Harness(this);
 
   private constructor(
     path: string,
@@ -186,6 +189,12 @@ export class Workspace {
   /** Validate and commit `ops` against `base`. A failed file write rejects and changes nothing. */
   patch(ops: readonly JsonPatchOp[], write: WorkspaceWrite): Promise<WorkspacePatchResult> {
     return this.enqueue(() => this.patchNow(ops, write));
+  }
+
+  /** Every issue `document` would raise as the next revision, without committing it. */
+  async check(document: unknown): Promise<WorkspaceIssue[]> {
+    const parsed = parseWorkspaceDocument(document);
+    return parsed.ok ? this.validate(parsed.value) : parsed.issues;
   }
 
   /** Commit the document at `revision` as a new revision, diffed against the current one. */

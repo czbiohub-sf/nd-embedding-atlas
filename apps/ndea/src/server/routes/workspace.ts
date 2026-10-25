@@ -117,10 +117,12 @@ function restActor(req: Request): WorkspaceActor {
   return { kind: req.headers.get("x-ndea-client") === "cli" ? "cli" : "browser" };
 }
 
-async function parseBody<T>(req: Request, schema: z.ZodType<T>): Promise<T | Response> {
+/** The JSON body validated by `schema` (an empty body reads as `{}`), or a 400 problem response. */
+export async function parseBody<T>(req: Request, schema: z.ZodType<T>): Promise<T | Response> {
   let raw: unknown;
   try {
-    raw = await req.json();
+    const text = await req.text();
+    raw = text === "" ? {} : JSON.parse(text);
   } catch {
     return problem("Invalid JSON body", []);
   }

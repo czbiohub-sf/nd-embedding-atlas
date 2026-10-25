@@ -23,6 +23,7 @@ import {
   COMPONENTS,
   elementScope,
   emptyDashboard,
+  findElement,
   freshElementId,
   freshId,
   insertTab,
@@ -450,4 +451,64 @@ export function applyDashboardEdits(document: WorkspaceDocument, edits: readonly
     }
   });
   return draft;
+}
+
+const componentTitle = (type: string) => COMPONENTS[type]?.title ?? type;
+
+/**
+ * One edit in glossary words, e.g. `Add Histogram beside Table`: a proposal
+ * change's summary. `document` is the workspace the edit applies to; ids
+ * are already resolved (`resolveEditReferences`).
+ */
+export function describeEdit(edit: DashboardEdit, document: WorkspaceDocument): string {
+  const view = (id: string) => {
+    const element = findElement(document, id);
+    if (!element) return `"${id}"`;
+    return typeof element.props.title === "string" ? `"${element.props.title}"` : componentTitle(element.type);
+  };
+  const layout = (id: string) => `layout "${document.layouts[id]?.name ?? id}"`;
+  switch (edit.op) {
+    case "set_data":
+      return `${Object.hasOwn(document.data, edit.name) ? "Change" : "Add"} source "${edit.name}"`;
+    case "remove_data":
+      return `Remove source "${edit.name}"`;
+    case "add": {
+      const at = !edit.at
+        ? ""
+        : "slot" in edit.at
+          ? " in an empty tile"
+          : "stack" in edit.at
+            ? ` in ${view(edit.at.stack)}`
+            : ` ${{ left: "left of", right: "beside", up: "above", down: "below" }[edit.at.side ?? "right"]} ${view(edit.at.beside)}`;
+      return `Add ${componentTitle(edit.type)}${at}${edit.layout ? ` to ${layout(edit.layout)}` : ""}`;
+    }
+    case "set_props":
+      return `Change ${view(edit.id)} settings: ${Object.keys(edit.props).join(", ")}`;
+    case "remove":
+      return `Remove ${view(edit.id)}`;
+    case "swap":
+      return `Swap ${view(edit.a)} and ${view(edit.b)}`;
+    case "bind":
+      return `Link ${view(edit.id)} to ${COORDINATION_TYPES[edit.type].label} link ${edit.scope}`;
+    case "unbind":
+      return `Unlink ${view(edit.id)} from its ${COORDINATION_TYPES[edit.type].label} link`;
+    case "set_filter":
+      return `${edit.clause === null ? "Clear" : "Filter"} ${edit.facet} on filter link ${edit.scope}`;
+    case "add_tab":
+      return `Add ${componentTitle(edit.type)} as a tab of ${view(edit.tile)}`;
+    case "move_tab":
+      return `Move ${view(edit.id)} to ${view(edit.to)}`;
+    case "close_tab":
+      return `Close ${view(edit.id)}`;
+    case "set_active_tab":
+      return `Show ${view(edit.id)} in its tile`;
+    case "add_layout":
+      return `Add layout "${edit.name}"${edit.from ? ` copied from ${layout(edit.from)}` : ""}`;
+    case "rename_layout":
+      return `Rename ${layout(edit.id)} to "${edit.name}"`;
+    case "remove_layout":
+      return `Remove ${layout(edit.id)}`;
+    case "set_active_layout":
+      return `Show ${layout(edit.id)}`;
+  }
 }

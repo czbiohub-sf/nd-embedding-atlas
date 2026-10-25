@@ -4,7 +4,8 @@
  * empty tiles (`slot`), and tiles of views: a bare view is a one-tab tile, a
  * `tabs` element a tile of several. Props resolve json-render expressions
  * against the document's coordination `state`; a tile adopts its active
- * view's live body from its dock.
+ * view's live body from its dock. While the harness proposes new tiles, the
+ * grid renders the proposal preview and those tiles as ghost tiles.
  */
 
 import { JSONUIProvider, Renderer, type ComponentRegistry, type ComponentRenderProps } from "@json-render/react";
@@ -23,6 +24,8 @@ import { Link, Maximize2, Plus, X } from "lucide-react";
 import { Children, createContext, use, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
+import { ProposalsContext } from "@/core/proposals/harness";
+import { GhostTile } from "@/core/proposals/Proposals";
 import { useDatasetSession } from "@/hooks/useDatasetSession";
 import { toRows } from "@/lib/mosaic-helpers";
 import { BodySocket, BodyStatus } from "./body-dock";
@@ -328,7 +331,7 @@ function TabsTile(props: ComponentRenderProps) {
 /* ── layout ────────────────────────────────────────────────────────── */
 
 /** The gutter between two panes is the resize handle; its hit area overhangs both tiles. */
-function Sash({ horizontal, onPointerDown }: { horizontal: boolean; onPointerDown: (e: React.PointerEvent) => void }) {
+function Sash({ horizontal, onPointerDown }: { horizontal: boolean; onPointerDown?: (e: React.PointerEvent) => void }) {
   return (
     <div
       onPointerDown={onPointerDown}
@@ -366,6 +369,8 @@ function Split(props: ComponentRenderProps) {
   const ws = useWorkspace();
   const { sashCleanupRef } = useDashboard();
   const id = idOf(props);
+  // A split a proposed tile opened exists only in the preview: no resizing until it is accepted.
+  const real = useWorkspaceSelector((w) => w.element(id) !== undefined);
   const horizontal = props.element.props.direction === "column";
   const ratio = Number(props.element.props.ratio);
   const [first, second] = Children.toArray(props.children);
@@ -393,7 +398,7 @@ function Split(props: ComponentRenderProps) {
   return (
     <div className={`flex min-h-0 min-w-0 flex-1 ${horizontal ? "flex-col" : "flex-row"}`}>
       <Pane share={ratio}>{first}</Pane>
-      <Sash horizontal={horizontal} onPointerDown={beginSash} />
+      <Sash horizontal={horizontal} onPointerDown={real ? beginSash : undefined} />
       <Pane share={1 - ratio}>{second}</Pane>
     </div>
   );
@@ -544,17 +549,28 @@ function Slot(props: ComponentRenderProps) {
 
 /* ── registry + state ──────────────────────────────────────────────── */
 
+/** A tile the harness proposes renders as a ghost in place of the component. */
+function ghostable(Component: (props: ComponentRenderProps) => ReactNode) {
+  return function Ghostable(props: ComponentRenderProps) {
+    const preview = use(ProposalsContext)?.preview;
+    const id = idOf(props);
+    const ghost = preview?.ghosts.get(id);
+    const element = preview?.document && activeSpec(preview.document).elements[id];
+    return ghost && element ? <GhostTile element={element} item={ghost} /> : <Component {...props} />;
+  };
+}
+
 const REGISTRY: ComponentRegistry = {
   split: Split,
   stack: Stack,
-  text: Text,
-  select: Select,
+  text: ghostable(Text),
+  select: ghostable(Select),
   slot: Slot,
-  tabs: TabsTile,
+  tabs: ghostable(TabsTile),
   ...Object.fromEntries(
     Object.entries(COMPONENTS)
       .filter(([, info]) => info.view)
-      .map(([type]) => [type, ViewTile]),
+      .map(([type]) => [type, ghostable(ViewTile)]),
   ),
 };
 
@@ -619,7 +635,9 @@ function FullscreenOverlay() {
 
 export function DashboardPane() {
   const ws = useWorkspace();
-  const spec = useWorkspaceSelector((w) => activeSpec(w.snapshot()));
+  const committed = useWorkspaceSelector((w) => activeSpec(w.snapshot()));
+  const ghostDoc = use(ProposalsContext)?.preview.document;
+  const spec = ghostDoc ? activeSpec(ghostDoc) : committed;
   const [drag, setDrag] = useState<DragState | null>(null);
   const dragRef = useRef<DragState | null>(null);
   const sashCleanupRef = useRef<(() => void) | null>(null);

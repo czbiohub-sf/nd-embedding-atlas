@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 
-import { isConnected, relativeTime } from "./presence";
+import { isConnected, relativeTime } from "./harness";
 
 test("relativeTime picks the largest unit", () => {
   const now = Date.parse("2026-01-01T00:10:00Z");

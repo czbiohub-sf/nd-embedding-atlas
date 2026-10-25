@@ -297,5 +297,63 @@ The agents' smokes also covered:
 - "Compare with <collection>" from the prototype's Collections flyout is not built.
 
 **Note:** the user's `vp up -r -L` dependency upgrade (DuckDB 2.0 and the rest) landed inside the
-phase 3 commit `34e84d6`, because it was already in the tree. `625f8f8` and `d8e6b45` adapted the
+phase 3 commit `34e84d6`, because it was already in the tree. `7e971b0` and `d8e6b45` adapted the
 duckdb-zarr and static addon builds to DuckDB 2.
+
+## Phase 7: proposals
+
+**Changed**
+
+- A proposal queue on the server (`server/harness.ts`, in memory: a restart drops pending
+  proposals). Harness edits mode is `propose` (default) or `direct`.
+  - In propose mode MCP `edit_dashboard` returns `{ status: "proposed", id, changes }`. The
+    exceptions are `set_filter` ops, which apply directly because filters are exploration
+    state.
+  - An invalid batch is rejected at once with a `rejected` push.
+  - `get_proposal` reports per-change status.
+  - `patch_workspace` and `restore_revision` are refused in propose mode with a hint.
+- Accept re-runs the selected named ops against the current revision and commits one
+  `workspace.patch` with the harness as the actor. A change that no longer applies becomes
+  `invalid` with its reason.
+- Every MCP tool call lands in a bounded feed (50, newest first) with a summary and outcome.
+- `packages/protocol` `harness.ts`: `HarnessState`, `Proposal`, `ToolCall`. `/ws harness/watch`
+  pushes state and `rejected` events. REST: `GET /api/harness`, `PUT /api/harness/mode`,
+  `POST /api/proposals/:id/accept|reject`. Change summaries come from the shared `describeEdit`
+  in `core/workspace/edits.ts`.
+- Browser (`core/proposals/*`):
+  - New tiles from pending `add` changes render as ghost tiles (dashed `--primary`, "Proposed ·
+    Histogram", "Proposed by smoke", Reject / Accept, no live body).
+  - Other changes (sources with a before → after diff, props, removals) appear in the bottom
+    bar ("smoke proposes 2 changes", Review / Reject all / Accept all) and in the Harness flyout.
+  - A rejected harness edit shows one toast with its reason and shakes the Harness rail button
+    once.
+  - Settings › Harness edits `Propose | Apply directly`; the Harness flyout shows agents, the
+    tool-call feed (write calls in `--primary`), and pending proposals.
+
+**Files:** `packages/protocol/src/{harness,index,status}.ts`, `apps/ndea/src/server/{harness,mcp,workspace,status,ws,app,routes/harness,routes/workspace}.ts` + tests,
+`apps/ndea/src/frontend/core/workspace/{edits,DashboardPane}.ts(x)`, `core/proposals/{harness,preview,Proposals}.ts(x)` + tests,
+`core/shell/{Shell,flyouts}.tsx`; deleted `core/shell/presence.ts`.
+
+**Checked:** `vp run verify` green (17/17). `vp run build`. Binary smoke on infectomics:
+
+- An MCP `edit_dashboard` (add histogram + set_data) returned `status: proposed` with two change
+  summaries; the browser showed the ghost tile and the bar with the source diff.
+- An invalid `set_props` was rejected ("no element "nope"") and landed in the feed.
+- Accept on the ghost committed revision 2 with actor `{kind:"mcp", agent:"smoke"}`, and the
+  ghost became a live Histogram tile.
+- Rejecting the source left no pending proposals.
+- The Harness flyout listed the agent and both tool calls.
+
+The agents' smoke also covered Accept all / Reject all and Apply directly making the next edit
+immediate.
+
+**Deferred**
+
+- `add_tab` into an existing tile, and `add` into another layout, go to the review list instead
+  of a ghost (`ponytail:`).
+- Right after an accept, the ghost and the real tile can both show for a moment.
+
+**Remaining differences**
+
+- The prototype animates the ghost's dashed outline; ours enters with `animate-nd-in` only.
+- The prototype's Settings label reads "Suggest"; we use the README's "Propose".

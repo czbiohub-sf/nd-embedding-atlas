@@ -268,7 +268,7 @@ A filter scope maps each source (an element id, or an agent's own key) to named 
 
 ## MCP server
 
-A running `ndea view` serves the [Model Context Protocol](https://modelcontextprotocol.io) over Streamable HTTP at `/mcp` on the same port, so an agent edits the workspace you have open. Every accepted edit appears in the browser without a reload.
+A running `ndea view` serves the [Model Context Protocol](https://modelcontextprotocol.io) over Streamable HTTP at `/mcp` on the same port, so an agent (the harness) edits the workspace you have open. Every accepted edit appears in the browser without a reload.
 
 The endpoint answers only localhost `Host` and `Origin` headers and requires the bearer token in `~/.ndea/mcp-token`, created on first use with owner-only permissions. The token survives restarts, so you connect each agent once.
 
@@ -290,13 +290,22 @@ Agent writes appear in workspace history as `mcp` with the `X-Ndea-Agent` name (
 | `list_columns`           | Observation columns with their types and kind (obs, var, annotation); pass `column` for distinct count, range, and its most frequent values             |
 | `list_collections`       | The project's collections (each with its datasets and obs counts) and the open one                                                                      |
 | `get_result`             | One element's or data source's predicate and exact count                                                                                                |
-| `edit_dashboard`         | Named ops: `set_data`, `remove_data`, `add` (into a slot, a stack, or beside an element, in any layout), `set_props`, `remove`, `swap`, `bind`, `unbind`, `set_filter`; tabs: `add_tab`, `move_tab`, `close_tab`, `set_active_tab`; layouts: `add_layout` (blank or a copy), `rename_layout`, `remove_layout`, `set_active_layout` |
-| `patch_workspace`        | Raw RFC 6902 ops at an exact revision, for anything the named ops do not cover                                                                          |
+| `edit_dashboard`         | Named ops: `set_data`, `remove_data`, `add` (into a slot, a stack, or beside an element, in any layout), `set_props`, `remove`, `swap`, `bind`, `unbind`, `set_filter`; tabs: `add_tab`, `move_tab`, `close_tab`, `set_active_tab`; layouts: `add_layout` (blank or a copy), `rename_layout`, `remove_layout`, `set_active_layout`. Proposes them while Harness edits are set to Propose |
+| `get_proposal`           | One proposal's changes with their status: pending, accepted, rejected, or invalid (with the reason it no longer applied)                                |
+| `patch_workspace`        | Raw RFC 6902 ops at an exact revision, for anything the named ops do not cover; only when Harness edits are set to Apply directly                       |
 | `get_history`            | Recent revisions, newest first: who committed each (actor and agent), its ops, time, and `restoredFrom`                                                 |
-| `restore_revision`       | Commit an earlier revision's document as a new revision; `revision_base` applies only if the workspace is still at that revision                        |
+| `restore_revision`       | Commit an earlier revision's document as a new revision; `revision_base` applies only if the workspace is still at that revision. Apply directly only  |
 | `create_observation_set` | Save an element's, a data source's, or a clause's rows as a set for `{"op":"inSet"}` clauses                                                            |
 
-`edit_dashboard` applies a whole batch or nothing. Pass `revision` to apply only if the workspace has not changed since you read it. Every write, from the browser, the CLI, or an agent, is checked like a document load: structure, component props, data references, bindings, and set references. A refused edit names the op or document path to fix and changes nothing.
+`edit_dashboard` validates a whole batch, and refuses all of it if any op fails. Pass `revision` to act only if the workspace has not changed since you read it. Every write, from the browser, the CLI, or an agent, is checked like a document load: structure, component props, data references, bindings, and set references. A refused edit names the op or document path to fix and changes nothing.
+
+### Proposals
+
+You review harness edits. By default (Settings › Harness edits: **Propose**), `edit_dashboard` returns `{ "status": "proposed", "id", "changes": [{ "index", "summary" }] }` instead of a revision: each change waits as a proposal until you accept or reject it, and the agent reads the outcome with `get_proposal`. `set_filter` ops still apply at once, since filters are exploration state, not layout or source edits; a batch that mixes them applies its filters and proposes the rest. Accepting re-runs the chosen changes against the current workspace and commits them as one revision recorded under the agent's name; a change that no longer applies (say, the view it targets is gone) becomes invalid with its reason while the others still commit. `patch_workspace` and `restore_revision` are refused in Propose mode. **Apply directly** makes agent edits take effect immediately, as before. Proposals live in the server's memory: restarting `ndea view` drops pending ones.
+
+In the browser, a proposed tile shows as a ghost tile with Accept / Reject; other changes (sources with a before → after diff, props, removals, links, layouts) are listed in a bar at the bottom with Accept all / Reject all, and in the Harness flyout with the tool-call feed. Settings › Harness edits switches between Propose and Apply directly. A rejected edit shows once as a toast.
+
+The same state is available over HTTP: `GET /api/harness` (agents, mode, pending proposals, and the last 50 tool calls), `PUT /api/harness/mode` with `{ "mode": "propose" | "direct" }`, and `POST /api/proposals/<id>/accept` or `/reject` with an optional `{ "changes": [<index>, …] }` (default: every pending change).
 
 ## `ndea completion`
 

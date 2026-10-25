@@ -10,7 +10,8 @@
  */
 
 import { z } from "zod";
-import { CollectionSummarySchema, type HarnessPresence } from "./status";
+import type { HarnessEvent } from "./harness";
+import { CollectionSummarySchema } from "./status";
 import type { WorkspaceChange } from "./workspace";
 
 export {
@@ -58,8 +59,34 @@ export type {
   WorkspaceRevision,
   WorkspaceSnapshot,
 } from "./workspace";
-export { CollectionSummarySchema, HarnessPresenceSchema, RuntimeStatusSchema } from "./status";
-export type { CollectionSummary, HarnessPresence, RuntimeStatus } from "./status";
+export {
+  HarnessAgentSchema,
+  HarnessEventSchema,
+  HarnessModeBodySchema,
+  HarnessModeSchema,
+  HarnessStateSchema,
+  ProposalAcceptedSchema,
+  ProposalChangeSchema,
+  ProposalDecisionBodySchema,
+  ProposalRejectedSchema,
+  ProposalSchema,
+  ToolCallSchema,
+} from "./harness";
+export type {
+  HarnessAgent,
+  HarnessEvent,
+  HarnessMode,
+  HarnessModeBody,
+  HarnessState,
+  Proposal,
+  ProposalAccepted,
+  ProposalChange,
+  ProposalDecisionBody,
+  ProposalRejected,
+  ToolCall,
+} from "./harness";
+export { CollectionSummarySchema, RuntimeStatusSchema } from "./status";
+export type { CollectionSummary, RuntimeStatus } from "./status";
 export { DatasetStructureSchema, type DatasetStructure } from "./structure";
 
 // ─── Shared primitives ──────────────────────────────────────────────────────
@@ -396,10 +423,10 @@ export interface NdeaProtocol {
     req: Record<string, never>;
     res: WorkspaceChange;
   };
-  /** Pushes the current harness presence on subscribe and on every MCP request from a named agent. */
+  /** Pushes the harness state on subscribe and on every change, plus one `rejected` event per invalid harness edit. */
   "harness/watch": {
     req: Record<string, never>;
-    res: HarnessPresence;
+    res: HarnessEvent;
   };
   /** Pushes the collection the server serves on subscribe and after every switch (`POST /api/collection`). */
   "session/watch": {

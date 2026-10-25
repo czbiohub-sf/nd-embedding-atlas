@@ -6,9 +6,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { createMcpEndpoint } from "../mcp.ts";
+import { handleHarnessGet, handleHarnessMode, handleProposalAccept, handleProposalReject } from "../routes/harness.ts";
 import { createServerSession, type DatasetMountConfig } from "../state.ts";
 import { DatasetQuerySession } from "../store.ts";
-import { WorkspaceHistorySchema } from "@ndea/protocol";
+import { WorkspaceHistorySchema, type HarnessEvent } from "@ndea/protocol";
 
 const TOKEN = "test-token";
 let dir: string;
@@ -93,11 +94,13 @@ describe("ndea MCP", () => {
 
   test("an agent builds a filtered, linked dashboard and reads the same numbers back", async () => {
     const { workspace } = await connect();
+    workspace.harness.setMode("direct");
     const tools = (await client!.listTools()).tools.map((tool) => tool.name).toSorted();
     expect(tools).toEqual([
       "create_observation_set",
       "edit_dashboard",
       "get_history",
+      "get_proposal",
       "get_result",
       "get_workspace",
       "list_collections",
@@ -192,6 +195,7 @@ describe("ndea MCP", () => {
     });
     expect(incapable.body.issues[0].pointer).toBe("/layouts/main/spec/elements/text-1/props/filter");
 
+    workspace.harness.setMode("direct");
     const patch = await call("patch_workspace", {
       revision: before,
       ops: [{ op: "add", path: "/data/bad", value: { from: "ghost" } }],
@@ -206,6 +210,7 @@ describe("ndea MCP", () => {
 
   test("writes are stamped mcp with the X-Ndea-Agent name; history and restore tools", async () => {
     const { workspace } = await connect("omp");
+    workspace.harness.setMode("direct");
     await call("edit_dashboard", { ops: [{ op: "set_data", name: "a", source: { sql: "area > 20" } }] });
     await call("patch_workspace", { revision: 1, ops: [{ op: "remove", path: "/data/a" }] });
     const history = WorkspaceHistorySchema.parse((await call("get_history", { limit: 5 })).body).revisions;
@@ -223,7 +228,130 @@ describe("ndea MCP", () => {
 
   test("a malformed X-Ndea-Agent is dropped, leaving the actor mcp", async () => {
     const { workspace } = await connect("not an agent!");
+    workspace.harness.setMode("direct");
     await call("edit_dashboard", { ops: [{ op: "set_data", name: "a", source: { sql: "area > 20" } }] });
     expect(workspace.history()[0].actor).toEqual({ kind: "mcp" });
+  });
+});
+
+const post = (path: string, body: unknown) =>
+  new Request(`http://localhost${path}`, { method: "POST", body: JSON.stringify(body) });
+
+describe("harness proposals", () => {
+  test("edits become a proposal; filters apply directly; accept commits as the agent; reject; get_proposal", async () => {
+    const { workspace } = await connect("omp");
+    const state = { workspace };
+    const proposed = await call("edit_dashboard", {
+      ops: [
+        { op: "add", type: "count", id: "c" },
+        {
+          op: "set_filter",
+          scope: "A",
+          source: "agent",
+          facet: "area",
+          clause: { op: "gt", column: "area", value: 40 },
+        },
+        { op: "add", type: "histogram", props: { field: "area" }, at: { beside: "c" } },
+      ],
+    });
+    expect(proposed.isError).toBe(false);
+    expect(proposed.body).toMatchObject({
+      status: "proposed",
+      changes: [
+        { index: 0, summary: "Add Count" },
+        { index: 1, summary: "Add Histogram beside Count" },
+      ],
+      filters: { revision: 1, count: 1 },
+    });
+    const id = proposed.body.id as string;
+    // The filter applied at once; the views wait.
+    expect(workspace.get().revision).toBe(1);
+    expect((workspace.get().document as any).state.filter.A.agent.area).toMatchObject({ op: "gt" });
+    expect(workspace.harness.state().proposals.map((p) => p.id)).toEqual([id]);
+
+    const accepted = await (
+      await handleProposalAccept(post(`/api/proposals/${id}/accept`, { changes: [0] }), id, state)
+    ).json();
+    expect(accepted).toMatchObject({
+      revision: 2,
+      proposal: { changes: [{ status: "accepted" }, { status: "pending" }] },
+    });
+    expect(workspace.history({ limit: 1 })[0]).toMatchObject({ revision: 2, actor: { kind: "mcp", agent: "omp" } });
+    expect((await call("get_proposal", { id })).body.changes.map((c: any) => c.status)).toEqual([
+      "accepted",
+      "pending",
+    ]);
+
+    const rejected = await (await handleProposalReject(post(`/api/proposals/${id}/reject`, {}), id, state)).json();
+    expect(rejected.proposal.changes.map((c: any) => c.status)).toEqual(["accepted", "rejected"]);
+    expect(workspace.get().revision).toBe(2);
+    expect(workspace.harness.state().proposals).toEqual([]);
+    expect((await handleProposalReject(post("/api/proposals/nope/reject", {}), "nope", state)).status).toBe(404);
+
+    const feed = workspace.harness.state().feed;
+    expect(feed.map(({ tool, outcome }) => [tool, outcome])).toEqual([
+      ["get_proposal", "→ 1 accepted, 1 pending"],
+      ["edit_dashboard", "proposed 2 changes; filters applied"],
+    ]);
+    expect(feed[1]).toMatchObject({ agent: "omp", summary: "Add Count (+2 more)", write: true });
+  });
+
+  test("a change that no longer applies turns invalid while the others commit", async () => {
+    const { workspace } = await connect("omp");
+    const proposed = await call("edit_dashboard", {
+      ops: [
+        { op: "add", type: "count", id: "c" },
+        { op: "set_data", name: "big", source: { sql: "area > 40" } },
+      ],
+    });
+    const id = proposed.body.id as string;
+    // Meanwhile a direct edit takes the id the proposal wanted.
+    workspace.harness.setMode("direct");
+    expect(
+      (await call("edit_dashboard", { ops: [{ op: "add", type: "text", id: "c", props: { text: "x" } }] })).body,
+    ).toMatchObject({ revision: 1 });
+    workspace.harness.setMode("propose");
+    const result = await workspace.harness.accept(id);
+    expect(result!.revision).toBe(2);
+    expect(result!.proposal.changes).toMatchObject([
+      { status: "invalid", reason: 'element id "c" is taken' },
+      { status: "accepted" },
+    ]);
+    expect((workspace.get().document as any).data.big).toEqual({ sql: "area > 40" });
+  });
+
+  test("an invalid batch is refused at once with a rejected event and a feed entry", async () => {
+    const { workspace } = await connect("omp");
+    const events: HarnessEvent[] = [];
+    const dispose = workspace.harness.watch((event) => events.push(event));
+    const refused = await call("edit_dashboard", { ops: [{ op: "add", type: "nope" }] });
+    dispose();
+    expect(refused.isError).toBe(true);
+    expect(refused.body.issues[0].pointer).toBe("/ops/0");
+    expect(events.filter((event) => event.kind === "rejected")).toMatchObject([
+      { agent: "omp", reason: "edit rejected; nothing was applied", issues: [{ pointer: "/ops/0" }] },
+    ]);
+    expect(workspace.harness.state().proposals).toEqual([]);
+    expect(workspace.harness.state().feed[0].outcome).toStartWith("rejected: edit rejected");
+  });
+
+  test("patch_workspace and restore_revision wait for Apply directly, which also applies edits at once", async () => {
+    const { workspace } = await connect("omp");
+    const patch = await call("patch_workspace", { revision: 0, ops: [{ op: "add", path: "/data/a", value: {} }] });
+    expect(patch).toMatchObject({ isError: true, body: { error: expect.stringContaining("Apply directly") } });
+    expect((await call("restore_revision", { revision: 1 })).body.error).toContain("use edit_dashboard");
+    expect(workspace.get().revision).toBe(0);
+
+    const switched = await handleHarnessMode(
+      new Request("http://localhost/api/harness/mode", { method: "PUT", body: JSON.stringify({ mode: "direct" }) }),
+      { workspace },
+    );
+    expect(await switched.json()).toMatchObject({ mode: "direct" });
+    expect(await handleHarnessGet({ workspace }).json()).toMatchObject({ mode: "direct", proposals: [] });
+    expect(
+      (await call("patch_workspace", { revision: 0, ops: [{ op: "add", path: "/data/a", value: {} }] })).body,
+    ).toEqual({ revision: 1 });
+    const applied = await call("edit_dashboard", { ops: [{ op: "add", type: "count" }] });
+    expect(applied.body).toMatchObject({ revision: 2, changed: true, added: ["count-1"] });
   });
 });

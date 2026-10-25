@@ -2,7 +2,7 @@
  * The rail's flyout bodies over real data: layouts (switch, add, rename, delete), collections
  * (the open one's datasets toggle the dataset filter; another switches) and
  * sources with exact obs counts, links (coordination scopes) and their member
- * views, harness presence, and settings.
+ * views, the harness (agents, pending proposals, tool-call feed), and settings.
  */
 
 import { useQuery } from "@tanstack/react-query";
@@ -10,7 +10,6 @@ import { ChevronRightIcon, CopyIcon, PencilIcon, PlusIcon, Trash2Icon } from "lu
 import { useState } from "react";
 import { toast } from "sonner";
 
-import { filterClauseSql } from "@ndea/components/filter";
 import { setProvenanceBadges, useProvenanceBadges } from "@ndea/components/table";
 import { Button } from "@ndea/ui/components/button";
 import { IconButton } from "@ndea/ui/components/icon-button";
@@ -19,6 +18,9 @@ import { Switch } from "@ndea/ui/components/switch";
 import { ToggleGroup, ToggleGroupItem } from "@ndea/ui/components/toggle-group";
 import { cn } from "@ndea/ui/lib/utils";
 
+import { isConnected, relativeTime, setHarnessMode, useProposals } from "@/core/proposals/harness";
+import { agentOf, sourceSummary } from "@/core/proposals/preview";
+import { ChangeRow } from "@/core/proposals/Proposals";
 import { activeSpec, freshId, type Dashboard, type DashboardElement } from "@/core/workspace/dashboard";
 import type { DashboardEdit } from "@/core/workspace/edits";
 import { documentLinks, elementTitle, LinkRow } from "@/core/workspace/LinksPopover";
@@ -27,7 +29,6 @@ import { useWorkspace, useWorkspaceSelector } from "@/core/workspace/workspace-c
 import { useTheme } from "@/ThemeProvider";
 import { LayoutWireframe } from "./LayoutWireframe";
 import { obs, totalObs, useCollections } from "./collections";
-import { isConnected, relativeTime, type HarnessAgent } from "./presence";
 
 function Heading({ children }: { children: React.ReactNode }) {
   return <div className="px-2 pt-3.5 pb-1 text-sm font-medium text-text-muted first:pt-1">{children}</div>;
@@ -273,10 +274,7 @@ function Source({ name, data }: { name: string; data: DataSources }) {
       return body.count;
     },
   });
-  const summary =
-    [source.from && `from ${source.from}`, source.where && filterClauseSql(source.where), source.sql]
-      .filter(Boolean)
-      .join(" · ") || "every obs";
+  const summary = sourceSummary(source);
   return (
     <div className="rounded-md px-2 py-1.5">
       <div className="flex items-center gap-2">
@@ -334,7 +332,10 @@ function McpEndpoint() {
   );
 }
 
-export function HarnessFlyout({ agents, now }: { agents: readonly HarnessAgent[]; now: number }) {
+export function HarnessFlyout() {
+  const { harness } = useProposals();
+  const { agents, proposals, feed } = harness.state;
+  const { now } = harness;
   return (
     <>
       <Heading>Agents</Heading>
@@ -357,6 +358,38 @@ export function HarnessFlyout({ agents, now }: { agents: readonly HarnessAgent[]
           );
         })
       )}
+      {proposals.length > 0 && <Heading>Proposals</Heading>}
+      {proposals.map((proposal) => (
+        <div key={proposal.id} className="mb-1 rounded-md bg-muted/50">
+          <div className="px-2 pt-1.5 text-sm text-text-muted">
+            {agentOf(proposal)} · {relativeTime(proposal.createdAt, now)}
+          </div>
+          {proposal.changes.map((change) => (
+            <ChangeRow key={change.index} proposal={proposal.id} change={change} />
+          ))}
+        </div>
+      ))}
+      <Heading>Tool calls</Heading>
+      {feed.length === 0 ? (
+        <Muted>No tool calls yet.</Muted>
+      ) : (
+        feed.map((call, index) => (
+          <div
+            key={`${call.at}/${index}`}
+            className="grid grid-cols-[34px_minmax(0,1fr)] gap-x-2 gap-y-px rounded-md px-2 py-1.5 hover:bg-muted"
+          >
+            <span className="font-mono text-xs text-text-muted tabular-nums">
+              {new Date(call.at).toTimeString().slice(0, 5)}
+            </span>
+            <span className="min-w-0 wrap-anywhere">
+              <span className={cn("font-mono font-medium", call.write && "text-primary")}>{call.tool}</span>{" "}
+              <span className="text-text-muted">{call.summary}</span>
+            </span>
+            <span />
+            <span className="font-mono text-xs wrap-anywhere text-text-muted">{call.outcome}</span>
+          </div>
+        ))
+      )}
       <Heading>MCP endpoint</Heading>
       <McpEndpoint />
     </>
@@ -366,8 +399,23 @@ export function HarnessFlyout({ agents, now }: { agents: readonly HarnessAgent[]
 export function SettingsFlyout() {
   const { theme, setTheme } = useTheme();
   const provenanceBadges = useProvenanceBadges();
+  const { mode } = useProposals().harness.state;
   return (
     <>
+      <Heading>Harness edits</Heading>
+      <div className="px-2 py-1">
+        <ToggleGroup
+          variant="segmented"
+          aria-label="Harness edits"
+          value={[mode]}
+          onValueChange={(value: string[]) => {
+            if (value[0] === "propose" || value[0] === "direct") setHarnessMode(value[0]);
+          }}
+        >
+          <ToggleGroupItem value="propose">Propose</ToggleGroupItem>
+          <ToggleGroupItem value="direct">Apply directly</ToggleGroupItem>
+        </ToggleGroup>
+      </div>
       <Heading>Theme</Heading>
       <div className="px-2 py-1">
         <ToggleGroup

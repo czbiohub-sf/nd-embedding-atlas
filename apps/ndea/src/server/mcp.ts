@@ -1,29 +1,34 @@
 /**
  * MCP over Streamable HTTP at /mcp. Tools close over the one server session,
  * so every agent reads and edits the same workspace document the browser
- * shows, through the session `Workspace` (`patch`, `restore`). Writes are
- * stamped `mcp`, with the agent named by an `X-Ndea-Agent` header that matches
- * the actor pattern (provenance only; the bearer token is the gate).
+ * shows. Named edits go through the workspace's harness pipeline
+ * (`Workspace.harness`): applied, or held as a proposal while Harness edits
+ * are set to propose. Writes are stamped `mcp`, with the agent named by an
+ * `X-Ndea-Agent` header that matches the actor pattern (provenance only; the
+ * bearer token is the gate). Every tool call lands in the harness feed.
  *
  * Access: loopback Host and Origin only (DNS rebinding): localhost,
  * 127.0.0.1, [::1], or any `*.localhost` name (RFC 6761 loopback, the
  * portless dev URLs), plus the bearer token from `mcp-token.ts`.
  */
 
-import { createMcpHandler, McpServer } from "@modelcontextprotocol/server";
+import {
+  createMcpHandler,
+  McpServer,
+  type StandardSchemaWithJSON,
+  type ToolAnnotations,
+} from "@modelcontextprotocol/server";
 import { filterClauseSql } from "@ndea/components/filter";
 import {
   FilterClauseSchema,
   JsonPatchOpSchema,
   OBSERVATION_SET_TABLE,
   WorkspaceActorSchema,
-  type JsonPatchOp,
   type WorkspaceActor,
 } from "@ndea/protocol";
-import { createPatch } from "rfc6902";
 import { z } from "zod";
 
-import { COMPONENTS, takenIds } from "../frontend/core/workspace/dashboard.ts";
+import { COMPONENTS } from "../frontend/core/workspace/dashboard.ts";
 import type { WorkspaceDocument } from "../frontend/core/workspace/types.ts";
 import { hasBearer } from "./mcp-token.ts";
 import { rowWords } from "./observation-sets.ts";
@@ -32,11 +37,10 @@ import type { ServerSession } from "./state.ts";
 import { agentSeen, clients } from "./status.ts";
 import { quoteIdent } from "./store.ts";
 import {
-  applyDashboardEdits,
   DashboardEditSchema,
+  describeEdit,
   resolveEditReferences,
   resolveElementId,
-  WorkspaceEditError,
   type DashboardEdit,
 } from "../frontend/core/workspace/edits.ts";
 
@@ -48,7 +52,8 @@ The workspace is one JSON document {data, layouts, layout, state}:
 A filter scope is a crossfilter: state.filter[scope] = {source: {facet: clause}}. Each member shows its data source AND every other source's clauses, never its own (an element's source key is its id). Write your own clauses with set_filter under your own source key (e.g. "agent").
 \`count\` is the metric component: it shows how many observations its data source and filter scope select.
 \`vgplot\` props are a Mosaic plot spec: \`entries\` is the plot's marks and interactors in order, \`attributes\` the other Plot options. Reserved params: marks read data {from:"$table", filterBy:"$scope"}, and an interactor publishes its brush into the filter scope with as:"$brush". Example histogram: entries [{mark:"rectY", data:{from:"$table", filterBy:"$scope"}, x:{bin:"area"}, y:{count:[]}}, {select:"intervalX", as:"$brush", field:"area"}].
-Start with get_workspace, list_components, and list_columns; list_collections names the project's collections and the open one. Change the dashboard with edit_dashboard (a batch applied atomically); patch_workspace applies raw JSON Patch. Every write is validated like a user edit: a rejected call returns issues with JSON Pointers (/ops/<i> names the op; /layouts/<layout>/spec/elements/<id>/props/<key> names a bad prop): fix and retry.
+Start with get_workspace, list_components, and list_columns; list_collections names the project's collections and the open one. Change the dashboard with edit_dashboard (a batch, validated whole); patch_workspace applies raw JSON Patch. Every write is validated like a user edit: a rejected call returns issues with JSON Pointers (/ops/<i> names the op; /layouts/<layout>/spec/elements/<id>/props/<key> names a bad prop): fix and retry.
+The person reviews harness edits. While Harness edits are set to propose (the default), edit_dashboard returns {status:"proposed", id, changes}: each change waits as a proposal the person accepts or rejects in the app, and get_proposal {id} reports each change's status (pending, accepted, rejected, or invalid with a reason when it no longer applied). set_filter ops still apply directly: filters are exploration state. patch_workspace and restore_revision work only when the person switches Harness edits to Apply directly; then edit_dashboard applies at once too.
 Read numbers with get_result. The open browser tab shows every accepted change live.
 get_history lists recent revisions (who wrote each, and its ops); restore_revision brings an earlier revision back as a new one.`;
 
@@ -97,18 +102,24 @@ export function createMcpEndpoint(state: ServerSession, token: string): (request
   };
 }
 
+/** `outcome`: the harness feed's few words for this call; stripped before the result goes out. */
 type ToolResult = {
   content: { type: "text"; text: string }[];
   structuredContent?: Record<string, unknown>;
   isError?: boolean;
+  outcome: string;
 };
 
-function ok(data: Record<string, unknown>): ToolResult {
-  return { content: [{ type: "text", text: JSON.stringify(data) }], structuredContent: data };
+function ok(data: Record<string, unknown>, outcome = "ok"): ToolResult {
+  return { content: [{ type: "text", text: JSON.stringify(data) }], structuredContent: data, outcome };
 }
 
 function rejected(error: string, extra: Record<string, unknown> = {}): ToolResult {
-  return { content: [{ type: "text", text: JSON.stringify({ error, ...extra }) }], isError: true };
+  return {
+    content: [{ type: "text", text: JSON.stringify({ error, ...extra }) }],
+    isError: true,
+    outcome: `rejected: ${error}`,
+  };
 }
 
 function document(state: Pick<ServerSession, "workspace">): { revision: number; document: WorkspaceDocument } {
@@ -131,52 +142,27 @@ function elementTarget(
   }
 }
 
-/**
- * Compile named edits against the current document and apply them as one
- * patch. Without an expected revision, a concurrent write is retried once
- * against the newer document, since named edits address ids, not positions.
- */
-async function runEdits(
-  state: ServerSession,
-  actor: WorkspaceActor,
-  edits: readonly DashboardEdit[],
-  expected: number | undefined,
-): Promise<ToolResult> {
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    const { revision, document: base } = document(state);
-    if (expected !== undefined && expected !== revision) {
-      return rejected("stale revision: the workspace changed; re-read it with get_workspace", { revision });
-    }
-    let next: WorkspaceDocument;
-    try {
-      next = applyDashboardEdits(base, resolveEditReferences(edits, state.workspace.name));
-    } catch (error) {
-      if (!(error instanceof WorkspaceEditError)) throw error;
-      return rejected("edit rejected; nothing was applied", {
-        revision,
-        issues: [{ pointer: `/ops/${error.index}`, detail: error.message }],
-      });
-    }
-    const ops: JsonPatchOp[] = JsonPatchOpSchema.array().parse(createPatch(base, next));
-    if (ops.length === 0) return ok({ revision, changed: false });
-    const result = await state.workspace.patch(ops, { base: revision, actor });
-    if (result.kind === "accepted") {
-      const before = takenIds(base);
-      const added = [...takenIds(next)].filter((id) => !before.has(id));
-      return ok({ revision: result.revision, changed: true, ...(added.length > 0 ? { added } : {}) });
-    }
-    if (result.kind === "invalid") {
-      return rejected("the edit would leave an invalid workspace; nothing was applied", {
-        revision,
-        issues: result.issues,
-      });
-    }
-    if (expected !== undefined) break;
+/** The op list in a few glossary words for the harness feed, e.g. `Add Histogram beside Table (+2 more)`. */
+function describeOps(state: Pick<ServerSession, "workspace">, ops: readonly DashboardEdit[]): string {
+  let resolved = ops;
+  try {
+    resolved = resolveEditReferences(ops, state.workspace.name);
+  } catch {
+    // Unresolvable references describe as written; the edit itself reports the error.
   }
-  return rejected("stale revision: the workspace changed; re-read it with get_workspace", {
-    revision: state.workspace.get().revision,
-  });
+  const first = describeEdit(resolved[0], document(state).document);
+  return resolved.length > 1 ? `${first} (+${resolved.length - 1} more)` : first;
 }
+
+const PROPOSE_ONLY =
+  "the person reviews harness edits; use edit_dashboard, or ask them to switch Harness edits to Apply directly";
+
+function plural(count: number, noun: string): string {
+  return `${count.toLocaleString("en-US")} ${noun}${count === 1 ? "" : "s"}`;
+}
+
+const EDIT_DASHBOARD =
+  "Change the workspace with a batch of ops, validated whole: while Harness edits are set to propose (the default) it returns {status:'proposed', id, changes:[{index, summary}]} and each change waits for the person to accept or reject it (read the outcome with get_proposal); set_filter ops still apply directly. When they are set to Apply directly, the batch applies atomically and returns the new revision and the ids of added elements. Data: set_data {name, source} adds or replaces a data source; remove_data {name}. Layouts: add_layout {id?, name, from?} adds a named layout (`from` duplicates that layout with fresh element ids; omitted: one empty tile) without showing it; rename_layout {id, name}; remove_layout {id} (never the last); set_active_layout {id} shows it. Elements (each op finds the layout holding its element): add {type, id?, props?, at?, layout?} places a new element in `layout` (default: the layout holding `at`, else the active one): at {slot} fills an empty slot, {stack, index?} inserts into a stack, {beside, side?: left|right|up|down} splits that element's tile (default: fill an empty root slot, else split the root to its right); set_props {id, props} merges props (null removes a key); remove {id}; swap {a, b}. Tabs: add_tab {tile, type, props?, id?} adds a view as the tile's active tab (a bare view tile is wrapped in tabs; an empty tile is filled); move_tab {id, to, index?} moves a view into another tile of the same layout (a tabs tile, one of its tabs, a bare view, or an empty tile) as its active tab; close_tab {id} removes a view from its tile (the last tab leaves an empty tile); set_active_tab {tile, id} shows a tab. Coordination: bind {id, type, scope} sets the element's {$bindState} prop and creates the link (scope) if needed; unbind {id, type} also drops the element's own filter clauses; set_filter {scope, source, facet, clause|null} writes your own crossfilter clause under your source key (every member sees it). Any existing element id may be a view's copied reference ndea://<workspace>/<id>. Pass `revision` to apply (or propose) only if nothing changed since you read it.";
 
 const READ = { readOnlyHint: true, openWorldHint: false } as const;
 const WRITE = { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false } as const;
@@ -192,8 +178,37 @@ function propsSchema(schema: z.ZodType): unknown {
 
 export function createNdeaMcpServer(state: ServerSession, actor: WorkspaceActor): McpServer {
   const server = new McpServer({ name: "ndea", version: "0.1.0" }, { instructions: INSTRUCTIONS });
+  const { harness } = state.workspace;
 
-  server.registerTool(
+  /** Register a tool whose every call lands in the harness feed: `summary` the args, the result's `outcome`. */
+  function register<S extends z.ZodType<Record<string, unknown>>>(
+    name: string,
+    config: { title: string; description: string; inputSchema: S; annotations: ToolAnnotations },
+    summary: (args: z.output<S>) => string,
+    run: (args: z.output<S>) => Promise<ToolResult>,
+  ): void {
+    const input: StandardSchemaWithJSON = config.inputSchema;
+    // The SDK validates `args` against `inputSchema` before this runs.
+    server.registerTool(name, { ...config, inputSchema: input }, async (raw: unknown) => {
+      const args = raw as z.output<S>;
+      const call = {
+        agent: actor.agent ?? null,
+        tool: name,
+        summary: summary(args),
+        write: config.annotations === WRITE,
+      };
+      try {
+        const { outcome, ...result } = await run(args);
+        harness.record({ ...call, outcome });
+        return result;
+      } catch (error) {
+        harness.record({ ...call, outcome: `rejected: ${error instanceof Error ? error.message : String(error)}` });
+        throw error;
+      }
+    });
+  }
+
+  register(
     "get_workspace",
     {
       title: "Read the workspace",
@@ -202,10 +217,14 @@ export function createNdeaMcpServer(state: ServerSession, actor: WorkspaceActor)
       inputSchema: z.object({}),
       annotations: READ,
     },
-    async () => ok(document(state)),
+    () => "workspace",
+    async () => {
+      const read = document(state);
+      return ok(read, `→ revision ${read.revision}`);
+    },
   );
 
-  server.registerTool(
+  register(
     "list_components",
     {
       title: "List dashboard components",
@@ -214,21 +233,25 @@ export function createNdeaMcpServer(state: ServerSession, actor: WorkspaceActor)
       inputSchema: z.object({}),
       annotations: READ,
     },
+    () => "components",
     async () =>
-      ok({
-        components: Object.entries(COMPONENTS).map(([type, info]) => ({
-          type,
-          description: info.description,
-          children: info.children,
-          reads: info.reads,
-          binds: info.binds,
-          defaults: info.defaults,
-          props: propsSchema(info.props),
-        })),
-      }),
+      ok(
+        {
+          components: Object.entries(COMPONENTS).map(([type, info]) => ({
+            type,
+            description: info.description,
+            children: info.children,
+            reads: info.reads,
+            binds: info.binds,
+            defaults: info.defaults,
+            props: propsSchema(info.props),
+          })),
+        },
+        `→ ${plural(Object.keys(COMPONENTS).length, "component")}`,
+      ),
   );
 
-  server.registerTool(
+  register(
     "list_columns",
     {
       title: "List observation columns",
@@ -240,11 +263,12 @@ export function createNdeaMcpServer(state: ServerSession, actor: WorkspaceActor)
       }),
       annotations: READ,
     },
+    ({ column }) => column ?? "all columns",
     async ({ column, limit }) => {
       const columns = [...state.store.columns()]
         .filter(([name]) => !name.startsWith("__"))
         .map(([name, { sqlType, kind }]) => ({ name, type: sqlType, kind }));
-      if (column === undefined) return ok({ columns });
+      if (column === undefined) return ok({ columns }, `→ ${plural(columns.length, "column")}`);
       const match = columns.find((candidate) => candidate.name === column);
       if (!match) return rejected(`unknown column "${column}"`, { columns: columns.map((c) => c.name) });
       const c = quoteIdent(match.name);
@@ -257,11 +281,14 @@ export function createNdeaMcpServer(state: ServerSession, actor: WorkspaceActor)
             `SELECT ${c} AS value, count(*) AS count FROM dataset GROUP BY 1 ORDER BY count DESC LIMIT ${limit}`,
           )
         : undefined;
-      return ok({ ...match, ...stats, ...(values ? { values } : {}) });
+      return ok(
+        { ...match, ...stats, ...(values ? { values } : {}) },
+        `→ ${plural(Number(stats.distinct_values), "distinct value")}`,
+      );
     },
   );
 
-  server.registerTool(
+  register(
     "list_collections",
     {
       title: "List collections",
@@ -270,7 +297,12 @@ export function createNdeaMcpServer(state: ServerSession, actor: WorkspaceActor)
       inputSchema: z.object({}),
       annotations: READ,
     },
-    async () => ok({ collection: state.status.collection, collections: state.status.collections }),
+    () => "collections",
+    async () =>
+      ok(
+        { collection: state.status.collection, collections: state.status.collections },
+        `→ ${plural(state.status.collections.length, "collection")}`,
+      ),
   );
 
   const TargetSchema = z
@@ -282,7 +314,7 @@ export function createNdeaMcpServer(state: ServerSession, actor: WorkspaceActor)
       message: "pass exactly one of `element` or `data`",
     });
 
-  server.registerTool(
+  register(
     "get_result",
     {
       title: "Read a result",
@@ -291,30 +323,83 @@ export function createNdeaMcpServer(state: ServerSession, actor: WorkspaceActor)
       inputSchema: TargetSchema,
       annotations: READ,
     },
+    ({ element, data }) => element ?? `source "${data}"`,
     async ({ element, data }) => {
       const target = elementTarget(state, element, data!);
       if ("error" in target) return rejected(target.error);
       const result = await workspaceResult(state, target);
-      return result.status === 200 ? ok(result.body) : rejected(result.body.error, result.body);
+      return result.status === 200
+        ? ok(result.body, `→ ${result.body.count.toLocaleString("en-US")} obs`)
+        : rejected(result.body.error, result.body);
     },
   );
 
-  server.registerTool(
+  register(
     "edit_dashboard",
     {
       title: "Edit the dashboard",
-      description:
-        "Change the workspace with a batch of ops, applied atomically. Data: set_data {name, source} adds or replaces a data source; remove_data {name}. Layouts: add_layout {id?, name, from?} adds a named layout (`from` duplicates that layout with fresh element ids; omitted: one empty tile) without showing it; rename_layout {id, name}; remove_layout {id} (never the last); set_active_layout {id} shows it. Elements (each op finds the layout holding its element): add {type, id?, props?, at?, layout?} places a new element in `layout` (default: the layout holding `at`, else the active one): at {slot} fills an empty slot, {stack, index?} inserts into a stack, {beside, side?: left|right|up|down} splits that element's tile (default: fill an empty root slot, else split the root to its right); set_props {id, props} merges props (null removes a key); remove {id}; swap {a, b}. Tabs: add_tab {tile, type, props?, id?} adds a view as the tile's active tab (a bare view tile is wrapped in tabs; an empty tile is filled); move_tab {id, to, index?} moves a view into another tile of the same layout (a tabs tile, one of its tabs, a bare view, or an empty tile) as its active tab; close_tab {id} removes a view from its tile (the last tab leaves an empty tile); set_active_tab {tile, id} shows a tab. Coordination: bind {id, type, scope} sets the element's {$bindState} prop and creates the link (scope) if needed; unbind {id, type} also drops the element's own filter clauses; set_filter {scope, source, facet, clause|null} writes your own crossfilter clause under your source key (every member sees it). Any existing element id may be a view's copied reference ndea://<workspace>/<id>. Pass `revision` to apply only if nothing changed since you read it. Returns the new revision and the ids of added elements.",
+      description: EDIT_DASHBOARD,
       inputSchema: z.object({
         revision: RevisionSchema.optional(),
         ops: z.array(DashboardEditSchema).min(1).max(100),
       }),
       annotations: WRITE,
     },
-    async ({ revision, ops }) => runEdits(state, actor, ops, revision),
+    ({ ops }) => describeOps(state, ops),
+    async ({ revision, ops }) => {
+      const result = await harness.edit(ops, actor, revision);
+      switch (result.kind) {
+        case "applied":
+          return ok(
+            {
+              revision: result.revision,
+              changed: result.changed,
+              ...(result.added.length > 0 ? { added: result.added } : {}),
+            },
+            result.changed ? "applied" : "no change",
+          );
+        case "proposed":
+          return ok(
+            {
+              status: "proposed",
+              id: result.proposal.id,
+              changes: result.proposal.changes.map(({ index, summary }) => ({ index, summary })),
+              note: "each change waits for the person to accept or reject it in the app; get_proposal reports the outcome",
+              ...(result.filters
+                ? { filters: { ...result.filters, note: "set_filter ops applied directly, without review" } }
+                : {}),
+            },
+            `proposed ${plural(result.proposal.changes.length, "change")}${result.filters ? "; filters applied" : ""}`,
+          );
+        case "invalid":
+          return rejected(result.reason, { revision: result.revision, issues: result.issues });
+        case "stale":
+          return rejected("stale revision: the workspace changed; re-read it with get_workspace", {
+            revision: result.revision,
+          });
+      }
+    },
   );
 
-  server.registerTool(
+  register(
+    "get_proposal",
+    {
+      title: "Read a proposal",
+      description:
+        "Read a proposal edit_dashboard returned: each change's index, summary, op, and status: pending (the person has not decided), accepted (committed), rejected (the person declined it), or invalid (it no longer applied to the current workspace when accepted; `reason` says why). Proposals live in server memory: a restart drops them.",
+      inputSchema: z.object({ id: z.string() }),
+      annotations: READ,
+    },
+    ({ id }) => `proposal ${id.slice(0, 8)}`,
+    async ({ id }) => {
+      const proposal = harness.proposal(id);
+      if (!proposal) return rejected(`unknown proposal "${id}" (a restart drops proposals)`);
+      const counts = Map.groupBy(proposal.changes, (change) => change.status);
+      return ok(proposal, `→ ${[...counts].map(([status, changes]) => `${changes.length} ${status}`).join(", ")}`);
+    },
+  );
+
+  register(
     "patch_workspace",
     {
       title: "Patch the workspace document",
@@ -323,19 +408,23 @@ export function createNdeaMcpServer(state: ServerSession, actor: WorkspaceActor)
       inputSchema: z.object({ revision: RevisionSchema, ops: z.array(JsonPatchOpSchema).min(1).max(1000) }),
       annotations: WRITE,
     },
+    ({ ops }) => plural(ops.length, "JSON Patch op"),
     async ({ revision, ops }) => {
+      if (harness.proposing) return rejected(PROPOSE_ONLY);
       const result = await state.workspace.patch(ops, { base: revision, actor });
-      if (result.kind === "accepted") return ok({ revision: result.revision });
+      if (result.kind === "accepted") return ok({ revision: result.revision }, "applied");
       if (result.kind === "conflict") {
         return rejected("stale revision: re-read the document and rebuild the patch", {
           revision: result.snapshot.revision,
         });
       }
-      return rejected("the patch would leave an invalid workspace; nothing was applied", { issues: result.issues });
+      const reason = "the patch would leave an invalid workspace; nothing was applied";
+      harness.rejected(actor, reason, result.issues);
+      return rejected(reason, { issues: result.issues });
     },
   );
 
-  server.registerTool(
+  register(
     "get_history",
     {
       title: "Read the revision history",
@@ -344,10 +433,14 @@ export function createNdeaMcpServer(state: ServerSession, actor: WorkspaceActor)
       inputSchema: z.object({ limit: z.number().int().min(1).max(500).default(20) }),
       annotations: READ,
     },
-    async ({ limit }) => ok({ revisions: state.workspace.history({ limit }) }),
+    ({ limit }) => `last ${limit}`,
+    async ({ limit }) => {
+      const revisions = state.workspace.history({ limit });
+      return ok({ revisions }, `→ ${plural(revisions.length, "revision")}`);
+    },
   );
 
-  server.registerTool(
+  register(
     "restore_revision",
     {
       title: "Restore an earlier revision",
@@ -356,21 +449,25 @@ export function createNdeaMcpServer(state: ServerSession, actor: WorkspaceActor)
       inputSchema: z.object({ revision: z.number().int().positive(), revision_base: RevisionSchema.optional() }),
       annotations: WRITE,
     },
+    ({ revision }) => `revision ${revision}`,
     async ({ revision, revision_base }) => {
+      if (harness.proposing) return rejected(PROPOSE_ONLY);
       const base = revision_base ?? state.workspace.get().revision;
       const result = await state.workspace.restore(revision, { base, actor });
-      if (result.kind === "accepted") return ok({ revision: result.revision, restoredFrom: revision });
+      if (result.kind === "accepted") return ok({ revision: result.revision, restoredFrom: revision }, "applied");
       if (result.kind === "not-found") return rejected(`unknown revision ${revision}; list them with get_history`);
       if (result.kind === "conflict") {
         return rejected("stale revision: the workspace changed; re-read it with get_workspace", {
           revision: result.snapshot.revision,
         });
       }
-      return rejected("restoring would leave an invalid workspace; nothing was applied", { issues: result.issues });
+      const reason = "restoring would leave an invalid workspace; nothing was applied";
+      harness.rejected(actor, reason, result.issues);
+      return rejected(reason, { issues: result.issues });
     },
   );
 
-  server.registerTool(
+  register(
     "create_observation_set",
     {
       title: "Save observations as a set",
@@ -382,6 +479,7 @@ export function createNdeaMcpServer(state: ServerSession, actor: WorkspaceActor)
         }),
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
+    ({ element, data, where }) => element ?? (data !== undefined ? `source "${data}"` : `clause ${where?.op}`),
     async ({ element, data, where }) => {
       let predicate: string | null;
       if (where !== undefined) {
@@ -399,7 +497,10 @@ export function createNdeaMcpServer(state: ServerSession, actor: WorkspaceActor)
       if (rows.length === 0) return rejected("no observations match; nothing was saved");
       try {
         const set = await state.observationSets.create(rowWords(rows.map((row) => Number(row.__row_index__))));
-        return ok({ ...set, clause: { op: "inSet", set: set.set } });
+        return ok(
+          { ...set, clause: { op: "inSet", set: set.set } },
+          `→ ${set.count.toLocaleString("en-US")} obs saved`,
+        );
       } catch (error) {
         return rejected(error instanceof Error ? error.message : String(error));
       }

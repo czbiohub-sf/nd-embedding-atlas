@@ -7,7 +7,7 @@
 import { stat } from "node:fs/promises";
 import { join } from "node:path";
 import { format } from "node:util";
-import type { HarnessPresence, RuntimeStatus } from "@ndea/protocol";
+import type { HarnessAgent, RuntimeStatus } from "@ndea/protocol";
 import { VERSION } from "../cli/version.ts";
 import type { ServerSession } from "./state.ts";
 
@@ -16,32 +16,30 @@ const MAX_AGENTS = 32;
 const MAX_LOGS = 200;
 const agents = new Map<string, string>();
 const logs: RuntimeStatus["logs"] = [];
-const presenceListeners = new Set<(presence: HarnessPresence) => void>();
+const agentListeners = new Set<() => void>();
 /** Warnings and errors printed while the TUI is up; replayed once it exits. Null when not muted. */
 let held: (() => void)[] | null = null;
 
 /** Mutated by `ws.ts` (open sockets) and the `/mcp` wrapper (requests in flight). */
 export const clients = { browserSockets: 0, mcpInFlight: 0 };
 
-/** Record an `X-Ndea-Agent` sighting; keeps the most recent 32 agents and notifies `watchHarness` listeners. */
+/** Record an `X-Ndea-Agent` sighting; keeps the most recent 32 agents and notifies `watchAgents` listeners. */
 export function agentSeen(agent: string): void {
   agents.delete(agent);
   agents.set(agent, new Date().toISOString());
   if (agents.size > MAX_AGENTS) agents.delete(agents.keys().next().value!);
-  const presence = harnessPresence();
-  for (const listener of presenceListeners) listener(presence);
+  for (const listener of agentListeners) listener();
 }
 
 /** Named agents, most recently seen first. */
-export function harnessPresence(): HarnessPresence {
-  return { agents: [...agents].toReversed().map(([agent, lastSeen]) => ({ agent, lastSeen })) };
+export function harnessAgents(): HarnessAgent[] {
+  return [...agents].toReversed().map(([agent, lastSeen]) => ({ agent, lastSeen }));
 }
 
-/** Call `listener` with the current presence now and after every sighting, until the returned dispose. */
-export function watchHarness(listener: (presence: HarnessPresence) => void): () => void {
-  listener(harnessPresence());
-  presenceListeners.add(listener);
-  return () => presenceListeners.delete(listener);
+/** Call `listener` after every sighting, until the returned dispose. */
+export function watchAgents(listener: () => void): () => void {
+  agentListeners.add(listener);
+  return () => agentListeners.delete(listener);
 }
 
 /** Keep the last 200 `console.log/warn/error` lines for the status Logs tab; call once at startup. */
@@ -113,7 +111,7 @@ export function getRuntimeStatus(session: ServerSession, url: string): RuntimeSt
         .history({ limit: 50 })
         .map(({ ops, baseRevision: _, ...revision }) => ({ ...revision, ops: ops.length })),
     },
-    clients: { ...clients, ...harnessPresence() },
+    clients: { ...clients, agents: harnessAgents() },
     logs,
   };
 }

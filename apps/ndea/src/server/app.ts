@@ -31,6 +31,7 @@ import { handleEmbeddingStatus, handleLoadEmbedding } from "./routes/embeddings.
 import { handleExport, handleExportStatus, handleGetExportDir } from "./routes/export.ts";
 import { handleFilter } from "./routes/filter.ts";
 import { handleSetsPost } from "./routes/sets.ts";
+import { handleHarnessGet, handleHarnessMode, handleProposalAccept, handleProposalReject } from "./routes/harness.ts";
 import {
   handleWorkspaceGet,
   handleWorkspaceHistory,
@@ -227,6 +228,11 @@ export function appServeOptions(options: CreateAppOptions) {
         "/api/workspace/restore": { POST: (req) => handleWorkspaceRestore(req, state) },
         "/api/workspace/elements/:id": { GET: (req) => handleWorkspaceResult({ element: req.params.id }, state) },
         "/api/workspace/data/:name": { GET: (req) => handleWorkspaceResult({ data: req.params.name }, state) },
+
+        "/api/harness": { GET: () => handleHarnessGet(state) },
+        "/api/harness/mode": { PUT: (req) => handleHarnessMode(req, state) },
+        "/api/proposals/:id/accept": { POST: (req) => handleProposalAccept(req, req.params.id, state) },
+        "/api/proposals/:id/reject": { POST: (req) => handleProposalReject(req, req.params.id, state) },
 
         "/api/annotations/columns": {
           GET: () => handleListAnnotationColumns(state),
