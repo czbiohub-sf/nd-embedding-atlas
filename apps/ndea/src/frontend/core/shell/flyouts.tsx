@@ -9,7 +9,9 @@ import { CopyIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import { filterClauseSql } from "@ndea/components/filter";
+import { setProvenanceBadges, useProvenanceBadges } from "@ndea/components/table";
 import { IconButton } from "@ndea/ui/components/icon-button";
+import { Switch } from "@ndea/ui/components/switch";
 import { ToggleGroup, ToggleGroupItem } from "@ndea/ui/components/toggle-group";
 import { cn } from "@ndea/ui/lib/utils";
 
@@ -221,6 +223,7 @@ export function HarnessFlyout({ agents, now }: { agents: readonly HarnessAgent[]
 
 export function SettingsFlyout() {
   const { theme, setTheme } = useTheme();
+  const provenanceBadges = useProvenanceBadges();
   return (
     <>
       <Heading>Theme</Heading>
@@ -237,6 +240,15 @@ export function SettingsFlyout() {
           <ToggleGroupItem value="light">Light</ToggleGroupItem>
         </ToggleGroup>
       </div>
+      <Heading>Table</Heading>
+      <label className="flex items-center gap-2 rounded-md px-2 py-1.5">
+        <span className="min-w-0 flex-1">Provenance badges</span>
+        <Switch
+          aria-label="Provenance badges"
+          checked={provenanceBadges}
+          onCheckedChange={(on) => setProvenanceBadges(on)}
+        />
+      </label>
       <Heading>MCP endpoint</Heading>
       <McpEndpoint />
     </>

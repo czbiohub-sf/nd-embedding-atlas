@@ -5,12 +5,12 @@
 
 import { parseWorkspaceDocument } from "../frontend/core/workspace/document.ts";
 import type { WorkspaceDocument } from "../frontend/core/workspace/types.ts";
-import annotate from "../presets/annotate.json";
+import exploration from "../presets/exploration.json";
 import { WorkspaceFileError } from "./workspace.ts";
 
-const BUILT_IN: Record<string, unknown> = { annotate };
+const BUILT_IN: Record<string, unknown> = { exploration };
 
-export const DEFAULT_PRESET = "annotate";
+export const DEFAULT_PRESET = "exploration";
 
 export async function loadPreset(preset: string): Promise<WorkspaceDocument> {
   const raw = Object.hasOwn(BUILT_IN, preset)

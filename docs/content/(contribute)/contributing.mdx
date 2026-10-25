@@ -57,7 +57,7 @@ vp run dev --fixture  # synthetic in-memory dataset
 ```
 
 The command runs one Bun process: the ndea server serves the frontend (with hot reload), the API, `/ws`, and `/mcp` on one port. [portless](https://portless.sh) names it `https://ndea.localhost`; a linked git worktree gets `https://<last branch segment>.ndea.localhost` (`refactor/foo` → `https://foo.ndea.localhost`), so several checkouts run side by side. Run it from the repository root (the root `bunfig.toml` carries the frontend plugins); Ctrl+C stops it. The first run starts the portless proxy (HTTPS on :443, asks for sudo and trusts its CA once); `PORTLESS=0 vp run dev` skips it and serves `http://localhost:5055`.
-A new workspace file starts from the `--preset` document (`annotate` by default); every build renders its dashboard and lets you edit its layout (right-click a tile header to split or remove it).
+A new workspace file starts from the `--preset` document (`exploration` by default); every build renders its dashboard and lets you edit its layout (right-click a tile header to split or remove it).
 
 ## Quality gates
 

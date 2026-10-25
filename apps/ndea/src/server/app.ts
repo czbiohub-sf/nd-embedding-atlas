@@ -19,11 +19,10 @@ import {
   handleCreateAnnotationColumn,
   handleCommitAnnotations,
   handleDeleteAnnotationColumn,
-  handleExportAnnotations,
   handleListAnnotationColumns,
-  handleSaveAnnotations,
+  handlePatchAnnotationColumn,
   handleWriteAnnotationValues,
-} from "./routes/annotate.ts";
+} from "./routes/annotations.ts";
 import { handleCategorize } from "./routes/categorize.ts";
 import { handleChannelStats } from "./routes/channel-stats.ts";
 import { handleCrop } from "./routes/crops.ts";
@@ -220,10 +219,11 @@ export function createApp(options: CreateAppOptions) {
           GET: () => handleListAnnotationColumns(state),
           POST: (req) => handleCreateAnnotationColumn(req, state),
         },
-        "/api/annotations/columns/:name": { DELETE: (req) => handleDeleteAnnotationColumn(req.params.name, state) },
+        "/api/annotations/columns/:name": {
+          PATCH: (req) => handlePatchAnnotationColumn(req.params.name, req, state),
+          DELETE: (req) => handleDeleteAnnotationColumn(req.params.name, state),
+        },
         "/api/annotations/values": { POST: (req) => handleWriteAnnotationValues(req, state) },
-        "/api/annotations/save": { POST: () => handleSaveAnnotations(state) },
-        "/api/annotations/export": { POST: (req) => handleExportAnnotations(req, state) },
         "/api/annotations/commit": {
           POST: (req) => handleCommitAnnotations(req, state, new URL(req.url).searchParams.get("dryRun") === "1"),
         },

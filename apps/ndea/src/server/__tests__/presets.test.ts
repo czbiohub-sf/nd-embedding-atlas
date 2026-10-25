@@ -16,11 +16,11 @@ afterEach(async () => {
 });
 
 describe("presets are workspace documents", () => {
-  test("a missing workspace file is written from annotate: five views linked on scope A", async () => {
+  test("a missing workspace file is written from exploration: four views linked on scope A", async () => {
     dir = await mkdtemp(join(tmpdir(), "ndea-preset-"));
     const path = join(dir, "workspace.json");
-    const workspace = await Workspace.open(path, () => loadPreset("annotate"), { validate: async () => [] });
-    expect(await Bun.file(path).json()).toMatchObject({ format: "ndea.workspace", version: 2, revision: 1 });
+    const workspace = await Workspace.open(path, () => loadPreset("exploration"), { validate: async () => [] });
+    expect(await Bun.file(path).json()).toMatchObject({ format: "ndea.workspace", revision: 1 });
 
     const document = workspace.get().document as WorkspaceDocument;
     const views = Object.values(document.spec.elements).filter((element) => COMPONENTS[element.type].view);
@@ -29,15 +29,9 @@ describe("presets are workspace documents", () => {
         .filter((element) => elementScope(element, type) === "A")
         .map((element) => element.type)
         .toSorted();
-    expect(views.map((element) => element.type).toSorted()).toEqual([
-      "annotate",
-      "gallery",
-      "image-viewer",
-      "scatter",
-      "table",
-    ]);
-    expect(bound("focus")).toEqual(["annotate", "gallery", "image-viewer", "scatter", "table"]);
-    expect(bound("filter")).toEqual(["annotate", "gallery", "scatter", "table"]);
+    expect(views.map((element) => element.type).toSorted()).toEqual(["gallery", "image-viewer", "scatter", "table"]);
+    expect(bound("focus")).toEqual(["gallery", "image-viewer", "scatter", "table"]);
+    expect(bound("filter")).toEqual(["gallery", "scatter", "table"]);
   });
 
   test("a .json path is a preset; unknown names and invalid documents are refused", async () => {

@@ -2,10 +2,12 @@
 /// <reference types="bun" />
 import { describe, expect, test } from "bun:test";
 import {
+  AnnotationColumnPatchBodySchema,
   AnnotationColumnsResponseSchema,
   type AnnotationColumnsResponse,
-  AnnotationPredicateWriteResponseSchema,
-  type AnnotationPredicateWriteResponse,
+  WriteAnnotationValuesBodySchema,
+  WriteAnnotationValuesResponseSchema,
+  type WriteAnnotationValuesResponse,
   CommitAnnotationsResponseSchema,
   CommitDatasetReportSchema,
   EmbeddingStatusSchema,
@@ -108,14 +110,14 @@ describe("shared HTTP response DTOs", () => {
   test("preserves annotation and export raw shapes", () => {
     const annotationColumns = {
       columns: [
-        { name: "cell_type", dtype: "categorical" },
-        { name: "score", dtype: "float" },
+        { name: "cell_type", dtype: "label" },
+        { name: "notes", dtype: "text" },
       ],
     } satisfies AnnotationColumnsResponse;
-    const annotationWrite = { ok: true, n: 12 } satisfies AnnotationPredicateWriteResponse;
+    const annotationWrite = { ok: true, n: 12 } satisfies WriteAnnotationValuesResponse;
     const exportDir = { default_dir: "/tmp/exports", writable: true };
     expect(AnnotationColumnsResponseSchema.parse(annotationColumns)).toEqual(annotationColumns);
-    expect(AnnotationPredicateWriteResponseSchema.parse(annotationWrite)).toEqual(annotationWrite);
+    expect(WriteAnnotationValuesResponseSchema.parse(annotationWrite)).toEqual(annotationWrite);
     expect(ExportDirectoryResponseSchema.parse(exportDir)).toEqual(exportDir);
   });
 
@@ -142,7 +144,11 @@ describe("shared HTTP response DTOs", () => {
       MetadataSchema.safeParse({ database: { type: "rest" }, obsm: {} }),
       TrajectoryResponseSchema.safeParse([{ rowIndex: 0, t: "0", spatial_x: 3, spatial_y: 4, datasetKey: null }]),
       AnnotationColumnsResponseSchema.safeParse({ columns: [{ name: "score", dtype: "number" }] }),
-      AnnotationPredicateWriteResponseSchema.safeParse({ ok: true }),
+      WriteAnnotationValuesResponseSchema.safeParse({ ok: true }),
+      AnnotationColumnPatchBodySchema.safeParse({}),
+      AnnotationColumnPatchBodySchema.safeParse({ name: 'bad"name' }),
+      WriteAnnotationValuesBodySchema.safeParse({ column: "c", rows: [] }),
+      WriteAnnotationValuesBodySchema.safeParse({ column: "c", rows: [{ rowIndex: -1, value: "x" }] }),
       ExportDirectoryResponseSchema.safeParse({ default_dir: "/tmp" }),
       VarNamesResponseSchema.safeParse({ names: [42] }),
       VarLayersResponseSchema.safeParse({ layers: "X" }),

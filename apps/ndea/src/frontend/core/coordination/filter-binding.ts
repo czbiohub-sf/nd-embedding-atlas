@@ -60,6 +60,7 @@ export function createFilterBinding({
       return () => listeners.delete(callback);
     },
     publish: (facet, clause) => writeFacet(facet, clause),
+    facet: (facet) => coordination.filterFacet(elementId, facet),
     clear: (facet) => writeFacet(facet, null),
     async materializeRowIds(signal?: AbortSignal): Promise<MaterializedFilterRows> {
       assertLive();

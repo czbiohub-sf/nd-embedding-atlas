@@ -1,261 +1,152 @@
 /**
- * Mosaic↔TanStack bridge: server-side paginated data fetching from DuckDB.
- *
- * Manages a page cache with LRU eviction. DuckDB handles sorting and filtering;
- * the frontend only holds ~500 rows in memory at any time.
+ * Server-side paging over DuckDB: the obs count, the groups (a `GROUP BY`
+ * query) and 100-row pages in the table's order. Every query skips Mosaic's
+ * cache, because field edits change values under the same SQL.
  */
 
-import { useDebouncer } from "@tanstack/react-pacer";
-import type { FilterCoordinationAPI, RowIndex } from "@ndea/sdk";
-import type { Coordinator, Selection } from "@uwdata/mosaic-core";
-import { count, type FilterExpr, Query } from "@uwdata/mosaic-sql";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { filterExprToExpr, toRows } from "../query/mosaic";
-import { useMosaicClient } from "../query/useMosaicClient";
+import type { Coordinator } from "@uwdata/mosaic-core";
+import { useCallback, useEffect, useMemo, useReducer, useState } from "react";
+import { toRows } from "../query/mosaic";
+import { type Group, type GroupValue, quoteIdent } from "./fields";
 
 const PAGE_SIZE = 100;
-const MAX_CACHED_PAGES = 5;
+// ponytail: whole-page FIFO eviction; enough to bound memory while scrolling.
+const MAX_PAGES = 24;
 
 export type Row = Record<string, unknown>;
-export type SortDirection = "asc" | "desc";
-export interface SortState {
-  column: string;
-  direction: SortDirection;
+
+export interface TableQueryOptions {
+  readonly coordinator: Coordinator;
+  readonly table: string;
+  /** Visible fields, in order. */
+  readonly columns: readonly string[];
+  /** WHERE expression: the data source and peer filters, the table's own filter, the search. */
+  readonly where: string | null;
+  /** ORDER BY body (`orderBySql`). */
+  readonly order: string;
+  readonly groupBy: string | null;
+  /** Bump to refetch after a write. */
+  readonly version: number;
 }
 
-interface UseTableQueryBaseOptions {
-  coordinator: Coordinator;
-  table: string;
-  columns: string[];
-  sort?: SortState | null;
-}
-export type UseTableQueryOptions = UseTableQueryBaseOptions &
-  ({ filter: FilterCoordinationAPI; selection?: never } | { filter?: never; selection: Selection });
-
-export interface UseTableQueryResult {
-  /** Total row count matching the current filter. */
-  totalCount: number;
-  /** Get a row by its virtual index. Returns undefined if not yet loaded. */
-  getRow: (index: number) => Row | undefined;
-  /** Return all currently cached rows (O(cached) not O(totalCount)). */
-  getCachedRows: () => Row[];
-  /** Request that a range of rows be loaded (call on scroll). */
-  ensureRange: (startIndex: number, endIndex: number) => void;
-  /** Whether the initial count query is loading. */
-  loading: boolean;
-  /** Find the position of a row by its __row_index__ value. */
-  findRowPosition: (rowIndex: RowIndex) => Promise<number | null>;
+export interface TableQuery {
+  /** Matching obs (the last answer while a new query runs); null before the first. */
+  readonly count: number | null;
+  /** Groups in order when grouped; null otherwise or before the first answer. */
+  readonly groups: readonly Group[] | null;
+  /** The row at `position` in the query's order, when its page is loaded. */
+  getRow(position: number): Row | undefined;
+  /** Load the pages covering `first … last` (plus one page either side). */
+  ensureRange(first: number, last: number): void;
+  /** Position of a row in the query's order; null when it doesn't match. */
+  positionOf(rowIndex: number): Promise<number | null>;
+  /** Row indices in the query's order: all of them, or `limit` from `offset`. */
+  rowIndices(offset?: number, limit?: number): Promise<number[]>;
 }
 
-export function tableFilterState(selection: Pick<Selection, "predicate">) {
-  const predicate = selection.predicate(null);
-  return {
-    key: String(predicate),
-    whereClause: predicate == null ? "" : `WHERE ${String(filterExprToExpr(predicate))}`,
-  };
-}
+export function useTableQuery({
+  coordinator,
+  table,
+  columns,
+  where,
+  order,
+  groupBy,
+  version,
+}: TableQueryOptions): TableQuery {
+  const whereSql = where ? ` WHERE ${where}` : "";
+  const key = [version, whereSql, order, groupBy, columns.join("\u0000")].join("\n");
+  const run = useCallback(async (sql: string) => toRows(await coordinator.query(sql, { cache: false })), [coordinator]);
 
-export function tableCacheKey(selection: Pick<Selection, "predicate">, revision: number, sort?: SortState | null) {
-  const sortKey = sort ? `${sort.column}:${sort.direction}` : "none";
-  return `${revision}:${String(selection.predicate(null))}|${sortKey}`;
-}
-
-function querySelection(options: UseTableQueryOptions): Selection {
-  if (options.filter) return options.filter.selection;
-  if (options.selection) return options.selection;
-  throw new Error("useTableQuery requires a filter or selection");
-}
-
-export function useTableQuery(opts: UseTableQueryOptions): UseTableQueryResult {
-  const { coordinator, table, columns, filter, sort } = opts;
-  const selection = querySelection(opts);
-
-  // ── Page cache ──────────────────────────────────────────────────
-  const pagesRef = useRef(new Map());
-  const pendingRef = useRef(new Set());
-  const activeCacheKeyRef = useRef("");
-  const [, forceUpdate] = useState(0);
-  const [filterVersion, setFilterVersion] = useState(0);
-  const [filterRevision, setFilterRevision] = useState(() => filter?.getResolved().revision ?? 0);
-  useEffect(() => {
-    if (!filter) return;
-    return filter.subscribeResolved(({ revision }) => setFilterRevision(revision));
-  }, [filter]);
-
-  // ── Count query via Mosaic client (reactive to selection) ────────
-  const countQuery = useCallback(
-    (predicate: FilterExpr) => {
-      const q = Query.from(table).select({ count: count() });
-      const expr = filterExprToExpr(predicate);
-      if (expr) q.where(expr);
-      return q;
-    },
-    [table],
-  );
-
-  const countTransform = useCallback((result: unknown) => {
-    const rows = toRows<{ count: number }>(result);
-    return rows[0]?.count ?? 0;
-  }, []);
-
-  const { data: totalCount, loading } = useMosaicClient<number>({
-    coordinator,
-    filter,
-    selection,
-    query: countQuery,
-    transform: countTransform,
-  });
-
-  // ── Invalidate all pages when filter/sort changes ───────────────
-  const cacheKey = tableCacheKey(selection, filterRevision, sort);
-  const prevCacheKey = useRef(cacheKey);
-  // Keep activeCacheKeyRef in sync on first render and when cacheKey changes.
-  activeCacheKeyRef.current = cacheKey;
-
-  // Debounce the re-fetch trigger so rapid lasso adjustments don't
-  // cause a fetch on every intermediate update.
-  const filterVersionDebouncer = useDebouncer(() => setFilterVersion((n) => n + 1), {
-    wait: 150,
-    leading: false,
-    trailing: true,
-    onUnmount: (d) => d.flush(),
-  });
+  const [summary, setSummary] = useState<{ key: string; count: number; groups: Group[] | null } | null>(null);
+  // A new key gets fresh pages; answers for an old key land in its orphaned maps.
+  // oxlint-disable-next-line react/exhaustive-deps -- key is the cache identity
+  const pages = useMemo(() => ({ rows: new Map<number, Row[]>(), pending: new Set<number>() }), [key]);
+  const [, loaded] = useReducer((n: number) => n + 1, 0);
 
   useEffect(() => {
-    if (prevCacheKey.current !== cacheKey) {
-      // activeCacheKeyRef is already updated inline above.
-      // Cancel in-flight fetches for the old key so they don't overwrite
-      // fresh data when they land (fetchPage checks the key on completion).
-      pendingRef.current.clear();
-      prevCacheKey.current = cacheKey;
-      filterVersionDebouncer.maybeExecute();
-    }
-  }, [cacheKey, filterVersionDebouncer.maybeExecute]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ── Build ORDER BY clause ───────────────────────────────────────
-  const buildOrderBy = useCallback(() => {
-    if (!sort) return "__row_index__ ASC";
-    const dir = sort.direction === "desc" ? "DESC" : "ASC";
-    return `"${sort.column}" ${dir}, __row_index__ ASC`;
-  }, [sort]);
-
-  // ── Fetch a page from DuckDB ────────────────────────────────────
-  const fetchPage = useCallback(
-    async (pageIndex: number) => {
-      if (pendingRef.current.has(pageIndex)) return;
-      pendingRef.current.add(pageIndex);
-
-      // Snapshot the key at fetch time: discard result if it changes.
-      const fetchedFor = activeCacheKeyRef.current;
-
+    let live = true;
+    // Debounced so typing a search or dragging a lasso elsewhere queries once.
+    const timer = setTimeout(async () => {
       try {
-        const offset = pageIndex * PAGE_SIZE;
-        const colList = columns.map((c) => `"${c}"`).join(", ");
-        const { whereClause } = tableFilterState(selection);
-        const sql = `SELECT "__row_index__", ${colList} FROM ${table} ${whereClause} ORDER BY ${buildOrderBy()} LIMIT ${PAGE_SIZE} OFFSET ${offset}`;
-
-        const result = await coordinator.query(sql);
-
-        // Discard if the filter changed while we were waiting.
-        if (fetchedFor !== activeCacheKeyRef.current) return;
-
-        const rows = toRows(result);
-
-        // LRU eviction: prefer evicting stale pages first.
-        const pages = pagesRef.current;
-        if (pages.size >= MAX_CACHED_PAGES) {
-          let evictKey = -1;
-          let evictTime = Infinity;
-          for (const [key, entry] of pages) {
-            const isStale = entry.cacheKey !== fetchedFor;
-            const t = isStale ? -Infinity : entry.lastAccessed;
-            if (t < evictTime) {
-              evictTime = t;
-              evictKey = key;
-            }
-          }
-          if (evictKey >= 0) pages.delete(evictKey);
-        }
-
-        pages.set(pageIndex, { rows, lastAccessed: Date.now(), cacheKey: fetchedFor });
-        forceUpdate((n) => n + 1);
-      } finally {
-        pendingRef.current.delete(pageIndex);
+        const g = groupBy ? quoteIdent(groupBy) : null;
+        const [counted, grouped] = await Promise.all([
+          run(`SELECT count(*) AS n FROM ${table}${whereSql}`),
+          g
+            ? run(`SELECT ${g} AS v, count(*) AS n FROM ${table}${whereSql} GROUP BY 1 ORDER BY 1 ASC NULLS LAST`)
+            : null,
+        ]);
+        if (!live) return;
+        setSummary({
+          key,
+          count: Number(counted[0]?.n ?? 0),
+          groups: grouped?.map((r) => ({ value: (r.v ?? null) as GroupValue, count: Number(r.n) })) ?? null,
+        });
+      } catch (error) {
+        if (live) console.error("[table] count failed", error);
       }
-    },
-    [coordinator, table, columns, selection, buildOrderBy],
-  );
+    }, 120);
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
+  }, [key, run, table, whereSql, groupBy]);
 
-  // ── Public: get a row by virtual index ──────────────────────────
-  const getRow = useCallback((index: number): Row | undefined => {
-    const pageIndex = Math.floor(index / PAGE_SIZE);
-    const entry = pagesRef.current.get(pageIndex);
-    if (!entry) return undefined;
-    entry.lastAccessed = Date.now();
-    return entry.rows[index - pageIndex * PAGE_SIZE];
-  }, []);
+  const ready = summary?.key === key;
+  const columnList = columns.map(quoteIdent).join(", ");
 
-  // ── Public: ensure a range is loaded (call from scroll handler) ─
-  // filterVersion is included so ensureRange gets a new reference whenever
-  // the filter/sort settles: this causes the scroll useEffect in DataTable
-  // to re-run and re-fetch the visible range without any extra dep wiring.
   const ensureRange = useCallback(
-    (startIndex: number, endIndex: number) => {
-      const startPage = Math.floor(startIndex / PAGE_SIZE);
-      const endPage = Math.floor(endIndex / PAGE_SIZE);
-      const activeKey = activeCacheKeyRef.current;
-      // Fetch visible pages + one page ahead/behind.
-      // Treat stale pages (wrong cacheKey) as missing so they get refreshed.
-      for (let p = Math.max(0, startPage - 1); p <= endPage + 1; p++) {
-        const entry = pagesRef.current.get(p);
-        const needsFetch = !entry || entry.cacheKey !== activeKey;
-        if (needsFetch && !pendingRef.current.has(p)) {
-          void fetchPage(p);
-        }
+    (first: number, last: number) => {
+      if (!ready) return;
+      const state = pages;
+      for (
+        let page = Math.max(0, Math.floor(first / PAGE_SIZE) - 1);
+        page <= Math.floor(last / PAGE_SIZE) + 1;
+        page++
+      ) {
+        if (state.rows.has(page) || state.pending.has(page) || page * PAGE_SIZE >= summary.count) continue;
+        state.pending.add(page);
+        const sql =
+          `SELECT __row_index__${columnList ? `, ${columnList}` : ""} FROM ${table}${whereSql} ` +
+          `ORDER BY ${order} LIMIT ${PAGE_SIZE} OFFSET ${page * PAGE_SIZE}`;
+        run(sql)
+          .then((rows) => {
+            if (state.rows.size >= MAX_PAGES) state.rows.delete(state.rows.keys().next().value!);
+            state.rows.set(page, rows);
+            loaded();
+          })
+          .catch((error) => console.error("[table] page failed", error))
+          .finally(() => state.pending.delete(page));
       }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [fetchPage, filterVersion],
+    [ready, summary, pages, columnList, table, whereSql, order, run],
   );
 
-  // ── Public: find row position for scroll-to-highlight ───────────
-  const findRowPosition = useCallback(
-    async (rowIndex: RowIndex): Promise<number | null> => {
-      const { whereClause } = tableFilterState(selection);
-
-      try {
-        // Count rows that come before this one in sort order
-        const countSql = `
-                    WITH target AS (SELECT * FROM ${table} WHERE __row_index__ = ${rowIndex})
-                    SELECT COUNT(*) AS pos FROM ${table}
-                    ${whereClause || "WHERE TRUE"}
-                    AND (${sort ? `("${sort.column}" < (SELECT "${sort.column}" FROM target) OR ("${sort.column}" = (SELECT "${sort.column}" FROM target) AND __row_index__ <= ${rowIndex}))` : `__row_index__ <= ${rowIndex}`})
-                `;
-        const result = await coordinator.query(countSql);
-        const rows = toRows<{ pos: number }>(result);
-        const pos = rows[0]?.pos;
-        return pos != null ? pos - 1 : null; // -1 because we count rows <= target
-      } catch {
-        return null;
-      }
+  const positionOf = useCallback(
+    async (rowIndex: number) => {
+      const rows = await run(
+        `SELECT pos FROM (SELECT __row_index__, row_number() OVER (ORDER BY ${order}) - 1 AS pos ` +
+          `FROM ${table}${whereSql}) WHERE __row_index__ = ${rowIndex}`,
+      );
+      return rows.length ? Number(rows[0].pos) : null;
     },
-    [coordinator, table, selection, sort],
+    [run, order, table, whereSql],
   );
 
-  const getCachedRows = useCallback((): Row[] => {
-    const rows: Row[] = [];
-    for (const entry of pagesRef.current.values()) {
-      for (const row of entry.rows) rows.push(row);
-    }
-    return rows;
-  }, []);
+  const rowIndices = useCallback(
+    async (offset?: number, limit?: number) => {
+      const page = limit === undefined ? "" : ` ORDER BY ${order} LIMIT ${limit} OFFSET ${offset ?? 0}`;
+      const rows = await run(`SELECT __row_index__ FROM ${table}${whereSql}${page}`);
+      return rows.map((r) => Number(r.__row_index__));
+    },
+    [run, order, table, whereSql],
+  );
 
   return {
-    totalCount: totalCount ?? 0,
-    getRow,
-    getCachedRows,
+    count: summary?.count ?? null,
+    groups: groupBy ? (summary?.groups ?? null) : null,
+    getRow: (position) => pages.rows.get(Math.floor(position / PAGE_SIZE))?.[position % PAGE_SIZE],
     ensureRange,
-    loading,
-    findRowPosition,
+    positionOf,
+    rowIndices,
   };
 }

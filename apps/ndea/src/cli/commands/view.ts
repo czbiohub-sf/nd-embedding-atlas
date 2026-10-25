@@ -42,7 +42,7 @@ export const viewFlags = [
   defineFlag("obs-columns", { type: "string", description: "Comma-separated obs columns to include" }),
   defineFlag("preset", {
     type: "string",
-    description: "Preset a new workspace file starts from: a built-in name (annotate) or a .json workspace document",
+    description: "Preset a new workspace file starts from: a built-in name (exploration) or a .json workspace document",
   }),
   defineFlag("workspace", {
     type: "string",

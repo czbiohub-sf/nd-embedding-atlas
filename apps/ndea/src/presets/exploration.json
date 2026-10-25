@@ -1,0 +1,56 @@
+{
+  "data": {},
+  "spec": {
+    "root": "root",
+    "elements": {
+      "root": {
+        "type": "split",
+        "props": { "direction": "column", "ratio": 0.68 },
+        "children": ["top", "table"]
+      },
+      "top": {
+        "type": "split",
+        "props": { "direction": "row", "ratio": 0.74 },
+        "children": ["embedding", "right"]
+      },
+      "embedding": {
+        "type": "scatter",
+        "props": {
+          "title": "Embedding",
+          "filter": { "$bindState": "/filter/A" },
+          "focus": { "$bindState": "/focus/A" }
+        },
+        "children": []
+      },
+      "right": {
+        "type": "split",
+        "props": { "direction": "column", "ratio": 0.48 },
+        "children": ["image", "gallery"]
+      },
+      "image": {
+        "type": "image-viewer",
+        "props": { "title": "Image viewer", "focus": { "$bindState": "/focus/A" } },
+        "children": []
+      },
+      "gallery": {
+        "type": "gallery",
+        "props": {
+          "title": "Crop gallery",
+          "filter": { "$bindState": "/filter/A" },
+          "focus": { "$bindState": "/focus/A" }
+        },
+        "children": []
+      },
+      "table": {
+        "type": "table",
+        "props": {
+          "title": "Table",
+          "filter": { "$bindState": "/filter/A" },
+          "focus": { "$bindState": "/focus/A" }
+        },
+        "children": []
+      }
+    }
+  },
+  "state": { "filter": { "A": {} }, "focus": { "A": null } }
+}

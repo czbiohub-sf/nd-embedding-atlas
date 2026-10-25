@@ -1,11 +1,11 @@
 /**
  * Observation predicates execute only as prepared single statements.
- * Owns bounded lookup, counts, annotation stamps, and file exports.
+ * Owns bounded lookup, counts, and file exports.
  */
 
 import type { FilterRow } from "@ndea/protocol";
 import type { ServerSession } from "./state.ts";
-import { annValueLiteral, quoteIdent, type DatasetQuerySession } from "./store.ts";
+import type { DatasetQuerySession } from "./store.ts";
 
 export interface ObservationPage {
   count: number;
@@ -51,39 +51,14 @@ export async function countObservations(store: DatasetQuerySession, predicate: s
   return Number(rows[0]?.n ?? 0);
 }
 
-/** Stamp matching identities and return the population count before the write. */
-export async function annotateObservations(
-  store: DatasetQuerySession,
-  column: string,
-  value: string | null,
-  predicate: string,
-): Promise<number> {
-  const entry = store.annotationColumns.get(column);
-  if (!entry) throw new Error(`Unknown annotation column: ${column}`);
-  const datasetKey = store.hasDatasetColumn() ? "ds._dataset" : "''";
-  const literal = annValueLiteral(value, entry.dtype);
-  const count = await countObservations(store, predicate);
-  await store.executeSingle(
-    `INSERT OR REPLACE INTO ${entry.table} (__row_index__, dataset_key, obs_name, ${quoteIdent(column)}) ` +
-      `SELECT ds.__row_index__, ${datasetKey}, ds.obs_name, ${literal} FROM dataset ds WHERE (${predicate})`,
-  );
-  return count;
-}
-
-/** Export matching observations, optionally projecting annotation columns, as one prepared COPY. */
+/** Export matching observations as one prepared COPY. */
 export async function exportObservations(
   store: DatasetQuerySession,
   predicate: string | null,
   outputPath: string,
   format: "parquet" | "csv" = "parquet",
-  columns?: string[],
 ): Promise<void> {
   const where = predicate ? ` WHERE (${predicate})` : "";
-  let projection = "*";
-  if (columns) {
-    const identities = store.hasDatasetColumn() ? "obs_name, _dataset" : "obs_name";
-    projection = `${identities}, ${columns.map((column) => `CAST(${quoteIdent(column)} AS TEXT) AS ${quoteIdent(column)}`).join(", ")}`;
-  }
   const escaped = outputPath.replaceAll("'", "''");
-  await store.executeSingle(`COPY (SELECT ${projection} FROM dataset${where}) TO '${escaped}' (FORMAT ${format})`);
+  await store.executeSingle(`COPY (SELECT * FROM dataset${where}) TO '${escaped}' (FORMAT ${format})`);
 }

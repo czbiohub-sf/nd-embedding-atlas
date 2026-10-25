@@ -83,35 +83,8 @@ function annTableName(colName: string): string {
   return `ann_${stem}__${djb2Hex(colName)}`;
 }
 
-/** DuckDB column type backing each annotation dtype. categorical/string both TEXT. */
-function annSqlType(dtype: AnnotationDtype): string {
-  if (dtype === "integer") return "INTEGER";
-  if (dtype === "float") return "DOUBLE";
-  return "TEXT";
-}
-
 /** Numbers `writeAnnotationValues` staging tables, so concurrent writes never share one. */
 let annStages = 0;
-
-/**
- * SQL literal for an annotation value, typed by the column's dtype. Integer
- * columns take a bare numeric literal (and reject non-integers at the door);
- * text columns take a single-quote-escaped string. NULL passes through.
- */
-export function annValueLiteral(value: string | null, dtype: AnnotationDtype): string {
-  if (value == null) return "NULL";
-  if (dtype === "integer") {
-    const n = Number(value);
-    if (!Number.isInteger(n)) throw new Error(`Value "${value}" is not an integer`);
-    return String(n);
-  }
-  if (dtype === "float") {
-    const n = Number(value);
-    if (!Number.isFinite(n)) throw new Error(`Value "${value}" is not a finite number`);
-    return String(n);
-  }
-  return `'${value.replace(/'/g, "''")}'`;
-}
 
 /** Concatenate multiple Uint8Array/Buffer chunks into a single Uint8Array. */
 function concatBuffers(buffers: (Buffer | Uint8Array)[]): Uint8Array {
@@ -320,30 +293,23 @@ export class DatasetQuerySession {
       if (colName) store._varCols.set(colName, { table: t, colName });
     }
 
-    // Re-register persisted annotation columns (ann_* tables). The dtype lives
-    // in __ann_meta__ (persists in the cached .db); fall back to inferring from
-    // the physical column type: INTEGER → integer, else categorical.
-    const annDtypes = new Map<string, AnnotationDtype>();
+    // Re-register persisted annotation fields (ann_* tables). The dtype lives
+    // in __ann_meta__ (persists in the cached .db); anything but "text" is a label.
+    const textFields = new Set<string>();
     if (tables.has("__ann_meta__")) {
-      const [names, dtypes] = (await conn.runAndReadAll(`SELECT col_name, dtype FROM __ann_meta__`)).getColumnsJS() as [
-        string[],
-        string[],
-      ];
-      names.forEach((n, i) => {
-        const d = dtypes[i];
-        annDtypes.set(n, d === "integer" || d === "string" ? d : "categorical");
-      });
+      const [names] = (
+        await conn.runAndReadAll(`SELECT col_name FROM __ann_meta__ WHERE dtype = 'text'`)
+      ).getColumnsJS() as [string[]];
+      for (const n of names) textFields.add(n);
     }
     for (const t of tables) {
       if (!t.startsWith("ann_")) continue;
-      const [cols, types] = (
-        await conn.runAndReadAll(`SELECT column_name, column_type FROM (DESCRIBE ${quoteIdent(t)})`)
-      ).getColumnsJS() as [string[], string[]];
-      const idx = cols.findIndex((c) => c !== "__row_index__" && c !== "dataset_key" && c !== "obs_name");
-      if (idx === -1) continue;
-      const colName = cols[idx];
-      const dtype = annDtypes.get(colName) ?? (/INT/i.test(types[idx]) ? "integer" : "categorical");
-      store._annotationCols.set(colName, { table: t, colName, dtype });
+      const cols = (
+        await conn.runAndReadAll(`SELECT column_name FROM (DESCRIBE ${quoteIdent(t)})`)
+      ).getColumnsJS()[0] as string[];
+      const colName = cols.find((c) => c !== "__row_index__" && c !== "dataset_key" && c !== "obs_name");
+      if (colName === undefined) continue;
+      store._annotationCols.set(colName, { table: t, colName, dtype: textFields.has(colName) ? "text" : "label" });
     }
 
     try {
@@ -466,72 +432,94 @@ export class DatasetQuerySession {
   }
 
   /**
-   * Ensure the annotation dtype registry exists. Persists with the cached
-   * `.duckdb` file so dtypes (esp. the string-vs-categorical distinction the
-   * column type alone can't recover) survive a reopen.
+   * Record a field's dtype in `__ann_meta__`. Persists with the cached
+   * `.duckdb` file so the label-vs-text distinction (both TEXT) survives a reopen.
    */
-  private async _ensureAnnMeta(): Promise<void> {
+  private async _setAnnMeta(colName: string, dtype: AnnotationDtype): Promise<void> {
     await this.conn.run(`CREATE TABLE IF NOT EXISTS __ann_meta__ (col_name TEXT PRIMARY KEY, dtype TEXT NOT NULL)`);
+    await this.conn.run(`INSERT OR REPLACE INTO __ann_meta__ VALUES ('${colName.replace(/'/g, "''")}', '${dtype}')`);
+  }
+
+  /** (Re)create an empty field table. `INSERT OR REPLACE` upserts need the primary key. */
+  private async _createAnnTable(table: string, colName: string): Promise<void> {
+    await this.conn.run(`DROP TABLE IF EXISTS ${table}`);
+    await this.conn.run(
+      `CREATE TABLE ${table} (__row_index__ UINTEGER PRIMARY KEY, dataset_key TEXT, obs_name TEXT, ${quoteIdent(colName)} TEXT)`,
+    );
   }
 
   /**
-   * Create a new user annotation column and add it to the dataset VIEW.
-   * No-op if the column already exists.
+   * Create a new annotation field and add it to the dataset VIEW.
+   * No-op if the field already exists.
    */
-  async registerAnnotationColumn(colName: string, dtype: AnnotationDtype = "categorical"): Promise<void> {
+  async registerAnnotationColumn(colName: string, dtype: AnnotationDtype = "label"): Promise<void> {
     if (this._annotationCols.has(colName)) return;
     const tableName = annTableName(colName);
-    await this._ensureAnnMeta();
-    await this.conn.run(`DROP TABLE IF EXISTS ${tableName}`);
-    await this.conn.run(
-      `CREATE TABLE ${tableName} (` +
-        `__row_index__ UINTEGER PRIMARY KEY, ` +
-        `dataset_key TEXT, ` +
-        `obs_name TEXT, ` +
-        `${quoteIdent(colName)} ${annSqlType(dtype)}` +
-        `)`,
-    );
-    await this.conn.run(`INSERT OR REPLACE INTO __ann_meta__ VALUES ('${colName.replace(/'/g, "''")}', '${dtype}')`);
+    await this._createAnnTable(tableName, colName);
+    await this._setAnnMeta(colName, dtype);
     this._annotationCols.set(colName, { table: tableName, colName, dtype });
     await this._rebuildView();
   }
 
-  /**
-   * Upsert annotation values. Rows already in the table are replaced.
-   * The column must exist (call registerAnnotationColumn first).
-   */
-  async writeAnnotationValues(
-    colName: string,
-    rows: { rowIndex: number; datasetKey: string; obsName: string; value: string | null }[],
-  ): Promise<void> {
+  /** Rename a field: copy into the new name's table, rebuild the VIEW, then drop the old table. */
+  async renameAnnotationColumn(from: string, to: string): Promise<void> {
+    const entry = this._annotationCols.get(from);
+    if (!entry) throw new Error(`Unknown annotation field: ${from}`);
+    const table = annTableName(to);
+    await this._createAnnTable(table, to);
+    await this.conn.run(`INSERT INTO ${table} SELECT * FROM ${entry.table}`);
+    await this._setAnnMeta(to, entry.dtype);
+    await this.conn.run(`DELETE FROM __ann_meta__ WHERE col_name = '${from.replace(/'/g, "''")}'`);
+    this._annotationCols.delete(from);
+    this._annotationCols.set(to, { table, colName: to, dtype: entry.dtype });
+    // VIEW first: it must stop referencing entry.table before the drop.
+    await this._rebuildView();
+    await this.conn.run(`DROP TABLE IF EXISTS ${entry.table}`);
+  }
+
+  /** Convert a field between label and text. Both are TEXT, so only the registry changes. */
+  async setAnnotationDtype(colName: string, dtype: AnnotationDtype): Promise<void> {
     const entry = this._annotationCols.get(colName);
-    if (!entry) throw new Error(`Unknown annotation column: ${colName}`);
-    const numeric = entry.dtype === "integer" || entry.dtype === "float";
-    // Every value is checked before anything is written; annValueLiteral throws on a bad number.
-    const values = rows.map(({ value }) => {
-      if (value == null || !numeric) return value;
-      const n = Number(annValueLiteral(value, entry.dtype));
-      if (entry.dtype === "integer" && (n | 0) !== n) throw new Error(`Value "${value}" is out of INTEGER range`);
-      return n;
-    });
-    // Upsert: append to a per-call staging table, then INSERT OR REPLACE on the primary key.
+    if (!entry) throw new Error(`Unknown annotation field: ${colName}`);
+    await this._setAnnMeta(colName, dtype);
+    entry.dtype = dtype;
+  }
+
+  /**
+   * Upsert field cells by `__row_index__` (null clears a cell) and return
+   * the number of rows written. `dataset_key`/`obs_name` come from obs_base;
+   * unknown row indices are skipped. A repeated row index: the last wins.
+   */
+  async writeAnnotationValues(colName: string, rows: { rowIndex: number; value: string | null }[]): Promise<number> {
+    const entry = this._annotationCols.get(colName);
+    if (!entry) throw new Error(`Unknown annotation field: ${colName}`);
+    // INSERT OR REPLACE refuses to touch one key twice in a statement.
+    const cells = [...new Map(rows.map((r) => [r.rowIndex, r.value]))];
     const stage = `__ann_stage_${++annStages}`;
     await appendColumns(
       this.conn,
       stage,
-      rows.length,
+      cells.length,
       [
-        { name: "__row_index__", type: "UINTEGER", get: (r) => rows[r].rowIndex },
-        { name: "dataset_key", type: "TEXT", get: (r) => rows[r].datasetKey },
-        { name: "obs_name", type: "TEXT", get: (r) => rows[r].obsName },
-        { name: colName, type: annSqlType(entry.dtype), get: (r) => values[r] },
+        { name: "__row_index__", type: "UINTEGER", get: (r) => cells[r][0] },
+        { name: "value", type: "TEXT", get: (r) => cells[r][1] },
       ],
       { create: true },
     );
-    await this.conn.run(`INSERT OR REPLACE INTO ${entry.table} SELECT * FROM ${stage}; DROP TABLE ${stage}`);
+    const datasetKey = this.hasDatasetColumn() ? "CAST(o._dataset AS TEXT)" : "''";
+    try {
+      const result = await this.conn.run(
+        `INSERT OR REPLACE INTO ${entry.table} ` +
+          `SELECT s.__row_index__, ${datasetKey}, CAST(o.obs_name AS TEXT), s.value ` +
+          `FROM ${stage} s JOIN obs_base o ON o.__row_index__ = s.__row_index__`,
+      );
+      return result.rowsChanged;
+    } finally {
+      await this.conn.run(`DROP TABLE ${stage}`);
+    }
   }
 
-  /** Drop an annotation column and remove it from the VIEW. */
+  /** Drop an annotation field and remove it from the VIEW. */
   async dropAnnotationColumn(colName: string): Promise<void> {
     const entry = this._annotationCols.get(colName);
     if (!entry) return;
@@ -545,11 +533,11 @@ export class DatasetQuerySession {
   }
 
   /**
-   * Write all annotation columns to a combined parquet sidecar.
+   * Write all annotation fields to a combined parquet sidecar.
    *
    * `USE_TMP_FILE true` makes the write atomic (DuckDB writes `path.tmp` then
    * renames), so a crash mid-write can't corrupt the prior sidecar: no manual
-   * backup rotation needed. When the last column is dropped, the sidecar is
+   * backup rotation needed. When the last field is dropped, the sidecar is
    * removed so the deletion persists (else a stale file resurrects it on load).
    *
    * ponytail: no point-in-time backups. If ever wanted, write base.N copies
@@ -563,14 +551,14 @@ export class DatasetQuerySession {
     }
     const parts = [...this._annotationCols.values()].map(
       ({ table, colName, dtype }) =>
-        `SELECT '${colName.replace(/'/g, "''")}' AS column_name, '${dtype}' AS dtype, __row_index__, dataset_key, obs_name, CAST(${quoteIdent(colName)} AS TEXT) AS value FROM ${table}`,
+        `SELECT '${colName.replace(/'/g, "''")}' AS column_name, '${dtype}' AS dtype, __row_index__, dataset_key, obs_name, ${quoteIdent(colName)} AS value FROM ${table}`,
     );
     const escaped = sidecarPath.replace(/'/g, "''");
     await this.conn.run(`COPY (${parts.join(" UNION ALL ")}) TO '${escaped}' (FORMAT parquet, USE_TMP_FILE true)`);
   }
 
   /**
-   * Load annotation columns from a parquet sidecar written by saveAnnotationsSidecar.
+   * Load annotation fields from a parquet sidecar written by saveAnnotationsSidecar.
    * Silently returns if the file does not exist.
    *
    * Re-keys the JOIN on the stored `__row_index__`. This is correct only while
@@ -580,41 +568,31 @@ export class DatasetQuerySession {
    * re-resolve __row_index__ by joining obs_name against obs_base here.
    */
   async loadAnnotationsSidecar(sidecarPath: string): Promise<void> {
-    let cols: { column_name: string; dtype: string | null }[];
+    let names: string[];
+    let dtypes: string[];
     const escaped = sidecarPath.replace(/'/g, "''");
     try {
-      // `dtype` was added later: COALESCE a missing/legacy column to categorical.
-      const hasDtype = (
+      [names, dtypes] = (
         await this.conn.runAndReadAll(
-          `SELECT COUNT(*) FROM (DESCRIBE SELECT * FROM read_parquet('${escaped}')) WHERE column_name = 'dtype'`,
+          `SELECT column_name, ANY_VALUE(dtype) FROM read_parquet('${escaped}') GROUP BY column_name`,
         )
-      ).getColumnsJS()[0][0];
-      const dtypeExpr = Number(hasDtype) > 0 ? "ANY_VALUE(dtype)" : "'categorical'";
-      const reader = await this.conn.runAndReadAll(
-        `SELECT column_name, ${dtypeExpr} AS dtype FROM read_parquet('${escaped}') GROUP BY column_name`,
-      );
-      const [names, dtypes] = reader.getColumnsJS() as [string[], (string | null)[]];
-      cols = names.map((column_name, i) => ({ column_name, dtype: dtypes[i] }));
+      ).getColumnsJS() as [string[], string[]];
     } catch {
       return; // file doesn't exist or is unreadable
     }
-    if (cols.length > 0) await this._ensureAnnMeta();
-    for (const { column_name: colName, dtype: rawDtype } of cols) {
-      if (this._annotationCols.has(colName)) continue;
-      const dtype: AnnotationDtype =
-        rawDtype === "integer" || rawDtype === "string" || rawDtype === "float" ? rawDtype : "categorical";
+    const loaded = names.filter((colName) => !this._annotationCols.has(colName));
+    for (const colName of loaded) {
+      const dtype: AnnotationDtype = dtypes[names.indexOf(colName)] === "text" ? "text" : "label";
       const tableName = annTableName(colName);
-      const escapedCol = colName.replace(/'/g, "''");
-      await this.conn.run(`DROP TABLE IF EXISTS ${tableName}`);
+      await this._createAnnTable(tableName, colName);
       await this.conn.run(
-        `CREATE TABLE ${tableName} AS ` +
-          `SELECT __row_index__, dataset_key, obs_name, CAST(value AS ${annSqlType(dtype)}) AS ${quoteIdent(colName)} ` +
-          `FROM read_parquet('${escaped}') WHERE column_name = '${escapedCol}'`,
+        `INSERT INTO ${tableName} SELECT __row_index__, dataset_key, obs_name, value ` +
+          `FROM read_parquet('${escaped}') WHERE column_name = '${colName.replace(/'/g, "''")}'`,
       );
-      await this.conn.run(`INSERT OR REPLACE INTO __ann_meta__ VALUES ('${escapedCol}', '${dtype}')`);
+      await this._setAnnMeta(colName, dtype);
       this._annotationCols.set(colName, { table: tableName, colName, dtype });
     }
-    if (cols.length > 0) await this._rebuildView();
+    if (loaded.length > 0) await this._rebuildView();
   }
 
   /**

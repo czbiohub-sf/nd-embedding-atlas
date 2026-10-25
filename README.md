@@ -2,7 +2,7 @@
 
 [![CI][badge-ci]][link-ci] [![Release][badge-release]][link-release] [![Bun][badge-bun]][link-bun] [![License][badge-license]][link-license]
 
-Explore and annotate n-dimensional (`TCZYX`) microscopy images with precomputed embeddings. nd-embedding-atlas links embedding space to source images so researchers can review, select, and annotate examples for downstream model training. It does not train models or include model-training code.
+Explore and label n-dimensional (`TCZYX`) microscopy images with precomputed embeddings. nd-embedding-atlas links embedding space to source images so researchers can review, select, and label examples for downstream model training. It does not train models or include model-training code.
 
 nd-embedding-atlas runs locally with linked scatter plots, tables, filters, charts, image viewers, and annotation tools. Your data remains on your machine.
 
@@ -57,7 +57,7 @@ See [Install][docs-install], [Launch ndea][docs-launch], and [Prepare data][docs
 - Streams local AnnData, a supported MuData subset, and mounted OME-Zarr HCS images.
 - Uses DuckDB and Mosaic for server-side queries and cross-filtering.
 - Renders large scatter plots and selections with WebGPU.
-- Opens a dashboard of linked views, starting from the built-in `annotate` preset or any `--preset` JSON document.
+- Opens a dashboard of linked views, starting from the built-in `exploration` preset (embedding, image viewer, crop gallery, and a table that edits label and text fields) or any `--preset` JSON document.
 
 ## Data compatibility
 

@@ -16,7 +16,6 @@ export type {
 } from "./component";
 
 export type {
-  AnnotationWriteAPI,
   ColorCoordinationAPI,
   ComponentHost,
   DataAPI,
@@ -24,6 +23,7 @@ export type {
   DataQueryAPI,
   DeviceInfo,
   DeviceLease,
+  FieldEditAPI,
   FilterCoordinationAPI,
   FilterFacet,
   FocusCoordinationAPI,

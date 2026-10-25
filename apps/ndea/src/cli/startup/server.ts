@@ -1,5 +1,4 @@
 import { stopRemoteRender } from "../../server/remote-render.ts";
-import { flushAnnotationSaves } from "../../server/routes/annotate.ts";
 import type { DatasetSessionMetadata, ServerSession } from "../../server/state.ts";
 import type { LaunchConfig } from "../config.ts";
 import { isCompiledBinary } from "../lib/paths.ts";
@@ -73,7 +72,6 @@ export async function registerGracefulShutdown(
 ): Promise<void> {
   const shutdown = async () => {
     printShuttingDown();
-    await flushAnnotationSaves(state);
     await stopRemoteRender();
     void server.stop();
     state.store.close();

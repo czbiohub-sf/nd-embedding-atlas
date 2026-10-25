@@ -6,7 +6,6 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./annotate": "./src/annotate/index.ts",
     "./catalog": "./src/catalog.ts",
     "./charts": "./src/charts/index.ts",
     "./count": "./src/count/index.ts",
@@ -30,7 +29,6 @@
     "@tanstack/react-pacer": "^0.24.1",
     "@tanstack/react-query": "catalog:",
     "@tanstack/react-store": "catalog:",
-    "@tanstack/react-table": "^9.3.1",
     "@tanstack/store": "catalog:",
     "@tanstack/virtual-core": "3.19.7",
     "@uwdata/mosaic-core": "catalog:",

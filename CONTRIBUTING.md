@@ -82,7 +82,7 @@ vp run build
 
 `vp run dev` enables dashboard layout editing (split, swap, remove, fill a
 slot). Every build opens the server-owned workspace document, which starts
-from the `--preset` document (`annotate` by default).
+from the `--preset` document (`exploration` by default).
 
 See [`AGENTS.md`](./AGENTS.md) for the full command catalogue, project layout,
 key abstractions, and gotchas.

@@ -1,10 +1,10 @@
 import type { Coordinator, MosaicClient, Selection } from "@uwdata/mosaic-core";
 import {
   AnnotationColumnsResponseSchema,
-  AnnotationPredicateWriteResponseSchema,
   CommitAnnotationsResponseSchema,
   ErrorResponseSchema,
   ObservationSetSchema,
+  type AnnotationDtype,
   type FilterClause,
   type Metadata,
 } from "@ndea/protocol";
@@ -112,6 +112,17 @@ export function createComponentHost<Config>(
   const assertActive = () => {
     if (disposed) throw new Error(`component host ${elementId} is disposed`);
   };
+  /** One field write; the dataset's columns changed, so the app's metadata refreshes. */
+  const writeField = async (url: string, method: string, body: unknown, action: string): Promise<void> => {
+    assertActive();
+    const response = await request(url, {
+      method,
+      ...(body === undefined ? {} : { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
+      signal: controller.signal,
+    });
+    if (!response.ok) throw await responseError(response, `${action} failed (${response.status})`);
+    await dependencies.refreshMetadata();
+  };
 
   const host: ComponentHost<Config> = {
     elementId,
@@ -166,40 +177,30 @@ export function createComponentHost<Config>(
         if (!init.saveSource) throw new Error(`component host ${elementId} cannot save data sources`);
         return init.saveSource(baseName, where);
       },
-      async listAnnotationColumns() {
+      async listFields() {
         assertActive();
         const response = await request("/api/annotations/columns", { signal: controller.signal });
-        if (!response.ok) throw await responseError(response, `list failed (${response.status})`);
+        if (!response.ok) throw await responseError(response, `listing fields failed (${response.status})`);
         return AnnotationColumnsResponseSchema.parse(await response.json()).columns;
       },
-      async createAnnotationColumn(
-        name: string,
-        dtype: "categorical" | "string" | "integer" | "float" = "categorical",
-      ) {
-        assertActive();
-        const response = await request("/api/annotations/columns", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name, dtype }),
-          signal: controller.signal,
-        });
-        if (!response.ok) throw await responseError(response, `create failed (${response.status})`);
-        await dependencies.refreshMetadata();
+      createField(name: string, dtype: AnnotationDtype) {
+        return writeField("/api/annotations/columns", "POST", { name, dtype }, "adding the field");
       },
-      async writeAnnotationByPredicate(column: string, label: string, predicate: string) {
-        assertActive();
-        const response = await request("/api/annotations/values", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ column, label, predicate }),
-          signal: controller.signal,
-        });
-        if (!response.ok) throw await responseError(response, `write failed (${response.status})`);
-        const result = AnnotationPredicateWriteResponseSchema.parse(await response.json());
-        await dependencies.refreshMetadata();
-        return result;
+      updateField(name: string, patch: { name?: string; dtype?: AnnotationDtype }) {
+        return writeField(`/api/annotations/columns/${encodeURIComponent(name)}`, "PATCH", patch, "changing the field");
       },
-      async commitAnnotations(options: { dryRun: boolean; columns?: string[] }) {
+      deleteField(name: string) {
+        return writeField(
+          `/api/annotations/columns/${encodeURIComponent(name)}`,
+          "DELETE",
+          undefined,
+          "deleting the field",
+        );
+      },
+      writeFieldValues(field: string, rows: readonly { rowIndex: RowIndex; value: string | null }[]) {
+        return writeField("/api/annotations/values", "POST", { column: field, rows }, "saving");
+      },
+      async commitFields(options: { dryRun: boolean; columns?: string[] }) {
         assertActive();
         const response = await request(`/api/annotations/commit${options.dryRun ? "?dryRun=1" : ""}`, {
           method: "POST",
@@ -207,7 +208,7 @@ export function createComponentHost<Config>(
           body: JSON.stringify(options.columns ? { columns: options.columns } : {}),
           signal: controller.signal,
         });
-        if (!response.ok) throw await responseError(response, `commit failed (${response.status})`);
+        if (!response.ok) throw await responseError(response, `writing fields failed (${response.status})`);
         return CommitAnnotationsResponseSchema.parse(await response.json());
       },
     },
@@ -217,6 +218,7 @@ export function createComponentHost<Config>(
       subscribeResolved: (callback: Parameters<FilterCoordinationAPI["subscribeResolved"]>[0]) =>
         trackDisposer(filter.subscribeResolved(callback)),
       publish: filter.publish.bind(filter),
+      facet: filter.facet.bind(filter),
       clear: filter.clear.bind(filter),
       materializeRowIds: filter.materializeRowIds.bind(filter),
     } satisfies FilterCoordinationAPI),

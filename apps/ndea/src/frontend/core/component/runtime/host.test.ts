@@ -49,6 +49,7 @@ function hostInit<Config>(
       getResolved: () => ({ predicate: null, revision: 0 }),
       subscribeResolved: () => () => {},
       publish() {},
+      facet: () => undefined,
       clear() {},
       materializeRowIds: async () => ({ rowIds: [], revision: 0 }),
     },

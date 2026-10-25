@@ -1,6 +1,4 @@
 import type { BodyMounter } from "./contracts";
-import { createAnnotateDefinition } from "./annotate/definition";
-import type { AnnotateServices } from "./annotate/services";
 import { createCountPlotDefinition } from "./charts/count-plot/definition";
 import { createHistogramDefinition } from "./charts/histogram/definition";
 import { createVgplotDefinition } from "./charts/vgplot/definition";
@@ -17,7 +15,6 @@ import { createTableDefinition } from "./table/definition";
 
 /** App-owned integrations the built-in view bodies need. */
 export interface ComponentServices {
-  readonly annotate: { useServices: () => AnnotateServices };
   readonly charts: ChartServices;
   readonly count: { predicateToSql: CountPredicateToSql };
   readonly gallery: { useServices: () => GalleryServices };
@@ -34,7 +31,6 @@ export function createComponentCatalog({
   services: ComponentServices;
 }) {
   return {
-    annotate: createAnnotateDefinition({ mountBody, ...services.annotate }),
     count: createCountDefinition({ mountBody, ...services.count }),
     table: createTableDefinition({ mountBody }),
     scatter: createScatterDefinition({ mountBody, services: services.scatter }),

@@ -56,7 +56,7 @@ A single `.yaml` / `.yml` path is parsed as a multi-dataset project config (see 
 | `--no-tui`             | boolean | `false`     | Keep log output instead of the live status screen (a non-terminal stdout always does) |
 | `--no-static`          | boolean | `false`     | Do not serve the bundled frontend (Vite serves it in dev mode)                        |
 | `--obs-columns <list>` | string  | all columns | Comma-separated subset of obs columns to load                                         |
-| `--preset <name>`      | string  | `annotate`  | Preset a new workspace file starts from: `annotate` or a `.json` workspace document   |
+| `--preset <name>`      | string  | `exploration` | Preset a new workspace file starts from: `exploration` or a `.json` workspace document |
 | `--workspace <file>`   | path    | see below   | Workspace document to open and save                                                   |
 
 ### Workspace file
@@ -227,7 +227,7 @@ Workspace patches reject unknown set references anywhere in the document. Startu
 | `text`                                                                                                  | `text` (a string or `{"$template": "…${/focus/A}"}`), `variant` (`heading`, `body`, `muted`)      | none        |
 | `select`                                                                                                | `column`, optional `label`; picking values publishes `{"op":"in"}` into its filter scope          | none        |
 | `slot`                                                                                                  | none: an empty tile                                                                               | none        |
-| `scatter`, `table`, `count`, `count-plot`, `histogram`, `vgplot`, `gallery`, `image-viewer`, `annotate` | the view's own settings, such as `columns` for `table` or `entries` and `attributes` for `vgplot` | none        |
+| `scatter`, `table`, `count`, `count-plot`, `histogram`, `vgplot`, `gallery`, `image-viewer` | the view's own settings, such as `columns` and `groupBy` for `table` or `entries` and `attributes` for `vgplot` | none        |
 
 Every component that reads observations also accepts `data` (the name of a data source; omitted means every observation) and `title`. `count` is the metric: the live number of rows its data and filter scope select. `vgplot` props are a [Mosaic](https://idl.uw.edu/mosaic) plot spec: `entries` is the `plot` array of marks and interactors, `attributes` the rest, with `$table`, `$scope` (the element's predicate), and `$brush` (a selection the chart publishes as a typed clause) supplied by the host.
 

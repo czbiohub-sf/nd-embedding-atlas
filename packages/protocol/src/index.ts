@@ -414,13 +414,11 @@ export interface NdeaProtocol {
 const COLUMN_NAME_RE = /^[A-Za-z0-9_][A-Za-z0-9 _.-]*$/;
 
 /**
- * Annotation column data type. `categorical`/`string` both stage as TEXT in
- * DuckDB (they differ only in on-disk AnnData encoding + how the frontend
- * colors them); `integer` stages as INTEGER and `float` as DOUBLE, both
- * colored continuously. `float` backs range annotations (a range is authored
- * as two float columns, `{name}_min` / `{name}_max`).
+ * Annotation field data type. Both stage as TEXT in DuckDB: `label` is an
+ * editable categorical (committed as a categorical `.obs` column), `text` is
+ * free text (committed as a string column).
  */
-export const AnnotationDtypeSchema = z.enum(["categorical", "string", "integer", "float"]);
+export const AnnotationDtypeSchema = z.enum(["label", "text"]);
 export type AnnotationDtype = z.infer<typeof AnnotationDtypeSchema>;
 
 /** One entry returned by GET /api/annotations/columns. */
@@ -436,69 +434,50 @@ export const AnnotationColumnsResponseSchema = z.object({
 });
 export type AnnotationColumnsResponse = z.infer<typeof AnnotationColumnsResponseSchema>;
 
-/** Predicate branch of POST /api/annotations/values. */
-export const AnnotationPredicateWriteResponseSchema = z.object({
-  ok: z.literal(true),
-  n: NonNegativeInt,
-});
-export type AnnotationPredicateWriteResponse = z.infer<typeof AnnotationPredicateWriteResponseSchema>;
+const AnnotationColumnName = z.string().min(1).max(200).regex(COLUMN_NAME_RE, "Invalid character in column name");
 
-/** POST /api/annotations/columns: create a new annotation column. */
+/** POST /api/annotations/columns: create a new annotation field. */
 export const AnnotationColumnBodySchema = z.object({
-  name: z.string().min(1).max(200).regex(COLUMN_NAME_RE, "Invalid character in column name"),
-  dtype: AnnotationDtypeSchema.default("categorical"),
+  name: AnnotationColumnName,
+  dtype: AnnotationDtypeSchema.default("label"),
 });
 export type AnnotationColumnBody = z.infer<typeof AnnotationColumnBodySchema>;
 
-/** One value row for POST /api/annotations/values (explicit rows path). */
+/**
+ * PATCH /api/annotations/columns/:name: rename and/or convert a field.
+ * Responds `{ column: <final name>, dtype }`.
+ */
+export const AnnotationColumnPatchBodySchema = z
+  .object({ name: AnnotationColumnName.optional(), dtype: AnnotationDtypeSchema.optional() })
+  .refine((body) => body.name !== undefined || body.dtype !== undefined, "Provide name and/or dtype");
+export type AnnotationColumnPatchBody = z.infer<typeof AnnotationColumnPatchBodySchema>;
+
+/** One cell for POST /api/annotations/values. A null value clears the cell. */
 export const AnnotationValueRowSchema = z.object({
   rowIndex: NonNegativeInt,
-  datasetKey: z.string().min(1).max(256),
-  obsName: z.string().min(1).max(512),
   value: z.string().nullable(),
 });
 export type AnnotationValueRow = z.infer<typeof AnnotationValueRowSchema>;
 
 /**
- * POST /api/annotations/values: write values into an annotation column.
- * Exactly one source:
- *   - `rows`               explicit row-index list (per-cell edits)
- *   - `predicate`          stamp `label` onto every obs matching a SQL WHERE
- *                          fragment (the Annotate component's batch door).
+ * POST /api/annotations/values: write cells into an annotation field by
+ * `__row_index__`. The server resolves each row's obs identity; unknown row
+ * indices are ignored, so `n` in the response counts only rows written.
  */
 export const WriteAnnotationValuesBodySchema = z.object({
-  column: z.string().min(1).max(200).regex(COLUMN_NAME_RE, "Invalid character in column name"),
-  rows: z.array(AnnotationValueRowSchema).max(2_000_000).optional(),
-  /**
-   * Stamp `label` onto every obs matching this SQL predicate.
-   * The server executes it as a prepared single statement against `dataset`.
-   */
-  predicate: z.string().min(1).optional(),
-  /** Label applied to a selection or predicate stamp. */
-  label: z.string().min(1).max(200).optional(),
+  column: AnnotationColumnName,
+  rows: z.array(AnnotationValueRowSchema).min(1).max(2_000_000),
 });
 export type WriteAnnotationValuesBody = z.infer<typeof WriteAnnotationValuesBodySchema>;
 
-/** Row scope for the annotation export: all obs or the active filter. */
-export const ExportScopeSchema = z.union([
-  z.object({ kind: z.literal("all") }),
-  z.object({ kind: z.literal("filter"), predicate: z.string().min(1) }),
-]);
-export type ExportScope = z.infer<typeof ExportScopeSchema>;
-
-const AnnotationColumnNames = z.array(z.string().min(1).max(200).regex(COLUMN_NAME_RE, "Invalid column name"));
-
-/**
- * POST /api/annotations/export: write a wide table (obs_name + chosen annotation
- * columns) for the row scope to the server export-dir.
- */
-export const AnnotationExportBodySchema = z.object({
-  columns: AnnotationColumnNames.min(1),
-  scope: ExportScopeSchema,
-  format: z.enum(["parquet", "csv"]).default("parquet"),
-  filename: z.string().max(200).optional(),
+/** Response of POST /api/annotations/values. */
+export const WriteAnnotationValuesResponseSchema = z.object({
+  ok: z.literal(true),
+  n: NonNegativeInt,
 });
-export type AnnotationExportBody = z.infer<typeof AnnotationExportBodySchema>;
+export type WriteAnnotationValuesResponse = z.infer<typeof WriteAnnotationValuesResponseSchema>;
+
+const AnnotationColumnNames = z.array(AnnotationColumnName);
 
 /**
  * POST /api/annotations/commit[?dryRun=1]: write annotation columns into each

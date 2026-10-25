@@ -11,7 +11,7 @@ import type { z } from "zod";
 
 export {
   AnnotationColumnBodySchema,
-  AnnotationExportBodySchema,
+  AnnotationColumnPatchBodySchema,
   CommitAnnotationsBodySchema,
   CategorizeBodySchema,
   CropBodySchema,

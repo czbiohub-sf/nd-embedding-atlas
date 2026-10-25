@@ -131,3 +131,57 @@ gold.
 - The prototype's settings Display tab for an embedding shows "Focus marker"; our embedding has
   no such prop, so its Display tab says the controls sit on the view.
 - The link indicator uses `NdScopesIcon` (as `data/ScopeIndicator.jsx`), not Lucide `git-fork`.
+
+## Phase 4: table as the editor; annotate removed
+
+**Changed**
+
+- The table is an Airtable-lite field editor (G5).
+  - Toolbar: server-side search across text fields, then `Filter │ Sort │ Group │ Fields`,
+    Save / Discard (with the unsaved edit count), "Write fields to file…" (dry-run report, then
+    confirm), and the obs count.
+  - Filter is a builder of typed clauses published under the table's own source key. Group
+    takes one field, with collapsible headers and obs counts. Fields sets column visibility and
+    order in the `columns` prop.
+- Headers show the type glyph (Aa, #, ◉, ◇, ☑) and the provenance marker: none for obs from the
+  file, a filled dot for a saved field, a hollow amber ring for unsaved edits. A Settings ›
+  Provenance badges switch toggles the markers (a per-browser preference).
+- The column menu sorts and hides; for fields it also renames, converts label ↔ text, and deletes
+  (with confirmation). **+** adds a label or text field.
+- Label and text cells edit inline into a client buffer: amber bar, Save posts, Discard drops.
+  Field operations apply at once through new `DatasetQuerySession` methods
+  (`renameAnnotationColumn`, `setAnnotationDtype`) and the PATCH route in
+  `routes/annotations.ts`; every field write saves the Parquet sidecar before responding.
+- Rows: click focuses; shift-click selects a range and ⌘-click toggles. The selection becomes an
+  observation set published on the table's `selection` facet; the table never filters itself.
+- `annotate` is deleted (component, services, CommitPanel, predicate writes, autosave). The
+  `annotate` preset became `exploration`: Embedding, Image viewer, Crop gallery, Table.
+
+**Files:** `packages/components/src/table/{DataTable,Toolbar,fields,provenance,useTableQuery,view,definition,contracts}.ts(x)`,
+deleted `packages/components/src/annotate/**`, `packages/components/src/catalog.ts`,
+`packages/sdk/src/{host,index}.ts`, `apps/ndea/src/frontend/core/{component/definitions,component/runtime/host,coordination/filter-binding,shell/flyouts}.ts(x)`,
+`apps/ndea/src/server/{store,app,observations,protocol,presets,routes/annotations}.ts`,
+`apps/ndea/src/presets/exploration.json`, `packages/protocol/src/index.ts`, `README.md`, `CONTRIBUTING.md`, `docs/content/**`.
+
+**Checked:** `vp run verify` green (17/17). `vp run build` (DuckDB 2). Binary smoke on infectomics:
+the exploration preset rendered the four tiles; the toolbar and filter builder opened in the
+standard frame; header glyphs and markers showed. The agent's dev smoke covered the rest:
+
+- search "B/2/" gave 11,025 obs; filter `t > 60` gave 5,885 across linked views;
+- group-by, rename, convert and delete all worked; Save persisted after a reload; Discard
+  cleared the buffer;
+- shift and ⌘ selection narrowed the embedding and gallery;
+- the dry-run write report was cancelled, so nothing was written to the test data.
+
+**Deferred**
+
+- Column resizing.
+- Bulk "label all selected rows".
+- Persisting search and group collapse.
+- String columns from the file are classed as category when they have ≤200 distinct values
+  (`ponytail:`).
+
+**Remaining differences**
+
+- The prototype's table shows saved annotation fields with coloured label pills from the d1–d9
+  set; ours use neutral pills for labels.

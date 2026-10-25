@@ -1,451 +1,606 @@
 /**
- * Custom data table with server-side pagination via DuckDB.
- *
- * Uses TanStack Table for headless table logic (sorting, column model,
- * row selection) and TanStack Virtual for rendering millions of rows
- * efficiently (only ~500 in memory at a time via page cache).
+ * The table grid (design data/DataTable.jsx): sticky header with type glyphs,
+ * provenance markers and column menus, a trailing + that adds a field, and
+ * virtualized rows (or group headers) over the server-side pages. Label and
+ * text field cells edit inline; edited cells carry a 2px amber bar until saved.
  */
 
+import { ChevronDownIcon, ChevronRightIcon, PlusIcon } from "lucide-react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
+import type { AnnotationDtype } from "@ndea/protocol";
+import { Checkbox } from "@ndea/ui/components/checkbox";
 import {
-  type ColumnDef,
-  type ColumnSizingState,
-  type ColumnVisibilityState,
-  columnResizingFeature,
-  columnSizingFeature,
-  columnVisibilityFeature,
-  flexRender,
-  type OnChangeFn,
-  rowSortingFeature,
-  type SortingState,
-  tableFeatures,
-  useTable,
-} from "@tanstack/react-table";
-import { useVirtualizer } from "../query/use-virtualizer";
-import type { Coordinator } from "@uwdata/mosaic-core";
-import { type FilterCoordinationAPI, type RowIndex, rowIndex } from "@ndea/sdk";
-import { CheckIcon, Columns3Icon } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@ndea/ui/components/command";
+import { Input } from "@ndea/ui/components/input";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  popoverHeading,
+  popoverRow,
+  popoverSeparator,
+} from "@ndea/ui/components/popover";
 import { cn } from "@ndea/ui/lib/utils";
-import { Popover, PopoverContent, PopoverTrigger } from "@ndea/ui/components/popover";
-import { ScrollArea } from "@ndea/ui/components/scroll-area";
-import type { ColumnType } from "../query/column-types";
-import { useColumnTypes } from "../query/useColumnTypes";
-import { type Row, type SortState, useTableQuery } from "./useTableQuery";
+import { useVirtualizer } from "../query/use-virtualizer";
+import {
+  FIELD_GLYPH,
+  type GroupLayout,
+  groupKey,
+  hasBit,
+  isGroupable,
+  type SortState,
+  type TableField,
+} from "./fields";
+import type { Row, TableQuery } from "./useTableQuery";
 
-/** Typed-column glyph for the header (# numeric · ◇ categorical/text · · other). */
-const TYPE_GLYPH: Record<ColumnType, string> = { number: "#", string: "◇", boolean: "⊙", other: "·" };
+const ROW_HEIGHT = 26;
+const HEADER_HEIGHT = 28;
+const LEAD_WIDTH = 56;
 
-/** Sort-direction glyph for the header; unsorted columns have no entry. */
-const SORT_GLYPH: Record<string, string> = { asc: "↑", desc: "↓" };
+/** Unsaved cell values: field → row index → value (null clears). */
+export type Edits = ReadonlyMap<string, ReadonlyMap<number, string | null>>;
 
-const ROW_HEIGHT = 32;
-const HEADER_HEIGHT = 30;
-const OVERSCAN = 15;
-const DATA_TABLE_FEATURES = tableFeatures({
-  rowSortingFeature,
-  columnVisibilityFeature,
-  columnSizingFeature,
-  columnResizingFeature,
-});
+export type Provenance = "obs" | "saved" | "unsaved";
 
-function formatCellValue(value: unknown): string {
-  if (typeof value === "number") {
-    return Number.isInteger(value) ? value.toLocaleString() : value.toFixed(3);
-  }
-  if (typeof value === "string") return value;
-  if (typeof value === "boolean" || typeof value === "bigint") return String(value);
-  try {
-    return JSON.stringify(value) ?? "";
-  } catch {
-    return String(value);
-  }
-}
-
-/** Starting column width, replaced by the data-driven auto-fit once rows load. */
-function initialColumnSize(name: string): number {
-  if (name.length < 6) return 80;
-  if (name.length < 12) return 120;
-  return 160;
-}
-
-/** Estimate column width in px by sampling row content lengths. */
-function estimateColumnWidth(name: string, rows: Row[]): number {
-  const CHAR_WIDTH = 7.2;
-  const PADDING = 20;
-  const MIN = 60;
-  const MAX = 360;
-
-  let maxLen = name.length + 2;
-  for (const row of rows) {
-    const val = row[name];
-    if (val == null) continue;
-    maxLen = Math.max(maxLen, formatCellValue(val).length);
-  }
-  return Math.min(MAX, Math.max(MIN, Math.ceil(maxLen * CHAR_WIDTH + PADDING)));
+/** What the grid asks of the view: every write goes through here. */
+export interface TableActions {
+  sort(next: SortState | null): void;
+  group(field: string | null): void;
+  hide(field: string): void;
+  addField(name: string, dtype: AnnotationDtype): void;
+  renameField(from: string, to: string): void;
+  convertField(name: string, dtype: AnnotationDtype): void;
+  deleteField(name: string): void;
+  /** Distinct saved values of a field, for the label editor and the filter builder. */
+  values(field: string): Promise<string[]>;
+  edit(field: string, rowIndex: number, value: string | null, saved: string | null): void;
+  clickRow(position: number, rowIndex: number, event: React.MouseEvent): void;
+  toggleRow(rowIndex: number): void;
+  toggleAll(): void;
+  toggleGroup(key: string): void;
 }
 
 export interface DataTableProps {
-  coordinator: Coordinator;
-  table: string;
-  columns: string[];
-  filter: FilterCoordinationAPI;
-  focusedRowIndex?: RowIndex | null;
-  onRowClick?: (rowIndex: RowIndex | null) => void;
-  onTotalCountChange?: (n: number) => void;
-  /** Controlled sort (the `ordering` coordination bridge). Omitted → DataTable
-   *  owns its sort internally (uncontrolled, today's behavior). */
-  sorting?: SortingState;
-  onSortingChange?: (next: SortingState) => void;
+  fields: readonly TableField[];
+  query: TableQuery;
+  /** Grouped rows; null lists rows flat. */
+  layout: GroupLayout | null;
+  sort: SortState | null;
+  groupBy: string | null;
+  focused: number | null;
+  /** Virtual index to bring into view (the focused row). */
+  reveal: number | null;
+  selection: Uint32Array | null;
+  /** Selected obs count, for the header checkbox. */
+  selected: number;
+  edits: Edits;
+  provenance: ((field: TableField) => Provenance) | null;
+  actions: TableActions;
+}
+
+function formatValue(value: unknown): string {
+  if (value == null) return "";
+  if (typeof value === "number") return value.toLocaleString("en-US", { maximumFractionDigits: 3 });
+  if (typeof value === "bigint") return value.toLocaleString("en-US");
+  if (value instanceof Date) return value.toISOString();
+  return typeof value === "object" ? JSON.stringify(value) : String(value as string | boolean);
+}
+
+/** Column width from the header and the first loaded rows. */
+function columnWidth(field: TableField, rows: Row[]): number {
+  let chars = field.name.length + 6;
+  for (const row of rows)
+    chars = Math.max(chars, formatValue(row[field.name]).length + (field.type === "label" ? 3 : 0));
+  return Math.min(320, Math.max(field.type === "number" ? 72 : 96, chars * 6.6 + 24));
+}
+
+function Pill({ children, empty }: { children: ReactNode; empty?: boolean }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex max-w-full items-center truncate rounded-full px-2 py-px font-sans text-sm",
+        empty ? "text-text-muted shadow-[inset_0_0_0_1px_var(--line-2)]" : "bg-muted text-foreground",
+      )}
+    >
+      {children}
+    </span>
+  );
+}
+
+function ProvenanceDot({ status }: { status: Provenance }) {
+  if (status === "obs") return null;
+  return (
+    <span
+      className={cn(
+        "size-1.5 shrink-0 rounded-full",
+        status === "saved" ? "bg-text-muted" : "shadow-[inset_0_0_0_1.5px_var(--dirty)]",
+      )}
+    />
+  );
+}
+
+const menuRow = cn(popoverRow, "w-full text-left hover:bg-muted");
+
+function ColumnMenu({
+  field,
+  sort,
+  groupBy,
+  actions,
+  status,
+}: {
+  field: TableField;
+  sort: SortState | null;
+  groupBy: string | null;
+  actions: TableActions;
+  status: Provenance;
+}) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState(field.name);
+  const close = (run: () => void) => () => {
+    setOpen(false);
+    run();
+  };
+  const sorted = sort?.col === field.name ? sort.dir : null;
+  const align = field.type === "number" ? "justify-end" : "justify-start";
+  return (
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (next) setName(field.name);
+      }}
+    >
+      <PopoverTrigger
+        title={`${field.name} · ${field.annotation ? `${field.type} field` : `${field.type} · from obs in the file, read-only`}`}
+        className={cn(
+          "flex h-full w-full min-w-0 items-center gap-1.5 rounded-sm px-1.5 text-text-muted outline-none hover:bg-muted hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring data-popup-open:bg-muted data-popup-open:text-foreground",
+          align,
+        )}
+      >
+        <span className="shrink-0 font-sans font-semibold text-[9.5px]">{FIELD_GLYPH[field.type]}</span>
+        <span className="min-w-0 truncate">{field.name}</span>
+        <ProvenanceDot status={status} />
+        {sorted ? <span className="shrink-0 text-primary">{sorted === "asc" ? "↑" : "↓"}</span> : null}
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-60 gap-0">
+        <div className={popoverHeading}>
+          {field.annotation ? `Edit field · ${field.type}` : `${field.name} · ${field.type}`}
+        </div>
+        {field.annotation ? (
+          <Input
+            aria-label="Field name"
+            value={name}
+            onChange={(e) => setName(e.currentTarget.value)}
+            onKeyDown={(e) => {
+              if (e.key !== "Enter") return;
+              const next = name.trim();
+              setOpen(false);
+              if (next && next !== field.name) actions.renameField(field.name, next);
+            }}
+            className="mx-1 mb-1 w-auto font-mono"
+          />
+        ) : null}
+        {(["asc", "desc"] as const).map((dir) => (
+          <button
+            key={dir}
+            type="button"
+            className={cn(menuRow, sorted === dir && "bg-muted")}
+            onClick={close(() => actions.sort(sorted === dir ? null : { col: field.name, dir }))}
+          >
+            {dir === "asc" ? "Sort ascending" : "Sort descending"}
+          </button>
+        ))}
+        {isGroupable(field.type) ? (
+          <button
+            type="button"
+            className={cn(menuRow, groupBy === field.name && "bg-muted")}
+            onClick={close(() => actions.group(groupBy === field.name ? null : field.name))}
+          >
+            {groupBy === field.name ? "Ungroup" : "Group by this field"}
+          </button>
+        ) : null}
+        <button
+          type="button"
+          className={cn(menuRow, "text-text-muted")}
+          onClick={close(() => actions.hide(field.name))}
+        >
+          Hide field
+        </button>
+        {field.annotation ? (
+          <>
+            <div className={popoverSeparator} />
+            <button
+              type="button"
+              className={menuRow}
+              onClick={close(() => actions.convertField(field.name, field.annotation === "label" ? "text" : "label"))}
+            >
+              {field.annotation === "label" ? "Convert to text" : "Convert to label"}
+              <span className="ml-auto text-sm text-text-muted">
+                {field.annotation === "label" ? "free text" : "values become labels"}
+              </span>
+            </button>
+            <div className={popoverSeparator} />
+            <button
+              type="button"
+              className={cn(menuRow, "text-destructive")}
+              onClick={close(() => actions.deleteField(field.name))}
+            >
+              Delete field…
+            </button>
+          </>
+        ) : null}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function AddField({ actions }: { actions: TableActions }) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const add = (dtype: AnnotationDtype) => {
+    const next = name.trim();
+    if (!next) return;
+    setOpen(false);
+    setName("");
+    actions.addField(next, dtype);
+  };
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger
+        aria-label="Add a field"
+        title="Add a field"
+        className="flex size-5 items-center justify-center rounded-sm text-text-muted outline-none hover:bg-muted hover:text-foreground data-popup-open:bg-muted"
+      >
+        <PlusIcon className="size-3" />
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-56 gap-0">
+        <div className={popoverHeading}>New field</div>
+        <Input
+          aria-label="Field name"
+          placeholder="Field name"
+          value={name}
+          onChange={(e) => setName(e.currentTarget.value)}
+          onKeyDown={(e) => e.key === "Enter" && add("label")}
+          className="mx-1 mb-1 w-auto font-mono"
+        />
+        <button type="button" className={menuRow} disabled={!name.trim()} onClick={() => add("label")}>
+          <span className="w-4 font-sans font-semibold text-[9.5px] text-text-muted">{FIELD_GLYPH.label}</span>
+          Label
+          <span className="ml-auto text-sm text-text-muted">pick or type a label</span>
+        </button>
+        <button type="button" className={menuRow} disabled={!name.trim()} onClick={() => add("text")}>
+          <span className="w-4 font-sans font-semibold text-[9.5px] text-text-muted">{FIELD_GLYPH.text}</span>
+          Text
+          <span className="ml-auto text-sm text-text-muted">free text</span>
+        </button>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/** Label cell: pick an existing label or type a new one. */
+function LabelEditor({
+  field,
+  value,
+  onPick,
+  values,
+}: {
+  field: string;
+  value: string | null;
+  onPick(value: string | null): void;
+  values: TableActions["values"];
+}) {
+  const [open, setOpen] = useState(false);
+  const [labels, setLabels] = useState<string[]>([]);
+  const [typed, setTyped] = useState("");
+  const term = typed.trim();
+  const pick = (next: string | null) => {
+    setOpen(false);
+    onPick(next);
+  };
+  return (
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) return;
+        setTyped("");
+        void values(field).then(setLabels, () => setLabels([]));
+      }}
+    >
+      <PopoverTrigger
+        className="flex h-full w-full min-w-0 items-center outline-none"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {value ? <Pill>{value}</Pill> : <Pill empty>add</Pill>}
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-56 gap-0 p-1.5" onClick={(e) => e.stopPropagation()}>
+        <Command>
+          <CommandInput placeholder="Find or create a label" value={typed} onValueChange={setTyped} />
+          <CommandList className="max-h-56">
+            <CommandEmpty>Type a label to create it.</CommandEmpty>
+            <CommandGroup>
+              {labels.map((label) => (
+                <CommandItem key={label} value={label} data-checked={label === value} onSelect={() => pick(label)}>
+                  {label}
+                </CommandItem>
+              ))}
+              {term && !labels.includes(term) ? (
+                <CommandItem value={`\u0000create ${term}`} onSelect={() => pick(term)} className="text-primary">
+                  Create “{term}”
+                </CommandItem>
+              ) : null}
+              {value ? (
+                <CommandItem value={"\u0000clear"} onSelect={() => pick(null)} className="text-text-muted">
+                  Clear
+                </CommandItem>
+              ) : null}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/** Text cell: click to type; Enter or leaving the cell keeps the text, Escape drops it. */
+function TextEditor({ value, onCommit }: { value: string | null; onCommit(value: string | null): void }) {
+  const [draft, setDraft] = useState<string | null>(null);
+  if (draft === null) {
+    return (
+      <button
+        type="button"
+        className="flex h-full w-full min-w-0 items-center text-left outline-none"
+        onClick={(e) => {
+          e.stopPropagation();
+          setDraft(value ?? "");
+        }}
+      >
+        {value ? <span className="truncate">{value}</span> : <span className="font-sans text-text-muted">add</span>}
+      </button>
+    );
+  }
+  const commit = () => {
+    setDraft(null);
+    onCommit(draft === "" ? null : draft);
+  };
+  return (
+    <Input
+      autoFocus
+      aria-label="Cell value"
+      value={draft}
+      onClick={(e) => e.stopPropagation()}
+      onChange={(e) => setDraft(e.currentTarget.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") commit();
+        if (e.key === "Escape") setDraft(null);
+      }}
+      className="h-5 rounded-xs px-1 font-mono text-sm"
+    />
+  );
+}
+
+function Cell({ field, row, edits, actions }: { field: TableField; row: Row; edits: Edits; actions: TableActions }) {
+  const rowIndex = Number(row.__row_index__);
+  const raw = row[field.name];
+  const pending = edits.get(field.name);
+  const dirty = pending?.has(rowIndex) ?? false;
+  const saved = raw == null ? null : formatValue(raw);
+  const value = dirty ? pending!.get(rowIndex)! : saved;
+  const edit = (next: string | null) => actions.edit(field.name, rowIndex, next, saved);
+
+  let content: ReactNode;
+  if (field.annotation === "label") {
+    content = <LabelEditor field={field.name} value={value} onPick={edit} values={actions.values} />;
+  } else if (field.annotation === "text") {
+    content = <TextEditor value={value} onCommit={edit} />;
+  } else if (raw == null) {
+    content = null;
+  } else if (field.type === "category") {
+    content = <Pill>{formatValue(raw)}</Pill>;
+  } else if (field.type === "boolean") {
+    content = <Checkbox checked={raw === true} readOnly aria-label={field.name} />;
+  } else {
+    content = <span className="truncate">{formatValue(raw)}</span>;
+  }
+  return (
+    <div
+      className={cn(
+        "flex h-full min-w-0 items-center border-muted border-l px-2",
+        field.type === "number" && "justify-end tabular-nums",
+        dirty && "shadow-[inset_2px_0_0_var(--dirty)]",
+      )}
+      title={field.annotation || raw == null ? undefined : formatValue(raw)}
+    >
+      {content}
+    </div>
+  );
 }
 
 export function DataTable({
-  coordinator,
-  table,
-  columns: columnNames,
-  filter,
-  focusedRowIndex,
-  onRowClick,
-  onTotalCountChange,
-  sorting: controlledSorting,
-  onSortingChange,
+  fields,
+  query,
+  layout,
+  sort,
+  groupBy,
+  focused,
+  reveal,
+  selection,
+  selected,
+  edits,
+  provenance,
+  actions,
 }: DataTableProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const count = query.count ?? 0;
+  const length = layout ? layout.length : count;
 
-  // ── Server-side sort state (lifted into TanStack Table) ─────────
-  // Controlled when the wrapper bridges sort to the `ordering` coordination
-  // scope; otherwise internal. Either way a change re-renders + re-queries.
-  const [internalSorting, setInternalSorting] = useState<SortingState>([]);
-  const sorting = controlledSorting ?? internalSorting;
-  const handleSortingChange: OnChangeFn<SortingState> = (updater) => {
-    const next = typeof updater === "function" ? updater(sorting) : updater;
-    if (controlledSorting === undefined) setInternalSorting(next);
-    onSortingChange?.(next);
-  };
-  const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({});
-  const [columnVisibility, setColumnVisibility] = useState<ColumnVisibilityState>({});
-  const [colFilter, setColFilter] = useState("");
-  const autoSizedForRef = useRef<string[] | null>(null);
-
-  // Column types (# / ◇ header glyphs) via `DESCRIBE dataset`.
-  const colTypes = useColumnTypes(coordinator);
-
-  const sort: SortState | null = useMemo(() => {
-    if (sorting.length === 0) return null;
-    return { column: sorting[0].id, direction: sorting[0].desc ? "desc" : "asc" };
-  }, [sorting]);
-
-  // ── Server-side data ────────────────────────────────────────────
-  const { totalCount, getRow, getCachedRows, ensureRange, findRowPosition } = useTableQuery({
-    coordinator,
-    table,
-    columns: columnNames,
-    filter,
-    sort,
-  });
-
-  // ── Column definitions ──────────────────────────────────────────
-  const tableColumns = useMemo<ColumnDef<typeof DATA_TABLE_FEATURES, Row>[]>(
-    () =>
-      columnNames.map((name) => ({
-        id: name,
-        accessorFn: (row: Row) => row[name],
-        header: name,
-        size: initialColumnSize(name),
-        minSize: 50,
-        maxSize: 600,
-        cell: (info) => {
-          const val = info.getValue();
-          if (val == null) return <span className="text-muted-foreground">:</span>;
-          const text = formatCellValue(val);
-          return (
-            <span className={cn("truncate", typeof val === "number" && "tabular-nums")} title={text}>
-              {text}
-            </span>
-          );
-        },
-      })),
-    [columnNames],
-  );
-
-  // ── Build visible data array from page cache ────────────────────
-  // Only includes rows that are actually loaded: NOT the full dataset.
-  // TanStack Table sees this small array; Virtual handles the full count.
-  const visibleData = useMemo(() => getCachedRows(), [getCachedRows]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Notify parent when row count changes so TerminalTable header can show it
-  useEffect(() => {
-    onTotalCountChange?.(totalCount);
-  }, [totalCount, onTotalCountChange]);
-
-  // ── Auto-size columns from first loaded data ─────────────────
-  // Latched per column SET: annotations add columns at runtime, which re-fits.
-  useEffect(() => {
-    if (autoSizedForRef.current === columnNames || visibleData.length === 0) return;
-    autoSizedForRef.current = columnNames;
-    const sizing: ColumnSizingState = {};
-    for (const name of columnNames) {
-      sizing[name] = estimateColumnWidth(name, visibleData.slice(0, 100));
+  // Widths latch per field set once the first rows arrive (state set while rendering, React's
+  // pattern for values derived from earlier renders).
+  const fieldKey = fields.map((f) => `${f.name}:${f.type}`).join("\u0000");
+  const [widths, setWidths] = useState<{ key: string; px: number[] } | null>(null);
+  if (query.getRow(0) && widths?.key !== fieldKey) {
+    const sample: Row[] = [];
+    for (let i = 0; i < 50; i++) {
+      const row = query.getRow(i);
+      if (row) sample.push(row);
     }
-    setColumnSizing(sizing);
-  }, [visibleData, columnNames]);
+    setWidths({ key: fieldKey, px: fields.map((f) => columnWidth(f, sample)) });
+  }
+  const columns = fields.map((f, i) => (widths?.key === fieldKey ? widths.px[i] : columnWidth(f, [])));
+  const template = `${LEAD_WIDTH}px ${columns.map((w) => `${w}px`).join(" ")} 32px`;
+  const totalWidth = LEAD_WIDTH + columns.reduce((a, b) => a + b, 0) + 32;
 
-  // ── TanStack Table instance ─────────────────────────────────────
-  const tableInstance = useTable({
-    features: DATA_TABLE_FEATURES,
-    data: visibleData,
-    columns: tableColumns,
-    state: { sorting, columnSizing, columnVisibility },
-    onSortingChange: handleSortingChange,
-    onColumnSizingChange: setColumnSizing,
-    onColumnVisibilityChange: setColumnVisibility,
-    columnResizeMode: "onChange",
-    enableColumnResizing: true,
-    manualSorting: true,
-    getRowId: (row) => String(row.__row_index__ ?? row.__virtual_index__),
-  });
-
-  // ── Memoized getItemKey ─────────────────────────────────────────
-  const getItemKey = useCallback((index: number) => index, []);
-
-  // ── Double-click resize handle → auto-fit column ─────────────
-  const handleAutoSizeColumn = useCallback(
-    (columnId: string) => {
-      const width = estimateColumnWidth(columnId, visibleData.slice(0, 100));
-      setColumnSizing((prev) => ({ ...prev, [columnId]: width }));
-    },
-    [visibleData],
-  );
-
-  // ── Virtual scrolling ───────────────────────────────────────────
   const { virtualItems, totalSize, scrollMargin, scrollToIndex } = useVirtualizer({
-    count: totalCount,
-    getScrollElement: () => containerRef.current,
+    count: length,
+    getScrollElement: () => scrollRef.current,
     estimateSize: () => ROW_HEIGHT,
-    overscan: OVERSCAN,
-    getItemKey,
+    overscan: 12,
     scrollMargin: HEADER_HEIGHT,
   });
 
-  // ── Fetch visible pages on scroll ───────────────────────────────
+  const first = virtualItems[0]?.index ?? 0;
+  const last = virtualItems.at(-1)?.index ?? 0;
+  const { ensureRange } = query;
   useEffect(() => {
-    if (virtualItems.length === 0) return;
-    const start = virtualItems[0].index;
-    const end = virtualItems[virtualItems.length - 1].index;
-    ensureRange(start, end);
-  }, [virtualItems, ensureRange]);
-
-  // ── Scroll-to-focus ─────────────────────────────────────────────
-  useEffect(() => {
-    if (focusedRowIndex == null) return;
-    void findRowPosition(focusedRowIndex).then((pos) => {
-      if (pos != null) {
-        scrollToIndex(pos, { align: "center" });
-        ensureRange(Math.max(0, pos - 50), pos + 50);
+    if (!layout) return ensureRange(first, last);
+    // Load the rows under the visible group headers.
+    let lo = Number.POSITIVE_INFINITY;
+    let hi = -1;
+    for (let i = first; i <= last && i < length; i++) {
+      const item = layout.item(i);
+      if (item.kind === "row") {
+        lo = Math.min(lo, item.position);
+        hi = item.position;
       }
-    });
-  }, [focusedRowIndex, findRowPosition, scrollToIndex, ensureRange]);
+    }
+    if (hi >= 0) ensureRange(lo, hi);
+  }, [first, last, length, layout, ensureRange]);
 
-  // ── Row click handler ───────────────────────────────────────────
-  const handleRowClick = useCallback(
-    (virtualIndex: number) => {
-      const row = getRow(virtualIndex);
-      if (!row || !onRowClick) return;
-      const rawRowIndex = row.__row_index__;
-      onRowClick(rawRowIndex != null ? rowIndex(Number(rawRowIndex)) : null);
-    },
-    [getRow, onRowClick],
-  );
+  useEffect(() => {
+    if (reveal !== null && reveal < length) scrollToIndex(reveal, { align: "auto" });
+  }, [reveal, length, scrollToIndex]);
 
-  // ── Render ──────────────────────────────────────────────────────
-  const headerGroups = tableInstance.getHeaderGroups();
-  const totalWidth = tableInstance.getTotalSize();
-
-  // "Best width when opened": size the Columns popover to the longest column name
-  // (mono ~7px/char + chrome), clamped 224–384px: so names show without truncating
-  // or forcing a horizontal scrollbar; anything past the cap truncates (title shows full).
-  const popoverWidth = Math.min(384, Math.max(224, columnNames.reduce((m, n) => Math.max(m, n.length), 8) * 7 + 56));
-
-  // Toolbar controls (top-right of the body): obs count + column view-options.
-  const controls = (
-    <div className="flex items-center gap-1.5 text-sm">
-      <span className="font-mono text-text-muted tabular-nums">{totalCount.toLocaleString("en-US")} obs</span>
-      <Popover>
-        <PopoverTrigger
-          aria-label="Columns"
-          className="focus-ring inline-flex size-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-        >
-          <Columns3Icon className="size-3.5" />
-        </PopoverTrigger>
-        <PopoverContent align="end" style={{ width: popoverWidth }} className="gap-1.5 p-1.5">
-          <div className="flex items-center justify-between px-0.5">
-            <span className="font-medium text-sm text-muted-foreground">Columns</span>
-            <span className="text-2xs text-text-muted tabular-nums">
-              {tableInstance.getVisibleLeafColumns().length}/{tableInstance.getAllLeafColumns().length}
-            </span>
-          </div>
-          <input
-            value={colFilter}
-            onChange={(e) => setColFilter(e.currentTarget.value)}
-            placeholder="filter columns…"
-            className="focus-ring h-6 w-full rounded border border-border bg-muted px-2 text-sm text-foreground placeholder:text-text-muted"
-          />
-          <ScrollArea viewportClassName="max-h-72 overflow-x-hidden" contentClassName="min-w-0">
-            {/* pr clears the overlay scrollbar's lane so long names don't tuck under it */}
-            <div className="flex flex-col pr-2.5">
-              {tableInstance
-                .getAllLeafColumns()
-                .filter((col) => col.id.toLowerCase().includes(colFilter.toLowerCase()))
-                .map((col) => {
-                  const on = col.getIsVisible();
-                  return (
-                    <button
-                      key={col.id}
-                      type="button"
-                      title={col.id}
-                      onClick={() => col.toggleVisibility()}
-                      className="flex items-center gap-2 rounded px-1.5 py-1 text-left text-sm hover:bg-muted"
-                    >
-                      <span className="flex size-3.5 shrink-0 items-center justify-center text-primary">
-                        {on ? <CheckIcon className="size-3" /> : null}
-                      </span>
-                      <span className={cn("min-w-0 truncate", on ? "text-foreground" : "text-text-muted")}>
-                        {col.id}
-                      </span>
-                    </button>
-                  );
-                })}
-            </div>
-          </ScrollArea>
-        </PopoverContent>
-      </Popover>
-    </div>
-  );
+  const allChecked = selected > 0 && selected >= count;
 
   return (
-    <div className="flex h-full w-full flex-col overflow-hidden bg-surface font-mono text-foreground text-ui">
-      {/* Toolbar row: column controls top-right. */}
-      <div className="flex h-7 shrink-0 items-center justify-end border-border border-b px-2.5">{controls}</div>
-      {/* Scrollable container */}
-      <div ref={containerRef} className="flex-1 overflow-auto">
-        {/* Sticky header via TanStack Table header groups. Raised above the element
-            body so rows scroll under it, matching the other sticky headers
-            rather than borrowing the page colour. */}
-        <div
-          className="sticky top-0 z-10 border-border border-b bg-card"
-          style={{ height: HEADER_HEIGHT, minWidth: totalWidth }}
-        >
-          {headerGroups.map((headerGroup) => (
-            <div key={headerGroup.id} className="flex" style={{ minWidth: totalWidth }}>
-              {headerGroup.headers.map((header) => {
-                const sortGlyph = SORT_GLYPH[String(header.column.getIsSorted())];
-                return (
-                  <div
-                    key={header.id}
-                    className="group relative flex shrink-0 items-center"
-                    style={{ width: header.getSize(), height: HEADER_HEIGHT }}
-                  >
-                    <button
-                      type="button"
-                      className="flex h-full w-full cursor-pointer select-none items-center gap-1 px-2 font-medium font-mono text-sm text-muted-foreground outline-none focus-ring hover:text-foreground"
-                      onClick={header.column.getToggleSortingHandler()}
-                      title={header.isPlaceholder ? undefined : String(header.column.columnDef.header ?? header.id)}
-                    >
-                      {header.isPlaceholder ? null : (
-                        <>
-                          <span className="shrink-0 text-[9px] text-text-muted/70 tabular-nums">
-                            {TYPE_GLYPH[colTypes?.get(header.column.id) ?? "other"]}
-                          </span>
-                          <span className="min-w-0 truncate">
-                            {flexRender(header.column.columnDef.header, header.getContext())}
-                          </span>
-                        </>
-                      )}
-                      {sortGlyph ? <span className="shrink-0 text-muted-foreground">{sortGlyph}</span> : null}
-                    </button>
-                    {/* biome-ignore lint/a11y/noStaticElementInteractions: column resize handle is drag-only */}
-                    <div
-                      onMouseDown={header.getResizeHandler()}
-                      onTouchStart={header.getResizeHandler()}
-                      onDoubleClick={() => handleAutoSizeColumn(header.column.id)}
-                      className={`absolute top-0 right-0 h-full w-[3px] cursor-col-resize touch-none select-none ${
-                        header.column.getIsResizing() ? "bg-primary" : "bg-transparent group-hover:bg-muted"
-                      }`}
-                    />
-                  </div>
-                );
-              })}
-            </div>
-          ))}
+    <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto px-1 font-mono text-sm">
+      <div
+        className="sticky top-0 z-10 grid border-border border-b-(length:--keyline) bg-surface"
+        style={{ gridTemplateColumns: template, height: HEADER_HEIGHT, width: totalWidth }}
+      >
+        <div className="flex items-center px-1.5">
+          <Checkbox
+            aria-label={allChecked || selected ? "Clear the selection" : "Select every obs in the table"}
+            checked={allChecked}
+            indeterminate={selected > 0 && !allChecked}
+            onCheckedChange={() => actions.toggleAll()}
+          />
         </div>
+        {fields.map((field) => (
+          <div key={field.name} className="min-w-0 border-muted border-l px-0.5 py-0.5">
+            <ColumnMenu
+              field={field}
+              sort={sort}
+              groupBy={groupBy}
+              actions={actions}
+              status={provenance ? provenance(field) : "obs"}
+            />
+          </div>
+        ))}
+        <div className="flex items-center justify-center border-muted border-l">
+          <AddField actions={actions} />
+        </div>
+      </div>
 
-        {/* Virtual row container */}
-        <div
-          style={{
-            height: `${totalSize}px`,
-            minWidth: totalWidth,
-            position: "relative",
-          }}
-        >
-          {virtualItems.map((virtualRow) => {
-            const row = getRow(virtualRow.index);
-            const isHighlighted =
-              focusedRowIndex != null && row?.__row_index__ != null && Number(row.__row_index__) === focusedRowIndex;
-
+      <div style={{ height: totalSize, width: totalWidth, position: "relative" }}>
+        {virtualItems.map((virtual) => {
+          const item = layout ? layout.item(virtual.index) : ({ kind: "row", position: virtual.index } as const);
+          const style = {
+            height: ROW_HEIGHT,
+            width: totalWidth,
+            transform: `translateY(${virtual.start - scrollMargin}px)`,
+          };
+          if (item.kind === "group") {
+            const value = item.group.value;
+            const key = groupKey(value);
             return (
               <button
+                key={`g:${key}`}
                 type="button"
-                key={virtualRow.key}
-                data-index={virtualRow.index}
-                className={`absolute flex cursor-pointer border-border/50 border-b text-left ${
-                  isHighlighted ? "bg-muted" : "hover:bg-muted"
-                }`}
-                style={{
-                  height: `${ROW_HEIGHT}px`,
-                  minWidth: totalWidth,
-                  transform: `translateY(${virtualRow.start - scrollMargin}px)`,
-                }}
-                onClick={() => handleRowClick(virtualRow.index)}
+                className="absolute top-0 left-0 flex items-center border-muted border-b text-left font-sans hover:bg-muted"
+                style={style}
+                onClick={() => actions.toggleGroup(key)}
               >
-                {row
-                  ? tableInstance.getVisibleLeafColumns().map((col) => {
-                      const val = row[col.id];
-                      const text = val == null ? null : formatCellValue(val);
-                      return (
-                        <div
-                          key={col.id}
-                          className="flex shrink-0 items-center overflow-hidden px-2"
-                          style={{
-                            width: col.getSize(),
-                            height: ROW_HEIGHT,
-                          }}
-                        >
-                          {val == null ? (
-                            <span className="text-muted-foreground">:</span>
-                          ) : (
-                            <span
-                              className={cn("truncate", typeof val === "number" && "tabular-nums")}
-                              title={text ?? ""}
-                            >
-                              {text}
-                            </span>
-                          )}
-                        </div>
-                      );
-                    })
-                  : /* Skeleton row */
-                    tableInstance.getVisibleLeafColumns().map((col) => (
-                      <div
-                        key={col.id}
-                        className="flex shrink-0 items-center px-2"
-                        style={{ width: col.getSize(), height: ROW_HEIGHT }}
-                      >
-                        <div className="h-3 w-2/3 animate-pulse rounded bg-muted" />
-                      </div>
-                    ))}
+                {/* Sticky so the value stays in view when the table scrolls sideways. */}
+                <span className="sticky left-0 flex w-fit items-center gap-2 px-1.5">
+                  {item.collapsed ? (
+                    <ChevronRightIcon className="size-3 text-text-muted" />
+                  ) : (
+                    <ChevronDownIcon className="size-3 text-text-muted" />
+                  )}
+                  <span className={cn("font-medium", value === null && "text-text-muted")}>
+                    {value === null ? "empty" : formatValue(value)}
+                  </span>
+                  <span className="font-mono text-text-muted text-xs">
+                    {item.group.count.toLocaleString("en-US")} obs
+                  </span>
+                </span>
               </button>
             );
-          })}
-        </div>
+          }
+          const row = query.getRow(item.position);
+          const rowIndex = row ? Number(row.__row_index__) : null;
+          const isSelected = rowIndex !== null && selection !== null && hasBit(selection, rowIndex);
+          const isFocused = rowIndex !== null && rowIndex === focused;
+          return (
+            // biome-ignore lint/a11y/useSemanticElements: a row holds its own buttons and inputs
+            <div
+              key={virtual.key}
+              role="row"
+              tabIndex={-1}
+              className={cn(
+                "absolute top-0 left-0 grid cursor-pointer border-muted border-b transition-colors",
+                isSelected || isFocused ? "bg-accent text-accent-foreground" : "hover:bg-muted",
+              )}
+              style={{ ...style, gridTemplateColumns: template }}
+              onClick={(e) => rowIndex !== null && actions.clickRow(item.position, rowIndex, e)}
+            >
+              <div
+                className={cn(
+                  "flex items-center gap-1.5 px-1.5 text-2xs text-text-muted",
+                  isFocused && "shadow-[inset_2px_0_0_var(--primary)]",
+                )}
+              >
+                <Checkbox
+                  aria-label="Select this obs"
+                  checked={isSelected}
+                  disabled={rowIndex === null}
+                  onClick={(e) => e.stopPropagation()}
+                  onCheckedChange={() => rowIndex !== null && actions.toggleRow(rowIndex)}
+                />
+                <span className="truncate">{(item.position + 1).toLocaleString("en-US")}</span>
+              </div>
+              {row
+                ? fields.map((field) => (
+                    <Cell key={field.name} field={field} row={row} edits={edits} actions={actions} />
+                  ))
+                : fields.map((field) => (
+                    <div key={field.name} className="flex items-center border-muted border-l px-2">
+                      <div className="h-2.5 w-2/3 animate-pulse rounded-xs bg-muted" />
+                    </div>
+                  ))}
+              <div className="border-muted border-l" />
+            </div>
+          );
+        })}
       </div>
     </div>
   );

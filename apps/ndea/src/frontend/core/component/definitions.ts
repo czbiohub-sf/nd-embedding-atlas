@@ -57,7 +57,6 @@ function useViewerSlots() {
 }
 
 const services: ComponentServices = {
-  annotate: { useServices: useViewerSlots },
   charts: { useColumnTypes, useQuery: useMosaicClient },
   count: { predicateToSql },
   gallery: {

@@ -1,6 +1,6 @@
 /**
  * ViewerChannelsStore: shares live channel state from ViewerProvider
- * to components outside the viewer tree (galleries, annotate crops).
+ * to components outside the viewer tree (galleries).
  *
  * ViewerProvider writes via publishViewerChannels in a useEffect.
  * useGalleryChannels reads it to match gallery thumbnails to the live

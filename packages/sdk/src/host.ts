@@ -1,7 +1,14 @@
 /** Services scoped to one live dashboard element. */
 
 import type { Coordinator, MosaicClient, Selection } from "@uwdata/mosaic-core";
-import type { CommitAnnotationsResponse, FilterClause, Metadata, ObservationSet } from "@ndea/protocol";
+import type {
+  AnnotationColumn,
+  AnnotationDtype,
+  CommitAnnotationsResponse,
+  FilterClause,
+  Metadata,
+  ObservationSet,
+} from "@ndea/protocol";
 import type { RowIndex } from "./component";
 
 export interface DeviceInfo {
@@ -36,18 +43,27 @@ export interface DataQueryAPI {
   query(sql: string, signal?: AbortSignal): Promise<unknown>;
 }
 
-export interface AnnotationWriteAPI {
-  listAnnotationColumns(): Promise<{ name: string; dtype: string }[]>;
-  createAnnotationColumn(name: string, dtype?: "categorical" | "string" | "integer" | "float"): Promise<void>;
-  writeAnnotationByPredicate(column: string, label: string, predicate: string): Promise<{ n: number }>;
+/**
+ * Annotation fields: editable `label` / `text` columns joined into the dataset.
+ * Field operations apply on the server at once; cell values arrive in batches
+ * (the table's Save). Every write refreshes the app's metadata.
+ */
+export interface FieldEditAPI {
+  listFields(): Promise<AnnotationColumn[]>;
+  createField(name: string, dtype: AnnotationDtype): Promise<void>;
+  /** Rename and/or convert a field. */
+  updateField(name: string, patch: { name?: string; dtype?: AnnotationDtype }): Promise<void>;
+  deleteField(name: string): Promise<void>;
+  /** Set cell values by row; `null` clears a cell. */
+  writeFieldValues(field: string, rows: readonly { rowIndex: RowIndex; value: string | null }[]): Promise<void>;
   /**
-   * Commits full columns to AnnData `.obs`; unannotated rows become NA.
-   * The write is irreversible.
+   * Writes whole fields into each source AnnData `.obs`; obs without a value
+   * become NA. Irreversible unless `dryRun`.
    */
-  commitAnnotations(options: { dryRun: boolean; columns?: string[] }): Promise<CommitAnnotationsResponse>;
+  commitFields(options: { dryRun: boolean; columns?: string[] }): Promise<CommitAnnotationsResponse>;
 }
 
-export type DataAPI = DataQueryAPI & RowSetPublishAPI & AnnotationWriteAPI;
+export type DataAPI = DataQueryAPI & RowSetPublishAPI & FieldEditAPI;
 
 /** 2D pan/zoom view. */
 export interface PanZoomView {
@@ -129,6 +145,8 @@ export interface FilterCoordinationAPI {
   getResolved(): ResolvedFilter;
   subscribeResolved(callback: (filter: ResolvedFilter) => void): () => void;
   publish(facet: FilterFacet, clause: FilterClause): void;
+  /** This element's own clause for `facet`; undefined when unset or the element is unbound. */
+  facet(facet: FilterFacet): FilterClause | undefined;
   clear(facet: FilterFacet): void;
   materializeRowIds(signal?: AbortSignal): Promise<MaterializedFilterRows>;
 }

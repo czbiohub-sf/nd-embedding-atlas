@@ -182,6 +182,15 @@ entrypoints across workspaces.
   document-supplied column name against it and interpolate it with
   `quoteIdent`, never a bare `"${name}"`. Mosaic's `/data/query` keeps its own
   statement allowlist.
+- Annotation fields (`server/routes/annotations.ts`) are `label` or `text`,
+  both TEXT in `ann_*` tables LEFT JOINed into the VIEW (`kind:
+  "annotation"`). Add, rename, convert, or drop a field only through
+  `DatasetQuerySession` (`registerAnnotationColumn`, `renameAnnotationColumn`,
+  `setAnnotationDtype`, `dropAnnotationColumn`); the VIEW is rebuilt before a
+  table it referenced is dropped. `writeAnnotationValues` takes `{ rowIndex,
+  value }` and fills in `obs_name`/`dataset_key` from obs_base. Every field
+  write saves the Parquet sidecar before it responds; commit to `.obs` is
+  `POST /api/annotations/commit[?dryRun=1]`.
 
 ### SDK
 
@@ -226,6 +235,16 @@ entrypoints across workspaces.
   colormaps, contrast over the channel-stats log histogram, auto contrast) and
   View (T/Z, 2D/3D, focus box, volume, local/remote render); a scale bar in the
   OME-Zarr axis unit sits bottom-right.
+- The table (`packages/components/src/table/`) is the field editor: a toolbar
+  (search, `Filter │ Sort │ Group │ Fields`, Save / Discard, "Write fields to
+  file…"), header glyphs and provenance markers (Settings › Provenance badges,
+  a localStorage preference), and server-side pages, counts, and groups that
+  skip Mosaic's cache because edits change values under the same SQL. Cell
+  edits stay in a client buffer until Save (`host.dataAPI.writeFieldValues`);
+  field operations (`createField`, `updateField`, `deleteField`) apply at
+  once. Its filter builder publishes on the `filter` facet and its row
+  selection (an observation set) on the `selection` facet; it narrows itself
+  by its own builder clauses but never by its selection.
 - TypeGPU drives the WebGPU embedding view (`packages/components/src/scatter/gpu/gpu/`):
   SoA position columns (`/api/scatter-positions` sends the element's
   `xDim`/`yDim`/`zDim` columns of its `obsmKey`), one `project()` shared by every pass,
