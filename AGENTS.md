@@ -225,6 +225,11 @@ entrypoints across workspaces.
   Data, Links, Harness, Settings) open over the tiles on hover and dock when
   pinned (click or ⌘B). No top bar, status bar, or revision UI: history stays
   on the server (REST, CLI, MCP, TUI).
+- ⌘K (or the rail's Search) opens the command menu (`core/shell/CommandMenu.tsx`,
+  on `@ndea/ui` `command`): it switches the layout (one, until named layouts)
+  and the dataset (a `_dataset` `eq` clause under source `dataset` in filter
+  scope `A`; "All datasets" clears it); `>` lists commands that call the
+  shell, `useTheme` and `WorkspaceStore`. The recovery page has commands only.
 - A view tile's 30px header: its tab, the embedding chip (embedding views),
   then the link indicator + popover (`LinksPopover.tsx`: each link's value,
   members, Unlink; hovering highlights member tiles through

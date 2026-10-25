@@ -12,9 +12,9 @@ import { IconButton } from "@ndea/ui/components/icon-button";
 import { NdHarnessIcon, NdSplitIcon } from "@ndea/ui/components/nd-icons";
 import { cn } from "@ndea/ui/lib/utils";
 
-import { useOpenCommandPalette } from "@/components/ThemeCommandPalette";
 import { DashboardPane } from "@/core/workspace/DashboardPane";
 import { OpenLinksContext } from "@/core/workspace/LinksPopover";
+import { WorkspaceCommandMenu, type MenuItem } from "./CommandMenu";
 import { DataFlyout, HarnessFlyout, LayoutsFlyout, LinksFlyout, SettingsFlyout } from "./flyouts";
 import { isConnected, useHarnessPresence } from "./presence";
 
@@ -44,7 +44,7 @@ interface FlyoutState {
 const togglePinned = (s: FlyoutState): FlyoutState => ({ ...s, hovered: !s.pinned, pinned: !s.pinned });
 
 export function Shell() {
-  const openPalette = useOpenCommandPalette();
+  const [menuOpen, setMenuOpen] = useState(false);
   const presence = useHarnessPresence();
   const connected = presence.agents.some((agent) => isConnected(agent, presence.now));
   const [{ panel, hovered, pinned }, setFlyout] = useState<FlyoutState>({
@@ -108,6 +108,17 @@ export function Shell() {
     </IconButton>
   );
 
+  const pin = (next: Panel) => setFlyout({ panel: next, hovered: false, pinned: true });
+  const shellCommands: MenuItem[] = [
+    { id: "shell:sidebar", label: "Toggle sidebar", meta: "⌘B", leading: <PanelLeftIcon />, onSelect: togglePin },
+    ...(Object.keys(PANELS) as Panel[]).map((id) => ({
+      id: `shell:${id}`,
+      label: `Open ${PANELS[id].title}`,
+      leading: PANELS[id].icon,
+      onSelect: () => pin(id),
+    })),
+  ];
+
   return (
     <div className="fixed inset-0 overflow-hidden bg-background select-none">
       <nav
@@ -124,7 +135,7 @@ export function Shell() {
           nd
           {connected && <span className="absolute top-0.5 -right-0.5 size-[5px] rounded-full bg-success" />}
         </span>
-        <IconButton size="md" label="Search" description="⌘K" tooltipSide="right" onClick={openPalette}>
+        <IconButton size="md" label="Search" description="⌘K" tooltipSide="right" onClick={() => setMenuOpen(true)}>
           <SearchIcon />
         </IconButton>
         <span className="my-1 h-px w-5 shrink-0 bg-border" />
@@ -181,10 +192,11 @@ export function Shell() {
             : "left-[calc(var(--edge)_+_var(--rail-width)_+_var(--gutter))]",
         )}
       >
-        <OpenLinksContext value={() => setFlyout({ panel: "links", hovered: false, pinned: true })}>
+        <OpenLinksContext value={() => pin("links")}>
           <DashboardPane />
         </OpenLinksContext>
       </main>
+      <WorkspaceCommandMenu open={menuOpen} onOpenChange={setMenuOpen} shellCommands={shellCommands} />
     </div>
   );
 }

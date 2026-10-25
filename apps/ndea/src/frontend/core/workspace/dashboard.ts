@@ -172,6 +172,14 @@ export const COMPONENTS: Readonly<Record<string, ComponentInfo>> = Object.freeze
   ...viewComponents(),
 });
 
+/**
+ * Components an empty tile can take as-is: not layout, and valid at their
+ * defaults (`text` needs text, `select` a column; agents add those with props).
+ */
+export const EMPTY_TILE_CHOICES: readonly string[] = Object.entries(COMPONENTS)
+  .filter(([type, info]) => !["split", "stack", "slot"].includes(type) && info.props.safeParse(info.defaults).success)
+  .map(([type]) => type);
+
 const COMMON_PROPS = new Set<string>(["data", "title", ...COORDINATION_TYPE_IDS]);
 
 /** The element's own props merged over its component defaults; common props removed. */

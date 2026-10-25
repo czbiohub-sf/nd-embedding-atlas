@@ -185,3 +185,41 @@ standard frame; header glyphs and markers showed. The agent's dev smoke covered 
 
 - The prototype's table shows saved annotation fields with coloured label pills from the d1–d9
   set; ours use neutral pills for labels.
+
+## Phase 5: ⌘K switcher
+
+**Changed**
+
+- `core/shell/CommandMenu.tsx` replaces the theme-only palette. It is a centred 760px window on
+  `@ndea/ui` `command` over the `--scrim` backdrop (no blur), with "Switch layout or dataset…
+  type > for commands".
+- Default mode lists:
+  - Layouts: one until G2, with a mini wireframe and the "current" marker.
+  - Datasets: obs counts per dataset; picking one publishes `{op:"eq", column:"_dataset"}`
+    under source `dataset` in filter scope `A`, and "All datasets" clears it. The datasets sit
+    as children of "All datasets", so → / ← work and G3 can add collections as a level above.
+  - A preview pane with the labelled wireframe, tile count and view titles.
+- `>` lists commands: theme, toggle sidebar (⌘B), open each flyout, and for the selected tile
+  fullscreen, copy reference, split and remove; plus add a component to the first empty tile.
+  The recovery page gets commands only.
+- The empty-tile component rule moved to `dashboard.ts` (`EMPTY_TILE_CHOICES`), shared by the
+  empty tile and the menu. Wireframe cells use `bg-accent`, which stays visible in light theme.
+
+**Files:** `apps/ndea/src/frontend/core/shell/{CommandMenu,Shell,LayoutWireframe}.tsx`,
+`App.tsx`, `core/workspace/{WorkspaceShell,DashboardPane,dashboard}.ts(x)`; deleted
+`components/ThemeCommandPalette.tsx`.
+
+**Checked:** `vp run verify` green. `vp run build`. Binary smoke on infectomics: ⌘K opened the
+760px menu with the layout row, the preview (4 tiles: Embedding · Image viewer · Crop gallery ·
+Table) and the two datasets (30,951 / 39,170 obs). The agent's smoke covered the rest: picking a
+dataset narrowed the table to its obs, "All datasets" restored 70,121, and the `>` commands for
+theme, flyout, copy reference, split, fullscreen and add component all worked.
+
+**Deferred:** the preview always shows the one layout; it follows the highlighted row once G2
+adds more (`ponytail:` in `CommandMenu.tsx`).
+
+**Remaining differences**
+
+- Screenshot 02's "8 in JUMP pilot" counts and the Collections group need G2/G3 (phase 6).
+- Layout rows have no subtitle (the prototype shows "Exploration", "Images", …) until layouts
+  have names.

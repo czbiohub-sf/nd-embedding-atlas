@@ -24,7 +24,7 @@ import { useDatasetSession } from "@/hooks/useDatasetSession";
 import { toRows } from "@/lib/mosaic-helpers";
 import { BodySocket, BodyStatus } from "./body-dock";
 import { ND_STAGE } from "./constants";
-import { COMPONENTS, type Dashboard as DashboardSpec, type SplitSide } from "./dashboard";
+import { COMPONENTS, EMPTY_TILE_CHOICES, type Dashboard as DashboardSpec, type SplitSide } from "./dashboard";
 import { EmbeddingChip } from "./EmbeddingChip";
 import { LinksIndicator } from "./LinksPopover";
 import { copyReference } from "./reference";
@@ -353,14 +353,6 @@ function Select(props: ComponentRenderProps) {
   );
 }
 
-/**
- * Components an empty tile can take as-is: not layout, and valid at their
- * defaults (`text` needs text, `select` a column; agents add those with props).
- */
-const CHOICES = Object.entries(COMPONENTS)
-  .filter(([type, info]) => !["split", "stack", "slot"].includes(type) && info.props.safeParse(info.defaults).success)
-  .map(([type]) => type);
-
 /** An empty tile (`slot`): pick the component that fills it. */
 function Slot(props: ComponentRenderProps) {
   const ws = useWorkspace();
@@ -371,7 +363,7 @@ function Slot(props: ComponentRenderProps) {
         <div className="m-auto flex w-full max-w-(--popover-width) flex-col gap-1.5">
           <span className="px-2 text-sm text-text-muted">Choose a component</span>
           <div className="flex flex-col gap-px">
-            {CHOICES.map((type) => (
+            {EMPTY_TILE_CHOICES.map((type) => (
               <button
                 type="button"
                 key={type}

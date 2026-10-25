@@ -1,10 +1,25 @@
-/** A layout's tile grid in miniature, drawn from its `split` ratios and `stack`s (Layouts flyout; ⌘K previews). */
+/** A layout's tile grid in miniature, drawn from its `split` ratios and `stack`s (Layouts flyout; ⌘K rows and preview). */
 
 import { cn } from "@ndea/ui/lib/utils";
 
-import { componentProps, type Dashboard } from "@/core/workspace/dashboard";
+import { componentProps, type Dashboard, type DashboardElement } from "@/core/workspace/dashboard";
+import { elementTitle } from "@/core/workspace/LinksPopover";
 
-function Cell({ spec, id, grow }: { spec: Dashboard; id: string; grow: number }) {
+/** Ids of the tile tree's leaves in reading order. */
+// eslint-disable-next-line react/only-export-components
+export function layoutTiles(spec: Dashboard, id = spec.root): string[] {
+  const element = spec.elements[id];
+  if (!element) return [];
+  if (element.type !== "split" && element.type !== "stack") return [id];
+  return element.children.flatMap((child) => layoutTiles(spec, child));
+}
+
+/** The name a tile shows in previews: its view's title, or "Empty tile". */
+// eslint-disable-next-line react/only-export-components
+export const tileTitle = (element: DashboardElement): string =>
+  element.type === "slot" ? "Empty tile" : elementTitle(element);
+
+function Cell({ spec, id, grow, labeled }: { spec: Dashboard; id: string; grow: number; labeled: boolean }) {
   const element = spec.elements[id];
   const style = { flex: `${grow} 1 0` };
   if (element?.type !== "split" && element?.type !== "stack") {
@@ -12,10 +27,14 @@ function Cell({ spec, id, grow }: { spec: Dashboard; id: string; grow: number })
       <span
         style={style}
         className={cn(
-          "min-h-0 min-w-0 rounded-[2px]",
-          element?.type === "slot" ? "border border-dashed border-line-2" : "bg-muted-2",
+          "flex min-h-0 min-w-0 items-end overflow-hidden rounded-[2px]",
+          element?.type === "slot" ? "border border-dashed border-line-2" : "bg-accent",
         )}
-      />
+      >
+        {labeled && element && (
+          <span className="truncate px-1 pb-0.5 text-2xs text-text-muted">{tileTitle(element)}</span>
+        )}
+      </span>
     );
   }
   const { direction, ratio } = componentProps(element);
@@ -24,16 +43,25 @@ function Cell({ spec, id, grow }: { spec: Dashboard; id: string; grow: number })
   return (
     <span style={style} className={cn("flex min-h-0 min-w-0 gap-0.5", direction === "column" && "flex-col")}>
       {element.children.map((child, index) => (
-        <Cell key={child} spec={spec} id={child} grow={grows[index]} />
+        <Cell key={child} spec={spec} id={child} grow={grows[index]} labeled={labeled} />
       ))}
     </span>
   );
 }
 
-export function LayoutWireframe({ spec, className }: { spec: Dashboard; className?: string }) {
+/** `labeled` writes each tile's title into its cell (the ⌘K preview). */
+export function LayoutWireframe({
+  spec,
+  className,
+  labeled = false,
+}: {
+  spec: Dashboard;
+  className?: string;
+  labeled?: boolean;
+}) {
   return (
     <span aria-hidden className={cn("flex", className)}>
-      <Cell spec={spec} id={spec.root} grow={1} />
+      <Cell spec={spec} id={spec.root} grow={1} labeled={labeled} />
     </span>
   );
 }
