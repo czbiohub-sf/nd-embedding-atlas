@@ -70,6 +70,8 @@ const textSchema = z.union([
 export type ComponentChildren = "two" | "any" | "none";
 
 export interface ComponentInfo {
+  /** Sentence-case display name (tile tab, empty-tile picker). */
+  readonly title: string;
   readonly description: string;
   /** The component's own props, after defaults; common props are checked separately. */
   readonly props: z.ZodType;
@@ -85,6 +87,7 @@ export interface ComponentInfo {
 
 const BUILTIN_COMPONENTS: Record<string, ComponentInfo> = {
   split: {
+    title: "Split",
     description: "Two children side by side (row) or stacked (column); ratio is the first child's share.",
     props: z.object({ direction: z.enum(["row", "column"]), ratio: z.number().min(0.05).max(0.95) }).strict(),
     defaults: { direction: "row", ratio: 0.5 },
@@ -94,15 +97,17 @@ const BUILTIN_COMPONENTS: Record<string, ComponentInfo> = {
     view: false,
   },
   stack: {
+    title: "Stack",
     description: "Any number of children in a row or column, sharing the space equally.",
     props: z.object({ direction: z.enum(["row", "column"]), gap: z.number().min(0).max(64) }).strict(),
-    defaults: { direction: "column", gap: 8 },
+    defaults: { direction: "column", gap: 4 },
     children: "any",
     reads: false,
     binds: [],
     view: false,
   },
   text: {
+    title: "Text",
     description: "A heading or paragraph; `text` may be a {$template} over coordination state.",
     props: z.object({ text: textSchema, variant: z.enum(["heading", "body", "muted"]) }).strict(),
     defaults: { variant: "body" },
@@ -112,6 +117,7 @@ const BUILTIN_COMPONENTS: Record<string, ComponentInfo> = {
     view: false,
   },
   select: {
+    title: "Select",
     description:
       "A picker over one column's values (with counts). Choosing values publishes {op:'in'} into its filter scope.",
     props: z.object({ column: z.string().min(1), label: z.string().optional() }).strict(),
@@ -122,6 +128,7 @@ const BUILTIN_COMPONENTS: Record<string, ComponentInfo> = {
     view: false,
   },
   slot: {
+    title: "Empty tile",
     description: "An empty tile the user fills with a component.",
     props: z.object({}).strict(),
     defaults: {},
@@ -146,6 +153,7 @@ function viewComponents(): Record<string, ComponentInfo> {
   for (const definition of Object.values(catalog)) {
     const config = definition.config;
     out[definition.type] = {
+      title: definition.title,
       description: definition.documentation.summary,
       props: config?.schema ?? z.object({}).strict(),
       defaults: (config?.defaultValue ?? {}) as Record<string, JsonValue>,

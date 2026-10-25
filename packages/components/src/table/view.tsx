@@ -64,7 +64,6 @@ export function TableView({ host }: BodyProps<TableConfig>) {
       onRowClick={handleRowClick}
       sorting={sorting}
       onSortingChange={handleSortingChange}
-      headerEl={host.bodyHeaderElement}
     />
   );
 }

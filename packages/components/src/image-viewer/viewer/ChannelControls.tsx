@@ -98,7 +98,7 @@ function ContrastInput({
           e.currentTarget.blur();
         }
       }}
-      className="h-5 w-16 px-1.5 text-right text-3xs tabular-nums"
+      className="h-5 w-16 px-1.5 text-right text-2xs tabular-nums"
     />
   );
 }
@@ -139,7 +139,7 @@ export function ChannelControls() {
   // ── Minimized: icon badge ──────────────────────────────────────────────────
   if (minimized) {
     return (
-      <Panel variant="glass" className="size-7">
+      <Panel className="size-7">
         <button
           type="button"
           onClick={() => setMinimized(false)}
@@ -157,11 +157,11 @@ export function ChannelControls() {
   // squeezed between the two numeric bounds); capped to the tile so a narrow
   // staged viewer can't overflow.
   return (
-    <Panel variant="glass" depth={2} className="flex w-[340px] max-w-[calc(100%-1rem)] flex-col">
+    <Panel className="flex w-[340px] max-w-[calc(100%-1rem)] flex-col">
       {/* Header */}
       <div className="flex shrink-0 items-center gap-1.5 px-2 py-1.5">
         <Layers className="size-3 shrink-0 text-muted-foreground/60" />
-        <span className="flex-1 font-medium text-3xs text-muted-foreground/70">Channels</span>
+        <span className="flex-1 font-medium text-2xs text-muted-foreground/70">Channels</span>
         <Button
           variant="outline"
           size="xs"
@@ -188,7 +188,7 @@ export function ChannelControls() {
           aria-label="Minimize channel controls"
           className="flex size-4 items-center justify-center rounded text-muted-foreground/40 transition-colors hover:text-muted-foreground"
         >
-          <span className="text-2xs leading-none">:</span>
+          <span className="text-sm leading-none">:</span>
         </button>
       </div>
 
@@ -236,7 +236,7 @@ export function ChannelControls() {
                     <ChevronRightIcon
                       className={`size-3 shrink-0 text-muted-foreground/70 transition-[rotate] duration-150 ease-out ${open ? "rotate-90" : ""}`}
                     />
-                    <span className="flex-1 truncate text-3xs text-foreground/80">{ch.label}</span>
+                    <span className="flex-1 truncate text-2xs text-foreground/80">{ch.label}</span>
                   </CollapsibleTrigger>
                 </div>
 
@@ -245,17 +245,17 @@ export function ChannelControls() {
                   <div className="flex flex-col gap-1 pt-1.5 pl-7">
                     {viewMode === "2d" && (
                       <div className="flex items-center gap-1.5">
-                        <span className="w-10 shrink-0 text-3xs text-muted-foreground">blend</span>
+                        <span className="w-10 shrink-0 text-2xs text-muted-foreground">blend</span>
                         <Select
                           value={ch.blendMode}
                           onValueChange={(v) => actions.setChannelProp(i, { blendMode: v as BlendMode })}
                         >
-                          <SelectTrigger className="h-5 w-fit gap-1 rounded px-1.5 text-3xs">
+                          <SelectTrigger className="h-5 w-fit gap-1 rounded px-1.5 text-2xs">
                             <SelectValue>{(value) => blendLabel(value as BlendMode)}</SelectValue>
                           </SelectTrigger>
                           <SelectContent>
                             {BLEND_OPTIONS.map((o) => (
-                              <SelectItem key={o.value} value={o.value} className="text-3xs">
+                              <SelectItem key={o.value} value={o.value} className="text-2xs">
                                 {o.label}
                               </SelectItem>
                             ))}

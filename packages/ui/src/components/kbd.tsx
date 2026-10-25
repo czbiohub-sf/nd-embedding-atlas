@@ -1,12 +1,13 @@
 import { MOD_KEY } from "@ndea/ui/lib/platform";
 import { cn } from "@ndea/ui/lib/utils";
 
+/** Design data/Kbd.jsx: muted keycap with a bottom keyline, mono 10.5px. */
 function Kbd({ className, ...props }: React.ComponentProps<"kbd">) {
   return (
     <kbd
       data-slot="kbd"
       className={cn(
-        "pointer-events-none inline-flex h-5 w-fit min-w-5 select-none items-center justify-center gap-1 rounded-xs bg-muted in-data-[slot=tooltip-content]:bg-background/20 px-1 font-medium font-sans in-data-[slot=tooltip-content]:text-background text-[0.625rem] text-muted-foreground dark:in-data-[slot=tooltip-content]:bg-background/10 [&_svg:not([class*='size-'])]:size-3",
+        "pointer-events-none inline-flex w-fit select-none items-center gap-1 rounded-xs bg-muted px-[5px] py-px font-mono text-text-muted text-xs leading-[1.4] shadow-[inset_0_-1px_0_var(--line-2)] [&_svg:not([class*='size-'])]:size-3",
         className,
       )}
       {...props}

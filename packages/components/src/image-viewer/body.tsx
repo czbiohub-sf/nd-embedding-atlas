@@ -23,7 +23,7 @@ export function createImageViewerView(services: ImageViewerServices) {
 
     if (!capabilitiesOf(host.data.metadata).has("plate-image")) {
       return (
-        <div className="flex h-full w-full items-center justify-center text-muted-foreground text-xs">
+        <div className="flex h-full w-full items-center justify-center text-muted-foreground text-ui">
           No plate data available
         </div>
       );

@@ -1,7 +1,7 @@
 /**
- * ThemeProvider: manages dark/light mode with localStorage persistence.
- * Applies `.dark` to `document.documentElement` and exposes a toggle.
- * Defaults to dark mode; respects OS preference only on first visit.
+ * ThemeProvider: dark (the default) or light, kept in localStorage as a
+ * per-browser UI preference (not workspace state). Applies `.dark` to
+ * `document.documentElement`; index.html applies it before React loads.
  */
 import { createContext, use, useCallback, useEffect, useState } from "react";
 
@@ -25,13 +25,11 @@ export function useTheme(): ThemeContextValue {
 
 function getInitialTheme(): Theme {
   try {
-    const stored = localStorage.getItem("ndea-theme") as Theme | null;
-    if (stored === "dark" || stored === "light") return stored;
+    if (localStorage.getItem("ndea-theme") === "light") return "light";
   } catch {
     // localStorage unavailable
   }
-  // Brand-canonical default is light (Biohub technical mode); honor an explicit OS dark pref.
-  return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  return "dark";
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {

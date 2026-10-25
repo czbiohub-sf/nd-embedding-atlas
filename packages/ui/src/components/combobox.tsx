@@ -95,21 +95,21 @@ export function Combobox<O extends ComboboxOption = ComboboxOption>({
         disabled={disabled}
         aria-expanded={open}
         className={cn(
-          "flex h-7 min-w-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-input bg-background px-2 text-xs/relaxed outline-none transition-colors",
-          "hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/30",
-          "disabled:cursor-not-allowed disabled:opacity-50",
+          "flex h-[26px] min-w-0 items-center gap-1.5 whitespace-nowrap rounded-sm bg-muted px-[7px] text-foreground text-ui-sm outline-none",
+          "focus-visible:ring-1 focus-visible:ring-ring data-popup-open:bg-muted-2",
+          "disabled:cursor-not-allowed disabled:opacity-45",
           triggerClassName,
         )}
       >
         {selected && leading ? leading(selected) : null}
-        <span className={cn("truncate text-left", !hideChevron && "flex-1", !selected && "text-muted-foreground")}>
+        <span className={cn("truncate text-left", !hideChevron && "flex-1", !selected && "text-text-muted")}>
           {selected?.label ?? placeholder}
         </span>
         {selected && triggerTrailing && trailing ? trailing(selected) : null}
-        {!hideChevron && <ChevronDownIcon className="size-3.5 shrink-0 text-muted-foreground" />}
+        {!hideChevron && <ChevronDownIcon className="size-[11px] shrink-0 text-text-muted" />}
       </PopoverTrigger>
       <PopoverContent
-        className={cn("max-h-[240px] w-52 overflow-hidden p-0", contentClassName)}
+        className={cn("w-52 gap-0 overflow-hidden", contentClassName)}
         side={side}
         align="start"
         sideOffset={4}
@@ -118,7 +118,7 @@ export function Combobox<O extends ComboboxOption = ComboboxOption>({
       >
         <Command>
           <CommandInput placeholder={searchPlaceholder} />
-          <CommandList>
+          <CommandList className="max-h-[200px]">
             <CommandEmpty>{emptyText}</CommandEmpty>
             <CommandGroup>
               {options.map((opt) => (
@@ -129,9 +129,12 @@ export function Combobox<O extends ComboboxOption = ComboboxOption>({
                     onValueChange(v === value ? "" : v);
                     setOpen(false);
                   }}
-                  className="gap-1.5"
+                  className="gap-2.5"
                 >
-                  <CheckIcon className={cn("size-3 shrink-0", opt.value === value ? "opacity-100" : "opacity-0")} />
+                  <CheckIcon
+                    strokeWidth={2.2}
+                    className={cn("size-3 shrink-0 text-primary", opt.value === value ? "opacity-100" : "opacity-0")}
+                  />
                   {leading ? leading(opt) : null}
                   <span className="flex-1 truncate">{opt.label}</span>
                   {trailing ? trailing(opt) : null}

@@ -47,7 +47,7 @@ export function ViewerControls({ datasetKey }: { datasetKey?: string }) {
   }
 
   return (
-    <Panel variant="glass" depth={2} className="flex min-w-44 flex-col gap-1.5 p-2">
+    <Panel className="flex min-w-44 flex-col gap-1.5 p-2">
       {hasT && (
         <SliderRow
           label={isTrajectoryMode ? "T*" : "T"}
@@ -95,14 +95,13 @@ export function ViewerControls({ datasetKey }: { datasetKey?: string }) {
       {hasCellCoords && (
         <>
           <Separator className="my-0.5 bg-border/50" />
-          <div className="flex items-center gap-1.5 text-3xs">
+          <div className="flex items-center gap-1.5 text-2xs">
             <Toggle
               size="sm"
-              variant="outline"
               pressed={showBbox}
               onPressedChange={setShowBbox}
               title="bounding box"
-              className="h-5 shrink-0 gap-1 px-1.5 text-3xs"
+              className="h-5 shrink-0 gap-1 px-1.5 text-2xs"
             >
               <Frame />
               bbox

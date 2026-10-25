@@ -1,0 +1,15 @@
+/* Base palettes. Do not reference these directly in components; use the semantic tokens in theme.css. */
+:root {
+  /* Biohub brand */
+  --bh-black: #000000; --bh-white: #FFFFFF; --bh-warm-black: #0D0001;
+  --bh-periwinkle: #6E4FF9; --bh-iris: #33029C; --bh-indigo: #1D004D; --bh-lavender: #B7A8FC;
+  --bh-teal: #26CFDB; --bh-dark-teal: #17617A; --bh-light-teal: #CEFAFD;
+  --bh-slate: #A0A4AC; --bh-dark-slate: #63666A; --bh-light-slate: #DEE8EB; --bh-keyline: #C7CBCF; --bh-mid-slate: #808285; --bh-graphite: #4A4E52;
+  /* Pierre Dark neutrals */
+  --pi-950: #0a0a0a; --pi-925: #101010; --pi-900: #171717; --pi-850: #1d1d1d; --pi-800: #262626; --pi-775: #2c2c2c; --pi-700: #404040;
+  --pi-500: #636363; --pi-450: #737373; --pi-300: #a3a3a3; --pi-50: #fafafa;
+  --pi-select: #19283c; --pi-select-fg: #9fd8ff;
+  /* Pierre accents */
+  --pi-blue: #009fff; --pi-green: #07c480; --pi-red: #ff2e3f; --pi-yellow: #ffca00; --pi-gold: #ffd452;
+  --pi-orange: #ffa359; --pi-violet: #9d6afb; --pi-pink: #ff678d; --pi-sky: #68cdf2; --pi-magenta: #d568ea;
+}

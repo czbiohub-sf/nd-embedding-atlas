@@ -116,13 +116,13 @@ export function DatasetSessionProvider({ children }: Props) {
 
   if (metadataQuery.isError) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-3 bg-surface-primary text-sm text-muted-foreground">
+      <div className="flex h-full flex-col items-center justify-center gap-3 bg-surface-primary text-lg text-muted-foreground">
         <p className="text-red-400">
           Failed to load metadata:{" "}
           {metadataQuery.error instanceof Error ? metadataQuery.error.message : String(metadataQuery.error)}
         </p>
         <button
-          className="rounded bg-muted px-3 py-1.5 text-xs hover:bg-surface-tertiary"
+          className="rounded bg-muted px-3 py-1.5 text-ui hover:bg-muted-2"
           onClick={() => {
             void metadataQuery.refetch();
           }}
@@ -134,7 +134,7 @@ export function DatasetSessionProvider({ children }: Props) {
   }
 
   if (metadataQuery.isPending) {
-    return <div className="flex h-full items-center justify-center text-sm text-muted-foreground">Loading...</div>;
+    return <div className="flex h-full items-center justify-center text-lg text-muted-foreground">Loading...</div>;
   }
 
   if (!sessionValue || !published) return null;

@@ -1,0 +1,27 @@
+<!-- @dsCard group="Components" viewport="700x520" name="Overlays" -->
+<!doctype html><html class="dark"><head><meta charset="utf-8"><link rel="stylesheet" href="../../styles.css">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js"></script>
+<script src="../dev-loader.js"></script>
+<style>body{padding:14px}.lab{font-size:10.5px;color:var(--text-muted);font-family:var(--font-mono);margin:10px 0 6px}.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}</style></head>
+<body><div id="root"></div>
+<script type="text/babel">
+(async () => {
+const NS = await window.ndeaLoad("../../");
+const { Tooltip, Icon, Button, IconButton, Input, Select, Checkbox, RangeSlider, SegmentedControl, Tabs, SidebarRail, Tile, TileSlot, Popover, Menu, CommandMenu, Toast, Toaster, Pill, Badge, Kbd, Legend, ScopeIndicator, ScopeRow, DataTable } = NS;
+function Demo() {
+  const L = (k) => <span style={{ width: 34, height: 22, display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 2, padding: 2, boxSizing: 'border-box', borderRadius: 3, boxShadow: 'inset 0 0 0 0.5px var(--border)' }}><span style={{ background: 'color-mix(in srgb, var(--primary) 32%, transparent)', borderRadius: 1, gridRow: 'span 2' }} /><span style={{ background: 'var(--muted-2)', borderRadius: 1 }} /><span style={{ background: 'var(--muted-2)', borderRadius: 1 }} /></span>;
+  return <div style={{ position: 'relative', height: 490, borderRadius: 8, background: 'var(--background)', overflow: 'hidden' }}>
+    <div style={{ position: 'absolute', left: 12, top: 12 }}><Popover title="Linked scopes" meta="Embedding 1" footer={<Button variant="ghost">Manage all scopes</Button>}>
+      <ScopeRow name="Filter" scopeKey="F1" color="var(--scope-filter)" value="treatment = Taxol" members="Embedding 1, Embedding 2, Crops, Table" onUnlink={() => {}} />
+      <ScopeRow name="Focus" scopeKey="FOCUS" color="var(--scope-focus)" value="B07-s3-412" members="Embedding 1, Image, Table" onUnlink={() => {}} />
+    </Popover></div>
+    <div style={{ position: 'absolute', left: 310, top: 12, width: 200 }}><Popover width={200} title="Color by"><Menu items={[{ heading: 'Categorical' }, { label: 'treatment', hint: '6 values', checked: true }, { label: 'plate', hint: '4 values' }, { heading: 'Continuous' }, { label: 'cell_area' }, { separator: true }, { label: 'Delete field', danger: true, icon: 'trash-2' }]} /></Popover></div>
+    <div style={{ position: 'absolute', left: 12, bottom: 16, display: 'flex', gap: 6, alignItems: 'center' }}><span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Hover:</span><Tooltip content="Tile settings"><IconButton icon="settings" label="Tile settings" /></Tooltip><Tooltip content="Copy reference for the harness"><IconButton icon="link" label="Copy reference" /></Tooltip><Tooltip content="Fullscreen"><IconButton icon="maximize-2" label="Fullscreen" /></Tooltip></div>
+    <Toaster style={{ right: 12, bottom: 12, width: 300 }} toasts={[{ id: 1, title: 'Opened cpg0016 · batch 7', description: '48,312 cells' }, { id: 2, title: 'Saved 12 edits', description: 'obs_annotations.parquet', tone: 'success' }]} onDismiss={() => {}} />
+  </div>;
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<Demo />);
+})();
+</script></body></html>

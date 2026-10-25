@@ -19,8 +19,8 @@ import { Slider } from "./slider";
 const sliderRowVariants = cva("flex items-center gap-1.5", {
   variants: {
     density: {
-      sm: "text-3xs",
-      md: "text-2xs",
+      sm: "text-2xs",
+      md: "text-sm",
     },
   },
   defaultVariants: { density: "sm" },

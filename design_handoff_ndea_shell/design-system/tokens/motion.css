@@ -1,0 +1,6 @@
+/* Motion. Short, one easing family, no bounce. .motion-off on <html> disables it. */
+:root {
+  --dur-fast: 140ms; --dur: 180ms; --dur-slow: 260ms;
+  --ease-out: cubic-bezier(.2,.7,.2,1); --ease-standard: ease; --ease-toast: cubic-bezier(.21,1.02,.73,1);
+}
+.motion-off { --dur-fast: 0ms; --dur: 0ms; --dur-slow: 0ms; }

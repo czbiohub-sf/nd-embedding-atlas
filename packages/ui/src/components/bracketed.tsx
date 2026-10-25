@@ -8,8 +8,6 @@ import { cn } from "@ndea/ui/lib/utils";
  * the brackets sit at reduced opacity so the value stays dominant.
  *
  *   <Bracketed>70,121</Bracketed>   → [70,121]
- *
- * Pairs with font-hud (Geist Pixel) for HUD readouts.
  */
 export function Bracketed({ children, className }: { children: React.ReactNode; className?: string }) {
   return (

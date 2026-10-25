@@ -149,12 +149,11 @@ interface LiveElement {
   config: string | undefined;
 }
 
-/** Owns every live view body and its stable body/header dock elements. */
+/** Owns every live view body and its stable body dock element. */
 export class ComponentRuntimeManager {
   private readonly dependencies: ElementRuntimeManagerDependencies;
   private readonly live = new Map<string, LiveElement>();
   private readonly bodyDocks = new Map<string, HTMLDivElement>();
-  private readonly headerDocks = new Map<string, HTMLDivElement>();
   private readonly listeners = new Set<() => void>();
   private readonly unsubscribeDocument: () => void;
   private disposed = false;
@@ -171,31 +170,14 @@ export class ComponentRuntimeManager {
   };
 
   bodyDock(id: string): HTMLDivElement {
-    return this.dock(
-      this.bodyDocks,
-      id,
-      "nd-body-dock",
-      "display:flex;flex-direction:column;flex:1;min-height:0;min-width:0;height:100%;width:100%;",
-    );
-  }
-
-  headerDock(id: string): HTMLDivElement {
-    return this.dock(
-      this.headerDocks,
-      id,
-      "nd-header-dock",
-      "display:flex;align-items:center;flex:1;min-width:0;height:100%;overflow:hidden;container-type:inline-size;line-height:1;",
-    );
-  }
-
-  private dock(docks: Map<string, HTMLDivElement>, id: string, className: string, css: string): HTMLDivElement {
     this.assertLive();
-    let element = docks.get(id);
+    let element = this.bodyDocks.get(id);
     if (!element) {
       element = document.createElement("div");
-      element.className = className;
-      element.style.cssText = css;
-      docks.set(id, element);
+      element.className = "nd-body-dock";
+      element.style.cssText =
+        "display:flex;flex-direction:column;flex:1;min-height:0;min-width:0;height:100%;width:100%;";
+      this.bodyDocks.set(id, element);
     }
     return element;
   }
@@ -231,9 +213,8 @@ export class ComponentRuntimeManager {
         errors.push(error);
       }
     }
-    for (const element of [...this.bodyDocks.values(), ...this.headerDocks.values()]) element.remove();
+    for (const element of this.bodyDocks.values()) element.remove();
     this.bodyDocks.clear();
-    this.headerDocks.clear();
     if (errors.length === 1) throw errors[0];
     if (errors.length > 1) throw new AggregateError(errors, "component runtime disposal failed");
   }
@@ -267,10 +248,8 @@ export class ComponentRuntimeManager {
       const element = session.element(id);
       if (!element || element.type !== entry.type) {
         this.stop(id);
-        for (const docks of [this.bodyDocks, this.headerDocks]) {
-          docks.get(id)?.remove();
-          docks.delete(id);
-        }
+        this.bodyDocks.get(id)?.remove();
+        this.bodyDocks.delete(id);
         changed = true;
         continue;
       }
@@ -299,7 +278,6 @@ export class ComponentRuntimeManager {
       elementId: id,
       type: definition.type,
       config: componentProps(element),
-      bodyHeaderElement: this.headerDock(id),
       predicate: filter.selection,
       focus: createFocusCoordination(session, id),
       viewSync: createViewCoordination(session, id),

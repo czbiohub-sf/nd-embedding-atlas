@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+@import "./tokens.css";
 
 @source "./components";
 @custom-variant dark (&:is(.dark *));
@@ -38,75 +39,121 @@
   @apply aria-invalid:border-destructive aria-invalid:ring-1 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40;
 }
 
-/* ── Glass: THE one frosted-surface recipe ───────────────────────────
- *  Floating chrome OVER live content (canvas / imagery / data-viz) only :
- *  docked panels and overlays on solid backgrounds use `Panel` solid instead.
- *  Sourced from the --glass-* tokens (defined by the consuming app) so the
- *  Tweakpane viewer theme shares the exact recipe. Pair with
- *  `border rounded-* shadow-*` for shape. */
-@utility glass {
-  background-color: var(--glass-bg);
-  border-color: var(--glass-border);
-  backdrop-filter: blur(var(--blur-glass)) saturate(1.5);
-  -webkit-backdrop-filter: blur(var(--blur-glass)) saturate(1.5);
+/* ── Tokens → utilities ──────────────────────────────────────────────
+ *  Values live in tokens.css (CSS vars that flip with `.dark`); these map
+ *  them to Tailwind utilities (bg-surface, text-text-muted, ring-tile-ring…).
+ * ──────────────────────────────────────────────────────────────────── */
+@theme {
+  --font-sans: "Geist Variable", Geist, system-ui, sans-serif;
+  --font-mono: "Geist Mono Variable", "Geist Mono", ui-monospace, monospace;
+
+  /* The design type scale replaces Tailwind's (and its line heights: leading-ui 1.4 is inherited). */
+  --text-*: initial;
+  --text-2xs: 10px;
+  --text-xs: 10.5px;
+  --text-sm: 11px;
+  --text-ui-sm: 11.5px;
+  --text-ui: 12px;
+  --text-ui-lg: 12.5px;
+  --text-md: 13px;
+  --text-lg: 14px;
+  --text-xl: 18px;
+  --text-2xl: 24px;
+  --text-metric: 34px;
+
+  --animate-nd-in: nd-in var(--dur-fast) var(--ease-out);
+  --animate-nd-toast: nd-toast var(--dur-slow) var(--ease-toast);
+  --animate-nd-shake: nd-shake var(--dur-slow) var(--ease-out);
+
+  --z-index-canvas: 10;
+  --z-index-hud: 20;
+  --z-index-panel: 30;
+  --z-index-float: 100;
+  --z-index-popover: 200;
+  --z-index-modal: 300;
+  --z-index-toast: 400;
 }
 
 @theme inline {
-  --font-heading: var(--font-mono);
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
-  --color-ring: var(--ring);
-  --color-input: var(--input);
-  --color-border: var(--border);
-  --color-destructive: var(--destructive);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-accent: var(--accent);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-muted: var(--muted);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-secondary: var(--secondary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-primary: var(--primary);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-popover: var(--popover);
-  --color-card-foreground: var(--card-foreground);
-  --color-card: var(--card);
-  --color-foreground: var(--foreground);
+  --font-heading: var(--font-sans);
+  --radius-xs: 3.5px;
+  --radius-sm: 4.2px;
+  --radius-md: 4.9px;
+  --radius-lg: 8.4px;
+  --radius-xl: 9.8px;
+
   --color-background: var(--background);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
-  --color-emphasis: var(--emphasis);
-  --color-danger-emphasis: var(--danger-emphasis);
-  --color-warning-emphasis: var(--warning-emphasis);
-  --color-success-emphasis: var(--success-emphasis);
-  --color-glass-bg: var(--glass-bg);
-  --color-glass-border: var(--glass-border);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-2: var(--muted-2);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-text-muted: var(--text-muted);
+  --color-text-faint: var(--text-faint);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-line-2: var(--line-2);
+  --color-line-3: var(--line-3);
+  --color-tile-ring: var(--tile-ring);
+  --color-ring: var(--ring);
+  --color-focus-mark: var(--focus-mark);
+  --color-overlay: var(--overlay);
+  --color-scrim: var(--scrim);
+  --color-hair: var(--hair);
+  --color-soft: var(--soft);
+  --color-destructive: var(--destructive);
+  --color-destructive-bg: var(--destructive-bg);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-dirty: var(--dirty);
+  --color-d1: var(--d1);
+  --color-d2: var(--d2);
+  --color-d3: var(--d3);
+  --color-d4: var(--d4);
+  --color-d5: var(--d5);
+  --color-d6: var(--d6);
+  --color-d7: var(--d7);
+  --color-d8: var(--d8);
+  --color-d9: var(--d9);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-chart-mark: var(--chart-1);
+  --color-chart-mark-fade: color-mix(in srgb, var(--chart-1) 12.5%, transparent);
+  --color-scope-filter: var(--scope-filter);
+  --color-scope-focus: var(--scope-focus);
+  --color-scope-color: var(--scope-color);
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
-  body {
-    @apply bg-background text-foreground;
-  }
+  /* Type goes on body, not html: Tailwind spacing is rem-based, so html keeps the 16px rem. */
   html {
-    @apply font-sans;
+    background: var(--background);
+    color: var(--foreground);
+  }
+  body {
+    font-family: var(--font-sans);
+    font-size: var(--text-ui);
+    line-height: 1.4;
+    font-variant-numeric: tabular-nums;
+  }
+  ::selection {
+    background: var(--accent);
+    color: var(--accent-foreground);
   }
 }

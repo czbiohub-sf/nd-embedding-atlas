@@ -23,6 +23,7 @@
     "@crustjs/style": "^0.3.6",
     "@crustjs/tui": "^0.0.6",
     "@duckdb/node-api": "catalog:",
+    "@fontsource-variable/geist": "^5.3.0",
     "@fontsource-variable/geist-mono": "^5.3.0",
     "@json-render/core": "0.21.1",
     "@json-render/react": "0.21.1",

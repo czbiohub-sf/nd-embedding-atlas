@@ -1,0 +1,30 @@
+<!-- @dsCard group="Components" viewport="700x370" name="Buttons & icons" -->
+<!doctype html><html class="dark"><head><meta charset="utf-8"><link rel="stylesheet" href="../../styles.css">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js"></script>
+<script src="../dev-loader.js"></script>
+<style>body{padding:14px}.lab{font-size:10.5px;color:var(--text-muted);font-family:var(--font-mono);margin:10px 0 6px}.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}</style></head>
+<body><div id="root"></div>
+<script type="text/babel">
+(async () => {
+const NS = await window.ndeaLoad("../../");
+const { OverlayButton, OverlayGroup, Icon, Button, IconButton, Input, Select, Checkbox, RangeSlider, SegmentedControl, Tabs, SidebarRail, Tile, TileSlot, Popover, Menu, CommandMenu, Toast, Toaster, Pill, Badge, Kbd, Legend, ScopeIndicator, ScopeRow, DataTable } = NS;
+function Demo() {
+  const [a, setA] = React.useState(true);
+  return <div>
+    <div className="lab">Button · sm</div>
+    <div className="row"><Button variant="primary">Save</Button><Button>Discard</Button><Button variant="accent">Save as source</Button><Button variant="ghost" active={a} onClick={() => setA(!a)}>Filter · 2</Button><Button variant="ghost">Sort</Button><Button variant="destructive">Delete field</Button><Button disabled>Disabled</Button></div>
+    <div className="lab">Button · md, with icon</div>
+    <div className="row"><Button size="md" variant="primary" icon="plus">Add condition</Button><Button size="md" icon="layout-grid">New layout</Button></div>
+    <div className="lab">IconButton</div>
+    <div className="row"><IconButton icon="settings-2" label="Tile settings" /><IconButton icon="link" label="Copy reference" /><IconButton icon="maximize-2" label="Fullscreen" /><IconButton icon="nd-legend" label="Legend" active /><IconButton icon="layers" label="Channels" /></div>
+    <div className="lab">OverlayButton · OverlayGroup (over canvases)</div>
+    <div className="row" style={{ padding: 10, borderRadius: 'var(--radius)', background: '#000', gap: 12 }}><OverlayGroup items={[{ value: 'pointer', icon: 'mouse-pointer-2', label: 'Select · V' }, { value: 'box', icon: 'square-dashed', label: 'Box · B' }, { value: 'lasso', icon: 'lasso', label: 'Lasso · L' }, { separator: true }, { value: 'legend', icon: 'nd-legend', label: 'Legend', action: true, active: true }]} value="lasso" /><OverlayButton icon="layers" label="Channels" /></div>
+    <div className="lab">Icon · ndea custom</div>
+    <div className="row" style={{ gap: 14, color: 'var(--foreground)' }}>{['nd-legend','nd-legend-continuous','nd-scopes','nd-embedding','nd-crops','nd-slot','nd-split','nd-axis-swap','nd-color-by','nd-channels','nd-harness'].map((n) => <span key={n} title={n}><Icon name={n} size={18} /></span>)}</div>
+  </div>;
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<Demo />);
+})();
+</script></body></html>

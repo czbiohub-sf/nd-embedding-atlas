@@ -1,0 +1,27 @@
+<!-- @dsCard group="Components" viewport="700x300" name="Tile" -->
+<!doctype html><html class="dark"><head><meta charset="utf-8"><link rel="stylesheet" href="../../styles.css">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js"></script>
+<script src="../dev-loader.js"></script>
+<script src="../../ndea-core.js"></script>
+<style>body{padding:14px}.lab{font-size:10.5px;color:var(--text-muted);font-family:var(--font-mono);margin:10px 0 6px}.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}</style></head>
+<body><div id="root"></div>
+<script type="text/babel">
+(async () => {
+const NS = await window.ndeaLoad("../../");
+const { Icon, Button, IconButton, Input, Select, Checkbox, RangeSlider, SegmentedControl, Tabs, SidebarRail, Tile, TileSlot, Popover, Menu, CommandMenu, Toast, Toaster, Pill, Badge, Kbd, Legend, ScopeIndicator, ScopeRow, DataTable } = NS;
+function Demo() {
+  return <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gridTemplateRows: '130px 130px', gap: 4, background: 'var(--background)', padding: 4, borderRadius: 8 }}>
+    <Tile style={{ gridRow: 'span 2' }} title="Embedding 1" subtitle="UMAP · dinov2-s14" actions={<><ScopeIndicator scopes={[{ key: 'F1', color: 'var(--scope-filter)' }, { key: 'FOCUS', color: 'var(--scope-focus)' }, { key: 'COLOR', color: 'var(--scope-color)' }]} /><IconButton icon="nd-legend" label="Legend" /><IconButton icon="settings-2" label="Tile settings" /></>} padded={false}>
+      <nd-scatter ds="cp7" focus="12" pal="#26CFDB,#ffa359,#9d6afb,#ff678d,#737373,#fafafa" dim="#262626" ring="#ffd452" style={{ position: 'absolute', inset: 0, display: 'block' }}></nd-scatter>
+    </Tile>
+    <Tile tabs={<Tabs tabs={[{ value: 'gal', label: 'Crops' }, { value: 'img', label: 'Image' }]} value="gal" />} actions={<IconButton icon="settings-2" label="Tile settings" />}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 3 }}>{Array.from({ length: 12 }, (_, i) => <span key={i} style={{ position: 'relative', aspectRatio: '1', borderRadius: 3, overflow: 'hidden', background: '#000', outline: i === 2 ? '2px solid var(--primary)' : 'none', outlineOffset: -2 }}><nd-micro seed={String(70011 + i * 13)} cat={String(i % 6)} dk="cp" res="64" lut="#FFFFFF" style={{ position: 'absolute', inset: 0, display: 'block' }}></nd-micro></span>)}</div>
+    </Tile>
+    <Tile title="Empty slot"><TileSlot /></Tile>
+  </div>;
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<Demo />);
+})();
+</script></body></html>

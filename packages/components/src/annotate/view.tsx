@@ -307,15 +307,15 @@ export function AnnotateView({ host, services }: BodyProps<AnnotateConfig> & { s
   );
 
   return (
-    <div className="relative flex h-full min-h-0 w-full flex-col overflow-hidden text-xs">
+    <div className="relative flex h-full min-h-0 w-full flex-col overflow-hidden text-ui">
       {/* palette / target bar */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-border-subtle border-b p-2.5">
         <div className="flex items-center gap-1.5">
-          <span className="text-2xs text-text-muted">{mode === "range" ? "metric" : "col"}</span>
+          <span className="text-sm text-text-muted">{mode === "range" ? "metric" : "col"}</span>
           {mode === "range" ? (
             <Input
               aria-label="range metric name"
-              className="h-7 w-40 px-2 text-xs"
+              className="h-7 w-40 px-2 text-ui"
               placeholder="regularization…"
               value={column ?? ""}
               onChange={(e) => setColumn(e.target.value)}
@@ -326,7 +326,7 @@ export function AnnotateView({ host, services }: BodyProps<AnnotateConfig> & { s
               <Input
                 autoFocus
                 aria-label="new annotation column name"
-                className="h-7 w-36 px-2 text-xs"
+                className="h-7 w-36 px-2 text-ui"
                 placeholder="new column…"
                 value={newColumn}
                 onChange={(e) => setNewColumn(e.target.value)}
@@ -363,7 +363,7 @@ export function AnnotateView({ host, services }: BodyProps<AnnotateConfig> & { s
                 </SelectTrigger>
                 <SelectContent>
                   {columns.length === 0 ? (
-                    <div className="px-2 py-1.5 text-2xs text-text-muted">no columns yet: create one →</div>
+                    <div className="px-2 py-1.5 text-sm text-text-muted">no columns yet: create one →</div>
                   ) : (
                     columns.map((c) => (
                       <SelectItem key={c} value={c}>
@@ -373,7 +373,7 @@ export function AnnotateView({ host, services }: BodyProps<AnnotateConfig> & { s
                   )}
                 </SelectContent>
               </Select>
-              <Button variant="outline" size="sm" className="h-7 px-2 text-2xs" onClick={() => setCreating(true)}>
+              <Button variant="outline" size="sm" className="h-7 px-2 text-sm" onClick={() => setCreating(true)}>
                 + new
               </Button>
             </>
@@ -382,12 +382,12 @@ export function AnnotateView({ host, services }: BodyProps<AnnotateConfig> & { s
 
         {/* mode toggle */}
         <div className="flex items-center gap-1.5">
-          <span className="text-2xs text-text-muted">mode</span>
+          <span className="text-sm text-text-muted">mode</span>
           <div className="inline-flex h-7 overflow-hidden rounded-md border border-input">
             <button
               type="button"
               className={cn(
-                "px-2.5 text-2xs transition-colors",
+                "px-2.5 text-sm transition-colors",
                 mode === "label" ? "bg-primary text-primary-foreground" : "text-text-muted hover:text-foreground",
               )}
               onClick={() => setModePersist("label")}
@@ -397,7 +397,7 @@ export function AnnotateView({ host, services }: BodyProps<AnnotateConfig> & { s
             <button
               type="button"
               className={cn(
-                "border-input border-l px-2.5 text-2xs transition-colors",
+                "border-input border-l px-2.5 text-sm transition-colors",
                 mode === "range" ? "bg-primary text-primary-foreground" : "text-text-muted hover:text-foreground",
               )}
               onClick={() => setModePersist("range")}
@@ -409,7 +409,7 @@ export function AnnotateView({ host, services }: BodyProps<AnnotateConfig> & { s
 
         {mode === "range" ? (
           <div className="flex min-w-0 flex-1 items-center justify-between gap-2">
-            <span className="truncate text-2xs text-text-muted">
+            <span className="truncate text-sm text-text-muted">
               {rangeBase ? (
                 <>
                   writes <span className="text-primary">{`${rangeBase}_min · ${rangeBase}_max`}</span>
@@ -422,7 +422,7 @@ export function AnnotateView({ host, services }: BodyProps<AnnotateConfig> & { s
               <PopoverTrigger
                 disabled={!rangeBase}
                 aria-label="Set annotation range"
-                className="inline-flex h-7 shrink-0 items-center rounded-md border border-input px-2 text-2xs text-foreground outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/30 disabled:pointer-events-none disabled:opacity-50"
+                className="inline-flex h-7 shrink-0 items-center rounded-md border border-input px-2 text-sm text-foreground outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/30 disabled:pointer-events-none disabled:opacity-50"
               >
                 range [{fmtVal(rangeLo) || ":"}, {fmtVal(rangeHi) || ":"}]
               </PopoverTrigger>
@@ -433,10 +433,10 @@ export function AnnotateView({ host, services }: BodyProps<AnnotateConfig> & { s
           </div>
         ) : (
           <div className="flex min-w-0 flex-1 items-center gap-1.5">
-            <span className="text-2xs text-text-muted">labels</span>
+            <span className="text-sm text-text-muted">labels</span>
             <Input
               aria-label="label vocabulary, comma separated"
-              className="h-7 min-w-0 flex-1 px-2 text-xs"
+              className="h-7 min-w-0 flex-1 px-2 text-ui"
               placeholder="infected, uninfected…"
               value={labelsText}
               onChange={(e) => setLabelsText(e.target.value)}
@@ -446,7 +446,7 @@ export function AnnotateView({ host, services }: BodyProps<AnnotateConfig> & { s
               <Popover>
                 <PopoverTrigger
                   aria-label="Stamp annotation"
-                  className="inline-flex h-7 shrink-0 items-center rounded-md border border-input px-2 text-2xs text-foreground outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/30"
+                  className="inline-flex h-7 shrink-0 items-center rounded-md border border-input px-2 text-sm text-foreground outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/30"
                 >
                   stamp
                 </PopoverTrigger>
@@ -474,7 +474,7 @@ export function AnnotateView({ host, services }: BodyProps<AnnotateConfig> & { s
 
       {/* no-scope caution (table still usable per-row) */}
       {!hasScope && (
-        <div className="flex items-start gap-1.5 border-warning/30 border-b bg-warning/10 px-2.5 py-1.5 text-2xs text-warning">
+        <div className="flex items-start gap-1.5 border-warning/30 border-b bg-warning/10 px-2.5 py-1.5 text-sm text-warning">
           <span aria-hidden>⚠</span>
           <span>No scope: labeling the whole dataset. Give it a data source or a filter scope to narrow it.</span>
         </div>
@@ -506,7 +506,7 @@ export function AnnotateView({ host, services }: BodyProps<AnnotateConfig> & { s
       </div>
 
       {/* footer */}
-      <div className="flex items-center gap-2.5 border-border-subtle border-t px-2.5 py-1.5 text-3xs">
+      <div className="flex items-center gap-2.5 border-border-subtle border-t px-2.5 py-1.5 text-2xs">
         <span className="text-muted-foreground">
           scope <Bracketed>{total.toLocaleString()}</Bracketed>
         </span>
@@ -515,7 +515,7 @@ export function AnnotateView({ host, services }: BodyProps<AnnotateConfig> & { s
           <Button
             variant="outline"
             size="sm"
-            className="h-6 px-2 text-3xs"
+            className="h-6 px-2 text-2xs"
             onClick={() => setShowCommit(true)}
             title="commit staged annotation columns to the source .obs on disk"
           >
@@ -533,7 +533,7 @@ export function AnnotateView({ host, services }: BodyProps<AnnotateConfig> & { s
             <Button
               variant="ghost"
               size="sm"
-              className="h-6 px-2 text-3xs text-text-muted"
+              className="h-6 px-2 text-2xs text-text-muted"
               disabled={busy || !rangeBase || !rangeComplete}
               onClick={() => void stampRangeScope()}
               title={`bracket every obs in scope = [${fmtVal(rangeLo)}, ${fmtVal(rangeHi)}]`}

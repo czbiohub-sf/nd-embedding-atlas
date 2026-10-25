@@ -103,7 +103,7 @@ export function RangeBracket({ lo, hi, onChange, onCommit, disabled, metric = "v
           : "border-input",
       )}
     >
-      <span className="text-3xs text-text-muted uppercase tracking-[0.5px]">{label}</span>
+      <span className="text-2xs text-text-muted uppercase tracking-[0.5px]">{label}</span>
       <input
         aria-label={`${metric} ${label}`}
         inputMode="decimal"
@@ -115,7 +115,7 @@ export function RangeBracket({ lo, hi, onChange, onCommit, disabled, metric = "v
         }}
         onKeyDown={onFieldKey}
         className={cn(
-          "w-full border-0 bg-transparent p-0 font-medium text-sm tabular-nums outline-none",
+          "w-full border-0 bg-transparent p-0 font-medium text-lg tabular-nums outline-none",
           invalid ? "text-destructive" : "text-foreground",
         )}
       />
@@ -151,7 +151,7 @@ export function RangeBracket({ lo, hi, onChange, onCommit, disabled, metric = "v
 
   return (
     <div className="flex flex-col gap-2.5">
-      <div className="flex items-baseline justify-between text-3xs text-text-muted">
+      <div className="flex items-baseline justify-between text-2xs text-text-muted">
         <span className="truncate font-medium text-muted-foreground" title={metric}>
           {metric}
         </span>
@@ -187,18 +187,18 @@ export function RangeBracket({ lo, hi, onChange, onCommit, disabled, metric = "v
         {handle("hi", hi, hiPct)}
       </div>
 
-      <div className="flex items-center gap-1.5 text-2xs">
+      <div className="flex items-center gap-1.5 text-sm">
         <span className="text-text-muted">range</span>
         <span className={cn("font-medium tabular-nums", invalid ? "text-destructive" : "text-primary")}>
           [{fmtVal(lo) || ":"}, {fmtVal(hi) || ":"}]
         </span>
-        <span className="ml-auto text-3xs text-text-muted">
+        <span className="ml-auto text-2xs text-text-muted">
           {invalid ? "min > max" : span != null ? `span ${fmtVal(span)}` : "set both ends"}
         </span>
       </div>
 
       {onCommit && (
-        <p className="text-3xs text-text-muted">
+        <p className="text-2xs text-text-muted">
           <Kbd>↵</Kbd> writes the range to the focused obs
         </p>
       )}

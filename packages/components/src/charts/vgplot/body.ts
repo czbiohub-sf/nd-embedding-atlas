@@ -3,19 +3,23 @@
  * A React body would need a bridge for `host.filter.selection` (a Selection that
  * mutates in place) and for vgplot's own DOM ownership; both are cheaper done
  * by hand. The registry conformance test rejects a `Component` export, so this
- * module must stay framework-free.
+ * module exports only the imperative mount.
  *
- * Control strip mirrors `charts/core/field-picker.tsx` imperatively (same
- * classes, same per-variant column kinds; `listColumns` already applies the
- * `__row_index__` skip). Its own `patchConfig` re-renders from the call site;
- * another writer's config change remounts the body.
+ * Exception: the column + mark pickers are the @ndea/ui Select (no native
+ * `<select>`), rendered into a small React root inside the control strip
+ * (`controls.tsx`, reusing `FieldPicker`). Its own `patchConfig` re-renders
+ * from the call site; another writer's config change remounts the body.
  */
 
 import type { MountedBody, ComponentHost } from "@ndea/sdk";
+import { buttonVariants } from "@ndea/ui/components/button";
+import { cn } from "@ndea/ui/lib/utils";
+import { createElement } from "react";
+import { createRoot } from "react-dom/client";
 import type { ColumnType } from "../../query/column-types";
+import { VgplotControls } from "./controls";
 import { mountPlot, type MountedPlot } from "./plot-host";
 import {
-  MARK_PRESETS,
   PRESET_COLUMN_KINDS,
   buildEntries,
   describeEntries,
@@ -27,17 +31,9 @@ import {
 
 type Host = ComponentHost<VgplotConfig>;
 
-const PRESET_LABELS: Record<MarkPreset, string> = {
-  histogram: "Histogram",
-  count: "Count",
-};
-
-const SELECT_CLASS =
-  "w-full rounded-sm border border-border bg-card px-1.5 py-1 font-mono text-2xs text-muted-foreground";
-const CLEAR_CLASS =
-  "shrink-0 rounded-sm border border-border bg-card px-2 py-1 font-mono text-2xs text-muted-foreground hover:bg-muted/50 disabled:pointer-events-none disabled:opacity-40";
-const NOTE_CLASS = "px-1 py-2 text-2xs text-muted-foreground/60";
-const ERROR_CLASS = "px-1 py-2 text-2xs text-destructive";
+const CLEAR_CLASS = cn(buttonVariants({ variant: "secondary", size: "sm" }), "h-[26px] shrink-0");
+const NOTE_CLASS = "px-1 py-2 text-sm text-muted-foreground/60";
+const ERROR_CLASS = "px-1 py-2 text-sm text-destructive";
 
 /** Coalesce a resize drag into one remount; a plot per frame would thrash DuckDB. */
 const RESIZE_DEBOUNCE_MS = 150;
@@ -62,17 +58,16 @@ export async function mountVgplotBody(host: Host): Promise<MountedBody> {
   controls.className = "flex shrink-0 gap-1.5";
   element.appendChild(controls);
 
-  const fieldSelect = document.createElement("select");
-  fieldSelect.className = SELECT_CLASS;
-  const presetSelect = document.createElement("select");
-  presetSelect.className = SELECT_CLASS;
+  const pickers = document.createElement("div");
+  pickers.className = "flex min-w-0 flex-1 gap-1.5";
+  const pickersRoot = createRoot(pickers);
   const clearButton = document.createElement("button");
   clearButton.type = "button";
   clearButton.className = CLEAR_CLASS;
   clearButton.textContent = "Clear";
   clearButton.title = "Clear selection";
   clearButton.disabled = true;
-  controls.append(fieldSelect, presetSelect, clearButton);
+  controls.append(pickers, clearButton);
 
   const plotHost = document.createElement("div");
   plotHost.className = "min-h-0 flex-1 overflow-hidden";
@@ -93,35 +88,25 @@ export async function mountVgplotBody(host: Host): Promise<MountedBody> {
   let lastWidth = -1;
   let lastHeight = -1;
 
-  function eligibleColumns(): string[] {
-    if (!columns) return [];
-    const kinds = PRESET_COLUMN_KINDS[preset];
-    return [...columns.entries()].filter(([, kind]) => kinds.includes(kind)).map(([name]) => name);
-  }
-
   function renderControls(): void {
-    fieldSelect.replaceChildren();
-    const placeholder = document.createElement("option");
-    placeholder.value = "";
-    placeholder.disabled = true;
-    placeholder.textContent = columnsError ? "Columns unavailable" : spec.length > 0 ? "Custom spec" : "Pick a column…";
-    fieldSelect.appendChild(placeholder);
-    for (const name of eligibleColumns()) {
-      const option = document.createElement("option");
-      option.value = name;
-      option.textContent = name;
-      fieldSelect.appendChild(option);
-    }
-    fieldSelect.value = field ?? "";
-
-    presetSelect.replaceChildren();
-    for (const name of MARK_PRESETS) {
-      const option = document.createElement("option");
-      option.value = name;
-      option.textContent = PRESET_LABELS[name];
-      presetSelect.appendChild(option);
-    }
-    presetSelect.value = preset;
+    pickersRoot.render(
+      createElement(VgplotControls, {
+        columns,
+        field,
+        preset,
+        placeholder: columnsError ? "Columns unavailable" : spec.length > 0 ? "Custom spec" : "Pick a column…",
+        onField: (next) => {
+          if (next !== field) applySelection(preset, next);
+        },
+        onPreset: (next) => {
+          if (next === preset) return;
+          // Keep the field only if the new preset can plot that column kind.
+          const kind = field == null ? undefined : columns?.get(field);
+          const keep = kind !== undefined && PRESET_COLUMN_KINDS[next].includes(kind);
+          applySelection(next, keep ? field : null);
+        },
+      }),
+    );
   }
 
   function showNote(text: string, className: string): void {
@@ -207,21 +192,6 @@ export async function mountVgplotBody(host: Host): Promise<MountedBody> {
     void render();
   }
 
-  fieldSelect.addEventListener("change", () => {
-    const next = fieldSelect.value;
-    if (!next || next === field) return;
-    applySelection(preset, next);
-  });
-
-  presetSelect.addEventListener("change", () => {
-    const next = presetSelect.value as MarkPreset;
-    if (next === preset) return;
-    // Keep the field only if the new preset can plot that column kind.
-    const kind = field == null ? undefined : columns?.get(field);
-    const keep = kind !== undefined && PRESET_COLUMN_KINDS[next].includes(kind);
-    applySelection(next, keep ? field : null);
-  });
-
   function clearSelection(): void {
     activePlot?.clearSelection();
   }
@@ -253,6 +223,8 @@ export async function mountVgplotBody(host: Host): Promise<MountedBody> {
     observer.disconnect();
     activePlot?.dispose();
     activePlot = null;
+    // Deferred: dispose can run inside a parent React commit, where a sync unmount warns.
+    queueMicrotask(() => pickersRoot.unmount());
     element.remove();
   }
   // Belt and braces: the observer and the plot can never outlive the element even

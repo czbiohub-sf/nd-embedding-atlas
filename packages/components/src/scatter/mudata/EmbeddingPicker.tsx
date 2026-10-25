@@ -79,14 +79,14 @@ export function EmbeddingPicker({
       <PopoverTrigger
         className={cn(
           "flex h-6 min-w-0 items-center gap-1.5 whitespace-nowrap rounded-md",
-          "border-0 bg-transparent px-1.5 text-2xs outline-none transition-colors",
+          "border-0 bg-transparent px-1.5 text-sm outline-none transition-colors",
           "text-foreground/80 hover:bg-muted hover:text-foreground focus-visible:ring-0",
           triggerClassName,
         )}
       >
         <span className="truncate font-mono">{bareLabel(activeKey)}</span>
         {activeMod && (
-          <Badge variant="outline" className={cn("px-1 py-0 text-3xs", modColor(activeMod))}>
+          <Badge variant="outline" className={cn("px-1 py-0 text-2xs", modColor(activeMod))}>
             {activeMod}
           </Badge>
         )}
@@ -101,7 +101,7 @@ export function EmbeddingPicker({
               type="button"
               onClick={() => setFilter(null)}
               className={cn(
-                "rounded-sm px-1.5 py-0.5 text-3xs transition-colors",
+                "rounded-sm px-1.5 py-0.5 text-2xs transition-colors",
                 !filter ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
               )}
             >
@@ -113,13 +113,13 @@ export function EmbeddingPicker({
                 type="button"
                 onClick={() => setFilter(filter === mod ? null : mod)}
                 className={cn(
-                  "rounded-sm px-1.5 py-0.5 text-3xs transition-colors",
+                  "rounded-sm px-1.5 py-0.5 text-2xs transition-colors",
                   filter === mod
                     ? "bg-muted text-foreground"
                     : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
                 )}
               >
-                <Badge variant="outline" className={cn("px-1 py-0 text-3xs", modColor(mod))}>
+                <Badge variant="outline" className={cn("px-1 py-0 text-2xs", modColor(mod))}>
                   {mod}
                 </Badge>
               </button>
@@ -139,7 +139,7 @@ export function EmbeddingPicker({
                     setOpen(false);
                   }}
                   className={cn(
-                    "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors",
+                    "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-ui transition-colors",
                     key === activeKey
                       ? "bg-primary/15 text-foreground"
                       : "text-muted-foreground hover:bg-muted hover:text-foreground",
@@ -147,9 +147,9 @@ export function EmbeddingPicker({
                 >
                   <span className="flex-1 truncate font-mono">{bareLabel(key)}</span>
                   {entry.n_dims != null && (
-                    <span className="shrink-0 text-3xs text-muted-foreground">{entry.n_dims}d</span>
+                    <span className="shrink-0 text-2xs text-muted-foreground">{entry.n_dims}d</span>
                   )}
-                  {!entry.loaded && <span className="shrink-0 text-3xs text-muted-foreground/50">load</span>}
+                  {!entry.loaded && <span className="shrink-0 text-2xs text-muted-foreground/50">load</span>}
                 </button>
               ));
 
@@ -161,15 +161,15 @@ export function EmbeddingPicker({
                 <Collapsible key={mod} defaultOpen>
                   <CollapsibleTrigger
                     className={cn(
-                      "flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-xs",
+                      "flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-ui",
                       "text-muted-foreground hover:bg-muted transition-colors",
                     )}
                   >
                     <ChevronRightIcon className="size-3 shrink-0 transition-transform [[data-open]>&]:rotate-90" />
-                    <Badge variant="outline" className={cn("px-1 py-0 text-3xs", modColor(mod))}>
+                    <Badge variant="outline" className={cn("px-1 py-0 text-2xs", modColor(mod))}>
                       {mod}
                     </Badge>
-                    <span className="ml-auto text-3xs text-muted-foreground">{entries.length}</span>
+                    <span className="ml-auto text-2xs text-muted-foreground">{entries.length}</span>
                   </CollapsibleTrigger>
                   <CollapsibleContent>
                     <div className="ml-3 border-border border-l pl-1">{items}</div>

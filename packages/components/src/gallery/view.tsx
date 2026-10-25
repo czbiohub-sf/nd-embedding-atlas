@@ -43,8 +43,8 @@ export function GalleryView({ host, services }: BodyProps<GalleryConfig> & { ser
   if (predicate == null) {
     return (
       <div className="flex h-full w-full flex-col items-center justify-center gap-2 p-4 text-center">
-        <div className="font-medium text-foreground/70 text-xs">Nothing selected</div>
-        <div className="max-w-[240px] text-2xs text-muted-foreground/60 leading-relaxed">
+        <div className="font-medium text-foreground/70 text-ui">Nothing selected</div>
+        <div className="max-w-[240px] text-sm text-muted-foreground/60 leading-relaxed">
           Narrow its data source or filter scope (a lasso, a chart brush, a select) to view crops.
         </div>
       </div>

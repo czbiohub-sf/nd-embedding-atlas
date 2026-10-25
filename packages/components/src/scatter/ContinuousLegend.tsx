@@ -80,9 +80,9 @@ function ActionButton({ active, disabled, onClick, children }: ActionButtonProps
       disabled={disabled}
       onClick={onClick}
       className={cn(
-        "flex-1 rounded border px-1.5 py-0.5 font-mono text-3xs transition-colors",
+        "flex-1 rounded border px-1.5 py-0.5 font-mono text-2xs transition-colors",
         active
-          ? "border-border-active bg-accent text-foreground"
+          ? "border-line-3 bg-accent text-foreground"
           : "border-transparent text-muted-foreground hover:bg-muted hover:text-foreground",
         "disabled:pointer-events-none disabled:opacity-30",
       )}
@@ -121,7 +121,7 @@ export function ContinuousLegend({
   void scale;
 
   return (
-    <Panel variant="glass" className="absolute top-2 left-2 z-20 w-52 px-2.5 py-2" title={columnName}>
+    <Panel className="absolute top-2 left-2 z-20 w-52 px-2.5 py-2" title={columnName}>
       {/* Single row: [colormap circle] [range slider] */}
       <div className="flex items-center gap-2">
         <ContextMenu>
@@ -132,7 +132,7 @@ export function ContinuousLegend({
             <ColormapCircle colormap={colormap} reversed={reversed} />
           </ContextMenuTrigger>
 
-          <ContextMenuContent className="w-60 rounded-lg border glass p-2 font-mono shadow-black/20 shadow-lg">
+          <ContextMenuContent className="w-60 font-mono">
             <ColormapGrid active={colormap} onSelect={onColormapChange ?? (() => {})} />
 
             <ContextMenuSeparator />
@@ -175,7 +175,7 @@ export function ContinuousLegend({
       </div>
 
       {/* Min / max labels */}
-      <div className="mt-1 flex justify-between px-0.5 font-mono text-3xs text-muted-foreground/70 tabular-nums">
+      <div className="mt-1 flex justify-between px-0.5 font-mono text-2xs text-muted-foreground/70 tabular-nums">
         <span>{formatValue(vmin)}</span>
         <span>{formatValue(vmax)}</span>
       </div>

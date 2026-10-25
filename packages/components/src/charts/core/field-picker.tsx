@@ -2,11 +2,12 @@
  * Minimal column picker for a chart component. The caller sources column
  * types from its own coordinator: no `useDashboard`.
  *
- * ponytail: native <select>, skip only `__row_index__`. Embedding/coord-column
- * noise filtering is YAGNI for a manual pick: the user chooses. Add a skip
- * heuristic only if the list proves noisy.
+ * ponytail: skip only `__row_index__`. Embedding/coord-column noise filtering
+ * is YAGNI for a manual pick: the user chooses. Add a skip heuristic only if
+ * the list proves noisy.
  */
 
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@ndea/ui/components/select";
 import type { ColumnType } from "../../query/column-types";
 
 const SKIP = new Set(["__row_index__"]);
@@ -18,29 +19,32 @@ interface Props {
   /** Column types this chart variant can plot (string/boolean vs number). */
   kinds: readonly ColumnType[];
   onPick: (field: string) => void;
+  /** Overrides the empty-state label (defaults to pick/loading). */
+  placeholder?: string;
 }
 
-export function FieldPicker({ types, value, kinds, onPick }: Props) {
+export function FieldPicker({ types, value, kinds, onPick, placeholder }: Props) {
   const eligible = types
     ? [...types.entries()].filter(([name, t]) => kinds.includes(t) && !SKIP.has(name)).map(([name]) => name)
     : [];
 
   return (
-    <select
-      className="w-full rounded-sm border border-border bg-card px-1.5 py-1 font-mono text-2xs text-muted-foreground"
-      value={value ?? ""}
-      onChange={(e) => {
-        if (e.target.value) onPick(e.target.value);
+    <Select
+      value={value}
+      onValueChange={(next) => {
+        if (next) onPick(next);
       }}
     >
-      <option value="" disabled>
-        {types ? "Pick a column…" : "Loading columns…"}
-      </option>
-      {eligible.map((name) => (
-        <option key={name} value={name}>
-          {name}
-        </option>
-      ))}
-    </select>
+      <SelectTrigger className="w-full font-mono">
+        <SelectValue placeholder={placeholder ?? (types ? "Pick a column…" : "Loading columns…")} />
+      </SelectTrigger>
+      <SelectContent>
+        {eligible.map((name) => (
+          <SelectItem key={name} value={name} className="font-mono">
+            {name}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }

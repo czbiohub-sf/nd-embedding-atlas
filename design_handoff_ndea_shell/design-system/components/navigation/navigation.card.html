@@ -1,0 +1,27 @@
+<!-- @dsCard group="Components" viewport="700x340" name="Navigation" -->
+<!doctype html><html class="dark"><head><meta charset="utf-8"><link rel="stylesheet" href="../../styles.css">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js"></script>
+<script src="../dev-loader.js"></script>
+<style>body{padding:14px}.lab{font-size:10.5px;color:var(--text-muted);font-family:var(--font-mono);margin:10px 0 6px}.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}</style></head>
+<body><div id="root"></div>
+<script type="text/babel">
+(async () => {
+const NS = await window.ndeaLoad("../../");
+const { Icon, Button, IconButton, Input, Select, Checkbox, RangeSlider, SegmentedControl, Tabs, SidebarRail, Tile, TileSlot, Popover, Menu, CommandMenu, Toast, Toaster, Pill, Badge, Kbd, Legend, ScopeIndicator, ScopeRow, DataTable } = NS;
+function Demo() {
+  const [s, setS] = React.useState('Shared · F1'); const [m, setM] = React.useState('Explore'); const [t, setT] = React.useState('emb');
+  return <div style={{ display: 'flex', gap: 24 }}>
+    <SidebarRail height={300} items={[{ id: 'l', icon: 'nd-split', label: 'Layouts', active: true }, { id: 'd', icon: 'database', label: 'Data' }, { id: 's', icon: 'nd-scopes', label: 'Links' }, { id: 'sep', separator: true }, { id: 'h', icon: 'nd-harness', label: 'Harness', dot: 'var(--primary)' }]} footer={[{ id: 'k', icon: 'search', label: 'Search ⌘K' }, { id: 'g', icon: 'settings-2', label: 'Settings' }]} />
+    <div>
+      <div className="lab">SegmentedControl</div>
+      <div className="row"><SegmentedControl options={['This tile', 'Shared · F1']} value={s} onChange={setS} /><SegmentedControl size="md" options={['Explore', 'Review', 'Images']} value={m} onChange={setM} /></div>
+      <div className="lab">Tabs · tile header</div>
+      <Tabs tabs={[{ value: 'emb', label: 'Embedding 1' }, { value: 'tbl', label: 'Table' }]} value={t} onChange={setT} onClose={() => {}} onAdd={() => {}} />
+    </div>
+  </div>;
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<Demo />);
+})();
+</script></body></html>

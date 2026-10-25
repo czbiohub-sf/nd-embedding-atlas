@@ -1,0 +1,21 @@
+<!-- @dsCard group="Components" viewport="700x520" name="Command menu" -->
+<!doctype html><html class="dark"><head><meta charset="utf-8"><link rel="stylesheet" href="../../styles.css">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js"></script>
+<script src="../dev-loader.js"></script>
+<style>body{padding:14px}.lab{font-size:10.5px;color:var(--text-muted);font-family:var(--font-mono);margin:10px 0 6px}.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}</style></head>
+<body><div id="root"></div>
+<script type="text/babel">
+(async () => {
+const NS = await window.ndeaLoad("../../");
+const { Icon, Button, IconButton, Input, Select, Checkbox, RangeSlider, SegmentedControl, Tabs, SidebarRail, Tile, TileSlot, Popover, Menu, CommandMenu, Toast, Toaster, Pill, Badge, Kbd, Legend, ScopeIndicator, ScopeRow, DataTable } = NS;
+function Demo() {
+  return <div style={{ position: 'relative', height: 500, borderRadius: 8, background: 'var(--background)', overflow: 'hidden' }}>
+    <CommandMenu width={660} onClose={() => {}} groups={[{ heading: 'Layouts', meta: '3 in JUMP pilot', items: [{ label: 'Exploration', current: true, meta: 'current' }, { label: 'Review' }, { label: 'Side by side' }] }, { heading: 'Collections', meta: 'JUMP pilot', items: [{ label: 'cpg0016 · batch 7', sub: '4 plates · 48,312 cells', current: true }, { label: 'BR00117010', depth: 1, meta: '12,077' }, { label: 'BR00117011', depth: 1, meta: '11,950' }, { label: 'cpg0016 · batch 8', sub: '4 plates · 51,077 cells' }] }]} commands={[{ label: 'Add empty slot', meta: 'layout' }, { label: 'Panel: data sources', meta: 'panel' }]}
+      preview={(it) => <><div style={{ height: 120, borderRadius: 'var(--radius-sm)', boxShadow: 'inset 0 0 0 0.5px var(--border)', background: 'var(--background)' }} /><span style={{ fontWeight: 'var(--weight-medium)' }}>{it ? it.label : ''}</span><span style={{ color: 'var(--text-muted)', fontSize: 'var(--text-ui-sm)' }}>{it && it.sub ? it.sub : 'Layout preview'}</span></>} />
+  </div>;
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<Demo />);
+})();
+</script></body></html>

@@ -140,14 +140,14 @@ export function GalleryPane({
     <div className="flex h-full w-full flex-col bg-surface">
       {/* Header */}
       <div className="flex h-7 shrink-0 items-center gap-1.5 border-border/60 border-b px-2 select-none">
-        <span className="font-medium text-foreground/90 text-2xs">Gallery</span>
+        <span className="font-medium text-foreground/90 text-sm">Gallery</span>
         {headerCount && (
-          <Badge variant="outline" className="font-mono text-3xs">
+          <Badge variant="outline" className="font-mono text-2xs">
             {headerCount}
           </Badge>
         )}
         {truncated && (
-          <span className="ml-auto font-mono text-3xs text-warning-hue/80">showing top {MAX_GALLERY_OBS}</span>
+          <span className="ml-auto font-mono text-2xs text-warning-hue/80">showing top {MAX_GALLERY_OBS}</span>
         )}
       </div>
 
@@ -160,11 +160,11 @@ export function GalleryPane({
         {rowCount === 0 ? (
           <EmptyState />
         ) : !hasPlate ? (
-          <div className="flex h-full items-center justify-center text-muted-foreground text-xs">
+          <div className="flex h-full items-center justify-center text-muted-foreground text-ui">
             No plate data available
           </div>
         ) : isLoading ? (
-          <div className="flex h-full items-center justify-center text-muted-foreground text-xs">Loading…</div>
+          <div className="flex h-full items-center justify-center text-muted-foreground text-ui">Loading…</div>
         ) : containerWidth === 0 ? null : (
           <div style={{ height: totalSize, position: "relative" }}>
             {items.map((vItem) => {
@@ -207,8 +207,8 @@ function EmptyState() {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center">
       <SquareDashedMousePointer className="size-5 text-muted-foreground/40" />
-      <div className="font-medium text-foreground/70 text-xs">No selection</div>
-      <div className="max-w-[260px] text-muted-foreground/60 text-2xs leading-relaxed">
+      <div className="font-medium text-foreground/70 text-ui">No selection</div>
+      <div className="max-w-[260px] text-muted-foreground/60 text-sm leading-relaxed">
         Narrow its filter scope (a lasso, a chart brush, a select) to populate the gallery.
       </div>
     </div>

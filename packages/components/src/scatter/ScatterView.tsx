@@ -528,7 +528,7 @@ export function ScatterView({
 
   if (!axes) {
     return (
-      <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden text-sm text-muted-foreground">
+      <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden text-lg text-muted-foreground">
         No embedding loaded
       </div>
     );
@@ -556,12 +556,12 @@ export function ScatterView({
         />
       </ScatterDeviceLeaseProvider>
       {showLoading && (
-        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-background/50 text-sm text-muted-foreground">
+        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-background/50 text-lg text-muted-foreground">
           Loading{loadingKey ? ` ${loadingKey.replace(/^X_/, "")}...` : "..."}
         </div>
       )}
       {errorMessage && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80 p-4 text-center text-red-400 text-sm">
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80 p-4 text-center text-red-400 text-lg">
           {errorMessage}
         </div>
       )}

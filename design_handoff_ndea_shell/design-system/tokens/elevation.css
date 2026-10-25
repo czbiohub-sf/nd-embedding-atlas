@@ -1,0 +1,12 @@
+/* Elevation. Light (Biohub) is flat: keylines instead of shadows. Dark (Pierre) uses soft shadows. */
+:root {
+  --shadow-raised: 0 0 0 var(--keyline) var(--border);
+  --shadow-popover: 0 0 0 var(--keyline) var(--border);
+  --shadow-toast: inset 0 0 0 var(--keyline) var(--border), 0 8px 24px rgba(13,0,1,.08);
+  --shadow-tile: 0 0 0 var(--tile-ring-width) var(--tile-ring);
+}
+.dark {
+  --shadow-raised: 0 1px 2px rgba(0,0,0,.5);
+  --shadow-popover: 0 0 0 var(--keyline) var(--border), 0 12px 40px rgba(0,0,0,.6);
+  --shadow-toast: inset 0 0 0 var(--keyline) var(--border), 0 8px 24px rgba(0,0,0,.22);
+}

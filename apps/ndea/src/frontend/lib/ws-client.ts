@@ -20,7 +20,6 @@
  */
 
 import type { NdeaProtocol } from "@ndea/protocol";
-import { setWsConnected, setWsError, setWsLatency } from "../stores/ws-connection-store";
 
 type ReqOf<M extends keyof NdeaProtocol> = NdeaProtocol[M]["req"];
 type ResOf<M extends keyof NdeaProtocol> = NdeaProtocol[M]["res"];
@@ -28,7 +27,6 @@ type ResOf<M extends keyof NdeaProtocol> = NdeaProtocol[M]["res"];
 interface PendingCall {
   resolve(value: unknown): void;
   reject(err: Error): void;
-  sentAt: number;
 }
 
 interface SubEntry {
@@ -96,11 +94,7 @@ export class NdeaWsClient {
   call<M extends keyof NdeaProtocol>(method: M, req: ReqOf<M>): Promise<ResOf<M>> {
     const id = this.nextId++;
     return new Promise<ResOf<M>>((resolve, reject) => {
-      this.pending.set(id, {
-        resolve: resolve,
-        reject,
-        sentAt: performance.now(),
-      });
+      this.pending.set(id, { resolve, reject });
       this.sendFrame({ _id: id, _type: method, ...(req as Record<string, unknown>) });
     });
   }
@@ -147,22 +141,17 @@ export class NdeaWsClient {
     this.ws = ws;
     ws.addEventListener("open", () => {
       this.retryAttempt = 0;
-      setWsConnected(true);
       for (const raw of this.sendQueue) ws.send(raw);
       this.sendQueue = [];
     });
     ws.addEventListener("message", (ev) => this.onMessage(ev));
     ws.addEventListener("close", () => {
-      setWsConnected(false);
       // Reject all in-flight calls and surface error to active subs.
       for (const p of this.pending.values()) p.reject(new WsReconnectError());
       this.pending.clear();
       for (const s of this.subs.values()) s.onError?.(new WsReconnectError());
       this.subs.clear();
       if (!this.shuttingDown) this.scheduleReconnect();
-    });
-    ws.addEventListener("error", () => {
-      setWsError("connection error");
     });
   }
 
@@ -204,7 +193,6 @@ export class NdeaWsClient {
     const pending = this.pending.get(id);
     if (!pending) return;
     this.pending.delete(id);
-    setWsLatency(performance.now() - pending.sentAt);
     if (ch === "error") {
       pending.reject(new Error(typeof frame.error === "string" ? frame.error : "ws error"));
     } else {

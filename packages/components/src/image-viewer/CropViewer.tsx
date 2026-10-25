@@ -44,7 +44,7 @@ function ViewerObsReadout() {
   const readout = formatViewerObsReadout(data);
   if (focusedRowIndex == null || readout == null) return null;
   return (
-    <div className="pointer-events-none absolute top-2 right-2 z-20 rounded bg-black/60 px-1.5 py-0.5 font-mono text-2xs text-white/85">
+    <div className="pointer-events-none absolute top-2 right-2 z-20 rounded bg-black/60 px-1.5 py-0.5 font-mono text-sm text-white/85">
       {readout}
     </div>
   );

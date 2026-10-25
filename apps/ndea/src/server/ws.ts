@@ -10,15 +10,16 @@
  * - Streaming/push: emit `{_ch: "data", ...}` frames, then `{_ch: "end"}`.
  * - Errors: `{_ch: "error", error: string}` (also implicit terminal).
  *
- * Methods: `workspace/watch` pushes every accepted workspace revision until
- * the client sends `{ _id: <new>, _type: "unsubscribe", target_id: <sub_id> }`.
+ * Methods: `workspace/watch` pushes every accepted workspace revision and
+ * `harness/watch` the harness presence, until the client sends
+ * `{ _id: <new>, _type: "unsubscribe", target_id: <sub_id> }`.
  * Data loads and Mosaic queries use the HTTP routes.
  */
 
 import type { ServerWebSocket } from "bun";
 import type { RenderSocketData } from "./remote-render.ts";
 import type { ServerSession } from "./state.ts";
-import { clients } from "./status.ts";
+import { clients, watchHarness } from "./status.ts";
 
 /** Data attached to every ServerWebSocket via server.upgrade(req, { data }). */
 export interface ServerSocketContext {
@@ -131,6 +132,7 @@ type Handler = (ws: WS, id: number, frame: Frame) => void | Promise<void>;
 
 const HANDLERS: Record<string, Handler> = {
   "workspace/watch": handleWorkspaceWatchWs,
+  "harness/watch": handleHarnessWatchWs,
 };
 
 // ─── workspace/watch ────────────────────────────────────────────────────────
@@ -138,5 +140,17 @@ const HANDLERS: Record<string, Handler> = {
 /** Push every committed workspace revision (actor, ops, time, echo token) until unsubscribed. */
 function handleWorkspaceWatchWs(ws: WS, id: number): void {
   const dispose = ws.data.state.workspace.watch((change) => sendData(ws, id, change));
+  socketSubs.get(ws)?.set(id, dispose);
+}
+
+// ─── harness/watch ──────────────────────────────────────────────────────────
+
+/**
+ * Push harness presence (agent names and last-seen times) now and after every
+ * named MCP request, until unsubscribed. Unauthenticated like the rest of `/ws`
+ * (loopback trust); names carry no paths or tokens.
+ */
+function handleHarnessWatchWs(ws: WS, id: number): void {
+  const dispose = watchHarness((presence) => sendData(ws, id, presence));
   socketSubs.get(ws)?.set(id, dispose);
 }

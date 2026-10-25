@@ -5,6 +5,12 @@ import { WorkspaceRevisionSchema } from "./workspace";
 
 const count = z.number().int().nonnegative();
 
+/** `harness/watch` push: agents named by `X-Ndea-Agent`, most recently seen first (`lastSeen`: ISO 8601). */
+export const HarnessPresenceSchema = z.object({
+  agents: z.array(z.object({ agent: z.string(), lastSeen: z.string() })),
+});
+export type HarnessPresence = z.infer<typeof HarnessPresenceSchema>;
+
 const DatasetStatusSchema = z.object({
   name: z.string(),
   format: z.enum(["anndata", "mudata"]),
@@ -50,7 +56,7 @@ export const RuntimeStatusSchema = z.object({
   clients: z.object({
     browserSockets: count,
     mcpInFlight: count,
-    agents: z.array(z.object({ agent: z.string(), lastSeen: z.string() })),
+    agents: HarnessPresenceSchema.shape.agents,
   }),
   /** The server's last 200 console lines, oldest first. */
   logs: z.array(z.object({ level: z.enum(["log", "warn", "error"]), text: z.string(), at: z.string() })),

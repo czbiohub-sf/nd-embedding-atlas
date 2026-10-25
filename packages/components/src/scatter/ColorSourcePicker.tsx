@@ -35,7 +35,7 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
       type="button"
       onClick={onClick}
       className={cn(
-        "flex-1 rounded-sm px-2 py-0.5 font-medium text-xs transition-colors",
+        "flex-1 rounded-sm px-2 py-0.5 font-medium text-ui transition-colors",
         active ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
       )}
     >
@@ -126,7 +126,7 @@ export function ColorSourcePicker({
       <PopoverTrigger
         aria-expanded={open}
         className={cn(
-          "flex h-7 min-w-0 items-center justify-between gap-1.5 whitespace-nowrap rounded-md border border-input bg-input/20 px-2 text-xs/relaxed outline-none transition-colors",
+          "flex h-7 min-w-0 items-center justify-between gap-1.5 whitespace-nowrap rounded-md border border-input bg-input/20 px-2 text-ui/relaxed outline-none transition-colors",
           "hover:bg-input/40 focus-visible:ring-2 focus-visible:ring-ring/30",
           "disabled:cursor-not-allowed disabled:opacity-50",
           "dark:bg-input/30",
@@ -190,7 +190,7 @@ export function ColorSourcePicker({
             <Command shouldFilter={false}>
               <CommandInput value={varQuery} onValueChange={setVarQuery} placeholder="Search var…" />
               <CommandList>
-                {varsLoading && <div className="py-4 text-center text-muted-foreground text-xs">Loading…</div>}
+                {varsLoading && <div className="py-4 text-center text-muted-foreground text-ui">Loading…</div>}
                 {!varsLoading && names.length === 0 && <CommandEmpty>No var found.</CommandEmpty>}
                 {!varsLoading && names.length > 0 && (
                   <CommandGroup>
@@ -222,7 +222,7 @@ export function ColorSourcePicker({
                     }
                   }}
                   className={cn(
-                    "rounded-sm border px-1.5 py-0.5 font-mono text-3xs transition-colors",
+                    "rounded-sm border px-1.5 py-0.5 font-mono text-2xs transition-colors",
                     selectedLayer === layer
                       ? "border-primary/50 bg-primary text-primary-foreground"
                       : "border-border bg-card text-muted-foreground hover:border-border hover:bg-muted hover:text-foreground",
@@ -235,7 +235,7 @@ export function ColorSourcePicker({
 
             {/* Errors shown inline; loading state is in the bottom dock */}
             {varStatus === "error" && (
-              <div className="border-border border-t px-3 py-2 text-destructive text-xs">Failed to load var.</div>
+              <div className="border-border border-t px-3 py-2 text-destructive text-ui">Failed to load var.</div>
             )}
           </>
         )}

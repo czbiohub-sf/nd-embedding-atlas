@@ -36,7 +36,6 @@ export interface HostInit<Config> {
   readonly elementId: string;
   readonly type: string;
   readonly config: Config;
-  readonly bodyHeaderElement: HTMLElement;
   readonly predicate: Selection;
   readonly focus: FocusCoordinationAPI;
   readonly viewSync: ViewCoordinationAPI;
@@ -132,7 +131,6 @@ export function createComponentHost<Config>(
       init.patchConfig(patch);
       config = next;
     },
-    bodyHeaderElement: init.bodyHeaderElement,
     data: Object.freeze({
       coordinator: dependencies.coordinator,
       table: dependencies.table,

@@ -10,6 +10,7 @@
  */
 
 import { z } from "zod";
+import type { HarnessPresence } from "./status";
 import type { WorkspaceChange } from "./workspace";
 
 export {
@@ -57,8 +58,8 @@ export type {
   WorkspaceRevision,
   WorkspaceSnapshot,
 } from "./workspace";
-export { RuntimeStatusSchema } from "./status";
-export type { RuntimeStatus } from "./status";
+export { HarnessPresenceSchema, RuntimeStatusSchema } from "./status";
+export type { HarnessPresence, RuntimeStatus } from "./status";
 export { DatasetStructureSchema, type DatasetStructure } from "./structure";
 
 // ─── Shared primitives ──────────────────────────────────────────────────────
@@ -391,6 +392,11 @@ export interface NdeaProtocol {
   "workspace/watch": {
     req: Record<string, never>;
     res: WorkspaceChange;
+  };
+  /** Pushes the current harness presence on subscribe and on every MCP request from a named agent. */
+  "harness/watch": {
+    req: Record<string, never>;
+    res: HarnessPresence;
   };
 }
 

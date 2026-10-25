@@ -91,8 +91,9 @@ entrypoints across workspaces.
   `{ error: "Unknown API endpoint: …" }`.
 - `/data/query` serves Mosaic's `restConnector` (`POST { type, sql }`;
   `arrow` returns Arrow IPC bytes, `exec` returns `{}`).
-- `/ws` carries the framed `{ _id, _type }` ndea protocol; its one method is
-  `workspace/watch`.
+- `/ws` carries the framed `{ _id, _type }` ndea protocol: `workspace/watch`
+  (committed revisions) and `harness/watch` (MCP agents and when each was
+  last seen, for the rail's harness presence).
 - Remote rendering (`server/remote-render.ts`, `server/chrome.ts`): an
   image viewer with `render: "remote"` opens `/ws/render` (one session per
   socket; the session dies with it). The server lazily launches one headless
@@ -197,7 +198,16 @@ entrypoints across workspaces.
 
 ### Frontend
 
-- React 19 renders the dashboard.
+- React 19 renders the dashboard. Design tokens (color, type, radius,
+  elevation, motion) live in `packages/ui/src/tokens.css`, from the design
+  handoff's `design-system/tokens/`; `packages/ui/src/styles.css` maps them to
+  Tailwind utilities. Dark (`.dark` on `<html>`) is the default; there is no
+  glass or blur. Overlays share one frame (`popoverFrame` in
+  `@ndea/ui/components/popover`).
+- The shell (`core/shell/Shell.tsx`): a 32px rail whose flyouts (Layouts,
+  Data, Links, Harness, Settings) open over the tiles on hover and dock when
+  pinned (click or ⌘B). No top bar, status bar, or revision UI: history stays
+  on the server (REST, CLI, MCP, TUI).
 - TypeGPU drives the WebGPU scatter plot (`packages/components/src/scatter/gpu/gpu/`):
   SoA position columns (`/api/scatter-positions` sends x, y, and z when the
   element's `zDim` prop asks for 3D), one `project()` shared by every pass,
@@ -234,17 +244,10 @@ entrypoints across workspaces.
   share that path. Views ask it questions (`element(id)`,
   `elementPredicate(id)`, `coordination.filterFacet`/`setFilterFacet`/
   `stateStore`) instead of reading document shape; only `WorkspaceSync`, the
-  History panel, and json-render's spec read `snapshot()`. `WorkspaceSync`
+  shell's flyouts, and json-render's spec read `snapshot()`. `WorkspaceSync`
   diffs `snapshot()` against the server's acknowledged revision and PATCHes
-  the difference.
-- `WorkspaceSync.onRevision` streams every accepted revision (this tab's
-  too; `clientId` only marks its own echoes). `WorkspaceHistory`
-  (`core/workspace/history.ts`) is the History panel's read model: the newest
-  page of `GET /api/workspace/history` plus live revisions, cached
-  `at(n)` documents, and `compareDocuments`, the element-level summary the
-  panel shows. Restore POSTs `/api/workspace/restore` at the acknowledged
-  base and never edits locally; its watch event applies the document like any
-  remote revision.
+  the difference. `compareDocuments` (`core/workspace/compare.ts`) summarizes
+  two documents element by element.
 - `ComponentRuntimeManager` (`core/component/runtime/workspace-runtime.ts`) keeps
   one live body per view element in a stable dock that tiles adopt, so moving
   a tile never remounts it. A config change from another writer (an agent, a
@@ -332,9 +335,9 @@ bare `vp build`; that invokes Rolldown instead of the single-binary pipeline.
 Direct `bun build --compile` skips the frontend plugins (Bun's CLI does not
 load them); use the project task.
 
-Dashboard layout editing (split, swap, remove, fill a slot) runs in
-development. Production builds compile it out; agents and patches edit any
-build.
+Dashboard layout editing ships in every build: right-click a tile header to
+split or remove it, drag its tab to swap tiles, and fill an empty tile from its
+component list.
 
 `ndea view` in a terminal shows a live status screen (`cli/tui.ts` on
 `@crustjs/tui`/OpenTUI, fed by `server/status.ts`): Overview (dataset cards,

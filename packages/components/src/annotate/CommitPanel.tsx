@@ -116,13 +116,11 @@ export function CommitPanel({
   const noColumns = columns.length === 0;
 
   return (
-    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-surface text-xs">
+    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-surface text-ui">
       <div className="flex items-center justify-between gap-2 border-border-subtle border-b p-2.5">
         <span className="font-medium text-foreground">Write to .obs on disk</span>
         <div className="flex items-center gap-2">
-          {scoped && (
-            <span className="rounded bg-surface-tertiary px-1.5 py-px text-3xs text-text-muted">scoped preview</span>
-          )}
+          {scoped && <span className="rounded bg-muted-2 px-1.5 py-px text-2xs text-text-muted">scoped preview</span>}
           <Button variant="ghost" size="sm" className="h-6 px-2 text-text-muted" onClick={onClose} title="close">
             ✕
           </Button>
@@ -132,13 +130,13 @@ export function CommitPanel({
       {/* staged-column selection */}
       <div className="min-h-0 flex-1 overflow-y-auto p-2.5">
         {noColumns ? (
-          <p className="text-2xs text-text-muted">No staged annotation columns yet. Label some obs first.</p>
+          <p className="text-sm text-text-muted">No staged annotation columns yet. Label some obs first.</p>
         ) : (
           <div className="flex flex-col gap-1">
             {columns.map((c) => (
               <label
                 key={c.name}
-                className="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 hover:bg-surface-tertiary/40"
+                className="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 hover:bg-muted-2/40"
               >
                 <input
                   type="checkbox"
@@ -147,7 +145,7 @@ export function CommitPanel({
                   className="size-3.5"
                 />
                 <span className="text-foreground">{c.name}</span>
-                <span className="text-3xs text-text-muted">{c.dtype}</span>
+                <span className="text-2xs text-text-muted">{c.dtype}</span>
               </label>
             ))}
           </div>
@@ -160,17 +158,17 @@ export function CommitPanel({
               r.error !== null ? (
                 <div
                   key={r.datasetKey}
-                  className="rounded border border-warning/30 bg-warning/10 p-1.5 text-2xs text-warning"
+                  className="rounded border border-warning/30 bg-warning/10 p-1.5 text-sm text-warning"
                 >
                   <span className="font-medium">{r.path ?? r.datasetKey}</span>: {r.error}
                 </div>
               ) : (
-                <div key={r.datasetKey} className="rounded border border-border-subtle p-1.5 text-2xs">
+                <div key={r.datasetKey} className="rounded border border-border-subtle p-1.5 text-sm">
                   <div className="flex items-baseline justify-between">
                     <span className="truncate font-medium text-foreground" title={r.path}>
                       {r.path}
                     </span>
-                    <span className="text-3xs text-text-muted">
+                    <span className="text-2xs text-text-muted">
                       {r.format} · {r.nObs?.toLocaleString()} obs
                     </span>
                   </div>
@@ -178,9 +176,9 @@ export function CommitPanel({
                     {(r.columns ?? []).map((col) => (
                       <div key={col.name} className="flex items-baseline justify-between text-text-muted">
                         <span>
-                          {col.name} <span className="text-3xs">{col.kind}</span>
+                          {col.name} <span className="text-2xs">{col.kind}</span>
                         </span>
-                        <span className="text-3xs">
+                        <span className="text-2xs">
                           {col.nNonNull.toLocaleString()} of {r.nObs?.toLocaleString()} labeled
                         </span>
                       </div>
@@ -224,7 +222,7 @@ export function CommitPanel({
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-6 text-3xs text-text-muted"
+                className="h-6 text-2xs text-text-muted"
                 disabled={busy}
                 onClick={invalidate}
               >
@@ -235,7 +233,7 @@ export function CommitPanel({
         )}
         {status && (
           <span
-            className={cn("truncate text-3xs", status.tone === "ok" ? "text-success" : "text-destructive")}
+            className={cn("truncate text-2xs", status.tone === "ok" ? "text-success" : "text-destructive")}
             title={status.msg}
           >
             {status.tone === "ok" ? "✓" : "✗"} {status.msg}

@@ -37,7 +37,7 @@ export function createCountPlotView({ useColumnTypes, useQuery }: ChartServices)
       <div className="flex h-full w-full flex-col gap-1.5 overflow-y-auto bg-surface p-2">
         <FieldPicker types={types} value={field} kinds={["string", "boolean"]} onPick={setField} />
         {field == null ? (
-          <div className="px-1 py-2 text-2xs text-muted-foreground/60">Pick a column to plot.</div>
+          <div className="px-1 py-2 text-sm text-muted-foreground/60">Pick a column to plot.</div>
         ) : (
           <CountPlotBody
             key={field}
@@ -101,7 +101,7 @@ function createCountPlotBody(useQuery: UseChartQuery) {
     };
 
     if (!data || data.length === 0) {
-      return <div className="py-2 text-2xs text-muted-foreground">{loading ? "Loading..." : "No data"}</div>;
+      return <div className="py-2 text-sm text-muted-foreground">{loading ? "Loading..." : "No data"}</div>;
     }
 
     const maxCount = Math.max(...data.map((d) => d.count), 1);
@@ -124,7 +124,7 @@ function createCountPlotBody(useQuery: UseChartQuery) {
               onClick={() => handleClick(row.value)}
             >
               <span
-                className="min-w-0 max-w-[40%] shrink-0 truncate font-mono text-2xs text-muted-foreground"
+                className="min-w-0 max-w-[40%] shrink-0 truncate font-mono text-sm text-muted-foreground"
                 title={row.value ?? "(null)"}
               >
                 {row.value ?? "(null)"}
@@ -141,7 +141,7 @@ function createCountPlotBody(useQuery: UseChartQuery) {
                 />
               </div>
 
-              <span className="shrink-0 font-mono text-2xs text-muted-foreground tabular-nums">
+              <span className="shrink-0 font-mono text-sm text-muted-foreground tabular-nums">
                 {row.countSelected.toLocaleString()}
               </span>
             </button>

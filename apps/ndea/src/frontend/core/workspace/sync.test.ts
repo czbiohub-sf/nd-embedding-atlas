@@ -1,10 +1,9 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import type { JsonPatchOp, WorkspaceRevision } from "@ndea/protocol";
+import type { JsonPatchOp } from "@ndea/protocol";
 
 import { Workspace, type WorkspacePatchResult } from "../../../server/workspace";
 import { emptyWorkspaceDocument } from "./document";
 import { WorkspaceSync, type PatchOutcome, type WorkspaceTransport } from "./sync";
-import type { WorkspaceDocument } from "./types";
 import { WorkspaceStore } from "./workspace-store";
 
 const cleanup: (() => void)[] = [];
@@ -12,19 +11,14 @@ afterEach(() => {
   for (const dispose of cleanup.splice(0)) dispose();
 });
 
-const outcome = (result: WorkspacePatchResult | { kind: "not-found" }): PatchOutcome =>
-  result.kind === "invalid"
-    ? { kind: "invalid", errors: result.issues.map((i) => i.detail) }
-    : result.kind === "not-found"
-      ? { kind: "invalid", errors: ["not found"] }
-      : result;
+const outcome = (result: WorkspacePatchResult): PatchOutcome =>
+  result.kind === "invalid" ? { kind: "invalid", errors: result.issues.map((i) => i.detail) } : result;
 
 /** The real server workspace behind an in-process transport; `live: false` drops watch pushes. */
 function memoryTransport(server: Workspace, { live = true } = {}): WorkspaceTransport {
   const actor = { kind: "browser" } as const;
   return {
     patch: async (base, ops, clientId) => outcome(await server.patch(ops, { base, actor, clientId })),
-    restore: async (base, revision, clientId) => outcome(await server.restore(revision, { base, actor, clientId })),
     watch: (onChange) => (live ? server.watch(onChange) : () => {}),
     snapshot: () => Promise.resolve(server.get()),
   };
@@ -42,12 +36,10 @@ async function session(options?: { live?: boolean }) {
   const sync = new WorkspaceSync(workspace, initial, memoryTransport(server, options), (e) => {
     throw new Error(e.join("; "));
   });
-  const revisions: [WorkspaceRevision, boolean][] = [];
-  sync.onRevision((revision, own) => revisions.push([revision, own]));
   sync.start();
   await sync.flush();
   cleanup.push(() => sync.dispose());
-  return { server, workspace, sync, revisions };
+  return { server, workspace, sync };
 }
 
 describe("WorkspaceSync", () => {
@@ -105,26 +97,5 @@ describe("WorkspaceSync", () => {
         spec: { elements: { "slot-1": { props: { title: "Mine" } } } },
       },
     });
-  });
-
-  test("every accepted revision reaches onRevision with its actor; own marks this tab's", async () => {
-    const { server, revisions } = await session();
-    await agentWrite(server, 1, [{ op: "add", path: "/data/infected", value: { sql: "infected" } }]);
-    expect(revisions.map(([r, own]) => [r.revision, r.actor, own])).toEqual([
-      [1, { kind: "browser" }, true],
-      [2, { kind: "mcp", agent: "omp" }, false],
-    ]);
-  });
-
-  test("restore commits on the server and its watch event brings the document back", async () => {
-    const { server, workspace, sync, revisions } = await session();
-    await agentWrite(server, 1, [{ op: "add", path: "/data/infected", value: { sql: "infected" } }]);
-    workspace.setElementProps("slot-1", { title: "Mine" });
-
-    expect(await sync.restore(1)).toEqual({ kind: "accepted", revision: 4 });
-    await sync.flush();
-    expect(server.get().document).toEqual(server.at(1)!.document);
-    expect(workspace.snapshot()).toEqual(server.at(1)!.document as WorkspaceDocument);
-    expect(revisions.at(-1)).toMatchObject([{ revision: 4, restoredFrom: 1 }, true]);
   });
 });

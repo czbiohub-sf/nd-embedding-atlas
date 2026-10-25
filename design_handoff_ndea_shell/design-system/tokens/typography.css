@@ -1,0 +1,18 @@
+/* Type. Default font set is Geist + Geist Mono. Switch the whole app with one class on <html>. */
+:root {
+  --font-sans: Geist, system-ui, sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, monospace;
+  --weight-regular: 400; --weight-medium: 500; --weight-semibold: 600;
+  --text-2xs: 10px; --text-xs: 10.5px; --text-sm: 11px; --text-ui-sm: 11.5px; --text-ui: 12px; --text-ui-lg: 12.5px; --text-md: 13px; --text-lg: 14px; --text-xl: 18px; --text-2xl: 24px; --text-metric: 34px;
+  --leading-tight: 1.2; --leading-ui: 1.4; --leading-body: 1.5;
+  --tracking-metric: -0.03em; --tracking-title: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.font-helvetica { --font-sans: Helvetica, 'Helvetica Neue', Arial, sans-serif; --font-mono: Helvetica, 'Helvetica Neue', Arial, sans-serif; --weight-medium: 700; --weight-semibold: 700; }
+.font-swiss { --font-sans: Helvetica, 'Helvetica Neue', Arial, sans-serif; --font-mono: 'IBM Plex Mono', ui-monospace, monospace; --weight-medium: 700; --weight-semibold: 700; }
+.font-plex { --font-sans: 'IBM Plex Sans', system-ui, sans-serif; --font-mono: 'IBM Plex Mono', ui-monospace, monospace; }
+.font-condensed { --font-sans: 'IBM Plex Sans Condensed', 'Archivo Narrow', sans-serif; --font-mono: 'IBM Plex Mono', ui-monospace, monospace; }
+.font-grotesk { --font-sans: 'Space Grotesk', system-ui, sans-serif; --font-mono: 'Space Mono', ui-monospace, monospace; }
+.font-soft { --font-sans: Manrope, system-ui, sans-serif; --font-mono: 'DM Mono', ui-monospace, monospace; --weight-medium: 600; }
+.font-terminal { --font-sans: 'JetBrains Mono', ui-monospace, monospace; --font-mono: 'JetBrains Mono', ui-monospace, monospace; --weight-semibold: 500; }
+.font-hud { --font-sans: 'Chakra Petch', sans-serif; --font-mono: 'Share Tech Mono', ui-monospace, monospace; }

@@ -1,0 +1,27 @@
+<!-- @dsCard group="Components" viewport="700x230" name="Form controls" -->
+<!doctype html><html class="dark"><head><meta charset="utf-8"><link rel="stylesheet" href="../../styles.css">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js"></script>
+<script src="../dev-loader.js"></script>
+<style>body{padding:14px}.lab{font-size:10.5px;color:var(--text-muted);font-family:var(--font-mono);margin:10px 0 6px}.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}</style></head>
+<body><div id="root"></div>
+<script type="text/babel">
+(async () => {
+const NS = await window.ndeaLoad("../../");
+const { Icon, Button, IconButton, Input, Select, Checkbox, RangeSlider, SegmentedControl, Tabs, SidebarRail, Tile, TileSlot, Popover, Menu, CommandMenu, Toast, Toaster, Pill, Badge, Kbd, Legend, ScopeIndicator, ScopeRow, DataTable } = NS;
+function Demo() {
+  const [c, setC] = React.useState(true); const [r, setR] = React.useState([0.06, 0.62]);
+  const bins = Array.from({ length: 40 }, (_, i) => Math.round(80 * Math.exp(-((i - 9) ** 2) / 40) + 20 * Math.exp(-((i - 24) ** 2) / 60) + 3));
+  return <div>
+    <div className="lab">Input · Select</div>
+    <div className="row"><Input icon="search" placeholder="Search" width={150} /><Select mono value="cell_area" options={[{value:'cell_area',label:'cell_area',meta:'number'},{value:'nuc_int',label:'nuc_int',meta:'number'},{value:'treatment',label:'treatment',meta:'category'}]} /><Select value="gt" options={[{value:'gt',label:'>'},{value:'between',label:'between'}]} /><Input mono placeholder="4200" width={70} /></div>
+    <div className="lab">Checkbox</div>
+    <div className="row" style={{ gap: 16 }}><Checkbox checked={c} onChange={setC} label="Provenance badges" /><Checkbox indeterminate /><Checkbox /></div>
+    <div className="lab">RangeSlider · contrast limits</div>
+    <RangeSlider low={r[0]} high={r[1]} histogram={bins} color="var(--d1)" onChange={(l, h) => setR([l, h])} width={320} />
+  </div>;
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<Demo />);
+})();
+</script></body></html>

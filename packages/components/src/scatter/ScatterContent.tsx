@@ -8,7 +8,6 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { capabilitiesOf } from "@ndea/sdk";
 import { useFocus, useScatterHost, useScatterSession } from "./context";
 import { selectAnyTrajectory } from "./helpers";
@@ -29,16 +28,13 @@ const DENSITY_CYCLE: readonly DensityMode[] = ["mean", "dominant", "weave"];
 
 export interface ScatterContentProps {
   initialObsmKey?: string | null;
-  /** container header slot: when present the toolbar portals there
-   *  (compact, 26px-friendly) instead of docking above the canvas */
-  toolbarTarget?: HTMLElement;
   /** Metadata of the host's focused point (bound by the view factory). */
   focusedPointMeta: FocusedPointMeta;
 }
 
 // ── ScatterContent ────────────────────────────────────────────────────────────
 
-export function ScatterContent({ initialObsmKey, toolbarTarget, focusedPointMeta }: ScatterContentProps) {
+export function ScatterContent({ initialObsmKey, focusedPointMeta }: ScatterContentProps) {
   const { state, actions, runtime } = useScatterSession();
   // The host owns this instance's WASM bitmap lifecycle.
   const host = useScatterHost();
@@ -208,7 +204,6 @@ export function ScatterContent({ initialObsmKey, toolbarTarget, focusedPointMeta
 
   const toolbar = effectiveAxes ? (
     <ScatterToolbar
-      variant={toolbarTarget ? "header" : "docked"}
       axes={effectiveAxes}
       obsmKeys={obsmKeys}
       dims={dims}
@@ -264,7 +259,7 @@ export function ScatterContent({ initialObsmKey, toolbarTarget, focusedPointMeta
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden">
-      {toolbarTarget && toolbar ? createPortal(toolbar, toolbarTarget) : toolbar}
+      {toolbar}
       <LegendProvider
         categoryMapping={coloredCategoryMapping}
         coordinator={coordinator}

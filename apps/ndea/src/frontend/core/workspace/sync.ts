@@ -5,10 +5,8 @@
  * period the sync diffs the committed document against the last
  * server-acknowledged one and PATCHes the difference. A stale revision (409)
  * rebases: pending ops replay on the server document and resend. Remote
- * revisions from `workspace/watch` rebase pending local ops the same way.
- * Every accepted revision, this tab's included, reaches `onRevision`;
- * `clientId` only tells this tab's echoes apart. A restore commits on the
- * server and its watch event updates the document like any remote revision.
+ * revisions from `workspace/watch` rebase pending local ops the same way;
+ * `clientId` tells this tab's own echoes apart.
  */
 
 import {
@@ -32,7 +30,6 @@ const SYNC_DEBOUNCE_MS = 500;
 
 export interface WorkspaceTransport {
   patch(baseRevision: number, ops: JsonPatchOp[], clientId: string): Promise<PatchOutcome>;
-  restore(baseRevision: number, revision: number, clientId: string): Promise<PatchOutcome>;
   watch(onChange: (change: WorkspaceChange) => void, onLost: () => void): () => void;
   snapshot(): Promise<WorkspaceSnapshot>;
 }
@@ -61,7 +58,6 @@ export class WorkspaceSync {
   private inflight: Promise<void> | null = null;
   private stopped = false;
   private disposers: (() => void)[] = [];
-  private readonly revisionListeners = new Set<(revision: WorkspaceRevision, own: boolean) => void>();
 
   constructor(
     workspace: WorkspaceStore,
@@ -79,10 +75,7 @@ export class WorkspaceSync {
     this.disposers.push(
       this.workspace.subscribe(() => this.schedule()),
       this.transport.watch(
-        ({ clientId, ...revision }) => {
-          for (const listener of this.revisionListeners) listener(revision, clientId === this.clientId);
-          void this.onRemote(revision);
-        },
+        ({ clientId: _clientId, ...revision }) => void this.onRemote(revision),
         () => void this.resync(),
       ),
     );
@@ -94,26 +87,6 @@ export class WorkspaceSync {
     this.stopped = true;
     clearTimeout(this.timer);
     for (const dispose of this.disposers.splice(0)) dispose();
-    this.revisionListeners.clear();
-  }
-
-  /** Every accepted revision in commit order; `own` marks this tab's writes. */
-  onRevision(listener: (revision: WorkspaceRevision, own: boolean) => void): () => void {
-    this.revisionListeners.add(listener);
-    return () => this.revisionListeners.delete(listener);
-  }
-
-  /**
-   * Commit the document at `revision` as a new revision, after pending edits
-   * land. A 409 or 400 is returned, never fatal: the watch catches this tab up.
-   */
-  async restore(revision: number): Promise<PatchOutcome> {
-    await this.flush();
-    while (this.inflight) await this.inflight;
-    const outcome = this.transport.restore(this.acked.revision, revision, this.clientId);
-    // Hold other writes until the server answers; its watch event then applies the restored document.
-    this.inflight = outcome.then(noop, noop).finally(() => (this.inflight = null));
-    return outcome;
   }
 
   /** Send pending edits now; resolves when the server has acknowledged them. */
@@ -151,7 +124,7 @@ export class WorkspaceSync {
     this.fail(outcome.errors);
   }
 
-  /** Own echoes are already acknowledged (or, for a restore, applied here like any other revision). */
+  /** Own echoes are already acknowledged. */
   private async onRemote(change: WorkspaceRevision): Promise<void> {
     if (this.stopped) return;
     while (this.inflight) await this.inflight;
@@ -195,12 +168,10 @@ export class WorkspaceSync {
   }
 }
 
-function noop(): void {}
-
-/** PATCH and restore answer alike: 200 `{ revision }`, 409 snapshot, 400 problem. */
-async function writeWorkspace(method: "PATCH" | "POST", url: string, body: object): Promise<PatchOutcome> {
-  const res = await fetch(url, {
-    method,
+/** PATCH answers: 200 `{ revision }`, 409 snapshot, 400 problem. */
+async function patchWorkspace(body: object): Promise<PatchOutcome> {
+  const res = await fetch("/api/workspace", {
+    method: "PATCH",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
   });
@@ -226,9 +197,7 @@ export function createHttpWorkspaceTransport(ws: {
   ): { unsubscribe(): void };
 }): WorkspaceTransport {
   return {
-    patch: (baseRevision, ops, clientId) => writeWorkspace("PATCH", "/api/workspace", { baseRevision, ops, clientId }),
-    restore: (baseRevision, revision, clientId) =>
-      writeWorkspace("POST", "/api/workspace/restore", { baseRevision, revision, clientId }),
+    patch: (baseRevision, ops, clientId) => patchWorkspace({ baseRevision, ops, clientId }),
     watch(onChange, onLost) {
       let sub: { unsubscribe(): void };
       // The socket reconnects on its own; re-subscribe and re-read whatever was missed.

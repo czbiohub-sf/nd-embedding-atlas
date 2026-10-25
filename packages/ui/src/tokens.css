@@ -1,0 +1,233 @@
+/*
+ * ndea design tokens, from design_handoff_ndea_shell/design-system/tokens/ (the source of truth).
+ * Base palettes feed the semantic tokens; components use only the semantic ones (via the Tailwind
+ * utilities mapped in styles.css). Light lives on :root, dark on `.dark` (the default).
+ */
+
+/* ── Base palettes: never referenced by components ──────────────────── */
+:root {
+  /* Biohub brand */
+  --bh-black: #000000;
+  --bh-white: #ffffff;
+  --bh-warm-black: #0d0001;
+  --bh-periwinkle: #6e4ff9;
+  --bh-iris: #33029c;
+  --bh-indigo: #1d004d;
+  --bh-lavender: #b7a8fc;
+  --bh-teal: #26cfdb;
+  --bh-slate: #a0a4ac;
+  --bh-dark-slate: #63666a;
+  --bh-light-slate: #dee8eb;
+  --bh-keyline: #c7cbcf;
+  --bh-mid-slate: #808285;
+  --bh-graphite: #4a4e52;
+  /* Pierre Dark neutrals */
+  --pi-950: #0a0a0a;
+  --pi-925: #101010;
+  --pi-900: #171717;
+  --pi-850: #1d1d1d;
+  --pi-800: #262626;
+  --pi-775: #2c2c2c;
+  --pi-700: #404040;
+  --pi-500: #636363;
+  --pi-450: #737373;
+  --pi-300: #a3a3a3;
+  --pi-50: #fafafa;
+  --pi-select: #19283c;
+  --pi-select-fg: #9fd8ff;
+  /* Pierre accents */
+  --pi-green: #07c480;
+  --pi-red: #ff2e3f;
+  --pi-yellow: #ffca00;
+  --pi-gold: #ffd452;
+  --pi-orange: #ffa359;
+  --pi-violet: #9d6afb;
+  --pi-pink: #ff678d;
+  --pi-sky: #68cdf2;
+  --pi-magenta: #d568ea;
+}
+
+/* ── Semantic tokens (shadcn names + ndea extensions) ───────────────── */
+:root {
+  --background: var(--bh-white);
+  --foreground: var(--bh-warm-black);
+  --surface: var(--bh-white);
+  --card: var(--bh-white);
+  --card-foreground: var(--bh-warm-black);
+  --popover: var(--bh-white);
+  --popover-foreground: var(--bh-warm-black);
+  --primary: var(--bh-periwinkle);
+  --primary-foreground: var(--bh-white);
+  --secondary: var(--muted-2);
+  --secondary-foreground: var(--foreground);
+  --muted: var(--bh-light-slate);
+  --muted-2: var(--bh-light-slate);
+  --muted-foreground: var(--bh-dark-slate);
+  --text-muted: var(--bh-dark-slate);
+  --text-faint: var(--bh-mid-slate);
+  --accent: #ece8fe;
+  --accent-foreground: var(--bh-iris);
+  --border: var(--bh-keyline);
+  --input: var(--bh-keyline);
+  --line-2: var(--bh-keyline);
+  --line-3: var(--bh-mid-slate);
+  --tile-ring: var(--bh-slate);
+  --ring: var(--bh-periwinkle);
+  --focus-mark: var(--bh-black);
+  --overlay: var(--bh-white);
+  --scrim: rgba(255, 255, 255, 0.55);
+  --hair: rgba(0, 0, 0, 0.15);
+  --soft: var(--bh-light-slate);
+  --destructive: #d92d3a;
+  --destructive-bg: var(--bh-light-slate);
+  --success: #0e8f5e;
+  --warning: #b7791f;
+  --dirty: #b7791f;
+  --d1: #6e4ff9;
+  --d2: #1d004d;
+  --d3: #b7a8fc;
+  --d4: #000000;
+  --d5: #4a4e52;
+  --d6: #808285;
+  --d7: #808285;
+  --d8: #c7cbcf;
+  --d9: #33029c;
+  --chart-1: var(--d1);
+  --chart-2: var(--d2);
+  --chart-3: var(--d3);
+  --chart-4: var(--d4);
+  --chart-5: var(--d5);
+  --scope-filter: var(--d1);
+  --scope-focus: var(--d2);
+  --scope-color: var(--d3);
+  --viridis: linear-gradient(90deg, #440154, #3b528b, #21918c, #5ec962, #fde725);
+}
+
+.dark {
+  --background: var(--pi-950);
+  --foreground: var(--pi-50);
+  --surface: var(--pi-925);
+  --card: var(--pi-900);
+  --card-foreground: var(--pi-50);
+  --popover: var(--pi-900);
+  --popover-foreground: var(--pi-50);
+  --primary: var(--bh-teal);
+  --primary-foreground: var(--pi-950);
+  --muted: var(--pi-850);
+  --muted-2: var(--pi-800);
+  --muted-foreground: var(--pi-300);
+  --text-muted: var(--pi-300);
+  --text-faint: var(--pi-500);
+  --accent: var(--pi-select);
+  --accent-foreground: var(--pi-select-fg);
+  --border: var(--pi-800);
+  --input: var(--pi-775);
+  --line-2: var(--pi-775);
+  --line-3: var(--pi-500);
+  --tile-ring: var(--pi-700);
+  --ring: var(--bh-teal);
+  --focus-mark: var(--pi-gold);
+  --overlay: rgba(16, 16, 16, 0.92);
+  --scrim: rgba(10, 10, 10, 0.45);
+  --hair: rgba(255, 255, 255, 0.08);
+  --soft: var(--pi-850);
+  --destructive: var(--pi-red);
+  --destructive-bg: rgba(255, 46, 63, 0.12);
+  --success: var(--pi-green);
+  --warning: var(--pi-yellow);
+  --dirty: var(--pi-orange);
+  --d1: var(--bh-teal);
+  --d2: var(--pi-orange);
+  --d3: var(--pi-violet);
+  --d4: var(--pi-pink);
+  --d5: var(--pi-450);
+  --d6: var(--pi-50);
+  --d7: var(--pi-sky);
+  --d8: var(--pi-gold);
+  --d9: var(--pi-magenta);
+}
+
+/* ── Radii, layout, lines ───────────────────────────────────────────── */
+:root {
+  --radius: 7px;
+  --edge: 4px;
+  --gutter: 4px;
+  --rail-width: 32px;
+  --flyout-width: 312px;
+  --popover-width: 280px;
+  --tile-header: 30px;
+  --keyline: 0.5px;
+  --tile-ring-width: 1.15px;
+  --hit-min: 26px;
+}
+
+/* ── Elevation: light is flat (keylines), dark uses soft shadows ────── */
+:root {
+  --shadow-raised: 0 0 0 var(--keyline) var(--border);
+  --shadow-popover: 0 0 0 var(--keyline) var(--border);
+  --shadow-toast: inset 0 0 0 var(--keyline) var(--border), 0 8px 24px rgba(13, 0, 1, 0.08);
+  --shadow-tile: 0 0 0 var(--tile-ring-width) var(--tile-ring);
+}
+.dark {
+  --shadow-raised: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-popover: 0 0 0 var(--keyline) var(--border), 0 12px 40px rgba(0, 0, 0, 0.6);
+  --shadow-toast: inset 0 0 0 var(--keyline) var(--border), 0 8px 24px rgba(0, 0, 0, 0.22);
+}
+
+/* ── Motion: short, one easing family, no bounce ────────────────────── */
+:root {
+  --dur-fast: 140ms;
+  --dur: 180ms;
+  --dur-slow: 260ms;
+  --ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --ease-toast: cubic-bezier(0.21, 1.02, 0.73, 1);
+}
+.motion-off {
+  --dur-fast: 0ms;
+  --dur: 0ms;
+  --dur-slow: 0ms;
+}
+.motion-off *,
+.motion-off *::before {
+  animation: none !important;
+  transition: none !important;
+}
+
+@keyframes nd-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes nd-toast {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes nd-shake {
+  0%,
+  100% {
+    transform: none;
+  }
+  20% {
+    transform: translateX(-4px);
+  }
+  40% {
+    transform: translateX(4px);
+  }
+  60% {
+    transform: translateX(-2px);
+  }
+  80% {
+    transform: translateX(2px);
+  }
+}

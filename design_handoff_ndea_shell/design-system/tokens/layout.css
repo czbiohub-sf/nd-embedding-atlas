@@ -1,0 +1,7 @@
+/* Radii, spacing, lines. Corners are the Biohub-softened set (field radii x 0.7). */
+:root {
+  --radius-xs: 3.5px; --radius-sm: 4.2px; --radius-md: 4.9px; --radius: 7px; --radius-lg: 8.4px; --radius-xl: 9.8px; --radius-pill: 999px;
+  --space-0-5: 2px; --space-0-75: 3px; --space-1: 4px; --space-1-5: 6px; --space-2: 8px; --space-2-5: 10px; --space-3: 12px; --space-4: 16px; --space-6: 24px;
+  --edge: 4px; --gutter: 4px; --rail-width: 32px; --flyout-width: 312px; --popover-width: 280px; --tile-header: 30px;
+  --keyline: 0.5px; --tile-ring-width: 1.15px; --hit-min: 26px;
+}

@@ -1,5 +1,5 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { ThemeCommandPalette } from "./components/ThemeCommandPalette";
+import { CommandPaletteProvider } from "./components/ThemeCommandPalette";
 import { Toaster } from "./components/ui/sonner";
 import { TooltipProvider } from "@ndea/ui/components/tooltip";
 import { WorkspaceShell } from "./core/workspace/WorkspaceShell";
@@ -11,10 +11,11 @@ export default function App() {
   return (
     <QueryClientProvider client={appQueryClient}>
       <ThemeProvider>
-        <TooltipProvider delay={400}>
+        <TooltipProvider>
           <DatasetSessionProvider>
-            <WorkspaceShell />
-            <ThemeCommandPalette />
+            <CommandPaletteProvider>
+              <WorkspaceShell />
+            </CommandPaletteProvider>
             <Toaster position="bottom-right" />
           </DatasetSessionProvider>
         </TooltipProvider>

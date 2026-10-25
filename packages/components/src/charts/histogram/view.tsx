@@ -42,7 +42,7 @@ export function createHistogramView({ useColumnTypes, useQuery }: ChartServices)
       <div className="flex h-full w-full flex-col gap-1.5 overflow-y-auto bg-surface p-2">
         <FieldPicker types={types} value={field} kinds={["number"]} onPick={setField} />
         {field == null ? (
-          <div className="px-1 py-2 text-2xs text-muted-foreground/60">Pick a column to plot.</div>
+          <div className="px-1 py-2 text-sm text-muted-foreground/60">Pick a column to plot.</div>
         ) : (
           <HistogramBody
             key={field}
@@ -143,17 +143,17 @@ function createHistogramBody(useQuery: UseChartQuery) {
     if (stats && stats.count > 0 && stats.min === stats.max) {
       return (
         <div ref={containerRef} className="py-2">
-          <span className="inline-block rounded bg-muted px-1.5 py-0.5 font-medium text-2xs text-foreground">
+          <span className="inline-block rounded bg-muted px-1.5 py-0.5 font-medium text-sm text-foreground">
             {formatTick(stats.min)}
           </span>
-          <span className="ml-1 text-3xs text-muted-foreground">({stats.countFiltered.toLocaleString()} rows)</span>
+          <span className="ml-1 text-2xs text-muted-foreground">({stats.countFiltered.toLocaleString()} rows)</span>
         </div>
       );
     }
 
     if (!binParams || !data || data.length === 0) {
       return (
-        <div ref={containerRef} className="py-2 text-2xs text-muted-foreground">
+        <div ref={containerRef} className="py-2 text-sm text-muted-foreground">
           {loading || statsLoading ? "Loading..." : "No data"}
         </div>
       );

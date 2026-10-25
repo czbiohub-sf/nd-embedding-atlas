@@ -71,8 +71,8 @@ export function LassoGalleryCard({
         // w-full is critical: <button> defaults to intrinsic-content sizing
         // even with `flex flex-col`, so without it the card collapses to the
         // image's natural size instead of filling the virtualizer column.
-        "group relative flex w-full cursor-pointer flex-col overflow-hidden rounded-md border bg-background text-left transition-all duration-150",
-        isHighlighted ? "border-primary ring-2 ring-primary/30" : "border-border/40 hover:border-border/70",
+        "group relative flex w-full cursor-pointer flex-col overflow-hidden rounded-md border bg-background text-left",
+        isHighlighted ? "border-transparent outline-2 outline-primary" : "border-border/40 hover:border-border/70",
       )}
     >
       <div className="relative w-full overflow-hidden bg-black" style={{ aspectRatio: aspect }}>
@@ -94,7 +94,7 @@ export function LassoGalleryCard({
         <div className="flex items-baseline justify-between gap-2">
           <span
             className={cn(
-              "min-w-0 flex-1 truncate font-mono text-2xs",
+              "min-w-0 flex-1 truncate font-mono text-sm",
               isHighlighted ? "font-medium text-primary" : "text-foreground/85",
             )}
             title={obs.fov ?? undefined}
@@ -103,7 +103,7 @@ export function LassoGalleryCard({
           </span>
           <span
             className={cn(
-              "shrink-0 font-mono text-3xs tabular-nums",
+              "shrink-0 font-mono text-2xs tabular-nums",
               isHighlighted ? "text-primary/70" : "text-muted-foreground/70",
             )}
           >
@@ -114,7 +114,7 @@ export function LassoGalleryCard({
           // Only renders in multi-dataset mode (server omits `dataset` for
           // single-dataset stores). Helps the user trace which yaml-grouped
           // dataset a crop belongs to.
-          <span className="truncate font-mono text-3xs text-muted-foreground/50" title={obs.datasetKey}>
+          <span className="truncate font-mono text-2xs text-muted-foreground/50" title={obs.datasetKey}>
             {obs.datasetKey}
           </span>
         )}

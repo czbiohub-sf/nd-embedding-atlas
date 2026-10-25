@@ -66,7 +66,7 @@ function ModBadge({ mod, className }: { mod: string; className?: string }) {
   return (
     <span
       className={cn(
-        "shrink-0 rounded-sm border px-1 font-mono text-3xs leading-none",
+        "shrink-0 rounded-sm border px-1 font-mono text-2xs leading-none",
         colors[mod] ?? "border-muted-foreground/30 bg-muted/30 text-muted-foreground",
         className,
       )}
@@ -80,8 +80,8 @@ function CrossModalityIndicator({ embeddingMod, colorMod }: { embeddingMod?: str
   if (!embeddingMod || !colorMod || embeddingMod === colorMod) return null;
   return (
     <div className="flex items-center gap-1 border-border border-t px-2 py-1.5">
-      <span className="text-3xs text-amber-400">⚡</span>
-      <span className="text-3xs text-muted-foreground">
+      <span className="text-2xs text-amber-400">⚡</span>
+      <span className="text-2xs text-muted-foreground">
         cross-modality: viewing <ModBadge mod={embeddingMod} /> colored by <ModBadge mod={colorMod} />
       </span>
     </div>
@@ -181,7 +181,7 @@ export function ModalityColorPicker({
           <span className="min-w-0 flex-1 truncate text-left" title={colorSource.column}>
             {colorSource.column}
           </span>
-          <Badge variant="outline" className="shrink-0 px-1 py-0 text-3xs">
+          <Badge variant="outline" className="shrink-0 px-1 py-0 text-2xs">
             obs
           </Badge>
           {colorMod && <ModBadge mod={colorMod} className="shrink-0" />}
@@ -194,7 +194,7 @@ export function ModalityColorPicker({
           <span className="min-w-0 flex-1 truncate text-left font-mono" title={colorSource.varName}>
             {colorSource.varName}
           </span>
-          <Badge variant="outline" className="shrink-0 border-emerald-500/30 px-1 py-0 text-3xs text-emerald-400">
+          <Badge variant="outline" className="shrink-0 border-emerald-500/30 px-1 py-0 text-2xs text-emerald-400">
             {colorSource.layer}
           </Badge>
           {colorMod && <ModBadge mod={colorMod} className="shrink-0" />}
@@ -207,7 +207,7 @@ export function ModalityColorPicker({
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
         className={cn(
-          "flex h-7 min-w-0 items-center justify-between gap-1.5 whitespace-nowrap rounded-md border border-input bg-input/20 px-2 text-xs/relaxed",
+          "flex h-7 min-w-0 items-center justify-between gap-1.5 whitespace-nowrap rounded-md border border-input bg-input/20 px-2 text-ui/relaxed",
           "hover:bg-input/40 focus-visible:ring-2 focus-visible:ring-ring/30",
           triggerClassName,
         )}
@@ -220,11 +220,11 @@ export function ModalityColorPicker({
         <Tabs value={topTab} onValueChange={(v) => setTopTab(v as "obs" | "var")}>
           {/* Top-level tabs: Obs / Var */}
           <TabsList className="w-full justify-start rounded-none border-border border-b bg-transparent p-1">
-            <TabsTrigger value="obs" className="text-xs">
+            <TabsTrigger value="obs" className="text-ui">
               Obs
             </TabsTrigger>
             {hasVar && (
-              <TabsTrigger value="var" className="text-xs">
+              <TabsTrigger value="var" className="text-ui">
                 Var
               </TabsTrigger>
             )}
@@ -241,7 +241,7 @@ export function ModalityColorPicker({
                     type="button"
                     onClick={() => setObsModTab(mod)}
                     className={cn(
-                      "rounded-sm px-1.5 py-0.5 text-3xs transition-colors",
+                      "rounded-sm px-1.5 py-0.5 text-2xs transition-colors",
                       obsModTab === mod
                         ? "bg-muted text-foreground"
                         : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
@@ -254,7 +254,7 @@ export function ModalityColorPicker({
             )}
 
             <Command>
-              <CommandInput placeholder="Search columns…" className="text-xs" />
+              <CommandInput placeholder="Search columns…" className="text-ui" />
               <CommandList>
                 <ScrollArea className="max-h-48">
                   <CommandEmpty>No columns found.</CommandEmpty>
@@ -366,7 +366,7 @@ export function ModalityColorPicker({
                         setVarQuery("");
                       }}
                       className={cn(
-                        "flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-3xs transition-colors",
+                        "flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-2xs transition-colors",
                         varModTab === mod
                           ? "bg-muted text-foreground"
                           : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
@@ -385,11 +385,11 @@ export function ModalityColorPicker({
                 value={varQuery}
                 onValueChange={setVarQuery}
                 placeholder={isMuData ? `Search ${varModTab} vars…` : "Search vars…"}
-                className="text-xs"
+                className="text-ui"
               />
               <CommandList>
                 <ScrollArea className="max-h-48">
-                  {varLoading && <div className="py-4 text-center text-muted-foreground text-xs">Loading…</div>}
+                  {varLoading && <div className="py-4 text-center text-muted-foreground text-ui">Loading…</div>}
                   {!varLoading && varNames.length === 0 && varQuery && <CommandEmpty>No vars found.</CommandEmpty>}
                   {!varLoading && varNames.length > 0 && (
                     <CommandGroup>
@@ -400,7 +400,7 @@ export function ModalityColorPicker({
                           disabled={varStatus === "loading"}
                           onSelect={() => handleVarSelect(name)}
                         >
-                          <span className="font-mono text-xs">{name}</span>
+                          <span className="font-mono text-ui">{name}</span>
                         </CommandItem>
                       ))}
                     </CommandGroup>
@@ -411,7 +411,7 @@ export function ModalityColorPicker({
 
             {/* Layer chips */}
             <div className="flex items-center gap-1 border-border border-t px-2 py-1.5">
-              <span className="text-3xs text-muted-foreground">Layer:</span>
+              <span className="text-2xs text-muted-foreground">Layer:</span>
               {layers.map((layer) => (
                 <button
                   key={layer}
@@ -423,7 +423,7 @@ export function ModalityColorPicker({
                     }
                   }}
                   className={cn(
-                    "rounded-sm border px-1.5 py-0.5 font-mono text-3xs transition-colors",
+                    "rounded-sm border px-1.5 py-0.5 font-mono text-2xs transition-colors",
                     selectedLayer === layer
                       ? "border-primary/50 bg-primary text-primary-foreground"
                       : "border-border bg-card text-muted-foreground hover:bg-muted",

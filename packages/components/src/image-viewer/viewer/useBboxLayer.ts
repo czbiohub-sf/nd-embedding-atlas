@@ -22,9 +22,9 @@ interface UseBboxLayerReturn {
   clearBbox: () => void;
 }
 
-// Themed via the destructive token (red across light/dark) instead of a
-// hard-coded rgb: tracks the palette like every other chrome color.
-const BBOX_COLOR = "var(--destructive)";
+// Themed via the focus-mark token (the design's focus colour across light/dark)
+// instead of a hard-coded rgb: tracks the palette like every other chrome color.
+const BBOX_COLOR = "var(--focus-mark)";
 const BBOX_BORDER_PX = 2;
 
 /**

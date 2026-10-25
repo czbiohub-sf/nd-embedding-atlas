@@ -155,6 +155,4 @@ export interface ComponentHost<Config = unknown> {
   readonly colorBy: ColorCoordinationAPI;
   readonly filter: FilterCoordinationAPI;
   acquireDeviceLease(): Promise<DeviceLease>;
-  /** The element header's toolbar slot. */
-  readonly bodyHeaderElement: HTMLElement;
 }

@@ -39,7 +39,6 @@ function hostInit<Config>(
     elementId,
     type: "fixture",
     config,
-    bodyHeaderElement: {} as HTMLElement,
     predicate: selection,
     focus: { get: () => null, set() {} },
     viewSync: { panX: 0, panY: 0, zoom: 1, linked: false, broadcast() {}, toggleLock() {} },

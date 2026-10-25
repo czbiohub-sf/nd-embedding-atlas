@@ -31,7 +31,7 @@ interface SliderRowProps {
 function SliderRow({ label, value, min, max, step, gradient, onChange }: SliderRowProps) {
   return (
     <div className="flex flex-col gap-0.5">
-      <div className="flex justify-between text-3xs text-muted-foreground/70 tabular-nums">
+      <div className="flex justify-between text-2xs text-muted-foreground/70 tabular-nums">
         <span>{label}</span>
         <span>{value.toFixed(label === "H" ? 0 : 2)}</span>
       </div>
@@ -73,14 +73,14 @@ export function OklchColorPicker({ label, color, defaultColor, onChange, onReset
   return (
     <div className="flex flex-col gap-2 p-1">
       <div className="flex items-center justify-between gap-2">
-        <span className="truncate text-3xs text-muted-foreground" title={label}>
+        <span className="truncate text-2xs text-muted-foreground" title={label}>
           {label}
         </span>
         <button
           type="button"
           onClick={onReset}
           disabled={isDefault}
-          className="shrink-0 rounded px-1 py-0.5 text-3xs text-muted-foreground/70 transition-opacity hover:text-muted-foreground disabled:pointer-events-none disabled:opacity-30"
+          className="shrink-0 rounded px-1 py-0.5 text-2xs text-muted-foreground/70 transition-opacity hover:text-muted-foreground disabled:pointer-events-none disabled:opacity-30"
         >
           ↺ reset
         </button>

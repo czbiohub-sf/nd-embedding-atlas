@@ -5,7 +5,7 @@ import { WIRE_FOCUS_COLOR } from "./helpers";
 const SVG_NS = "http://www.w3.org/2000/svg";
 /** Used only if the page background token cannot be read (no computed style). */
 const SCRIM_FALLBACK = "#0a0a0a";
-/** The "single-record focus" channel color; shared with --color-wire-focus. */
+/** The "single-record focus" channel color; shared with --color-focus-mark. */
 const FOCUS_COLOR = WIRE_FOCUS_COLOR;
 
 export interface HighlightFocusOverlayHandle {

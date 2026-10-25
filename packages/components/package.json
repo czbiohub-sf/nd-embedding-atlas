@@ -22,7 +22,7 @@
     "test": "bun test"
   },
   "dependencies": {
-    "@idetik/core": "^0.48.0",
+    "@idetik/core": "^0.48.3",
     "@ndea/ochre": "workspace:*",
     "@ndea/protocol": "workspace:*",
     "@ndea/sdk": "workspace:*",

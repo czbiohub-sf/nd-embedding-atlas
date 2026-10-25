@@ -1,0 +1,7 @@
+html { background: var(--background); color: var(--foreground); font-family: var(--font-sans); font-size: var(--text-ui); line-height: var(--leading-ui); font-variant-numeric: tabular-nums; }
+body { margin: 0; }
+a { color: var(--primary); } a:hover { opacity: .7; }
+@keyframes nd-in { from { opacity: 0; transform: translateY(4px) scale(.985); } to { opacity: 1; transform: none; } }
+@keyframes nd-toast { from { opacity: 0; transform: translateY(16px) scale(.98); } to { opacity: 1; transform: none; } }
+@keyframes nd-shake { 0%,100% { transform: none; } 20% { transform: translateX(-4px); } 40% { transform: translateX(4px); } 60% { transform: translateX(-2px); } 80% { transform: translateX(2px); } }
+.motion-off *, .motion-off *::before { animation: none !important; transition: none !important; }

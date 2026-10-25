@@ -403,7 +403,7 @@ export function AnnotateTable({
       {/* sticky header */}
       <div
         role="row"
-        className="sticky top-0 z-10 grid items-center border-border border-b bg-card px-2.5 text-3xs text-text-muted uppercase tracking-[0.5px]"
+        className="sticky top-0 z-10 grid items-center border-border border-b bg-card px-2.5 text-2xs text-text-muted uppercase tracking-[0.5px]"
         style={{ gridTemplateColumns: gridCols, height: HEADER_HEIGHT }}
       >
         {thumbs && <span role="columnheader" aria-label="crop" />}
@@ -433,7 +433,7 @@ export function AnnotateTable({
               aria-current={isFocus ? "true" : undefined}
               onMouseDown={(e) => onRowMouseDown(v.index, e)}
               className={cn(
-                "absolute grid cursor-pointer items-center border-border-subtle border-b px-2.5 text-xs",
+                "absolute grid cursor-pointer items-center border-border-subtle border-b px-2.5 text-ui",
                 isSel ? "bg-primary/12" : "hover:bg-foreground/4",
                 isFocus && "shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--color-primary)_28%,transparent)]",
               )}
@@ -482,7 +482,7 @@ export function AnnotateTable({
                 ) : numericLabel ? (
                   <span className="truncate text-muted-foreground tabular-nums">{val}</span>
                 ) : (
-                  <span className="rounded-full bg-primary/25 px-2 py-px text-2xs text-foreground">{val}</span>
+                  <span className="rounded-full bg-primary/25 px-2 py-px text-sm text-foreground">{val}</span>
                 )}
               </span>
             </div>

@@ -5,48 +5,31 @@ import * as React from "react";
 import { toggleVariants } from "@ndea/ui/components/toggle";
 import { cn } from "@ndea/ui/lib/utils";
 
-const ToggleGroupContext = React.createContext<
-  VariantProps<typeof toggleVariants> & {
-    spacing?: number;
-    orientation?: "horizontal" | "vertical";
-  }
->({
+/** `variant="segmented"` is the segmented control: muted track, pressed option on a raised card thumb. */
+const ToggleGroupContext = React.createContext<VariantProps<typeof toggleVariants>>({
   size: "default",
   variant: "default",
-  spacing: 0,
-  orientation: "horizontal",
 });
 
 function ToggleGroup({
   className,
   variant,
   size,
-  spacing = 0,
-  orientation = "horizontal",
   children,
   ...props
-}: ToggleGroupPrimitive.Props &
-  VariantProps<typeof toggleVariants> & {
-    spacing?: number;
-    orientation?: "horizontal" | "vertical";
-  }) {
+}: ToggleGroupPrimitive.Props & VariantProps<typeof toggleVariants>) {
   return (
     <ToggleGroupPrimitive
       data-slot="toggle-group"
       data-variant={variant}
-      data-size={size}
-      data-spacing={spacing}
-      data-orientation={orientation}
-      style={{ "--gap": spacing } as React.CSSProperties}
       className={cn(
-        "group/toggle-group flex w-fit flex-row items-center gap-[--spacing(var(--gap))] rounded-md data-vertical:flex-col data-vertical:items-stretch data-[size=sm]:rounded-[min(var(--radius-md),8px)]",
+        "flex w-fit items-center data-[orientation=vertical]:flex-col data-[orientation=vertical]:items-stretch",
+        variant === "segmented" && "gap-px rounded-md bg-muted p-0.5",
         className,
       )}
       {...props}
     >
-      <ToggleGroupContext.Provider value={{ variant, size, spacing, orientation }}>
-        {children}
-      </ToggleGroupContext.Provider>
+      <ToggleGroupContext.Provider value={{ variant, size }}>{children}</ToggleGroupContext.Provider>
     </ToggleGroupPrimitive>
   );
 }
@@ -63,15 +46,9 @@ function ToggleGroupItem({
   return (
     <TogglePrimitive
       data-slot="toggle-group-item"
-      data-variant={context.variant || variant}
-      data-size={context.size || size}
-      data-spacing={context.spacing}
       className={cn(
-        "shrink-0 focus:z-10 focus-visible:z-10 group-data-[spacing=0]/toggle-group:rounded-none group-data-vertical/toggle-group:data-[spacing=0]:data-[variant=outline]:border-t-0 group-data-horizontal/toggle-group:data-[spacing=0]:data-[variant=outline]:border-l-0 group-data-[spacing=0]/toggle-group:px-2 group-data-horizontal/toggle-group:data-[spacing=0]:last:rounded-r-md group-data-vertical/toggle-group:data-[spacing=0]:last:rounded-b-md group-data-vertical/toggle-group:data-[spacing=0]:data-[variant=outline]:first:border-t group-data-horizontal/toggle-group:data-[spacing=0]:data-[variant=outline]:first:border-l group-data-vertical/toggle-group:data-[spacing=0]:first:rounded-t-md group-data-horizontal/toggle-group:data-[spacing=0]:first:rounded-l-md",
-        toggleVariants({
-          variant: context.variant || variant,
-          size: context.size || size,
-        }),
+        "shrink-0 focus-visible:z-10",
+        toggleVariants({ variant: context.variant || variant, size: context.size || size }),
         className,
       )}
       {...props}

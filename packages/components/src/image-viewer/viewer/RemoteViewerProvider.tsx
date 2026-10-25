@@ -344,7 +344,7 @@ function RemoteStatusBadge({
     return (
       <div
         role="alert"
-        className="absolute inset-x-0 bottom-12 z-30 mx-auto flex w-fit max-w-[90%] flex-col items-center gap-2 rounded bg-black/75 p-3 text-center text-white/90 text-xs"
+        className="absolute inset-x-0 bottom-12 z-30 mx-auto flex w-fit max-w-[90%] flex-col items-center gap-2 rounded bg-black/75 p-3 text-center text-white/90 text-ui"
       >
         <span className="break-words">Remote rendering failed: {status.error}</span>
         <div className="flex gap-2">
@@ -367,7 +367,7 @@ function RemoteStatusBadge({
   return (
     <div
       data-remote-status={status.phase}
-      className="pointer-events-none absolute right-2 bottom-2 z-20 rounded bg-black/60 px-1.5 py-0.5 font-mono text-2xs text-white/85"
+      className="pointer-events-none absolute right-2 bottom-2 z-20 rounded bg-black/60 px-1.5 py-0.5 font-mono text-sm text-white/85"
     >
       {text}
     </div>

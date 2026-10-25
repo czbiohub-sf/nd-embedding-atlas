@@ -1,0 +1,38 @@
+<!-- @dsCard group="Components" viewport="700x440" name="Data display" -->
+<!doctype html><html class="dark"><head><meta charset="utf-8"><link rel="stylesheet" href="../../styles.css">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js"></script>
+<script src="../dev-loader.js"></script>
+<style>body{padding:14px}.lab{font-size:10.5px;color:var(--text-muted);font-family:var(--font-mono);margin:10px 0 6px}.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}</style></head>
+<body><div id="root"></div>
+<script type="text/babel">
+(async () => {
+const NS = await window.ndeaLoad("../../");
+const { Icon, Button, IconButton, Input, Select, Checkbox, RangeSlider, SegmentedControl, Tabs, SidebarRail, Tile, TileSlot, Popover, Menu, CommandMenu, Toast, Toaster, Pill, Badge, Kbd, Legend, ScopeIndicator, ScopeRow, DataTable } = NS;
+function Demo() {
+  const [f, setF] = React.useState('r2'); const [sel, setSel] = React.useState(['r1']);
+  return <div style={{ display: 'grid', gridTemplateColumns: '1fr 190px', gap: 14 }}>
+    <div>
+      <div className="lab">Pill · Badge · Kbd</div>
+      <div className="row"><Pill label="DMSO" color="var(--d1)" /><Pill label="Taxol" color="var(--d4)" selected /><Pill empty /><Badge tone="accent">current</Badge><Badge mono>48,312</Badge><Badge tone="outline">3 conditions</Badge><Kbd>⌘K</Kbd><Kbd>esc</Kbd></div>
+      <div className="lab">DataTable · provenance</div>
+      <div style={{ background: 'var(--surface)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-tile)', padding: '4px 4px 0' }}>
+        <DataTable style={{ maxHeight: 230 }} focusId={f} onRowClick={(r) => setF(r.id)} selected={sel} onSelect={setSel} summaries={{ cell_area: 'avg 2,481', phenotype: '2 of 4' }}
+          columns={[{ key: 'well', status: 'obs' }, { key: 'treatment', type: 'category', status: 'obs' }, { key: 'cell_area', type: 'number', status: 'obs' }, { key: 'phenotype', type: 'label', status: 'unsaved' }, { key: 'notes', status: 'saved' }]}
+          rows={[{ id: 'r1', cells: { well: 'B07', treatment: { label: 'Taxol', color: 'var(--d4)' }, cell_area: '3,912', phenotype: { label: 'mitotic arrest', color: 'var(--d2)' } }, dirty: { phenotype: {} } }, { id: 'r2', cells: { well: 'C11', treatment: { label: 'DMSO', color: 'var(--d1)' }, cell_area: '2,104', phenotype: { label: 'normal', color: 'var(--d1)' }, notes: 'clean' } }, { id: 'r3', cells: { well: 'D03', treatment: { label: 'Nocodazole', color: 'var(--d3)' }, cell_area: '3,377' } }, { id: 'r4', cells: { well: 'E19', treatment: { label: 'DMSO', color: 'var(--d1)' }, cell_area: '1,988' } }]} />
+      </div>
+    </div>
+    <div>
+      <div className="lab">Legend</div>
+      <Legend title="treatment" hasFilter items={[{ label: 'DMSO', color: 'var(--d1)', count: '9,412' }, { label: 'Staurosporine', color: 'var(--d2)', count: '6,108' }, { label: 'Nocodazole', color: 'var(--d3)', count: '7,731' }, { label: 'Taxol', color: 'var(--d4)', count: '8,265', active: true }]} onClear={() => {}} />
+      <div style={{ height: 10 }} />
+      <Legend title="cell_area" mode="continuous" min="420" max="6,180" />
+      <div className="lab">ScopeIndicator</div>
+      <ScopeIndicator scopes={[{ key: 'F1', color: 'var(--scope-filter)' }, { key: 'FOCUS', color: 'var(--scope-focus)' }]} />
+    </div>
+  </div>;
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<Demo />);
+})();
+</script></body></html>

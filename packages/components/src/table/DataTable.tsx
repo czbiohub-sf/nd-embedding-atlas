@@ -25,9 +25,7 @@ import type { Coordinator } from "@uwdata/mosaic-core";
 import { type FilterCoordinationAPI, type RowIndex, rowIndex } from "@ndea/sdk";
 import { CheckIcon, Columns3Icon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { cn } from "@ndea/ui/lib/utils";
-import { Bracketed } from "@ndea/ui/components/bracketed";
 import { Popover, PopoverContent, PopoverTrigger } from "@ndea/ui/components/popover";
 import { ScrollArea } from "@ndea/ui/components/scroll-area";
 import type { ColumnType } from "../query/column-types";
@@ -98,9 +96,6 @@ export interface DataTableProps {
    *  owns its sort internally (uncontrolled, today's behavior). */
   sorting?: SortingState;
   onSortingChange?: (next: SortingState) => void;
-  /** Dashboard element header slot: the column controls portal here (like the
-   *  scatter toolbar). Absent → a docked control row renders inline instead. */
-  headerEl?: HTMLElement | null;
 }
 
 export function DataTable({
@@ -113,7 +108,6 @@ export function DataTable({
   onTotalCountChange,
   sorting: controlledSorting,
   onSortingChange,
-  headerEl,
 }: DataTableProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -271,13 +265,10 @@ export function DataTable({
   // or forcing a horizontal scrollbar; anything past the cap truncates (title shows full).
   const popoverWidth = Math.min(384, Math.max(224, columnNames.reduce((m, n) => Math.max(m, n.length), 8) * 7 + 56));
 
-  // Header controls: count + column view-options. Portaled into the element
-  // header slot (like the scatter toolbar); a docked row is the no-header fallback.
+  // Toolbar controls (top-right of the body): obs count + column view-options.
   const controls = (
-    <div className="flex items-center gap-1.5 text-2xs" data-nodrag="1">
-      <span className="text-muted-foreground">
-        <Bracketed>{totalCount.toLocaleString()}</Bracketed>
-      </span>
+    <div className="flex items-center gap-1.5 text-sm">
+      <span className="font-mono text-text-muted tabular-nums">{totalCount.toLocaleString("en-US")} obs</span>
       <Popover>
         <PopoverTrigger
           aria-label="Columns"
@@ -287,8 +278,8 @@ export function DataTable({
         </PopoverTrigger>
         <PopoverContent align="end" style={{ width: popoverWidth }} className="gap-1.5 p-1.5">
           <div className="flex items-center justify-between px-0.5">
-            <span className="font-medium text-2xs text-muted-foreground">Columns</span>
-            <span className="text-3xs text-text-muted tabular-nums">
+            <span className="font-medium text-sm text-muted-foreground">Columns</span>
+            <span className="text-2xs text-text-muted tabular-nums">
               {tableInstance.getVisibleLeafColumns().length}/{tableInstance.getAllLeafColumns().length}
             </span>
           </div>
@@ -296,7 +287,7 @@ export function DataTable({
             value={colFilter}
             onChange={(e) => setColFilter(e.currentTarget.value)}
             placeholder="filter columns…"
-            className="focus-ring h-6 w-full rounded border border-border bg-muted px-2 text-2xs text-foreground placeholder:text-text-muted"
+            className="focus-ring h-6 w-full rounded border border-border bg-muted px-2 text-sm text-foreground placeholder:text-text-muted"
           />
           <ScrollArea viewportClassName="max-h-72 overflow-x-hidden" contentClassName="min-w-0">
             {/* pr clears the overlay scrollbar's lane so long names don't tuck under it */}
@@ -312,7 +303,7 @@ export function DataTable({
                       type="button"
                       title={col.id}
                       onClick={() => col.toggleVisibility()}
-                      className="flex items-center gap-2 rounded px-1.5 py-1 text-left text-2xs hover:bg-muted"
+                      className="flex items-center gap-2 rounded px-1.5 py-1 text-left text-sm hover:bg-muted"
                     >
                       <span className="flex size-3.5 shrink-0 items-center justify-center text-primary">
                         {on ? <CheckIcon className="size-3" /> : null}
@@ -331,14 +322,9 @@ export function DataTable({
   );
 
   return (
-    <div className="flex h-full w-full flex-col overflow-hidden bg-surface font-mono text-foreground text-xs">
-      {headerEl ? (
-        createPortal(controls, headerEl)
-      ) : (
-        <div className="flex h-7 shrink-0 items-center justify-end border-border-subtle border-b px-2.5">
-          {controls}
-        </div>
-      )}
+    <div className="flex h-full w-full flex-col overflow-hidden bg-surface font-mono text-foreground text-ui">
+      {/* Toolbar row: column controls top-right. */}
+      <div className="flex h-7 shrink-0 items-center justify-end border-border border-b px-2.5">{controls}</div>
       {/* Scrollable container */}
       <div ref={containerRef} className="flex-1 overflow-auto">
         {/* Sticky header via TanStack Table header groups. Raised above the element
@@ -360,7 +346,7 @@ export function DataTable({
                   >
                     <button
                       type="button"
-                      className="flex h-full w-full cursor-pointer select-none items-center gap-1 px-2 font-medium font-mono text-2xs text-muted-foreground outline-none focus-ring hover:text-foreground"
+                      className="flex h-full w-full cursor-pointer select-none items-center gap-1 px-2 font-medium font-mono text-sm text-muted-foreground outline-none focus-ring hover:text-foreground"
                       onClick={header.column.getToggleSortingHandler()}
                       title={header.isPlaceholder ? undefined : String(header.column.columnDef.header ?? header.id)}
                     >

@@ -5,6 +5,24 @@ import type * as React from "react";
 
 import { cn } from "@ndea/ui/lib/utils";
 
+/**
+ * The one pop-up frame (design overlay/Popover.jsx), shared by popover, select,
+ * menus, combobox, command, dialog and tooltip: card surface, keyline + shadow
+ * (no border), 8.4px radius, 6px inset, 4px-rise open. Close is instant.
+ */
+const popoverFrame =
+  "rounded-lg bg-card p-1.5 text-popover-foreground text-ui shadow-(--shadow-popover) outline-none origin-(--transform-origin) data-open:animate-nd-in";
+
+/** Row inside the frame (design overlay/Menu.jsx): 6×8px, 4.9px radius, muted highlight. */
+const popoverRow =
+  "relative flex cursor-default select-none items-center gap-2 rounded-md px-2 py-1.5 text-ui outline-hidden data-highlighted:bg-muted data-disabled:pointer-events-none data-disabled:opacity-45 [&_svg:not([class*='size-'])]:size-3.5 [&_svg]:pointer-events-none [&_svg]:shrink-0";
+
+/** Section heading inside the frame. */
+const popoverHeading = "px-2 pt-2 pb-[3px] text-sm text-text-muted";
+
+/** Keyline separator inside the frame. */
+const popoverSeparator = "mx-1.5 my-1 h-(--keyline) bg-border";
+
 function Popover({ ...props }: PopoverPrimitive.Root.Props) {
   return <PopoverPrimitive.Root data-slot="popover" {...props} />;
 }
@@ -40,10 +58,7 @@ function PopoverContent({
       >
         <PopoverPrimitive.Popup
           data-slot="popover-content"
-          className={cn(
-            "data-[side=bottom]:slide-in-from-top-2 data-[side=inline-end]:slide-in-from-left-2 data-[side=inline-start]:slide-in-from-right-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-open:fade-in-0 data-open:zoom-in-95 data-closed:fade-out-0 data-closed:zoom-out-95 z-50 flex w-72 origin-(--transform-origin) flex-col gap-4 rounded-lg bg-popover p-2.5 text-popover-foreground text-xs shadow-md outline-hidden ring-1 ring-foreground/10 duration-100 data-closed:animate-out data-open:animate-in",
-            className,
-          )}
+          className={cn(popoverFrame, "flex w-(--popover-width) flex-col gap-1.5", className)}
           {...props}
         />
       </PopoverPrimitive.Positioner>
@@ -52,27 +67,34 @@ function PopoverContent({
 }
 
 function PopoverHeader({ className, ...props }: React.ComponentProps<"div">) {
-  return <div data-slot="popover-header" className={cn("flex flex-col gap-1 text-xs", className)} {...props} />;
+  return (
+    <div data-slot="popover-header" className={cn("flex items-baseline gap-1.5 px-1.5 pt-1", className)} {...props} />
+  );
 }
 
 function PopoverTitle({ className, ...props }: PopoverPrimitive.Title.Props) {
-  return (
-    <PopoverPrimitive.Title
-      data-slot="popover-title"
-      className={cn("font-heading font-medium text-sm", className)}
-      {...props}
-    />
-  );
+  return <PopoverPrimitive.Title data-slot="popover-title" className={cn("font-semibold", className)} {...props} />;
 }
 
 function PopoverDescription({ className, ...props }: PopoverPrimitive.Description.Props) {
   return (
     <PopoverPrimitive.Description
       data-slot="popover-description"
-      className={cn("text-muted-foreground", className)}
+      className={cn("truncate text-sm text-text-muted", className)}
       {...props}
     />
   );
 }
 
-export { Popover, PopoverContent, PopoverDescription, PopoverHeader, PopoverTitle, PopoverTrigger };
+export {
+  Popover,
+  PopoverContent,
+  PopoverDescription,
+  PopoverHeader,
+  PopoverTitle,
+  PopoverTrigger,
+  popoverFrame,
+  popoverHeading,
+  popoverRow,
+  popoverSeparator,
+};

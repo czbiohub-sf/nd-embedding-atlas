@@ -1,13 +1,9 @@
 /**
- * ScatterToolbar: the scatter's controls, two ways:
- *  · variant="header": compact run portaled into the element header's
- *    middle gap (host.bodyHeaderElement)
- *  · variant="docked": full-width row above a fullscreen surface whose
- *    container has no header slot
- * Either way the points stay unobstructed. The active embedding is the
+ * ScatterToolbar: the scatter's controls as a full-width row docked above the
+ * canvas, so the points stay unobstructed. The active embedding is the
  * primary-filled bracketed chip [embedding]; everything else sits ghosted.
  *
- * Two zones in one row (docked wraps when narrow; header clips):
+ * Two zones in one row (wraps when narrow):
  *  left  → [⋰] bracket icon + embedding chip + X/Y(/Z) dims + 2D/3D (persp/ortho) + COL pickers
  *  right → selection tools + track/fit
  */
@@ -97,10 +93,6 @@ interface Props {
 
   hasSelection: boolean;
   selectionCount: number;
-
-  /** docked (default) = full-width row above the canvas;
-   *  header = compact 26px-friendly run for an element header slot */
-  variant?: "docked" | "header";
 }
 
 // The toolbar row carries the background, so the dim/COL triggers are ghost
@@ -109,13 +101,13 @@ interface Props {
 // ColorSourcePicker base sets dark:bg-input/30, which (a dark-variant rule)
 // outranks a bare bg.
 const ghostTrigger =
-  "h-7 max-w-44 rounded-md border-0 bg-transparent dark:bg-transparent px-2 font-mono text-2xs leading-none text-foreground/85 hover:bg-muted hover:text-foreground focus-visible:ring-0";
+  "h-7 max-w-44 rounded-md border-0 bg-transparent dark:bg-transparent px-2 font-mono text-sm leading-none text-foreground/85 hover:bg-muted hover:text-foreground focus-visible:ring-0";
 const chipActive =
-  "h-7 max-w-44 gap-0 rounded-md border border-transparent bg-primary dark:bg-primary px-2.5 font-mono text-2xs leading-none text-primary-foreground hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring/40 before:mr-px before:text-primary-foreground/60 before:content-['['] after:ml-px after:text-primary-foreground/60 after:content-[']']";
+  "h-7 max-w-44 gap-0 rounded-md border border-transparent bg-primary dark:bg-primary px-2.5 font-mono text-sm leading-none text-primary-foreground hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring/40 before:mr-px before:text-primary-foreground/60 before:content-['['] after:ml-px after:text-primary-foreground/60 after:content-[']']";
 
 /** X / Y / COLOR caption labels: mono, uppercase, dim. leading-none keeps
  *  the caption's line box flat so it centers on the same line as the values. */
-const captionCls = "font-mono text-3xs uppercase leading-none tracking-[0.12em] text-muted-foreground";
+const captionCls = "font-mono text-2xs uppercase leading-none tracking-[0.12em] text-muted-foreground";
 
 /** Borderless square icon button for the top-right utility cluster: derives
  *  from the shadcn icon-button variant so toolbar buttons share one source
@@ -155,23 +147,14 @@ export function ScatterToolbar({
   onToggleTrajectory,
   hasSelection,
   selectionCount,
-  variant = "docked",
 }: Props) {
   const disabled = loadingKey !== null;
-
-  // header variant: fit inside the 26px element header: shorter controls,
-  // tighter caps, no wrap (overflow clips; popovers escape via portal)
-  const compact = variant === "header";
-  const trigger = cn(ghostTrigger, compact && "h-5 max-w-28 px-1.5");
-  const chip = cn(chipActive, compact && "h-5 max-w-28 px-2");
-  const btn = cn(iconBtn, compact && "size-5");
-  const icon = compact ? "size-3" : "size-3.5";
-  // header slot: utility buttons (everything past the selection tools) drop
-  // out together when the slot is tight: the marquee/lasso pair survives
-  const util = cn(btn, compact && "hidden @[22rem]:flex");
+  const trigger = ghostTrigger;
+  const btn = iconBtn;
+  const icon = "size-3.5";
   // Mono caption-sized text toggles (palette/scale, 2D/3D, persp/ortho).
   const textToggle =
-    "px-0.5 font-mono text-3xs leading-none text-muted-foreground/70 uppercase tracking-wide transition-colors hover:text-foreground disabled:opacity-40 disabled:hover:text-muted-foreground/70";
+    "px-0.5 font-mono text-2xs leading-none text-muted-foreground/70 uppercase tracking-wide transition-colors hover:text-foreground disabled:opacity-40 disabled:hover:text-muted-foreground/70";
   // Memoize option arrays to avoid churn on every render
   const embeddingOptions = useMemo<ComboboxOption[]>(
     () => obsmKeys.map((k) => ({ value: k, label: k.replace(/^X_/, "") })),
@@ -180,21 +163,11 @@ export function ScatterToolbar({
   const dimOptions = useMemo<ComboboxOption[]>(() => dims.map((d) => ({ value: String(d), label: String(d) })), [dims]);
 
   return (
-    <div
-      className={
-        compact
-          ? "flex h-full min-w-0 flex-1 items-center gap-x-1.5 overflow-hidden"
-          : "flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 border-b border-border bg-card px-1.5 py-1"
-      }
-    >
-      {/* hairline boundary: element identity ends, controls begin */}
-      {compact ? <span className="h-3.5 w-px shrink-0 bg-border-subtle" /> : null}
-
+    <div className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 border-b border-border bg-card px-1.5 py-1">
       {/* ── Left zone: embedding + dims + color. Rhythm: tight inside a
           caption·value pair, medium between pairs, generous between groups ── */}
-      <div className={cn("flex min-w-0 items-center", compact ? "gap-2" : "gap-2.5")}>
-        {/* the element header already carries LED + title: skip the glyph there */}
-        {compact ? null : <BracketIcon icon={ChartScatter} className="size-6 text-foreground/75" />}
+      <div className="flex min-w-0 items-center gap-2.5">
+        <BracketIcon icon={ChartScatter} className="size-6 text-foreground/75" />
 
         {/* Embedding: primary-filled bracketed chip. Modality picker for MuData, combobox otherwise. */}
         {modalities && obsm ? (
@@ -202,7 +175,7 @@ export function ScatterToolbar({
             obsm={obsm}
             activeKey={axes.obsmKey}
             onSelect={(v) => onSetAxes({ ...axes, obsmKey: v, xDim: 0, yDim: 1 })}
-            triggerClassName={chip}
+            triggerClassName={chipActive}
             hideChevron
           />
         ) : (
@@ -213,15 +186,14 @@ export function ScatterToolbar({
             placeholder="embedding"
             searchPlaceholder="Search embeddings…"
             disabled={disabled}
-            triggerClassName={chip}
+            triggerClassName={chipActive}
             contentClassName="w-48"
             hideChevron
           />
         )}
 
-        {/* X / Y dims: two caption·value pairs. In the header slot this
-            segment drops out below 26rem (priority: chip > color > dims) */}
-        <div className={cn("items-center gap-1.5", compact ? "hidden @[26rem]:flex" : "flex")}>
+        {/* X / Y dims: two caption·value pairs */}
+        <div className="flex items-center gap-1.5">
           <span className="flex items-center gap-0.5" title="X axis: embedding dimension">
             <span className={captionCls}>X</span>
             <Combobox
@@ -287,11 +259,8 @@ export function ScatterToolbar({
           ) : null}
         </div>
 
-        {/* Color-by column: gated at 17rem of slot width in the header */}
-        <div
-          className={cn("min-w-0 items-center gap-0.5", compact ? "hidden @[17rem]:flex" : "flex")}
-          title="color points by column"
-        >
+        {/* Color-by column */}
+        <div className="flex min-w-0 items-center gap-0.5" title="color points by column">
           <span className={captionCls}>COLOR</span>
           {modalities && modalities.length > 0 ? (
             <ModalityColorPicker
@@ -318,11 +287,7 @@ export function ScatterToolbar({
         </div>
 
         {colorModeCanToggle && (
-          <button
-            type="button"
-            onClick={onToggleColorMode}
-            className={cn(textToggle, compact && "hidden @[30rem]:block")}
-          >
+          <button type="button" onClick={onToggleColorMode} className={textToggle}>
             {colorMode === "continuous" ? "scale" : "palette"}
           </button>
         )}
@@ -331,7 +296,7 @@ export function ScatterToolbar({
             type="button"
             onClick={onCycleDensityMode}
             title="Dense overviews: average colors (mean), the most frequent category (dominant), or categories interleaved by share (weave)"
-            className={cn(textToggle, compact && "hidden @[30rem]:block")}
+            className={textToggle}
           >
             {densityMode}
           </button>
@@ -352,13 +317,7 @@ export function ScatterToolbar({
             label="Rectangle"
             description="Drag to select a region"
             side="bottom"
-            render={
-              <ToggleGroupItem
-                value="marquee"
-                size="sm"
-                className={cn(btn, "data-[state=on]:bg-accent data-[state=on]:text-foreground")}
-              />
-            }
+            render={<ToggleGroupItem value="marquee" className={btn} />}
           >
             <BoxSelect className={icon} />
           </HoverTip>
@@ -366,13 +325,7 @@ export function ScatterToolbar({
             label="Lasso"
             description="Trace a freehand region"
             side="bottom"
-            render={
-              <ToggleGroupItem
-                value="lasso"
-                size="sm"
-                className={cn(btn, "data-[state=on]:bg-accent data-[state=on]:text-foreground")}
-              />
-            }
+            render={<ToggleGroupItem value="lasso" className={btn} />}
           >
             <LassoSelect className={icon} />
           </HoverTip>
@@ -382,16 +335,14 @@ export function ScatterToolbar({
             type="button"
             onClick={onToggleSelectionDepth}
             title="3D selection: everything inside the shape (through), or only the nearest dense structure (front)"
-            className={cn(textToggle, compact && "hidden @[20rem]:block")}
+            className={textToggle}
           >
             {selectionDepth}
           </button>
         )}
 
         {hasSelection ? (
-          <span className={cn("font-mono text-3xs text-wire-sel", compact && "hidden @[18rem]:inline")}>
-            lasso [{selectionCount.toLocaleString()}]
-          </span>
+          <span className="font-mono text-2xs text-warning">lasso [{selectionCount.toLocaleString()}]</span>
         ) : null}
 
         {onToggleTrajectory && (
@@ -404,7 +355,7 @@ export function ScatterToolbar({
                 type="button"
                 onClick={onToggleTrajectory}
                 aria-label="Track"
-                className={cn(util, trajectoryActive && "text-primary")}
+                className={cn(btn, trajectoryActive && "text-primary")}
               />
             }
           >
@@ -416,9 +367,9 @@ export function ScatterToolbar({
             label="Fit view"
             description="Zoom out to show all points"
             side="bottom"
-            render={<button type="button" onClick={onFitView} aria-label="Fit view" className={util} />}
+            render={<button type="button" onClick={onFitView} aria-label="Fit view" className={btn} />}
           >
-            <ScanDotIcon size={compact ? 12 : 14} />
+            <ScanDotIcon size={14} />
           </HoverTip>
         )}
       </div>

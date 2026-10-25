@@ -1,21 +1,28 @@
 /**
  * The dashboard: json-render renders the document's `spec` with this registry.
  * Layout (`split`, `stack`), content (`text`), controls (`select`), empty
- * `slot`s, and one tile per view component. Props resolve json-render
+ * tiles (`slot`), and one tile per view component. Props resolve json-render
  * expressions against the document's coordination `state`; view tiles adopt
  * their element's live body from its dock.
  */
 
 import { JSONUIProvider, Renderer, type ComponentRegistry, type ComponentRenderProps } from "@json-render/react";
 import type { FilterClause } from "@ndea/protocol";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "@ndea/ui/components/context-menu";
+import { IconButton } from "@ndea/ui/components/icon-button";
+import { cn } from "@ndea/ui/lib/utils";
+import { Maximize2 } from "lucide-react";
 import { Children, createContext, use, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { createPortal } from "react-dom";
 
-import { NdIconButton } from "@/components/dashboard/icon-button";
-import { Caption, Hud } from "@/components/dashboard/primitives";
 import { useDatasetSession } from "@/hooks/useDatasetSession";
 import { toRows } from "@/lib/mosaic-helpers";
-import { BodySocket, BodyStatus, HeaderSocket } from "./body-dock";
+import { BodySocket, BodyStatus } from "./body-dock";
 import { ND_STAGE } from "./constants";
 import { COMPONENTS, type Dashboard as DashboardSpec, type SplitSide } from "./dashboard";
 import { useWorkspace, useWorkspaceSelector, useWorkspaceSession } from "./workspace-context";
@@ -28,9 +35,8 @@ interface DragState {
 }
 
 interface DashboardContextValue {
-  editable: boolean;
   drag: DragState | null;
-  beginDrag: (id: string) => void;
+  beginDrag: (id: string, start: React.PointerEvent) => void;
   sashCleanupRef: { current: (() => void) | null };
 }
 
@@ -47,173 +53,126 @@ const idOf = ({ element }: ComponentRenderProps): string => String(element.props
 
 /* ── tile chrome ───────────────────────────────────────────────────── */
 
-function SplitButton({ id }: { id: string }) {
-  const ws = useWorkspace();
-  const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
-  const anchorRef = useRef<HTMLSpanElement>(null);
+const TILE_FRAME =
+  "relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-[7px] bg-surface shadow-(--shadow-tile)";
+const TILE_HEADER = "flex h-(--tile-header) shrink-0 items-center gap-1.5 overflow-hidden px-1.5";
+const SPLIT_SIDES: readonly SplitSide[] = ["left", "right", "up", "down"];
 
-  useEffect(() => {
-    if (!pos) return;
-    const close = (e: PointerEvent) => {
-      if (!(e.target as HTMLElement | null)?.closest?.(`[data-split-pop="${id}"]`)) setPos(null);
-    };
-    window.addEventListener("pointerdown", close);
-    return () => window.removeEventListener("pointerdown", close);
-  }, [pos, id]);
-
-  const sides: SplitSide[] = ["left", "up", "down", "right"];
+/** The header's tab strip. Until tiles hold several tabs it holds one: the view's title. */
+function TileTab({ title, onPointerDown }: { title: string; onPointerDown?: (e: React.PointerEvent) => void }) {
   return (
-    <span ref={anchorRef} data-split-pop={id} className="relative inline-flex">
-      <NdIconButton
-        icon="split"
-        title="split this tile: pick a side for the new slot"
-        active={pos !== null}
-        onClick={() => {
-          const r = anchorRef.current?.getBoundingClientRect();
-          setPos(pos || !r ? null : { top: r.bottom + 4, right: window.innerWidth - r.right });
-        }}
-      />
-      {pos
-        ? createPortal(
-            <span
-              data-split-pop={id}
-              style={{ position: "fixed", top: pos.top, right: pos.right }}
-              className="z-popover flex items-center gap-[3px] rounded-[5px] border glass px-1.5 py-[5px] shadow-[0_6px_20px_rgba(0,0,0,0.45)]"
-            >
-              {sides.map((side) => (
-                <NdIconButton
-                  key={side}
-                  icon={`split-${side}`}
-                  title={`empty slot ${side}`}
-                  onClick={() => {
-                    setPos(null);
-                    ws.splitElement(id, side);
-                  }}
-                />
-              ))}
-            </span>,
-            document.body,
-          )
-        : null}
-    </span>
-  );
-}
-
-/** A leaf's frame: header (grip · title · toolbar · id · actions) over its content. */
-function Tile({
-  id,
-  title,
-  toolbar,
-  children,
-}: {
-  id: string;
-  title: string;
-  toolbar?: ReactNode;
-  children: ReactNode;
-}) {
-  const ws = useWorkspace();
-  const { editable, drag, beginDrag } = useDashboard();
-  const selected = useWorkspaceSession((s) => s.selectedElementId === id);
-  const dropTarget = drag?.over === id && drag.id !== id;
-  return (
-    <div
-      data-dashboard-tile={id}
-      onPointerDown={() => ws.selectElement(id)}
-      className="relative box-border flex min-h-0 min-w-0 flex-1 flex-col rounded-[7px] bg-surface"
-      style={{
-        border: `1px solid ${dropTarget || selected ? "var(--primary)" : "var(--border)"}`,
-        boxShadow: dropTarget ? "0 0 0 2px var(--primary)" : selected ? "0 0 0 1px var(--primary)" : "none",
-        opacity: drag?.id === id ? 0.45 : 1,
-      }}
-    >
-      <div className="flex h-[26px] shrink-0 items-center gap-1.5 overflow-hidden border-b border-border px-[9px] leading-none whitespace-nowrap">
-        {editable ? (
-          <span
-            title="drag to rearrange"
-            onPointerDown={(e) => {
-              e.stopPropagation();
-              beginDrag(id);
-            }}
-            className="shrink-0 cursor-grab text-[10px] tracking-[1px] text-text-muted select-none"
-          >
-            ⠿
-          </span>
-        ) : null}
-        <span className="text-[11.5px] leading-none font-medium whitespace-nowrap">{title}</span>
-        {toolbar ?? <span className="flex-1" />}
-        <span className={`font-mono text-[9.5px] whitespace-nowrap ${selected ? "text-primary" : "text-text-muted"}`}>
-          ◆ {id}
-        </span>
-        {editable ? <SplitButton id={id} /> : null}
-        {editable ? (
-          <NdIconButton icon="close" title="remove from dashboard" onClick={() => ws.removeElement(id)} />
-        ) : null}
-      </div>
-      <div className="min-h-0 flex-1 overflow-hidden p-2">{children}</div>
+    <div role="tablist" className="inline-flex min-w-0 items-center rounded-md bg-muted p-0.5">
+      <span
+        role="tab"
+        aria-selected
+        onPointerDown={onPointerDown}
+        className="min-w-0 truncate rounded-sm bg-card px-2 py-0.5 font-medium text-foreground text-ui shadow-(--shadow-raised)"
+      >
+        {title}
+      </span>
     </div>
   );
 }
 
-const titleOf = (props: ComponentRenderProps, fallback: string) => {
-  const title = props.element.props.title;
-  return typeof title === "string" && title ? title : fallback;
-};
+/** A leaf's frame: 30px header (tab · actions; right-click for layout edits) over a full-bleed body. */
+function Tile({
+  id,
+  title,
+  actions,
+  children,
+}: {
+  id: string;
+  title: string;
+  actions?: ReactNode;
+  children: ReactNode;
+}) {
+  const ws = useWorkspace();
+  const { drag, beginDrag } = useDashboard();
+  return (
+    <div
+      data-dashboard-tile={id}
+      onPointerDown={() => ws.selectElement(id)}
+      className={cn(
+        TILE_FRAME,
+        drag?.over === id && drag.id !== id && "ring-2 ring-primary",
+        drag?.id === id && "opacity-45",
+      )}
+    >
+      <ContextMenu>
+        <ContextMenuTrigger className={TILE_HEADER}>
+          <TileTab title={title} onPointerDown={(e) => beginDrag(id, e)} />
+          <span className="flex-1" />
+          {actions}
+        </ContextMenuTrigger>
+        <ContextMenuContent>
+          {SPLIT_SIDES.map((side) => (
+            <ContextMenuItem key={side} onClick={() => ws.splitElement(id, side)}>
+              Split {side}
+            </ContextMenuItem>
+          ))}
+          <ContextMenuSeparator />
+          <ContextMenuItem variant="destructive" onClick={() => ws.removeElement(id)}>
+            Remove
+          </ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>
+      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">{children}</div>
+    </div>
+  );
+}
+
+/** The element's own `title`, else the fallback. */
+const titleOr = (title: unknown, fallback: string) => (typeof title === "string" && title ? title : fallback);
+
+/** A view's title: its own, else its component's. */
+const viewTitle = (type: string, title: unknown) => titleOr(title, COMPONENTS[type]?.title ?? type);
 
 /* ── view ──────────────────────────────────────────────────────────── */
 
 function ViewTile(props: ComponentRenderProps) {
   const ws = useWorkspace();
   const id = idOf(props);
-  const title = titleOf(props, props.element.type);
+  const title = viewTitle(props.element.type, props.element.props.title);
   const fullscreen = useWorkspaceSession((s) => s.fullscreen === id);
   return (
     <Tile
       id={id}
       title={title}
-      toolbar={
-        <>
-          {fullscreen ? <span className="flex-1" /> : <HeaderSocket id={id} />}
-          <NdIconButton icon="fullscreen" title="fullscreen" onClick={() => ws.setFullscreen(id)} />
-        </>
+      actions={
+        <IconButton size="md" label="Fullscreen" onClick={() => ws.setFullscreen(id)}>
+          <Maximize2 strokeWidth={1.5} />
+        </IconButton>
       }
     >
       <BodyStatus id={id} label={title} />
-      {fullscreen ? (
-        <div className="grid h-full place-items-center rounded border border-dashed border-border">
-          <Hud size={8.5}>fullscreen · esc</Hud>
-        </div>
-      ) : (
-        <BodySocket id={id} className="flex h-full min-h-0 flex-col overflow-hidden" />
-      )}
+      {/* The fullscreen overlay holds the body meanwhile. */}
+      {fullscreen ? null : <BodySocket id={id} className="flex h-full min-h-0 flex-col overflow-hidden" />}
     </Tile>
   );
 }
 
 /* ── layout ────────────────────────────────────────────────────────── */
 
+/** The gutter between two panes is the resize handle; its hit area overhangs both tiles. */
 function Sash({ horizontal, onPointerDown }: { horizontal: boolean; onPointerDown: (e: React.PointerEvent) => void }) {
-  const { editable } = useDashboard();
-  const [hot, setHot] = useState(false);
   return (
     <div
-      onPointerDown={editable ? onPointerDown : undefined}
-      onPointerEnter={editable ? () => setHot(true) : undefined}
-      onPointerLeave={editable ? () => setHot(false) : undefined}
-      className="z-[5] grid shrink-0 place-items-center touch-none"
-      style={{
-        width: horizontal ? "auto" : ND_STAGE.sashHitPx,
-        height: horizontal ? ND_STAGE.sashHitPx : "auto",
-        cursor: editable ? (horizontal ? "row-resize" : "col-resize") : "default",
-      }}
+      onPointerDown={onPointerDown}
+      className={cn(
+        "group relative z-[5] shrink-0 touch-none",
+        horizontal ? "h-(--gutter) cursor-row-resize" : "w-(--gutter) cursor-col-resize",
+      )}
     >
       <div
-        className="rounded-sm transition-colors duration-100"
-        style={{
-          width: horizontal ? 36 : ND_STAGE.sashLinePx,
-          height: horizontal ? ND_STAGE.sashLinePx : 36,
-          background: hot ? "color-mix(in oklab, var(--primary) 55%, transparent)" : "var(--border)",
-        }}
-      />
+        className="absolute grid place-items-center"
+        style={
+          horizontal
+            ? { left: 0, right: 0, top: "50%", height: ND_STAGE.sashHitPx, translate: "0 -50%" }
+            : { top: 0, bottom: 0, left: "50%", width: ND_STAGE.sashHitPx, translate: "-50% 0" }
+        }
+      >
+        <div className={cn("rounded-full group-hover:bg-primary/55", horizontal ? "h-0.5 w-9" : "h-9 w-0.5")} />
+      </div>
     </div>
   );
 }
@@ -271,7 +230,7 @@ function Stack(props: ComponentRenderProps) {
   return (
     <div
       className={`flex min-h-0 min-w-0 flex-1 ${column ? "flex-col" : "flex-row"}`}
-      style={{ gap: Number(props.element.props.gap ?? 8) }}
+      style={{ gap: Number(props.element.props.gap ?? 4) }}
     >
       {Children.map(props.children, (child) => (
         <div className="flex min-h-0 min-w-0 flex-1">{child}</div>
@@ -283,9 +242,9 @@ function Stack(props: ComponentRenderProps) {
 /* ── content and controls ──────────────────────────────────────────── */
 
 const TEXT_STYLE = {
-  heading: "text-base font-semibold text-foreground",
-  body: "text-sm text-foreground",
-  muted: "text-xs text-text-muted",
+  heading: "font-medium text-foreground text-lg",
+  body: "text-foreground text-ui",
+  muted: "text-text-muted text-ui",
 } as const;
 
 function Text(props: ComponentRenderProps) {
@@ -293,7 +252,7 @@ function Text(props: ComponentRenderProps) {
     typeof props.element.props.variant === "string" ? props.element.props.variant : "body"
   ) as keyof typeof TEXT_STYLE;
   return (
-    <div className={`min-w-0 flex-1 px-1 py-0.5 ${TEXT_STYLE[variant] ?? TEXT_STYLE.body}`}>
+    <div className={`min-w-0 flex-1 px-2.5 py-1 ${TEXT_STYLE[variant] ?? TEXT_STYLE.body}`}>
       {typeof props.element.props.text === "string" ? props.element.props.text : ""}
     </div>
   );
@@ -301,7 +260,7 @@ function Text(props: ComponentRenderProps) {
 
 const quoteIdent = (name: string) => `"${name.replaceAll('"', '""')}"`;
 
-/** A column's values (with counts in context) as toggles; the chosen set is its `in` clause. */
+/** A column's values (with obs counts in context) as pills; the chosen set is its `in` clause. */
 function Select(props: ComponentRenderProps) {
   const ws = useWorkspace();
   const { runtime } = useDatasetSession();
@@ -340,66 +299,77 @@ function Select(props: ComponentRenderProps) {
   return (
     <Tile
       id={id}
-      title={titleOf(props, typeof props.element.props.label === "string" ? props.element.props.label : column)}
+      title={titleOr(
+        props.element.props.title,
+        typeof props.element.props.label === "string" ? props.element.props.label : column,
+      )}
     >
       {error ? (
-        <Caption className="text-destructive">{error}</Caption>
+        <div className="p-2.5 font-mono text-destructive text-sm">{error}</div>
       ) : (
-        <div className="flex h-full flex-wrap content-start gap-1 overflow-auto">
-          {(options ?? []).map(({ value, n }) => (
-            <button
-              type="button"
-              key={value}
-              aria-pressed={chosen.has(value)}
-              onClick={() => toggle(value)}
-              className={`cursor-pointer rounded border px-2 py-[3px] font-mono text-3xs whitespace-nowrap ${chosen.has(value) ? "border-primary bg-primary text-primary-foreground" : "border-border bg-muted text-muted-foreground"}`}
-            >
-              {value} <span className="opacity-70">{n.toLocaleString("en-US")}</span>
-            </button>
-          ))}
+        <div className="flex min-h-0 flex-1 flex-wrap content-start gap-1 overflow-auto p-2">
+          {(options ?? []).map(({ value, n }) => {
+            const on = chosen.has(value);
+            return (
+              <button
+                type="button"
+                key={value}
+                aria-pressed={on}
+                onClick={() => toggle(value)}
+                className={cn(
+                  "inline-flex cursor-pointer items-center gap-[5px] whitespace-nowrap rounded-full px-2 py-0.5 text-sm",
+                  on
+                    ? "bg-accent text-accent-foreground"
+                    : "bg-muted text-foreground hover:shadow-[inset_0_0_0_1px_var(--line-3)]",
+                )}
+              >
+                {value}
+                <span className={cn("font-mono text-xs tabular-nums", on ? "opacity-70" : "text-text-muted")}>
+                  {n.toLocaleString("en-US")} obs
+                </span>
+              </button>
+            );
+          })}
         </div>
       )}
     </Tile>
   );
 }
 
+/**
+ * Components an empty tile can take as-is: not layout, and valid at their
+ * defaults (`text` needs text, `select` a column; agents add those with props).
+ */
+const CHOICES = Object.entries(COMPONENTS)
+  .filter(([type, info]) => !["split", "stack", "slot"].includes(type) && info.props.safeParse(info.defaults).success)
+  .map(([type]) => type);
+
+/** An empty tile (`slot`): pick the component that fills it. */
 function Slot(props: ComponentRenderProps) {
   const ws = useWorkspace();
-  const { editable } = useDashboard();
   const id = idOf(props);
-  const choices = Object.keys(COMPONENTS).filter((type) => !["split", "stack", "slot"].includes(type));
   return (
-    <div
-      data-dashboard-tile={id}
-      className="relative box-border flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center gap-2 overflow-hidden rounded-[7px] border-[1.5px] border-dashed border-border-active p-3"
-    >
-      {editable ? (
-        <button
-          type="button"
-          title="dismiss slot"
-          onClick={() => ws.removeElement(id)}
-          className="absolute top-[5px] right-[7px] cursor-pointer border-0 bg-transparent p-0 text-2xs text-text-muted"
-        >
-          ✕
-        </button>
-      ) : null}
-      <Hud size={9.5}>empty slot</Hud>
-      {editable ? (
-        <div className="flex max-w-[300px] flex-wrap justify-center gap-[5px]">
-          {choices.map((type) => (
-            <button
-              type="button"
-              key={type}
-              title={COMPONENTS[type].description}
-              onClick={() => ws.fillSlot(id, type)}
-              className="cursor-pointer rounded border border-border bg-muted px-2 py-[3px] font-mono text-3xs whitespace-nowrap text-muted-foreground"
-            >
-              + {type}
-            </button>
-          ))}
+    <Tile id={id} title="Empty tile">
+      <div className="mx-2 mb-2 flex min-h-0 flex-1 overflow-auto rounded-md border-[1.5px] border-line-2 border-dashed p-2">
+        <div className="m-auto flex w-full max-w-(--popover-width) flex-col gap-1.5">
+          <span className="px-2 text-sm text-text-muted">Choose a component</span>
+          <div className="flex flex-col gap-px">
+            {CHOICES.map((type) => (
+              <button
+                type="button"
+                key={type}
+                title={COMPONENTS[type].description}
+                onClick={() => ws.fillSlot(id, type)}
+                className="flex cursor-pointer flex-col items-start gap-0.5 rounded-md px-2 py-1.5 text-left hover:bg-muted"
+              >
+                <span className="font-medium text-foreground text-ui">{COMPONENTS[type].title}</span>
+                <span className="w-full truncate text-sm text-text-muted">{COMPONENTS[type].description}</span>
+              </button>
+            ))}
+          </div>
         </div>
-      ) : null}
-    </div>
+      </div>
+    </Tile>
   );
 }
 
@@ -433,7 +403,7 @@ function renderSpec(spec: DashboardSpec) {
 
 /* ── fullscreen ────────────────────────────────────────────────────── */
 
-/** The fullscreen element's body and toolbar reparent here; esc hands them back. */
+/** The fullscreen element's body reparents here, in the same tile chrome; esc hands it back. */
 function FullscreenOverlay() {
   const ws = useWorkspace();
   const id = useWorkspaceSession((s) => s.fullscreen);
@@ -451,17 +421,17 @@ function FullscreenOverlay() {
   }, [id, ws]);
 
   if (!id || !element) return null;
-  const title = typeof element.props.title === "string" && element.props.title ? element.props.title : element.type;
   return (
-    <div className="absolute inset-0 z-30 flex flex-col bg-background">
-      <div className="flex h-[26px] shrink-0 items-center gap-1.5 border-b border-border bg-card px-[9px] leading-none whitespace-nowrap">
-        <span className="text-[11.5px] font-medium whitespace-nowrap">{title}</span>
-        <HeaderSocket id={id} />
-        <span className="font-mono text-[9.5px] whitespace-nowrap text-text-muted">◆ {id}</span>
-        <NdIconButton icon="fullscreen" active title="exit fullscreen (esc)" onClick={() => ws.setFullscreen(null)} />
-      </div>
-      <div className="min-h-0 flex-1 p-2">
-        <BodySocket id={id} className="flex h-full min-h-0 flex-col overflow-hidden" />
+    <div className="absolute inset-0 z-30 flex bg-background">
+      <div className={TILE_FRAME}>
+        <div className={TILE_HEADER}>
+          <TileTab title={viewTitle(element.type, element.props.title)} />
+          <span className="flex-1" />
+          <IconButton size="md" label="Exit fullscreen" pressed onClick={() => ws.setFullscreen(null)}>
+            <Maximize2 strokeWidth={1.5} />
+          </IconButton>
+        </div>
+        <BodySocket id={id} className="flex min-h-0 flex-1 flex-col overflow-hidden" />
       </div>
     </div>
   );
@@ -469,7 +439,7 @@ function FullscreenOverlay() {
 
 /* ── pane ──────────────────────────────────────────────────────────── */
 
-export function DashboardPane({ editable }: { editable: boolean }) {
+export function DashboardPane() {
   const ws = useWorkspace();
   const spec = useWorkspaceSelector((ws) => ws.snapshot().spec);
   const [drag, setDrag] = useState<DragState | null>(null);
@@ -479,35 +449,39 @@ export function DashboardPane({ editable }: { editable: boolean }) {
 
   useEffect(() => () => sashCleanupRef.current?.(), []);
 
-  const beginDrag = (id: string) => {
-    ws.selectElement(id);
-    dragRef.current = { id, over: null };
-    setDrag(dragRef.current);
+  /** A tab press becomes a drag-to-swap after a few px of travel, so a plain click stays a click. */
+  const beginDrag = (id: string, start: React.PointerEvent) => {
+    if (start.button !== 0) return;
+    const { clientX, clientY } = start;
     const move = (ev: PointerEvent) => {
+      if (!dragRef.current && Math.hypot(ev.clientX - clientX, ev.clientY - clientY) < ND_STAGE.dragStartPx) return;
       const over = document.elementFromPoint(ev.clientX, ev.clientY)?.closest?.("[data-dashboard-tile]");
       const target = over ? over.getAttribute("data-dashboard-tile") : null;
-      const current = dragRef.current;
-      if (current && current.over !== target) {
-        dragRef.current = { ...current, over: target };
-        setDrag(dragRef.current);
-      }
+      if (dragRef.current?.over === target) return;
+      dragRef.current = { id, over: target };
+      setDrag(dragRef.current);
     };
-    const up = () => {
+    const end = (ev: PointerEvent) => {
       window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointerup", end);
+      window.removeEventListener("pointercancel", end);
       const current = dragRef.current;
+      if (!current) return;
       dragRef.current = null;
       setDrag(null);
-      if (current?.over && current.over !== current.id) ws.swapElements(current.id, current.over);
+      if (ev.type === "pointerup" && current.over && current.over !== current.id) {
+        ws.swapElements(current.id, current.over);
+      }
     };
     window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", up);
+    window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", end);
   };
 
   return (
-    <DashboardContext value={{ editable, drag, beginDrag, sashCleanupRef }}>
+    <DashboardContext value={{ drag, beginDrag, sashCleanupRef }}>
       <JSONUIProvider registry={REGISTRY} store={ws.coordination.stateStore}>
-        <div className="relative box-border flex h-full p-2">
+        <div className="relative flex h-full min-h-0 min-w-0">
           <Renderer spec={rendered} registry={REGISTRY} />
           <FullscreenOverlay />
         </div>

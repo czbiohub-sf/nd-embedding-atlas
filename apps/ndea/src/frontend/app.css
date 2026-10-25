@@ -1,254 +1,11 @@
-@import url("https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&display=swap");
+/* Tokens and their utilities live in @ndea/ui (tokens.css, styles.css); this file adds the
+ * app's fonts, sources, and document-level rules. */
 @import "@ndea/ui/styles.css";
+@import "@fontsource-variable/geist";
 @import "@fontsource-variable/geist-mono";
 @source "./";
 @source "../../../../packages/components/src";
 
-/* Geist Pixel: HUD signage face. Vendored from Vercel Geist (SIL OFL 1.1); the `geist` npm package only
- * ships Pixel as a next/font module, unusable in this Vite+Bun app. See src/frontend/fonts/README.md.
- * Size at pixel-grid multiples to stay crisp. */
-@font-face {
-  font-family: "Geist Pixel";
-  src: url("./fonts/GeistPixel-Square.woff2") format("woff2");
-  font-weight: 400 700;
-  font-display: swap;
-}
-
-/*
- * nd-embedding-atlas: design token system
- *
- * Architecture (Tailwind v4): ONE token vocabulary (shadcn-canonical):
- *   :root / html.dark → canonical tokens (--background/--card/--primary/--foreground/…)
- *   @theme inline      → maps them to utilities (bg-background, text-foreground, border-border)
- *   @theme (Tier-3)    → app-only extensions shadcn lacks (text-muted, surface-tertiary,
- *                        border-active, status-bar, wires/LEDs, emphasis, glass, z-scale)
- *   .dark switches every CSS var → utilities flip automatically (no dark: prefix needed)
- *   Components use Tailwind utilities only: no rival --color-* surface/text vocab.
- *
- * Design: Scientific instrument panel. Geist Mono everywhere (UI + data/IDs) + Geist Pixel (HUD signage).
- */
-
-/* ── Class-based dark mode variant ──────────────────────────────────── */
-/* ════════════════════════════════════════════════════════════════════
- * TIER 1: PRIMITIVES
- * ────────────────────────────────────────────────────────────────────
- * Raw source values. Never used directly by components.
- * The --*-hue anchors are consumed by the --*-emphasis family below
- * via relative-color syntax.
- * ════════════════════════════════════════════════════════════════════ */
-:root {
-  /* ── Brand ─────────────────────────────────────────────────────────
-   * Biohub periwinkle ramp: 500 is Periwinkle (PMS 2725 C), 800 Iris
-   * (PMS 2735 C), 950 Indigo (PMS 273 C); the rest interpolate.
-   *
-   * Hue is NOT constant along the ramp (500 sits at 284°, 300 at 295°), so
-   * a single hue knob cannot express it. Squeezing the accent through one
-   * shipped #644ff6 while every comment claimed #6E4FF9 — each stop is its
-   * own authoritative value. Mirrored for JS/SVG in lib/color/brand.ts;
-   * keep the two in step. Source: 2025-11-04 Biohub Brand Book. */
-  --brand-periwinkle-100: #e6dbff;
-  --brand-periwinkle-300: #b195ff;
-  --brand-periwinkle-400: #9272fd;
-  --brand-periwinkle-500: #6e4ff9;
-  --brand-periwinkle-800: #33029c;
-  --brand-periwinkle-950: #1d004d;
-
-  /* Hue anchors: source colors for --emphasis family */
-  --accent-hue: var(--brand-periwinkle-500);
-  --danger-hue: oklch(0.577 0.245 27.325);
-  --warning-hue: oklch(0.741 0.181 60);
-  --success-hue: oklch(0.69 0.19 170);
-}
-
-/* ════════════════════════════════════════════════════════════════════
- * TIER 2: CANONICAL TOKENS (shadcn vocab) · LIGHT
- * ────────────────────────────────────────────────────────────────────
- * The ONE surface/text/border vocabulary. Dark values live in html.dark
- * below; both are mapped to Tailwind utilities (bg-background, text-
- * foreground, border-border, …) by the @theme inline block lower down.
- * ════════════════════════════════════════════════════════════════════ */
-:root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(0.988 0 0); /* faint off-white so panels separate from the white page */
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: var(--accent-hue); /* Biohub periwinkle #6E4FF9 */
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.967 0 0);
-  --secondary-foreground: oklch(0.21 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.46 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.87 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: var(--accent-hue); /* periwinkle focus ring */
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.45rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: var(--accent-hue);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
-}
-
-/* ════════════════════════════════════════════════════════════════════
- * TIER 3: APP EXTENSIONS (no shadcn equivalent)
- * ────────────────────────────────────────────────────────────────────
- * @theme generates Tailwind utilities. Light values here; dark in html.dark.
- * ════════════════════════════════════════════════════════════════════ */
-@theme {
-  /* Fonts: ONE text face: Geist Mono carries everything (instrument-panel
-   * voice; no separate prose face). --font-sans stays as the alias every
-   * `font-sans` utility and third-party var resolves through. */
-  --font-sans: "Geist Mono Variable", ui-monospace, monospace;
-  --font-mono: "Geist Mono Variable", ui-monospace, monospace;
-  --font-hud: "Geist Pixel", "Geist Mono Variable", ui-monospace, monospace;
-
-  /* ── Tier-3 surface/border/text EXTENSIONS: levels shadcn has no token for ──
-   * Canonical tokens cover the rest: page → bg-background, panel → bg-card,
-   * inset → bg-muted, border → border-border, ink → text-foreground,
-   * secondary → text-muted-foreground. Only these three have no canonical twin. */
-  --color-surface-tertiary: #e8e8e8; /* oklch(0.93): hover-LIGHTEN, one step above muted */
-  --color-border-active: #b8b8b8; /* oklch(0.72): stronger border on hover/active        */
-  --color-text-muted: #6e6e6e; /* oklch(0.50): 3rd/dimmest text, below muted-foreground   */
-
-  /* ── Element surfaces ──
-   * Dashboard elements read as wells cut into the board, so the hairline
-   * carries the figure/ground, not the fill.
-   *
-   * Two levels, and the split is load-bearing:
-   *   --color-surface       element fill: frame + every full-bleed body
-   *                         (table, chart, gallery, crop viewer)
-   *   --card                raised *inside* an element: sticky headers, selects,
-   *                         buttons, toolbars — lighter than the body on purpose */
-  --color-surface: oklch(0.988 0 0);
-
-  /* ── Charts ── */
-  --color-chart-mark: var(--accent-hue);
-  --color-chart-mark-fade: oklch(from var(--color-chart-mark) l c h / 0.125);
-
-  /* ── Z-index layer system ── */
-  --z-canvas: 10;
-  --z-hud: 20;
-  --z-panel: 30;
-  --z-float: 100;
-  --z-popover: 200;
-  --z-modal: 300;
-  --z-toast: 400;
-
-  /* ── Typography scale ──
-   * Tailwind v4 ships --text-xs (0.75rem / 12px) and larger. These add tighter
-   * named rungs below that floor for dense instrument labels (the canonical
-   * targets for what used to be arbitrary 10px/11px values). */
-  --text-2xs: 0.6875rem; /* 11px: tight label */
-  --text-3xs: 0.625rem; /* 10px: dense legend */
-
-  /* ── Density ──
-   * Compact controls select named text rungs (--text-2xs / --text-3xs) plus
-   * Tailwind height/padding utilities; no bespoke control-height tokens. */
-
-  /* ── Glass surface blur (exposed as blur-glass utility) ── */
-  --blur-glass: 12px;
-}
-
-/* ── Tier 2: Emphasis family + glass tokens (light) ──
- * Not in @theme because they're derived via relative color from
- * Tier 1 anchors. Exposed to Tailwind via @theme inline at bottom. */
-:root {
-  --emphasis: oklch(from var(--accent-hue) l c h / 5%);
-  --danger-emphasis: oklch(from var(--danger-hue) l c h / 10%);
-  --warning-emphasis: oklch(from var(--warning-hue) l c h / 7%);
-  --success-emphasis: oklch(from var(--success-hue) l c h / 10%);
-
-  --glass-bg: oklch(1 0 0 / 80%);
-  --glass-border: oklch(0 0 0 / 7%);
-}
-
-/* ════════════════════════════════════════════════════════════════════
- * TIER 2: CANONICAL TOKENS · DARK   (+ Tier-3 extension dark values)
- * ────────────────────────────────────────────────────────────────────
- *  Overrides the same CSS vars as the light :root above; Tailwind utilities
- *  (bg-background, text-foreground, …) flip automatically: no dark: prefix.
- *  html.dark (specificity 0,1,1) intentionally beats any plain :root block.
- * ════════════════════════════════════════════════════════════════════ */
-html.dark {
-  /* Tier-3 extension dark values (canonical dark set is below in this same block) */
-  --color-surface-tertiary: oklch(0.32 0 0); /* one step above muted (hover-lighten) */
-  --color-border-active: oklch(1 0 0 / 22%); /* stronger border on hover/active       */
-  --color-text-muted: oklch(0.62 0 0); /* 3rd/dimmest text, below muted-foreground    */
-
-  /* Element fill (dark): board and elements are both pure black; the hairline
-   * carries figure/ground, not the fill. */
-  --color-surface: #000000;
-
-  /* Emphasis family: bumped alpha for dark surfaces (hues carry less on dark) */
-  --emphasis: oklch(from var(--accent-hue) l c h / 10%);
-  --danger-emphasis: oklch(from var(--danger-hue) l c h / 15%);
-  --warning-emphasis: oklch(from var(--warning-hue) l c h / 12%);
-  --success-emphasis: oklch(from var(--success-hue) l c h / 15%);
-
-  /* Glass surface: dark panels need a darker tint, paler border */
-  --glass-bg: oklch(0 0 0 / 60%);
-  --glass-border: oklch(1 0 0 / 7%);
-
-  /* Canonical dark values: mirror the light :root above (--background/--card/--primary/…). */
-  --background: #000000; /* pure black board; elements match it, hairlines separate */
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: var(--accent-hue); /* Biohub periwinkle #6E4FF9 */
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.274 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.76 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 16%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: var(--accent-hue); /* periwinkle focus ring */
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: var(--accent-hue);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
-}
-
-/* Selection/focus highlight hues and status colors. */
-@theme {
-  /* Non-brand ramp stops shared with the docs syntax theme, chosen for
-   * separation: min CIEDE2000 30.9, all ≥4.7:1 on the board. */
-  --color-wire-sel: #ffbc56;
-  --color-wire-focus: #68cdf2;
-
-  /* Status hues as color tokens (anchors live in Tier 1) */
-  --color-success: var(--success-hue);
-  --color-warning: var(--warning-hue);
-}
-
-/* ── Base layout ──────────────────────────────────────────────────── */
 html,
 body,
 #root {
@@ -259,11 +16,6 @@ body,
 }
 
 body {
-  background-color: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-sans);
-  font-size: 12px; /* 85% density base (was 13px); named rungs/utilities layer on top */
-  line-height: 1.4;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -277,55 +29,26 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--border);
+  background: var(--line-2);
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-border-active);
+  background: var(--line-3);
 }
-/* Corner where the h+v scrollbars meet: UA default is an opaque light square.
- * Transparent so it disappears against any surface (the bottom-right "white box"). */
+/* Where the h+v scrollbars meet: the UA default is an opaque square. */
 ::-webkit-scrollbar-corner {
   background: transparent;
-}
-
-/* ── Native select ────────────────────────────────────────────────── */
-select {
-  appearance: none;
-  background-color: var(--card);
-  color: var(--foreground);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 2px 18px 2px 5px;
-  font-size: 11px;
-  font-family: var(--font-sans);
-  cursor: pointer;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238892b0' d='M3 5l3 3 3-3'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 4px center;
-}
-select:hover {
-  border-color: var(--color-border-active);
-}
-select:focus {
-  outline: 1px solid var(--color-ring);
-  outline-offset: -1px;
-}
-select:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
 }
 
 /* ── Trajectory active state ──────────────────────────────────────── */
 .trajectory-active canvas {
   opacity: 0.2;
-  transition: opacity 0.2s ease;
+  transition: opacity var(--dur) var(--ease-out);
 }
 
 /* ── Reduced motion ───────────────────────────────────────────────────
- *  Honor prefers-reduced-motion. Durations collapse to ~0 (0.01ms, not 0)
- *  so transitionend/animationend still fire: Base UI / Radix popovers
- *  depend on those events to unmount. */
+ *  Durations collapse to ~0 (0.01ms, not 0) so transitionend/animationend
+ *  still fire: Base UI popovers depend on those events to unmount. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

@@ -48,18 +48,21 @@ export function CategoricalLegend() {
   const hasIsolation = isolatedIndices.size > 0;
 
   return (
-    <div ref={containerRef} className="absolute top-2 left-2 z-20 w-52 rounded-lg border glass font-mono text-2xs">
-      <div className="flex items-center justify-between px-2.5 pt-2 pb-1 text-3xs text-muted-foreground uppercase tracking-wider">
+    <div
+      ref={containerRef}
+      className="absolute top-2 left-2 z-20 w-52 rounded-lg bg-overlay font-mono text-sm shadow-(--shadow-popover)"
+    >
+      <div className="flex items-center justify-between px-2.5 pt-2 pb-1 text-2xs text-muted-foreground uppercase tracking-wider">
         <span>Categories · {legend.length}</span>
         <Popover>
           <PopoverTrigger
             aria-label="Change palette"
             title={`Palette · ${state.categoricalColormap}`}
-            className="rounded-sm px-1 py-0.5 font-mono text-3xs text-muted-foreground/70 normal-case outline-none transition-colors focus-ring hover:bg-muted hover:text-foreground"
+            className="rounded-sm px-1 py-0.5 font-mono text-2xs text-muted-foreground/70 normal-case outline-none transition-colors focus-ring hover:bg-muted hover:text-foreground"
           >
             {state.categoricalColormap} ▾
           </PopoverTrigger>
-          <PopoverContent align="end" className="w-60 rounded-lg border glass p-2 font-mono shadow-black/20 shadow-lg">
+          <PopoverContent align="end" className="w-60 font-mono">
             <CategoricalPaletteGrid active={state.categoricalColormap} onSelect={actions.setCategoricalColormap} />
           </PopoverContent>
         </Popover>
@@ -135,7 +138,7 @@ export function CategoricalLegend() {
                       title="Click to toggle visibility · Shift+Click to isolate · Right-click for color"
                     />
                   </ContextMenuTrigger>
-                  <ContextMenuContent className="w-52 rounded-lg border glass p-1 font-mono shadow-black/20 shadow-lg">
+                  <ContextMenuContent className="w-52 font-mono">
                     <OklchColorPicker
                       label={item.label}
                       color={effectiveOklch}

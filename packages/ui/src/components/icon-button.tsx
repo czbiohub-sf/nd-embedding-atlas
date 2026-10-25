@@ -6,31 +6,23 @@ import { cn } from "@ndea/ui/lib/utils";
 import { HoverTip } from "./hover-tip";
 
 /**
- * IconButton: standalone icon-only chrome control with a required tooltip.
+ * IconButton: icon-only chrome control with a built-in tooltip (design core/IconButton.jsx).
  *
- * Use for general chrome (panels, headers, future toolbars) needing a single
- * tooltipped icon button. NOT for:
- *  - canvas instrument buttons → use `nd-icon-button` (same Base UI Button
- *    base, tiny instrument styling, data-nodrag);
- *  - toolbars that group controls in a ToggleGroup and tip them uniformly
- *    (e.g. ScatterToolbar derives its buttons from `iconButtonVariants`
- *    directly, keeping HoverTip + ToggleGroupItem composition caller-side).
- *
- * Shares `iconButtonVariants` with those callers so the icon-button look has
- * one source. Enforces the tooltip via required `label` + `description` :
- * icon-only controls without an accessible name fail a11y. `pressed` mirrors
- * aria-pressed for toggle semantics.
+ * Every icon-only button uses it: `label` is the accessible name and tooltip
+ * title; `description` is an optional second tooltip line. `pressed` mirrors
+ * aria-pressed and fills with the accent. Toolbars that compose their own
+ * HoverTip + ToggleGroupItem reuse `iconButtonVariants` for the same look.
  */
 
 const iconButtonVariants = cva(
   cn(
     "inline-flex shrink-0 items-center justify-center",
-    "rounded-md bg-transparent text-muted-foreground transition-colors",
-    "hover:bg-foreground/10 hover:text-foreground",
-    "aria-pressed:text-foreground",
-    "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/50",
-    "disabled:pointer-events-none disabled:opacity-40",
-    "[&_svg]:pointer-events-none [&_svg]:shrink-0",
+    "rounded-xs bg-transparent text-text-muted outline-none",
+    "hover:bg-muted hover:text-foreground",
+    "aria-pressed:bg-accent aria-pressed:text-accent-foreground data-pressed:bg-accent data-pressed:text-accent-foreground",
+    "focus-visible:ring-1 focus-visible:ring-ring",
+    "disabled:pointer-events-none disabled:opacity-45",
+    "[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg]:stroke-[1.5]",
   ),
   {
     variants: {
@@ -47,10 +39,10 @@ type IconButtonProps = Omit<React.ComponentPropsWithoutRef<"button">, "children"
   VariantProps<typeof iconButtonVariants> & {
     /** Icon element: single svg or similar. */
     children: React.ReactNode;
-    /** Bold label shown in the tooltip. */
+    /** Accessible name and tooltip title. */
     label: string;
-    /** One-phrase description shown in the tooltip. */
-    description: string;
+    /** Optional one-phrase second tooltip line. */
+    description?: string;
     /** Tooltip side. Defaults to bottom. */
     tooltipSide?: "top" | "bottom" | "left" | "right";
     /** aria-pressed mirror for toggle usage. */
