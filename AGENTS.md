@@ -92,8 +92,17 @@ entrypoints across workspaces.
 - `/data/query` serves Mosaic's `restConnector` (`POST { type, sql }`;
   `arrow` returns Arrow IPC bytes, `exec` returns `{}`).
 - `/ws` carries the framed `{ _id, _type }` ndea protocol: `workspace/watch`
-  (committed revisions) and `harness/watch` (MCP agents and when each was
-  last seen, for the rail's harness presence).
+  (committed revisions), `harness/watch` (MCP agents and when each was
+  last seen, for the rail's harness presence), and `session/watch` (the open
+  collection; a tab reloads when it changes).
+- Collections (`collections:` in the project YAML, `cli/config.ts`; datasets
+  in none form an implicit one named after the file): a server run ingests one
+  (`--collection`, default the first). `POST /api/collection { name }` clears
+  every scope's `dataset` filter source, builds the new session beside the old
+  one (`cli/startup.ts`), swaps it in with `server.reload(appServeOptions(…))`
+  on the same port, closes the old store, and pushes `session/watch`. The one
+  workspace file is shared by all collections. Metadata and `RuntimeStatus`
+  carry `collection` and `collections` (`nObs` from store metadata, no ingest).
 - Remote rendering (`server/remote-render.ts`, `server/chrome.ts`): an
   image viewer with `render: "remote"` opens `/ws/render` (one session per
   socket; the session dies with it). The server lazily launches one headless
@@ -119,10 +128,13 @@ entrypoints across workspaces.
   that model; `/mcp` adds loopback `Host`/`Origin` plus the bearer, and the two
   status routes take the bearer. `--host` with a non-loopback address prints a
   startup warning; it adds no auth.
-- The workspace document has three sections: `data` (named data sources),
-  `spec` (the json-render dashboard), and `state` (coordination cells).
+- The workspace document (format v3) has four fields: `data` (named data
+  sources), `layouts` (named json-render dashboards `{ [id]: { name, spec } }`;
+  element ids are unique across every layout), `layout` (the active layout's
+  id), and `state` (coordination cells every layout shares).
   `frontend/core/workspace/document.ts` validates all of it and is pure, so the
-  server and the browser run the same rules.
+  server and the browser run the same rules. Any other format version is
+  refused at startup; deleting the file reseeds it from the preset.
 - `Workspace` (`server/workspace.ts`) owns the session's one revisioned
   workspace document, its file, and its history. A missing file is written
   from the preset (`server/presets.ts`): a built-in JSON document under
@@ -277,11 +289,13 @@ entrypoints across workspaces.
   params.
 - `DatasetSessionProvider` owns metadata, trajectories, query infrastructure,
   and the session-local runtime manager.
-- json-render renders the document's `spec` (`workspace/DashboardPane.tsx`).
+- json-render renders the active layout's spec (`workspace/DashboardPane.tsx`).
   `workspace/dashboard.ts` holds the component catalog (`COMPONENTS`: layout
-  `split`/`stack`, `text`, `select`, `slot`, and one component per view
-  definition, keyed by its type), the structural and prop rules, and the
-  pure edit operations the UI and agents share. Components get element ids
+  `split`/`stack`, `tabs` (a tile of views; `active` is the shown child),
+  `text`, `select`, `slot`, and one component per view definition, keyed by
+  its type), the structural and prop rules, the layout lookups (`findElement`,
+  `layoutOf`, `activeSpec`), and the pure edit operations the UI and agents
+  share. A bare view leaf is a one-tab tile. Components get element ids
   through a render-only `elementId` prop; props resolve json-render
   expressions against coordination `state`.
 - A data component reads `props.data` (a named source; omitted means every
@@ -298,8 +312,10 @@ entrypoints across workspaces.
   two documents element by element.
 - `ComponentRuntimeManager` (`core/component/runtime/workspace-runtime.ts`) keeps
   one live body per view element in a stable dock that tiles adopt, so moving
-  a tile never remounts it. A config change from another writer (an agent, a
-  remote revision) restarts the body; the body's own `patchConfig` does not.
+  a tile or a tab never remounts it. An inactive tab's body starts on first
+  show and stays alive; views outside the active layout stop and start again
+  on switch. A config change from another writer (an agent, a remote revision)
+  restarts the body; the body's own `patchConfig` does not.
 - Coordination is document data. `state[type][scope]` holds shared values and
   an element prop `{ $bindState: "/<type>/<scope>" }` (json-render's two-way
   binding) joins it to a scope; `frontend/core/coordination/types.ts`

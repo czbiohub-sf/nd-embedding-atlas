@@ -1,8 +1,9 @@
+import type { CollectionSummary } from "@ndea/protocol";
 import { AnnData, MuData, open, type DatasetHandle } from "@ndea/zarr";
 import { DEFAULT_OBSM_PRIORITY } from "../../server/store.ts";
 import { detectSpatialColumns, spatialHiddenColumns } from "../../server/state.ts";
 import type { DatasetMountConfig, SpatialColumns } from "../../server/state.ts";
-import type { ProjectDatasetMount } from "../config.ts";
+import type { ProjectCollection, ProjectDatasetMount } from "../config.ts";
 import { task } from "../lib/style.ts";
 import { describeDataset } from "./output.ts";
 
@@ -66,6 +67,25 @@ export async function openDatasets(entries: readonly ProjectDatasetMount[]): Pro
     loaded.push(dataset);
   }
   return loaded;
+}
+
+/** Every collection with each dataset's `nObs` from its store metadata (no ingest), each store read once. */
+export async function summarizeCollections(collections: readonly ProjectCollection[]): Promise<CollectionSummary[]> {
+  const paths = [...new Set(collections.flatMap((c) => c.datasets.map((d) => d.path)))];
+  const nObs = new Map(
+    await Promise.all(
+      paths.map(async (path) => {
+        const parsed = await open(path);
+        if (parsed.kind === "anndata") return [path, AnnData.from(parsed).nObs] as const;
+        if (parsed.kind === "mudata") return [path, MuData.from(parsed).nObs] as const;
+        throw new Error(`${path}: store is ${parsed.kind}, not AnnData/MuData`);
+      }),
+    ),
+  );
+  return collections.map((c) => ({
+    name: c.name,
+    datasets: c.datasets.map((d) => ({ name: d.name, nObs: nObs.get(d.path)! })),
+  }));
 }
 
 function collectDatasetConfigs(loaded: readonly LoadedDataset[]): Map<string, DatasetMountConfig> {

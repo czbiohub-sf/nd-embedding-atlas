@@ -1,11 +1,10 @@
 /**
  * The ⌘K command menu: a centered 760px window. By default it switches
- * things (layouts, and datasets as a tree under "All datasets"; collections
- * wrap datasets the same way once G3 lands); typing ">" lists commands.
+ * things (layouts, and collections with their datasets as children); typing
+ * ">" lists commands.
  * ↑↓ move, ↵ open, → / ← expand and collapse, esc closes.
  */
 
-import { useQuery } from "@tanstack/react-query";
 import {
   ChevronRightIcon,
   CopyIcon,
@@ -24,12 +23,12 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@ndea/ui/
 import { Kbd } from "@ndea/ui/components/kbd";
 import { cn } from "@ndea/ui/lib/utils";
 
-import { COMPONENTS, EMPTY_TILE_CHOICES, type SplitSide } from "@/core/workspace/dashboard";
+import { activeSpec, COMPONENTS, EMPTY_TILE_CHOICES, tileView, type SplitSide } from "@/core/workspace/dashboard";
 import { copyReference } from "@/core/workspace/reference";
 import { useWorkspace, useWorkspaceSelector, useWorkspaceSession } from "@/core/workspace/workspace-context";
-import { useDatasetSession } from "@/hooks/useDatasetSession";
-import { toRows } from "@/lib/mosaic-helpers";
 import { useTheme } from "@/ThemeProvider";
+import { CollectionSwitchDialog } from "./CollectionSwitchDialog";
+import { useCollectionsGroup } from "./collections";
 import { LayoutWireframe, layoutTiles, tileTitle } from "./LayoutWireframe";
 
 export interface MenuItem {
@@ -75,7 +74,8 @@ function MenuBody({
 }: {
   groups: MenuGroup[];
   commands: MenuItem[];
-  preview?: ReactNode;
+  /** The right-hand pane for the highlighted row's id. */
+  preview?: (highlighted: string | undefined) => ReactNode;
   close: () => void;
 }) {
   const [query, setQuery] = useState("");
@@ -116,7 +116,7 @@ function MenuBody({
       setHighlight(parent);
     }
   };
-  const pane = !commandMode && preview;
+  const pane = !commandMode && preview?.(current?.item.id);
 
   return (
     <Command
@@ -242,8 +242,8 @@ export function CommandMenu({
   onOpenChange: (open: boolean) => void;
   groups?: MenuGroup[];
   commands?: MenuItem[];
-  /** The right-hand pane in switch mode. */
-  preview?: ReactNode;
+  /** The right-hand pane in switch mode, for the highlighted row's id. */
+  preview?: (highlighted: string | undefined) => ReactNode;
 }) {
   const { theme, setTheme } = useTheme();
   useEffect(() => {
@@ -290,22 +290,6 @@ export function CommandMenu({
 
 /* ── content ───────────────────────────────────────────────────────── */
 
-const obs = (n: number | undefined) => (n === undefined ? undefined : `${n.toLocaleString("en-US")} obs`);
-
-function useDatasetCounts(names: readonly string[]): Record<string, number> | undefined {
-  const { coordinator, table } = useDatasetSession().runtime;
-  return useQuery({
-    queryKey: ["command-menu", "dataset-counts", table],
-    enabled: names.length > 1,
-    queryFn: async (): Promise<Record<string, number>> => {
-      const rows = toRows<{ name: unknown; n: number }>(
-        await coordinator.query(`SELECT _dataset AS name, COUNT(*)::INT AS n FROM ${table} GROUP BY _dataset`),
-      );
-      return Object.fromEntries(rows.map((row) => [String(row.name), row.n]));
-    },
-  }).data;
-}
-
 const SPLIT_ICON: Record<SplitSide, ReactNode> = {
   left: <SquareSplitHorizontalIcon />,
   right: <SquareSplitHorizontalIcon />,
@@ -313,7 +297,7 @@ const SPLIT_ICON: Record<SplitSide, ReactNode> = {
   down: <SquareSplitVerticalIcon />,
 };
 
-/** The shell's menu: the layout and datasets to switch to; `shellCommands` (sidebar, flyouts) lead the commands. */
+/** The shell's menu: the layouts and collections to switch to; `shellCommands` (sidebar, flyouts) lead the commands. */
 export function WorkspaceCommandMenu({
   open,
   onOpenChange,
@@ -324,82 +308,52 @@ export function WorkspaceCommandMenu({
   shellCommands: MenuItem[];
 }) {
   const ws = useWorkspace();
-  const spec = useWorkspaceSelector((w) => w.snapshot().spec);
-  const datasetClause = useWorkspaceSelector((w) => w.snapshot().state.filter?.A?.dataset?.dataset);
+  const layouts = useWorkspaceSelector((w) => w.snapshot().layouts);
+  const currentLayout = useWorkspaceSelector((w) => w.snapshot().layout);
+  const spec = useWorkspaceSelector((w) => activeSpec(w.snapshot()));
   const selectedId = useWorkspaceSession((s) => s.selectedElementId);
-  const keys = useDatasetSession().state.metadata.dataset_keys ?? [];
-  const counts = useDatasetCounts(keys);
+  const collections = useCollectionsGroup();
 
   const tiles = layoutTiles(spec).map((id) => ({ id, element: spec.elements[id] }));
-  const activeDataset = datasetClause?.op === "eq" ? datasetClause.value : undefined;
-  const setDataset = (value: string | null) =>
-    ws.apply([
-      {
-        op: "set_filter",
-        scope: "A",
-        source: "dataset",
-        facet: "dataset",
-        clause: value === null ? null : { op: "eq", column: "_dataset", value },
-      },
-    ]);
-
-  // ponytail: one layout (the document's spec) until named layouts (G2) land.
   const groups: MenuGroup[] = [
     {
       heading: "Layouts",
-      items: [
-        {
-          id: "layout:current",
-          label: "Layout",
-          current: true,
-          leading: <LayoutWireframe spec={spec} className="h-4 w-[26px] shrink-0" />,
-        },
-      ],
+      items: Object.entries(layouts).map(([id, layout]) => ({
+        id: `layout:${id}`,
+        label: layout.name,
+        current: id === currentLayout,
+        leading: <LayoutWireframe spec={layout.spec} className="h-4 w-[26px] shrink-0" />,
+        onSelect: () => ws.apply([{ op: "set_active_layout", id }]),
+      })),
     },
   ];
-  if (keys.length > 1) {
-    groups.push({
-      heading: "Datasets",
-      meta: `${keys.length} datasets`,
-      items: [
-        {
-          id: "dataset:*",
-          label: "All datasets",
-          meta: obs(counts && Object.values(counts).reduce((sum, n) => sum + n, 0)),
-          current: activeDataset === undefined,
-          onSelect: () => setDataset(null),
-          children: keys.map((key) => ({
-            id: `dataset:${key}`,
-            label: key,
-            meta: obs(counts?.[key]),
-            current: activeDataset === key,
-            onSelect: () => setDataset(key),
-          })),
-        },
-      ],
-    });
-  }
+  if (collections) groups.push(collections);
 
   const selected = selectedId ? spec.elements[selectedId] : undefined;
+  const view = selectedId ? tileView(spec, selectedId) : undefined;
   const slot = tiles.find((tile) => tile.element.type === "slot");
   const commands: MenuItem[] = [...shellCommands];
   if (selectedId && selected) {
-    const sub = tileTitle(selected);
+    const sub = tileTitle(spec, selectedId);
+    if (view) {
+      commands.push(
+        {
+          id: "view:fullscreen",
+          label: "Fullscreen",
+          sub,
+          leading: <Maximize2Icon />,
+          onSelect: () => ws.setFullscreen(view),
+        },
+        {
+          id: "view:reference",
+          label: "Copy reference",
+          sub,
+          leading: <CopyIcon />,
+          onSelect: () => void copyReference(ws, view),
+        },
+      );
+    }
     commands.push(
-      {
-        id: "view:fullscreen",
-        label: "Fullscreen",
-        sub,
-        leading: <Maximize2Icon />,
-        onSelect: () => ws.setFullscreen(selectedId),
-      },
-      {
-        id: "view:reference",
-        label: "Copy reference",
-        sub,
-        leading: <CopyIcon />,
-        onSelect: () => void copyReference(ws, selectedId),
-      },
       ...(["left", "right", "up", "down"] as const).map((side) => ({
         id: `tile:split-${side}`,
         label: `Split tile ${side}`,
@@ -429,19 +383,29 @@ export function WorkspaceCommandMenu({
     }
   }
 
-  // ponytail: the one layout is always the highlighted one; preview the highlighted row once G2 adds more.
-  const preview = (
+  // The highlighted layout row's layout; any other row previews the active one.
+  const preview = (highlighted: string | undefined) => {
+    const id = highlighted?.startsWith("layout:") ? highlighted.slice("layout:".length) : currentLayout;
+    const layout = layouts[id] ?? layouts[currentLayout];
+    const shown = layoutTiles(layout.spec);
+    return (
+      <>
+        <div className="rounded-md bg-muted p-1.5">
+          <LayoutWireframe spec={layout.spec} labeled className="aspect-[16/10] w-full" />
+        </div>
+        <div className="text-md font-semibold">{layout.name}</div>
+        <div className="text-sm text-text-muted">
+          {shown.length} {shown.length === 1 ? "tile" : "tiles"} ·{" "}
+          {shown.map((tile) => tileTitle(layout.spec, tile)).join(" · ")}
+        </div>
+      </>
+    );
+  };
+
+  return (
     <>
-      <div className="rounded-md bg-muted p-1.5">
-        <LayoutWireframe spec={spec} labeled className="aspect-[16/10] w-full" />
-      </div>
-      <div className="text-md font-semibold">Layout</div>
-      <div className="text-sm text-text-muted">
-        {tiles.length} {tiles.length === 1 ? "tile" : "tiles"} ·{" "}
-        {tiles.map((tile) => tileTitle(tile.element)).join(" · ")}
-      </div>
+      <CommandMenu open={open} onOpenChange={onOpenChange} groups={groups} commands={commands} preview={preview} />
+      <CollectionSwitchDialog />
     </>
   );
-
-  return <CommandMenu open={open} onOpenChange={onOpenChange} groups={groups} commands={commands} preview={preview} />;
 }

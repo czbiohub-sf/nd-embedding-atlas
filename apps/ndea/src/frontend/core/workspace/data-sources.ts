@@ -11,7 +11,7 @@ import { z } from "zod";
 
 import { filterClausesSql, filterScopeClauses } from "../coordination/types";
 import { filterClauseSql } from "@ndea/components/filter";
-import { elementData, elementScope } from "./dashboard";
+import { elementData, elementScope, findElement } from "./dashboard";
 import type { WorkspaceDocument } from "./types";
 
 export const DATA_SOURCE_NAME = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/;
@@ -70,12 +70,12 @@ export function dataSourceSql(data: DataSources, name: string | undefined): stri
 }
 
 /**
- * What one dashboard element shows: its data source AND every other source's
- * clauses in its filter scope (never its own, keyed by element id). Null for
- * every observation, or when the element does not exist.
+ * What one dashboard element (of any layout) shows: its data source AND every
+ * other source's clauses in its filter scope (never its own, keyed by element
+ * id). Null for every observation, or when the element does not exist.
  */
 export function elementPredicate(document: WorkspaceDocument, elementId: string): string | null {
-  const element = document.spec.elements[elementId];
+  const element = findElement(document, elementId);
   if (!element) return null;
   const cell = document.state.filter?.[elementScope(element, "filter") ?? ""];
   return and([

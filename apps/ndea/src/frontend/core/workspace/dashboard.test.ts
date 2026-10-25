@@ -9,19 +9,21 @@ const pointers = (value: unknown) => {
   return parsed.ok ? [] : parsed.issues.map((issue) => `${issue.pointer} ${issue.detail}`);
 };
 
+const main = (spec: unknown) => ({ main: { name: "Main", spec } });
+
 const withElements = (elements: Record<string, unknown>, extra: object = {}) => ({
   ...emptyWorkspaceDocument(),
-  spec: {
+  layouts: main({
     root: "root",
     elements: { root: { type: "stack", props: {}, children: Object.keys(elements) }, ...elements },
-  },
+  }),
   ...extra,
 });
 
 describe("dashboard validation", () => {
   test("component props are checked against the component's contract, with pointers", () => {
     const doc = withElements({ t: { type: "table", props: { columns: "x" }, children: [] } });
-    expect(pointers(doc)[0]).toStartWith("/spec/elements/t/props/columns");
+    expect(pointers(doc)[0]).toStartWith("/layouts/main/spec/elements/t/props/columns");
   });
 
   test("unknown types, data sources, and malformed bindings are rejected", () => {
@@ -33,28 +35,48 @@ describe("dashboard validation", () => {
     });
     const issues = pointers(doc).map((issue) => issue.split(" ")[0]);
     expect(issues).toEqual([
-      "/spec/elements/a/type",
-      "/spec/elements/b/props/data",
-      "/spec/elements/c/props/focus",
-      "/spec/elements/d/props/filter",
+      "/layouts/main/spec/elements/a/type",
+      "/layouts/main/spec/elements/b/props/data",
+      "/layouts/main/spec/elements/c/props/focus",
+      "/layouts/main/spec/elements/d/props/filter",
     ]);
   });
 
   test("structure: splits take two children, leaves none, and every element is reachable once", () => {
     const doc = {
       ...emptyWorkspaceDocument(),
-      spec: {
+      layouts: main({
         root: "s",
         elements: {
           s: { type: "split", props: { direction: "row", ratio: 0.5 }, children: ["t", "t"] },
           t: { type: "text", props: { text: "x" }, children: ["orphan"] },
           orphan: { type: "slot", props: {}, children: [] },
         },
-      },
+      }),
     };
     expect(pointers(doc).map((issue) => issue.split(" ")[0])).toEqual([
-      "/spec/elements/s/children/1",
-      "/spec/elements/t/children",
+      "/layouts/main/spec/elements/s/children/1",
+      "/layouts/main/spec/elements/t/children",
+    ]);
+  });
+
+  test("tabs hold views, and `active` names one of them; the active layout must exist", () => {
+    const doc = {
+      ...emptyWorkspaceDocument(),
+      layouts: main({
+        root: "tabs",
+        elements: {
+          tabs: { type: "tabs", props: { active: "ghost" }, children: ["v", "x"] },
+          v: { type: "table", props: {}, children: [] },
+          x: { type: "text", props: { text: "x" }, children: [] },
+        },
+      }),
+      layout: "nope",
+    };
+    expect(pointers(doc).map((issue) => issue.split(" ")[0])).toEqual([
+      "/layout",
+      "/layouts/main/spec/elements/tabs/children/1",
+      "/layouts/main/spec/elements/tabs/props/active",
     ]);
   });
 });
@@ -79,7 +101,12 @@ describe("data sources", () => {
       other: { chart: { op: "eq" as const, column: "y", value: 2 } },
     };
     const me = { type: "table", props: { data: "infected", filter: { $bindState: "/filter/A" } }, children: [] };
-    const document = { data, spec: { root: "me", elements: { me } }, state: { filter: { A: filter } } };
+    const document = {
+      data,
+      layouts: { main: { name: "Main", spec: { root: "me", elements: { me } } } },
+      layout: "main",
+      state: { filter: { A: filter } },
+    };
     const sql = elementPredicate(document, "me")!;
     expect(sql).toContain(`"state" = 'infected'`);
     expect(sql).toContain(`"y" = 2`);

@@ -7,7 +7,7 @@
 import type { z } from "zod";
 import type { workspaceDocumentSchema } from "./document";
 
-/** Exactly the persisted workspace document: `data`, `spec`, and `state`. */
+/** Exactly the persisted workspace document: `data`, `layouts`, `layout`, and `state`. */
 export type WorkspaceDocument = z.infer<typeof workspaceDocumentSchema>;
 
 /** This tab's editor state. Never persisted, never synced. */

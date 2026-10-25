@@ -2,7 +2,13 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { loadProjectConfig, pathsToConfig, resolveLaunchConfig, type ParsedProjectConfig } from "../config.ts";
+import {
+  loadProjectConfig,
+  pathsToConfig,
+  resolveLaunchConfig,
+  type ParsedProjectConfig,
+  type ProjectDatasetMount,
+} from "../config.ts";
 import { defaultWorkspacePath } from "../lib/paths.ts";
 
 let projectDir: string;
@@ -45,17 +51,18 @@ settings:
 preset: explore
 `);
 
+    const cells: ProjectDatasetMount = {
+      name: "cells",
+      path: join(projectDir, "data", "cells.zarr"),
+      platePath: join(projectDir, "images", "plate.zarr"),
+      channels: {
+        DNA: { color: "#3366ff", contrast: [10, 900], visible: false },
+      },
+    };
     expect(config).toEqual({
-      datasets: [
-        {
-          name: "cells",
-          path: join(projectDir, "data", "cells.zarr"),
-          platePath: join(projectDir, "images", "plate.zarr"),
-          channels: {
-            DNA: { color: "#3366ff", contrast: [10, 900], visible: false },
-          },
-        },
-      ],
+      datasets: [cells],
+      // No `collections:`: one implicit collection, named after the project file.
+      collections: [{ name: "project", datasets: [cells] }],
       obsColumns: ["cell_type", "treatment"],
       settings: { port: 6060, host: "0.0.0.0" },
       preset: "explore",
@@ -124,9 +131,81 @@ datasets:
   });
 });
 
+const names = (config: ParsedProjectConfig) => config.collections.map((c) => [c.name, c.datasets.map((d) => d.name)]);
+
+describe("project config collections", () => {
+  const DATASETS = `
+datasets:
+  a: { anndata: a.zarr }
+  b: { anndata: b.zarr }
+  c: { anndata: c.zarr }
+`;
+
+  test("accepts the array and map forms; a dataset may be in several; the rest form the implicit collection", async () => {
+    const listed = await loadYaml(`${DATASETS}
+collections:
+  - name: first
+    datasets: [a]
+  - name: both
+    datasets: [a, b]
+`);
+    expect(names(listed)).toEqual([
+      ["first", ["a"]],
+      ["both", ["a", "b"]],
+      ["project", ["c"]],
+    ]);
+    expect(listed.collections[1].datasets[1]).toBe(listed.datasets[1]);
+
+    const keyed = await loadYaml(`${DATASETS}
+collections:
+  all: { datasets: [c, b, a] }
+`);
+    expect(names(keyed)).toEqual([["all", ["c", "b", "a"]]]);
+  });
+
+  test.each([
+    ["an unknown dataset", "collections:\n  x: { datasets: [a, nope] }", /Collection 'x': unknown dataset "nope"/],
+    [
+      "a duplicate name",
+      "collections:\n  - { name: x, datasets: [a] }\n  - { name: x, datasets: [b, c] }",
+      /Collection 'x' is defined twice/,
+    ],
+    [
+      "a name clashing with the implicit collection",
+      "collections:\n  project: { datasets: [a] }",
+      /'project' clashes with the implicit collection.*\(b, c\)/,
+    ],
+    ["no datasets", "collections:\n  x: { datasets: [] }", /Collection 'x' must list its datasets/],
+    ["a dataset listed twice", "collections:\n  x: { datasets: [a, a] }", /Collection 'x' lists a dataset twice/],
+    ["a missing name", "collections:\n  - { datasets: [a] }", /Collection entry 0 must have a 'name'/],
+  ])("rejects %s", async (_, yaml, error) => {
+    await expect(loadYaml(`${DATASETS}${yaml}\n`)).rejects.toThrow(error);
+  });
+
+  test("--collection picks one; the default is the first; an unknown name lists the choices", async () => {
+    const project = await loadYaml(`${DATASETS}
+collections:
+  first: { datasets: [a] }
+  second: { datasets: [b, c] }
+`);
+    const overrides = { noOpen: false, dev: false };
+    expect(resolveLaunchConfig(project, overrides).collection).toBe("first");
+    expect(resolveLaunchConfig(project, { ...overrides, collection: "second" }).collection).toBe("second");
+    expect(() => resolveLaunchConfig(project, { ...overrides, collection: "third" })).toThrow(
+      "unknown collection 'third' (collections: first, second)",
+    );
+    // Every collection shares the project's one workspace file.
+    expect(resolveLaunchConfig(project, { ...overrides, collection: "second" }).workspace).toBe(
+      resolveLaunchConfig(project, overrides).workspace,
+    );
+  });
+});
+
 describe("launch config", () => {
+  const cells = { name: "cells", path: "/project/cells.zarr" };
   const project: ParsedProjectConfig = {
-    datasets: [{ name: "cells", path: "/project/cells.zarr" }],
+    datasets: [cells],
+    collections: [{ name: "project", datasets: [cells] }],
     obsColumns: ["from_yaml"],
     settings: { port: 6060, host: "yaml-host" },
     preset: "yaml-preset",
@@ -139,7 +218,8 @@ describe("launch config", () => {
         dev: true,
       }),
     ).toEqual({
-      datasets: project.datasets,
+      collections: project.collections,
+      collection: "project",
       obsColumns: ["from_yaml"],
       port: 6060,
       host: "yaml-host",
@@ -162,7 +242,8 @@ describe("launch config", () => {
         workspace: "relative/workspace.json",
       }),
     ).toEqual({
-      datasets: project.datasets,
+      collections: project.collections,
+      collection: "project",
       obsColumns: ["from_cli"],
       port: 7070,
       host: "cli-host",
@@ -175,13 +256,10 @@ describe("launch config", () => {
 
   test("keeps existing defaults for bare paths", () => {
     const parsed = pathsToConfig(["relative/example.zarr"]);
+    const example = { name: "example", path: resolve("relative/example.zarr") };
     expect(resolveLaunchConfig(parsed, { noOpen: false, dev: false })).toEqual({
-      datasets: [
-        {
-          name: "example",
-          path: resolve("relative/example.zarr"),
-        },
-      ],
+      collections: [{ name: "example", datasets: [example] }],
+      collection: "example",
       obsColumns: undefined,
       port: 5055,
       host: "127.0.0.1",

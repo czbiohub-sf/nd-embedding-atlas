@@ -17,6 +17,7 @@
  */
 
 import type { Server, ServerWebSocket } from "bun";
+import { findElement } from "../frontend/core/workspace/dashboard.ts";
 import type { WorkspaceDocument } from "../frontend/core/workspace/types.ts";
 import { launchChrome, openTab, type Chrome } from "./chrome.ts";
 import type { ServerSocketContext } from "./ws.ts";
@@ -131,7 +132,7 @@ async function startSession(ws: RenderSocket, frame: Record<string, unknown>): P
   }
   const element = typeof frame.element === "string" ? frame.element : "";
   const document = state.workspace.get().document as WorkspaceDocument;
-  if (document.spec.elements[element]?.type !== "image-viewer") {
+  if (findElement(document, element)?.type !== "image-viewer") {
     return void send(ws, { _type: "render/error", error: `no image-viewer element "${element}"` });
   }
   if (sessions.size >= MAX_SESSIONS) {

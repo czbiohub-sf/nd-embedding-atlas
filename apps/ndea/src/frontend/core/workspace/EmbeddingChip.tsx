@@ -12,7 +12,7 @@ import { CheckIcon } from "lucide-react";
 import { useState } from "react";
 
 import { useDatasetSession } from "@/hooks/useDatasetSession";
-import { COMPONENTS } from "./dashboard";
+import { activeSpec, COMPONENTS } from "./dashboard";
 import { useWorkspace, useWorkspaceSelector } from "./workspace-context";
 
 type Obsm = Record<string, { loaded: boolean; n_dims?: number | null }>;
@@ -27,7 +27,7 @@ export function EmbeddingChip({ id }: { id: string }) {
   const ws = useWorkspace();
   const { state } = useDatasetSession();
   const obsm: Obsm = state.metadata.obsm;
-  const elements = useWorkspaceSelector((w) => w.snapshot().spec.elements);
+  const elements = useWorkspaceSelector((w) => activeSpec(w.snapshot()).elements);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
 

@@ -1,13 +1,13 @@
 /**
  * YAML project config loader.
  *
- * Supports multi-dataset project files with optional obs columns,
- * channel configs, and server settings. Single zarr paths are also
- * handled via `pathsToConfig()`.
+ * Supports multi-dataset project files grouped into collections, with
+ * optional obs columns, channel configs, and server settings. Single zarr
+ * paths are also handled via `pathsToConfig()`.
  */
 
 import { existsSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { basename, dirname, extname, resolve } from "node:path";
 import { parse as parseYaml } from "yaml";
 import type { DatasetChannelConfig } from "../server/state.ts";
 import { defaultWorkspacePath } from "./lib/paths.ts";
@@ -21,8 +21,16 @@ export interface ProjectDatasetMount {
   channels?: Record<string, DatasetChannelConfig>;
 }
 
+/** Datasets one server run opens together; a run serves one collection (`--collection`). */
+export interface ProjectCollection {
+  name: string;
+  datasets: ProjectDatasetMount[];
+}
+
 export interface ParsedProjectConfig {
   datasets: ProjectDatasetMount[];
+  /** Declared collections, then the implicit one (named after the project) holding datasets in none. */
+  collections: ProjectCollection[];
   obsColumns?: string[];
   settings?: {
     port?: number;
@@ -34,7 +42,9 @@ export interface ParsedProjectConfig {
 
 /** Fully resolved config with CLI overrides applied. */
 export interface LaunchConfig {
-  datasets: ProjectDatasetMount[];
+  collections: ProjectCollection[];
+  /** The collection this run opens. */
+  collection: string;
   obsColumns?: string[];
   port: number;
   host: string;
@@ -49,6 +59,8 @@ export interface LaunchConfig {
 }
 
 export interface LaunchOverrides {
+  /** Collection to open; defaults to the first. */
+  collection?: string;
   port?: number;
   host?: string;
   noOpen: boolean;
@@ -90,11 +102,12 @@ export async function loadProjectConfig(yamlPath: string): Promise<ParsedProject
     throw new Error("Config must define at least one dataset");
   }
 
+  const collections = parseCollections(raw.collections, datasets, basename(absPath, extname(absPath)));
   const obsColumns = parseObsColumns(raw.obs_columns);
   const settings = parseSettings(raw.settings);
   const preset = typeof raw.preset === "string" ? raw.preset : undefined;
 
-  return { datasets, obsColumns, settings, preset };
+  return { datasets, collections, obsColumns, settings, preset };
 }
 
 // ─── Path-based config ──────────────────────────────────────────────────────
@@ -102,7 +115,7 @@ export async function loadProjectConfig(yamlPath: string): Promise<ParsedProject
 /**
  * Convert bare zarr paths into a ParsedProjectConfig.
  *
- * Each path becomes a dataset whose name is derived from the filename.
+ * Each path becomes a dataset whose name is derived from the filename; together they are one collection.
  */
 export function pathsToConfig(paths: string[]): ParsedProjectConfig {
   const datasets: ProjectDatasetMount[] = paths.map((p) => {
@@ -112,13 +125,19 @@ export function pathsToConfig(paths: string[]): ParsedProjectConfig {
     const name = base.replace(/\.zarr$/, "");
     return { name, path: abs };
   });
-  return { datasets };
+  return { datasets, collections: [{ name: datasets.map((d) => d.name).join(" + "), datasets }] };
 }
 
 /** Apply CLI overrides to a parsed project without changing boundary precedence. */
 export function resolveLaunchConfig(project: ParsedProjectConfig, overrides: LaunchOverrides): LaunchConfig {
+  const names = project.collections.map((c) => c.name);
+  const collection = overrides.collection ?? names[0];
+  if (!names.includes(collection)) {
+    throw new Error(`unknown collection '${collection}' (collections: ${names.join(", ")})`);
+  }
   return {
-    datasets: project.datasets,
+    collections: project.collections,
+    collection,
     obsColumns: overrides.obsColumns ?? project.obsColumns,
     port: overrides.port ?? project.settings?.port ?? 5055,
     host: overrides.host ?? project.settings?.host ?? "127.0.0.1",
@@ -126,6 +145,7 @@ export function resolveLaunchConfig(project: ParsedProjectConfig, overrides: Lau
     dev: overrides.dev,
     tui: overrides.tui,
     preset: overrides.preset ?? project.preset,
+    // Every dataset of the project, so all collections share one workspace file.
     workspace: overrides.workspace
       ? resolve(overrides.workspace)
       : defaultWorkspacePath(project.datasets.map((dataset) => dataset.path)),
@@ -219,6 +239,62 @@ function parseDictEntry(name: string, entry: unknown, baseDir: string): ProjectD
   }
 
   return dataset;
+}
+
+/**
+ * `collections:` as an array of `{ name, datasets }` or a map of name → `{ datasets }`; datasets
+ * named by any collection may appear in several. Datasets in none form a trailing implicit
+ * collection named `implicitName` (all of them when `collections:` is absent).
+ */
+function parseCollections(
+  raw: unknown,
+  datasets: readonly ProjectDatasetMount[],
+  implicitName: string,
+): ProjectCollection[] {
+  if (raw != null && typeof raw !== "object") throw new TypeError("'collections' must be an array or object");
+  const entries: [unknown, unknown, string][] = Array.isArray(raw)
+    ? raw.map((entry: unknown, i) => {
+        const e = (entry ?? {}) as Record<string, unknown>;
+        return [e.name, e.datasets, `Collection entry ${i}`];
+      })
+    : Object.entries((raw ?? {}) as Record<string, unknown>).map(([name, e]) => [
+        name,
+        (e as Record<string, unknown> | null)?.datasets,
+        `Collection '${name}'`,
+      ]);
+  const byName = new Map(datasets.map((dataset) => [dataset.name, dataset]));
+  const collections = entries.map(([name, members, owner]): ProjectCollection => {
+    if (typeof name !== "string" || !name) throw new Error(`${owner} must have a 'name' string`);
+    if (!Array.isArray(members) || members.length === 0) {
+      throw new Error(`${owner} must list its datasets: datasets: [<dataset name>, ...]`);
+    }
+    if (new Set(members).size !== members.length) throw new Error(`${owner} lists a dataset twice`);
+    return {
+      name,
+      datasets: members.map((member: unknown) => {
+        const dataset = typeof member === "string" ? byName.get(member) : undefined;
+        if (!dataset) {
+          throw new Error(
+            `${owner}: unknown dataset ${JSON.stringify(member)} (datasets: ${[...byName.keys()].join(", ")})`,
+          );
+        }
+        return dataset;
+      }),
+    };
+  });
+  const listed = new Set(collections.flatMap((c) => c.datasets));
+  const rest = datasets.filter((dataset) => !listed.has(dataset));
+  if (rest.length > 0) collections.push({ name: implicitName, datasets: rest });
+  const names = collections.map((c) => c.name);
+  const duplicate = names.find((name, i) => names.indexOf(name) !== i);
+  if (duplicate !== undefined) {
+    throw new Error(
+      duplicate === implicitName && rest.length > 0
+        ? `Collection '${duplicate}' clashes with the implicit collection of datasets in no collection (${rest.map((d) => d.name).join(", ")})`
+        : `Collection '${duplicate}' is defined twice`,
+    );
+  }
+  return collections;
 }
 
 function parseAliasedString(

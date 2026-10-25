@@ -58,10 +58,11 @@ A single `.yaml` / `.yml` path is parsed as a multi-dataset project config (see 
 | `--obs-columns <list>` | string  | all columns | Comma-separated subset of obs columns to load                                         |
 | `--preset <name>`      | string  | `exploration` | Preset a new workspace file starts from: `exploration` or a `.json` workspace document |
 | `--workspace <file>`   | path    | see below   | Workspace document to open and save                                                   |
+| `--collection <name>`  | string  | the first   | Collection of a YAML project to open ([collections](/project-config#collections))     |
 
 ### Workspace file
 
-The running server owns one workspace document: named data sources, the dashboard spec, and coordination state. Every edit, from the browser or from `ndea workspace patch`, is saved to the workspace file as a new revision. Without `--workspace`, ndea uses `~/.ndea/workspaces/<key>.json`, where the key is derived from the dataset paths, so opening the same datasets reopens the same workspace. A missing file is written from the preset as revision 1, before any browser opens. A preset is itself a workspace document: `--preset annotate` uses the built-in one, and `--preset my-layout.json` copies any valid document, such as the `document` field printed by `ndea workspace get`. A file or preset that fails validation stops `ndea view` before any data loads and lists each problem by JSON Pointer; ndea never rewrites or migrates it.
+The running server owns one workspace document: named data sources, named layouts (each a dashboard spec; one is active), and coordination state. Every edit, from the browser or from `ndea workspace patch`, is saved to the workspace file as a new revision. Without `--workspace`, ndea uses `~/.ndea/workspaces/<key>.json`, where the key is derived from the dataset paths, so opening the same datasets reopens the same workspace. A missing file is written from the preset as revision 1, before any browser opens. A preset is itself a workspace document: `--preset exploration` uses the built-in one (two layouts, Exploration and Review), and `--preset my-layout.json` copies any valid document, such as the `document` field printed by `ndea workspace get`. A file or preset that fails validation stops `ndea view` before any data loads and lists each problem by JSON Pointer; ndea never rewrites or migrates it. A workspace file of another format version (files written before format 3) is refused the same way; delete it and the preset seeds a new one.
 
 `--port` accepts integers in `[1, 65535]`.
 
@@ -165,7 +166,7 @@ A flag beats its environment variable, which beats the default. `ndea mcp check`
 
 ```bash
 ndea workspace get
-ndea workspace patch --revision 3 --ops '[{"op":"replace","path":"/spec/elements/root/props/ratio","value":0.6}]'
+ndea workspace patch --revision 3 --ops '[{"op":"replace","path":"/layouts/exploration/spec/elements/root/props/ratio","value":0.6}]'
 ```
 
 `get` prints `{ "revision", "document" }`. `patch` applies [RFC 6902](https://www.rfc-editor.org/rfc/rfc6902) operations to the document at `--revision` and prints the new `{ "revision" }`. Read the revision with `get` first.
@@ -218,7 +219,7 @@ Workspace patches reject unknown set references anywhere in the document. Startu
 
 ### The dashboard
 
-`/spec` is a [json-render](https://json-render.dev) flat spec: `{ "root", "elements" }`, where every element has a `type`, `props`, and `children` (element ids). Every element is reachable from `root` exactly once.
+`/layouts` maps layout ids to `{ "name", "spec" }`, and `/layout` is the id of the layout the browser shows. Each `spec` is a [json-render](https://json-render.dev) flat spec: `{ "root", "elements" }`, where every element has a `type`, `props`, and `children` (element ids). Every element is reachable from its layout's `root` exactly once, and element ids are unique across all layouts. `/data` and `/state` are shared by every layout.
 
 | Type                                                                                                    | Props                                                                                             | Children    |
 | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ----------- |
@@ -226,6 +227,7 @@ Workspace patches reject unknown set references anywhere in the document. Startu
 | `stack`                                                                                                 | `direction`, `gap` (px)                                                                           | any number  |
 | `text`                                                                                                  | `text` (a string or `{"$template": "…${/focus/A}"}`), `variant` (`heading`, `body`, `muted`)      | none        |
 | `select`                                                                                                | `column`, optional `label`; picking values publishes `{"op":"in"}` into its filter scope          | none        |
+| `tabs`                                                                                                  | `active`: the id of the child the tile shows                                                      | one or more views |
 | `slot`                                                                                                  | none: an empty tile                                                                               | none        |
 | `scatter`, `table`, `count`, `count-plot`, `histogram`, `vgplot`, `gallery`, `image-viewer` | the view's own settings, such as `columns` and `groupBy` for `table` or `entries` and `attributes` for `vgplot` | none        |
 
@@ -237,13 +239,13 @@ Every component that reads observations also accepts `data` (the name of a data 
 # A data source, and a metric reading it beside the scatter plot's tile.
 ndea workspace patch --revision 7 --ops '[
   {"op":"add","path":"/data/infected","value":{"where":{"op":"eq","column":"predicted_infection_state","value":"infected"}}},
-  {"op":"add","path":"/spec/elements/n-inf","value":{"type":"count","props":{"title":"Infected","data":"infected"},"children":[]}},
-  {"op":"add","path":"/spec/elements/top","value":{"type":"split","props":{"direction":"column","ratio":0.2},"children":["n-inf","scatter"]}},
-  {"op":"replace","path":"/spec/elements/root/children/0","value":"top"}
+  {"op":"add","path":"/layouts/exploration/spec/elements/n-inf","value":{"type":"count","props":{"title":"Infected","data":"infected"},"children":[]}},
+  {"op":"add","path":"/layouts/exploration/spec/elements/left","value":{"type":"split","props":{"direction":"column","ratio":0.2},"children":["n-inf","embedding"]}},
+  {"op":"replace","path":"/layouts/exploration/spec/elements/top/children/0","value":"left"}
 ]'
 ```
 
-A patch is rejected with the offending pointer when it leaves an element unreachable, gives a split other than two children, names an unknown component or data source, or sets a prop the component's schema refuses, for example `/spec/elements/table/props/columns`.
+A view on its own is a tile with one tab; a `tabs` element is a tile with several. A patch is rejected with the offending pointer when it leaves an element unreachable, gives a split other than two children, puts anything but views in `tabs` or names a missing `active` tab, reuses an element id from another layout, names an unknown component or data source, or sets a prop the component's schema refuses, for example `/layouts/exploration/spec/elements/table/props/columns`. MCP `edit_dashboard` has named ops for layouts and tabs, so agents rarely need these paths.
 
 ### Linking views
 
@@ -252,7 +254,7 @@ Elements link through coordination state, so an agent links and drives them with
 ```bash
 # Put the metric in filter scope A (the scope must exist in state first).
 ndea workspace patch --revision 8 --ops '[
-  {"op":"add","path":"/spec/elements/n-inf/props/filter","value":{"$bindState":"/filter/A"}}
+  {"op":"add","path":"/layouts/exploration/spec/elements/n-inf/props/filter","value":{"$bindState":"/filter/A"}}
 ]'
 # Filter every member of scope A to infected cells, as the source "agent".
 ndea workspace patch --revision 9 --ops '[
@@ -283,11 +285,12 @@ Agent writes appear in workspace history as `mcp` with the `X-Ndea-Agent` name (
 
 | Tool                     | Does                                                                                                                                                    |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `get_workspace`          | The whole document: data sources, dashboard spec, and coordination state, with its revision                                                             |
+| `get_workspace`          | The whole document: data sources, layouts (each a dashboard spec) and the active one, and coordination state, with its revision                       |
 | `list_components`        | Every component with its description, children rule, whether it reads data, the scopes it can bind, defaults, and JSON Schema                           |
 | `list_columns`           | Observation columns with their types and kind (obs, var, annotation); pass `column` for distinct count, range, and its most frequent values             |
+| `list_collections`       | The project's collections (each with its datasets and obs counts) and the open one                                                                      |
 | `get_result`             | One element's or data source's predicate and exact count                                                                                                |
-| `edit_dashboard`         | Named ops: `set_data`, `remove_data`, `add` (into a slot, a stack, or beside an element), `set_props`, `remove`, `swap`, `bind`, `unbind`, `set_filter` |
+| `edit_dashboard`         | Named ops: `set_data`, `remove_data`, `add` (into a slot, a stack, or beside an element, in any layout), `set_props`, `remove`, `swap`, `bind`, `unbind`, `set_filter`; tabs: `add_tab`, `move_tab`, `close_tab`, `set_active_tab`; layouts: `add_layout` (blank or a copy), `rename_layout`, `remove_layout`, `set_active_layout` |
 | `patch_workspace`        | Raw RFC 6902 ops at an exact revision, for anything the named ops do not cover                                                                          |
 | `get_history`            | Recent revisions, newest first: who committed each (actor and agent), its ops, time, and `restoredFrom`                                                 |
 | `restore_revision`       | Commit an earlier revision's document as a new revision; `revision_base` applies only if the workspace is still at that revision                        |

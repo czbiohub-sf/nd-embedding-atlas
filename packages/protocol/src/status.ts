@@ -32,6 +32,14 @@ const DatasetStatusSchema = z.object({
   bytes: count.optional(),
 });
 
+/** A project collection: the datasets one server run can open together (`ndea view --collection`). */
+export const CollectionSummarySchema = z.object({
+  name: z.string(),
+  /** `nObs` from each store's metadata, read without an ingest. */
+  datasets: z.array(z.object({ name: z.string(), nObs: count })),
+});
+export type CollectionSummary = z.infer<typeof CollectionSummarySchema>;
+
 export const RuntimeStatusSchema = z.object({
   server: z.object({
     version: z.string(),
@@ -42,6 +50,9 @@ export const RuntimeStatusSchema = z.object({
     ingest: z.enum(["cached", "fresh", "uncached"]),
   }),
   datasets: z.array(DatasetStatusSchema),
+  /** The open collection's name; `datasets` are its members. */
+  collection: z.string(),
+  collections: z.array(CollectionSummarySchema),
   embeddings: z.object({
     available: z.array(z.string()),
     loading: z.array(z.string()),

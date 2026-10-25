@@ -10,7 +10,7 @@ import { cn } from "@ndea/ui/lib/utils";
 import { createContext, use, useState } from "react";
 
 import { COORDINATION_TYPE_IDS, type CoordinationState, type CoordinationTypeId } from "@/core/coordination/types";
-import { COMPONENTS, elementScope, type DashboardElement } from "./dashboard";
+import { allElements, COMPONENTS, elementScope, findElement, type DashboardElement } from "./dashboard";
 import type { WorkspaceDocument } from "./types";
 import { useWorkspace, useWorkspaceSelector } from "./workspace-context";
 
@@ -72,7 +72,7 @@ export interface Link {
 export function documentLinks(document: WorkspaceDocument, id?: string): Link[] {
   return COORDINATION_TYPE_IDS.flatMap((type) => {
     if (id === undefined) return Object.keys(document.state[type] ?? {}).map((scope) => ({ type, scope }));
-    const scope = elementScope(document.spec.elements[id], type);
+    const scope = elementScope(findElement(document, id), type);
     return scope === undefined ? [] : [{ type, scope }];
   });
 }
@@ -80,13 +80,13 @@ export function documentLinks(document: WorkspaceDocument, id?: string): Link[] 
 const UNLINK = "rounded-sm px-1.5 py-0.5 text-sm text-text-muted hover:bg-accent hover:text-foreground";
 
 /**
- * One link: dot, type and name, value, members. `unlink` set: one Unlink for
- * that view (popover); unset: Unlink per member (flyout).
+ * One link: dot, type and name, value, members (in every layout). `unlink`
+ * set: one Unlink for that view (popover); unset: Unlink per member (flyout).
  */
 export function LinkRow({ document, link, unlink }: { document: WorkspaceDocument; link: Link; unlink?: string }) {
   const ws = useWorkspace();
   const { type, scope } = link;
-  const members = Object.entries(document.spec.elements).filter(([, element]) => elementScope(element, type) === scope);
+  const members = allElements(document).filter(([, element]) => elementScope(element, type) === scope);
   const unbind = (id: string) => {
     ws.highlight([]);
     ws.apply([{ op: "unbind", id, type }]);
@@ -136,7 +136,7 @@ export function LinksIndicator({ id }: { id: string }) {
   const openLinks = use(OpenLinksContext);
   const [open, setOpen] = useState(false);
   const document = useWorkspaceSelector((w) => w.snapshot());
-  const element = document.spec.elements[id];
+  const element = findElement(document, id);
   if (!element) return null;
   const links = documentLinks(document, id);
   return (

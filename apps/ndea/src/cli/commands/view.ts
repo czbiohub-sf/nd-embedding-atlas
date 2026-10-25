@@ -48,6 +48,10 @@ export const viewFlags = [
     type: "string",
     description: "Workspace document file (default: ~/.ndea/workspaces/<datasets>.json)",
   }),
+  defineFlag("collection", {
+    type: "string",
+    description: "Collection of a YAML project to open (default: the first)",
+  }),
 ] as const;
 
 interface ViewInput {
@@ -61,6 +65,7 @@ interface ViewInput {
     "obs-columns"?: string;
     preset?: string;
     workspace?: string;
+    collection?: string;
   };
   signal: AbortSignal;
 }
@@ -78,6 +83,7 @@ export async function runView({ args, flags, signal }: ViewInput): Promise<void>
     obsColumns: parseObsColumns(flags["obs-columns"]),
     preset: flags.preset,
     workspace: flags.workspace,
+    collection: flags.collection,
   });
 
   // Ingest does not poll the signal, so Ctrl-C during startup exits here (130).

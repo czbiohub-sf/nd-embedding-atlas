@@ -1,31 +1,33 @@
 /**
- * The rail's flyout bodies, all read-only over real data: the current layout,
- * datasets and sources with exact obs counts, links (coordination scopes) and
- * their member views, harness presence, and settings.
+ * The rail's flyout bodies over real data: layouts (switch, add, rename, delete), collections
+ * (the open one's datasets toggle the dataset filter; another switches) and
+ * sources with exact obs counts, links (coordination scopes) and their member
+ * views, harness presence, and settings.
  */
 
 import { useQuery } from "@tanstack/react-query";
-import { CopyIcon } from "lucide-react";
+import { ChevronRightIcon, CopyIcon, PencilIcon, PlusIcon, Trash2Icon } from "lucide-react";
+import { useState } from "react";
 import { toast } from "sonner";
 
 import { filterClauseSql } from "@ndea/components/filter";
 import { setProvenanceBadges, useProvenanceBadges } from "@ndea/components/table";
+import { Button } from "@ndea/ui/components/button";
 import { IconButton } from "@ndea/ui/components/icon-button";
+import { Input } from "@ndea/ui/components/input";
 import { Switch } from "@ndea/ui/components/switch";
 import { ToggleGroup, ToggleGroupItem } from "@ndea/ui/components/toggle-group";
 import { cn } from "@ndea/ui/lib/utils";
 
-import type { Dashboard, DashboardElement } from "@/core/workspace/dashboard";
+import { activeSpec, freshId, type Dashboard, type DashboardElement } from "@/core/workspace/dashboard";
+import type { DashboardEdit } from "@/core/workspace/edits";
 import { documentLinks, elementTitle, LinkRow } from "@/core/workspace/LinksPopover";
 import { dataSourceSql, type DataSources } from "@/core/workspace/data-sources";
-import { useWorkspaceSelector } from "@/core/workspace/workspace-context";
-import { useDatasetSession } from "@/hooks/useDatasetSession";
-import { toRows } from "@/lib/mosaic-helpers";
+import { useWorkspace, useWorkspaceSelector } from "@/core/workspace/workspace-context";
 import { useTheme } from "@/ThemeProvider";
 import { LayoutWireframe } from "./LayoutWireframe";
+import { obs, totalObs, useCollections } from "./collections";
 import { isConnected, relativeTime, type HarnessAgent } from "./presence";
-
-const obs = (n: number) => `${n.toLocaleString("en-US")} obs`;
 
 function Heading({ children }: { children: React.ReactNode }) {
   return <div className="px-2 pt-3.5 pb-1 text-sm font-medium text-text-muted first:pt-1">{children}</div>;
@@ -41,24 +43,130 @@ function Muted({ children }: { children: React.ReactNode }) {
 
 /* ── Layouts ───────────────────────────────────────────────────────── */
 
-/** Leaves of the tile tree in reading order. */
+/** Views of the tile tree in reading order (every tab of a tabs tile). */
 function tiles(spec: Dashboard, id = spec.root): DashboardElement[] {
   const element = spec.elements[id];
   if (!element) return [];
-  if (element.type !== "split" && element.type !== "stack") return [element];
+  if (!["split", "stack", "tabs"].includes(element.type)) return [element];
   return element.children.flatMap((child) => tiles(spec, child));
 }
 
+const LAYOUT_ROW = "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-muted";
+
 export function LayoutsFlyout() {
-  const spec = useWorkspaceSelector((ws) => ws.snapshot().spec);
+  const ws = useWorkspace();
+  const layouts = useWorkspaceSelector((w) => w.snapshot().layouts);
+  const current = useWorkspaceSelector((w) => w.snapshot().layout);
+  const spec = useWorkspaceSelector((w) => activeSpec(w.snapshot()));
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const name = layouts[current]?.name ?? current;
+  const apply = (edits: DashboardEdit[]) => {
+    try {
+      ws.apply(edits);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : String(error));
+    }
+  };
+  /** Add a layout (blank, or a copy of `from`) and show it. */
+  const create = (layoutName: string, from?: string) => {
+    const id = freshId("layout", new Set(Object.keys(layouts)));
+    apply([
+      { op: "add_layout", id, name: layoutName, from },
+      { op: "set_active_layout", id },
+    ]);
+  };
+  const rename = (value: string) => {
+    setRenaming(null);
+    if (value.trim() && value.trim() !== name) apply([{ op: "rename_layout", id: current, name: value.trim() }]);
+  };
   const leaves = tiles(spec);
   return (
     <>
-      {/* ponytail: one layout until named layouts (G2) land. */}
+      <Heading>Layouts</Heading>
+      {Object.entries(layouts).map(([id, layout]) =>
+        id === current && renaming !== null ? (
+          <Row key={id}>
+            <LayoutWireframe spec={layout.spec} className="h-5 w-8 shrink-0" />
+            <Input
+              autoFocus
+              aria-label="Layout name"
+              value={renaming}
+              onChange={(e) => setRenaming(e.target.value)}
+              onBlur={() => rename(renaming)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") rename(renaming);
+                if (e.key === "Escape") {
+                  e.stopPropagation();
+                  setRenaming(null);
+                }
+              }}
+            />
+          </Row>
+        ) : (
+          <button
+            type="button"
+            key={id}
+            aria-current={id === current}
+            className={LAYOUT_ROW}
+            onClick={() => id !== current && apply([{ op: "set_active_layout", id }])}
+          >
+            <LayoutWireframe spec={layout.spec} className="h-5 w-8 shrink-0" />
+            <span className="min-w-0 flex-1 truncate">{layout.name}</span>
+            {id === current && (
+              <span className="flex shrink-0 items-center gap-1.5 text-sm text-text-muted">
+                <span className="size-1.5 rounded-full bg-primary" />
+                current
+              </span>
+            )}
+          </button>
+        ),
+      )}
+      <Heading>New from template</Heading>
+      <button type="button" className={LAYOUT_ROW} onClick={() => create(`Layout ${Object.keys(layouts).length + 1}`)}>
+        <PlusIcon className="size-3.5 shrink-0 text-text-muted" strokeWidth={1.5} />
+        <span className="min-w-0 flex-1 truncate">Blank</span>
+        <span className="text-sm text-text-muted">one empty tile</span>
+      </button>
+      {Object.entries(layouts).map(([id, layout]) => (
+        <button type="button" key={id} className={LAYOUT_ROW} onClick={() => create(`${layout.name} copy`, id)}>
+          <CopyIcon className="size-3.5 shrink-0 text-text-muted" strokeWidth={1.5} />
+          <span className="min-w-0 flex-1 truncate">Copy of {layout.name}</span>
+        </button>
+      ))}
       <Heading>Current layout</Heading>
-      <div className="mx-2 mb-1 rounded-md bg-muted p-1.5">
-        <LayoutWireframe spec={spec} className="aspect-[16/10] w-full" />
-      </div>
+      {deleting ? (
+        <Row>
+          <span className="min-w-0 flex-1 truncate">Delete “{name}”?</span>
+          <Button size="sm" variant="ghost" onClick={() => setDeleting(false)}>
+            Cancel
+          </Button>
+          <Button
+            size="sm"
+            variant="destructive"
+            onClick={() => {
+              setDeleting(false);
+              apply([{ op: "remove_layout", id: current }]);
+            }}
+          >
+            Delete
+          </Button>
+        </Row>
+      ) : (
+        <div className="flex flex-wrap gap-1 px-1">
+          <Button size="sm" variant="ghost" onClick={() => create(`${name} copy`, current)}>
+            <CopyIcon /> Duplicate
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setRenaming(name)}>
+            <PencilIcon /> Rename
+          </Button>
+          {Object.keys(layouts).length > 1 && (
+            <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setDeleting(true)}>
+              <Trash2Icon /> Delete
+            </Button>
+          )}
+        </div>
+      )}
       <Heading>Views</Heading>
       {leaves.map((element, index) =>
         element.type === "slot" ? (
@@ -87,33 +195,67 @@ function Count({ value, error }: { value: number | undefined; error: Error | nul
   );
 }
 
-function Datasets() {
-  const { state, runtime } = useDatasetSession();
-  const { coordinator, table } = runtime;
-  const keys = state.metadata.dataset_keys ?? [];
-  const names = keys.length > 0 ? keys : [table];
-  const counts = useQuery({
-    queryKey: ["shell", "dataset-counts", table, names],
-    queryFn: async (): Promise<Record<string, number>> => {
-      if (names.length === 1) {
-        const [row] = toRows<{ n: number }>(await coordinator.query(`SELECT COUNT(*)::INT AS n FROM ${table}`));
-        return { [names[0]]: row?.n ?? 0 };
-      }
-      const rows = toRows<{ name: unknown; n: number }>(
-        await coordinator.query(`SELECT _dataset AS name, COUNT(*)::INT AS n FROM ${table} GROUP BY _dataset`),
-      );
-      return Object.fromEntries(rows.map((row) => [String(row.name), row.n]));
-    },
-  });
+function Collections() {
+  const { collections, open, included, setIncluded, toggle, requestSwitch } = useCollections();
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set(open ? [open.name] : []));
+  const flip = (name: string) =>
+    setExpanded((set) => {
+      const next = new Set(set);
+      if (!next.delete(name)) next.add(name);
+      return next;
+    });
   return (
     <>
-      <Heading>Datasets</Heading>
-      {names.map((name) => (
-        <Row key={name}>
-          <span className="min-w-0 flex-1 truncate font-mono text-ui-sm font-medium">{name}</span>
-          <Count value={counts.data?.[name]} error={counts.error} />
-        </Row>
-      ))}
+      <Heading>{collections.length === 1 ? "Collection" : "Collections"}</Heading>
+      {collections.map((c) => {
+        const isOpen = c === open;
+        const filterable = isOpen && c.datasets.length > 1;
+        return (
+          <div key={c.name}>
+            <Row className="items-start py-1 pl-0.5">
+              <IconButton label={expanded.has(c.name) ? "Collapse" : "Expand"} onClick={() => flip(c.name)}>
+                <ChevronRightIcon className={cn("transition-transform", expanded.has(c.name) && "rotate-90")} />
+              </IconButton>
+              <div className="min-w-0 flex-1">
+                <div className="truncate font-medium">{c.name}</div>
+                <div className="truncate font-mono text-xs text-text-muted tabular-nums">
+                  {isOpen && "open · "}
+                  {c.datasets.length} {c.datasets.length === 1 ? "dataset" : "datasets"} · {obs(totalObs(c))}
+                </div>
+              </div>
+              {!isOpen && (
+                <Button size="xs" variant="outline" onClick={() => requestSwitch(c.name)}>
+                  Switch
+                </Button>
+              )}
+            </Row>
+            {expanded.has(c.name) &&
+              c.datasets.map((d) => (
+                <Row key={d.name} className="pl-8">
+                  {filterable && (
+                    <Switch
+                      aria-label={`Include ${d.name}`}
+                      checked={included === null || included.has(d.name)}
+                      onCheckedChange={() => toggle(d.name)}
+                    />
+                  )}
+                  <span
+                    className={cn("min-w-0 flex-1 truncate font-mono text-ui-sm", !isOpen && "text-text-muted")}
+                    title={d.name}
+                  >
+                    {d.name}
+                  </span>
+                  <span className="shrink-0 font-mono text-xs text-text-muted tabular-nums">{obs(d.nObs)}</span>
+                </Row>
+              ))}
+            {filterable && included !== null && expanded.has(c.name) && (
+              <Button size="xs" variant="link" className="ml-8" onClick={() => setIncluded(null)}>
+                Include all datasets
+              </Button>
+            )}
+          </div>
+        );
+      })}
     </>
   );
 }
@@ -153,7 +295,7 @@ export function DataFlyout() {
   const names = Object.keys(data);
   return (
     <>
-      <Datasets />
+      <Collections />
       <Heading>Sources</Heading>
       {names.length === 0 ? (
         <Muted>No sources. Views read every obs.</Muted>

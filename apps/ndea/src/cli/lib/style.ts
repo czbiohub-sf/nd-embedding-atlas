@@ -10,6 +10,7 @@ import { defineExtension, defineExtensionId } from "@crustjs/core";
 import { spinner } from "@crustjs/progress";
 import { bold, dim, fg, link, style } from "@crustjs/style";
 import type { StyleFn } from "@crustjs/style";
+import { consoleMuted } from "../../server/status.ts";
 
 const color =
   (hex: string): StyleFn =>
@@ -40,9 +41,11 @@ export const url = (href: string): string => (style.colorsEnabled ? link(accent(
 /**
  * Run `work` behind a spinner on stdout, beside the rest of the output. The
  * final line is `✓ <last message>` (or `✗` when `work` throws); a non-TTY
- * stdout (pipes, CI, agents) gets only that line, with no animation.
+ * stdout (pipes, CI, agents) gets only that line, with no animation. While the
+ * status TUI is up (a collection switch), `work` runs without one.
  */
 export function task<T>(message: string, work: (update: (message: string) => void) => Promise<T>): Promise<T> {
+  if (consoleMuted()) return work(() => {});
   return spinner({
     message,
     sink: process.stdout,

@@ -146,8 +146,8 @@ export interface ServerSession {
   /** The session's one authoritative workspace document and its history. */
   workspace: Workspace;
   observationSets: ObservationSets;
-  /** Startup facts `getRuntimeStatus` reports, built once with the session; `bytes` arrives later. */
-  status: Pick<RuntimeStatus["server"], "ingest"> & { datasets: RuntimeStatus["datasets"] };
+  /** Startup facts `getRuntimeStatus` and metadata report, built once with the session; `bytes` arrives later. */
+  status: Pick<RuntimeStatus["server"], "ingest"> & Pick<RuntimeStatus, "datasets" | "collection" | "collections">;
 }
 
 /**
@@ -172,7 +172,7 @@ export function createServerSession({
     obsmLoaders: new Map(),
     cropPool: null,
     annotationsSidecarPath: null,
-    status: { ingest: "uncached", datasets: [] },
+    status: { ingest: "uncached", datasets: [], collection: "", collections: [] },
     ...overrides,
     workspace: overrides.workspace ?? Workspace.memory(undefined, { validate: (doc) => workspaceIssues(doc, session) }),
     observationSets: new ObservationSets(store, observationSetsDirectory),

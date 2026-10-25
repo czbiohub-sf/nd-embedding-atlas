@@ -55,6 +55,19 @@ export function DatasetSessionProvider({ children }: Props) {
   });
   const metadata = metadataQuery.data ?? null;
 
+  // A collection switch (from any tab) replaces the server session: reload onto the new one.
+  const collection = metadata?.collection;
+  useEffect(() => {
+    if (collection === undefined) return;
+    let sub: { unsubscribe(): void };
+    // The socket reconnects on its own; subscribe again after a drop.
+    const open = () => {
+      sub = wsClient.subscribe("session/watch", {}, (msg) => msg.collection !== collection && location.reload(), open);
+    };
+    open();
+    return () => sub.unsubscribe();
+  }, [collection]);
+
   // Trajectory state: per-dataset, keyed by datasetKey (empty string for single-dataset mode)
   const [trajectories, setTrajectoriesState] = useState<Record<string, TrajectoryData | null>>({});
 

@@ -2,7 +2,7 @@
 
 import { cn } from "@ndea/ui/lib/utils";
 
-import { componentProps, type Dashboard, type DashboardElement } from "@/core/workspace/dashboard";
+import { componentProps, type Dashboard } from "@/core/workspace/dashboard";
 import { elementTitle } from "@/core/workspace/LinksPopover";
 
 /** Ids of the tile tree's leaves in reading order. */
@@ -14,10 +14,15 @@ export function layoutTiles(spec: Dashboard, id = spec.root): string[] {
   return element.children.flatMap((child) => layoutTiles(spec, child));
 }
 
-/** The name a tile shows in previews: its view's title, or "Empty tile". */
+/** The name a tile shows in previews: its views' titles (a tabs tile lists every tab), or "Empty tile". */
 // eslint-disable-next-line react/only-export-components
-export const tileTitle = (element: DashboardElement): string =>
-  element.type === "slot" ? "Empty tile" : elementTitle(element);
+export function tileTitle(spec: Dashboard, id: string): string {
+  const element = spec.elements[id];
+  if (!element) return id;
+  if (element.type === "slot") return "Empty tile";
+  if (element.type !== "tabs") return elementTitle(element);
+  return element.children.map((child) => tileTitle(spec, child)).join(" · ");
+}
 
 function Cell({ spec, id, grow, labeled }: { spec: Dashboard; id: string; grow: number; labeled: boolean }) {
   const element = spec.elements[id];
@@ -32,7 +37,7 @@ function Cell({ spec, id, grow, labeled }: { spec: Dashboard; id: string; grow: 
         )}
       >
         {labeled && element && (
-          <span className="truncate px-1 pb-0.5 text-2xs text-text-muted">{tileTitle(element)}</span>
+          <span className="truncate px-1 pb-0.5 text-2xs text-text-muted">{tileTitle(spec, id)}</span>
         )}
       </span>
     );

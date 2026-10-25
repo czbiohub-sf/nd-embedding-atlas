@@ -1,8 +1,9 @@
 /**
- * The dashboard: a json-render flat spec `{ root, elements }` that composes the
- * whole workspace UI. Every element is one component: layout (`split`,
- * `stack`), content (`text`), controls (`select`), an empty `slot`, or a view
- * (`scatter`, `table`, `vgplot`, …) whose props are its configuration.
+ * The dashboard: named layouts, each a json-render flat spec `{ root, elements }`
+ * that composes the whole workspace UI. Every element is one component: layout
+ * (`split`, `stack`), a tile's `tabs`, content (`text`), controls (`select`), an
+ * empty `slot`, or a view (`scatter`, `table`, `vgplot`, …) whose props are its
+ * configuration. Element ids are unique across every layout of the workspace.
  *
  * Props every data component shares:
  * - `data`: the named data source it reads (see `data-sources.ts`); omitted
@@ -59,6 +60,18 @@ export const dashboardSchema = z
 
 export type DashboardElement = z.infer<typeof elementSchema>;
 export type Dashboard = z.infer<typeof dashboardSchema>;
+
+export const layoutsSchema = z.record(
+  z.string().regex(ELEMENT_ID, "layout ids use letters, digits, _ and -"),
+  z.object({ name: z.string().trim().min(1).max(64), spec: dashboardSchema }).strict(),
+);
+export type Layouts = z.infer<typeof layoutsSchema>;
+
+/** The document fields layouts live in: every layout and the active one's id. */
+export interface LayoutDocument {
+  readonly layouts: Layouts;
+  readonly layout: string;
+}
 
 /** A literal string, or a json-render expression resolved against coordination state. */
 const textSchema = z.union([
@@ -127,6 +140,16 @@ const BUILTIN_COMPONENTS: Record<string, ComponentInfo> = {
     binds: ["filter"],
     view: false,
   },
+  tabs: {
+    title: "Tabs",
+    description: "A tile holding several views as tabs; `active` is the id of the child it shows.",
+    props: z.object({ active: z.string().min(1) }).strict(),
+    defaults: {},
+    children: "any",
+    reads: false,
+    binds: [],
+    view: false,
+  },
   slot: {
     title: "Empty tile",
     description: "An empty tile the user fills with a component.",
@@ -177,7 +200,9 @@ export const COMPONENTS: Readonly<Record<string, ComponentInfo>> = Object.freeze
  * defaults (`text` needs text, `select` a column; agents add those with props).
  */
 export const EMPTY_TILE_CHOICES: readonly string[] = Object.entries(COMPONENTS)
-  .filter(([type, info]) => !["split", "stack", "slot"].includes(type) && info.props.safeParse(info.defaults).success)
+  .filter(
+    ([type, info]) => !["split", "stack", "tabs", "slot"].includes(type) && info.props.safeParse(info.defaults).success,
+  )
   .map(([type]) => type);
 
 const COMMON_PROPS = new Set<string>(["data", "title", ...COORDINATION_TYPE_IDS]);
@@ -201,12 +226,11 @@ export function elementData(element: DashboardElement | undefined): string | und
   return typeof data === "string" ? data : undefined;
 }
 
-const at = (id: string, ...rest: string[]) => ["spec", "elements", id, ...rest];
-
-/** Every rule the element schema cannot express, as `[path, message]` pairs. */
-export function dashboardIssues(dashboard: Dashboard, data: DataSources): [string[], string][] {
+/** Every rule the element schema cannot express for one layout's spec at `base`, as `[path, message]` pairs. */
+export function dashboardIssues(dashboard: Dashboard, data: DataSources, base: string[]): [string[], string][] {
+  const at = (id: string, ...rest: string[]) => [...base, "elements", id, ...rest];
   const issues: [string[], string][] = [];
-  if (!dashboard.elements[dashboard.root]) return [[["spec", "root"], `unknown element "${dashboard.root}"`]];
+  if (!dashboard.elements[dashboard.root]) return [[[...base, "root"], `unknown element "${dashboard.root}"`]];
   const seen = new Set<string>();
   const visit = (id: string, path: string[]) => {
     const element = dashboard.elements[id];
@@ -215,7 +239,7 @@ export function dashboardIssues(dashboard: Dashboard, data: DataSources): [strin
     seen.add(id);
     element.children.forEach((child, index) => visit(child, at(id, "children", String(index))));
   };
-  visit(dashboard.root, ["spec", "root"]);
+  visit(dashboard.root, [...base, "root"]);
 
   for (const [id, element] of Object.entries(dashboard.elements)) {
     if (!seen.has(id)) issues.push([at(id), "unreachable from root"]);
@@ -230,6 +254,19 @@ export function dashboardIssues(dashboard: Dashboard, data: DataSources): [strin
     const count = element.children.length;
     if (info.children === "two" && count !== 2) issues.push([at(id, "children"), `${element.type} takes 2 children`]);
     if (info.children === "none" && count !== 0) issues.push([at(id, "children"), `${element.type} takes no children`]);
+    if (element.type === "tabs") {
+      if (count === 0) issues.push([at(id, "children"), "tabs takes at least one child"]);
+      element.children.forEach((child, index) => {
+        const type = dashboard.elements[child]?.type;
+        if (type !== undefined && !COMPONENTS[type]?.view) {
+          issues.push([at(id, "children", String(index)), `tabs hold views; "${child}" is a ${type}`]);
+        }
+      });
+      const active = element.props.active;
+      if (typeof active === "string" && !element.children.includes(active)) {
+        issues.push([at(id, "props", "active"), `"${active}" is not one of its tabs`]);
+      }
+    }
 
     const parsed = info.props.safeParse(componentProps(element));
     if (!parsed.success) {
@@ -259,13 +296,79 @@ export function dashboardIssues(dashboard: Dashboard, data: DataSources): [strin
   return issues;
 }
 
+/** Missing or unknown active layout, every layout's spec, and element ids used by two layouts. */
+export function layoutIssues(doc: LayoutDocument, data: DataSources): [string[], string][] {
+  const issues: [string[], string][] = [];
+  if (Object.keys(doc.layouts).length === 0) issues.push([["layouts"], "a workspace has at least one layout"]);
+  else if (!Object.hasOwn(doc.layouts, doc.layout)) issues.push([["layout"], `unknown layout "${doc.layout}"`]);
+  const owner = new Map<string, string>();
+  for (const [layout, { spec }] of Object.entries(doc.layouts)) {
+    issues.push(...dashboardIssues(spec, data, ["layouts", layout, "spec"]));
+    for (const id of Object.keys(spec.elements)) {
+      const first = owner.get(id);
+      if (first === undefined) owner.set(id, layout);
+      else {
+        issues.push([
+          ["layouts", layout, "spec", "elements", id],
+          `element id "${id}" is also in layout "${first}"; ids are unique across layouts`,
+        ]);
+      }
+    }
+  }
+  return issues;
+}
+
+/* ── layout lookups ────────────────────────────────────────────────── */
+
+/** The active layout's spec. */
+export function activeSpec(doc: LayoutDocument): Dashboard {
+  return doc.layouts[doc.layout].spec;
+}
+
+/** The id of the layout holding element `id`. */
+export function layoutOf(doc: LayoutDocument, id: string): string | undefined {
+  return Object.keys(doc.layouts).find((layout) => Object.hasOwn(doc.layouts[layout].spec.elements, id));
+}
+
+/** An element of any layout. */
+export function findElement(doc: LayoutDocument, id: string): DashboardElement | undefined {
+  const layout = layoutOf(doc, id);
+  return layout === undefined ? undefined : doc.layouts[layout].spec.elements[id];
+}
+
+/** Every element of every layout. */
+export function allElements(doc: LayoutDocument): [string, DashboardElement][] {
+  return Object.values(doc.layouts).flatMap(({ spec }) => Object.entries(spec.elements));
+}
+
+/** Every element id in the workspace: what a fresh id must avoid. */
+export function takenIds(doc: LayoutDocument): Set<string> {
+  return new Set(allElements(doc).map(([id]) => id));
+}
+
+/** The view a tile shows: a `tabs` tile's active tab, or a view leaf itself. */
+export function tileView(spec: Dashboard, tile: string): string | undefined {
+  const element = spec.elements[tile];
+  if (element?.type === "tabs") return element.props.active as string;
+  return element && COMPONENTS[element.type]?.view ? tile : undefined;
+}
+
 /* ── operations: pure edits the dashboard UI and agents share ──────────── */
 
-export function freshElementId(dashboard: Dashboard, prefix: string): string {
+const NO_IDS: ReadonlySet<string> = new Set();
+const SLOT: DashboardElement = { type: "slot", props: {}, children: [] };
+
+/** `<prefix>-<n>`, not in `taken`: a fresh element or layout id. */
+export function freshId(prefix: string, taken: { has(id: string): boolean }): string {
   for (let n = 1; ; n += 1) {
     const id = `${prefix}-${n}`;
-    if (!dashboard.elements[id]) return id;
+    if (!taken.has(id)) return id;
   }
+}
+
+/** A fresh element id: free in `dashboard` and in `reserved` (the other layouts' ids). */
+export function freshElementId(dashboard: Dashboard, prefix: string, reserved: ReadonlySet<string> = NO_IDS): string {
+  return freshId(prefix, { has: (id) => Object.hasOwn(dashboard.elements, id) || reserved.has(id) });
 }
 
 export function parentOf(dashboard: Dashboard, id: string): string | undefined {
@@ -295,20 +398,19 @@ function subtree(dashboard: Dashboard, id: string): string[] {
 
 /**
  * Remove an element and its subtree. A `split` parent collapses into the
- * sibling; a removed root leaves an empty slot.
+ * sibling; a tab leaves its `tabs` (see `closeTab`); a removed root leaves an
+ * empty slot.
  */
-export function removeElement(dashboard: Dashboard, id: string): Dashboard {
+export function removeElement(dashboard: Dashboard, id: string, reserved: ReadonlySet<string> = NO_IDS): Dashboard {
   if (!dashboard.elements[id]) return dashboard;
   const removed = subtree(dashboard, id);
   if (dashboard.root === id) {
-    const slot = freshElementId(withoutElements(dashboard, removed), "slot");
-    return {
-      root: slot,
-      elements: { ...withoutElements(dashboard, removed).elements, [slot]: { type: "slot", props: {}, children: [] } },
-    };
+    const slot = freshElementId(withoutElements(dashboard, removed), "slot", reserved);
+    return { root: slot, elements: { ...withoutElements(dashboard, removed).elements, [slot]: SLOT } };
   }
   const parent = parentOf(dashboard, id)!;
   const parentElement = dashboard.elements[parent];
+  if (parentElement.type === "tabs") return withoutElements(vacate(dashboard, id, reserved), removed);
   if (parentElement.type === "split") {
     const sibling = parentElement.children.find((child) => child !== id)!;
     return withoutElements(relink(dashboard, parent, sibling), [parent, ...removed]);
@@ -324,10 +426,15 @@ export function removeElement(dashboard: Dashboard, id: string): Dashboard {
 }
 
 /** Split an element; the new empty slot sits on `side`. Returns the dashboard and the slot id. */
-export function splitElement(dashboard: Dashboard, id: string, side: SplitSide): [Dashboard, string | null] {
+export function splitElement(
+  dashboard: Dashboard,
+  id: string,
+  side: SplitSide,
+  reserved: ReadonlySet<string> = NO_IDS,
+): [Dashboard, string | null] {
   if (!dashboard.elements[id]) return [dashboard, null];
-  const slot = freshElementId(dashboard, "slot");
-  const split = freshElementId(dashboard, "split");
+  const slot = freshElementId(dashboard, "slot", reserved);
+  const split = freshElementId(dashboard, "split", reserved);
   const direction = side === "left" || side === "right" ? "row" : "column";
   const children = side === "left" || side === "up" ? [slot, id] : [id, slot];
   const linked = relink(dashboard, id, split);
@@ -336,7 +443,7 @@ export function splitElement(dashboard: Dashboard, id: string, side: SplitSide):
       ...linked,
       elements: {
         ...linked.elements,
-        [slot]: { type: "slot", props: {}, children: [] },
+        [slot]: SLOT,
         [split]: { type: "split", props: { direction, ratio: 0.5 }, children },
       },
     },
@@ -344,15 +451,12 @@ export function splitElement(dashboard: Dashboard, id: string, side: SplitSide):
   ];
 }
 
-/** Replace a slot with a new component element (same id). */
-export function fillSlot(
-  dashboard: Dashboard,
-  slot: string,
-  type: string,
-  props: Record<string, JsonValue>,
-): Dashboard {
-  if (dashboard.elements[slot]?.type !== "slot") return dashboard;
-  return { ...dashboard, elements: { ...dashboard.elements, [slot]: { type, props, children: [] } } };
+/** Props a view starts with in a tile: bound to filter A and focus A when it can bind them. */
+export function tileProps(type: string): Record<string, JsonValue> {
+  const props: Record<string, JsonValue> = {};
+  if (COMPONENTS[type]?.binds.includes("filter")) props.filter = { $bindState: "/filter/A" };
+  if (COMPONENTS[type]?.binds.includes("focus")) props.focus = { $bindState: "/focus/A" };
+  return props;
 }
 
 /** Exchange two elements' places in the tree. */
@@ -378,7 +482,108 @@ export function setElementProps(dashboard: Dashboard, id: string, patch: Record<
   return { ...dashboard, elements: { ...dashboard.elements, [id]: { ...element, props } } };
 }
 
+/**
+ * Take a view out of its tile; its element stays in `elements`, detached. A
+ * tab leaves its `tabs` (the neighbour becomes active); the last tab, or a
+ * bare view leaf, leaves an empty tile.
+ */
+function vacate(dashboard: Dashboard, id: string, reserved: ReadonlySet<string>): Dashboard {
+  const parent = parentOf(dashboard, id);
+  const tabs = parent === undefined ? undefined : dashboard.elements[parent];
+  if (parent !== undefined && tabs?.type === "tabs" && tabs.children.length > 1) {
+    const index = tabs.children.indexOf(id);
+    const children = tabs.children.toSpliced(index, 1);
+    const active = tabs.props.active === id ? children[Math.max(0, index - 1)] : tabs.props.active;
+    return {
+      ...dashboard,
+      elements: { ...dashboard.elements, [parent]: { ...tabs, props: { ...tabs.props, active }, children } },
+    };
+  }
+  const place = tabs?.type === "tabs" ? parent! : id;
+  const slot = freshElementId(dashboard, "slot", reserved);
+  const linked = relink(dashboard, place, slot);
+  const elements = { ...linked.elements, [slot]: SLOT };
+  if (place !== id) delete elements[place];
+  return { ...linked, elements };
+}
+
+/** Close a tab (or a bare view leaf): its element goes; the last tab leaves an empty tile. */
+export function closeTab(dashboard: Dashboard, id: string, reserved: ReadonlySet<string> = NO_IDS): Dashboard {
+  if (!dashboard.elements[id]) return dashboard;
+  return withoutElements(vacate(dashboard, id, reserved), [id]);
+}
+
+/**
+ * Put the detached view `id` (already in `elements`) into tile `to` at `index`
+ * and make it active: a `tabs` tile takes it as a tab, a bare view leaf is
+ * wrapped in a new `tabs`, and an empty slot is replaced by it.
+ */
+export function insertTab(
+  dashboard: Dashboard,
+  id: string,
+  to: string,
+  index: number | undefined,
+  reserved: ReadonlySet<string> = NO_IDS,
+): Dashboard {
+  const target = dashboard.elements[to];
+  if (!target) return dashboard;
+  if (target.type === "slot") {
+    return withoutElements(relink(dashboard, to, id), [to]);
+  }
+  if (target.type === "tabs") {
+    const children = target.children.toSpliced(index ?? target.children.length, 0, id);
+    return {
+      ...dashboard,
+      elements: { ...dashboard.elements, [to]: { ...target, props: { ...target.props, active: id }, children } },
+    };
+  }
+  const tabs = freshElementId(dashboard, "tabs", reserved);
+  const linked = relink(dashboard, to, tabs);
+  const children = [to].toSpliced(index ?? 1, 0, id);
+  return { ...linked, elements: { ...linked.elements, [tabs]: { type: "tabs", props: { active: id }, children } } };
+}
+
+/** Move view `id` into tile `to` (see `insertTab`); within its own `tabs` it reorders. Same layout only. */
+export function moveTab(
+  dashboard: Dashboard,
+  id: string,
+  to: string,
+  index: number | undefined,
+  reserved: ReadonlySet<string> = NO_IDS,
+): Dashboard {
+  const parent = parentOf(dashboard, id);
+  if (parent === to) {
+    const tabs = dashboard.elements[to];
+    const rest = tabs.children.filter((child) => child !== id);
+    const children = rest.toSpliced(index ?? rest.length, 0, id);
+    return { ...dashboard, elements: { ...dashboard.elements, [to]: { ...tabs, props: { active: id }, children } } };
+  }
+  return insertTab(vacate(dashboard, id, reserved), id, to, index, reserved);
+}
+
 /** A one-slot dashboard: the base an agent or user builds from. */
-export function emptyDashboard(): Dashboard {
-  return { root: "slot-1", elements: { "slot-1": { type: "slot", props: {}, children: [] } } };
+export function emptyDashboard(slot = "slot-1"): Dashboard {
+  return { root: slot, elements: { [slot]: SLOT } };
+}
+
+/**
+ * A copy of `spec` with every element renamed `<type>-<n>`, free of
+ * `reserved`: a duplicated layout never shares an id with its source.
+ */
+export function renameElements(spec: Dashboard, reserved: ReadonlySet<string>): Dashboard {
+  const taken = new Set(reserved);
+  const names = new Map<string, string>();
+  for (const [id, element] of Object.entries(spec.elements)) {
+    const name = freshId(element.type, taken);
+    taken.add(name);
+    names.set(id, name);
+  }
+  const rename = (id: string) => names.get(id) ?? id;
+  const elements: Dashboard["elements"] = {};
+  for (const [id, element] of Object.entries(spec.elements)) {
+    const props =
+      element.type === "tabs" ? { ...element.props, active: rename(element.props.active as string) } : element.props;
+    elements[rename(id)] = { ...element, props, children: element.children.map(rename) };
+  }
+  return { root: rename(spec.root), elements };
 }

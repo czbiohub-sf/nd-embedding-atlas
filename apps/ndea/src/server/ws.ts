@@ -10,8 +10,9 @@
  * - Streaming/push: emit `{_ch: "data", ...}` frames, then `{_ch: "end"}`.
  * - Errors: `{_ch: "error", error: string}` (also implicit terminal).
  *
- * Methods: `workspace/watch` pushes every accepted workspace revision and
- * `harness/watch` the harness presence, until the client sends
+ * Methods: `workspace/watch` pushes every accepted workspace revision,
+ * `harness/watch` the harness presence, and `session/watch` the collection
+ * the server serves, until the client sends
  * `{ _id: <new>, _type: "unsubscribe", target_id: <sub_id> }`.
  * Data loads and Mosaic queries use the HTTP routes.
  */
@@ -133,6 +134,7 @@ type Handler = (ws: WS, id: number, frame: Frame) => void | Promise<void>;
 const HANDLERS: Record<string, Handler> = {
   "workspace/watch": handleWorkspaceWatchWs,
   "harness/watch": handleHarnessWatchWs,
+  "session/watch": handleSessionWatchWs,
 };
 
 // ─── workspace/watch ────────────────────────────────────────────────────────
@@ -153,4 +155,25 @@ function handleWorkspaceWatchWs(ws: WS, id: number): void {
 function handleHarnessWatchWs(ws: WS, id: number): void {
   const dispose = watchHarness((presence) => sendData(ws, id, presence));
   socketSubs.get(ws)?.set(id, dispose);
+}
+
+// ─── session/watch ──────────────────────────────────────────────────────────
+
+const sessionWatchers = new Set<(collection: string) => void>();
+
+/** Tell every `session/watch` subscriber the server now serves `collection` (after a collection switch). */
+export function sessionChanged(collection: string): void {
+  for (const watcher of sessionWatchers) watcher(collection);
+}
+
+/**
+ * Push the socket's collection now and the new one after every switch. A tab
+ * reloads when it differs from its metadata's; a socket opened after a switch
+ * carries the new session, so a tab that missed the push still learns of it.
+ */
+function handleSessionWatchWs(ws: WS, id: number): void {
+  const watcher = (collection: string) => sendData(ws, id, { collection });
+  watcher(ws.data.state.status.collection);
+  sessionWatchers.add(watcher);
+  socketSubs.get(ws)?.set(id, () => sessionWatchers.delete(watcher));
 }

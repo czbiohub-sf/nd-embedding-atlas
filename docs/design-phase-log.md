@@ -223,3 +223,79 @@ adds more (`ponytail:` in `CommandMenu.tsx`).
 - Screenshot 02's "8 in JUMP pilot" counts and the Collections group need G2/G3 (phase 6).
 - Layout rows have no subtitle (the prototype shows "Exploration", "Images", …) until layouts
   have names.
+
+## Phase 6: tabs, named layouts, collections (schema)
+
+**Changed**
+
+- Named layouts (G2, format v3): the document is
+  `{ data, layouts: { [id]: { name, spec } }, layout, state }`.
+  - Element ids are unique across layouts; data sources and links are shared.
+  - A v2 file is refused with "delete <file> to reseed it from the preset" (no migration; the
+    user waived compatibility).
+  - Ops `add_layout {id?, name, from?}`, `rename_layout`, `remove_layout`, `set_active_layout`.
+    Element ops find the layout holding their element; `add` targets the active layout.
+  - The runtime manager stops bodies outside the active layout and starts them on switch.
+  - The Layouts flyout lists layouts with wireframes and offers New from template (blank, copy
+    of each), Duplicate, Rename and Delete. ⌘K lists every layout, and its preview follows the
+    highlight.
+- Tabs (G1): a `tabs` component (view children, `active` prop); a bare view leaf is a one-tab
+  tile.
+  - Ops `add_tab`, `move_tab`, `close_tab`, `set_active_tab`.
+  - The header strip shows every tab, × on multi-tab tiles, and **+** for a component menu.
+  - Dragging a tab onto another tile's strip moves it without remounting its body; dragging onto
+    a body still swaps tiles.
+- Collections (G3, one per server run):
+  - The project YAML takes `collections:` (list or map); datasets outside any collection form
+    an implicit collection, so old project files open as one. `ndea view --collection <name>`;
+    the default is the first collection.
+  - Metadata and status report `collections` with metadata-only obs counts.
+  - `POST /api/collection` rebuilds the session in-process (`Bun.serve` `server.reload`): it
+    clears dataset filters (a `system` revision), re-ingests, and pushes `session/watch`, so
+    tabs reload.
+  - The Data flyout and ⌘K "Collections" show collection › datasets: include toggles inside the
+    current collection, Switch (with confirm) for the others. MCP `list_collections`.
+- The `exploration` preset is v3 with two layouts: Exploration (Embedding; Image viewer + Crop
+  gallery; Table + Histogram tabs) and Review.
+
+**Files:** `apps/ndea/src/frontend/core/workspace/{dashboard,document,types,data-sources,edits,workspace-store,compare,DashboardPane,EmbeddingChip,LinksPopover,ViewSettings}.ts(x)` + tests,
+`core/component/runtime/workspace-runtime.ts`, `core/coordination/coordination.ts`,
+`core/shell/{LayoutWireframe,flyouts,CommandMenu,collections,CollectionSwitchDialog}.ts(x)`,
+`core/session/DatasetSessionProvider.tsx`,
+`server/{workspace,mcp,app,state,status,ws,remote-render,routes/workspace,routes/meta,routes/collection}.ts`,
+`cli/{config,startup,commands/view}.ts`, `cli/startup/{datasets,server,session}.ts`,
+`packages/protocol/src/{index,status}.ts`, `presets/exploration.json`, docs.
+
+**Checked:** `vp run verify` green (17/17). `vp run build`. Binary smoke with a three-collection
+project YAML:
+
+- `--collection day-24` ingested 30,951 obs.
+- ⌘K showed layouts Exploration/Review and collections day-24 / day-22 / both (30,951 / 39,170 /
+  70,121) with dataset rows.
+- The Table tile showed Table × + Histogram tabs.
+- The Layouts flyout switched to Review (document `layout: "review"`).
+- `POST /api/collection {name:"both"}` switched the session and the open tab reloaded to
+  70,121 obs.
+
+The agents' smokes also covered:
+
+- layout add / duplicate / rename / delete;
+- adding and closing tabs, and a tab drag that kept the same canvas node;
+- MCP `add_layout` / `set_active_layout` / `add_tab` / `move_tab` / `close_tab`;
+- the v2 refusal message;
+- dataset include toggles inside "both", and a switch that cleared a stale dataset filter.
+
+**Deferred**
+
+- `move_tab` across layouts is refused.
+- A one-tab tile has no ×; it is removed from the header context menu.
+
+**Remaining differences**
+
+- The prototype's project switcher on the app mark (several projects) is out of scope: one
+  project per server.
+- "Compare with <collection>" from the prototype's Collections flyout is not built.
+
+**Note:** the user's `vp up -r -L` dependency upgrade (DuckDB 2.0 and the rest) landed inside the
+phase 3 commit `34e84d6`, because it was already in the tree. `625f8f8` and `d8e6b45` adapted the
+duckdb-zarr and static addon builds to DuckDB 2.

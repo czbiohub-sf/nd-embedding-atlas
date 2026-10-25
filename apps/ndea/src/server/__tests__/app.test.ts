@@ -241,7 +241,8 @@ describe("createApp", () => {
       embeddings: ["X_umap"],
       plate: { path: "/data/p.zarr", wells: 1, channels: [{ name: "DAPI", color: "#0000FF" }] },
     };
-    state.status = { ingest: "fresh", datasets: [dataset] };
+    const collections = [{ name: "t", datasets: [{ name: "t", nObs: 5 }] }];
+    state.status = { ingest: "fresh", datasets: [dataset], collection: "t", collections };
     captureConsole();
     console.warn("\u001B[33mstatus warning\u001B[39m");
     const server = createApp({
@@ -269,8 +270,45 @@ describe("createApp", () => {
     expect(status.workspace.revision).toBeGreaterThanOrEqual(0);
     expect(status.server.ingest).toBe("fresh");
     expect(status.datasets).toEqual([dataset]);
+    expect(status).toMatchObject({ collection: "t", collections });
     expect(status.logs.at(-1)).toMatchObject({ level: "warn", text: "status warning" });
     ws.close();
+  });
+
+  test("POST /api/collection validates, no-ops on the open collection, and switches through the callback", async () => {
+    const store = await createMockStore(5);
+    activeStore = store;
+    const state = createMockState(store);
+    state.status = {
+      ...state.status,
+      collection: "a",
+      collections: [
+        { name: "a", datasets: [{ name: "x", nObs: 1 }] },
+        { name: "b", datasets: [{ name: "y", nObs: 2 }] },
+      ],
+    };
+    const switched: string[] = [];
+    const server = createApp({
+      port: 0,
+      host: "localhost",
+      store,
+      state,
+      config: createMockConfig(),
+      noStatic: true,
+      switchCollection: async (name) => void switched.push(name),
+    });
+    activeServer = server;
+    const base = `http://localhost:${server.port}`;
+    const post = (body: unknown) =>
+      fetch(`${base}/api/collection`, { method: "POST", body: JSON.stringify(body) }).then((r) => r.status);
+    expect(await post({})).toBe(400);
+    expect(await post({ name: "nope" })).toBe(404);
+    expect(await post({ name: "a" })).toBe(200);
+    expect(switched).toEqual([]);
+    expect(await post({ name: "b" })).toBe(200);
+    expect(switched).toEqual(["b"]);
+    const metadata = MetadataSchema.parse(await (await fetch(`${base}/data/metadata.json`)).json());
+    expect(metadata).toMatchObject({ collection: "a", collections: state.status.collections });
   });
 
   test("GET /api/embeddings/{key}/status returns not_started", async () => {

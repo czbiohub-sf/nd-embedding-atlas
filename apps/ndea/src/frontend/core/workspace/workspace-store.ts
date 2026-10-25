@@ -1,9 +1,10 @@
 /**
- * WorkspaceStore: this tab's copy of the server-owned document (`data`, `spec`,
- * `state`) plus its editor session. Every document write goes through
- * `commit`; `WorkspaceSync` diffs `snapshot()` against the server's
- * acknowledged revision and PATCHes the difference. Views ask questions
- * (`element`, `elementPredicate`, `coordination`) instead of reading the document.
+ * WorkspaceStore: this tab's copy of the server-owned document (`data`,
+ * `layouts`, `layout`, `state`) plus its editor session. Every document write
+ * goes through `commit`; `WorkspaceSync` diffs `snapshot()` against the
+ * server's acknowledged revision and PATCHes the difference. Views ask
+ * questions (`element`, `elementPredicate`, `coordination`) instead of reading
+ * the document.
  */
 
 import { Store } from "@tanstack/store";
@@ -15,11 +16,13 @@ import {
   type CoordinationScopeCellPort,
 } from "@/core/coordination/coordination";
 import {
-  COMPONENTS,
-  fillSlot,
+  findElement,
+  layoutOf,
   setElementProps,
   splitElement,
   swapElements,
+  takenIds,
+  tileProps,
   type Dashboard,
   type DashboardElement,
   type SplitSide,
@@ -60,8 +63,9 @@ export class WorkspaceStore {
     return () => subscription.unsubscribe();
   };
 
+  /** An element of any layout (ids are unique across layouts). */
   element(id: string): DashboardElement | undefined {
-    return this.documentStore.state.spec.elements[id];
+    return findElement(this.documentStore.state, id);
   }
 
   /** What the element shows (see `elementPredicate`). */
@@ -80,7 +84,7 @@ export class WorkspaceStore {
     const settled = withoutRemovedContributions(prev, next);
     this.documentStore.setState(() => settled);
     const { selectedElementId, fullscreen } = this.session.state;
-    const gone = (id: string | null) => id !== null && !settled.spec.elements[id];
+    const gone = (id: string | null) => id !== null && layoutOf(settled, id) !== settled.layout;
     if (gone(selectedElementId) || gone(fullscreen)) {
       this.patchSession({
         selectedElementId: gone(selectedElementId) ? null : selectedElementId,
@@ -94,8 +98,14 @@ export class WorkspaceStore {
     this.commit(() => next);
   }
 
-  private setSpec(update: (spec: Dashboard) => Dashboard): void {
-    this.commit((state) => ({ ...state, spec: update(state.spec) }));
+  /** Edit the spec of the layout holding element `id`; a no-op when no layout does. */
+  private setSpec(id: string, update: (spec: Dashboard, reserved: ReadonlySet<string>) => Dashboard): void {
+    this.commit((state) => {
+      const layout = layoutOf(state, id);
+      if (layout === undefined) return state;
+      const spec = update(state.layouts[layout].spec, takenIds(state));
+      return { ...state, layouts: { ...state.layouts, [layout]: { ...state.layouts[layout], spec } } };
+    });
   }
 
   /* ── dashboard edits ───────────────────────────────────────────────── */
@@ -106,28 +116,16 @@ export class WorkspaceStore {
   }
 
   setElementProps(id: string, patch: Record<string, JsonValue | undefined>): void {
-    this.setSpec((spec) => setElementProps(spec, id, patch));
+    this.setSpec(id, (spec) => setElementProps(spec, id, patch));
   }
 
   splitElement(id: string, side: SplitSide): void {
-    this.setSpec((spec) => splitElement(spec, id, side)[0]);
+    this.setSpec(id, (spec, reserved) => splitElement(spec, id, side, reserved)[0]);
   }
 
-  /** Fill a slot with a fresh component at its defaults. */
+  /** Fill a slot with a fresh component at its defaults, bound to filter A and focus A when it can bind them. */
   fillSlot(slotId: string, type: string): void {
-    const props: Record<string, JsonValue> = {};
-    if (COMPONENTS[type]?.binds.includes("filter")) props.filter = { $bindState: "/filter/A" };
-    if (COMPONENTS[type]?.binds.includes("focus")) props.focus = { $bindState: "/focus/A" };
-    this.commit((state) => ({
-      ...state,
-      spec: fillSlot(state.spec, slotId, type, props),
-      // A new member's scopes exist from the start.
-      state: {
-        ...state.state,
-        ...("filter" in props && !state.state.filter?.A ? { filter: { ...state.state.filter, A: {} } } : {}),
-        ...("focus" in props && state.state.focus?.A === undefined ? { focus: { ...state.state.focus, A: null } } : {}),
-      },
-    }));
+    this.apply([{ op: "add", type, props: tileProps(type), at: { slot: slotId } }]);
   }
 
   removeElement(id: string): void {
@@ -135,7 +133,7 @@ export class WorkspaceStore {
   }
 
   swapElements(a: string, b: string): void {
-    this.setSpec((spec) => swapElements(spec, a, b));
+    this.setSpec(a, (spec) => swapElements(spec, a, b));
   }
 
   setSplitRatio(id: string, ratio: number): void {

@@ -15,6 +15,7 @@ import type { ServerSession, DatasetSessionMetadata } from "./state.ts";
 import index from "../../index.html";
 import { handleMosaicRoute } from "./routes/mosaic.ts";
 import { handleMetadata } from "./routes/meta.ts";
+import { handleCollectionSwitch } from "./routes/collection.ts";
 import {
   handleCreateAnnotationColumn,
   handleCommitAnnotations,
@@ -120,22 +121,33 @@ export interface CreateAppOptions {
   dev?: boolean;
   /** Bearer token that /mcp requires; without one the MCP endpoint is off. */
   mcpToken?: string;
+  /** Re-open the session on another project collection (`POST /api/collection`); the caller reloads the server. */
+  switchCollection?: (name: string) => Promise<void>;
 }
 
 // ─── Server factory ─────────────────────────────────────────────────────────
 
 export function createApp(options: CreateAppOptions) {
+  return Bun.serve<ServerSocketContext>(appServeOptions(options));
+}
+
+/**
+ * Everything `Bun.serve` takes for one session. A collection switch passes the
+ * new session's options to `server.reload()`: same port, new routes; sockets
+ * opened before keep the old session until the tab reloads.
+ */
+export function appServeOptions(options: CreateAppOptions) {
   const { store, state, config } = options;
   const mcp = options.mcpToken ? createMcpEndpoint(state, options.mcpToken) : null;
 
   // Spin up the Bun Worker pool for crop rendering when a plate is
-  // available. Pool persists for the lifetime of the server; workers keep
+  // available. Pool persists for the lifetime of the session; workers keep
   // their zarr Array LRU + WebP WASM init warm across requests.
   if (state.plateMounts.length > 0 && !state.cropPool) {
     state.cropPool = new CropPool(state.plateMounts);
   }
 
-  return Bun.serve<ServerSocketContext>({
+  return {
     port: options.port,
     hostname: options.host,
     development: options.dev ? { hmr: true, console: true } : false,
@@ -181,6 +193,7 @@ export function createApp(options: CreateAppOptions) {
         },
         "/data/query": { GET: (req) => handleMosaicRoute(req, store), POST: (req) => handleMosaicRoute(req, store) },
         "/data/metadata.json": { GET: () => handleMetadata(state, config) },
+        "/api/collection": { POST: (req) => handleCollectionSwitch(req, state, options.switchCollection) },
 
         "/api/health": { GET: () => handleHealth(state) },
 
@@ -250,5 +263,5 @@ export function createApp(options: CreateAppOptions) {
       open: (ws) => (isRenderSocket(ws) ? handleRenderOpen(ws) : handleWsOpen(ws)),
       close: (ws) => (isRenderSocket(ws) ? handleRenderClose(ws) : handleWsClose(ws)),
     },
-  });
+  } satisfies Bun.Serve.Options<ServerSocketContext>;
 }

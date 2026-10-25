@@ -26,7 +26,7 @@ import {
   type WorkspaceProblem,
 } from "@ndea/protocol";
 import { z } from "zod";
-import { COMPONENTS } from "../../frontend/core/workspace/dashboard.ts";
+import { COMPONENTS, findElement } from "../../frontend/core/workspace/dashboard.ts";
 import { dataSourceSql, elementPredicate } from "../../frontend/core/workspace/data-sources.ts";
 import type { WorkspaceIssue } from "../../frontend/core/workspace/document.ts";
 import type { WorkspaceDocument } from "../../frontend/core/workspace/types.ts";
@@ -165,8 +165,8 @@ export async function workspaceResult(
   let predicate: string | null;
   if ("element" in target) {
     const id = target.element;
-    const element = Object.hasOwn(doc.spec.elements, id) ? doc.spec.elements[id] : undefined;
-    if (!element) return { status: 404, body: { revision, error: `no element "${id}" in the dashboard` } };
+    const element = findElement(doc, id);
+    if (!element) return { status: 404, body: { revision, error: `no element "${id}" in any layout` } };
     if (!COMPONENTS[element.type]?.reads) {
       return { status: 400, body: { revision, error: `element "${id}" (${element.type}) reads no data` } };
     }

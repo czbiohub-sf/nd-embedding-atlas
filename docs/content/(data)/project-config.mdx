@@ -1,6 +1,6 @@
 ---
 title: Project YAML
-description: Configure named datasets, OME-Zarr plates, channels, and server settings.
+description: Configure named datasets, collections, OME-Zarr plates, channels, and server settings.
 ---
 
 Use one `.yaml` or `.yml` file when a session needs stable dataset names, mounted image plates, or shared launch settings. Relative paths resolve from the YAML file's directory.
@@ -53,11 +53,33 @@ datasets:
 
 Every entry requires a non-empty name and data path. A project must contain at least one dataset.
 
+## Collections
+
+A server run opens one collection: a named group of datasets ingested together. Group a project's datasets with `collections:`, as a list or a name-keyed map:
+
+```yaml
+collections:
+  - name: day-24
+    datasets: [experiment_a]
+  - name: both
+    datasets: [experiment_a, experiment_b]
+
+# or
+collections:
+  day-24: { datasets: [experiment_a] }
+  both: { datasets: [experiment_a, experiment_b] }
+```
+
+A dataset may be in several collections. Datasets in no collection form one more collection named after the project file (`project.yaml` → `project`), so a file without `collections:` is a single collection of all its datasets. Unknown dataset names, a collection listed twice, an empty collection, and a name that clashes with the implicit collection are errors.
+
+`ndea view project.yaml --collection both` opens one; the default is the first. Inside the open collection, datasets are a filter (Data panel toggles, ⌘K). Opening another collection from the Data panel or ⌘K asks for confirmation, clears the dataset filter, re-loads the data on the same server, and reloads every open tab. All collections of a project share one workspace file, so layouts and views keep their settings; a view that names a column the new collection lacks is flagged.
+
 ## Field reference
 
 | Field                     | Type             | Required    | Meaning                                  |
 | ------------------------- | ---------------- | ----------- | ---------------------------------------- |
 | `datasets`                | mapping or array | yes         | named AnnData or supported MuData mounts |
+| `collections`             | mapping or array | no          | named groups of dataset names; one opens per run |
 | `anndata` / `path`        | string           | per dataset | local Zarr path                          |
 | `hcs_plate` / plate alias | string           | no          | matching OME-Zarr HCS plate              |
 | `channels`                | mapping          | no          | initial image channel display settings   |
@@ -68,7 +90,7 @@ Every entry requires a non-empty name and data path. A project must contain at l
 
 Each channel entry requires a hexadecimal `color` string without `#`. `contrast`, when supplied, is a two-number `[min, max]` pair. `visible` is optional and converted to a boolean.
 
-CLI values override YAML values for host, port, preset, and observation columns.
+CLI values override YAML values for host, port, preset, and observation columns. `--collection` picks the collection.
 
 ## Launch and validate
 

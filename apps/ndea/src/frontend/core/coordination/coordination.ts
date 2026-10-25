@@ -11,13 +11,22 @@
  * Writes validate against the type's Zod schema and replace the cell
  * (latest-wins). Agents reach the same cells through JSON Patch. This module
  * owns binding semantics: views ask it (`scopeOf`, `filterFacet`, `stateStore`)
- * instead of reading `spec` bindings and `state` cells themselves.
+ * instead of reading element bindings and `state` cells themselves.
  */
 
 import { getByPath, type StateStore } from "@json-render/core";
 import type { FilterClause } from "@ndea/protocol";
 
-import { elementScope, setElementProps, type Dashboard } from "../workspace/dashboard";
+import {
+  allElements,
+  elementScope,
+  findElement,
+  layoutOf,
+  setElementProps,
+  takenIds,
+  type DashboardElement,
+  type LayoutDocument,
+} from "../workspace/dashboard";
 import {
   bindingPointer,
   COORDINATION_TYPES,
@@ -28,9 +37,8 @@ import {
   type CoordinationValue,
 } from "./types";
 
-interface CoordinationDocumentState {
+interface CoordinationDocumentState extends LayoutDocument {
   readonly state: CoordinationState;
-  readonly spec: Dashboard;
 }
 
 interface CoordinationDocumentPort {
@@ -75,14 +83,26 @@ function withoutFilterContribution(state: CoordinationState, scope: string | und
   return withCell(state, "filter", scope!, rest);
 }
 
-/** Drop the filter contributions of elements no longer in `next`, so peers stop seeing them. */
+/** Drop the filter contributions of elements no longer in `next` (any layout), so peers stop seeing them. */
 export function withoutRemovedContributions<S extends CoordinationDocumentState>(previous: S, next: S): S {
   let state = next.state;
-  for (const [id, element] of Object.entries(previous.spec.elements)) {
-    if (next.spec.elements[id]) continue;
+  const kept = takenIds(next);
+  for (const [id, element] of allElements(previous)) {
+    if (kept.has(id)) continue;
     state = withoutFilterContribution(state, elementScope(element, "filter"), id);
   }
   return state === next.state ? next : { ...next, state };
+}
+
+/** `s` with element `id`'s props patched in whichever layout holds it. */
+function withElementProps<S extends CoordinationDocumentState>(
+  s: S,
+  id: string,
+  patch: Record<string, DashboardElement["props"][string] | undefined>,
+): S {
+  const layout = layoutOf(s, id)!;
+  const spec = setElementProps(s.layouts[layout].spec, id, patch);
+  return { ...s, layouts: { ...s.layouts, [layout]: { ...s.layouts[layout], spec } } };
 }
 
 class Coordination implements CoordinationScopeCellPort {
@@ -113,29 +133,29 @@ class Coordination implements CoordinationScopeCellPort {
   /** Bind an element to a scope, seeding the cell with the type's default when it does not exist yet. */
   assignScope(elementId: string, type: CoordinationTypeId, scope: string): void {
     this.document.update((s) => {
-      const previous = elementScope(s.spec.elements[elementId], type);
-      if (previous === scope || !s.spec.elements[elementId]) return s;
+      const element = findElement(s, elementId);
+      const previous = elementScope(element, type);
+      if (previous === scope || !element) return s;
       let state = type === "filter" ? withoutFilterContribution(s.state, previous, elementId) : s.state;
       if (state[type]?.[scope] === undefined)
         state = withCell(state, type, scope, COORDINATION_TYPES[type].defaultValue);
-      const spec = setElementProps(s.spec, elementId, { [type]: { $bindState: bindingPointer(type, scope) } });
-      return { ...s, state, spec };
+      return { ...withElementProps(s, elementId, { [type]: { $bindState: bindingPointer(type, scope) } }), state };
     });
   }
 
   /** Unbind an element from one type (it stops participating in that type). */
   clearScope(elementId: string, type: CoordinationTypeId): void {
     this.document.update((s) => {
-      const element = s.spec.elements[elementId];
+      const element = findElement(s, elementId);
       if (!element || !(type in element.props)) return s;
       const state =
         type === "filter" ? withoutFilterContribution(s.state, elementScope(element, type), elementId) : s.state;
-      return { ...s, state, spec: setElementProps(s.spec, elementId, { [type]: undefined }) };
+      return { ...withElementProps(s, elementId, { [type]: undefined }), state };
     });
   }
 
   scopeOf(elementId: string, type: CoordinationTypeId): string | undefined {
-    return elementScope(this.document.snapshot().spec.elements[elementId], type);
+    return elementScope(findElement(this.document.snapshot(), elementId), type);
   }
 
   setCoordinationValue<T extends CoordinationTypeId>(type: T, scope: string, value: CoordinationValue<T>): void {

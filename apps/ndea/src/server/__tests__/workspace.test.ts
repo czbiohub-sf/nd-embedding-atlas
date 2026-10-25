@@ -14,11 +14,14 @@ import {
 } from "../routes/workspace.ts";
 import { Workspace, WorkspaceFileError } from "../workspace.ts";
 
+const HIST = { type: "histogram", props: { field: "area" }, children: [] };
 const DOCUMENT = {
   data: {},
-  spec: { root: "hist", elements: { hist: { type: "histogram", props: { field: "area" }, children: [] } } },
+  layouts: { main: { name: "Main", spec: { root: "hist", elements: { hist: HIST } } } },
+  layout: "main",
   state: {},
 };
+const BINS = "/layouts/main/spec/elements/hist/props/bins";
 
 const addData = (name: string) => ({ op: "add" as const, path: `/data/${name}`, value: { sql: "area > 20" } });
 const browser = { kind: "browser" } as const;
@@ -55,7 +58,7 @@ describe("Workspace", () => {
       kind: "accepted",
       revision: 2,
     });
-    expect(await Bun.file(path).json()).toMatchObject({ format: "ndea.workspace", version: 2, revision: 2 });
+    expect(await Bun.file(path).json()).toMatchObject({ format: "ndea.workspace", version: 3, revision: 2 });
     expect(await Bun.file(join(dir, "nested", "workspace.history.sqlite")).exists()).toBe(true);
     const reopened = await Workspace.open(path, noSeed, { validate });
     expect(reopened.get()).toEqual(workspace.get());
@@ -76,11 +79,11 @@ describe("Workspace", () => {
     const { workspace, path } = await seeded();
     const before = await Bun.file(path).text();
     const history = workspace.history();
-    const bad = await workspace.patch([{ op: "add", path: "/spec/elements/hist/props/bins", value: "many" }], {
+    const bad = await workspace.patch([{ op: "add", path: BINS, value: "many" }], {
       base: 1,
       actor: browser,
     });
-    expect(bad).toMatchObject({ kind: "invalid", issues: [{ pointer: "/spec/elements/hist/props/bins" }] });
+    expect(bad).toMatchObject({ kind: "invalid", issues: [{ pointer: BINS }] });
     expect(await workspace.patch([{ op: "remove", path: "/data/missing" }], { base: 1, actor: browser })).toMatchObject(
       {
         kind: "invalid",
@@ -100,7 +103,7 @@ describe("Workspace", () => {
       document.data.large = { sql: "area > 20" };
     }).toThrow(TypeError);
     expect(() => {
-      document.spec.elements.hist!.props.field = "perimeter";
+      document.layouts.main.spec.elements.hist.props.field = "perimeter";
     }).toThrow(TypeError);
     expect(workspace.get()).toEqual({ revision: 1, document: DOCUMENT, name: "workspace" });
     expect(workspace.history()).toEqual(history);
@@ -240,13 +243,14 @@ describe("Workspace", () => {
     ).toEqual({ n: 1 });
   });
 
-  test("refuses to open a file with the wrong format version", async () => {
+  test("refuses a file of another format version (a v2 file) and says to delete it", async () => {
     const { path } = await seeded();
     const file = await Bun.file(path).json();
-    await Bun.write(path, JSON.stringify({ ...file, version: 1 }));
+    await Bun.write(path, JSON.stringify({ ...file, version: 2 }));
     const opened = Workspace.open(path, noSeed, { validate });
     await expect(opened).rejects.toBeInstanceOf(WorkspaceFileError);
-    await expect(opened).rejects.toThrow("/version");
+    await expect(opened).rejects.toThrow(`/version: format version 2 is not supported`);
+    await expect(opened).rejects.toThrow(`delete ${path} to reseed it from the preset`);
   });
 });
 

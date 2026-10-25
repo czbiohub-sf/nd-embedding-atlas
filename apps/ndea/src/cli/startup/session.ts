@@ -1,6 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
+import type { CollectionSummary } from "@ndea/protocol";
 import type { MuData } from "@ndea/zarr";
 import { buildPlateMounts, readPlateMeta } from "../../server/plate.ts";
 import type { PlateChannel, PlateMetaInfo, PlateMount } from "../../server/plate.ts";
@@ -57,6 +58,7 @@ export async function prepareServerSession(
   datasets: PreparedDatasets,
   query: PreparedQuerySession,
   workspace: Workspace,
+  collections: CollectionSummary[],
 ): Promise<PreparedServerSession> {
   const plateMounts = buildPlateMounts(datasets.datasetConfigs, datasets.isMultiDataset);
   const platesByMount = await readPlateMetadata(plateMounts);
@@ -67,11 +69,13 @@ export async function prepareServerSession(
     availableObsmKeys: datasets.availableObsmKeys,
     accessors: new Map(datasets.loaded.map(({ entry, adata }) => [entry.name, adata])),
     plateMounts,
-    annotationsSidecarPath: query.cacheEnabled ? null : resolveAnnotationsSidecarPath(config.datasets[0].path),
+    annotationsSidecarPath: query.cacheEnabled ? null : resolveAnnotationsSidecarPath(datasets.loaded[0].entry.path),
     workspace,
   });
   state.status = {
     ingest: query.cached ? "cached" : query.cacheEnabled ? "fresh" : "uncached",
+    collection: config.collection,
+    collections,
     datasets: datasets.loaded.map(({ entry, adata, obsmKeys, nVars }) => {
       // One mount per plate: `/plate/<name>` for a union, else the single dataset's `/plate`.
       const mount = entry.platePath && plateMounts.find((m) => (m.datasetKey ?? entry.name) === entry.name);

@@ -100,6 +100,7 @@ describe("ndea MCP", () => {
       "get_history",
       "get_result",
       "get_workspace",
+      "list_collections",
       "list_columns",
       "list_components",
       "patch_workspace",
@@ -143,6 +144,26 @@ describe("ndea MCP", () => {
     expect(read.revision).toBe(workspace.get().revision);
     expect(read.document.state.filter.A).toEqual({ agent: { area: { op: "gt", column: "area", value: 40 } } });
 
+    const tabbed = await call("edit_dashboard", {
+      ops: [
+        { op: "add_tab", tile: "table-1", type: "histogram", id: "hist", props: { field: "area" } },
+        { op: "add_layout", id: "review", name: "Review", from: "main" },
+        { op: "set_active_layout", id: "review" },
+        { op: "move_tab", id: "hist", to: "count-1" },
+        { op: "close_tab", id: "table-1" },
+      ],
+    });
+    expect(tabbed.isError).toBe(false);
+    const doc = (await call("get_workspace", {})).body.document;
+    expect(doc.layout).toBe("review");
+    expect(Object.keys(doc.layouts)).toEqual(["main", "review"]);
+    const main = Object.values(doc.layouts.main.spec.elements as Record<string, Record<string, unknown>>);
+    expect(main.filter((element) => element.type === "tabs")).toEqual([
+      { type: "tabs", props: { active: "hist" }, children: ["count-1", "hist"] },
+    ]);
+    expect(doc.layouts.main.spec.elements["table-1"]).toBeUndefined();
+    expect(Object.keys(doc.layouts.review.spec.elements)).not.toContain("count-1");
+    expect((await call("get_result", { element: "hist" })).body).toMatchObject({ count: 3 });
     expect((await call("create_observation_set", { element: "count-1" })).body.count).toBe(1);
   });
 
@@ -161,7 +182,7 @@ describe("ndea MCP", () => {
 
     const badProp = await call("edit_dashboard", { ops: [{ op: "add", type: "histogram", props: { bins: "many" } }] });
     expect(badProp.isError).toBe(true);
-    expect(badProp.body.issues[0].pointer).toBe("/spec/elements/histogram-1/props/bins");
+    expect(badProp.body.issues[0].pointer).toBe("/layouts/main/spec/elements/histogram-1/props/bins");
 
     const incapable = await call("edit_dashboard", {
       ops: [
@@ -169,7 +190,7 @@ describe("ndea MCP", () => {
         { op: "bind", id: "text-1", type: "filter", scope: "A" },
       ],
     });
-    expect(incapable.body.issues[0].pointer).toBe("/spec/elements/text-1/props/filter");
+    expect(incapable.body.issues[0].pointer).toBe("/layouts/main/spec/elements/text-1/props/filter");
 
     const patch = await call("patch_workspace", {
       revision: before,

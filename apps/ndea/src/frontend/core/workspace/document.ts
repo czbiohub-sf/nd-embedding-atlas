@@ -1,28 +1,28 @@
 /**
- * The workspace document: server-owned and file-persisted. Three sections:
- * `data` (named data sources), `spec` (the json-render dashboard), and
- * `state` (coordination cells the spec binds). Pure (Zod only) so the server
- * and the browser validate with the same schema. Editor session state lives
- * in `Workspace.session` and never reaches it. Only the exact format version
- * loads; there are no migrations.
+ * The workspace document: server-owned and file-persisted. Four fields:
+ * `data` (named data sources), `layouts` (named json-render dashboards),
+ * `layout` (the active layout's id), and `state` (coordination cells every
+ * layout binds). Pure (Zod only) so the server and the browser validate with
+ * the same schema. Editor session state lives in `Workspace.session` and never
+ * reaches it. Only the exact format version loads; there are no migrations.
  */
 
 import { applyPatch, type Operation } from "rfc6902";
 import { z } from "zod";
 
 import { coordinationStateSchema } from "../coordination/types";
-import { dashboardIssues, dashboardSchema, emptyDashboard } from "./dashboard";
+import { emptyDashboard, layoutIssues, layoutsSchema } from "./dashboard";
 import { dataIssues, dataSchema } from "./data-sources";
 import type { WorkspaceDocument } from "./types";
 
 export const WORKSPACE_FORMAT = "ndea.workspace";
-export const WORKSPACE_FORMAT_VERSION = 2;
+export const WORKSPACE_FORMAT_VERSION = 3;
 
 export const workspaceDocumentSchema = z
-  .object({ data: dataSchema, spec: dashboardSchema, state: coordinationStateSchema })
+  .object({ data: dataSchema, layouts: layoutsSchema, layout: z.string(), state: coordinationStateSchema })
   .strict()
   .superRefine((doc, context) => {
-    for (const [path, message] of [...dataIssues(doc.data), ...dashboardIssues(doc.spec, doc.data)]) {
+    for (const [path, message] of [...dataIssues(doc.data), ...layoutIssues(doc, doc.data)]) {
       context.addIssue({ code: "custom", path, message });
     }
   });
@@ -57,9 +57,9 @@ export function parseWorkspaceFile(value: unknown): WorkspaceParse<{ revision: n
   return { ok: false, issues: toIssues(parsed.error.issues) };
 }
 
-/** No data sources and one empty slot: the base an agent builds a dashboard from. */
+/** No data sources and one layout of one empty slot: the base an agent builds a dashboard from. */
 export function emptyWorkspaceDocument(): WorkspaceDocument {
-  return { data: {}, spec: emptyDashboard(), state: {} };
+  return { data: {}, layouts: { main: { name: "Main", spec: emptyDashboard() } }, layout: "main", state: {} };
 }
 
 function toIssues(issues: readonly z.core.$ZodIssue[]): WorkspaceIssue[] {

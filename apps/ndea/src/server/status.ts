@@ -74,6 +74,9 @@ export function muteConsole(value: boolean): void {
   for (const write of replay) write();
 }
 
+/** True while the TUI is up; spinners (`task`) stay off the screen then. */
+export const consoleMuted = (): boolean => held !== null;
+
 /** Total file bytes under `path` (a zarr directory or a single file); undefined when unreadable. */
 export async function diskBytes(path: string): Promise<number | undefined> {
   try {
@@ -94,6 +97,8 @@ export function getRuntimeStatus(session: ServerSession, url: string): RuntimeSt
   return {
     server: { version: VERSION, url, startedAt, rss: process.memoryUsage.rss(), ingest: session.status.ingest },
     datasets: session.status.datasets,
+    collection: session.status.collection,
+    collections: session.status.collections,
     embeddings: {
       available: session.availableObsmKeys,
       loading: [...session.loadingTasks.keys()].filter(

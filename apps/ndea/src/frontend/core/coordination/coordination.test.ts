@@ -13,14 +13,19 @@ function fresh() {
   const ws = new WorkspaceStore();
   ws.applyDocument({
     ...emptyWorkspaceDocument(),
-    spec: {
-      root: "root",
-      elements: {
-        root: { type: "stack", props: {}, children: ["n1", "n2", "n3", "scatter"] },
-        n1: leaf,
-        n2: leaf,
-        n3: leaf,
-        scatter: { ...leaf, type: "scatter" },
+    layouts: {
+      main: {
+        name: "Main",
+        spec: {
+          root: "root",
+          elements: {
+            root: { type: "stack", props: {}, children: ["n1", "n2", "n3", "scatter"] },
+            n1: leaf,
+            n2: leaf,
+            n3: leaf,
+            scatter: { ...leaf, type: "scatter" },
+          },
+        },
       },
     },
   });

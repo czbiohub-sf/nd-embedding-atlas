@@ -42,6 +42,8 @@ test("renderStatus shows each dataset's facts and the workspace, not embeddings 
           embeddings: [],
         },
       ],
+      collection: "infectomics",
+      collections: [{ name: "infectomics", datasets: [{ name: "infectomics", nObs: 70121 }] }],
       embeddings: { available: ["X_umap"], loading: ["X_pca"], errors: {} },
       workspace: {
         path: "/tmp/w.json",

@@ -30,18 +30,28 @@ describe("dashboard edits", () => {
     const next = applyDashboardEdits(emptyWorkspaceDocument(), BUILD);
     expect(next).toEqual({
       data: { infected: { where: { op: "eq", column: "condition", value: "infected" } } },
-      spec: {
-        root: "split-1",
-        elements: {
-          "split-1": { type: "split", props: { direction: "column", ratio: 0.5 }, children: ["split-2", "table-1"] },
-          "split-2": { type: "split", props: { direction: "row", ratio: 0.5 }, children: ["tools", "count-1"] },
-          "count-1": { type: "count", props: { data: "infected", filter: filterA }, children: [] },
-          "table-1": { type: "table", props: {}, children: [] },
-          tools: { type: "stack", props: {}, children: ["select-1", "text-1"] },
-          "text-1": { type: "text", props: { text: "Cells" }, children: [] },
-          "select-1": { type: "select", props: { column: "condition", filter: filterA }, children: [] },
+      layouts: {
+        main: {
+          name: "Main",
+          spec: {
+            root: "split-1",
+            elements: {
+              "split-1": {
+                type: "split",
+                props: { direction: "column", ratio: 0.5 },
+                children: ["split-2", "table-1"],
+              },
+              "split-2": { type: "split", props: { direction: "row", ratio: 0.5 }, children: ["tools", "count-1"] },
+              "count-1": { type: "count", props: { data: "infected", filter: filterA }, children: [] },
+              "table-1": { type: "table", props: {}, children: [] },
+              tools: { type: "stack", props: {}, children: ["select-1", "text-1"] },
+              "text-1": { type: "text", props: { text: "Cells" }, children: [] },
+              "select-1": { type: "select", props: { column: "condition", filter: filterA }, children: [] },
+            },
+          },
         },
       },
+      layout: "main",
       state: { filter: { A: { agent: { area: large } } } },
     });
     expect(parseWorkspaceDocument(next).ok).toBe(true);
@@ -64,9 +74,10 @@ describe("dashboard edits", () => {
       { op: "remove", id: "table-1" },
       { op: "swap", a: "tools", b: "count-1" },
     ]);
-    expect(swapped.spec.root).toBe("split-2");
-    expect(swapped.spec.elements["split-2"].children).toEqual(["count-1", "tools"]);
-    expect(swapped.spec.elements["select-1"].props).toEqual({ column: "condition" });
+    const spec = swapped.layouts.main.spec;
+    expect(spec.root).toBe("split-2");
+    expect(spec.elements["split-2"].children).toEqual(["count-1", "tools"]);
+    expect(spec.elements["select-1"].props).toEqual({ column: "condition" });
     expect(Object.keys(swapped.state.filter?.A ?? {}).toSorted()).toEqual(["agent", "count-1"]);
 
     const next = applyDashboardEdits(swapped, [
@@ -75,7 +86,7 @@ describe("dashboard edits", () => {
       { op: "set_props", id: "tools", props: { gap: 4, direction: null } },
       { op: "set_filter", scope: "A", source: "agent", facet: "area", clause: null },
     ]);
-    expect(next.spec).toEqual({
+    expect(next.layouts.main.spec).toEqual({
       root: "tools",
       elements: {
         tools: { type: "stack", props: { gap: 4 }, children: ["select-1"] },
@@ -96,6 +107,20 @@ describe("dashboard edits", () => {
       [[{ op: "unbind", id: "slot-1", type: "filter" }], 0, "not bound"],
       [[{ op: "remove_data", name: "infected" }], 0, 'no data source "infected"'],
       [[BUILD[1], BUILD[2], { op: "swap", a: "split-1", b: "count-1" }], 2, "cannot swap"],
+      [[BUILD[1], { op: "add_tab", tile: "count-1", type: "text" }], 1, "not a view"],
+      [[BUILD[1], { op: "set_active_tab", tile: "count-1", id: "slot-1" }], 1, "not a tab"],
+      [
+        [
+          BUILD[1],
+          { op: "add_layout", name: "B" },
+          { op: "add", type: "table", layout: "layout-1" },
+          { op: "move_tab", id: "table-1", to: "count-1" },
+        ],
+        3,
+        "different layouts",
+      ],
+      [[{ op: "remove_layout", id: "main" }], 0, "the only layout"],
+      [[{ op: "set_active_layout", id: "nope" }], 0, 'no layout "nope"'],
     ];
     for (const [edits, index, message] of cases) {
       let error: unknown;
@@ -112,6 +137,77 @@ describe("dashboard edits", () => {
       });
     }
     expect(base).toEqual(emptyWorkspaceDocument());
+  });
+});
+
+describe("tabs and layouts", () => {
+  const TWO_VIEWS: DashboardEdit[] = [
+    { op: "add", type: "table", id: "table" },
+    { op: "add", type: "count", id: "count", at: { beside: "table" } },
+  ];
+
+  test("add_tab wraps a bare view; move_tab and close_tab keep every tile valid", () => {
+    let doc = applyDashboardEdits(emptyWorkspaceDocument(), [
+      ...TWO_VIEWS,
+      { op: "add_tab", tile: "table", type: "histogram", id: "hist", props: { filter: filterA } },
+    ]);
+    const spec = () => doc.layouts.main.spec;
+    expect(spec().elements["tabs-1"]).toEqual({ type: "tabs", props: { active: "hist" }, children: ["table", "hist"] });
+    expect(doc.state.filter?.A).toEqual({});
+    expect(parseWorkspaceDocument(doc).ok).toBe(true);
+
+    doc = applyDashboardEdits(doc, [
+      { op: "set_active_tab", tile: "tabs-1", id: "table" },
+      { op: "move_tab", id: "hist", to: "count" },
+    ]);
+    expect(spec().elements["tabs-1"]).toEqual({ type: "tabs", props: { active: "table" }, children: ["table"] });
+    expect(spec().elements["tabs-2"]).toEqual({ type: "tabs", props: { active: "hist" }, children: ["count", "hist"] });
+    expect(parseWorkspaceDocument(doc).ok).toBe(true);
+
+    doc = applyDashboardEdits(doc, [{ op: "move_tab", id: "hist", to: "count", index: 0 }]);
+    expect(spec().elements["tabs-2"].children).toEqual(["hist", "count"]);
+
+    doc = applyDashboardEdits(doc, [{ op: "close_tab", id: "table" }]);
+    expect(spec().elements["tabs-1"]).toBeUndefined();
+    expect(spec().elements["slot-1"]).toEqual({ type: "slot", props: {}, children: [] });
+    expect(parseWorkspaceDocument(doc).ok).toBe(true);
+
+    doc = applyDashboardEdits(doc, [{ op: "remove", id: "hist" }]);
+    expect(spec().elements["tabs-2"]).toEqual({ type: "tabs", props: { active: "count" }, children: ["count"] });
+    expect(parseWorkspaceDocument(doc).ok).toBe(true);
+  });
+
+  test("layouts: a copy gets fresh ids, add targets the active layout, removal falls back", () => {
+    let doc = applyDashboardEdits(emptyWorkspaceDocument(), [
+      ...TWO_VIEWS,
+      { op: "add_layout", id: "copy", name: "Copy", from: "main" },
+      { op: "add_layout", name: "Blank" },
+      { op: "set_active_layout", id: "copy" },
+      { op: "add", type: "count", id: "count-x" },
+    ]);
+    expect(Object.keys(doc.layouts)).toEqual(["main", "copy", "layout-1"]);
+    const ids = Object.values(doc.layouts).flatMap((layout) => Object.keys(layout.spec.elements));
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(doc.layouts.copy.spec.elements["count-x"]).toBeDefined();
+    expect(parseWorkspaceDocument(doc).ok).toBe(true);
+
+    doc = applyDashboardEdits(doc, [
+      { op: "rename_layout", id: "copy", name: "Review" },
+      { op: "remove_layout", id: "copy" },
+    ]);
+    expect(doc.layout).toBe("main");
+    expect(Object.keys(doc.layouts)).toEqual(["main", "layout-1"]);
+  });
+
+  test("an element id in two layouts is rejected with a pointer", () => {
+    const doc = emptyWorkspaceDocument();
+    const parsed = parseWorkspaceDocument({
+      ...doc,
+      layouts: { ...doc.layouts, other: { name: "Other", spec: doc.layouts.main.spec } },
+    });
+    expect(parsed.ok ? [] : parsed.issues.map((issue) => issue.pointer)).toEqual([
+      "/layouts/other/spec/elements/slot-1",
+    ]);
   });
 });
 

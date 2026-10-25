@@ -27,7 +27,7 @@ function memoryTransport(server: Workspace, { live = true } = {}): WorkspaceTran
 const agentWrite = (server: Workspace, base: number, ops: JsonPatchOp[]) =>
   server.patch(ops, { base, actor: { kind: "mcp", agent: "omp" } });
 
-/** A synced session whose dashboard is one count element, `slot-1`. */
+/** A synced session whose dashboard is one count element, `count-1`. */
 async function session(options?: { live?: boolean }) {
   const server = Workspace.memory();
   const workspace = new WorkspaceStore();
@@ -47,29 +47,29 @@ describe("WorkspaceSync", () => {
     const { server, workspace, sync } = await session();
     expect(server.get()).toMatchObject({
       revision: 1,
-      document: { spec: { elements: { "slot-1": { type: "count" } } } },
+      document: { layouts: { main: { spec: { elements: { "count-1": { type: "count" } } } } } },
     });
 
-    workspace.setElementProps("slot-1", { title: "Cells" });
-    workspace.setElementProps("slot-1", { title: "All cells" });
+    workspace.setElementProps("count-1", { title: "Cells" });
+    workspace.setElementProps("count-1", { title: "All cells" });
     await sync.flush();
     expect(server.get()).toMatchObject({
       revision: 2,
-      document: { spec: { elements: { "slot-1": { props: { title: "All cells" } } } } },
+      document: { layouts: { main: { spec: { elements: { "count-1": { props: { title: "All cells" } } } } } } },
     });
   });
 
   test("selection and other session state never reach the server document", async () => {
     const { server, workspace, sync } = await session();
-    workspace.selectElement("slot-1");
-    workspace.setFullscreen("slot-1");
+    workspace.selectElement("count-1");
+    workspace.setFullscreen("count-1");
     await sync.flush();
     expect(server.get().revision).toBe(1);
   });
 
   test("a remote edit applies locally and rebases pending local edits instead of dropping either", async () => {
     const { server, workspace, sync } = await session();
-    workspace.setElementProps("slot-1", { title: "Mine" });
+    workspace.setElementProps("count-1", { title: "Mine" });
     await agentWrite(server, 1, [{ op: "add", path: "/data/infected", value: { sql: "infected" } }]);
     await sync.flush();
 
@@ -77,7 +77,7 @@ describe("WorkspaceSync", () => {
       revision: 3,
       document: {
         data: { infected: { sql: "infected" } },
-        spec: { elements: { "slot-1": { props: { title: "Mine" } } } },
+        layouts: { main: { spec: { elements: { "count-1": { props: { title: "Mine" } } } } } },
       },
     });
     expect(workspace.snapshot().data).toEqual({ infected: { sql: "infected" } });
@@ -86,7 +86,7 @@ describe("WorkspaceSync", () => {
   test("a stale revision (409) replays local ops onto the server document and resends", async () => {
     const { server, workspace, sync } = await session({ live: false });
     await agentWrite(server, 1, [{ op: "add", path: "/data/infected", value: { sql: "infected" } }]);
-    workspace.setElementProps("slot-1", { title: "Mine" });
+    workspace.setElementProps("count-1", { title: "Mine" });
     await sync.flush(); // 409 → rebase onto revision 2
     await sync.flush(); // resend on top of it
 
@@ -94,7 +94,7 @@ describe("WorkspaceSync", () => {
       revision: 3,
       document: {
         data: { infected: { sql: "infected" } },
-        spec: { elements: { "slot-1": { props: { title: "Mine" } } } },
+        layouts: { main: { spec: { elements: { "count-1": { props: { title: "Mine" } } } } } },
       },
     });
   });

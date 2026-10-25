@@ -13,15 +13,28 @@ function document(largeSql = "area > 20") {
       infected: { where: { op: "eq", column: "condition", value: "infected" } },
       large: { from: "infected", sql: largeSql },
     },
-    spec: {
-      root: "root",
-      elements: {
-        root: { type: "stack", props: {}, children: ["count", "table", "title"] },
-        count: { type: "count", props: { data: "infected", filter: filterA }, children: [] },
-        table: { type: "table", props: { filter: filterA }, children: [] },
-        title: { type: "text", props: { text: "Cells" }, children: [] },
+    layouts: {
+      main: {
+        name: "Main",
+        spec: {
+          root: "root",
+          elements: {
+            root: { type: "stack", props: {}, children: ["table", "title"] },
+            table: { type: "table", props: { filter: filterA }, children: [] },
+            title: { type: "text", props: { text: "Cells" }, children: [] },
+          },
+        },
+      },
+      // An element of a layout nobody is looking at still has a result.
+      other: {
+        name: "Other",
+        spec: {
+          root: "count",
+          elements: { count: { type: "count", props: { data: "infected", filter: filterA }, children: [] } },
+        },
       },
     },
+    layout: "main",
     // The table publishes a brush; every other member of A sees it, the table does not.
     state: { filter: { A: { table: { area: { op: "gt", column: "area", value: 20 } } } } },
   };
@@ -64,7 +77,7 @@ async function directCount(where: string): Promise<number> {
 }
 
 describe("GET /api/workspace/elements/:id and /data/:name", () => {
-  test("an element counts its data source AND the other members' clauses, never its own", async () => {
+  test("an element of any layout counts its data source AND the other members' clauses, never its own", async () => {
     const state = await session();
     const count = await result(state, { element: "count" });
     expect(count.status).toBe(200);

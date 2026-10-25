@@ -23,7 +23,7 @@ import {
 import { createPatch } from "rfc6902";
 import { z } from "zod";
 
-import { COMPONENTS } from "../frontend/core/workspace/dashboard.ts";
+import { COMPONENTS, takenIds } from "../frontend/core/workspace/dashboard.ts";
 import type { WorkspaceDocument } from "../frontend/core/workspace/types.ts";
 import { hasBearer } from "./mcp-token.ts";
 import { rowWords } from "./observation-sets.ts";
@@ -41,14 +41,14 @@ import {
 } from "../frontend/core/workspace/edits.ts";
 
 const INSTRUCTIONS = `ndea is a dashboard over single-cell and imaging observations (one row per observation).
-The workspace is one JSON document {data, spec, state}:
+The workspace is one JSON document {data, layouts, layout, state}:
 - data: named data sources {from?, where?, sql?}. A source narrows its \`from\` source (or every observation) by a typed clause (\`where\`, e.g. {op:'eq', column:'predicted_infection_state', value:'infected'}; {op:'inSet', set} for a saved set) and/or a SQL predicate (\`sql\`).
-- spec: a json-render flat spec {root, elements}; each element is {type, props, children}. Layout: split (exactly two children), stack (any children), slot (an empty tile). Content: text, select, and views (scatter, table, count, histogram, vgplot, ...). Props are \`data\` (a data source name; omitted = every observation), \`title\`, coordination bindings, and the component's own config over its defaults (list_components).
-- state: coordination cells state[type][scope] for focus, filter, colorBy, viewSync, ordering. An element joins a scope through a binding prop: props.filter = {"$bindState": "/filter/A"}.
+- layouts: named layouts {[id]: {name, spec}}; \`layout\` is the id of the one the person sees. Each spec is a json-render flat spec {root, elements}; each element is {type, props, children}. Element ids are unique across every layout. Layout components: split (exactly two children), stack (any children), tabs (a tile holding several views; \`active\` is the shown child's id), slot (an empty tile). A view leaf on its own is a one-tab tile. Content: text, select, and views (scatter, table, count, histogram, vgplot, ...). Props are \`data\` (a data source name; omitted = every observation), \`title\`, coordination bindings, and the component's own config over its defaults (list_components).
+- state: coordination cells state[type][scope] for focus, filter, colorBy, viewSync, ordering, shared by every layout. An element joins a scope through a binding prop: props.filter = {"$bindState": "/filter/A"}.
 A filter scope is a crossfilter: state.filter[scope] = {source: {facet: clause}}. Each member shows its data source AND every other source's clauses, never its own (an element's source key is its id). Write your own clauses with set_filter under your own source key (e.g. "agent").
 \`count\` is the metric component: it shows how many observations its data source and filter scope select.
 \`vgplot\` props are a Mosaic plot spec: \`entries\` is the plot's marks and interactors in order, \`attributes\` the other Plot options. Reserved params: marks read data {from:"$table", filterBy:"$scope"}, and an interactor publishes its brush into the filter scope with as:"$brush". Example histogram: entries [{mark:"rectY", data:{from:"$table", filterBy:"$scope"}, x:{bin:"area"}, y:{count:[]}}, {select:"intervalX", as:"$brush", field:"area"}].
-Start with get_workspace, list_components, and list_columns. Change the dashboard with edit_dashboard (a batch applied atomically); patch_workspace applies raw JSON Patch. Every write is validated like a user edit: a rejected call returns issues with JSON Pointers (/ops/<i> names the op; /spec/elements/<id>/props/<key> names a bad prop): fix and retry.
+Start with get_workspace, list_components, and list_columns; list_collections names the project's collections and the open one. Change the dashboard with edit_dashboard (a batch applied atomically); patch_workspace applies raw JSON Patch. Every write is validated like a user edit: a rejected call returns issues with JSON Pointers (/ops/<i> names the op; /layouts/<layout>/spec/elements/<id>/props/<key> names a bad prop): fix and retry.
 Read numbers with get_result. The open browser tab shows every accepted change live.
 get_history lists recent revisions (who wrote each, and its ops); restore_revision brings an earlier revision back as a new one.`;
 
@@ -161,7 +161,8 @@ async function runEdits(
     if (ops.length === 0) return ok({ revision, changed: false });
     const result = await state.workspace.patch(ops, { base: revision, actor });
     if (result.kind === "accepted") {
-      const added = Object.keys(next.spec.elements).filter((id) => !Object.hasOwn(base.spec.elements, id));
+      const before = takenIds(base);
+      const added = [...takenIds(next)].filter((id) => !before.has(id));
       return ok({ revision: result.revision, changed: true, ...(added.length > 0 ? { added } : {}) });
     }
     if (result.kind === "invalid") {
@@ -197,7 +198,7 @@ export function createNdeaMcpServer(state: ServerSession, actor: WorkspaceActor)
     {
       title: "Read the workspace",
       description:
-        "Read the workspace document at its current revision: `data` (named data sources), `spec` (the dashboard: {root, elements}, each element {type, props, children}), and `state` (coordination cells state[type][scope]; elements bind them with props like filter: {$bindState: '/filter/A'}).",
+        "Read the workspace document at its current revision: `data` (named data sources), `layouts` (named layouts {[id]: {name, spec}}, each spec {root, elements} with elements {type, props, children}; element ids are unique across layouts), `layout` (the id of the layout the person sees), and `state` (coordination cells state[type][scope] every layout shares; elements bind them with props like filter: {$bindState: '/filter/A'}).",
       inputSchema: z.object({}),
       annotations: READ,
     },
@@ -260,6 +261,18 @@ export function createNdeaMcpServer(state: ServerSession, actor: WorkspaceActor)
     },
   );
 
+  server.registerTool(
+    "list_collections",
+    {
+      title: "List collections",
+      description:
+        "List the project's collections (each a group of datasets with their obs counts) and the open one. Only the open collection's datasets are loaded; inside it, one dataset is a filter clause on `_dataset`. Switching collection re-loads the data and happens in the browser (Data panel or ⌘K), not here.",
+      inputSchema: z.object({}),
+      annotations: READ,
+    },
+    async () => ok({ collection: state.status.collection, collections: state.status.collections }),
+  );
+
   const TargetSchema = z
     .object({
       element: z.string().optional().describe("an element id or its reference ndea://<workspace>/<id>"),
@@ -291,7 +304,7 @@ export function createNdeaMcpServer(state: ServerSession, actor: WorkspaceActor)
     {
       title: "Edit the dashboard",
       description:
-        "Change the workspace with a batch of ops, applied atomically. Data: set_data {name, source} adds or replaces a data source; remove_data {name}. Elements: add {type, id?, props?, at?} places a new element: at {slot} fills an empty slot, {stack, index?} inserts into a stack, {beside, side?: left|right|up|down} splits that element (default: fill an empty root slot, else split the root to its right); set_props {id, props} merges props (null removes a key); remove {id}; swap {a, b}. Coordination: bind {id, type, scope} sets the element's {$bindState} prop and creates the link (scope) if needed; unbind {id, type} also drops the element's own filter clauses; set_filter {scope, source, facet, clause|null} writes your own crossfilter clause under your source key (every member sees it). Any existing element id may be a view's copied reference ndea://<workspace>/<id>. Pass `revision` to apply only if nothing changed since you read it. Returns the new revision and the ids of added elements.",
+        "Change the workspace with a batch of ops, applied atomically. Data: set_data {name, source} adds or replaces a data source; remove_data {name}. Layouts: add_layout {id?, name, from?} adds a named layout (`from` duplicates that layout with fresh element ids; omitted: one empty tile) without showing it; rename_layout {id, name}; remove_layout {id} (never the last); set_active_layout {id} shows it. Elements (each op finds the layout holding its element): add {type, id?, props?, at?, layout?} places a new element in `layout` (default: the layout holding `at`, else the active one): at {slot} fills an empty slot, {stack, index?} inserts into a stack, {beside, side?: left|right|up|down} splits that element's tile (default: fill an empty root slot, else split the root to its right); set_props {id, props} merges props (null removes a key); remove {id}; swap {a, b}. Tabs: add_tab {tile, type, props?, id?} adds a view as the tile's active tab (a bare view tile is wrapped in tabs; an empty tile is filled); move_tab {id, to, index?} moves a view into another tile of the same layout (a tabs tile, one of its tabs, a bare view, or an empty tile) as its active tab; close_tab {id} removes a view from its tile (the last tab leaves an empty tile); set_active_tab {tile, id} shows a tab. Coordination: bind {id, type, scope} sets the element's {$bindState} prop and creates the link (scope) if needed; unbind {id, type} also drops the element's own filter clauses; set_filter {scope, source, facet, clause|null} writes your own crossfilter clause under your source key (every member sees it). Any existing element id may be a view's copied reference ndea://<workspace>/<id>. Pass `revision` to apply only if nothing changed since you read it. Returns the new revision and the ids of added elements.",
       inputSchema: z.object({
         revision: RevisionSchema.optional(),
         ops: z.array(DashboardEditSchema).min(1).max(100),
@@ -306,7 +319,7 @@ export function createNdeaMcpServer(state: ServerSession, actor: WorkspaceActor)
     {
       title: "Patch the workspace document",
       description:
-        "Escape hatch for edits the named ops do not cover: apply RFC 6902 JSON Patch ops to the document (get_workspace) at an exact revision, e.g. replace /state/focus/A or /spec/elements/<id>/props/<key>. The patch is validated like any edit and applies atomically.",
+        "Escape hatch for edits the named ops do not cover: apply RFC 6902 JSON Patch ops to the document (get_workspace) at an exact revision, e.g. replace /state/focus/A or /layouts/<layout>/spec/elements/<id>/props/<key>. The patch is validated like any edit and applies atomically.",
       inputSchema: z.object({ revision: RevisionSchema, ops: z.array(JsonPatchOpSchema).min(1).max(1000) }),
       annotations: WRITE,
     },

@@ -10,7 +10,7 @@
  */
 
 import { z } from "zod";
-import type { HarnessPresence } from "./status";
+import { CollectionSummarySchema, type HarnessPresence } from "./status";
 import type { WorkspaceChange } from "./workspace";
 
 export {
@@ -58,8 +58,8 @@ export type {
   WorkspaceRevision,
   WorkspaceSnapshot,
 } from "./workspace";
-export { HarnessPresenceSchema, RuntimeStatusSchema } from "./status";
-export type { HarnessPresence, RuntimeStatus } from "./status";
+export { CollectionSummarySchema, HarnessPresenceSchema, RuntimeStatusSchema } from "./status";
+export type { CollectionSummary, HarnessPresence, RuntimeStatus } from "./status";
 export { DatasetStructureSchema, type DatasetStructure } from "./structure";
 
 // ─── Shared primitives ──────────────────────────────────────────────────────
@@ -316,6 +316,9 @@ export const MetadataSchema = z.looseObject({
   spatial: SpatialMetaSchema.optional(),
   plate: z.boolean().optional(),
   dataset_keys: z.array(z.string()).optional(),
+  /** The project's collections and the open one (`ndea view --collection`); `dataset_keys` lists its datasets. */
+  collections: z.array(CollectionSummarySchema).optional(),
+  collection: z.string().optional(),
   plate_ome_version: z.enum(["0.4", "0.5"]).optional(),
   plate_pixel_scale: z.object({ x: z.number(), y: z.number() }).optional(),
   plate_channels: z.array(PlateChannelSchema).optional(),
@@ -397,6 +400,11 @@ export interface NdeaProtocol {
   "harness/watch": {
     req: Record<string, never>;
     res: HarnessPresence;
+  };
+  /** Pushes the collection the server serves on subscribe and after every switch (`POST /api/collection`). */
+  "session/watch": {
+    req: Record<string, never>;
+    res: { collection: string };
   };
 }
 

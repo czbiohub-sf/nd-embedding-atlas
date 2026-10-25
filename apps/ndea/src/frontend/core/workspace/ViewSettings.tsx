@@ -28,7 +28,7 @@ import { z } from "zod";
 import type { CoordinationTypeId } from "@/core/coordination/types";
 import { useDatasetSession } from "@/hooks/useDatasetSession";
 import { configFields, type ConfigField } from "./config-fields";
-import { COMPONENTS, componentProps, elementData, elementScope, type DashboardElement } from "./dashboard";
+import { allElements, COMPONENTS, componentProps, elementData, elementScope, type DashboardElement } from "./dashboard";
 import type { DashboardEdit } from "./edits";
 import { LINK_DOT, LINK_LABEL } from "./LinksPopover";
 import { copyReference } from "./reference";
@@ -49,7 +49,7 @@ function apply(ws: WorkspaceStore, edits: DashboardEdit[]): void {
 /** The scope other views share for `type`: the most common one, else the first in state, else "A". */
 function sharedScope(document: WorkspaceDocument, type: CoordinationTypeId, id: string): string {
   const counts = new Map<string, number>();
-  for (const [other, element] of Object.entries(document.spec.elements)) {
+  for (const [other, element] of allElements(document)) {
     const scope = other === id ? undefined : elementScope(element, type);
     if (scope !== undefined) counts.set(scope, (counts.get(scope) ?? 0) + 1);
   }

@@ -110,5 +110,5 @@ async function serveFixture(): Promise<void> {
 
   console.log(`[dev] fixture: ${rows} synthetic rows on ${server.url}`);
   console.log("[dev] numeric: value, score, umap_0, umap_1 | categorical: category, _dataset, obs_name");
-  void registerGracefulShutdown({ host: "127.0.0.1", port }, state, server);
+  void registerGracefulShutdown({ host: "127.0.0.1", port }, () => state, server);
 }

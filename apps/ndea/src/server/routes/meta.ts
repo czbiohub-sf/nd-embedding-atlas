@@ -120,6 +120,10 @@ export function handleMetadata(state: ServerSession, config: DatasetSessionMetad
   if (config.datasetKeys) {
     result.dataset_keys = config.datasetKeys;
   }
+  if (state.status.collections.length > 0) {
+    result.collections = state.status.collections;
+    result.collection = state.status.collection;
+  }
   if (config.datasetChannels) {
     result.dataset_channels = config.datasetChannels;
   }

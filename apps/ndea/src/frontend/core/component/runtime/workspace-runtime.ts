@@ -18,7 +18,7 @@ import type {
 import { createFilterBinding } from "@/core/coordination/filter-binding";
 import { COORDINATION_TYPES, type CoordinationTypeId, type CoordinationValue } from "@/core/coordination/types";
 import { COMPONENT_DEFINITIONS, type AnyComponentDefinition } from "@/core/component/definitions";
-import { componentProps, type DashboardElement } from "@/core/workspace/dashboard";
+import { activeSpec, componentProps, type DashboardElement } from "@/core/workspace/dashboard";
 import type { WorkspaceStore } from "@/core/workspace/workspace-store";
 import { createComponentHost, type ComponentHostDependencies, type HostHandle } from "./host";
 import { ComponentRuntime } from "./instance-runtime";
@@ -237,15 +237,17 @@ export class ComponentRuntimeManager {
   }
 
   /**
-   * Removed or retyped elements dispose; a config another writer changed (an
+   * Removed or retyped elements, and views outside the active layout, dispose
+   * (a switch back starts them again); a config another writer changed (an
    * agent, a remote revision) restarts the body so it reads the new props.
    */
   private reconcile(): void {
     const { session } = this.dependencies;
+    const shown = activeSpec(session.snapshot()).elements;
     let changed = false;
     // Deleting the current entry while iterating a Map is safe.
     for (const [id, entry] of this.live) {
-      const element = session.element(id);
+      const element = Object.hasOwn(shown, id) ? shown[id] : undefined;
       if (!element || element.type !== entry.type) {
         this.stop(id);
         this.bodyDocks.get(id)?.remove();

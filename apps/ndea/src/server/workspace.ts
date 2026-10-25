@@ -116,8 +116,10 @@ export class Workspace {
 
   /**
    * Open `path`; a missing file is written from `seed()` as revision 1. Invalid
-   * files throw. When the history lacks the current revision (a new history
-   * file, or the JSON was replaced), a `system` baseline row records it.
+   * files throw, and so does any other format version (no migrations: deleting
+   * the file reseeds it from the preset). When the history lacks the current
+   * revision (a new history file, or the JSON was replaced), a `system`
+   * baseline row records it.
    */
   static async open(
     path: string,
@@ -133,6 +135,15 @@ export class Workspace {
       } catch (error) {
         throw new WorkspaceFileError(path, [
           { pointer: "", detail: error instanceof Error ? error.message : String(error) },
+        ]);
+      }
+      const version = (json as { version?: unknown } | null)?.version;
+      if (version !== WORKSPACE_FORMAT_VERSION) {
+        throw new WorkspaceFileError(path, [
+          {
+            pointer: "/version",
+            detail: `format version ${JSON.stringify(version)} is not supported (this ndea reads version ${WORKSPACE_FORMAT_VERSION}); delete ${path} to reseed it from the preset`,
+          },
         ]);
       }
       const parsed = parseWorkspaceFile(json);
