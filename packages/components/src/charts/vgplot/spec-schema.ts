@@ -52,8 +52,9 @@ const plotEntrySchema: z.ZodType<PlotEntry> = z
   });
 
 export const vgplotConfigSchema: z.ZodType<VgplotConfig> = z.object({
-  entries: z.array(plotEntrySchema),
-  attributes: z.record(z.string(), jsonValueSchema),
+  // The view's mark and field pickers write the spec; settings never edit raw spec JSON.
+  entries: z.array(plotEntrySchema).meta({ title: "Plot entries", hidden: true }),
+  attributes: z.record(z.string(), jsonValueSchema).meta({ title: "Plot attributes", hidden: true }),
 });
 
 export const VGPLOT_DEFAULT_CONFIG: VgplotConfig = { entries: [], attributes: {} };

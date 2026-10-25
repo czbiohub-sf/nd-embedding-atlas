@@ -24,7 +24,7 @@ type OmeroChannel = Awaited<ReturnType<typeof loadOmeroChannels>>[number];
 /** Minimal interface for the idetik loader exposed by `OmeZarrImageSource.loader`. */
 interface IdetikLoader {
   getSourceDimensionMap(): {
-    x: { lods: { size: number; scale?: number; translation?: number }[] };
+    x: { unit?: string; lods: { size: number; scale?: number; translation?: number }[] };
     y: { lods: { size: number; scale?: number; translation?: number }[] };
     z?: { lods: { size: number }[] };
     t?: { lods: { size: number }[] };
@@ -190,7 +190,7 @@ export function useFovLoader({
         const sx = dims.x.lods[0].scale;
         const sy = dims.y.lods[0].scale;
         const translation = tx !== 0 || ty !== 0 ? { x: tx, y: ty } : null;
-        const scale = sx != null && sy != null ? { x: sx, y: sy } : null;
+        const scale = sx != null && sy != null ? { x: sx, y: sy, unit: dims.x.unit } : null;
         console.log("[useFovLoader] setBounds", { zMax, tMax, translation, scale });
         actionsRef.current.setBounds({ zMax, tMax, translation, scale });
       } catch (e) {
@@ -344,6 +344,7 @@ export function useFovLoader({
         return {
           label,
           color: hex,
+          configuredColor: hex.toUpperCase(),
           visible: true,
           contrastLimits: ch.contrastLimits,
           contrastRange,
@@ -367,6 +368,7 @@ export function useFovLoader({
             // user's visibility/contrast/blend across obs clicks in one plate.
             contrastRange: defaultChannelState[i].contrastRange,
             stats: defaultChannelState[i].stats,
+            configuredColor: defaultChannelState[i].configuredColor,
           }))
         : defaultChannelState;
 

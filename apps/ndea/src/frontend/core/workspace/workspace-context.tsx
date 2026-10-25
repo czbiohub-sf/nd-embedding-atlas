@@ -40,7 +40,7 @@ export function WorkspaceProvider({
   const { metadata } = state;
 
   const [{ workspace: ws, componentRuntimes, initial }] = useState(() => {
-    const w = new WorkspaceStore();
+    const w = new WorkspaceStore(snapshot.name);
     // An invalid server document opens read-only and is never overwritten.
     const decoded = decodeWorkspaceDocument(snapshot.document);
     if (decoded.ok) w.applyDocument(decoded.state);

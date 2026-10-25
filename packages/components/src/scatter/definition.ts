@@ -20,24 +20,38 @@ export function createScatterDefinition({
         obsmKey: z
           .string()
           .nullable()
-          .describe("The obsm embedding shown. Switching it resets xDim/yDim to 0/1 and zDim to null."),
-        colorByColumn: z.string().nullable(),
-        xDim: dim.describe("Embedding dimension on the x axis (0-based column of the obsm matrix)."),
-        yDim: dim.describe("Embedding dimension on the y axis (0-based column of the obsm matrix)."),
+          .describe("The obsm embedding shown. Switching it resets xDim/yDim to 0/1 and zDim to null.")
+          .meta({ title: "Embedding", section: "data", control: "obsm" }),
+        // The rest sit in the view's control group, axis picker and legend.
+        colorByColumn: z.string().nullable().meta({ title: "Color by", control: "column", hidden: true }),
+        xDim: dim
+          .describe("Embedding dimension on the x axis (0-based column of the obsm matrix).")
+          .meta({ title: "X axis", hidden: true }),
+        yDim: dim
+          .describe("Embedding dimension on the y axis (0-based column of the obsm matrix).")
+          .meta({ title: "Y axis", hidden: true }),
         zDim: dim
           .nullable()
           .describe(
             "3D: the embedding dimension on the z axis (the embedding needs more columns than zDim). null = 2D.",
-          ),
+          )
+          .meta({ title: "Z axis", hidden: true }),
         density: z
           .object({ mode: z.enum(["mean", "dominant", "weave"]) })
           .describe(
             "How dense overviews composite categorical colors per pixel: mean (average color), dominant (the most frequent category), or weave (categories interleaved by share). Continuous color always averages.",
-          ),
-        pointSize: z.number().positive().max(0.02).describe("Point radius in normalized device units (default 0.002)."),
+          )
+          .meta({ title: "Density", hidden: true }),
+        pointSize: z
+          .number()
+          .positive()
+          .max(0.02)
+          .describe("Point radius in normalized device units (default 0.002).")
+          .meta({ title: "Point size", hidden: true }),
         legend: z
           .enum(["popover", "pinned"])
-          .describe("popover: the legend opens from the control group; pinned: it stays in the view's bottom-left."),
+          .describe("popover: the legend opens from the control group; pinned: it stays in the view's bottom-left.")
+          .meta({ title: "Legend", hidden: true }),
       }),
       defaultValue: {
         obsmKey: null,

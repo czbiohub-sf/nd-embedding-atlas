@@ -16,12 +16,13 @@ export function createImageViewerDefinition({
     title: "Image Viewer",
     config: {
       schema: z.object({
-        datasetKey: z.string().nullable(),
+        datasetKey: z.string().nullable().meta({ title: "Dataset", section: "data", control: "dataset" }),
         render: z
           .enum(["local", "remote"])
           .describe(
             "Where the image renders. local: on this browser's GPU. remote: in headless Chrome on the ndea server's machine (next to the data, e.g. an HPC GPU node), streamed to this tile as video; pan, zoom and the viewer's controls still work.",
-          ),
+          )
+          .meta({ title: "Render", section: "display" }),
       }),
       defaultValue: { datasetKey: null, render: "local" } satisfies ImageViewerConfig,
     },

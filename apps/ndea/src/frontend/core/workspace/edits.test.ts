@@ -1,7 +1,14 @@
 import { describe, expect, test } from "bun:test";
 
-import { emptyWorkspaceDocument, parseWorkspaceDocument } from "../../frontend/core/workspace/document.ts";
-import { applyDashboardEdits, WorkspaceEditError, type DashboardEdit } from "../workspace-edits.ts";
+import { emptyWorkspaceDocument, parseWorkspaceDocument } from "./document.ts";
+import {
+  applyDashboardEdits,
+  elementReference,
+  resolveEditReferences,
+  resolveElementId,
+  WorkspaceEditError,
+  type DashboardEdit,
+} from "./edits.ts";
 
 const filterA = { $bindState: "/filter/A" };
 const large = { op: "gt", column: "area", value: 40 } as const;
@@ -105,5 +112,19 @@ describe("dashboard edits", () => {
       });
     }
     expect(base).toEqual(emptyWorkspaceDocument());
+  });
+});
+
+describe("element references", () => {
+  test("a reference into this workspace resolves; another workspace's is rejected", () => {
+    expect(resolveElementId("scatter-1", "atlas")).toBe("scatter-1");
+    expect(resolveElementId(elementReference("atlas", "scatter-1"), "atlas")).toBe("scatter-1");
+    expect(() => resolveElementId("ndea://other/scatter-1", "atlas")).toThrow(/workspace "other"/);
+    const edits: DashboardEdit[] = [
+      { op: "swap", a: "ndea://atlas/a", b: "b" },
+      { op: "remove", id: "ndea://other/c" },
+    ];
+    expect(() => resolveEditReferences(edits, "atlas")).toThrow(WorkspaceEditError);
+    expect(resolveEditReferences(edits.slice(0, 1), "atlas")).toEqual([{ op: "swap", a: "a", b: "b" }]);
   });
 });

@@ -14,6 +14,7 @@ import { cn } from "@ndea/ui/lib/utils";
 
 import { useOpenCommandPalette } from "@/components/ThemeCommandPalette";
 import { DashboardPane } from "@/core/workspace/DashboardPane";
+import { OpenLinksContext } from "@/core/workspace/LinksPopover";
 import { DataFlyout, HarnessFlyout, LayoutsFlyout, LinksFlyout, SettingsFlyout } from "./flyouts";
 import { isConnected, useHarnessPresence } from "./presence";
 
@@ -180,7 +181,9 @@ export function Shell() {
             : "left-[calc(var(--edge)_+_var(--rail-width)_+_var(--gutter))]",
         )}
       >
-        <DashboardPane />
+        <OpenLinksContext value={() => setFlyout({ panel: "links", hovered: false, pinned: true })}>
+          <DashboardPane />
+        </OpenLinksContext>
       </main>
     </div>
   );

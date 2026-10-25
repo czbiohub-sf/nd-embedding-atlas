@@ -16,4 +16,6 @@ export interface WorkspaceSession {
   selectedElementId: string | null;
   /** element whose body fills the workspace; esc exits */
   fullscreen: string | null;
+  /** member tiles of the link row under the pointer; their tiles draw a ring */
+  highlightedElementIds: readonly string[];
 }

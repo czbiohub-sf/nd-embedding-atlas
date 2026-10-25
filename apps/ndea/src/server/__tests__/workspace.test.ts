@@ -43,7 +43,7 @@ async function seeded(): Promise<{ workspace: Workspace; path: string }> {
   dir = await mkdtemp(join(tmpdir(), "ndea-workspace-"));
   const path = join(dir, "nested", "workspace.json");
   const workspace = await Workspace.open(path, seed, { validate });
-  expect(workspace.get()).toEqual({ revision: 1, document: DOCUMENT });
+  expect(workspace.get()).toEqual({ revision: 1, document: DOCUMENT, name: "workspace" });
   expect(await Bun.file(path).json()).toMatchObject({ revision: 1, document: DOCUMENT });
   return { workspace, path };
 }
@@ -67,7 +67,7 @@ describe("Workspace", () => {
     const { workspace, path } = await seeded();
     const before = await Bun.file(path).text();
     const result = await workspace.patch([addData("large")], { base: 0, actor: browser });
-    expect(result).toEqual({ kind: "conflict", snapshot: { revision: 1, document: DOCUMENT } });
+    expect(result).toEqual({ kind: "conflict", snapshot: { revision: 1, document: DOCUMENT, name: "workspace" } });
     expect(await Bun.file(path).text()).toBe(before);
     expect(workspace.history()).toHaveLength(1);
   });
@@ -87,7 +87,7 @@ describe("Workspace", () => {
         issues: [{ pointer: "/data/missing" }],
       },
     );
-    expect(workspace.get()).toEqual({ revision: 1, document: DOCUMENT });
+    expect(workspace.get()).toEqual({ revision: 1, document: DOCUMENT, name: "workspace" });
     expect(workspace.history()).toEqual(history);
     expect(await Bun.file(path).text()).toBe(before);
   });
@@ -102,7 +102,7 @@ describe("Workspace", () => {
     expect(() => {
       document.spec.elements.hist!.props.field = "perimeter";
     }).toThrow(TypeError);
-    expect(workspace.get()).toEqual({ revision: 1, document: DOCUMENT });
+    expect(workspace.get()).toEqual({ revision: 1, document: DOCUMENT, name: "workspace" });
     expect(workspace.history()).toEqual(history);
     // Patches still apply (to a clone), and the next accepted document is frozen too.
     expect(await workspace.patch([addData("large")], { base: 1, actor: cli })).toEqual({
@@ -206,7 +206,7 @@ describe("Workspace", () => {
     const history = workspace.history();
     await expect(workspace.patch([addData("a")], { base: 1, actor: browser })).rejects.toThrow();
     await rm(`${path}.${process.pid}.tmp`, { recursive: true });
-    expect(workspace.get()).toEqual({ revision: 1, document: DOCUMENT });
+    expect(workspace.get()).toEqual({ revision: 1, document: DOCUMENT, name: "workspace" });
     expect(workspace.history()).toEqual(history);
     expect(workspace.at(2)).toBeUndefined();
     // The queue survives the failure.

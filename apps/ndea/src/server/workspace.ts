@@ -9,7 +9,7 @@
 
 import { Database } from "bun:sqlite";
 import { mkdirSync, renameSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
+import { basename, dirname } from "node:path";
 import {
   JsonPatchOpSchema,
   type JsonPatchOp,
@@ -79,6 +79,8 @@ const COLUMNS = "revision, base, actor_kind, actor_agent, ops, committed_at, res
 
 export class Workspace {
   readonly path: string;
+  /** The file stem: the `<name>` in `ndea://<name>/<element-id>` references. */
+  readonly name: string;
   private revision = 0;
   private document: WorkspaceDocument;
   private readonly db: Database;
@@ -96,6 +98,7 @@ export class Workspace {
     persist: (revision: number, document: WorkspaceDocument) => void,
   ) {
     this.path = path;
+    this.name = basename(path, ".json");
     this.document = deepFreeze(document);
     this.db = db;
     this.validate = validate;
@@ -148,7 +151,7 @@ export class Workspace {
 
   /** The accepted snapshot; its document is deep-frozen, so callers read it but never mutate it. */
   get(): WorkspaceSnapshot {
-    return { revision: this.revision, document: this.document };
+    return { revision: this.revision, document: this.document, name: this.name };
   }
 
   /** The document as committed at `revision`, if history has it. */
@@ -156,7 +159,7 @@ export class Workspace {
     const row = this.db
       .query<{ document: string }, [number]>("SELECT document FROM revisions WHERE revision = ?")
       .get(revision);
-    return row ? { revision, document: JSON.parse(row.document) } : undefined;
+    return row ? { revision, document: JSON.parse(row.document), name: this.name } : undefined;
   }
 
   /** Committed revisions, newest first, older than `before`. */

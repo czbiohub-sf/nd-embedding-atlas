@@ -17,7 +17,8 @@ export function createGalleryDefinition({
     type: "gallery",
     title: "Gallery",
     config: {
-      schema: z.object({ lanes: z.number().nullable() }),
+      // ponytail: the body sizes its lanes to the tile and ignores `lanes`; show it once the body reads it.
+      schema: z.object({ lanes: z.number().nullable().meta({ title: "Lanes", hidden: true }) }),
       defaultValue: { lanes: null } satisfies GalleryConfig,
     },
     documentation: {

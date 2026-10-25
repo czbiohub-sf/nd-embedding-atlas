@@ -169,9 +169,11 @@ entrypoints across workspaces.
   per-request `createMcpHandler`; tools close over the one server session and
   the request's actor. Only loopback `Host`/`Origin` (localhost, 127.0.0.1,
   [::1], `*.localhost`) and the bearer token in `~/.ndea/mcp-token` pass.
-  `edit_dashboard` compiles named ops on a draft document
-  (`server/workspace-edits.ts`) and applies the diff as one patch; add new
-  agent operations there, not as new write paths.
+  `edit_dashboard` compiles named ops on a draft document and applies the diff
+  as one patch. The browser's `WorkspaceStore.apply` runs the same ops; new
+  agent operations go in `core/workspace/edits.ts`, not as new write paths.
+  Element ids in tools accept a view reference `ndea://<workspace>/<id>`
+  (`resolveElementId`, same module); another workspace's reference is rejected.
 - `DatasetQuerySession` (`server/store.ts`) owns one DuckDB connection and the
   `dataset` VIEW: obs_base plus var and annotation joins. Base
   tables, the VIEW, temporary selections, and Mosaic preaggregations share that
@@ -189,6 +191,12 @@ entrypoints across workspaces.
   validation metadata, not a gate), and a lazy `load()` returning a
   `ComponentModule` that mounts a framework-neutral body. The element's props
   are its config, merged over `defaultValue`.
+- Config fields carry Zod `.meta({ title, section: "display" | "data",
+  control: "column" | "obsm" | "dataset", hidden })` (`ConfigFieldMeta` in
+  `@ndea/sdk`). `core/workspace/config-fields.ts` turns a schema into fields
+  and `ViewSettings.tsx` renders the gear popover from them (switch, segmented
+  for 2–3 options, select, slider when the range is explicit). Mark a field
+  `hidden` when the view itself already has the control.
 - `ComponentHost` is one plain interface: every service (data, `predicate`,
   `dataAPI`, focus, filter, colorBy, viewSync, ordering, GPU lease) is always
   present. `createComponentHost` (`frontend/core/component/runtime/host.ts`)
@@ -208,6 +216,16 @@ entrypoints across workspaces.
   Data, Links, Harness, Settings) open over the tiles on hover and dock when
   pinned (click or ⌘B). No top bar, status bar, or revision UI: history stays
   on the server (REST, CLI, MCP, TUI).
+- A view tile's 30px header: its tab, the embedding chip (embedding views),
+  then the link indicator + popover (`LinksPopover.tsx`: each link's value,
+  members, Unlink; hovering highlights member tiles through
+  `WorkspaceSession.highlightedElementIds`), the view settings gear, copy
+  reference (`reference.ts`: `ndea://<workspace name>/<element id>`), and
+  fullscreen. Right-click it to split or remove the tile.
+- The image viewer's top-left overlay holds Channels (visibility, named
+  colormaps, contrast over the channel-stats log histogram, auto contrast) and
+  View (T/Z, 2D/3D, focus box, volume, local/remote render); a scale bar in the
+  OME-Zarr axis unit sits bottom-right.
 - TypeGPU drives the WebGPU embedding view (`packages/components/src/scatter/gpu/gpu/`):
   SoA position columns (`/api/scatter-positions` sends the element's
   `xDim`/`yDim`/`zDim` columns of its `obsmKey`), one `project()` shared by every pass,

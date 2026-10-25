@@ -81,3 +81,53 @@ the Legend and Axes popovers rendered.
 - Embedding entries show the obsm key and dimension count; the prototype's method parameters
   and author ("n_neighbors 15 · You") have no source in our data.
 - The point-size icon is Lucide `circle-dot`, not the prototype's dots glyph.
+
+## Phase 3: links, view settings, copy reference, image viewer
+
+**Changed**
+
+- Shared edits (G6 prerequisite): `server/workspace-edits.ts` moved to `core/workspace/edits.ts`.
+  `WorkspaceStore.apply(edits)` commits named ops through the one write path, and remove /
+  source writes use it. AGENTS.md now says agent operations go there.
+- Link indicator and popover (G8, `LinksPopover.tsx`): one dot per link coloured by
+  `--scope-*`. Rows show the type, the link name, its value, member views and Unlink. Hovering
+  highlights member tiles (`WorkspaceSession.highlightedElementIds`). "Manage all scopes" pins
+  the Links flyout, which shares the same rows.
+- View settings (G9, `ViewSettings.tsx`, `config-fields.ts`): an editable title, then Display /
+  Data / Links tabs generated from each component's config schema through Zod
+  `.meta({ title, section, control, hidden })`. The footer holds copy reference, fullscreen,
+  duplicate and remove. `@ndea/ui` `Switch`.
+- Copy reference (G10, `reference.ts`): `ndea://<workspace name>/<element id>`. MCP accepts it
+  wherever it takes an element id and rejects another workspace's reference.
+  `GET /api/workspace` returns `name`.
+- Image viewer (X3):
+  - Channels panel: visibility, named colormaps, contrast over the log histogram, auto
+    contrast; it opens below the button on tiles under 300px.
+  - View panel: T/Z, 2D/3D, focus box, volume, local/remote render.
+  - A scale bar (1/2/5 × 10ⁿ in the OME-Zarr axis unit). `VolumeControls.tsx` is deleted.
+
+**Files:** `apps/ndea/src/frontend/core/workspace/{edits,edits.test,LinksPopover,ViewSettings,config-fields,config-fields.test,reference,workspace-store,DashboardPane,types,workspace-context}.ts(x)`,
+`core/shell/{Shell,flyouts}.tsx`, `server/{mcp,workspace}.ts`, `packages/protocol/src/workspace.ts`,
+`packages/ui/src/components/switch.tsx`, `packages/sdk/src/component.ts`, every
+`packages/components/src/*/definition.ts`,
+`packages/components/src/image-viewer/{CropViewer,body}.tsx` and
+`viewer/{ChannelControls,ViewerControls,ViewerContext,ViewerProvider,RemoteViewerProvider,useFovLoader,scale-bar}.ts(x)`.
+
+**Checked:** `vp run verify` green (17/17). `vp run build`. Binary smoke on infectomics: the header
+shows the link dots, gear, copy and fullscreen; the links popover listed Focus A (obs 66,262) and
+Filter A with members; the settings popover showed its tabs and footer; the Channels panel
+showed 3 channels with histograms and colormaps; the scale bar read 10–20 µm; the focus box is
+gold.
+
+**Deferred**
+
+- The table `columns` and gallery `lanes` config fields are hidden (no body reads them).
+  Phase 4's Fields menu takes over `columns`.
+- Contrast slider: dragging the limits inward from outside the data range shrinks the range
+  once mid-drag.
+
+**Remaining differences**
+
+- The prototype's settings Display tab for an embedding shows "Focus marker"; our embedding has
+  no such prop, so its Display tab says the controls sit on the view.
+- The link indicator uses `NdScopesIcon` (as `data/ScopeIndicator.jsx`), not Lucide `git-fork`.

@@ -39,7 +39,7 @@ jobs:
           persist-credentials: false
 
       - uses: oven-sh/setup-bun@v2
-      - uses: voidzero-dev/setup-vp@v1
+      - uses: voidzero-dev/setup-vp@v1.21.2
 
       - id: pages
         name: Configure Pages

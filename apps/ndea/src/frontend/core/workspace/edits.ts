@@ -16,7 +16,7 @@ import {
   COORDINATION_TYPE_IDS,
   COORDINATION_TYPES,
   type CoordinationState,
-} from "../frontend/core/coordination/types.ts";
+} from "../coordination/types.ts";
 import {
   COMPONENTS,
   elementScope,
@@ -28,11 +28,11 @@ import {
   swapElements,
   type Dashboard,
   type DashboardElement,
-} from "../frontend/core/workspace/dashboard.ts";
-import { dataSourceSchema } from "../frontend/core/workspace/data-sources.ts";
-import type { WorkspaceDocument } from "../frontend/core/workspace/types.ts";
+} from "./dashboard.ts";
+import { dataSourceSchema } from "./data-sources.ts";
+import type { WorkspaceDocument } from "./types.ts";
 
-const IdSchema = z.string().min(1);
+const IdSchema = z.string().min(1).describe("an element id or its reference ndea://<workspace>/<id>");
 const ScopeSchema = z.string().regex(/^[A-Za-z0-9_-]+$/, "scope names use letters, digits, _ and -");
 const CoordinationTypeSchema = z.enum(COORDINATION_TYPE_IDS);
 const PropsSchema = z.record(z.string(), z.json());
@@ -86,6 +86,51 @@ export class WorkspaceEditError extends Error {
     super(message);
     this.index = index;
   }
+}
+
+/** `ndea://<workspace>/<element-id>`: a pasteable pointer to one view. */
+export function elementReference(workspace: string, id: string): string {
+  return `ndea://${workspace}/${id}`;
+}
+
+/** A bare element id, or the id a reference into `workspace` names; throws for another workspace's reference. */
+export function resolveElementId(value: string, workspace: string): string {
+  const match = /^ndea:\/\/([^/]+)\/(.+)$/.exec(value);
+  if (!match) return value;
+  if (match[1] !== workspace)
+    throw new Error(`${value} names workspace "${match[1]}"; this is "${workspace}" (ndea://${workspace}/<id>)`);
+  return match[2];
+}
+
+/** Resolve every existing-element id in `edits` (references allowed); throws `WorkspaceEditError` naming the op. */
+export function resolveEditReferences(edits: readonly DashboardEdit[], workspace: string): DashboardEdit[] {
+  return edits.map((edit, index) => {
+    const id = (value: string) => {
+      try {
+        return resolveElementId(value, workspace);
+      } catch (error) {
+        throw new WorkspaceEditError(index, (error as Error).message);
+      }
+    };
+    switch (edit.op) {
+      case "set_props":
+      case "remove":
+      case "bind":
+      case "unbind":
+        return { ...edit, id: id(edit.id) };
+      case "swap":
+        return { ...edit, a: id(edit.a), b: id(edit.b) };
+      case "add": {
+        const at = edit.at;
+        if (!at) return edit;
+        if ("slot" in at) return { ...edit, at: { ...at, slot: id(at.slot) } };
+        if ("stack" in at) return { ...edit, at: { ...at, stack: id(at.stack) } };
+        return { ...edit, at: { ...at, beside: id(at.beside) } };
+      }
+      default:
+        return edit;
+    }
+  });
 }
 
 function requireElement(spec: Dashboard, id: string): DashboardElement {

@@ -17,6 +17,22 @@ export interface ConfigContract<Config = unknown> {
   readonly defaultValue: Config;
 }
 
+/**
+ * What a config field's `.meta()` tells the settings generator (README §4): the
+ * settings tab it sits on, the domain values a string takes, or that the view
+ * already shows the control (so settings never repeat it). `title` is the label.
+ */
+export interface ConfigFieldMeta {
+  readonly section?: "display" | "data";
+  /** column: an obs column name; obsm: an embedding key; dataset: a dataset key. */
+  readonly control?: "column" | "obsm" | "dataset";
+  readonly hidden?: boolean;
+}
+
+declare module "zod" {
+  interface GlobalMeta extends ConfigFieldMeta {}
+}
+
 export interface ComponentDocumentation {
   readonly summary: string;
   readonly use: string;

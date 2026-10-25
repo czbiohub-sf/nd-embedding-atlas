@@ -17,7 +17,6 @@ import {
 import {
   COMPONENTS,
   fillSlot,
-  removeElement,
   setElementProps,
   splitElement,
   swapElements,
@@ -27,9 +26,12 @@ import {
 } from "./dashboard";
 import { elementPredicate, type DataSources } from "./data-sources";
 import { emptyWorkspaceDocument } from "./document";
+import { applyDashboardEdits, type DashboardEdit } from "./edits";
 import type { WorkspaceDocument, WorkspaceSession } from "./types";
 
 export class WorkspaceStore {
+  /** The workspace file stem: the `<name>` in `ndea://<name>/<element-id>` references. */
+  readonly name: string;
   private readonly documentStore = new Store<WorkspaceDocument>(emptyWorkspaceDocument());
   readonly coordination: CoordinationScopeCellPort = createCoordination({
     snapshot: () => this.documentStore.state,
@@ -37,7 +39,15 @@ export class WorkspaceStore {
     subscribe: (listener) => this.subscribe(listener),
   });
   /** This tab's editor state. Never persisted, never synced. */
-  readonly session = new Store<WorkspaceSession>({ selectedElementId: null, fullscreen: null });
+  readonly session = new Store<WorkspaceSession>({
+    selectedElementId: null,
+    fullscreen: null,
+    highlightedElementIds: [],
+  });
+
+  constructor(name = "workspace") {
+    this.name = name;
+  }
 
   /** The whole document: for sync, history, and json-render's spec only. */
   snapshot(): WorkspaceDocument {
@@ -90,6 +100,11 @@ export class WorkspaceStore {
 
   /* ── dashboard edits ───────────────────────────────────────────────── */
 
+  /** Apply named edits (`edits.ts`, the ops agents use); throws `WorkspaceEditError` for an op that cannot apply. */
+  apply(edits: readonly DashboardEdit[]): void {
+    this.commit((state) => applyDashboardEdits(state, edits));
+  }
+
   setElementProps(id: string, patch: Record<string, JsonValue | undefined>): void {
     this.setSpec((spec) => setElementProps(spec, id, patch));
   }
@@ -116,7 +131,7 @@ export class WorkspaceStore {
   }
 
   removeElement(id: string): void {
-    this.setSpec((spec) => removeElement(spec, id));
+    this.apply([{ op: "remove", id }]);
   }
 
   swapElements(a: string, b: string): void {
@@ -130,7 +145,7 @@ export class WorkspaceStore {
   /* ── data sources ──────────────────────────────────────────────────── */
 
   setDataSource(name: string, source: DataSources[string]): void {
-    this.commit((state) => ({ ...state, data: { ...state.data, [name]: source } }));
+    this.apply([{ op: "set_data", name, source }]);
   }
 
   /* ── session ───────────────────────────────────────────────────────── */
@@ -145,5 +160,9 @@ export class WorkspaceStore {
 
   setFullscreen(id: string | null): void {
     this.patchSession({ fullscreen: id });
+  }
+
+  highlight(ids: readonly string[]): void {
+    this.patchSession({ highlightedElementIds: ids });
   }
 }

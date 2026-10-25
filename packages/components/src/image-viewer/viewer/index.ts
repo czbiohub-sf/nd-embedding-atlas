@@ -6,8 +6,6 @@ export const Viewer = {
   Canvas: ViewerCanvas,
 } as const;
 
-export { ChannelControls } from "./ChannelControls";
 export { ViewerControls } from "./ViewerControls";
 export { ViewerErrorBoundary } from "./ViewerErrorBoundary";
 export { ViewerLoadingOverlay } from "./ViewerLoadingOverlay";
-export { VolumeControls } from "./VolumeControls";

@@ -2,14 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useFocus } from "../query/useFocus";
 import { useImageViewerHost, useImageViewerServices } from "./context";
-import {
-  ChannelControls,
-  Viewer,
-  ViewerControls,
-  ViewerErrorBoundary,
-  ViewerLoadingOverlay,
-  VolumeControls,
-} from "./viewer";
+import { Viewer, ViewerControls, ViewerErrorBoundary, ViewerLoadingOverlay } from "./viewer";
+import type { RenderMode } from "./viewer/ViewerControls";
 import { RemoteViewerProvider } from "./viewer/RemoteViewerProvider";
 import { RenderPageBridge } from "./viewer/RenderPageBridge";
 import { SingleCropViewer } from "./SingleCropViewer";
@@ -21,7 +15,7 @@ interface CropViewerProps {
   datasetKey?: string;
   /** remote: show the server's render stream; page: be that headless render page. */
   mode: "local" | "remote" | "page";
-  onRenderLocal: () => void;
+  onRender: (mode: RenderMode) => void;
 }
 
 /**
@@ -50,7 +44,7 @@ function ViewerObsReadout() {
   );
 }
 
-export function CropViewer({ channelInstance = "docked", datasetKey, mode, onRenderLocal }: CropViewerProps) {
+export function CropViewer({ channelInstance = "docked", datasetKey, mode, onRender }: CropViewerProps) {
   // Focus read: scoped to this element's host (coordination group).
   const host = useImageViewerHost();
   const { remote } = useImageViewerServices();
@@ -89,19 +83,16 @@ export function CropViewer({ channelInstance = "docked", datasetKey, mode, onRen
     <>
       <ViewerObsReadout />
       <ViewerLoadingOverlay />
-      <div className="absolute top-2 left-2 z-20 flex flex-col gap-1">
-        <ChannelControls />
-        <VolumeControls />
-      </div>
-      <div className="absolute bottom-2 left-2 z-20">
-        <ViewerControls datasetKey={datasetKey} />
-      </div>
+      <ViewerControls
+        datasetKey={datasetKey}
+        render={{ mode: mode === "remote" ? "remote" : "local", onChange: onRender }}
+      />
     </>
   );
   return (
     <ViewerErrorBoundary>
       {mode === "remote" ? (
-        <RemoteViewerProvider channelInstance={channelInstance} onRenderLocal={onRenderLocal}>
+        <RemoteViewerProvider channelInstance={channelInstance} onRenderLocal={() => onRender("local")}>
           {canvas}
           {overlays}
         </RemoteViewerProvider>

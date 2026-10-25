@@ -19,9 +19,10 @@ export function createAnnotateDefinition({
     title: "Annotate",
     config: {
       schema: z.object({
-        column: z.string().nullable(),
-        labels: z.array(z.string()),
-        mode: z.enum(["label", "range"]).optional(),
+        // All three sit in the view's own toolbar.
+        column: z.string().nullable().meta({ title: "Column", control: "column", hidden: true }),
+        labels: z.array(z.string()).meta({ title: "Labels", hidden: true }),
+        mode: z.enum(["label", "range"]).optional().meta({ title: "Mode", hidden: true }),
       }),
       defaultValue: { column: null, labels: [] } satisfies AnnotateConfig,
     },

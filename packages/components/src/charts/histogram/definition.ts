@@ -17,7 +17,10 @@ export function createHistogramDefinition({
     type: "histogram",
     title: "Histogram",
     config: {
-      schema: z.object({ field: z.string().nullable(), bins: z.number() }),
+      schema: z.object({
+        field: z.string().nullable().meta({ title: "Field", control: "column", hidden: true }),
+        bins: z.number().int().min(2).max(100).meta({ title: "Bins", section: "display" }),
+      }),
       defaultValue: { field: null, bins: 20 } satisfies HistogramConfig,
     },
     documentation: {

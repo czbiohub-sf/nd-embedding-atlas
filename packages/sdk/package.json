@@ -18,6 +18,7 @@
     "@uwdata/mosaic-core": "catalog:",
     "@webgpu/types": "catalog:",
     "typescript": "catalog:",
+    "vite": "catalog:",
     "vite-plus": "catalog:",
     "zod": "catalog:"
   },

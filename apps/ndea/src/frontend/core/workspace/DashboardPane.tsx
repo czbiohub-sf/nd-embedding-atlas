@@ -17,7 +17,7 @@ import {
 } from "@ndea/ui/components/context-menu";
 import { IconButton } from "@ndea/ui/components/icon-button";
 import { cn } from "@ndea/ui/lib/utils";
-import { Maximize2 } from "lucide-react";
+import { Link, Maximize2 } from "lucide-react";
 import { Children, createContext, use, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { useDatasetSession } from "@/hooks/useDatasetSession";
@@ -26,6 +26,9 @@ import { BodySocket, BodyStatus } from "./body-dock";
 import { ND_STAGE } from "./constants";
 import { COMPONENTS, type Dashboard as DashboardSpec, type SplitSide } from "./dashboard";
 import { EmbeddingChip } from "./EmbeddingChip";
+import { LinksIndicator } from "./LinksPopover";
+import { copyReference } from "./reference";
+import { ViewSettingsButton } from "./ViewSettings";
 import { useWorkspace, useWorkspaceSelector, useWorkspaceSession } from "./workspace-context";
 
 const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
@@ -91,12 +94,14 @@ function Tile({
 }) {
   const ws = useWorkspace();
   const { drag, beginDrag } = useDashboard();
+  const highlighted = useWorkspaceSession((s) => s.highlightedElementIds.includes(id));
   return (
     <div
       data-dashboard-tile={id}
       onPointerDown={() => ws.selectElement(id)}
       className={cn(
         TILE_FRAME,
+        highlighted && "ring-[1.5px] ring-primary",
         drag?.over === id && drag.id !== id && "ring-2 ring-primary",
         drag?.id === id && "opacity-45",
       )}
@@ -144,9 +149,16 @@ function ViewTile(props: ComponentRenderProps) {
       title={title}
       chip={props.element.type === "scatter" ? <EmbeddingChip id={id} /> : null}
       actions={
-        <IconButton size="md" label="Fullscreen" onClick={() => ws.setFullscreen(id)}>
-          <Maximize2 strokeWidth={1.5} />
-        </IconButton>
+        <>
+          <LinksIndicator id={id} />
+          <ViewSettingsButton id={id} />
+          <IconButton size="md" label="Copy reference for the harness" onClick={() => void copyReference(ws, id)}>
+            <Link strokeWidth={1.5} />
+          </IconButton>
+          <IconButton size="md" label="Fullscreen" onClick={() => ws.setFullscreen(id)}>
+            <Maximize2 strokeWidth={1.5} />
+          </IconButton>
+        </>
       }
     >
       <BodyStatus id={id} label={title} />

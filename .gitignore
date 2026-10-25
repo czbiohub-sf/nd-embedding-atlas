@@ -47,3 +47,4 @@ notes/
 bench/
 
 examples/
+.vitest/

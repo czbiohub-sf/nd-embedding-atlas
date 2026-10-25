@@ -60,6 +60,8 @@ export function ControlPopover({
   description,
   title,
   action,
+  side = "right",
+  className = "w-60",
   children,
 }: {
   icon: ReactNode;
@@ -68,6 +70,9 @@ export function ControlPopover({
   title: string;
   /** Right side of the popover header, e.g. the legend's pin toggle. */
   action?: ReactNode;
+  /** Where the popover opens; the image viewer opens below on narrow views. */
+  side?: "right" | "bottom";
+  className?: string;
   children: ReactNode;
 }) {
   return (
@@ -93,7 +98,7 @@ export function ControlPopover({
       >
         {icon}
       </HoverTip>
-      <PopoverContent side="right" align="start" sideOffset={6} className="w-60">
+      <PopoverContent side={side} align="start" sideOffset={6} className={className}>
         <PopoverHeader className="items-center">
           <PopoverTitle className="flex-1">{title}</PopoverTitle>
           {action}

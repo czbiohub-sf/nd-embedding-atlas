@@ -10,7 +10,8 @@ export function createTableDefinition({ mountBody }: { mountBody: BodyMounter })
     type: "table",
     title: "Table",
     config: {
-      schema: z.object({ columns: z.array(z.string()).nullable() }),
+      // The table's Fields menu (G5) will own this; the body reads every obs column today.
+      schema: z.object({ columns: z.array(z.string()).nullable().meta({ title: "Columns", hidden: true }) }),
       defaultValue: { columns: null } satisfies TableConfig,
     },
     documentation: {

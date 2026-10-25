@@ -17,7 +17,10 @@ export function createCountPlotDefinition({
     type: "count-plot",
     title: "Count Plot",
     config: {
-      schema: z.object({ field: z.string().nullable(), limit: z.number() }),
+      schema: z.object({
+        field: z.string().nullable().meta({ title: "Field", control: "column", hidden: true }),
+        limit: z.number().int().min(1).max(50).meta({ title: "Bars", section: "display" }),
+      }),
       defaultValue: { field: null, limit: 11 } satisfies CountPlotConfig,
     },
     documentation: {

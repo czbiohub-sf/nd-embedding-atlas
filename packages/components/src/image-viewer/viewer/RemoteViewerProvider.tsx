@@ -41,6 +41,7 @@ const INITIAL_STATE: ViewerState = {
   generation: 0,
   cropSize: 100,
   showBbox: true,
+  worldPerPixel: null,
 };
 
 const noop = () => {};
@@ -367,7 +368,7 @@ function RemoteStatusBadge({
   return (
     <div
       data-remote-status={status.phase}
-      className="pointer-events-none absolute right-2 bottom-2 z-20 rounded bg-black/60 px-1.5 py-0.5 font-mono text-sm text-white/85"
+      className="pointer-events-none absolute bottom-2 left-2 z-20 rounded bg-black/60 px-1.5 py-0.5 font-mono text-sm text-white/85"
     >
       {text}
     </div>

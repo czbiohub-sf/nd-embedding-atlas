@@ -13,13 +13,8 @@ import { IconButton } from "@ndea/ui/components/icon-button";
 import { ToggleGroup, ToggleGroupItem } from "@ndea/ui/components/toggle-group";
 import { cn } from "@ndea/ui/lib/utils";
 
-import {
-  COORDINATION_TYPE_IDS,
-  COORDINATION_TYPES,
-  type CoordinationState,
-  type CoordinationTypeId,
-} from "@/core/coordination/types";
-import { elementScope, type Dashboard, type DashboardElement } from "@/core/workspace/dashboard";
+import type { Dashboard, DashboardElement } from "@/core/workspace/dashboard";
+import { documentLinks, elementTitle, LinkRow } from "@/core/workspace/LinksPopover";
 import { dataSourceSql, type DataSources } from "@/core/workspace/data-sources";
 import { useWorkspaceSelector } from "@/core/workspace/workspace-context";
 import { useDatasetSession } from "@/hooks/useDatasetSession";
@@ -29,11 +24,6 @@ import { LayoutWireframe } from "./LayoutWireframe";
 import { isConnected, relativeTime, type HarnessAgent } from "./presence";
 
 const obs = (n: number) => `${n.toLocaleString("en-US")} obs`;
-
-function viewTitle(element: DashboardElement): string {
-  const { title } = element.props;
-  return typeof title === "string" && title ? title : element.type;
-}
 
 function Heading({ children }: { children: React.ReactNode }) {
   return <div className="px-2 pt-3.5 pb-1 text-sm font-medium text-text-muted first:pt-1">{children}</div>;
@@ -75,7 +65,7 @@ export function LayoutsFlyout() {
           </Row>
         ) : (
           <Row key={index}>
-            <span className="min-w-0 flex-1 truncate">{viewTitle(element)}</span>
+            <span className="min-w-0 flex-1 truncate">{elementTitle(element)}</span>
             <span className="font-mono text-xs text-text-muted">{element.type}</span>
           </Row>
         ),
@@ -174,61 +164,11 @@ export function DataFlyout() {
 
 /* ── Links ─────────────────────────────────────────────────────────── */
 
-const DOT: Record<CoordinationTypeId, string> = {
-  filter: "bg-scope-filter",
-  focus: "bg-scope-focus",
-  colorBy: "bg-scope-color",
-  viewSync: "bg-text-faint",
-  ordering: "bg-text-faint",
-};
-
-function linkSummary(state: CoordinationState, type: CoordinationTypeId, scope: string): string {
-  switch (type) {
-    case "filter": {
-      const sources = Object.values(state.filter?.[scope] ?? {});
-      const clauses = sources.reduce((sum, facets) => sum + Object.keys(facets).length, 0);
-      return clauses === 0 ? "No clauses" : clauses === 1 ? "1 clause" : `${clauses} clauses`;
-    }
-    case "focus": {
-      const index = state.focus?.[scope];
-      return index === null || index === undefined ? "Nothing focused" : `obs ${index.toLocaleString("en-US")}`;
-    }
-    case "colorBy":
-      return state.colorBy?.[scope] ?? "No color";
-    case "viewSync": {
-      const zoom = state.viewSync?.[scope]?.zoom;
-      return zoom === undefined ? "" : `Zoom ${zoom.toFixed(2)}`;
-    }
-    case "ordering": {
-      const order = state.ordering?.[scope];
-      return order ? `${order.col} ${order.dir}` : "Unsorted";
-    }
-  }
-}
-
 export function LinksFlyout() {
   const document = useWorkspaceSelector((ws) => ws.snapshot());
-  const links = COORDINATION_TYPE_IDS.flatMap((type) =>
-    Object.keys(document.state[type] ?? {}).map((scope) => ({ type, scope })),
-  );
+  const links = documentLinks(document);
   if (links.length === 0) return <Muted>No links. Views that share a link appear here.</Muted>;
-  const elements = Object.values(document.spec.elements);
-  return links.map(({ type, scope }) => {
-    const members = elements.filter((element) => elementScope(element, type) === scope).map(viewTitle);
-    return (
-      <div key={`${type}/${scope}`} className="rounded-md px-2 py-2">
-        <div className="flex items-center gap-2">
-          <span className={cn("size-2 shrink-0 rounded-full", DOT[type])} />
-          <span className="font-medium first-letter:uppercase">{COORDINATION_TYPES[type].label}</span>
-          <span className="min-w-0 truncate font-mono text-xs text-text-muted">{scope}</span>
-        </div>
-        <div className="mt-1 ml-4 truncate">{linkSummary(document.state, type, scope)}</div>
-        <div className="mt-0.5 ml-4 truncate text-text-muted">
-          {members.length === 0 ? "No member views" : members.join(", ")}
-        </div>
-      </div>
-    );
-  });
+  return links.map((link) => <LinkRow key={`${link.type}/${link.scope}`} document={document} link={link} />);
 }
 
 /* ── Harness and settings ──────────────────────────────────────────── */

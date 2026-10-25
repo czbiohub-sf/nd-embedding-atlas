@@ -35,9 +35,9 @@ export function createImageViewerView(services: ImageViewerServices) {
           <CropViewer
             datasetKey={datasetKey}
             mode={services.remote.page ? "page" : render}
-            onRenderLocal={() => {
-              host.patchConfig({ render: "local" });
-              setRender("local");
+            onRender={(mode) => {
+              host.patchConfig({ render: mode });
+              setRender(mode);
             }}
           />
         </div>

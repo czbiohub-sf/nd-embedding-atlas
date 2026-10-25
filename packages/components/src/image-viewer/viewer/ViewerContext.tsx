@@ -19,14 +19,16 @@ export type BlendMode = "normal" | "additive" | "multiply" | "subtractive";
 export interface ChannelDef {
   label: string;
   color: string; // hex like "FF0000"
+  /** The source's color for this channel; the colormap list keeps it when it is not a named one. */
+  configuredColor: string;
   visible: boolean;
   contrastLimits: [number, number];
   contrastRange: [number, number]; // full range for slider min/max
   blendMode: BlendMode;
   /**
    * Per-channel pixel stats from /api/channel-stats (coarsest pyramid level),
-   * fetched once when the FOV loads. Feeds the per-channel autocontrast button
-   * (and, later, the levels histogram). Null until fetched, or if it failed.
+   * fetched once when the FOV loads. Feeds auto contrast and the histogram
+   * behind the contrast slider. Null until fetched, or if it failed.
    */
   stats?: ChannelStat | null;
 }
@@ -59,9 +61,10 @@ export interface DimensionBounds {
    * the first FOV at startup: datasets with mixed magnifications/objectives
    * have per-FOV scales that disagree with the plate-level value. Using the
    * wrong scale leaves the bbox at e.g. 2.5× the correct world offset, off
-   * the image entirely. `null` when no scale transform is present.
+   * the image entirely. `null` when no scale transform is present. `unit` is
+   * the x axis's declared OME-Zarr unit (e.g. "micrometer"), if any.
    */
-  scale: { x: number; y: number } | null;
+  scale: { x: number; y: number; unit?: string } | null;
 }
 
 // ── State: reactive ──────────────────────────────────────────────────────────
@@ -85,6 +88,8 @@ export interface ViewerState {
   cropSize: number;
   /** Draw the bounding-box overlay. */
   showBbox: boolean;
+  /** World units per CSS pixel at the current 2D zoom (scale bar); null in 3D or before first frame. */
+  worldPerPixel: number | null;
 }
 
 // ── Actions ──────────────────────────────────────────────────────────────────

@@ -31,7 +31,14 @@ import { workspaceResult } from "./routes/workspace.ts";
 import type { ServerSession } from "./state.ts";
 import { agentSeen, clients } from "./status.ts";
 import { quoteIdent } from "./store.ts";
-import { applyDashboardEdits, DashboardEditSchema, WorkspaceEditError, type DashboardEdit } from "./workspace-edits.ts";
+import {
+  applyDashboardEdits,
+  DashboardEditSchema,
+  resolveEditReferences,
+  resolveElementId,
+  WorkspaceEditError,
+  type DashboardEdit,
+} from "../frontend/core/workspace/edits.ts";
 
 const INSTRUCTIONS = `ndea is a dashboard over single-cell and imaging observations (one row per observation).
 The workspace is one JSON document {data, spec, state}:
@@ -110,6 +117,20 @@ function document(state: Pick<ServerSession, "workspace">): { revision: number; 
   return { revision: snapshot.revision, document: snapshot.document as WorkspaceDocument };
 }
 
+/** An `element` (id or reference) or `data` target; a reference into another workspace is an error. */
+function elementTarget(
+  state: Pick<ServerSession, "workspace">,
+  element: string | undefined,
+  data: string,
+): { element: string } | { data: string } | { error: string } {
+  if (element === undefined) return { data };
+  try {
+    return { element: resolveElementId(element, state.workspace.name) };
+  } catch (error) {
+    return { error: (error as Error).message };
+  }
+}
+
 /**
  * Compile named edits against the current document and apply them as one
  * patch. Without an expected revision, a concurrent write is retried once
@@ -128,7 +149,7 @@ async function runEdits(
     }
     let next: WorkspaceDocument;
     try {
-      next = applyDashboardEdits(base, edits);
+      next = applyDashboardEdits(base, resolveEditReferences(edits, state.workspace.name));
     } catch (error) {
       if (!(error instanceof WorkspaceEditError)) throw error;
       return rejected("edit rejected; nothing was applied", {
@@ -241,7 +262,7 @@ export function createNdeaMcpServer(state: ServerSession, actor: WorkspaceActor)
 
   const TargetSchema = z
     .object({
-      element: z.string().optional().describe("a dashboard element id"),
+      element: z.string().optional().describe("an element id or its reference ndea://<workspace>/<id>"),
       data: z.string().optional().describe("a data source name"),
     })
     .refine((input) => (input.element === undefined) !== (input.data === undefined), {
@@ -253,12 +274,14 @@ export function createNdeaMcpServer(state: ServerSession, actor: WorkspaceActor)
     {
       title: "Read a result",
       description:
-        "Evaluate at the current revision what one element shows (`element`: its data source AND the other sources' clauses in its filter scope) or what one data source selects (`data`). Returns the SQL predicate (null = every observation) and the exact count of matching observations.",
+        "Evaluate at the current revision what one element shows (`element`: its data source AND the other sources' clauses in its filter scope) or what one data source selects (`data`). `element` takes an id or a view's copied reference (ndea://<workspace>/<id>). Returns the SQL predicate (null = every observation) and the exact count of matching observations.",
       inputSchema: TargetSchema,
       annotations: READ,
     },
     async ({ element, data }) => {
-      const result = await workspaceResult(state, element !== undefined ? { element } : { data: data! });
+      const target = elementTarget(state, element, data!);
+      if ("error" in target) return rejected(target.error);
+      const result = await workspaceResult(state, target);
       return result.status === 200 ? ok(result.body) : rejected(result.body.error, result.body);
     },
   );
@@ -268,7 +291,7 @@ export function createNdeaMcpServer(state: ServerSession, actor: WorkspaceActor)
     {
       title: "Edit the dashboard",
       description:
-        "Change the workspace with a batch of ops, applied atomically. Data: set_data {name, source} adds or replaces a data source; remove_data {name}. Elements: add {type, id?, props?, at?} places a new element: at {slot} fills an empty slot, {stack, index?} inserts into a stack, {beside, side?: left|right|up|down} splits that element (default: fill an empty root slot, else split the root to its right); set_props {id, props} merges props (null removes a key); remove {id}; swap {a, b}. Coordination: bind {id, type, scope} sets the element's {$bindState} prop and creates the scope if needed; unbind {id, type} also drops the element's own filter clauses; set_filter {scope, source, facet, clause|null} writes your own crossfilter clause under your source key (every member sees it). Pass `revision` to apply only if nothing changed since you read it. Returns the new revision and the ids of added elements.",
+        "Change the workspace with a batch of ops, applied atomically. Data: set_data {name, source} adds or replaces a data source; remove_data {name}. Elements: add {type, id?, props?, at?} places a new element: at {slot} fills an empty slot, {stack, index?} inserts into a stack, {beside, side?: left|right|up|down} splits that element (default: fill an empty root slot, else split the root to its right); set_props {id, props} merges props (null removes a key); remove {id}; swap {a, b}. Coordination: bind {id, type, scope} sets the element's {$bindState} prop and creates the link (scope) if needed; unbind {id, type} also drops the element's own filter clauses; set_filter {scope, source, facet, clause|null} writes your own crossfilter clause under your source key (every member sees it). Any existing element id may be a view's copied reference ndea://<workspace>/<id>. Pass `revision` to apply only if nothing changed since you read it. Returns the new revision and the ids of added elements.",
       inputSchema: z.object({
         revision: RevisionSchema.optional(),
         ops: z.array(DashboardEditSchema).min(1).max(100),
@@ -351,7 +374,9 @@ export function createNdeaMcpServer(state: ServerSession, actor: WorkspaceActor)
       if (where !== undefined) {
         predicate = filterClauseSql(where);
       } else {
-        const result = await workspaceResult(state, element !== undefined ? { element } : { data: data! });
+        const target = elementTarget(state, element, data!);
+        if ("error" in target) return rejected(target.error);
+        const result = await workspaceResult(state, target);
         if (result.status !== 200) return rejected(result.body.error, result.body);
         predicate = result.body.predicate;
       }

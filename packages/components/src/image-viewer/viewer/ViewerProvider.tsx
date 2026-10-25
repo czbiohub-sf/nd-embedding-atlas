@@ -99,6 +99,31 @@ export function ViewerProvider({ children, channelInstance = "docked" }: Props) 
   const multiChannelRef = useRef<MultiChannelLayers | null>(null);
   const [cropSize, setCropSize] = useState(100);
   const [showBbox, setShowBbox] = useState(true);
+  const [worldPerPixel, setWorldPerPixel] = useState<number | null>(null);
+
+  // Scale bar input: world units per CSS pixel of the 2D camera. Pan/zoom mutate
+  // the camera inside idetik with no change event, so sample it once per frame
+  // and set state only when it moves by more than 0.5%.
+  // ponytail: per-frame poll; subscribe to the controls if idetik grows a camera event.
+  useEffect(() => {
+    if (!initialized || viewMode !== "2d") {
+      setWorldPerPixel(null);
+      return;
+    }
+    let frame = 0;
+    const sample = () => {
+      const width = canvasElRef.current?.clientWidth ?? 0;
+      const camera = cameraRef.current;
+      if (camera && width > 0) {
+        const view = camera.getWorldViewRect();
+        const next = (view.max[0] - view.min[0]) / width;
+        setWorldPerPixel((prev) => (prev != null && Math.abs(next / prev - 1) < 0.005 ? prev : next));
+      }
+      frame = requestAnimationFrame(sample);
+    };
+    frame = requestAnimationFrame(sample);
+    return () => cancelAnimationFrame(frame);
+  }, [initialized, viewMode]);
 
   const aggregateState = useMemo(() => computeAggregate(trackedLayers), [trackedLayers]);
 
@@ -325,6 +350,7 @@ export function ViewerProvider({ children, channelInstance = "docked" }: Props) 
       generation,
       cropSize,
       showBbox,
+      worldPerPixel,
     }),
     [
       initialized,
@@ -340,6 +366,7 @@ export function ViewerProvider({ children, channelInstance = "docked" }: Props) 
       generation,
       cropSize,
       showBbox,
+      worldPerPixel,
     ],
   );
 

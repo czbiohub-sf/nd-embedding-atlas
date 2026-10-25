@@ -29,7 +29,7 @@ jobs:
         with:
           persist-credentials: false
       - uses: oven-sh/setup-bun@v2
-      - uses: voidzero-dev/setup-vp@v1
+      - uses: voidzero-dev/setup-vp@v1.21.2
       # Rust builds the duckdb-zarr extension (`build:zarr-ext`) on a cache
       # miss. Pinned to match local dev; bump deliberately.
       - uses: dtolnay/rust-toolchain@1.99.0
@@ -83,7 +83,7 @@ jobs:
         with:
           persist-credentials: false
       - uses: oven-sh/setup-bun@v2
-      - uses: voidzero-dev/setup-vp@v1
+      - uses: voidzero-dev/setup-vp@v1.21.2
       # Rust builds the duckdb-zarr extension (`build:zarr-ext`) on a cache
       # miss. Pinned to match local dev; bump deliberately.
       - uses: dtolnay/rust-toolchain@1.99.0

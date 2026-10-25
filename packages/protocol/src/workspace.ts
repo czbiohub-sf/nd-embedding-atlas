@@ -19,10 +19,14 @@ export const JsonPatchOpSchema = z.discriminatedUnion("op", [
 ]);
 export type JsonPatchOp = z.infer<typeof JsonPatchOpSchema>;
 
-/** GET /api/workspace. The server seeds a missing workspace file from its preset, so `document` is always set. */
+/**
+ * GET /api/workspace. The server seeds a missing workspace file from its preset, so `document` is always set.
+ * `name` is the workspace file stem, the `<name>` in `ndea://<name>/<element-id>` references.
+ */
 export const WorkspaceSnapshotSchema = z.object({
   revision: z.number().int().nonnegative(),
   document: z.unknown(),
+  name: z.string(),
 });
 export type WorkspaceSnapshot = z.infer<typeof WorkspaceSnapshotSchema>;
 
