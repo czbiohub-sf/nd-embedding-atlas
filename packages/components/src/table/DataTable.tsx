@@ -484,9 +484,11 @@ export function DataTable({
     if (hi >= 0) ensureRange(lo, hi);
   }, [first, last, length, layout, ensureRange]);
 
+  // Gate on the rendered height, not `length`: a new count renders once with the old height, and a scroll into
+  // rows the DOM lacks is lost while the virtualizer still draws them.
   useEffect(() => {
-    if (reveal !== null && reveal < length) scrollToIndex(reveal, { align: "auto" });
-  }, [reveal, length, scrollToIndex]);
+    if (reveal !== null && reveal < totalSize / ROW_HEIGHT) scrollToIndex(reveal, { align: "auto" });
+  }, [reveal, totalSize, scrollToIndex]);
 
   const allChecked = selected > 0 && selected >= count;
 

@@ -114,10 +114,11 @@ function TabStrip({
               onPointerDown={(e) => beginDrag({ tile, tab: editable ? id : undefined }, e)}
               onClick={() => !on && applyOrToast(ws, [{ op: "set_active_tab", tile, id }])}
               className={cn(
-                "group/tab flex min-w-0 cursor-default items-center gap-1 rounded-sm px-2 py-0.5 text-ui",
+                "group/tab flex cursor-default items-center gap-1 rounded-sm px-2 py-0.5 text-ui",
+                // The active tab keeps a few letters in a narrow tile ("Emb…"), like the design's narrow headers.
                 on
-                  ? "bg-card font-medium text-foreground shadow-(--shadow-raised)"
-                  : "text-text-muted hover:text-foreground",
+                  ? "min-w-10 bg-card font-medium text-foreground shadow-(--shadow-raised)"
+                  : "min-w-0 text-text-muted hover:text-foreground",
                 drag?.tab === id && "opacity-45",
               )}
             >

@@ -58,7 +58,7 @@
 - _(frontend)_ Abort in-flight embedding load on unmount
 - _(build)_ Keep embedded frontend and DuckDB source manifests as stable development stubs
 - _(server)_ `PATCH /api/workspace` and MCP writes now reject a document whose typed clauses (a data source's `where`, a `state.filter` clause) name a column the dataset lacks, with a JSON-pointer issue per clause (e.g. `/data/bad/where/column`); raw `data.sql` is still checked only when it runs. Startup logs the same issues for the workspace file instead of refusing it.
-- _(server)_ `/data/metadata.json` `obs_columns` now lists annotation columns restored from a cached ingest, and drops configured `--obs-columns` names the dataset does not have
+- _(frontend)_ The table's rows stayed blank after a filter change that also moved the focused obs: the reveal scrolled before the list had its new height, so the scroll was lost while the virtualizer drew the target rows. The reveal now waits for the rendered height.
 
 ### 🛡️ Security
 
