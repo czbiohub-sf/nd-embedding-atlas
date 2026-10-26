@@ -39,12 +39,31 @@ function sameItems(a: readonly VirtualItem[], b: readonly VirtualItem[]): boolea
   );
 }
 
+/**
+ * `observeElementRect`, plus a resync: a scroller that was detached or hidden
+ * comes back at offset 0 with no scroll event, while the virtualizer keeps the
+ * old offset and draws rows off-screen. Its next layout fires the resize
+ * observer; a replayed scroll event makes the virtualizer re-read the offset.
+ */
+function observeRectAndOffset<TScroll extends Element, TItem extends Element>(
+  instance: Virtualizer<TScroll, TItem>,
+  cb: (rect: { width: number; height: number }) => void,
+): void | (() => void) {
+  return observeElementRect(instance, (rect) => {
+    cb(rect);
+    const el = instance.scrollElement;
+    if (!el) return;
+    const offset = instance.options.horizontal ? el.scrollLeft : el.scrollTop;
+    if (Math.abs(offset - (instance.scrollOffset ?? 0)) >= 1) el.dispatchEvent(new Event("scroll"));
+  });
+}
+
 function resolve<TScroll extends Element, TItem extends Element>(
   options: UseVirtualizerOptions<TScroll, TItem>,
   publish: () => void,
 ): VirtualizerOptions<TScroll, TItem> {
   return {
-    observeElementRect,
+    observeElementRect: observeRectAndOffset,
     observeElementOffset,
     scrollToFn: elementScroll,
     ...options,
