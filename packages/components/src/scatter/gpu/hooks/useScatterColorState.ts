@@ -104,7 +104,7 @@ export function useScatterColorState(coordinator: Coordinator, metadata: Metadat
         `SELECT COUNT(DISTINCT CAST("${col}" AS TEXT))::INT AS n FROM obs_base`,
       );
       const n = Math.min(toRows<{ n: number }>(countResult)[0]?.n ?? 64, 256);
-      const mapping = await services.categorize(coordinator, col, n);
+      const mapping = await services.categorize(col, n);
       return { n, mapping };
     },
   });

@@ -17,9 +17,15 @@ records what was built from it and what still differs.
 - Fonts: Geist for UI, Geist Mono for data (ids, counts, field names).
 - `@ndea/ui` controls: `IconButton` (size `md` = 26px with a tooltip),
   `Popover` + `popoverFrame`/`popoverRow` (the one pop-up frame), `Select`,
-  `Combobox`, `Command`, `Dialog`, `Tabs`, `ToggleGroup variant="segmented"`,
-  `Switch`, `Checkbox`, `nd-icons`. Tooltips wait 500ms. Toasts are Sonner
+  `Combobox`, `Command`, `Dialog`, `Tabs`, `ToggleGroup variant="segmented"`
+  (`Segmented` for one string choice), `Switch`, `Checkbox`, `nd-icons`, and
+  `floating-controls` (`ControlGroup`, `ControlPopover`, `ControlRow`,
+  `ControlHeading`: the control column floating over the embedding and the
+  image viewer). Tooltips wait 500ms. Toasts are Sonner
   (`components/ui/sonner.tsx`).
+- Named colormaps (catalog lookup, hex palettes, GPU LUTs) are
+  `@ndea/ochre/palette`; `lib/color/ochre-palette.ts` adds picker order, the
+  default categorical palette, and "tab10" as d3's Tableau10.
 - The theme is a per-browser preference (`ThemeProvider`, `localStorage`), as
   is Settings › Provenance badges; workspace state never goes there.
 
@@ -97,8 +103,9 @@ proposal bar (bottom centre) and the Harness flyout. Accept/Reject call
 - `scene.ts` stores points in Morton order with 256-point batches and bounds;
   setters, the selection bitmask, and picks speak row order
   (`writeLayer`/`layerToRows`/`perm` translate).
-- Controls float in the view (`ScatterControls.tsx`): pointer/box/lasso (V/B/L,
-  shift adds, ⌥ subtracts), Legend / Point size / Axes popovers, the bottom-right
+- Controls float in the view (`ScatterControls.tsx`, on `@ndea/ui`
+  `floating-controls`): pointer/box/lasso (V/B/L, shift adds, ⌥ subtracts),
+  Legend / Point size / Axes popovers, the bottom-right
   axis picker, the pinned legend, and the selection pill (count from
   `POST /api/sets`, Invert, Save as source via `host.dataAPI.saveSource`,
   Clear). Selections combine CPU-side (`selection-bits.ts`) and publish

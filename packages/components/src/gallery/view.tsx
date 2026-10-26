@@ -16,9 +16,9 @@ import { GalleryPane } from "./GalleryPane";
 import { predicateToSql } from "../query/mosaic";
 import type { BodyProps } from "../contracts";
 import { useFocus } from "../query/useFocus";
-import type { GalleryConfig, GalleryServices } from "./contracts";
+import type { GalleryServices } from "./contracts";
 
-export function GalleryView({ host, services }: BodyProps<GalleryConfig> & { services: GalleryServices }) {
+export function GalleryView({ host, services }: BodyProps<unknown> & { services: GalleryServices }) {
   // host.predicate is a Mosaic Selection that mutates in place when a
   // filter in scope changes and notifies Mosaic clients via "value" events:
   // NOT React. Bridge it so the empty gate AND GalleryPane's query key

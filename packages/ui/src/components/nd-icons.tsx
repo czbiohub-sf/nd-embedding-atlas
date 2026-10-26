@@ -55,38 +55,6 @@ export const NdScopesIcon = ndIcon(
   </>,
 );
 
-export const NdEmbeddingIcon = ndIcon(
-  "NdEmbeddingIcon",
-  <>
-    <path d="M4 4v16h16" />
-    <circle cx="9" cy="14" r="1" />
-    <circle cx="12" cy="9" r="1" />
-    <circle cx="15.5" cy="13" r="1" />
-    <circle cx="17.5" cy="7" r="1" />
-    <circle cx="10" cy="10.5" r="1" />
-  </>,
-);
-
-export const NdCropsIcon = ndIcon(
-  "NdCropsIcon",
-  <>
-    <rect x="3" y="3" width="7.5" height="7.5" rx="1.5" />
-    <rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5" />
-    <rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5" />
-    <rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5" />
-    <circle cx="6.75" cy="6.75" r="1.5" />
-    <circle cx="17.25" cy="17.25" r="1.5" />
-  </>,
-);
-
-export const NdSlotIcon = ndIcon(
-  "NdSlotIcon",
-  <>
-    <rect x="3" y="3" width="18" height="18" rx="2" strokeDasharray="3 3" />
-    <path d="M12 9v6M9 12h6" />
-  </>,
-);
-
 export const NdSplitIcon = ndIcon(
   "NdSplitIcon",
   <>
@@ -98,15 +66,6 @@ export const NdSplitIcon = ndIcon(
 export const NdAxisSwapIcon = ndIcon(
   "NdAxisSwapIcon",
   <path d="M7 4v16M7 20l-3-3M7 20l3-3M17 20V4M17 4l-3 3M17 4l3 3" />,
-);
-
-export const NdColorByIcon = ndIcon(
-  "NdColorByIcon",
-  <>
-    <circle cx="7" cy="12" r="3" />
-    <circle cx="12" cy="12" r="3" />
-    <circle cx="17" cy="12" r="3" />
-  </>,
 );
 
 export const NdChannelsIcon = ndIcon(

@@ -111,7 +111,7 @@ export interface ScatterServices {
   useFocusedPointMeta(rowIndex: RowIndex | null): FocusedPointMeta;
   getCategoricalPalette(colormap: string, count: number): string[];
   getColormapList(): ColormapList;
-  categorize(coordinator: Coordinator, column: string, maxCategories: number): Promise<CategoryMapping>;
+  categorize(column: string, maxCategories: number): Promise<CategoryMapping>;
   buildColormapLut(name: string): Uint32Array;
   pickDefaultCategoricalPalette(count: number): string;
   readonly renderSettingsStore: Store<RenderSettingsState>;

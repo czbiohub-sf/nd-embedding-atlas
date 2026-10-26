@@ -58,4 +58,35 @@ function ToggleGroupItem({
   );
 }
 
-export { ToggleGroup, ToggleGroupItem };
+/** Single-choice segmented control over string values. */
+function Segmented<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: T;
+  options: readonly { value: NoInfer<T>; label: string; disabled?: boolean }[];
+  onChange(value: NoInfer<T>): void;
+}) {
+  return (
+    <ToggleGroup
+      variant="segmented"
+      aria-label={label}
+      value={[value]}
+      onValueChange={(next: string[]) => {
+        const picked = options.find((option) => option.value === next[0]);
+        if (picked) onChange(picked.value);
+      }}
+    >
+      {options.map((option) => (
+        <ToggleGroupItem key={option.value} value={option.value} disabled={option.disabled}>
+          {option.label}
+        </ToggleGroupItem>
+      ))}
+    </ToggleGroup>
+  );
+}
+
+export { Segmented, ToggleGroup, ToggleGroupItem };

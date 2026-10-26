@@ -10,7 +10,8 @@
     "./catalog/*": "./src/colormap/catalog/*.ts",
     "./color": "./src/color/index.ts",
     "./colormap": "./src/colormap/index.ts",
-    "./gpu": "./src/gpu/index.ts"
+    "./gpu": "./src/gpu/index.ts",
+    "./palette": "./src/palette.ts"
   },
   "scripts": {
     "check": "vp check",

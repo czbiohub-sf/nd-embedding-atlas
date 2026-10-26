@@ -8,6 +8,7 @@ import { useSelector } from "@tanstack/react-store";
 import { createComponentCatalog, type ComponentServices } from "@ndea/components/catalog";
 import type { ChannelHash } from "@ndea/components/gallery";
 import { useColumnTypes, useMosaicClient } from "@ndea/components/query";
+import { buildLut } from "@ndea/ochre/palette";
 import { ChannelStatsResponseSchema, ObsInfoSchema } from "@ndea/protocol";
 import type { ComponentDefinition } from "@ndea/sdk";
 
@@ -16,7 +17,6 @@ import { mountReactBody } from "@/core/component/react-body";
 import { useDatasetSession } from "@/hooks/useDatasetSession";
 import { useFocusedPointMeta } from "@/hooks/useFocusedPointMeta";
 import { makeCategoryColumn } from "@/lib/color/category-column";
-import { buildColormapLut } from "@/lib/color/ochre-lut";
 import { getCategoricalPalette, getColormapList, pickDefaultCategoricalPalette } from "@/lib/color/ochre-palette";
 import { predicateToSql } from "@/lib/mosaic-helpers";
 import { renderSettingsStore } from "@/stores/render-settings-store";
@@ -104,7 +104,7 @@ const services: ComponentServices = {
     getCategoricalPalette,
     getColormapList,
     categorize: makeCategoryColumn,
-    buildColormapLut,
+    buildColormapLut: buildLut,
     pickDefaultCategoricalPalette,
     renderSettingsStore,
     onDeviceLost,

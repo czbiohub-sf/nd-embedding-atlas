@@ -100,7 +100,6 @@
   --scope-filter: var(--d1);
   --scope-focus: var(--d2);
   --scope-color: var(--d3);
-  --viridis: linear-gradient(90deg, #440154, #3b528b, #21918c, #5ec962, #fde725);
 }
 
 .dark {
