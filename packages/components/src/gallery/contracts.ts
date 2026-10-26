@@ -1,9 +1,6 @@
 import type { Metadata } from "@ndea/protocol";
 
 export type ChannelHash = string & { readonly __brand: "ChannelHash" };
-export interface GalleryConfig {
-  lanes: number | null;
-}
 export interface ChannelDef {
   label: string;
   color: string;

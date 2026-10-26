@@ -10,7 +10,6 @@
     "test": "bun test"
   },
   "dependencies": {
-    "@zarrita/storage": "catalog:",
     "zarrita": "catalog:"
   },
   "devDependencies": {

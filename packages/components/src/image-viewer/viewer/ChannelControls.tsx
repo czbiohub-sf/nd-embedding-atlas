@@ -3,7 +3,7 @@ import { Checkbox } from "@ndea/ui/components/checkbox";
 import { NdChannelsIcon } from "@ndea/ui/components/nd-icons";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@ndea/ui/components/select";
 import { Slider } from "@ndea/ui/components/slider";
-import { ControlHeading, ControlPopover, ControlRow } from "../../scatter/ScatterControls";
+import { ControlHeading, ControlPopover, ControlRow } from "@ndea/ui/components/floating-controls";
 import { type AutoContrastMethod, deriveAutoLimits } from "../contrast-window";
 import { useViewer } from "./useViewer";
 import type { BlendMode, ChannelDef } from "./ViewerContext";

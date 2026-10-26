@@ -9,8 +9,8 @@ import {
   ControlHeading,
   ControlPopover,
   ControlRow,
-  Segmented,
-} from "../../scatter/ScatterControls";
+} from "@ndea/ui/components/floating-controls";
+import { Segmented } from "@ndea/ui/components/toggle-group";
 import { useImageViewerHost, useImageViewerSession } from "../context";
 import { ChannelControls } from "./ChannelControls";
 import { roundLength, unitSymbol } from "./scale-bar";

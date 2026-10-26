@@ -8,11 +8,13 @@ import { Axis3d, ChevronDownIcon, CircleDot, Lasso, MousePointer2, Pin, PinOff, 
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { capabilitiesOf } from "@ndea/sdk";
 import { Button } from "@ndea/ui/components/button";
+import { ControlDivider, ControlGroup, ControlPopover, ControlRow } from "@ndea/ui/components/floating-controls";
 import { IconButton } from "@ndea/ui/components/icon-button";
 import { NdLegendContinuousIcon, NdLegendIcon } from "@ndea/ui/components/nd-icons";
 import { Popover, PopoverContent, PopoverTrigger, popoverSeparator } from "@ndea/ui/components/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@ndea/ui/components/select";
 import { Slider } from "@ndea/ui/components/slider";
+import { Segmented } from "@ndea/ui/components/toggle-group";
 import { useFocus, useScatterHost, useScatterSession } from "./context";
 import { dimLabel, selectAnyTrajectory } from "./helpers";
 import type { IsolationCapability } from "./gpu/handle-capabilities";
@@ -33,17 +35,7 @@ import { ColormapGrid } from "./ColormapGrid";
 import { ColorSourcePicker } from "./ColorSourcePicker";
 import { LegendProvider, useLegend } from "./LegendContext";
 import { ModalityColorPicker } from "./mudata/ModalityColorPicker";
-import {
-  AxisPicker,
-  ControlDivider,
-  ControlGroup,
-  ControlPopover,
-  ControlRow,
-  PinnedLegend,
-  Segmented,
-  SelectionPill,
-  ToolButton,
-} from "./ScatterControls";
+import { AxisPicker, PinnedLegend, SelectionPill, ToolButton } from "./ScatterControls";
 import { type ScatterOverlays, ScatterView } from "./ScatterView";
 
 const POINT_SIZE_DEFAULT = 0.002;

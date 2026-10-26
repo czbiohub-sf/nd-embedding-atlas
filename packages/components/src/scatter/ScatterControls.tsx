@@ -1,47 +1,18 @@
 /**
  * Controls that float over the embedding canvas (design core/OverlayControls.jsx,
- * README §3): the control group (top-left), the axis picker (bottom-right), the
- * selection pill (top centre) and the pinned legend (bottom-left). Solid
- * overlay fill, no blur.
+ * README §3): the axis picker (bottom-right), the selection pill (top centre)
+ * and the pinned legend (bottom-left). The control group and its popovers are
+ * `@ndea/ui/components/floating-controls`.
  */
 
 import { useRef, type ReactNode } from "react";
-import { HoverTip } from "@ndea/ui/components/hover-tip";
-import { IconButton, iconButtonVariants } from "@ndea/ui/components/icon-button";
+import { overlaySurface } from "@ndea/ui/components/floating-controls";
+import { IconButton } from "@ndea/ui/components/icon-button";
 import { NdAxisSwapIcon } from "@ndea/ui/components/nd-icons";
-import {
-  Popover,
-  PopoverContent,
-  PopoverHeader,
-  PopoverTitle,
-  PopoverTrigger,
-  popoverHeading,
-} from "@ndea/ui/components/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@ndea/ui/components/select";
-import { ToggleGroup, ToggleGroupItem } from "@ndea/ui/components/toggle-group";
 import { cn } from "@ndea/ui/lib/utils";
 import type { ScatterSelectionState } from "./gpu/hooks/useScatterSelection";
 import { dimLabel } from "./helpers";
-
-const overlaySurface = "bg-overlay shadow-(--shadow-popover)";
-const NESTED_POPUP = "[data-slot=popover-content], [data-slot=select-content], [data-slot=context-menu-content]";
-
-/** The one column of 26px buttons, top-left inside the view. */
-export function ControlGroup({ children }: { children: ReactNode }) {
-  return (
-    <div
-      role="toolbar"
-      aria-orientation="vertical"
-      className={cn("absolute top-2 left-2 z-20 flex flex-col gap-0.5 rounded-lg p-0.5", overlaySurface)}
-    >
-      {children}
-    </div>
-  );
-}
-
-export function ControlDivider() {
-  return <span aria-hidden className="mx-[3px] my-px h-px bg-border" />;
-}
 
 export function ToolButton(props: {
   label: string;
@@ -51,107 +22,6 @@ export function ToolButton(props: {
   children: ReactNode;
 }) {
   return <IconButton size="md" tooltipSide="right" {...props} />;
-}
-
-/** A control-group button that opens an @ndea/ui popover beside the group. */
-export function ControlPopover({
-  icon,
-  label,
-  description,
-  title,
-  action,
-  side = "right",
-  className = "w-60",
-  children,
-}: {
-  icon: ReactNode;
-  label: string;
-  description?: string;
-  title: string;
-  /** Right side of the popover header, e.g. the legend's pin toggle. */
-  action?: ReactNode;
-  /** Where the popover opens; the image viewer opens below on narrow views. */
-  side?: "right" | "bottom";
-  className?: string;
-  children: ReactNode;
-}) {
-  return (
-    // A press in, or focus moving to, a pop-up opened from this one (color-by, palette, a select) is not outside.
-    <Popover
-      onOpenChange={(open, details) => {
-        const { event, reason } = details;
-        const target = event instanceof FocusEvent ? event.relatedTarget : event.target;
-        if (
-          !open &&
-          (reason === "outside-press" || reason === "focus-out") &&
-          target instanceof Element &&
-          target.closest(NESTED_POPUP)
-        )
-          details.cancel();
-      }}
-    >
-      <HoverTip
-        label={label}
-        description={description}
-        side="right"
-        render={<PopoverTrigger aria-label={label} className={iconButtonVariants({ size: "md" })} />}
-      >
-        {icon}
-      </HoverTip>
-      <PopoverContent side={side} align="start" sideOffset={6} className={className}>
-        <PopoverHeader className="items-center">
-          <PopoverTitle className="flex-1">{title}</PopoverTitle>
-          {action}
-        </PopoverHeader>
-        {children}
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-/** Labelled row inside a control popover. */
-export function ControlRow({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="flex min-h-[26px] items-center gap-2 px-1.5">
-      <span className="w-16 shrink-0 text-sm text-text-muted">{label}</span>
-      <div className="flex min-w-0 flex-1 items-center justify-end">{children}</div>
-    </div>
-  );
-}
-
-export function ControlHeading({ children }: { children: ReactNode }) {
-  return <div className={popoverHeading}>{children}</div>;
-}
-
-/** Single-choice segmented control. */
-export function Segmented<T extends string>({
-  label,
-  value,
-  options,
-  onChange,
-}: {
-  label: string;
-  value: T;
-  options: readonly { value: NoInfer<T>; label: string; disabled?: boolean }[];
-  onChange(value: NoInfer<T>): void;
-}) {
-  return (
-    <ToggleGroup
-      variant="segmented"
-      aria-label={label}
-      value={[value]}
-      onValueChange={(next: string[]) => {
-        const picked = options.find((option) => option.value === next[0]);
-        if (picked) onChange(picked.value);
-      }}
-    >
-      {options.map((option) => (
-        <ToggleGroupItem key={option.value} value={option.value} disabled={option.disabled}>
-          {option.label}
-        </ToggleGroupItem>
-      ))}
-    </ToggleGroup>
-  );
 }
 
 /** Dimension select for one axis; the wheel over it steps through the dimensions. */

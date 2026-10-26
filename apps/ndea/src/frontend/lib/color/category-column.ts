@@ -11,7 +11,6 @@
  * them server-side removes both problems.
  */
 
-import type { Coordinator } from "@uwdata/mosaic-core";
 import type { CategorizeResponse } from "@ndea/protocol";
 
 export interface CategoryLegendItem {
@@ -29,17 +28,7 @@ export interface CategoryMapping {
 export const OTHER_COLOR = "#6b7280";
 export const NULL_COLOR = "#4b5563";
 
-const DEFAULT_MAX_CATEGORIES = 64;
-
-export async function makeCategoryColumn(
-  coordinator: Coordinator,
-  column: string,
-  maxCategories: number = DEFAULT_MAX_CATEGORIES,
-): Promise<CategoryMapping> {
-  // `coordinator` retained in the signature for API stability: the server
-  // owns DuckDB state now, but existing call sites pass it through.
-  void coordinator;
-
+export async function makeCategoryColumn(column: string, maxCategories: number): Promise<CategoryMapping> {
   const res = await fetch("/api/categorize", {
     method: "POST",
     headers: { "Content-Type": "application/json" },

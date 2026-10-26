@@ -1,56 +1,14 @@
 /**
- * Frontend source of truth for colormap names + palette generation.
- *
- * Phase 8: replaces `/data/colormaps` + `/data/categorical-palette` backend
- * endpoints. Everything is synchronous: ochre's catalog is bundled, and
- * palette generation is tens of µs even at n=256.
- *
- * Continuous colormaps: every linear colormap in ochre's catalog (all
- * sources: bids, colorbrewer, cmocean, cmasher, colorcet, crameri,
- * matplotlib, paraview, seaborn, etc.). ~300 names. Categorical is kept
- * curated since the picker UX shows all entries at once.
+ * The embedding's colormap picker over `@ndea/ochre/palette`: picker order,
+ * the default categorical palette, and the name "tab10".
  */
 
-import type { ColorMap, DiscreteColormap, LinearColormap } from "@ndea/ochre";
-import { srgbToHex } from "@ndea/ochre";
-import * as bids from "@ndea/ochre/catalog/bids";
-import * as chrisluts from "@ndea/ochre/catalog/chrisluts";
-import * as cividis from "@ndea/ochre/catalog/cividis";
-import * as cmasher from "@ndea/ochre/catalog/cmasher";
-import * as cmocean from "@ndea/ochre/catalog/cmocean";
-import * as colorbrewer from "@ndea/ochre/catalog/colorbrewer";
-import { Accent, Dark2, Paired, Pastel1, Pastel2, Set1, Set2, Set3 } from "@ndea/ochre/catalog/colorbrewer";
-import * as colorcet from "@ndea/ochre/catalog/colorcet";
-import * as contrib from "@ndea/ochre/catalog/contrib";
-import * as crameri from "@ndea/ochre/catalog/crameri";
-import { glasbey as OchreGlasbey } from "@ndea/ochre/catalog/glasbey";
-import * as google from "@ndea/ochre/catalog/google";
-import * as ibm from "@ndea/ochre/catalog/ibm";
-import * as imagej from "@ndea/ochre/catalog/imagej";
-import * as matlab from "@ndea/ochre/catalog/matlab";
-import * as matplotlib from "@ndea/ochre/catalog/matplotlib";
-import * as napari from "@ndea/ochre/catalog/napari";
-import * as observable from "@ndea/ochre/catalog/observable";
-import { okabeito } from "@ndea/ochre/catalog/okabeito";
-import * as paraview from "@ndea/ochre/catalog/paraview";
-import { petroff10, petroff6, petroff8 } from "@ndea/ochre/catalog/petroff";
-import * as seaborn from "@ndea/ochre/catalog/seaborn";
-import {
-  tab10 as OchreTab10,
-  tab20 as OchreTab20,
-  tab20b as OchreTab20b,
-  tab20c as OchreTab20c,
-} from "@ndea/ochre/catalog/tableau";
-import * as tol from "@ndea/ochre/catalog/tol";
-import * as vispy from "@ndea/ochre/catalog/vispy";
-import * as yorick from "@ndea/ochre/catalog/yorick";
+import type { ColormapList } from "@ndea/components/scatter";
+import { categoricalColormaps, continuousColormaps, samplePalette } from "@ndea/ochre/palette";
 
-// ─── Vendored d3 Tableau10 (refreshed tableau palette) ──────────────────────
-// Ochre's `tab10` maps to matplotlib-classic Category10 (`#1f77b4...`), but
-// d3-scale-chromatic's `schemeTableau10`: which our backend has been serving
-// for the name "tab10": uses Tableau's refreshed palette (`#4e79a7...`).
-// To preserve the exact colors users see today, we vendor the d3 hex array
-// under the name "tab10" and alias "Category10" to ochre's matplotlib-classic.
+// "tab10" is d3's schemeTableau10 (Tableau's refreshed palette, `#4e79a7…`),
+// the colors users have always seen under that name; ochre's matplotlib-classic
+// tab10 (`#1f77b4…`) is listed as "Category10".
 const TABLEAU10_HEX: readonly string[] = [
   "#4E79A7",
   "#F28E2C",
@@ -63,32 +21,6 @@ const TABLEAU10_HEX: readonly string[] = [
   "#9C755F",
   "#BAB0AB",
 ];
-
-// ─── Categorical catalog (curated) ──────────────────────────────────────────
-
-const CATEGORICAL_CMAPS: Record<string, DiscreteColormap> = {
-  // "tab10" handled separately via TABLEAU10_HEX.
-  Category10: OchreTab10,
-  tab20: OchreTab20,
-  tab20b: OchreTab20b,
-  tab20c: OchreTab20c,
-  Set1,
-  Set2,
-  Set3,
-  Paired,
-  Dark2,
-  Accent,
-  Pastel1,
-  Pastel2,
-  okabeito,
-  petroff6,
-  petroff8,
-  petroff10,
-};
-
-// glasbey is a LinearColormap rather than discrete; keep a direct reference
-// so resolveColormap / the picker can still look it up by name.
-const GLASBEY_CMAP: LinearColormap = OchreGlasbey;
 
 /**
  * Pick a reasonable default categorical palette for `n` categories.
@@ -104,166 +36,25 @@ export function pickDefaultCategoricalPalette(n: number): string {
   return "glasbey";
 }
 
-// ─── Continuous catalog (every ochre linear colormap) ───────────────────────
-// Iterate each source namespace, collect every entry whose kind === "linear".
-// First source to export a name wins on collisions; duplicates from other
-// sources are prefixed with the source name (e.g. `matplotlib:twilight`).
+const COLORMAP_LIST: ColormapList = {
+  categorical: ["tab10", ...Object.keys(categoricalColormaps)],
+  continuous: Object.keys(continuousColormaps),
+};
 
-const CONTINUOUS_SOURCES: (readonly [string, Record<string, unknown>])[] = [
-  // Ordered by preference: earlier sources win on name collision.
-  ["bids", bids],
-  ["colorbrewer", colorbrewer],
-  ["cmocean", cmocean],
-  ["crameri", crameri],
-  ["matplotlib", matplotlib],
-  ["colorcet", colorcet],
-  ["cmasher", cmasher],
-  ["paraview", paraview],
-  ["seaborn", seaborn],
-  ["tol", tol],
-  ["vispy", vispy],
-  ["observable", observable],
-  ["ibm", ibm],
-  ["matlab", matlab],
-  ["napari", napari],
-  ["imagej", imagej],
-  ["yorick", yorick],
-  ["chrisluts", chrisluts],
-  ["contrib", contrib],
-  ["cividis", cividis],
-  ["google", google],
-];
-
-function isLinear(value: unknown): value is LinearColormap {
-  return (
-    typeof value === "object" &&
-    (value as { kind?: unknown })?.kind === "linear" &&
-    typeof (value as { map?: unknown }).map === "function"
-  );
-}
-
-const CONTINUOUS_CMAPS: Record<string, LinearColormap> = (() => {
-  const acc: Record<string, LinearColormap> = {};
-  for (const [source, ns] of CONTINUOUS_SOURCES) {
-    for (const [key, value] of Object.entries(ns)) {
-      if (!isLinear(value)) continue;
-      const name = key in acc ? `${source}:${key}` : key;
-      acc[name] = value;
-    }
-  }
-  return acc;
-})();
-
-// Explicit name lists (ordered for picker display).
-const CATEGORICAL_NAMES: readonly string[] = [
-  "tab10",
-  "Category10",
-  ...Object.keys(CATEGORICAL_CMAPS).filter((n) => n !== "Category10"),
-  "glasbey",
-];
-const CONTINUOUS_NAMES: readonly string[] = Object.keys(CONTINUOUS_CMAPS);
-
-export interface ColormapList {
-  categorical: string[];
-  continuous: string[];
-}
-
-// ─── Public API ─────────────────────────────────────────────────────────────
-
-let cachedList: ColormapList | null = null;
-
-/** Stable (referentially memoized) list of all available colormap names. */
+/** Every colormap name in picker order; one stable object. */
 export function getColormapList(): ColormapList {
-  cachedList ??= { categorical: [...CATEGORICAL_NAMES], continuous: [...CONTINUOUS_NAMES] };
-  return cachedList;
+  return COLORMAP_LIST;
 }
 
-// Referential-identity cache per (name, n). Keeps React re-renders stable:
-// when ColormapGrid or ContinuousLegend rebuild, they get the same array
-// reference and skip downstream work gated on Object.is equality.
-const paletteCache = new Map<string, string[]>();
+const tab10Cache = new Map<number, string[]>();
 
-function paletteCacheKey(name: string, n: number): string {
-  return `${name}\u0000${n}`;
-}
-
-function grayscale(n: number): string[] {
-  if (n === 0) return [];
-  if (n === 1) return ["#808080"];
-  const out: string[] = Array.from({ length: n });
-  for (let i = 0; i < n; i++) {
-    const v = Math.round((i / (n - 1)) * 255);
-    const hex = v.toString(16).padStart(2, "0");
-    out[i] = `#${hex}${hex}${hex}`.toUpperCase();
-  }
-  return out;
-}
-
-function sampleLinear(cmap: LinearColormap, n: number): string[] {
-  if (n === 0) return [];
-  if (n === 1) return [srgbToHex(cmap.map(0.5))];
-  const out: string[] = Array.from({ length: n });
-  for (let i = 0; i < n; i++) {
-    out[i] = srgbToHex(cmap.map(i / (n - 1)));
-  }
-  return out;
-}
-
-function sampleDiscreteCycling(cmap: DiscreteColormap, n: number): string[] {
-  const src = cmap.colors;
-  if (src.length === 0) return grayscale(n);
-  const out: string[] = Array.from({ length: n });
-  for (let i = 0; i < n; i++) out[i] = srgbToHex(src[i % src.length]);
-  return out;
-}
-
-function buildTableau10Palette(n: number): string[] {
-  if (n === 0) return [];
-  const out: string[] = Array.from({ length: n });
-  for (let i = 0; i < n; i++) out[i] = TABLEAU10_HEX[i % TABLEAU10_HEX.length];
-  return out;
-}
-
-/**
- * Return `n` hex color strings for a named colormap. Matches the behavior of
- * the former backend `/data/categorical-palette` endpoint:
- *   - Discrete palettes cycle when `n > palette.length`.
- *   - Linear (continuous) palettes are sampled at `n` evenly-spaced t values.
- *   - Unknown names fall back to grayscale.
- *
- * Returned arrays are referentially stable per (name, n). Safe to pass to
- * React dep arrays and memoized children.
- */
+/** `n` hex colors for a named colormap, referentially stable per (name, n). */
 export function getCategoricalPalette(name: string, n: number): string[] {
-  const key = paletteCacheKey(name, n);
-  const hit = paletteCache.get(key);
-  if (hit) return hit;
-
-  let out: string[];
-  if (name === "tab10") {
-    out = buildTableau10Palette(n);
-  } else if (CATEGORICAL_CMAPS[name]) {
-    out = sampleDiscreteCycling(CATEGORICAL_CMAPS[name], n);
-  } else if (name === "glasbey") {
-    out = sampleLinear(GLASBEY_CMAP, n);
-  } else if (CONTINUOUS_CMAPS[name]) {
-    out = sampleLinear(CONTINUOUS_CMAPS[name], n);
-  } else {
-    out = grayscale(n);
+  if (name !== "tab10") return samplePalette(name, n);
+  let out = tab10Cache.get(n);
+  if (!out) {
+    out = Array.from({ length: n }, (_, i) => TABLEAU10_HEX[i % TABLEAU10_HEX.length]);
+    tab10Cache.set(n, out);
   }
-
-  paletteCache.set(key, out);
   return out;
-}
-
-/**
- * Resolve a name to a ColorMap for direct GPU LUT building (used by
- * `ochre-lut.ts`). Lets continuous and categorical paths share the same
- * catalog without duplicating name→ColorMap lookup logic.
- */
-export function resolveColormap(name: string): ColorMap | null {
-  if (CONTINUOUS_CMAPS[name]) return CONTINUOUS_CMAPS[name];
-  if (CATEGORICAL_CMAPS[name]) return CATEGORICAL_CMAPS[name];
-  if (name === "glasbey") return GLASBEY_CMAP;
-  return null;
 }

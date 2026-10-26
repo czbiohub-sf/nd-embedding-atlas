@@ -1,9 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json",
   "entry": [
-    "apps/ndea/src/cli/index.ts",
     "apps/ndea/src/frontend/main.tsx",
-
     "vite.config.ts",
     "apps/ndea/scripts/build.ts",
     "apps/ndea/scripts/release-version.ts",
@@ -15,8 +13,7 @@
   ],
   "ignorePatterns": [
     "docs/**",
-    "site/**",
-    "dist/**",
+    "design_handoff_ndea_shell/**",
     ".fallow/**",
     ".source/**",
     "packages/ochre/src/colormap/data/**"
