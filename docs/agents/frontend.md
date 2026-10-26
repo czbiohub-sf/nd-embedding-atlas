@@ -33,12 +33,21 @@ records what was built from it and what still differs.
 
 - `core/shell/Shell.tsx`: a 32px rail (Search ⌘K, Layouts, Data, Links,
   Harness, Settings, pin). Hovering opens a 312px flyout over the tiles; click
-  or ⌘B pins it and it pushes the grid. Flyouts live in `flyouts.tsx`.
-- ⌘K (`CommandMenu.tsx`, on `@ndea/ui` `command`): switches layouts (with a
-  wireframe preview that follows the highlight) and collections › datasets (a
-  dataset of the open collection is a `_dataset` clause under source `dataset`
-  in filter scope `A`; another collection switches the session after a
-  confirm); `>` lists commands. The recovery page offers commands only.
+  or ⌘B pins it and it pushes the grid. Each flyout is its own module
+  (`LayoutsFlyout.tsx`, `DataFlyout.tsx`, `LinksFlyout.tsx`,
+  `HarnessFlyout.tsx`, `SettingsFlyout.tsx`) built from `flyout-rows.tsx`.
+  `collections.ts` is data only (collections, the dataset filter and its
+  pure `datasetFilterEdit`, the switch request); the Data flyout and ⌘K each
+  render it.
+- ⌘K: `CommandMenu.tsx` is the presentation only (groups and command rows in,
+  the chosen row's `action` out); `commands.tsx` holds the pure builders
+  (layouts, collections › datasets, theme, shell, tile, add-view rows, each
+  with a `Command`); `WorkspaceCommandMenu.tsx` reads the state, runs the
+  commands, and draws the layout wireframe preview that follows the
+  highlight. A dataset of the open collection is a `_dataset` clause under
+  source `dataset` in filter scope `A`; another collection switches the
+  session after a confirm. `>` lists commands. The recovery page offers the
+  theme commands only.
 - No top bar, status bar, or revision UI.
 
 ## Tiles, tabs, layouts

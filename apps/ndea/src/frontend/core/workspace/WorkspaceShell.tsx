@@ -9,14 +9,17 @@ import { useEffect, useState } from "react";
 
 import { RENDER_PAGE } from "@/core/component/definitions";
 import { CommandMenu } from "@/core/shell/CommandMenu";
+import { themeCommands } from "@/core/shell/commands";
 import { Shell } from "@/core/shell/Shell";
+import { useTheme } from "@/ThemeProvider";
 import { BodySocket, BodyStatus } from "./body-dock";
 import { fetchWorkspaceSnapshot } from "./sync";
 import { useWorkspacePersistence, WorkspaceProvider, type WorkspacePersistenceState } from "./workspace-context";
 
-/** The read-only notice; ⌘K still opens the command menu, with commands only. */
+/** The read-only notice; ⌘K still opens the command menu, with the theme commands only. */
 function RecoveryWorkspaceSurface({ persistence }: { persistence: WorkspacePersistenceState }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const { theme, setTheme } = useTheme();
   return (
     <div className="fixed inset-0 grid place-items-center overflow-hidden bg-background p-8 select-none">
       <div role="alert" className="max-w-xl rounded-lg bg-card p-4 text-ui shadow-(--shadow-popover)">
@@ -30,7 +33,12 @@ function RecoveryWorkspaceSurface({ persistence }: { persistence: WorkspacePersi
           Edits are disabled and nothing is saved. Fix or remove the workspace file, then restart ndea view.
         </div>
       </div>
-      <CommandMenu open={menuOpen} onOpenChange={setMenuOpen} />
+      <CommandMenu
+        open={menuOpen}
+        onOpenChange={setMenuOpen}
+        commands={themeCommands(theme)}
+        onSelect={(command) => command.kind === "theme" && setTheme(command.theme)}
+      />
     </div>
   );
 }

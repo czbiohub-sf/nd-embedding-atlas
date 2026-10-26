@@ -1,6 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
 import type { RowIndex } from "@ndea/sdk";
-import { jsonFetcher } from "../lib/fetcher";
 
 /**
  * Fields needed to start a trajectory trace for a focused point.
@@ -30,7 +29,11 @@ const EMPTY: FocusedPointMeta = { trackable: false };
 export function useFocusedPointMeta(focusedRowIndex: RowIndex | null): FocusedPointMeta {
   const { data } = useQuery<Record<string, string | null>>({
     queryKey: ["obs-detail", focusedRowIndex],
-    queryFn: () => jsonFetcher(`/api/obs/${focusedRowIndex}/detail`) as Promise<Record<string, string | null>>,
+    queryFn: async () => {
+      const res = await fetch(`/api/obs/${focusedRowIndex}/detail`);
+      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+      return (await res.json()) as Record<string, string | null>;
+    },
     enabled: focusedRowIndex != null,
     staleTime: 60_000,
     gcTime: 5 * 60_000,

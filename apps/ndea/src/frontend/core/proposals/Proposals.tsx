@@ -12,7 +12,7 @@ import { Button } from "@ndea/ui/components/button";
 import { popoverFrame } from "@ndea/ui/components/popover";
 import { cn } from "@ndea/ui/lib/utils";
 
-import { COMPONENTS, type DashboardElement } from "@/core/workspace/dashboard";
+import { COMPONENTS, elementTitle, type DashboardElement } from "@/core/workspace/dashboard";
 import { DashboardEditSchema } from "@/core/workspace/edits";
 import { useWorkspaceSelector } from "@/core/workspace/workspace-context";
 import { decide, decideAll, useProposals } from "./harness";
@@ -86,14 +86,10 @@ export function ChangeRow({ proposal, change }: { proposal: string; change: Prop
 /** A view the harness proposes: dashed `--primary` outline, a placeholder body, and Accept / Reject. */
 export function GhostTile({ element, item }: { element: DashboardElement; item: PendingChange }) {
   const component = COMPONENTS[element.type];
-  const title =
-    typeof element.props.title === "string" && element.props.title
-      ? element.props.title
-      : (component?.title ?? element.type);
   return (
     <div className="flex min-h-0 min-w-0 flex-1 animate-nd-in flex-col overflow-hidden rounded-[7px] border-[1.5px] border-dashed border-primary bg-surface">
       <div className="flex h-(--tile-header) shrink-0 items-center px-2.5 text-ui text-text-muted">
-        <span className="truncate">Proposed · {title}</span>
+        <span className="truncate">Proposed · {elementTitle(element)}</span>
       </div>
       <div className="m-auto flex max-w-full flex-col items-center gap-0.5 px-3 text-center">
         <span className="font-medium">{component?.title ?? element.type}</span>

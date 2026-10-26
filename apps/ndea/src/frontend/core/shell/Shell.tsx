@@ -19,10 +19,14 @@ import { ProposalBar } from "@/core/proposals/Proposals";
 import { DashboardPane } from "@/core/workspace/DashboardPane";
 import { OpenLinksContext } from "@/core/workspace/LinksPopover";
 import { useWorkspaceSelector } from "@/core/workspace/workspace-context";
-import { WorkspaceCommandMenu, type MenuItem } from "./CommandMenu";
-import { DataFlyout, HarnessFlyout, LayoutsFlyout, LinksFlyout, SettingsFlyout } from "./flyouts";
+import { DataFlyout } from "./DataFlyout";
+import { HarnessFlyout } from "./HarnessFlyout";
+import { LayoutsFlyout } from "./LayoutsFlyout";
+import { LinksFlyout } from "./LinksFlyout";
+import { SettingsFlyout } from "./SettingsFlyout";
+import { WorkspaceCommandMenu } from "./WorkspaceCommandMenu";
 
-type Panel = "layouts" | "data" | "links" | "harness" | "settings";
+export type Panel = "layouts" | "data" | "links" | "harness" | "settings";
 
 const PANELS: Record<Panel, { title: string; icon: React.ReactNode }> = {
   layouts: { title: "Layouts", icon: <NdSplitIcon /> },
@@ -123,15 +127,6 @@ export function Shell() {
     () => ({ harness, preview, review: () => setFlyout({ panel: "harness", hovered: false, pinned: true }) }),
     [harness, preview],
   );
-  const shellCommands: MenuItem[] = [
-    { id: "shell:sidebar", label: "Toggle sidebar", meta: "⌘B", leading: <PanelLeftIcon />, onSelect: togglePin },
-    ...(Object.keys(PANELS) as Panel[]).map((id) => ({
-      id: `shell:${id}`,
-      label: `Open ${PANELS[id].title}`,
-      leading: PANELS[id].icon,
-      onSelect: () => pin(id),
-    })),
-  ];
 
   return (
     <ProposalsContext value={proposalsValue}>
@@ -215,7 +210,13 @@ export function Shell() {
           </OpenLinksContext>
           <ProposalBar />
         </main>
-        <WorkspaceCommandMenu open={menuOpen} onOpenChange={setMenuOpen} shellCommands={shellCommands} />
+        <WorkspaceCommandMenu
+          open={menuOpen}
+          onOpenChange={setMenuOpen}
+          panels={PANELS}
+          onPanel={pin}
+          onSidebar={togglePin}
+        />
       </div>
     </ProposalsContext>
   );

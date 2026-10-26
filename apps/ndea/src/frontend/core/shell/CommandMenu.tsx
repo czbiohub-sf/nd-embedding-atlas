@@ -1,21 +1,12 @@
 /**
- * The ⌘K command menu: a centered 760px window. By default it switches
- * things (layouts, and collections with their datasets as children); typing
- * ">" lists commands.
+ * The ⌘K window: a centered 760px searchable, nested menu. Rows come in as
+ * `groups` (switch mode) and `commands` (typing ">", or the only rows with no
+ * groups); choosing a row hands its `action` to `onSelect`. It knows nothing
+ * of the workspace (`WorkspaceCommandMenu` feeds it).
  * ↑↓ move, ↵ open, → / ← expand and collapse, esc closes.
  */
 
-import {
-  ChevronRightIcon,
-  CopyIcon,
-  Maximize2Icon,
-  MoonIcon,
-  PlusIcon,
-  SquareSplitHorizontalIcon,
-  SquareSplitVerticalIcon,
-  SunIcon,
-  Trash2Icon,
-} from "lucide-react";
+import { ChevronRightIcon } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { Command, CommandGroup, CommandItem, CommandList } from "@ndea/ui/components/command";
@@ -23,27 +14,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@ndea/ui/
 import { Kbd } from "@ndea/ui/components/kbd";
 import { cn } from "@ndea/ui/lib/utils";
 
-import {
-  activeSpec,
-  COMPONENTS,
-  EMPTY_TILE_CHOICES,
-  tileProps,
-  tileView,
-  type SplitSide,
-} from "@/core/workspace/dashboard";
-import { copyReference } from "@/core/workspace/reference";
-import {
-  applyOrToast,
-  useWorkspace,
-  useWorkspaceSelector,
-  useWorkspaceSession,
-} from "@/core/workspace/workspace-context";
-import { useTheme } from "@/ThemeProvider";
-import { CollectionSwitchDialog } from "./CollectionSwitchDialog";
-import { useCollectionsGroup } from "./collections";
-import { LayoutWireframe, layoutTiles, tileTitle } from "./LayoutWireframe";
-
-export interface MenuItem {
+export interface MenuItem<A> {
   /** Unique across the menu: the highlighted row's key. */
   id: string;
   label: string;
@@ -52,24 +23,31 @@ export interface MenuItem {
   current?: boolean;
   leading?: ReactNode;
   /** Nested rows (a collection's datasets); → expands, ← collapses. */
-  children?: MenuItem[];
-  onSelect?: () => void;
+  children?: MenuItem<A>[];
+  /** Handed to `onSelect`; a row without one only closes the menu. */
+  action?: A;
 }
 
-export interface MenuGroup {
+export interface MenuGroup<A> {
   heading: string;
   meta?: string;
-  items: MenuItem[];
+  items: MenuItem<A>[];
 }
 
-interface Row {
-  item: MenuItem;
+interface Row<A> {
+  item: MenuItem<A>;
   depth: number;
   parent?: string;
 }
 
 /** Visible rows: the expanded tree, or every match (at its depth) while searching. */
-function rowsOf(items: MenuItem[], needle: string, collapsed: ReadonlySet<string>, depth = 0, parent?: string): Row[] {
+function rowsOf<A>(
+  items: MenuItem<A>[],
+  needle: string,
+  collapsed: ReadonlySet<string>,
+  depth = 0,
+  parent?: string,
+): Row<A>[] {
   return items.flatMap((item) => {
     const matches = !needle || `${item.label} ${item.sub ?? ""}`.toLowerCase().includes(needle);
     const self = matches ? [{ item, depth, parent }] : [];
@@ -78,18 +56,15 @@ function rowsOf(items: MenuItem[], needle: string, collapsed: ReadonlySet<string
   });
 }
 
-function MenuBody({
-  groups,
-  commands,
-  preview,
-  close,
-}: {
-  groups: MenuGroup[];
-  commands: MenuItem[];
-  /** The right-hand pane for the highlighted row's id. */
+interface MenuProps<A> {
+  groups: MenuGroup<A>[];
+  commands: MenuItem<A>[];
+  /** The right-hand pane in switch mode, for the highlighted row's id. */
   preview?: (highlighted: string | undefined) => ReactNode;
-  close: () => void;
-}) {
+  onSelect: (action: A) => void;
+}
+
+function MenuBody<A>({ groups, commands, preview, onSelect, close }: MenuProps<A> & { close: () => void }) {
   const [query, setQuery] = useState("");
   const [highlight, setHighlight] = useState("");
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
@@ -102,9 +77,9 @@ function MenuBody({
   const rows = shown.flatMap((group) => group.rows);
   const current = rows.find((row) => row.item.id === highlight) ?? rows[0];
 
-  const run = (item: MenuItem) => {
+  const run = (item: MenuItem<A>) => {
     close();
-    item.onSelect?.();
+    if (item.action !== undefined) onSelect(item.action);
   };
   const setCollapsedId = (id: string, value: boolean) =>
     setCollapsed((set) => {
@@ -239,25 +214,17 @@ function MenuBody({
   );
 }
 
-/**
- * The window, toggled by ⌘K (Ctrl+K) anywhere; its search, highlight and
- * expansion reset each time it opens. The theme commands lead `commands`.
- */
-export function CommandMenu({
+/** The window, toggled by ⌘K (Ctrl+K) anywhere; its search, highlight and expansion reset each time it opens. */
+export function CommandMenu<A>({
   open,
   onOpenChange,
   groups = [],
-  commands = [],
-  preview,
-}: {
+  ...menu
+}: Omit<MenuProps<A>, "groups"> & {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  groups?: MenuGroup[];
-  commands?: MenuItem[];
-  /** The right-hand pane in switch mode, for the highlighted row's id. */
-  preview?: (highlighted: string | undefined) => ReactNode;
+  groups?: MenuGroup<A>[];
 }) {
-  const { theme, setTheme } = useTheme();
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key.toLowerCase() !== "k" || (!event.metaKey && !event.ctrlKey)) return;
@@ -267,23 +234,6 @@ export function CommandMenu({
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [open, onOpenChange]);
-  const allCommands: MenuItem[] = [
-    {
-      id: "theme:light",
-      label: "Light theme",
-      leading: <SunIcon />,
-      current: theme === "light",
-      onSelect: () => setTheme("light"),
-    },
-    {
-      id: "theme:dark",
-      label: "Dark theme",
-      leading: <MoonIcon />,
-      current: theme === "dark",
-      onSelect: () => setTheme("dark"),
-    },
-    ...commands,
-  ];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -294,130 +244,8 @@ export function CommandMenu({
       >
         <DialogTitle className="sr-only">Command menu</DialogTitle>
         <DialogDescription className="sr-only">Switch layout or dataset, or type &gt; for commands</DialogDescription>
-        <MenuBody groups={groups} commands={allCommands} preview={preview} close={() => onOpenChange(false)} />
+        <MenuBody groups={groups} {...menu} close={() => onOpenChange(false)} />
       </DialogContent>
     </Dialog>
-  );
-}
-
-/* ── content ───────────────────────────────────────────────────────── */
-
-const SPLIT_ICON: Record<SplitSide, ReactNode> = {
-  left: <SquareSplitHorizontalIcon />,
-  right: <SquareSplitHorizontalIcon />,
-  up: <SquareSplitVerticalIcon />,
-  down: <SquareSplitVerticalIcon />,
-};
-
-/** The shell's menu: the layouts and collections to switch to; `shellCommands` (sidebar, flyouts) lead the commands. */
-export function WorkspaceCommandMenu({
-  open,
-  onOpenChange,
-  shellCommands,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  shellCommands: MenuItem[];
-}) {
-  const ws = useWorkspace();
-  const layouts = useWorkspaceSelector((w) => w.snapshot().layouts);
-  const currentLayout = useWorkspaceSelector((w) => w.snapshot().layout);
-  const spec = useWorkspaceSelector((w) => activeSpec(w.snapshot()));
-  const selectedId = useWorkspaceSession((s) => s.selectedElementId);
-  const collections = useCollectionsGroup();
-
-  const tiles = layoutTiles(spec).map((id) => ({ id, element: spec.elements[id] }));
-  const groups: MenuGroup[] = [
-    {
-      heading: "Layouts",
-      items: Object.entries(layouts).map(([id, layout]) => ({
-        id: `layout:${id}`,
-        label: layout.name,
-        current: id === currentLayout,
-        leading: <LayoutWireframe spec={layout.spec} className="h-4 w-[26px] shrink-0" />,
-        onSelect: () => ws.apply([{ op: "set_active_layout", id }]),
-      })),
-    },
-  ];
-  if (collections) groups.push(collections);
-
-  const selected = selectedId ? spec.elements[selectedId] : undefined;
-  const view = selectedId ? tileView(spec, selectedId) : undefined;
-  const slot = tiles.find((tile) => tile.element.type === "slot");
-  const commands: MenuItem[] = [...shellCommands];
-  if (selectedId && selected) {
-    const sub = tileTitle(spec, selectedId);
-    if (view) {
-      commands.push(
-        {
-          id: "view:fullscreen",
-          label: "Fullscreen",
-          sub,
-          leading: <Maximize2Icon />,
-          onSelect: () => ws.setFullscreen(view),
-        },
-        {
-          id: "view:reference",
-          label: "Copy reference",
-          sub,
-          leading: <CopyIcon />,
-          onSelect: () => void copyReference(ws, view),
-        },
-      );
-    }
-    commands.push(
-      ...(["left", "right", "up", "down"] as const).map((side) => ({
-        id: `tile:split-${side}`,
-        label: `Split tile ${side}`,
-        sub,
-        leading: SPLIT_ICON[side],
-        onSelect: () => applyOrToast(ws, [{ op: "split", id: selectedId, side }]),
-      })),
-      {
-        id: "tile:remove",
-        label: "Remove tile",
-        sub,
-        leading: <Trash2Icon />,
-        onSelect: () => applyOrToast(ws, [{ op: "remove", id: selectedId }]),
-      },
-    );
-  }
-  if (slot) {
-    for (const type of EMPTY_TILE_CHOICES) {
-      const title = COMPONENTS[type].title;
-      commands.push({
-        id: `add:${type}`,
-        label: `Add ${title}`,
-        sub: "to the first empty tile",
-        leading: <PlusIcon />,
-        onSelect: () => applyOrToast(ws, [{ op: "add", type, props: tileProps(type), at: { slot: slot.id } }]),
-      });
-    }
-  }
-
-  // The highlighted layout row's layout; any other row previews the active one.
-  const preview = (highlighted: string | undefined) => {
-    const id = highlighted?.startsWith("layout:") ? highlighted.slice("layout:".length) : currentLayout;
-    const layout = layouts[id] ?? layouts[currentLayout];
-    const shown = layoutTiles(layout.spec);
-    return (
-      <>
-        <div className="rounded-md bg-muted p-1.5">
-          <LayoutWireframe spec={layout.spec} labeled className="aspect-[16/10] w-full" />
-        </div>
-        <div className="text-md font-semibold">{layout.name}</div>
-        <div className="text-sm text-text-muted">
-          {shown.length} {shown.length === 1 ? "tile" : "tiles"} ·{" "}
-          {shown.map((tile) => tileTitle(layout.spec, tile)).join(" · ")}
-        </div>
-      </>
-    );
-  };
-
-  return (
-    <>
-      <CommandMenu open={open} onOpenChange={onOpenChange} groups={groups} commands={commands} preview={preview} />
-      <CollectionSwitchDialog />
-    </>
   );
 }
