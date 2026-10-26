@@ -27,23 +27,13 @@ Pass several Zarr paths when they do not need image linkage or per-dataset chann
 ndea view experiment-a.zarr experiment-b.zarr
 ```
 
-Use a YAML project when you need stable dataset names, mounted OME-Zarr plates, channel display settings, or a shared observation-column selection:
+Use a YAML project when you need stable dataset names, mounted OME-Zarr plates, or channel display settings:
 
 ```bash
 ndea view project.yaml
 ```
 
 See [Project YAML](/project-config) for both accepted dataset syntaxes.
-
-## Limit loaded observation columns
-
-Large `obs` tables take longer to ingest. Keep only columns needed for filtering, colouring, annotation, and image linkage:
-
-```bash
-ndea view data.zarr --obs-columns cell_type,treatment,fov_name,t,x,y
-```
-
-Spatial columns required for image linkage are added automatically when detected.
 
 ## Confirm the session
 

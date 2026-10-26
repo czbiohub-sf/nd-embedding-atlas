@@ -65,7 +65,6 @@ describe("shared HTTP response DTOs", () => {
       props: { data: { id: "obs_name", projection: { x: "umap_0", y: "umap_1" } } },
       database: { type: "rest" },
       obsm: { X_umap: { prefix: "umap", n_dims: 2, loaded: true } },
-      obs_columns: ["cell_type"],
       var_count: 42,
       layers: ["X"],
       export_dir: "/tmp/exports",
@@ -184,7 +183,6 @@ describe("shared HTTP response DTOs", () => {
     };
     const parsedMetadata = MetadataSchema.parse(metadata);
     expect(parsedMetadata).toEqual(metadata);
-    expect("obs_columns" in parsedMetadata).toBe(false);
 
     const status = VarColumnStatusResponseSchema.parse({ status: "loading", column: "__var_X__" });
     expect("error" in status).toBe(false);

@@ -23,14 +23,6 @@ datasets:
         color: 22C55E
         visible: false
 
-obs_columns:
-  - treatment
-  - cell_type
-  - fov_name
-  - t
-  - x
-  - y
-
 settings:
   host: 127.0.0.1
   port: 5055
@@ -83,7 +75,6 @@ A dataset may be in several collections. Datasets in no collection form one more
 | `anndata` / `path`        | string           | per dataset | local Zarr path                          |
 | `hcs_plate` / plate alias | string           | no          | matching OME-Zarr HCS plate              |
 | `channels`                | mapping          | no          | initial image channel display settings   |
-| `obs_columns`             | string array     | no          | observation columns to ingest            |
 | `settings.host`           | string           | no          | bind host; default `127.0.0.1`           |
 | `settings.port`           | integer          | no          | bind port; default `5055`                |
 | `preset`                  | string           | no          | preset for a new workspace file: `exploration` or a `.json` workspace document |

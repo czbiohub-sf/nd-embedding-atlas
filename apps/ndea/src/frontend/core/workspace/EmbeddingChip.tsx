@@ -12,7 +12,7 @@ import { CheckIcon } from "lucide-react";
 import { useState } from "react";
 
 import { useDatasetSession } from "@/hooks/useDatasetSession";
-import { activeSpec, COMPONENTS } from "./dashboard";
+import { activeSpec, elementTitle } from "./dashboard";
 import { applyOrToast, useWorkspace, useWorkspaceSelector } from "./workspace-context";
 
 type Obsm = Record<string, { loaded: boolean; n_dims?: number | null }>;
@@ -37,7 +37,7 @@ export function EmbeddingChip({ id }: { id: string }) {
   const usedBy = (key: string) =>
     Object.values(elements)
       .filter((element) => element.type === "scatter" && effectiveObsmKey(element.props.obsmKey, obsm) === key)
-      .map((element) => (typeof element.props.title === "string" && element.props.title) || COMPONENTS.scatter.title);
+      .map(elementTitle);
   const keys = Object.keys(obsm).filter((key) => key.toLowerCase().includes(query.trim().toLowerCase()));
 
   return (

@@ -31,7 +31,6 @@ export interface ParsedProjectConfig {
   datasets: ProjectDatasetMount[];
   /** Declared collections, then the implicit one (named after the project) holding datasets in none. */
   collections: ProjectCollection[];
-  obsColumns?: string[];
   settings?: {
     port?: number;
     host?: string;
@@ -45,7 +44,6 @@ export interface LaunchConfig {
   collections: ProjectCollection[];
   /** The collection this run opens. */
   collection: string;
-  obsColumns?: string[];
   port: number;
   host: string;
   noOpen: boolean;
@@ -66,7 +64,6 @@ export interface LaunchOverrides {
   noOpen: boolean;
   dev: boolean;
   tui?: boolean;
-  obsColumns?: string[];
   preset?: string;
   /** Workspace file; defaults to `defaultWorkspacePath(datasets)`. */
   workspace?: string;
@@ -103,11 +100,10 @@ export async function loadProjectConfig(yamlPath: string): Promise<ParsedProject
   }
 
   const collections = parseCollections(raw.collections, datasets, basename(absPath, extname(absPath)));
-  const obsColumns = parseObsColumns(raw.obs_columns);
   const settings = parseSettings(raw.settings);
   const preset = typeof raw.preset === "string" ? raw.preset : undefined;
 
-  return { datasets, collections, obsColumns, settings, preset };
+  return { datasets, collections, settings, preset };
 }
 
 // ─── Path-based config ──────────────────────────────────────────────────────
@@ -138,7 +134,6 @@ export function resolveLaunchConfig(project: ParsedProjectConfig, overrides: Lau
   return {
     collections: project.collections,
     collection,
-    obsColumns: overrides.obsColumns ?? project.obsColumns,
     port: overrides.port ?? project.settings?.port ?? 5055,
     host: overrides.host ?? project.settings?.host ?? "127.0.0.1",
     noOpen: overrides.noOpen,
@@ -351,19 +346,6 @@ function parseChannels(raw: unknown, datasetId: number | string): Record<string,
     result[name] = channel;
   }
   return result;
-}
-
-function parseObsColumns(raw: unknown): string[] | undefined {
-  if (raw == null) return undefined;
-  if (!Array.isArray(raw)) {
-    throw new TypeError("'obs_columns' must be an array of strings");
-  }
-  for (const item of raw) {
-    if (typeof item !== "string") {
-      throw new TypeError(`obs_columns entries must be strings, got: ${typeof item}`);
-    }
-  }
-  return raw as string[];
 }
 
 function parseSettings(raw: unknown): ParsedProjectConfig["settings"] | undefined {

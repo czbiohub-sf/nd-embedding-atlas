@@ -2,26 +2,7 @@
 
 import { cn } from "@ndea/ui/lib/utils";
 
-import { componentProps, elementTitle, type Dashboard } from "@/core/workspace/dashboard";
-
-/** Ids of the tile tree's leaves in reading order. */
-// eslint-disable-next-line react/only-export-components
-export function layoutTiles(spec: Dashboard, id = spec.root): string[] {
-  const element = spec.elements[id];
-  if (!element) return [];
-  if (element.type !== "split" && element.type !== "stack") return [id];
-  return element.children.flatMap((child) => layoutTiles(spec, child));
-}
-
-/** The name a tile shows in previews: its views' titles (a tabs tile lists every tab), or "Empty tile". */
-// eslint-disable-next-line react/only-export-components
-export function tileTitle(spec: Dashboard, id: string): string {
-  const element = spec.elements[id];
-  if (!element) return id;
-  if (element.type === "slot") return "Empty tile";
-  if (element.type !== "tabs") return elementTitle(element);
-  return element.children.map((child) => tileTitle(spec, child)).join(" · ");
-}
+import { componentProps, tileTitle, type Dashboard } from "@/core/workspace/dashboard";
 
 function Cell({ spec, id, grow, labeled }: { spec: Dashboard; id: string; grow: number; labeled: boolean }) {
   const element = spec.elements[id];

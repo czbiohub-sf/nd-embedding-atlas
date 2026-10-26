@@ -6,7 +6,7 @@
 
 import type { ReactNode } from "react";
 
-import { activeSpec } from "@/core/workspace/dashboard";
+import { activeSpec, layoutTiles, tileTitle } from "@/core/workspace/dashboard";
 import { copyReference } from "@/core/workspace/reference";
 import {
   applyOrToast,
@@ -27,7 +27,7 @@ import {
   tileCommands,
   type Command,
 } from "./commands";
-import { LayoutWireframe, layoutTiles, tileTitle } from "./LayoutWireframe";
+import { LayoutWireframe } from "./LayoutWireframe";
 import type { Panel } from "./Shell";
 
 export function WorkspaceCommandMenu({

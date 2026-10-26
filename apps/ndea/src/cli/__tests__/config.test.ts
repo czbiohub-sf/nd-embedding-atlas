@@ -44,7 +44,6 @@ datasets:
         color: "#3366ff"
         contrast: [10, 900]
         visible: false
-obs_columns: [cell_type, treatment]
 settings:
   port: 6060
   host: 0.0.0.0
@@ -63,7 +62,6 @@ preset: explore
       datasets: [cells],
       // No `collections:`: one implicit collection, named after the project file.
       collections: [{ name: "project", datasets: [cells] }],
-      obsColumns: ["cell_type", "treatment"],
       settings: { port: 6060, host: "0.0.0.0" },
       preset: "explore",
     });
@@ -206,7 +204,6 @@ describe("launch config", () => {
   const project: ParsedProjectConfig = {
     datasets: [cells],
     collections: [{ name: "project", datasets: [cells] }],
-    obsColumns: ["from_yaml"],
     settings: { port: 6060, host: "yaml-host" },
     preset: "yaml-preset",
   };
@@ -220,7 +217,6 @@ describe("launch config", () => {
     ).toEqual({
       collections: project.collections,
       collection: "project",
-      obsColumns: ["from_yaml"],
       port: 6060,
       host: "yaml-host",
       noOpen: false,
@@ -237,14 +233,12 @@ describe("launch config", () => {
         host: "cli-host",
         noOpen: true,
         dev: false,
-        obsColumns: ["from_cli"],
         preset: "cli-preset",
         workspace: "relative/workspace.json",
       }),
     ).toEqual({
       collections: project.collections,
       collection: "project",
-      obsColumns: ["from_cli"],
       port: 7070,
       host: "cli-host",
       noOpen: true,
@@ -260,7 +254,6 @@ describe("launch config", () => {
     expect(resolveLaunchConfig(parsed, { noOpen: false, dev: false })).toEqual({
       collections: [{ name: "example", datasets: [example] }],
       collection: "example",
-      obsColumns: undefined,
       port: 5055,
       host: "127.0.0.1",
       noOpen: false,

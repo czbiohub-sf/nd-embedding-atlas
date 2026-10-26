@@ -19,7 +19,9 @@ import type { ReactNode } from "react";
 import {
   COMPONENTS,
   EMPTY_TILE_CHOICES,
+  layoutTiles,
   tileProps,
+  tileTitle,
   tileView,
   type Dashboard,
   type LayoutDocument,
@@ -28,7 +30,7 @@ import {
 import type { DashboardEdit } from "@/core/workspace/edits";
 import { datasetFilterEdit, obs, totalObs, type Collections } from "./collections";
 import type { MenuGroup, MenuItem } from "./CommandMenu";
-import { LayoutWireframe, layoutTiles, tileTitle } from "./LayoutWireframe";
+import { LayoutWireframe } from "./LayoutWireframe";
 import type { Panel } from "./Shell";
 
 export type Command =

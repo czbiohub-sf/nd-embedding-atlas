@@ -103,8 +103,6 @@ export interface DatasetMountConfig {
 
 /** Static per-session metadata for the /data endpoints. */
 export interface DatasetSessionMetadata {
-  /** Obs columns clients list (detected, or `--obs-columns`); metadata appends annotation columns. */
-  obsColumnNames: string[];
   embeddingProps: Record<string, unknown>;
   hasPlate: boolean;
   plateMeta: Record<string, unknown> | null;

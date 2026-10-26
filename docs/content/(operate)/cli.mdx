@@ -55,7 +55,6 @@ A single `.yaml` / `.yml` path is parsed as a multi-dataset project config (see 
 | `--no-open`            | boolean | `false`     | Do not auto-open the browser                                                          |
 | `--no-tui`             | boolean | `false`     | Keep log output instead of the live status screen (a non-terminal stdout always does) |
 | `--no-static`          | boolean | `false`     | Do not serve the bundled frontend (Vite serves it in dev mode)                        |
-| `--obs-columns <list>` | string  | all columns | Comma-separated subset of obs columns to load                                         |
 | `--preset <name>`      | string  | `exploration` | Preset a new workspace file starts from: `exploration` or a `.json` workspace document |
 | `--workspace <file>`   | path    | see below   | Workspace document to open and save                                                   |
 | `--collection <name>`  | string  | the first   | Collection of a YAML project to open ([collections](/project-config#collections))     |
@@ -219,7 +218,7 @@ Workspace patches reject unknown set references anywhere in the document. Startu
 
 ### The dashboard
 
-`/layouts` maps layout ids to `{ "name", "spec" }`, and `/layout` is the id of the layout the browser shows. Each `spec` is a [json-render](https://json-render.dev) flat spec: `{ "root", "elements" }`, where every element has a `type`, `props`, and `children` (element ids). Every element is reachable from its layout's `root` exactly once, and element ids are unique across all layouts. `/data` and `/state` are shared by every layout.
+`/layouts` maps layout ids to `{ "name", "spec" }`, and `/layout` is the id of the layout the browser shows. Each `spec` is a flat spec: `{ "root", "elements" }`, where every element has a `type`, `props`, and `children` (element ids). Every element is reachable from its layout's `root` exactly once, and element ids are unique across all layouts. `/data` and `/state` are shared by every layout.
 
 | Type                                                                                                    | Props                                                                                             | Children    |
 | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ----------- |
@@ -249,7 +248,7 @@ A view on its own is a tile with one tab; a `tabs` element is a tile with severa
 
 ### Linking views
 
-Elements link through coordination state, so an agent links and drives them with plain patches. A prop `{"$bindState": "/<type>/<scope>"}` (json-render's two-way binding) joins an element to a scope; `/state/<type>/<scope>` holds the shared value. Types are `focus` (a row index or `null`), `filter`, `colorBy` (a column name or `null`), `viewSync`, and `ordering`.
+Elements link through coordination state, so an agent links and drives them with plain patches. A prop `{"$bindState": "/<type>/<scope>"}` (a two-way binding: the view reads and writes the cell) joins an element to a scope; `/state/<type>/<scope>` holds the shared value. Types are `focus` (a row index or `null`), `filter`, `colorBy` (a column name or `null`), `viewSync`, and `ordering`.
 
 ```bash
 # Put the metric in filter scope A (the scope must exist in state first).

@@ -39,7 +39,6 @@ export const viewFlags = [
     default: true,
     description: "Show the live status screen in a terminal (--no-tui keeps log output)",
   }),
-  defineFlag("obs-columns", { type: "string", description: "Comma-separated obs columns to include" }),
   defineFlag("preset", {
     type: "string",
     description: "Preset a new workspace file starts from: a built-in name (exploration) or a .json workspace document",
@@ -62,7 +61,6 @@ interface ViewInput {
     open: boolean;
     dev: boolean;
     tui: boolean;
-    "obs-columns"?: string;
     preset?: string;
     workspace?: string;
     collection?: string;
@@ -80,7 +78,6 @@ export async function runView({ args, flags, signal }: ViewInput): Promise<void>
     noOpen: !flags.open,
     dev: flags.dev,
     tui: flags.tui && process.stdin.isTTY && process.stdout.isTTY,
-    obsColumns: parseObsColumns(flags["obs-columns"]),
     preset: flags.preset,
     workspace: flags.workspace,
     collection: flags.collection,
@@ -107,14 +104,6 @@ export default defineCommand(
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 type Overrides = Parameters<typeof resolveLaunchConfig>[1];
-
-function parseObsColumns(raw: string | undefined): string[] | undefined {
-  const cols = (raw ?? "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-  return cols.length > 0 ? cols : undefined;
-}
 
 async function resolveConfig(paths: string[], overrides: Overrides): Promise<LaunchConfig> {
   if (paths.length === 1 && isYamlConfig(paths[0])) {

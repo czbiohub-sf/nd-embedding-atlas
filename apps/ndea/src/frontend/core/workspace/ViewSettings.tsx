@@ -9,6 +9,7 @@
  * named edit through `ws.apply`, the ops agents use.
  */
 
+import { useColumns } from "@ndea/components/query";
 import type { JsonValue } from "@ndea/sdk";
 import { IconButton, iconButtonVariants } from "@ndea/ui/components/icon-button";
 import { HoverTip } from "@ndea/ui/components/hover-tip";
@@ -18,7 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Slider } from "@ndea/ui/components/slider";
 import { Switch } from "@ndea/ui/components/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@ndea/ui/components/tabs";
-import { ToggleGroup, ToggleGroupItem } from "@ndea/ui/components/toggle-group";
+import { Segmented } from "@ndea/ui/components/toggle-group";
 import { cn } from "@ndea/ui/lib/utils";
 import { CopyIcon, Link, Maximize2, Settings, Trash2, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
@@ -58,33 +59,6 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
 interface Option {
   readonly value: string | null;
   readonly label: string;
-}
-
-function Segmented({
-  options,
-  value,
-  onChange,
-}: {
-  options: Option[];
-  value: string | null;
-  onChange(v: string | null): void;
-}) {
-  return (
-    <ToggleGroup
-      variant="segmented"
-      value={[String(value)]}
-      onValueChange={(next: string[]) => {
-        const picked = options.find((o) => String(o.value) === next[0]);
-        if (picked) onChange(picked.value);
-      }}
-    >
-      {options.map((o) => (
-        <ToggleGroupItem key={String(o.value)} value={String(o.value)}>
-          {o.label}
-        </ToggleGroupItem>
-      ))}
-    </ToggleGroup>
-  );
 }
 
 function Choice({
@@ -192,11 +166,12 @@ function RangeControl({
   );
 }
 
-/** The domain values a `control` string takes, from the dataset's catalog. */
+/** The domain values a `control` string takes: catalog columns (var columns are picked in the scatter's Var tab), obsm keys, datasets. */
 function useCatalog(): Record<NonNullable<ConfigField["control"]>, string[]> {
   const { metadata } = useDatasetSession().state;
+  const columns = useColumns();
   return {
-    column: metadata.obs_columns ?? [],
+    column: [...(columns?.values() ?? [])].filter((c) => c.kind !== "var").map((c) => c.name),
     obsm: Object.keys(metadata.obsm),
     dataset: metadata.dataset_keys ?? [],
   };
@@ -235,7 +210,12 @@ function FieldControl({ id, field, props }: { id: string; field: ConfigField; pr
     const options = [...none, ...(schema.options as string[]).map((v) => ({ value: v, label: v }))];
     const current = typeof value === "string" ? value : null;
     return options.length <= 3 ? (
-      <Segmented options={options} value={current} onChange={write} />
+      <Segmented
+        label={title}
+        options={options.map((o) => ({ value: String(o.value), label: o.label }))}
+        value={String(current)}
+        onChange={(picked) => write(options.find((o) => String(o.value) === picked)?.value ?? null)}
+      />
     ) : (
       <Choice label={title} options={options} value={current} onChange={write} />
     );

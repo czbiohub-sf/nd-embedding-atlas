@@ -44,7 +44,6 @@ async function buildState(): Promise<{ state: ServerSession; server: Server; por
   });
 
   const meta: DatasetSessionMetadata = {
-    obsColumnNames: ["obs_name"],
     embeddingProps: {},
     hasPlate: false,
     plateMeta: null,

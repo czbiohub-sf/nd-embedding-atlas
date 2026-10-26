@@ -47,7 +47,6 @@ async function serveFixture(): Promise<void> {
   const port = Number(process.env.PORT ?? 5055);
   const rows = 2000;
   const embeddingKey = "X_fixture";
-  const obsColumns = ["__row_index__", "obs_name", "_dataset", "category", "value", "score", "umap_0", "umap_1"];
 
   const store = await DatasetQuerySession.fromInit(async (conn: DuckDBConnection) => {
     // `value` is multi-modal so a histogram shows structure; `category` is
@@ -94,7 +93,6 @@ async function serveFixture(): Promise<void> {
     store,
     state,
     config: {
-      obsColumnNames: obsColumns,
       embeddingProps: {},
       hasPlate: false,
       plateMeta: null,

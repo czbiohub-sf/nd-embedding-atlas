@@ -1,13 +1,12 @@
 /**
  * Live view bodies for the dashboard: one runtime per view element, keyed by
  * element id. A body's config is its element's component props with
- * json-render expressions (`$template`, `$state`, …) resolved against the
+ * expressions (`$template`, `$state`: `coordination/expressions.ts`) resolved against the
  * coordination `state`; its predicate is the element's data source AND the
  * other members of its filter scope (`elementPredicate`), the same SQL the
  * server evaluates.
  */
 
-import { resolveElementProps } from "@json-render/core";
 import { Store } from "@tanstack/store";
 import type {
   ColorCoordinationAPI,
@@ -18,6 +17,7 @@ import type {
   ViewCoordinationAPI,
 } from "@ndea/sdk";
 
+import { resolveExpressions } from "@/core/coordination/expressions";
 import { createFilterBinding } from "@/core/coordination/filter-binding";
 import {
   COORDINATION_TYPES,
@@ -149,7 +149,7 @@ function createFocusCoordination(session: ElementRuntimeSession, id: string): Fo
 
 /** The config a body sees: its component props, expressions resolved against the coordination cells. */
 const bodyConfig = (element: DashboardElement, state: CoordinationState): Record<string, JsonValue> =>
-  resolveElementProps(componentProps(element), { stateModel: state }) as Record<string, JsonValue>;
+  resolveExpressions(componentProps(element), state) as Record<string, JsonValue>;
 
 const configKey = (element: DashboardElement | undefined, state: CoordinationState): string | undefined =>
   element ? JSON.stringify(bodyConfig(element, state)) : undefined;

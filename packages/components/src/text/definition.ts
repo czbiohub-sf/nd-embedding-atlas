@@ -7,7 +7,7 @@ import type { BodyMounter } from "../contracts";
 const VARIANTS = ["heading", "body", "muted"] as const;
 
 export interface TextConfig {
-  /** A string, or a json-render expression the host resolves against coordination state before the body reads it. */
+  /** A string, or a `$template` / `$state` expression the host resolves against coordination state before the body reads it. */
   readonly text: string | { readonly $template: string } | { readonly $state: string };
   readonly variant: (typeof VARIANTS)[number];
 }

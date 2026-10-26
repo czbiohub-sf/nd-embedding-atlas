@@ -1,5 +1,5 @@
 /**
- * The dashboard: named layouts, each a json-render flat spec `{ root, elements }`
+ * The dashboard: named layouts, each a flat spec `{ root, elements }`
  * that composes the whole workspace UI. Every element is one component: layout
  * (`split`, `stack`), a tile's `tabs`, an empty `slot`, or a view (`scatter`,
  * `table`, `text`, `select`, …) whose props are its configuration. Element ids
@@ -10,7 +10,7 @@
  *   means every observation.
  * - `title`: its header text.
  * - `<coordination type>`: `{ $bindState: "/<type>/<scope>" }` joins a
- *   coordination scope (json-render's two-way binding into `state`).
+ *   coordination scope (two-way: the view reads and writes `state` there).
  *
  * Pure (Zod + definitions' config contracts) so the server validates and
  * evaluates exactly what the browser renders.
@@ -73,7 +73,7 @@ export interface LayoutDocument {
   readonly layout: string;
 }
 
-/** A literal string, or a json-render expression resolved against coordination state: what a `title` takes. */
+/** A literal string, or an expression (`coordination/expressions.ts`) over coordination state: what a `title` takes. */
 const textSchema = z.union([
   z.string(),
   z.object({ $template: z.string() }).strict(),
@@ -335,6 +335,23 @@ export function tileView(spec: Dashboard, tile: string): string | undefined {
   const element = spec.elements[tile];
   if (element?.type === "tabs") return element.props.active as string;
   return element && COMPONENTS[element.type]?.view ? tile : undefined;
+}
+
+/** Ids of the tile tree's leaves (tiles) in reading order. */
+export function layoutTiles(spec: Dashboard, id = spec.root): string[] {
+  const element = spec.elements[id];
+  if (!element) return [];
+  if (element.type !== "split" && element.type !== "stack") return [id];
+  return element.children.flatMap((child) => layoutTiles(spec, child));
+}
+
+/** The name a tile shows in previews: its views' titles (a tabs tile lists every tab), or "Empty tile". */
+export function tileTitle(spec: Dashboard, id: string): string {
+  const element = spec.elements[id];
+  if (!element) return id;
+  if (element.type === "slot") return "Empty tile";
+  if (element.type !== "tabs") return elementTitle(element);
+  return element.children.map((child) => tileTitle(spec, child)).join(" · ");
 }
 
 /* ── operations: pure edits the dashboard UI and agents share ──────────── */

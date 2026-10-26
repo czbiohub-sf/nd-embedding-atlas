@@ -6,11 +6,11 @@ import { useState } from "react";
 import { Button } from "@ndea/ui/components/button";
 import { Input } from "@ndea/ui/components/input";
 
-import { activeSpec, elementTitle, freshId } from "@/core/workspace/dashboard";
+import { activeSpec, elementTitle, freshId, layoutTiles } from "@/core/workspace/dashboard";
 import type { DashboardEdit } from "@/core/workspace/edits";
 import { applyOrToast, useWorkspace, useWorkspaceSelector } from "@/core/workspace/workspace-context";
 import { Heading, Row } from "./flyout-rows";
-import { LayoutWireframe, layoutTiles } from "./LayoutWireframe";
+import { LayoutWireframe } from "./LayoutWireframe";
 
 const LAYOUT_ROW = "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-muted";
 

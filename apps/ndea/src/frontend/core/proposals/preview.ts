@@ -10,7 +10,7 @@
 import type { Proposal, ProposalChange } from "@ndea/protocol";
 
 import { filterClauseSql } from "@ndea/components/filter";
-import { activeSpec, type Dashboard, type DashboardElement } from "@/core/workspace/dashboard";
+import { activeSpec, layoutTiles, type Dashboard } from "@/core/workspace/dashboard";
 import type { DataSources } from "@/core/workspace/data-sources";
 import { applyDashboardEdits, DashboardEditSchema, type DashboardEdit } from "@/core/workspace/edits";
 import type { WorkspaceDocument } from "@/core/workspace/types";
@@ -38,16 +38,9 @@ export interface ProposalPreview {
 
 export const agentOf = (proposal: Proposal): string => proposal.actor.agent ?? "harness";
 
-/** Tiles of a layout: bare views and tabs elements that are not themselves tabs. */
+/** Tiles of a layout that hold views: every tile but the empty ones. */
 function tileIds(spec: Dashboard): Set<string> {
-  const tabs = new Set(
-    Object.values(spec.elements).flatMap((e: DashboardElement) => (e.type === "tabs" ? e.children : [])),
-  );
-  return new Set(
-    Object.entries(spec.elements)
-      .filter(([id, e]) => !["split", "stack", "slot"].includes(e.type) && !tabs.has(id))
-      .map(([id]) => id),
-  );
+  return new Set(layoutTiles(spec).filter((id) => spec.elements[id].type !== "slot"));
 }
 
 export function previewProposals(document: WorkspaceDocument, proposals: readonly Proposal[]): ProposalPreview {
