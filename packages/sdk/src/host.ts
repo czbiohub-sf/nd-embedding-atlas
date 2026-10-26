@@ -28,19 +28,13 @@ export interface DataContext {
   readonly metadata: Metadata;
 }
 
-/** Persists observations as a content-addressed set; reference it as `{ op: "inSet", set }`. */
+/** Saved selections as workspace data sources. */
 export interface RowSetPublishAPI {
-  /** `bits`: row bitmask over all `rows` observations (bit `r & 31` of word `r >> 5` = row `r`). */
-  createObservationSet(bits: Uint32Array<ArrayBuffer>, rows: number): Promise<ObservationSet>;
   /**
    * Saves `where` as a workspace data source named `<baseName>-<n>` (first free n ≥ 1,
    * since source names allow no spaces) and returns that name.
    */
   saveSource(baseName: string, where: FilterClause): string;
-}
-
-export interface DataQueryAPI {
-  query(sql: string, signal?: AbortSignal): Promise<unknown>;
 }
 
 /**
@@ -63,7 +57,7 @@ export interface FieldEditAPI {
   commitFields(options: { dryRun: boolean; columns?: string[] }): Promise<CommitAnnotationsResponse>;
 }
 
-export type DataAPI = DataQueryAPI & RowSetPublishAPI & FieldEditAPI;
+export type DataAPI = RowSetPublishAPI & FieldEditAPI;
 
 /** 2D pan/zoom view. */
 export interface PanZoomView {
@@ -145,6 +139,19 @@ export interface FilterCoordinationAPI {
   getResolved(): ResolvedFilter;
   subscribeResolved(callback: (filter: ResolvedFilter) => void): () => void;
   publish(facet: FilterFacet, clause: FilterClause): void;
+  /**
+   * Publishes a row selection on `facet`: persists `bits` (a bitmask over all
+   * `rows` observations; bit `r & 31` of word `r >> 5` = row `r`) as a
+   * content-addressed set, then publishes `{ op: "inSet", set }`, and returns
+   * the set. `null` clears the facet. Aborting `signal` before the set exists
+   * publishes nothing and resolves null, so a superseded selection never lands.
+   */
+  publishSelection(
+    facet: FilterFacet,
+    bits: Uint32Array<ArrayBuffer> | null,
+    rows: number,
+    signal?: AbortSignal,
+  ): Promise<ObservationSet | null>;
   /** This element's own clause for `facet`; undefined when unset or the element is unbound. */
   facet(facet: FilterFacet): FilterClause | undefined;
   clear(facet: FilterFacet): void;

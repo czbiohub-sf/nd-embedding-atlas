@@ -13,7 +13,7 @@
 import { AnnData, MuData, type DatasetHandle, type FrameMeta } from "@ndea/zarr";
 import type { DuckDBConnection } from "@duckdb/node-api";
 import { appendColumns } from "./append-columns.ts";
-import { quoteIdent } from "./store.ts";
+import { quoteIdent } from "@ndea/protocol";
 
 /** One dataset of a project, in obs_base order. */
 export interface IngestDataset {

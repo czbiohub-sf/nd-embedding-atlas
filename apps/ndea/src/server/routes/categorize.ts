@@ -10,9 +10,9 @@
  *   5. Return { indexColumn, legend, otherIndex, nullIndex }.
  */
 
-import { CategorizeBodySchema, type CategorizeResponse, type CategoryLegendItem } from "@ndea/protocol";
+import { CategorizeBodySchema, quoteIdent, type CategorizeResponse, type CategoryLegendItem } from "@ndea/protocol";
 import { parseBody } from "../request-body.ts";
-import { quoteIdent, type DatasetQuerySession } from "../store.ts";
+import type { DatasetQuerySession } from "../store.ts";
 
 const DEFAULT_MAX_CATEGORIES = 64;
 

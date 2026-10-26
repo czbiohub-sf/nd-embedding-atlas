@@ -7,7 +7,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
-import type { AnnotationDtype, CommitAnnotationsResponse } from "@ndea/protocol";
+import { type AnnotationDtype, type CommitAnnotationsResponse, quoteIdent } from "@ndea/protocol";
 import { rowIndex as toRowIndex } from "@ndea/sdk";
 import { Button } from "@ndea/ui/components/button";
 import {
@@ -20,7 +20,7 @@ import {
 } from "@ndea/ui/components/dialog";
 import type { BodyProps } from "../contracts";
 import { filterClauseSql } from "../filter/sql";
-import { duckdbTypeToColumnType } from "../query/column-types";
+import { useColumns } from "../query/columns";
 import { toRows } from "../query/mosaic";
 import { useFocus } from "../query/useFocus";
 import type { TableConfig } from "./contracts";
@@ -37,7 +37,6 @@ import {
   hasBit,
   isStringField,
   orderBySql,
-  quoteIdent,
   searchSql,
   type SortState,
   type TableField,
@@ -53,30 +52,30 @@ const errorMessage = (error: unknown) => (error instanceof Error ? error.message
 const renameIn = (list: string[] | null, from: string, to: string | null) =>
   list?.flatMap((n) => (n === from ? (to === null ? [] : [to]) : [n])) ?? null;
 
-/** Obs from the file (the session's obs columns) and annotation fields, typed. */
+/** The column catalog minus var columns: obs from the file read-only, annotation fields editable. */
 function useFields(host: BodyProps<TableConfig>["host"], version: number) {
-  const { coordinator, table, metadata } = host.data;
+  const { coordinator, table } = host.data;
+  const columns = useColumns();
   const [fields, setFields] = useState<TableField[] | null>(null);
   const [rows, setRows] = useState(0);
   // Distinct counts never change for obs from the file: query each column once.
   const distinct = useRef(new Map<string, number>());
   useEffect(() => {
+    if (!columns) return;
     let live = true;
     void (async () => {
       // `version` is the refetch trigger after a field write.
       void version;
       const run = async (sql: string) => toRows(await coordinator.query(sql, { cache: false }));
-      const [annotations, described, counted] = await Promise.all([
+      const [annotations, counted] = await Promise.all([
         host.dataAPI.listFields(),
-        run(`SELECT column_name, column_type FROM (DESCRIBE ${table})`),
         run(`SELECT count(*) AS n FROM ${table}`),
       ]);
-      const types = new Map(
-        described.map((r) => [String(r.column_name), duckdbTypeToColumnType(String(r.column_type))]),
-      );
       const dtypes = new Map(annotations.map((a) => [a.name, a.dtype]));
-      const obs = (metadata.obs_columns ?? []).filter((name) => types.has(name) && !dtypes.has(name));
-      const unknown = obs.filter((name) => types.get(name) === "string" && !distinct.current.has(name));
+      const listed = [...columns.values()].filter((c) => c.kind !== "var");
+      const unknown = listed
+        .filter((c) => c.kind === "obs" && c.type === "string" && !distinct.current.has(c.name))
+        .map((c) => c.name);
       if (unknown.length) {
         const [row] = await run(
           `SELECT ${unknown.map((n, i) => `approx_count_distinct(${quoteIdent(n)}) AS c${i}`).join(", ")} FROM ${table}`,
@@ -85,21 +84,19 @@ function useFields(host: BodyProps<TableConfig>["host"], version: number) {
       }
       if (!live) return;
       setRows(Number(counted[0]?.n ?? 0));
-      setFields([
-        ...obs.map((name) => ({
-          name,
-          type: fieldType(types.get(name)!, distinct.current.get(name), null),
-          annotation: null,
-        })),
-        ...annotations
-          .filter((a) => types.has(a.name))
-          .map((a) => ({ name: a.name, type: fieldType("string", undefined, a.dtype), annotation: a.dtype })),
-      ]);
+      setFields(
+        listed.flatMap(({ name, type, kind }): TableField[] => {
+          if (kind === "obs")
+            return [{ name, type: fieldType(type, distinct.current.get(name), null), annotation: null }];
+          const dtype = dtypes.get(name);
+          return dtype ? [{ name, type: fieldType("string", undefined, dtype), annotation: dtype }] : [];
+        }),
+      );
     })().catch((error) => host.notifications.notify(`Table fields failed: ${errorMessage(error)}`, "error"));
     return () => {
       live = false;
     };
-  }, [host, coordinator, table, metadata, version]);
+  }, [host, coordinator, table, columns, version]);
   return { fields, rows };
 }
 
@@ -212,19 +209,23 @@ export function TableView({ host }: BodyProps<TableConfig>) {
   const [selection, setSelection] = useState<Uint32Array<ArrayBuffer> | null>(null);
   const selected = useMemo(() => (selection ? countBits(selection) : 0), [selection]);
   const anchor = useRef<number | null>(null);
+  /** Bumped by every selection; the reload restore below yields to any. */
   const selectionRun = useRef(0);
+  /** The latest selection still on its way; the next one aborts it. */
+  const pendingSelection = useRef<AbortController | null>(null);
   const select = useCallback(
     async (bits: Uint32Array<ArrayBuffer>) => {
-      const run = ++selectionRun.current;
+      selectionRun.current += 1;
       const empty = countBits(bits) === 0;
       setSelection(empty ? null : bits);
-      if (empty) return host.filter.clear("selection");
+      pendingSelection.current?.abort();
+      const pending = new AbortController();
+      pendingSelection.current = pending;
       try {
-        const { set } = await host.dataAPI.createObservationSet(bits, nObs);
-        if (run === selectionRun.current && !host.signal.aborted)
-          host.filter.publish("selection", { op: "inSet", set });
+        await host.filter.publishSelection("selection", empty ? null : bits, nObs, pending.signal);
       } catch (error) {
-        if (!host.signal.aborted) host.notifications.notify(`Selection failed: ${errorMessage(error)}`, "error");
+        if (!host.signal.aborted && !pending.signal.aborted)
+          host.notifications.notify(`Selection failed: ${errorMessage(error)}`, "error");
       }
     },
     [host, nObs],

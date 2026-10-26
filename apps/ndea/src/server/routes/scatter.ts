@@ -9,7 +9,8 @@
 
 import { ObsmSliceLoader } from "../slice-loader.ts";
 import type { ServerSession } from "../state.ts";
-import { quoteIdent, type DatasetQuerySession } from "../store.ts";
+import { quoteIdent } from "@ndea/protocol";
+import type { DatasetQuerySession } from "../store.ts";
 
 // ─── Binary format helpers ──────────────────────────────────────────────────
 // Format (version 1):

@@ -21,9 +21,9 @@ import {
   AnnotationColumnPatchBodySchema,
   CommitAnnotationsBodySchema,
   WriteAnnotationValuesBodySchema,
+  quoteIdent,
 } from "@ndea/protocol";
 import { parseBody } from "../request-body.ts";
-import { quoteIdent } from "../store.ts";
 import type { ServerSession } from "../state.ts";
 import { commitObsColumns, type ObsColumnInput } from "@ndea/zarr";
 

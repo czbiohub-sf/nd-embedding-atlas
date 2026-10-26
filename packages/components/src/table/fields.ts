@@ -4,8 +4,7 @@
  * the row-selection bitmask. No React, so it is unit-tested directly.
  */
 
-import type { AnnotationDtype, FilterClause } from "@ndea/protocol";
-import type { ColumnType } from "../query/column-types";
+import { type AnnotationDtype, type ColumnType, type FilterClause, quoteIdent } from "@ndea/protocol";
 
 /** Text, number, category (from the file), label (editable categorical field), boolean. */
 export type FieldType = "text" | "number" | "category" | "label" | "boolean";
@@ -45,8 +44,6 @@ export const isStringField = (type: FieldType) => type === "text" || type === "c
 
 /** Fields rows can be grouped by. */
 export const isGroupable = (type: FieldType) => type === "category" || type === "label" || type === "boolean";
-
-export const quoteIdent = (name: string) => `"${name.replaceAll('"', '""')}"`;
 
 // ── Filter builder ──────────────────────────────────────────────────
 

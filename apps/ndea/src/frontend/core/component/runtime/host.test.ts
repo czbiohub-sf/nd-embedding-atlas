@@ -57,6 +57,15 @@ function hostInit<Config>(
   };
 }
 
+/** A filter binding that records publishes and clears. */
+function recordingFilter(events: unknown[]): HostInit<unknown>["filter"] {
+  return {
+    ...hostInit("recorder", {}).filter,
+    publish: (facet, clause) => events.push(["publish", facet, clause]),
+    clear: (facet) => events.push(["clear", facet]),
+  };
+}
+
 describe("createComponentHost", () => {
   test("throws instead of mutating local config when no persistence patch handler exists", () => {
     const handle = createComponentHost(hostDependencies(), hostInit<Record<string, unknown>>("configless-1", {}));
@@ -180,22 +189,57 @@ describe("createComponentHost", () => {
     expect(events).toEqual(["release-pending", "late-device"]);
   });
 
-  test("creates an observation set through POST /api/sets with the global fetch receiver", async () => {
+  test("publishSelection creates the set through POST /api/sets, publishes it, and clears on null", async () => {
     const requests: { receiver: unknown; url: string; body: number[] }[] = [];
     const fetcher = function (this: unknown, input: string, init?: { body?: Uint8Array }): Promise<Response> {
       requests.push({ receiver: this, url: input, body: [...(init?.body ?? [])] });
       return Promise.resolve(Response.json({ set: "0123456789abcdef", count: 2 }));
     } as unknown as typeof globalThis.fetch;
-    const handle = createComponentHost(hostDependencies({ fetch: fetcher }), hostInit("row-set", {}));
+    const events: unknown[] = [];
+    const handle = createComponentHost(
+      hostDependencies({ fetch: fetcher }),
+      hostInit("row-set", {}, { filter: recordingFilter(events) }),
+    );
     const host = handle.host;
 
     // Rows 2 and 5 of 10: one u32 word, sent as ceil(10 / 8) = 2 bytes.
-    expect(await host.dataAPI.createObservationSet(new Uint32Array([0b100100]), 10)).toEqual({
+    expect(await host.filter.publishSelection("lasso", new Uint32Array([0b100100]), 10)).toEqual({
       set: "0123456789abcdef",
       count: 2,
     });
     expect(requests).toEqual([{ receiver: globalThis, url: "/api/sets?rows=10", body: [0b100100, 0] }]);
+    expect(await host.filter.publishSelection("lasso", null, 10)).toBeNull();
+    expect(events).toEqual([
+      ["publish", "lasso", { op: "inSet", set: "0123456789abcdef" }],
+      ["clear", "lasso"],
+    ]);
     handle.dispose();
+  });
+
+  test("publishSelection publishes nothing once its signal aborts", async () => {
+    const { promise: response, resolve } = Promise.withResolvers<Response>();
+    const events: unknown[] = [];
+    const handle = createComponentHost(
+      hostDependencies({ fetch: (() => response) as unknown as typeof globalThis.fetch }),
+      hostInit("superseded", {}, { filter: recordingFilter(events) }),
+    );
+    const superseded = new AbortController();
+    const publishing = handle.host.filter.publishSelection("lasso", new Uint32Array([1]), 1, superseded.signal);
+    superseded.abort();
+    resolve(Response.json({ set: "0123456789abcdef", count: 1 }));
+    expect(await publishing).toBeNull();
+    expect(events).toEqual([]);
+
+    const failing = createComponentHost(
+      hostDependencies({ fetch: (() => Promise.reject(new Error("aborted"))) as unknown as typeof globalThis.fetch }),
+      hostInit("aborted", {}, { filter: recordingFilter(events) }),
+    );
+    const aborted = new AbortController();
+    aborted.abort();
+    expect(await failing.host.filter.publishSelection("lasso", new Uint32Array([1]), 1, aborted.signal)).toBeNull();
+    expect(events).toEqual([]);
+    handle.dispose();
+    failing.dispose();
   });
 
   test("saves a data source through the init handler and refuses without one", () => {

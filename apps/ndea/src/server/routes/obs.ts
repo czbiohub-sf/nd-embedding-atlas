@@ -10,7 +10,7 @@
 import { z } from "zod";
 import { parseBody } from "../request-body.ts";
 import { cropFovColumn, parseBbox, type ServerSession } from "../state.ts";
-import { quoteIdent } from "../store.ts";
+import { quoteIdent } from "@ndea/protocol";
 
 const ObsBatchBodySchema = z.object({ row_indices: z.array(z.number().int()) });
 

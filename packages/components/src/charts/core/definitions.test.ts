@@ -12,7 +12,6 @@ const mountBody = (() => {
 }) as BodyMounter;
 
 const services: ChartServices = {
-  useColumnTypes: () => null,
   useQuery: () => ({ data: null, loading: false, error: null }),
 };
 

@@ -14,11 +14,9 @@
  * - `$brush`  the interactor's output `Selection`, read back out of `astToDOM`
  */
 
-import type { Coordinator } from "@uwdata/mosaic-core";
+import type { ColumnType } from "@ndea/protocol";
 import { z } from "zod";
 import type { JsonValue } from "@ndea/sdk";
-import { type ColumnType, duckdbTypeToColumnType } from "../../query/column-types";
-import { toRows } from "../core/mosaic-helpers";
 
 /**
  * One entry of a mosaic-spec `plot: [...]` array. A mark entry carries a
@@ -124,23 +122,4 @@ export function describeEntries(entries: readonly PlotEntry[]): { preset: MarkPr
 
 function isRecord(value: JsonValue | undefined): value is { [key: string]: JsonValue } {
   return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-/** Internal columns hidden from the picker, matching `FieldPicker`. */
-const SKIP_COLUMNS = new Set(["__row_index__"]);
-
-/**
- * Column name → kind, straight off the coordinator. The non-React twin of
- * `useColumnTypes`: the vgplot body is imperative and cannot call hooks.
- */
-export async function listColumns(coordinator: Coordinator): Promise<Map<string, ColumnType>> {
-  const result = await coordinator.query(`SELECT column_name, column_type FROM (DESCRIBE dataset)`);
-  const rows = toRows<{ column_name: string; column_type: string }>(result);
-
-  const columns = new Map<string, ColumnType>();
-  for (const row of rows) {
-    if (SKIP_COLUMNS.has(row.column_name)) continue;
-    columns.set(row.column_name, duckdbTypeToColumnType(row.column_type));
-  }
-  return columns;
 }

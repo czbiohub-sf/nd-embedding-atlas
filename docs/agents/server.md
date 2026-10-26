@@ -151,6 +151,9 @@ unknown set are rejected.
   `dataset` VIEW (obs_base + var + annotation joins); temp selections and
   Mosaic preaggregations share it. `columns()` is the catalog
   (`name → { sqlType, kind }`), refreshed on every VIEW rebuild.
+  `GET /api/columns` (`server/routes/columns.ts`) serves it to the browser as
+  `[{ name, type, sqlType, kind }]` without internal `__*` columns (`type` from
+  `columnType` in `@ndea/protocol`).
 - Annotation fields (`server/routes/annotations.ts`) are `label` or `text`,
   TEXT in `ann_*` tables joined into the VIEW (`kind: "annotation"`). Add,
   rename, convert, or drop only through `registerAnnotationColumn`,

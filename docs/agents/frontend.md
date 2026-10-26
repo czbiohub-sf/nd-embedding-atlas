@@ -77,8 +77,17 @@ records what was built from it and what still differs.
   does not.
 - `createComponentHost` (`core/component/runtime/host.ts`) builds the
   `ComponentHost`; `predicate` is the element's source AND its filter scope.
-  `DatasetSessionProvider` owns metadata, trajectories, and query
-  infrastructure.
+  Views query through `host.data.coordinator`. A row selection becomes a
+  filter through `host.filter.publishSelection(facet, bits, rows, signal)`
+  (creates the observation set, publishes `{ op: "inSet" }`, clears on
+  `null`; an aborted signal publishes nothing). `DatasetSessionProvider` owns
+  metadata, trajectories, and query infrastructure; its `refreshMetadata`
+  (after every field write) also refetches the column catalog.
+- Columns: every list of columns (table fields, chart/vgplot pickers, scatter
+  color by) comes from the catalog, `useColumns()` / `fetchColumns()` in
+  `packages/components/src/query/columns.ts` (`GET /api/columns`), never
+  `DESCRIBE`. Mosaic glue (`toRows`, `filterExprToExpr`, `predicateToSql`,
+  `usePredicateSql`, `stringPredicate`) lives once in `query/mosaic.ts`.
 - A data component reads `props.data` (a named source; omitted = every obs).
 
 ## Proposals UI
@@ -107,21 +116,23 @@ proposal bar (bottom centre) and the Harness flyout. Accept/Reject call
   `floating-controls`): pointer/box/lasso (V/B/L, shift adds, ⌥ subtracts),
   Legend / Point size / Axes popovers, the bottom-right
   axis picker, the pinned legend, and the selection pill (count from
-  `POST /api/sets`, Invert, Save as source via `host.dataAPI.saveSource`,
-  Clear). Selections combine CPU-side (`selection-bits.ts`) and publish
-  `{ op: "inSet" }` on the `lasso` facet. Props `xDim`, `yDim`, `zDim`,
-  `pointSize`, `legend`, `density.mode` persist through `patchConfig`.
+  `host.filter.publishSelection`, Invert, Save as source via
+  `host.dataAPI.saveSource`, Clear). Selections combine CPU-side
+  (`selection-bits.ts`) and publish `{ op: "inSet" }` on the `lasso` facet.
+  Props `xDim`, `yDim`, `zDim`, `pointSize`, `legend`, `density.mode` persist
+  through `patchConfig`.
 
 ## Table (`packages/components/src/table/`)
 
 The field editor: toolbar (search, `Filter │ Sort │ Group │ Fields`,
-Save/Discard, "Write fields to file…"), type glyphs and provenance markers, and
+Save/Discard, "Write fields to file…"), type glyphs and provenance markers
+(from the catalog's `kind`: obs read-only, annotation fields editable), and
 server-side pages, counts, and groups that bypass Mosaic's cache because edits
 change values under the same SQL. Cell edits stay in a client buffer until Save
 (`host.dataAPI.writeFieldValues`); field operations apply at once. The filter
-builder publishes on the `filter` facet and row selection (an observation set)
-on the `selection` facet; the table narrows by its own builder clauses, never by
-its selection. No keyboard shortcuts.
+builder publishes on the `filter` facet and row selection (an observation set,
+via `publishSelection`) on the `selection` facet; the table narrows by its own
+builder clauses, never by its selection. No keyboard shortcuts.
 
 ## Image viewer and charts
 

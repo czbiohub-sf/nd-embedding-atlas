@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { stringPredicate } from "../../helpers";
+import { stringPredicate } from "../../../query/mosaic";
 import { hasFilterPredicate, scatterWords } from "./usePredicateBits";
 
 describe("predicate bitmask", () => {

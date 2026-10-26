@@ -5,10 +5,11 @@ import { type FilterExpr, cast, column } from "@uwdata/mosaic-sql";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { BodyProps } from "../../contracts";
+import { filterExprToExpr, toRows } from "../../query/mosaic";
+import { useColumns } from "../../query/columns";
 import type { ChartServices, UseChartQuery } from "../core/contracts";
 import { FieldPicker } from "../core/field-picker";
 import { buildHistogramStatsQuery } from "../core/filter-queries";
-import { filterExprToExpr, toRows } from "../core/mosaic-helpers";
 import { useChartLeaf } from "../core/use-chart-leaf";
 import { useContainerSize } from "../core/use-container-size";
 import { binParams as computeBinParams, histogramBrushPredicate, type Stats } from "./binmath";
@@ -24,11 +25,11 @@ const CHART_HEIGHT = 64;
 const AXIS_HEIGHT = 18;
 const TOTAL_HEIGHT = CHART_HEIGHT + AXIS_HEIGHT;
 
-export function createHistogramView({ useColumnTypes, useQuery }: ChartServices) {
+export function createHistogramView({ useQuery }: ChartServices) {
   const HistogramBody = createHistogramBody(useQuery);
   return function HistogramView({ host }: BodyProps<HistogramConfig>) {
     const { coordinator, table, filter, field, setField } = useChartLeaf(host);
-    const types = useColumnTypes(coordinator);
+    const columns = useColumns();
     const bins = host.config.bins ?? 20;
     const onFilter = useCallback(
       (clause: FilterClause | null) => {
@@ -40,7 +41,7 @@ export function createHistogramView({ useColumnTypes, useQuery }: ChartServices)
 
     return (
       <div className="flex h-full w-full flex-col gap-1.5 overflow-y-auto bg-surface p-2">
-        <FieldPicker types={types} value={field} kinds={["number"]} onPick={setField} />
+        <FieldPicker columns={columns} value={field} kinds={["number"]} onPick={setField} />
         {field == null ? (
           <div className="px-1 py-2 text-sm text-muted-foreground/60">Pick a column to plot.</div>
         ) : (

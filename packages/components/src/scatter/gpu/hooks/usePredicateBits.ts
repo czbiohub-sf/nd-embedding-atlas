@@ -2,7 +2,7 @@ import type { FilterCoordinationAPI } from "@ndea/sdk";
 import type { Coordinator } from "@uwdata/mosaic-core";
 import { type FilterExpr, literal, Query, sql } from "@uwdata/mosaic-sql";
 import { useCallback, useState } from "react";
-import { filterExprToExpr } from "../../helpers";
+import { filterExprToExpr } from "../../../query/mosaic";
 import { useMosaicClient } from "../../../query/useMosaicClient";
 
 export function hasFilterPredicate(predicate: FilterExpr | null | undefined): boolean {

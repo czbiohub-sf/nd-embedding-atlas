@@ -1,6 +1,5 @@
-import { and, type ExprNode, type FilterExpr, literal } from "@uwdata/mosaic-sql";
 import { okLchToSrgb, ParseColorError, srgbFromHex, srgbToHex, srgbToOkLch } from "@ndea/ochre";
-import type { ColumnType } from "../query/column-types";
+import type { Columns } from "../query/columns";
 import type { ColorMode, TrajectoryData } from "./contracts";
 import type { ScatterData } from "./gpu/types";
 
@@ -74,38 +73,16 @@ export function dimLabel(obsmKey: string, dim: number): string {
   return known ? `${known}${dim + 1}` : `${name} ${dim + 1}`;
 }
 
-export function filterExprToExpr(filter: FilterExpr | null | undefined): ExprNode {
-  if (filter == null) return literal(true);
-  if (typeof filter === "boolean") return literal(filter);
-  if (typeof filter === "string") return literal(true);
-  if (Array.isArray(filter)) {
-    const expressions = filter.filter(
-      (value): value is ExprNode => value != null && typeof value !== "boolean" && typeof value !== "string",
-    );
-    if (expressions.length === 0) return literal(true);
-    return expressions.length === 1 ? expressions[0] : and(...expressions);
-  }
-  return filter;
-}
-
-export function toRows<T = Record<string, unknown>>(result: unknown): T[] {
-  return Array.isArray(result) ? result : Array.from(result as Iterable<T>);
-}
-
-export function stringPredicate(sql: string): ExprNode {
-  return { toString: () => sql } as unknown as ExprNode;
-}
-
 export function resolveColorMode(
   columnName: string | null,
-  columnTypes: Map<string, ColumnType> | null,
+  columns: Columns | null,
   userOverride?: ColorMode,
 ): { mode: ColorMode; canToggle: boolean } {
-  if (!columnName || !columnTypes) return { mode: "categorical", canToggle: false };
+  if (!columnName || !columns) return { mode: "categorical", canToggle: false };
   if (columnName.startsWith("__var_") && columnName.endsWith("__")) {
     return { mode: userOverride ?? "continuous", canToggle: false };
   }
-  const dtype = columnTypes.get(columnName);
+  const dtype = columns.get(columnName)?.type;
   return {
     mode: userOverride ?? (dtype === "number" ? "continuous" : "categorical"),
     canToggle: dtype === "number",

@@ -26,7 +26,9 @@ import type {
   SelectionTool,
   TrajectoryData,
 } from "./contracts";
-import { colorSourceFromString, colorSourceLegendLabel, pointWorldPos, toRows, TRAJECTORY_COLOR } from "./helpers";
+import { colorSourceFromString, colorSourceLegendLabel, pointWorldPos, TRAJECTORY_COLOR } from "./helpers";
+import { quoteIdent } from "@ndea/protocol";
+import { toRows } from "../query/mosaic";
 import { useMosaicScatterData } from "./gpu/hooks/useMosaicScatterData";
 import { type ScatterSelection, useScatterSelection } from "./gpu/hooks/useScatterSelection";
 import { usePredicateBits } from "./gpu/hooks/usePredicateBits";
@@ -308,7 +310,7 @@ export function ScatterView({
     let cancelled = false;
     const tid = setTimeout(() => {
       coordinator
-        .query(`SELECT __row_index__ FROM dataset WHERE "${col}" >= ${vmin} AND "${col}" <= ${vmax}`)
+        .query(`SELECT __row_index__ FROM dataset WHERE ${quoteIdent(col)} BETWEEN ${vmin} AND ${vmax}`)
         .then((result: unknown) => {
           if (cancelled) return;
           const indices = toRows<{ __row_index__: number }>(result).map((r) => rowIndex(r.__row_index__));

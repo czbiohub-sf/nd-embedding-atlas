@@ -1,22 +1,13 @@
 /// <reference types="bun" />
 import { describe, expect, test } from "bun:test";
-import type { Coordinator } from "@uwdata/mosaic-core";
 
 import {
   buildEntries,
   describeEntries,
-  listColumns,
   type PlotEntry,
   VGPLOT_DEFAULT_CONFIG,
   vgplotConfigSchema,
 } from "./spec-schema";
-
-/** Coordinator stub: only `query` is exercised by `listColumns`. */
-function stubCoordinator(rows: { column_name: string; column_type: string }[]): Coordinator {
-  return {
-    query: async () => rows,
-  } as unknown as Coordinator;
-}
 
 describe("vgplotConfigSchema", () => {
   test("the default config parses (registry conformance)", () => {
@@ -124,54 +115,5 @@ describe("describeEntries", () => {
   test("accepts the array form of a bin argument", () => {
     const entries: PlotEntry[] = [{ mark: "rectY", x: { bin: ["col"] } }];
     expect(describeEntries(entries)).toEqual({ preset: "histogram", field: "col" });
-  });
-});
-
-describe("listColumns", () => {
-  test("maps DuckDB types to column kinds", async () => {
-    const columns = await listColumns(
-      stubCoordinator([
-        { column_name: "n_int", column_type: "INTEGER" },
-        { column_name: "n_big", column_type: "BIGINT" },
-        { column_name: "n_dbl", column_type: "DOUBLE" },
-        { column_name: "n_dec", column_type: "DECIMAL(18,3)" },
-        { column_name: "s_var", column_type: "VARCHAR" },
-        { column_name: "s_enum", column_type: "ENUM('a','b')" },
-        { column_name: "s_enum_words", column_type: "ENUM('interphase', 'real', 'bool_flag')" },
-        { column_name: "b_flag", column_type: "BOOLEAN" },
-        { column_name: "t_ts", column_type: "TIMESTAMP" },
-        { column_name: "l_list", column_type: "FLOAT[]" },
-      ]),
-    );
-
-    expect([...columns]).toEqual([
-      ["n_int", "number"],
-      ["n_big", "number"],
-      ["n_dbl", "number"],
-      ["n_dec", "number"],
-      ["s_var", "string"],
-      ["s_enum", "string"],
-      ["s_enum_words", "string"],
-      ["b_flag", "boolean"],
-      ["t_ts", "other"],
-      ["l_list", "number"],
-    ]);
-  });
-
-  test("omits __row_index__", async () => {
-    const columns = await listColumns(
-      stubCoordinator([
-        { column_name: "__row_index__", column_type: "BIGINT" },
-        { column_name: "keep", column_type: "VARCHAR" },
-      ]),
-    );
-
-    expect(columns.has("__row_index__")).toBe(false);
-    expect([...columns.keys()]).toEqual(["keep"]);
-  });
-
-  test("lowercase type strings are matched case-insensitively", async () => {
-    const columns = await listColumns(stubCoordinator([{ column_name: "c", column_type: "varchar" }]));
-    expect(columns.get("c")).toBe("string");
   });
 });

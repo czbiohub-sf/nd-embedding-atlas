@@ -26,6 +26,7 @@ import {
   handleWriteAnnotationValues,
 } from "./routes/annotations.ts";
 import { handleCategorize } from "./routes/categorize.ts";
+import { handleColumns } from "./routes/columns.ts";
 import { handleChannelStats } from "./routes/channel-stats.ts";
 import { handleCrop } from "./routes/crops.ts";
 import { handleEmbeddingStatus, handleLoadEmbedding } from "./routes/embeddings.ts";
@@ -191,6 +192,7 @@ export function appServeOptions(options: CreateAppOptions) {
         },
         "/data/query": { GET: (req) => handleMosaicRoute(req, store), POST: (req) => handleMosaicRoute(req, store) },
         "/data/metadata.json": { GET: () => handleMetadata(state, config) },
+        "/api/columns": { GET: () => handleColumns(store) },
         "/api/collection": { POST: (req) => handleCollectionSwitch(req, options.sessions) },
 
         "/api/health": { GET: () => handleHealth(state) },

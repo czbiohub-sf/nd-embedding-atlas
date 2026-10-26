@@ -20,7 +20,6 @@ export type {
   ComponentHost,
   DataAPI,
   DataContext,
-  DataQueryAPI,
   DeviceInfo,
   DeviceLease,
   FieldEditAPI,

@@ -7,7 +7,7 @@
 
 import { TrajectoryResponseSchema, type TrajectoryFrame } from "@ndea/protocol";
 import type { ServerSession } from "../state.ts";
-import { quoteIdent } from "../store.ts";
+import { quoteIdent } from "@ndea/protocol";
 
 /**
  * Handle GET /api/trajectory

@@ -6,8 +6,9 @@
 
 import type { Coordinator } from "@uwdata/mosaic-core";
 import { useCallback, useEffect, useMemo, useReducer, useState } from "react";
+import { quoteIdent } from "@ndea/protocol";
 import { toRows } from "../query/mosaic";
-import { type Group, type GroupValue, quoteIdent } from "./fields";
+import type { Group, GroupValue } from "./fields";
 
 const PAGE_SIZE = 100;
 // ponytail: whole-page FIFO eviction; enough to bound memory while scrolling.
