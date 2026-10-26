@@ -4,7 +4,17 @@
  * floating controls render inside the view through `ScatterView.renderOverlays`.
  */
 
-import { Axis3d, ChevronDownIcon, CircleDot, Lasso, MousePointer2, Pin, PinOff, SquareDashed } from "lucide-react";
+import {
+  Axis3d,
+  ChevronDownIcon,
+  CircleDot,
+  Lasso,
+  MousePointer2,
+  Pin,
+  PinOff,
+  RotateCcw,
+  SquareDashed,
+} from "lucide-react";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { capabilitiesOf } from "@ndea/sdk";
 import { Button } from "@ndea/ui/components/button";
@@ -12,11 +22,10 @@ import { ControlDivider, ControlGroup, ControlPopover, ControlRow } from "@ndea/
 import { IconButton } from "@ndea/ui/components/icon-button";
 import { NdLegendContinuousIcon, NdLegendIcon } from "@ndea/ui/components/nd-icons";
 import { Popover, PopoverContent, PopoverTrigger, popoverSeparator } from "@ndea/ui/components/popover";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@ndea/ui/components/select";
 import { Slider } from "@ndea/ui/components/slider";
 import { Segmented } from "@ndea/ui/components/toggle-group";
 import { useFocus, useScatterHost, useScatterSession } from "./context";
-import { dimLabel, selectAnyTrajectory } from "./helpers";
+import { selectAnyTrajectory } from "./helpers";
 import type { IsolationCapability } from "./gpu/handle-capabilities";
 import { useEmbeddingLoader } from "./gpu/hooks/useEmbeddingLoader";
 import { useIsolationBridge } from "./gpu/hooks/useIsolationBridge";
@@ -35,7 +44,7 @@ import { ColormapGrid } from "./ColormapGrid";
 import { ColorSourcePicker } from "./ColorSourcePicker";
 import { LegendProvider, useLegend } from "./LegendContext";
 import { ModalityColorPicker } from "./mudata/ModalityColorPicker";
-import { AxisPicker, PinnedLegend, SelectionPill, ToolButton } from "./ScatterControls";
+import { AxisPicker, DimSelect, PinnedLegend, SelectionPill, ToolButton } from "./ScatterControls";
 import { type ScatterOverlays, ScatterView } from "./ScatterView";
 
 const POINT_SIZE_DEFAULT = 0.002;
@@ -400,42 +409,54 @@ export function ScatterContent({ focusedPointMeta }: ScatterContentProps) {
             </Button>
           </ControlRow>
         </ControlPopover>
-        <ControlPopover icon={<Axis3d />} label="Axes" description="2D or 3D, projection, fit view" title="Axes">
-          <ControlRow label="View">
-            <Segmented
-              label="2D or 3D"
-              value={zDim === null ? "2d" : "3d"}
-              options={[
-                { value: "2d", label: "2D" },
-                { value: "3d", label: "3D", disabled: nDims < 3 },
-              ]}
-              onChange={(v) =>
+        <ControlPopover
+          icon={<Axis3d />}
+          label="Axes"
+          description="Axis dimensions, 2D or 3D, projection, reset view"
+          title="Axes"
+          action={
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-pressed={zDim !== null}
+              disabled={nDims < 3}
+              title={nDims < 3 ? "3D needs an embedding with 3+ dims" : undefined}
+              onClick={() =>
                 patch({
                   zDim:
-                    v === "2d"
+                    zDim !== null
                       ? null
                       : (Array.from({ length: nDims }, (_, d) => d).find((d) => d !== xDim && d !== yDim) ?? null),
                 })
               }
-            />
-          </ControlRow>
-          {nDims < 3 ? <p className="px-1.5 text-sm text-text-muted">3D needs an embedding with 3+ dims.</p> : null}
-          {zDim !== null && obsmKey ? (
+            >
+              3D
+            </Button>
+          }
+        >
+          {obsmKey ? (
             <>
-              <ControlRow label="z">
-                <Select value={zDim} onValueChange={(d) => d !== null && patch({ zDim: d })}>
-                  <SelectTrigger size="sm" aria-label="z axis dimension" className="font-mono">
-                    <SelectValue>{(d: number) => dimLabel(obsmKey, d)}</SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Array.from({ length: nDims }, (_, d) => (
-                      <SelectItem key={d} value={d} className="font-mono">
-                        {dimLabel(obsmKey, d)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <ControlRow label="x">
+                <DimSelect axis="x" obsmKey={obsmKey} nDims={nDims} value={xDim} onChange={(d) => patch({ xDim: d })} />
               </ControlRow>
+              <ControlRow label="y">
+                <DimSelect axis="y" obsmKey={obsmKey} nDims={nDims} value={yDim} onChange={(d) => patch({ yDim: d })} />
+              </ControlRow>
+              {zDim !== null ? (
+                <ControlRow label="z">
+                  <DimSelect
+                    axis="z"
+                    obsmKey={obsmKey}
+                    nDims={nDims}
+                    value={zDim}
+                    onChange={(d) => patch({ zDim: d })}
+                  />
+                </ControlRow>
+              ) : null}
+            </>
+          ) : null}
+          {zDim !== null ? (
+            <>
               <ControlRow label="Projection">
                 <Segmented
                   label="Projection"
@@ -460,14 +481,15 @@ export function ScatterContent({ focusedPointMeta }: ScatterContentProps) {
               </ControlRow>
             </>
           ) : null}
-          <Button variant="secondary" size="sm" className="mx-1.5 mt-1" onClick={() => fitViewRef.current?.()}>
-            Fit view
+          <Button variant="ghost" size="sm" className="mx-1.5 mt-1 self-start" onClick={() => fitViewRef.current?.()}>
+            <RotateCcw />
+            Reset view
           </Button>
         </ControlPopover>
       </ControlGroup>
       {pinned && legend ? <PinnedLegend>{legend}</PinnedLegend> : null}
       {obsmKey ? (
-        <AxisPicker obsmKey={obsmKey} nDims={nDims} xDim={xDim} yDim={yDim} onChange={(next) => patch(next)} />
+        <AxisPicker obsmKey={obsmKey} nDims={nDims} dims={{ xDim, yDim, zDim }} onChange={(next) => patch(next)} />
       ) : null}
       {selection.state ? (
         <SelectionPill

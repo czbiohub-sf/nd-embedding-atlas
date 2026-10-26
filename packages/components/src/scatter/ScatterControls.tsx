@@ -24,20 +24,48 @@ export function ToolButton(props: {
   return <IconButton size="md" tooltipSide="right" {...props} />;
 }
 
-/** Dimension select for one axis; the wheel over it steps through the dimensions. */
-function AxisSelect({
+type Axis = "x" | "y" | "z";
+
+/** One axis's embedding dimension. */
+export function DimSelect({
   axis,
   obsmKey,
   nDims,
   value,
   onChange,
+  bar = false,
 }: {
-  axis: "x" | "y";
+  axis: Axis;
   obsmKey: string;
   nDims: number;
   value: number;
   onChange(dim: number): void;
+  /** In the bottom-right bar: no fill, list opens upward. Otherwise a full-width filled select. */
+  bar?: boolean;
 }) {
+  return (
+    <Select value={value} onValueChange={(dim) => dim !== null && onChange(dim)}>
+      <SelectTrigger
+        size="sm"
+        aria-label={`${axis} axis dimension`}
+        className={bar ? "bg-transparent font-mono" : "w-full font-mono"}
+      >
+        <SelectValue>{(dim: number) => dimLabel(obsmKey, dim)}</SelectValue>
+      </SelectTrigger>
+      <SelectContent side={bar ? "top" : "bottom"} align="end">
+        {Array.from({ length: nDims }, (_, dim) => (
+          <SelectItem key={dim} value={dim} className="font-mono">
+            {dimLabel(obsmKey, dim)}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+/** A labelled dimension select; the wheel over it steps through the dimensions. */
+function AxisSelect(props: { axis: Axis; obsmKey: string; nDims: number; value: number; onChange(dim: number): void }) {
+  const { axis, nDims, value, onChange } = props;
   // Trackpads send many small deltas: step once per ~40px of scroll.
   const wheel = useRef(0);
   return (
@@ -52,43 +80,44 @@ function AxisSelect({
       }}
     >
       <span className="pl-1.5 font-mono text-sm text-text-muted">{axis}</span>
-      <Select value={value} onValueChange={(dim) => dim !== null && onChange(dim)}>
-        <SelectTrigger size="sm" aria-label={`${axis} axis dimension`} className="bg-transparent font-mono">
-          <SelectValue>{(dim: number) => dimLabel(obsmKey, dim)}</SelectValue>
-        </SelectTrigger>
-        <SelectContent side="top" align="end">
-          {Array.from({ length: nDims }, (_, dim) => (
-            <SelectItem key={dim} value={dim} className="font-mono">
-              {dimLabel(obsmKey, dim)}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <DimSelect {...props} bar />
     </div>
   );
 }
 
-/** `x UMAP1 ⌄ │ y UMAP2 ⌄ │ swap`, bottom-right, shown for every embedding. */
+export interface AxisDims {
+  xDim: number;
+  yDim: number;
+  /** null = 2D. */
+  zDim: number | null;
+}
+
+/** `x UMAP1 ⌄ │ y UMAP2 ⌄ │ z UMAP3 ⌄ │ swap`, bottom-right, shown for every embedding; z only in 3D. */
 export function AxisPicker({
   obsmKey,
   nDims,
-  xDim,
-  yDim,
+  dims,
   onChange,
 }: {
   obsmKey: string;
   nDims: number;
-  xDim: number;
-  yDim: number;
-  onChange(axes: { xDim: number; yDim: number }): void;
+  dims: AxisDims;
+  onChange(dims: Partial<AxisDims>): void;
 }) {
+  const { xDim, yDim, zDim } = dims;
   const divider = <span aria-hidden className="mx-0.5 h-4 w-px bg-border" />;
   return (
     <div className={cn("absolute right-2 bottom-2 z-20 flex items-center rounded-lg p-0.5", overlaySurface)}>
-      <AxisSelect axis="x" obsmKey={obsmKey} nDims={nDims} value={xDim} onChange={(x) => onChange({ xDim: x, yDim })} />
+      <AxisSelect axis="x" obsmKey={obsmKey} nDims={nDims} value={xDim} onChange={(x) => onChange({ xDim: x })} />
       {divider}
-      <AxisSelect axis="y" obsmKey={obsmKey} nDims={nDims} value={yDim} onChange={(y) => onChange({ xDim, yDim: y })} />
+      <AxisSelect axis="y" obsmKey={obsmKey} nDims={nDims} value={yDim} onChange={(y) => onChange({ yDim: y })} />
       {divider}
+      {zDim !== null ? (
+        <>
+          <AxisSelect axis="z" obsmKey={obsmKey} nDims={nDims} value={zDim} onChange={(z) => onChange({ zDim: z })} />
+          {divider}
+        </>
+      ) : null}
       <IconButton size="md" label="Swap x and y" tooltipSide="top" onClick={() => onChange({ xDim: yDim, yDim: xDim })}>
         <NdAxisSwapIcon />
       </IconButton>

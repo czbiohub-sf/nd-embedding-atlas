@@ -213,8 +213,8 @@ const TAN = Math.tan(FOV / 2);
 const HOME = Math.sqrt(3) / Math.sin(FOV / 2);
 const MAX_PITCH = Math.PI / 2 - 0.01;
 
-/** Orbit basis of a view: right, up, and back (target → eye). */
-function basis({ yaw, pitch }: TurntableView): [Vec3, Vec3, Vec3] {
+/** Orbit basis of a view, in world coordinates: right, up, and back (target → eye). */
+export function basis({ yaw, pitch }: Pick<TurntableView, "yaw" | "pitch">): [Vec3, Vec3, Vec3] {
   const cy = Math.cos(yaw);
   const sy = Math.sin(yaw);
   const cp = Math.cos(pitch);

@@ -38,6 +38,7 @@ import { CategoricalLegend } from "./CategoricalLegend";
 import { ContinuousLegend } from "./ContinuousLegend";
 import { useEffectiveCategoryColors, useLegend } from "./LegendContext";
 import { HighlightFocusOverlay, type HighlightFocusOverlayHandle } from "./HighlightFocusOverlay";
+import { AxisGizmo, type AxisGizmoHandle } from "./AxisGizmo";
 
 /** What the view hands its floating controls: the legend body (null when there is none) and the selection. */
 export interface ScatterOverlays {
@@ -179,6 +180,7 @@ export function ScatterView({
 
   const containerRef = useRef<HTMLDivElement>(null);
   const highlightOverlayRef = useRef<HighlightFocusOverlayHandle | null>(null);
+  const gizmoRef = useRef<AxisGizmoHandle | null>(null);
   const gpuAdapter = useRef({
     project: (x: number, y: number, z?: number) => hostRef.current?.project(x, y, z) ?? null,
   });
@@ -359,6 +361,7 @@ export function ScatterView({
   callbacksRef.current.onPointClick = (pointIndex) => setFocus(rowIndex(pointIndex));
   callbacksRef.current.onViewChange = (state) => {
     highlightOverlayRef.current?.update();
+    gizmoRef.current?.update(state);
     viewBroadcaster.maybeExecute(state);
   };
 
@@ -445,6 +448,8 @@ export function ScatterView({
     // dimensionality's cells; a 3D cell also carries the projection.
     return host.viewSync.subscribe?.((s) => {
       hostRef.current?.setViewState(s);
+      // A synced write skips onViewChange, so the gizmo follows it here.
+      if (zCol !== null) gizmoRef.current?.update(s);
       if (zCol !== null && s.projection) onProjectionChange(s.projection);
     });
   }, [host, zCol, onProjectionChange]);
@@ -567,6 +572,7 @@ export function ScatterView({
         containerRef={containerRef}
         gpuRef={gpuAdapter}
       />
+      {zCol !== null ? <AxisGizmo ref={gizmoRef} /> : null}
       {renderOverlays({ legend, selection })}
     </div>
   );

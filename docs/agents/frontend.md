@@ -150,8 +150,11 @@ proposal bar (bottom centre) and the Harness flyout. Accept/Reject call
   imports), and the catalog's data there added ~10 MB to `dist/ndea`.
 - Controls float in the view (`ScatterControls.tsx`, on `@ndea/ui`
   `floating-controls`): pointer/box/lasso (V/B/L, shift adds, ⌥ subtracts),
-  Legend / Point size / Axes popovers, the bottom-right
-  axis picker, the pinned legend, and the selection pill (count from
+  Legend / Point size / Axes popovers (Axes: the 3D toggle in its header, x/y/z
+  dimension rows, projection and 3D selection depth, Reset view), the
+  bottom-right axis picker (x │ y │ z in 3D │ swap), the 3D orientation gizmo
+  (`AxisGizmo.tsx`, top-right, from the camera's `basis`), the pinned legend,
+  and the selection pill (count from
   `host.filter.publishSelection`, Invert, Save as source via
   `host.dataAPI.saveSource`, Clear). Selections combine CPU-side
   (`selection-bits.ts`) and publish `{ op: "inSet" }` on the `lasso` facet.
