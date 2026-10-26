@@ -6,14 +6,15 @@
  * the browser and the server both compute.
  */
 
+import { stringPredicate, toRows } from "@ndea/components/query";
 import type { FilterClause } from "@ndea/protocol";
 import type { FilterCoordinationAPI, FilterFacet, MaterializedFilterRows, ResolvedFilter, RowIndex } from "@ndea/sdk";
 import { Selection } from "@uwdata/mosaic-core";
 
-import { stringPredicate, toRows } from "@/lib/mosaic-helpers";
 import type { CoordinationScopeCellPort } from "./coordination";
 
-export interface FilterBinding extends FilterCoordinationAPI {
+/** `publishSelection` needs the server, so the host adds it over this binding. */
+export interface FilterBinding extends Omit<FilterCoordinationAPI, "publishSelection"> {
   setPredicate(sql: string | null): void;
   dispose(): void;
 }

@@ -14,6 +14,8 @@ import type { HarnessEvent } from "./harness";
 import { CollectionSummarySchema } from "./status";
 import type { WorkspaceChange } from "./workspace";
 
+export { ColumnCatalogSchema, columnType, quoteIdent } from "./columns";
+export type { CatalogColumn, ColumnKind, ColumnType } from "./columns";
 export {
   OBSERVATION_SET_TABLE,
   FilterClauseSchema,

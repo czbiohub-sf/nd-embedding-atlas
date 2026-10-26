@@ -8,7 +8,7 @@
  */
 
 import { cropFovColumn, parseBbox, type ServerSession } from "../state.ts";
-import { quoteIdent } from "../store.ts";
+import { quoteIdent } from "@ndea/protocol";
 
 /** Stringify a DuckDB scalar without risking [object Object]. */
 function scalarToString(value: unknown): string {

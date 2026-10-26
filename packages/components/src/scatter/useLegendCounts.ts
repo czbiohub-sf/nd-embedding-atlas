@@ -2,7 +2,7 @@ import type { Coordinator, Selection } from "@uwdata/mosaic-core";
 import type { FilterExpr } from "@uwdata/mosaic-sql";
 import { cast, column, count, Query, sum } from "@uwdata/mosaic-sql";
 import { useCallback } from "react";
-import { filterExprToExpr, toRows } from "./helpers";
+import { filterExprToExpr, toRows } from "../query/mosaic";
 import { useMosaicClient } from "../query/useMosaicClient";
 
 export interface CategoryCounts {

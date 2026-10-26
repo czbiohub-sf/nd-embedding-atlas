@@ -1,15 +1,8 @@
 import { defineComponent } from "@ndea/sdk";
 import type { BodyMounter } from "../contracts";
-import type { CountPredicateToSql } from "./contracts";
-import { createCountBody } from "./body";
+import { CountBody } from "./body";
 
-export function createCountDefinition({
-  mountBody,
-  predicateToSql,
-}: {
-  mountBody: BodyMounter;
-  predicateToSql: CountPredicateToSql;
-}) {
+export function createCountDefinition({ mountBody }: { mountBody: BodyMounter }) {
   return defineComponent({
     type: "count",
     title: "Count",
@@ -18,10 +11,6 @@ export function createCountDefinition({
       use: "Use it as a metric that updates as other views filter the data.",
     },
     binds: ["filter"],
-    load: async () => {
-      // ComponentDefinition.load is the intentional lazy component-body boundary.
-      const CountBody = createCountBody(predicateToSql);
-      return { mountBody: (host) => mountBody(CountBody, host, "Count") };
-    },
+    load: async () => ({ mountBody: (host) => mountBody(CountBody, host, "Count") }),
   });
 }

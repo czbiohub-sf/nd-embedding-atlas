@@ -245,7 +245,7 @@ export function ScatterContent({ focusedPointMeta }: ScatterContentProps) {
     coloredCategoryMapping,
     categoryCol,
     clearCategoryMapping,
-  } = useScatterColorState(coordinator, metadata);
+  } = useScatterColorState(coordinator);
 
   // ── Isolation → Mosaic cross-filter + GPU alpha dimming ───────────────────
   const isolationHandleRef = useRef<IsolationCapability | null>(null);

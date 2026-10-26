@@ -4,7 +4,7 @@ import type { SelectionCombine } from "../../contracts";
 import { combineSelection, invertSelection, isEmptySelection } from "../../selection-bits";
 import type { SelectionCapability } from "../handle-capabilities";
 
-/** A published selection: the exact `count` and `set` returned by `POST /api/sets`. */
+/** A published selection: the exact `count` and `set` from `host.filter.publishSelection`. */
 export interface ScatterSelectionState {
   count: number;
   set: string;
@@ -45,18 +45,19 @@ export function useScatterSelection({
   }, [host]);
   const [state, setState] = useState<ScatterSelectionState | null>(null);
   const bitsRef = useRef<Uint32Array<ArrayBuffer> | null>(null);
-  const revisionRef = useRef(0);
+  /** The latest selection still on its way; a newer one or a reset aborts it. */
+  const pendingRef = useRef<AbortController | null>(null);
   const queueRef = useRef(Promise.resolve());
   useEffect(
     () => () => {
-      revisionRef.current += 1;
+      pendingRef.current?.abort();
       hostRef.current.filter.clear("lasso");
     },
     [],
   );
 
   const reset = () => {
-    revisionRef.current += 1;
+    pendingRef.current?.abort();
     bitsRef.current = null;
     setState(null);
     host.filter.clear("lasso");
@@ -71,16 +72,16 @@ export function useScatterSelection({
     }
     bitsRef.current = bits;
     gpuRef.current?.setSelectionBits(bits);
-    const revision = ++revisionRef.current;
+    pendingRef.current?.abort();
+    const pending = new AbortController();
+    pendingRef.current = pending;
     queueRef.current = queueRef.current.then(async () => {
-      if (host.signal.aborted || revision !== revisionRef.current) return;
+      if (pending.signal.aborted) return;
       try {
-        const { set, count } = await host.dataAPI.createObservationSet(bits, numPoints);
-        if (host.signal.aborted || revision !== revisionRef.current) return;
-        host.filter.publish("lasso", { op: "inSet", set });
-        setState({ count, set, tool: label });
+        const published = await host.filter.publishSelection("lasso", bits, numPoints, pending.signal);
+        if (published) setState({ ...published, tool: label });
       } catch (error) {
-        if (!host.signal.aborted && revision === revisionRef.current) {
+        if (!host.signal.aborted && !pending.signal.aborted) {
           host.notifications.notify(error instanceof Error ? error.message : String(error), "error");
         }
       }

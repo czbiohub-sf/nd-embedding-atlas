@@ -16,14 +16,13 @@ import { buttonVariants } from "@ndea/ui/components/button";
 import { cn } from "@ndea/ui/lib/utils";
 import { createElement } from "react";
 import { createRoot } from "react-dom/client";
-import type { ColumnType } from "../../query/column-types";
+import { type Columns, fetchColumns } from "../../query/columns";
 import { VgplotControls } from "./controls";
 import { mountPlot, type MountedPlot } from "./plot-host";
 import {
   PRESET_COLUMN_KINDS,
   buildEntries,
   describeEntries,
-  listColumns,
   type MarkPreset,
   type PlotEntry,
   type VgplotConfig,
@@ -43,10 +42,10 @@ const RESIZE_EPSILON_PX = 2;
 const FALLBACK_HEIGHT_PX = 160;
 
 export async function mountVgplotBody(host: Host): Promise<MountedBody> {
-  let columns: Map<string, ColumnType> | null = null;
+  let columns: Columns | null = null;
   let columnsError: string | null = null;
   try {
-    columns = await listColumns(host.data.coordinator);
+    columns = await fetchColumns(host.signal);
   } catch (error) {
     columnsError = error instanceof Error ? error.message : String(error);
   }
@@ -101,7 +100,7 @@ export async function mountVgplotBody(host: Host): Promise<MountedBody> {
         onPreset: (next) => {
           if (next === preset) return;
           // Keep the field only if the new preset can plot that column kind.
-          const kind = field == null ? undefined : columns?.get(field);
+          const kind = field == null ? undefined : columns?.get(field)?.type;
           const keep = kind !== undefined && PRESET_COLUMN_KINDS[next].includes(kind);
           applySelection(next, keep ? field : null);
         },

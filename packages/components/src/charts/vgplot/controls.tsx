@@ -1,7 +1,7 @@
 /** vgplot control strip: column + mark pickers, mounted by the imperative body into its own React root. */
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@ndea/ui/components/select";
-import type { ColumnType } from "../../query/column-types";
+import type { Columns } from "../../query/columns";
 import { FieldPicker } from "../core/field-picker";
 import { MARK_PRESETS, PRESET_COLUMN_KINDS, type MarkPreset } from "./spec-schema";
 
@@ -11,7 +11,7 @@ const PRESET_LABELS: Record<MarkPreset, string> = {
 };
 
 interface Props {
-  columns: ReadonlyMap<string, ColumnType> | null;
+  columns: Columns | null;
   field: string | null;
   preset: MarkPreset;
   placeholder: string;
@@ -23,7 +23,7 @@ export function VgplotControls({ columns, field, preset, placeholder, onField, o
   return (
     <>
       <FieldPicker
-        types={columns}
+        columns={columns}
         value={field}
         kinds={PRESET_COLUMN_KINDS[preset]}
         placeholder={placeholder}

@@ -12,7 +12,8 @@
 
 import { CategorizeBodySchema, parseJsonBody } from "../protocol.ts";
 import type { CategorizeResponse, CategoryLegendItem } from "../protocol.ts";
-import { quoteIdent, type DatasetQuerySession } from "../store.ts";
+import { quoteIdent } from "@ndea/protocol";
+import type { DatasetQuerySession } from "../store.ts";
 
 const DEFAULT_MAX_CATEGORIES = 64;
 

@@ -11,7 +11,7 @@ import {
   sum,
 } from "@uwdata/mosaic-sql";
 
-import { filterExprToExpr } from "./mosaic-helpers";
+import { filterExprToExpr } from "../../query/mosaic";
 
 export function buildCountPlotQuery(table: string, textExpr: ExprNode, limit: number, predicate: FilterExpr) {
   const pred = filterExprToExpr(predicate);

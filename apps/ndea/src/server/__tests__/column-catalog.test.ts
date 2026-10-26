@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WorkspaceProblemSchema } from "@ndea/protocol";
 import { handleCategorize } from "../routes/categorize.ts";
+import { handleColumns } from "../routes/columns.ts";
 import { handleScatterCategories, handleScatterContinuousValues } from "../routes/scatter.ts";
 import { handleWorkspacePatch } from "../routes/workspace.ts";
 import { createServerSession } from "../state.ts";
@@ -68,6 +69,20 @@ test("request-supplied column names resolve against the catalog; injection gets 
     ],
   });
   expect(store!.columns().get("__ev_condition_id")).toEqual({ sqlType: "INTEGER", kind: "obs" });
+});
+
+test("GET /api/columns lists the catalog with types and kinds, internal columns excluded, after every rebuild", async () => {
+  await session();
+  const catalog = async () => (await handleColumns(store!).json()) as unknown[];
+  expect(await catalog()).toEqual([
+    { name: "obs_name", type: "string", sqlType: "VARCHAR", kind: "obs" },
+    { name: "condition", type: "string", sqlType: "VARCHAR", kind: "obs" },
+    { name: "area", type: "number", sqlType: "DECIMAL(3,1)", kind: "obs" },
+  ]);
+  await store!.registerAnnotationColumn("note", "text");
+  await store!.addObsIndexColumn("__ev_condition_id");
+  expect(await catalog()).toContainEqual({ name: "note", type: "string", sqlType: "VARCHAR", kind: "annotation" });
+  expect((await catalog()).length).toBe(4);
 });
 
 test("PATCH rejects typed clauses on unknown columns with pointers and accepts known ones", async () => {

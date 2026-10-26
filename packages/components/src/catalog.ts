@@ -4,7 +4,6 @@ import { createHistogramDefinition } from "./charts/histogram/definition";
 import { createVgplotDefinition } from "./charts/vgplot/definition";
 import type { ChartServices } from "./charts/core/contracts";
 import { createCountDefinition } from "./count/definition";
-import type { CountPredicateToSql } from "./count/contracts";
 import { createGalleryDefinition } from "./gallery/definition";
 import type { GalleryServices } from "./gallery/contracts";
 import { createImageViewerDefinition } from "./image-viewer/definition";
@@ -16,7 +15,6 @@ import { createTableDefinition } from "./table/definition";
 /** App-owned integrations the built-in view bodies need. */
 export interface ComponentServices {
   readonly charts: ChartServices;
-  readonly count: { predicateToSql: CountPredicateToSql };
   readonly gallery: { useServices: () => GalleryServices };
   readonly imageViewer: ImageViewerServices;
   readonly scatter: ScatterServices;
@@ -31,7 +29,7 @@ export function createComponentCatalog({
   services: ComponentServices;
 }) {
   return {
-    count: createCountDefinition({ mountBody, ...services.count }),
+    count: createCountDefinition({ mountBody }),
     table: createTableDefinition({ mountBody }),
     scatter: createScatterDefinition({ mountBody, services: services.scatter }),
     countPlot: createCountPlotDefinition({ mountBody, services: services.charts }),

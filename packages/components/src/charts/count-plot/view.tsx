@@ -5,10 +5,11 @@ import { type FilterExpr, cast, column } from "@uwdata/mosaic-sql";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { BodyProps } from "../../contracts";
+import { toRows } from "../../query/mosaic";
+import { useColumns } from "../../query/columns";
 import type { ChartServices, UseChartQuery } from "../core/contracts";
 import { FieldPicker } from "../core/field-picker";
 import { buildCountPlotQuery } from "../core/filter-queries";
-import { toRows } from "../core/mosaic-helpers";
 import { useChartLeaf } from "../core/use-chart-leaf";
 import { countPlotPredicate, NULL_VALUE } from "./predicate";
 import type { CountPlotConfig } from "./types";
@@ -19,11 +20,11 @@ interface CountPlotRow {
   countSelected: number;
 }
 
-export function createCountPlotView({ useColumnTypes, useQuery }: ChartServices) {
+export function createCountPlotView({ useQuery }: ChartServices) {
   const CountPlotBody = createCountPlotBody(useQuery);
   return function CountPlotView({ host }: BodyProps<CountPlotConfig>) {
     const { coordinator, table, filter, field, setField } = useChartLeaf(host);
-    const types = useColumnTypes(coordinator);
+    const columns = useColumns();
     const limit = host.config.limit ?? 11;
     const onFilter = useCallback(
       (clause: FilterClause | null) => {
@@ -35,7 +36,7 @@ export function createCountPlotView({ useColumnTypes, useQuery }: ChartServices)
 
     return (
       <div className="flex h-full w-full flex-col gap-1.5 overflow-y-auto bg-surface p-2">
-        <FieldPicker types={types} value={field} kinds={["string", "boolean"]} onPick={setField} />
+        <FieldPicker columns={columns} value={field} kinds={["string", "boolean"]} onPick={setField} />
         {field == null ? (
           <div className="px-1 py-2 text-sm text-muted-foreground/60">Pick a column to plot.</div>
         ) : (

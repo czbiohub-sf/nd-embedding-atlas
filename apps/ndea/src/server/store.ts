@@ -11,6 +11,7 @@
 
 import { rm } from "node:fs/promises";
 import type { DuckDBInstance } from "@duckdb/node-api";
+import { quoteIdent, type ColumnKind } from "@ndea/protocol";
 import { appendColumns } from "./append-columns.ts";
 import { openDuckDB } from "./zarr-extension.ts";
 import type { DuckDBConnection } from "@duckdb/node-api";
@@ -20,13 +21,10 @@ import type { AnnotationDtype } from "./protocol.ts";
 
 type RowData = Record<string, unknown>;
 
-/** Where a `dataset` VIEW column comes from. */
-export type DatasetColumnKind = "obs" | "var" | "annotation";
-
 /** One column of the `dataset` VIEW, as DuckDB describes it. */
 export interface DatasetColumn {
   sqlType: string;
-  kind: DatasetColumnKind;
+  kind: ColumnKind;
 }
 
 // ─── Column prefix derivation ────────────────────────────────────────────────
@@ -52,16 +50,6 @@ export function obsmColumnPrefix(obsmKey: string): string {
 export const DEFAULT_OBSM_PRIORITY = ["X_umap", "X_tsne", "X_phate", "X_pca"];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-/**
- * Quote a value as a SQL identifier: wrap in double quotes, double any embedded
- * double-quote. The ONLY safe way to interpolate a user-influenced column name
- * into SQL: a bare `"${name}"` lets a name containing `"` break out of the
- * identifier and inject arbitrary statements (conn.run executes multiple).
- */
-export function quoteIdent(id: string): string {
-  return `"${id.replace(/"/g, '""')}"`;
-}
 
 /** djb2 hash → short hex. Stable across runs (no Math.random / Date). */
 function djb2Hex(s: string): string {
@@ -615,8 +603,8 @@ export class DatasetQuerySession {
 
     const joins: string[] = [];
     const extraCols: string[] = [];
-    const kinds = new Map<string, DatasetColumnKind>();
-    const addExtra = (table: string, column: string, kind: DatasetColumnKind) => {
+    const kinds = new Map<string, ColumnKind>();
+    const addExtra = (table: string, column: string, kind: ColumnKind) => {
       extraCols.push(`${table}.${quoteIdent(column)}`);
       kinds.set(column, kind);
     };

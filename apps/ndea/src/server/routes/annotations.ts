@@ -23,7 +23,7 @@ import {
   WriteAnnotationValuesBodySchema,
   parseJsonBody,
 } from "../protocol.ts";
-import { quoteIdent } from "../store.ts";
+import { quoteIdent } from "@ndea/protocol";
 import type { ServerSession } from "../state.ts";
 import { commitObsColumns, type ObsColumnInput } from "@ndea/zarr";
 

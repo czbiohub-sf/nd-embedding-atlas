@@ -7,7 +7,7 @@
 import { useSelector } from "@tanstack/react-store";
 import { createComponentCatalog, type ComponentServices } from "@ndea/components/catalog";
 import type { ChannelHash } from "@ndea/components/gallery";
-import { useColumnTypes, useMosaicClient } from "@ndea/components/query";
+import { useMosaicClient } from "@ndea/components/query";
 import { ChannelStatsResponseSchema, ObsInfoSchema } from "@ndea/protocol";
 import type { ComponentDefinition } from "@ndea/sdk";
 
@@ -18,7 +18,6 @@ import { useFocusedPointMeta } from "@/hooks/useFocusedPointMeta";
 import { makeCategoryColumn } from "@/lib/color/category-column";
 import { buildColormapLut } from "@/lib/color/ochre-lut";
 import { getCategoricalPalette, getColormapList, pickDefaultCategoricalPalette } from "@/lib/color/ochre-palette";
-import { predicateToSql } from "@/lib/mosaic-helpers";
 import { renderSettingsStore } from "@/stores/render-settings-store";
 import { clearViewerChannels, publishViewerChannels, viewerChannelsStore } from "@/stores/viewer-channels-store";
 import { clearViewerZ, publishViewerZ, viewerZStore } from "@/stores/viewer-z-store";
@@ -57,8 +56,7 @@ function useViewerSlots() {
 }
 
 const services: ComponentServices = {
-  charts: { useColumnTypes, useQuery: useMosaicClient },
-  count: { predicateToSql },
+  charts: { useQuery: useMosaicClient },
   gallery: {
     useServices: () => {
       const { state } = useDatasetSession();

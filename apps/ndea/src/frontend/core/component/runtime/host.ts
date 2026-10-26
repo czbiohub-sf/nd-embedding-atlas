@@ -42,7 +42,8 @@ export interface HostInit<Config> {
   readonly viewSync: ViewCoordinationAPI;
   readonly ordering: OrderingCoordinationAPI;
   readonly colorBy: ColorCoordinationAPI;
-  readonly filter: FilterCoordinationAPI;
+  /** The filter-scope binding; the host adds `publishSelection` over it. */
+  readonly filter: Omit<FilterCoordinationAPI, "publishSelection">;
   readonly patchConfig?: (patch: Partial<Config>) => void;
   /** Persists a named workspace data source (see `RowSetPublishAPI.saveSource`). */
   readonly saveSource?: (baseName: string, where: FilterClause) => string;
@@ -157,21 +158,6 @@ export function createComponentHost<Config>(
     },
     predicate: init.predicate,
     dataAPI: {
-      query(sql: string): Promise<unknown> {
-        assertActive();
-        return dependencies.coordinator.query(sql);
-      },
-      async createObservationSet(bits: Uint32Array<ArrayBuffer>, rows: number) {
-        assertActive();
-        const response = await request(`/api/sets?rows=${rows}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/octet-stream" },
-          body: new Uint8Array(bits.buffer, bits.byteOffset, Math.ceil(rows / 8)),
-          signal: controller.signal,
-        });
-        if (!response.ok) throw await responseError(response, `set creation failed (${response.status})`);
-        return ObservationSetSchema.parse(await response.json());
-      },
       saveSource(baseName: string, where: FilterClause) {
         assertActive();
         if (!init.saveSource) throw new Error(`component host ${elementId} cannot save data sources`);
@@ -218,6 +204,28 @@ export function createComponentHost<Config>(
       subscribeResolved: (callback: Parameters<FilterCoordinationAPI["subscribeResolved"]>[0]) =>
         trackDisposer(filter.subscribeResolved(callback)),
       publish: filter.publish.bind(filter),
+      async publishSelection(facet, bits, rows, signal) {
+        assertActive();
+        if (!bits) {
+          filter.clear(facet);
+          return null;
+        }
+        const response = await request(`/api/sets?rows=${rows}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/octet-stream" },
+          body: new Uint8Array(bits.buffer, bits.byteOffset, Math.ceil(rows / 8)),
+          signal: signal ? AbortSignal.any([controller.signal, signal]) : controller.signal,
+        }).catch((error: unknown) => {
+          if (signal?.aborted) return null;
+          throw error;
+        });
+        if (!response) return null;
+        if (!response.ok) throw await responseError(response, `set creation failed (${response.status})`);
+        const set = ObservationSetSchema.parse(await response.json());
+        if (disposed || signal?.aborted) return null;
+        filter.publish(facet, { op: "inSet", set: set.set });
+        return set;
+      },
       facet: filter.facet.bind(filter),
       clear: filter.clear.bind(filter),
       materializeRowIds: filter.materializeRowIds.bind(filter),

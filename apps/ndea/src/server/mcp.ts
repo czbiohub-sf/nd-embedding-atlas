@@ -35,7 +35,7 @@ import { rowWords } from "./observation-sets.ts";
 import { workspaceResult } from "./routes/workspace.ts";
 import type { ServerSession } from "./state.ts";
 import { agentSeen, clients } from "./status.ts";
-import { quoteIdent } from "./store.ts";
+import { quoteIdent } from "@ndea/protocol";
 import {
   DashboardEditSchema,
   describeEdit,

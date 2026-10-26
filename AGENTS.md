@@ -89,7 +89,9 @@ writes UI state:
 ## Load-bearing constraints
 
 - **Column names:** resolve every request- or document-supplied column against
-  `DatasetQuerySession.columns()` and interpolate it with `quoteIdent`.
+  `DatasetQuerySession.columns()` and interpolate it with `quoteIdent`
+  (`@ndea/protocol`, the one copy). The browser lists columns only from that
+  catalog (`GET /api/columns`, `useColumns` in `@ndea/components/query`).
 - **The `dataset` VIEW:** add or change columns only through
   `DatasetQuerySession` methods (`addObsIndexColumn`, `register*Column`,
   annotation field methods); they rebuild the VIEW and its catalog. A bare

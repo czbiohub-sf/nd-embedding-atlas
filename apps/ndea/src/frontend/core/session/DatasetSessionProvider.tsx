@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSelector } from "@tanstack/react-store";
 import { Coordinator, restConnector, Selection } from "@uwdata/mosaic-core";
 import { type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { columnsQueryKey } from "@ndea/components/query";
 import { MetadataSchema } from "@ndea/protocol";
 import { wsClient } from "@/lib/ws-client";
 import { scatterKeys } from "@/lib/query-keys";
@@ -71,9 +72,12 @@ export function DatasetSessionProvider({ children }: Props) {
   // Trajectory state: per-dataset, keyed by datasetKey (empty string for single-dataset mode)
   const [trajectories, setTrajectoriesState] = useState<Record<string, TrajectoryData | null>>({});
 
-  // Actions
+  // Actions. A field write changes the dataset's columns: metadata and the column catalog refetch.
   const refreshMetadata = useCallback(async () => {
-    await queryClient.invalidateQueries({ queryKey: scatterKeys.metadata() });
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: scatterKeys.metadata() }),
+      queryClient.invalidateQueries({ queryKey: columnsQueryKey }),
+    ]);
   }, [queryClient]);
 
   const setTrajectory = useCallback((data: TrajectoryData | null) => {

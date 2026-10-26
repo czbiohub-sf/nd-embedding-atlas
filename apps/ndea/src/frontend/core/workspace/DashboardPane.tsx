@@ -27,7 +27,7 @@ import { toast } from "sonner";
 import { ProposalsContext } from "@/core/proposals/harness";
 import { GhostTile } from "@/core/proposals/Proposals";
 import { useDatasetSession } from "@/hooks/useDatasetSession";
-import { toRows } from "@/lib/mosaic-helpers";
+import { toRows } from "@ndea/components/query";
 import { BodySocket, BodyStatus } from "./body-dock";
 import { ND_STAGE } from "./constants";
 import {

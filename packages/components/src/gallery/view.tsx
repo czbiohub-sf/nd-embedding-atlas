@@ -10,28 +10,19 @@
  * different filter scopes show different crops.
  */
 
-import { useCallback, useSyncExternalStore } from "react";
+import { useCallback } from "react";
 import type { RowIndex } from "@ndea/sdk";
 import { GalleryPane } from "./GalleryPane";
-import { predicateToSql } from "../query/mosaic";
+import { usePredicateSql } from "../query/mosaic";
 import type { BodyProps } from "../contracts";
 import { useFocus } from "../query/useFocus";
 import type { GalleryConfig, GalleryServices } from "./contracts";
 
 export function GalleryView({ host, services }: BodyProps<GalleryConfig> & { services: GalleryServices }) {
   // host.predicate is a Mosaic Selection that mutates in place when a
-  // filter in scope changes and notifies Mosaic clients via "value" events:
-  // NOT React. Bridge it so the empty gate AND GalleryPane's query key
-  // recompute; without this the crops go stale after a filter changes.
-  const selection = host.predicate;
-  const subscribe = useCallback(
-    (onChange: () => void) => {
-      selection.addEventListener("value", onChange);
-      return () => selection.removeEventListener("value", onChange);
-    },
-    [selection],
-  );
-  const predicate = useSyncExternalStore(subscribe, () => predicateToSql(selection));
+  // filter in scope changes; `usePredicateSql` bridges it so the empty gate
+  // AND GalleryPane's query key recompute (else crops go stale).
+  const predicate = usePredicateSql(host.predicate);
 
   // Focus rides the scoped host seam (group-aware), not the process-wide bus.
   // state: same as ScatterView/Table. A crop click writes through
