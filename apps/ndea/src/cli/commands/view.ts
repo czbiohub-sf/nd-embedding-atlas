@@ -87,6 +87,7 @@ export async function runView({ args, flags, signal }: ViewInput): Promise<void>
   // Deferred a tick so the spinner's own SIGINT listener restores the cursor
   // first. After startup Crust drops its SIGINT hook and the server's
   // graceful shutdown owns Ctrl-C.
+  // fallow-ignore-next-line boundary-violation -- the startup interrupt (AGENTS.md)
   signal.addEventListener("abort", () => setImmediate(() => process.exit(130)), { once: true });
   await startup(config);
 }

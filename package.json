@@ -8,6 +8,7 @@
   "type": "module",
   "scripts": {
     "audit": "fallow",
+    "audit:gate": "fallow audit",
     "bench:ingest": "vp run build:zarr-ext && bun run apps/ndea/scripts/bench-ingest.ts",
     "bytecode-order": "bun run apps/ndea/scripts/record-bytecode-order.ts",
     "dev": "vp run build:zarr-ext && bun x --bun portless run bun apps/ndea/scripts/dev.ts",

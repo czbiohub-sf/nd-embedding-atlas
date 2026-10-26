@@ -50,7 +50,7 @@ function binaryResponse(body: Uint8Array): Response {
  * Parse a trailing `_<digits>` dim index off a SQL-safe obsm column name
  * like `dinov2_pca_7` → 7. Returns null if the suffix isn't present.
  */
-export function parseDimIndex(col: string): number | null {
+function parseDimIndex(col: string): number | null {
   const m = /_(\d+)$/.exec(col);
   return m ? Number(m[1]) : null;
 }
@@ -60,7 +60,7 @@ export function parseDimIndex(col: string): number | null {
  * on `state.obsmLoaders`. Width is discovered via a metadata-only shape
  * read against the first accessor that carries the key: no data load.
  */
-export async function getOrCreateObsmLoader(state: ServerSession, embedding: string): Promise<ObsmSliceLoader> {
+async function getOrCreateObsmLoader(state: ServerSession, embedding: string): Promise<ObsmSliceLoader> {
   const existing = state.obsmLoaders.get(embedding);
   if (existing) return existing;
   const width = await ObsmSliceLoader.detectWidth(embedding, state.accessors.entries());

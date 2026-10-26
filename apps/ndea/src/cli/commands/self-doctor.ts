@@ -15,12 +15,12 @@ import { existsSync } from "node:fs";
 import { readFile, readlink, stat } from "node:fs/promises";
 import { detectInstallManager } from "../lib/install-manager.ts";
 import { LIBDUCKDB_EMBEDDED_PATH } from "../lib/__generated-libduckdb.ts";
-import { libduckdbCachePath } from "../lib/libduckdb-cache.ts";
-import { activeLauncher, currentVersionPath, isCompiledBinary, stateDir, versionsDir } from "../lib/paths.ts";
+import { libduckdbCachePath } from "../../env/libduckdb-cache.ts";
+import { activeLauncher, currentVersionPath, isCompiledBinary, stateDir, versionsDir } from "../../env/paths.ts";
 import { fetchRelease } from "../lib/releases.ts";
 import { accent, fail, heading, label, mb, ok, warn } from "../lib/style.ts";
 import { listVersions } from "../lib/versions.ts";
-import { VERSION } from "../version.ts";
+import { VERSION } from "../../env/version.ts";
 import { probeChrome } from "../../server/chrome.ts";
 import { ZARR_EXTENSION, openDuckDB, zarrExtensionPath } from "../../server/zarr-extension.ts";
 

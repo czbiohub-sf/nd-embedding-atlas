@@ -14,7 +14,13 @@ import { existsSync } from "node:fs";
 import { z } from "zod";
 import { detectInstallManager, pathContains } from "../lib/install-manager.ts";
 import { acquireLock } from "../lib/lock.ts";
-import { activeLauncher, installLockPath, isCompiledBinary, resolveLauncherTarget, versionsDir } from "../lib/paths.ts";
+import {
+  activeLauncher,
+  installLockPath,
+  isCompiledBinary,
+  resolveLauncherTarget,
+  versionsDir,
+} from "../../env/paths.ts";
 import { pruneVersionCaches, pruneVersions } from "../lib/prune.ts";
 import { label, mb, ok } from "../lib/style.ts";
 

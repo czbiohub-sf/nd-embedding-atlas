@@ -3,7 +3,7 @@ import { ingestCacheKey, ingestPragmas, isLocalPath, resolveIngestCachePath } fr
 import { DatasetQuerySession } from "../../server/store.ts";
 import { ingestObs, ingestVar, type IngestDataset } from "../../server/zarr-ingest.ts";
 import { label, num, task } from "../lib/style.ts";
-import { VERSION } from "../version.ts";
+import { VERSION } from "../../env/version.ts";
 import type { PreparedDatasets } from "./datasets.ts";
 
 export interface PreparedQuerySession {

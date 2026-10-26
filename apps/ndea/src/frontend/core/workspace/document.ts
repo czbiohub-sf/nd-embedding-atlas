@@ -27,7 +27,7 @@ export const workspaceDocumentSchema = z
     }
   });
 
-export const workspaceFileSchema = z
+const workspaceFileSchema = z
   .object({
     format: z.literal(WORKSPACE_FORMAT),
     version: z.literal(WORKSPACE_FORMAT_VERSION),

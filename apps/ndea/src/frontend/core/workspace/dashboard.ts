@@ -51,7 +51,7 @@ const elementSchema = z
   })
   .strict();
 
-export const dashboardSchema = z
+const dashboardSchema = z
   .object({
     root: z.string().min(1),
     elements: z.record(z.string().regex(ELEMENT_ID, "element ids use letters, digits, _ and -"), elementSchema),
@@ -211,7 +211,7 @@ export function elementTitle(element: DashboardElement): string {
 }
 
 /** Every rule the element schema cannot express for one layout's spec at `base`, as `[path, message]` pairs. */
-export function dashboardIssues(dashboard: Dashboard, data: DataSources, base: string[]): [string[], string][] {
+function dashboardIssues(dashboard: Dashboard, data: DataSources, base: string[]): [string[], string][] {
   const at = (id: string, ...rest: string[]) => [...base, "elements", id, ...rest];
   const issues: [string[], string][] = [];
   if (!dashboard.elements[dashboard.root]) return [[[...base, "root"], `unknown element "${dashboard.root}"`]];

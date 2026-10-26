@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 
 /**
- * release:version: propagate `package.json.version` into `src/cli/version.ts`.
+ * release:version: propagate `package.json.version` into `src/env/version.ts`.
  *
  * Run after changing package.json so the compiled binary embeds the same
  * version. Release verification rejects version drift.
@@ -18,7 +18,7 @@ import { resolve } from "node:path";
 
 const ROOT = resolve(import.meta.dir, "..");
 const PKG_PATH = resolve(ROOT, "package.json");
-const TARGET_PATH = resolve(ROOT, "src/cli/version.ts");
+const TARGET_PATH = resolve(ROOT, "src/env/version.ts");
 
 const pkg: unknown = await Bun.file(PKG_PATH).json();
 const version = pkg && typeof pkg === "object" && "version" in pkg ? pkg.version : undefined;

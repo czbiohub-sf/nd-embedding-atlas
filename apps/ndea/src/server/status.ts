@@ -9,7 +9,7 @@ import { stat } from "node:fs/promises";
 import { join } from "node:path";
 import { format } from "node:util";
 import type { RuntimeStatus } from "@ndea/protocol";
-import { VERSION } from "../cli/version.ts";
+import { VERSION } from "../env/version.ts";
 import type { ServerSession } from "./state.ts";
 
 const startedAt = new Date().toISOString();

@@ -59,7 +59,7 @@ export function getModality(obsmKey: string): string | undefined {
   return separator > 0 ? obsmKey.slice(0, separator) : undefined;
 }
 
-export function getBareObsmKey(obsmKey: string): string {
+function getBareObsmKey(obsmKey: string): string {
   const separator = obsmKey.indexOf(":");
   return separator > 0 ? obsmKey.slice(separator + 1) : obsmKey;
 }

@@ -47,7 +47,7 @@ export function versionedBinaryPath(tag: string): string {
 }
 
 /** `~/.ndea/locks`: flock directory for install/update mutex. */
-export function locksDir(): string {
+function locksDir(): string {
   return resolve(stateDir(), "locks");
 }
 
@@ -72,7 +72,7 @@ export function currentVersionPath(): string {
 }
 
 /** `~/.local/bin/ndea`: the user-facing symlink the installer puts on `$PATH`. */
-export function launcherPath(): string {
+function launcherPath(): string {
   return resolve(resolveHome(), ".local", "bin", "ndea");
 }
 

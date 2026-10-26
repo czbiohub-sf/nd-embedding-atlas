@@ -9,7 +9,7 @@ import {
   type ParsedProjectConfig,
   type ProjectDatasetMount,
 } from "../config.ts";
-import { defaultWorkspacePath } from "../lib/paths.ts";
+import { defaultWorkspacePath } from "../../env/paths.ts";
 
 let projectDir: string;
 let configPath: string;

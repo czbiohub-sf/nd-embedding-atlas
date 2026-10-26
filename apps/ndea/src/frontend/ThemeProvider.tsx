@@ -14,7 +14,7 @@ interface ThemeContextValue {
 }
 
 // eslint-disable-next-line react/only-export-components
-export const ThemeContext = createContext<ThemeContextValue | null>(null);
+const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 // eslint-disable-next-line react/only-export-components
 export function useTheme(): ThemeContextValue {

@@ -17,7 +17,7 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { dlopen, FFIType } from "bun:ffi";
 import { LIBDUCKDB_EMBEDDED_PATH } from "./__generated-libduckdb.ts";
-import { libduckdbCachePath } from "./libduckdb-cache.ts";
+import { libduckdbCachePath } from "../../env/libduckdb-cache.ts";
 
 if (LIBDUCKDB_EMBEDDED_PATH !== null) {
   const dylibPath = libduckdbCachePath();

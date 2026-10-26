@@ -170,7 +170,7 @@ function propsSchema(schema: z.ZodType): unknown {
   }
 }
 
-export function createNdeaMcpServer(state: ServerSession, actor: WorkspaceActor): McpServer {
+function createNdeaMcpServer(state: ServerSession, actor: WorkspaceActor): McpServer {
   const server = new McpServer({ name: "ndea", version: "0.1.0" }, { instructions: INSTRUCTIONS });
   const { harness } = state;
 

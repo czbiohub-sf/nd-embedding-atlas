@@ -26,7 +26,7 @@ export const FIELD_GLYPH: Record<FieldType, string> = {
 
 /** A string obs column with at most this many distinct values is a category. */
 // ponytail: a distinct-count heuristic; read the AnnData categorical encoding if it misjudges.
-export const CATEGORY_MAX = 200;
+const CATEGORY_MAX = 200;
 
 export function fieldType(
   columnType: ColumnType,
@@ -78,7 +78,7 @@ export const CONDITION_OPS: Record<FieldType, readonly { op: ConditionOp; label:
 };
 
 /** The typed clause for one condition; null while its value is incomplete. */
-export function conditionClause(condition: Condition, type: FieldType): FilterClause | null {
+function conditionClause(condition: Condition, type: FieldType): FilterClause | null {
   const { column, op, value } = condition;
   if (op === "isNull" || op === "isNotNull") return { op, column };
   if (value === "") return null;

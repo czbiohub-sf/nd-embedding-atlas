@@ -14,7 +14,7 @@ import { filterClauseSql } from "@ndea/components/filter";
 import { elementData, elementScope, findElement } from "./dashboard";
 import type { WorkspaceDocument } from "./types";
 
-export const DATA_SOURCE_NAME = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/;
+const DATA_SOURCE_NAME = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/;
 
 export const dataSourceSchema = z
   .object({

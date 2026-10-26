@@ -60,4 +60,4 @@ requests (`C_STRUCT`, `v1.2.0`). Rebuild on every DuckDB bump; CI pins Rust
   `%LOCALAPPDATA%\ndea\bin`; `ndea self update` exits early on `win32`, and
   re-running the installer upgrades.
 - `vp run release:version` writes `apps/ndea/package.json`'s version into
-  `src/cli/version.ts` before tagging.
+  `src/env/version.ts` before tagging.

@@ -8,7 +8,7 @@ import { timingSafeEqual } from "node:crypto";
 import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
-import { stateDir } from "../cli/lib/paths.ts";
+import { stateDir } from "../env/paths.ts";
 
 /** Read the token, creating it with owner-only permissions on first use. */
 export async function loadMcpToken(path = join(stateDir(), "mcp-token")): Promise<string> {

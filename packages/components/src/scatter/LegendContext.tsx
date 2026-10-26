@@ -61,7 +61,7 @@ export interface LegendContextValue {
 }
 
 // eslint-disable-next-line react/only-export-components
-export const LegendContext = createContext<LegendContextValue | null>(null);
+const LegendContext = createContext<LegendContextValue | null>(null);
 
 // eslint-disable-next-line react/only-export-components
 export function useLegend(): LegendContextValue {

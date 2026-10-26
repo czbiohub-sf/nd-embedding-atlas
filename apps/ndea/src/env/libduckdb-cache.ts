@@ -18,7 +18,7 @@
 
 import { homedir } from "node:os";
 import { resolve } from "node:path";
-import { VERSION } from "../version.ts";
+import { VERSION } from "./version.ts";
 
 /** `<cache root>/ndea/<version>/`: where a compiled binary extracts its embedded files. */
 export function ndeaCacheDir(): string {

@@ -14,7 +14,7 @@ import { wsClient } from "@/lib/ws-client";
 import type { ProposalPreview } from "./preview";
 
 // ponytail: fixed window over the last MCP request; a server-side session or heartbeat would make it exact.
-export const HARNESS_CONNECTED_MS = 5 * 60_000;
+const HARNESS_CONNECTED_MS = 5 * 60_000;
 
 export type HarnessAgent = HarnessState["agents"][number];
 

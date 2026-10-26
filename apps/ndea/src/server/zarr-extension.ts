@@ -17,7 +17,7 @@ import { existsSync, mkdirSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { DuckDBInstance, version as duckdbLibraryVersion } from "@duckdb/node-api";
 import type { DuckDBConnection } from "@duckdb/node-api";
-import { ndeaCacheDir } from "../cli/lib/libduckdb-cache.ts";
+import { ndeaCacheDir } from "../env/libduckdb-cache.ts";
 import { ZARR_EXTENSION_EMBEDDED_PATH } from "./__generated-zarr-extension.ts";
 
 /** The duckdb-zarr release ndea builds, and the commit its tag points at. */
@@ -36,7 +36,7 @@ export function zarrExtensionKey(duckdbVersion: string, platform = duckdbPlatfor
 }
 
 /** Source/dev location; `scripts/build-zarr-extension.ts` writes it. */
-export function devZarrExtensionPath(duckdbVersion: string = duckdbLibraryVersion()): string {
+function devZarrExtensionPath(duckdbVersion: string = duckdbLibraryVersion()): string {
   const appRoot = resolve(import.meta.dir, "../..");
   return resolve(appRoot, ".zarr-ext-cache", zarrExtensionKey(duckdbVersion), "zarr.duckdb_extension");
 }
@@ -64,7 +64,7 @@ export async function zarrExtensionPath(): Promise<string> {
 }
 
 /** Load the extension on `conn` (the instance must allow unsigned extensions). */
-export async function loadZarrExtension(conn: DuckDBConnection): Promise<void> {
+async function loadZarrExtension(conn: DuckDBConnection): Promise<void> {
   const path = await zarrExtensionPath();
   await conn.run(`LOAD '${path.replace(/'/g, "''")}'`);
 }

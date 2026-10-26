@@ -1,7 +1,7 @@
 import type { LaunchConfig } from "../config.ts";
 import { accent, heading, label, num, ok, url, warn } from "../lib/style.ts";
 import { getNetworkAddress } from "../resolve.ts";
-import { VERSION } from "../version.ts";
+import { VERSION } from "../../env/version.ts";
 import type { LoadedDataset } from "./datasets.ts";
 
 export function printBanner(): void {

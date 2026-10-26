@@ -10,7 +10,7 @@ import { existsSync } from "node:fs";
 import { basename, dirname, extname, resolve } from "node:path";
 import { parse as parseYaml } from "yaml";
 import type { DatasetChannelConfig } from "../server/state.ts";
-import { defaultWorkspacePath } from "./lib/paths.ts";
+import { defaultWorkspacePath } from "../env/paths.ts";
 
 // ─── Public types ───────────────────────────────────────────────────────────
 

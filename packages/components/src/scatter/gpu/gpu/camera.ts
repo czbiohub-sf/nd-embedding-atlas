@@ -16,7 +16,7 @@ export function transform(m: Mat4, x: number, y: number, z = 0): [number, number
 }
 
 /** `a · b`. */
-export function multiply(a: Mat4, b: Mat4): Mat4 {
+function multiply(a: Mat4, b: Mat4): Mat4 {
   const out = new Float32Array(16);
   for (let c = 0; c < 4; c++) {
     for (let r = 0; r < 4; r++) {
@@ -38,7 +38,7 @@ const normalize = (a: Vec3): Vec3 => {
 };
 
 /** View matrix: the eye at `eye` looks at `target`, y up (right-handed: the camera looks down −z). */
-export function lookAt(eye: Vec3, target: Vec3, up: Vec3 = [0, 1, 0]): Mat4 {
+function lookAt(eye: Vec3, target: Vec3, up: Vec3 = [0, 1, 0]): Mat4 {
   const f = normalize([target[0] - eye[0], target[1] - eye[1], target[2] - eye[2]]);
   const s = normalize(cross(f, up));
   const u = cross(s, f);
@@ -52,7 +52,7 @@ export function lookAt(eye: Vec3, target: Vec3, up: Vec3 = [0, 1, 0]): Mat4 {
 }
 
 /** Perspective projection into WebGPU clip space (depth 0 at `near`, 1 at `far`). */
-export function perspective(fovY: number, aspect: number, near: number, far: number): Mat4 {
+function perspective(fovY: number, aspect: number, near: number, far: number): Mat4 {
   const f = 1 / Math.tan(fovY / 2);
   // prettier-ignore
   return Float32Array.of(
@@ -64,7 +64,7 @@ export function perspective(fovY: number, aspect: number, near: number, far: num
 }
 
 /** Orthographic projection of a centered `2·halfW × 2·halfH` view into WebGPU clip space. */
-export function orthographic(halfW: number, halfH: number, near: number, far: number): Mat4 {
+function orthographic(halfW: number, halfH: number, near: number, far: number): Mat4 {
   // prettier-ignore
   return Float32Array.of(
     1 / halfW, 0, 0, 0,

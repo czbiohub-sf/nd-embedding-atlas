@@ -2,7 +2,7 @@ import { mkdir, rename, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
 import { OBSERVATION_SET_TABLE, ObservationSetIdSchema, type ObservationSet } from "@ndea/protocol";
-import { stateDir } from "../cli/lib/paths.ts";
+import { stateDir } from "../env/paths.ts";
 import type { WorkspaceIssue } from "../frontend/core/workspace/document.ts";
 import type { WorkspaceDocument } from "../frontend/core/workspace/types.ts";
 import type { DatasetQuerySession } from "./store.ts";

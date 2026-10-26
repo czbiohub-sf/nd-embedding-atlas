@@ -3,9 +3,9 @@ import type { ComponentHost, ComponentModule, MountedBody } from "@ndea/sdk";
 import type { AnyComponentDefinition } from "@/core/component/definitions";
 import type { HostHandle } from "./host";
 
-export type ComponentFailureStage = "module" | "host" | "body";
+type ComponentFailureStage = "module" | "host" | "body";
 
-export type ComponentRuntimeState =
+type ComponentRuntimeState =
   | { readonly status: "unloaded" }
   | { readonly status: "loading" }
   | { readonly status: "ready"; readonly element: HTMLElement }

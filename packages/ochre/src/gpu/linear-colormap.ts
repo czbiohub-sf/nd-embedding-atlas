@@ -1,11 +1,11 @@
 import { tgpu, type TgpuFn } from "typegpu";
 import * as d from "typegpu/data";
 import * as std from "typegpu/std";
-import { srgbToLinearRgb as srgbToLinearRgbCpu } from "../color/linear-rgb";
-import { srgbToOkLab as srgbToOkLabCpu } from "../color/convert";
-import { okLabToOkLch as okLabToOkLchCpu } from "../color/oklch";
+import { linearToSrgb, oklabToRgb } from "@typegpu/color";
+import { srgbToLinearRgb } from "../color/linear-rgb";
+import { srgbToOkLab } from "../color/convert";
+import { okLabToOkLch } from "../color/oklch";
 import type { ColorStop } from "../colormap/types";
-import { linearRgbToSrgb, okLabToSrgb } from "./color";
 
 export type ColormapFn = TgpuFn<(t: d.F32) => d.Vec4f>;
 
@@ -56,17 +56,17 @@ export function toGpuSrgb(opts: LinearColormapGpuOptions): ColormapFn {
 /** GPU colormap that interpolates in linear RGB, then gamma-encodes to sRGB. */
 export function toGpuLinearRgb(opts: LinearColormapGpuOptions): ColormapFn {
   const sorted = sortStops(opts.stops);
-  const linear = sorted.map((s) => srgbToLinearRgbCpu(s.color));
+  const linear = sorted.map((s) => srgbToLinearRgb(s.color));
   const entries = stopsVec3f(linear.map((c) => ({ x: c.r, y: c.g, z: c.b })));
-  return emitColormap(opts.name, entries, "linearRgbToSrgb(mixed)", { linearRgbToSrgb });
+  return emitColormap(opts.name, entries, "linearToSrgb(mixed)", { linearToSrgb });
 }
 
 /** GPU colormap that interpolates in OkLab (perceptually uniform). Default. */
 export function toGpuOkLab(opts: LinearColormapGpuOptions): ColormapFn {
   const sorted = sortStops(opts.stops);
-  const labs = sorted.map((s) => srgbToOkLabCpu(s.color));
+  const labs = sorted.map((s) => srgbToOkLab(s.color));
   const entries = stopsVec3f(labs.map((c) => ({ x: c.l, y: c.a, z: c.b })));
-  return emitColormap(opts.name, entries, "okLabToSrgb(mixed)", { okLabToSrgb });
+  return emitColormap(opts.name, entries, "oklabToRgb(mixed)", { oklabToRgb });
 }
 
 // OkLch conversion used only by the OkLch colormap path. Kept local so that
@@ -77,7 +77,7 @@ const okLchToSrgb = tgpu
     d.vec3f,
   )((c) => {
     const hr = c.z * 0.017453292519943295;
-    return okLabToSrgb(d.vec3f(c.x, c.y * std.cos(hr), c.y * std.sin(hr)));
+    return oklabToRgb(d.vec3f(c.x, c.y * std.cos(hr), c.y * std.sin(hr)));
   })
   .$name("okLchToSrgb");
 
@@ -89,7 +89,7 @@ const okLchToSrgb = tgpu
  */
 export function toGpuOkLch(opts: LinearColormapGpuOptions): ColormapFn {
   const sorted = sortStops(opts.stops);
-  const lchs = sorted.map((s) => okLabToOkLchCpu(srgbToOkLabCpu(s.color)));
+  const lchs = sorted.map((s) => okLabToOkLch(srgbToOkLab(s.color)));
 
   // Unwrap hues: walk stops and shift each h so |h - prev| ≤ 180.
   const unwrapped: { l: number; c: number; h: number }[] = [];

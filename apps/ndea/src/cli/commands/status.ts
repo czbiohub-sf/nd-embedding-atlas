@@ -9,7 +9,7 @@ import { join } from "node:path";
 import { defineCommand, defineFlag } from "@crustjs/core";
 import { RuntimeStatusSchema } from "@ndea/protocol";
 import type { RuntimeStatus } from "@ndea/protocol";
-import { stateDir } from "../lib/paths.ts";
+import { stateDir } from "../../env/paths.ts";
 import { server } from "../lib/server.ts";
 import { PlainError } from "../lib/style.ts";
 

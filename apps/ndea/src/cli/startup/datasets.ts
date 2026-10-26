@@ -117,7 +117,7 @@ export function prepareDatasets(loaded: LoadedDataset[]): PreparedDatasets {
   };
 }
 
-export async function discoverObsmKeys(adata: DatasetHandle): Promise<string[]> {
+async function discoverObsmKeys(adata: DatasetHandle): Promise<string[]> {
   const listed = await adata.listObsmKeys();
   if (listed) return listed;
 

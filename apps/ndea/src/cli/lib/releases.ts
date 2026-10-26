@@ -2,7 +2,7 @@
  * GitHub Releases resolver and release-asset integrity helpers.
  */
 
-export const REPO = "czbiohub-sf/nd-embedding-atlas";
+const REPO = "czbiohub-sf/nd-embedding-atlas";
 
 export const CHANNELS = ["stable", "latest", "pre-release"] as const;
 

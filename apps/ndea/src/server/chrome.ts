@@ -36,7 +36,7 @@ function playwrightHeadlessShell(): string | null {
  * then `google-chrome` / `chromium` / `chromium-browser` on PATH, then
  * Playwright's `chromium-headless-shell` cache. Throws with what it tried.
  */
-export function findChrome(): string {
+function findChrome(): string {
   const configured = process.env.NDEA_CHROME;
   if (configured) {
     if (existsSync(configured)) return configured;
@@ -250,4 +250,4 @@ export async function probeChrome(): Promise<ChromeProbe> {
 }
 
 /** Codecs the render page tries in order; the doctor probes the same list. */
-export const REMOTE_CODECS = ["avc1.640033", "vp09.00.41.08"] as const;
+const REMOTE_CODECS = ["avc1.640033", "vp09.00.41.08"] as const;

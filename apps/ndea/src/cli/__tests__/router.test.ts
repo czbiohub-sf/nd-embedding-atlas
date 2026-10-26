@@ -12,7 +12,7 @@ import { Crust } from "@crustjs/core";
 import { captureExecute } from "@crustjs/testing";
 import { app } from "../index.ts";
 import { server } from "../lib/server.ts";
-import { VERSION } from "../version.ts";
+import { VERSION } from "../../env/version.ts";
 
 const ROOT = join(import.meta.dir, "..", "..", "..");
 // eslint-disable-next-line no-control-regex

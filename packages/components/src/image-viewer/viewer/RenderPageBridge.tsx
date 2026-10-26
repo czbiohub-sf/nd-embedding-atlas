@@ -12,7 +12,7 @@ import { useViewer } from "./useViewer";
 import type { ViewerActions, ViewerState } from "./ViewerContext";
 
 /** Viewer actions the remote tile's controls may call; everything else stays page-local. */
-export const REMOTE_ACTIONS = [
+const REMOTE_ACTIONS = [
   "setZIndex",
   "setTIndex",
   "setChannelProp",

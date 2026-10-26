@@ -51,7 +51,7 @@ class WsReconnectError extends Error {
 const RECONNECT_BASE_MS = 200;
 const RECONNECT_CAP_MS = 5000;
 
-export class NdeaWsClient {
+class NdeaWsClient {
   private readonly url: string;
   private ws: WebSocket | null = null;
   private nextId = 1;

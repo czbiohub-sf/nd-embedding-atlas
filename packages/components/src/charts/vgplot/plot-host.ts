@@ -37,11 +37,11 @@ import { brushFilterClause } from "./brush-filter";
 import type { PlotEntry } from "./spec-schema";
 
 /** Param name carrying the source table; mark entries reference it as `$table`. */
-export const TABLE_PARAM = "table";
+const TABLE_PARAM = "table";
 /** Param name carrying the input predicate; mark entries filter by `$scope`. */
-export const SCOPE_PARAM = "scope";
+const SCOPE_PARAM = "scope";
 /** Param name an interactor publishes to; read back out after instantiation. */
-export const BRUSH_PARAM = "brush";
+const BRUSH_PARAM = "brush";
 
 export interface MountPlotOptions {
   coordinator: Coordinator;

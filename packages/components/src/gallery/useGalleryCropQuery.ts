@@ -12,7 +12,7 @@ interface TrajectoryFrame {
 export const obsCoordKey = (value: RowIndex) => ["obs-coord", value] as const;
 
 /** A rendered crop: data URL + its aspect-preserving pixel dimensions. */
-export interface CropResult {
+interface CropResult {
   url: string;
   /** Rendered width/height from the `X-Crop-*` headers; 0 if unavailable. */
   w: number;

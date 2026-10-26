@@ -26,11 +26,11 @@ import {
   versionDir,
   versionedBinaryPath,
   versionsDir,
-} from "../lib/paths.ts";
+} from "../../env/paths.ts";
 import { pruneVersionCaches, pruneVersions } from "../lib/prune.ts";
 import { CHANNELS, detectTarget, fetchRelease, parseShaFile, sha256Hex } from "../lib/releases.ts";
 import { label, mb, ok, task, url } from "../lib/style.ts";
-import { VERSION } from "../version.ts";
+import { VERSION } from "../../env/version.ts";
 
 /** Versions retained after a successful update; each one costs ~185 MB on disk. */
 const AUTO_GC_KEEP = 1;

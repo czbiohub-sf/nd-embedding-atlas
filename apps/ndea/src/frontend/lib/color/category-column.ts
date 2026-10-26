@@ -25,8 +25,8 @@ export interface CategoryMapping {
   legend: CategoryLegendItem[];
 }
 
-export const OTHER_COLOR = "#6b7280";
-export const NULL_COLOR = "#4b5563";
+const OTHER_COLOR = "#6b7280";
+const NULL_COLOR = "#4b5563";
 
 export async function makeCategoryColumn(column: string, maxCategories: number): Promise<CategoryMapping> {
   const res = await fetch("/api/categorize", {

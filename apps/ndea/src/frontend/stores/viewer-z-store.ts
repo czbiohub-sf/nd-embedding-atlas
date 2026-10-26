@@ -12,7 +12,7 @@
 
 import { Store } from "@tanstack/store";
 
-export interface ViewerZState {
+interface ViewerZState {
   slots: Record<string, number>;
 }
 

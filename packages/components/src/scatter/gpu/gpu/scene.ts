@@ -28,7 +28,7 @@ export const Bit = {
 } as const;
 export const LAYERS = 6;
 
-export const Frame = d.struct({
+const Frame = d.struct({
   viewProj: d.mat4x4f,
   /** Canvas size, device px. */
   viewport: d.vec2f,

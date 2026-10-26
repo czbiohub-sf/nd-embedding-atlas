@@ -30,8 +30,67 @@
     "node-addon-api",
     "node-api-headers"
   ],
-  "ignoreExportsUsedInFile": true,
   "rules": {
     "unused-class-members": "off"
-  }
+  },
+  // The dependency direction AGENTS.md describes. First matching zone wins; unzoned files (scripts, tests) are free.
+  "boundaries": {
+    "zones": [
+      { "name": "tests", "patterns": ["**/*.test.ts", "**/*.test.tsx", "**/*.test-d.ts", "**/__tests__/**"] },
+      // Where ndea lives on this machine: state dir, install layout, cache dir, version. Shared by the CLI and server.
+      { "name": "env", "patterns": ["apps/ndea/src/env/**"] },
+      // The pure workspace model the server validates and edits with (no React).
+      {
+        "name": "workspace-model",
+        "patterns": [
+          "apps/ndea/src/frontend/core/workspace/{types,document,dashboard,edits,data-sources}.ts",
+          "apps/ndea/src/frontend/core/coordination/types.ts",
+        ],
+      },
+      { "name": "server", "patterns": ["apps/ndea/src/server/**"] },
+      { "name": "cli", "patterns": ["apps/ndea/src/cli/**"] },
+      { "name": "workspace-client", "patterns": ["apps/ndea/src/frontend/core/workspace/**"] },
+      { "name": "frontend", "patterns": ["apps/ndea/src/frontend/**", "apps/ndea/src/presets/**"] },
+      // FilterClause → SQL: protocol + mosaic-sql only, so the server may use it.
+      { "name": "filter-sql", "patterns": ["packages/components/src/filter/**"] },
+      { "name": "components", "patterns": ["packages/components/src/**"] },
+      { "name": "sdk", "patterns": ["packages/sdk/src/**"] },
+      { "name": "protocol", "patterns": ["packages/protocol/src/**"] },
+      { "name": "ui", "patterns": ["packages/ui/src/**"] },
+      { "name": "ochre", "patterns": ["packages/ochre/src/**"] },
+      { "name": "zarr", "patterns": ["packages/zarr/src/**"] },
+    ],
+    "rules": [
+      { "from": "env", "allow": [] },
+      { "from": "workspace-model", "allow": ["protocol", "sdk", "components", "filter-sql"] },
+      { "from": "server", "allow": ["env", "workspace-model", "filter-sql", "protocol", "zarr", "ochre"] },
+      { "from": "cli", "allow": ["env", "server", "workspace-model", "protocol", "zarr", "ochre"] },
+      {
+        "from": "workspace-client",
+        "allow": ["workspace-model", "frontend", "components", "filter-sql", "sdk", "protocol", "ui", "ochre"],
+      },
+      {
+        "from": "frontend",
+        "allow": ["workspace-model", "workspace-client", "components", "filter-sql", "sdk", "protocol", "ui", "ochre"],
+      },
+      { "from": "filter-sql", "allow": ["protocol"] },
+      { "from": "components", "allow": ["filter-sql", "sdk", "protocol", "ochre", "ui"] },
+      { "from": "sdk", "allow": ["protocol"] },
+      { "from": "ui", "allow": ["ochre"] },
+      { "from": "protocol", "allow": [] },
+      { "from": "ochre", "allow": [] },
+      { "from": "zarr", "allow": [] },
+    ],
+    "calls": {
+      "forbidden": [
+        // The server document is the only persisted workspace.
+        { "from": "workspace-client", "callee": ["localStorage.*", "sessionStorage.*"] },
+        // CLI commands fail by throwing; only the server's shutdown and startup interrupt exit.
+        { "from": "cli", "callee": "process.exit" },
+        { "from": "server", "callee": "process.exit" },
+        { "from": "frontend", "callee": "process.exit" },
+        { "from": "components", "callee": "process.exit" },
+      ],
+    },
+  },
 }

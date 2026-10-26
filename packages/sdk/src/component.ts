@@ -22,7 +22,7 @@ export interface ConfigContract<Config = unknown> {
  * settings tab it sits on, the domain values a string takes, or that the view
  * already shows the control (so settings never repeat it). `title` is the label.
  */
-export interface ConfigFieldMeta {
+interface ConfigFieldMeta {
   readonly section?: "display" | "data";
   /** column: an obs column name; obsm: an embedding key; dataset: a dataset key. */
   readonly control?: "column" | "obsm" | "dataset";

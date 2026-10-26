@@ -31,7 +31,7 @@ async function readPlateMetadata(mounts: readonly PlateMount[]): Promise<PlateMe
   return new Map(entries);
 }
 
-export function resolveAnnotationsSidecarPath(zarrPath: string): string {
+function resolveAnnotationsSidecarPath(zarrPath: string): string {
   const cacheRoot = process.env.XDG_CACHE_HOME ?? resolve(homedir(), ".cache");
   const directory = resolve(cacheRoot, "ndea", "annotations");
   mkdirSync(directory, { recursive: true });

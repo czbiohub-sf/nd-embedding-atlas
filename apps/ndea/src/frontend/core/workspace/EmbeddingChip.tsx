@@ -18,7 +18,7 @@ import { applyOrToast, useWorkspace, useWorkspaceSelector } from "./workspace-co
 type Obsm = Record<string, { loaded: boolean; n_dims?: number | null }>;
 
 /** The key an embedding view shows: its `obsmKey`, else the scatter's default (first loaded, else first). */
-export function effectiveObsmKey(obsmKey: unknown, obsm: Obsm): string | undefined {
+function effectiveObsmKey(obsmKey: unknown, obsm: Obsm): string | undefined {
   if (typeof obsmKey === "string" && obsm[obsmKey]) return obsmKey;
   return Object.entries(obsm).find(([, entry]) => entry.loaded)?.[0] ?? Object.keys(obsm)[0];
 }

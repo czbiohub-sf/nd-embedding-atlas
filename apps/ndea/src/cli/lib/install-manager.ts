@@ -57,7 +57,7 @@ export function parseMiseSourcePath(entry: MiseLsEntry): string | null {
   return typeof path === "string" && path.length > 0 ? path : null;
 }
 
-export function parseMiseLsJson(output: string): MiseLsEntry[] {
+function parseMiseLsJson(output: string): MiseLsEntry[] {
   const parsed: unknown = JSON.parse(output);
   if (Array.isArray(parsed)) return parsed.filter(isMiseLsEntry);
   if (!parsed || typeof parsed !== "object") return [];

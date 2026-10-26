@@ -38,9 +38,9 @@ import updateCommand from "./commands/self-update.ts";
 import viewCommand, { runView, viewArgs, viewFlags } from "./commands/view.ts";
 import workspaceCommand from "./commands/workspace.ts";
 import { looksLikeMiseInstallPath, MISE_TOOL_ID } from "./lib/install-manager.ts";
-import { isCompiledBinary } from "./lib/paths.ts";
+import { isCompiledBinary } from "../env/paths.ts";
 import { errors } from "./lib/style.ts";
-import { VERSION } from "./version.ts";
+import { VERSION } from "../env/version.ts";
 
 const selfCommand = defineCommand("self", { description: "Update, diagnose, or prune this ndea install" }, (command) =>
   command.add(updateCommand, doctorCommand, pruneCommand),

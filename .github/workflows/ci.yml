@@ -61,6 +61,26 @@ jobs:
           }
           Write-Host "install.ps1 parses cleanly"
 
+  # ── Fallow audit: fails only on findings this change introduces (dead
+  # code, boundaries, duplication, complexity) ──────────────────────────
+  audit:
+    name: Fallow audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          # The gate analyzes the base commit too.
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+      - uses: voidzero-dev/setup-vp@v1.21.2
+      - name: Install dependencies
+        run: vp install --frozen-lockfile
+      - name: vp run audit:gate
+        env:
+          FALLOW_AUDIT_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: vp run audit:gate
+
   # ── Full build + launch verify (frontend + binary, catches release-time
   # regressions at PR time rather than at release time) ─────────────────
   build-verify:
@@ -119,7 +139,7 @@ jobs:
   all-green:
     name: All checks pass
     if: always()
-    needs: [verify, build-verify]
+    needs: [verify, audit, build-verify]
     runs-on: ubuntu-latest
     steps:
       - uses: re-actors/alls-green@release/v1

@@ -5,7 +5,7 @@ import type { SessionHost, HostedSession } from "../../server/session-host.ts";
 import type { ServerSession } from "../../server/state.ts";
 import type { ServerSocketContext } from "../../server/ws.ts";
 import type { LaunchConfig } from "../config.ts";
-import { isCompiledBinary } from "../lib/paths.ts";
+import { isCompiledBinary } from "../../env/paths.ts";
 import { displayHost, openUrl, printShutdownHint, printShuttingDown } from "./output.ts";
 
 type RunningServer = Server<ServerSocketContext>;
@@ -62,7 +62,7 @@ export async function prewarmEmbeddings(state: ServerSession): Promise<void> {
   await Promise.all(state.availableObsmKeys.map((key) => loadEmbeddingAsync(key, state)));
 }
 
-export const localUrl = (config: Pick<LaunchConfig, "host" | "port">): string =>
+const localUrl = (config: Pick<LaunchConfig, "host" | "port">): string =>
   `http://${displayHost(config.host)}:${config.port}`;
 
 export function openBrowser(config: LaunchConfig): void {
@@ -84,6 +84,7 @@ export async function registerGracefulShutdown(
     // The server outlives the `view` action (Crust's invocation ended at
     // "Ready"), so no command boundary is left to return through: exiting is
     // how a long-running server stops.
+    // fallow-ignore-next-line boundary-violation -- the server's shutdown (AGENTS.md)
     process.exit(0);
   };
   process.on("SIGINT", () => void shutdown());

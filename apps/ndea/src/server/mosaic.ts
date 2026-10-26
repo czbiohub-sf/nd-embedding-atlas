@@ -73,7 +73,7 @@ export interface MosaicQuery {
 
 // ─── Content types ───────────────────────────────────────────────────────────
 
-export const ARROW_IPC_CONTENT_TYPE = "application/vnd.apache.arrow.stream";
+const ARROW_IPC_CONTENT_TYPE = "application/vnd.apache.arrow.stream";
 
 // ─── Query Handler ───────────────────────────────────────────────────────────
 

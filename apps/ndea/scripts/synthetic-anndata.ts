@@ -39,7 +39,7 @@ const DICT = { "encoding-type": "dict", "encoding-version": "0.1.0" };
 const TEXT_ENCODER = new TextEncoder();
 
 /** zarr-python's `_guess_chunks`: halve dims in turn until near a size target that grows with the array. */
-export function guessChunks(shape: number[], typesize: number): number[] {
+function guessChunks(shape: number[], typesize: number): number[] {
   const chunks = shape.map((s) => Math.max(s, 1));
   const bytes = () => chunks.reduce((a, b) => a * b, 1) * typesize;
   const target = Math.min(64 * 2 ** 20, Math.max(128 * 2 ** 10, 256 * 2 ** 10 * 2 ** Math.log10(bytes() / 2 ** 20)));

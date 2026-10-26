@@ -14,7 +14,7 @@ export interface DeviceBroker {
   releaseFor(elementId: string): void;
 }
 
-export function createDeviceBroker(): DeviceBroker {
+function createDeviceBroker(): DeviceBroker {
   const leases = new Map<string, DeviceLease>();
 
   function releaseFor(elementId: string): void {

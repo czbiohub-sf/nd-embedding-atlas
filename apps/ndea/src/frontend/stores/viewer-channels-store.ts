@@ -13,7 +13,7 @@
 import { Store } from "@tanstack/store";
 import type { ChannelDef } from "@ndea/components/image-viewer";
 
-export interface ViewerChannelsState {
+interface ViewerChannelsState {
   slots: Record<string, ChannelDef[]>;
 }
 

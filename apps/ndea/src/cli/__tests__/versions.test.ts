@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
-import { stateDir, versionsDir } from "../lib/paths.ts";
+import { stateDir, versionsDir } from "../../env/paths.ts";
 import { listVersions } from "../lib/versions.ts";
 
 const TMP_HOME = resolve(tmpdir(), "ndea-test-versions");
