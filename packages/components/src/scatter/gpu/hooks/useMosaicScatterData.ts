@@ -123,7 +123,7 @@ export function useMosaicScatterData({
   //    Phase 7: fetch raw f32 values only. vmin/vmax come back from the
   //    backend's autocompute; user-driven slider range is applied via the
   //    handle uniform without re-fetching. Colormap and reversed also stay
-  //    frontend-only (LUT generated via ochre), so they're NOT in the query
+  //    frontend-only (the GPU samples the colormap), so they're NOT in the query
   //    key: only column change triggers a re-fetch.
   const continuousQuery = useQuery({
     queryKey: scatterKeys.continuousColors(continuousColCol!, "values"),

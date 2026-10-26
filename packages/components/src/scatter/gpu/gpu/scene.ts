@@ -1,6 +1,7 @@
 import { tgpu, type StorageFlag, type TgpuBuffer, type TgpuFn, type TgpuReadonly, type TgpuUniform } from "typegpu";
 import * as d from "typegpu/data";
 import * as std from "typegpu/std";
+import type { ColormapFn } from "@ndea/colors/typegpu";
 import type { TgpuRoot } from "../../gpu/types";
 
 /** "No point": the clicked-point sentinel. */
@@ -100,6 +101,8 @@ export interface Scene {
   readonly rowBits: TgpuBuffer<d.WgslArray<d.Atomic<d.U32>>> & StorageFlag;
   readonly frame: TgpuUniform<typeof Frame>;
   readonly colors: TgpuUniform<d.WgslArray<d.Vec4f>>;
+  /** Fill `colors` with `colormap` at 256 evenly spaced t (one compute pass; the pipeline is kept per colormap). */
+  writeColormap(colormap: ColormapFn): void;
   /** Clip-space position of a world point: `viewProj · (p, 1)`. */
   readonly clip: TgpuFn<(p: d.Vec3f) => d.Vec4f>;
   /** Clip-space position of point i: `clip(x, y, z or 0)`. */
@@ -228,8 +231,12 @@ export function createScene(root: TgpuRoot, positions: Float32Array, n: number, 
   const boundsRO = boundsBuf.as("readonly");
   const bitsRO = bits.as("readonly");
   const frame = root.createUniform(Frame);
-  // Categorical palette (first `paletteLen` entries) or the 256-entry continuous LUT.
-  const colors = root.createUniform(d.arrayOf(d.vec4f, 256));
+  // Categorical palette (first `paletteLen` entries) or the continuous colormap sampled at 256 points,
+  // in linear light. A colormap fills it on the GPU (`writeColormap`); a palette arrives from the CPU.
+  const colorsBuf = root.createBuffer(d.arrayOf(d.vec4f, 256)).$usage("uniform", "storage");
+  const colors = colorsBuf.as("uniform");
+  const colorsRW = colorsBuf.as("mutable");
+  const colormapKernels = new Map<ColormapFn, { dispatchThreads(n: number): void }>();
 
   // ── Row order → storage order: out word w packs elements w·per … w·per+per−1, each the
   // element at row perm[s] of the row-order input (per = 1 << shift: 1 f32, 4 u8, or 32 bits).
@@ -542,6 +549,17 @@ export function createScene(root: TgpuRoot, positions: Float32Array, n: number, 
     batchLive,
     batchCenter,
     wordPasses,
+    writeColormap(colormap) {
+      let kernel = colormapKernels.get(colormap);
+      if (!kernel) {
+        kernel = root.createGuardedComputePipeline((i: number) => {
+          "use gpu";
+          colorsRW.$[i] = colormap(d.f32(i) / 255);
+        });
+        colormapKernels.set(colormap, kernel);
+      }
+      kernel.dispatchThreads(256);
+    },
     writeCategories(rows) {
       const padded = new Uint8Array(Math.ceil(n / 4) * 4);
       padded.set(rows.subarray(0, n));

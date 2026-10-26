@@ -43,15 +43,15 @@ packages/components/  built-in view components and their bodies
 packages/sdk/         component authoring + host contract
 packages/protocol/    shared Zod request/response schemas
 packages/ui/          design tokens and shadcn/Base UI controls
-packages/ochre/       color, colormaps, TypeGPU helpers
+packages/colors/      color, colormaps, TypeGPU helpers
 packages/zarr/        AnnData/MuData/OME-Zarr metadata and writes
 docs/                 Waku docs site (own lockfile); docs/agents/ holds agent references
 design_handoff_ndea_shell/  the UI design handoff: tokens, reference JSX, prototype
 ```
 
 Dependencies flow one way: `apps/ndea → every @ndea/*`;
-`@ndea/components → sdk, protocol, ochre, ui`; `sdk → protocol`;
-`ui → ochre`. Packages import only public `@ndea/*` entrypoints and never app
+`@ndea/components → sdk, protocol, colors, ui`; `sdk → protocol`;
+`ui → colors`. Packages import only public `@ndea/*` entrypoints and never app
 code. Inside the app, the server imports `src/env/` (state and cache dirs,
 install layout, version), the pure workspace model
 (`core/workspace/{types,document,dashboard,edits,data-sources}.ts`,

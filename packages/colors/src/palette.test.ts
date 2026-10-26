@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { srgbToHex } from "./color";
 import { Accent } from "./colormap/catalog/colorbrewer";
 import { viridis } from "./colormap/catalog/bids";
-import { buildLut, categoricalColormaps, continuousColormaps, resolveColormap, samplePalette } from "./palette";
+import { categoricalColormaps, continuousColormaps, resolveColormap, samplePalette } from "./palette";
 
 describe("palette", () => {
   test("resolves curated categorical and every linear name; unknown is null", () => {
@@ -33,15 +33,5 @@ describe("palette", () => {
     expect(samplePalette("nope", 3)).toEqual(["#000000", "#808080", "#FFFFFF"]);
     expect(samplePalette("nope", 1)).toEqual(["#808080"]);
     expect(samplePalette("viridis", 5)).toBe(samplePalette("viridis", 5));
-  });
-
-  test("LUTs pack RGBA little-endian, forward, grayscale when unknown", () => {
-    const gray = buildLut("nope", 2);
-    expect([...gray]).toEqual([0xff000000, 0xffffffff]);
-    const lut = buildLut("viridis");
-    expect(lut.length).toBe(256);
-    const first = viridis.map(0);
-    expect(lut[0] & 0xff).toBe(Math.round(first.r * 255));
-    expect((lut[0] >>> 16) & 0xff).toBe(Math.round(first.b * 255));
   });
 });

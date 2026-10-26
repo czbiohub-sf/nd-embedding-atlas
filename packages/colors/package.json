@@ -1,5 +1,5 @@
 {
-  "name": "@ndea/ochre",
+  "name": "@ndea/colors",
   "version": "0.1.0",
   "private": true,
   "description": "Color conversion, colormap, catalog, and TypeGPU helpers for NDEA.",
@@ -10,8 +10,8 @@
     "./catalog/*": "./src/colormap/catalog/*.ts",
     "./color": "./src/color/index.ts",
     "./colormap": "./src/colormap/index.ts",
-    "./gpu": "./src/gpu/index.ts",
-    "./palette": "./src/palette.ts"
+    "./palette": "./src/palette.ts",
+    "./typegpu": "./src/typegpu/index.ts"
   },
   "scripts": {
     "check": "vp check",

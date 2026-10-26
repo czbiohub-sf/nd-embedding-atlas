@@ -2,6 +2,7 @@ import type { Coordinator, Selection } from "@uwdata/mosaic-core";
 import type { Metadata, TrajectoryFrame } from "@ndea/protocol";
 import type { RowIndex } from "@ndea/sdk";
 import type { Store } from "@tanstack/store";
+import type { LinearColormap } from "@ndea/colors";
 
 /**
  * How the density path (overviews with too many points for markers) composites categorical
@@ -111,8 +112,9 @@ export interface ScatterServices {
   useFocusedPointMeta(rowIndex: RowIndex | null): FocusedPointMeta;
   getCategoricalPalette(colormap: string, count: number): string[];
   getColormapList(): ColormapList;
+  /** The continuous colormap a picker name refers to (unknown names: a gray ramp); the GPU samples it. */
+  getContinuousColormap(name: string): LinearColormap;
   categorize(column: string, maxCategories: number): Promise<CategoryMapping>;
-  buildColormapLut(name: string): Uint32Array;
   pickDefaultCategoricalPalette(count: number): string;
   readonly renderSettingsStore: Store<RenderSettingsState>;
   onDeviceLost(listener: (info: GPUDeviceLostInfo) => void): () => void;

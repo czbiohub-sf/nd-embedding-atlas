@@ -92,7 +92,6 @@ const FORWARDED = Object.keys({
   setContinuousRange: 0,
   setContinuousReversed: 0,
   setContinuousScale: 0,
-  setContinuousLut: 0,
   setExternalSelection: 0,
   clearExternalSelection: 0,
   clearSelection: 0,

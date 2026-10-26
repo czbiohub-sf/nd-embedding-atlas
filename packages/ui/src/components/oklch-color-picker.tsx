@@ -1,4 +1,4 @@
-import type { OkLch } from "@ndea/ochre";
+import type { OkLch } from "@ndea/colors";
 import { Slider } from "@ndea/ui/components/slider";
 import { cn } from "@ndea/ui/lib/utils";
 

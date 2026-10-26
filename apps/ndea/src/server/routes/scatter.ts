@@ -4,7 +4,7 @@
  * GET /api/scatter-positions         : v1, Float32 position columns (x, y, then z in 3D)
  * GET /api/scatter-categories        : v1, Uint8 category indices
  * GET /api/scatter-continuous-values : v2, Float32 raw values + vmin/vmax header
- *                                        (frontend applies colormap via ochre LUT on GPU)
+ *                                        (the frontend samples the colormap on the GPU)
  */
 
 import { ObsmSliceLoader } from "../slice-loader.ts";
@@ -215,7 +215,7 @@ export async function handleScatterCategories(url: URL, store: DatasetQuerySessi
  *
  * Returns raw Float32 values per observation plus autocomputed vmin/vmax
  * (from finite values). The frontend GPU kernel normalizes via a uniform
- * and looks up an ochre-generated LUT: so colormap swaps and slider
+ * and indexes a color table the GPU samples from the colormap: so colormap swaps and slider
  * drags happen without re-fetching. NaN values are preserved in the
  * payload; the kernel maps them to mid-gradient.
  *

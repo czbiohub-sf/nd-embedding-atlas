@@ -1,13 +1,14 @@
 /**
- * The embedding's colormap picker over `@ndea/ochre/palette`: picker order,
- * the default categorical palette, and the name "tab10".
+ * The embedding's colormaps over `@ndea/colors/palette`: picker order, the
+ * default categorical palette, the name "tab10", and continuous lookup.
  */
 
+import type { LinearColormap } from "@ndea/colors";
 import type { ColormapList } from "@ndea/components/scatter";
-import { categoricalColormaps, continuousColormaps, samplePalette } from "@ndea/ochre/palette";
+import { categoricalColormaps, continuousColormaps, samplePalette } from "@ndea/colors/palette";
 
 // "tab10" is d3's schemeTableau10 (Tableau's refreshed palette, `#4e79a7…`),
-// the colors users have always seen under that name; ochre's matplotlib-classic
+// the colors users have always seen under that name; the catalog's matplotlib-classic
 // tab10 (`#1f77b4…`) is listed as "Category10".
 const TABLEAU10_HEX: readonly string[] = [
   "#4E79A7",
@@ -44,6 +45,11 @@ const COLORMAP_LIST: ColormapList = {
 /** Every colormap name in picker order; one stable object. */
 export function getColormapList(): ColormapList {
   return COLORMAP_LIST;
+}
+
+/** The continuous colormap a picker name refers to; an unknown name is a gray ramp. */
+export function getContinuousColormap(name: string): LinearColormap {
+  return continuousColormaps[name] ?? continuousColormaps.gray;
 }
 
 const tab10Cache = new Map<number, string[]>();

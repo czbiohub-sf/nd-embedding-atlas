@@ -1,4 +1,5 @@
-import { srgbChannelToLinear } from "@ndea/ochre";
+import { srgbChannelToLinear } from "@ndea/colors";
+import { toGpuColormap } from "@ndea/colors/typegpu";
 import type { DeviceInfo, RowIndex } from "@ndea/sdk";
 import { type DensityMode, gpuPointIndex, type SelectionCombine } from "../../contracts";
 import { PALETTE } from "../../gpu/constants";
@@ -132,7 +133,7 @@ export async function createScatterplot(
   // Compaction reruns only when the camera, a filter, or the data changed.
   let compactDirty = true;
 
-  /** Palette and LUT colors arrive as sRGB; the GPU works in linear light and the composite encodes once. */
+  /** Palette colors arrive as sRGB; the GPU works in linear light and the composite encodes once. */
   function writeColors(rgba: Float32Array) {
     for (let i = 0; i < rgba.length; i++) if ((i & 3) !== 3) rgba[i] = srgbChannelToLinear(rgba[i]);
     scene.colors.write(rgba);
@@ -148,12 +149,6 @@ export async function createScatterplot(
     writeColors(rgba);
     f.paletteLen = len;
     f.colorBy = 0;
-  }
-
-  function setLut(lut: Uint32Array) {
-    const rgba = new Float32Array(256 * 4);
-    for (let i = 0; i < 256; i++) for (let c = 0; c < 4; c++) rgba[i * 4 + c] = ((lut[i] >>> (c * 8)) & 0xff) / 255;
-    writeColors(rgba);
   }
 
   function setScale(scale: "linear" | "log" | "sqrt" = "linear") {
@@ -307,7 +302,7 @@ export async function createScatterplot(
     },
     setContinuousColors(args) {
       scene.writeValues(args.values);
-      setLut(args.lut);
+      scene.writeColormap(toGpuColormap(args.colormap));
       f.vmin = Math.min(args.vmin, args.vmax);
       f.vmax = Math.max(args.vmin, args.vmax);
       f.reversed = args.reversed ? 1 : 0;
@@ -325,10 +320,6 @@ export async function createScatterplot(
     },
     setContinuousScale(scale) {
       setScale(scale);
-      interaction.requestRender();
-    },
-    setContinuousLut(lut) {
-      setLut(lut);
       interaction.requestRender();
     },
     project(x, y, z = 0) {

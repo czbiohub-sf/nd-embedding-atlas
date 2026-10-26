@@ -35,8 +35,8 @@
         "@fontsource-variable/geist-mono": "^5.3.0",
         "@jsquash/webp": "^1.5.0",
         "@modelcontextprotocol/server": "^2.4.0",
+        "@ndea/colors": "workspace:*",
         "@ndea/components": "workspace:*",
-        "@ndea/ochre": "workspace:*",
         "@ndea/protocol": "workspace:*",
         "@ndea/sdk": "workspace:*",
         "@ndea/ui": "workspace:*",
@@ -85,12 +85,26 @@
         "@duckdb/node-bindings-win32-x64": "2.0.0-r.1",
       },
     },
+    "packages/colors": {
+      "name": "@ndea/colors",
+      "version": "0.1.0",
+      "dependencies": {
+        "@typegpu/color": "^0.12.1",
+        "typegpu": "catalog:",
+      },
+      "devDependencies": {
+        "@types/bun": "catalog:",
+        "typescript": "catalog:",
+        "vite": "catalog:",
+        "vite-plus": "catalog:",
+      },
+    },
     "packages/components": {
       "name": "@ndea/components",
       "version": "0.1.0",
       "dependencies": {
         "@idetik/core": "^0.50.0",
-        "@ndea/ochre": "workspace:*",
+        "@ndea/colors": "workspace:*",
         "@ndea/protocol": "workspace:*",
         "@ndea/sdk": "workspace:*",
         "@ndea/ui": "workspace:*",
@@ -122,20 +136,6 @@
       },
       "peerDependencies": {
         "react": "catalog:",
-      },
-    },
-    "packages/ochre": {
-      "name": "@ndea/ochre",
-      "version": "0.1.0",
-      "dependencies": {
-        "@typegpu/color": "^0.12.1",
-        "typegpu": "catalog:",
-      },
-      "devDependencies": {
-        "@types/bun": "catalog:",
-        "typescript": "catalog:",
-        "vite": "catalog:",
-        "vite-plus": "catalog:",
       },
     },
     "packages/protocol": {
@@ -176,7 +176,7 @@
       "version": "0.1.0",
       "dependencies": {
         "@base-ui/react": "catalog:",
-        "@ndea/ochre": "workspace:*",
+        "@ndea/colors": "workspace:*",
         "class-variance-authority": "catalog:",
         "clsx": "^2.1.1",
         "cmdk": "^1.1.1",
@@ -459,9 +459,9 @@
 
     "@ndea/app": ["@ndea/app@workspace:apps/ndea"],
 
-    "@ndea/components": ["@ndea/components@workspace:packages/components"],
+    "@ndea/colors": ["@ndea/colors@workspace:packages/colors"],
 
-    "@ndea/ochre": ["@ndea/ochre@workspace:packages/ochre"],
+    "@ndea/components": ["@ndea/components@workspace:packages/components"],
 
     "@ndea/protocol": ["@ndea/protocol@workspace:packages/protocol"],
 

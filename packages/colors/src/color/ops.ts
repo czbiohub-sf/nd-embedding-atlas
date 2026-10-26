@@ -1,5 +1,5 @@
 // Color operations as a tree-shakeable namespace. Import via
-// `import { Color } from "@ndea/ochre"` and access ops as `Color.toOkLab`.
+// `import { Color } from "@ndea/colors"` and access ops as `Color.toOkLab`.
 //
 // sRGB is the canonical CPU color type. `from*` parses / converts *into* sRGB;
 // `to*` converts sRGB *to* another space or format.

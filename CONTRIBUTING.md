@@ -49,7 +49,7 @@ ranges. Review `overrides` separately because they are deliberately pinned.
 ```text
 apps/ndea/            CLI, server, frontend, and binary builder
 packages/components/  Built-in component definitions and their bodies
-packages/ochre/       Color, colormap, and TypeGPU helpers
+packages/colors/      Color, colormap, and TypeGPU helpers
 packages/protocol/    Shared request and response schemas
 packages/sdk/         Component authoring and host contracts
 packages/ui/          Shared UI controls

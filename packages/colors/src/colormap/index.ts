@@ -5,5 +5,5 @@ export * from "./build";
 export * from "./transform";
 export * from "./popular";
 // Convenience: a tiny `catalog` namespace holding popular entries only.
-// Full 26-source namespace lives at `@ndea/ochre/catalog`.
+// Full 26-source namespace lives at `@ndea/colors/catalog`.
 export * as catalog from "./popular";

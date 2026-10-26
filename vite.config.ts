@@ -50,7 +50,7 @@ export default defineConfig({
       react: { version: "19.0.0" },
     },
 
-    ignorePatterns: ["**/dist/**", "packages/ochre/src/colormap/data/**"],
+    ignorePatterns: ["**/dist/**", "packages/colors/src/colormap/data/**"],
 
     categories: {
       correctness: "error",
@@ -249,7 +249,7 @@ export default defineConfig({
     endOfLine: "lf",
     sortPackageJson: true,
     // Packed colormap tables must retain source layout.
-    ignorePatterns: ["**/dist/**", "packages/ochre/src/colormap/data/**"],
+    ignorePatterns: ["**/dist/**", "packages/colors/src/colormap/data/**"],
   },
 
   staged: {

@@ -16,7 +16,7 @@
     "design_handoff_ndea_shell/**",
     ".fallow/**",
     ".source/**",
-    "packages/ochre/src/colormap/data/**"
+    "packages/colors/src/colormap/data/**"
   ],
   "ignoreDependencies": [
     "@duckdb/node-bindings-darwin-arm64",
@@ -44,8 +44,8 @@
         "name": "workspace-model",
         "patterns": [
           "apps/ndea/src/frontend/core/workspace/{types,document,dashboard,edits,data-sources}.ts",
-          "apps/ndea/src/frontend/core/coordination/types.ts",
-        ],
+          "apps/ndea/src/frontend/core/coordination/types.ts"
+        ]
       },
       { "name": "server", "patterns": ["apps/ndea/src/server/**"] },
       { "name": "cli", "patterns": ["apps/ndea/src/cli/**"] },
@@ -57,29 +57,29 @@
       { "name": "sdk", "patterns": ["packages/sdk/src/**"] },
       { "name": "protocol", "patterns": ["packages/protocol/src/**"] },
       { "name": "ui", "patterns": ["packages/ui/src/**"] },
-      { "name": "ochre", "patterns": ["packages/ochre/src/**"] },
-      { "name": "zarr", "patterns": ["packages/zarr/src/**"] },
+      { "name": "colors", "patterns": ["packages/colors/src/**"] },
+      { "name": "zarr", "patterns": ["packages/zarr/src/**"] }
     ],
     "rules": [
       { "from": "env", "allow": [] },
       { "from": "workspace-model", "allow": ["protocol", "sdk", "components", "filter-sql"] },
-      { "from": "server", "allow": ["env", "workspace-model", "filter-sql", "protocol", "zarr", "ochre"] },
-      { "from": "cli", "allow": ["env", "server", "workspace-model", "protocol", "zarr", "ochre"] },
+      { "from": "server", "allow": ["env", "workspace-model", "filter-sql", "protocol", "zarr", "colors"] },
+      { "from": "cli", "allow": ["env", "server", "workspace-model", "protocol", "zarr", "colors"] },
       {
         "from": "workspace-client",
-        "allow": ["workspace-model", "frontend", "components", "filter-sql", "sdk", "protocol", "ui", "ochre"],
+        "allow": ["workspace-model", "frontend", "components", "filter-sql", "sdk", "protocol", "ui", "colors"]
       },
       {
         "from": "frontend",
-        "allow": ["workspace-model", "workspace-client", "components", "filter-sql", "sdk", "protocol", "ui", "ochre"],
+        "allow": ["workspace-model", "workspace-client", "components", "filter-sql", "sdk", "protocol", "ui", "colors"]
       },
       { "from": "filter-sql", "allow": ["protocol"] },
-      { "from": "components", "allow": ["filter-sql", "sdk", "protocol", "ochre", "ui"] },
+      { "from": "components", "allow": ["filter-sql", "sdk", "protocol", "colors", "ui"] },
       { "from": "sdk", "allow": ["protocol"] },
-      { "from": "ui", "allow": ["ochre"] },
+      { "from": "ui", "allow": ["colors"] },
       { "from": "protocol", "allow": [] },
-      { "from": "ochre", "allow": [] },
-      { "from": "zarr", "allow": [] },
+      { "from": "colors", "allow": [] },
+      { "from": "zarr", "allow": [] }
     ],
     "calls": {
       "forbidden": [
@@ -89,8 +89,8 @@
         { "from": "cli", "callee": "process.exit" },
         { "from": "server", "callee": "process.exit" },
         { "from": "frontend", "callee": "process.exit" },
-        { "from": "components", "callee": "process.exit" },
-      ],
-    },
-  },
+        { "from": "components", "callee": "process.exit" }
+      ]
+    }
+  }
 }

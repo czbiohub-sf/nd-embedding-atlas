@@ -1,6 +1,6 @@
 // Colormap operations as a tree-shakeable namespace. Import via
-// `import { Cmap } from "@ndea/ochre"` and access ops as `Cmap.map`.
-// GPU variants live at `@ndea/ochre/gpu`.
+// `import { Cmap } from "@ndea/colors"` and access ops as `Cmap.map`.
+// GPU variants live at `@ndea/colors/typegpu`.
 
 import type { Srgb } from "../color/types";
 import type { ColorMap } from "./types";

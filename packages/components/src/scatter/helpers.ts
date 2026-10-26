@@ -1,4 +1,4 @@
-import { okLchToSrgb, ParseColorError, srgbFromHex, srgbToHex, srgbToOkLch } from "@ndea/ochre";
+import { okLchToSrgb, ParseColorError, srgbFromHex, srgbToHex, srgbToOkLch } from "@ndea/colors";
 import type { Columns } from "../query/columns";
 import type { ColorMode, TrajectoryData } from "./contracts";
 import type { ScatterData } from "./gpu/types";

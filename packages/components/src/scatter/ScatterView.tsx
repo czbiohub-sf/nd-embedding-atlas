@@ -6,7 +6,7 @@
  * Rendered inside a LegendProvider by ScatterContent.
  */
 
-import { srgbFromHex, srgbToLinearRgb } from "@ndea/ochre";
+import { srgbFromHex, srgbToLinearRgb } from "@ndea/colors";
 import { useThrottler } from "@tanstack/react-pacer";
 import { useSelector } from "@tanstack/react-store";
 import type { FilterClause } from "@ndea/protocol";
@@ -387,7 +387,7 @@ export function ScatterView({
         values: c.values,
         vmin: c.vmin,
         vmax: c.vmax,
-        lut: services.buildColormapLut(c.colormap),
+        colormap: services.getContinuousColormap(c.colormap),
         reversed: c.reversed,
         scale: legendState.scale,
       });
@@ -415,7 +415,7 @@ export function ScatterView({
       values: c.values,
       vmin: c.vmin,
       vmax: c.vmax,
-      lut: services.buildColormapLut(c.colormap),
+      colormap: services.getContinuousColormap(c.colormap),
       reversed: c.reversed,
       scale: legendState.scale,
     });

@@ -8,7 +8,6 @@ import { useSelector } from "@tanstack/react-store";
 import { createComponentCatalog, type ComponentServices } from "@ndea/components/catalog";
 import type { ChannelHash } from "@ndea/components/gallery";
 import { useMosaicClient } from "@ndea/components/query";
-import { buildLut } from "@ndea/ochre/palette";
 import { ChannelStatsResponseSchema, ObsInfoSchema } from "@ndea/protocol";
 import type { ComponentDefinition } from "@ndea/sdk";
 
@@ -17,7 +16,12 @@ import { mountReactBody } from "@/core/component/react-body";
 import { useDatasetSession } from "@/hooks/useDatasetSession";
 import { useFocusedPointMeta } from "@/hooks/useFocusedPointMeta";
 import { makeCategoryColumn } from "@/lib/color/category-column";
-import { getCategoricalPalette, getColormapList, pickDefaultCategoricalPalette } from "@/lib/color/ochre-palette";
+import {
+  getCategoricalPalette,
+  getColormapList,
+  getContinuousColormap,
+  pickDefaultCategoricalPalette,
+} from "@/lib/color/colormaps";
 import { renderSettingsStore } from "@/stores/render-settings-store";
 import { clearViewerChannels, publishViewerChannels, viewerChannelsStore } from "@/stores/viewer-channels-store";
 import { clearViewerZ, publishViewerZ, viewerZStore } from "@/stores/viewer-z-store";
@@ -101,8 +105,8 @@ const services: ComponentServices = {
     useFocusedPointMeta,
     getCategoricalPalette,
     getColormapList,
+    getContinuousColormap,
     categorize: makeCategoryColumn,
-    buildColormapLut: buildLut,
     pickDefaultCategoricalPalette,
     renderSettingsStore,
     onDeviceLost,

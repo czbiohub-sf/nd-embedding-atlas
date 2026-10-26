@@ -1,5 +1,5 @@
 /**
- * Named colormaps as hex palettes and GPU LUTs.
+ * Named colormaps: the catalog and hex palettes (`@ndea/colors/typegpu` puts a linear one on the GPU).
  *
  * The catalog: a curated set of categorical palettes (discrete maps plus
  * glasbey) and every linear colormap from every source (~300). On a name
@@ -140,24 +140,6 @@ export function samplePalette(name: string, n: number): string[] {
     const cmap = resolveColormap(name);
     out = n === 0 ? [] : cmap ? sample(cmap, n) : grayscale(n);
     paletteCache.set(key, out);
-  }
-  return out;
-}
-
-const byte = (v: number) => Math.max(0, Math.min(255, Math.round(v * 255)));
-
-/**
- * A `size`-entry packed RGBA LUT (`R | G<<8 | B<<16 | A<<24`, ready for a
- * `d.arrayOf(d.u32, size)` buffer) sampled forward over `t ∈ [0, 1]`; an
- * unknown name is a grayscale ramp. Reversal is the consumer's job.
- */
-export function buildLut(name: string, size = 256): Uint32Array {
-  const cmap = resolveColormap(name);
-  const out = new Uint32Array(size);
-  for (let i = 0; i < size; i++) {
-    const t = i / (size - 1);
-    const c = cmap ? cmap.map(t) : { r: t, g: t, b: t, alpha: 1 };
-    out[i] = (byte(c.r) | (byte(c.g) << 8) | (byte(c.b) << 16) | (byte(c.alpha) << 24)) >>> 0;
   }
   return out;
 }

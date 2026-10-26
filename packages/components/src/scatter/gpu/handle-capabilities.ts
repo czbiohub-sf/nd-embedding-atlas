@@ -7,6 +7,7 @@
  */
 
 import type { RowIndex, TurntableView, ViewSyncState } from "@ndea/sdk";
+import type { LinearColormap } from "@ndea/colors";
 import type { DensityMode, SelectionDepth, SelectionTool } from "../contracts";
 
 export interface SelectionCapability {
@@ -80,23 +81,22 @@ export interface ColorCapability {
   /** Categorical coloring: palette by category index (a uniform write; indices re-uploaded when given). */
   setColors(palette: readonly (readonly [number, number, number, number?])[], categoryIndices?: Uint8Array): void;
   /**
-   * Continuous coloring: uploads raw values and a 256-entry packed-u32 LUT;
-   * colors are computed in the shader. Slider drags and toggles go through
-   * the setters below, which are uniform writes.
+   * Continuous coloring: uploads raw values and names the catalog colormap,
+   * which the GPU samples into the color table; colors are computed in the
+   * shader. Slider drags and toggles go through the setters below, which are
+   * uniform writes.
    */
   setContinuousColors(args: {
     values: Float32Array;
     vmin: number;
     vmax: number;
-    lut: Uint32Array;
+    colormap: LinearColormap;
     reversed: boolean;
     scale?: "linear" | "log" | "sqrt";
   }): void;
   setContinuousRange(vmin: number, vmax: number): void;
   setContinuousReversed(reversed: boolean): void;
   setContinuousScale(scale: "linear" | "log" | "sqrt"): void;
-  /** Upload a fresh LUT (colormap change). */
-  setContinuousLut(lut: Uint32Array): void;
 }
 
 /** React-layer scatter GPU handle (`ScatterGPUHost`'s ref): every capability, no lifecycle. */

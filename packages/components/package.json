@@ -22,7 +22,7 @@
   },
   "dependencies": {
     "@idetik/core": "^0.50.0",
-    "@ndea/ochre": "workspace:*",
+    "@ndea/colors": "workspace:*",
     "@ndea/protocol": "workspace:*",
     "@ndea/sdk": "workspace:*",
     "@ndea/ui": "workspace:*",

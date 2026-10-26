@@ -20,7 +20,7 @@ const expectColorClose = (actual: ReturnType<typeof srgb>, expected: ReturnType<
   expect(actual.alpha).toBeCloseTo(expected.alpha, 5);
 };
 
-describe("Ochre", () => {
+describe("colors", () => {
   test("parses and formats short, long, and alpha hex colors", () => {
     expect(srgbToHex(srgbFromHex("#369"))).toBe("#336699");
     expect(srgbToHex(srgbFromHex("336699"))).toBe("#336699");

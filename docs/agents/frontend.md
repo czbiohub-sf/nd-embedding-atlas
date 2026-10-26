@@ -23,9 +23,12 @@ records what was built from it and what still differs.
   `ControlHeading`: the control column floating over the embedding and the
   image viewer). Tooltips wait 500ms. Toasts are Sonner
   (`components/ui/sonner.tsx`).
-- Named colormaps (catalog lookup, hex palettes, GPU LUTs) are
-  `@ndea/ochre/palette`; `lib/color/ochre-palette.ts` adds picker order, the
-  default categorical palette, and "tab10" as d3's Tableau10.
+- Named colormaps (catalog lookup, hex palettes) are `@ndea/colors/palette`;
+  `lib/color/colormaps.ts` adds picker order, the default categorical palette,
+  "tab10" as d3's Tableau10, and `getContinuousColormap` (the scatter
+  service). `@ndea/colors/typegpu` `toGpuColormap` turns a linear colormap
+  into a TypeGPU function (`t` → linear-light RGB, in the colormap's own
+  interpolation space, stop positions honored; one per colormap).
 - The theme is a per-browser preference (`ThemeProvider`, `localStorage`), as
   is Settings › Provenance badges; workspace state never goes there.
 
@@ -139,6 +142,12 @@ proposal bar (bottom centre) and the Harness flyout. Accept/Reject call
 - `scene.ts` stores points in Morton order with 256-point batches and bounds;
   setters, the selection bitmask, and picks speak row order
   (`writeLayer`/`layerToRows`/`perm` translate).
+- Continuous color: `scene.writeColormap(toGpuColormap(cmap))` samples the
+  colormap into the 256-entry color table in one compute pass (pipeline kept
+  per colormap); a categorical palette writes the same table from the CPU.
+  The catalog reaches the scatter only through the `getContinuousColormap`
+  service: the server bundle includes component bodies (their lazy `load()`
+  imports), and the catalog's data there added ~10 MB to `dist/ndea`.
 - Controls float in the view (`ScatterControls.tsx`, on `@ndea/ui`
   `floating-controls`): pointer/box/lasso (V/B/L, shift adds, ⌥ subtracts),
   Legend / Point size / Axes popovers, the bottom-right
