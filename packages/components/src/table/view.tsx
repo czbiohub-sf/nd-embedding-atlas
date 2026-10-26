@@ -299,12 +299,20 @@ export function TableView({ host }: BodyProps<TableConfig>) {
         setEdits((prev) => new Map([...prev].map(([f, cells]) => [f === from ? to : f, cells])));
         if (config.columns) patch({ columns: renameIn(config.columns, from, to) });
         if (groupBy === from) patch({ groupBy: to });
+        if (from in config.widths) {
+          const { [from]: width, ...rest } = config.widths;
+          patch({ widths: { ...rest, [to]: width } });
+        }
         if (activeSort?.col === from) setSort({ ...activeSort, col: to });
         setConditionsState((cs) => cs.map((c) => (c.column === from ? { ...c, column: to } : c)));
       }, `Renaming ${from} failed`),
     convertField: (name, dtype: AnnotationDtype) =>
       void fieldOp(() => host.dataAPI.updateField(name, { dtype }), `Converting ${name} failed`),
     deleteField: setDeleting,
+    resizeField: (name, px) => {
+      const { [name]: _old, ...rest } = config.widths;
+      patch({ widths: px === null ? rest : { ...rest, [name]: px } });
+    },
     values: async (field) => {
       const saved = toRows(
         await coordinator.query(
@@ -403,6 +411,7 @@ export function TableView({ host }: BodyProps<TableConfig>) {
         selection={selection}
         selected={selected}
         edits={edits}
+        widths={config.widths}
         provenance={showProvenance ? provenance : null}
         actions={actions}
       />

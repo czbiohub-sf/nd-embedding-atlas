@@ -3,4 +3,6 @@ export interface TableConfig {
   columns: string[] | null;
   /** Rows grouped by this field (the toolbar's Group menu). */
   groupBy: string | null;
+  /** Px width of each field the user resized; the others size to their content. */
+  widths: Record<string, number>;
 }

@@ -171,7 +171,10 @@ change values under the same SQL. Cell edits stay in a client buffer until Save
 (`host.dataAPI.writeFieldValues`); field operations apply at once. The filter
 builder publishes on the `filter` facet and row selection (an observation set,
 via `publishSelection`) on the `selection` facet; the table narrows by its own
-builder clauses, never by its selection. No keyboard shortcuts.
+builder clauses, never by its selection. Columns size to their content until
+resized: drag a header's right edge (←/→ on the focused edge, double-click to
+reset); the px widths persist in the `widths` prop. No other keyboard
+shortcuts.
 
 ## Image viewer and charts
 

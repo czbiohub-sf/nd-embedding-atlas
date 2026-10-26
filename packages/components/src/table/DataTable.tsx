@@ -42,6 +42,9 @@ import type { Row, TableQuery } from "./useTableQuery";
 const ROW_HEIGHT = 26;
 const HEADER_HEIGHT = 28;
 const LEAD_WIDTH = 56;
+const MIN_COLUMN = 48;
+const MAX_COLUMN = 800;
+const clampWidth = (px: number) => Math.round(Math.min(MAX_COLUMN, Math.max(MIN_COLUMN, px)));
 
 /** Unsaved cell values: field → row index → value (null clears). */
 export type Edits = ReadonlyMap<string, ReadonlyMap<number, string | null>>;
@@ -57,6 +60,8 @@ export interface TableActions {
   renameField(from: string, to: string): void;
   convertField(name: string, dtype: AnnotationDtype): void;
   deleteField(name: string): void;
+  /** Set a field's column width in px; null returns it to its content width. */
+  resizeField(name: string, px: number | null): void;
   /** Distinct saved values of a field, for the label editor and the filter builder. */
   values(field: string): Promise<string[]>;
   edit(field: string, rowIndex: number, value: string | null, saved: string | null): void;
@@ -80,6 +85,8 @@ export interface DataTableProps {
   /** Selected obs count, for the header checkbox. */
   selected: number;
   edits: Edits;
+  /** Px widths of the fields the user resized. */
+  widths: Readonly<Record<string, number>>;
   provenance: ((field: TableField) => Provenance) | null;
   actions: TableActions;
 }
@@ -424,6 +431,67 @@ function Cell({ field, row, edits, actions }: { field: TableField; row: Row; edi
   );
 }
 
+/**
+ * The right edge of a header cell: drag it, or ←/→ while it has focus, to resize the column;
+ * double-click returns the column to its content width.
+ */
+function ResizeHandle({
+  name,
+  width,
+  onPreview,
+  onCommit,
+}: {
+  name: string;
+  width: number;
+  onPreview(px: number | null): void;
+  onCommit(px: number | null): void;
+}) {
+  return (
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      aria-label={`Resize ${name}`}
+      aria-valuenow={Math.round(width)}
+      aria-valuemin={MIN_COLUMN}
+      aria-valuemax={MAX_COLUMN}
+      tabIndex={0}
+      className={cn(
+        "absolute top-0 -right-1 z-10 h-full w-2 cursor-col-resize outline-none",
+        "after:absolute after:inset-y-1 after:left-1/2 after:w-px hover:after:bg-primary focus-visible:after:bg-primary",
+      )}
+      onPointerDown={(e) => {
+        if (e.button !== 0) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const handle = e.currentTarget;
+        const startX = e.clientX;
+        let px = width;
+        handle.setPointerCapture(e.pointerId);
+        const move = (event: PointerEvent) => {
+          px = clampWidth(width + event.clientX - startX);
+          onPreview(px);
+        };
+        const up = () => {
+          handle.removeEventListener("pointermove", move);
+          handle.removeEventListener("pointerup", up);
+          handle.removeEventListener("pointercancel", up);
+          onPreview(null);
+          if (px !== width) onCommit(px);
+        };
+        handle.addEventListener("pointermove", move);
+        handle.addEventListener("pointerup", up);
+        handle.addEventListener("pointercancel", up);
+      }}
+      onDoubleClick={() => onCommit(null)}
+      onKeyDown={(e) => {
+        if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+        e.preventDefault();
+        onCommit(clampWidth(width + (e.key === "ArrowRight" ? 16 : -16)));
+      }}
+    />
+  );
+}
+
 export function DataTable({
   fields,
   query,
@@ -435,6 +503,7 @@ export function DataTable({
   selection,
   selected,
   edits,
+  widths,
   provenance,
   actions,
 }: DataTableProps) {
@@ -442,19 +511,25 @@ export function DataTable({
   const count = query.count ?? 0;
   const length = layout ? layout.length : count;
 
-  // Widths latch per field set once the first rows arrive (state set while rendering, React's
-  // pattern for values derived from earlier renders).
+  // Content widths latch per field set once the first rows arrive (state set while rendering, React's
+  // pattern for values derived from earlier renders). A width the user set wins; a drag previews locally
+  // and writes the config once, on release.
   const fieldKey = fields.map((f) => `${f.name}:${f.type}`).join("\u0000");
-  const [widths, setWidths] = useState<{ key: string; px: number[] } | null>(null);
-  if (query.getRow(0) && widths?.key !== fieldKey) {
+  const [auto, setAuto] = useState<{ key: string; px: number[] } | null>(null);
+  if (query.getRow(0) && auto?.key !== fieldKey) {
     const sample: Row[] = [];
     for (let i = 0; i < 50; i++) {
       const row = query.getRow(i);
       if (row) sample.push(row);
     }
-    setWidths({ key: fieldKey, px: fields.map((f) => columnWidth(f, sample)) });
+    setAuto({ key: fieldKey, px: fields.map((f) => columnWidth(f, sample)) });
   }
-  const columns = fields.map((f, i) => (widths?.key === fieldKey ? widths.px[i] : columnWidth(f, [])));
+  const [preview, setPreview] = useState<{ name: string; px: number } | null>(null);
+  const columns = fields.map((f, i) =>
+    preview?.name === f.name
+      ? preview.px
+      : (widths[f.name] ?? (auto?.key === fieldKey ? auto.px[i] : columnWidth(f, []))),
+  );
   const template = `${LEAD_WIDTH}px ${columns.map((w) => `${w}px`).join(" ")} 32px`;
   const totalWidth = LEAD_WIDTH + columns.reduce((a, b) => a + b, 0) + 32;
 
@@ -510,14 +585,20 @@ export function DataTable({
             onCheckedChange={() => actions.toggleAll()}
           />
         </div>
-        {fields.map((field) => (
-          <div key={field.name} className="min-w-0 border-muted border-l px-0.5 py-0.5">
+        {fields.map((field, i) => (
+          <div key={field.name} className="relative min-w-0 border-muted border-l px-0.5 py-0.5">
             <ColumnMenu
               field={field}
               sort={sort}
               groupBy={groupBy}
               actions={actions}
               status={provenance ? provenance(field) : "obs"}
+            />
+            <ResizeHandle
+              name={field.name}
+              width={columns[i]}
+              onPreview={(px) => setPreview(px === null ? null : { name: field.name, px })}
+              onCommit={(px) => actions.resizeField(field.name, px)}
             />
           </div>
         ))}
