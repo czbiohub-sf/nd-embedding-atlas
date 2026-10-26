@@ -169,12 +169,32 @@ Save/Discard, "Write fields to file…"), type glyphs and provenance markers
 server-side pages, counts, and groups that bypass Mosaic's cache because edits
 change values under the same SQL. Cell edits stay in a client buffer until Save
 (`host.dataAPI.writeFieldValues`); field operations apply at once. The filter
-builder publishes on the `filter` facet and row selection (an observation set,
-via `publishSelection`) on the `selection` facet; the table narrows by its own
-builder clauses, never by its selection. Columns size to their content until
-resized: drag a header's right edge (←/→ on the focused edge, double-click to
-reset); the px widths persist in the `widths` prop. No other keyboard
-shortcuts.
+builder joins its conditions with and or or and publishes on the `filter`
+facet; row selection (an observation set, via `publishSelection`) goes on the
+`selection` facet; the table narrows by its own builder clauses, never by its
+selection. Groups chain: `groupBy` is a list, and `GroupLayout` (`fields.ts`)
+opens a header per level whenever its value changes. Columns size to their
+content until resized: drag a header's right edge (←/→ on the focused edge,
+double-click to reset); the px widths persist in the `widths` prop. No other
+keyboard shortcuts.
+
+`useObsView` is the engine the table and the crop gallery share: fields,
+search, filter, sort (`ordering`), groups, the paged query, selection and
+focus reveal. `Toolbar` takes the view and renders its own controls as
+children (the table's `EditControls`, the gallery's layout switches).
+
+## Crop gallery (`packages/components/src/gallery/`)
+
+The obs as square crops on the table's engine and toolbar; Fields are caption
+lines. `CropGrid` wraps tiles under `GroupLayout` headers (`perLine` = tiles per
+line); `CropStrips` uses `GroupLayout` with `perLine = Infinity`, so each
+innermost group is one line under its outer headers, with a horizontal
+virtualizer for columns: in sort order, or one shared column per value of
+`columnsBy` (a pivot; those strips load whole). `useCrop` batches the obs's
+image positions into one `/api/obs/batch` per frame and fetches
+`/api/crop/{fov}`; `zoom` sets the crop window (100% = 150 image px either
+side). The color strip reads the `colorBy` link through the shared
+`categoryMappingQuery` (same entry as the scatter).
 
 ## Image viewer and charts
 

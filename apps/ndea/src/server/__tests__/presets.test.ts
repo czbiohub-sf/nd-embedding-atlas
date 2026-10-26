@@ -32,13 +32,14 @@ describe("presets are workspace documents", () => {
     });
     const views = (layout: string) =>
       Object.values(document.layouts[layout].spec.elements).filter((element) => COMPONENTS[element.type].view);
-    const bound = (layout: string, type: "focus" | "filter") =>
+    const bound = (layout: string, type: "focus" | "filter" | "colorBy") =>
       views(layout)
         .filter((element) => elementScope(element, type) === "A")
         .map((element) => element.type)
         .toSorted();
     expect(bound("exploration", "focus")).toEqual(["gallery", "image-viewer", "scatter", "table"]);
     expect(bound("exploration", "filter")).toEqual(["gallery", "histogram", "scatter", "table"]);
+    expect(bound("exploration", "colorBy")).toEqual(["gallery", "scatter"]);
     expect(bound("review", "focus")).toEqual(["gallery", "image-viewer", "table"]);
     expect(bound("review", "filter")).toEqual(["gallery", "table"]);
   });

@@ -1,32 +1,42 @@
-import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
-import { type RowIndex, rowIndex } from "@ndea/sdk";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import type { ChannelDef, ChannelHash } from "./contracts";
 
-interface TrajectoryFrame {
-  t: number;
-  z?: number | null;
-  rowIndex?: number;
+/** An obs's place in its image (`/api/obs/batch`). */
+interface Spatial {
+  x: number;
+  y: number;
+  fov?: string;
+  t?: number;
+  z?: number;
+  dataset?: string;
 }
 
-/** Stable query key for a single obs coordinate lookup. */
-export const obsCoordKey = (value: RowIndex) => ["obs-coord", value] as const;
+type Waiter = { resolve(spatial: Spatial | undefined): void; reject(error: unknown): void };
+let queued = new Map<number, Waiter[]>();
 
-/** A rendered crop: data URL + its aspect-preserving pixel dimensions. */
-interface CropResult {
-  url: string;
-  /** Rendered width/height from the `X-Crop-*` headers; 0 if unavailable. */
-  w: number;
-  h: number;
+/** Lookups made within one frame go out as one POST `/api/obs/batch`. */
+function loadSpatial(row: number): Promise<Spatial | undefined> {
+  return new Promise((resolve, reject) => {
+    if (queued.size === 0) setTimeout(flushSpatial, 16);
+    queued.set(row, [...(queued.get(row) ?? []), { resolve, reject }]);
+  });
 }
 
-export interface GalleryCropQueryParams {
-  fovName: string;
-  datasetKey?: string;
-  frame: TrajectoryFrame;
-  channels: readonly ChannelDef[];
-  hash: ChannelHash;
-  enabled: boolean;
-  viewerZ: number;
+async function flushSpatial() {
+  const batch = queued;
+  queued = new Map();
+  try {
+    const response = await fetch("/api/obs/batch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ row_indices: [...batch.keys()] }),
+    });
+    if (!response.ok) throw new Error(`obs/batch failed: ${response.status}`);
+    const data = (await response.json()) as Record<string, Spatial>;
+    for (const [row, waiters] of batch) for (const w of waiters) w.resolve(data[row]);
+  } catch (error) {
+    for (const waiters of batch.values()) for (const w of waiters) w.reject(error);
+  }
 }
 
 /**
@@ -38,74 +48,39 @@ export function resolveCropZ(rowZ: number | null | undefined, viewerZ: number | 
   return Math.round(rowZ ?? viewerZ ?? 0);
 }
 
-/**
- * Fetches a composited WebP crop from POST /api/crop/{fov_path}.
- *
- * x/y are FOV-local pixel coordinates straight from obs (the obsCoordKey cache,
- * else /api/obs/{rowIndex}); z is resolved per-obs with a viewer-Z fallback.
- * Returns a data URL (not a blob URL) so the crop lifecycle is the cache entry's
- * lifecycle: no URL.revokeObjectURL to race against a mounted <img>.
- */
-export function useGalleryCropQuery({
-  fovName,
-  datasetKey,
-  frame,
-  channels,
-  hash,
-  enabled,
-  viewerZ,
-}: GalleryCropQueryParams) {
-  const queryClient = useQueryClient();
+/** Image px either side of the obs at 100% zoom. */
+const BASE_HALF = 150;
 
-  const z = resolveCropZ(frame.z, viewerZ);
+export interface CropQueryParams {
+  row: number;
+  /** Tile edge in CSS px; the crop renders at the next of 128/256/512 device px. */
+  size: number;
+  /** Magnification in percent. */
+  zoom: number;
+  channels: readonly ChannelDef[];
+  hash: ChannelHash;
+  viewerZ: number;
+  enabled: boolean;
+}
 
-  return useQuery<CropResult>({
-    // rowIndex is essential: many cells share (fov, t): a lasso selection
-    // routinely has multiple obs in the same FOV at the same timepoint. Without
-    // the per-obs id they collide on one cache entry and the gallery paints the
-    // first-fetched cell's crop for all of them (it diverges from the viewer).
-    queryKey: ["crop", fovName, frame.t ?? null, z, frame.rowIndex ?? null, hash],
+/** A composited WebP crop around `row` (POST /api/crop/{fov}) as a data URL. */
+export function useCrop({ row, size, zoom, channels, hash, viewerZ, enabled }: CropQueryParams) {
+  const half = Math.max(8, Math.round((BASE_HALF * 100) / zoom));
+  const px = [128, 256, 512].find((p) => p >= size * (globalThis.devicePixelRatio ?? 1)) ?? 512;
+  return useQuery({
+    queryKey: ["crop", row, half, px, viewerZ, hash],
     queryFn: async ({ signal }) => {
-      // Resolve FOV-local pixel coordinates.
-      // Prefer pre-populated cache (from batch prefetch in TrackGallery);
-      // fall back to individual obs fetch if not yet cached.
-      let xPx = 0;
-      let yPx = 0;
-      if (frame.rowIndex != null) {
-        const focusedRowIndex = rowIndex(frame.rowIndex);
-        const cached = queryClient.getQueryData<{ x: number; y: number }>(obsCoordKey(focusedRowIndex));
-        if (cached) {
-          xPx = Math.round(cached.x);
-          yPx = Math.round(cached.y);
-        } else {
-          const obsR = await fetch(`/api/obs/${frame.rowIndex}`, { signal });
-          if (obsR.ok) {
-            const obs = (await obsR.json()) as { x?: number; y?: number };
-            xPx = Math.round(obs.x ?? 0);
-            yPx = Math.round(obs.y ?? 0);
-            // Populate cache so subsequent renders skip the fetch
-            queryClient.setQueryData(obsCoordKey(focusedRowIndex), { x: xPx, y: yPx });
-          }
-        }
-      }
-
+      const spatial = await loadSpatial(row);
+      if (!spatial?.fov) throw new Error(`obs ${row} has no image position`);
       const body = {
-        t: frame.t,
-        z,
-        x: xPx,
-        y: yPx,
-        // half stays at 150 src-pixels (same spatial framing as before so the
-        // cell-in-crop ratio doesn't change). size bumped to 320 so the WebP
-        // is roughly 1:1 with the source region instead of downsampling →
-        // sharp at retina 220–240px CSS cards. Adds maybe 5 KB per crop at
-        // q=78, well within budget.
-        half: 150,
-        size: 320,
-        ...(datasetKey ? { dataset_key: datasetKey } : {}),
-        // Send cIndex explicitly: today it equals array index (1:1 with the
-        // zarr C-axis), but a future channel-reorder UI would let the user
-        // shuffle the array without changing which physical channel each
-        // entry refers to. Server reads the right C-axis slab via cIndex.
+        t: spatial.t ?? 0,
+        z: resolveCropZ(spatial.z, viewerZ),
+        x: Math.round(spatial.x),
+        y: Math.round(spatial.y),
+        half,
+        size: px,
+        ...(spatial.dataset ? { dataset_key: spatial.dataset } : {}),
+        // cIndex is explicit so a reordered channel list still reads the right zarr C slab.
         channels: channels.map((ch, idx) => ({
           cIndex: idx,
           visible: ch.visible,
@@ -115,49 +90,27 @@ export function useGalleryCropQuery({
           blend: ch.blendMode,
         })),
       };
-
-      const res = await fetch(`/api/crop/${fovName}`, {
+      const res = await fetch(`/api/crop/${spatial.fov}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
         signal,
       });
-
-      if (!res.ok) {
-        const detail = await res.json().catch(() => null);
-        console.error(`[useGalleryCropQuery] crop failed ${res.status}:`, detail, "body sent:", body);
-        throw new Error(`crop fetch failed: ${res.status}`);
-      }
-
-      // Rendered dims from the server (aspect-preserving): lets masonry size
-      // each tile before the image decodes. 0 if the header is missing.
-      const w = Number(res.headers.get("X-Crop-Width")) || 0;
-      const h = Number(res.headers.get("X-Crop-Height")) || 0;
-
-      // Data URL, NOT a blob URL: the crop string lives and dies with the
-      // React Query cache entry, so there is no URL.revokeObjectURL lifecycle to
-      // get wrong. Blob URLs broke here: a revoke fired (gallery unmount, or a
-      // gcTime eviction while `keepPreviousData` was still painting the old URL)
-      // on a string a mounted <img> was still showing, leaving a broken image.
-      // Crops are small (~5–15 KB webp) and the gallery is virtualized (only the
-      // visible + overscan cards hold a query), so base64 in cache is cheap.
+      if (!res.ok) throw new Error(`crop fetch failed: ${res.status}`);
+      // A data URL lives and dies with its cache entry: no blob-URL revocation to race a mounted <img>.
       const blob = await res.blob();
-      if (signal.aborted) throw new DOMException("Aborted before decode", "AbortError");
-      const dataUrl = await new Promise<string>((resolve, reject) => {
+      return await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.addEventListener("load", () => resolve(reader.result as string), { once: true });
         reader.addEventListener("error", () => reject(reader.error ?? new Error("crop decode failed")), { once: true });
         reader.readAsDataURL(blob);
       });
-      return { url: dataUrl, w, h };
     },
     enabled,
-    staleTime: Infinity, // same (fov, t, hash) always produces same image
-    // Brief grace period before eviction so a card swapping back to a recent
-    // (fov, t, hash) hits the cache. Data URLs need no revocation, so this is
-    // now purely a cache-retention knob (kept small to bound memory).
+    staleTime: Infinity,
+    // Short retention: the gallery is virtualized, so only visible tiles hold a crop.
     gcTime: 1000,
-    // Hold the prior crop while a new (fov, t, hash) query is fetching.
+    // Hold the last crop while a zoom or channel change refetches.
     placeholderData: keepPreviousData,
   });
 }

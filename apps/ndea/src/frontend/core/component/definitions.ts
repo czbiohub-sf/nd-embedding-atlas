@@ -64,7 +64,10 @@ const services: ComponentServices = {
   gallery: {
     useServices: () => {
       const { state } = useDatasetSession();
-      return { dataset: { metadata: state.metadata, ...useViewerSlots() } };
+      return {
+        dataset: { metadata: state.metadata, ...useViewerSlots() },
+        color: { categorize: makeCategoryColumn, getCategoricalPalette, pickDefaultCategoricalPalette },
+      };
     },
   },
   imageViewer: {

@@ -1,9 +1,8 @@
 import type { Coordinator } from "@uwdata/mosaic-core";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo, useState, useSyncExternalStore } from "react";
-import { quoteIdent } from "@ndea/protocol";
+import { categoryMappingQuery } from "../../../query/category-mapping";
 import { useColumns } from "../../../query/columns";
-import { toRows } from "../../../query/mosaic";
 import { useScatterHost, useScatterServices } from "../../context";
 import type { CategoryMapping, ColorMode } from "../../contracts";
 import { colorSourceFromString, colorSourceToString, resolveColorMode } from "../../helpers";
@@ -96,23 +95,12 @@ export function useScatterColorState(coordinator: Coordinator): ScatterColorStat
   const palette = services.getCategoricalPalette(categoricalColormap, maxCategories);
 
   // ── Category column mapping ─────────────────────────────────────────────────
-  // useQuery handles cancellation on unmount + cross-panel dedup (two panels
-  // coloring by the same column share one DuckDB materialization). Coordinator
-  // identity in the key drops stale mappings on backend restart.
+  // useQuery handles cancellation on unmount + cross-view dedup (the gallery's
+  // color strip and other scatters coloring by the same column share one
+  // DuckDB materialization).
   const categoryQuery = useQuery({
-    queryKey: ["category-mapping", colorByColumn, colorMode] as const,
+    ...categoryMappingQuery(coordinator, colorByColumn, services.categorize),
     enabled: !!colorByColumn && colorMode === "categorical",
-    staleTime: Infinity,
-    gcTime: 0,
-    queryFn: async () => {
-      const col = colorByColumn as string;
-      const countResult = await coordinator.query(
-        `SELECT COUNT(DISTINCT CAST(${quoteIdent(col)} AS TEXT))::INT AS n FROM obs_base`,
-      );
-      const n = Math.min(toRows<{ n: number }>(countResult)[0]?.n ?? 64, 256);
-      const mapping = await services.categorize(col, n);
-      return { n, mapping };
-    },
   });
 
   const categoryMapping = categoryQuery.data?.mapping ?? null;

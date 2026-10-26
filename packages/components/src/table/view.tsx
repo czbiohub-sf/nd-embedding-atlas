@@ -1,13 +1,12 @@
 /**
- * Table body: the obs as rows, one column per field. Owns the field list
- * (obs from the file plus annotation fields), the unsaved edit buffer, the
- * filter builder (typed clauses on the `filter` facet), the row selection (an
- * observation set on the `selection` facet: peers narrow, this table never
- * filters itself by it), sort (`ordering`), group, and the Fields config.
+ * Table body: the obs as rows, one column per field. The shared obs engine
+ * (`useObsView`) owns fields, search, filter, sort, groups, selection and
+ * focus; the table adds the unsaved edit buffer, field operations, column
+ * widths and the Fields config.
  */
 
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
-import { type AnnotationDtype, type CommitAnnotationsResponse, quoteIdent } from "@ndea/protocol";
+import { useCallback, useMemo, useState } from "react";
+import type { AnnotationDtype, CommitAnnotationsResponse } from "@ndea/protocol";
 import { rowIndex as toRowIndex } from "@ndea/sdk";
 import { Button } from "@ndea/ui/components/button";
 import {
@@ -19,96 +18,21 @@ import {
   DialogTitle,
 } from "@ndea/ui/components/dialog";
 import type { BodyProps } from "../contracts";
-import { filterClauseSql } from "../filter/sql";
-import { useColumns } from "../query/columns";
-import { toRows } from "../query/mosaic";
-import { useFocus } from "../query/useFocus";
 import type { TableConfig } from "./contracts";
 import { DataTable, type Edits, type Provenance, type TableActions } from "./DataTable";
-import {
-  andSql,
-  clauseConditions,
-  type Condition,
-  conditionsClause,
-  countBits,
-  emptyBits,
-  fieldType,
-  GroupLayout,
-  hasBit,
-  isStringField,
-  orderBySql,
-  searchSql,
-  type SortState,
-  type TableField,
-  withBits,
-} from "./fields";
+import { GroupLayout, type TableField } from "./fields";
 import { useProvenanceBadges } from "./provenance";
-import { CommitDialog, Toolbar } from "./Toolbar";
-import { useTableQuery } from "./useTableQuery";
-
-const errorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error));
+import { CommitDialog, EditControls, Toolbar } from "./Toolbar";
+import { errorMessage, useObsView } from "./useObsView";
 
 /** `list` with `from` renamed to `to` (dropped when `to` is null). */
 const renameIn = (list: string[] | null, from: string, to: string | null) =>
   list?.flatMap((n) => (n === from ? (to === null ? [] : [to]) : [n])) ?? null;
 
-/** The column catalog minus var columns: obs from the file read-only, annotation fields editable. */
-function useFields(host: BodyProps<TableConfig>["host"], version: number) {
-  const { coordinator, table } = host.data;
-  const columns = useColumns();
-  const [fields, setFields] = useState<TableField[] | null>(null);
-  const [rows, setRows] = useState(0);
-  // Distinct counts never change for obs from the file: query each column once.
-  const distinct = useRef(new Map<string, number>());
-  useEffect(() => {
-    if (!columns) return;
-    let live = true;
-    void (async () => {
-      // `version` is the refetch trigger after a field write.
-      void version;
-      const run = async (sql: string) => toRows(await coordinator.query(sql, { cache: false }));
-      const [annotations, counted] = await Promise.all([
-        host.dataAPI.listFields(),
-        run(`SELECT count(*) AS n FROM ${table}`),
-      ]);
-      const dtypes = new Map(annotations.map((a) => [a.name, a.dtype]));
-      const listed = [...columns.values()].filter((c) => c.kind !== "var");
-      const unknown = listed
-        .filter((c) => c.kind === "obs" && c.type === "string" && !distinct.current.has(c.name))
-        .map((c) => c.name);
-      if (unknown.length) {
-        const [row] = await run(
-          `SELECT ${unknown.map((n, i) => `approx_count_distinct(${quoteIdent(n)}) AS c${i}`).join(", ")} FROM ${table}`,
-        );
-        unknown.forEach((n, i) => distinct.current.set(n, Number(row[`c${i}`])));
-      }
-      if (!live) return;
-      setRows(Number(counted[0]?.n ?? 0));
-      setFields(
-        listed.flatMap(({ name, type, kind }): TableField[] => {
-          if (kind === "obs")
-            return [{ name, type: fieldType(type, distinct.current.get(name), null), annotation: null }];
-          const dtype = dtypes.get(name);
-          return dtype ? [{ name, type: fieldType("string", undefined, dtype), annotation: dtype }] : [];
-        }),
-      );
-    })().catch((error) => host.notifications.notify(`Table fields failed: ${errorMessage(error)}`, "error"));
-    return () => {
-      live = false;
-    };
-  }, [host, coordinator, table, columns, version]);
-  return { fields, rows };
-}
-
 export function TableView({ host }: BodyProps<TableConfig>) {
-  const { coordinator, table } = host.data;
-  const focused = useFocus(host);
   const showProvenance = useProvenanceBadges();
-  const [version, refresh] = useReducer((n: number) => n + 1, 0);
-  const { fields, rows: nObs } = useFields(host, version);
-  const byName = useMemo(() => new Map((fields ?? []).map((f) => [f.name, f])), [fields]);
 
-  // ── Config: visible fields and grouping ─────────────────────────────
+  // ── Config: visible fields, grouping, widths ────────────────────────
   const [config, setConfig] = useState<TableConfig>(host.config);
   const patch = useCallback(
     (next: Partial<TableConfig>) => {
@@ -117,72 +41,30 @@ export function TableView({ host }: BodyProps<TableConfig>) {
     },
     [host],
   );
-  const visibleFields = useMemo(() => {
-    const listed = (config.columns ?? []).flatMap((n) => byName.get(n) ?? []);
-    return listed.length ? listed : (fields ?? []);
-  }, [config.columns, byName, fields]);
-  const groupBy = config.groupBy && byName.has(config.groupBy) ? config.groupBy : null;
-  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
-
-  // ── Sort ⇄ the `ordering` link (echo-guarded) ───────────────────────
-  const [sort, setSortState] = useState<SortState | null>(() => host.ordering.get());
-  useEffect(
-    () =>
-      host.ordering.subscribe?.((cell) =>
-        setSortState((prev) => (prev?.col === cell?.col && prev?.dir === cell?.dir ? prev : cell)),
-      ),
-    [host],
-  );
-  const setSort = useCallback(
-    (next: SortState | null) => {
-      setSortState(next);
-      host.ordering.set(next);
-    },
-    [host],
-  );
-  const activeSort = sort && byName.has(sort.col) ? sort : null;
-
-  // ── Filter builder → typed clauses on the `filter` facet ────────────
-  const [conditions, setConditionsState] = useState<Condition[]>(() => clauseConditions(host.filter.facet("filter")));
-  const typeOf = useCallback((column: string) => byName.get(column)?.type, [byName]);
-  const ownClause = useMemo(() => (fields ? conditionsClause(conditions, typeOf) : null), [fields, conditions, typeOf]);
-  const published = useRef(JSON.stringify(host.filter.facet("filter") ?? null));
-  useEffect(() => {
-    if (!fields) return;
-    const next = JSON.stringify(ownClause);
-    if (next === published.current) return;
-    published.current = next;
-    if (ownClause) host.filter.publish("filter", ownClause);
-    else host.filter.clear("filter");
-  }, [host, fields, ownClause]);
-
-  // ── What the table shows ────────────────────────────────────────────
-  const [peers, setPeers] = useState(() => host.filter.getResolved().predicate);
-  useEffect(() => host.filter.subscribeResolved((f) => setPeers(f.predicate)), [host]);
-  const [search, setSearch] = useState("");
-  const searched = useMemo(
-    () =>
-      searchSql(
-        search,
-        (fields ?? []).filter((f) => isStringField(f.type)).map((f) => f.name),
-      ),
-    [search, fields],
-  );
-  const where = andSql([peers, ownClause ? filterClauseSql(ownClause) : null, searched]);
-  const visibleNames = useMemo(() => visibleFields.map((f) => f.name), [visibleFields]);
-  const query = useTableQuery({
-    coordinator,
-    table,
-    columns: visibleNames,
-    where,
-    order: orderBySql(activeSort, groupBy),
-    groupBy,
-    version,
-  });
+  const view = useObsView(host, { columns: config.columns, emptyShowsAll: true, groupBy: config.groupBy });
+  const {
+    fields,
+    query,
+    visibleFields,
+    visibleNames,
+    collapsed,
+    sort: activeSort,
+    setSort,
+    selection,
+    selected,
+  } = view;
+  const { groupBy } = view;
   const layout = useMemo(
-    () => (groupBy && query.groups ? new GroupLayout(query.groups, collapsed) : null),
-    [groupBy, query.groups, collapsed],
+    () => (groupBy.length && query.groups ? new GroupLayout(query.groups, collapsed) : null),
+    [groupBy.length, query.groups, collapsed],
   );
+  // One index per request (state set while rendering): a later layout change must not re-reveal.
+  const [reveal, setReveal] = useState<{ request: object; index: number } | null>(null);
+  if (view.reveal && view.reveal !== reveal?.request)
+    setReveal({
+      request: view.reveal,
+      index: layout ? layout.indexOf(view.reveal.position) : view.reveal.position,
+    });
 
   // ── Unsaved edits ───────────────────────────────────────────────────
   const [edits, setEdits] = useState<Edits>(new Map());
@@ -197,71 +79,13 @@ export function TableView({ host }: BodyProps<TableConfig>) {
         setEdits((prev) => new Map([...prev].filter(([f]) => f !== field)));
       }
       host.notifications.notify(`Saved ${editCount.toLocaleString("en-US")} ${editCount === 1 ? "edit" : "edits"}`);
-      refresh();
+      view.refresh();
     } catch (error) {
       host.notifications.notify(`Save failed: ${errorMessage(error)}`, "error");
     } finally {
       setSaving(false);
     }
   };
-
-  // ── Selection → observation set on the `selection` facet ────────────
-  const [selection, setSelection] = useState<Uint32Array<ArrayBuffer> | null>(null);
-  const selected = useMemo(() => (selection ? countBits(selection) : 0), [selection]);
-  const anchor = useRef<number | null>(null);
-  /** Bumped by every selection; the reload restore below yields to any. */
-  const selectionRun = useRef(0);
-  /** The latest selection still on its way; the next one aborts it. */
-  const pendingSelection = useRef<AbortController | null>(null);
-  const select = useCallback(
-    async (bits: Uint32Array<ArrayBuffer>) => {
-      selectionRun.current += 1;
-      const empty = countBits(bits) === 0;
-      setSelection(empty ? null : bits);
-      pendingSelection.current?.abort();
-      const pending = new AbortController();
-      pendingSelection.current = pending;
-      try {
-        await host.filter.publishSelection("selection", empty ? null : bits, nObs, pending.signal);
-      } catch (error) {
-        if (!host.signal.aborted && !pending.signal.aborted)
-          host.notifications.notify(`Selection failed: ${errorMessage(error)}`, "error");
-      }
-    },
-    [host, nObs],
-  );
-  // A selection published before a reload comes back from its set.
-  useEffect(() => {
-    const own = host.filter.facet("selection");
-    if (!nObs || own?.op !== "inSet") return;
-    void coordinator
-      .query(`SELECT __row_index__ FROM ${table} WHERE ${filterClauseSql(own)}`, { cache: false })
-      .then((rows) => {
-        if (selectionRun.current === 0)
-          setSelection(
-            withBits(
-              emptyBits(nObs),
-              toRows(rows).map((r) => Number(r.__row_index__)),
-              true,
-            ),
-          );
-      });
-  }, [host, coordinator, table, nObs]);
-
-  // ── Focus: reveal the focused row ───────────────────────────────────
-  const [reveal, setReveal] = useState<{ readonly index: number } | null>(null);
-  const ownFocus = useRef<number | null>(null);
-  const { positionOf } = query;
-  useEffect(() => {
-    if (focused === null || focused === ownFocus.current) return;
-    let live = true;
-    void positionOf(focused).then((position) => {
-      if (live && position !== null) setReveal({ index: layout ? layout.indexOf(position) : position });
-    });
-    return () => {
-      live = false;
-    };
-  }, [focused, positionOf, layout]);
 
   // ── Field operations (applied on the server at once) ────────────────
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -272,17 +96,22 @@ export function TableView({ host }: BodyProps<TableConfig>) {
   const fieldOp = async (run: () => Promise<void>, failure: string) => {
     try {
       await run();
-      refresh();
+      view.refresh();
     } catch (error) {
       host.notifications.notify(`${failure}: ${errorMessage(error)}`, "error");
     }
   };
 
+  const values = async (field: string) => {
+    const pending = [...(edits.get(field)?.values() ?? [])].filter((v): v is string => v !== null);
+    return [...new Set([...(await view.values(field)), ...pending])].toSorted();
+  };
+
   const actions: TableActions = {
     sort: setSort,
-    group: (field) => {
-      setCollapsed(new Set());
-      patch({ groupBy: field });
+    group: (next) => {
+      view.setCollapsed(new Set());
+      patch({ groupBy: next });
     },
     hide: (field) => {
       const next = visibleNames.filter((n) => n !== field);
@@ -298,13 +127,13 @@ export function TableView({ host }: BodyProps<TableConfig>) {
         await host.dataAPI.updateField(from, { name: to });
         setEdits((prev) => new Map([...prev].map(([f, cells]) => [f === from ? to : f, cells])));
         if (config.columns) patch({ columns: renameIn(config.columns, from, to) });
-        if (groupBy === from) patch({ groupBy: to });
+        if (groupBy.includes(from)) patch({ groupBy: renameIn(groupBy, from, to) ?? [] });
         if (from in config.widths) {
           const { [from]: width, ...rest } = config.widths;
           patch({ widths: { ...rest, [to]: width } });
         }
         if (activeSort?.col === from) setSort({ ...activeSort, col: to });
-        setConditionsState((cs) => cs.map((c) => (c.column === from ? { ...c, column: to } : c)));
+        view.setConditions((cs) => cs.map((c) => (c.column === from ? { ...c, column: to } : c)));
       }, `Renaming ${from} failed`),
     convertField: (name, dtype: AnnotationDtype) =>
       void fieldOp(() => host.dataAPI.updateField(name, { dtype }), `Converting ${name} failed`),
@@ -313,16 +142,7 @@ export function TableView({ host }: BodyProps<TableConfig>) {
       const { [name]: _old, ...rest } = config.widths;
       patch({ widths: px === null ? rest : { ...rest, [name]: px } });
     },
-    values: async (field) => {
-      const saved = toRows(
-        await coordinator.query(
-          `SELECT DISTINCT ${quoteIdent(field)} AS v FROM ${table} WHERE ${quoteIdent(field)} IS NOT NULL ORDER BY 1 LIMIT 500`,
-          { cache: false },
-        ),
-      ).map((r) => String(r.v));
-      const pending = [...(edits.get(field)?.values() ?? [])].filter((v): v is string => v !== null);
-      return [...new Set([...saved, ...pending])].toSorted();
-    },
+    values,
     edit: (field, row, value, saved) =>
       setEdits((prev) => {
         const cells = new Map(prev.get(field));
@@ -333,35 +153,10 @@ export function TableView({ host }: BodyProps<TableConfig>) {
         else next.delete(field);
         return next;
       }),
-    clickRow: (position, row, event) => {
-      const base = selection ?? emptyBits(nObs);
-      if (event.shiftKey && anchor.current !== null) {
-        const from = Math.min(anchor.current, position);
-        void query
-          .rowIndices(from, Math.abs(position - anchor.current) + 1)
-          .then((rows) => select(withBits(base, rows, true)));
-      } else if (event.metaKey || event.ctrlKey) {
-        void select(withBits(base, [row], !hasBit(base, row)));
-      } else {
-        ownFocus.current = row;
-        host.focus.set(toRowIndex(row));
-      }
-      anchor.current = position;
-    },
-    toggleRow: (row) => {
-      const base = selection ?? emptyBits(nObs);
-      void select(withBits(base, [row], !hasBit(base, row)));
-    },
-    toggleAll: () => {
-      if (selected > 0) return void select(emptyBits(nObs));
-      void query.rowIndices().then((rows) => select(withBits(emptyBits(nObs), rows, true)));
-    },
-    toggleGroup: (key) =>
-      setCollapsed((prev) => {
-        const next = new Set(prev);
-        if (!next.delete(key)) next.add(key);
-        return next;
-      }),
+    clickRow: view.clickRow,
+    toggleRow: view.toggleRow,
+    toggleAll: view.toggleAll,
+    toggleGroup: view.toggleGroup,
   };
 
   const provenance = (field: TableField): Provenance =>
@@ -369,44 +164,39 @@ export function TableView({ host }: BodyProps<TableConfig>) {
 
   if (!fields) return <div className="h-full w-full bg-surface" />;
   const fieldNames = fields.filter((f) => f.annotation).map((f) => f.name);
+  const hidden = fields.length - visibleNames.length;
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden bg-surface text-ui">
       <Toolbar
-        fields={fields}
-        visible={visibleNames}
-        search={search}
-        onSearch={setSearch}
-        conditions={conditions}
-        onConditions={setConditionsState}
-        sort={activeSort}
-        onSort={setSort}
-        groupBy={groupBy}
+        view={view}
+        values={values}
         onGroup={actions.group}
-        onColumns={(next) => patch({ columns: next })}
-        values={actions.values}
-        count={query.count}
-        selected={selected}
-        onClearSelection={() => void select(emptyBits(nObs))}
-        edits={editCount}
-        saving={saving}
-        onSave={() => void save()}
-        onDiscard={() => setEdits(new Map())}
-        canWrite={fieldNames.length > 0}
-        onWrite={() =>
-          void host.dataAPI.commitFields({ dryRun: true, columns: fieldNames }).then(
-            (report) => setCommit({ report, writing: false }),
-            (error) => host.notifications.notify(`Dry run failed: ${errorMessage(error)}`, "error"),
-          )
-        }
-      />
+        fieldsLabel={hidden > 0 ? `${hidden} hidden` : "Fields"}
+        fieldsActive={hidden > 0}
+        onColumns={(next) => next?.length !== 0 && patch({ columns: next })}
+      >
+        <EditControls
+          edits={editCount}
+          saving={saving}
+          onSave={() => void save()}
+          onDiscard={() => setEdits(new Map())}
+          canWrite={fieldNames.length > 0}
+          onWrite={() =>
+            void host.dataAPI.commitFields({ dryRun: true, columns: fieldNames }).then(
+              (report) => setCommit({ report, writing: false }),
+              (error) => host.notifications.notify(`Dry run failed: ${errorMessage(error)}`, "error"),
+            )
+          }
+        />
+      </Toolbar>
       <DataTable
         fields={visibleFields}
         query={query}
         layout={layout}
         sort={activeSort}
         groupBy={groupBy}
-        focused={focused === null ? null : Number(focused)}
+        focused={view.focused}
         reveal={reveal}
         selection={selection}
         selected={selected}
@@ -457,9 +247,9 @@ export function TableView({ host }: BodyProps<TableConfig>) {
                   await host.dataAPI.deleteField(name);
                   setEdits((prev) => new Map([...prev].filter(([f]) => f !== name)));
                   if (config.columns) patch({ columns: renameIn(config.columns, name, null) });
-                  if (groupBy === name) patch({ groupBy: null });
+                  if (groupBy.includes(name)) patch({ groupBy: renameIn(groupBy, name, null) ?? [] });
                   if (activeSort?.col === name) setSort(null);
-                  setConditionsState((cs) => cs.filter((c) => c.column !== name));
+                  view.setConditions((cs) => cs.filter((c) => c.column !== name));
                 }, `Deleting ${name} failed`);
               }}
             >

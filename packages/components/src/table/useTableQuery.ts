@@ -25,7 +25,8 @@ export interface TableQueryOptions {
   readonly where: string | null;
   /** ORDER BY body (`orderBySql`). */
   readonly order: string;
-  readonly groupBy: string | null;
+  /** Group fields, outermost first; empty lists rows flat. */
+  readonly groupBy: readonly string[];
   /** Bump to refetch after a write. */
   readonly version: number;
 }
@@ -55,7 +56,9 @@ export function useTableQuery({
   version,
 }: TableQueryOptions): TableQuery {
   const whereSql = where ? ` WHERE ${where}` : "";
-  const key = [version, whereSql, order, groupBy, columns.join("\u0000")].join("\n");
+  // A string, so a fresh array with the same fields is the same query.
+  const groupNames = groupBy.join("\u0000");
+  const key = [version, whereSql, order, groupNames, columns.join("\u0000")].join("\n");
   const run = useCallback(async (sql: string) => toRows(await coordinator.query(sql, { cache: false })), [coordinator]);
 
   const [summary, setSummary] = useState<{ key: string; count: number; groups: Group[] | null } | null>(null);
@@ -69,18 +72,26 @@ export function useTableQuery({
     // Debounced so typing a search or dragging a lasso elsewhere queries once.
     const timer = setTimeout(async () => {
       try {
-        const g = groupBy ? quoteIdent(groupBy) : null;
+        const names = groupNames ? groupNames.split("\u0000") : [];
+        const cols = names.map(quoteIdent).join(", ");
         const [counted, grouped] = await Promise.all([
           run(`SELECT count(*) AS n FROM ${table}${whereSql}`),
-          g
-            ? run(`SELECT ${g} AS v, count(*) AS n FROM ${table}${whereSql} GROUP BY 1 ORDER BY 1 ASC NULLS LAST`)
+          names.length
+            ? run(
+                `SELECT ${cols}, count(*) AS __n FROM ${table}${whereSql} GROUP BY ${cols} ` +
+                  `ORDER BY ${names.map((n) => `${quoteIdent(n)} ASC NULLS LAST`).join(", ")}`,
+              )
             : null,
         ]);
         if (!live) return;
         setSummary({
           key,
           count: Number(counted[0]?.n ?? 0),
-          groups: grouped?.map((r) => ({ value: (r.v ?? null) as GroupValue, count: Number(r.n) })) ?? null,
+          groups:
+            grouped?.map((r) => ({
+              values: names.map((n) => (r[n] ?? null) as GroupValue),
+              count: Number(r.__n),
+            })) ?? null,
         });
       } catch (error) {
         if (live) console.error("[table] count failed", error);
@@ -90,7 +101,7 @@ export function useTableQuery({
       live = false;
       clearTimeout(timer);
     };
-  }, [key, run, table, whereSql, groupBy]);
+  }, [key, run, table, whereSql, groupNames]);
 
   const ready = summary?.key === key;
   const columnList = columns.map(quoteIdent).join(", ");
@@ -144,7 +155,7 @@ export function useTableQuery({
 
   return {
     count: summary?.count ?? null,
-    groups: groupBy ? (summary?.groups ?? null) : null,
+    groups: groupNames ? (summary?.groups ?? null) : null,
     getRow: (position) => pages.rows.get(Math.floor(position / PAGE_SIZE))?.[position % PAGE_SIZE],
     ensureRange,
     positionOf,

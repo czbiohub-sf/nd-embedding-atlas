@@ -42,8 +42,17 @@ export function fieldType(
 /** Fields whose values are strings: search covers these. */
 export const isStringField = (type: FieldType) => type === "text" || type === "category" || type === "label";
 
-/** Fields rows can be grouped by. */
-export const isGroupable = (type: FieldType) => type === "category" || type === "label" || type === "boolean";
+/** Fields obs can be grouped by: every type but free text. */
+export const isGroupable = (type: FieldType) => type !== "text";
+
+/** A cell value as the table and gallery print it. */
+export function formatValue(value: unknown): string {
+  if (value == null) return "";
+  if (typeof value === "number") return value.toLocaleString("en-US", { maximumFractionDigits: 3 });
+  if (typeof value === "bigint") return value.toLocaleString("en-US");
+  if (value instanceof Date) return value.toISOString();
+  return typeof value === "object" ? JSON.stringify(value) : String(value as string | boolean);
+}
 
 // ── Filter builder ──────────────────────────────────────────────────
 
@@ -89,10 +98,14 @@ function conditionClause(condition: Condition, type: FieldType): FilterClause | 
   return { op, column, value: type === "boolean" ? value === "true" : value };
 }
 
-/** AND of the complete conditions: null when none, the clause itself when one. */
+/** How the builder joins its conditions: every one (and) or any one (or). */
+export type Conjunction = "and" | "or";
+
+/** The conditions joined by `conjunction`: null when none is complete, the clause itself when one is. */
 export function conditionsClause(
   conditions: readonly Condition[],
   typeOf: (column: string) => FieldType | undefined,
+  conjunction: Conjunction = "and",
 ): FilterClause | null {
   const clauses = conditions.flatMap((c) => {
     const type = typeOf(c.column);
@@ -100,15 +113,21 @@ export function conditionsClause(
     return clause ? [clause] : [];
   });
   if (clauses.length === 0) return null;
-  return clauses.length === 1 ? clauses[0] : { op: "and", clauses };
+  return clauses.length === 1 ? clauses[0] : { op: conjunction, clauses };
 }
+
+/** The conjunction of a published clause. */
+export const clauseConjunction = (clause: FilterClause | undefined): Conjunction =>
+  clause?.op === "or" ? "or" : "and";
 
 /** Back from a published clause to builder rows; shapes the builder can't show are dropped. */
 export function clauseConditions(clause: FilterClause | undefined): Condition[] {
   if (!clause) return [];
+  return clause.op === "and" || clause.op === "or" ? clause.clauses.flatMap(leafCondition) : leafCondition(clause);
+}
+
+function leafCondition(clause: FilterClause): Condition[] {
   switch (clause.op) {
-    case "and":
-      return clause.clauses.flatMap(clauseConditions);
     case "isNull":
     case "isNotNull":
       return [{ column: clause.column, op: clause.op, value: "" }];
@@ -131,10 +150,10 @@ export interface SortState {
   readonly dir: "asc" | "desc";
 }
 
-/** ORDER BY body: group, then sort, then the stable row order. */
-export function orderBySql(sort: SortState | null, groupBy: string | null): string {
+/** ORDER BY body: the group fields, then sort, then the stable row order. */
+export function orderBySql(sort: SortState | null, groupBy: readonly string[]): string {
   const keys = [
-    groupBy ? `${quoteIdent(groupBy)} ASC NULLS LAST` : null,
+    ...groupBy.map((g) => `${quoteIdent(g)} ASC NULLS LAST`),
     sort ? `${quoteIdent(sort.col)} ${sort.dir === "desc" ? "DESC" : "ASC"} NULLS LAST` : null,
     "__row_index__",
   ];
@@ -160,42 +179,91 @@ export function andSql(predicates: readonly (string | null)[]): string | null {
 export type GroupValue = string | number | boolean | null;
 
 export interface Group {
-  readonly value: GroupValue;
+  /** One value per group field, in `groupBy` order. */
+  readonly values: readonly GroupValue[];
   readonly count: number;
 }
 
-export const groupKey = (value: GroupValue) => (value === null ? "\u0000null" : String(value));
+export const groupKey = (values: readonly GroupValue[]) => JSON.stringify(values);
 
-/** A virtual list item: a group header, or the row at `position` in the query's order. */
-export type TableItem = { kind: "group"; group: Group; collapsed: boolean } | { kind: "row"; position: number };
+/** A group's values as its header prints them: `a · b`, empty for null. */
+export const groupLabel = (values: readonly GroupValue[]) =>
+  values.map((v) => (v === null ? "empty" : formatValue(v))).join(" · ");
 
 /**
- * Lays groups out as `header, rows…` (rows only when expanded) over the flat
- * row order, which is sorted by the group first, so group `g`'s rows are the
- * positions `offset[g] … offset[g] + count - 1`.
+ * A virtual list item: the header of a group level (its values are the
+ * prefix up to `level`, its count every obs under it), or `count` rows from
+ * `position` in the query's order, all in the innermost `group`.
+ */
+export type TableItem =
+  | { kind: "group"; group: Group; level: number; collapsed: boolean }
+  | { kind: "row"; position: number; count: number; group: Group | null };
+
+type Entry =
+  | { start: number; kind: "group"; group: Group; level: number; collapsed: boolean }
+  | { start: number; kind: "lines"; offset: number; group: Group };
+
+/**
+ * Lays nested groups out like Airtable: a header whenever a level's value
+ * changes (`a`, then `a · x`, `a · y`, then `b`, `b · x`), then the lines of
+ * each innermost group, over the flat row order (sorted by the group fields
+ * first, so innermost group `g`'s rows are `offset[g] … offset[g] + count - 1`).
+ * A collapsed header hides everything under it. A line holds `perLine` rows:
+ * one in the table, a row of tiles in the gallery grid; `Infinity` puts each
+ * innermost group on one line (a gallery strip) and drops its own header.
  */
 export class GroupLayout {
   readonly length: number;
+  private readonly entries: Entry[] = [];
   private readonly starts: number[] = [];
+  /** Per innermost group: its first row's position, and the virtual index that shows it. */
   private readonly offsets: number[] = [];
-  private readonly groups: readonly Group[];
-  private readonly collapsed: ReadonlySet<string>;
+  private readonly shownAt: number[] = [];
+  private readonly expanded: boolean[] = [];
+  private readonly perLine: number;
 
-  constructor(groups: readonly Group[], collapsed: ReadonlySet<string>) {
-    this.groups = groups;
-    this.collapsed = collapsed;
+  constructor(groups: readonly Group[], collapsed: ReadonlySet<string>, perLine = 1) {
+    this.perLine = perLine;
+    const depth = groups[0]?.values.length ?? 0;
+    const headed = perLine === Infinity ? depth - 1 : depth;
+    const runs: { values: readonly GroupValue[]; count: number }[] = [];
     let start = 0;
     let offset = 0;
-    for (const group of groups) {
-      this.starts.push(start);
+    /** The shallowest collapsed level still open, and its header's index. */
+    let hiddenAt = Infinity;
+    let hiddenIndex = 0;
+    groups.forEach((group, g) => {
+      const previous = groups[g - 1]?.values;
+      let changed = 0;
+      while (previous && changed < depth && previous[changed] === group.values[changed]) changed++;
+      if (changed <= hiddenAt) hiddenAt = Infinity;
+      for (let level = changed; level < headed; level++) {
+        const run = { values: group.values.slice(0, level + 1), count: 0 };
+        runs[level] = run;
+        const isCollapsed = collapsed.has(groupKey(run.values));
+        if (hiddenAt < level) continue;
+        this.entries.push({ start, kind: "group", group: run, level, collapsed: isCollapsed });
+        if (isCollapsed) {
+          hiddenAt = level;
+          hiddenIndex = start;
+        }
+        start += 1;
+      }
+      for (let level = 0; level < headed; level++) runs[level].count += group.count;
       this.offsets.push(offset);
-      start += 1 + (collapsed.has(groupKey(group.value)) ? 0 : group.count);
+      this.expanded.push(hiddenAt === Infinity);
+      if (hiddenAt === Infinity) {
+        this.entries.push({ start, kind: "lines", offset, group });
+        this.shownAt.push(start);
+        start += perLine === Infinity ? 1 : Math.ceil(group.count / perLine);
+      } else this.shownAt.push(hiddenIndex);
       offset += group.count;
-    }
+    });
+    this.starts = this.entries.map((e) => e.start);
     this.length = start;
   }
 
-  /** The group whose span holds `x` in `within` (starts or offsets). */
+  /** The last index in `within` whose value is at or before `x`. */
   private find(within: number[], x: number): number {
     let lo = 0;
     let hi = within.length - 1;
@@ -208,19 +276,22 @@ export class GroupLayout {
   }
 
   item(index: number): TableItem {
-    const g = this.find(this.starts, index);
-    const group = this.groups[g];
-    const local = index - this.starts[g];
-    if (local === 0) return { kind: "group", group, collapsed: this.collapsed.has(groupKey(group.value)) };
-    return { kind: "row", position: this.offsets[g] + local - 1 };
+    const entry = this.entries[this.find(this.starts, index)];
+    if (entry.kind === "group") {
+      const { group, level, collapsed } = entry;
+      return { kind: "group", group, level, collapsed };
+    }
+    const { group } = entry;
+    if (this.perLine === Infinity) return { kind: "row", position: entry.offset, count: group.count, group };
+    const skip = (index - entry.start) * this.perLine;
+    return { kind: "row", position: entry.offset + skip, count: Math.min(this.perLine, group.count - skip), group };
   }
 
-  /** Virtual index of row `position`: its header when the group is collapsed. */
+  /** Virtual index of row `position`: the collapsed header above it when it is hidden. */
   indexOf(position: number): number {
     const g = this.find(this.offsets, position);
-    const group = this.groups[g];
-    if (this.collapsed.has(groupKey(group.value))) return this.starts[g];
-    return this.starts[g] + 1 + position - this.offsets[g];
+    if (!this.expanded[g] || this.perLine === Infinity) return this.shownAt[g];
+    return this.shownAt[g] + Math.floor((position - this.offsets[g]) / this.perLine);
   }
 }
 

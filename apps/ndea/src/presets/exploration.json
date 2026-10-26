@@ -21,7 +21,8 @@
             "props": {
               "title": "Embedding",
               "filter": { "$bindState": "/filter/A" },
-              "focus": { "$bindState": "/focus/A" }
+              "focus": { "$bindState": "/focus/A" },
+              "colorBy": { "$bindState": "/colorBy/A" }
             },
             "children": []
           },
@@ -40,7 +41,8 @@
             "props": {
               "title": "Crop gallery",
               "filter": { "$bindState": "/filter/A" },
-              "focus": { "$bindState": "/focus/A" }
+              "focus": { "$bindState": "/focus/A" },
+              "colorBy": { "$bindState": "/colorBy/A" }
             },
             "children": []
           },
@@ -109,5 +111,5 @@
     }
   },
   "layout": "exploration",
-  "state": { "filter": { "A": {} }, "focus": { "A": null } }
+  "state": { "filter": { "A": {} }, "focus": { "A": null }, "colorBy": { "A": null } }
 }

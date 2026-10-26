@@ -1,8 +1,9 @@
 /**
- * The table toolbar: search, the `Filter │ Sort │ Group │ Fields` group,
- * the selection, Save / Discard while edits are unsaved, the field menu
- * ("Write fields to file…") and the obs count. Every pop-up uses the
- * standard frame.
+ * The toolbar the table and the gallery share: search, the
+ * `Filter │ Sort │ Group │ Fields` group, the selection, the view's own
+ * controls (`children`) and the obs count. The table's Save / Discard and
+ * "Write fields to file…" are `EditControls`. Every pop-up uses the standard
+ * frame.
  */
 
 import { ArrowDownIcon, ArrowUpIcon, CheckIcon, EllipsisIcon, GripVerticalIcon, XIcon } from "lucide-react";
@@ -37,7 +38,16 @@ import {
 } from "@ndea/ui/components/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@ndea/ui/components/select";
 import { cn } from "@ndea/ui/lib/utils";
-import { type Condition, CONDITION_OPS, FIELD_GLYPH, isGroupable, type SortState, type TableField } from "./fields";
+import {
+  type Condition,
+  CONDITION_OPS,
+  type Conjunction,
+  FIELD_GLYPH,
+  isGroupable,
+  type SortState,
+  type TableField,
+} from "./fields";
+import type { ObsView } from "./useObsView";
 
 const obs = (n: number) => `${n.toLocaleString("en-US")} obs`;
 const menuRow = cn(popoverRow, "w-full text-left hover:bg-muted");
@@ -62,14 +72,15 @@ function Tool({ label, active, children }: { label: string; active: boolean; chi
 
 function ConditionRow({
   condition,
-  first,
+  lead,
   fields,
   values,
   onChange,
   onRemove,
 }: {
   condition: Condition;
-  first: boolean;
+  /** "where" on the first row, the conjunction on the rest. */
+  lead: ReactNode;
   fields: readonly TableField[];
   values: (field: string) => Promise<string[]>;
   onChange(next: Condition): void;
@@ -93,8 +104,8 @@ function ConditionRow({
     };
   }, [choice, condition.column, values]);
   return (
-    <div className="grid grid-cols-[40px_minmax(0,1fr)_auto] items-center gap-1.5 border-muted border-t px-1 py-1.5">
-      <span className="text-sm text-text-muted">{first ? "where" : "and"}</span>
+    <div className="grid grid-cols-[52px_minmax(0,1fr)_auto] items-center gap-1.5 border-muted border-t px-1 py-1.5">
+      <span className="text-sm text-text-muted">{lead}</span>
       <div className="flex min-w-0 flex-wrap items-center gap-1">
         <Select
           items={fields.map((f) => ({ value: f.name, label: f.name }))}
@@ -180,28 +191,53 @@ function ConditionRow({
   );
 }
 
+function ConjunctionSelect({ value, onChange }: { value: Conjunction; onChange(next: Conjunction): void }) {
+  return (
+    <Select
+      items={[
+        { value: "and", label: "and" },
+        { value: "or", label: "or" },
+      ]}
+      value={value}
+      onValueChange={(next) => next && onChange(next)}
+    >
+      <SelectTrigger size="sm" aria-label="Join conditions with">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="and">and</SelectItem>
+        <SelectItem value="or">or</SelectItem>
+      </SelectContent>
+    </Select>
+  );
+}
+
 function FilterBuilder({
   fields,
   conditions,
+  conjunction,
   count,
   values,
   onChange,
+  onConjunction,
 }: {
   fields: readonly TableField[];
   conditions: readonly Condition[];
+  conjunction: Conjunction;
   count: number | null;
   values: (field: string) => Promise<string[]>;
   onChange(next: Condition[]): void;
+  onConjunction(next: Conjunction): void;
 }) {
   const add = () => {
     const field = fields[0];
     if (field) onChange([...conditions, { column: field.name, op: CONDITION_OPS[field.type][0].op, value: "" }]);
   };
   return (
-    <PopoverContent align="start" className="w-[440px] max-w-[calc(100vw-16px)] gap-0">
+    <PopoverContent align="start" className="w-[456px] max-w-[calc(100vw-16px)] gap-0">
       <div className="flex items-baseline gap-2 px-1.5 pt-1 pb-1.5">
         <span className="font-semibold">Filter</span>
-        <span className="text-sm text-text-muted">narrows this table and every view in its filter link</span>
+        <span className="text-sm text-text-muted">narrows this view and every view in its filter link</span>
       </div>
       <div className="max-h-72 overflow-y-auto">
         {conditions.length === 0 ? <div className="px-1.5 py-2 text-text-muted">No conditions yet.</div> : null}
@@ -210,7 +246,16 @@ function FilterBuilder({
             // biome-ignore lint/suspicious/noArrayIndexKey: conditions have no identity beyond their slot
             key={i}
             condition={condition}
-            first={i === 0}
+            // Like Airtable: the second row picks the conjunction, the rows after it repeat it.
+            lead={
+              i === 0 ? (
+                "where"
+              ) : i === 1 ? (
+                <ConjunctionSelect value={conjunction} onChange={onConjunction} />
+              ) : (
+                conjunction
+              )
+            }
             fields={fields}
             values={values}
             onChange={(next) => onChange(conditions.map((c, j) => (j === i ? next : c)))}
@@ -279,26 +324,95 @@ function SortMenu({
   );
 }
 
-function GroupMenu({
+/** Group levels as rows, like the filter: `group by a`, `then by b`, … reordered by dragging the grip. */
+function GroupBuilder({
   fields,
   groupBy,
+  count,
   onGroup,
 }: {
   fields: readonly TableField[];
-  groupBy: string | null;
-  onGroup(field: string | null): void;
+  groupBy: readonly string[];
+  count: number | null;
+  onGroup(next: string[]): void;
 }) {
-  const choices = [null, ...fields.filter((f) => isGroupable(f.type)).map((f) => f.name)];
+  const [dragged, setDragged] = useState<number | null>(null);
+  const groupable = fields.filter((f) => isGroupable(f.type));
+  const unused = groupable.find((f) => !groupBy.includes(f.name));
   return (
-    <PopoverContent align="start" className="w-56 gap-0">
-      <div className={popoverHeading}>Group rows by</div>
+    <PopoverContent align="start" className="w-[360px] max-w-[calc(100vw-16px)] gap-0">
+      <div className="flex items-baseline gap-2 px-1.5 pt-1 pb-1.5">
+        <span className="font-semibold">Group</span>
+        <span className="text-sm text-text-muted">nests obs by each field in turn</span>
+      </div>
       <div className="max-h-72 overflow-y-auto">
-        {choices.map((name) => (
-          <button key={name ?? ""} type="button" className={menuRow} onClick={() => onGroup(name)}>
-            <CheckIcon className={cn("size-3 text-primary", groupBy !== name && "opacity-0")} />
-            <span className={cn("truncate", name ? "font-mono" : "text-text-muted")}>{name ?? "None"}</span>
-          </button>
-        ))}
+        {groupBy.length === 0 ? <div className="px-1.5 py-2 text-text-muted">Not grouped.</div> : null}
+        {groupBy.map((name, i) => {
+          // Each level lists its own field and the ones no other level uses.
+          const choices = groupable.filter((f) => f.name === name || !groupBy.includes(f.name));
+          return (
+            <div
+              key={name}
+              onDragOver={(e) => dragged !== null && e.preventDefault()}
+              onDrop={() => {
+                if (dragged === null || dragged === i) return;
+                const next = groupBy.filter((_, j) => j !== dragged);
+                next.splice(i, 0, groupBy[dragged]);
+                onGroup(next);
+                setDragged(null);
+              }}
+              className="grid grid-cols-[14px_56px_minmax(0,1fr)_auto] items-center gap-1.5 border-muted border-t px-1 py-1.5"
+            >
+              <span
+                draggable
+                onDragStart={() => setDragged(i)}
+                onDragEnd={() => setDragged(null)}
+                aria-label={`Move ${name}`}
+                className="cursor-grab text-text-muted"
+              >
+                <GripVerticalIcon className="size-3" />
+              </span>
+              <span className="text-sm text-text-muted">{i === 0 ? "group by" : "then by"}</span>
+              <Select
+                items={choices.map((f) => ({ value: f.name, label: f.name }))}
+                value={name}
+                onValueChange={(picked) => picked && onGroup(groupBy.map((g, j) => (j === i ? picked : g)))}
+              >
+                <SelectTrigger size="sm" aria-label="Group field" className="max-w-52 font-mono">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {choices.map((f) => (
+                    <SelectItem key={f.name} value={f.name} className="font-mono">
+                      {f.name}
+                      <span className="ml-auto font-sans text-2xs text-text-muted">{FIELD_GLYPH[f.type]}</span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <IconButton label="Remove group" onClick={() => onGroup(groupBy.filter((_, j) => j !== i))}>
+                <XIcon />
+              </IconButton>
+            </div>
+          );
+        })}
+      </div>
+      <div className="flex items-center gap-1.5 border-border border-t-(length:--keyline) px-0.5 pt-1.5">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-primary"
+          disabled={!unused}
+          onClick={() => unused && onGroup([...groupBy, unused.name])}
+        >
+          {groupBy.length ? "+ Add subgroup" : "+ Add group"}
+        </Button>
+        <span className="flex-1 text-right font-mono text-sm text-text-muted">{count === null ? "" : obs(count)}</span>
+        {groupBy.length ? (
+          <Button variant="ghost" size="sm" onClick={() => onGroup([])}>
+            Clear
+          </Button>
+        ) : null}
       </div>
     </PopoverContent>
   );
@@ -340,10 +454,7 @@ function FieldsMenu({
                 setDragged(null);
               }}
               className={menuRow}
-              onClick={() => {
-                const next = on ? visible.filter((n) => n !== name) : [...visible, name];
-                if (next.length) onChange(next);
-              }}
+              onClick={() => onChange(on ? visible.filter((n) => n !== name) : [...visible, name])}
             >
               <CheckIcon className={cn("size-3 text-primary", !on && "opacity-0")} />
               <span className={cn("min-w-0 flex-1 truncate font-mono", !on && "text-text-muted")}>{name}</span>
@@ -428,73 +539,17 @@ export function CommitDialog({
 
 // ── Toolbar ─────────────────────────────────────────────────────────
 
-export interface ToolbarProps {
-  fields: readonly TableField[];
-  visible: readonly string[];
-  search: string;
-  onSearch(text: string): void;
-  conditions: readonly Condition[];
-  onConditions(next: Condition[]): void;
-  sort: SortState | null;
-  onSort(next: SortState | null): void;
-  groupBy: string | null;
-  onGroup(field: string | null): void;
-  onColumns(next: string[] | null): void;
-  values: (field: string) => Promise<string[]>;
-  count: number | null;
-  selected: number;
-  onClearSelection(): void;
+export function EditControls(props: {
   edits: number;
   saving: boolean;
   onSave(): void;
   onDiscard(): void;
   canWrite: boolean;
   onWrite(): void;
-}
-
-export function Toolbar(props: ToolbarProps) {
-  const { fields, sort, groupBy, conditions, count, selected, edits } = props;
-  const hidden = fields.length - props.visible.length;
+}) {
+  const { edits } = props;
   return (
-    <div className="flex h-8 shrink-0 items-center gap-1.5 overflow-hidden px-1.5">
-      <Input
-        aria-label="Search"
-        placeholder="Search"
-        value={props.search}
-        onChange={(e) => props.onSearch(e.currentTarget.value)}
-        className="h-[22px] w-28 min-w-12 shrink"
-      />
-      <ButtonGroup className="shrink-0 border-line-2 [&>*+*]:border-line-2">
-        <Tool label={conditions.length ? `Filter · ${conditions.length}` : "Filter"} active={conditions.length > 0}>
-          <FilterBuilder
-            fields={fields}
-            conditions={conditions}
-            count={count}
-            values={props.values}
-            onChange={props.onConditions}
-          />
-        </Tool>
-        <Tool label={sort ? `Sort: ${sort.col} ${sort.dir === "asc" ? "↑" : "↓"}` : "Sort"} active={sort !== null}>
-          <SortMenu fields={fields} sort={sort} onSort={props.onSort} />
-        </Tool>
-        <Tool label={groupBy ? `Group: ${groupBy}` : "Group"} active={groupBy !== null}>
-          <GroupMenu fields={fields} groupBy={groupBy} onGroup={props.onGroup} />
-        </Tool>
-        <Tool label={hidden > 0 ? `${hidden} hidden` : "Fields"} active={hidden > 0}>
-          <FieldsMenu fields={fields} visible={props.visible} onChange={props.onColumns} />
-        </Tool>
-      </ButtonGroup>
-      {selected > 0 ? (
-        <span className="flex shrink-0 items-center gap-1.5 whitespace-nowrap pl-1">
-          <span className="size-1.5 rounded-full bg-primary" />
-          <span className="font-mono text-sm">{obs(selected)}</span>
-          <span className="text-sm text-text-muted">selected</span>
-          <Button variant="ghost" size="sm" className="text-primary" onClick={props.onClearSelection}>
-            Clear
-          </Button>
-        </span>
-      ) : null}
-      <span className="flex-1" />
+    <>
       {edits > 0 ? (
         <>
           <span className="flex shrink-0 items-center gap-1.5 whitespace-nowrap text-dirty text-sm">
@@ -519,6 +574,73 @@ export function Toolbar(props: ToolbarProps) {
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+    </>
+  );
+}
+
+export interface ToolbarProps {
+  view: ObsView;
+  values: (field: string) => Promise<string[]>;
+  onGroup(next: string[]): void;
+  /** The Fields button: the table counts hidden fields, the gallery its captions. */
+  fieldsLabel: string;
+  fieldsActive: boolean;
+  onColumns(next: string[] | null): void;
+  /** The view's own controls, right-aligned before the count. */
+  children?: ReactNode;
+}
+
+export function Toolbar(props: ToolbarProps) {
+  const { view } = props;
+  const { sort, groupBy, conditions, selected } = view;
+  const fields = view.fields ?? [];
+  const count = view.query.count;
+  return (
+    <div className="flex h-8 shrink-0 items-center gap-1.5 overflow-hidden px-1.5">
+      <Input
+        aria-label="Search"
+        placeholder="Search"
+        value={view.search}
+        onChange={(e) => view.setSearch(e.currentTarget.value)}
+        className="h-[22px] w-28 min-w-12 shrink"
+      />
+      <ButtonGroup className="shrink-0 border-line-2 [&>*+*]:border-line-2">
+        <Tool label={conditions.length ? `Filter · ${conditions.length}` : "Filter"} active={conditions.length > 0}>
+          <FilterBuilder
+            fields={fields}
+            conditions={conditions}
+            conjunction={view.conjunction}
+            count={count}
+            values={props.values}
+            onChange={view.setConditions}
+            onConjunction={view.setConjunction}
+          />
+        </Tool>
+        <Tool label={sort ? `Sort: ${sort.col} ${sort.dir === "asc" ? "↑" : "↓"}` : "Sort"} active={sort !== null}>
+          <SortMenu fields={fields} sort={sort} onSort={view.setSort} />
+        </Tool>
+        <Tool
+          label={groupBy.length > 1 ? `Group · ${groupBy.length}` : groupBy.length ? `Group: ${groupBy[0]}` : "Group"}
+          active={groupBy.length > 0}
+        >
+          <GroupBuilder fields={fields} groupBy={groupBy} count={count} onGroup={props.onGroup} />
+        </Tool>
+        <Tool label={props.fieldsLabel} active={props.fieldsActive}>
+          <FieldsMenu fields={fields} visible={view.visibleNames} onChange={props.onColumns} />
+        </Tool>
+      </ButtonGroup>
+      {selected > 0 ? (
+        <span className="flex shrink-0 items-center gap-1.5 whitespace-nowrap pl-1">
+          <span className="size-1.5 rounded-full bg-primary" />
+          <span className="font-mono text-sm">{obs(selected)}</span>
+          <span className="text-sm text-text-muted">selected</span>
+          <Button variant="ghost" size="sm" className="text-primary" onClick={view.clearSelection}>
+            Clear
+          </Button>
+        </span>
+      ) : null}
+      <span className="flex-1" />
+      {props.children}
       <span className="shrink-0 whitespace-nowrap font-mono text-sm text-text-muted">
         {count === null ? "" : obs(count)}
       </span>

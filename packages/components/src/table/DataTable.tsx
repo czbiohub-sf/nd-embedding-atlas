@@ -5,7 +5,7 @@
  * text field cells edit inline; edited cells carry a 2px amber bar until saved.
  */
 
-import { ChevronDownIcon, ChevronRightIcon, PlusIcon } from "lucide-react";
+import { PlusIcon } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import type { AnnotationDtype } from "@ndea/protocol";
 import { Checkbox } from "@ndea/ui/components/checkbox";
@@ -30,13 +30,15 @@ import { cn } from "@ndea/ui/lib/utils";
 import { useVirtualizer } from "../query/use-virtualizer";
 import {
   FIELD_GLYPH,
-  type GroupLayout,
+  formatValue,
   groupKey,
+  type GroupLayout,
   hasBit,
   isGroupable,
   type SortState,
   type TableField,
 } from "./fields";
+import { GroupHeader } from "./GroupHeader";
 import type { Row, TableQuery } from "./useTableQuery";
 
 const ROW_HEIGHT = 26;
@@ -54,7 +56,7 @@ export type Provenance = "obs" | "saved" | "unsaved";
 /** What the grid asks of the view: every write goes through here. */
 export interface TableActions {
   sort(next: SortState | null): void;
-  group(field: string | null): void;
+  group(next: string[]): void;
   hide(field: string): void;
   addField(name: string, dtype: AnnotationDtype): void;
   renameField(from: string, to: string): void;
@@ -77,7 +79,7 @@ export interface DataTableProps {
   /** Grouped rows; null lists rows flat. */
   layout: GroupLayout | null;
   sort: SortState | null;
-  groupBy: string | null;
+  groupBy: readonly string[];
   focused: number | null;
   /** A request to bring a virtual index into view (the focused row); each request object is applied once. */
   reveal: { readonly index: number } | null;
@@ -89,14 +91,6 @@ export interface DataTableProps {
   widths: Readonly<Record<string, number>>;
   provenance: ((field: TableField) => Provenance) | null;
   actions: TableActions;
-}
-
-function formatValue(value: unknown): string {
-  if (value == null) return "";
-  if (typeof value === "number") return value.toLocaleString("en-US", { maximumFractionDigits: 3 });
-  if (typeof value === "bigint") return value.toLocaleString("en-US");
-  if (value instanceof Date) return value.toISOString();
-  return typeof value === "object" ? JSON.stringify(value) : String(value as string | boolean);
 }
 
 /** Column width from the header and the first loaded rows. */
@@ -143,7 +137,7 @@ function ColumnMenu({
 }: {
   field: TableField;
   sort: SortState | null;
-  groupBy: string | null;
+  groupBy: readonly string[];
   actions: TableActions;
   status: Provenance;
 }) {
@@ -206,10 +200,18 @@ function ColumnMenu({
         {isGroupable(field.type) ? (
           <button
             type="button"
-            className={cn(menuRow, groupBy === field.name && "bg-muted")}
-            onClick={close(() => actions.group(groupBy === field.name ? null : field.name))}
+            className={cn(menuRow, groupBy.includes(field.name) && "bg-muted")}
+            onClick={close(() =>
+              actions.group(
+                groupBy.includes(field.name) ? groupBy.filter((g) => g !== field.name) : [...groupBy, field.name],
+              ),
+            )}
           >
-            {groupBy === field.name ? "Ungroup" : "Group by this field"}
+            {groupBy.includes(field.name)
+              ? "Remove from groups"
+              : groupBy.length
+                ? "Add as subgroup"
+                : "Group by this field"}
           </button>
         ) : null}
         <button
@@ -609,40 +611,25 @@ export function DataTable({
 
       <div style={{ height: totalSize, width: totalWidth, position: "relative" }}>
         {virtualItems.map((virtual) => {
-          const item = layout ? layout.item(virtual.index) : ({ kind: "row", position: virtual.index } as const);
+          const item = layout
+            ? layout.item(virtual.index)
+            : ({ kind: "row", position: virtual.index, count: 1, group: null } as const);
           const style = {
             height: ROW_HEIGHT,
             width: totalWidth,
             transform: `translateY(${virtual.start - scrollMargin}px)`,
           };
-          if (item.kind === "group") {
-            const value = item.group.value;
-            const key = groupKey(value);
+          if (item.kind === "group")
             return (
-              <button
-                key={`g:${key}`}
-                type="button"
-                className="absolute top-0 left-0 flex items-center border-muted border-b text-left font-sans hover:bg-muted"
+              <GroupHeader
+                key={`g:${groupKey(item.group.values)}`}
+                item={item}
+                field={groupBy[item.level]}
+                onToggle={actions.toggleGroup}
+                className="border-muted border-b"
                 style={style}
-                onClick={() => actions.toggleGroup(key)}
-              >
-                {/* Sticky so the value stays in view when the table scrolls sideways. */}
-                <span className="sticky left-0 flex w-fit items-center gap-2 px-1.5">
-                  {item.collapsed ? (
-                    <ChevronRightIcon className="size-3 text-text-muted" />
-                  ) : (
-                    <ChevronDownIcon className="size-3 text-text-muted" />
-                  )}
-                  <span className={cn("font-medium", value === null && "text-text-muted")}>
-                    {value === null ? "empty" : formatValue(value)}
-                  </span>
-                  <span className="font-mono text-text-muted text-xs">
-                    {item.group.count.toLocaleString("en-US")} obs
-                  </span>
-                </span>
-              </button>
+              />
             );
-          }
           const row = query.getRow(item.position);
           const rowIndex = row ? Number(row.__row_index__) : null;
           const isSelected = rowIndex !== null && selection !== null && hasBit(selection, rowIndex);
