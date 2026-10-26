@@ -22,29 +22,16 @@ import { ToggleGroup, ToggleGroupItem } from "@ndea/ui/components/toggle-group";
 import { cn } from "@ndea/ui/lib/utils";
 import { CopyIcon, Link, Maximize2, Settings, Trash2, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
-import { toast } from "sonner";
 import { z } from "zod";
 
 import type { CoordinationTypeId } from "@/core/coordination/types";
 import { useDatasetSession } from "@/hooks/useDatasetSession";
 import { configFields, type ConfigField } from "./config-fields";
 import { allElements, COMPONENTS, componentProps, elementData, elementScope, type DashboardElement } from "./dashboard";
-import type { DashboardEdit } from "./edits";
 import { LINK_DOT, LINK_LABEL } from "./LinksPopover";
 import { copyReference } from "./reference";
 import type { WorkspaceDocument } from "./types";
-import { useWorkspace, useWorkspaceSelector } from "./workspace-context";
-import type { WorkspaceStore } from "./workspace-store";
-
-/* ── writes ────────────────────────────────────────────────────────── */
-
-function apply(ws: WorkspaceStore, edits: DashboardEdit[]): void {
-  try {
-    ws.apply(edits);
-  } catch (error) {
-    toast.error(error instanceof Error ? error.message : String(error));
-  }
-}
+import { applyOrToast, useWorkspace, useWorkspaceSelector } from "./workspace-context";
 
 /** The scope other views share for `type`: the most common one, else the first in state, else "A". */
 function sharedScope(document: WorkspaceDocument, type: CoordinationTypeId, id: string): string {
@@ -231,7 +218,7 @@ function FieldControl({ id, field, props }: { id: string; field: ConfigField; pr
         ? { [key]: next }
         : { [key]: { ...(top && typeof top === "object" && !Array.isArray(top) ? top : {}), [child]: next } };
     if (field.control === "obsm") Object.assign(patch, AXES_RESET);
-    apply(ws, [{ op: "set_props", id, props: patch }]);
+    applyOrToast(ws, [{ op: "set_props", id, props: patch }]);
   };
   const none: Option[] = field.nullable ? [{ value: null, label: field.control === "column" ? "none" : "auto" }] : [];
   const { schema, title } = field;
@@ -307,7 +294,7 @@ function SourceRow({ id, element }: { id: string; element: DashboardElement }) {
         label="Source"
         options={options}
         value={elementData(element) ?? null}
-        onChange={(data) => apply(ws, [{ op: "set_props", id, props: { data } }])}
+        onChange={(data) => applyOrToast(ws, [{ op: "set_props", id, props: { data } }])}
       />
     </Row>
   );
@@ -338,7 +325,7 @@ function LinksTab({ id, element }: { id: string; element: DashboardElement }) {
               aria-label={`Link ${LINK_LABEL[type]}`}
               checked={scope !== undefined}
               onCheckedChange={(on) =>
-                apply(ws, [
+                applyOrToast(ws, [
                   on
                     ? { op: "bind", id, type, scope: sharedScope(ws.snapshot(), type, id) }
                     : { op: "unbind", id, type },
@@ -363,7 +350,7 @@ function TitleInput({ id, element }: { id: string; element: DashboardElement }) 
   const own = typeof element.props.title === "string" ? element.props.title : "";
   const commit = (text: string) => {
     const title = text.trim();
-    if (title !== own) apply(ws, [{ op: "set_props", id, props: { title: title || null } }]);
+    if (title !== own) applyOrToast(ws, [{ op: "set_props", id, props: { title: title || null } }]);
   };
   return (
     <Input
@@ -435,7 +422,9 @@ function SettingsBody({ id, element, close }: { id: string; element: DashboardEl
           label="Duplicate"
           description="Joins the same links"
           onClick={act(() =>
-            apply(ws, [{ op: "add", type: element.type, props: element.props, at: { beside: id, side: "right" } }]),
+            applyOrToast(ws, [
+              { op: "add", type: element.type, props: element.props, at: { beside: id, side: "right" } },
+            ]),
           )}
         >
           <CopyIcon />
@@ -444,7 +433,7 @@ function SettingsBody({ id, element, close }: { id: string; element: DashboardEl
         <button
           type="button"
           className="flex items-center gap-1.5 rounded-sm px-2 py-1 text-destructive hover:bg-muted [&_svg]:size-3.5 [&_svg]:stroke-[1.5]"
-          onClick={act(() => apply(ws, [{ op: "remove", id }]))}
+          onClick={act(() => applyOrToast(ws, [{ op: "remove", id }]))}
         >
           <Trash2 />
           Remove

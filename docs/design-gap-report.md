@@ -371,7 +371,7 @@ session field), `workspace-store.ts`.
   control, hidden })` on config fields, read by the generator.
 - Data tab: `data` source select, plus component data props (obsm key).
 - Links tab: one switch per type in `binds` (bind/unbind).
-- Writes go through `set_props` (`WorkspaceStore.setElementProps`).
+- Writes go through `set_props` (`WorkspaceStore.apply`).
 - **Missing in `@ndea/ui`:** a Switch component. Add it on Base UI `Switch`.
 
 **Files**

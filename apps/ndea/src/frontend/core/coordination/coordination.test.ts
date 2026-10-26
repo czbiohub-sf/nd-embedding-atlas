@@ -3,6 +3,7 @@ import type { FilterClause } from "@ndea/protocol";
 import { rowIndex, type RowIndex } from "@ndea/sdk";
 
 import { emptyWorkspaceDocument } from "../workspace/document";
+import { applyDashboardEdits } from "../workspace/edits";
 import { WorkspaceStore } from "../workspace/workspace-store";
 import { createFilterBinding } from "./filter-binding";
 import { setFilterFacet } from "./types";
@@ -52,6 +53,24 @@ describe("coordination cells", () => {
     expect(ws.element("n1")?.props).toEqual({});
   });
 
+  test("assignScope and clearScope are the bind and unbind edits; rebinding the same scope is a no-op", () => {
+    const { co, ws } = fresh();
+    ws.coordination.setCoordinationValue("filter", "A", { n1: { lasso: { op: "eq", column: "t", value: 1 } } });
+    const before = ws.snapshot();
+    co.assignScope("n1", "filter", "A");
+    const bound = applyDashboardEdits(before, [{ op: "bind", id: "n1", type: "filter", scope: "A" }]);
+    expect(ws.snapshot()).toEqual(bound);
+    const after = ws.snapshot();
+    co.assignScope("n1", "filter", "A");
+    expect(ws.snapshot()).toBe(after);
+    co.clearScope("n1", "filter");
+    const unbound = ws.snapshot();
+    expect(unbound).toEqual(applyDashboardEdits(bound, [{ op: "unbind", id: "n1", type: "filter" }]));
+    co.clearScope("n1", "filter");
+    co.assignScope("ghost", "filter", "A");
+    expect(ws.snapshot()).toBe(unbound);
+  });
+
   test("writes are validated against the type schema", () => {
     const { co } = fresh();
     expect(() => co.setCoordinationValue("focus", "A", -1 as RowIndex)).toThrow("failed validation");
@@ -84,8 +103,20 @@ describe("coordination cells", () => {
     expect(co.readCoordination("filter", "A")).toEqual({ agent: { where: clause } });
 
     co.setCoordinationValue("filter", "B", { n1: { lasso: clause } });
-    ws.removeElement("n1");
+    ws.apply([{ op: "remove", id: "n1" }]);
     expect(co.readCoordination("filter", "B")).toEqual({});
+  });
+
+  test("an adopted document that removed an element (a remote raw patch) drops its contribution too", () => {
+    const { co, ws } = fresh();
+    const clause = { op: "eq", column: "t", value: 1 } as const;
+    co.assignScope("n2", "filter", "A");
+    co.setCoordinationValue("filter", "A", { n2: { lasso: clause }, agent: { where: clause } });
+    const { layouts, ...rest } = ws.snapshot();
+    const { n2: _gone, ...elements } = layouts.main.spec.elements;
+    elements.root = { ...elements.root, children: ["n1", "n3", "scatter"] };
+    ws.applyDocument({ ...rest, layouts: { main: { ...layouts.main, spec: { root: "root", elements } } } });
+    expect(co.readCoordination("filter", "A")).toEqual({ agent: { where: clause } });
   });
 });
 

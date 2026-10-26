@@ -9,26 +9,19 @@
  *     sees the same value, reactively, with no message passing.
  *
  * Writes validate against the type's Zod schema and replace the cell
- * (latest-wins). Agents reach the same cells through JSON Patch. This module
- * owns binding semantics: views ask it (`scopeOf`, `filterFacet`, `stateStore`)
- * instead of reading element bindings and `state` cells themselves.
+ * (latest-wins). Agents reach the same cells through JSON Patch. Views ask
+ * this module (`scopeOf`, `filterFacet`, `stateStore`) instead of reading
+ * element bindings and `state` cells themselves. Binding and unbinding are
+ * the `bind`/`unbind` edit ops (`workspace/edits.ts`), which own the binding
+ * prop, the new scope's cell, and the filter clean-up; this port only runs them.
  */
 
 import { getByPath, type StateStore } from "@json-render/core";
 import type { FilterClause } from "@ndea/protocol";
 
+import { elementScope, findElement, type LayoutDocument } from "../workspace/dashboard";
+import type { DashboardEdit } from "../workspace/edits";
 import {
-  allElements,
-  elementScope,
-  findElement,
-  layoutOf,
-  setElementProps,
-  takenIds,
-  type DashboardElement,
-  type LayoutDocument,
-} from "../workspace/dashboard";
-import {
-  bindingPointer,
   COORDINATION_TYPES,
   isCoordinationType,
   setFilterFacet,
@@ -43,7 +36,10 @@ interface CoordinationDocumentState extends LayoutDocument {
 
 interface CoordinationDocumentPort {
   snapshot(): CoordinationDocumentState;
-  update(mutator: (state: CoordinationDocumentState) => CoordinationDocumentState): void;
+  /** Replace the coordination cells (`state`); nothing else. */
+  updateState(mutator: (state: CoordinationState) => CoordinationState): void;
+  /** Run named edits: the only way bindings change. */
+  apply(edits: readonly DashboardEdit[]): void;
   subscribe(listener: () => void): () => void;
 }
 
@@ -75,36 +71,6 @@ function withCell(
   return { ...state, [type]: { ...state[type], [scope]: value } };
 }
 
-/** Drop an element's crossfilter contribution from a filter scope; peers stop seeing it. */
-function withoutFilterContribution(state: CoordinationState, scope: string | undefined, elementId: string) {
-  const cell = scope === undefined ? undefined : state.filter?.[scope];
-  if (!cell || !(elementId in cell)) return state;
-  const { [elementId]: _dropped, ...rest } = cell;
-  return withCell(state, "filter", scope!, rest);
-}
-
-/** Drop the filter contributions of elements no longer in `next` (any layout), so peers stop seeing them. */
-export function withoutRemovedContributions<S extends CoordinationDocumentState>(previous: S, next: S): S {
-  let state = next.state;
-  const kept = takenIds(next);
-  for (const [id, element] of allElements(previous)) {
-    if (kept.has(id)) continue;
-    state = withoutFilterContribution(state, elementScope(element, "filter"), id);
-  }
-  return state === next.state ? next : { ...next, state };
-}
-
-/** `s` with element `id`'s props patched in whichever layout holds it. */
-function withElementProps<S extends CoordinationDocumentState>(
-  s: S,
-  id: string,
-  patch: Record<string, DashboardElement["props"][string] | undefined>,
-): S {
-  const layout = layoutOf(s, id)!;
-  const spec = setElementProps(s.layouts[layout].spec, id, patch);
-  return { ...s, layouts: { ...s.layouts, [layout]: { ...s.layouts[layout], spec } } };
-}
-
 class Coordination implements CoordinationScopeCellPort {
   private readonly document: CoordinationDocumentPort;
 
@@ -130,28 +96,18 @@ class Coordination implements CoordinationScopeCellPort {
     this.setCoordinationValue(type, scope, value as never);
   }
 
-  /** Bind an element to a scope, seeding the cell with the type's default when it does not exist yet. */
+  /** Bind an element to a scope (`bind`); a no-op when it already binds that scope or does not exist. */
   assignScope(elementId: string, type: CoordinationTypeId, scope: string): void {
-    this.document.update((s) => {
-      const element = findElement(s, elementId);
-      const previous = elementScope(element, type);
-      if (previous === scope || !element) return s;
-      let state = type === "filter" ? withoutFilterContribution(s.state, previous, elementId) : s.state;
-      if (state[type]?.[scope] === undefined)
-        state = withCell(state, type, scope, COORDINATION_TYPES[type].defaultValue);
-      return { ...withElementProps(s, elementId, { [type]: { $bindState: bindingPointer(type, scope) } }), state };
-    });
+    const element = findElement(this.document.snapshot(), elementId);
+    if (!element || elementScope(element, type) === scope) return;
+    this.document.apply([{ op: "bind", id: elementId, type, scope }]);
   }
 
-  /** Unbind an element from one type (it stops participating in that type). */
+  /** Unbind an element from one type (`unbind`; it stops participating); a no-op when it is not bound. */
   clearScope(elementId: string, type: CoordinationTypeId): void {
-    this.document.update((s) => {
-      const element = findElement(s, elementId);
-      if (!element || !(type in element.props)) return s;
-      const state =
-        type === "filter" ? withoutFilterContribution(s.state, elementScope(element, type), elementId) : s.state;
-      return { ...withElementProps(s, elementId, { [type]: undefined }), state };
-    });
+    const element = findElement(this.document.snapshot(), elementId);
+    if (!element || !(type in element.props)) return;
+    this.document.apply([{ op: "unbind", id: elementId, type }]);
   }
 
   scopeOf(elementId: string, type: CoordinationTypeId): string | undefined {
@@ -162,7 +118,7 @@ class Coordination implements CoordinationScopeCellPort {
     if (!COORDINATION_TYPES[type].value.safeParse(value).success) {
       throw new TypeError(`coordination cell "/${type}/${scope}" failed validation`);
     }
-    this.document.update((s) => ({ ...s, state: withCell(s.state, type, scope, value) }));
+    this.document.updateState((state) => withCell(state, type, scope, value));
   }
 
   readCoordination<T extends CoordinationTypeId>(type: T, scope: string): CoordinationValue<T> | undefined {

@@ -70,9 +70,9 @@ writes UI state:
   and `WorkspaceSync` PATCHes the diff. Workspace state lives only there:
   editor-only state goes in `WorkspaceSession`, never `localStorage`.
 - **Named edit ops** (`core/workspace/edits.ts`): `add`, `set_props`, `remove`,
-  `swap`, `bind`/`unbind`, `set_filter`, `set_data`, tabs, layouts. MCP
-  `edit_dashboard` and `WorkspaceStore.apply` run the same ops; a new agent
-  operation is a new op here, never a new write path.
+  `split`, `swap`, `bind`/`unbind`, `set_filter`, `set_data`, tabs, layouts.
+  MCP `edit_dashboard` and `WorkspaceStore.apply` run the same ops, and every
+  browser edit is one; a new operation is a new op here, never a new write path.
 - **Proposals:** harness edits arrive as proposals by default (Settings ›
   Harness edits): `server/harness.ts` holds them in memory and accept re-runs
   the ops on the current revision as one patch stamped with the agent.

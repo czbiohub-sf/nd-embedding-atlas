@@ -1,11 +1,14 @@
 /**
- * Named dashboard edits for agents. Each op runs against a draft of the
- * document through the same pure dashboard operations the browser uses; the
- * caller diffs the draft against the base into one RFC 6902 patch, so every
- * edit still meets the one validated write path (`Workspace.patch`). An op
- * that cannot apply throws `WorkspaceEditError` naming it; everything the
+ * Named dashboard edits: the one edit vocabulary of agents and the browser.
+ * Each op runs against a draft of the document through the pure per-section
+ * helpers (`dashboard.ts` for layouts, `coordination/types.ts` for cells);
+ * the caller diffs the draft against the base into one RFC 6902 patch, so
+ * every edit still meets the one validated write path (`Workspace.patch`). An
+ * op that cannot apply throws `WorkspaceEditError` naming it; everything the
  * document schema checks (component props, data references, bind rules) is
  * left to that write path. Element ops find the layout holding their element.
+ * Changes that span sections (an element's layout and its coordination
+ * cells, a removal and its filter contributions) live only here.
  */
 
 import { FilterClauseSchema } from "@ndea/protocol";
@@ -19,9 +22,11 @@ import {
   type CoordinationTypeId,
 } from "../coordination/types.ts";
 import {
+  allElements,
   closeTab,
   COMPONENTS,
   elementScope,
+  elementTitle,
   emptyDashboard,
   findElement,
   freshElementId,
@@ -38,6 +43,8 @@ import {
   takenIds,
   type Dashboard,
   type DashboardElement,
+  type LayoutDocument,
+  type SplitSide,
 } from "./dashboard.ts";
 import { dataSourceSchema } from "./data-sources.ts";
 import type { WorkspaceDocument } from "./types.ts";
@@ -48,6 +55,8 @@ const ScopeSchema = z.string().regex(/^[A-Za-z0-9_-]+$/, "scope names use letter
 const CoordinationTypeSchema = z.enum(COORDINATION_TYPE_IDS);
 const PropsSchema = z.record(z.string(), z.json());
 
+const SideSchema = z.enum(["left", "right", "up", "down"]);
+
 const AtSchema = z.union([
   z.object({ slot: IdSchema }).strict().describe("fill this empty slot"),
   z
@@ -55,7 +64,7 @@ const AtSchema = z.union([
     .strict()
     .describe("insert into this stack's children at `index` (default: last)"),
   z
-    .object({ beside: IdSchema, side: z.enum(["left", "right", "up", "down"]).optional() })
+    .object({ beside: IdSchema, side: SideSchema.optional() })
     .strict()
     .describe("split this element in two; the new element takes `side` (default: right)"),
 ]);
@@ -79,6 +88,14 @@ export const DashboardEditSchema = z.discriminatedUnion("op", [
     props: PropsSchema.describe("merged into the element's props; null removes a key"),
   }),
   z.object({ op: z.literal("remove"), id: IdSchema }),
+  z
+    .object({
+      op: z.literal("split"),
+      id: IdSchema.describe("the element to split; a tab splits its tile"),
+      side: SideSchema.optional().describe("where the new empty tile goes (default: right)"),
+      slot: IdSchema.optional().describe("id for the new empty tile (default slot-<n>); later ops may reference it"),
+    })
+    .describe("split an element in two, leaving a new empty tile on `side`; set the split's ratio with set_props"),
   z.object({ op: z.literal("swap"), a: IdSchema, b: IdSchema }),
   z.object({ op: z.literal("bind"), id: IdSchema, type: CoordinationTypeSchema, scope: ScopeSchema }),
   z.object({ op: z.literal("unbind"), id: IdSchema, type: CoordinationTypeSchema }),
@@ -161,6 +178,7 @@ export function resolveEditReferences(edits: readonly DashboardEdit[], workspace
     switch (edit.op) {
       case "set_props":
       case "remove":
+      case "split":
       case "bind":
       case "unbind":
       case "close_tab":
@@ -232,16 +250,42 @@ function replaceSlot(spec: Dashboard, slot: string, id: string, element: Dashboa
   return { root: spec.root === slot ? id : spec.root, elements };
 }
 
-/** Drop one source's clauses from a filter scope: an element's own contribution. */
-function dropFilterSource(state: CoordinationState, scope: string | undefined, source: string): void {
-  if (scope !== undefined && state.filter?.[scope]) delete state.filter[scope][source];
+/** What splitting `id` splits: beside a tab means beside its tile. */
+function splitTarget(spec: Dashboard, id: string): string {
+  requireElement(spec, id);
+  const parent = parentOf(spec, id);
+  return parent !== undefined && spec.elements[parent].type === "tabs" ? parent : id;
 }
 
-/** Elements of `before` gone from `after` take their filter contributions with them. */
-function dropRemoved(state: CoordinationState, before: Dashboard, after: Dashboard): void {
-  for (const [id, element] of Object.entries(before.elements)) {
-    if (!Object.hasOwn(after.elements, id)) dropFilterSource(state, elementScope(element, "filter"), id);
-  }
+/** `state` without element `id`'s own clauses in filter scope `scope`: its crossfilter contribution. */
+function withoutContribution(state: CoordinationState, scope: string | undefined, id: string): CoordinationState {
+  const cell = scope === undefined ? undefined : state.filter?.[scope];
+  if (!cell || !Object.hasOwn(cell, id)) return state;
+  const { [id]: _dropped, ...rest } = cell;
+  return { ...state, filter: { ...state.filter, [scope!]: rest } };
+}
+
+/** Elements of `before` gone from `after` (any layout) take their filter contributions with them. */
+function withoutRemoved(
+  state: CoordinationState,
+  before: readonly [string, DashboardElement][],
+  after: LayoutDocument,
+): CoordinationState {
+  const kept = takenIds(after);
+  return before.reduce(
+    (next, [id, element]) => (kept.has(id) ? next : withoutContribution(next, elementScope(element, "filter"), id)),
+    state,
+  );
+}
+
+/**
+ * `next` without the filter contributions of `previous`'s elements it no
+ * longer has, so peers stop seeing them. Every op settles this itself; the
+ * browser also settles documents it adopts (a remote raw patch may remove).
+ */
+export function withoutRemovedContributions(previous: WorkspaceDocument, next: WorkspaceDocument): WorkspaceDocument {
+  const state = withoutRemoved(next.state, allElements(previous), next);
+  return state === next.state ? next : { ...next, state };
 }
 
 /** Create the scope's cell at its default if missing: a new member's scopes exist from the start. */
@@ -285,11 +329,7 @@ function addElement(
     if (requireElement(spec, at.slot).type !== "slot") throw new Error(`element "${at.slot}" is not an empty slot`);
     return replaceSlot(spec, at.slot, newId(spec, edit.id, edit.type, reserved), element);
   }
-  requireElement(spec, at.beside);
-  // Beside a tab means beside its tile.
-  const parent = parentOf(spec, at.beside);
-  const beside = parent !== undefined && spec.elements[parent].type === "tabs" ? parent : at.beside;
-  const [split, slot] = splitElement(spec, beside, at.side ?? "right", reserved);
+  const [split, slot] = splitElement(spec, splitTarget(spec, at.beside), at.side ?? "right", reserved);
   return replaceSlot(split, slot!, newId(split, edit.id, edit.type, reserved), element);
 }
 
@@ -327,9 +367,15 @@ function applyEdit(draft: WorkspaceDocument, edit: DashboardEdit): void {
     }
     case "remove": {
       const layout = holder(draft, edit.id);
-      const next = removeElement(spec(layout), edit.id, takenIds(draft));
-      dropRemoved(draft.state, spec(layout), next);
-      update(layout, next);
+      update(layout, removeElement(spec(layout), edit.id, takenIds(draft)));
+      return;
+    }
+    case "split": {
+      const layout = holder(draft, edit.id);
+      const reserved = takenIds(draft);
+      const slot = newId(spec(layout), edit.slot, "slot", reserved);
+      const target = splitTarget(spec(layout), edit.id);
+      update(layout, splitElement(spec(layout), target, edit.side ?? "right", reserved.add(slot), slot)[0]);
       return;
     }
     case "swap": {
@@ -344,7 +390,9 @@ function applyEdit(draft: WorkspaceDocument, edit: DashboardEdit): void {
     case "bind": {
       const layout = holder(draft, edit.id);
       const previous = elementScope(spec(layout).elements[edit.id], "filter");
-      if (edit.type === "filter" && previous !== edit.scope) dropFilterSource(draft.state, previous, edit.id);
+      if (edit.type === "filter" && previous !== edit.scope) {
+        draft.state = withoutContribution(draft.state, previous, edit.id);
+      }
       update(
         layout,
         setElementProps(spec(layout), edit.id, { [edit.type]: { $bindState: bindingPointer(edit.type, edit.scope) } }),
@@ -356,7 +404,8 @@ function applyEdit(draft: WorkspaceDocument, edit: DashboardEdit): void {
       const layout = holder(draft, edit.id);
       const element = spec(layout).elements[edit.id];
       if (!(edit.type in element.props)) throw new Error(`element "${edit.id}" is not bound to ${edit.type}`);
-      if (edit.type === "filter") dropFilterSource(draft.state, elementScope(element, "filter"), edit.id);
+      if (edit.type === "filter")
+        draft.state = withoutContribution(draft.state, elementScope(element, "filter"), edit.id);
       update(layout, setElementProps(spec(layout), edit.id, { [edit.type]: undefined }));
       return;
     }
@@ -396,9 +445,7 @@ function applyEdit(draft: WorkspaceDocument, edit: DashboardEdit): void {
     case "close_tab": {
       const layout = holder(draft, edit.id);
       requireView(spec(layout), edit.id);
-      const next = closeTab(spec(layout), edit.id, takenIds(draft));
-      dropRemoved(draft.state, spec(layout), next);
-      update(layout, next);
+      update(layout, closeTab(spec(layout), edit.id, takenIds(draft)));
       return;
     }
     case "set_active_tab": {
@@ -428,7 +475,6 @@ function applyEdit(draft: WorkspaceDocument, edit: DashboardEdit): void {
       requireLayout(draft, edit.id);
       const rest = Object.keys(draft.layouts).filter((id) => id !== edit.id);
       if (rest.length === 0) throw new Error(`cannot remove "${edit.id}", the only layout`);
-      dropRemoved(draft.state, spec(edit.id), { root: "", elements: {} });
       delete draft.layouts[edit.id];
       if (draft.layout === edit.id) draft.layout = rest[0];
       return;
@@ -440,20 +486,27 @@ function applyEdit(draft: WorkspaceDocument, edit: DashboardEdit): void {
   }
 }
 
-/** Apply `edits` in order to a draft; throws `WorkspaceEditError` at the first op that cannot apply. */
+/**
+ * Apply `edits` in order to a draft; throws `WorkspaceEditError` at the first
+ * op that cannot apply. Elements an op removes take their filter
+ * contributions with them.
+ */
 export function applyDashboardEdits(document: WorkspaceDocument, edits: readonly DashboardEdit[]): WorkspaceDocument {
   const draft = structuredClone(document);
   edits.forEach((edit, index) => {
+    const before = allElements(draft);
     try {
       applyEdit(draft, edit);
     } catch (error) {
       throw new WorkspaceEditError(index, error instanceof Error ? error.message : String(error));
     }
+    draft.state = withoutRemoved(draft.state, before, draft);
   });
   return draft;
 }
 
 const componentTitle = (type: string) => COMPONENTS[type]?.title ?? type;
+const SIDE_WORDS: Record<SplitSide, string> = { left: "left of", right: "beside", up: "above", down: "below" };
 
 /**
  * One edit in glossary words, e.g. `Add Histogram beside Table`: a proposal
@@ -461,10 +514,12 @@ const componentTitle = (type: string) => COMPONENTS[type]?.title ?? type;
  * are already resolved (`resolveEditReferences`).
  */
 export function describeEdit(edit: DashboardEdit, document: WorkspaceDocument): string {
+  /** The element's title; quoted when it is its own, not its component's. */
   const view = (id: string) => {
     const element = findElement(document, id);
     if (!element) return `"${id}"`;
-    return typeof element.props.title === "string" ? `"${element.props.title}"` : componentTitle(element.type);
+    const title = elementTitle(element);
+    return title === componentTitle(element.type) ? title : `"${title}"`;
   };
   const layout = (id: string) => `layout "${document.layouts[id]?.name ?? id}"`;
   switch (edit.op) {
@@ -479,13 +534,15 @@ export function describeEdit(edit: DashboardEdit, document: WorkspaceDocument): 
           ? " in an empty tile"
           : "stack" in edit.at
             ? ` in ${view(edit.at.stack)}`
-            : ` ${{ left: "left of", right: "beside", up: "above", down: "below" }[edit.at.side ?? "right"]} ${view(edit.at.beside)}`;
+            : ` ${SIDE_WORDS[edit.at.side ?? "right"]} ${view(edit.at.beside)}`;
       return `Add ${componentTitle(edit.type)}${at}${edit.layout ? ` to ${layout(edit.layout)}` : ""}`;
     }
     case "set_props":
       return `Change ${view(edit.id)} settings: ${Object.keys(edit.props).join(", ")}`;
     case "remove":
       return `Remove ${view(edit.id)}`;
+    case "split":
+      return `Add an empty tile ${SIDE_WORDS[edit.side ?? "right"]} ${view(edit.id)}`;
     case "swap":
       return `Swap ${view(edit.a)} and ${view(edit.b)}`;
     case "bind":

@@ -2,8 +2,7 @@
 
 import { cn } from "@ndea/ui/lib/utils";
 
-import { componentProps, type Dashboard } from "@/core/workspace/dashboard";
-import { elementTitle } from "@/core/workspace/LinksPopover";
+import { componentProps, elementTitle, type Dashboard } from "@/core/workspace/dashboard";
 
 /** Ids of the tile tree's leaves in reading order. */
 // eslint-disable-next-line react/only-export-components

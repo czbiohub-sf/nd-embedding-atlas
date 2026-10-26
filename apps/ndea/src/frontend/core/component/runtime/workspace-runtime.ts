@@ -1,10 +1,13 @@
 /**
  * Live view bodies for the dashboard: one runtime per view element, keyed by
- * element id. A body's config is its element's component props; its predicate
- * is the element's data source AND the other members of its filter scope
- * (`elementPredicate`), the same SQL the server evaluates.
+ * element id. A body's config is its element's component props with
+ * json-render expressions (`$template`, `$state`, …) resolved against the
+ * coordination `state`; its predicate is the element's data source AND the
+ * other members of its filter scope (`elementPredicate`), the same SQL the
+ * server evaluates.
  */
 
+import { resolveElementProps } from "@json-render/core";
 import { Store } from "@tanstack/store";
 import type {
   ColorCoordinationAPI,
@@ -16,9 +19,14 @@ import type {
 } from "@ndea/sdk";
 
 import { createFilterBinding } from "@/core/coordination/filter-binding";
-import { COORDINATION_TYPES, type CoordinationTypeId, type CoordinationValue } from "@/core/coordination/types";
+import {
+  COORDINATION_TYPES,
+  type CoordinationState,
+  type CoordinationTypeId,
+  type CoordinationValue,
+} from "@/core/coordination/types";
 import { COMPONENT_DEFINITIONS, type AnyComponentDefinition } from "@/core/component/definitions";
-import { activeSpec, componentProps, type DashboardElement } from "@/core/workspace/dashboard";
+import { componentProps, type DashboardElement } from "@/core/workspace/dashboard";
 import type { WorkspaceStore } from "@/core/workspace/workspace-store";
 import { createComponentHost, type ComponentHostDependencies, type HostHandle } from "./host";
 import { ComponentRuntime } from "./instance-runtime";
@@ -28,7 +36,7 @@ const VIEW_COORDINATION_LOCK = "lock1";
 /** The slice of `WorkspaceStore` the runtimes read and write. */
 export type ElementRuntimeSession = Pick<
   WorkspaceStore,
-  "element" | "elementPredicate" | "subscribe" | "coordination" | "setElementProps" | "snapshot" | "setDataSource"
+  "element" | "elementPredicate" | "subscribe" | "coordination" | "apply" | "snapshot"
 >;
 
 export interface ElementRuntimeManagerDependencies {
@@ -139,8 +147,12 @@ function createFocusCoordination(session: ElementRuntimeSession, id: string): Fo
   };
 }
 
-const configKey = (element: DashboardElement | undefined): string | undefined =>
-  element ? JSON.stringify(componentProps(element)) : undefined;
+/** The config a body sees: its component props, expressions resolved against the coordination cells. */
+const bodyConfig = (element: DashboardElement, state: CoordinationState): Record<string, JsonValue> =>
+  resolveElementProps(componentProps(element), { stateModel: state }) as Record<string, JsonValue>;
+
+const configKey = (element: DashboardElement | undefined, state: CoordinationState): string | undefined =>
+  element ? JSON.stringify(bodyConfig(element, state)) : undefined;
 
 interface LiveElement {
   readonly type: string;
@@ -191,7 +203,7 @@ export class ComponentRuntimeManager {
     const definition = element ? COMPONENT_DEFINITIONS[element.type] : undefined;
     if (!element || !definition) return undefined;
     const entry: LiveElement = { type: element.type, runtime: this.start(id, definition), config: undefined };
-    entry.config = configKey(this.dependencies.session.element(id));
+    entry.config = configKey(this.dependencies.session.element(id), this.dependencies.session.snapshot().state);
     this.live.set(id, entry);
     this.emit();
     return entry.runtime;
@@ -243,7 +255,8 @@ export class ComponentRuntimeManager {
    */
   private reconcile(): void {
     const { session } = this.dependencies;
-    const shown = activeSpec(session.snapshot()).elements;
+    const { layouts, layout, state } = session.snapshot();
+    const shown = layouts[layout].spec.elements;
     let changed = false;
     // Deleting the current entry while iterating a Map is safe.
     for (const [id, entry] of this.live) {
@@ -255,7 +268,7 @@ export class ComponentRuntimeManager {
         changed = true;
         continue;
       }
-      const config = configKey(element);
+      const config = configKey(element, state);
       if (config === entry.config) continue;
       entry.runtime.dispose();
       entry.runtime = this.start(id, COMPONENT_DEFINITIONS[element.type]);
@@ -279,7 +292,7 @@ export class ComponentRuntimeManager {
     const handle = createComponentHost(appHost, {
       elementId: id,
       type: definition.type,
-      config: componentProps(element),
+      config: bodyConfig(element, session.snapshot().state),
       predicate: filter.selection,
       focus: createFocusCoordination(session, id),
       viewSync: createViewCoordination(session, id),
@@ -290,17 +303,19 @@ export class ComponentRuntimeManager {
         const entry = this.live.get(id);
         const current = session.element(id);
         if (!current) return;
-        // Own writes do not restart the body: record them before they land.
+        // Own writes do not restart the body: record them before they land (`set_props`: null removes a key).
         const props = patch as Record<string, JsonValue>;
-        if (entry) entry.config = configKey({ ...current, props: { ...current.props, ...props } });
-        session.setElementProps(id, props);
+        const next = { ...current.props, ...props };
+        for (const [key, value] of Object.entries(props)) if (value === null) delete next[key];
+        if (entry) entry.config = configKey({ ...current, props: next }, session.snapshot().state);
+        session.apply([{ op: "set_props", id, props }]);
       },
       saveSource: (baseName, where) => {
         const { data } = session.snapshot();
         let n = 1;
         while (data[`${baseName}-${n}`]) n++;
         const name = `${baseName}-${n}`;
-        session.setDataSource(name, { where });
+        session.apply([{ op: "set_data", name, source: { where } }]);
         return name;
       },
     });
