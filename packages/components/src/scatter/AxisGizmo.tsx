@@ -10,6 +10,8 @@ import { forwardRef, useImperativeHandle, useRef } from "react";
 import { basis } from "./gpu/gpu/camera";
 
 const AXES = ["x", "y", "z"] as const;
+/** The usual 3D axis colors (x red, y green, z blue), mid-tone so they read on dark and light surfaces. */
+const AXIS_COLOR = { x: "#f0524f", y: "#3fb86b", z: "#4a8ef0" } as const;
 /** Half the gizmo's box, and the screen length of an axis that faces the viewer side-on. */
 const HALF = 36;
 const LENGTH = 22;
@@ -57,7 +59,7 @@ export const AxisGizmo = forwardRef<AxisGizmoHandle>(function AxisGizmo(_, ref) 
       width={HALF * 2}
       height={HALF * 2}
       viewBox={`${-HALF} ${-HALF} ${HALF * 2} ${HALF * 2}`}
-      className="pointer-events-none absolute top-2 right-2 z-10 text-text-muted"
+      className="pointer-events-none absolute top-2 right-2 z-10"
     >
       {AXES.map((axis, i) => (
         <g key={axis}>
@@ -69,15 +71,15 @@ export const AxisGizmo = forwardRef<AxisGizmoHandle>(function AxisGizmo(_, ref) 
             y1={0}
             x2={0}
             y2={0}
-            stroke="currentColor"
-            strokeWidth={1.5}
+            stroke={AXIS_COLOR[axis]}
+            strokeWidth={1.75}
             strokeLinecap="round"
           />
           <text
             ref={(el) => {
               labels.current[i] = el;
             }}
-            fill="currentColor"
+            fill={AXIS_COLOR[axis]}
             fontSize={12}
             className="font-mono"
             textAnchor="middle"
