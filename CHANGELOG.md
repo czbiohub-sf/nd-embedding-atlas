@@ -109,6 +109,7 @@
 - [**breaking**] _(server)_ Delete `GET /api/config` and the protocol `ConfigResponseSchema`; nothing called it, and `/data/metadata.json` carries the same facts
 - _(server)_ The server `Workspace` deep-freezes the accepted document at open and on every commit, so `get()` readers can't change authoritative state around `patch`; ops still apply to a `structuredClone`
 - _(frontend)_ Frontend `Workspace` → `WorkspaceStore`; its read interface is `element`/`elementPredicate`/`snapshot`/`subscribe`, and `elementPredicate(document, id)` replaces the four-argument form
+- _(app)_ `src/env/` holds the install-wide facts (`paths.ts`, `version.ts`, `libduckdb-cache.ts`), moved out of `cli/` because the server needs the state dir, the cache dir, and the version. Routes share `routeError` (499 on abort, else logged 500); `ndea status` fetches through the `server` context; the stale frontend `lib/query-keys.ts`, the ochre `gpu/color` re-export facade, the unused `nd-toast` animation, and five copies of `stopsFromPositionedLut` are gone; `getByPath` drops a branch the object case already covered
 
 ### ⚙️ Miscellaneous Tasks
 
@@ -116,6 +117,7 @@
 - Drop unused deps + merge duplicate resolveFrontendDir
 - _(server)_ Review cleanup: try/catch dedup, colormap wire-up, Bun concat
 - Drop the unused `playwright` and `@playwright/test` dev dependencies; Fallow ignores `node-addon-api` and `node-api-headers`, which `build-duckdb-addon.ts` resolves by path
+- Fallow does more: `.fallowrc.json` `boundaries` enforce the dependency direction (packages one way; the server never imports the CLI or React code; no `localStorage` in `core/workspace`; `process.exit` only at the CLI's two sanctioned exits). CI's new `audit` job runs `vp run audit:gate` (`fallow audit`, new findings only), and `vp run mutation` runs `fallow mutation` with `bun test`. `ignoreExportsUsedInFile` is off: 46 exports used only in their own file lost `export`
 
 ## [0.0.3] - 2026-04-09
 

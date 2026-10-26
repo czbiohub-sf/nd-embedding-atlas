@@ -32,12 +32,16 @@ export const server = defineContext("server")
   )
   .setup(({ flags, stdout, signal }) => {
     const origin = `http://${flags.host}:${flags.port}`;
-    const send = async (path: string, init?: { method: string; body: unknown }): Promise<string> => {
+    const send = async (
+      path: string,
+      init?: { method: string; body: unknown },
+      headers?: Record<string, string>,
+    ): Promise<string> => {
       let res: Response;
       try {
         res = await fetch(`${origin}${path}`, {
           signal,
-          headers: { "x-ndea-client": "cli", ...(init && { "content-type": "application/json" }) },
+          headers: { "x-ndea-client": "cli", ...(init && { "content-type": "application/json" }), ...headers },
           ...(init && { method: init.method, body: JSON.stringify(init.body) }),
         });
       } catch (err) {
@@ -59,6 +63,10 @@ export const server = defineContext("server")
       },
       async json<T>(path: string, schema: z.ZodType<T>): Promise<T> {
         return schema.parse(JSON.parse(await send(path)));
+      },
+      /** GET `path` with extra headers (e.g. the bearer `/api/status` takes); the raw body. */
+      text(path: string, headers: Record<string, string>): Promise<string> {
+        return send(path, undefined, headers);
       },
     };
   });

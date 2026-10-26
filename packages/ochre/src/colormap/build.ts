@@ -77,3 +77,16 @@ export function linearFromLut(opts: LinearFromLutOptions): LinearColormap {
   }
   return linearColormap({ name: opts.name, stops, interpolation: opts.interpolation });
 }
+
+/** Stops from a flat RGB LUT with an explicit position per entry. */
+export function stopsFromPositionedLut(pos: Float32Array, lut: Float32Array): ColorStop[] {
+  const out: ColorStop[] = Array.from({ length: pos.length });
+  for (let i = 0; i < pos.length; i++) {
+    const o = i * 3;
+    out[i] = {
+      position: pos[i],
+      color: { r: lut[o], g: lut[o + 1], b: lut[o + 2], alpha: 1 },
+    };
+  }
+  return out;
+}

@@ -11,7 +11,6 @@ import { RuntimeStatusSchema } from "@ndea/protocol";
 import type { RuntimeStatus } from "@ndea/protocol";
 import { stateDir } from "../../env/paths.ts";
 import { server } from "../lib/server.ts";
-import { PlainError } from "../lib/style.ts";
 
 export default defineCommand(
   "status",
@@ -20,26 +19,14 @@ export default defineCommand(
     command
       .provide(server())
       .flags(defineFlag("json", { type: "boolean", default: false, description: "Print one JSON snapshot and exit" }))
-      .action(async ({ ctx, flags, stdout, signal }) => {
-        const { origin } = await ctx.server;
+      .action(async ({ ctx, flags, stdout }) => {
+        const { text } = await ctx.server;
         const token = await readFile(join(stateDir(), "mcp-token"), "utf8").then(
-          (text) => text.trim(),
+          (contents) => contents.trim(),
           () => "",
         );
         const fetchStatus = async (): Promise<{ body: string; status: RuntimeStatus }> => {
-          let res: Response;
-          try {
-            res = await fetch(`${origin}/api/status`, { signal, headers: { authorization: `Bearer ${token}` } });
-          } catch (err) {
-            if (signal.aborted) throw err;
-            throw new Error(
-              `no ndea server at ${origin} (${err instanceof Error ? err.message : String(err)})\n` +
-                "  start one with `ndea view <data>`, or pass --host/--port (NDEA_HOST/NDEA_PORT)",
-              { cause: err },
-            );
-          }
-          const body = await res.text();
-          if (!res.ok) throw new PlainError(body);
+          const body = await text("/api/status", { authorization: `Bearer ${token}` });
           return { body, status: RuntimeStatusSchema.parse(JSON.parse(body)) };
         };
 

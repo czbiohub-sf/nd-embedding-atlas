@@ -12,6 +12,7 @@
 
 import { computeChannelStats } from "../channel-stats.ts";
 import type { PlateMount } from "../plate.ts";
+import { routeError } from "../request-body.ts";
 import type { ServerSession } from "../state.ts";
 
 /** Resolve which plate mount hosts this FOV, given an optional dataset_key. */
@@ -32,8 +33,6 @@ export async function handleChannelStats(fovPath: string, req: Request, state: S
     const channels = await computeChannelStats(mount.diskPath, decodeURIComponent(fovPath));
     return Response.json({ channels }, { headers: { "Cache-Control": "public, max-age=3600" } });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[channel-stats] ${msg}`);
-    return Response.json({ error: msg }, { status: 500 });
+    return routeError("channel-stats", err);
   }
 }

@@ -29,7 +29,6 @@
   --text-metric: 34px;
 
   --animate-nd-in: nd-in var(--dur-fast) var(--ease-out);
-  --animate-nd-toast: nd-toast var(--dur-slow) var(--ease-toast);
   --animate-nd-shake: nd-shake var(--dur-slow) var(--ease-out);
 
   --z-index-canvas: 10;

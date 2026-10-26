@@ -5,7 +5,6 @@ import { type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useSt
 import { columnsQueryKey } from "@ndea/components/query";
 import { MetadataSchema } from "@ndea/protocol";
 import { wsClient } from "@/lib/ws-client";
-import { scatterKeys } from "@/lib/query-keys";
 import type { Metadata, TrajectoryData } from "@/types";
 import {
   clearDatasetSession,
@@ -21,6 +20,7 @@ interface Props {
 }
 
 const TABLE = "dataset";
+const METADATA_KEY = ["metadata"] as const;
 
 export function DatasetSessionProvider({ children }: Props) {
   // Infrastructure: created once. Mosaic queries POST to same-origin /data/query.
@@ -46,7 +46,7 @@ export function DatasetSessionProvider({ children }: Props) {
   // Metadata
   const queryClient = useQueryClient();
   const metadataQuery = useQuery<Metadata>({
-    queryKey: scatterKeys.metadata(),
+    queryKey: METADATA_KEY,
     queryFn: () =>
       fetch("/data/metadata.json")
         .then((r) => r.json())
@@ -75,7 +75,7 @@ export function DatasetSessionProvider({ children }: Props) {
   // Actions. A field write changes the dataset's columns: metadata and the column catalog refetch.
   const refreshMetadata = useCallback(async () => {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: scatterKeys.metadata() }),
+      queryClient.invalidateQueries({ queryKey: METADATA_KEY }),
       queryClient.invalidateQueries({ queryKey: columnsQueryKey }),
     ]);
   }, [queryClient]);

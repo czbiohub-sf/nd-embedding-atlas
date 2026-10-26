@@ -6,10 +6,6 @@ export interface ViewerObsSummary {
   track_id?: number;
 }
 
-export function focusedObservationPath(focusedRowIndex: RowIndex): `/api/obs/${number}` {
-  return `/api/obs/${focusedRowIndex}`;
-}
-
 export function syncViewerActivity(actions: { pause(): void; resume(): void }, focusedRowIndex: RowIndex | null): void {
   if (focusedRowIndex == null) actions.pause();
   else actions.resume();

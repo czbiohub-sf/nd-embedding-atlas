@@ -1,12 +1,7 @@
 /// <reference types="bun" />
 import { describe, expect, test } from "bun:test";
 import { rowIndex } from "@ndea/sdk";
-import {
-  focusedObservationPath,
-  formatViewerObsReadout,
-  shouldRevealViewer,
-  syncViewerActivity,
-} from "./focus-behavior";
+import { formatViewerObsReadout, shouldRevealViewer, syncViewerActivity } from "./focus-behavior";
 
 describe("image viewer focus behavior", () => {
   test("pauses with no focus and resumes for row zero or any later row", () => {
@@ -28,11 +23,6 @@ describe("image viewer focus behavior", () => {
     expect(formatViewerObsReadout({})).toBeNull();
     expect(formatViewerObsReadout({ fov_name: "FOV-7" })).toBe("FOV-7");
     expect(formatViewerObsReadout({ fov_name: "FOV-7", track_id: 0, t: 0 })).toBe("FOV-7 · #0 · T 0");
-  });
-
-  test("keeps the observation request path numerically identical", () => {
-    expect(focusedObservationPath(rowIndex(0))).toBe("/api/obs/0");
-    expect(focusedObservationPath(rowIndex(4821))).toBe("/api/obs/4821");
   });
 
   test("reveals pixels only after the focused observation and its layers are ready", () => {

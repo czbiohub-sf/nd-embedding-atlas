@@ -15,6 +15,7 @@
     "docs": "bun run --cwd docs dev",
     "docs:build": "bun run --cwd docs build",
     "docs:serve": "bun run --cwd docs start",
+    "mutation": "fallow mutation --allow-dirty",
     "ndea": "vp run build:zarr-ext && bun run apps/ndea/src/cli/index.ts",
     "release:version": "bun run apps/ndea/scripts/release-version.ts"
   },

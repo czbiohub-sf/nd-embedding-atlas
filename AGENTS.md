@@ -27,11 +27,13 @@ vp run verify                 # check + test every workspace (cached); the gate 
 vp run dev [--fixture]        # one Bun process with HMR; infectomics beside the repo, or synthetic data
 vp run ndea <args>            # the CLI from source, e.g. `vp run ndea view <project.yaml>`
 vp run build                  # dist/ndea, the single-file binary
+vp run audit:gate             # fallow audit: fails on dead code, boundary, dupes, complexity this change adds (CI runs it)
+vp run mutation [paths…]      # fallow mutation over changed code (or the paths): which mutants the tests miss
 ```
 
-Other tasks (`build:zarr-ext`, `bytecode-order`, `audit`, `bench:ingest`,
-`release:version`, `docs*`) are in `vite.config.ts` `run.tasks` (cached) and
-the root `package.json` scripts.
+Other tasks (`build:zarr-ext`, `bytecode-order`, `audit` (the full Fallow
+report), `bench:ingest`, `release:version`, `docs*`) are in `vite.config.ts`
+`run.tasks` (cached) and the root `package.json` scripts.
 
 ## Layout
 
@@ -50,7 +52,13 @@ design_handoff_ndea_shell/  the UI design handoff: tokens, reference JSX, protot
 Dependencies flow one way: `apps/ndea → every @ndea/*`;
 `@ndea/components → sdk, protocol, ochre, ui`; `sdk → protocol`;
 `ui → ochre`. Packages import only public `@ndea/*` entrypoints and never app
-code.
+code. Inside the app, the server imports `src/env/` (state and cache dirs,
+install layout, version), the pure workspace model
+(`core/workspace/{types,document,dashboard,edits,data-sources}.ts`,
+`core/coordination/types.ts`), and `@ndea/components/filter`, never the CLI or
+React code. `.fallowrc.json` `boundaries` enforces all of this, plus no
+`localStorage` in `core/workspace` and no `process.exit` outside the CLI's two
+sanctioned exits; extend its zones when you add an area.
 
 ## The workspace document
 
@@ -127,9 +135,9 @@ writes UI state:
   (revision UI, chat, glass/blur, native `<select>`, ⌘1–9 shortcuts); they
   stay out.
 - CLI commands fail by throwing; `cli/lib/style.ts` renders each failure once
-  and owns all terminal styling. `process.exit` belongs to server shutdown
-  only. Commands that talk to a running server use the `server` context
-  (`--host`/`--port`, `NDEA_HOST`/`NDEA_PORT`).
+  and owns all terminal styling. `process.exit` belongs to server shutdown and
+  the startup interrupt only. Commands that talk to a running server use the
+  `server` context (`--host`/`--port`, `NDEA_HOST`/`NDEA_PORT`).
 - Clean breaks: when something is superseded, migrate every caller and delete
   the old path.
 

@@ -15,7 +15,7 @@
  */
 
 import { CropBodySchema } from "@ndea/protocol";
-import { parseBody } from "../request-body.ts";
+import { parseBody, routeError } from "../request-body.ts";
 import type { ServerSession } from "../state.ts";
 
 const DEFAULT_QUALITY = 78;
@@ -76,8 +76,6 @@ export async function handleCrop(fovPath: string, req: Request, state: ServerSes
       },
     });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[crop] ${msg}`);
-    return Response.json({ error: msg }, { status: 500 });
+    return routeError("crop", err);
   }
 }

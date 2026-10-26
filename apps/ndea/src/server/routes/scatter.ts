@@ -10,6 +10,7 @@
 import { ObsmSliceLoader } from "../slice-loader.ts";
 import type { ServerSession } from "../state.ts";
 import { quoteIdent } from "@ndea/protocol";
+import { routeError } from "../request-body.ts";
 import type { DatasetQuerySession } from "../store.ts";
 
 // ─── Binary format helpers ──────────────────────────────────────────────────
@@ -159,10 +160,7 @@ export async function handleScatterPositions(url: URL, state: ServerSession, sig
 
     return binaryResponse(packBinary(header, new Uint8Array(positions.buffer)));
   } catch (err) {
-    if (signal.aborted) return new Response("aborted", { status: 499 });
-    const message = err instanceof Error ? err.message : String(err);
-    console.error(`[scatter-positions] ${message}`);
-    return Response.json({ error: message }, { status: 500 });
+    return routeError("scatter-positions", err, signal);
   }
 }
 

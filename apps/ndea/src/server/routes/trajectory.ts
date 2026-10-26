@@ -7,6 +7,7 @@
 
 import { TrajectoryResponseSchema, type TrajectoryFrame } from "@ndea/protocol";
 import type { ServerSession } from "../state.ts";
+import { routeError } from "../request-body.ts";
 import { quoteIdent } from "@ndea/protocol";
 
 /**
@@ -71,9 +72,6 @@ export async function handleTrajectory(url: URL, state: ServerSession, signal: A
     TrajectoryResponseSchema.parse(frames);
     return Response.json(frames);
   } catch (err) {
-    if (signal.aborted) return new Response("aborted", { status: 499 });
-    const message = err instanceof Error ? err.message : String(err);
-    console.error(`[trajectory] ${message}`);
-    return Response.json({ error: message }, { status: 500 });
+    return routeError("trajectory", err, signal);
   }
 }

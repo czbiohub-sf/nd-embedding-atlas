@@ -18,8 +18,7 @@ export function getByPath(value: unknown, path: string): unknown {
   let current = value;
   for (const token of (path.startsWith("/") ? path.slice(1) : path).split("/")) {
     const key = token.replaceAll("~1", "/").replaceAll("~0", "~");
-    if (Array.isArray(current)) current = current[Number.parseInt(key, 10)];
-    else if (current !== null && typeof current === "object" && Object.hasOwn(current, key)) {
+    if (current !== null && typeof current === "object" && Object.hasOwn(current, key)) {
       current = (current as Record<string, unknown>)[key];
     } else return undefined;
   }
@@ -34,7 +33,7 @@ export function resolveExpressions(value: JsonValue, state: unknown): JsonValue 
   if (typeof $state === "string") return getByPath(state, $state) as JsonValue;
   if (typeof $template === "string") {
     return $template.replace(/\$\{([^}]+)\}/g, (_, path: string) => {
-      const found = getByPath(state, path.startsWith("/") ? path : `/${path}`) as JsonValue | undefined;
+      const found = getByPath(state, path) as JsonValue | undefined;
       if (found == null) return "";
       return typeof found === "object" ? JSON.stringify(found) : String(found);
     });
