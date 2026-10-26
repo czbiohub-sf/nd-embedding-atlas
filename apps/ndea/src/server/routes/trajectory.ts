@@ -5,7 +5,7 @@
  * sits exactly on the drawn points in 2D and 3D.
  */
 
-import { TrajectoryResponseSchema, type TrajectoryFrame } from "../protocol.ts";
+import { TrajectoryResponseSchema, type TrajectoryFrame } from "@ndea/protocol";
 import type { ServerSession } from "../state.ts";
 import { quoteIdent } from "../store.ts";
 

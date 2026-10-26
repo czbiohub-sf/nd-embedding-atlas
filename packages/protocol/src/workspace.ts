@@ -49,16 +49,6 @@ export type WorkspacePatchAccepted = z.infer<typeof WorkspacePatchAcceptedSchema
 export const WorkspaceConflictSchema = WorkspaceSnapshotSchema.extend({ error: z.literal("stale revision") });
 export type WorkspaceConflict = z.infer<typeof WorkspaceConflictSchema>;
 
-/** 400 response: RFC 9457 problem details with JSON Pointer issues. */
-export const WorkspaceProblemSchema = z.object({
-  type: z.literal("about:blank"),
-  title: z.string(),
-  status: z.literal(400),
-  detail: z.string(),
-  errors: z.array(z.object({ pointer: z.string(), detail: z.string() })),
-});
-export type WorkspaceProblem = z.infer<typeof WorkspaceProblemSchema>;
-
 /**
  * Who committed a revision, stamped by the server from the transport (never
  * from the request body). `system` is the seed or baseline; `agent` is the

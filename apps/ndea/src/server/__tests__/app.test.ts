@@ -10,7 +10,8 @@ import type { DuckDBConnection } from "@duckdb/node-api";
 import { decodeIPC, restConnector } from "@uwdata/mosaic-core";
 import { EmbeddingStatusSchema, MetadataSchema, RuntimeStatusSchema } from "@ndea/protocol";
 import { DatasetQuerySession } from "../store.ts";
-import { createApp, type CreateAppOptions } from "../app.ts";
+import { appServeOptions, createApp, type CreateAppOptions } from "../app.ts";
+import { SessionHost, type HostedSession } from "../session-host.ts";
 import type { ServerSession, DatasetSessionMetadata } from "../state.ts";
 import { createServerSession } from "../state.ts";
 import { captureConsole } from "../status.ts";
@@ -275,40 +276,74 @@ describe("createApp", () => {
     ws.close();
   });
 
-  test("POST /api/collection validates, no-ops on the open collection, and switches through the callback", async () => {
+  test("POST /api/collection switches through the SessionHost: filters cleared, routes reloaded, tabs told", async () => {
+    const collections = [
+      { name: "a", datasets: [{ name: "x", nObs: 1 }] },
+      { name: "b", datasets: [{ name: "y", nObs: 2 }] },
+    ];
     const store = await createMockStore(5);
     activeStore = store;
     const state = createMockState(store);
-    state.status = {
-      ...state.status,
-      collection: "a",
-      collections: [
-        { name: "a", datasets: [{ name: "x", nObs: 1 }] },
-        { name: "b", datasets: [{ name: "y", nObs: 2 }] },
-      ],
-    };
-    const switched: string[] = [];
-    const server = createApp({
+    state.status = { ...state.status, collection: "a", collections };
+    const filter = { op: "in", column: "_dataset", values: ["test_dataset"] };
+    await state.workspace.patch(
+      [{ op: "add", path: "/state/filter", value: { A: { dataset: { _dataset: filter } } } }],
+      {
+        base: 0,
+        actor: { kind: "browser" },
+      },
+    );
+    const opened: string[] = [];
+    const sessions = new SessionHost({ state, metadata: createMockConfig() }, async (name) => {
+      opened.push(name);
+      const next = createServerSession({ store: await createMockStore(7), workspace: state.workspace });
+      next.status = { ...next.status, collection: name, collections };
+      return { state: next, metadata: createMockConfig() };
+    });
+    const options = ({ state: session, metadata }: HostedSession): CreateAppOptions => ({
       port: 0,
       host: "localhost",
-      store,
-      state,
-      config: createMockConfig(),
+      store: session.store,
+      state: session,
+      config: metadata,
       noStatic: true,
-      switchCollection: async (name) => void switched.push(name),
+      sessions,
     });
+    const server = createApp(options(sessions.current));
     activeServer = server;
+    sessions.onChange((next) => server.reload<string>(appServeOptions(options(next))));
     const base = `http://localhost:${server.port}`;
+
+    const ws = new WebSocket(`ws://localhost:${server.port}/ws`);
+    const pushed: string[] = [];
+    let arrived = Promise.withResolvers<void>();
+    ws.addEventListener("message", (event) => {
+      pushed.push(JSON.parse(String(event.data)).collection);
+      arrived.resolve();
+    });
+    const open = Promise.withResolvers<unknown>();
+    ws.addEventListener("open", open.resolve, { once: true });
+    await open.promise;
+    ws.send(JSON.stringify({ _id: 1, _type: "session/watch" }));
+    await arrived.promise;
+    arrived = Promise.withResolvers<void>();
+
     const post = (body: unknown) =>
       fetch(`${base}/api/collection`, { method: "POST", body: JSON.stringify(body) }).then((r) => r.status);
     expect(await post({})).toBe(400);
     expect(await post({ name: "nope" })).toBe(404);
     expect(await post({ name: "a" })).toBe(200);
-    expect(switched).toEqual([]);
+    expect(opened).toEqual([]);
     expect(await post({ name: "b" })).toBe(200);
-    expect(switched).toEqual(["b"]);
+    expect(opened).toEqual(["b"]);
+    activeStore = sessions.current.state.store; // the host closed the old one
+    expect(state.workspace.get()).toMatchObject({ revision: 2, document: { state: { filter: { A: {} } } } });
+    expect(state.workspace.history({ limit: 1 })[0].actor).toEqual({ kind: "system" });
     const metadata = MetadataSchema.parse(await (await fetch(`${base}/data/metadata.json`)).json());
-    expect(metadata).toMatchObject({ collection: "a", collections: state.status.collections });
+    expect(metadata).toMatchObject({ collection: "b", collections });
+    await arrived.promise;
+    expect(pushed).toEqual(["a", "b"]);
+    ws.close();
   });
 
   test("GET /api/embeddings/{key}/status returns not_started", async () => {

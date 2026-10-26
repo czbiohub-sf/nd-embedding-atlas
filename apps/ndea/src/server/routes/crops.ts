@@ -14,16 +14,17 @@
  * event loop. WS streaming (Phase 3) reuses the same pool.
  */
 
-import { CropBodySchema, parseJsonBody } from "../protocol.ts";
+import { CropBodySchema } from "@ndea/protocol";
+import { parseBody } from "../request-body.ts";
 import type { ServerSession } from "../state.ts";
 
 const DEFAULT_QUALITY = 78;
 const DEFAULT_HALF = 150;
 
 export async function handleCrop(fovPath: string, req: Request, state: ServerSession): Promise<Response> {
-  const parsed = await parseJsonBody(req, CropBodySchema);
-  if (!parsed.ok) return parsed.response;
-  const body = parsed.data;
+  const parsed = await parseBody(req, CropBodySchema);
+  if (parsed instanceof Response) return parsed;
+  const body = parsed;
 
   const t = body.t ?? 0;
   const z = body.z ?? 0;

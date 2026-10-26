@@ -12,7 +12,8 @@ import { access, mkdir } from "node:fs/promises";
 import { constants } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
 import { exportDir, sanitiseFilename } from "../export-util.ts";
-import { ExportBodySchema, parseJsonBody } from "../protocol.ts";
+import { ExportBodySchema } from "@ndea/protocol";
+import { parseBody } from "../request-body.ts";
 import type { DatasetQuerySession } from "../store.ts";
 import { countObservations, exportObservations } from "../observations.ts";
 
@@ -54,9 +55,9 @@ export async function handleExport(req: Request, store: DatasetQuerySession): Pr
     return Response.json({ error: "An export is already in progress" }, { status: 409 });
   }
 
-  const parsed = await parseJsonBody(req, ExportBodySchema);
-  if (!parsed.ok) return parsed.response;
-  const body = parsed.data;
+  const parsed = await parseBody(req, ExportBodySchema);
+  if (parsed instanceof Response) return parsed;
+  const body = parsed;
 
   try {
     // Validate the predicate up-front by counting matches.

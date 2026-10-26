@@ -9,15 +9,15 @@
 import { FilterRequestSchema, type FilterResponse } from "@ndea/protocol";
 import { filterClauseSql } from "@ndea/components/filter";
 import { PREDICATE_ERROR_RE, queryObservations } from "../observations.ts";
-import { parseJsonBody } from "../protocol.ts";
+import { parseBody } from "../request-body.ts";
 import type { ServerSession } from "../state.ts";
 
 export async function handleFilter(req: Request, state: Pick<ServerSession, "store" | "datasets">): Promise<Response> {
-  const parsed = await parseJsonBody(req, FilterRequestSchema);
-  if (!parsed.ok) return parsed.response;
-  const sql = parsed.data.where ? filterClauseSql(parsed.data.where) : null;
+  const parsed = await parseBody(req, FilterRequestSchema);
+  if (parsed instanceof Response) return parsed;
+  const sql = parsed.where ? filterClauseSql(parsed.where) : null;
   try {
-    const response: FilterResponse = { sql, ...(await queryObservations(state, sql, parsed.data.limit)) };
+    const response: FilterResponse = { sql, ...(await queryObservations(state, sql, parsed.limit)) };
     return Response.json(response);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

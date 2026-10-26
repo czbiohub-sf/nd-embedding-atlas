@@ -1,11 +1,12 @@
 /**
  * MCP over Streamable HTTP at /mcp. Tools close over the one server session,
  * so every agent reads and edits the same workspace document the browser
- * shows. Named edits go through the workspace's harness pipeline
- * (`Workspace.harness`): applied, or held as a proposal while Harness edits
- * are set to propose. Writes are stamped `mcp`, with the agent named by an
- * `X-Ndea-Agent` header that matches the actor pattern (provenance only; the
- * bearer token is the gate). Every tool call lands in the harness feed.
+ * shows. Named edits go through the session's harness (`Harness.edit`):
+ * applied, or held as a proposal while Harness edits are set to propose. Raw
+ * patches and restores go through `workspace-writes.ts`, which stamps them
+ * `mcp` with the agent named by a well-formed `X-Ndea-Agent` header
+ * (provenance only; the bearer token is the gate) and refuses them in propose
+ * mode. Every tool call lands in the harness feed.
  *
  * Access: loopback Host and Origin only (DNS rebinding): localhost,
  * 127.0.0.1, [::1], or any `*.localhost` name (RFC 6761 loopback, the
@@ -19,13 +20,7 @@ import {
   type ToolAnnotations,
 } from "@modelcontextprotocol/server";
 import { filterClauseSql } from "@ndea/components/filter";
-import {
-  FilterClauseSchema,
-  JsonPatchOpSchema,
-  OBSERVATION_SET_TABLE,
-  WorkspaceActorSchema,
-  type WorkspaceActor,
-} from "@ndea/protocol";
+import { FilterClauseSchema, JsonPatchOpSchema, OBSERVATION_SET_TABLE, type WorkspaceActor } from "@ndea/protocol";
 import { z } from "zod";
 
 import { COMPONENTS } from "../frontend/core/workspace/dashboard.ts";
@@ -34,7 +29,7 @@ import { hasBearer } from "./mcp-token.ts";
 import { rowWords } from "./observation-sets.ts";
 import { workspaceResult } from "./routes/workspace.ts";
 import type { ServerSession } from "./state.ts";
-import { agentSeen, clients } from "./status.ts";
+import { clients } from "./status.ts";
 import { quoteIdent } from "./store.ts";
 import {
   DashboardEditSchema,
@@ -43,6 +38,7 @@ import {
   resolveElementId,
   type DashboardEdit,
 } from "../frontend/core/workspace/edits.ts";
+import { mcpActor, patchWorkspace, restoreWorkspace } from "./workspace-writes.ts";
 
 const INSTRUCTIONS = `ndea is a dashboard over single-cell and imaging observations (one row per observation).
 The workspace is one JSON document {data, layouts, layout, state}:
@@ -67,12 +63,6 @@ function isLoopbackUrl(url: string): boolean {
   }
 }
 
-/** The MCP actor for a request: `X-Ndea-Agent` names the agent when it is well formed. */
-function mcpActor(headers: Headers | undefined): WorkspaceActor {
-  const actor = WorkspaceActorSchema.safeParse({ kind: "mcp", agent: headers?.get("x-ndea-agent") ?? undefined });
-  return actor.success ? actor.data : { kind: "mcp" };
-}
-
 /** The /mcp route: loopback-only Host and Origin, a matching bearer token, then the MCP handler. */
 export function createMcpEndpoint(state: ServerSession, token: string): (request: Request) => Promise<Response> {
   const handler = createMcpHandler(({ requestInfo }) => createNdeaMcpServer(state, mcpActor(requestInfo?.headers)));
@@ -92,7 +82,7 @@ export function createMcpEndpoint(state: ServerSession, token: string): (request
       });
     }
     const { agent } = mcpActor(request.headers);
-    if (agent) agentSeen(agent);
+    if (agent) state.harness.seen(agent);
     clients.mcpInFlight++;
     try {
       return await handler.fetch(request);
@@ -154,9 +144,6 @@ function describeOps(state: Pick<ServerSession, "workspace">, ops: readonly Dash
   return resolved.length > 1 ? `${first} (+${resolved.length - 1} more)` : first;
 }
 
-const PROPOSE_ONLY =
-  "the person reviews harness edits; use edit_dashboard, or ask them to switch Harness edits to Apply directly";
-
 function plural(count: number, noun: string): string {
   return `${count.toLocaleString("en-US")} ${noun}${count === 1 ? "" : "s"}`;
 }
@@ -178,7 +165,7 @@ function propsSchema(schema: z.ZodType): unknown {
 
 export function createNdeaMcpServer(state: ServerSession, actor: WorkspaceActor): McpServer {
   const server = new McpServer({ name: "ndea", version: "0.1.0" }, { instructions: INSTRUCTIONS });
-  const { harness } = state.workspace;
+  const { harness } = state;
 
   /** Register a tool whose every call lands in the harness feed: `summary` the args, the result's `outcome`. */
   function register<S extends z.ZodType<Record<string, unknown>>>(
@@ -410,17 +397,14 @@ export function createNdeaMcpServer(state: ServerSession, actor: WorkspaceActor)
     },
     ({ ops }) => plural(ops.length, "JSON Patch op"),
     async ({ revision, ops }) => {
-      if (harness.proposing) return rejected(PROPOSE_ONLY);
-      const result = await state.workspace.patch(ops, { base: revision, actor });
+      const result = await patchWorkspace(state, ops, { base: revision, actor });
       if (result.kind === "accepted") return ok({ revision: result.revision }, "applied");
       if (result.kind === "conflict") {
         return rejected("stale revision: re-read the document and rebuild the patch", {
           revision: result.snapshot.revision,
         });
       }
-      const reason = "the patch would leave an invalid workspace; nothing was applied";
-      harness.rejected(actor, reason, result.issues);
-      return rejected(reason, { issues: result.issues });
+      return rejected(result.reason, result.kind === "invalid" ? { issues: result.issues } : {});
     },
   );
 
@@ -451,9 +435,8 @@ export function createNdeaMcpServer(state: ServerSession, actor: WorkspaceActor)
     },
     ({ revision }) => `revision ${revision}`,
     async ({ revision, revision_base }) => {
-      if (harness.proposing) return rejected(PROPOSE_ONLY);
       const base = revision_base ?? state.workspace.get().revision;
-      const result = await state.workspace.restore(revision, { base, actor });
+      const result = await restoreWorkspace(state, revision, { base, actor });
       if (result.kind === "accepted") return ok({ revision: result.revision, restoredFrom: revision }, "applied");
       if (result.kind === "not-found") return rejected(`unknown revision ${revision}; list them with get_history`);
       if (result.kind === "conflict") {
@@ -461,9 +444,7 @@ export function createNdeaMcpServer(state: ServerSession, actor: WorkspaceActor)
           revision: result.snapshot.revision,
         });
       }
-      const reason = "restoring would leave an invalid workspace; nothing was applied";
-      harness.rejected(actor, reason, result.issues);
-      return rejected(reason, { issues: result.issues });
+      return rejected(result.reason, result.kind === "invalid" ? { issues: result.issues } : {});
     },
   );
 

@@ -41,7 +41,6 @@ export {
   WorkspaceHistorySchema,
   WorkspacePatchAcceptedSchema,
   WorkspacePatchBodySchema,
-  WorkspaceProblemSchema,
   WorkspaceRestoreBodySchema,
   WorkspaceRevisionSchema,
   WorkspaceSnapshotSchema,
@@ -54,7 +53,6 @@ export type {
   WorkspaceHistory,
   WorkspacePatchAccepted,
   WorkspacePatchBody,
-  WorkspaceProblem,
   WorkspaceRestoreBody,
   WorkspaceRevision,
   WorkspaceSnapshot,
@@ -87,7 +85,6 @@ export type {
 } from "./harness";
 export { CollectionSummarySchema, RuntimeStatusSchema } from "./status";
 export type { CollectionSummary, RuntimeStatus } from "./status";
-export { DatasetStructureSchema, type DatasetStructure } from "./structure";
 
 // ─── Shared primitives ──────────────────────────────────────────────────────
 
@@ -207,6 +204,19 @@ export const ErrorResponseSchema = z.looseObject({
   error: z.string(),
 });
 export type ErrorResponse = z.infer<typeof ErrorResponseSchema>;
+
+/**
+ * 400 response for a malformed request body (every route) or an invalid
+ * workspace write: RFC 9457 problem details with JSON Pointer issues.
+ */
+export const ProblemSchema = z.object({
+  type: z.literal("about:blank"),
+  title: z.string(),
+  status: z.literal(400),
+  detail: z.string(),
+  errors: z.array(z.object({ pointer: z.string(), detail: z.string() })),
+});
+export type Problem = z.infer<typeof ProblemSchema>;
 
 /** GET /api/export-dir response. */
 export const ExportDirectoryResponseSchema = z.object({

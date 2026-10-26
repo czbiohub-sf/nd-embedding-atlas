@@ -21,8 +21,8 @@ import {
   AnnotationColumnPatchBodySchema,
   CommitAnnotationsBodySchema,
   WriteAnnotationValuesBodySchema,
-  parseJsonBody,
-} from "../protocol.ts";
+} from "@ndea/protocol";
+import { parseBody } from "../request-body.ts";
 import { quoteIdent } from "../store.ts";
 import type { ServerSession } from "../state.ts";
 import { commitObsColumns, type ObsColumnInput } from "@ndea/zarr";
@@ -60,9 +60,9 @@ export function handleListAnnotationColumns(state: ServerSession): Response {
 
 /** POST /api/annotations/columns */
 export async function handleCreateAnnotationColumn(req: Request, state: ServerSession): Promise<Response> {
-  const parsed = await parseJsonBody(req, AnnotationColumnBodySchema);
-  if (!parsed.ok) return parsed.response;
-  const { name, dtype } = parsed.data;
+  const parsed = await parseBody(req, AnnotationColumnBodySchema);
+  if (parsed instanceof Response) return parsed;
+  const { name, dtype } = parsed;
   const conflict = nameConflict(state, name);
   if (conflict) return conflict;
 
@@ -86,10 +86,10 @@ export async function handlePatchAnnotationColumn(
   req: Request,
   state: ServerSession,
 ): Promise<Response> {
-  const parsed = await parseJsonBody(req, AnnotationColumnPatchBodySchema);
-  if (!parsed.ok) return parsed.response;
+  const parsed = await parseBody(req, AnnotationColumnPatchBodySchema);
+  if (parsed instanceof Response) return parsed;
   if (!state.store.hasAnnotationColumn(colName)) return NOT_FOUND();
-  const to = parsed.data.name ?? colName;
+  const to = parsed.name ?? colName;
   const renaming = to !== colName;
   const conflict = renaming ? nameConflict(state, to) : null;
   if (conflict) return conflict;
@@ -97,7 +97,7 @@ export async function handlePatchAnnotationColumn(
   if (renaming) _claimed.add(to);
   try {
     if (renaming) await state.store.renameAnnotationColumn(colName, to);
-    if (parsed.data.dtype) await state.store.setAnnotationDtype(to, parsed.data.dtype);
+    if (parsed.dtype) await state.store.setAnnotationDtype(to, parsed.dtype);
     await saveSidecar(state);
     return Response.json({ column: to, dtype: state.store.annotationColumns.get(to)?.dtype });
   } catch (err) {
@@ -121,9 +121,9 @@ export async function handleDeleteAnnotationColumn(colName: string, state: Serve
 
 /** POST /api/annotations/values: `{ ok: true, n }`, n = rows written (unknown row indices are skipped). */
 export async function handleWriteAnnotationValues(req: Request, state: ServerSession): Promise<Response> {
-  const parsed = await parseJsonBody(req, WriteAnnotationValuesBodySchema);
-  if (!parsed.ok) return parsed.response;
-  const { column, rows } = parsed.data;
+  const parsed = await parseBody(req, WriteAnnotationValuesBodySchema);
+  if (parsed instanceof Response) return parsed;
+  const { column, rows } = parsed;
   if (!state.store.hasAnnotationColumn(column)) return NOT_FOUND();
   try {
     const n = await state.store.writeAnnotationValues(column, rows);
@@ -142,9 +142,9 @@ export async function handleWriteAnnotationValues(req: Request, state: ServerSes
  * writing. Omitting `columns` commits all of them.
  */
 export async function handleCommitAnnotations(req: Request, state: ServerSession, dryRun: boolean): Promise<Response> {
-  const parsed = await parseJsonBody(req, CommitAnnotationsBodySchema);
-  if (!parsed.ok) return parsed.response;
-  const names = (parsed.data.columns ?? [...state.store.annotationColumns.keys()]).filter((n) =>
+  const parsed = await parseBody(req, CommitAnnotationsBodySchema);
+  if (parsed instanceof Response) return parsed;
+  const names = (parsed.columns ?? [...state.store.annotationColumns.keys()]).filter((n) =>
     state.store.hasAnnotationColumn(n),
   );
   if (names.length === 0) return Response.json({ error: "No annotation fields to commit" }, { status: 400 });

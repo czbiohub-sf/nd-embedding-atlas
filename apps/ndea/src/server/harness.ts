@@ -1,10 +1,12 @@
 /**
- * The harness edit pipeline: validate an agent's named edits, then apply them
- * or hold them as a proposal for the person. Lives on the `Workspace` (so it
- * survives a collection switch) and in memory only: a restart drops pending
+ * The harness: Harness edits mode, proposals, the tool-call feed, and which
+ * agents were seen. It validates an agent's named edits, then applies them or
+ * holds them as a proposal for the person, and commits only through
+ * `Workspace.patch`. One per server process, beside the `Workspace` (so it
+ * survives a collection switch), in memory only: a restart drops pending
  * proposals. Proposals keep the named `DashboardEdit`s, not patches, and
  * accepting re-runs the chosen changes against the current revision and
- * commits them as one `Workspace.patch` stamped with the proposing agent.
+ * commits them as one patch stamped with the proposing agent.
  * In `propose` mode `set_filter` ops still apply directly: filters are
  * exploration state, not layout or source edits.
  */
@@ -30,10 +32,10 @@ import {
   type DashboardEdit,
 } from "../frontend/core/workspace/edits.ts";
 import type { WorkspaceDocument } from "../frontend/core/workspace/types.ts";
-import { harnessAgents, watchAgents } from "./status.ts";
 import type { Workspace } from "./workspace.ts";
 
 const MAX_FEED = 50;
+const MAX_AGENTS = 32;
 // ponytail: decided proposals stay readable (get_proposal) until 100 newer ones push them out.
 const MAX_PROPOSALS = 100;
 
@@ -49,6 +51,8 @@ export class Harness {
   /** Insertion order: oldest first. */
   private readonly proposals = new Map<string, Proposal>();
   private readonly feed: ToolCall[] = [];
+  /** Agent name → last seen; insertion order: least recently seen first. */
+  private readonly agents = new Map<string, string>();
   private readonly listeners = new Set<(event: HarnessEvent) => void>();
   /** Decisions run one at a time, so a change can never be accepted twice. */
   private queue: Promise<unknown> = Promise.resolve();
@@ -61,7 +65,7 @@ export class Harness {
 
   state(): HarnessState {
     return {
-      agents: harnessAgents(),
+      agents: [...this.agents].toReversed().map(([agent, lastSeen]) => ({ agent, lastSeen })),
       mode: this.mode,
       proposals: [...this.proposals.values()].filter((p) => p.changes.some((c) => c.status === "pending")),
       feed: [...this.feed],
@@ -72,11 +76,15 @@ export class Harness {
   watch(listener: (event: HarnessEvent) => void): () => void {
     listener({ kind: "state", state: this.state() });
     this.listeners.add(listener);
-    const unwatchAgents = watchAgents(() => listener({ kind: "state", state: this.state() }));
-    return () => {
-      this.listeners.delete(listener);
-      unwatchAgents();
-    };
+    return () => this.listeners.delete(listener);
+  }
+
+  /** Record an `X-Ndea-Agent` sighting; keeps the 32 most recently seen agents. */
+  seen(agent: string): void {
+    this.agents.delete(agent);
+    this.agents.set(agent, new Date().toISOString());
+    if (this.agents.size > MAX_AGENTS) this.agents.delete(this.agents.keys().next().value!);
+    this.changed();
   }
 
   setMode(mode: HarnessMode): void {

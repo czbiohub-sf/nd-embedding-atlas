@@ -4,6 +4,7 @@ import {
   CommitAnnotationsResponseSchema,
   ErrorResponseSchema,
   ObservationSetSchema,
+  ProblemSchema,
   type AnnotationDtype,
   type FilterClause,
   type Metadata,
@@ -64,8 +65,11 @@ function toError(value: unknown): Error {
 }
 
 async function responseError(response: Response, fallback: string): Promise<Error> {
-  const parsed = ErrorResponseSchema.safeParse(await response.json().catch(() => null));
-  return new Error(parsed.success ? parsed.data.error : fallback);
+  const body: unknown = await response.json().catch(() => null);
+  const error = ErrorResponseSchema.safeParse(body);
+  if (error.success) return new Error(error.data.error);
+  const problem = ProblemSchema.safeParse(body);
+  return new Error(problem.success ? problem.data.detail : fallback);
 }
 
 function createTrackedDisposer(disposers: (() => void)[], disposer: () => void): () => void {

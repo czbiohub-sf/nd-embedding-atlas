@@ -11,6 +11,7 @@ import { diskBytes } from "../../server/status.ts";
 import type { LaunchConfig } from "../config.ts";
 import type { PreparedDatasets } from "./datasets.ts";
 import type { PreparedQuerySession } from "./ingest.ts";
+import type { Harness } from "../../server/harness.ts";
 import type { Workspace } from "../../server/workspace.ts";
 import { workspaceIssues } from "../../server/routes/workspace.ts";
 import type { WorkspaceDocument } from "../../frontend/core/workspace/types.ts";
@@ -57,7 +58,8 @@ export async function prepareServerSession(
   config: LaunchConfig,
   datasets: PreparedDatasets,
   query: PreparedQuerySession,
-  workspace: Workspace,
+  /** Shared by every collection's session. */
+  { workspace, harness }: { workspace: Workspace; harness: Harness },
   collections: CollectionSummary[],
 ): Promise<PreparedServerSession> {
   const plateMounts = buildPlateMounts(datasets.datasetConfigs, datasets.isMultiDataset);
@@ -71,6 +73,7 @@ export async function prepareServerSession(
     plateMounts,
     annotationsSidecarPath: query.cacheEnabled ? null : resolveAnnotationsSidecarPath(datasets.loaded[0].entry.path),
     workspace,
+    harness,
   });
   state.status = {
     ingest: query.cached ? "cached" : query.cacheEnabled ? "fresh" : "uncached",

@@ -9,7 +9,8 @@
  * Ports Python `server/routes/_mosaic.py`.
  */
 
-import { MosaicQueryBodySchema } from "./protocol.ts";
+import { MosaicQueryBodySchema } from "@ndea/protocol";
+import { parseJson } from "./request-body.ts";
 import type { DatasetQuerySession } from "./store.ts";
 
 // ─── SQL Security Filter ─────────────────────────────────────────────────────
@@ -128,54 +129,10 @@ export async function handleMosaicQuery(body: MosaicQuery, store: DatasetQuerySe
 }
 
 /**
- * Parse a Mosaic query from a Request object.
- *
- * Handles both GET (query string) and POST (JSON body) patterns.
- * Validates the payload against MosaicQueryBodySchema (discriminated
- * union on `type`) and returns a 400 Response on validation failure.
+ * A Mosaic query from the JSON body (POST) or the `query` parameter (GET),
+ * validated by `MosaicQueryBodySchema`, or a 400 problem response.
  */
-export async function parseMosaicQuery(
-  req: Request,
-): Promise<{ ok: true; query: MosaicQuery } | { ok: false; response: Response }> {
-  let raw: unknown;
-  if (req.method === "GET") {
-    const url = new URL(req.url);
-    const queryParam = url.searchParams.get("query");
-    if (!queryParam) {
-      return {
-        ok: false,
-        response: Response.json({ error: "Missing 'query' parameter" }, { status: 400 }),
-      };
-    }
-    try {
-      raw = JSON.parse(queryParam);
-    } catch {
-      return {
-        ok: false,
-        response: Response.json({ error: "Invalid JSON in 'query' parameter" }, { status: 400 }),
-      };
-    }
-  } else {
-    // POST
-    try {
-      raw = await req.json();
-    } catch {
-      return {
-        ok: false,
-        response: Response.json({ error: "Invalid JSON body" }, { status: 400 }),
-      };
-    }
-  }
-
-  const result = MosaicQueryBodySchema.safeParse(raw);
-  if (!result.success) {
-    return {
-      ok: false,
-      response: Response.json(
-        { error: "Query payload failed validation", issues: result.error.issues },
-        { status: 400 },
-      ),
-    };
-  }
-  return { ok: true, query: result.data };
+export async function parseMosaicQuery(req: Request): Promise<MosaicQuery | Response> {
+  const text = req.method === "GET" ? (new URL(req.url).searchParams.get("query") ?? "") : await req.text();
+  return parseJson(text, MosaicQueryBodySchema);
 }

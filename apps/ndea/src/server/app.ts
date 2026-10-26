@@ -12,6 +12,7 @@
 import type { BunRequest, Server } from "bun";
 import type { DatasetQuerySession } from "./store.ts";
 import type { ServerSession, DatasetSessionMetadata } from "./state.ts";
+import type { SessionHost } from "./session-host.ts";
 import index from "../../index.html";
 import { handleMosaicRoute } from "./routes/mosaic.ts";
 import { handleMetadata } from "./routes/meta.ts";
@@ -57,7 +58,6 @@ import {
 import { createMcpEndpoint } from "./mcp.ts";
 import { hasBearer } from "./mcp-token.ts";
 import { getRuntimeStatus } from "./status.ts";
-import { handleStructure } from "./structure.ts";
 
 // ─── CORS + method handling ─────────────────────────────────────────────────
 
@@ -122,8 +122,8 @@ export interface CreateAppOptions {
   dev?: boolean;
   /** Bearer token that /mcp requires; without one the MCP endpoint is off. */
   mcpToken?: string;
-  /** Re-open the session on another project collection (`POST /api/collection`); the caller reloads the server. */
-  switchCollection?: (name: string) => Promise<void>;
+  /** Collection switches (`POST /api/collection`) and `session/watch` pushes; without one the server serves one collection. */
+  sessions?: SessionHost;
 }
 
 // ─── Server factory ─────────────────────────────────────────────────────────
@@ -134,8 +134,8 @@ export function createApp(options: CreateAppOptions) {
 
 /**
  * Everything `Bun.serve` takes for one session. A collection switch passes the
- * new session's options to `server.reload()`: same port, new routes; sockets
- * opened before keep the old session until the tab reloads.
+ * new session's options to `server.reload()` (`cli/startup/server.ts`): same
+ * port, new routes; sockets opened before keep the old session until the tab reloads.
  */
 export function appServeOptions(options: CreateAppOptions) {
   const { store, state, config } = options;
@@ -159,7 +159,7 @@ export function appServeOptions(options: CreateAppOptions) {
       // MCP has its own Host/Origin/token guard and no CORS.
       "/mcp": (req: Request) => (mcp ? mcp(req) : new Response("Not Found", { status: 404 })),
       "/ws": (req: Request, server: Server<ServerSocketContext>) =>
-        server.upgrade(req, { data: { state } })
+        server.upgrade(req, { data: { state, sessions: options.sessions } })
           ? undefined
           : withCors(new Response("WebSocket upgrade failed", { status: 400 })),
       "/ws/render": (req: Request, server: Server<ServerSocketContext>) => {
@@ -189,12 +189,9 @@ export function appServeOptions(options: CreateAppOptions) {
                 )
               : Response.json({ error: "Unauthorized" }, { status: 401, headers: { "WWW-Authenticate": "Bearer" } }),
         },
-        "/api/status/datasets/:name/structure": {
-          GET: (req) => handleStructure(req, state, req.params.name, options.mcpToken),
-        },
         "/data/query": { GET: (req) => handleMosaicRoute(req, store), POST: (req) => handleMosaicRoute(req, store) },
         "/data/metadata.json": { GET: () => handleMetadata(state, config) },
-        "/api/collection": { POST: (req) => handleCollectionSwitch(req, state, options.switchCollection) },
+        "/api/collection": { POST: (req) => handleCollectionSwitch(req, options.sessions) },
 
         "/api/health": { GET: () => handleHealth(state) },
 

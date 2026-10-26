@@ -12,6 +12,7 @@ import {
   handleWorkspaceRestore,
   handleWorkspaceRevision,
 } from "../routes/workspace.ts";
+import { Harness } from "../harness.ts";
 import { Workspace, WorkspaceFileError } from "../workspace.ts";
 
 const HIST = { type: "histogram", props: { field: "area" }, children: [] };
@@ -259,7 +260,9 @@ describe("workspace REST", () => {
     new Request(`http://x${path}`, { method, headers, body: JSON.stringify(body) });
 
   test("stamps browser by default and cli with X-Ndea-Client: cli; history, revisions, restore", async () => {
-    const state = { workspace: Workspace.memory() };
+    const workspace = Workspace.memory();
+    // Harness edits default to propose: the person's own writes never wait for review.
+    const state = { workspace, harness: new Harness(workspace) };
     const ok = await handleWorkspacePatch(
       send("PATCH", "/api/workspace", { baseRevision: 0, ops: [addData("a")] }),
       state,

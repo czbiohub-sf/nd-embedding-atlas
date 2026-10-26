@@ -17,28 +17,28 @@ import {
 } from "@ndea/protocol";
 
 import type { ServerSession } from "../state.ts";
-import { parseBody } from "./workspace.ts";
+import { parseBody } from "../request-body.ts";
 
-type State = Pick<ServerSession, "workspace">;
+type State = Pick<ServerSession, "harness">;
 
 const unknownProposal = (id: string) => Response.json({ error: `Unknown proposal ${id}` }, { status: 404 });
 
 export function handleHarnessGet(state: State): Response {
-  const body: HarnessState = state.workspace.harness.state();
+  const body: HarnessState = state.harness.state();
   return Response.json(body);
 }
 
 export async function handleHarnessMode(req: Request, state: State): Promise<Response> {
   const body = await parseBody(req, HarnessModeBodySchema);
   if (body instanceof Response) return body;
-  state.workspace.harness.setMode(body.mode);
+  state.harness.setMode(body.mode);
   return handleHarnessGet(state);
 }
 
 export async function handleProposalAccept(req: Request, id: string, state: State): Promise<Response> {
   const body = await parseBody(req, ProposalDecisionBodySchema);
   if (body instanceof Response) return body;
-  const result = await state.workspace.harness.accept(id, body.changes);
+  const result = await state.harness.accept(id, body.changes);
   if (!result) return unknownProposal(id);
   const accepted: ProposalAccepted = result;
   return Response.json(accepted);
@@ -47,7 +47,7 @@ export async function handleProposalAccept(req: Request, id: string, state: Stat
 export async function handleProposalReject(req: Request, id: string, state: State): Promise<Response> {
   const body = await parseBody(req, ProposalDecisionBodySchema);
   if (body instanceof Response) return body;
-  const proposal = await state.workspace.harness.reject(id, body.changes);
+  const proposal = await state.harness.reject(id, body.changes);
   if (!proposal) return unknownProposal(id);
   const rejected: ProposalRejected = { proposal };
   return Response.json(rejected);

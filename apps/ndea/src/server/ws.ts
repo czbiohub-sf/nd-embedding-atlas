@@ -19,12 +19,15 @@
 
 import type { ServerWebSocket } from "bun";
 import type { RenderSocketData } from "./remote-render.ts";
+import type { SessionHost } from "./session-host.ts";
 import type { ServerSession } from "./state.ts";
 import { clients } from "./status.ts";
 
 /** Data attached to every ServerWebSocket via server.upgrade(req, { data }). */
 export interface ServerSocketContext {
   state: ServerSession;
+  /** The server's session host, when it can switch collections (`session/watch`). */
+  sessions?: SessionHost;
   /** Set on `/ws/render` sockets (`server/remote-render.ts`). */
   render?: RenderSocketData;
 }
@@ -153,18 +156,11 @@ function handleWorkspaceWatchWs(ws: WS, id: number): void {
  * until unsubscribed. Unauthenticated like the rest of `/ws` (loopback trust).
  */
 function handleHarnessWatchWs(ws: WS, id: number): void {
-  const dispose = ws.data.state.workspace.harness.watch((event) => sendData(ws, id, event));
+  const dispose = ws.data.state.harness.watch((event) => sendData(ws, id, event));
   socketSubs.get(ws)?.set(id, dispose);
 }
 
 // ─── session/watch ──────────────────────────────────────────────────────────
-
-const sessionWatchers = new Set<(collection: string) => void>();
-
-/** Tell every `session/watch` subscriber the server now serves `collection` (after a collection switch). */
-export function sessionChanged(collection: string): void {
-  for (const watcher of sessionWatchers) watcher(collection);
-}
 
 /**
  * Push the socket's collection now and the new one after every switch. A tab
@@ -172,8 +168,7 @@ export function sessionChanged(collection: string): void {
  * carries the new session, so a tab that missed the push still learns of it.
  */
 function handleSessionWatchWs(ws: WS, id: number): void {
-  const watcher = (collection: string) => sendData(ws, id, { collection });
-  watcher(ws.data.state.status.collection);
-  sessionWatchers.add(watcher);
-  socketSubs.get(ws)?.set(id, () => sessionWatchers.delete(watcher));
+  sendData(ws, id, { collection: ws.data.state.status.collection });
+  const dispose = ws.data.sessions?.onChange(({ state }) => sendData(ws, id, { collection: state.status.collection }));
+  if (dispose) socketSubs.get(ws)?.set(id, dispose);
 }

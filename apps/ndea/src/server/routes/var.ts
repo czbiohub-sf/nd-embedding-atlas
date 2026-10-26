@@ -13,7 +13,8 @@
 
 import { AnnData, MuData } from "@ndea/zarr";
 import type { DatasetHandle } from "@ndea/zarr";
-import { VarColumnBodySchema, parseJsonBody } from "../protocol.ts";
+import { VarColumnBodySchema } from "@ndea/protocol";
+import { parseBody } from "../request-body.ts";
 import type { ServerSession } from "../state.ts";
 import { varColumnQuery } from "../zarr-ingest.ts";
 
@@ -100,11 +101,11 @@ export async function handleVarLayers(state: ServerSession): Promise<Response> {
  * /api/var-column/{task_id}/status for completion.
  */
 export async function handleVarColumn(req: Request, state: ServerSession): Promise<Response> {
-  const parsed = await parseJsonBody(req, VarColumnBodySchema);
-  if (!parsed.ok) return parsed.response;
-  const name = parsed.data.name;
-  const layer = parsed.data.layer ?? "X";
-  const modality = parsed.data.modality;
+  const parsed = await parseBody(req, VarColumnBodySchema);
+  if (parsed instanceof Response) return parsed;
+  const name = parsed.name;
+  const layer = parsed.layer ?? "X";
+  const modality = parsed.modality;
 
   try {
     const safeVar = name.replace(/[^a-zA-Z0-9]/g, "_");

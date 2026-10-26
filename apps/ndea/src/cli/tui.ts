@@ -10,7 +10,7 @@ import { runTui } from "@crustjs/tui";
 import { style } from "@crustjs/style";
 import { BoxRenderable, ScrollBoxRenderable, StyledText, TabSelectRenderable, TextRenderable, fg } from "@opentui/core";
 import type { TextChunk } from "@opentui/core";
-import type { DatasetStructure, RuntimeStatus } from "@ndea/protocol";
+import type { RuntimeStatus } from "@ndea/protocol";
 import { openUrl } from "./startup/output.ts";
 
 type Line = TextChunk[];
@@ -183,10 +183,7 @@ function copy(text: string): void {
 }
 
 /** Redraw `poll()` every second until `q` or Ctrl+C; resolves once the terminal is restored. */
-export async function runStatusTui(
-  poll: () => RuntimeStatus | Promise<RuntimeStatus>,
-  loadStructure: (name: string) => Promise<DatasetStructure>,
-): Promise<void> {
+export async function runStatusTui(poll: () => RuntimeStatus | Promise<RuntimeStatus>): Promise<void> {
   await runTui(async (renderer) => {
     const frame = new BoxRenderable(renderer, { width: "100%", height: "100%", flexDirection: "column" });
     const top = new TextRenderable(renderer, { content: "", paddingX: 1 });
@@ -227,9 +224,7 @@ export async function runStatusTui(
     const footer = new TextRenderable(renderer, {
       content: styled([
         join(
-          ["Tab/1-3 switch", "↑↓ select", "↵ structure", "o open browser", "c copy URL", "q quit"].map((hint) => [
-            paint(hint, MUTED),
-          ]),
+          ["Tab/1-3 switch", "↑↓ scroll", "o open browser", "c copy URL", "q quit"].map((hint) => [paint(hint, MUTED)]),
           "   ",
         ),
       ]),
@@ -239,7 +234,6 @@ export async function runStatusTui(
     renderer.root.add(frame);
 
     let url = "";
-    let [selected, structure] = [0, false];
     const draw = async () => {
       const now = Date.now();
       const width = renderer.width - 7; // pane padding, card border and padding, scrollbar
@@ -265,9 +259,6 @@ export async function runStatusTui(
           }
           text.content = styled(card(d, s, width));
         }
-        [...cards.values()].forEach(
-          (t, i) => ((t.parent as BoxRenderable).borderStyle = i === selected ? "heavy" : "rounded"),
-        );
         workspaceText.content = styled([workspace(s, now, width)]);
         activityText.content = styled(activity(s, now));
         logsText.content = styled(logs(s));
@@ -289,21 +280,10 @@ export async function runStatusTui(
     renderer.keyInput.on("keypress", (key) => {
       const tab = tabs.getSelectedIndex();
       if (key.name === "q") renderer.destroy();
-      else if (structure) return;
       else if (key.name === "o" && url) openUrl(url);
       else if (key.name === "c" && url) copy(url);
       else if (key.name === "tab") show((tab + (key.shift ? TABS.length - 1 : 1)) % TABS.length);
       else if (["1", "2", "3"].includes(key.name)) show(Number(key.name) - 1);
-      else if (tab === 0 && (key.name === "up" || key.name === "down") && cards.size) {
-        selected = (selected + (key.name === "up" ? cards.size - 1 : 1)) % cards.size;
-        void draw();
-      } else if (tab === 0 && key.name === "return" && cards.size) {
-        structure = true;
-        // Lazy: the experimental structure view (and its removal notes) loads only when opened.
-        void import("./tui-structure.ts").then(({ openStructure }) =>
-          openStructure(renderer, [...cards.keys()][selected], loadStructure, () => ((structure = false), show(0))),
-        );
-      }
     });
   }).catch((error: unknown) => {
     if (!(error instanceof Error && error.name === "AbortError")) throw error;

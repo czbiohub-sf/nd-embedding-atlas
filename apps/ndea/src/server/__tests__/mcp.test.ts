@@ -54,7 +54,7 @@ async function connect(agent?: string) {
   });
   client = new Client({ name: "test", version: "1.0.0" }, { versionNegotiation: { mode: "auto" } });
   await client.connect(transport);
-  return { client, endpoint, workspace: state.workspace };
+  return { client, endpoint, workspace: state.workspace, harness: state.harness };
 }
 
 async function call(name: string, args: Record<string, unknown>) {
@@ -93,8 +93,8 @@ describe("ndea MCP", () => {
   });
 
   test("an agent builds a filtered, linked dashboard and reads the same numbers back", async () => {
-    const { workspace } = await connect();
-    workspace.harness.setMode("direct");
+    const { workspace, harness } = await connect();
+    harness.setMode("direct");
     const tools = (await client!.listTools()).tools.map((tool) => tool.name).toSorted();
     expect(tools).toEqual([
       "create_observation_set",
@@ -171,7 +171,7 @@ describe("ndea MCP", () => {
   });
 
   test("invalid edits are refused whole, with a pointer to fix, and change nothing", async () => {
-    const { workspace } = await connect();
+    const { workspace, harness } = await connect();
     const before = workspace.get().revision;
 
     const missing = await call("edit_dashboard", {
@@ -195,7 +195,7 @@ describe("ndea MCP", () => {
     });
     expect(incapable.body.issues[0].pointer).toBe("/layouts/main/spec/elements/text-1/props/filter");
 
-    workspace.harness.setMode("direct");
+    harness.setMode("direct");
     const patch = await call("patch_workspace", {
       revision: before,
       ops: [{ op: "add", path: "/data/bad", value: { from: "ghost" } }],
@@ -209,8 +209,8 @@ describe("ndea MCP", () => {
   });
 
   test("writes are stamped mcp with the X-Ndea-Agent name; history and restore tools", async () => {
-    const { workspace } = await connect("omp");
-    workspace.harness.setMode("direct");
+    const { workspace, harness } = await connect("omp");
+    harness.setMode("direct");
     await call("edit_dashboard", { ops: [{ op: "set_data", name: "a", source: { sql: "area > 20" } }] });
     await call("patch_workspace", { revision: 1, ops: [{ op: "remove", path: "/data/a" }] });
     const history = WorkspaceHistorySchema.parse((await call("get_history", { limit: 5 })).body).revisions;
@@ -227,8 +227,8 @@ describe("ndea MCP", () => {
   });
 
   test("a malformed X-Ndea-Agent is dropped, leaving the actor mcp", async () => {
-    const { workspace } = await connect("not an agent!");
-    workspace.harness.setMode("direct");
+    const { workspace, harness } = await connect("not an agent!");
+    harness.setMode("direct");
     await call("edit_dashboard", { ops: [{ op: "set_data", name: "a", source: { sql: "area > 20" } }] });
     expect(workspace.history()[0].actor).toEqual({ kind: "mcp" });
   });
@@ -239,8 +239,8 @@ const post = (path: string, body: unknown) =>
 
 describe("harness proposals", () => {
   test("edits become a proposal; filters apply directly; accept commits as the agent; reject; get_proposal", async () => {
-    const { workspace } = await connect("omp");
-    const state = { workspace };
+    const { workspace, harness } = await connect("omp");
+    const state = { workspace, harness };
     const proposed = await call("edit_dashboard", {
       ops: [
         { op: "add", type: "count", id: "c" },
@@ -267,7 +267,7 @@ describe("harness proposals", () => {
     // The filter applied at once; the views wait.
     expect(workspace.get().revision).toBe(1);
     expect((workspace.get().document as any).state.filter.A.agent.area).toMatchObject({ op: "gt" });
-    expect(workspace.harness.state().proposals.map((p) => p.id)).toEqual([id]);
+    expect(harness.state().proposals.map((p) => p.id)).toEqual([id]);
 
     const accepted = await (
       await handleProposalAccept(post(`/api/proposals/${id}/accept`, { changes: [0] }), id, state)
@@ -285,10 +285,10 @@ describe("harness proposals", () => {
     const rejected = await (await handleProposalReject(post(`/api/proposals/${id}/reject`, {}), id, state)).json();
     expect(rejected.proposal.changes.map((c: any) => c.status)).toEqual(["accepted", "rejected"]);
     expect(workspace.get().revision).toBe(2);
-    expect(workspace.harness.state().proposals).toEqual([]);
+    expect(harness.state().proposals).toEqual([]);
     expect((await handleProposalReject(post("/api/proposals/nope/reject", {}), "nope", state)).status).toBe(404);
 
-    const feed = workspace.harness.state().feed;
+    const feed = harness.state().feed;
     expect(feed.map(({ tool, outcome }) => [tool, outcome])).toEqual([
       ["get_proposal", "→ 1 accepted, 1 pending"],
       ["edit_dashboard", "proposed 2 changes; filters applied"],
@@ -297,7 +297,7 @@ describe("harness proposals", () => {
   });
 
   test("a change that no longer applies turns invalid while the others commit", async () => {
-    const { workspace } = await connect("omp");
+    const { workspace, harness } = await connect("omp");
     const proposed = await call("edit_dashboard", {
       ops: [
         { op: "add", type: "count", id: "c" },
@@ -306,12 +306,12 @@ describe("harness proposals", () => {
     });
     const id = proposed.body.id as string;
     // Meanwhile a direct edit takes the id the proposal wanted.
-    workspace.harness.setMode("direct");
+    harness.setMode("direct");
     expect(
       (await call("edit_dashboard", { ops: [{ op: "add", type: "text", id: "c", props: { text: "x" } }] })).body,
     ).toMatchObject({ revision: 1 });
-    workspace.harness.setMode("propose");
-    const result = await workspace.harness.accept(id);
+    harness.setMode("propose");
+    const result = await harness.accept(id);
     expect(result!.revision).toBe(2);
     expect(result!.proposal.changes).toMatchObject([
       { status: "invalid", reason: 'element id "c" is taken' },
@@ -321,9 +321,9 @@ describe("harness proposals", () => {
   });
 
   test("an invalid batch is refused at once with a rejected event and a feed entry", async () => {
-    const { workspace } = await connect("omp");
+    const { harness } = await connect("omp");
     const events: HarnessEvent[] = [];
-    const dispose = workspace.harness.watch((event) => events.push(event));
+    const dispose = harness.watch((event) => events.push(event));
     const refused = await call("edit_dashboard", { ops: [{ op: "add", type: "nope" }] });
     dispose();
     expect(refused.isError).toBe(true);
@@ -331,12 +331,12 @@ describe("harness proposals", () => {
     expect(events.filter((event) => event.kind === "rejected")).toMatchObject([
       { agent: "omp", reason: "edit rejected; nothing was applied", issues: [{ pointer: "/ops/0" }] },
     ]);
-    expect(workspace.harness.state().proposals).toEqual([]);
-    expect(workspace.harness.state().feed[0].outcome).toStartWith("rejected: edit rejected");
+    expect(harness.state().proposals).toEqual([]);
+    expect(harness.state().feed[0].outcome).toStartWith("rejected: edit rejected");
   });
 
   test("patch_workspace and restore_revision wait for Apply directly, which also applies edits at once", async () => {
-    const { workspace } = await connect("omp");
+    const { workspace, harness } = await connect("omp");
     const patch = await call("patch_workspace", { revision: 0, ops: [{ op: "add", path: "/data/a", value: {} }] });
     expect(patch).toMatchObject({ isError: true, body: { error: expect.stringContaining("Apply directly") } });
     expect((await call("restore_revision", { revision: 1 })).body.error).toContain("use edit_dashboard");
@@ -344,10 +344,10 @@ describe("harness proposals", () => {
 
     const switched = await handleHarnessMode(
       new Request("http://localhost/api/harness/mode", { method: "PUT", body: JSON.stringify({ mode: "direct" }) }),
-      { workspace },
+      { harness },
     );
     expect(await switched.json()).toMatchObject({ mode: "direct" });
-    expect(await handleHarnessGet({ workspace }).json()).toMatchObject({ mode: "direct", proposals: [] });
+    expect(await handleHarnessGet({ harness }).json()).toMatchObject({ mode: "direct", proposals: [] });
     expect(
       (await call("patch_workspace", { revision: 0, ops: [{ op: "add", path: "/data/a", value: {} }] })).body,
     ).toEqual({ revision: 1 });

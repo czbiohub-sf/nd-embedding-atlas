@@ -7,8 +7,12 @@
  * GET  /api/health             : Health check
  */
 
+import { z } from "zod";
+import { parseBody } from "../request-body.ts";
 import { cropFovColumn, parseBbox, type ServerSession } from "../state.ts";
 import { quoteIdent } from "../store.ts";
+
+const ObsBatchBodySchema = z.object({ row_indices: z.array(z.number().int()) });
 
 /** Stringify a DuckDB scalar without risking [object Object]. */
 function scalarToString(value: unknown): string {
@@ -33,25 +37,9 @@ export async function handleObsBatch(req: Request, state: ServerSession): Promis
     return Response.json({});
   }
 
-  let body: unknown;
-  try {
-    body = await req.json();
-  } catch {
-    return Response.json({ error: "Invalid JSON body" }, { status: 400 });
-  }
-
-  const list = (body as { row_indices?: unknown }).row_indices;
-  if (!Array.isArray(list)) {
-    return Response.json({ error: "row_indices must be an array of integers" }, { status: 422 });
-  }
-
-  const rowIndices: number[] = [];
-  for (const v of list) {
-    if (!Number.isInteger(v)) {
-      return Response.json({ error: "row_indices must be integers" }, { status: 422 });
-    }
-    rowIndices.push(v as number);
-  }
+  const body = await parseBody(req, ObsBatchBodySchema);
+  if (body instanceof Response) return body;
+  const rowIndices = body.row_indices;
 
   if (rowIndices.length === 0) {
     return Response.json({});

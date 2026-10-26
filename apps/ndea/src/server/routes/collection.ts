@@ -1,37 +1,29 @@
 /**
- * POST /api/collection { name }: re-open the server session on another
- * collection of the project (re-ingest, new `dataset` VIEW). Responds once the
+ * POST /api/collection { name }: serve another collection of the project
+ * through the `SessionHost` (re-ingest, new `dataset` VIEW). Responds once the
  * new session serves; `session/watch` then tells every tab to reload.
+ *   200 { collection } · 404 unknown · 409 another switch runs · 501 no host.
  */
 
 import { z } from "zod";
-import type { ServerSession } from "../state.ts";
+import { parseBody } from "../request-body.ts";
+import type { SessionHost } from "../session-host.ts";
 
 const BodySchema = z.object({ name: z.string() });
 
-let switching: string | null = null;
-
-export async function handleCollectionSwitch(
-  req: Request,
-  state: ServerSession,
-  switchCollection: ((name: string) => Promise<void>) | undefined,
-): Promise<Response> {
-  const body = BodySchema.safeParse(await req.json().catch(() => null));
-  if (!body.success) return Response.json({ error: "expected { name: string }" }, { status: 400 });
-  const { name } = body.data;
-  if (!state.status.collections.some((c) => c.name === name)) {
-    return Response.json({ error: `unknown collection '${name}'` }, { status: 404 });
-  }
-  if (name === state.status.collection) return Response.json({ collection: name });
-  if (!switchCollection) return Response.json({ error: "this server cannot switch collections" }, { status: 501 });
-  if (switching) return Response.json({ error: `already switching to '${switching}'` }, { status: 409 });
-  switching = name;
+export async function handleCollectionSwitch(req: Request, sessions: SessionHost | undefined): Promise<Response> {
+  const body = await parseBody(req, BodySchema);
+  if (body instanceof Response) return body;
+  const { name } = body;
+  if (!sessions) return Response.json({ error: "this server cannot switch collections" }, { status: 501 });
   try {
-    await switchCollection(name);
+    const result = await sessions.switchTo(name);
+    if (result.kind === "unknown") return Response.json({ error: `unknown collection '${name}'` }, { status: 404 });
+    if (result.kind === "busy") {
+      return Response.json({ error: `already switching to '${result.target}'` }, { status: 409 });
+    }
     return Response.json({ collection: name });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
-  } finally {
-    switching = null;
   }
 }

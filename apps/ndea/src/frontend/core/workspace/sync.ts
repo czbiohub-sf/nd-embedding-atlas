@@ -12,7 +12,7 @@
 import {
   WorkspaceConflictSchema,
   WorkspacePatchAcceptedSchema,
-  WorkspaceProblemSchema,
+  ProblemSchema,
   WorkspaceSnapshotSchema,
   type JsonPatchOp,
   type WorkspaceChange,
@@ -178,7 +178,7 @@ async function patchWorkspace(body: object): Promise<PatchOutcome> {
   const json: unknown = await res.json();
   if (res.ok) return { kind: "accepted", revision: WorkspacePatchAcceptedSchema.parse(json).revision };
   if (res.status === 409) return { kind: "conflict", snapshot: WorkspaceConflictSchema.parse(json) };
-  const problem = WorkspaceProblemSchema.safeParse(json);
+  const problem = ProblemSchema.safeParse(json);
   return {
     kind: "invalid",
     errors: problem.success

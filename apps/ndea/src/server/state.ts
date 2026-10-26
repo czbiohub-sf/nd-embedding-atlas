@@ -11,6 +11,7 @@ import type { CropPool } from "./crop-pool.ts";
 import type { PlateChannel, PlateMount } from "./plate.ts";
 import type { ObsmSliceLoader } from "./slice-loader.ts";
 import type { DatasetQuerySession } from "./store.ts";
+import { Harness } from "./harness.ts";
 import { Workspace } from "./workspace.ts";
 import { ObservationSets } from "./observation-sets.ts";
 
@@ -143,8 +144,10 @@ export interface ServerSession {
    * ~/.ndea fallback configured). Derived once at startup.
    */
   annotationsSidecarPath: string | null;
-  /** The session's one authoritative workspace document and its history. */
+  /** The one authoritative workspace document and its history; shared by every collection's session. */
   workspace: Workspace;
+  /** Harness edits mode, proposals, tool-call feed, agents seen; created beside `workspace`, shared likewise. */
+  harness: Harness;
   observationSets: ObservationSets;
   /** Startup facts `getRuntimeStatus` and metadata report, built once with the session; `bytes` arrives later. */
   status: Pick<RuntimeStatus["server"], "ingest"> & Pick<RuntimeStatus, "datasets" | "collection" | "collections">;
@@ -152,7 +155,8 @@ export interface ServerSession {
 
 /**
  * Defaults share one store connection, including the observation-set temp
- * table; the default workspace is in memory and validates against this session.
+ * table; the default workspace is in memory and validates against this
+ * session, and the default harness edits it.
  */
 export function createServerSession({
   store,
@@ -160,6 +164,8 @@ export function createServerSession({
   ...overrides
 }: Pick<ServerSession, "store"> &
   Partial<Omit<ServerSession, "store" | "observationSets">> & { observationSetsDirectory?: string }): ServerSession {
+  const workspace =
+    overrides.workspace ?? Workspace.memory(undefined, { validate: (doc) => workspaceIssues(doc, session) });
   const session: ServerSession = {
     store,
     datasets: new Map(),
@@ -174,7 +180,8 @@ export function createServerSession({
     annotationsSidecarPath: null,
     status: { ingest: "uncached", datasets: [], collection: "", collections: [] },
     ...overrides,
-    workspace: overrides.workspace ?? Workspace.memory(undefined, { validate: (doc) => workspaceIssues(doc, session) }),
+    workspace,
+    harness: overrides.harness ?? new Harness(workspace),
     observationSets: new ObservationSets(store, observationSetsDirectory),
   };
   return session;

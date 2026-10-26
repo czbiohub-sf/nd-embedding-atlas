@@ -14,7 +14,7 @@ import type { DuckDBInstance } from "@duckdb/node-api";
 import { appendColumns } from "./append-columns.ts";
 import { openDuckDB } from "./zarr-extension.ts";
 import type { DuckDBConnection } from "@duckdb/node-api";
-import type { AnnotationDtype } from "./protocol.ts";
+import type { AnnotationDtype } from "@ndea/protocol";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 

@@ -1,6 +1,6 @@
 import { ObservationSetCreateBodySchema, ObservationSetSchema } from "@ndea/protocol";
 import { rowWords, UnknownObservationRows } from "../observation-sets.ts";
-import { parseJsonBody } from "../protocol.ts";
+import { parseBody, problem } from "../request-body.ts";
 import type { ServerSession } from "../state.ts";
 
 /** JSON `{ rowIndices }`, or an `application/octet-stream` row bitmask with `?rows=<nObs>`. */
@@ -14,19 +14,16 @@ export async function handleSetsPost(
     const bytes = Math.ceil(state.store.nObs / 8);
     const body = new Uint8Array(await req.arrayBuffer());
     if (rows !== state.store.nObs || body.byteLength !== bytes) {
-      return Response.json(
-        {
-          error: `bitmask must cover all ${state.store.nObs} rows in ${bytes} bytes (got rows=${rows}, ${body.byteLength} bytes)`,
-        },
-        { status: 400 },
+      return problem(
+        `bitmask must cover all ${state.store.nObs} rows in ${bytes} bytes (got rows=${rows}, ${body.byteLength} bytes)`,
       );
     }
     words = new Uint32Array(Math.ceil(rows / 32));
     new Uint8Array(words.buffer).set(body);
   } else {
-    const parsed = await parseJsonBody(req, ObservationSetCreateBodySchema);
-    if (!parsed.ok) return parsed.response;
-    words = rowWords(parsed.data.rowIndices);
+    const parsed = await parseBody(req, ObservationSetCreateBodySchema);
+    if (parsed instanceof Response) return parsed;
+    words = rowWords(parsed.rowIndices);
   }
   try {
     return Response.json(ObservationSetSchema.parse(await state.observationSets.create(words)));

@@ -17,7 +17,6 @@ import { handleMosaicQuery, parseMosaicQuery } from "../mosaic.ts";
  * POST uses JSON body.
  */
 export async function handleMosaicRoute(req: Request, store: DatasetQuerySession): Promise<Response> {
-  const parsed = await parseMosaicQuery(req);
-  if (!parsed.ok) return parsed.response;
-  return handleMosaicQuery(parsed.query, store);
+  const query = await parseMosaicQuery(req);
+  return query instanceof Response ? query : handleMosaicQuery(query, store);
 }

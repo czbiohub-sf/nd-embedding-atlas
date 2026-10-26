@@ -2,7 +2,7 @@ import { afterEach, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ObservationSetSchema, WorkspaceProblemSchema } from "@ndea/protocol";
+import { ObservationSetSchema, ProblemSchema } from "@ndea/protocol";
 import { emptyWorkspaceDocument } from "../../frontend/core/workspace/document.ts";
 import { createServerSession } from "../state.ts";
 import { rowWords } from "../observation-sets.ts";
@@ -143,7 +143,7 @@ test("PATCH rejects unknown nested set references with a clause pointer and pres
   );
   expect(response.status).toBe(400);
   expect(response.headers.get("content-type")).toBe("application/problem+json");
-  expect(WorkspaceProblemSchema.parse(await response.json()).errors).toEqual([
+  expect(ProblemSchema.parse(await response.json()).errors).toEqual([
     {
       pointer: "/state/filter/A/agent/facet~1~0/clauses/0/clauses/0/clause",
       detail: 'unknown observation set "0000000000000000"',
@@ -181,7 +181,7 @@ test("PATCH rejects an unknown set referenced from a data source", async () => {
     state,
   );
   expect(response.status).toBe(400);
-  expect(WorkspaceProblemSchema.parse(await response.json()).errors).toEqual([
+  expect(ProblemSchema.parse(await response.json()).errors).toEqual([
     { pointer: "/data/pinned/where", detail: 'unknown observation set "0000000000000000"' },
   ]);
   expect(state.workspace.get().revision).toBe(0);

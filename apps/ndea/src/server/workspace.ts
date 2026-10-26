@@ -29,7 +29,6 @@ import {
   type WorkspaceIssue,
 } from "../frontend/core/workspace/document.ts";
 import type { WorkspaceDocument } from "../frontend/core/workspace/types.ts";
-import { Harness } from "./harness.ts";
 
 export type WorkspacePatchResult =
   | { kind: "accepted"; revision: number }
@@ -90,8 +89,6 @@ export class Workspace {
   private readonly listeners = new Set<(change: WorkspaceChange) => void>();
   /** Writes run one at a time so two writers can never both pass the revision check. */
   private queue: Promise<unknown> = Promise.resolve();
-  /** Agents' edit pipeline: mode, pending proposals, tool-call feed. In memory; survives collection switches. */
-  readonly harness: Harness = new Harness(this);
 
   private constructor(
     path: string,

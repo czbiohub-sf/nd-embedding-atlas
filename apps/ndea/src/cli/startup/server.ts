@@ -1,17 +1,14 @@
 import type { Server } from "bun";
 import type { CreateAppOptions } from "../../server/app.ts";
 import { stopRemoteRender } from "../../server/remote-render.ts";
-import type { DatasetSessionMetadata, ServerSession } from "../../server/state.ts";
+import type { SessionHost, HostedSession } from "../../server/session-host.ts";
+import type { ServerSession } from "../../server/state.ts";
 import type { ServerSocketContext } from "../../server/ws.ts";
 import type { LaunchConfig } from "../config.ts";
 import { isCompiledBinary } from "../lib/paths.ts";
 import { displayHost, openUrl, printShutdownHint, printShuttingDown } from "./output.ts";
 
-export interface RunningServer {
-  stop(closeActiveConnections?: boolean): void | Promise<void>;
-  /** Serve another session on the same port (a collection switch). */
-  serve(state: ServerSession, metadata: DatasetSessionMetadata): void;
-}
+type RunningServer = Server<ServerSocketContext>;
 
 function isPortCollision(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
@@ -22,12 +19,8 @@ function isPortCollision(error: unknown): boolean {
   );
 }
 
-export async function startServer(
-  config: LaunchConfig,
-  state: ServerSession,
-  metadata: DatasetSessionMetadata,
-  switchCollection: (name: string) => Promise<void>,
-): Promise<RunningServer> {
+/** Serve `sessions.current`; each collection switch reloads the routes for the new session on the same port. */
+export async function startServer(config: LaunchConfig, sessions: SessionHost): Promise<RunningServer> {
   // A binary embeds the built frontend; only a checkout has the source for Bun's dev server.
   if (config.dev && isCompiledBinary()) {
     throw new Error("--dev serves the frontend source: run it from a checkout (vp run dev)");
@@ -35,19 +28,19 @@ export async function startServer(
   const { appServeOptions, createApp } = await import("../../server/app.ts");
   const { loadMcpToken } = await import("../../server/mcp-token.ts");
   const mcpToken = await loadMcpToken();
-  const options = (session: ServerSession, sessionMetadata: DatasetSessionMetadata): CreateAppOptions => ({
+  const options = ({ state, metadata }: HostedSession): CreateAppOptions => ({
     port: config.port,
     host: config.host,
-    store: session.store,
-    state: session,
-    config: sessionMetadata,
+    store: state.store,
+    state,
+    config: metadata,
     dev: config.dev,
     mcpToken,
-    switchCollection,
+    sessions,
   });
-  let server: Server<ServerSocketContext>;
+  let server: RunningServer;
   try {
-    server = createApp(options(state, metadata));
+    server = createApp(options(sessions.current));
   } catch (error) {
     if (!isPortCollision(error)) throw error;
     throw new Error(
@@ -58,10 +51,9 @@ export async function startServer(
       { cause: error },
     );
   }
-  return {
-    stop: (closeActiveConnections) => server.stop(closeActiveConnections),
-    serve: (next, nextMetadata) => server.reload<string>(appServeOptions(options(next, nextMetadata))),
-  };
+  // Subscribed before any socket, so routes reload before `session/watch` tells tabs to reload.
+  sessions.onChange((next) => server.reload<string>(appServeOptions(options(next))));
+  return server;
 }
 
 export async function prewarmEmbeddings(state: ServerSession): Promise<void> {
@@ -98,17 +90,13 @@ export async function registerGracefulShutdown(
   process.on("SIGTERM", () => void shutdown());
   if (!config.tui) return printShutdownHint();
   // Lazy: OpenTUI loads its native library on import; log mode never needs it.
-  const [{ runStatusTui }, { getRuntimeStatus, muteConsole }, { datasetStructure }] = await Promise.all([
+  const [{ runStatusTui }, { getRuntimeStatus, muteConsole }] = await Promise.all([
     import("../tui.ts"),
     import("../../server/status.ts"),
-    import("../../server/structure.ts"),
   ]);
   const url = localUrl(config);
   muteConsole(true);
-  await runStatusTui(
-    () => getRuntimeStatus(session(), url),
-    (name) => datasetStructure(session(), name),
-  );
+  await runStatusTui(() => getRuntimeStatus(session(), url));
   muteConsole(false);
   await shutdown();
 }

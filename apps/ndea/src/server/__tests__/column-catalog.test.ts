@@ -2,7 +2,7 @@ import { afterEach, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { WorkspaceProblemSchema } from "@ndea/protocol";
+import { ProblemSchema } from "@ndea/protocol";
 import { handleCategorize } from "../routes/categorize.ts";
 import { handleScatterCategories, handleScatterContinuousValues } from "../routes/scatter.ts";
 import { handleWorkspacePatch } from "../routes/workspace.ts";
@@ -87,7 +87,7 @@ test("PATCH rejects typed clauses on unknown columns with pointers and accepts k
     },
   ]);
   expect(rejected.status).toBe(400);
-  expect(WorkspaceProblemSchema.parse(await rejected.json()).errors).toEqual([
+  expect(ProblemSchema.parse(await rejected.json()).errors).toEqual([
     { pointer: "/data/bad/where/clause/column", detail: 'unknown column "nope"' },
     { pointer: "/state/filter/A/agent~1x/area/column", detail: 'unknown column "missing"' },
   ]);

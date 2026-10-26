@@ -10,16 +10,16 @@
  *   5. Return { indexColumn, legend, otherIndex, nullIndex }.
  */
 
-import { CategorizeBodySchema, parseJsonBody } from "../protocol.ts";
-import type { CategorizeResponse, CategoryLegendItem } from "../protocol.ts";
+import { CategorizeBodySchema, type CategorizeResponse, type CategoryLegendItem } from "@ndea/protocol";
+import { parseBody } from "../request-body.ts";
 import { quoteIdent, type DatasetQuerySession } from "../store.ts";
 
 const DEFAULT_MAX_CATEGORIES = 64;
 
 export async function handleCategorize(req: Request, store: DatasetQuerySession): Promise<Response> {
-  const parsed = await parseJsonBody(req, CategorizeBodySchema);
-  if (!parsed.ok) return parsed.response;
-  const { column, maxCategories = DEFAULT_MAX_CATEGORIES } = parsed.data;
+  const parsed = await parseBody(req, CategorizeBodySchema);
+  if (parsed instanceof Response) return parsed;
+  const { column, maxCategories = DEFAULT_MAX_CATEGORIES } = parsed;
   if (!store.columns().has(column)) return Response.json({ error: `Unknown column "${column}"` }, { status: 400 });
 
   const source = quoteIdent(column);

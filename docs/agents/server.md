@@ -8,7 +8,13 @@ Paths are relative to `apps/ndea/src/` unless they name a package.
 - `server/app.ts` builds one `Bun.serve` routes table (`appServeOptions`).
   Add an endpoint as an `api({ "/api/x/:id": { GET } })` entry: it gets CORS,
   a 204 preflight, and a 405 with `Allow`; unknown `/api/*` paths return 404
-  `{ error: "Unknown API endpoint: …" }`. Routes live in `server/routes/*.ts`.
+  `{ error: "Unknown API endpoint: …" }`. Routes live in `server/routes/*.ts`
+  and import schemas from `@ndea/protocol` directly.
+- Request bodies: every route parses with `parseBody(req, schema)`
+  (`server/request-body.ts`), which returns the value or a 400 RFC 9457
+  problem (`Problem` in `@ndea/protocol`: `{ type, title, status, detail,
+  errors: [{ pointer, detail }] }`, `application/problem+json`). An empty
+  body reads as `{}`. Other errors stay `{ error }` with their status.
 - `/` and every non-API path serve `apps/ndea/index.html`: through Bun's dev
   server with `--dev`, bundled on first request in a source run, embedded in
   the binary.
@@ -23,10 +29,10 @@ Paths are relative to `apps/ndea/src/` unless they name a package.
     and on every change, plus one `rejected` event per invalid harness edit.
   - `session/watch`: the open collection; a tab reloads when it changes.
 - `/ws/render`: remote rendering (below). `/mcp`: MCP (below).
-- `GET /api/status` (the `RuntimeStatus` snapshot) and
-  `GET /api/status/datasets/:name/structure` take the MCP bearer because they
-  expose filesystem paths. Everything else is open under the local trust model;
-  `--host` with a non-loopback address prints a warning and adds no auth.
+- `GET /api/status` (the `RuntimeStatus` snapshot) takes the MCP bearer
+  because it exposes filesystem paths. Everything else is open under the local
+  trust model; `--host` with a non-loopback address prints a warning and adds
+  no auth. `GET /api/health` stays for the ingest benchmark.
 
 ## Workspace, history, actors
 
@@ -34,7 +40,7 @@ Paths are relative to `apps/ndea/src/` unless they name a package.
   file, and its history. A missing file is written from the preset
   (`server/presets.ts`: a built-in under `apps/ndea/src/presets/`, default
   `exploration`, or a `.json` path).
-- Writers (browser sync, `PATCH /api/workspace`, CLI, MCP) all call
+- Writers (browser sync, `PATCH /api/workspace`, CLI, MCP) all end in
   `workspace.patch` (or `restore`): RFC 6902 ops at a base revision,
   serialized, checked by `parseWorkspaceDocument` (structure, props, data
   references, bindings, unique ids), then by the injected `validate`
@@ -42,6 +48,11 @@ Paths are relative to `apps/ndea/src/` unless they name a package.
   and typed clauses naming columns the dataset lacks). Raw `data.sql` is
   checked only when it runs. Startup logs those issues for the file instead of
   refusing it; only a wrong format version refuses.
+- Write policy lives in `server/workspace-writes.ts` (`patchWorkspace`,
+  `restoreWorkspace`, `restActor`, `mcpActor`), shared by REST and MCP: an
+  agent's raw patch or restore is `refused` in propose mode, the person's own
+  writes (browser, CLI) never are, and an agent's invalid write raises a
+  harness `rejected` event. Each transport only formats the outcome.
 - The accepted document is deep-frozen; ops apply to a `structuredClone`.
 - Each write appends a row (revision, base, actor, ops, document, time,
   `restoredFrom`) to `<workspace>.history.sqlite` in the same transaction as
@@ -49,7 +60,7 @@ Paths are relative to `apps/ndea/src/` unless they name a package.
   workspace whose history lacks its revision adds a `system` baseline row.
 - The actor comes from the transport, never the body: `browser`, `cli`
   (`X-Ndea-Client: cli`, sent by `cli/lib/server.ts`), or `mcp` with the agent
-  from `X-Ndea-Agent`. Provenance, not authorization.
+  from `X-Ndea-Agent` (`workspace-writes.ts`). Provenance, not authorization.
 - History is server-side only (no revision UI): `GET /api/workspace/history`,
   `GET /api/workspace/revisions/:n`, `POST /api/workspace/restore` (revision N
   committed again as a new revision), `ndea workspace history|restore`, MCP
@@ -72,8 +83,13 @@ Paths are relative to `apps/ndea/src/` unless they name a package.
   summary, the result's `outcome`) to the harness feed.
 - Element ids in tools accept `ndea://<workspace>/<id>` (`resolveElementId` in
   `core/workspace/edits.ts`); another workspace's reference is rejected.
-- `edit_dashboard` goes through `Workspace.harness` (`server/harness.ts`, in
-  memory: survives collection switches, not restarts).
+- `Harness` (`server/harness.ts`) owns Harness edits mode, proposals, the
+  tool-call feed, and the agents seen (`seen`, from `X-Ndea-Agent` on `/mcp`).
+  Startup creates it beside the `Workspace` and puts both on every
+  `ServerSession` (`workspace`, `harness`); it commits only through
+  `Workspace.patch`. In memory: survives collection switches, not restarts.
+  `server/status.ts` only reports (workspace history, harness agents).
+- `edit_dashboard` goes through `Harness.edit`.
   - `propose` (default): validates the whole batch, applies its `set_filter`
     ops at once, holds the rest as a proposal of named ops (generated ids
     pinned, summaries from `describeEdit`), and returns
@@ -103,10 +119,14 @@ unknown set are rejected.
 - `collections:` in the project YAML (`cli/config.ts`; list or name-keyed
   map); datasets in none form an implicit collection named after the file. A
   run ingests one (`--collection`, default the first).
-- `POST /api/collection { name }` clears every scope's `dataset` filter source
-  (a `system` revision), builds the new session beside the old one
-  (`cli/startup.ts`), swaps it in with `server.reload(appServeOptions(…))` on
-  the same port, closes the old store, and pushes `session/watch`.
+- `SessionHost` (`server/session-host.ts`) owns the served session and the
+  switch. `POST /api/collection { name }` calls `switchTo`, which runs one
+  transition at a time (another gets 409): clear every scope's `dataset`
+  filter source (a `system` revision), open the new session beside the old one
+  (the `open` callback `cli/startup.ts` passes), make it current, notify
+  `onChange` listeners (`cli/startup/server.ts` reloads the routes with
+  `server.reload(appServeOptions(…))` on the same port; `/ws` pushes
+  `session/watch`), then close the old store.
 - One workspace file serves all collections. Metadata and `RuntimeStatus`
   carry `collection` and `collections` (`nObs` from store metadata, no ingest).
   MCP `list_collections` reports them.

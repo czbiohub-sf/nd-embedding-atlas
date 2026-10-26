@@ -1,46 +1,25 @@
 /**
  * Runtime status: one snapshot of what this server process is doing, shared
- * by `GET /api/status`, `ndea status`, and the in-process TUI. The client
- * counters and the log ring are process-wide: one server per process.
+ * by `GET /api/status`, `ndea status`, and the in-process TUI. Reporting only:
+ * it reads the session, its workspace history, and the harness's agents. The
+ * client counters and the log ring are process-wide: one server per process.
  */
 
 import { stat } from "node:fs/promises";
 import { join } from "node:path";
 import { format } from "node:util";
-import type { HarnessAgent, RuntimeStatus } from "@ndea/protocol";
+import type { RuntimeStatus } from "@ndea/protocol";
 import { VERSION } from "../cli/version.ts";
 import type { ServerSession } from "./state.ts";
 
 const startedAt = new Date().toISOString();
-const MAX_AGENTS = 32;
 const MAX_LOGS = 200;
-const agents = new Map<string, string>();
 const logs: RuntimeStatus["logs"] = [];
-const agentListeners = new Set<() => void>();
 /** Warnings and errors printed while the TUI is up; replayed once it exits. Null when not muted. */
 let held: (() => void)[] | null = null;
 
 /** Mutated by `ws.ts` (open sockets) and the `/mcp` wrapper (requests in flight). */
 export const clients = { browserSockets: 0, mcpInFlight: 0 };
-
-/** Record an `X-Ndea-Agent` sighting; keeps the most recent 32 agents and notifies `watchAgents` listeners. */
-export function agentSeen(agent: string): void {
-  agents.delete(agent);
-  agents.set(agent, new Date().toISOString());
-  if (agents.size > MAX_AGENTS) agents.delete(agents.keys().next().value!);
-  for (const listener of agentListeners) listener();
-}
-
-/** Named agents, most recently seen first. */
-export function harnessAgents(): HarnessAgent[] {
-  return [...agents].toReversed().map(([agent, lastSeen]) => ({ agent, lastSeen }));
-}
-
-/** Call `listener` after every sighting, until the returned dispose. */
-export function watchAgents(listener: () => void): () => void {
-  agentListeners.add(listener);
-  return () => agentListeners.delete(listener);
-}
 
 /** Keep the last 200 `console.log/warn/error` lines for the status Logs tab; call once at startup. */
 export function captureConsole(): void {
@@ -91,7 +70,7 @@ export async function diskBytes(path: string): Promise<number | undefined> {
 }
 
 export function getRuntimeStatus(session: ServerSession, url: string): RuntimeStatus {
-  const { workspace } = session;
+  const { workspace, harness } = session;
   return {
     server: { version: VERSION, url, startedAt, rss: process.memoryUsage.rss(), ingest: session.status.ingest },
     datasets: session.status.datasets,
@@ -111,7 +90,7 @@ export function getRuntimeStatus(session: ServerSession, url: string): RuntimeSt
         .history({ limit: 50 })
         .map(({ ops, baseRevision: _, ...revision }) => ({ ...revision, ops: ops.length })),
     },
-    clients: { ...clients, agents: harnessAgents() },
+    clients: { ...clients, agents: harness.state().agents },
     logs,
   };
 }

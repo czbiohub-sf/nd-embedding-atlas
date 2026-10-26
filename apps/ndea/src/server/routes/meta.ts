@@ -6,7 +6,7 @@
  */
 
 import { deriveDataCapabilities } from "../capabilities.ts";
-import { MetadataSchema, type ObsmEntry } from "../protocol.ts";
+import { MetadataSchema, type ObsmEntry } from "@ndea/protocol";
 import { cropFovColumn, type ServerSession, type DatasetSessionMetadata } from "../state.ts";
 import { obsmColumnPrefix } from "../store.ts";
 import { exportDir } from "../export-util.ts";
