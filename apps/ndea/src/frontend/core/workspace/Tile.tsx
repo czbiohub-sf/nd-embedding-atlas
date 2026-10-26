@@ -51,7 +51,7 @@ function AddTab({ tile }: { tile: string }) {
         onPointerDown={(e) => e.stopPropagation()}
         className="flex shrink-0 rounded-sm p-[3px] text-text-muted hover:bg-muted hover:text-foreground data-popup-open:bg-muted data-popup-open:text-foreground"
       >
-        <Plus className="size-3" strokeWidth={1.5} />
+        <Plus className="size-3" strokeWidth={1.75} />
       </PopoverTrigger>
       <PopoverContent align="start" className="w-(--popover-width) gap-0">
         <div className={popoverHeading}>Add a tab</div>
@@ -138,7 +138,7 @@ function TabStrip({
                     !on && "invisible group-hover/tab:visible",
                   )}
                 >
-                  <X className="size-[11px]" strokeWidth={1.5} />
+                  <X className="size-[11px]" strokeWidth={1.75} />
                 </span>
               )}
             </button>
@@ -232,10 +232,10 @@ function ViewsTile({ tile, tabIds, active }: { tile: string; tabIds: readonly st
           <LinksIndicator id={active} />
           <ViewSettingsButton id={active} />
           <IconButton size="md" label="Copy reference for the harness" onClick={() => void copyReference(ws, active)}>
-            <Link strokeWidth={1.5} />
+            <Link strokeWidth={1.75} />
           </IconButton>
           <IconButton size="md" label="Fullscreen" onClick={() => ws.setFullscreen(active)}>
-            <Maximize2 strokeWidth={1.5} />
+            <Maximize2 strokeWidth={1.75} />
           </IconButton>
         </>
       }

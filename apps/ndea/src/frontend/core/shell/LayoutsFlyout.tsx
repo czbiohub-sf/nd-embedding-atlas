@@ -82,13 +82,13 @@ export function LayoutsFlyout() {
       )}
       <Heading>New from template</Heading>
       <button type="button" className={LAYOUT_ROW} onClick={() => create(`Layout ${Object.keys(layouts).length + 1}`)}>
-        <PlusIcon className="size-3.5 shrink-0 text-text-muted" strokeWidth={1.5} />
+        <PlusIcon className="size-3.5 shrink-0 text-text-muted" strokeWidth={1.75} />
         <span className="min-w-0 flex-1 truncate">Blank</span>
         <span className="text-sm text-text-muted">one empty tile</span>
       </button>
       {Object.entries(layouts).map(([id, layout]) => (
         <button type="button" key={id} className={LAYOUT_ROW} onClick={() => create(`${layout.name} copy`, id)}>
-          <CopyIcon className="size-3.5 shrink-0 text-text-muted" strokeWidth={1.5} />
+          <CopyIcon className="size-3.5 shrink-0 text-text-muted" strokeWidth={1.75} />
           <span className="min-w-0 flex-1 truncate">Copy of {layout.name}</span>
         </button>
       ))}

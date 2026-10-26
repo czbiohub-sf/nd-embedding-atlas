@@ -457,7 +457,7 @@ export function ViewSettingsButton({ id }: { id: string }) {
           />
         }
       >
-        <Settings strokeWidth={1.5} />
+        <Settings strokeWidth={1.75} />
       </HoverTip>
       <PopoverContent align="end" className="gap-2 px-0 pt-1.5">
         <SettingsBody id={id} element={element} close={() => setOpen(false)} />

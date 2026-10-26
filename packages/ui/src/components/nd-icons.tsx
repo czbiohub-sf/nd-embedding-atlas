@@ -4,7 +4,7 @@ import type * as React from "react";
 type NdIconProps = Omit<React.SVGProps<SVGSVGElement>, "children"> & { size?: number | string };
 
 function ndIcon(displayName: string, paths: React.ReactNode) {
-  function NdIcon({ size = 14, strokeWidth = 1.5, ...props }: NdIconProps) {
+  function NdIcon({ size = 14, strokeWidth = 1.75, ...props }: NdIconProps) {
     return (
       <svg
         xmlns="http://www.w3.org/2000/svg"

@@ -22,7 +22,7 @@ const iconButtonVariants = cva(
     "aria-pressed:bg-accent aria-pressed:text-accent-foreground data-pressed:bg-accent data-pressed:text-accent-foreground",
     "focus-visible:ring-1 focus-visible:ring-ring",
     "disabled:pointer-events-none disabled:opacity-45",
-    "[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg]:stroke-[1.5]",
+    "[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg]:stroke-[1.75]",
   ),
   {
     variants: {

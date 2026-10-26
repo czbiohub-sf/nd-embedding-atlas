@@ -1,7 +1,9 @@
 /*
- * ndea design tokens, from design_handoff_ndea_shell/design-system/tokens/ (the source of truth).
- * Base palettes feed the semantic tokens; components use only the semantic ones (via the Tailwind
- * utilities mapped in styles.css). Light lives on :root, dark on `.dark` (the default).
+ * ndea design tokens, from design_handoff_ndea_shell/design-system/tokens/ (the source of truth),
+ * except the muted and faint text tokens, raised for contrast (dark muted ~10.9:1, faint ~5.5:1
+ * on the surfaces; light 8.2:1 and 5.6:1). Base palettes feed the semantic tokens; components use
+ * only the semantic ones (via the Tailwind utilities mapped in styles.css). Light lives on :root,
+ * dark on `.dark` (the default).
  */
 
 /* ── Base palettes: never referenced by components ──────────────────── */
@@ -31,7 +33,9 @@
   --pi-700: #404040;
   --pi-500: #636363;
   --pi-450: #737373;
+  --pi-400: #8a8a8a;
   --pi-300: #a3a3a3;
+  --pi-200: #c8c8c8;
   --pi-50: #fafafa;
   --pi-select: #19283c;
   --pi-select-fg: #9fd8ff;
@@ -62,9 +66,9 @@
   --secondary-foreground: var(--foreground);
   --muted: var(--bh-light-slate);
   --muted-2: var(--bh-light-slate);
-  --muted-foreground: var(--bh-dark-slate);
-  --text-muted: var(--bh-dark-slate);
-  --text-faint: var(--bh-mid-slate);
+  --muted-foreground: var(--bh-graphite);
+  --text-muted: var(--bh-graphite);
+  --text-faint: var(--bh-dark-slate);
   --accent: #ece8fe;
   --accent-foreground: var(--bh-iris);
   --border: var(--bh-keyline);
@@ -114,9 +118,9 @@
   --primary-foreground: var(--pi-950);
   --muted: var(--pi-850);
   --muted-2: var(--pi-800);
-  --muted-foreground: var(--pi-300);
-  --text-muted: var(--pi-300);
-  --text-faint: var(--pi-500);
+  --muted-foreground: var(--pi-200);
+  --text-muted: var(--pi-200);
+  --text-faint: var(--pi-400);
   --accent: var(--pi-select);
   --accent-foreground: var(--pi-select-fg);
   --border: var(--pi-800);

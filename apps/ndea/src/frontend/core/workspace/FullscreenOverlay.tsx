@@ -41,7 +41,7 @@ export function FullscreenOverlay() {
           </div>
           <span className="flex-1" />
           <IconButton size="md" label="Exit fullscreen" pressed onClick={() => ws.setFullscreen(null)}>
-            <Maximize2 strokeWidth={1.5} />
+            <Maximize2 strokeWidth={1.75} />
           </IconButton>
         </div>
         <BodySocket id={id} className="flex min-h-0 flex-1 flex-col overflow-hidden" />
